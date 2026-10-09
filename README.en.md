@@ -52,6 +52,20 @@ omnicad setup --cliente todos --aplicar  # does it (backing up each file as .bak
 Tool names and parameters are in English (`create_box`, `fillet`, `radius`); descriptions and messages are in Spanish
 for now. Docs: [docs/agentes/](docs/agentes/README.md).
 
+## Download (no coding needed)
+
+Get the installer from the [latest release](https://github.com/JerryblackVe/OmniCAD/releases/latest):
+
+| System | File | How |
+|---|---|---|
+| Windows 10/11 | `OmniCAD-…-windows-instalador.exe` | Run it and follow the steps. No admin needed. |
+| Linux (Ubuntu 22.04 or newer) | `OmniCAD-…-x86_64.AppImage` | Make it executable (`chmod +x`) and run it. |
+
+- To connect Claude Code or OpenCode: tick the option in the installer, or run `omnicad-cli setup --cliente todos --aplicar`.
+- ⚠ Windows may show "Windows protected your PC" because the installer is unsigned: "More info" › "Run anyway".
+
+The sections below are for running from source (to develop or try the latest).
+
 ## Install (Windows)
 
 You need [Python 3.12](https://www.python.org/downloads/) and Git.
@@ -94,7 +108,7 @@ The goal is to grow the project collaboratively. Start with [CONTRIBUTING.md](CO
 
 ## Roadmap
 
-Easy installer for Windows and Linux · testing on native Linux (WSL2 is tested) · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
+Guided first launch (language, connect agents) · testing on native Linux (WSL2 is tested) · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
 lighting) · vectors, SVG, text and vectorizing · assemblies, animation, simulations · Rhino-style tools and
 Grasshopper-style visual programming.
 

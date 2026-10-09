@@ -49,6 +49,20 @@ omnicad setup --cliente todos --aplicar  # lo hace (con copia .bak de cada archi
 Todo está en [docs/agentes/](docs/agentes/README.md): cómo conectar cada cliente, la CLI, el modo en vivo y la lista
 completa de herramientas.
 
+## Descargar (sin programar)
+
+Bajá el instalador de la [última versión](https://github.com/JerryblackVe/OmniCAD/releases/latest):
+
+| Sistema | Archivo | Cómo |
+|---|---|---|
+| Windows 10/11 | `OmniCAD-…-windows-instalador.exe` | Abrilo y seguí los pasos. No pide administrador. |
+| Linux (Ubuntu 22.04 o más nuevo) | `OmniCAD-…-x86_64.AppImage` | Dale permiso de ejecución (`chmod +x`) y abrilo. |
+
+- Para conectar Claude Code u OpenCode: marcá la opción en el instalador, o corré `omnicad-cli setup --cliente todos --aplicar`.
+- ⚠ Windows puede avisar «Windows protegió su PC» porque el instalador no está firmado: «Más información» › «Ejecutar de todas formas».
+
+Las secciones de abajo son para correrlo desde el código (para programar o probar lo último).
+
 ## Instalación (Windows)
 
 Necesitás [Python 3.12](https://www.python.org/downloads/) y Git.
@@ -97,7 +111,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 
 ## Hoja de ruta
 
-- Instalador fácil para Windows y Linux, para cualquiera (sepa programar o no).
+- Primer arranque guiado: elegir idioma y conectar los agentes con un botón.
 - Linux: probarlo en una PC con Linux nativo (hoy está probado en WSL2).
 - Español e inglés en todo: interfaz, mensajes, herramientas y documentación.
 - Integración con Blender en los dos sentidos.
