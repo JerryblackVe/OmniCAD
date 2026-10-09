@@ -236,6 +236,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #pestana:hover { background: transparent; border-bottom-color: $borde; }
 #pestana:checked { background: transparent; border-bottom-color: $acento; }
 #titulo_grupo { font-size: 8pt; padding: 0 6px; border-radius: 0; }
+#boton_cinta { font-size: 8pt; padding: 3px 4px 1px 4px; border-radius: 4px; }
 #espacio_trabajo { border: 1px solid $boton_primario; border-radius: 4px; background: $boton_primario;
                    color: $boton_primario_texto; font-size: 9pt; font-weight: 600; padding: 0 14px; }
 #espacio_trabajo:hover { background: $boton_primario_hover; }  /* relleno con el acento, como en docs/diseno/ */

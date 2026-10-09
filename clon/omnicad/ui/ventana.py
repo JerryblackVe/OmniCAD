@@ -23,7 +23,7 @@ import numpy as np
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
-                               QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
+                               QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION
 from ..ejemplo import crear_documento_ejemplo
@@ -166,7 +166,6 @@ class VentanaPrincipal(QMainWindow):
         self.panel_datos.abrir.connect(self._abrir_reciente)
         self.panel_datos.cerrar.connect(lambda: self.acciones["panel_datos"].setChecked(False))
         self.cinta = Cinta(self.acciones)
-        self.cinta.pila.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self._espacios = {}                 # espacio de trabajo → su ventana (DIBUJO, RENDERIZAR, ANIMACIÓN)
         for nombre, clave in (("DIBUJO", "dibujo"), ("RENDERIZAR", "render"), ("ANIMACIÓN", "animacion")):
             a = self.cinta.acciones_espacio[nombre]

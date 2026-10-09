@@ -13,7 +13,8 @@ reales son QAction compartidas que crea la ventana y se buscan por clave.
 """
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QMenu, QStackedWidget, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy, QStackedWidget, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION
 from .buscador_comandos import BuscadorComandos
@@ -176,6 +177,22 @@ BOCETO = GRUPOS_BOCETO + [CONFIGURAR, INSPECCIONAR, INSERTAR, ENSAMBLAR, SELECCI
                           ("TERMINAR BOCETO", ["sk_terminar"], [_i("", "sk_terminar")])]
 CONTEXTUALES = [("BOCETO", BOCETO)]
 
+LARGO_RENGLON = 10      # un nombre más largo que esto se parte en dos renglones bajo el ícono
+ANCHO_SOLO_ICONO = 38   # botón de la cinta sin texto (ventana angosta)
+
+
+def etiqueta_boton(texto):
+    """Texto bajo el ícono de un botón de la cinta (docs/diseno/referencia_oscuro_moderno.webp): sin el atajo ni
+    los puntos suspensivos, partido en el espacio más cercano al medio si es largo («Crear boceto» → «Crear» /
+    «boceto»), y siempre en DOS renglones (el segundo puede ir vacío) para que todos los íconos de la fila queden a
+    la misma altura."""
+    texto = texto.split("\t")[0].replace("…", "").replace("...", "").strip()
+    if len(texto) > LARGO_RENGLON and " " in texto:
+        corte = min((i for i, c in enumerate(texto) if c == " "), key=lambda i: abs(i - len(texto) / 2))
+        return texto[:corte] + "\n" + texto[corte + 1:]
+    return texto + "\n "
+
+
 PESTANAS = [("SÓLIDO", SOLIDO), ("SUPERFICIE", SUPERFICIE), ("MALLA", MALLA), ("CHAPA", CHAPA),
             ("PLÁSTICO", PLASTICO), ("ADMINISTRAR", ADMINISTRAR), ("UTILIDADES", UTILIDADES)]
 ESPACIOS = ["DISEÑO", "DISEÑO GENERATIVO", "RENDERIZAR", "ANIMACIÓN", "SIMULACIÓN", "FABRICACIÓN", "DIBUJO", "ELECTRÓNICA"]
@@ -217,6 +234,8 @@ class Cinta(QWidget):
         fila = QHBoxLayout()
         fila.setSpacing(6)
         self.pila = QStackedWidget()
+        # Ancho «Ignored»: la ventana puede ser más angosta que la pestaña; ajustar_textos la compacta.
+        self.pila.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.pestanas = []
         for i, (nombre, grupos) in enumerate(PESTANAS):
             b = QToolButton(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
@@ -225,6 +244,7 @@ class Cinta(QWidget):
             self.pestanas.append(b)
             self.pila.addWidget(self._fila_grupos(grupos))
         self.pestanas[0].setChecked(True)
+        self.pila.currentChanged.connect(lambda _i: self.ajustar_textos())
         self.contextuales = {}
         for nombre, grupos in CONTEXTUALES:     # pestañas que aparecen solo en su entorno (BOCETO)
             b = QToolButton(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
@@ -275,11 +295,12 @@ class Cinta(QWidget):
         botones = QHBoxLayout()
         botones.setSpacing(2)
         for ref in rapidos:
-            b = QToolButton()
-            b.setDefaultAction(self._accion(ref))
-            b.setIconSize(QSize(30, 30))
-            b.setFixedSize(38, 38)
-            b.setToolButtonStyle(Qt.ToolButtonIconOnly)
+            a = self._accion(ref)
+            a.setIconText(etiqueta_boton(a.text()))     # solo lo usan los botones con texto; los menús usan text()
+            b = QToolButton(objectName="boton_cinta")
+            b.setDefaultAction(a)
+            b.setIconSize(QSize(28, 28))
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)     # el ancho lo pone ajustar_textos, ya con la fuente del tema
             botones.addWidget(b)
         v.addLayout(botones)
         t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾")
@@ -313,6 +334,47 @@ class Cinta(QWidget):
         if atajo:
             a.setText(f"{texto}\t{atajo}")    # el atajo se muestra como en Fusion pero NO se registra
         return a
+
+    # ------------------------------------------------------------ texto bajo los íconos
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self.ajustar_textos()
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self.ajustar_textos()
+
+    def ajustar_textos(self):
+        """Si la pestaña visible no entra con el texto bajo los íconos (ventana angosta), sus botones quedan solo
+        con el ícono; al volver a entrar, recuperan el texto. El ancho con texto se mide una vez por pestaña, con la
+        cinta ya visible: antes la fuente del tema no está aplicada y la medida sale de más (1481 px en vez de 1110)."""
+        pagina = self.pila.currentWidget()
+        botones = pagina.findChildren(QToolButton, "boton_cinta") if pagina is not None and self.isVisible() else []
+        if not botones:
+            return
+        ancho = pagina.property("ancho_con_texto")
+        if ancho is None:
+            for b in botones:
+                self._estilo_boton(b, True)
+            for lay in pagina.findChildren(QLayout) + [pagina.layout()]:
+                lay.invalidate()            # sin esto, sizeHint devuelve el ancho viejo (sin texto) guardado en caché
+            ancho = pagina.sizeHint().width()
+            pagina.setProperty("ancho_con_texto", ancho)
+        con_texto = self.pila.width() >= ancho
+        for b in botones:
+            self._estilo_boton(b, con_texto)
+
+    @staticmethod
+    def _estilo_boton(b, con_texto):
+        # El ancho lo fija el renglón más largo: el sizeHint de QToolButton con texto bajo el ícono sale mucho más
+        # ancho que el texto (medido: 77 px para «Extruir», que ocupa 33) y la cinta no entraba en 1586 px.
+        if con_texto:
+            renglones = b.text().split("\n")
+            b.setFixedWidth(max(ANCHO_SOLO_ICONO + 10, max(b.fontMetrics().horizontalAdvance(r) for r in renglones) + 14))
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        else:
+            b.setFixedWidth(ANCHO_SOLO_ICONO)
+            b.setToolButtonStyle(Qt.ToolButtonIconOnly)
 
     def pestana_actual(self):
         todas = [n for n, _ in PESTANAS] + [n for n, _ in CONTEXTUALES]
