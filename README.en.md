@@ -61,7 +61,7 @@ The goal is to grow the project collaboratively. Start with [CONTRIBUTING.md](CO
 
 ## Roadmap
 
-Linux support · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
+Easy installer for Windows and Linux ·  Linux support · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
 lighting) · vectors, SVG, text and vectorizing · assemblies, animation, simulations · Rhino-style tools and
 Grasshopper-style visual programming.
 

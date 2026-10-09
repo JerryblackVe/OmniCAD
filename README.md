@@ -64,6 +64,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 
 ## Hoja de ruta
 
+- Instalador fácil para Windows y Linux, para cualquiera (sepa programar o no).
 - Funcionar en Linux sin problemas.
 - Español e inglés en todo: interfaz, mensajes, herramientas y documentación.
 - Integración con Blender en los dos sentidos.

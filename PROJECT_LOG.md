@@ -22,6 +22,7 @@ Regla para todo lo que sigue: de los programas propietarios (Fusion 360, Rhino, 
 5. **Vectores, SVG, edición, movimiento, vectorizado y texto:** mejorarlos tomando como referencia las funciones del manual de Blender (https://docs.blender.org/manual/en/latest/).
 6. **Ensamblaje de piezas, animación, mallado, simulaciones, historial y movimiento de piezas y de dibujos:** revisar todo.
 7. **Funciones de Rhino 8 y Grasshopper** (https://www.rhino3d.com/support/), incluida la programación visual tipo Grasshopper. Meta del usuario: un programa más completo que Fusion 360, con funciones nuevas. Hay un MCP de Rhino instalado (con herramientas de Grasshopper) que puede servir para ver cómo se comporta cada función.
+8. **Instalador fácil para Windows y Linux** (pedido del usuario, 2026-10-09): que cualquiera, sepa programar o no, lo instale y configure sin terminal. Windows: instalador `.exe` con acceso directo, asociación de `.omnicad` y desinstalador. Linux: AppImage (y quizás .deb/Flatpak). Primer arranque guiado (idioma, conectar agentes de IA con `omnicad setup` desde un botón). Generado automático en GitHub Actions con cada versión. Ojo: pesa ~300-500 MB (OpenCascade + Qt).
 
 ## Registro
 
