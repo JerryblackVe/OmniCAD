@@ -1,0 +1,3 @@
+# OmniCAD
+
+@AGENTS.md

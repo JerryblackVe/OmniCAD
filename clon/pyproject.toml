@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnicad"
+version = "0.1.0"
+description = "OmniCAD: CAD 3D paramétrico en Python (OpenCascade) con MCP y CLI para agentes IA"
+requires-python = ">=3.12"
+license = "GPL-3.0-or-later"
+dynamic = ["dependencies"]
+
+[project.urls]
+Repositorio = "https://github.com/JerryblackVe/OmniCAD"
+Documentacion = "https://github.com/JerryblackVe/OmniCAD/tree/main/docs"
+
+[project.scripts]
+omnicad = "omnicad.cli:main"                  # CLI para agentes y scripts
+omnicad-mcp = "omnicad.servidor_mcp:main"     # servidor MCP (stdio o HTTP local)
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["omnicad*"]
+
+[tool.setuptools.package-data]
+"omnicad.api" = ["guia/*.md"]

@@ -1,0 +1,23 @@
+# Entorno y cachés
+clon/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Material de análisis: incluye documentación y capturas de Autodesk. Nunca se publica.
+analisis/
+evidencias/
+
+# Ajeno al proyecto
+/skills/
+
+# Autoguardados
+*.autoguardado.*
+*.egg-info/
+
+# Material privado (análisis de programas propietarios, bitácora completa): nunca se publica
+/privado/
+
+# Instrucciones locales de cada máquina
+CLAUDE.local.md

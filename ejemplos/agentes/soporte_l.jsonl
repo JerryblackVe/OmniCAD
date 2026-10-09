@@ -1,0 +1,10 @@
+{"tool": "create_parameter", "args": {"name": "espesor", "expression": "8 mm"}}
+{"tool": "create_parameter", "args": {"name": "diametro", "expression": "8 mm"}}
+{"tool": "sketch_from_spec", "args": {"name": "Base", "plane": "XY", "entities": [{"type": "rectangle", "corner1": [0, 0], "corner2": [80, 40]}]}}
+{"tool": "extrude", "args": {"sketch": "Base", "distance": "espesor"}}
+{"tool": "sketch_from_spec", "args": {"name": "Pared", "plane": "XZ", "entities": [{"type": "rectangle", "corner1": [0, 0], "corner2": [80, 40]}]}}
+{"tool": "extrude", "args": {"sketch": "Pared", "distance": "espesor", "operation": "join", "reverse": true}}
+{"tool": "sketch_from_spec", "args": {"name": "Agujeros", "plane": "XY", "entities": [{"type": "circle", "id": "a", "center": [15, 25], "radius": 4}, {"type": "circle", "id": "b", "center": [65, 25], "radius": 4}], "dimensions": [{"type": "diameter", "entities": ["a"], "value": "diametro"}, {"type": "diameter", "entities": ["b"], "value": "diametro"}]}}
+{"tool": "extrude", "args": {"sketch": "Agujeros", "profile": "all", "distance": "espesor", "operation": "cut"}}
+{"tool": "fillet", "args": {"edges": "nearest:[40,8,8]", "radius": 6}}
+{"tool": "fillet", "args": {"edges": "|Z and >Y", "radius": 5}}
