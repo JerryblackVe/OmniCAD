@@ -16,7 +16,6 @@ import math
 from pathlib import Path
 
 from ..nucleo import geometria as geo
-from ..nucleo import malla
 from ..timeline.documento import Documento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP
 from ..timeline.ops_insertar import OpImportarIGES
@@ -99,6 +98,7 @@ def _texto(ruta):
 def _malla(ruta, unidades):
     if unidades not in UNIDADES_MALLA:
         raise ErrorAbrir(f"Unidades de malla inválidas: {unidades} (usá {', '.join(UNIDADES_MALLA)}).")
+    from ..nucleo import malla          # perezoso: la ventana importa este módulo al arrancar
     try:
         m = malla.leer(ruta) if ruta.suffix.lower() == ".3mf" else malla.leer(ruta, unidades=unidades)
     except (geo.ErrorGeometria, OSError, ValueError) as e:

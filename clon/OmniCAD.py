@@ -19,13 +19,12 @@ if str(RAIZ) not in sys.path:
 
 
 def _verificar_dependencias():
-    faltan = []
-    for modulo, paquete in (("PySide6", "PySide6"), ("OpenGL", "PyOpenGL"), ("OCP", "cadquery-ocp"),
-                            ("numpy", "numpy"), ("scipy", "scipy")):
-        try:
-            __import__(modulo)
-        except ImportError:
-            faltan.append(paquete)
+    """Avisa si falta algún paquete. Solo los BUSCA (find_spec), sin importarlos: scipy, p. ej., se carga recién al
+    usar una malla o el solver de bocetos (arranque rápido)."""
+    from importlib.util import find_spec
+    faltan = [paquete for modulo, paquete in (("PySide6", "PySide6"), ("OpenGL", "PyOpenGL"), ("OCP", "cadquery-ocp"),
+                                               ("numpy", "numpy"), ("scipy", "scipy"))
+              if find_spec(modulo) is None]
     if faltan:
         sys.exit("Faltan dependencias: " + ", ".join(faltan) +
                  "\nInstalalas con:  python -m pip install -r requirements.txt")

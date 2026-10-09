@@ -258,3 +258,23 @@ def test_el_lienzo_de_render_sin_glsl_dibuja_como_el_visor(monkeypatch):
     lz.paintGL()
     assert llamadas == [lz.config]
     lz.deleteLater()
+
+
+def test_arrancar_no_importa_scipy():
+    """Paso 5 (arranque rápido): scipy cuesta ~0,4 s y ~47 MB; se carga recién al usar una malla o el solver."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    codigo = ("import sys; import OmniCAD, omnicad.ui.ventana; OmniCAD._verificar_dependencias(); "
+              "print(sorted(m for m in sys.modules if m.split('.')[0] == 'scipy'))")
+    salida = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, timeout=120,
+                            cwd=Path(__file__).resolve().parents[1])
+    assert salida.returncode == 0, salida.stderr
+    assert salida.stdout.strip().splitlines()[-1] == "[]"
+
+
+def test_la_malla_carga_scipy_al_usarla():
+    from omnicad.nucleo import malla
+    m = malla.Malla(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float),
+                    np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]))
+    assert len(malla.generar_grupos(m, angulo=10).caras) == 4      # usa scipy adentro, importado al vuelo

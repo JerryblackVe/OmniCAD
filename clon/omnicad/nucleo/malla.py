@@ -29,11 +29,11 @@ from OCP.BRepLib import BRepLib
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.TopoDS import TopoDS_Shell
 from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
-from scipy.sparse import coo_matrix, csr_matrix
-from scipy.sparse.csgraph import breadth_first_order, connected_components
-from scipy.spatial import cKDTree
 
 from . import geometria as geo
+
+# scipy se importa adentro de cada función que lo usa (perezoso): cuesta ~0,4 s y la app lo importaba al arrancar
+# (vía `io_archivos.abrir_externo`) aunque no se abra ninguna malla.
 
 try:
     import manifold3d as _manifold
@@ -228,6 +228,8 @@ def _cascaras(c, n_vertices):
     M = len(c)
     if not M:
         return np.zeros(0, np.int64), np.zeros(0, bool)
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
     topo = _Topo(c, n_vertices)
     grafo = coo_matrix((np.ones(len(topo.h1)), (topo.h1 // 3, topo.h2 // 3)), shape=(M, M))
     etiqueta = _reetiquetar(connected_components(grafo, directed=False)[1])
@@ -294,6 +296,8 @@ def _orientar_consistente(c, n_vertices):
     M = len(c)
     if not M:
         return c
+    from scipy.sparse import coo_matrix, csr_matrix
+    from scipy.sparse.csgraph import breadth_first_order, connected_components
     f1, f2, mismo, _ = _Topo(c, n_vertices).pares()
     clave = np.minimum(f1, f2) * M + np.maximum(f1, f2)
     _, unicos = np.unique(clave, return_index=True)
@@ -929,6 +933,9 @@ def _soldar(m, tolerancia):
     if not len(c):
         return m.copia()
     if tolerancia > 0:
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+        from scipy.spatial import cKDTree
         pares = cKDTree(v).query_pairs(tolerancia, output_type="ndarray")
         if len(pares):
             N = len(v)
@@ -1045,6 +1052,8 @@ def generar_grupos(m, *, angulo=30.0, tamano_minimo=0.0):
     f1, f2, _, arista = topo.pares()
     n = m.normales_caras()
     juntas = np.einsum("ij,ij->i", n[f1], n[f2]) >= math.cos(math.radians(angulo))
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
     grafo = coo_matrix((np.ones(int(juntas.sum())), (f1[juntas], f2[juntas])), shape=(M, M))
     etiqueta = _reetiquetar(connected_components(grafo, directed=False)[1])
     if tamano_minimo > 0:
@@ -1083,6 +1092,8 @@ def combinar_grupos(m, ids):
     ga, gb = m.grupos[f1], m.grupos[f2]
     sel = np.isin(ga, ids) & np.isin(gb, ids) & (ga != gb)
     a, b = np.searchsorted(ids, ga[sel]), np.searchsorted(ids, gb[sel])
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
     ncomp, _ = connected_components(coo_matrix((np.ones(len(a)), (a, b)), shape=(len(ids), len(ids))),
                                     directed=False)
     if ncomp > 1:
@@ -1410,6 +1421,7 @@ class _Referencia:
     más próximo)."""
 
     def __init__(self, v, c, k=10):
+        from scipy.spatial import cKDTree
         self.tris = v[c]
         self.arbol = cKDTree(self.tris.mean(1))
         self.k = min(k, len(c))
@@ -1431,6 +1443,7 @@ def _relajar(ed, ref, bordes_fijos, pasos):
     F = ed.caras_vivas()
     n = ed.nv
     e = np.unique(np.sort(F[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1), axis=0)
+    from scipy.sparse import coo_matrix
     A = coo_matrix((np.ones(2 * len(e)), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])), shape=(n, n)).tocsr()
     grado = np.asarray(A.sum(1)).ravel()
     he = F[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2)
@@ -1761,6 +1774,7 @@ def _combinar_brep(mallas, operacion):
 
 # ---------------------------------------------------------------- suavizar, normales, separar, escalar, alinear
 def _adyacencia(c, n):
+    from scipy.sparse import coo_matrix
     e = np.unique(np.sort(_medias_aristas(c), axis=1), axis=0)
     return coo_matrix((np.ones(2 * len(e)), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])), shape=(n, n)).tocsr()
 

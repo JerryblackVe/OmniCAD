@@ -308,6 +308,8 @@ Desde el recálculo parcial (2026-10-09), la línea «recálculo» suma el tiemp
 
 Desde el paso 4 de rendimiento (mallas en la placa de video, 2026-10-09), la vista 3D da `1.72 ms por cuadro` en esta misma PC, y hay una línea más, «de lejos»: el modelo a 1/12 de su tamaño en pantalla, con y sin menos detalle a la distancia, p. ej. `7480 triángulos, 1.34 ms por cuadro (sin menos detalle a la distancia: 17326 triángulos, 1.31 ms)`.
 
+Desde el paso 5 de rendimiento (arranque rápido, 2026-10-09), el arranque da `1.92 s (importar: 0.93 s)` y la memoria `493 MB al arrancar` en esta misma PC (antes del paso, con la apertura de `.f3d` sumada: 2.34 s y 531 MB).
+
 - `--repeticiones N` (1 a 10, defecto 3), `--lado N` (agujeros por lado, 1 a 20, defecto 8), `--cuadros N` (10 a 1000, defecto 120).
 - «cuadros/s posibles» es el tiempo de dibujo puro (`paintGL` + `glFinish`); «en pantalla» queda limitado por la sincronía vertical del monitor.
 - `--json` devuelve todos los números (también `ms_p95` y `mostrar_modelo_s`). Necesita pantalla con OpenGL.
