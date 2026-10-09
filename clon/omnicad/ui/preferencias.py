@@ -29,6 +29,8 @@ DEFECTOS = {
     "general/autoguardado_min": 1,
     "general/puente_agentes": False,         # MCP en vivo: apagado por defecto (ui/puente.py)
     "general/puente_codigo": False,          # execute_code en vivo (corre Python en la interfaz)
+    "atajos/diseno": "extruir,empalme_3d",   # caja de herramientas (S): los que Fusion trae fijados
+    "atajos/boceto": "",
     "material/aspecto": "acero",
     "graficos/preset": "personalizar",
     "unidades/precision": 3,

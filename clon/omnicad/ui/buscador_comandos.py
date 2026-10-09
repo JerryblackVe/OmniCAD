@@ -19,8 +19,9 @@ from .iconos import icono
 
 MAXIMO = 12                         # filas de la lista
 ANCHO = 280                         # ancho del campo en la cinta
-# Fuera del buscador: él mismo y los filtros de selección («Caras», «Cuerpos»…), que sueltos parecen comandos.
-EXCLUIDAS = ("buscar_comando",)
+# Fuera de la búsqueda: el buscador, la caja de herramientas y los filtros de selección («Caras», «Cuerpos»…),
+# que sueltos parecen comandos.
+EXCLUIDAS = ("buscar_comando", "caja_herramientas")
 PREFIJOS_EXCLUIDOS = ("filtro_",)
 
 
@@ -52,6 +53,25 @@ def coincidencias(consulta, entradas, maximo=MAXIMO):
     return [clave for *_, clave in sorted(puntuadas)][:maximo]
 
 
+def nombre_accion(accion):
+    """Nombre de un comando sin el atajo ni los «&»: «Extruir\tE» → «Extruir»."""
+    return accion.text().split("\t")[0].replace("&", "").strip()
+
+
+def comandos_disponibles(acciones):
+    """(clave, nombre) de los comandos que se pueden usar ahora (habilitados y visibles), sin nombres repetidos.
+    También la usa la caja de herramientas (tecla S)."""
+    vistos, lista = set(), []
+    for clave, a in acciones.items():
+        nombre = nombre_accion(a)
+        if (not nombre or nombre in vistos or not a.isEnabled() or not a.isVisible() or clave in EXCLUIDAS
+                or clave.startswith(PREFIJOS_EXCLUIDOS)):
+            continue
+        vistos.add(nombre)
+        lista.append((clave, nombre))
+    return lista
+
+
 class BuscadorComandos(QLineEdit):
     """Campo «Buscar comando…» de la cinta. `acciones`: dict clave → QAction (las de la ventana)."""
 
@@ -76,16 +96,7 @@ class BuscadorComandos(QLineEdit):
             self._filtrar(self.text())
 
     def disponibles(self):
-        """(clave, nombre) de los comandos que se pueden usar ahora, sin nombres repetidos."""
-        vistos, lista = set(), []
-        for clave, a in self.acciones.items():
-            nombre = a.text().split("\t")[0].replace("&", "").strip()
-            if (not nombre or nombre in vistos or not a.isEnabled() or not a.isVisible() or clave in EXCLUIDAS
-                    or clave.startswith(PREFIJOS_EXCLUIDOS)):
-                continue
-            vistos.add(nombre)
-            lista.append((clave, nombre))
-        return lista
+        return comandos_disponibles(self.acciones)
 
     # ------------------------------------------------------------ lista desplegable
     def _crear_lista(self):

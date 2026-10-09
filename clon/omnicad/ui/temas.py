@@ -247,6 +247,16 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #lista_comandos { background: $menu_fondo; border: 1px solid $menu_borde; border-radius: 4px; padding: 2px; }
 #lista_comandos::item { padding: 4px 8px; border-radius: 3px; }
 #lista_comandos::item:selected { background: $menu_hover; color: $texto; }
+#caja_herramientas { background: $flotante; border: 1px solid $borde; border-radius: 6px; }
+#titulo_caja { font-size: 8pt; letter-spacing: 0.4px; color: $texto_tenue; }
+#atajos_caja, #resultados_caja { background: transparent; border: 0; }
+#atajos_caja::item { border-radius: 4px; padding: 2px; }
+#atajos_caja::item:hover { background: $hover; }
+#atajos_caja::item:selected { background: transparent; color: $texto; }
+#resultados_caja::item { border-radius: 3px; }
+#resultados_caja::item:selected { background: $menu_hover; }
+#vacio_caja, #atajo_teclado { color: $texto_tenue; }
+#chinche:checked { background: $activo; border-color: $activo_borde; }
 
 #pestana_doc { background: $entrada; border: 1px solid $borde; border-bottom: 0;
                border-top-left-radius: 3px; border-top-right-radius: 3px; padding: 3px 16px; }

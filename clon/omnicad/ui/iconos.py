@@ -416,6 +416,16 @@ def _lupa(p):
     p.drawLine(QPointF(18, 20), QPointF(25, 27))
 
 
+def _chinche(p):
+    """«Fijar en atajos» de la caja de herramientas (tecla S)."""
+    p.setPen(QPen(GRIS_OSCURO, 2.2, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(14, 18), QPointF(5, 27))                       # aguja
+    p.setPen(QPen(ROJO.darker(150), 1))
+    p.setBrush(ROJO)
+    p.drawPolygon(QPolygonF([QPointF(9, 16), QPointF(16, 9), QPointF(23, 16), QPointF(16, 23)]))   # base
+    p.drawEllipse(QPointF(21, 11), 6.5, 6.5)                          # cabeza
+
+
 def _zoom(p):
     _lupa(p)
     p.setPen(QPen(GRIS_OSCURO, 1.6))
@@ -1062,7 +1072,7 @@ DIBUJOS = {
     "guardar": _guardar, "deshacer": lambda p: _arco_flecha(p, False), "rehacer": lambda p: _arco_flecha(p, True),
     "ayuda": _ayuda, "engranaje": _engranaje, "ojo": _ojo, "ojo_no": lambda p: _ojo(p, True),
     "componente": _componente, "cuerpo": _cuerpo, "carpeta": _carpeta, "unidades": _unidades,
-    "origen": _origen, "orbita": _orbita, "encuadre": _encuadre, "zoom": _zoom, "ajustar": _ajustar, "buscar": _lupa,
+    "origen": _origen, "orbita": _orbita, "encuadre": _encuadre, "zoom": _zoom, "ajustar": _ajustar, "buscar": _lupa, "chinche": _chinche,
     "visualizacion": _visualizacion, "rejilla": _rejilla, "casa": _casa, "captura": _captura,
     "tl_inicio": lambda p: _tl(p, "inicio"), "tl_anterior": lambda p: _tl(p, "anterior"),
     "tl_reproducir": lambda p: _tl(p, "reproducir"), "tl_siguiente": lambda p: _tl(p, "siguiente"),

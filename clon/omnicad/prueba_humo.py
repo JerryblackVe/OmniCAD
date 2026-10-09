@@ -60,6 +60,13 @@ def _interfaz(v, r):
         cinta.pestanas[i].click()
     r.check(cinta.pestana_actual() == "UTILIDADES", "Las pestañas cambian el contenido de la cinta")
     cinta.pestanas[0].click()
+    QTest.keyClick(v.visor, Qt.Key_S)
+    caja = v.caja
+    fijados = [caja.atajos.item(i).text() for i in range(caja.atajos.count())] if caja else []
+    r.check(caja is not None and caja.isVisible() and caja.titulo.text() == "ATAJOS DE DISEÑO"
+            and fijados == ["Extruir", "Empalme"], f"Tecla S: caja de herramientas con los atajos de diseño {fijados}")
+    QTest.keyClick(caja.campo, Qt.Key_Escape)
+    r.check(not caja.isVisible(), "Esc cierra la caja de herramientas")
 
     # Navegador: ojo de un cuerpo y de la carpeta Origen
     nav, cuerpo = v.navegador, next(iter(v.doc.estado_final.cuerpos))
@@ -231,6 +238,13 @@ def _boceto_en_3d(v, r):
             "Clic en el plano XY: entra al boceto (pestaña BOCETO, paleta y lienzo sobre la vista 3D)")
     r.check(abs(float(v.visor.R[2] @ (0, 0, 1)) - 1) < 1e-9, "La cámara mira el plano del boceto («Mirar a» automático)")
     lz = mb.lienzo
+    QTest.keyClick(lz, Qt.Key_S)
+    QTest.keyClicks(v.caja.campo, "linea")
+    hallados = [v.caja.resultados.item(i).data(Qt.UserRole) for i in range(v.caja.resultados.count())]
+    r.check(v.caja.isVisible() and v.caja.titulo.text() == "ATAJOS DE BOCETO" and "sk_linea" in hallados,
+            f"Tecla S dentro del boceto: atajos de boceto y sus herramientas en la búsqueda {hallados[:3]}")
+    QTest.keyClick(v.caja.campo, Qt.Key_Escape)
+    r.check(not v.caja.isVisible() and mb.activo, "Esc cierra la caja sin salir del boceto")
     v.acciones["sk_rectangulo"].trigger()
     r.check(lz.herramienta == "rectangulo", "La cinta BOCETO elige la herramienta (Rectángulo de 2 puntos, R)")
     _clic(lz, 0, 0)

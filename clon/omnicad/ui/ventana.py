@@ -113,6 +113,7 @@ class VentanaPrincipal(QMainWindow):
         self._eleccion = None               # "boceto" | "plano": qué se está eligiendo en la vista
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
+        self.caja = None                    # caja de herramientas (tecla S), se crea al primer uso
         self._estado_previa = None          # vista previa del comando abierto
         self._indice_boceto = None          # paso del boceto que se edita (vista "retrocedida")
         self.acciones = {}
@@ -292,6 +293,8 @@ class VentanaPrincipal(QMainWindow):
           "Guarda los cuerpos como malla: STL, OBJ, 3MF o PLY.", "exportar_malla")
         A("seleccionar", "Seleccionar", lambda: self.visor.set_modo(None), None,
           "Sale de los modos de navegación (órbita, encuadre, zoom).", "seleccionar")
+        A("caja_herramientas", "Caja de herramientas", self.abrir_caja_herramientas, "S",
+          "Buscá y usá cualquier comando, y fijá los que más usás (en un boceto, con su propia lista).", "chinche")
         A("buscar_comando", "Buscar comando", lambda: self.cinta.buscador.enfocar(), "Ctrl+K",
           "Escribí parte del nombre de un comando y Enter lo ejecuta.", "buscar")
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
@@ -656,6 +659,16 @@ class VentanaPrincipal(QMainWindow):
         m.aboutToShow.connect(sincronizar)
         self.menu_unidades = m
         self.timeline.unidades.setMenu(m)
+
+    def abrir_caja_herramientas(self):
+        """Tecla S: la caja de herramientas junto al ratón (atajos de boceto si hay un boceto abierto)."""
+        from .caja_herramientas import CajaHerramientas
+        if self.caja is None:
+            self.caja = CajaHerramientas(self.acciones, self.prefs, self)
+        pos = self.caja.pos_raton()
+        if not self.rect().contains(pos):
+            pos = self.rect().center()
+        self.caja.abrir("boceto" if self.modo_boceto.activo else "diseno", pos)
 
     def _pref_unidades(self, clave, valor):
         self.prefs[clave] = valor
