@@ -252,7 +252,7 @@ def test_cli_dev_screenshot_real(tmp_path, capsys):
 
 
 # ---------------------------------------------------------------- run_bench (medición de rendimiento)
-CORRIDA = {"importar_s": 1.0, "arranque_s": 2.0, "memoria_inicio_mb": 480.0, "modelo": {"pasos": 73, "agujeros": 64},
+CORRIDA = {"preset": "personalizar", "importar_s": 1.0, "arranque_s": 2.0, "memoria_inicio_mb": 480.0, "modelo": {"pasos": 73, "agujeros": 64},
            "recalculo_completo_s": 0.9, "recalculo_ultimo_paso_s": 0.03, "recalculo_parametro_s": 1.0,
            "mostrar_modelo_s": 0.2, "triangulos": 19196, "memoria_modelo_mb": 518.0,
            "giro": {"cuadros": 120, "fps_dibujo": 265.0, "ms_medio": 3.8, "ms_p95": 4.2, "fps_pantalla": 60.0},

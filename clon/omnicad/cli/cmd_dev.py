@@ -77,7 +77,8 @@ def captura(ns):
 
 def bench(ns):
     r = util.api().llamar(util.api().Sesion(), "run_bench",
-                          {"repetitions": ns.repeticiones, "side": ns.lado, "frames": ns.cuadros})
+                          {"repetitions": ns.repeticiones, "side": ns.lado, "frames": ns.cuadros,
+                           **({"preset": ns.preset} if ns.preset else {})})
     if ns.json:
         print(util.a_json(r))
         return util.codigo(r)
@@ -86,7 +87,7 @@ def bench(ns):
         return 1
     x = r["result"]
     g, m = x["giro"], x["modelo"]
-    util.decir(f"Mediana de {x['repetitions']} corrida(s):")
+    util.decir(f"Mediana de {x['repetitions']} corrida(s), gráficos «{x['preset']}»:")
     util.decir(f"  arranque         {x['arranque_s']} s  (importar: {x['importar_s']} s)")
     util.decir(f"  memoria          {x['memoria_inicio_mb']} MB al arrancar · {x['memoria_modelo_mb']} MB con el modelo "
                f"· pico {x['memoria_pico_mb']} MB")
@@ -128,4 +129,6 @@ def registrar(sub, comun):
     b.add_argument("--repeticiones", type=int, default=3, help="cuántas veces medir (defecto 3)")
     b.add_argument("--lado", type=int, default=8, help="agujeros por lado del modelo grande (defecto 8 → 64)")
     b.add_argument("--cuadros", type=int, default=120, help="cuadros de la órbita (defecto 120)")
+    b.add_argument("--preset", choices=("rendimiento", "equilibrado", "calidad", "personalizar"),
+                   help="valor predefinido de gráficos con el que medir (defecto: el de fábrica)")
     b.set_defaults(func=bench)

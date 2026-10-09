@@ -13,6 +13,7 @@ por `perfiles.py`, así la capa de kernel queda aislada.
 import math
 
 import numpy as np
+from OCP.BRepTools import BRepTools
 from OCP.BRep import BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
@@ -28,7 +29,8 @@ from OCP.Bnd import Bnd_Box
 from OCP.GCPnts import GCPnts_TangentialDeflection
 from OCP.GeomAbs import GeomAbs_Plane
 from OCP.GProp import GProp_GProps
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_SOLID
 from OCP.OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher
 from OCP.TopExp import TopExp, TopExp_Explorer
@@ -323,8 +325,12 @@ def se_tocan(a, b, tolerancia=1e-6):
 
 
 # ---------------------------------------------------------------- teselado para el visor y exportación
-def teselar_por_cara(forma, deflexion=0.05, angular=0.3):
-    """[(cara, triángulos Kx3x3)]: sirve para elegir caras con el ratón (picking)."""
+def teselar_por_cara(forma, deflexion=0.05, angular=0.3, rehacer=False):
+    """[(cara, triángulos Kx3x3)]: sirve para elegir caras con el ratón (picking). OpenCascade guarda la malla en la
+    forma y, si ya tiene una MÁS FINA, la reusa aunque se pida una más gruesa (cilindro: 88 triángulos pedidos, 396
+    devueltos); `rehacer=True` la borra antes para que el detalle pedido se respete."""
+    if rehacer:
+        BRepTools.Clean_s(forma)
     BRepMesh_IncrementalMesh(forma, deflexion, False, angular, True)
     salida = []
     for cara in caras(forma):
@@ -342,10 +348,11 @@ def teselar_por_cara(forma, deflexion=0.05, angular=0.3):
     return salida
 
 
-def teselar(forma, deflexion=0.05, angular=0.3):
-    """Devuelve (vertices Nx3, normales Nx3) como triángulos sueltos (3 filas por triángulo), float32."""
+def teselar(forma, deflexion=0.05, angular=0.3, rehacer=False):
+    """Devuelve (vertices Nx3, normales Nx3) como triángulos sueltos (3 filas por triángulo), float32.
+    `rehacer`: ver `teselar_por_cara`. Equivale a la malla de visualización de Fusion (Preferencias › Gráficos)."""
     verts, norms = [], []
-    for _cara, tris in teselar_por_cara(forma, deflexion, angular):
+    for _cara, tris in teselar_por_cara(forma, deflexion, angular, rehacer):
         a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
         n = np.cross(b - a, c - a)
         largo = np.linalg.norm(n, axis=1, keepdims=True)

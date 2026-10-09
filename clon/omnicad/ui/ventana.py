@@ -43,7 +43,7 @@ from .modo_boceto import ModoBoceto
 from .navegador import ORIGEN, Navegador
 from .panel_datos import PanelDatos
 from .panel_timeline import PanelTimeline
-from .preferencias import EFECTOS, PRESETS, DialogoPreferencias, Preferencias
+from .preferencias import DETALLES, EFECTOS, PRESETS, DialogoPreferencias, Preferencias
 from .superposiciones import AreaVisor, BarraNavegacion
 from .visor3d import ENTORNOS, ESTILOS, Visor3D
 
@@ -439,19 +439,20 @@ class VentanaPrincipal(QMainWindow):
         if p["general/camara"] != self._camara_aplicada:     # solo si cambió: no pisa la cámara elegida a mano
             self._camara_aplicada = p["general/camara"]
             c.camara = self._camara_aplicada
-        # Valor predefinido de gráficos: elegir uno fija los efectos; tocar un efecto pasa a "Personalizar".
+        # Valor predefinido de gráficos: elegir uno fija todo junto; tocar una de sus claves pasa a "Personalizar".
         preset = p["graficos/preset"]
         if preset != self._preset_aplicado:
             if preset in PRESETS and self._preset_aplicado is not None:
-                for k, valor in PRESETS[preset].items():
-                    p[f"vista/efecto_{k}"] = valor
+                for clave, valor in PRESETS[preset].items():
+                    p[clave] = valor
             self._preset_aplicado = preset
-        elif preset in PRESETS and any(p[f"vista/efecto_{k}"] != v for k, v in PRESETS[preset].items()):
+        elif preset in PRESETS and any(p[clave] != valor for clave, valor in PRESETS[preset].items()):
             p["graficos/preset"] = self._preset_aplicado = "personalizar"
         c.efectos = {k: p[f"vista/efecto_{k}"] for k in EFECTOS}
-        teselado = 0.02 if p["graficos/preset"] == "calidad" else 0.05
-        if teselado != c.teselado:
-            c.teselado = teselado
+        c.dinamico, c.fps_minimo, c.limite_fps = p["graficos/dinamico"], p["graficos/fps_minimo"], p["graficos/limite_fps"]
+        teselado, angular = DETALLES.get(p["graficos/detalle"], DETALLES["automatico"])
+        if (teselado, angular) != (c.teselado, c.angular):
+            c.teselado, c.angular = teselado, angular
             for v in self.area.visores:
                 v.invalidar_teselado()
             if self.doc is not None:
@@ -580,6 +581,7 @@ class VentanaPrincipal(QMainWindow):
         dlg = DialogoPreferencias(self.prefs, self, pagina)
         dlg.aplicado.connect(self.aplicar_preferencias)
         dlg.tema_elegido.connect(self.aplicar_tema)         # vista previa al instante, antes de Aplicar
+        dlg.graficos_cambiados.connect(self.aplicar_preferencias)   # Gráficos: al instante
         dlg.rejected.connect(lambda: self.aplicar_tema())   # Cancelar: vuelve al tema guardado
         dlg.exec()
 

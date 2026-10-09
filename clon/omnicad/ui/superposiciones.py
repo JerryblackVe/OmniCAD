@@ -284,7 +284,8 @@ class BarraNavegacion(QFrame):
             self._opcion(sub, "   " + ENTORNOS[clave][0], "entorno", clave, grupo=g)
         sub = m.addMenu("Valor predefinido de gráficos")
         g = QActionGroup(self)
-        for clave, texto in (("rendimiento", "Rendimiento"), ("calidad", "Calidad"), ("personalizar", "Personalizar")):
+        for clave, texto in (("rendimiento", "Rendimiento"), ("equilibrado", "Equilibrado"), ("calidad", "Calidad"),
+                             ("personalizar", "Personalizar")):
             self._opcion(sub, texto, "preset", clave, grupo=g)
         sub = m.addMenu("Efectos")
         indicador = sub.addAction("Valor predefinido de gráficos")

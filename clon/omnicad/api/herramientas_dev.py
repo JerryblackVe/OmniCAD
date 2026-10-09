@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Literal
 
 from ..ui.captura import SIN_PANTALLA
 from .errores import ErrorAPI, error
@@ -207,11 +208,13 @@ def mediana_de_corridas(corridas):
 @herramienta("run_bench", "dev", "Mide el rendimiento de OmniCAD con la ventana real: arranque, memoria, recálculo de "
              "un modelo grande (placa con N×N agujeros) y cuadros por segundo al girar la vista. Repite la medición y "
              "devuelve la mediana de cada número. Sirve para comparar antes y después de optimizar.", modifica=False)
-def run_bench(sesion, repetitions: int = 3, side: int = 8, frames: int = 120):
+def run_bench(sesion, repetitions: int = 3, side: int = 8, frames: int = 120,
+              preset: Literal["rendimiento", "equilibrado", "calidad", "personalizar"] | None = None):
     """
     repetitions: cuántas veces medir (1 a 10); el resultado es la mediana de cada número.
     side: agujeros por lado del modelo grande (1 a 20; 8 = 64 agujeros y 73 pasos).
     frames: cuadros de la órbita para medir los cuadros por segundo (10 a 1000).
+    preset: valor predefinido de gráficos con el que medir; vacío = el de fábrica (personalizar).
     """
     if not (1 <= repetitions <= 10 and 1 <= side <= 20 and 10 <= frames <= 1000):
         raise error("INVALID_ARGUMENTS", "repetitions va de 1 a 10, side de 1 a 20 y frames de 10 a 1000.")
@@ -219,7 +222,7 @@ def run_bench(sesion, repetitions: int = 3, side: int = 8, frames: int = 120):
     corridas = []
     for _ in range(repetitions):
         argv = [sys.executable, "-m", "omnicad.ui.bench", "--lado", str(side), "--cuadros", str(frames),
-                "--t0", repr(time.time())]
+                "--t0", repr(time.time())] + (["--preset", preset] if preset else [])
         codigo, salida = _correr(argv, TIMEOUT_BENCH)
         if codigo is None:
             raise ErrorAPI("OPERATION_FAILED", f"La medición pasó de {TIMEOUT_BENCH} s y se cortó.")

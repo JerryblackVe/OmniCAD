@@ -33,6 +33,10 @@ DEFECTOS = {
     "atajos/boceto": "",
     "material/aspecto": "acero",
     "graficos/preset": "personalizar",
+    "graficos/detalle": "automatico",        # teselado: automatico (según el tamaño de cada pieza), bajo, medio, alto
+    "graficos/dinamico": True,               # Fusion «Dynamic»: menos efectos al navegar si baja de fps_minimo
+    "graficos/fps_minimo": 30,               # Fusion «Minimum framerate during navigation (FPS)»
+    "graficos/limite_fps": 0,                # 0 = sin límite; 30 o 15 ahorran batería
     "unidades/precision": 3,
     "unidades/precision_angular": 1,
     "unidades/ocultar_ceros": True,
@@ -58,9 +62,22 @@ DEFECTOS = {
     "vista/panel_datos": False,             # Fusion arranca con el panel de datos cerrado
 }
 EFECTOS = ("cupula", "suelo", "sombra_suelo", "reflejo", "aa")
-# Valores predefinidos de gráficos (como Fusion: Rendimiento apaga los efectos; Calidad prende los caros)
-PRESETS = {"rendimiento": {"cupula": True, "suelo": False, "sombra_suelo": False, "reflejo": False, "aa": False},
-           "calidad": {"cupula": True, "suelo": True, "sombra_suelo": True, "reflejo": False, "aa": True}}
+# Valores predefinidos de gráficos. Fusion trae Rendimiento, Calidad y Personalizar; «Equilibrado» lo pidió el usuario
+# (2026-10-09). Cada uno fija todo junto: efectos, detalle de las piezas y «Dinámico». El límite de cuadros no: es
+# para ahorrar batería y lo elige cada uno. Tocar cualquiera de estas claves pasa a «Personalizar».
+_EFECTOS_BASE = {"vista/efecto_cupula": True, "vista/efecto_suelo": False, "vista/efecto_sombra_suelo": False,
+                 "vista/efecto_reflejo": False}
+PRESETS = {
+    "rendimiento": {**_EFECTOS_BASE, "vista/efecto_aa": False, "graficos/detalle": "bajo", "graficos/dinamico": True},
+    "equilibrado": {**_EFECTOS_BASE, "vista/efecto_aa": True, "graficos/detalle": "automatico",
+                    "graficos/dinamico": True},
+    "calidad": {**_EFECTOS_BASE, "vista/efecto_suelo": True, "vista/efecto_sombra_suelo": True, "vista/efecto_aa": True,
+                "graficos/detalle": "alto", "graficos/dinamico": False},
+}
+# Teselado por nivel de detalle: (deflexión en mm, ángulo en radianes). Deflexión None = automática según el tamaño
+# de cada pieza (ui/visor3d.deflexion_automatica). El ángulo manda en las piezas redondas: con 0.3 rad, «bajo» y
+# «automático» daban los mismos 17244 triángulos en el modelo del bench (2026-10-09).
+DETALLES = {"automatico": (None, 0.3), "bajo": (0.2, 0.6), "medio": (0.05, 0.3), "alto": (0.01, 0.2)}
 MAX_RECIENTES = 15
 
 
@@ -165,7 +182,16 @@ PAGINAS = [
     ]),
     ("graficos", None, "Gráficos", "Preferencias que se utilizan para controlar la visualización de gráficos", [
         ("graficos/preset", "Valor predefinido de gráficos", "combo",
-         [("rendimiento", "Rendimiento"), ("calidad", "Calidad"), ("personalizar", "Personalizar")]),
+         [("rendimiento", "Rendimiento"), ("equilibrado", "Equilibrado"), ("calidad", "Calidad"),
+          ("personalizar", "Personalizar")]),
+        ("graficos/detalle", "Nivel de detalle de las piezas", "combo",
+         [("automatico", "Automático (según el tamaño de cada pieza)"), ("bajo", "Bajo (más rápido)"),
+          ("medio", "Medio"), ("alto", "Alto (más fino)")]),
+        ("graficos/dinamico", "Dinámico (menos efectos al girar si la vista se pone lenta)", "check", None),
+        ("graficos/fps_minimo", "Velocidad mínima de cuadros al navegar (FPS)", "combo",
+         [(n, str(n)) for n in (15, 20, 30, 45, 60)]),
+        ("graficos/limite_fps", "Límite de cuadros por segundo", "combo",
+         [(0, "Sin límite"), (60, "60"), (30, "30 (ahorro de batería)"), (15, "15 (máximo ahorro de batería)")]),
         ("vista/efecto_cupula", "Cúpula de entorno", "check", None),
         ("vista/efecto_suelo", "Plano del suelo", "check", None),
         ("vista/efecto_sombra_suelo", "Sombra en el suelo", "check", None),
@@ -187,6 +213,9 @@ PAGINAS = [
 ]
 
 
+CLAVES_GRAFICOS = tuple(clave for pagina, *_r, filas in PAGINAS if pagina == "graficos" for clave, *_x in filas if clave)
+
+
 def _combo_temas(actual):
     """Combo con los temas incluidos y los del usuario."""
     lista, _avisos = temas.disponibles()
@@ -200,6 +229,7 @@ def _combo_temas(actual):
 class DialogoPreferencias(QDialog):
     aplicado = Signal()
     tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
+    graficos_cambiados = Signal()      # vista previa: Preferencias › Gráficos ya escritas en prefs (al instante)
 
     def __init__(self, prefs, parent=None, inicial="general"):
         super().__init__(parent)
@@ -223,6 +253,13 @@ class DialogoPreferencias(QDialog):
             items[pagina] = it
             self.pila.addWidget(self._pagina(filas, descripcion))
         self.arbol.expandAll()
+        # Gráficos al instante: cada cambio se escribe y se ve en la vista; Cancelar vuelve a lo que había.
+        self._sincronizando = False
+        self._graficos_originales = {k: prefs[k] for k in CLAVES_GRAFICOS}
+        for k in CLAVES_GRAFICOS:
+            c = self.controles[k]
+            (c.currentIndexChanged if isinstance(c, QComboBox) else c.toggled).connect(
+                lambda *_a, k=k: self._grafico_cambiado(k))
         self.arbol.currentItemChanged.connect(self._ir)
         self.arbol.setCurrentItem(items.get(inicial, items["general"]))    # p. ej. "valores" desde la barra de unidades
 
@@ -371,6 +408,43 @@ class DialogoPreferencias(QDialog):
 
     def _cambio(self, *_):
         self.b_aplicar.setEnabled(True)
+
+    # ------------------------------------------------------------ gráficos (al instante)
+    def _poner(self, clave, valor):
+        c = self.controles[clave]
+        if isinstance(c, QComboBox):
+            c.setCurrentIndex(max(c.findData(valor), 0))
+        else:
+            c.setChecked(bool(valor))
+
+    def _grafico_cambiado(self, clave):
+        """Elegir un valor predefinido pone sus valores en los demás controles; tocar uno de esos controles pasa a
+        «Personalizar» (como Fusion). Después se escribe todo y la vista lo muestra en el acto."""
+        if self._sincronizando:
+            return
+        self._sincronizando = True
+        try:
+            valores = self.valores()
+            preset = valores["graficos/preset"]
+            if clave == "graficos/preset" and preset in PRESETS:
+                for k, v in PRESETS[preset].items():
+                    self._poner(k, v)
+            elif preset in PRESETS and clave in PRESETS[preset] and valores[clave] != PRESETS[preset][clave]:
+                self._poner("graficos/preset", "personalizar")
+        finally:
+            self._sincronizando = False
+        valores = self.valores()
+        for k in CLAVES_GRAFICOS:
+            self.prefs[k] = valores[k]
+        self.graficos_cambiados.emit()
+
+    def reject(self):
+        actuales = {k: self.prefs[k] for k in CLAVES_GRAFICOS}
+        if actuales != self._graficos_originales:
+            for k, v in self._graficos_originales.items():
+                self.prefs[k] = v
+            self.graficos_cambiados.emit()
+        super().reject()
 
     def valores(self):
         salida = {}

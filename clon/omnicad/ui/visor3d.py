@@ -20,6 +20,7 @@ rejilla del diseño o del boceto activo, sombreado azul de perfiles y "Corte" po
 Eje Z hacia arriba (como la opción "Z hacia arriba" de Fusion; práctico para impresión 3D).
 """
 import math
+import time
 
 import numpy as np
 from OpenGL import GL
@@ -158,7 +159,7 @@ def rayo_triangulos(origen, direccion, tris):
 
 
 
-def teselar_cuerpo(forma, deflexion):
+def teselar_cuerpo(forma, deflexion, angular=0.3):
     """(vértices, normales) de triángulos sueltos para dibujar un cuerpo B-rep o de malla."""
     if es_malla(forma):
         v = np.asarray(forma.vertices, float)[np.asarray(forma.caras, int)]
@@ -166,7 +167,23 @@ def teselar_cuerpo(forma, deflexion):
         largo = np.linalg.norm(n, axis=1, keepdims=True)
         n = n / np.where(largo == 0, 1.0, largo)
         return v.reshape(-1, 3).astype(np.float32), np.repeat(n, 3, axis=0).astype(np.float32)
-    return geo.teselar(forma, deflexion)
+    return geo.teselar(forma, deflexion, angular, rehacer=True)    # el detalle elegido manda, aunque haya otra malla
+
+
+# Detalle «Automático»: la deflexión sigue al tamaño de cada pieza (diagonal de su caja × factor), entre estos topes.
+FACTOR_DETALLE_AUTO, DEFLEXION_MIN, DEFLEXION_MAX = 3e-4, 0.01, 0.5
+# Orden en que «Dinámico» apaga cosas al navegar (Fusion: «reduced or toggled off in priority order»).
+DEGRADACION = (("reflejo",), ("suelo", "sombra_suelo"), ("aa",))
+
+
+def deflexion_automatica(forma):
+    """Deflexión (mm) para teselar `forma` con el detalle «Automático»: fina en piezas chicas, gruesa en grandes."""
+    try:
+        mn, mx = geo.caja_envolvente(forma)
+        diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
+    except Exception:  # noqa: BLE001 — una forma rara no debe impedir dibujar: se usa el medio
+        return 0.05
+    return min(max(diag * FACTOR_DETALLE_AUTO, DEFLEXION_MIN), DEFLEXION_MAX)
 
 
 def aristas_cuerpo(forma):
@@ -240,7 +257,13 @@ class ConfigVista:
         self.invertir_zoom = False
         self.tipo_orbita = "libre"
         self.camara = "perspectiva"         # perspectiva | ortografica | persp_orto_caras
-        self.teselado = 0.05                # deflexión: más chica = más fina ("Calidad")
+        self.teselado = None                # deflexión en mm (más chica = más fina); None = automática por pieza
+        self.angular = 0.3                  # ángulo del teselado en radianes (manda en las piezas redondas)
+        # Preferencias › Gráficos, como Fusion: «Dinámico» baja efectos mientras se navega si un cuadro tarda más que
+        # 1/fps_minimo; `limite_fps` (0 = sin límite) espacia los cuadros para ahorrar batería.
+        self.dinamico = True
+        self.fps_minimo = 30
+        self.limite_fps = 0
 
     def colores_fondo(self):
         _, arriba, abajo, _ = ENTORNOS.get(self.entorno, ENTORNOS["tema"])
@@ -316,7 +339,57 @@ class Visor3D(QOpenGLWidget):
         self.opciones_boceto = {"rejilla": True, "corte": False}
         self.paso_boceto = None            # paso de la rejilla del boceto (lo fija el modo boceto)
         self.info_gl = ""
+        self._navegando = False            # orbitando, desplazando o haciendo zoom (para «Dinámico»)
+        self._degradado = 0                # cuántos escalones de DEGRADACION están apagados ahora
+        self._ms_cuadro = 0.0              # lo que tardó el último paintGL (CPU)
+        self._t_cuadro = 0.0               # cuándo empezó el último paintGL (para el límite de cuadros)
+        self._t_fin_nav = QTimer(self, singleShot=True, interval=250)
+        self._t_fin_nav.timeout.connect(self._fin_navegacion)
+        self._t_limite = QTimer(self, singleShot=True)
+        self._t_limite.timeout.connect(lambda: QOpenGLWidget.update(self))
         self._fijar_direccion(*VISTAS["iso"])
+
+    # ------------------------------------------------------------ rendimiento (Preferencias › Gráficos)
+    def update(self, *args):
+        """Con «Límite de cuadros por segundo», junta los pedidos de redibujo para no pasar de ese ritmo."""
+        limite = self.config.limite_fps
+        if args or not limite:
+            return QOpenGLWidget.update(self, *args)
+        espera = self._t_cuadro + 1.0 / limite - time.perf_counter()
+        if espera <= 0:
+            QOpenGLWidget.update(self)
+        elif not self._t_limite.isActive():
+            self._t_limite.start(int(espera * 1000) + 1)
+
+    def _navegar(self):
+        self._navegando = True
+        self._t_fin_nav.start()
+
+    def _fin_navegacion(self):
+        """Al soltar (250 ms sin moverse): vuelve todo el detalle."""
+        self._navegando = False
+        if self._degradado:
+            self._degradado = 0
+            self.update()
+
+    def _ajustar_degradado(self):
+        cfg = self.config
+        if not (self._navegando and cfg.dinamico):
+            self._degradado = 0
+            return
+        presupuesto = 1000.0 / max(cfg.fps_minimo, 1)
+        if self._ms_cuadro > presupuesto and self._degradado < len(DEGRADACION) + 1:
+            self._degradado += 1           # el último escalón (len + 1) además saca las aristas
+        elif self._ms_cuadro < presupuesto * 0.5 and self._degradado:
+            self._degradado -= 1
+
+    def efectos_visibles(self):
+        """Los efectos de la configuración menos los que «Dinámico» apagó mientras se navega."""
+        efectos = dict(self.config.efectos)
+        for grupo in DEGRADACION[:self._degradado]:
+            for k in grupo:
+                efectos[k] = False
+        return efectos
 
     # ------------------------------------------------------------ datos de la escena
     def set_modelo(self, estado, ocultos=frozenset(), excluir_bocetos=(), apariencias=None):
@@ -330,7 +403,7 @@ class Visor3D(QOpenGLWidget):
             if clave in self._cache:
                 datos = self._cache[clave]
             else:
-                v, n = teselar_cuerpo(c.forma, self.config.teselado)
+                v, n = teselar_cuerpo(c.forma, self._deflexion(c.forma), self.config.angular)
                 datos = (c.forma, v, n, aristas_cuerpo(c.forma))
             cache[clave] = datos
             if c.id not in ocultos:
@@ -351,6 +424,12 @@ class Visor3D(QOpenGLWidget):
                 polis.extend(polilineas_boceto(br))
         self._bocetos = _segmentos(polis)
         self.update()
+
+    def _deflexion(self, forma):
+        """Deflexión del detalle elegido (Preferencias › Gráficos); con «Automático», según el tamaño de la pieza."""
+        if self.config.teselado is not None or es_malla(forma):
+            return self.config.teselado or 0.05
+        return deflexion_automatica(forma)
 
     def invalidar_teselado(self):
         """Tras cambiar la calidad del teselado ("Valor predefinido de gráficos")."""
@@ -583,7 +662,7 @@ class Visor3D(QOpenGLWidget):
             tris = np.asarray(forma.vertices, float)[np.asarray(forma.caras, int)]
             self._pick[id(forma)] = ([], tris, np.zeros(len(tris), int))
         if id(forma) not in self._pick:
-            caras = geo.teselar_por_cara(forma, self.config.teselado)
+            caras = geo.teselar_por_cara(forma, self._deflexion(forma), self.config.angular)   # la misma malla que se ve
             if caras:
                 tris = np.concatenate([t for _, t in caras])
                 indice = np.concatenate([np.full(len(t), i) for i, (_, t) in enumerate(caras)])
@@ -1186,7 +1265,7 @@ class Visor3D(QOpenGLWidget):
             GL.glDisable(GL.GL_LIGHTING)
             GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
         claro = not con_color and oscuro
-        if estilo != "sombreado":
+        if estilo != "sombreado" and not (estilo == "sombreado_aristas" and self._degradado > len(DEGRADACION)):
             GL.glLineWidth(1.4 if not con_color else 1.2)
             GL.glColor3f(*((0.88, 0.90, 0.94) if claro else (0.10, 0.11, 0.13)))
             if estilo == "alambrico":
@@ -1261,7 +1340,17 @@ class Visor3D(QOpenGLWidget):
         GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
 
     def paintGL(self):
+        inicio = self._t_cuadro = time.perf_counter()
+        self._ajustar_degradado()
         cfg = self.config
+        efectos_cfg, cfg.efectos = cfg.efectos, self.efectos_visibles()
+        try:
+            self._pintar(cfg)
+        finally:
+            cfg.efectos = efectos_cfg
+            self._ms_cuadro = (time.perf_counter() - inicio) * 1000
+
+    def _pintar(self, cfg):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT | GL.GL_STENCIL_BUFFER_BIT)
         (GL.glEnable if cfg.efectos.get("aa", True) else GL.glDisable)(GL.GL_MULTISAMPLE)
         self._fondo()
@@ -1555,6 +1644,7 @@ class Visor3D(QOpenGLWidget):
             return
         d = pos - self._ultimo
         self._ultimo = pos
+        self._navegar()
         if self._accion == "orbita":
             self.orbitar(d.x(), d.y())
         elif self._accion == "zoom":
@@ -1563,6 +1653,7 @@ class Visor3D(QOpenGLWidget):
             self.desplazar(d.x(), d.y())
 
     def wheelEvent(self, e):
+        self._navegar()
         self.acercar(e.angleDelta().y() / 120.0, e.position())
 
     def _dibujar_lazo(self):

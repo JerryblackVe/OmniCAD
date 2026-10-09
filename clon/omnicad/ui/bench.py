@@ -88,7 +88,7 @@ def _cronometro(funcion):
     return round(time.perf_counter() - t, 3)
 
 
-def medir(lado, cuadros, t0):
+def medir(lado, cuadros, t0, preset=None):
     from PySide6.QtCore import QSettings
     from PySide6.QtGui import QSurfaceFormat
     from PySide6.QtTest import QTest
@@ -112,6 +112,12 @@ def medir(lado, cuadros, t0):
     r = {"importar_s": importar_s}
     with tempfile.TemporaryDirectory(prefix="omnicad_bench_") as tmp:
         prefs = Preferencias(QSettings(str(Path(tmp) / "prefs.ini"), QSettings.IniFormat))
+        if preset:                          # Preferencias › Gráficos › Valor predefinido (fija todo junto)
+            from .preferencias import PRESETS
+            prefs["graficos/preset"] = preset
+            for clave, valor in PRESETS.get(preset, {}).items():
+                prefs[clave] = valor
+        r["preset"] = prefs["graficos/preset"]
         try:
             v = VentanaPrincipal(prefs=prefs)
         except Exception as e:  # noqa: BLE001 — sin contexto OpenGL la app no puede dibujar
@@ -187,9 +193,11 @@ def main(argv=None) -> int:
     ap.add_argument("--lado", type=int, default=8, help="agujeros por lado del modelo grande (defecto 8 → 64)")
     ap.add_argument("--cuadros", type=int, default=120, help="cuadros de la órbita para medir los FPS")
     ap.add_argument("--t0", type=float, default=None, help="hora (time.time) en que se lanzó el proceso")
+    ap.add_argument("--preset", choices=("rendimiento", "equilibrado", "calidad", "personalizar"),
+                    help="valor predefinido de gráficos (defecto: el de fábrica, personalizar)")
     args = ap.parse_args(argv)
     try:
-        codigo, r = medir(max(1, args.lado), max(10, args.cuadros), args.t0)
+        codigo, r = medir(max(1, args.lado), max(10, args.cuadros), args.t0, args.preset)
     except Exception as e:  # noqa: BLE001 — la falla sale como mensaje claro
         print(f"bench: {type(e).__name__}: {e}", file=sys.stderr)
         return FALLA

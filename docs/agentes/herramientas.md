@@ -871,4 +871,5 @@ Mide el rendimiento de OmniCAD con la ventana real: arranque, memoria, recálcul
   - `repetitions` (entero; opcional, por defecto `3`): cuántas veces medir (1 a 10); el resultado es la mediana de cada número.
   - `side` (entero; opcional, por defecto `8`): agujeros por lado del modelo grande (1 a 20; 8 = 64 agujeros y 73 pasos).
   - `frames` (entero; opcional, por defecto `120`): cuadros de la órbita para medir los cuadros por segundo (10 a 1000).
+  - `preset` ("rendimiento" | "equilibrado" | "calidad" | "personalizar" o null; opcional, por defecto `null`): valor predefinido de gráficos con el que medir; vacío = el de fábrica (personalizar).
 - CLI: `omnicad call run_bench --doc pieza.omnicad`
