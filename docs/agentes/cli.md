@@ -288,6 +288,7 @@ OK captura …\ventana.png  1600x900  <bytes> bytes
 
 - `--example`: abre el modelo de ejemplo. `--project ruta.omnicad`: abre ese proyecto (no se combinan).
 - `--size ANCHOxALTO`: por defecto `1600x900`.
+- `--theme NOMBRE`: tema de la interfaz: `oscuro_moderno` (el de fábrica), `claro_moderno`, `azul_profesional`, `minimalista`, `clasico` o `usuario:<archivo>` (un `.json` de la carpeta de temas). Un nombre que no existe falla con `INVALID_ARGUMENTS`.
 - Necesita una pantalla con OpenGL: sin eso falla con `OPERATION_FAILED`.
 - Salida: 0 si salió, 1 si falló la captura, 2 si el uso es inválido (la salida no es `.png`, el tamaño está mal, el proyecto no existe).
 

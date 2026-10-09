@@ -22,7 +22,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from .. import NOMBRE_APP, VERSION
+from .. import NOMBRE_APP, VERSION, carpeta_datos
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
 from ..timeline.documento import Documento, ErrorDocumento
@@ -113,8 +113,7 @@ def leer_miniatura(ruta):
 
 # ---------------------------------------------------------------- autoguardado
 def carpeta_autoguardado():
-    base = os.environ.get("LOCALAPPDATA") or str(Path.home())
-    carpeta = Path(base) / NOMBRE_APP / "autoguardado"
+    carpeta = carpeta_datos() / "autoguardado"
     carpeta.mkdir(parents=True, exist_ok=True)
     return carpeta
 

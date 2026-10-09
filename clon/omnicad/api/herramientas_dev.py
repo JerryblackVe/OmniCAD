@@ -130,13 +130,14 @@ def _dimensiones_png(datos):
 @herramienta("app_screenshot", "dev", "Abre la ventana REAL de OmniCAD en otro proceso, espera a que dibuje, captura "
              "la ventana entera y la cierra. Es la forma de ver la interfaz tal como la ve una persona.", modifica=False)
 def app_screenshot(sesion, path: str | None = None, example: bool = False, project: str | None = None,
-                   width: int = 1600, height: int = 900):
+                   width: int = 1600, height: int = 900, theme: str | None = None):
     """
     path: ruta del PNG donde guardar la captura además de devolverla; vacío = no se guarda en disco.
     example: true abre el modelo de ejemplo.
     project: ruta de un proyecto .omnicad a abrir; no se combina con example.
     width: ancho de la captura en píxeles (320 a 4000).
     height: alto de la captura en píxeles (240 a 3000).
+    theme: tema de la interfaz: oscuro_moderno, claro_moderno, azul_profesional, minimalista, clasico o usuario:<archivo>; vacío = el de fábrica.
     """
     if example and project:
         raise error("INVALID_ARGUMENTS", "Usá example o project, no los dos.")
@@ -144,6 +145,11 @@ def app_screenshot(sesion, path: str | None = None, example: bool = False, proje
         raise error("INVALID_ARGUMENTS", "El tamaño tiene que ser de 320 a 4000 px de ancho y de 240 a 3000 px de alto.")
     if project is not None and not Path(project).is_file():
         raise error("FILE_NOT_FOUND", f"No existe el proyecto: {project}")
+    if theme:
+        from ..ui import temas
+        validos = [clave for clave, _nombre, _propio in temas.disponibles()[0]]
+        if theme not in validos:
+            raise error("INVALID_ARGUMENTS", f"No existe el tema '{theme}'. Temas: {', '.join(validos)}.")
     temporal = None
     if path:
         destino = Path(path).resolve()
@@ -153,6 +159,8 @@ def app_screenshot(sesion, path: str | None = None, example: bool = False, proje
     try:
         destino.parent.mkdir(parents=True, exist_ok=True)
         argv = [sys.executable, "-m", "omnicad.ui.captura", str(destino), "--tamano", f"{width}x{height}"]
+        if theme:
+            argv += ["--tema", theme]
         if example:
             argv.append("--ejemplo")
         elif project is not None:

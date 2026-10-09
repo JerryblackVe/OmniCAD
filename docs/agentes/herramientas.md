@@ -858,4 +858,5 @@ Abre la ventana REAL de OmniCAD en otro proceso, espera a que dibuje, captura la
   - `project` (texto; opcional, por defecto `null`): ruta de un proyecto .omnicad a abrir; no se combina con example.
   - `width` (entero; opcional, por defecto `1600`): ancho de la captura en píxeles (320 a 4000).
   - `height` (entero; opcional, por defecto `900`): alto de la captura en píxeles (240 a 3000).
+  - `theme` (texto; opcional, por defecto `null`): tema de la interfaz: oscuro_moderno, claro_moderno, azul_profesional, minimalista, clasico o usuario:<archivo>; vacío = el de fábrica.
 - CLI: `omnicad call app_screenshot --doc pieza.omnicad`

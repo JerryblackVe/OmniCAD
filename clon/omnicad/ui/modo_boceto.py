@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QGridL
 
 from .. import NOMBRE_APP
 from ..nucleo.perfiles import detectar
+from . import temas
 from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo
 from .iconos import icono
 
@@ -135,8 +136,6 @@ class PaletaBoceto(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("paleta_boceto")
-        self.setStyleSheet("#paleta_boceto { background: #f5f5f5; border: 1px solid #c8c8c8; }"
-                           "#paleta_boceto QLabel { font-size: 9pt; }")
         v = QVBoxLayout(self)
         v.setSizeConstraint(QLayout.SetFixedSize)      # el panel mide siempre lo que su contenido
         v.setContentsMargins(8, 4, 8, 8)
@@ -274,13 +273,13 @@ class PaletaBoceto(QFrame):
             self.estado.setText("")
         elif not resultado.ok:
             self.estado.setText(f"⚠ {resultado.descripcion()}")
-            self.estado.setStyleSheet("color: #b00020;")
+            temas.poner_rol(self.estado, "error")
         elif resultado.gdl == 0:
             self.estado.setText("Totalmente restringido.")
-            self.estado.setStyleSheet("color: #1b6e20;")
+            temas.poner_rol(self.estado, "ok")
         else:
             self.estado.setText(f"Faltan {resultado.gdl} grado(s) de libertad por restringir.")
-            self.estado.setStyleSheet("color: #5a5a5a;")
+            temas.poner_rol(self.estado, "tenue")
         self.ajustar()
 
 

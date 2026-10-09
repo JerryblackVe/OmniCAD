@@ -31,7 +31,7 @@ from PySide6.QtWidgets import QWidget
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, es_malla  # noqa: F401 — se re-exportan
-from .estilo import LIENZO_RGB
+from . import temas
 
 
 class BandaSeleccion(QWidget):
@@ -68,10 +68,16 @@ ESTILOS = {"sombreado": "Sombreado", "sombreado_ocultas": "Sombreado con aristas
            "sombreado_aristas": "Sombreado con solo aristas visibles", "alambrico": "Estructura alámbrica",
            "alambrico_ocultas": "Representación alámbrica con aristas ocultas",
            "alambrico_visibles": "Estructura alámbrica solo con aristas visibles"}
+def _entorno_tema():
+    """El entorno «Tema»: el fondo de la vista 3D del tema ACTIVO (ui/temas.py)."""
+    c = temas.activo()
+    return ("Tema (por defecto)", temas.rgb_f(c["visor_arriba"]), temas.rgb_f(c["visor_abajo"]), 0.26)
+
+
 # Entornos: Fusion usa imágenes HDR; acá cada uno es un degradado de fondo (la "cúpula") con su
 # intensidad de luz. Los nombres son los del menú de Fusion; el aspecto es una aproximación.
 ENTORNOS = {
-    "tema": ("Tema (por defecto)", LIENZO_RGB, LIENZO_RGB, 0.26),
+    "tema": _entorno_tema(),
     "fotomaton": ("Fotomatón", (0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95),
     "rubicon": ("Rubicon River", (0.72, 0.81, 0.90), (0.42, 0.47, 0.40), 0.90),
     "cielo_oscuro": ("Cielo oscuro", (0.14, 0.17, 0.27), (0.03, 0.03, 0.06), 0.80),
@@ -79,6 +85,7 @@ ENTORNOS = {
     "habitacion_gris": ("Habitación gris", (0.62, 0.62, 0.63), (0.40, 0.40, 0.41), 0.90),
     "azul_tranquilidad": ("Azul tranquilidad", (0.62, 0.75, 0.90), (0.26, 0.36, 0.56), 0.90),
 }
+temas.observar(lambda: ENTORNOS.__setitem__("tema", _entorno_tema()))      # al cambiar de tema, cambia el fondo
 # Con el tema oscuro Fusion ilumina con el entorno: los cuerpos se ven gris medio, con poco contraste entre
 # caras y brillos marcados en las curvas (medido en el video: arriba #666, costados #393939–#5f5f5f).
 LUZ_AMBIENTE = {"tema": 0.11}            # el resto de los entornos: 0.30
@@ -1043,6 +1050,10 @@ class Visor3D(QOpenGLWidget):
     def _rejilla(self, plano, paso, color_ejes=True):
         """Rejilla sobre un plano, centrada en la zona que se está mirando (líneas mayores cada 5)."""
         oscuro = self.config.oscuro()
+        if self.config.entorno == "tema":           # el color de la rejilla lo da el tema; los otros entornos, el suyo
+            rojo, verde, azul = temas.rgb_f(temas.color("rejilla"))
+        else:
+            rojo, verde, azul = (0.62, 0.66, 0.74) if oscuro else (0.35, 0.38, 0.45)
         n = 40
         ext = paso * n
         cu, cv = plano.a_uv(self.objetivo)
@@ -1053,10 +1064,7 @@ class Visor3D(QOpenGLWidget):
             u, v = cu + i * paso, cv + i * paso
             mayor_u, mayor_v = round(u / paso) % 5 == 0, round(v / paso) % 5 == 0
             for mayor, a, b in ((mayor_u, (u, cv - ext), (u, cv + ext)), (mayor_v, (cu - ext, v), (cu + ext, v))):
-                if oscuro:
-                    GL.glColor4f(0.62, 0.66, 0.74, 0.40 if mayor else 0.16)
-                else:
-                    GL.glColor4f(0.35, 0.38, 0.45, 0.45 if mayor else 0.22)
+                GL.glColor4f(rojo, verde, azul, (0.40 if mayor else 0.16) if oscuro else (0.45 if mayor else 0.22))
                 GL.glVertex3f(*plano.a_3d(*a))
                 GL.glVertex3f(*plano.a_3d(*b))
         GL.glEnd()

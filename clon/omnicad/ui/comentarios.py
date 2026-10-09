@@ -14,8 +14,6 @@ class PanelComentarios(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("panel_comentarios")
-        self.setStyleSheet("#panel_comentarios { background: #ffffff; border: 1px solid #c8c8c8; }"
-                           "QLabel { color: #555555; font-size: 10px; letter-spacing: 0.5px; }")
         self.doc = None
         self.setFixedWidth(ANCHO)
         lay = QVBoxLayout(self)
@@ -32,13 +30,11 @@ class PanelComentarios(QFrame):
         self.b_mas.setText("+")
         self.b_mas.setAutoRaise(True)
         self.b_mas.setToolTip("<b>Agregar comentario</b><br>Deja una nota en el diseño (se guarda con el proyecto).")
-        self.b_mas.setStyleSheet("QToolButton { border: none; color: #555555; font-size: 13px; padding: 0 4px; }")
         self.b_mas.clicked.connect(self.agregar)
         fila.addWidget(self.b_mas)
         lay.addWidget(cabecera)
         self.lista = QListWidget()
         self.lista.setWordWrap(True)
-        self.lista.setStyleSheet("QListWidget { border: none; border-top: 1px solid #e0e0e0; font-size: 11px; }")
         self.lista.setContextMenuPolicy(Qt.CustomContextMenu)
         self.lista.customContextMenuRequested.connect(self._menu)
         self.lista.setFixedHeight(140)

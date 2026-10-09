@@ -35,7 +35,7 @@ def check(ns):
         # Igual que sin --json: si algún paso falla, sale con 1 (aunque la llamada en sí haya andado).
         return util.codigo(r) if not r["ok"] else (0 if r["result"]["ok"] else 1)
     if not r["ok"]:
-        util.mostrar("run_checks", r)
+        util.mostrar("run_checks", r, False)
         return 1
     res = r["result"]
     util.decir(_linea_paso("ruff", res["ruff"]))
@@ -57,6 +57,8 @@ def captura(ns):
     if ns.project and not Path(ns.project).is_file():
         raise util.UsoError(f"No existe el proyecto: {ns.project}", ["Pasá la ruta de un archivo .omnicad existente."])
     args = {"example": ns.example, "width": ancho, "height": alto}
+    if ns.theme:
+        args["theme"] = ns.theme
     if ns.project:
         args["project"] = str(Path(ns.project).resolve())
     r = util.api().llamar(util.api().Sesion(), "app_screenshot", args)
@@ -66,7 +68,7 @@ def captura(ns):
         print(util.a_json(r))
         return util.codigo(r)
     if not r["ok"]:
-        util.mostrar("app_screenshot", r)
+        util.mostrar("app_screenshot", r, False)
         return 1
     img = r["result"]["image"]
     util.decir(f"OK captura {img['path']}  {img['width']}x{img['height']}  {img['size_bytes']} bytes")
@@ -93,4 +95,7 @@ def registrar(sub, comun):
     s.add_argument("--project", metavar="ruta.omnicad", help="abrir este proyecto")
     s.add_argument("--size", default="1600x900", metavar="ANCHOxALTO",
                    help="tamaño de la captura en píxeles (defecto 1600x900)")
+    s.add_argument("--theme", metavar="NOMBRE",
+                   help="tema de la interfaz: oscuro_moderno (defecto), claro_moderno, azul_profesional, "
+                        "minimalista, clasico o usuario:<archivo>")
     s.set_defaults(func=captura)

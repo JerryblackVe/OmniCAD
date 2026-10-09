@@ -23,7 +23,7 @@ import numpy as np
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
-                               QMessageBox, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+                               QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION
 from ..ejemplo import crear_documento_ejemplo
@@ -33,7 +33,7 @@ from ..nucleo import geometria as geo
 from ..restricciones import Boceto
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpPrimitiva
-from . import estilo, formato
+from . import formato, temas
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
@@ -101,9 +101,10 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self, doc=None, prefs=None):
         super().__init__()
         self.resize(1600, 950)
-        QApplication.instance().setStyleSheet(estilo.QSS)
         self._filtro_info = _FiltroInfoHerramientas(self)
         self.prefs = prefs or Preferencias()
+        self._tema_aplicado = None          # tokens del tema que ya están en la aplicación
+        self._avisos_tema = self.aplicar_tema()     # antes de crear los widgets: nacen con el estilo del tema
         self.doc = None
         self.ocultos = set()
         self.vis = dict(VISIBILIDAD_INICIAL)
@@ -208,6 +209,8 @@ class VentanaPrincipal(QMainWindow):
         for menu in self.findChildren(QMenu):
             menu.installEventFilter(self._filtro_ayuda)
         self.set_documento(doc or Documento())
+        if self._avisos_tema:
+            self.mensaje(self._avisos_tema[0], 10000)
 
     # ------------------------------------------------------------ acciones (comandos)
     def _accion(self, clave, texto, funcion, atajo=None, ayuda=None, ico=None, marcable=False):
@@ -406,8 +409,27 @@ class VentanaPrincipal(QMainWindow):
         c.visibilidad = {k: p[f"vista/vis_{k}"] for k in CLAVES_VISIBILIDAD}
         self.barra_nav.set_estilo(c.estilo_visual)
 
+    def aplicar_tema(self, clave=None):
+        """Preferencias › General › Tema: activa `clave` (o el guardado) en la aplicación entera —QSS, paleta y fondo
+        de la vista 3D— sin reiniciar. Devuelve los avisos (un archivo de tema inválido se ignora, no rompe nada)."""
+        avisos = temas.activar(clave or self.prefs["general/tema"])
+        for a in avisos:
+            log.warning("tema: %s", a)
+        if dict(temas.activo()) != self._tema_aplicado:
+            self._tema_aplicado = dict(temas.activo())
+            temas.aplicar_a_app(QApplication.instance())
+            if hasattr(self, "area"):                      # ya hay ventana armada: repintar lo que pinta a mano
+                for v in self.area.visores:
+                    v.update()
+                for arbol in self.findChildren(QTreeWidget):
+                    arbol.viewport().update()
+        return avisos
+
     def aplicar_preferencias(self):
         p, c = self.prefs, self.visor.config
+        avisos = self.aplicar_tema()
+        if avisos and self.isVisible():
+            self.mensaje(avisos[0], 10000)
         self.temporizador.start(p["general/autoguardado_min"] * 60_000)
         c.esquema_raton, c.invertir_zoom = p["general/raton"], p["general/invertir_zoom"]
         c.aspecto, c.tipo_orbita = p["material/aspecto"], p["general/tipo_orbita"]
@@ -554,6 +576,8 @@ class VentanaPrincipal(QMainWindow):
     def preferencias(self):
         dlg = DialogoPreferencias(self.prefs, self)
         dlg.aplicado.connect(self.aplicar_preferencias)
+        dlg.tema_elegido.connect(self.aplicar_tema)         # vista previa al instante, antes de Aplicar
+        dlg.rejected.connect(lambda: self.aplicar_tema())   # Cancelar: vuelve al tema guardado
         dlg.exec()
 
     def ayuda_comando(self, accion=None):

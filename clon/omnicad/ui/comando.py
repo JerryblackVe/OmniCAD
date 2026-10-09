@@ -18,9 +18,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxL
                                QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
+from . import temas
 from .iconos import icono
-
-AZUL = "#0696d7"
 
 
 class ErrorComando(ValueError):
@@ -287,20 +286,6 @@ class _FilaSeleccion(QWidget):
         self.borrar.setVisible(n > 0)
 
 
-QSS_PANEL = f"""
-#panel_comando {{ background: #ffffff; border: 1px solid #b9b9b9; }}
-#cabecera_comando {{ background: #f0f0f0; border-bottom: 1px solid #d0d0d0; }}
-#titulo_comando {{ font-weight: 600; letter-spacing: 0.3px; }}
-#panel_comando QLabel#etiqueta_cmd {{ color: #3c3c3c; }}
-#seleccion_cmd {{ text-align: left; padding: 3px 8px; border: 1px solid #c8c8c8; background: #fafafa; }}
-#seleccion_cmd[activa="true"] {{ border: 1px solid {AZUL}; background: #e6f4fb; color: {AZUL}; }}
-#seleccion_cmd[lleno="true"] {{ color: #1d1d1d; }}
-#panel_comando QLineEdit, #panel_comando QComboBox, #panel_comando QSpinBox {{ padding: 2px 4px; }}
-#mensaje_comando {{ color: #b00020; }}
-#aviso_comando {{ color: #8a6d00; }}
-"""
-
-
 class PanelComando(QFrame):
     """Panel flotante de un comando. Emite `aceptado(op)` o `cancelado()`."""
     aceptado = Signal(object)
@@ -311,7 +296,6 @@ class PanelComando(QFrame):
         super().__init__(parent)
         self.setObjectName("panel_comando")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet(QSS_PANEL)
         self.comando, self.ctx, self.visor = comando, ctx, visor
         self.campos = comando.campos(ctx)
         self.valores = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in self.campos}
@@ -456,7 +440,7 @@ class PanelComando(QFrame):
                     w.setStyleSheet("")
                 except ErrorExpresion as e:
                     w.setToolTip(str(e))
-                    w.setStyleSheet("background: #ffd9d9;")
+                    w.setStyleSheet(f"background: {temas.color('campo_error')};")
 
     def _cambiar(self, clave, valor):
         self.valores[clave] = valor
@@ -622,7 +606,7 @@ class PanelComando(QFrame):
 
     def _mostrar(self, texto, aviso=False):
         self.mensaje.setObjectName("aviso_comando" if aviso else "mensaje_comando")
-        self.mensaje.setStyleSheet("color: #8a6d00;" if aviso else "color: #b00020;")
+        self.mensaje.setStyleSheet(f"color: {temas.color('aviso' if aviso else 'error')};")
         self.mensaje.setText(texto)
         self.mensaje.setVisible(bool(texto))
         self.adjustSize()

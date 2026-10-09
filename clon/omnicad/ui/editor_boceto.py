@@ -37,7 +37,7 @@ from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, 
 from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, mas_cercano, puntos_primitiva)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion
-from . import formato
+from . import formato, temas
 from .iconos import icono
 
 HERRAMIENTAS = {
@@ -274,8 +274,6 @@ class EntradaValor(QFrame):
         super().__init__(parent)
         self.tab_externo = False
         self.setObjectName("entrada_valor")
-        self.setStyleSheet("#entrada_valor { background: #ffffff; border: 1px solid #0696d7; border-radius: 2px; }"
-                           "QLineEdit { border: 0; padding: 1px 3px; min-width: 70px; }")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(3, 2, 3, 2)
         lay.setSpacing(4)
@@ -316,7 +314,7 @@ class EntradaValor(QFrame):
         return super().eventFilter(obj, e)
 
     def marcar_error(self, i=0):
-        self.campos[i].setStyleSheet("background: #ffd9d9;")
+        self.campos[i].setStyleSheet(f"background: {temas.color('campo_error')};")
 
 
 class Lienzo(QWidget):

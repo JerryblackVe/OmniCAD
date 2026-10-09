@@ -14,6 +14,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFontMetricsF, QIcon, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QWidget
 
+from . import temas
+
 RADIO = 104                 # distancia del centro al punto de anclaje de cada comando
 ALTO_PILDORA = 24
 ANCHO_LISTA = 230
@@ -57,13 +59,14 @@ class _Fila(QWidget):
 
     def paintEvent(self, _e):
         p = QPainter(self)
+        c = temas.activo()
         if self._sobre and self.activo:
-            p.fillRect(self.rect(), QColor("#dcebfb"))
-        p.setPen(QColor("#262626") if self.activo else QColor("#a0a0a0"))
+            p.fillRect(self.rect(), QColor(c["menu_hover"]))
+        p.setPen(QColor(c["texto"] if self.activo else c["texto_inactivo"]))
         r = self.rect().adjusted(12, 0, -10, 0)
         p.drawText(r, Qt.AlignVCenter | Qt.AlignLeft, self.texto)
         if self.atajo:
-            p.setPen(QColor("#8a8a8a"))
+            p.setPen(QColor(c["texto_tenue"]))
             p.drawText(r, Qt.AlignVCenter | Qt.AlignRight, self.atajo)
 
 
@@ -85,15 +88,13 @@ class MenuRadial(QWidget):
         if filas:
             self.lista = QFrame(self)
             self.lista.setObjectName("lista_radial")
-            self.lista.setStyleSheet("#lista_radial { background: #ffffff; border: 1px solid #b9b9b9; }")
             lay = QVBoxLayout(self.lista)
             lay.setContentsMargins(0, 3, 0, 3)
             lay.setSpacing(0)
             for f in filas:
                 if f is None:
-                    linea = QFrame()
+                    linea = QFrame(objectName="linea_radial")
                     linea.setFixedHeight(7)
-                    linea.setStyleSheet("border: none; border-top: 1px solid #e0e0e0; margin: 3px 6px 0 6px;")
                     lay.addWidget(linea)
                     continue
                 texto, funcion, *resto = f
@@ -204,16 +205,21 @@ class MenuRadial(QWidget):
         p.setFont(self.font())
         p.setRenderHint(QPainter.Antialiasing)
         c = self.centro
+        tc = temas.activo()
+        acento = QColor(tc["acento"])
         if self.activo is not None:              # sector resaltado
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(43, 125, 233, 38))
+            acento.setAlpha(46)
+            p.setBrush(acento)
             r = RADIO - 18
             p.drawPie(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), int((90 - self.activo * 45 - 22.5) * 16), 45 * 16)
-        p.setPen(QPen(QColor("#9a9a9a"), 1.2))
-        p.setBrush(QColor(255, 255, 255, 235))
+        p.setPen(QPen(QColor(tc["texto_tenue"]), 1.2))
+        pildora = QColor(tc["menu_fondo"])
+        pildora.setAlpha(240)
+        p.setBrush(pildora)
         p.drawEllipse(c, 9, 9)
         if len(self.niveles) > 1:                # flecha para volver al primer nivel
-            p.setPen(QPen(QColor("#555555"), 1.6))
+            p.setPen(QPen(QColor(tc["texto_tenue"]), 1.6))
             p.drawLine(QPointF(c.x() - 4, c.y() + 2), QPointF(c.x(), c.y() - 3))
             p.drawLine(QPointF(c.x(), c.y() - 3), QPointF(c.x() + 4, c.y() + 2))
         for i, item in enumerate(self.items):
@@ -223,8 +229,8 @@ class MenuRadial(QWidget):
             camino = QPainterPath()
             camino.addRoundedRect(r, 4, 4)
             resaltado = i == self.activo and item.activo
-            p.setPen(QPen(QColor("#2b7de9") if resaltado else QColor("#b4b4b4"), 1))
-            p.setBrush(QColor("#e3effc") if resaltado else QColor(255, 255, 255, 245))
+            p.setPen(QPen(QColor(tc["acento"]) if resaltado else QColor(tc["menu_borde"]), 1))
+            p.setBrush(QColor(tc["menu_hover"]) if resaltado else pildora)
             p.drawPath(camino)
             x = r.left() + 7
             if item.icono is not None:
@@ -232,11 +238,11 @@ class MenuRadial(QWidget):
                 modo = QIcon.Normal if item.activo else QIcon.Disabled
                 p.drawPixmap(int(x), int(r.center().y() - 8), icono.pixmap(16, 16, modo))
                 x += 21
-            p.setPen(QColor("#202020") if item.activo else QColor("#a5a5a5"))
+            p.setPen(QColor(tc["texto"] if item.activo else tc["texto_inactivo"]))
             p.drawText(QRectF(x, r.top(), r.right() - x - (12 if item.sub else 4), r.height()),
                        Qt.AlignVCenter | Qt.AlignLeft, item.texto)
             if item.sub:
-                p.setBrush(QColor("#555555"))
+                p.setBrush(QColor(tc["texto_tenue"]))
                 p.setPen(Qt.NoPen)
                 cx, cy = r.right() - 9, r.center().y()
                 p.drawPolygon(QPolygonF([QPointF(cx - 3, cy - 2), QPointF(cx + 3, cy - 2), QPointF(cx, cy + 2)]))

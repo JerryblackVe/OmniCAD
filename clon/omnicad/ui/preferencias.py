@@ -7,15 +7,18 @@ filas "etiqueta: control" y los botones Restablecer / Aplicar / Aceptar / Cancel
 Solo se ofrecen opciones que OmniCAD cumple de verdad. Las categorías de Fusion que
 dependen de la nube o de licencias (Tokens, Red, Recopilación de datos…) no se copian.
 """
-from PySide6.QtCore import QSettings, Qt, Signal
+from PySide6.QtCore import QSettings, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPushButton,
                                QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
+from . import iconos_tema, temas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
 
 DEFECTOS = {
+    "general/tema": temas.DEFECTO,            # ui/temas.py: oscuro_moderno, claro_moderno, … o usuario:<archivo>
     "general/raton": "fusion",               # como Fusion: medio desplaza, Mayús+medio orbita
     "general/invertir_zoom": False,
     "general/camara": "perspectiva",
@@ -134,6 +137,8 @@ PAGINAS = [
     ("general", None, "General", "Preferencias que controlan el comportamiento general de la interfaz de usuario", [
         (None, "Idioma del usuario", "combo", [("es", "Español | Español")]),
         (None, "Orientación de modelado por defecto", "combo", [("z", "Z hacia arriba")]),
+        ("general/tema", "Tema de la interfaz", "tema", None),
+        (None, "Temas propios", "acciones_tema", None),
         ("general/autoguardado_min", "Intervalo de copia de seguridad de recuperación automática (minutos)", "entero", (1, 60)),
         ("general/info_herramientas", "Mostrar información de herramientas", "check", None),
         ("general/raton", "Configuración del ratón (encuadre, zoom, órbita)", "combo",
@@ -180,8 +185,19 @@ PAGINAS = [
 ]
 
 
+def _combo_temas(actual):
+    """Combo con los temas incluidos y los del usuario."""
+    lista, _avisos = temas.disponibles()
+    c = _combo([(clave, nombre + (" (propio)" if propio else "")) for clave, nombre, propio in lista], actual)
+    if c.findData(actual) < 0 and actual:                    # tema guardado que ya no existe: se ve, y cae al de fábrica
+        c.addItem(f"{actual} (no se encuentra)", actual)
+        c.setCurrentIndex(c.count() - 1)
+    return c
+
+
 class DialogoPreferencias(QDialog):
     aplicado = Signal()
+    tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
 
     def __init__(self, prefs, parent=None):
         super().__init__(parent)
@@ -190,6 +206,7 @@ class DialogoPreferencias(QDialog):
         self.resize(1060, 680)
         self.prefs = prefs
         self.controles = {}            # clave → widget
+        self.aviso_tema = None         # QLabel bajo el combo de temas: contraste, avisos y confirmaciones
 
         self.arbol = QTreeWidget()
         self.arbol.setHeaderHidden(True)
@@ -246,6 +263,22 @@ class DialogoPreferencias(QDialog):
             form.addRow(QLabel("Elegí una subcategoría en el árbol de la izquierda."))
         for clave, etiqueta, tipo, opciones in filas:
             actual = self.prefs[clave] if clave else None
+            if tipo == "acciones_tema":
+                form.addRow(etiqueta, self._acciones_tema())
+                continue
+            if tipo == "tema":
+                c = _combo_temas(actual)
+                c.currentIndexChanged.connect(self._cambio)
+                c.currentIndexChanged.connect(self._tema_cambiado)
+                self.aviso_tema = QLabel(objectName="aviso_tema", wordWrap=True)
+                temas.poner_rol(self.aviso_tema, "tenue")
+                caja = QVBoxLayout()
+                caja.addWidget(c)
+                caja.addWidget(self.aviso_tema)
+                form.addRow(etiqueta, caja)
+                self.controles[clave] = c
+                self._mostrar_aviso_tema(c.currentData())
+                continue
             if tipo == "combo":
                 c = _combo(opciones, actual)
                 c.setEnabled(len(opciones) > 1)
@@ -264,6 +297,65 @@ class DialogoPreferencias(QDialog):
             if clave:
                 self.controles[clave] = c
         return w
+
+    # ------------------------------------------------------------ temas
+    def _acciones_tema(self):
+        fila = QHBoxLayout()
+        abrir = QPushButton("Abrir carpeta de temas")
+        abrir.setToolTip("Los temas propios son archivos .json en esa carpeta; aparecen en la lista al reabrir "
+                         "Preferencias.")
+        abrir.clicked.connect(self._abrir_carpeta_temas)
+        exportar = QPushButton("Exportar tema actual como plantilla")
+        exportar.setToolTip("Guarda el tema elegido como un .json con todos sus colores, para editarlo y hacer el tuyo.")
+        exportar.clicked.connect(self._exportar_plantilla)
+        fila.addWidget(abrir)
+        fila.addWidget(exportar)
+        fila.addStretch(1)
+        self.b_abrir_temas, self.b_exportar_tema = abrir, exportar
+        return fila
+
+    def _tema_cambiado(self, *_):
+        clave = self.controles["general/tema"].currentData()
+        self._mostrar_aviso_tema(clave)
+        self.tema_elegido.emit(clave)
+
+    def _mostrar_aviso_tema(self, clave, extra=""):
+        """Texto bajo el combo: lo que no cierra del tema elegido (contraste, archivos ignorados) y `extra`."""
+        tema, avisos = temas.resolver(clave)
+        partes = [extra] if extra else ["Se aplica al instante, sin reiniciar."]
+        if iconos_tema.necesita_reiniciar(tema["colores"]):
+            partes.append("⚠ Los íconos de las barras se adaptan a este tema al reiniciar OmniCAD.")
+        bajos = temas.contraste_bajo(tema["colores"])
+        if bajos:
+            lista = ", ".join(f"{t}/{f} {r:.1f}" for t, f, r in bajos[:4])
+            partes.append(f"⚠ Contraste menor a {temas.MIN_CONTRASTE}:1 en {lista}"
+                          + ("…" if len(bajos) > 4 else "") + ".")
+        partes += [f"⚠ {a}" for a in avisos]
+        self.aviso_tema.setText("\n".join(partes))
+
+    def _abrir_carpeta_temas(self):
+        carpeta = temas.carpeta_temas(crear=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(carpeta)))
+        return carpeta
+
+    def _exportar_plantilla(self):
+        combo = self.controles["general/tema"]
+        clave = combo.currentData()
+        try:
+            ruta = temas.exportar_plantilla(temas.ruta_plantilla_nueva(temas.carpeta_temas(crear=True)), clave)
+        except OSError as e:
+            self._mostrar_aviso_tema(clave, f"⚠ No se pudo guardar la plantilla: {e.strerror or e}")
+            return None
+        # el combo ahora incluye el tema nuevo (sin disparar la vista previa)
+        combo.blockSignals(True)
+        nuevo = _combo_temas(clave)
+        combo.clear()
+        for i in range(nuevo.count()):
+            combo.addItem(nuevo.itemText(i), nuevo.itemData(i))
+        combo.setCurrentIndex(max(combo.findData(clave), 0))
+        combo.blockSignals(False)
+        self._mostrar_aviso_tema(clave, f"Plantilla guardada: {ruta}. Editala y reabrí Preferencias para elegirla.")
+        return ruta
 
     def _ir(self, item, _anterior=None):
         if item is None:

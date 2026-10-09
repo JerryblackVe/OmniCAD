@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpin
 
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros, validar_nombre
+from . import temas
 
 ETIQUETAS_CAMPO = {"ancho": "Ancho (X)", "largo": "Largo (Y)", "alto": "Alto (Z)", "radio": "Radio",
                    "radio_mayor": "Radio mayor", "radio_menor": "Radio menor", "x": "Posición X",
@@ -39,7 +40,7 @@ class CampoExpresion(QLineEdit):
             self.valido = True
         except ErrorExpresion as e:
             self.setToolTip(str(e))
-            self.setStyleSheet("background: #ffd9d9;")
+            self.setStyleSheet(f"background: {temas.color('campo_error')};")
             self.valido = False
         self.valido_cambio.emit(self.valido)
 
@@ -182,7 +183,7 @@ class DialogoParametros(QDialog):
         self.tabla_qt.setHorizontalHeaderLabels(self.COLUMNAS)
         self.tabla_qt.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.error = QLabel()                 # antes de cargar filas: cada fila recalcula y escribe acá
-        self.error.setStyleSheet("color: #b00020;")
+        temas.poner_rol(self.error, "error")
         self.resultado = None
         for p in tabla:
             self._agregar_fila(p.nombre, p.expresion, p.tipo, p.comentario)

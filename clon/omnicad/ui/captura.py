@@ -2,12 +2,13 @@
 """
 Captura de la ventana REAL de OmniCAD, para verificar la interfaz sin mirar la pantalla.
 
-    python -m omnicad.ui.captura salida.png [--ejemplo | --proyecto ruta.omnicad] [--tamano 1600x900]
+    python -m omnicad.ui.captura salida.png [--ejemplo | --proyecto ruta.omnicad] [--tamano 1600x900] [--tema NOMBRE]
 
 Abre la ventana principal con el mismo formato OpenGL que `OmniCAD.py`, espera a que el visor dibuje,
 encuadra el modelo, guarda la ventana entera en `salida.png` y sale. Las preferencias van a un .ini temporal:
 no se toca la configuración del usuario ni su lista de proyectos recientes. El proyecto se abre sin los
-diálogos de recuperación de autoguardado, para que nada quede esperando una respuesta.
+diálogos de recuperación de autoguardado, para que nada quede esperando una respuesta. `--tema` elige el tema de la
+interfaz (oscuro_moderno, claro_moderno, azul_profesional, minimalista, clasico o usuario:<archivo>); sin él, el de fábrica.
 
 Códigos de salida: 0 ok · 1 otra falla · 2 uso · 3 no hay pantalla u OpenGL.
 La herramienta `app_screenshot` (api/herramientas_dev.py) la llama en un subproceso.
@@ -34,7 +35,7 @@ def _tamano(texto):
     return int(partes[0]), int(partes[1])
 
 
-def _capturar(salida, ejemplo, ruta_proyecto, ancho, alto):
+def _capturar(salida, ejemplo, ruta_proyecto, ancho, alto, tema=None):
     from PySide6.QtCore import QLibraryInfo, QSettings, QSize, Qt, QTranslator
     from PySide6.QtGui import QSurfaceFormat
     from PySide6.QtTest import QTest
@@ -61,6 +62,8 @@ def _capturar(salida, ejemplo, ruta_proyecto, ancho, alto):
     temporal = Path(tempfile.mkdtemp(prefix="omnicad_captura_"))
     try:
         prefs = Preferencias(QSettings(str(temporal / "prefs.ini"), QSettings.IniFormat))
+        if tema:
+            prefs["general/tema"] = tema
         try:
             ventana = VentanaPrincipal(crear_documento_ejemplo() if ejemplo else None, prefs=prefs)
         except Exception as e:  # driver sin OpenGL o sin contexto: la app no puede dibujar
@@ -95,13 +98,19 @@ def main(argv=None) -> int:
     origen.add_argument("--proyecto", metavar="ruta.omnicad", help="abrir este proyecto")
     ap.add_argument("--tamano", type=_tamano, default=(1600, 900), metavar="ANCHOxALTO",
                     help="tamaño de la captura en píxeles (defecto 1600x900)")
+    ap.add_argument("--tema", metavar="NOMBRE", help="tema de la interfaz (defecto: el de fábrica, oscuro_moderno)")
     args = ap.parse_args(argv)
+    if args.tema:
+        from . import temas
+        claves = [clave for clave, _nombre, _propio in temas.disponibles()[0]]
+        if args.tema not in claves:
+            ap.error(f"no existe el tema '{args.tema}'. Temas: {', '.join(claves)}")
     ancho, alto = args.tamano
     ruta_proyecto = Path(args.proyecto).resolve() if args.proyecto else None
     if ruta_proyecto is not None and not ruta_proyecto.is_file():
         ap.error(f"no existe el proyecto: {args.proyecto}")
     try:
-        return _capturar(Path(args.salida).resolve(), args.ejemplo, ruta_proyecto, ancho, alto)
+        return _capturar(Path(args.salida).resolve(), args.ejemplo, ruta_proyecto, ancho, alto, args.tema)
     except SinPantalla as e:
         print(f"captura: {e}", file=sys.stderr)
         return SIN_PANTALLA

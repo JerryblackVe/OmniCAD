@@ -21,7 +21,7 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Renombrar en el navegador con doble clic o F2. Candado en los bocetos totalmente restringidos | `ui/navegador.py` |
 | Panel COMENTARIOS abajo a la izquierda, guardado con el proyecto | `ui/comentarios.py`, `doc.comentarios` |
 | Los íconos fijos de la cinta son los del video | `ui/cinta.py` |
-| Cuerpos gris medio (medidos del video), fondo #2d323f y panel de datos cerrado al abrir | `visor3d.py`, `estilo.py` |
+| Cuerpos gris medio (medidos del video), fondo #2d323f y panel de datos cerrado al abrir | `visor3d.py`, `temas.py` (tema «Clásico») |
 | Cotas en vivo al dibujar con candado, arrastrar líneas y círculos, ventana en el boceto y cotas sin caja | agente del boceto (`ui/editor_boceto.py`) |
 | Flechas y caja de valor en la vista para Extruir, Empalme, Agujero y los demás; tríada de Mover/copiar | agente de manipuladores (`ui/manipuladores.py`) |
 

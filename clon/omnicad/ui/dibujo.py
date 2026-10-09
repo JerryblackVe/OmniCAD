@@ -32,11 +32,10 @@ from .. import NOMBRE_APP, VERSION
 from ..io_archivos import dxf
 from ..nucleo import dibujo as nd
 from ..nucleo.geometria import ErrorGeometria
-from . import estilo
+from . import temas
 from .cinta import ESPACIOS
 
 FONDO_LIENZO = "#a3a3a3"
-COLOR_SELECCION = QColor(estilo.ACENTO)
 COLOR_PREVIA = QColor("#1f7fd0")
 _PATRONES = {"trazos": (3.0, 1.5), "trazo_punto": (12.0, 3.0, 2.0, 3.0)}
 _TEXTOS = {}      # texto → (ruta a 100 px, avance, altura de mayúscula)
@@ -202,7 +201,7 @@ class ItemElemento(QGraphicsItem):
         return self.pintura.rect
 
     def paint(self, p, opcion, widget=None):
-        self.pintura.pintar(p, COLOR_SELECCION if self.isSelected() else self.color)
+        self.pintura.pintar(p, QColor(temas.color("acento")) if self.isSelected() else self.color)
 
 
 # =============================================================== íconos propios de la cinta
@@ -1442,7 +1441,7 @@ class VentanaDibujo(QMainWindow):
         super().__init__(parent)
         app = QApplication.instance()
         if app is not None and not app.styleSheet():
-            app.setStyleSheet(estilo.QSS)
+            temas.aplicar_a_app(app)
         self.doc = doc
         self.setWindowTitle(f"{doc.nombre} — Dibujo — {NOMBRE_APP}")
         self.resize(1300, 820)

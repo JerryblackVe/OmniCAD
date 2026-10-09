@@ -22,6 +22,7 @@ from .io_archivos import exportar as ex
 from .io_archivos import proyecto
 from .nucleo import geometria as geo
 from .timeline.operaciones import OpBoceto, OpExtrusion, OpPlano
+from .ui import temas
 from .ui.panel_timeline import MARCADOR
 from .ui.preferencias import DialogoPreferencias, Preferencias
 from .ui.ventana import VentanaPrincipal
@@ -173,7 +174,31 @@ def _interfaz(v, r):
             "Preferencias: Aplicar cambia el aspecto de los cuerpos")
     dlg.b_restablecer.click()
     r.check(v.visor.config.aspecto == "acero", "Preferencias: Restablecer vuelve a los valores por defecto")
+    _temas(v, dlg, r)
     dlg.reject()
+
+
+def _temas(v, dlg, r):
+    """Temas: elegir otro cambia al instante el QSS de la aplicación y el fondo de la vista 3D; Restablecer vuelve."""
+    dlg.tema_elegido.connect(v.aplicar_tema)
+    app, combo = QApplication.instance(), dlg.controles["general/tema"]
+    r.check(temas.clave_activa() == "oscuro_moderno" and temas.color("fondo") in app.styleSheet(),
+            "Temas: arranca con «Oscuro moderno» (QSS de la aplicación generado desde el tema)")
+    combo.setCurrentIndex(combo.findData("claro_moderno"))
+    claro = temas.INCLUIDOS["claro_moderno"]["colores"]
+    esquina = v.visor.grabFramebuffer().pixelColor(2, 2)
+    esperado = [round(c * 255) for c in temas.rgb_f(claro["visor_arriba"])]
+    r.check(temas.clave_activa() == "claro_moderno" and claro["fondo"] in app.styleSheet()
+            and not v.visor.config.oscuro() and v.prefs["general/tema"] == "oscuro_moderno",
+            "Temas: elegir «Claro moderno» lo aplica al instante (vista previa) sin tocar lo guardado")
+    r.check(all(abs(a - b) <= 12 for a, b in zip((esquina.red(), esquina.green(), esquina.blue()), esperado, strict=True)),
+            f"Temas: el fondo de la vista 3D cambia con el tema (esquina {esquina.name()}, esperado {esperado})")
+    dlg.b_aplicar.click()
+    r.check(v.prefs["general/tema"] == "claro_moderno", "Temas: Aplicar guarda el tema elegido")
+    dlg.b_restablecer.click()
+    r.check(temas.clave_activa() == "oscuro_moderno" and v.prefs["general/tema"] == "oscuro_moderno"
+            and temas.INCLUIDOS["oscuro_moderno"]["colores"]["fondo"] in app.styleSheet(),
+            "Temas: Restablecer vuelve al tema de fábrica")
 
 
 def _punto_del_plano(visor, nombre):

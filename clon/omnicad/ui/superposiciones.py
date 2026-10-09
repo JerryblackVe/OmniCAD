@@ -212,9 +212,8 @@ class BarraNavegacion(QFrame):
         return m
 
     def _separador(self):
-        s = QFrame()
+        s = QFrame(objectName="separador_barra")
         s.setFixedSize(1, 18)
-        s.setStyleSheet("background: #c8c8c8;")
         return s
 
     def _boton(self, accion, menu=None):

@@ -12,7 +12,7 @@ from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMenu, QStyle, QStyledItemDelegate, QToolButton,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
-from .estilo import TEXTO
+from . import temas
 from .iconos import icono
 
 ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO = Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
@@ -41,7 +41,10 @@ class _Delegado(QStyledItemDelegate):
         p.save()
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#cfe6f7") if option.state & QStyle.State_Selected else QColor(245, 245, 245, 242))
+        c = temas.activo()
+        fila = QColor(c["nav_fila"])
+        fila.setAlpha(242)
+        p.setBrush(QColor(c["seleccion"]) if option.state & QStyle.State_Selected else fila)
         p.drawRect(caja)
         x = caja.left() + 4
         y = caja.center().y() - 8
@@ -52,7 +55,8 @@ class _Delegado(QStyledItemDelegate):
         p.drawPixmap(QRectF(x, y, 16, 16), icono(index.data(ROL_ICONO) or "").pixmap(32, 32), QRectF(0, 0, 32, 32))
         x += 22
         p.setFont(f)
-        p.setPen(QColor(TEXTO) if index.data(ROL_OJO) is not False else QColor("#9a9a9a"))
+        p.setPen(QColor(c["seleccion_texto"] if option.state & QStyle.State_Selected else c["texto"])
+                 if index.data(ROL_OJO) is not False else QColor(c["texto_inactivo"]))
         p.drawText(QRectF(x, caja.top(), caja.right() - x, caja.height()), Qt.AlignVCenter | Qt.AlignLeft, texto)
         p.restore()
 
@@ -83,7 +87,7 @@ class _Arbol(QTreeWidget):
             return
         p.save()
         p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(QPen(QColor("#d6d9de"), 1.6))
+        p.setPen(QPen(QColor(temas.color("nav_flecha")), 1.6))
         cx, cy = rect.right() - 9, rect.center().y()
         if item.isExpanded():
             p.drawPolyline(QPolygonF([QPointF(cx - 4, cy - 2), QPointF(cx, cy + 2), QPointF(cx + 4, cy - 2)]))

@@ -8,6 +8,8 @@ from PySide6.QtCore import QPointF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPixmap, QPolygonF
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QToolButton, QVBoxLayout
 
+from . import temas
+
 COLORES = {"advertencia": "#f2b705", "error": "#d9382c", "info": "#2f7ed8"}
 
 
@@ -38,8 +40,6 @@ class AvisoFlotante(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("AvisoFlotante")
-        self.setStyleSheet("#AvisoFlotante { background: #ffffff; border: 1px solid #c9c9c9; border-radius: 2px; }"
-                           "QLabel { color: #3c3c3c; background: transparent; }")
         self.setFixedWidth(250)
         fila = QHBoxLayout(self)
         fila.setContentsMargins(10, 8, 6, 8)
@@ -50,11 +50,11 @@ class AvisoFlotante(QFrame):
         col = QVBoxLayout()
         col.setSpacing(2)
         self.titulo = QLabel()
-        self.titulo.setStyleSheet("font-weight: bold; color: #222222;")
+        temas.poner_rol(self.titulo, "titulo")
         self.texto = QLabel()
         self.texto.setWordWrap(True)
         self.texto.setStyleSheet("font-size: 11px;")
-        self.enlace = QLabel("<a href='#' style='color:#0b6bcb;text-decoration:none'>Más información</a>")
+        self.enlace = QLabel(f"<a href='#' style='color:{temas.color('enlace')};text-decoration:none'>Más información</a>")
         self.enlace.setStyleSheet("font-size: 11px;")
         self.enlace.linkActivated.connect(self._mas_informacion)
         for w in (self.titulo, self.texto, self.enlace):
@@ -63,7 +63,6 @@ class AvisoFlotante(QFrame):
         cerrar = QToolButton()
         cerrar.setText("×")
         cerrar.setAutoRaise(True)
-        cerrar.setStyleSheet("QToolButton { border: none; color: #777777; font-size: 14px; }")
         cerrar.clicked.connect(self.hide)
         fila.addWidget(cerrar, 0, Qt.AlignTop)
         self._detalle = ""

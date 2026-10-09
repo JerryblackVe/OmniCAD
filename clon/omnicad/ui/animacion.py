@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
 from .. import NOMBRE_APP
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
-from . import estilo
+from . import temas
 from .render import SEP, CintaEspacio, LienzoRender, _Oyente, icono_render
 from .superposiciones import AreaVisor
 
@@ -599,14 +599,16 @@ class PistasAnimacion(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        p.fillRect(self.rect(), QColor("#ffffff"))
+        tc = temas.activo()
+        p.fillRect(self.rect(), QColor(tc["entrada"]))
         filas = self.filas()
         for i, (clave, nombre) in enumerate(filas):
             y = self.REGLA + i * self.FILA
-            p.fillRect(QRectF(0, y, w, self.FILA), QColor("#f7f9fb" if i % 2 else "#ffffff"))
+            p.fillRect(QRectF(0, y, w, self.FILA), QColor(tc["panel"] if i % 2 else tc["entrada"]))
             sel = clave in self.v.seleccion
-            p.fillRect(QRectF(0, y, self.NOMBRES, self.FILA), QColor("#d6eaf8" if sel else "#f2f2f2"))
-            p.setPen(QColor("#3c3c3c" if not clave.startswith("__") else "#5a5a5a"))
+            p.fillRect(QRectF(0, y, self.NOMBRES, self.FILA), QColor(tc["seleccion"] if sel else tc["panel_cabecera"]))
+            p.setPen(QColor((tc["seleccion_texto"] if sel else tc["texto"]) if not clave.startswith("__")
+                            else tc["texto_tenue"]))
             f = p.font()
             f.setItalic(clave.startswith("__"))
             p.setFont(f)
@@ -615,23 +617,23 @@ class PistasAnimacion(QWidget):
         f = p.font()
         f.setItalic(False)
         p.setFont(f)
-        p.setPen(QColor("#d4d4d4"))
+        p.setPen(QColor(tc["borde"]))
         p.drawLine(QPointF(self.NOMBRES, 0), QPointF(self.NOMBRES, h))
         # regla
-        p.fillRect(QRectF(self.NOMBRES + 1, 0, w, self.REGLA), QColor("#f5f5f5"))
+        p.fillRect(QRectF(self.NOMBRES + 1, 0, w, self.REGLA), QColor(tc["fondo"]))
         paso = next(s for s in (0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60) if s * self.escala >= 40)
         t, fin = 0.0, self.t_de(w)
         while t <= fin + 1e-9:
             x = self.x_de(t)
-            p.setPen(QColor("#9a9a9a"))
+            p.setPen(QColor(tc["texto_tenue"]))
             p.drawLine(QPointF(x, self.REGLA - 7), QPointF(x, self.REGLA))
-            p.setPen(QColor("#e8e8e8"))
+            p.setPen(QColor(tc["borde_suave"]))
             p.drawLine(QPointF(x, self.REGLA), QPointF(x, h))
-            p.setPen(QColor("#5a5a5a"))
+            p.setPen(QColor(tc["texto_tenue"]))
             p.drawText(QRectF(x - 30, 2, 60, 14), Qt.AlignCenter, f"{t:g} s")
             t += paso
         dur = self.v.guion.duracion
-        p.fillRect(QRectF(self.x_de(dur), self.REGLA, 2, h), QColor("#c8c8c8"))
+        p.fillRect(QRectF(self.x_de(dur), self.REGLA, 2, h), QColor(tc["borde"]))
         # barras
         for r, a, _fila in self.barras():
             color = QColor(COLORES.get(a["tipo"], "#888888"))
@@ -761,7 +763,7 @@ class LineaTiempoAnimacion(QWidget):
         barra = QHBoxLayout()
         barra.setContentsMargins(8, 3, 8, 3)
         titulo = QLabel("LÍNEA DE TIEMPO DE ANIMACIÓN")
-        titulo.setStyleSheet("font-size: 8pt; letter-spacing: 0.4px; color: #5a5a5a;")
+        temas.poner_rol(titulo, "encabezado")
         barra.addWidget(titulo)
         barra.addSpacing(12)
         self.botones = {}
@@ -1082,7 +1084,7 @@ class VentanaAnimacion(QMainWindow):
         super().__init__(parent)
         app = QApplication.instance()
         if app is not None and not app.styleSheet():
-            app.setStyleSheet(estilo.QSS)
+            temas.aplicar_a_app(app)
         self.doc = doc
         self.setWindowTitle(f"{doc.nombre} — Animación — {NOMBRE_APP}")
         self.resize(1400, 920)

@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 from .. import NOMBRE_APP, VERSION
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
-from . import estilo
+from . import temas
 from .cinta import ESPACIOS
 from .iconos import icono
 from .superposiciones import AreaVisor
@@ -1296,10 +1296,6 @@ class PanelFlotante(QFrame):
     def __init__(self, titulo, parent=None):
         super().__init__(parent)
         self.setObjectName("panel_flotante")
-        self.setStyleSheet("#panel_flotante { background: #ffffff; border: 1px solid #b9b9b9; }"
-                           "#titulo_panel { background: #f0f0f0; border-bottom: 1px solid #d0d0d0; }"
-                           "#titulo_panel QLabel { font-weight: 600; letter-spacing: 0.4px; }"
-                           "QGroupBox { font-weight: 600; }")
         self.setFixedWidth(330)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 6)
@@ -1326,7 +1322,7 @@ class PanelFlotante(QFrame):
 
 def _seccion(texto):
     lb = QLabel(texto)
-    lb.setStyleSheet("color: #3c3c3c; font-weight: 600; padding-top: 4px; border-bottom: 1px solid #e3e3e3;")
+    temas.poner_rol(lb, "seccion")
     return lb
 
 
@@ -1534,7 +1530,7 @@ class PanelAspecto(PanelFlotante):
         self.cuerpo.addWidget(self.arbol, 1)
         self.ayuda = QLabel("Elegí un aspecto y hacé clic en un cuerpo para aplicarlo.")
         self.ayuda.setWordWrap(True)
-        self.ayuda.setStyleSheet("color: #6a6a6a;")
+        temas.poner_rol(self.ayuda, "tenue")
         self.cuerpo.addWidget(self.ayuda)
         botones = QHBoxLayout()
         self.b_aplicar = QPushButton("Aplicar a la selección")
@@ -1718,7 +1714,7 @@ class VisorImagen(QDialog):
         area.setWidget(lb)
         v.addWidget(area, 1)
         info = QLabel(f"{render['motor']} · {render['segundos']:.1f} s" + (f" · {render['ruta']}" if render.get("ruta") else ""))
-        info.setStyleSheet("color: #6a6a6a;")
+        temas.poner_rol(info, "tenue")
         v.addWidget(info)
         b = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
         b.button(QDialogButtonBox.Save).setText("Guardar como…")
@@ -1747,11 +1743,10 @@ class GaleriaRender(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("galeria_render")
-        self.setStyleSheet("#galeria_render { background: #f5f5f5; border-top: 1px solid #d4d4d4; }")
         h = QHBoxLayout(self)
         h.setContentsMargins(8, 4, 8, 4)
         titulo = QLabel("GALERÍA DE\nRENDERS")
-        titulo.setStyleSheet("font-size: 8pt; color: #5a5a5a; letter-spacing: 0.4px;")
+        temas.poner_rol(titulo, "encabezado")
         h.addWidget(titulo)
         self.lista = QListWidget()
         self.lista.setViewMode(QListWidget.IconMode)
@@ -1761,13 +1756,12 @@ class GaleriaRender(QFrame):
         self.lista.setFixedHeight(112)
         self.lista.setMovement(QListWidget.Static)
         self.lista.setSpacing(4)
-        self.lista.setStyleSheet("QListWidget { background: transparent; border: 0; }")
         self.lista.setContextMenuPolicy(Qt.CustomContextMenu)
         self.lista.customContextMenuRequested.connect(self._menu)
         self.lista.itemDoubleClicked.connect(lambda it: self.abrir.emit(self.lista.row(it)))
         h.addWidget(self.lista, 1)
         self.vacio = QLabel("Los renders de esta sesión aparecen acá (RENDERIZAR › Renderizar).")
-        self.vacio.setStyleSheet("color: #8a8a8a;")
+        temas.poner_rol(self.vacio, "tenue")
         h.addWidget(self.vacio)
 
     def actualizar(self, renders):
@@ -1827,7 +1821,7 @@ class VentanaRender(QMainWindow):
         super().__init__(parent)
         app = QApplication.instance()
         if app is not None and not app.styleSheet():
-            app.setStyleSheet(estilo.QSS)
+            temas.aplicar_a_app(app)
         self.doc = doc
         self.setWindowTitle(f"{doc.nombre} — Renderizar — {NOMBRE_APP}")
         self.resize(1400, 900)

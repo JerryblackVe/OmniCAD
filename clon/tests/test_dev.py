@@ -27,6 +27,16 @@ def resultado_ok(r):
     return r["result"]
 
 
+def promedio_gris(ruta):
+    """Brillo medio (0 a 255) de la parte de arriba de un PNG: la barra y la cinta, que cambian con el tema."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+    img = QImage(str(ruta))
+    assert not img.isNull(), ruta
+    c = img.copy(0, 0, img.width(), 80).scaled(1, 1, Qt.IgnoreAspectRatio, Qt.SmoothTransformation).pixelColor(0, 0)
+    return (c.red() + c.green() + c.blue()) / 3
+
+
 def sin_pantalla(r):
     """True si la captura no pudo abrir la ventana (no hay escritorio u OpenGL): el test se salta."""
     return not r["ok"] and "No hay pantalla u OpenGL" in r["mensaje"]
@@ -138,7 +148,8 @@ def test_run_checks_real_reporta_una_ruta_inexistente():
 def test_app_screenshot_validaciones():
     casos = [({"example": True, "project": "x.omnicad"}, "INVALID_ARGUMENTS"),
              ({"width": 100}, "INVALID_ARGUMENTS"),
-             ({"project": "no_existe_nunca.omnicad"}, "FILE_NOT_FOUND")]
+             ({"project": "no_existe_nunca.omnicad"}, "FILE_NOT_FOUND"),
+             ({"theme": "no_existe_nunca"}, "INVALID_ARGUMENTS")]
     for args, kind in casos:
         r = api.llamar(api.Sesion(), "app_screenshot", args)
         assert r["ok"] is False and r["error_kind"] == kind, (args, r)
@@ -155,6 +166,19 @@ def test_app_screenshot_ejemplo_png_del_tamano_pedido(tmp_path):
     assert struct.unpack(">II", img["image"].png[16:24]) == (800, 500)
     assert (img["image"].ancho, img["image"].alto) == (800, 500)
     assert Path(img["path"]) == destino.resolve() and destino.is_file()
+
+
+def test_app_screenshot_con_tema_cambia_los_colores_de_la_ventana(tmp_path):
+    colores = {}
+    for tema in ("oscuro_moderno", "claro_moderno"):
+        r = api.llamar(api.Sesion(), "app_screenshot", {"example": True, "width": 480, "height": 300, "theme": tema,
+                                                        "path": str(tmp_path / f"{tema}.png")})
+        if sin_pantalla(r):
+            pytest.skip(f"sin pantalla u OpenGL: {r['mensaje']}")
+        img = resultado_ok(r)
+        assert (img["image"].ancho, img["image"].alto) == (480, 300)
+        colores[tema] = promedio_gris(tmp_path / f"{tema}.png")
+    assert colores["claro_moderno"] > colores["oscuro_moderno"] + 60, colores     # claro frente a oscuro
 
 
 def test_app_screenshot_sin_path_no_devuelve_ruta(tmp_path):
@@ -185,6 +209,7 @@ def test_cli_dev_uso_incorrecto(tmp_path):
     assert main(["dev", "screenshot", str(tmp_path / "x.png"), "--example",
                  "--project", str(tmp_path / "y.omnicad")]) == 2
     assert main(["dev", "screenshot", str(tmp_path / "x.png"), "--project", str(tmp_path / "y.omnicad")]) == 2
+    assert main(["dev", "screenshot", str(tmp_path / "x.png"), "--theme", "no_existe_nunca"]) == 1
 
 
 def test_cli_dev_check_resume_y_sale_0(capsys, monkeypatch):

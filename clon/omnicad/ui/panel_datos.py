@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem
                                QWidget)
 
 from ..io_archivos import proyecto
+from . import temas
 from .iconos import icono
 
 
@@ -27,7 +28,7 @@ class _Tarjeta(QWidget):
         mini = QLabel()
         mini.setFixedSize(64, 64)
         mini.setAlignment(Qt.AlignCenter)
-        mini.setStyleSheet("background: #ffffff;")
+        mini.setObjectName("miniatura")
         pm = QPixmap()
         try:
             datos = proyecto.leer_miniatura(ruta)
@@ -43,7 +44,8 @@ class _Tarjeta(QWidget):
         nombre = QLabel(f"<b>{Path(ruta).stem}</b>")
         nombre.setToolTip(str(ruta))
         fecha = QLabel(time.strftime("%d/%m/%Y %H:%M", time.localtime(Path(ruta).stat().st_mtime)))
-        fecha.setStyleSheet("color: #5a5a5a; font-size: 8pt;")
+        fecha.setStyleSheet("font-size: 8pt;")
+        temas.poner_rol(fecha, "tenue")
         v.addWidget(nombre)
         v.addWidget(fecha)
         v.addStretch(1)
@@ -79,7 +81,7 @@ class PanelDatos(QWidget):
         self.lista.customContextMenuRequested.connect(self._menu)
         self.vacio = QLabel("Todavía no hay proyectos recientes.\nGuardá o abrí un .omnicad y aparece acá.")
         self.vacio.setAlignment(Qt.AlignCenter)
-        self.vacio.setStyleSheet("color: #8a8a8a;")
+        temas.poner_rol(self.vacio, "tenue")
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.addLayout(cab)

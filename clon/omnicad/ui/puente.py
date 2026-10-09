@@ -29,9 +29,8 @@ from PySide6.QtWidgets import QApplication, QLabel
 from .. import VERSION, api
 from ..api import protocolo_puente as proto
 from ..api.errores import error
+from . import temas
 
-ESTILO_ESPERANDO = "color: #8a8a8a; padding: 0 10px;"
-ESTILO_CONECTADO = "color: #1f1f1f; background: #6fcf6f; border-radius: 3px; padding: 0 8px; font-weight: bold;"
 
 
 class PuenteAgentes(QObject):
@@ -270,13 +269,13 @@ class PuenteAgentes(QObject):
             self.indicador.hide()
         elif n:
             self.indicador.setText("● Agente IA conectado" + (f" ({n})" if n > 1 else ""))
-            self.indicador.setStyleSheet(ESTILO_CONECTADO)
+            temas.poner_rol(self.indicador, "conectado")
             self.indicador.setToolTip(f"{n} agente(s) IA controlan OmniCAD por el puente MCP en vivo "
                                       f"(127.0.0.1:{self.puerto}). Se apaga en Preferencias › General.")
             self.indicador.show()
         else:
             self.indicador.setText("Puente IA activo")
-            self.indicador.setStyleSheet(ESTILO_ESPERANDO)
+            temas.poner_rol(self.indicador, "esperando")
             self.indicador.setToolTip(f"OmniCAD acepta agentes IA en 127.0.0.1:{self.puerto} (con el token de "
                                       "puente.json). Se apaga en Preferencias › General.")
             self.indicador.show()
