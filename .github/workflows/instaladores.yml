@@ -1,0 +1,74 @@
+# Arma los instaladores de OmniCAD (Windows .exe y Linux AppImage) con instalador/armar.py.
+# - Al subir una etiqueta de versión (git tag v0.1.0 && git push origin v0.1.0): los arma y los publica en GitHub Releases.
+# - A mano (pestaña Actions › Instaladores › Run workflow): los arma y los deja como artefactos, sin publicar nada.
+name: Instaladores
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencias
+        run: |
+          python -m venv clon/.venv
+          clon/.venv/Scripts/python.exe -m pip install -r clon/requirements.txt -r instalador/requisitos.txt
+      - name: Inno Setup
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Armar el instalador
+        run: clon/.venv/Scripts/python.exe instalador/armar.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: instalador/dist/*.exe
+
+  linux:
+    # 22.04 y no la última: el AppImage solo corre en sistemas con una glibc igual o más nueva que la de donde se armó.
+    runs-on: ubuntu-22.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Librerías del sistema que pide Qt (README › Instalación (Linux))
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 \
+            libfontconfig1 libdbus-1-3
+      - name: Dependencias
+        run: |
+          python -m venv clon/.venv
+          clon/.venv/bin/python -m pip install -r clon/requirements.txt -r instalador/requisitos.txt
+      - name: Armar el AppImage
+        run: clon/.venv/bin/python instalador/armar.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: instalador/dist/*.AppImage
+
+  publicar:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: instaladores
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: instaladores/*
+          generate_release_notes: true

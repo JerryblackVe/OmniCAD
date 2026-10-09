@@ -11,6 +11,7 @@ mueve el marcador, guarda, exporta STL/OBJ/STEP, vuelve a abrir y comprueba que 
 Las preferencias van a un .ini temporal: la prueba no toca la configuración del usuario.
 Devuelve 0 si todo pasa. Uso:  python OmniCAD.py --prueba-humo
 """
+import sys
 import tempfile
 from pathlib import Path
 
@@ -541,6 +542,11 @@ def _fase_puente(v, r, carpeta):
 
 
 def ejecutar():
+    # Los checks llevan ▾, «» y tildes: con la salida redirigida a un archivo, Windows usa cp1252 y la prueba se caía
+    # (la app instalada ignora PYTHONIOENCODING). Sin consola (OmniCAD.exe), stdout es None y print no hace nada.
+    for flujo in (sys.stdout, sys.stderr):
+        if flujo is not None and hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(encoding="utf-8", errors="replace")
     _app = QApplication.instance() or QApplication([])  # noqa: F841 — mantiene viva la app
     r = _Registro()
     carpeta = Path(tempfile.mkdtemp(prefix="omnicad_humo_"))

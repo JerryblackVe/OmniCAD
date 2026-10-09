@@ -56,14 +56,19 @@ def main(argv=None):
     traductor = QTranslator(app)            # botones estándar de Qt en español (Guardar, Cancelar, …)
     if traductor.load("qtbase_es", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
         app.installTranslator(traductor)
+    from omnicad.ui import arranque
+    arranque.poner_icono(app)
 
     if args.prueba_humo:
         from omnicad.prueba_humo import ejecutar
         return ejecutar()
 
+    portada = arranque.mostrar_portada(app)      # mientras se importa lo pesado (OCP, OpenGL…), como Fusion
     from omnicad.ui.ventana import VentanaPrincipal
     ventana = VentanaPrincipal()
     ventana.showMaximized()
+    if portada:
+        portada.finish(ventana)
     if args.puente and not ventana.encender_puente():
         logging.getLogger("omnicad").warning("No se pudo encender el puente para agentes IA.")
     if args.proyecto:

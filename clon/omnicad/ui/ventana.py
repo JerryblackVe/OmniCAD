@@ -71,6 +71,21 @@ def texto_atajo(secuencia):
     return texto
 
 
+def dentro_del_poligono(puntos, poligono):
+    """Qué puntos (N×2) caen dentro del polígono (M×2), con la regla par-impar (rayo hacia +x). Reemplaza a
+    `matplotlib.path.Path.contains_points`: matplotlib no es una dependencia de OmniCAD (llegaba por vtk) y la app
+    instalada no lo trae."""
+    p = np.asarray(puntos, float).reshape(-1, 2)
+    q = np.asarray(poligono, float).reshape(-1, 2)
+    x, y = p[:, :1], p[:, 1:]
+    x1, y1 = q[:, 0], q[:, 1]
+    x2, y2 = np.roll(x1, -1), np.roll(y1, -1)
+    cruza = (y1 > y) != (y2 > y)                    # el lado atraviesa la horizontal del punto
+    with np.errstate(divide="ignore", invalid="ignore"):
+        x_corte = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
+    return (cruza & (x < x_corte)).sum(axis=1) % 2 == 1
+
+
 class _FiltroInfoHerramientas(QObject):
     """
     Preferencias → 'Mostrar información de herramientas' apagada: se tragan los tooltips.
@@ -1099,8 +1114,6 @@ class VentanaPrincipal(QMainWindow):
 
     def _seleccion_region(self, poligono, cruce):
         """Selección en ventana o de forma libre: cuerpos (o caras con prioridad de cara) dentro del polígono."""
-        from matplotlib.path import Path as Trayecto
-        trayecto = Trayecto(np.asarray(poligono, float))
         estado = self._estado_visible()
         caras = getattr(self, "prioridad_seleccion", None) == "cara"
         nuevos = []
@@ -1110,7 +1123,7 @@ class VentanaPrincipal(QMainWindow):
                 for i, cara in enumerate(lista):
                     pts = tris[indice == i].reshape(-1, 3)
                     s, ok = self.visor.puntos_pantalla(pts)
-                    dentro = trayecto.contains_points(s[ok]) if ok.any() else np.zeros(0, bool)
+                    dentro = dentro_del_poligono(s[ok], poligono) if ok.any() else np.zeros(0, bool)
                     if len(dentro) and (dentro.any() if cruce else dentro.all()):
                         from ..nucleo import referencias as refs
                         from .comando import hit_desde_ref
@@ -1119,7 +1132,7 @@ class VentanaPrincipal(QMainWindow):
                 continue
             v = m["v"][:: max(1, len(m["v"]) // 400)]
             s, ok = self.visor.puntos_pantalla(v)
-            dentro = trayecto.contains_points(s[ok]) if ok.any() else np.zeros(0, bool)
+            dentro = dentro_del_poligono(s[ok], poligono) if ok.any() else np.zeros(0, bool)
             if len(dentro) and (dentro.any() if cruce else dentro.all()):
                 nuevos.append(m["id"])
         if not caras:

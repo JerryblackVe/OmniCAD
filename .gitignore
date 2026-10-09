@@ -21,3 +21,7 @@ evidencias/
 
 # Instrucciones locales de cada máquina
 CLAUDE.local.md
+
+# Instaladores armados (instalador/README.md): se publican en GitHub Releases, no en el repo
+/instalador/build/
+/instalador/dist/

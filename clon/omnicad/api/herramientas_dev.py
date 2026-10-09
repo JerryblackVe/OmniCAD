@@ -83,6 +83,13 @@ def parsear_humo(texto, codigo):
     return {"ok": codigo == 0, "summary": resultado, "failures": fallas[:TOPE_LINEAS]}
 
 
+def _exigir_codigo_fuente(nombre):
+    """La app instalada (congelada con PyInstaller) no trae tests ni OmniCAD.py, y `sys.executable` es el programa, no
+    Python: sin esto, `run_checks` lanzaría `omnicad-mcp.exe -m ruff`."""
+    if getattr(sys, "frozen", False):
+        raise error("DEV_ONLY", f"{nombre} necesita el código fuente de OmniCAD: no anda en la app instalada.")
+
+
 # ---------------------------------------------------------------- pasos de la verificación
 def _paso_ruff():
     codigo, salida = _correr([sys.executable, "-m", "ruff", "check", *_ARGS_RUFF], TIMEOUT_RUFF)
@@ -113,6 +120,7 @@ def run_checks(sesion, include_smoke: bool = True, pytest_args: str = ""):
     include_smoke: true corre también la prueba de humo (abre la ventana real; tarda 1 a 2 minutos).
     pytest_args: argumentos de pytest separados por espacios, p. ej. "tests/test_parametros.py -k ancho"; vacío = toda la suite.
     """
+    _exigir_codigo_fuente("run_checks")
     if os.environ.get(VAR_ANIDADO):
         raise error("NESTED_CHECKS", "run_checks no se puede llamar desde la verificación que él mismo lanzó.")
     inicio = time.perf_counter()
@@ -143,6 +151,7 @@ def app_screenshot(sesion, path: str | None = None, example: bool = False, proje
     height: alto de la captura en píxeles (240 a 3000).
     theme: tema de la interfaz: oscuro_moderno, claro_moderno, azul_profesional, minimalista, clasico o usuario:<archivo>; vacío = el de fábrica.
     """
+    _exigir_codigo_fuente("app_screenshot")
     if example and project:
         raise error("INVALID_ARGUMENTS", "Usá example o project, no los dos.")
     if not (320 <= width <= 4000 and 240 <= height <= 3000):
@@ -217,6 +226,7 @@ def run_bench(sesion, repetitions: int = 3, side: int = 8, frames: int = 120,
     frames: cuadros de la órbita para medir los cuadros por segundo (10 a 1000).
     preset: valor predefinido de gráficos con el que medir; vacío = el de fábrica (personalizar).
     """
+    _exigir_codigo_fuente("run_bench")
     if not (1 <= repetitions <= 10 and 1 <= side <= 20 and 10 <= frames <= 1000):
         raise error("INVALID_ARGUMENTS", "repetitions va de 1 a 10, side de 1 a 20 y frames de 10 a 1000.")
     import json

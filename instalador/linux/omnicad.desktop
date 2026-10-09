@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=OmniCAD
+GenericName=CAD 3D paramétrico
+GenericName[en]=Parametric 3D CAD
+Comment=Diseño 3D paramétrico libre, con MCP y CLI para agentes de IA
+Comment[en]=Free parametric 3D design, with MCP and CLI for AI agents
+Exec=OmniCAD %f
+Icon=omnicad
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+MimeType=application/x-omnicad;
+Keywords=CAD;3D;paramétrico;parametric;OpenCascade;

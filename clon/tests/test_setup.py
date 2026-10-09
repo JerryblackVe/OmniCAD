@@ -490,3 +490,30 @@ def test_fusion_nunca_en_la_instalacion_de_autodesk(monkeypatch):
     monkeypatch.setattr(cmd_setup, "carpeta_addins", lambda inicio=None: Path("D:/Autodesk/API/AddIns"))
     accion, aviso = cmd_setup._accion_fusion(None, True)
     assert accion.status == "error" and "solo lectura" in accion.message and aviso is None
+
+
+def test_app_instalada_registra_omnicad_mcp_y_su_skill(capsys, home, monkeypatch, tmp_path):
+    """Con la app congelada (instalador) no hay intérprete: el MCP es `omnicad-mcp(.exe)` junto al ejecutable y la skill
+    viaja adentro del paquete (`_MEIPASS/skill_omnicad`)."""
+    carpeta = tmp_path / "OmniCAD"
+    (carpeta / "_internal" / "skill_omnicad").mkdir(parents=True)
+    (carpeta / "_internal" / "skill_omnicad" / "SKILL.md").write_text(SKILL.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(carpeta / "omnicad.exe"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(carpeta / "_internal"), raising=False)
+    mcp = (carpeta / ("omnicad-mcp.exe" if os.name == "nt" else "omnicad-mcp")).as_posix()
+    codigo, res = setup_json(capsys, home, "--aplicar")
+    assert codigo == 0
+    claude = json.loads((home / ".claude.json").read_text(encoding="utf-8"))["mcpServers"]["omnicad"]
+    assert claude["command"] == mcp and claude["args"] == []
+    opencode = json.loads((home / ".config" / "opencode" / "opencode.json").read_text(encoding="utf-8"))["mcp"]["omnicad"]
+    assert opencode["command"] == [mcp]
+    assert (home / ".claude" / "skills" / "omnicad" / "SKILL.md").is_file()
+
+
+def test_en_el_appimage_registra_el_appimage_con_mcp(monkeypatch, tmp_path):
+    """Dentro del AppImage sys.executable vive en /tmp/.mount_XXXX (cambia en cada arranque): se registra el .AppImage."""
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", "/tmp/.mount_ab12/usr/lib/omnicad/omnicad-cli")
+    monkeypatch.setenv("APPIMAGE", "/home/ana/Aplicaciones/OmniCAD-0.1.0-x86_64.AppImage")
+    assert cmd_setup._comando_mcp() == ("/home/ana/Aplicaciones/OmniCAD-0.1.0-x86_64.AppImage", ["mcp"])

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Entrada del AppImage de OmniCAD.
+#   OmniCAD.AppImage [proyecto.omnicad]   abre la app
+#   OmniCAD.AppImage cli …                la CLI (lo mismo que `omnicad` instalado con pip)
+#   OmniCAD.AppImage mcp …                el servidor MCP (lo registra `OmniCAD.AppImage cli setup`)
+AQUI="$(dirname "$(readlink -f "$0")")"
+PROGRAMAS="$AQUI/usr/lib/omnicad"
+case "$1" in
+    cli) shift; exec "$PROGRAMAS/omnicad-cli" "$@" ;;
+    mcp) shift; exec "$PROGRAMAS/omnicad-mcp" "$@" ;;
+    *)   exec "$PROGRAMAS/OmniCAD" "$@" ;;
+esac

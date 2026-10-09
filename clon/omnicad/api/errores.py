@@ -156,6 +156,9 @@ PISTAS = {
     "NESTED_CHECKS": ["run_checks ya está corriendo más arriba (este proceso lo lanzó él): no se anida, porque cada "
                       "nivel volvería a correr toda la suite y llenaría la memoria.",
                       "En un test, reemplazá los subprocesos (monkeypatch de herramientas_dev._correr)."],
+    "DEV_ONLY": ["Esta herramienta trabaja sobre el código fuente (tests, prueba de humo, ventana en otro proceso) y la "
+                 "app instalada no lo trae.",
+                 "Cloná el repo y usala desde ahí: README › Instalación."],
 }
 
 # (clases, patrón del mensaje o None, error_kind). Gana la PRIMERA fila que coincide: lo específico va antes.

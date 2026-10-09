@@ -71,6 +71,18 @@ def _python():
     return os.path.abspath(sys.executable).replace("\\", "/")
 
 
+def _comando_mcp():
+    """(programa, argumentos) del servidor MCP. Con la app instalada (congelada con PyInstaller) no hay intérprete:
+    el servidor es `omnicad-mcp(.exe)`, junto al ejecutable que corre (instalador/omnicad.spec)."""
+    if getattr(sys, "frozen", False) and os.environ.get("APPIMAGE"):
+        # AppImage: la carpeta interna cambia en cada arranque (/tmp/.mount_…); se registra el .AppImage, que con `mcp`
+        # lanza el servidor (instalador/linux/AppRun).
+        return _norm(os.environ["APPIMAGE"]), ["mcp"]
+    if getattr(sys, "frozen", False):
+        return _norm(Path(sys.executable).resolve().parent / ("omnicad-mcp.exe" if os.name == "nt" else "omnicad-mcp")), []
+    return _python(), list(ARGS_MCP)
+
+
 def _norm(texto):
     return str(texto).replace("\\", "/")
 
@@ -130,8 +142,12 @@ def _guardar_fusion(ruta, modificar):
 
 # ---------------------------------------------------------------- skill
 def _origen_skill(ns):
-    candidatos = [Path(ns.skill_origen)] if ns.skill_origen else \
-        [Path(__file__).resolve().parents[3] / ".claude" / "skills" / NOMBRE]
+    if ns.skill_origen:
+        candidatos = [Path(ns.skill_origen)]
+    elif getattr(sys, "frozen", False):         # app instalada: la skill viaja adentro (instalador/omnicad.spec)
+        candidatos = [Path(sys._MEIPASS) / "skill_omnicad"]
+    else:
+        candidatos = [Path(__file__).resolve().parents[3] / ".claude" / "skills" / NOMBRE]
     for c in candidatos:
         if (c / "SKILL.md").is_file():
             return c
@@ -215,12 +231,13 @@ def _accion_fusion(inicio, explicito):
 
 # ---------------------------------------------------------------- Claude Code
 def _entrada_claude():
-    return {"type": "stdio", "command": _python(), "args": list(ARGS_MCP), "env": {}}
+    programa, args = _comando_mcp()
+    return {"type": "stdio", "command": programa, "args": args, "env": {}}
 
 
 def _accion_claude_mcp(ns, inicio):
     cfg = inicio / ".claude.json"
-    py = _python()
+    py, args = _comando_mcp()
     existente = None
     if cfg.is_file():
         datos, error = _leer_json(cfg)
@@ -232,12 +249,12 @@ def _accion_claude_mcp(ns, inicio):
             return Accion("claude-code", "mcp", "error", str(cfg), "no se puede fusionar",
                           message='"mcpServers" no es un objeto JSON: no se toca.')
         existente = servidores.get(NOMBRE)
-    if isinstance(existente, dict) and _norm(existente.get("command", "")) == py and existente.get("args") == ARGS_MCP:
+    if isinstance(existente, dict) and _norm(existente.get("command", "")) == py and existente.get("args") == args:
         return Accion("claude-code", "mcp", "unchanged", str(cfg), f'"{NOMBRE}" ya está registrado con este Python')
     reemplaza = existente is not None
     claude = None if (ns.inicio or ns.sin_cli) else _buscar("claude")
     if claude:
-        comando = [claude, "mcp", "add", "--scope", "user", NOMBRE, "--", py, *ARGS_MCP]
+        comando = [claude, "mcp", "add", "--scope", "user", NOMBRE, "--", py, *args]
         detalle = (f"{'reemplaza la entrada existente y ' if reemplaza else ''}registra el MCP para todos tus proyectos "
                    f"(alcance user); la CLI edita ese archivo y se respalda antes")
 
@@ -280,7 +297,8 @@ def _correr(comando):
 
 # ---------------------------------------------------------------- OpenCode
 def _entrada_opencode():
-    return {"type": "local", "command": [_python(), *ARGS_MCP], "enabled": True, "timeout": TIMEOUT_OPENCODE_MS}
+    programa, args = _comando_mcp()
+    return {"type": "local", "command": [programa, *args], "enabled": True, "timeout": TIMEOUT_OPENCODE_MS}
 
 
 def _accion_opencode_mcp(inicio):

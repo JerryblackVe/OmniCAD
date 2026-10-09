@@ -5,6 +5,7 @@ from pathlib import Path
 
 VERSION = "0.1.0"
 NOMBRE_APP = "OmniCAD"
+RECURSOS = Path(__file__).resolve().parent / "recursos"     # ícono (.ico y .png) y portada de la pantalla de carga
 
 
 def carpeta_datos():

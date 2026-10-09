@@ -2,6 +2,7 @@
 """Herramientas de desarrollo (grupo "dev"): `run_checks`, `app_screenshot` y la CLI `omnicad dev`."""
 import json
 import struct
+import sys
 from pathlib import Path
 
 import pytest
@@ -113,6 +114,18 @@ def test_run_checks_no_se_anida(monkeypatch):
     monkeypatch.setenv(hd.VAR_ANIDADO, "1")
     r = api.llamar(api.Sesion(), "run_checks", {"include_smoke": False})
     assert not r["ok"] and r["error_kind"] == "NESTED_CHECKS", r
+
+
+@pytest.mark.parametrize("nombre", ["run_checks", "app_screenshot", "run_bench"])
+def test_en_la_app_instalada_las_herramientas_dev_avisan_que_necesitan_el_codigo(monkeypatch, nombre):
+    """Congelada (instalador), sys.executable es el programa: run_checks lanzaba omnicad-mcp.exe -m ruff."""
+    def no_deberia_correr(*a, **k):
+        raise AssertionError("lanzó un subproceso en la app instalada")
+    monkeypatch.setattr(hd, "_correr", no_deberia_correr)
+    monkeypatch.setattr(hd.subprocess, "run", no_deberia_correr)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    r = api.llamar(api.Sesion(), nombre, {})
+    assert not r["ok"] and r["error_kind"] == "DEV_ONLY", r
 
 
 def test_run_checks_marca_sus_subprocesos(monkeypatch):

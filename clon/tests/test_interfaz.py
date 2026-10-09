@@ -106,3 +106,15 @@ def test_texto_atajo_en_castellano():
     from omnicad.ui.ventana import texto_atajo
     assert texto_atajo("Ctrl+Shift+S") == "Control+Mayúsculas+S"
     assert texto_atajo("E") == "E"
+
+
+def test_dentro_del_poligono_regla_par_impar():
+    """Reemplaza a matplotlib.path (la app instalada no trae matplotlib y la selección en ventana se colgaba)."""
+    import numpy as np
+
+    from omnicad.ui.ventana import dentro_del_poligono
+    cuadrado = [(0, 0), (10, 0), (10, 5), (0, 5)]
+    assert dentro_del_poligono([(5, 2), (11, 2), (-1, 2), (5, 6)], cuadrado).tolist() == [True, False, False, False]
+    estrella = [(0, 0), (8, 1), (9, 9), (4, 5), (1, 8)]                  # cóncavo: (4, 6) cae en la muesca
+    assert dentro_del_poligono([(5, 3), (4, 6), (2, 6)], estrella).tolist() == [True, False, True]
+    assert dentro_del_poligono(np.zeros((0, 2)), cuadrado).shape == (0,)
