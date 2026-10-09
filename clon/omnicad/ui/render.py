@@ -1844,7 +1844,7 @@ class VentanaRender(QMainWindow):
         self.galeria.actualizar(self.renders)
         doc.suscribir(_Oyente(self))
         self.actualizar()
-        QTimer.singleShot(0, self.lienzo.encuadrar)
+        QTimer.singleShot(0, self.lienzo, self.lienzo.encuadrar)   # con contexto: no corre si el lienzo ya no existe
         self.indicar("Elegí un cuerpo y un aspecto (CONFIGURAR › Aspecto); ajustá la escena y RENDERIZAR.")
 
     # ------------------------------------------------------------ acciones

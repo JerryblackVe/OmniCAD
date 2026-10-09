@@ -47,13 +47,14 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 `PySide`/`QtCore`/`QtGui` ahí). Mantenelo: solo `ui/` conoce Qt.
 
 ## Cómo correr la app
-Desde `D:/PROGRAMA/clon`, con el Python del venv `.venv/Scripts/python.exe`:
+Desde `clon/`, con el Python del venv: `.venv/Scripts/python.exe` en Windows, `.venv/bin/python` en Linux y macOS
+(en Linux, las librerías del sistema que pide Qt están en el README › Instalación (Linux)):
 - `OmniCAD.py` abre la app; `OmniCAD.py proyecto.omnicad` abre un proyecto.
 - `OmniCAD.py --ejemplo` abre con el modelo de ejemplo.
 - `OmniCAD.py --prueba-humo` prueba automática de la interfaz (sale con 0 si pasa).
 
 ## Cómo verificar
-Desde `D:/PROGRAMA/clon` (shell Bash):
+Desde `clon/` (shell Bash; en Linux, `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`):
 ```
 .venv/Scripts/python.exe -m ruff check --select F,B023,B905 .
 .venv/Scripts/python.exe -m pytest -q

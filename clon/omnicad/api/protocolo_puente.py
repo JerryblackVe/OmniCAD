@@ -15,14 +15,15 @@ Transporte: TCP SOLO en 127.0.0.1, líneas JSON en UTF-8 (un objeto por línea, 
   - Token incorrecto → error UNAUTHORIZED y la app cierra la conexión.
 
 Descubrimiento: al escuchar, la app escribe `puente.json` ({port, token, pid, version, protocol}) en
-%LOCALAPPDATA%/OmniCAD (o en la carpeta de la variable OMNICAD_PUENTE_DIR, que usan las pruebas) y lo borra
-al cerrar. Ese archivo es la única forma de conseguir el token.
+la carpeta de datos (`omnicad.carpeta_datos`: %LOCALAPPDATA%/OmniCAD o ~/.local/share/OmniCAD), o en la de
+la variable OMNICAD_PUENTE_DIR (la usan las pruebas), y lo borra al cerrar. Ese archivo es la única forma de conseguir el token.
 """
 import base64
 import json
 import os
 from pathlib import Path
 
+from .. import carpeta_datos
 from .registro import Imagen
 
 PUERTO_POR_DEFECTO = 27191
@@ -38,8 +39,7 @@ def carpeta_info():
     propia = os.environ.get(VARIABLE_CARPETA)
     if propia:
         return Path(propia)
-    base = os.environ.get("LOCALAPPDATA")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "OmniCAD"
+    return carpeta_datos()
 
 
 def ruta_info():

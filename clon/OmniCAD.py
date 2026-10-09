@@ -41,6 +41,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     _verificar_dependencias()
 
+    import omnicad.ui  # noqa: F401 — en Linux elige la plataforma de Qt y la de OpenGL ANTES de crear la aplicación
     from PySide6.QtCore import QLibraryInfo, QTranslator
     from PySide6.QtGui import QSurfaceFormat
     from PySide6.QtWidgets import QApplication

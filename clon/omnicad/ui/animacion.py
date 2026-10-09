@@ -1131,7 +1131,7 @@ class VentanaAnimacion(QMainWindow):
         self.addAction(espacio)
         doc.suscribir(_Oyente(self))
         self.actualizar()
-        QTimer.singleShot(0, self._encuadrar_inicial)
+        QTimer.singleShot(0, self, self._encuadrar_inicial)
         self.indicar("Elegí cuerpos (clic o en la línea de tiempo), ubicá el cursor de tiempo y usá TRANSFORMAR.")
 
     @property

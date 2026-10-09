@@ -15,7 +15,7 @@ If it is useful to you, a donation helps keep it going.
 
 </div>
 
-[Versión en español](README.md) · License [GPL-3.0](LICENSE) · Status: **alpha** (tested on Windows; Linux pending)
+[Versión en español](README.md) · License [GPL-3.0](LICENSE) · Status: **alpha** (tested on Windows and on Ubuntu 24.04 under WSL2)
 
 ![OmniCAD](docs/img/omnicad.png)
 
@@ -65,7 +65,27 @@ python -m venv .venv
 .venv\Scripts\python.exe OmniCAD.py --ejemplo
 ```
 
-**Linux:** all dependencies exist for Linux, but it has not been tested yet. It is on the roadmap.
+## Install (Linux)
+
+Tested on Ubuntu 24.04 inside Windows with WSL2 (native Linux not tested yet). Besides Python 3.12 and Git, Qt needs a few system
+libraries:
+
+```
+sudo apt install python3-venv libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+  libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 \
+  libfontconfig1 libdbus-1-3 libglib2.0-0t64 fonts-dejavu-core
+git clone https://github.com/JerryblackVe/OmniCAD.git
+cd OmniCAD/clon
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e .
+.venv/bin/python OmniCAD.py --ejemplo
+```
+
+- On WSL2, to draw with the graphics card (instead of the CPU): `export GALLIUM_DRIVER=d3d12` before launching.
+- On Linux the app uses X11 (`xcb`; on Wayland desktops, through XWayland): with native Wayland the popup menus
+  (radial menu) fail. To try Wayland anyway: `QT_QPA_PLATFORM=wayland`.
+- The app keeps its own files (autosave, themes) in `~/.local/share/OmniCAD`.
 
 ## Contributing
 
@@ -74,7 +94,7 @@ The goal is to grow the project collaboratively. Start with [CONTRIBUTING.md](CO
 
 ## Roadmap
 
-Easy installer for Windows and Linux ·  Linux support · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
+Easy installer for Windows and Linux · testing on native Linux (WSL2 is tested) · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
 lighting) · vectors, SVG, text and vectorizing · assemblies, animation, simulations · Rhino-style tools and
 Grasshopper-style visual programming.
 

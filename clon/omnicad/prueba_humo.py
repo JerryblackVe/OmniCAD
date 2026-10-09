@@ -238,6 +238,10 @@ def _clic(lz, u, v):
 
 
 def _boceto_en_3d(v, r):
+    # Linux (WSLg): al cerrar los diálogos de las fases anteriores la ventana queda sin activar y los atajos de
+    # teclado (la S de abajo) no le llegan; en Windows la activación vuelve sola.
+    v.activateWindow()
+    QTest.qWaitForWindowActive(v, 2000)
     v.crear_boceto()
     r.check(v.visor.modo == "elegir_plano" and v.area.aviso.isVisible(),
             "Crear boceto pide elegir un plano o una cara plana (planos de origen visibles)")

@@ -23,6 +23,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .. import carpeta_datos
+
 VERSION_PROTOCOLO = 1
 EXTENSIONES = (".f3d", ".f3z")
 VARIABLE_CARPETA = "OMNICAD_PUENTE_FUSION_DIR"
@@ -49,8 +51,7 @@ def carpeta_info():
     propia = os.environ.get(VARIABLE_CARPETA)
     if propia:
         return Path(propia)
-    base = os.environ.get("LOCALAPPDATA")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "OmniCAD"
+    return carpeta_datos()
 
 
 def ruta_info():

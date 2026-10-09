@@ -237,3 +237,18 @@ def test_pedidos_mal_formados_no_tiran_la_app(puente):
         assert c.pedir("ping")["ok"]                                     # la conexión sigue sirviendo
     finally:
         c.cerrar()
+
+
+def test_app_y_puentes_usan_la_misma_carpeta_de_datos(monkeypatch, tmp_path):
+    """En Linux la app guardaba en ~/OmniCAD y el puente en ~/.local/share/OmniCAD: ahora es una sola regla."""
+    from pathlib import Path
+
+    from omnicad import carpeta_datos
+    from omnicad.io_archivos import puente_fusion
+    for variable in ("LOCALAPPDATA", proto.VARIABLE_CARPETA, puente_fusion.VARIABLE_CARPETA):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    assert carpeta_datos() == tmp_path / ".local" / "share" / "OmniCAD"           # Linux y macOS
+    assert proto.carpeta_info() == puente_fusion.carpeta_info() == carpeta_datos()
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))                   # Windows
+    assert proto.carpeta_info() == puente_fusion.carpeta_info() == carpeta_datos() == tmp_path / "local" / "OmniCAD"

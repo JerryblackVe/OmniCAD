@@ -8,5 +8,7 @@ NOMBRE_APP = "OmniCAD"
 
 
 def carpeta_datos():
-    """%LOCALAPPDATA%/OmniCAD (o la carpeta personal): donde la app guarda lo suyo (autoguardado, temas…)."""
-    return Path(os.environ.get("LOCALAPPDATA") or str(Path.home())) / NOMBRE_APP
+    """Donde la app guarda lo suyo (autoguardado, temas, puente.json…): %LOCALAPPDATA%/OmniCAD en Windows y
+    ~/.local/share/OmniCAD en Linux y macOS (la misma regla que el complemento de Fusion, `OmniCADPuente.py`)."""
+    base = os.environ.get("LOCALAPPDATA")
+    return (Path(base) if base else Path.home() / ".local" / "share") / NOMBRE_APP

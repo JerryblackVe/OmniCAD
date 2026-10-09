@@ -155,7 +155,7 @@ def test_conectar_tiene_los_siete_clientes():
 
 def test_el_comando_del_mcp_existe():
     texto = leer(DOCS / "conectar.md")
-    assert "D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp" in texto
+    assert "C:/OmniCAD/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp" in texto
     assert "omnicad-mcp.exe" in texto
     assert (RAIZ / "clon" / "omnicad" / "servidor_mcp" / "__main__.py").is_file()
 

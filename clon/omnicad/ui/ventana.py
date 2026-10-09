@@ -735,7 +735,7 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar()
         if hasattr(self, "comentarios"):
             self.comentarios.set_documento(doc)
-        QTimer.singleShot(0, self.visor.encuadrar)
+        QTimer.singleShot(0, self.visor, self.visor.encuadrar)
 
     def _actualizar(self):
         estado = self.doc.estado_final

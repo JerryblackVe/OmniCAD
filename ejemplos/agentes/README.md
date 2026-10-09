@@ -14,8 +14,8 @@ Tres formas de armar la MISMA pieza: un soporte en L (mm).
 | `soporte_l.py` | Python (`from omnicad import api`) | la misma pieza con `api.llamar`; guarda `.omnicad`, `.stl` y `.png` |
 | `soporte_l.receta.json` | `omnicad call apply_recipe` | la receta ya hecha (lo que devuelve `get_recipe`) |
 
-Todos los comandos se corren desde la raíz del repo (`D:/PROGRAMA`). `omnicad` es `clon/.venv/Scripts/omnicad.exe`
-(o `clon/.venv/Scripts/python.exe -m omnicad.cli`).
+Todos los comandos se corren desde la raíz del repo. `omnicad` es `clon/.venv/Scripts/omnicad.exe`
+(o `clon/.venv/Scripts/python.exe -m omnicad.cli`). En Linux y macOS: `clon/.venv/bin/omnicad` y `clon/.venv/bin/python`.
 
 ## 1. Batch
 

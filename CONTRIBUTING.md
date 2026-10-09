@@ -21,6 +21,9 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -e .
 ```
 
+En Linux: `python3 -m venv .venv` y `.venv/bin/python` en lugar de `.venv\Scripts\python.exe` (las librerías del
+sistema que pide Qt están en el [README](README.md#instalación-linux)). Lo mismo en los comandos de abajo.
+
 ## Verificar antes de mandar un cambio
 
 Desde `clon/`:

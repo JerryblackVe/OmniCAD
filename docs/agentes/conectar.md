@@ -30,12 +30,15 @@ Dentro de cada configuración va uno de estos dos comandos. Los dos hacen lo mis
 
 | Forma | Comando |
 |---|---|
-| Con el Python del venv (recomendada) | `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp` |
-| Con el comando instalado | `D:/PROGRAMA/clon/.venv/Scripts/omnicad-mcp.exe` |
+| Con el Python del venv (recomendada) | `C:/OmniCAD/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp` |
+| Con el comando instalado | `C:/OmniCAD/clon/.venv/Scripts/omnicad-mcp.exe` |
 
-- Usá **rutas absolutas**: los clientes lanzan el servidor desde otra carpeta.
+- Usá **rutas absolutas**: los clientes lanzan el servidor desde otra carpeta. Los ejemplos suponen el repo clonado en
+  `C:/OmniCAD`: cambialo por tu carpeta (`omnicad setup` pone la ruta real solo).
+- Linux y macOS: el Python del venv es `.venv/bin/python` (p. ej. `/home/ana/OmniCAD/clon/.venv/bin/python`) y el
+  comando instalado, `.venv/bin/omnicad-mcp`.
 - Escribí las rutas con barras `/`, incluso en Windows: evita tener que duplicar las barras invertidas en JSON y TOML.
-- Todos los bloques de abajo usan la primera forma. Para la segunda: `"command": "D:/PROGRAMA/clon/.venv/Scripts/omnicad-mcp.exe"` y sin `args`.
+- Todos los bloques de abajo usan la primera forma. Para la segunda: `"command": "C:/OmniCAD/clon/.venv/Scripts/omnicad-mcp.exe"` y sin `args`.
 - El nombre del servidor es `omnicad`. No le pongas guiones bajos ni espacios: algunos clientes arman con él el nombre de cada herramienta.
 - El servidor habla por stdio. No imprime nada en stdout que no sea del protocolo; sus mensajes van a stderr.
 
@@ -63,7 +66,7 @@ Ejemplo de `args` con opciones: `["-m", "omnicad.servidor_mcp", "--toolsets", "d
 Si el cliente no conecta, probá el comando solo en una terminal. Tiene que quedar esperando sin imprimir errores:
 
 ```
-D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp --log-level INFO
+C:/OmniCAD/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp --log-level INFO
 ```
 
 Si no conecta o tarda: probá subir el tiempo de arranque del cliente (hay un campo `timeout` o similar en varios de abajo).
@@ -77,7 +80,7 @@ Si no conecta o tarda: probá subir el tiempo de arranque del cliente (hay un ca
 - Por comando (alcance `local`: solo este proyecto, queda en `~/.claude.json`):
 
 ```
-claude mcp add omnicad -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp
+claude mcp add omnicad -- C:/OmniCAD/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp
 ```
 
 - Para compartirlo con el equipo: agregá `--scope project` (escribe `.mcp.json` en la raíz del proyecto; Claude Code pide aprobación la primera vez). Para todos tus proyectos: `--scope user`.
@@ -88,7 +91,7 @@ claude mcp add omnicad -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.s
 {
   "mcpServers": {
     "omnicad": {
-      "command": "D:/PROGRAMA/clon/.venv/Scripts/python.exe",
+      "command": "C:/OmniCAD/clon/.venv/Scripts/python.exe",
       "args": ["-m", "omnicad.servidor_mcp"]
     }
   }
@@ -111,7 +114,7 @@ Fuente: <https://code.claude.com/docs/en/mcp> (sintaxis de `claude mcp add`, alc
 {
   "mcpServers": {
     "omnicad": {
-      "command": "D:/PROGRAMA/clon/.venv/Scripts/python.exe",
+      "command": "C:/OmniCAD/clon/.venv/Scripts/python.exe",
       "args": ["-m", "omnicad.servidor_mcp"]
     }
   }
@@ -141,7 +144,7 @@ Fuente: <https://modelcontextprotocol.io/docs/develop/connect-local-servers> (ub
   "mcp": {
     "omnicad": {
       "type": "local",
-      "command": ["D:/PROGRAMA/clon/.venv/Scripts/python.exe", "-m", "omnicad.servidor_mcp"],
+      "command": ["C:/OmniCAD/clon/.venv/Scripts/python.exe", "-m", "omnicad.servidor_mcp"],
       "enabled": true,
       "timeout": 30000
     }
@@ -164,12 +167,12 @@ Fuente: <https://opencode.ai/docs/mcp-servers> (opciones `type`, `command`, `ena
 
 ```toml
 [mcp_servers.omnicad]
-command = "D:/PROGRAMA/clon/.venv/Scripts/python.exe"
+command = "C:/OmniCAD/clon/.venv/Scripts/python.exe"
 args = ["-m", "omnicad.servidor_mcp"]
 startup_timeout_sec = 30
 ```
 
-- Por comando (equivale a lo de arriba, sin el tiempo de arranque): `codex mcp add omnicad -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp`
+- Por comando (equivale a lo de arriba, sin el tiempo de arranque): `codex mcp add omnicad -- C:/OmniCAD/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp`
 - Verificar: `codex mcp list`.
 - No encontré una nota específica de Windows en la documentación.
 
@@ -187,7 +190,7 @@ Fuente: <https://learn.chatgpt.com/docs/extend/mcp?surface=cli> (el enlace <http
   "mcpServers": {
     "omnicad": {
       "type": "stdio",
-      "command": "D:/PROGRAMA/clon/.venv/Scripts/python.exe",
+      "command": "C:/OmniCAD/clon/.venv/Scripts/python.exe",
       "args": ["-m", "omnicad.servidor_mcp"]
     }
   }
@@ -211,7 +214,7 @@ Fuente: <https://cursor.com/docs/mcp> (ubicaciones, formato `mcpServers`, tabla 
 {
   "mcpServers": {
     "omnicad": {
-      "command": "D:/PROGRAMA/clon/.venv/Scripts/python.exe",
+      "command": "C:/OmniCAD/clon/.venv/Scripts/python.exe",
       "args": ["-m", "omnicad.servidor_mcp"],
       "timeout": 30000
     }
@@ -238,7 +241,7 @@ Fuente: <https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-se
   "servers": {
     "omnicad": {
       "type": "stdio",
-      "command": "D:/PROGRAMA/clon/.venv/Scripts/python.exe",
+      "command": "C:/OmniCAD/clon/.venv/Scripts/python.exe",
       "args": ["-m", "omnicad.servidor_mcp"]
     }
   }

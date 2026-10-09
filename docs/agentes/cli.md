@@ -7,8 +7,8 @@ Es la misma API que usa el servidor MCP: lo que hace una herramienta acá lo hac
 
 | Forma | Comando |
 |---|---|
-| Comando instalado | `D:/PROGRAMA/clon/.venv/Scripts/omnicad.exe` (en estos ejemplos, `omnicad`) |
-| Sin depender del PATH | `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m omnicad.cli` |
+| Comando instalado | `clon/.venv/Scripts/omnicad.exe` en Windows, `clon/.venv/bin/omnicad` en Linux y macOS (en estos ejemplos, `omnicad`) |
+| Sin depender del PATH | `clon/.venv/Scripts/python.exe -m omnicad.cli` (Linux y macOS: `clon/.venv/bin/python -m omnicad.cli`) |
 
 - `omnicad --version` y `omnicad --help` arrancan al instante: la API (que tarda unos 2 s) se carga solo cuando hace falta.
 - Todo el texto de la ayuda y de los errores está en español.

@@ -15,7 +15,7 @@ Si te ayuda, una donación me ayuda a seguir.
 
 </div>
 
-[English version](README.en.md) · Licencia [GPL-3.0](LICENSE) · Estado: **alfa** (Windows probado; Linux pendiente)
+[English version](README.en.md) · Licencia [GPL-3.0](LICENSE) · Estado: **alfa** (probado en Windows y en Ubuntu 24.04 sobre WSL2)
 
 ![OmniCAD](docs/img/omnicad.png)
 
@@ -64,7 +64,27 @@ python -m venv .venv
 
 - `OmniCAD.py` abre la app vacía; `OmniCAD.py pieza.omnicad` abre un proyecto.
 - Después de `pip install -e .` quedan los comandos `omnicad` (CLI) y `omnicad-mcp` (servidor MCP).
-- **Linux:** las dependencias existen para Linux, pero todavía no se probó. Es uno de los pendientes.
+## Instalación (Linux)
+
+Probado en Ubuntu 24.04 dentro de Windows con WSL2 (falta una PC con Linux nativo). Además de Python 3.12 y Git, Qt necesita algunas
+librerías del sistema:
+
+```
+sudo apt install python3-venv libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+  libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-randr0 \
+  libfontconfig1 libdbus-1-3 libglib2.0-0t64 fonts-dejavu-core
+git clone https://github.com/JerryblackVe/OmniCAD.git
+cd OmniCAD/clon
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e .
+.venv/bin/python OmniCAD.py --ejemplo
+```
+
+- En WSL2, para dibujar con la placa de video (y no con el procesador): `export GALLIUM_DRIVER=d3d12` antes de abrir.
+- En Linux la app usa X11 (`xcb`; en escritorios Wayland, por XWayland): con Wayland nativo los menús emergentes
+  (menú radial) fallan. Para probar Wayland igual: `QT_QPA_PLATFORM=wayland`.
+- La app guarda lo suyo (autoguardado, temas) en `~/.local/share/OmniCAD`.
 
 ## Contribuir
 
@@ -78,7 +98,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 ## Hoja de ruta
 
 - Instalador fácil para Windows y Linux, para cualquiera (sepa programar o no).
-- Funcionar en Linux sin problemas.
+- Linux: probarlo en una PC con Linux nativo (hoy está probado en WSL2).
 - Español e inglés en todo: interfaz, mensajes, herramientas y documentación.
 - Integración con Blender en los dos sentidos.
 - Mejor render: materiales, colores e iluminación.
