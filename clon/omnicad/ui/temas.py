@@ -269,6 +269,8 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #barra_timeline QListWidget::item { border-radius: 2px; }
 #barra_timeline QListWidget::item:selected { background: $seleccion; }
 #estado_timeline { color: $texto_tenue; padding-right: 8px; }
+#selector_unidades { color: $texto_tenue; padding: 2px 8px; border-radius: 4px; }
+#selector_unidades:hover { color: $texto; }
 
 #dlg_preferencias QTreeWidget { border: 1px solid $borde; background: $entrada; }
 #dlg_preferencias QTreeWidget::item { padding: 4px 2px; }

@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
@@ -161,6 +161,7 @@ class VentanaPrincipal(QMainWindow):
         self.timeline.eliminar.connect(lambda i: self._intentar(lambda: self.doc.eliminar(i)))
         self.timeline.mover.connect(lambda i, n: self._intentar(lambda: self.doc.mover(i, n)))
         self.timeline.marcador.connect(lambda n: self._intentar(lambda: self.doc.mover_marcador(n)))
+        self._crear_menu_unidades()
 
         self.panel_datos = PanelDatos(self.prefs)
         self.panel_datos.abrir.connect(self._abrir_reciente)
@@ -574,8 +575,8 @@ class VentanaPrincipal(QMainWindow):
             if not mostrar:
                 w.installEventFilter(self._filtro_info)
 
-    def preferencias(self):
-        dlg = DialogoPreferencias(self.prefs, self)
+    def preferencias(self, _marcado=False, pagina="general"):
+        dlg = DialogoPreferencias(self.prefs, self, pagina)
         dlg.aplicado.connect(self.aplicar_preferencias)
         dlg.tema_elegido.connect(self.aplicar_tema)         # vista previa al instante, antes de Aplicar
         dlg.rejected.connect(lambda: self.aplicar_tema())   # Cancelar: vuelve al tema guardado
@@ -611,6 +612,54 @@ class VentanaPrincipal(QMainWindow):
         caja.open()
         self._caja_ayuda = caja
         return caja
+
+    def _crear_menu_unidades(self):
+        """Menú de «Unidades: mm, g ▾» en la barra de abajo. El modelo trabaja en mm y g: las demás unidades se ven
+        grisadas (no implementadas, como en la cinta). Lo que sí cambia es la precisión con que se muestran los
+        valores, la misma preferencia que Preferencias › Visualización de unidad y valor."""
+        m = QMenu(self)
+        m.setToolTipsVisible(True)
+        no_disp = f"No disponible en {NOMBRE_APP} {VERSION}: el modelo trabaja en milímetros y gramos."
+        for titulo, unidades, nota in (
+                ("Longitud", ["Milímetro (mm)", "Centímetro (cm)", "Metro (m)", "Pulgada (in)", "Pie (ft)"],
+                 "<br>En cualquier campo se puede escribir otra unidad (2 in, 5 cm) y se pasa a mm."),
+                ("Masa", ["Gramo (g)", "Kilogramo (kg)", "Libra (lb)"], "")):
+            m.addSection(titulo)
+            grupo = QActionGroup(m)
+            for i, texto in enumerate(unidades):
+                a = m.addAction(texto)
+                a.setCheckable(True)
+                a.setChecked(i == 0)
+                a.setEnabled(i == 0)
+                if i:
+                    a.setToolTip(no_disp + nota)
+                grupo.addAction(a)
+        m.addSeparator()
+        precision = m.addMenu("Precisión")
+        grupo = QActionGroup(precision)
+        for n in range(6):
+            a = precision.addAction("0" if n == 0 else "0." + "123456"[:n])
+            a.setCheckable(True)
+            a.setData(n)
+            a.triggered.connect(lambda _=False, n=n: self._pref_unidades("unidades/precision", n))
+            grupo.addAction(a)
+        ceros = m.addAction("Ocultar ceros finales")
+        ceros.setCheckable(True)
+        ceros.triggered.connect(lambda v: self._pref_unidades("unidades/ocultar_ceros", bool(v)))
+        m.addSeparator()
+        m.addAction("Preferencias de unidades…").triggered.connect(lambda: self.preferencias(pagina="valores"))
+
+        def sincronizar():                  # Preferencias puede haberlas cambiado desde la última vez
+            for a in grupo.actions():
+                a.setChecked(a.data() == self.prefs["unidades/precision"])
+            ceros.setChecked(bool(self.prefs["unidades/ocultar_ceros"]))
+        m.aboutToShow.connect(sincronizar)
+        self.menu_unidades = m
+        self.timeline.unidades.setMenu(m)
+
+    def _pref_unidades(self, clave, valor):
+        self.prefs[clave] = valor
+        self.aplicar_preferencias()
 
     def _mostrar_panel_datos(self, visible):
         self.panel_datos.setVisible(visible)

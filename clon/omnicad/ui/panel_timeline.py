@@ -94,6 +94,15 @@ class PanelTimeline(QWidget):
             lay.addWidget(b)
         lay.addSpacing(8)
         lay.addWidget(self.lista, 1)
+        # «Unidades: mm, g ▾» (docs/diseno/): el menú lo arma la ventana, que tiene las preferencias.
+        self.unidades = QToolButton(objectName="selector_unidades", text="Unidades: mm, g  ▾")
+        self.unidades.setIcon(icono("unidades"))
+        self.unidades.setIconSize(QSize(16, 16))
+        self.unidades.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.unidades.setPopupMode(QToolButton.InstantPopup)
+        self.unidades.setToolTip("<b>Unidades del documento</b><br>Unidades y precisión con que se muestran los valores.")
+        lay.addWidget(self.unidades)
+        lay.addSpacing(12)
         self.estado = QLabel(objectName="estado_timeline")
         lay.addWidget(self.estado)
 

@@ -199,7 +199,7 @@ class DialogoPreferencias(QDialog):
     aplicado = Signal()
     tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
 
-    def __init__(self, prefs, parent=None):
+    def __init__(self, prefs, parent=None, inicial="general"):
         super().__init__(parent)
         self.setObjectName("dlg_preferencias")
         self.setWindowTitle("Preferencias")
@@ -222,7 +222,7 @@ class DialogoPreferencias(QDialog):
             self.pila.addWidget(self._pagina(filas, descripcion))
         self.arbol.expandAll()
         self.arbol.currentItemChanged.connect(self._ir)
-        self.arbol.setCurrentItem(items["general"])
+        self.arbol.setCurrentItem(items.get(inicial, items["general"]))    # p. ej. "valores" desde la barra de unidades
 
         cuerpo = QHBoxLayout()
         cuerpo.addWidget(self.arbol)
