@@ -60,12 +60,13 @@ def memoria_mb():
 
 def documento_grande(lado=8):
     """Placa de 20·lado mm con lado×lado agujeros (un paso «cortar» por agujero, diámetro = parámetro «diam») y
-    `lado` esferas unidas arriba. Las operaciones se cargan sin calcular: el que llama mide `recalcular(0)`."""
+    `lado` esferas unidas arriba (la última con radio = parámetro «r_esfera»). Las operaciones se cargan sin calcular: el que llama mide `recalcular(0)`."""
     from ..timeline.documento import Documento
     from ..timeline.operaciones import OpPrimitiva
     doc = Documento()
     doc.nombre = f"Banco {lado}x{lado}"
     doc.parametros.agregar("diam", "8 mm")
+    doc.parametros.agregar("r_esfera", "6 mm")
     paso = 20.0
     ops = [OpPrimitiva(doc.nuevo_id(), "Placa", forma="caja", ancho=f"{paso * lado} mm", largo=f"{paso * lado} mm",
                        alto="10 mm", x="0", y="0", z="0", operacion="nuevo")]
@@ -75,7 +76,7 @@ def documento_grande(lado=8):
                                    alto="30 mm", x=f"{paso * (i + 0.5)} mm", y=f"{paso * (j + 0.5)} mm", z="-10 mm",
                                    operacion="cortar"))
     for i in range(lado):
-        ops.append(OpPrimitiva(doc.nuevo_id(), f"Esfera {i}", forma="esfera", radio="6 mm",
+        ops.append(OpPrimitiva(doc.nuevo_id(), f"Esfera {i}", forma="esfera", radio="r_esfera" if i == lado - 1 else "6 mm",
                                x=f"{paso * (i + 0.5)} mm", y="0", z="10 mm", operacion="unir"))
     doc.operaciones = ops
     doc.marcador = len(ops)
@@ -147,6 +148,9 @@ def medir(lado, cuadros, t0, preset=None):
         tabla = copy.deepcopy(doc.parametros)        # lo que hace «Cambiar parámetros» al aceptar
         tabla.modificar("diam", "9 mm")
         r["recalculo_parametro_s"] = _cronometro(lambda: doc.aplicar_parametros(tabla))
+        tabla = copy.deepcopy(doc.parametros)        # un parámetro que lee solo el último paso
+        tabla.modificar("r_esfera", "7 mm")
+        r["recalculo_parametro_final_s"] = _cronometro(lambda: doc.aplicar_parametros(tabla))
 
         r["mostrar_modelo_s"] = _cronometro(lambda: (v.set_documento(doc), QTest.qWait(0)))
         dibujados.clear()

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Subcomando `setup`: conecta OmniCAD a Claude Code y a OpenCode (registra el MCP y copia la skill `omnicad`).
+"""Subcomando `setup`: conecta OmniCAD a Claude Code y a OpenCode (registra el MCP y copia la skill `omnicad`) y
+instala en Fusion 360 el complemento OmniCADPuente (para abrir .f3d/.f3z desde OmniCAD).
 
 SEGURO POR DEFECTO: sin `--aplicar` solo muestra el plan y no escribe nada. Con `--aplicar`:
   - cada archivo de configuración que se modifica se respalda antes (`archivo.bak`; si ya hay uno, `.bak-FECHA`);
@@ -10,6 +11,8 @@ SEGURO POR DEFECTO: sin `--aplicar` solo muestra el plan y no escribe nada. Con 
 Dónde va cada cosa (ver el epílogo de la ayuda para las fuentes):
   Claude Code: MCP con `claude mcp add --scope user` (queda en ~/.claude.json); skill en ~/.claude/skills/omnicad/.
   OpenCode:    MCP en la clave "mcp" de ~/.config/opencode/opencode.jsonc (o .json); skill en ~/.config/opencode/skills/omnicad/ (con «todos», la de ~/.claude/skills).
+  Fusion 360:  complemento en la carpeta AddIns DEL USUARIO (%APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns);
+               nunca en la instalación de Fusion (p. ej. D:/Autodesk, que es solo lectura).
 
 No importa `omnicad.api` (arranque instantáneo). `_buscar` y `_ejecutar` se pueden reemplazar en las pruebas.
 """
@@ -142,13 +145,14 @@ def _archivos(carpeta):
                   if p.is_file() and "__pycache__" not in p.parts and ".bak" not in p.name)
 
 
-def _accion_skill(cliente, origen, destino):
+def _accion_skill(cliente, origen, destino, tipo="skill", mensaje=""):
     archivos = _archivos(origen)
     distintos = [r for r in archivos
                  if not (destino / r).is_file() or (destino / r).read_bytes() != (origen / r).read_bytes()]
     detalle = f"copia {len(archivos)} archivo(s) desde {origen}"
     if not distintos:
-        return Accion(cliente, "skill", "unchanged", str(destino), "la skill ya está copiada y es idéntica")
+        que = "la skill" if tipo == "skill" else "el complemento"
+        return Accion(cliente, tipo, "unchanged", str(destino), f"{que} ya está copiado y es idéntico")
 
     def aplicar():
         respaldos = []
@@ -161,7 +165,52 @@ def _accion_skill(cliente, origen, destino):
             raise _Falla(f"la copia a {destino} no quedó idéntica.")
         return ", ".join(respaldos)
 
-    return Accion(cliente, "skill", "pending", str(destino), detalle, aplicar=aplicar)
+    return Accion(cliente, tipo, "pending", str(destino), detalle, aplicar=aplicar, message=mensaje)
+
+
+# ---------------------------------------------------------------- complemento de Fusion 360
+COMPLEMENTO = "OmniCADPuente"
+# Instalaciones de Fusion: solo lectura. El complemento va SIEMPRE a la carpeta del usuario.
+_PROHIBIDAS = [Path("D:/Autodesk")]
+
+
+def _origen_complemento():
+    origen = Path(__file__).resolve().parents[1] / "integraciones" / "fusion" / COMPLEMENTO
+    if not (origen / f"{COMPLEMENTO}.py").is_file():
+        raise util.UsoError(f"No encuentro el complemento de Fusion en {origen}.",
+                            ["Reinstalá OmniCAD (pip install -e .) desde el repo."])
+    return origen
+
+
+def carpeta_addins(inicio=None):
+    """Carpeta AddIns de Fusion del usuario, o None si el sistema no tiene Fusion (Linux)."""
+    if sys.platform == "darwin":
+        base = Path(inicio) if inicio else Path.home()
+        return base / "Library" / "Application Support" / "Autodesk" / "Autodesk Fusion 360" / "API" / "AddIns"
+    if os.name == "nt":
+        appdata = Path(inicio) / "AppData" / "Roaming" if inicio else Path(os.environ.get("APPDATA") or
+                                                                            Path.home() / "AppData" / "Roaming")
+        return appdata / "Autodesk" / "Autodesk Fusion 360" / "API" / "AddIns"
+    return None
+
+
+def _prohibida(destino):
+    destino = Path(destino).resolve()
+    return any(destino == p.resolve() or p.resolve() in destino.parents for p in _PROHIBIDAS)
+
+
+def _accion_fusion(inicio, explicito):
+    addins = carpeta_addins(inicio)
+    if addins is None:
+        return None, "Fusion 360 no existe para este sistema: no se instala el complemento."
+    destino = addins / COMPLEMENTO
+    if _prohibida(destino):
+        return Accion("fusion", "addin", "error", str(destino), "no se instala ahí",
+                      message="Esa carpeta es de la instalación de Fusion (solo lectura)."), None
+    if not addins.parent.is_dir() and not explicito:
+        return None, "Fusion 360 no está instalado para este usuario: no se instala el complemento (--cliente fusion lo fuerza)."
+    return _accion_skill("fusion", _origen_complemento(), destino, "addin",
+                         "Después: reiniciá Fusion o, en Utilidades › Complementos (Mayús+S), ejecutá OmniCADPuente."), None
 
 
 # ---------------------------------------------------------------- Claude Code
@@ -282,6 +331,10 @@ def _planear(ns):
         acciones.append(_accion_skill("claude-code", origen, inicio / ".claude" / "skills" / NOMBRE))
     if ns.cliente in ("opencode", "todos"):
         acciones.append(_accion_opencode_mcp(inicio))
+    if ns.cliente in ("fusion", "todos"):
+        accion, aviso = _accion_fusion(ns.inicio, ns.cliente == "fusion")
+        acciones += [accion] if accion else []
+        avisos += [aviso] if aviso else []
     if ns.cliente == "opencode":
         acciones.append(_accion_skill("opencode", origen, inicio / ".config" / "opencode" / "skills" / NOMBRE))
     elif ns.cliente == "todos":
@@ -309,7 +362,7 @@ def _aplicar(acciones):
 
 
 _ROTULO = {"pending": "HARÍA", "done": "HECHO", "unchanged": "YA ESTÁ", "manual": "A MANO", "error": "ERROR"}
-_CLIENTE = {"claude-code": "Claude Code", "opencode": "OpenCode"}
+_CLIENTE = {"claude-code": "Claude Code", "opencode": "OpenCode", "fusion": "Fusion 360"}
 
 
 def _mostrar(acciones, avisos, aplicado):
@@ -362,18 +415,21 @@ fuentes: code.claude.com/docs/en/mcp y /skills; opencode.ai/docs/mcp-servers, /s
 OpenCode en Windows se confirmó con `opencode debug paths` (la documentación solo dice ~/.config/opencode/).
 no confirmado: que se respeten CLAUDE_CONFIG_DIR ni XDG_CONFIG_HOME (se usa siempre ~/.claude.json y ~/.config).
 Un opencode.jsonc con comentarios no se reescribe (se perderían): el comando muestra qué sumar a mano.
+  Fusion 360   complemento  %APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns/OmniCADPuente/ (macOS: ~/Library/
+               Application Support/...); con «todos» solo si Fusion está instalado. Nunca en D:/Autodesk.
 """
 
 
 def registrar(sub, comun):
     p = sub.add_parser("setup", parents=[comun], epilog=EPILOGO,
-                       help="conecta OmniCAD a Claude Code y OpenCode (MCP + skill); sin --aplicar solo muestra el plan",
+                       help="conecta OmniCAD a Claude Code y OpenCode (MCP + skill) y a Fusion 360 (complemento); sin --aplicar "
+                            "solo muestra el plan",
                        description="Registra el servidor MCP de OmniCAD y copia la skill `omnicad` en Claude Code y/o "
                                    "OpenCode. SIN --aplicar solo muestra qué haría y no escribe nada. Con --aplicar "
                                    "respalda (.bak) cada archivo de configuración que modifica, fusiona el JSON sin "
                                    "borrar otros servidores y es idempotente. El MCP se registra con el Python que "
                                    "corre este comando (ruta absoluta).")
-    p.add_argument("--cliente", "-c", choices=["claude-code", "opencode", "todos"], default="todos",
+    p.add_argument("--cliente", "-c", choices=["claude-code", "opencode", "fusion", "todos"], default="todos",
                    help="a quién conectar (defecto todos)")
     p.add_argument("--aplicar", action="store_true", help="escribir de verdad (sin esto solo muestra el plan)")
     p.add_argument("--inicio", metavar="DIR", help="usar esta carpeta en lugar de la del usuario (para pruebas); "

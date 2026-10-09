@@ -4,9 +4,12 @@ INSERTAR › Lienzo y Calcomanía de Fusion [SLD-INSERT-CANVAS, SLD-SCALE-CANVAS
 (guardada dentro de la receta) apoyada sobre un plano o una cara plana, con posición, giro, ancho real
 (calibración) y opacidad. El lienzo es una referencia para dibujar encima; la calcomanía se pega a la
 cara del cuerpo y se ve opaca.
+
+También Importar IGES (Archivo › Abrir de un .iges/.igs): como Importar STEP, el archivo va dentro de la receta.
 """
+from ..nucleo import intercambio
 from . import entidades as ent
-from .operaciones import ANGULO, ErrorOperacion, Operacion, _resolver, registrar_operacion
+from .operaciones import ANGULO, ErrorOperacion, Operacion, _resolver, aplicar_resultado, registrar_operacion
 
 
 class OpLienzo(Operacion):
@@ -38,4 +41,16 @@ class OpLienzo(Operacion):
                                    "imagen": self.p["imagen"]}
 
 
-registrar_operacion(OpLienzo)
+class OpImportarIGES(Operacion):
+    """Importa un IGES como cuerpo(s) (Fusion lo abre con Abrir › Abrir desde mi equipo). El contenido se embebe
+    en la receta para que el proyecto sea autónomo."""
+    TIPO, ETIQUETA, ICONO = "importar_iges", "Importar IGES", "⇩"
+    PARAMS = {"archivo": "", "contenido": ""}
+
+    def ejecutar(self, estado, ctx):
+        if not self.p["contenido"]:
+            raise ErrorOperacion("La importación no tiene contenido IGES.")
+        aplicar_resultado(estado, ctx, self.id, intercambio.leer_iges_texto(self.p["contenido"]), "nuevo")
+
+
+registrar_operacion(OpLienzo, OpImportarIGES)

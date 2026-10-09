@@ -29,6 +29,7 @@ def aislar(monkeypatch, tmp_path_factory):
     falso = tmp_path_factory.mktemp("home_falso")
     monkeypatch.setenv("USERPROFILE", str(falso))
     monkeypatch.setenv("HOME", str(falso))
+    monkeypatch.setenv("APPDATA", str(falso / "AppData" / "Roaming"))
     monkeypatch.setattr(cmd_setup, "_buscar", lambda nombre: None)
 
     def prohibido(*a, **k):
@@ -455,3 +456,37 @@ def test_skill_md_los_enlaces_a_archivos_del_repo_existen():
     assert {"docs/agentes/guia_diseno.md", "docs/agentes/conectar.md", "AGENTS.md", "PROJECT_LOG.md"} <= rutas
     for r in rutas:
         assert (REPO / r).is_file(), f"SKILL.md nombra {r} y no existe en el repo"
+
+
+# ---------------------------------------------------------------- complemento de Fusion 360
+def _api_fusion(home):
+    api_fusion = home / "AppData" / "Roaming" / "Autodesk" / "Autodesk Fusion 360" / "API"
+    api_fusion.mkdir(parents=True)
+    return api_fusion / "AddIns" / "OmniCADPuente"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="la carpeta de Windows; macOS usa ~/Library/Application Support")
+def test_fusion_instala_el_complemento_en_la_carpeta_del_usuario(capsys, home):
+    destino = _api_fusion(home)
+    codigo, res = setup_json(capsys, home, "--cliente", "fusion")            # plan: no escribe
+    assert codigo == 0 and estados(res) == {("fusion", "addin"): "pending"} and not destino.exists()
+    codigo, res = setup_json(capsys, home, "--cliente", "fusion", "--aplicar")
+    assert codigo == 0 and estados(res) == {("fusion", "addin"): "done"}
+    origen = cmd_setup._origen_complemento()
+    assert instantanea(destino) == instantanea(origen)
+    manifiesto = json.loads((destino / "OmniCADPuente.manifest").read_text(encoding="utf-8"))
+    assert manifiesto["type"] == "addin" and manifiesto["runOnStartup"] is True
+    codigo, res = setup_json(capsys, home, "--cliente", "fusion", "--aplicar")   # idempotente
+    assert estados(res) == {("fusion", "addin"): "unchanged"}
+
+
+def test_fusion_con_todos_solo_si_esta_instalado(capsys, home):
+    codigo, res = setup_json(capsys, home)
+    assert ("fusion", "addin") not in estados(res)
+    assert any("Fusion 360 no" in a for a in res["avisos"])
+
+
+def test_fusion_nunca_en_la_instalacion_de_autodesk(monkeypatch):
+    monkeypatch.setattr(cmd_setup, "carpeta_addins", lambda inicio=None: Path("D:/Autodesk/API/AddIns"))
+    accion, aviso = cmd_setup._accion_fusion(None, True)
+    assert accion.status == "error" and "solo lectura" in accion.message and aviso is None

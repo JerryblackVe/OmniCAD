@@ -12,7 +12,9 @@ Toda falla que ve un agente es un `ErrorAPI(error_kind, mensaje, pistas)`:
 """
 import re
 
+from ..io_archivos.abrir_externo import ErrorAbrir
 from ..io_archivos.exportar import ErrorExportacion
+from ..io_archivos.puente_fusion import ErrorPuenteFusion
 from ..io_archivos.proyecto import ErrorProyecto
 from ..nucleo.geometria import ErrorGeometria
 from ..restricciones import ErrorBoceto
@@ -63,6 +65,14 @@ PISTAS = {
                        "Los cuerpos de malla solo se exportan a .stl, .obj, .3mf o .ply."],
     "INVALID_PROJECT": ["El archivo no es un proyecto .omnicad válido o está dañado.",
                         "Si hay un autoguardado (*.autoguardado.omnicad), probá abrir ese."],
+    "UNSUPPORTED_FILE_TYPE": ["Se abren .omnicad/.fclone, .step/.stp, .iges/.igs, .stl, .obj, .3mf, .ply, .dxf, .f3d y .f3z."],
+    "IMPORT_FAILED": ["El archivo puede estar dañado o ser de un formato que OpenCascade no lee.",
+                      "Probá exportarlo de nuevo desde el programa de origen (STEP AP214 o AP242)."],
+    "FUSION_NOT_AVAILABLE": ["Abrí Fusion 360 y verificá que el complemento OmniCADPuente esté en ejecución "
+                             "(Utilidades › Complementos, Mayús+S); se instala con «omnicad setup --cliente fusion --aplicar».",
+                             "Sin Fusion: abrí el .f3d en Fusion, Archivo › Exportar… como STEP y abrí ese .step con open_document."],
+    "FUSION_CONVERSION_FAILED": ["Revisá en Fusion si el archivo abre bien (referencias faltantes, versión más nueva).",
+                                 "Alternativa: en Fusion, Archivo › Exportar… como STEP y abrí ese .step con open_document."],
     "FILE_ERROR": ["No se pudo leer o escribir el archivo: revisá la ruta y que haya espacio en el disco."],
     "NOT_FOUND": ["get_scene_info, get_timeline y get_parameters listan lo que existe."],
     "MISSING_PATH": ["El documento todavía no tiene archivo: pasá path."],
@@ -166,6 +176,9 @@ _TABLA = [
     (ErrorExportacion, r"^Formato no soportado|malla no se pueden guardar|no parece un STEP", "INVALID_FORMAT"),
     (ErrorExportacion, None, "OPERATION_FAILED"),
     (ErrorProyecto, None, "INVALID_PROJECT"),
+    (ErrorAbrir, r"^Formato no soportado", "UNSUPPORTED_FILE_TYPE"),
+    (ErrorAbrir, r"^No existe el archivo", "FILE_NOT_FOUND"),
+    (ErrorAbrir, None, "IMPORT_FAILED"),
     (ErrorDocumento, None, "DOCUMENT_ERROR"),
     (_PASO, None, "OPERATION_FAILED"),
     (FileNotFoundError, None, "FILE_NOT_FOUND"),
@@ -192,6 +205,8 @@ def traducir(exc):
     if isinstance(exc, ErrorAPI):
         return exc
     mensaje = str(exc) or type(exc).__name__
+    if isinstance(exc, ErrorPuenteFusion):
+        return error("FUSION_NOT_AVAILABLE" if exc.motivo == "sin_puente" else "FUSION_CONVERSION_FAILED", mensaje)
     if isinstance(exc, KeyError):
         mensaje = f"No existe {exc.args[0]!r}." if exc.args else "Clave inexistente."
     for clases, patron, kind in _TABLA:

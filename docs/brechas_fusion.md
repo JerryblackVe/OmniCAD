@@ -25,6 +25,13 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Cotas en vivo al dibujar con candado, arrastrar líneas y círculos, ventana en el boceto y cotas sin caja | agente del boceto (`ui/editor_boceto.py`) |
 | Flechas y caja de valor en la vista para Extruir, Empalme, Agujero y los demás; tríada de Mover/copiar | agente de manipuladores (`ui/manipuladores.py`) |
 
+## Hecho: abrir archivos de otros programas (2026-10-09)
+
+| Comportamiento de Fusion | Dónde está |
+|---|---|
+| Abrir STEP, IGES, STL, OBJ, 3MF, PLY y DXF crea un diseño nuevo con su paso de importación; del STEP vienen nombres de cuerpos, colores y componentes | `io_archivos/abrir_externo.py`, `nucleo/intercambio.py` (`leer_step_estructura`) |
+| Abrir `.f3d` y `.f3z`: Fusion instalado los convierte por su API pública con el complemento propio OmniCADPuente (`omnicad setup --cliente fusion`) | `integraciones/fusion/OmniCADPuente/`, `io_archivos/puente_fusion.py` |
+
 ## Lo que falta
 
 | Falta | Por qué no está todavía |
@@ -36,4 +43,6 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Relleno azul del perfil en la vista previa mientras se dibuja | La geometría aparece rellena recién al crearse. |
 | Tabla de grupos de aristas en Empalme (radios distintos por grupo) | Hoy hay un solo radio por operación. |
 | Configuración del timeline (engranaje abajo a la derecha) | No implementado. |
+| Historial de pasos al abrir un `.f3d` (hoy entra la forma como STEP y los parámetros de usuario, que no mueven esa forma) | Hay que traducir cada operación de Fusion a una de OmniCAD por la API pública: es una fase propia. |
+| `.f3z` con referencias externas: se abre el diseño de arriba del paquete; los diseños referenciados pueden no venir | La importación de archivo de Fusion solo acepta `.f3d` sueltos. |
 | Electrónica, Diseño generativo, Simulación, Fabricación y Forma (T-Splines) | Fuera del alcance del clon, igual que antes. |

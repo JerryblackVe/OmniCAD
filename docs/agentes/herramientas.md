@@ -28,7 +28,7 @@ Archivo, escena, timeline y deshacer.
 |---|---|---|
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), cantidad de pasos del timeline y parámetros. |
 | [`new_document`](#new_document) | sí | Empieza un documento vacío (descarta el actual de la sesión sin guardarlo). |
-| [`open_document`](#open_document) | sí | Abre un proyecto .omnicad (o .fclone) y lo deja como documento activo. |
+| [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY) o Fusion 360 (.f3d, .f3z: lo convierte Fusion instalado con el complemento OmniCADPuente; trae la forma y los parámetros de usuario, no el historial). |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
 | [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas) o .step/.stp, .iges/.igs, .brep (sólidos exactos). |
 | [`undo`](#undo) | sí | Deshace el último cambio del documento (cada herramienta que modifica es un paso). |
@@ -58,11 +58,12 @@ Empieza un documento vacío (descarta el actual de la sesión sin guardarlo).
 
 ### `open_document`
 
-Abre un proyecto .omnicad (o .fclone) y lo deja como documento activo.
+Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY) o Fusion 360 (.f3d, .f3z: lo convierte Fusion instalado con el complemento OmniCADPuente; trae la forma y los parámetros de usuario, no el historial).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `path` (texto; obligatorio): ruta del archivo de proyecto.
+  - `path` (texto; obligatorio): ruta del archivo.
+  - `mesh_units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
 - CLI: `omnicad call open_document --doc pieza.omnicad path=…`
 
 ### `save_document`

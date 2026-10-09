@@ -15,7 +15,10 @@ omnicad setup --cliente todos            # solo MUESTRA qué haría (no escribe 
 omnicad setup --cliente todos --aplicar  # lo hace: respalda cada archivo con .bak y no borra otros servidores
 ```
 
-- `--cliente claude-code | opencode | todos`. Correrlo dos veces no duplica nada.
+- `--cliente claude-code | opencode | fusion | todos`. Correrlo dos veces no duplica nada.
+- Fusion 360: copia el complemento OmniCADPuente a la carpeta AddIns DEL USUARIO (`%APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns/`;
+  nunca a la instalación de Fusion). Arranca solo con Fusion; la primera vez, reiniciá Fusion o ejecutalo en Utilidades ›
+  Complementos (Mayús+S). Con eso, `open_document` y Archivo › Abrir abren `.f3d` y `.f3z` (forma + parámetros de usuario).
 - Claude Code: usa `claude mcp add --scope user`; la skill va a `~/.claude/skills/omnicad/`.
 - OpenCode: suma `mcp.omnicad` a `~/.config/opencode/opencode.jsonc` (o `.json`). Con `todos`, la skill queda solo en
   `~/.claude/skills/` porque OpenCode también lee esa carpeta (dos copias darían «duplicate skill name»).

@@ -91,13 +91,20 @@ def new_document(sesion, name: str = "Sin título"):
     return {"name": sesion.doc.nombre}
 
 
-@herramienta("open_document", "documento", "Abre un proyecto .omnicad (o .fclone) y lo deja como documento activo.",
-             modifica=True, transaccion=False)
-def open_document(sesion, path: str):
+_UNIDADES_MALLA = {"mm": "mm", "cm": "cm", "m": "m", "in": "pulgadas", "ft": "pies"}
+
+
+@herramienta("open_document", "documento", "Abre un archivo y lo deja como documento activo: proyecto .omnicad (o "
+             ".fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y "
+             "componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY) o Fusion 360 (.f3d, "
+             ".f3z: lo convierte Fusion instalado con el complemento OmniCADPuente; trae la forma y los parámetros de "
+             "usuario, no el historial).", modifica=True, transaccion=False)
+def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm"):
     """
-    path: ruta del archivo de proyecto.
+    path: ruta del archivo.
+    mesh_units: unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
     """
-    sesion.abrir(path)
+    sesion.abrir(path, _UNIDADES_MALLA[mesh_units])
     for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False):
         if r.estado in ("error", "aviso"):
             sesion.avisar(f"{op.nombre} ({op.id}) [{ESTADOS[r.estado]}]: {r.mensaje}")

@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDia
 
 from .. import NOMBRE_APP, VERSION
 from ..ejemplo import crear_documento_ejemplo
+from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
-from ..io_archivos import proyecto
 from ..nucleo import geometria as geo
 from ..restricciones import Boceto
 from ..timeline.documento import Documento, ErrorDocumento
@@ -49,6 +49,11 @@ from .visor3d import ENTORNOS, ESTILOS, Visor3D
 
 log = logging.getLogger(__name__)
 FILTRO_PROYECTO = "Proyectos OmniCAD (*.omnicad *.fclone)"     # .fclone: proyectos del nombre anterior
+# Archivo › Abrir: además del proyecto, los formatos que Fusion abre con «Abrir desde mi equipo».
+FILTRO_ABRIR = ";;".join([
+    "Todos los archivos que se pueden abrir (*.omnicad *.fclone *.f3d *.f3z *.step *.stp *.iges *.igs *.stl *.obj "
+    "*.3mf *.ply *.dxf)", FILTRO_PROYECTO, "Fusion 360 (*.f3d *.f3z)", "STEP (*.step *.stp)", "IGES (*.iges *.igs)",
+    "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)"])
 VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True}
 CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos")
 NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"))
@@ -1728,7 +1733,7 @@ class VentanaPrincipal(QMainWindow):
     def abrir(self):
         if not self._salir_de_boceto() or not self._confirmar_descartar():
             return
-        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir proyecto", "", FILTRO_PROYECTO)
+        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir", "", FILTRO_ABRIR)
         if ruta:
             self.abrir_ruta(ruta)
 
@@ -1737,6 +1742,9 @@ class VentanaPrincipal(QMainWindow):
             self.abrir_ruta(ruta)
 
     def abrir_ruta(self, ruta):
+        if abrir_externo.es_externo(ruta):
+            self._abrir_externo(ruta)
+            return
         try:
             pendiente = proyecto.autoguardado_pendiente(ruta)
             origen = ruta
@@ -1753,6 +1761,65 @@ class VentanaPrincipal(QMainWindow):
             self._recordar(ruta)
         except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
             QMessageBox.critical(self, "No se pudo abrir", str(e))
+
+    def _abrir_externo(self, ruta):
+        """STEP, IGES, mallas, DXF o .f3d/.f3z como documento nuevo (sin ruta: Guardar pide dónde)."""
+        unidades = "mm"
+        if abrir_externo.pide_unidades(ruta):
+            unidades, ok = QInputDialog.getItem(self, "Abrir malla", "Unidades del archivo:",
+                                                list(abrir_externo.UNIDADES_MALLA), 0, False)
+            if not ok:
+                return
+        es_fusion = Path(ruta).suffix.lower() in puente_fusion.EXTENSIONES
+        try:
+            if es_fusion:
+                doc, avisos = self._esperando("Fusion 360 está convirtiendo el archivo…",
+                                              lambda: abrir_externo.documento_desde_archivo(ruta, unidades))
+            else:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+                try:
+                    doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades)
+                finally:
+                    QApplication.restoreOverrideCursor()
+        except puente_fusion.ErrorPuenteFusion as e:
+            QMessageBox.warning(self, "No se pudo abrir el archivo de Fusion", str(e))
+            return
+        except (abrir_externo.ErrorAbrir, OSError, ValueError) as e:
+            QMessageBox.critical(self, "No se pudo abrir", str(e))
+            return
+        self.set_documento(doc)
+        self._recordar(ruta)
+        if avisos:
+            QMessageBox.information(self, f"Abierto: {Path(ruta).name}", "\n\n".join(avisos))
+
+    def _esperando(self, texto, funcion):
+        """Corre `funcion` en otro hilo mostrando un aviso de espera (la ventana no se congela). Devuelve su
+        resultado o relanza su excepción."""
+        import threading
+
+        from PySide6.QtCore import QEventLoop
+        from PySide6.QtWidgets import QProgressDialog
+        resultado = {}
+
+        def trabajo():
+            try:
+                resultado["valor"] = funcion()
+            except Exception as e:  # noqa: BLE001 — se relanza en el hilo de la interfaz
+                resultado["error"] = e
+
+        espera = QProgressDialog(texto, None, 0, 0, self)
+        espera.setWindowTitle(NOMBRE_APP)
+        espera.setWindowModality(Qt.WindowModal)
+        espera.setMinimumDuration(300)
+        hilo = threading.Thread(target=trabajo, daemon=True)
+        hilo.start()
+        while hilo.is_alive():           # el hilo de Python no tiene bucle de Qt: se espera atendiendo la interfaz
+            QApplication.processEvents(QEventLoop.AllEvents, 50)
+            hilo.join(0.05)
+        espera.close()
+        if "error" in resultado:
+            raise resultado["error"]
+        return resultado["valor"]
 
     def _recordar(self, ruta):
         self.prefs.agregar_reciente(str(Path(ruta).resolve()))

@@ -304,13 +304,15 @@ Mediana de 3 corrida(s):
   vista 3D         3.86 ms por cuadro (259.2 cuadros/s posibles) · 60.3 cuadros/s en pantalla
 ```
 
+Desde el recálculo parcial (2026-10-09), la línea «recálculo» suma el tiempo de cambiar un parámetro que lee solo el último paso, p. ej. `(uno que usa solo el último paso: 0.051 s)`.
+
 - `--repeticiones N` (1 a 10, defecto 3), `--lado N` (agujeros por lado, 1 a 20, defecto 8), `--cuadros N` (10 a 1000, defecto 120).
 - «cuadros/s posibles» es el tiempo de dibujo puro (`paintGL` + `glFinish`); «en pantalla» queda limitado por la sincronía vertical del monitor.
 - `--json` devuelve todos los números (también `ms_p95` y `mostrar_modelo_s`). Necesita pantalla con OpenGL.
 
 ### setup
 
-Registra el MCP y copia la skill `omnicad` en Claude Code y OpenCode. Detalle y rutas: [conectar.md](conectar.md).
+Registra el MCP y copia la skill `omnicad` en Claude Code y OpenCode, e instala en Fusion 360 el complemento OmniCADPuente (para abrir `.f3d`/`.f3z`). Detalle y rutas: [conectar.md](conectar.md).
 
 ```
 $ omnicad setup --cliente todos
@@ -319,7 +321,7 @@ omnicad setup: PLAN, no se escribió nada. Para aplicarlo agregá --aplicar.
 ```
 
 - Sin `--aplicar` solo muestra el plan. Con `--aplicar` escribe, respalda cada archivo con `.bak` y no borra otros servidores; correrlo dos veces no duplica.
-- `--cliente claude-code | opencode | todos` (por defecto `todos`).
+- `--cliente claude-code | opencode | fusion | todos` (por defecto `todos`; con `todos`, Fusion solo si está instalado).
 - `--inicio CARPETA`: usa otra carpeta como la del usuario (para pruebas; nunca toca la real).
 
 ## Recetas rápidas

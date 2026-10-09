@@ -637,6 +637,16 @@ def ejecutar():
     QTest.qWait(200)
     r.check(v.doc.ruta == str(ruta) and all(x.estado == "ok" for x in v.doc.resultados), "Reabrir el proyecto recalcula todo OK")
     r.check(_colores_distintos(v.visor.grabFramebuffer()) > 50, "El visor dibuja el proyecto reabierto")
+    volumen = sum(geo.volumen(c.forma) for c in v.doc.estado_final.cuerpos.values())
+    for formato in ("step", "iges"):          # Archivo › Abrir de un archivo de intercambio: documento nuevo
+        v.abrir_ruta(str(carpeta / f"humo.{formato}"))
+        QTest.qWait(100)
+        abierto = sum(geo.volumen(c.forma) for c in v.doc.estado_final.cuerpos.values())
+        r.check(v.doc.ruta is None and len(v.doc.operaciones) == 1 and v.doc.resultados[0].estado == "ok"
+                and abs(abierto - volumen) < 1e-3 * volumen,
+                f"Abrir {formato.upper()}: documento nuevo con 1 paso y el mismo volumen ({abierto:.1f} mm³)")
+    v.abrir_ruta(str(ruta))
+    QTest.qWait(100)
 
     # 8) Autoguardado
     v.doc.modificado = True

@@ -12,7 +12,8 @@ Equivalencias con Fusion 360 (informe_analisis.md §3.3):
   - Design.computeAll            →  Documento.recalcular()
 
 Recalcular reutiliza el estado guardado de cada paso: si se edita el paso i, solo se
-recalculan los pasos desde i en adelante.
+recalculan los pasos desde i en adelante. Al cambiar parámetros, se recalcula desde el primer paso
+que LEYÓ un parámetro cuyo valor cambió (cada paso anota lo que lee al ejecutarse).
 """
 import json
 import logging
@@ -51,6 +52,8 @@ class Documento:
         self.marcador = 0
         self.resultados = []
         self._estados = []
+        self._usados = []         # por paso: nombres de parámetros que leyó en el último cálculo
+        self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
         self._contador = 0
         self.modificado = False
         self._oyentes = []
@@ -226,12 +229,14 @@ class Documento:
         tabla.valores()                                # valida antes de tocar el documento
         self._guardar_para_deshacer()
         self.configuraciones = dict(datos, activa=activa)
+        desde = self._primer_afectado(tabla)
         self.parametros = tabla
-        for op in self.operaciones:
-            if op.id in supresiones:
+        for i, op in enumerate(self.operaciones):
+            if op.id in supresiones and op.suprimida != supresiones[op.id]:
                 op.suprimida = supresiones[op.id]
+                desde = min(desde, i)
         self.modificado = True
-        self.recalcular(0)
+        self.recalcular(desde)
 
     def quitar_analisis(self, nombre):
         if nombre in self.analisis:
@@ -324,9 +329,26 @@ class Documento:
             detalle = "; ".join(f"«{n}» (lo usa {', '.join(sorted(p))})" for n, p in sorted(faltan.items()))
             raise ErrorDocumento(f"No se puede quitar ni renombrar un parámetro en uso: {detalle}.")
         self._guardar_para_deshacer()
+        desde = self._primer_afectado(tabla)
         self.parametros = tabla
         self.modificado = True
-        self.recalcular(0)
+        self.recalcular(desde)
+
+    def _primer_afectado(self, tabla):
+        """Índice del primer paso que leyó un parámetro cuyo valor cambia con `tabla` (Fusion también
+        recalcula solo lo que depende del cambio). Si ningún paso lo leyó, len(operaciones): nada que rehacer."""
+        if self._valores is None:
+            return 0
+        try:
+            nuevos = tabla.valores()
+        except ErrorExpresion:
+            nuevos = {}
+        viejos = self._valores
+        cambiados = {n for n in viejos.keys() | nuevos.keys() if viejos.get(n) != nuevos.get(n)}
+        for i, usados in enumerate(self._usados):
+            if usados & cambiados:
+                return i
+        return len(self._usados)
 
     # ------------------------------------------------------------ cálculo
     def previsualizar(self, op, indice=None):
@@ -345,16 +367,20 @@ class Documento:
 
     def recalcular(self, desde=0):
         desde = max(0, min(desde, len(self._estados), len(self.resultados)))
+        desde = min(desde, len(self._usados))
         del self._estados[desde:]
         del self.resultados[desde:]
+        del self._usados[desde:]
         try:
             valores = self.parametros.valores()
         except ErrorExpresion as e:
             valores = {}
             log.warning("Parámetros inválidos: %s", e)
+        self._valores = valores
         estado = self.estado_en(desde)
         for i in range(desde, len(self.operaciones)):
             op = self.operaciones[i]
+            usados = frozenset()
             if i >= self.marcador:
                 self.resultados.append(ResultadoPaso("retrocedida"))
             elif op.suprimida:
@@ -362,6 +388,7 @@ class Documento:
             else:
                 nuevo = estado.copia()
                 ctx = Contexto(valores)
+                usados = ctx.usados
                 try:
                     op.ejecutar(nuevo, ctx)
                     estado = nuevo
@@ -375,6 +402,7 @@ class Documento:
                     log.error("Error inesperado en %s:\n%s", op.id, traceback.format_exc())
                     self.resultados.append(ResultadoPaso("error", f"Error inesperado: {e}"))
             self._estados.append(estado)
+            self._usados.append(usados)
         self._notificar()
 
     # ------------------------------------------------------------ comentarios (panel COMENTARIOS)

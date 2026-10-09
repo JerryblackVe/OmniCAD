@@ -93,7 +93,8 @@ def bench(ns):
                f"· pico {x['memoria_pico_mb']} MB")
     util.decir(f"  modelo grande    {m['pasos']} pasos, {x['triangulos']} triángulos")
     util.decir(f"  recálculo        todo {x['recalculo_completo_s']} s · último paso {x['recalculo_ultimo_paso_s']} s"
-               f" · cambiar un parámetro {x['recalculo_parametro_s']} s")
+               f" · cambiar un parámetro {x['recalculo_parametro_s']} s"
+               f" (uno que usa solo el último paso: {x.get('recalculo_parametro_final_s', '-')} s)")
     util.decir(f"  vista 3D         {g['ms_medio']} ms por cuadro ({g['fps_dibujo']} cuadros/s posibles) · "
                f"{g['fps_pantalla']} cuadros/s en pantalla")
     return 0

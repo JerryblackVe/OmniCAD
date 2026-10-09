@@ -26,3 +26,4 @@ include = ["omnicad*"]
 
 [tool.setuptools.package-data]
 "omnicad.api" = ["guia/*.md"]
+"omnicad" = ["integraciones/fusion/OmniCADPuente/*"]   # complemento de Fusion (omnicad setup)

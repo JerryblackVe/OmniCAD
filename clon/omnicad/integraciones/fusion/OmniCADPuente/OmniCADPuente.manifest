@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "addin",
+  "id": "50a9e4c7-b03c-4c72-bb8b-c3d3d8c37b98",
+  "author": "OmniCAD",
+  "description": {
+    "": "Puente de OmniCAD: deja que OmniCAD abra archivos .f3d y .f3z (los convierte a STEP con la API pública)."
+  },
+  "version": "1.0.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

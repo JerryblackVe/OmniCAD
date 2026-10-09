@@ -96,9 +96,27 @@ class EstadoModelo:
         return self.cuerpos[cid]
 
 
+class _Lecturas(dict):
+    """Los valores de los parámetros, anotando qué nombres se consultan (también los que no existen):
+    el documento sabe así qué pasos recalcular cuando cambia un parámetro."""
+
+    def __init__(self, valores, usados):
+        super().__init__(valores)
+        self._usados = usados
+
+    def __contains__(self, nombre):
+        self._usados.add(nombre)
+        return super().__contains__(nombre)
+
+    def __getitem__(self, nombre):
+        self._usados.add(nombre)
+        return super().__getitem__(nombre)
+
+
 class Contexto:
     def __init__(self, valores_parametros):
-        self.valores = valores_parametros
+        self.usados = set()       # nombres de parámetros que leyó la operación al ejecutarse
+        self.valores = _Lecturas(valores_parametros, self.usados)
         self.avisos = []
 
     def evaluar(self, expr, tipo=LONGITUD):
@@ -591,15 +609,28 @@ class OpCombinar(Operacion):
 
 
 class OpImportarSTEP(Operacion):
-    """Importa un STEP como cuerpo(s). El contenido se embebe en la receta para que el proyecto sea autónomo."""
+    """Importa un STEP como cuerpo(s). El contenido se embebe en la receta para que el proyecto sea autónomo.
+    Con `estructura` (Archivo › Abrir) conserva lo que traiga el archivo: nombres de las piezas, colores y
+    componentes; sin ella (recetas viejas e Insertar STEP) todo entra como cuerpos sueltos."""
     TIPO, ETIQUETA, ICONO = "importar_step", "Importar STEP", "⇩"
-    PARAMS = {"archivo": "", "contenido": ""}
+    PARAMS = {"archivo": "", "contenido": "", "estructura": False}
 
     def ejecutar(self, estado, ctx):
         if not self.p["contenido"]:
             raise ErrorOperacion("La importación no tiene contenido STEP.")
-        forma = intercambio.leer_step_texto(self.p["contenido"])
-        aplicar_resultado(estado, ctx, self.id, forma, "nuevo")
+        if not self.p.get("estructura"):
+            aplicar_resultado(estado, ctx, self.id, intercambio.leer_step_texto(self.p["contenido"]), "nuevo")
+            return
+        datos = intercambio.leer_step_estructura_texto(self.p["contenido"])
+        ids = {}
+        for c in datos["componentes"]:
+            ids[c["id"]] = f"{self.id}.{c['id']}"
+            estado.componentes[ids[c["id"]]] = {"nombre": c["nombre"], "padre": ids.get(c["padre"], ""),
+                                                "fijo": False, "matriz": np.identity(4).tolist()}
+        for c in datos["cuerpos"]:
+            estado.nuevo_cuerpo(self.id, c["forma"], c["tipo"], nombre=c["nombre"] or None,
+                                apariencia=list(c["color"]) if c["color"] else None,
+                                componente=ids.get(c["componente"], ""))
 
 
 class OpOperacionBase(Operacion):

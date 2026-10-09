@@ -14,7 +14,7 @@ import json
 from contextlib import contextmanager
 from pathlib import Path
 
-from ..io_archivos import proyecto
+from ..io_archivos import abrir_externo, proyecto
 from ..timeline.documento import _LIMITE_DESHACER, Documento
 from .errores import desde_mensaje, error
 
@@ -37,11 +37,20 @@ class Sesion:
         self.doc.nombre = nombre
         return self.doc
 
-    def abrir(self, ruta):
+    def abrir(self, ruta, unidades="mm"):
+        """Proyecto .omnicad/.fclone, o un archivo de otro programa (STEP, IGES, mallas, DXF, .f3d/.f3z: ver
+        `io_archivos.abrir_externo`) como documento nuevo sin ruta; sus avisos van a `avisos`."""
         ruta = Path(ruta)
         if not ruta.is_file():
             raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
-        self.doc = proyecto.abrir(ruta)
+        if abrir_externo.es_externo(ruta):
+            self.doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades)
+            for aviso in avisos:
+                self.avisar(aviso)
+        elif ruta.suffix.lower() not in proyecto.EXTENSIONES:
+            raise error("UNSUPPORTED_FILE_TYPE", f"Formato no soportado: {ruta.suffix or '(sin extensión)'}.")
+        else:
+            self.doc = proyecto.abrir(ruta)
         return self.doc
 
     def guardar(self, ruta=None, sobrescribir=False):

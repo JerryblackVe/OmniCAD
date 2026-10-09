@@ -18,7 +18,7 @@ from OCP.BRep import BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from OCP.BRepBndLib import BRepBndLib
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_Transform
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepGProp import BRepGProp
@@ -27,7 +27,8 @@ from OCP.BRepPrimAPI import (BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRep
                              BRepPrimAPI_MakeRevol, BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus)
 from OCP.Bnd import Bnd_Box
 from OCP.GCPnts import GCPnts_TangentialDeflection
-from OCP.GeomAbs import GeomAbs_Plane
+from OCP.GeomAbs import (GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion,
+                         GeomAbs_SurfaceOfRevolution, GeomAbs_Torus)
 from OCP.GProp import GProp_GProps
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 
@@ -260,16 +261,56 @@ def compuesto(formas):
 
 
 # ---------------------------------------------------------------- consultas
-def volumen(forma):
+# Caras que la integración de OpenCascade resuelve bien (las barridas por una curva también: es una sola dirección).
+_ANALITICAS = (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus, GeomAbs_SurfaceOfExtrusion,
+               GeomAbs_SurfaceOfRevolution)
+_CONTROL_RELATIVO = 1e-3          # malla de control: desvío relativo al tamaño de cada cara (rápida, ~0,3 s)
+_DEFLEXION_FINA = 3e-5            # malla fina: de la diagonal de la caja (~0,01 mm en una pieza de 300 mm)
+_DEFLEXION_MINIMA = 0.01          # mm: menos hace fallar el mallado de algunas B-spline (queda una cara sin malla)
+_ERROR_GROSERO = 0.05             # diferencia relativa a partir de la cual la integración exacta se descarta
+
+
+def es_forma_libre(forma):
+    """True si alguna cara es B-spline, Bézier, desfasada u otra superficie libre."""
+    return any(BRepAdaptor_Surface(c).GetType() not in _ANALITICAS for c in caras(forma))
+
+
+def _por_malla(forma, funcion, deflexion, relativa):
+    """Volumen o área sobre la malla de una COPIA (la malla de la vista no se toca). None si una cara no se malló."""
+    copia = BRepBuilderAPI_Copy(forma).Shape()
+    BRepMesh_IncrementalMesh(copia, deflexion, relativa, 0.2, True)
+    if any(BRep_Tool.Triangulation_s(c, TopLoc_Location()) is None for c in caras(copia)):
+        return None
     p = GProp_GProps()
-    BRepGProp.VolumeProperties_s(forma, p)
+    funcion(copia, p, False, False, True) if funcion is BRepGProp.VolumeProperties_s else funcion(copia, p, False, True)
     return p.Mass()
+
+
+def _propiedades(forma, funcion):
+    """Volumen o área. La integración de OpenCascade es exacta y rápida con caras analíticas y con la mayoría de las
+    libres (barridos, recubrimientos, bobinas), pero en superficies libres muy recortadas puede errar mucho: el fuelle
+    de un .f3d de Fusion daba 180 791 mm³ contra 124 672 de Fusion (con tolerancia, 125 050 en 27 s). Con caras libres
+    se controla contra una malla rápida; si difieren más de 5 % (un error grosero: la malla se equivoca menos de 1,5 %
+    incluso en un alambre de 1 mm), vale una malla fina: 124 718 mm³ en ~1 s."""
+    p = GProp_GProps()
+    funcion(forma, p)
+    exacto = p.Mass()
+    if not es_forma_libre(forma):
+        return exacto
+    control = _por_malla(forma, funcion, _CONTROL_RELATIVO, True)
+    if control is None or abs(exacto - control) <= _ERROR_GROSERO * abs(control):
+        return exacto
+    caja = caja_envolvente(forma)
+    fino = _por_malla(forma, funcion, max(_DEFLEXION_MINIMA, math.dist(*caja) * _DEFLEXION_FINA if caja else 0), False)
+    return fino if fino is not None else control
+
+
+def volumen(forma):
+    return _propiedades(forma, BRepGProp.VolumeProperties_s)
 
 
 def area(forma):
-    p = GProp_GProps()
-    BRepGProp.SurfaceProperties_s(forma, p)
-    return p.Mass()
+    return _propiedades(forma, BRepGProp.SurfaceProperties_s)
 
 
 def longitud(forma):
