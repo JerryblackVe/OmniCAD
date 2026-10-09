@@ -4,6 +4,17 @@
 itself when you change a dimension, like professional CAD tools. And **AI agents** (Claude Code, OpenCode, Cursor,
 Codex…) can drive it through MCP or the command line.
 
+<div align="center">
+
+## ☕ If OmniCAD helps you, support it
+
+**OmniCAD is free and open.** It is built by one person, in their spare time.<br>
+If it is useful to you, a donation helps keep it going.
+
+<a href="https://ko-fi.com/jerryblackve"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+
+</div>
+
 [Versión en español](README.md) · License [GPL-3.0](LICENSE) · Status: **alpha** (tested on Windows; Linux pending)
 
 ![OmniCAD](docs/img/omnicad.png)
@@ -77,3 +88,8 @@ trademarks of Robert McNeel & Associates.
 ## License
 
 [GNU GPL v3.0 or later](LICENSE).
+
+## Support the project
+
+OmniCAD is free and built by one person. If it helps you, you can support it with a donation at
+[ko-fi.com/jerryblackve](https://ko-fi.com/jerryblackve). Thank you!

@@ -4,6 +4,17 @@
 solo cuando cambiás una medida, como en los CAD profesionales. Y además lo pueden manejar **agentes de IA** (Claude Code,
 OpenCode, Cursor, Codex…) por MCP o por línea de comandos.
 
+<div align="center">
+
+## ☕ Si OmniCAD te sirve, apoyalo
+
+**OmniCAD es libre y gratis.** Lo hace una sola persona, en su tiempo.<br>
+Si te ayuda, una donación me ayuda a seguir.
+
+<a href="https://ko-fi.com/jerryblackve"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Apoyame en Ko-fi"></a>
+
+</div>
+
 [English version](README.en.md) · Licencia [GPL-3.0](LICENSE) · Estado: **alfa** (Windows probado; Linux pendiente)
 
 ![OmniCAD](docs/img/omnicad.png)
@@ -88,3 +99,8 @@ Robert McNeel & Associates.
 
 [GNU GPL v3.0 o posterior](LICENSE). Podés usarlo, estudiarlo, modificarlo y compartirlo; si distribuís una versión
 modificada, tiene que seguir siendo libre con la misma licencia.
+
+## Apoyar el proyecto
+
+OmniCAD es libre y gratis, y lo hace una sola persona. Si te sirve, podés apoyarlo con una donación en
+[ko-fi.com/jerryblackve](https://ko-fi.com/jerryblackve). ¡Gracias!
