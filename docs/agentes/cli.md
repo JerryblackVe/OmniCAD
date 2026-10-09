@@ -258,7 +258,7 @@ Se detuvo en el paso 1 de 1: NO se guardó nada.
 
 ### dev
 
-Verificación del programa, para quien lo desarrolla. Son las herramientas `run_checks` y `app_screenshot` del grupo `dev` ([herramientas.md](herramientas.md#grupo-dev)): la misma fuente que usa el MCP con `--dev`.
+Verificación del programa, para quien lo desarrolla. Son las herramientas `run_checks`, `app_screenshot` y `run_bench` del grupo `dev` ([herramientas.md](herramientas.md#grupo-dev)): la misma fuente que usa el MCP con `--dev`.
 
 > `dev check --json` se corrió el 2026-10-09 (ruff limpio, 1138 passed, humo TODO OK, salida 0). El formato de texto y el de `dev screenshot` salen de leer `clon/omnicad/cli/cmd_dev.py` y `clon/omnicad/api/herramientas_dev.py`.
 
@@ -291,6 +291,22 @@ OK captura …\ventana.png  1600x900  <bytes> bytes
 - `--theme NOMBRE`: tema de la interfaz: `oscuro_moderno` (el de fábrica), `claro_moderno`, `azul_profesional`, `minimalista`, `clasico` o `usuario:<archivo>` (un `.json` de la carpeta de temas). Un nombre que no existe falla con `INVALID_ARGUMENTS`.
 - Necesita una pantalla con OpenGL: sin eso falla con `OPERATION_FAILED`.
 - Salida: 0 si salió, 1 si falló la captura, 2 si el uso es inválido (la salida no es `.png`, el tamaño está mal, el proyecto no existe).
+
+**`omnicad dev bench`**: mide el rendimiento con la ventana REAL en otro proceso (`python -m omnicad.ui.bench`): arranque, memoria, recálculo de un modelo grande (placa con 8×8 agujeros, 73 pasos) y cuadros por segundo al girar la vista. Repite la medición y da la mediana de cada número. Corrida real del 2026-10-09 (22 s):
+
+```
+$ omnicad dev bench
+Mediana de 3 corrida(s):
+  arranque         1.891 s  (importar: 0.896 s)
+  memoria          479.5 MB al arrancar · 517.3 MB con el modelo · pico 531.7 MB
+  modelo grande    73 pasos, 19196 triángulos
+  recálculo        todo 0.945 s · último paso 0.029 s · cambiar un parámetro 1.056 s
+  vista 3D         3.86 ms por cuadro (259.2 cuadros/s posibles) · 60.3 cuadros/s en pantalla
+```
+
+- `--repeticiones N` (1 a 10, defecto 3), `--lado N` (agujeros por lado, 1 a 20, defecto 8), `--cuadros N` (10 a 1000, defecto 120).
+- «cuadros/s posibles» es el tiempo de dibujo puro (`paintGL` + `glFinish`); «en pantalla» queda limitado por la sincronía vertical del monitor.
+- `--json` devuelve todos los números (también `ms_p95` y `mostrar_modelo_s`). Necesita pantalla con OpenGL.
 
 ### setup
 

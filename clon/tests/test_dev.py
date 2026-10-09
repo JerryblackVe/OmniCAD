@@ -57,7 +57,7 @@ def simular_pasos(monkeypatch, pytest_codigo=0):
 
 def test_grupo_dev_registrado():
     herramientas = {h["nombre"]: h for h in api.catalogo("dev")}
-    assert set(herramientas) == {"run_checks", "app_screenshot"}
+    assert set(herramientas) == {"run_checks", "app_screenshot", "run_bench"}
     assert not any(h["modifica"] for h in herramientas.values())
 
 
@@ -249,3 +249,55 @@ def test_cli_dev_screenshot_real(tmp_path, capsys):
         pytest.skip("sin pantalla u OpenGL")
     assert codigo == 0 and destino.is_file()
     assert "480x300" in salida.out
+
+
+# ---------------------------------------------------------------- run_bench (medición de rendimiento)
+CORRIDA = {"importar_s": 1.0, "arranque_s": 2.0, "memoria_inicio_mb": 480.0, "modelo": {"pasos": 73, "agujeros": 64},
+           "recalculo_completo_s": 0.9, "recalculo_ultimo_paso_s": 0.03, "recalculo_parametro_s": 1.0,
+           "mostrar_modelo_s": 0.2, "triangulos": 19196, "memoria_modelo_mb": 518.0,
+           "giro": {"cuadros": 120, "fps_dibujo": 265.0, "ms_medio": 3.8, "ms_p95": 4.2, "fps_pantalla": 60.0},
+           "memoria_pico_mb": 532.0}
+
+
+def test_mediana_de_corridas_toma_la_mediana_de_cada_numero_tambien_anidado():
+    otra = dict(CORRIDA, arranque_s=8.0, giro=dict(CORRIDA["giro"], fps_dibujo=100.0))
+    tercera = dict(CORRIDA, arranque_s=3.0, giro=dict(CORRIDA["giro"], fps_dibujo=300.0))
+    m = hd.mediana_de_corridas([CORRIDA, otra, tercera])
+    assert m["arranque_s"] == 3.0 and m["giro"]["fps_dibujo"] == 265.0 and m["modelo"] == CORRIDA["modelo"]
+    assert hd.mediana_de_corridas([CORRIDA]) == CORRIDA
+
+
+def test_run_bench_validaciones():
+    for args in ({"repetitions": 0}, {"side": 30}, {"frames": 5}):
+        r = api.llamar(api.Sesion(), "run_bench", args)
+        assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+
+
+def test_run_bench_repite_y_da_la_mediana(monkeypatch):
+    salidas = iter([CORRIDA, dict(CORRIDA, arranque_s=9.0), dict(CORRIDA, arranque_s=3.0)])
+    llamadas = []
+
+    def simulado(argv, timeout):
+        llamadas.append(argv)
+        return 0, "qt.qpa: aviso suelto\n" + json.dumps(next(salidas)) + "\n"
+    monkeypatch.setattr(hd, "_correr", simulado)
+    r = api.llamar(api.Sesion(), "run_bench", {"repetitions": 3, "side": 4, "frames": 30})
+    assert r["ok"] and r["result"]["repetitions"] == 3 and r["result"]["arranque_s"] == 3.0
+    assert all(a[1:3] == ["-m", "omnicad.ui.bench"] and "--t0" in a and a[a.index("--lado") + 1] == "4"
+               for a in llamadas)
+
+
+def test_run_bench_sin_pantalla_o_con_falla_lo_dice(monkeypatch):
+    monkeypatch.setattr(hd, "_correr", lambda argv, timeout: (hd.SIN_PANTALLA, ""))
+    r = api.llamar(api.Sesion(), "run_bench", {"repetitions": 1})
+    assert not r["ok"] and "No hay pantalla" in r["mensaje"]
+    monkeypatch.setattr(hd, "_correr", lambda argv, timeout: (1, "bench: el modelo grande tiene errores\n"))
+    r = api.llamar(api.Sesion(), "run_bench", {"repetitions": 1})
+    assert not r["ok"] and "modelo grande tiene errores" in r["mensaje"]
+
+
+def test_cli_dev_bench_resume(capsys, monkeypatch):
+    monkeypatch.setattr(hd, "_correr", lambda argv, timeout: (0, json.dumps(CORRIDA)))
+    assert main(["dev", "bench", "--repeticiones", "1"]) == 0
+    salida = capsys.readouterr().out
+    assert "arranque" in salida and "3.8 ms por cuadro" in salida and "73 pasos" in salida

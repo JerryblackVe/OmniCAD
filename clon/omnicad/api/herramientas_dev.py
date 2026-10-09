@@ -5,6 +5,8 @@
     y resume cada paso. Cada paso va en un subproceso con su propio tiempo máximo.
   - `app_screenshot`: abre la ventana REAL de OmniCAD en otro proceso (`omnicad.ui.captura`), la captura
     entera y la cierra. Sirve para ver la interfaz tal como la ve una persona.
+  - `run_bench`: mide el rendimiento con la ventana real (`omnicad.ui.bench`): arranque, memoria, recálculo de un
+    modelo grande y cuadros por segundo al girar. Repite y da la mediana de cada número.
 
 Son herramientas de desarrollo: el servidor MCP las muestra solo con `--dev` y la CLI las expone en
 `omnicad dev`. Los parseadores (`parsear_*`) son funciones puras: se prueban sin correr nada.
@@ -28,6 +30,7 @@ TIMEOUT_RUFF = 120                            # segundos máximos por paso
 TIMEOUT_PYTEST = 900
 TIMEOUT_HUMO = 600
 TIMEOUT_CAPTURA = 180
+TIMEOUT_BENCH = 300                           # por repetición
 _ARGS_RUFF = ["--select", "F,B023,B905", "."]   # el criterio de AGENTS.md (sin --select hay cientos de avisos viejos)
 _FIRMA_PNG = b"\x89PNG\r\n\x1a\n"
 # Marca que run_checks pone en sus subprocesos. Si la suite que lanzó vuelve a llamar a run_checks sin simular los
@@ -182,3 +185,50 @@ def app_screenshot(sesion, path: str | None = None, example: bool = False, proje
     finally:
         if temporal is not None:
             shutil.rmtree(temporal, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- medición de rendimiento
+def mediana_de_corridas(corridas):
+    """Une varias corridas de `omnicad.ui.bench` (dicts, quizás anidados) tomando la mediana de cada número; lo que
+    no es número (o falta en alguna corrida) se toma de la primera. Pura: se prueba sin correr nada."""
+    import statistics
+
+    def unir(valores):
+        primero = valores[0]
+        if isinstance(primero, dict):
+            return {k: unir([v[k] for v in valores if isinstance(v, dict) and k in v]) for k in primero}
+        if isinstance(primero, (int, float)) and not isinstance(primero, bool) and                 all(isinstance(v, (int, float)) for v in valores):
+            m = statistics.median(valores)
+            return round(m, 3) if isinstance(m, float) else m
+        return primero
+    return unir(list(corridas))
+
+
+@herramienta("run_bench", "dev", "Mide el rendimiento de OmniCAD con la ventana real: arranque, memoria, recálculo de "
+             "un modelo grande (placa con N×N agujeros) y cuadros por segundo al girar la vista. Repite la medición y "
+             "devuelve la mediana de cada número. Sirve para comparar antes y después de optimizar.", modifica=False)
+def run_bench(sesion, repetitions: int = 3, side: int = 8, frames: int = 120):
+    """
+    repetitions: cuántas veces medir (1 a 10); el resultado es la mediana de cada número.
+    side: agujeros por lado del modelo grande (1 a 20; 8 = 64 agujeros y 73 pasos).
+    frames: cuadros de la órbita para medir los cuadros por segundo (10 a 1000).
+    """
+    if not (1 <= repetitions <= 10 and 1 <= side <= 20 and 10 <= frames <= 1000):
+        raise error("INVALID_ARGUMENTS", "repetitions va de 1 a 10, side de 1 a 20 y frames de 10 a 1000.")
+    import json
+    corridas = []
+    for _ in range(repetitions):
+        argv = [sys.executable, "-m", "omnicad.ui.bench", "--lado", str(side), "--cuadros", str(frames),
+                "--t0", repr(time.time())]
+        codigo, salida = _correr(argv, TIMEOUT_BENCH)
+        if codigo is None:
+            raise ErrorAPI("OPERATION_FAILED", f"La medición pasó de {TIMEOUT_BENCH} s y se cortó.")
+        if codigo == SIN_PANTALLA:
+            raise ErrorAPI("OPERATION_FAILED", "No hay pantalla u OpenGL disponible para abrir la ventana.",
+                           ["Corré esto en la sesión de escritorio, no en un proceso sin pantalla."])
+        linea = next((x for x in reversed(salida.splitlines()) if x.startswith("{")), None)
+        if codigo != 0 or linea is None:
+            raise ErrorAPI("OPERATION_FAILED", f"La medición falló: {_ultima_linea(salida) or 'sin detalle'}",
+                           ["Corré `python -m omnicad.ui.bench` para ver el error completo."])
+        corridas.append(json.loads(linea))
+    return {"repetitions": repetitions, **mediana_de_corridas(corridas)}

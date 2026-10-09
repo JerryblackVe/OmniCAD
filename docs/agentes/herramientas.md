@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-62 herramientas en 7 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+63 herramientas en 7 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -18,7 +18,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [solido](#grupo-solido) | 18 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [inspeccion](#grupo-inspeccion) | 7 | Ver y medir el resultado. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
-| [dev](#grupo-dev) | 2 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
+| [dev](#grupo-dev) | 3 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
 
 ## Grupo documento
 
@@ -836,6 +836,7 @@ Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`).
 |---|---|---|
 | [`run_checks`](#run_checks) | no | Corre la verificación del proyecto (ruff, pytest y, si se pide, la prueba de humo de la interfaz) y devuelve un resumen por paso. |
 | [`app_screenshot`](#app_screenshot) | no | Abre la ventana REAL de OmniCAD en otro proceso, espera a que dibuje, captura la ventana entera y la cierra. |
+| [`run_bench`](#run_bench) | no | Mide el rendimiento de OmniCAD con la ventana real: arranque, memoria, recálculo de un modelo grande (placa con N×N agujeros) y cuadros por segundo al girar la vista. |
 
 ### `run_checks`
 
@@ -860,3 +861,14 @@ Abre la ventana REAL de OmniCAD en otro proceso, espera a que dibuje, captura la
   - `height` (entero; opcional, por defecto `900`): alto de la captura en píxeles (240 a 3000).
   - `theme` (texto; opcional, por defecto `null`): tema de la interfaz: oscuro_moderno, claro_moderno, azul_profesional, minimalista, clasico o usuario:<archivo>; vacío = el de fábrica.
 - CLI: `omnicad call app_screenshot --doc pieza.omnicad`
+
+### `run_bench`
+
+Mide el rendimiento de OmniCAD con la ventana real: arranque, memoria, recálculo de un modelo grande (placa con N×N agujeros) y cuadros por segundo al girar la vista. Repite la medición y devuelve la mediana de cada número. Sirve para comparar antes y después de optimizar.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `repetitions` (entero; opcional, por defecto `3`): cuántas veces medir (1 a 10); el resultado es la mediana de cada número.
+  - `side` (entero; opcional, por defecto `8`): agujeros por lado del modelo grande (1 a 20; 8 = 64 agujeros y 73 pasos).
+  - `frames` (entero; opcional, por defecto `120`): cuadros de la órbita para medir los cuadros por segundo (10 a 1000).
+- CLI: `omnicad call run_bench --doc pieza.omnicad`

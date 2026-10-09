@@ -85,7 +85,7 @@ Las herramientas se agrupan en "toolsets". El agente activa solo los que necesit
 | solido | `extrude`, `revolve`, `sweep`, `loft`, `fillet`, `chamfer`, `shell`, `create_hole`, `rectangular_pattern`, `circular_pattern`, `mirror`, `boolean_operation`, `create_box`, `create_cylinder`, `create_sphere`, `create_torus`, `move_body` |
 | inspeccion | `get_viewport_image` (vistas iso, front, top, …), `find_faces`, `find_edges`, `measure_distance`, `measure_angle`, `get_physical_properties`, `check_interference` |
 | avanzado | `list_operation_types`, `describe_operation`, `run_operation`, `get_recipe`, `apply_recipe`, `execute_code` (Python con `api` ya cargado), `get_guide` |
-| dev | Solo con `--dev`: `run_checks` (ruff + pytest + prueba de humo) y `app_screenshot` (captura de la ventana real) |
+| dev | Solo con `--dev`: `run_checks` (ruff + pytest + prueba de humo) , `app_screenshot` (captura de la ventana real) y `run_bench` (medición de rendimiento) |
 
 El formato de la respuesta es el mismo en todas las herramientas:
 
