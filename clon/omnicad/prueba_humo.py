@@ -221,8 +221,19 @@ def _punto_del_plano(visor, nombre):
     return None
 
 
+def _mover(w, pos):
+    """Movimiento del ratón SIMULADO, enviado al widget. QTest.mouseMove mueve el cursor REAL de Windows: si la persona
+    usa el ratón mientras corre la prueba gana el suyo, el boceto no ve el movimiento y «Entrada dinámica» fallaba
+    (2026-10-09: falló 3 de 5 corridas, con y sin la caja de herramientas)."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    local = QPointF(pos)
+    QApplication.sendEvent(w, QMouseEvent(QEvent.MouseMove, local, w.mapToGlobal(local), Qt.NoButton, Qt.NoButton,
+                                          Qt.NoModifier))
+
+
 def _clic(lz, u, v):
-    QTest.mouseMove(lz, lz.a_px(u, v).toPoint())
+    _mover(lz, lz.a_px(u, v))
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz.a_px(u, v).toPoint())
 
 
@@ -274,7 +285,7 @@ def _boceto_en_3d(v, r):
     # Entrada dinámica: escribir la longitud mientras se dibuja una línea
     mb.herramienta("linea")
     _clic(lz, 0, -40)
-    QTest.mouseMove(lz, lz.a_px(20, -40).toPoint())
+    _mover(lz, lz.a_px(20, -40))
     QTest.keyClick(lz, Qt.Key_2)
     r.check(lz.entrada is not None, "Entrada dinámica: escribir un número abre el campo de longitud")
     lz.entrada.campos[0].setText("25")

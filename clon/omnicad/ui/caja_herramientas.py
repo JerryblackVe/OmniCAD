@@ -12,8 +12,7 @@ Toolbox»:
   - Los atajos se reordenan arrastrándolos y la caja se agranda desde la esquina de abajo a la derecha.
 Lo fijado se guarda en las preferencias (`atajos/diseno`, `atajos/boceto`: claves separadas por comas).
 
-Es un widget hijo de la ventana (no una ventana aparte), como la lista del buscador de la cinta: no depende del
-gestor de ventanas (Windows y Linux). Se cierra con Esc, al ejecutar un comando o al hacer clic afuera.
+Es un widget hijo de la ventana (no una ventana aparte): no depende del gestor de ventanas (Windows y Linux). Se cierra con Esc, al ejecutar un comando o al hacer clic afuera.
 """
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QCursor
@@ -21,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QLineE
                                QListWidgetItem, QSizeGrip, QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
                                QVBoxLayout, QWidget)
 
-from .buscador_comandos import coincidencias, comandos_disponibles, nombre_accion
+from .busqueda_comandos import coincidencias, comandos_disponibles, nombre_accion
 from .iconos import icono
 
 CONTEXTOS = {"diseno": "ATAJOS DE DISEÑO", "boceto": "ATAJOS DE BOCETO"}
@@ -92,6 +91,7 @@ class CajaHerramientas(QFrame):
         self.acciones = acciones
         self.prefs = prefs
         self.contexto = "diseno"
+        self._foco_anterior = None
         self.resize(TAMANO_INICIAL)
         self.setMinimumSize(200, 140)
 
@@ -138,6 +138,9 @@ class CajaHerramientas(QFrame):
         """Abre la caja de `contexto` ("diseno" o "boceto") con la esquina de arriba a la izquierda cerca de `pos`
         (coordenadas de la ventana), sin salirse de ella."""
         self.contexto = contexto
+        foco = QApplication.focusWidget()
+        if foco is None or not self.isAncestorOf(foco):
+            self._foco_anterior = foco      # al cerrar vuelve ahí (p. ej. el lienzo del boceto)
         self.titulo.setText(CONTEXTOS[contexto])
         self.campo.clear()
         self._llenar_atajos()
@@ -154,6 +157,14 @@ class CajaHerramientas(QFrame):
     def cerrar(self):
         QApplication.instance().removeEventFilter(self)
         self.hide()
+        # Sin esto el foco queda en cualquier widget y las teclas siguientes disparan atajos de la ventana: en un
+        # boceto, escribir «2» elegía «Selección de forma libre» en vez de abrir la entrada de longitud.
+        foco, self._foco_anterior = self._foco_anterior, None
+        try:
+            if foco is not None and foco.isVisible():
+                foco.setFocus(Qt.PopupFocusReason)
+        except RuntimeError:                # el widget ya no existe (p. ej. se cerró el boceto)
+            pass
 
     def eventFilter(self, obj, e):
         tipo = e.type()

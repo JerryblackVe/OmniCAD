@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy,
                                QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION
-from .buscador_comandos import BuscadorComandos
 from .cinta_boceto import GRUPOS_BOCETO
 from .cinta_items import SEP, _i, _sub
 from .iconos import icono
@@ -255,8 +254,6 @@ class Cinta(QWidget):
             self.pila.addWidget(self._fila_grupos(grupos))
             self.contextuales[nombre] = b
         fila.addStretch(1)
-        self.buscador = BuscadorComandos(acciones)      # «Buscar comando…» (Ctrl+K), a la derecha de las pestañas
-        fila.addWidget(self.buscador, 0, Qt.AlignVCenter)
         derecha.addLayout(fila)
         derecha.addWidget(self.pila)
         lay.addLayout(derecha, 1)

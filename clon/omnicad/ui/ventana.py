@@ -295,8 +295,6 @@ class VentanaPrincipal(QMainWindow):
           "Sale de los modos de navegación (órbita, encuadre, zoom).", "seleccionar")
         A("caja_herramientas", "Caja de herramientas", self.abrir_caja_herramientas, "S",
           "Buscá y usá cualquier comando, y fijá los que más usás (en un boceto, con su propia lista).", "chinche")
-        A("buscar_comando", "Buscar comando", lambda: self.cinta.buscador.enfocar(), "Ctrl+K",
-          "Escribí parte del nombre de un comando y Enter lo ejecuta.", "buscar")
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
           "Con el ratón sobre un comando de la cinta o de un menú, muestra su ayuda.")
         A("renombrar", "Renombrar", lambda: self.navegador.renombrar_en_linea(), "F2",

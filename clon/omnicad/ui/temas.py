@@ -241,12 +241,6 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
                    color: $boton_primario_texto; font-size: 9pt; font-weight: 600; padding: 0 14px; }
 #espacio_trabajo:hover { background: $boton_primario_hover; }  /* relleno con el acento, como en docs/diseno/ */
 #separador_grupo { background: $borde_suave; }
-#buscador_comandos { background: $entrada; border: 1px solid $borde; border-radius: 4px; padding: 3px 4px;
-                     margin: 2px 0; }
-#buscador_comandos:focus { border-color: $acento; }
-#lista_comandos { background: $menu_fondo; border: 1px solid $menu_borde; border-radius: 4px; padding: 2px; }
-#lista_comandos::item { padding: 4px 8px; border-radius: 3px; }
-#lista_comandos::item:selected { background: $menu_hover; color: $texto; }
 #caja_herramientas { background: $flotante; border: 1px solid $borde; border-radius: 6px; }
 #titulo_caja { font-size: 8pt; letter-spacing: 0.4px; color: $texto_tenue; }
 #atajos_caja, #resultados_caja { background: transparent; border: 0; }

@@ -24,7 +24,7 @@ Codex…) can drive it through MCP or the command line.
   imports STEP; sketches from DXF and SVG.
 - **Inspection:** volume, mass, area, bounding box, distances, angles and interference.
 - **Interface:** 5 themes (modern dark, modern light, professional blue, minimalist and classic) plus user themes
-  in a JSON file; command search with Ctrl+K.
+  in a JSON file; toolbox on the S key (search and pin commands).
 - **Geometry kernel:** [OpenCascade](https://dev.opencascade.org/) (B-rep).
 
 ## For AI agents

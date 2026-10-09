@@ -126,3 +126,18 @@ def test_no_se_sale_de_la_ventana(caja):
     c.abrir("diseno", QPoint(5000, 5000))
     padre = c.parentWidget().rect()
     assert padre.contains(c.geometry())
+
+
+def test_al_cerrar_el_foco_vuelve_adonde_estaba(caja):
+    # Si no vuelve, en un boceto la tecla «2» dispara «Selección de forma libre» en vez de la entrada de longitud.
+    from PySide6.QtWidgets import QLineEdit
+    c, _, _ = caja
+    c.cerrar()
+    lienzo = QLineEdit(c.parentWidget())
+    lienzo.show()
+    lienzo.setFocus()
+    QTest.qWait(10)
+    c.abrir("boceto", QPoint(50, 50))
+    assert QApplication.focusWidget() is c.campo
+    QTest.keyClick(c.campo, Qt.Key_Escape)
+    assert QApplication.focusWidget() is lienzo

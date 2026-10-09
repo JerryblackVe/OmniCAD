@@ -63,7 +63,7 @@ Sin `--select`, ruff muestra cientos de avisos de estilo viejos que NO son el cr
 **Memoria:** la suite completa y la prueba de humo (abren ventanas OpenGL) usan mucha memoria: se corren de a
 UNA a la vez. Si sos uno de varios agentes en paralelo, corré solo tus archivos de test; la suite completa y la
 humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB).
-**Prueba de humo:** no uses el ratón sobre su ventana mientras corre: el paso «Entrada dinámica» puede fallar.
+**Prueba de humo:** no uses el ratón sobre su ventana mientras corre: varios pasos mueven el cursor REAL con `QTest.mouseMove`. Para un paso nuevo que solo necesita que el widget vea el ratón, usá `_mover` (movimiento simulado, no depende del cursor real).
 Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lleva al menos una prueba con
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
