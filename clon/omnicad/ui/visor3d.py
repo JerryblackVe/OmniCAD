@@ -19,8 +19,10 @@ reflejo en el suelo, anti-aliasing), visibilidad del origen y de los planos de c
 rejilla del diseño o del boceto activo, sombreado azul de perfiles y "Corte" por el plano del boceto.
 Eje Z hacia arriba (como la opción "Z hacia arriba" de Fusion; práctico para impresión 3D).
 """
+import ctypes
 import math
 import time
+import weakref
 
 import numpy as np
 from OpenGL import GL
@@ -176,6 +178,46 @@ FACTOR_DETALLE_AUTO, DEFLEXION_MIN, DEFLEXION_MAX = 3e-4, 0.01, 0.5
 DEGRADACION = (("reflejo",), ("suelo", "sombra_suelo"), ("aa",))
 
 
+# Detalle a la distancia (paso 4 de rendimiento): una pieza que se ve chica se dibuja con una malla más gruesa.
+# Por nivel: (factor de la deflexión, factor del ángulo, diámetro máximo en pantalla en px). El error de una malla es
+# a lo sumo su deflexión: el nivel vale solo si esa deflexión en pantalla queda bajo ERROR_LOD_PX (no se nota).
+NIVELES_LOD = ((4.0, 2.0, 96.0), (16.0, 4.0, 24.0))
+ERROR_LOD_PX, ANGULO_LOD_MAX = 0.5, 1.0
+PRESUPUESTO_LOD_S = 0.012          # tiempo por vuelta para calcular mallas gruesas sin trabar la interfaz
+
+
+def nivel_lod(diametro_px, deflexion_px):
+    """Nivel de detalle (0 = la malla de siempre) de piezas que en pantalla miden `diametro_px` y cuya malla fina
+    tiene una deflexión de `deflexion_px`. Acepta números o arrays (una pieza por elemento)."""
+    d, e = np.asarray(diametro_px, float), np.asarray(deflexion_px, float)
+    nivel = np.zeros(d.shape, int)
+    for k, (f_defl, _f_ang, max_px) in enumerate(NIVELES_LOD, 1):   # cada nivel pide más que el anterior
+        nivel = np.where((d <= max_px) & (e * f_defl <= ERROR_LOD_PX), k, nivel)
+    return nivel
+
+
+def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
+    """(vértices, colores RGBA) float32 para GL_LINES de la rejilla: 2n+1 líneas por eje alrededor de `centro_uv`,
+    más marcadas cada 5. Con numpy: punto por punto en Python costaba ~1,5 ms por cuadro."""
+    cu, cv = centro_uv
+    ext = paso * n
+    i = np.arange(-n, n + 1)
+    u, v = cu + i * paso, cv + i * paso
+    uv = np.empty((len(i), 2, 2, 2))               # [i, línea de u fija / de v fija, extremo, (u, v)]
+    uv[:, 0, :, 0] = u[:, None]
+    uv[:, 0, 0, 1], uv[:, 0, 1, 1] = cv - ext, cv + ext
+    uv[:, 1, 0, 0], uv[:, 1, 1, 0] = cu - ext, cu + ext
+    uv[:, 1, :, 1] = v[:, None]
+    uv = uv.reshape(-1, 2)
+    vertices = plano.origen + np.outer(uv[:, 0], plano.u) + np.outer(uv[:, 1], plano.v)
+    mayor = np.stack([np.round(u / paso).astype(int) % 5 == 0, np.round(v / paso).astype(int) % 5 == 0], axis=1)
+    alfa = np.where(mayor, 0.40, 0.16) if oscuro else np.where(mayor, 0.45, 0.22)
+    colores = np.empty((len(uv), 4))
+    colores[:, :3] = rgb
+    colores[:, 3] = np.repeat(alfa.reshape(-1), 2)
+    return vertices.astype(np.float32), colores.astype(np.float32)
+
+
 def deflexion_automatica(forma):
     """Deflexión (mm) para teselar `forma` con el detalle «Automático»: fina en piezas chicas, gruesa en grandes."""
     try:
@@ -264,6 +306,9 @@ class ConfigVista:
         self.dinamico = True
         self.fps_minimo = 30
         self.limite_fps = 0
+        # Menos detalle a la distancia (NIVELES_LOD). Fusion lo hace por dentro, sin opción: acá tampoco se muestra;
+        # el interruptor sirve para medir con y sin (bench).
+        self.detalle_distancia = True
 
     def colores_fondo(self):
         _, arriba, abajo, _ = ENTORNOS.get(self.entorno, ENTORNOS["tema"])
@@ -324,7 +369,16 @@ class Visor3D(QOpenGLWidget):
         self._resalte = np.zeros((0, 3), np.float32)
         self._perfiles = np.zeros((0, 3), np.float32)
         self._hover = None                 # ("plano", ref) | ("cara", triángulos)
-        self._cache = {}                   # id(forma) → (forma, v, n, aristas)
+        self._cache = {}                   # id(forma) → (forma, v, n, aristas, centro, radio, deflexión)
+        self._buffers = {}                 # id(array) → (búfer en la placa de video, weakref al array): se sube 1 vez
+        self._lod = {}                     # (id(forma), nivel) → (forma, v, n) o None: mallas gruesas para lejos
+        self._lod_pendientes = {}          # (id(forma), nivel) → (forma, deflexión fina, nivel), a calcular
+        self._lod_datos = (np.zeros((0, 3)), np.zeros(0), np.zeros(0))   # centros, radios y deflexiones de _mallas
+        self._niveles = np.zeros(0, int)   # nivel de detalle de cada malla en el cuadro actual
+        self._t_lod = QTimer(self, singleShot=True, interval=0)
+        self._t_lod.timeout.connect(self._calcular_lod)
+        self._rejilla_cache = (None, None)  # (clave, (vértices, colores)) de la última rejilla
+        self._caja_cache = (None, None, None)   # (_mallas, _bocetos, caja) de `_caja_escena`
         self._ultimo, self._boton, self._accion = None, None, None
         self._banda, self._banda_inicio = None, None
         self._banda_pendiente = None       # clic izquierdo en vacío: si se arrastra, ventana de selección
@@ -395,7 +449,7 @@ class Visor3D(QOpenGLWidget):
     def set_modelo(self, estado, ocultos=frozenset(), excluir_bocetos=(), apariencias=None):
         """Muestra un estado del modelo. `apariencias`: id de cuerpo → color que pisa el del cuerpo
         (Aspecto y Material físico del documento)."""
-        nuevas, cache, formas = [], {}, {}
+        nuevas, cache, formas, lod = [], {}, {}, []
         apariencias = apariencias or {}
         self._estado, self._ocultos, self._excluir_bocetos = estado, frozenset(ocultos), tuple(excluir_bocetos)
         for i, c in enumerate(estado.cuerpos.values()):
@@ -403,8 +457,11 @@ class Visor3D(QOpenGLWidget):
             if clave in self._cache:
                 datos = self._cache[clave]
             else:
-                v, n = teselar_cuerpo(c.forma, self._deflexion(c.forma), self.config.angular)
-                datos = (c.forma, v, n, aristas_cuerpo(c.forma))
+                defl = self._deflexion(c.forma)
+                v, n = teselar_cuerpo(c.forma, defl, self.config.angular)
+                mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
+                datos = (c.forma, v, n, aristas_cuerpo(c.forma), (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
+                         defl)
             cache[clave] = datos
             if c.id not in ocultos:
                 tipo = getattr(c, "tipo", "solido")
@@ -412,10 +469,16 @@ class Visor3D(QOpenGLWidget):
                 if color is None:
                     color = COLOR_SUPERFICIE if tipo == "superficie" else COLOR_MALLA if tipo == "malla" else None
                 nuevas.append({"v": datos[1], "n": datos[2], "seg": datos[3], "indice": i, "id": c.id,
-                               "color": tuple(color) if color is not None else None, "tipo": tipo})
+                               "color": tuple(color) if color is not None else None, "tipo": tipo,
+                               "forma": None if es_malla(c.forma) else c.forma})   # las mallas no tienen niveles
+                lod.append(datos[4:7])
                 formas[c.id] = c.forma
         self._pick = {k: v for k, v in self._pick.items() if k in cache}
         self._pick_aristas = {k: v for k, v in self._pick_aristas.items() if k in cache}
+        self._lod = {k: v for k, v in self._lod.items() if k[0] in cache}
+        self._lod_pendientes = {k: v for k, v in self._lod_pendientes.items() if k[0] in cache}
+        self._lod_datos = (np.array([d[0] for d in lod], float).reshape(-1, 3), np.array([d[1] for d in lod], float),
+                           np.array([d[2] for d in lod], float))
         self._cache, self._mallas, self._formas = cache, nuevas, formas
         self._hover_ent = None
         polis = []
@@ -433,7 +496,100 @@ class Visor3D(QOpenGLWidget):
 
     def invalidar_teselado(self):
         """Tras cambiar la calidad del teselado ("Valor predefinido de gráficos")."""
-        self._cache, self._pick = {}, {}
+        self._cache, self._pick, self._lod, self._lod_pendientes = {}, {}, {}, {}
+
+    # ------------------------------------------------------------ mallas en la placa de video y detalle a la distancia
+    def _buffer_gl(self, arr):
+        """Búfer de la placa de video con los datos de `arr`: se sube UNA vez y se reusa en cada cuadro mientras el
+        array viva (antes se mandaba toda la malla en cada cuadro). Pide el contexto OpenGL activo."""
+        clave = id(arr)
+        entrada = self._buffers.get(clave)
+        if entrada is not None and entrada[1]() is arr:
+            return entrada[0]
+        buf = entrada[0] if entrada is not None else int(GL.glGenBuffers(1))   # otro array con el mismo id: se pisa
+        datos = np.ascontiguousarray(arr, np.float32)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, buf)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, datos.nbytes, datos, GL.GL_STATIC_DRAW)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+        self._buffers[clave] = (buf, weakref.ref(arr))
+        return buf
+
+    def _barrer_buffers(self):
+        """Libera en la placa los búferes de arrays que ya no existen (otro modelo, otro detalle, cuerpo borrado)."""
+        muertos = [k for k, (_b, ref) in self._buffers.items() if ref() is None]
+        if muertos:
+            GL.glDeleteBuffers(len(muertos), [self._buffers.pop(k)[0] for k in muertos])
+
+    def _apuntar(self, v, n=None):
+        """Vértices (y normales) para el próximo glDrawArrays, desde su búfer en la placa. Lo que no es un array de
+        numpy (raro) va como antes, desde la memoria."""
+        if not isinstance(v, np.ndarray):
+            GL.glVertexPointer(3, GL.GL_FLOAT, 0, np.asarray(v, np.float32))
+            if n is not None:
+                GL.glNormalPointer(GL.GL_FLOAT, 0, np.asarray(n, np.float32))
+            return
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._buffer_gl(v))
+        GL.glVertexPointer(3, GL.GL_FLOAT, 0, ctypes.c_void_p(0))
+        if n is not None:
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._buffer_gl(n))
+            GL.glNormalPointer(GL.GL_FLOAT, 0, ctypes.c_void_p(0))
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+
+    def _elegir_niveles(self):
+        """Nivel de detalle de cada malla en este cuadro, según lo grande que se ve (en perspectiva, según su
+        distancia a la cámara)."""
+        n = len(self._mallas)
+        centros, radios, defl = self._lod_datos
+        if not n or not self.config.detalle_distancia or len(radios) != n:
+            self._niveles = np.zeros(n, int)
+            return
+        k = max(self.height(), 1) * self.devicePixelRatioF() / (2 * math.tan(math.radians(self.fov) / 2))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if self.ortografica:
+                px_mm = np.full(n, k / self.distancia)
+            else:
+                prof = (self.ojo() - centros) @ self.R[2]          # distancia de cada pieza a lo largo de la vista
+                px_mm = np.where(prof > radios, k / np.maximum(prof, 1e-9), np.inf)   # cámara adentro: detalle total
+            self._niveles = nivel_lod(2 * radios * px_mm, defl * px_mm)
+
+    def _malla_dibujo(self, i, m):
+        """(v, n) con que se dibuja la malla `m` (la i-ésima) en este cuadro: la de su nivel de detalle si ya está
+        calculada; si no, la fina, y ese nivel queda pendiente para después del cuadro."""
+        nivel = int(self._niveles[i]) if i < len(self._niveles) else 0
+        forma = m.get("forma")
+        if not nivel or forma is None or m["id"] in self.transformaciones:
+            return m["v"], m["n"]
+        clave = (id(forma), nivel)
+        if clave not in self._lod:
+            if clave not in self._lod_pendientes:
+                self._lod_pendientes[clave] = (forma, float(self._lod_datos[2][i]), nivel)
+                if not self._t_lod.isActive():
+                    self._t_lod.start()
+            return m["v"], m["n"]
+        datos = self._lod[clave]
+        return (datos[1], datos[2]) if datos is not None else (m["v"], m["n"])
+
+    def _calcular_lod(self):
+        """Calcula mallas gruesas pendientes, con un tope de tiempo por vuelta para no trabar la interfaz."""
+        fin = time.perf_counter() + PRESUPUESTO_LOD_S
+        while self._lod_pendientes and time.perf_counter() < fin:
+            clave, (forma, defl, nivel) = self._lod_pendientes.popitem()
+            f_defl, f_ang, _ = NIVELES_LOD[nivel - 1]
+            try:
+                v, n = geo.teselar_aparte(forma, defl * f_defl, min(self.config.angular * f_ang, ANGULO_LOD_MAX))
+            except Exception:  # noqa: BLE001 — si una pieza no se puede mallar más gruesa, sigue con la fina
+                v = None
+            fina = self._cache.get(clave[0])
+            # Solo vale si ahorra triángulos (en una pieza de caras planas sale igual: no gasta memoria de la placa).
+            self._lod[clave] = (forma, v, n) if v is not None and fina and 0 < len(v) < len(fina[1]) else None
+        if self._lod_pendientes:
+            self._t_lod.start()
+        self.update()
+
+    def triangulos_dibujados(self):
+        """Triángulos de los cuerpos que se dibujan en el cuadro actual (con el detalle a la distancia)."""
+        self._elegir_niveles()
+        return sum(len(self._malla_dibujo(i, m)[0]) for i, m in enumerate(self._mallas)) // 3
 
     def set_resaltado(self, caras):
         caras = list(caras or [])
@@ -462,6 +618,16 @@ class Visor3D(QOpenGLWidget):
     def _puntos_escena(self):
         partes = [m["v"] for m in self._mallas if len(m["v"])] + ([self._bocetos] if len(self._bocetos) else [])
         return np.concatenate(partes) if partes else None
+
+    def _caja_escena(self):
+        """(mínimo, máximo) de lo que se muestra (cuerpos y bocetos), o None. Se calcula una vez por modelo: los
+        efectos del suelo la piden en cada cuadro y recorrer todos los vértices costaba ~6 ms con 55 000 triángulos."""
+        mallas, bocetos, caja = self._caja_cache
+        if mallas is not self._mallas or bocetos is not self._bocetos:   # las dos listas se reemplazan, no se tocan
+            pts = self._puntos_escena()
+            caja = None if pts is None else (pts.min(axis=0), pts.max(axis=0))
+            self._caja_cache = (self._mallas, self._bocetos, caja)
+        return caja
 
     # ------------------------------------------------------------ cámara
     def _fijar_direccion(self, azimut, elevacion):
@@ -527,11 +693,11 @@ class Visor3D(QOpenGLWidget):
             self.update()
 
     def encuadrar(self):
-        pts = self._puntos_escena()
-        if pts is None:
+        caja = self._caja_escena()
+        if caja is None:
             self.objetivo, self.distancia = np.zeros(3), 250.0
         else:
-            mn, mx = pts.min(axis=0), pts.max(axis=0)
+            mn, mx = caja
             self.objetivo = (mn + mx) / 2
             radio = max(float(np.linalg.norm(mx - mn)) / 2, 1.0)
             self.distancia = radio / math.sin(math.radians(self.fov) / 2) * 1.1
@@ -1085,6 +1251,8 @@ class Visor3D(QOpenGLWidget):
 
     # ------------------------------------------------------------ OpenGL
     def initializeGL(self):
+        # Contexto nuevo (también al cambiar de ventana): los búferes y texturas del anterior ya no existen.
+        self._buffers, self._texturas = {}, {}
         self.info_gl = f"OpenGL {GL.glGetString(GL.GL_VERSION).decode()} — {GL.glGetString(GL.GL_RENDERER).decode()}"
         self._stencil = int(GL.glGetIntegerv(GL.GL_STENCIL_BITS)) > 0
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -1121,9 +1289,9 @@ class Visor3D(QOpenGLWidget):
 
     def _z_suelo(self):
         if self.config.desfase_suelo:
-            pts = self._puntos_escena()
-            if pts is not None:
-                return float(pts[:, 2].min())
+            caja = self._caja_escena()
+            if caja is not None:
+                return float(caja[0][2])
         return 0.0
 
     def _rejilla(self, plano, paso, color_ejes=True):
@@ -1137,16 +1305,17 @@ class Visor3D(QOpenGLWidget):
         ext = paso * n
         cu, cv = plano.a_uv(self.objetivo)
         cu, cv = round(cu / (5 * paso)) * 5 * paso, round(cv / (5 * paso)) * 5 * paso
+        clave = (tuple(plano.origen), tuple(plano.u), tuple(plano.v), paso, cu, cv, rojo, verde, azul, oscuro)
+        if self._rejilla_cache[0] != clave:     # cambia al desplazar o al cambiar el paso, no en cada cuadro
+            self._rejilla_cache = (clave, lineas_rejilla(plano, paso, (cu, cv), (rojo, verde, azul), oscuro, n))
+        vertices, colores = self._rejilla_cache[1]
         GL.glLineWidth(1.0)
-        GL.glBegin(GL.GL_LINES)
-        for i in range(-n, n + 1):
-            u, v = cu + i * paso, cv + i * paso
-            mayor_u, mayor_v = round(u / paso) % 5 == 0, round(v / paso) % 5 == 0
-            for mayor, a, b in ((mayor_u, (u, cv - ext), (u, cv + ext)), (mayor_v, (cu - ext, v), (cu + ext, v))):
-                GL.glColor4f(rojo, verde, azul, (0.40 if mayor else 0.16) if oscuro else (0.45 if mayor else 0.22))
-                GL.glVertex3f(*plano.a_3d(*a))
-                GL.glVertex3f(*plano.a_3d(*b))
-        GL.glEnd()
+        GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
+        GL.glEnableClientState(GL.GL_COLOR_ARRAY)
+        GL.glColorPointer(4, GL.GL_FLOAT, 0, colores)
+        GL.glVertexPointer(3, GL.GL_FLOAT, 0, vertices)
+        GL.glDrawArrays(GL.GL_LINES, 0, len(vertices))
+        GL.glDisableClientState(GL.GL_COLOR_ARRAY)
         if color_ejes:   # ejes del plano (X rojo, Y verde, Z azul según hacia dónde apuntan)
             GL.glLineWidth(1.5)
             GL.glBegin(GL.GL_LINES)
@@ -1199,7 +1368,7 @@ class Visor3D(QOpenGLWidget):
     def _dibujar_caras(self, alfa=1.0, transparentes=False):
         """Caras de los cuerpos: primero los opacos; los de opacidad < 1 en una segunda pasada."""
         GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
-        for m in self._mallas:
+        for i, m in enumerate(self._mallas):
             v, n = m["v"], m["n"]
             op = self.opacidad.get(m["id"], 1.0) * alfa
             if not len(v) or (op < 0.999 and alfa >= 0.999) != transparentes:
@@ -1214,6 +1383,8 @@ class Visor3D(QOpenGLWidget):
                         self._cache_dinamico.clear()
                     self._cache_dinamico[clave] = np.asarray(self.funcion_colores(n, self.R[2]), np.float32)
                 colores = self._cache_dinamico[clave]
+            elif colores is None:               # los colores por vértice (análisis) van con la malla fina
+                v, n = self._malla_dibujo(i, m)
             if colores is not None and len(colores) == len(v):
                 GL.glEnableClientState(GL.GL_COLOR_ARRAY)
                 GL.glColorPointer(3, GL.GL_FLOAT, 0, colores)
@@ -1225,8 +1396,7 @@ class Visor3D(QOpenGLWidget):
             if t is not None:
                 GL.glPushMatrix()
                 GL.glMultMatrixf(np.asarray(t, float).T.astype(np.float32))
-            GL.glVertexPointer(3, GL.GL_FLOAT, 0, v)
-            GL.glNormalPointer(GL.GL_FLOAT, 0, n)
+            self._apuntar(v, n)
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(v))
             if t is not None:
                 GL.glPopMatrix()
@@ -1242,7 +1412,7 @@ class Visor3D(QOpenGLWidget):
                 if t is not None:
                     GL.glPushMatrix()
                     GL.glMultMatrixf(np.asarray(t, float).T.astype(np.float32))
-                GL.glVertexPointer(3, GL.GL_FLOAT, 0, seg)
+                self._apuntar(seg)
                 GL.glDrawArrays(GL.GL_LINES, 0, len(seg))
                 if t is not None:
                     GL.glPopMatrix()
@@ -1284,8 +1454,8 @@ class Visor3D(QOpenGLWidget):
 
     def _efectos_suelo(self, z):
         ef, oscuro = self.config.efectos, self.config.oscuro()
-        pts = self._puntos_escena()
-        radio = 50.0 if pts is None else max(float(np.linalg.norm(pts.max(axis=0) - pts.min(axis=0))), 10.0)
+        caja = self._caja_escena()
+        radio = 50.0 if caja is None else max(float(np.linalg.norm(caja[1] - caja[0])), 10.0)
         c = self.objetivo
         if ef.get("reflejo") and self._mallas:
             GL.glPushMatrix()
@@ -1318,10 +1488,10 @@ class Visor3D(QOpenGLWidget):
             GL.glMultMatrixf(m.T.astype(np.float32))
             GL.glDepthMask(GL.GL_FALSE)
             GL.glColor4f(0, 0, 0, 0.30)
-            for m in self._mallas:
-                v = m["v"]
+            for i, m in enumerate(self._mallas):
+                v = self._malla_dibujo(i, m)[0]
                 if len(v):
-                    GL.glVertexPointer(3, GL.GL_FLOAT, 0, v)
+                    self._apuntar(v)
                     GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(v))
             GL.glDepthMask(GL.GL_TRUE)
             GL.glPopMatrix()
@@ -1345,12 +1515,15 @@ class Visor3D(QOpenGLWidget):
         cfg = self.config
         efectos_cfg, cfg.efectos = cfg.efectos, self.efectos_visibles()
         try:
-            self._pintar(cfg)
+            self._pintar_vista(cfg)
         finally:
             cfg.efectos = efectos_cfg
             self._ms_cuadro = (time.perf_counter() - inicio) * 1000
 
-    def _pintar(self, cfg):
+    def _pintar_vista(self, cfg):
+        # No se llama `_pintar`: LienzoRender (render.py) tiene su propio `_pintar` con otra firma, y sin GLSL cae acá.
+        self._barrer_buffers()
+        self._elegir_niveles()
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT | GL.GL_STENCIL_BUFFER_BIT)
         (GL.glEnable if cfg.efectos.get("aa", True) else GL.glDisable)(GL.GL_MULTISAMPLE)
         self._fondo()
@@ -1399,7 +1572,7 @@ class Visor3D(QOpenGLWidget):
         if cfg.visibilidad.get("bocetos", True) and len(self._bocetos):
             GL.glLineWidth(2.0)
             GL.glColor3f(*((0.35, 0.62, 1.0) if cfg.oscuro() else (0.10, 0.35, 0.85)))
-            GL.glVertexPointer(3, GL.GL_FLOAT, 0, self._bocetos)
+            self._apuntar(self._bocetos)
             GL.glDrawArrays(GL.GL_LINES, 0, len(self._bocetos))
         if self.plano_boceto is not None and self.opciones_boceto.get("perfil", True):
             self._triangulos_planos(self._perfiles, AZUL_PERFIL, 0.22)

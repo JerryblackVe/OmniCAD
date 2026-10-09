@@ -406,6 +406,13 @@ def teselar(forma, deflexion=0.05, angular=0.3, rehacer=False):
     return np.concatenate(verts).astype(np.float32), np.concatenate(norms).astype(np.float32)
 
 
+def teselar_aparte(forma, deflexion=0.05, angular=0.3):
+    """Como `teselar`, pero sobre una copia de la topología que comparte la geometría: la malla guardada en `forma`
+    queda intacta. Para los niveles de detalle a la distancia del visor (malla más gruesa para piezas que se ven
+    chicas) sin pisar la malla que usan el dibujo de cerca y la elección de caras."""
+    return teselar(BRepBuilderAPI_Copy(forma, False, False).Shape(), deflexion, angular)
+
+
 def triangulos_indexados(forma, deflexion=0.05, angular=0.3):
     """Vértices únicos + índices (para OBJ/STL) a partir del teselado."""
     v, _ = teselar(forma, deflexion, angular)

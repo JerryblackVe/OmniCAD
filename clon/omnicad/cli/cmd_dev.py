@@ -97,6 +97,10 @@ def bench(ns):
                f" (uno que usa solo el último paso: {x.get('recalculo_parametro_final_s', '-')} s)")
     util.decir(f"  vista 3D         {g['ms_medio']} ms por cuadro ({g['fps_dibujo']} cuadros/s posibles) · "
                f"{g['fps_pantalla']} cuadros/s en pantalla")
+    lejos = x.get("lejos")
+    if lejos:
+        util.decir(f"  de lejos         {lejos['triangulos']} triángulos, {lejos['ms_medio']} ms por cuadro (sin menos "
+                   f"detalle a la distancia: {lejos['triangulos_sin_lod']} triángulos, {lejos['ms_medio_sin_lod']} ms)")
     return 0
 
 

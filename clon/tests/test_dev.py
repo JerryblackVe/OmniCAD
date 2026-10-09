@@ -256,6 +256,7 @@ CORRIDA = {"preset": "personalizar", "importar_s": 1.0, "arranque_s": 2.0, "memo
            "recalculo_completo_s": 0.9, "recalculo_ultimo_paso_s": 0.03, "recalculo_parametro_s": 1.0, "recalculo_parametro_final_s": 0.03,
            "mostrar_modelo_s": 0.2, "triangulos": 19196, "memoria_modelo_mb": 518.0,
            "giro": {"cuadros": 120, "fps_dibujo": 265.0, "ms_medio": 3.8, "ms_p95": 4.2, "fps_pantalla": 60.0},
+           "lejos": {"triangulos": 7480, "ms_medio": 1.3, "triangulos_sin_lod": 17326, "ms_medio_sin_lod": 1.4},
            "memoria_pico_mb": 532.0}
 
 
@@ -301,3 +302,7 @@ def test_cli_dev_bench_resume(capsys, monkeypatch):
     assert main(["dev", "bench", "--repeticiones", "1"]) == 0
     salida = capsys.readouterr().out
     assert "arranque" in salida and "3.8 ms por cuadro" in salida and "73 pasos" in salida
+    assert "de lejos         7480 triángulos" in salida and "17326 triángulos" in salida
+    sin_lejos = {k: v for k, v in CORRIDA.items() if k != "lejos"}      # corridas de antes del paso 4: sin la línea
+    monkeypatch.setattr(hd, "_correr", lambda argv, timeout: (0, json.dumps(sin_lejos)))
+    assert main(["dev", "bench", "--repeticiones", "1"]) == 0 and "de lejos" not in capsys.readouterr().out

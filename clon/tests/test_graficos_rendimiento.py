@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Preferencias › Gráficos de rendimiento (pendiente 10, paso 2): detalle de las piezas, «Dinámico», límite de
-cuadros, valores predefinidos y su aplicación al instante en el diálogo."""
+"""Rendimiento (pendiente 10). Paso 2, Preferencias › Gráficos: detalle de las piezas, «Dinámico», límite de
+cuadros, valores predefinidos y su aplicación al instante en el diálogo. Paso 4: mallas en la placa de video una
+sola vez, rejilla con numpy y menos detalle a la distancia."""
 import os
 
+import numpy as np
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -138,3 +140,121 @@ def test_cancelar_vuelve_a_lo_que_habia(dialogo):
     dlg.reject()
     QTest.qWait(1)
     assert {k: prefs[k] for k in CLAVES_GRAFICOS} == antes and avisos[-1] == antes
+
+
+# ---------------------------------------------------------------- paso 4: mallas en la placa y detalle a la distancia
+def test_teselar_aparte_no_toca_la_malla_de_la_forma():
+    c = geo.cilindro(10, 30, (0, 0, 0))
+    fino = _triangulos(c, 0.01, 0.2, rehacer=True)
+    grueso = len(geo.teselar_aparte(c, 0.2, 0.6)[0]) // 3
+    assert grueso < fino / 3
+    assert _triangulos(c, 0.01, 0.2) == fino and geo.es_valida(c)   # la malla guardada en la forma sigue siendo la fina
+
+
+def test_nivel_lod_elige_el_mas_grueso_que_no_se_nota():
+    assert visor3d.nivel_lod(500, 0.05) == 0                   # se ve grande: malla de siempre
+    assert visor3d.nivel_lod(80, 0.05) == 1
+    assert visor3d.nivel_lod(20, 0.01) == 2
+    assert visor3d.nivel_lod(20, 0.2) == 0                     # chica, pero la malla gruesa erraría 0,8 px
+    assert visor3d.nivel_lod([500, 80, 20], [0.05, 0.05, 0.01]).tolist() == [0, 1, 2]
+
+
+def _rejilla_punto_por_punto(plano, paso, cu, cv, rgb, oscuro, n=40):
+    """Lo que hacía `Visor3D._rejilla` antes del paso 4 (glVertex de a uno), como referencia."""
+    ext, vert, col = paso * n, [], []
+    for i in range(-n, n + 1):
+        u, v = cu + i * paso, cv + i * paso
+        mayor_u, mayor_v = round(u / paso) % 5 == 0, round(v / paso) % 5 == 0
+        for mayor, a, b in ((mayor_u, (u, cv - ext), (u, cv + ext)), (mayor_v, (cu - ext, v), (cu + ext, v))):
+            alfa = (0.40 if mayor else 0.16) if oscuro else (0.45 if mayor else 0.22)
+            vert += [plano.a_3d(*a), plano.a_3d(*b)]
+            col += [(*rgb, alfa)] * 2
+    return np.array(vert, np.float32), np.array(col, np.float32)
+
+
+@pytest.mark.parametrize("plano", [geo.Plano("XY"), geo.Plano.desde_marco((5, -3, 2), (0.3, 0.2, 0.9), (1, 0, 0))])
+def test_lineas_rejilla_igual_que_punto_por_punto(plano):
+    for paso, cu, cv, oscuro in ((10.0, 50.0, -100.0, True), (0.5, 2.5, 0.0, False)):
+        v, c = visor3d.lineas_rejilla(plano, paso, (cu, cv), (0.6, 0.7, 0.8), oscuro)
+        v0, c0 = _rejilla_punto_por_punto(plano, paso, cu, cv, (0.6, 0.7, 0.8), oscuro)
+        assert v.shape == v0.shape == (2 * 81 * 2, 3) and np.allclose(v, v0, atol=1e-4) and np.allclose(c, c0)
+
+
+class _GLFalso:
+    """Lo justo de OpenGL para probar la caché de búferes sin placa de video."""
+    GL_ARRAY_BUFFER, GL_STATIC_DRAW = 1, 2
+
+    def __init__(self):
+        self.subidas, self.borrados, self._n = 0, [], 0
+
+    def glGenBuffers(self, _n):
+        self._n += 1
+        return self._n
+
+    def glBindBuffer(self, *_):
+        pass
+
+    def glBufferData(self, *_):
+        self.subidas += 1
+
+    def glDeleteBuffers(self, _n, ids):
+        self.borrados += list(ids)
+
+
+def test_buffer_se_sube_una_vez_y_se_libera_cuando_el_array_muere(visor, monkeypatch):
+    import gc
+    gl = _GLFalso()
+    monkeypatch.setattr(visor3d, "GL", gl)
+    a, b = np.zeros((30, 3), np.float32), np.ones((30, 3), np.float32)
+    ida = visor._buffer_gl(a)
+    assert visor._buffer_gl(a) == ida and visor._buffer_gl(b) != ida and gl.subidas == 2
+    del a
+    gc.collect()
+    visor._barrer_buffers()
+    assert gl.borrados == [ida] and visor._buffer_gl(b) and gl.subidas == 2
+
+
+def _estado_cilindro():
+    from omnicad.timeline.documento import Documento
+    from omnicad.timeline.operaciones import OpPrimitiva
+    doc = Documento()
+    doc.operaciones = [OpPrimitiva(doc.nuevo_id(), "Pieza", forma="cilindro", radio="10 mm", alto="30 mm", x="0",
+                                   y="0", z="0", operacion="nuevo")]
+    doc.marcador = 1
+    doc.recalcular(0)
+    return doc.estado_final
+
+
+def test_de_lejos_se_dibuja_una_malla_mas_gruesa_y_de_cerca_la_fina(visor):
+    visor.resize(800, 600)
+    visor.set_modelo(_estado_cilindro())
+    fina = len(visor._mallas[0]["v"]) // 3
+    visor.encuadrar()
+    assert visor.triangulos_dibujados() == fina and not visor._lod_pendientes
+    visor.distancia *= 30                                      # la pieza queda de unos 20 px
+    assert visor.triangulos_dibujados() == fina and visor._lod_pendientes   # mientras se calcula, la fina
+    visor._calcular_lod()
+    lejos = visor.triangulos_dibujados()
+    assert lejos < fina / 2 and not visor._lod_pendientes
+    visor.config.detalle_distancia = False
+    assert visor.triangulos_dibujados() == fina
+    visor.config.detalle_distancia = True
+    visor.transformaciones = {visor._mallas[0]["id"]: np.identity(4)}   # animada: siempre la fina
+    assert visor.triangulos_dibujados() == fina
+    visor.transformaciones = {}
+    visor.encuadrar()
+    assert visor.triangulos_dibujados() == fina
+
+
+def test_el_lienzo_de_render_sin_glsl_dibuja_como_el_visor(monkeypatch):
+    """Visor3D.paintGL llamaba a `_pintar`, que LienzoRender redefine con otra firma: sin GLSL fallaba."""
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from omnicad.ui.render import LienzoRender
+    llamadas = []
+    monkeypatch.setattr(visor3d.Visor3D, "_pintar_vista", lambda self, cfg: llamadas.append(cfg))
+    lz = LienzoRender()
+    lz._gl = None                                              # sin GLSL: cae al dibujo del Visor3D
+    lz.paintGL()
+    assert llamadas == [lz.config]
+    lz.deleteLater()

@@ -506,7 +506,7 @@ class LienzoRender(Visor3D):
         return self._matrices_tam(self.width(), self.height())
 
     # ------------------------------------------------------------ selección de cuerpos (con transformaciones)
-    def elegir_entidad(self, pos, filtros=None):
+    def elegir_entidad(self, pos, filtros=None, a_traves=False):   # misma firma que Visor3D (solo elige cuerpos)
         filtros = set(filtros if filtros is not None else (self.filtro or ()))
         if "cuerpo" not in filtros:
             return None
@@ -546,7 +546,7 @@ class LienzoRender(Visor3D):
                         "suelo": _Programa(_VS_SIMPLE, _FS_SUELO % disco),
                         "fondo": _Programa(_VS_FONDO, _FS_FONDO),
                         "reducir": _Programa(_VS_QUAD, _FS_REDUCIR),
-                        "fbos": {}, "vbos": {}}
+                        "fbos": {}}
             GL.glUseProgram(0)
             self.gl_error = None
         except Exception as e:  # noqa: BLE001 — sin GLSL el lienzo dibuja como el Visor3D
@@ -568,32 +568,13 @@ class LienzoRender(Visor3D):
                 raise RuntimeError(f"Framebuffer incompleto ({clave} {ancho}×{alto}).")
         return f
 
-    def _vbo(self, arr):
-        vbos = self._gl["vbos"]
-        clave = id(arr)
-        if clave not in vbos or vbos[clave][1] is not arr:
-            b = int(GL.glGenBuffers(1))
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, b)
-            GL.glBufferData(GL.GL_ARRAY_BUFFER, arr.nbytes, arr, GL.GL_STATIC_DRAW)
-            vbos[clave] = (b, arr)
-        return vbos[clave][0]
-
-    def _limpiar_vbos(self):
-        vivos = {id(a) for m in self._mallas for a in (m["v"], m["n"], m["loc"])}
-        vbos = self._gl["vbos"]
-        muertos = [k for k in vbos if k not in vivos]
-        if muertos:
-            GL.glDeleteBuffers(len(muertos), [vbos[k][0] for k in muertos])
-            for k in muertos:
-                del vbos[k]
-
     def _dibujar_malla(self, m, normales=True):
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._vbo(m["v"]))
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._buffer_gl(m["v"]))
         GL.glVertexPointer(3, GL.GL_FLOAT, 0, ctypes.c_void_p(0))
         if normales:
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._vbo(m["n"]))
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._buffer_gl(m["n"]))
             GL.glNormalPointer(GL.GL_FLOAT, 0, ctypes.c_void_p(0))
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._vbo(m["loc"]))
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._buffer_gl(m["loc"]))
             GL.glTexCoordPointer(3, GL.GL_FLOAT, 0, ctypes.c_void_p(0))
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(m["v"]))
 
@@ -608,7 +589,7 @@ class LienzoRender(Visor3D):
 
     def _luz(self, mallas):
         """Matrices de la luz principal (clip y [0,1]³) ajustadas a la esfera de los cuerpos."""
-        mn, mx = self._caja(mallas)
+        mn, mx = self._caja_mallas(mallas)
         c = (mn + mx) / 2
         r = max(float(np.linalg.norm(mx - mn)) / 2, 1e-6) * 1.02
         atras = rc.luces(self.escena["rotacion"])[0]
@@ -770,7 +751,7 @@ class LienzoRender(Visor3D):
             GL.glVertexPointer(3, GL.GL_FLOAT, 0, quad)
             GL.glDrawArrays(GL.GL_QUADS, 0, 4)
         if e["suelo"] and todos:
-            mn, mx = self._caja(todos)
+            mn, mx = self._caja_mallas(todos)
             c = (mn + mx) / 2
             rxy = max(float(np.linalg.norm(mx[:2] - mn[:2])) / 2, self._radio_escena(todos) * 0.3)
             ext = rxy * 4.0
@@ -878,17 +859,17 @@ class LienzoRender(Visor3D):
             GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         GL.glUseProgram(0)
         GL.glEnable(GL.GL_DEPTH_TEST)
-        self._limpiar_vbos()
+        self._barrer_buffers()          # búferes de la placa: los comparte con Visor3D
         return proy, vista
 
     @staticmethod
-    def _caja(mallas):
+    def _caja_mallas(mallas):
         return (np.min([m["caja"][0] for m in mallas], axis=0), np.max([m["caja"][1] for m in mallas], axis=0))
 
     def _radio_escena(self, mallas):
         if not mallas:
             return 1.0
-        mn, mx = self._caja(mallas)
+        mn, mx = self._caja_mallas(mallas)
         return max(float(np.linalg.norm(mx - mn)) / 2, 1.0)
 
     def paintGL(self):

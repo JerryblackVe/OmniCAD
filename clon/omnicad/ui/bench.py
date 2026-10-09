@@ -89,6 +89,38 @@ def _cronometro(funcion):
     return round(time.perf_counter() - t, 3)
 
 
+def _ms_por_cuadro(visor, cuadros):
+    """ms de cada cuadro de una órbita, ordenados: dibujo puro (paintGL + glFinish), lo que cuesta cada cuadro."""
+    from OpenGL import GL
+    tiempos = []
+    for _ in range(cuadros):
+        t = time.perf_counter()
+        visor.orbitar(4, 0)
+        visor.makeCurrent()
+        visor.paintGL()
+        GL.glFinish()
+        visor.doneCurrent()
+        tiempos.append(time.perf_counter() - t)
+    return sorted(x * 1000 for x in tiempos)
+
+
+def _medir_lejos(visor, cuadros, app):
+    """El modelo lejos (~1/12 del tamaño en pantalla): triángulos y ms por cuadro con y sin detalle a la distancia."""
+    visor.distancia *= 12
+    salida = {}
+    for clave, activo in (("", True), ("_sin_lod", False)):
+        visor.config.detalle_distancia = activo
+        visor.triangulos_dibujados()                # pide las mallas gruesas que falten y espera que se calculen
+        limite = time.perf_counter() + 20
+        while visor._lod_pendientes and time.perf_counter() < limite:
+            app.processEvents()
+        salida["triangulos" + clave] = visor.triangulos_dibujados()
+        salida["ms_medio" + clave] = round(statistics.mean(_ms_por_cuadro(visor, cuadros)), 2)
+    visor.config.detalle_distancia = True
+    visor.distancia /= 12
+    return salida
+
+
 def medir(lado, cuadros, t0, preset=None):
     from PySide6.QtCore import QSettings
     from PySide6.QtGui import QSurfaceFormat
@@ -162,18 +194,8 @@ def medir(lado, cuadros, t0, preset=None):
         r["triangulos"] = sum(len(m["v"]) for m in v.visor._mallas) // 3
         r["memoria_modelo_mb"] = round(memoria_mb()[0], 1)
 
-        from OpenGL import GL
         visor = v.visor
-        tiempos = []                        # dibujo puro: paintGL + glFinish (lo que cuesta cada cuadro)
-        for _ in range(cuadros):
-            t = time.perf_counter()
-            visor.orbitar(4, 0)
-            visor.makeCurrent()
-            visor.paintGL()
-            GL.glFinish()
-            visor.doneCurrent()
-            tiempos.append(time.perf_counter() - t)
-        ms = sorted(x * 1000 for x in tiempos)
+        ms = _ms_por_cuadro(visor, cuadros)
         dibujados.clear()                   # en pantalla: pedir cuadro y esperar que se muestre (con sincronía vertical)
         t = time.perf_counter()
         limite = t + 30
@@ -186,6 +208,7 @@ def medir(lado, cuadros, t0, preset=None):
         r["giro"] = {"cuadros": cuadros, "fps_dibujo": round(1000 / statistics.mean(ms), 1),
                      "ms_medio": round(statistics.mean(ms), 2), "ms_p95": round(ms[int(len(ms) * 0.95) - 1], 2),
                      "fps_pantalla": round(en_pantalla, 1)}
+        r["lejos"] = _medir_lejos(visor, cuadros, app)
         r["memoria_pico_mb"] = round(memoria_mb()[1], 1)
         v.doc.modificado = False
         v.close()

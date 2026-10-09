@@ -198,7 +198,8 @@ def mediana_de_corridas(corridas):
         primero = valores[0]
         if isinstance(primero, dict):
             return {k: unir([v[k] for v in valores if isinstance(v, dict) and k in v]) for k in primero}
-        if isinstance(primero, (int, float)) and not isinstance(primero, bool) and                 all(isinstance(v, (int, float)) for v in valores):
+        if (isinstance(primero, (int, float)) and not isinstance(primero, bool)
+                and all(isinstance(v, (int, float)) for v in valores)):
             m = statistics.median(valores)
             return round(m, 3) if isinstance(m, float) else m
         return primero
