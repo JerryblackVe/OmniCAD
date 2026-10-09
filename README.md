@@ -20,6 +20,8 @@ OpenCode, Cursor, Codex…) por MCP o por línea de comandos.
 - **Archivos:** proyecto `.omnicad` abierto (ZIP con receta JSON); exporta STL, OBJ, 3MF, PLY, STEP, IGES y BREP;
   importa STEP; bocetos desde DXF y SVG.
 - **Inspección:** volumen, masa, área, caja envolvente, distancias, ángulos e interferencias.
+- **Interfaz:** 5 temas (oscuro moderno, claro moderno, azul profesional, minimalista y clásico) y temas propios del
+  usuario en un archivo JSON; buscador de comandos con Ctrl+K.
 - **Kernel geométrico:** [OpenCascade](https://dev.opencascade.org/) (B-rep), el mismo tipo de núcleo que usan los CAD comerciales.
 
 ## Para agentes de IA

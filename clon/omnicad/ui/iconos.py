@@ -1062,7 +1062,7 @@ DIBUJOS = {
     "guardar": _guardar, "deshacer": lambda p: _arco_flecha(p, False), "rehacer": lambda p: _arco_flecha(p, True),
     "ayuda": _ayuda, "engranaje": _engranaje, "ojo": _ojo, "ojo_no": lambda p: _ojo(p, True),
     "componente": _componente, "cuerpo": _cuerpo, "carpeta": _carpeta, "unidades": _unidades,
-    "origen": _origen, "orbita": _orbita, "encuadre": _encuadre, "zoom": _zoom, "ajustar": _ajustar,
+    "origen": _origen, "orbita": _orbita, "encuadre": _encuadre, "zoom": _zoom, "ajustar": _ajustar, "buscar": _lupa,
     "visualizacion": _visualizacion, "rejilla": _rejilla, "casa": _casa, "captura": _captura,
     "tl_inicio": lambda p: _tl(p, "inicio"), "tl_anterior": lambda p: _tl(p, "anterior"),
     "tl_reproducir": lambda p: _tl(p, "reproducir"), "tl_siguiente": lambda p: _tl(p, "siguiente"),

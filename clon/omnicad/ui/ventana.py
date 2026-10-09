@@ -292,6 +292,8 @@ class VentanaPrincipal(QMainWindow):
           "Guarda los cuerpos como malla: STL, OBJ, 3MF o PLY.", "exportar_malla")
         A("seleccionar", "Seleccionar", lambda: self.visor.set_modo(None), None,
           "Sale de los modos de navegación (órbita, encuadre, zoom).", "seleccionar")
+        A("buscar_comando", "Buscar comando", lambda: self.cinta.buscador.enfocar(), "Ctrl+K",
+          "Escribí parte del nombre de un comando y Enter lo ejecuta.", "buscar")
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
           "Con el ratón sobre un comando de la cinta o de un menú, muestra su ayuda.")
         A("renombrar", "Renombrar", lambda: self.navegador.renombrar_en_linea(), "F2",
