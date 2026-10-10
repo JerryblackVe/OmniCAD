@@ -120,6 +120,14 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - Ensamblajes, animación, simulaciones y movimiento de piezas.
 - Funciones al estilo Rhino y programación visual al estilo Grasshopper.
 
+Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
+
+- Texto que sigue una curva.
+- Boceto 3D: mover los puntos del boceto en altura.
+- Hélice como curva de boceto (hoy hay solo espiral plana).
+- Aspecto completo: pintar caras sueltas, muestras del diseño y editor de color, brillo y rugosidad.
+- Grupos en la línea de tiempo.
+
 Detalle en [PROJECT_LOG.md](PROJECT_LOG.md#pendientes).
 
 ## Aviso
