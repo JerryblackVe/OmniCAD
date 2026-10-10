@@ -57,7 +57,7 @@ def subproceso(*argv, cwd=None, env=None):
 def test_version_por_subproceso():
     r = subproceso("--version")
     assert r.returncode == 0
-    assert r.stdout.decode("utf-8").strip() == "omnicad 0.1.1"
+    assert r.stdout.decode("utf-8").strip() == "omnicad 0.1.2"
 
 
 def test_version_y_ayuda_no_cargan_la_api():

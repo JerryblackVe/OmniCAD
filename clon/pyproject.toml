@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnicad"
-version = "0.1.1"                 # la misma que omnicad/__init__.py (tests/test_recursos.py lo controla)
+version = "0.1.2"                 # la misma que omnicad/__init__.py (tests/test_recursos.py lo controla)
 description = "OmniCAD: CAD 3D paramétrico en Python (OpenCascade) con MCP y CLI para agentes IA"
 requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
