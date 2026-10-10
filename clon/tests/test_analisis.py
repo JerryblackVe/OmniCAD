@@ -131,8 +131,9 @@ def test_centro_de_masa_combinado_y_materiales():
     assert an.centro_de_masa([a, b]) == pytest.approx((15, 5, 5))
     assert an.centro_de_masa({"a": a, "b": b}, densidades=[1.0, 3.0]) == pytest.approx((20, 5, 5))
     nombres = {"Acero", "Acero inoxidable", "Aluminio 6061", "Latón", "Cobre", "ABS", "PLA", "PETG", "Nylon",
-               "Policarbonato", "Madera (pino)", "Vidrio", "Titanio", "Hierro fundido"}
-    assert set(an.TABLA_MATERIALES) == nombres
+               "Policarbonato", "Madera (pino)", "Vidrio", "Titanio", "Hierro fundido", "Goma natural", "Goma EPDM",
+               "Neopreno", "Silicona", "TPU", "Polipropileno", "Polietileno HDPE", "POM (acetal)", "Acrílico (PMMA)"}
+    assert an.MATERIALES_BASE == nombres and nombres <= set(an.TABLA_MATERIALES)   # más los propios del usuario
     for mat in an.TABLA_MATERIALES.values():
         assert 0.3 < mat["densidad"] < 10 and all(0 <= c <= 1 for c in mat["color"])
     acero = an.TABLA_MATERIALES["Acero"]["densidad"]

@@ -10,6 +10,9 @@ recalcula entera cada vez que cambia algo. Las herramientas se agrupan así:
 | inspeccion | ver y medir el resultado | `get_viewport_image`, `get_physical_properties`, `measure_distance`, `check_interference` |
 | boceto | dibujar, modificar, restringir y acotar bocetos 2D | `sketch_from_spec`, `draw_slot`, `sketch_fillet`, `trim_sketch_curve`, `edit_dimension` |
 | vectores | fuentes, texto de boceto, insertar SVG / DXF, imagen → vector | `add_text`, `list_fonts`, `insert_svg`, `trace_image` |
+| chapa | chapa metálica: reglas (también propias), pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF | `create_base_flange`, `create_edge_flange`, `create_sheet_metal_rule`, `export_flat_pattern_dxf` |
+| ensamble | componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento | `get_assembly`, `create_component`, `create_joint`, `drive_joint`, `motion_study` |
+| material | material físico (densidad → masa), materiales propios y aspecto | `list_materials`, `set_material`, `define_material`, `set_appearance` |
 | avanzado | cualquier operación, receta, código, guía | `run_operation`, `describe_operation`, `get_recipe`, `execute_code` |
 
 Hay más grupos (sólidos, modificar…): el catálogo de herramientas del servidor es la lista completa y

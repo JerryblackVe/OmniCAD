@@ -624,3 +624,31 @@ def test_patron_plano_no_cuenta_como_pieza_del_modelo(tmp_path):
     assert sum(f[2] for f in filas_bom(doc)) == 1
     r = api.llamar(s, "get_physical_properties", {"bodies": [patron.id]})   # pedido por nombre, sí
     assert r["ok"], r
+
+
+# ---------------------------------------------------------------- reglas propias copiadas en el paso
+def test_regla_propia_copiada_en_el_paso_y_validacion():
+    """Una regla propia viaja en «regla_propia» del paso: manda mientras el nombre coincida con «regla»; si alguien
+    elige otra regla de la biblioteca, la copia vieja ya no se usa. Lo que la regla fija no sigue al espesor."""
+    d = chapa.definicion_regla("Latón 0.8 mm", 0.8, k=0.4, material="Latón", radio=1.0)
+    r = chapa.regla("Latón 0.8 mm", d, espesor=1.5)
+    assert (r["radio"], r["alivio_ancho"], r["k"], r["material"]) == (1.0, 1.5, 0.4, "Latón")
+    with pytest.raises(g.ErrorGeometria):
+        chapa.regla("Acero 1 mm", espesor=float("nan"))
+    with pytest.raises(g.ErrorGeometria, match="Reglas disponibles: Acero 1 mm"):
+        chapa.regla("Cartón")
+    doc = _doc_placa()
+    op = doc.operacion("op2")
+    doc.reemplazar(op.id, op.__class__(op.id, op.nombre, op.suprimida,
+                                       **dict(op.p, regla="Latón 0.8 mm", regla_propia=d)))
+    c = _cuerpo(doc)
+    assert c.chapa["regla"]["espesor"] == 0.8 and c.material == "Latón"
+    assert g.volumen(c.forma) == pytest.approx(100 * 50 * 0.8)
+    otra = Documento.desde_dict(json.loads(json.dumps(doc.a_dict())))       # la receta alcanza (sin biblioteca)
+    assert _cuerpo(otra).chapa["regla"]["k"] == 0.4
+    op = doc.operacion("op2")
+    doc.reemplazar(op.id, op.__class__(op.id, op.nombre, op.suprimida, **dict(op.p, regla="Acero 1 mm")))
+    assert _cuerpo(doc).chapa["regla"]["espesor"] == 1.0 and _cuerpo(doc).material == "Acero"
+    op = doc.operacion("op2")
+    res = doc.reemplazar(op.id, op.__class__(op.id, op.nombre, op.suprimida, **dict(op.p, regla_propia="Latón")))
+    assert res.estado == "error" and "«regla_propia»" in res.mensaje

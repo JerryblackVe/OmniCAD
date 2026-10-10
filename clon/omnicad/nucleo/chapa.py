@@ -64,24 +64,50 @@ FORMAS_ESQUINA = {"recortar": "Recortar al pliegue", "redondo": "Redondo", "cuad
                   "desgarro": "Desgarro"}
 CAMPOS_REGLA = ("espesor", "radio", "k", "alivio_forma", "alivio_ancho", "alivio_profundidad", "esquina_forma",
                 "esquina_tam", "separacion")
+_NUMERICOS_REGLA = ("espesor", "radio", "k", "alivio_ancho", "alivio_profundidad", "esquina_tam", "separacion")
+
+# Reglas propias del usuario [SM-RULES-REF, «Crear regla» en la biblioteca]: nombre → definición (la de
+# `definicion_regla`). Se guardan en un .json de la carpeta de datos (`ruta_reglas_propias`) y se cargan al importar.
+# Un paso que usa una regla propia guarda además su definición en la receta («regla_propia» de la operación): el
+# proyecto se abre igual en otra PC aunque allá no exista la regla.
+REGLAS_USUARIO = {}
+VAR_REGLAS = "OMNICAD_REGLAS_CHAPA"      # otra ruta para el .json (pruebas, carpeta compartida)
 
 
-def regla(nombre=REGLA_DEFECTO, **ajustes):
+def regla(nombre=REGLA_DEFECTO, definicion=None, **ajustes):
     """Regla de chapa (dict) a partir de una regla de la biblioteca y ajustes ("Override rules"). Como en
-    Fusion, los valores que dependen del espesor (radio, alivios, separación) lo siguen si no se ajustan."""
-    if nombre not in REGLAS:
-        raise geo.ErrorGeometria(f"Regla de chapa desconocida: {nombre}")
+    Fusion, los valores que dependen del espesor (radio, alivios, separación) lo siguen si no se ajustan.
+    `definicion` (la de `definicion_regla`) reemplaza a la de la biblioteca: es la regla propia que viaja en la
+    receta. Sin ella, `nombre` se busca en las reglas de fábrica y después en las propias del usuario."""
+    if definicion is not None:
+        if not isinstance(definicion, dict) or "espesor" not in definicion:
+            raise geo.ErrorGeometria("La definición de la regla tiene que ser un dict con al menos «espesor».")
+        base = definicion
+    elif nombre in REGLAS:
+        base = REGLAS[nombre]
+    elif nombre in REGLAS_USUARIO:
+        base = REGLAS_USUARIO[nombre]
+    else:
+        raise geo.ErrorGeometria(f"Regla de chapa desconocida: {nombre}. Reglas disponibles: "
+                                 f"{', '.join(reglas_disponibles())}.")
     ajustes = {k: v for k, v in ajustes.items() if v is not None}
     desconocidos = set(ajustes) - set(CAMPOS_REGLA)
     if desconocidos:
         raise geo.ErrorGeometria(f"Campos de regla desconocidos: {', '.join(sorted(desconocidos))}")
-    t = float(ajustes.get("espesor", REGLAS[nombre]["espesor"]))
-    r = {"nombre": nombre, "espesor": t, "radio": t, "k": REGLAS[nombre]["k"], "alivio_forma": "redondo",
+    t = float(ajustes.get("espesor", base["espesor"]))
+    r = {"nombre": nombre, "espesor": t, "radio": t, "k": base.get("k", 0.44), "alivio_forma": "redondo",
          "alivio_ancho": t, "alivio_profundidad": t / 2, "esquina_forma": "recortar", "esquina_tam": 4 * t,
-         "separacion": t, "material": REGLAS[nombre]["material"]}
+         "separacion": t, "material": base.get("material")}
+    # Los valores que la regla fija explícitamente no siguen al espesor (los de fábrica solo fijan espesor y K).
+    r.update({k: v for k, v in base.items() if k in CAMPOS_REGLA and k != "espesor" and v is not None})
     r.update(ajustes)
-    for k in ("espesor", "radio", "k", "alivio_ancho", "alivio_profundidad", "esquina_tam", "separacion"):
-        r[k] = float(r[k])
+    for k in _NUMERICOS_REGLA:
+        try:
+            r[k] = float(r[k])
+        except (TypeError, ValueError):
+            raise geo.ErrorGeometria(f"El valor «{k}» de la regla tiene que ser un número: llegó {r[k]!r}.") from None
+        if not math.isfinite(r[k]):
+            raise geo.ErrorGeometria(f"El valor «{k}» de la regla tiene que ser un número finito.")
     if r["espesor"] <= 0:
         raise geo.ErrorGeometria("El espesor de la chapa tiene que ser positivo.")
     if r["radio"] < 0:
@@ -93,6 +119,106 @@ def regla(nombre=REGLA_DEFECTO, **ajustes):
     if r["alivio_forma"] not in FORMAS_ALIVIO or r["esquina_forma"] not in FORMAS_ESQUINA:
         raise geo.ErrorGeometria("Forma de alivio desconocida.")
     return r
+
+
+def reglas_disponibles():
+    """Nombres de las reglas que se pueden usar por nombre: las de fábrica y después las propias del usuario."""
+    return list(REGLAS) + [n for n in REGLAS_USUARIO if n not in REGLAS]
+
+
+def definicion_regla(nombre, espesor, k=0.44, material=None, radio=None, alivio_forma=None, alivio_ancho=None,
+                     alivio_profundidad=None, esquina_forma=None, esquina_tam=None, separacion=None):
+    """Definición de una regla propia [SM-RULES-REF] (dict JSON): nombre, espesor (mm), factor K y material físico,
+    más los valores opcionales que la regla fija (None = siguen al espesor como en las de fábrica: radio = t,
+    alivio t × t/2, esquina 4·t, separación t). Se valida armando la regla. Errores: ErrorGeometria."""
+    nombre = str(nombre or "").strip()
+    if not nombre:
+        raise geo.ErrorGeometria("La regla necesita un nombre.")
+    if len(nombre) > 80:
+        raise geo.ErrorGeometria("El nombre de la regla es demasiado largo (máximo 80 caracteres).")
+    d = {"nombre": nombre, "espesor": espesor, "k": k, "material": material or None}
+    opcionales = {"radio": radio, "alivio_forma": alivio_forma, "alivio_ancho": alivio_ancho,
+                  "alivio_profundidad": alivio_profundidad, "esquina_forma": esquina_forma,
+                  "esquina_tam": esquina_tam, "separacion": separacion}
+    d.update({c: v for c, v in opcionales.items() if v is not None})
+    r = regla(nombre, definicion=d)                     # valida números, rangos y formas
+    return {c: (r[c] if c in _NUMERICOS_REGLA else v) for c, v in d.items()}
+
+
+def ruta_reglas_propias():
+    """El .json de las reglas propias: la variable OMNICAD_REGLAS_CHAPA o «reglas_chapa.json» en la carpeta de datos
+    de la app (%LOCALAPPDATA%/OmniCAD o ~/.local/share/OmniCAD)."""
+    import os
+    from .. import carpeta_datos
+    return Path(os.environ[VAR_REGLAS]) if os.environ.get(VAR_REGLAS) else carpeta_datos() / "reglas_chapa.json"
+
+
+def leer_biblioteca_json(ruta, clave):
+    """{nombre: datos} guardados en `ruta` bajo `clave`; {} si no existe o está dañado (nunca lanza)."""
+    import json
+    try:
+        datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
+        salida = datos.get(clave) if isinstance(datos, dict) else None
+        return dict(salida) if isinstance(salida, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def escribir_biblioteca_json(ruta, clave, nombre, valor):
+    """Cambia UNA entrada (None la borra) leyendo antes el archivo: otro proceso (la app y el servidor MCP) puede
+    haber sumado las suyas. Escribe en un temporal y lo renombra: un corte no deja el archivo a medias."""
+    import json
+    ruta = Path(ruta)
+    datos = leer_biblioteca_json(ruta, clave)
+    if valor is None:
+        datos.pop(nombre, None)
+    else:
+        datos[nombre] = valor
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    temporal = ruta.with_name(ruta.name + ".tmp")
+    temporal.write_text(json.dumps({"version": 1, clave: datos}, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporal.replace(ruta)
+
+
+def definir_regla(definicion, guardar=True):
+    """Suma (o reemplaza) una regla propia en la biblioteca del usuario. No pisa las de fábrica. `guardar` la
+    escribe en `ruta_reglas_propias()` para las próximas sesiones. Devuelve la definición."""
+    d = definicion_regla(**definicion)
+    if any(d["nombre"].casefold() == n.casefold() for n in REGLAS):
+        raise geo.ErrorGeometria(f"«{d['nombre']}» es una regla de fábrica: elegí otro nombre para la regla propia.")
+    REGLAS_USUARIO[d["nombre"]] = d
+    if guardar:
+        escribir_biblioteca_json(ruta_reglas_propias(), "reglas", d["nombre"], d)
+    return d
+
+
+def quitar_regla(nombre, guardar=True):
+    """Saca una regla propia de la biblioteca (los pasos que ya la usan la tienen copiada en la receta)."""
+    if nombre not in REGLAS_USUARIO:
+        raise geo.ErrorGeometria(f"No hay una regla propia llamada «{nombre}».")
+    del REGLAS_USUARIO[nombre]
+    if guardar:
+        escribir_biblioteca_json(ruta_reglas_propias(), "reglas", nombre, None)
+
+
+def cargar_reglas_propias(ruta=None):
+    """Lee las reglas propias del .json (las inválidas se saltean). Devuelve los nombres cargados."""
+    cargadas = []
+    for nombre, d in leer_biblioteca_json(ruta or ruta_reglas_propias(), "reglas").items():
+        try:
+            d = definicion_regla(**dict(d, nombre=nombre))
+        except (geo.ErrorGeometria, TypeError):
+            continue
+        if nombre not in REGLAS:
+            REGLAS_USUARIO[nombre] = d
+            cargadas.append(nombre)
+    return cargadas
+
+
+try:
+    cargar_reglas_propias()
+except Exception:  # noqa: BLE001 — una biblioteca del usuario dañada no tiene que impedir abrir la app
+    pass
 
 
 def longitud_pliegue(angulo, radio, espesor, k):
@@ -1025,9 +1151,10 @@ def pestana_contorno(aristas, plano, regla_chapa, distancia, orientacion="lado1"
     return m
 
 
-def convertir(forma, cara, nombre_regla=REGLA_DEFECTO, **ajustes):
+def convertir(forma, cara, nombre_regla=REGLA_DEFECTO, definicion=None, **ajustes):
     """Convertir a chapa [SM-TO-CONVERT-TO-SM] para placas PLANAS de espesor constante: el cuerpo tiene que ser
-    el prisma de la cara elegida. Como en Fusion, el espesor detectado reemplaza al de la regla elegida."""
+    el prisma de la cara elegida. Como en Fusion, el espesor detectado reemplaza al de la regla elegida.
+    `definicion`: la de una regla propia (ver `regla`)."""
     plano = geo.plano_de_cara(cara)
     if plano is None:
         raise geo.ErrorGeometria("Elegí una cara plana ancha del cuerpo.")
@@ -1045,7 +1172,7 @@ def convertir(forma, cara, nombre_regla=REGLA_DEFECTO, **ajustes):
         raise geo.ErrorGeometria(f"El cuerpo no es una placa plana de espesor constante: por ahora solo se convierten "
                                  f"placas planas (sin pliegues ni caras inclinadas). Espesor medido: {t:.4g} mm.")
     mat = np.array(marco(plano.origen - t * plano.normal, plano.u, plano.v, plano.normal))
-    r = regla(nombre_regla, **{**ajustes, "espesor": t})
+    r = regla(nombre_regla, definicion, **{**ajustes, "espesor": t})
     return modelo_nuevo(r, mat, caras_a_region(_a_plano(cara, mat)))
 
 
