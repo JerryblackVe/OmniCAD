@@ -22,6 +22,7 @@ from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
                                 BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Transform)
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepFeat import BRepFeat_SplitShape
 from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
 from OCP.BRepGProp import BRepGProp_Face
@@ -452,34 +453,98 @@ def _cara_sigue_puesta(resultado, cara, espesor):
     return geo.se_tocan(v, resultado, 1e-5)
 
 
+def _medida_minima(forma):
+    """La medida más chica de la caja envolvente de `forma` (mm)."""
+    (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(forma)
+    return min(x1 - x0, y1 - y0, z1 - z0)
+
+
+def _demasiado_grueso(forma, espesor, hueco=False):
+    """Mensaje si el espesor no entra en la pieza (None si entra): con caras quitadas, una pared no puede ser más
+    gruesa que la medida más chica de la caja envolvente; en un hueco cerrado, ni la mitad (las dos paredes de
+    enfrente se tocan y no queda cavidad)."""
+    medida = _medida_minima(forma)
+    limite = medida / 2 if hueco else medida
+    if abs(espesor) < limite - 1e-9:
+        return None
+    if hueco:
+        return (f"El vaciado falló: el espesor ({abs(espesor):g} mm) es demasiado grande para un hueco cerrado: tiene "
+                f"que ser menor que la mitad de la medida más chica de la pieza ({medida:g} mm).")
+    return (f"El vaciado falló: el espesor ({abs(espesor):g} mm) es demasiado grande para la pieza (su medida más "
+            f"chica es {medida:g} mm).")
+
+
+def _resultado_imposible(forma, resultado, espesor):
+    """True si lo que devolvió el kernel no puede ser el vaciado de `forma`: volumen cero o negativo (un sólido «al
+    revés»), o material fuera de donde puede quedar la pared (hacia adentro, dentro de la caja de la pieza y con menos
+    volumen que ella; hacia afuera, dentro de la caja agrandada en el espesor). Pasaba sin error: una caja de
+    40 × 40 × 10 vaciada 25 mm salía más alta y con más volumen; un prisma con cortes cerca de la cara quitada, con
+    volumen negativo."""
+    despues = geo.volumen_exacto(resultado)
+    if despues <= 0:
+        return True
+    caja, caja_r = geo.caja_envolvente(forma), geo.caja_envolvente(resultado)
+    if caja_r is None:
+        return True
+    holgura = max(0.0, espesor) + max(1e-4 * math.dist(*caja), 1e-5)
+    if any(r < a - holgura for r, a in zip(caja_r[0], caja[0], strict=True)) or \
+            any(r > b + holgura for r, b in zip(caja_r[1], caja[1], strict=True)):
+        return True
+    return espesor < 0 and despues > geo.volumen_exacto(forma) * (1 + 1e-9)
+
+
+def _falla_kernel(forma, espesor, hueco=False):
+    """Mensaje para un vaciado que el kernel no hizo (o hizo mal) con un espesor que, en principio, entra."""
+    return _demasiado_grueso(forma, espesor, hueco) or (
+        f"El vaciado falló: el kernel no pudo hacerlo con {abs(espesor):g} mm en esta geometría (¿una pared, un "
+        "empalme o el hueco entre un corte y la cara quitada más finos que el espesor?). Probá un espesor menor o "
+        "vaciar antes de cortar.")
+
+
 def _cascara(forma, caras, espesor, union):
     ts = BRepOffsetAPI_MakeThickSolid()
     try:
         ts.MakeThickSolidByJoin(forma, _lista_occ(caras), float(espesor), TOL, BRepOffset_Skin, False, False, union)
         ts.Build()
     except Exception as e:  # noqa: BLE001 — p. ej. Standard_NoSuchObject «BRep_Tool:: no parameter on edge»
-        raise geo.ErrorGeometria("El vaciado falló: el kernel no pudo con ese espesor en esta geometría. Probá otro "
+        raise geo.ErrorGeometria(_demasiado_grueso(forma, espesor) or
+                                 "El vaciado falló: el kernel no pudo con ese espesor en esta geometría. Probá otro "
                                  "espesor o vaciar antes de cortar.") from e
     if not ts.IsDone():
-        raise geo.ErrorGeometria("El vaciado falló: el espesor es demasiado grande para la geometría.")
+        raise geo.ErrorGeometria(_falla_kernel(forma, espesor))
     resultado = ts.Shape()
+    if _resultado_imposible(forma, resultado, espesor):
+        raise geo.ErrorGeometria(_falla_kernel(forma, espesor))
     # Con cortes que cruzan la cara quitada, MakeThickSolid puede dar IsDone y devolver el cuerpo tal cual o apenas
     # tocado, con la cara todavía puesta. La historia no sirve para verlo: en un vaciado bien hecho también da la
     # cara quitada por «modificada» y no por borrada.
     antes = geo.volumen_exacto(forma)
     if (abs(geo.volumen_exacto(resultado) - antes) <= 1e-9 * abs(antes)
             or any(_cara_sigue_puesta(resultado, c, abs(espesor)) for c in caras)):
-        raise geo.ErrorGeometria("El vaciado falló: el kernel no pudo quitar esas caras (¿cortes o agujeros que "
+        raise geo.ErrorGeometria(_demasiado_grueso(forma, espesor) or
+                                 "El vaciado falló: el kernel no pudo quitar esas caras (¿cortes o agujeros que "
                                  "cruzan la cara quitada?). Probá otro espesor o vaciar antes de cortar.")
     return resultado
 
 
 def _desfase_cuerpo(forma, distancia, union):
+    """El cuerpo desfasado `distancia` (negativa = hacia adentro) para un hueco cerrado. Hacia adentro, si el
+    espesor no deja cavidad falla antes de llamar al kernel (devolvía el cuerpo sin cambios o un error del corte)."""
+    if distancia < 0 and (mensaje := _demasiado_grueso(forma, distancia, hueco=True)):
+        raise geo.ErrorGeometria(mensaje)
     mo = BRepOffsetAPI_MakeOffsetShape()
-    mo.PerformByJoin(forma, float(distancia), TOL, BRepOffset_Skin, False, False, union)
+    try:
+        mo.PerformByJoin(forma, float(distancia), TOL, BRepOffset_Skin, False, False, union)
+    except Exception as e:  # noqa: BLE001 — fallos de OCC sin texto útil
+        raise geo.ErrorGeometria(_falla_kernel(forma, distancia, hueco=True)) from e
     if not mo.IsDone():
-        raise geo.ErrorGeometria("El desfase del cuerpo falló: el espesor es demasiado grande.")
-    return mo.Shape()
+        raise geo.ErrorGeometria(_falla_kernel(forma, distancia, hueco=True))
+    desfasado = mo.Shape()
+    antes, despues = geo.volumen_exacto(forma), geo.volumen_exacto(desfasado)
+    if (_resultado_imposible(forma, desfasado, distancia) or (distancia < 0 and despues >= antes)
+            or (distancia > 0 and despues <= antes)):
+        raise geo.ErrorGeometria(_falla_kernel(forma, distancia, hueco=True))
+    return desfasado
 
 
 def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, direccion="interior",
@@ -701,6 +766,23 @@ def alinear(forma, origen, destino, *, voltear=False):
 
 
 # ---------------------------------------------------------------- desfase y reemplazo de caras
+def _cara_dada_vuelta(mo, forma, caras, resultado, dist):
+    """True si el kernel desfasó una cara curva más que su radio y la «dio vuelta» por el eje: la cara nueva no queda
+    a `dist` de la original (un cilindro de radio 10 achicado 12 mm salía de radio 2; un agujero de radio 5 llenado
+    14,9 mm salía MÁS GRANDE, de radio 9,9) o el volumen cambia al revés de lo pedido (positivo agrega material)."""
+    if geo.solidos(forma):          # en una superficie abierta el «volumen» no dice nada
+        antes, despues = geo.volumen_exacto(forma), geo.volumen_exacto(resultado)
+        if (dist > 0 and despues < antes) or (dist < 0 and despues > antes):
+            return True
+    for cara in caras:
+        for nueva in mo.Generated(cara):
+            medida = BRepExtrema_DistShapeShape(nueva, cara)
+            medida.Perform()
+            if medida.IsDone() and abs(medida.Value() - abs(dist)) > 1e-3 * abs(dist) + 1e-6:
+                return True
+    return False
+
+
 def desfasar_caras(forma, caras, distancia, *, tangente=True):
     """Offset Face / Press Pull sobre caras: mueve las caras a lo largo de su normal (positivo = hacia
     afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes."""
@@ -714,21 +796,29 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         for t in (caras_tangentes(forma, c) if tangente else [c]):
             if not _contiene(todas, t):
                 todas.append(t)
+    resultado = None
     try:
         mo = BRepOffset_MakeOffset()
         mo.Initialize(forma, 0.0, TOL, BRepOffset_Skin, False, False, GeomAbs_Intersection, False, False)
         for c in todas:
             mo.SetOffsetOnFace(c, dist)
         mo.MakeOffsetShape()
-        resultado = mo.Shape() if mo.IsDone() else None
-        if resultado is not None and geo.es_valida(resultado) and not geo.esta_vacia(resultado):
-            return resultado
+        if mo.IsDone() and not mo.Shape().IsNull() and geo.es_valida(mo.Shape()) and not geo.esta_vacia(mo.Shape()):
+            resultado = mo.Shape()
+            dada_vuelta = _cara_dada_vuelta(mo, forma, todas, resultado, dist)
     except Exception:  # noqa: BLE001 — se intenta la alternativa por extrusión
-        pass
+        resultado = None
+    if resultado is not None:
+        if dada_vuelta:
+            raise geo.ErrorGeometria(f"Desfase de caras: con {abs(dist):g} mm la cara se da vuelta: la distancia es igual "
+                                     "o mayor que su radio de curvatura (un cilindro no se achica, ni un agujero se "
+                                     "cierra, más que su radio). Probá una distancia menor.")
+        return resultado
     planos = [_plano_de_cara(c) for c in todas]
     if any(p is None for p in planos):
         raise geo.ErrorGeometria("El desfase de caras falló en el kernel.")
-    return _reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)])
+    return _reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
+                       operacion="Desfase de caras")
 
 
 def _largo_extension(cara, destino, d, diag):
@@ -754,9 +844,10 @@ def _cruce_rayo(punto, direccion, cara):
     return min(ts, key=abs) if ts else None
 
 
-def _reemplazar(forma, pares):
+def _reemplazar(forma, pares, operacion="Reemplazar cara"):
     """Replace Face por extrusión: cada cara origen se extruye a lo largo de su normal hacia afuera
-    (lo que queda entre la cara y el destino se SUMA) y hacia adentro (se RESTA)."""
+    (lo que queda entre la cara y el destino se SUMA) y hacia adentro (se RESTA). `operacion` nombra el comando en
+    los mensajes de error (también lo usa el desfase de caras)."""
     diag = _diagonal(forma)
     sumar, restar = [], []
     for cara, destino in pares:
@@ -784,7 +875,10 @@ def _reemplazar(forma, pares):
     resultado = geo.unir_todos([forma] + sumar)
     for pieza in restar:
         resultado = geo.booleano(resultado, pieza, "cortar")
-    return _validar(_unificar(resultado), "Reemplazar cara")
+    if restar and (geo.esta_vacia(resultado) or not geo.solidos(resultado)):
+        raise geo.ErrorGeometria(f"{operacion}: no queda material: la cara entra hasta atravesar todo el cuerpo. "
+                                 "Probá una distancia menor.")
+    return _validar(_unificar(resultado), operacion)
 
 
 def reemplazar_cara(forma, caras_origen, destino):
