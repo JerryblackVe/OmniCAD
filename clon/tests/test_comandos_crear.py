@@ -209,3 +209,51 @@ def test_saliente_de_una_receta_vieja_conserva_su_sentido():
     cmd, ctx = Saliente(), ContextoComando(vieja, op=op)
     assert cmd.construir(cmd.desde_op(op, ctx), ctx).p["sentido"] == "plano"
     assert cmd.construir(cmd.desde_op(op, ctx), ContextoComando(vieja)).p["sentido"] == "auto"
+
+
+def test_engranaje_par_con_ensamblaje_y_eje_por_dialogo():
+    """CREAR › Engranaje: el campo Medidas calcula antes de crear; con «Par de engranajes» y «Crear unión y vínculo»,
+    al aceptar se agregan componentes, uniones y vínculo en el mismo paso de deshacer. CREAR › Eje: tabla de tramos."""
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.nucleo import engranajes as en
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos import CATALOGO, comando_para
+    from omnicad.ui.comandos.engranaje import Eje, Engranaje
+    assert CATALOGO["engranaje"] is Engranaje and CATALOGO["eje_escalonado"] is Eje
+    doc = Documento()
+    cmd, ctx = Engranaje(), ContextoComando(doc)
+    campos = {c.clave: c for c in cmd.campos(ctx)}
+    v = {k: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for k, c in campos.items()}
+    v.update(par=True, ancho="4 mm")
+    texto = campos["medidas"].funcion(v, ctx)
+    assert "Ø primitivo 40 · exterior 44 · fondo 35" in texto and "Distancia entre centros 60 mm" in texto
+    assert campos["dientes2"].visible_si(v) and not campos["alto"].visible_si(v)
+    op = cmd.construir(v, ctx)
+    cmd.al_cerrar(ctx)                    # como al aceptar: el ensamblaje espera a que la ventana agregue el paso
+    pila = len(doc._deshacer)
+    assert doc.agregar(op).estado == "ok"
+    QApplication.processEvents()
+    assert [o.TIPO for o in doc.operaciones] == ["engranaje", "componente", "componente", "union", "union",
+                                                 "vinculo_movimiento"]
+    assert all(r.estado == "ok" for r in doc.resultados) and len(doc._deshacer) == pila + 1
+    cancelado = cmd.construir(v, ctx)                 # un diálogo cancelado: su paso nunca entró al documento
+    assert Engranaje.ensamblar_si_aceptado(ctx, cancelado) is None and len(doc.operaciones) == 6
+    assert comando_para(op) is Engranaje
+    editar = ContextoComando(doc, op=op)
+    assert "ensamblar" not in {c.clave for c in Engranaje().campos(editar)}
+    v2 = Engranaje().desde_op(op, editar)
+    assert Engranaje().construir(v2, editar).p == op.p
+    # rueda de cadena y cremallera por el mismo diálogo
+    texto = campos["medidas"].funcion(dict(v, tipo="rueda_cadena", cadena="08B", dientes="20", par=False), ctx)
+    assert "ancho de diente ISO 7.208 mm" in texto
+    op = _ejecutar(doc, Engranaje, tipo="cremallera", dientes="4", ancho="3 mm")
+    assert op.p["tipo"] == "cremallera" and _ultimo(doc).nombre == "Cremallera m2"
+    # eje escalonado: 2 tramos con chaflán al final del segundo
+    op = _ejecutar(doc, Eje, n=2, d1="10 mm", l1="8 mm", ini1="ninguno", d2="6 mm", l2="20 mm", fin2="chaflan",
+                   mf2="0.5 mm")
+    assert len(op.p["tramos"]) == 2
+    tramos = [{"diametro": 10, "largo": 8}, {"diametro": 6, "largo": 20, "fin": "chaflan", "medida_fin": 0.5}]
+    assert g.volumen(_ultimo(doc).forma) == pytest.approx(en.volumen_eje(tramos), rel=1e-9)
+    v3 = Eje().desde_op(op, ContextoComando(doc, op=op))
+    assert v3["n"] == 2 and (v3["d2"], v3["fin2"], v3["mf2"]) == ("6 mm", "chaflan", "0.5 mm")

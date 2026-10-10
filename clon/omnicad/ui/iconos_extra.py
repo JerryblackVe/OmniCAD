@@ -1218,6 +1218,53 @@ def _fijacion(p):
     _poli(p, tapa, METAL[0], BORDE_METAL)
 
 
+def _contorno_engranaje(cx, cy, ra, rf, dientes, achatado, giro=0.0):
+    """Contorno de un engranaje visto en perspectiva (el eje vertical aplastado `achatado` veces)."""
+    paso = 2 * math.pi / dientes
+    puntos = []
+    for k in range(dientes):
+        c = math.radians(giro) + k * paso
+        for r, d in ((rf, -0.30), (ra, -0.15), (ra, 0.15), (rf, 0.30)):
+            puntos.append(QPointF(cx + r * math.cos(c + d * paso), cy + r * math.sin(c + d * paso) * achatado))
+    return puntos
+
+
+def _engranaje_3d(p):
+    """CREAR › Engranaje: rueda dentada con espesor y agujero central."""
+    cx, cy, ra, rf, k = 16, 13.5, 13.0, 10.2, 0.6
+    abajo = _contorno_engranaje(cx, cy + 4.5, ra, rf, 12, k, 8)
+    arriba = _contorno_engranaje(cx, cy, ra, rf, 12, k, 8)
+    _poli(p, abajo, AZUL_LADO, AZUL_BORDE)
+    for a, b in zip(arriba, abajo, strict=True):                # paredes de los dientes de adelante
+        if a.y() > cy:
+            p.setPen(QPen(AZUL_BORDE, 0.7))
+            p.drawLine(a, b)
+    g = QLinearGradient(QPointF(cx, cy - ra * k), QPointF(cx, cy + ra * k))
+    g.setColorAt(0, AZUL_ARRIBA)
+    g.setColorAt(1, AZUL_FRENTE)
+    _poli(p, arriba, QBrush(g), AZUL_BORDE)
+    p.setPen(QPen(AZUL_BORDE, 0.9))
+    p.setBrush(QColor("#163f66"))
+    p.drawEllipse(QPointF(cx, cy), 3.2, 3.2 * k)
+
+
+def _eje_escalonado(p):
+    """CREAR › Eje: eje de tres tramos de distinto diámetro, con chaflán en las puntas."""
+    tramos = ((3.0, 11.0, 4.6), (11.0, 21.5, 7.4), (21.5, 29.0, 3.6))      # (x inicio, x fin, radio)
+    for i, (x0, x1, r) in enumerate(tramos):
+        ch = 1.4 if i in (0, len(tramos) - 1) else 0.0
+        izq, der = (ch if i == 0 else 0.0), (ch if i == len(tramos) - 1 else 0.0)
+        contorno = [QPointF(x0, 16 - r + izq), QPointF(x0 + izq, 16 - r), QPointF(x1 - der, 16 - r),
+                    QPointF(x1, 16 - r + der), QPointF(x1, 16 + r - der), QPointF(x1 - der, 16 + r),
+                    QPointF(x0 + izq, 16 + r), QPointF(x0, 16 + r - izq)]
+        g = QLinearGradient(QPointF(0, 16 - r), QPointF(0, 16 + r))
+        g.setColorAt(0, AZUL_ARRIBA)
+        g.setColorAt(0.45, AZUL_FRENTE)
+        g.setColorAt(1, AZUL_LADO)
+        _poli(p, contorno, QBrush(g), AZUL_BORDE)
+    _eje(p, 1.5, 16, 30.5, 16)
+
+
 # ================================================================ ENSAMBLAR
 def _nuevo_componente(p):
     _caja(p, 12, 12, 12, 14, 14, 1.0, BLANCOS, GRIS_OSCURO)
@@ -1905,6 +1952,7 @@ DIBUJOS_EXTRA = {
     "patron_circular_3d": _patron_circular_3d, "patron_ruta": _patron_ruta, "simetria_3d": _simetria_3d,
     "engrosar": _engrosar, "relleno_contorno": _relleno_contorno, "cuerpo_envolvente": _cuerpo_envolvente,
     "operacion_base": _operacion_base, "derivar": _derivar, "crear_forma": _crear_forma,
+    "engranaje_3d": _engranaje_3d, "eje_escalonado": _eje_escalonado,
     # modificar
     "pulsar_tirar": _pulsar_tirar, "empalme_3d": lambda p: _arista_viva(p, True),
     "chaflan_3d": lambda p: _arista_viva(p, False), "vaciado": _vaciado, "desmoldeo": _desmoldeo,

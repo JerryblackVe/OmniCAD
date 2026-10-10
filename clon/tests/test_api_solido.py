@@ -45,8 +45,9 @@ def test_herramientas_del_grupo_solido():
     assert [h["nombre"] for h in api.catalogo("solido")] == [
         "extrude", "revolve", "sweep", "loft", "create_box", "create_cylinder", "create_sphere", "create_torus",
         "boolean_operation", "mirror", "rectangular_pattern", "circular_pattern", "move_body",
-        "fillet", "chamfer", "shell", "create_hole", "draft"]   # las 5 últimas: herramientas_modificar.py (Paquete D)
-    assert all(h["modifica"] for h in api.catalogo("solido"))
+        "fillet", "chamfer", "shell", "create_hole", "draft",   # herramientas_modificar.py (Paquete D)
+        "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft"]  # engranajes
+    assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
 
 
 # ---------------------------------------------------------------- el soporte en L, solo con la API

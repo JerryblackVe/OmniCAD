@@ -17,7 +17,7 @@ def registrar(*clases):
     return clases
 
 
-from . import chapa, construir, crear, ensamblar, fijacion, insertar, inspeccionar, malla, modificar, solido, superficie  # noqa: E402,F401  (cada módulo se registra al importarse)
+from . import chapa, construir, crear, engranaje, ensamblar, fijacion, insertar, inspeccionar, malla, modificar, solido, superficie  # noqa: E402,F401  (cada módulo se registra al importarse)
 from . import asas_extra  # noqa: E402,F401  (engancha asas en la vista a comandos ya registrados)
 
 
