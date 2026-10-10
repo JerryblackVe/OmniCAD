@@ -84,8 +84,9 @@ class OpMover(Operacion):
             if p.get("pivote"):
                 piv = ent.como_punto(_resolver(p["pivote"], estado))
             else:                                   # pivote por defecto: centro de la selección
-                cajas = [geo.caja_envolvente(f) for f in formas]
-                piv = np.mean([(np.array(a) + np.array(b)) / 2 for a, b in cajas if a], axis=0)
+                cajas = [f.caja() if hasattr(f, "caja") else geo.caja_envolvente(f) for f in formas]  # malla o B-rep
+                centros = [(np.array(c[0]) + np.array(c[1])) / 2 for c in cajas if c is not None]
+                piv = np.mean(centros, axis=0) if centros else np.zeros(3)    # todos vacíos: el origen
             m = np.identity(4)
             for eje, k in ((0, "rx"), (1, "ry"), (2, "rz")):
                 ang = A(k)

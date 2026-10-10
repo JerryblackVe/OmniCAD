@@ -147,7 +147,7 @@ def registrar(sub, comun):
 
     p = sub.add_parser("export", parents=[comun], help="exporta cuerpos a STL, STEP, OBJ... (herramienta export)",
                        description="Exporta los cuerpos de un proyecto; el formato sale de la extensión de la salida "
-                                   "(.stl .obj .3mf .ply .step .stp .iges .igs .brep).")
+                                   "(.stl .obj .3mf .ply .step .stp .iges .igs .brep; .dxf: patrón plano de chapa).")
     p.add_argument("archivo", metavar="archivo.omnicad")
     p.add_argument("salida", metavar="salida.stl|.step|...")
     p.add_argument("--bodies", "-b", nargs="+", metavar="CUERPO", help="ids o nombres de los cuerpos (por defecto, todos)")

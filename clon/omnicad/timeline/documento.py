@@ -211,15 +211,38 @@ class Documento:
         self._cargar(json.loads(self._rehacer.pop()))
 
     def _cargar(self, datos):
+        """Deshacer/rehacer: vuelve a la receta `datos` recalculando solo desde el primer paso que cambia (antes
+        recalculaba desde el paso 0: con una rosca modelada de 30 s, cada deshacer tardaba ~35 s)."""
+        antes_ops, antes_marcador, antes_props = self.operaciones, self.marcador, self.propiedades
+        antes_valores = self._valores_o_nada()
         self.parametros = TablaParametros.desde_lista(datos.get("parametros"))
         self.propiedades = {k: dict(v) for k, v in (datos.get("propiedades") or {}).items()}
         self.analisis = {k: dict(v) for k, v in (datos.get("analisis") or {}).items()}
         self.configuraciones = dict(datos.get("configuraciones") or {})
-        self.operaciones = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
-        self.marcador = min(datos.get("marcador", len(self.operaciones)), len(self.operaciones))
-        self._contador = datos.get("contador", len(self.operaciones))
+        nuevas = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
+        self.marcador = min(datos.get("marcador", len(nuevas)), len(nuevas))
+        self._contador = datos.get("contador", len(nuevas))
         self.modificado = True
-        self.recalcular(0)
+        despues_valores = self._valores_o_nada()
+        a, d = antes_valores or {}, despues_valores or {}
+        cambiados = {k for k in set(a) | set(d)
+                     if a.get(k) != d.get(k)}
+        desde = 0
+        if self.propiedades == antes_props and antes_valores is not None and despues_valores is not None:
+            tope = min(len(antes_ops), len(nuevas), antes_marcador, self.marcador, len(self._estados),
+                       len(self._usados))
+            while (desde < tope and nuevas[desde].a_dict() == antes_ops[desde].a_dict()
+                   and not (self._usados[desde] & cambiados)):
+                nuevas[desde] = antes_ops[desde]          # el mismo objeto: guarda lo que leyó al calcularse
+                desde += 1
+        self.operaciones = nuevas
+        self.recalcular(desde)
+
+    def _valores_o_nada(self):
+        try:
+            return self.parametros.valores()
+        except ErrorExpresion:
+            return None
 
     # ------------------------------------------------------------ edición del timeline
     def agregar(self, op):

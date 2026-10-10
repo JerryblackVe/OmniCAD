@@ -179,7 +179,7 @@ Soporte  (pieza.omnicad)
 
 ### export
 
-Exporta cuerpos (`export`); el formato sale de la extensión: `.stl`, `.obj`, `.3mf`, `.ply`, `.step`, `.stp`, `.iges`, `.igs`, `.brep`.
+Exporta cuerpos (`export`); el formato sale de la extensión: `.stl`, `.obj`, `.3mf`, `.ply`, `.step`, `.stp`, `.iges`, `.igs`, `.brep`; `.dxf` exporta el patrón plano de un cuerpo de chapa.
 
 ```
 $ omnicad export pieza.omnicad pieza.stl

@@ -21,6 +21,7 @@ from ..nucleo import referencias as refs
 from . import entidades as ent
 from ..nucleo.perfiles import buscar_por_firma, detectar
 from ..restricciones import Boceto, resolver
+from ..restricciones.boceto import ErrorBoceto, validar_valor_cota
 from .parametros import ANGULO, LONGITUD, evaluar
 
 OPERACIONES_CUERPO = {"nuevo": "Cuerpo nuevo", "unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
@@ -468,7 +469,13 @@ class OpBoceto(Operacion):
         # Se resuelve una COPIA: el boceto guardado no se toca. Si un parámetro deja el boceto en
         # conflicto, al volver a un valor válido se parte otra vez de la geometría original.
         boceto = self.boceto.copia()
-        res = resolver(boceto, self.valores_cotas(ctx))
+        valores = self.valores_cotas(ctx)
+        for c in self.boceto.cotas.values():           # una cota manejada por parámetro puede quedar fuera de rango
+            try:
+                validar_valor_cota(c.tipo, valores[c.id])
+            except ErrorBoceto as e:                   # aviso y no error: los proyectos viejos abren igual
+                ctx.aviso(f"{self.nombre}: {e}")
+        res = resolver(boceto, valores)
         if not res.ok:
             ctx.aviso(res.descripcion())
         perfiles = detectar(boceto.geometria(), plano)

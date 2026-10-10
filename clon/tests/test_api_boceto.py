@@ -487,3 +487,16 @@ def test_boceto_con_conflicto_pide_arreglar(s):
     assert r["error_kind"] == "SKETCH_OVERCONSTRAINED"
     assert foto(s) == antes
     assert llamar(s, "get_sketch")["status"] == "under_constrained"
+
+
+def test_cota_manejada_por_parametro_fuera_de_rango_avisa(s):
+    """Antes set_parameter r=-5 dejaba la cota de radio en -5 sin ningún aviso (el solver dibujaba 5)."""
+    llamar(s, "create_parameter", name="r", expression="5 mm")
+    llamar(s, "create_sketch")
+    c = llamar(s, "draw_circle", radius=5, center_x=0, center_y=0)["entities"][0]["id"]
+    llamar(s, "add_dimension", sketch="Boceto1", type="radius", entities=[c], value="r")
+    for valor, texto in (("-5 mm", "mayor que cero"), ("1e9 mm", "1.000.000 mm")):
+        r = api.llamar(s, "set_parameter", {"name": "r", "expression": valor})
+        assert r["ok"] and any(texto in a for a in r.get("avisos", [])), r
+    r = api.llamar(s, "set_parameter", {"name": "r", "expression": "7 mm"})
+    assert r["ok"] and not any("cota" in a.lower() for a in r.get("avisos", [])), r

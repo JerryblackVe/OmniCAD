@@ -176,3 +176,21 @@ def test_desmoldeo_y_dividir_cara():
     _ejecutar(doc, DividirCara, caras=[_hit_sub(doc, "cara", (0, 10, 20))],
               herramienta=[_hit(doc, {"tipo": "plano", "id": "YZ"})])
     assert len(refs.subformas(_cuerpo(doc).forma, "cara")) == 7     # la cara de arriba quedó partida en dos
+
+
+def test_mover_gira_una_malla_alrededor_de_su_centro():
+    """El pivote por defecto de Mover usaba geo.caja_envolvente también sobre mallas (y fallaba con un cuerpo vacío):
+    ahora una malla girada 90° alrededor de Z queda con su centro en el mismo lugar."""
+    from omnicad.timeline.ops_malla import OpTeselar
+    from omnicad.timeline.ops_modificar import OpMover
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Caja", forma="caja", ancho="10 mm", largo="20 mm", alto="5 mm",
+                            x="30 mm"))
+    doc.agregar(OpTeselar(doc.nuevo_id(), cuerpos=["op1.c1"], mantener=False))
+    malla = next(iter(doc.estado_final.cuerpos.values()))
+    (a0, b0) = malla.forma.caja()
+    doc.agregar(OpMover(doc.nuevo_id(), cuerpos=[malla.id], rz="90 deg"))
+    assert [r.estado for r in doc.resultados] == ["ok"] * 3, [r.mensaje for r in doc.resultados]
+    (a1, b1) = doc.estado_final.cuerpos[malla.id].forma.caja()
+    assert np.allclose((np.array(a0) + b0) / 2, (np.array(a1) + b1) / 2, atol=1e-6)
+    assert np.allclose(np.array(b1) - a1, (np.array(b0) - a0)[[1, 0, 2]], atol=1e-6)   # ancho y largo cambiados

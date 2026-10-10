@@ -7,6 +7,7 @@ from omnicad.ejemplo import crear_documento_ejemplo
 from omnicad.nucleo import geometria as g
 from omnicad.timeline.documento import Documento, ErrorDocumento
 from omnicad.timeline.operaciones import OpCombinar, OpPrimitiva
+from omnicad.timeline.parametros import TablaParametros
 
 VOL_PLACA = (60 * 40 - math.pi * 36) * 8 + math.pi * 16 * 12 - 2 / 3 * math.pi * 125
 VOL_ARO_TOROIDE = math.pi * (86 ** 2 - 80 ** 2) * 12 + 2 * math.pi ** 2 * 12 * 9
@@ -91,3 +92,36 @@ def test_receta_ida_y_vuelta(ejemplo):
     copia = Documento.desde_dict(ejemplo.a_dict())
     assert copia.a_dict() == ejemplo.a_dict()
     assert _volumenes(copia) == _volumenes(ejemplo)
+
+
+def test_deshacer_recalcula_solo_desde_el_paso_que_cambia(monkeypatch):
+    """Antes deshacer y rehacer recalculaban desde el paso 0 (con una rosca modelada de 30 s, ~35 s por deshacer).
+    Ahora los pasos iguales y que no leen un parámetro cambiado no se ejecutan, y el resultado es el mismo."""
+    doc = Documento()
+    doc.parametros.agregar("alto", "10 mm")
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Base", forma="caja", ancho="40 mm", largo="40 mm", alto="5 mm"))
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Taco", forma="caja", ancho="5 mm", largo="5 mm", alto="alto",
+                            x="50 mm"))
+    doc.agregar(OpCombinar(doc.nuevo_id(), objetivo="op1.c1", herramientas=["op2.c1"], operacion="unir"))
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Otra", forma="caja", ancho="3 mm", largo="3 mm", alto="3 mm",
+                            x="-20 mm"))
+    completo = _volumenes(doc)
+    corridas = []
+    original = OpPrimitiva.ejecutar
+
+    def contar(self, estado, ctx):
+        corridas.append(self.id)
+        return original(self, estado, ctx)
+    monkeypatch.setattr(OpPrimitiva, "ejecutar", contar)
+    doc.deshacer()                                   # saca «Otra»: nada se recalcula
+    assert corridas == [] and len(doc.estado_final.cuerpos) == 1
+    doc.rehacer()                                    # vuelve «Otra»: solo ese paso
+    assert corridas == ["op4"] and _volumenes(doc) == completo
+    corridas.clear()
+    tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
+    tabla.modificar("alto", "20 mm")
+    doc.aplicar_parametros(tabla)                  # el parámetro lo lee «Taco» (op2): desde ahí
+    assert corridas == ["op2", "op4"]
+    corridas.clear()
+    doc.deshacer()                                   # vuelve alto = 10: otra vez desde op2
+    assert corridas == ["op2", "op4"] and _volumenes(doc) == completo
