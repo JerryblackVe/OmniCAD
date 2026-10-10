@@ -225,7 +225,8 @@ def export(sesion, path: str, bodies: list[str] | None = None, overwrite: bool =
     if dxf:
         cuerpos = [_cuerpo_chapa(sesion, bodies)]
     else:
-        cuerpos = [sesion.cuerpo(b) for b in bodies] if bodies else list(sesion.doc.estado_final.cuerpos.values())
+        cuerpos = ([sesion.cuerpo(b) for b in bodies] if bodies
+                   else ops_chapa.cuerpos_del_modelo(sesion.doc.estado_final))   # sin patrones planos
     if ruta.exists() and not overwrite:
         raise error("FILE_EXISTS", f"Ya existe el archivo: {ruta}")
     if not ruta.parent.is_dir():

@@ -361,13 +361,14 @@ class Replegar(Comando):
 # ---------------------------------------------------------------- patrón plano y DXF
 class PatronPlano(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "patron_plano", "Crear patrón plano", "patron_plano", None
-    AYUDA = "Crea el patrón plano de la chapa (desarrollo exacto con el factor K) como un cuerpo aparte."
+    AYUDA = ("Crea el patrón plano de la chapa (desarrollo exacto con el factor K). Como en Fusion, se ve en su "
+             "propio modo (Activar / Terminar patrón plano) y no ocupa lugar en el modelo plegado.")
     CLASE_OP = OpPatronPlano
     verificar = staticmethod(_con_chapa)
 
     def campos(self, ctx):
         return [Seleccion("cara", "Cara estacionaria", CARA_PLANA),
-                Opciones("ubicacion", "Ubicación", UBICACIONES_PATRON),
+                Opciones("ubicacion", "Ubicación", UBICACIONES_PATRON, "en_lugar"),
                 Info("resumen", "Desarrollo", self._resumen)]
 
     def _resumen(self, v, ctx):

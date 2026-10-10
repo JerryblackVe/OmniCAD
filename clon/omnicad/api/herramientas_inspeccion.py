@@ -14,6 +14,7 @@ import numpy as np
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
 from ..nucleo import render_cpu as rc
+from ..timeline import ops_chapa
 from ..timeline.operaciones import propiedades_cuerpo
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -35,7 +36,7 @@ _VISTAS = {"iso": (1.0, -1.0, 1.0), "front": (0.0, -1.0, 0.0), "back": (0.0, 1.0
 # ---------------------------------------------------------------- cuerpos
 def _cuerpos(sesion, bodies):
     """Cuerpos pedidos por id o nombre (sin repetir); sin lista = todos los del final del timeline."""
-    todos = list(sesion.doc.estado_final.cuerpos.values())
+    todos = ops_chapa.cuerpos_del_modelo(sesion.doc.estado_final)     # el patrón plano no es del modelo
     if not bodies:
         return todos
     elegidos = {}

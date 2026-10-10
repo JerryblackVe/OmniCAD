@@ -33,6 +33,7 @@ from ..nucleo import geometria as geo
 from ..restricciones import Boceto
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpPrimitiva, propiedades_cuerpo
+from ..timeline.ops_chapa import es_patron_plano
 from . import formato, temas
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
@@ -127,6 +128,7 @@ class VentanaPrincipal(QMainWindow):
         self._avisos_tema = self.aplicar_tema()     # antes de crear los widgets: nacen con el estilo del tema
         self.doc = None
         self.ocultos = set()
+        self.patron_activo = None           # id del patrón plano en pantalla (Activar patrón plano), o None
         self.vis = dict(VISIBILIDAD_INICIAL)
         self._camara_aplicada = None
         self._preset_aplicado = None
@@ -285,6 +287,9 @@ class VentanaPrincipal(QMainWindow):
         A("parametros", "Cambiar parámetros", self.parametros, "Ctrl+P",
           "Parámetros de usuario con nombre, expresión y unidad. Todo el modelo se recalcula.", "parametros")
         A("calcular", "Calcular todo", self.calcular_todo, "Ctrl+B", "Vuelve a calcular todo el timeline.", "calcular")
+        A("activar_patron_plano", "Activar patrón plano", self.alternar_patron_plano, None,
+          "Muestra solo el patrón plano de la chapa elegida (o del último creado); otra vez vuelve al modelo plegado.",
+          "patron_plano", True)
         A("colores_componente", "Mostrar colores de componente", self._colores_componente, "Shift+N",
           "Pinta cada cuerpo con un color distinto para distinguirlos.", "colores_componente", True)
         A("importar_step", "Insertar STEP…", self.importar_step, None, "Inserta un archivo STEP como un paso del timeline.",
@@ -745,6 +750,7 @@ class VentanaPrincipal(QMainWindow):
         self.doc = doc
         self._avisos_vistos = None
         self.ocultos = set()
+        self.patron_activo = None
         self.vis = dict(VISIBILIDAD_INICIAL)
         doc.suscribir(self._actualizar)
         self._actualizar()
@@ -791,9 +797,18 @@ class VentanaPrincipal(QMainWindow):
             ocultos |= set(estado.cuerpos)
         if not (self.vis["todo"] and self.vis["bocetos"]):
             ocultos |= set(estado.bocetos)
+        patrones = {cid for cid, c in estado.cuerpos.items() if es_patron_plano(c)}
+        if self.patron_activo in patrones:  # como Fusion: el patrón plano solo, en su propio modo
+            ocultos |= (set(estado.cuerpos) - {self.patron_activo}) | set(estado.bocetos)
+            ocultos.discard(self.patron_activo)
+        else:                               # en el modelo plegado el patrón plano no se ve
+            ocultos |= patrones
         return ocultos
 
     def _refrescar_visibilidad(self):
+        if self.patron_activo is not None and self.patron_activo not in self.doc.estado_final.cuerpos:
+            self._poner_patron_activo(None)     # lo borraron o se deshizo: vuelve el modelo plegado
+            return
         estado, c = self._estado_visible(), self.visor.config
         base = self.vis["todo"] and self.vis["origen"]
         c.origen = {clave.strip("_"): base and clave not in self.ocultos for clave, _, _ in ORIGEN}
@@ -1590,6 +1605,35 @@ class VentanaPrincipal(QMainWindow):
             self._reemplazar(op)
         else:
             self._agregar(op)
+            if op.TIPO == "patron_plano":   # como Fusion: al crearlo, el patrón plano queda a la vista
+                nuevo = [c.id for c in self.doc.estado_final.cuerpos.values()
+                         if c.op_id == op.id and es_patron_plano(c)]
+                if nuevo:
+                    self._poner_patron_activo(nuevo[0])
+
+    def alternar_patron_plano(self, _=False):
+        """Activar patrón plano / Terminar patrón plano de Fusion: muestra solo el patrón plano (el de la chapa
+        elegida, o el último creado) y vuelve al modelo plegado con la segunda pulsación."""
+        if self.patron_activo is not None:
+            self._poner_patron_activo(None)
+            return
+        estado = self.doc.estado_final
+        patrones = [c for c in estado.cuerpos.values() if es_patron_plano(c)]
+        elegidos = {h["ref"].get("cuerpo") for h in self.seleccion if h["tipo"] == "cuerpo"}
+        propios = [c for c in patrones if c.id in elegidos or c.chapa.get("patron_de") in elegidos]
+        elegido = (propios or patrones[-1:] or [None])[0]
+        if elegido is None:
+            self.mensaje("Este diseño no tiene patrón plano: crealo con CHAPA › Patrón plano.")
+        self._poner_patron_activo(elegido.id if elegido is not None else None)
+
+    def _poner_patron_activo(self, cid):
+        self.patron_activo = cid
+        a = self.acciones["activar_patron_plano"]
+        a.setChecked(cid is not None)
+        a.setText("Terminar patrón plano" if cid is not None else "Activar patrón plano")
+        if cid is not None:
+            self.mensaje("Patrón plano: se ve solo el desarrollo. Pulsá «Terminar patrón plano» para volver.")
+        self._refrescar_visibilidad()
 
     # ------------------------------------------------------------ vistas guardadas
     def _vista_nueva(self):

@@ -38,6 +38,18 @@ def es_chapa(cuerpo):
     return m is not None and not m.get("patron_de")
 
 
+def es_patron_plano(cuerpo):
+    """¿El cuerpo es un patrón plano? Como en Fusion, no es una pieza del modelo: se ve en su propio modo (Activar
+    patrón plano) y no cuenta para interferencias, propiedades, exportar «todo» ni la lista de materiales."""
+    m = getattr(cuerpo, "chapa", None)
+    return m is not None and bool(m.get("patron_de"))
+
+
+def cuerpos_del_modelo(estado):
+    """Los cuerpos del estado sin los patrones planos."""
+    return [c for c in estado.cuerpos.values() if not es_patron_plano(c)]
+
+
 def modelo_actual(cuerpo, aviso=None):
     """Modelo de chapa del cuerpo, con los cortes que le hicieron otras herramientas ya incorporados."""
     m = getattr(cuerpo, "chapa", None)
@@ -287,7 +299,7 @@ class OpPatronPlano(_OpChapa):
     estacionaria (o al lado de la pieza, sin tocarla a ella ni a los otros cuerpos que ya existen en ese punto
     del timeline). Guarda el modelo para exportar el DXF; no se edita con las herramientas de chapa."""
     TIPO, ETIQUETA, ICONO = "patron_plano", "Patrón plano", "▱"
-    PARAMS = {"cara": None, "punto": None, "ubicacion": "junto"}
+    PARAMS = {"cara": None, "punto": None, "ubicacion": "en_lugar"}
     OPCIONES = {"ubicacion": UBICACIONES_PATRON}
     REFS = ("cara",)
 

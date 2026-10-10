@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFileDialog
 
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
+from ..timeline.ops_chapa import es_patron_plano
 from . import formato
 
 CARPETA_SCRIPTS = Path.home() / "OmniCAD" / "Scripts"
@@ -52,7 +53,7 @@ def filas_bom(doc, nombre_de=None):
     nombre_de = nombre_de or (lambda c: doc.propiedad(c.id, "nombre") or c.nombre)
     grupos = {}
     for c in estado.cuerpos.values():
-        if getattr(c, "tipo", "solido") != "solido":
+        if getattr(c, "tipo", "solido") != "solido" or es_patron_plano(c):   # el patrón plano no es otra pieza
             continue
         material = doc.propiedad(c.id, "material") or getattr(c, "material", None) or "Acero"
         vol = geo.volumen(c.forma)

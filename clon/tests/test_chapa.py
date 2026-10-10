@@ -276,7 +276,7 @@ def test_desplegar_y_volver_a_plegar_conservan_el_volumen():
 def test_patron_plano_como_cuerpo_aparte():
     from omnicad.ui.comandos.chapa import PatronPlano
     doc = _doc_pestana()
-    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2))])
+    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2))], ubicacion="junto")
     patron = _cuerpo(doc)
     assert patron.id != "op2.c1" and patron.chapa["patron_de"] == "op2.c1"
     assert g.volumen(patron.forma) == pytest.approx(100 * (62 + BA90) * T)
@@ -558,7 +558,7 @@ def test_patron_plano_al_lado_no_cae_sobre_otros_cuerpos():
     doc = _doc_pestana()
     # Una caja justo donde caía el patrón (x 110..210): el patrón la saltea y queda 10 mm más allá.
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="50", alto="10", x="105"))
-    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2), "op2.c1")])
+    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2), "op2.c1")], ubicacion="junto")
     patron = _cuerpo(doc)
     assert patron.chapa["patron_de"] == "op2.c1" and g.es_valida(patron.forma)
     assert g.volumen(patron.forma) == pytest.approx(100 * (62 + BA90) * T)
@@ -599,3 +599,28 @@ def test_desgarro_avisa_una_sola_vez_desde_execute_code():
     assert r["ok"], r
     ignorado = ["«target» se ignora con operation=new_body: el cuerpo es nuevo."]
     assert r["result"]["result"] == [ignorado, ignorado] and r["avisos"] == ignorado
+
+
+def test_patron_plano_no_cuenta_como_pieza_del_modelo(tmp_path):
+    """Como en Fusion, el patrón plano no es otra pieza: exportar «todo», interferencias, propiedades y la lista de
+    materiales lo dejan afuera (antes se exportaba junto con la pieza y la BOM contaba dos piezas)."""
+    from omnicad import api
+    from omnicad.ui.administrar import filas_bom
+    from omnicad.ui.comandos.chapa import PatronPlano
+    doc = _doc_pestana()
+    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2))])
+    patron = _cuerpo(doc)
+    assert ops_chapa.es_patron_plano(patron) and patron.op_id == doc.operaciones[-1].id
+    (x0, _, z0), _ = g.caja_envolvente(patron.forma)
+    assert (x0, z0) == pytest.approx((0, 0))                  # por defecto, sobre la cara estacionaria
+    assert [c.id for c in ops_chapa.cuerpos_del_modelo(doc.estado_final)] == ["op2.c1"]
+    s = api.Sesion(doc)
+    r = api.llamar(s, "export", {"path": str(tmp_path / "todo.stl")})
+    assert r["ok"] and r["result"]["bodies"] == ["op2.c1"], r
+    r = api.llamar(s, "check_interference", {})
+    assert r["ok"] and not r["result"].get("interferences"), r
+    r = api.llamar(s, "get_physical_properties", {})
+    assert r["ok"] and [b["id"] for b in r["result"]["bodies"]] == ["op2.c1"], r
+    assert sum(f[2] for f in filas_bom(doc)) == 1
+    r = api.llamar(s, "get_physical_properties", {"bodies": [patron.id]})   # pedido por nombre, sí
+    assert r["ok"], r

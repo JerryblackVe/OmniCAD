@@ -135,7 +135,8 @@ CHAPA = [
     ("MODIFICAR", ["plegar", "desplegar", "patron_plano"], [
         _i("Plegar", "plegar"), _i("Desplegar", "desplegar"), _i("Volver a plegar caras", "replegar"),
         _i("Desgarro", "desgarro"), _i("Unir plegando", "unir_plegando"), _i("Cierre de esquina"), SEP,
-        _i("Patrón plano", "patron_plano"), _i("Exportar patrón plano a DXF", "exportar_dxf_chapa"), SEP,
+        _i("Patrón plano", "patron_plano"), _i("Activar patrón plano", "activar_patron_plano"),
+        _i("Exportar patrón plano a DXF", "exportar_dxf_chapa"), SEP,
         _i("Reglas de chapa", "reglas_chapa")]),
 ] + COMPARTIDOS
 PLASTICO = [

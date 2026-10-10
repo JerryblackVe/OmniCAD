@@ -6,6 +6,7 @@ import numpy as np
 
 from ...nucleo import analisis as an
 from ...timeline import entidades as ent
+from ...timeline.ops_chapa import cuerpos_del_modelo, es_patron_plano
 from ...timeline.parametros import ANGULO
 from .. import analisis_vista, formato
 from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, ref1
@@ -109,7 +110,7 @@ class Interferencia(Comando):
                 Info("resultado", "Resultados", self._resultado)]
 
     def _calcular(self, v, ctx):
-        ids = [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []] or list(ctx.estado.cuerpos)
+        ids = [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []] or [c.id for c in cuerpos_del_modelo(ctx.estado)]
         cuerpos = {c: ctx.estado.cuerpos[c].forma for c in ids if c in ctx.estado.cuerpos
                    and getattr(ctx.estado.cuerpos[c], "tipo", "solido") == "solido"}
         clave = (tuple(sorted((c, id(f)) for c, f in cuerpos.items())), bool(v.get("coincidentes")))
@@ -155,7 +156,8 @@ class CentroMasa(Comando):
 
     def _calcular(self, v, ctx):
         ids = [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []] or [
-            c for c, cu in ctx.estado.cuerpos.items() if getattr(cu, "tipo", "solido") == "solido"]
+            c for c, cu in ctx.estado.cuerpos.items() if getattr(cu, "tipo", "solido") == "solido"
+            and not es_patron_plano(cu)]
         if not ids:
             return None, 0.0
         def material(c):   # el Material físico asignado, si no el del cuerpo (fijación, regla de chapa), si no acero
