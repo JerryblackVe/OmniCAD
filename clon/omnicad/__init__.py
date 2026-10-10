@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 NOMBRE_APP = "OmniCAD"
 RECURSOS = Path(__file__).resolve().parent / "recursos"     # ícono (.ico y .png) y portada de la pantalla de carga
 
