@@ -172,24 +172,42 @@ class OpRepujado(_OpCrear):
         self._registrar_usados([cuerpo.id])
 
 
+# Tipos de rosca: las claves de nucleo.solidos_crear.FAMILIAS_ROSCA (acá sin cargar el núcleo; un test las compara)
+FAMILIAS_ROSCA = ("iso_metrica", "unificada", "trapezoidal", "acme", "bsp_paralela", "bsp_conica", "npt")
+
+
+def _tol():
+    from ..nucleo import tolerancias
+    return tolerancias
+
+
 class OpAgujero(_OpCrear):
-    """Agujero de Fusion [GUID-0DFCBD4F]: en puntos de boceto, vértices o puntos sobre una cara; simple,
-    abocardado o avellanado; extensión distancia o todo; punta plana o en ángulo; simple o roscado."""
+    """Agujero de Fusion [GUID-0DFCBD4F, GUID-3A76B269]: posición en puntos de boceto, vértices, puntos sobre una
+    cara o por referencias (dos aristas y dos distancias); simple, abocardado o avellanado; extensión distancia,
+    todo o hasta (cara, plano o cuerpo); punta plana o en ángulo; rosca simple, con holgura (ISO 273), roscado
+    cosmético o modelado (con clase y holgura para impresión 3D) o roscado cónico (tubería R/NPT)."""
     TIPO, ETIQUETA, ICONO = "agujero", "Agujero", "◎"
+    # Las claves que siguen a "objetivos" son nuevas: una receta vieja que no las tiene se calcula igual que antes.
     PARAMS = {"posiciones": [], "puntos_cara": [], "tipo": "simple", "diametro": "6 mm", "extension": "distancia",
               "profundidad": "10 mm", "punta": "angulo", "angulo_punta": "118 deg", "diam_abocardado": "10 mm",
               "prof_abocardado": "4 mm", "diam_avellanado": "12 mm", "angulo_avellanado": "90 deg",
-              "rosca": "simple", "designacion": "M6", "invertir": False, "objetivos": []}
+              "rosca": "simple", "designacion": "M6", "invertir": False, "objetivos": [],
+              "clase_rosca": "", "holgura_3d": "0 mm", "mano": "derecha", "ajuste": "normal", "hasta": None,
+              "desfase_hasta": "0 mm", "ref_cara": None, "ref_aristas": [], "ref_distancia1": "10 mm",
+              "ref_distancia2": "10 mm"}
     EXPRESIONES = ("diametro", "profundidad", "angulo_punta", "diam_abocardado", "prof_abocardado", "diam_avellanado",
-                   "angulo_avellanado")
-    OPCIONES = {"tipo": ("simple", "abocardado", "avellanado"), "extension": ("distancia", "todo"),
-                "punta": ("angulo", "plana"), "rosca": ("simple", "cosmetica", "modelada")}
-    REFS = ("posiciones",)
+                   "angulo_avellanado", "holgura_3d", "desfase_hasta", "ref_distancia1", "ref_distancia2")
+    OPCIONES = {"tipo": ("simple", "abocardado", "avellanado"), "extension": ("distancia", "todo", "hasta"),
+                "punta": ("angulo", "plana"), "rosca": ("simple", "holgura", "cosmetica", "modelada", "conico"),
+                "ajuste": ("fino", "normal", "grueso"), "mano": ("derecha", "izquierda")}
+    REFS = ("posiciones", "hasta", "ref_cara", "ref_aristas")
 
     def dependencias(self):
         return super().dependencias() | ent.dependencias_de([d["cara"] for d in self.p.get("puntos_cara") or [] if isinstance(d, dict) and "cara" in d])
 
-    def _colocaciones(self, estado):
+    def _colocaciones(self, estado, ctx=None):
+        """[(punto, dirección hacia el material)] de cada agujero. La posición por referencias necesita `ctx`
+        para evaluar sus distancias (sin él no se incluye)."""
         salida = []
         for e in _resolver_todas(self.p["posiciones"], estado):
             n = e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0])
@@ -204,56 +222,145 @@ class OpAgujero(_OpCrear):
             salida.append((e.plano.origen + (p - e.plano.origen) - e.plano.normal * float((p - e.plano.origen) @
                                                                                           e.plano.normal),
                            -e.plano.normal))
+        if self.p.get("ref_cara") and ctx is not None:
+            salida.append(self._por_referencias(estado, ctx))
         if not salida:
-            raise ErrorOperacion("Elegí dónde van los agujeros (puntos de boceto o un punto sobre una cara).")
+            raise ErrorOperacion("Elegí dónde van los agujeros (puntos de boceto, un punto sobre una cara o una cara "
+                                 "con dos aristas de referencia).")
         return [(p, -d if self.p["invertir"] else d) for p, d in salida]
 
-    def ejecutar(self, estado, ctx):
+    def _por_referencias(self, estado, ctx):
+        """Posición «Referencias»: el punto de la cara a las dos distancias de las dos aristas."""
+        e = _resolver(self.p["ref_cara"], estado, ("cara",))
+        if e.plano is None:
+            raise ErrorOperacion("La posición por referencias va sobre una cara plana.")
+        aristas = _resolver_todas(self.p.get("ref_aristas") or [], estado, ("arista",))
+        if len(aristas) != 2:
+            raise ErrorOperacion("La posición por referencias necesita dos aristas rectas de la cara.")
+        distancias = [ctx.evaluar(self.p["ref_distancia1"]), ctx.evaluar(self.p["ref_distancia2"])]
+        punto = _sc().punto_por_referencias(e.forma, [a.forma for a in aristas], distancias)
+        return punto, -e.plano.normal
+
+    def _objetivo_hasta(self, estado):
+        if not self.p.get("hasta"):
+            raise ErrorOperacion("Extensión «Hasta»: elegí la cara, el plano o el cuerpo donde termina el agujero.")
+        e = _resolver(self.p["hasta"], estado, ("cara", "plano", "cuerpo"))
+        if e.tipo == "plano":
+            return e.plano
+        return e.forma
+
+    def opciones_herramienta(self, ctx, rapido=False):
+        """Argumentos de `herramienta_agujero` (sin la profundidad) según el tipo de rosca. `rapido`: la rosca
+        modelada se reemplaza por su agujero liso (vista previa)."""
         p, sc = self.p, _sc()
         A = lambda k: ctx.evaluar(p[k], ANGULO)  # noqa: E731
         L = lambda k: ctx.evaluar(p[k])  # noqa: E731
-        opciones = {"tipo": p["tipo"], "diametro": L("diametro"), "punta": p["punta"], "angulo_punta": A("angulo_punta"),
-                    "roscado": p["designacion"] if p["rosca"] == "modelada" else None}
+        opciones = {"tipo": p["tipo"], "punta": p["punta"], "angulo_punta": A("angulo_punta")}
+        rosca = p["rosca"]
+        if rosca == "modelada":
+            datos = sc.datos_rosca(p["designacion"])
+            if datos["conica"]:
+                raise ErrorOperacion(f"{datos['designacion']} es una rosca cónica: usá «Roscado cónico».")
+            clase, _ = _tol().resolver_clase(datos["familia"], datos["diametro"], datos["paso"],
+                                             p.get("clase_rosca") or "", True)
+            if rapido:
+                opciones["diametro"] = sc.diametro_taladro_rosca(p["designacion"], clase, L("holgura_3d"))
+            else:
+                opciones.update(diametro=L("diametro"), roscado=p["designacion"], clase=clase,
+                                holgura=L("holgura_3d"), mano=p.get("mano") or "derecha")
+        elif rosca == "holgura":
+            opciones["diametro"] = sc.diametro_paso_libre(p["designacion"], p.get("ajuste") or "normal")
+        elif rosca == "conico":
+            datos = sc.datos_rosca(p["designacion"])
+            if not datos["conica"]:
+                raise ErrorOperacion(f"Roscado cónico: {datos['designacion']} no es una rosca de tubería cónica "
+                                     "(R/Rc o NPT).")
+            opciones.update(diametro=datos["diametro_menor"], conicidad=datos["conicidad"])
+        else:
+            opciones["diametro"] = L("diametro")
         if p["tipo"] == "abocardado":
             opciones.update(diam_abocardado=L("diam_abocardado"), prof_abocardado=L("prof_abocardado"))
         elif p["tipo"] == "avellanado":
             opciones.update(diam_avellanado=L("diam_avellanado"), angulo_avellanado=A("angulo_avellanado"))
+        return opciones
+
+    def herramientas(self, estado, ctx, rapido=False):
+        """Sólidos a restar, uno por agujero."""
+        p, sc = self.p, _sc()
         solidos = [c.forma for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
         if not solidos:
             raise ErrorOperacion("No hay cuerpos sólidos para agujerear.")
-        todo = geo.compuesto(solidos)
+        opciones = self.opciones_herramienta(ctx, rapido)
+        todo = geo.compuesto(solidos) if p["extension"] == "todo" else None
+        hasta = self._objetivo_hasta(estado) if p["extension"] == "hasta" else None
         herramientas = []
-        for punto, direccion in self._colocaciones(estado):
+        for punto, direccion in self._colocaciones(estado, ctx):
             if p["extension"] == "todo":
                 herramientas.append(sc.agujero(todo, punto, direccion, profundidad=None, **opciones))
+            elif p["extension"] == "hasta":
+                prof = sc.profundidad_hasta(punto, direccion, hasta, ctx.evaluar(p.get("desfase_hasta") or "0 mm"))
+                herramientas.append(sc.herramienta_agujero(punto, direccion, profundidad=prof, **opciones))
             else:
-                herramientas.append(sc.herramienta_agujero(punto, direccion, profundidad=L("profundidad"), **opciones))
+                herramientas.append(sc.herramienta_agujero(punto, direccion, profundidad=ctx.evaluar(p["profundidad"]),
+                                                           **opciones))
+        return herramientas
+
+    def ejecutar(self, estado, ctx):
+        p = self.p
+        herramientas = self.herramientas(estado, ctx)
         if p["rosca"] == "cosmetica":
             ctx.aviso(f"Rosca cosmética {p['designacion']}: no cambia la geometría.")
+        elif p["rosca"] == "conico":
+            ctx.aviso(f"Roscado cónico {p['designacion']}: el agujero se angosta 1:16 desde la boca (diámetro menor "
+                      "en el plano de calibre); la rosca es cosmética.")
+        elif p["rosca"] == "modelada" and p.get("clase_rosca"):
+            datos = _sc().datos_rosca(p["designacion"])
+            _, aviso = _tol().resolver_clase(datos["familia"], datos["diametro"], datos["paso"], p["clase_rosca"],
+                                             True)
+            if aviso:
+                ctx.aviso(aviso)
         self._aplicar(estado, ctx, geo.unir_todos(herramientas), "cortar")
 
 
 class OpRosca(_OpCrear):
-    """Rosca de Fusion [GUID-7BD8CD24]: sobre una cara cilíndrica, tamaño automático o elegido, largo completo o
-    con desfase, cosmética o modelada, mano derecha o izquierda."""
+    """Rosca de Fusion [GUID-7BD8CD24, GUID-C37E8172]: sobre una cara cilíndrica; tipo (familia: métrica ISO,
+    unificada, trapezoidal, ACME, tubería BSP/NPT), tamaño automático o elegido, clase de tolerancia (6g/6H,
+    2A/2B…) y holgura para impresión 3D; largo completo o con desfase; cosmética o modelada; mano derecha o
+    izquierda."""
     TIPO, ETIQUETA, ICONO = "rosca", "Rosca", "⌇"
     PARAMS = {"caras": [], "designacion": "", "largo_completo": True, "longitud": "10 mm", "desfase": "0 mm",
-              "modelada": True, "mano": "derecha", "invertir": False}
-    EXPRESIONES = ("longitud", "desfase")
-    OPCIONES = {"mano": ("derecha", "izquierda")}
+              "modelada": True, "mano": "derecha", "invertir": False,
+              "familia": "iso_metrica", "clase_rosca": "", "holgura_3d": "0 mm"}   # nuevas: «familia» y siguientes
+    EXPRESIONES = ("longitud", "desfase", "holgura_3d")
+    OPCIONES = {"mano": ("derecha", "izquierda"), "familia": FAMILIAS_ROSCA}
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["caras"], estado, ("cara",))
         if not ents:
             raise ErrorOperacion("Elegí las caras cilíndricas a roscar.")
+        p, sc = self.p, _sc()
+        holgura = ctx.evaluar(p.get("holgura_3d") or "0 mm")
+        self.roscas = []                     # lo que quedó en cada cara (designación y clase): para informar
         for e in ents:
             cuerpo = estado.cuerpo(e.cuerpo)
-            cuerpo.forma = _sc().rosca(cuerpo.forma, e.forma, designacion=self.p["designacion"] or None,
-                                       longitud=None if self.p["largo_completo"] else ctx.evaluar(self.p["longitud"]),
-                                       desfase=ctx.evaluar(self.p["desfase"]), modelada=self.p["modelada"],
-                                       mano=self.p["mano"], invertir=self.p["invertir"])
-            if not self.p["modelada"]:
+            info = sc.analizar_rosca(cuerpo.forma, e.forma, designacion=p["designacion"] or None,
+                                     familia=p.get("familia") or None)
+            datos, modelada = info["datos"], p["modelada"]
+            if modelada and datos["conica"]:
+                ctx.aviso(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica queda cosmética.")
+                modelada = False
+            clase, aviso = _tol().resolver_clase(datos["familia"], datos["diametro"], datos["paso"],
+                                                 p.get("clase_rosca") or "", info["interna"])
+            if aviso and modelada:
+                ctx.aviso(aviso)
+            cuerpo.forma = sc.rosca(cuerpo.forma, e.forma, designacion=datos["designacion"],
+                                    longitud=None if p["largo_completo"] else ctx.evaluar(p["longitud"]),
+                                    desfase=ctx.evaluar(p["desfase"]), modelada=modelada, mano=p["mano"],
+                                    invertir=p["invertir"], clase=clase, holgura=holgura)
+            self.roscas.append({"cuerpo": cuerpo.id, "designacion": datos["designacion"], "clase": clase,
+                                "interna": info["interna"], "modelada": modelada})
+            if not modelada:
                 ctx.aviso("Rosca cosmética: la geometría no cambia (como la rosca no modelada de Fusion).")
 
 

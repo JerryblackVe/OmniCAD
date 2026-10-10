@@ -1310,22 +1310,117 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo):
 
 
 # ================================================================ 7. agujero
+# Agujeros de paso (Fusion: tipo «Con holgura») para tornillos métricos, ISO 273: diámetro del agujero (mm) en
+# las series fina, media y gruesa. ISO 273 es la fuente de cada fila.
+PASO_LIBRE_ISO273 = {
+    "M1.6": (1.7, 1.8, 2.0), "M2": (2.2, 2.4, 2.6), "M2.5": (2.7, 2.9, 3.1), "M3": (3.2, 3.4, 3.6),
+    "M3.5": (3.7, 3.9, 4.2), "M4": (4.3, 4.5, 4.8), "M5": (5.3, 5.5, 5.8), "M6": (6.4, 6.6, 7.0),
+    "M8": (8.4, 9.0, 10.0), "M10": (10.5, 11.0, 12.0), "M12": (13.0, 13.5, 14.5), "M14": (15.0, 15.5, 16.5),
+    "M16": (17.0, 17.5, 18.5), "M18": (19.0, 20.0, 21.0), "M20": (21.0, 22.0, 24.0), "M22": (23.0, 24.0, 26.0),
+    "M24": (25.0, 26.0, 28.0), "M27": (28.0, 30.0, 32.0), "M30": (31.0, 33.0, 35.0), "M33": (34.0, 36.0, 38.0),
+    "M36": (37.0, 39.0, 42.0), "M39": (40.0, 42.0, 45.0), "M42": (43.0, 45.0, 48.0), "M45": (46.0, 48.0, 52.0),
+    "M48": (50.0, 52.0, 56.0), "M52": (54.0, 56.0, 62.0), "M56": (58.0, 62.0, 66.0), "M60": (62.0, 66.0, 70.0),
+    "M64": (66.0, 70.0, 74.0)}
+AJUSTES_PASO_LIBRE = ("fino", "normal", "grueso")       # series de ISO 273 (Fusion: cercano, normal, holgado)
+
+
+def diametro_paso_libre(tamano, ajuste="normal"):
+    """Diámetro del agujero con holgura (Clearance de Fusion) para un tornillo métrico según ISO 273: «M8» (o
+    «M8x1.25»: el paso no cuenta) con ajuste "fino", "normal" (serie media) o "grueso". Ej.: M8 normal = 9 mm."""
+    if ajuste not in AJUSTES_PASO_LIBRE:
+        raise geo.ErrorGeometria(f"Ajuste desconocido: {ajuste} (hay {', '.join(AJUSTES_PASO_LIBRE)}).")
+    m = re.fullmatch(r"\s*[Mm]\s*(\d+(?:\.\d+)?)(?:\s*[xX×]\s*\d+(?:\.\d+)?)?\s*", str(tamano or ""))
+    clave = f"M{float(m.group(1)):g}" if m else None
+    if clave not in PASO_LIBRE_ISO273:
+        raise geo.ErrorGeometria(f"ISO 273 no tiene el tamaño «{tamano}»: hay M1.6 a M64 (solo métricos).")
+    return PASO_LIBRE_ISO273[clave][AJUSTES_PASO_LIBRE.index(ajuste)]
+
+
+def profundidad_hasta(punto, direccion, objetivo, desfase=0.0):
+    """Extensión «Hasta» del agujero de Fusion: distancia desde `punto` según `direccion` hasta `objetivo`, que es
+    un geo.Plano (plano de construcción), una cara (si es plana se toma su plano extendido, como «extender caras»
+    de Fusion) o un cuerpo (el primer corte del rayo con él). `desfase` se suma (positivo = más hondo)."""
+    p, d = np.asarray(punto, float), _unit(direccion, "dirección del agujero")
+    plano = objetivo if isinstance(objetivo, geo.Plano) else None
+    if plano is None and getattr(objetivo, "ShapeType", None) and objetivo.ShapeType() == TopAbs_FACE:
+        plano = geo.plano_de_cara(TopoDS.Face(objetivo))
+    if plano is not None:
+        den = float(d @ plano.normal)
+        if abs(den) < 1e-9:
+            raise geo.ErrorGeometria("El plano «hasta» es paralelo al agujero: no lo corta nunca.")
+        t = float((plano.origen - p) @ plano.normal) / den
+    else:
+        cortes = [x for x in _rayo(objetivo, p, d) if x > 1e-6]
+        if not cortes:
+            raise geo.ErrorGeometria("El agujero no llega a la cara o cuerpo «hasta» en su dirección.")
+        t = cortes[0]
+    t += float(desfase)
+    if t <= 1e-6:
+        raise geo.ErrorGeometria("La cara «hasta» queda detrás del inicio del agujero (o el desfase la deja ahí).")
+    return t
+
+
+def punto_por_referencias(cara, aristas, distancias):
+    """Posición «Referencias» del agujero de Fusion: el punto de la cara plana `cara` que queda a `distancias[i]`
+    (mm) de cada una de las dos aristas rectas `aristas` (proyectadas sobre la cara), hacia el lado de la cara.
+    Las aristas no pueden ser paralelas."""
+    plano = geo.plano_de_cara(TopoDS.Face(cara))
+    if plano is None:
+        raise geo.ErrorGeometria("La posición por referencias va sobre una cara plana.")
+    aristas, distancias = list(aristas), [float(x) for x in distancias]
+    if len(aristas) != 2 or len(distancias) != 2:
+        raise geo.ErrorGeometria("La posición por referencias necesita dos aristas y dos distancias.")
+    centro = plano.a_uv(geo.centro_masa(cara, superficie=True))
+    filas, lados = [], []
+    for arista, dist in zip(aristas, distancias, strict=True):
+        curva = BRepAdaptor_Curve(TopoDS.Edge(arista))
+        if curva.GetType() != GeomAbs_Line:
+            raise geo.ErrorGeometria("Las referencias del agujero tienen que ser aristas rectas.")
+        a = np.array(plano.a_uv(_xyz(curva.Value(curva.FirstParameter()))))
+        b = np.array(plano.a_uv(_xyz(curva.Value(curva.LastParameter()))))
+        if np.linalg.norm(b - a) < 1e-9:
+            raise geo.ErrorGeometria("Una arista de referencia es perpendicular a la cara.")
+        t = (b - a) / np.linalg.norm(b - a)
+        n = np.array([-t[1], t[0]])
+        if float((np.asarray(centro) - a) @ n) < 0:          # la normal mira hacia el lado de la cara
+            n = -n
+        filas.append(n)
+        lados.append(dist + float(a @ n))
+    m = np.array(filas)
+    if abs(np.linalg.det(m)) < 1e-6:
+        raise geo.ErrorGeometria("Las dos aristas de referencia son paralelas: elegí dos que se crucen.")
+    u, v = np.linalg.solve(m, np.array(lados))
+    return plano.a_3d(u, v)
+
+
 def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profundidad=10.0, punta="angulo",
                         angulo_punta=118.0, diam_abocardado=None, prof_abocardado=None, diam_avellanado=None,
-                        angulo_avellanado=90.0, roscado=None, mano="derecha"):
+                        angulo_avellanado=90.0, roscado=None, mano="derecha", clase="", holgura=0.0,
+                        conicidad=0.0):
     """Sólido a restar de un agujero de Fusion (revolución del medio perfil). `direccion` apunta hacia el
     material; `profundidad` llega hasta el hombro (sin la punta, como en Fusion). `roscado` = designación de
-    TABLA_ROSCAS: el agujero se hace al diámetro menor básico y se le suma el surco helicoidal de la rosca."""
+    TABLA_ROSCAS: el agujero se hace al diámetro menor y se le suma el surco helicoidal de la rosca; `clase`
+    ("6H", "2B", "auto"…: ver `tolerancias`) lleva el diámetro menor y los flancos al centro de su tolerancia y
+    `holgura` (mm, radial) agranda todo para imprimir en 3D. `conicidad` (diámetro por mm de profundidad, p. ej.
+    1/16 en las roscas de tubería cónicas) angosta el agujero hacia el fondo (Roscado cónico)."""
     d = _unit(direccion, "dirección del agujero")
     p = np.asarray(punto, float)
     if roscado:
         datos = datos_rosca(roscado)
-        diametro = datos["diametro_menor"]
+        if datos["conica"]:
+            raise geo.ErrorGeometria("Las roscas cónicas (R, NPT) no se modelan: usá Roscado cónico (cosmético).")
+        if conicidad:
+            raise geo.ErrorGeometria("Un agujero cónico no lleva rosca modelada paralela.")
+        flancos = _desfases_clase(datos, clase, True)["flancos"] + float(holgura)
+        diametro = diametro_taladro_rosca(roscado, clase, holgura)
     if diametro is None or diametro <= 0:
         raise geo.ErrorGeometria("El diámetro del agujero debe ser positivo.")
     if profundidad is None or profundidad <= 0:
         raise geo.ErrorGeometria("La profundidad del agujero debe ser positiva.")
+    if conicidad < 0 or conicidad * profundidad >= diametro:
+        raise geo.ErrorGeometria("La conicidad cierra el agujero antes del fondo.")
     r = diametro / 2
+    radio = lambda z: r - conicidad / 2 * z  # noqa: E731 — radio del agujero a la profundidad z
     medio = [(0.0, 0.0)]
     if tipo == "simple":
         medio.append((r, 0.0))
@@ -1334,7 +1429,8 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
             raise geo.ErrorGeometria("El abocardado necesita diámetro mayor que el del agujero y profundidad positiva.")
         if prof_abocardado >= profundidad:
             raise geo.ErrorGeometria("La profundidad del abocardado supera la del agujero.")
-        medio += [(diam_abocardado / 2, 0.0), (diam_abocardado / 2, prof_abocardado), (r, prof_abocardado)]
+        medio += [(diam_abocardado / 2, 0.0), (diam_abocardado / 2, prof_abocardado),
+                  (radio(prof_abocardado), prof_abocardado)]
     elif tipo == "avellanado":
         if not diam_avellanado or diam_avellanado <= diametro or not 0 < angulo_avellanado < 180:
             raise geo.ErrorGeometria("El avellanado necesita diámetro mayor que el del agujero y ángulo entre "
@@ -1342,14 +1438,15 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
         h = (diam_avellanado - diametro) / 2 / math.tan(math.radians(angulo_avellanado) / 2)
         if h >= profundidad:
             raise geo.ErrorGeometria("El avellanado es más profundo que el agujero.")
-        medio += [(diam_avellanado / 2, 0.0), (r, h)]
+        medio += [(diam_avellanado / 2, 0.0), (radio(h), h)]
     else:
         raise geo.ErrorGeometria(f"Tipo de agujero desconocido: {tipo}")
-    medio.append((r, profundidad))
+    r_fondo = radio(profundidad)
+    medio.append((r_fondo, profundidad))
     if punta == "angulo":
         if not 0 < angulo_punta < 180:
             raise geo.ErrorGeometria("El ángulo de la punta debe estar entre 0° y 180°.")
-        medio.append((0.0, profundidad + r / math.tan(math.radians(angulo_punta) / 2)))
+        medio.append((0.0, profundidad + r_fondo / math.tan(math.radians(angulo_punta) / 2)))
     elif punta == "plana":
         medio.append((0.0, profundidad))
     else:
@@ -1358,7 +1455,11 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
     perfil = _cara(_poligono([p + e * rho + d * zz for rho, zz in medio]))
     herramienta = BRepPrimAPI_MakeRevol(perfil, gp_Ax1(_pnt(p), _gdir(d)), 2 * math.pi).Shape()
     if roscado:
-        surco = _surco_rosca(p, d, datos["diametro"], datos["paso"], 0.0, profundidad, True, mano, radio_cara=r)
+        surco, torno = _armar_surco(lambda extra: _surco_rosca(
+            p, d, datos["diametro"], datos["paso"], 0.0, profundidad, True, mano, radio_cara=r, partes=True,
+            extra=extra, **_perfil_surco(datos, flancos)))
+        if torno is not None:                         # la holgura deja sin espesor la cresta: se agranda el agujero
+            herramienta = geo.booleano(herramienta, torno, "unir")
         herramienta = geo.booleano(herramienta, surco, "unir")
     return _validar(herramienta, "Agujero")
 
@@ -1378,6 +1479,20 @@ def agujero(cuerpo, punto, direccion, *, profundidad=None, **opciones):
 
 
 # ================================================================ 8. roscas
+# Familias de rosca (el «Tipo» del diálogo de Fusion): nombre, norma de la que salen los datos, ángulo entre
+# flancos del perfil (grados) y si es cónica (las de tubería cónicas no se modelan: Roscado cónico cosmético).
+FAMILIAS_ROSCA = {
+    "iso_metrica": {"nombre": "ISO métrica (M)", "norma": "ISO 261 / ISO 262 / ISO 724 (perfil ISO 68-1)",
+                    "angulo": 60.0, "conica": False},
+    "unificada": {"nombre": "Unificada ASME (UNC / UNF)", "norma": "ASME B1.1", "angulo": 60.0, "conica": False},
+    "trapezoidal": {"nombre": "Trapezoidal métrica ISO (Tr)", "norma": "ISO 2904 / ISO 2902", "angulo": 30.0,
+                    "conica": False},
+    "acme": {"nombre": "ACME de uso general", "norma": "ASME B1.5", "angulo": 29.0, "conica": False},
+    "bsp_paralela": {"nombre": "Tubería BSP paralela (G)", "norma": "ISO 228-1", "angulo": 55.0, "conica": False},
+    "bsp_conica": {"nombre": "Tubería BSPT cónica (R / Rc)", "norma": "ISO 7-1", "angulo": 55.0, "conica": True},
+    "npt": {"nombre": "Tubería NPT cónica", "norma": "ASME B1.20.1", "angulo": 60.0, "conica": True},
+}
+
 # Métrica ISO (ISO 261 / ISO 724, perfil básico de 60°) y unificada UNC/UNF (ASME B1.1). Broca para roscar:
 # en métrica D − P redondeado como en las tablas de taller; en UN, la broca de número/letra/fracción usual.
 _ISO_GRUESA = [(1.6, 0.35, 1.25), (2, 0.4, 1.6), (2.5, 0.45, 2.05), (3, 0.5, 2.5), (3.5, 0.6, 2.9), (4, 0.7, 3.3),
@@ -1389,54 +1504,188 @@ _ISO_FINA = [(1.6, 0.2), (2, 0.25), (2.5, 0.35), (3, 0.35), (4, 0.5), (5, 0.5), 
              (10, 1.0), (12, 1.5), (12, 1.25), (14, 1.5), (16, 1.5), (18, 2.0), (18, 1.5), (20, 2.0), (20, 1.5),
              (22, 2.0), (22, 1.5), (24, 2.0), (27, 2.0), (30, 2.0), (33, 2.0), (36, 3.0), (39, 3.0), (42, 3.0),
              (45, 3.0), (48, 3.0), (52, 4.0), (56, 4.0), (60, 4.0), (64, 4.0)]
-_UNC = [("#4", 0.112, 40, 0.0890), ("#6", 0.138, 32, 0.1065), ("#8", 0.164, 32, 0.1360), ("#10", 0.190, 24, 0.1495),
+# Unificada (ASME B1.1): (tamaño, diámetro nominal en pulgadas, hilos por pulgada, broca para roscar en pulgadas).
+# Los números (#0 a #12) valen 0.060 + 0.013·N pulgadas.
+_UNC = [("#1", 0.073, 64, 0.0595), ("#2", 0.086, 56, 0.0700), ("#3", 0.099, 48, 0.0785),
+        ("#4", 0.112, 40, 0.0890), ("#5", 0.125, 40, 0.1015), ("#6", 0.138, 32, 0.1065), ("#8", 0.164, 32, 0.1360),
+        ("#10", 0.190, 24, 0.1495), ("#12", 0.216, 24, 0.1770),
         ("1/4", 0.250, 20, 0.2010), ("5/16", 0.3125, 18, 0.2570), ("3/8", 0.375, 16, 0.3125),
         ("7/16", 0.4375, 14, 0.3680), ("1/2", 0.500, 13, 0.4219), ("9/16", 0.5625, 12, 0.4844),
-        ("5/8", 0.625, 11, 0.5312), ("3/4", 0.750, 10, 0.6562), ("7/8", 0.875, 9, 0.7656), ("1", 1.000, 8, 0.8750)]
-_UNF = [("#4", 0.112, 48, 0.0935), ("#6", 0.138, 40, 0.1130), ("#8", 0.164, 36, 0.1360), ("#10", 0.190, 32, 0.1590),
+        ("5/8", 0.625, 11, 0.5312), ("3/4", 0.750, 10, 0.6562), ("7/8", 0.875, 9, 0.7656), ("1", 1.000, 8, 0.8750),
+        ("1-1/8", 1.125, 7, 0.9844), ("1-1/4", 1.250, 7, 1.1094), ("1-3/8", 1.375, 6, 1.2188),
+        ("1-1/2", 1.500, 6, 1.3438)]
+_UNF = [("#0", 0.060, 80, 0.0469), ("#1", 0.073, 72, 0.0595), ("#2", 0.086, 64, 0.0700), ("#3", 0.099, 56, 0.0820),
+        ("#4", 0.112, 48, 0.0935), ("#5", 0.125, 44, 0.1040), ("#6", 0.138, 40, 0.1130), ("#8", 0.164, 36, 0.1360),
+        ("#10", 0.190, 32, 0.1590), ("#12", 0.216, 28, 0.1820),
         ("1/4", 0.250, 28, 0.2130), ("5/16", 0.3125, 24, 0.2720), ("3/8", 0.375, 24, 0.3320),
         ("7/16", 0.4375, 20, 0.3906), ("1/2", 0.500, 20, 0.4531), ("9/16", 0.5625, 18, 0.5156),
-        ("5/8", 0.625, 18, 0.5781), ("3/4", 0.750, 16, 0.6875), ("7/8", 0.875, 14, 0.8125), ("1", 1.000, 12, 0.9219)]
+        ("5/8", 0.625, 18, 0.5781), ("3/4", 0.750, 16, 0.6875), ("7/8", 0.875, 14, 0.8125), ("1", 1.000, 12, 0.9219),
+        ("1-1/8", 1.125, 12, 1.0469), ("1-1/4", 1.250, 12, 1.1719), ("1-3/8", 1.375, 12, 1.2969),
+        ("1-1/2", 1.500, 12, 1.4219)]
+# Trapezoidal métrica, perfil ISO 2904 (30°), serie de pasos media de ISO 2902 en los diámetros de primera
+# elección: (diámetro nominal, paso) en mm.
+_TRAPEZOIDAL = [(8, 1.5), (10, 2), (12, 3), (14, 3), (16, 4), (18, 4), (20, 4), (22, 5), (24, 5), (26, 5), (28, 5),
+                (30, 6), (32, 6), (36, 6), (40, 7), (44, 7), (48, 8), (50, 8), (52, 8), (60, 9), (70, 10), (80, 10),
+                (90, 12), (100, 12)]
+# ACME de uso general (ASME B1.5, 29°), combinaciones recomendadas: (tamaño, diámetro en pulgadas, hilos/pulgada).
+_ACME = [("1/4", 0.25, 16), ("5/16", 0.3125, 14), ("3/8", 0.375, 12), ("7/16", 0.4375, 12), ("1/2", 0.5, 10),
+         ("5/8", 0.625, 8), ("3/4", 0.75, 6), ("7/8", 0.875, 6), ("1", 1.0, 5), ("1-1/8", 1.125, 5), ("1-1/4", 1.25, 5),
+         ("1-3/8", 1.375, 4), ("1-1/2", 1.5, 4), ("1-3/4", 1.75, 4), ("2", 2.0, 4), ("2-1/4", 2.25, 3),
+         ("2-1/2", 2.5, 3), ("2-3/4", 2.75, 3), ("3", 3.0, 2), ("3-1/2", 3.5, 2), ("4", 4.0, 2), ("4-1/2", 4.5, 2),
+         ("5", 5.0, 2)]
+# Tubería BSP (perfil Whitworth de 55°): (tamaño, hilos por pulgada, diámetro mayor en mm). Paralela G: ISO 228-1.
+# La cónica R/Rc (ISO 7-1) tiene el mismo diámetro en el plano de calibre y solo los tamaños de _BSP_CONICA.
+_BSP = [("1/16", 28, 7.723), ("1/8", 28, 9.728), ("1/4", 19, 13.157), ("3/8", 19, 16.662), ("1/2", 14, 20.955),
+        ("5/8", 14, 22.911), ("3/4", 14, 26.441), ("7/8", 14, 30.201), ("1", 11, 33.249), ("1-1/8", 11, 37.897),
+        ("1-1/4", 11, 41.910), ("1-1/2", 11, 47.803), ("1-3/4", 11, 53.746), ("2", 11, 59.614), ("2-1/4", 11, 65.710),
+        ("2-1/2", 11, 75.184), ("2-3/4", 11, 81.534), ("3", 11, 87.884), ("3-1/2", 11, 100.330), ("4", 11, 113.030)]
+_BSP_CONICA = ("1/16", "1/8", "1/4", "3/8", "1/2", "3/4", "1", "1-1/4", "1-1/2", "2", "2-1/2", "3", "4")
+# NPT (ASME B1.20.1, 60°, conicidad 1:16): (tamaño, diámetro exterior del tubo D en pulgadas, hilos por pulgada,
+# enganche a mano L1 en pulgadas). Flancos en el extremo chico E0 = D − (0.05·D + 1.1)·p; en el plano de calibre
+# (la boca de la rosca interior) E1 = E0 + L1/16. Alto del filete h = 0,8·p.
+_NPT = [("1/16", 0.3125, 27, 0.160), ("1/8", 0.405, 27, 0.180), ("1/4", 0.540, 18, 0.200), ("3/8", 0.675, 18, 0.240),
+        ("1/2", 0.840, 14, 0.320), ("3/4", 1.050, 14, 0.339), ("1", 1.315, 11.5, 0.400), ("1-1/4", 1.660, 11.5, 0.420),
+        ("1-1/2", 1.900, 11.5, 0.420), ("2", 2.375, 11.5, 0.436)]
+_WHITWORTH_H = 0.960491     # altura del triángulo fundamental de 55° por mm de paso; filete = 2/3 de eso
+
+
+def _fila(familia, norma, tamano, d, p, broca, d2, d1, conicidad=0.0):
+    return {"norma": norma, "familia": familia, "tamano": tamano, "diametro": d, "paso": p, "broca": broca,
+            "diametro_flancos": d2, "diametro_menor": d1, "angulo": FAMILIAS_ROSCA[familia]["angulo"],
+            "conica": FAMILIAS_ROSCA[familia]["conica"], "conicidad": conicidad}
 
 
 def _armar_tabla():
     tabla = {}
+    h60 = math.sqrt(3) / 2
     for d, p, b in _ISO_GRUESA:
-        tabla[f"M{d:g}x{p:g}"] = {"norma": "ISO métrica gruesa", "diametro": float(d), "paso": p, "broca": b}
+        tabla[f"M{d:g}x{p:g}"] = _fila("iso_metrica", "ISO métrica gruesa", f"M{d:g}", float(d), p, b,
+                                       d - 2 * (3 / 8) * h60 * p, d - 2 * (5 / 8) * h60 * p)
     for d, p in _ISO_FINA:
-        tabla[f"M{d:g}x{p:g}"] = {"norma": "ISO métrica fina", "diametro": float(d), "paso": p,
-                                  "broca": round(d - p, 2)}
+        tabla[f"M{d:g}x{p:g}"] = _fila("iso_metrica", "ISO métrica fina", f"M{d:g}", float(d), p, round(d - p, 2),
+                                       d - 2 * (3 / 8) * h60 * p, d - 2 * (5 / 8) * h60 * p)
     for serie, filas in (("UNC", _UNC), ("UNF", _UNF)):
         for t, d, tpi, b in filas:
-            tabla[f"{t}-{tpi} {serie}"] = {"norma": f"Unificada {serie}", "diametro": round(d * 25.4, 4),
-                                          "paso": 25.4 / tpi, "broca": round(b * 25.4, 3)}
+            D, P = round(d * 25.4, 4), 25.4 / tpi
+            tabla[f"{t}-{tpi} {serie}"] = _fila("unificada", f"Unificada {serie}", t, D, P, round(b * 25.4, 3),
+                                               D - 2 * (3 / 8) * h60 * P, D - 2 * (5 / 8) * h60 * P)
+    for d, p in _TRAPEZOIDAL:
+        tabla[f"Tr{d:g}x{p:g}"] = _fila("trapezoidal", "Trapezoidal ISO 2904", f"Tr{d:g}", float(d), float(p),
+                                        float(d - p), d - p / 2, float(d - p))
+    for t, d, tpi in _ACME:
+        D, P = round(d * 25.4, 4), 25.4 / tpi
+        tabla[f"{t}-{tpi} ACME"] = _fila("acme", "ACME ASME B1.5", t, D, P, None, D - P / 2, D - P)
+    for t, tpi, D in _BSP:
+        P, hw = 25.4 / tpi, 2 / 3 * _WHITWORTH_H * 25.4 / tpi
+        tabla[f"G{t}"] = _fila("bsp_paralela", "BSP paralela ISO 228-1", t, D, P, None, D - hw, D - 2 * hw)
+    for t, tpi, D in _BSP:
+        if t in _BSP_CONICA:
+            P, hw = 25.4 / tpi, 2 / 3 * _WHITWORTH_H * 25.4 / tpi
+            tabla[f"R{t}"] = _fila("bsp_conica", "BSPT ISO 7-1", t, D, P, None, D - hw, D - 2 * hw, 1 / 16)
+    for t, D, tpi, L1 in _NPT:
+        p = 1 / tpi
+        e1 = (D - (0.05 * D + 1.1) * p + L1 / 16) * 25.4
+        P = 25.4 / tpi
+        tabla[f"{t}-{tpi:g} NPT"] = _fila("npt", "NPT ASME B1.20.1", t, round(e1 + 0.8 * P, 4), P, None, round(e1, 4),
+                                         round(e1 - 0.8 * P, 4), 1 / 16)
     return tabla
 
 
 TABLA_ROSCAS = _armar_tabla()
 _GRUESA_POR_D = {f"M{d:g}": f"M{d:g}x{p:g}" for d, p, _b in _ISO_GRUESA}
+_POR_TEXTO = {k.lower().replace(" ", ""): k for k in TABLA_ROSCAS}
+_FRACCION = r"(\d+(?:-\d+/\d+|/\d+)?)"           # tamaño en pulgadas: 1, 1/2, 1-1/4
+
+
+def _primera(prefijo, sufijo=""):
+    """Primera clave de la tabla (en su orden: la serie preferida primero) que empieza y termina así."""
+    return next((k for k in TABLA_ROSCAS if k.startswith(prefijo) and k.endswith(sufijo)), None)
+
+
+def _clave_rosca(texto):
+    t = texto.strip().replace("×", "x").replace("X", "x")
+    clave = _POR_TEXTO.get(t.lower().replace(" ", ""))
+    if clave:
+        return clave
+    m = re.fullmatch(r"[Mm]\s*(\d+(?:\.\d+)?)(?:\s*x\s*(\d+(?:\.\d+)?))?", t)
+    if m:
+        d = float(m.group(1))
+        return f"M{d:g}x{float(m.group(2)):g}" if m.group(2) else _GRUESA_POR_D.get(f"M{d:g}")
+    m = re.fullmatch(r"(#?\d+(?:-\d+/\d+|/\d+)?)\s*-\s*(\d+)\s*(UNC|UNF|unc|unf)?", t)
+    if m:
+        serie = (m.group(3) or "").upper()
+        candidatas = [f"{m.group(1)}-{m.group(2)} {s}" for s in ((serie,) if serie else ("UNC", "UNF"))]
+        return next((c for c in candidatas if c in TABLA_ROSCAS), None)
+    m = re.fullmatch(r"[Tt][Rr]\s*(\d+(?:\.\d+)?)(?:\s*x\s*(\d+(?:\.\d+)?))?", t)
+    if m:
+        d = float(m.group(1))
+        return f"Tr{d:g}x{float(m.group(2)):g}" if m.group(2) else _primera(f"Tr{d:g}x")
+    m = re.fullmatch(_FRACCION + r"(?:\s*-\s*(\d+))?\s*(?:ACME|acme|Acme)", t)
+    if m:
+        return f"{m.group(1)}-{m.group(2)} ACME" if m.group(2) else _primera(f"{m.group(1)}-", " ACME")
+    m = re.fullmatch(_FRACCION + r"(?:\s*-\s*(\d+(?:\.\d+)?))?\s*(?:NPT|npt)", t)
+    if m:
+        return f"{m.group(1)}-{float(m.group(2)):g} NPT" if m.group(2) else _primera(f"{m.group(1)}-", " NPT")
+    m = re.fullmatch(r"(G|g|R|Rc|RC|rc|r)\s*" + _FRACCION, t)
+    if m:
+        return f"{'G' if m.group(1) in ('G', 'g') else 'R'}{m.group(2)}"
+    return None
 
 
 def datos_rosca(designacion):
-    """Datos de una rosca: 'M6' (gruesa), 'M6x0.75', '1/4-20 UNC', '#10-32 UNF' (sin serie, prueba UNC y
-    UNF). Agrega `designacion` canónica y `diametro_menor` básico = D − 1,0825·P (5H/4 del perfil de 60°)."""
-    texto = str(designacion).strip().replace("×", "x").replace("X", "x")
-    clave = None
-    m = re.fullmatch(r"[Mm]\s*(\d+(?:\.\d+)?)(?:\s*x\s*(\d+(?:\.\d+)?))?", texto)
-    if m:
-        d = float(m.group(1))
-        clave = f"M{d:g}x{float(m.group(2)):g}" if m.group(2) else _GRUESA_POR_D.get(f"M{d:g}")
-    else:
-        m = re.fullmatch(r"(#?\d+(?:/\d+)?)\s*-\s*(\d+)\s*(UNC|UNF|unc|unf)?", texto)
-        if m:
-            serie = (m.group(3) or "").upper()
-            candidatas = [f"{m.group(1)}-{m.group(2)} {s}" for s in ((serie,) if serie else ("UNC", "UNF"))]
-            clave = next((c for c in candidatas if c in TABLA_ROSCAS), None)
+    """Datos de una rosca de TABLA_ROSCAS: 'M6' (gruesa), 'M6x0.75', '1/4-20 UNC', '#10-32 UNF' (sin serie,
+    prueba UNC y UNF), 'Tr20x4' (o 'Tr20': serie media), '1/2-10 ACME', 'G1/2', 'R1/2' o 'Rc1/2', '1/2-14 NPT'
+    (o '1/2 NPT'). Devuelve la fila con `designacion` canónica, `familia`, `diametro` (mayor), `paso`,
+    `diametro_flancos` y `diametro_menor` básicos (interior), `angulo` del perfil y `conica`. En las cónicas los
+    diámetros son los del plano de calibre."""
+    clave = _clave_rosca(str(designacion or ""))
     if clave is None or clave not in TABLA_ROSCAS:
         raise geo.ErrorGeometria(f"Rosca desconocida: {designacion}")
-    datos = dict(TABLA_ROSCAS[clave], designacion=clave)
-    datos["diametro_menor"] = datos["diametro"] - 2 * (5 / 8) * (math.sqrt(3) / 2) * datos["paso"]
-    return datos
+    return dict(TABLA_ROSCAS[clave], designacion=clave)
+
+
+def tamanos_rosca(familia):
+    """Tamaños nominales de una familia en orden (los del desplegable «Tamaño»)."""
+    if familia not in FAMILIAS_ROSCA:
+        raise geo.ErrorGeometria(f"Familia de rosca desconocida: {familia}")
+    vistos = []
+    for fila in TABLA_ROSCAS.values():
+        if fila["familia"] == familia and fila["tamano"] not in vistos:
+            vistos.append(fila["tamano"])
+    if familia in ("iso_metrica", "trapezoidal"):
+        vistos.sort(key=lambda t: float(re.sub(r"[^\d.]", "", t)))
+    return vistos
+
+
+def designaciones_rosca(familia, tamano):
+    """Designaciones de un tamaño (las del desplegable «Designación»): la de paso grueso o preferido primero."""
+    return [k for k, f in TABLA_ROSCAS.items() if f["familia"] == familia and f["tamano"] == tamano]
+
+
+def familia_de(designacion):
+    """Familia (clave de FAMILIAS_ROSCA) de una designación."""
+    return datos_rosca(designacion)["familia"]
+
+
+def _desfases_clase(datos, clase, interna):
+    """Corrimientos de modelado de la clase (ver tolerancias.desfases_rosca) para una fila de datos_rosca."""
+    from . import tolerancias as tol
+    clase, _ = tol.resolver_clase(datos["familia"], datos["diametro"], datos["paso"], clase, interna)
+    return tol.desfases_rosca(datos["familia"], datos["diametro"], datos["paso"], clase, interna,
+                              datos["diametro_flancos"], datos["diametro_menor"])
+
+
+def diametro_taladro_rosca(designacion, clase="", holgura=0.0):
+    """Diámetro del agujero de una rosca interior modelada: el menor básico, al centro de la tolerancia de la
+    `clase` (6H: D1 + TD1/2) y agrandado por la `holgura` radial de impresión 3D. M10 sin clase: 8,376 mm."""
+    datos = datos_rosca(designacion)
+    return datos["diametro_menor"] + 2 * (_desfases_clase(datos, clase, True)["menor"] + float(holgura))
+
+
+def _perfil_surco(datos, desfase=0.0):
+    """Argumentos de perfil de `_surco_rosca` para una fila de datos_rosca."""
+    return {"angulo": datos["angulo"], "diametro_flancos": datos["diametro_flancos"],
+            "diametro_menor": datos["diametro_menor"], "desfase": float(desfase)}
 
 
 def _helice(origen, eje, x, radio, paso, altura, mano="derecha", angulo=0.0):
@@ -1468,45 +1717,129 @@ def _barrido_helicoidal(perfil, helice):
     return ps.Shape()
 
 
-def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_cara=None):
-    """Sólido helicoidal con la forma del hueco entre filetes (perfil básico ISO/UN de 60°) recortado al
-    tramo [z0, z0 + largo] del eje. Rosca exterior: se le resta al cilindro; interior: al cuerpo agujereado."""
+def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_cara=None, *, angulo=60.0,
+                 diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1):
+    """Sólido helicoidal con la forma del hueco entre filetes recortado al tramo [z0, z0 + largo] del eje. Rosca
+    exterior: se le resta al cilindro; interior: al cuerpo agujereado. Perfil por defecto: el básico ISO/UN de
+    60°; `angulo` (entre flancos), `diametro_flancos` y `diametro_menor` dan el de otras familias (55°, 30°,
+    29°). `desfase` (mm, radial) corre los flancos hacia afuera del material: clase de tolerancia y holgura.
+    `partes=True` devuelve (surco, torneado o None) por separado: restar primero el torneado (un cilindro o un
+    anillo) y después el surco es más rápido que unirlos (M3 con holgura 0,1: 3,6 s → menos de la mitad).
+    `extra` (en pasos) es cuánto sobresale el surco del material; ver `_cortar_rosca`."""
     z = _unit(eje)
     o = np.asarray(origen, float)
-    prof = 5 / 8 * math.sqrt(3) / 2 * paso         # 5H/8: altura del filete básico
-    extra = 0.1 * paso                             # el surco sobresale del material para cortar limpio
+    h60 = math.sqrt(3) / 2
+    d2 = diametro - 2 * (3 / 8) * h60 * paso if diametro_flancos is None else float(diametro_flancos)
+    d1 = diametro - 2 * (5 / 8) * h60 * paso if diametro_menor is None else float(diametro_menor)
+    desfase = float(desfase)
+    rel_extra, extra = extra, extra * paso         # el surco sobresale del material para cortar limpio
+    if not 0 < angulo < 90 or not d1 < d2 < diametro:
+        raise geo.ErrorGeometria("Perfil de rosca inválido.")
+    if abs(desfase) >= (diametro - d1) / 4:
+        raise geo.ErrorGeometria(f"La holgura de la rosca es demasiado grande para su paso: la clase y la holgura "
+                                 f"juntas corren los flancos {abs(desfase):.3g} mm y el máximo es "
+                                 f"{(diametro - d1) / 4:.3g} mm (la mitad de la altura del filete).")
     if interna:
-        if radio_cara is not None and radio_cara >= diametro / 2 - 1e-6:
+        if radio_cara is not None and radio_cara >= diametro / 2 + desfase - 1e-6:
             raise geo.ErrorGeometria("El agujero es más grande que el diámetro mayor de la rosca.")
     else:
         if radio_cara is not None and radio_cara > diametro / 2 + extra - 0.01 * paso:
             raise geo.ErrorGeometria("El cilindro es más grueso que el diámetro mayor de la rosca.")
-        if radio_cara is not None and radio_cara <= diametro / 2 - prof:
+        if radio_cara is not None and radio_cara <= d1 / 2 - desfase:
             raise geo.ErrorGeometria("El cilindro es más fino que el núcleo de la rosca.")
     eje_r = tuple(round(float(c), 12) for c in z)
+    iso = (angulo == 60 and desfase == 0 and abs(d2 - (diametro - 2 * (3 / 8) * h60 * paso)) < 1e-9
+           and abs(d1 - (diametro - 2 * (5 / 8) * h60 * paso)) < 1e-9)
+    perfil = (60.0, None, None, 0.0) if iso else (round(float(angulo), 9), round(d2, 9), round(d1, 9),
+                                                   round(desfase, 9))
     base = _surco_en_origen(round(float(diametro), 9), round(float(paso), 9), round(float(largo), 9), bool(interna),
-                            mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r)
+                            mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r, *perfil,
+                            round(float(rel_extra), 9))
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(*map(float, o + z * z0)))
-    return BRepBuilderAPI_Transform(base, trsf, True).Shape()     # copia: el corte no toca el surco guardado
+    # copias trasladadas: el corte no toca lo guardado en la caché
+    surco, torno = (None if f is None else BRepBuilderAPI_Transform(f, trsf, True).Shape() for f in base)
+    if partes:
+        return surco, torno
+    return surco if torno is None else geo.booleano(surco, torno, "unir")
+
+
+_ANCHO_LIMITE, _ANCHO_TOPE, _ANCHO_TORNO = 0.995, 0.97, 0.93     # anchos del surco en pasos (ver _surco_en_origen)
 
 
 @functools.lru_cache(maxsize=16)
-def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje):
-    """Surco de `_surco_rosca` con el tramo empezando en el origen. Se guarda por (tamaño, largo, eje, mano):
-    roscar varios agujeros iguales arma el barrido helicoidal UNA vez y lo copia trasladado (hallazgo L138:
-    M3 en 4 agujeros tardaba 30 s)."""
+def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angulo=60.0, d2=None, d1=None,
+                     desfase=0.0, rel_extra=0.1):
+    """Surco de `_surco_rosca` con el tramo empezando en el origen. Se guarda por (tamaño, largo, eje, mano,
+    perfil): roscar varios agujeros iguales arma el barrido helicoidal UNA vez y lo copia trasladado (hallazgo
+    L138: M3 en 4 agujeros tardaba 30 s).
+
+    El perfil es un trapecio: a la distancia ρ del eje, el surco exterior mide P/2 + 2·(ρ − d2/2 + desfase)·tan(α/2)
+    a lo largo del eje (el interior, lo que ocupa el filete del tornillo, P/2 − 2·(ρ − d2/2 − desfase)·tan(α/2)).
+    Si con el desfase el surco llegara a medir un paso (las vueltas se tocarían y el barrido sale inválido), se
+    corta a 0,97·P y la cresta que quedaría más fina se tornea (se quita en todo el tramo).
+    d2 = d1 = None: perfil básico ISO/UN de 60° sin desfase, con las mismas cuentas que antes de las familias (las
+    recetas viejas dan exactamente la misma geometría)."""
     z = np.asarray(eje, float)
     x = _perpendicular(z)
-    prof = 5 / 8 * math.sqrt(3) / 2 * paso         # 5H/8: altura del filete básico
-    pend = 2 * math.tan(math.radians(30))          # ancho que gana el surco por mm radial (flancos a 60°)
-    extra = 0.1 * paso                             # el surco sobresale del material para cortar limpio
+    extra = rel_extra * paso                       # el surco sobresale del material para cortar limpio
+    if d2 is None and d1 is None:
+        prof = 5 / 8 * math.sqrt(3) / 2 * paso     # 5H/8: altura del filete básico
+        pend = 2 * math.tan(math.radians(30))      # ancho que gana el surco por mm radial (flancos a 60°)
+        if interna:
+            r_out, w_out = diametro / 2, paso / 8
+            r_in, w_in = diametro / 2 - prof - extra, 3 * paso / 4 + pend * extra
+        else:
+            r_in, w_in = diametro / 2 - prof, paso / 4
+            r_out, w_out = diametro / 2 + extra, 7 * paso / 8 + pend * extra
+        return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out)
+    t = math.tan(math.radians(angulo / 2))
+
+    def ancho(rho):
+        if interna:
+            return paso / 2 - 2 * (rho - (d2 / 2 + desfase)) * t
+        return paso / 2 + 2 * (rho - (d2 / 2 - desfase)) * t
+
+    def radio_de_ancho(fraccion):                  # radio al que el surco mide fraccion·paso
+        delta = (fraccion - 0.5) * paso / (2 * t)
+        return d2 / 2 + desfase - delta if interna else d2 / 2 - desfase + delta
+
     if interna:
-        r_out, w_out = diametro / 2, paso / 8
-        r_in, w_in = diametro / 2 - prof - extra, 3 * paso / 4 + pend * extra
+        r_out, r_in = diametro / 2 + desfase, d1 / 2 - extra
     else:
-        r_in, w_in = diametro / 2 - prof, paso / 4
-        r_out, w_out = diametro / 2 + extra, 7 * paso / 8 + pend * extra
+        r_in, r_out = d1 / 2 - desfase, diametro / 2 + extra
+    torno = r_torno = None
+    # el torneado pasa de largo un pelo en las puntas: si terminara justo donde termina el surco, sus caras planas
+    # coincidirían con las del surco y el corte del surco falla (pasó con M3 y holgura 0,1)
+    eps = 0.02 * paso
+    base_torno, largo_torno = tuple(z * -eps), largo + 2 * eps
+    if interna and ancho(r_in) > _ANCHO_LIMITE * paso:
+        r_in = radio_de_ancho(_ANCHO_TOPE)
+        if r_in > (d1 / 2 if radio_cara is None else radio_cara) - 0.01 * paso:
+            r_torno = radio_de_ancho(_ANCHO_TORNO)
+            torno = geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z))
+    elif not interna and ancho(r_out) > _ANCHO_LIMITE * paso:
+        r_out = radio_de_ancho(_ANCHO_TOPE)
+        afuera = diametro / 2 if radio_cara is None else radio_cara
+        if r_out < afuera + 0.01 * paso:
+            r_torno = radio_de_ancho(_ANCHO_TORNO)
+            grande = geo.cilindro(afuera + extra + 1.0, largo_torno, base=base_torno, eje=tuple(z))
+            torno = geo.booleano(grande, geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z)), "cortar")
+    return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, ancho(r_in), r_out,
+                         ancho(r_out), torno, r_torno, verificar=True)
+
+
+def _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out, torno=None,
+                  r_torno=None, verificar=False):
+    """Barre el trapecio (r_in, w_in)–(r_out, w_out) por la hélice, lo recorta al tramo [0, largo] y, en un
+    agujero, le saca lo que cae dentro del agujero. Devuelve (surco, torno): el torneado de la cresta va aparte.
+    En un agujero, el surco se recorta al radio del torneado `r_torno` (su cara coincide con la del agujero
+    torneado): si los flancos cruzan ese cilindro, el corte falla sin avisar (M3 interior con holgura 0,12 no
+    cortaba nada). En la exterior es al revés: recortar el surco con el cilindro del torneado devuelve el cilindro
+    entero (falla del kernel), y sin recortarlo el corte sale bien.
+    `verificar`: compara el volumen del surco (y, en un agujero, el de lo que queda después del recorte) con la
+    cuenta exacta del barrido helicoidal (`_volumen_surco`). Tr12x3 y Tr20x4 interiores salían mal sin avisar con
+    algunos largos (el recorte no hacía nada o se comía de más); con otro `extra` salen bien (`_EXTRAS`)."""
     o = np.zeros(3)
     z_ini = -paso                                  # la hélice pasa de largo un paso en cada punta
     base = o + z * (z_ini + paso / 2)
@@ -1515,12 +1848,47 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje):
     surco = _barrido_helicoidal(perfil, _helice(base, z, x, (r_in + r_out) / 2, paso, largo + 2 * paso, mano))
     tramo = geo.cilindro(r_out + 1.0, largo, base=(0.0, 0.0, 0.0), eje=tuple(z))
     surco = geo.booleano(surco, tramo, "intersecar")
-    if interna and radio_cara is not None:
+    trapecio = (r_in, w_in, r_out, w_out, largo, paso)
+    if verificar:
+        _exigir_volumen(surco, _volumen_surco(r_in, r_out, *trapecio))
+    adentro = r_torno if (r_torno is not None and interna) else radio_cara
+    if interna and adentro is not None:
         # Se le saca al surco la parte que cae dentro del agujero: cortar el cuerpo con el surco entero falla
         # sin avisar en varios tamaños (M10, M12, M20), y con este paso previo sale bien en todos.
-        hueco = geo.cilindro(radio_cara, largo + 2.0, base=tuple(z * -1.0), eje=tuple(z))
+        hueco = geo.cilindro(adentro, largo + 2.0, base=tuple(z * -1.0), eje=tuple(z))
         surco = geo.booleano(surco, hueco, "cortar")
-    return surco
+        if verificar:
+            _exigir_volumen(surco, _volumen_surco(max(adentro, r_in), r_out, *trapecio))
+    return surco, torno
+
+
+def _volumen_surco(r_a, r_b, r_in, w_in, r_out, w_out, largo, paso):
+    """Volumen exacto de la parte del surco entre los radios r_a y r_b: un barrido helicoidal de una sección del
+    plano del eje recortado a un largo L encierra (L / paso) · ∫ w(ρ)·2πρ dρ, con el ancho w lineal en ρ entre
+    (r_in, w_in) y (r_out, w_out) (Simpson es exacto: el integrando es cuadrático)."""
+    if r_b <= r_a:
+        return 0.0
+    f = lambda r: (w_in + (w_out - w_in) * (r - r_in) / (r_out - r_in)) * 2 * math.pi * r  # noqa: E731
+    return largo / paso * (r_b - r_a) / 6 * (f(r_a) + 4 * f((r_a + r_b) / 2) + f(r_b))
+
+
+def _exigir_volumen(forma, esperado, tolerancia=0.01):
+    if forma is None or geo.esta_vacia(forma) or abs(geo.volumen_exacto(forma) - esperado) > tolerancia * esperado:
+        raise geo.ErrorGeometria("El kernel armó mal el surco de la rosca.")
+
+
+_EXTRAS = (0.1, 0.13, 0.07)     # cuánto sobresale el surco (en pasos): el primero es el de siempre; los otros, reintentos
+
+
+def _armar_surco(armar):
+    """`armar(extra)` con cada margen de `_EXTRAS` hasta que el kernel no falle (ver `_barrer_surco`)."""
+    error = None
+    for extra in _EXTRAS:
+        try:
+            return armar(extra)
+        except geo.ErrorGeometria as e:
+            error = e
+    raise error
 
 
 def _caras_cilindricas(cuerpo):
@@ -1531,15 +1899,20 @@ def _radio_cilindro(cara):
     return BRepAdaptor_Surface(cara).Cylinder().Radius()
 
 
-def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, modelada=True, mano="derecha",
-          interna=None, invertir=False):
-    """Rosca (Thread) de Fusion [GUID-7BD8CD24…, GUID-C37E8172…] sobre una cara cilíndrica del cuerpo.
+def _candidatas_auto(familia):
+    familia = familia or "iso_metrica"
+    if familia not in FAMILIAS_ROSCA:
+        raise geo.ErrorGeometria(f"Familia de rosca desconocida: {familia}")
+    if FAMILIAS_ROSCA[familia]["conica"]:
+        raise geo.ErrorGeometria("Las roscas cónicas no tienen tamaño automático sobre una cara cilíndrica.")
+    return [datos_rosca(k) for k, f in TABLA_ROSCAS.items() if f["familia"] == familia]
 
-    `cara=None`: la cara cilíndrica que mejor calza con la designación (o la de mayor área).
-    `designacion=None`: tamaño métrico automático según el diámetro de la cara, como Fusion. `longitud=None`
-    = largo completo; `desfase` corre el inicio desde el extremo inferior del eje de la cara (el superior con
-    `invertir`). `interna=None` detecta si la cara es un agujero. `modelada=False` = rosca cosmética (la
-    geometría no cambia). Devuelve el cuerpo roscado."""
+
+def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna=None):
+    """Lo que la Rosca de Fusion deduce de la cara antes de cortar: {"cara", "datos" (datos_rosca: el tamaño
+    elegido o el automático de `familia` según el diámetro de la cara), "interna", "radio", "origen", "eje",
+    "zmin", "zmax" (tramo axial de la cara)}. `cara=None`: la cilíndrica que mejor calza con la designación (o
+    la de mayor área)."""
     if cara is None:
         candidatas = _caras_cilindricas(cuerpo)
         if not candidatas:
@@ -1564,22 +1937,58 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
         datos = datos_rosca(designacion)
     else:
         clave_diam = "diametro_menor" if es_interna else "diametro"
-        datos = min((datos_rosca(k) for k in TABLA_ROSCAS if k.startswith("M")),
-                    key=lambda dt: (round(abs(2 * radio - dt[clave_diam]), 6), dt["norma"] != "ISO métrica gruesa"))
+        preferida = {"iso_metrica": "ISO métrica gruesa", "unificada": "Unificada UNC"}.get(familia or "iso_metrica")
+        datos = min(_candidatas_auto(familia),
+                    key=lambda dt: (round(abs(2 * radio - dt[clave_diam]), 6), dt["norma"] != preferida))
     alturas = []           # tramo axial de la cara: se proyectan puntos de sus aristas sobre el eje
     for e in _aristas_de(cara):
         curva = BRepAdaptor_Curve(e)
         a, b = curva.FirstParameter(), curva.LastParameter()
         alturas += [float((_xyz(curva.Value(a + (b - a) * k / 8)) - o) @ z) for k in range(9)]
-    zmin, zmax = min(alturas), max(alturas)
+    return {"cara": cara, "datos": datos, "interna": es_interna, "radio": radio, "origen": o, "eje": z,
+            "zmin": min(alturas), "zmax": max(alturas)}
+
+
+def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, modelada=True, mano="derecha",
+          interna=None, invertir=False, familia=None, clase="", holgura=0.0):
+    """Rosca (Thread) de Fusion [GUID-7BD8CD24…, GUID-C37E8172…] sobre una cara cilíndrica del cuerpo.
+
+    `cara=None`: la cara cilíndrica que mejor calza con la designación (o la de mayor área).
+    `designacion=None`: tamaño automático de `familia` (por defecto la métrica ISO) según el diámetro de la cara,
+    como Fusion. `longitud=None` = largo completo; `desfase` corre el inicio desde el extremo inferior del eje de
+    la cara (el superior con `invertir`). `interna=None` detecta si la cara es un agujero. `modelada=False` =
+    rosca cosmética (la geometría no cambia). `clase` ("6g", "6H", "2A", "auto"…; "" = perfil básico) corre los
+    flancos al centro de la tolerancia de la clase (ISO 965-1 / ASME B1.1) y `holgura` (mm, radial) los corre
+    más, para imprimir en 3D. El perfil es el de la familia: 60° (M, UN), 55° (G), 30° (Tr) o 29° (ACME); las
+    cónicas (R, NPT) solo van cosméticas. Devuelve el cuerpo roscado."""
+    info = analizar_rosca(cuerpo, cara, designacion=designacion, familia=familia, interna=interna)
+    datos, o, z, radio = info["datos"], info["origen"], info["eje"], info["radio"]
+    zmin, zmax = info["zmin"], info["zmax"]
     largo = (zmax - zmin - desfase) if longitud is None else float(longitud)
     if largo <= 1e-6 or desfase < 0 or desfase + largo > zmax - zmin + 1e-6:
         raise geo.ErrorGeometria("La longitud y el desfase de la rosca no entran en la cara.")
     if not modelada:
         return cuerpo
+    if datos["conica"]:
+        raise geo.ErrorGeometria(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica solo va "
+                                 "cosmética (o con Agujero › Roscado cónico).")
+    flancos = _desfases_clase(datos, clase, info["interna"])["flancos"] + float(holgura)
     z0 = zmax - desfase - largo if invertir else zmin + desfase
-    surco = _surco_rosca(o, z, datos["diametro"], datos["paso"], z0, largo, es_interna, mano, radio)
-    return _cortar_helicoidal(cuerpo, surco)          # sale validado y con el surco cortado
+    # el perfil básico de 60° sin desfase es el de siempre (sin controles extra: misma geometría y mismo tiempo)
+    verificar = not (datos["familia"] in ("iso_metrica", "unificada") and flancos == 0)
+
+    def cortar(extra):
+        surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], z0, largo, info["interna"], mano, radio,
+                                    partes=True, extra=extra, **_perfil_surco(datos, flancos))
+        base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")   # cresta sin espesor: se tornea
+        resultado = _cortar_helicoidal(base, surco)   # sale validado y con el surco cortado
+        if verificar:                                 # el corte no puede sacar más que el surco entero
+            quitado = geo.volumen_exacto(base) - geo.volumen_exacto(resultado)
+            if not 0 < quitado <= 1.01 * geo.volumen_exacto(surco):
+                raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
+        return resultado
+
+    return _armar_surco(cortar)
 
 
 def _cortar_helicoidal(cuerpo, herramienta):

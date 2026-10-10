@@ -479,7 +479,7 @@ def test_clic_sobre_la_cara_engancha_al_centro(app_qt):
     cara["punto"] = np.asarray(o, float) + np.asarray(r, float) * t
     assert np.linalg.norm(cara["punto"] - centro) > 0.05
     panel.show()
-    panel._activar(panel.campos[0])
+    panel._activar(next(c for c in panel.campos if c.clave == "colocacion"))
     panel._elegida(cara)
     punto = np.asarray(panel.valores["colocacion"][0]["punto"], float)
     assert punto == pytest.approx(centro, abs=1e-6)

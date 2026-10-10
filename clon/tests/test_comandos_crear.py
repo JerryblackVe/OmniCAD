@@ -122,6 +122,208 @@ def test_rosca_cosmetica_bobina_y_tuberia():
     assert g.volumen(_ultimo(doc).forma) == pytest.approx(math.pi * 4 * 40, rel=1e-4)
 
 
+def _caja_y_cara_de_arriba(alto=10):
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="40", alto=str(alto)))
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    arriba = next(s for s in refs.subformas(forma, "cara") if np.allclose(refs.firma_cara(s)["centro"], (20, 20, alto)))
+    return doc, forma, arriba
+
+
+def _clic(doc, forma, cara, punto):
+    hit = _h(doc, refs.referencia("op1.c1", cara, forma))
+    hit["punto"] = np.array(punto, float)
+    return hit
+
+
+def _volumen(doc):
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    assert g.es_valida(forma)
+    return g.volumen(forma)
+
+
+def test_agujero_con_holgura_iso_273_y_conico():
+    from omnicad.ui.comandos.crear import Agujero
+    doc, forma, arriba = _caja_y_cara_de_arriba()
+    op = _ejecutar(doc, Agujero, colocacion=[_clic(doc, forma, arriba, (10, 10, 10))], extension="todo",
+                   rosca="holgura", tam_holgura="M8", ajuste="normal")
+    assert (op.p["rosca"], op.p["designacion"], op.p["ajuste"]) == ("holgura", "M8", "normal")
+    assert _volumen(doc) == pytest.approx(16000 - math.pi * 4.5 ** 2 * 10, rel=1e-6)      # ISO 273 M8 media: Ø9
+    antes = _volumen(doc)
+    op = _ejecutar(doc, Agujero, colocacion=[_clic(doc, forma, arriba, (30, 30, 10))], rosca="conico",
+                   tipo_conica="bsp_conica", tam_bsp_conica="1/4", profundidad="8 mm", punta="plana")
+    assert op.p["designacion"] == "R1/4"
+    r0 = (13.157 - 2 * 2 / 3 * 0.960491 * 25.4 / 19) / 2                                    # Ø menor en la boca
+    r1 = r0 - 8 / 32                                                                        # conicidad 1:16
+    assert antes - _volumen(doc) == pytest.approx(math.pi * 8 / 3 * (r0 * r0 + r0 * r1 + r1 * r1), rel=1e-4)
+    assert any("cónico" in r.mensaje for r in doc.resultados if r.mensaje)
+
+
+def test_agujero_roscado_con_tipo_tamano_designacion_y_clase():
+    from omnicad.nucleo import solidos_crear as sc
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Agujero
+    doc, forma, arriba = _caja_y_cara_de_arriba()
+    i = sc.tamanos_rosca("iso_metrica").index("M8")
+    op = _ejecutar(doc, Agujero, colocacion=[_clic(doc, forma, arriba, (20, 20, 10))], profundidad="8 mm",
+                   rosca="modelada", tipo_rosca="iso_metrica", tam_iso_metrica="M8", **{f"des_iso_metrica_{i}": "M8x1"},
+                   clase_iso_metrica="6H")
+    assert (op.p["designacion"], op.p["clase_rosca"]) == ("M8x1", "6H")
+    ctx = ContextoComando(doc, op=op)
+    cmd = Agujero()
+    v = cmd.desde_op(op, ctx)
+    assert (v["tipo_rosca"], v["tam_iso_metrica"], v[f"des_iso_metrica_{i}"], v["clase_iso_metrica"]) == (
+        "iso_metrica", "M8", "M8x1", "6H")
+    texto = cmd._info(v, ctx)
+    assert "M8x1" in texto and "6H" in texto and "ISO 965-1" in texto
+    otra = cmd.construir({c.clave: c.defecto for c in cmd.campos(ctx)} | v, ctx)
+    assert {k: otra.p[k] for k in ("designacion", "clase_rosca", "rosca")} == {
+        "designacion": "M8x1", "clase_rosca": "6H", "rosca": "modelada"}
+
+
+def test_agujero_hasta_una_cara_por_referencias_y_desde_boceto():
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Agujero
+    doc, forma, arriba = _caja_y_cara_de_arriba(alto=20)
+    plano = OpPlano(doc.nuevo_id(), "Plano", base="XY", distancia="5 mm")
+    doc.agregar(plano)
+    op = _ejecutar(doc, Agujero, colocacion=[_clic(doc, forma, arriba, (10, 10, 20))], extension="hasta",
+                   hasta=[_h(doc, {"tipo": "plano", "id": plano.id})], diametro="4 mm", punta="plana")
+    assert op.p["extension"] == "hasta"
+    assert 32000 - _volumen(doc) == pytest.approx(math.pi * 4 * 15, rel=1e-6)            # de z = 20 a z = 5
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    arriba = next(s for s in refs.subformas(forma, "cara") if refs.firma_cara(s)["geom"] == "plano"
+                  and np.allclose(refs.firma_cara(s)["centro"][2], 20))
+    aristas = [s for s in refs.subformas(forma, "arista") if refs.firma_arista(s)["geom"] == "linea"
+               and np.allclose(refs.firma_arista(s)["medio"][2], 20)]
+    x40 = next(s for s in aristas if np.allclose([p[0] for p in refs.firma_arista(s)["extremos"]], 40))
+    y0 = next(s for s in aristas if np.allclose([p[1] for p in refs.firma_arista(s)["extremos"]], 0))
+    hits = {k: [_h(doc, refs.referencia("op1.c1", s, forma))] for k, s in
+            (("ref_cara", arriba), ("ref_arista1", x40), ("ref_arista2", y0))}
+    antes = _volumen(doc)
+    op = _ejecutar(doc, Agujero, posicion="referencias", ref_distancia1="6 mm", ref_distancia2="9 mm",
+                   diametro="3 mm", profundidad="4 mm", punta="plana", **hits)
+    assert op.p["ref_cara"] and len(op.p["ref_aristas"]) == 2
+    assert antes - _volumen(doc) == pytest.approx(math.pi * 2.25 * 4, rel=1e-6)
+    ctx = ContextoComando(doc, op=op)
+    (punto, direccion), = op._colocaciones(ctx.estado, ctx)
+    assert punto == pytest.approx([34, 9, 20]) and direccion == pytest.approx([0, 0, -1])
+    assert Agujero().desde_op(op, ctx)["posicion"] == "referencias"
+    b = Boceto()
+    pids = [b.agregar_punto(5, 35), b.agregar_punto(35, 35)]
+    sk = OpBoceto(doc.nuevo_id(), plano="cara", marco=g.plano_de_cara(arriba).marco(), boceto=b)
+    doc.agregar(sk)
+    antes = _volumen(doc)
+    op = _ejecutar(doc, Agujero, posicion="boceto", diametro="2 mm", profundidad="3 mm", punta="plana",
+                   puntos_boceto=[_h(doc, {"tipo": "punto_boceto", "boceto": sk.id, "punto": p}) for p in pids])
+    assert antes - _volumen(doc) == pytest.approx(2 * math.pi * 3, rel=1e-6)
+    assert Agujero().desde_op(op, ContextoComando(doc, op=op))["posicion"] == "boceto"
+
+
+def test_agujero_de_una_receta_vieja_da_el_mismo_volumen():
+    """Una receta de antes de la clase, la holgura y la extensión «hasta» (sin esas claves) se calcula igual."""
+    from omnicad.nucleo import solidos_crear as sc
+    from omnicad.timeline.operaciones import operacion_desde_dict
+    doc, forma, arriba = _caja_y_cara_de_arriba()
+    vieja = {"tipo": "agujero", "id": "op2", "nombre": "Agujero1", "params": {
+        "posiciones": [], "puntos_cara": [{"cara": refs.referencia("op1.c1", arriba, forma), "punto": [20, 20, 10]}],
+        "tipo": "simple", "diametro": "6 mm", "extension": "distancia", "profundidad": "4 mm", "punta": "angulo",
+        "angulo_punta": "118 deg", "diam_abocardado": "10 mm", "prof_abocardado": "4 mm", "diam_avellanado": "12 mm",
+        "angulo_avellanado": "90 deg", "rosca": "modelada", "designacion": "M6", "invertir": False, "objetivos": []}}
+    doc.agregar(operacion_desde_dict(vieja))
+    herramienta = sc.herramienta_agujero((20, 20, 10), (0, 0, -1), profundidad=4, roscado="M6", diametro=6)
+    esperado = g.volumen(g.booleano(forma, herramienta, "cortar"))
+    assert _volumen(doc) == pytest.approx(esperado, rel=1e-9)
+
+
+def test_rosca_dialogo_tipo_tamano_designacion_clase_y_recordar():
+    from omnicad.nucleo import solidos_crear as sc
+    from omnicad.timeline.ops_solido import OpRosca
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Rosca
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="cilindro", radio="10", alto="20"))
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    lateral = next(s for s in refs.subformas(forma, "cara") if refs.firma_cara(s)["geom"] == "cilindro")
+    cara = [_h(doc, refs.referencia("op1.c1", lateral, forma))]
+    Rosca._recuerdo = {}
+    op = _ejecutar(doc, Rosca, caras=cara, tipo_rosca="trapezoidal", tam_trapezoidal="Tr20", recordar=True,
+                   largo_completo=False, longitud="12 mm")
+    assert (op.p["designacion"], op.p["familia"], op.p["clase_rosca"]) == ("Tr20x4", "trapezoidal", "")
+    d1 = sc.datos_rosca("Tr20x4")["diametro_menor"]
+    quitado = math.pi * 100 * 20 - _volumen(doc)
+    assert quitado == pytest.approx(0.5 * math.pi * (100 - (d1 / 2) ** 2) * 12, rel=0.03)  # perfil simétrico de 30°
+    ctx = ContextoComando(doc)
+    campos = {c.clave: c for c in Rosca().campos(ctx)}
+    assert campos["tipo_rosca"].defecto == "trapezoidal" and campos["tam_trapezoidal"].defecto == "Tr20"
+    assert campos["recordar"].defecto is True
+    v = Rosca().desde_op(op, ContextoComando(doc, op=op))
+    assert (v["tipo_rosca"], v["tam_trapezoidal"]) == ("trapezoidal", "Tr20")
+    Rosca._recuerdo = {}
+    # métrica automática según la cara con clase 6g: la clase llega al paso y a la información del diálogo
+    doc2 = Documento()
+    doc2.agregar(OpPrimitiva(doc2.nuevo_id(), forma="cilindro", radio="5", alto="12"))
+    forma2 = doc2.estado_final.cuerpos["op1.c1"].forma
+    lat2 = next(s for s in refs.subformas(forma2, "cara") if refs.firma_cara(s)["geom"] == "cilindro")
+    caras2 = [_h(doc2, refs.referencia("op1.c1", lat2, forma2))]
+    op = _ejecutar(doc2, Rosca, caras=caras2, clase_iso_metrica="6g", largo_completo=False, longitud="6 mm")
+    assert (op.p["designacion"], op.p["clase_rosca"]) == ("", "6g") and op.roscas[0]["designacion"] == "M10x1.5"
+    v = {c.clave: c.defecto for c in Rosca().campos(ContextoComando(doc2))} | {"caras": caras2, "tam_iso_metrica": "M10",
+                                                                             "clase_iso_metrica": "6g"}
+    assert "9.732–9.968" in Rosca()._info(v, ContextoComando(doc2))
+    # receta vieja (sin familia ni clase): el diálogo la muestra sin clase, para no cambiar su geometría al editar
+    vieja = OpRosca("op9", "Rosca9", caras=[c["ref"] for c in caras2], designacion="M10")
+    v = Rosca().desde_op(vieja, ContextoComando(doc2))
+    assert v["clase_iso_metrica"] == "" and v["tipo_rosca"] == "iso_metrica"
+
+
+def test_paneles_de_agujero_y_rosca_cambian_campos_y_calculan_la_vista_previa():
+    """El panel real: cada tipo de rosca muestra sus campos (tamaño por tipo, designación por tamaño) y la vista
+    previa sale sin error."""
+    from omnicad.ui.comando import ContextoComando, PanelComando
+    from omnicad.ui.comandos.crear import Agujero, Rosca
+    from omnicad.ui.visor3d import Visor3D
+    doc, forma, arriba = _caja_y_cara_de_arriba()
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_final)
+    panel = PanelComando(Agujero(), ContextoComando(doc), visor, {"colocacion": [_clic(doc, forma, arriba, (20, 20, 10))]})
+
+    def visibles():
+        return {c.clave for c in panel.campos if panel._visible(c)}
+    assert {"colocacion", "diametro"} <= visibles() and "tam_holgura" not in visibles()
+    for rosca, deben, no in (("holgura", {"tam_holgura", "ajuste", "info_rosca"}, {"diametro", "tipo_rosca"}),
+                             ("modelada", {"tipo_rosca", "tam_iso_metrica", "clase_iso_metrica", "holgura_3d"},
+                              {"diametro", "tam_holgura"}),
+                             ("cosmetica", {"tipo_rosca", "diametro"}, {"clase_iso_metrica", "holgura_3d"}),
+                             ("conico", {"tipo_conica", "tam_bsp_conica"}, {"tipo_rosca"})):
+        panel.set_valor("rosca", rosca)
+        panel._calcular_previa()
+        assert deben <= visibles() and not (no & visibles()), rosca
+        assert panel.ultima_op is not None and panel._previa_ok, (rosca, panel.mensaje.text())
+    panel.set_valor("rosca", "modelada")
+    panel.set_valor("tipo_rosca", "unificada")
+    assert {"tam_unificada", "clase_unificada"} <= visibles() and "tam_iso_metrica" not in visibles()
+    panel.set_valor("posicion", "referencias")
+    assert {"ref_cara", "ref_arista1", "ref_distancia1"} <= visibles() and "colocacion" not in visibles()
+    panel.set_valor("extension", "hasta")
+    assert {"hasta", "desfase_hasta"} <= visibles()
+    panel.cancelar()
+    doc2 = Documento()
+    doc2.agregar(OpPrimitiva(doc2.nuevo_id(), forma="cilindro", radio="5", alto="12"))
+    forma2 = doc2.estado_final.cuerpos["op1.c1"].forma
+    lateral = next(s for s in refs.subformas(forma2, "cara") if refs.firma_cara(s)["geom"] == "cilindro")
+    panel = PanelComando(Rosca(), ContextoComando(doc2), visor,
+                         {"caras": [_h(doc2, refs.referencia("op1.c1", lateral, forma2))], "modelada": False})
+    panel.set_valor("tipo_rosca", "iso_metrica")
+    panel.set_valor("tam_iso_metrica", "M10")
+    panel._calcular_previa()
+    assert "M10x1.5" in panel.widgets["info_rosca"].text() and "6g" in panel.widgets["info_rosca"].text()
+    from omnicad.nucleo import solidos_crear as sc
+    i = sc.tamanos_rosca("iso_metrica").index("M10")
+    assert f"des_iso_metrica_{i}" in visibles()                       # M10 tiene tres pasos: hay que elegir
+    panel.cancelar()
+
+
 def test_patrones_simetria_envolvente_y_relleno():
     from omnicad.ui.comandos.crear import (PatronCircular, PatronRectangular, RellenoContorno, Simetria,
                                                SolidoEnvolvente)

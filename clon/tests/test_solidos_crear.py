@@ -450,6 +450,164 @@ def test_corte_helicoidal_que_no_toca_el_cuerpo_avisa():
         sc._cortar_helicoidal(placa, lejos)
 
 
+# ---------------------------------------------------------------- 8b. familias, clases y holgura de rosca
+def test_recetas_viejas_de_rosca_y_agujero_dan_el_mismo_volumen():
+    """Volúmenes medidos con el código de antes de las familias de rosca (perfil básico ISO/UN de 60°): las recetas
+    viejas tienen que dar EXACTAMENTE la misma geometría (mismas cuentas, misma caché)."""
+    sc._surco_en_origen.cache_clear()
+    cil = g.cilindro(3, 10)
+    assert g.volumen(sc.rosca(cil, longitud=6)) == pytest.approx(250.84060112026796, rel=1e-9)
+    assert g.volumen(sc.rosca(cil, designacion="M6", longitud=6, mano="izquierda")) == pytest.approx(
+        250.84066914546972, rel=1e-9)
+
+
+def test_recetas_viejas_de_agujero_roscado_y_rosca_interior_dan_el_mismo_volumen():
+    caja = g.caja(16, 16, 10, (-8, -8, 0))
+    h = sc.herramienta_agujero((0, 0, 10), (0, 0, -1), roscado="M8", profundidad=6)
+    assert g.volumen(g.booleano(caja, h, "cortar")) == pytest.approx(2288.7455586392284, rel=1e-9)
+    dd = sc.datos_rosca("1/4-20 UNC")
+    blo = g.booleano(g.caja(14, 14, 8, (-7, -7, 0)), g.cilindro(dd["diametro_menor"] / 2, 8), "cortar")
+    assert g.volumen(sc.rosca(blo, designacion="1/4-20 UNC")) == pytest.approx(1370.912302636908, rel=1e-9)
+
+
+def test_familias_de_rosca_con_datos_de_sus_normas():
+    assert set(sc.FAMILIAS_ROSCA) == {"iso_metrica", "unificada", "trapezoidal", "acme", "bsp_paralela", "bsp_conica",
+                                      "npt"}
+    from omnicad.timeline.ops_solido import FAMILIAS_ROSCA
+    assert FAMILIAS_ROSCA == tuple(sc.FAMILIAS_ROSCA)
+    tr = sc.datos_rosca("Tr20x4")                                            # ISO 2904: d2 = d − P/2, D1 = d − P
+    assert (tr["familia"], tr["angulo"], tr["diametro_flancos"], tr["diametro_menor"]) == ("trapezoidal", 30, 18, 16)
+    assert sc.datos_rosca("tr 20")["designacion"] == "Tr20x4"
+    acme = sc.datos_rosca("1/2-10 ACME")                                     # ASME B1.5: 29°, alto P/2
+    assert acme["angulo"] == 29 and acme["diametro_flancos"] == pytest.approx(12.7 - 1.27)
+    g12 = sc.datos_rosca("G1/2")                                             # ISO 228-1: 20,955 / 18,631, 14 hilos
+    assert g12["diametro"] == 20.955 and g12["paso"] == pytest.approx(25.4 / 14)
+    assert g12["diametro_menor"] == pytest.approx(18.631, abs=1e-3) and g12["angulo"] == 55
+    assert sc.datos_rosca("Rc 1/2")["designacion"] == "R1/2" and sc.datos_rosca("R1/2")["conica"]
+    npt = sc.datos_rosca("1/2 NPT")                                          # B1.20.1: E1 = 0,77843 in
+    assert npt["designacion"] == "1/2-14 NPT" and npt["diametro_flancos"] == pytest.approx(0.77843 * 25.4, abs=1e-3)
+    assert npt["conicidad"] == pytest.approx(1 / 16)
+    assert sc.datos_rosca("#12-24")["diametro"] == pytest.approx(0.216 * 25.4)
+    assert sc.datos_rosca("1-1/2-6 UNC")["paso"] == pytest.approx(25.4 / 6)
+    assert sc.designaciones_rosca("iso_metrica", "M10") == ["M10x1.5", "M10x1.25", "M10x1"]
+    assert sc.tamanos_rosca("trapezoidal")[:3] == ["Tr8", "Tr10", "Tr12"]
+    for clave in sc.TABLA_ROSCAS:                                            # toda la tabla se vuelve a leer
+        assert sc.datos_rosca(clave)["designacion"] == clave
+    with pytest.raises(g.ErrorGeometria):
+        sc.datos_rosca("Tr21x4")
+
+
+def test_paso_libre_iso_273():
+    assert sc.diametro_paso_libre("M8") == 9.0
+    assert sc.diametro_paso_libre("M8x1.25", "fino") == 8.4 and sc.diametro_paso_libre("M8", "grueso") == 10.0
+    assert sc.diametro_paso_libre("M3", "normal") == 3.4 and sc.diametro_paso_libre("M64", "grueso") == 74.0
+    with pytest.raises(g.ErrorGeometria):
+        sc.diametro_paso_libre("1/4-20")
+
+
+@pytest.mark.parametrize("designacion", ["Tr20x4", "1/2-10 ACME", "G1/2"])
+def test_roscas_de_otras_familias_modeladas(designacion):
+    """Perfil de su norma (30°, 29° o 55°): el surco de un perfil simétrico ocupa la mitad del anillo entre el
+    diámetro mayor y el menor (exterior e interior)."""
+    dat = sc.datos_rosca(designacion)
+    d, d1 = dat["diametro"], dat["diametro_menor"]
+    largo = 3 * dat["paso"]
+    cil = g.cilindro(d / 2, largo + 4)
+    exterior = sc.rosca(cil, designacion=designacion, longitud=largo)
+    anillo = math.pi * ((d / 2) ** 2 - (d1 / 2) ** 2) * largo
+    assert g.es_valida(exterior) and len(g.solidos(exterior)) == 1
+    assert g.volumen(cil) - g.volumen(exterior) == pytest.approx(0.5 * anillo, rel=0.03)
+    bloque = g.booleano(g.caja(2 * d, 2 * d, largo, (-d, -d, 0)), g.cilindro(d1 / 2, largo), "cortar")
+    interior = sc.rosca(bloque, designacion=designacion)
+    assert g.es_valida(interior)
+    assert g.volumen(bloque) - g.volumen(interior) == pytest.approx(0.5 * anillo, rel=0.03)
+
+
+def test_rosca_con_clase():
+    d1 = sc.datos_rosca("M10")["diametro_menor"]
+    cil = g.cilindro(5, 10)
+    basica = g.volumen(cil) - g.volumen(sc.rosca(cil, designacion="M10", longitud=6))
+    con_6g = g.volumen(cil) - g.volumen(sc.rosca(cil, designacion="M10", longitud=6, clase="6g"))
+    # 6g corre todo el perfil δ = (0,032 + 0,132/2)/2 = 0,049 mm hacia el eje: el surco gana 2·δ·tan30° de ancho
+    # entre el núcleo y el cilindro, más una franja de δ de alto y P/4 de ancho en el fondo (por vuelta de 1,5 mm)
+    delta = (0.032 + 0.132 / 2) / 2
+    area = 2 * delta * math.tan(math.radians(30)) * (5 - d1 / 2) + delta * 1.5 / 4
+    assert con_6g - basica == pytest.approx(area * 2 * math.pi * (5 + d1 / 2) / 2 * 6 / 1.5, rel=0.05)
+    with pytest.raises(g.ErrorGeometria):
+        sc.rosca(cil, designacion="M10", longitud=6, clase="6H")              # clase de agujero en un eje
+
+
+def test_rosca_con_holgura_para_imprimir():
+    cil = g.cilindro(5, 8)
+    con_6g = g.volumen(cil) - g.volumen(sc.rosca(cil, designacion="M10", longitud=4.5, clase="6g"))
+    holgada = g.volumen(cil) - g.volumen(sc.rosca(cil, designacion="M10", longitud=4.5, clase="6g", holgura=0.1))
+    assert holgada > con_6g + 1.0
+    with pytest.raises(g.ErrorGeometria):
+        sc.rosca(cil, designacion="M10", longitud=4.5, holgura=0.5)           # más que la mitad del filete
+    # M3 con holgura 0,12: la cresta queda sin espesor y se tornea (antes el surco se tocaba consigo mismo). Se va
+    # el 84 % del anillo entre el diámetro menor y el mayor (cuenta a mano del perfil corrido 0,12 mm).
+    d1 = sc.datos_rosca("M3")["diametro_menor"]
+    bloque = g.booleano(g.caja(6, 6, 3, (-3, -3, 0)), g.cilindro(d1 / 2, 3), "cortar")
+    roscado = sc.rosca(bloque, designacion="M3", holgura=0.12)
+    assert g.es_valida(roscado)
+    assert g.volumen(bloque) - g.volumen(roscado) == pytest.approx(0.84 * math.pi * (1.5 ** 2 - (d1 / 2) ** 2) * 3,
+                                                                   rel=0.05)
+
+
+def test_agujero_roscado_con_clase_y_conico():
+    assert sc.diametro_taladro_rosca("M10") == pytest.approx(8.376, abs=1e-3)
+    assert sc.diametro_taladro_rosca("M10", "6H") == pytest.approx(8.376 + 0.150, abs=1e-3)   # D1 + TD1/2
+    assert sc.diametro_taladro_rosca("M10", "6H", 0.1) == pytest.approx(8.726, abs=1e-3)
+    h = sc.herramienta_agujero((0, 0, 20), (0, 0, -1), roscado="M10", clase="6H", profundidad=10, punta="plana")
+    basico = sc.herramienta_agujero((0, 0, 20), (0, 0, -1), roscado="M10", profundidad=10, punta="plana")
+    assert g.es_valida(h)
+
+    def herramienta_esperada(r_agujero, desfase):
+        """Cilindro del agujero + la parte del filete del tornillo que queda afuera: (L/P)·∫ w(ρ)·2πρ dρ, con el
+        ancho del filete w(ρ) = P/2 − 2·(ρ − d2/2 − desfase)·tan 30° hasta el diámetro mayor corrido."""
+        d2, n = 10 - 0.75 * math.sqrt(3) / 2 * 1.5, 2000
+        r_fin = 5 + desfase
+        paso_r = (r_fin - r_agujero) / n
+        integral = sum((0.75 - 2 * (r - d2 / 2 - desfase) * math.tan(math.radians(30))) * 2 * math.pi * r * paso_r
+                       for r in (r_agujero + (k + 0.5) * paso_r for k in range(n)))
+        return math.pi * r_agujero ** 2 * 10 + 10 / 1.5 * integral
+    # 6H: agujero Ø8,526 (D1 + TD1/2) y flancos corridos (TD2/2)/2 = 0,045 mm
+    assert g.volumen(h) == pytest.approx(herramienta_esperada(8.5262 / 2, 0.045), rel=1e-4)
+    assert g.volumen(basico) == pytest.approx(herramienta_esperada(sc.datos_rosca("M10")["diametro_menor"] / 2, 0),
+                                              rel=1e-4)
+    r = sc.datos_rosca("R1/2")["diametro_menor"] / 2                         # cono 1:16 desde la boca
+    cono = sc.herramienta_agujero((0, 0, 20), (0, 0, -1), diametro=2 * r, conicidad=1 / 16, profundidad=15,
+                                  punta="plana")
+    r1 = r - 15 / 32
+    assert g.volumen(cono) == pytest.approx(math.pi * 15 / 3 * (r * r + r * r1 + r1 * r1), rel=1e-6)
+    assert g.es_valida(cono)
+    with pytest.raises(g.ErrorGeometria):
+        sc.herramienta_agujero((0, 0, 20), (0, 0, -1), roscado="R1/2", profundidad=10)
+
+
+def test_agujero_hasta_y_por_referencias():
+    caja = g.caja(40, 30, 20)
+    arriba = next(c for c in g.caras(caja) if g.plano_de_cara(c) is not None
+                  and np.allclose(g.plano_de_cara(c).normal, Z) and g.centro_masa(c, superficie=True)[2] > 19)
+    abajo = next(c for c in g.caras(caja) if g.centro_masa(c, superficie=True)[2] < 1e-6)
+    assert sc.profundidad_hasta((5, 5, 20), (0, 0, -1), abajo) == pytest.approx(20)
+    assert sc.profundidad_hasta((5, 5, 20), (0, 0, -1), g.Plano("XY", 4), desfase=1) == pytest.approx(17)
+    assert sc.profundidad_hasta((5, 5, 25), (0, 0, -1), caja) == pytest.approx(5)          # primer corte del cuerpo
+    with pytest.raises(g.ErrorGeometria):
+        sc.profundidad_hasta((5, 5, 20), (1, 0, 0), g.Plano("XY"))
+    aristas = [e for e in rf.subformas(caja, "arista")
+               if np.allclose(rf.firma_arista(e)["medio"][2], 20) and rf.firma_arista(e)["geom"] == "linea"]
+
+    def arista_en(eje, valor):
+        return next(e for e in aristas if np.allclose([q[eje] for q in rf.firma_arista(e)["extremos"]], valor))
+    p = sc.punto_por_referencias(arriba, [arista_en(0, 0), arista_en(1, 0)], [7, 4])
+    assert p == pytest.approx([7, 4, 20])
+    p = sc.punto_por_referencias(arriba, [arista_en(0, 40), arista_en(1, 30)], [7, 4])   # hacia adentro de la cara
+    assert p == pytest.approx([33, 26, 20])
+    with pytest.raises(g.ErrorGeometria):
+        sc.punto_por_referencias(arriba, [arista_en(0, 0), arista_en(0, 40)], [7, 4])   # paralelas
+
+
 # ---------------------------------------------------------------- 9. bobina
 def test_bobina_secciones_y_posiciones():
     # Pappus para un barrido helicoidal: área de la sección · 2π · radio del centroide · vueltas (la hélice

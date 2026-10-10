@@ -33,6 +33,16 @@ Toda falla vuelve como `{"ok": false, "error_kind", "mensaje", "pistas"}`. Decid
 
 Los `avisos` de una respuesta correcta no son fallas, pero conviene leerlos.
 
+## Agujeros, roscas y ajustes
+
+- `create_hole` con `hole_tap="clearance"` (paso libre ISO 273 para `thread="M8"`, `fit="close"`/normal/loose),
+  `hole_tap="modeled"` (rosca real; `thread_class="6H"`, "2B" o "auto"; `print_clearance=0.2` en mm para imprimir
+  en 3D) o `hole_tap="taper"` (R/NPT, agujero cónico 1:16). `to="<Z"` lleva el agujero hasta una cara, plano o
+  cuerpo; `reference_edges=[...]` con `reference_distances=[...]` lo ubica a distancia de dos aristas (paramétrico).
+- `create_thread`: rosca sobre caras cilíndricas (eje o agujero); sin `thread="..."`, tamaño automático del tipo.
+- `thread_info` (tipos, tamaños, diámetros límite de una clase) y `fit_tolerance` (ajuste ISO 286, p. ej. H7/g6)
+  solo consultan: no cambian el documento.
+
 ## Atajos
 
 - `get_recipe` / `apply_recipe`: foto y restauración de todo el documento en JSON.
