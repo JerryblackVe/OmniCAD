@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-137 herramientas en 12 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+143 herramientas en 12 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 18 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 24 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 6 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
@@ -957,6 +957,12 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth) o pasantes (through_all). |
 | [`draft`](#draft) | sí | Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. |
+| [`gear_info`](#gear_info) | no | Calcula las medidas de un engranaje cilíndrico de evolvente sin modelarlo (ISO 21771, perfil de referencia ISO 53): diámetros primitivo, base, exterior y de fondo, paso, espesor del diente, dientes mínimos sin socavado (criterio estricto: 18 con 20°; el límite teórico, 17,1, va en min_teeth_theoretical) y desplazamiento mínimo. |
+| [`create_gear`](#create_gear) | sí | Crea un engranaje cilíndrico de evolvente (perfil de referencia ISO 53), recto o, con helix_angle, helicoidal, como un paso del timeline (tipo «engranaje»; medidas como expresiones con parámetros). |
+| [`create_gear_pair`](#create_gear_pair) | sí | Crea dos engranajes de evolvente que engranan, en UN paso del timeline: el segundo a la distancia entre centros de trabajo (m·(z1+z2)/2 sin desplazamientos), en la dirección dada y girado medio diente para que los dientes entren en los huecos (con hélice, el segundo es de la mano contraria). |
+| [`create_rack`](#create_rack) | sí | Crea una cremallera recta con el perfil de referencia ISO 53 (paso π·módulo, flancos rectos al ángulo de presión) como un paso del timeline. |
+| [`create_sprocket`](#create_sprocket) | sí | Crea una rueda dentada para cadena de rodillos con la forma de diente de ISO 606 (hueco medio) como un paso del timeline. chain elige la cadena (05B…16B, 08A…16A = ANSI 40…80) o 'custom' con pitch y roller_diameter propios; sin width, el ancho del diente sale de la norma (0,93 o 0,95 × ancho interior de la cadena). |
+| [`create_shaft`](#create_shaft) | sí | Asistente de ejes: crea un eje escalonado de revolución a partir de una tabla de tramos (diámetro, largo y, en cada extremo, chaflán a 45° o empalme) como un paso del timeline (tipo «eje_escalonado»). |
 
 ### `extrude`
 
@@ -1218,6 +1224,116 @@ Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el pl
   - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de extracción.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
 - CLI: `omnicad call draft --doc pieza.omnicad faces=… angle=…`
+
+### `gear_info`
+
+Calcula las medidas de un engranaje cilíndrico de evolvente sin modelarlo (ISO 21771, perfil de referencia ISO 53): diámetros primitivo, base, exterior y de fondo, paso, espesor del diente, dientes mínimos sin socavado (criterio estricto: 18 con 20°; el límite teórico, 17,1, va en min_teeth_theoretical) y desplazamiento mínimo. Con teeth2, también el par exterior: distancia entre centros, relación, ángulo de presión de trabajo, grado de recubrimiento e interferencia.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `module` (número; obligatorio): módulo normal en mm (en un engranaje recto, el módulo).
+  - `teeth` (entero; obligatorio): cantidad de dientes.
+  - `pressure_angle` (número; opcional, por defecto `20`): ángulo de presión en grados (20 es el normal de ISO 53).
+  - `helix_angle` (número; opcional, por defecto `0`): ángulo de hélice en grados (0 = recto; positivo = hélice a derechas).
+  - `profile_shift` (número; opcional, por defecto `0`): coeficiente de desplazamiento de perfil x (0 = sin desplazar).
+  - `clearance` (número; opcional, por defecto `0.25`): holgura de fondo como fracción del módulo (0.25 en ISO 53).
+  - `backlash` (número; opcional, por defecto `0`): juego circunferencial del par en el primitivo, en mm (cada rueda adelgaza la mitad).
+  - `teeth2` (entero; opcional, por defecto `null`): dientes del segundo engranaje para calcular el par; vacío = solo este engranaje.
+  - `profile_shift2` (número; opcional, por defecto `0`): desplazamiento de perfil del segundo engranaje.
+- CLI: `omnicad call gear_info --doc pieza.omnicad module=… teeth=…`
+
+### `create_gear`
+
+Crea un engranaje cilíndrico de evolvente (perfil de referencia ISO 53), recto o, con helix_angle, helicoidal, como un paso del timeline (tipo «engranaje»; medidas como expresiones con parámetros). El eje sigue la normal del plano y el primer diente apunta al eje x del plano. Devuelve también sus diámetros (gear). Para dos que engranan, create_gear_pair.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `module` (número o expresión; obligatorio): módulo normal en mm (número o expresión).
+  - `teeth` (número o expresión; obligatorio): cantidad de dientes (entero, o expresión que dé un entero).
+  - `width` (número o expresión; opcional, por defecto `10`): ancho del engranaje a lo largo del eje, en mm.
+  - `pressure_angle` (número o expresión; opcional, por defecto `20`): ángulo de presión en grados (20 es el normal).
+  - `helix_angle` (número o expresión; opcional, por defecto `0`): ángulo de hélice en grados; 0 = recto, positivo = a derechas.
+  - `profile_shift` (número o expresión; opcional, por defecto `0`): coeficiente de desplazamiento de perfil x.
+  - `clearance` (número o expresión; opcional, por defecto `0.25`): holgura de fondo como fracción del módulo (0.25 en ISO 53).
+  - `backlash` (número o expresión; opcional, por defecto `0`): juego del par en el primitivo, en mm (este engranaje adelgaza la mitad).
+  - `bore` (número o expresión; opcional, por defecto `0`): diámetro del agujero central en mm; 0 = macizo.
+  - `rotation` (número o expresión; opcional, por defecto `0`): giro del engranaje alrededor de su eje, en grados.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del centro sobre el plano, en mm; vacío = el origen del plano.
+- CLI: `omnicad call create_gear --doc pieza.omnicad module=… teeth=…`
+
+### `create_gear_pair`
+
+Crea dos engranajes de evolvente que engranan, en UN paso del timeline: el segundo a la distancia entre centros de trabajo (m·(z1+z2)/2 sin desplazamientos), en la dirección dada y girado medio diente para que los dientes entren en los huecos (con hélice, el segundo es de la mano contraria). Con assembly (por defecto) agrega además, con las operaciones de ENSAMBLAR, un componente por engranaje, una unión de revolución «como está» en cada eje y el vínculo de movimiento con la relación de dientes (giran en sentidos contrarios): todo es un solo paso de deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `module` (número o expresión; obligatorio): módulo normal en mm de los dos engranajes.
+  - `teeth1` (número o expresión; obligatorio): dientes del primer engranaje (el del centro).
+  - `teeth2` (número o expresión; obligatorio): dientes del segundo engranaje.
+  - `width` (número o expresión; opcional, por defecto `10`): ancho de los dos engranajes, en mm.
+  - `pressure_angle` (número o expresión; opcional, por defecto `20`): ángulo de presión en grados.
+  - `helix_angle` (número o expresión; opcional, por defecto `0`): ángulo de hélice del primero en grados (el segundo lleva el contrario); 0 = rectos.
+  - `profile_shift1` (número o expresión; opcional, por defecto `0`): desplazamiento de perfil x del primero.
+  - `profile_shift2` (número o expresión; opcional, por defecto `0`): desplazamiento de perfil x del segundo (con x1 + x2 ≠ 0 cambia la distancia entre centros).
+  - `clearance` (número o expresión; opcional, por defecto `0.25`): holgura de fondo como fracción del módulo.
+  - `backlash` (número o expresión; opcional, por defecto `0`): juego del par en el primitivo, en mm (cada engranaje adelgaza la mitad).
+  - `bore1` (número o expresión; opcional, por defecto `0`): diámetro del agujero central del primero en mm; 0 = macizo.
+  - `bore2` (número o expresión; opcional, por defecto `0`): diámetro del agujero central del segundo en mm; 0 = macizo.
+  - `direction` (número o expresión; opcional, por defecto `0`): dirección del centro del segundo vista desde el primero, en grados desde el eje x del plano.
+  - `rotation` (número o expresión; opcional, por defecto `0`): giro del primero alrededor de su eje, en grados (el segundo gira lo que le corresponde para engranar).
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoyan: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del centro del primero sobre el plano, en mm; vacío = el origen del plano.
+  - `assembly` (true/false; opcional, por defecto `true`): true para crear además los componentes, las uniones de revolución y el vínculo de movimiento.
+- CLI: `omnicad call create_gear_pair --doc pieza.omnicad module=… teeth1=… teeth2=…`
+
+### `create_rack`
+
+Crea una cremallera recta con el perfil de referencia ISO 53 (paso π·módulo, flancos rectos al ángulo de presión) como un paso del timeline. La línea primitiva va sobre el eje x del plano desde center, los dientes hacia +y del plano y el ancho por la normal; los extremos caen en el medio de un hueco.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `module` (número o expresión; obligatorio): módulo en mm.
+  - `teeth` (número o expresión; obligatorio): cantidad de dientes (el largo es teeth × π × module).
+  - `width` (número o expresión; opcional, por defecto `10`): ancho a lo largo de la normal del plano, en mm.
+  - `height` (número o expresión; opcional, por defecto `10`): alto de la base a la línea primitiva, en mm (mayor que 1.25 × module).
+  - `pressure_angle` (número o expresión; opcional, por defecto `20`): ángulo de presión (de los flancos) en grados.
+  - `clearance` (número o expresión; opcional, por defecto `0.25`): holgura de fondo como fracción del módulo.
+  - `backlash` (número o expresión; opcional, por defecto `0`): juego en la línea primitiva, en mm (el diente adelgaza la mitad).
+  - `rotation` (número o expresión; opcional, por defecto `0`): giro alrededor de la normal del plano, en grados.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del inicio de la línea primitiva sobre el plano, en mm; vacío = el origen del plano.
+- CLI: `omnicad call create_rack --doc pieza.omnicad module=… teeth=…`
+
+### `create_sprocket`
+
+Crea una rueda dentada para cadena de rodillos con la forma de diente de ISO 606 (hueco medio) como un paso del timeline. chain elige la cadena (05B…16B, 08A…16A = ANSI 40…80) o 'custom' con pitch y roller_diameter propios; sin width, el ancho del diente sale de la norma (0,93 o 0,95 × ancho interior de la cadena).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `teeth` (número o expresión; obligatorio): cantidad de dientes (6 o más).
+  - `chain` ("05B" | "06B" | "08B" | "10B" | "12B" | "16B" | "08A" | "10A" | "12A" | "16A" | "custom"; opcional, por defecto `"08B"`): designación ISO 606 de la cadena ("08B", "10A"…) o "custom".
+  - `pitch` (número o expresión; opcional, por defecto `null`): paso de la cadena en mm (solo con chain="custom").
+  - `roller_diameter` (número o expresión; opcional, por defecto `null`): diámetro del rodillo en mm (solo con chain="custom").
+  - `width` (número o expresión; opcional, por defecto `null`): ancho del diente en mm; vacío = el de ISO 606 para la cadena (obligatorio con "custom").
+  - `bore` (número o expresión; opcional, por defecto `0`): diámetro del agujero central en mm; 0 = macizo.
+  - `rotation` (número o expresión; opcional, por defecto `0`): giro alrededor del eje, en grados.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del centro sobre el plano, en mm; vacío = el origen del plano.
+- CLI: `omnicad call create_sprocket --doc pieza.omnicad teeth=…`
+
+### `create_shaft`
+
+Asistente de ejes: crea un eje escalonado de revolución a partir de una tabla de tramos (diámetro, largo y, en cada extremo, chaflán a 45° o empalme) como un paso del timeline (tipo «eje_escalonado»). El eje sale de center por la normal del plano (en XY, hacia +Z), con los tramos en orden. Un chaflán o empalme va sobre la esquina de ese tramo: convexa en la punta o en un escalón que baja, cóncava en uno que sube. operation cut hace un agujero escalonado.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `segments` (lista de objeto; obligatorio): tramos en orden, cada uno {"diameter": mm, "length": mm, "start": "none"|"chamfer"|"fillet", "start_size": mm, "end": "none"|"chamfer"|"fillet", "end_size": mm}; diameter y length son obligatorios y todos aceptan expresiones.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano de donde sale el eje: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del comienzo del eje sobre el plano, en mm; vacío = el origen del plano.
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+- CLI: `omnicad call create_shaft --doc pieza.omnicad segments=…`
 
 ## Grupo chapa
 
