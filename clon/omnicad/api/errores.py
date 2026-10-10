@@ -61,9 +61,9 @@ PISTAS = {
     "FILE_NOT_FOUND": ["Revisá la ruta: el archivo o la carpeta no existen.", "Usá una ruta absoluta."],
     "FILE_EXISTS": ["Pasá overwrite=true (en la CLI: --overwrite) para reemplazarlo, o elegí otra ruta."],
     "PERMISSION_DENIED": ["Elegí una carpeta con permiso de escritura o cerrá el programa que tiene abierto el archivo."],
-    "INVALID_FORMAT": ["Formatos de exportación: .stl, .obj, .3mf, .ply, .step/.stp, .iges/.igs, .brep y .dxf "
+    "INVALID_FORMAT": ["Formatos de exportación: .stl, .obj, .3mf, .ply, .step/.stp, .iges/.igs, .brep, .glb/.gltf y .dxf "
                        "(patrón plano de chapa).",
-                       "Los cuerpos de malla solo se exportan a .stl, .obj, .3mf o .ply."],
+                       "Los cuerpos de malla solo se exportan a .stl, .obj, .3mf, .ply o .glb/.gltf."],
     "INVALID_PROJECT": ["El archivo no es un proyecto .omnicad válido o está dañado.",
                         "Si hay un autoguardado (*.autoguardado.omnicad), probá abrir ese."],
     "UNSUPPORTED_FILE_TYPE": ["Se abren .omnicad/.fclone, .step/.stp, .iges/.igs, .stl, .obj, .3mf, .ply, .dxf, "

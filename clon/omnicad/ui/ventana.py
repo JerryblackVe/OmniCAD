@@ -259,7 +259,8 @@ class VentanaPrincipal(QMainWindow):
         A("recuperados", "Abrir documentos recuperados", self.verificar_autoguardado_huerfano)
         A("guardar", "Guardar", self.guardar, "Ctrl+S", "Guardar el proyecto", "guardar")
         A("guardar_como", "Guardar como…", self.guardar_como, "Ctrl+Shift+S")
-        A("exportar", "Exportar…", lambda: self.exportar(None), None, "Exportar los cuerpos a STL, OBJ o STEP", "exportar")
+        A("exportar", "Exportar…", lambda: self.exportar(None), None,
+          "Exportar los cuerpos a STL, OBJ, 3MF, PLY, glTF/GLB (con colores), STEP, IGES o BREP", "exportar")
         A("exportar_stl", "Exportar STL…", lambda: self.exportar("stl"), None, "Malla triangulada para impresión 3D", "exportar")
         A("exportar_obj", "Exportar OBJ…", lambda: self.exportar("obj"), None, "Malla triangulada", "exportar")
         A("impresion3d", "Impresión en 3D…", lambda: self.exportar("stl"), None,
@@ -314,8 +315,8 @@ class VentanaPrincipal(QMainWindow):
           "Anima una unión en todo su recorrido.", "estudio_movimiento")
         A("insertar_malla", "Insertar malla…", self.insertar_malla, None,
           "Inserta un archivo STL, OBJ, 3MF o PLY como cuerpo de malla.", "insertar_malla")
-        A("exportar_malla", "Exportar como malla…", lambda: self.exportar(("3mf", "stl", "obj", "ply")), None,
-          "Guarda los cuerpos como malla: STL, OBJ, 3MF o PLY.", "exportar_malla")
+        A("exportar_malla", "Exportar como malla…", lambda: self.exportar(("3mf", "stl", "obj", "ply", "glb", "gltf")),
+          None, "Guarda los cuerpos como malla: STL, OBJ, 3MF, PLY o glTF/GLB (con colores).", "exportar_malla")
         A("seleccionar", "Seleccionar", lambda: self.visor.set_modo(None), None,
           "Sale de los modos de navegación (órbita, encuadre, zoom).", "seleccionar")
         A("caja_herramientas", "Caja de herramientas", self.abrir_caja_herramientas, "S",
@@ -1991,7 +1992,7 @@ class VentanaPrincipal(QMainWindow):
             sufijo = next((f for f in formatos if f"*.{f}" in filtro), formatos[0])
             ruta = f"{ruta}.{sufijo}"
         try:
-            n = ex.exportar(cuerpos, ruta)
+            n = ex.exportar(cuerpos, ruta, self.doc.propiedades)
             extra = f" ({n} triángulos)" if isinstance(n, int) else ""
             self.mensaje(f"Exportado {len(cuerpos)} cuerpo(s) a {ruta}{extra}", 6000)
         except (ex.ErrorExportacion, RuntimeError, OSError) as e:

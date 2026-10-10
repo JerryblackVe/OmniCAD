@@ -154,8 +154,8 @@ MALLA = [
     ("CREAR", ["insertar_malla", "malla_teselar"], [
         _i("Insertar malla", "insertar_malla"), _i("Malla de cuerpo B-Rep", "malla_teselar"),
         _i("Crear boceto de sección de malla")]),
-    ("PREPARAR", ["reparar_malla", "grupos_caras"], [
-        _i("Reparar", "reparar_malla"), _i("Generar grupos de caras", "grupos_caras"),
+    ("PREPARAR", ["reparar_malla", "limpiar_malla", "grupos_caras"], [
+        _i("Reparar", "reparar_malla"), _i("Limpiar", "limpiar_malla"), _i("Generar grupos de caras", "grupos_caras"),
         _i("Combinar grupos de caras"), _i("Crear grupo de caras")]),
     ("MODIFICAR", ["reducir_malla", "remallar", "cortar_plano", "combinar_mallas", "convertir_malla"], [
         _i("Edición directa"), _i("Remallar", "remallar"), _i("Reducir", "reducir_malla"),
@@ -164,7 +164,7 @@ MALLA = [
         _i("Alinear"), _i("Extruir textura"), _i("Separar", "separar_malla"), _i("Escalar malla", "escalar_malla"),
         SEP, _i("Convertir malla", "convertir_malla")]),
 ] + COMPARTIDOS + [
-    ("EXPORTAR", ["exportar_malla"], [_i("Exportar como malla (STL, OBJ, 3MF, PLY)…", "exportar_malla"),
+    ("EXPORTAR", ["exportar_malla"], [_i("Exportar como malla (STL, OBJ, 3MF, PLY, GLB)…", "exportar_malla"),
                                       _i("Exportar STL…", "exportar_stl"), _i("Exportar OBJ…", "exportar_obj")])]
 ADMINISTRAR = [("LISTA DE MATERIALES", ["lista_materiales"], [_i("Lista de materiales", "lista_materiales")])]
 UTILIDADES = [

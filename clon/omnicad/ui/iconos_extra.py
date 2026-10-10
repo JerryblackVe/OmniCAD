@@ -1615,6 +1615,32 @@ def _reparar_malla(p):
     p.restore()
 
 
+def _destello(p, cx, cy, r, color):
+    """Estrella de cuatro puntas (brillo de «limpio»)."""
+    f = 0.28
+    puntos = [QPointF(cx, cy - r), QPointF(cx + r * f, cy - r * f), QPointF(cx + r, cy), QPointF(cx + r * f, cy + r * f),
+              QPointF(cx, cy + r), QPointF(cx - r * f, cy + r * f), QPointF(cx - r, cy), QPointF(cx - r * f, cy - r * f)]
+    _poli(p, puntos, color, NARANJA, 0.7)
+
+
+def _limpiar_malla(p):
+    _cara_malla(p, *_cuadro(_q(12.5, 13), 0, 0, 12, 12, 0), MALLA[1], 3)
+    p.save()
+    p.translate(23.5, 17.5)
+    p.rotate(32)
+    p.setPen(QPen(GRIS_OSCURO, 0.9))
+    p.setBrush(QColor("#c8925a"))
+    p.drawRoundedRect(QRectF(-1.1, -15, 2.2, 15), 1, 1)
+    p.setBrush(QColor("#f2c14e"))
+    p.drawPolygon(QPolygonF([QPointF(-3.2, 0), QPointF(3.2, 0), QPointF(4.6, 8), QPointF(-4.6, 8)]))
+    p.setPen(QPen(GRIS_OSCURO, 0.6))
+    for x in (-2.2, 0.0, 2.2):
+        p.drawLine(QPointF(x, 1.6), QPointF(x * 1.4, 7.4))
+    p.restore()
+    _destello(p, 6.5, 6.5, 4.2, QColor("#fff3b0"))
+    _destello(p, 13, 3.6, 2.4, QColor("#fff3b0"))
+
+
 def _grupos_caras(p):
     a = b = h = 13
     q = _q(*_centro(a, b, h))
@@ -2034,7 +2060,8 @@ DIBUJOS_EXTRA = {
     "recortar_sup": _recortar_sup, "destrimar": _destrimar, "extender_sup": _extender_sup, "coser": _coser,
     "descoser": _descoser, "invertir_normal": _invertir_normal,
     # malla
-    "malla_teselar": _malla_teselar, "reparar_malla": _reparar_malla, "grupos_caras": _grupos_caras,
+    "malla_teselar": _malla_teselar, "reparar_malla": _reparar_malla, "limpiar_malla": _limpiar_malla,
+    "grupos_caras": _grupos_caras,
     "reducir_malla": _reducir_malla, "remallar": _remallar, "cortar_plano": _cortar_plano,
     "vaciado_malla": _vaciado_malla, "combinar_mallas": _combinar_mallas, "suavizar_malla": _suavizar_malla,
     "separar_malla": _separar_malla, "escalar_malla": _escalar_malla, "convertir_malla": _convertir_malla,

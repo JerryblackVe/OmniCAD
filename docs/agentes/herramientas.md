@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-143 herramientas en 12 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+158 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -18,6 +18,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 24 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
+| [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 6 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 10 | Ver y medir el resultado. |
@@ -36,7 +37,7 @@ Archivo, escena, timeline y deshacer.
 | [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; el historial, los parámetros y los nombres de los cuerpos no se leen). |
 | [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño .omnicad/.fclone (entra como componente). |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
-| [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
+| [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
 | [`undo`](#undo) | sí | Deshace el último cambio del documento (cada herramienta que modifica es un paso). |
 | [`redo`](#redo) | sí | Rehace el último cambio deshecho. |
 | [`get_timeline`](#get_timeline) | no | Lista los pasos del timeline en orden: índice, id, tipo, nombre, si está suprimido, estado (ok, warning, error, suppressed, rolled_back), mensaje, parámetros tal como se guardaron (params: expresiones como «5 * placa»), cuánto da cada expresión con los parámetros actuales (values, en mm o grados) y, en primitivas y Mover, qué campo guardado corresponde a cada argumento de la herramienta (aliases: length → ancho = X, width → largo = Y…), que edit_feature también acepta. |
@@ -98,7 +99,7 @@ Guarda el documento como proyecto .omnicad. Sin path, guarda en su archivo actua
 
 ### `export`
 
-Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). Crea las carpetas que falten (create_folders=false para que falle con FILE_NOT_FOUND).
+Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). Crea las carpetas que falten (create_folders=false para que falle con FILE_NOT_FOUND).
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1614,6 +1615,212 @@ Exporta el patrón plano de un cuerpo de chapa (o de su patrón plano) a DXF en 
   - `bend_extensions` (true/false; opcional, por defecto `false`): true dibuja las líneas de inicio y fin de cada pliegue.
   - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo si ya existe.
 - CLI: `omnicad call export_flat_pattern_dxf --doc pieza.omnicad path=…`
+
+## Grupo malla
+
+Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file).
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`get_mesh_info`](#get_mesh_info) | no | Información de los cuerpos de malla (uno o todos): triángulos, vértices, grupos de caras, cáscaras (partes conexas), si es cerrada (estanca) y orientada, si el volumen es positivo (normales hacia afuera), aristas de borde (agujeros) y no manifold, triángulos degenerados, volumen (mm³), área (mm²) y caja envolvente. |
+| [`tessellate`](#tessellate) | sí | Convierte sólidos o superficies en cuerpos de malla (MALLA › Malla de cuerpo B-Rep de Fusion): un grupo de caras por cara del B-rep. refinement: low, medium o high (desvío de 0,2 % / 0,05 % / 0,01 % de la diagonal de la caja y 30° / 15° / 8°). keep_original=false borra el cuerpo B-rep. |
+| [`repair_mesh`](#repair_mesh) | sí | Repara mallas (MALLA › PREPARAR › Reparar de Fusion). kind: close_holes (une vértices idénticos, orienta las normales y tapa los agujeros), merge_vertices (solo une los vértices casi coincidentes), stitch_and_remove (además cose, corrige triángulos degenerados, quita caras dobles y partes diminutas) o rebuild (lo anterior y un remallado uniforme). |
+| [`clean_mesh`](#clean_mesh) | sí | Limpia mallas paso por paso (Malla › Limpiar de Blender), en este orden y cada uno con su casilla: merge_by_distance (une los vértices a distance mm o menos), dissolve_degenerate (colapsa aristas de distance o menos y arregla triángulos sin área y caras dobles), delete_loose (vértices sin caras, triángulos aislados y, con min_shell_fraction, partes chicas), recalculate_normals (orientación consistente y hacia afuera) y fill_holes (tapa los agujeros de hasta max_hole_sides lados; 0 = todos). |
+| [`generate_face_groups`](#generate_face_groups) | sí | Agrupa las caras de mallas por ángulo (MALLA › PREPARAR › Generar grupos de caras de Fusion): las vecinas cuyas normales difieren menos de angle quedan en el mismo grupo. |
+| [`reduce_mesh`](#reduce_mesh) | sí | Baja la cantidad de triángulos de mallas (MALLA › MODIFICAR › Reducir de Fusion; colapso de aristas con error cuadrático). mode: proportion (fracción de los triángulos actuales), face_count (cantidad objetivo) o tolerance (desvío máximo en mm). |
+| [`remesh`](#remesh) | sí | Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density). |
+| [`smooth_mesh`](#smooth_mesh) | sí | Suaviza mallas sin encogerlas (MALLA › MODIFICAR › Suavizar de Fusion; filtro de Taubin). |
+| [`shell_mesh`](#shell_mesh) | sí | Ahueca mallas cerradas con un espesor de pared (MALLA › MODIFICAR › Vaciado de Fusion): suma una cáscara interior desplazada thickness mm hacia adentro. |
+| [`plane_cut_mesh`](#plane_cut_mesh) | sí | Corta mallas con un plano (MALLA › MODIFICAR › Corte de plano de Fusion). kind: trim (queda el lado hacia donde apunta la normal del plano; flip conserva el otro), split_body (dos cuerpos, uno por lado) o split_faces (una malla con los triángulos partidos sobre el plano). fill tapa el corte (un grupo de caras nuevo). |
+| [`combine_meshes`](#combine_meshes) | sí | Combina cuerpos de malla (MALLA › MODIFICAR › Combinar de Fusion). operation: join, cut o intersect (booleanas reales: las mallas tienen que ser cerradas; repair_mesh o clean_mesh antes si no) o merge (junta los triángulos sin tocarlos). |
+| [`separate_mesh`](#separate_mesh) | sí | Separa mallas en varios cuerpos (MALLA › MODIFICAR › Separar de Fusion): by shells, un cuerpo por parte conexa; by face_groups, uno por grupo de caras (generate_face_groups los crea). |
+| [`reverse_mesh_normals`](#reverse_mesh_normals) | sí | Da vuelta la orientación de todos los triángulos de mallas (MALLA › MODIFICAR › Invertir normal de Fusion): el volumen cambia de signo. |
+| [`scale_mesh`](#scale_mesh) | sí | Escala mallas desde el origen (MALLA › MODIFICAR › Escalar malla de Fusion): uniforme con factor_x solo, o distinto en cada eje. |
+| [`convert_mesh`](#convert_mesh) | sí | Convierte mallas en cuerpos B-rep (MALLA › MODIFICAR › Convertir malla de Fusion): sólido si la malla es cerrada, superficie si no. method: faceted (una cara plana por triángulo) o prismatic (une las caras coplanares vecinas del mismo grupo; no reconoce cilindros). |
+
+### `get_mesh_info`
+
+Información de los cuerpos de malla (uno o todos): triángulos, vértices, grupos de caras, cáscaras (partes conexas), si es cerrada (estanca) y orientada, si el volumen es positivo (normales hacia afuera), aristas de borde (agujeros) y no manifold, triángulos degenerados, volumen (mm³), área (mm²) y caja envolvente. No cambia el documento.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo de malla; vacío = todos los cuerpos de malla del documento.
+- CLI: `omnicad call get_mesh_info --doc pieza.omnicad`
+
+### `tessellate`
+
+Convierte sólidos o superficies en cuerpos de malla (MALLA › Malla de cuerpo B-Rep de Fusion): un grupo de caras por cara del B-rep. refinement: low, medium o high (desvío de 0,2 % / 0,05 % / 0,01 % de la diagonal de la caja y 30° / 15° / 8°). keep_original=false borra el cuerpo B-rep.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos sólidos o de superficie (uno o una lista).
+  - `refinement` ("low" | "medium" | "high"; opcional, por defecto `"medium"`): finura de los triángulos: "low", "medium" o "high".
+  - `keep_original` (true/false; opcional, por defecto `true`): true conserva el cuerpo B-rep además de la malla nueva.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call tessellate --doc pieza.omnicad bodies=…`
+
+### `repair_mesh`
+
+Repara mallas (MALLA › PREPARAR › Reparar de Fusion). kind: close_holes (une vértices idénticos, orienta las normales y tapa los agujeros), merge_vertices (solo une los vértices casi coincidentes), stitch_and_remove (además cose, corrige triángulos degenerados, quita caras dobles y partes diminutas) o rebuild (lo anterior y un remallado uniforme). Para elegir cada paso de limpieza por separado: clean_mesh.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `kind` ("close_holes" | "merge_vertices" | "stitch_and_remove" | "rebuild"; opcional, por defecto `"close_holes"`): "close_holes", "merge_vertices", "stitch_and_remove" o "rebuild".
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call repair_mesh --doc pieza.omnicad bodies=…`
+
+### `clean_mesh`
+
+Limpia mallas paso por paso (Malla › Limpiar de Blender), en este orden y cada uno con su casilla: merge_by_distance (une los vértices a distance mm o menos), dissolve_degenerate (colapsa aristas de distance o menos y arregla triángulos sin área y caras dobles), delete_loose (vértices sin caras, triángulos aislados y, con min_shell_fraction, partes chicas), recalculate_normals (orientación consistente y hacia afuera) y fill_holes (tapa los agujeros de hasta max_hole_sides lados; 0 = todos). Triángulos a cuadriláteros no existe: la malla es solo de triángulos.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `merge_by_distance` (true/false; opcional, por defecto `true`): true une los vértices que están a distance o menos.
+  - `distance` (número o expresión; opcional, por defecto `"0.001 mm"`): umbral en mm (número o expresión) para unir vértices y colapsar aristas cortas; 0 = solo los idénticos.
+  - `dissolve_degenerate` (true/false; opcional, por defecto `true`): true colapsa las aristas cortas y arregla los triángulos sin área.
+  - `delete_loose` (true/false; opcional, por defecto `true`): true borra vértices sin caras y triángulos que no comparten aristas con otros.
+  - `min_shell_fraction` (número; opcional, por defecto `0.0`): con delete_loose, borra también las partes conexas con menos de esta fracción (0 a 1) del área total (p. ej. 0.01 = 1 %); 0 = no.
+  - `recalculate_normals` (true/false; opcional, por defecto `true`): true orienta los triángulos de forma consistente y hacia afuera.
+  - `fill_holes` (true/false; opcional, por defecto `false`): true tapa los agujeros (cada tapa es un grupo de caras nuevo).
+  - `max_hole_sides` (entero; opcional, por defecto `0`): con fill_holes, solo los agujeros de hasta esta cantidad de lados; 0 = todos.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call clean_mesh --doc pieza.omnicad bodies=…`
+
+### `generate_face_groups`
+
+Agrupa las caras de mallas por ángulo (MALLA › PREPARAR › Generar grupos de caras de Fusion): las vecinas cuyas normales difieren menos de angle quedan en el mismo grupo. Sirve para separate_mesh by=face_groups y para convertir con method=prismatic.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `angle` (número o expresión; opcional, por defecto `30`): ángulo límite entre caras vecinas, en grados (número o expresión), entre 0 y 180.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call generate_face_groups --doc pieza.omnicad bodies=…`
+
+### `reduce_mesh`
+
+Baja la cantidad de triángulos de mallas (MALLA › MODIFICAR › Reducir de Fusion; colapso de aristas con error cuadrático). mode: proportion (fracción de los triángulos actuales), face_count (cantidad objetivo) o tolerance (desvío máximo en mm).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `mode` ("proportion" | "face_count" | "tolerance"; opcional, por defecto `"proportion"`): "proportion", "face_count" o "tolerance".
+  - `proportion` (número o expresión; opcional, por defecto `0.5`): con mode=proportion, fracción de triángulos que queda (mayor que 0 y hasta 1).
+  - `face_count` (entero; opcional, por defecto `1000`): con mode=face_count, cantidad de triángulos objetivo (al menos 4).
+  - `tolerance` (número o expresión; opcional, por defecto `0.1`): con mode=tolerance, desvío máximo en mm (número o expresión).
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call reduce_mesh --doc pieza.omnicad bodies=…`
+
+### `remesh`
+
+Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density). Tiene un tope de 100.000 triángulos: si se pasaría, falla antes de calcular y dice cuánto bajar.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `density` (número o expresión; opcional, por defecto `1`): densidad relativa de triángulos (mayor que 0; 1 = parecida a la actual).
+  - `preserve_boundaries` (true/false; opcional, por defecto `true`): true no toca los bordes abiertos.
+  - `preserve_sharp_edges` (true/false; opcional, por defecto `true`): true conserva las aristas vivas (más de 30° entre caras) y los bordes entre grupos.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call remesh --doc pieza.omnicad bodies=…`
+
+### `smooth_mesh`
+
+Suaviza mallas sin encogerlas (MALLA › MODIFICAR › Suavizar de Fusion; filtro de Taubin). Los bordes abiertos quedan fijos; redondea las aristas vivas (avisa si el volumen de una malla cerrada cambia más de 1 %).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `strength` (número o expresión; opcional, por defecto `0.5`): intensidad del suavizado, de 0 a 1.
+  - `iterations` (entero; opcional, por defecto `10`): cantidad de pasadas (al menos 1).
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call smooth_mesh --doc pieza.omnicad bodies=…`
+
+### `shell_mesh`
+
+Ahueca mallas cerradas con un espesor de pared (MALLA › MODIFICAR › Vaciado de Fusion): suma una cáscara interior desplazada thickness mm hacia adentro. Aproximado: avisa si la pared interior se pliega o se cruza (usá un espesor menor).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla (tienen que ser cerrados).
+  - `thickness` (número o expresión; opcional, por defecto `2`): espesor de la pared en mm (número o expresión, mayor que cero).
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call shell_mesh --doc pieza.omnicad bodies=…`
+
+### `plane_cut_mesh`
+
+Corta mallas con un plano (MALLA › MODIFICAR › Corte de plano de Fusion). kind: trim (queda el lado hacia donde apunta la normal del plano; flip conserva el otro), split_body (dos cuerpos, uno por lado) o split_faces (una malla con los triángulos partidos sobre el plano). fill tapa el corte (un grupo de caras nuevo). Normales: XY = +Z, YZ = +X, XZ = −Y; kept_side_normal en el resultado dice cuál quedó.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `plane` (texto; obligatorio): "XY", "XZ", "YZ" o el id o nombre de un plano de construcción.
+  - `kind` ("trim" | "split_body" | "split_faces"; opcional, por defecto `"trim"`): "trim", "split_body" o "split_faces".
+  - `fill` (true/false; opcional, por defecto `true`): true tapa el corte con triángulos.
+  - `flip` (true/false; opcional, por defecto `false`): true invierte el lado que se conserva (en trim) o el orden de las partes (en split_body).
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call plane_cut_mesh --doc pieza.omnicad bodies=… plane=…`
+
+### `combine_meshes`
+
+Combina cuerpos de malla (MALLA › MODIFICAR › Combinar de Fusion). operation: join, cut o intersect (booleanas reales: las mallas tienen que ser cerradas; repair_mesh o clean_mesh antes si no) o merge (junta los triángulos sin tocarlos). El resultado queda en target; las herramientas se borran salvo keep_tools=true.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `target` (texto; obligatorio): id o nombre del cuerpo de malla de destino.
+  - `tools` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla herramienta (uno o una lista).
+  - `operation` ("join" | "cut" | "intersect" | "merge"; opcional, por defecto `"join"`): "join", "cut", "intersect" o "merge".
+  - `keep_tools` (true/false; opcional, por defecto `false`): true conserva los cuerpos herramienta.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call combine_meshes --doc pieza.omnicad target=… tools=…`
+
+### `separate_mesh`
+
+Separa mallas en varios cuerpos (MALLA › MODIFICAR › Separar de Fusion): by shells, un cuerpo por parte conexa; by face_groups, uno por grupo de caras (generate_face_groups los crea). Si una malla tiene una sola parte, avisa y no cambia.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `by` ("shells" | "face_groups"; opcional, por defecto `"shells"`): "shells" (partes conexas) o "face_groups" (grupos de caras).
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call separate_mesh --doc pieza.omnicad bodies=…`
+
+### `reverse_mesh_normals`
+
+Da vuelta la orientación de todos los triángulos de mallas (MALLA › MODIFICAR › Invertir normal de Fusion): el volumen cambia de signo. Para orientar bien una malla con normales mezcladas: clean_mesh con recalculate_normals.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call reverse_mesh_normals --doc pieza.omnicad bodies=…`
+
+### `scale_mesh`
+
+Escala mallas desde el origen (MALLA › MODIFICAR › Escalar malla de Fusion): uniforme con factor_x solo, o distinto en cada eje. Un factor negativo espeja (las normales siguen hacia afuera).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `factor_x` (número o expresión; opcional, por defecto `1`): factor de escala en X (número o expresión, distinto de cero); sin factor_y ni factor_z, en los tres ejes.
+  - `factor_y` (número o expresión; opcional, por defecto `null`): factor en Y; vacío = el de factor_x.
+  - `factor_z` (número o expresión; opcional, por defecto `null`): factor en Z; vacío = el de factor_x.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call scale_mesh --doc pieza.omnicad bodies=…`
+
+### `convert_mesh`
+
+Convierte mallas en cuerpos B-rep (MALLA › MODIFICAR › Convertir malla de Fusion): sólido si la malla es cerrada, superficie si no. method: faceted (una cara plana por triángulo) o prismatic (une las caras coplanares vecinas del mismo grupo; no reconoce cilindros). Máximo 50.000 triángulos: reduce_mesh antes si hay más. keep_original=true conserva la malla.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `method` ("faceted" | "prismatic"; opcional, por defecto `"faceted"`): "faceted" o "prismatic".
+  - `keep_original` (true/false; opcional, por defecto `false`): true conserva el cuerpo de malla además del B-rep nuevo.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call convert_mesh --doc pieza.omnicad bodies=…`
 
 ## Grupo ensamble
 

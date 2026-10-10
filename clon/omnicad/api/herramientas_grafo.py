@@ -29,7 +29,7 @@ from .registro import herramienta
 _ESTADOS = {"ok": "ok", "aviso": "warning", "error": "error"}
 _MAX_ITEMS = 200                 # ítems por salida que devuelve run_graph (con count dice cuántos hay)
 _MAX_AVISOS = 8
-_EXTENSIONES = (".step", ".stp", ".stl", ".obj", ".3mf", ".ply", ".iges", ".igs", ".brep", ".brp")
+_EXTENSIONES = (".step", ".stp", ".stl", ".obj", ".3mf", ".ply", ".iges", ".igs", ".brep", ".brp", ".glb", ".gltf")
 _PISTA_NODOS = "list_graph_nodes lista los tipos de nodo, sus entradas y salidas, y el formato con un ejemplo."
 Categoria = Literal["entrada", "matematica", "listas", "arboles", "vectores", "curvas", "solidos", "salida"]
 

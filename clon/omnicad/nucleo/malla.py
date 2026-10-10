@@ -2247,3 +2247,166 @@ def a_brep(m, *, metodo="facetado", max_triangulos=50000):
     if not geo.es_valida(forma):
         raise geo.ErrorGeometria("La conversión dio un cuerpo inválido (¿la malla se autointersecta?).")
     return forma
+
+
+# ---------------------------------------------------------------- limpieza (Malla › Limpiar de Blender)
+# Las opciones replican las de Blender › Malla › Limpiar (Merge by Distance, Degenerate Dissolve, Delete Loose, Fill
+# Holes, Recalculate Normals); el código es propio. «Triángulos a cuadriláteros» no está: `Malla` es solo de triángulos.
+def _exigir_no_vacia(m):
+    if not len(m.caras):
+        raise geo.ErrorGeometria("La malla está vacía.")
+
+
+def _distancia_valida(distancia, que="La distancia"):
+    d = float(distancia)
+    if not (d >= 0 and math.isfinite(d)):
+        raise geo.ErrorGeometria(f"{que} tiene que ser un número mayor o igual que cero (mm).")
+    return d
+
+
+def fusionar_por_distancia(m, distancia=0.0):
+    """Fusionar por distancia (Merge by Distance de Blender): une los vértices a `distancia` mm o menos (0 = solo los
+    idénticos; en cadena: si A está cerca de B y B de C, quedan los tres en uno, en la posición del de menor índice),
+    quita las caras que quedan con un vértice repetido y los vértices que ya no usa ninguna cara. Conserva los grupos."""
+    _exigir_no_vacia(m)
+    return _soldar(m, _distancia_valida(distancia))
+
+
+def _quitar_caras_dobles(m):
+    """Caras con los mismos tres vértices: si todas recorren el triángulo en el mismo sentido queda una; si hay de los
+    dos sentidos (una «aleta» sin volumen) se quitan todas."""
+    c = m.caras
+    if len(c) < 2:
+        return m
+    _, inv, cuenta = np.unique(np.sort(c, axis=1), axis=0, return_inverse=True, return_counts=True)
+    inv = inv.reshape(-1)
+    if cuenta.max() < 2:
+        return m
+    orden = np.argsort(c, axis=1)
+    par = orden[:, 1] == (orden[:, 0] + 1) % 3          # permutación par = mismo sentido que la terna ordenada
+    quitar = np.zeros(len(c), bool)
+    for k in np.flatnonzero(cuenta > 1).tolist():
+        caras = np.flatnonzero(inv == k)
+        if par[caras].all() or not par[caras].any():
+            quitar[caras[1:]] = True
+        else:
+            quitar[caras] = True
+    return _compactar(m.vertices, c[~quitar], m.grupos[~quitar])
+
+
+def disolver_degenerados(m, distancia=None):
+    """Disolver degenerados (Degenerate Dissolve de Blender): colapsa las aristas de largo `distancia` mm o menos (los
+    extremos de cada grupo de aristas cortas se juntan en su punto medio) y arregla lo que queda sin área: quita las
+    caras con un vértice repetido, voltea la arista larga de los triángulos de vértices alineados (astillas) con su
+    vecina o, sin vecina, los quita, y saca las caras dobles. distancia: por defecto una millonésima de la diagonal."""
+    _exigir_no_vacia(m)
+    v, c, g = m.vertices, m.caras, m.grupos
+    d = 1e-6 * (_diagonal(v) or 1.0) if distancia is None else _distancia_valida(distancia)
+    topo = _Topo(c, len(v))
+    a, b = topo.aristas[:, 0], topo.aristas[:, 1]
+    cortas = np.linalg.norm(v[a] - v[b], axis=1) <= d
+    if cortas.any():
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+        N = len(v)
+        ncomp, etiqueta = connected_components(
+            coo_matrix((np.ones(int(cortas.sum())), (a[cortas], b[cortas])), shape=(N, N)), directed=False)
+        suma = np.zeros((ncomp, 3))
+        np.add.at(suma, etiqueta, v)
+        v, c = suma / np.bincount(etiqueta, minlength=ncomp)[:, None], etiqueta[c]
+    ok = (c[:, 0] != c[:, 1]) & (c[:, 1] != c[:, 2]) & (c[:, 0] != c[:, 2])
+    r = _compactar(v, c[ok], g[ok])
+    for _ in range(4):                                  # voltear una astilla puede dejar otra: unas pocas pasadas
+        antes = len(r.caras)
+        r = _corregir_degenerados(r)
+        if len(r.caras) == antes and not np.any(r.areas_caras() <= (1e-9 * (_diagonal(r.vertices) or 1.0)) ** 2):
+            break
+    r = _quitar_caras_dobles(r)
+    if not len(r.caras):
+        raise geo.ErrorGeometria("Disolver degenerados no dejó ninguna cara: la distancia es demasiado grande.")
+    return r
+
+
+def borrar_sueltos(m, *, caras_aisladas=True, area_minima=0.0):
+    """Borrar sueltos (Delete Loose de Blender): quita los vértices que no usa ninguna cara, con `caras_aisladas` los
+    triángulos que no comparten ninguna arista con otro (en una malla de triángulos son los sueltos de Blender) y,
+    con `area_minima` > 0, las cáscaras (partes conexas) de área menor que esa fracción (0 a 1) del área total, como
+    los restos sueltos de un escaneo."""
+    _exigir_no_vacia(m)
+    if not 0 <= area_minima < 1:
+        raise geo.ErrorGeometria("El área mínima es una fracción del área total entre 0 y 1.")
+    c = m.caras
+    ok = np.ones(len(c), bool)
+    if caras_aisladas:
+        topo = _Topo(c, len(m.vertices))
+        ok = ~(topo.cuenta[topo.inv] == 1).reshape(-1, 3).all(1)
+    r = _quitar_cascaras_chicas(_compactar(m.vertices, c[ok], m.grupos[ok]), area_minima)
+    if not len(r.caras):
+        raise geo.ErrorGeometria("Borrar sueltos quitaría toda la malla: no tiene caras unidas entre sí.")
+    return r
+
+
+def rellenar_huecos(m, *, lados_maximos=0):
+    """Rellenar huecos (Fill Holes de Blender): tapa cada agujero (lazo de aristas de borde) con la triangulación de su
+    contorno; cada tapa es un grupo de caras nuevo. lados_maximos: solo los agujeros de hasta esa cantidad de lados (0 =
+    todos, como «Sides» de Blender). Un borde que no cierra un lazo (normales mezcladas: recalculalas antes) queda
+    abierto."""
+    _exigir_no_vacia(m)
+    if int(lados_maximos) != lados_maximos or lados_maximos < 0:
+        raise geo.ErrorGeometria("Los lados máximos son un entero mayor o igual que cero (0 = todos los agujeros).")
+    v, c, g = m.vertices, m.caras, m.grupos
+    lazos = _lazos(_Topo(c, len(v)).libres())
+    if lados_maximos:
+        lazos = [lz for lz in lazos if len(lz) <= lados_maximos]
+    c, g = _rellenar_lazos(v, c, g, lazos)
+    return Malla(v, c, g)
+
+
+def recalcular_normales(m, *, hacia_adentro=False):
+    """Recalcular normales (Recalculate Outside / Inside de Blender): orienta los triángulos de cada cáscara de forma
+    consistente (las vecinas recorren la arista compartida en sentidos opuestos) y hacia afuera: las cáscaras cerradas
+    con volumen positivo (las que están dentro de otra, negativo: son huecos) y las abiertas según el volumen que
+    encierran respecto de su propio centro. hacia_adentro: todas al revés (Recalculate Inside)."""
+    _exigir_no_vacia(m)
+    v = m.vertices
+    c = _orientar_hacia_afuera(v, _orientar_consistente(m.caras, len(v)))
+    etiqueta, cerrada = _cascaras(c, len(v))
+    if not cerrada.all():
+        t = v[c]
+        areas = 0.5 * np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1) + 1e-300
+        k = len(cerrada)
+        centro = np.stack([np.bincount(etiqueta, areas * t.mean(1)[:, i], k) for i in range(3)], 1)
+        centro /= np.bincount(etiqueta, areas, k)[:, None]
+        rel = t - centro[etiqueta][:, None, :]
+        vol = np.bincount(etiqueta, np.einsum("ij,ij->i", rel[:, 0], np.cross(rel[:, 1], rel[:, 2])), k)
+        c = _invertir(c, (~cerrada & (vol < 0))[etiqueta])
+    if hacia_adentro:
+        c = c[:, [0, 2, 1]]
+    return Malla(v, c, m.grupos)
+
+
+def limpiar(m, *, fusionar=True, distancia=0.001, degenerados=True, sueltos=True, area_minima=0.0, normales=True,
+            rellenar=False, lados_maximos=0):
+    """Limpiar malla (Blender › Malla › Limpiar, en un solo paso y en este orden): fusionar por distancia
+    (`distancia` mm), disolver degenerados (aristas de `distancia` o menos y triángulos sin área), borrar sueltos
+    (vértices sin caras, triángulos aislados y, con `area_minima`, cáscaras chicas), recalcular normales hacia afuera y
+    rellenar huecos de hasta `lados_maximos` lados (0 = todos; si además se recalculan las normales, se vuelven a
+    orientar con las tapas puestas). Triángulos a cuadriláteros no está: la malla de OmniCAD es solo de triángulos."""
+    if not (fusionar or degenerados or sueltos or normales or rellenar):
+        raise geo.ErrorGeometria("Elegí al menos un paso de limpieza.")
+    _exigir_no_vacia(m)
+    d = _distancia_valida(distancia)
+    r = m
+    if fusionar:
+        r = fusionar_por_distancia(r, d)
+    if degenerados:
+        r = disolver_degenerados(r, d)
+    if sueltos:
+        r = borrar_sueltos(r, area_minima=area_minima)
+    if normales:
+        r = recalcular_normales(r)
+    if rellenar:
+        r = rellenar_huecos(r, lados_maximos=lados_maximos)
+        if normales:
+            r = recalcular_normales(r)
+    return r if r is not m else m.copia()
