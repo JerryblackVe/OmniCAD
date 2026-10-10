@@ -34,6 +34,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `clon/omnicad/timeline/` | Parámetros, `documento.py`, `operaciones.py` (base) y `ops_*.py` (una familia de operaciones por archivo) |
 | `clon/omnicad/restricciones/` | Boceto 2D y solver (scipy) |
 | `clon/omnicad/io_archivos/` | `.omnicad`, STL/OBJ/STEP, DXF, SVG, autoguardado |
+| `clon/omnicad/grafo/` | Programación visual sin ventana (árboles de datos, nodos, motor); doc en `docs/grafo.md` |
 | `clon/omnicad/ui/` | PySide6: `ventana.py`, `cinta.py`, `visor3d.py`, paneles, boceto en 3D |
 | `clon/omnicad/ui/comandos/` | Un módulo por familia de comandos con diálogo (`CATALOGO`) |
 | `clon/tests/` | pytest (un `test_*.py` por área) |

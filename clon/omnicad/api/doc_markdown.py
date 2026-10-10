@@ -30,6 +30,7 @@ GRUPOS = {
     "material": "Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos.",
     "inspeccion": "Ver y medir el resultado.",
     "avanzado": "Cualquier operación, receta, código y guía.",
+    "grafo": "Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline.",
     "dev": "Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`).",
 }
 

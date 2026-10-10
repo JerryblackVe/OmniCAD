@@ -64,3 +64,24 @@ una herramienta y un ejemplo deja de andar, ese test falla.
 
 Para rehacer la receta después de un cambio en el formato: armar la pieza con el batch, abrirla con `open_document`,
 sacar `get_recipe` y guardar `{"recipe": ...}` en `soporte_l.receta.json`.
+
+## Otro ejemplo: grafo de nodos (programación visual sin ventana)
+
+`grilla_cajas.grafo.json` son los argumentos de `run_graph` y de `bake_graph`: un grafo (cajas en una grilla de
+`filas` × `filas`, de `lado` × `lado` × `alto`, unidas en una pieza) y sus entradas (`lado` = 12, `filas` = 4).
+Resultado: 1 cuerpo de 48 x 48 x 5 mm, volumen 11520 mm³. El formato del grafo y la lista de nodos están en
+[docs/grafo.md](../../docs/grafo.md); `list_graph_nodes` los da también.
+
+```
+omnicad call run_graph --args-file ejemplos/agentes/grilla_cajas.grafo.json --json
+omnicad call run_graph --args-file ejemplos/agentes/grilla_cajas.grafo.json export=salida/grilla.step
+omnicad new salida/grilla.omnicad
+omnicad call bake_graph --doc salida/grilla.omnicad graph=ejemplos/agentes/grilla_cajas.grafo.json
+omnicad info salida/grilla.omnicad
+```
+
+`run_graph` no toca el documento: devuelve el valor de cada nodo «salida» (`volumen` y la `pieza` con su caja) y, con
+`export`, escribe los cuerpos. Llamarlo otra vez con otras entradas (`inputs='{"lado": 20, "filas": 2}'`) recalcula
+solo los nodos que dependen de lo que cambió. `bake_graph` agrega un paso «Grafo» al timeline; si una entrada es una
+expresión con parámetros del documento (`inputs='{"lado": "ancho / 4"}'`), la pieza sigue al parámetro.
+`clon/tests/test_api_grafo.py` corre este ejemplo por la CLI y compara el volumen.

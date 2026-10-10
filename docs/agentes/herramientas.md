@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-134 herramientas en 11 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+137 herramientas en 12 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -22,6 +22,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [material](#grupo-material) | 6 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 10 | Ver y medir el resultado. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
+| [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
 | [dev](#grupo-dev) | 3 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
 
 ## Grupo documento
@@ -1959,6 +1960,56 @@ Guía corta para agentes (ciclo de trabajo, unidades, cómo leer errores). Sin t
 - Parámetros:
   - `topic` (texto; opcional, por defecto `null`): tema de la guía (el índice los lista), p. ej. "flujo"; vacío = el índice.
 - CLI: `omnicad call get_guide --doc pieza.omnicad`
+
+## Grupo grafo
+
+Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline.
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`list_graph_nodes`](#list_graph_nodes) | no | Lista los tipos de nodo para armar grafos de programación visual (tipo Grasshopper) que corren sin ventana con run_graph y se hornean con bake_graph: tipo, categoría, descripción y cada entrada y salida con su tipo de dato, acceso (item, lista o árbol), unidad y valor por defecto. |
+| [`run_graph`](#run_graph) | no | Evalúa un grafo de nodos (programación visual tipo Grasshopper: flujo de datos con listas y árboles) SIN tocar el documento. |
+| [`bake_graph`](#bake_graph) | sí | Hornea un grafo en el documento: agrega UN paso «Grafo» al timeline que guarda el grafo y sus entradas y lo vuelve a evaluar en cada recálculo (paramétrico: una entrada como "ancho / 2" o un nodo «parametro» siguen a los parámetros del documento, y el paso se edita con edit_feature). |
+
+### `list_graph_nodes`
+
+Lista los tipos de nodo para armar grafos de programación visual (tipo Grasshopper) que corren sin ventana con run_graph y se hornean con bake_graph: tipo, categoría, descripción y cada entrada y salida con su tipo de dato, acceso (item, lista o árbol), unidad y valor por defecto. Trae también el formato JSON del grafo con un ejemplo.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `category` ("entrada" | "matematica" | "listas" | "arboles" | "vectores" | "curvas" | "solidos" | "salida" o null; opcional, por defecto `null`): categoría de nodos: entrada, matematica, listas, arboles, vectores, curvas, solidos o salida; vacío = todas.
+  - `query` (texto; opcional, por defecto `null`): texto a buscar en el tipo, el título o la descripción (sin distinguir mayúsculas); vacío = todos.
+  - `include_format` (true/false; opcional, por defecto `true`): true para incluir el formato JSON del grafo, las reglas de emparejado y un ejemplo.
+- CLI: `omnicad call list_graph_nodes --doc pieza.omnicad`
+
+### `run_graph`
+
+Evalúa un grafo de nodos (programación visual tipo Grasshopper: flujo de datos con listas y árboles) SIN tocar el documento. Devuelve el valor de cada nodo «salida» (los cuerpos con volumen, área y caja), las entradas usadas y el estado y el tiempo de cada nodo; con export guarda los cuerpos de las salidas (.step, .stl, .3mf, .obj…). Las entradas se cambian por nombre en inputs (también con expresiones de parámetros del documento). Llamar de nuevo con el mismo grafo recalcula solo los nodos que dependen de lo que cambió. list_graph_nodes trae los nodos y el formato.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `graph` (objeto o texto; obligatorio): el grafo (objeto con "nodos"; ver list_graph_nodes), su texto JSON o la ruta a un archivo .json con el grafo o con {"graph", "inputs"}.
+  - `inputs` (objeto; opcional, por defecto `null`): valores de entrada por nombre, p. ej. {"lado": 20, "alto": "espesor * 2"}: el nombre (o id) de un nodo de entrada cambia su valor; "nodo.entrada" cambia cualquier entrada de un nodo. Acepta números, expresiones con parámetros del documento, listas y puntos [x, y, z].
+  - `outputs` (lista de texto o null; opcional, por defecto `null`): nombres de las salidas a devolver y exportar; vacío = todas.
+  - `export` (texto; opcional, por defecto `null`): ruta del archivo donde guardar los cuerpos de las salidas (.step/.stp, .stl, .obj, .3mf, .ply, .iges/.igs, .brep); vacío = no exporta.
+  - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo de export si ya existe.
+  - `include_nodes` (true/false; opcional, por defecto `true`): true para incluir el estado, los mensajes y el tiempo de cada nodo.
+- CLI: `omnicad call run_graph --doc pieza.omnicad graph=…`
+
+### `bake_graph`
+
+Hornea un grafo en el documento: agrega UN paso «Grafo» al timeline que guarda el grafo y sus entradas y lo vuelve a evaluar en cada recálculo (paramétrico: una entrada como "ancho / 2" o un nodo «parametro» siguen a los parámetros del documento, y el paso se edita con edit_feature). Los cuerpos salen de los nodos «salida»; operation los aplica como cuerpo nuevo, unir, cortar o intersecar. Con fixed=true deja cuerpos fijos (operación base, sin el grafo).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `graph` (objeto o texto; obligatorio): el grafo (objeto con "nodos"; ver list_graph_nodes), su texto JSON o la ruta a un archivo .json con el grafo o con {"graph", "inputs"}.
+  - `inputs` (objeto; opcional, por defecto `null`): valores de entrada por nombre (como en run_graph); las expresiones con parámetros del documento quedan enlazadas: al cambiar el parámetro, el paso se recalcula.
+  - `outputs` (lista de texto o null; opcional, por defecto `null`): nombres de las salidas cuyos cuerpos se hornean; vacío = todas.
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect" (con fixed=true, solo new_body).
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) para join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = el automático.
+  - `fixed` (true/false; opcional, por defecto `false`): true para hornear cuerpos fijos (operación base) en vez del grafo paramétrico.
+- CLI: `omnicad call bake_graph --doc pieza.omnicad graph=…`
 
 ## Grupo dev
 
