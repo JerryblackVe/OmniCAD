@@ -340,6 +340,6 @@ class DialogoRoscas(QDialog):
         botones = QDialogButtonBox(QDialogButtonBox.Close)
         botones.rejected.connect(self.reject)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Roscas ISO métricas (gruesa y fina) y unificadas (UNC/UNF) disponibles para Agujero y Rosca."))
+        lay.addWidget(QLabel("Roscas disponibles para Agujero y Rosca: métricas ISO, unificadas (UNC/UNF), trapezoidales, ACME, BSP paralela y cónica, y NPT."))
         lay.addWidget(t)
         lay.addWidget(botones)
