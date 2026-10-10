@@ -45,6 +45,18 @@ prueba con resultado numérico. Recetas de código: A, B y C de `AGENTS.md`.
 | Complementos de usuario | B5 + GH12 |
 | Cotas y símbolos de dibujo | F9 + RH14 |
 
+## Hecho (2026-10-10, sesión en la nube)
+
+| IDs | Qué quedó | Qué falta |
+|---|---|---|
+| F2 + B2 + RH13 | Revisar geometría e impresión 3D, Reparar cuerpo (`nucleo/revision.py`, API y comandos) | Lista con clic por problema; mapa de color del espesor |
+| F1 + F7 | Engranajes de evolvente recto/helicoidal, par con unión y vínculo, cremallera, rueda de cadena ISO 606, eje escalonado (`nucleo/engranajes.py`) | Polea dentada (perfil no verificado); valores ISO 606 a verificar contra la norma |
+| GH1, GH2, GH3, GH5, GH8 | Grafo sin ventana: árboles, 76 nodos, motor con caché, horneado paramétrico, `run_graph`/`bake_graph` (`clon/omnicad/grafo/`, `docs/grafo.md`) | GH4 lienzo y el resto |
+| B3 | Exportar glTF/GLB con materiales PBR (`io_archivos/gltf.py`) | FBX y USD |
+| B9 | Limpiar malla: fusionar por distancia, disolver degenerados, borrar sueltos, rellenar huecos, recalcular normales | Triángulos → cuadriláteros (la malla es solo de triángulos) |
+
+Ver el Registro de `PROJECT_LOG.md` (2026-10-10, «Nube: …») para el detalle y las herramientas MCP nuevas.
+
 ## Orden sugerido (lo que no pide decisiones)
 
 1. F2+B2+RH13 informe de geometría (útil ya, para STEP y mallas importadas).
