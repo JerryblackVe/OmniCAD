@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-160 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+163 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,12 +16,12 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 24 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 25 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 6 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
-| [inspeccion](#grupo-inspeccion) | 10 | Ver y medir el resultado. |
+| [inspeccion](#grupo-inspeccion) | 12 | Ver y medir el resultado. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
 | [dev](#grupo-dev) | 3 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
@@ -978,7 +978,8 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`fillet`](#fillet) | sí | Redondea aristas (empalme de radio constante). |
 | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
-| [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth) o pasantes (through_all). |
+| [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
+| [`create_thread`](#create_thread) | sí | Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. |
 | [`draft`](#draft) | sí | Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. |
 | [`gear_info`](#gear_info) | no | Calcula las medidas de un engranaje cilíndrico de evolvente sin modelarlo (ISO 21771, perfil de referencia ISO 53): diámetros primitivo, base, exterior y de fondo, paso, espesor del diente, dientes mínimos sin socavado (criterio estricto: 18 con 20°; el límite teórico, 17,1, va en min_teeth_theoretical) y desplazamiento mínimo. |
 | [`create_gear`](#create_gear) | sí | Crea un engranaje cilíndrico de evolvente (perfil de referencia ISO 53), recto o, con helix_angle, helicoidal, como un paso del timeline (tipo «engranaje»; medidas como expresiones con parámetros). |
@@ -1218,14 +1219,14 @@ Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quita
 
 ### `create_hole`
 
-Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth) o pasantes (through_all). Dos formas de ubicarlos: (1) ASOCIATIVA, en puntos de un boceto: sketch + sketch_points (ids de get_sketch, p. ej. el centro de un círculo); el agujero sigue al punto si el boceto o sus cotas cambian, perpendicular al plano del boceto y hacia el lado del material (flip lo invierte); face es opcional (elige el cuerpo). (2) FIJA, sobre una cara plana: face con un selector (p. ej. '>Z') o un id de find_faces ('Cuerpo1/F6'; UNA cara plana) y points: [u, v] en mm en los ejes x,y de un boceto sobre esa cara (find_faces da el center_uv) o [x, y, z] del mundo (se proyecta sobre la cara); sin points, el centro de la cara. Esos puntos quedan fijos en el espacio aunque la cara se mueva. El fondo es plano salvo drill_tip=true (cono de 118°). diameter y depth aceptan número (mm) o expresión.
+Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). Tres formas de ubicarlos: (1) ASOCIATIVA, en puntos de un boceto: sketch + sketch_points (ids de get_sketch, p. ej. el centro de un círculo); el agujero sigue al punto si el boceto o sus cotas cambian, perpendicular al plano del boceto y hacia el lado del material (flip lo invierte); face es opcional (elige el cuerpo). (2) FIJA, sobre una cara plana: face con un selector (p. ej. '>Z') o un id de find_faces ('Cuerpo1/F6'; UNA cara plana) y points: [u, v] en mm en los ejes x,y de un boceto sobre esa cara (find_faces da el center_uv) o [x, y, z] del mundo (se proyecta sobre la cara); sin points, el centro de la cara. Esos puntos quedan fijos en el espacio aunque la cara se mueva. (3) REFERENCIAS: face + reference_edges y reference_distances ubican el agujero a esas distancias de dos aristas rectas (paramétrico). hole_tap: simple, clearance (agujero de paso ISO 273 para el tornillo thread='M8' con fit close/normal/loose), cosmetic (rosca solo informativa; diámetro = diameter o la broca de roscar), modeled (rosca real: thread, thread_class '6H', '2B', 'auto' o '' y print_clearance para imprimir en 3D) o taper (rosca cónica de tubería R/NPT: agujero cónico 1:16, rosca cosmética). El fondo es plano salvo drill_tip=true (cono de 118°). Medidas en número (mm) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `diameter` (número o expresión; obligatorio): diámetro del agujero en mm (número o expresión).
-  - `face` (texto; opcional, por defecto `null`): la cara plana donde se empieza: selector (">Z"), id de find_faces ("Cuerpo1/F6"). Tiene que dar UNA cara. Obligatoria con points o sin sketch_points; con sketch_points es opcional y solo elige el cuerpo.
-  - `points` (lista de lista de número o null; opcional, por defecto `null`): posiciones fijas sobre face: lista de [u, v] (ejes x,y de un boceto sobre la cara) o [x, y, z] (mundo); vacío = centro de la cara. No se combina con sketch_points.
-  - `depth` (número o expresión; opcional, por defecto `null`): profundidad en mm hasta el fondo plano; obligatoria salvo con through_all.
+  - `diameter` (número o expresión; opcional, por defecto `null`): diámetro del agujero en mm (número o expresión); obligatorio con hole_tap simple, opcional con cosmetic.
+  - `face` (texto; opcional, por defecto `null`): la cara plana donde se empieza: selector (">Z"), id de find_faces ("Cuerpo1/F6"). Tiene que dar UNA cara. Obligatoria con points, con reference_edges o sin sketch_points; con sketch_points es opcional y solo elige el cuerpo.
+  - `points` (lista de lista de número o null; opcional, por defecto `null`): posiciones fijas sobre face: lista de [u, v] (ejes x,y de un boceto sobre la cara) o [x, y, z] (mundo); vacío = centro de la cara. No se combina con sketch_points ni con reference_edges.
+  - `depth` (número o expresión; opcional, por defecto `null`): profundidad en mm hasta el fondo plano; obligatoria salvo con through_all o to.
   - `through_all` (true/false; opcional, por defecto `false`): true atraviesa todo el cuerpo (ignora depth).
   - `hole_type` ("simple" | "counterbore" | "countersink"; opcional, por defecto `"simple"`): "simple", "counterbore" (abocardado) o "countersink" (avellanado).
   - `counterbore_diameter` (número o expresión; opcional, por defecto `null`): diámetro del abocardado en mm (mayor que diameter); solo con counterbore.
@@ -1237,7 +1238,36 @@ Hace agujeros redondos hacia adentro del material: simples, abocardados (counter
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de sketch_points; vacío = el último boceto.
   - `sketch_points` (lista de entero o null; opcional, por defecto `null`): ids de puntos del boceto (get_sketch los lista; el centro de un círculo también es un punto): un agujero asociativo en cada uno.
   - `flip` (true/false; opcional, por defecto `false`): con sketch_points, true invierte el sentido automático (hacia el material).
-- CLI: `omnicad call create_hole --doc pieza.omnicad diameter=…`
+  - `hole_tap` ("simple" | "clearance" | "cosmetic" | "modeled" | "taper"; opcional, por defecto `"simple"`): "simple", "clearance" (paso libre ISO 273), "cosmetic", "modeled" (rosca real) o "taper" (tubería cónica).
+  - `thread` (texto; opcional, por defecto `null`): rosca: "M8", "M8x1", "1/4-20 UNC", "Tr20x4", "G1/2" (taper: "R1/2" o "1/2 NPT"); con clearance, el tornillo ("M8").
+  - `thread_class` (texto; opcional, por defecto `"auto"`): clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), "auto" (6H o 2B si hay datos) o "" (perfil básico).
+  - `fit` ("close" | "normal" | "loose"; opcional, por defecto `"normal"`): ajuste del agujero de paso (clearance): "close" (serie fina), "normal" (media) o "loose" (gruesa).
+  - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura radial extra en mm de la rosca modelada (flancos y agujero), para imprimir en 3D.
+  - `left_hand` (true/false; opcional, por defecto `false`): true = rosca a izquierdas (solo modeled).
+  - `to` (texto; opcional, por defecto `null`): extensión «hasta»: "XY"/"XZ"/"YZ" o un plano de construcción, un cuerpo (id o nombre) o UNA cara (selector o id).
+  - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más hondo).
+  - `reference_edges` (lista de texto o null; opcional, por defecto `null`): posición por referencias: DOS aristas rectas (selector o id de find_edges), no paralelas.
+  - `reference_distances` (lista de número o expresión o null; opcional, por defecto `null`): las DOS distancias en mm del centro del agujero a cada arista de reference_edges.
+- CLI: `omnicad call create_hole --doc pieza.omnicad`
+
+### `create_thread`
+
+Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. Se elige con un selector estilo CadQuery (p. ej. '%CYLINDER'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F3', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. thread: designación ('M10', 'M10x1.25', '1/4-20 UNC', 'Tr20x4', '1/2-10 ACME', 'G1/2'); vacío = el tamaño de family más cercano al diámetro de la cara. thread_class: '6g'/'6h'/'6H'/'6G' (métrica, ISO 965-1), '2A'/'3A'/'2B'/'3B' (unificada, ASME B1.1), 'auto' (la de Fusion: 6H/6g o 2B/2A, si hay datos del tamaño) o '' (perfil básico): corre los flancos al centro de la tolerancia. print_clearance agrega holgura radial para imprimir en 3D. modeled=false = cosmética (no cambia la geometría; las roscas cónicas R/NPT siempre quedan cosméticas sobre una cara cilíndrica). length vacío = largo completo; offset corre el inicio. Perfil según el tipo: 60° (M, UN), 55° (G), 30° (Tr) o 29° (ACME).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o lista de texto; obligatorio): caras cilíndricas a roscar: selector ("%CYLINDER"), id de find_faces ("Cuerpo1/F3") o lista.
+  - `thread` (texto; opcional, por defecto `null`): designación de la rosca ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "G1/2"…); vacío = automática según la cara.
+  - `family` ("iso_metric" | "unified" | "trapezoidal" | "acme" | "bsp_parallel" | "bsp_taper" | "npt"; opcional, por defecto `"iso_metric"`): tipo de rosca para el tamaño automático: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
+  - `thread_class` (texto; opcional, por defecto `"auto"`): clase de tolerancia: "6g", "6H", "2A", "2B"…, "auto" (la de Fusion) o "" (perfil básico).
+  - `modeled` (true/false; opcional, por defecto `true`): true corta el filete real; false = rosca cosmética (la geometría no cambia).
+  - `length` (número o expresión; opcional, por defecto `null`): largo roscado en mm (número o expresión); vacío = toda la cara.
+  - `offset` (número o expresión; opcional, por defecto `0`): distancia en mm desde el extremo de la cara hasta donde empieza la rosca (con length).
+  - `left_hand` (true/false; opcional, por defecto `false`): true = rosca a izquierdas.
+  - `reverse` (true/false; opcional, por defecto `false`): true mide length y offset desde el otro extremo de la cara.
+  - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura radial extra en mm (flancos), para piezas impresas en 3D.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+- CLI: `omnicad call create_thread --doc pieza.omnicad faces=…`
 
 ### `draft`
 
@@ -2106,6 +2136,8 @@ Ver y medir el resultado.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
+| [`thread_info`](#thread_info) | no | Datos de roscas normalizadas (no cambia el documento). |
+| [`fit_tolerance`](#fit_tolerance) | no | Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). |
 | [`get_viewport_image`](#get_viewport_image) | no | Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde una vista estándar o una dirección propia. |
 | [`get_physical_properties`](#get_physical_properties) | no | Volumen (mm³), área (mm²), masa (g), centro de masa y caja envolvente de cada cuerpo y del total. |
 | [`measure_distance`](#measure_distance) | no | Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista o un punto. |
@@ -2116,6 +2148,28 @@ Ver y medir el resultado.
 | [`check_geometry`](#check_geometry) | no | Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. |
 | [`check_printability`](#check_printability) | no | Revisión de impresión 3D de un cuerpo (o de todos), como la caja de herramientas de impresión 3D de Blender: si es estanco, espesor mínimo de pared (rayos hacia adentro desde la superficie; zonas más finas que min_thickness), zonas en voladizo que necesitan soportes (más de overhang_angle desde la vertical, sin contar la cara apoyada en la cama: el plano Z más bajo del cuerpo) y aristas filosas (ángulo interior menor que sharp_angle). printable = estanco y sin paredes finas. |
 | [`repair_body`](#repair_body) | sí | Repara un cuerpo y deja un paso «Reparar cuerpo» en el timeline (editable; un paso de deshacer): cose las aristas abiertas (si queda estanco pasa a sólido), baja las tolerancias mayores que tolerance, corrige con ShapeFix (orientación de caras, contornos) y refina (une caras coplanares). |
+
+### `thread_info`
+
+Datos de roscas normalizadas (no cambia el documento). Sin argumentos: los tipos (familias) con su norma, ángulo de perfil y clases. Con family: sus tamaños y designaciones. Con thread: diámetro mayor, paso, diámetros de flancos y menor básicos, broca para roscar, agujero de paso ISO 273 (métricas) y, con thread_class, los diámetros límite de la clase (ISO 965-1 o ASME B1.1; 'auto' da los de las dos clases por defecto). Todo en mm.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `thread` (texto; opcional, por defecto `null`): designación ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "1/2-10 ACME", "G1/2", "R1/2", "1/2 NPT").
+  - `family` ("iso_metric" | "unified" | "trapezoidal" | "acme" | "bsp_parallel" | "bsp_taper" | "npt" o null; opcional, por defecto `null`): tipo de rosca cuyos tamaños listar: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
+  - `thread_class` (texto; opcional, por defecto `null`): clase para los diámetros límite: "6g", "6H", "2A", "2B"…, o "auto" (las dos por defecto).
+- CLI: `omnicad call thread_info --doc pieza.omnicad`
+
+### `fit_tolerance`
+
+Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). Hay grados IT5 a IT11 hasta 500 mm; agujeros D, E, F, G, H y ejes d, e, f, g, h, j6, k, n, p, s. Ej.: nominal=25, hole='H7', shaft='g6'. Todo en mm.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `nominal` (número; obligatorio): medida nominal en mm (más de 0 y hasta 500).
+  - `hole` (texto; opcional, por defecto `"H7"`): clase del agujero, letra mayúscula y grado: "H7", "H8", "H11", "G7", "F8"…
+  - `shaft` (texto; opcional, por defecto `"g6"`): clase del eje, letra minúscula y grado: "g6", "h6", "h7", "f7", "k6", "n6", "p6", "s6", "j6"…
+- CLI: `omnicad call fit_tolerance --doc pieza.omnicad nominal=…`
 
 ### `get_viewport_image`
 

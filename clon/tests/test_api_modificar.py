@@ -321,6 +321,101 @@ def test_agujero_en_boceto_errores(caja):
         assert foto(caja) == antes, args
 
 
+def test_agujero_con_holgura_roscado_y_conico(caja):
+    r = llamar(caja, "create_hole", face=">Z", hole_tap="clearance", thread="M8", through_all=True, points=[[-5, -5]])
+    assert r["thread"] == "M8" and volumen(caja) == pytest.approx(8000 - math.pi * 4.5 ** 2 * 20, abs=1e-2)  # ISO 273
+    llamar(caja, "undo")
+    llamar(caja, "create_hole", face=">Z", hole_tap="clearance", thread="M8", fit="close", through_all=True)
+    assert volumen(caja) == pytest.approx(8000 - math.pi * 4.2 ** 2 * 20, abs=1e-2)
+    llamar(caja, "undo")
+    r = llamar(caja, "create_hole", face=">Z", hole_tap="modeled", thread="M6", thread_class="6H", depth=6)
+    assert r["thread"] == "M6x1" and 8000 - math.pi * 9 * 7 < volumen(caja) < 8000 - math.pi * 2.46 ** 2 * 6
+    paso = llamar(caja, "get_timeline")["steps"][-1]["params"]
+    assert (paso["rosca"], paso["designacion"], paso["clase_rosca"]) == ("modelada", "M6x1", "6H")
+    llamar(caja, "undo")
+    r = api.llamar(caja, "create_hole", {"face": ">Z", "hole_tap": "taper", "thread": "1/4 NPT", "depth": 10})
+    assert r["ok"] and any("cónico" in a for a in r["avisos"])
+    llamar(caja, "undo")
+    llamar(caja, "create_hole", face=">Z", hole_tap="cosmetic", thread="M6", depth=6)          # Ø = broca de roscar
+    assert volumen(caja) == pytest.approx(8000 - math.pi * 6.25 * 6, abs=1e-2)
+
+
+def test_agujero_hasta_y_por_referencias(caja):
+    llamar(caja, "create_hole", face=">Z", diameter=4, to="XY", to_offset=-2, points=[[5, 5]])   # z = 20 → z = 2
+    assert volumen(caja) == pytest.approx(8000 - math.pi * 4 * 18, abs=1e-2)
+    llamar(caja, "undo")
+    llamar(caja, "create_hole", face=">Z", diameter=4, to="<Z", points=[[5, 5]])                  # hasta la cara de abajo
+    assert volumen(caja) == pytest.approx(8000 - math.pi * 4 * 20, abs=1e-2)
+    llamar(caja, "undo")
+    r = llamar(caja, "create_hole", face=">Z", diameter=2, depth=3, reference_edges=["edges:>X and >Z", "edges:<Y and >Z"],
+               reference_distances=[4, "3 mm"])
+    assert r["holes"] == 1 and volumen(caja) == pytest.approx(8000 - math.pi * 3, abs=1e-2)
+    c = llamar(caja, "find_faces", selector="%CYLINDER")["faces"][0]["center"]
+    assert c[0] == pytest.approx(10 - 4) and c[1] == pytest.approx(-10 + 3)
+
+
+def test_agujero_roscado_errores(caja):
+    antes = foto(caja)
+    for args in ({"face": ">Z", "hole_tap": "modeled", "depth": 5},                              # sin thread
+                 {"face": ">Z", "hole_tap": "modeled", "thread": "M7", "depth": 5},              # rosca desconocida
+                 {"face": ">Z", "hole_tap": "modeled", "thread": "M6", "thread_class": "6g", "depth": 5},  # de eje
+                 {"face": ">Z", "hole_tap": "taper", "thread": "M6", "depth": 5},               # no es cónica
+                 {"face": ">Z", "hole_tap": "clearance", "thread": "1/4-20", "depth": 5},       # ISO 273: solo M
+                 {"face": ">Z", "depth": 5},                                                      # simple sin diámetro
+                 {"face": ">Z", "diameter": 3, "depth": 5, "reference_edges": ["edges:>X and >Z"],
+                  "reference_distances": [2]}):
+        assert falla(caja, "create_hole", **args)["error_kind"] == "INVALID_ARGUMENTS", args
+        assert foto(caja) == antes, args
+
+
+def test_create_thread_exterior_con_clase_y_tamano_automatico(s):
+    llamar(s, "create_cylinder", radius=5, height=12)
+    r = llamar(s, "create_thread", faces="%CYLINDER", thread_class="6g", length=6)
+    assert r["threads"] == [{"body": "Cuerpo1", "designation": "M10x1.5", "class": "6g", "internal": False,
+                             "modeled": True}]
+    assert r["faces_used"] == 1 and r["bodies_modified"][0]["volume"] < math.pi * 25 * 12
+    llamar(s, "undo")
+    r = llamar(s, "create_thread", faces="%CYLINDER", thread="M10x1.25", thread_class="", modeled=False)
+    assert r["threads"][0]["class"] is None and volumen(s) == pytest.approx(math.pi * 25 * 12, abs=1e-2)
+    for args, kind in (({"faces": ">Z"}, "UNSUPPORTED_ELEMENT"),
+                       ({"faces": "%CYLINDER", "thread": "M10", "thread_class": "2A"}, "INVALID_ARGUMENTS"),
+                       ({"faces": "%CYLINDER", "thread": "Tr99"}, "INVALID_ARGUMENTS")):
+        assert falla(s, "create_thread", **args)["error_kind"] == kind, args
+
+
+def test_create_thread_interior_trapezoidal(s):
+    llamar(s, "create_box", length=40, width=40, height=12)
+    llamar(s, "create_hole", face=">Z", diameter=16, through_all=True)
+    v0 = volumen(s)
+    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal")
+    assert r["threads"][0]["designation"] == "Tr20x4" and r["threads"][0]["internal"]
+    assert v0 - volumen(s) == pytest.approx(0.5 * math.pi * (10 ** 2 - 8 ** 2) * 12, rel=0.03)
+
+
+def test_thread_info_y_fit_tolerance(s):
+    familias = {f["family"]: f for f in llamar(s, "thread_info")["families"]}
+    assert set(familias) == {"iso_metric", "unified", "trapezoidal", "acme", "bsp_parallel", "bsp_taper", "npt"}
+    assert familias["trapezoidal"]["profile_angle"] == 30 and familias["bsp_taper"]["taper"]
+    tr = llamar(s, "thread_info", family="trapezoidal")["sizes"]
+    assert tr[0] == {"size": "Tr8", "designations": ["Tr8x1.5"]}
+    m10 = llamar(s, "thread_info", thread="M10", thread_class="6g")
+    assert (m10["designation"], m10["pitch"], m10["tap_drill"]) == ("M10x1.5", 1.5, 8.5)
+    assert m10["clearance_holes"] == {"close": 10.5, "normal": 11.0, "loose": 12.0}
+    assert m10["limits"][0]["major_diameter"] == pytest.approx([9.732, 9.968])
+    assert m10["limits"][0]["pitch_diameter"] == pytest.approx([8.862, 8.994], abs=6e-4)
+    assert [x["class"] for x in llamar(s, "thread_info", thread="M10", thread_class="auto")["limits"]] == ["6H", "6g"]
+    unc = llamar(s, "thread_info", thread="1/4-20", thread_class="2B")["limits"][0]
+    assert [round(x / 25.4, 4) for x in unc["pitch_diameter"]] == [0.2175, 0.2224]
+    f = llamar(s, "fit_tolerance", nominal=25, hole="H7", shaft="g6")
+    assert f["fit_type"] == "clearance" and (f["max_clearance"], f["min_clearance"]) == pytest.approx((0.041, 0.007))
+    assert f["hole"]["upper_deviation"] == pytest.approx(0.021) and f["shaft"]["lower_deviation"] == pytest.approx(-0.02)
+    assert llamar(s, "fit_tolerance", nominal=25, hole="H7", shaft="p6")["fit_type"] == "interference"
+    assert llamar(s, "fit_tolerance", nominal=25, hole="H7", shaft="k6")["fit_type"] == "transition"
+    for args in ({"nominal": 600, "hole": "H7", "shaft": "g6"}, {"nominal": 25, "hole": "g6", "shaft": "H7"}):
+        assert falla(s, "fit_tolerance", **args)["error_kind"] == "INVALID_ARGUMENTS"
+    assert falla(s, "thread_info", thread="M7")["error_kind"] == "INVALID_ARGUMENTS"
+
+
 # ---------------------------------------------------------------- desmoldeo
 def test_draft_inclina_las_laterales(caja):
     r = llamar(caja, "draft", faces="#Z", angle=3, neutral="<Z")
@@ -398,3 +493,14 @@ def test_secuencia_caja_parametrica_fillet_shell_y_cambio(caja_param):
     esperado30 = (27000 - 4 * (9 - 9 * math.pi / 4) * 30) - (26 * 26 * 28 - 4 * (1 - math.pi / 4) * 28)
     assert volumen(s) == pytest.approx(esperado30, abs=1e-2)
     assert len(llamar(s, "find_faces", selector="%CYLINDER")["faces"]) == 8                   # 4 exteriores + 4 interiores
+
+
+def test_agujero_en_boceto_con_holgura_iso_273(caja):
+    """Las dos ampliaciones de create_hole juntas: posición asociativa (sketch_points) + tipo de rosca (clearance)."""
+    llamar(caja, "create_sketch", plane=">Z", name="Tapa")
+    llamar(caja, "draw_circle", radius=1, center_x=3, center_y=4, sketch="Tapa")
+    centro = llamar(caja, "get_sketch", sketch="Tapa")["entities"][0]["points"][0]
+    r = llamar(caja, "create_hole", sketch="Tapa", sketch_points=[centro], hole_tap="clearance", thread="M8",
+               through_all=True)
+    assert r["thread"] == "M8" and r["direction"] == [0, 0, -1]
+    assert volumen(caja) == pytest.approx(8000 - math.pi * 4.5 ** 2 * 20, abs=1e-2)          # M8 normal: Ø 9
