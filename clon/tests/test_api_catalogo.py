@@ -15,7 +15,7 @@ from omnicad.api import registro as cat
 
 ESPERADAS = {"documento": {"get_scene_info", "new_document", "open_document", "save_document", "export", "undo",
                            "redo", "get_timeline", "edit_feature", "suppress_feature", "delete_feature", "rename",
-                           "insert_file"},
+                           "insert_file", "set_marker", "get_profile_sketches"},
              "parametros": {"get_parameters", "create_parameter", "set_parameter", "delete_parameter"}}
 
 
@@ -35,7 +35,7 @@ def temporales():
 def test_herramientas_registradas_por_grupo():
     for grupo, nombres in ESPERADAS.items():
         assert {h["nombre"] for h in api.catalogo(grupo)} == nombres
-    assert len(api.catalogo(["documento", "parametros"])) == 17
+    assert len(api.catalogo(["documento", "parametros"])) == 19
 
 
 def test_esquemas_validos_y_documentados():

@@ -32,13 +32,13 @@ from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
 from ..restricciones import Boceto
 from ..timeline.documento import Documento, ErrorDocumento
-from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpPrimitiva, propiedades_cuerpo
+from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
 from . import formato, temas
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
-from .dialogos import DialogoParametros, DialogoPrimitiva, DialogoRejilla
+from .dialogos import DialogoParametros, DialogoRejilla
 from .iconos import icono
 from .modo_boceto import ModoBoceto
 from .navegador import ORIGEN, Navegador
@@ -184,6 +184,8 @@ class VentanaPrincipal(QMainWindow):
         self.timeline.eliminar.connect(lambda i: self._intentar(lambda: self.doc.eliminar(i)))
         self.timeline.mover.connect(lambda i, n: self._intentar(lambda: self.doc.mover(i, n)))
         self.timeline.marcador.connect(lambda n: self._intentar(lambda: self.doc.mover_marcador(n)))
+        self.timeline.buscar_navegador.connect(self.buscar_en_navegador)
+        self.timeline.animar_union.connect(self.animar_union)
         self._crear_menu_unidades()
 
         self.panel_datos = PanelDatos(self.prefs)
@@ -280,10 +282,7 @@ class VentanaPrincipal(QMainWindow):
             else:
                 funcion = lambda _=False, c=clase: self.ejecutar_comando(c())  # noqa: E731
             A(clave, clase.TITULO, funcion, getattr(clase, "ATAJO", None), getattr(clase, "AYUDA", None), clase.ICONO)
-        for forma, texto, ico in (("caja", "Prisma rectangular", "caja"), ("cilindro", "Cilindro", "cilindro"),
-                                  ("esfera", "Esfera", "esfera"), ("toroide", "Toroide", "toroide")):
-            A(forma, texto, lambda _=False, f=forma: self.crear_primitiva(f), None,
-              f"Crea un cuerpo «{texto.lower()}» con medidas paramétricas.", ico)
+        # caja, cilindro, esfera y toroide: comandos con panel de `comandos/primitivas.py` (ya están en CATALOGO)
         A("parametros", "Cambiar parámetros", self.parametros, "Ctrl+P",
           "Parámetros de usuario con nombre, expresión y unidad. Todo el modelo se recalcula.", "parametros")
         A("calcular", "Calcular todo", self.calcular_todo, "Ctrl+B", "Vuelve a calcular todo el timeline.", "calcular")
@@ -316,8 +315,9 @@ class VentanaPrincipal(QMainWindow):
           "Inserta un archivo STL, OBJ, 3MF o PLY como cuerpo de malla.", "insertar_malla")
         A("exportar_malla", "Exportar como malla…", lambda: self.exportar(("3mf", "stl", "obj", "ply")), None,
           "Guarda los cuerpos como malla: STL, OBJ, 3MF o PLY.", "exportar_malla")
-        A("seleccionar", "Seleccionar", lambda: self.visor.set_modo(None), None,
-          "Sale de los modos de navegación (órbita, encuadre, zoom).", "seleccionar")
+        A("seleccionar", "Seleccionar", self.accion_seleccionar, None,
+          "Vuelve a seleccionar: sale de la herramienta de boceto activa (línea, círculo…) y de los modos de "
+          "navegación (órbita, encuadre, zoom) y de selección por región.", "seleccionar")
         A("caja_herramientas", "Caja de herramientas", self.abrir_caja_herramientas, "S",
           "Buscá y usá cualquier comando, y fijá los que más usás (en un boceto, con su propia lista).", "chinche")
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
@@ -745,6 +745,7 @@ class VentanaPrincipal(QMainWindow):
     # ------------------------------------------------------------ documento
     def set_documento(self, doc):
         if self.modo_boceto.activo:
+            self._cerrar_panel_de_boceto()
             self.modo_boceto.cancelar()
         self._cancelar_eleccion()
         self.doc = doc
@@ -1027,7 +1028,8 @@ class VentanaPrincipal(QMainWindow):
         self._agregar(OpOperacionBase.desde_cuerpos(self.doc.nuevo_id(), [estado.cuerpos[c] for c in cuerpos]))
 
     def _insertar_archivo(self, clase):
-        """INSERTAR › DXF / SVG: primero el archivo, después el diálogo para ubicarlo en un plano."""
+        """INSERTAR › DXF / SVG / imagen / lienzo: primero el archivo, después el diálogo para ubicarlo en un plano
+        (con un boceto abierto, DXF, SVG e imagen van a ESE boceto: ver `ejecutar_comando`)."""
         ext = clase.EXTENSIONES
         ruta, _ = QFileDialog.getOpenFileName(self, clase.TITULO, "", f"{ext[0].upper()} (" +
                                               " ".join(f"*.{e}" for e in ext) + ")")
@@ -1145,6 +1147,16 @@ class VentanaPrincipal(QMainWindow):
             self.grupos_filtro = set(self.FILTROS_GRUPO)
         (self.grupos_filtro.add if activo else self.grupos_filtro.discard)(grupo)
         self._aplicar_filtro()
+
+    def accion_seleccionar(self, _=False):
+        """SELECCIONAR › Seleccionar (como la flecha de Fusion): deja de dibujar y vuelve a elegir. Dentro de un
+        boceto sale de la herramienta activa (antes solo salía de órbita, encuadre y zoom y la herramienta de
+        boceto seguía dibujando); afuera, también corta la elección de plano pendiente."""
+        self.visor.set_modo(None)
+        if self.modo_boceto.activo:
+            self.modo_boceto.herramienta("seleccionar")
+        else:
+            self._cancelar_eleccion()
 
     def _modo_seleccion(self, modo):
         if self.panel is not None or not self._salir_de_boceto():
@@ -1496,6 +1508,44 @@ class VentanaPrincipal(QMainWindow):
             self.ejecutar_comando(clase(), valores={"cuerpos" if accion != "suprimir" else "objetos":
                                                      [hit_desde_ref({"tipo": "cuerpo", "cuerpo": clave}, estado)]})
 
+    def claves_navegador_de(self, op_id):
+        """Claves del navegador de lo que crea el paso `op_id` (su boceto, plano, unión, componente o cuerpos); si
+        no crea nada propio (empalme, vaciado…), los cuerpos que modifica."""
+        estado = self.doc.estado_final
+        propias = [op_id] + [k for k in list(estado.planos) + list(estado.ejes) + list(estado.puntos) +
+                             list(estado.lienzos) if str(k).split("_")[0] == op_id]
+        propias += [c.id for c in estado.cuerpos.values() if c.op_id == op_id]
+        if any(self.navegador.item(k) is not None for k in propias):
+            return propias
+        try:
+            deps = self.doc.operacion(op_id).dependencias()
+        except Exception:  # noqa: BLE001 — sin dependencias legibles no hay a qué apuntar
+            deps = set()
+        return [c.id for c in estado.cuerpos.values() if c.op_id in deps]
+
+    def buscar_en_navegador(self, op_id):
+        """Timeline › «Buscar en navegador» (Fusion: Find in Browser): despliega el navegador hasta el elemento
+        del paso y lo deja elegido. Devuelve la clave encontrada (o None)."""
+        clave = next((k for k in self.claves_navegador_de(op_id) if self.navegador.item(k) is not None), None)
+        if clave is None:
+            op = self.doc.operacion(op_id)
+            self.mensaje(f"«{op.nombre}» no tiene un elemento en el navegador (¿suprimido o después del marcador?).")
+            return None
+        if not self.navegador.isVisible():
+            self.acciones["ver_navegador"].setChecked(True)
+            self._mostrar_elemento("ver_navegador", True)
+        if self.navegador.arbol.isHidden():
+            self.navegador.b_plegar.click()          # el navegador estaba plegado: se despliega
+        item = self.navegador.item(clave)
+        padre = item.parent()
+        while padre is not None:
+            padre.setExpanded(True)
+            padre = padre.parent()
+        self.navegador.arbol.setCurrentItem(item)
+        self.navegador.arbol.scrollToItem(item)
+        self.navegador.ajustar_alto()
+        return clave
+
     def _elegido_en_navegador(self, ident):
         """Con un comando abierto, elegir en el navegador también selecciona (como en Fusion)."""
         from .comando import Seleccion, hit_desde_ref
@@ -1587,6 +1637,10 @@ class VentanaPrincipal(QMainWindow):
     # ------------------------------------------------------------ diálogos de comando (estilo Fusion)
     def ejecutar_comando(self, comando, op=None, valores=None):
         """Abre el diálogo del comando sobre el lienzo. Con `op` edita ese paso del timeline."""
+        if op is None and self.modo_boceto.activo:
+            from .comandos.insertar_en_boceto import InsertarEnBoceto, admite
+            if admite(comando):                # Insertar SVG / DXF / imagen: al boceto abierto, sin cambiar de plano
+                return self._comando_en_boceto(InsertarEnBoceto(comando, self.modo_boceto.lienzo), valores)
         if not self._salir_de_boceto():
             return None
         ctx = ContextoComando(self.doc, self, op)
@@ -1614,6 +1668,29 @@ class VentanaPrincipal(QMainWindow):
         self.area.reubicar()
         self.visor.setFocus()
         return panel
+
+    def _comando_en_boceto(self, comando, valores=None):
+        """Panel de un comando que trabaja DENTRO del boceto abierto (Insertar SVG/DXF/imagen): el boceto sigue
+        abierto, el panel queda arriba de su paleta y al aceptar el cambio entra en el boceto (no en el timeline)."""
+        self._cancelar_eleccion()
+        if self.panel is not None:
+            self.panel.cancelar()
+        self.modo_boceto.herramienta("seleccionar")     # una herramienta a medio usar no queda colgada debajo
+        ctx = ContextoComando(self.doc, self, None)
+        panel = PanelComando(comando, ctx, self.visor, valores, self.area)
+        panel.aceptado.connect(lambda _op: self._comando_cerrado())
+        panel.cancelado.connect(self._comando_cerrado)
+        self.panel = panel
+        self.visor.ventana_libre = False
+        self.area.set_panel(panel)
+        panel.show()
+        self.area.reubicar()
+        return panel
+
+    def _cerrar_panel_de_boceto(self):
+        """Si el panel abierto trabaja dentro del boceto (Insertar SVG…), se cancela: el boceto se cierra."""
+        if self.panel is not None and getattr(self.panel.comando, "EN_BOCETO_ABIERTO", False):
+            self.panel.cancelar()
 
     def _previa_comando(self, estado):
         if self.panel is None:
@@ -1750,6 +1827,7 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.acciones[pendiente].trigger()
 
     def _boceto_terminado(self, boceto, datos):
+        self._cerrar_panel_de_boceto()
         self._indice_boceto = None
         op = datos.get("op")
         if op is None:
@@ -1765,11 +1843,8 @@ class VentanaPrincipal(QMainWindow):
 
 
     def crear_primitiva(self, forma):
-        if not self._salir_de_boceto():
-            return
-        dlg = DialogoPrimitiva(self.doc, forma, parent=self)
-        if dlg.exec():
-            self._agregar(dlg.crear_operacion())
+        """Prisma rectangular, cilindro, esfera o toroide: abre su comando con panel (`comandos/primitivas.py`)."""
+        return self.ejecutar_comando(CATALOGO[forma]())
 
     def editar_operacion(self, op_id):
         if not self._salir_de_boceto():
@@ -1792,10 +1867,6 @@ class VentanaPrincipal(QMainWindow):
                                         "activalo o corregí su plano de referencia para editarlo.")
                 return
             self._iniciar_boceto(op.boceto, br.plano, {"op": op}, self.doc.indice(op.id))
-        elif isinstance(op, OpPrimitiva):
-            dlg = DialogoPrimitiva(self.doc, op=op, parent=self)
-            if dlg.exec():
-                self._reemplazar(dlg.crear_operacion())
         elif isinstance(op, OpImportarSTEP):
             QMessageBox.information(self, NOMBRE_APP, f"Importación de «{op.p['archivo']}»: no tiene parámetros editables.")
 

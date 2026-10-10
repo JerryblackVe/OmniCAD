@@ -145,6 +145,9 @@ class DialogoRejilla(QDialog):
 
 
 class DialogoPrimitiva(_DialogoBase):
+    """Diálogo VIEJO de las primitivas (X/Y/Z y radio escritos a mano). La interfaz ya no lo abre: la cinta y el
+    timeline usan los comandos con panel de `comandos/primitivas.py`. Se conserva para scripts y pruebas viejas."""
+
     def __init__(self, doc, forma="caja", op=None, parent=None):
         forma = op.p["forma"] if op else forma
         super().__init__(OpPrimitiva.ETIQUETAS[forma], parent)

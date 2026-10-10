@@ -82,20 +82,115 @@ class Medir(Comando):
     def construir(self, v, ctx):
         return None
 
-    def mostrar(self, v, ctx):
-        r = self._datos(v, ctx)
-        prims = []
-        if r and r.get("punto_a") is not None and r.get("punto_b") is not None:
+    # ------------------------------------------------------------ cota guía en la vista (como Fusion)
+    @staticmethod
+    def _tam_flecha(visor, punto):
+        """Largo de las flechas en mm para que se vean de ~12 px en pantalla."""
+        from ..manipuladores import mm_por_px
+        try:
+            return float(mm_por_px(visor, punto)) * 12.0
+        except Exception:  # noqa: BLE001 — sin cámara (pruebas), un tamaño fijo
+            return 2.0
+
+    def cota(self, r, v, ctx, visor=None, color=analisis_vista.COLOR_COTA):
+        """Cota guía de un resultado de `an.medir`: {"capas", "etiquetas"} (ver `analisis_vista.cota_guia`).
+        Dos selecciones: la distancia mínima entre los puntos más cercanos (y el ángulo, si lo hay). Una sola:
+        largo de una arista recta, Ø de lo circular, área de una cara, posición de un punto o volumen."""
+        vacio = {"capas": [], "etiquetas": []}
+        if not r:
+            return vacio
+        vista = np.asarray(visor.R[2], float) if visor is not None and hasattr(visor, "R") else None
+
+        def tam(p):
+            return self._tam_flecha(visor, p) if visor is not None else 2.0
+        if r.get("punto_a") is not None and r.get("punto_b") is not None:
             pa, pb = np.asarray(r["punto_a"], float), np.asarray(r["punto_b"], float)
-            prims = [("lineas", np.array([pa, pb]), (1.0, 0.6, 0.1), 2.0), ("puntos", np.array([pa, pb]), (1.0, 0.6, 0.1), 8)]
-        ctx.ventana.visor.set_capa("medida", prims) if ctx.ventana else None
+            texto = f"{_n(r['distancia'])} mm"
+            if r.get("angulo") is not None and r["angulo"] > 1e-6:
+                texto += f" · {_n(r['angulo'])}°"
+            return analisis_vista.cota_guia(pa, pb, texto, tam((pa + pb) / 2), vista, color)
+        info = r.get("a") or {}
+        hit = (v.get("a") or [None])[0]
+        if info.get("centro") is not None and info.get("radio"):
+            centro = np.asarray(info["centro"], float)
+            return analisis_vista.cota_diametro(centro, info["radio"], info.get("eje") or info.get("normal"),
+                                                f"Ø {_n(info['diametro'])} mm", tam(centro), vista, color)
+        if info.get("tipo") == "arista":
+            from ...nucleo import geometria as geo
+            poli = np.asarray(geo.polilinea_arista(_entrada(hit, ctx.estado)), float)
+            if info.get("direccion") is not None:          # recta: cota de punta a punta
+                return analisis_vista.cota_guia(poli[0], poli[-1], f"{_n(info['largo'])} mm", tam(poli[0]),
+                                                vista, color)
+            from ..visor3d import _segmentos
+            return {"capas": [("lineas", _segmentos([poli]), color, 2.5)],
+                    "etiquetas": [(poli[len(poli) // 2], f"{_n(info['largo'])} mm")]}
+        if info.get("posicion") is not None:
+            p = np.asarray(info["posicion"], float)
+            return {"capas": [("puntos", np.array([p]), color, 9)], "etiquetas": [(p, _vec(p))]}
+        if info.get("tipo") == "cara":
+            if hit and hit.get("punto") is not None:
+                p = np.asarray(hit["punto"], float)        # donde se hizo clic sobre la cara
+            else:
+                from ..manipuladores import centroide
+                p = centroide(_entrada(hit, ctx.estado))
+            return {"capas": [], "etiquetas": [(p, f"{_n(info['area'])} mm²")]}
+        if info.get("volumen") is not None and info.get("centro_masa") is not None:
+            p = np.asarray(info["centro_masa"], float)
+            return {"capas": [("puntos", np.array([p]), color, 8)], "etiquetas": [(p, f"{_n(info['volumen'])} mm³")]}
+        return vacio
+
+    def mostrar(self, v, ctx):
+        self._v, self._ctx = v, ctx
+        visor = ctx.ventana.visor if ctx.ventana else None
+        if visor is None:
+            return
+        if not getattr(self, "_escuchando", False):        # valor en vivo de lo que está bajo el cursor
+            visor.entidad_sobre.connect(self._sobre)
+            self._escuchando = True
+        self._limpiar(visor, "medida_previa")
+        self._limpiar(visor, "medida")
+        c = self.cota(self._datos(v, ctx), v, ctx, visor)
+        visor.set_capa("medida", c["capas"])
+        visor.set_etiquetas("medida", c["etiquetas"])
+
+    def _sobre(self, hit):
+        """Con la primera selección hecha, lo que está bajo el cursor se mide en vivo (cota celeste con «≈»),
+        antes de hacer el segundo clic."""
+        ctx, v = getattr(self, "_ctx", None), getattr(self, "_v", None)
+        visor = ctx.ventana.visor if ctx is not None and ctx.ventana else None
+        if visor is None:
+            return
+        self._limpiar(visor, "medida_previa")
+        if hit is None or not v or not v.get("a") or v.get("b") or hit.get("ref") == v["a"][0].get("ref"):
+            return
+        try:
+            r = an.medir(_entrada(v["a"][0], ctx.estado), _entrada(hit, ctx.estado),
+                         centro_a_centro=bool(v.get("centro")))
+            c = self.cota(r, {"a": v["a"], "b": [hit]}, ctx, visor, analisis_vista.COLOR_COTA_PREVIA)
+        except Exception:  # noqa: BLE001 — lo que no se puede medir simplemente no muestra la cota previa
+            return
+        visor.set_capa("medida_previa", c["capas"])
+        visor.set_etiquetas("medida_previa", [(p, f"≈ {t}") for p, t in c["etiquetas"]])
+
+    @staticmethod
+    def _limpiar(visor, capa):
+        visor.set_capa(capa, None)
+        visor.set_etiquetas(capa, None)
 
     def aplicar(self, v, ctx):
         pass
 
     def al_cerrar(self, ctx):
         if ctx.ventana:
-            ctx.ventana.visor.set_capa("medida", None)
+            visor = ctx.ventana.visor
+            if getattr(self, "_escuchando", False):
+                try:
+                    visor.entidad_sobre.disconnect(self._sobre)
+                except (RuntimeError, TypeError):
+                    pass
+                self._escuchando = False
+            for capa in ("medida", "medida_previa"):
+                self._limpiar(visor, capa)
 
 
 class Interferencia(Comando):

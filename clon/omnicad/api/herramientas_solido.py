@@ -310,44 +310,61 @@ def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: 
                       x, y, z, operation, target, caja_centrada=True)
 
 
+def _radio_o_diametro(radio, diametro, nombre_radio, nombre_diametro):
+    """El radio que guarda el paso, dado el radio o el diámetro (uno solo, como el campo Diámetro del panel de la
+    app). Un diámetro numérico se guarda como su mitad; con parámetros, como «(expresión) / 2»."""
+    if (radio is None) == (diametro is None):
+        raise error("INVALID_ARGUMENTS", f"Indicá {nombre_radio} o {nombre_diametro} (uno solo).")
+    if radio is not None:
+        _numero_positivo(radio, nombre_radio)
+        return radio
+    _numero_positivo(diametro, nombre_diametro)
+    return diametro / 2 if isinstance(diametro, (int, float)) else f"({diametro.strip()}) / 2"
+
+
 @herramienta("create_cylinder", "solido",
              "Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la "
-             "base; la altura crece hacia +Z.", modifica=True)
-def create_cylinder(sesion, radius: Expr, height: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0,
-                    operation: Operacion = "new_body", target: Cuerpos | None = None):
+             "base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo).", modifica=True)
+def create_cylinder(sesion, height: Expr, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, z: Expr = 0,
+                    operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None):
     """
-    radius: radio en mm (positivo).
     height: altura en mm (positiva).
+    radius: radio en mm (positivo). Alternativa: diameter.
     x: x del centro de la base (mm).
     y: y del centro de la base (mm).
     z: z de la base (mm).
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    diameter: diámetro en mm, en vez de radius (como el panel Cilindro de la app); el paso guarda la mitad.
     """
-    _numero_positivo(radius, "radius")
+    radio = _radio_o_diametro(radius, diameter, "radius", "diameter")
     _numero_positivo(height, "height")
-    return _primitiva(sesion, "cilindro", "Cilindro", {"radio": radius, "alto": height}, x, y, z, operation, target)
+    return _primitiva(sesion, "cilindro", "Cilindro", {"radio": radio, "alto": height}, x, y, z, operation, target)
 
 
-@herramienta("create_sphere", "solido", "Crea una esfera. (x, y, z) es su centro.", modifica=True)
-def create_sphere(sesion, radius: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0, operation: Operacion = "new_body",
-                  target: Cuerpos | None = None):
+@herramienta("create_sphere", "solido", "Crea una esfera. (x, y, z) es su centro. La medida va como radius o como "
+             "diameter (uno solo).", modifica=True)
+def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, z: Expr = 0,
+                  operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None):
     """
-    radius: radio en mm (positivo).
+    radius: radio en mm (positivo). Alternativa: diameter.
     x: x del centro (mm).
     y: y del centro (mm).
     z: z del centro (mm).
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    diameter: diámetro en mm, en vez de radius (como el panel Esfera de la app); el paso guarda la mitad.
     """
-    _numero_positivo(radius, "radius")
-    return _primitiva(sesion, "esfera", "Esfera", {"radio": radius}, x, y, z, operation, target)
+    radio = _radio_o_diametro(radius, diameter, "radius", "diameter")
+    return _primitiva(sesion, "esfera", "Esfera", {"radio": radio}, x, y, z, operation, target)
 
 
 @herramienta("create_torus", "solido", "Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). "
-             "(x, y, z) es su centro.", modifica=True)
-def create_torus(sesion, major_radius: Expr, minor_radius: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0,
-                 operation: Operacion = "new_body", target: Cuerpos | None = None):
+             "(x, y, z) es su centro. Medidas como radios (major_radius, minor_radius) o diámetros (major_diameter, "
+             "minor_diameter), uno de cada par.", modifica=True)
+def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | None = None, x: Expr = 0, y: Expr = 0,
+                 z: Expr = 0, operation: Operacion = "new_body", target: Cuerpos | None = None,
+                 major_diameter: Expr | None = None, minor_diameter: Expr | None = None):
     """
     major_radius: radio mayor en mm (del centro al centro del tubo); tiene que ser mayor que minor_radius.
     minor_radius: radio menor en mm (del tubo).
@@ -356,10 +373,12 @@ def create_torus(sesion, major_radius: Expr, minor_radius: Expr, x: Expr = 0, y:
     z: z del centro (mm).
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    major_diameter: diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
+    minor_diameter: diámetro del tubo, en vez de minor_radius.
     """
-    _numero_positivo(major_radius, "major_radius")
-    _numero_positivo(minor_radius, "minor_radius")
-    return _primitiva(sesion, "toroide", "Toroide", {"radio_mayor": major_radius, "radio_menor": minor_radius},
+    mayor = _radio_o_diametro(major_radius, major_diameter, "major_radius", "major_diameter")
+    menor = _radio_o_diametro(minor_radius, minor_diameter, "minor_radius", "minor_diameter")
+    return _primitiva(sesion, "toroide", "Toroide", {"radio_mayor": mayor, "radio_menor": menor},
                       x, y, z, operation, target)
 
 
