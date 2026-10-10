@@ -28,7 +28,8 @@ from . import textos
 from .conversion import a_resultado_mcp
 from .puente_cliente import ClientePuente
 
-GRUPOS_CONOCIDOS = ("documento", "parametros", "boceto", "vectores", "solido", "inspeccion", "avanzado", "dev")
+GRUPOS_CONOCIDOS = ("documento", "parametros", "boceto", "vectores", "solido", "inspeccion", "avanzado", "grafo",
+                    "dev")
 GRUPOS_POR_DEFECTO = tuple(g for g in GRUPOS_CONOCIDOS if g != "dev")
 MODOS = ("auto", "vivo", "sin_ventana")
 AVISO_VIVO = ("MODO EN VIVO: desde ahora trabajás sobre el documento ABIERTO en la ventana de OmniCAD ({doc}), no "

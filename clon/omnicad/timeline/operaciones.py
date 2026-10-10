@@ -919,5 +919,5 @@ def operacion_desde_dict(d):
 
 
 # Operaciones de los otros módulos (se registran al importarse; van al final por el import circular).
-from . import (ops_chapa, ops_construir, ops_ensamblar, ops_fijacion, ops_insertar, ops_malla,  # noqa: E402,F401
-               ops_modificar, ops_solido, ops_superficie)
+from . import (ops_chapa, ops_construir, ops_ensamblar, ops_fijacion, ops_grafo, ops_insertar,  # noqa: E402,F401
+               ops_malla, ops_modificar, ops_solido, ops_superficie)

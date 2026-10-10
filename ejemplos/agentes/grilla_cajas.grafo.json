@@ -1,0 +1,22 @@
+{
+  "graph": {
+    "formato": "omnicad.grafo",
+    "version": 1,
+    "nodos": [
+      {"id": "lado", "tipo": "deslizador", "entradas": {"valor": 10, "minimo": 1, "maximo": 50}},
+      {"id": "alto", "tipo": "numero", "entradas": {"valor": 5}},
+      {"id": "filas", "tipo": "entero", "entradas": {"valor": 3}},
+      {"id": "grilla", "tipo": "puntos_grilla",
+       "entradas": {"cantidad_x": {"de": "filas"}, "cantidad_y": {"de": "filas"},
+                    "paso_x": {"de": "lado"}, "paso_y": {"de": "lado"}}},
+      {"id": "cajas", "tipo": "caja",
+       "entradas": {"centro": {"de": "grilla.puntos"}, "ancho": {"de": "lado"}, "largo": {"de": "lado"},
+                    "alto": {"de": "alto"}}},
+      {"id": "union", "tipo": "unir", "entradas": {"cuerpos": {"de": "cajas"}}},
+      {"id": "vol", "tipo": "volumen", "entradas": {"cuerpo": {"de": "union"}}},
+      {"id": "pieza", "tipo": "salida", "entradas": {"valor": {"de": "union"}}},
+      {"id": "volumen", "tipo": "salida", "entradas": {"valor": {"de": "vol"}}}
+    ]
+  },
+  "inputs": {"lado": 12, "filas": 4}
+}
