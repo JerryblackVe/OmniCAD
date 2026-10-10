@@ -52,7 +52,11 @@ _CAST = {TopAbs_COMPOUND: TopoDS.Compound, TopAbs_SOLID: TopoDS.Solid, TopAbs_SH
 
 # ---------------------------------------------------------------- utilidades
 def _tipado(forma):
-    """Devuelve la forma con su clase concreta (TopoDS_Face, TopoDS_Shell…)."""
+    """Devuelve la forma con su clase concreta (TopoDS_Face, TopoDS_Shell…). Una forma nula es un error: el kernel a
+    veces da IsDone y una forma nula (desfase de una caja de 10 mm de alto, 6 mm hacia adentro) y `ShapeType()` sobre
+    ella tiraba la app entera (fallo de segmentación)."""
+    if forma is None or forma.IsNull():
+        raise geo.ErrorGeometria("El kernel no devolvió ninguna forma con estos valores.")
     return _CAST.get(forma.ShapeType(), lambda s: s)(forma)
 
 
@@ -565,6 +569,29 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
     return _coser_caras(caras)
 
 
+def _desfase_imposible(original, resultado, distancia, *, engrosado=False):
+    """True si el kernel no dejó cada cara desfasada a `distancia` de `original`. Pasa cuando la distancia supera el
+    radio de curvatura del lado del desfase: la superficie se da vuelta por el centro (un cilindro de radio 10
+    desfasado 12 mm hacia adentro quedaba de radio 2, a 8 mm del original) o se reduce a una línea (desfasado 10 mm).
+    En un engrosado también valen las caras que tocan el original (la de partida y los bordes)."""
+    d = abs(distancia)
+    if geo.area(resultado) <= 1e-6 * geo.area(original):
+        return True
+    if not engrosado and geo.solidos(original) and \
+            geo.volumen_exacto(resultado) <= 1e-9 * abs(geo.volumen_exacto(original)):
+        return True             # un cuerpo desfasado hasta la mitad de su grosor queda chato (o «al revés»)
+    borde = geo.compuesto(geo.caras(original))     # la superficie, no el sólido: adentro de un sólido la distancia es 0
+    for cara in geo.caras(resultado):
+        medida = BRepExtrema_DistShapeShape(cara, borde)
+        medida.Perform()
+        if not medida.IsDone():
+            continue
+        x = medida.Value()
+        if x < d * (1 - 1e-3) - 1e-6 and not (engrosado and x <= 1e-4 * max(1.0, d)):
+            return True
+    return False
+
+
 def desfasar_superficie(forma, distancia, *, tipo="agudo"):
     """Superficie desfasada [SFC-OFFSET] (BRepOffsetAPI_MakeOffsetShape). Distancia positiva = hacia
     la normal. `tipo`: "agudo" (Sharp Offset) o "redondeado" (Rounded Offset)."""
@@ -577,7 +604,12 @@ def desfasar_superficie(forma, distancia, *, tipo="agudo"):
     off.PerformByJoin(forma, float(distancia), 1e-6, BRepOffset_Skin, False, False, junta)
     if not off.IsDone():
         raise geo.ErrorGeometria("El desfase falló (¿la distancia supera el radio de curvatura?).")
-    return _simplificar(off.Shape())
+    resultado = None if off.Shape().IsNull() else _simplificar(off.Shape())
+    if resultado is None or _desfase_imposible(forma, resultado, distancia):
+        raise geo.ErrorGeometria(f"El desfase falló: con {abs(distancia):g} mm la superficie se cruza consigo misma "
+                                 "(la distancia es igual o mayor que su radio de curvatura de ese lado, o que la mitad "
+                                 "del grosor del cuerpo). Probá una distancia menor.")
+    return resultado
 
 
 def primitiva_superficie(solido):
@@ -855,9 +887,16 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     op = BRepOffset_MakeOffset()
     op.Initialize(base, float(espesor), 1e-6, BRepOffset_Skin, False, False, junta, True, False)
     op.MakeOffsetShape()
-    if not op.IsDone():
+    if not op.IsDone() or op.Shape().IsNull():
         raise geo.ErrorGeometria("No se pudo engrosar (¿el espesor supera el radio de curvatura?).")
     resultado = _simplificar(op.Shape())
     if not geo.solidos(resultado):
         raise geo.ErrorGeometria("El engrosado no produjo un sólido.")
+    # Más grueso que el radio de curvatura, el kernel daba «ok» con un sólido inválido (cilindro de radio 10 engrosado
+    # 10 hacia adentro), dado vuelta por el eje (12 mm: un tubo de radio 2 a 10) o con volumen negativo (25 mm).
+    if (not geo.es_valida(resultado) or geo.volumen_exacto(resultado) <= 0
+            or _desfase_imposible(base, resultado, espesor, engrosado=True)):
+        raise geo.ErrorGeometria(f"No se pudo engrosar: {abs(espesor):g} mm es igual o mayor que el radio de "
+                                 "curvatura de la superficie de ese lado. Probá un espesor menor o engrosar hacia el "
+                                 "otro lado.")
     return resultado
