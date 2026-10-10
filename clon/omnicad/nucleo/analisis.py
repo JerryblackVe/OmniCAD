@@ -132,6 +132,8 @@ def _info_cara(cara):
     info = {"tipo": "cara", "area": geo.area(cara), "perimetro": perimetro}
     t = sup.GetType()
     signo = -1.0 if cara.Orientation() == TopAbs_REVERSED else 1.0
+    if t == GeomAbs_Plane and not sup.Plane().Position().Direct():
+        signo = -signo                      # ejes indirectos (tapas de una revolución): la normal es −eje
     if t == GeomAbs_Plane:
         info["superficie"] = "plano"
         info["normal"] = _tupla(_np(sup.Plane().Axis().Direction()) * signo)
@@ -390,6 +392,8 @@ def _props_nodos(cara, tri, idx, tris, curvatura):
     sup = BRepAdaptor_Surface(cara)
     signo = -1.0 if cara.Orientation() == TopAbs_REVERSED else 1.0
     if sup.GetType() == GeomAbs_Plane:
+        if not sup.Plane().Position().Direct():
+            signo = -signo                  # ejes indirectos: la normal es −eje
         return np.tile(_np(sup.Plane().Axis().Direction()) * signo, (m, 1)), curv
     if not tri.HasUVNodes():
         return plana, curv

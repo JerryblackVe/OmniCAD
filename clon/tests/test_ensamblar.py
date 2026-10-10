@@ -90,3 +90,32 @@ def test_union_como_esta_e_insertar_diseno():
     ins = [c for c in doc.estado_final.cuerpos.values() if c.componente == doc.operaciones[-1].id]
     assert len(ins) == 1 and g.volumen(ins[0].forma) == pytest.approx(np.pi * 9 * 20)
     assert Documento.desde_dict(doc.a_dict()).estado_final.componentes
+
+
+def test_union_con_tapa_de_revolucion_no_da_vuelta_la_pieza():
+    """La tapa plana de una revolución tiene ejes indirectos: su normal hacia afuera es −eje. Antes la unión
+    rígida tomaba +eje y daba vuelta la pantalla de una lámpara (cúpula apuntando para abajo)."""
+    from omnicad.api import Sesion, llamar
+    s = Sesion()
+    llamar(s, "sketch_from_spec", {"plane": "XZ", "entities": [
+        {"type": "arc", "id": "ext", "center": [0, 0], "start": [50, 0], "sweep": 90},
+        {"type": "line", "id": "eje", "start": [0, 50], "end": [0, 48]},
+        {"type": "arc", "id": "int", "center": [0, 0], "start": [48, 0], "sweep": 90},
+        {"type": "line", "id": "borde", "start": [48, 0], "end": [50, 0]}],
+        "constraints": [{"type": "coincident", "entities": ["ext.end", "eje.start"]},
+                        {"type": "coincident", "entities": ["eje.end", "int.end"]},
+                        {"type": "coincident", "entities": ["int.start", "borde.start"]},
+                        {"type": "coincident", "entities": ["borde.end", "ext.start"]}]})
+    assert llamar(s, "revolve", {"sketch": "op1", "profile": 0, "axis": "sketch_y"})["ok"]
+    assert llamar(s, "create_cylinder", {"radius": 5, "height": 10, "z": -10})["ok"]
+    doc = s.doc
+    aro = _cara(doc, "op2.c1", (0, 0, 0))
+    assert refs.firma_cara(next(x for x in refs.subformas(doc.estado_final.cuerpos["op2.c1"].forma, "cara")
+                                if refs.firma_cara(x)["geom"] == "plano"))["normal"] == pytest.approx([0, 0, -1])
+    doc.agregar(OpComponente(doc.nuevo_id(), "Soporte", cuerpos=["op3.c1"], fijo=True))
+    doc.agregar(OpComponente(doc.nuevo_id(), "Pantalla", cuerpos=["op2.c1"]))
+    doc.agregar(OpUnion(doc.nuevo_id(), "Unión1", tipo="rigida", origen1=aro, origen2=_cara(doc, "op3.c1", (0, 0, 0))))
+    assert doc.resultados[-1].estado == "ok"
+    caja = g.caja_envolvente(doc.estado_final.cuerpos["op2.c1"].forma)
+    assert caja[0][2] == pytest.approx(0, abs=1e-3) and caja[1][2] == pytest.approx(50, abs=1e-3)
+    assert g.es_valida(doc.estado_final.cuerpos["op2.c1"].forma)

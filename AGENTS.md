@@ -37,7 +37,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `clon/omnicad/ui/` | PySide6: `ventana.py`, `cinta.py`, `visor3d.py`, paneles, boceto en 3D |
 | `clon/omnicad/ui/comandos/` | Un módulo por familia de comandos con diálogo (`CATALOGO`) |
 | `clon/tests/` | pytest (un `test_*.py` por área) |
-| `docs/` | `arquitectura.md`, `guia_comandos.md`, `plan_mcp_cli.md`, `brechas_fusion.md`, `agentes/` (MCP y CLI) |
+| `docs/` | `arquitectura.md`, `guia_comandos.md`, `plan_mcp_cli.md`, `brechas_fusion.md` y las demás `brechas_*.md` (índice: `brechas_indice.md`), `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`) |
 | `scripts/` | Utilidades: capturas de pantalla de OmniCAD |

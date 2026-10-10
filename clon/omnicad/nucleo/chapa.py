@@ -138,7 +138,10 @@ def _pnt(x, y, z=0.0):
 
 
 def _hacia_arriba(cara):
-    nz = BRepAdaptor_Surface(cara).Plane().Axis().Direction().Z()
+    pln = BRepAdaptor_Surface(cara).Plane()
+    nz = pln.Axis().Direction().Z()
+    if not pln.Position().Direct():         # ejes indirectos: la normal es −eje
+        nz = -nz
     if cara.Orientation() == TopAbs_REVERSED:
         nz = -nz
     return cara if nz > 0 else TopoDS.Face(cara.Reversed())

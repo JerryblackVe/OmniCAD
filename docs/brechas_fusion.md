@@ -45,4 +45,5 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Configuración del timeline (engranaje abajo a la derecha) | No implementado. |
 | Historial de pasos al abrir un `.f3d` (hoy entra la forma como STEP y los parámetros de usuario, que no mueven esa forma) | Hay que traducir cada operación de Fusion a una de OmniCAD por la API pública: es una fase propia. |
 | `.f3z` con referencias externas: se abre el diseño de arriba del paquete; los diseños referenciados pueden no venir | La importación de archivo de Fusion solo acepta `.f3d` sueltos. |
-| Electrónica, Diseño generativo, Simulación, Fabricación y Forma (T-Splines) | Fuera del alcance del clon, igual que antes. |
+| Electrónica y Diseño generativo | Fuera del alcance por ahora: quedaron afuera desde el recorte del MVP. Un optimizador de parámetros simple está en GH11 de `brechas_grasshopper.md`. |
+| Simulación, Fabricación y Forma (T-Splines) | Pendientes de prioridad 3 desde el 2026-10-09 (antes, fuera del alcance por el recorte del MVP): F19 y F20 de `brechas_freecad.md`, B17 de `brechas_blender.md`, RH19 de `brechas_rhino.md`. Antes de empezar hay que decidir las dependencias (p. ej. CalculiX y Gmsh). |

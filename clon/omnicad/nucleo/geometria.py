@@ -119,6 +119,8 @@ def plano_de_cara(cara):
     pln = sup.Plane()
     d, loc = pln.Axis().Direction(), pln.Location()
     n = np.array([d.X(), d.Y(), d.Z()])
+    if not pln.Position().Direct():         # ejes indirectos (tapas de una revolución): la normal es −eje
+        n = -n
     if cara.Orientation() == TopAbs_REVERSED:
         n = -n
     origen = n * float(n @ np.array([loc.X(), loc.Y(), loc.Z()]))

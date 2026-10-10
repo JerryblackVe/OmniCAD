@@ -60,8 +60,11 @@ def firma_cara(cara):
     BRepGProp.SurfaceProperties_s(cara, p)
     f = {"geom": tipo, "centro": _xyz(p.CentreOfMass()), "area": float(p.Mass())}
     if tipo == "plano":
-        d = sup.Plane().Axis().Direction()
+        pln = sup.Plane()
+        d = pln.Axis().Direction()
         n = np.array([d.X(), d.Y(), d.Z()])
+        if not pln.Position().Direct():     # ejes indirectos (tapas de una revolución): la normal es −eje
+            n = -n
         f["normal"] = (-n if cara.Orientation() == TopAbs_REVERSED else n).tolist()
     elif tipo in ("cilindro", "cono"):
         eje = (sup.Cylinder() if tipo == "cilindro" else sup.Cone()).Axis()
