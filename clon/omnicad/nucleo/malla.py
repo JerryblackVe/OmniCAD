@@ -1545,7 +1545,7 @@ def _remallar_nucleo(ed, largo, iteraciones, ref, bordes_fijos, pasos_relajar=1,
             # lo que crece es la división (puede duplicar las caras en cada ronda): se mira en cada corte, y como al
             # dividir no muere ninguna cara, las vivas son len(ed.c) menos las muertas de antes
             tope = math.inf if techo is None else techo + len(ed.c) - sum(ed.viva)
-            for a, b in e[sel[np.argsort(-L[sel])]].tolist():
+            for a, b in e[sel[np.argsort(-np.round(L[sel], 9), kind="stable")]].tolist():
                 comunes = ed.vf[a] & ed.vf[b]
                 if not comunes or (bordes_fijos and len(comunes) == 1):
                     continue
@@ -1555,7 +1555,7 @@ def _remallar_nucleo(ed, largo, iteraciones, ref, bordes_fijos, pasos_relajar=1,
         e = ed.aristas()                                         # colapsar aristas cortas
         L = np.linalg.norm(ed.v[e[:, 0]] - ed.v[e[:, 1]], axis=1)
         sel = np.flatnonzero(L < bajo)
-        for a, b in e[sel[np.argsort(L[sel])]].tolist():
+        for a, b in e[sel[np.argsort(np.round(L[sel], 9), kind="stable")]].tolist():
             if not (ed.vivo[a] and ed.vivo[b]) or not (ed.vf[a] & ed.vf[b]):
                 continue
             if np.linalg.norm(ed.v[a] - ed.v[b]) >= bajo:
