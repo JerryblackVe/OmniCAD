@@ -149,6 +149,22 @@ class OpRepararMalla(_OpMallaSimple):
         return _ml().reparar(m, tipo=self.p["tipo"])
 
 
+class OpLimpiarMalla(_OpMallaSimple):
+    """PREPARAR › Limpiar (Malla › Limpiar de Blender): fusionar por distancia, disolver degenerados, borrar sueltos,
+    recalcular normales y rellenar huecos, cada paso con su casilla (`nucleo.malla.limpiar`)."""
+    TIPO, ETIQUETA, ICONO = "limpiar_malla", "Limpiar malla", "✧"
+    PARAMS = {"cuerpos": [], "fusionar": True, "distancia": "0.001 mm", "degenerados": True, "sueltos": True,
+              "area_minima": "0", "normales": True, "rellenar": False, "lados": 0}
+    EXPRESIONES = ("distancia", "area_minima")
+
+    def transformar(self, m, ctx):
+        return _calcular(ctx, "limpiar", m, fusionar=bool(self.p["fusionar"]),
+                         distancia=ctx.evaluar(self.p["distancia"]), degenerados=bool(self.p["degenerados"]),
+                         sueltos=bool(self.p["sueltos"]), area_minima=ctx.evaluar(self.p["area_minima"], "escalar"),
+                         normales=bool(self.p["normales"]), rellenar=bool(self.p["rellenar"]),
+                         lados_maximos=self.entero("lados", minimo=0))
+
+
 class OpGruposCaras(_OpMallaSimple):
     """PREPARAR › Generar grupos de caras [MESH-GENERATE-FACE-GROUPS]."""
     TIPO, ETIQUETA, ICONO = "grupos_caras", "Grupos de caras", "◩"
@@ -293,6 +309,6 @@ class OpConvertirMalla(_OpMalla):
                 del estado.cuerpos[c.id]
 
 
-registrar_operacion(OpInsertarMalla, OpTeselar, OpRepararMalla, OpGruposCaras, OpReducirMalla, OpRemallar,
-                    OpCortarPlanoMalla, OpVaciadoMalla, OpCombinarMallas, OpSuavizarMalla, OpInvertirNormalMalla,
-                    OpSepararMalla, OpEscalarMalla, OpConvertirMalla)
+registrar_operacion(OpInsertarMalla, OpTeselar, OpRepararMalla, OpLimpiarMalla, OpGruposCaras, OpReducirMalla,
+                    OpRemallar, OpCortarPlanoMalla, OpVaciadoMalla, OpCombinarMallas, OpSuavizarMalla,
+                    OpInvertirNormalMalla, OpSepararMalla, OpEscalarMalla, OpConvertirMalla)

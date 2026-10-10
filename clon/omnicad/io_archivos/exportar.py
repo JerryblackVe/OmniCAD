@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Exportación STL / OBJ / STEP e importación STEP.
+Exportación STL / OBJ / 3MF / PLY / glTF (GLB) / STEP / IGES / BREP e importación STEP (glTF: `gltf.py`).
 
 Equivalencia con Fusion 360: `ExportManager.createSTLExportOptions / createOBJExportOptions /
 createSTEPExportOptions` y `ImportManager.createSTEPImportOptions` (informe_analisis.md §3.5).
@@ -15,6 +15,8 @@ from ..nucleo import geometria as geo
 from ..nucleo import intercambio
 
 FORMATOS = {"stl": "STL (malla)", "obj": "OBJ (malla)", "3mf": "3MF (malla para impresión 3D)", "ply": "PLY (malla)",
+            "glb": "glTF binario (malla con colores: web y realidad aumentada)",
+            "gltf": "glTF (JSON con la malla embebida)",
             "step": "STEP (sólido exacto)", "iges": "IGES (superficies exactas)", "brep": "BREP de OpenCascade"}
 
 
@@ -141,12 +143,21 @@ def exportar_malla(cuerpos, ruta, deflexion=0.02):
     return len(m.caras)
 
 
-def exportar(cuerpos, ruta):
-    """Elige el formato por la extensión del archivo."""
+def exportar_gltf(cuerpos, ruta, propiedades=None):
+    """glTF 2.0 (.glb binario o .gltf con el búfer embebido), con el color y el acabado de cada cuerpo."""
+    from .gltf import escribir_gltf
+    return escribir_gltf(_cuerpos(cuerpos), ruta, propiedades=propiedades)
+
+
+def exportar(cuerpos, ruta, propiedades=None):
+    """Elige el formato por la extensión del archivo. `propiedades` (las del documento: aspecto, acabado, opacidad y
+    nombre de cada cuerpo) solo las usa glTF, el único formato que guarda materiales."""
     ext = Path(ruta).suffix.lower().lstrip(".")
     ext = {"stp": "step", "igs": "iges", "brp": "brep"}.get(ext, ext)
     funciones = {"stl": exportar_stl, "obj": exportar_obj, "step": exportar_step, "3mf": exportar_malla,
                  "ply": exportar_malla, "iges": exportar_iges, "brep": exportar_brep}
+    if ext in ("glb", "gltf"):
+        return exportar_gltf(cuerpos, ruta, propiedades)
     if ext not in funciones:
         raise ErrorExportacion(f"Formato no soportado: .{ext} (usá {', '.join('.' + f for f in FORMATOS)})")
     return funciones[ext](cuerpos, ruta)

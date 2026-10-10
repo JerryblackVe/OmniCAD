@@ -26,6 +26,8 @@ GRUPOS = {
     "vectores": "Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.",
     "solido": "Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.",
     "chapa": "Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF.",
+    "malla": "Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, "
+             "separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file).",
     "ensamble": "Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento.",
     "material": "Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos.",
     "inspeccion": "Ver y medir el resultado.",

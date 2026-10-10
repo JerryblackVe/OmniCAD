@@ -251,8 +251,10 @@ def _cuerpo_chapa(sesion, bodies):
 
 
 @herramienta("export", "documento", "Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, "
-             ".ply (mallas), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de "
-             "chapa). Crea las carpetas que falten (create_folders=false para que falle con FILE_NOT_FOUND).")
+             ".ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de "
+             "cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos "
+             "exactos) o .dxf (patrón plano de un cuerpo de chapa). Crea las carpetas que falten "
+             "(create_folders=false para que falle con FILE_NOT_FOUND).")
 def export(sesion, path: str, bodies: list[str] | None = None, overwrite: bool = False, create_folders: bool = True):
     """
     path: ruta del archivo a escribir.
@@ -292,7 +294,7 @@ def _exportar_a(sesion, cuerpos, ruta, dxf):
         ops_chapa.exportar_dxf(sesion.doc.estado_final, cuerpos[0].id, ruta, centros=True, extensiones=False)
         return {"path": str(ruta.resolve()), "format": "dxf", "bodies": [cuerpos[0].id],
                 "size_bytes": ruta.stat().st_size}
-    n = exportar(cuerpos, ruta)
+    n = exportar(cuerpos, ruta, propiedades=sesion.doc.propiedades)
     resultado = {"path": str(ruta.resolve()), "format": ruta.suffix.lower().lstrip("."),
                  "bodies": [c.id for c in cuerpos], "size_bytes": ruta.stat().st_size}
     if isinstance(n, int):

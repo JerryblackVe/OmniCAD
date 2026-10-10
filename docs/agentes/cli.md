@@ -80,7 +80,7 @@ delete_parameter  parametros  M  Borra un parámetro que no use ningún paso ni 
 4 herramienta(s). M = modifica el documento. Detalle: omnicad describe <herramienta>
 ```
 
-- `--group G` (`-g`): solo un grupo (`documento`, `parametros`, `boceto`, `vectores`, `solido`, `chapa`, `ensamble`, `material`, `inspeccion`, `avanzado`, `grafo`, `dev`).
+- `--group G` (`-g`): solo un grupo (`documento`, `parametros`, `boceto`, `vectores`, `solido`, `chapa`, `malla`, `ensamble`, `material`, `inspeccion`, `avanzado`, `grafo`, `dev`).
 - `--json`: lista de `{nombre, grupo, modifica, descripcion}`.
 - `--markdown`: el catálogo entero como Markdown. Así se genera [herramientas.md](herramientas.md). Se combina con `--output ruta.md` (`-o`), que escribe en UTF-8 con saltos `\n`. No se combina con `--group` ni `--json`.
 

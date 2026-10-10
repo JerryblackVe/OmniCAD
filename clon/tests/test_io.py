@@ -40,6 +40,25 @@ def test_obj(doc, tmp_path):
     assert sum(1 for x in lineas if x.startswith("o ")) == 2
 
 
+def test_glb_y_gltf_del_ejemplo(doc, tmp_path):
+    """Archivo › Exportar › glTF: un nodo por cuerpo bajo la raíz (Y arriba), en metros y con un material por aspecto."""
+    cuerpos = list(doc.estado_final.cuerpos.values())
+    n = ex.exportar(cuerpos, tmp_path / "m.glb", doc.propiedades)
+    datos = (tmp_path / "m.glb").read_bytes()
+    assert datos[:4] == b"glTF" and struct.unpack_from("<I", datos, 8)[0] == len(datos)
+    largo = struct.unpack_from("<I", datos, 12)[0]
+    js = json.loads(datos[20:20 + largo])
+    assert len(js["nodes"]) == len(cuerpos) + 1 and js["nodes"][0]["children"] == list(range(1, len(cuerpos) + 1))
+    indices = [js["accessors"][m["primitives"][0]["indices"]]["count"] for m in js["meshes"]]
+    assert sum(indices) == 3 * n and n > 1000
+    caja = [(a["min"], a["max"]) for m in js["meshes"] for a in [js["accessors"][m["primitives"][0]["attributes"]["POSITION"]]]]
+    for (mn, mx), c in zip(caja, cuerpos, strict=True):           # posiciones en metros: la caja del sólido / 1000
+        (a, b) = g.caja_envolvente(c.forma)
+        assert mn == pytest.approx([x / 1000 for x in a], abs=5e-5) and mx == pytest.approx([x / 1000 for x in b], abs=5e-5)
+    assert ex.exportar(cuerpos, tmp_path / "m.gltf", doc.propiedades) == n
+    assert json.loads((tmp_path / "m.gltf").read_text(encoding="utf-8"))["buffers"][0]["uri"].startswith("data:")
+
+
 def test_step_ida_y_vuelta(doc, tmp_path):
     ruta = tmp_path / "m.step"
     ex.exportar(doc.estado_final.cuerpos.values(), ruta)

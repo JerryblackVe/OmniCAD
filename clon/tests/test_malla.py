@@ -513,3 +513,105 @@ def test_timeline_avisa_y_no_recalcula_reducir_ni_remallar_si_la_entrada_no_camb
     assert llamadas == {"remallar": 2, "reducir": 2}
     res = doc.agregar(OpVaciadoMalla(doc.nuevo_id(), cuerpos=["op1.c1"], espesor="20 mm"))
     assert res.estado == "aviso" and res.mensaje.count("Vaciar: con 20") == 1                # un solo aviso
+
+
+# ---------------------------------------------------------------- limpieza (Malla › Limpiar de Blender)
+def _cubo_con_astilla(desvio):
+    """Cubo cerrado con la cara de abajo partida por un vértice extra sobre la arista 0-1 a `desvio` mm del 0: con
+    desvío 5 queda una astilla de área cero (0, 8, 1); con desvío chico, además una arista de largo `desvio`."""
+    v = np.vstack([V_CUBO, [desvio, 0, 0]])
+    f = [x for x in F_CUBO.tolist() if x != [0, 2, 1]] + [[0, 2, 8], [8, 2, 1], [0, 8, 1]]
+    return ml.Malla(v, f)
+
+
+def test_fusionar_por_distancia():
+    v = np.vstack([V_CUBO, V_CUBO[0] + [1e-4, 0, 0]])
+    f = F_CUBO.copy()
+    f[4:6][f[4:6] == 0] = 8                                   # dos caras usan la copia: el cubo queda abierto
+    m = ml.Malla(v, f)
+    assert not m.es_cerrada()
+    assert len(ml.fusionar_por_distancia(m, 0).vertices) == 9        # 0 = solo los idénticos
+    r = ml.fusionar_por_distancia(m, 0.001)
+    assert (len(r.vertices), len(r.caras)) == (8, 12) and r.es_cerrada() and r.volumen() == pytest.approx(1000)
+    with pytest.raises(g.ErrorGeometria):
+        ml.fusionar_por_distancia(m, -1)
+
+
+def test_disolver_degenerados():
+    astilla = _cubo_con_astilla(5.0)
+    assert ml.analizar(astilla)["degenerados"] == 1
+    r = ml.disolver_degenerados(astilla)                      # voltea la arista larga con la vecina
+    a = ml.analizar(r)
+    assert a["degenerados"] == 0 and a["cerrada"] and len(r.caras) == 14
+    assert r.volumen() == pytest.approx(1000) and g.es_valida(ml.a_brep(r))
+    corta = ml.disolver_degenerados(_cubo_con_astilla(1e-4), 0.001)    # colapsa la arista de 0,0001 mm
+    assert (len(corta.vertices), len(corta.caras)) == (8, 12) and corta.es_cerrada()
+    assert corta.volumen() == pytest.approx(1000, abs=1e-3)
+    aleta = ml.Malla(V_CUBO, np.vstack([F_CUBO, [[0, 6, 4], [0, 4, 6]]]))   # dos caras iguales al revés
+    assert len(ml.disolver_degenerados(aleta).caras) == 12
+
+
+def test_borrar_sueltos():
+    v = np.vstack([V_CUBO, [[50, 0, 0], [51, 0, 0], [50, 1, 0], [99, 99, 99]]])
+    m = ml.Malla(v, np.vstack([F_CUBO, [[8, 9, 10]]]))        # un triángulo suelto y un vértice sin caras
+    r = ml.borrar_sueltos(m)
+    assert (len(r.vertices), len(r.caras)) == (8, 12) and r.es_cerrada()
+    assert len(ml.borrar_sueltos(m, caras_aisladas=False).caras) == 13
+    dos = ml.Malla(np.vstack([V_CUBO, V_CUBO * 0.1 + 50]), np.vstack([F_CUBO, F_CUBO + 8]))
+    assert len(ml.borrar_sueltos(dos, area_minima=0.05).caras) == 12      # la parte chica (1 % del área) se va
+    with pytest.raises(g.ErrorGeometria):
+        ml.borrar_sueltos(ml.Malla(v[8:11], [[0, 1, 2]]))
+
+
+def test_rellenar_huecos_y_recalcular_normales():
+    abierta = ml.Malla(V_CUBO, F_CUBO[2:])
+    r = ml.rellenar_huecos(abierta)
+    assert len(r.caras) == 12 and r.es_cerrada() and r.volumen() == pytest.approx(1000)
+    assert len(np.unique(r.grupos)) == 2                      # la tapa es un grupo nuevo
+    assert len(ml.rellenar_huecos(abierta, lados_maximos=3).caras) == 10    # el hueco tiene 4 lados
+    mezclada = ml.Malla(V_CUBO, np.vstack([F_CUBO[:6], F_CUBO[6:][:, [0, 2, 1]]]))
+    assert not mezclada.es_cerrada()
+    r = ml.recalcular_normales(mezclada)
+    assert r.es_cerrada() and r.volumen() == pytest.approx(1000)
+    assert ml.recalcular_normales(mezclada, hacia_adentro=True).volumen() == pytest.approx(-1000)
+    al_reves = ml.recalcular_normales(ml.Malla(V_CUBO, F_CUBO[2:][:, [0, 2, 1]]))     # abierta y al revés
+    assert al_reves.normales_caras()[0] == pytest.approx([0, 0, 1])                    # la tapa de arriba, hacia +Z
+
+
+def test_limpiar_en_un_paso():
+    v = np.vstack([V_CUBO, [[50, 0, 0], [51, 0, 0], [50, 1, 0]]])
+    f = np.vstack([F_CUBO[2:], [[8, 9, 10]]])
+    f[1::2, :] = f[1::2, [0, 2, 1]]
+    sucia = ml.Malla(v, f)
+    r = ml.limpiar(sucia, rellenar=True)
+    assert (len(r.vertices), len(r.caras)) == (8, 12) and r.es_cerrada() and r.volumen() == pytest.approx(1000)
+    solo_normales = ml.limpiar(sucia, fusionar=False, degenerados=False, sueltos=False)
+    assert len(solo_normales.caras) == 11
+    with pytest.raises(g.ErrorGeometria, match="al menos un paso"):
+        ml.limpiar(sucia, fusionar=False, degenerados=False, sueltos=False, normales=False)
+
+
+def test_limpiar_por_el_timeline_y_el_comando():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from omnicad.timeline.documento import Documento
+    from omnicad.timeline.ops_malla import OpInsertarMalla, OpLimpiarMalla
+    from omnicad.ui.comando import ContextoComando, hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.comandos.malla import Limpiar
+    doc = Documento()
+    doc.agregar(OpInsertarMalla(doc.nuevo_id(), "abierta", archivo="abierta", datos=ml.Malla(V_CUBO, F_CUBO[2:]).a_dict()))
+    cmd, ctx = Limpiar(), ContextoComando(doc)
+    assert CATALOGO["limpiar_malla"] is Limpiar and cmd.CLASE_OP is OpLimpiarMalla
+    v = {c.clave: c.defecto for c in cmd.campos(ctx)}
+    v.update(cuerpos=[hit_desde_ref({"tipo": "cuerpo", "cuerpo": "op1.c1"}, doc.estado_final)], rellenar=True)
+    op = cmd.construir(v, ctx)
+    assert op.p["distancia"] == "0.001 mm" and op.p["rellenar"] is True and op.p["lados"] == 0
+    assert doc.agregar(op).estado == "ok"
+    m = doc.estado_final.cuerpos["op1.c1"].forma
+    assert len(m.caras) == 12 and m.es_cerrada() and m.volumen() == pytest.approx(1000)
+    assert cmd.desde_op(op, ctx)["rellenar"] is True
+    doc.reemplazar(op.id, OpLimpiarMalla(op.id, cuerpos=["op1.c1"], rellenar=True, lados=3))
+    assert len(doc.estado_final.cuerpos["op1.c1"].forma.caras) == 10      # el hueco de 4 lados queda abierto

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Comandos del espacio MALLA (pestaña MALLA de la cinta)."""
 from ...timeline.ops_malla import (OpCombinarMallas, OpConvertirMalla, OpCortarPlanoMalla, OpEscalarMalla,
-                                   OpGruposCaras, OpInvertirNormalMalla, OpReducirMalla, OpRemallar, OpRepararMalla,
-                                   OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
+                                   OpGruposCaras, OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar,
+                                   OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits
 from . import registrar
@@ -51,6 +51,22 @@ Reparar = _clase("reparar_malla", "Reparar", "reparar_malla", OpRepararMalla,
                                                                    "coser_y_quitar": "Coser y quitar",
                                                                    "reconstruir": "Reconstruir"})],
                  lambda v, ctx: {"tipo": v["tipo"]})
+_PASOS_LIMPIAR = ("fusionar", "distancia", "degenerados", "sueltos", "area_minima", "normales", "rellenar", "lados")
+Limpiar = _clase("limpiar_malla", "Limpiar", "limpiar_malla", OpLimpiarMalla,
+                 "Fusiona vértices cercanos, disuelve triángulos degenerados, borra lo suelto, recalcula las normales "
+                 "hacia afuera y rellena huecos (cada paso con su casilla).",
+                 [lambda: Casilla("fusionar", "Fusionar por distancia", True),
+                  lambda: Expresion("distancia", "Distancia", "0.001 mm",
+                                    visible_si=lambda v: v.get("fusionar") or v.get("degenerados")),
+                  lambda: Casilla("degenerados", "Disolver degenerados", True),
+                  lambda: Casilla("sueltos", "Borrar sueltos", True),
+                  lambda: Expresion("area_minima", "Partes chicas (fracción del área)", "0", ESCALAR,
+                                    visible_si=lambda v: v.get("sueltos")),
+                  lambda: Casilla("normales", "Recalcular normales (hacia afuera)", True),
+                  lambda: Casilla("rellenar", "Rellenar huecos"),
+                  lambda: Entero("lados", "Lados máximos del hueco (0 = todos)", 0, 0, 100_000,
+                                 visible_si=lambda v: v.get("rellenar"))],
+                 lambda v, ctx: {k: v[k] for k in _PASOS_LIMPIAR})
 Grupos = _clase("grupos_caras", "Generar grupos de caras", "grupos_caras", OpGruposCaras,
                 "Agrupa caras de la malla según el ángulo entre ellas.",
                 [lambda: Expresion("angulo", "Ángulo", "30 deg", ANGULO)], lambda v, ctx: {"angulo": v["angulo"]})
@@ -162,5 +178,5 @@ class CombinarMallas(Comando):
                                                                                           ctx.estado))
 
 
-registrar(Teselar, Reparar, Grupos, Reducir, Remallar, CortarPlano, Vaciado, CombinarMallas, Suavizar, InvertirNormal,
-          Separar, Escalar, Convertir)
+registrar(Teselar, Reparar, Limpiar, Grupos, Reducir, Remallar, CortarPlano, Vaciado, CombinarMallas, Suavizar,
+          InvertirNormal, Separar, Escalar, Convertir)
