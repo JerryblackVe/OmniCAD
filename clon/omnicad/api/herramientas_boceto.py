@@ -361,9 +361,10 @@ def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False, a
 def _spline(b, puntos, tipo, grado, cerrada, construccion=False):
     pts = [_xy(p, "Cada punto de la spline") for p in puntos]
     control = tipo == "control_points"
-    if control and (grado not in (3, 5) or len(pts) < grado + 1):
-        raise ErrorBoceto(f"Una spline de puntos de control de grado {grado} necesita grado 3 o 5 y al menos "
-                          f"{grado + 1} puntos.")
+    if control and grado not in (3, 5):
+        raise ErrorBoceto(f"Una spline de puntos de control tiene grado 3 o 5 (llegó {grado}).")
+    if control and len(pts) < grado + 1:
+        raise ErrorBoceto(f"Una spline de puntos de control de grado {grado} necesita al menos {grado + 1} puntos.")
     # como Fusion, la spline de ajuste es siempre cúbica: su grado se ignora (con 0 o −1 rompía la interpolación)
     sid = b.agregar_spline(pts, "control" if control else "ajuste", grado if control else 3, cerrada,
                            construccion=construccion)
