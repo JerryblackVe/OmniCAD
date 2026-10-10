@@ -2,6 +2,8 @@
 """INSERTAR: archivos DXF y SVG como bocetos sobre un plano o una cara (Fusion: SLD-INS-DXF, SLD-INS-SVG)."""
 from pathlib import Path
 
+import numpy as np
+
 from ...timeline.operaciones import OpBoceto
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Seleccion, Texto, exigir
@@ -27,6 +29,22 @@ class _InsertarArchivo2D(Comando):
                 Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
                 Expresion("angulo", "Ángulo", "0 deg", ANGULO),
                 Casilla("voltear_h", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
+
+    def manipuladores(self, ctx, v):
+        """Aro en la vista para arrastrar el dibujo por el plano (escribe Desplazamiento X / Y)."""
+        from .. import manipuladores as mp
+        from .comunes import evaluar_o_cero
+        sel = v.get("plano") or []
+        plano = sel[0].get("plano") if sel else None
+        if plano is None:
+            return []
+        o, u, w = (np.asarray(x, float) for x in (plano.origen, plano.u, plano.v))
+        dx, dy = evaluar_o_cero(ctx, v.get("dx")), evaluar_o_cero(ctx, v.get("dy"))
+
+        def al_mover(q):
+            d = np.asarray(q, float) - o
+            return {"dx": float(d @ u), "dy": float(d @ w)}
+        return [mp.Posicion("desplazamiento", o + u * dx + w * dy, plano.normal, al_mover)]
 
     def leer(self, ruta, v=None):
         raise NotImplementedError

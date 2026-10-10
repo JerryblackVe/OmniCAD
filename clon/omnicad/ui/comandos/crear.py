@@ -207,13 +207,78 @@ class Agujero(Comando):
     def manipuladores(self, ctx, v):
         """Flecha de profundidad en el primer agujero: sale del fondo y apunta hacia el material."""
         from .. import manipuladores as mp
-        if v.get("extension") != "distancia" or not v.get("colocacion"):
+        if not v.get("colocacion"):
             return []
         try:
-            punto, direccion = self.construir(v, ctx)._colocaciones(ctx.estado)[0]
-        except Exception:  # noqa: BLE001 — sin colocación válida no hay flecha
+            cols = self.construir(v, ctx)._colocaciones(ctx.estado)
+        except Exception:  # noqa: BLE001 — sin colocación válida no hay flecha ni asas
             return []
-        return [mp.Flecha("profundidad", punto, direccion, minimo=0.0)]
+        asas = []
+        if v.get("extension") == "distancia":
+            asas.append(mp.Flecha("profundidad", cols[0][0], cols[0][1], minimo=0.0))
+        if v.get("rosca") != "modelada":
+            # como Fusion: asa en el borde del agujero que se tira para agrandarlo (el valor es el diámetro)
+            radial, _ = mp.perpendiculares(cols[0][1])
+            asas.append(mp.AsaRadial("diametro", cols[0][0], radial, factor=0.5, minimo=0.1))
+        # un aro por cada agujero puesto con un clic sobre una cara: se arrastra por la cara
+        sel = v["colocacion"]
+        n_fijos = sum(1 for h in sel if h["ref"]["tipo"] != "cara")
+        por_cara = [i for i, h in enumerate(sel) if h["ref"]["tipo"] == "cara" and h.get("punto") is not None]
+        for k, i in enumerate(por_cara):
+            if n_fijos + k >= len(cols):
+                break
+            punto, direccion = cols[n_fijos + k]
+
+            forma_cara = self._forma_cara(sel[i], ctx)
+
+            def al_mover(q, i=i, forma_cara=forma_cara):
+                if forma_cara is not None and not mp.punto_en_cara(forma_cara, q):
+                    return {}                      # el agujero no sale de la cara
+                actual = list(v["colocacion"])
+                actual[i] = dict(actual[i], punto=np.asarray(q, float))
+                return {"colocacion": actual}
+            asas.append(mp.Posicion(f"agujero{i}", punto, direccion, al_mover,
+                                    candidatos=self._enganches(sel[i], ctx)))
+        return asas
+
+    @staticmethod
+    def _forma_cara(hit, ctx):
+        from .. import manipuladores as mp
+        e = mp.entidad(hit, ctx.estado)
+        return e.forma if e is not None else None
+
+    @staticmethod
+    def _enganches(hit, ctx):
+        """Puntos de enganche de la cara del hit: su centro, esquinas, puntos medios y centros de arcos."""
+        from .. import manipuladores as mp
+        e = mp.entidad(hit, ctx.estado)
+        if e is None or e.forma is None:
+            return []
+        try:
+            return mp.puntos_enganche_cara(e.forma)
+        except Exception:  # noqa: BLE001 — sin candidatos, el agujero se mueve libre
+            return []
+
+    def ajustar_hit(self, campo, hit, ctx, visor):
+        """Al hacer clic en una cara, el punto se engancha al centro de la cara (o a una esquina, un punto
+        medio…) si queda a menos de ENGANCHE_PX píxeles, como Fusion."""
+        from .. import manipuladores as mp
+        if campo.clave != "colocacion" or hit["ref"].get("tipo") != "cara" or hit.get("punto") is None:
+            return None
+        cands = self._enganches(hit, ctx)
+        if not cands:
+            return None
+        click = np.asarray(hit["punto"], float)
+        s, ok = visor.puntos_pantalla(np.array([c[0] for c in cands] + [click], float))
+        s, ok = np.asarray(s, float), np.asarray(ok, bool)
+        if not ok[-1]:
+            return None
+        d = np.linalg.norm(s[:-1] - s[-1], axis=1)
+        d[~ok[:-1]] = np.inf
+        i = int(np.argmin(d))
+        if d[i] > mp.ENGANCHE_PX:
+            return None
+        return dict(hit, punto=np.asarray(cands[i][0], float))
 
     def previa_vista(self, ctx, v, op):
         """Como Fusion, el agujero se ve en ROJO mientras el diálogo está abierto (lo que se va a quitar)."""

@@ -98,7 +98,7 @@ NARANJA_PLANO = (0.95, 0.66, 0.30)
 AZUL_PERFIL = (0.30, 0.55, 0.95)
 AZUL_HOVER = (0.45, 0.70, 1.0)
 AZUL_SELECCION = (0.15, 0.50, 1.0)
-TOL_PX_ARISTA, TOL_PX_VERTICE = 7.0, 9.0
+TOL_PX_ARISTA, TOL_PX_VERTICE = 9.0, 11.0     # zonas de agarre generosas (antes 7 y 9)
 # Filtros de selección que entiende `elegir_entidad` (los diálogos de comando piden uno o varios).
 FILTROS = ("cara", "cara_plana", "arista", "arista_lineal", "arista_circular", "vertice", "cuerpo", "perfil",
            "curva_boceto", "punto_boceto", "boceto", "plano", "eje", "punto")

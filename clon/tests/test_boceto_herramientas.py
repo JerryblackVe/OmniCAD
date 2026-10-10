@@ -139,7 +139,7 @@ def test_conica_rho_05_es_una_parabola(app_qt):
 
 def test_texto_da_perfiles_y_desglosar_lo_vuelve_curvas_fijas(app_qt):
     lz = _lienzo(app_qt)
-    _crear(lz, "texto", (0, 0))
+    _crear(lz, "texto", (0, 0), (0, 0))               # dos clics en el mismo lugar: texto suelto sin cuadro
     _aceptar(lz, "Hola", "10", "0")
     tid = next(iter(lz.b.curvas))
     assert lz.b.tipo_de(tid) == "texto" and len(detectar(lz.b.geometria(), PLANO)) >= 4

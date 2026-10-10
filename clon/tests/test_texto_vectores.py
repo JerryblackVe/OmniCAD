@@ -516,6 +516,266 @@ def test_herramienta_texto_sobre_una_curva_en_la_interfaz(app_qt):
     assert min(y for _x, y in _puntos(lz.b.primitivas(t.id))) > 20
 
 
+@hay_arial
+def test_texto_con_cuadro_del_ratón_y_cambios_en_vivo(app_qt):
+    """Como Fusion: dos esquinas dan el cuadro (alto = altura de la letra, ancho = caja) y lo escrito se ve en vivo."""
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.ajustar_grilla = False
+    lz.set_herramienta("texto")
+    lz.clics.append((None, (10.0, 5.0)))
+    lz._procesar_clics()
+    assert lz.entrada is None and len(lz.clics) == 1         # espera la esquina opuesta
+    lz.clics.append((None, (70.0, 25.0)))
+    lz._procesar_clics()
+    assert lz.entrada is not None
+    assert lz.entrada.campos[1].text() == "20"                # altura = alto del cuadro
+    ancho_antes = max(x for poli in lz._previa_polis for x, _y in poli)
+    assert lz._previa_polis and ancho_antes <= 70.0 + 1e-6
+    lz.entrada.campos[0].setText("OJO")                       # cambio en vivo: otro texto, otros contornos
+    assert lz._previa_polis
+    lz.entrada.campos[1].setText("10")
+    alto = max(y for poli in lz._previa_polis for _x, y in poli) - min(y for poli in lz._previa_polis for _x, y in poli)
+    assert alto <= 10.5
+    assert not b.curvas                                       # nada se crea hasta aceptar
+    lz.entrada.aceptado.emit(["OJO", "10", "0", "0", "1"])
+    t = next(c for c in b.curvas.values() if c.tipo == "texto")
+    assert t.ancho_caja == pytest.approx(60.0) and t.ancla_v == "arriba" and t.texto == "OJO"
+    assert t.punto is not None and lz._previa_polis == []
+
+
+@hay_arial
+def test_un_texto_se_agarra_desde_cualquier_parte_de_su_caja(app_qt):
+    """Antes había que acertarle al borde de una letra: ahora vale toda la caja, resalta y se arrastra."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    tid = b.agregar_texto((0, 0), "HOLA", 20, 0, "Arial")
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.resize(800, 600)
+    lz.ajustar_grilla = False
+    lz._camara()
+    pts = _puntos(b.primitivas(tid))
+    xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+    centro = (sum(xs) / len(xs), (min(ys) + max(ys)) / 2)
+    # el centro de la «O»: está lejos de cualquier trazo de letra (más de 6 px) y aun así es el texto
+    hueco = lz.a_px(*centro)
+    assert lz._curva_cercana(hueco) == tid
+    assert lz._curva_cercana(lz.a_px(max(xs) + 50, centro[1])) is None      # lejos de la caja: nada
+    lz._actualizar_sobre(hueco)
+    assert lz._sobre == tid
+    lz._actualizar_sobre(lz.a_px(max(xs) + 50, centro[1]))
+    assert lz._sobre is None
+    # arrastrarlo desde ese lugar lo mueve (texto suelto)
+    x0, y0 = b.coords(b.curvas[tid].punto)
+    lz._presionar_seleccion(hueco, Qt.NoModifier)
+    assert lz._arrastre == ("curva", tid, "mover")
+    destino = lz.a_px(centro[0] + 15, centro[1] + 10)
+    lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+    lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), Qt.LeftButton, Qt.NoButton,
+                                     Qt.NoModifier))
+    x1, y1 = b.coords(b.curvas[tid].punto)
+    assert (x1 - x0, y1 - y0) == pytest.approx((15.0, 10.0), abs=0.5)
+
+
+def test_zonas_de_agarre_generosas_y_resaltado_de_manijas_y_circulos(app_qt):
+    from PySide6.QtCore import QPointF
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    cid = b.agregar_circulo((0, 0), 15)                # un círculo chico en pantalla (60 px de radio)
+    lin = b.agregar_linea((40, 0), (80, 0))
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.resize(800, 600)
+    lz.ajustar_grilla = False
+    lz._camara()
+    # circulo chico: se agarra desde adentro (lejos del trazo y del centro)
+    dentro = lz.a_px(8.0, 4.0)
+    assert lz.entidad_en(dentro) == cid
+    # un círculo grande no: su interior sigue libre para la ventana de selección
+    b2 = Boceto()
+    b2.agregar_circulo((0, 0), 60)
+    lz2 = Lienzo(b2, TablaParametros().evaluar, plano=Plano("XY"))
+    lz2.resize(800, 600)
+    lz2.ajustar_grilla = False
+    lz2._camara()
+    assert lz2.entidad_en(lz2.a_px(20.0, 10.0)) is None
+    # un punto se agarra desde 10 px (antes 8)
+    p = next(iter(b.puntos))
+    q = lz.a_px(*b.coords(p))
+    assert lz._punto_cercano(QPointF(q.x() + 10, q.y())) == p
+    # marco: al elegir algo, pasar sobre una manija la resalta
+    lz.seleccion = [cid, lin]
+    caja = lz._caja_marco()
+    m = lz._manijas_marco(caja)["escala0"]
+    lz._actualizar_sobre(QPointF(m.x() + 3, m.y() + 3))
+    assert lz._manija_sobre == "escala0" and lz._sobre is None
+
+
+@hay_arial
+def test_arrastrar_un_texto_en_curva_lo_desliza_por_la_curva(app_qt):
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    circ = b.agregar_circulo((0, 0), 30)
+    tid = b.agregar_texto((0, 0), "ARRIBA", 6, 0, "Arial", camino=circ, camino_pos=0.25, alineacion="centro")
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.resize(800, 600)
+    lz.ajustar_grilla = False
+    lz._camara()
+    t = b.curvas[tid]
+    x, y = _puntos(b.primitivas(tid))[0]                      # un punto de las letras
+    ini = lz.a_px(x, y)
+    lz._presionar_seleccion(ini, Qt.NoModifier)
+    assert lz._arrastre == ("curva", tid, "deslizar")
+    # arrastrar un cuarto de vuelta por el círculo: del tope (0°) hacia un costado
+    destino = lz.a_px(x + 30, y - 30)
+    lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+    lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), Qt.LeftButton, Qt.NoButton,
+                                     Qt.NoModifier))
+    assert t.camino_pos != pytest.approx(0.25, abs=0.02)      # se deslizó
+    nuevo = t.camino_pos
+    lz.deshacer()
+    assert b.curvas[tid].camino_pos == pytest.approx(0.25) and nuevo != 0.25
+
+
+@hay_arial
+def test_el_texto_pendiente_no_se_pierde_con_clic_derecho_ni_al_cambiar_de_herramienta(app_qt):
+    """Bug: con el cuadro abierto, el clic derecho (menú radial › Aceptar) descartaba el texto escrito."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+
+    def nuevo():
+        b = Boceto()
+        lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+        lz.ajustar_grilla = False
+        lz.set_herramienta("texto")
+        for xy in ((0.0, 0.0), (60.0, 20.0)):
+            lz.clics.append((None, xy))
+            lz._procesar_clics()
+        lz.entrada.campos[0].setText("HOLA")
+        return b, lz
+
+    def textos(b):
+        return [c.texto for c in b.curvas.values() if c.tipo == "texto"]
+
+    b, lz = nuevo()                                           # clic derecho
+    lz.mousePressEvent(QMouseEvent(QEvent.Type.MouseButtonPress, QPointF(5, 5), QPointF(5, 5), Qt.RightButton,
+                                   Qt.RightButton, Qt.NoModifier))
+    assert textos(b) == ["HOLA"] and lz.entrada is None
+    b, lz = nuevo()                                           # cambiar de herramienta
+    lz.set_herramienta("linea")
+    assert textos(b) == ["HOLA"]
+    b, lz = nuevo()                                           # terminar el boceto
+    lz.confirmar_texto_pendiente()
+    assert textos(b) == ["HOLA"]
+
+
+@hay_arial
+def test_el_texto_se_escribe_directo_en_el_cuadro(app_qt):
+    """Las teclas escriben en el lienzo (no en la barra): Enter = línea nueva, Ctrl+Enter acepta, Esc cancela."""
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QKeyEvent
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.ajustar_grilla = False
+
+    def tecla(k, texto="", mod=Qt.NoModifier):
+        lz.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, k, mod, texto))
+
+    lz.set_herramienta("texto")
+    for xy in ((0.0, 0.0), (60.0, 20.0)):
+        lz.clics.append((None, xy))
+        lz._procesar_clics()
+    assert lz.entrada.campos[0].isHidden()                    # el campo «Texto» ya no está en la barra
+    # cursor parpadeante: en el cuadro (arriba a la izquierda, tras el «Texto» de relleno sale a su derecha)
+    assert lz._caret is not None and lz._t_caret.isActive()
+    antes = lz._caret_on
+    lz._parpadeo()
+    assert lz._caret_on is not antes
+    # la barra se mueve arrastrándola
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QMouseEvent
+    lz.resize(3000, 900)                                       # la barra no sale del lienzo
+    barra = lz.entrada
+    p0 = barra.pos()
+    barra.mousePressEvent(QMouseEvent(QEvent.Type.MouseButtonPress, QPointF(0, 0), Qt.LeftButton, Qt.LeftButton,
+                                      Qt.NoModifier))
+    barra.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(5, 7), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+    barra.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(5, 7), Qt.LeftButton, Qt.NoButton,
+                                        Qt.NoModifier))
+    assert barra.pos() == p0 + QPoint(5, 7) and barra._arrastre is None
+    for ch in "AB":
+        tecla(ord(ch), ch)
+    assert lz.entrada.campos[0].text() == "AB"                # la 1.ª tecla reemplazó el «Texto» de relleno
+    tecla(Qt.Key_Return)
+    tecla(ord("C"), "C")
+    assert lz.entrada.campos[0].text() == "AB\\nC" and lz._previa_polis
+    tecla(Qt.Key_Backspace)
+    tecla(Qt.Key_Backspace)
+    assert lz.entrada.campos[0].text() == "AB"
+    tecla(Qt.Key_Return, mod=Qt.ControlModifier)              # Ctrl+Enter acepta
+    t = next(c for c in b.curvas.values() if c.tipo == "texto")
+    assert t.texto == "AB" and lz.entrada is None
+    # Esc cancela sin crear nada
+    lz.set_herramienta("texto")
+    for xy in ((0.0, 40.0), (30.0, 50.0)):
+        lz.clics.append((None, xy))
+        lz._procesar_clics()
+    tecla(ord("Z"), "Z")
+    tecla(Qt.Key_Escape)
+    assert lz.entrada is None and len([c for c in b.curvas.values() if c.tipo == "texto"]) == 1
+
+
+@hay_arial
+def test_editar_un_texto_muestra_sus_opciones_en_la_paleta(app_qt):
+    """Doble clic sobre un texto con «Seleccionar»: la paleta enseña Fuente/Negrita/Alineación y después vuelve."""
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    from PySide6.QtWidgets import QFormLayout
+    from omnicad.ui.modo_boceto import PaletaBoceto
+    b = Boceto()
+    tid = b.agregar_texto((0, 0), "HOLA", 10, 0, "Arial", True, False)
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    paleta = PaletaBoceto()
+    lz.texto_en_edicion.connect(
+        lambda: paleta.set_herramienta("texto", lz.lados, lz.opcion_cota, lz.opciones))
+    lz.herramienta_cambiada.connect(
+        lambda h: paleta.set_herramienta(h, lz.lados, lz.opcion_cota, lz.opciones))
+    assert lz.herramienta == "seleccionar"
+    lz.editar_texto(tid, lz.rect().center())
+    etiquetas = [paleta.form_contexto.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text()
+                 for i in range(paleta.form_contexto.rowCount())]
+    assert {"Fuente", "Negrita", "Cursiva", "Alineación"} <= set(etiquetas)
+    assert lz.opciones["negrita"] is True                     # parte de lo que ya tiene el texto
+    lz._cerrar_entrada()
+    assert paleta.form_contexto.rowCount() == 0               # «Seleccionar» no tiene opciones propias
+
+
 # ---------------------------------------------------------------- bocetos grandes (fase 7)
 def test_boceto_grande_sin_restricciones_no_arma_un_sistema_gigante():
     """Antes, 3000 curvas sueltas pedían una matriz de (18 000)² en el solver y fallaba por memoria."""

@@ -378,6 +378,225 @@ def test_agujero_con_flecha_de_profundidad_y_previa_roja(app_qt):
     assert "previa_comando" not in visor._capas
 
 
+def test_agujero_se_mueve_arrastrando_su_aro_por_la_cara(app_qt):
+    """El agujero puesto con un clic sobre una cara se puede correr con el ratón (antes quedaba donde se hizo clic)."""
+    from omnicad.ui.comandos.crear import Agujero
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cara["punto"] = np.array([10.0, 10.0, 20.0])
+    panel, visor, estados = _panel(Agujero(), doc, {"colocacion": [cara], "profundidad": "8 mm"})
+    asa = _manip(panel, "posicion:agujero0")
+    gestor = panel.manipuladores
+    ini = gestor.pantalla([asa.punto])[0][0]
+    destino = gestor.pantalla([asa.punto + np.array([5.0, 0.0, 0.0])])[0][0]
+    _arrastrar(visor, ini, destino)
+    nuevo = np.asarray(panel.valores["colocacion"][0]["punto"], float)
+    assert nuevo[0] == pytest.approx(15.0, abs=0.6) and nuevo[1] == pytest.approx(10.0, abs=0.6)
+    assert nuevo[2] == pytest.approx(20.0, abs=1e-6)               # sigue sobre la cara
+    panel._calcular_previa()
+    assert estados and g.es_valida(_cuerpo(estados[-1]).forma)
+    panel.cancelar()
+
+
+def test_dibujo_insertado_se_corre_arrastrando_su_aro(app_qt):
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.insertar import InsertarSVG
+    doc = _doc_rectangulo()
+    plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
+    panel, visor, _estados = _panel(InsertarSVG(), doc, {"plano": [plano], "dx": "0 mm", "dy": "0 mm"})
+    manips = [m for m in panel.manipuladores.manips if m.ident == "posicion:desplazamiento"]
+    if not manips:                                  # el hit de un plano de origen no trae su marco: sin aro
+        pytest.skip("el hit del plano no trae geometría")
+    gestor = panel.manipuladores
+    asa = manips[0]
+    ini = gestor.pantalla([asa.punto])[0][0]
+    destino = gestor.pantalla([asa.punto + np.array([8.0, 0.0, 0.0])])[0][0]
+    _arrastrar(visor, ini, destino)
+    assert panel.ctx.evaluar(panel.valores["dx"]) == pytest.approx(8.0, abs=0.7)
+    panel.cancelar()
+
+
+def test_agujero_diametro_con_asa_en_el_borde(app_qt):
+    """Como Fusion: se tira del borde del agujero y el diámetro cambia (con su caja de valor)."""
+    from omnicad.ui.comandos.crear import Agujero
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cara["punto"] = np.array([10.0, 10.0, 20.0])
+    panel, visor, _estados = _panel(Agujero(), doc, {"colocacion": [cara], "diametro": "6 mm"})
+    asa = _manip(panel, "flecha:diametro")
+    assert asa.origen == pytest.approx((10, 10, 20)) and abs(asa.direccion[2]) < 1e-9     # radial, sobre la cara
+    gestor = panel.manipuladores
+    base = gestor.pantalla([asa.puntos(gestor)[0]])[0][0]
+    hacia = gestor.pantalla([asa.puntos(gestor)[0] + asa.direccion * 5.0])[0][0] - base
+    _arrastrar(visor, base, base + hacia / np.linalg.norm(hacia) * 25)
+    assert panel.ctx.evaluar(panel.valores["diametro"]) != pytest.approx(6.0)
+    assert "diametro" in panel.manipuladores.cajas
+    panel.cancelar()
+
+
+def test_puntos_de_enganche_de_una_cara(app_qt):
+    from omnicad.ui import manipuladores as mp
+    doc = _doc_caja()
+    from omnicad.ui.manipuladores import entidad
+    cara = entidad(_cara_de_arriba(doc), doc.estado_final).forma
+    pts = mp.puntos_enganche_cara(cara)
+    tipos = sorted(t for _p, t in pts)
+    assert tipos == ["centro"] + ["medio"] * 4 + ["vertice"] * 4
+    centro = next(p for p, t in pts if t == "centro")
+    assert centro == pytest.approx((10, 10, 20))
+
+
+def test_agujero_se_engancha_al_centro_de_la_cara_al_arrastrar(app_qt):
+    """Fusion marca el centro de la superficie y el agujero se engancha ahí al acercarse."""
+    from omnicad.ui.comandos.crear import Agujero
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cara["punto"] = np.array([4.0, 4.0, 20.0])
+    panel, visor, _estados = _panel(Agujero(), doc, {"colocacion": [cara], "profundidad": "8 mm"})
+    asa = _manip(panel, "posicion:agujero0")
+    assert len(asa.candidatos) == 9
+    gestor = panel.manipuladores
+    ini = gestor.pantalla([asa.punto])[0][0]
+    cerca = gestor.pantalla([np.array([10.0, 10.0, 20.0])])[0][0] + np.array([4.0, 3.0])    # a 5 px del centro
+    _arrastrar(visor, ini, cerca)
+    nuevo = np.asarray(panel.valores["colocacion"][0]["punto"], float)
+    assert nuevo == pytest.approx((10.0, 10.0, 20.0), abs=1e-6)             # enganchado exacto
+    # el centro marcado en azul
+    assert _manip(panel, "posicion:agujero0")._enganchado() is not None
+    panel.cancelar()
+
+
+def test_clic_sobre_la_cara_engancha_al_centro(app_qt):
+    from omnicad.ui.comandos.crear import Agujero
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    panel, visor, _estados = _panel(Agujero(), doc, {})
+    centro = np.array([10.0, 10.0, 20.0])
+    px = visor.puntos_pantalla(np.array([centro]))[0][0] + np.array([5.0, 4.0])
+    # un clic a 6 px del centro: el visor da el punto 3D de la cara bajo ese píxel
+    o, r = visor.rayo(type("P", (), {"x": lambda s: px[0], "y": lambda s: px[1]})())
+    t = (20.0 - o[2]) / r[2]
+    cara["punto"] = np.asarray(o, float) + np.asarray(r, float) * t
+    assert np.linalg.norm(cara["punto"] - centro) > 0.05
+    panel.show()
+    panel._activar(panel.campos[0])
+    panel._elegida(cara)
+    punto = np.asarray(panel.valores["colocacion"][0]["punto"], float)
+    assert punto == pytest.approx(centro, abs=1e-6)
+    panel.cancelar()
+
+
+def test_asas_en_la_vista_de_otros_comandos(app_qt):
+    """Flechas, arcos, aros y tríada en comandos que antes solo tenían campos de texto."""
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cuerpo = hit_desde_ref({"tipo": "cuerpo", "cuerpo": "op1.c1"}, doc.estado_final)
+    eje_x = hit_desde_ref({"tipo": "eje", "id": "X"}, doc.estado_final)
+    eje_z = hit_desde_ref({"tipo": "eje", "id": "Z"}, doc.estado_final)
+
+    def idents(clave, valores, d=doc):
+        panel, _visor, _e = _panel(CATALOGO[clave](), d, valores)
+        res = [m.ident for m in panel.manipuladores.manips]
+        panel.cancelar()
+        return res
+
+    assert "flecha:espesor" in idents("engrosar", {"caras": [cara]})
+    assert "flecha:distancia" in idents("sup_desfase", {"caras": [cara]})
+    assert "flecha:d1" in idents("patron_rectangular_3d", {"cuerpos": [cuerpo], "dir1": [eje_x]})
+    assert "angulo:angulo" in idents("patron_circular_3d", {"cuerpos": [cuerpo], "eje": [eje_z]})
+    assert "triada" in idents("scu", {})
+    assert "flecha:diametro" in idents("bobina", {})
+    plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
+    assert "posicion:desplazamiento" in idents("lienzo", {"plano": [plano]})
+    # «Unión construida» no tiene desfases: sin tríada
+    assert idents("union_construida", {}) == []
+
+
+def test_asa_de_extruir_superficie(app_qt):
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_rectangulo()
+    curva = next(iter(doc.estado_final.bocetos["op1"].boceto.curvas))
+    hit = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, doc.estado_final)
+    panel, _visor, _e = _panel(CATALOGO["sup_extruir"](), doc, {"curvas": [hit]})
+    assert "flecha:distancia" in [m.ident for m in panel.manipuladores.manips]
+    panel.cancelar()
+
+
+def test_asas_en_la_vista_lote_2(app_qt):
+    """Nervio, Red, Repujado, Rosca, Tubería, Dobladillo, Extender, Reglada, Empalme de superficie, Plegar,
+    Plano en ángulo, Desmoldeo y Patrón en trayectoria ya tienen su asa."""
+    from omnicad.nucleo import referencias as refs
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+
+    # caja + un boceto con un rectángulo sobre el plano XY
+    doc = _doc_caja()
+    b = Boceto()
+    b.agregar_rectangulo((2, 2), (8, 6))
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto2", plano="XY", boceto=b))
+    est = doc.estado_final
+    boc = est.bocetos["op2"]
+    curva = next(iter(boc.boceto.curvas))
+    h_curva = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op2", "curva": curva}, est)
+    h_perfil = hit_desde_ref({"tipo": "perfil", "boceto": "op2", **OpExtrusion.referencia_perfil(boc.perfiles[0])}, est)
+    cuerpo = hit_desde_ref({"tipo": "cuerpo", "cuerpo": "op1.c1"}, est)
+    cara_sup = _cara_de_arriba(doc)
+    arista = _arista_de_arriba(doc)
+    forma = est.cuerpos["op1.c1"].forma
+    lateral = next(c for c in refs.subformas(forma, "cara") if np.allclose(g.centro_masa(c, True), (0, 10, 10)))
+    h_lateral = hit_desde_ref(refs.referencia("op1.c1", lateral, caja=g.caja_envolvente(forma)), est)
+    plano_xy = hit_desde_ref({"tipo": "plano", "id": "XY"}, est)
+    eje_x = hit_desde_ref({"tipo": "eje", "id": "X"}, est)
+    eje_z = hit_desde_ref({"tipo": "eje", "id": "Z"}, est)
+
+    def idents(clave, valores, d=doc):
+        panel, _visor, _e = _panel(CATALOGO[clave](), d, valores)
+        res = [m.ident for m in panel.manipuladores.manips]
+        panel.cancelar()
+        return res
+
+    assert "flecha:espesor" in idents("nervio", {"curvas": [h_curva]})
+    assert "flecha:profundidad" in idents("red", {"curvas": [h_curva], "extension": "profundidad"})
+    assert "flecha:profundidad" in idents("repujado", {"perfiles": [h_perfil], "cara": [cara_sup]})
+    assert "flecha:tamano" in idents("tuberia", {"ruta": [h_curva]})
+    assert "flecha:longitud" in idents("dobladillo", {"aristas": [arista]})
+    assert "flecha:distancia" in idents("extender_sup", {"aristas": [arista]})
+    assert "flecha:distancia" in idents("reglada", {"aristas": [arista], "direccion": [eje_z]})
+    assert "flecha:medida" in idents("sup_empalme", {"aristas": [arista]})
+    assert "angulo:angulo" in idents("plegar", {"cara": [cara_sup], "lineas": [h_curva]})
+    assert "angulo:angulo" in idents("plano_angulo", {"r0": [eje_x]})
+    assert "angulo:angulo" in idents("desmoldeo", {"plano": [plano_xy], "caras": [h_lateral]})
+    assert "flecha:d1" in idents("patron_ruta", {"cuerpos": [cuerpo], "ruta": [h_curva]})
+
+    # rosca: cilindro, sin «longitud completa»
+    dc = Documento()
+    dc.agregar(OpPrimitiva(dc.nuevo_id(), forma="cilindro", radio="5", alto="20"))
+    cil = dc.estado_final.cuerpos["op1.c1"].forma
+    lateral_c = next(c for c in refs.subformas(cil, "cara") if refs.firma_cara(c).get("geom") == "cilindro")
+    h_cil = hit_desde_ref(refs.referencia("op1.c1", lateral_c, caja=g.caja_envolvente(cil)), dc.estado_final)
+    res = idents("rosca", {"caras": [h_cil], "largo_completo": False}, d=dc)
+    assert "flecha:longitud" in res and "flecha:desfase" in res
+
+
+def test_el_agujero_no_sale_de_la_cara(app_qt):
+    from omnicad.ui.comandos.crear import Agujero
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cara["punto"] = np.array([10.0, 10.0, 20.0])
+    panel, visor, _e = _panel(Agujero(), doc, {"colocacion": [cara], "profundidad": "8 mm"})
+    asa = _manip(panel, "posicion:agujero0")
+    gestor = panel.manipuladores
+    ini = gestor.pantalla([asa.punto])[0][0]
+    afuera = gestor.pantalla([np.array([60.0, 10.0, 20.0])])[0][0]          # 40 mm fuera del borde de la cara
+    _arrastrar(visor, ini, afuera)
+    nuevo = np.asarray(panel.valores["colocacion"][0]["punto"], float)
+    assert 0.0 <= nuevo[0] <= 20.0 and 0.0 <= nuevo[1] <= 20.0
+    panel.cancelar()
+
+
 def test_angulo_de_la_revolucion(app_qt):
     from omnicad.ui.comando import hit_desde_ref
     from omnicad.ui.comandos.solido import Revolucion

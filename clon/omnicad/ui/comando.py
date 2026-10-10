@@ -142,6 +142,11 @@ class Comando:
     def mostrar(self, v, ctx):
         """Para los comandos SIN_OP: lo que se ve en la vista mientras el diálogo está abierto."""
 
+    def ajustar_hit(self, campo, hit, ctx, visor):
+        """Gancho al elegir algo en la vista: puede devolver el hit corregido (p. ej. enganchado al centro de la
+        cara). None = sin cambios."""
+        return None
+
     def manipuladores(self, ctx, v):
         """Manipuladores en la vista (`ui/manipuladores.py`: Flecha, Angulo, Triada…) para los valores `v`.
         El panel los recalcula cada vez que cambia un valor; [] = sin manipuladores."""
@@ -483,6 +488,10 @@ class PanelComando(QFrame):
         campo = self.activa
         if campo is None or not self.isVisible():
             return
+        try:
+            hit = self.comando.ajustar_hit(campo, hit, self.ctx, self.visor) or hit
+        except Exception:  # noqa: BLE001 — sin el ajuste, vale lo que se tocó
+            pass
         lista = list(self.valores.get(campo.clave) or [])
         repetida = next((h for h in lista if h["ref"] == hit["ref"]), None)
         if repetida is not None:            # clic sobre algo ya elegido: se quita (como Fusion)

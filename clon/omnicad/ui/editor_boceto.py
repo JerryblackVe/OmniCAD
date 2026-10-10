@@ -29,7 +29,7 @@ Comportamiento tomado de la ayuda de Fusion (libro "Design: Sketch", SKT-*):
 import math
 import warnings
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
@@ -80,8 +80,8 @@ HERRAMIENTAS = {
                        "termina."),
     "conica": ("Curva cónica", "Clic en un extremo, clic en el otro y clic en el vértice; escribí Rho y Enter."),
     "punto": ("Punto", "Clic para ubicar puntos."),
-    "texto": ("Texto", "Clic para ubicar el texto; escribí el texto, la altura y el ángulo y Enter "
-                       "(fuente, negrita y cursiva en la paleta)."),
+    "texto": ("Texto", "Clic en una esquina y clic en la opuesta: el cuadro fija la altura y el ancho del texto; "
+                       "escribí y mirá los cambios en vivo, Enter acepta (fuente y estilo en la paleta)."),
     "espiral": ("Espiral", "Clic en el centro y clic en el inicio; escribí las vueltas y el paso y Enter."),
     "simetria": ("Simetría", "Seleccioná la geometría, Enter y clic en la línea de simetría."),
     "patron_rectangular": ("Patrón rectangular", "Seleccioná la geometría y Enter; escribí cantidad y distancia "
@@ -144,6 +144,9 @@ PROYECCION = ("proyectar", "intersecar", "incluir_3d")
 MODIFICAN = tuple(PICKS) + SELECCION + PROYECCION       # no aplican el tipo de línea a lo que crean
 VIOLETA = QColor(170, 90, 230)
 TOL_PX = 8.0
+TOL_PUNTO = 11.0          # radio (px) para agarrar un punto: más grande que lo que se ve
+TOL_MANIJA = 12.0         # radio (px) de las manijas del marco de control
+RADIO_INTERIOR_PX = 80.0  # círculos de hasta este radio en pantalla se agarran también desde adentro
 TOL_INFERENCIA = math.radians(3.0)
 # Cotas en vivo mientras se dibuja (las cajas de valor de Fusion): herramientas que las muestran.
 RANURAS_RECTAS = ("ranura_centro", "ranura_total", "ranura_punto")
@@ -291,6 +294,8 @@ class EntradaValor(QFrame):
     def __init__(self, etiquetas, textos, parent):
         super().__init__(parent)
         self.tab_externo = False
+        self._arrastre = None
+        self._movible = False
         self.setObjectName("entrada_valor")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(3, 2, 3, 2)
@@ -305,6 +310,51 @@ class EntradaValor(QFrame):
             self.campos.append(c)
         self.adjustSize()
 
+    def hacer_movible(self):
+        """La barra se arrastra con el ratón desde cualquier parte que no sea un campo (agarre ⋮⋮ a la izquierda)."""
+        self._movible = True
+        agarre = QLabel("⋮⋮")
+        agarre.setToolTip("Arrastrá para mover la barra")
+        agarre.setCursor(Qt.SizeAllCursor)
+        self.layout().insertWidget(0, agarre)
+        self.setCursor(Qt.SizeAllCursor)
+        self.layout().activate()
+        self.adjustSize()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._arrastre = e.position().toPoint()
+            e.accept()
+        else:
+            super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if self._arrastre is not None:
+            nueva = self.pos() + e.position().toPoint() - self._arrastre
+            padre = self.parentWidget()
+            if padre is not None:
+                nueva.setX(max(0, min(nueva.x(), padre.width() - self.width())))
+                nueva.setY(max(0, min(nueva.y(), padre.height() - self.height())))
+            self.move(nueva)
+            e.accept()
+        else:
+            super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        self._arrastre = None
+        super().mouseReleaseEvent(e)
+
+    def ocultar_primero(self):
+        """El primer campo (el texto) se escribe directamente en el cuadro del lienzo, no en la barra."""
+        lay = self.layout()
+        desde = 1 if self._movible else 0
+        for i in range(desde, desde + 2):
+            w = lay.itemAt(i).widget()
+            if w is not None:
+                w.hide()
+        self.layout().activate()
+        self.adjustSize()
+
     def abrir(self, pos):
         self.move(int(pos.x()) + 14, int(pos.y()) + 10)
         self.show()
@@ -317,9 +367,10 @@ class EntradaValor(QFrame):
             if e.key() in (Qt.Key_Tab, Qt.Key_Backtab) and self.tab_externo:
                 self.tabulado.emit(obj.text().strip(), 1 if e.key() == Qt.Key_Tab else -1)
                 return True
-            if e.key() in (Qt.Key_Tab, Qt.Key_Backtab) and len(self.campos) > 1:
-                i = self.campos.index(obj)
-                siguiente = self.campos[(i + (1 if e.key() == Qt.Key_Tab else -1)) % len(self.campos)]
+            visibles = [c for c in self.campos if not c.isHidden()]
+            if e.key() in (Qt.Key_Tab, Qt.Key_Backtab) and len(visibles) > 1:
+                i = visibles.index(obj)
+                siguiente = visibles[(i + (1 if e.key() == Qt.Key_Tab else -1)) % len(visibles)]
                 siguiente.setFocus()
                 siguiente.selectAll()
                 return True
@@ -339,6 +390,7 @@ class Lienzo(QWidget):
     cambio = Signal()
     mensaje = Signal(str)
     herramienta_cambiada = Signal(str)
+    texto_en_edicion = Signal()     # se edita un texto ya creado: la paleta muestra sus opciones (fuente, estilo…)
     info = Signal(str)          # medidas de lo elegido, como Fusion ("1 línea de boceto | Longitud: …")
     aviso = Signal(str)         # aviso flotante (p. ej. una operación borró restricciones o cotas)
 
@@ -360,6 +412,15 @@ class Lienzo(QWidget):
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
                          "negrita": False, "cursiva": False,
                          "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq"}
+        self._paleta_texto = False                 # la paleta muestra las opciones del texto que se edita
+        self._previa_texto = None                  # texto en vivo mientras se escribe en la caja (como Fusion)
+        self._previa_polis = []                    # contornos de esa vista previa (coordenadas del boceto)
+        self._texto_oculto = None                  # texto existente en edición: en su lugar se dibuja la previa
+        self._caret = None                         # segmento del cursor de escritura, en coordenadas del boceto
+        self._caret_on = True
+        self._t_caret = QTimer(self)
+        self._t_caret.setInterval(530)
+        self._t_caret.timeout.connect(self._parpadeo)
         self.escala = 4.0
         self.centro = [0.0, 0.0]
         self.seleccion = []
@@ -375,7 +436,11 @@ class Lienzo(QWidget):
         self.resultado = None
         self.entrada = None
         self._mvp = None
+        self._sobre = None               # entidad bajo el ratón en Seleccionar (se resalta y cambia el cursor)
+        self._manija_sobre = None        # manija del marco bajo el ratón
+        self._zona_sobre = None          # cota o símbolo de restricción bajo el ratón
         self._arrastre, self._movio = None, False
+        self._desliz = None              # (fracción al agarrar, posición del texto, camino cerrado)
         self._presion = None
         self._tangente = None            # (punto de partida, línea) mientras se arrastra un arco tangente
         self._ventana = None
@@ -563,7 +628,7 @@ class Lienzo(QWidget):
         return not ((c.construccion and not self.mostrar["construccion"])
                     or (c.proyectada and not self.mostrar["proyectadas"]))
 
-    def _punto_cercano(self, pos, excluir=None, radio_px=TOL_PX):
+    def _punto_cercano(self, pos, excluir=None, radio_px=TOL_PUNTO):
         mejor, dmin = None, radio_px
         for p in self.b.puntos.values():
             if p.id == excluir:
@@ -574,21 +639,34 @@ class Lienzo(QWidget):
                 mejor, dmin = p.id, d
         return mejor
 
-    def _curva_cercana(self, pos, radio_px=6.0, tipos=None):
+    def _curva_cercana(self, pos, radio_px=6.0, tipos=None, interior=False):
         mejor, dmin = None, radio_px
         for c in self.b.curvas.values():
             if not self._visible(c) or (tipos and c.tipo not in tipos):
                 continue
+            if interior and isinstance(c, Circulo) and radio_px * 0.8 < dmin:
+                # círculo chico (un agujero): también se agarra desde adentro, cediendo ante lo que esté más cerca
+                centro = self.a_px(*self.b.coords(c.centro))
+                r_px = self.b.radio(c.id) * self.px_por_mm()
+                if r_px <= RADIO_INTERIOR_PX and math.hypot(pos.x() - centro.x(), pos.y() - centro.y()) <= r_px:
+                    mejor, dmin = c.id, radio_px * 0.8
+            xs, ys = [], []
             for poli in self._polilineas(c, 48):
                 px = self._poli_px(poli)
                 d = min(_dist_px(pos, a, b) for a, b in zip(px, px[1:], strict=False))
                 if d < dmin:
                     mejor, dmin = c.id, d
+                if isinstance(c, Texto):
+                    xs += [q.x() for q in px]
+                    ys += [q.y() for q in px]
+            if xs and min(xs) - radio_px <= pos.x() <= max(xs) + radio_px \
+                    and min(ys) - radio_px <= pos.y() <= max(ys) + radio_px and radio_px * 0.9 < dmin:
+                mejor, dmin = c.id, radio_px * 0.9      # dentro de la caja del texto: cede ante lo que esté más cerca
         return mejor
 
     def entidad_en(self, pos):
         pid = self._punto_cercano(pos)
-        return pid if pid is not None else self._curva_cercana(pos)
+        return pid if pid is not None else self._curva_cercana(pos, interior=True)
 
     def _ajustar(self, pos, excluir=None, base=None):
         """(id de punto enganchado o None, (u, v)). Con `base`, infiere horizontal/vertical."""
@@ -614,6 +692,7 @@ class Lienzo(QWidget):
 
     # ------------------------------------------------------------ herramientas
     def set_herramienta(self, h):
+        self.confirmar_texto_pendiente()          # cambiar de herramienta no pierde el texto escrito
         self.herramienta = h
         self.clics, self.picks, self.picks_xy = [], [], []
         self.fase = None
@@ -945,25 +1024,42 @@ class Lienzo(QWidget):
             if c[0][0] is None:
                 self.aplicar_cambio(lambda: self.b.agregar_punto(*c[0][1]))
             self.clics = []
-        elif h == "texto" and len(c) == 1:
+        elif h == "texto" and c:
+            if len(c) > 1 and self.entrada is not None:
+                c.pop()                                 # ya hay una caja de texto abierta
+                return
             pid, xy = c[0]
             # clic sobre una curva (no sobre un punto): texto en curva, centrado donde se hizo clic
-            camino = None if pid is not None else self._curva_cercana(self.a_px(*xy))
-            if camino is not None and isinstance(self.b.curvas.get(camino), Texto):
-                camino = None
-            en_curva = {}
+            camino = None
+            if len(c) == 1 and pid is None:
+                camino = self._curva_cercana(self.a_px(*xy))
+                if camino is not None and isinstance(self.b.curvas.get(camino), Texto):
+                    camino = None
+                if camino is None:
+                    self.mensaje.emit("Texto: clic en la esquina opuesta para dibujar el cuadro del texto "
+                                      "(o clic otra vez en el mismo lugar para un texto de 5 mm).")
+                    return                              # falta la 2.ª esquina del cuadro
+            en_curva, caja, altura_ini, rect = {}, {}, 5.0, None
             if camino is not None:
                 o = self.opciones
                 pos = fraccion_en_camino(self.b.primitivas(camino)[0], xy)
                 en_curva = {"camino": camino, "camino_lado": o.get("camino_lado", "izq"), "camino_pos": pos,
                             "alineacion": "centro"}
+            elif len(c) == 2:
+                fin_xy = c[1][1]
+                x0, x1 = sorted((xy[0], fin_xy[0]))
+                y0, y1 = sorted((xy[1], fin_xy[1]))
+                if x1 - x0 > 1e-6 and y1 - y0 > 1e-6:   # cuadro dibujado: su alto es el de la letra, su ancho parte líneas
+                    pid, xy, altura_ini = None, (x0, y1), y1 - y0
+                    caja = {"ancho_caja": x1 - x0, "ancla_v": "arriba"}
+                    rect = (x0, y0, x1, y1)
 
             def aceptar(v):
                 v = (list(v) + [""] * 5)[:5]          # los campos de más (espaciado, interlineado) son opcionales
                 altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
                 espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
                 o = self.opciones
-                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | en_curva
+                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | en_curva | caja
                 ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
                     pid if pid is not None else xy, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
                     o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
@@ -972,7 +1068,10 @@ class Lienzo(QWidget):
             if camino is not None:
                 self.mensaje.emit("Texto en curva: las letras siguen la curva elegida (Lado en curva, en la paleta).")
             self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
-                                ["Texto", "5", "0", "0", "1"], self._pos_cursor, aceptar)
+                                ["Texto", formato.numero(altura_ini), "0", "0", "1"], self._pos_cursor, aceptar)
+            self._previa_texto = {"pos": pid if pid is not None else xy, "existente": None,
+                                  "extra": en_curva | caja, "caja": rect, "reemplazar": True}
+            self._conectar_previa_texto()
         elif h == "espiral" and len(c) == 2:
             (_, ce), (_, ini) = c
 
@@ -1282,6 +1381,117 @@ class Lienzo(QWidget):
         self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
                             [t.texto.replace("\n", "\\n"), formato.numero(t.altura), formato.numero(t.angulo, True),
                              formato.numero(t.espaciado), formato.numero(t.interlineado)], pos, aceptar)
+        # como en Fusion, al editar un texto se ven sus opciones (fuente, negrita, alineación…) en la paleta
+        self._paleta_texto = True
+        self.texto_en_edicion.emit()
+        self._previa_texto = {"pos": None, "existente": tid, "extra": {}, "caja": None, "reemplazar": False}
+        self._texto_oculto = tid                 # mientras se escribe se ve la previa en vivo en su lugar
+        self._conectar_previa_texto()
+
+    # ------------------------------------------------------------ texto en vivo (como Fusion)
+    def _conectar_previa_texto(self):
+        """Cada letra o número que se escribe en la caja redibuja el texto en vivo."""
+        for campo in self.entrada.campos:
+            campo.textChanged.connect(lambda _t: self.refrescar_previa_texto())
+        self.entrada.hacer_movible()
+        self.entrada.ocultar_primero()           # el texto se escribe en el cuadro, no en la barra
+        self._caret_on = True
+        self._t_caret.start()
+        self.setFocus()
+        self.mensaje.emit("Escribí el texto directamente en el cuadro. Enter = línea nueva; Ctrl+Enter o clic "
+                          "afuera = aceptar; Tab = altura y demás; Esc = cancelar.")
+        self.refrescar_previa_texto()
+
+    def confirmar_texto_pendiente(self):
+        """Acepta el texto que está abierto en el cuadro (si hay uno): al salir del boceto, cambiar de herramienta
+        o usar el menú radial no se pierde lo escrito."""
+        if self._previa_texto is not None and self.entrada is not None:
+            self.entrada.aceptado.emit([c.text().strip() for c in self.entrada.campos])
+
+    def _teclado_en_texto(self, e):
+        """Teclas con el cuadro de texto abierto: escriben en el texto del lienzo. True si las atendió."""
+        d = self._previa_texto
+        if d is None or self.entrada is None:
+            return False
+        campo, k = self.entrada.campos[0], e.key()
+        if k == Qt.Key_Escape:
+            self.cancelar()
+            return True
+        if k in (Qt.Key_Return, Qt.Key_Enter):
+            if e.modifiers() & Qt.ControlModifier:
+                self.entrada.aceptado.emit([c.text().strip() for c in self.entrada.campos])
+                return True
+            texto = campo.text()
+            campo.setText(("" if d["reemplazar"] else texto) + "\\n")
+        elif k in (Qt.Key_Backspace, Qt.Key_Delete):
+            texto = "" if d["reemplazar"] else campo.text()
+            campo.setText(texto[:-2] if texto.endswith("\\n") else texto[:-1])
+        elif e.text() and e.text().isprintable() and not e.modifiers() & Qt.ControlModifier:
+            campo.setText(("" if d["reemplazar"] else campo.text()) + e.text())
+        else:
+            return False
+        d["reemplazar"] = False
+        return True
+
+    def _posicion_cursor(self, texto, altura, inter, polis, d):
+        """Segmento vertical que marca dónde se escribe: al final de la última línea del texto."""
+        pts = [q for poli in polis for q in poli]
+        caja = d.get("caja")
+        if not pts:                                   # sin texto: arranca en la esquina superior izquierda
+            if caja is not None:
+                return ((caja[0], caja[3] - altura), (caja[0], caja[3]))
+            return None
+        ymin, xmin = min(q[1] for q in pts), min(q[0] for q in pts)
+        if texto.endswith("\n"):                       # línea nueva vacía: debajo de la última, a la izquierda
+            x = caja[0] if caja is not None else xmin
+            base = ymin - altura * inter
+            return ((x, base), (x, base + altura))
+        corte = ymin + altura * inter * 0.5            # lo que cae en la última línea
+        ultima = [q for poli in polis if sum(q[1] for q in poli) / len(poli) <= corte for q in poli]
+        if not ultima:
+            ultima = pts
+        x = max(q[0] for q in ultima) + altura * 0.08
+        base = min(q[1] for q in ultima)
+        return ((x, base), (x, base + altura))
+
+    def _parpadeo(self):
+        self._caret_on = not self._caret_on
+        self.update()
+
+    def refrescar_previa_texto(self):
+        """Recalcula los contornos del texto con lo escrito en la caja y con las opciones de la paleta."""
+        d, e = self._previa_texto, self.entrada
+        if d is None or e is None:
+            return
+        v = ([c.text() for c in e.campos] + [""] * 5)[:5]
+        polis, self._caret = [], None
+        self._caret_on = True
+        self._t_caret.start()         # al escribir el cursor queda fijo y vuelve a parpadear
+        try:
+            texto = v[0].replace("\\n", "\n")
+            altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
+            esp, inter = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
+            o = self.opciones
+            if texto.strip() and altura > 0 and inter > 0:
+                copia = self.b.copia()
+                if d["existente"] is not None:
+                    nid = d["existente"]
+                    t = copia.curvas[nid]
+                    t.texto, t.altura, t.angulo = texto, altura, ang
+                    t.fuente, t.negrita, t.cursiva = o["fuente"], o["negrita"], o["cursiva"]
+                    t.espaciado, t.interlineado = esp, inter
+                    t.alineacion, t.ancla_v = o["alineacion"], o["ancla_v"]
+                    t.camino_lado = o.get("camino_lado", t.camino_lado)
+                else:
+                    extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | d["extra"]
+                    nid = copia.agregar_texto(d["pos"], texto, altura, ang, o["fuente"], o["negrita"], o["cursiva"],
+                                              espaciado=esp, interlineado=inter, **extra)
+                polis = [list(puntos_primitiva(prim)) for prim in copia.primitivas(nid)]
+            self._caret = self._posicion_cursor(texto, altura, inter, polis, d)
+        except (ErrorBoceto, ErrorExpresion, ValueError, ZeroDivisionError, KeyError):
+            polis = []                      # mientras se escribe un valor a medias, no se dibuja nada
+        self._previa_polis = polis
+        self.update()
 
     # ------------------------------------------------------------ entrada dinámica y cotas en pantalla
     def _abrir_entrada(self, etiquetas, textos, pos, al_aceptar):
@@ -1316,7 +1526,17 @@ class Lienzo(QWidget):
             entrada.hide()
             entrada.deleteLater()
             self.setFocus()
+            if self.herramienta == "texto":
+                self.clics = []              # cancelar (Esc) también descarta la esquina del cuadro
             self.update()
+        if self._previa_texto is not None:
+            self._previa_texto, self._previa_polis, self._texto_oculto = None, [], None
+            self._caret = None
+            self._t_caret.stop()
+            self.update()
+        if self._paleta_texto:
+            self._paleta_texto = False
+            self.herramienta_cambiada.emit(self.herramienta)     # la paleta vuelve a las opciones de la herramienta
         self._editando = None
         self._cota_editada = None
 
@@ -2015,7 +2235,7 @@ class Lienzo(QWidget):
     def _zona_en(self, pos):
         for tabla in (self._zonas_cotas, self._zonas_glifos):
             for ident, rect in tabla.items():
-                if rect.contains(pos):
+                if rect.adjusted(-4, -4, 4, 4).contains(pos):
                     return ident
         return None
 
@@ -2031,6 +2251,11 @@ class Lienzo(QWidget):
         pos = e.position()
         self._camara()
         self.setFocus()
+        if self._previa_texto is not None and self.entrada is not None and e.button() in (Qt.LeftButton,
+                                                                                          Qt.RightButton):
+            self.confirmar_texto_pendiente()          # clic afuera o clic derecho (menú radial): el texto queda
+            if e.button() == Qt.LeftButton:
+                return
         if self.entrada is not None and e.button() == Qt.LeftButton:
             if self._editando is not None:          # clic con una caja a medio escribir: el valor queda fijo
                 texto = self.entrada.campos[0].text()
@@ -2126,7 +2351,7 @@ class Lienzo(QWidget):
         if caja is None:
             return False
         for nombre, q in self._manijas_marco(caja).items():
-            if math.hypot(q.x() - pos.x(), q.y() - pos.y()) <= 8:
+            if math.hypot(q.x() - pos.x(), q.y() - pos.y()) <= TOL_MANIJA:
                 mm = self.a_mm(pos)
                 self._marco = {"tipo": nombre, "caja": caja, "inicio": mm, "actual": mm, "px_inicio": pos,
                                "px_actual": pos, "shift": False}
@@ -2201,7 +2426,7 @@ class Lienzo(QWidget):
         p.setPen(QPen(azul, 1))
         p.drawLine(arriba, manijas["rotar"])
         for nombre, q in manijas.items():
-            p.setBrush(QColor(255, 255, 255))
+            p.setBrush(QColor(255, 170, 40) if nombre == self._manija_sobre else QColor(255, 255, 255))
             if nombre == "rotar":
                 p.drawEllipse(q, 5, 5)
             elif nombre == "mover":
@@ -2270,7 +2495,19 @@ class Lienzo(QWidget):
             self._arrastre = ent
         elif ent in self.b.curvas:
             c = self.b.curvas[ent]
-            if not isinstance(c, (Linea, Circulo, Arco)) or c.proyectada:
+            if isinstance(c, Texto) and c.camino in self.b.curvas:
+                # texto en curva: arrastrarlo lo desliza por la curva (la posición sigue al ratón)
+                cam = self.b.curvas[c.camino]
+                inicio = fraccion_en_camino(self.b.primitivas(c.camino)[0], self.a_mm(pos))
+                cerrada = isinstance(cam, Circulo) or bool(getattr(cam, "cerrada", False))
+                self._arrastre = ("curva", ent, "deslizar")
+                self._desliz = (inicio, c.camino_pos, cerrada)
+                self._ultimo = self.a_mm(pos)
+                self._movio = False
+                self._instantanea()
+                self.mensaje.emit("Arrastrá el texto para deslizarlo por la curva.")
+                return
+            if not isinstance(c, (Linea, Circulo, Arco, Texto)) or c.proyectada:
                 return
             if set(c.puntos()) <= fijos or self._determinada(ent):
                 self.mensaje.emit("Esa curva está totalmente restringida (o fija): no se puede arrastrar.")
@@ -2302,7 +2539,7 @@ class Lienzo(QWidget):
     def _modo_arrastre(self, cid):
         """"radio" si arrastrar la curva puede cambiar el radio (está libre); si no, "mover"."""
         c = self.b.curvas[cid]
-        if isinstance(c, Linea):
+        if isinstance(c, (Linea, Texto)):
             return "mover"
         copia = self.b.copia()
         r0 = copia.radio(cid)
@@ -2313,7 +2550,23 @@ class Lienzo(QWidget):
             return "mover"
         return "radio" if abs(copia.radio(cid) - r0) > 1e-4 else "mover"
 
+    def _deslizar_texto(self, cid, cur):
+        """Mueve un texto en curva a lo largo de su camino: conserva el punto del texto que se agarró."""
+        t = self.b.curvas[cid]
+        inicio, pos0, cerrada = self._desliz
+        ahora = fraccion_en_camino(self.b.primitivas(t.camino)[0], cur)
+        delta = ahora - inicio
+        if cerrada:
+            delta = (delta + 0.5) % 1.0 - 0.5         # por el camino corto: da la vuelta sin saltar
+            t.camino_pos = (pos0 + delta) % 1.0
+        else:
+            t.camino_pos = min(max(pos0 + delta, 0.0), 1.0)
+        self.update()
+
     def _mover_curva(self, cid, modo, cur):
+        if modo == "deslizar":
+            self._deslizar_texto(cid, cur)
+            return
         c = self.b.curvas[cid]
         fijos = self.b.puntos_fijos()
         if modo == "radio":
@@ -2343,10 +2596,48 @@ class Lienzo(QWidget):
                         self.b.puntos[q].y += dy
         self.resolver(arrastrado=pid)
 
+    def _manija_en(self, pos):
+        """Nombre de la manija del marco de control bajo `pos` (o None)."""
+        caja = self._caja_marco() if self.mostrar_marco else None
+        if caja is None:
+            return None
+        for nombre, q in self._manijas_marco(caja).items():
+            if math.hypot(q.x() - pos.x(), q.y() - pos.y()) <= TOL_MANIJA:
+                return nombre
+        return None
+
+    def _actualizar_sobre(self, pos):
+        """Seleccionar: resalta lo que hay bajo el ratón (manija, cota, símbolo, curva o punto) y cambia el
+        cursor, para que se vea dónde agarrar. Orden igual al del clic: manija, cota/símbolo, entidad."""
+        manija = self._manija_en(pos)
+        zona = None if manija is not None else self._zona_en(pos)
+        ent = None
+        if manija is None and zona is None and len(self.b.curvas) <= 400:
+            ent = self.entidad_en(pos)
+            if ent is not None and ent not in self.b.curvas and ent not in self.b.puntos:
+                ent = None
+        if (ent, manija, zona) != (self._sobre, self._manija_sobre, self._zona_sobre):
+            self._sobre, self._manija_sobre, self._zona_sobre = ent, manija, zona
+            if manija is not None:
+                self.setCursor(Qt.CrossCursor if manija == "rotar" else Qt.SizeAllCursor)
+            elif zona is not None:
+                self.setCursor(Qt.PointingHandCursor)
+            elif ent is not None:
+                self.setCursor(Qt.SizeAllCursor)
+            else:
+                self.unsetCursor()
+            self.update()
+
     def mouseMoveEvent(self, e):
         pos = e.position()
         self._pos_cursor = pos
         self._camara()
+        if (self.herramienta == "seleccionar" and not (e.buttons() & Qt.LeftButton) and self.entrada is None
+                and self._reenvio is None and self._marco is None):
+            self._actualizar_sobre(pos)
+        elif self._sobre is not None or self._manija_sobre is not None or self._zona_sobre is not None:
+            self._sobre = self._manija_sobre = self._zona_sobre = None
+            self.unsetCursor()
         if self._reenvio is not None:
             self.visor.mouseMoveEvent(e)
             return
@@ -2591,6 +2882,14 @@ class Lienzo(QWidget):
     def event(self, e):
         # Mientras se dibuja, los números son la entrada dinámica (no los atajos de vista 0-3) y
         # Supr / Enter / Esc son del boceto: se reclaman antes de que actúen los atajos de la ventana.
+        if e.type() == e.Type.ShortcutOverride and self._previa_texto is not None and self.entrada is not None:
+            e.accept()                      # escribiendo en el cuadro de texto: ningún atajo de la ventana
+            return True
+        if (e.type() == e.Type.KeyPress and e.key() in (Qt.Key_Tab, Qt.Key_Backtab)
+                and self._previa_texto is not None and self.entrada is not None):
+            self.entrada.campos[1].setFocus()          # Tab: de la escritura en el cuadro a la altura
+            self.entrada.campos[1].selectAll()
+            return True
         if e.type() == e.Type.ShortcutOverride and (
                 self._admite_entrada(e) or e.key() in (Qt.Key_Delete, Qt.Key_Backspace, Qt.Key_Escape,
                                                        Qt.Key_Return, Qt.Key_Enter)):
@@ -2606,6 +2905,8 @@ class Lienzo(QWidget):
         return super().event(e)
 
     def keyPressEvent(self, e):
+        if self._teclado_en_texto(e):
+            return
         k = e.key()
         h = self.herramienta
         if k == Qt.Key_Escape:
@@ -2638,6 +2939,8 @@ class Lienzo(QWidget):
     def _color_curva(self, c, determinadas, fijos):
         if c.id in self.seleccion or c.id in self.picks:
             return QColor(0, 180, 255), 3.0
+        if c.id == self._sobre:
+            return QColor(255, 170, 40), 3.0        # lo que se agarraría al hacer clic
         if c.proyectada:
             return VIOLETA, 2.0
         if c.construccion:                      # tema oscuro de Fusion: gris claro punteado; claro: naranja
@@ -2729,6 +3032,8 @@ class Lienzo(QWidget):
         fijos_verdes = fijos - en_origen
         ocultos = set()
         for c in self.b.curvas.values():
+            if c.id == self._texto_oculto:
+                continue                     # se está editando: se ve la vista previa en vivo
             if not self._visible(c):
                 ocultos.update(c.puntos())
                 continue
@@ -2772,6 +3077,12 @@ class Lienzo(QWidget):
         self._zonas_glifos = self._dibujar_glifos(p) if self.mostrar["restricciones"] else {}
         self._zonas_cotas = self._dibujar_cotas(p) if self.mostrar["cotas"] else {}
         self._dibujar_marco(p)
+        if self._zona_sobre is not None:
+            rect = self._zonas_cotas.get(self._zona_sobre) or self._zonas_glifos.get(self._zona_sobre)
+            if rect is not None:
+                p.setBrush(Qt.NoBrush)
+                p.setPen(QPen(QColor(255, 170, 40), 2))
+                p.drawRect(rect.adjusted(-3, -3, 3, 3))
         self._dibujar_previa(p)
         self._dibujar_campos_vivos(p)
         if self._ventana is not None:
@@ -2971,6 +3282,22 @@ class Lienzo(QWidget):
         h, cur = self.herramienta, self._cursor_efectivo()      # con los valores escritos ya aplicados
         # Fusion dibuja la vista previa como geometría sin restringir: azul y continua
         acento = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
+        if self._previa_polis or self._caret is not None or (self._previa_texto and self._previa_texto.get("caja")):
+            p.setPen(QPen(acento, 2.0))
+            for poli in self._previa_polis:
+                self._dibujar_polilinea(p, poli)
+            if self._caret is not None and self._caret_on and self.hasFocus():
+                p.setPen(QPen(QColor(245, 245, 245) if self._oscuro() else QColor(20, 20, 20), 2.0))
+                self._dibujar_polilinea(p, list(self._caret))     # el cursor parpadeante: acá se escribe
+            caja = (self._previa_texto or {}).get("caja")
+            if not caja and self._previa_polis:     # texto ya creado: el cuadro es el que lo envuelve
+                xs = [q[0] for poli in self._previa_polis for q in poli]
+                ys = [q[1] for poli in self._previa_polis for q in poli]
+                caja = (min(xs), min(ys), max(xs), max(ys))
+            if caja:                         # el cuadro dibujado con el ratón, en línea de trazos
+                x0, y0, x1, y1 = caja
+                p.setPen(QPen(acento, 1, Qt.DashLine))
+                self._dibujar_polilinea(p, [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
         if h == "recortar" and self._previa_recorte:
             p.setPen(QPen(QColor(230, 60, 60), 3, Qt.DashLine))
             self._dibujar_polilinea(p, self._previa_recorte)
@@ -2997,7 +3324,7 @@ class Lienzo(QWidget):
             if h in ("linea", "linea_medio"):
                 ini = self.clics[-1][1] if h == "linea" else (2 * a[0] - cur[0], 2 * a[1] - cur[1])
                 p.drawLine(self.a_px(*ini), self.a_px(*cur))
-            elif h == "rectangulo":
+            elif h == "rectangulo" or (h == "texto" and self.entrada is None):
                 self._dibujar_polilinea(p, [a, (cur[0], a[1]), cur, (a[0], cur[1]), a])
             elif h == "rectangulo_centro":
                 k = cur

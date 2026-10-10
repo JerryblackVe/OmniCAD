@@ -354,6 +354,7 @@ class ModoBoceto(QObject):
         self.lienzo.mensaje.connect(lambda t: v.mensaje(t, 7000))
         self.lienzo.cambio.connect(self._cambio)
         self.lienzo.herramienta_cambiada.connect(self._sincronizar_herramienta)
+        self.lienzo.texto_en_edicion.connect(self._opciones_de_texto)
         self.lienzo.info.connect(v.info_seleccion)               # "1 línea de boceto | Longitud: …"
         self.lienzo.aviso.connect(lambda t: v.aviso_flotante(t))
         self.paleta = PaletaBoceto(area)
@@ -387,6 +388,7 @@ class ModoBoceto(QObject):
     def terminar(self):
         if not self.activo:
             return True
+        self.lienzo.confirmar_texto_pendiente()      # el texto que se está escribiendo entra en el boceto
         r = self.lienzo.resultado
         if r is not None and not r.ok:
             resp = QMessageBox.question(self.v, NOMBRE_APP, "El boceto tiene restricciones en conflicto. "
@@ -456,6 +458,12 @@ class ModoBoceto(QObject):
             self.paleta.set_herramienta(h, self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
             self.v.area.reubicar()
 
+    def _opciones_de_texto(self):
+        """Doble clic sobre un texto: la paleta muestra sus opciones aunque la herramienta activa sea otra."""
+        if self.paleta is not None:
+            self.paleta.set_herramienta("texto", self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
+            self.v.area.reubicar()
+
     def _tipo_de_linea(self):
         self.paleta.b_construccion.setChecked(self.lienzo.construccion)
         self.paleta.b_eje.setChecked(self.lienzo.eje)
@@ -477,6 +485,7 @@ class ModoBoceto(QObject):
     def _ajuste(self, clave, valor):
         if self.activo:
             self.lienzo.opciones[clave] = valor
+            self.lienzo.refrescar_previa_texto()          # fuente, estilo y alineación se ven en vivo
 
     def _opciones_visor(self):
         ch = self.paleta.checks

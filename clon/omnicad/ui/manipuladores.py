@@ -48,6 +48,7 @@ BORDE_ESFERA = (0.35, 0.35, 0.37)
 ROJO_PREVIA = (0.88, 0.18, 0.15)       # vista previa de lo que se corta (agujero)
 
 TOL_PX = 9.0                           # distancia del cursor a un asa para tomarla
+ENGANCHE_PX = 14.0                     # distancia del cursor a un punto de enganche (snap) para engancharse
 LARGO_FLECHA, LARGO_PUNTA, RADIO_PUNTA = 70.0, 18.0, 6.5     # píxeles
 LARGO_TRIADA = 120.0
 RADIO_ANGULO = 60.0
@@ -259,6 +260,99 @@ class Flecha(Manipulador):
         if self.caja is True or (self.caja == "arrastre" and arrastre is not None):
             return [(self.clave, self.puntos(g)[1])]
         return []
+
+
+class AsaRadial(Flecha):
+    """Asa redonda sobre el borde de algo (el diámetro de un agujero): se arrastra como una flecha de distancia,
+    pero se ve como el círculo con flechitas de Fusion y no como una flecha larga."""
+
+    def puntos(self, g):
+        base, _sentido, _k = self._geom(g)
+        return base, base
+
+    def dibujar(self, g, activo):
+        base, _sentido, k = self._geom(g)
+        color = AZUL_ACTIVO if activo is not None else (1.0, 1.0, 1.0)
+        return _disco(g.visor, base, 7.0 * k, color, borde=BORDE_ESFERA)
+
+    def tocar(self, g, q):
+        base, _ = self.puntos(g)
+        s, ok = g.pantalla([base])
+        if not ok[0]:
+            return math.inf, None
+        return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "asa"
+
+
+class Posicion(Manipulador):
+    """Asa de posición: un punto sobre un plano que se arrastra con el ratón (el agujero sobre una cara, el
+    desplazamiento de un dibujo insertado). Es un aro con cruz de ~15 px de radio de agarre.
+    `al_mover(punto3d)` devuelve los valores a escribir en el diálogo ({clave: número o lista})."""
+
+    def __init__(self, ident, punto, normal, al_mover, radio_px=9.0, color=AZUL, candidatos=()):
+        self.punto, self.normal = np.asarray(punto, float), unitario(normal)
+        self.al_mover, self.radio_px, self.color = al_mover, radio_px, color
+        self.candidatos = [(np.asarray(p, float), t) for p, t in candidatos]   # puntos de enganche (snap)
+        self.ident = f"posicion:{ident}"
+
+    def _enganchado(self):
+        """Candidato donde está el punto ahora (o None): se marca en azul, como Fusion."""
+        for p, t in self.candidatos:
+            if float(np.linalg.norm(p - self.punto)) < 1e-4:
+                return p
+        return None
+
+    def dibujar(self, g, activo):
+        # como Fusion: punto blanco con borde oscuro y una cruz fina sobre el plano
+        color = AZUL_ACTIVO if activo is not None else self.color
+        k = g.escala(self.punto)
+        u, v = perpendiculares(self.normal)
+        r = self.radio_px * k
+        cruz = np.array([self.punto - u * r * 1.6, self.punto + u * r * 1.6,
+                         self.punto - v * r * 1.6, self.punto + v * r * 1.6])
+        relleno = AZUL_ACTIVO if activo is not None else (1.0, 1.0, 1.0)
+        prims = [("lineas", cruz, color, 1.8)]
+        enganche = self._enganchado()
+        for p, tipo in self.candidatos:          # marcas de enganche: el centro de la cara, esquinas, puntos medios
+            if enganche is not None and p is enganche:
+                continue
+            kp = g.escala(p)
+            prims += _disco(g.visor, p, (4.5 if tipo == "centro" else 3.2) * kp, (1.0, 1.0, 1.0), borde=BORDE_ESFERA)
+        if enganche is not None:                 # enganchado: la marca se pone azul y más grande
+            prims += _disco(g.visor, enganche, 6.5 * g.escala(enganche), AZUL_ACTIVO, borde=BORDE_ESFERA)
+        return prims + _disco(g.visor, self.punto, 5.5 * k, relleno, borde=BORDE_ESFERA)
+
+    def tocar(self, g, q):
+        s, ok = g.pantalla([self.punto])
+        if not ok[0]:
+            return math.inf, None
+        return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "mover"      # ~15 px de radio de agarre
+
+    def empezar(self, g, pos, sub):
+        o, r = g.rayo(pos)
+        p = plano_rayo(o, r, self.punto, self.normal)
+        if p is None:
+            return None
+        return {"desde": self.punto - p, "origen": self.punto, "normal": self.normal}
+
+    def mover(self, g, estado, pos):
+        o, r = g.rayo(pos)
+        p = plano_rayo(o, r, estado["origen"], estado["normal"])
+        if p is None:
+            return {}
+        p = p + estado["desde"]
+        enganche = self._candidato_cerca(g, pos)
+        return self.al_mover(enganche if enganche is not None else p)
+
+    def _candidato_cerca(self, g, pos):
+        """Punto de enganche a menos de ENGANCHE_PX del cursor (el más cercano), o None."""
+        if not self.candidatos:
+            return None
+        s, ok = g.pantalla([p for p, _t in self.candidatos])
+        q = np.array([pos.x(), pos.y()], float)
+        d = np.linalg.norm(s - q, axis=1)
+        d[~ok] = np.inf
+        i = int(np.argmin(d))
+        return self.candidatos[i][0] if d[i] <= ENGANCHE_PX else None
 
 
 class Angulo(Manipulador):
@@ -801,6 +895,10 @@ class GestorManipuladores(QObject):
         self._escribiendo = True
         try:
             for clave, v in nuevos.items():
+                if not isinstance(v, (int, float)):       # una selección u otro valor ya armado
+                    self.panel.set_valor(clave, v)
+                    cambio = True
+                    continue
                 texto = self.texto(clave, v)
                 if texto != str(self.panel.valores.get(clave)):
                     self.panel.set_valor(clave, texto)
@@ -905,6 +1003,42 @@ def punto_borde(formas, centro, direccion):
             pts.append(np.array([centroide(f)]))
     pts = np.concatenate(pts).astype(float)
     return pts[int(np.argmax((pts - centro) @ direccion))]
+
+
+def punto_en_cara(cara, punto, tolerancia=1e-3):
+    """True si `punto` (sobre el plano de la cara) cae dentro de la cara o en su borde."""
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+    c = BRepClass_FaceClassifier(cara, gp_Pnt(*[float(x) for x in punto]), tolerancia)
+    return c.State() in (TopAbs_IN, TopAbs_ON)
+
+
+def puntos_enganche_cara(cara, maximo=60):
+    """Puntos donde se engancha un agujero (o lo que se coloque) sobre una cara: [(punto 3D, tipo)], tipo en
+    "centro" (centro de la cara), "vertice", "medio" (punto medio de una arista) y "centro_arco" (de un círculo)."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Circle
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopoDS import TopoDS
+
+    from ..nucleo import geometria as geo
+    salida = [(np.array(geo.centro_masa(cara, True), float), "centro")]
+
+    def sumar(p, tipo):
+        p = np.array([p.X(), p.Y(), p.Z()], float) if hasattr(p, "X") else np.asarray(p, float)
+        if len(salida) < maximo and all(float(np.linalg.norm(p - q)) > 1e-4 for q, _ in salida):
+            salida.append((p, tipo))
+
+    for e in geo._explorar(cara, TopAbs_EDGE):
+        c = BRepAdaptor_Curve(TopoDS.Edge(e))
+        a, b = c.FirstParameter(), c.LastParameter()
+        sumar(c.Value(a), "vertice")
+        sumar(c.Value(b), "vertice")
+        if c.GetType() == GeomAbs_Circle:
+            sumar(c.Circle().Location(), "centro_arco")
+        sumar(c.Value((a + b) / 2), "medio")
+    return salida
 
 
 def punto_normal_cara(cara):
