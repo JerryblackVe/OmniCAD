@@ -1,0 +1,2032 @@
+diff --git a/.claude/skills/omnicad/SKILL.md b/.claude/skills/omnicad/SKILL.md
+index 4853520..b9b3a1d 100644
+--- a/.claude/skills/omnicad/SKILL.md
++++ b/.claude/skills/omnicad/SKILL.md
+@@ -32,7 +32,7 @@ Vueltas cortas. Un cambio, mirar el resultado, recién entonces el siguiente.
+ | Paso | Herramienta (CLI: `omnicad call <herramienta>`) |
+ |---|---|
+ | 1. Mirar | `get_scene_info` (cuerpos, bocetos, parámetros), `get_timeline` (pasos y estado). CLI: `omnicad info pieza.omnicad` |
+-| 2. Hacer | Medidas como parámetros (`create_parameter`; después `set_parameter`). Sólidos: `create_box`, `create_cylinder`. Con perfil: `create_sketch` o `sketch_from_spec` (boceto entero en una llamada) y `extrude` o `revolve`. Después `fillet`, `chamfer`, `shell`, `create_hole`, `rectangular_pattern`, `circular_pattern`, `mirror`, `boolean_operation`, `move_body`. Cualquier otra operación: `list_operation_types`, `describe_operation` y `run_operation` |
++| 2. Hacer | Medidas como parámetros (`create_parameter`; después `set_parameter`). Sólidos: `create_box`, `create_cylinder`. Con perfil: `create_sketch` o `sketch_from_spec` (boceto entero en una llamada) y `extrude` o `revolve`. Después `fillet`, `chamfer`, `shell`, `create_hole`, `rectangular_pattern`, `circular_pattern`, `point_pattern`, `path_pattern`, `multi_transform`, `mirror`, `boolean_operation`, `move_body`. Los patrones repiten cuerpos (argumento bodies) o pasos (argumento features: el agujero o el corte se repite sobre la pieza, sin booleanas aparte). Cualquier otra operación: `list_operation_types`, `describe_operation` y `run_operation` |
+ | 3. Ver la imagen | `get_viewport_image` (vistas `iso`, `front`, `top`, `right`...; mirá 2 o 3 ángulos). CLI: `omnicad render pieza.omnicad vista.png --view iso` y ABRÍ el PNG con tu herramienta de lectura de imágenes |
+ | 4. Medir | `get_physical_properties` (volumen, caja envolvente), `measure_distance`, `measure_angle`, `check_interference` con varias piezas |
+ | 5. Guardar | `save_document` con ruta absoluta (la CLI guarda sola con `--doc`). Exportar: `export` o `omnicad export pieza.omnicad pieza.stl` (también `.step`, `.obj`, `.3mf`) |
+diff --git a/clon/omnicad/api/herramientas_avanzado.py b/clon/omnicad/api/herramientas_avanzado.py
+index 048e92f..e293b9e 100644
+--- a/clon/omnicad/api/herramientas_avanzado.py
++++ b/clon/omnicad/api/herramientas_avanzado.py
+@@ -118,7 +118,8 @@ FORMATOS_REFERENCIA = [
+     'ninguna de estas formas llega sin cambios al paso, que dice qué campo está mal y qué esperaba.',
+ ]
+ _CAMPOS_CUERPO = ("cuerpos", "objetivos", "objetivo", "cuerpo", "herramientas")     # ids de cuerpo como texto
+-_SIN_REFERENCIAS = ("marco", "receta", "datos", "ajustes", "suprimir", "celdas", "componentes")
++_SIN_REFERENCIAS = ("marco", "receta", "datos", "ajustes", "suprimir", "celdas", "componentes", "pasos",
++                    "coordenadas", "referencia_xyz", "transformaciones")
+ _ORIGEN = {"XY": ("plano", "XY"), "XZ": ("plano", "XZ"), "YZ": ("plano", "YZ"), "X": ("eje", "X"), "Y": ("eje", "Y"),
+            "Z": ("eje", "Z"), "O": ("punto", "O")}
+ _SELECTOR_DE_CAMPO = {"cara": "cara", "caras": "cara", "caras_a": "cara", "caras_b": "cara", "aristas": "arista"}
+@@ -405,6 +406,8 @@ _COORDENADAS = "coordenadas [x, y, z] en mm (no es una referencia)"
+ _ESPERA_TIPO = {
+     ("plegar", "punto"): _COORDENADAS, ("desplegar", "punto"): _COORDENADAS, ("patron_plano", "punto"): _COORDENADAS,
+     ("recortar_sup", "punto"): _COORDENADAS + ": el lado que se quita",
++    ("patron", "referencia"): _UN_PUNTO + ' que se lleva a cada punto (forma_patron="puntos"); vacío = el origen',
++    ("patron", "puntos"): 'puntos (' + _UN_PUNTO + ') o un boceto entero ("Boceto1": todos sus puntos sueltos)',
+     ("origen_union", "origen"): 'dónde va el marco: una cara, una arista, un punto o un eje ("Cuerpo1/F3")',
+     ("reemplazar_cara", "destino"): "la cara o el plano destino",
+     ("alinear", "origen"): "lo que se mueve: una cara, una arista, un vértice o un punto",
+@@ -445,6 +448,19 @@ _NOTAS = {
+     ("agujero", "puntos_cara"): 'posiciones FIJAS: [{"cara": "Cuerpo1/F6" (o su referencia), "punto": [x, y, z]}] '
+                                 '(create_hole con points).',
+     ("relleno_contorno", "celdas"): "índices de las regiones cerradas, ordenadas por centroide (x, y, z); [] = la 0.",
++    **{(t, "objeto"): '"cuerpos" (repite los cuerpos de «cuerpos») u "operaciones" (repite la herramienta de los pasos '
++                      'de «pasos»: un agujero, una extrusión que corta…, con la misma operación).'
++       for t in ("patron", "multitransformar")},
++    **{(t, "pasos"): 'ids de pasos anteriores ("op3") cuyo efecto se repite con objeto="operaciones".'
++       for t in ("patron", "multitransformar")},
++    ("patron", "giro"): 'forma_patron="ruta": giro total alrededor de la ruta; la copia k gira giro · k / (n1 − 1).',
++    ("patron", "coordenadas"): 'forma_patron="puntos": puntos fijos [[x, y, z], …] (mm o expresiones).',
++    ("patron", "referencia_xyz"): 'forma_patron="puntos": el punto [x, y, z] que se lleva a cada punto (si no hay '
++                                    '«referencia»); [] = el origen.',
++    ("multitransformar", "transformaciones"): 'lista ordenada de dicts {"tipo": "rectangular" | "circular" | "ruta" | '
++                                              '"puntos" | "simetria", …} con las claves del patrón (dir1, n1, d1…) o '
++                                              '"plano" en la simetría, con referencias guardadas ({"tipo": "eje", '
++                                              '"id": "X"}); multi_transform las arma desde formas cortas.',
+ }
+ 
+ 
+diff --git a/clon/omnicad/api/herramientas_solido.py b/clon/omnicad/api/herramientas_solido.py
+index e69a066..f219749 100644
+--- a/clon/omnicad/api/herramientas_solido.py
++++ b/clon/omnicad/api/herramientas_solido.py
+@@ -20,7 +20,7 @@ from typing import Literal
+ from ..nucleo import geometria as geo
+ from ..timeline.operaciones import OpCombinar, OpExtrusion, OpPrimitiva, OpRevolucion
+ from ..timeline.ops_modificar import OpMover
+-from ..timeline.ops_solido import OpBarrido, OpPatron, OpSimetria, OpSolevacion
++from ..timeline.ops_solido import OpBarrido, OpMultitransformar, OpPatron, OpSimetria, OpSolevacion
+ from .errores import error
+ from .herramientas_boceto import (boceto_activo, nombre_nuevo, referencia_plano, seleccionar_perfiles,
+                                   texto_expr)
+@@ -403,13 +403,48 @@ def mirror(sesion, bodies: Cuerpos, plane: str = "YZ", combine: bool = False):
+     return _agregar(sesion, op)
+ 
+ 
++Pasos = str | list[str]
++
++
++def _objeto_patron(sesion, bodies, features):
++    """objeto, cuerpos y pasos de un patrón: cuerpos (bodies) u operaciones del timeline (features)."""
++    from ..timeline.ops_solido import TIPOS_REPETIBLES
++    ids = _ids_cuerpos(sesion, bodies)
++    pasos = [sesion.paso(f) for f in _lista(features)]
++    if ids and pasos:
++        raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies) u operaciones (features), no las dos cosas.")
++    if not ids and not pasos:
++        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies' o una operación del timeline en "
++                                         "'features'.")
++    doc = sesion.doc
++    for op in pasos:
++        if doc.indice(op.id) >= doc.marcador:
++            raise error("INVALID_ARGUMENTS", f"El paso «{op.nombre}» está después del marcador del timeline: no se "
++                                             "puede repetir desde acá.")
++        if op.TIPO not in TIPOS_REPETIBLES or (op.TIPO in ("patron", "multitransformar")
++                                               and op.p.get("objeto") != "operaciones"):
++            raise error("INVALID_ARGUMENTS", f"El paso «{op.nombre}» ({op.ETIQUETA}) no deja una herramienta para "
++                        "repetir.", "Se repiten los pasos que cortan, unen o crean con una herramienta: "
++                        + ", ".join(TIPOS_REPETIBLES) + " (patrones y multitransformaciones, solo de operaciones).",
++                        "Para repetir un cuerpo entero usá bodies.")
++        if op.p.get("operacion") == "intersecar":
++            raise error("INVALID_ARGUMENTS", f"El paso «{op.nombre}» interseca: repetirlo dejaría solo lo común a todas "
++                                             "las copias. Se repiten los que cortan, unen o crean un cuerpo nuevo.")
++    return {"objeto": "operaciones" if pasos else "cuerpos", "cuerpos": ids, "pasos": [o.id for o in pasos]}
++
++
++def _agregar_patron(sesion, op):
++    return _agregar(sesion, op, op.p["objeto"] == "operaciones")
++
++
+ @herramienta("rectangular_pattern", "solido",
+-             "Patrón rectangular de cuerpos: copias en una o dos direcciones (ejes del origen), con la separación "
+-             "entre copias consecutivas. Las copias son cuerpos nuevos (o se unen al original con combine). Cantidades "
+-             "incluyen el original.", modifica=True)
+-def rectangular_pattern(sesion, bodies: Cuerpos, x_count: int = 1, x_spacing: Expr = "10 mm", y_count: int = 1,
+-                        y_spacing: Expr = "10 mm", axis1: Literal["x", "y", "z"] = "x",
+-                        axis2: Literal["x", "y", "z"] = "y", combine: bool = False):
++             "Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una "
++             "extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o "
++             "dos direcciones (ejes del origen), con la separación entre copias consecutivas. Con bodies las copias "
++             "son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.", modifica=True)
++def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1, x_spacing: Expr = "10 mm",
++                        y_count: int = 1, y_spacing: Expr = "10 mm", axis1: Literal["x", "y", "z"] = "x",
++                        axis2: Literal["x", "y", "z"] = "y", combine: bool = False, features: Pasos | None = None):
+     """
+     bodies: cuerpo(s) a repetir (id o nombre).
+     x_count: cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
+@@ -418,11 +453,10 @@ def rectangular_pattern(sesion, bodies: Cuerpos, x_count: int = 1, x_spacing: Ex
+     y_spacing: separación entre instancias consecutivas en la dirección 2 (se guarda como d2).
+     axis1: eje de la dirección 1 ("x", "y" o "z").
+     axis2: eje de la dirección 2.
+-    combine: true para unir las copias al cuerpo original.
++    combine: true para unir las copias al cuerpo original (solo con bodies).
++    features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
+     """
+-    ids = _ids_cuerpos(sesion, bodies)
+-    if not ids:
+-        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies'.")
++    objeto = _objeto_patron(sesion, bodies, features)
+     if x_count < 1 or y_count < 1:
+         raise error("INVALID_ARGUMENTS", "x_count e y_count tienen que ser 1 o más.")
+     if x_count == 1 and y_count == 1:
+@@ -433,37 +467,246 @@ def rectangular_pattern(sesion, bodies: Cuerpos, x_count: int = 1, x_spacing: Ex
+     doc = sesion.doc
+     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón rectangular", OpPatron,
+                                                lambda o: o.p["forma_patron"] == "rectangular"),
+-                  forma_patron="rectangular", cuerpos=ids, dir1={"tipo": "eje", "id": axis1.upper()}, n1=x_count,
++                  forma_patron="rectangular", dir1={"tipo": "eje", "id": axis1.upper()}, n1=x_count,
+                   d1=texto_expr(x_spacing), dir2={"tipo": "eje", "id": axis2.upper()} if y_count > 1 else None,
+-                  n2=y_count, d2=texto_expr(y_spacing), distribucion="espaciado", combinar=combine)
+-    return _agregar(sesion, op)
++                  n2=y_count, d2=texto_expr(y_spacing), distribucion="espaciado", combinar=combine, **objeto)
++    return _agregar_patron(sesion, op)
+ 
+ 
+ @herramienta("circular_pattern", "solido",
+-             "Patrón circular de cuerpos alrededor de un eje del origen (x, y o z). Con 360° las copias se reparten "
+-             "en toda la vuelta; con menos, entre el original y el ángulo total. count incluye el original.",
+-             modifica=True)
+-def circular_pattern(sesion, bodies: Cuerpos, count: int, axis: Literal["x", "y", "z"] = "z",
+-                     total_angle: Expr = 360, combine: bool = False):
++             "Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del "
++             "origen (x, y o z). Con 360° las copias se reparten en toda la vuelta; con menos, entre el original y el "
++             "ángulo total. count incluye el original.", modifica=True)
++def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: Literal["x", "y", "z"] = "z",
++                     total_angle: Expr = 360, combine: bool = False, features: Pasos | None = None):
+     """
+-    bodies: cuerpo(s) a repetir (id o nombre).
+     count: cantidad de instancias, original incluido (2 a 10.000).
++    bodies: cuerpo(s) a repetir (id o nombre).
+     axis: eje de giro del origen: "x", "y" o "z".
+     total_angle: ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
+-    combine: true para unir las copias al cuerpo original.
++    combine: true para unir las copias al cuerpo original (solo con bodies).
++    features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+     """
+-    ids = _ids_cuerpos(sesion, bodies)
+-    if not ids:
+-        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies'.")
++    objeto = _objeto_patron(sesion, bodies, features)
+     if count < 2:
+         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
+     _exigir_instancias(count, "count")
+     doc = sesion.doc
+     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón circular", OpPatron,
+                                                lambda o: o.p["forma_patron"] == "circular"),
+-                  forma_patron="circular", cuerpos=ids, eje={"tipo": "eje", "id": axis.upper()}, n=count,
+-                  angulo=texto_expr(total_angle), distribucion="extension", combinar=combine)
+-    return _agregar(sesion, op)
++                  forma_patron="circular", eje={"tipo": "eje", "id": axis.upper()}, n=count,
++                  angulo=texto_expr(total_angle), distribucion="extension", combinar=combine, **objeto)
++    return _agregar_patron(sesion, op)
++
++
++def _xyz_api(valores, que):
++    if not isinstance(valores, (list, tuple)) or len(valores) != 3:
++        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser [x, y, z] (3 valores): recibió {valores!r}.")
++    return [texto_expr(v) for v in valores]
++
++
++def _params_puntos(sesion, points, sketch, reference):
++    """Parámetros del Patrón en puntos: coordenadas (points), los puntos sueltos de un boceto (sketch) y la
++    referencia."""
++    coordenadas = [_xyz_api(p, f"points[{i}]") for i, p in enumerate(points or [])]
++    puntos = []
++    if sketch is not None:
++        sop, br = boceto_activo(sesion, sketch)
++        en_curvas = {i for c in br.boceto.curvas.values() for i in c.puntos()}
++        if not [i for i in br.boceto.puntos if i not in en_curvas]:
++            raise error("ENTITY_NOT_FOUND", f"El boceto «{sop.nombre}» no tiene puntos sueltos (puntos que no son de "
++                                            "ninguna curva).", "Dibujalos con draw_point.")
++        puntos.append({"tipo": "boceto", "boceto": sop.id})
++    if not coordenadas and not puntos:
++        raise error("INVALID_ARGUMENTS", "Indicá los puntos: coordenadas en 'points' y/o un boceto con puntos sueltos "
++                                         "en 'sketch'.")
++    return {"forma_patron": "puntos", "coordenadas": coordenadas, "puntos": puntos,
++            "referencia_xyz": _xyz_api(reference, "reference") if reference is not None else []}
++
++
++ESPACIADOS = {"extent": "extension", "spacing": "espaciado"}
++ORIENTACIONES = {"identical": "identica", "path_direction": "direccion_ruta"}
++
++
++def _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist, symmetric):
++    """Parámetros del Patrón en ruta (curvas de un boceto, como la ruta de sweep)."""
++    if count < 2:
++        raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
++    _exigir_instancias(2 * count - 1 if symmetric else count, "count")
++    rop, rbr = boceto_activo(sesion, path_sketch)
++    curvas = list(path_curves) if path_curves else [c.id for c in rbr.boceto.curvas.values() if not c.construccion]
++    for cid in curvas:
++        if cid not in rbr.boceto.curvas:
++            raise error("ENTITY_NOT_FOUND", f"El boceto «{rop.nombre}» no tiene la curva {cid}.")
++    if not curvas:
++        raise error("ENTITY_NOT_FOUND", f"El boceto de la ruta «{rop.nombre}» no tiene curvas.")
++    if spacing_mode not in ESPACIADOS or orientation not in ORIENTACIONES:
++        raise error("INVALID_ARGUMENTS", f"spacing_mode: {', '.join(ESPACIADOS)}; orientation: "
++                                         f"{', '.join(ORIENTACIONES)}.")
++    return {"forma_patron": "ruta", "ruta": [{"tipo": "curva_boceto", "boceto": rop.id, "curva": c} for c in curvas],
++            "n1": count, "d1": texto_expr(distance), "distribucion": ESPACIADOS[spacing_mode],
++            "inicio": texto_expr(start), "orientacion": ORIENTACIONES[orientation], "giro": texto_expr(twist),
++            "simetrico": bool(symmetric)}
++
++
++@herramienta("point_pattern", "solido",
++             "Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia "
++             "cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que "
++             "corta— en cada punto. Los puntos son coordenadas (points) y/o todos los puntos sueltos de un boceto "
++             "(sketch). Cada copia lleva el punto de referencia (reference; por defecto el origen) a uno de los "
++             "puntos: para repetir un agujero, reference es el punto donde está el agujero. Un punto igual a la "
++             "referencia no repite la copia.", modifica=True)
++def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None = None,
++                  points: list[list[Expr]] | None = None, sketch: str | None = None,
++                  reference: list[Expr] | None = None, combine: bool = False):
++    """
++    bodies: cuerpo(s) a repetir (id o nombre).
++    features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++    points: puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
++    sketch: id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
++    reference: punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
++    combine: true para unir las copias al cuerpo original (solo con bodies).
++    """
++    objeto = _objeto_patron(sesion, bodies, features)
++    params = _params_puntos(sesion, points, sketch, reference)
++    _exigir_instancias(len(params["coordenadas"]) + 1, "points")
++    doc = sesion.doc
++    op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón en puntos", OpPatron,
++                                               lambda o: o.p["forma_patron"] == "puntos"),
++                  combinar=combine, **params, **objeto)
++    return _agregar_patron(sesion, op)
++
++
++@herramienta("path_pattern", "solido",
++             "Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de FreeCAD): copias de "
++             "cuerpos (bodies) —o de operaciones del timeline (features)— a lo largo de curvas de un boceto. count "
++             "incluye el original. distance es el largo TOTAL de la primera a la última (spacing_mode=\"extent\") o la "
++             "separación entre copias (\"spacing\"). start ubica el original sobre la ruta (0 a 1). "
++             "orientation=\"path_direction\" gira cada copia con la ruta; twist además la gira alrededor de la ruta, "
++             "de a poco, hasta ese ángulo total en la última.", modifica=True)
++def path_pattern(sesion, path_sketch: str, count: int, distance: Expr, bodies: Cuerpos | None = None,
++                 features: Pasos | None = None, path_curves: list[int] | None = None,
++                 spacing_mode: Literal["extent", "spacing"] = "extent", start: Expr = 0,
++                 orientation: Literal["identical", "path_direction"] = "identical", twist: Expr = 0,
++                 symmetric: bool = False, combine: bool = False):
++    """
++    path_sketch: id o nombre del boceto con la ruta.
++    count: cantidad de instancias, original incluido (2 a 10.000).
++    distance: largo total (extent) o separación entre copias (spacing), en mm o expresión.
++    bodies: cuerpo(s) a repetir (id o nombre).
++    features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++    path_curves: ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
++    spacing_mode: "extent" (distance es el largo total) o "spacing" (distance es la separación).
++    start: dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
++    orientation: "identical" (las copias solo se trasladan) o "path_direction" (giran con la tangente de la ruta).
++    twist: giro total alrededor de la ruta en grados (número o expresión): la copia k gira twist · k / (count − 1).
++    symmetric: true para repartir count copias hacia cada lado del original.
++    combine: true para unir las copias al cuerpo original (solo con bodies).
++    """
++    objeto = _objeto_patron(sesion, bodies, features)
++    params = _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist,
++                          symmetric)
++    doc = sesion.doc
++    op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón en ruta", OpPatron, lambda o: o.p["forma_patron"] == "ruta"),
++                  combinar=combine, **params, **objeto)
++    return _agregar_patron(sesion, op)
++
++
++_CLAVES_TRANSFORMACION = {
++    "rectangular": {"type", "axis", "count", "spacing", "axis2", "count2", "spacing2", "symmetric"},
++    "circular": {"type", "axis", "count", "total_angle", "symmetric"},
++    "mirror": {"type", "plane"},
++    "points": {"type", "points", "sketch", "reference"},
++    "path": {"type", "path_sketch", "path_curves", "count", "distance", "spacing_mode", "start", "orientation",
++             "twist", "symmetric"},
++}
++
++
++def _eje_api(valor, que):
++    eje = str(valor or "").strip().lower()
++    if eje not in ("x", "y", "z"):
++        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser \"x\", \"y\" o \"z\": recibió {valor!r}.")
++    return {"tipo": "eje", "id": eje.upper()}
++
++
++def _entero_api(valor, que, minimo=1):
++    if isinstance(valor, bool) or not isinstance(valor, (int, float)) or int(valor) != valor or valor < minimo:
++        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser un entero ≥ {minimo}: recibió {valor!r}.")
++    return int(valor)
++
++
++def _transformacion_api(sesion, t, i):
++    """Una transformación de multi_transform (claves en inglés) → dict de OpMultitransformar. Devuelve (dict,
++    cantidad de instancias que aporta, el original incluido)."""
++    que = f"transforms[{i}]"
++    if not isinstance(t, dict) or t.get("type") not in _CLAVES_TRANSFORMACION:
++        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser un dict con \"type\": "
++                                         f"{', '.join(_CLAVES_TRANSFORMACION)}.")
++    tipo = t["type"]
++    sobran = set(t) - _CLAVES_TRANSFORMACION[tipo]
++    if sobran:
++        raise error("INVALID_ARGUMENTS", f"{que} ({tipo}) no acepta {', '.join(sorted(sobran))}.",
++                    f"Claves válidas: {', '.join(sorted(_CLAVES_TRANSFORMACION[tipo]))}.")
++    if tipo == "rectangular":
++        n1 = _entero_api(t.get("count", 2), f"{que}.count")
++        n2 = _entero_api(t.get("count2", 1), f"{que}.count2")
++        dir2 = _eje_api(t["axis2"], f"{que}.axis2") if n2 > 1 else None
++        d = {"tipo": "rectangular", "dir1": _eje_api(t.get("axis", "x"), f"{que}.axis"), "n1": n1,
++             "d1": texto_expr(t.get("spacing", 10)), "dir2": dir2, "n2": n2, "d2": texto_expr(t.get("spacing2", 10)),
++             "distribucion": "espaciado", "simetrico": bool(t.get("symmetric", False))}
++        if n2 > 1 and "axis2" not in t:
++            raise error("INVALID_ARGUMENTS", f"{que}: con count2 > 1 falta axis2.")
++        k = 2 if d["simetrico"] else 1
++        return d, (k * n1 - k + 1) * (k * n2 - k + 1)
++    if tipo == "circular":
++        n = _entero_api(t.get("count", 2), f"{que}.count", 2)
++        d = {"tipo": "circular", "eje": _eje_api(t.get("axis", "z"), f"{que}.axis"), "n": n,
++             "angulo": texto_expr(t.get("total_angle", 360)), "distribucion": "extension",
++             "simetrico": bool(t.get("symmetric", False))}
++        return d, 2 * n - 1 if d["simetrico"] else n
++    if tipo == "mirror":
++        return {"tipo": "simetria", "plano": {"tipo": "plano", "id": referencia_plano(sesion, t.get("plane", "YZ"))}}, 2
++    if tipo == "points":
++        d = _params_puntos(sesion, t.get("points"), t.get("sketch"), t.get("reference"))
++        d["tipo"] = d.pop("forma_patron")
++        return d, len(d["coordenadas"]) + 1
++    d = _params_ruta(sesion, t.get("path_sketch"), t.get("path_curves"), _entero_api(t.get("count"), f"{que}.count", 2),
++                     t.get("distance", 10), t.get("spacing_mode", "extent"), t.get("start", 0),
++                     t.get("orientation", "identical"), t.get("twist", 0), bool(t.get("symmetric", False)))
++    d["tipo"] = d.pop("forma_patron")
++    return d, d["n1"]
++
++
++@herramienta("multi_transform", "solido",
++             "Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es "
++             "una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular "
++             "de 3 + mirror = 6). Tipos: {\"type\": \"rectangular\", \"axis\": \"x\", \"count\": 3, \"spacing\": 20} "
++             "(y axis2, count2, spacing2, symmetric), {\"type\": \"circular\", \"axis\": \"z\", \"count\": 6, "
++             "\"total_angle\": 360}, {\"type\": \"mirror\", \"plane\": \"YZ\"}, {\"type\": \"points\", \"points\": "
++             "[[x, y, z]], \"sketch\": …, \"reference\": [x, y, z]} y {\"type\": \"path\", \"path_sketch\": …, "
++             "\"count\": 4, \"distance\": 60, \"twist\": 90} (las mismas opciones que path_pattern). Repite cuerpos "
++             "(bodies) u operaciones del timeline (features).", modifica=True)
++def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = None, features: Pasos | None = None,
++                    combine: bool = False):
++    """
++    transforms: lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
++    bodies: cuerpo(s) a repetir (id o nombre).
++    features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++    combine: true para unir las copias al cuerpo original (solo con bodies).
++    """
++    objeto = _objeto_patron(sesion, bodies, features)
++    if not transforms:
++        raise error("INVALID_ARGUMENTS", "transforms necesita al menos una transformación.")
++    lista, total = [], 1
++    for i, t in enumerate(transforms):
++        d, n = _transformacion_api(sesion, t, i)
++        lista.append(d)
++        total *= n
++    _exigir_instancias(total, "el producto de las transformaciones")
++    doc = sesion.doc
++    op = OpMultitransformar(doc.nuevo_id(), nombre_nuevo(doc, "Multitransformación", OpMultitransformar),
++                            transformaciones=lista, combinar=combine, **objeto)
++    return _agregar_patron(sesion, op)
+ 
+ 
+ def _centro(cuerpos, exacto=False):
+diff --git a/clon/omnicad/nucleo/solidos_crear.py b/clon/omnicad/nucleo/solidos_crear.py
+index c018cd4..01c9416 100644
+--- a/clon/omnicad/nucleo/solidos_crear.py
++++ b/clon/omnicad/nucleo/solidos_crear.py
+@@ -1829,13 +1829,20 @@ def _trsf_de_marcos(p0, f0, p1, f1):
+ 
+ 
+ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",
+-                             simetrico=False, suprimir=()):
++                             simetrico=False, suprimir=(), giro=0.0):
+     """Patrón sobre ruta [SLD-REF-PATTERN]: el original está en la fracción `inicio` (0..1) de la ruta y las
+     instancias avanzan `distancia` mm (largo total o paso, según `distribucion`). "identica" solo traslada;
+     "direccion_ruta" además gira cada instancia con la ruta (marco de rotación mínima). En rutas abiertas se
+-    omiten las instancias que caen fuera; en las cerradas se da la vuelta. Como máximo INSTANCIAS_MAXIMAS."""
++    omiten las instancias que caen fuera; en las cerradas se da la vuelta. Como máximo INSTANCIAS_MAXIMAS.
++
++    `giro` (grados, como el Twisted Path Array de FreeCAD Draft): además, cada instancia gira alrededor de la
++    tangente de la ruta en su lugar, en forma progresiva: la instancia k gira giro · k / (n − 1), así la última
++    gira el ángulo total y el original nada (con «simétrico», las de atrás giran al revés)."""
+     if orientacion not in ("identica", "direccion_ruta"):
+         raise geo.ErrorGeometria(f"Orientación desconocida: {orientacion}")
++    giro = float(giro)
++    if not math.isfinite(giro):
++        raise geo.ErrorGeometria("El giro del patrón en ruta tiene que ser un ángulo finito.")
+     _exigir_instancias(_cantidad(n, simetrico))
+     w = _alambre(ruta)
+     largo = _longitud(w)
+@@ -1864,10 +1871,81 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
+         elif s < -1e-9 or s > largo + 1e-9:
+             continue
+         p1, f1 = marco(min(max(s, 0.0), largo))
+-        salida.append(_traslacion(p1 - p0) if orientacion == "identica" else _trsf_de_marcos(p0, f0, p1, f1))
++        t = _traslacion(p1 - p0) if orientacion == "identica" else _trsf_de_marcos(p0, f0, p1, f1)
++        angulo = giro * k / (int(n) - 1) if int(n) > 1 else 0.0
++        if abs(angulo) > 1e-12:
++            r = gp_Trsf()
++            r.SetRotation(gp_Ax1(_pnt(p1), _gdir(f1[:, 0])), math.radians(angulo))
++            t = r.Multiplied(t)             # primero lleva la copia a su lugar y después la gira sobre la tangente
++        salida.append(t)
++    return salida
++
++
++def transformaciones_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=()):
++    """Patrón en puntos (PartDesign › Point Pattern y Draft › Point Array de FreeCAD; en Fusion, los agujeros en
++    varios puntos de boceto): lista de gp_Trsf con la identidad (el original) y una traslación por punto, la que
++    lleva `referencia` a ese punto. Un punto que coincide con la referencia (o con otro punto) no repite la copia.
++    `suprimir`: índices de las copias a omitir (1 = la del primer punto; el original no se suprime). Como máximo
++    INSTANCIAS_MAXIMAS."""
++    ref = np.asarray(referencia, float).reshape(-1)
++    pts = [np.asarray(p, float).reshape(-1) for p in puntos]
++    if ref.size != 3 or not np.all(np.isfinite(ref)):
++        raise geo.ErrorGeometria("El punto de referencia del patrón tiene que ser [x, y, z] con números finitos.")
++    if any(p.size != 3 or not np.all(np.isfinite(p)) for p in pts):
++        raise geo.ErrorGeometria("Cada punto del patrón tiene que ser [x, y, z] con números finitos.")
++    if not pts:
++        raise geo.ErrorGeometria("El patrón en puntos necesita al menos un punto.")
++    _exigir_instancias(len(pts) + 1)
++    fuera = {int(i) for i in suprimir} - {0}
++    usados = [ref]
++    salida = [gp_Trsf()]
++    for k, p in enumerate(pts, start=1):
++        if any(np.linalg.norm(p - q) < 1e-6 for q in usados):
++            continue
++        usados.append(p)
++        if k not in fuera:
++            salida.append(_traslacion(p - ref))
+     return salida
+ 
+ 
++def transformacion_simetria(plano):
++    """gp_Trsf de la simetría (Mirror) respecto de un geo.Plano."""
++    t = gp_Trsf()
++    t.SetMirror(gp_Ax2(_pnt(plano.origen), _gdir(plano.normal)))
++    return t
++
++
++def _clave_trsf(t):
++    """Huella de una gp_Trsf (matriz 3×4 redondeada a 1e-6): dos instancias con la misma huella son la misma."""
++    return tuple(round(t.Value(i, j), 6) + 0.0 for i in (1, 2, 3) for j in (1, 2, 3, 4))
++
++
++def componer_transformaciones(listas):
++    """Multitransformación (PartDesign › MultiTransform de FreeCAD): compone listas de gp_Trsf en orden; cada
++    lista se aplica a TODAS las instancias que dejaron las anteriores (patrón 3 + simetría = 6 instancias). Cada
++    lista empieza por la identidad (el original). Devuelve la lista compuesta, con la identidad primero y sin
++    repetir instancias iguales. Como máximo INSTANCIAS_MAXIMAS (se controla antes de componer)."""
++    listas = [list(lista) for lista in listas]
++    if not listas:
++        raise geo.ErrorGeometria("La multitransformación necesita al menos una transformación.")
++    total = 1
++    for lista in listas:
++        if not lista:
++            raise geo.ErrorGeometria("Una transformación de la lista no dejó ninguna instancia.")
++        total *= len(lista)
++    _exigir_instancias(total)
++    salida = [gp_Trsf()]
++    for lista in listas:
++        nuevas = {}
++        for t in lista:
++            for previa in salida:
++                c = t.Multiplied(previa)     # primero las transformaciones anteriores, después esta
++                nuevas.setdefault(_clave_trsf(c), c)
++        salida = list(nuevas.values())
++    identidad = gp_Trsf()
++    return [identidad] + [t for t in salida if _clave_trsf(t) != _clave_trsf(identidad)]
++
++
+ def aplicar(forma, trsf):
+     """Aplica una gp_Trsf (o una matriz 4x4) a una forma y devuelve la copia transformada."""
+     if not isinstance(trsf, gp_Trsf):
+@@ -1888,9 +1966,7 @@ def a_matriz(trsf):
+ 
+ def simetria(forma, plano):
+     """Simetría (Mirror) de Fusion [SLD-REF-MIRROR-DIALOG]: copia reflejada respecto de un geo.Plano."""
+-    t = gp_Trsf()
+-    t.SetMirror(gp_Ax2(_pnt(plano.origen), _gdir(plano.normal)))
+-    return aplicar(forma, t)
++    return aplicar(forma, transformacion_simetria(plano))
+ 
+ 
+ # ================================================================ 12. engrosar
+diff --git a/clon/omnicad/timeline/documento.py b/clon/omnicad/timeline/documento.py
+index 07027e1..06d6925 100644
+--- a/clon/omnicad/timeline/documento.py
++++ b/clon/omnicad/timeline/documento.py
+@@ -65,9 +65,12 @@ def _igual(a, b):
+ def _cambios_de_cuerpos(antes, despues):
+     """Lo que hizo un paso (de `antes` a `despues`) si solo cambió cuerpos que la caché del proyecto puede guardar:
+     ([[id, None si es el mismo de antes | sus datos]] en el orden del estado, formas de los cuerpos cambiados).
+-    None si cambió otra cosa (bocetos, planos, componentes…) o un cuerpo que no va en un BREP (malla, chapa)."""
++    None si cambió otra cosa (bocetos, planos, componentes…) o un cuerpo que no va en un BREP (malla, chapa). Las
++    herramientas anotadas (`EstadoModelo.herramientas`) no cuentan: no se guardan, y el paso cuya herramienta repite
++    un patrón de operaciones se recalcula al abrir (`_pasos_repetidos`)."""
+     va, vd = vars(antes), vars(despues)
+-    if list(va) != list(vd) or not all(_igual(va[k], vd[k]) for k in va if k not in ("cuerpos", "contador_cuerpos")):
++    if list(va) != list(vd) or not all(_igual(va[k], vd[k]) for k in va
++                                       if k not in ("cuerpos", "contador_cuerpos", "herramientas")):
+         return None
+     lista, formas = [], []
+     for cid, c in despues.cuerpos.items():
+@@ -497,11 +500,13 @@ class Documento:
+         self._valores = valores
+         nombres = self._nombres_cuerpos()
+         estado = self.estado_en(desde)
++        repetidos = self._pasos_repetidos() if self._cache else set()
+         for i in range(desde, len(self.operaciones)):
+             op = self.operaciones[i]
+             usados = frozenset()
+             duracion = 0.0
+-            guardado = self._de_cache(i, op, estado) if i < self.marcador and not op.suprimida else None
++            guardado = self._de_cache(i, op, estado) if (i < self.marcador and not op.suprimida
++                                                          and op.id not in repetidos) else None
+             if i >= self.marcador:
+                 self.resultados.append(ResultadoPaso("retrocedida"))
+             elif op.suprimida:
+@@ -556,6 +561,16 @@ class Documento:
+                            "cuerpos": cuerpos}, formas))
+         return pasos
+ 
++    def _pasos_repetidos(self):
++        """Pasos cuya herramienta repite un patrón de operaciones (`pasos_repetidos()` de OpPatron y
++        OpMultitransformar): se calculan aunque estén en la caché, que guarda los cuerpos y no la herramienta."""
++        salida = set()
++        for op in self.operaciones:
++            pasos = getattr(op, "pasos_repetidos", None)
++            if pasos is not None and not op.suprimida:
++                salida |= set(pasos())
++        return salida
++
+     def _de_cache(self, i, op, estado):
+         """El paso i tomado de la caché del proyecto que se está abriendo, sin ejecutarlo: (estado, resultado,
+         parámetros que leyó, duración). None si no está guardado o no cuadra con `estado` (entonces se ejecuta)."""
+diff --git a/clon/omnicad/timeline/operaciones.py b/clon/omnicad/timeline/operaciones.py
+index c0cb1ff..181080d 100644
+--- a/clon/omnicad/timeline/operaciones.py
++++ b/clon/omnicad/timeline/operaciones.py
+@@ -112,6 +112,9 @@ class EstadoModelo:
+         self.uniones = {}          # id → datos de la unión (ENSAMBLAR › Unión)
+         self.grupos_rigidos = []   # [[ids de componentes]] que se mueven juntos (ENSAMBLAR › Grupo rígido)
+         self.lienzos = {}          # id → imagen sobre un plano (INSERTAR › Lienzo / Calcomanía)
++        # id de paso → ((herramienta, operación, objetivo, tipo), …) que aplicó con `aplicar_resultado`: el patrón de
++        # operaciones (OpPatron con objeto="operaciones") repite esa herramienta transformada.
++        self.herramientas = {}
+         self.contador_cuerpos = 0
+ 
+     def copia(self):
+@@ -125,6 +128,7 @@ class EstadoModelo:
+         e.uniones = dict(self.uniones)
+         e.grupos_rigidos = [list(g) for g in self.grupos_rigidos]
+         e.lienzos = dict(self.lienzos)
++        e.herramientas = dict(self.herramientas)
+         e.contador_cuerpos = self.contador_cuerpos
+         return e
+ 
+@@ -178,9 +182,12 @@ class Contexto:
+ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido"):
+     """Aplica una forma recién creada según FeatureOperations. `objetivo`: id de un cuerpo, lista de ids
+     ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca).
+-    Devuelve los ids de cuerpos afectados."""
++    Devuelve los ids de cuerpos afectados. La herramienta queda anotada en `estado.herramientas[op_id]` (el patrón
++    de operaciones la repite)."""
+     if geo.esta_vacia(herramienta):
+         raise ErrorOperacion("La operación no generó geometría.")
++    anotado = list(objetivo) if isinstance(objetivo, (list, tuple)) else objetivo
++    estado.herramientas[op_id] = estado.herramientas.get(op_id, ()) + ((herramienta, operacion, anotado, tipo),)
+     if operacion == "nuevo":
+         sols = (geo.solidos(herramienta) if tipo == "solido" else []) or [herramienta]
+         return [estado.nuevo_cuerpo(op_id, s, tipo) for s in sols]
+diff --git a/clon/omnicad/timeline/ops_solido.py b/clon/omnicad/timeline/ops_solido.py
+index fd66008..0467e97 100644
+--- a/clon/omnicad/timeline/ops_solido.py
++++ b/clon/omnicad/timeline/ops_solido.py
+@@ -2,7 +2,8 @@
+ """
+ Operaciones de SÓLIDO › CREAR (además de Extruir, Revolución y las primitivas de `operaciones.py`):
+ barrido, solevación, nervio, red, repujado, agujero, rosca, bobina, tubería, patrones (rectangular,
+-circular y en ruta), simetría, relleno de contorno, sólido envolvente y las de plástico (saliente, labio).
++circular, en ruta con giro y en puntos; de cuerpos o de operaciones), multitransformación, simetría, relleno de
++contorno, sólido envolvente y las de plástico (saliente, labio).
+ El núcleo geométrico está en `nucleo/solidos_crear.py`.
+ """
+ import numpy as np
+@@ -301,21 +302,146 @@ class OpTuberia(_OpCrear):
+         self._aplicar(estado, ctx, forma)
+ 
+ 
++# Tipos de paso que dejan su herramienta (el sólido que cortan, unen o crean, vía `aplicar_resultado`) y por eso se
++# pueden repetir con un patrón de operaciones; también los patrones y multitransformaciones de operaciones. Es la
++# lista que muestran los errores (la API y el diálogo la controlan antes de crear el paso).
++TIPOS_REPETIBLES = ("extrusion", "revolucion", "agujero", "primitiva", "barrido", "solevacion", "bobina", "tuberia",
++                    "relleno_contorno", "solido_envolvente", "patron", "multitransformar")
++OBJETOS_PATRON = ("cuerpos", "operaciones")
++
++
++def _ids_pasos(p):
++    pasos = p.get("pasos") or []
++    if not isinstance(pasos, (list, tuple)):
++        raise ParametroMalFormado(pasos, "tiene que ser una lista de ids de pasos", "pasos")
++    return [str(x) for x in pasos if x]
++
++
++def _xyz(ctx, valores, que):
++    """[x, y, z] de números o expresiones (mm) → array de 3 floats."""
++    if not isinstance(valores, (list, tuple)) or len(valores) != 3:
++        raise ErrorOperacion(f"{que} tiene que ser [x, y, z]: llegó {ent.describir_valor(valores)}.")
++    return np.array([ctx.evaluar(v) if isinstance(v, str) else float(v) for v in valores], float)
++
++
++def _puntos_de(entidad):
++    """Puntos 3D de una entidad del patrón en puntos: un boceto entero da sus puntos sueltos (los que no son de
++    ninguna curva); lo demás, su punto (punto de boceto, vértice, punto de construcción, centro de una curva)."""
++    if entidad.tipo == "boceto":
++        b = entidad.boceto.boceto
++        en_curvas = {i for c in b.curvas.values() for i in c.puntos()}
++        return [entidad.plano.a_3d(pt.x, pt.y) for pid, pt in sorted(b.puntos.items()) if pid not in en_curvas]
++    return [ent.como_punto(entidad)]
++
++
++def repetir_pasos(op, estado, ctx, trsfs):
++    """Patrón de operaciones (el de features de Fusion, con cálculo «Idéntico»): la herramienta que dejó cada paso
++    de `op.p["pasos"]` (la extrusión que corta, el agujero…) se copia con cada gp_Trsf de `trsfs` (sin el original)
++    y se aplica con la MISMA operación (cortar, unir o cuerpo nuevo) a los mismos cuerpos que el paso original.
++    Las extensiones no se recalculan por copia: un agujero «Todo» copiado a una zona más gruesa no la atraviesa.
++    Devuelve los ids de los cuerpos afectados."""
++    pasos = _ids_pasos(op.p)
++    if not pasos:
++        raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
++    if not trsfs:
++        ctx.aviso("El patrón no tiene copias: no cambió nada.")
++        return []
++    sc, afectados = _sc(), []
++    for pid in pasos:
++        registros = estado.herramientas.get(pid)
++        if not registros:
++            raise ErrorOperacion(
++                f"El paso «{pid}» no dejó una herramienta que se pueda repetir: tiene que estar antes de este paso, "
++                f"activo y sin error, y ser de un tipo que corta, une o crea con una herramienta. Tipos que se pueden "
++                f"repetir: {', '.join(TIPOS_REPETIBLES)} (los dos últimos, de operaciones).")
++        for forma, operacion, objetivo, tipo in registros:
++            if operacion == "intersecar":
++                raise ErrorOperacion(f"El paso «{pid}» interseca: repetirlo dejaría solo lo común a todas las copias. "
++                                     "Se repiten los pasos que cortan, unen o crean un cuerpo nuevo.")
++            copias = [sc.aplicar(forma, t) for t in trsfs]
++            if operacion == "nuevo":              # cada copia, su propio cuerpo (aunque se toquen)
++                for copia in copias:
++                    afectados += aplicar_resultado(estado, ctx, op.id, copia, operacion, objetivo, tipo)
++                continue
++            herramienta = sc.unir_instancias(copias) if tipo == "solido" else geo.compuesto(copias)
++            afectados += aplicar_resultado(estado, ctx, op.id, herramienta, operacion, objetivo, tipo)
++    return afectados
++
++
++def copiar_cuerpos(op, estado, trsfs):
++    """Copias de los cuerpos de `op.p["cuerpos"]` con cada gp_Trsf de `trsfs`: cuerpos nuevos (heredan aspecto y
++    material) o, con `combinar`, unidas al original."""
++    for cid in op.p["cuerpos"]:
++        c = estado.cuerpo(cid)
++        copias = [_sc().aplicar(c.forma, t) for t in trsfs]
++        if op.p["combinar"]:
++            c.forma = geo.unir_todos([c.forma] + copias)
++        else:
++            for forma in copias:
++                estado.nuevo_cuerpo(op.id, forma, c.tipo, **atributos_copia(c))
++
++
+ class OpPatron(_OpCrear):
+-    """Patrón rectangular, circular o en ruta de Fusion [SLD-PATTERNS] sobre cuerpos (o componentes): cada
+-    instancia es un cuerpo nuevo (o se une al original con «Combinar»).
++    """Patrón rectangular, circular, en ruta o en puntos de Fusion [SLD-PATTERNS] (el «en puntos» es el Point Pattern
++    de FreeCAD; el giro en ruta, su Twisted Path Array).
++    `objeto` es el «Tipo de objeto» de Fusion: "cuerpos" (`cuerpos`: cada instancia es un cuerpo nuevo, o se une al
++    original con «Combinar») u "operaciones" (`pasos`: ids de pasos anteriores —una extrusión que corta, un
++    agujero…—; su herramienta se repite transformada y se aplica con la misma operación a los mismos cuerpos: ver
++    `repetir_pasos`).
+     `distribucion` es el «Tipo de distancia» de Fusion: con "extension" (por defecto) d1/d2 son la distancia TOTAL
+     entre la primera y la última instancia y, en el circular, `angulo` es el ángulo total; con "espaciado" son la
+-    separación (o el ángulo) entre instancias consecutivas."""
++    separación (o el ángulo) entre instancias consecutivas.
++    En ruta, `giro` hace girar cada copia alrededor de la ruta, progresivo hasta ese ángulo total en la última.
++    En puntos: `puntos` (puntos de boceto, vértices, puntos de construcción o un boceto entero = sus puntos sueltos)
++    y `coordenadas` ([x, y, z], números o expresiones); cada copia lleva el punto de referencia (`referencia`, o
++    `referencia_xyz` [x, y, z]; por defecto el origen) a uno de los puntos."""
+     TIPO, ETIQUETA, ICONO = "patron", "Patrón", "⁂"
+     PARAMS = {"forma_patron": "rectangular", "cuerpos": [], "dir1": None, "n1": 3, "d1": "30 mm", "dir2": None,
+               "n2": 1, "d2": "30 mm", "distribucion": "extension", "simetrico": False, "eje": None, "n": 6,
+               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
+-              "combinar": False}
+-    EXPRESIONES = ("d1", "d2", "angulo", "inicio")
+-    OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta"), "distribucion": ("extension", "espaciado"),
+-                "orientacion": ("identica", "direccion_ruta")}
+-    REFS = ("dir1", "dir2", "eje", "ruta")
++              "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
++              "referencia_xyz": [], "objeto": "cuerpos", "pasos": []}
++    EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
++    OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"), "distribucion": ("extension", "espaciado"),
++                "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON}
++    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia")
++
++    def dependencias(self):
++        try:
++            pasos = set(_ids_pasos(self.p))
++        except ErrorOperacion:
++            pasos = set()
++        return (super().dependencias() | pasos) - {self.id}
++
++    def pasos_repetidos(self):
++        """Pasos cuya herramienta repite (objeto = "operaciones"); [] con cuerpos."""
++        try:
++            return _ids_pasos(self.p) if self.p.get("objeto") == "operaciones" else []
++        except ErrorOperacion:
++            return []
++
++    def expresiones(self):
++        xyz = list(self.p.get("coordenadas") or []) + [self.p.get("referencia_xyz") or []]
++        return super().expresiones() + [v for c in xyz if isinstance(c, (list, tuple)) for v in c if isinstance(v, str)]
++
++    def puntos_patron(self, estado, ctx):
++        """(puntos, referencia) del patrón en puntos, en 3D."""
++        p = self.p
++        coordenadas = p.get("coordenadas") or []
++        if not isinstance(coordenadas, (list, tuple)):
++            raise ParametroMalFormado(coordenadas, "tiene que ser una lista de [x, y, z]", "coordenadas")
++        puntos = [q for e in _resolver_todas(p.get("puntos"), estado) for q in _puntos_de(e)]
++        puntos += [_xyz(ctx, c, "Cada coordenada") for c in coordenadas]
++        if not puntos:
++            raise ErrorOperacion("Elegí los puntos del patrón (puntos de boceto, vértices, puntos de construcción, un "
++                                 "boceto con puntos sueltos o coordenadas [x, y, z]).")
++        if p.get("referencia"):
++            ref = ent.como_punto(_resolver(p["referencia"], estado))
++        elif p.get("referencia_xyz"):
++            ref = _xyz(ctx, p["referencia_xyz"], "«referencia_xyz»")
++        else:
++            ref = np.zeros(3)
++        return puntos, ref
+ 
+     def aclaracion_distancias(self):
+         """Frase que dice cómo se leen las distancias (o el ángulo) con la `distribucion` actual."""
+@@ -349,23 +475,108 @@ class OpPatron(_OpCrear):
+                                                   angulo_total=ctx.evaluar(p["angulo"], ANGULO),
+                                                   distribucion="completa" if p["distribucion"] == "extension"
+                                                   else "espaciado", simetrico=p["simetrico"], suprimir=sup)
++        if p["forma_patron"] == "puntos":
++            puntos, ref = self.puntos_patron(estado, ctx)
++            return sc.transformaciones_en_puntos(puntos, ref, suprimir=sup)
+         _, ruta = _aristas(p["ruta"], estado, "la ruta")
+         return sc.transformaciones_en_ruta(ruta, self.entero("n1"), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
+                                            inicio=ctx.evaluar(p["inicio"], "escalar"), distribucion=p["distribucion"],
+-                                           simetrico=p["simetrico"], suprimir=sup)
++                                           simetrico=p["simetrico"], suprimir=sup,
++                                           giro=ctx.evaluar(p.get("giro") or "0", ANGULO))
+ 
+     def ejecutar(self, estado, ctx):
+-        if not self.p["cuerpos"]:
+-            raise ErrorOperacion("Elegí los cuerpos del patrón.")
+-        trsfs = self.transformaciones(estado, ctx)[1:]          # la primera es el original
+-        for cid in self.p["cuerpos"]:
+-            c = estado.cuerpo(cid)
+-            copias = [_sc().aplicar(c.forma, t) for t in trsfs]
+-            if self.p["combinar"]:
+-                c.forma = geo.unir_todos([c.forma] + copias)
+-            else:
+-                for forma in copias:
+-                    estado.nuevo_cuerpo(self.id, forma, c.tipo, **atributos_copia(c))
++        _ejecutar_patron(self, estado, ctx, "Elegí los cuerpos del patrón.")
++
++
++def _ejecutar_patron(op, estado, ctx, sin_cuerpos):
++    """`ejecutar` común del Patrón y la Multitransformación: repite pasos o copia cuerpos."""
++    if op.p.get("objeto", "cuerpos") == "operaciones":
++        if not _ids_pasos(op.p):
++            raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
++        op._registrar_usados(repetir_pasos(op, estado, ctx, op.transformaciones(estado, ctx)[1:]))
++        return
++    if not op.p["cuerpos"]:
++        raise ErrorOperacion(sin_cuerpos)
++    copiar_cuerpos(op, estado, op.transformaciones(estado, ctx)[1:])          # la primera es el original
++
++
++TIPOS_TRANSFORMACION = ("rectangular", "circular", "ruta", "puntos", "simetria")
++
++
++class OpMultitransformar(_OpCrear):
++    """Multitransformación (PartDesign › MultiTransform de FreeCAD; en Fusion se encadenan patrones y simetrías):
++    una lista de transformaciones apilables en un solo paso. Cada una se aplica a TODAS las instancias que dejaron
++    las anteriores: patrón rectangular de 3 + simetría = 6 instancias.
++
++    `transformaciones`: lista de dicts con "tipo" ("rectangular", "circular", "ruta", "puntos" o "simetria") y los
++    campos de ese tipo con las mismas claves que el Patrón (dir1, n1, d1, dir2, n2, d2, distribucion, simetrico,
++    eje, n, angulo, ruta, orientacion, inicio, giro, puntos, coordenadas, referencia, referencia_xyz, suprimir) o,
++    en la simetría, "plano". `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
++    TIPO, ETIQUETA, ICONO = "multitransformar", "Multitransformación", "✣"
++    PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False}
++    OPCIONES = {"objeto": OBJETOS_PATRON}
++
++    def _lista(self):
++        lista = self.p.get("transformaciones") or []
++        if not isinstance(lista, (list, tuple)) or not all(isinstance(t, dict) for t in lista):
++            raise ParametroMalFormado(lista, 'se esperaba una lista de dicts como {"tipo": "rectangular", …}',
++                                      "transformaciones")
++        return list(lista)
++
++    def _patron(self, t):
++        return OpPatron(self.id, forma_patron=t.get("tipo"), **{k: v for k, v in t.items() if k != "tipo"})
++
++    def dependencias(self):
++        deps = super().dependencias()
++        try:
++            lista, pasos = self._lista(), set(_ids_pasos(self.p))
++        except ErrorOperacion:
++            return deps
++        for t in lista:
++            deps |= ent.dependencias_de(*(t.get(k) for k in OpPatron.REFS + ("plano",)))
++        return (deps | pasos) - {self.id}
++
++    pasos_repetidos = OpPatron.pasos_repetidos
++
++    def expresiones(self):
++        try:
++            lista = self._lista()
++        except ErrorOperacion:
++            return []
++        return [e for t in lista if t.get("tipo") in TIPOS_TRANSFORMACION and t.get("tipo") != "simetria"
++                for e in self._patron(t).expresiones()]
++
++    def transformaciones(self, estado, ctx):
++        """Lista compuesta de gp_Trsf (la primera, la identidad = el original)."""
++        lista = self._lista()
++        if not lista:
++            raise ErrorOperacion("Agregá al menos una transformación (rectangular, circular, ruta, puntos o simetria).")
++        from OCP.gp import gp_Trsf
++        sc, listas = _sc(), []
++        for i, t in enumerate(lista, start=1):
++            tipo = t.get("tipo")
++            if tipo not in TIPOS_TRANSFORMACION:
++                raise ErrorOperacion(f"Transformación {i}: «tipo» tiene que ser uno de: {', '.join(TIPOS_TRANSFORMACION)}; "
++                                     f"llegó {ent.describir_valor(tipo)}.")
++            try:
++                if tipo == "simetria":
++                    if not t.get("plano"):
++                        raise ErrorOperacion("elegí el plano de simetría.")
++                    plano = ent.como_plano(_resolver(t["plano"], estado))
++                    listas.append([gp_Trsf(), sc.transformacion_simetria(plano)])
++                    continue
++                patron = self._patron(t)
++                patron.revisar_parametros()
++                patron.validar_opciones()
++                listas.append(patron.transformaciones(estado, ctx))
++            except ParametroMalFormado:
++                raise
++            except (ErrorOperacion, ent.ErrorReferencia, geo.ErrorGeometria) as e:
++                raise ErrorOperacion(f"Transformación {i} ({tipo}): {e}") from e
++        return sc.componer_transformaciones(listas)
++
++    def ejecutar(self, estado, ctx):
++        _ejecutar_patron(self, estado, ctx, "Elegí los cuerpos de la multitransformación.")
+ 
+ 
+ class OpSimetria(_OpCrear):
+@@ -521,3 +732,4 @@ class OpLabio(_OpCrear):
+ 
+ registrar_operacion(OpBarrido, OpSolevacion, OpNervio, OpRed, OpRepujado, OpAgujero, OpRosca, OpBobina, OpTuberia,
+                     OpPatron, OpSimetria, OpRellenoContorno, OpSolidoEnvolvente, OpSaliente, OpLabio)
++registrar_operacion(OpMultitransformar)
+diff --git a/clon/omnicad/ui/cinta.py b/clon/omnicad/ui/cinta.py
+index 51799e1..43ef859 100644
+--- a/clon/omnicad/ui/cinta.py
++++ b/clon/omnicad/ui/cinta.py
+@@ -88,7 +88,8 @@ SOLIDO = [
+         _i("Bobina", "bobina"), _i("Tubería", "tuberia"), _i("Engranaje", "engranaje"), _i("Eje", "eje_escalonado"),
+         SEP,
+         _sub("Patrón", [_i("Patrón rectangular", "patron_rectangular_3d"), _i("Patrón circular", "patron_circular_3d"),
+-                        _i("Patrón en trayectoria", "patron_ruta")]),
++                        _i("Patrón en trayectoria", "patron_ruta"), _i("Patrón en puntos", "patron_puntos"),
++                        _i("Multitransformación", "multitransformar")]),
+         _i("Simetría", "simetria_3d"), SEP,
+         _i("Engrosar", "engrosar"), _i("Llenado de contorno", "relleno_contorno"),
+         _i("Sólido envolvente", "cuerpo_envolvente"), SEP,
+diff --git a/clon/omnicad/ui/comandos/__init__.py b/clon/omnicad/ui/comandos/__init__.py
+index c660470..753638c 100644
+--- a/clon/omnicad/ui/comandos/__init__.py
++++ b/clon/omnicad/ui/comandos/__init__.py
+@@ -19,6 +19,7 @@ def registrar(*clases):
+ 
+ from . import chapa, construir, crear, engranaje, ensamblar, fijacion, insertar, inspeccionar, malla, modificar, solido, superficie  # noqa: E402,F401  (cada módulo se registra al importarse)
+ from . import revision  # noqa: E402,F401  (INSPECCIONAR › Revisar geometría y Reparar cuerpo)
++from . import patrones  # noqa: E402,F401  (SÓLIDO › CREAR › Patrón en puntos y Multitransformación)
+ from . import asas_extra  # noqa: E402,F401  (engancha asas en la vista a comandos ya registrados)
+ 
+ 
+diff --git a/clon/omnicad/ui/comandos/crear.py b/clon/omnicad/ui/comandos/crear.py
+index cbcb7b8..709ef19 100644
+--- a/clon/omnicad/ui/comandos/crear.py
++++ b/clon/omnicad/ui/comandos/crear.py
+@@ -5,6 +5,7 @@ import numpy as np
+ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpNervio, OpPatron, OpRed,
+                                     OpRellenoContorno, OpRepujado, OpRosca, OpSaliente, OpSimetria, OpSolevacion,
+                                     OpSolidoEnvolvente, OpTuberia)
++from ...timeline.ops_solido import TIPOS_REPETIBLES
+ from ...timeline.parametros import ANGULO, ESCALAR
+ from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
+                        hit_desde_ref, hits, ref1, refs)
+@@ -400,12 +401,64 @@ class Tuberia(Comando):
+         return _con_objetivos(op, ctx, dict(op.p, ruta=hits(op.p["ruta"], ctx.estado)))
+ 
+ 
++def _de_cuerpos(v):
++    return v.get("objeto", "cuerpos") != "operaciones"
++
++
++def campos_objeto():
++    """«Tipo de objeto» de Fusion para Patrón y Multitransformación: cuerpos (se eligen en la vista) u operaciones
++    (pasos anteriores del timeline, por nombre o id: el agujero, la extrusión que corta…)."""
++    return [Opciones("objeto", "Tipo de objeto", {"cuerpos": "Cuerpos", "operaciones": "Operaciones"}),
++            Seleccion("cuerpos", "Objetos (cuerpos)", {"cuerpo"}, maximo=None, visible_si=_de_cuerpos),
++            Texto("pasos", "Operaciones (nombres del timeline, separados por coma)", "",
++                  visible_si=lambda v: not _de_cuerpos(v),
++                  ayuda="Pasos anteriores que cortan, unen o crean con una herramienta: "
++                        + ", ".join(TIPOS_REPETIBLES) + ".")]
++
++
++def pasos_repetibles(texto, ctx):
++    """Ids de los pasos escritos en el campo «Operaciones» (nombres o ids separados por coma): tienen que estar antes
++    del paso que se crea o edita y ser de un tipo que deja su herramienta (TIPOS_REPETIBLES)."""
++    anteriores = ctx.doc.operaciones[:ctx.indice]
++    ids = []
++    for nombre in (x.strip() for x in str(texto or "").replace(";", ",").split(",")):
++        if not nombre:
++            continue
++        op = next((o for o in anteriores if o.id == nombre), None) or next(
++            (o for o in anteriores if o.nombre.casefold() == nombre.casefold()), None)
++        if op is None:
++            raise ErrorComando(f"No hay un paso «{nombre}» antes de este en el timeline.")
++        if op.TIPO not in TIPOS_REPETIBLES or (op.TIPO in ("patron", "multitransformar")
++                                               and op.p.get("objeto") != "operaciones"):
++            raise ErrorComando(f"«{op.nombre}» ({op.ETIQUETA}) no deja una herramienta para repetir. Se repiten: "
++                               + ", ".join(TIPOS_REPETIBLES) + " (patrones, solo los de operaciones).")
++        ids.append(op.id)
++    if not ids:
++        raise ErrorComando("Escribí las operaciones a repetir (nombres del timeline, separados por coma).")
++    return ids
++
++
++def objeto_params(v, ctx):
++    """objeto, cuerpos y pasos del Patrón o la Multitransformación según el «Tipo de objeto»."""
++    if _de_cuerpos(v):
++        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
++        return {"objeto": "cuerpos", "cuerpos": _cuerpos(v["cuerpos"]), "pasos": []}
++    return {"objeto": "operaciones", "cuerpos": [], "pasos": pasos_repetibles(v.get("pasos"), ctx)}
++
++
++def objeto_valores(op, ctx):
++    """Los valores de los campos de `campos_objeto` desde una operación guardada."""
++    nombres = {o.id: o.nombre for o in ctx.doc.operaciones}
++    return {"objeto": op.p.get("objeto", "cuerpos"), "cuerpos": _hits_cuerpos(op.p.get("cuerpos") or [], ctx.estado),
++            "pasos": ", ".join(nombres.get(i, i) for i in op.p.get("pasos") or [])}
++
++
+ class _Patron(Comando):
+     CLASE_OP = OpPatron
+     FORMA = "rectangular"
+ 
+     def campos(self, ctx):
+-        base = [Seleccion("cuerpos", "Objetos (cuerpos)", {"cuerpo"}, maximo=None)]
++        base = campos_objeto()
+         if self.FORMA == "rectangular":
+             base += [Seleccion("dir1", "Dirección 1", {"eje", "arista_lineal", "plano", "cara_plana"}),
+                      Opciones("distribucion", "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"}),
+@@ -416,31 +469,48 @@ class _Patron(Comando):
+             base += [Seleccion("eje", "Eje", {"eje"}),
+                      Opciones("distribucion", "Tipo", {"extension": "Completo", "espaciado": "Ángulo entre copias"}),
+                      Entero("n", "Cantidad", 6, 1), Expresion("angulo", "Ángulo total / entre copias", "360 deg", ANGULO)]
++        elif self.FORMA == "puntos":
++            base += [Seleccion("puntos", "Puntos", {"punto_boceto", "vertice", "punto", "boceto"}, maximo=None,
++                               ayuda="Puntos de boceto, vértices, puntos de construcción o un boceto entero (todos sus "
++                                     "puntos sueltos)."),
++                     Seleccion("referencia", "Punto de referencia", {"punto_boceto", "vertice", "punto"}, minimo=0,
++                               ayuda="El punto que se lleva a cada punto elegido (vacío = el origen). Para repetir un "
++                                     "agujero, el punto donde está el agujero.")]
+         else:
+             base += [Seleccion("ruta", "Ruta", CURVA, maximo=None),
+                      Opciones("distribucion", "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"}),
+                      Entero("n1", "Cantidad", 3, 1), Expresion("d1", "Distancia", "30 mm"),
+                      Expresion("inicio", "Punto de inicio (0 a 1)", "0", ESCALAR),
+-                     Opciones("orientacion", "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"})]
+-        return base + [Casilla("simetrico", "Simétrico"), Texto("suprimir", "Suprimir copias (n.º, separados por coma)", ""),
+-                       Casilla("combinar", "Unir al original")]
++                     Opciones("orientacion", "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"}),
++                     Expresion("giro", "Giro alrededor de la ruta (total)", "0 deg", ANGULO,
++                               ayuda="Cada copia gira alrededor de la ruta, de a poco, hasta este ángulo en la última.")]
++        if self.FORMA != "puntos":
++            base.append(Casilla("simetrico", "Simétrico"))
++        return base + [Texto("suprimir", "Suprimir copias (n.º, separados por coma)", ""),
++                       Casilla("combinar", "Unir al original", visible_si=_de_cuerpos)]
+ 
+     def construir(self, v, ctx):
+-        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
++        objeto = objeto_params(v, ctx)
++        if self.FORMA == "puntos" and not v.get("puntos") and not (ctx.op is not None and ctx.op.p.get("coordenadas")):
++            raise ErrorComando("Seleccioná los puntos.")
+         try:
+             suprimir = [int(x) for x in str(v.get("suprimir") or "").replace(";", ",").split(",") if x.strip()]
+         except ValueError as e:
+             raise ErrorComando("En «Suprimir copias» van números separados por coma.") from e
+         params = {k: v.get(k) for k in ("n1", "d1", "n2", "d2", "distribucion", "simetrico", "n", "angulo", "orientacion",
+-                                         "inicio", "combinar") if k in v}
+-        params.update(forma_patron=self.FORMA, cuerpos=_cuerpos(v["cuerpos"]), dir1=ref1(v, "dir1"),
+-                      dir2=ref1(v, "dir2"), eje=ref1(v, "eje"), ruta=refs(v, "ruta"), suprimir=suprimir)
++                                         "inicio", "giro", "combinar") if k in v}
++        params.update(objeto, forma_patron=self.FORMA, dir1=ref1(v, "dir1"), dir2=ref1(v, "dir2"), eje=ref1(v, "eje"),
++                      ruta=refs(v, "ruta"), puntos=refs(v, "puntos"), referencia=ref1(v, "referencia"),
++                      suprimir=suprimir)
++        if self.FORMA == "puntos" and ctx.op is not None:            # lo que el diálogo no muestra (de la API)
++            params.update(coordenadas=ctx.op.p.get("coordenadas") or [],
++                          referencia_xyz=[] if params["referencia"] else ctx.op.p.get("referencia_xyz") or [])
+         return self.crear_op(OpPatron, v, ctx, **params)
+ 
+     def desde_op(self, op, ctx):
+-        v = dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), ruta=hits(op.p.get("ruta"), ctx.estado),
+-                 suprimir=", ".join(str(i) for i in op.p.get("suprimir") or []))
+-        for k in ("dir1", "dir2", "eje"):
++        v = dict(op.p, ruta=hits(op.p.get("ruta"), ctx.estado), puntos=hits(op.p.get("puntos"), ctx.estado),
++                 suprimir=", ".join(str(i) for i in op.p.get("suprimir") or []), **objeto_valores(op, ctx))
++        for k in ("dir1", "dir2", "eje", "referencia"):
+             v[k] = _h1(op.p.get(k), ctx.estado)
+         return v
+ 
+diff --git a/clon/omnicad/ui/comandos/patrones.py b/clon/omnicad/ui/comandos/patrones.py
+new file mode 100644
+index 0000000..d820f12
+--- /dev/null
++++ b/clon/omnicad/ui/comandos/patrones.py
+@@ -0,0 +1,123 @@
++# -*- coding: utf-8 -*-
++"""Patrones de SÓLIDO › CREAR que se agregan a los de `crear.py`: Patrón en puntos y Multitransformación (patrón +
++simetría + patrón en un solo paso, como el MultiTransform de FreeCAD). Los dos repiten cuerpos u operaciones."""
++from ...timeline.ops_solido import OpMultitransformar
++from ...timeline.parametros import ANGULO
++from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, ref1
++from . import registrar
++from .crear import _h1, _Patron, _de_cuerpos, campos_objeto, objeto_params, objeto_valores
++
++RANURAS = 4                                     # transformaciones apilables en el diálogo
++TIPOS_RANURA = {"ninguna": "—", "rectangular": "Patrón rectangular", "circular": "Patrón circular",
++                "simetria": "Simetría"}
++DISTRIBUCIONES = {"extension": "Extensión / completo", "espaciado": "Espaciado / entre copias"}
++DIRECCION = {"eje", "arista_lineal", "plano", "cara_plana"}
++
++
++class PatronPuntos(_Patron):
++    CLAVE, TITULO, ICONO, FORMA = "patron_puntos", "Patrón en puntos", "patron_puntos", "puntos"
++    AYUDA = "Copias de cuerpos u operaciones en cada punto elegido (puntos de boceto, vértices o puntos de construcción)."
++    VARIANTE = ("forma_patron", "puntos")
++
++
++def _es(k, *tipos):
++    return lambda v: v.get(f"t{k}_tipo", "ninguna") in tipos
++
++
++def _ranura_desde(t):
++    """Valores de una ranura del diálogo desde una transformación guardada; None si el diálogo no la puede mostrar
++    (en ruta, en puntos o rectangular en dos direcciones: se crean desde la API)."""
++    tipo = t.get("tipo")
++    if tipo == "rectangular" and not t.get("dir2"):
++        return {"tipo": tipo, "dir": t.get("dir1"), "n": t.get("n1", 3), "d": t.get("d1", "30 mm"),
++                "distribucion": t.get("distribucion", "extension")}
++    if tipo == "circular":
++        return {"tipo": tipo, "eje": t.get("eje"), "n": t.get("n", 6), "angulo": t.get("angulo", "360 deg"),
++                "distribucion": t.get("distribucion", "extension")}
++    if tipo == "simetria":
++        return {"tipo": tipo, "plano": t.get("plano")}
++    return None
++
++
++class Multitransformar(Comando):
++    CLAVE, TITULO, ICONO = "multitransformar", "Multitransformación", "multitransformar"
++    AYUDA = ("Patrones y simetrías encadenados en un solo paso: cada transformación se aplica a todas las copias de "
++             "las anteriores (patrón de 3 + simetría = 6).")
++    CLASE_OP = OpMultitransformar
++
++    def campos(self, ctx):
++        campos = campos_objeto()
++        fijas = Info("fijas", "Transformaciones", lambda v, c: (
++            f"{len(v['_fijas'])} transformaciones creadas desde la API (en ruta, en puntos o en dos direcciones): el "
++            "diálogo no las edita y Aceptar las conserva." if v.get("_fijas") else ""),
++            visible_si=lambda v: bool(v.get("_fijas")))
++        campos.append(fijas)
++        for k in range(1, RANURAS + 1):
++            libre = (lambda v, k=k: not v.get("_fijas") and (k == 1 or v.get(f"t{k - 1}_tipo", "ninguna") != "ninguna"))
++            campos += [
++                Opciones(f"t{k}_tipo", f"Transformación {k}", TIPOS_RANURA, "rectangular" if k == 1 else "ninguna",
++                         visible_si=libre),
++                Seleccion(f"t{k}_dir", "   Dirección", DIRECCION,
++                          visible_si=lambda v, k=k, f=_es(k, "rectangular"): f(v) and not v.get("_fijas")),
++                Seleccion(f"t{k}_eje", "   Eje", {"eje"},
++                          visible_si=lambda v, k=k, f=_es(k, "circular"): f(v) and not v.get("_fijas")),
++                Seleccion(f"t{k}_plano", "   Plano de simetría", {"plano", "cara_plana"},
++                          visible_si=lambda v, k=k, f=_es(k, "simetria"): f(v) and not v.get("_fijas")),
++                Opciones(f"t{k}_distribucion", "   Distribución", DISTRIBUCIONES,
++                         visible_si=lambda v, k=k, f=_es(k, "rectangular", "circular"): f(v) and not v.get("_fijas")),
++                Entero(f"t{k}_n", "   Cantidad", 3, 1,
++                       visible_si=lambda v, k=k, f=_es(k, "rectangular", "circular"): f(v) and not v.get("_fijas")),
++                Expresion(f"t{k}_d", "   Distancia", "30 mm",
++                          visible_si=lambda v, k=k, f=_es(k, "rectangular"): f(v) and not v.get("_fijas")),
++                Expresion(f"t{k}_angulo", "   Ángulo", "360 deg", ANGULO,
++                          visible_si=lambda v, k=k, f=_es(k, "circular"): f(v) and not v.get("_fijas"))]
++        return campos + [Casilla("combinar", "Unir al original", visible_si=_de_cuerpos)]
++
++    def construir(self, v, ctx):
++        objeto = objeto_params(v, ctx)
++        lista = list(v.get("_fijas") or [])
++        if not lista:
++            for k in range(1, RANURAS + 1):
++                tipo = v.get(f"t{k}_tipo", "ninguna")
++                if tipo == "ninguna":
++                    break
++                if tipo == "rectangular":
++                    if not v.get(f"t{k}_dir"):
++                        raise ErrorComando(f"Transformación {k}: seleccioná la dirección.")
++                    lista.append({"tipo": tipo, "dir1": ref1(v, f"t{k}_dir"), "n1": v.get(f"t{k}_n", 3),
++                                  "d1": v.get(f"t{k}_d", "30 mm"),
++                                  "distribucion": v.get(f"t{k}_distribucion", "extension")})
++                elif tipo == "circular":
++                    if not v.get(f"t{k}_eje"):
++                        raise ErrorComando(f"Transformación {k}: seleccioná el eje.")
++                    lista.append({"tipo": tipo, "eje": ref1(v, f"t{k}_eje"), "n": v.get(f"t{k}_n", 3),
++                                  "angulo": v.get(f"t{k}_angulo", "360 deg"),
++                                  "distribucion": v.get(f"t{k}_distribucion", "extension")})
++                else:
++                    if not v.get(f"t{k}_plano"):
++                        raise ErrorComando(f"Transformación {k}: seleccioná el plano de simetría.")
++                    lista.append({"tipo": "simetria", "plano": ref1(v, f"t{k}_plano")})
++        if not lista:
++            raise ErrorComando("Elegí al menos una transformación.")
++        return self.crear_op(OpMultitransformar, v, ctx, transformaciones=lista, combinar=bool(v.get("combinar")),
++                             **objeto)
++
++    def desde_op(self, op, ctx):
++        v = dict(objeto_valores(op, ctx), combinar=op.p.get("combinar", False))
++        lista = op.p.get("transformaciones") or []
++        ranuras = [_ranura_desde(t) for t in lista]
++        if len(lista) > RANURAS or any(r is None for r in ranuras):
++            v["_fijas"] = [dict(t) for t in lista]
++            return v
++        for k in range(1, RANURAS + 1):
++            r = ranuras[k - 1] if k <= len(ranuras) else {"tipo": "ninguna"}
++            v[f"t{k}_tipo"] = r["tipo"]
++            for clave in ("dir", "eje", "plano"):
++                v[f"t{k}_{clave}"] = _h1(r.get(clave), ctx.estado)
++            for clave in ("n", "d", "angulo", "distribucion"):
++                if clave in r:
++                    v[f"t{k}_{clave}"] = r[clave]
++        return v
++
++
++registrar(PatronPuntos, Multitransformar)
+diff --git a/clon/omnicad/ui/iconos_extra.py b/clon/omnicad/ui/iconos_extra.py
+index 120cac4..6be7c97 100644
+--- a/clon/omnicad/ui/iconos_extra.py
++++ b/clon/omnicad/ui/iconos_extra.py
+@@ -495,6 +495,27 @@ def _simetria_3d(p):
+     _caja_en(p, q, 11, 1, 0, 6, 10, 9, FANTASMA, BORDE_FANTASMA)
+ 
+ 
++def _patron_puntos(p):
++    """Copias sobre puntos sueltos (de un boceto): el original azul y las copias pálidas, cada una sobre su punto."""
++    puntos = [(6.5, 27.5), (15.5, 18.0), (25.0, 27.0), (25.5, 13.5)]
++    for x, y in puntos:
++        _punto_dato(p, x, y, 1.8)
++    for k, (x, y) in sorted(enumerate(puntos), key=lambda e: e[1][1]):
++        _caja(p, 4.5, 4.5, 4.5, x, y - 6.6, 1.0, _azules() if k == 0 else FANTASMA,
++              AZUL_BORDE if k == 0 else BORDE_FANTASMA)
++
++
++def _multitransformar(p):
++    """Patrón + simetría en un paso: el original (adelante) y su copia del patrón, el plano y las dos copias
++    reflejadas."""
++    q = _q(13.8, 9.5)
++    _caja_en(p, q, 0, 0, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
++    _caja_en(p, q, 0, 8, 0, 5, 5, 5)
++    _plano_q(p, [q(8, -2, -1), q(8, 15, -1), q(8, 15, 9), q(8, -2, 9)])
++    _caja_en(p, q, 11, 0, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
++    _caja_en(p, q, 11, 8, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
++
++
+ def _engrosar(p):
+     arriba = QPainterPath(QPointF(3, 12))
+     arriba.cubicTo(10, 4, 17, 16, 24, 8)
+@@ -1989,6 +2010,7 @@ DIBUJOS_EXTRA = {
+     "repujado": _repujado, "saliente": _saliente, "encaje_presion": _encaje_presion, "agujero": _agujero,
+     "rosca": _rosca, "bobina": _bobina, "tuberia": _tuberia, "patron_rectangular_3d": _patron_rectangular_3d,
+     "patron_circular_3d": _patron_circular_3d, "patron_ruta": _patron_ruta, "simetria_3d": _simetria_3d,
++    "patron_puntos": _patron_puntos, "multitransformar": _multitransformar,
+     "engrosar": _engrosar, "relleno_contorno": _relleno_contorno, "cuerpo_envolvente": _cuerpo_envolvente,
+     "operacion_base": _operacion_base, "derivar": _derivar, "crear_forma": _crear_forma,
+     "engranaje_3d": _engranaje_3d, "eje_escalonado": _eje_escalonado,
+diff --git a/clon/tests/test_api_solido.py b/clon/tests/test_api_solido.py
+index 463fc8c..4613fa5 100644
+--- a/clon/tests/test_api_solido.py
++++ b/clon/tests/test_api_solido.py
+@@ -44,7 +44,8 @@ def caja(sesion, cuerpo):
+ def test_herramientas_del_grupo_solido():
+     assert [h["nombre"] for h in api.catalogo("solido")] == [
+         "extrude", "revolve", "sweep", "loft", "create_box", "create_cylinder", "create_sphere", "create_torus",
+-        "boolean_operation", "mirror", "rectangular_pattern", "circular_pattern", "move_body",
++        "boolean_operation", "mirror", "rectangular_pattern", "circular_pattern", "point_pattern", "path_pattern",
++        "multi_transform", "move_body",
+         "fillet", "chamfer", "shell", "create_hole", "draft",   # herramientas_modificar.py (Paquete D)
+         "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft"]  # engranajes
+     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
+@@ -354,8 +355,81 @@ def test_patron_circular(s):
+     assert caja(s, ejex["bodies_created"][0]["id"]) == pytest.approx(([20, -5, -10], [30, 5, 0]), abs=1e-6)
+ 
+ 
++# ---------------------------------------------------------------- patrones de operaciones, en puntos, en ruta, multi
++PLACA = 100 * 60 * 10
++AGUJERO = math.pi * 3 ** 2 * 10
++
++
++def _placa_con_agujero(s):
++    """Placa 100 × 60 × 10 de (0, 0, 0) a (100, 60, 10) con un agujero Ø6 pasante en (10, 10)."""
++    llamar(s, "create_box", length=100, width=60, height=10, x=50, y=30)
++    return llamar(s, "create_hole", diameter=6, face=">Z", points=[[10, 10, 10]], through_all=True)["feature"]
++
++
++def test_patron_de_operaciones_repite_el_agujero(s):
++    """Hallazgo: los patrones solo repetían cuerpos (ventilación = caja + patrón + cortar). Ahora repiten pasos."""
++    agujero = _placa_con_agujero(s)
++    r = llamar(s, "rectangular_pattern", features=agujero["id"], x_count=3, x_spacing=20, y_count=2, y_spacing=25)
++    assert r["bodies_created"] == [] and r["bodies_removed"] == []
++    assert r["bodies_modified"][0]["volume"] == pytest.approx(PLACA - 6 * AGUJERO, abs=1e-3)
++    paso = s.paso(r["feature"]["id"])
++    assert (paso.p["objeto"], paso.p["pasos"], paso.p["cuerpos"]) == ("operaciones", [agujero["id"]], [])
++    r = llamar(s, "point_pattern", features=agujero["name"], points=[[90, 50, 0], [90, 10, 0]], reference=[10, 10, 0])
++    assert r["bodies_modified"][0]["volume"] == pytest.approx(PLACA - 8 * AGUJERO, abs=1e-3)
++    # (10, 10) → (50, 10) ya estaba agujereado por el patrón: cortarlo otra vez no cambia nada
++    r = llamar(s, "multi_transform", features=[agujero["id"]], transforms=[
++        {"type": "rectangular", "axis": "x", "count": 2, "spacing": 40},
++        {"type": "rectangular", "axis": "y", "count": 2, "spacing": 40}])
++    assert r["bodies_modified"][0]["volume"] == pytest.approx(PLACA - 10 * AGUJERO, abs=1e-3)
++    llamar(s, "create_sketch", plane="XY", name="Suelto")
++    r = api.llamar(s, "rectangular_pattern", {"features": "Suelto", "x_count": 2})
++    assert r["error_kind"] == "INVALID_ARGUMENTS" and "no deja una herramienta" in r["mensaje"]
++    assert "agujero" in " ".join(r["pistas"])
++
++
++def test_patron_en_puntos_de_un_boceto_y_en_ruta_con_giro(s):
++    cubo = llamar(s, "create_box", length=4, width=4, height=20)["bodies_created"][0]["id"]   # centro (0, 0), z 0..20
++    llamar(s, "create_sketch", plane="XY", name="Puntos")
++    llamar(s, "draw_point", x=50, y=0)
++    llamar(s, "draw_point", x=0, y=50)
++    r = llamar(s, "point_pattern", bodies=cubo, sketch="Puntos")
++    assert sorted(tuple(caja(s, b["id"])[0]) for b in r["bodies_created"]) == [(-2, 48, 0), (48, -2, 0)]
++    assert api.llamar(s, "point_pattern", {"bodies": cubo, "sketch": "Puntos", "points": [[0, 0, 0]]})["ok"]
++    llamar(s, "create_sketch", plane="XY", name="Ruta")
++    llamar(s, "draw_line", start_x=0, start_y=0, end_x=100, end_y=0)
++    r = llamar(s, "path_pattern", bodies=cubo, path_sketch="Ruta", count=3, distance=100, twist=90)
++    assert len(r["bodies_created"]) == 2
++    medio, ultimo = (caja(s, b["id"]) for b in r["bodies_created"])
++    assert ultimo == pytest.approx(([98, -20, -2], [102, 0, 2]), abs=1e-6)      # 90° sobre la ruta: acostado
++    assert medio[0][0] == pytest.approx(48) and medio[1][2] == pytest.approx(22 * math.cos(math.radians(45)), abs=1e-3)
++    paso = s.paso(r["feature"]["id"])
++    assert (paso.p["forma_patron"], paso.p["giro"], paso.p["distribucion"]) == ("ruta", "90.0", "extension")
++
++
++def test_multi_transform_de_cuerpos(s):
++    cubo = llamar(s, "create_box", length=10, width=10, height=10, x=25)["bodies_created"][0]["id"]
++    r = llamar(s, "multi_transform", bodies=cubo, transforms=[
++        {"type": "rectangular", "axis": "y", "count": 3, "spacing": 20}, {"type": "mirror", "plane": "YZ"}])
++    minimos = sorted(tuple(caja(s, b["id"])[0]) for b in r["bodies_created"])
++    assert minimos == [(-30, -5, 0), (-30, 15, 0), (-30, 35, 0), (20, 15, 0), (20, 35, 0)]
++    assert all(b["volume"] == pytest.approx(1000) for b in r["bodies_created"])
++    paso = s.paso(r["feature"]["id"])
++    assert paso.TIPO == "multitransformar" and [t["tipo"] for t in paso.p["transformaciones"]] == ["rectangular",
++                                                                                                    "simetria"]
++
++
+ @pytest.mark.parametrize("nombre, args, kind", [
+     ("rectangular_pattern", {"bodies": "Cuerpo1"}, "INVALID_ARGUMENTS"),
++    ("rectangular_pattern", {"bodies": "Cuerpo1", "features": "op1", "x_count": 2}, "INVALID_ARGUMENTS"),
++    ("rectangular_pattern", {"x_count": 2}, "INVALID_ARGUMENTS"),
++    ("rectangular_pattern", {"features": "op9", "x_count": 2}, "FEATURE_NOT_FOUND"),
++    ("point_pattern", {"bodies": "Cuerpo1"}, "INVALID_ARGUMENTS"),
++    ("point_pattern", {"bodies": "Cuerpo1", "points": [[1, 2]]}, "INVALID_ARGUMENTS"),
++    ("path_pattern", {"bodies": "Cuerpo1", "path_sketch": "Nada", "count": 3, "distance": 10}, "SKETCH_NOT_FOUND"),
++    ("multi_transform", {"bodies": "Cuerpo1", "transforms": []}, "INVALID_ARGUMENTS"),
++    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "spiral"}]}, "INVALID_ARGUMENTS"),
++    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "mirror", "plano": "XY"}]}, "INVALID_ARGUMENTS"),
++    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "circular", "axis": "w"}]}, "INVALID_ARGUMENTS"),
+     ("rectangular_pattern", {"bodies": "Cuerpo1", "x_count": 0}, "INVALID_ARGUMENTS"),
+     ("rectangular_pattern", {"bodies": "Cuerpo1", "y_count": 2, "axis1": "x", "axis2": "x"}, "INVALID_ARGUMENTS"),
+     ("circular_pattern", {"bodies": "Cuerpo1", "count": 1}, "INVALID_ARGUMENTS"),
+@@ -422,6 +496,9 @@ def test_move_body_a_una_posicion_absoluta(s):
+     ("move_body", {"body": "Cuerpo1", "translate": [1, 1, 1]}),
+     ("mirror", {"bodies": "Cuerpo1", "plane": "XY"}),
+     ("circular_pattern", {"bodies": "Cuerpo1", "count": 3}),
++    ("point_pattern", {"bodies": "Cuerpo1", "points": [[0, 0, 50]]}),
++    ("path_pattern", {"bodies": "Cuerpo1", "path_sketch": "Boceto1", "count": 2, "distance": 3}),
++    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "mirror", "plane": "XY"}]}),
+     ("extrude", {"sketch": "Boceto1", "distance": 3}),
+ ])
+ def test_cada_herramienta_es_un_paso_de_deshacer(s, nombre, args):
+diff --git a/clon/tests/test_comandos_crear.py b/clon/tests/test_comandos_crear.py
+index 9fafdc6..f6dbd92 100644
+--- a/clon/tests/test_comandos_crear.py
++++ b/clon/tests/test_comandos_crear.py
+@@ -150,6 +150,134 @@ def test_patrones_simetria_envolvente_y_relleno():
+     assert g.volumen(_ultimo(doc2).forma) == pytest.approx(g.volumen(forma), rel=1e-4)
+ 
+ 
++def _placa_y_agujero():
++    """Placa 100 × 60 × 10 (op1), boceto «Puntos» con un punto en (10, 10) (op2) y «Agujero1» Ø6 pasante ahí (op3)."""
++    from omnicad.timeline.ops_solido import OpAgujero
++    doc = Documento()
++    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="60", alto="10"))
++    b = Boceto()
++    pid = b.agregar_punto(10, 10)
++    sk = OpBoceto(doc.nuevo_id(), "Puntos", plano="XY", boceto=b)
++    doc.agregar(sk)
++    punto = {"tipo": "punto_boceto", "boceto": sk.id, "punto": pid}
++    doc.agregar(OpAgujero(doc.nuevo_id(), "Agujero1", posiciones=[punto], diametro="6 mm", extension="todo",
++                          invertir=True))
++    return doc, punto
++
++
++def test_patron_de_operaciones_y_en_puntos_por_el_dialogo():
++    """Tipo de objeto «Operaciones»: el agujero (por su nombre en el timeline) se repite sobre la placa."""
++    from omnicad.ui.comando import ContextoComando, ErrorComando
++    from omnicad.ui.comandos import comando_para
++    from omnicad.ui.comandos.crear import PatronRectangular
++    from omnicad.ui.comandos.patrones import PatronPuntos
++    doc, punto = _placa_y_agujero()
++    agujero = math.pi * 9 * 10
++    op = _ejecutar(doc, PatronRectangular, objeto="operaciones", pasos="Agujero1",
++                   dir1=[_h(doc, {"tipo": "eje", "id": "X"})], n1=3, d1="20 mm", distribucion="espaciado")
++    assert (op.p["objeto"], op.p["pasos"], op.p["cuerpos"]) == ("operaciones", ["op3"], [])
++    forma = doc.estado_final.cuerpos["op1.c1"].forma
++    assert g.es_valida(forma) and g.volumen(forma) == pytest.approx(60000 - 3 * agujero, rel=1e-9)
++    editar = ContextoComando(doc, op=op)
++    v = PatronRectangular().desde_op(op, editar)
++    assert v["objeto"] == "operaciones" and v["pasos"] == "Agujero1"
++    assert PatronRectangular().construir(v, editar).p == op.p
++    ctx = ContextoComando(doc)
++    with pytest.raises(ErrorComando, match="no deja una herramienta"):
++        PatronRectangular().construir(dict(v, pasos="Puntos"), ctx)
++    with pytest.raises(ErrorComando, match="No hay un paso"):
++        PatronRectangular().construir(dict(v, pasos="Agujero9"), ctx)
++    # en puntos: los puntos sueltos de otro boceto; la referencia es el punto del agujero
++    b = Boceto()
++    b.agregar_punto(90, 50)
++    b.agregar_punto(90, 10)
++    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
++    doc.agregar(sk)
++    op = _ejecutar(doc, PatronPuntos, objeto="operaciones", pasos="op3",
++                   puntos=[_h(doc, {"tipo": "boceto", "boceto": sk.id})], referencia=[_h(doc, punto)])
++    assert op.p["forma_patron"] == "puntos" and comando_para(op) is PatronPuntos
++    assert g.volumen(doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(60000 - 5 * agujero, rel=1e-9)
++    editar = ContextoComando(doc, op=op)
++    v = PatronPuntos().desde_op(op, editar)
++    assert PatronPuntos().construir(v, editar).p == op.p
++    with pytest.raises(ErrorComando, match="los puntos"):
++        PatronPuntos().construir(dict(v, puntos=[]), ContextoComando(doc))
++
++
++def test_patron_en_ruta_con_giro_y_multitransformar_por_el_dialogo():
++    from omnicad.timeline.ops_solido import OpMultitransformar
++    from omnicad.ui.comando import ContextoComando, ErrorComando
++    from omnicad.ui.comandos import comando_para
++    from omnicad.ui.comandos.crear import PatronRuta
++    from omnicad.ui.comandos.patrones import Multitransformar
++    doc = Documento()
++    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="2", largo="2", alto="20", x="-1", y="-1"))
++    br, ids = _boceto(doc, plano="XY", lineas=[((0, 0), (100, 0))])
++    c = _h(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})
++    op = _ejecutar(doc, PatronRuta, cuerpos=[c], ruta=_curvas(doc, br, ids), n1=3, d1="100 mm", giro="90 deg")
++    assert op.p["giro"] == "90 deg"
++    (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(doc.estado_final.cuerpos[f"{op.id}.c2"].forma)
++    assert (x1 - x0, y1 - y0, z1 - z0) == pytest.approx((2, 20, 2))            # acostada: giró 90° sobre la ruta
++    # multitransformación: patrón de 3 en Y + simetría en YZ = 6 instancias (5 cuerpos nuevos)
++    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="10"))
++    caja = _h(doc, {"tipo": "cuerpo", "cuerpo": doc.operaciones[-1].id + ".c1"})
++    op = _ejecutar(doc, Multitransformar, cuerpos=[caja], t1_tipo="rectangular",
++                   t1_dir=[_h(doc, {"tipo": "eje", "id": "Y"})], t1_n=3, t1_d="20 mm", t1_distribucion="espaciado",
++                   t2_tipo="simetria", t2_plano=[_h(doc, {"tipo": "plano", "id": "YZ"})])
++    assert [t["tipo"] for t in op.p["transformaciones"]] == ["rectangular", "simetria"]
++    nuevos = [k for k in doc.estado_final.cuerpos if k.startswith(op.id)]
++    assert len(nuevos) == 5 and all(g.volumen(doc.estado_final.cuerpos[k].forma) == pytest.approx(125) for k in nuevos)
++    assert comando_para(op) is Multitransformar
++    editar = ContextoComando(doc, op=op)
++    v = Multitransformar().desde_op(op, editar)
++    assert (v["t1_tipo"], v["t2_tipo"], v["t3_tipo"]) == ("rectangular", "simetria", "ninguna")
++    assert Multitransformar().construir(v, editar).p == op.p
++    with pytest.raises(ErrorComando, match="seleccioná el eje"):
++        Multitransformar().construir(dict(v, t1_tipo="circular", t1_eje=[]), editar)
++    # una multitransformación de la API con una transformación que el diálogo no edita: Aceptar la conserva
++    api_op = OpMultitransformar(doc.nuevo_id(), cuerpos=[caja["ref"]["cuerpo"]], transformaciones=[
++        {"tipo": "puntos", "coordenadas": [[0, 0, 50]]}])
++    assert doc.agregar(api_op).estado == "ok"
++    editar = ContextoComando(doc, op=api_op)
++    v = Multitransformar().desde_op(api_op, editar)
++    assert v["_fijas"] and Multitransformar().construir(v, editar).p == api_op.p
++
++
++def test_panel_de_multitransformar_y_patron_de_operaciones():
++    """El panel real (un visor sin ventana): las ranuras de transformación aparecen de a una, «Tipo de objeto» cambia
++    cuerpos por operaciones y la vista previa arma el paso."""
++    from omnicad.ui.comando import ContextoComando, PanelComando
++    from omnicad.ui.comandos.crear import PatronCircular
++    from omnicad.ui.comandos.patrones import Multitransformar
++    from omnicad.ui.visor3d import Visor3D
++
++    class Ventana:
++        def __init__(self, doc, visor):
++            self.doc, self.visor = doc, visor
++
++        def info_seleccion(self, texto):
++            pass
++
++    doc, _ = _placa_y_agujero()
++    visor = Visor3D()
++    visor.set_modelo(doc.estado_final)
++    ctx = ContextoComando(doc, Ventana(doc, visor))
++    panel = PanelComando(Multitransformar(), ctx, visor)
++    campos = {c.clave: c for c in panel.campos}
++    visibles = lambda: {k for k, c in campos.items() if panel._visible(c)}  # noqa: E731
++    assert {"cuerpos", "t1_tipo", "t1_dir", "t1_n", "t1_d", "t2_tipo"} <= visibles()
++    assert not {"pasos", "t2_plano", "t3_tipo", "fijas"} & visibles()
++    panel.set_valor("t2_tipo", "simetria")
++    panel.set_valor("objeto", "operaciones")
++    assert {"t2_plano", "t3_tipo", "pasos"} <= visibles() and not {"cuerpos", "combinar"} & visibles()
++    panel.cancelar()
++    panel = PanelComando(PatronCircular(), ctx, visor, {"objeto": "operaciones", "pasos": "Agujero1",
++                                                        "eje": [_h(doc, {"tipo": "eje", "id": "Z"})], "n": 4})
++    panel._calcular_previa()
++    assert panel.ultima_op is not None and panel.ultima_op.p["pasos"] == ["op3"]
++    panel.cancelar()
++
++
+ def _placa_con_punto(z_plano):
+     """Placa 40×40×2 (z 0..2, cuerpo op1.c1) y un boceto con un punto en (20, 20) sobre el plano z = `z_plano`."""
+     doc = Documento()
+diff --git a/clon/tests/test_iconos_extra.py b/clon/tests/test_iconos_extra.py
+index ccf83e4..51f8c04 100644
+--- a/clon/tests/test_iconos_extra.py
++++ b/clon/tests/test_iconos_extra.py
+@@ -18,7 +18,8 @@ HOJA = RAIZ.parent / "evidencias" / "capturas" / "iconos_extra.png"
+ SECCIONES = {
+     "SÓLIDO / CREAR": ["barrido", "solevacion", "nervio", "red", "labio", "repujado", "saliente", "encaje_presion",
+                        "agujero", "rosca", "bobina", "tuberia", "patron_rectangular_3d", "patron_circular_3d",
+-                       "patron_ruta", "simetria_3d", "engrosar", "relleno_contorno", "cuerpo_envolvente",
++                       "patron_ruta", "patron_puntos", "multitransformar", "simetria_3d", "engrosar",
++                       "relleno_contorno", "cuerpo_envolvente",
+                        "operacion_base", "derivar", "crear_forma", "engranaje_3d", "eje_escalonado"],
+     "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "vaciado", "desmoldeo", "escala_3d", "desfase_cara",
+                   "reemplazar_cara", "dividir_cara", "dividir_cuerpo", "division_silueta", "mover_copiar", "alinear",
+@@ -85,7 +86,7 @@ def _alfas(img):
+ 
+ def test_estan_todos_y_no_sobran(modulos):
+     _, extra = modulos
+-    assert len(NOMBRES) == len(set(NOMBRES)) == 144
++    assert len(NOMBRES) == len(set(NOMBRES)) == 146
+     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
+ 
+ 
+diff --git a/clon/tests/test_patrones_avanzados.py b/clon/tests/test_patrones_avanzados.py
+new file mode 100644
+index 0000000..09050a1
+--- /dev/null
++++ b/clon/tests/test_patrones_avanzados.py
+@@ -0,0 +1,311 @@
++# -*- coding: utf-8 -*-
++"""Patrones avanzados (F3 y F18 de docs/brechas_freecad.md y el hallazgo «los patrones solo repiten cuerpos»):
++patrón en puntos, giro progresivo en el patrón en ruta, patrón de OPERACIONES (repite la herramienta de un agujero
++o de una extrusión que corta) y multitransformación (patrón + simetría + patrón en un solo paso)."""
++import json
++import math
++import zipfile
++
++import numpy as np
++import pytest
++from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
++from OCP.gp import gp_Pnt, gp_Trsf
++
++from omnicad.io_archivos import proyecto
++from omnicad.nucleo import geometria as g
++from omnicad.nucleo import solidos_crear as sc
++from omnicad.restricciones import Boceto
++from omnicad.timeline import documento
++from omnicad.timeline.documento import Documento
++from omnicad.timeline.operaciones import OpBoceto, OpExtrusion, OpPlano, OpPrimitiva, operacion_desde_dict
++from omnicad.timeline.ops_solido import TIPOS_REPETIBLES, OpAgujero, OpMultitransformar, OpPatron
++
++R, H = 3.0, 10.0                                   # agujero Ø6 pasante en una placa de 10 mm
++CAJA = 100 * 60 * 10
++AGUJERO = math.pi * R ** 2 * H
++EJE_X, EJE_Y, EJE_Z = ({"tipo": "eje", "id": e} for e in "XYZ")
++
++
++def _xyz(t, p):
++    q = gp_Pnt(*map(float, p)).Transformed(t)
++    return np.array([q.X(), q.Y(), q.Z()])
++
++
++def _vol(doc, cid="op1.c1"):
++    return g.volumen(doc.estado_final.cuerpos[cid].forma)
++
++
++def _ok(doc, op):
++    r = doc.agregar(op)
++    assert r.estado in ("ok", "aviso"), r.mensaje
++    return r
++
++
++def _placa_con_agujero():
++    """Placa 100 × 60 × 10 (op1.c1, de (0, 0, 0) a (100, 60, 10)), boceto con un punto en (10, 10) (op2) y agujero
++    Ø6 pasante hacia +Z en ese punto (op3)."""
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="60", alto="10"))
++    b = Boceto()
++    pid = b.agregar_punto(10, 10)
++    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
++    _ok(doc, sk)
++    _ok(doc, OpAgujero(doc.nuevo_id(), posiciones=[{"tipo": "punto_boceto", "boceto": sk.id, "punto": pid}],
++                       diametro="6 mm", extension="todo", invertir=True))
++    assert _vol(doc) == pytest.approx(CAJA - AGUJERO, rel=1e-9)
++    return doc
++
++
++# ---------------------------------------------------------------- núcleo
++def test_transformaciones_en_puntos():
++    ts = sc.transformaciones_en_puntos([(10, 0, 0), (0, 0, 0), (5, 5, 5), (10, 0, 0)], (0, 0, 0))
++    assert len(ts) == 3                          # el original, (10, 0, 0) y (5, 5, 5): el origen y el repetido no
++    assert _xyz(ts[1], (1, 2, 3)) == pytest.approx([11, 2, 3])
++    assert _xyz(ts[2], (1, 2, 3)) == pytest.approx([6, 7, 8])
++    ts = sc.transformaciones_en_puntos([(10, 0, 0), (20, 0, 0)], (5, 0, 0), suprimir=[1])
++    assert len(ts) == 2 and _xyz(ts[1], (5, 0, 0)) == pytest.approx([20, 0, 0])
++    caja = g.caja(4, 4, 4)
++    copia = sc.aplicar(caja, sc.transformaciones_en_puntos([(30, 40, 50)], (2, 2, 0))[1])
++    assert g.es_valida(copia) and g.volumen(copia) == pytest.approx(64)
++    assert g.caja_envolvente(copia)[0] == pytest.approx((28, 38, 50))
++    with pytest.raises(g.ErrorGeometria):
++        sc.transformaciones_en_puntos([], (0, 0, 0))
++    with pytest.raises(g.ErrorGeometria):
++        sc.transformaciones_en_puntos([(1, 2)], (0, 0, 0))
++
++
++def test_ruta_con_giro_progresivo():
++    ruta = BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(100, 0, 0)).Edge()
++    sin = sc.transformaciones_en_ruta(ruta, 3, 100.0)
++    con = sc.transformaciones_en_ruta(ruta, 3, 100.0, giro=90.0)
++    assert len(sin) == len(con) == 3
++    p = (0, 0, 10)                                # un punto 10 mm arriba de la ruta
++    assert _xyz(sin[2], p) == pytest.approx([100, 0, 10], abs=1e-9)
++    assert _xyz(con[0], p) == pytest.approx([0, 0, 10], abs=1e-9)                     # el original no gira
++    assert _xyz(con[1], p) == pytest.approx([50, -10 * math.sin(math.radians(45)), 10 * math.cos(math.radians(45))],
++                                            abs=1e-9)                                  # mitad del giro
++    assert _xyz(con[2], p) == pytest.approx([100, -10, 0], abs=1e-9)                   # giro total: 90° sobre +X
++    caja = sc.aplicar(g.caja(2, 2, 20), con[2])
++    assert g.es_valida(caja) and g.volumen(caja) == pytest.approx(80)
++    (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(caja)
++    assert (x1 - x0, y1 - y0, z1 - z0) == pytest.approx((2, 20, 2))                    # la columna quedó acostada
++    with pytest.raises(g.ErrorGeometria):
++        sc.transformaciones_en_ruta(ruta, 3, 100.0, giro=float("nan"))
++
++
++def test_componer_transformaciones():
++    rect = sc.transformaciones_rectangulares((1, 0, 0), 3, 10.0, distribucion="espaciado")
++    espejo = [gp_Trsf(), sc.transformacion_simetria(g.Plano("XZ"))]
++    ts = sc.componer_transformaciones([rect, espejo])
++    assert len(ts) == 6
++    puntos = sorted(tuple(np.round(_xyz(t, (1, 2, 3)), 6)) for t in ts)
++    assert puntos == [(1, -2, 3), (1, 2, 3), (11, -2, 3), (11, 2, 3), (21, -2, 3), (21, 2, 3)]
++    # el orden importa: primero gira 90° y después traslada
++    giro = sc.transformaciones_circulares((0, 0, 0), (0, 0, 1), 4)[:2]
++    ts = sc.componer_transformaciones([giro, rect[:2]])
++    assert sorted(tuple(np.round(_xyz(t, (1, 0, 0)), 6)) for t in ts) == [(0, 1, 0), (1, 0, 0), (10, 1, 0), (11, 0, 0)]
++    # dos simetrías iguales no repiten instancias (la segunda devuelve al original)
++    assert len(sc.componer_transformaciones([espejo, espejo])) == 2
++    copia = sc.aplicar(g.caja(5, 5, 5), ts[-1])
++    assert g.es_valida(copia) and g.volumen(copia) == pytest.approx(125)
++    reflejo = sc.aplicar(g.caja(5, 5, 5), sc.componer_transformaciones([rect, espejo])[-1])
++    assert g.es_valida(reflejo) and g.volumen(reflejo) == pytest.approx(125)
++    with pytest.raises(g.ErrorGeometria, match="como máximo"):
++        sc.componer_transformaciones([[gp_Trsf()] * 200, [gp_Trsf()] * 200])
++    with pytest.raises(g.ErrorGeometria):
++        sc.componer_transformaciones([])
++
++
++# ---------------------------------------------------------------- patrón de operaciones
++def test_patron_rectangular_de_un_agujero_resta_seis_agujeros_exactos():
++    """El hallazgo: un patrón 3 × 2 de un agujero pasante hace 6 agujeros (el original cuenta) sobre la placa."""
++    doc = _placa_con_agujero()
++    pat = OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=["op3"], forma_patron="rectangular", dir1=EJE_X, n1=3,
++                   d1="20 mm", dir2=EJE_Y, n2=2, d2="25 mm", distribucion="espaciado")
++    _ok(doc, pat)
++    forma = doc.estado_final.cuerpos["op1.c1"].forma
++    assert g.es_valida(forma)
++    assert g.volumen(forma) == pytest.approx(CAJA - 6 * AGUJERO, rel=1e-9)
++    assert list(doc.estado_final.cuerpos) == ["op1.c1"]            # no crea cuerpos: corta la placa
++    assert "op3" in pat.dependencias() and pat.pasos_repetidos() == ["op3"]
++    # paramétrico: el agujero original cambia de diámetro y el patrón lo sigue
++    nuevo = doc.operacion("op3").copia()
++    nuevo.p["diametro"] = "8 mm"
++    doc.reemplazar("op3", nuevo)
++    assert _vol(doc) == pytest.approx(CAJA - 6 * math.pi * 16 * H, rel=1e-9)
++
++
++def test_patron_de_extrusion_que_corta_y_de_una_que_une():
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="60", alto="10"))
++    b = Boceto()
++    b.agregar_rectangulo((10, 20), (14, 40))                         # ranura de ventilación 4 × 20
++    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
++    _ok(doc, sk)
++    perfil = doc.estado_final.bocetos[sk.id].perfiles[0]
++    corte = OpExtrusion(doc.nuevo_id(), boceto=sk.id, perfiles=[OpExtrusion.referencia_perfil(perfil)],
++                        distancia="10 mm", operacion="cortar")
++    _ok(doc, corte)
++    _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[corte.id], forma_patron="rectangular", dir1=EJE_X,
++                      n1=8, d1="10 mm", distribucion="espaciado"))
++    assert g.es_valida(doc.estado_final.cuerpos["op1.c1"].forma)
++    assert _vol(doc) == pytest.approx(CAJA - 8 * 4 * 20 * 10, rel=1e-9)
++    # un taco unido arriba, reflejado en el plano medio de la placa (x = 50): se une a la placa
++    taco = OpPrimitiva(doc.nuevo_id(), forma="cilindro", radio="2", alto="5", x="80", y="30", z="10", operacion="unir")
++    _ok(doc, taco)
++    medio = OpPlano(doc.nuevo_id(), "Medio", base="YZ", distancia="50 mm")
++    _ok(doc, medio)
++    antes = _vol(doc)
++    _ok(doc, OpMultitransformar(doc.nuevo_id(), objeto="operaciones", pasos=[taco.id], transformaciones=[
++        {"tipo": "simetria", "plano": {"tipo": "plano", "id": medio.id}}]))
++    assert list(doc.estado_final.cuerpos) == ["op1.c1"]
++    assert _vol(doc) == pytest.approx(antes + math.pi * 4 * 5, rel=1e-9)
++    assert g.es_valida(doc.estado_final.cuerpos["op1.c1"].forma)
++    (x0, _, _), (x1, _, z1) = g.caja_envolvente(doc.estado_final.cuerpos["op1.c1"].forma)
++    assert (x0, x1, z1) == pytest.approx((0, 100, 15))
++
++
++def test_patron_de_un_cuerpo_nuevo_crea_cuerpos():
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5"))
++    pat = OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=["op1"], forma_patron="circular", eje=EJE_Z, n=4)
++    _ok(doc, pat)
++    nuevos = [c for c in doc.estado_final.cuerpos if c.startswith(pat.id)]
++    assert len(nuevos) == 3
++    assert all(g.volumen(doc.estado_final.cuerpos[c].forma) == pytest.approx(125) for c in nuevos)
++
++
++def test_patron_de_un_patron_de_operaciones():
++    doc = _placa_con_agujero()
++    fila = OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=["op3"], forma_patron="rectangular", dir1=EJE_X, n1=4,
++                    d1="20 mm", distribucion="espaciado")
++    _ok(doc, fila)
++    _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[fila.id, "op3"], forma_patron="rectangular",
++                      dir1=EJE_Y, n1=3, d1="20 mm", distribucion="espaciado"))
++    assert _vol(doc) == pytest.approx(CAJA - 12 * AGUJERO, rel=1e-9)
++
++
++def test_errores_claros_del_patron_de_operaciones():
++    doc = _placa_con_agujero()
++    r = doc.agregar(OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=["op2"], dir1=EJE_X))     # un boceto
++    assert r.estado == "error" and "no dejó una herramienta" in r.mensaje
++    assert all(t in r.mensaje for t in TIPOS_REPETIBLES)
++    doc.deshacer()
++    r = doc.agregar(OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[], dir1=EJE_X))
++    assert r.estado == "error" and "Elegí las operaciones" in r.mensaje
++    doc.deshacer()
++    corte = OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="50", largo="50", alto="50", operacion="intersecar")
++    _ok(doc, corte)
++    r = doc.agregar(OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[corte.id], dir1=EJE_X))
++    assert r.estado == "error" and "interseca" in r.mensaje
++
++
++def test_la_cache_del_proyecto_no_pierde_la_herramienta(tmp_path, monkeypatch):
++    """Al abrir, los pasos lentos salen de la caché (sin ejecutarse): el paso que repite el patrón se calcula igual,
++    porque la caché guarda los cuerpos y no la herramienta."""
++    monkeypatch.setattr(documento, "_SEGUNDOS_CACHE", 0)
++    doc = _placa_con_agujero()
++    _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=["op3"], forma_patron="rectangular", dir1=EJE_X,
++                      n1=3, d1="20 mm", distribucion="espaciado"))
++    ruta = proyecto.guardar(doc, tmp_path / "placa")
++    with zipfile.ZipFile(ruta) as z:                 # el agujero y el patrón van a la caché
++        assert [p["op"] for p in json.loads(z.read("cache/pasos.json"))["pasos"]] == ["op1", "op3", "op4"]
++    abierto = proyecto.abrir(ruta)
++    assert [r.estado for r in abierto.resultados] == ["ok"] * 4
++    assert _vol(abierto) == pytest.approx(CAJA - 3 * AGUJERO, rel=1e-9)
++    r = abierto.reemplazar("op4", abierto.operacion("op4").copia())        # recalcular el patrón después de abrir
++    assert r.estado == "ok" and _vol(abierto) == pytest.approx(CAJA - 3 * AGUJERO, rel=1e-9)
++
++
++# ---------------------------------------------------------------- patrón en puntos y en ruta (timeline)
++def test_patron_en_puntos_de_un_boceto_y_con_referencia():
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="4", largo="4", alto="4"))      # de (0,0,0) a (4,4,4)
++    b = Boceto()
++    for x, y in ((50, 0), (0, 50), (50, 50)):
++        b.agregar_punto(x, y)
++    b.agregar_linea((100, 100), (120, 100))          # sus extremos no son puntos sueltos
++    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
++    _ok(doc, sk)
++    pat = OpPatron(doc.nuevo_id(), forma_patron="puntos", cuerpos=["op1.c1"],
++                   puntos=[{"tipo": "boceto", "boceto": sk.id}], referencia={"tipo": "punto", "id": "O"},
++                   coordenadas=[[0, 0, "20 mm"]])
++    _ok(doc, pat)
++    nuevos = sorted(g.caja_envolvente(doc.estado_final.cuerpos[c].forma)[0] for c in doc.estado_final.cuerpos
++                    if c.startswith(pat.id))
++    assert nuevos == pytest.approx([(0, 0, 20), (0, 50, 0), (50, 0, 0), (50, 50, 0)])
++    assert all(g.es_valida(doc.estado_final.cuerpos[c].forma) for c in doc.estado_final.cuerpos)
++    assert sk.id in pat.dependencias()
++    # referencia [x, y, z]: el centro de la base de la caja va a cada punto
++    pat2 = OpPatron(doc.nuevo_id(), forma_patron="puntos", cuerpos=["op1.c1"], coordenadas=[[100, 0, 0]],
++                    referencia_xyz=[2, 2, 0], combinar=True)
++    _ok(doc, pat2)
++    assert _vol(doc) == pytest.approx(128) and g.caja_envolvente(doc.estado_final.cuerpos["op1.c1"].forma)[1] == \
++        pytest.approx((102, 4, 4))
++    r = doc.agregar(OpPatron(doc.nuevo_id(), forma_patron="puntos", cuerpos=["op1.c1"]))
++    assert r.estado == "error" and "Elegí los puntos" in r.mensaje
++
++
++def test_patron_en_ruta_con_giro():
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="2", largo="2", alto="20", x="-1", y="-1"))
++    b = Boceto()
++    b.agregar_linea((0, 0), (100, 0))
++    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
++    _ok(doc, sk)
++    curva = next(iter(b.curvas))
++    pat = OpPatron(doc.nuevo_id(), forma_patron="ruta", cuerpos=["op1.c1"], n1=3, d1="100 mm",
++                   ruta=[{"tipo": "curva_boceto", "boceto": sk.id, "curva": curva}], giro="90 deg")
++    _ok(doc, pat)
++    ultimo = doc.estado_final.cuerpos[f"{pat.id}.c2"].forma
++    (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(ultimo)
++    assert (x1 - x0, y1 - y0, z1 - z0) == pytest.approx((2, 20, 2))         # la columna gira 90° hasta acostarse
++    assert g.es_valida(ultimo) and g.volumen(ultimo) == pytest.approx(80)
++
++
++def test_recetas_viejas_del_patron_siguen_igual():
++    """Un patrón guardado antes de los tipos nuevos (sin objeto, giro, puntos…) abre y calcula igual."""
++    viejo = {"tipo": "patron", "id": "op2", "nombre": "Patrón1", "params": {
++        "forma_patron": "rectangular", "cuerpos": ["op1.c1"], "dir1": EJE_X, "n1": 3, "d1": "40 mm", "dir2": None,
++        "n2": 1, "d2": "30 mm", "distribucion": "extension", "simetrico": False, "eje": None, "n": 6,
++        "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [], "combinar": False}}
++    op = operacion_desde_dict(viejo)
++    assert op.p["objeto"] == "cuerpos" and op.p["giro"] == "0 deg"
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5"))
++    _ok(doc, op)
++    assert sorted(g.caja_envolvente(c.forma)[0][0] for c in doc.estado_final.cuerpos.values()) == \
++        pytest.approx([0, 20, 40])
++
++
++# ---------------------------------------------------------------- multitransformación
++def test_multitransformar_cuerpos_patron_y_simetria():
++    doc = Documento()
++    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="10"))
++    mt = OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[
++        {"tipo": "rectangular", "dir1": EJE_Y, "n1": 3, "d1": "20 mm", "distribucion": "espaciado"},
++        {"tipo": "simetria", "plano": {"tipo": "plano", "id": "YZ"}}])
++    _ok(doc, mt)
++    minimos = sorted(tuple(np.round(g.caja_envolvente(c.forma)[0], 6)) for c in doc.estado_final.cuerpos.values())
++    assert minimos == [(-15, 0, 0), (-15, 20, 0), (-15, 40, 0), (10, 0, 0), (10, 20, 0), (10, 40, 0)]
++    assert all(g.es_valida(c.forma) and g.volumen(c.forma) == pytest.approx(125)
++               for c in doc.estado_final.cuerpos.values())
++    assert mt.dependencias() == {"op1"}
++
++
++def test_multitransformar_operaciones_y_errores():
++    doc = _placa_con_agujero()
++    _ok(doc, OpMultitransformar(doc.nuevo_id(), objeto="operaciones", pasos=["op3"], transformaciones=[
++        {"tipo": "rectangular", "dir1": EJE_X, "n1": 2, "d1": "80 mm", "distribucion": "espaciado"},
++        {"tipo": "rectangular", "dir1": EJE_Y, "n1": 2, "d1": "40 mm", "distribucion": "espaciado"}]))
++    assert _vol(doc) == pytest.approx(CAJA - 4 * AGUJERO, rel=1e-9)
++    assert g.es_valida(doc.estado_final.cuerpos["op1.c1"].forma)
++    r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[{"tipo": "espiral"}]))
++    assert r.estado == "error" and "Transformación 1" in r.mensaje and "simetria" in r.mensaje
++    doc.deshacer()
++    r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[]))
++    assert r.estado == "error" and "al menos una transformación" in r.mensaje
++    doc.deshacer()
++    r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[
++        {"tipo": "circular", "n": 3}]))
++    assert r.estado == "error" and "Transformación 1 (circular)" in r.mensaje and "eje" in r.mensaje
+diff --git a/clon/tests/test_simetria_patrones.py b/clon/tests/test_simetria_patrones.py
+index 3798253..81d9a9b 100644
+--- a/clon/tests/test_simetria_patrones.py
++++ b/clon/tests/test_simetria_patrones.py
+@@ -1,5 +1,7 @@
+ # -*- coding: utf-8 -*-
+ """Simetría, patrones y copias: heredan aspecto y material; distancias del patrón explicadas (P12)."""
++import math
++
+ import pytest
+ 
+ from omnicad import api
+@@ -108,3 +110,50 @@ def test_edit_feature_de_rectangular_pattern_aclara_separacion(s):
+ def test_describe_operation_patron_explica_distribucion():
+     doc = ok(api.llamar(api.Sesion(Documento()), "describe_operation", {"type": "patron"}))["doc"]
+     assert "distribucion" in doc and "TOTAL" in doc
++
++
++def _ruta(s):
++    ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "Ruta"}))
++    ok(api.llamar(s, "draw_line", {"start_x": 0, "start_y": -40, "end_x": 100, "end_y": -40}))
++    return "Ruta"
++
++
++def test_patron_en_puntos_en_ruta_y_multitransformacion_heredan(s):
++    cid = _nuevo(s, "point_pattern", {"bodies": "op1.c1", "points": [[40, 0, 0]]})
++    _hereda(s, cid)
++    cid = _nuevo(s, "multi_transform", {"bodies": "op1.c1", "transforms": [
++        {"type": "rectangular", "axis": "y", "count": 2, "spacing": 30}, {"type": "mirror", "plane": "XY"}]})
++    _hereda(s, cid)
++    cid = _nuevo(s, "path_pattern", {"bodies": "op1.c1", "path_sketch": _ruta(s), "count": 2, "distance": 50,
++                                     "twist": 45})
++    _hereda(s, cid)
++
++
++def test_run_operation_patron_de_operaciones_y_multitransformar(s):
++    """run_operation guarda tal cual los campos nuevos (pasos, coordenadas y transformaciones no son referencias) y el
++    patrón y la multitransformación de operaciones repiten el corte del cilindro."""
++    ok(api.llamar(s, "create_cylinder", {"radius": 1, "height": 30, "z": -10, "operation": "cut"}))
++    agujero = s.doc.operaciones[-1].id
++    un_agujero = math.pi * 1 ** 2 * 10
++    ok(api.llamar(s, "run_operation", {"type": "patron", "params": {
++        "objeto": "operaciones", "pasos": [agujero], "forma_patron": "puntos", "coordenadas": [[3, 3, 0]]}}))
++    patron = s.doc.operaciones[-1]
++    assert s.doc.resultados[-1].estado == "ok" and patron.p["pasos"] == [agujero]
++    assert geo.volumen(s.doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(1000 - 2 * un_agujero, rel=1e-9)
++    ok(api.llamar(s, "run_operation", {"type": "multitransformar", "params": {
++        "objeto": "operaciones", "pasos": [patron.id],
++        "transformaciones": [{"tipo": "simetria", "plano": {"tipo": "plano", "id": "YZ"}}]}}))
++    assert s.doc.resultados[-1].estado == "ok"
++    forma = s.doc.estado_final.cuerpos["op1.c1"].forma
++    assert geo.es_valida(forma) and geo.volumen(forma) == pytest.approx(1000 - 3 * un_agujero, rel=1e-9)
++
++
++def test_describe_operation_patron_y_multitransformar_explican_lo_nuevo():
++    sesion = api.Sesion(Documento())
++    doc = ok(api.llamar(sesion, "describe_operation", {"type": "patron"}))["doc"]
++    assert all(clave in doc for clave in ("objeto", "pasos", "giro", "coordenadas", "referencia_xyz", "puntos"))
++    campos = {p["name"]: p for p in ok(api.llamar(sesion, "describe_operation", {"type": "patron"}))["params"]}
++    assert all("format" not in campos[k] for k in ("pasos", "coordenadas", "referencia_xyz"))     # no son referencias
++    assert "punto" in campos["referencia"]["format"] and "boceto" in campos["puntos"]["format"]
++    doc = ok(api.llamar(sesion, "describe_operation", {"type": "multitransformar"}))["doc"]
++    assert "transformaciones" in doc and "simetria" in doc
+diff --git a/docs/agentes/herramientas.md b/docs/agentes/herramientas.md
+index 92b02fa..06339d5 100644
+--- a/docs/agentes/herramientas.md
++++ b/docs/agentes/herramientas.md
+@@ -5,7 +5,7 @@
+ > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
+ > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
+ 
+-143 herramientas en 12 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
++146 herramientas en 12 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+ Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
+ 
+ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
+@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
+ | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
+ | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
+ | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
+-| [solido](#grupo-solido) | 24 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
++| [solido](#grupo-solido) | 27 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+ | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
+ | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
+ | [material](#grupo-material) | 6 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
+@@ -949,8 +949,11 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
+ | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
+ | [`boolean_operation`](#boolean_operation) | sí | Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). |
+ | [`mirror`](#mirror) | sí | Refleja cuerpos respecto de un plano (origen o de construcción). |
+-| [`rectangular_pattern`](#rectangular_pattern) | sí | Patrón rectangular de cuerpos: copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. |
+-| [`circular_pattern`](#circular_pattern) | sí | Patrón circular de cuerpos alrededor de un eje del origen (x, y o z). |
++| [`rectangular_pattern`](#rectangular_pattern) | sí | Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. |
++| [`circular_pattern`](#circular_pattern) | sí | Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del origen (x, y o z). |
++| [`point_pattern`](#point_pattern) | sí | Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que corta— en cada punto. |
++| [`path_pattern`](#path_pattern) | sí | Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de FreeCAD): copias de cuerpos (bodies) —o de operaciones del timeline (features)— a lo largo de curvas de un boceto. count incluye el original. distance es el largo TOTAL de la primera a la última (spacing_mode="extent") o la separación entre copias ("spacing"). start ubica el original sobre la ruta (0 a 1). orientation="path_direction" gira cada copia con la ruta; twist además la gira alrededor de la ruta, de a poco, hasta ese ángulo total en la última. |
++| [`multi_transform`](#multi_transform) | sí | Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). |
+ | [`move_body`](#move_body) | sí | Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). |
+ | [`fillet`](#fillet) | sí | Redondea aristas (empalme de radio constante). |
+ | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
+@@ -1114,32 +1117,80 @@ Refleja cuerpos respecto de un plano (origen o de construcción). Crea cuerpos n
+ 
+ ### `rectangular_pattern`
+ 
+-Patrón rectangular de cuerpos: copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. Las copias son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.
++Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. Con bodies las copias son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.
+ 
+ - Modifica el documento: sí, es un paso de deshacer.
+ - Parámetros:
+-  - `bodies` (texto o lista de texto; obligatorio): cuerpo(s) a repetir (id o nombre).
++  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
+   - `x_count` (entero; opcional, por defecto `1`): cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
+   - `x_spacing` (número o expresión; opcional, por defecto `"10 mm"`): separación entre instancias consecutivas en la dirección 1 (mm o expresión). Se guarda como d1 con distribucion="espaciado": edit_feature d1 sigue siendo la separación.
+   - `y_count` (entero; opcional, por defecto `1`): cantidad de instancias en la dirección 2, original incluido (x_count × y_count ≤ 10.000).
+   - `y_spacing` (número o expresión; opcional, por defecto `"10 mm"`): separación entre instancias consecutivas en la dirección 2 (se guarda como d2).
+   - `axis1` ("x" | "y" | "z"; opcional, por defecto `"x"`): eje de la dirección 1 ("x", "y" o "z").
+   - `axis2` ("x" | "y" | "z"; opcional, por defecto `"y"`): eje de la dirección 2.
+-  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original.
+-- CLI: `omnicad call rectangular_pattern --doc pieza.omnicad bodies=…`
++  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
++  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
++- CLI: `omnicad call rectangular_pattern --doc pieza.omnicad`
+ 
+ ### `circular_pattern`
+ 
+-Patrón circular de cuerpos alrededor de un eje del origen (x, y o z). Con 360° las copias se reparten en toda la vuelta; con menos, entre el original y el ángulo total. count incluye el original.
++Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del origen (x, y o z). Con 360° las copias se reparten en toda la vuelta; con menos, entre el original y el ángulo total. count incluye el original.
+ 
+ - Modifica el documento: sí, es un paso de deshacer.
+ - Parámetros:
+-  - `bodies` (texto o lista de texto; obligatorio): cuerpo(s) a repetir (id o nombre).
+   - `count` (entero; obligatorio): cantidad de instancias, original incluido (2 a 10.000).
++  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
+   - `axis` ("x" | "y" | "z"; opcional, por defecto `"z"`): eje de giro del origen: "x", "y" o "z".
+   - `total_angle` (número o expresión; opcional, por defecto `360`): ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
+-  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original.
+-- CLI: `omnicad call circular_pattern --doc pieza.omnicad bodies=… count=…`
++  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
++  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++- CLI: `omnicad call circular_pattern --doc pieza.omnicad count=…`
++
++### `point_pattern`
++
++Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que corta— en cada punto. Los puntos son coordenadas (points) y/o todos los puntos sueltos de un boceto (sketch). Cada copia lleva el punto de referencia (reference; por defecto el origen) a uno de los puntos: para repetir un agujero, reference es el punto donde está el agujero. Un punto igual a la referencia no repite la copia.
++
++- Modifica el documento: sí, es un paso de deshacer.
++- Parámetros:
++  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
++  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++  - `points` (lista de lista de número o expresión o null; opcional, por defecto `null`): puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
++  - `sketch` (texto; opcional, por defecto `null`): id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
++  - `reference` (lista de número o expresión o null; opcional, por defecto `null`): punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
++  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
++- CLI: `omnicad call point_pattern --doc pieza.omnicad`
++
++### `path_pattern`
++
++Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de FreeCAD): copias de cuerpos (bodies) —o de operaciones del timeline (features)— a lo largo de curvas de un boceto. count incluye el original. distance es el largo TOTAL de la primera a la última (spacing_mode="extent") o la separación entre copias ("spacing"). start ubica el original sobre la ruta (0 a 1). orientation="path_direction" gira cada copia con la ruta; twist además la gira alrededor de la ruta, de a poco, hasta ese ángulo total en la última.
++
++- Modifica el documento: sí, es un paso de deshacer.
++- Parámetros:
++  - `path_sketch` (texto; obligatorio): id o nombre del boceto con la ruta.
++  - `count` (entero; obligatorio): cantidad de instancias, original incluido (2 a 10.000).
++  - `distance` (número o expresión; obligatorio): largo total (extent) o separación entre copias (spacing), en mm o expresión.
++  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
++  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++  - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
++  - `spacing_mode` ("extent" | "spacing"; opcional, por defecto `"extent"`): "extent" (distance es el largo total) o "spacing" (distance es la separación).
++  - `start` (número o expresión; opcional, por defecto `0`): dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
++  - `orientation` ("identical" | "path_direction"; opcional, por defecto `"identical"`): "identical" (las copias solo se trasladan) o "path_direction" (giran con la tangente de la ruta).
++  - `twist` (número o expresión; opcional, por defecto `0`): giro total alrededor de la ruta en grados (número o expresión): la copia k gira twist · k / (count − 1).
++  - `symmetric` (true/false; opcional, por defecto `false`): true para repartir count copias hacia cada lado del original.
++  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
++- CLI: `omnicad call path_pattern --doc pieza.omnicad path_sketch=… count=… distance=…`
++
++### `multi_transform`
++
++Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). Tipos: {"type": "rectangular", "axis": "x", "count": 3, "spacing": 20} (y axis2, count2, spacing2, symmetric), {"type": "circular", "axis": "z", "count": 6, "total_angle": 360}, {"type": "mirror", "plane": "YZ"}, {"type": "points", "points": [[x, y, z]], "sketch": …, "reference": [x, y, z]} y {"type": "path", "path_sketch": …, "count": 4, "distance": 60, "twist": 90} (las mismas opciones que path_pattern). Repite cuerpos (bodies) u operaciones del timeline (features).
++
++- Modifica el documento: sí, es un paso de deshacer.
++- Parámetros:
++  - `transforms` (lista de objeto; obligatorio): lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
++  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
++  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
++  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
++- CLI: `omnicad call multi_transform --doc pieza.omnicad transforms=…`
+ 
+ ### `move_body`
+ 
+diff --git a/docs/brechas_freecad.md b/docs/brechas_freecad.md
+index 1418900..ef99e65 100644
+--- a/docs/brechas_freecad.md
++++ b/docs/brechas_freecad.md
+@@ -40,7 +40,7 @@ selección «otro»; búsqueda en la tecla S.
+ |---|---|---|---|
+ | F1 | **Engranajes y ruedas dentadas**: engranaje de evolvente (recto y helicoidal), cremallera, rueda de cadena, polea dentada. *PartDesign › Involute Gear, Sprocket; taller externo Gear.* | CREAR › «Engranaje»: plano + punto centro, módulo, nº de dientes, ángulo de presión, ancho, hélice; vista previa viva; opción «par de engranajes» que pone la distancia entre centros y crea la unión + el vínculo de movimiento con la relación de dientes. | No existe generador. Sí existen `union` y `vinculo_movimiento` (`ops_ensamblar.py`). |
+ | F2 | **Revisar geometría**: diagnóstico de un cuerpo (sólido inválido, caras que se cruzan, aristas libres, tolerancias) con botón «Reparar». *Part › Check Geometry, Set Tolerance, Refine Shape.* | INSPECCIONAR › «Revisar geometría»: lista de problemas; clic en uno resalta la pieza en la vista; «Reparar» aplica refinar/tolerancia y deja un paso. | `geo.es_valida` y `UnifySameDomain` ya se usan por dentro; falta el comando y el informe. Muy útil tras importar STEP/mallas. Hacerlo UNA vez junto con B2 de `brechas_blender.md` (revisión de impresión) y RH13 de `brechas_rhino.md` (aristas abiertas y no manifold): es el mismo informe. |
+-| F3 | **Patrón en puntos y en ruta con giro**: copias en cada punto de un boceto/cuerpo; copias a lo largo de una ruta que van girando. *PartDesign › Point Pattern; Draft › Twisted Path Array.* | Nuevos tipos en el comando Patrón existente: «En puntos» y «En ruta (con giro)»; vista previa de las copias. | Ampliar `patron` (rectangular, circular, ruta ya están). |
++| F3 | **Patrón en puntos y en ruta con giro**: copias en cada punto de un boceto/cuerpo; copias a lo largo de una ruta que van girando. *PartDesign › Point Pattern; Draft › Twisted Path Array.* | Nuevos tipos en el comando Patrón existente: «En puntos» y «En ruta (con giro)»; vista previa de las copias. | **Hecho (2026-10-10)**: `patron` tiene `forma_patron="puntos"` (puntos de boceto, vértices, puntos de construcción, un boceto entero o coordenadas, con punto de referencia) y `giro` en la ruta; comandos «Patrón en puntos» y campo «Giro» en «Patrón en trayectoria»; API `point_pattern` y `path_pattern`. Además, todos los patrones repiten OPERACIONES (`objeto="operaciones"`: la herramienta de un agujero o de una extrusión que corta, con la misma booleana; API `features`). Falta la vista previa de las copias como fantasmas. |
+ | F4 | **Referencias perdidas**: que editar un boceto o una cota temprana no suelte empalmes, agujeros ni patrones, y que si se pierde una referencia se pueda **reparar** en el acto. *FreeCAD 1.0: mitigación del nombre topológico.* | Paso con error en rojo en el timeline; al abrirlo, «Falta una cara: elegí la nueva» y el resto se recalcula. Es el punto fuerte de Fusion. | Buscado en el código: `firma_cara` (`nucleo/referencias.py`) resuelve las referencias y hay pruebas sueltas en los tests de comandos; cuando una referencia se pierde, el panel la muestra sin resaltar (`ui/comando.py`) y no hay forma de reelegirla. Falta un juego de pruebas «editar el paso 1 y ver que todo sigue pegado». |
+ | F5 | **Diagnóstico del boceto**: seleccionar restricciones en conflicto, redundantes y elementos sin restringir; validar y reparar un boceto roto. *Sketcher › Validate Sketch, Select Conflicting / Redundant / Under-constrained.* | Aviso «2 restricciones en conflicto» con «Más información» (ya existe el globo de avisos): al clic se resaltan en el boceto y se pueden borrar desde la lista. | Buscado en el código: el solver detecta el conflicto (`restricciones/solver.py`), el boceto deshace solo la restricción que sobre-restringe (`ui/editor_boceto.py`) y avisa al salir (`ui/modo_boceto.py`). Falta DECIR cuáles chocan o sobran, y elegirlas desde la lista. |
+ 
+@@ -60,7 +60,7 @@ selección «otro»; búsqueda en la tecla S.
+ | F15 | **Parámetros desde hoja**: importar/exportar parámetros y familias de piezas desde CSV/XLSX con nombre propio por celda. *Spreadsheet; VarSets de 1.1.* | Administrar › Parámetros › «Importar de hoja»; la tabla se vuelve configuraciones. | Hay parámetros y configuraciones (`administrar.py`). |
+ | F16 | **Pulidos de uso**: buscador dentro de Preferencias, iluminación de tres puntos en el visor, indicador del centro de giro, más estilos de navegación. *FreeCAD 1.0/1.1.* | Chicos y sueltos; cada uno con su opción en Preferencias. | Buscado en el código: no hay buscador en Preferencias ni indicador del centro de giro; hay 3 estilos de ratón (OmniCAD, Fusion, Tinkercad) en `ui/preferencias.py`. La iluminación de tres puntos: sin verificar. |
+ | F17 | **Copias ligeras** (enlaces): muchas copias de una pieza compartiendo la geometría. *App Link / Link Arrays.* | Invisible para el usuario: un patrón de 200 tornillos no pesa 200 veces. | Medir con `omnicad dev bench` antes de decidir. Es la misma tarea que RH17 (`brechas_rhino.md`) y PL8 (`brechas_plasticity.md`). |
+-| F18 | **Multitransformación**: combinar patrón + simetría + patrón en un solo paso. *PartDesign › Multi-Transform.* | Lista de transformaciones apilables dentro del mismo panel. | Ampliar `patron`/`simetria`. |
++| F18 | **Multitransformación**: combinar patrón + simetría + patrón en un solo paso. *PartDesign › Multi-Transform.* | Lista de transformaciones apilables dentro del mismo panel. | **Hecho (2026-10-10)**: operación `multitransformar` (rectangular, circular, ruta, puntos y simetría, en orden; de cuerpos o de operaciones), comando «Multitransformación» con 4 ranuras (rectangular de una dirección, circular y simetría) y API `multi_transform`. Falta la escala (Scaled de FreeCAD). |
+ 
+ ### Prioridad 3 — grandes, piden una decisión del usuario antes
+ 

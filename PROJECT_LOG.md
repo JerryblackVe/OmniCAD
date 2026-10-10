@@ -148,30 +148,23 @@ Una viñeta por tarea: `- **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, 
 
 - **2026-10-10 · Nube: integración de la ola 2.** Doc `docs/agentes/herramientas.md` regenerada (137 herramientas en 12 grupos); grupos nuevos en `docs/agentes/cli.md` y `conectar.md`; fila de `grafo/` en AGENTS.md. Verificación con todo integrado salvo el grafo: pytest 2022 passed, 21 skipped; ruff limpio. Humo NO corrida (nube): la tiene que correr quien reciba el PR en la PC.
 
+- **2026-10-10 · Nube: engranajes y eje escalonado (F1, F7).** `nucleo/engranajes.py` (evolvente recto y helicoidal ISO 53/21771, par a la distancia entre centros con medio diente, cremallera, rueda de cadena ISO 606, eje por tramos con chaflán/empalme), `timeline/ops_engranaje.py` (`OpEngranaje` con par + unión y vínculo; `OpEje`), API `gear_info`, `create_gear`, `create_gear_pair`, `create_rack`, `create_sprocket`, `create_shaft`, comandos CREAR › Engranaje y Eje. Par 20/40: intersección 0 y contacto. Límites: sin polea dentada (perfil no verificado); tabla ISO 606 de memoria, verificar contra la norma.
+
+- **2026-10-10 · Nube: malla por MCP, Limpiar malla (B9) y glTF/GLB (B3).** Grupo `malla` (15 herramientas: `get_mesh_info`, `tessellate`, `repair_mesh`, `clean_mesh`, `reduce_mesh`, `remesh`, `smooth_mesh`, `shell_mesh`, `plane_cut_mesh`, `combine_meshes`, `separate_mesh`, …); `nucleo/malla.py`: `fusionar_por_distancia`, `disolver_degenerados`, `borrar_sueltos`, `rellenar_huecos`, `recalcular_normales`, `limpiar` + `OpLimpiarMalla` y comando; `io_archivos/gltf.py` (glTF 2.0/GLB propio: metros, Y arriba, PBR por aspecto) en Archivo › Exportar, MALLA › Exportar y `export`. FBX/USD no.
+
+- **2026-10-10 · Nube: bugs y mejoras de interfaz.** Seleccionar sale de la herramienta de boceto (`ventana.accion_seleccionar`); Insertar SVG/DXF/imagen con un boceto abierto suma a ese boceto sin pedir plano (`ui/comandos/insertar_en_boceto.py`); Medir dibuja cota guía con flechas y etiqueta y mide en vivo bajo el cursor (`analisis_vista.cota_guia`, `visor3d.set_etiquetas`); menú del timeline según el tipo con «Editar boceto de perfil», «Rodar marcador aquí», «Buscar en navegador»; primitivas como comandos con panel, Diámetro, clic en plano/cara/punto y asas (`ui/comandos/primitivas.py`; `OpPrimitiva` y la receta sin cambios). API `set_marker`, `get_profile_sketches`, `diameter` en create_sphere/cylinder/torus. Límite: caja, cilindro y toroide solo con eje Z. Test `test_hallazgos_ui.py` (22).
+
+- **2026-10-10 · Nube: roscas, tolerancias y Agujero.** Familias de rosca (M, UN, Tr ISO 2904, ACME B1.5, G ISO 228-1, R ISO 7-1, NPT) con perfil modelado de su ángulo; clases ISO 965-1/ASME B1.1 con diámetros límite y holgura para impresión 3D; `nucleo/tolerancias.py` (ISO 286: IT5–IT11, ajustes comunes); Agujero con holgura ISO 273, cónico 1:16, extensión «Hasta» y posición «Referencias»; diálogos Tipo/Tamaño/Designación/Clase; API `create_thread`, `thread_info`, `fit_tolerance` y `create_hole` ampliada (combinada con `sketch_points` asociativos; test `test_agujero_en_boceto_con_holgura_iso_273`). Recetas viejas: mismo volumen (1e-9). Datos de norma que faltan: finas ISO 965, grados ≠ 6, agujeros J/K/M/N/P de ISO 286, roscas GOST/DIN madera/JIS/GB; roscas cónicas solo cosméticas.
+
+- **2026-10-10 · Nube: cortado por crédito.** Quedaron SIN hacer (no se lanzaron): bobina espiral/tubería/repujado/labio, recolectar bugs (pendiente 20), recuperación de documentos (21), tope de tiempo de `execute_code` del puente, superficies de Rhino (RH1/RH2/RH4/RH8), PL6/F6/B11/RH10, RH6/F10/F15/VR10. El agente de patrones (F3 en puntos y en ruta con giro, patrón de operaciones, F18 multitransformar) quedó casi terminado pero SIN verificar: su trabajo está en `docs/pendiente_patrones_avanzados.patch` (19 archivos; aplicar en la PC con `git apply`, correr ruff + pytest + humo, regenerar `herramientas.md`, y borrar el parche).
+
+- **2026-10-10 · Nube: verificación final.** Ver la última corrida de pytest en el mensaje del PR / de la sesión. Humo NO corrida (nube): obligatoria en la PC antes de juntar con `main` (la UI cambió: Seleccionar, insertar en boceto, Medir, timeline, primitivas, Agujero, Rosca, engranajes, revisión, malla).
+
 ## Hallazgos de pruebas de uso (pendientes de corregir)
 
 Se anotan mientras se modelan piezas reales en la app. Formato: `- [fecha] Qué falta o falla. · Dónde se vio.` Al corregir uno, se pasa al Registro y se borra de acá.
 
 Referencia: capturas de Fusion del usuario + ayuda local (`GUID-C37E8172` Thread reference, `GUID-3A76B269` Hole reference, `SLD-PIPE-SOLID`, `SLD-COIL-SOLID`, `GUID-471827A2` Thicken, `SLD-EMBOSS`, `SLD-SPHERE-SOLID`).
-
-**Boceto, medir e insertar SVG** (2026-10-10, pedido del usuario)
-- [2026-10-10] ⚠ BUG, BOCETO: al usar una herramienta de boceto y luego tocar el botón Seleccionar, NO sale de la herramienta: sigue en modo dibujo. Dónde: `ui/ventana.py:319` (Seleccionar llama `visor.set_modo(None)`, que solo sale de órbita, encuadre y zoom).
-- [2026-10-10] MEDIR, mejora pedida: la herramienta Medir (`ui/cinta.py:42`) necesita cotas guía, flechas y valor en vivo al seleccionar y al agregar. Hoy el valor solo aparece al escribir un número y aceptar. Debe verse visual e intuitivo.
-- [2026-10-10] ⚠ BUG, INSERTAR SVG: dentro de un boceto abierto, «Insertar SVG» (`ui/cinta.py:51`) sale del boceto y pide elegir un plano para abrir un boceto nuevo. Debe poder insertar el SVG en cualquier boceto abierto, sin cambiar de plano.
-
-**Roscas y tolerancias** (prioridad alta, pedido del usuario)
-- [2026-10-09] ROSCA, tipos: `TABLA_ROSCAS` (`nucleo/solidos_crear.py:1222`) solo trae métrica ISO gruesa/fina (M1.6–M64) y UNC/UNF (#4–1"). Fusion ofrece 16 tipos: M métrico ANSI, GB, ISO, autorroscante GOST, tornillo para madera DIN, autorroscantes en pulgadas, en pulgadas para plásticos, métricas para plásticos, ACME, unificadas ANSI, tubería BSP / DIN / GB / ISO / JIS, métricas de tornillo, trapezoidales métricas ISO, tuercas de bloqueo AFBMA.
-- [2026-10-09] ROSCA, diálogo (`ui/comandos/crear.py:257`): solo texto libre «Tamaño (vacío = automático)». Fusion tiene Biblioteca de roscas, Tipo, Tamaño (lista), Designación, Clase, Dirección y la casilla «Recordar tamaño» (la «Recorr…» de la captura); además «Repetir rosca» en el clic derecho. Faltan todos menos Dirección.
-- [2026-10-09] ROSCA, clase/ajuste: no existe «Clase» (6H/6g, 2A/2B…): la rosca modelada no tiene holgura ni tolerancia.
-- [2026-10-09] TOLERANCIAS: no hay ninguna (la única «tolerancia» del código es el épsilon del solver, `restricciones/solver.py:28`). Faltan: cotas con ± / límites, ajustes ISO (H7/g6), tolerancia general del modelo y holgura para impresión 3D (agujero/eje).
-
-**Agujero** (`ui/comandos/crear.py:161`, ref. `GUID-3A76B269`)
-- [2026-10-09] AGUJERO, tipo de rosca: solo Simple / Roscado cosmético / Roscado modelado. Faltan «Con holgura» (clearance, con ajuste Normal/Cercano/Holgado) y «Roscado cónico» (taper tapped). El tamaño de rosca es texto libre («M6»), sin Tipo/Tamaño/Designación como en Roscas.
-- [2026-10-09] AGUJERO, extensión: solo Distancia y Todo; Fusion también tiene «Hasta».
-- [2026-10-09] AGUJERO, posición: no hay «Referencias» (elegir dos aristas y dar distancias para ubicar el agujero); solo el punto del clic o puntos de boceto. Tampoco separa «Punto único» de «Desde boceto».
-
-**Primitivas** (`ui/dialogos.py:147` `DialogoPrimitiva`, ref. `SLD-SPHERE-SOLID`)
-- [2026-10-09] ESFERA y demás primitivas: son un diálogo viejo con X/Y/Z escritos a mano y RADIO. Fusion: clic en plano/cara + punto del centro, Diámetro, manipulador en el visor, vista previa viva. Pendiente: elegir plano y punto con el mouse, Diámetro en vez de radio (o ambos), manipulador, estilo de panel de comando como los demás.
 
 **Bobina** (`ui/comandos/crear.py:282`, ref. `SLD-COIL-SOLID`)
 - [2026-10-09] BOBINA: falta el tipo «Espiral» (Fusion tiene 4 tipos; OmniCAD 3: rev+altura, rev+paso, altura+paso) y el botón «Giro» (rota la bobina 90° alrededor de Y). Además diámetro y altura sin manipulador en el visor.
@@ -213,7 +206,6 @@ Referencia: capturas de Fusion del usuario + ayuda local (`GUID-C37E8172` Thread
 - [2026-10-09] RENDER: franjas claras verticales e irregulares sobre las superficies y sólidos que salen de una solevación (B-spline); parece ruido de normales del teselado del visor. Se ve en el sólido de la botella y en la superficie desfasada.
 - [2026-10-09] `coser` espera ids de cuerpo (strings) y, si recibe una referencia `{"tipo":"cuerpo",…}` como `engrosar`, falla con «Error inesperado: unhashable type: 'dict'». Convención mezclada (`cuerpos` por id en coser/descoser/invertir_normal, `caras` por referencia en engrosar/desfase) y sin validar el tipo.
 - [2026-10-09] SOLEVACIÓN: las aristas de sección que salen de un loft entre círculos quedan como `bspline` (longitud 188,5 = 2π·30), no como círculos; las herramientas que buscan aristas circulares (rosca, agujeros, uniones, fijaciones) no las reconocen.
-- [2026-10-09] MALLA por MCP: no hay herramientas para insertar/teselar/reparar/reducir/remallar/convertir; `open_document` de un STL REEMPLAZA el documento (no hay «insertar archivo» en el actual). Hubo que leer con `nucleo.malla.leer_stl` y pasar `datos` a `insertar_malla`.
 - [2026-10-09] FUNCIONÓ: 4 secciones por parámetros, solevación, parche, coser (avisó bordes abiertos), engrosar (+2 mm hacia afuera, volumen 49.704 mm³), revolución y extrusión de superficie, desfase (+5 mm), extender (+5 mm, área = 48,7 × 45 mm), recortar con plano, descoser en 3 caras y volver a coser, invertir normal, empalme de superficie, reglada, teselar, grupos de caras, cortar con plano + relleno, escalar (1,2·1,2·0,8 → volumen × 1,152 exacto), invertir normal de malla (volumen negativo), separar cáscaras, combinar mallas, mallas → sólido (volumen idéntico, válido).
 
 **Prueba 6: minifigura desde un plano acotado** (9 cuerpos, parámetros en placas P = 3,2 mm; `evidencias/minifigura/`)
@@ -245,6 +237,10 @@ Cobertura: (a) 86 tipos de operación con parámetros por defecto y con referenc
 - [2026-10-09] Render: el cilindro chico (Ø28) se ve facetado. · Lámpara en vivo.
 
 ## Lecciones aprendidas
+- [2026-10-10] Comparar todo surco helicoidal con su volumen exacto: el kernel lo arma o recorta mal sin avisar (Tr20x4 interior de 12 mm dio 3734 mm³ contra 827). · Evidencia: `test_roscas_de_otras_familias_modeladas`, `_exigir_volumen` en `solidos_crear.py`.
+- [2026-10-10] Un parámetro de operación no puede llamarse «clase»: choca con `Comando.crear_op(clase, …)`. · Evidencia: TypeError en `test_agujero_en_cara_y_desde_boceto_roscado`.
+- [2026-10-10] En una prueba con `VentanaPrincipal`, poner `doc.modificado = False` antes de `close()`: si no, el cartel «¿descartar cambios?» cuelga pytest. · Evidencia: `tests/test_hallazgos_ui.py` colgado 600 s.
+- [2026-10-10] Dos agentes que amplían la misma herramienta (create_hole) en paralelo chocan en el merge: asignar UNA herramienta a UN agente. · Evidencia: conflicto de 7 bloques en `api/herramientas_modificar.py` resuelto a mano.
 - [2026-10-10] Un algoritmo que procesa elementos en orden de una medida (largo de arista) tiene que ordenar con `kind="stable"` sobre valores redondeados: `np.argsort` usa SIMD distinto según el procesador y los empates de 1 ulp cambian el resultado entre PC. · Evidencia: `remallar` del tubo daba +10,9 % en Windows y −0,9 % en la nube (AVX-512); `tests/test_malla.py`.
 - [2026-10-10] Después de un desfase de OCC (`MakeThickSolid`, `MakeOffsetShape`) no alcanza con `IsDone()` + `es_valida`: revisar volumen > 0, caja envolvente y la distancia de las caras nuevas; pasado el radio de curvatura OCC «da vuelta» la superficie y devuelve un sólido válido. · Evidencia: `tests/test_hallazgos_nucleo.py` (cilindro −25 → radio 15).
 - [2026-10-10] OCC puede dar `IsDone()` con una forma NULA y `ShapeType()` sobre ella es un fallo de segmentación (no una excepción): comprobar `IsNull()` antes de usar el resultado. · Evidencia: `test_hallazgos_nucleo.py::test_desfasar_un_cuerpo_mas_que_su_mitad_falla_sin_tirar_la_app` tiraba pytest.
