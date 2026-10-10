@@ -7,8 +7,8 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .operaciones import (ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _resolver, _resolver_todas,
-                          aplicar_resultado, registrar_operacion)
+from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
+                          _resolver_todas, aplicar_resultado, registrar_operacion)
 
 
 def _sf():
@@ -77,6 +77,7 @@ class OpSupBarrido(_OpSuperficie):
     TIPO, ETIQUETA, ICONO = "sup_barrido", "Barrido de superficie", "↝"
     PARAMS = {"perfil": [], "ruta": [], "orientacion": "perpendicular", "torsion": "0 deg"}
     EXPRESIONES = ("torsion",)
+    OPCIONES = {"orientacion": ("perpendicular", "paralela")}
     REFS = ("perfil", "ruta")
 
     def ejecutar(self, estado, ctx):
@@ -104,6 +105,7 @@ class OpParche(_OpSuperficie):
     """SUPERFICIE › Parche [SFC-PATCH]: cierra un contorno con una superficie."""
     TIPO, ETIQUETA, ICONO = "parche", "Parche", "◍"
     PARAMS = {"contorno": [], "continuidad": "G0"}
+    OPCIONES = {"continuidad": ("G0", "G1", "G2")}
     REFS = ("contorno",)
 
     def ejecutar(self, estado, ctx):
@@ -120,6 +122,7 @@ class OpReglada(_OpSuperficie):
     TIPO, ETIQUETA, ICONO = "reglada", "Superficie reglada", "▥"
     PARAMS = {"aristas": [], "tipo": "normal", "distancia": "10 mm", "angulo": "0 deg", "direccion": None}
     EXPRESIONES = ("distancia", "angulo")
+    OPCIONES = {"tipo": ("normal", "tangente", "direccion")}
     REFS = ("aristas", "direccion")
 
     def ejecutar(self, estado, ctx):
@@ -137,6 +140,7 @@ class OpSupDesfase(_OpSuperficie):
     TIPO, ETIQUETA, ICONO = "sup_desfase", "Desfase de superficie", "⧉"
     PARAMS = {"caras": [], "distancia": "2 mm", "tipo": "agudo"}
     EXPRESIONES = ("distancia",)
+    OPCIONES = {"tipo": ("agudo", "redondeado")}
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
@@ -166,10 +170,11 @@ class OpDestrimar(_OpSuperficie):
     """SUPERFICIE › Destrimar [SFC-UNTRIM]."""
     TIPO, ETIQUETA, ICONO = "destrimar", "Destrimar", "◰"
     PARAMS = {"caras": [], "contornos": "exteriores"}
+    OPCIONES = {"contornos": ("exteriores", "interiores", "todos")}
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
-        for e in _resolver_todas(self.p["caras"], estado):
+        for e in _resolver_todas(self.p["caras"], estado, ("cara",)):
             c = estado.cuerpo(e.cuerpo)
             nueva = _sf().destrimar(e.forma, contornos=self.p["contornos"])
             resto = [f for f in geo.caras(c.forma) if not f.IsSame(e.forma)]
@@ -181,11 +186,12 @@ class OpExtenderSup(_OpSuperficie):
     TIPO, ETIQUETA, ICONO = "extender_sup", "Extender", "⇲"
     PARAMS = {"aristas": [], "distancia": "5 mm", "tipo": "natural"}
     EXPRESIONES = ("distancia",)
+    OPCIONES = {"tipo": ("natural", "tangente", "perpendicular")}
     REFS = ("aristas",)
 
     def ejecutar(self, estado, ctx):
         grupos = {}
-        for e in _resolver_todas(self.p["aristas"], estado):
+        for e in _resolver_todas(self.p["aristas"], estado, ("arista",)):
             if e.cuerpo is None:
                 raise ErrorOperacion("Elegí bordes de un cuerpo de superficie.")
             grupos.setdefault(e.cuerpo, []).append(e.forma)
@@ -224,7 +230,7 @@ class OpDescoser(_OpSuperficie):
         for cid in self.p["cuerpos"]:
             c = estado.cuerpo(cid)
             caras = _sf().descoser(c.forma)
-            del estado.cuerpos[cid]
+            del estado.cuerpos[c.id]
             for cara in caras:
                 estado.nuevo_cuerpo(self.id, cara, "superficie", apariencia=c.apariencia)
 
@@ -241,10 +247,14 @@ class OpInvertirNormal(_OpSuperficie):
 
 
 class OpEngrosar(_OpSuperficie):
-    """CREAR › Engrosar [GUID-471827A2]: da espesor a caras o superficies (cuerpo nuevo o booleana)."""
+    """CREAR › Engrosar [GUID-471827A2]: da espesor a caras o superficies (cuerpo nuevo o booleana).
+    `tipo`: "agudo" (Sharp Thicken, esquinas en punta) o "redondeado" (Rounded Thicken)."""
     TIPO, ETIQUETA, ICONO = "engrosar", "Engrosar", "▤"
-    PARAMS = {"caras": [], "espesor": "2 mm", "direccion": "un_lado", "operacion": "nuevo", "objetivos": []}
+    PARAMS = {"caras": [], "espesor": "2 mm", "direccion": "un_lado", "tipo": "agudo", "operacion": "nuevo",
+              "objetivos": []}
     EXPRESIONES = ("espesor",)
+    OPCIONES = {"direccion": ("un_lado", "simetrica"), "tipo": ("agudo", "redondeado"),
+                "operacion": OPERACIONES_CUERPO}
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
@@ -253,7 +263,7 @@ class OpEngrosar(_OpSuperficie):
             raise ErrorOperacion("Elegí las caras o superficies a engrosar.")
         base = geo.compuesto([e.forma for e in ents]) if len(ents) > 1 else ents[0].forma
         forma = _sf().engrosar_superficie(base, ctx.evaluar(self.p["espesor"]),
-                                          simetrica=self.p["direccion"] == "simetrica")
+                                          simetrica=self.p["direccion"] == "simetrica", tipo=self.p["tipo"])
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"],
                                                  self.p.get("objetivos") or ""))
 
@@ -263,11 +273,12 @@ class OpSupEmpalme(_OpSuperficie):
     TIPO, ETIQUETA, ICONO = "sup_empalme", "Empalme de superficie", "◜"
     PARAMS = {"aristas": [], "tipo": "empalme", "medida": "1 mm"}
     EXPRESIONES = ("medida",)
+    OPCIONES = {"tipo": ("empalme", "chaflan")}
     REFS = ("aristas",)
 
     def ejecutar(self, estado, ctx):
         grupos = {}
-        for e in _resolver_todas(self.p["aristas"], estado):
+        for e in _resolver_todas(self.p["aristas"], estado, ("arista",)):
             grupos.setdefault(e.cuerpo, []).append(e.forma)
         if not grupos:
             raise ErrorOperacion("Elegí las aristas.")

@@ -277,13 +277,16 @@ class Engrosar(Comando):
         return [Seleccion("caras", "Caras", {"cara", "cuerpo"}, maximo=None),
                 Expresion("espesor", "Grosor", "2 mm"),
                 Opciones("direccion", "Dirección", {"un_lado": "Un lado", "simetrica": "Simétrica"}),
+                Opciones("tipo", "Tipo de engrosado",
+                         {"agudo": "Engrosado afilado", "redondeado": "Engrosado redondeado"}),
                 Opciones("operacion", "Operación", OPCIONES_OPERACION, "nuevo"), campo_objetivos()]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras.")
         ctx.evaluar(v["espesor"])
         return self.crear_op(OpEngrosar, v, ctx, caras=refs(v, "caras"), espesor=v["espesor"],
-                             direccion=v["direccion"], operacion=v["operacion"], objetivos=objetivos(v))
+                             direccion=v["direccion"], tipo=v["tipo"], operacion=v["operacion"],
+                             objetivos=objetivos(v))
 
     def desde_op(self, op, ctx):
         return dict(op.p, caras=hits(op.p["caras"], ctx.estado),

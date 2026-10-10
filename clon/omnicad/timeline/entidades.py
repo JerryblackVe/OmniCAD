@@ -16,6 +16,9 @@ Tipos de referencia (dicts serializables):
 `resolver` devuelve una `Entidad` con lo que cada operación necesita (forma OCC, plano, eje o
 punto) y `dependencias` dice de qué pasos del timeline depende la referencia.
 """
+import json
+import numbers
+
 import numpy as np
 
 from ..nucleo import geometria as geo
@@ -29,6 +32,120 @@ NOMBRES_ORIGEN = {"XY": "Plano XY", "XZ": "Plano XZ", "YZ": "Plano YZ", "X": "Ej
 
 class ErrorReferencia(RuntimeError):
     pass
+
+
+class ReferenciaMalFormada(ErrorReferencia):
+    """La referencia no tiene la forma de la tabla de arriba (texto, None, dict sin «tipo» o sin sus claves).
+    `valor` es lo que llegó: las operaciones lo usan para nombrar el campo del paso que está mal."""
+
+    def __init__(self, valor, detalle):
+        self.valor, self.detalle = valor, detalle
+        super().__init__(f"Referencia mal formada: llegó {describir_valor(valor)}; {detalle}")
+
+
+def describir_valor(valor):
+    """Texto corto de un valor recibido, para los mensajes de error («el texto 'x'», JSON si no)."""
+    if isinstance(valor, str):
+        return f"el texto {valor[:40]!r}"
+    try:
+        texto = json.dumps(valor, ensure_ascii=False)
+    except (TypeError, ValueError):
+        texto = repr(valor)
+    return texto if len(texto) <= 70 else texto[:69] + "…"
+
+
+# Claves obligatorias de cada tipo de referencia (con su tipo) y un ejemplo para los mensajes de error.
+_CLAVES = {
+    "cara": (("cuerpo", str), ("firma", dict)), "arista": (("cuerpo", str), ("firma", dict)),
+    "vertice": (("cuerpo", str), ("firma", dict)), "cuerpo": (("cuerpo", str),),
+    "plano": (("id", str),), "eje": (("id", str),), "punto": (("id", str),),
+    "perfil": (("boceto", str), ("firma", (list, tuple))), "curva_boceto": (("boceto", str), ("curva", int)),
+    "punto_boceto": (("boceto", str), ("punto", int)), "boceto": (("boceto", str),),
+}
+_EJEMPLOS = {
+    "cara": '{"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", …}}',
+    "arista": '{"tipo": "arista", "cuerpo": "op1.c1", "firma": {"geom": "linea", …}}',
+    "vertice": '{"tipo": "vertice", "cuerpo": "op1.c1", "firma": {"geom": "punto", …}}',
+    "cuerpo": '{"tipo": "cuerpo", "cuerpo": "op1.c1"}', "plano": '{"tipo": "plano", "id": "XY"}',
+    "eje": '{"tipo": "eje", "id": "Z"}', "punto": '{"tipo": "punto", "id": "O"}',
+    "perfil": '{"tipo": "perfil", "boceto": "op1", "firma": […]}',
+    "curva_boceto": '{"tipo": "curva_boceto", "boceto": "op1", "curva": 1}',
+    "punto_boceto": '{"tipo": "punto_boceto", "boceto": "op1", "punto": 1}',
+    "boceto": '{"tipo": "boceto", "boceto": "op1"}',
+}
+_NOMBRE_TIPO = {str: "texto", dict: "un dict", int: "un entero"}
+
+
+def validar(ref):
+    """Comprueba la FORMA de una referencia (no que exista lo que nombra). Lanza ReferenciaMalFormada."""
+    tipos = ", ".join(_CLAVES)
+    if not isinstance(ref, dict):
+        raise ReferenciaMalFormada(ref, f"se esperaba una referencia como {_EJEMPLOS['punto']} o "
+                                        f"{_EJEMPLOS['cuerpo']} (tipos: {tipos})")
+    t = ref.get("tipo")
+    if not isinstance(t, str) or t not in _CLAVES:
+        raise ReferenciaMalFormada(ref, f"«tipo» tiene que ser uno de: {tipos}")
+    for clave, tipo in _CLAVES[t]:
+        if not isinstance(ref.get(clave), tipo):
+            raise ReferenciaMalFormada(ref, f"a la referencia «{t}» le falta «{clave}» "
+                                            f"({_NOMBRE_TIPO.get(tipo, 'una lista')}): se esperaba como {_EJEMPLOS[t]}")
+    if t in _FIRMA:
+        detalle = _problema_firma(t, ref["firma"])
+    elif t == "perfil":
+        detalle = problema_perfil(ref)
+    else:
+        detalle = None
+    if detalle:
+        raise ReferenciaMalFormada(ref, detalle)
+
+
+def _es_numero(v):
+    return isinstance(v, numbers.Real) and not isinstance(v, bool)
+
+
+def _es_lista_de_numeros(v, n):
+    return isinstance(v, (list, tuple, np.ndarray)) and len(v) == n and all(_es_numero(x) for x in v)
+
+
+_FORMAS_FIRMA = {
+    "numero": ("un número", _es_numero),
+    "punto": ("[x, y, z]", lambda v: _es_lista_de_numeros(v, 3)),
+    "extremos": ("[[x, y, z], [x, y, z]]",
+                 lambda v: isinstance(v, (list, tuple)) and len(v) == 2 and all(_es_lista_de_numeros(p, 3) for p in v)),
+}
+# Claves de la firma de una subforma que lee nucleo/referencias._distancia: las obligatorias por tipo y las que
+# solo algunas geometrías tienen (normal de un plano, eje y radio de un cilindro, «rel» de la caja…).
+_FIRMA = {"cara": (("centro", "punto"), ("area", "numero")),
+          "arista": (("medio", "punto"), ("largo", "numero"), ("extremos", "extremos")),
+          "vertice": (("punto", "punto"),)}
+_FIRMA_OPCIONAL = (("rel", "punto"), ("normal", "punto"), ("eje", "punto"), ("radio", "numero"), ("centro", "punto"))
+
+
+def _problema_firma(t, firma):
+    """Qué le falta a la firma de una cara, arista o vértice (None si está completa)."""
+    if not isinstance(firma.get("geom"), str):
+        return f"la «firma» de la referencia «{t}» no tiene «geom» (texto): se esperaba como {_EJEMPLOS[t]}"
+    for clave, forma in _FIRMA[t]:
+        if not _FORMAS_FIRMA[forma][1](firma.get(clave)):
+            return (f"a la «firma» de la referencia «{t}» le falta «{clave}» ({_FORMAS_FIRMA[forma][0]}); conviene "
+                    "copiar la referencia entera de find_faces / find_edges o de la selección, no armarla a mano")
+    for clave, forma in _FIRMA_OPCIONAL:
+        if clave in firma and not _FORMAS_FIRMA[forma][1](firma[clave]):
+            return f"en la «firma» de la referencia «{t}», «{clave}» tiene que ser {_FORMAS_FIRMA[forma][0]}"
+    return None
+
+
+def problema_perfil(ref):
+    """Qué está mal en un perfil de boceto ({"firma": [ids de curva], "centroide": [u, v]}; None si nada)."""
+    if not isinstance(ref, dict):
+        return 'se esperaba un perfil del boceto como {"firma": [1, 2, 3], "centroide": [u, v]}'
+    firma = ref.get("firma")
+    if not isinstance(firma, (list, tuple)) or not all(isinstance(c, numbers.Integral) and not isinstance(c, bool)
+                                                       for c in firma):
+        return 'la «firma» del perfil tiene que ser la lista de ids de sus curvas (enteros), p. ej. [1, 2, 3]'
+    if ref.get("centroide") is not None and not _es_lista_de_numeros(ref["centroide"], 2):
+        return "el «centroide» del perfil tiene que ser [u, v] (dos números)"
+    return None
 
 
 class Entidad:
@@ -56,6 +173,7 @@ def _boceto(estado, bid):
 
 
 def resolver(ref, estado):
+    validar(ref)
     t = ref["tipo"]
     if t in ("cara", "arista", "vertice"):
         cuerpo = _cuerpo(estado, ref["cuerpo"])
@@ -134,7 +252,9 @@ def geo_dir(v):
 
 
 def resolver_todas(lista, estado):
-    """Resuelve una lista de referencias. Las subformas del mismo cuerpo no se repiten."""
+    """Resuelve una lista de referencias (None = vacía). Las subformas del mismo cuerpo no se repiten."""
+    if lista is not None and not isinstance(lista, (list, tuple)):
+        raise ReferenciaMalFormada(lista, "se esperaba una lista de referencias")
     salida = []
     for ref in lista or []:
         ent = resolver(ref, estado)
@@ -146,17 +266,23 @@ def resolver_todas(lista, estado):
 
 
 def dependencias(ref):
-    """Ids de operaciones de las que depende la referencia."""
+    """Ids de operaciones de las que depende la referencia. Con un valor mal formado devuelve lo que se pueda
+    (o nada): el error con el campo lo da la ejecución del paso, no esto."""
+    if not isinstance(ref, dict):
+        return set()
     t = ref.get("tipo")
     if t in ("cara", "arista", "vertice", "cuerpo"):
-        cid = ref.get("cuerpo") or ""
-        return {cid.split(".c")[0]} if cid else set()
+        cid = ref.get("cuerpo")
+        return {cid.split(".c")[0]} if cid and isinstance(cid, str) else set()
     if t in ("plano", "eje", "punto"):
         i = ref.get("id")
+        if not i or not isinstance(i, str):
+            return set()
         # los planos/ejes/puntos de un SCU llevan sufijo: "op7_xy" depende de "op7"
-        return set() if i in geo.Plano.DEFINICIONES or i in EJES_ORIGEN or i == "O" or not i else {i.split("_")[0]}
+        return set() if i in geo.Plano.DEFINICIONES or i in EJES_ORIGEN or i == "O" else {i.split("_")[0]}
     if t in ("perfil", "curva_boceto", "punto_boceto", "boceto"):
-        return {ref["boceto"]}
+        b = ref.get("boceto")
+        return {b} if b and isinstance(b, str) else set()
     return set()
 
 
@@ -165,7 +291,9 @@ def dependencias_de(*listas):
     for lista in listas:
         if isinstance(lista, dict):
             lista = [lista]
-        for ref in lista or []:
+        if not isinstance(lista, (list, tuple)):
+            continue
+        for ref in lista:
             if ref:
                 deps |= dependencias(ref)
     return deps

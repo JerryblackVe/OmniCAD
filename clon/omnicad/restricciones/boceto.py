@@ -38,6 +38,10 @@ TIPOS_COTA = {
     "distancia": "Distancia", "distancia_h": "Distancia horizontal", "distancia_v": "Distancia vertical",
     "radio": "Radio", "diametro": "Diámetro", "angulo": "Ángulo", "desfase": "Desfase",
 }
+COTAS_POSITIVAS = ("distancia", "distancia_h", "distancia_v", "radio", "diametro", "desfase")   # todas menos el ángulo
+# mm (1 km): tope de una cota de largo. Más allá el núcleo ya no calcula bien (un barrido por una ruta de 1 km da el
+# volumen exacto; por una de 10 km falla); nucleo/perfiles.py busca regiones cerradas en ±MEDIDA_MAXIMA
+MEDIDA_MAXIMA = 1e6
 CIRCULARES = ("circulo", "arco")
 ELIPTICAS = ("elipse", "arco_elipse")
 LIBRES = ("spline", "conica")
@@ -48,6 +52,21 @@ _DOS_PI = 2 * math.pi
 
 class ErrorBoceto(ValueError):
     pass
+
+
+def validar_valor_cota(tipo, valor):
+    """Como Fusion, una cota de largo, radio, diámetro o desfase tiene que ser mayor que cero (el solver
+    toma el valor absoluto del radio: −5 quedaba guardado y dibujaba 5) y de hasta MEDIDA_MAXIMA (1 km; frena
+    valores absurdos como un radio de 1e9 o infinito). Los ángulos no se validan acá."""
+    if tipo not in COTAS_POSITIVAS:
+        return
+    nombre = TIPOS_COTA[tipo].lower()
+    if not valor > 0:                                   # también NaN
+        raise ErrorBoceto(f"La cota de {nombre} tiene que ser mayor que cero (vale {valor:g}).")
+    if not valor <= MEDIDA_MAXIMA:                      # también infinito
+        miles = f"{MEDIDA_MAXIMA:,.0f}".replace(",", ".")
+        raise ErrorBoceto(f"La cota de {nombre} no puede pasar de {miles} mm (1 km; vale {valor:g} mm): más grande, "
+                          "el núcleo geométrico ya no calcula bien.")
 
 
 # ---------------------------------------------------------------- entidades
@@ -712,6 +731,8 @@ class Boceto:
 
     # ------------------------------------------------------------ creación
     def agregar_punto(self, x, y, proyectado=False):
+        if not (math.isfinite(x) and math.isfinite(y)):     # con NaN o infinito, OCC no termina de partir la cara
+            raise ErrorBoceto("Las coordenadas de un punto tienen que ser números finitos.")
         p = Punto(self._nuevo_id(), x, y, proyectado)
         self.puntos[p.id] = p
         return p.id
@@ -749,8 +770,8 @@ class Boceto:
         return lineas
 
     def agregar_circulo(self, centro, radio, construccion=False):
-        if radio <= 0:
-            raise ErrorBoceto("El radio debe ser positivo.")
+        if not 0 < radio < math.inf:                        # también NaN
+            raise ErrorBoceto("El radio debe ser positivo y finito.")
         return self._agregar_curva(Circulo(self._nuevo_id(), self._punto(centro), radio, construccion))
 
     def agregar_arco_centro(self, centro, inicio, fin, construccion=False):
@@ -775,7 +796,7 @@ class Boceto:
         c, m = self._punto(centro), self._punto(mayor)
         (cx, cy), (mx, my) = self.coords(c), self.coords(m)
         a = math.hypot(mx - cx, my - cy)
-        if a < 1e-9 or radio_menor <= 1e-9:
+        if a < 1e-9 or not 1e-9 < radio_menor < math.inf:    # también NaN
             raise ErrorBoceto("La elipse necesita ejes de largo positivo.")
         eid = self._agregar_curva(Elipse(self._nuevo_id(), c, m, radio_menor, construccion))
         if ejes:
@@ -801,6 +822,9 @@ class Boceto:
             ids.pop()
         if len(ids) < 2 or (cerrada and len(ids) < 3):
             raise ErrorBoceto("La spline necesita más puntos.")
+        primero = self.coords(ids[0])
+        if all(math.dist(primero, self.coords(i)) < 1e-9 for i in ids[1:]):
+            raise ErrorBoceto("Los puntos de la spline coinciden: no definen una curva.")
         if modo not in ("ajuste", "control"):
             raise ErrorBoceto(f"Tipo de spline desconocido: {modo}")
         return self._agregar_curva(Spline(self._nuevo_id(), ids, modo, grado, cerrada if modo == "ajuste" else False,
@@ -819,7 +843,7 @@ class Boceto:
         """Texto en el boceto (SKT-CREATE-TEXT): sus contornos dan perfiles para extruir."""
         if not str(texto).strip():
             raise ErrorBoceto("El texto está vacío.")
-        if altura <= 0:
+        if not 0 < altura < math.inf:                       # también NaN
             raise ErrorBoceto("La altura del texto debe ser positiva.")
         return self._agregar_curva(Texto(self._nuevo_id(), self._punto(posicion), texto, fuente, altura, angulo,
                                          negrita, cursiva))

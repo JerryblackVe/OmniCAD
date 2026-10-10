@@ -12,19 +12,26 @@ import importlib
 import inspect
 import io
 import json
+import math
 import re
+import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Literal
 
 from ..timeline.documento import VERSION_RECETA
-from ..timeline.operaciones import TIPOS_OPERACION, operacion_desde_dict
+from ..timeline.operaciones import TIPOS_OPERACION, OpOperacionBase, operacion_desde_dict
 from .errores import desde_mensaje, error
 from .registro import _a_json, herramienta, llamar
 
 _GUIA = Path(__file__).resolve().parent / "guia"
+# Operaciones que guardan el archivo copiado en la receta (clave del contenido): por run_operation no leen rutas.
+_CONTENIDO_EMBEBIDO = {"importar_step": "contenido", "importar_iges": "contenido", "insertar_malla": "datos",
+                       "insertar_diseno": "receta"}
 _SALIDA_MAXIMA = 20000        # caracteres de stdout que devuelve execute_code
 _TRAZA_MAXIMA = 1500          # caracteres del mensaje de error de execute_code
+PLAZO_CODIGO = 60.0           # segundos que corre execute_code por defecto antes de cortarse
 
 
 # ---------------------------------------------------------------- tipos de operación
@@ -96,8 +103,9 @@ def list_operation_types(sesion):
     return {"count": len(tipos), "types": tipos}
 
 
-@herramienta("describe_operation", "avanzado", "Explica un tipo de operación: parámetros con su valor por defecto, tipo "
-             "y si aceptan expresiones; el docstring completo y un ejemplo de llamada a run_operation.")
+@herramienta("describe_operation", "avanzado", "Explica un tipo de operación: parámetros con su valor por defecto, "
+             "tipo, si aceptan expresiones y, en los de lista cerrada, sus valores válidos (choices); el docstring "
+             "completo y un ejemplo de llamada a run_operation.")
 def describe_operation(sesion, type: str):
     """
     type: tipo de operación (list_operation_types los lista), p. ej. "primitiva".
@@ -106,6 +114,9 @@ def describe_operation(sesion, type: str):
     expresiones = _claves_expresion(clase)
     params = [{"name": k, "default": v, "type": _tipo_de_valor(k, v, expresiones), "accepts_expression": k in expresiones}
               for k, v in clase.PARAMS.items()]
+    for p in params:
+        if p["name"] in clase.OPCIONES:           # la misma lista con la que el paso valida al calcularse
+            p["choices"] = list(clase.OPCIONES[p["name"]])
     return {"type": clase.TIPO, "label": clase.ETIQUETA, "summary": _resumen_clase(clase),
             "doc": inspect.getdoc(clase) or "", "params": params,
             "expressions": [k for k in clase.PARAMS if k in expresiones], "example": _ejemplo(clase)}
@@ -127,10 +138,20 @@ def run_operation(sesion, type: str, params: dict | None = None, name: str | Non
         raise error("INVALID_ARGUMENTS", f"La operación '{clase.TIPO}' no tiene los parámetros: {', '.join(desconocidos)}.",
                     f"Parámetros válidos: {', '.join(clase.PARAMS) or '(ninguno)'}.",
                     "describe_operation explica cada uno.")
+    clave = _CONTENIDO_EMBEBIDO.get(clase.TIPO)
+    if clave and not params.get(clave):
+        raise error("INVALID_ARGUMENTS", f"«{clase.TIPO}» guarda el archivo copiado en «{clave}»: con la ruta sola no "
+                    "alcanza.", "Usá insert_file(path=...): lee el archivo y lo agrega como un paso del documento actual.")
+    cuerpos = params.get("cuerpos") if clase.TIPO == "operacion_base" else None
+    if isinstance(cuerpos, list) and cuerpos and all(isinstance(c, str) for c in cuerpos):
+        # Como «Crear operación base» de la ventana: los cuerpos nombrados se congelan en este momento.
+        params = dict(params, cuerpos=OpOperacionBase.desde_cuerpos("_", [sesion.cuerpo(c) for c in cuerpos]).p["cuerpos"])
     doc = sesion.doc
     antes = set(doc.estado_final.cuerpos)
     op = operacion_desde_dict({"tipo": clase.TIPO, "id": doc.nuevo_id(), "nombre": name or None, "params": params})
     resultado = doc.agregar(op)
+    if op.TIPO == "patron" and "distribucion" not in params and {"d1", "d2", "angulo"} & set(params):
+        sesion.avisar(f"«{op.nombre}»: {op.aclaracion_distancias()}")
     nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
     return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": resultado.estado, "message": resultado.mensaje,
             "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos)}
@@ -186,11 +207,14 @@ def _renumerar(doc, ops_nuevas, propiedades):
              "documento queda intacto.", modifica=True)
 def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "replace"):
     """
-    recipe: receta como la devuelve get_recipe (objeto con 'operaciones', 'parametros', etc.).
+    recipe: la receta de get_recipe: su resultado {"recipe": …} tal cual o el objeto de adentro (con 'operaciones',
+        'parametros', etc.).
     mode: "replace" reemplaza el contenido del documento (conserva su archivo); "append" suma al final del
         timeline los pasos y parámetros de la receta (renumera los ids que chocan; un parámetro con el mismo
         nombre y otra expresión es un error) y deja el marcador al final.
     """
+    if "operaciones" not in recipe and isinstance(recipe.get("recipe"), dict):
+        recipe = recipe["recipe"]                     # el resultado de get_recipe tal cual
     _validar_receta(recipe)
     doc = sesion.doc
     # Nombre, vistas, espacios y comentarios no son parte de `_cargar` ni de la transacción: se restauran acá.
@@ -262,22 +286,110 @@ def _serializable(valor, sesion):
         return repr(valor)[:2000]
 
 
+class _TiempoAgotado(BaseException):
+    """Corte de execute_code por plazo. BaseException: ni un `except Exception` del agente ni el de
+    Documento.recalcular la atrapan; y se relanza en cada línea, así que tampoco la frena un `except:`."""
+
+    def __init__(self, linea):
+        super().__init__(linea)
+        self.linea = linea
+
+
+_VIGIA = {"id": None}         # id de sys.monitoring reservado (perezosamente) para vigilar el plazo
+_limites = {}                 # objeto de código del agente → instante (monotonic) en que se corta
+
+
+def _al_cambiar_de_linea(code, linea):
+    limite = _limites.get(code)
+    if limite is not None and time.monotonic() > limite:
+        raise _TiempoAgotado(linea)
+
+
+def _al_saltar(code, desde, _hacia):
+    """Saltos (también hacia atrás dentro de una misma línea, p. ej. `while True: pass`, que no dispara LINE)."""
+    limite = _limites.get(code)
+    if limite is not None and time.monotonic() > limite:
+        linea = next((ln for ini, fin, ln in code.co_lines() if ini <= desde < fin), None)
+        raise _TiempoAgotado(linea)
+
+
+_EVENTOS = sys.monitoring.events.LINE | sys.monitoring.events.JUMP
+
+
+def _id_vigia():
+    """Reserva un id de herramienta de sys.monitoring la primera vez. None si están todos ocupados."""
+    if _VIGIA["id"] is None:
+        mon = sys.monitoring
+        for i in (3, 4):
+            if mon.get_tool(i) is None:
+                mon.use_tool_id(i, "omnicad-plazo")
+                mon.register_callback(i, mon.events.LINE, _al_cambiar_de_linea)
+                mon.register_callback(i, mon.events.JUMP, _al_saltar)
+                _VIGIA["id"] = i
+                break
+    return _VIGIA["id"]
+
+
+def _codigos(co):
+    yield co
+    for c in co.co_consts:
+        if isinstance(c, type(co)):
+            yield from _codigos(c)
+
+
+@contextlib.contextmanager
+def _plazo(compilado, segundos, sesion):
+    """Vigila SOLO las líneas del código del agente (eventos LINE locales): una llamada interna larga no se
+    corta a la mitad, el corte llega cuando vuelve al código del agente (nunca queda un recálculo a medias)."""
+    vigia = _id_vigia() if segundos is not None else None
+    if vigia is None:
+        if segundos is not None:
+            sesion.avisar("No se pudo vigilar el tiempo máximo (sys.monitoring ocupado): el código corre sin límite.")
+        yield
+        return
+    codigos = [c for c in _codigos(compilado) if c not in _limites]
+    limite = min([time.monotonic() + segundos, *_limites.values()])   # uno anidado no dura más que el de afuera
+    for c in codigos:
+        _limites[c] = limite
+        sys.monitoring.set_local_events(vigia, c, _EVENTOS)
+    try:
+        yield
+    finally:
+        for c in codigos:
+            sys.monitoring.set_local_events(vigia, c, 0)
+            _limites.pop(c, None)
+
+
 @herramienta("execute_code", "avanzado", "Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. "
              "Devuelve lo impreso (stdout) y la variable `result` si el código la define. Todo es un paso de "
-             "deshacer; si el código lanza una excepción, el documento queda intacto.", modifica=True)
-def execute_code(sesion, code: str):
+             "deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` "
+             f"segundos ({PLAZO_CODIGO:g} por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve "
+             "a como estaba.", modifica=True)
+def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     """
     code: código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar
         (atajo de api.llamar(sesion, nombre, args)). Asigná `result = ...` para devolver un valor.
+    timeout: segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como
+        estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se
+        vigila tu código: una llamada larga a una herramienta termina antes del corte.
     """
+    if timeout is not None and not (math.isfinite(timeout) and timeout > 0):
+        raise error("INVALID_ARGUMENTS", f"timeout tiene que ser un número de segundos mayor que 0 (o null); vino {timeout!r}.")
     api = importlib.import_module(__package__)
     espacio = {"__name__": "__codigo__", "api": api, "sesion": sesion, "doc": sesion.doc,
                "llamar": lambda nombre, args=None: llamar(sesion, nombre, args)}
     salida = io.StringIO()
     try:
         compilado = compile(code, "<codigo>", "exec")
-        with contextlib.redirect_stdout(salida), contextlib.redirect_stderr(salida):
+        with contextlib.redirect_stdout(salida), contextlib.redirect_stderr(salida), _plazo(compilado, timeout, sesion):
             exec(compilado, espacio)  # noqa: S102 — es la función de la herramienta: ejecutar código del agente
+    except _TiempoAgotado as e:
+        lineas = code.splitlines()
+        fuente = lineas[e.linea - 1].strip() if 0 < e.linea <= len(lineas) else ""
+        texto = f"El código pasó el tiempo máximo ({timeout:g} s) y se cortó en la línea {e.linea}: {fuente}"
+        if salida.getvalue():
+            texto += "\nSalida hasta el corte:\n" + salida.getvalue()[-500:]
+        raise error("CODE_TIMEOUT", texto[:_TRAZA_MAXIMA]) from None
     except (Exception, SystemExit) as e:  # noqa: BLE001
         texto = _traza(e, code)
         if salida.getvalue():

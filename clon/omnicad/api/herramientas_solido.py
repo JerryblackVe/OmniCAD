@@ -14,6 +14,7 @@ herramienta (como el modo automático de Fusion).
 Empalmes, chaflanes, vaciado, agujeros y desmoldeo (los que eligen caras o aristas con selectores) están en
 `herramientas_modificar.py`; los selectores, en `selectores.py`.
 """
+import math
 from typing import Literal
 
 from ..nucleo import geometria as geo
@@ -95,6 +96,15 @@ def _ref_perfil(sop, perfil):
 def _numero_positivo(valor, que):
     if isinstance(valor, (int, float)) and valor <= 0:
         raise error("INVALID_ARGUMENTS", f"{que} tiene que ser positivo (recibió {valor}).")
+
+
+def _exigir_instancias(total, que):
+    """Tope de instancias de un patrón, antes de gastar un id (el núcleo lo vuelve a frenar en run_operation)."""
+    from ..nucleo.solidos_crear import INSTANCIAS_MAXIMAS      # local: el núcleo se carga recién al calcular
+    if total > INSTANCIAS_MAXIMAS:
+        maximo, pedido = (f"{n:,}".replace(",", ".") for n in (INSTANCIAS_MAXIMAS, total))
+        raise error("INVALID_ARGUMENTS", f"Un patrón admite como máximo {maximo} instancias, el original incluido "
+                                         f"({que} = {pedido}).")
 
 
 # ---------------------------------------------------------------- extrusión y revolución
@@ -207,9 +217,14 @@ def sweep(sesion, sketch: str, profile: Perfiles, path_sketch: str, path_curves:
     operation: "new_body", "join", "cut" o "intersect".
     orientation: "perpendicular" (el perfil sigue la tangente de la ruta) o "parallel" (mantiene su orientación).
     taper_angle: ángulo de conicidad en grados.
-    twist_angle: ángulo de torsión total en grados.
+    twist_angle: torsión total en grados (máximo ±3600; ±1800 en rutas cerradas; la ruta no puede tener esquinas).
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     """
+    if isinstance(twist_angle, (int, float)) and not isinstance(twist_angle, bool):
+        from ..nucleo.solidos_crear import TORSION_MAXIMA      # local: el núcleo se carga recién al calcular
+        if not math.isfinite(twist_angle) or abs(twist_angle) > TORSION_MAXIMA:
+            raise error("INVALID_ARGUMENTS", f"twist_angle admite como máximo ±{TORSION_MAXIMA:g}° "
+                                             f"({TORSION_MAXIMA / 360:g} vueltas); recibió {twist_angle:g}°.")
     sop, br = boceto_activo(sesion, sketch)
     perfiles = seleccionar_perfiles(br, sop, profile)
     rop, rbr = boceto_activo(sesion, path_sketch)
@@ -259,14 +274,7 @@ def loft(sesion, sketches: list[str], profiles: list[int | str] | None = None, o
 
 
 # ---------------------------------------------------------------- primitivas
-def _mitad(posicion, tamano):
-    """posición − tamaño / 2 (número si ambos lo son; si no, una expresión con parámetros)."""
-    if not isinstance(posicion, str) and not isinstance(tamano, str):
-        return float(posicion) - float(tamano) / 2
-    return f"({texto_expr(posicion)}) - ({texto_expr(tamano)}) / 2"
-
-
-def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target):
+def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, **extra):
     doc = sesion.doc
     objetivos = _objetivos(sesion, operation, target)
     if len(objetivos) > 1:
@@ -274,6 +282,7 @@ def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target):
     p = {"forma": forma, "x": texto_expr(x), "y": texto_expr(y), "z": texto_expr(z),
          "operacion": OPERACIONES[operation], "objetivo": objetivos[0] if len(objetivos) == 1 else ""}
     p.update({k: texto_expr(v) for k, v in medidas.items()})
+    p.update(extra)
     op = OpPrimitiva(doc.nuevo_id(), nombre_nuevo(doc, base, OpPrimitiva, lambda o: o.p["forma"] == forma), **p)
     return _agregar(sesion, op, operation != "new_body")
 
@@ -281,7 +290,8 @@ def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target):
 @herramienta("create_box", "solido",
              "Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) "
              "es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. Medidas y posición "
-             "aceptan expresiones con parámetros.", modifica=True)
+             "aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado "
+             "(caja_centrada) y edit_feature acepta length, width y height.", modifica=True)
 def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0,
                operation: Operacion = "new_body", target: Cuerpos | None = None):
     """
@@ -297,7 +307,7 @@ def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: 
     for valor, que in ((length, "length"), (width, "width"), (height, "height")):
         _numero_positivo(valor, que)
     return _primitiva(sesion, "caja", "Caja", {"ancho": length, "largo": width, "alto": height},
-                      _mitad(x, length), _mitad(y, width), z, operation, target)
+                      x, y, z, operation, target, caja_centrada=True)
 
 
 @herramienta("create_cylinder", "solido",
@@ -402,10 +412,10 @@ def rectangular_pattern(sesion, bodies: Cuerpos, x_count: int = 1, x_spacing: Ex
                         axis2: Literal["x", "y", "z"] = "y", combine: bool = False):
     """
     bodies: cuerpo(s) a repetir (id o nombre).
-    x_count: cantidad de instancias en la dirección 1, original incluido (1 = sin copias).
-    x_spacing: separación entre instancias consecutivas en la dirección 1 (mm o expresión).
-    y_count: cantidad de instancias en la dirección 2, original incluido.
-    y_spacing: separación entre instancias consecutivas en la dirección 2.
+    x_count: cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
+    x_spacing: separación entre instancias consecutivas en la dirección 1 (mm o expresión). Se guarda como d1 con distribucion="espaciado": edit_feature d1 sigue siendo la separación.
+    y_count: cantidad de instancias en la dirección 2, original incluido (x_count × y_count ≤ 10.000).
+    y_spacing: separación entre instancias consecutivas en la dirección 2 (se guarda como d2).
     axis1: eje de la dirección 1 ("x", "y" o "z").
     axis2: eje de la dirección 2.
     combine: true para unir las copias al cuerpo original.
@@ -419,6 +429,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos, x_count: int = 1, x_spacing: Ex
         raise error("INVALID_ARGUMENTS", "Con x_count = 1 e y_count = 1 el patrón no crea copias.")
     if y_count > 1 and axis1 == axis2:
         raise error("INVALID_ARGUMENTS", "axis1 y axis2 tienen que ser ejes distintos.")
+    _exigir_instancias(x_count * y_count, "x_count × y_count")
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón rectangular", OpPatron,
                                                lambda o: o.p["forma_patron"] == "rectangular"),
@@ -436,9 +447,9 @@ def circular_pattern(sesion, bodies: Cuerpos, count: int, axis: Literal["x", "y"
                      total_angle: Expr = 360, combine: bool = False):
     """
     bodies: cuerpo(s) a repetir (id o nombre).
-    count: cantidad de instancias, original incluido (2 o más).
+    count: cantidad de instancias, original incluido (2 a 10.000).
     axis: eje de giro del origen: "x", "y" o "z".
-    total_angle: ángulo total en grados (número o expresión); 360 = vuelta completa.
+    total_angle: ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
     combine: true para unir las copias al cuerpo original.
     """
     ids = _ids_cuerpos(sesion, bodies)
@@ -446,6 +457,7 @@ def circular_pattern(sesion, bodies: Cuerpos, count: int, axis: Literal["x", "y"
         raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies'.")
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
+    _exigir_instancias(count, "count")
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón circular", OpPatron,
                                                lambda o: o.p["forma_patron"] == "circular"),
@@ -454,17 +466,32 @@ def circular_pattern(sesion, bodies: Cuerpos, count: int, axis: Literal["x", "y"
     return _agregar(sesion, op)
 
 
+def _centro(cuerpos):
+    """Centro de un grupo de cuerpos como el pivote por defecto de Mover: promedio de los centros de sus cajas."""
+    centros = []
+    for c in cuerpos:
+        caja = c.forma.caja() if getattr(c, "tipo", "solido") == "malla" else geo.caja_envolvente(c.forma)
+        if caja:
+            centros.append([(a + b) / 2 for a, b in zip(caja[0], caja[1], strict=True)])
+    if not centros:
+        return None
+    return [_r(sum(v) / len(centros)) for v in zip(*centros, strict=True)]
+
+
 @herramienta("move_body", "solido",
-             "Mueve (o copia) cuerpos: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) "
-             "y después traslada translate = [x, y, z] mm. El pivote es el centro de la caja de los cuerpos o el "
-             "origen del diseño.", modifica=True)
+             "Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] "
+             "grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA "
+             "a la posición actual (no es una posición absoluta). pivot='center' es el promedio de los centros de las "
+             "cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro "
+             "cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae "
+             "center.before y center.after.", modifica=True)
 def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate: list[Expr] | None = None,
               pivot: Literal["center", "origin"] = "center", copy: bool = False):
     """
     body: cuerpo(s) a mover (id o nombre).
-    translate: desplazamiento [x, y, z] en mm (números o expresiones); vacío = sin desplazamiento.
+    translate: DESPLAZAMIENTO [dx, dy, dz] en mm que se suma a la posición actual (números o expresiones); vacío = sin desplazamiento.
     rotate: giro [rx, ry, rz] en grados (números o expresiones); vacío = sin giro.
-    pivot: centro del giro: "center" (centro de los cuerpos) u "origin" (origen del diseño).
+    pivot: centro del giro: "center" (centro de las cajas de los cuerpos, se recalcula) u "origin" (origen, estable).
     copy: true para dejar el original y crear cuerpos nuevos con el movimiento.
     """
     ids = _ids_cuerpos(sesion, body)
@@ -479,5 +506,11 @@ def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate
                  dx=texto_expr(t[0]), dy=texto_expr(t[1]), dz=texto_expr(t[2]),
                  rx=texto_expr(g[0]), ry=texto_expr(g[1]), rz=texto_expr(g[2]),
                  pivote={"tipo": "punto", "id": "O"} if pivot == "origin" else None, copiar=copy)
-    return _agregar(sesion, op)
+    cuerpos = sesion.doc.estado_final.cuerpos
+    antes = _centro([cuerpos[i] for i in ids])
+    resultado = _agregar(sesion, op)
+    cuerpos = sesion.doc.estado_final.cuerpos
+    movidos = [b["id"] for b in resultado["bodies_created"]] if copy else ids
+    resultado["center"] = {"before": antes, "after": _centro([cuerpos[i] for i in movidos if i in cuerpos])}
+    return resultado
 

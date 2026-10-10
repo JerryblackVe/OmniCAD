@@ -121,9 +121,18 @@ def referencia(cuerpo_id, sub, forma=None, caja=None):
 
 
 # ---------------------------------------------------------------- búsqueda
+_GEOM_LIBRE = ("bspline", "otra")
+
+
 def _distancia(tipo, f, g, escala):
-    """Qué tan distintas son dos firmas (0 = iguales). `escala` normaliza por el tamaño del cuerpo."""
+    """Qué tan distintas son dos firmas (0 = iguales). `escala` normaliza por el tamaño del cuerpo.
+
+    La firma guardada `f` libre ("bspline"/"otra") se compara con una candidata analítica, con un recargo: los
+    .omnicad viejos guardan así las caras y aristas de una solevación, que ahora salen planas, rectas o circulares
+    (solidos_crear._canonizar). Al revés no: una firma analítica guardada solo acepta su mismo tipo."""
     if f["geom"] != g["geom"]:
+        if f["geom"] in _GEOM_LIBRE:
+            return _distancia(tipo, dict(f, geom=g["geom"]), g, escala) + 0.05
         return math.inf
     if "rel" in f and "rel" in g:
         # Con posición relativa a la caja, la distancia absoluta pesa poco: así sobrevive a cambios de tamaño.
@@ -133,7 +142,6 @@ def _distancia(tipo, f, g, escala):
         rel = 0.0
     if tipo == "vertice":
         return rel + math.dist(f["punto"], g["punto"]) / escala
-        return math.dist(f["punto"], g["punto"]) / escala
     if tipo == "arista":
         d = rel + math.dist(f["medio"], g["medio"]) / escala
         d += abs(f["largo"] - g["largo"]) / max(f["largo"], g["largo"], 1e-9) * (0.15 if rel or "rel" in f else 0.5)

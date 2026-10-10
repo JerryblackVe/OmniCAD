@@ -303,17 +303,31 @@ def es_malla(forma):
 
 
 def malla_suave(forma, deflexion=0.05):
-    """(vértices, normales) float32 de triángulos sueltos con normales suaves dentro de cada cara (B-rep)
-    o con ángulo de pliegue (cuerpos de malla)."""
+    """(vértices, normales) float32 de triángulos sueltos. B-rep: en cada vértice, la normal EXACTA de la
+    superficie (hacia afuera del material), como la del análisis de cebra; promediar los triángulos torcía
+    la normal en las caras B-spline (teselado irregular) y los brillos salían como franjas dentadas. Una cara
+    sin superficie (solo triangulación, p. ej. de un STEP teselado) usa la normal promediada. Cuerpos de
+    malla: normales promediadas con ángulo de pliegue."""
     if es_malla(forma):
         tris = np.asarray(forma.vertices, float)[np.asarray(forma.caras, int)]
         return normales_suaves(tris, None, 35.0)
-    caras = geo.teselar_por_cara(forma, deflexion, 0.25)
-    if not caras:
+    from OCP.BRep import BRep_Tool
+    from OCP.TopLoc import TopLoc_Location
+
+    from .analisis import _indices, _props_nodos
+    verts, norms = [], []
+    for cara, tris in geo.teselar_por_cara(forma, deflexion, 0.25):
+        if BRep_Tool.Surface_s(cara) is None:
+            n = normales_suaves(tris, None, 60.0)[1]
+        else:
+            tri = BRep_Tool.Triangulation_s(cara, TopLoc_Location())
+            idx = _indices(tri, cara)
+            n = _props_nodos(cara, tri, idx, tris, False)[0][idx].reshape(-1, 3)
+        verts.append(tris.reshape(-1, 3))
+        norms.append(n)
+    if not verts:
         return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32)
-    tris = np.concatenate([t for _, t in caras])
-    grupos = np.concatenate([np.full(len(t), i) for i, (_, t) in enumerate(caras)])
-    return normales_suaves(tris, grupos, 60.0)
+    return np.concatenate(verts).astype(np.float32), _unit(np.concatenate(norms)).astype(np.float32)
 
 
 def color_y_acabado(cuerpo, props):

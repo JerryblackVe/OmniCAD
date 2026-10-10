@@ -49,6 +49,7 @@ Punto de entrada: `clon/OmniCAD.py` (`--ejemplo`, `--prueba-humo`, o un `.omnica
 | **Cotas con expresiones** que usan parámetros | Solo números | Diseño paramétrico: cambiar un parámetro rehace la pieza |
 | **Una unidad interna por magnitud** (mm, grados) + expresiones con unidades | Unidades mezcladas | mm es la unidad de STL, STEP e impresión 3D |
 | **Perfiles derivados, no guardados**, referenciados por **firma** + centroide | Índice del perfil | Los índices cambian al editar el boceto; la firma sobrevive (problema de nombres topológicos) |
+| **Boceto sobre una cara asociado a la cara** (referencia por firma + posición relativa a la caja, como los empalmes; el plano se recalcula en cada paso) | Marco congelado al crear | Como Fusion: si un parámetro mueve la cara, el boceto la sigue. Los proyectos viejos sin referencia conservan su marco |
 | **Formato `.omnicad` = ZIP con receta JSON + caché B-rep + miniatura** | Guardar solo geometría | Abierto y legible: la receta es la fuente de verdad; la caché acelera la apertura |
 | **Recalcular desde el paso editado**, con el estado de cada paso cacheado | Recalcular todo siempre | Editar el paso *i* reusa el estado *i-1* |
 | **Error por paso sin romper el resto** | Abortar el recálculo | Un paso roto se marca y el resto del historial sigue visible |
@@ -73,7 +74,6 @@ Punto de entrada: `clon/OmniCAD.py` (`--ejemplo`, `--prueba-humo`, o un `.omnica
 
 | En Fusion | En OmniCAD | Por qué |
 |---|---|---|
-| Boceto sobre una cara con referencia topológica (sigue a la cara) | El plano de la cara se guarda congelado; para planos paramétricos está «Plano de desfase» | Evita el problema de nombres topológicos |
 | Primitivas sobre un plano elegido | Primitivas en coordenadas absolutas (posición X, Y, Z; eje Z) | Más simple de usar desde la API de agentes |
 | Unidad interna cm | mm | Ver tabla anterior |
 | Panel de datos en la nube, con versiones | Lista local de proyectos recientes con miniatura | OmniCAD no tiene nube |
@@ -101,10 +101,13 @@ ZIP (deflate) con:
 |---|---|
 | `manifiesto.json` | `formato: "OmniCAD-proyecto"`, `version_formato: 1`, app, fecha, unidades |
 | `receta.json` | `version_receta`, parámetros, `marcador`, operaciones con sus parámetros y bocetos completos |
-| `cache/cuerpos.brep` | B-rep de los cuerpos finales (opcional; útil para otras herramientas) |
+| `cache/cuerpos.brep` | Compuesto B-rep (opcional, sin la malla del visor): primero los cuerpos finales que no son malla (útil para otras herramientas), después las formas de los pasos lentos |
+| `cache/pasos.json` | Resultado de los pasos que tardaron ≥ 0,1 s y solo cambiaron cuerpos: huella de la receta, cuántas formas son finales y, por paso, sus cuerpos y formas |
 | `miniatura.png` | Captura del visor |
 
-La receta es la única fuente de verdad: al abrir se reconstruye todo desde ella.
+La receta es la única fuente de verdad. Al abrir, los pasos lentos se toman de la caché si la huella
+(receta byte a byte + versión de la app) coincide; el resto se recalcula desde la receta. Si la huella no
+coincide o la caché está dañada, se recalcula todo. Editar un paso recalcula como siempre.
 La escritura es atómica (archivo temporal + reemplazo).
 Autoguardado cada 60 s si hay cambios: `<proyecto>.autoguardado.omnicad` junto al proyecto, o
 `%LOCALAPPDATA%\OmniCAD\autoguardado\` si todavía no se guardó. Al abrir se ofrece recuperar

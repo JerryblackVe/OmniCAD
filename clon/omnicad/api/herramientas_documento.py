@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """Herramientas del grupo "documento": archivo, escena, timeline, deshacer y rehacer."""
 import copy
+import re
 from pathlib import Path
 from typing import Literal
 
 from ..io_archivos.exportar import exportar
 from ..nucleo import geometria as geo
+from ..timeline import ops_chapa, parametros
 from .registro import herramienta
 from .errores import ErrorAPI, error
 
@@ -63,6 +65,32 @@ def _params_json(op):
     return params
 
 
+def _nombres_parametros(doc):
+    try:
+        return doc.parametros.valores()
+    except parametros.ErrorExpresion:
+        return {}
+
+
+def _valores_json(op, nombres):
+    """Cuánto da cada expresión del paso (mm o grados, según la unidad que escribió): `params` guarda el texto
+    («5 * placa») para ver de qué parámetro depende; esto, el valor con los parámetros actuales."""
+    claves = [k for k in op.EXPRESIONES if k in op.p]
+    campos = getattr(op, "CAMPOS", None)
+    if isinstance(campos, dict):                         # primitiva: las medidas de su forma y la posición
+        claves += [k for k in campos.get(op.p.get("forma"), []) + ["x", "y", "z"] if k in op.p and k not in claves]
+    valores = {}
+    for k in claves:
+        v = op.p[k]
+        if isinstance(v, bool) or not isinstance(v, (str, int, float)) or v == "":
+            continue
+        try:
+            valores[k] = round(parametros.evaluar(v, parametros.ESCALAR, nombres), 6)
+        except (parametros.ErrorExpresion, TypeError, ValueError):
+            continue
+    return valores
+
+
 def _tiene_referencias(v):
     """True si `v` es una referencia persistente a cara/arista (`nucleo.referencias`) o una lista de ellas."""
     if isinstance(v, dict):
@@ -81,12 +109,21 @@ def get_scene_info(sesion):
     return _resumen(sesion)
 
 
-@herramienta("new_document", "documento", "Empieza un documento vacío (descarta el actual de la sesión sin guardarlo).",
-             modifica=True, transaccion=False)
-def new_document(sesion, name: str = "Sin título"):
+def _exigir_sin_cambios(sesion, discard):
+    """Misma regla con y sin ventana: no se tira trabajo sin guardar salvo que se pida (Document.close(False))."""
+    if sesion.doc.modificado and not discard:
+        raise error("UNSAVED_CHANGES", f"«{sesion.doc.nombre}» tiene cambios sin guardar.")
+
+
+@herramienta("new_document", "documento", "Empieza un documento vacío en lugar del actual. Si el actual tiene cambios "
+             "sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta).", modifica=True,
+             transaccion=False)
+def new_document(sesion, name: str = "Sin título", discard: bool = False):
     """
     name: nombre del documento nuevo.
+    discard: true para descartar los cambios sin guardar del documento actual.
     """
+    _exigir_sin_cambios(sesion, discard)
     sesion.nuevo(name)
     return {"name": sesion.doc.nombre}
 
@@ -96,19 +133,53 @@ _UNIDADES_MALLA = {"mm": "mm", "cm": "cm", "m": "m", "in": "pulgadas", "ft": "pi
 
 @herramienta("open_document", "documento", "Abre un archivo y lo deja como documento activo: proyecto .omnicad (o "
              ".fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y "
-             "componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY) o Fusion 360 (.f3d, "
-             ".f3z: lo convierte Fusion instalado con el complemento OmniCADPuente; trae la forma y los parámetros de "
-             "usuario, no el historial).", modifica=True, transaccion=False)
-def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm"):
+             "componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, "
+             "como operación base) o Fusion 360 (.f3d, .f3z: lo convierte Fusion instalado con el complemento "
+             "OmniCADPuente; trae la forma y los parámetros de usuario, no el historial). Si el actual tiene cambios "
+             "sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el "
+             "documento actual: insert_file.", modifica=True,
+             transaccion=False)
+def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", discard: bool = False):
     """
     path: ruta del archivo.
     mesh_units: unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
+    discard: true para descartar los cambios sin guardar del documento actual.
     """
+    _exigir_sin_cambios(sesion, discard)
     sesion.abrir(path, _UNIDADES_MALLA[mesh_units])
     for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False):
         if r.estado in ("error", "aviso"):
             sesion.avisar(f"{op.nombre} ({op.id}) [{ESTADOS[r.estado]}]: {r.mensaje}")
     return _resumen(sesion)
+
+
+@herramienta("insert_file", "documento", "Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline "
+             "(Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla "
+             ".stl/.obj/.3mf/.ply u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia "
+             "dentro de la receta. Para abrirlo como documento nuevo: open_document.", modifica=True)
+def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", name: str | None = None):
+    """
+    path: ruta del archivo a insertar.
+    mesh_units: unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
+    name: nombre del paso en el timeline; vacío = «Importar archivo.ext» / «Insertar archivo».
+    """
+    from ..io_archivos import abrir_externo
+    ruta = Path(path).expanduser()
+    if ruta.suffix.lower() not in abrir_externo.INSERTABLES:
+        raise error("UNSUPPORTED_FILE_TYPE", f"Formato no soportado para insertar: {ruta.suffix or '(sin extensión)'}."
+                    f" Se insertan: {', '.join(abrir_externo.INSERTABLES)}.",
+                    "Un .dxf, .brep o .f3d/.f3z se abre como documento nuevo con open_document.")
+    if not ruta.is_file():
+        raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
+    doc = sesion.doc
+    op = abrir_externo.operacion_para_insertar(ruta, doc.nuevo_id(), _UNIDADES_MALLA[mesh_units])
+    if name and name.strip():
+        op.nombre = name.strip()
+    antes = set(doc.estado_final.cuerpos)
+    r = doc.agregar(op)
+    nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
+    return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": r.estado, "message": r.mensaje,
+            "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos)}
 
 
 @herramienta("save_document", "documento", "Guarda el documento como proyecto .omnicad. Sin path, guarda en su "
@@ -122,20 +193,47 @@ def save_document(sesion, path: str | None = None, overwrite: bool = False):
     return {"path": str(final.resolve()), "name": sesion.doc.nombre}
 
 
+def _cuerpo_chapa(sesion, bodies):
+    """El cuerpo cuyo patrón plano va al .dxf: el elegido (de chapa o su patrón plano) o el único de chapa."""
+    if bodies:
+        cuerpos = [sesion.cuerpo(b) for b in bodies]
+    else:
+        cuerpos = [c for c in sesion.doc.estado_final.cuerpos.values() if ops_chapa.es_chapa(c)]
+        if not cuerpos:
+            raise error("NOTHING_TO_EXPORT", "No hay cuerpos de chapa: el .dxf exporta el patrón plano de uno.")
+    if len(cuerpos) > 1:
+        raise error("INVALID_ARGUMENTS", "El .dxf lleva el patrón plano de UN cuerpo de chapa: elegí uno en bodies.")
+    c = cuerpos[0]
+    if getattr(c, "chapa", None) is None:
+        raise error("INVALID_FORMAT", f"«{sesion.nombre_cuerpo(c)}» no es de chapa: el .dxf exporta el patrón plano "
+                    "de un cuerpo de chapa (o de su patrón plano).", "Para un sólido común usá .step o .stl.")
+    return c
+
+
 @herramienta("export", "documento", "Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, "
-             ".ply (mallas) o .step/.stp, .iges/.igs, .brep (sólidos exactos).")
+             ".ply (mallas), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de "
+             "chapa).")
 def export(sesion, path: str, bodies: list[str] | None = None, overwrite: bool = False):
     """
     path: ruta del archivo a escribir.
-    bodies: ids o nombres de los cuerpos; vacío = todos los cuerpos del final del timeline.
+    bodies: ids o nombres de los cuerpos; vacío = todos los cuerpos del final del timeline. En .dxf, un solo
+        cuerpo de chapa o su patrón plano (vacío = el único cuerpo de chapa que haya).
     overwrite: true para reemplazar el archivo si ya existe.
     """
     ruta = Path(path)
-    cuerpos = [sesion.cuerpo(b) for b in bodies] if bodies else list(sesion.doc.estado_final.cuerpos.values())
+    dxf = ruta.suffix.lower() == ".dxf"
+    if dxf:
+        cuerpos = [_cuerpo_chapa(sesion, bodies)]
+    else:
+        cuerpos = [sesion.cuerpo(b) for b in bodies] if bodies else list(sesion.doc.estado_final.cuerpos.values())
     if ruta.exists() and not overwrite:
         raise error("FILE_EXISTS", f"Ya existe el archivo: {ruta}")
     if not ruta.parent.is_dir():
         raise error("FILE_NOT_FOUND", f"No existe la carpeta: {ruta.parent}")
+    if dxf:                                  # como CHAPA › Exportar DXF del patrón plano, con sus valores por defecto
+        ops_chapa.exportar_dxf(sesion.doc.estado_final, cuerpos[0].id, ruta, centros=True, extensiones=False)
+        return {"path": str(ruta.resolve()), "format": "dxf", "bodies": [cuerpos[0].id],
+                "size_bytes": ruta.stat().st_size}
     n = exportar(cuerpos, ruta)
     resultado = {"path": str(ruta.resolve()), "format": ruta.suffix.lower().lstrip("."),
                  "bodies": [c.id for c in cuerpos], "size_bytes": ruta.stat().st_size}
@@ -168,34 +266,96 @@ def redo(sesion):
 
 
 @herramienta("get_timeline", "documento", "Lista los pasos del timeline en orden: índice, id, tipo, nombre, si está "
-             "suprimido, estado (ok, warning, error, suppressed, rolled_back), mensaje y parámetros.")
+             "suprimido, estado (ok, warning, error, suppressed, rolled_back), mensaje, parámetros tal como se guardaron "
+             "(params: expresiones como «5 * placa») y cuánto da cada expresión con los parámetros actuales (values, "
+             "en mm o grados).")
 def get_timeline(sesion, include_params: bool = True):
     """
     include_params: false para omitir los parámetros de cada paso (respuesta más corta).
     """
     doc = sesion.doc
+    nombres = _nombres_parametros(doc) if include_params else {}
     pasos = []
     for i, (op, r) in enumerate(zip(doc.operaciones, doc.resultados, strict=False)):
         paso = dict(_paso_info(op), index=i, suppressed=op.suprimida, status=ESTADOS.get(r.estado, r.estado),
                     message=r.mensaje)
         if include_params:
             paso["params"] = _params_json(op)
+            paso["values"] = _valores_json(op, nombres)
         pasos.append(paso)
     return {"steps": pasos, "marker": doc.marcador}
 
 
+# Nombres de las herramientas que edit_feature acepta además de los de la receta (que no cambian).
+_ALIAS = {
+    "primitiva": {"length": "ancho", "width": "largo", "height": "alto", "radius": "radio",
+                  "major_radius": "radio_mayor", "minor_radius": "radio_menor"},
+    "mover": {"pivot": "pivote"},
+}
+_PIVOTE_ORIGEN = {"tipo": "punto", "id": "O"}
+
+
+def _traducir_alias(op, params):
+    alias = _ALIAS.get(op.TIPO, {})
+    salida = {}
+    for k, v in params.items():
+        clave = alias.get(k, k)
+        if clave in salida:
+            otro = next(a for a, c in alias.items() if c == clave)
+            raise error("INVALID_ARGUMENTS", f"{otro} y {clave} son el mismo campo: indicá uno solo.")
+        salida[clave] = v
+    return salida
+
+
+def _pivote(valor):
+    """Valor de 'pivote' de un paso Mover: None (centro), el origen o una referencia a un punto o vértice."""
+    if valor is None or (isinstance(valor, str) and valor.strip().lower() in ("center", "centro", "")):
+        return None
+    if isinstance(valor, str) and valor.strip().lower() in ("origin", "origen"):
+        return dict(_PIVOTE_ORIGEN)
+    if isinstance(valor, dict) and valor.get("tipo") in ("punto", "vertice"):
+        return valor
+    raise error("INVALID_ARGUMENTS", f"pivote no acepta {valor!r}.",
+                "pivote acepta 'center', 'origin' o una referencia {'tipo': 'punto', 'id': 'O'}.")
+
+
+def _exigir_tipos(op, params):
+    """Un campo que guarda una referencia o una lista (por defecto None o lista, y no es una expresión) no acepta un
+    texto ni un número: sin este control el paso fallaba con «Error inesperado: string indices must be integers»."""
+    for k, v in params.items():
+        defecto = op.PARAMS.get(k)
+        if k in op.EXPRESIONES or v is None or not (defecto is None or isinstance(defecto, list)):
+            continue
+        if isinstance(v, (dict, list)) if defecto is None else isinstance(v, list):
+            continue
+        raise error("INVALID_ARGUMENTS", f"«{k}» del paso «{op.nombre}» guarda "
+                    f"{'una referencia (punto, eje, plano, cara…)' if defecto is None else 'una lista'}, "
+                    f"no {v!r}.", "Mirá el formato con get_timeline o describe_operation; null = valor por defecto.")
+
+
 @herramienta("edit_feature", "documento", "Cambia parámetros de un paso del timeline (conserva su id) y recalcula. "
-             "Si el paso u otro posterior queda con error, el cambio se descarta.", modifica=True)
+             "Si el paso u otro posterior queda con error, el cambio se descarta. Usa los nombres de get_timeline; "
+             "en primitivas también acepta los de las herramientas: length (= ancho, X), width (= largo, Y), "
+             "height (= alto, Z), radius (= radio), major_radius, minor_radius. En pasos Mover, pivot/pivote acepta "
+             "'center' u 'origin'. Devuelve params (lo guardado, con sus expresiones) y values (cuánto da cada una, en mm o "
+             "grados). Los campos que guardan una referencia (pivote, eje, plano, cara…) no aceptan texto ni números.",
+             modifica=True)
 def edit_feature(sesion, feature: str, params: dict):
     """
     feature: id (p. ej. "op3") o nombre del paso.
     params: parámetros a cambiar, con los nombres que muestra get_timeline, p. ej. {"distancia": "15 mm"}.
     """
     op = sesion.paso(feature)
+    params = _traducir_alias(op, params)
     desconocidos = [k for k in params if k not in op.PARAMS]
     if desconocidos:
+        alias = _ALIAS.get(op.TIPO)
+        extra = f" También acepta: {', '.join(f'{a} (= {c})' for a, c in alias.items())}." if alias else ""
         raise error("INVALID_ARGUMENTS", f"El paso «{op.nombre}» ({op.TIPO}) no tiene: {', '.join(desconocidos)}.",
-                    f"Parámetros de '{op.TIPO}': {', '.join(op.PARAMS)}.")
+                    f"Parámetros de '{op.TIPO}': {', '.join(op.PARAMS)}.{extra}")
+    if op.TIPO == "mover" and "pivote" in params:
+        params["pivote"] = _pivote(params["pivote"])
+    _exigir_tipos(op, params)
     if not params:
         raise error("INVALID_ARGUMENTS", "No se indicó ningún parámetro para cambiar.",
                     f"Parámetros de '{op.TIPO}': {', '.join(op.PARAMS)}.")
@@ -211,7 +371,10 @@ def edit_feature(sesion, feature: str, params: dict):
     nueva = op.copia()
     nueva.p.update(copy.deepcopy(params))
     sesion.doc.reemplazar(op.id, nueva)
-    return dict(_paso_info(nueva), params=_params_json(nueva))
+    if nueva.TIPO == "patron" and {"d1", "d2", "angulo", "distribucion"} & set(params):
+        sesion.avisar(f"«{nueva.nombre}»: {nueva.aclaracion_distancias()}")
+    return dict(_paso_info(nueva), params=_params_json(nueva),
+                values=_valores_json(nueva, _nombres_parametros(sesion.doc)))
 
 
 @herramienta("suppress_feature", "documento", "Suprime o reactiva un paso del timeline (suprimido = no se calcula).",
@@ -240,6 +403,13 @@ def delete_feature(sesion, feature: str):
     return dict(_paso_info(op), deleted=True)
 
 
+def _exigir_no_id(nombre, id_propio):
+    """Un nombre con forma de id (op3, op3.c1) taparía al paso o cuerpo con ese id: la búsqueda mira ids primero."""
+    if re.fullmatch(r"op\d+(\.c\d+)?", nombre, re.IGNORECASE) and nombre.casefold() != id_propio.casefold():
+        raise error("INVALID_ARGUMENTS", f"«{nombre}» tiene la forma de un id de paso o de cuerpo (op3, op3.c1) y se "
+                    "confundiría con él.", "Elegí otro nombre, p. ej. «Brazo izquierdo».")
+
+
 @herramienta("rename", "documento", "Renombra un paso del timeline o un cuerpo.", modifica=True)
 def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", "body"] = "auto"):
     """
@@ -257,6 +427,7 @@ def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", 
             if kind == "feature" or e.error_kind != "FEATURE_NOT_FOUND":
                 raise
         else:
+            _exigir_no_id(nuevo, op.id)
             anterior = op.nombre
             sesion.doc.renombrar(op.id, nuevo)
             return {"kind": "feature", "id": op.id, "old_name": anterior, "new_name": nuevo}
@@ -266,6 +437,7 @@ def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", 
         if kind == "body" or e.error_kind != "BODY_NOT_FOUND":
             raise
         raise error("NOT_FOUND", f"No existe un paso ni un cuerpo '{target}'.") from None
+    _exigir_no_id(nuevo, c.id)
     anterior = sesion.nombre_cuerpo(c)
     sesion.doc.set_propiedad([c.id], "nombre", nuevo)
     return {"kind": "body", "id": c.id, "old_name": anterior, "new_name": nuevo}

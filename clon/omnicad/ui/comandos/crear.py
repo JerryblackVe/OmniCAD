@@ -484,7 +484,10 @@ class Saliente(Comando):
 
     def construir(self, v, ctx):
         exigir(v, "posiciones", "Seleccioná los puntos.")
-        return self.crear_op(OpSaliente, v, ctx, posiciones=refs(v, "posiciones"),
+        # El sentido no se elige (Fusion solo tiene «Invertir»): al editar se conserva el del paso (una receta
+        # vieja sigue con "plano"); un saliente nuevo usa el automático.
+        sentido = ctx.op.p.get("sentido", "plano") if ctx.op is not None else OpSaliente.PARAMS["sentido"]
+        return self.crear_op(OpSaliente, v, ctx, posiciones=refs(v, "posiciones"), sentido=sentido,
                              **{k: v[k] for k in ("diametro_exterior", "diametro_agujero", "altura", "angulo_desmoldeo",
                                                   "invertir")})
 

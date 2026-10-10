@@ -15,6 +15,10 @@ SINTAXIS (se evalúa sobre las caras o las aristas de UN cuerpo; "centro" = cent
                     perpendicular al eje (#Z en una caja = las 4 laterales).
     +X  -X  +Y ...  caras planas cuya normal apunta en ese sentido. En aristas +Z y -Z valen como |Z (una
                     arista no tiene sentido).
+    |Z~3  #Z~3  +Z~3 ...   lo mismo con una tolerancia de N grados (0 < N <= 45): elige también lo APENAS
+                    inclinado, p. ej. las caras y aristas laterales tras un desmoldeo. Sin «~» la tolerancia es
+                    casi nula (TOL_DIR). Tras un desmoldeo de θ en las 4 laterales de una caja, las aristas de
+                    esquina quedan a atan(√2·tan θ) de la vertical (1,5° → 2,1°).
     %PLANE %CYLINDER %CONE %SPHERE %TORUS %BSPLINE %OTHER        tipo de superficie (caras).
     %LINE %CIRCLE %ELLIPSE %BSPLINE %OTHER                      tipo de curva (aristas).
     nearest:[x,y,z] la cara o arista MÁS CERCANA al punto (distancia real a la forma); una sola.
@@ -31,8 +35,9 @@ PRÓXIMO CAMBIO del documento: el número es la posición de la subforma en el c
 herramientas NUNCA guardan el id: guardan la referencia persistente de `nucleo.referencias` (firma geométrica
 relativa a la caja del cuerpo), que es la que sobrevive a cambios de parámetros.
 
-Dónde se espera un elemento suelto (measure_distance, measure_angle, create_sketch) el selector se evalúa sobre
-las CARAS; para aristas se escribe `edges:|Z` (o `faces:` para ser explícito) o se usa un id.
+Dónde se espera un elemento suelto (measure_distance, measure_angle, create_sketch, sketch_from_spec) el selector
+se evalúa sobre las CARAS; para aristas se escribe `edges:|Z` (o `faces:` para ser explícito) o se usa un id.
+Todas esas herramientas tienen `body` para decir sobre qué cuerpo se evalúa el selector cuando hay varios.
 """
 import hashlib
 import json
@@ -51,7 +56,8 @@ from ..nucleo import referencias as refs
 from .errores import error
 
 TOL_POS = 1e-3          # mm: dos centros a menos de esto están en el mismo nivel
-TOL_DIR = 1e-3          # seno del ángulo máximo para decir "paralelo" / "perpendicular"
+TOL_DIR = 1e-3          # seno del ángulo máximo para decir "paralelo" / "perpendicular" (sin «~»)
+TOL_MAX_GRADOS = 45     # tope de la tolerancia «~N»: más que esto, paralelo y perpendicular se pisan
 MAX_ELEMENTOS = 300     # tope de elementos que devuelve find_faces / find_edges
 
 EJES = {"X": np.array([1.0, 0.0, 0.0]), "Y": np.array([0.0, 1.0, 0.0]), "Z": np.array([0.0, 0.0, 1.0])}
@@ -109,7 +115,7 @@ _TOKEN = re.compile(r"""\s*(?:
     | (?P<kw>(?:and|or|not)\b)
     | (?P<cerca>nearest\s*:\s*\[(?P<coords>[^\]]*)\])
     | (?P<mm>[<>])\s*(?P<eje1>[XYZ])\b(?:\s*\[\s*(?P<idx>-?\d+)\s*\])?
-    | (?P<dir>[|\#+\-])\s*(?P<eje2>[XYZ])\b
+    | (?P<dir>[|\#+\-])\s*(?P<eje2>[XYZ])\b(?:\s*~\s*(?P<tol>\d+(?:\.\d+)?)\b)?
     | %\s*(?P<geom>[A-Za-z]+)\b
     | (?P<todo>all\b|\*)
     )""", re.IGNORECASE | re.VERBOSE)
@@ -145,7 +151,11 @@ def _tokens(texto):
         elif m.group("mm"):
             salida.append(("atomo", ("mm", m.group("mm"), m.group("eje1").upper(), int(m.group("idx") or 0))))
         elif m.group("dir"):
-            salida.append(("atomo", ("dir", m.group("dir"), m.group("eje2").upper())))
+            grados = None if m.group("tol") is None else float(m.group("tol"))
+            if grados is not None and not 0 < grados <= TOL_MAX_GRADOS:
+                raise _invalido(texto, f"la tolerancia «~» va en grados, mayor que 0 y hasta {TOL_MAX_GRADOS} "
+                                "(p. ej. |Z~3).")
+            salida.append(("atomo", ("dir", m.group("dir"), m.group("eje2").upper(), grados)))
         elif m.group("geom"):
             salida.append(("atomo", ("geom", m.group("geom").upper())))
         else:
@@ -250,16 +260,17 @@ def _atomo(a, elementos, tipo, texto):
         return {i for i, e in enumerate(elementos)
                 if abs(float(e.centro[k]) * (1 if signo == ">" else -1) - nivel) <= TOL_POS}
     if clase == "dir":
-        _, simbolo, eje = a
+        _, simbolo, eje, grados = a
         d = EJES[eje]
+        tol = TOL_DIR if grados is None else math.sin(math.radians(grados))   # seno del desvío admitido
         salida = set()
         for i, e in enumerate(elementos):
             v = e.vector
             if v is None:
                 continue
-            paralelo = float(np.linalg.norm(np.cross(v, d))) < TOL_DIR
+            paralelo = float(np.linalg.norm(np.cross(v, d))) < tol
             if simbolo == "#":
-                ok = abs(float(v @ d)) < TOL_DIR
+                ok = abs(float(v @ d)) < tol
             elif simbolo == "|" or tipo == "arista":
                 ok = paralelo
             else:                                    # + o - sobre una cara plana: sentido de la normal

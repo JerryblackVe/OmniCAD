@@ -7,17 +7,25 @@ en el timeline (como Fusion, que al abrir un STEP o un STL crea un diseño nuevo
   IGES (.iges/.igs)   → Importar IGES
   Mallas (.stl/.obj/.3mf/.ply) → Insertar malla (las unidades del archivo se eligen; el 3MF trae las suyas)
   DXF (.dxf)          → Boceto sobre el plano XY
+  BREP (.brep/.brp)   → Operación base con sus sólidos y superficies (el B-rep de OpenCascade que escribe Exportar)
   Fusion (.f3d/.f3z)  → Fusion 360 instalado lo convierte a STEP por el puente (`puente_fusion`) y se crean
                         sus parámetros de usuario. El historial de pasos de Fusion NO se traduce.
+
+`operacion_para_insertar` arma el mismo paso (STEP, IGES, malla u otro diseño .omnicad) para agregarlo al documento
+ACTUAL, como Insertar de Fusion (la herramienta insert_file).
 
 Sin Qt: lo usan la ventana, la API, la CLI y el MCP.
 """
 import math
 from pathlib import Path
 
+from OCP.TopAbs import TopAbs_COMPOUND
+from OCP.TopoDS import TopoDS_Iterator
+
 from ..nucleo import geometria as geo
+from ..nucleo import intercambio
 from ..timeline.documento import Documento
-from ..timeline.operaciones import OpBoceto, OpImportarSTEP
+from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpOperacionBase
 from ..timeline.ops_insertar import OpImportarIGES
 from ..timeline.ops_malla import OpInsertarMalla
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros
@@ -25,9 +33,11 @@ from . import puente_fusion
 from .dxf import leer_dxf
 
 FORMATOS = {".step": "STEP", ".stp": "STEP", ".iges": "IGES", ".igs": "IGES", ".stl": "STL", ".obj": "OBJ",
-            ".3mf": "3MF", ".ply": "PLY", ".dxf": "DXF", ".f3d": "Fusion 360", ".f3z": "Fusion 360"}
+            ".3mf": "3MF", ".ply": "PLY", ".dxf": "DXF", ".brep": "BREP", ".brp": "BREP",
+            ".f3d": "Fusion 360", ".f3z": "Fusion 360"}
 MALLAS = (".stl", ".obj", ".3mf", ".ply")
 UNIDADES_MALLA = ("mm", "cm", "m", "pulgadas", "pies")
+INSERTABLES = (".step", ".stp", ".iges", ".igs") + MALLAS + (".omnicad", ".fclone")
 _LONGITUDES_FUSION = {"mm", "cm", "m", "in", "ft"}
 _TOLERANCIA_VOLUMEN = 0.01            # con Fusion: 1 % (en superficies libres los núcleos difieren ~0,5 %)
 
@@ -59,14 +69,14 @@ def documento_desde_archivo(ruta, unidades="mm"):
     doc.nombre = ruta.stem
     nombre = f"Importar {ruta.name}"
     fusion = None
-    if ext in (".step", ".stp"):
-        op = OpImportarSTEP(doc.nuevo_id(), nombre, archivo=ruta.name, contenido=_texto(ruta), estructura=True)
-    elif ext in (".iges", ".igs"):
-        op = OpImportarIGES(doc.nuevo_id(), nombre, archivo=ruta.name, contenido=_texto(ruta))
-    elif ext in MALLAS:
-        op = OpInsertarMalla(doc.nuevo_id(), f"Insertar {ruta.name}", archivo=ruta.stem, datos=_malla(ruta, unidades))
+    if ext in (".step", ".stp", ".iges", ".igs") + MALLAS:
+        op = operacion_para_insertar(ruta, doc.nuevo_id(), unidades)
     elif ext == ".dxf":
         op = OpBoceto(doc.nuevo_id(), "Boceto1", boceto=_boceto_dxf(ruta), plano="XY")
+    elif ext in (".brep", ".brp"):
+        # Sin historial, como la «operación base» que crea Fusion al traer geometría suelta: el B-rep va en la receta.
+        oid = doc.nuevo_id()
+        op = OpOperacionBase(oid, nombre, cuerpos=_cuerpos_brep(ruta, oid))
     else:
         fusion = puente_fusion.convertir(ruta)
         op = OpImportarSTEP(doc.nuevo_id(), nombre, archivo=ruta.name, contenido=fusion["step_texto"], estructura=True)
@@ -88,6 +98,34 @@ def documento_desde_archivo(ruta, unidades="mm"):
     return doc, avisos
 
 
+def operacion_para_insertar(ruta, op_id, unidades="mm"):
+    """Insertar en el diseño actual de Fusion (Insertar desde mi PC / Insertar malla / Insertar componente): lee
+    `ruta` y devuelve el paso con el contenido COPIADO adentro, listo para `doc.agregar`. STEP (con nombres,
+    colores y componentes), IGES, malla (`unidades` para STL/OBJ/PLY) u otro diseño .omnicad (entra como
+    componente). Lanza ErrorAbrir si no existe, no se puede leer o el formato no se inserta."""
+    ruta = Path(ruta)
+    ext = ruta.suffix.lower()
+    if ext not in INSERTABLES:
+        raise ErrorAbrir(f"Formato no soportado para insertar: {ext or '(sin extensión)'}. "
+                         f"Se insertan: {', '.join(INSERTABLES)}.")
+    if not ruta.is_file():
+        raise ErrorAbrir(f"No existe el archivo: {ruta}")
+    if ext in (".step", ".stp"):
+        return OpImportarSTEP(op_id, f"Importar {ruta.name}", archivo=ruta.name, contenido=_texto(ruta),
+                              estructura=True)
+    if ext in (".iges", ".igs"):
+        return OpImportarIGES(op_id, f"Importar {ruta.name}", archivo=ruta.name, contenido=_texto(ruta))
+    if ext in MALLAS:
+        return OpInsertarMalla(op_id, f"Insertar {ruta.name}", archivo=ruta.stem, datos=_malla(ruta, unidades))
+    from ..timeline.ops_ensamblar import OpInsertarDiseno
+    from . import proyecto
+    try:
+        otro = proyecto.abrir(ruta)
+    except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
+        raise ErrorAbrir(f"No se pudo leer el diseño {ruta.name}: {e}") from None
+    return OpInsertarDiseno(op_id, f"Insertar {ruta.stem}", archivo=ruta.stem, receta=otro.a_dict())
+
+
 def _texto(ruta):
     try:
         return ruta.read_text(encoding="utf-8", errors="replace")
@@ -104,6 +142,35 @@ def _malla(ruta, unidades):
     except (geo.ErrorGeometria, OSError, ValueError) as e:
         raise ErrorAbrir(f"No se pudo leer la malla {ruta.name}: {e}") from None
     return m.a_dict()
+
+
+def _cuerpos_brep(ruta, op_id):
+    """Cuerpos de un .brep para OpOperacionBase. Exportar escribe un cuerpo solo, o un compuesto con un hijo por
+    cuerpo: cada hijo da un cuerpo por sólido o, si no tiene sólidos, un cuerpo de superficie."""
+    try:
+        forma = intercambio.leer_brep(ruta)
+    except geo.ErrorGeometria:
+        raise ErrorAbrir(f"No se pudo leer el BREP {ruta.name}: el archivo está dañado o no es un BREP de "
+                         "OpenCascade.") from None
+    hijos = []
+    if forma.ShapeType() == TopAbs_COMPOUND:
+        it = TopoDS_Iterator(forma)
+        while it.More():
+            hijos.append(it.Value())
+            it.Next()
+    else:
+        hijos = [forma]
+    partes = []
+    for h in hijos:
+        solidos = geo.solidos(h)
+        if solidos:
+            partes += [(s, "solido") for s in solidos]
+        elif geo.caras(h):
+            partes.append((h, "superficie"))
+    if not partes:
+        raise ErrorAbrir(f"El BREP {ruta.name} no tiene sólidos ni superficies.")
+    return [{"id": f"{op_id}.c{k}", "nombre": ruta.stem + (f" ({k})" if len(partes) > 1 else ""), "tipo": tipo,
+             "apariencia": None, "brep": intercambio.brep_a_texto(f)} for k, (f, tipo) in enumerate(partes, 1)]
 
 
 def _boceto_dxf(ruta):

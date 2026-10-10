@@ -165,6 +165,35 @@ def test_inspeccion_no_modifica_el_documento(s):
     assert (json.dumps(s.doc.a_dict(), sort_keys=True), len(s.doc._deshacer)) == antes
 
 
+# ViewCube de Fusion con Z arriba (el mismo que el de la app, ui/superposiciones.CARAS). Filas de R de la cámara:
+# derecha de la imagen, arriba de la imagen y hacia el ojo (dónde está la cámara respecto del modelo).
+_VIEWCUBE = {"front": ((1, 0, 0), (0, 0, 1), (0, -1, 0)), "back": ((-1, 0, 0), (0, 0, 1), (0, 1, 0)),
+             "right": ((0, 1, 0), (0, 0, 1), (1, 0, 0)), "left": ((0, -1, 0), (0, 0, 1), (-1, 0, 0)),
+             "top": ((1, 0, 0), (0, 1, 0), (0, 0, 1)), "bottom": ((1, 0, 0), (0, -1, 0), (0, 0, -1))}
+
+
+@pytest.mark.parametrize("vista", sorted(_VIEWCUBE))
+def test_vistas_estandar_como_el_viewcube_de_fusion(vista):
+    """«right» mostró la trasera de un auto con el frente hacia -X: las vistas llevan el nombre de los ejes del
+    mundo, como el ViewCube de Fusion (right = cámara en +X, se ve la cara +X), no del frente de la pieza."""
+    import numpy as np
+    from omnicad.api import herramientas_inspeccion as hi
+    cam, _ = hi._camara(hi._VISTAS[vista], hi._esquinas([((0.0, 0.0, 0.0), (10.0, 10.0, 10.0))]), 4 / 3, 40.0)
+    assert np.allclose(cam["R"], _VIEWCUBE[vista], atol=1e-12)
+
+
+def test_vista_iso_es_la_isometrica_del_visor():
+    """La «iso» de la API tenía 30° de elevación y la del visor (y la esquina del ViewCube) 35,26°."""
+    import math
+
+    import numpy as np
+    from omnicad.api import herramientas_inspeccion as hi
+    cam, _ = hi._camara(hi._VISTAS["iso"], hi._esquinas([((0.0, 0.0, 0.0), (10.0, 10.0, 10.0))]), 4 / 3, 40.0)
+    atras = np.asarray(cam["R"])[2]
+    assert math.degrees(math.asin(atras[2])) == pytest.approx(35.264, abs=1e-3)       # visor3d.VISTAS["iso"]
+    assert math.degrees(math.atan2(atras[1], atras[0])) == pytest.approx(-45.0)        # esquina frente-derecha
+
+
 @pytest.mark.parametrize("vista", ["iso", "front", "top", "right"])
 def test_encuadre_contiene_toda_la_caja(vista):
     """Regresión: la cámara se ajustaba con 2 esquinas de la caja y un soporte en L salía recortado."""

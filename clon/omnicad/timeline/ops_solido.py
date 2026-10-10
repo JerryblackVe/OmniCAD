@@ -9,8 +9,10 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .operaciones import (ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _resolver, _resolver_todas,
-                          aplicar_resultado, registrar_operacion)
+from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _resolver,
+                          _resolver_todas, aplicar_resultado, atributos_copia, registrar_operacion)
+
+ESPESORES = ("simetrica", "lado1", "lado2")     # dirección del espesor de nervio y red (nucleo.solidos_crear)
 
 
 def _sc():
@@ -69,6 +71,8 @@ class OpBarrido(_OpCrear):
               "torsion": "0 deg", "conicidad": "0 deg", "escala_carril": "escalar", "operacion": "nuevo",
               "objetivos": []}
     EXPRESIONES = ("distancia", "torsion", "conicidad")
+    OPCIONES = {"orientacion": ("perpendicular", "paralela"), "escala_carril": ("escalar", "estirar", "ninguna"),
+                "operacion": OPERACIONES_CUERPO}
     REFS = ("perfiles", "ruta", "carril")
 
     def ejecutar(self, estado, ctx):
@@ -79,6 +83,8 @@ class OpBarrido(_OpCrear):
                              distancia=ctx.evaluar(self.p["distancia"], "escalar"),
                              torsion=ctx.evaluar(self.p["torsion"], ANGULO),
                              conicidad=ctx.evaluar(self.p["conicidad"], ANGULO), escala_carril=self.p["escala_carril"])
+        if geo.sin_volumen(forma):
+            raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
         self._aplicar(estado, ctx, forma)
 
 
@@ -88,6 +94,7 @@ class OpSolevacion(_OpCrear):
     TIPO, ETIQUETA, ICONO = "solevacion", "Solevación", "⌓"
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
               "operacion": "nuevo", "objetivos": []}
+    OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("secciones", "carriles", "linea_central")
 
     def ejecutar(self, estado, ctx):
@@ -100,6 +107,9 @@ class OpSolevacion(_OpCrear):
         central = _aristas(self.p["linea_central"], estado)[1] if self.p["linea_central"] else None
         forma = _sc().solevar(secciones, carriles=[c[0] if len(c) == 1 else c for c in carriles], linea_central=central,
                               cerrada=self.p["cerrada"], reglada=self.p["reglada"])
+        if geo.sin_volumen(forma):
+            raise ErrorOperacion("La solevación no encierra volumen: los perfiles no pueden estar todos en el mismo "
+                                 "plano y una solevación cerrada no puede volver sobre sí misma.")
         self._aplicar(estado, ctx, forma)
 
 
@@ -109,6 +119,7 @@ class OpNervio(_OpCrear):
     PARAMS = {"curvas": [], "espesor": "2 mm", "extension": "hasta_siguiente", "profundidad": "10 mm",
               "direccion": "simetrica", "invertir": False, "objetivo": ""}
     EXPRESIONES = ("espesor", "profundidad")
+    OPCIONES = {"extension": ("hasta_siguiente", "profundidad"), "direccion": ESPESORES}
     REFS = ("curvas",)
 
     def ejecutar(self, estado, ctx):
@@ -147,13 +158,14 @@ class OpRepujado(_OpCrear):
     TIPO, ETIQUETA, ICONO = "repujado", "Repujado", "Ⓐ"
     PARAMS = {"perfiles": [], "cara": None, "profundidad": "1 mm", "tipo": "relieve", "envolver": False}
     EXPRESIONES = ("profundidad",)
+    OPCIONES = {"tipo": ("relieve", "grabado")}
     REFS = ("perfiles", "cara")
 
     def ejecutar(self, estado, ctx):
         _, caras = _caras(self.p["perfiles"], estado)
         if not self.p["cara"]:
             raise ErrorOperacion("Elegí la cara sobre la que va el repujado.")
-        e = _resolver(self.p["cara"], estado)
+        e = _resolver(self.p["cara"], estado, ("cara",))
         cuerpo = estado.cuerpo(e.cuerpo)
         cuerpo.forma = _sc().repujado(cuerpo.forma, caras, e.forma, ctx.evaluar(self.p["profundidad"]),
                                       tipo=self.p["tipo"], envolver=self.p["envolver"])
@@ -170,10 +182,12 @@ class OpAgujero(_OpCrear):
               "rosca": "simple", "designacion": "M6", "invertir": False, "objetivos": []}
     EXPRESIONES = ("diametro", "profundidad", "angulo_punta", "diam_abocardado", "prof_abocardado", "diam_avellanado",
                    "angulo_avellanado")
+    OPCIONES = {"tipo": ("simple", "abocardado", "avellanado"), "extension": ("distancia", "todo"),
+                "punta": ("angulo", "plana"), "rosca": ("simple", "cosmetica", "modelada")}
     REFS = ("posiciones",)
 
     def dependencias(self):
-        return super().dependencias() | ent.dependencias_de([d["cara"] for d in self.p.get("puntos_cara") or []])
+        return super().dependencias() | ent.dependencias_de([d["cara"] for d in self.p.get("puntos_cara") or [] if isinstance(d, dict) and "cara" in d])
 
     def _colocaciones(self, estado):
         salida = []
@@ -181,7 +195,9 @@ class OpAgujero(_OpCrear):
             n = e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0])
             salida.append((ent.como_punto(e), -n))
         for d in self.p.get("puntos_cara") or []:
-            e = _resolver(d["cara"], estado)
+            if not isinstance(d, dict) or "cara" not in d:
+                raise ParametroMalFormado(d, 'se esperaba {"cara": <referencia de cara>, "punto": [x, y, z]}', "puntos_cara")
+            e = _resolver(d["cara"], estado, ("cara",))
             if e.plano is None:
                 raise ErrorOperacion("El agujero va sobre una cara plana.")
             p = np.asarray(d["punto"], float)
@@ -224,10 +240,11 @@ class OpRosca(_OpCrear):
     PARAMS = {"caras": [], "designacion": "", "largo_completo": True, "longitud": "10 mm", "desfase": "0 mm",
               "modelada": True, "mano": "derecha", "invertir": False}
     EXPRESIONES = ("longitud", "desfase")
+    OPCIONES = {"mano": ("derecha", "izquierda")}
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
-        ents = _resolver_todas(self.p["caras"], estado)
+        ents = _resolver_todas(self.p["caras"], estado, ("cara",))
         if not ents:
             raise ErrorOperacion("Elegí las caras cilíndricas a roscar.")
         for e in ents:
@@ -248,6 +265,10 @@ class OpBobina(_OpCrear):
               "altura": "30 mm", "paso": "6 mm", "angulo": "0 deg", "seccion": "circular", "tamano": "3 mm",
               "posicion": "sobre", "horario": False, "operacion": "nuevo", "objetivos": []}
     EXPRESIONES = ("diametro", "revoluciones", "altura", "paso", "angulo", "tamano")
+    DATOS = {"rev_altura": ("revoluciones", "altura"), "rev_paso": ("revoluciones", "paso"),
+             "altura_paso": ("altura", "paso")}           # tipo → los dos datos que se dan
+    OPCIONES = {"tipo": DATOS, "seccion": ("circular", "cuadrada", "triangular_externa", "triangular_interna"),
+                "posicion": ("dentro", "sobre", "fuera"), "operacion": OPERACIONES_CUERPO}
     REFS = ("plano", "centro")
 
     def ejecutar(self, estado, ctx):
@@ -255,8 +276,7 @@ class OpBobina(_OpCrear):
         plano = ent.como_plano(_resolver(p["plano"], estado)) if p["plano"] else geo.Plano("XY")
         centro = ent.como_punto(_resolver(p["centro"], estado)) if p["centro"] else plano.origen
         datos = {"revoluciones": None, "altura": None, "paso": None}
-        for k in {"rev_altura": ("revoluciones", "altura"), "rev_paso": ("revoluciones", "paso"),
-                  "altura_paso": ("altura", "paso")}[p["tipo"]]:
+        for k in self.DATOS[p["tipo"]]:
             datos[k] = ctx.evaluar(p[k], "escalar" if k == "revoluciones" else "longitud")
         forma = _sc().bobina(centro, plano.normal, diametro=ctx.evaluar(p["diametro"]), angulo=ctx.evaluar(p["angulo"], ANGULO),
                              seccion=p["seccion"], tamano_seccion=ctx.evaluar(p["tamano"]), posicion_seccion=p["posicion"],
@@ -270,6 +290,7 @@ class OpTuberia(_OpCrear):
     PARAMS = {"ruta": [], "distancia": "1", "seccion": "circular", "tamano": "5 mm", "hueca": False,
               "espesor": "0.5 mm", "operacion": "nuevo", "objetivos": []}
     EXPRESIONES = ("distancia", "tamano", "espesor")
+    OPCIONES = {"seccion": ("circular", "cuadrada", "triangular"), "operacion": OPERACIONES_CUERPO}
     REFS = ("ruta",)
 
     def ejecutar(self, estado, ctx):
@@ -282,35 +303,54 @@ class OpTuberia(_OpCrear):
 
 class OpPatron(_OpCrear):
     """Patrón rectangular, circular o en ruta de Fusion [SLD-PATTERNS] sobre cuerpos (o componentes): cada
-    instancia es un cuerpo nuevo (o se une al original con «Combinar»)."""
+    instancia es un cuerpo nuevo (o se une al original con «Combinar»).
+    `distribucion` es el «Tipo de distancia» de Fusion: con "extension" (por defecto) d1/d2 son la distancia TOTAL
+    entre la primera y la última instancia y, en el circular, `angulo` es el ángulo total; con "espaciado" son la
+    separación (o el ángulo) entre instancias consecutivas."""
     TIPO, ETIQUETA, ICONO = "patron", "Patrón", "⁂"
     PARAMS = {"forma_patron": "rectangular", "cuerpos": [], "dir1": None, "n1": 3, "d1": "30 mm", "dir2": None,
               "n2": 1, "d2": "30 mm", "distribucion": "extension", "simetrico": False, "eje": None, "n": 6,
               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
               "combinar": False}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio")
+    OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta"), "distribucion": ("extension", "espaciado"),
+                "orientacion": ("identica", "direccion_ruta")}
     REFS = ("dir1", "dir2", "eje", "ruta")
+
+    def aclaracion_distancias(self):
+        """Frase que dice cómo se leen las distancias (o el ángulo) con la `distribucion` actual."""
+        forma = self.p["forma_patron"]
+        campo = {"circular": "angulo", "ruta": "d1"}.get(forma, "d1/d2")
+        if self.p["distribucion"] == "espaciado":
+            return f"{campo} es la separación entre instancias consecutivas (distribucion = \"espaciado\")."
+        return (f"{campo} es la distancia TOTAL entre la primera y la última instancia (distribucion = \"extension\", "
+                "como «Extensión» de Fusion); para dar la separación entre instancias usá distribucion = \"espaciado\".")
 
     def transformaciones(self, estado, ctx):
         p, sc = self.p, _sc()
-        sup = tuple(int(i) for i in p.get("suprimir") or [])
+        try:
+            sup = tuple(int(i) for i in p.get("suprimir") or [])
+        except (TypeError, ValueError):
+            raise ErrorOperacion(f"«suprimir» tiene que ser una lista de números enteros (índices de copia): llegó "
+                                 f"{ent.describir_valor(p.get('suprimir'))}.") from None
         if p["forma_patron"] == "rectangular":
             if not p["dir1"]:
                 raise ErrorOperacion("Elegí la dirección 1.")
             d1 = ent.direccion(_resolver(p["dir1"], estado))
             d2 = ent.direccion(_resolver(p["dir2"], estado)) if p["dir2"] else None
-            return sc.transformaciones_rectangulares(d1, int(p["n1"]), ctx.evaluar(p["d1"]), d2, int(p["n2"]),
+            return sc.transformaciones_rectangulares(d1, self.entero("n1"), ctx.evaluar(p["d1"]), d2, self.entero("n2") if d2 is not None else 1,
                                                      ctx.evaluar(p["d2"]), distribucion=p["distribucion"],
                                                      simetrico1=p["simetrico"], simetrico2=p["simetrico"], suprimir=sup)
         if p["forma_patron"] == "circular":
             if not p["eje"]:
                 raise ErrorOperacion("Elegí el eje.")
             punto, eje = ent.como_eje(_resolver(p["eje"], estado))
-            return sc.transformaciones_circulares(punto, eje, int(p["n"]), angulo_total=ctx.evaluar(p["angulo"], ANGULO),
+            return sc.transformaciones_circulares(punto, eje, self.entero("n"),
+                                                  angulo_total=ctx.evaluar(p["angulo"], ANGULO),
                                                   distribucion="completa" if p["distribucion"] == "extension"
                                                   else "espaciado", simetrico=p["simetrico"], suprimir=sup)
         _, ruta = _aristas(p["ruta"], estado, "la ruta")
-        return sc.transformaciones_en_ruta(ruta, int(p["n1"]), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
+        return sc.transformaciones_en_ruta(ruta, self.entero("n1"), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
                                            inicio=ctx.evaluar(p["inicio"], "escalar"), distribucion=p["distribucion"],
                                            simetrico=p["simetrico"], suprimir=sup)
 
@@ -325,8 +365,7 @@ class OpPatron(_OpCrear):
                 c.forma = geo.unir_todos([c.forma] + copias)
             else:
                 for forma in copias:
-                    estado.nuevo_cuerpo(self.id, forma, c.tipo, apariencia=c.apariencia, material=c.material,
-                                        componente=c.componente)
+                    estado.nuevo_cuerpo(self.id, forma, c.tipo, **atributos_copia(c))
 
 
 class OpSimetria(_OpCrear):
@@ -345,15 +384,20 @@ class OpSimetria(_OpCrear):
             if self.p["combinar"]:
                 c.forma = geo.booleano(c.forma, reflejo, "unir")
             else:
-                estado.nuevo_cuerpo(self.id, reflejo, c.tipo, apariencia=c.apariencia, material=c.material,
-                                    componente=c.componente)
+                estado.nuevo_cuerpo(self.id, reflejo, c.tipo, **atributos_copia(c))
 
 
 class OpRellenoContorno(_OpCrear):
     """Relleno de contorno de Fusion [GUID-575E005F]: las herramientas (cuerpos, caras, planos) forman celdas
-    cerradas y las elegidas pasan a ser sólido."""
+    cerradas y las elegidas pasan a ser sólido.
+
+    `herramientas`: lista de referencias: cuerpo {"tipo": "cuerpo", "cuerpo": "op1.c1"}, plano {"tipo": "plano",
+    "id": "XY"} (o el id de un plano de construcción) o cara {"tipo": "cara", "cuerpo": …, "firma": …} (copiada de
+    find_faces). `celdas`: índices de las regiones cerradas, ordenadas por centroide (x, y, z); [] = la celda 0.
+    `operacion`: nuevo/unir/cortar/intersecar; `objetivos`: ids de los cuerpos a unir, cortar o intersecar."""
     TIPO, ETIQUETA, ICONO = "relleno_contorno", "Relleno de contorno", "▩"
     PARAMS = {"herramientas": [], "celdas": [], "operacion": "nuevo", "objetivos": []}
+    OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("herramientas",)
 
     def formas_herramienta(self, estado):
@@ -375,6 +419,7 @@ class OpSolidoEnvolvente(_OpCrear):
     TIPO, ETIQUETA, ICONO = "solido_envolvente", "Sólido envolvente", "⬚"
     PARAMS = {"cuerpos": [], "tipo": "caja", "margen": "0 mm", "eje": "z", "operacion": "nuevo", "objetivos": []}
     EXPRESIONES = ("margen",)
+    OPCIONES = {"tipo": ("caja", "cilindro"), "operacion": OPERACIONES_CUERPO}   # eje: "x", "y", "z" o un vector
 
     def ejecutar(self, estado, ctx):
         if not self.p["cuerpos"]:
@@ -386,12 +431,26 @@ class OpSolidoEnvolvente(_OpCrear):
 
 
 class OpSaliente(_OpCrear):
-    """Saliente (Boss) de PLÁSTICO [SLD-BOSS], simplificado: columna con agujero que nace en un punto."""
+    """Saliente (Boss) de PLÁSTICO [SLD-BOSS], simplificado: columna con agujero que nace en un punto.
+
+    `sentido` (hacia dónde crece, sobre la normal del plano del boceto): "auto" (como Fusion) = hacia afuera del
+    material si el punto está sobre una cara del cuerpo, y hacia el cuerpo si está en el aire; "plano" = siempre
+    −normal del plano (el cálculo de las recetas guardadas antes del automático, ver `migrar_receta`).
+    `invertir` (Flip) da vuelta el sentido elegido."""
     TIPO, ETIQUETA, ICONO = "saliente", "Saliente", "⌾"
     PARAMS = {"posiciones": [], "diametro_exterior": "8 mm", "diametro_agujero": "3 mm", "altura": "",
-              "profundidad_agujero": "", "angulo_desmoldeo": "0 deg", "invertir": False}
+              "profundidad_agujero": "", "angulo_desmoldeo": "0 deg", "invertir": False, "sentido": "auto"}
     EXPRESIONES = ("diametro_exterior", "diametro_agujero", "angulo_desmoldeo")
+    OPCIONES = {"sentido": ("auto", "plano")}
     REFS = ("posiciones",)
+
+    @staticmethod
+    def migrar_receta(d):
+        """Un saliente guardado sin «sentido» (antes del automático) conserva el cálculo de antes: "plano"."""
+        params = d.get("params", {})
+        if isinstance(params, dict) and "sentido" not in params:
+            d = dict(d, params=dict(params, sentido="plano"))
+        return d
 
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["posiciones"], estado)
@@ -400,14 +459,39 @@ class OpSaliente(_OpCrear):
         L = lambda k: ctx.evaluar(self.p[k]) if str(self.p.get(k) or "").strip() else None  # noqa: E731
         for e in ents:
             n = e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0])
-            d = n if self.p["invertir"] else -n
             cuerpo = _cuerpo_objetivo(estado, [e] if e.forma is not None else
                                       [ent.Entidad("punto", forma=_vertice(ent.como_punto(e)))], self.p)
+            d = _sentido_saliente(cuerpo.forma, ent.como_punto(e), n) if self.p["sentido"] == "auto" else -n
+            if self.p["invertir"]:
+                d = -d
             cuerpo.forma = _sc().saliente(cuerpo.forma, ent.como_punto(e), d, diametro_exterior=L("diametro_exterior"),
                                           diametro_agujero=L("diametro_agujero"), altura=L("altura"),
                                           profundidad_agujero=L("profundidad_agujero"),
                                           angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
             self._registrar_usados([cuerpo.id])
+
+
+def _sentido_saliente(forma, punto, normal):
+    """Sentido automático del saliente sobre `normal`: si `punto` está sobre una cara de `forma` (material de un
+    solo lado), hacia afuera del material; si está en el aire (o dentro), hacia el cuerpo: +normal cuando el cuerpo
+    entero queda de ese lado y −normal si no (lo de antes)."""
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.TopAbs import TopAbs_IN
+    from OCP.gp import gp_Pnt
+    n = np.asarray(normal, float) / np.linalg.norm(normal)
+    p = np.asarray(punto, float)
+    solidos = geo.solidos(forma) or [forma]
+
+    def dentro(q):
+        return any(BRepClass3d_SolidClassifier(s, gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN
+                   for s in solidos)
+
+    arriba, abajo = dentro(p + 1e-3 * n), dentro(p - 1e-3 * n)
+    if arriba != abajo:
+        return -n if arriba else n
+    (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(forma)
+    esquinas = np.array([[x, y, z] for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)])
+    return n if float(((esquinas - p) @ n).min()) >= -1e-6 else -n
 
 
 def _vertice(p):
@@ -422,6 +506,7 @@ class OpLabio(_OpCrear):
     PARAMS = {"aristas": [], "tipo": "labio", "ancho": "1 mm", "alto": "1.5 mm", "holgura": "0.1 mm",
               "direccion": None, "invertir": False}
     EXPRESIONES = ("ancho", "alto", "holgura")
+    OPCIONES = {"tipo": ("labio", "ranura")}
     REFS = ("aristas", "direccion")
 
     def ejecutar(self, estado, ctx):

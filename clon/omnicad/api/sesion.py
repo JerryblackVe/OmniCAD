@@ -23,6 +23,7 @@ class Sesion:
     def __init__(self, documento=None):
         self.doc = documento if documento is not None else Documento()
         self.avisos = []
+        self._llamadas = 0       # llamadas en curso de registro.llamar (más de una: anidadas, p. ej. execute_code)
 
     @property
     def ruta(self):
@@ -54,12 +55,16 @@ class Sesion:
         return self.doc
 
     def guardar(self, ruta=None, sobrescribir=False):
-        """Guarda el proyecto. No pisa un archivo existente distinto del actual salvo `sobrescribir`."""
-        if ruta is None:
+        """Guarda el proyecto. Sin ruta (o vacía), en su archivo actual. No pisa un archivo existente distinto del
+        actual salvo `sobrescribir`."""
+        if ruta is None or not str(ruta).strip():
             if not self.doc.ruta:
                 raise error("MISSING_PATH", "El documento todavía no se guardó: falta la ruta.")
             ruta = self.doc.ruta
         ruta = Path(ruta)
+        if ruta.name in ("", ".."):                           # «.», «..», «C:/»: sin nombre de archivo
+            raise error("INVALID_ARGUMENTS", f"La ruta «{ruta}» no tiene nombre de archivo.",
+                        "Pasá la ruta completa del proyecto, p. ej. C:/piezas/soporte.omnicad.")
         if ruta.suffix.lower() not in proyecto.EXTENSIONES:   # igual que proyecto.guardar
             ruta = ruta.with_suffix(proyecto.EXTENSION)
         actual = Path(self.doc.ruta).resolve() if self.doc.ruta else None
@@ -103,6 +108,7 @@ class Sesion:
         doc = self.doc
         antes = json.dumps(doc.a_dict())
         pila, pila_rehacer, modificado = list(doc._deshacer), list(doc._rehacer), doc.modificado
+        contador = doc._contador         # una llamada que falla no gasta números de id (la receta queda idéntica)
         previos = self._estados_pasos()
         try:
             yield
@@ -127,6 +133,8 @@ class Sesion:
                 doc._cargar(json.loads(antes))
                 doc._deshacer[:], doc._rehacer[:] = pila, pila_rehacer
                 doc.modificado = modificado
+            if self.doc is doc:
+                doc._contador = contador
             raise
 
 

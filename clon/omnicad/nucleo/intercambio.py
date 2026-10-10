@@ -19,7 +19,8 @@ from OCP.TDataStd import TDataStd_Name
 from OCP.TDF import TDF_Label
 from OCP.TDocStd import TDocStd_Document
 from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS_Shape
+from OCP.TopoDS import TopoDS_Iterator, TopoDS_Shape
+from OCP.TopTools import TopTools_FormatVersion
 from OCP.XCAFDoc import XCAFDoc_ColorTool, XCAFDoc_ColorType, XCAFDoc_DocumentTool
 
 from .geometria import ErrorGeometria, caras, solidos
@@ -248,7 +249,10 @@ def leer_step_estructura_texto(texto):
 
 
 def escribir_brep(forma, ruta):
-    if not BRepTools.Write_s(forma, str(ruta)):
+    """Forma → archivo BREP (texto, el formato de siempre). Sin la malla de pantalla de las caras: el visor la rehace
+    al mostrar y duplicaba el tamaño de la caché del proyecto. OCC guarda igual la triangulación de las caras que no
+    tienen superficie (las que son solo malla), así que no se pierde geometría."""
+    if not BRepTools.Write_s(forma, str(ruta), False, False, TopTools_FormatVersion.TopTools_FormatVersion_VERSION_1):
         raise ErrorGeometria(f"No se pudo escribir el BREP: {ruta}")
 
 
@@ -257,6 +261,17 @@ def leer_brep(ruta):
     if not BRepTools.Read_s(forma, str(ruta), BRep_Builder()):
         raise ErrorGeometria(f"No se pudo leer el BREP: {ruta}")
     return forma
+
+
+def partes_de_brep(ruta):
+    """Las formas de un BREP que guardó un compuesto (`escribir_brep(geo.compuesto(formas), ruta)`), en el mismo
+    orden en que entraron."""
+    compuesto = leer_brep(ruta)       # vivo mientras se recorre: el iterador no retiene la forma que recorre
+    it, partes = TopoDS_Iterator(compuesto), []
+    while it.More():
+        partes.append(it.Value())
+        it.Next()
+    return partes
 
 
 def brep_a_texto(forma):

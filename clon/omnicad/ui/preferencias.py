@@ -173,7 +173,7 @@ PAGINAS = [
         ("general/tamano_viewcube", "Tamaño de ViewCube", "combo",
          [("pequeno", "Pequeño"), ("automatico", "Automático"), ("grande", "Grande")]),
         ("general/puente_agentes", "Permitir que agentes IA controlen OmniCAD (MCP en vivo)", "check", None),
-        ("general/puente_codigo", "Permitir también execute_code en vivo (un bucle infinito congela la app)",
+        ("general/puente_codigo", "Permitir también execute_code en vivo (congela la app mientras corre: como mucho 100 s)",
          "check", None),
     ]),
     ("material", None, "Material", "Preferencias que controlan el material y el aspecto por defecto", [

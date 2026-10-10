@@ -12,7 +12,9 @@ from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pln, gp_Pnt
 
 from omnicad.nucleo import geometria as g
 from omnicad.nucleo import perfiles as pf
+from omnicad.nucleo import referencias as rf
 from omnicad.nucleo import solidos_crear as sc
+from omnicad.nucleo import solidos_modificar as sm
 from omnicad.restricciones import Boceto
 
 Z = (0, 0, 1)
@@ -231,6 +233,68 @@ def test_solevado_con_linea_central_y_carril():
         sc.solevar(secciones, carriles=[linea((2, 0, 0), (3, 0, 10)), linea((-2, 0, 0), (-3, 0, 10))])
 
 
+def octogono(radio, z):
+    return poligono([(radio * math.cos(k * math.pi / 4), radio * math.sin(k * math.pi / 4), z) for k in range(8)])
+
+
+def _tipos(forma, tipo):
+    firmas = [rf.firma(s) for s in rf.subformas(forma, tipo)]
+    return firmas, {f["geom"] for f in firmas}
+
+
+@pytest.mark.parametrize("reglada", [False, True])
+def test_solevado_entre_poligonos_da_caras_planas(reglada):
+    """Hallazgo L196/L197: las caras laterales salían B-spline (sin normal: no se podía bocetar ni ubicar agujeros
+    sobre ellas) y el vaciado de ese loft mezclaba caras planas y «otra». Tronco de octógonos (A = 2√2·R²)."""
+    a1, a2 = 2 * math.sqrt(2) * 50 ** 2, 2 * math.sqrt(2) * 40 ** 2
+    tronco = valido(sc.solevar([octogono(50, 0), octogono(40, 100)], reglada=reglada),
+                    100 / 3 * (a1 + a2 + math.sqrt(a1 * a2)))                    # 575.113,5
+    caras, tipos = _tipos(tronco, "cara")
+    assert len(caras) == 10 and tipos == {"plano"}
+    for f in caras:                        # normales hacia afuera: tapas ∓Z, laterales alejándose del eje
+        c, n = np.array(f["centro"]), np.array(f["normal"])
+        if abs(n[2]) > 0.99:
+            assert n[2] * (c[2] - 50) > 0
+        else:
+            assert float(n[:2] @ c[:2]) > 0
+    assert _tipos(tronco, "arista")[1] == {"linea"}
+    arriba = [c for c in g.caras(tronco) if abs(g.centro_masa(c, superficie=True)[2] - 100) < 1e-6]
+    hueco = sm.vaciado(tronco, arriba, espesor_interior=3.0)
+    assert g.es_valida(hueco) and _tipos(hueco, "cara")[1] == {"plano"} and len(g.caras(hueco)) == 19
+
+
+def test_solevado_entre_circulos_da_aristas_circulares():
+    """Hallazgo L176: las aristas de sección salían B-spline y la rosca, los agujeros, las uniones y las fijaciones
+    (que buscan aristas circulares) no las veían. La costura sigue siendo B-spline."""
+    secciones = [(r, z) for r, z in ((30, 0), (30, 100), (20, 150), (10, 180))]
+    botella = valido(sc.solevar([circulo((0, 0, z), r) for r, z in secciones]))
+    cruda = sc._loft([("alambre", alambre_circulo((0, 0, z), r)) for r, z in secciones], True, False, False)
+    assert g.volumen(botella) == pytest.approx(g.volumen(cruda), rel=1e-12)     # la misma forma
+    aristas, tipos = _tipos(botella, "arista")
+    circulos = sorted((f for f in aristas if f["geom"] == "circulo"), key=lambda f: f["centro"][2])
+    assert [f["radio"] for f in circulos] == pytest.approx([30, 10], rel=1e-8)     # ajuste de OCC: 30,00000002
+    assert np.allclose([f["centro"] for f in circulos], [(0, 0, 0), (0, 0, 180)], atol=1e-7)
+    assert [f["largo"] for f in circulos] == pytest.approx([60 * math.pi, 20 * math.pi], rel=1e-8)
+    assert sum(f["geom"] == "bspline" for f in aristas) == 1
+
+
+def test_referencia_vieja_de_solevado_resuelve_a_la_cara_y_arista_canonicas():
+    """Los .omnicad guardados antes tienen las firmas de esas caras y aristas como 'bspline' (sin normal, radio ni
+    centro): tienen que seguir resolviendo a la misma subforma, ahora plana o circular. Antes, una arista circular
+    vieja de la botella resolvía a la costura (la única B-spline que quedaba). Al revés sigue estricto."""
+    for forma in (sc.solevar([octogono(50, 0), octogono(40, 100)]),
+                  sc.solevar([circulo((0, 0, z), r) for r, z in ((30, 0), (30, 100), (20, 150), (10, 180))])):
+        for tipo, quitar in (("cara", ("normal",)), ("arista", ("radio", "centro"))):
+            for sub in rf.subformas(forma, tipo):
+                ref = rf.referencia("c1", sub, forma=forma)
+                if ref["firma"]["geom"] not in ("plano", "linea", "circulo"):
+                    continue
+                vieja = {k: v for k, v in ref["firma"].items() if k not in quitar}
+                assert rf.resolver(forma, dict(ref, firma=dict(vieja, geom="bspline"))).IsSame(sub)
+                otra = dict(ref, firma=dict(ref["firma"], geom="cilindro" if tipo == "cara" else "elipse"))
+                assert rf.resolver(forma, otra) is None
+
+
 # ---------------------------------------------------------------- 5. nervio y red
 def test_nervio_hasta_el_cuerpo_y_con_profundidad():
     canal = canal_u()
@@ -349,6 +413,41 @@ def test_agujero_roscado_y_rosca_cosmetica():
     assert g.volumen(sc.rosca(cil, modelada=False)) == pytest.approx(g.volumen(cil))
     with pytest.raises(g.ErrorGeometria):
         sc.rosca(cil, designacion="M6", longitud=20)
+
+
+def test_rosca_en_varios_agujeros_iguales_reusa_el_surco(monkeypatch):
+    """Hallazgo L138: M3x0.5 en 4 agujeros de 10 mm tardaba 30 s. El barrido se arma una sola vez y se copia."""
+    sc._surco_en_origen.cache_clear()
+    llamadas = []
+    original = sc._barrido_helicoidal
+    monkeypatch.setattr(sc, "_barrido_helicoidal", lambda *a: llamadas.append(1) or original(*a))
+    dat = sc.datos_rosca("M3x0.5")
+    d, d1 = dat["diametro"], dat["diametro_menor"]
+    placa = g.caja(40, 40, 12, (-20, -20, 0))
+    centros = [(-10, -10), (10, -10), (10, 10), (-10, 10)]
+    for cx, cy in centros:
+        placa = g.booleano(placa, g.cilindro(d1 / 2, 10, base=(cx, cy, 2)), "cortar")
+    tiempo, quitados = 0.0, []
+    for cx, cy in centros:
+        cara = next(c for c in sc._caras_cilindricas(placa)
+                    if np.allclose(g.centro_masa(c, superficie=True)[:2], (cx, cy), atol=1e-6))
+        v = g.volumen(placa)
+        t = time.perf_counter()
+        placa = sc.rosca(placa, cara, designacion="M3x0.5")
+        tiempo += time.perf_counter() - t
+        quitados.append(v - g.volumen(placa))
+    assert tiempo < 10
+    assert len(llamadas) == 1
+    assert g.es_valida(placa) and len(g.solidos(placa)) == 1
+    assert quitados == pytest.approx([quitados[0]] * 4, rel=1e-4)
+    assert quitados[0] == pytest.approx(7 / 16 * math.pi * ((d / 2) ** 2 - (d1 / 2) ** 2) * 10, rel=0.05)
+
+
+def test_corte_helicoidal_que_no_toca_el_cuerpo_avisa():
+    placa = g.caja(40, 40, 12, (-20, -20, 0))
+    lejos = sc._surco_rosca((500, 500, 500), (0, 0, 1), 3.0, 0.5, 0.0, 10.0, True, "derecha", radio_cara=1.2)
+    with pytest.raises(g.ErrorGeometria):
+        sc._cortar_helicoidal(placa, lejos)
 
 
 # ---------------------------------------------------------------- 9. bobina

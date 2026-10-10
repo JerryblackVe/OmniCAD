@@ -60,7 +60,7 @@ def ejecutar_script(ns):
     if ns.save and not ns.doc:
         raise util.UsoError("--save necesita --doc: no hay archivo donde guardar.")
     codigo = ruta.read_text(encoding="utf-8-sig")
-    return correr("execute_code", {"code": codigo}, ns.doc, ns.json, guardar=ns.save)
+    return correr("execute_code", {"code": codigo, "timeout": None}, ns.doc, ns.json, guardar=ns.save)
 
 
 # ---------------------------------------------------------------- batch

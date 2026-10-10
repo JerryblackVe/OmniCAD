@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 from .. import NOMBRE_APP, VERSION
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
+from ..timeline.operaciones import propiedades_cuerpo
 from . import temas
 from .cinta import ESPACIOS
 from .iconos import icono
@@ -440,7 +441,7 @@ class LienzoRender(Visor3D):
             cache[id(forma)] = (forma, v, n, seg)
             if c.id in ocultos or not len(v):
                 continue
-            color, acabado = color_y_acabado(c, propiedades.get(c.id))
+            color, acabado = color_y_acabado(c, propiedades_cuerpo(propiedades, c))
             objetos[c.id] = {"v0": v, "n0": n, "seg0": seg, "color": color, "acabado": acabado, "indice": i,
                              "tipo": getattr(c, "tipo", "solido"), "nombre": propiedades.get(c.id, {}).get("nombre")
                              or c.nombre}

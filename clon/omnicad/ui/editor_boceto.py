@@ -35,7 +35,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, circunferencia_3_puntos, dominio,
-                                    evaluar_primitiva, mas_cercano, puntos_primitiva)
+                                    evaluar_primitiva, mas_cercano, puntos_primitiva, validar_valor_cota)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion
 from . import formato, temas
 from .iconos import icono
@@ -1323,8 +1323,8 @@ class Lienzo(QWidget):
                 raise ErrorBoceto("El polígono necesita entre 3 y 64 lados.")
             return n
         valor = self.evaluar(texto, ANGULO if clave in ANGULARES else LONGITUD)
-        if clave not in ANGULARES and valor <= 0:
-            raise ErrorBoceto("El valor tiene que ser mayor que cero.")
+        if clave not in ANGULARES:          # lo escrito se vuelve cota: mayor que cero y hasta 1 km, igual que al editarla
+            validar_valor_cota(clave if clave in ("radio", "diametro") else "distancia", valor)
         return valor
 
     def _valores_bloqueados(self):
@@ -1791,7 +1791,7 @@ class Lienzo(QWidget):
 
         def aceptar(v):
             texto = v[0] or formato.numero(actual, angular=tipo == "angulo")
-            self.evaluar(texto, _tipo_valor(tipo))
+            validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo)))     # −5 o 0: la caja queda en rojo
 
             def crear():
                 self.b.agregar_cota(tipo, entidades, texto)
@@ -1807,7 +1807,7 @@ class Lienzo(QWidget):
 
         def aceptar(v):
             texto = v[0]
-            self.evaluar(texto, _tipo_valor(cota.tipo))
+            validar_valor_cota(cota.tipo, self.evaluar(texto, _tipo_valor(cota.tipo)))
 
             def cambiar():
                 cota.expresion = texto

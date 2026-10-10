@@ -9,12 +9,12 @@ from . import registrar
 
 
 def _plano_de_hit(hit):
-    """Parámetros `plano`/`marco` de OpBoceto según lo elegido."""
+    """Parámetros `plano`/`marco`/`cara` de OpBoceto según lo elegido (en una cara, su referencia persistente)."""
     ref = hit["ref"]
     if ref["tipo"] == "plano":
-        return {"plano": ref["id"], "marco": None}
+        return {"plano": ref["id"], "marco": None, "cara": None}
     if ref["tipo"] == "cara" and hit.get("plano") is not None:
-        return {"plano": "cara", "marco": hit["plano"].marco()}
+        return {"plano": "cara", "marco": hit["plano"].marco(), "cara": ref}
     raise ErrorComando("Elegí un plano o una cara plana.")
 
 

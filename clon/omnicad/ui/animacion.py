@@ -1336,7 +1336,8 @@ class VentanaAnimacion(QMainWindow):
             fr = self.cuadro()
             valores["visible"] = all(fr["opacidad"].get(c, 1.0) < 0.5 for c in self.seleccion)
             valores["duracion"] = 0.0
-        d = DialogoAccion(self, tipo, valores, len(self.seleccion) if tipo != "explosion" else len(self.seleccion))
+        # Explosión sin selección = todo el modelo (agregar_accion); el diálogo lo muestra con 0 cuerpos.
+        d = DialogoAccion(self, tipo, valores, len(self.seleccion))
         if d.exec() != QDialog.Accepted:
             return None
         a = {"tipo": tipo, **valores, **d.valores()}

@@ -28,6 +28,8 @@ Toda falla vuelve como `{"ok": false, "error_kind", "mensaje", "pistas"}`. Decid
 - `FEATURE_NOT_FOUND`, `BODY_NOT_FOUND`: la referencia no existe; la pista sugiere nombres parecidos.
 - `OPERATION_FAILED`: el paso no se pudo calcular con esos valores. El documento NO cambió.
 - `CODE_ERROR`: falló tu código de `execute_code`; el mensaje trae la línea. El documento NO cambió.
+- `CODE_TIMEOUT`: tu código de `execute_code` pasó su `timeout` (60 s por defecto) y se cortó; el documento
+  NO cambió. Subí `timeout` o partí el trabajo en llamadas más cortas.
 
 Los `avisos` de una respuesta correcta no son fallas, pero conviene leerlos.
 

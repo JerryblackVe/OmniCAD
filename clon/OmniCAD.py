@@ -18,6 +18,20 @@ if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
 
+def _manejador_log():
+    """Adónde va el registro: a la consola si hay; en la app sin consola (OmniCAD.exe, sys.stderr = None) a
+    omnicad.log en la carpeta de datos. Sin esto cada aviso imprimía «--- Logging error ---»."""
+    if sys.stderr is not None:
+        return logging.StreamHandler()
+    try:
+        from omnicad import carpeta_datos
+        carpeta = carpeta_datos()
+        carpeta.mkdir(parents=True, exist_ok=True)
+        return logging.FileHandler(carpeta / "omnicad.log", "w", encoding="utf-8", delay=True)
+    except OSError:
+        return logging.NullHandler()
+
+
 def _verificar_dependencias():
     """Avisa si falta algún paquete. Solo los BUSCA (find_spec), sin importarlos: scipy, p. ej., se carga recién al
     usar una malla o el solver de bocetos (arranque rápido)."""
@@ -38,7 +52,7 @@ def main(argv=None):
     ap.add_argument("--puente", action="store_true",
                     help="permitir que agentes IA controlen esta sesión (MCP en vivo, solo 127.0.0.1)")
     args = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", handlers=[_manejador_log()])
     _verificar_dependencias()
 
     import omnicad.ui  # noqa: F401 — en Linux elige la plataforma de Qt y la de OpenGL ANTES de crear la aplicación

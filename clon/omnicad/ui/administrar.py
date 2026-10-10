@@ -54,7 +54,7 @@ def filas_bom(doc, nombre_de=None):
     for c in estado.cuerpos.values():
         if getattr(c, "tipo", "solido") != "solido":
             continue
-        material = doc.propiedad(c.id, "material") or "Acero"
+        material = doc.propiedad(c.id, "material") or getattr(c, "material", None) or "Acero"
         vol = geo.volumen(c.forma)
         comp = estado.componentes.get(c.componente, {}).get("nombre", "") if c.componente else ""
         base = nombre_de(c).split(" (")[0]

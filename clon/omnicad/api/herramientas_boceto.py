@@ -18,6 +18,7 @@ from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..restricciones import Boceto, ErrorBoceto
+from ..restricciones.boceto import validar_valor_cota
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, evaluar
 from . import selectores as sl
@@ -73,6 +74,20 @@ def referencia_plano(sesion, plane):
     parecidos = difflib.get_close_matches(ref, opciones, n=3, cutoff=0.5)
     raise error("PLANE_NOT_FOUND", f"No existe el plano '{ref}'.",
                 *([f"¿Quisiste decir: {', '.join(parecidos)}?"] if parecidos else []))
+
+
+def plano_o_cara(sesion, plane, body=None):
+    """Dónde va un boceto nuevo: (plano, marco, id de cara, referencia de cara). Un plano de origen o de construcción da
+    (referencia, None, None, None); una cara plana (selector como '>Z' o id 'Cuerpo1/F6', evaluado sobre `body` o el
+    único cuerpo) da ('cara', marco de la cara, id efímero, referencia persistente con la que el boceto sigue a la
+    cara en cada recálculo). Lo comparten create_sketch y sketch_from_spec."""
+    try:
+        return referencia_plano(sesion, plane), None, None, None
+    except ErrorAPI as e:
+        if e.error_kind != "PLANE_NOT_FOUND" or not (sl.es_id(plane) or sl.parece_selector(plane)):
+            raise
+    cuerpo, elem = sl.elegir_uno(sesion, plane, "cara", body)
+    return "cara", sl.plano_de_cara(elem).marco(), sl.emitir_id(sesion, cuerpo, elem), sl.referencia(cuerpo, elem)
 
 
 def op_boceto(sesion, ref=None):
@@ -170,13 +185,40 @@ def _exigir_sin_conflicto(sesion, op, previo_ok, que):
                     f"{br.solver.descripcion()}")
 
 
+# ---------------------------------------------------------------- números finitos
+def _finito(v):
+    """True si `v` es un número (no bool) finito: NaN, ±inf y enteros que no entran en un float dan False."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        return math.isfinite(v)
+    except OverflowError:
+        return False
+
+
+def _exigir_finitos(argumentos):
+    """INVALID_ARGUMENTS si un número de los argumentos (o de una lista anidada) es NaN o infinito: con una
+    coordenada así, el cálculo de perfiles de OpenCascade no termina nunca. Se llama con `locals()`."""
+    def revisar(nombre, v):
+        if isinstance(v, (list, tuple)):
+            for i, x in enumerate(v):
+                revisar(f"{nombre}[{i}]", x)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool) and not _finito(v):
+            raise error("INVALID_ARGUMENTS", f"'{nombre}' tiene que ser un número finito (llegó {v!r}).")
+    for nombre, v in argumentos.items():
+        revisar(nombre, v)
+
+
 # ---------------------------------------------------------------- constructores sobre un Boceto
 def _xy(v, que):
     try:
         x, y = v
-        return float(x), float(y)
-    except (TypeError, ValueError):
-        raise error("INVALID_GEOMETRY", f"{que} tiene que ser [x, y] con números (mm).") from None
+        x, y = float(x), float(y)
+    except (TypeError, ValueError, OverflowError):
+        x = y = math.nan
+    if not (math.isfinite(x) and math.isfinite(y)):
+        raise error("INVALID_GEOMETRY", f"{que} tiene que ser [x, y] con números finitos (mm).")
+    return x, y
 
 
 def _linea(b, x1, y1, x2, y2, construccion=False):
@@ -228,6 +270,8 @@ def _arco_3_puntos(b, p1, p2, p3, construccion=False):
 def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False):
     if lados < 3:
         raise ErrorBoceto("Un polígono necesita al menos 3 lados.")
+    if lados > 64:      # el mismo tope que la interfaz (ui/editor_boceto.py, _evaluar_campo)
+        raise ErrorBoceto(f"Un polígono admite como máximo 64 lados, como la interfaz (recibió {lados}).")
     if radio <= 1e-9:
         raise ErrorBoceto("El radio del polígono tiene que ser positivo.")
     rv = radio / math.cos(math.pi / lados) if circunscrito else radio
@@ -253,7 +297,9 @@ def _spline(b, puntos, tipo, grado, cerrada, construccion=False):
     if control and (grado not in (3, 5) or len(pts) < grado + 1):
         raise ErrorBoceto(f"Una spline de puntos de control de grado {grado} necesita grado 3 o 5 y al menos "
                           f"{grado + 1} puntos.")
-    sid = b.agregar_spline(pts, "control" if control else "ajuste", grado, cerrada, construccion=construccion)
+    # como Fusion, la spline de ajuste es siempre cúbica: su grado se ignora (con 0 o −1 rompía la interpolación)
+    sid = b.agregar_spline(pts, "control" if control else "ajuste", grado if control else 3, cerrada,
+                           construccion=construccion)
     ids = b.curvas[sid].pts
     alias = {"": sid, "start": ids[0], "end": ids[-1]}
     alias.update({f"p{i + 1}": p for i, p in enumerate(ids)})
@@ -403,26 +449,20 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
              "la normal exterior como normal (extruir con join crece hacia afuera; con cut entra al material solo, como Fusion). Ejes: en "
              "caras horizontales x→+X; en las demás y→+Z (hacia arriba) y x = y × normal; el origen es la proyección del "
              "origen del mundo sobre el plano de la cara, no una esquina (plane_frame lo da y find_faces trae center_uv, "
-             "el centro de cada cara en estos ejes). El marco de la cara se congela al crear el boceto: si después cambia "
-             "un parámetro que mueve la cara, el boceto no la sigue.",
+             "el centro de cada cara en estos ejes). El boceto queda asociado a la cara, como en Fusion: si un parámetro "
+             "la mueve o la gira, el boceto la sigue; si la cara desaparece, el paso da error. Con varios cuerpos, body dice en cuál se evalúa "
+             "el selector de la cara.",
              modifica=True)
-def create_sketch(sesion, plane: str = "XY", name: str | None = None):
+def create_sketch(sesion, plane: str = "XY", name: str | None = None, body: str | None = None):
     """
     plane: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
     name: nombre del boceto; vacío = "Boceto1", "Boceto2"…
+    body: id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
     """
     doc = sesion.doc
-    cara = None
-    try:
-        ref, marco = referencia_plano(sesion, plane), None
-    except ErrorAPI as e:
-        if e.error_kind != "PLANE_NOT_FOUND" or not (sl.es_id(plane) or sl.parece_selector(plane)):
-            raise
-        cuerpo, elem = sl.elegir_uno(sesion, plane, "cara")
-        marco = sl.plano_de_cara(elem).marco()
-        ref, cara = "cara", sl.emitir_id(sesion, cuerpo, elem)
+    ref, marco, cara, ref_cara = plano_o_cara(sesion, plane, body)
     nombre = name.strip() if name and name.strip() else nombre_nuevo(doc, "Boceto", OpBoceto)
-    op = OpBoceto(doc.nuevo_id(), nombre, plano=ref, marco=marco)
+    op = OpBoceto(doc.nuevo_id(), nombre, plano=ref, marco=marco, cara=ref_cara)
     doc.agregar(op)
     br = boceto_resuelto(sesion, op)
     info = {"sketch": _paso(op), "plane": ref, "plane_frame": _info_plano(br.plano) if br is not None else None,
@@ -444,6 +484,7 @@ def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una línea de construcción (no forma perfiles).
     """
+    _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _linea(b, start_x, start_y, end_x, end_y, construction))
 
 
@@ -464,11 +505,12 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
     center_y: y del centro.
     origin_x: x de la esquina mínima (forma esquina + tamaño; 0 si solo se da origin_y).
     origin_y: y de la esquina mínima.
-    width: tamaño en x del boceto (mm), para las formas con tamaño.
-    height: tamaño en y del boceto (mm), para las formas con tamaño.
+    width: tamaño en x del boceto (mm, mayor que cero), para las formas con tamaño.
+    height: tamaño en y del boceto (mm, mayor que cero), para las formas con tamaño.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un rectángulo de construcción (no forma perfiles).
     """
+    _exigir_finitos(locals())
     esquinas = (x1, y1, x2, y2)
     if any(v is not None for v in esquinas):
         if any(v is None for v in esquinas):
@@ -478,6 +520,9 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if width is None or height is None:
             raise error("INVALID_ARGUMENTS", "Indicá las dos esquinas (x1, y1, x2, y2) o un tamaño (width y height) "
                         "con center_x/center_y o con origin_x/origin_y.")
+        if not (width > 0 and height > 0):
+            raise error("INVALID_GEOMETRY", f"width y height tienen que ser mayores que cero (llegaron {width:g} y "
+                        f"{height:g}).")
         if center_x is not None or center_y is not None:
             cx, cy = center_x or 0.0, center_y or 0.0
             a, b_ = (cx - width / 2, cy - height / 2), (cx + width / 2, cy + height / 2)
@@ -498,6 +543,7 @@ def draw_circle(sesion, radius: float, center_x: float = 0.0, center_y: float = 
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un círculo de construcción (no forma perfiles).
     """
+    _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _circulo(b, center_x, center_y, radius, construction))
 
 
@@ -522,6 +568,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un arco de construcción (no forma perfiles).
     """
+    _exigir_finitos(locals())
     if sweep_angle is not None:
         if center_x is None or center_y is None:
             raise error("INVALID_ARGUMENTS", "Con sweep_angle hacen falta center_x y center_y.")
@@ -541,7 +588,7 @@ def create_polygon(sesion, sides: int, radius: float, center_x: float = 0.0, cen
                    rotation: float = 0.0, kind: Literal["inscribed", "circumscribed"] = "inscribed",
                    sketch: str | None = None, construction: bool = False):
     """
-    sides: cantidad de lados (3 o más).
+    sides: cantidad de lados (3 a 64).
     radius: radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito).
     center_x: x del centro (mm).
     center_y: y del centro (mm).
@@ -550,6 +597,7 @@ def create_polygon(sesion, sides: int, radius: float, center_x: float = 0.0, cen
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un polígono de construcción (no forma perfiles).
     """
+    _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, radius, center_x, center_y, rotation,
                                                         kind == "circumscribed", construction))
 
@@ -566,6 +614,7 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una spline de construcción (no forma perfiles).
     """
+    _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction))
 
 
@@ -613,7 +662,8 @@ def _exigir_entidades(b, ids):
 
 @herramienta("add_dimension", "boceto",
              "Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión "
-             "con parámetros ('ancho / 2'); si se omite, usa la medida actual. Entidades por tipo: distance: dos "
+             "con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y "
+             "desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos "
              "puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; "
              "radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos.",
              modifica=True)
@@ -639,10 +689,11 @@ def add_dimension(sesion, sketch: str,
         expresion = repr(round(medida, 6))
     else:
         expresion = texto_expr(value)
-    evaluar(expresion, ANGULO if interno == "angulo" else LONGITUD, sesion.doc.parametros.valores())
+    valor = evaluar(expresion, ANGULO if interno == "angulo" else LONGITUD, sesion.doc.parametros.valores())
     antes = _claves(b)
     try:
         kid = b.agregar_cota(interno, list(entities), expresion)
+        validar_valor_cota(interno, valor)
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", str(e)) from e
     sesion.doc.reemplazar(op.id, nueva)
@@ -679,8 +730,8 @@ def _campo(e, i, clave, alternativas=()):
 
 
 def _numero(v, i, tipo, que):
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        raise _spec_error(i, tipo, f"{que} tiene que ser un número (mm).")
+    if not _finito(v):
+        raise _spec_error(i, tipo, f"{que} tiene que ser un número finito.")
     return float(v)
 
 
@@ -697,6 +748,8 @@ def _construir_entidad(b, i, e):
         else:
             w = _numero(_campo(e, i, "width"), i, tipo, "'width'")
             h = _numero(_campo(e, i, "height"), i, tipo, "'height'")
+            if not (w > 0 and h > 0):
+                raise _spec_error(i, tipo, "'width' y 'height' tienen que ser mayores que cero.")
             if "center" in e:
                 cx, cy = p("center")
                 x1, y1, x2, y2 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
@@ -723,7 +776,12 @@ def _construir_entidad(b, i, e):
         tipo_spline = e.get("spline_type", "fit_points")
         if tipo_spline not in ("fit_points", "control_points"):
             raise _spec_error(i, tipo, "'spline_type' es fit_points o control_points.")
-        return _spline(b, _campo(e, i, "points"), tipo_spline, int(e.get("degree", 3)), bool(e.get("closed", False)), c)
+        grado = e.get("degree", 3)
+        if isinstance(grado, float) and grado.is_integer():
+            grado = int(grado)
+        if isinstance(grado, bool) or not isinstance(grado, int):
+            raise _spec_error(i, tipo, "'degree' tiene que ser un entero (3 o 5).")
+        return _spline(b, _campo(e, i, "points"), tipo_spline, grado, bool(e.get("closed", False)), c)
     if tipo == "point":
         x, y = p("at", "position")
         return {"": b.agregar_punto(x, y)}
@@ -758,19 +816,22 @@ def _citar(token, alias, b, que):
              "constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value}] (value puede ser "
              "una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', 'id.center', y en un "
              "rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas); un entero cita un id de "
-             "entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. Devuelve "
-             "handles (cita → id real), perfiles y estado.", modifica=True)
+             "entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un "
+             "plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre "
+             "esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve "
+             "handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano).", modifica=True)
 def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = None,
                      constraints: list[dict] | None = None, dimensions: list[dict] | None = None,
-                     name: str | None = None):
+                     name: str | None = None, body: str | None = None):
     """
-    plane: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+    plane: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
     entities: geometría del boceto (ver la descripción de la herramienta).
     constraints: restricciones, cada una {"type": ..., "entities": [citas]}.
     dimensions: cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión}.
     name: nombre del boceto; vacío = "Boceto1", "Boceto2"…
+    body: id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
     """
-    ref = referencia_plano(sesion, plane)
+    ref, marco, cara, ref_cara = plano_o_cara(sesion, plane, body)
     doc = sesion.doc
     b = Boceto()
     alias = {}
@@ -802,19 +863,24 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             if d.get("value") is None:
                 raise error("INVALID_DIMENSION", f"Cota {j}: falta 'value' (número o expresión).")
             expresion = texto_expr(d["value"])
-            evaluar(expresion, ANGULO if tipo == "angle" else LONGITUD, valores)
+            valor = evaluar(expresion, ANGULO if tipo == "angle" else LONGITUD, valores)
             try:
                 b.agregar_cota(COTAS[tipo], ids, expresion)
+                validar_valor_cota(COTAS[tipo], valor)
             except ErrorBoceto as e:
                 raise error("INVALID_DIMENSION", f"Cota {j}: {e}") from e
     except ErrorBoceto as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
     nombre = name.strip() if name and name.strip() else nombre_nuevo(doc, "Boceto", OpBoceto)
-    op = OpBoceto(doc.nuevo_id(), nombre, plano=ref, boceto=b)
+    op = OpBoceto(doc.nuevo_id(), nombre, plano=ref, marco=marco, cara=ref_cara, boceto=b)
     doc.agregar(op)
     _exigir_sin_conflicto(sesion, op, True, "Las restricciones y cotas del spec")
     br = boceto_resuelto(sesion, op)
     estado, gdl = estado_solver(br)
-    return {"sketch": _paso(op), "plane": ref, "handles": alias, "entities": len(b.curvas),
-            "constraints": len(b.restricciones), "dimensions": len(b.cotas),
-            "profiles": None if br is None else len(br.perfiles), "dof": gdl, "status": estado}
+    info = {"sketch": _paso(op), "plane": ref, "plane_frame": _info_plano(br.plano) if br is not None else None,
+            "handles": alias, "entities": len(b.curvas), "constraints": len(b.restricciones),
+            "dimensions": len(b.cotas), "profiles": None if br is None else len(br.perfiles), "dof": gdl,
+            "status": estado}
+    if cara:
+        info["face"] = cara
+    return info

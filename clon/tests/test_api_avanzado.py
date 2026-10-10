@@ -231,6 +231,56 @@ def test_execute_code_falla_dentro_de_la_api_y_traza_larga(s):
     assert len(api.llamar(s, "execute_code", {"code": "raise ValueError('x' * 5000)"})["mensaje"]) <= 1500
 
 
+# ---------------------------------------------------------------- execute_code con plazo (L139)
+def test_execute_code_bucle_infinito_se_corta_por_timeout(s):
+    import time
+    antes = foto(s)
+    t0 = time.monotonic()
+    r = api.llamar(s, "execute_code", {"code": "print('arranca')\nwhile True:\n    pass", "timeout": 0.3})
+    assert time.monotonic() - t0 < 5
+    assert not r["ok"] and r["error_kind"] == "CODE_TIMEOUT" and r["pistas"]
+    assert "0.3 s" in r["mensaje"] and "línea" in r["mensaje"] and "arranca" in r["mensaje"]
+    assert foto(s) == antes
+
+
+@pytest.mark.parametrize("codigo", ["while True: pass", "x = 0\nwhile 1: x += 1",
+                                    "def f():\n    while True: pass\nf()"])
+def test_execute_code_bucle_de_una_linea_se_corta_por_timeout(s, codigo):
+    # El salto hacia atrás dentro de una misma línea no dispara LINE: el vigía escucha también JUMP.
+    import time
+    antes = foto(s)
+    t0 = time.monotonic()
+    r = api.llamar(s, "execute_code", {"code": codigo, "timeout": 0.3})
+    assert time.monotonic() - t0 < 5
+    assert not r["ok"] and r["error_kind"] == "CODE_TIMEOUT"
+    assert foto(s) == antes
+
+
+def test_execute_code_timeout_revierte_recalculos_aunque_atrape_todo(s):
+    antes = foto(s)
+    codigo = ("i = 0\n"
+              "while True:\n"
+              "    try:\n"
+              "        i += 1\n"
+              "        llamar('create_box', {'length': 5 + i % 3, 'width': 5, 'height': 5})\n"
+              "    except:\n"
+              "        pass\n")
+    r = api.llamar(s, "execute_code", {"code": codigo, "timeout": 1})
+    assert r["error_kind"] == "CODE_TIMEOUT"
+    assert foto(s) == antes and len(s.doc.resultados) == len(s.doc.operaciones)
+    assert ok(api.llamar(s, "execute_code", {"code": "result = 2 + 2"}))["result"] == 4   # sigue andando
+
+
+def test_execute_code_timeout_invalido_none_y_anidado(s):
+    for malo in (0, -1, float("nan")):
+        assert api.llamar(s, "execute_code", {"code": "result = 1", "timeout": malo})["error_kind"] == "INVALID_ARGUMENTS"
+    assert ok(api.llamar(s, "execute_code", {"code": "result = 1", "timeout": None}))["result"] == 1
+    interno = "llamar('execute_code', {'code': 'while True:\\n    pass', 'timeout': 0.2})['error_kind']"
+    assert ok(api.llamar(s, "execute_code", {"code": "result = " + interno}))["result"] == "CODE_TIMEOUT"
+    props = next(h for h in api.catalogo() if h["nombre"] == "execute_code")["esquema"]["properties"]
+    assert props["timeout"]["default"] == av.PLAZO_CODIGO == 60
+
+
 # ---------------------------------------------------------------- guía
 def test_guia_indice_y_flujo(s):
     ind = ok(api.llamar(s, "get_guide"))

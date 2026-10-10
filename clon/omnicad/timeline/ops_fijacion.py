@@ -101,6 +101,7 @@ class OpFijacion(Operacion):
     TIPO, ETIQUETA, ICONO = "fijacion", "Fijación", "⚲"
     PARAMS = {"posiciones": [], "direccion": None, "similares": True, "familia": "tornillo", "norma": "ISO 4762",
               "tamano": AUTO, "largo": AUTO, "rosca": "cosmetica", "voltear": False, "material": "Acero"}
+    OPCIONES = {"familia": fj.FAMILIAS, "rosca": fj.TIPOS_ROSCA}    # norma, tamaño, largo y material: de la biblioteca
 
     def dependencias(self):
         return ent.dependencias_de(self.p.get("posiciones"), self.p.get("direccion")) - {self.id}

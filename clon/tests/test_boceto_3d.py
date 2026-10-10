@@ -79,6 +79,90 @@ def test_plano_desfasado_de_otro_plano():
     assert doc.estado_final.planos["op3"].origen[2] == pytest.approx(30)
 
 
+# ---------------------------------------------------------------- boceto asociado a la cara (L143)
+def _cara_mas_x(forma):
+    return next(c for c in g.caras(forma) if (p := g.plano_de_cara(c)) is not None and p.normal[0] > 0.99)
+
+
+def _doc_corte_en_cara(asociado=True):
+    """Caja de ancho paramétrico 70 con una abertura 10x4x3 cortada desde un boceto en la cara +X."""
+    from omnicad.nucleo import referencias as refs
+    doc = Documento()
+    doc.parametros.agregar("ancho", "70 mm")
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="ancho", largo="40", alto="20"))
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    cara = _cara_mas_x(forma)
+    b = Boceto()
+    b.agregar_rectangulo((15, 8), (25, 12))
+    extra = {"cara": refs.referencia("op1.c1", cara, forma)} if asociado else {}
+    doc.agregar(OpBoceto(doc.nuevo_id(), plano="cara", marco=g.plano_de_cara(cara).marco(), boceto=b, **extra))
+    perfil = doc.estado_final.bocetos["op2"].perfiles[0]
+    doc.agregar(OpExtrusion(doc.nuevo_id(), boceto="op2", perfiles=[OpExtrusion.referencia_perfil(perfil)],
+                            distancia="3", invertir=True, operacion="cortar"))
+    return doc
+
+
+def _ancho(doc, valor):
+    t = TablaParametros.desde_lista(doc.parametros.a_lista())
+    t.modificar("ancho", valor)
+    doc.aplicar_parametros(t)
+
+
+@pytest.mark.parametrize("ancho", [76, 64])
+def test_boceto_sobre_cara_sigue_a_la_cara(ancho):
+    doc = _doc_corte_en_cara()
+    _ancho(doc, f"{ancho} mm")
+    assert all(r.estado == "ok" for r in doc.resultados), [(r.estado, r.mensaje) for r in doc.resultados]
+    assert doc.estado_final.bocetos["op2"].plano.origen[0] == pytest.approx(ancho)
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    assert g.es_valida(forma)
+    assert g.volumen(forma) == pytest.approx(ancho * 40 * 20 - 10 * 4 * 3, rel=1e-6)
+    assert g.area(_cara_mas_x(forma)) == pytest.approx(40 * 20 - 10 * 4, rel=1e-6)   # la abertura está en la cara
+
+
+def test_boceto_viejo_sin_cara_conserva_el_marco():
+    doc = _doc_corte_en_cara(asociado=False)
+    _ancho(doc, "76 mm")
+    assert doc.estado_final.bocetos["op2"].plano.origen[0] == pytest.approx(70)
+    datos = doc.a_dict()
+    for op in datos["operaciones"]:
+        op["params"].pop("cara", None)
+    otro = Documento.desde_dict(datos)
+    assert otro.operacion("op2").p["cara"] is None
+
+
+def test_boceto_sobre_cara_perdida_da_error_y_depende_del_cuerpo():
+    doc = _doc_corte_en_cara()
+    assert "op1" in doc.operacion("op2").dependencias()
+    with pytest.raises(ErrorDocumento):
+        doc.eliminar("op1")
+    doc.suprimir("op1")
+    r = doc.resultados[1]                                                    # el boceto, op2
+    assert r.estado == "error" and "cara" in r.mensaje
+
+
+def test_boceto_sobre_cara_sigue_a_la_cara_tras_guardar_y_abrir():
+    otro = Documento.desde_dict(_doc_corte_en_cara().a_dict())
+    _ancho(otro, "80 mm")
+    assert otro.estado_final.bocetos["op2"].plano.origen[0] == pytest.approx(80)
+    assert g.volumen(otro.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(80 * 40 * 20 - 120, rel=1e-6)
+
+
+def test_api_create_sketch_en_cara_queda_asociado():
+    from omnicad import api
+    s = api.Sesion()
+    for nombre, args in (("create_parameter", {"name": "ancho", "expression": "70 mm"}),
+                         ("create_box", {"length": "ancho", "width": 40, "height": 20}),
+                         ("create_sketch", {"plane": ">X"})):
+        r = api.llamar(s, nombre, args)
+        assert r["ok"], r
+    op = s.doc.operaciones[-1]
+    assert op.p["cara"]["tipo"] == "cara"
+    assert r["result"]["plane_frame"]["origin"][0] == pytest.approx(35)
+    assert api.llamar(s, "set_parameter", {"name": "ancho", "expression": "76 mm"})["ok"]
+    assert s.doc.estado_final.bocetos[op.id].plano.origen[0] == pytest.approx(38)
+
+
 def test_vistas_guardadas_se_guardan_con_el_documento():
     doc = Documento()
     doc.vistas["Frente"] = {"objetivo": [0, 0, 0], "distancia": 100.0, "R": np.identity(3).tolist(), "camara": "ortografica"}

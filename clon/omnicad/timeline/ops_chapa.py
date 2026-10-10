@@ -67,10 +67,11 @@ def _guardar(c, m):
 
 
 def _cuerpo_nuevo(estado, op_id, m, forma=None, nombre=None, como=None):
-    """Cuerpo de chapa nuevo (con el aspecto, material y componente de `como`, si se da)."""
+    """Cuerpo de chapa nuevo: con el aspecto, material y componente de `como`, si se da; si no, con el material
+    de la regla (como en Fusion, la regla de chapa trae el material)."""
     forma = chapa.solido(m) if forma is None else forma
-    extra = {} if como is None else {"apariencia": como.apariencia, "material": como.material,
-                                     "componente": como.componente}
+    extra = {"material": m["regla"].get("material")} if como is None else {
+        "apariencia": como.apariencia, "material": como.material, "componente": como.componente}
     cid = estado.nuevo_cuerpo(op_id, forma, "solido", nombre, **extra)
     c = estado.cuerpos[cid]
     c.__class__ = CuerpoChapa
@@ -143,6 +144,10 @@ class OpPestana(_OpChapa):
               "alivio_ancho": "", "alivio_profundidad": ""}
     EXPRESIONES = ("distancia", "distancia2", "altura", "angulo", "ancho_distancia", "ancho1", "ancho2", "radio",
                    "alivio_ancho", "alivio_profundidad")
+    OPCIONES = {"tipo": ("base", "contorno", "arista"), "orientacion": chapa.ORIENTACIONES,
+                "direccion": DIRECCIONES_CONTORNO, "referencia": chapa.REFERENCIAS_ALTURA,
+                "posicion": chapa.POSICIONES, "ancho": chapa.TIPOS_ANCHO,
+                "alivio_forma": ("", *chapa.FORMAS_ALIVIO)}       # "": el alivio de la regla
     REFS = ("perfiles", "curvas", "aristas")
 
     def ejecutar(self, estado, ctx):
@@ -201,6 +206,7 @@ class OpDobladillo(_OpChapa):
     PARAMS = {"aristas": [], "tipo": "cerrado", "longitud": "10 mm", "separacion": "", "radio": "",
               "posicion": "adyacente", "invertir": False}
     EXPRESIONES = ("longitud", "separacion", "radio")
+    OPCIONES = {"tipo": chapa.TIPOS_DOBLADILLO, "posicion": ("adyacente", "tangente")}
     REFS = ("aristas",)
 
     def ejecutar(self, estado, ctx):
@@ -220,6 +226,7 @@ class OpPlegar(_OpChapa):
     PARAMS = {"cara": None, "punto": None, "lineas": [], "angulo": "90 deg", "posicion": "centro", "invertir": False,
               "anular": False, "radio": ""}
     EXPRESIONES = ("angulo", "radio")
+    OPCIONES = {"posicion": chapa.POSICIONES_LINEA}
     REFS = ("cara", "lineas")
 
     def ejecutar(self, estado, ctx):
@@ -245,6 +252,7 @@ class OpDesplegar(_OpChapa):
     y los pliegues elegidos (caras curvas) o todos. Volver a plegar: el cuerpo (y opcionalmente otra cara fija)."""
     TIPO, ETIQUETA, ICONO = "desplegar", "Desplegado", "⇱"
     PARAMS = {"modo": "desplegar", "cuerpo": "", "cara": None, "punto": None, "pliegues": [], "todos": True}
+    OPCIONES = {"modo": ("desplegar", "replegar")}
     REFS = ("cara", "pliegues")
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
@@ -276,34 +284,56 @@ UBICACIONES_PATRON = {"junto": "Al lado de la pieza", "en_lugar": "Sobre la cara
 
 class OpPatronPlano(_OpChapa):
     """CHAPA › CREAR › Crear patrón plano [GUID-7EBD9424]: cuerpo nuevo con la pieza desplegada sobre la cara
-    estacionaria (o al lado de la pieza, para no superponerlos). Guarda el modelo para exportar el DXF; no se
-    edita con las herramientas de chapa."""
+    estacionaria (o al lado de la pieza, sin tocarla a ella ni a los otros cuerpos que ya existen en ese punto
+    del timeline). Guarda el modelo para exportar el DXF; no se edita con las herramientas de chapa."""
     TIPO, ETIQUETA, ICONO = "patron_plano", "Patrón plano", "▱"
     PARAMS = {"cara": None, "punto": None, "ubicacion": "junto"}
+    OPCIONES = {"ubicacion": UBICACIONES_PATRON}
     REFS = ("cara",)
 
     def ejecutar(self, estado, ctx):
         if not self.p["cara"]:
             raise ErrorOperacion("Elegí la cara estacionaria.")
-        e = _resolver(self.p["cara"], estado)
+        e = _resolver(self.p["cara"], estado, ("cara",))
         c, m = _modelo(estado, ctx, e.cuerpo)
         punto = None if self.p.get("punto") is None else np.asarray(self.p["punto"], float)
         fija = chapa.placa_de_cara(m, e.forma, punto)[0]
         forma = chapa.patron_plano(m, fija)
         if self.p.get("ubicacion", "junto") == "junto":
             eje = (np.array(m["marco"]) @ chapa.transformaciones(m)[fija])[:3, 0]
-            forma = geo.trasladar(forma, eje * _separacion(c.forma, forma, eje))
+            forma = _al_lado(estado, c, forma, eje)
         patron = dict(m, patron_de=c.id, estacionaria=fija)
         _cuerpo_nuevo(estado, self.id, patron, forma, f"Patrón plano ({c.nombre})", como=c)
 
 
+def _caja(cuerpo):
+    """Caja envolvente ((x0, y0, z0), (x1, y1, z1)) de un cuerpo (también de malla); None si está vacío."""
+    return cuerpo.forma.caja() if cuerpo.tipo == "malla" else geo.caja_envolvente(cuerpo.forma)
+
+
 def _separacion(a, b, eje):
-    """Cuánto correr `b` a lo largo de `eje` para que quede 10 mm más allá de `a`."""
-    def extremos(forma):
-        (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(forma)
+    """Cuánto correr la caja `b` a lo largo de `eje` para que quede 10 mm más allá de la caja `a`."""
+    def extremos(caja):
+        (x0, y0, z0), (x1, y1, z1) = caja
         proy = [float(np.dot((x, y, z), eje)) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
         return min(proy), max(proy)
     return extremos(a)[1] - extremos(b)[0] + 10.0
+
+
+def _al_lado(estado, cuerpo, forma, eje):
+    """`forma` corrida a lo largo de `eje` hasta quedar 10 mm más allá de `cuerpo` y sin solaparse con la caja de
+    ningún otro cuerpo del estado. Cada cuerpo que estorba la empuja 10 mm más allá de él: la distancia crece en
+    cada vuelta y un cuerpo ya salteado no vuelve a estorbar, así que termina."""
+    caja = geo.caja_envolvente(forma)
+    d = _separacion(_caja(cuerpo), caja, eje)
+    otras = [x for x in (_caja(c) for c in estado.cuerpos.values()) if x is not None]
+    while True:
+        p0, p1 = np.asarray(caja[0]) + eje * d, np.asarray(caja[1]) + eje * d
+        choca = next((x for x in otras if np.all(p0 < np.asarray(x[1]) - 1e-6) and
+                      np.all(np.asarray(x[0]) + 1e-6 < p1)), None)
+        if choca is None:
+            return geo.trasladar(forma, eje * d)
+        d = _separacion(choca, caja, eje)
 
 
 class OpConvertirChapa(_OpChapa):
@@ -316,7 +346,7 @@ class OpConvertirChapa(_OpChapa):
     def ejecutar(self, estado, ctx):
         if not self.p["cara"]:
             raise ErrorOperacion("Elegí una cara plana ancha del cuerpo.")
-        e = _resolver(self.p["cara"], estado)
+        e = _resolver(self.p["cara"], estado, ("cara",))
         c = estado.cuerpo(e.cuerpo)
         if getattr(c, "chapa", None) is not None:
             raise ErrorOperacion(f"«{c.nombre}» ya es un cuerpo de chapa.")
@@ -326,6 +356,7 @@ class OpConvertirChapa(_OpChapa):
         m = chapa.convertir(c.forma, e.forma, self.p.get("regla") or chapa.REGLA_DEFECTO, **ajustes)
         m["op_regla"] = self.id
         _guardar(c, m)
+        c.material = m["regla"].get("material") or c.material      # el de la regla plantilla
 
 
 MODOS_DESGARRO = {"cara": "Cara", "puntos": "Puntos"}
@@ -338,6 +369,7 @@ class OpDesgarro(_OpChapa):
     TIPO, ETIQUETA, ICONO = "desgarro", "Desgarro", "⫽"
     PARAMS = {"modo": "cara", "cara": None, "puntos": [], "lado": "centro", "separacion": ""}
     EXPRESIONES = ("separacion",)
+    OPCIONES = {"modo": MODOS_DESGARRO, "lado": chapa.ORIENTACIONES}
     REFS = ("cara", "puntos")
 
     def ejecutar(self, estado, ctx):

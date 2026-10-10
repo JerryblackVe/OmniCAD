@@ -20,6 +20,7 @@ from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fus
 from OCP.BRepBndLib import BRepBndLib
 from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_Transform
 from OCP.BRepCheck import BRepCheck_Analyzer
+from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepGProp import BRepGProp
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
@@ -32,7 +33,7 @@ from OCP.GeomAbs import (GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_
 from OCP.GProp import GProp_GProps
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_SOLID
+from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_REVERSED, TopAbs_SOLID, TopAbs_VERTEX
 from OCP.OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
@@ -137,29 +138,44 @@ def _dir(v):
 
 
 # ---------------------------------------------------------------- primitivas
+def _primitiva(constructor, que):
+    """La forma del constructor de OCC, comprobada: con medidas extremas (radio de 5e8 mm o de 1e-7 mm) el kernel
+    devuelve una forma inválida sin avisar, o lanza Standard_DomainError (caja de 1e-8 mm)."""
+    try:
+        forma = constructor().Shape()
+    except Exception:  # noqa: BLE001 — Standard_DomainError / Standard_ConstructionError de OCC
+        forma = None
+    if forma is None or not es_valida(forma):
+        raise ErrorGeometria(f"No se puede construir {que}: las medidas son demasiado grandes o demasiado chicas "
+                             "para el kernel.")
+    return forma
+
+
 def caja(ancho, largo, alto, origen=(0, 0, 0)):
     if min(ancho, largo, alto) <= 0:
         raise ErrorGeometria("Las medidas de la caja deben ser positivas.")
-    return BRepPrimAPI_MakeBox(gp_Pnt(*map(float, origen)), float(ancho), float(largo), float(alto)).Shape()
+    return _primitiva(lambda: BRepPrimAPI_MakeBox(gp_Pnt(*map(float, origen)), float(ancho), float(largo),
+                                                  float(alto)), "la caja")
 
 
 def cilindro(radio, alto, base=(0, 0, 0), eje=(0, 0, 1)):
     if radio <= 0 or alto <= 0:
         raise ErrorGeometria("Radio y alto del cilindro deben ser positivos.")
-    return BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*map(float, base)), _dir(eje)), float(radio), float(alto)).Shape()
+    return _primitiva(lambda: BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*map(float, base)), _dir(eje)), float(radio),
+                                                       float(alto)), "el cilindro")
 
 
 def esfera(radio, centro=(0, 0, 0)):
     if radio <= 0:
         raise ErrorGeometria("El radio de la esfera debe ser positivo.")
-    return BRepPrimAPI_MakeSphere(gp_Pnt(*map(float, centro)), float(radio)).Shape()
+    return _primitiva(lambda: BRepPrimAPI_MakeSphere(gp_Pnt(*map(float, centro)), float(radio)), "la esfera")
 
 
 def toroide(radio_mayor, radio_menor, centro=(0, 0, 0), eje=(0, 0, 1)):
     if radio_menor <= 0 or radio_mayor <= radio_menor:
         raise ErrorGeometria("El toroide necesita radio mayor > radio menor > 0.")
-    return BRepPrimAPI_MakeTorus(gp_Ax2(gp_Pnt(*map(float, centro)), _dir(eje)),
-                                 float(radio_mayor), float(radio_menor)).Shape()
+    return _primitiva(lambda: BRepPrimAPI_MakeTorus(gp_Ax2(gp_Pnt(*map(float, centro)), _dir(eje)),
+                                                    float(radio_mayor), float(radio_menor)), "el toroide")
 
 
 # ---------------------------------------------------------------- operaciones
@@ -191,11 +207,31 @@ def cara_de_plano(plano, tam=1e4):
                                    -tam, tam, -tam, tam).Face()
 
 
+LONGITUD_MINIMA = 1e-6   # mm: OCC no construye un prisma de 1e-7 mm (su Precision::Confusion); desde 2e-7 sí
+
+
+def exigir_longitud(valor, que, minimo=LONGITUD_MINIMA):
+    """Error claro si una distancia de extrusión (en valor absoluto) es menor que `minimo`: el kernel
+    fallaría con «BRepSweep_Prism::Constructor». `que`: «La distancia de extrusión», «La profundidad…»."""
+    if abs(valor) < minimo:
+        raise ErrorGeometria(f"{que} tiene que ser de al menos {minimo:.6f} mm; recibió {valor:g} mm.")
+
+
+def exigir_distancias_extrusion(direccion, distancia1, distancia2=None, medida="mitad"):
+    """Revisa las distancias de una extrusión por distancia con el nombre de su campo y el valor que se escribió, no
+    el largo de cada prisma (la simétrica «mitad» arma uno del doble). En la simétrica con medida total cada lado mide
+    la mitad: ahí el mínimo se duplica."""
+    exigir_longitud(distancia1, "La distancia de extrusión")
+    if direccion == "dos_lados":
+        exigir_longitud(distancia2, "La distancia del lado 2")
+    elif direccion == "simetrica" and medida == "total":
+        exigir_longitud(distancia1, "La distancia total de la extrusión simétrica", 2 * LONGITUD_MINIMA)
+
+
 def extruir(caras, normal, distancia, simetrica=False):
     """Extrusión de una o más caras planas (equivalente a ExtrudeFeature con DistanceExtentDefinition
     o SymmetricExtentDefinition). Distancia negativa = sentido contrario a la normal."""
-    if abs(distancia) < 1e-9:
-        raise ErrorGeometria("La distancia de extrusión no puede ser cero.")
+    exigir_longitud(distancia, "La distancia de extrusión")
     n = np.asarray(normal, float) / np.linalg.norm(normal)
     solidos = []
     for cara in caras:
@@ -215,7 +251,17 @@ def revolver(caras, punto_eje, dir_eje, angulo_grados):
         raise ErrorGeometria("El ángulo de revolución no puede ser cero.")
     ang = math.radians(max(-360.0, min(360.0, angulo_grados)))
     eje = gp_Ax1(gp_Pnt(*map(float, punto_eje)), _dir(dir_eje))
-    solidos = [BRepPrimAPI_MakeRevol(c, eje, ang).Shape() for c in caras]
+    solidos = []
+    for c in caras:
+        rev = BRepPrimAPI_MakeRevol(c, eje, ang)
+        if not rev.IsDone():        # OCC lo marca así cuando el sólido se cortaría a sí mismo
+            raise ErrorGeometria("El perfil cruza el eje de revolución: tiene que quedar de un solo lado del eje "
+                                 "(puede apoyarse en él).")
+        forma = rev.Shape()
+        if sin_volumen(forma):
+            raise ErrorGeometria("La revolución no genera un sólido: el eje no puede ser perpendicular al plano "
+                                 "del perfil.")
+        solidos.append(forma)
     return unir_todos(solidos)
 
 
@@ -288,15 +334,20 @@ def _por_malla(forma, funcion, deflexion, relativa):
     return p.Mass()
 
 
+def _integral(forma, funcion):
+    """Volumen o área por la integración exacta de OpenCascade, sin el control por malla de `_propiedades`."""
+    p = GProp_GProps()
+    funcion(forma, p)
+    return p.Mass()
+
+
 def _propiedades(forma, funcion):
     """Volumen o área. La integración de OpenCascade es exacta y rápida con caras analíticas y con la mayoría de las
     libres (barridos, recubrimientos, bobinas), pero en superficies libres muy recortadas puede errar mucho: el fuelle
     de un .f3d de Fusion daba 180 791 mm³ contra 124 672 de Fusion (con tolerancia, 125 050 en 27 s). Con caras libres
     se controla contra una malla rápida; si difieren más de 5 % (un error grosero: la malla se equivoca menos de 1,5 %
     incluso en un alambre de 1 mm), vale una malla fina: 124 718 mm³ en ~1 s."""
-    p = GProp_GProps()
-    funcion(forma, p)
-    exacto = p.Mass()
+    exacto = _integral(forma, funcion)
     if not es_forma_libre(forma):
         return exacto
     control = _por_malla(forma, funcion, _CONTROL_RELATIVO, True)
@@ -309,6 +360,29 @@ def _propiedades(forma, funcion):
 
 def volumen(forma):
     return _propiedades(forma, BRepGProp.VolumeProperties_s)
+
+
+def volumen_exacto(forma):
+    """Volumen por integración exacta, sin malla (barato aun con B-spline): para comparar dos formas o descartar las
+    degeneradas. Para informar un volumen, `volumen`."""
+    return _integral(forma, BRepGProp.VolumeProperties_s)
+
+
+TAMANO_MINIMO = 1e-3    # mm: un sólido más chico no sirve (la tolerancia del kernel es 1e-7 mm)
+_CHATO = 1e-6           # |V| / (área · diagonal): degenerados ≤ 3,5e-8; una lámina de 0,01 × 100 × 100, 3,5e-5
+
+
+def sin_volumen(forma):
+    """True si un sólido no encierra volumen: vacío, más chico que TAMANO_MINIMO o chato (solevación entre perfiles
+    coplanares, perfil paralelo a la ruta, escala casi nula). Una lámina de t × L × L da |V| / (A · d) ≈ t / (2,8 L):
+    se acepta desde t ≈ 3e-6 · L. Es para sólidos (formas cerradas): una superficie no tiene volumen."""
+    bb = caja_envolvente(forma)
+    if bb is None:
+        return True
+    d = math.dist(*bb)
+    if d < TAMANO_MINIMO:
+        return True
+    return abs(volumen_exacto(forma)) <= _CHATO * _integral(forma, BRepGProp.SurfaceProperties_s) * d
 
 
 def area(forma):
@@ -363,8 +437,29 @@ def esta_vacia(forma):
 
 
 def se_tocan(a, b, tolerancia=1e-6):
+    """True si las formas se tocan o se superponen, también cuando una queda entera dentro de un sólido de la otra.
+    BRepExtrema_DistShapeShape solo mira «adentro» cuando la forma es un SOLID: con un COMPOUND (lo que devuelve toda
+    booleana) mide entre los bordes, y una cavidad interna daba «no se tocan» (el corte automático la salteaba)."""
     d = BRepExtrema_DistShapeShape(a, b)
-    return d.IsDone() and d.Value() <= tolerancia
+    if d.IsDone() and d.Value() <= tolerancia:
+        return True
+    return _adentro(a, b, tolerancia) or _adentro(b, a, tolerancia)
+
+
+def _adentro(a, b, tolerancia):
+    """True si alguna pieza de `b` (cada sólido, o `b` entera si no tiene) queda dentro de un sólido de `a`. Se usa
+    con los bordes separados: entonces cada pieza está entera adentro o entera afuera y basta un vértice."""
+    sols = solidos(a)
+    if not sols:
+        return False
+    for pieza in solidos(b) or [b]:
+        v = next(_explorar(pieza, TopAbs_VERTEX), None)
+        if v is None:
+            continue
+        p = BRep_Tool.Pnt_s(TopoDS.Vertex(v))
+        if any(BRepClass3d_SolidClassifier(s, p, tolerancia).State() == TopAbs_IN for s in sols):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------- teselado para el visor y exportación

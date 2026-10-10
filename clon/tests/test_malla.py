@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -413,3 +414,99 @@ def test_remallar_malla_abierta():
     assert borde(fija) == borde(abierta)                                   # borde intacto (mismos 4 vértices)
     libre = ml.remallar(abierta, longitud=2.0, preservar_bordes=False)
     assert len(borde(libre)) > 4 and libre.area() == pytest.approx(500.0)
+
+
+# ---------------------------------------------------------------- avisos de volumen y memoria (pruebas de uso)
+def tubo(R=10.0, r=8.0, alto=30.0, n=32):
+    """Tubo de pared fina (2 mm) teselado como un STL de CAD: 256 triángulos, los de las paredes de 30 × 2 mm."""
+    a = np.linspace(0, 2 * math.pi, n, endpoint=False)
+    anillo = lambda radio, z: np.c_[radio * np.cos(a), radio * np.sin(a), np.full(n, z)]  # noqa: E731
+    eb, et, ib, it = 0, n, 2 * n, 3 * n
+    caras = []
+    for i in range(n):
+        j = (i + 1) % n
+        caras += [[eb + i, eb + j, et + j], [eb + i, et + j, et + i], [ib + i, it + j, ib + j], [ib + i, it + i, it + j],
+                  [et + i, et + j, it + j], [et + i, it + j, it + i], [eb + i, ib + j, eb + j], [eb + i, ib + i, ib + j]]
+    return ml.Malla(np.vstack([anillo(R, 0), anillo(R, alto), anillo(r, 0), anillo(r, alto)]), caras)
+
+
+def test_remallar_pared_fina_conserva_el_volumen():
+    """Prueba de uso: remallar una pared de 2 mm cambiaba el volumen −5,4 % sin avisar. La causa era proyectar sobre
+    el triángulo de CENTRO más cercano: en las astillas (30 × 2 mm) caía sobre la otra pared, a 2 mm."""
+    tb = tubo()
+    assert tb.es_cerrada() and tb.volumen() == pytest.approx(3371.16, abs=0.01)
+    pared = np.flatnonzero(np.abs(tb.normales_caras()[:, 2]) < 0.1)
+    puntos = np.einsum("j,ijk->ik", [0.8, 0.1, 0.1], tb.triangulos()[pared])       # 128 puntos sobre las paredes
+    assert ml._Referencia(tb.vertices, tb.caras, largo=2.0).mas_cercano(puntos)[0].max() < 1e-9
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ml.AvisoMalla)
+        r = ml.remallar(tb, longitud=2.0)
+    assert r.es_cerrada() and len(r.caras) < 2500
+    assert r.volumen() == pytest.approx(tb.volumen(), rel=0.005) and r.area() == pytest.approx(tb.area(), rel=0.004)
+
+
+def test_remallar_avisa_si_el_volumen_cambia_mas_del_1_por_ciento(esfera):
+    """Con densidad 1 las aristas del tubo miden 11,4 mm contra una pared de 2 mm: el volumen sube 10,9 %."""
+    with pytest.warns(ml.AvisoMalla, match=r"Remallar cambió el volumen un \+10,9 % \(aristas de 11,4 mm\): la "
+                                            r"densidad es baja .*paredes finas.*subí la densidad"):
+        r = ml.remallar(tubo(), densidad=1.0)
+    assert r.es_cerrada() and r.volumen() == pytest.approx(1.109 * tubo().volumen(), rel=1e-3)
+    with pytest.warns(ml.AvisoMalla, match=r"bajá la longitud"):
+        ml.remallar(tubo(), longitud=12.0)
+    with warnings.catch_warnings():                                        # −0,9 % y 0 %: sin aviso
+        warnings.simplefilter("error", ml.AvisoMalla)
+        ml.remallar(esfera, densidad=0.25, iteraciones=3)
+        ml.remallar(cubo(), longitud=2.0)
+        ml.remallar(ml.Malla(V_CUBO, F_CUBO[:-2]), longitud=2.0)          # abierta: no tiene volumen
+
+
+def test_suavizar_pondera_por_largo_de_arista(esfera):
+    """Prueba de uso: Suavizar 5 iteraciones subía el volumen +0,65 % de una botella reducida. Con pesos iguales, un
+    vértice unido por una arista larga (Reducir deja caras de 64 mm) viajaba hasta 9 mm; en el tubo, las aristas de
+    30 mm acortaban el cuerpo de 0..30 a 2,45..27,55. Con pesos 1/largo el desplazamiento queda a la escala de las
+    aristas cortas. Lo que sigue cambiando el volumen es redondear las aristas vivas: si pasa del 1 %, avisa."""
+    tb = tubo()
+    with pytest.warns(ml.AvisoMalla, match=r"Suavizar cambió el volumen un -2\d,\d %: redondea las aristas vivas"):
+        r = ml.suavizar(tb, intensidad=0.5, iteraciones=5)
+    (_, _, z0), (_, _, z1) = r.caja()
+    assert z0 == pytest.approx(0.0, abs=0.1) and z1 == pytest.approx(30.0, abs=0.1)
+    assert np.linalg.norm(r.vertices - tb.vertices, axis=1).max() < 0.5
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ml.AvisoMalla)
+        lisa = ml.suavizar(esfera, intensidad=0.5, iteraciones=5)
+    assert lisa.volumen() == pytest.approx(esfera.volumen(), rel=0.01)
+
+
+def test_timeline_avisa_y_no_recalcula_reducir_ni_remallar_si_la_entrada_no_cambio(monkeypatch):
+    """Prueba de uso: reducir 74.252 triángulos tarda ~9 s y remallar ~7 s, y se rehacían en cada recálculo
+    (deshacer, editar un paso anterior, vista previa y Aceptar). Ahora se recuerdan por contenido."""
+    from omnicad.timeline import ops_malla
+    from omnicad.timeline.documento import Documento
+    from omnicad.timeline.ops_malla import OpInsertarMalla, OpReducirMalla, OpRemallar, OpVaciadoMalla
+    ops_malla._MEMORIA.clear()
+    llamadas = {"remallar": 0, "reducir": 0}
+    for nombre in llamadas:
+        original = getattr(ml, nombre)
+
+        def contar(*a, _nombre=nombre, _original=original, **k):
+            llamadas[_nombre] += 1
+            return _original(*a, **k)
+        monkeypatch.setattr(ml, nombre, contar)
+    doc = Documento()
+    doc.agregar(OpInsertarMalla(doc.nuevo_id(), "tubo", archivo="tubo", datos=tubo().a_dict()))
+    res = doc.agregar(OpRemallar(doc.nuevo_id(), cuerpos=["op1.c1"], densidad="1"))
+    assert res.estado == "aviso" and "cambió el volumen un +10,9 %" in res.mensaje
+    assert llamadas["remallar"] == 1
+    doc.recalcular(0)
+    assert llamadas["remallar"] == 1                                       # misma entrada: no se rehace …
+    assert doc.resultados[1].estado == "aviso" and "volumen" in doc.resultados[1].mensaje     # … y sigue avisando
+    assert doc.estado_final.cuerpos["op1.c1"].forma.volumen() == pytest.approx(1.109 * tubo().volumen(), rel=1e-3)
+    doc.reemplazar("op2", OpRemallar("op2", cuerpos=["op1.c1"], densidad="4"))
+    assert llamadas["remallar"] == 2 and doc.resultados[1].estado == "ok"  # otra densidad: se calcula
+    doc.agregar(OpReducirMalla(doc.nuevo_id(), cuerpos=["op1.c1"], proporcion="0.5"))
+    doc.recalcular(0)
+    assert llamadas == {"remallar": 2, "reducir": 1}
+    doc.reemplazar("op3", OpReducirMalla("op3", cuerpos=["op1.c1"], proporcion="0.4"))
+    assert llamadas == {"remallar": 2, "reducir": 2}
+    res = doc.agregar(OpVaciadoMalla(doc.nuevo_id(), cuerpos=["op1.c1"], espesor="20 mm"))
+    assert res.estado == "aviso" and res.mensaje.count("Vaciar: con 20") == 1                # un solo aviso

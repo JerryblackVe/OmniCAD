@@ -9,17 +9,18 @@ listas de gp_Trsf). La booleana contra los cuerpos del documento la hace la capa
 donde el comando de Fusion entrega el cuerpo ya modificado (repujado, rosca, saliente, labio).
 Unidades: mm y grados. Ayuda de cada comando: analisis/fusion_doc/paginas/<ID>.txt.
 """
+import functools
 import math
 import re
 
 import numpy as np
 from OCP.BOPAlgo import BOPAlgo_MakerVolume
-from OCP.BRep import BRep_Tool
+from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Splitter
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
-                                BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, BRepBuilderAPI_RightCorner,
-                                BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
+from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepAlgoAPI_Splitter
+from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
+                                BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire,
+                                BRepBuilderAPI_RightCorner, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
 from OCP.BRepClass import BRepClass_FaceClassifier
 from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 from OCP.BRepExtrema import BRepExtrema_DistShapeShape
@@ -32,21 +33,26 @@ from OCP.BRepOffsetAPI import (BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffse
                                BRepOffsetAPI_ThruSections)
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
 from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+from OCP.ElCLib import ElCLib
 from OCP.GCPnts import GCPnts_AbscissaPoint
-from OCP.Geom import Geom_ConicalSurface, Geom_CylindricalSurface
+from OCP.Geom import Geom_Circle, Geom_ConicalSurface, Geom_CylindricalSurface, Geom_Line, Geom_Plane
 from OCP.Geom2d import Geom2d_Line, Geom2d_TrimmedCurve
 from OCP.Geom2dAPI import Geom2dAPI_Interpolate
-from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane
+from OCP.GeomAbs import (GeomAbs_BezierCurve, GeomAbs_BezierSurface, GeomAbs_BSplineCurve, GeomAbs_BSplineSurface,
+                         GeomAbs_Cylinder, GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane)
 from OCP.GeomAPI import GeomAPI_Interpolate
+from OCP.GeomLib import GeomLib_IsPlanarSurface
 from OCP.GProp import GProp_GProps
 from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
 from OCP.Law import Law_Interpol, Law_Linear
 from OCP.OCP.collections import Array1_gp_Pnt2d, HArray1_gp_Pnt, HArray1_gp_Pnt2d, List_TopoDS_Shape
+from OCP.ShapeAnalysis import ShapeAnalysis_CanonicalRecognition
 from OCP.ShapeFix import ShapeFix_Face
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID,
                         TopAbs_VERTEX, TopAbs_WIRE)
 from OCP.TopExp import TopExp, TopExp_Explorer
+from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS
 from OCP.gp import gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Dir2d, gp_Lin, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
 
@@ -368,8 +374,7 @@ def cara_de_plano(plano, tamano=1e3):
 def _prisma(cara, n, d, conicidad=0.0):
     """Extrusión de una cara plana una distancia `d` (con signo) según `n`, con ángulo de inclinación en
     grados (positivo = se ensancha, como en Fusion)."""
-    if abs(d) < 1e-9:
-        raise geo.ErrorGeometria("La distancia de extrusión no puede ser cero.")
+    geo.exigir_longitud(d, "La distancia de extrusión")
     if abs(conicidad) < 1e-9:
         return BRepPrimAPI_MakePrism(cara, _gvec(np.asarray(n, float) * d)).Shape()
     if abs(conicidad) >= 89.0:
@@ -507,6 +512,8 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
         return _validar(_herramienta_extrusion(caras, abiertas, n, base, lados, delgado), "Extrusión")
 
     if hasta is not None:                            # extensión "Al objeto" en el lado 1
+        if direccion == "dos_lados" and distancia2:  # 0 = sin lado 2
+            geo.exigir_longitud(distancia2, "La distancia del lado 2")
         es_cara = hasta.ShapeType() == TopAbs_FACE
         plano_obj = geo.plano_de_cara(TopoDS.Face(hasta)) if es_cara else None
         if plano_obj is not None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9:
@@ -534,13 +541,14 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
             partes.append(_herramienta_extrusion(caras, abiertas, n, base, lados1 + lados2, delgado))
         return _validar(_unir(partes), "Extrusión")
 
-    if distancia1 is None or abs(distancia1) < 1e-9:
+    if distancia1 is None:
         raise geo.ErrorGeometria("Falta la distancia de extrusión.")
+    if direccion == "dos_lados" and distancia2 is None:
+        raise geo.ErrorGeometria("Falta la distancia del lado 2.")
+    geo.exigir_distancias_extrusion(direccion, distancia1, distancia2, medida_simetrica)
     if direccion == "un_lado":
         lados = [(float(distancia1), conicidad1)]
     elif direccion == "dos_lados":
-        if distancia2 is None or abs(distancia2) < 1e-9:
-            raise geo.ErrorGeometria("Falta la distancia del lado 2.")
         lados = [(abs(distancia1), conicidad1), (-abs(distancia2), conicidad2)]
     else:
         if medida_simetrica not in ("mitad", "total"):
@@ -636,6 +644,65 @@ def revolver_avanzado(caras, punto_eje, dir_eje, *, direccion="un_lado", angulo1
 
 
 # ================================================================ 3. barrido
+# Torsión máxima del barrido: 10 vueltas, elegida por tiempo. La guía de torsión lleva un punto cada 5°. El modo plano
+# (rutas abiertas sin quiebres) es rápido: 3600° en 50 mm, 0,1 s. El curvilíneo (rutas cerradas y las lisas donde el
+# plano falla) crece con los grados y tiene su propio tope (TORSION_MAXIMA_CURVILINEA). Medido en curvilíneo,
+# rectángulo 4×2: 3600° tarda 27 s en una ruta de 100 mm con empalme de R ≤ 4; 5400° en esa ruta, 57 s; 36.000° en
+# 50 mm, más de 100 s.
+# Cambios de compatibilidad, a propósito: una receta vieja con más de 3600°, con más de 1800° donde va el curvilíneo, o
+# con torsión en una ruta con esquinas ahora falla con un mensaje que dice el tope. Antes tardaban de 15 s a minutos, y
+# las de esquinas daban un sólido inválido o tiraban abajo el proceso.
+TORSION_MAXIMA = 3600.0
+# En el modo curvilíneo (rutas cerradas, y las lisas donde el plano falla) el tope es más bajo: recta de 20 mm + arco
+# tangente de R2 (el perfil se autointerseca), 1800° anda en 5,8 s y 3600° tira abajo el proceso (0xC0000005, violación
+# de acceso, a los 18 s); círculo de R30 cerrado, 1800° en 5 s.
+TORSION_MAXIMA_CURVILINEA = 1800.0
+# Quiebre (ángulo entre las tangentes de dos aristas seguidas) desde el que la torsión no se calcula. Medido, rectángulo
+# 4 × 2 con 90°, dos rectas de 50 mm: con 0,5° el modo plano anda (0,2 s con 3600°); con 1°, 2° y 10° da un sólido
+# inválido; el curvilíneo con 0,5° tarda 7,9 s (360°: 78 s; 1800°: más de 200 s) y con 10° o 90° da inválido a los
+# 15 a 36 s (3600°: violación de acceso).
+QUIEBRE_MAXIMO_TORSION = 0.5
+_QUIEBRE_LISO = 0.1          # hasta acá la ruta es lisa: si el modo plano falla se prueba el curvilíneo
+
+
+def validar_torsion(grados):
+    """Frena una torsión no finita o de más de ±TORSION_MAXIMA grados antes de calcular nada."""
+    if not math.isfinite(grados) or abs(grados) > TORSION_MAXIMA:
+        raise geo.ErrorGeometria(f"La torsión del barrido admite como máximo ±{TORSION_MAXIMA:g}° "
+                                 f"({TORSION_MAXIMA / 360:g} vueltas); recibió {grados:g}°.")
+
+
+def _quiebre_maximo(ruta):
+    """Mayor ángulo (grados) entre la tangente final de una arista y la inicial de la siguiente (también entre la
+    última y la primera si la ruta es cerrada); 0 en una ruta lisa."""
+    tangentes = []
+    for e in _aristas_de(ruta):
+        c = BRepAdaptor_Curve(e)
+        p, v0, v1 = gp_Pnt(), gp_Vec(), gp_Vec()
+        c.D1(c.FirstParameter(), p, v0)
+        c.D1(c.LastParameter(), p, v1)
+        t0, t1 = _xyz(v0), _xyz(v1)
+        tangentes.append((-t1, -t0) if e.Orientation() == TopAbs_REVERSED else (t0, t1))
+    pares = list(zip(tangentes, tangentes[1:], strict=False))
+    if _es_cerrado(ruta) and len(tangentes) > 1:
+        pares.append((tangentes[-1], tangentes[0]))
+    peor = 0.0
+    for (_, fin), (inicio, _) in pares:
+        n = float(np.linalg.norm(fin) * np.linalg.norm(inicio))
+        coseno = float(fin @ inicio) / n if n > 1e-18 else -1.0
+        peor = max(peor, math.degrees(math.acos(min(1.0, max(-1.0, coseno)))))
+    return peor
+
+
+def _guia_plana_posible(ruta, tolerancia=QUIEBRE_MAXIMO_TORSION):
+    """¿La guía de torsión puede ir en modo plano (el plano normal a la ruta corta la guía)? Solo en rutas abiertas
+    sin quiebres de más de `tolerancia` grados. El modo curvilíneo (empareja ruta y guía por longitud de arco) pierde
+    volumen (−2 % con 90°), tarda segundos y no resuelve rutas de 100 mm o más ni splines; el plano es exacto, pero en
+    un quiebre da un sólido inválido o tira abajo el kernel (codo de 90° con 3600°: violación de acceso) y en las rutas
+    cerradas no resuelve."""
+    return not _es_cerrado(ruta) and _quiebre_maximo(ruta) <= tolerancia
+
+
 def _guia_torsion(ruta, grados, radio):
     """Curva auxiliar que gira `grados` alrededor de la ruta: con MakePipeShell en modo auxiliar
     (NoContact) la normal del perfil apunta a ella, así el perfil se tuerce."""
@@ -689,7 +756,8 @@ def _ley_escala_carril(ruta, carril, n=33):
     return ley
 
 
-def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, escala_carril, solido, radio_guia):
+def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, escala_carril, solido, radio_guia,
+                     guia_plana=False):
     ps = BRepOffsetAPI_MakePipeShell(ruta)
     ley = None
     if carril is not None:
@@ -702,8 +770,8 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
         ps.SetMode(carril, True, BRepFill_NoContact)
         if escala_carril != "ninguna":
             ley = _ley_escala_carril(ruta, carril)
-    elif abs(torsion) > 1e-9:
-        ps.SetMode(_guia_torsion(ruta, torsion, radio_guia), True, BRepFill_NoContact)
+    elif abs(torsion) > 1e-9:       # segundo argumento: True = curvilíneo, False = plano (ver _guia_plana_posible)
+        ps.SetMode(_guia_torsion(ruta, torsion, radio_guia), not guia_plana, BRepFill_NoContact)
     elif orientacion == "paralela":
         p0, t0 = _punto_en(ruta, 0.0)
         ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(_perpendicular(t0))))
@@ -744,12 +812,50 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     se aplica como escala lineal de cada lazo: los agujeros se achican). `carril` = Path + Guide Rail:
     `escala_carril` "escalar" (el perfil se agranda con la distancia ruta→carril), "ninguna" (el carril solo
     orienta); "estirar" (escala en una sola dirección) no existe en OCC y se hace como "escalar".
-    `solido=False` devuelve la superficie.
+    `solido=False` devuelve la superficie. La torsión admite como máximo ±TORSION_MAXIMA grados y una ruta
+    sin quiebres (QUIEBRE_MAXIMO_TORSION); en las rutas abiertas va primero la guía en modo plano (ver
+    _guia_plana_posible) y, en las cerradas o si el plano falla en una ruta lisa, el curvilíneo, con
+    ±TORSION_MAXIMA_CURVILINEA como máximo.
     """
+    validar_torsion(torsion)
     ruta = _recortar_alambre(_alambre(ruta), float(distancia))
     carril = _alambre(carril) if carril is not None else None
+    datos = (_lista(perfiles), ruta, carril, orientacion, torsion, conicidad, escala_carril, solido)
+    if abs(torsion) > 1e-9 and carril is None:
+        _exigir_ruta_para_torsion(ruta, torsion)
+        if _guia_plana_posible(ruta):
+            try:
+                return _barrer(*datos, guia_plana=True)
+            except geo.ErrorGeometria:
+                if _quiebre_maximo(ruta) > _QUIEBRE_LISO:
+                    raise           # con un quiebre el curvilíneo tarda minutos y tampoco lo resuelve
+            if abs(torsion) > TORSION_MAXIMA_CURVILINEA:    # el curvilíneo de siempre, si la torsión le cabe
+                raise geo.ErrorGeometria(f"El barrido con {torsion:g}° de torsión no se pudo resolver en esta ruta. "
+                                         f"Donde el cálculo exacto falla, la torsión admite como máximo "
+                                         f"±{TORSION_MAXIMA_CURVILINEA:g}° ({TORSION_MAXIMA_CURVILINEA / 360:g} "
+                                         f"vueltas).")
+    return _barrer(*datos, guia_plana=False)
+
+
+def _exigir_ruta_para_torsion(ruta, torsion):
+    """Antes de calcular: la torsión necesita una ruta sin quiebres (QUIEBRE_MAXIMO_TORSION) y, si es cerrada (va en
+    modo curvilíneo), no más de ±TORSION_MAXIMA_CURVILINEA grados."""
+    quiebre = _quiebre_maximo(ruta)
+    if quiebre > QUIEBRE_MAXIMO_TORSION:
+        grados = (f"{x:.3g}°".replace(".", ",") for x in (quiebre, QUIEBRE_MAXIMO_TORSION))
+        raise geo.ErrorGeometria("La torsión del barrido necesita una ruta sin esquinas: la ruta quiebra {} entre dos "
+                                 "aristas (admite hasta {}). Redondeá la esquina con un empalme en el boceto o barré "
+                                 "sin torsión.".format(*grados))
+    if _es_cerrado(ruta) and abs(torsion) > TORSION_MAXIMA_CURVILINEA:
+        raise geo.ErrorGeometria(f"En una ruta cerrada la torsión del barrido admite como máximo "
+                                 f"±{TORSION_MAXIMA_CURVILINEA:g}° ({TORSION_MAXIMA_CURVILINEA / 360:g} vueltas); "
+                                 f"recibió {torsion:g}°.")
+
+
+def _barrer(perfiles, ruta, carril, orientacion, torsion, conicidad, escala_carril, solido, guia_plana):
+    """Barre cada perfil (el exterior menos sus agujeros) con la guía de torsión en el modo pedido."""
     salida = []
-    for perfil in _lista(perfiles):
+    for perfil in perfiles:
         if perfil.ShapeType() == TopAbs_FACE:
             cara = TopoDS.Face(perfil)
             exterior = BRepTools.OuterWire_s(cara)
@@ -759,11 +865,11 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
         bb = geo.caja_envolvente(exterior)
         radio_guia = max(1.0, float(np.linalg.norm(np.subtract(bb[1], bb[0]))))
         forma = _barrido_alambre(exterior, ruta, carril, orientacion, torsion, conicidad, escala_carril, solido,
-                                 radio_guia)
+                                 radio_guia, guia_plana)
         if solido:
             for w in interiores:   # el agujero se achica cuando la región se ensancha
                 hueco = _barrido_alambre(w, ruta, carril, orientacion, torsion, -conicidad, escala_carril, True,
-                                         radio_guia)
+                                         radio_guia, guia_plana)
                 forma = geo.booleano(forma, hueco, "cortar")
         salida.append(forma)
     if not salida:
@@ -787,6 +893,94 @@ def _seccion(s):
     return ("alambre", _alambre(s), [])
 
 
+# Cuánto (mm) puede apartarse una cara o arista libre de su plano, recta o círculo para pasarla a esa forma exacta.
+_TOL_CANONICA = 1e-6
+_SUPERFICIES_LIBRES = (GeomAbs_BSplineSurface, GeomAbs_BezierSurface)
+_CURVAS_LIBRES = (GeomAbs_BSplineCurve, GeomAbs_BezierCurve)
+
+
+def _plano_canonico(cara, tol):
+    """(Geom_Plane, ubicación) de una cara libre que es plana, con la normal de su superficie (así la cara no se da
+    vuelta), o None."""
+    loc = TopLoc_Location()
+    sup = BRep_Tool.Surface_s(cara, loc)
+    prueba = GeomLib_IsPlanarSurface(sup, tol)
+    if not prueba.IsPlanar():
+        return None
+    pln = prueba.Plan()
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    p, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
+    sup.D1((u0 + u1) / 2, (v0 + v1) / 2, p, du, dv)
+    normal = du.Crossed(dv)
+    if normal.Magnitude() < 1e-12:          # punto singular: no se sabe el sentido
+        return None
+    if normal.Dot(gp_Vec(pln.Axis().Direction())) < 0:
+        pln = gp_Pln(gp_Ax3(pln.Location(), pln.Axis().Direction().Reversed(), pln.XAxis().Direction()))
+    return Geom_Plane(pln), loc
+
+
+def _curva_canonica(arista, tol):
+    """(curva, a, z) de una arista libre que es recta o arco: Geom_Line o Geom_Circle recorrida de a a z en el mismo
+    sentido que la original, o None."""
+    ad = BRepAdaptor_Curve(arista)
+    f, l = ad.FirstParameter(), ad.LastParameter()
+    p0, p1 = ad.Value(f), ad.Value(l)
+    cerrada = p0.Distance(p1) <= tol
+    rec = ShapeAnalysis_CanonicalRecognition(arista)
+    if not cerrada and rec.IsLine(tol, gp_Lin()):
+        return Geom_Line(p0, gp_Dir(gp_Vec(p0, p1))), 0.0, p0.Distance(p1)
+    circ = gp_Circ()
+    if not rec.IsCircle(tol, circ):
+        return None
+    q = ad.Value(f + (l - f) * (0.25 if cerrada else 0.5))          # un punto intermedio da el sentido
+    if any(circ.Distance(x) > 10 * tol for x in (p0, q, p1)):
+        return None
+
+    def avance(x):
+        return (ElCLib.Parameter_s(circ, x) - ElCLib.Parameter_s(circ, p0)) % (2 * math.pi)
+    if avance(q) > (math.pi if cerrada else avance(p1)):            # va al revés que el eje del círculo
+        eje = circ.Position()
+        circ = gp_Circ(gp_Ax2(eje.Location(), eje.Direction().Reversed(), eje.XDirection()), circ.Radius())
+    a = ElCLib.Parameter_s(circ, p0)
+    return Geom_Circle(circ), a, a + (2 * math.pi if cerrada else avance(p1))
+
+
+def _canonizar(forma, tol=_TOL_CANONICA):
+    """Pasa a plano las caras B-spline/Bézier planas y a recta o círculo las aristas que lo son, como las entrega
+    Fusion. ThruSections (también el reglado) deja todo B-spline aunque las secciones sean polígonos o círculos:
+    sin plano no hay normal para bocetar ni ubicar agujeros, y sin círculo la rosca, los agujeros, las uniones y
+    las fijaciones no ven las aristas. Trabaja sobre una copia y, si quedara inválida, devuelve la forma tal cual."""
+    if forma is None or geo.esta_vacia(forma):
+        return forma
+    copia = BRepBuilderAPI_Copy(forma).Shape()
+    b = BRep_Builder()
+    cambio = False
+    for cara in _caras_de(copia):            # primero las caras: en un plano las pcurvas se calculan solas
+        if BRepAdaptor_Surface(cara).GetType() not in _SUPERFICIES_LIBRES:
+            continue
+        plano = _plano_canonico(cara, tol)
+        if plano is not None:
+            b.UpdateFace(cara, plano[0], plano[1], BRep_Tool.Tolerance_s(cara))
+            cambio = True
+    for arista in _aristas_de(copia):        # repetidas (una por cara): la segunda vez ya no es libre
+        if BRep_Tool.Degenerated_s(arista) or BRepAdaptor_Curve(arista).GetType() not in _CURVAS_LIBRES:
+            continue
+        canonica = _curva_canonica(arista, tol)
+        if canonica is None:
+            continue
+        curva, a, z = canonica
+        b.UpdateEdge(arista, curva, TopLoc_Location(), BRep_Tool.Tolerance_s(arista))
+        b.Range(arista, a, z, True)
+        b.SameParameter(arista, False)
+        b.SameRange(arista, False)
+        BRepLib.SameParameter_s(arista, tol)    # rehace las pcurvas de las caras libres al rango nuevo
+        cambio = True
+    if not cambio:
+        return forma
+    BRepLib.UpdateTolerances_s(copia)
+    return copia if geo.es_valida(copia) else forma
+
+
 def _loft(alambres, solido, reglada, cerrada):
     ts = BRepOffsetAPI_ThruSections(solido, reglada)
     for tipo, forma in alambres:
@@ -806,7 +1000,8 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     punto/vértice como primera o última sección. `cerrada` une la última sección con la primera. Con
     `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles`: OpenCascade no tiene
     solevado con varios carriles; se admite UNO, como guía de contacto (el borde del solevado lo sigue)
-    sobre una línea central dada o sobre la polilínea de los centros de las secciones.
+    sobre una línea central dada o sobre la polilínea de los centros de las secciones. Las caras planas y las
+    aristas rectas o circulares salen analíticas, como en Fusion (ver _canonizar).
     """
     secs = [_seccion(s) for s in _lista(secciones)]
     if len(secs) < 2:
@@ -862,7 +1057,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
                     cercano = min(siguiente, key=lambda w, c=c: np.linalg.norm(_centro_alambre(w) - c))
                     cadena.append(("alambre", cercano))
                 forma = geo.booleano(forma, _loft(cadena, True, reglada, cerrada), "cortar")
-    return _validar(forma, "Solevado")
+    return _validar(_canonizar(forma), "Solevado")
 
 
 def _centro_alambre(w):
@@ -985,8 +1180,7 @@ def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve"
     cilindro conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial."""
     if profundidad < 0:
         profundidad, tipo = -profundidad, ("grabado" if tipo == "relieve" else "relieve")
-    if profundidad < 1e-9:
-        raise geo.ErrorGeometria("La profundidad del repujado no puede ser cero.")
+    geo.exigir_longitud(profundidad, "La profundidad del repujado")
     if tipo not in ("relieve", "grabado"):
         raise geo.ErrorGeometria(f"Efecto de repujado desconocido: {tipo}")
     perfiles = _caras_de(caras_perfil)
@@ -1278,34 +1472,53 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     """Sólido helicoidal con la forma del hueco entre filetes (perfil básico ISO/UN de 60°) recortado al
     tramo [z0, z0 + largo] del eje. Rosca exterior: se le resta al cilindro; interior: al cuerpo agujereado."""
     z = _unit(eje)
-    x = _perpendicular(z)
     o = np.asarray(origen, float)
+    prof = 5 / 8 * math.sqrt(3) / 2 * paso         # 5H/8: altura del filete básico
+    extra = 0.1 * paso                             # el surco sobresale del material para cortar limpio
+    if interna:
+        if radio_cara is not None and radio_cara >= diametro / 2 - 1e-6:
+            raise geo.ErrorGeometria("El agujero es más grande que el diámetro mayor de la rosca.")
+    else:
+        if radio_cara is not None and radio_cara > diametro / 2 + extra - 0.01 * paso:
+            raise geo.ErrorGeometria("El cilindro es más grueso que el diámetro mayor de la rosca.")
+        if radio_cara is not None and radio_cara <= diametro / 2 - prof:
+            raise geo.ErrorGeometria("El cilindro es más fino que el núcleo de la rosca.")
+    eje_r = tuple(round(float(c), 12) for c in z)
+    base = _surco_en_origen(round(float(diametro), 9), round(float(paso), 9), round(float(largo), 9), bool(interna),
+                            mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r)
+    trsf = gp_Trsf()
+    trsf.SetTranslation(gp_Vec(*map(float, o + z * z0)))
+    return BRepBuilderAPI_Transform(base, trsf, True).Shape()     # copia: el corte no toca el surco guardado
+
+
+@functools.lru_cache(maxsize=16)
+def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje):
+    """Surco de `_surco_rosca` con el tramo empezando en el origen. Se guarda por (tamaño, largo, eje, mano):
+    roscar varios agujeros iguales arma el barrido helicoidal UNA vez y lo copia trasladado (hallazgo L138:
+    M3 en 4 agujeros tardaba 30 s)."""
+    z = np.asarray(eje, float)
+    x = _perpendicular(z)
     prof = 5 / 8 * math.sqrt(3) / 2 * paso         # 5H/8: altura del filete básico
     pend = 2 * math.tan(math.radians(30))          # ancho que gana el surco por mm radial (flancos a 60°)
     extra = 0.1 * paso                             # el surco sobresale del material para cortar limpio
     if interna:
         r_out, w_out = diametro / 2, paso / 8
         r_in, w_in = diametro / 2 - prof - extra, 3 * paso / 4 + pend * extra
-        if radio_cara is not None and radio_cara >= r_out - 1e-6:
-            raise geo.ErrorGeometria("El agujero es más grande que el diámetro mayor de la rosca.")
     else:
         r_in, w_in = diametro / 2 - prof, paso / 4
         r_out, w_out = diametro / 2 + extra, 7 * paso / 8 + pend * extra
-        if radio_cara is not None and radio_cara > r_out - 0.01 * paso:
-            raise geo.ErrorGeometria("El cilindro es más grueso que el diámetro mayor de la rosca.")
-        if radio_cara is not None and radio_cara <= r_in:
-            raise geo.ErrorGeometria("El cilindro es más fino que el núcleo de la rosca.")
-    z_ini = z0 - paso                              # la hélice pasa de largo un paso en cada punta
+    o = np.zeros(3)
+    z_ini = -paso                                  # la hélice pasa de largo un paso en cada punta
     base = o + z * (z_ini + paso / 2)
     perfil = _poligono([base + x * r_in - z * w_in / 2, base + x * r_out - z * w_out / 2,
                         base + x * r_out + z * w_out / 2, base + x * r_in + z * w_in / 2])
     surco = _barrido_helicoidal(perfil, _helice(base, z, x, (r_in + r_out) / 2, paso, largo + 2 * paso, mano))
-    tramo = geo.cilindro(r_out + 1.0, largo, base=tuple(o + z * z0), eje=tuple(z))
+    tramo = geo.cilindro(r_out + 1.0, largo, base=(0.0, 0.0, 0.0), eje=tuple(z))
     surco = geo.booleano(surco, tramo, "intersecar")
     if interna and radio_cara is not None:
         # Se le saca al surco la parte que cae dentro del agujero: cortar el cuerpo con el surco entero falla
         # sin avisar en varios tamaños (M10, M12, M20), y con este paso previo sale bien en todos.
-        hueco = geo.cilindro(radio_cara, largo + 2.0, base=tuple(o + z * (z0 - 1.0)), eje=tuple(z))
+        hueco = geo.cilindro(radio_cara, largo + 2.0, base=tuple(z * -1.0), eje=tuple(z))
         surco = geo.booleano(surco, hueco, "cortar")
     return surco
 
@@ -1366,13 +1579,15 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
         return cuerpo
     z0 = zmax - desfase - largo if invertir else zmin + desfase
     surco = _surco_rosca(o, z, datos["diametro"], datos["paso"], z0, largo, es_interna, mano, radio)
-    return _validar(_cortar_helicoidal(cuerpo, surco), "Rosca")
+    return _cortar_helicoidal(cuerpo, surco)          # sale validado y con el surco cortado
 
 
 def _cortar_helicoidal(cuerpo, herramienta):
     """Corte con una herramienta helicoidal. El corte exacto a veces no hace nada sin avisar (las caras del
-    surco rozan el cilindro del agujero: pasó con M10 y M20 interiores); con tolerancia difusa sale bien."""
-    v0 = geo.volumen(cuerpo)
+    surco rozan el cilindro del agujero: pasó con M10 y M20 interiores); con tolerancia difusa sale bien.
+    Éxito = forma válida y alguna cara del surco quedó en el resultado (antes se comparaban volúmenes del
+    cuerpo entero, la mitad del tiempo de la rosca: hallazgo L138)."""
+    caras_herr = geo.caras(herramienta)
     for difuso in (0.0, 1e-5, 1e-4):
         op = BRepAlgoAPI_Cut()
         args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
@@ -1380,10 +1595,12 @@ def _cortar_helicoidal(cuerpo, herramienta):
         herr.Append(herramienta)
         op.SetArguments(args)
         op.SetTools(herr)
+        op.SetRunParallel(True)
         if difuso:
             op.SetFuzzyValue(difuso)
         op.Build()
-        if op.IsDone() and geo.es_valida(op.Shape()) and geo.volumen(op.Shape()) < v0 * (1 - 1e-7):
+        if (op.IsDone() and any(not op.IsDeleted(f) for f in caras_herr)
+                and geo.es_valida(op.Shape())):
             return op.Shape()
     raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
 
@@ -1413,6 +1630,11 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
     "dentro", "sobre" o "fuera" del diámetro. `horario` invierte el giro."""
     if sum(v is not None for v in (revoluciones, altura, paso)) != 2:
         raise geo.ErrorGeometria("Dá exactamente dos de: revoluciones, altura y paso.")
+    if revoluciones is not None and revoluciones <= 0:     # antes de dividir por ellas
+        raise geo.ErrorGeometria(f"Las revoluciones de la bobina tienen que ser mayores que cero; recibió "
+                                 f"{revoluciones:g}.")
+    if paso is not None and paso <= 0:
+        raise geo.ErrorGeometria(f"El paso de la bobina tiene que ser mayor que cero; recibió {paso:g} mm.")
     if revoluciones is None:
         revoluciones = altura / paso
     elif altura is None:
@@ -1481,6 +1703,55 @@ def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, dista
 
 
 # ================================================================ 11. patrones y simetría
+# Instancias máximas de un patrón (el original cuenta): igual al máximo de cada campo de cantidad de la interfaz.
+# Se valida antes de armar nada: una cantidad enorme se comía la memoria (MemoryError sin mensaje).
+INSTANCIAS_MAXIMAS = 10_000
+
+
+def _miles(n):
+    return f"{n:,}".replace(",", ".")
+
+
+def _cantidad(n, simetrico):
+    """Instancias de una dirección del patrón, original incluido: n, o 2n − 1 si es simétrico."""
+    if int(n) < 1:
+        raise geo.ErrorGeometria("La cantidad del patrón debe ser al menos 1.")
+    return 2 * int(n) - 1 if simetrico else int(n)
+
+
+def _exigir_instancias(total):
+    if total > INSTANCIAS_MAXIMAS:
+        raise geo.ErrorGeometria(f"Un patrón admite como máximo {_miles(INSTANCIAS_MAXIMAS)} instancias (el original "
+                                 f"cuenta); pediste {_miles(total)}.")
+
+
+def unir_instancias(formas):
+    """Une el original y las copias de un patrón («Combinar» de Fusion) en UNA booleana con varios argumentos.
+    Unirlas de a una (geo.unir_todos) crece con el cuadrado de la cantidad: cubos de 10 mm separados 20, 10 × 10 en
+    3,1 s, 20 × 20 en 51 s, 32 × 32 y 100 × 100 más de 200 s; así 0,1 s, 0,3 s, 0,7 s y 8,3 s (20 × 20 solapados
+    cada 5 mm: 5,6 s). Mismo resultado."""
+    formas = [f for f in formas if f is not None]
+    if not formas:
+        raise geo.ErrorGeometria("No hay geometría para unir.")
+    if len(formas) == 1:
+        return formas[0]
+    argumentos, herramientas = List_TopoDS_Shape(), List_TopoDS_Shape()
+    argumentos.Append(formas[0])
+    for f in formas[1:]:
+        herramientas.Append(f)
+    op = BRepAlgoAPI_Fuse()
+    op.SetArguments(argumentos)
+    op.SetTools(herramientas)
+    try:
+        op.Build()
+        hecho = op.IsDone()
+    except Exception:  # noqa: BLE001 — OCC lanza excepciones sin texto en los casos que no resuelve
+        hecho = False
+    if not hecho:
+        raise geo.ErrorGeometria("La unión de las instancias del patrón falló en el kernel.")
+    return geo.unificar_caras(op.Shape())
+
+
 def _indices(n, simetrico):
     if int(n) < 1:
         raise geo.ErrorGeometria("La cantidad del patrón debe ser al menos 1.")
@@ -1507,7 +1778,8 @@ def transformaciones_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, dis
     """Patrón rectangular [SLD-REF-PATTERN]: lista de gp_Trsf en orden (i, j) — i por dir1, j por dir2 —
     que incluye la identidad (0, 0) = el original. "extension": d = largo total por dirección; "espaciado":
     d = paso. Simétrico: la misma cantidad hacia los dos lados (2n − 1). `suprimir` = pares (i, j) o índices
-    i a omitir (el original no se suprime)."""
+    i a omitir (el original no se suprime). Como máximo INSTANCIAS_MAXIMAS en total."""
+    _exigir_instancias(_cantidad(n1, simetrico1) * (_cantidad(n2, simetrico2) if dir2 is not None else 1))
     u1 = _unit(dir1, "dirección 1")
     u2 = _unit(dir2, "dirección 2") if dir2 is not None else np.zeros(3)
     s1 = _paso(int(n1), d1, distribucion)
@@ -1522,8 +1794,10 @@ def transformaciones_circulares(punto, eje, n, *, angulo_total=360.0, distribuci
                                 suprimir=()):
     """Patrón circular [SLD-REF-PATTERN]: lista de gp_Trsf (índice 0 = identidad). "completa": las instancias
     reparten `angulo_total` (con 360° la última no se superpone con el original); "espaciado":
-    `angulo_total` es el ángulo entre instancias. Simétrico: n hacia cada lado del original."""
+    `angulo_total` es el ángulo entre instancias. Simétrico: n hacia cada lado del original. Como máximo
+    INSTANCIAS_MAXIMAS."""
     n = int(n)
+    _exigir_instancias(_cantidad(n, simetrico))
     if distribucion == "completa":
         if abs(abs(angulo_total) - 360.0) < 1e-9 and not simetrico:
             paso = angulo_total / n
@@ -1559,9 +1833,10 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
     """Patrón sobre ruta [SLD-REF-PATTERN]: el original está en la fracción `inicio` (0..1) de la ruta y las
     instancias avanzan `distancia` mm (largo total o paso, según `distribucion`). "identica" solo traslada;
     "direccion_ruta" además gira cada instancia con la ruta (marco de rotación mínima). En rutas abiertas se
-    omiten las instancias que caen fuera; en las cerradas se da la vuelta."""
+    omiten las instancias que caen fuera; en las cerradas se da la vuelta. Como máximo INSTANCIAS_MAXIMAS."""
     if orientacion not in ("identica", "direccion_ruta"):
         raise geo.ErrorGeometria(f"Orientación desconocida: {orientacion}")
+    _exigir_instancias(_cantidad(n, simetrico))
     w = _alambre(ruta)
     largo = _longitud(w)
     cerrada = _es_cerrado(w)

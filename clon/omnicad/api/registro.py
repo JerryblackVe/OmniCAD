@@ -272,12 +272,22 @@ def llamar(sesion, nombre, args=None):
             raise error("UNKNOWN_TOOL", f"No existe la herramienta '{nombre}'.",
                         *([f"¿Quisiste decir: {', '.join(parecidas)}?"] if parecidas else []))
         kwargs = _argumentos(h, args)
-        sesion.avisos = []
-        if h.transaccion:
-            with sesion.transaccion():
+        # Solo la llamada de afuera empieza la lista de avisos: una anidada (llamar dentro de execute_code)
+        # devuelve los suyos sin borrar los que ya juntaron las anteriores. Cada llamada devuelve sus avisos sin
+        # repetir: la transacción de adentro y la de afuera informan el mismo paso nuevo.
+        anidadas = getattr(sesion, "_llamadas", 0)
+        if not anidadas:
+            sesion.avisos = []
+        desde = len(sesion.avisos)
+        sesion._llamadas = anidadas + 1
+        try:
+            if h.transaccion:
+                with sesion.transaccion():
+                    resultado = h.funcion(sesion, **kwargs)
+            else:
                 resultado = h.funcion(sesion, **kwargs)
-        else:
-            resultado = h.funcion(sesion, **kwargs)
-        return {"ok": True, "result": _a_json(resultado), "avisos": list(sesion.avisos)}
+        finally:
+            sesion._llamadas = anidadas
+        return {"ok": True, "result": _a_json(resultado), "avisos": list(dict.fromkeys(sesion.avisos[desde:]))}
     except Exception as e:  # noqa: BLE001 — contrato: llamar nunca lanza
         return traducir(e).a_dict()

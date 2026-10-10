@@ -51,11 +51,12 @@ _ANCHO_DESGARRO = 0.01  # mm: el alivio «desgarro» se modela como un corte fin
 # ---------------------------------------------------------------- reglas
 # Aproximaciones honestas de la biblioteca de Fusion: radio = espesor y K = 0,44 (los valores por defecto de
 # Fusion); alivio de plegado redondo de ancho t y profundidad t/2; esquina recortada al pliegue; separación t.
+# Como en Fusion, la regla trae su material físico (clave de analisis.TABLA_MATERIALES): el cuerpo lo toma.
 REGLAS = {
-    "Acero 1 mm": {"espesor": 1.0, "k": 0.44},
-    "Acero 2 mm": {"espesor": 2.0, "k": 0.44},
-    "Aluminio 1.5 mm": {"espesor": 1.5, "k": 0.44},
-    "Acero inoxidable 1.2 mm": {"espesor": 1.2, "k": 0.44},
+    "Acero 1 mm": {"espesor": 1.0, "k": 0.44, "material": "Acero"},
+    "Acero 2 mm": {"espesor": 2.0, "k": 0.44, "material": "Acero"},
+    "Aluminio 1.5 mm": {"espesor": 1.5, "k": 0.44, "material": "Aluminio 6061"},
+    "Acero inoxidable 1.2 mm": {"espesor": 1.2, "k": 0.44, "material": "Acero inoxidable"},
 }
 REGLA_DEFECTO = "Acero 1 mm"
 FORMAS_ALIVIO = {"redondo": "Redondo", "recto": "Recto", "desgarro": "Desgarro"}
@@ -77,7 +78,7 @@ def regla(nombre=REGLA_DEFECTO, **ajustes):
     t = float(ajustes.get("espesor", REGLAS[nombre]["espesor"]))
     r = {"nombre": nombre, "espesor": t, "radio": t, "k": REGLAS[nombre]["k"], "alivio_forma": "redondo",
          "alivio_ancho": t, "alivio_profundidad": t / 2, "esquina_forma": "recortar", "esquina_tam": 4 * t,
-         "separacion": t}
+         "separacion": t, "material": REGLAS[nombre]["material"]}
     r.update(ajustes)
     for k in ("espesor", "radio", "k", "alivio_ancho", "alivio_profundidad", "esquina_tam", "separacion"):
         r[k] = float(r[k])

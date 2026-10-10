@@ -441,13 +441,37 @@ def chaflan(forma, grupos, *, cadena_tangente=True):
 
 
 # ---------------------------------------------------------------- vaciado
+def _cara_sigue_puesta(resultado, cara, espesor):
+    """True si la cara quitada sigue tapando el resultado. Se mira el punto central de la cara: en un vaciado bien
+    hecho queda en la abertura, lejos de las paredes. Solo se decide si ese punto cae dentro de la cara y a más de
+    cuatro espesores de su borde (más cerca, el canto de una pared inclinada puede taparlo con razón)."""
+    p, _ = _punto_normal(cara)
+    v = BRepBuilderAPI_MakeVertex(gp_Pnt(*p)).Vertex()
+    if not geo.se_tocan(v, cara, 1e-5) or geo.se_tocan(v, geo.compuesto(_aristas(cara)), 4 * espesor):
+        return False
+    return geo.se_tocan(v, resultado, 1e-5)
+
+
 def _cascara(forma, caras, espesor, union):
     ts = BRepOffsetAPI_MakeThickSolid()
-    ts.MakeThickSolidByJoin(forma, _lista_occ(caras), float(espesor), TOL, BRepOffset_Skin, False, False, union)
-    ts.Build()
+    try:
+        ts.MakeThickSolidByJoin(forma, _lista_occ(caras), float(espesor), TOL, BRepOffset_Skin, False, False, union)
+        ts.Build()
+    except Exception as e:  # noqa: BLE001 — p. ej. Standard_NoSuchObject «BRep_Tool:: no parameter on edge»
+        raise geo.ErrorGeometria("El vaciado falló: el kernel no pudo con ese espesor en esta geometría. Probá otro "
+                                 "espesor o vaciar antes de cortar.") from e
     if not ts.IsDone():
         raise geo.ErrorGeometria("El vaciado falló: el espesor es demasiado grande para la geometría.")
-    return ts.Shape()
+    resultado = ts.Shape()
+    # Con cortes que cruzan la cara quitada, MakeThickSolid puede dar IsDone y devolver el cuerpo tal cual o apenas
+    # tocado, con la cara todavía puesta. La historia no sirve para verlo: en un vaciado bien hecho también da la
+    # cara quitada por «modificada» y no por borrada.
+    antes = geo.volumen_exacto(forma)
+    if (abs(geo.volumen_exacto(resultado) - antes) <= 1e-9 * abs(antes)
+            or any(_cara_sigue_puesta(resultado, c, abs(espesor)) for c in caras)):
+        raise geo.ErrorGeometria("El vaciado falló: el kernel no pudo quitar esas caras (¿cortes o agujeros que "
+                                 "cruzan la cara quitada?). Probá otro espesor o vaciar antes de cortar.")
+    return resultado
 
 
 def _desfase_cuerpo(forma, distancia, union):
@@ -1014,4 +1038,9 @@ def quitar_caras(forma, caras):
     df.Build()
     if not df.IsDone():
         raise geo.ErrorGeometria("No se pudieron quitar esas caras: las vecinas no cierran el hueco.")
+    # Como Suprimir caras de Fusion: cura el hueco o falla (en Fusion, dejarlo abierto es otro comando, de superficies).
+    # Con la tapa de una caja, el defeaturing da IsDone y devuelve el cuerpo tal cual sin borrar nada.
+    if not all(df.IsDeleted(c) for c in caras):
+        raise geo.ErrorGeometria("No se pueden borrar esas caras: las caras vecinas no alcanzan a cerrar el hueco "
+                                 "(por ejemplo, la tapa de una caja).")
     return _validar(df.Shape(), "Quitar caras")

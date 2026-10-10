@@ -10,7 +10,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from . import entidades as ent
 from .operaciones import (ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _resolver, _resolver_todas,
-                          registrar_operacion)
+                          atributos_copia, registrar_operacion)
 
 
 def _sm():
@@ -21,7 +21,7 @@ def _sm():
 def _por_cuerpo(refs, estado, que="aristas"):
     """{id de cuerpo: [subformas]} a partir de referencias a caras o aristas (pueden ser de varios cuerpos)."""
     grupos = {}
-    for e in _resolver_todas(refs, estado):
+    for e in _resolver_todas(refs, estado, ("arista",) if que == "aristas" else ("cara",)):
         if e.cuerpo is None:
             raise ErrorOperacion(f"Solo se pueden usar {que} de cuerpos.")
         grupos.setdefault(e.cuerpo, []).append(e.forma)
@@ -68,6 +68,7 @@ class OpMover(Operacion):
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
               "copiar": False}
     EXPRESIONES = ("dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z")
+    OPCIONES = {"tipo": TIPOS_MOVIMIENTO}
 
     def dependencias(self):
         p = self.p
@@ -123,8 +124,8 @@ class OpMover(Operacion):
             else:
                 nueva = geo.transformar(c.forma, m)
             if self.p.get("copiar"):
-                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=f"{c.nombre} (copia)", apariencia=c.apariencia,
-                                    material=c.material, componente=c.componente)
+                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=f"{c.nombre} (copia)",
+                                    **atributos_copia(c))
             else:
                 c.forma = nueva
 
@@ -142,8 +143,7 @@ class OpQuitar(Operacion):
         if not self.p["cuerpos"]:
             raise ErrorOperacion("Elegí los cuerpos a quitar.")
         for cid in self.p["cuerpos"]:
-            estado.cuerpo(cid)
-            del estado.cuerpos[cid]
+            del estado.cuerpos[estado.cuerpo(cid).id]
 
 
 class OpEmpalme(Operacion):
@@ -155,6 +155,8 @@ class OpEmpalme(Operacion):
               "cuerda": "1 mm", "cadena_tangente": True, "caras_a": [], "caras_b": [], "regla": "todas",
               "redondeos": "ambos"}
     EXPRESIONES = ("radio", "radio_fin", "cuerda")
+    OPCIONES = {"tipo": ("empalme", "reglas"), "tipo_radio": ("constante", "cuerda", "variable"),
+                "regla": ("todas", "entre"), "redondeos": ("ambos", "redondeos", "empalmes")}
 
     def dependencias(self):
         return _deps_refs(self.p["aristas"], self.p["caras_a"], self.p["caras_b"]) - {self.id}
@@ -183,6 +185,7 @@ class OpChaflan(Operacion):
     PARAMS = {"aristas": [], "tipo": "distancia_igual", "distancia": "1 mm", "distancia2": "1 mm",
               "angulo": "45 deg", "voltear": False, "cadena_tangente": True}
     EXPRESIONES = ("distancia", "distancia2", "angulo")
+    OPCIONES = {"tipo": ("distancia_igual", "dos_distancias", "distancia_angulo")}
 
     def dependencias(self):
         return _deps_refs(self.p["aristas"]) - {self.id}
@@ -204,6 +207,7 @@ class OpVaciado(Operacion):
     PARAMS = {"caras": [], "cuerpos": [], "espesor_interior": "1 mm", "espesor_exterior": "1 mm",
               "direccion": "interior", "tangente": True, "tipo": "afilado"}
     EXPRESIONES = ("espesor_interior", "espesor_exterior")
+    OPCIONES = {"direccion": ("interior", "exterior", "ambos"), "tipo": ("afilado", "redondeado")}
 
     def dependencias(self):
         return (_deps_refs(self.p["caras"]) | _deps_objetivo(self.p["cuerpos"])) - {self.id}
@@ -212,7 +216,7 @@ class OpVaciado(Operacion):
         p, sm = self.p, _sm()
         grupos = _por_cuerpo(p["caras"], estado, "caras") if p["caras"] else {}
         for cid in p["cuerpos"]:
-            grupos.setdefault(cid, [])
+            grupos.setdefault(estado.cuerpo(cid).id, [])
         if not grupos:
             raise ErrorOperacion("Elegí caras a quitar o un cuerpo para vaciar.")
         for cid, caras in grupos.items():
@@ -228,6 +232,7 @@ class OpDesmoldeo(Operacion):
     TIPO, ETIQUETA, ICONO = "desmoldeo", "Desmoldeo", "◿"
     PARAMS = {"plano": None, "caras": [], "angulo": "3 deg", "lados": "uno", "angulo2": "3 deg", "voltear": False}
     EXPRESIONES = ("angulo", "angulo2")
+    OPCIONES = {"lados": ("uno", "dos", "simetrico")}
 
     def dependencias(self):
         return _deps_refs(self.p["plano"], self.p["caras"]) - {self.id}
@@ -253,6 +258,7 @@ class OpEscala(Operacion):
     TIPO, ETIQUETA, ICONO = "escala", "Escala", "⤢"
     PARAMS = {"cuerpos": [], "punto": None, "tipo": "uniforme", "factor": "1", "fx": "1", "fy": "1", "fz": "1"}
     EXPRESIONES = ("factor", "fx", "fy", "fz")
+    OPCIONES = {"tipo": ("uniforme", "no_uniforme")}
 
     def dependencias(self):
         return (_deps_objetivo(self.p["cuerpos"]) | _deps_refs(self.p["punto"])) - {self.id}
@@ -269,6 +275,8 @@ class OpEscala(Operacion):
                 c.forma = sm.escalar(c.forma, punto, factor=E("factor"))
             else:
                 c.forma = sm.escalar(c.forma, punto, factores=(E("fx"), E("fy"), E("fz")))
+            if getattr(c, "tipo", "solido") == "solido" and geo.sin_volumen(c.forma):
+                raise ErrorOperacion(f"«{c.nombre}» queda sin volumen con esa escala: el factor es demasiado chico.")
 
 
 class OpDesfaseCara(Operacion):
@@ -348,8 +356,7 @@ class OpDividirCuerpo(Operacion):
             ctx.aviso("La herramienta no divide el cuerpo.")
         c.forma = partes[0]
         for parte in partes[1:]:
-            estado.nuevo_cuerpo(self.id, parte, c.tipo, apariencia=c.apariencia, material=c.material,
-                                componente=c.componente)
+            estado.nuevo_cuerpo(self.id, parte, c.tipo, **atributos_copia(c))
 
 
 class OpDivisionSilueta(Operacion):
@@ -401,8 +408,8 @@ class OpAlinear(Operacion):
             c = estado.cuerpo(cid)
             nueva = geo.transformar(c.forma, m)
             if p["copiar"]:
-                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=f"{c.nombre} (copia)", apariencia=c.apariencia,
-                                    material=c.material, componente=c.componente)
+                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=f"{c.nombre} (copia)",
+                                    **atributos_copia(c))
             else:
                 c.forma = nueva
 

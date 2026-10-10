@@ -14,14 +14,23 @@ Equivalencias con Fusion 360 (informe_analisis.md §3.3):
 Recalcular reutiliza el estado guardado de cada paso: si se edita el paso i, solo se
 recalculan los pasos desde i en adelante. Al cambiar parámetros, se recalcula desde el primer paso
 que LEYÓ un parámetro cuyo valor cambió (cada paso anota lo que lee al ejecutarse).
+
+Abrir un proyecto no recalcula los pasos lentos (como Fusion, que abre con la geometría guardada): el proyecto
+guarda el resultado de los pasos que tardaron al menos `_SEGUNDOS_CACHE` (`pasos_para_cache`) y `desde_dict(datos,
+cache)` los toma de ahí en vez de ejecutarlos. Los demás pasos se calculan como siempre, y editar recalcula normal.
 """
 import json
 import logging
+import time
 import traceback
+
+from OCP.TopoDS import TopoDS_Shape
 
 from ..nucleo.geometria import ErrorGeometria
 from ..restricciones import ErrorBoceto
-from .operaciones import Contexto, ErrorOperacion, EstadoModelo, operacion_desde_dict
+from .entidades import ErrorReferencia
+from .operaciones import (HEREDABLES, TIPOS_OPERACION, Contexto, Cuerpo, ErrorOperacion, EstadoModelo,
+                          operacion_desde_dict, propiedades_cuerpo)
 from .parametros import ErrorExpresion, TablaParametros, nombres_usados
 
 log = logging.getLogger(__name__)
@@ -29,10 +38,63 @@ log = logging.getLogger(__name__)
 VERSION_RECETA = 1
 _LIMITE_DESHACER = 50
 _LIMITE_BYTES_DESHACER = 150_000_000   # un STEP importado viaja en cada instantánea: se acota la memoria
+# Un paso que tarda al menos esto guarda su resultado con el proyecto: al abrirlo no se recalcula. Los más rápidos
+# se recalculan (guardarlos agrandaría el archivo sin ganar casi nada de tiempo).
+_SEGUNDOS_CACHE = 0.1
+_CAMPOS_CUERPO = ("nombre", "op_id", "tipo", "apariencia", "material", "componente")
 
 
 class ErrorDocumento(ValueError):
     pass
+
+
+def _igual(a, b):
+    """¿Dos valores de estados del modelo son iguales sin recalcular nada? Los objetos (formas, bocetos resueltos,
+    planos) solo si son el MISMO; los dicts, listas, tuplas y valores simples, por contenido."""
+    if a is b:
+        return True
+    if isinstance(a, dict) and isinstance(b, dict):
+        return list(a) == list(b) and all(_igual(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)) and type(a) is type(b):
+        return len(a) == len(b) and all(_igual(x, y) for x, y in zip(a, b, strict=True))
+    if isinstance(a, (str, int, float, bool)) and type(a) is type(b):
+        return a == b
+    return False
+
+
+def _cambios_de_cuerpos(antes, despues):
+    """Lo que hizo un paso (de `antes` a `despues`) si solo cambió cuerpos que la caché del proyecto puede guardar:
+    ([[id, None si es el mismo de antes | sus datos]] en el orden del estado, formas de los cuerpos cambiados).
+    None si cambió otra cosa (bocetos, planos, componentes…) o un cuerpo que no va en un BREP (malla, chapa)."""
+    va, vd = vars(antes), vars(despues)
+    if list(va) != list(vd) or not all(_igual(va[k], vd[k]) for k in va if k not in ("cuerpos", "contador_cuerpos")):
+        return None
+    lista, formas = [], []
+    for cid, c in despues.cuerpos.items():
+        previo = antes.cuerpos.get(cid)
+        if previo is not None and type(c) is type(previo) and _igual(vars(c), vars(previo)):
+            lista.append([cid, None])
+            continue
+        datos = {k: getattr(c, k) for k in _CAMPOS_CUERPO}
+        try:
+            se_guarda = json.loads(json.dumps(datos)) == datos
+        except (TypeError, ValueError):
+            se_guarda = False
+        if (not se_guarda or type(c) is not Cuerpo or set(vars(c)) != {"id", "forma", "origen", *_CAMPOS_CUERPO}
+                or c.tipo == "malla" or not isinstance(c.forma, TopoDS_Shape) or c.forma.IsNull()):
+            return None
+        lista.append([cid, datos])
+        formas.append(c.forma)
+    return lista, formas
+
+
+def _migrar(d):
+    """Un paso de una receta leída (archivo, receta aplicada o diseño insertado): si su operación cambió de
+    cálculo, `migrar_receta` le completa lo que le falta para que se calcule como antes (p. ej. las uniones
+    sin «version_marco»)."""
+    tipo = d.get("tipo") if isinstance(d, dict) else None
+    migrar = getattr(TIPOS_OPERACION.get(tipo) if isinstance(tipo, str) else None, "migrar_receta", None)
+    return migrar(d) if migrar else d
 
 
 class ResultadoPaso:
@@ -54,6 +116,8 @@ class Documento:
         self._estados = []
         self._usados = []         # por paso: nombres de parámetros que leyó en el último cálculo
         self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
+        self._duraciones = []     # por paso: segundos que tardó su último cálculo (0 si no se ejecutó)
+        self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
         self._contador = 0
         self.modificado = False
         self._oyentes = []
@@ -151,7 +215,7 @@ class Documento:
         self.propiedades = {k: dict(v) for k, v in (datos.get("propiedades") or {}).items()}
         self.analisis = {k: dict(v) for k, v in (datos.get("analisis") or {}).items()}
         self.configuraciones = dict(datos.get("configuraciones") or {})
-        self.operaciones = [operacion_desde_dict(d) for d in datos.get("operaciones", [])]
+        self.operaciones = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
         self.marcador = min(datos.get("marcador", len(self.operaciones)), len(self.operaciones))
         self._contador = datos.get("contador", len(self.operaciones))
         self.modificado = True
@@ -190,9 +254,39 @@ class Documento:
             if not props:
                 del self.propiedades[cid]
         self.modificado = True
+        if clave == "nombre":
+            self._renombrar_cuerpos(ids_cuerpos, valor)
         self._notificar()
 
+    def _nombres_cuerpos(self):
+        """{id de cuerpo: nombre} de los cuerpos renombrados en el navegador."""
+        return {cid: p["nombre"] for cid, p in self.propiedades.items() if p.get("nombre")}
+
+    def _poner_nombres(self, estado, nombres):
+        """Una sola fuente de verdad para el nombre: `Cuerpo.nombre` refleja el renombre (como en Fusion, donde el
+        nombre del navegador ES el del cuerpo). El nombre sigue guardado en `propiedades`: la receta no cambia."""
+        for cid, nombre in nombres.items():
+            c = estado.cuerpos.get(cid)
+            if c is not None:
+                c.nombre = nombre
+
+    def _renombrar_cuerpos(self, ids_cuerpos, valor):
+        if valor:                   # el nombre nuevo va a todos los estados ya calculados, sin recalcular geometría
+            nombres = self._nombres_cuerpos()
+            for estado in self._estados:
+                self._poner_nombres(estado, nombres)
+            return
+        # Se quitó el renombre: el nombre original lo pone la operación que creó el cuerpo (op3.c1 → op3).
+        indices = [i for i, o in enumerate(self.operaciones) for cid in ids_cuerpos if cid.split(".c")[0] == o.id]
+        self.recalcular(min(indices, default=0))
+
     def propiedad(self, cid, clave, defecto=None):
+        """Propiedad `clave` del cuerpo `cid`; el aspecto, el acabado y el material se heredan del original si
+        el cuerpo es una copia sin valor propio (`operaciones.propiedades_cuerpo`)."""
+        if clave in HEREDABLES:
+            cuerpo = self.estado_final.cuerpos.get(cid)
+            if cuerpo is not None:
+                return propiedades_cuerpo(self.propiedades, cuerpo).get(clave, defecto)
         return self.propiedades.get(cid, {}).get(clave, defecto)
 
     def agregar_analisis(self, tipo, params, nombre=None):
@@ -362,48 +456,111 @@ class Documento:
         except ErrorExpresion:
             valores = {}
         ctx = Contexto(valores)
-        op.ejecutar(estado, ctx)
+        op.calcular(estado, ctx)
         return estado, ctx.avisos
 
     def recalcular(self, desde=0):
         desde = max(0, min(desde, len(self._estados), len(self.resultados)))
-        desde = min(desde, len(self._usados))
+        desde = min(desde, len(self._usados), len(self._duraciones))
         del self._estados[desde:]
         del self.resultados[desde:]
         del self._usados[desde:]
+        del self._duraciones[desde:]
         try:
             valores = self.parametros.valores()
         except ErrorExpresion as e:
             valores = {}
             log.warning("Parámetros inválidos: %s", e)
         self._valores = valores
+        nombres = self._nombres_cuerpos()
         estado = self.estado_en(desde)
         for i in range(desde, len(self.operaciones)):
             op = self.operaciones[i]
             usados = frozenset()
+            duracion = 0.0
+            guardado = self._de_cache(i, op, estado) if i < self.marcador and not op.suprimida else None
             if i >= self.marcador:
                 self.resultados.append(ResultadoPaso("retrocedida"))
             elif op.suprimida:
                 self.resultados.append(ResultadoPaso("suprimida"))
+            elif guardado is not None:
+                estado, resultado, usados, duracion = guardado
+                self.resultados.append(resultado)
             else:
                 nuevo = estado.copia()
                 ctx = Contexto(valores)
                 usados = ctx.usados
+                inicio = time.perf_counter()
                 try:
-                    op.ejecutar(nuevo, ctx)
+                    op.calcular(nuevo, ctx)
                     estado = nuevo
                     if ctx.avisos:
                         self.resultados.append(ResultadoPaso("aviso", " ".join(ctx.avisos)))
                     else:
                         self.resultados.append(ResultadoPaso("ok"))
-                except (ErrorOperacion, ErrorGeometria, ErrorExpresion, ErrorBoceto) as e:
+                except (ErrorOperacion, ErrorGeometria, ErrorExpresion, ErrorBoceto, ErrorReferencia) as e:
                     self.resultados.append(ResultadoPaso("error", str(e)))
                 except Exception as e:  # noqa: BLE001 — un fallo del kernel no debe tumbar la app
                     log.error("Error inesperado en %s:\n%s", op.id, traceback.format_exc())
                     self.resultados.append(ResultadoPaso("error", f"Error inesperado: {e}"))
+                duracion = time.perf_counter() - inicio
+            self._poner_nombres(estado, nombres)   # antes del paso siguiente: la copia de «Placa» sale «Placa (copia)»
             self._estados.append(estado)
             self._usados.append(usados)
+            self._duraciones.append(duracion)
         self._notificar()
+
+    # ------------------------------------------------------------ caché de pasos lentos (abrir sin recalcular)
+    def pasos_para_cache(self, minimo=None):
+        """Lo que el proyecto guarda para abrir sin recalcular (`proyecto.guardar`): [(datos, formas)] de los pasos
+        activos que tardaron al menos `minimo` segundos (por defecto `_SEGUNDOS_CACHE`), terminaron bien (ok o
+        aviso) y solo cambiaron cuerpos sólidos o superficies. `datos` es JSON; `formas`, las formas de los cuerpos
+        que el paso creó o cambió, en el orden de `datos["cuerpos"]`."""
+        minimo = _SEGUNDOS_CACHE if minimo is None else minimo
+        pasos = []
+        for i in range(min(self.marcador, len(self._estados), len(self._duraciones))):
+            op, resultado = self.operaciones[i], self.resultados[i]
+            if op.suprimida or resultado.estado not in ("ok", "aviso") or self._duraciones[i] < minimo:
+                continue
+            despues = self.estado_en(i + 1)
+            cambios = _cambios_de_cuerpos(self.estado_en(i), despues)
+            if cambios is None:
+                continue
+            cuerpos, formas = cambios
+            pasos.append(({"indice": i, "op": op.id, "estado": resultado.estado, "mensaje": resultado.mensaje,
+                           "usados": sorted(self._usados[i]), "dependencias": sorted(op._usados),
+                           "contador": despues.contador_cuerpos, "duracion": self._duraciones[i],
+                           "cuerpos": cuerpos}, formas))
+        return pasos
+
+    def _de_cache(self, i, op, estado):
+        """El paso i tomado de la caché del proyecto que se está abriendo, sin ejecutarlo: (estado, resultado,
+        parámetros que leyó, duración). None si no está guardado o no cuadra con `estado` (entonces se ejecuta)."""
+        guardado = self._cache.get(i)
+        if guardado is None:
+            return None
+        datos, formas = guardado
+        try:
+            if datos["op"] != op.id or datos["estado"] not in ("ok", "aviso"):
+                return None
+            nuevo = estado.copia()
+            cuerpos, propias = {}, iter(formas)
+            for cid, m in datos["cuerpos"]:
+                if m is None:
+                    cuerpos[cid] = nuevo.cuerpos[cid]
+                else:
+                    cuerpos[cid] = Cuerpo(cid, m["nombre"], next(propias), m["op_id"], m["tipo"], m["apariencia"],
+                                          m["material"], m["componente"])
+            if next(propias, None) is not None:
+                return None
+            nuevo.cuerpos = cuerpos
+            nuevo.contador_cuerpos = int(datos["contador"])
+            resultado = ResultadoPaso(datos["estado"], str(datos["mensaje"]))
+            usados, duracion, dependencias = set(datos["usados"]), float(datos["duracion"]), set(datos["dependencias"])
+        except (KeyError, TypeError, ValueError, StopIteration):
+            return None
+        op._usados = dependencias       # lo que fija `ejecutar`: sin esto se podría mover o borrar lo que usa el paso
+        return nuevo, resultado, usados, duracion
 
     # ------------------------------------------------------------ comentarios (panel COMENTARIOS)
     def agregar_comentario(self, texto):
@@ -428,7 +585,9 @@ class Documento:
                 "espacios": self.espacios, "comentarios": self.comentarios}
 
     @classmethod
-    def desde_dict(cls, datos):
+    def desde_dict(cls, datos, cache=None):
+        """Documento desde una receta. `cache` ({índice de paso: (datos, formas)}, lo que guardó `pasos_para_cache`
+        con ESTA misma receta) evita recalcular esos pasos; se usa solo para esta carga: después, editar recalcula."""
         version = datos.get("version_receta", 1)
         if version > VERSION_RECETA:
             raise ErrorDocumento(f"La receta es de una versión más nueva ({version}) que la soportada ({VERSION_RECETA}).")
@@ -437,6 +596,10 @@ class Documento:
         doc.vistas = dict(datos.get("vistas", {}))
         doc.espacios = dict(datos.get("espacios", {}))
         doc.comentarios = [dict(c) for c in datos.get("comentarios", [])]
-        doc._cargar(datos)
+        doc._cache = cache or {}
+        try:
+            doc._cargar(datos)
+        finally:
+            doc._cache = {}
         doc.modificado = False
         return doc

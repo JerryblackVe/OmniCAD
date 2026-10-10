@@ -212,6 +212,11 @@ def test_new_y_open_document_con_cambios_sin_guardar(puente, ventana, tmp_path):
         r = c.pedir("new_document", {"name": "Vacío"})
         assert r["ok"] and ventana.doc.nombre == "Vacío" and not ventana.doc.estado_final.cuerpos
         assert "Vacío" in ventana.windowTitle()
+        # discard=true descarta los cambios de la ventana (como sin ventana: la regla es de la herramienta)
+        assert c.pedir("create_box", {"length": 10, "width": 10, "height": 10})["ok"] and ventana.doc.modificado
+        r = c.pedir("new_document", {"name": "Descartado", "discard": True})
+        assert r["ok"] and ventana.doc.nombre == "Descartado" and not ventana.doc.estado_final.cuerpos
+        assert not ventana.doc.modificado
     finally:
         c.cerrar()
 
@@ -224,6 +229,26 @@ def test_execute_code_en_vivo_solo_con_su_preferencia(puente, ventana):
         ventana.prefs["general/puente_codigo"] = True
         r = c.pedir("execute_code", {"code": "result = len(doc.operaciones)"})
         assert r["ok"] and r["result"]["result"] == 0
+    finally:
+        ventana.prefs["general/puente_codigo"] = False
+        c.cerrar()
+
+
+def test_execute_code_en_vivo_con_plazo(puente, ventana):
+    from omnicad.api.herramientas_avanzado import PLAZO_CODIGO
+    from omnicad.servidor_mcp.puente_cliente import TIEMPO_RESPUESTA
+    from omnicad.ui.puente import PLAZO_MAXIMO_CODIGO
+    assert PLAZO_CODIGO <= PLAZO_MAXIMO_CODIGO < TIEMPO_RESPUESTA
+    c = _cliente(puente)
+    ventana.prefs["general/puente_codigo"] = True
+    try:
+        pasos = len(ventana.doc.operaciones)
+        bucle = "while True:\n    llamar('create_box', {'length': 5, 'width': 5, 'height': 5})"
+        r = c.pedir("execute_code", {"code": bucle, "timeout": 0.5})
+        assert r["error_kind"] == "CODE_TIMEOUT" and len(ventana.doc.operaciones) == pasos
+        for malo in (None, 500):
+            assert c.pedir("execute_code", {"code": "result = 1", "timeout": malo})["error_kind"] == "INVALID_ARGUMENTS"
+        assert c.pedir("ping", {})["ok"]
     finally:
         ventana.prefs["general/puente_codigo"] = False
         c.cerrar()

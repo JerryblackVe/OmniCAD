@@ -160,11 +160,15 @@ class DialogoPrimitiva(_DialogoBase):
         self.form.addRow("Cuerpo objetivo", self.objetivo)
         nota = {"caja": "La posición es la esquina mínima.", "cilindro": "La posición es el centro de la base (eje Z).",
                 "esfera": "La posición es el centro.", "toroide": "La posición es el centro (eje Z)."}[forma]
+        self.caja_centrada = bool(op and op.p.get("caja_centrada"))      # cajas creadas con create_box
+        if forma == "caja" and self.caja_centrada:
+            nota = "La posición es el centro de la base."
         self.form.addRow("", QLabel(nota))
 
     def crear_operacion(self):
         params = {k: c.text().strip() for k, c in self.valores.items()}
-        params.update(forma=self.forma, operacion=self.operacion.currentData(), objetivo=self.objetivo.currentData() or "")
+        params.update(forma=self.forma, operacion=self.operacion.currentData(), objetivo=self.objetivo.currentData() or "",
+                      caja_centrada=self.caja_centrada)
         if self.op:
             return OpPrimitiva(self.op.id, self.op.nombre, self.op.suprimida, **params)
         return OpPrimitiva(self.doc.nuevo_id(), **params)

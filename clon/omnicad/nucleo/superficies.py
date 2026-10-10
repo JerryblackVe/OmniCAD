@@ -38,7 +38,7 @@ from OCP.ShapeFix import ShapeFix_Face
 from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_REVERSED, TopAbs_SHELL,
                         TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
 from OCP.TopExp import TopExp
-from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shape
+from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex
 from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
 
 from . import geometria as geo
@@ -220,8 +220,7 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
     `conicidad` (grados, Taper Angle): positivo abre la superficie hacia afuera de un contorno cerrado,
     negativo la cierra; en una curva abierta, positivo inclina hacia la derecha del recorrido mirando
     desde `direccion`. La altura medida sobre `direccion` es siempre `distancia`."""
-    if abs(distancia) < 1e-9:
-        raise geo.ErrorGeometria("La distancia de extrusión no puede ser cero.")
+    geo.exigir_longitud(distancia, "La distancia de extrusión")
     if abs(conicidad) >= 89.0:
         raise geo.ErrorGeometria("La conicidad tiene que estar entre -89° y 89°.")
     n = _unitario(direccion)
@@ -239,14 +238,52 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
         caras = []
         for d, alto in lados:
             ang = math.radians(abs(conicidad))
-            dr = BRepOffsetAPI_MakeDraft(w, gp_Dir(*map(float, d)), ang)
-            dr.SetDraft(conicidad < 0)   # "interno" = hacia adentro del contorno
-            dr.Perform(alto / math.cos(ang))
-            if not dr.IsDone():
-                raise geo.ErrorGeometria("No se pudo crear la extrusión cónica.")
-            caras.extend(geo.caras(dr.Shape()))
+            try:
+                dr = BRepOffsetAPI_MakeDraft(w, gp_Dir(*map(float, d)), ang)
+                dr.SetDraft(conicidad < 0)   # "interno" = hacia adentro del contorno
+                dr.Perform(alto / math.cos(ang))
+                hecho = dr.IsDone()
+            except Exception:  # noqa: BLE001 — OCC lanza gp_VectorWithNullMagnitude, sin texto, con algunas rectas
+                hecho = False
+            if hecho:
+                caras.extend(geo.caras(dr.Shape()))
+            elif (t := _direccion_recta(w)) is not None:
+                caras.extend(geo.caras(_prisma_inclinado(w, t, d, alto, conicidad)))
+            else:
+                raise geo.ErrorGeometria("No se pudo crear la extrusión de superficie con conicidad con estas curvas: "
+                                         "probá con conicidad 0.")
         piezas.append(_coser_caras(caras))
     return _simplificar(_juntar(piezas))
+
+
+def _direccion_recta(alambre):
+    """Dirección unitaria del alambre (de su primer vértice al último) si es un tramo recto: aristas rectas y
+    alineadas. None si no lo es (o si es cerrado)."""
+    v1, v2 = TopoDS_Vertex(), TopoDS_Vertex()
+    TopExp.Vertices_s(alambre, v1, v2)
+    if v1.IsNull() or v2.IsNull():
+        return None
+    a, b = _np(BRep_Tool.Pnt_s(v1)), _np(BRep_Tool.Pnt_s(v2))
+    largo = float(np.linalg.norm(b - a))
+    if largo < _TOL:
+        return None
+    t = (b - a) / largo
+    for e in geo._explorar(alambre, TopAbs_EDGE):
+        e = TopoDS.Edge(e)
+        if BRepAdaptor_Curve(e).GetType() != GeomAbs_Line or \
+                any(np.linalg.norm(np.cross(p - a, t)) > _TOL for p in _extremos(e)):
+            return None
+    return t
+
+
+def _prisma_inclinado(alambre, t, d, alto, conicidad):
+    """Superficie de un tramo recto (dirección `t`) extruido `alto` según `d` e inclinado `conicidad` grados hacia
+    t × d (la derecha del recorrido mirando desde `d`): la misma cara plana que da MakeDraft cuando la resuelve."""
+    lateral = np.cross(t, d)
+    if np.linalg.norm(lateral) < 1e-9:
+        raise geo.ErrorGeometria("La curva es paralela a la dirección de extrusión: no se puede extruir.")
+    v = (np.asarray(d, float) + lateral * math.tan(math.radians(conicidad))) * alto
+    return BRepPrimAPI_MakePrism(alambre, gp_Vec(*map(float, v))).Shape()
 
 
 def revolver_superficie(aristas, punto_eje, dir_eje, angulo):
@@ -308,14 +345,25 @@ def _trsf_marco(p0, t0, r0, p1, t1, r1):
     return tr
 
 
+# Torsión máxima del barrido de superficie: 50 vueltas. Lleva una sección cada ≤10° y el tiempo crece más que los
+# grados (ruta de 200 mm: 3600° 0,8 s; 7200° 3,9 s; 18.000° 49 s; 36.000° 115 s y el kernel falla). Es otro tope que el
+# del barrido sólido (TORSION_MAXIMA de solidos_crear) porque cuesta otra cosa: hasta 18.000° andaba y sigue andando.
+TORSION_MAXIMA_SUPERFICIE = 18000.0
+
+
 def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", torsion=0.0):
     """Barrido de curvas a lo largo de una ruta [SFC-SWEEP] (Single Path).
 
     `orientacion`: "perpendicular" (el perfil acompaña a la ruta) o "paralela" (el perfil no rota).
     `torsion` (grados, Twist Angle): giro total del perfil alrededor de la ruta; solo con perpendicular.
-    La torsión se construye con secciones intermedias cada ≤10° (aproximación muy fina, no exacta)."""
+    La torsión se construye con secciones intermedias cada ≤10° (aproximación muy fina, no exacta) y admite como
+    máximo ±TORSION_MAXIMA_SUPERFICIE grados."""
     if orientacion not in ("perpendicular", "paralela"):
         raise geo.ErrorGeometria(f"Orientación de barrido desconocida: {orientacion}")
+    if not math.isfinite(torsion) or abs(torsion) > TORSION_MAXIMA_SUPERFICIE:
+        raise geo.ErrorGeometria(f"La torsión del barrido de superficie admite como máximo "
+                                 f"±{TORSION_MAXIMA_SUPERFICIE:g}° ({TORSION_MAXIMA_SUPERFICIE / 360:g} vueltas); "
+                                 f"recibió {torsion:g}°.")
     if abs(torsion) > 1e-9 and orientacion != "perpendicular":
         raise geo.ErrorGeometria("La torsión solo existe con orientación perpendicular.")
     espina = _alambre_unico(ruta, "La ruta")
@@ -793,6 +841,11 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     junta = {"agudo": GeomAbs_Intersection, "redondeado": GeomAbs_Arc}.get(tipo)
     if junta is None:
         raise geo.ErrorGeometria(f"Tipo de engrosado desconocido: {tipo}")
+    if simetrica and tipo == "redondeado":
+        # Desfasar −t/2 con juntas en arco y engrosar t después invierte esos arcos y OCC no da un sólido: se
+        # engrosa cada mitad por su lado (esquina de afuera redondeada con radio t/2) y se unen.
+        mitades = [engrosar_superficie(forma, s * abs(espesor) / 2, tipo=tipo) for s in (1, -1)]
+        return _simplificar(geo.booleano(mitades[0], mitades[1], "unir"))
     base = _simplificar(forma)
     if base.ShapeType() == TopAbs_COMPOUND:
         base = _coser_caras(geo.caras(base))

@@ -11,8 +11,10 @@ y las expresiones llevan unidades explícitas o toman la unidad por defecto:
 Las expresiones se evalúan con `ast` y una lista blanca de nodos: nunca con eval().
 """
 import ast
+import keyword
 import math
 import re
+import unicodedata
 
 LONGITUD, ANGULO, ESCALAR = "longitud", "angulo", "escalar"
 TIPOS = (LONGITUD, ANGULO, ESCALAR)
@@ -33,7 +35,6 @@ RESERVADOS = set(UNIDADES) | set(FUNCIONES) | set(CONSTANTES)
 
 _NUM_CON_UNIDAD = re.compile(
     r"(?<![\w.])((?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*(°|" + "|".join(sorted(UNIDADES, key=len, reverse=True)) + r")(?![\w])")
-_NOMBRE_VALIDO = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class ErrorExpresion(ValueError):
@@ -127,8 +128,13 @@ def nombres_usados(expr):
 
 
 def validar_nombre(nombre):
-    if not _NOMBRE_VALIDO.match(nombre or ""):
+    """Como en Fusion, un nombre de parámetro es un identificador: letras (también ñ y acentos), dígitos y «_», sin
+    empezar con dígito. Se exige la forma normalizada NFKC porque así lo lee el evaluador (si no, «ñ» escrita como
+    n + tilde combinada no se encontraría nunca)."""
+    if not (isinstance(nombre, str) and nombre.isidentifier() and unicodedata.normalize("NFKC", nombre) == nombre):
         raise ErrorExpresion(f"Nombre de parámetro inválido: '{nombre}'.")
+    if keyword.iskeyword(nombre):
+        raise ErrorExpresion(f"'{nombre}' es una palabra reservada (unidad, función o palabra de Python).")
     if nombre in RESERVADOS:
         raise ErrorExpresion(f"'{nombre}' es una palabra reservada (unidad o función).")
 

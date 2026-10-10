@@ -61,11 +61,13 @@ PISTAS = {
     "FILE_NOT_FOUND": ["Revisá la ruta: el archivo o la carpeta no existen.", "Usá una ruta absoluta."],
     "FILE_EXISTS": ["Pasá overwrite=true (en la CLI: --overwrite) para reemplazarlo, o elegí otra ruta."],
     "PERMISSION_DENIED": ["Elegí una carpeta con permiso de escritura o cerrá el programa que tiene abierto el archivo."],
-    "INVALID_FORMAT": ["Formatos de exportación: .stl, .obj, .3mf, .ply, .step/.stp, .iges/.igs, .brep.",
+    "INVALID_FORMAT": ["Formatos de exportación: .stl, .obj, .3mf, .ply, .step/.stp, .iges/.igs, .brep y .dxf "
+                       "(patrón plano de chapa).",
                        "Los cuerpos de malla solo se exportan a .stl, .obj, .3mf o .ply."],
     "INVALID_PROJECT": ["El archivo no es un proyecto .omnicad válido o está dañado.",
                         "Si hay un autoguardado (*.autoguardado.omnicad), probá abrir ese."],
-    "UNSUPPORTED_FILE_TYPE": ["Se abren .omnicad/.fclone, .step/.stp, .iges/.igs, .stl, .obj, .3mf, .ply, .dxf, .f3d y .f3z."],
+    "UNSUPPORTED_FILE_TYPE": ["Se abren .omnicad/.fclone, .step/.stp, .iges/.igs, .stl, .obj, .3mf, .ply, .dxf, "
+                              ".brep/.brp, .f3d y .f3z."],
     "IMPORT_FAILED": ["El archivo puede estar dañado o ser de un formato que OpenCascade no lee.",
                       "Probá exportarlo de nuevo desde el programa de origen (STEP AP214 o AP242)."],
     "FUSION_NOT_AVAILABLE": ["Abrí Fusion 360 y verificá que el complemento OmniCADPuente esté en ejecución "
@@ -105,10 +107,12 @@ PISTAS = {
     "INVALID_AXIS": ["axis: 'sketch_x', 'sketch_y', 'x', 'y', 'z' o el id de una línea del boceto (get_sketch)."],
     # --- selectores
     "INVALID_SELECTOR": ["Sintaxis: >Z <Z (más alto/bajo), |Z (paralelo), #Z (perpendicular), +Z -Z (normal), "
-                         "%PLANE %CIRCLE (tipo), nearest:[x,y,z]. Se combinan con and, or, not y paréntesis.",
+                         "|Z~3 (con 3° de tolerancia), %PLANE %CIRCLE (tipo), nearest:[x,y,z]. Se combinan con and, "
+                         "or, not y paréntesis.",
                          "get_guide(topic='selectores') tiene ejemplos."],
     "NO_MATCH": ["find_faces / find_edges sin selector listan todo con su tipo y centro.",
-                 "Revisá el eje y el tipo: '|Z' en caras es la tapa y la base, '#Z' son las laterales."],
+                 "Revisá el eje y el tipo: '|Z' en caras es la tapa y la base, '#Z' son las laterales.",
+                 "Si están apenas inclinadas (p. ej. tras un desmoldeo), sumá una tolerancia en grados: |Z~3, #Z~3."],
     "STALE_ID": ["Los ids de find_faces / find_edges valen solo hasta el próximo cambio del documento.",
                  "Volvé a llamar find_faces / find_edges, o usá un selector (p. ej. '>Z')."],
     "ELEMENT_NOT_FOUND": ["find_faces / find_edges listan los ids que existen (Cuerpo1/F3 = cara, Cuerpo1/E7 = arista)."],
@@ -129,6 +133,9 @@ PISTAS = {
                        "El documento quedó como estaba."],
     "CODE_ERROR": ["Corregí el código y volvé a llamar: el documento quedó como estaba.",
                    "Tenés definidos api, sesion, doc y llamar(nombre, args); print() sale en stdout."],
+    "CODE_TIMEOUT": ["El documento quedó como estaba: no hace falta deshacer.",
+                     "Subí timeout (en vivo, como mucho 100 s) o partí el trabajo en llamadas más cortas.",
+                     "Si es un bucle sin salida, revisá la condición del while."],
     "TOPIC_NOT_FOUND": ["get_guide sin argumentos devuelve el índice con los temas."],
     "INTERNAL_ERROR": ["Es una falla interna de OmniCAD: el documento no cambió. Probá con otros valores o reportalo."],
     # --- puente en vivo (la app abierta; ver api/protocolo_puente.py)
@@ -143,8 +150,8 @@ PISTAS = {
                         "Para trabajar sin la ventana, arrancá el servidor MCP con --modo sin_ventana (o auto)."],
     "APP_NOT_RESPONDING": ["OmniCAD no contestó a tiempo: puede estar calculando algo pesado o trabado.",
                            "Revisá la ventana; get_scene_info dice si el último cambio se aplicó."],
-    "UNSAVED_CHANGES": ["El documento abierto en la ventana tiene cambios sin guardar: guardalo antes con "
-                        "save_document (o pedile al usuario que lo guarde o lo descarte).",
+    "UNSAVED_CHANGES": ["El documento tiene cambios sin guardar: guardalo antes con save_document, o pasá "
+                        "discard=true para descartarlos (en vivo, mejor que decida el usuario).",
                         "No se descartó nada."],
     "LIVE_NOT_ALLOWED": ["En vivo, execute_code corre en la interfaz de OmniCAD: solo se permite si el usuario activa "
                          "Preferencias › General › «Permitir también execute_code en vivo».",
@@ -173,6 +180,7 @@ _TABLA = [
     (ErrorExpresion, r"^Referencia circular", "CIRCULAR_REFERENCE"),
     (ErrorExpresion, r"^La unidad '.*' es de", "UNIT_MISMATCH"),
     (ErrorExpresion, None, "INVALID_EXPRESSION"),
+    (ErrorOperacion, r"^Parámetro mal formado", "INVALID_ARGUMENTS"),
     (ErrorOperacion, r"^El cuerpo '.*' no existe", "BODY_NOT_FOUND"),
     (ErrorOperacion, r"^Se perdió la referencia", "REFERENCE_LOST"),
     (ErrorExportacion, r"^No hay cuerpos", "NOTHING_TO_EXPORT"),

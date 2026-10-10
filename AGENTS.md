@@ -40,7 +40,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `docs/` | `arquitectura.md`, `guia_comandos.md`, `plan_mcp_cli.md`, `brechas_fusion.md` y las demás `brechas_*.md` (índice: `brechas_indice.md`), `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`) |
-| `scripts/` | Utilidades: capturas de pantalla de OmniCAD |
+| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno) |
 | `PROJECT_LOG.md` | Bitácora y "Lecciones aprendidas" |
 
 **`nucleo/`, `timeline/`, `restricciones/` e `io_archivos/` NO importan Qt** (comprobado: cero
@@ -63,7 +63,10 @@ PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe OmniCAD.py --prueba-humo
 Sin `--select`, ruff muestra cientos de avisos de estilo viejos que NO son el criterio.
 **Memoria:** la suite completa y la prueba de humo (abren ventanas OpenGL) usan mucha memoria: se corren de a
 UNA a la vez. Si sos uno de varios agentes en paralelo, corré solo tus archivos de test; la suite completa y la
-humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB).
+humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB). Con varios agentes, cada
+comando pesado va con turno (uno a la vez en toda la PC; corta a los 900 s; en Windows, tope de 3 GB de memoria):
+`.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe -m pytest tests/test_x.py -q`
+(cada pytest reserva ~1 GB aunque use 350 MB de RAM).
 **Prueba de humo:** no uses el ratón sobre su ventana mientras corre: varios pasos mueven el cursor REAL con `QTest.mouseMove`. Para un paso nuevo que solo necesita que el widget vea el ratón, usá `_mover` (movimiento simulado, no depende del cursor real).
 Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lleva al menos una prueba con
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).

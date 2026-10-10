@@ -49,7 +49,8 @@ Reglas que evitan rehacer trabajo:
 ## Selectores de caras y aristas (estilo CadQuery)
 
 Valen en `find_faces`, `find_edges`, `fillet`, `chamfer`, `shell`, `create_hole`, `draft`, `create_sketch`,
-`measure_distance` y `measure_angle`. Se evalúan sobre UN cuerpo (`body`, o el único).
+`sketch_from_spec`, `measure_distance` y `measure_angle`. Se evalúan sobre UN cuerpo (`body`, o el único):
+con varios cuerpos, pasá `body`.
 
 | Selector | Elige |
 |---|---|
@@ -57,6 +58,7 @@ Valen en `find_faces`, `find_edges`, `fillet`, `chamfer`, `shell`, `create_hole`
 | `\|Z` | aristas paralelas al eje; en caras, la normal paralela (tapa y base) |
 | `#Z` | lo perpendicular (en una caja, las 4 caras laterales) |
 | `+Z` `-Z` | caras planas con esa normal |
+| `\|Z~3` `#Z~3` | lo mismo con 3° de tolerancia: lo apenas inclinado (tras un desmoldeo) |
 | `%PLANE` `%CYLINDER` | tipo de CARA. Tipo de ARISTA: `%LINE` `%CIRCLE` |
 | `nearest:[x,y,z]` | la más cercana a un punto |
 
@@ -81,6 +83,7 @@ Decidí por `error_kind`, leé `mensaje` y probá las `pistas`.
 | `OPERATION_FAILED` | Esos valores no se pueden calcular (radio que no cabe, espesor excesivo): bajalos |
 | `SKETCH_NOT_FOUND` `BODY_NOT_FOUND` `FEATURE_NOT_FOUND` | La referencia no existe: `get_scene_info` o `get_timeline` listan los nombres e ids |
 | `CODE_ERROR` | Falló tu código de `execute_code`: el mensaje trae la línea |
+| `CODE_TIMEOUT` | Tu código de `execute_code` pasó su tiempo máximo, timeout (60 s por defecto) y se cortó; el documento no cambió |
 | `APP_BUSY` | (en vivo) el usuario está en un comando: esperá unos segundos y repetí |
 | `APP_NOT_RUNNING` | (en vivo) la app no escucha: abrila con los agentes permitidos o usá `--modo sin_ventana` |
 

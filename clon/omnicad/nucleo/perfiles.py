@@ -40,10 +40,12 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopoDS import TopoDS
 from OCP.gp import gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln
 
-from ..restricciones.boceto import distancia_primitiva, puntos_primitiva
+from ..restricciones.boceto import MEDIDA_MAXIMA, distancia_primitiva, puntos_primitiva
 from . import geometria as geo
 
-_TAM_CARA = 1e5   # mm: la cara "enorme" que se parte
+# mm: semilado de la cara "enorme" que se parte. Los perfiles valen dentro de ±_TAM_CARA/2 = ±MEDIDA_MAXIMA (el tope
+# de las cotas, restricciones/boceto.py): una cota aceptada no deja el perfil afuera (con 1e5, un radio de 60 m lo perdía)
+_TAM_CARA = 2 * MEDIDA_MAXIMA
 
 
 class Perfil:
@@ -97,11 +99,25 @@ def _arista_bspline(plano, polos, nudos, grado, pesos):
     return BRepBuilderAPI_MakeEdge(curva)
 
 
+def _finita(prim):
+    """True si todos los números de la primitiva (coordenadas, radios, ángulos, polos, nudos, pesos) son finitos."""
+    pendientes = list(prim[2:])
+    while pendientes:
+        v = pendientes.pop()
+        if isinstance(v, (tuple, list, np.ndarray)):
+            pendientes.extend(v)
+        elif isinstance(v, (float, np.floating)) and not math.isfinite(v):
+            return False
+    return True
+
+
 def aristas_boceto(geometria, plano):
     """Crea aristas OCC a partir de las primitivas 2D de `Boceto.geometria()`. Devuelve [(id, arista)]."""
     aristas = []
     for prim in geometria:
         tipo, cid = prim[0], prim[1]
+        if not _finita(prim):
+            continue        # con una arista NaN o infinita el BRepAlgoAPI_Splitter de `detectar` no termina nunca
         try:
             if tipo == "linea":
                 (u1, v1), (u2, v2) = prim[2], prim[3]

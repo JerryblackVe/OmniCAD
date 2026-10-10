@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
+import faulthandler
 import json
 import math
 
 import pytest
 
 from omnicad import api
+from omnicad.nucleo import geometria as geo
 
 
 @pytest.fixture
@@ -351,6 +353,10 @@ def test_spec_con_todos_los_tipos_de_entidad(s):
       "constraints": [{"type": "vertical", "entities": ["a"]}, {"type": "horizontal", "entities": ["a"]}]},
      "SKETCH_OVERCONSTRAINED"),
     ({"plane": "ZZ"}, "PLANE_NOT_FOUND"),
+    ({"entities": [{"type": "circle", "id": "c", "center": [0, 0], "radius": 5}],
+      "dimensions": [{"type": "radius", "entities": ["c"], "value": -5}]}, "INVALID_DIMENSION"),
+    ({"entities": [{"type": "rectangle", "origin": [0, 0], "width": -10, "height": 5}]}, "INVALID_SPEC"),
+    ({"entities": [{"type": "spline", "points": [[0, 0], [5, 5], [10, 0]], "degree": "abc"}]}, "INVALID_SPEC"),
 ])
 def test_spec_invalido_no_deja_nada(s, spec, kind):
     llamar(s, "create_sketch")
@@ -358,6 +364,118 @@ def test_spec_invalido_no_deja_nada(s, spec, kind):
     r = api.llamar(s, "sketch_from_spec", spec)
     assert r["ok"] is False and r["error_kind"] == kind, r
     assert foto(s) == antes
+
+
+# ---------------------------------------------------------------- entradas no finitas y medidas inválidas
+NAN, INF = float("nan"), float("inf")
+
+
+def _sin_colgarse(funcion):
+    """Corre `funcion` con un perro guardián: si vuelve el cuelgue del Splitter de OCC (coordenada NaN o
+    infinita), pytest muere con el traceback en vez de colgar la PC (no hay pytest-timeout)."""
+    faulthandler.dump_traceback_later(60, exit=True)
+    try:
+        return funcion()
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+
+
+@pytest.mark.parametrize("nombre, args, campo", [
+    ("draw_line", {"start_x": 0, "start_y": 0, "end_x": NAN, "end_y": 5}, "end_x"),
+    ("draw_line", {"start_x": INF, "start_y": 0, "end_x": 1, "end_y": 5}, "start_x"),
+    ("draw_rectangle", {"x1": 0, "y1": 0, "x2": NAN, "y2": 5}, "x2"),
+    ("draw_rectangle", {"center_x": 0, "center_y": 0, "width": INF, "height": 5}, "width"),
+    ("draw_circle", {"radius": NAN}, "radius"),
+    ("draw_circle", {"radius": 5, "center_x": NAN}, "center_x"),
+    ("draw_circle", {"radius": INF}, "radius"),
+    ("draw_arc", {"start_x": 10, "start_y": 0, "center_x": 0, "center_y": 0, "sweep_angle": NAN}, "sweep_angle"),
+    ("draw_arc", {"start_x": 0, "start_y": 0, "mid_x": 5, "mid_y": -INF, "end_x": 10, "end_y": 0}, "mid_y"),
+    ("create_polygon", {"sides": 6, "radius": NAN}, "radius"),
+    ("create_polygon", {"sides": 6, "radius": 5, "rotation": INF}, "rotation"),
+    ("draw_spline", {"points": [[0, 0], [NAN, 5], [10, 0]]}, "points[1][0]"),
+])
+def test_dibujar_con_numeros_no_finitos_falla_sin_colgarse(s, nombre, args, campo):
+    llamar(s, "create_sketch")
+    antes = foto(s)
+    r = _sin_colgarse(lambda: api.llamar(s, nombre, args))
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and f"'{campo}'" in r["mensaje"] and "finito" in r["mensaje"], r
+    assert foto(s) == antes
+
+
+@pytest.mark.parametrize("entidad, kind", [
+    ({"type": "line", "start": [0, 0], "end": [NAN, 5]}, "INVALID_GEOMETRY"),
+    ({"type": "line", "start": [0, 0], "end": ["nan", 5]}, "INVALID_GEOMETRY"),      # float("nan") de un texto
+    ({"type": "circle", "center": [INF, 0], "radius": 3}, "INVALID_GEOMETRY"),
+    ({"type": "circle", "center": [0, 0], "radius": NAN}, "INVALID_SPEC"),
+    ({"type": "spline", "points": [[0, 0], [5, NAN], [10, 0]]}, "INVALID_GEOMETRY"),
+    ({"type": "polygon", "sides": 6, "radius": 5, "rotation": INF}, "INVALID_SPEC"),
+])
+def test_spec_con_numeros_no_finitos_falla_sin_colgarse(s, entidad, kind):
+    llamar(s, "create_sketch")
+    antes = foto(s)
+    r = _sin_colgarse(lambda: api.llamar(s, "sketch_from_spec", {"entities": [entidad]}))
+    assert r["error_kind"] == kind and "finito" in r["mensaje"], r
+    assert foto(s) == antes
+
+
+@pytest.mark.parametrize("tipo, valor, texto", [
+    ("radius", -5, "mayor que cero"), ("radius", 0, "mayor que cero"), ("diameter", -1, "mayor que cero"),
+    ("distance", 0, "mayor que cero"), ("radius", 1e9, "1.000.000 mm"), ("distance", 2e6, "1.000.000 mm"),
+    ("diameter", 1e7, "1.000.000 mm"),
+])
+def test_cota_de_largo_fuera_de_rango_se_rechaza(s, tipo, valor, texto):
+    llamar(s, "create_sketch")
+    circulo = llamar(s, "draw_circle", radius=5)["entities"][0]["id"]
+    linea = llamar(s, "draw_line", start_x=20, start_y=0, end_x=30, end_y=0)["entities"][0]["id"]
+    antes = foto(s)
+    r = api.llamar(s, "add_dimension", {"sketch": "Boceto1", "type": tipo, "value": valor,
+                                         "entities": [linea if tipo == "distance" else circulo]})
+    assert r["error_kind"] == "INVALID_DIMENSION" and texto in r["mensaje"], r
+    assert foto(s) == antes
+    d = llamar(s, "add_dimension", sketch="Boceto1", type="radius", entities=[circulo], value=12)
+    assert d["dimension"]["value"] == 12 and entidades(s)[circulo]["radius"] == 12
+
+
+def test_cotas_grandes_dentro_del_tope_valen(s):
+    """El tope de las cotas (1 km) no rompe una ruta abierta larga ni un perfil grande (con el tope viejo de
+    100 m, acotar la ruta de 150 m de un barrido daba INVALID_DIMENSION y un radio de 60 m perdía el perfil)."""
+    llamar(s, "create_sketch", name="Ruta")
+    ruta = llamar(s, "draw_line", start_x=0, start_y=0, end_x=150000, end_y=0)["entities"][0]["id"]
+    d = llamar(s, "add_dimension", sketch="Ruta", type="distance", entities=[ruta])          # la medida actual
+    assert d["dimension"]["value"] == pytest.approx(150000)
+    llamar(s, "create_sketch", plane="YZ", name="Perfil")
+    llamar(s, "draw_circle", radius=5)
+    barrido = llamar(s, "sweep", sketch="Perfil", profile=0, path_sketch="Ruta")["bodies_created"][0]
+    assert barrido["volume"] == pytest.approx(math.pi * 25 * 150000, rel=1e-6)
+    assert geo.es_valida(s.cuerpo(barrido["id"]).forma)
+    llamar(s, "create_sketch", name="Grande")
+    c = llamar(s, "draw_circle", radius=5)["entities"][0]["id"]
+    d = llamar(s, "add_dimension", sketch="Grande", type="radius", entities=[c], value=6e4)
+    assert d["dimension"]["value"] == 6e4 and d["profiles"] == 1
+    perfil = llamar(s, "get_sketch", sketch="Grande")["profiles"][0]
+    assert perfil["area"] == pytest.approx(math.pi * 6e4 ** 2, rel=1e-6)
+
+
+def test_spline_y_rectangulo_degenerados_se_rechazan(s):
+    llamar(s, "create_sketch")
+    antes = foto(s)
+    r = api.llamar(s, "draw_spline", {"points": [[1, 1], [1, 1], [1, 1]]})
+    assert r["error_kind"] == "INVALID_GEOMETRY" and "coinciden" in r["mensaje"], r
+    for args in ({"origin_x": 0, "origin_y": 0, "width": -10, "height": 5},
+                 {"center_x": 0, "center_y": 0, "width": 10, "height": -5}):
+        r = api.llamar(s, "draw_rectangle", args)
+        assert r["error_kind"] == "INVALID_GEOMETRY" and "mayores que cero" in r["mensaje"], r
+    assert foto(s) == antes
+
+
+@pytest.mark.parametrize("grado", [0, -1, 5])
+def test_el_grado_de_la_spline_de_ajuste_se_ignora(s, grado):
+    llamar(s, "create_sketch")
+    sp = llamar(s, "draw_spline", points=[[0, 0], [5, 5], [10, 0], [15, 3], [20, -2], [25, 4]], degree=grado)
+    assert entidades(s)[sp["entities"][0]["id"]]["degree"] == 3                # como Fusion: la de ajuste es cúbica
+    r = api.llamar(s, "draw_spline", {"points": [[0, 0], [1, 1], [2, 0], [3, 1], [4, 0], [5, 1]],
+                                      "spline_type": "control_points", "degree": grado})
+    assert r["ok"] is (grado == 5) and (r["ok"] or r["error_kind"] == "INVALID_GEOMETRY"), r
 
 
 def test_boceto_con_conflicto_pide_arreglar(s):

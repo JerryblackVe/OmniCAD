@@ -32,7 +32,7 @@ from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
 from ..restricciones import Boceto
 from ..timeline.documento import Documento, ErrorDocumento
-from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpPrimitiva
+from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpPrimitiva, propiedades_cuerpo
 from . import formato, temas
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
@@ -52,8 +52,8 @@ FILTRO_PROYECTO = "Proyectos OmniCAD (*.omnicad *.fclone)"     # .fclone: proyec
 # Archivo › Abrir: además del proyecto, los formatos que Fusion abre con «Abrir desde mi equipo».
 FILTRO_ABRIR = ";;".join([
     "Todos los archivos que se pueden abrir (*.omnicad *.fclone *.f3d *.f3z *.step *.stp *.iges *.igs *.stl *.obj "
-    "*.3mf *.ply *.dxf)", FILTRO_PROYECTO, "Fusion 360 (*.f3d *.f3z)", "STEP (*.step *.stp)", "IGES (*.iges *.igs)",
-    "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)"])
+    "*.3mf *.ply *.dxf *.brep *.brp)", FILTRO_PROYECTO, "Fusion 360 (*.f3d *.f3z)", "STEP (*.step *.stp)",
+    "IGES (*.iges *.igs)", "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)", "BREP de OpenCascade (*.brep *.brp)"])
 VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True}
 CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos")
 NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"))
@@ -854,8 +854,8 @@ class VentanaPrincipal(QMainWindow):
         """Color de cada cuerpo según Aspecto o, si no tiene, según su Material físico (como Fusion)."""
         from ..nucleo.analisis import TABLA_MATERIALES
         salida = {}
-        for cid in estado.cuerpos:
-            props = self.doc.propiedades.get(cid, {})
+        for cid, c in estado.cuerpos.items():
+            props = propiedades_cuerpo(self.doc.propiedades, c)
             if props.get("apariencia"):
                 salida[cid] = tuple(props["apariencia"])
             elif props.get("material") in TABLA_MATERIALES:
@@ -1391,7 +1391,8 @@ class VentanaPrincipal(QMainWindow):
             return
         self._seleccionar([])
         if self._salir_de_boceto():
-            self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": "cara", "marco": hit["plano"].marco()})
+            self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": "cara", "marco": hit["plano"].marco(),
+                                                                "cara": hit["ref"]})
 
     def _accion_navegador(self, accion, clave):
         """Menú contextual del navegador (como el de Fusion sobre cuerpos, bocetos y construcción)."""
@@ -1650,7 +1651,8 @@ class VentanaPrincipal(QMainWindow):
         proposito = self._eleccion
         self._cancelar_eleccion()
         if proposito == "boceto":
-            self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": hit["ref"], "marco": hit["marco"]})
+            self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": hit["ref"], "marco": hit["marco"],
+                                                                "cara": hit.get("cara_ref")})
 
     def _nombre_nuevo(self, clase, base):
         """Nombres como los de Fusion: Boceto1, Boceto2…, Plano1…"""
@@ -1678,7 +1680,7 @@ class VentanaPrincipal(QMainWindow):
                 self._refrescar_visibilidad()
                 return
             self._agregar(OpBoceto(self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
-                                   marco=datos["marco"], boceto=boceto))
+                                   marco=datos["marco"], cara=datos.get("cara"), boceto=boceto))
         else:
             self._reemplazar(OpBoceto(op.id, op.nombre, op.suprimida, boceto=boceto, **op.p))
         self._refrescar_visibilidad()

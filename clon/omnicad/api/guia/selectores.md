@@ -1,7 +1,8 @@
 # Selectores de caras y aristas
 
 Al estilo CadQuery. Sirven en `find_faces`, `find_edges`, `fillet`, `chamfer`, `shell`, `create_hole`,
-`draft`, `create_sketch`, `measure_distance` y `measure_angle`. Se evalúan sobre UN cuerpo (`body`, o el único).
+`draft`, `create_sketch`, `sketch_from_spec`, `measure_distance` y `measure_angle`. Se evalúan sobre UN cuerpo
+(`body`, o el único): con varios cuerpos, pasá `body`.
 
 | Selector | Elige |
 |---|---|
@@ -9,6 +10,7 @@ Al estilo CadQuery. Sirven en `find_faces`, `find_edges`, `fillet`, `chamfer`, `
 | `\|Z` | aristas rectas paralelas al eje; caras con la normal paralela (caja: tapa y base) |
 | `#Z` | lo perpendicular: aristas perpendiculares; caras con la normal perpendicular (caja: las 4 laterales) |
 | `+Z` `-Z` | caras planas con la normal en ese sentido |
+| `\|Z~3` `#Z~3` `+Z~3` | lo mismo con 3° de tolerancia (de 0 a 45): lo apenas inclinado, p. ej. tras un desmoldeo |
 | `%PLANE` `%CYLINDER` `%CONE` `%SPHERE` `%TORUS` | tipo de cara |
 | `%LINE` `%CIRCLE` `%ELLIPSE` `%BSPLINE` | tipo de arista |
 | `nearest:[x,y,z]` | la más cercana al punto (una sola) |
@@ -18,12 +20,15 @@ Cada término se evalúa sobre todas y después se combinan los resultados.
 
 ## Ejemplos
 
-- Redondear las 4 aristas verticales de una caja: `fillet(edges="|Z", radius=2)`.
+- Redondear las 4 aristas verticales de una caja: `fillet(edges="|Z", radius=2)`. Si antes hubo un desmoldeo,
+  ya no son exactamente verticales (con 1,5° de desmoldeo las de esquina quedan a 2,1°): `fillet(edges="|Z~3", radius=2)`.
 - Vaciar abriendo la tapa: `shell(body="Cuerpo1", faces=">Z", thickness=2)`.
 - Agujero pasante en la tapa: `create_hole(face=">Z", diameter=6, through_all=true)`.
 - Boceto sobre la tapa: `create_sketch(plane=">Z")`. Ejes: en caras horizontales x→+X; en las demás y→+Z.
   El origen es la proyección del origen del mundo; `find_faces` da center_uv (el centro de la cara en esos ejes).
   `extrude` va hacia la normal exterior: `join` crece hacia afuera y `cut` entra al material solo (como Fusion); `reverse` fuerza el sentido.
+  `sketch_from_spec(plane=">Z", entities=[...])` hace lo mismo con el boceto entero en una llamada.
+  Con varios cuerpos: `create_sketch(plane=">Z", body="Cuerpo2")`.
 - Ángulo entre la tapa y una lateral: `measure_angle(a=">Z", b=">X")` da 90.
 
 ## Ids efímeros
@@ -36,5 +41,8 @@ Donde se espera un solo elemento (medir, boceto) el selector va sobre caras; par
 ## Errores
 
 - `INVALID_SELECTOR`: no se entiende el texto (el mensaje dice dónde).
-- `NO_MATCH`: es válido pero no eligió nada (el mensaje cuenta las caras o aristas y sus tipos).
+- `NO_MATCH`: es válido pero no eligió nada (el mensaje cuenta las caras o aristas y sus tipos). Si están
+  apenas inclinadas, probá con tolerancia: `|Z~3`.
+- `AMBIGUOUS_REFERENCE`: hay varios cuerpos y el selector no dice cuál (pasá `body`), o eligió más de uno
+  donde hace falta uno solo.
 - `REFERENCE_LOST`: al recalcular, una cara o arista guardada ya no existe; el documento queda igual.

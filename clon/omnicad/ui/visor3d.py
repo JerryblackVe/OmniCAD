@@ -322,7 +322,7 @@ class ConfigVista:
 class Visor3D(QOpenGLWidget):
     camara_cambiada = Signal()
     modo_cambiado = Signal(object)
-    plano_elegido = Signal(object)      # {"ref", "plano", "marco"} al elegir un plano o una cara
+    plano_elegido = Signal(object)      # {"ref", "plano", "marco", "cara_ref"} al elegir un plano o una cara
     eleccion_cancelada = Signal()
     entidad_elegida = Signal(object)    # clic con un filtro de selección activo: dict de `elegir_entidad`
     clic_vacio = Signal()               # clic sin nada debajo (deselecciona)
@@ -838,7 +838,8 @@ class Visor3D(QOpenGLWidget):
         return self._pick[id(forma)]
 
     def elegir(self, pos, planos=True, caras=True):
-        """Lo que hay bajo el cursor: {"ref", "plano", "marco", "tris"} (plano None = cara no plana)."""
+        """Lo que hay bajo el cursor: {"ref", "plano", "marco", "tris"} (plano None = cara no plana); en una cara
+        plana además "cara_ref", su referencia persistente (el boceto sobre la cara la sigue con ella)."""
         o, d = self.rayo(pos)
         mejor_t, mejor = np.inf, None
         if planos:
@@ -863,6 +864,7 @@ class Visor3D(QOpenGLWidget):
                     mejor_t = ts[i]
                     mejor = {"ref": "cara" if pl is not None else None, "plano": pl,
                              "marco": pl.marco() if pl is not None else None,
+                             "cara_ref": refs.referencia(cid, cara, caja=self._caja(cid)) if pl is not None else None,
                              "tris": tris[indice == indice[i]].reshape(-1, 3).astype(np.float32), "cuerpo": cid}
         return mejor
 

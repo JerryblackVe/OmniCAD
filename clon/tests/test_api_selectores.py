@@ -201,3 +201,146 @@ def test_find_no_modifica_el_documento(caja):
     llamar(caja, "find_edges", selector="|Z")
     llamar(caja, "measure_angle", a=">Z", b=">X")
     assert json.dumps(caja.doc.a_dict(), sort_keys=True) == antes
+
+
+# ---------------------------------------------------------------- tolerancia angular «~» (L132)
+def _volumen(sesion, cuerpo="Cuerpo1"):
+    return llamar(sesion, "get_physical_properties", bodies=[cuerpo])["bodies"][0]["volume"]
+
+
+@pytest.fixture
+def desmoldeada(s):
+    """Caja 40×30×20 con desmoldeo de 1,5° en las 4 laterales: caras y aristas APENAS inclinadas."""
+    llamar(s, "create_box", length=40, width=30, height=20)
+    llamar(s, "draft", faces="#Z", angle=1.5, neutral="<Z")
+    return s
+
+
+def test_tolerancia_angular_elige_lo_apenas_inclinado(desmoldeada):
+    s = desmoldeada
+    # sin «~» sigue siendo estricto, como antes: nada quedó exactamente vertical
+    r = falla(s, "find_edges", selector="|Z")
+    assert r["error_kind"] == "NO_MATCH" and any("~" in p for p in r["pistas"])
+    assert falla(s, "find_faces", selector="#Z")["error_kind"] == "NO_MATCH"
+    # las aristas de esquina quedan a atan(√2·tan 1,5°) ≈ 2,1° de Z: ~3 las toma, ~1 no
+    r = llamar(s, "find_edges", selector="|Z~3")
+    assert r["count"] == 4
+    for e in r["edges"]:
+        inclinacion = math.degrees(math.acos(abs(e["direction"][2])))
+        assert 1.5 < inclinacion < 3
+    assert falla(s, "find_edges", selector="|Z~1")["error_kind"] == "NO_MATCH"
+    assert cuantas(s, "find_faces", "#Z~2") == 4                 # las 4 laterales a 1,5° de la vertical
+    assert cuantas(s, "find_faces", "+X~2") == 1
+    assert cuantas(s, "find_faces", "|Z~2") == 2                 # tapa y base siguen horizontales
+    assert cuantas(s, "find_faces", "#Z~2 and >X") == 1          # se combina como siempre
+    assert cuantas(s, "find_edges", "not |Z~3") == 8
+    assert cuantas(s, "find_edges", " | Z ~ 3 ") == 4             # admite espacios
+
+
+def test_fillet_con_tolerancia_tras_desmoldeo(desmoldeada):
+    """El caso de L132: fillet(edges='|Z') daba NO_MATCH después de un desmoldeo de 1,5°."""
+    from omnicad.nucleo import geometria as geo
+    s = desmoldeada
+    antes = _volumen(s)
+    r = llamar(s, "fillet", edges="|Z~3", radius=2)
+    assert r["edges_used"] == 4
+    despues = _volumen(s)
+    # un empalme de radio r en una esquina recta saca (1 − π/4)·r² por mm de largo; 4 aristas de ~20 mm (el
+    # desmoldeo casi no cambia la cuenta)
+    assert antes - despues == pytest.approx(4 * (1 - math.pi / 4) * 2 ** 2 * 20, rel=0.05)
+    cuerpo = next(iter(s.doc.estado_final.cuerpos.values()))
+    assert geo.es_valida(cuerpo.forma)
+
+
+def test_tolerancia_no_cambia_lo_exacto(caja):
+    for selector, aristas, caras in (("|Z~3", 4, 2), ("#Z~3", 8, 4), ("+Z~3", 4, 1), ("-X~0.5", 4, 1),
+                                     ("|Z~3 and >X", 2, None)):
+        assert cuantas(caja, "find_edges", selector) == aristas, selector
+        if caras is not None:
+            assert cuantas(caja, "find_faces", selector) == caras, selector
+    assert sl.compilar("|Z") == ("dir", "|", "Z", None)
+    assert sl.compilar("#x~2.5") == ("dir", "#", "X", 2.5)
+
+
+@pytest.mark.parametrize("malo", [">Z~3", "|Z~", "|Z~0", "|Z~90", "|Z~-3", "|Z~45.5", "|Z~3and >X", "%PLANE~3"])
+def test_tolerancia_mal_escrita(caja, malo):
+    r = falla(caja, "find_faces", selector=malo)
+    assert r["error_kind"] == "INVALID_SELECTOR" and r["pistas"], malo
+
+
+def test_tolerancia_fuera_de_rango_explica_el_rango(caja):
+    r = falla(caja, "find_edges", selector="|Z~60")
+    assert r["error_kind"] == "INVALID_SELECTOR" and "45" in r["mensaje"]
+
+
+# ---------------------------------------------------------------- sketch_from_spec sobre una cara (L133)
+def test_sketch_from_spec_sobre_una_cara(caja):
+    r = llamar(caja, "sketch_from_spec", plane=">Z", entities=[{"type": "circle", "center": [0, 0], "radius": 3}])
+    assert r["plane"] == "cara" and r["profiles"] == 1 and r["face"].startswith("Cuerpo1/F")
+    assert r["plane_frame"]["origin"] == [0.0, 0.0, 20.0] and r["plane_frame"]["normal"] == [0.0, 0.0, 1.0]
+    # igual que create_sketch sobre la misma cara: mismo marco
+    otro = llamar(caja, "create_sketch", plane=">Z")
+    assert otro["plane_frame"] == r["plane_frame"]
+    llamar(caja, "extrude", sketch=r["sketch"]["id"], distance=5, operation="cut")
+    assert _volumen(caja) == pytest.approx(8000 - math.pi * 9 * 5, rel=1e-4)
+
+
+def test_sketch_from_spec_con_id_de_cara(caja):
+    cara = llamar(caja, "find_faces", selector="+X")["faces"][0]
+    r = llamar(caja, "sketch_from_spec", plane=cara["id"],
+               entities=[{"type": "rectangle", "center": cara["center_uv"], "width": 4, "height": 4}])
+    assert r["plane"] == "cara" and r["profiles"] == 1 and r["plane_frame"]["normal"] == [1.0, 0.0, 0.0]
+
+
+def test_sketch_from_spec_plano_desconocido_sigue_dando_plane_not_found(caja):
+    assert falla(caja, "sketch_from_spec", plane="Fantasma")["error_kind"] == "PLANE_NOT_FOUND"
+    n = len(caja.doc.operaciones)
+    assert falla(caja, "sketch_from_spec", plane="%CYLINDER")["error_kind"] == "NO_MATCH"
+    assert len(caja.doc.operaciones) == n
+
+
+# ---------------------------------------------------------------- body con varios cuerpos (L134, L145)
+@pytest.fixture
+def dos_cajas(caja):
+    llamar(caja, "create_box", length=5, width=5, height=5, x=50)
+    return caja
+
+
+def test_create_sketch_con_body(dos_cajas):
+    s = dos_cajas
+    r = falla(s, "create_sketch", plane=">Z")
+    assert r["error_kind"] == "AMBIGUOUS_REFERENCE" and "body" in r["mensaje"]
+    r = llamar(s, "create_sketch", plane=">Z", body="Cuerpo2")
+    assert r["face"].startswith("Cuerpo2/F") and r["plane_frame"]["origin"][2] == pytest.approx(5)
+    # con un plano de origen body no molesta
+    assert llamar(s, "create_sketch", plane="XY", body="Cuerpo2")["plane"] == "XY"
+    assert falla(s, "create_sketch", plane=">Z", body="Fantasma")["error_kind"] == "BODY_NOT_FOUND"
+
+
+def test_sketch_from_spec_con_body(dos_cajas):
+    s = dos_cajas
+    assert falla(s, "sketch_from_spec", plane=">Z",
+                 entities=[{"type": "circle", "center": [0, 0], "radius": 1}])["error_kind"] == "AMBIGUOUS_REFERENCE"
+    tapa = llamar(s, "find_faces", body="Cuerpo2", selector=">Z")["faces"][0]
+    r = llamar(s, "sketch_from_spec", plane=">Z", body="Cuerpo2",
+               entities=[{"type": "circle", "center": tapa["center_uv"], "radius": 1}])
+    assert r["face"].startswith("Cuerpo2/F") and r["profiles"] == 1
+    llamar(s, "extrude", sketch=r["sketch"]["id"], distance=3, operation="join", target="Cuerpo2")
+    caja2 = llamar(s, "get_physical_properties", bodies=["Cuerpo2"])["bodies"][0]
+    assert caja2["bounding_box"]["max"][2] == pytest.approx(8)
+    assert caja2["volume"] == pytest.approx(125 + math.pi * 3, rel=1e-4)
+
+
+def test_measure_con_body(dos_cajas):
+    s = dos_cajas
+    assert falla(s, "measure_angle", a=">Z", b=">X")["error_kind"] == "AMBIGUOUS_REFERENCE"
+    assert falla(s, "measure_distance", a=">Z", b="<Z")["error_kind"] == "AMBIGUOUS_REFERENCE"
+    assert llamar(s, "measure_angle", a=">Z", b=">X", body="Cuerpo2")["angle"] == pytest.approx(90)
+    r = llamar(s, "measure_distance", a=">Z", b="<Z", body="Cuerpo2")
+    assert r["distance"] == pytest.approx(5) and r["a"]["id"].startswith("Cuerpo2/F")
+    # selector sobre body + otro cuerpo por nombre: de la cara -X de la caja chica a la caja grande
+    r = llamar(s, "measure_distance", a="<X", b="Cuerpo1", body="Cuerpo2")
+    assert r["distance"] == pytest.approx(47.5 - 10)
+    # un id no necesita body, aunque body diga otro cuerpo
+    id_grande = llamar(s, "find_faces", body="Cuerpo1", selector=">Z")["faces"][0]["id"]
+    assert llamar(s, "measure_angle", a=id_grande, b="<Z", body="Cuerpo2")["angle"] == pytest.approx(180)

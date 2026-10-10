@@ -14,6 +14,7 @@ import numpy as np
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
 from ..nucleo import render_cpu as rc
+from ..timeline.operaciones import propiedades_cuerpo
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_documento import _info_cuerpo, _r
@@ -25,8 +26,9 @@ _LADO_MINIMO = 16
 # calculan más grandes y se reducen (antialias); las grandes se calculan a su tamaño.
 _PIXELES_RENDER = 450_000
 
-# Dirección HACIA la cámara (desde el modelo) de cada vista, con Z hacia arriba, como las vistas del visor.
-_VISTAS = {"iso": (1.0, -1.0, 0.8165), "front": (0.0, -1.0, 0.0), "back": (0.0, 1.0, 0.0),
+# Dirección HACIA la cámara (desde el modelo) de cada vista, con Z hacia arriba, como las vistas del visor
+# (ui/visor3d.VISTAS). «iso» es la isométrica verdadera (elevación 35,26°, la esquina del ViewCube).
+_VISTAS = {"iso": (1.0, -1.0, 1.0), "front": (0.0, -1.0, 0.0), "back": (0.0, 1.0, 0.0),
            "right": (1.0, 0.0, 0.0), "left": (-1.0, 0.0, 0.0), "top": (0.0, 0.0, 1.0), "bottom": (0.0, 0.0, -1.0)}
 
 
@@ -63,7 +65,7 @@ def _objetos_render(sesion, cuerpos, deflexion):
         v, n = rc.malla_suave(c.forma, deflexion)
         if not len(v):
             continue
-        color, acabado = rc.color_y_acabado(c, sesion.doc.propiedades.get(c.id))
+        color, acabado = rc.color_y_acabado(c, propiedades_cuerpo(sesion.doc.propiedades, c))
         objetos.append({"v": v, "n": n, "color": color, "acabado": acabado,
                         "opacidad": float(sesion.doc.propiedad(c.id, "opacidad", 1.0))})
     return objetos
@@ -101,7 +103,11 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
                        width: int = 640, height: int = 480, bodies: list[str] | None = None, fit: bool = True,
                        direction: list[float] | None = None):
     """
-    view: vista estándar. "iso" es la isométrica; "front" mira hacia +Y (cámara en -Y); "right" mira hacia -X.
+    view: vista estándar: las caras del ViewCube de Fusion con Z arriba, nombradas por los ejes del MUNDO (no por
+        el frente de la pieza). "front": cámara en -Y, se ve la cara -Y con +X a la derecha; "back": cámara en +Y;
+        "right": cámara en +X, se ve la cara +X con +Y a la derecha; "left": cámara en -X; "top": cámara en +Z,
+        X a la derecha e Y hacia arriba; "bottom": cámara en -Z; "iso": esquina frente-derecha-arriba. Si la
+        pieza mira hacia otro eje, usá direction.
     width: ancho de la imagen en píxeles (16 a 2048).
     height: alto de la imagen en píxeles (16 a 2048).
     bodies: ids o nombres de los cuerpos a dibujar; vacío = todos.
@@ -221,18 +227,18 @@ def get_physical_properties(sesion, bodies: list[str] | None = None, density: fl
 
 
 # ---------------------------------------------------------------- medir
-def _resolver_ref(sesion, ref):
+def _resolver_ref(sesion, ref, body=None):
     """(entidad para `analisis.medir`, descripción) de una referencia: cara o arista (id de find_faces / find_edges
-    o selector), cuerpo (id o nombre) o punto [x, y, z]. Un selector suelto se evalúa sobre las caras; para
-    aristas, `edges:<selector>` o un id."""
+    o selector, que se evalúa sobre `body` o el único cuerpo), cuerpo (id o nombre) o punto [x, y, z]. Un selector
+    suelto se evalúa sobre las caras; para aristas, `edges:<selector>` o un id."""
     if isinstance(ref, str):
         if sl.es_id(ref) or sl._PREFIJO.match(ref):
-            return _elemento(sesion, ref)
+            return _elemento(sesion, ref, body)
         try:
             c = sesion.cuerpo(ref)
         except ErrorAPI as e:
             if e.error_kind == "BODY_NOT_FOUND" and sl.parece_selector(ref):
-                return _elemento(sesion, ref)
+                return _elemento(sesion, ref, body)
             raise
         if _es_malla(c):
             raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(c)}» es una malla: todavía no se puede medir "
@@ -245,22 +251,24 @@ def _resolver_ref(sesion, ref):
     return np.array(ref, float), {"kind": "point", "position": [_r(x) for x in ref]}
 
 
-def _elemento(sesion, ref):
-    cuerpo, e = sl.elegir_uno(sesion, ref)
+def _elemento(sesion, ref, body=None):
+    cuerpo, e = sl.elegir_uno(sesion, ref, body=body)
     return e.sub, {"kind": "face" if e.tipo == "cara" else "edge", "id": sl.emitir_id(sesion, cuerpo, e),
                    "body": _nombre_y_id(sesion, cuerpo)}
 
 
 @herramienta("measure_distance", "inspeccion", "Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista "
              "o un punto. Caras y aristas se dan por id (find_faces / find_edges) o por selector (>Z elige sobre las caras; "
-             "edges:|Z sobre las aristas). Devuelve la distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b.")
-def measure_distance(sesion, a: str | list[float], b: str | list[float]):
+             "edges:|Z sobre las aristas; con varios cuerpos, body dice en cuál se evalúan los selectores). Devuelve la "
+             "distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b.")
+def measure_distance(sesion, a: str | list[float], b: str | list[float], body: str | None = None):
     """
     a: cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
     b: cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
+    body: id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids y los nombres de cuerpo no lo necesitan.
     """
-    ea, da = _resolver_ref(sesion, a)
-    eb, db = _resolver_ref(sesion, b)
+    ea, da = _resolver_ref(sesion, a, body)
+    eb, db = _resolver_ref(sesion, b, body)
     m = an.medir(ea, eb)
     return {"distance": _r(m["distancia"]), "point_a": [_r(x) for x in m["punto_a"]],
             "point_b": [_r(x) for x in m["punto_b"]], "delta": [_r(x) for x in m["delta"]],
@@ -321,7 +329,8 @@ def _buscar(sesion, tipo, body, selector):
 
 
 _SELECTOR = ("Selector estilo CadQuery: >Z <Z (centro más alto/bajo), |Z (aristas paralelas al eje; caras con la "
-             "normal paralela), #Z (perpendicular), +Z -Z (normal de caras planas), %PLANE %CYLINDER %CIRCLE %LINE "
+             "normal paralela), #Z (perpendicular), +Z -Z (normal de caras planas), |Z~3 #Z~3 (lo mismo con 3° de "
+             "tolerancia, para lo apenas inclinado, p. ej. tras un desmoldeo), %PLANE %CYLINDER %CIRCLE %LINE "
              "(tipo), nearest:[x,y,z], combinables con and, or, not y paréntesis (get_guide topic=selectores). ")
 _EFIMERO = ("Cada elemento trae un id corto (p. ej. 'Cuerpo1/F3') VÁLIDO HASTA EL PRÓXIMO CAMBIO DEL DOCUMENTO "
             "(un id viejo da STALE_ID); fillet, chamfer, shell, create_hole y create_sketch lo aceptan, o aceptan el "
@@ -355,13 +364,14 @@ def find_edges(sesion, body: str | None = None, selector: str | None = None):
              "arista. Cara-cara: ángulo entre las normales exteriores (0 a 180; dos caras de una caja que se tocan en "
              "una arista dan 90), más acute_angle (0 a 90). Arista-arista y cara-arista: ángulo agudo (0 a 90), porque "
              "una arista no tiene sentido. Cada lado es un id de find_faces / find_edges o un selector (sobre caras; "
-             "edges:|Z para aristas) que elija UNA sola.")
-def measure_angle(sesion, a: str, b: str):
+             "edges:|Z para aristas) que elija UNA sola; con varios cuerpos, body dice en cuál se evalúan los selectores.")
+def measure_angle(sesion, a: str, b: str, body: str | None = None):
     """
     a: cara o arista: id ("Cuerpo1/F3") o selector (">Z", "edges:|Z").
     b: cara o arista: id ("Cuerpo1/F3") o selector (">X", "edges:|X").
+    body: id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids no lo necesitan.
     """
-    (ca, ea), (cb, eb) = sl.elegir_uno(sesion, a), sl.elegir_uno(sesion, b)
+    (ca, ea), (cb, eb) = sl.elegir_uno(sesion, a, body=body), sl.elegir_uno(sesion, b, body=body)
     for e in (ea, eb):
         if e.vector is None:
             raise error("UNSUPPORTED_ELEMENT", f"No se puede medir el ángulo de {'una cara' if e.tipo == 'cara' else 'una arista'} "

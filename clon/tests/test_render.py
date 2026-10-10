@@ -91,12 +91,93 @@ def test_rasterizar_triangulo_y_profundidad():
 def test_normales_suaves_de_un_cilindro():
     v, n = _malla(geo.cilindro(10, 20))
     assert len(v) == len(n) and len(v) % 3 == 0
-    lado = np.abs(v[:, 2] - 10) < 9.9                            # vértices del costado (no de las tapas)
     tapa = (np.abs(n[:, 2]) > 0.99)
+    costado = ~tapa                     # BRepMesh solo pone nodos en los bordes del costado: se filtra por la normal
     radial = v[:, :2] / np.linalg.norm(v[:, :2], axis=1, keepdims=True)
-    costado = lado & ~tapa
+    assert costado.sum() > 100
     assert np.all(np.einsum("ij,ij->i", n[costado, :2], radial[costado]) > 0.995)   # suaves y hacia afuera
     assert tapa.sum() > 0 and np.allclose(np.abs(n[tapa, 2]), 1.0, atol=1e-3)
+
+
+def _botella():
+    """Sólido de una solevación entre 5 círculos coaxiales (caras B-spline): una superficie de revolución
+    alrededor de Z, así la normal exacta no tiene componente a lo largo del paralelo."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt
+
+    from omnicad.nucleo import solidos_crear as sc
+
+    def alambre(r, z):
+        c = gp_Circ(gp_Ax2(gp_Pnt(0, 0, z), gp_Dir(0, 0, 1)), r)
+        return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(c).Edge()).Wire()
+    return sc.solevar([alambre(r, z) for r, z in ((30, 0), (30, 60), (22, 110), (13, 150), (12, 175))])
+
+
+@pytest.mark.parametrize("deflexion", [0.05, 0.11, 0.4])
+def test_malla_suave_solevacion_sin_franjas_dentadas(deflexion):
+    """Franjas claras irregulares sobre las solevaciones: la normal de cada vértice tiene que ser la de la
+    superficie, no el promedio de los triángulos (irregulares en las caras B-spline)."""
+    botella = _botella()
+    assert geo.es_valida(botella)
+    v, n = (a.astype(float) for a in rc.malla_suave(botella, deflexion))
+    assert len(v) == len(n) and len(v) % 3 == 0 and len(v) > 300
+    assert np.allclose(np.linalg.norm(n, axis=1), 1.0, atol=1e-5)
+    r = np.linalg.norm(v[:, :2], axis=1)
+    lado = r > 1.0
+    paralelo = np.c_[-v[lado, 1], v[lado, 0]] / r[lado, None]
+    assert np.abs(np.einsum("ij,ij->i", n[lado, :2], paralelo)).max() < 1e-3      # antes: 0,244 (14°)
+    costado = lado & (np.abs(n[:, 2]) < 0.99)
+    assert costado.sum() > 100
+    assert np.all(np.einsum("ij,ij->i", n[costado, :2], v[costado, :2]) > 0)      # hacia afuera
+    tapas = ~costado & lado
+    assert np.all(n[tapas, 2] * (v[tapas, 2] - 87.5) > 0)                        # tapas: abajo -Z, arriba +Z
+
+
+def test_malla_suave_normales_hacia_afuera():
+    # esfera: la normal es la dirección radial (también en los polos, donde la superficie no la define)
+    v, n = (a.astype(float) for a in rc.malla_suave(geo.esfera(10), 0.05))
+    assert np.einsum("ij,ij->i", n, v / np.linalg.norm(v, axis=1, keepdims=True)).min() > 0.999
+    # cilindro: costado radial, tapas ±Z
+    v, n = (a.astype(float) for a in rc.malla_suave(geo.cilindro(10, 20), 0.05))
+    tapa = np.abs(n[:, 2]) > 0.99
+    radial = v[~tapa, :2] / np.linalg.norm(v[~tapa, :2], axis=1, keepdims=True)
+    assert (~tapa).sum() > 100 and np.einsum("ij,ij->i", n[~tapa, :2], radial).min() > 0.99999
+    assert np.all(n[tapa, 2] * (v[tapa, 2] - 10) > 0)
+    # caja (caras planas, algunas invertidas): todas hacia afuera
+    v, n = (a.astype(float) for a in rc.malla_suave(geo.caja(10, 10, 10), 0.05))
+    assert np.all(np.einsum("ij,ij->i", n.reshape(-1, 3, 3)[:, 0], v.reshape(-1, 3, 3).mean(1) - 5) > 0)
+
+
+def test_malla_suave_cara_con_ubicacion():
+    """Cuerpo con ubicación propia (STEP con ensamble): las normales salen en coordenadas del mundo."""
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    t = gp_Trsf()
+    t.SetRotation(gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)), math.radians(90))     # eje del cilindro: Z → -Y
+    t.SetTranslationPart(gp_Vec(5, 0, 0))
+    v, n = (a.astype(float) for a in rc.malla_suave(geo.cilindro(10, 20).Moved(TopLoc_Location(t)), 0.05))
+    tapa = np.abs(n[:, 1]) > 0.99
+    radial = (v - (5.0, 0.0, 0.0)) * (1.0, 0.0, 1.0)
+    radial = radial[~tapa] / np.linalg.norm(radial[~tapa], axis=1, keepdims=True)
+    assert (~tapa).sum() > 100 and np.einsum("ij,ij->i", n[~tapa], radial).min() > 0.99999
+    assert tapa.sum() > 0 and np.all(n[tapa, 1] * (v[tapa, 1] + 10) > 0)         # tapas en y = 0 (+Y) e y = -20 (-Y)
+
+
+def test_malla_suave_cara_sin_superficie():
+    """Una cara que solo trae triangulación (STEP teselado) usa la normal promediada, sin fallar."""
+    from OCP.BRep import BRep_Builder
+    from OCP.Poly import Poly_Triangle, Poly_Triangulation
+    from OCP.TopoDS import TopoDS_Face
+    from OCP.gp import gp_Pnt
+    tri = Poly_Triangulation(4, 2, False)
+    for i, p in enumerate(((0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)), 1):
+        tri.SetNode(i, gp_Pnt(*p))
+    tri.SetTriangle(1, Poly_Triangle(1, 2, 3))
+    tri.SetTriangle(2, Poly_Triangle(1, 3, 4))
+    cara = TopoDS_Face()
+    BRep_Builder().MakeFace(cara, tri)
+    v, n = rc.malla_suave(cara, 0.05)
+    assert v.shape == (6, 3) and np.allclose(n, (0.0, 0.0, 1.0))
 
 
 def test_mapa_de_sombras():

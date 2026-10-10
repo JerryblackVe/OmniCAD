@@ -11,10 +11,12 @@ Decisiones:
   - Las herramientas que MODIFICAN se rechazan con APP_BUSY si el usuario tiene un comando abierto, edita un
     boceto, está eligiendo un plano o hay un diálogo modal. Las que solo leen funcionan siempre.
   - `new_document` / `open_document`: si la ventana tiene cambios sin guardar → UNSAVED_CHANGES (no se
-    descarta nada); si no, la ventana pasa a mostrar el documento nuevo.
+    descarta nada), salvo discard=true; si no, la ventana pasa a mostrar el documento nuevo. La regla es de las
+    herramientas (`api/herramientas_documento.py`): vale igual sin ventana.
   - `execute_code` en vivo: NO se permite salvo la preferencia `general/puente_codigo`. Corre Python en el hilo
-    de la interfaz: un bucle infinito congelaría la app (con el trabajo del usuario adentro) y no hay forma
-    segura de cortarlo desde el mismo hilo. Sin ventana (servidor MCP --modo sin_ventana) no tiene ese riesgo.
+    de la interfaz: la ventana no responde mientras corre. Se corta al vencer su `timeout` (como mucho
+    PLAZO_MAXIMO_CODIGO, menos que la espera del cliente) y el documento vuelve atrás. Sin ventana (servidor MCP
+    --modo sin_ventana) no tiene ese riesgo.
   - Las herramientas del grupo `dev` no corren en vivo: son del servidor MCP (pytest, capturas…).
 """
 import json
@@ -30,6 +32,8 @@ from .. import VERSION, api
 from ..api import protocolo_puente as proto
 from ..api.errores import error
 from . import temas
+
+PLAZO_MAXIMO_CODIGO = 100.0   # s: execute_code en vivo; menos que puente_cliente.TIEMPO_RESPUESTA (120 s)
 
 
 
@@ -227,14 +231,18 @@ class PuenteAgentes(QObject):
         if herramienta == "execute_code" and not self.permite_codigo():
             return error("LIVE_NOT_ALLOWED", "execute_code está desactivado en vivo: correría Python en el hilo de la "
                          "interfaz y un bucle infinito congelaría OmniCAD.").a_dict()
+        if herramienta == "execute_code" and isinstance(args, dict) and "timeout" in args:
+            plazo = args["timeout"]
+            if plazo is None or (isinstance(plazo, (int, float)) and plazo > PLAZO_MAXIMO_CODIGO):
+                return error("INVALID_ARGUMENTS", f"En vivo, execute_code corre como mucho {PLAZO_MAXIMO_CODIGO:g} s "
+                             "(timeout): la ventana no responde mientras corre.",
+                             "Partí el trabajo en llamadas más cortas o usá el servidor MCP con --modo sin_ventana.").a_dict()
         modifica = h is not None and h["modifica"]
         if modifica:
             motivo = self.motivo_ocupado()
             if motivo:
                 return error("APP_BUSY", f"OmniCAD está ocupado: {motivo}.",
                              "El usuario está usando la app: esperá o pedile que termine lo que está haciendo.").a_dict()
-            if herramienta in ("new_document", "open_document") and v.doc.modificado:
-                return error("UNSAVED_CHANGES", f"«{v.doc.nombre}» tiene cambios sin guardar en la ventana.").a_dict()
         doc = self.sesion.doc = v.doc
         pasos = len(doc.operaciones)
         respuesta = api.llamar(self.sesion, herramienta, args)

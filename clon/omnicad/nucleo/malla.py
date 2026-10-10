@@ -52,6 +52,24 @@ def _factor(unidades):
     return UNIDADES[unidades]
 
 
+class AvisoMalla(RuntimeWarning):
+    """Aviso de una operación de malla que no falla pero conviene revisar; el timeline lo muestra en el paso."""
+
+
+# Cambio de volumen (relativo) desde el que Remallar y Suavizar avisan: una pieza cerrada no debería cambiar tanto.
+AVISO_VOLUMEN = 0.01
+
+
+def _avisar_volumen(antes, despues, texto):
+    """AvisoMalla si las dos mallas son cerradas y el volumen cambió más de AVISO_VOLUMEN. `texto` lleva {cambio}
+    (p. ej. «+10,9 %»)."""
+    if not (antes.es_cerrada() and despues.es_cerrada()) or not antes.volumen():
+        return
+    cambio = despues.volumen() / antes.volumen() - 1
+    if abs(cambio) > AVISO_VOLUMEN:
+        warnings.warn(texto.format(cambio=f"{100 * cambio:+.1f} %".replace(".", ",")), AvisoMalla, stacklevel=3)
+
+
 # ---------------------------------------------------------------- modelo
 class Malla:
     """Cuerpo de malla (Mesh Body): vértices Nx3 en mm, caras Mx3 y un grupo de caras por cara."""
@@ -1012,7 +1030,8 @@ def reparar(m, *, tipo="cerrar_agujeros", tolerancia=None, umbral_cascara=0.001,
       tapa los agujeros (recorte de orejas por lazo de borde) y deja el volumen positivo.
     - 'coser_y_quitar' (Stitch and Remove): además cose con `tolerancia`, corrige caras degeneradas, quita
       caras dobles y cáscaras con menos de `umbral_cascara` del área total.
-    - 'reconstruir' (Rebuild): 'coser_y_quitar' + remallado uniforme con `densidad`.
+    - 'reconstruir' (Rebuild): 'coser_y_quitar' + remallado uniforme con `densidad` (con el tope del remallado:
+      si se pasa, pide reducir la malla antes).
     tolerancia: mm (por defecto una millonésima de la diagonal de la caja)."""
     tipos = ("cerrar_agujeros", "unir_vertices", "coser_y_quitar", "reconstruir")
     if tipo not in tipos:
@@ -1032,7 +1051,21 @@ def reparar(m, *, tipo="cerrar_agujeros", tolerancia=None, umbral_cascara=0.001,
     c = _orientar_consistente(r.caras, len(v))
     c, g = _rellenar_lazos(v, c, g, _lazos(_Topo(c, len(v)).libres()))
     r = Malla(v, _orientar_hacia_afuera(v, c), g)
-    return remallar(r, densidad=densidad) if tipo == "reconstruir" else r
+    if tipo != "reconstruir":
+        return r
+    try:
+        return remallar(r, densidad=densidad)
+    except _RemalladoExcesivo as e:     # Reparar no tiene densidad: lo que baja la cuenta es reducir la malla antes
+        if e.pico_maximo is not None:
+            raise geo.ErrorGeometria(f"Reconstruir pasaría de {_miles(e.pico_maximo)} triángulos (el máximo) al "
+                                     f"dividir las aristas largas (astillas de un teselado: triángulos largos y finos): "
+                                     f"reducí antes la malla (Modificar › Reducir).") from None
+        if not (e.triangulos and math.isfinite(e.triangulos)):
+            raise
+        objetivo = _tres_cifras(len(r.caras) * TRIANGULOS_MAXIMOS_REMALLADO / e.triangulos, abajo=True)
+        raise geo.ErrorGeometria(f"Reconstruir daría unos {_miles(e.triangulos)} triángulos y el máximo es "
+                                 f"{_miles(TRIANGULOS_MAXIMOS_REMALLADO)}: reducí antes la malla (Modificar › "
+                                 f"Reducir) a unos {objetivo} triángulos o menos.") from None
 
 
 # ---------------------------------------------------------------- grupos de caras
@@ -1416,15 +1449,39 @@ def _mas_cercano_tri(p, a, b, c):
     return res
 
 
+def _partir_largos(T, largo, maximo):
+    """Parte los triángulos T (K×3×3) por la mitad de su arista más larga hasta que ninguna pase de `largo`, sin
+    cambiar la superficie. Si los pedazos pasarían de `maximo`, deja el resto sin partir."""
+    listos, hechos = [], 0
+    while len(T):
+        L = np.linalg.norm(T[:, [1, 2, 0]] - T, axis=2)          # aristas 0-1, 1-2 y 2-0
+        j = L.argmax(1)
+        ok = ~(L[np.arange(len(T)), j] > largo)
+        listos.append(T[ok])
+        hechos += int(ok.sum())
+        T, j = T[~ok], j[~ok]
+        if hechos + 2 * len(T) > maximo:
+            listos.append(T)
+            break
+        R = np.take_along_axis(T, ((np.arange(3) + j[:, None]) % 3)[:, :, None], axis=1)   # la más larga: 0-1
+        m = (R[:, 0] + R[:, 1]) / 2
+        T = np.concatenate([np.stack([R[:, 0], m, R[:, 2]], 1), np.stack([m, R[:, 1], R[:, 2]], 1)])
+    return np.concatenate(listos)
+
+
 class _Referencia:
     """Superficie de referencia para proyectar puntos (punto más cercano entre los k triángulos de centro
-    más próximo)."""
+    más próximo). Con `largo`, antes se parten los triángulos con aristas de más de 2·largo (la superficie es la
+    misma): en las astillas de un teselado (un cilindro tiene triángulos de 100 × 2 mm) el centro más próximo no es
+    el del triángulo más cercano y se proyectaba sobre otro. Medido, cilindro R20 × 100 teselado (232 triángulos):
+    con longitud 2,5 terminaba con 2,2 veces los triángulos estimados en 14 s y ahora con 1,06 veces en 5,5 s; con
+    longitud 1, 5,3 veces en 195 s contra 1,02 veces en 48 s."""
 
-    def __init__(self, v, c, k=10):
+    def __init__(self, v, c, k=10, largo=None):
         from scipy.spatial import cKDTree
-        self.tris = v[c]
+        self.tris = v[c] if largo is None else _partir_largos(v[c], 2 * largo, 2 * TRIANGULOS_MAXIMOS_REMALLADO)
         self.arbol = cKDTree(self.tris.mean(1))
-        self.k = min(k, len(c))
+        self.k = min(k, len(self.tris))
 
     def mas_cercano(self, puntos):
         _, idx = self.arbol.query(puntos, k=self.k)
@@ -1472,20 +1529,29 @@ def _relajar(ed, ref, bordes_fijos, pasos):
             V[libres] = ref.mas_cercano(V[libres])[1]
 
 
-def _remallar_nucleo(ed, largo, iteraciones, ref, bordes_fijos, pasos_relajar=1):
+class _Desborde(Exception):
+    """La división de una vuelta pasó el techo de caras vivas (args[0]: cuántas había)."""
+
+
+def _remallar_nucleo(ed, largo, iteraciones, ref, bordes_fijos, pasos_relajar=1, techo=None):
     alto, bajo = 4 / 3 * largo, 4 / 5 * largo
     for _ in range(iteraciones):
-        for _ronda in range(12):                                 # dividir aristas largas
+        for _ronda in range(_RONDAS_DIVISION):                   # dividir aristas largas
             e = ed.aristas()
             L = np.linalg.norm(ed.v[e[:, 0]] - ed.v[e[:, 1]], axis=1)
             sel = np.flatnonzero(L > alto)
             if not len(sel):
                 break
+            # lo que crece es la división (puede duplicar las caras en cada ronda): se mira en cada corte, y como al
+            # dividir no muere ninguna cara, las vivas son len(ed.c) menos las muertas de antes
+            tope = math.inf if techo is None else techo + len(ed.c) - sum(ed.viva)
             for a, b in e[sel[np.argsort(-L[sel])]].tolist():
                 comunes = ed.vf[a] & ed.vf[b]
                 if not comunes or (bordes_fijos and len(comunes) == 1):
                     continue
                 ed.dividir(a, b)
+                if len(ed.c) > tope:
+                    raise _Desborde(techo + len(ed.c) - tope)
         e = ed.aristas()                                         # colapsar aristas cortas
         L = np.linalg.norm(ed.v[e[:, 0]] - ed.v[e[:, 1]], axis=1)
         sel = np.flatnonzero(L < bajo)
@@ -1555,28 +1621,207 @@ def _preparar_rasgos(ed, m, *, preservar_bordes, angulo_vivo):
             ed.fijo[x] = True
 
 
+# Triángulos máximos que puede dar un remallado (estimados antes de calcular): ≈ 45 s en esta implementación
+# (medido: 0,4 ms por triángulo; densidad 20 en una esfera dio 101.106 triángulos en 44 s).
+TRIANGULOS_MAXIMOS_REMALLADO = 100_000
+# Techos por si el estimado se queda corto. Las primeras vueltas dividen de más y colapsan en las siguientes; con
+# astillas (teselados de cilindros) mucho más. Medido: un cilindro R20 × 100 con estimado 95.000 llegó a 494.560 caras
+# en medio de la 1.ª vuelta, terminó las vueltas con 233.742 · 211.780 · 143.312 · 114.772 y dio 104.810 (107 s,
+# 1,2 GB el proceso); una barra R5 × 300 (refinamiento alto, agujas de 300 × 0,5 mm) con estimado 20.000 duplicaba las
+# caras en cada ronda hasta 1.183.380 (1 GB) y habría tardado 172 s. El resultado dio entre 0,92 y 1,14 veces el
+# estimado (y 2 veces en esa barra con estimado 5.000). La división nunca pasa de TECHO_TRANSITORIO caras vivas (se mira
+# en cada corte: memoria), el resultado no pasa de TECHO_REMALLADO, y desde la 2.ª vuelta, si la cuenta crece a un
+# ritmo que la llevaría por encima de TECHO_REMALLADO al final, se corta ahí.
+TECHO_TRANSITORIO = 600_000
+TECHO_REMALLADO = 130_000
+_RONDAS_DIVISION = 12        # rondas de división de aristas largas por vuelta (_remallar_nucleo)
+# Caras máximas al terminar la división de la 1.ª vuelta (_pico_division, calculado antes de remallar). En las astillas
+# de un teselado CAD (triángulos largos y finos) esa división pasa de largo el resultado y es lo que más tarda: el
+# tiempo es ≈ 0,1 s por cada 1.000 caras del pico más ≈ 0,26 s por cada 1.000 del resultado. Medido (teselado y
+# densidad → pico, tiempo): barra R5 × 300 alto, 500 → 131.420, 16,5 s; 1000 → 393.928, 49,8 s; 2350 → 394.004, 56 s;
+# cilindro R20 × 100 medio, 1000 → 124.008, 25,8 s; 4000 → 494.560, 106 s; esfera R10 medio, 19 → 120.476, 37,6 s.
+PICO_MAXIMO_REMALLADO = 150_000
+
+
+def _pico_division(T, fijas, alto, rondas, maximo):
+    """Caras que deja la división de aristas largas de la 1.ª vuelta de _remallar_nucleo sobre los triángulos T (K×3×3),
+    sin el editor: cada triángulo se divide solo (una arista se parte igual desde sus dos caras). Por ronda se parten
+    las aristas de más de `alto` que había al empezarla, de la más larga a la más corta; `fijas` (K×3, arista j =
+    vértices j y j+1) son los bordes que no se dividen. Da lo mismo que el editor (medido en barras, cilindros, toros
+    y esferas teselados). Deja de contar al pasar de `maximo`."""
+    hechos = 0
+    for _ in range(rondas):
+        L = np.linalg.norm(T[:, [1, 2, 0]] - T, axis=2)
+        pend = (L > alto) & ~fijas
+        listos = ~pend.any(1)
+        hechos += int(listos.sum())
+        T, fijas, pend, L = T[~listos], fijas[~listos], pend[~listos], L[~listos]
+        while len(T) and pend.any():
+            si = pend.any(1)
+            quietos = (T[~si], fijas[~si], pend[~si], L[~si])
+            j = np.where(pend[si], L[si], -1.0).argmax(1)
+            rot = (np.arange(3) + j[:, None]) % 3                   # la arista que se parte queda como la 0 (x, y)
+            t = np.take_along_axis(T[si], rot[:, :, None], 1)
+            f, p, lg = (np.take_along_axis(a[si], rot, 1) for a in (fijas, pend, L))
+            x, y, z = t[:, 0], t[:, 1], t[:, 2]
+            m = (x + y) / 2
+            mz, no = np.linalg.norm(z - m, axis=1), np.zeros(len(t), bool)
+            hijo_a = (np.stack([x, m, z], 1), np.stack([no, no, f[:, 2]], 1), np.stack([no, no, p[:, 2]], 1),
+                      np.stack([lg[:, 0] / 2, mz, lg[:, 2]], 1))            # [x, m, z]
+            hijo_b = (np.stack([m, y, z], 1), np.stack([no, f[:, 1], no], 1), np.stack([no, p[:, 1], no], 1),
+                      np.stack([lg[:, 0] / 2, lg[:, 1], mz], 1))            # [m, y, z]
+            T, fijas, pend, L = (np.concatenate(x3) for x3 in zip(quietos, hijo_a, hijo_b, strict=True))
+            if hechos + len(T) > maximo:
+                return hechos + len(T)
+        if not len(T):
+            break
+    return hechos + len(T)
+
+
+def _excedente_bordes(bordes, largo):
+    """Triángulos de más por ronda de división que dejan los bordes abiertos fijos («Preservar bordes») de largos
+    `bordes` con el largo objetivo `largo`. Un borde de n aristas máximas (n = largo del borde / (4/3 · largo)) no se
+    divide: con n > 2 el triángulo que lo toca siempre tiene otra arista larga, que se divide en cada ronda y llena de
+    triángulos los extremos (abanicos); con n > 1,5 las tiras angostas ya crecen algo. Medido por ronda y por borde
+    (tiras de 1 mm de ancho, el peor caso, y placas): 0,09 con n = 1,9 y 2,05; 0,28 con 2,8; 0,54 a 1,1 con 2,98;
+    2,05 con 3,3; 2,8 con 4; 4,3 con 5; 11,4 con 8; 29 con 15. Se suma 0,15 + n · mín(0,6 · (n − 2), n / 4), que
+    queda por encima de todo eso (al menos 1,3 veces)."""
+    n = np.asarray(bordes, float) / (4 / 3 * largo)
+    n = n[n > 1.5]
+    return float((0.15 + n * np.minimum(0.6 * np.maximum(n - 2, 0.0), n / 4)).sum())
+
+
+def _estimado_remallado(area, bordes, largo, rondas):
+    """Triángulos que dará el remallado: área / área de un equilátero de lado `largo` más el excedente de los bordes
+    fijos en las `rondas` de división. Medido: lo real dio entre 0,92 y 1,14 veces esto (esfera, cubo, caja y
+    cilindro teselados, casquete abierto) y menos en las tiras y placas con bordes fijos largos."""
+    return area / (math.sqrt(3) / 4) / largo / largo + rondas * _excedente_bordes(bordes, largo)
+
+
+class _RemalladoExcesivo(geo.ErrorGeometria):
+    """El remallado pasaría (o pasó) del tope; `triangulos` (o `pico_maximo`, si lo que se pasa es el pico de la
+    división) deja que Reparar › Reconstruir dé su propio consejo."""
+
+    def __init__(self, mensaje, triangulos=None, pico_maximo=None):
+        super().__init__(mensaje)
+        self.triangulos = triangulos
+        self.pico_maximo = pico_maximo
+
+
+_POR_BORDES = "con «Preservar bordes» los bordes abiertos largos no se dividen y sus extremos se llenan de triángulos"
+
+
+def _miles(n):
+    return f"{n:,.0f}".replace(",", ".")
+
+
+def _tres_cifras(x, abajo):
+    """x con 3 cifras significativas, redondeado hacia abajo o hacia arriba (el lado que entra en el tope)."""
+    e = 10.0 ** (math.floor(math.log10(x)) - 2)
+    v = (math.floor(x / e) if abajo else math.ceil(x / e)) * e
+    return _miles(v) if v >= 1000 else f"{v:.3g}".replace(".", ",")
+
+
+def _exigir_tamano_remallado(area, bordes, largo, rondas, densidad, longitud, pico=None, pico_maximo=None):
+    """Frena antes de calcular si el estimado (_estimado_remallado) pasa de TRIANGULOS_MAXIMOS_REMALLADO o, con
+    `pico` (largo → caras al terminar la división de la 1.ª vuelta, ver _pico_division), si ese pico pasa de
+    `pico_maximo`. El consejo da el largo (o la densidad) con que entra en los dos topes, contando los bordes fijos."""
+    maximo = TRIANGULOS_MAXIMOS_REMALLADO
+    estimado = _estimado_remallado(area, bordes, largo, rondas)
+    pico0 = pico(largo) if pico is not None else 0
+    if estimado <= maximo and pico0 <= (pico_maximo or 0):
+        return
+    hi = largo
+    if estimado > maximo:
+        lo, hi = largo, 2 * largo       # el estimado baja al subir el largo: se busca el largo más chico que entra
+        while _estimado_remallado(area, bordes, hi, rondas) > maximo:
+            lo, hi = hi, 2 * hi
+        for _ in range(60):
+            medio = (lo + hi) / 2
+            lo, hi = (lo, medio) if _estimado_remallado(area, bordes, medio, rondas) <= maximo else (medio, hi)
+    if pico is not None and pico(hi) > pico_maximo:     # el pico también baja al subir el largo (por escalones)
+        lo, hi = hi, 2 * hi
+        while pico(hi) > pico_maximo:
+            lo, hi = hi, 2 * hi
+        for _ in range(16):    # sobra para 3 cifras; cada vuelta simula la división (≈ 0,1 s)
+            medio = (lo + hi) / 2
+            lo, hi = (lo, medio) if pico(medio) <= pico_maximo else (medio, hi)
+    if longitud is not None:
+        numero = f"subí la longitud a {_tres_cifras(hi, abajo=False)} mm o más"
+    else:   # largo = media / √densidad → la densidad que da `hi` es densidad · (largo / hi)²
+        numero = f"bajá la densidad a {_tres_cifras(densidad * (largo / hi) ** 2, abajo=True)} o menos"
+    if estimado <= maximo:      # el pico se deja de contar al pasar el máximo: no se da una cuenta
+        raise _RemalladoExcesivo(f"El remallado pasaría de {_miles(pico_maximo)} triángulos (el máximo) al dividir las "
+                                 f"aristas largas (astillas de un teselado: triángulos largos y finos): {numero}.",
+                                 pico_maximo=pico_maximo)
+    solo_area = _estimado_remallado(area, (), largo, rondas)
+    consejo = f"{_POR_BORDES}: desactivalo o {numero}" if solo_area <= maximo else numero
+    raise _RemalladoExcesivo(f"El remallado daría unos {_miles(estimado)} triángulos y el máximo es "
+                             f"{_miles(maximo)}: {consejo}.", estimado)
+
+
 def remallar(m, *, densidad=1.0, longitud=None, preservar_bordes=True, preservar_aristas_vivas=True,
              angulo_vivo=30.0, iteraciones=5):
     """Remallar uniforme [MESH-REMESH] (remallado isótropo tipo Botsch-Kobbelt): divide aristas largas,
     colapsa cortas, voltea aristas hacia valencia 6 y relaja los vértices en el plano tangente,
     proyectándolos sobre la malla original. `densidad` > 1 da más caras (largo objetivo = largo medio /
     √densidad); `longitud` fija el largo objetivo en mm. Preserva los bordes entre grupos, las aristas
-    vivas (Preserve Sharp Edges, > `angulo_vivo`) y, con `preservar_bordes`, los bordes abiertos intactos."""
+    vivas (Preserve Sharp Edges, > `angulo_vivo`) y, con `preservar_bordes`, los bordes abiertos intactos.
+    Si el estimado pasa de TRIANGULOS_MAXIMOS_REMALLADO triángulos, o la división de la 1.ª vuelta pasaría de
+    PICO_MAXIMO_REMALLADO (astillas de un teselado, ver _pico_division), falla antes de calcular. Si igual crece de más,
+    se corta (ver TECHO_TRANSITORIO): el resultado nunca tiene más de TECHO_REMALLADO triángulos (salvo que la malla
+    de entrada ya tuviera más). Si el volumen de una malla cerrada cambia más de AVISO_VOLUMEN, avisa (AvisoMalla):
+    aristas largas contra paredes finas o curvas cerradas."""
     if not len(m.caras):
         raise geo.ErrorGeometria("La malla está vacía.")
-    if densidad <= 0 or (longitud is not None and longitud <= 0):
-        raise geo.ErrorGeometria("La densidad y la longitud tienen que ser positivas.")
+    if not (densidad > 0 and math.isfinite(densidad)) or \
+            (longitud is not None and not (longitud > 0 and math.isfinite(longitud))):
+        raise geo.ErrorGeometria("La densidad y la longitud tienen que ser positivas y finitas.")
     if iteraciones < 1:
         raise geo.ErrorGeometria("Hace falta al menos una iteración.")
     base = _sin_degenerados(m)
+    if not len(base.caras) or not np.isfinite(base.vertices).all():
+        raise geo.ErrorGeometria("La malla no tiene caras con área o tiene coordenadas no finitas.")
     topo = _Topo(base.caras, len(base.vertices))
-    media = float(np.linalg.norm(base.vertices[topo.aristas[:, 0]] - base.vertices[topo.aristas[:, 1]], axis=1).mean())
-    largo = float(longitud) if longitud is not None else media / math.sqrt(densidad)
+    largos = np.linalg.norm(base.vertices[topo.aristas[:, 0]] - base.vertices[topo.aristas[:, 1]], axis=1)
+    largo = float(longitud) if longitud is not None else float(largos.mean()) / math.sqrt(densidad)
+    bordes = largos[topo.cuenta == 1] if preservar_bordes else largos[:0]     # sin preservar, se dividen
+    fijas = ((topo.cuenta[topo.inv] == 1) & preservar_bordes).reshape(-1, 3)    # aristas j, j+1 de cada cara
+    pico_maximo = max(PICO_MAXIMO_REMALLADO, len(base.caras))       # una malla grande que no crece no se frena
+    tris = base.vertices[base.caras]
+
+    def pico(x):
+        return _pico_division(tris, fijas, 4 / 3 * x, _RONDAS_DIVISION, pico_maximo)
+    _exigir_tamano_remallado(base.area(), bordes, largo, _RONDAS_DIVISION * int(iteraciones), densidad, longitud,
+                             pico, pico_maximo)
     ed = _Editor(base.vertices, base.caras, base.grupos)
     _preparar_rasgos(ed, base, preservar_bordes=preservar_bordes,
                      angulo_vivo=angulo_vivo if preservar_aristas_vivas else None)
-    _remallar_nucleo(ed, largo, int(iteraciones), _Referencia(base.vertices, base.caras), preservar_bordes)
-    return ed.exportar()
+    ref = _Referencia(base.vertices, base.caras, largo=largo)
+    vueltas, antes = int(iteraciones), len(base.caras)
+    for k in range(1, vueltas + 1):                     # de a una vuelta (es lo mismo) para mirar cuánto creció
+        try:
+            _remallar_nucleo(ed, largo, 1, ref, preservar_bordes, techo=max(TECHO_TRANSITORIO, len(base.caras)))
+        except _Desborde as d:
+            cortar = d.args[0]
+        else:
+            vivas = sum(ed.viva)
+            creciendo = k > 1 and vivas > antes         # la 1.ª vuelta siempre divide de más: no cuenta
+            al_final = vivas + (vueltas - k) * (vivas - antes) if creciendo else vivas    # si sigue creciendo así
+            pasa = (creciendo or k == vueltas) and al_final > max(TECHO_REMALLADO, len(base.caras))
+            cortar, antes = (vivas if pasa else None), vivas
+        if cortar is not None:
+            numero = "subí la longitud" if longitud is not None else "bajá la densidad"
+            consejo = (f"{_POR_BORDES}: desactivalo o {numero}" if (bordes > 1.5 * 4 / 3 * largo).any()
+                       else numero)
+            raise _RemalladoExcesivo(f"El remallado se cortó en la vuelta {k} de {vueltas} con {_miles(cortar)} "
+                                     f"triángulos: crece más de lo estimado (el máximo es "
+                                     f"{_miles(TRIANGULOS_MAXIMOS_REMALLADO)}): {consejo}.", cortar)
+    r = ed.exportar()
+    _avisar_volumen(m, r, f"Remallar cambió el volumen un {{cambio}} (aristas de {largo:.3g} mm): ".replace(".", ",")
+                    + "la densidad es baja para el detalle de la pieza (paredes finas, curvas cerradas); "
+                    + ("bajá la longitud." if longitud is not None else "subí la densidad."))
+    return r
 
 
 # ---------------------------------------------------------------- cortar, vaciar, combinar
@@ -1661,7 +1906,7 @@ def vaciar(m, espesor):
     """Vaciar [MESH-SHELL] (aproximado): cada vértice se desplaza hacia adentro `espesor` mm (el desfase que
     mejor respeta los planos de sus caras, así las paredes planas quedan exactas), esa copia se invierte
     y se suma como cáscara interior (grupos nuevos). No resuelve autointersecciones: avisa con
-    RuntimeWarning si la cáscara interior se pliega o se acerca a la exterior."""
+    AvisoMalla si la cáscara interior se pliega o se acerca a la exterior."""
     if espesor <= 0:
         raise geo.ErrorGeometria("El espesor tiene que ser positivo.")
     if not m.es_cerrada():
@@ -1699,7 +1944,7 @@ def vaciar(m, espesor):
     distancia, _ = _Referencia(v, c).mas_cercano(interior[usados])
     if plegadas or np.any(distancia < 0.8 * espesor):
         warnings.warn(f"Vaciar: con {espesor} mm la cáscara interior se autointersecta o se pliega "
-                      f"({plegadas} caras invertidas); usá un espesor menor.", RuntimeWarning, stacklevel=2)
+                      f"({plegadas} caras invertidas); usá un espesor menor.", AvisoMalla, stacklevel=2)
     return Malla(np.vstack([v, interior]), np.vstack([c, c[:, [0, 2, 1]] + len(v)]),
                  np.r_[g, g + int(g.max()) + 1])
 
@@ -1773,16 +2018,23 @@ def _combinar_brep(mallas, operacion):
 
 
 # ---------------------------------------------------------------- suavizar, normales, separar, escalar, alinear
-def _adyacencia(c, n):
+def _adyacencia(v, c):
+    """Matriz de vecinos con peso 1/largo de la arista (Fujiwara): con pesos iguales un vértice unido por una arista
+    larga viaja hacia el otro extremo. Medido, botella reducida (caras de hasta 64 mm), Suavizar 0,5 × 5: el vértice
+    que más se movía, 9,3 mm con pesos iguales y 0,82 mm con 1/largo."""
     from scipy.sparse import coo_matrix
     e = np.unique(np.sort(_medias_aristas(c), axis=1), axis=0)
-    return coo_matrix((np.ones(2 * len(e)), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])), shape=(n, n)).tocsr()
+    w = 1.0 / np.maximum(np.linalg.norm(v[e[:, 0]] - v[e[:, 1]], axis=1), 1e-9 * (_diagonal(v) or 1.0))
+    n = len(v)
+    return coo_matrix((np.r_[w, w], (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])), shape=(n, n)).tocsr()
 
 
 def suavizar(m, *, intensidad=0.5, iteraciones=10, grupos=None):
     """Suavizar [MESH-SMOOTH] con el filtro de Taubin (λ|μ), que no encoge la malla como el laplaciano
-    simple. `intensidad` 0-1 (Smoothness de Fusion). Los vértices de borde quedan fijos; con `grupos`
-    solo se mueven los vértices rodeados por caras de esos grupos."""
+    simple, y vecinos pesados por 1/largo de arista. `intensidad` 0-1 (Smoothness de Fusion). Los vértices de
+    borde quedan fijos; con `grupos` solo se mueven los vértices rodeados por caras de esos grupos. Redondea las
+    aristas vivas (las convexas pierden material y las cóncavas lo ganan): si el volumen de una malla cerrada
+    cambia más de AVISO_VOLUMEN, avisa (AvisoMalla)."""
     if not 0 <= intensidad <= 1:
         raise geo.ErrorGeometria("La intensidad va de 0 a 1.")
     if iteraciones < 1:
@@ -1792,9 +2044,9 @@ def suavizar(m, *, intensidad=0.5, iteraciones=10, grupos=None):
     lam = 0.6 * intensidad
     mu = 1.0 / (0.1 - 1.0 / lam)
     n = len(m.vertices)
-    A = _adyacencia(m.caras, n)
-    grado = np.asarray(A.sum(1)).ravel()
-    movibles = grado > 0
+    A = _adyacencia(m.vertices, m.caras)
+    peso = np.asarray(A.sum(1)).ravel()
+    movibles = peso > 0
     movibles[_Topo(m.caras, n).libres().ravel()] = False
     if grupos is not None:
         fuera = ~np.isin(m.grupos, list(grupos))
@@ -1802,9 +2054,12 @@ def suavizar(m, *, intensidad=0.5, iteraciones=10, grupos=None):
     v = m.vertices.copy()
     for _ in range(int(iteraciones)):
         for factor in (lam, mu):
-            delta = (A @ v) / np.maximum(grado, 1)[:, None] - v
+            delta = (A @ v) / np.maximum(peso, 1e-300)[:, None] - v
             v[movibles] += factor * delta[movibles]
-    return Malla(v, m.caras, m.grupos)
+    r = Malla(v, m.caras, m.grupos)
+    _avisar_volumen(m, r, "Suavizar cambió el volumen un {cambio}: redondea las aristas vivas (las convexas pierden "
+                          "material y las cóncavas lo ganan); bajá la intensidad o las iteraciones.")
+    return r
 
 
 def invertir_normales(m, caras=None, grupos=None):

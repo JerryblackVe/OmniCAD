@@ -473,3 +473,129 @@ def test_contorno_con_arco_y_choque_con_error_claro():
              altura="30 mm", angulo="150 deg", referencia="tangente", posicion="adyacente")
     res = doc.agregar(Pestana().construir(v, ContextoComando(doc)))
     assert res.estado == "error" and "se superponen" in res.mensaje
+
+
+# ---------------------------------------------------------------- material de la regla, API y patrón plano
+def _desgarro_del_pliegue(doc):
+    """Operación Desgarro (modo cara) sobre el pliegue de la pestaña de `_doc_pestana`, sin agregarla."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.chapa import Desgarro
+    c = _cuerpo(doc, "op2.c1")
+    cil = next(s for s in refs.subformas(c.forma, "cara") if refs.firma(s)["geom"] == "cilindro")
+    cmd, ctx = Desgarro(), ContextoComando(doc)
+    v = {x.clave: (list(x.defecto) if isinstance(x.defecto, list) else x.defecto) for x in cmd.campos(ctx)}
+    v.update(modo="cara", cara=[_h(doc, refs.referencia("op2.c1", cil, c.forma))])
+    return cmd.construir(v, ctx)
+
+
+def test_la_regla_asigna_su_material_fisico():
+    from omnicad import api
+    from omnicad.nucleo import analisis as an
+    from omnicad.ui.administrar import filas_bom
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.chapa import ConvertirChapa, PatronPlano
+    from omnicad.ui.comandos.inspeccionar import CentroMasa
+    assert all(r["material"] in an.TABLA_MATERIALES for r in chapa.REGLAS.values())
+    assert chapa.regla("Acero 2 mm", espesor=3.0)["material"] == "Acero"
+    doc = _doc_placa("Aluminio 1.5 mm")
+    c = _cuerpo(doc)
+    assert c.material == "Aluminio 6061" and g.es_valida(c.forma)
+    masa = 100 * 50 * 1.5 * 2.70e-3                          # mm³ · g/cm³ · 1e-3 = g
+    r = api.llamar(api.Sesion(doc), "get_physical_properties", {})
+    assert r["ok"] and not r["avisos"], r
+    (info,) = r["result"]["bodies"]
+    assert info["material"] == "Aluminio 6061" and info["mass_g"] == pytest.approx(masa, rel=1e-4)
+    assert filas_bom(doc)[0][3] == "Aluminio 6061" and filas_bom(doc)[0][4] == pytest.approx(masa)
+    assert CentroMasa()._calcular({}, ContextoComando(doc))[1] == pytest.approx(masa)
+    # «Acero 2 mm» (el caso del hallazgo): acero, 10 000 mm³ → 78,5 g. El patrón plano hereda el material.
+    doc = _doc_pestana()
+    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2))])
+    assert [x.material for x in doc.estado_final.cuerpos.values()] == ["Acero", "Acero"]
+    assert _cuerpo(_doc_placa()).material == "Acero"
+    r = api.llamar(api.Sesion(_doc_placa()), "get_physical_properties", {})
+    assert r["result"]["bodies"][0]["mass_g"] == pytest.approx(78.5)
+    doc.agregar(_desgarro_del_pliegue(doc))                  # las partes del desgarro también lo heredan
+    assert len(doc.estado_final.cuerpos) == 3
+    assert {x.material for x in doc.estado_final.cuerpos.values()} == {"Acero"}
+    doc = Documento()                                         # convertir: el material de la regla plantilla
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="50", alto="3"))
+    assert _cuerpo(doc).material is None
+    _ejecutar(doc, ConvertirChapa, cara=[_cara(doc, (50, 25, 3))], regla="Acero inoxidable 1.2 mm")
+    assert _cuerpo(doc).material == "Acero inoxidable"
+    doc.propiedades["op1.c1"] = {"material": "Latón"}         # el Material físico asignado a mano sigue mandando
+    assert filas_bom(doc)[0][3] == "Latón"
+
+
+def test_export_de_la_api_escribe_el_dxf_del_patron_plano(tmp_path):
+    from omnicad import api
+    s = api.Sesion(_doc_pestana())
+    ruta = tmp_path / "p.dxf"
+    r = api.llamar(s, "export", {"path": str(ruta)})          # sin bodies: el único cuerpo de chapa
+    assert r["ok"], r
+    assert r["result"]["format"] == "dxf" and r["result"]["bodies"] == ["op2.c1"] and r["result"]["size_bytes"] > 0
+    capas = {}
+    for capa, prim in leer_dxf(ruta, con_capas=True):
+        capas.setdefault(capa, []).append(prim)
+    cerrado, area = _lazo_cerrado_y_area(capas["CONTORNO_EXTERIOR"])
+    assert cerrado and area == pytest.approx(100 * (62 + BA90), rel=1e-6)
+    assert len(capas["LINEAS_PLIEGUE"]) == 1
+    s.doc.agregar(OpPrimitiva(s.doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10", x="300"))
+    r = api.llamar(s, "export", {"path": str(tmp_path / "caja.dxf"), "bodies": ["op4.c1"]})
+    assert not r["ok"] and r["error_kind"] == "INVALID_FORMAT" and "no es de chapa" in r["mensaje"]
+    r = api.llamar(s, "export", {"path": str(ruta), "bodies": ["op2.c1"], "overwrite": True})
+    assert r["ok"] and r["result"]["bodies"] == ["op2.c1"]
+    s.doc.agregar(_desgarro_del_pliegue(s.doc))               # dos cuerpos de chapa: hay que elegir uno
+    r = api.llamar(s, "export", {"path": str(tmp_path / "dos.dxf")})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+    s = api.Sesion(Documento())
+    s.doc.agregar(OpPrimitiva(s.doc.nuevo_id(), forma="caja"))
+    r = api.llamar(s, "export", {"path": str(tmp_path / "nada.dxf")})
+    assert not r["ok"] and r["error_kind"] == "NOTHING_TO_EXPORT"
+
+
+def test_patron_plano_al_lado_no_cae_sobre_otros_cuerpos():
+    from omnicad.ui.comandos.chapa import PatronPlano
+    doc = _doc_pestana()
+    # Una caja justo donde caía el patrón (x 110..210): el patrón la saltea y queda 10 mm más allá.
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="50", alto="10", x="105"))
+    _ejecutar(doc, PatronPlano, cara=[_cara(doc, (50, 40, 2), "op2.c1")])
+    patron = _cuerpo(doc)
+    assert patron.chapa["patron_de"] == "op2.c1" and g.es_valida(patron.forma)
+    assert g.volumen(patron.forma) == pytest.approx(100 * (62 + BA90) * T)
+    (x0, _, z0), (x1, _, z1) = g.caja_envolvente(patron.forma)
+    assert (x0, x1, z0, z1) == pytest.approx((155, 255, 0, 2))
+    for otro in doc.estado_final.cuerpos.values():
+        if otro is not patron:
+            (a0, *_), (a1, *_) = g.caja_envolvente(otro.forma)
+            assert a1 < x0 or a0 > x1                         # no se solapa con ningún cuerpo
+
+
+def test_desgarro_avisa_una_sola_vez_desde_execute_code():
+    from omnicad import api
+    s = api.Sesion(_doc_pestana())
+    params = _desgarro_del_pliegue(s.doc).a_dict()["params"]
+    codigo = (f"import json\nr = llamar('run_operation', {{'type': 'desgarro', 'params': "
+              f"json.loads({json.dumps(json.dumps(params))})}})\nresult = r['avisos']")
+    r = api.llamar(s, "execute_code", {"code": codigo})
+    assert r["ok"], r
+    assert sum("La chapa quedó en 2 cuerpos" in a for a in r["avisos"]) == 1, r["avisos"]
+    assert sum("La chapa quedó en 2 cuerpos" in a for a in r["result"]["result"]) == 1
+    # Una llamada anidada no borra los avisos que juntaron las anteriores del mismo código, y dos llamadas anidadas
+    # con el mismo aviso devuelven cada una el suyo (de solo lectura y de las que modifican).
+    caja = OpPrimitiva(s.doc.nuevo_id(), forma="caja", x="300")
+    s.doc.agregar(caja)
+    codigo = (f"a = llamar('get_physical_properties', {{'bodies': ['{caja.id}.c1']}})\n"
+              "b = llamar('get_parameters')\n"
+              f"c = llamar('get_physical_properties', {{'bodies': ['{caja.id}.c1']}})\n"
+              "result = [a['avisos'], b['avisos'], c['avisos']]")
+    r = api.llamar(s, "execute_code", {"code": codigo})
+    assert r["ok"], r
+    (sin_densidad,), otros, repetido = r["result"]["result"]
+    assert "Sin densidad" in sin_densidad and otros == [] and repetido == [sin_densidad]
+    assert r["avisos"] == [sin_densidad]
+    codigo = ("result = [llamar('create_box', {'length': 5, 'width': 5, 'height': 5, 'x': x, "
+              f"'operation': 'new_body', 'target': '{caja.id}.c1'}})['avisos'] for x in (500, 900)]")
+    r = api.llamar(s, "execute_code", {"code": codigo})
+    assert r["ok"], r
+    ignorado = ["«target» se ignora con operation=new_body: el cuerpo es nuevo."]
+    assert r["result"]["result"] == [ignorado, ignorado] and r["avisos"] == ignorado

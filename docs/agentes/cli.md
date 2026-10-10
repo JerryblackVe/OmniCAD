@@ -207,7 +207,7 @@ OK get_viewport_image
 
 ### run
 
-Corre un script de Python con `api`, `sesion`, `doc` y `llamar(nombre, args)` ya definidos (herramienta `execute_code`). Todo el script es un solo paso de deshacer; si lanza una excepción, el documento queda igual. `print` va a stdout y `result = …` devuelve un valor.
+Corre un script de Python con `api`, `sesion`, `doc` y `llamar(nombre, args)` ya definidos (herramienta `execute_code`). Todo el script es un solo paso de deshacer; si lanza una excepción, el documento queda igual. `print` va a stdout y `result = …` devuelve un valor. `run` corre sin tiempo máximo (Ctrl+C lo corta).
 
 `llamar` devuelve el dict completo (`{"ok": ..., "result": ...}`).
 

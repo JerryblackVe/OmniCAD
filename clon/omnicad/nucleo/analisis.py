@@ -273,6 +273,10 @@ def medir(a, b=None, *, centro_a_centro=False):
 
 
 # ---------------------------------------------------------------- interferencias
+# Espesor medio (2·volumen/área, en mm) por debajo del cual el volumen común es contacto con error de redondeo.
+ESPESOR_MIN_INTERFERENCIA = 1e-3
+
+
 def _cajas_se_tocan(ca, cb, tol):
     if ca is None or cb is None:
         return False
@@ -287,6 +291,10 @@ def interferencias(cuerpos, *, caras_coincidentes=False):
     volumen de interferencia (BRepAlgoAPI_Common). Primero filtra por caja envolvente (rápido). Con
     `caras_coincidentes=True` también informa los pares que solo se tocan en caras (volumen 0, "area" y
     las caras comunes en "forma"), como la opción "Incluir caras coincidentes".
+
+    Dos cuerpos apoyados cara con cara con una inclinación de redondeo (1e-5 rad) dan un volumen común de
+    milésimas de mm³ pero de espesor casi nulo: eso es contacto, no interferencia. Un par cuenta solo si
+    el espesor medio del volumen común (2·volumen/área) llega a ESPESOR_MIN_INTERFERENCIA (0,001 mm).
     """
     ids = list(cuerpos)
     cajas = {i: geo.caja_envolvente(cuerpos[i]) for i in ids}
@@ -299,7 +307,7 @@ def interferencias(cuerpos, *, caras_coincidentes=False):
             comun = geo.booleano(fa, fb, "intersecar")
             vol = geo.volumen(comun) if not geo.esta_vacia(comun) else 0.0
             escala = min(abs(geo.volumen(fa)), abs(geo.volumen(fb))) or 1.0
-            if vol > 1e-9 * escala:
+            if vol > 1e-9 * escala and 2 * vol >= ESPESOR_MIN_INTERFERENCIA * geo.area(comun):
                 salida.append({"a": ia, "b": ib, "volumen": vol, "forma": comun, "coincidente": False})
             elif caras_coincidentes:
                 # Booleano entre las cáscaras (dimensión 2): devuelve solo las porciones de cara compartidas.

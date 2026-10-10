@@ -6,9 +6,9 @@ import pytest
 
 from omnicad.nucleo import geometria as g
 from omnicad.nucleo.perfiles import detectar, intersecar_forma, proyectar_forma
-from omnicad.restricciones import Boceto, auto_restringir, grados_de_libertad, puntos_primitiva, resolver
+from omnicad.restricciones import Boceto, ErrorBoceto, auto_restringir, grados_de_libertad, puntos_primitiva, resolver
 from omnicad.restricciones.boceto import (distancia_primitiva, distancia_punto_recta, dominio, evaluar_primitiva,
-                                              mas_cercano)
+                                              mas_cercano, validar_valor_cota)
 from omnicad.timeline.parametros import TablaParametros
 
 PLANO = g.Plano("XY")
@@ -491,6 +491,91 @@ def test_deshacer_recorte_y_entrada_que_no_rompe_atajos(app_qt):
     lz.clics = [(None, (0.0, 0.0))]
     evento = QKeyEvent(QKeyEvent.Type.ShortcutOverride, Qt.Key_2, Qt.NoModifier, "2")
     assert lz.event(evento) and evento.isAccepted()                     # el dígito es de la entrada dinámica
+
+
+# ---------------------------------------------------------------- entradas no finitas y cotas fuera de rango
+def test_detectar_salta_primitivas_no_finitas():
+    import faulthandler
+    nan, inf = float("nan"), float("inf")
+    faulthandler.dump_traceback_later(60, exit=True)     # si vuelve el cuelgue del Splitter de OCC, pytest muere
+    try:
+        assert detectar([("linea", 1, (0, 0), (nan, 5))], PLANO) == []
+        perfiles = detectar([("linea", 1, (0, 0), (inf, 5)), ("circulo", 2, (0, 0), 5.0),
+                             ("spline", 3, ((0, 0), (nan, 1), (2, 0)), (0, 0, 0, 1, 1, 1), 2, None)], PLANO)
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+    assert [round(p.area, 6) for p in perfiles] == [pytest.approx(math.pi * 25)] and perfiles[0].firma == {2}
+    assert g.es_valida(perfiles[0].cara)
+
+
+def test_boceto_rechaza_numeros_no_finitos_y_spline_degenerada():
+    nan, inf = float("nan"), float("inf")
+    b = Boceto()
+    for crear in (lambda: b.agregar_punto(nan, 0), lambda: b.agregar_punto(0, inf),
+                  lambda: b.agregar_linea((0, 0), (nan, 1)), lambda: b.agregar_circulo((0, 0), nan),
+                  lambda: b.agregar_circulo((0, 0), inf), lambda: b.agregar_circulo((inf, 0), 3),
+                  lambda: b.agregar_elipse((0, 0), (5, 0), nan), lambda: b.agregar_texto((0, 0), "A", nan),
+                  lambda: b.agregar_spline([(1, 1), (1, 1), (1, 1)])):
+        with pytest.raises(ErrorBoceto):
+            crear()
+    assert not b.curvas
+    sid = b.agregar_spline([(1, 1), (1, 1), (4, 2)])                # puntos repetidos pero no todos: vale
+    assert len(b.curvas[sid].pts) == 3
+
+
+def test_validar_valor_cota():
+    for tipo, valor in (("radio", -5), ("radio", 0), ("diametro", -1), ("distancia", float("nan")),
+                        ("distancia_h", -2), ("desfase", 0), ("radio", 1e9), ("distancia", 1.5e6), ("diametro", math.inf)):
+        with pytest.raises(ErrorBoceto):
+            validar_valor_cota(tipo, valor)
+    for tipo, valor in (("radio", 5), ("radio", 6e4), ("diametro", 1e6), ("distancia", 1.5e5), ("distancia_v", 1e6),
+                        ("desfase", 0.1), ("angulo", 120), ("angulo", -30)):
+        validar_valor_cota(tipo, valor)
+
+
+def test_detectar_perfiles_grandes_dentro_del_tope():
+    """Toda región cerrada dentro del tope de las cotas (±1 km) forma perfil: con la cara vieja de 1e5 mm, un
+    círculo de 60 m de radio desaparecía sin aviso."""
+    for r in (6e4, 9e5):
+        perfiles = detectar([("circulo", 1, (0, 0), r)], PLANO)
+        assert len(perfiles) == 1 and perfiles[0].area == pytest.approx(math.pi * r * r, rel=1e-9)
+        assert g.es_valida(perfiles[0].cara)
+    assert detectar([("circulo", 1, (0, 0), 1e300)], PLANO) == []      # absurdo: queda afuera, sin colgarse
+
+
+def test_cota_negativa_o_cero_se_rechaza_en_la_caja(app_qt):
+    lz = _lienzo(app_qt)
+    c = lz.b.agregar_circulo((20, 20), 5)
+    lz._abrir_cota("radio", [c], lz._pos_cursor)
+    _aceptar(lz, "-5")
+    assert not lz.b.cotas and lz.entrada is not None                    # la caja queda abierta (en rojo), como Fusion
+    _aceptar(lz, "4")
+    assert [k.expresion for k in lz.b.cotas.values()] == ["4"] and lz.b.radio(c) == pytest.approx(4)
+    cota = next(iter(lz.b.cotas))
+    lz.editar_cota(cota, lz._pos_cursor)
+    _aceptar(lz, "0")
+    assert lz.b.cotas[cota].expresion == "4" and lz.entrada is not None and lz.b.radio(c) == pytest.approx(4)
+    _aceptar(lz, "3")
+    assert lz.b.cotas[cota].expresion == "3" and lz.b.radio(c) == pytest.approx(3)
+
+
+def test_lo_escrito_al_dibujar_respeta_el_tope_de_las_cotas(app_qt):
+    """Lo escrito en la caja al dibujar se vuelve cota: el mismo rango que al editarla (> 0 y hasta 1 km)."""
+    lz = _lienzo(app_qt)
+    lz.set_herramienta("circulo")
+    lz._registrar_clic(None, (0.0, 0.0))                                 # centro
+    for malo in ("3000000", "0", "-2"):
+        with pytest.raises(ErrorBoceto):
+            lz._evaluar_campo("diametro", malo)
+    with pytest.raises(ErrorBoceto, match="1.000.000"):
+        lz._evaluar_campo("largo", "2e6")
+    assert lz._evaluar_campo("angulo", "-30") == pytest.approx(-30)      # los ángulos no tienen este tope
+    lz._bloquear("diametro", "50", lz._evaluar_campo("diametro", "50"))
+    lz._registrar_clic(None, (5.0, 0.0))
+    assert [(k.tipo, k.expresion) for k in lz.b.cotas.values()] == [("diametro", "50")]
+    perfiles = detectar(lz.b.geometria(), PLANO)
+    assert len(perfiles) == 1 and g.es_valida(perfiles[0].cara)
+    assert g.area(perfiles[0].cara) == pytest.approx(math.pi * 25 ** 2, rel=1e-6)
 
 
 def test_simetria_de_elipses_y_splines_y_punto_medio_de_arco():

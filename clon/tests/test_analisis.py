@@ -91,6 +91,21 @@ def test_interferencias_volumen_exacto_y_coincidentes():
     assert ("A", "C") not in coinc
 
 
+def test_interferencias_ignora_contacto_con_error_de_redondeo():
+    """El cilindro Ø28 de la lámpara apoyado en el Ø14 con 1,8e-5 rad de inclinación (la del extremo del
+    barrido) daba 0,004 mm³ de «interferencia»: una cuña de 5e-5 mm de espesor es contacto, no choque."""
+    a = 1.8e-5
+    giro = np.identity(4)
+    giro[[0, 0, 2, 2], [0, 2, 0, 2]] = math.cos(a), math.sin(a), -math.sin(a), math.cos(a)
+    giro[:3, 3] = np.array([0, 0, 405.0]) - giro[:3, :3] @ (0, 0, 405.0)      # alrededor del punto de apoyo
+    arriba, abajo = g.transformar(g.cilindro(14, 27, base=(0, 0, 405)), giro), g.cilindro(7, 405)
+    comun = g.volumen(g.booleano(arriba, abajo, "intersecar"))
+    assert 1e-9 * g.volumen(abajo) < comun < 1e-2          # el filtro relativo solo no lo descartaba
+    assert an.interferencias({"A": arriba, "B": abajo}) == []
+    real = an.interferencias({"A": g.caja(30, 30, 10), "B": g.caja(10, 10, 10, (5, 5, 9.99))})   # solape de 0,01 mm
+    assert len(real) == 1 and real[0]["volumen"] == pytest.approx(1.0) and g.es_valida(real[0]["forma"])
+
+
 # ---------------------------------------------------------------- propiedades físicas
 def test_propiedades_fisicas_caja_acero():
     p = an.propiedades_fisicas(g.caja(10, 20, 30), 7.85)

@@ -239,7 +239,119 @@ def test_documento_nuevo_y_externo():
     assert s.doc is doc and s.ruta is None
     ok(api.llamar(s, "create_parameter", {"name": "a", "expression": "5 mm"}))
     assert avisado and "a" in doc.parametros                         # modifica el documento de afuera
-    r = ok(api.llamar(s, "new_document", {"name": "Otra"}))
+    r = ok(api.llamar(s, "new_document", {"name": "Otra", "discard": True}))
     assert r["name"] == "Otra" and s.doc is not doc
     info = ok(api.llamar(s, "get_scene_info"))
     assert info["bodies"] == [] and info["timeline_steps"] == 0 and info["parameters"] == []
+
+
+# ---------------------------------------------------------------- hallazgos de las pruebas de uso
+def _cache_brep(ruta, carpeta):
+    """La forma de cache/cuerpos.brep del proyecto (None si no tiene caché)."""
+    import zipfile
+    from omnicad.nucleo import intercambio
+    with zipfile.ZipFile(ruta) as z:
+        if "cache/cuerpos.brep" not in z.namelist():
+            return None
+        z.extract("cache/cuerpos.brep", carpeta)
+    return intercambio.leer_brep(carpeta / "cache" / "cuerpos.brep")
+
+
+def test_guardar_y_reabrir_con_cuerpo_de_malla(tmp_path):
+    """Antes save_document (y Guardar de la ventana) daban INTERNAL_ERROR «Add(): incompatible function arguments»:
+    la caché B-rep metía la Malla en un compuesto OCC. Las mallas viajan solo en la receta."""
+    from omnicad.nucleo import geometria as geo
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10}))
+    ok(api.llamar(s, "run_operation", {"type": "teselar", "params": {"cuerpos": ["op1.c1"], "mantener": True}}))
+    r = ok(api.llamar(s, "save_document", {"path": str(tmp_path / "con_malla.omnicad")}))
+    cache = _cache_brep(r["path"], tmp_path)
+    assert len(geo.solidos(cache)) == 1 and geo.es_valida(cache)
+    assert geo.volumen(cache) == pytest.approx(1000, rel=1e-9)        # solo el sólido, sin la malla
+    abierta = ok(api.llamar(api.Sesion(), "open_document", {"path": r["path"]}))
+    assert [(b["type"], b["volume"]) for b in abierta["bodies"]] == [("solid", pytest.approx(1000)),
+                                                                     ("mesh", pytest.approx(1000))]
+    # solo malla: se guarda sin caché
+    ok(api.llamar(s, "edit_feature", {"feature": "op2", "params": {"mantener": False}}))
+    r = ok(api.llamar(s, "save_document", {"path": str(tmp_path / "solo_malla.omnicad")}))
+    assert _cache_brep(r["path"], tmp_path / "b") is None
+    abierta = ok(api.llamar(api.Sesion(), "open_document", {"path": r["path"]}))
+    assert [(b["type"], b["volume"]) for b in abierta["bodies"]] == [("mesh", pytest.approx(1000))]
+
+
+def test_abrir_brep_como_operacion_base(tmp_path):
+    """El .brep que escribe export se abre como los demás formatos: documento nuevo con UN paso (operación base)."""
+    from omnicad.nucleo import geometria as geo
+    from omnicad.nucleo import intercambio
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 20, "height": 30}))
+    ok(api.llamar(s, "create_cylinder", {"radius": 3, "height": 5, "x": 50}))
+    ok(api.llamar(s, "export", {"path": str(tmp_path / "dos.brep")}))
+    otra = api.Sesion()
+    info = ok(api.llamar(otra, "open_document", {"path": str(tmp_path / "dos.brep")}))
+    assert info["name"] == "dos" and info["path"] is None and info["modified"] is False
+    assert [(b["type"], b["volume"]) for b in info["bodies"]] == [("solid", pytest.approx(6000)),
+                                                                  ("solid", pytest.approx(math.pi * 9 * 5))]
+    assert all(geo.es_valida(c.forma) for c in otra.doc.estado_final.cuerpos.values())
+    pasos = ok(api.llamar(otra, "get_timeline"))["steps"]
+    assert [(p["type"], p["status"]) for p in pasos] == [("operacion_base", "ok")]
+    # se guarda y se reabre igual (el B-rep queda en la receta)
+    r = ok(api.llamar(otra, "save_document", {"path": str(tmp_path / "dos.omnicad")}))
+    assert ok(api.llamar(api.Sesion(), "open_document", {"path": r["path"]}))["bodies"] == info["bodies"]
+    # .brp con un sólido y una superficie sueltos
+    mixto = geo.compuesto([geo.caja(1, 2, 3), geo.cara_de_plano(geo.Plano("XY"), tam=10)])
+    intercambio.escribir_brep(mixto, tmp_path / "mixto.brp")
+    info = ok(api.llamar(api.Sesion(), "open_document", {"path": str(tmp_path / "mixto.brp")}))
+    assert [b["type"] for b in info["bodies"]] == ["solid", "surface"]
+    assert info["bodies"][0]["volume"] == pytest.approx(6) and info["bodies"][1]["area"] == pytest.approx(400)  # 20×20
+    roto = tmp_path / "roto.brep"
+    roto.write_text("no es un BREP", encoding="utf-8")
+    r = api.llamar(api.Sesion(), "open_document", {"path": str(roto)})
+    assert r["error_kind"] == "IMPORT_FAILED" and "roto.brep" in r["mensaje"]
+
+
+def test_guardar_con_ruta_vacia_o_sin_nombre(tmp_path):
+    """Antes path="" daba INTERNAL_ERROR «WindowsPath('.') has an empty name». Vacío = el archivo actual."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10}))
+    r = api.llamar(s, "save_document", {"path": ""})
+    assert r["error_kind"] == "MISSING_PATH"
+    assert api.llamar(s, "save_document", {"path": "  "})["error_kind"] == "MISSING_PATH"
+    for sin_nombre in (".", "..", str(tmp_path) + "/.."):
+        r = api.llamar(s, "save_document", {"path": sin_nombre})
+        assert r["error_kind"] == "INVALID_ARGUMENTS" and "nombre de archivo" in r["mensaje"]
+    guardado = ok(api.llamar(s, "save_document", {"path": str(tmp_path / "pieza.omnicad")}))
+    ok(api.llamar(s, "create_sphere", {"radius": 2, "x": 30}))
+    r = ok(api.llamar(s, "save_document", {"path": ""}))
+    assert r["path"] == guardado["path"] and not s.doc.modificado
+
+
+def test_new_y_open_document_con_cambios_sin_guardar_sin_ventana(tmp_path):
+    """Misma regla que en vivo: con cambios sin guardar fallan con UNSAVED_CHANGES; discard=true los descarta."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10}))
+    ruta = tmp_path / "otra.omnicad"
+    api.Sesion().guardar(ruta)
+    antes = foto(s)
+    for tool, args in (("new_document", {"name": "Otro"}), ("open_document", {"path": str(ruta)})):
+        r = api.llamar(s, tool, args)
+        assert r["error_kind"] == "UNSAVED_CHANGES" and any("discard" in p for p in r["pistas"])
+        assert foto(s) == antes                                          # no se descartó nada
+    assert ok(api.llamar(s, "open_document", {"path": str(ruta), "discard": True}))["bodies"] == []
+    ok(api.llamar(s, "create_box", {"length": 1, "width": 1, "height": 1}))
+    assert ok(api.llamar(s, "new_document", {"name": "Nuevo", "discard": True}))["name"] == "Nuevo"
+    assert ok(api.llamar(s, "new_document", {"name": "Sin cambios"}))["name"] == "Sin cambios"
+    for nombre in ("new_document", "open_document"):
+        h = next(h for h in api.catalogo() if h["nombre"] == nombre)
+        assert "UNSAVED_CHANGES" in h["descripcion"] and "sin guardarlo" not in h["descripcion"]
+
+
+def test_apply_recipe_acepta_el_resultado_de_get_recipe_tal_cual(s):
+    """Antes pasar {"recipe": {...}} (lo que devuelve get_recipe) daba INVALID_RECIPE."""
+    resultado = ok(api.llamar(s, "get_recipe"))
+    otra = api.Sesion()
+    r = ok(api.llamar(otra, "apply_recipe", {"recipe": resultado}))
+    assert r["added_steps"] == 8 and ok(api.llamar(otra, "get_recipe")) == resultado
+    otra = api.Sesion()
+    assert ok(api.llamar(otra, "apply_recipe", {"recipe": resultado["recipe"]}))["added_steps"] == 8
+    assert api.llamar(otra, "apply_recipe", {"recipe": {"recipe": {}}})["error_kind"] == "INVALID_RECIPE"

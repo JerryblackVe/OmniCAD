@@ -10,12 +10,13 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .operaciones import ANGULO, ErrorOperacion, Operacion, _resolver, registrar_operacion
+from .operaciones import ANGULO, ErrorOperacion, Operacion, OpPlano, _resolver, registrar_operacion
 
 TIPOS_PLANO = {"desfase": "Plano de desfase", "angulo": "Plano en el ángulo", "tangente": "Plano tangente",
                "medio": "Plano medio", "dos_aristas": "Plano a través de dos aristas",
                "tres_puntos": "Plano a través de tres puntos", "perpendicular": "Plano perpendicular",
                "ruta": "Plano en ruta"}
+OpPlano.OPCIONES = {"tipo": TIPOS_PLANO}      # OpPlano vive en operaciones.py; sus tipos, acá
 TIPOS_EJE = {"cilindro": "Eje a través de cilindro/cono/toroide", "perpendicular_cara": "Eje perpendicular a la cara",
              "dos_planos": "Eje a través de dos planos", "dos_puntos": "Eje a través de dos puntos",
              "arista": "Eje a través de arista"}
@@ -87,6 +88,7 @@ class OpEje(Operacion):
     """Ejes de construcción de Fusion [SLD-CONSTRUCT-AXIS-*]."""
     TIPO, ETIQUETA, ICONO = "eje", "Eje", "╱"
     PARAMS = {"tipo": "arista", "refs": []}
+    OPCIONES = {"tipo": TIPOS_EJE}
 
     def dependencias(self):
         return ent.dependencias_de(self.p["refs"]) - {self.id}
@@ -115,6 +117,7 @@ class OpPunto(Operacion):
     TIPO, ETIQUETA, ICONO = "punto", "Punto", "•"
     PARAMS = {"tipo": "vertice", "refs": [], "posicion": "0.5"}
     EXPRESIONES = ("posicion",)
+    OPCIONES = {"tipo": TIPOS_PUNTO}
 
     def dependencias(self):
         return ent.dependencias_de(self.p["refs"]) - {self.id}

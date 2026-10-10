@@ -118,3 +118,37 @@ def test_construccion_planos_ejes_y_puntos():
     op = _ejecutar(doc, C["plano_angulo"], r0=[_h(doc, {"tipo": "eje", "id": "X"})], angulo="90 deg")
     assert abs(doc.estado_final.planos[op.id].normal[2]) < 1e-9
     assert forma is not None
+
+
+def _ele(doc):
+    """Superficie en L: dos caras 10×10 a escuadra, de un boceto de dos líneas extruido 10 mm en Z."""
+    from omnicad.ui.comandos.superficie import SupExtruir
+    bid, ids = _boceto(doc, lineas=[((0, 0), (10, 0)), ((10, 0), (10, 10))])
+    _ejecutar(doc, SupExtruir, curvas=_curvas(doc, bid, ids), distancia="10 mm")
+    return _h(doc, {"tipo": "cuerpo", "cuerpo": _ultimo(doc).id})
+
+
+def test_engrosar_tipo_afilado_o_redondeado():
+    """L119: el núcleo sabía engrosar redondeado, pero el paso no pasaba el tipo y el diálogo no lo mostraba.
+    Redondeado: la esquina de afuera es un cuarto de cilindro de radio = espesor (simétrica: espesor / 2)."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.superficie import Engrosar
+    from omnicad.timeline.ops_superficie import OpEngrosar
+    assert "tipo" in [c.clave for c in Engrosar().campos(ContextoComando(Documento()))]
+    esperado = {("un_lado", "agudo"): 440.0, ("un_lado", "redondeado"): 440 - (4 - math.pi) * 10,
+                ("simetrica", "agudo"): 400.0, ("simetrica", "redondeado"): 400 - (1 - math.pi / 4) * 10}
+    for (direccion, tipo), volumen in esperado.items():
+        doc = Documento()
+        ele = _ele(doc)
+        espesor = "-2 mm" if direccion == "un_lado" else "2 mm"       # −2: hacia afuera de la esquina
+        op = _ejecutar(doc, Engrosar, caras=[ele], espesor=espesor, direccion=direccion, tipo=tipo)
+        assert op.p["tipo"] == tipo
+        solido = _ultimo(doc).forma
+        assert g.es_valida(solido) and len(g.solidos(solido)) == 1, (direccion, tipo)
+        assert g.volumen(solido) == pytest.approx(volumen, rel=1e-6), (direccion, tipo)
+        cmd, ctx = Engrosar(), ContextoComando(doc, op=op)
+        assert cmd.construir(cmd.desde_op(op, ctx), ctx).p["tipo"] == tipo     # editar conserva el tipo
+    doc = Documento()                                    # un paso sin «tipo» (receta vieja) engrosa afilado
+    ele = _ele(doc)
+    doc.agregar(OpEngrosar(doc.nuevo_id(), caras=[ele["ref"]], espesor="-2 mm"))
+    assert doc.resultados[-1].estado == "ok" and g.volumen(_ultimo(doc).forma) == pytest.approx(440)

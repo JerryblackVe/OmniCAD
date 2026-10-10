@@ -390,6 +390,17 @@ def test_run_script_con_error_exit_1_y_no_guarda(pieza, tmp_path, capsys):
     assert pieza.read_bytes() == antes
 
 
+def test_run_script_corre_sin_tiempo_maximo(pieza, tmp_path, capsys, monkeypatch):
+    from omnicad.api import herramientas_avanzado as av
+    plazos = []
+    original = av._plazo
+    monkeypatch.setattr(av, "_plazo", lambda co, seg, ses: plazos.append(seg) or original(co, seg, ses))
+    script = tmp_path / "corto.py"
+    script.write_text("result = 1\n", encoding="utf-8")
+    codigo, _, _ = correr(capsys, "run", script, "--doc", pieza)
+    assert codigo == 0 and plazos == [None]
+
+
 # ---------------------------------------------------------------- UTF-8
 def test_textos_con_tildes_no_rompen_la_salida_con_consola_no_utf8(pieza):
     """Aunque Python crea que la consola es cp1252/ascii, la CLI escribe UTF-8 sin caer."""

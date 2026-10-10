@@ -148,3 +148,64 @@ def test_patrones_simetria_envolvente_y_relleno():
     sup = [_h(doc2, {"tipo": "cuerpo", "cuerpo": k}) for k in doc2.estado_final.cuerpos]
     _ejecutar(doc2, RellenoContorno, herramientas=sup, celdas="1")
     assert g.volumen(_ultimo(doc2).forma) == pytest.approx(g.volumen(forma), rel=1e-4)
+
+
+def _placa_con_punto(z_plano):
+    """Placa 40×40×2 (z 0..2, cuerpo op1.c1) y un boceto con un punto en (20, 20) sobre el plano z = `z_plano`."""
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="40", alto="2"))
+    plano = OpPlano(doc.nuevo_id(), "Plano", base="XY", distancia=f"{z_plano} mm")
+    doc.agregar(plano)
+    b = Boceto()
+    pid = b.agregar_punto(20, 20)
+    sk = OpBoceto(doc.nuevo_id(), plano=plano.id, boceto=b)
+    doc.agregar(sk)
+    return doc, _h(doc, {"tipo": "punto_boceto", "boceto": sk.id, "punto": pid})
+
+
+def _alto_placa(doc):
+    """(z mínima, z máxima) de la placa con su saliente; antes revisa que la forma sea válida."""
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    assert g.es_valida(forma)
+    (_, _, z0), (_, _, z1) = g.caja_envolvente(forma)
+    return z0, z1
+
+
+def test_saliente_crece_hacia_afuera_del_material():
+    """L136: con el boceto sobre la cara de arriba de la placa, la columna salía hacia abajo (−normal del plano) y
+    atravesaba la placa. Como el Boss de Fusion, crece hacia afuera del material; «Invertir» la da vuelta."""
+    from omnicad.ui.comandos.crear import Saliente
+    doc, punto = _placa_con_punto(2)
+    op = _ejecutar(doc, Saliente, posiciones=[punto], altura="10 mm")
+    assert op.p["sentido"] == "auto"
+    assert _alto_placa(doc) == pytest.approx((0, 12))
+    columna = math.pi * (4 ** 2 - 1.5 ** 2) * 10                     # Ø8 con agujero Ø3, 10 mm sobre la placa
+    assert g.volumen(doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(40 * 40 * 2 + columna, rel=1e-6)
+    doc, punto = _placa_con_punto(2)
+    _ejecutar(doc, Saliente, posiciones=[punto], altura="10 mm", invertir=True)
+    assert _alto_placa(doc) == pytest.approx((-8, 2))
+    doc, punto = _placa_con_punto(0)                                 # sobre la cara de abajo: crece hacia abajo
+    _ejecutar(doc, Saliente, posiciones=[punto], altura="10 mm")
+    assert _alto_placa(doc) == pytest.approx((-10, 2))
+    doc, punto = _placa_con_punto(20)                                # en el aire, sin altura: baja hasta la placa
+    _ejecutar(doc, Saliente, posiciones=[punto])
+    assert _alto_placa(doc) == pytest.approx((0, 20))
+
+
+def test_saliente_de_una_receta_vieja_conserva_su_sentido():
+    """Una receta guardada antes del sentido automático (sin «sentido») abre igual que antes: −normal del plano.
+    Editar ese paso no lo cambia; un saliente nuevo usa el automático."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Saliente
+    doc, punto = _placa_con_punto(2)
+    _ejecutar(doc, Saliente, posiciones=[punto], altura="10 mm")
+    receta = doc.a_dict()
+    del receta["operaciones"][-1]["params"]["sentido"]
+    vieja = Documento.desde_dict(receta)
+    op = vieja.operaciones[-1]
+    assert op.p["sentido"] == "plano" and vieja.resultados[-1].estado == "ok"
+    assert _alto_placa(vieja) == pytest.approx((-8, 2))
+    assert vieja.a_dict()["operaciones"][-1]["params"]["sentido"] == "plano"
+    cmd, ctx = Saliente(), ContextoComando(vieja, op=op)
+    assert cmd.construir(cmd.desde_op(op, ctx), ctx).p["sentido"] == "plano"
+    assert cmd.construir(cmd.desde_op(op, ctx), ContextoComando(vieja)).p["sentido"] == "auto"

@@ -158,8 +158,9 @@ class CentroMasa(Comando):
             c for c, cu in ctx.estado.cuerpos.items() if getattr(cu, "tipo", "solido") == "solido"]
         if not ids:
             return None, 0.0
-        dens = [an.TABLA_MATERIALES.get(ctx.doc.propiedad(c, "material") or "Acero", {"densidad": 7.85})["densidad"]
-                for c in ids]
+        def material(c):   # el Material físico asignado, si no el del cuerpo (fijación, regla de chapa), si no acero
+            return ctx.doc.propiedad(c, "material") or getattr(ctx.estado.cuerpos[c], "material", None) or "Acero"
+        dens = [an.TABLA_MATERIALES.get(material(c), {"densidad": 7.85})["densidad"] for c in ids]
         formas = [ctx.estado.cuerpos[c].forma for c in ids]
         masa = sum(an.propiedades_fisicas(f, d)["masa"] for f, d in zip(formas, dens, strict=True))
         return np.asarray(an.centro_de_masa(formas, dens), float), masa

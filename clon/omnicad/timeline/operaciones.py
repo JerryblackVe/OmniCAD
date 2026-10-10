@@ -17,6 +17,7 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
+from ..nucleo import referencias as refs
 from . import entidades as ent
 from ..nucleo.perfiles import buscar_por_firma, detectar
 from ..restricciones import Boceto, resolver
@@ -30,19 +31,64 @@ class ErrorOperacion(RuntimeError):
     pass
 
 
+class ParametroMalFormado(ErrorOperacion):
+    """Un parámetro del paso no tiene la forma esperada: texto donde va una referencia, None en una lista, un
+    dict sin sus claves… `valor` es el objeto que llegó; `Operacion.calcular` lo busca en los parámetros del
+    paso para nombrar el `campo` («pivote», «aristas[0]»)."""
+
+    def __init__(self, valor, detalle, campo=""):
+        self.valor, self.detalle, self.campo = valor, detalle, campo
+        donde = f" «{campo}»" if campo else ""
+        super().__init__(f"Parámetro mal formado{donde}: llegó {ent.describir_valor(valor)}; {detalle}")
+
+
+def id_cuerpo(valor):
+    """Id del cuerpo de un campo de cuerpos, que acepta las dos formas: el id (texto, p. ej. "op1.c1") o la
+    referencia {"tipo": "cuerpo", "cuerpo": "op1.c1"} (la de los campos de caras). Otra cosa: ParametroMalFormado."""
+    if isinstance(valor, str):
+        return valor
+    if isinstance(valor, dict) and valor.get("tipo") == "cuerpo" and isinstance(valor.get("cuerpo"), str):
+        return valor["cuerpo"]
+    raise ParametroMalFormado(valor, 'se esperaba un cuerpo: su id (texto, p. ej. "op1.c1") o '
+                                     '{"tipo": "cuerpo", "cuerpo": "op1.c1"}')
+
+
 # ---------------------------------------------------------------- estado del modelo
 class Cuerpo:
     """Cuerpo del modelo. `tipo`: "solido" | "superficie" | "malla" (como los cuerpos de Fusion).
     `apariencia` (color RGB 0..1) y `material` (nombre de la biblioteca) los fijan las operaciones
     Aspecto y Material físico; `componente` agrupa cuerpos (ENSAMBLAR › Nuevo componente)."""
 
-    def __init__(self, id, nombre, forma, op_id, tipo="solido", apariencia=None, material=None, componente=""):
+    def __init__(self, id, nombre, forma, op_id, tipo="solido", apariencia=None, material=None, componente="",
+                 origen=()):
         self.id, self.nombre, self.forma, self.op_id = id, nombre, forma, op_id
         self.tipo, self.apariencia, self.material, self.componente = tipo, apariencia, material, componente
+        self.origen = tuple(origen)     # ids de los cuerpos de los que es copia, el más cercano primero (solo memoria)
 
     def copia(self):
         return Cuerpo(self.id, self.nombre, self.forma, self.op_id, self.tipo, self.apariencia, self.material,
-                      self.componente)
+                      self.componente, self.origen)
+
+
+HEREDABLES = ("apariencia", "acabado", "material")     # propiedades que una copia toma de su original
+
+
+def atributos_copia(c):
+    """Atributos para `EstadoModelo.nuevo_cuerpo` de una copia de `c` (simetría, patrón, mover › copiar…):
+    hereda aspecto, material y componente, y recuerda de qué cuerpo sale."""
+    return {"apariencia": c.apariencia, "material": c.material, "componente": c.componente,
+            "origen": (c.id,) + tuple(getattr(c, "origen", ()))}
+
+
+def propiedades_cuerpo(propiedades, cuerpo):
+    """Propiedades del documento (`Documento.propiedades`) de `cuerpo`, con el aspecto, el acabado y el material
+    que no tenga propios tomados del cuerpo del que es copia (como en Fusion, la copia se ve como el original)."""
+    props = dict(propiedades.get(cuerpo.id) or {})
+    for oid in getattr(cuerpo, "origen", ()):
+        for k in HEREDABLES:
+            if k not in props and k in (propiedades.get(oid) or {}):
+                props[k] = propiedades[oid][k]
+    return props
 
 
 class BocetoResuelto:
@@ -91,6 +137,7 @@ class EstadoModelo:
         return cid
 
     def cuerpo(self, cid):
+        cid = id_cuerpo(cid)
         if cid not in self.cuerpos:
             raise ErrorOperacion(f"El cuerpo '{cid}' no existe en este punto del timeline.")
         return self.cuerpos[cid]
@@ -137,7 +184,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         return [estado.nuevo_cuerpo(op_id, s, tipo) for s in sols]
     if operacion not in OPERACIONES_COMBINAR:
         raise ErrorOperacion(f"Operación desconocida: {operacion}")
-    lista = [objetivo] if isinstance(objetivo, str) and objetivo else list(objetivo or [])
+    lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
     if lista:
         objetivos = [estado.cuerpo(o) for o in lista]
     else:
@@ -164,6 +211,8 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     for c in objetivos:
         if not lista and not geo.se_tocan(c.forma, herramienta):
             continue
+        if lista and operacion == "cortar" and not geo.se_tocan(c.forma, herramienta):
+            ctx.aviso(f"La herramienta no toca a {c.nombre}: no le cortó nada.")
         nueva = geo.booleano(c.forma, herramienta, operacion)
         if geo.esta_vacia(nueva):
             del estado.cuerpos[c.id]
@@ -177,12 +226,17 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
 
 
 def _dependencia_de_cuerpo(cid):
-    return cid.split(".c")[0] if cid else None
+    """Paso que creó el cuerpo (id o referencia de cuerpo); None si el valor no sirve."""
+    if isinstance(cid, dict):
+        cid = cid.get("cuerpo")
+    return cid.split(".c")[0] if cid and isinstance(cid, str) else None
 
 
 def _deps_objetivo(objetivo):
-    lista = [objetivo] if isinstance(objetivo, str) else list(objetivo or [])
-    return {_dependencia_de_cuerpo(c) for c in lista if c}
+    """Pasos de los que dependen los cuerpos de un campo (un id, una referencia o una lista de ellos).
+    Tolera valores mal formados: el error con el campo lo da la ejecución."""
+    lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo]
+    return {_dependencia_de_cuerpo(c) for c in lista} - {None}
 
 
 # ---------------------------------------------------------------- operaciones
@@ -192,6 +246,9 @@ class Operacion:
     ICONO = ""
     PARAMS = {}
     EXPRESIONES = ()   # claves de `p` que son expresiones (pueden usar parámetros)
+    # Claves de `p` con una lista cerrada de valores → los valores válidos (tupla o dict valor → etiqueta). Es la
+    # única fuente: `validar_opciones` la usa al calcular y describe_operation la muestra como «choices».
+    OPCIONES = {}
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
         self.id = id
@@ -215,6 +272,62 @@ class Operacion:
     def ejecutar(self, estado, ctx):
         raise NotImplementedError
 
+    def revisar_parametros(self):
+        """Revisión común de la forma: un parámetro cuyo valor por defecto es una lista (o un dict) tiene que
+        serlo; None tampoco vale (las recetas reales nunca lo guardan así)."""
+        for k, defecto in self.PARAMS.items():
+            v = self.p.get(k, defecto)
+            if isinstance(defecto, list) and not isinstance(v, (list, tuple)):
+                raise ParametroMalFormado(v, "tiene que ser una lista", k)
+            if isinstance(defecto, dict) and not isinstance(v, dict):
+                raise ParametroMalFormado(v, "tiene que ser un dict", k)
+
+    def validar_opciones(self):
+        """Cada clave de OPCIONES tiene que tener uno de sus valores válidos; si no, un error que nombra el campo y
+        los valores. None solo vale si el valor por defecto también es None (campo opcional)."""
+        for clave, validos in self.OPCIONES.items():
+            valor = self.p.get(clave, self.PARAMS.get(clave))
+            if valor is None and self.PARAMS.get(clave) is None:
+                continue
+            if valor not in list(validos):
+                raise ErrorOperacion(f"Valor no válido para «{clave}»: llegó {ent.describir_valor(valor)}. Valores "
+                                     f"válidos: {', '.join(map(str, validos))}.")
+
+    def entero(self, clave, minimo=1):
+        """El parámetro `clave` como entero: acepta un int, un float sin decimales o un texto de dígitos («3»).
+        Otra cosa, o menos que `minimo`, es un ErrorOperacion que nombra el campo."""
+        valor = self.p.get(clave, self.PARAMS.get(clave))
+        n = None
+        if isinstance(valor, (int, np.integer)) and not isinstance(valor, bool):
+            n = int(valor)
+        elif isinstance(valor, float) and valor.is_integer():
+            n = int(valor)
+        elif isinstance(valor, str):
+            try:
+                n = int(valor)
+            except ValueError:
+                pass
+        if n is None or (minimo is not None and n < minimo):
+            al_menos = f" (al menos {minimo})" if minimo is not None else ""
+            raise ErrorOperacion(f"«{clave}» tiene que ser un número entero{al_menos}: llegó "
+                                 f"{ent.describir_valor(valor)}.")
+        return n
+
+    def calcular(self, estado, ctx):
+        """`ejecutar` con la validación común (lo que usa el documento): revisa los contenedores y los valores de
+        lista cerrada (OPCIONES) y, si una referencia o un id de cuerpo llega mal formado, el error nombra el campo
+        del paso. No toca `self.p`."""
+        self.revisar_parametros()
+        self.validar_opciones()
+        try:
+            self.ejecutar(estado, ctx)
+        except (ParametroMalFormado, ent.ReferenciaMalFormada) as e:
+            if getattr(e, "campo", ""):
+                raise
+            raise ParametroMalFormado(e.valor, e.detalle, _ubicar(self.p, e.valor)) from e
+        except ent.ErrorReferencia as e:     # como_plano, como_eje…: una referencia del tipo equivocado
+            raise ErrorOperacion(str(e)) from e
+
     def copia(self):
         return operacion_desde_dict(self.a_dict())
 
@@ -223,12 +336,56 @@ class Operacion:
                 "params": copy.deepcopy(self.p)}
 
 
-def resolver_plano(ref, marco, estado):
-    """Plano de referencia: de origen ("XY", "XZ", "YZ"), una cara ("cara" + marco congelado) o un
-    plano de construcción del timeline (id de su operación)."""
+def _ubicar(p, valor):
+    """Campo de `p` que guarda `valor` (el MISMO objeto): «clave», «clave[i]» o «clave[i].sub»; "" si no está.
+    Un None, booleano o número puede estar en varios lados: se busca primero dentro de las listas y arriba
+    solo si una única clave lo tiene."""
+    escalar = valor is None or isinstance(valor, (bool, int, float))
+    arriba = [k for k, v in p.items() if v is valor]
+    if arriba and not escalar:
+        return arriba[0]
+    for k, v in p.items():
+        if not isinstance(v, (list, tuple)):
+            continue
+        for i, x in enumerate(v):
+            if x is valor:
+                return f"{k}[{i}]"
+            if isinstance(x, dict):
+                sub = next((s for s, y in x.items() if y is valor), None)
+                if sub is not None:
+                    return f"{k}[{i}].{sub}"
+    return arriba[0] if len(arriba) == 1 else ""
+
+
+def _plano_de_cara_asociada(cara, estado):
+    """Plano de la cara (referencia persistente, como la de los empalmes) recalculado en ESTE estado."""
+    ent.validar(cara)
+    cuerpo = estado.cuerpos.get(cara.get("cuerpo"))
+    if cuerpo is None:
+        raise ErrorOperacion(f"El cuerpo de la cara donde está el boceto («{cara.get('cuerpo')}») ya no existe "
+                             "en este punto del timeline.")
+    sub = refs.resolver(cuerpo.forma, cara)
+    if sub is None:
+        raise ErrorOperacion(f"El boceto perdió la cara de {cuerpo.nombre} donde estaba apoyado: la geometría "
+                             "cambió demasiado. Deshacé el cambio o volvé a crear el boceto sobre la cara.")
+    plano = geo.plano_de_cara(sub)
+    if plano is None:
+        raise ErrorOperacion(f"La cara de {cuerpo.nombre} donde está el boceto dejó de ser plana.")
+    return plano
+
+
+def resolver_plano(ref, marco, estado, cara=None):
+    """Plano de referencia: de origen ("XY", "XZ", "YZ"), una cara ("cara") o un plano de construcción del
+    timeline (id de su operación). Con `cara` (referencia persistente) el plano sigue a la cara en cada
+    recálculo, como en Fusion; sin ella (proyectos viejos) se usa el `marco` congelado al crear."""
+    if not isinstance(ref, str):
+        raise ParametroMalFormado(ref, 'se esperaba el plano como texto: "XY", "XZ", "YZ", "cara" o el id de un '
+                                       'plano de construcción (p. ej. "op3")')
     if ref in geo.Plano.DEFINICIONES:
         return geo.Plano(ref)
     if ref == "cara":
+        if cara:
+            return _plano_de_cara_asociada(cara, estado)
         if not marco:
             raise ErrorOperacion("Falta la definición del plano de la cara.")
         return geo.Plano.desde_marco(marco["origen"], marco["normal"], marco["u"])
@@ -239,7 +396,7 @@ def resolver_plano(ref, marco, estado):
 
 
 def _es_ref_operacion(ref):
-    return bool(ref) and ref not in geo.Plano.DEFINICIONES and ref != "cara"
+    return bool(ref) and isinstance(ref, str) and ref not in geo.Plano.DEFINICIONES and ref != "cara"
 
 
 class OpPlano(Operacion):
@@ -272,11 +429,14 @@ class OpPlano(Operacion):
 
 class OpBoceto(Operacion):
     """Crear boceto de Fusion: curvas 2D con restricciones y cotas sobre un plano de origen, una cara plana o
-    un plano de construcción. Sus perfiles cerrados alimentan Extruir, Revolución y los demás."""
+    un plano de construcción. Sus perfiles cerrados alimentan Extruir, Revolución y los demás. Sobre una cara
+    queda asociado a ella: si un parámetro la mueve o la gira, el boceto la sigue; si se pierde, el paso da error."""
     TIPO, ETIQUETA, ICONO = "boceto", "Boceto", "✎"
-    # plano: "XY" | "XZ" | "YZ" | "cara" (con `marco`) | id de un plano de construcción.
+    # plano: "XY" | "XZ" | "YZ" | "cara" (con `cara` y `marco`) | id de un plano de construcción.
+    # cara: referencia persistente a la cara (nucleo.referencias); `marco` queda de respaldo y es lo único que
+    # tienen los proyectos viejos (boceto con marco congelado).
     # desplazamiento: se conserva por compatibilidad con los proyectos anteriores (bocetos desfasados).
-    PARAMS = {"plano": "XY", "desplazamiento": "0", "marco": None}
+    PARAMS = {"plano": "XY", "desplazamiento": "0", "marco": None, "cara": None}
     EXPRESIONES = ("desplazamiento",)
 
     def __init__(self, id, nombre=None, suprimida=False, boceto=None, **params):
@@ -294,10 +454,12 @@ class OpBoceto(Operacion):
         deps = super().dependencias()
         if _es_ref_operacion(self.p["plano"]):
             deps.add(self.p["plano"])
+        if self.p["plano"] == "cara":
+            deps |= ent.dependencias_de(self.p.get("cara"))
         return deps
 
     def plano(self, estado, ctx):
-        base = resolver_plano(self.p["plano"], self.p.get("marco"), estado)
+        base = resolver_plano(self.p["plano"], self.p.get("marco"), estado, self.p.get("cara"))
         d = ctx.evaluar(self.p["desplazamiento"])
         return base.desplazado(d) if d else base
 
@@ -318,18 +480,35 @@ class OpBoceto(Operacion):
         return d
 
 
-def _resolver(ref, estado):
-    try:
-        return ent.resolver(ref, estado)
-    except ent.ErrorReferencia as e:
-        raise ErrorOperacion(str(e)) from e
+def _exigir_tipos(ref, tipos):
+    """Con `tipos` (p. ej. ("cara",)), una referencia bien formada de otro tipo es un ParametroMalFormado: sin esto,
+    un cuerpo en un campo de caras llega al núcleo y OCP falla con un TypeError sin nombre de campo."""
+    if tipos and ref["tipo"] not in tipos:
+        raise ParametroMalFormado(ref, f"se esperaba una referencia de tipo {' o '.join(tipos)}, no «{ref['tipo']}» "
+                                       f"(p. ej. {ent._EJEMPLOS[tipos[0]]})")
 
 
-def _resolver_todas(lista, estado):
+def _resolver(ref, estado, tipos=()):
     try:
-        return ent.resolver_todas(lista, estado)
+        e = ent.resolver(ref, estado)
+    except ent.ReferenciaMalFormada as e:
+        raise ParametroMalFormado(e.valor, e.detalle) from e
     except ent.ErrorReferencia as e:
         raise ErrorOperacion(str(e)) from e
+    _exigir_tipos(ref, tipos)
+    return e
+
+
+def _resolver_todas(lista, estado, tipos=()):
+    try:
+        salida = ent.resolver_todas(lista, estado)
+    except ent.ReferenciaMalFormada as e:
+        raise ParametroMalFormado(e.valor, e.detalle) from e
+    except ent.ErrorReferencia as e:
+        raise ErrorOperacion(str(e)) from e
+    for ref in lista or []:
+        _exigir_tipos(ref, tipos)
+    return salida
 
 
 def _caja_todo(estado):
@@ -354,7 +533,7 @@ class _OpConPerfiles(Operacion):
 
     def dependencias(self):
         deps = super().dependencias()
-        if self.p.get("boceto"):
+        if self.p.get("boceto") and isinstance(self.p["boceto"], str):
             deps.add(self.p["boceto"])
         deps |= _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("objetivos"))
         deps |= ent.dependencias_de(self.p.get("caras"), self.p.get("hasta"), self.p.get("inicio_objeto"),
@@ -364,12 +543,17 @@ class _OpConPerfiles(Operacion):
     def _caras(self, estado):
         """(plano, caras): los perfiles elegidos y las caras planas elegidas, todos coplanares."""
         caras, plano = [], None
+        if self.p.get("boceto") is not None and not isinstance(self.p["boceto"], str):    # [] y {} también
+            raise ParametroMalFormado(self.p["boceto"], 'se esperaba el id del boceto (texto, p. ej. "op1")')
         if self.p.get("perfiles"):
             br = estado.bocetos.get(self.p["boceto"])
             if br is None:
                 raise ErrorOperacion("El boceto de referencia no está disponible (¿borrado, suprimido o después del "
                                      "marcador?).")
             for ref in self.p["perfiles"]:
+                detalle = ent.problema_perfil(ref)
+                if detalle:
+                    raise ParametroMalFormado(ref, detalle)
                 perfil = buscar_por_firma(br.perfiles, ref["firma"], ref.get("centroide"))
                 if perfil is None:
                     raise ErrorOperacion("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
@@ -408,6 +592,10 @@ class OpExtrusion(_OpConPerfiles):
               "hasta_modo": "cara", "desfase_hasta": "0 mm", "curvas": [],
               "simetrica": False, "operacion": "nuevo", "objetivo": "", "objetivos": []}
     EXPRESIONES = ("distancia", "distancia2", "desfase_inicio", "conicidad", "conicidad2", "espesor", "desfase_hasta")
+    OPCIONES = {"tipo": ("solida", "delgada"), "inicio": ("plano", "desfase", "objeto"), "direccion": DIRECCIONES,
+                "medida": ("mitad", "total"), "extension": ("distancia", "objeto", "todo"),
+                "extension2": ("distancia", "objeto", "todo"), "hasta_modo": ("cara", "cuerpo", "a_traves"),
+                "ubicacion": ("lado1", "lado2", "centro"), "operacion": OPERACIONES_CUERPO}
 
     def expresiones(self):
         return [self.p[k] for k in self.EXPRESIONES if k in self.p]
@@ -477,6 +665,7 @@ class OpExtrusion(_OpConPerfiles):
 
 
 def _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase):
+    geo.exigir_distancias_extrusion(direccion, d1, d2, medida)     # con el campo y el valor escritos
     if abs(desfase) > 1e-12:
         caras = [geo.trasladar(c, n * desfase) for c in caras]
     if direccion == "simetrica":
@@ -494,6 +683,7 @@ class OpRevolucion(_OpConPerfiles):
               "angulo": "360 deg", "direccion": "un_lado", "angulo2": "90 deg", "invertir": False,
               "operacion": "nuevo", "objetivo": "", "objetivos": []}
     EXPRESIONES = ("angulo", "angulo2")
+    OPCIONES = {"extension": ("angulo", "completa"), "direccion": DIRECCIONES, "operacion": OPERACIONES_CUERPO}
 
     def expresiones(self):
         return [self.p[k] for k in self.EXPRESIONES if k in self.p]
@@ -532,7 +722,10 @@ class OpRevolucion(_OpConPerfiles):
 
 class OpPrimitiva(Operacion):
     """Caja, Cilindro, Esfera y Toroide de Fusion (CREAR): primitiva con sus medidas y posición (x, y, z) como
-    cuerpo nuevo o unida, cortada o intersecada con los cuerpos existentes."""
+    cuerpo nuevo o unida, cortada o intersecada con los cuerpos existentes.
+
+    Caja: (x, y, z) es la esquina mínima; con caja_centrada (lo que guarda create_box) (x, y) es el centro de la
+    base y z la base. ancho = tamaño en X, largo = en Y, alto = en Z."""
     TIPO, ETIQUETA, ICONO = "primitiva", "Primitiva", "■"
     CAMPOS = {
         "caja": ["ancho", "largo", "alto"],
@@ -544,7 +737,8 @@ class OpPrimitiva(Operacion):
     ICONOS = {"caja": "■", "cilindro": "◯", "esfera": "●", "toroide": "◎"}
     PARAMS = {"forma": "caja", "ancho": "20 mm", "largo": "20 mm", "alto": "20 mm", "radio": "10 mm",
               "radio_mayor": "20 mm", "radio_menor": "5 mm", "x": "0", "y": "0", "z": "0",
-              "operacion": "nuevo", "objetivo": ""}
+              "operacion": "nuevo", "objetivo": "", "caja_centrada": False}
+    OPCIONES = {"forma": CAMPOS, "operacion": OPERACIONES_CUERPO}
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
         forma = params.get("forma", "caja")
@@ -557,10 +751,7 @@ class OpPrimitiva(Operacion):
         return self.ICONOS.get(self.p["forma"], "■")
 
     def dependencias(self):
-        deps = super().dependencias()
-        if self.p.get("objetivo"):
-            deps.add(_dependencia_de_cuerpo(self.p["objetivo"]))
-        return deps
+        return super().dependencias() | _deps_objetivo(self.p.get("objetivo"))
 
     def expresiones(self):
         return [self.p[k] for k in self.CAMPOS.get(self.p["forma"], []) + ["x", "y", "z"]]
@@ -570,6 +761,8 @@ class OpPrimitiva(Operacion):
         pos = (v["x"], v["y"], v["z"])
         f = self.p["forma"]
         if f == "caja":
+            if self.p.get("caja_centrada"):         # create_box: (x, y) es el centro de la base
+                pos = (v["x"] - v["ancho"] / 2, v["y"] - v["largo"] / 2, v["z"])
             forma = geo.caja(v["ancho"], v["largo"], v["alto"], pos)
         elif f == "cilindro":
             forma = geo.cilindro(v["radio"], v["alto"], pos)
@@ -586,19 +779,22 @@ class OpCombinar(Operacion):
     """Equivalente a CombineFeature: cuerpo objetivo + herramientas + operación + mantener herramientas."""
     TIPO, ETIQUETA, ICONO = "combinar", "Combinar", "⊕"
     PARAMS = {"objetivo": "", "herramientas": [], "operacion": "unir", "mantener": False}
+    OPCIONES = {"operacion": OPERACIONES_COMBINAR}
 
     def dependencias(self):
-        return {_dependencia_de_cuerpo(c) for c in [self.p["objetivo"]] + list(self.p["herramientas"]) if c}
+        return _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("herramientas"))
 
     def ejecutar(self, estado, ctx):
         if not self.p["objetivo"] or not self.p["herramientas"]:
             raise ErrorOperacion("Elegí un cuerpo objetivo y al menos una herramienta.")
-        if self.p["objetivo"] in self.p["herramientas"]:
-            raise ErrorOperacion("El objetivo no puede ser también herramienta.")
         objetivo = estado.cuerpo(self.p["objetivo"])
         herramientas = [estado.cuerpo(h) for h in self.p["herramientas"]]
+        if any(h.id == objetivo.id for h in herramientas):
+            raise ErrorOperacion("El objetivo no puede ser también herramienta.")
         resultado = objetivo.forma
         for h in herramientas:
+            if self.p["operacion"] == "cortar" and not geo.se_tocan(resultado, h.forma):
+                ctx.aviso(f"{h.nombre} no toca a {objetivo.nombre}: no le cortó nada.")
             resultado = geo.booleano(resultado, h.forma, self.p["operacion"])
         if geo.esta_vacia(resultado):
             raise ErrorOperacion("El resultado quedó vacío (¿los cuerpos no se intersecan?).")
@@ -636,7 +832,11 @@ class OpImportarSTEP(Operacion):
 class OpOperacionBase(Operacion):
     """Crear operación base de Fusion [SLD-CREATE-BASE-FEATURE]: los cuerpos quedan guardados tal cual (B-rep
     dentro de la receta) y dejan de depender de los pasos anteriores. Si el cuerpo original sigue existiendo
-    se reemplaza con la copia congelada (mismo id); si no, se agrega."""
+    se reemplaza con la copia congelada (mismo id); si no, se agrega.
+
+    `cuerpos`: lista de copias congeladas {"id", "nombre", "tipo" ("solido"|"superficie"), "apariencia",
+    "brep" (texto B-rep de OpenCascade)}. Por run_operation alcanza con los ids o nombres de los cuerpos
+    (["op1.c1"]): se congelan en ese momento. Las mallas no entran."""
     TIPO, ETIQUETA, ICONO = "operacion_base", "Operación base", "▣"
     PARAMS = {"cuerpos": []}
 
@@ -650,6 +850,9 @@ class OpOperacionBase(Operacion):
 
     def ejecutar(self, estado, ctx):
         for d in self.p["cuerpos"]:
+            if not isinstance(d, dict) or not isinstance(d.get("id"), str) or not isinstance(d.get("brep"), str):
+                raise ParametroMalFormado(d, 'se esperaba un cuerpo congelado: {"id": "op1.c1", "brep": "…", …} (lo '
+                                             'arma Crear operación base, no se escribe a mano)')
             forma = intercambio.forma_de_texto(d["brep"])
             if d["id"] in estado.cuerpos:
                 estado.cuerpos[d["id"]].forma = forma

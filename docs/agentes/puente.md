@@ -66,8 +66,8 @@ El estado de la app (`app`): `document`, `path`, `modified`, `bodies`, `timeline
 
 ## Qué cambia en vivo
 
-- **`new_document` y `open_document`** cambian lo que muestra la ventana. Si el documento de la ventana tiene cambios sin guardar, fallan con `UNSAVED_CHANGES`: no se descarta nada.
-- **`execute_code` está apagado** salvo que se active Preferencias › General › «Permitir también execute_code en vivo» (`general/puente_codigo`). Corre Python dentro de la ventana: un bucle infinito la congelaría, con tu trabajo adentro. Sin ventana no tiene ese riesgo.
+- **`new_document` y `open_document`** cambian lo que muestra la ventana. Si el documento de la ventana tiene cambios sin guardar, fallan con `UNSAVED_CHANGES`: no se descarta nada. Con `discard=true` los descartan (es la misma regla que sin ventana); en vivo, mejor que lo decida el usuario.
+- **`execute_code` está apagado** salvo que se active Preferencias › General › «Permitir también execute_code en vivo» (`general/puente_codigo`). Corre Python dentro de la ventana, que no responde mientras corre. Se corta a los `timeout` segundos (60 por defecto, como mucho 100 en vivo; `null` se rechaza) con `CODE_TIMEOUT`, y el documento vuelve a como estaba. Sin ventana no tiene ese riesgo.
 - **`get_viewport_image`** en vivo usa el mismo render por software que sin ventana. Para ver la interfaz tal como la ves vos, `app_screenshot` (grupo `dev`).
 - **El grupo `dev` nunca corre en vivo**: corre en el proceso del servidor MCP (pytest, capturas).
 - Las herramientas que **solo leen** funcionan siempre. Las que **modifican** se rechazan con `APP_BUSY` si estás usando la app (abajo).
@@ -82,7 +82,7 @@ Se suman a los errores de la API ([guia_diseno.md](guia_diseno.md)). Siempre vue
 | `APP_BUSY` | una herramienta que **modifica** llegó mientras tenés un comando abierto, editás un boceto, elegís un plano en la vista o hay un diálogo modal | esperar o pedirle al usuario que termine; las de lectura siguen andando |
 | `APP_NOT_RUNNING` | no hay app escuchando según `puente.json` | abrir OmniCAD con `--puente`, o usar `--modo sin_ventana` |
 | `APP_NOT_RESPONDING` | la app no contestó en 120 s (se corta esa conexión) | revisar si la app está colgada; reintentar |
-| `UNSAVED_CHANGES` | `new_document` u `open_document` con cambios sin guardar en la ventana | guardar en la ventana, o pedirle al usuario que decida |
+| `UNSAVED_CHANGES` | `new_document` u `open_document` con cambios sin guardar en la ventana (sin ventana pasa lo mismo) | guardar en la ventana, o pedirle al usuario que decida; `discard=true` los descarta |
 | `LIVE_NOT_ALLOWED` | `execute_code` sin la preferencia `general/puente_codigo`, o una herramienta del grupo `dev` | usar herramientas normales; para `dev`, correr sin pasar por el puente |
 | `BRIDGE_ERROR` | se cortó la conexión a mitad de una llamada, o la respuesta vino mal | **no se sabe si se aplicó**: mirar `get_scene_info` o `get_timeline` antes de repetir |
 

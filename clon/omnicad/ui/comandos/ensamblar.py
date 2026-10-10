@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
 """Comandos de ENSAMBLAR: nuevo componente, unión, unión como está, origen de unión, grupo rígido,
 accionar uniones, vínculo de movimiento y fijar componente."""
+from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (MOVIMIENTOS, TIPOS_UNION, OpComponente, OpGrupoRigido, OpOrigenUnion,
-                                       OpUnion, OpVinculoMovimiento)
+                                       OpUnion, OpVinculoMovimiento, componente_por_ref)
 from ...timeline.parametros import ANGULO
 from ..comando import Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits, ref1
 from . import registrar
 
 SNAP = {"cara", "arista", "vertice", "plano", "eje", "punto", "curva_boceto"}
 EJES = {"Z": "Z", "X": "X", "Y": "Y"}
-CLAVES = {"centro": "Centro / punto medio", "inicio": "Inicio de arista", "fin": "Fin de arista"}
+CLAVES = {"centro": "Centro / punto medio", "inicio": "Inicio (arista o cilindro)", "fin": "Fin (arista o cilindro)"}
 
 
 def _hits_cuerpos(ids, estado):
     return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
+
+
+def _version(ctx, clase, clave):
+    """Al editar, la versión de cálculo del paso (una receta vieja no cambia de marco); un paso nuevo usa
+    la actual (la de PARAMS)."""
+    return ctx.op.p.get(clave, 1) if ctx.op is not None else clase.PARAMS[clave]
 
 
 def _gira(v):
@@ -82,7 +89,9 @@ class Union(Comando):
     def campos(self, ctx):
         campos = [Seleccion("origen1", "Componente 1: ajuste", SNAP),
                   Opciones("clave1", "Punto de ajuste 1", CLAVES)]
-        if not self.COMO_ESTA:
+        if self.COMO_ESTA:
+            campos += [Seleccion("origen2", "Componente 2 (elegí un cuerpo)", {"cuerpo"})]
+        else:
             campos += [Seleccion("origen2", "Componente 2: ajuste", SNAP),
                        Opciones("clave2", "Punto de ajuste 2", CLAVES),
                        Expresion("angulo", "Ángulo", "0 deg", ANGULO), Expresion("dx", "Desfase X", "0 mm"),
@@ -92,14 +101,14 @@ class Union(Comando):
 
     def construir(self, v, ctx):
         exigir(v, "origen1", "Seleccioná el origen en el componente 1.")
-        if not self.COMO_ESTA:
-            exigir(v, "origen2", "Seleccioná el origen en el componente 2.")
+        exigir(v, "origen2", "Seleccioná un cuerpo del componente 2." if self.COMO_ESTA else
+               "Seleccioná el origen en el componente 2.")
         _validar(v, ctx)
         params = {k: v.get(k) for k in _MOVIMIENTO}
-        params.update(origen1=ref1(v, "origen1"), clave1=v.get("clave1", "centro"), como_esta=self.COMO_ESTA)
+        params.update(origen1=ref1(v, "origen1"), clave1=v.get("clave1", "centro"), como_esta=self.COMO_ESTA,
+                      origen2=ref1(v, "origen2"), version_marco=_version(ctx, OpUnion, "version_marco"))
         if not self.COMO_ESTA:
-            params.update({k: v.get(k) for k in ("angulo", "dx", "dy", "dz", "voltear", "clave2")},
-                          origen2=ref1(v, "origen2"))
+            params.update({k: v.get(k) for k in ("angulo", "dx", "dy", "dz", "voltear", "clave2")})
         return self.crear_op(OpUnion, v, ctx, **params)
 
     def desde_op(self, op, ctx):
@@ -111,8 +120,10 @@ class Union(Comando):
 
 class UnionComoEsta(Union):
     CLAVE, TITULO, ICONO, ATAJO = "union_construida", "Unión como está", "union_construida", "Shift+J"
-    AYUDA = "Une dos componentes en la posición en que están y define su movimiento."
+    AYUDA = ("Une dos componentes en la posición en que están y define su movimiento. El componente 1 es "
+             "la pieza que sigue al componente 2 cuando este se mueve.")
     COMO_ESTA = True
+    VARIANTE = ("como_esta", True)      # doble clic en el timeline: edita con este diálogo, no con el de Unión
 
 
 class OrigenUnion(Comando):
@@ -128,6 +139,7 @@ class OrigenUnion(Comando):
     def construir(self, v, ctx):
         exigir(v, "origen", "Seleccioná dónde va el origen.")
         return self.crear_op(OpOrigenUnion, v, ctx, origen=ref1(v, "origen"),
+                             version_marco=_version(ctx, OpOrigenUnion, "version_marco"),
                              **{k: v[k] for k in ("clave", "angulo", "dx", "dy", "dz")})
 
     def desde_op(self, op, ctx):
@@ -158,7 +170,13 @@ class GrupoRigido(Comando):
         return self.crear_op(OpGrupoRigido, v, ctx, componentes=comps)
 
     def desde_op(self, op, ctx):
-        ids = [next((c for c, cu in ctx.estado.cuerpos.items() if cu.componente == k), None) for k in op.p["componentes"]]
+        comps = []
+        for ref in op.p["componentes"]:
+            try:
+                comps.append(componente_por_ref(ctx.estado, ref))    # id, nombre o cuerpo del componente
+            except ErrorOperacion:
+                pass
+        ids = [next((c for c, cu in ctx.estado.cuerpos.items() if cu.componente == k), None) for k in comps if k]
         return dict(op.p, cuerpos=_hits_cuerpos([i for i in ids if i], ctx.estado))
 
 
@@ -216,7 +234,8 @@ class VinculoMovimiento(Comando):
         if v["union1"] == v["union2"]:
             raise ErrorComando("Elegí dos uniones distintas.")
         return self.crear_op(OpVinculoMovimiento, v, ctx, union1=v["union1"], union2=v["union2"], factor=v["factor"],
-                             invertir=v["invertir"])
+                             invertir=v["invertir"],
+                             version_vinculo=_version(ctx, OpVinculoMovimiento, "version_vinculo"))
 
 
 class FijarComponente(Comando):
