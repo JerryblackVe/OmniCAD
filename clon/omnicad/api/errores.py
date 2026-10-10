@@ -121,6 +121,19 @@ PISTAS = {
     "REFERENCE_LOST": ["Una cara o arista elegida antes ya no existe: la geometría cambió demasiado.",
                        "Volvé a elegirla con find_faces / find_edges y editá el paso (edit_feature) o rehacelo.",
                        "El documento quedó como estaba."],
+    # --- ensamble, chapa y materiales
+    "COMPONENT_NOT_FOUND": ["get_assembly lista los componentes con su id, nombre y cuerpos.",
+                            "create_component crea un componente con cuerpos."],
+    "JOINT_NOT_FOUND": ["get_assembly lista las uniones con su id, nombre y tipo.",
+                        "create_joint crea una unión entre dos componentes."],
+    "MATERIAL_NOT_FOUND": ["list_materials lista los materiales físicos con su densidad.",
+                           "define_material crea un material propio (nombre y densidad en g/cm³)."],
+    "SHEET_METAL_RULE_NOT_FOUND": ["list_sheet_metal_rules lista las reglas (de fábrica, propias y del documento).",
+                                   "create_sheet_metal_rule crea una regla propia (espesor, factor K, radio, material)."],
+    "NOT_SHEET_METAL": ["get_sheet_metal_info lista los cuerpos de chapa.",
+                        "Creá chapa con create_base_flange / create_contour_flange o convertí una placa con "
+                        "convert_to_sheet_metal."],
+    "NAME_EXISTS": ["Pasá overwrite=true para reemplazarlo, o elegí otro nombre."],
     # --- inspección y avanzado
     "NOTHING_TO_RENDER": ["Creá al menos un cuerpo antes de pedir la imagen (get_scene_info lista los cuerpos).",
                           "Si pasaste bodies, revisá que existan y tengan caras."],

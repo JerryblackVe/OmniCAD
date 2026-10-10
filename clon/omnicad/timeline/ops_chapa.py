@@ -15,8 +15,8 @@ from OCP.BRepAdaptor import BRepAdaptor_Curve
 from ..nucleo import chapa
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .operaciones import (ANGULO, Cuerpo, ErrorOperacion, Operacion, _deps_objetivo, _resolver, _resolver_todas,
-                          registrar_operacion)
+from .operaciones import (ANGULO, Cuerpo, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _resolver,
+                          _resolver_todas, registrar_operacion)
 from .parametros import ESCALAR, LONGITUD
 
 
@@ -101,9 +101,21 @@ def _ajustes(p, ctx):
     return salida
 
 
+def _definicion(p):
+    """La regla propia copiada en el paso («regla_propia», la de `chapa.definicion_regla`), si es la de `regla`.
+    Si el nombre ya no coincide (alguien eligió otra regla de la biblioteca), manda el nombre."""
+    d = p.get("regla_propia")
+    if d is None:
+        return None
+    if not isinstance(d, dict):
+        raise ParametroMalFormado(d, "tiene que ser un dict con la regla propia (espesor, k, material…) o null",
+                                  "regla_propia")
+    return d if d.get("nombre") == (p.get("regla") or chapa.REGLA_DEFECTO) else None
+
+
 def _regla(p, ctx):
-    """Regla de la operación: la de la biblioteca (`regla`) con sus ajustes."""
-    return chapa.regla(p.get("regla") or chapa.REGLA_DEFECTO, **_ajustes(p, ctx))
+    """Regla de la operación: la de la biblioteca (`regla`) o la propia copiada en el paso, con sus ajustes."""
+    return chapa.regla(p.get("regla") or chapa.REGLA_DEFECTO, _definicion(p), **_ajustes(p, ctx))
 
 
 def _expresiones_ajustes(p):
@@ -146,10 +158,11 @@ class OpPestana(_OpChapa):
     (orientación lado 1, lado 2 o centro); "contorno": curvas abiertas de un boceto → chapa plegada extruida
     (distancia, dirección); "arista": aristas de chapa → pestaña (altura, ángulo, referencia de altura, posición
     del pliegue, ancho, invertir y anular radio y alivio de la regla). La base y el contorno crean cuerpos nuevos
-    con la regla elegida (`regla` + `ajustes`)."""
+    con la regla elegida (`regla` + `ajustes`; una regla propia viaja copiada en `regla_propia`)."""
     TIPO, ETIQUETA, ICONO = "pestana", "Pestaña", "▭"
     PARAMS = {"tipo": "base", "perfiles": [], "curvas": [], "aristas": [], "orientacion": "lado1",
-              "regla": chapa.REGLA_DEFECTO, "ajustes": {}, "distancia": "20 mm", "direccion": "un_lado",
+              "regla": chapa.REGLA_DEFECTO, "regla_propia": None, "ajustes": {}, "distancia": "20 mm",
+              "direccion": "un_lado",
               "distancia2": "10 mm", "altura": "20 mm", "angulo": "90 deg", "referencia": "exterior",
               "posicion": "interior", "ancho": "completo", "ancho_distancia": "20 mm", "ancho1": "10 mm",
               "ancho2": "10 mm", "invertir": False, "anular": False, "radio": "", "alivio_forma": "",
@@ -350,9 +363,10 @@ def _al_lado(estado, cuerpo, forma, eje):
 
 class OpConvertirChapa(_OpChapa):
     """CHAPA › CREAR › Convertir a chapa [SM-TO-CONVERT-TO-SM]: una placa plana de espesor constante pasa a ser de
-    chapa; el espesor se mide desde la cara elegida y reemplaza al de la regla plantilla."""
+    chapa; el espesor se mide desde la cara elegida y reemplaza al de la regla plantilla (de la biblioteca o propia,
+    copiada en `regla_propia`)."""
     TIPO, ETIQUETA, ICONO = "convertir_chapa", "Convertir a chapa", "⇄"
-    PARAMS = {"cara": None, "regla": chapa.REGLA_DEFECTO, "ajustes": {}}
+    PARAMS = {"cara": None, "regla": chapa.REGLA_DEFECTO, "regla_propia": None, "ajustes": {}}
     REFS = ("cara",)
 
     def ejecutar(self, estado, ctx):
@@ -365,7 +379,8 @@ class OpConvertirChapa(_OpChapa):
         if c.tipo != "solido":
             raise ErrorOperacion("Solo se convierten cuerpos sólidos.")
         ajustes = {k: v for k, v in _ajustes(self.p, ctx).items() if k != "espesor"}   # el espesor se mide
-        m = chapa.convertir(c.forma, e.forma, self.p.get("regla") or chapa.REGLA_DEFECTO, **ajustes)
+        m = chapa.convertir(c.forma, e.forma, self.p.get("regla") or chapa.REGLA_DEFECTO, _definicion(self.p),
+                            **ajustes)
         m["op_regla"] = self.id
         _guardar(c, m)
         c.material = m["regla"].get("material") or c.material      # el de la regla plantilla

@@ -409,3 +409,15 @@ def test_perno_contra_un_eje_de_construccion_queda_igual_que_contra_el_agujero()
     R = np.asarray(doc.estado_final.componentes["op5"]["matriz"])[:3, :3]
     assert R == pytest.approx(np.identity(3), abs=1e-9)
     assert g.es_valida(doc.estado_final.cuerpos["op3.c1"].forma)
+
+
+def test_insertar_diseno_fijo_no_se_mueve():
+    """«Fijar» también vale para un diseño insertado (antes su componente quedaba siempre libre)."""
+    otro = Documento()
+    otro.agregar(OpPrimitiva(otro.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    doc = _doc_dos_cajas()
+    doc.agregar(OpInsertarDiseno(doc.nuevo_id(), "Insertar pieza", archivo="pieza", receta=otro.a_dict(), fijo=True))
+    assert doc.estado_final.componentes["op5"]["fijo"] is True
+    res = doc.agregar(OpUnion(doc.nuevo_id(), "Mal", tipo="rigida", origen1=_cara(doc, "op5.c1", (5, 5, 0)),
+                              origen2=_cara(doc, "op1.c1", (20, 20, 10))))
+    assert res.estado == "error" and "fijo" in res.mensaje

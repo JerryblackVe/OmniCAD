@@ -61,7 +61,111 @@ TABLA_MATERIALES = {
     "Vidrio": {"densidad": 2.50, "color": (0.70, 0.85, 0.85)},
     "Titanio": {"densidad": 4.51, "color": (0.55, 0.55, 0.58)},
     "Hierro fundido": {"densidad": 7.20, "color": (0.35, 0.35, 0.36)},
+    # Gomas y elastómeros: valores TÍPICOS de compuestos comerciales (cambian con la carga y la dureza Shore; una
+    # junta de EPDM va de 1,1 a 1,4 g/cm³ y una silicona de 1,1 a 1,5). Para un valor exacto, un material propio.
+    "Goma natural": {"densidad": 0.93, "color": (0.10, 0.10, 0.10)},
+    "Goma EPDM": {"densidad": 1.15, "color": (0.12, 0.12, 0.13)},
+    "Neopreno": {"densidad": 1.23, "color": (0.15, 0.15, 0.16)},
+    "Silicona": {"densidad": 1.15, "color": (0.88, 0.86, 0.82)},
+    "TPU": {"densidad": 1.21, "color": (0.20, 0.20, 0.22)},           # TPU 95A de impresión: 1,20 a 1,22
+    # Otros plásticos comunes (densidad típica de tablas de proveedores).
+    "Polipropileno": {"densidad": 0.90, "color": (0.92, 0.92, 0.90)},
+    "Polietileno HDPE": {"densidad": 0.95, "color": (0.94, 0.94, 0.93)},
+    "POM (acetal)": {"densidad": 1.41, "color": (0.95, 0.95, 0.93)},
+    "Acrílico (PMMA)": {"densidad": 1.18, "color": (0.88, 0.94, 0.97)},
 }
+MATERIALES_BASE = frozenset(TABLA_MATERIALES)   # los de fábrica: no se redefinen ni se borran
+VAR_MATERIALES = "OMNICAD_MATERIALES"           # otra ruta para el .json de materiales propios (pruebas, carpeta compartida)
+DENSIDAD_MAXIMA = 25.0                          # g/cm³ (el osmio, lo más denso que hay, tiene 22,6)
+
+
+def ruta_materiales_propios():
+    """El .json de los materiales propios: la variable OMNICAD_MATERIALES o «materiales.json» en la carpeta de datos
+    de la app (%LOCALAPPDATA%/OmniCAD o ~/.local/share/OmniCAD)."""
+    import os
+    from pathlib import Path
+    from .. import carpeta_datos
+    return Path(os.environ[VAR_MATERIALES]) if os.environ.get(VAR_MATERIALES) else carpeta_datos() / "materiales.json"
+
+
+def _color_valido(color):
+    if color is None:
+        return (0.60, 0.60, 0.62)
+    try:
+        c = tuple(float(x) for x in color)
+    except (TypeError, ValueError):
+        raise geo.ErrorGeometria("El color va como [r, g, b] con valores de 0 a 1.") from None
+    if len(c) != 3 or not all(math.isfinite(x) and 0.0 <= x <= 1.0 for x in c):
+        raise geo.ErrorGeometria("El color va como [r, g, b] con valores de 0 a 1.")
+    return c
+
+
+def material_propio(nombre, densidad, color=None):
+    """(nombre limpio, {"densidad", "color"}) de un material propio validado. Errores: ErrorGeometria."""
+    nombre = str(nombre or "").strip()
+    if not nombre:
+        raise geo.ErrorGeometria("El material necesita un nombre.")
+    if len(nombre) > 80:
+        raise geo.ErrorGeometria("El nombre del material es demasiado largo (máximo 80 caracteres).")
+    try:
+        densidad = float(densidad)
+    except (TypeError, ValueError):
+        raise geo.ErrorGeometria(f"La densidad tiene que ser un número (g/cm³): llegó {densidad!r}.") from None
+    if not math.isfinite(densidad) or not 0.0 < densidad <= DENSIDAD_MAXIMA:
+        raise geo.ErrorGeometria(f"La densidad va en g/cm³, mayor que 0 y hasta {DENSIDAD_MAXIMA:g} "
+                                 f"(recibió {densidad:g}).")
+    return nombre, {"densidad": densidad, "color": _color_valido(color)}
+
+
+def es_material_propio(nombre):
+    return nombre in TABLA_MATERIALES and nombre not in MATERIALES_BASE
+
+
+def definir_material(nombre, densidad, color=None, guardar=True):
+    """Material físico propio (Administrar materiales de Fusion › material nuevo en la biblioteca del usuario):
+    suma o reemplaza una entrada de TABLA_MATERIALES, así la masa, la lista de materiales y el visor lo usan como
+    a los de fábrica (que no se pueden pisar). `guardar` lo escribe en `ruta_materiales_propios()` para las
+    próximas sesiones. Devuelve (nombre, datos)."""
+    nombre, datos = material_propio(nombre, densidad, color)
+    if any(nombre.casefold() == b.casefold() for b in MATERIALES_BASE):
+        raise geo.ErrorGeometria(f"«{nombre}» es un material de fábrica: elegí otro nombre para el material propio.")
+    TABLA_MATERIALES[nombre] = datos
+    if guardar:
+        from .chapa import escribir_biblioteca_json
+        escribir_biblioteca_json(ruta_materiales_propios(), "materiales", nombre,
+                       {"densidad": datos["densidad"], "color": list(datos["color"])})
+    return nombre, datos
+
+
+def quitar_material(nombre, guardar=True):
+    """Saca un material propio de la tabla (y del .json con `guardar`). Los de fábrica no se quitan."""
+    if not es_material_propio(nombre):
+        raise geo.ErrorGeometria(f"No hay un material propio llamado «{nombre}».")
+    del TABLA_MATERIALES[nombre]
+    if guardar:
+        from .chapa import escribir_biblioteca_json
+        escribir_biblioteca_json(ruta_materiales_propios(), "materiales", nombre, None)
+
+
+def cargar_materiales_propios(ruta=None):
+    """Suma a la tabla los materiales propios del .json (los inválidos o con nombre de fábrica se saltean)."""
+    from .chapa import leer_biblioteca_json
+    cargados = []
+    for nombre, d in leer_biblioteca_json(ruta or ruta_materiales_propios(), "materiales").items():
+        try:
+            nombre, datos = material_propio(nombre, (d or {}).get("densidad"), (d or {}).get("color"))
+        except (geo.ErrorGeometria, AttributeError):
+            continue
+        if not any(nombre.casefold() == b.casefold() for b in MATERIALES_BASE):
+            TABLA_MATERIALES[nombre] = datos
+            cargados.append(nombre)
+    return cargados
+
+
+try:
+    cargar_materiales_propios()
+except Exception:  # noqa: BLE001 — una biblioteca del usuario dañada no tiene que impedir abrir la app
+    pass
 
 
 # ---------------------------------------------------------------- utilidades

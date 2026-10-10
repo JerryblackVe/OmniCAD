@@ -490,17 +490,18 @@ class OpVinculoMovimiento(Operacion):
 
 class OpInsertarDiseno(Operacion):
     """INSERTAR › Insertar componente / derivación [ASM-INSERT-FUSION-DESIGN]: los cuerpos finales de otro
-    diseño (.omnicad) entran como un componente nuevo. La receta se guarda adentro (copia independiente)."""
+    diseño (.omnicad) entran como un componente nuevo. La receta se guarda adentro (copia independiente). `fijo`
+    como en `OpComponente` (Fijar)."""
     TIPO, ETIQUETA, ICONO = "insertar_diseno", "Insertar diseño", "⇩"
-    PARAMS = {"archivo": "", "receta": None}
+    PARAMS = {"archivo": "", "receta": None, "fijo": False}
 
     def ejecutar(self, estado, ctx):
         from .documento import Documento
         if not self.p["receta"]:
             raise ErrorOperacion("La inserción no tiene el diseño.")
         otro = Documento.desde_dict(self.p["receta"])
-        estado.componentes[self.id] = {"nombre": self.p["archivo"] or self.nombre, "padre": "", "fijo": False,
-                                       "matriz": np.identity(4).tolist()}
+        estado.componentes[self.id] = {"nombre": self.p["archivo"] or self.nombre, "padre": "",
+                                       "fijo": bool(self.p.get("fijo")), "matriz": np.identity(4).tolist()}
         for c in otro.estado_final.cuerpos.values():
             estado.nuevo_cuerpo(self.id, c.forma, c.tipo, nombre=c.nombre, apariencia=c.apariencia,
                                 material=c.material, componente=self.id)
