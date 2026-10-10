@@ -132,7 +132,14 @@ def validar_nombre(nombre):
     empezar con dígito. Se exige la forma normalizada NFKC porque así lo lee el evaluador (si no, «ñ» escrita como
     n + tilde combinada no se encontraría nunca)."""
     if not (isinstance(nombre, str) and nombre.isidentifier() and unicodedata.normalize("NFKC", nombre) == nombre):
-        raise ErrorExpresion(f"Nombre de parámetro inválido: '{nombre}'.")
+        if isinstance(nombre, str) and nombre.isidentifier():
+            # Válido para Python, pero con letras de forma no normal (p. ej. «ñ» como n + tilde combinada): el
+            # evaluador lo leería como otro nombre y el parámetro no se encontraría nunca.
+            raise ErrorExpresion(f"Nombre de parámetro inválido: '{nombre}': tiene letras escritas como letra + marca "
+                                 f"combinada (p. ej. n + tilde); escribilo con las letras compuestas: "
+                                 f"'{unicodedata.normalize('NFKC', nombre)}'.")
+        raise ErrorExpresion(f"Nombre de parámetro inválido: '{nombre}'. Puede tener letras (también con acento y ñ), "
+                             "números y '_', y no empezar con un número.")
     if keyword.iskeyword(nombre):
         raise ErrorExpresion(f"'{nombre}' es una palabra reservada (unidad, función o palabra de Python).")
     if nombre in RESERVADOS:

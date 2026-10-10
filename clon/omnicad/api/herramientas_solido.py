@@ -466,8 +466,9 @@ def circular_pattern(sesion, bodies: Cuerpos, count: int, axis: Literal["x", "y"
     return _agregar(sesion, op)
 
 
-def _centro(cuerpos):
-    """Centro de un grupo de cuerpos como el pivote por defecto de Mover: promedio de los centros de sus cajas."""
+def _centro(cuerpos, exacto=False):
+    """Centro de un grupo de cuerpos como el pivote por defecto de Mover: promedio de los centros de sus cajas
+    (redondeado a 1e-4 mm para informar; `exacto` sin redondear, para calcular)."""
     centros = []
     for c in cuerpos:
         caja = c.forma.caja() if getattr(c, "tipo", "solido") == "malla" else geo.caja_envolvente(c.forma)
@@ -475,31 +476,49 @@ def _centro(cuerpos):
             centros.append([(a + b) / 2 for a, b in zip(caja[0], caja[1], strict=True)])
     if not centros:
         return None
-    return [_r(sum(v) / len(centros)) for v in zip(*centros, strict=True)]
+    return [(float if exacto else _r)(sum(v) / len(centros)) for v in zip(*centros, strict=True)]
+
+
+def _menos(expr, valor):
+    """Expresión «expr − valor» (valor en mm, ya calculado): un número si expr lo es; si no, texto que conserva los
+    parámetros de expr («(alto_eje) - (15.0 mm)»)."""
+    if isinstance(expr, (int, float)):
+        return repr(round(float(expr) - valor, 6) + 0.0)
+    if abs(valor) < 1e-9:
+        return expr.strip()
+    return f"({expr.strip()}) - ({round(valor, 6) + 0.0!r} mm)"
 
 
 @herramienta("move_body", "solido",
              "Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] "
              "grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA "
-             "a la posición actual (no es una posición absoluta). pivot='center' es el promedio de los centros de las "
+             "a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate "
+             "[0, 0, 15] queda en z = 17). Para llevarlo a una posición absoluta usá position = [x, y, z]: el centro de "
+             "la caja de los cuerpos (después del giro) queda ahí. pivot='center' es el promedio de los centros de las "
              "cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro "
              "cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae "
              "center.before y center.after.", modifica=True)
 def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate: list[Expr] | None = None,
-              pivot: Literal["center", "origin"] = "center", copy: bool = False):
+              pivot: Literal["center", "origin"] = "center", copy: bool = False, position: list[Expr] | None = None):
     """
     body: cuerpo(s) a mover (id o nombre).
     translate: DESPLAZAMIENTO [dx, dy, dz] en mm que se suma a la posición actual (números o expresiones); vacío = sin desplazamiento.
     rotate: giro [rx, ry, rz] en grados (números o expresiones); vacío = sin giro.
     pivot: centro del giro: "center" (centro de las cajas de los cuerpos, se recalcula) u "origin" (origen, estable).
     copy: true para dejar el original y crear cuerpos nuevos con el movimiento.
+    position: posición ABSOLUTA [x, y, z] en mm (números o expresiones) del centro de la caja de los cuerpos; no se
+        combina con translate. El paso guarda el desplazamiento que hace falta ahora (position − centro, con los
+        parámetros de position): si después cambia la forma de la pieza, el centro se corre con ella.
     """
     ids = _ids_cuerpos(sesion, body)
     if not ids:
         raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'body'.")
-    for valor, que in ((translate, "translate"), (rotate, "rotate")):
+    for valor, que in ((translate, "translate"), (rotate, "rotate"), (position, "position")):
         if valor is not None and len(valor) != 3:
             raise error("INVALID_ARGUMENTS", f"{que} tiene que ser [x, y, z] (3 valores).")
+    if translate is not None and position is not None:
+        raise error("INVALID_ARGUMENTS", "translate (desplazamiento) y position (posición absoluta) no se combinan: "
+                    "usá uno de los dos.")
     t, g = translate or [0, 0, 0], rotate or [0, 0, 0]
     doc = sesion.doc
     op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, tipo="libre",
@@ -508,7 +527,20 @@ def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate
                  pivote={"tipo": "punto", "id": "O"} if pivot == "origin" else None, copiar=copy)
     cuerpos = sesion.doc.estado_final.cuerpos
     antes = _centro([cuerpos[i] for i in ids])
-    resultado = _agregar(sesion, op)
+    foto = _foto(sesion)
+    doc.agregar(op)
+    if position is not None:
+        movidos = [c for c in doc.estado_final.cuerpos if c not in foto] if copy else ids
+        girado = _centro([doc.estado_final.cuerpos[i] for i in movidos if i in doc.estado_final.cuerpos], exacto=True)
+        if girado is None:
+            raise error("INVALID_ARGUMENTS", "Los cuerpos no tienen caja (están vacíos): no hay centro que llevar a "
+                        "position.")
+        nueva = op.copia()
+        nueva.p.update({k: _menos(texto_expr(v) if isinstance(v, str) else v, c)
+                        for k, v, c in zip(("dx", "dy", "dz"), position, girado, strict=True)})
+        doc.reemplazar(op.id, nueva)
+        op = nueva
+    resultado = _informe(sesion, op, foto)
     cuerpos = sesion.doc.estado_final.cuerpos
     movidos = [b["id"] for b in resultado["bodies_created"]] if copy else ids
     resultado["center"] = {"before": antes, "after": _centro([cuerpos[i] for i in movidos if i in cuerpos])}

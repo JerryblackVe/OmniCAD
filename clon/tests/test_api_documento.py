@@ -203,7 +203,8 @@ def test_guardar_le_pone_al_documento_el_nombre_del_archivo(tmp_path):
     otra = api.Sesion()
     assert ok(api.llamar(otra, "open_document", {"path": r["path"]}))["name"] == "pieza"
     # si no se puede escribir, el nombre no cambia
-    assert api.llamar(s, "save_document", {"path": str(tmp_path / "no_existe" / "x.omnicad")})["ok"] is False
+    assert api.llamar(s, "save_document", {"path": str(tmp_path / "no_existe" / "x.omnicad"),
+                                           "create_folders": False})["ok"] is False
     assert ok(api.llamar(s, "get_scene_info"))["name"] == "pieza"
 
 
@@ -214,8 +215,8 @@ def test_errores_de_archivo(s, tmp_path):
     antes = s.doc
     assert api.llamar(s, "open_document", {"path": str(basura)})["error_kind"] == "INVALID_PROJECT"
     assert s.doc is antes
-    r = api.llamar(s, "save_document", {"path": str(tmp_path / "no_existe" / "a.omnicad")})
-    assert r["error_kind"] == "FILE_NOT_FOUND"
+    r = api.llamar(s, "save_document", {"path": str(tmp_path / "no_existe" / "a.omnicad"), "create_folders": False})
+    assert r["error_kind"] == "FILE_NOT_FOUND" and not (tmp_path / "no_existe").exists()
 
 
 def test_exportar(s, tmp_path):
@@ -355,3 +356,108 @@ def test_apply_recipe_acepta_el_resultado_de_get_recipe_tal_cual(s):
     otra = api.Sesion()
     assert ok(api.llamar(otra, "apply_recipe", {"recipe": resultado["recipe"]}))["added_steps"] == 8
     assert api.llamar(otra, "apply_recipe", {"recipe": {"recipe": {}}})["error_kind"] == "INVALID_RECIPE"
+
+
+# ---------------------------------------------------------------- hallazgos de las pruebas de uso (ola 2)
+def test_guardar_crea_las_carpetas_que_faltan(tmp_path, monkeypatch):
+    """Antes save_document a una carpeta inexistente daba FILE_NOT_FOUND. Ahora la crea (y avisa); con
+    create_folders=false sigue fallando, y si la escritura falla no deja carpetas vacías."""
+    from omnicad.io_archivos import proyecto
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 20, "height": 30}))
+    r = api.llamar(s, "save_document", {"path": str(tmp_path / "a" / "b" / "pieza.omnicad")})
+    assert r["ok"] and (tmp_path / "a" / "b" / "pieza.omnicad").is_file()
+    assert any("Se creó la carpeta" in a and "b" in a for a in r["avisos"])
+    info = ok(api.llamar(api.Sesion(), "open_document", {"path": r["result"]["path"]}))
+    assert info["bodies"][0]["volume"] == pytest.approx(6000)
+    # sin crear carpetas: FILE_NOT_FOUND y no se crea nada
+    r = api.llamar(s, "save_document", {"path": str(tmp_path / "c" / "x.omnicad"), "create_folders": False})
+    assert r["error_kind"] == "FILE_NOT_FOUND" and any("create_folders" in p for p in r["pistas"])
+    assert not (tmp_path / "c").exists()
+    # un archivo en el camino: FILE_ERROR, sin carpetas a medias
+    (tmp_path / "archivo.txt").write_text("x", encoding="utf-8")
+    r = api.llamar(s, "save_document", {"path": str(tmp_path / "archivo.txt" / "d" / "x.omnicad")})
+    assert r["error_kind"] == "FILE_ERROR" and "archivo.txt" in r["mensaje"]
+    # si la escritura falla después de crear las carpetas, se borran
+
+    def falla(*args, **kwargs):
+        raise OSError("disco lleno")
+    monkeypatch.setattr(proyecto, "guardar", falla)
+    r = api.llamar(s, "save_document", {"path": str(tmp_path / "e" / "f" / "x.omnicad")})
+    assert r["error_kind"] == "FILE_ERROR" and not (tmp_path / "e").exists()
+
+
+def test_exportar_crea_las_carpetas_que_faltan(s, tmp_path):
+    r = api.llamar(s, "export", {"path": str(tmp_path / "salida" / "stl" / "todo.stl")})
+    assert r["ok"] and r["result"]["triangles"] > 0 and (tmp_path / "salida" / "stl" / "todo.stl").stat().st_size > 84
+    assert any("Se creó la carpeta" in a for a in r["avisos"])
+    r = api.llamar(s, "export", {"path": str(tmp_path / "z" / "a.xyz")})
+    assert r["error_kind"] == "INVALID_FORMAT" and not (tmp_path / "z").exists()        # formato malo: ni la carpeta
+    r = api.llamar(api.Sesion(), "export", {"path": str(tmp_path / "w" / "v.stl")})
+    assert r["error_kind"] == "NOTHING_TO_EXPORT" and not (tmp_path / "w").exists()     # falló: se borró la carpeta
+    r = api.llamar(s, "export", {"path": str(tmp_path / "y" / "a.stl"), "create_folders": False})
+    assert r["error_kind"] == "FILE_NOT_FOUND" and not (tmp_path / "y").exists()
+
+
+def test_escena_lista_componentes_y_uniones():
+    """Antes get_scene_info no decía nada de componentes ni uniones (solo cuerpos)."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 40, "width": 40, "height": 10}))
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10, "x": 50}))
+    ok(api.llamar(s, "rename", {"target": "Cuerpo1", "new_name": "Base"}))
+    ok(api.llamar(s, "rename", {"target": "Cuerpo2", "new_name": "Bloque"}))
+    vacia = ok(api.llamar(s, "get_scene_info"))
+    assert vacia["components"] == [] and vacia["joints"] == [] and vacia["rigid_groups"] == []
+    c1 = ok(api.llamar(s, "run_operation", {"type": "componente", "params": {"cuerpos": ["Bloque"]}, "name": "Pieza"}))
+    c2 = ok(api.llamar(s, "run_operation", {"type": "componente", "params": {"cuerpos": ["Base"], "fijo": True},
+                                            "name": "Soporte"}))
+    abajo = ok(api.llamar(s, "find_faces", {"selector": "<Z", "body": "Bloque"}))["faces"][0]["id"]
+    arriba = ok(api.llamar(s, "find_faces", {"selector": ">Z", "body": "Base"}))["faces"][0]["id"]
+    u = ok(api.llamar(s, "run_operation", {"type": "union", "params": {"origen1": abajo, "origen2": arriba},
+                                           "name": "Apoyo"}))
+    info = ok(api.llamar(s, "get_scene_info"))
+    assert [(c["id"], c["name"], c["grounded"], c["bodies"]) for c in info["components"]] == [
+        (c1["id"], "Pieza", False, ["op2.c1"]), (c2["id"], "Soporte", True, ["op1.c1"])]
+    pieza = info["components"][0]
+    assert [fila[3] for fila in pieza["transform"][:3]] == pytest.approx([-50, 0, 10])   # se movió 50 en X y subió 10
+    assert info["joints"] == [{"id": u["id"], "name": "Apoyo", "type": "rigid", "component1": c1["id"],
+                               "component2": c2["id"], "moves": [c1["id"]],
+                               "values": {"rotation": 0.0, "rotation2": 0.0, "rotation3": 0.0, "slide": 0.0,
+                                          "slide2": 0.0}}]
+    bloque = next(b for b in info["bodies"] if b["name"] == "Bloque")
+    assert bloque["bounding_box"]["min"] == pytest.approx([-5, -5, 10]) and bloque["bounding_box"]["max"][2] == 20
+
+
+def test_get_timeline_dice_que_campo_es_que():
+    """NOMBRES CRUZADOS: la caja guarda ancho = X (length) y largo = Y (width); get_timeline lo dice en aliases."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 50, "width": 10, "height": 5}))
+    ok(api.llamar(s, "create_cylinder", {"radius": 3, "height": 7, "x": 100}))
+    ok(api.llamar(s, "move_body", {"body": "Cuerpo1", "translate": [0, 0, 1]}))
+    pasos = ok(api.llamar(s, "get_timeline"))["steps"]
+    assert pasos[0]["aliases"] == {"length": "ancho", "width": "largo", "height": "alto"}
+    assert pasos[0]["values"]["ancho"] == 50 and pasos[0]["values"]["largo"] == 10
+    assert pasos[1]["aliases"] == {"height": "alto", "radius": "radio"}
+    assert pasos[2]["aliases"] == {"pivot": "pivote"}
+    assert "aliases" not in ok(api.llamar(s, "get_timeline", {"include_params": False}))["steps"][0]
+
+
+def test_edit_feature_acepta_formas_cortas_de_referencias():
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10, "x": 20}))
+    ok(api.llamar(s, "create_sphere", {"radius": 1, "x": 100}))
+    paso = ok(api.llamar(s, "move_body", {"body": "Cuerpo1", "rotate": [0, 0, 90]}))["feature"]["id"]
+    r = ok(api.llamar(s, "edit_feature", {"feature": paso, "params": {"pivote": "O"}}))
+    assert r["params"]["pivote"] == {"tipo": "punto", "id": "O"}
+    bb = ok(api.llamar(s, "get_scene_info"))["bodies"][0]["bounding_box"]
+    assert bb["min"][:2] == pytest.approx([-5, 15]) and bb["max"][:2] == pytest.approx([5, 25])   # giró sobre el origen
+    antes = foto(s)
+    r = api.llamar(s, "edit_feature", {"feature": paso, "params": {"pivote": "Cuerpo1/F1"}})
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "delete_feature" in r["pistas"][0]
+    r = api.llamar(s, "edit_feature", {"feature": paso, "params": {"pivote": "qwerty"}})
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "pivote" in r["mensaje"]
+    assert foto(s) == antes
+    ok(api.llamar(s, "edit_feature", {"feature": paso, "params": {"cuerpos": ["Cuerpo2"]}}))   # nombre → id
+    assert s.paso(paso).p["cuerpos"] == ["op2.c1"]
+    esfera = next(b for b in ok(api.llamar(s, "get_scene_info"))["bodies"] if b["id"] == "op2.c1")
+    assert esfera["bounding_box"]["min"][:2] == pytest.approx([-1, 99])                    # (100, 0) girado 90°

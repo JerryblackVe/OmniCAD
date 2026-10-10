@@ -54,9 +54,10 @@ class Sesion:
             self.doc = proyecto.abrir(ruta)
         return self.doc
 
-    def guardar(self, ruta=None, sobrescribir=False):
+    def guardar(self, ruta=None, sobrescribir=False, crear_carpetas=False):
         """Guarda el proyecto. Sin ruta (o vacía), en su archivo actual. No pisa un archivo existente distinto del
-        actual salvo `sobrescribir`."""
+        actual salvo `sobrescribir`. Con `crear_carpetas` crea las carpetas que falten (y las borra si al final no se
+        pudo guardar); sin él, una carpeta inexistente es FILE_NOT_FOUND."""
         if ruta is None or not str(ruta).strip():
             if not self.doc.ruta:
                 raise error("MISSING_PATH", "El documento todavía no se guardó: falta la ruta.")
@@ -70,8 +71,10 @@ class Sesion:
         actual = Path(self.doc.ruta).resolve() if self.doc.ruta else None
         if ruta.exists() and ruta.resolve() != actual and not sobrescribir:
             raise error("FILE_EXISTS", f"Ya existe el archivo: {ruta}")
+        nuevas = crear_carpeta(ruta.parent) if crear_carpetas else []
         if not ruta.parent.is_dir():
-            raise error("FILE_NOT_FOUND", f"No existe la carpeta: {ruta.parent}")
+            raise error("FILE_NOT_FOUND", f"No existe la carpeta: {ruta.parent}",
+                        "save_document crea las carpetas que faltan con create_folders=true.")
         # Como en Fusion, el documento toma el nombre del archivo. Se pone ANTES de escribir para que el manifiesto
         # guarde el mismo nombre que ve la sesión (si no, al reabrir con la API volvía el nombre viejo).
         nombre_anterior, self.doc.nombre = self.doc.nombre, ruta.stem
@@ -79,9 +82,12 @@ class Sesion:
             final = proyecto.guardar(self.doc, ruta)
         except BaseException:
             self.doc.nombre = nombre_anterior
+            borrar_carpetas(nuevas)
             raise
         self.doc.ruta = str(final)
         self.doc.modificado = False
+        if nuevas:
+            self.avisar(f"Se creó la carpeta {ruta.parent}.")
         return final
 
     # ------------------------------------------------------------ búsqueda por id o nombre
@@ -136,6 +142,33 @@ class Sesion:
             if self.doc is doc:
                 doc._contador = contador
             raise
+
+
+def crear_carpeta(carpeta):
+    """Crea `carpeta` y las que falten arriba. Devuelve las que creó, de la de más arriba a la de más abajo (para
+    borrarlas si después la escritura falla). Un archivo en el camino o sin permiso: FILE_ERROR o PERMISSION_DENIED."""
+    carpeta, faltan = Path(carpeta), []
+    p = carpeta
+    while not p.exists() and p.parent != p:
+        faltan.append(p)
+        p = p.parent
+    faltan.reverse()
+    try:
+        carpeta.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        borrar_carpetas([f for f in faltan if f.is_dir()])
+        raise error("PERMISSION_DENIED" if isinstance(e, PermissionError) else "FILE_ERROR",
+                    f"No se pudo crear la carpeta {carpeta}: {e.strerror or e}") from None
+    return faltan
+
+
+def borrar_carpetas(carpetas):
+    """Borra (de la más profunda a la de más arriba) las carpetas que creó `crear_carpeta`, si quedaron vacías."""
+    for c in reversed(carpetas):
+        try:
+            c.rmdir()
+        except OSError:
+            pass
 
 
 def _buscar(ref, elementos, id_de, nombre_de, que, error_kind):
