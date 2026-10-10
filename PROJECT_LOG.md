@@ -9,6 +9,7 @@ Bitácora del proyecto: estado, pendientes, qué se hizo y lecciones aprendidas.
 | App de escritorio: núcleo, timeline, bocetos, interfaz | Funciona (alfa, Windows; Linux probado en WSL2) |
 | Cobertura de comandos de diseño | En curso — ver `docs/brechas_fusion.md` |
 | Capa para agentes IA: API, MCP, CLI, puente en vivo, skill | Hecha (paquetes A–J y L). Prueba con agentes reales: Claude Code OK; faltan OpenCode, solo-CLI y modo en vivo — `docs/plan_mcp_cli.md` |
+| Bugs de la Prueba 10 y pruebas de uso (ola 1) | Corregidos el 2026-10-10 (pytest 1783, humo OK). Próxima sesión: ola 2 (mejoras) y pendientes 13–19 |
 | Linux nativo, bilingüe ES/EN y hoja de ruta | Pendiente — ver «Pendientes» |
 
 ### Pendientes
