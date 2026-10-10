@@ -23,13 +23,14 @@ Si te ayuda, una donación me ayuda a seguir.
 
 - **Diseño paramétrico:** parámetros con unidades y expresiones (`ancho / 2 + 3 mm`), timeline editable, deshacer y rehacer.
 - **Bocetos 2D con restricciones:** líneas, arcos, círculos, polígonos, splines, cotas y un solver de restricciones.
+- **Texto y vectores:** texto de boceto con todas las fuentes instaladas (TrueType, OpenType, variables), espaciado, interlineado, alineación, caja, parámetros `{ancho}` y **texto sobre una curva**; insertar SVG por capas y colores, vectorizar una imagen, marco para mover, escalar, girar y espejar, unir / restar / intersecar perfiles, desfase y limpieza de geometría importada.
 - **Sólidos:** extrusión, revolución, barrido, solevación, primitivas, empalme, chaflán, vaciado, desmoldeo, agujeros,
   roscas, nervios, patrones, simetría, booleanas, dividir, escalar, mover y más.
 - **Superficies, chapa metálica y mallas:** parches, recortar, coser, engrosar; pestañas, pliegues y desplegado;
   reparar, remallar, reducir y suavizar mallas.
 - **Ensamblaje básico:** componentes, uniones, grupos rígidos y fijaciones (tornillería).
 - **Archivos:** proyecto `.omnicad` abierto (ZIP con receta JSON); exporta STL, OBJ, 3MF, PLY, STEP, IGES y BREP;
-  importa STEP; bocetos desde DXF y SVG.
+  importa STEP; bocetos desde DXF, SVG e imágenes vectorizadas; guarda bocetos como DXF y SVG.
 - **Inspección:** volumen, masa, área, caja envolvente, distancias, ángulos e interferencias.
 - **Interfaz:** 5 temas (oscuro moderno, claro moderno, azul profesional, minimalista y clásico) y temas propios del
   usuario en un archivo JSON; caja de herramientas con la tecla S (buscar y fijar comandos).
@@ -116,13 +117,12 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - Español e inglés en todo: interfaz, mensajes, herramientas y documentación.
 - Integración con Blender en los dos sentidos.
 - Mejor render: materiales, colores e iluminación.
-- Vectores, SVG, texto y vectorizado.
+- Más vectores: editar curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
 - Ensamblajes, animación, simulaciones y movimiento de piezas.
 - Funciones al estilo Rhino y programación visual al estilo Grasshopper.
 
 Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
 
-- Texto que sigue una curva.
 - Boceto 3D: mover los puntos del boceto en altura.
 - Hélice como curva de boceto (hoy hay solo espiral plana).
 - Aspecto completo: pintar caras sueltas, muestras del diseño y editor de color, brillo y rugosidad.
