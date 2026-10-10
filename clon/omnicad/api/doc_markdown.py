@@ -23,6 +23,7 @@ GRUPOS = {
     "documento": "Archivo, escena, timeline y deshacer.",
     "parametros": "Medidas con nombre que gobiernan el modelo.",
     "boceto": "Bocetos 2D: geometría, restricciones y cotas.",
+    "vectores": "Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.",
     "solido": "Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.",
     "inspeccion": "Ver y medir el resultado.",
     "avanzado": "Cualquier operación, receta, código y guía.",

@@ -21,8 +21,9 @@ from ..nucleo import referencias as refs
 from . import entidades as ent
 from ..nucleo.perfiles import buscar_por_firma, detectar
 from ..restricciones import Boceto, resolver
-from ..restricciones.boceto import ErrorBoceto, validar_valor_cota
-from .parametros import ANGULO, LONGITUD, evaluar
+from ..restricciones.boceto import (ErrorBoceto, Texto, expresiones_de_texto, sustituir_expresiones,
+                                    validar_valor_cota)
+from .parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, evaluar
 
 OPERACIONES_CUERPO = {"nuevo": "Cuerpo nuevo", "unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
 OPERACIONES_COMBINAR = {"unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
@@ -449,7 +450,9 @@ class OpBoceto(Operacion):
                 for c in self.boceto.cotas.values()}
 
     def expresiones(self):
-        return super().expresiones() + [c.expresion for c in self.boceto.cotas.values()]
+        en_textos = [e for c in self.boceto.curvas.values() if isinstance(c, Texto)
+                     for e in expresiones_de_texto(c.texto)]
+        return super().expresiones() + [c.expresion for c in self.boceto.cotas.values()] + en_textos
 
     def dependencias(self):
         deps = super().dependencias()
@@ -469,6 +472,12 @@ class OpBoceto(Operacion):
         # Se resuelve una COPIA: el boceto guardado no se toca. Si un parámetro deja el boceto en
         # conflicto, al volver a un valor válido se parte otra vez de la geometría original.
         boceto = self.boceto.copia()
+        for c in boceto.curvas.values():               # {parámetro} dentro de un texto (el fx de Fusion)
+            if isinstance(c, Texto) and "{" in c.texto:
+                try:
+                    c.texto = texto_con_valores(c.texto, ctx.valores)
+                except ErrorExpresion as e:
+                    ctx.aviso(f"{self.nombre}: texto «{c.texto}»: {e}")
         valores = self.valores_cotas(ctx)
         for c in self.boceto.cotas.values():           # una cota manejada por parámetro puede quedar fuera de rango
             try:
@@ -485,6 +494,25 @@ class OpBoceto(Operacion):
         d = super().a_dict()
         d["boceto"] = self.boceto.a_dict()
         return d
+
+
+def texto_con_valores(texto, valores):
+    """Texto con sus {expresión} reemplazadas por el valor que tienen con los parámetros `valores` (longitudes
+    en mm, ángulos en grados, números sueltos). Levanta ErrorExpresion si alguna no se puede calcular."""
+    def valor(expr):
+        ultimo = None
+        for tipo in (LONGITUD, ANGULO, ESCALAR):
+            try:
+                return evaluar(expr, tipo, valores)
+            except ErrorExpresion as e:
+                ultimo = ultimo or e
+        raise ultimo
+    try:
+        return sustituir_expresiones(texto, valor)
+    except ValueError as e:                       # formato inválido: «{ancho:xyz}»
+        if isinstance(e, ErrorExpresion):
+            raise
+        raise ErrorExpresion(f"Formato de número inválido en el texto: {e}") from e
 
 
 def _exigir_tipos(ref, tipos):

@@ -25,10 +25,22 @@ class _InsertarArchivo2D(Comando):
         return [Seleccion("plano", "Plano/cara", {"plano", "cara_plana"}),
                 Texto("archivo", "Archivo", ""), Expresion("escala", "Escala", "1", ESCALAR),
                 Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO)]
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
+                Casilla("voltear_h", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
 
-    def leer(self, ruta):
+    def leer(self, ruta, v=None):
         raise NotImplementedError
+
+    def clave_filtro(self, v):
+        """Lo que, además del archivo, cambia las primitivas leídas (para no leer de nuevo en cada vista previa)."""
+        return ()
+
+    def transformacion(self, v, ctx):
+        """Argumentos de `boceto_desde_primitivas` según el diálogo."""
+        return {"escala": ctx.evaluar(v["escala"], ESCALAR),
+                "desplazamiento": (ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])),
+                "angulo": ctx.evaluar(v["angulo"], ANGULO),
+                "voltear_h": bool(v.get("voltear_h")), "voltear_v": bool(v.get("voltear_v"))}
 
     def construir(self, v, ctx):
         from ...io_archivos.boceto_archivos import boceto_desde_primitivas
@@ -36,17 +48,15 @@ class _InsertarArchivo2D(Comando):
         ruta = (v.get("archivo") or "").strip()
         if not ruta or not Path(ruta).is_file():
             raise ErrorComando("Elegí el archivo (Archivo › ruta completa).")
-        clave = (ruta, Path(ruta).stat().st_mtime)
+        clave = (ruta, Path(ruta).stat().st_mtime, self.clave_filtro(v))
         if getattr(self, "_clave", None) != clave:
             try:
-                self._prims = self.leer(ruta)
+                self._prims = self.leer(ruta, v)
             except (ValueError, OSError) as e:
                 raise ErrorComando(f"No se pudo leer el archivo: {e}") from e
             self._clave = clave
         try:
-            boceto = boceto_desde_primitivas(self._prims, escala=ctx.evaluar(v["escala"], ESCALAR),
-                                             desplazamiento=(ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])),
-                                             angulo=ctx.evaluar(v["angulo"], ANGULO))
+            boceto = boceto_desde_primitivas(self._prims, **self.transformacion(v, ctx))
         except ValueError as e:
             raise ErrorComando(str(e)) from e
         if ctx.op is not None:
@@ -66,19 +76,62 @@ class InsertarDXF(_InsertarArchivo2D):
     AYUDA = "Trae la geometría 2D de un archivo DXF a un boceto nuevo sobre un plano o una cara."
     EXTENSIONES = ("dxf",)
 
-    def leer(self, ruta):
+    def leer(self, ruta, v=None):
         from ...io_archivos.dxf import leer_dxf
         return leer_dxf(ruta)
 
 
+def _lista(texto):
+    return [t.strip() for t in str(texto or "").replace(";", ",").split(",") if t.strip()]
+
+
 class InsertarSVG(_InsertarArchivo2D):
     CLAVE, TITULO, ICONO = "insertar_svg", "Insertar SVG", "insertar_svg"
-    AYUDA = "Trae un dibujo SVG a un boceto nuevo (las curvas pasan a splines)."
+    AYUDA = ("Trae un dibujo SVG a un boceto nuevo (las curvas pasan a splines). Con Capas o Colores se importa "
+             "solo esa parte del archivo.")
     EXTENSIONES = ("svg",)
 
-    def leer(self, ruta):
+    def campos(self, ctx):
+        return super().campos(ctx) + [Texto("capas", "Capas (coma)", ""), Texto("colores", "Colores #rrggbb (coma)", "")]
+
+    def clave_filtro(self, v):
+        return (tuple(_lista(v.get("capas"))), tuple(_lista(v.get("colores"))))
+
+    def leer(self, ruta, v=None):
         from ...io_archivos.svg import leer_svg
-        return leer_svg(ruta)
+        v = v or {}
+        return leer_svg(ruta, capas=_lista(v.get("capas")) or None, colores=_lista(v.get("colores")) or None)
+
+
+class VectorizarImagen(_InsertarArchivo2D):
+    """INSERTAR › Vectorizar imagen: PNG/JPG a contornos cerrados en un boceto (no existe en Fusion)."""
+    CLAVE, TITULO, ICONO = "vectorizar_imagen", "Vectorizar imagen", "vectorizar_imagen"
+    AYUDA = ("Convierte una imagen (logo, silueta, dibujo en blanco y negro) en contornos cerrados de un boceto. "
+             "Umbral 0 = automático.")
+    EXTENSIONES = ("png", "jpg", "jpeg", "bmp", "gif", "webp")
+
+    def campos(self, ctx):
+        return [Seleccion("plano", "Plano/cara", {"plano", "cara_plana"}), Texto("archivo", "Imagen", ""),
+                Expresion("ancho", "Ancho final", "100 mm"),
+                Entero("umbral", "Umbral (0 = auto)", 0, 0, 254), Casilla("invertir", "Tinta clara (invertir)"),
+                Entero("suavizado", "Suavizado (px)", 1, 0, 10), Casilla("curvas", "Curvas suaves (splines)"),
+                Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
+                Casilla("voltear_h", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
+
+    def clave_filtro(self, v):
+        return (v.get("umbral"), bool(v.get("invertir")), v.get("suavizado"), bool(v.get("curvas")))
+
+    def leer(self, ruta, v=None):
+        from ...io_archivos.vectorizar import vectorizar_imagen
+        v = v or {}
+        return vectorizar_imagen(ruta, umbral=(v.get("umbral") or None), invertir=bool(v.get("invertir")),
+                                 suavizado=float(v.get("suavizado", 1)), curvas=bool(v.get("curvas")))
+
+    def transformacion(self, v, ctx):
+        return {"ancho": ctx.evaluar(v["ancho"]), "desplazamiento": (ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])),
+                "angulo": ctx.evaluar(v["angulo"], ANGULO),
+                "voltear_h": bool(v.get("voltear_h")), "voltear_v": bool(v.get("voltear_v"))}
 
 
 class Lienzo(Comando):
@@ -145,4 +198,4 @@ class Calcomania(Lienzo):
     VARIANTE = ("calcomania", True)
 
 
-registrar(InsertarDXF, InsertarSVG, Lienzo, Calcomania)
+registrar(InsertarDXF, InsertarSVG, VectorizarImagen, Lienzo, Calcomania)

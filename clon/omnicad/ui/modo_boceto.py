@@ -10,7 +10,7 @@ Modo boceto dentro de la vista 3D (como el entorno de boceto de Fusion 360):
 Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del timeline.
 """
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QFont, QKeySequence
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout,
                                QMessageBox, QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
@@ -91,6 +91,10 @@ OPCIONES_HERRAMIENTA = {
     "patron_rectangular": [("patron_distancia", "Distancia", [("extension", "Extensión"), ("espaciado", "Espaciado")])],
     "proyectar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
     "intersecar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
+    "texto": [("alineacion", "Alineación", [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]),
+              ("ancla_v", "Punto de anclaje", [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"),
+                                               ("abajo", "Abajo")]),
+              ("camino_lado", "Lado en curva", [("izq", "Izquierda de la curva"), ("der", "Derecha (al revés)")])],
 }
 _FUENTES = []
 
@@ -254,7 +258,10 @@ class PaletaBoceto(QFrame):
             self.form_contexto.addRow(etiqueta, combo)
         if h == "texto":
             fuente = QComboBox()
-            fuente.addItems(_fuentes())
+            nombres = _fuentes()
+            fuente.addItems(nombres)
+            for i, nombre in enumerate(nombres):      # cada nombre se ve con su propia tipografía
+                fuente.setItemData(i, QFont(nombre), Qt.FontRole)
             fuente.setCurrentIndex(max(0, fuente.findText(opciones.get("fuente", "Arial"))))
             fuente.currentTextChanged.connect(lambda t: self.ajuste.emit("fuente", t))
             self.form_contexto.addRow("Fuente", fuente)

@@ -8,6 +8,7 @@ recalcula entera cada vez que cambia algo. Las herramientas se agrupan así:
 | documento | archivo, escena, timeline, deshacer | `get_scene_info`, `get_timeline`, `save_document`, `undo` |
 | parametros | medidas con nombre que gobiernan el modelo | `get_parameters`, `set_parameter` |
 | inspeccion | ver y medir el resultado | `get_viewport_image`, `get_physical_properties`, `measure_distance`, `check_interference` |
+| vectores | fuentes, texto de boceto, insertar SVG / DXF, imagen → vector | `add_text`, `list_fonts`, `insert_svg`, `trace_image` |
 | avanzado | cualquier operación, receta, código, guía | `run_operation`, `describe_operation`, `get_recipe`, `execute_code` |
 
 Hay más grupos (bocetos, sólidos…): el catálogo de herramientas del servidor es la lista completa y
@@ -17,6 +18,7 @@ cada una trae su descripción y sus argumentos.
 
 - `flujo`: el ciclo de trabajo (mirar, hacer, ver la imagen, medir, guardar), unidades, ids y errores.
 - `selectores`: elegir caras y aristas (`>Z`, `|Z`, `%CIRCLE`…) para empalmes, chaflanes, vaciados, agujeros y bocetos sobre cara.
+- **texto_vectores**: fuentes, texto de boceto con todas sus opciones, insertar SVG / DXF y vectorizar imágenes.
 
 Pedí un tema con `get_guide(topic="flujo")`.
 

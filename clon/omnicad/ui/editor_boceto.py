@@ -35,7 +35,8 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, circunferencia_3_puntos, dominio,
-                                    evaluar_primitiva, mas_cercano, puntos_primitiva, validar_valor_cota)
+                                    evaluar_primitiva, fraccion_en_camino, mas_cercano, puntos_primitiva,
+                                    validar_valor_cota)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion
 from . import formato, temas
 from .iconos import icono
@@ -264,6 +265,23 @@ def _numero(texto):
     return float(str(texto).replace(",", "."))
 
 
+_CACHE_MUESTRAS = {}
+
+
+def _muestras(prim, pasos):
+    """`puntos_primitiva` con caché: la primitiva (tupla de números) es la clave, así un cambio la invalida."""
+    clave = (prim, pasos)
+    try:
+        r = _CACHE_MUESTRAS.get(clave)
+    except TypeError:                         # alguna primitiva con listas: sin caché
+        return puntos_primitiva(prim, pasos)
+    if r is None:
+        if len(_CACHE_MUESTRAS) > 50000:
+            _CACHE_MUESTRAS.clear()
+        r = _CACHE_MUESTRAS[clave] = tuple(puntos_primitiva(prim, pasos))
+    return r
+
+
 class EntradaValor(QFrame):
     """Entrada en pantalla (1 o más campos) para cotas y valores dinámicos; Tab cambia de campo."""
     aceptado = Signal(list)
@@ -340,10 +358,13 @@ class Lienzo(QWidget):
         # Opciones de la paleta (Opciones de función de Fusion) para las herramientas nuevas.
         self.opciones = {"grado_spline": 3, "continuidad": "G1", "patron_distancia": "extension",
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
-                         "negrita": False, "cursiva": False}
+                         "negrita": False, "cursiva": False,
+                         "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq"}
         self.escala = 4.0
         self.centro = [0.0, 0.0]
         self.seleccion = []
+        self.mostrar_marco = True       # marco de control (Fusion: «Mostrar el marco de control») sobre lo elegido
+        self._marco = None              # arrastre en curso de una manija del marco
         self.clics = []
         self.picks = []
         self.picks_xy = []
@@ -527,10 +548,15 @@ class Lienzo(QWidget):
 
     # ------------------------------------------------------------ geometría en pantalla
     def _polilineas(self, c, pasos=64):
-        """Polilíneas (u, v) de una curva (un texto da una por contorno)."""
-        return [puntos_primitiva(p, pasos) for p in self.b.primitivas(c.id)]
+        """Polilíneas (u, v) de una curva (un texto da una por contorno). Con caché por primitiva: con miles de
+        curvas, muestrear las splines en cada cuadro tardaba ~1 s y trababa el zoom y el paneo."""
+        return [_muestras(p, pasos) for p in self.b.primitivas(c.id)]
 
     def _poli_px(self, puntos):
+        if self.visor is None:               # boceto 2D: la cuenta de a_px en línea (se hace miles de veces)
+            s, cx, cy = self.escala, self.centro[0], self.centro[1]
+            w2, h2 = self.width() / 2, self.height() / 2
+            return [QPointF((x - cx) * s + w2, h2 - (y - cy) * s) for x, y in puntos]
         return [self.a_px(*p) for p in puntos]
 
     def _visible(self, c):
@@ -921,15 +947,32 @@ class Lienzo(QWidget):
             self.clics = []
         elif h == "texto" and len(c) == 1:
             pid, xy = c[0]
+            # clic sobre una curva (no sobre un punto): texto en curva, centrado donde se hizo clic
+            camino = None if pid is not None else self._curva_cercana(self.a_px(*xy))
+            if camino is not None and isinstance(self.b.curvas.get(camino), Texto):
+                camino = None
+            en_curva = {}
+            if camino is not None:
+                o = self.opciones
+                pos = fraccion_en_camino(self.b.primitivas(camino)[0], xy)
+                en_curva = {"camino": camino, "camino_lado": o.get("camino_lado", "izq"), "camino_pos": pos,
+                            "alineacion": "centro"}
 
             def aceptar(v):
+                v = (list(v) + [""] * 5)[:5]          # los campos de más (espaciado, interlineado) son opcionales
                 altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
+                espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
                 o = self.opciones
-                ok = self.aplicar_cambio(lambda: self.b.agregar_texto(pid if pid is not None else xy, v[0], altura, ang,
-                                                                      o["fuente"], o["negrita"], o["cursiva"]))
+                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | en_curva
+                ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
+                    pid if pid is not None else xy, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
+                    o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
                 self.clics = []
                 return ok
-            self._abrir_entrada(["Texto", "Altura", "∠"], ["Texto", "5", "0"], self._pos_cursor, aceptar)
+            if camino is not None:
+                self.mensaje.emit("Texto en curva: las letras siguen la curva elegida (Lado en curva, en la paleta).")
+            self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
+                                ["Texto", "5", "0", "0", "1"], self._pos_cursor, aceptar)
         elif h == "espiral" and len(c) == 2:
             (_, ce), (_, ini) = c
 
@@ -1216,18 +1259,29 @@ class Lienzo(QWidget):
 
     def editar_texto(self, tid, pos):
         t = self.b.curvas[tid]
+        # la paleta parte de lo que ya tiene el texto: aceptar sin tocar nada no le cambia la fuente ni la alineación
+        self.opciones.update(fuente=t.fuente, negrita=t.negrita, cursiva=t.cursiva, alineacion=t.alineacion,
+                             ancla_v=t.ancla_v, camino_lado=t.camino_lado)
 
         def aceptar(v):
+            v = (list(v) + [""] * 5)[:5]
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
+            espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
             if not v[0].strip():
                 raise ErrorBoceto("El texto está vacío.")
+            if interlineado <= 0:
+                raise ErrorBoceto("El interlineado tiene que ser mayor que cero.")
 
             def cambiar():
-                t.texto, t.altura, t.angulo = v[0], altura, ang
+                t.texto, t.altura, t.angulo = v[0].replace("\\n", "\n"), altura, ang
                 t.fuente, t.negrita, t.cursiva = self.opciones["fuente"], self.opciones["negrita"], self.opciones["cursiva"]
+                t.espaciado, t.interlineado = espaciado, interlineado
+                t.alineacion, t.ancla_v = self.opciones["alineacion"], self.opciones["ancla_v"]
+                t.camino_lado = self.opciones.get("camino_lado", t.camino_lado)
             return self.aplicar_cambio(cambiar)
-        self._abrir_entrada(["Texto", "Altura", "∠"], [t.texto, formato.numero(t.altura), formato.numero(t.angulo, True)],
-                            pos, aceptar)
+        self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
+                            [t.texto.replace("\n", "\\n"), formato.numero(t.altura), formato.numero(t.angulo, True),
+                             formato.numero(t.espaciado), formato.numero(t.interlineado)], pos, aceptar)
 
     # ------------------------------------------------------------ entrada dinámica y cotas en pantalla
     def _abrir_entrada(self, etiquetas, textos, pos, al_aceptar):
@@ -1997,7 +2051,9 @@ class Lienzo(QWidget):
         if e.button() != Qt.LeftButton:
             return
         h = self.herramienta
-        if h == "seleccionar":
+        if h == "seleccionar" and self._presionar_marco(pos):
+            pass
+        elif h == "seleccionar":
             self._presionar_seleccion(pos, e.modifiers())
         elif h == "cota":
             self._clic_cota(pos)
@@ -2014,6 +2070,165 @@ class Lienzo(QWidget):
             self._presion = (pos, *self._ajustar(pos, base=base))
             self._presion_inferencia = self.inferencia
         self.update()
+
+    # ------------------------------------------------------------ marco de control (mover, escalar, girar, espejar)
+    def _ids_marco(self):
+        return [i for i in self.seleccion if i in self.b.curvas or i in self.b.puntos]
+
+    def _caja_marco(self):
+        """Caja (xmin, ymin, xmax, ymax) en mm de lo elegido, o None si el marco no corresponde: hace falta
+        estar seleccionando y tener al menos dos curvas (o un texto)."""
+        if not self.mostrar_marco or self.herramienta != "seleccionar" or self.fase not in (None, "", "seleccion"):
+            return None
+        ids = self._ids_marco()
+        curvas = [i for i in ids if i in self.b.curvas]
+        if len(curvas) < 2 and not any(isinstance(self.b.curvas[i], Texto) for i in curvas):
+            return None
+        pts = []
+        for i in ids:
+            if i in self.b.puntos:
+                pts.append(self.b.coords(i))
+                continue
+            for prim in self.b.primitivas(i):
+                if prim[0] == "linea":
+                    pts += [prim[2], prim[3]]
+                elif prim[0] == "circulo":
+                    (cx, cy), r = prim[2], prim[3]
+                    pts += [(cx - r, cy - r), (cx + r, cy + r)]
+                elif prim[0] == "spline":         # la curva queda dentro de su polígono de control
+                    pts += list(prim[2])
+                else:
+                    pts += puntos_primitiva(prim, 24)
+        if not pts:
+            return None
+        xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+        caja = (min(xs), min(ys), max(xs), max(ys))
+        a, b = self.a_px(caja[0], caja[1]), self.a_px(caja[2], caja[3])
+        if abs(b.x() - a.x()) < 4 and abs(b.y() - a.y()) < 4:
+            return None
+        return caja
+
+    def _manijas_marco(self, caja):
+        """{nombre: punto en píxeles} de las manijas del marco."""
+        x0, y0, x1, y1 = caja
+        esq = [self.a_px(x0, y0), self.a_px(x1, y0), self.a_px(x1, y1), self.a_px(x0, y1)]
+        arriba = self.a_px((x0 + x1) / 2, y1)
+        derecha, abajo = self.a_px(x1, (y0 + y1) / 2), self.a_px((x0 + x1) / 2, y0)
+        m = {f"escala{k}": q for k, q in enumerate(esq)}
+        m["rotar"] = QPointF(arriba.x(), arriba.y() - 28)
+        m["mover"] = self.a_px((x0 + x1) / 2, (y0 + y1) / 2)
+        m["espejo_h"] = QPointF(derecha.x() + 18, derecha.y())
+        m["espejo_v"] = QPointF(abajo.x(), abajo.y() + 18)
+        return m
+
+    def _presionar_marco(self, pos):
+        caja = self._caja_marco()
+        if caja is None:
+            return False
+        for nombre, q in self._manijas_marco(caja).items():
+            if math.hypot(q.x() - pos.x(), q.y() - pos.y()) <= 8:
+                mm = self.a_mm(pos)
+                self._marco = {"tipo": nombre, "caja": caja, "inicio": mm, "actual": mm, "px_inicio": pos,
+                               "px_actual": pos, "shift": False}
+                return True
+        return False
+
+    def _transformacion_marco(self):
+        """(descripción, función punto → punto, acción sobre el boceto) del arrastre en curso."""
+        m = self._marco
+        x0, y0, x1, y1 = m["caja"]
+        c = ((x0 + x1) / 2, (y0 + y1) / 2)
+        (ix, iy), (ax, ay) = m["inicio"], m["actual"]
+        tipo, ids = m["tipo"], self._ids_marco()
+        if tipo == "mover":
+            dx, dy = ax - ix, ay - iy
+            if m["shift"]:                       # Shift: solo en el eje donde más se movió
+                dx, dy = (dx, 0.0) if abs(dx) >= abs(dy) else (0.0, dy)
+            return (f"Δ {formato.numero(dx)} ; {formato.numero(dy)} mm", lambda q: (q[0] + dx, q[1] + dy),
+                    lambda: self.b.transformar(ids, dx=dx, dy=dy))
+        if tipo.startswith("escala"):
+            k = int(tipo[-1])
+            esq = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+            ancla = c if m["shift"] else esq[(k + 2) % 4]
+            d0 = math.dist(esq[k], ancla)
+            f = max(math.dist((ax, ay), ancla) / d0, 1e-3) if d0 > 1e-12 else 1.0
+            return (f"× {formato.numero(f)}", lambda q: (ancla[0] + f * (q[0] - ancla[0]), ancla[1] + f * (q[1] - ancla[1])),
+                    lambda: self.b.escalar(ids, ancla, f))
+        if tipo == "rotar":
+            ang = math.degrees(math.atan2(ay - c[1], ax - c[0]) - math.atan2(iy - c[1], ix - c[0]))
+            ang = (ang + 180.0) % 360.0 - 180.0
+            if m["shift"]:
+                ang = round(ang / 15.0) * 15.0
+            a = math.radians(ang)
+
+            def girar(q):
+                u, v = q[0] - c[0], q[1] - c[1]
+                return (c[0] + u * math.cos(a) - v * math.sin(a), c[1] + u * math.sin(a) + v * math.cos(a))
+            return (f"{formato.numero(ang)}°", girar, lambda: self.b.transformar(ids, angulo=ang, centro=c))
+        horizontal = tipo == "espejo_h"
+        return ("Espejo", (lambda q: (2 * c[0] - q[0], q[1])) if horizontal else (lambda q: (q[0], 2 * c[1] - q[1])),
+                lambda: self._espejar_marco(ids, c, horizontal))
+
+    def _espejar_marco(self, ids, centro, horizontal):
+        _hechos, textos = self.b.reflejar(ids, centro, horizontal)
+        if textos:
+            self.mensaje.emit("Los textos rectos no se espejan con el marco: usá Voltear del texto.")
+
+    def _soltar_marco(self):
+        m, self._marco = self._marco, None
+        if m is None:
+            return
+        movio = math.hypot(m["px_actual"].x() - m["px_inicio"].x(), m["px_actual"].y() - m["px_inicio"].y()) > 3
+        if not movio and not m["tipo"].startswith("espejo"):
+            return
+        self._marco = m
+        _texto, _f, accion = self._transformacion_marco()
+        self._marco = None
+        self.aplicar_cambio(accion)
+
+    def _dibujar_marco(self, p):
+        caja = self._marco["caja"] if self._marco is not None else self._caja_marco()
+        if caja is None:
+            return
+        x0, y0, x1, y1 = caja
+        azul = QColor(0, 150, 255)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(azul, 1, Qt.DashLine))
+        esq = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        p.drawPolygon(QPolygonF([self.a_px(*q) for q in esq]))
+        manijas = self._manijas_marco(caja)
+        arriba = self.a_px((x0 + x1) / 2, y1)
+        p.setPen(QPen(azul, 1))
+        p.drawLine(arriba, manijas["rotar"])
+        for nombre, q in manijas.items():
+            p.setBrush(QColor(255, 255, 255))
+            if nombre == "rotar":
+                p.drawEllipse(q, 5, 5)
+            elif nombre == "mover":
+                p.drawLine(QPointF(q.x() - 6, q.y()), QPointF(q.x() + 6, q.y()))
+                p.drawLine(QPointF(q.x(), q.y() - 6), QPointF(q.x(), q.y() + 6))
+            elif nombre.startswith("espejo"):        # flecha doble dibujada (no depende de la fuente)
+                h = nombre == "espejo_h"
+                a = QPointF(q.x() - 7, q.y()) if h else QPointF(q.x(), q.y() - 7)
+                b = QPointF(q.x() + 7, q.y()) if h else QPointF(q.x(), q.y() + 7)
+                p.drawLine(a, b)
+                for punta, s in ((a, 1), (b, -1)):
+                    if h:
+                        p.drawLine(punta, QPointF(punta.x() + 4 * s, punta.y() - 3))
+                        p.drawLine(punta, QPointF(punta.x() + 4 * s, punta.y() + 3))
+                    else:
+                        p.drawLine(punta, QPointF(punta.x() - 3, punta.y() + 4 * s))
+                        p.drawLine(punta, QPointF(punta.x() + 3, punta.y() + 4 * s))
+            else:
+                p.drawRect(QRectF(q.x() - 4, q.y() - 4, 8, 8))
+        p.setBrush(Qt.NoBrush)
+        if self._marco is not None:                 # vista previa del resultado
+            texto, f, _accion = self._transformacion_marco()
+            p.setPen(QPen(QColor(255, 140, 0), 1.5, Qt.DashLine))
+            p.drawPolygon(QPolygonF([self.a_px(*f(q)) for q in esq]))
+            p.setPen(QPen(QColor(255, 140, 0), 1))
+            q = self._marco["px_actual"]
+            p.drawText(QPointF(q.x() + 14, q.y() - 10), texto)
 
     def _presionar_seleccion(self, pos, mods, arrastrar=True):
         suma = bool(mods & (Qt.ControlModifier | Qt.ShiftModifier))
@@ -2146,6 +2361,12 @@ class Lienzo(QWidget):
             self._ventana = (self._ventana[0], pos)
             self.update()
             return
+        if self._marco is not None:
+            self._marco["actual"] = self.a_mm(pos)
+            self._marco["px_actual"] = pos
+            self._marco["shift"] = bool(e.modifiers() & Qt.ShiftModifier)
+            self.update()
+            return
         base = self.clics[-1][1] if self.clics and self.herramienta not in ("circulo_3p",) else None
         excluir = self._arrastre if isinstance(self._arrastre, int) else None
         self.cursor = self._ajustar(pos, excluir=excluir, base=base)[1]
@@ -2174,6 +2395,11 @@ class Lienzo(QWidget):
             self.visor.mouseReleaseEvent(e)     # clic derecho: el visor abre el menú radial (Aceptar / Cancelar…)
             return
         self._pan = None
+        if self._marco is not None:
+            self._marco["shift"] = bool(e.modifiers() & Qt.ShiftModifier)
+            self._soltar_marco()
+            self.update()
+            return
         if self._ventana is not None:
             self._seleccionar_ventana(*self._ventana)
             self._ventana = None
@@ -2520,10 +2746,13 @@ class Lienzo(QWidget):
                 self._dibujar_polilinea(p, [self.b.coords(q) for q in c.pts])
         if self.mostrar["puntos"]:
             visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
+            ancho, alto = self.width() + 8, self.height() + 8
             for pt in self.b.puntos.values():
                 if pt.id in ocultos and pt.id not in visibles or (pt.proyectado and not self.mostrar["proyectadas"]):
                     continue
                 q = self.a_px(pt.x, pt.y)
+                if not (-8 <= q.x() <= ancho and -8 <= q.y() <= alto):
+                    continue                          # fuera de la pantalla: no se dibuja
                 if pt.id in self.seleccion or pt.id in self.picks:
                     color, relleno = QColor(0, 180, 255), QColor(0, 180, 255)
                 elif pt.proyectado:
@@ -2542,6 +2771,7 @@ class Lienzo(QWidget):
             p.setBrush(Qt.NoBrush)
         self._zonas_glifos = self._dibujar_glifos(p) if self.mostrar["restricciones"] else {}
         self._zonas_cotas = self._dibujar_cotas(p) if self.mostrar["cotas"] else {}
+        self._dibujar_marco(p)
         self._dibujar_previa(p)
         self._dibujar_campos_vivos(p)
         if self._ventana is not None:

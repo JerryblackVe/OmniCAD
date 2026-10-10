@@ -1930,6 +1930,7 @@ DIBUJOS_EXTRA = {
     "calcomania": _calcomania,
     "insertar_svg": lambda p: _insertar_archivo(p, "SVG", NARANJA, _glifo_svg),
     "insertar_dxf": lambda p: _insertar_archivo(p, "DXF", AZUL_LADO, _glifo_dxf),
+    "vectorizar_imagen": lambda p: _insertar_archivo(p, "PNG", AZUL_LADO, _glifo_svg),
     "insertar_malla": _insertar_malla, "insertar_componente": _insertar_componente, "fijacion": _fijacion,
     # ensamblar
     "nuevo_componente": _nuevo_componente, "union": _union, "union_construida": _union_construida,

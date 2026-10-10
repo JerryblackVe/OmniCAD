@@ -135,7 +135,7 @@ el autoguardado si es más nuevo.
 | `FeatureOperations` | `operacion`: nuevo / unir / cortar / intersecar |
 | `ExportManager` STL / OBJ / STEP | `io_archivos.exportar` |
 | `ImportManager.createSTEPImportOptions` | `OpImportarSTEP` (el STEP se embebe en la receta) |
-| `.f3d` | `.omnicad` |
+| `.f3d` | `.omnicad` (y Archivo › Abrir lee los `.f3d` sin Fusion: `io_archivos/f3d_nativo.py`) |
 
 ## 7. Capa de agentes
 

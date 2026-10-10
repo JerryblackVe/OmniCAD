@@ -1050,6 +1050,36 @@ class VentanaPrincipal(QMainWindow):
         except (ErrorDXF, OSError) as e:
             QMessageBox.critical(self, "No se pudo guardar", str(e))
 
+    def guardar_boceto_svg(self, op_id):
+        """Boceto → SVG en milímetros (corte láser, vinilo); la construcción va en un grupo aparte."""
+        from ..io_archivos.svg import ErrorSVG, escribir_svg
+        br = self.doc.estado_final.bocetos.get(op_id)
+        if br is None:
+            return
+        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar como SVG", f"{br.nombre}.svg", "SVG (*.svg)")
+        if not ruta:
+            return
+        try:
+            construccion = [c.id for c in br.boceto.curvas.values() if c.construccion]
+            escribir_svg(ruta, br.boceto.geometria(incluir_construccion=True), construccion)
+            self.mensaje(f"Boceto guardado en {ruta}", 5000)
+        except (ErrorSVG, OSError) as e:
+            QMessageBox.critical(self, "No se pudo guardar", str(e))
+
+    def limpiar_boceto(self, op_id):
+        """Quita curvas repetidas, cierra huecos de 0,01 mm y junta líneas alineadas (lo típico de un DXF/SVG)."""
+        op = next((o for o in self.doc.operaciones if o.id == op_id), None)
+        if op is None or not hasattr(op, "boceto"):
+            return
+        nueva = op.copia()
+        hecho = nueva.boceto.limpiar(0.01)
+        if not any(hecho.values()):
+            self.mensaje(f"{op.nombre}: no había nada para limpiar.", 5000)
+            return
+        self._reemplazar(nueva)
+        self.mensaje(f"{op.nombre}: {hecho['duplicadas']} repetidas borradas, {hecho['huecos']} huecos cerrados, "
+                     f"{hecho['colineales']} líneas unidas.", 8000)
+
     def insertar_diseno(self):
         from ..timeline.ops_ensamblar import OpInsertarDiseno
         if not self._salir_de_boceto():
@@ -1438,6 +1468,10 @@ class VentanaPrincipal(QMainWindow):
             self._intentar(lambda: self.doc.eliminar(clave))
         elif accion == "boceto_dxf":
             self.guardar_boceto_dxf(clave)
+        elif accion == "boceto_svg":
+            self.guardar_boceto_svg(clave)
+        elif accion == "boceto_limpiar":
+            self.limpiar_boceto(clave)
         elif accion == "animar_union":
             self.animar_union(clave)
         elif accion == "accionar_union":
@@ -1832,7 +1866,7 @@ class VentanaPrincipal(QMainWindow):
         es_fusion = Path(ruta).suffix.lower() in puente_fusion.EXTENSIONES
         try:
             if es_fusion:
-                doc, avisos = self._esperando("Fusion 360 está convirtiendo el archivo…",
+                doc, avisos = self._esperando("Leyendo el archivo de Fusion…",
                                               lambda: abrir_externo.documento_desde_archivo(ruta, unidades))
             else:
                 QApplication.setOverrideCursor(Qt.WaitCursor)

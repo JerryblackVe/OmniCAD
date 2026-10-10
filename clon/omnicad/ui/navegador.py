@@ -282,6 +282,8 @@ class Navegador(QFrame):
         elif tipo == "boceto":
             m.addAction("Editar boceto", lambda: self.editar.emit(clave))
             m.addAction("Guardar como DXF…", lambda: self.accion.emit("boceto_dxf", clave))
+            m.addAction("Guardar como SVG…", lambda: self.accion.emit("boceto_svg", clave))
+            m.addAction("Limpiar geometría", lambda: self.accion.emit("boceto_limpiar", clave))
             m.addAction("Renombrar…", lambda: self.accion.emit("renombrar_paso", clave))
             m.addAction("Buscar en el timeline", lambda: self.accion.emit("buscar_timeline", clave))
             m.addSeparator()

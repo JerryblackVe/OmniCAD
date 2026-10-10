@@ -8,10 +8,11 @@ en el timeline (como Fusion, que al abrir un STEP o un STL crea un diseño nuevo
   Mallas (.stl/.obj/.3mf/.ply) → Insertar malla (las unidades del archivo se eligen; el 3MF trae las suyas)
   DXF (.dxf)          → Boceto sobre el plano XY
   BREP (.brep/.brp)   → Operación base con sus sólidos y superficies (el B-rep de OpenCascade que escribe Exportar)
-  Fusion (.f3d/.f3z)  → Fusion 360 instalado lo convierte a STEP por el puente (`puente_fusion`) y se crean
-                        sus parámetros de usuario. El historial de pasos de Fusion NO se traduce.
+  Fusion (.f3d/.f3z)  → Operación base con los cuerpos que trae el archivo, leídos SIN Fusion (`f3d_nativo`).
+                        Si eso falla y Fusion está abierto con su complemento, se convierte por el puente
+                        (`puente_fusion`, que además trae los parámetros). El historial de Fusion NO se traduce.
 
-`operacion_para_insertar` arma el mismo paso (STEP, IGES, malla u otro diseño .omnicad) para agregarlo al documento
+`operacion_para_insertar` arma el mismo paso (STEP, IGES, malla, Fusion u otro diseño .omnicad) para agregarlo al documento
 ACTUAL, como Insertar de Fusion (la herramienta insert_file).
 
 Sin Qt: lo usan la ventana, la API, la CLI y el MCP.
@@ -37,7 +38,7 @@ FORMATOS = {".step": "STEP", ".stp": "STEP", ".iges": "IGES", ".igs": "IGES", ".
             ".f3d": "Fusion 360", ".f3z": "Fusion 360"}
 MALLAS = (".stl", ".obj", ".3mf", ".ply")
 UNIDADES_MALLA = ("mm", "cm", "m", "pulgadas", "pies")
-INSERTABLES = (".step", ".stp", ".iges", ".igs") + MALLAS + (".omnicad", ".fclone")
+INSERTABLES = (".step", ".stp", ".iges", ".igs") + MALLAS + (".f3d", ".f3z", ".omnicad", ".fclone")
 _LONGITUDES_FUSION = {"mm", "cm", "m", "in", "ft"}
 _TOLERANCIA_VOLUMEN = 0.01            # con Fusion: 1 % (en superficies libres los núcleos difieren ~0,5 %)
 
@@ -78,12 +79,7 @@ def documento_desde_archivo(ruta, unidades="mm"):
         oid = doc.nuevo_id()
         op = OpOperacionBase(oid, nombre, cuerpos=_cuerpos_brep(ruta, oid))
     else:
-        fusion = puente_fusion.convertir(ruta)
-        op = OpImportarSTEP(doc.nuevo_id(), nombre, archivo=ruta.name, contenido=fusion["step_texto"], estructura=True)
-        doc.parametros, extra = parametros_desde_fusion(fusion.get("parametros") or [])
-        avisos += extra
-        avisos.append("El historial de pasos de Fusion no se traduce todavía: entra la forma y los parámetros de "
-                      "usuario (que no mueven la geometría importada).")
+        op, fusion = _paso_fusion(ruta, doc, nombre, avisos)
     doc.operaciones = [op]
     doc.marcador = 1
     doc.recalcular(0)
@@ -98,11 +94,48 @@ def documento_desde_archivo(ruta, unidades="mm"):
     return doc, avisos
 
 
+def _paso_fusion(ruta, doc, nombre, avisos):
+    """Paso de un .f3d/.f3z. Primero se lee el B-rep que trae el archivo, SIN Fusion (`f3d_nativo`). Solo si eso
+    falla y Fusion está abierto con el complemento, se le pide a Fusion (el puente también trae los parámetros).
+    Devuelve (paso, resultado del puente o None) y agrega los avisos a `avisos`."""
+    oid = doc.nuevo_id()
+    try:
+        return _operacion_f3d(ruta, oid, nombre, avisos), None
+    except ErrorAbrir as e:
+        error_nativo = e
+    if puente_fusion.leer_info() is None:
+        raise ErrorAbrir(f"{error_nativo}\n\n{puente_fusion.PASOS_A_MANO}") from None
+    fusion = puente_fusion.convertir(ruta)
+    op = OpImportarSTEP(oid, nombre, archivo=ruta.name, contenido=fusion["step_texto"], estructura=True)
+    doc.parametros, extra = parametros_desde_fusion(fusion.get("parametros") or [])
+    avisos += extra
+    avisos.append("El historial de pasos de Fusion no se traduce todavía: entra la forma y los parámetros de "
+                  "usuario (que no mueven la geometría importada).")
+    return op, fusion
+
+
+def _operacion_f3d(ruta, op_id, nombre, avisos):
+    """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede."""
+    from . import f3d_nativo                    # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
+    try:
+        partes, extra = f3d_nativo.leer(ruta)
+    except f3d_nativo.ErrorF3D as e:
+        raise ErrorAbrir(str(e)) from None
+    avisos += extra
+    avisos.append("Abierto sin Fusion: entran los cuerpos (sólidos y superficies) tal como están. El historial, "
+                  "los parámetros y los nombres de los cuerpos no se leen.")
+    varios = len(partes) > 1
+    cuerpos = [{"id": f"{op_id}.c{k}", "nombre": ruta.stem + (f" ({k})" if varios else ""), "tipo": tipo,
+                "apariencia": None, "brep": intercambio.brep_a_texto(forma)}
+               for k, (forma, tipo) in enumerate(partes, 1)]
+    return OpOperacionBase(op_id, nombre, cuerpos=cuerpos)
+
+
 def operacion_para_insertar(ruta, op_id, unidades="mm"):
     """Insertar en el diseño actual de Fusion (Insertar desde mi PC / Insertar malla / Insertar componente): lee
     `ruta` y devuelve el paso con el contenido COPIADO adentro, listo para `doc.agregar`. STEP (con nombres,
-    colores y componentes), IGES, malla (`unidades` para STL/OBJ/PLY) u otro diseño .omnicad (entra como
-    componente). Lanza ErrorAbrir si no existe, no se puede leer o el formato no se inserta."""
+    colores y componentes), IGES, malla (`unidades` para STL/OBJ/PLY), Fusion (.f3d/.f3z, leído sin Fusion) u otro
+    diseño .omnicad (entra como componente). Lanza ErrorAbrir si no existe, no se puede leer o el formato no se inserta."""
     ruta = Path(ruta)
     ext = ruta.suffix.lower()
     if ext not in INSERTABLES:
@@ -117,6 +150,8 @@ def operacion_para_insertar(ruta, op_id, unidades="mm"):
         return OpImportarIGES(op_id, f"Importar {ruta.name}", archivo=ruta.name, contenido=_texto(ruta))
     if ext in MALLAS:
         return OpInsertarMalla(op_id, f"Insertar {ruta.name}", archivo=ruta.stem, datos=_malla(ruta, unidades))
+    if ext in (".f3d", ".f3z"):
+        return _operacion_f3d(ruta, op_id, f"Insertar {ruta.name}", [])
     from ..timeline.ops_ensamblar import OpInsertarDiseno
     from . import proyecto
     try:

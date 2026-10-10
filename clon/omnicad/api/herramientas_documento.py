@@ -134,8 +134,8 @@ _UNIDADES_MALLA = {"mm": "mm", "cm": "cm", "m": "m", "in": "pulgadas", "ft": "pi
 @herramienta("open_document", "documento", "Abre un archivo y lo deja como documento activo: proyecto .omnicad (o "
              ".fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y "
              "componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, "
-             "como operación base) o Fusion 360 (.f3d, .f3z: lo convierte Fusion instalado con el complemento "
-             "OmniCADPuente; trae la forma y los parámetros de usuario, no el historial). Si el actual tiene cambios "
+             "como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; "
+             "el historial, los parámetros y los nombres de los cuerpos no se leen). Si el actual tiene cambios "
              "sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el "
              "documento actual: insert_file.", modifica=True,
              transaccion=False)
@@ -155,7 +155,8 @@ def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", 
 
 @herramienta("insert_file", "documento", "Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline "
              "(Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla "
-             ".stl/.obj/.3mf/.ply u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia "
+             ".stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño "
+             ".omnicad/.fclone (entra como componente). El contenido se copia "
              "dentro de la receta. Para abrirlo como documento nuevo: open_document.", modifica=True)
 def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", name: str | None = None):
     """
@@ -168,7 +169,7 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
     if ruta.suffix.lower() not in abrir_externo.INSERTABLES:
         raise error("UNSUPPORTED_FILE_TYPE", f"Formato no soportado para insertar: {ruta.suffix or '(sin extensión)'}."
                     f" Se insertan: {', '.join(abrir_externo.INSERTABLES)}.",
-                    "Un .dxf, .brep o .f3d/.f3z se abre como documento nuevo con open_document.")
+                    "Un .dxf o .brep se abre como documento nuevo con open_document.")
     if not ruta.is_file():
         raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
     doc = sesion.doc

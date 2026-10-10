@@ -10,6 +10,7 @@ sirve cada tema y cómo pedirlo. Así no hay dos versiones que se contradigan.
 | `indice` | el mapa: qué grupos de herramientas hay, qué temas existen y las reglas que valen siempre | [indice.md](../../clon/omnicad/api/guia/indice.md) |
 | `flujo` | el ciclo de trabajo (mirar, hacer, ver la imagen, medir, guardar), unidades, cómo se nombran cuerpos y pasos, cómo leer los errores | [flujo.md](../../clon/omnicad/api/guia/flujo.md) |
 | `selectores` | elegir caras y aristas (`>Z`, `\|Z`, `%CIRCLE`…) para empalmes, chaflanes, vaciados, agujeros y bocetos sobre una cara | [selectores.md](../../clon/omnicad/api/guia/selectores.md) |
+| `texto_vectores` | fuentes instaladas, texto de boceto con todas sus opciones y parámetros `{ancho}`, insertar SVG / DXF, vectorizar imágenes y exportar el boceto | [texto_vectores.md](../../clon/omnicad/api/guia/texto_vectores.md) |
 
 Orden de lectura: `flujo` antes de tocar nada; `selectores` la primera vez que necesites una cara o una arista.
 

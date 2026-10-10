@@ -18,7 +18,8 @@ omnicad setup --cliente todos --aplicar  # lo hace: respalda cada archivo con .b
 - `--cliente claude-code | opencode | fusion | todos`. Correrlo dos veces no duplica nada.
 - Fusion 360: copia el complemento OmniCADPuente a la carpeta AddIns DEL USUARIO (`%APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns/`;
   nunca a la instalación de Fusion). Arranca solo con Fusion; la primera vez, reiniciá Fusion o ejecutalo en Utilidades ›
-  Complementos (Mayús+S). Con eso, `open_document` y Archivo › Abrir abren `.f3d` y `.f3z` (forma + parámetros de usuario).
+  Complementos (Mayús+S). Es OPCIONAL: `open_document` y Archivo › Abrir leen los `.f3d`/`.f3z` sin Fusion
+  (`io_archivos/f3d_nativo.py`); el complemento queda de respaldo si esa lectura falla y además trae los parámetros.
 - Claude Code: usa `claude mcp add --scope user`; la skill va a `~/.claude/skills/omnicad/`.
 - OpenCode: suma `mcp.omnicad` a `~/.config/opencode/opencode.jsonc` (o `.json`). Con `todos`, la skill queda solo en
   `~/.claude/skills/` porque OpenCode también lee esa carpeta (dos copias darían «duplicate skill name»).
@@ -49,7 +50,7 @@ Se agregan a `args` (o al comando). Todas son opcionales.
 | Opción | Qué hace |
 |---|---|
 | `--doc RUTA` | abre ese proyecto `.omnicad` al arrancar (trabaja sin ventana) |
-| `--toolsets LISTA` | solo estos grupos, separados por coma. Por defecto: `documento,parametros,boceto,solido,inspeccion,avanzado` |
+| `--toolsets LISTA` | solo estos grupos, separados por coma. Por defecto: `documento,parametros,boceto,vectores,solido,inspeccion,avanzado` |
 | `--modo auto\|vivo\|sin_ventana` | de dónde salen las herramientas; por defecto `auto`. Ver [puente.md](puente.md) |
 | `--dev` | suma el grupo `dev` (`run_checks`, `app_screenshot`, `run_bench`). Ver [puente.md](puente.md) y [cli.md](cli.md) |
 | `--http` y `--port N` | sirve por HTTP en `127.0.0.1` (puerto por defecto 27190, ruta `/mcp`) en vez de stdio |

@@ -30,7 +30,8 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Comportamiento de Fusion | Dónde está |
 |---|---|
 | Abrir STEP, IGES, STL, OBJ, 3MF, PLY y DXF crea un diseño nuevo con su paso de importación; del STEP vienen nombres de cuerpos, colores y componentes | `io_archivos/abrir_externo.py`, `nucleo/intercambio.py` (`leer_step_estructura`) |
-| Abrir `.f3d` y `.f3z`: Fusion instalado los convierte por su API pública con el complemento propio OmniCADPuente (`omnicad setup --cliente fusion`) | `integraciones/fusion/OmniCADPuente/`, `io_archivos/puente_fusion.py` |
+| Abrir `.f3d` y `.f3z` SIN Fusion (2026-10-10): se lee el B-rep que trae el archivo (bloques SAB de ShapeManager comprimidos con Zstandard) y entra como operación base | `io_archivos/f3d_nativo.py`, `sab.py`, `acis_occ.py`, `zstd_puro.py` |
+| Respaldo con Fusion instalado: si la lectura propia falla, lo convierte Fusion por su API pública con el complemento OmniCADPuente (trae también los parámetros de usuario) | `integraciones/fusion/OmniCADPuente/`, `io_archivos/puente_fusion.py` |
 
 ## Lo que falta
 
@@ -43,7 +44,9 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Relleno azul del perfil en la vista previa mientras se dibuja | La geometría aparece rellena recién al crearse. |
 | Tabla de grupos de aristas en Empalme (radios distintos por grupo) | Hoy hay un solo radio por operación. |
 | Configuración del timeline (engranaje abajo a la derecha) | No implementado. |
-| Historial de pasos al abrir un `.f3d` (hoy entra la forma como STEP y los parámetros de usuario, que no mueven esa forma) | Hay que traducir cada operación de Fusion a una de OmniCAD por la API pública: es una fase propia. |
+| Historial de pasos al abrir un `.f3d` (hoy entran los cuerpos sin historial; con Fusion abierto, además los parámetros de usuario) | El historial vive en el flujo de diseño propietario de Fusion (`FusionDesignSegmentType1/BulkStream.dat`, clases por GUID sin nombres): hay que descifrarlo o traducirlo por la API pública con Fusion. Es una fase propia. |
+| Instancias y componentes movidos al abrir un `.f3d` sin Fusion: cada componente entra donde está guardado su B-rep; faltan las copias (p. ej. las piezas acomodadas en las camas de impresión del sello) y la posición de los componentes movidos | Las matrices de posición están en el flujo de diseño y en la escena `OGS/DefaultScene/world` (nodos `Instance`/`TransformAttribute`), pero falta saber a qué bloque `BREP.*.smbh` corresponde cada una. |
 | `.f3z` con referencias externas: se abre el diseño de arriba del paquete; los diseños referenciados pueden no venir | La importación de archivo de Fusion solo acepta `.f3d` sueltos. |
 | Electrónica y Diseño generativo | Fuera del alcance por ahora: quedaron afuera desde el recorte del MVP. Un optimizador de parámetros simple está en GH11 de `brechas_grasshopper.md`. |
 | Simulación, Fabricación y Forma (T-Splines) | Pendientes de prioridad 3 desde el 2026-10-09 (antes, fuera del alcance por el recorte del MVP): F19 y F20 de `brechas_freecad.md`, B17 de `brechas_blender.md`, RH19 de `brechas_rhino.md`. Antes de empezar hay que decidir las dependencias (p. ej. CalculiX y Gmsh). |
+| **Recuperación de trabajo** al arrancar tras un cierre inesperado: lista de documentos recuperados con «Abrir» y «Suprimir», y «Archivo › Recuperar documentos» | Hoy el arranque solo ofrece un autoguardado de documento sin título (Sí/No); los proyectos con ruta se ofrecen solo al reabrirlos. Pendiente 21 de `PROJECT_LOG.md`. |

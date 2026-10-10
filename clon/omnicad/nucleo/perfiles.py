@@ -141,8 +141,8 @@ def aristas_boceto(geometria, plano):
                     continue
                 e = _arista_elipse(plano, *prim[2:6], *(prim[6:8] if tipo == "arco_elipse" else ()))
             elif tipo == "spline":
-                pts = puntos_primitiva(prim, 16)
-                if max(math.dist(pts[0], q) for q in pts[1:]) < 1e-9:
+                polos = prim[2]
+                if max(abs(q[0] - polos[0][0]) + abs(q[1] - polos[0][1]) for q in polos[1:]) < 1e-9:
                     continue
                 e = _arista_bspline(plano, prim[2], prim[3], prim[4], prim[5])
             else:
@@ -159,8 +159,86 @@ def _a_uv(plano, p3):
     return float(d @ plano.u), float(d @ plano.v)
 
 
+_CACHE_PERFILES = {}
+_CACHE_MAX = 24
+
+
+def _clave_plano(plano):
+    return tuple(float(v) for arr in (plano.origen, plano.u, plano.v, plano.normal) for v in arr)
+
+
 def detectar(geometria, plano, tolerancia=1e-4):
-    """Devuelve la lista de Perfil ordenada de forma determinista (por centroide u, luego v)."""
+    """Devuelve la lista de Perfil ordenada de forma determinista (por centroide u, luego v).
+
+    Con caché: recalcular el timeline sin tocar el boceto no vuelve a partir la cara (con miles de curvas,
+    partir es lo que más tarda). La clave es la geometría misma (tuplas de números), así que cualquier cambio
+    la invalida."""
+    try:
+        clave = (tuple(geometria), _clave_plano(plano), tolerancia)
+        hash(clave)
+    except TypeError:                      # alguna primitiva con listas: sin caché
+        return _detectar(geometria, plano, tolerancia)
+    if clave in _CACHE_PERFILES:
+        return list(_CACHE_PERFILES[clave])
+    perfiles = _detectar(geometria, plano, tolerancia)
+    if len(_CACHE_PERFILES) >= _CACHE_MAX:
+        _CACHE_PERFILES.pop(next(iter(_CACHE_PERFILES)))
+    _CACHE_PERFILES[clave] = tuple(perfiles)
+    return perfiles
+
+
+def _aristas_de(forma):
+    salida = []
+    ex = TopExp_Explorer(forma, TopAbs_EDGE)
+    while ex.More():
+        salida.append(TopoDS.Edge(ex.Current()))
+        ex.Next()
+    return salida
+
+
+def _punto_medio(arista):
+    """Punto medio de la arista o None si no tiene curva 3D (aristas degeneradas)."""
+    try:
+        c = BRepAdaptor_Curve(arista)
+        p = c.Value((c.FirstParameter() + c.LastParameter()) / 2)
+    except Exception:  # noqa: BLE001 — Standard_NullObject y similares de OCC
+        return None
+    return p.X(), p.Y(), p.Z()
+
+
+def _origen_aristas(aristas, caras, sp):
+    """{hash de arista de las caras: id de la curva del boceto de la que salió}.
+
+    El Splitter copia TODAS las aristas, y pedirle el historial (Modified) a cada una cuesta ~0,5 ms: con miles
+    de curvas eran segundos. Las que no se partieron se reconocen por su punto medio (la copia es idéntica); el
+    historial se pide solo para las que sí se partieron."""
+    from scipy.spatial import cKDTree
+    origen = {}
+    unicas = {}
+    for cara in caras:
+        for a in _aristas_de(cara):
+            unicas.setdefault(hash(a), a)
+    if not aristas or not unicas:
+        return origen
+    usadas = np.zeros(len(aristas), bool)
+    fuente = [(i, m) for i, m in ((i, _punto_medio(e)) for i, (_cid, e) in enumerate(aristas)) if m is not None]
+    destino = [(h, m) for h, m in ((h, _punto_medio(a)) for h, a in unicas.items()) if m is not None]
+    if fuente and destino:
+        arbol = cKDTree(np.array([m for _i, m in fuente]))
+        dist, idx = arbol.query(np.array([m for _h, m in destino]))
+        for (h, _m), d, k in zip(destino, dist, idx, strict=True):
+            if d < 1e-7:
+                i = fuente[k][0]
+                origen[h] = aristas[i][0]
+                usadas[i] = True
+    for i, (cid, e) in enumerate(aristas):
+        if not usadas[i]:                  # se partió (o se superpone con otra): sus hijas por el historial
+            for hija in sp.Modified(e):
+                origen.setdefault(hash(hija), cid)
+    return origen
+
+
+def _detectar(geometria, plano, tolerancia=1e-4):
     aristas = aristas_boceto(geometria, plano)
     if not aristas:
         return []
@@ -177,21 +255,19 @@ def detectar(geometria, plano, tolerancia=1e-4):
     sp.Build()
     if not sp.IsDone():
         raise geo.ErrorGeometria("No se pudieron calcular los perfiles del boceto.")
-    origen = {}        # hash de arista resultante → id de la curva del boceto de la que salió
-    for cid, e in aristas:
-        origen.setdefault(hash(e), cid)
-        for hija in sp.Modified(e):
-            origen.setdefault(hash(hija), cid)
+    caras = list(geo.caras(sp.Shape()))
+    origen = _origen_aristas(aristas, caras, sp)
+    borde = {hash(a) for a in _aristas_de(grande)}
+    for a in _aristas_de(grande):
+        borde.update(hash(h) for h in sp.Modified(a))
 
     perfiles = []
-    for cara in geo.caras(sp.Shape()):
-        bb = geo.caja_envolvente(cara)
-        if bb is None or max(abs(c) for c in bb[0] + bb[1]) > _TAM_CARA * 0.5:
+    for cara in caras:
+        aristas_cara = _aristas_de(cara)
+        if any(hash(a) in borde for a in aristas_cara):
             continue  # región exterior (toca el borde de la cara enorme)
         firma = set()
-        ex = TopExp_Explorer(cara, TopAbs_EDGE)
-        while ex.More():
-            arista = TopoDS.Edge(ex.Current())
+        for arista in aristas_cara:
             cid = origen.get(hash(arista))
             if cid is None:          # respaldo geométrico: la curva más cercana al punto medio
                 curva = BRepAdaptor_Curve(arista)
@@ -202,7 +278,6 @@ def detectar(geometria, plano, tolerancia=1e-4):
                     cid = mejor[1]
             if cid is not None:
                 firma.add(cid)
-            ex.Next()
         perfiles.append(Perfil(cara, geo.area(cara), _a_uv(plano, geo.centro_masa(cara, superficie=True)),
                                frozenset(firma)))
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
@@ -302,15 +377,22 @@ _ASPECTOS = {(False, False): Font_FA_Regular, (True, False): Font_FA_Bold, (Fals
 
 
 def fuentes_disponibles():
-    """Nombres de las fuentes del sistema que OCC puede usar (para el Texto de boceto)."""
+    """Nombres de las fuentes para el Texto de boceto: todas las instaladas (catálogo de `fuentes`, que ve
+    también las del usuario y las variables) más las que conoce el administrador de OpenCascade."""
+    nombres = set()
+    try:
+        from . import fuentes
+        nombres.update(fuentes.familias())
+    except Exception:  # noqa: BLE001 — sin catálogo, quedan las de OpenCascade
+        pass
     seq = Sequence_TCollection_HAsciiString()
     Font_FontMgr.GetInstance_s().GetAvailableFontsNames(seq)
-    return sorted({seq.Value(i).ToCString() for i in range(1, seq.Length() + 1)})
+    nombres.update(seq.Value(i).ToCString() for i in range(1, seq.Length() + 1))
+    return sorted(nombres, key=str.casefold)
 
 
-def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False):
-    """Contornos de un texto como primitivas 2D (líneas y B-splines) con el origen en la esquina inferior
-    izquierda de la línea base (Texto de boceto de Fusion: fuente, altura, negrita, cursiva)."""
+def _contornos_occ(texto, fuente, altura, negrita, cursiva):
+    """Respaldo: contornos con el administrador de fuentes de OpenCascade (solo lo básico)."""
     f = StdPrs_BRepFont()
     if not f.FindAndInit(TCollection_AsciiString(str(fuente)), _ASPECTOS[(bool(negrita), bool(cursiva))],
                          float(altura), Font_StrictLevel_Any):
@@ -326,6 +408,22 @@ def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=Fa
         if prim is not None:
             salida.append(prim)
     return salida
+
+
+def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False, **opciones):
+    """Contornos de un texto como primitivas 2D (líneas y B-splines) con el origen en la esquina inferior
+    izquierda de la línea base (Texto de boceto de Fusion: fuente, altura, negrita, cursiva).
+
+    Opciones (ver `fuentes.contornos_texto`): espaciado, interlineado, alineacion, ancla_v, ancho_caja,
+    voltear_h, voltear_v. Usa fontTools; si la fuente no está en el catálogo cae al administrador de
+    OpenCascade (que ignora las opciones)."""
+    from . import fuentes
+    try:
+        return fuentes.contornos_texto(texto, fuente, altura, negrita, cursiva, **opciones)
+    except fuentes.ErrorFuente as e:
+        if fuentes.buscar_fuente(fuente) is not None:       # la fuente existe: el error es de las opciones
+            raise geo.ErrorGeometria(str(e)) from e
+    return _contornos_occ(texto, fuente, altura, negrita, cursiva)
 
 
 # ---------------------------------------------------------------- Proyectar / Intersecar

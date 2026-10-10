@@ -73,32 +73,23 @@ def _unitario(v):
 class _Sistema:
     """Arma el vector de incógnitas y la función de residuos de un boceto."""
 
-    def __init__(self, boceto, valores_cotas):
+    def __init__(self, boceto, valores_cotas, grupo=None):
+        """`grupo` (de `_grupos`) limita el sistema a una parte independiente del boceto: sus incógnitas y
+        sus términos. Sin grupo, el boceto entero (como siempre)."""
         self.b = boceto
         self.valores = valores_cotas
-        self.fijos_p, self.fijos_r = set(), set()
-        for r in boceto.restricciones.values():
-            if r.tipo == "fijo":
-                for e in r.entidades:
-                    ent = boceto.entidad(e)
-                    if ent.tipo == "punto":
-                        self.fijos_p.add(e)
-                    else:
-                        self.fijos_p.update(ent.puntos())
-                        if isinstance(ent, (Circulo, Elipse, ArcoElipse)):
-                            self.fijos_r.add(e)
-        for c in boceto.curvas.values():
-            if c.proyectada:
-                self.fijos_p.update(c.puntos())
-                self.fijos_r.add(c.id)
-        self.fijos_p.update(p.id for p in boceto.puntos.values() if p.proyectado)
+        self._curvas = list(boceto.curvas.values()) if grupo is None else grupo["curvas"]
+        self._restricciones = list(boceto.restricciones.values()) if grupo is None else grupo["restricciones"]
+        self._cotas = list(boceto.cotas.values()) if grupo is None else grupo["cotas"]
+        self.fijos_p, self.fijos_r = _fijos(boceto)
         self.idx_p, self.idx_r, x0 = {}, {}, []
         for pid, p in boceto.puntos.items():
-            if pid not in self.fijos_p:
+            if pid not in self.fijos_p and (grupo is None or pid in grupo["p"]):
                 self.idx_p[pid] = len(x0)
                 x0 += [p.x, p.y]
         for cid, c in boceto.curvas.items():
-            if isinstance(c, (Circulo, Elipse, ArcoElipse)) and cid not in self.fijos_r:
+            if isinstance(c, (Circulo, Elipse, ArcoElipse)) and cid not in self.fijos_r and (
+                    grupo is None or cid in grupo["r"]):
                 self.idx_r[cid] = len(x0)
                 x0.append(c.radio if isinstance(c, Circulo) else c.radio_menor)
         self.n_base = len(x0)
@@ -189,14 +180,14 @@ class _Sistema:
     # ---- residuos
     def _armar(self):
         b, x0, T = self.b, self.x0, self.terminos
-        for c in b.curvas.values():
+        for c in self._curvas:
             if isinstance(c, Arco):
                 T.append(lambda x, c=c: [math.dist(self.P(x, c.inicio), self.P(x, c.centro))
                                          - math.dist(self.P(x, c.fin), self.P(x, c.centro))])
             elif isinstance(c, ArcoElipse):
                 T.append(lambda x, c=c: [self.sobre_elipse(x, self.P(x, c.inicio), c.id),
                                          self.sobre_elipse(x, self.P(x, c.fin), c.id)])
-        for r in b.restricciones.values():
+        for r in self._restricciones:
             t = r.tipo
             e = r.entidades
             tipos = [b.tipo_de(i) for i in e]
@@ -306,7 +297,7 @@ class _Sistema:
                         return [ox + ca * (px - ox) - sa * (py - oy) - qx, oy + sa * (px - ox) + ca * (py - oy) - qy]
                     T.append(f)
 
-        for c in b.cotas.values():
+        for c in self._cotas:
             if c.id not in self.valores:
                 continue
             v, e, t = self.valores[c.id], c.entidades, c.tipo
@@ -470,19 +461,140 @@ def _jacobiano(fun, x, h=1e-7):
     return J
 
 
+def _claves(b, eid):
+    """Incógnitas posibles de una entidad: ('p', id) por punto y ('r', id) por radio."""
+    if eid in b.puntos:
+        return [("p", eid)]
+    c = b.curvas.get(eid)
+    if c is None:
+        return []
+    salida = [("p", p) for p in c.puntos()]
+    if isinstance(c, (Circulo, Elipse, ArcoElipse)):
+        salida.append(("r", eid))
+    return salida
+
+
+def _grupos(b):
+    """Partes INDEPENDIENTES del boceto: dos incógnitas van juntas si alguna restricción, cota o curva con
+    relación propia (arco, arco de elipse) las une. La geometría sin restricciones (un SVG o un texto
+    importados) no forma ningún grupo: no entra al solver. Devuelve [{p, r, curvas, restricciones, cotas}]."""
+    padre = {}
+
+    def raiz(k):
+        padre.setdefault(k, k)
+        while padre[k] != k:
+            padre[k] = padre[padre[k]]
+            k = padre[k]
+        return k
+
+    def unir(claves):
+        if claves:
+            r0 = raiz(claves[0])
+            for k in claves[1:]:
+                padre[raiz(k)] = r0
+            return r0
+        return None
+    con_terminos = []
+    for c in b.curvas.values():
+        if isinstance(c, (Arco, ArcoElipse)):
+            con_terminos.append(("curvas", c, _claves(b, c.id)))
+    for r in b.restricciones.values():
+        if r.tipo != "fijo":
+            con_terminos.append(("restricciones", r, [k for e in r.entidades for k in _claves(b, e)]))
+    for k in b.cotas.values():
+        con_terminos.append(("cotas", k, [q for e in k.entidades for q in _claves(b, e)]))
+    for _tipo, _obj, claves in con_terminos:
+        unir(claves)
+    grupos = {}
+    for tipo, obj, claves in con_terminos:
+        if not claves:
+            continue
+        g = grupos.setdefault(raiz(claves[0]), {"p": set(), "r": set(), "curvas": [], "restricciones": [],
+                                                "cotas": []})
+        g[tipo].append(obj)
+        for clase, i in claves:
+            g[clase].add(i)
+    return list(grupos.values())
+
+
+def _sueltas(b, grupos, sis_fijos):
+    """Incógnitas libres que no están en ningún grupo: (puntos, radios)."""
+    en_grupo_p = set().union(*(g["p"] for g in grupos)) if grupos else set()
+    en_grupo_r = set().union(*(g["r"] for g in grupos)) if grupos else set()
+    fijos_p, fijos_r = sis_fijos
+    puntos = {p for p in b.puntos if p not in fijos_p and p not in en_grupo_p}
+    radios = {c for c, k in b.curvas.items() if isinstance(k, (Circulo, Elipse, ArcoElipse))
+              and c not in fijos_r and c not in en_grupo_r}
+    return puntos, radios
+
+
+def _fijos(b):
+    """(puntos fijos, radios fijos): restricción «fijo» y geometría proyectada (no son incógnitas)."""
+    fijos_p, fijos_r = set(), set()
+    for r in b.restricciones.values():
+        if r.tipo == "fijo":
+            for e in r.entidades:
+                ent = b.entidad(e)
+                if ent.tipo == "punto":
+                    fijos_p.add(e)
+                else:
+                    fijos_p.update(ent.puntos())
+                    if isinstance(ent, (Circulo, Elipse, ArcoElipse)):
+                        fijos_r.add(e)
+    for c in b.curvas.values():
+        if c.proyectada:
+            fijos_p.update(c.puntos())
+            fijos_r.add(c.id)
+    fijos_p.update(p.id for p in b.puntos.values() if p.proyectado)
+    return fijos_p, fijos_r
+
+
 def resolver(boceto, valores_cotas=None, arrastrado=None):
     """Resuelve el boceto en el lugar (modifica coordenadas y radios). Devuelve ResultadoSolver.
 
     valores_cotas: {id_cota: valor} en mm o grados (ya evaluados desde sus expresiones).
     arrastrado: id de un punto que el usuario está moviendo; se intenta respetar su posición.
+
+    Se resuelve cada parte independiente por separado (`_grupos`): la geometría sin restricciones no entra,
+    así un dibujo importado de miles de curvas no arma un sistema gigante (antes, 30 000 incógnitas pedían
+    una matriz de 6,7 GB y fallaba).
     """
-    sis = _Sistema(boceto, valores_cotas or {})
+    valores = valores_cotas or {}
+    grupos = _grupos(boceto)
+    fijos = _fijos(boceto)
+    sueltos_p, sueltos_r = _sueltas(boceto, grupos, fijos)
+    libres_p, libres_r = set(sueltos_p), set(sueltos_r)
+    gdl, err_max, inconsistente = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False
+    for g in grupos:
+        sis = _Sistema(boceto, valores, g)
+        x, err, J, rango = _resolver_grupo(sis, arrastrado)
+        if x is not None:
+            sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
+        gdl += len(sis.x0) - rango
+        err_max = max(err_max, err)
+        inconsistente = inconsistente or err >= TOLERANCIA
+        lp, lr = _libres(sis, J, rango)
+        libres_p |= lp
+        libres_r |= lr
+    determinadas = _determinadas(boceto, libres_p, libres_r)
+    if inconsistente:
+        return ResultadoSolver("inconsistente", gdl, err_max, "Revisá las últimas restricciones o cotas.", determinadas)
+    colapsadas = _curvas_colapsadas(boceto) if grupos else ""
+    if colapsadas:
+        # Ej.: "horizontal" sobre una línea vertical se "cumple" achicándola a largo cero. Fusion lo
+        # rechaza como conflicto; acá también.
+        return ResultadoSolver("inconsistente", gdl, 0.0,
+                               f"Para cumplirse, la geometría colapsa (largo o radio cero): {colapsadas}.")
+    return ResultadoSolver("ok", gdl, err_max, determinadas=determinadas)
+
+
+def _resolver_grupo(sis, arrastrado):
+    """(x resuelto o None, error máximo, jacobiano, rango) de un grupo."""
     n = len(sis.x0)
     if n == 0 or not sis.terminos:
         r = sis.residuos(sis.x0) if sis.terminos else np.zeros(0)
         err = float(np.max(np.abs(r))) if len(r) else 0.0
-        return ResultadoSolver("ok" if err < TOLERANCIA else "inconsistente", n, err,
-                               determinadas=_entidades_determinadas(sis, np.zeros((0, n)), 0))
+        return None, err, np.zeros((0, n)), 0
 
     pesos = np.full(n, _PESO_REGULARIZACION)
     if arrastrado in sis.idx_p:
@@ -501,38 +613,34 @@ def resolver(boceto, valores_cotas=None, arrastrado=None):
     err = float(np.max(np.abs(res))) if len(res) else 0.0
     J = _jacobiano(sis.residuos, x)
     rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
-    determinadas = _entidades_determinadas(sis, J, rango)
-    sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
-    if err >= TOLERANCIA:
-        return ResultadoSolver("inconsistente", n - rango, err, "Revisá las últimas restricciones o cotas.", determinadas)
-    colapsadas = _curvas_colapsadas(boceto)
-    if colapsadas:
-        # Ej.: "horizontal" sobre una línea vertical se "cumple" achicándola a largo cero. Fusion lo
-        # rechaza como conflicto; acá también.
-        return ResultadoSolver("inconsistente", n - rango, 0.0,
-                               f"Para cumplirse, la geometría colapsa (largo o radio cero): {colapsadas}.")
-    return ResultadoSolver("ok", n - rango, err, determinadas=determinadas)
+    return x, err, J, rango
 
 
-def _entidades_determinadas(sis, J, rango, tol=1e-6):
-    """
-    Qué entidades quedan sin libertad: una incógnita está determinada si no aparece en el núcleo
-    del jacobiano (ningún movimiento que respete las restricciones la cambia). Un punto lo está si
-    lo están sus dos coordenadas; una curva, si lo están sus puntos (y el radio, en un círculo).
-    """
+def _libres(sis, J, rango, tol=1e-6):
+    """(puntos, radios) del grupo que siguen libres: una incógnita está determinada si no aparece en el
+    núcleo del jacobiano (ningún movimiento que respete las restricciones la cambia)."""
     n = len(sis.x0)
+    if n == 0:
+        return set(), set()
     if rango >= n:
         libres = np.zeros(n, bool)
+    elif J.size:
+        _, _, vt = np.linalg.svd(J)
+        libres = np.linalg.norm(vt[rango:].T, axis=1) > tol
     else:
-        _, _, vt = np.linalg.svd(J) if J.size else (None, None, np.identity(n))
-        nucleo = vt[rango:].T if J.size else np.identity(n)
-        libres = np.linalg.norm(nucleo, axis=1) > tol
-    puntos = {pid for pid in sis.b.puntos
-              if pid not in sis.idx_p or not (libres[sis.idx_p[pid]] or libres[sis.idx_p[pid] + 1])}
+        libres = np.ones(n, bool)
+    puntos = {pid for pid, i in sis.idx_p.items() if libres[i] or libres[i + 1]}
+    radios = {cid for cid, i in sis.idx_r.items() if libres[i]}
+    return puntos, radios
+
+
+def _determinadas(b, libres_p, libres_r):
+    """Entidades que ya no se pueden mover: puntos sin coordenadas libres (los fijos y proyectados lo están
+    siempre) y curvas con todos sus puntos determinados y el radio (si tiene) también."""
+    puntos = {pid for pid in b.puntos if pid not in libres_p}
     salida = set(puntos)
-    for cid, c in sis.b.curvas.items():
-        radio_ok = cid not in sis.idx_r or not libres[sis.idx_r[cid]]
-        if set(c.puntos()) <= puntos and radio_ok:
+    for cid, c in b.curvas.items():
+        if set(c.puntos()) <= puntos and cid not in libres_r:
             salida.add(cid)
     return salida
 
@@ -558,13 +666,20 @@ def _curvas_colapsadas(boceto, minimo=1e-6):
 
 def grados_de_libertad(boceto, valores_cotas=None):
     """GDL sin mover la geometría (para mostrar el estado)."""
-    sis = _Sistema(boceto, valores_cotas or {})
-    if len(sis.x0) == 0:
-        return 0
-    if not sis.terminos:
-        return len(sis.x0)
-    J = _jacobiano(sis.residuos, sis.x0)
-    return len(sis.x0) - int(np.linalg.matrix_rank(J, tol=1e-6))
+    valores = valores_cotas or {}
+    grupos = _grupos(boceto)
+    sueltos_p, sueltos_r = _sueltas(boceto, grupos, _fijos(boceto))
+    gdl = 2 * len(sueltos_p) + len(sueltos_r)
+    for g in grupos:
+        sis = _Sistema(boceto, valores, g)
+        if len(sis.x0) == 0:
+            continue
+        if not sis.terminos:
+            gdl += len(sis.x0)
+            continue
+        J = _jacobiano(sis.residuos, sis.x0)
+        gdl += len(sis.x0) - int(np.linalg.matrix_rank(J, tol=1e-6))
+    return gdl
 
 
 # ---------------------------------------------------------------- AutoConstrain

@@ -80,7 +80,7 @@ delete_parameter  parametros  M  Borra un parámetro que no use ningún paso ni 
 4 herramienta(s). M = modifica el documento. Detalle: omnicad describe <herramienta>
 ```
 
-- `--group G` (`-g`): solo un grupo (`documento`, `parametros`, `boceto`, `solido`, `inspeccion`, `avanzado`, `dev`).
+- `--group G` (`-g`): solo un grupo (`documento`, `parametros`, `boceto`, `vectores`, `solido`, `inspeccion`, `avanzado`, `dev`).
 - `--json`: lista de `{nombre, grupo, modifica, descripcion}`.
 - `--markdown`: el catálogo entero como Markdown. Así se genera [herramientas.md](herramientas.md). Se combina con `--output ruta.md` (`-o`), que escribe en UTF-8 con saltos `\n`. No se combina con `--group` ni `--json`.
 
@@ -316,7 +316,7 @@ Desde el paso 5 de rendimiento (arranque rápido, 2026-10-09), el arranque da `1
 
 ### setup
 
-Registra el MCP y copia la skill `omnicad` en Claude Code y OpenCode, e instala en Fusion 360 el complemento OmniCADPuente (para abrir `.f3d`/`.f3z`). Detalle y rutas: [conectar.md](conectar.md).
+Registra el MCP y copia la skill `omnicad` en Claude Code y OpenCode, e instala en Fusion 360 el complemento OmniCADPuente (opcional: los `.f3d`/`.f3z` se abren sin Fusion; el complemento es el respaldo y trae los parámetros). Detalle y rutas: [conectar.md](conectar.md).
 
 ```
 $ omnicad setup --cliente todos

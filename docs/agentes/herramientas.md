@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-64 herramientas en 7 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+80 herramientas en 8 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -15,6 +15,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [documento](#grupo-documento) | 13 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 12 | Bocetos 2D: geometría, restricciones y cotas. |
+| [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 18 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [inspeccion](#grupo-inspeccion) | 7 | Ver y medir el resultado. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
@@ -28,8 +29,8 @@ Archivo, escena, timeline y deshacer.
 |---|---|---|
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), cantidad de pasos del timeline y parámetros. |
 | [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
-| [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: lo convierte Fusion instalado con el complemento OmniCADPuente; trae la forma y los parámetros de usuario, no el historial). |
-| [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply u otro diseño .omnicad/.fclone (entra como componente). |
+| [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; el historial, los parámetros y los nombres de los cuerpos no se leen). |
+| [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño .omnicad/.fclone (entra como componente). |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
 | [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
 | [`undo`](#undo) | sí | Deshace el último cambio del documento (cada herramienta que modifica es un paso). |
@@ -60,7 +61,7 @@ Empieza un documento vacío en lugar del actual. Si el actual tiene cambios sin 
 
 ### `open_document`
 
-Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: lo convierte Fusion instalado con el complemento OmniCADPuente; trae la forma y los parámetros de usuario, no el historial). Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el documento actual: insert_file.
+Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; el historial, los parámetros y los nombres de los cuerpos no se leen). Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el documento actual: insert_file.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -71,7 +72,7 @@ Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), 
 
 ### `insert_file`
 
-Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia dentro de la receta. Para abrirlo como documento nuevo: open_document.
+Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia dentro de la receta. Para abrirlo como documento nuevo: open_document.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -397,6 +398,287 @@ Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, r
   - `name` (texto; opcional, por defecto `null`): nombre del boceto; vacío = "Boceto1", "Boceto2"…
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
 - CLI: `omnicad call sketch_from_spec --doc pieza.omnicad`
+
+## Grupo vectores
+
+Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`list_fonts`](#list_fonts) | no | Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. |
+| [`add_font_folder`](#add_font_folder) | no | Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesión. |
+| [`add_text`](#add_text) | sí | Escribe un texto en el boceto (un paso de deshacer). |
+| [`edit_text`](#edit_text) | sí | Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa queda como estaba. |
+| [`explode_text`](#explode_text) | sí | Desglosa un texto del boceto (Fusion: Explode Text): el texto pasa a ser líneas y splines fijas, que se pueden editar curva por curva. |
+| [`inspect_svg`](#inspect_svg) | no | Mira un archivo SVG antes de insertarlo: tamaño en mm, y qué capas (grupos) y colores trae, con la cantidad de trazos de cada uno. |
+| [`insert_svg`](#insert_svg) | sí | Inserta un dibujo SVG en un boceto (Fusion: Insertar > Insertar SVG) y lo deja como curvas editables (las curvas Bézier pasan a splines de control; círculos y arcos quedan exactos). |
+| [`insert_dxf`](#insert_dxf) | sí | Inserta la geometría 2D de un archivo DXF en un boceto (Fusion: Insertar > Insertar DXF): líneas, arcos, círculos, polilíneas, splines y textos. |
+| [`trace_image`](#trace_image) | sí | Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como contornos cerrados (logos, siluetas, dibujos en blanco y negro). |
+| [`export_sketch`](#export_sketch) | no | Guarda un boceto como archivo 2D para corte láser, vinilo o CNC (Fusion: Guardar como DXF); el formato sale de la extensión: .dxf o .svg. |
+| [`combine_profiles`](#combine_profiles) | sí | Une, resta o interseca perfiles (regiones cerradas) del boceto y deja el contorno resultante como curvas nuevas, sin las líneas internas: juntar letras que se pisan, restar un marco, quedarse con lo común. |
+| [`offset_profiles`](#offset_profiles) | sí | Desfase (offset) del contorno de perfiles del boceto, con agujeros incluidos: distance > 0 agranda, < 0 achica. |
+| [`transform_sketch`](#transform_sketch) | sí | Mueve, gira, escala y/o espeja curvas de un boceto (un paso de deshacer): lo importado de un SVG, un texto, una selección. |
+| [`clean_sketch`](#clean_sketch) | sí | Limpia geometría importada (SVG, DXF, imagen vectorizada): borra curvas repetidas, une extremos sueltos a menos de tolerance mm (cierra huecos para que los contornos formen perfiles) y junta líneas seguidas alineadas en una sola. |
+| [`move_sketch_point`](#move_sketch_point) | sí | Mueve un punto del boceto (edición de nodos): extremos de líneas y arcos, puntos de control de splines (las curvas Bézier de un SVG), centros. |
+| [`delete_sketch_entities`](#delete_sketch_entities) | sí | Borra curvas, puntos, restricciones o cotas del boceto (un paso de deshacer); lo que dependa de ellos se borra también (un punto se lleva sus curvas). |
+
+### `list_fonts`
+
+Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `query` (texto; opcional, por defecto `null`): texto a buscar dentro del nombre de la familia (sin distinguir mayúsculas); vacío = todas.
+  - `limit` (entero; opcional, por defecto `100`): cuántas familias devolver como máximo (1 a 1000).
+  - `include_styles` (true/false; opcional, por defecto `false`): true para incluir los estilos de cada familia (peso, cursiva y archivo).
+- CLI: `omnicad call list_fonts --doc pieza.omnicad`
+
+### `add_font_folder`
+
+Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesión. Para que quede fija, definí la variable de entorno OMNICAD_FUENTES con la carpeta.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): carpeta con las fuentes (se busca también en sus subcarpetas).
+- CLI: `omnicad call add_font_folder --doc pieza.omnicad path=…`
+
+### `add_text`
+
+Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `text` (texto; obligatorio): el texto; '\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo.
+  - `x` (número; opcional, por defecto `0.0`): x del ancla (mm).
+  - `y` (número; opcional, por defecto `0.0`): y del ancla (mm).
+  - `height` (número; opcional, por defecto `5.0`): tamaño de la fuente en mm (positivo).
+  - `angle` (número; opcional, por defecto `0.0`): giro del texto en grados alrededor del ancla (antihorario).
+  - `font` (texto; opcional, por defecto `"Arial"`): familia (Arial, Segoe UI…) o ruta a un archivo de fuente.
+  - `bold` (true/false; opcional, por defecto `false`): negrita (el peso más cercano a 700 de la familia).
+  - `italic` (true/false; opcional, por defecto `false`): cursiva.
+  - `letter_spacing` (número; opcional, por defecto `0.0`): mm extra entre letras (negativo junta).
+  - `line_spacing` (número; opcional, por defecto `1.0`): factor del salto de línea de la fuente (1 = el de la fuente).
+  - `align` ("left" | "center" | "right" o null; opcional, por defecto `null`): alineación de cada línea dentro de la caja (left, center o right); en curva, qué parte del texto cae en path_position. Vacío = left (recto) o center (en curva).
+  - `anchor` ("baseline" | "top" | "middle" | "bottom"; opcional, por defecto `"baseline"`): qué parte del bloque cae sobre (x, y): baseline (línea base de la primera), top, middle o bottom.
+  - `box_width` (número; opcional, por defecto `0.0`): ancho de la caja en mm; 0 = sin caja (el bloque mide lo que mide su línea más larga).
+  - `flip_h` (true/false; opcional, por defecto `false`): espejo horizontal del texto dentro de su bloque.
+  - `flip_v` (true/false; opcional, por defecto `false`): espejo vertical del texto dentro de su bloque.
+  - `path_entity` (entero; opcional, por defecto `null`): id de la curva (get_sketch) que sigue el texto; vacío = texto recto.
+  - `path_side` ("left" | "right"; opcional, por defecto `"left"`): left = letras a la izquierda del sentido de la curva; right = la recorre al revés (letras del otro lado, se siguen leyendo derechas).
+  - `path_position` (número; opcional, por defecto `0.5`): fracción 0-1 del largo de la curva (en su sentido propio) donde cae el texto; un círculo empieza a la derecha y gira antihorario (0.25 = arriba).
+  - `path_offset` (número; opcional, por defecto `0.0`): mm entre la curva y la línea base (positivo = hacia el lado de las letras).
+  - `fit_path` (true/false; opcional, por defecto `false`): true reparte el texto en todo el largo de la curva.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call add_text --doc pieza.omnicad text=…`
+
+### `edit_text`
+
+Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa queda como estaba. Los perfiles de las letras se recalculan; lo que dependa de ellos (extrusiones) sigue al texto.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entity` (entero; obligatorio): id de la curva de texto (get_sketch).
+  - `text` (texto; opcional, por defecto `null`): texto nuevo ('\n' separa líneas; {parámetro} muestra su valor).
+  - `x` (número; opcional, por defecto `null`): x nueva del ancla (mm).
+  - `y` (número; opcional, por defecto `null`): y nueva del ancla (mm).
+  - `height` (número; opcional, por defecto `null`): tamaño nuevo de la fuente en mm.
+  - `angle` (número; opcional, por defecto `null`): giro nuevo en grados.
+  - `font` (texto; opcional, por defecto `null`): familia o ruta de la fuente nueva.
+  - `bold` (true/false; opcional, por defecto `null`): negrita.
+  - `italic` (true/false; opcional, por defecto `null`): cursiva.
+  - `letter_spacing` (número; opcional, por defecto `null`): mm extra entre letras.
+  - `line_spacing` (número; opcional, por defecto `null`): factor del salto de línea.
+  - `align` ("left" | "center" | "right" o null; opcional, por defecto `null`): left, center o right.
+  - `anchor` ("baseline" | "top" | "middle" | "bottom" o null; opcional, por defecto `null`): baseline, top, middle o bottom.
+  - `box_width` (número; opcional, por defecto `null`): ancho de la caja en mm (0 = sin caja).
+  - `flip_h` (true/false; opcional, por defecto `null`): espejo horizontal.
+  - `flip_v` (true/false; opcional, por defecto `null`): espejo vertical.
+  - `path_entity` (entero; opcional, por defecto `null`): id de la curva que sigue el texto; 0 = quitar la curva (texto recto otra vez).
+  - `path_side` ("left" | "right" o null; opcional, por defecto `null`): left o right (lado de la curva).
+  - `path_position` (número; opcional, por defecto `null`): fracción 0-1 del largo de la curva.
+  - `path_offset` (número; opcional, por defecto `null`): mm entre la curva y la línea base.
+  - `fit_path` (true/false; opcional, por defecto `null`): repartir el texto en todo el largo.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call edit_text --doc pieza.omnicad entity=…`
+
+### `explode_text`
+
+Desglosa un texto del boceto (Fusion: Explode Text): el texto pasa a ser líneas y splines fijas, que se pueden editar curva por curva. Ya no se puede cambiar la fuente ni el contenido.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entity` (entero; obligatorio): id de la curva de texto (get_sketch).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call explode_text --doc pieza.omnicad entity=…`
+
+### `inspect_svg`
+
+Mira un archivo SVG antes de insertarlo: tamaño en mm, y qué capas (grupos) y colores trae, con la cantidad de trazos de cada uno. Sirve para elegir layers o colors de insert_svg.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo .svg.
+- CLI: `omnicad call inspect_svg --doc pieza.omnicad path=…`
+
+### `insert_svg`
+
+Inserta un dibujo SVG en un boceto (Fusion: Insertar > Insertar SVG) y lo deja como curvas editables (las curvas Bézier pasan a splines de control; círculos y arcos quedan exactos). Con plane crea un boceto nuevo sobre ese plano o cara; sin plane suma el dibujo al boceto sketch (por defecto el último). Orden: voltear, escalar (o ajustar a width), girar y mover. Con layers o colors importa solo esa parte del archivo (inspect_svg dice cuáles hay).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo .svg.
+  - `plane` (texto; opcional, por defecto `null`): "XY", "XZ", "YZ", un plano de construcción o una cara plana: crea un boceto nuevo ahí. Vacío = usar sketch.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto donde sumar el dibujo (sin plane); vacío = el último boceto.
+  - `scale` (número; opcional, por defecto `1.0`): factor de escala sobre el tamaño del archivo (1 = tal cual, en mm reales).
+  - `width` (número; opcional, por defecto `null`): ancho final del dibujo en mm (pisa a scale); el alto sigue la proporción.
+  - `x` (número; opcional, por defecto `0.0`): desplazamiento en X del boceto (mm), después de escalar y girar.
+  - `y` (número; opcional, por defecto `0.0`): desplazamiento en Y del boceto (mm).
+  - `angle` (número; opcional, por defecto `0.0`): giro en grados (antihorario) alrededor del origen del boceto.
+  - `flip_h` (true/false; opcional, por defecto `false`): espejo horizontal alrededor del centro del dibujo.
+  - `flip_v` (true/false; opcional, por defecto `false`): espejo vertical alrededor del centro del dibujo.
+  - `layers` (lista de texto o null; opcional, por defecto `null`): solo los grupos con estos ids o etiquetas (inkscape:label); vacío = todo.
+  - `colors` (lista de texto o null; opcional, por defecto `null`): solo los trazos o rellenos de estos colores, como '#rrggbb'; vacío = todo.
+  - `name` (texto; opcional, por defecto `null`): nombre del boceto nuevo (con plane); vacío = "BocetoN".
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de cara de plane.
+- CLI: `omnicad call insert_svg --doc pieza.omnicad path=…`
+
+### `insert_dxf`
+
+Inserta la geometría 2D de un archivo DXF en un boceto (Fusion: Insertar > Insertar DXF): líneas, arcos, círculos, polilíneas, splines y textos. Mismo manejo de plane / sketch / transformación que insert_svg. Las unidades del DXF se pasan a mm.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo .dxf.
+  - `plane` (texto; opcional, por defecto `null`): "XY", "XZ", "YZ", un plano de construcción o una cara plana: crea un boceto nuevo ahí. Vacío = usar sketch.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto donde sumar el dibujo (sin plane); vacío = el último boceto.
+  - `scale` (número; opcional, por defecto `1.0`): factor de escala (1 = tal cual).
+  - `width` (número; opcional, por defecto `null`): ancho final del dibujo en mm (pisa a scale).
+  - `x` (número; opcional, por defecto `0.0`): desplazamiento en X (mm).
+  - `y` (número; opcional, por defecto `0.0`): desplazamiento en Y (mm).
+  - `angle` (número; opcional, por defecto `0.0`): giro en grados alrededor del origen del boceto.
+  - `flip_h` (true/false; opcional, por defecto `false`): espejo horizontal alrededor del centro del dibujo.
+  - `flip_v` (true/false; opcional, por defecto `false`): espejo vertical alrededor del centro del dibujo.
+  - `name` (texto; opcional, por defecto `null`): nombre del boceto nuevo (con plane).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de cara de plane.
+- CLI: `omnicad call insert_dxf --doc pieza.omnicad path=…`
+
+### `trace_image`
+
+Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como contornos cerrados (logos, siluetas, dibujos en blanco y negro). Mismo manejo de plane / sketch / transformación que insert_svg. Los agujeros salen como contornos aparte (forman perfiles anillo). Con curves=true cada contorno es UNA spline suave; con false, una polilínea simplificada. El tamaño sale de width (mm) o, si falta, de dpi.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta de la imagen.
+  - `plane` (texto; opcional, por defecto `null`): "XY", "XZ", "YZ", un plano de construcción o una cara plana: crea un boceto nuevo ahí. Vacío = usar sketch.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto donde sumar el dibujo (sin plane); vacío = el último boceto.
+  - `width` (número; opcional, por defecto `null`): ancho final en mm; vacío = el ancho de la imagen en píxeles según dpi.
+  - `dpi` (número; opcional, por defecto `96.0`): píxeles por pulgada para el tamaño cuando no hay width.
+  - `threshold` (número; opcional, por defecto `null`): umbral de la tinta (1 a 254); vacío = automático (Otsu).
+  - `invert` (true/false; opcional, por defecto `false`): true si la tinta es lo claro (letras blancas sobre fondo oscuro).
+  - `smoothing` (número; opcional, por defecto `1.0`): suavizado previo en píxeles (0 = ninguno); quita el ruido y el dentado.
+  - `tolerance` (número; opcional, por defecto `0.5`): desvío máximo al simplificar los contornos, en píxeles (más alto = menos puntos).
+  - `min_area` (número; opcional, por defecto `4.0`): los contornos de menos píxeles² se descartan como ruido.
+  - `channel` ("auto" | "luminance" | "alpha"; opcional, por defecto `"auto"`): auto (usa la transparencia si la hay), luminance o alpha.
+  - `curves` (true/false; opcional, por defecto `false`): true = una spline suave por contorno; false = polilínea.
+  - `x` (número; opcional, por defecto `0.0`): desplazamiento en X (mm).
+  - `y` (número; opcional, por defecto `0.0`): desplazamiento en Y (mm).
+  - `angle` (número; opcional, por defecto `0.0`): giro en grados alrededor del origen del boceto.
+  - `flip_h` (true/false; opcional, por defecto `false`): espejo horizontal alrededor del centro del dibujo.
+  - `flip_v` (true/false; opcional, por defecto `false`): espejo vertical alrededor del centro del dibujo.
+  - `name` (texto; opcional, por defecto `null`): nombre del boceto nuevo (con plane).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de cara de plane.
+- CLI: `omnicad call trace_image --doc pieza.omnicad path=…`
+
+### `export_sketch`
+
+Guarda un boceto como archivo 2D para corte láser, vinilo o CNC (Fusion: Guardar como DXF); el formato sale de la extensión: .dxf o .svg. Las letras del texto salen como curvas. En SVG el dibujo queda con su esquina inferior izquierda en el origen y en milímetros reales; la geometría de construcción va en un grupo aparte (DXF: capa CONSTRUCCION) y solo si include_construction.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo a escribir (.dxf o .svg).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `include_construction` (true/false; opcional, por defecto `false`): true para incluir las curvas de construcción.
+  - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo si ya existe.
+- CLI: `omnicad call export_sketch --doc pieza.omnicad path=…`
+
+### `combine_profiles`
+
+Une, resta o interseca perfiles (regiones cerradas) del boceto y deja el contorno resultante como curvas nuevas, sin las líneas internas: juntar letras que se pisan, restar un marco, quedarse con lo común. Con keep_original=false (por defecto) se borran las curvas de los perfiles usados (un texto usado se borra entero). Índices de perfil: get_sketch.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `profiles` (lista de entero o texto; obligatorio): índices de los perfiles (o "all"); en subtract e intersect son los que se cortan.
+  - `operation` ("union" | "subtract" | "intersect"; opcional, por defecto `"union"`): union (todo junto), subtract (profiles menos tool_profiles) o intersect (lo común).
+  - `tool_profiles` (lista de entero o null; opcional, por defecto `null`): índices de los perfiles herramienta (subtract e intersect); en union se suman a profiles.
+  - `keep_original` (true/false; opcional, por defecto `false`): true para dejar las curvas originales además del resultado.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call combine_profiles --doc pieza.omnicad profiles=…`
+
+### `offset_profiles`
+
+Desfase (offset) del contorno de perfiles del boceto, con agujeros incluidos: distance > 0 agranda, < 0 achica. Sirve con cualquier curva (letras, splines de un SVG), no solo líneas y arcos encadenados. Esquinas redondas o vivas. Las curvas originales quedan (keep_original=true por defecto).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `profiles` (lista de entero o texto; obligatorio): índices de los perfiles (get_sketch) o "all".
+  - `distance` (número; obligatorio): mm; positivo agranda la región, negativo la achica.
+  - `corners` ("round" | "sharp"; opcional, por defecto `"round"`): round (arcos en las esquinas) o sharp (las esquinas se prolongan hasta cortarse).
+  - `keep_original` (true/false; opcional, por defecto `true`): false para borrar las curvas de los perfiles usados.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call offset_profiles --doc pieza.omnicad profiles=… distance=…`
+
+### `transform_sketch`
+
+Mueve, gira, escala y/o espeja curvas de un boceto (un paso de deshacer): lo importado de un SVG, un texto, una selección. Orden: espejo, escala, giro y desplazamiento, todo alrededor del centro (por defecto el de la caja de la selección). Con copy=true trabaja sobre una copia. Las cotas de largo de lo escalado se multiplican por el factor.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entities` (lista de entero o null; opcional, por defecto `null`): ids de curvas o puntos (get_sketch); vacío = todas las curvas del boceto.
+  - `dx` (número; opcional, por defecto `0.0`): desplazamiento en X (mm).
+  - `dy` (número; opcional, por defecto `0.0`): desplazamiento en Y (mm).
+  - `angle` (número; opcional, por defecto `0.0`): giro en grados (antihorario) alrededor del centro.
+  - `scale` (número; opcional, por defecto `1.0`): factor de escala (positivo; 1 = igual).
+  - `mirror` ("none" | "horizontal" | "vertical"; opcional, por defecto `"none"`): horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
+  - `center_x` (número; opcional, por defecto `null`): x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
+  - `center_y` (número; opcional, por defecto `null`): y del centro; vacío = centro de la caja de la selección.
+  - `copy` (true/false; opcional, por defecto `false`): true para transformar una copia y dejar el original.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call transform_sketch --doc pieza.omnicad`
+
+### `clean_sketch`
+
+Limpia geometría importada (SVG, DXF, imagen vectorizada): borra curvas repetidas, une extremos sueltos a menos de tolerance mm (cierra huecos para que los contornos formen perfiles) y junta líneas seguidas alineadas en una sola. No toca nada que tenga restricciones o cotas.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `tolerance` (número; opcional, por defecto `0.01`): distancia máxima en mm para considerar dos puntos iguales o tres puntos alineados.
+  - `remove_duplicates` (true/false; opcional, por defecto `true`): borrar curvas repetidas.
+  - `close_gaps` (true/false; opcional, por defecto `true`): unir extremos sueltos cercanos.
+  - `merge_collinear` (true/false; opcional, por defecto `true`): juntar líneas seguidas alineadas.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call clean_sketch --doc pieza.omnicad`
+
+### `move_sketch_point`
+
+Mueve un punto del boceto (edición de nodos): extremos de líneas y arcos, puntos de control de splines (las curvas Bézier de un SVG), centros. El solver vuelve a cumplir las restricciones que tenga.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `point` (entero; obligatorio): id del punto (get_sketch lista los puntos de cada curva en 'points').
+  - `x` (número; obligatorio): x nueva (mm).
+  - `y` (número; obligatorio): y nueva (mm).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call move_sketch_point --doc pieza.omnicad point=… x=… y=…`
+
+### `delete_sketch_entities`
+
+Borra curvas, puntos, restricciones o cotas del boceto (un paso de deshacer); lo que dependa de ellos se borra también (un punto se lleva sus curvas).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entities` (lista de entero; obligatorio): ids a borrar (get_sketch).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call delete_sketch_entities --doc pieza.omnicad entities=…`
 
 ## Grupo solido
 

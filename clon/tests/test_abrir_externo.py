@@ -244,15 +244,17 @@ def test_puente_clave_y_ruta(tmp_path, puente):
         puente_fusion.convertir(tmp_path / "falta.f3d")
 
 
-def test_sin_fusion_aviso_claro_con_pasos_a_mano(tmp_path, monkeypatch):
+def test_f3d_danado_sin_fusion_aviso_claro_con_pasos_a_mano(tmp_path, monkeypatch):
+    """Un .f3d que no se puede leer en nativo y sin Fusion abierto: error claro con los pasos para hacerlo a mano
+    (los .f3d sanos se abren sin Fusion: tests/test_f3d_nativo.py)."""
     monkeypatch.setenv(puente_fusion.VARIABLE_CARPETA, str(tmp_path / "vacia"))
     f3d = tmp_path / "pieza.f3d"
     f3d.write_bytes(b"PK")
-    with pytest.raises(puente_fusion.ErrorPuenteFusion) as e:
+    with pytest.raises(ErrorAbrir) as e:
         documento_desde_archivo(f3d)
-    assert e.value.motivo == "sin_puente" and "Archivo › Exportar" in str(e.value) and "omnicad setup" in str(e.value)
+    assert "no es un archivo de Fusion válido" in str(e.value) and "Archivo › Exportar" in str(e.value)
     r = api.llamar(api.Sesion(), "open_document", {"path": str(f3d)})
-    assert not r["ok"] and r["error_kind"] == "FUSION_NOT_AVAILABLE" and "STEP" in " ".join(r["pistas"])
+    assert not r["ok"] and r["error_kind"] == "IMPORT_FAILED" and "Archivo › Exportar" in r["mensaje"]
     # Un puente anotado pero caído (Fusion se cerró sin borrar el archivo) da el mismo aviso, no un error crudo.
     (tmp_path / "vacia").mkdir()
     puente_fusion.ruta_info().write_text(json.dumps({"puerto": 9, "token": "x"}))

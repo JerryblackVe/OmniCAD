@@ -387,7 +387,14 @@ def _info_curva(b, c):
     elif c.tipo in ("elipse", "arco_elipse"):
         d.update(center=xy(c.centro), minor_radius=_r(c.radio_menor))
     elif c.tipo == "texto":
-        d.update(text=c.texto)
+        d.update(text=c.texto, position=xy(c.punto), font=c.fuente, height=_r(c.altura), angle=_r(c.angulo),
+                 bold=c.negrita, italic=c.cursiva, letter_spacing=_r(c.espaciado), line_spacing=_r(c.interlineado),
+                 align={"izq": "left", "centro": "center", "der": "right"}.get(c.alineacion, c.alineacion),
+                 anchor={"base": "baseline", "arriba": "top", "medio": "middle", "abajo": "bottom"}.get(
+                     c.ancla_v, c.ancla_v), box_width=_r(c.ancho_caja), flip_h=c.voltear_h, flip_v=c.voltear_v)
+        if c.camino is not None:
+            d.update(path_entity=c.camino, path_side="left" if c.camino_lado == "izq" else "right",
+                     path_position=_r(c.camino_pos), path_offset=_r(c.camino_desfase), fit_path=c.camino_ajustar)
     return d
 
 

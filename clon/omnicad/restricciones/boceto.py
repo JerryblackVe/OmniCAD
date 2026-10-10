@@ -23,6 +23,7 @@ Coordenadas en milímetros, en el sistema (u, v) del plano del boceto.
 import bisect
 import copy
 import math
+import re
 from functools import lru_cache
 
 import numpy as np
@@ -220,16 +221,54 @@ class Conica(_Curva):
 
 class Texto(_Curva):
     """Texto de boceto: `punto` es la esquina inferior izquierda de la línea base; el ángulo, en grados.
-    Sus contornos forman perfiles (se pueden extruir), como en Fusion."""
+    Sus contornos forman perfiles (se pueden extruir), como en Fusion.
+
+    Además de fuente, altura, negrita y cursiva: `espaciado` (mm entre letras), `interlineado` (factor),
+    `alineacion` ("izq", "centro", "der" dentro de la caja), `ancla_v` ("base", "arriba", "medio", "abajo":
+    qué parte del bloque cae sobre `punto`), `ancho_caja` (mm; 0 = sin caja, >0 parte las líneas) y
+    `voltear_h` / `voltear_v` (espejo dentro del bloque).
+
+    Texto en curva (Fusion: texto en trayectoria): `camino` es el id de una curva del mismo boceto; entonces
+    `punto` y `angulo` no se usan y las letras siguen la curva. `camino_lado` ("izq" / "der": de qué lado del
+    sentido de la curva van las letras), `camino_pos` (fracción 0-1 del largo donde cae el ancla, según
+    `alineacion`), `camino_desfase` (mm entre la curva y la línea base) y `camino_ajustar` (repartir en todo el
+    largo). Si la curva se borra, el texto vuelve a ser recto."""
     tipo, PUNTOS = "texto", ("punto",)
-    DATOS = ("texto", "fuente", "altura", "angulo", "negrita", "cursiva")
+    DATOS = ("texto", "fuente", "altura", "angulo", "negrita", "cursiva", "espaciado", "interlineado", "alineacion",
+             "ancla_v", "ancho_caja", "voltear_h", "voltear_v", "camino", "camino_lado", "camino_pos",
+             "camino_desfase", "camino_ajustar")
+    _PREDETERMINADOS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base",
+                        "ancho_caja": 0.0, "voltear_h": False, "voltear_v": False, "camino": None,
+                        "camino_lado": "izq", "camino_pos": 0.5, "camino_desfase": 0.0, "camino_ajustar": False}
 
     def __init__(self, id, punto, texto, fuente="Arial", altura=5.0, angulo=0.0, negrita=False, cursiva=False,
-                 construccion=False, eje=False, proyectada=False):
+                 construccion=False, eje=False, proyectada=False, espaciado=0.0, interlineado=1.0,
+                 alineacion="izq", ancla_v="base", ancho_caja=0.0, voltear_h=False, voltear_v=False, camino=None,
+                 camino_lado="izq", camino_pos=0.5, camino_desfase=0.0, camino_ajustar=False):
         self.id, self.punto, self.texto, self.fuente = id, punto, str(texto), str(fuente)
         self.altura, self.angulo = float(altura), float(angulo)
         self.negrita, self.cursiva = bool(negrita), bool(cursiva)
+        self.espaciado, self.interlineado = float(espaciado), float(interlineado)
+        self.alineacion, self.ancla_v, self.ancho_caja = str(alineacion), str(ancla_v), float(ancho_caja)
+        self.voltear_h, self.voltear_v = bool(voltear_h), bool(voltear_v)
+        self.camino = None if camino is None else int(camino)
+        self.camino_lado, self.camino_pos = str(camino_lado), float(camino_pos)
+        self.camino_desfase, self.camino_ajustar = float(camino_desfase), bool(camino_ajustar)
         self._estilo(construccion, eje, proyectada)
+
+    def a_dict(self):
+        """Como las demás curvas, pero sin las opciones que tienen su valor por defecto (los archivos viejos
+        y los nuevos sin opciones quedan iguales)."""
+        d = super().a_dict()
+        for k, v in self._PREDETERMINADOS.items():
+            if d.get(k) == v:
+                del d[k]
+        return d
+
+    def opciones_contorno(self):
+        """Opciones de `fuentes.contornos_texto` en el orden en que se guardan en el caché."""
+        return (self.espaciado, self.interlineado, self.alineacion, self.ancla_v, self.ancho_caja,
+                self.voltear_h, self.voltear_v)
 
 
 class Restriccion:
@@ -649,17 +688,49 @@ def _cruces_circulos(c1, r1, c2, r2):
 
 
 @lru_cache(maxsize=256)
-def _contornos_texto(texto, fuente, altura, negrita, cursiva):
-    from ..nucleo.perfiles import contornos_texto      # OpenCascade solo hace falta para el texto
+def _contornos_texto(texto, fuente, altura, negrita, cursiva, opciones=(0.0, 1.0, "izq", "base", 0.0, False, False)):
+    from ..nucleo.perfiles import contornos_texto      # fontTools / OpenCascade solo hacen falta para el texto
+    espaciado, interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v = opciones
     try:
-        return tuple(contornos_texto(texto, fuente, altura, negrita, cursiva))
+        return tuple(contornos_texto(texto, fuente, altura, negrita, cursiva, espaciado=espaciado,
+                                     interlineado=interlineado, alineacion=alineacion, ancla_v=ancla_v,
+                                     ancho_caja=ancho_caja, voltear_h=voltear_h, voltear_v=voltear_v))
     except Exception:  # noqa: BLE001 — una fuente rota no debe romper el boceto
         return ()
 
 
-def primitivas_entidad(c, P, R=None):
+@lru_cache(maxsize=128)
+def _contornos_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
+                      camino):
+    from ..nucleo.fuentes import contornos_en_camino
+    try:
+        return tuple(contornos_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
+                                         alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
+                                         ajustar=ajustar))
+    except Exception:  # noqa: BLE001 — una fuente rota o un camino degenerado no deben romper el boceto
+        return ()
+
+
+def polilinea_camino(prim, pasos=720):
+    """Polilínea densa de una curva para apoyar texto (redondeada a 1e-9 para que sirva de clave de caché)."""
+    return tuple((round(float(x), 9), round(float(y), 9)) for x, y in puntos_primitiva(prim, pasos))
+
+
+def fraccion_en_camino(prim, q):
+    """Fracción 0-1 del largo de la curva en el punto más cercano a `q` (para ubicar un texto donde se hizo clic)."""
+    pts = np.asarray(polilinea_camino(prim), float)
+    tramos = np.hypot(*np.diff(pts, axis=0).T)
+    acum = np.concatenate([[0.0], np.cumsum(tramos)])
+    if acum[-1] < 1e-12:
+        return 0.5
+    i = int(np.argmin(np.hypot(pts[:, 0] - q[0], pts[:, 1] - q[1])))
+    return float(acum[i] / acum[-1])
+
+
+def primitivas_entidad(c, P, R=None, curvas=None):
     """Primitivas 2D de una curva. `P(pid)` → (u, v); `R(cid)` → radio del círculo o radio menor de la
-    elipse (por defecto, el guardado). El solver pasa sus propios accesores."""
+    elipse (por defecto, el guardado). El solver pasa sus propios accesores. `curvas` (las del boceto) hace
+    falta para el texto en curva; sin ellas, el texto se dibuja recto."""
     if R is None:
         R = lambda _cid: c.radio if isinstance(c, Circulo) else c.radio_menor  # noqa: E731
     if isinstance(c, Linea):
@@ -690,18 +761,87 @@ def primitivas_entidad(c, P, R=None):
         w = c.rho / (1 - c.rho)
         return [("spline", c.id, (P(c.inicio), P(c.vertice), P(c.fin)), (0.0, 0.0, 0.0, 1.0, 1.0, 1.0), 2,
                  (1.0, w, 1.0))]
+    if isinstance(c, Texto) and c.camino is not None and curvas is not None and c.camino != c.id \
+            and not isinstance(curvas.get(c.camino, c), Texto):
+        base = primitivas_entidad(curvas[c.camino], P)      # radios guardados (el solver no pide textos)
+        if base:
+            return [(p[0], c.id) + tuple(p[2:]) for p in _contornos_camino(
+                c.texto, c.fuente, c.altura, c.negrita, c.cursiva, c.espaciado, c.alineacion, c.camino_pos,
+                c.camino_lado, c.camino_desfase, c.camino_ajustar, polilinea_camino(base[0]))]
     if isinstance(c, Texto):
         ox, oy = P(c.punto)
         ang = math.radians(c.angulo)
         T = lambda q: (lambda r: (r[0] + ox, r[1] + oy))(_rot(q[0], q[1], ang))  # noqa: E731
         salida = []
-        for prim in _contornos_texto(c.texto, c.fuente, c.altura, c.negrita, c.cursiva):
+        for prim in _contornos_texto(c.texto, c.fuente, c.altura, c.negrita, c.cursiva, c.opciones_contorno()):
             if prim[0] == "linea":
                 salida.append(("linea", c.id, T(prim[2]), T(prim[3])))
             else:
                 salida.append(("spline", c.id, tuple(T(q) for q in prim[2]), prim[3], prim[4], prim[5]))
         return salida
     return []
+
+
+_FX = re.compile(r"\{([^{}]*)\}")
+
+
+def _partes_fx(contenido):
+    expresion, _, formato = contenido.partition(":")
+    return expresion.strip(), formato.strip()
+
+
+def expresiones_de_texto(texto):
+    """Expresiones que lleva un texto entre llaves: «Ancho {ancho}» → ['ancho']; «{largo / 2:.1f}» → ['largo / 2']."""
+    return [e for e, _f in (_partes_fx(m.group(1)) for m in _FX.finditer(str(texto))) if e]
+
+
+def sustituir_expresiones(texto, valor):
+    """Reemplaza cada {expresión} (o {expresión:formato}) por el número que devuelve `valor(expresión)`.
+    Sin formato, hasta 4 decimales y sin ceros de más; con formato, el de Python (`.1f`, `05.0f`…).
+    Lo que `valor` no pueda calcular lo deja `valor` (lanza); el que llama decide qué hacer con el error."""
+    def reemplazo(m):
+        expresion, formato = _partes_fx(m.group(1))
+        if not expresion:
+            return m.group(0)
+        v = float(valor(expresion))
+        if formato:
+            return format(v, formato)
+        s = f"{v:.4f}".rstrip("0").rstrip(".")
+        return "0" if s in ("", "-0") else s
+    return _FX.sub(reemplazo, str(texto))
+
+
+_ORIENTADAS = ("horizontal", "vertical")
+_COTAS_ORIENTADAS = ("distancia_h", "distancia_v")
+
+
+def _cambia_orientacion(angulo):
+    """True si un giro de `angulo` grados deja de respetar horizontales y verticales (no es múltiplo de 180°)."""
+    resto = float(angulo) % 180.0
+    return min(resto, 180.0 - resto) > 1e-9
+
+
+def _validar_opciones_texto(op):
+    """Opciones del Texto: claves conocidas, números finitos y valores de lista válidos."""
+    desconocidas = set(op) - set(Texto._PREDETERMINADOS)
+    if desconocidas:
+        raise ErrorBoceto(f"Opciones de texto desconocidas: {', '.join(sorted(desconocidas))}.")
+    for k in ("espaciado", "interlineado", "ancho_caja"):
+        if k in op and not math.isfinite(float(op[k])):
+            raise ErrorBoceto(f"«{k}» tiene que ser un número finito.")
+    if "interlineado" in op and float(op["interlineado"]) <= 0:
+        raise ErrorBoceto("El interlineado tiene que ser mayor que cero.")
+    if "ancho_caja" in op and float(op["ancho_caja"]) < 0:
+        raise ErrorBoceto("El ancho de la caja no puede ser negativo.")
+    if op.get("alineacion", "izq") not in ("izq", "centro", "der"):
+        raise ErrorBoceto("La alineación es izq, centro o der.")
+    if op.get("ancla_v", "base") not in ("base", "arriba", "medio", "abajo"):
+        raise ErrorBoceto("El anclaje vertical es base, arriba, medio o abajo.")
+    if op.get("camino_lado", "izq") not in ("izq", "der"):
+        raise ErrorBoceto("El lado del texto en curva es izq o der.")
+    for k in ("camino_pos", "camino_desfase"):
+        if k in op and not math.isfinite(float(op[k])):
+            raise ErrorBoceto(f"«{k}» tiene que ser un número finito.")
 
 
 # ---------------------------------------------------------------- boceto
@@ -727,7 +867,23 @@ class Boceto:
         raise ErrorBoceto(f"No existe la entidad {id}.")
 
     def copia(self):
-        return copy.deepcopy(self)
+        """Copia independiente. Más rápida que deepcopy: los puntos y las curvas solo tienen números, textos y
+        listas de números (lo que se copia aparte)."""
+        b = copy.copy(self)
+        b.puntos = {k: copy.copy(p) for k, p in self.puntos.items()}
+        b.curvas = {}
+        for k, c in self.curvas.items():
+            n = copy.copy(c)
+            for a, v in vars(c).items():
+                if isinstance(v, (list, dict, set)):
+                    setattr(n, a, copy.deepcopy(v))
+            b.curvas[k] = n
+        b.restricciones = copy.deepcopy(self.restricciones)
+        b.cotas = copy.deepcopy(self.cotas)
+        for a, v in vars(self).items():
+            if a not in ("puntos", "curvas", "restricciones", "cotas") and isinstance(v, (list, dict, set)):
+                setattr(b, a, copy.deepcopy(v))
+        return b
 
     # ------------------------------------------------------------ creación
     def agregar_punto(self, x, y, proyectado=False):
@@ -839,14 +995,26 @@ class Boceto:
             raise ErrorBoceto("El vértice no puede estar alineado con los extremos.")
         return self._agregar_curva(Conica(self._nuevo_id(), a, v, b, rho, construccion))
 
-    def agregar_texto(self, posicion, texto, altura=5.0, angulo=0.0, fuente="Arial", negrita=False, cursiva=False):
-        """Texto en el boceto (SKT-CREATE-TEXT): sus contornos dan perfiles para extruir."""
+    def agregar_texto(self, posicion, texto, altura=5.0, angulo=0.0, fuente="Arial", negrita=False, cursiva=False,
+                      **opciones):
+        """Texto en el boceto (SKT-CREATE-TEXT): sus contornos dan perfiles para extruir. `opciones`: espaciado,
+        interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v (ver `Texto`)."""
         if not str(texto).strip():
             raise ErrorBoceto("El texto está vacío.")
         if not 0 < altura < math.inf:                       # también NaN
             raise ErrorBoceto("La altura del texto debe ser positiva.")
+        _validar_opciones_texto(opciones)
+        self._validar_camino(opciones.get("camino"))
         return self._agregar_curva(Texto(self._nuevo_id(), self._punto(posicion), texto, fuente, altura, angulo,
-                                         negrita, cursiva))
+                                         negrita, cursiva, **opciones))
+
+    def _validar_camino(self, camino):
+        """El camino de un texto en curva tiene que ser una curva del boceto que no sea otro texto."""
+        if camino is None:
+            return
+        c = self.curvas.get(camino)
+        if c is None or isinstance(c, Texto):
+            raise ErrorBoceto(f"El camino del texto tiene que ser una curva del boceto (no un texto): {camino}.")
 
     def agregar_ranura(self, tipo, puntos, ancho, construccion=False):
         """Ranuras de Fusion (SKT-CREATE-SLOTS), armadas con líneas y arcos tangentes:
@@ -1086,6 +1254,9 @@ class Boceto:
 
     def _quitar_huerfanas(self):
         vivos = set(self.puntos) | set(self.curvas)
+        for c in self.curvas.values():
+            if isinstance(c, Texto) and c.camino is not None and c.camino not in self.curvas:
+                c.camino = None                            # se borró su curva: vuelve a ser texto recto
         for tabla in (self.restricciones, self.cotas):
             for k in [k for k, v in tabla.items() if not set(v.entidades) <= vivos]:
                 del tabla[k]
@@ -1296,7 +1467,7 @@ class Boceto:
     # ------------------------------------------------------------ geometría para perfiles y dibujo
     def primitivas(self, cid):
         """Primitivas 2D de una curva (un texto da varias; las demás, una)."""
-        return primitivas_entidad(self.curvas[cid], self.coords)
+        return primitivas_entidad(self.curvas[cid], self.coords, curvas=self.curvas)
 
     def geometria(self, incluir_construccion=False):
         """Lista de primitivas 2D (formato de cada tupla):
@@ -1924,11 +2095,13 @@ class Boceto:
                 mapa_c[i] = c.id
         if restricciones:
             todo = {**mapa, **mapa_c}
+            gira = _cambia_orientacion(angulo)
             for r in list(self.restricciones.values()):
-                if r.tipo not in ("fijo", "patron", "desfase") and set(r.entidades) <= set(todo):
+                if r.tipo not in ("fijo", "patron", "desfase") and set(r.entidades) <= set(todo) and not (
+                        gira and r.tipo in _ORIENTADAS):
                     self.agregar_restriccion(r.tipo, [todo[e] for e in r.entidades], r.datos)
             for k in list(self.cotas.values()):
-                if set(k.entidades) <= set(todo):
+                if set(k.entidades) <= set(todo) and not (gira and k.tipo in _COTAS_ORIENTADAS):
                     self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, k.datos)
         return mapa, mapa_c
 
@@ -1951,7 +2124,146 @@ class Boceto:
         for i in ids:
             if isinstance(self.curvas.get(i), Texto):
                 self.curvas[i].angulo += angulo
+        if _cambia_orientacion(angulo):        # una horizontal girada 90° ya no es horizontal: si quedara, colapsa
+            afectados = set(ids) | set(pts)
+            for k in [k for k, r in self.restricciones.items()
+                      if r.tipo in _ORIENTADAS and set(r.entidades) <= afectados]:
+                del self.restricciones[k]
+            for k in [k for k, c in self.cotas.items()
+                      if c.tipo in _COTAS_ORIENTADAS and set(c.entidades) <= afectados]:
+                del self.cotas[k]
         return list(ids)
+
+    # ------------------------------------------------------------ limpiar geometría importada
+    def _referencias(self):
+        """Ids usados por alguna restricción o cota (eso no se toca al limpiar)."""
+        return {e for t in (self.restricciones, self.cotas) for v in t.values() for e in v.entidades}
+
+    def _usos_de_puntos(self):
+        usos = {}
+        for c in self.curvas.values():
+            for p in c.puntos():
+                usos.setdefault(p, []).append(c.id)
+        return usos
+
+    def _fusionar_punto(self, queda, sale):
+        """Todo lo que usaba el punto `sale` pasa a usar `queda`; `sale` se borra."""
+        for c in self.curvas.values():
+            for a in c.PUNTOS:
+                if getattr(c, a) == sale:
+                    setattr(c, a, queda)
+            if isinstance(c, Spline):
+                c.pts = [queda if p == sale else p for p in c.pts]
+        for t in (self.restricciones, self.cotas):
+            for v in t.values():
+                v.entidades = [queda if e == sale else e for e in v.entidades]
+        self.puntos.pop(sale, None)
+
+    def _clave_curva(self, c, tol):
+        r = lambda q: (round(q[0] / tol), round(q[1] / tol))  # noqa: E731
+        if isinstance(c, Linea):
+            return ("linea", frozenset((r(self.coords(c.p1)), r(self.coords(c.p2)))))
+        if isinstance(c, Circulo):
+            return ("circulo", r(self.coords(c.centro)), round(c.radio / tol))
+        if isinstance(c, Arco):
+            return ("arco", r(self.coords(c.centro)), r(self.coords(c.inicio)), r(self.coords(c.fin)))
+        if isinstance(c, Spline):
+            pts = tuple(r(self.coords(p)) for p in c.pts)
+            return ("spline", c.modo, c.grado, min(pts, pts[::-1]))
+        return None
+
+    def limpiar(self, tolerancia=0.01, duplicados=True, huecos=True, colineales=True):
+        """Limpieza de geometría importada (SVG, DXF, imagen vectorizada), sin tocar lo que tiene restricciones o
+        cotas: borra curvas repetidas, une extremos sueltos que quedaron a menos de `tolerancia` mm (cierra
+        huecos para que los contornos formen perfiles) y junta líneas seguidas que están alineadas en una sola.
+        Devuelve {"duplicadas": n, "huecos": n, "colineales": n}."""
+        if not tolerancia > 0:
+            raise ErrorBoceto("La tolerancia tiene que ser positiva.")
+        refs = self._referencias()
+        salida = {"duplicadas": 0, "huecos": 0, "colineales": 0}
+        if duplicados:
+            vistas = {}
+            for cid in list(self.curvas):
+                c = self.curvas[cid]
+                clave = None if cid in refs or c.proyectada else self._clave_curva(c, tolerancia)
+                if clave is None:
+                    continue
+                clave = (clave, c.construccion)
+                if clave in vistas:
+                    self.eliminar(cid)
+                    salida["duplicadas"] += 1
+                else:
+                    vistas[clave] = cid
+        if huecos:
+            usos = self._usos_de_puntos()
+            sueltos = [p for p, cs in usos.items() if len(cs) == 1 and p not in refs
+                       and self.curvas[cs[0]].extremos() and p in self.curvas[cs[0]].extremos()
+                       and not self.puntos[p].proyectado]
+            hechos = set()
+            for i, a in enumerate(sueltos):
+                if a in hechos:
+                    continue
+                qa = self.coords(a)
+                for b in sueltos[i + 1:]:
+                    if b in hechos or usos[b] == usos[a]:
+                        continue
+                    if math.dist(qa, self.coords(b)) <= tolerancia:
+                        self._fusionar_punto(a, b)
+                        hechos.update((a, b))
+                        salida["huecos"] += 1
+                        break
+        if colineales:
+            cambio = True
+            while cambio:
+                cambio = False
+                usos = self._usos_de_puntos()
+                for p, cs in usos.items():
+                    if len(cs) != 2 or p in refs or self.puntos[p].proyectado:
+                        continue
+                    l1, l2 = (self.curvas.get(k) for k in cs)
+                    if not (isinstance(l1, Linea) and isinstance(l2, Linea)) or l1.construccion != l2.construccion \
+                            or l1.id in refs or l2.id in refs:
+                        continue
+                    a = l1.p1 if l1.p2 == p else l1.p2
+                    b = l2.p1 if l2.p2 == p else l2.p2
+                    if a == b or abs(distancia_punto_recta(self.coords(p), self.coords(a), self.coords(b))) > tolerancia:
+                        continue
+                    qa, qb, qp = self.coords(a), self.coords(b), self.coords(p)
+                    if (qp[0] - qa[0]) * (qb[0] - qp[0]) + (qp[1] - qa[1]) * (qb[1] - qp[1]) <= 0:
+                        continue                       # vuelve para atrás: no es una sola recta
+                    if l1.p1 == p:
+                        l1.p1 = b
+                    else:
+                        l1.p2 = b
+                    self.curvas.pop(l2.id)
+                    self.puntos.pop(p, None)
+                    salida["colineales"] += 1
+                    cambio = True
+                    break
+        self._quitar_huerfanas()
+        return salida
+
+    def reflejar(self, ids, centro, horizontal=True):
+        """Espejo en el lugar (sin copia) respecto de la recta vertical (horizontal=True) u horizontal que pasa
+        por `centro`. Los arcos invierten su sentido para seguir siendo antihorarios. Los textos rectos no se
+        pueden espejar así (sus letras no se reflejan): se dejan como están y se devuelven aparte.
+        Devuelve (ids espejados, ids de textos que no se espejaron)."""
+        cx, cy = centro
+        textos = [i for i in ids if isinstance(self.curvas.get(i), Texto) and self.curvas[i].camino is None]
+        ids = [i for i in ids if i not in textos]
+        pts = self.puntos_de(ids)
+        if any(p in self.puntos_fijos() for p in pts):
+            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede espejar.")
+        self._transformar_puntos(pts, (lambda q: (2 * cx - q[0], q[1])) if horizontal else
+                                 (lambda q: (q[0], 2 * cy - q[1])))
+        for i in ids:
+            c = self.curvas.get(i)
+            if isinstance(c, (Arco, ArcoElipse)):
+                c.inicio, c.fin = c.fin, c.inicio
+            elif isinstance(c, Texto):                   # texto en curva: sigue a su curva, del otro lado
+                c.camino_lado = "der" if c.camino_lado == "izq" else "izq"
+                c.camino_pos = 1.0 - c.camino_pos
+        return list(ids), textos
 
     def escalar(self, ids, base, factor):
         """Escala del boceto (SKT-SCALE): agranda o achica la geometría desde el punto base; las cotas
@@ -1971,6 +2283,9 @@ class Boceto:
                 c.radio_menor *= factor
             elif isinstance(c, Texto):
                 c.altura *= factor
+                c.espaciado *= factor
+                c.ancho_caja *= factor
+                c.camino_desfase *= factor
         for k in self.cotas.values():
             if k.tipo != "angulo" and set(k.entidades) <= afectados:
                 try:

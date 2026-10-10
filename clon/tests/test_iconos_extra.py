@@ -30,7 +30,7 @@ SECCIONES = {
     "INSPECCIONAR": ["interferencia", "curvatura_peine", "cebra", "mapa_entorno", "angulo_desmoldeo",
                      "mapa_curvatura", "isocurva", "accesibilidad", "radio_minimo", "seccion", "centro_masa",
                      "colores_componente"],
-    "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "insertar_malla", "insertar_componente", "fijacion"],
+    "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "vectorizar_imagen", "insertar_malla", "insertar_componente", "fijacion"],
     "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "origen_union", "grupo_rigido",
                   "accionar_uniones", "vinculo_movimiento", "conjunto_contacto", "estudio_movimiento",
                   "fijar_componente"],
@@ -85,7 +85,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 139
+    assert len(NOMBRES) == len(set(NOMBRES)) == 140
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

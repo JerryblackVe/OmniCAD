@@ -48,7 +48,7 @@ INSPECCIONAR = ("INSPECCIONAR", ["medir", "seccion"], [
     _i("Mostrar colores de componente", "colores_componente"),
     _i("Mostrar grupos de caras de malla", atajo="Mayúsculas+F")])
 INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
-    _i("Calcomanía", "calcomania"), _i("Lienzo", "lienzo"), _i("Insertar SVG", "insertar_svg"),
+    _i("Calcomanía", "calcomania"), _i("Lienzo", "lienzo"), _i("Insertar SVG", "insertar_svg"), _i("Vectorizar imagen", "vectorizar_imagen"),
     _i("Insertar archivos DXF", "insertar_dxf"),
     _i("Insertar malla", "insertar_malla"),
     _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijación", "fijacion"),
