@@ -421,3 +421,20 @@ def test_insertar_diseno_fijo_no_se_mueve():
     res = doc.agregar(OpUnion(doc.nuevo_id(), "Mal", tipo="rigida", origen1=_cara(doc, "op5.c1", (5, 5, 0)),
                               origen2=_cara(doc, "op1.c1", (20, 20, 10))))
     assert res.estado == "error" and "fijo" in res.mensaje
+
+
+def test_comando_fijar_un_diseno_insertado_conserva_sus_cuerpos():
+    """«Fijar / liberar componente» sobre un diseño insertado lo rehacía como OpComponente vacío: los cuerpos
+    insertados desaparecían. Ahora conserva la clase del paso."""
+    from omnicad.ui.comando import ContextoComando, hit_desde_ref
+    from omnicad.ui.comandos.ensamblar import FijarComponente
+    otro = Documento()
+    otro.agregar(OpPrimitiva(otro.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    doc = _doc_dos_cajas()
+    doc.agregar(OpInsertarDiseno(doc.nuevo_id(), "Insertar pieza", archivo="pieza", receta=otro.a_dict()))
+    cid = next(k for k, c in doc.estado_final.cuerpos.items() if c.componente == "op5")
+    ctx = ContextoComando(doc)
+    FijarComponente().aplicar({"cuerpos": [hit_desde_ref({"tipo": "cuerpo", "cuerpo": cid}, doc.estado_final)]}, ctx)
+    assert isinstance(doc.operacion("op5"), OpInsertarDiseno)
+    assert doc.estado_final.componentes["op5"]["fijo"] is True
+    assert g.volumen(doc.estado_final.cuerpos[cid].forma) == pytest.approx(1000.0)

@@ -254,7 +254,9 @@ class FijarComponente(Comando):
         if not comps:
             raise ErrorComando("Ese cuerpo no está en un componente.")
         op = ctx.doc.operacion(comps[0])
-        nueva = OpComponente(op.id, op.nombre, op.suprimida, **dict(op.p, fijo=not op.p.get("fijo")))
+        # misma clase que el paso original: un diseño insertado (OpInsertarDiseno) también es un componente con «fijo»;
+        # rehacerlo como OpComponente perdía sus cuerpos
+        nueva = op.__class__(op.id, op.nombre, op.suprimida, **dict(op.p, fijo=not op.p.get("fijo")))
         (ctx.ventana._reemplazar if ctx.ventana else lambda o: ctx.doc.reemplazar(o.id, o))(nueva)
 
 
