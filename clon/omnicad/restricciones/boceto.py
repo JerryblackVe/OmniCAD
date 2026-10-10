@@ -1967,17 +1967,18 @@ class Boceto:
         return ln
 
     # ------------------------------------------------------------ MODIFICAR: desfase
-    def desfase(self, cid, distancia, punto_lado=None, expresion=None):
+    def desfase(self, cid, distancia, punto_lado=None, expresion=None, invertir=False):
         """Desfase (SKT-OFFSET) de la cadena conectada a `cid`: curvas paralelas a `distancia`, con las
         esquinas resueltas por intersección, la restricción de desfase y su cota. Por defecto, una cadena
-        cerrada se desfasa hacia afuera; `punto_lado` elige el lado. Devuelve los ids nuevos."""
+        cerrada se desfasa hacia afuera (y una abierta, a la izquierda de su recorrido); `punto_lado` elige el
+        lado e `invertir` pasa al lado contrario del que tocaba. Devuelve los ids nuevos."""
         if distancia <= 0:
             raise ErrorBoceto("La distancia de desfase debe ser positiva.")
         cadena, cerrada = self.cadena(cid)
         c0 = self.curvas[cid]
         if len(cadena) == 1 and isinstance(c0, Circulo):
             r = c0.radio
-            fuera = punto_lado is None or math.dist(punto_lado, self.coords(c0.centro)) > r
+            fuera = (punto_lado is None or math.dist(punto_lado, self.coords(c0.centro)) > r) != bool(invertir)
             if not fuera and distancia >= r:
                 raise ErrorBoceto("El desfase es mayor que el radio.")
             nuevo = self.agregar_circulo(c0.centro, r + distancia if fuera else r - distancia, c0.construccion)
@@ -2012,6 +2013,8 @@ class Boceto:
             s = -1.0 if area > 0 else 1.0
         else:
             s = 1.0
+        if invertir:
+            s = -s
         dd = s * distancia
         portadoras = []      # (tipo, datos) de cada curva desfasada + sus extremos desfasados
         for k, inv, c, a, b, *_r in elems:

@@ -11,14 +11,19 @@ Cómo se orientan las coordenadas 2D (x, y) del boceto, en mm, según el plano (
 Cada `draw_*` edita el `OpBoceto` con `doc.reemplazar` (sobre una copia, nunca en el lugar): es UN paso de
 deshacer. Los ids de entidades, restricciones y cotas del boceto son enteros estables (no cambian al
 editar ni al recalcular).
+
+Las herramientas que MODIFICAN geometría que ya existe (recortar, empalme, chaflán, desfase, simetría, patrones,
+círculo tangente, curva de fusión, restringir automáticamente) calculan sobre la geometría YA RESUELTA por el
+solver (la que muestra get_sketch), como el editor de la interfaz, y la guardan así. La lógica de cada una está en
+`restricciones.boceto.Boceto` (la misma que usa la interfaz): acá solo se valida y se informa.
 """
 import difflib
 import math
 from typing import Literal
 
 from ..nucleo import geometria as geo
-from ..restricciones import Boceto, ErrorBoceto
-from ..restricciones.boceto import validar_valor_cota
+from ..restricciones import Boceto, ErrorBoceto, auto_restringir
+from ..restricciones.boceto import ArcoElipse, Circulo, Elipse, Texto, validar_valor_cota
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, evaluar
 from . import selectores as sl
@@ -267,27 +272,89 @@ def _arco_3_puntos(b, p1, p2, p3, construccion=False):
             "end": arco.inicio if horario else arco.fin}
 
 
-def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False):
+def _origen_fijo(b):
+    """Punto fijo en (0, 0): el dato del boceto al que se acota (como el origen de Fusion). Usa uno que ya esté
+    fijo ahí (también un punto proyectado) o lo crea con la restricción «fijo»."""
+    for pid in sorted(b.puntos_fijos()):
+        if math.hypot(*b.coords(pid)) < 1e-9:
+            return pid
+    pid = b.agregar_punto(0.0, 0.0)
+    b.agregar_restriccion("fijo", [pid])
+    return pid
+
+
+def _acotar_desde_origen(b, pid):
+    """Ubica el punto `pid` respecto del origen fijo con cotas horizontal y vertical (o restricciones horizontal /
+    vertical cuando una distancia es cero, porque una cota de largo tiene que ser positiva)."""
+    origen = _origen_fijo(b)
+    x, y = b.coords(pid)
+    if abs(x) < 1e-9:
+        b.agregar_restriccion("vertical", [origen, pid])
+    else:
+        b.agregar_cota("distancia_h", [origen, pid], repr(round(abs(x), 9)))
+    if abs(y) < 1e-9:
+        b.agregar_restriccion("horizontal", [origen, pid])
+    else:
+        b.agregar_cota("distancia_v", [origen, pid], repr(round(abs(y), 9)))
+    return origen
+
+
+def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False, acotar=False, expr_radio=None):
+    """Polígono regular como la interfaz. Con `acotar` queda TOTALMENTE restringido: cota de radio del círculo guía
+    (con `expr_radio`, la expresión que se guarda), giro fijado (horizontal / vertical o cota de ángulo contra una
+    línea de referencia horizontal) y centro acotado desde el origen fijo del boceto."""
     if lados < 3:
         raise ErrorBoceto("Un polígono necesita al menos 3 lados.")
     if lados > 64:      # el mismo tope que la interfaz (ui/editor_boceto.py, _evaluar_campo)
         raise ErrorBoceto(f"Un polígono admite como máximo 64 lados, como la interfaz (recibió {lados}).")
     if radio <= 1e-9:
         raise ErrorBoceto("El radio del polígono tiene que ser positivo.")
+    if acotar:
+        validar_valor_cota("radio", radio)
     rv = radio / math.cos(math.pi / lados) if circunscrito else radio
     a0 = math.radians(giro)
     esquinas = [(cx + rv * math.cos(a0 + 2 * math.pi * k / lados), cy + rv * math.sin(a0 + 2 * math.pi * k / lados))
                 for k in range(lados)]
-    cid = b.agregar_circulo((cx, cy), radio, True)         # círculo de construcción guía, como en la interfaz
+    centro = (cx, cy)
+    if acotar and math.hypot(cx, cy) < 1e-9:
+        centro = _origen_fijo(b)                            # el centro ES el origen fijo
+    cid = b.agregar_circulo(centro, radio, True)           # círculo de construcción guía, como en la interfaz
     verts = [b.agregar_punto(*q) for q in esquinas]
     ls = [b.agregar_linea(verts[k], verts[(k + 1) % lados], construccion) for k in range(lados)]
     for k in range(1, lados):
         b.agregar_restriccion("igual", [ls[0], ls[k]])
     for v, ln in zip(verts, ls, strict=True):
         b.agregar_restriccion("tangente" if circunscrito else "coincidente", [ln if circunscrito else v, cid])
-    alias = {"": cid, "circle": cid, "center": b.curvas[cid].centro}
+    if circunscrito:
+        # lados iguales y tangentes al círculo NO alcanzan con una cantidad par de lados: los tramos de tangencia
+        # pueden alternar (largo a + b, b + a…) y queda un grado de libertad de más (un hexágono daba dof 5). La
+        # restricción de polígono regular lo cierra.
+        b.agregar_restriccion("poligono", list(ls))
+    pc = b.curvas[cid].centro
+    alias = {"": cid, "circle": cid, "center": pc}
     alias.update({f"side{k + 1}": ls[k] for k in range(lados)})
     alias.update({f"v{k + 1}": verts[k] for k in range(lados)})
+    if not acotar:
+        return alias
+    alias["radius_dimension"] = b.agregar_cota("radio", [cid], expr_radio or repr(float(radio)))
+    radial = b.agregar_linea(pc, verts[0], True)            # del centro al primer vértice: fija el giro
+    alias["radial"] = radial
+    a = giro % 360.0
+    m = a % 180.0
+    if min(m, 180.0 - m) < 1e-9:
+        b.agregar_restriccion("horizontal", [radial])
+    elif abs(m - 90.0) < 1e-9:
+        b.agregar_restriccion("vertical", [radial])
+    else:
+        # una cota de ángulo necesita dos líneas: referencia horizontal del centro hasta el círculo guía
+        q = b.agregar_punto(cx + radio, cy)
+        ref = b.agregar_linea(pc, q, True)
+        b.agregar_restriccion("horizontal", [ref])
+        b.agregar_restriccion("coincidente", [q, cid])
+        alias["reference"] = ref
+        alias["angle_dimension"] = b.agregar_cota("angulo", [ref, radial], repr(round(a if a <= 180 else 360 - a, 9)))
+    if pc != _origen_fijo(b):
+        _acotar_desde_origen(b, pc)
     return alias
 
 
@@ -303,6 +370,44 @@ def _spline(b, puntos, tipo, grado, cerrada, construccion=False):
     ids = b.curvas[sid].pts
     alias = {"": sid, "start": ids[0], "end": ids[-1]}
     alias.update({f"p{i + 1}": p for i, p in enumerate(ids)})
+    return alias
+
+
+def _elipse(b, cx, cy, radio_mayor, radio_menor, giro, construccion=False):
+    """Elipse por centro, radios y giro del eje mayor (con sus ejes de construcción, como la interfaz)."""
+    for v, que in ((radio_mayor, "mayor"), (radio_menor, "menor")):
+        if not v > 1e-9:
+            raise ErrorBoceto(f"El radio {que} de la elipse tiene que ser positivo (llegó {v:g}).")
+        validar_valor_cota("radio", v)
+    a = math.radians(giro)
+    antes = set(b.curvas)
+    eid = b.agregar_elipse((cx, cy), (cx + radio_mayor * math.cos(a), cy + radio_mayor * math.sin(a)), radio_menor,
+                           construccion)
+    e = b.curvas[eid]
+    ejes = [c for c in b.curvas if c not in antes and c != eid]
+    return {"": eid, "center": e.centro, "major": e.mayor, "major_axis": ejes[0], "minor_axis": ejes[1]}
+
+
+RANURAS = {"center_to_center": ("centro", 2), "overall": ("total", 2), "center_point": ("punto", 2),
+           "arc_three_points": ("arco_3p", 3), "arc_center": ("arco_centro", 3)}
+
+
+def _ranura(b, tipo, puntos, ancho, construccion=False):
+    """Ranura de la interfaz (líneas y arcos tangentes + eje de construcción). Alias: side1, end2, side2, end1 (los
+    dos lados y los dos extremos curvos), axis (eje), center1 y center2 (centros de los extremos)."""
+    if tipo not in RANURAS:
+        raise ErrorBoceto(f"Tipo de ranura desconocido: {tipo}. Tipos: {', '.join(RANURAS)}.")
+    interno, n = RANURAS[tipo]
+    if not isinstance(puntos, (list, tuple)) or len(puntos) != n:
+        raise ErrorBoceto(f"La ranura «{tipo}» necesita {n} puntos [x, y] (llegaron "
+                          f"{len(puntos) if isinstance(puntos, (list, tuple)) else 'otra cosa'}).")
+    pts = [_xy(p, f"El punto {i + 1} de la ranura") for i, p in enumerate(puntos)]
+    if not (_finito(ancho) and ancho > 1e-9):
+        raise ErrorBoceto(f"El ancho de la ranura tiene que ser un número positivo (llegó {ancho!r}).")
+    validar_valor_cota("distancia", ancho)
+    ids = b.agregar_ranura(interno, pts, float(ancho), construccion)
+    alias = dict(zip(("side1", "end2", "side2", "end1", "axis"), ids, strict=True))
+    alias.update(center1=b.curvas[ids[3]].centro, center2=b.curvas[ids[1]].centro)
     return alias
 
 
@@ -324,19 +429,56 @@ def _informe_edicion(sesion, op, b, antes):
     br = boceto_resuelto(sesion, op)
     estado, gdl = estado_solver(br)
     nuevas = [c for cid, c in b.curvas.items() if cid not in antes["curvas"]]
-    return {"sketch": _paso(op),
-            "entities": [{"id": c.id, "type": _tipo_curva(c)} for c in nuevas],
-            "points": [p for p in b.puntos if p not in antes["puntos"]],
-            "constraints": [{"id": r.id, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo)}
-                            for rid, r in b.restricciones.items() if rid not in antes["restricciones"]],
-            "profiles": None if br is None else len(br.perfiles), "dof": gdl, "status": estado}
+    informe = {"sketch": _paso(op),
+               "entities": [{"id": c.id, "type": _tipo_curva(c)} for c in nuevas],
+               "points": [p for p in b.puntos if p not in antes["puntos"]],
+               "constraints": [{"id": r.id, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo)}
+                               for rid, r in b.restricciones.items() if rid not in antes["restricciones"]],
+               "profiles": None if br is None else len(br.perfiles), "dof": gdl, "status": estado}
+    cotas = [{"id": k.id, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "expression": k.expresion}
+             for kid, k in b.cotas.items() if kid not in antes["cotas"]]
+    if cotas:
+        informe["dimensions"] = cotas
+    borradas = sorted(antes["curvas"] - set(b.curvas))
+    if borradas:
+        informe["entities_deleted"] = borradas
+    return informe
 
 
-def _dibujar(sesion, ref, constructor):
-    """Edita el boceto con `constructor(boceto)` sobre una copia y la reemplaza en el timeline (un paso)."""
+def valores_cotas(sesion, b):
+    """{id de cota: valor en mm o grados} con los parámetros actuales (lo que el solver necesita)."""
+    valores = sesion.doc.parametros.valores()
+    return {k.id: evaluar(k.expresion, ANGULO if k.tipo == "angulo" else LONGITUD, valores) for k in b.cotas.values()}
+
+
+def _sincronizar_con_solver(sesion, op, b):
+    """Lleva a `b` (copia del boceto guardado de `op`) las coordenadas y los radios que dejó el solver, o sea lo que
+    muestra get_sketch: así recortar, empalmar o copiar calculan sobre lo que el agente ve (la interfaz guarda el
+    boceto ya resuelto). Si el boceto no está disponible o está en conflicto, queda la geometría guardada."""
+    br = boceto_resuelto(sesion, op)
+    if br is None or not br.solver.ok:
+        return
+    r = br.boceto
+    for pid, p in b.puntos.items():
+        q = r.puntos.get(pid)
+        if q is not None:
+            p.x, p.y = q.x, q.y
+    for cid, c in b.curvas.items():
+        k = r.curvas.get(cid)
+        if isinstance(c, Circulo) and isinstance(k, Circulo):
+            c.radio = k.radio
+        elif isinstance(c, (Elipse, ArcoElipse)) and isinstance(k, (Elipse, ArcoElipse)):
+            c.radio_menor = k.radio_menor
+
+
+def _dibujar(sesion, ref, constructor, desde_solver=False):
+    """Edita el boceto con `constructor(boceto)` sobre una copia y la reemplaza en el timeline (un paso). Con
+    `desde_solver`, la copia parte de la geometría resuelta (ver `_sincronizar_con_solver`)."""
     op = op_boceto(sesion, ref)
     nueva = op.copia()
     b = nueva.boceto
+    if desde_solver:
+        _sincronizar_con_solver(sesion, op, b)
     antes = _claves(b)
     try:
         constructor(b)
@@ -372,6 +514,8 @@ def _info_curva(b, c):
     d = {"id": c.id, "type": _tipo_curva(c), "construction": c.construccion, "points": c.puntos()}
     if c.eje:
         d["centerline"] = True
+    if c.proyectada:
+        d["projected"] = True
     if c.tipo == "linea":
         d.update(start=xy(c.p1), end=xy(c.p2), length=_r(math.dist(b.coords(c.p1), b.coords(c.p2))))
     elif c.tipo == "circulo":
@@ -385,7 +529,13 @@ def _info_curva(b, c):
         d.update(spline_type="control_points" if c.modo == "control" else "fit_points", degree=c.grado,
                  closed=c.cerrada, vertices=[xy(p) for p in c.pts])
     elif c.tipo in ("elipse", "arco_elipse"):
-        d.update(center=xy(c.centro), minor_radius=_r(c.radio_menor))
+        (cx, cy), (mx, my) = b.coords(c.centro), b.coords(c.mayor)
+        d.update(center=xy(c.centro), major_point=xy(c.mayor), major_radius=_r(math.hypot(mx - cx, my - cy)),
+                 minor_radius=_r(c.radio_menor), angle=_r(math.degrees(math.atan2(my - cy, mx - cx))))
+        if c.tipo == "arco_elipse":
+            d.update(start=xy(c.inicio), end=xy(c.fin))
+    elif c.tipo == "conica":
+        d.update(start=xy(c.inicio), vertex=xy(c.vertice), end=xy(c.fin), rho=_r(c.rho))
     elif c.tipo == "texto":
         d.update(text=c.texto, position=xy(c.punto), font=c.fuente, height=_r(c.altura), angle=_r(c.angulo),
                  bold=c.negrita, italic=c.cursiva, letter_spacing=_r(c.espaciado), line_spacing=_r(c.interlineado),
@@ -590,23 +740,31 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
 
 @herramienta("create_polygon", "boceto", "Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía "
              "de construcción, como la interfaz). Inscrito: los vértices están sobre el círculo de radio `radius`; "
-             "circunscrito: los lados son tangentes a ese círculo.", modifica=True)
-def create_polygon(sesion, sides: int, radius: float, center_x: float = 0.0, center_y: float = 0.0,
+             "circunscrito: los lados son tangentes a ese círculo (radius = medio entrecaras). Sin más, le quedan 4 "
+             "grados de libertad (centro, tamaño y giro); con fully_constrained=true queda TOTALMENTE acotado: cota "
+             "de radio del círculo guía (guarda la expresión de radius, así sigue a un parámetro), giro fijado "
+             "(restricción horizontal/vertical o cota de ángulo) y centro acotado desde un punto fijo en el origen "
+             "del boceto (dof 0).", modifica=True)
+def create_polygon(sesion, sides: int, radius: Expr, center_x: float = 0.0, center_y: float = 0.0,
                    rotation: float = 0.0, kind: Literal["inscribed", "circumscribed"] = "inscribed",
-                   sketch: str | None = None, construction: bool = False):
+                   sketch: str | None = None, construction: bool = False, fully_constrained: bool = False):
     """
     sides: cantidad de lados (3 a 64).
-    radius: radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito).
+    radius: radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2").
     center_x: x del centro (mm).
     center_y: y del centro (mm).
     rotation: ángulo en grados del primer vértice respecto del eje x del boceto.
     kind: "inscribed" (vértices sobre el círculo) o "circumscribed" (lados tangentes al círculo).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un polígono de construcción (no forma perfiles).
+    fully_constrained: true para dejarlo totalmente acotado (radio, giro y posición del centro): dof 0.
     """
     _exigir_finitos(locals())
-    return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, radius, center_x, center_y, rotation,
-                                                        kind == "circumscribed", construction))
+    expresion = texto_expr(radius)
+    valor = evaluar(expresion, LONGITUD, sesion.doc.parametros.valores())
+    return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, valor, center_x, center_y, rotation,
+                                                        kind == "circumscribed", construction, fully_constrained,
+                                                        expresion))
 
 
 @herramienta("draw_spline", "boceto", "Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control "
@@ -778,7 +936,18 @@ def _construir_entidad(b, i, e):
         if isinstance(lados, bool) or not isinstance(lados, int):
             raise _spec_error(i, tipo, "'sides' tiene que ser un entero.")
         return _poligono(b, lados, _numero(_campo(e, i, "radius"), i, tipo, "'radius'"), cx, cy,
-                         _numero(e.get("rotation", 0.0), i, tipo, "'rotation'"), e.get("kind") == "circumscribed", c)
+                         _numero(e.get("rotation", 0.0), i, tipo, "'rotation'"), e.get("kind") == "circumscribed", c,
+                         bool(e.get("fully_constrained", False)))
+    if tipo == "ellipse":
+        cx, cy = p("center") if "center" in e else (0.0, 0.0)
+        return _elipse(b, cx, cy, _numero(_campo(e, i, "major_radius"), i, tipo, "'major_radius'"),
+                       _numero(_campo(e, i, "minor_radius"), i, tipo, "'minor_radius'"),
+                       _numero(e.get("angle", 0.0), i, tipo, "'angle'"), c)
+    if tipo == "slot":
+        kind = e.get("kind", "center_to_center")
+        if kind not in RANURAS:
+            raise _spec_error(i, tipo, f"'kind' es uno de: {', '.join(RANURAS)}.")
+        return _ranura(b, kind, _campo(e, i, "points"), _numero(_campo(e, i, "width"), i, tipo, "'width'"), c)
     if tipo == "spline":
         tipo_spline = e.get("spline_type", "fit_points")
         if tipo_spline not in ("fit_points", "control_points"):
@@ -792,7 +961,8 @@ def _construir_entidad(b, i, e):
     if tipo == "point":
         x, y = p("at", "position")
         return {"": b.agregar_punto(x, y)}
-    raise _spec_error(i, tipo, "tipo desconocido. Tipos: line, rectangle, circle, arc, polygon, spline, point.")
+    raise _spec_error(i, tipo, "tipo desconocido. Tipos: line, rectangle, circle, arc, polygon, ellipse, slot, "
+                      "spline, point.")
 
 
 def _citar(token, alias, b, que):
@@ -818,11 +988,14 @@ def _citar(token, alias, b, que):
              "Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. "
              "entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 | center,width,height | "
              "origin,width,height}, circle{center,radius}, arc{center,start,sweep | start,mid,end}, "
-             "polygon{sides,radius,center,rotation,kind}, spline{points,spline_type,degree,closed}, point{at}; todas "
-             "aceptan id (nombre propio para citarla) y construction. Las coordenadas son [x, y] en mm del plano. "
-             "constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value}] (value puede ser "
-             "una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', 'id.center', y en un "
-             "rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas); un entero cita un id de "
+             "polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,"
+             "angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, "
+             "point{at}; todas aceptan id (nombre propio para citarla) y construction. Las coordenadas son [x, y] en "
+             "mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value}] "
+             "(value puede ser una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', "
+             "'id.center', en un rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas), en un "
+             "polígono 'id.side1..', 'id.v1..' y 'id.circle', en una elipse 'id.major' y 'id.major_axis/minor_axis', "
+             "en una ranura 'id.side1/side2/end1/end2/axis/center1/center2'; un entero cita un id de "
              "entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un "
              "plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre "
              "esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve "
@@ -891,3 +1064,573 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
     if cara:
         info["face"] = cara
     return info
+
+
+# ================================================================ más geometría (como el editor de la interfaz)
+_TIPO_A_TEXTO = {"linea": "una línea", "circulo": "un círculo", "arco": "un arco", "elipse": "una elipse",
+                 "arco_elipse": "un arco de elipse", "spline": "una spline", "conica": "una cónica", "texto": "un texto",
+                 "punto": "un punto"}
+
+
+def _curva(b, cid, tipos=None, que="la entidad"):
+    """La curva `cid` del boceto, o ENTITY_NOT_FOUND / INVALID_GEOMETRY si no existe o no es de `tipos`."""
+    c = b.curvas.get(cid) if isinstance(cid, int) and not isinstance(cid, bool) else None
+    if c is None:
+        if cid in b.puntos:
+            raise error("INVALID_GEOMETRY", f"{que.capitalize()} {cid} es un punto: acá hace falta una curva.")
+        _exigir_entidades(b, [cid])
+    if tipos and c.tipo not in tipos:
+        raise error("INVALID_GEOMETRY", f"{que.capitalize()} {cid} es {_TIPO_A_TEXTO.get(c.tipo, c.tipo)}: acá hace "
+                    f"falta {' o '.join(_TIPO_A_TEXTO.get(t, t) for t in tipos)}.")
+    return c
+
+
+def _opcional_xy(v, que):
+    return None if v is None else _xy(v, que)
+
+
+def _valor_expr(sesion, valor, tipo=LONGITUD):
+    """(texto de la expresión, valor en mm o grados) de un número o una expresión con parámetros."""
+    expresion = texto_expr(valor)
+    return expresion, evaluar(expresion, tipo, sesion.doc.parametros.valores())
+
+
+def _cota_valida(tipo, valor, que):
+    try:
+        validar_valor_cota(tipo, valor)
+    except ErrorBoceto as e:
+        raise error("INVALID_DIMENSION", f"{que}: {e}") from e
+
+
+@herramienta("draw_ellipse", "boceto",
+             "Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. Como la "
+             "interfaz, suma sus ejes mayor y menor como líneas de construcción, con el centro en su punto medio "
+             "(sirven para acotarla). Una elipse cerrada forma un perfil.", modifica=True)
+def draw_ellipse(sesion, major_radius: float, minor_radius: float, center_x: float = 0.0, center_y: float = 0.0,
+                 angle: float = 0.0, sketch: str | None = None, construction: bool = False):
+    """
+    major_radius: semieje mayor en mm (positivo): distancia del centro al extremo del eje mayor.
+    minor_radius: semieje menor en mm (positivo).
+    center_x: x del centro (mm).
+    center_y: y del centro (mm).
+    angle: giro del eje mayor en grados respecto del eje x del boceto (antihorario).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    construction: true para una elipse de construcción (no forma perfiles).
+    """
+    _exigir_finitos(locals())
+    return _dibujar(sesion, sketch, lambda b: _elipse(b, center_x, center_y, major_radius, minor_radius, angle,
+                                                      construction))
+
+
+@herramienta("draw_slot", "boceto",
+             "Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de "
+             "construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro "
+             "del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la "
+             "ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del "
+             "arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro "
+             "extremo] (antihorario). width es el ancho total. Forma un perfil cerrado.", modifica=True)
+def draw_slot(sesion, points: list[list[float]], width: float,
+              kind: Literal["center_to_center", "overall", "center_point", "arc_three_points",
+                            "arc_center"] = "center_to_center",
+              sketch: str | None = None, construction: bool = False):
+    """
+    points: 2 puntos [x, y] (ranuras rectas) o 3 (ranuras de arco), en mm; qué es cada uno depende de kind.
+    width: ancho total de la ranura en mm (positivo; en una de arco, menor que el doble del radio del eje).
+    kind: center_to_center, overall, center_point, arc_three_points o arc_center.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    construction: true para una ranura de construcción (no forma perfiles).
+    """
+    _exigir_finitos(locals())
+    return _dibujar(sesion, sketch, lambda b: _ranura(b, kind, points, width, construction))
+
+
+@herramienta("draw_point", "boceto", "Agrega un punto suelto al boceto (Fusion: Punto): sirve de referencia para cotas, "
+             "restricciones, agujeros o el centro de un patrón circular.", modifica=True)
+def draw_point(sesion, x: float, y: float, sketch: str | None = None):
+    """
+    x: x del punto (mm).
+    y: y del punto (mm).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    return _dibujar(sesion, sketch, lambda b: b.agregar_punto(float(x), float(y)))
+
+
+@herramienta("draw_conic", "boceto",
+             "Dibuja una curva cónica (Fusion: Curva cónica) entre dos extremos, con el vértice (donde se cruzan las "
+             "tangentes de los extremos) y Rho: 0.5 = parábola, menos = elipse, más = hipérbola.", modifica=True)
+def draw_conic(sesion, start_x: float, start_y: float, end_x: float, end_y: float, vertex_x: float, vertex_y: float,
+               rho: float = 0.5, sketch: str | None = None, construction: bool = False):
+    """
+    start_x: x del primer extremo (mm).
+    start_y: y del primer extremo (mm).
+    end_x: x del otro extremo (mm).
+    end_y: y del otro extremo (mm).
+    vertex_x: x del vértice (mm); no puede estar alineado con los extremos.
+    vertex_y: y del vértice (mm).
+    rho: forma de la curva, entre 0 y 1 sin incluirlos.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    construction: true para una cónica de construcción.
+    """
+    _exigir_finitos(locals())
+    return _dibujar(sesion, sketch, lambda b: b.agregar_conica((start_x, start_y), (vertex_x, vertex_y),
+                                                               (end_x, end_y), rho, construction))
+
+
+@herramienta("draw_tangent_circle", "boceto",
+             "Dibuja un círculo tangente a 2 o 3 líneas del boceto (Fusion: Círculo de 2 / 3 tangentes) y le agrega "
+             "las restricciones de tangencia. Con 2 líneas, (x, y) dice en qué ángulo de las dos va y, sin radius, "
+             "también su tamaño (el círculo pasa cerca de ese punto); entre dos paralelas el diámetro es la "
+             "separación. Con 3 líneas sale el inscrito, o el que tenga sus tangencias más cerca de (x, y).",
+             modifica=True)
+def draw_tangent_circle(sesion, lines: list[int], x: float | None = None, y: float | None = None,
+                        radius: float | None = None, sketch: str | None = None, construction: bool = False):
+    """
+    lines: ids de 2 o 3 líneas del boceto (get_sketch).
+    x: x de un punto que ubica el círculo (mm); vacío = automático.
+    y: y de ese punto (mm).
+    radius: radio en mm (solo con 2 líneas no paralelas); vacío = el que pasa por (x, y).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    construction: true para un círculo de construcción.
+    """
+    _exigir_finitos(locals())
+    if len(lines) not in (2, 3):
+        raise error("INVALID_ARGUMENTS", f"lines lleva 2 o 3 ids de líneas (llegaron {len(lines)}).")
+    if (x is None) != (y is None):
+        raise error("INVALID_ARGUMENTS", "Pasá x e y juntos, o ninguno de los dos.")
+    if radius is not None and (len(lines) == 3 or not radius > 0):
+        raise error("INVALID_ARGUMENTS", "radius va solo con 2 líneas y tiene que ser positivo.")
+    q = None if x is None else (float(x), float(y))
+
+    def crear(b):
+        for k in lines:
+            _curva(b, k, ("linea",), "la línea")
+        if len(set(lines)) != len(lines):
+            raise ErrorBoceto("Elegí líneas distintas.")
+        if len(lines) == 2:
+            # sin punto: entre los puntos medios de las dos líneas (adentro del ángulo que forman, como al dibujar)
+            medios = [tuple((u + v) / 2 for u, v in zip(*b._extremos_linea(k), strict=True)) for k in lines]
+            ubicacion = q or ((medios[0][0] + medios[1][0]) / 2, (medios[0][1] + medios[1][1]) / 2)
+            b.agregar_circulo_tangente(list(lines), ubicacion, radius, None, construction)
+        else:
+            b.agregar_circulo_tangente(list(lines), None, None, None if q is None else [q] * 3, construction)
+    return _dibujar(sesion, sketch, crear, desde_solver=True)
+
+
+@herramienta("draw_blend_curve", "boceto",
+             "Une los extremos de dos curvas abiertas con una spline suave (Fusion: Curva de fusión), tangente (G1) o "
+             "con curvatura continua (G2) en las dos uniones. Sin point1/point2 une los dos extremos más cercanos.",
+             modifica=True)
+def draw_blend_curve(sesion, entity1: int, entity2: int, point1: list[float] | None = None,
+                     point2: list[float] | None = None, continuity: Literal["G1", "G2"] = "G1",
+                     sketch: str | None = None):
+    """
+    entity1: id de la primera curva (línea, arco, spline o cónica; abierta).
+    entity2: id de la segunda curva.
+    point1: [x, y] cerca del extremo de entity1 que se une; vacío = automático.
+    point2: [x, y] cerca del extremo de entity2 que se une; vacío = automático.
+    continuity: G1 (tangente) o G2 (curvatura continua).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
+
+    def crear(b):
+        c1, c2 = _curva(b, entity1, que="entity1"), _curva(b, entity2, que="entity2")
+        if entity1 == entity2:
+            raise ErrorBoceto("Elegí dos curvas distintas.")
+        e1, e2 = c1.extremos(), c2.extremos()
+        if not e1 or not e2 or isinstance(c1, Texto) or isinstance(c2, Texto):
+            raise ErrorBoceto("La curva de fusión une extremos de curvas abiertas (no círculos, elipses ni textos).")
+        a, c = min(((a, c) for a in e1 for c in e2), key=lambda par: math.dist(b.coords(par[0]), b.coords(par[1])))
+        b.curva_fusion(entity1, p1 or b.coords(a), entity2, p2 or b.coords(c), continuity)
+    return _dibujar(sesion, sketch, crear, desde_solver=True)
+
+
+# ---------------------------------------------------------------- modificar: empalme, chaflán, recortar, desfase
+@herramienta("sketch_fillet", "boceto",
+             "Empalme de boceto (Fusion: Empalme en el boceto): redondea la esquina entre dos curvas (líneas, arcos o "
+             "círculos) con un arco tangente; recorta las curvas, agrega las tangencias y la cota de radio. radius "
+             "puede ser una expresión con parámetros (queda en la cota). Con point1/point2 se elige qué parte de cada "
+             "curva se conserva (útil si se cruzan); sin ellos, la parte más larga.", modifica=True)
+def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list[float] | None = None,
+                  point2: list[float] | None = None, sketch: str | None = None):
+    """
+    entity1: id de la primera curva (get_sketch).
+    entity2: id de la segunda curva.
+    radius: radio del empalme en mm: número o expresión con parámetros.
+    point1: [x, y] sobre entity1, del lado que se conserva; vacío = automático.
+    point2: [x, y] sobre entity2, del lado que se conserva; vacío = automático.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    expresion, valor = _valor_expr(sesion, radius)
+    _cota_valida("radio", valor, "radius")
+    p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
+
+    def empalmar(b):
+        for k, que in ((entity1, "entity1"), (entity2, "entity2")):
+            _curva(b, k, ("linea", "arco", "circulo"), que)
+        if entity1 == entity2:
+            raise ErrorBoceto("Elegí dos curvas distintas.")
+        b.empalme(entity1, entity2, valor, p1, p2, expresion)
+    return _dibujar(sesion, sketch, empalmar, desde_solver=True)
+
+
+@herramienta("sketch_chamfer", "boceto",
+             "Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de "
+             "dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). Recorta las líneas, "
+             "agrega la línea del chaflán y sus cotas (las distancias pueden ser expresiones con parámetros).",
+             modifica=True)
+def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Expr | None = None,
+                   angle: Expr | None = None, point1: list[float] | None = None, point2: list[float] | None = None,
+                   sketch: str | None = None):
+    """
+    line1: id de la primera línea.
+    line2: id de la segunda línea.
+    distance: distancia del chaflán sobre line1 (y sobre line2 si no hay distance2 ni angle), en mm o expresión.
+    distance2: distancia sobre line2 (chaflán de dos distancias); vacío = igual a distance.
+    angle: ángulo en grados del chaflán respecto de line1 (chaflán de distancia y ángulo); no va con distance2.
+    point1: [x, y] sobre line1, del lado que se conserva; vacío = automático.
+    point2: [x, y] sobre line2, del lado que se conserva; vacío = automático.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    if distance2 is not None and angle is not None:
+        raise error("INVALID_ARGUMENTS", "Pasá distance2 (dos distancias) o angle (distancia y ángulo), no los dos.")
+    expresion, d1 = _valor_expr(sesion, distance)
+    _cota_valida("distancia", d1, "distance")
+    expr2, d2 = (None, None) if distance2 is None else _valor_expr(sesion, distance2)
+    if d2 is not None:
+        _cota_valida("distancia", d2, "distance2")
+    ang = None if angle is None else _valor_expr(sesion, angle, ANGULO)[1]
+    if ang is not None and not 0 < ang < 180:
+        raise error("INVALID_DIMENSION", f"angle tiene que estar entre 0 y 180 grados (llegó {ang:g}).")
+    p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
+
+    def chaflan(b):
+        for k, que in ((line1, "line1"), (line2, "line2")):
+            _curva(b, k, ("linea",), que)
+        if line1 == line2:
+            raise ErrorBoceto("Elegí dos líneas distintas.")
+        previas = set(b.cotas)
+        b.chaflan(line1, line2, d1, d2, ang, p1, p2, expresion)
+        if expr2 is not None:              # la segunda distancia también guarda su expresión
+            nuevas = [k for kid, k in b.cotas.items() if kid not in previas and k.tipo == "distancia"]
+            if len(nuevas) == 2:
+                nuevas[1].expresion = expr2
+    return _dibujar(sesion, sketch, chaflan, desde_solver=True)
+
+
+@herramienta("trim_sketch_curve", "boceto",
+             "Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el "
+             "lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los "
+             "cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una "
+             "línea o un arco hasta la próxima curva; break la parte en los cruces más cercanos.", modifica=True)
+def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["trim", "extend", "break"] = "trim",
+                      sketch: str | None = None):
+    """
+    entity: id de la curva (get_sketch).
+    x: x del punto que elige el tramo (mm).
+    y: y del punto (mm).
+    mode: trim (recortar), extend (alargar) o break (partir).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    hecho = {}
+
+    def modificar(b):
+        _curva(b, entity)
+        if mode == "trim":
+            hecho["queda"] = b.recortar(entity, (x, y))
+        elif mode == "extend":
+            b.alargar(entity, (x, y))
+        else:
+            hecho["partes"] = b.partir(entity, (x, y))
+    r = _dibujar(sesion, sketch, modificar, desde_solver=True)
+    r["mode"] = mode
+    if mode == "trim":
+        r["deleted"] = hecho["queda"] is None
+    if mode == "break":
+        r["pieces"] = hecho["partes"]
+    return r
+
+
+@herramienta("offset_sketch_curves", "boceto",
+             "Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de "
+             "un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena "
+             "cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la "
+             "izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un "
+             "punto. Para letras, splines o cualquier contorno (sin parámetros) está offset_profiles.", modifica=True)
+def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | None = None,
+                         side_y: float | None = None, sketch: str | None = None):
+    """
+    entity: id de una curva de la cadena (línea o arco) o de un círculo.
+    distance: separación en mm, número o expresión con parámetros; negativa = al lado contrario.
+    side_x: x de un punto del lado donde va el desfase; vacío = el lado por defecto.
+    side_y: y de ese punto.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    if (side_x is None) != (side_y is None):
+        raise error("INVALID_ARGUMENTS", "Pasá side_x y side_y juntos, o ninguno de los dos.")
+    expresion, valor = _valor_expr(sesion, distance)
+    if valor < 0:
+        expresion = f"-({expresion})" if isinstance(distance, str) else repr(abs(valor))
+    _cota_valida("desfase", abs(valor), "distance")
+    lado = None if side_x is None else (float(side_x), float(side_y))
+
+    def desfasar(b):
+        _curva(b, entity, ("linea", "arco", "circulo"))
+        b.desfase(entity, abs(valor), lado, expresion, invertir=valor < 0)
+    return _dibujar(sesion, sketch, desfasar, desde_solver=True)
+
+
+# ---------------------------------------------------------------- crear: simetría y patrones
+def _exigir_seleccion(b, entities):
+    if not entities:
+        raise error("INVALID_ARGUMENTS", "entities está vacía: pasá ids de curvas o puntos (get_sketch).")
+    _exigir_entidades(b, entities)
+
+
+@herramienta("mirror_sketch", "boceto",
+             "Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respecto de una línea del "
+             "boceto, con restricciones de simetría (si la geometría original cambia, la copia la sigue). Lo que está "
+             "sobre el eje se comparte. Los textos no se espejan (para eso: transform_sketch o edit_text).",
+             modifica=True)
+def mirror_sketch(sesion, entities: list[int], axis: int, sketch: str | None = None):
+    """
+    entities: ids de las curvas o puntos a reflejar (get_sketch).
+    axis: id de la línea de simetría (puede ser de construcción).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    textos = []
+
+    def reflejar(b):
+        _exigir_seleccion(b, entities)
+        _curva(b, axis, ("linea",), "el eje")
+        textos.extend(i for i in entities if isinstance(b.curvas.get(i), Texto))
+        b.simetria(list(entities), axis)
+    r = _dibujar(sesion, sketch, reflejar, desde_solver=True)
+    if textos:
+        sesion.avisar(f"Los textos {textos} no se espejan con simetría: usá transform_sketch o edit_text (flip_h).")
+    return r
+
+
+# Cada copia queda atada al original (restricción de patrón) y el solver resuelve todo junto: medido, 200 círculos
+# copiados (200 puntos) tardan 3,6 s y 99 rectángulos (396 puntos) 7,5 s, y eso se repite en cada edición del boceto.
+MAX_COPIAS_PATRON = 200
+MAX_PUNTOS_PATRON = 200      # copias × puntos de la selección
+
+
+def _exigir_cantidad(n, que):
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser un entero de 1 en adelante (llegó {n!r}).")
+
+
+def _exigir_tamano_patron(b, entities, copias, sin=()):
+    puntos = len([p for p in b.puntos_de(entities) if p not in sin])
+    if copias * puntos > MAX_PUNTOS_PATRON:
+        raise error("INVALID_ARGUMENTS", f"El patrón copiaría {copias * puntos} puntos ({copias} copias × {puntos}): un "
+                    f"patrón de boceto admite hasta {MAX_PUNTOS_PATRON}, porque cada copia queda atada al original y "
+                    "el boceto se vuelve lento.", "Para más copias, patroná el cuerpo (rectangular_pattern o "
+                    "circular_pattern) o la operación.")
+
+
+@herramienta("sketch_rectangular_pattern", "boceto",
+             "Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una "
+             "o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo "
+             "siguen). La dirección 1 sale del ángulo angle y la 2 es perpendicular (+90°). Con spacing=extent la "
+             "distancia es la total (de la primera a la última copia); con spacing la de cada paso. Tope: 200 puntos "
+             "copiados (copias × puntos de la selección; un rectángulo tiene 4), para que el boceto no se vuelva lento.",
+             modifica=True)
+def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distance1: float, count2: int = 1,
+                               distance2: float = 0.0, angle: float = 0.0,
+                               spacing: Literal["extent", "spacing"] = "extent", symmetric: bool = False,
+                               sketch: str | None = None):
+    """
+    entities: ids de las curvas o puntos a repetir (get_sketch).
+    count1: cantidad en la dirección 1, contando el original.
+    distance1: distancia en la dirección 1 (mm; total o por paso según spacing; negativa = sentido contrario).
+    count2: cantidad en la dirección 2 (1 = una sola fila).
+    distance2: distancia en la dirección 2 (mm).
+    angle: dirección 1 en grados respecto del eje x del boceto; la dirección 2 queda a +90°.
+    spacing: extent (distancia total) o spacing (distancia entre copias).
+    symmetric: true para repartir las copias a los dos lados del original.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    _exigir_cantidad(count1, "count1")
+    _exigir_cantidad(count2, "count2")
+    if count1 * count2 < 2:
+        raise error("INVALID_ARGUMENTS", "El patrón necesita al menos dos ejemplares (count1 × count2 ≥ 2).")
+    if count1 * count2 - 1 > MAX_COPIAS_PATRON:
+        raise error("INVALID_ARGUMENTS", f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió "
+                    f"{count1 * count2 - 1}): para más, usá un patrón de cuerpos (rectangular_pattern).")
+    a = math.radians(angle)
+    d1, d2 = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
+    modo = "extension" if spacing == "extent" else "espaciado"
+
+    def repetir(b):
+        _exigir_seleccion(b, entities)
+        _exigir_tamano_patron(b, entities, count1 * count2 - 1)
+        b.patron_rectangular(list(entities), count1, distance1, count2, distance2, d1, d2, modo, symmetric)
+    return _dibujar(sesion, sketch, repetir, desde_solver=True)
+
+
+@herramienta("sketch_circular_pattern", "boceto",
+             "Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de "
+             "un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la "
+             "vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. Tope: 200 puntos copiados "
+             "(copias × puntos de la selección; un círculo tiene 1).",
+             modifica=True)
+def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: float = 0.0, center_y: float = 0.0,
+                            center_point: int | None = None, total_angle: float = 360.0, symmetric: bool = False,
+                            sketch: str | None = None):
+    """
+    entities: ids de las curvas o puntos a repetir (get_sketch).
+    count: cantidad total, contando el original (2 o más).
+    center_x: x del centro (mm), si no se da center_point.
+    center_y: y del centro (mm).
+    center_point: id de un punto del boceto que hace de centro (las copias lo siguen); pisa center_x/center_y.
+    total_angle: ángulo total en grados (360 = vuelta entera; negativo = sentido horario).
+    symmetric: true para repartir las copias a los dos lados del original (si total_angle no es 360).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    _exigir_cantidad(count, "count")
+    if count < 2:
+        raise error("INVALID_ARGUMENTS", "El patrón circular necesita al menos 2 ejemplares (count ≥ 2).")
+    if count - 1 > MAX_COPIAS_PATRON:
+        raise error("INVALID_ARGUMENTS", f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió "
+                    f"{count - 1}): para más, usá un patrón de cuerpos (circular_pattern).")
+    if not 0 < abs(total_angle) <= 360:
+        raise error("INVALID_ARGUMENTS", "total_angle va de -360 a 360 grados, distinto de cero.")
+
+    def repetir(b):
+        _exigir_seleccion(b, entities)
+        if center_point is not None and center_point not in b.puntos:
+            raise error("ENTITY_NOT_FOUND", f"center_point {center_point} no es un punto del boceto.")
+        centro = center_point if center_point is not None else (float(center_x), float(center_y))
+        _exigir_tamano_patron(b, entities, count - 1, sin=(center_point,))
+        b.patron_circular(list(entities), centro, count, total_angle, symmetric)
+    return _dibujar(sesion, sketch, repetir, desde_solver=True)
+
+
+# ---------------------------------------------------------------- proyectar, tipo de línea, cotas y AutoConstrain
+@herramienta("project_to_sketch", "boceto",
+             "Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde "
+             "cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en "
+             "la interfaz), sirve para restricciones, cotas y perfiles, y NO sigue al modelo si después cambia. "
+             "edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces.",
+             modifica=True)
+def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[str] | str | None = None,
+                      bodies: list[str] | None = None, mode: Literal["project", "intersect"] = "project",
+                      body: str | None = None, sketch: str | None = None):
+    """
+    edges: aristas a proyectar: selector ('|Z', '%CIRCLE and >Z') o ids ('Cuerpo1/E3'); vacío = ninguna.
+    faces: caras a proyectar (su contorno): selector o ids ('Cuerpo1/F6'); vacío = ninguna.
+    bodies: ids o nombres de cuerpos enteros; vacío = ninguno.
+    mode: project (proyección ortogonal) o intersect (corte con el plano del boceto).
+    body: cuerpo donde se evalúan los selectores de edges y faces; vacío = el único cuerpo.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    from ..nucleo.perfiles import intersecar_forma, proyectar_forma
+    op, br = boceto_activo(sesion, sketch)
+    formas = [e.sub for _c, e in sl.elegir(sesion, edges, "arista", body, permitir_vacio=True)]
+    formas += [e.sub for _c, e in sl.elegir(sesion, faces, "cara", body, permitir_vacio=True)]
+    for ref in bodies or []:
+        c = sesion.cuerpo(ref)
+        if getattr(c, "tipo", "solido") == "malla":
+            raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(c)}» es una malla: no se proyecta.")
+        formas.append(c.forma)
+    if not formas:
+        raise error("INVALID_ARGUMENTS", "Elegí qué proyectar: edges, faces o bodies.")
+    funcion = intersecar_forma if mode == "intersect" else proyectar_forma
+    prims, puntos = [], []
+    for f in formas:
+        p, q = funcion(f, br.plano)
+        prims += p
+        puntos += q
+    if not prims and not puntos:
+        raise error("INVALID_GEOMETRY", "Eso no deja nada sobre el plano del boceto"
+                    + (": no corta su plano." if mode == "intersect" else "."))
+    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(prims, puntos), desde_solver=True)
+    r["mode"] = mode
+    return r
+
+
+@herramienta("set_line_type", "boceto",
+             "Cambia el tipo de línea de curvas del boceto (Fusion: Construcción / Línea central de la paleta): normal "
+             "(forma perfiles), construction (de construcción: guía, no forma perfiles) o centerline (eje: forma "
+             "perfiles y sirve de eje de revolución).", modifica=True)
+def set_line_type(sesion, entities: list[int], line_type: Literal["normal", "construction", "centerline"],
+                  sketch: str | None = None):
+    """
+    entities: ids de las curvas (get_sketch).
+    line_type: normal, construction o centerline (centerline solo en curvas que no son texto).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    def cambiar(b):
+        if not entities:
+            raise error("INVALID_ARGUMENTS", "entities está vacía: pasá ids de curvas (get_sketch).")
+        for i in entities:
+            c = _curva(b, i)
+            if line_type == "centerline" and isinstance(c, Texto):
+                raise ErrorBoceto(f"La entidad {i} es un texto: no puede ser línea central.")
+        for i in entities:
+            c = b.curvas[i]
+            c.construccion = line_type == "construction"
+            c.eje = line_type == "centerline"
+    r = _dibujar(sesion, sketch, cambiar)
+    r["line_type"] = line_type
+    return r
+
+
+@herramienta("edit_dimension", "boceto",
+             "Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con "
+             "parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y "
+             "el boceto queda como estaba. Para borrar una cota o una restricción: delete_sketch_entities con su id.",
+             modifica=True)
+def edit_dimension(sesion, dimension: int, value: Expr, sketch: str | None = None):
+    """
+    dimension: id de la cota (get_sketch la lista en dimensions).
+    value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2").
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op, br = boceto_activo(sesion, sketch)
+    nueva = op.copia()
+    k = nueva.boceto.cotas.get(dimension) if isinstance(dimension, int) and not isinstance(dimension, bool) else None
+    if k is None:
+        hay = ", ".join(str(i) for i in nueva.boceto.cotas) or "ninguna"
+        raise error("ENTITY_NOT_FOUND", f"El boceto «{op.nombre}» ({op.id}) no tiene la cota {dimension!r} (cotas: "
+                    f"{hay}).", "get_sketch lista las cotas (dimensions) con su id.")
+    tipo = _COTA_A_INGLES.get(k.tipo, k.tipo)
+    expresion, valor = _valor_expr(sesion, value, ANGULO if k.tipo == "angulo" else LONGITUD)
+    _cota_valida(k.tipo, valor, f"La cota {dimension} ({tipo})")
+    if k.tipo == "angulo" and not 0 < valor < 180:
+        raise error("INVALID_DIMENSION", f"Una cota de ángulo va entre 0 y 180 grados (llegó {valor:g}).")
+    anterior = k.expresion
+    k.expresion = expresion
+    sesion.doc.reemplazar(op.id, nueva)
+    _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota {dimension} ({tipo}) = {expresion}")
+    estado, gdl = estado_solver(boceto_resuelto(sesion, nueva))
+    return {"sketch": _paso(nueva), "dimension": {"id": dimension, "type": tipo, "entities": list(k.entidades),
+                                                  "previous_expression": anterior, "expression": expresion,
+                                                  "value": _valor_cota(sesion, k)},
+            "dof": gdl, "status": estado}
+
+
+@herramienta("auto_constrain", "boceto",
+             "Restringe automáticamente el boceto (Fusion: Restringir automáticamente): agrega coincidencias, "
+             "horizontales, verticales e igualdades que ya se cumplen y después cotas (largos, radios, ángulos y "
+             "posiciones desde un punto fijo en el origen) con las medidas actuales, hasta dejarlo totalmente "
+             "restringido si se puede. Cada agregado se prueba solo: nada entra en conflicto. Las cotas quedan como "
+             "números (cambialas con edit_dimension).", modifica=True)
+def auto_constrain(sesion, sketch: str | None = None):
+    """
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op, _br = boceto_activo(sesion, sketch)
+    valores = valores_cotas(sesion, op.boceto)
+    agregado = []
+    r = _dibujar(sesion, op.id, lambda b: agregado.extend(auto_restringir(b, valores)), desde_solver=True)
+    r["added"] = agregado
+    return r

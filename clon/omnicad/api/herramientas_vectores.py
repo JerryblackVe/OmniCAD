@@ -19,7 +19,7 @@ from ..timeline.operaciones import OpBoceto, texto_con_valores
 from ..timeline.parametros import ErrorExpresion
 from .errores import error
 from .herramientas_boceto import (_dibujar, _exigir_finitos, _paso, boceto_activo, boceto_resuelto,
-                                  estado_solver, nombre_nuevo, op_boceto, plano_o_cara)
+                                  estado_solver, nombre_nuevo, op_boceto, plano_o_cara, valores_cotas)
 from .registro import herramienta
 
 _ALINEACION = {"left": "izq", "center": "centro", "right": "der"}
@@ -684,7 +684,9 @@ def clean_sketch(sesion, tolerance: float = 0.01, remove_duplicates: bool = True
 
 @herramienta("move_sketch_point", "vectores",
              "Mueve un punto del boceto (edición de nodos): extremos de líneas y arcos, puntos de control de splines "
-             "(las curvas Bézier de un SVG), centros. El solver vuelve a cumplir las restricciones que tenga.",
+             "(las curvas Bézier de un SVG), centros. Como arrastrar en la interfaz: el punto va a (x, y) y el resto se "
+             "acomoda para seguir cumpliendo restricciones y cotas; si ellas no lo dejan llegar (por ejemplo, una cota "
+             "fija su distancia), queda lo más cerca posible: reached dice si llegó y point dónde quedó.",
              modifica=True)
 def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None = None):
     """
@@ -693,7 +695,9 @@ def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None
     y: y nueva (mm).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
+    from ..restricciones import resolver
     _exigir_finitos({"x": x, "y": y})
+    previo = boceto_resuelto(sesion, op_boceto(sesion, sketch))
 
     def mover(b):
         if point not in b.puntos:
@@ -701,7 +705,17 @@ def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None
         if point in b.puntos_fijos():
             raise ErrorBoceto(f"El punto {point} está fijo (o es proyectado): no se puede mover.")
         _mover(b, point, x, y)
-    return _dibujar(sesion, sketch, mover)
+        # se resuelve acá con el punto «arrastrado» (pesa más que el resto): sin eso, el solver del recálculo
+        # repartía el movimiento y el punto quedaba a mitad de camino (p. ej. con una simetría)
+        res = resolver(b, valores_cotas(sesion, b), arrastrado=point)
+        if not res.ok and (previo is None or previo.solver.ok):
+            raise ErrorBoceto(f"No se pudo mover el punto {point} cumpliendo las restricciones: {res.descripcion()}")
+    r = _dibujar(sesion, sketch, mover, desde_solver=True)
+    br = boceto_resuelto(sesion, op_boceto(sesion, r["sketch"]["id"]))
+    px, py = (br.boceto if br is not None else op_boceto(sesion, r["sketch"]["id"]).boceto).coords(point)
+    r["point"] = {"id": point, "x": round(px, 4) + 0.0, "y": round(py, 4) + 0.0}
+    r["reached"] = math.hypot(px - x, py - y) < 1e-6
+    return r
 
 
 @herramienta("delete_sketch_entities", "vectores",
