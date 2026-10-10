@@ -971,6 +971,45 @@ def _interferencia(p):
     p.drawPath(choque)
 
 
+def _lupa(p, cx, cy, r):
+    """Lupa: vidrio translúcido con aro oscuro y mango hacia abajo a la derecha."""
+    p.setPen(QPen(GRIS_OSCURO, 2.6, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(cx + r * 0.7, cy + r * 0.7), QPointF(cx + r * 1.55, cy + r * 1.55))
+    p.setPen(QPen(GRIS_OSCURO, 1.5))
+    p.setBrush(QColor(235, 245, 255, 170))
+    p.drawEllipse(QPointF(cx, cy), r, r)
+
+
+def _revisar_geometria(p):
+    """Revisar geometría: cuerpo gris con una arista abierta marcada en rojo y una lupa."""
+    a, b, h = 15, 13, 11
+    q = _q(13, 13.5)
+    _caja_en(p, q, 0, 0, 0, a, b, h, GRISES, BORDE_GRIS)
+    p.setPen(QPen(QColor("#d9453a"), 2.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(q(0, 0, h), q(a, 0, h))
+    p.drawLine(q(a, 0, h), q(a, 0, 0))
+    _ptos(p, [(q(a, 0, h).x(), q(a, 0, h).y())], 3.4, QColor("#a72c22"))
+    _lupa(p, 21.5, 20.5, 5.2)
+
+
+def _reparar_cuerpo(p):
+    """Reparar cuerpo: cuerpo azul con una llave."""
+    q = _q(12, 12)
+    _caja_en(p, q, 0, 0, 0, 14, 12, 11)
+    p.save()
+    p.translate(22.5, 22.5)
+    p.rotate(45)
+    p.setPen(QPen(GRIS_OSCURO, 0.9))
+    p.setBrush(QColor("#c9ced4"))
+    p.drawRoundedRect(QRectF(-1.9, -1.5, 3.8, 10.5), 1.4, 1.4)
+    llave = QPainterPath()
+    llave.addEllipse(QPointF(0, -3.8), 4.2, 4.2)
+    boca = QPainterPath()
+    boca.addRect(QRectF(-1.5, -9, 3.0, 5.4))
+    p.drawPath(llave.subtracted(boca))
+    p.restore()
+
+
 def _curvatura_peine(p):
     c = QPainterPath(QPointF(3, 24))
     c.cubicTo(9, 2, 19, 30, 29, 9)
@@ -1926,6 +1965,7 @@ DIBUJOS_EXTRA = {
     "mapa_entorno": _mapa_entorno, "angulo_desmoldeo": _angulo_desmoldeo, "mapa_curvatura": _mapa_curvatura,
     "isocurva": _isocurva, "accesibilidad": _accesibilidad, "radio_minimo": _radio_minimo, "seccion": _seccion,
     "centro_masa": _centro_masa, "colores_componente": _colores_componente,
+    "revisar_geometria": _revisar_geometria, "reparar_cuerpo": _reparar_cuerpo,
     # insertar
     "calcomania": _calcomania,
     "insertar_svg": lambda p: _insertar_archivo(p, "SVG", NARANJA, _glifo_svg),

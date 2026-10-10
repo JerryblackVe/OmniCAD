@@ -18,6 +18,7 @@ def registrar(*clases):
 
 
 from . import chapa, construir, crear, ensamblar, fijacion, insertar, inspeccionar, malla, modificar, solido, superficie  # noqa: E402,F401  (cada módulo se registra al importarse)
+from . import revision  # noqa: E402,F401  (INSPECCIONAR › Revisar geometría y Reparar cuerpo)
 from . import asas_extra  # noqa: E402,F401  (engancha asas en la vista a comandos ya registrados)
 
 
