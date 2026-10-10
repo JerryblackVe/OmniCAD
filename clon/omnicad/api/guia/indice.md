@@ -8,10 +8,11 @@ recalcula entera cada vez que cambia algo. Las herramientas se agrupan así:
 | documento | archivo, escena, timeline, deshacer | `get_scene_info`, `get_timeline`, `save_document`, `undo` |
 | parametros | medidas con nombre que gobiernan el modelo | `get_parameters`, `set_parameter` |
 | inspeccion | ver y medir el resultado | `get_viewport_image`, `get_physical_properties`, `measure_distance`, `check_interference` |
+| boceto | dibujar, modificar, restringir y acotar bocetos 2D | `sketch_from_spec`, `draw_slot`, `sketch_fillet`, `trim_sketch_curve`, `edit_dimension` |
 | vectores | fuentes, texto de boceto, insertar SVG / DXF, imagen → vector | `add_text`, `list_fonts`, `insert_svg`, `trace_image` |
 | avanzado | cualquier operación, receta, código, guía | `run_operation`, `describe_operation`, `get_recipe`, `execute_code` |
 
-Hay más grupos (bocetos, sólidos…): el catálogo de herramientas del servidor es la lista completa y
+Hay más grupos (sólidos, modificar…): el catálogo de herramientas del servidor es la lista completa y
 cada una trae su descripción y sus argumentos.
 
 ## Temas
@@ -21,6 +22,16 @@ cada una trae su descripción y sus argumentos.
 - **texto_vectores**: fuentes, texto de boceto con todas sus opciones, insertar SVG / DXF y vectorizar imágenes.
 
 Pedí un tema con `get_guide(topic="flujo")`.
+
+## Bocetos (grupo boceto), lo mismo que el editor de la interfaz
+
+- Dibujar: líneas, rectángulo, círculo, arco, spline, `draw_point`, `draw_conic`, `draw_ellipse`, `draw_slot`,
+  `draw_tangent_circle`, `draw_blend_curve`; `create_polygon` con **fully_constrained** queda con dof 0.
+- Modificar (sobre lo que muestra `get_sketch`): `sketch_fillet`, `sketch_chamfer`, `trim_sketch_curve`
+  (trim / extend / break), `offset_sketch_curves` (desfase con cota), `mirror_sketch`, `sketch_rectangular_pattern`,
+  `sketch_circular_pattern`, `project_to_sketch`, `set_line_type` (construcción / línea central).
+- Acotar: `add_constraint`, `add_dimension`, `edit_dimension` (cambiar una cota), `auto_constrain`;
+  `move_sketch_point` y `delete_sketch_entities` (también borra restricciones y cotas).
 
 ## Reglas que valen siempre
 
