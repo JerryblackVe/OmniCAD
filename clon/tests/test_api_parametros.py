@@ -83,3 +83,22 @@ def test_referencia_circular(s):
 def test_sugerencia_de_nombre(s):
     r = api.llamar(s, "set_parameter", {"name": "anchoo", "expression": "1"})
     assert "ancho" in r["pistas"][0]
+
+
+def test_nombres_con_acentos_y_mensaje_de_la_forma_combinada():
+    """Hallazgo: «ñandú» daba INVALID_PARAMETER_NAME. Escrita con letras compuestas se acepta y el evaluador la usa
+    (es un identificador de Python). Escrita con n + tilde combinada (NFD) se rechaza a propósito, porque el
+    evaluador normaliza los nombres de la expresión a NFKC y no la encontraría nunca: el mensaje lo explica y da
+    la forma que sirve."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_parameter", {"name": "ñandú", "expression": "12 mm"}))
+    assert ok(api.llamar(s, "create_parameter", {"name": "diámetro", "expression": "ñandú * 2"}))["value"] == 24
+    caja = ok(api.llamar(s, "create_box", {"length": "ñandú", "width": "diámetro", "height": 1}))
+    assert caja["bodies_created"][0]["volume"] == pytest.approx(12 * 24)
+    assert ok(api.llamar(s, "set_parameter", {"name": "ñandú", "expression": "10 mm"}))["value"] == 10
+    assert ok(api.llamar(s, "get_scene_info"))["bodies"][0]["volume"] == pytest.approx(10 * 20)
+    r = api.llamar(s, "create_parameter", {"name": "ñandú2", "expression": "1"})   # «ñandú2» combinada
+    assert r["error_kind"] == "INVALID_PARAMETER_NAME"
+    assert "marca combinada" in r["mensaje"] and "'ñandú2'" in r["mensaje"]
+    r = api.llamar(s, "create_parameter", {"name": "2x", "expression": "1"})
+    assert r["error_kind"] == "INVALID_PARAMETER_NAME" and "acento y ñ" in r["mensaje"]

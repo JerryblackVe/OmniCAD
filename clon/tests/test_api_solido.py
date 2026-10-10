@@ -386,6 +386,34 @@ def test_mover_cuerpos(s):
     assert api.llamar(s, "move_body", {"body": "nada"})["error_kind"] == "BODY_NOT_FOUND"
 
 
+def test_move_body_a_una_posicion_absoluta(s):
+    """Hallazgo: translate SUMA al centro actual (un anillo en z = 2 movido «a» 15,5 quedó en 17,5). Con position el
+    centro de la caja va a esa posición, también después de girar, y una expresión conserva su parámetro."""
+    llamar(s, "create_parameter", name="alto_eje", expression="40 mm")
+    cubo = llamar(s, "create_box", length=10, width=10, height=4)["bodies_created"][0]["id"]        # centro z = 2
+    r = llamar(s, "move_body", body=cubo, translate=[0, 0, 15.5])
+    assert r["center"] == {"before": [0, 0, 2], "after": [0, 0, 17.5]}                              # relativo
+    llamar(s, "undo")
+    r = llamar(s, "move_body", body=cubo, position=[5, 6, "alto_eje"])
+    assert r["center"] == {"before": [0, 0, 2], "after": [5, 6, 40]}
+    assert caja(s, cubo) == pytest.approx(([0, 1, 38], [10, 11, 42]))
+    paso = s.paso(r["feature"]["id"])
+    assert (paso.p["dx"], paso.p["dz"]) == ("5.0", "(alto_eje) - (2.0 mm)")
+    llamar(s, "set_parameter", name="alto_eje", expression="50 mm")                                # sigue al parámetro
+    assert caja(s, cubo)[0][2] == pytest.approx(48)
+    # una L girada: el centro de la caja DESPUÉS del giro queda en position
+    ele = llamar(s, "create_box", length=30, width=10, height=10, x=100)["bodies_created"][0]["id"]
+    llamar(s, "create_box", length=10, width=10, height=30, x=110, operation="join", target=ele)
+    r = llamar(s, "move_body", body=ele, rotate=[0, 45, 0], position=[-50, 0, 0])
+    assert r["center"]["after"] == pytest.approx([-50, 0, 0], abs=1e-4)
+    copia = llamar(s, "move_body", body=ele, position=[0, 80, 0], copy=True)
+    assert copia["center"] == {"before": pytest.approx([-50, 0, 0], abs=1e-4), "after": [0, 80, 0]}
+    assert len(copia["bodies_created"]) == 1
+    r = api.llamar(s, "move_body", {"body": cubo, "translate": [0, 0, 1], "position": [0, 0, 0]})
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "position" in r["mensaje"]
+    assert api.llamar(s, "move_body", {"body": cubo, "position": [1, 2]})["error_kind"] == "INVALID_ARGUMENTS"
+
+
 # ---------------------------------------------------------------- un paso de deshacer por herramienta
 @pytest.mark.parametrize("nombre, args", [
     ("create_box", {"length": 5, "width": 5, "height": 5}),

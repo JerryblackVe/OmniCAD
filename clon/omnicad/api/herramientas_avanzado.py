@@ -21,8 +21,9 @@ from pathlib import Path
 from typing import Literal
 
 from ..timeline.documento import VERSION_RECETA
-from ..timeline.operaciones import TIPOS_OPERACION, OpOperacionBase, operacion_desde_dict
-from .errores import desde_mensaje, error
+from ..timeline.operaciones import TIPOS_OPERACION, OpExtrusion, OpOperacionBase, operacion_desde_dict
+from . import selectores as sl
+from .errores import ErrorAPI, desde_mensaje, error
 from .registro import _a_json, herramienta, llamar
 
 _GUIA = Path(__file__).resolve().parent / "guia"
@@ -96,6 +97,274 @@ def _ejemplo(clase):
     return {"tool": "run_operation", "args": {"type": clase.TIPO, "params": params}}
 
 
+# ---------------------------------------------------------------- referencias abreviadas
+# Los pasos guardan referencias (los dicts de `timeline.entidades`: {"tipo": "cara", "cuerpo", "firma"}…), que un
+# agente no puede escribir a mano. run_operation y edit_feature aceptan además estas formas cortas y las traducen
+# acá, con el documento actual (la misma traducción para todas las operaciones).
+FORMATOS_REFERENCIA = [
+    'Cara o arista: el id de find_faces / find_edges ("Cuerpo1/F3", "Cuerpo1/E7"; vale hasta el próximo cambio) o '
+    'un selector con prefijo: "faces:>Z", "edges:|Z" (sobre el único cuerpo) o {"faces": ">Z", "body": "Cuerpo1"}. '
+    'En campos de caras o aristas («caras», «aristas»…) el selector va sin prefijo (">Z"). Se guarda la referencia '
+    'persistente, que sigue a la cara cuando cambian los parámetros.',
+    'Origen: "XY", "XZ", "YZ" (planos), "X", "Y", "Z" (ejes) y "O" (el punto de origen).',
+    'Construcción y bocetos: id o nombre de un plano, eje o punto de construcción ("op3", "Plano1") o de un boceto '
+    '(el boceto entero, como plano).',
+    'Boceto: {"sketch": "Boceto1", "point": 3} (punto; get_sketch lista los ids), {"sketch": "Boceto1", "curve": 2} '
+    '(curva) o {"sketch": "Boceto1", "profile": 0} (perfil: índice, lista, "all" o "largest"). Siguen al boceto si '
+    'cambia.',
+    'Cuerpo: {"body": "Cuerpo1"} (id o nombre). En los campos de ids de cuerpo («cuerpos», «objetivos»…) va el id o '
+    'el nombre directo ("op2.c1", "Cuerpo1"; se guarda el id).',
+    'La forma guardada (un dict con "tipo", como la muestra get_timeline) se acepta tal cual. Un texto que no es '
+    'ninguna de estas formas llega sin cambios al paso, que dice qué campo está mal y qué esperaba.',
+]
+_CAMPOS_CUERPO = ("cuerpos", "objetivos", "objetivo", "cuerpo", "herramientas")     # ids de cuerpo como texto
+_SIN_REFERENCIAS = ("marco", "receta", "datos", "ajustes", "suprimir", "celdas", "componentes")
+_ORIGEN = {"XY": ("plano", "XY"), "XZ": ("plano", "XZ"), "YZ": ("plano", "YZ"), "X": ("eje", "X"), "Y": ("eje", "Y"),
+           "Z": ("eje", "Z"), "O": ("punto", "O")}
+_SELECTOR_DE_CAMPO = {"cara": "cara", "caras": "cara", "caras_a": "cara", "caras_b": "cara", "aristas": "arista"}
+_CAMPOS_PERFIL = ("perfiles", "perfil", "secciones")
+_ID_CUERPO = re.compile(r"op\d+\.c\d+")
+_PREFIJO = re.compile(r"^\s*(faces|edges)\s*:", re.IGNORECASE)
+_LETRA_ID = re.compile(r"/([FE])\d+\s*$", re.IGNORECASE)
+
+
+def tipo_de_campo(clase, clave):
+    """Qué guarda el campo `clave` de la operación: "cuerpos" (ids de cuerpo como texto), "una" (UNA referencia),
+    "lista" (lista de referencias) o None (otra cosa: números, textos, expresiones, marcos, contenido embebido)."""
+    if clave not in clase.PARAMS or clave in _SIN_REFERENCIAS or clave in clase.EXPRESIONES:
+        return None
+    if clave in _CAMPOS_CUERPO and clave not in getattr(clase, "REFS", ()):
+        return "cuerpos"
+    defecto = clase.PARAMS[clave]
+    if defecto is None:
+        return "una"
+    return "lista" if isinstance(defecto, list) else None
+
+
+def _elementos_elegidos(sesion, clave, spec, body, elementos):
+    """Referencias persistentes de las caras o aristas que elige un id efímero o un selector."""
+    if not elementos:
+        raise error("INVALID_ARGUMENTS", f"«{clave}»: {spec!r} es un id de find_faces / find_edges o un selector, y "
+                    "acá no sirve: se evaluaría sobre la pieza terminada y no sobre la de antes del paso.",
+                    "Borrá el paso (delete_feature) y crealo de nuevo con su herramienta o con run_operation (ahí sí "
+                    "valen ids y selectores), o deshacelo con undo si recién lo creaste.")
+    m, letra = _PREFIJO.match(spec), _LETRA_ID.search(spec)
+    if m:
+        tipo = "cara" if m.group(1).lower() == "faces" else "arista"
+    elif sl.es_id(spec) and letra:
+        tipo = "cara" if letra.group(1).upper() == "F" else "arista"
+    else:
+        tipo = _SELECTOR_DE_CAMPO[clave]
+    try:
+        elegidos = sl.elegir(sesion, spec, tipo, body)
+    except ErrorAPI as e:
+        if e.error_kind == "AMBIGUOUS_REFERENCE" and not body:
+            raise error("AMBIGUOUS_REFERENCE", e.mensaje, 'Decí el cuerpo: {"faces": ">Z", "body": "Cuerpo1"}, o '
+                        'usá ids de find_faces / find_edges.') from None
+        raise
+    return [sl.referencia(c, e) for c, e in elegidos]
+
+
+def _de_boceto(sesion, clave, item):
+    """{"sketch": …} con "point", "curve" o "profile" (o solo, el boceto entero) → referencias."""
+    from .herramientas_boceto import boceto_activo, seleccionar_perfiles   # diferido: no cambia el orden del catálogo
+    otras = set(item) - {"sketch"}
+    if len(otras) > 1 or otras - {"point", "curve", "profile"}:
+        raise error("INVALID_ARGUMENTS", f"«{clave}»: {item!r} no es una referencia de boceto.",
+                    'Usá {"sketch": "Boceto1", "point": 3}, {"sketch": "Boceto1", "curve": 2} o '
+                    '{"sketch": "Boceto1", "profile": 0} (una sola de point, curve o profile).')
+    sop, br = boceto_activo(sesion, item["sketch"])
+    if not otras:
+        if clave in _CAMPOS_PERFIL:
+            raise error("INVALID_ARGUMENTS", f"«{clave}» guarda perfiles: elegí uno del boceto «{sop.nombre}».",
+                        f'Usá {{"sketch": "{sop.nombre}", "profile": 0}} (get_sketch lista los perfiles).')
+        return [{"tipo": "boceto", "boceto": sop.id}]
+    que = otras.pop()
+    if que == "profile":
+        return [dict(OpExtrusion.referencia_perfil(p), tipo="perfil", boceto=sop.id)
+                for p in seleccionar_perfiles(br, sop, item["profile"])]
+    numeros = item[que] if isinstance(item[que], list) else [item[que]]
+    existentes, tipo, k = ((br.boceto.puntos, "punto_boceto", "punto") if que == "point"
+                           else (br.boceto.curvas, "curva_boceto", "curva"))
+    for n in numeros:
+        if isinstance(n, bool) or not isinstance(n, int) or n not in existentes:
+            raise error("ENTITY_NOT_FOUND", f"«{clave}»: el boceto «{sop.nombre}» ({sop.id}) no tiene "
+                        f"{'el punto' if que == 'point' else 'la curva'} {n!r}.")
+    return [{"tipo": tipo, "boceto": sop.id, k: n} for n in numeros]
+
+
+def _de_texto(sesion, clave, texto):
+    """Origen, construcción o boceto nombrado por un texto → [referencia]; None si el texto no nombra nada de eso
+    (llega sin cambios al paso, que da el error con el campo y lo que esperaba)."""
+    if texto.upper() in _ORIGEN:
+        t, i = _ORIGEN[texto.upper()]
+        return [{"tipo": t, "id": i}]
+    estado, cf = sesion.doc.estado_final, texto.casefold()
+    hallados = []                                # (por id, qué es, referencia)
+
+    def anotar(i, nombre, que, ref):
+        if i == texto or str(nombre or "").casefold() == cf:
+            hallados.append((i == texto, f"{que} {i}", ref))
+    for i, p in estado.planos.items():
+        anotar(i, getattr(p, "nombre", ""), "plano", {"tipo": "plano", "id": i})
+    for i, e in estado.ejes.items():
+        anotar(i, e[2] if len(e) > 2 else "", "eje", {"tipo": "eje", "id": i})
+    for i, p in estado.puntos.items():
+        anotar(i, p[1] if len(p) > 1 else "", "punto", {"tipo": "punto", "id": i})
+    for i, br in estado.bocetos.items():
+        anotar(i, br.nombre, "boceto", {"tipo": "boceto", "boceto": i})
+    hallados = [h for h in hallados if h[0]] or hallados
+    if len(hallados) > 1:
+        raise error("AMBIGUOUS_REFERENCE", f"«{clave}»: «{texto}» puede ser {', '.join(h[1] for h in hallados)}.",
+                    "Usá el id.")
+    if not hallados:
+        return None
+    ref = hallados[0][2]
+    if ref["tipo"] == "boceto" and clave in _CAMPOS_PERFIL:
+        return _de_boceto(sesion, clave, {"sketch": ref["boceto"]})        # da el error con la forma correcta
+    return [ref]
+
+
+def _es_corta(v):
+    """True si `v` es una forma corta de un elemento (id efímero, selector con prefijo o dict abreviado)."""
+    if isinstance(v, str):
+        return sl.es_id(v) or bool(_PREFIJO.match(v))
+    return isinstance(v, dict) and "tipo" not in v and bool(set(v) & {"sketch", "body", "faces", "edges"})
+
+
+def _refs(sesion, clave, item, elementos):
+    """Una forma corta (texto o dict) → lista de referencias; None si `item` no es una forma corta (queda igual)."""
+    if isinstance(item, dict):
+        if "tipo" in item:
+            return None
+        if "sketch" in item:
+            return _de_boceto(sesion, clave, item)
+        if item and set(item) <= {"body", "faces", "edges"}:
+            if set(item) == {"body"}:
+                return [{"tipo": "cuerpo", "cuerpo": sesion.cuerpo(item["body"]).id}]
+            if {"faces", "edges"} <= set(item):
+                raise error("INVALID_ARGUMENTS", f"«{clave}»: pasá faces o edges, no los dos.")
+            que = "faces" if "faces" in item else "edges"
+            return _elementos_elegidos(sesion, clave, f"{que}:{item[que]}", item.get("body"), elementos)
+        # dict propio de la operación (p. ej. {"cara": …, "punto": [x, y, z]} del agujero): sus valores cortos
+        if any(_es_corta(v) for v in item.values()):
+            return [{k: (_una(sesion, k, v, elementos) if _es_corta(v) else v) for k, v in item.items()}]
+        return None
+    if not isinstance(item, str):
+        return None
+    texto = item.strip()
+    if texto.upper() in _ORIGEN:
+        return _de_texto(sesion, clave, texto)
+    if _PREFIJO.match(texto) or sl.es_id(texto) or (clave in _SELECTOR_DE_CAMPO and sl.parece_selector(texto)):
+        return _elementos_elegidos(sesion, clave, texto, None, elementos)
+    return _de_texto(sesion, clave, texto)
+
+
+def _una(sesion, clave, valor, elementos):
+    refs = _refs(sesion, clave, valor, elementos)
+    if refs is None:                     # no es una forma corta (p. ej. coordenadas [x, y, z] o la referencia guardada)
+        return valor
+    if len(refs) != 1:
+        raise error("AMBIGUOUS_REFERENCE", f"«{clave}» guarda UNA referencia y {valor!r} eligió {len(refs)}.",
+                    "Afiná el selector (p. ej. con and o nearest:[x,y,z]) o usá un id de find_faces / find_edges.")
+    return refs[0]
+
+
+def _lista(sesion, clave, valor, elementos):
+    if not isinstance(valor, list):      # una sola forma corta (p. ej. "edges:|Z"); otra cosa queda igual
+        refs = _refs(sesion, clave, valor, elementos)
+        return valor if refs is None else refs
+    salida = []
+    for item in valor:
+        refs = _refs(sesion, clave, item, elementos)
+        salida.extend([item] if refs is None else refs)
+    return salida
+
+
+def _id_de_cuerpo(sesion, item, estricto):
+    """Id del cuerpo que nombra `item`. Sin `estricto` (edit_feature) un nombre que no existe al final del timeline
+    queda como está: el paso dice entonces qué cuerpo le falta y en qué paso."""
+    if isinstance(item, dict) and set(item) == {"body"}:
+        item = item["body"]
+    if not isinstance(item, str) or not item.strip() or _ID_CUERPO.fullmatch(item.strip()):
+        return item                      # vacío, un id (puede no existir al final: edit_feature) o el formato guardado
+    try:
+        return sesion.cuerpo(item).id
+    except ErrorAPI as e:
+        if estricto or e.error_kind != "BODY_NOT_FOUND":
+            raise
+        return item
+
+
+def _cuerpos(sesion, valor, defecto, estricto):
+    """Nombres de cuerpo → ids. Un texto suelto donde va una lista queda igual (el paso pide la lista)."""
+    if isinstance(valor, list):
+        return [_id_de_cuerpo(sesion, x, estricto) for x in valor]
+    if isinstance(defecto, list):
+        return valor
+    return _id_de_cuerpo(sesion, valor, estricto)
+
+
+def _perfiles_de_extrusion(sesion, valor, salida, actuales):
+    """«perfiles» de extrusión y revolución (sin «tipo»: el boceto va en el campo «boceto»): índices, "all",
+    "largest" o {"sketch", "profile"} → {"firma", "centroide"}. Completa «boceto» si falta."""
+    from .herramientas_boceto import boceto_activo, op_boceto, seleccionar_perfiles
+    lista = []
+    for item in (valor if isinstance(valor, list) else [valor]):
+        if isinstance(item, dict) and "sketch" not in item:
+            lista.append(item)                                   # el formato guardado
+            continue
+        boceto = salida.get("boceto") or actuales.get("boceto")
+        if isinstance(item, dict):
+            if set(item) != {"sketch", "profile"}:
+                raise error("INVALID_ARGUMENTS", f"«perfiles»: {item!r} no es un perfil.",
+                            'Usá {"sketch": "Boceto1", "profile": 0} o el índice con «boceto».')
+            sop = op_boceto(sesion, item["sketch"])
+            if boceto and boceto != sop.id:
+                raise error("INVALID_ARGUMENTS", f"Los perfiles tienen que ser del boceto del paso ({boceto}), no de "
+                            f"«{sop.nombre}» ({sop.id}).")
+            salida["boceto"], seleccion = sop.id, item["profile"]
+        else:
+            if not boceto:
+                raise error("INVALID_ARGUMENTS", "Para elegir perfiles por índice, pasá también «boceto» (id o nombre).",
+                            'O usá {"sketch": "Boceto1", "profile": 0}.')
+            sop, seleccion = op_boceto(sesion, boceto), item
+        sop, br = boceto_activo(sesion, sop.id)
+        lista.extend(OpExtrusion.referencia_perfil(p) for p in seleccionar_perfiles(br, sop, seleccion))
+    return lista
+
+
+def traducir_referencias(sesion, clase, params, actuales=None, elementos=True):
+    """(params con las formas cortas cambiadas por referencias, [campos cambiados]) para la operación `clase`.
+    `actuales`: los parámetros del paso que se edita (el boceto de sus perfiles). Con `elementos=False` (edit_feature)
+    no se aceptan ids de find_faces / find_edges ni selectores (valen para la pieza terminada, no para la de antes
+    del paso) y un nombre de cuerpo que no está al final del timeline queda como está (el paso dirá cuál falta). El
+    formato guardado pasa tal cual."""
+    from .herramientas_boceto import op_boceto
+    salida = dict(params)
+    actuales = clase.PARAMS if actuales is None else actuales
+    con_boceto = hasattr(clase, "referencia_perfil") and "boceto" in clase.PARAMS
+    if con_boceto and isinstance(params.get("boceto"), str) and params["boceto"].strip():
+        salida["boceto"] = op_boceto(sesion, params["boceto"]).id
+    for clave, valor in params.items():
+        if con_boceto and clave == "perfiles":
+            salida[clave] = _perfiles_de_extrusion(sesion, valor, salida, actuales)
+            continue
+        if clave == "pivote" and isinstance(valor, str) and valor.strip().casefold() in ("center", "centro"):
+            salida[clave] = None                    # Mover: el centro de la caja de los cuerpos (el valor por defecto)
+            continue
+        tipo = tipo_de_campo(clase, clave)
+        if tipo is None or valor is None or (clase.TIPO == "operacion_base" and clave == "cuerpos"):
+            continue
+        if tipo == "cuerpos":
+            salida[clave] = _cuerpos(sesion, valor, clase.PARAMS[clave], elementos)
+        elif tipo == "una":
+            salida[clave] = _una(sesion, clave, valor, elementos)
+        else:
+            salida[clave] = _lista(sesion, clave, valor, elementos)
+    return salida, [k for k in salida if k not in params or salida[k] != params[k]]
+
+
 @herramienta("list_operation_types", "avanzado", "Lista todos los tipos de operación del timeline que acepta "
              "run_operation: tipo, etiqueta y una línea que dice qué hace.")
 def list_operation_types(sesion):
@@ -103,9 +372,101 @@ def list_operation_types(sesion):
     return {"count": len(tipos), "types": tipos}
 
 
+# Qué espera cada campo de referencias, por su nombre; (tipo, campo) afina los que cambian según la operación.
+_UN_PUNTO = ('un punto: "O" (origen), un punto de construcción, un punto de boceto ({"sketch": "Boceto1", "point": 3}) '
+             'o un vértice')
+_UN_EJE = ('un eje o una dirección: "X", "Y", "Z", un eje de construcción, una arista recta ("Cuerpo1/E7"), una línea '
+           'de boceto ({"sketch": "Boceto1", "curve": 2}) o una cara plana (su normal)')
+_CURVAS = 'curvas de boceto ({"sketch": "Boceto1", "curve": 2}) o aristas ("Cuerpo1/E7", "edges:>Z")'
+_PERFILES = 'perfiles de boceto: {"sketch": "Boceto1", "profile": 0} (índice, lista, "all" o "largest")'
+_ESPERA = {
+    "cara": 'una cara ("Cuerpo1/F6", ">Z")', "caras": 'caras ("Cuerpo1/F6", ">Z", "%CYLINDER"…)',
+    "caras_a": "caras", "caras_b": "caras", "aristas": 'aristas ("Cuerpo1/E7", "|Z"…)',
+    "perfiles": _PERFILES, "perfil": _PERFILES,
+    "secciones": 'perfiles ({"sketch": "Boceto1", "profile": 0}) o puntos, en el orden de la solevación',
+    "posiciones": 'puntos de boceto ({"sketch": "Boceto1", "point": 3}: siguen al boceto), vértices, aristas circulares '
+                  'o caras cilíndricas',
+    "plano": 'un plano: "XY", "XZ", "YZ", un plano de construcción (id o nombre), un boceto o una cara plana',
+    "eje": _UN_EJE, "eje_ref": _UN_EJE, "dir1": _UN_EJE, "dir2": _UN_EJE, "direccion": _UN_EJE, "eje_x": _UN_EJE,
+    "eje_y": _UN_EJE,
+    "pivote": _UN_PUNTO + '; vacío o "center" = el centro de la caja de los cuerpos',
+    "punto": _UN_PUNTO, "centro": _UN_PUNTO, "origen": _UN_PUNTO, "destino": _UN_PUNTO, "puntos": "puntos (" + _UN_PUNTO + ")",
+    "origen1": 'dónde se une el componente 1 (el que se mueve): una cara, una arista o un punto de un cuerpo suyo '
+               '("Cuerpo1/F3")',
+    "origen2": 'dónde se une el componente 2: una cara, una arista o un punto ("Cuerpo2/F5")',
+    "ruta": _CURVAS, "carril": _CURVAS, "carriles": _CURVAS, "curvas": _CURVAS, "contorno": _CURVAS,
+    "lineas": _CURVAS, "linea_central": _CURVAS, "pliegues": _CURVAS,
+    "herramienta": 'un cuerpo, un plano o una cara', "herramientas": 'cuerpos ({"body": "Cuerpo1"}), planos ("XY") o caras',
+    "hasta": "una cara, un plano o un cuerpo", "hasta2": "una cara, un plano o un cuerpo",
+    "inicio_objeto": "una cara plana o un plano",
+    "refs": "las referencias de la construcción, en orden: planos, ejes, puntos, caras, aristas, vértices o puntos de boceto",
+}
+_COORDENADAS = "coordenadas [x, y, z] en mm (no es una referencia)"
+_ESPERA_TIPO = {
+    ("plegar", "punto"): _COORDENADAS, ("desplegar", "punto"): _COORDENADAS, ("patron_plano", "punto"): _COORDENADAS,
+    ("recortar_sup", "punto"): _COORDENADAS + ": el lado que se quita",
+    ("origen_union", "origen"): 'dónde va el marco: una cara, una arista, un punto o un eje ("Cuerpo1/F3")',
+    ("reemplazar_cara", "destino"): "la cara o el plano destino",
+    ("alinear", "origen"): "lo que se mueve: una cara, una arista, un vértice o un punto",
+    ("alinear", "destino"): "a dónde va: una cara, una arista, un vértice o un punto",
+    ("operacion_base", "cuerpos"): 'ids o nombres de los cuerpos ("op1.c1", "Cuerpo1"): se congelan al crear el paso '
+                                   '(guarda su B-rep)',
+    ("grupo_rigido", "componentes"): 'componentes: el id del paso que creó cada uno ("op5"), su nombre o el id de uno '
+                                     'de sus cuerpos (get_scene_info lista los componentes)',
+    ("vinculo_movimiento", "union1"): 'el id del paso de la unión que manda ("op7"; get_scene_info lista las uniones)',
+    ("vinculo_movimiento", "union2"): 'el id del paso de la unión que se mueve en proporción a union1',
+}
+_ESPERA_CUERPOS = 'ids o nombres de cuerpos (get_scene_info): "op1.c1", "Cuerpo1" o {"body": "Cuerpo1"}; se guarda el id'
+# Aclaraciones de campos cuyo significado no sale del nombre (hallazgos de las pruebas de uso del 2026-10-09).
+_NOTAS = {
+    ("patron", "distribucion"): '"extension" (por defecto): d1, d2 y angulo son TOTALES, de la primera a la última '
+                                'instancia; "espaciado": la separación (o el ángulo) entre instancias consecutivas. '
+                                'rectangular_pattern guarda "espaciado"; circular_pattern, "extension".',
+    ("patron", "d1"): 'con distribucion="extension" (por defecto) es la distancia TOTAL entre la primera y la última '
+                      'instancia; con "espaciado", la separación entre instancias (el x_spacing de rectangular_pattern).',
+    ("patron", "d2"): 'como d1, en la dirección 2.',
+    ("patron", "angulo"): 'con distribucion="extension" (por defecto) es el ángulo TOTAL; con "espaciado", el ángulo '
+                          'entre instancias.',
+    ("primitiva", "ancho"): "caja: tamaño en X (el length de create_box).",
+    ("primitiva", "largo"): "caja: tamaño en Y (el width de create_box).",
+    ("primitiva", "alto"): "caja y cilindro: tamaño en Z (el height de create_box).",
+    ("primitiva", "x"): "caja con caja_centrada=true (lo que guarda create_box): (x, y) es el centro de la base y z la "
+                        "base; sin caja_centrada, (x, y, z) es la esquina mínima. Cilindro: centro de la base; esfera y "
+                        "toroide: el centro.",
+    ("primitiva", "caja_centrada"): "true: (x, y) es el centro de la base (create_box); false: la esquina mínima "
+                                    "(recetas viejas y el diálogo con esa opción).",
+    **dict.fromkeys((("mover", "dx"), ("mover", "dy"), ("mover", "dz")),
+                    'tipo="libre" o "traslacion": desplazamiento que se SUMA a la posición actual (no es una posición); '
+                    'para ir a una posición: tipo="punto_a_posicion" o move_body con position.'),
+    **dict.fromkeys((("mover", "x"), ("mover", "y"), ("mover", "z")),
+                    'tipo="punto_a_posicion": posición ABSOLUTA a la que va el punto «origen».'),
+    ("agujero", "posiciones"): 'puntos de boceto ({"sketch": "Boceto1", "point": 3}): el agujero sigue al punto si el '
+                               'boceto cambia (create_hole con sketch_points); dirección: hacia −normal del boceto.',
+    ("agujero", "puntos_cara"): 'posiciones FIJAS: [{"cara": "Cuerpo1/F6" (o su referencia), "punto": [x, y, z]}] '
+                                '(create_hole con points).',
+    ("relleno_contorno", "celdas"): "índices de las regiones cerradas, ordenadas por centroide (x, y, z); [] = la 0.",
+}
+
+
+def _formato_de_campo(clase, clave):
+    """Texto que dice qué espera un campo de referencias (None si el campo no guarda referencias)."""
+    if (clase.TIPO, clave) in _ESPERA_TIPO:
+        return _ESPERA_TIPO[(clase.TIPO, clave)]
+    if hasattr(clase, "referencia_perfil") and clave == "perfiles":
+        return 'perfiles del boceto de «boceto»: índices (0, [0, 2]), "all", "largest" o {"sketch": "Boceto1", "profile": 0}'
+    tipo = tipo_de_campo(clase, clave)
+    if tipo == "cuerpos":
+        return _ESPERA_CUERPOS
+    if tipo is None:
+        return None
+    espera = _ESPERA.get(clave, "una referencia" if tipo == "una" else "referencias")
+    return ("UNA referencia: " if tipo == "una" else "lista de referencias: ") + espera
+
+
 @herramienta("describe_operation", "avanzado", "Explica un tipo de operación: parámetros con su valor por defecto, "
-             "tipo, si aceptan expresiones y, en los de lista cerrada, sus valores válidos (choices); el docstring "
-             "completo y un ejemplo de llamada a run_operation.")
+             "tipo, si aceptan expresiones, en los de lista cerrada sus valores válidos (choices), en los que guardan "
+             "referencias qué esperan y en qué formas cortas (format, reference_formats), aclaraciones (notes); el "
+             "docstring completo y un ejemplo de llamada a run_operation.")
 def describe_operation(sesion, type: str):
     """
     type: tipo de operación (list_operation_types los lista), p. ej. "primitiva".
@@ -117,18 +478,33 @@ def describe_operation(sesion, type: str):
     for p in params:
         if p["name"] in clase.OPCIONES:           # la misma lista con la que el paso valida al calcularse
             p["choices"] = list(clase.OPCIONES[p["name"]])
+        formato = _formato_de_campo(clase, p["name"])
+        if formato:
+            p["format"] = formato
+            if p["type"] == "any" and tipo_de_campo(clase, p["name"]) == "una" and "[x, y, z]" not in formato:
+                p["type"] = "reference"
+        nota = _NOTAS.get((clase.TIPO, p["name"]))
+        if nota:
+            p["notes"] = nota
     return {"type": clase.TIPO, "label": clase.ETIQUETA, "summary": _resumen_clase(clase),
             "doc": inspect.getdoc(clase) or "", "params": params,
-            "expressions": [k for k in clase.PARAMS if k in expresiones], "example": _ejemplo(clase)}
+            "expressions": [k for k in clase.PARAMS if k in expresiones],
+            "reference_formats": FORMATOS_REFERENCIA, "example": _ejemplo(clase)}
 
 
 @herramienta("run_operation", "avanzado", "Agrega al timeline cualquier operación por su tipo y sus parámetros nativos "
-             "(claves en español, las de describe_operation). Una llamada = un paso de deshacer; si el paso falla, "
-             "el documento queda intacto.", modifica=True)
+             "(claves en español, las de describe_operation). En los campos que guardan referencias acepta formas "
+             "cortas y las traduce: ids de find_faces / find_edges (\"Cuerpo1/F3\"), selectores (\"faces:>Z\"), "
+             "\"XY\", \"Z\", \"O\", planos/ejes/puntos de construcción y bocetos por id o nombre, "
+             "{\"sketch\": …, \"point\" | \"curve\" | \"profile\": …}, {\"body\": …} y nombres de cuerpo en los "
+             "campos de ids de cuerpo (describe_operation los lista). Lo que no reconoce llega igual al paso, que dice "
+             "qué campo está mal. Una llamada = un paso de deshacer; si el paso falla, el documento queda intacto.",
+             modifica=True)
 def run_operation(sesion, type: str, params: dict | None = None, name: str | None = None):
     """
     type: tipo de operación (list_operation_types los lista).
-    params: parámetros a cambiar respecto de los valores por defecto, con las claves de describe_operation.
+    params: parámetros a cambiar respecto de los valores por defecto, con las claves de describe_operation. Las
+        referencias pueden ir en forma corta (ver reference_formats de describe_operation).
     name: nombre del paso en el timeline; vacío = el automático.
     """
     clase = _clase(type)
@@ -146,6 +522,7 @@ def run_operation(sesion, type: str, params: dict | None = None, name: str | Non
     if isinstance(cuerpos, list) and cuerpos and all(isinstance(c, str) for c in cuerpos):
         # Como «Crear operación base» de la ventana: los cuerpos nombrados se congelan en este momento.
         params = dict(params, cuerpos=OpOperacionBase.desde_cuerpos("_", [sesion.cuerpo(c) for c in cuerpos]).p["cuerpos"])
+    params, traducidos = traducir_referencias(sesion, clase, params)
     doc = sesion.doc
     antes = set(doc.estado_final.cuerpos)
     op = operacion_desde_dict({"tipo": clase.TIPO, "id": doc.nuevo_id(), "nombre": name or None, "params": params})
@@ -154,7 +531,7 @@ def run_operation(sesion, type: str, params: dict | None = None, name: str | Non
         sesion.avisar(f"«{op.nombre}»: {op.aclaracion_distancias()}")
     nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
     return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": resultado.estado, "message": resultado.mensaje,
-            "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos)}
+            "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos), "translated_params": traducidos}
 
 
 # ---------------------------------------------------------------- receta

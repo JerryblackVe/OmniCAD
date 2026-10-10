@@ -21,7 +21,8 @@ cada una trae su descripción y sus argumentos.
 ## Temas
 
 - `flujo`: el ciclo de trabajo (mirar, hacer, ver la imagen, medir, guardar), unidades, ids y errores.
-- `selectores`: elegir caras y aristas (`>Z`, `|Z`, `%CIRCLE`…) para empalmes, chaflanes, vaciados, agujeros y bocetos sobre cara.
+- `selectores`: elegir caras y aristas (`>Z`, `|Z`, `%CIRCLE`…) para empalmes, chaflanes, vaciados, agujeros y bocetos sobre cara,
+  y cómo pasarle a `run_operation` caras, aristas, puntos de boceto, perfiles y cuerpos.
 - **texto_vectores**: fuentes, texto de boceto con todas sus opciones, insertar SVG / DXF y vectorizar imágenes.
 
 Pedí un tema con `get_guide(topic="flujo")`.

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import math
 import re
 
 import pytest
@@ -107,6 +108,123 @@ def test_run_operation_que_falla_deja_el_documento_igual(s):
     assert foto(s) == antes
     r = api.llamar(s, "run_operation", {"type": "extrusion", "params": {"boceto": "no_existe"}})
     assert not r["ok"] and foto(s) == antes
+
+
+# ---------------------------------------------------------------- run_operation: referencias en forma corta
+def _volumen(sesion, cid="op1.c1"):
+    return next(b["volume"] for b in ok(api.llamar(sesion, "get_scene_info"))["bodies"] if b["id"] == cid)
+
+
+def test_run_operation_traduce_ids_y_selectores():
+    """Antes rosca, labio y repujado exigían armar las referencias a mano con execute_code."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_cylinder", {"radius": 5, "height": 20}))
+    cara = ok(api.llamar(s, "find_faces", {"selector": "%CYLINDER"}))["faces"][0]["id"]
+    r = ok(api.llamar(s, "run_operation", {"type": "rosca", "params": {"caras": [cara], "modelada": False}}))
+    assert r["status"] == "aviso" and r["translated_params"] == ["caras"]
+    ref = s.paso(r["id"]).p["caras"][0]
+    assert ref["tipo"] == "cara" and ref["cuerpo"] == "op1.c1" and ref["firma"]["geom"] == "cilindro"
+
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 40, "width": 30, "height": 20}))
+    ok(api.llamar(s, "shell", {"body": "Cuerpo1", "faces": ">Z", "thickness": 2}))
+    v0 = _volumen(s)
+    r = ok(api.llamar(s, "run_operation", {"type": "labio", "params": {
+        "aristas": ">Z and (>X or <X or >Y or <Y)", "direccion": "Z", "ancho": "1 mm", "alto": "1.5 mm"}}))
+    assert r["status"] == "ok" and sorted(r["translated_params"]) == ["aristas", "direccion"]
+    p = s.paso(r["id"]).p
+    assert len(p["aristas"]) == 4 and all(a["tipo"] == "arista" for a in p["aristas"])
+    assert p["direccion"] == {"tipo": "eje", "id": "Z"}
+    assert 140 * 1.5 * 0.9 < _volumen(s) - v0 < 140 * 1.5           # 1 × 1,5 mm a lo largo de los 140 mm del borde
+
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 40, "width": 30, "height": 10}))
+    ok(api.llamar(s, "create_sketch", {"plane": ">Z", "name": "Marca"}))
+    ok(api.llamar(s, "draw_circle", {"radius": 5, "sketch": "Marca"}))
+    r = ok(api.llamar(s, "run_operation", {"type": "repujado", "params": {
+        "perfiles": [{"sketch": "Marca", "profile": 0}], "cara": ">Z", "profundidad": "1 mm"}}))
+    assert r["status"] == "ok" and sorted(r["translated_params"]) == ["cara", "perfiles"]
+    assert s.paso(r["id"]).p["perfiles"][0]["tipo"] == "perfil" and s.paso(r["id"]).p["perfiles"][0]["boceto"] == "op2"
+    assert _volumen(s) == pytest.approx(12000 + math.pi * 25, abs=1e-3)
+
+
+def test_run_operation_puntos_de_boceto_perfiles_y_cuerpos():
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 40, "width": 40, "height": 10}))
+    ok(api.llamar(s, "create_sketch", {"plane": ">Z", "name": "Centros"}))
+    ok(api.llamar(s, "draw_circle", {"radius": 1, "center_x": 10, "center_y": 5, "sketch": "Centros"}))
+    centro = ok(api.llamar(s, "get_sketch", {"sketch": "Centros"}))["entities"][0]["points"][0]
+    r = ok(api.llamar(s, "run_operation", {"type": "agujero", "params": {
+        "posiciones": [{"sketch": "Centros", "point": centro}], "diametro": "4 mm", "profundidad": "5 mm",
+        "punta": "plana", "objetivos": ["Cuerpo1"]}}))
+    assert s.paso(r["id"]).p["posiciones"] == [{"tipo": "punto_boceto", "boceto": "op2", "punto": centro}]
+    assert s.paso(r["id"]).p["objetivos"] == ["op1.c1"]                  # nombre de cuerpo → id
+    assert _volumen(s) == pytest.approx(16000 - math.pi * 4 * 5, abs=1e-3)
+    # extrusión con el boceto por nombre y el perfil por índice
+    ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "Pie"}))
+    ok(api.llamar(s, "draw_rectangle", {"x1": 100, "y1": 0, "x2": 110, "y2": 10, "sketch": "Pie"}))
+    r = ok(api.llamar(s, "run_operation", {"type": "extrusion", "params": {"boceto": "Pie", "perfiles": [0],
+                                                                         "distancia": "3 mm"}}))
+    assert r["status"] == "ok" and sorted(r["translated_params"]) == ["boceto", "perfiles"]
+    assert _volumen(s, r["new_bodies"][0]) == pytest.approx(300)
+    # o con {"sketch", "profile"}: completa «boceto»
+    r = ok(api.llamar(s, "run_operation", {"type": "extrusion", "params": {
+        "perfiles": [{"sketch": "Pie", "profile": "largest"}], "distancia": "2 mm"}}))
+    assert s.paso(r["id"]).p["boceto"] == s.paso("Pie").id and _volumen(s, r["new_bodies"][0]) == pytest.approx(200)
+
+
+def test_run_operation_union_y_fijacion_con_ids():
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 40, "width": 40, "height": 10}))
+    ok(api.llamar(s, "create_hole", {"face": ">Z", "diameter": 6.4, "through_all": True}))
+    arista = ok(api.llamar(s, "find_edges", {"selector": "%CIRCLE and >Z"}))["edges"][0]
+    assert arista["radius"] == pytest.approx(3.2)
+    r = ok(api.llamar(s, "run_operation", {"type": "fijacion", "params": {"posiciones": [arista["id"]]}}))
+    assert r["status"] == "ok" and len(r["new_bodies"]) == 1 and r["translated_params"] == ["posiciones"]
+    tornillo = next(b for b in ok(api.llamar(s, "get_scene_info"))["bodies"] if b["id"] == r["new_bodies"][0])
+    assert tornillo["name"].startswith("ISO 4762 M6") and tornillo["volume"] > 0
+    assert tornillo["bounding_box"]["min"][:2] == pytest.approx([-5, -5], abs=0.6)    # cabeza Ø10 sobre el agujero
+
+
+def test_run_operation_errores_de_referencias(s):
+    antes = foto(s)
+    casos = [({"type": "rosca", "params": {"caras": ["qwerty"]}}, "INVALID_ARGUMENTS", "caras"),
+             ({"type": "rosca", "params": {"caras": ["faces:%CYLINDER"]}}, "AMBIGUOUS_REFERENCE", "Cuerpo"),
+             ({"type": "repujado", "params": {"cara": {"faces": "#Z", "body": "Cuerpo1"}, "perfiles": []}},
+              "AMBIGUOUS_REFERENCE", "cara"),
+             ({"type": "agujero", "params": {"posiciones": [{"sketch": "Boceto placa", "point": 999}]}},
+              "ENTITY_NOT_FOUND", "999"),
+             ({"type": "agujero", "params": {"posiciones": [{"sketch": "Boceto placa", "punto": 1}]}},
+              "INVALID_ARGUMENTS", "posiciones"),
+             ({"type": "extrusion", "params": {"perfiles": [0]}}, "INVALID_ARGUMENTS", "boceto"),
+             ({"type": "solevacion", "params": {"secciones": ["Boceto placa"]}}, "INVALID_ARGUMENTS", "profile"),
+             ({"type": "mover", "params": {"cuerpos": ["nada"]}}, "BODY_NOT_FOUND", "nada")]
+    for args, kind, texto in casos:
+        r = api.llamar(s, "run_operation", args)
+        assert not r["ok"] and r["error_kind"] == kind and texto in r["mensaje"] + " ".join(r["pistas"]), (args, r)
+        assert foto(s) == antes, args
+
+
+def test_describe_operation_explica_referencias_y_notas(s):
+    def params(tipo):
+        d = ok(api.llamar(s, "describe_operation", {"type": tipo}))
+        assert d["reference_formats"] and any("Cuerpo1/F3" in f for f in d["reference_formats"])
+        return {p["name"]: p for p in d["params"]}
+    mover = params("mover")
+    assert mover["pivote"]["type"] == "reference" and '"O"' in mover["pivote"]["format"]
+    assert "center" in mover["pivote"]["format"] and "SUMA" in mover["dx"]["notes"]
+    assert "ids o nombres de cuerpos" in mover["cuerpos"]["format"] and mover["tipo"]["choices"][0] == "libre"
+    patron = params("patron")
+    assert "TOTAL" in patron["d1"]["notes"] and "espaciado" in patron["distribucion"]["notes"]
+    assert patron["distribucion"]["choices"] == ["extension", "espaciado"]
+    prim = params("primitiva")
+    assert "X" in prim["ancho"]["notes"] and "length" in prim["ancho"]["notes"] and "centro" in prim["x"]["notes"]
+    assert "[x, y, z]" in params("plegar")["punto"]["format"] and params("plegar")["punto"]["type"] == "any"
+    assert "congelan" in params("operacion_base")["cuerpos"]["format"]
+    assert '"XY"' in params("relleno_contorno")["herramientas"]["format"]
+    assert '"profile"' in params("extrusion")["perfiles"]["format"]
+    assert "format" not in params("extrusion")["distancia"]
+    assert params("teselar")["refinamiento"]["choices"] == ["bajo", "medio", "alto"]
 
 
 # ---------------------------------------------------------------- receta

@@ -266,6 +266,61 @@ def test_agujero_en_cara_no_plana(s):
     assert r["error_kind"] == "UNSUPPORTED_ELEMENT"
 
 
+def _cilindros(sesion):
+    return sorted(tuple(round(c, 3) for c in f["center"]) for f in llamar(sesion, "find_faces", selector="%CYLINDER")["faces"])
+
+
+def test_agujero_en_puntos_de_boceto_sigue_al_boceto(s):
+    """Antes create_hole solo aceptaba coordenadas fijas: al cambiar una medida el agujero no seguía al boceto."""
+    llamar(s, "create_parameter", name="px", expression="10 mm")
+    llamar(s, "create_box", length=40, width=40, height=10)                          # x, y en ±20; z 0..10
+    llamar(s, "create_sketch", plane="XY", name="Centros")
+    linea = llamar(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=5, sketch="Centros")
+    inicio, fin = linea["points"]
+    llamar(s, "add_constraint", sketch="Centros", type="fix", entities=[inicio])
+    llamar(s, "add_dimension", sketch="Centros", type="horizontal", entities=[linea["entities"][0]["id"]], value="px")
+    llamar(s, "add_dimension", sketch="Centros", type="vertical", entities=[linea["entities"][0]["id"]], value=5)
+    r = llamar(s, "create_hole", diameter=4, depth=5, sketch="Centros", sketch_points=[fin])
+    assert r["holes"] == 1 and r["sketch_points"] == [fin] and r["direction"] == [0, 0, 1]   # boceto abajo: sube
+    paso = r["feature"]["id"]
+    assert s.paso(paso).p["posiciones"] == [{"tipo": "punto_boceto", "boceto": s.paso("Centros").id, "punto": fin}]
+    assert volumen(s) == pytest.approx(16000 - math.pi * 4 * 5, abs=1e-3)
+    assert _cilindros(s) == [(10.0, 5.0, 2.5)]
+    llamar(s, "set_parameter", name="px", expression="15 mm")                       # el agujero sigue a la cota
+    assert _cilindros(s) == [(15.0, 5.0, 2.5)]
+    assert volumen(s) == pytest.approx(16000 - math.pi * 4 * 5, abs=1e-3)
+
+
+def test_agujero_en_boceto_sobre_la_tapa_y_flip(caja):
+    llamar(caja, "create_sketch", plane=">Z", name="Tapa")
+    llamar(caja, "draw_circle", radius=1, center_x=3, center_y=4, sketch="Tapa")
+    centro = llamar(caja, "get_sketch", sketch="Tapa")["entities"][0]["points"][0]
+    r = llamar(caja, "create_hole", diameter=2, depth=4, sketch_points=[centro], face=">Z")   # último boceto
+    assert r["direction"] == [0, 0, -1] and volumen(caja) == pytest.approx(8000 - math.pi * 4, abs=1e-3)
+    llamar(caja, "undo")
+    r = api.llamar(caja, "create_hole", {"diameter": 2, "depth": 4, "sketch": "Tapa", "sketch_points": [centro],
+                                         "flip": True})
+    assert r["ok"] and r["result"]["direction"] == [0, 0, 1]                        # hacia afuera: no corta nada
+    assert volumen(caja) == pytest.approx(8000) and any("no cambió el volumen" in a for a in r["avisos"])
+
+
+def test_agujero_en_boceto_errores(caja):
+    llamar(caja, "create_sketch", plane=">Z", name="Tapa")
+    llamar(caja, "draw_circle", radius=1, sketch="Tapa")
+    centro = llamar(caja, "get_sketch", sketch="Tapa")["entities"][0]["points"][0]
+    antes = foto(caja)
+    for args, kind in [({"diameter": 2, "through_all": True}, "INVALID_ARGUMENTS"),                 # ni cara ni puntos
+                       ({"diameter": 2, "through_all": True, "sketch": "Tapa"}, "INVALID_ARGUMENTS"),
+                       ({"diameter": 2, "through_all": True, "sketch_points": [999]}, "ENTITY_NOT_FOUND"),
+                       ({"diameter": 2, "through_all": True, "sketch": "nada", "sketch_points": [centro]},
+                        "SKETCH_NOT_FOUND"),
+                       ({"diameter": 2, "through_all": True, "face": ">Z", "points": [[1, 1]],
+                         "sketch_points": [centro]}, "INVALID_ARGUMENTS"),
+                       ({"diameter": 2, "sketch_points": [centro]}, "INVALID_ARGUMENTS")]:          # sin depth
+        assert falla(caja, "create_hole", **args)["error_kind"] == kind, args
+        assert foto(caja) == antes, args
+
+
 # ---------------------------------------------------------------- desmoldeo
 def test_draft_inclina_las_laterales(caja):
     r = llamar(caja, "draft", faces="#Z", angle=3, neutral="<Z")

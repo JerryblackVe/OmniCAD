@@ -38,6 +38,16 @@ Cada término se evalúa sobre todas y después se combinan los resultados.
 se vence): después, volvé a listar o usá un selector. Una lista mezcla ids y selectores (se unen).
 Donde se espera un solo elemento (medir, boceto) el selector va sobre caras; para aristas: `edges:|Z` o un id.
 
+## Referencias en run_operation
+
+`run_operation` traduce solo las referencias de cualquier operación (rosca, labio, repujado, fijación, unión…):
+ids ("Cuerpo1/F3"), selectores con prefijo ("faces:>Z", "edges:%CIRCLE"; sin prefijo en campos de caras o
+aristas) o {"faces": ">Z", "body": "Cuerpo1"}; "XY", "Z", "O"; planos, ejes y puntos de construcción por nombre;
+{"sketch": "Boceto1", "point": 3}, {"sketch": "Boceto1", "curve": 2}, {"sketch": "Boceto1", "profile": 0};
+{"body": "Cuerpo1"}. P. ej. rosca: {"caras": ["Cuerpo1/F1"]}; fijación: {"posiciones": ["Cuerpo1/E10"]};
+unión: {"origen1": "Bloque/F5", "origen2": "Base/F6"}. `describe_operation` dice qué espera cada campo
+("format"). `edit_feature` acepta las formas que no dependen de la pieza (origen, construcción, bocetos).
+
 ## Errores
 
 - `INVALID_SELECTOR`: no se entiende el texto (el mensaje dice dónde).
