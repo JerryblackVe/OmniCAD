@@ -4,7 +4,10 @@ Barra de timeline inferior (como la línea de tiempo de Fusion 360): botones de 
 (inicio, anterior, siguiente, fin), un ícono chico por paso y el marcador negro que separa lo
 activo de lo retrocedido. El estado de cada paso (FeatureHealthStates de Fusion) se ve en el
 fondo: amarillo = aviso, rojo = error; suprimido o retrocedido = ícono gris.
-Se arrastra el marcador o un paso para moverlos; doble clic edita; menú contextual completo.
+Se arrastra el marcador o un paso para moverlos; doble clic edita. El clic derecho abre un menú distinto
+según el tipo de paso, como Fusion: boceto (Editar boceto), operación (Editar operación y «Editar boceto de
+perfil»), unión (Editar unión, Animar unión); todos con Renombrar, Suprimir, Mover, «Rodar marcador aquí»,
+«Retroceder antes de este paso», «Buscar en navegador» y Eliminar.
 """
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon
@@ -16,7 +19,9 @@ from .iconos import icono
 COLORES = {"aviso": QColor(255, 214, 102), "error": QColor(255, 140, 140)}
 MARCADOR = "__marcador__"
 ICONO_TIPO = {"boceto": "boceto", "extrusion": "extruir", "revolucion": "revolucion", "combinar": "combinar",
-              "importar_step": "importar", "plano": "plano_desfase"}
+              "importar_step": "importar", "plano": "plano_desfase",
+              "engranaje": "engranaje_3d", "eje_escalonado": "eje_escalonado", "reparar_cuerpo": "reparar_cuerpo",
+              "limpiar_malla": "limpiar_malla"}
 
 
 def icono_operacion(op):
@@ -57,6 +62,8 @@ class PanelTimeline(QWidget):
     eliminar = Signal(str)
     mover = Signal(str, int)
     marcador = Signal(int)
+    buscar_navegador = Signal(str)      # «Buscar en navegador»: elige el elemento del paso en el navegador
+    animar_union = Signal(str)          # «Animar unión» (menú de un paso de unión)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -179,23 +186,94 @@ class PanelTimeline(QWidget):
         if op_id and op_id != MARCADOR:
             self.editar.emit(op_id)
 
+    def entradas_menu(self, op_id):
+        """Menú contextual del paso, distinto según su tipo como en Fusion (boceto, operación, unión):
+        [Entrada | None (separador)]. Una Entrada con `hijos` es un submenú."""
+        doc = self.doc
+        i = doc.indice(op_id)
+        op = doc.operaciones[i]
+        tipo = tipo_menu(op)
+        E = Entrada
+        emitir = lambda senal, *args: (lambda: senal.emit(*args))  # noqa: E731
+        if tipo == "boceto":
+            arriba = [E("Editar boceto", emitir(self.editar, op_id))]
+        elif tipo == "union":
+            arriba = [E("Editar unión…", emitir(self.editar, op_id))]
+            if op.TIPO == "union":
+                arriba.append(E("Animar unión", emitir(self.animar_union, op_id)))
+        else:
+            arriba = [E("Editar operación…", emitir(self.editar, op_id))]
+            bocetos = bocetos_de_perfil(doc, op)
+            if len(bocetos) == 1:
+                arriba.append(E("Editar boceto de perfil", emitir(self.editar, bocetos[0].id)))
+            elif bocetos:
+                arriba.append(E("Editar boceto de perfil", None, hijos=[
+                    E(b.nombre, emitir(self.editar, b.id)) for b in bocetos]))
+        sufijo = "boceto" if tipo == "boceto" else ("unión" if tipo == "union" else "operación")
+        return arriba + [
+            E("Renombrar…", emitir(self.renombrar, op_id)),
+            E(f"Desuprimir {sufijo}" if op.suprimida else f"Suprimir {sufijo}",
+              emitir(self.suprimir, op_id, not op.suprimida)),
+            None,
+            E("Mover a la izquierda", emitir(self.mover, op_id, i - 1), i > 0),
+            E("Mover a la derecha", emitir(self.mover, op_id, i + 1), i < len(doc.operaciones) - 1),
+            # «Rodar marcador aquí» de Fusion (antes «Retroceder hasta aquí»): el paso queda calculado
+            E("Rodar marcador aquí", emitir(self.marcador, i + 1), doc.marcador != i + 1,
+              "El marcador queda justo después de este paso: lo que sigue no se calcula."),
+            E("Retroceder antes de este paso", emitir(self.marcador, i), doc.marcador != i,
+              "El marcador queda justo antes: este paso y lo que sigue no se calculan."),
+            None,
+            E("Buscar en navegador", emitir(self.buscar_navegador, op_id),
+              ayuda="Elige en el navegador el elemento que crea o modifica este paso."),
+            None,
+            E("Eliminar", emitir(self.eliminar, op_id)),
+        ]
+
     def _menu(self, pos):
         item = self.lista.itemAt(pos)
         if item is None or item.data(Qt.UserRole) in (None, MARCADOR) or self.doc is None:
             return
-        op_id = item.data(Qt.UserRole)
-        i = self.doc.indice(op_id)
-        op = self.doc.operaciones[i]
         m = QMenu(self)
-        m.addAction("Editar operación…", lambda: self.editar.emit(op_id))
-        m.addAction("Renombrar…", lambda: self.renombrar.emit(op_id))
-        m.addAction("Desuprimir operación" if op.suprimida else "Suprimir operación",
-                    lambda: self.suprimir.emit(op_id, not op.suprimida))
-        m.addSeparator()
-        m.addAction("Mover a la izquierda", lambda: self.mover.emit(op_id, i - 1)).setEnabled(i > 0)
-        m.addAction("Mover a la derecha", lambda: self.mover.emit(op_id, i + 1)).setEnabled(i < len(self.doc.operaciones) - 1)
-        m.addAction("Retroceder hasta aquí", lambda: self.marcador.emit(i + 1))
-        m.addAction("Retroceder antes de este paso", lambda: self.marcador.emit(i))
-        m.addSeparator()
-        m.addAction("Eliminar", lambda: self.eliminar.emit(op_id))
+        _llenar_menu(m, self.entradas_menu(item.data(Qt.UserRole)))
         m.exec(self.lista.mapToGlobal(pos))
+
+
+class Entrada:
+    """Opción del menú contextual del timeline (`hijos`: submenú)."""
+
+    def __init__(self, texto, funcion, habilitada=True, ayuda="", hijos=None):
+        self.texto, self.funcion, self.habilitada, self.ayuda, self.hijos = texto, funcion, habilitada, ayuda, hijos
+
+    def __repr__(self):
+        return f"Entrada({self.texto!r})"
+
+
+def _llenar_menu(menu, entradas):
+    for e in entradas:
+        if e is None:
+            menu.addSeparator()
+        elif e.hijos:
+            _llenar_menu(menu.addMenu(e.texto), e.hijos)
+        else:
+            a = menu.addAction(e.texto, e.funcion)
+            a.setEnabled(bool(e.habilitada))
+            if e.ayuda:
+                a.setToolTip(e.ayuda)
+    menu.setToolTipsVisible(True)
+
+
+TIPOS_UNION = ("union", "grupo_rigido", "vinculo_movimiento")
+
+
+def tipo_menu(op):
+    """Qué menú lleva el paso: "boceto", "union" (uniones de ENSAMBLAR) u "operacion" (el resto)."""
+    if op.TIPO == "boceto":
+        return "boceto"
+    return "union" if op.TIPO in TIPOS_UNION else "operacion"
+
+
+def bocetos_de_perfil(doc, op):
+    """Bocetos que usa el paso: lo que abre «Editar boceto de perfil» sin pasar por el navegador (misma regla que
+    la herramienta `get_profile_sketches` de la API)."""
+    from ..api.herramientas_timeline import bocetos_de_perfil as bocetos
+    return bocetos(doc, op)

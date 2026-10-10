@@ -98,6 +98,10 @@ NARANJA_PLANO = (0.95, 0.66, 0.30)
 AZUL_PERFIL = (0.30, 0.55, 0.95)
 AZUL_HOVER = (0.45, 0.70, 1.0)
 AZUL_SELECCION = (0.15, 0.50, 1.0)
+# Etiqueta del valor de una cota guía (Medir): va sobre la vista 3D, así que lleva fondo y texto propios (se lee
+# igual con cualquier tema y cualquier fondo del visor).
+QSS_ETIQUETA = ("QLabel#etiqueta_cota { background: rgba(40, 40, 44, 225); color: #ffffff; padding: 2px 6px;"
+                " border: 1px solid #f29a1f; border-radius: 3px; }")
 TOL_PX_ARISTA, TOL_PX_VERTICE = 9.0, 11.0     # zonas de agarre generosas (antes 7 y 9)
 # Filtros de selección que entiende `elegir_entidad` (los diálogos de comando piden uno o varios).
 FILTROS = ("cara", "cara_plana", "arista", "arista_lineal", "arista_circular", "vertice", "cuerpo", "perfil",
@@ -331,6 +335,7 @@ class Visor3D(QOpenGLWidget):
     entidad_pintada = Signal(object)           # selección de pintura: lo que hay bajo el cursor al arrastrar
     seleccion_otra = Signal(object, object)    # pulsación larga: (entidades bajo el cursor, posición global)
     gesto_radial = Signal(int)                 # clic derecho + arrastre: sector 0..7 del menú radial (N, NE, …)
+    entidad_sobre = Signal(object)             # con un filtro activo: lo que quedó bajo el cursor (o None) al cambiar
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
@@ -401,6 +406,8 @@ class Visor3D(QOpenGLWidget):
         self._t_fin_nav.timeout.connect(self._fin_navegacion)
         self._t_limite = QTimer(self, singleShot=True)
         self._t_limite.timeout.connect(lambda: QOpenGLWidget.update(self))
+        self._etiquetas = {}               # nombre → [(punto 3D, QLabel)]: valores de las cotas guía de Medir
+        self.camara_cambiada.connect(self._ubicar_etiquetas)
         self._fijar_direccion(*VISTAS["iso"])
 
     # ------------------------------------------------------------ rendimiento (Preferencias › Gráficos)
@@ -884,6 +891,46 @@ class Visor3D(QOpenGLWidget):
         else:
             self._capas.pop(nombre, None)
         self.update()
+
+    def set_etiquetas(self, nombre, etiquetas):
+        """Textos anclados a puntos 3D encima del modelo (el valor de una cota guía de Medir): [(punto, texto)].
+        Siguen al punto al mover la cámara; lista vacía o None las borra. Van en un QLabel hijo del visor, como las
+        cajas de valor de los manipuladores, porque el dibujo OpenGL del visor no tiene texto."""
+        for _p, etiqueta in self._etiquetas.pop(nombre, []):
+            etiqueta.hide()
+            etiqueta.setParent(None)              # deja de ser hija ya mismo (no espera al bucle de eventos)
+            etiqueta.deleteLater()
+        if etiquetas:
+            from PySide6.QtWidgets import QLabel
+            lista = []
+            for punto, texto in etiquetas:
+                etiqueta = QLabel(str(texto), self, objectName="etiqueta_cota")
+                etiqueta.setAttribute(Qt.WA_TransparentForMouseEvents)
+                etiqueta.setStyleSheet(QSS_ETIQUETA)
+                etiqueta.adjustSize()
+                lista.append((np.asarray(punto, float).reshape(3), etiqueta))
+            self._etiquetas[nombre] = lista
+        self._ubicar_etiquetas()
+
+    def textos_etiquetas(self, nombre):
+        """Textos de las etiquetas de una capa (para las pruebas y la API en vivo)."""
+        return [etiqueta.text() for _p, etiqueta in self._etiquetas.get(nombre, [])]
+
+    def _ubicar_etiquetas(self):
+        """Cada etiqueta, centrada sobre su punto proyectado; se oculta si el punto queda detrás o fuera."""
+        filas = [(p, e) for lista in self._etiquetas.values() for p, e in lista]
+        if not filas:
+            return
+        s, ok = self.puntos_pantalla(np.array([p for p, _e in filas], float))
+        w, h = self.width(), self.height()
+        for (_p, e), (x, y), visible in zip(filas, np.asarray(s, float), np.asarray(ok, bool), strict=True):
+            if not visible or not (-20 <= x <= w + 20 and -20 <= y <= h + 20):
+                e.hide()
+                continue
+            e.move(int(min(max(2, x - e.width() / 2), max(2, w - e.width() - 2))),
+                   int(min(max(2, y - e.height() - 8), max(2, h - e.height() - 2))))
+            e.show()
+            e.raise_()
 
     def set_colores_vertice(self, colores_por_cuerpo):
         """Colores por vértice para los análisis (cebra, curvatura, desmoldeo…). {} vuelve al aspecto normal."""
@@ -1813,6 +1860,7 @@ class Visor3D(QOpenGLWidget):
             anterior = self._hover_ent
             if (hit is None) != (anterior is None) or (hit and anterior and hit["ref"] != anterior["ref"]):
                 self._hover_ent = hit
+                self.entidad_sobre.emit(hit)       # Medir: valor en vivo de lo que está bajo el cursor
                 self.update()
             return
         if self._ultimo is None or self._accion is None:
@@ -1847,6 +1895,7 @@ class Visor3D(QOpenGLWidget):
     def leaveEvent(self, e):
         if self._hover_ent is not None:
             self._hover_ent = None
+            self.entidad_sobre.emit(None)
             self.update()
         super().leaveEvent(e)
 

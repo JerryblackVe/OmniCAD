@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-158 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+160 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 13 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 15 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -45,6 +45,8 @@ Archivo, escena, timeline y deshacer.
 | [`suppress_feature`](#suppress_feature) | sí | Suprime o reactiva un paso del timeline (suprimido = no se calcula). |
 | [`delete_feature`](#delete_feature) | sí | Borra un paso del timeline. |
 | [`rename`](#rename) | sí | Renombra un paso del timeline o un cuerpo. |
+| [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
+| [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
 
 ### `get_scene_info`
 
@@ -173,6 +175,26 @@ Renombra un paso del timeline o un cuerpo.
   - `new_name` (texto; obligatorio): nombre nuevo (no vacío).
   - `kind` ("auto" | "feature" | "body"; opcional, por defecto `"auto"`): "feature" o "body" para desambiguar; "auto" busca primero entre los pasos y después entre los cuerpos.
 - CLI: `omnicad call rename --doc pieza.omnicad target=… new_name=…`
+
+### `set_marker`
+
+Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). Lo que queda a la derecha del marcador no se calcula (estado rolled_back) hasta volver a moverlo. Indicá UNO: position, after (el marcador queda justo después de ese paso, que sí se calcula) o before (justo antes). undo lo vuelve a donde estaba. Si al avanzar un paso queda con error, se avisa (errors) pero el marcador se mueve igual (como en la app).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `position` (entero; opcional, por defecto `null`): índice del marcador: 0 = antes del primer paso; la cantidad de pasos = al final (todo calculado).
+  - `after` (texto; opcional, por defecto `null`): id o nombre de un paso: el marcador queda justo después (como «Rodar marcador aquí» sobre ese paso).
+  - `before` (texto; opcional, por defecto `null`): id o nombre de un paso: el marcador queda justo antes (ni ese paso ni los siguientes se calculan).
+- CLI: `omnicad call set_marker --doc pieza.omnicad`
+
+### `get_profile_sketches`
+
+Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. Sus ids sirven como «sketch» de las herramientas de boceto (get_sketch, draw_line…).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `feature` (texto; obligatorio): id o nombre del paso (p. ej. una extrusión).
+- CLI: `omnicad call get_profile_sketches --doc pieza.omnicad feature=…`
 
 ## Grupo parametros
 
@@ -945,7 +967,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`sweep`](#sweep) | sí | Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). |
 | [`loft`](#loft) | sí | Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. |
 | [`create_box`](#create_box) | sí | Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. |
-| [`create_cylinder`](#create_cylinder) | sí | Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la base; la altura crece hacia +Z. |
+| [`create_cylinder`](#create_cylinder) | sí | Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo). |
 | [`create_sphere`](#create_sphere) | sí | Crea una esfera. (x, y, z) es su centro. |
 | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
 | [`boolean_operation`](#boolean_operation) | sí | Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). |
@@ -1048,47 +1070,51 @@ Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y hei
 
 ### `create_cylinder`
 
-Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la base; la altura crece hacia +Z.
+Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `radius` (número o expresión; obligatorio): radio en mm (positivo).
   - `height` (número o expresión; obligatorio): altura en mm (positiva).
+  - `radius` (número o expresión; opcional, por defecto `null`): radio en mm (positivo). Alternativa: diameter.
   - `x` (número o expresión; opcional, por defecto `0`): x del centro de la base (mm).
   - `y` (número o expresión; opcional, por defecto `0`): y del centro de la base (mm).
   - `z` (número o expresión; opcional, por defecto `0`): z de la base (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
-- CLI: `omnicad call create_cylinder --doc pieza.omnicad radius=… height=…`
+  - `diameter` (número o expresión; opcional, por defecto `null`): diámetro en mm, en vez de radius (como el panel Cilindro de la app); el paso guarda la mitad.
+- CLI: `omnicad call create_cylinder --doc pieza.omnicad height=…`
 
 ### `create_sphere`
 
-Crea una esfera. (x, y, z) es su centro.
+Crea una esfera. (x, y, z) es su centro. La medida va como radius o como diameter (uno solo).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `radius` (número o expresión; obligatorio): radio en mm (positivo).
+  - `radius` (número o expresión; opcional, por defecto `null`): radio en mm (positivo). Alternativa: diameter.
   - `x` (número o expresión; opcional, por defecto `0`): x del centro (mm).
   - `y` (número o expresión; opcional, por defecto `0`): y del centro (mm).
   - `z` (número o expresión; opcional, por defecto `0`): z del centro (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
-- CLI: `omnicad call create_sphere --doc pieza.omnicad radius=…`
+  - `diameter` (número o expresión; opcional, por defecto `null`): diámetro en mm, en vez de radius (como el panel Esfera de la app); el paso guarda la mitad.
+- CLI: `omnicad call create_sphere --doc pieza.omnicad`
 
 ### `create_torus`
 
-Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro.
+Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. Medidas como radios (major_radius, minor_radius) o diámetros (major_diameter, minor_diameter), uno de cada par.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `major_radius` (número o expresión; obligatorio): radio mayor en mm (del centro al centro del tubo); tiene que ser mayor que minor_radius.
-  - `minor_radius` (número o expresión; obligatorio): radio menor en mm (del tubo).
+  - `major_radius` (número o expresión; opcional, por defecto `null`): radio mayor en mm (del centro al centro del tubo); tiene que ser mayor que minor_radius.
+  - `minor_radius` (número o expresión; opcional, por defecto `null`): radio menor en mm (del tubo).
   - `x` (número o expresión; opcional, por defecto `0`): x del centro (mm).
   - `y` (número o expresión; opcional, por defecto `0`): y del centro (mm).
   - `z` (número o expresión; opcional, por defecto `0`): z del centro (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
-- CLI: `omnicad call create_torus --doc pieza.omnicad major_radius=… minor_radius=…`
+  - `major_diameter` (número o expresión; opcional, por defecto `null`): diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
+  - `minor_diameter` (número o expresión; opcional, por defecto `null`): diámetro del tubo, en vez de minor_radius.
+- CLI: `omnicad call create_torus --doc pieza.omnicad`
 
 ### `boolean_operation`
 
