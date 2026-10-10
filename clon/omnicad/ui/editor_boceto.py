@@ -806,6 +806,9 @@ class Lienzo(QWidget):
         if tipo == "circunscrito":
             for ln in ls:
                 self.b.agregar_restriccion("tangente", [ln, cid])
+            # con lados pares, «igual» + «tangente» deja los tramos de tangencia alternar (un grado de libertad de
+            # más): la restricción de polígono regular lo cierra (igual que `create_polygon` de la API)
+            self.b.agregar_restriccion("poligono", list(ls))
         else:
             for v in verts:
                 self.b.agregar_restriccion("coincidente", [v, cid])

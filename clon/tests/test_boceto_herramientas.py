@@ -397,6 +397,15 @@ def test_poligono_curvatura_y_restricciones_con_curvas_nuevas(app_qt):
     assert b.primitivas(e2)[0][3:5] == pytest.approx(b.primitivas(e)[0][3:5])
 
 
+@pytest.mark.parametrize("lados", [4, 6])
+def test_poligono_circunscrito_par_queda_regular(app_qt, lados):
+    """Con lados pares, «igual» + «tangente» dejaba un grado de libertad de más (hexágono: 5 en vez de 4); el editor
+    suma la restricción de polígono regular, como `create_polygon` de la API."""
+    lz = _lienzo(app_qt)
+    lz._poligono((0, 0), (10, 0), lados, "circunscrito")
+    assert grados_de_libertad(lz.b) == 4                                   # centro (2) + radio + giro
+
+
 def test_restringir_automaticamente_hasta_gdl_cero(app_qt):
     b = Boceto()
     b.agregar_rectangulo((3, 4), (23, 14))

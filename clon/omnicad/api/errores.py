@@ -95,7 +95,8 @@ PISTAS = {
                           "círculo o arco; angle: dos líneas."],
     "SKETCH_OVERCONSTRAINED": ["La restricción o cota choca con las que ya hay: el boceto quedó como estaba.",
                                "get_sketch muestra restricciones, cotas y grados de libertad."],
-    "INVALID_SPEC": ["Cada entidad lleva 'type' (line, rectangle, circle, arc, polygon, spline, point) y sus "
+    "INVALID_SPEC": ["Cada entidad lleva 'type' (line, rectangle, circle, arc, polygon, spline, point, ellipse, "
+                     "slot) y sus "
                      "coordenadas; 'id' es opcional y sirve para citarla en constraints y dimensions.",
                      "Citas: 'id', 'id.start', 'id.end', 'id.center' o, en un rectángulo, 'id.bottom/right/top/left'."],
     "PROFILE_NOT_FOUND": ["get_sketch lista los perfiles con su índice, área y centroide.",
