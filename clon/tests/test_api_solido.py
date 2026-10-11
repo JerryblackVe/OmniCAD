@@ -44,7 +44,8 @@ def caja(sesion, cuerpo):
 def test_herramientas_del_grupo_solido():
     assert [h["nombre"] for h in api.catalogo("solido")] == [
         "extrude", "revolve", "sweep", "loft", "create_box", "create_cylinder", "create_sphere", "create_torus",
-        "boolean_operation", "mirror", "rectangular_pattern", "circular_pattern", "move_body",
+        "boolean_operation", "mirror", "rectangular_pattern", "circular_pattern", "point_pattern", "path_pattern",
+        "multi_transform", "move_body",
         "fillet", "chamfer", "shell", "create_hole", "create_thread", "draft",   # herramientas_modificar.py
         "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft"]  # engranajes
     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
@@ -354,8 +355,81 @@ def test_patron_circular(s):
     assert caja(s, ejex["bodies_created"][0]["id"]) == pytest.approx(([20, -5, -10], [30, 5, 0]), abs=1e-6)
 
 
+# ---------------------------------------------------------------- patrones de operaciones, en puntos, en ruta, multi
+PLACA = 100 * 60 * 10
+AGUJERO = math.pi * 3 ** 2 * 10
+
+
+def _placa_con_agujero(s):
+    """Placa 100 × 60 × 10 de (0, 0, 0) a (100, 60, 10) con un agujero Ø6 pasante en (10, 10)."""
+    llamar(s, "create_box", length=100, width=60, height=10, x=50, y=30)
+    return llamar(s, "create_hole", diameter=6, face=">Z", points=[[10, 10, 10]], through_all=True)["feature"]
+
+
+def test_patron_de_operaciones_repite_el_agujero(s):
+    """Hallazgo: los patrones solo repetían cuerpos (ventilación = caja + patrón + cortar). Ahora repiten pasos."""
+    agujero = _placa_con_agujero(s)
+    r = llamar(s, "rectangular_pattern", features=agujero["id"], x_count=3, x_spacing=20, y_count=2, y_spacing=25)
+    assert r["bodies_created"] == [] and r["bodies_removed"] == []
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(PLACA - 6 * AGUJERO, abs=1e-3)
+    paso = s.paso(r["feature"]["id"])
+    assert (paso.p["objeto"], paso.p["pasos"], paso.p["cuerpos"]) == ("operaciones", [agujero["id"]], [])
+    r = llamar(s, "point_pattern", features=agujero["name"], points=[[90, 50, 0], [90, 10, 0]], reference=[10, 10, 0])
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(PLACA - 8 * AGUJERO, abs=1e-3)
+    # (10, 10) → (50, 10) ya estaba agujereado por el patrón: cortarlo otra vez no cambia nada
+    r = llamar(s, "multi_transform", features=[agujero["id"]], transforms=[
+        {"type": "rectangular", "axis": "x", "count": 2, "spacing": 40},
+        {"type": "rectangular", "axis": "y", "count": 2, "spacing": 40}])
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(PLACA - 10 * AGUJERO, abs=1e-3)
+    llamar(s, "create_sketch", plane="XY", name="Suelto")
+    r = api.llamar(s, "rectangular_pattern", {"features": "Suelto", "x_count": 2})
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "no deja una herramienta" in r["mensaje"]
+    assert "agujero" in " ".join(r["pistas"])
+
+
+def test_patron_en_puntos_de_un_boceto_y_en_ruta_con_giro(s):
+    cubo = llamar(s, "create_box", length=4, width=4, height=20)["bodies_created"][0]["id"]   # centro (0, 0), z 0..20
+    llamar(s, "create_sketch", plane="XY", name="Puntos")
+    llamar(s, "draw_point", x=50, y=0)
+    llamar(s, "draw_point", x=0, y=50)
+    r = llamar(s, "point_pattern", bodies=cubo, sketch="Puntos")
+    assert sorted(tuple(caja(s, b["id"])[0]) for b in r["bodies_created"]) == [(-2, 48, 0), (48, -2, 0)]
+    assert api.llamar(s, "point_pattern", {"bodies": cubo, "sketch": "Puntos", "points": [[0, 0, 0]]})["ok"]
+    llamar(s, "create_sketch", plane="XY", name="Ruta")
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=100, end_y=0)
+    r = llamar(s, "path_pattern", bodies=cubo, path_sketch="Ruta", count=3, distance=100, twist=90)
+    assert len(r["bodies_created"]) == 2
+    medio, ultimo = (caja(s, b["id"]) for b in r["bodies_created"])
+    assert ultimo == pytest.approx(([98, -20, -2], [102, 0, 2]), abs=1e-6)      # 90° sobre la ruta: acostado
+    assert medio[0][0] == pytest.approx(48) and medio[1][2] == pytest.approx(22 * math.cos(math.radians(45)), abs=1e-3)
+    paso = s.paso(r["feature"]["id"])
+    assert (paso.p["forma_patron"], paso.p["giro"], paso.p["distribucion"]) == ("ruta", "90.0", "extension")
+
+
+def test_multi_transform_de_cuerpos(s):
+    cubo = llamar(s, "create_box", length=10, width=10, height=10, x=25)["bodies_created"][0]["id"]
+    r = llamar(s, "multi_transform", bodies=cubo, transforms=[
+        {"type": "rectangular", "axis": "y", "count": 3, "spacing": 20}, {"type": "mirror", "plane": "YZ"}])
+    minimos = sorted(tuple(caja(s, b["id"])[0]) for b in r["bodies_created"])
+    assert minimos == [(-30, -5, 0), (-30, 15, 0), (-30, 35, 0), (20, 15, 0), (20, 35, 0)]
+    assert all(b["volume"] == pytest.approx(1000) for b in r["bodies_created"])
+    paso = s.paso(r["feature"]["id"])
+    assert paso.TIPO == "multitransformar" and [t["tipo"] for t in paso.p["transformaciones"]] == ["rectangular",
+                                                                                                    "simetria"]
+
+
 @pytest.mark.parametrize("nombre, args, kind", [
     ("rectangular_pattern", {"bodies": "Cuerpo1"}, "INVALID_ARGUMENTS"),
+    ("rectangular_pattern", {"bodies": "Cuerpo1", "features": "op1", "x_count": 2}, "INVALID_ARGUMENTS"),
+    ("rectangular_pattern", {"x_count": 2}, "INVALID_ARGUMENTS"),
+    ("rectangular_pattern", {"features": "op9", "x_count": 2}, "FEATURE_NOT_FOUND"),
+    ("point_pattern", {"bodies": "Cuerpo1"}, "INVALID_ARGUMENTS"),
+    ("point_pattern", {"bodies": "Cuerpo1", "points": [[1, 2]]}, "INVALID_ARGUMENTS"),
+    ("path_pattern", {"bodies": "Cuerpo1", "path_sketch": "Nada", "count": 3, "distance": 10}, "SKETCH_NOT_FOUND"),
+    ("multi_transform", {"bodies": "Cuerpo1", "transforms": []}, "INVALID_ARGUMENTS"),
+    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "spiral"}]}, "INVALID_ARGUMENTS"),
+    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "mirror", "plano": "XY"}]}, "INVALID_ARGUMENTS"),
+    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "circular", "axis": "w"}]}, "INVALID_ARGUMENTS"),
     ("rectangular_pattern", {"bodies": "Cuerpo1", "x_count": 0}, "INVALID_ARGUMENTS"),
     ("rectangular_pattern", {"bodies": "Cuerpo1", "y_count": 2, "axis1": "x", "axis2": "x"}, "INVALID_ARGUMENTS"),
     ("circular_pattern", {"bodies": "Cuerpo1", "count": 1}, "INVALID_ARGUMENTS"),
@@ -422,6 +496,9 @@ def test_move_body_a_una_posicion_absoluta(s):
     ("move_body", {"body": "Cuerpo1", "translate": [1, 1, 1]}),
     ("mirror", {"bodies": "Cuerpo1", "plane": "XY"}),
     ("circular_pattern", {"bodies": "Cuerpo1", "count": 3}),
+    ("point_pattern", {"bodies": "Cuerpo1", "points": [[0, 0, 50]]}),
+    ("path_pattern", {"bodies": "Cuerpo1", "path_sketch": "Boceto1", "count": 2, "distance": 3}),
+    ("multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "mirror", "plane": "XY"}]}),
     ("extrude", {"sketch": "Boceto1", "distance": 3}),
 ])
 def test_cada_herramienta_es_un_paso_de_deshacer(s, nombre, args):

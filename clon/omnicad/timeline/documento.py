@@ -65,9 +65,12 @@ def _igual(a, b):
 def _cambios_de_cuerpos(antes, despues):
     """Lo que hizo un paso (de `antes` a `despues`) si solo cambió cuerpos que la caché del proyecto puede guardar:
     ([[id, None si es el mismo de antes | sus datos]] en el orden del estado, formas de los cuerpos cambiados).
-    None si cambió otra cosa (bocetos, planos, componentes…) o un cuerpo que no va en un BREP (malla, chapa)."""
+    None si cambió otra cosa (bocetos, planos, componentes…) o un cuerpo que no va en un BREP (malla, chapa). Las
+    herramientas anotadas (`EstadoModelo.herramientas`) no cuentan: no se guardan, y el paso cuya herramienta repite
+    un patrón de operaciones se recalcula al abrir (`_pasos_repetidos`)."""
     va, vd = vars(antes), vars(despues)
-    if list(va) != list(vd) or not all(_igual(va[k], vd[k]) for k in va if k not in ("cuerpos", "contador_cuerpos")):
+    if list(va) != list(vd) or not all(_igual(va[k], vd[k]) for k in va
+                                       if k not in ("cuerpos", "contador_cuerpos", "herramientas")):
         return None
     lista, formas = [], []
     for cid, c in despues.cuerpos.items():
@@ -497,11 +500,13 @@ class Documento:
         self._valores = valores
         nombres = self._nombres_cuerpos()
         estado = self.estado_en(desde)
+        repetidos = self._pasos_repetidos() if self._cache else set()
         for i in range(desde, len(self.operaciones)):
             op = self.operaciones[i]
             usados = frozenset()
             duracion = 0.0
-            guardado = self._de_cache(i, op, estado) if i < self.marcador and not op.suprimida else None
+            guardado = self._de_cache(i, op, estado) if (i < self.marcador and not op.suprimida
+                                                          and op.id not in repetidos) else None
             if i >= self.marcador:
                 self.resultados.append(ResultadoPaso("retrocedida"))
             elif op.suprimida:
@@ -555,6 +560,16 @@ class Documento:
                            "contador": despues.contador_cuerpos, "duracion": self._duraciones[i],
                            "cuerpos": cuerpos}, formas))
         return pasos
+
+    def _pasos_repetidos(self):
+        """Pasos cuya herramienta repite un patrón de operaciones (`pasos_repetidos()` de OpPatron y
+        OpMultitransformar): se calculan aunque estén en la caché, que guarda los cuerpos y no la herramienta."""
+        salida = set()
+        for op in self.operaciones:
+            pasos = getattr(op, "pasos_repetidos", None)
+            if pasos is not None and not op.suprimida:
+                salida |= set(pasos())
+        return salida
 
     def _de_cache(self, i, op, estado):
         """El paso i tomado de la caché del proyecto que se está abriendo, sin ejecutarlo: (estado, resultado,

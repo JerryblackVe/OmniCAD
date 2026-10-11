@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-163 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+166 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 25 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 28 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -972,8 +972,11 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
 | [`boolean_operation`](#boolean_operation) | sí | Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). |
 | [`mirror`](#mirror) | sí | Refleja cuerpos respecto de un plano (origen o de construcción). |
-| [`rectangular_pattern`](#rectangular_pattern) | sí | Patrón rectangular de cuerpos: copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. |
-| [`circular_pattern`](#circular_pattern) | sí | Patrón circular de cuerpos alrededor de un eje del origen (x, y o z). |
+| [`rectangular_pattern`](#rectangular_pattern) | sí | Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. |
+| [`circular_pattern`](#circular_pattern) | sí | Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del origen (x, y o z). |
+| [`point_pattern`](#point_pattern) | sí | Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que corta— en cada punto. |
+| [`path_pattern`](#path_pattern) | sí | Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de FreeCAD): copias de cuerpos (bodies) —o de operaciones del timeline (features)— a lo largo de curvas de un boceto. count incluye el original. distance es el largo TOTAL de la primera a la última (spacing_mode="extent") o la separación entre copias ("spacing"). start ubica el original sobre la ruta (0 a 1). orientation="path_direction" gira cada copia con la ruta; twist además la gira alrededor de la ruta, de a poco, hasta ese ángulo total en la última. |
+| [`multi_transform`](#multi_transform) | sí | Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). |
 | [`move_body`](#move_body) | sí | Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). |
 | [`fillet`](#fillet) | sí | Redondea aristas (empalme de radio constante). |
 | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
@@ -1142,32 +1145,80 @@ Refleja cuerpos respecto de un plano (origen o de construcción). Crea cuerpos n
 
 ### `rectangular_pattern`
 
-Patrón rectangular de cuerpos: copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. Las copias son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.
+Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. Con bodies las copias son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (texto o lista de texto; obligatorio): cuerpo(s) a repetir (id o nombre).
+  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
   - `x_count` (entero; opcional, por defecto `1`): cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
   - `x_spacing` (número o expresión; opcional, por defecto `"10 mm"`): separación entre instancias consecutivas en la dirección 1 (mm o expresión). Se guarda como d1 con distribucion="espaciado": edit_feature d1 sigue siendo la separación.
   - `y_count` (entero; opcional, por defecto `1`): cantidad de instancias en la dirección 2, original incluido (x_count × y_count ≤ 10.000).
   - `y_spacing` (número o expresión; opcional, por defecto `"10 mm"`): separación entre instancias consecutivas en la dirección 2 (se guarda como d2).
   - `axis1` ("x" | "y" | "z"; opcional, por defecto `"x"`): eje de la dirección 1 ("x", "y" o "z").
   - `axis2` ("x" | "y" | "z"; opcional, por defecto `"y"`): eje de la dirección 2.
-  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original.
-- CLI: `omnicad call rectangular_pattern --doc pieza.omnicad bodies=…`
+  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
+- CLI: `omnicad call rectangular_pattern --doc pieza.omnicad`
 
 ### `circular_pattern`
 
-Patrón circular de cuerpos alrededor de un eje del origen (x, y o z). Con 360° las copias se reparten en toda la vuelta; con menos, entre el original y el ángulo total. count incluye el original.
+Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del origen (x, y o z). Con 360° las copias se reparten en toda la vuelta; con menos, entre el original y el ángulo total. count incluye el original.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (texto o lista de texto; obligatorio): cuerpo(s) a repetir (id o nombre).
   - `count` (entero; obligatorio): cantidad de instancias, original incluido (2 a 10.000).
+  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
   - `axis` ("x" | "y" | "z"; opcional, por defecto `"z"`): eje de giro del origen: "x", "y" o "z".
   - `total_angle` (número o expresión; opcional, por defecto `360`): ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
-  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original.
-- CLI: `omnicad call circular_pattern --doc pieza.omnicad bodies=… count=…`
+  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+- CLI: `omnicad call circular_pattern --doc pieza.omnicad count=…`
+
+### `point_pattern`
+
+Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que corta— en cada punto. Los puntos son coordenadas (points) y/o todos los puntos sueltos de un boceto (sketch). Cada copia lleva el punto de referencia (reference; por defecto el origen) a uno de los puntos: para repetir un agujero, reference es el punto donde está el agujero. Un punto igual a la referencia no repite la copia.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
+  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+  - `points` (lista de lista de número o expresión o null; opcional, por defecto `null`): puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
+  - `reference` (lista de número o expresión o null; opcional, por defecto `null`): punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
+  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+- CLI: `omnicad call point_pattern --doc pieza.omnicad`
+
+### `path_pattern`
+
+Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de FreeCAD): copias de cuerpos (bodies) —o de operaciones del timeline (features)— a lo largo de curvas de un boceto. count incluye el original. distance es el largo TOTAL de la primera a la última (spacing_mode="extent") o la separación entre copias ("spacing"). start ubica el original sobre la ruta (0 a 1). orientation="path_direction" gira cada copia con la ruta; twist además la gira alrededor de la ruta, de a poco, hasta ese ángulo total en la última.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path_sketch` (texto; obligatorio): id o nombre del boceto con la ruta.
+  - `count` (entero; obligatorio): cantidad de instancias, original incluido (2 a 10.000).
+  - `distance` (número o expresión; obligatorio): largo total (extent) o separación entre copias (spacing), en mm o expresión.
+  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
+  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+  - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
+  - `spacing_mode` ("extent" | "spacing"; opcional, por defecto `"extent"`): "extent" (distance es el largo total) o "spacing" (distance es la separación).
+  - `start` (número o expresión; opcional, por defecto `0`): dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
+  - `orientation` ("identical" | "path_direction"; opcional, por defecto `"identical"`): "identical" (las copias solo se trasladan) o "path_direction" (giran con la tangente de la ruta).
+  - `twist` (número o expresión; opcional, por defecto `0`): giro total alrededor de la ruta en grados (número o expresión): la copia k gira twist · k / (count − 1).
+  - `symmetric` (true/false; opcional, por defecto `false`): true para repartir count copias hacia cada lado del original.
+  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+- CLI: `omnicad call path_pattern --doc pieza.omnicad path_sketch=… count=… distance=…`
+
+### `multi_transform`
+
+Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). Tipos: {"type": "rectangular", "axis": "x", "count": 3, "spacing": 20} (y axis2, count2, spacing2, symmetric), {"type": "circular", "axis": "z", "count": 6, "total_angle": 360}, {"type": "mirror", "plane": "YZ"}, {"type": "points", "points": [[x, y, z]], "sketch": …, "reference": [x, y, z]} y {"type": "path", "path_sketch": …, "count": 4, "distance": 60, "twist": 90} (las mismas opciones que path_pattern). Repite cuerpos (bodies) u operaciones del timeline (features).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `transforms` (lista de objeto; obligatorio): lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
+  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
+  - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+  - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+- CLI: `omnicad call multi_transform --doc pieza.omnicad transforms=…`
 
 ### `move_body`
 

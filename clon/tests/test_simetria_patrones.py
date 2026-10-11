@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Simetría, patrones y copias: heredan aspecto y material; distancias del patrón explicadas (P12)."""
+import math
+
 import pytest
 
 from omnicad import api
@@ -108,3 +110,50 @@ def test_edit_feature_de_rectangular_pattern_aclara_separacion(s):
 def test_describe_operation_patron_explica_distribucion():
     doc = ok(api.llamar(api.Sesion(Documento()), "describe_operation", {"type": "patron"}))["doc"]
     assert "distribucion" in doc and "TOTAL" in doc
+
+
+def _ruta(s):
+    ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "Ruta"}))
+    ok(api.llamar(s, "draw_line", {"start_x": 0, "start_y": -40, "end_x": 100, "end_y": -40}))
+    return "Ruta"
+
+
+def test_patron_en_puntos_en_ruta_y_multitransformacion_heredan(s):
+    cid = _nuevo(s, "point_pattern", {"bodies": "op1.c1", "points": [[40, 0, 0]]})
+    _hereda(s, cid)
+    cid = _nuevo(s, "multi_transform", {"bodies": "op1.c1", "transforms": [
+        {"type": "rectangular", "axis": "y", "count": 2, "spacing": 30}, {"type": "mirror", "plane": "XY"}]})
+    _hereda(s, cid)
+    cid = _nuevo(s, "path_pattern", {"bodies": "op1.c1", "path_sketch": _ruta(s), "count": 2, "distance": 50,
+                                     "twist": 45})
+    _hereda(s, cid)
+
+
+def test_run_operation_patron_de_operaciones_y_multitransformar(s):
+    """run_operation guarda tal cual los campos nuevos (pasos, coordenadas y transformaciones no son referencias) y el
+    patrón y la multitransformación de operaciones repiten el corte del cilindro."""
+    ok(api.llamar(s, "create_cylinder", {"radius": 1, "height": 30, "z": -10, "operation": "cut"}))
+    agujero = s.doc.operaciones[-1].id
+    un_agujero = math.pi * 1 ** 2 * 10
+    ok(api.llamar(s, "run_operation", {"type": "patron", "params": {
+        "objeto": "operaciones", "pasos": [agujero], "forma_patron": "puntos", "coordenadas": [[3, 3, 0]]}}))
+    patron = s.doc.operaciones[-1]
+    assert s.doc.resultados[-1].estado == "ok" and patron.p["pasos"] == [agujero]
+    assert geo.volumen(s.doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(1000 - 2 * un_agujero, rel=1e-9)
+    ok(api.llamar(s, "run_operation", {"type": "multitransformar", "params": {
+        "objeto": "operaciones", "pasos": [patron.id],
+        "transformaciones": [{"tipo": "simetria", "plano": {"tipo": "plano", "id": "YZ"}}]}}))
+    assert s.doc.resultados[-1].estado == "ok"
+    forma = s.doc.estado_final.cuerpos["op1.c1"].forma
+    assert geo.es_valida(forma) and geo.volumen(forma) == pytest.approx(1000 - 3 * un_agujero, rel=1e-9)
+
+
+def test_describe_operation_patron_y_multitransformar_explican_lo_nuevo():
+    sesion = api.Sesion(Documento())
+    doc = ok(api.llamar(sesion, "describe_operation", {"type": "patron"}))["doc"]
+    assert all(clave in doc for clave in ("objeto", "pasos", "giro", "coordenadas", "referencia_xyz", "puntos"))
+    campos = {p["name"]: p for p in ok(api.llamar(sesion, "describe_operation", {"type": "patron"}))["params"]}
+    assert all("format" not in campos[k] for k in ("pasos", "coordenadas", "referencia_xyz"))     # no son referencias
+    assert "punto" in campos["referencia"]["format"] and "boceto" in campos["puntos"]["format"]
+    doc = ok(api.llamar(sesion, "describe_operation", {"type": "multitransformar"}))["doc"]
+    assert "transformaciones" in doc and "simetria" in doc

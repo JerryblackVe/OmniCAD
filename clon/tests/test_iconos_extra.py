@@ -18,7 +18,8 @@ HOJA = RAIZ.parent / "evidencias" / "capturas" / "iconos_extra.png"
 SECCIONES = {
     "SÓLIDO / CREAR": ["barrido", "solevacion", "nervio", "red", "labio", "repujado", "saliente", "encaje_presion",
                        "agujero", "rosca", "bobina", "tuberia", "patron_rectangular_3d", "patron_circular_3d",
-                       "patron_ruta", "simetria_3d", "engrosar", "relleno_contorno", "cuerpo_envolvente",
+                       "patron_ruta", "patron_puntos", "multitransformar", "simetria_3d", "engrosar",
+                       "relleno_contorno", "cuerpo_envolvente",
                        "operacion_base", "derivar", "crear_forma", "engranaje_3d", "eje_escalonado"],
     "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "vaciado", "desmoldeo", "escala_3d", "desfase_cara",
                   "reemplazar_cara", "dividir_cara", "dividir_cuerpo", "division_silueta", "mover_copiar", "alinear",
@@ -85,7 +86,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 145
+    assert len(NOMBRES) == len(set(NOMBRES)) == 147
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

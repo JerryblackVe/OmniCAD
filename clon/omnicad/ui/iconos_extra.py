@@ -495,6 +495,27 @@ def _simetria_3d(p):
     _caja_en(p, q, 11, 1, 0, 6, 10, 9, FANTASMA, BORDE_FANTASMA)
 
 
+def _patron_puntos(p):
+    """Copias sobre puntos sueltos (de un boceto): el original azul y las copias pálidas, cada una sobre su punto."""
+    puntos = [(6.5, 27.5), (15.5, 18.0), (25.0, 27.0), (25.5, 13.5)]
+    for x, y in puntos:
+        _punto_dato(p, x, y, 1.8)
+    for k, (x, y) in sorted(enumerate(puntos), key=lambda e: e[1][1]):
+        _caja(p, 4.5, 4.5, 4.5, x, y - 6.6, 1.0, _azules() if k == 0 else FANTASMA,
+              AZUL_BORDE if k == 0 else BORDE_FANTASMA)
+
+
+def _multitransformar(p):
+    """Patrón + simetría en un paso: el original (adelante) y su copia del patrón, el plano y las dos copias
+    reflejadas."""
+    q = _q(13.8, 9.5)
+    _caja_en(p, q, 0, 0, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
+    _caja_en(p, q, 0, 8, 0, 5, 5, 5)
+    _plano_q(p, [q(8, -2, -1), q(8, 15, -1), q(8, 15, 9), q(8, -2, 9)])
+    _caja_en(p, q, 11, 0, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
+    _caja_en(p, q, 11, 8, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
+
+
 def _engrosar(p):
     arriba = QPainterPath(QPointF(3, 12))
     arriba.cubicTo(10, 4, 17, 16, 24, 8)
@@ -2015,6 +2036,7 @@ DIBUJOS_EXTRA = {
     "repujado": _repujado, "saliente": _saliente, "encaje_presion": _encaje_presion, "agujero": _agujero,
     "rosca": _rosca, "bobina": _bobina, "tuberia": _tuberia, "patron_rectangular_3d": _patron_rectangular_3d,
     "patron_circular_3d": _patron_circular_3d, "patron_ruta": _patron_ruta, "simetria_3d": _simetria_3d,
+    "patron_puntos": _patron_puntos, "multitransformar": _multitransformar,
     "engrosar": _engrosar, "relleno_contorno": _relleno_contorno, "cuerpo_envolvente": _cuerpo_envolvente,
     "operacion_base": _operacion_base, "derivar": _derivar, "crear_forma": _crear_forma,
     "engranaje_3d": _engranaje_3d, "eje_escalonado": _eje_escalonado,

@@ -112,6 +112,9 @@ class EstadoModelo:
         self.uniones = {}          # id → datos de la unión (ENSAMBLAR › Unión)
         self.grupos_rigidos = []   # [[ids de componentes]] que se mueven juntos (ENSAMBLAR › Grupo rígido)
         self.lienzos = {}          # id → imagen sobre un plano (INSERTAR › Lienzo / Calcomanía)
+        # id de paso → ((herramienta, operación, objetivo, tipo), …) que aplicó con `aplicar_resultado`: el patrón de
+        # operaciones (OpPatron con objeto="operaciones") repite esa herramienta transformada.
+        self.herramientas = {}
         self.contador_cuerpos = 0
 
     def copia(self):
@@ -125,6 +128,7 @@ class EstadoModelo:
         e.uniones = dict(self.uniones)
         e.grupos_rigidos = [list(g) for g in self.grupos_rigidos]
         e.lienzos = dict(self.lienzos)
+        e.herramientas = dict(self.herramientas)
         e.contador_cuerpos = self.contador_cuerpos
         return e
 
@@ -178,9 +182,12 @@ class Contexto:
 def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido"):
     """Aplica una forma recién creada según FeatureOperations. `objetivo`: id de un cuerpo, lista de ids
     ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca).
-    Devuelve los ids de cuerpos afectados."""
+    Devuelve los ids de cuerpos afectados. La herramienta queda anotada en `estado.herramientas[op_id]` (el patrón
+    de operaciones la repite)."""
     if geo.esta_vacia(herramienta):
         raise ErrorOperacion("La operación no generó geometría.")
+    anotado = list(objetivo) if isinstance(objetivo, (list, tuple)) else objetivo
+    estado.herramientas[op_id] = estado.herramientas.get(op_id, ()) + ((herramienta, operacion, anotado, tipo),)
     if operacion == "nuevo":
         sols = (geo.solidos(herramienta) if tipo == "solido" else []) or [herramienta]
         return [estado.nuevo_cuerpo(op_id, s, tipo) for s in sols]

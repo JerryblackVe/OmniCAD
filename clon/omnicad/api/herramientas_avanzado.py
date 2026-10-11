@@ -118,7 +118,8 @@ FORMATOS_REFERENCIA = [
     'ninguna de estas formas llega sin cambios al paso, que dice qué campo está mal y qué esperaba.',
 ]
 _CAMPOS_CUERPO = ("cuerpos", "objetivos", "objetivo", "cuerpo", "herramientas")     # ids de cuerpo como texto
-_SIN_REFERENCIAS = ("marco", "receta", "datos", "ajustes", "suprimir", "celdas", "componentes")
+_SIN_REFERENCIAS = ("marco", "receta", "datos", "ajustes", "suprimir", "celdas", "componentes", "pasos",
+                    "coordenadas", "referencia_xyz", "transformaciones")
 _ORIGEN = {"XY": ("plano", "XY"), "XZ": ("plano", "XZ"), "YZ": ("plano", "YZ"), "X": ("eje", "X"), "Y": ("eje", "Y"),
            "Z": ("eje", "Z"), "O": ("punto", "O")}
 _SELECTOR_DE_CAMPO = {"cara": "cara", "caras": "cara", "caras_a": "cara", "caras_b": "cara", "aristas": "arista"}
@@ -405,6 +406,8 @@ _COORDENADAS = "coordenadas [x, y, z] en mm (no es una referencia)"
 _ESPERA_TIPO = {
     ("plegar", "punto"): _COORDENADAS, ("desplegar", "punto"): _COORDENADAS, ("patron_plano", "punto"): _COORDENADAS,
     ("recortar_sup", "punto"): _COORDENADAS + ": el lado que se quita",
+    ("patron", "referencia"): _UN_PUNTO + ' que se lleva a cada punto (forma_patron="puntos"); vacío = el origen',
+    ("patron", "puntos"): 'puntos (' + _UN_PUNTO + ') o un boceto entero ("Boceto1": todos sus puntos sueltos)',
     ("origen_union", "origen"): 'dónde va el marco: una cara, una arista, un punto o un eje ("Cuerpo1/F3")',
     ("reemplazar_cara", "destino"): "la cara o el plano destino",
     ("alinear", "origen"): "lo que se mueve: una cara, una arista, un vértice o un punto",
@@ -445,6 +448,19 @@ _NOTAS = {
     ("agujero", "puntos_cara"): 'posiciones FIJAS: [{"cara": "Cuerpo1/F6" (o su referencia), "punto": [x, y, z]}] '
                                 '(create_hole con points).',
     ("relleno_contorno", "celdas"): "índices de las regiones cerradas, ordenadas por centroide (x, y, z); [] = la 0.",
+    **{(t, "objeto"): '"cuerpos" (repite los cuerpos de «cuerpos») u "operaciones" (repite la herramienta de los pasos '
+                      'de «pasos»: un agujero, una extrusión que corta…, con la misma operación).'
+       for t in ("patron", "multitransformar")},
+    **{(t, "pasos"): 'ids de pasos anteriores ("op3") cuyo efecto se repite con objeto="operaciones".'
+       for t in ("patron", "multitransformar")},
+    ("patron", "giro"): 'forma_patron="ruta": giro total alrededor de la ruta; la copia k gira giro · k / (n1 − 1).',
+    ("patron", "coordenadas"): 'forma_patron="puntos": puntos fijos [[x, y, z], …] (mm o expresiones).',
+    ("patron", "referencia_xyz"): 'forma_patron="puntos": el punto [x, y, z] que se lleva a cada punto (si no hay '
+                                    '«referencia»); [] = el origen.',
+    ("multitransformar", "transformaciones"): 'lista ordenada de dicts {"tipo": "rectangular" | "circular" | "ruta" | '
+                                              '"puntos" | "simetria", …} con las claves del patrón (dir1, n1, d1…) o '
+                                              '"plano" en la simetría, con referencias guardadas ({"tipo": "eje", '
+                                              '"id": "X"}); multi_transform las arma desde formas cortas.',
 }
 
 

@@ -2238,13 +2238,20 @@ def _trsf_de_marcos(p0, f0, p1, f1):
 
 
 def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",
-                             simetrico=False, suprimir=()):
+                             simetrico=False, suprimir=(), giro=0.0):
     """Patrón sobre ruta [SLD-REF-PATTERN]: el original está en la fracción `inicio` (0..1) de la ruta y las
     instancias avanzan `distancia` mm (largo total o paso, según `distribucion`). "identica" solo traslada;
     "direccion_ruta" además gira cada instancia con la ruta (marco de rotación mínima). En rutas abiertas se
-    omiten las instancias que caen fuera; en las cerradas se da la vuelta. Como máximo INSTANCIAS_MAXIMAS."""
+    omiten las instancias que caen fuera; en las cerradas se da la vuelta. Como máximo INSTANCIAS_MAXIMAS.
+
+    `giro` (grados, como el Twisted Path Array de FreeCAD Draft): además, cada instancia gira alrededor de la
+    tangente de la ruta en su lugar, en forma progresiva: la instancia k gira giro · k / (n − 1), así la última
+    gira el ángulo total y el original nada (con «simétrico», las de atrás giran al revés)."""
     if orientacion not in ("identica", "direccion_ruta"):
         raise geo.ErrorGeometria(f"Orientación desconocida: {orientacion}")
+    giro = float(giro)
+    if not math.isfinite(giro):
+        raise geo.ErrorGeometria("El giro del patrón en ruta tiene que ser un ángulo finito.")
     _exigir_instancias(_cantidad(n, simetrico))
     w = _alambre(ruta)
     largo = _longitud(w)
@@ -2273,8 +2280,79 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
         elif s < -1e-9 or s > largo + 1e-9:
             continue
         p1, f1 = marco(min(max(s, 0.0), largo))
-        salida.append(_traslacion(p1 - p0) if orientacion == "identica" else _trsf_de_marcos(p0, f0, p1, f1))
+        t = _traslacion(p1 - p0) if orientacion == "identica" else _trsf_de_marcos(p0, f0, p1, f1)
+        angulo = giro * k / (int(n) - 1) if int(n) > 1 else 0.0
+        if abs(angulo) > 1e-12:
+            r = gp_Trsf()
+            r.SetRotation(gp_Ax1(_pnt(p1), _gdir(f1[:, 0])), math.radians(angulo))
+            t = r.Multiplied(t)             # primero lleva la copia a su lugar y después la gira sobre la tangente
+        salida.append(t)
     return salida
+
+
+def transformaciones_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=()):
+    """Patrón en puntos (PartDesign › Point Pattern y Draft › Point Array de FreeCAD; en Fusion, los agujeros en
+    varios puntos de boceto): lista de gp_Trsf con la identidad (el original) y una traslación por punto, la que
+    lleva `referencia` a ese punto. Un punto que coincide con la referencia (o con otro punto) no repite la copia.
+    `suprimir`: índices de las copias a omitir (1 = la del primer punto; el original no se suprime). Como máximo
+    INSTANCIAS_MAXIMAS."""
+    ref = np.asarray(referencia, float).reshape(-1)
+    pts = [np.asarray(p, float).reshape(-1) for p in puntos]
+    if ref.size != 3 or not np.all(np.isfinite(ref)):
+        raise geo.ErrorGeometria("El punto de referencia del patrón tiene que ser [x, y, z] con números finitos.")
+    if any(p.size != 3 or not np.all(np.isfinite(p)) for p in pts):
+        raise geo.ErrorGeometria("Cada punto del patrón tiene que ser [x, y, z] con números finitos.")
+    if not pts:
+        raise geo.ErrorGeometria("El patrón en puntos necesita al menos un punto.")
+    _exigir_instancias(len(pts) + 1)
+    fuera = {int(i) for i in suprimir} - {0}
+    usados = [ref]
+    salida = [gp_Trsf()]
+    for k, p in enumerate(pts, start=1):
+        if any(np.linalg.norm(p - q) < 1e-6 for q in usados):
+            continue
+        usados.append(p)
+        if k not in fuera:
+            salida.append(_traslacion(p - ref))
+    return salida
+
+
+def transformacion_simetria(plano):
+    """gp_Trsf de la simetría (Mirror) respecto de un geo.Plano."""
+    t = gp_Trsf()
+    t.SetMirror(gp_Ax2(_pnt(plano.origen), _gdir(plano.normal)))
+    return t
+
+
+def _clave_trsf(t):
+    """Huella de una gp_Trsf (matriz 3×4 redondeada a 1e-6): dos instancias con la misma huella son la misma."""
+    return tuple(round(t.Value(i, j), 6) + 0.0 for i in (1, 2, 3) for j in (1, 2, 3, 4))
+
+
+def componer_transformaciones(listas):
+    """Multitransformación (PartDesign › MultiTransform de FreeCAD): compone listas de gp_Trsf en orden; cada
+    lista se aplica a TODAS las instancias que dejaron las anteriores (patrón 3 + simetría = 6 instancias). Cada
+    lista empieza por la identidad (el original). Devuelve la lista compuesta, con la identidad primero y sin
+    repetir instancias iguales. Como máximo INSTANCIAS_MAXIMAS (se controla antes de componer)."""
+    listas = [list(lista) for lista in listas]
+    if not listas:
+        raise geo.ErrorGeometria("La multitransformación necesita al menos una transformación.")
+    total = 1
+    for lista in listas:
+        if not lista:
+            raise geo.ErrorGeometria("Una transformación de la lista no dejó ninguna instancia.")
+        total *= len(lista)
+    _exigir_instancias(total)
+    salida = [gp_Trsf()]
+    for lista in listas:
+        nuevas = {}
+        for t in lista:
+            for previa in salida:
+                c = t.Multiplied(previa)     # primero las transformaciones anteriores, después esta
+                nuevas.setdefault(_clave_trsf(c), c)
+        salida = list(nuevas.values())
+    identidad = gp_Trsf()
+    return [identidad] + [t for t in salida if _clave_trsf(t) != _clave_trsf(identidad)]
 
 
 def aplicar(forma, trsf):
@@ -2297,9 +2375,7 @@ def a_matriz(trsf):
 
 def simetria(forma, plano):
     """Simetría (Mirror) de Fusion [SLD-REF-MIRROR-DIALOG]: copia reflejada respecto de un geo.Plano."""
-    t = gp_Trsf()
-    t.SetMirror(gp_Ax2(_pnt(plano.origen), _gdir(plano.normal)))
-    return aplicar(forma, t)
+    return aplicar(forma, transformacion_simetria(plano))
 
 
 # ================================================================ 12. engrosar

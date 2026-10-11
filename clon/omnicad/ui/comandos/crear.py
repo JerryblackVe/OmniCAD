@@ -5,6 +5,7 @@ import numpy as np
 from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpNervio, OpPatron, OpRed,
                                     OpRellenoContorno, OpRepujado, OpRosca, OpSaliente, OpSimetria, OpSolevacion,
                                     OpSolidoEnvolvente, OpTuberia)
+from ...timeline.ops_solido import TIPOS_REPETIBLES
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
                        hit_desde_ref, hits, ref1, refs)
@@ -659,12 +660,64 @@ class Tuberia(Comando):
         return _con_objetivos(op, ctx, dict(op.p, ruta=hits(op.p["ruta"], ctx.estado)))
 
 
+def _de_cuerpos(v):
+    return v.get("objeto", "cuerpos") != "operaciones"
+
+
+def campos_objeto():
+    """«Tipo de objeto» de Fusion para Patrón y Multitransformación: cuerpos (se eligen en la vista) u operaciones
+    (pasos anteriores del timeline, por nombre o id: el agujero, la extrusión que corta…)."""
+    return [Opciones("objeto", "Tipo de objeto", {"cuerpos": "Cuerpos", "operaciones": "Operaciones"}),
+            Seleccion("cuerpos", "Objetos (cuerpos)", {"cuerpo"}, maximo=None, visible_si=_de_cuerpos),
+            Texto("pasos", "Operaciones (nombres del timeline, separados por coma)", "",
+                  visible_si=lambda v: not _de_cuerpos(v),
+                  ayuda="Pasos anteriores que cortan, unen o crean con una herramienta: "
+                        + ", ".join(TIPOS_REPETIBLES) + ".")]
+
+
+def pasos_repetibles(texto, ctx):
+    """Ids de los pasos escritos en el campo «Operaciones» (nombres o ids separados por coma): tienen que estar antes
+    del paso que se crea o edita y ser de un tipo que deja su herramienta (TIPOS_REPETIBLES)."""
+    anteriores = ctx.doc.operaciones[:ctx.indice]
+    ids = []
+    for nombre in (x.strip() for x in str(texto or "").replace(";", ",").split(",")):
+        if not nombre:
+            continue
+        op = next((o for o in anteriores if o.id == nombre), None) or next(
+            (o for o in anteriores if o.nombre.casefold() == nombre.casefold()), None)
+        if op is None:
+            raise ErrorComando(f"No hay un paso «{nombre}» antes de este en el timeline.")
+        if op.TIPO not in TIPOS_REPETIBLES or (op.TIPO in ("patron", "multitransformar")
+                                               and op.p.get("objeto") != "operaciones"):
+            raise ErrorComando(f"«{op.nombre}» ({op.ETIQUETA}) no deja una herramienta para repetir. Se repiten: "
+                               + ", ".join(TIPOS_REPETIBLES) + " (patrones, solo los de operaciones).")
+        ids.append(op.id)
+    if not ids:
+        raise ErrorComando("Escribí las operaciones a repetir (nombres del timeline, separados por coma).")
+    return ids
+
+
+def objeto_params(v, ctx):
+    """objeto, cuerpos y pasos del Patrón o la Multitransformación según el «Tipo de objeto»."""
+    if _de_cuerpos(v):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
+        return {"objeto": "cuerpos", "cuerpos": _cuerpos(v["cuerpos"]), "pasos": []}
+    return {"objeto": "operaciones", "cuerpos": [], "pasos": pasos_repetibles(v.get("pasos"), ctx)}
+
+
+def objeto_valores(op, ctx):
+    """Los valores de los campos de `campos_objeto` desde una operación guardada."""
+    nombres = {o.id: o.nombre for o in ctx.doc.operaciones}
+    return {"objeto": op.p.get("objeto", "cuerpos"), "cuerpos": _hits_cuerpos(op.p.get("cuerpos") or [], ctx.estado),
+            "pasos": ", ".join(nombres.get(i, i) for i in op.p.get("pasos") or [])}
+
+
 class _Patron(Comando):
     CLASE_OP = OpPatron
     FORMA = "rectangular"
 
     def campos(self, ctx):
-        base = [Seleccion("cuerpos", "Objetos (cuerpos)", {"cuerpo"}, maximo=None)]
+        base = campos_objeto()
         if self.FORMA == "rectangular":
             base += [Seleccion("dir1", "Dirección 1", {"eje", "arista_lineal", "plano", "cara_plana"}),
                      Opciones("distribucion", "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"}),
@@ -675,31 +728,48 @@ class _Patron(Comando):
             base += [Seleccion("eje", "Eje", {"eje"}),
                      Opciones("distribucion", "Tipo", {"extension": "Completo", "espaciado": "Ángulo entre copias"}),
                      Entero("n", "Cantidad", 6, 1), Expresion("angulo", "Ángulo total / entre copias", "360 deg", ANGULO)]
+        elif self.FORMA == "puntos":
+            base += [Seleccion("puntos", "Puntos", {"punto_boceto", "vertice", "punto", "boceto"}, maximo=None,
+                               ayuda="Puntos de boceto, vértices, puntos de construcción o un boceto entero (todos sus "
+                                     "puntos sueltos)."),
+                     Seleccion("referencia", "Punto de referencia", {"punto_boceto", "vertice", "punto"}, minimo=0,
+                               ayuda="El punto que se lleva a cada punto elegido (vacío = el origen). Para repetir un "
+                                     "agujero, el punto donde está el agujero.")]
         else:
             base += [Seleccion("ruta", "Ruta", CURVA, maximo=None),
                      Opciones("distribucion", "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"}),
                      Entero("n1", "Cantidad", 3, 1), Expresion("d1", "Distancia", "30 mm"),
                      Expresion("inicio", "Punto de inicio (0 a 1)", "0", ESCALAR),
-                     Opciones("orientacion", "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"})]
-        return base + [Casilla("simetrico", "Simétrico"), Texto("suprimir", "Suprimir copias (n.º, separados por coma)", ""),
-                       Casilla("combinar", "Unir al original")]
+                     Opciones("orientacion", "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"}),
+                     Expresion("giro", "Giro alrededor de la ruta (total)", "0 deg", ANGULO,
+                               ayuda="Cada copia gira alrededor de la ruta, de a poco, hasta este ángulo en la última.")]
+        if self.FORMA != "puntos":
+            base.append(Casilla("simetrico", "Simétrico"))
+        return base + [Texto("suprimir", "Suprimir copias (n.º, separados por coma)", ""),
+                       Casilla("combinar", "Unir al original", visible_si=_de_cuerpos)]
 
     def construir(self, v, ctx):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
+        objeto = objeto_params(v, ctx)
+        if self.FORMA == "puntos" and not v.get("puntos") and not (ctx.op is not None and ctx.op.p.get("coordenadas")):
+            raise ErrorComando("Seleccioná los puntos.")
         try:
             suprimir = [int(x) for x in str(v.get("suprimir") or "").replace(";", ",").split(",") if x.strip()]
         except ValueError as e:
             raise ErrorComando("En «Suprimir copias» van números separados por coma.") from e
         params = {k: v.get(k) for k in ("n1", "d1", "n2", "d2", "distribucion", "simetrico", "n", "angulo", "orientacion",
-                                         "inicio", "combinar") if k in v}
-        params.update(forma_patron=self.FORMA, cuerpos=_cuerpos(v["cuerpos"]), dir1=ref1(v, "dir1"),
-                      dir2=ref1(v, "dir2"), eje=ref1(v, "eje"), ruta=refs(v, "ruta"), suprimir=suprimir)
+                                         "inicio", "giro", "combinar") if k in v}
+        params.update(objeto, forma_patron=self.FORMA, dir1=ref1(v, "dir1"), dir2=ref1(v, "dir2"), eje=ref1(v, "eje"),
+                      ruta=refs(v, "ruta"), puntos=refs(v, "puntos"), referencia=ref1(v, "referencia"),
+                      suprimir=suprimir)
+        if self.FORMA == "puntos" and ctx.op is not None:            # lo que el diálogo no muestra (de la API)
+            params.update(coordenadas=ctx.op.p.get("coordenadas") or [],
+                          referencia_xyz=[] if params["referencia"] else ctx.op.p.get("referencia_xyz") or [])
         return self.crear_op(OpPatron, v, ctx, **params)
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), ruta=hits(op.p.get("ruta"), ctx.estado),
-                 suprimir=", ".join(str(i) for i in op.p.get("suprimir") or []))
-        for k in ("dir1", "dir2", "eje"):
+        v = dict(op.p, ruta=hits(op.p.get("ruta"), ctx.estado), puntos=hits(op.p.get("puntos"), ctx.estado),
+                 suprimir=", ".join(str(i) for i in op.p.get("suprimir") or []), **objeto_valores(op, ctx))
+        for k in ("dir1", "dir2", "eje", "referencia"):
             v[k] = _h1(op.p.get(k), ctx.estado)
         return v
 

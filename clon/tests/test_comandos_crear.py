@@ -352,6 +352,134 @@ def test_patrones_simetria_envolvente_y_relleno():
     assert g.volumen(_ultimo(doc2).forma) == pytest.approx(g.volumen(forma), rel=1e-4)
 
 
+def _placa_y_agujero():
+    """Placa 100 × 60 × 10 (op1), boceto «Puntos» con un punto en (10, 10) (op2) y «Agujero1» Ø6 pasante ahí (op3)."""
+    from omnicad.timeline.ops_solido import OpAgujero
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="60", alto="10"))
+    b = Boceto()
+    pid = b.agregar_punto(10, 10)
+    sk = OpBoceto(doc.nuevo_id(), "Puntos", plano="XY", boceto=b)
+    doc.agregar(sk)
+    punto = {"tipo": "punto_boceto", "boceto": sk.id, "punto": pid}
+    doc.agregar(OpAgujero(doc.nuevo_id(), "Agujero1", posiciones=[punto], diametro="6 mm", extension="todo",
+                          invertir=True))
+    return doc, punto
+
+
+def test_patron_de_operaciones_y_en_puntos_por_el_dialogo():
+    """Tipo de objeto «Operaciones»: el agujero (por su nombre en el timeline) se repite sobre la placa."""
+    from omnicad.ui.comando import ContextoComando, ErrorComando
+    from omnicad.ui.comandos import comando_para
+    from omnicad.ui.comandos.crear import PatronRectangular
+    from omnicad.ui.comandos.patrones import PatronPuntos
+    doc, punto = _placa_y_agujero()
+    agujero = math.pi * 9 * 10
+    op = _ejecutar(doc, PatronRectangular, objeto="operaciones", pasos="Agujero1",
+                   dir1=[_h(doc, {"tipo": "eje", "id": "X"})], n1=3, d1="20 mm", distribucion="espaciado")
+    assert (op.p["objeto"], op.p["pasos"], op.p["cuerpos"]) == ("operaciones", ["op3"], [])
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    assert g.es_valida(forma) and g.volumen(forma) == pytest.approx(60000 - 3 * agujero, rel=1e-9)
+    editar = ContextoComando(doc, op=op)
+    v = PatronRectangular().desde_op(op, editar)
+    assert v["objeto"] == "operaciones" and v["pasos"] == "Agujero1"
+    assert PatronRectangular().construir(v, editar).p == op.p
+    ctx = ContextoComando(doc)
+    with pytest.raises(ErrorComando, match="no deja una herramienta"):
+        PatronRectangular().construir(dict(v, pasos="Puntos"), ctx)
+    with pytest.raises(ErrorComando, match="No hay un paso"):
+        PatronRectangular().construir(dict(v, pasos="Agujero9"), ctx)
+    # en puntos: los puntos sueltos de otro boceto; la referencia es el punto del agujero
+    b = Boceto()
+    b.agregar_punto(90, 50)
+    b.agregar_punto(90, 10)
+    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
+    doc.agregar(sk)
+    op = _ejecutar(doc, PatronPuntos, objeto="operaciones", pasos="op3",
+                   puntos=[_h(doc, {"tipo": "boceto", "boceto": sk.id})], referencia=[_h(doc, punto)])
+    assert op.p["forma_patron"] == "puntos" and comando_para(op) is PatronPuntos
+    assert g.volumen(doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(60000 - 5 * agujero, rel=1e-9)
+    editar = ContextoComando(doc, op=op)
+    v = PatronPuntos().desde_op(op, editar)
+    assert PatronPuntos().construir(v, editar).p == op.p
+    with pytest.raises(ErrorComando, match="los puntos"):
+        PatronPuntos().construir(dict(v, puntos=[]), ContextoComando(doc))
+
+
+def test_patron_en_ruta_con_giro_y_multitransformar_por_el_dialogo():
+    from omnicad.timeline.ops_solido import OpMultitransformar
+    from omnicad.ui.comando import ContextoComando, ErrorComando
+    from omnicad.ui.comandos import comando_para
+    from omnicad.ui.comandos.crear import PatronRuta
+    from omnicad.ui.comandos.patrones import Multitransformar
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="2", largo="2", alto="20", x="-1", y="-1"))
+    br, ids = _boceto(doc, plano="XY", lineas=[((0, 0), (100, 0))])
+    c = _h(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})
+    op = _ejecutar(doc, PatronRuta, cuerpos=[c], ruta=_curvas(doc, br, ids), n1=3, d1="100 mm", giro="90 deg")
+    assert op.p["giro"] == "90 deg"
+    (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(doc.estado_final.cuerpos[f"{op.id}.c2"].forma)
+    assert (x1 - x0, y1 - y0, z1 - z0) == pytest.approx((2, 20, 2))            # acostada: giró 90° sobre la ruta
+    # multitransformación: patrón de 3 en Y + simetría en YZ = 6 instancias (5 cuerpos nuevos)
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="10"))
+    caja = _h(doc, {"tipo": "cuerpo", "cuerpo": doc.operaciones[-1].id + ".c1"})
+    op = _ejecutar(doc, Multitransformar, cuerpos=[caja], t1_tipo="rectangular",
+                   t1_dir=[_h(doc, {"tipo": "eje", "id": "Y"})], t1_n=3, t1_d="20 mm", t1_distribucion="espaciado",
+                   t2_tipo="simetria", t2_plano=[_h(doc, {"tipo": "plano", "id": "YZ"})])
+    assert [t["tipo"] for t in op.p["transformaciones"]] == ["rectangular", "simetria"]
+    nuevos = [k for k in doc.estado_final.cuerpos if k.startswith(op.id)]
+    assert len(nuevos) == 5 and all(g.volumen(doc.estado_final.cuerpos[k].forma) == pytest.approx(125) for k in nuevos)
+    assert comando_para(op) is Multitransformar
+    editar = ContextoComando(doc, op=op)
+    v = Multitransformar().desde_op(op, editar)
+    assert (v["t1_tipo"], v["t2_tipo"], v["t3_tipo"]) == ("rectangular", "simetria", "ninguna")
+    assert Multitransformar().construir(v, editar).p == op.p
+    with pytest.raises(ErrorComando, match="seleccioná el eje"):
+        Multitransformar().construir(dict(v, t1_tipo="circular", t1_eje=[]), editar)
+    # una multitransformación de la API con una transformación que el diálogo no edita: Aceptar la conserva
+    api_op = OpMultitransformar(doc.nuevo_id(), cuerpos=[caja["ref"]["cuerpo"]], transformaciones=[
+        {"tipo": "puntos", "coordenadas": [[0, 0, 50]]}])
+    assert doc.agregar(api_op).estado == "ok"
+    editar = ContextoComando(doc, op=api_op)
+    v = Multitransformar().desde_op(api_op, editar)
+    assert v["_fijas"] and Multitransformar().construir(v, editar).p == api_op.p
+
+
+def test_panel_de_multitransformar_y_patron_de_operaciones():
+    """El panel real (un visor sin ventana): las ranuras de transformación aparecen de a una, «Tipo de objeto» cambia
+    cuerpos por operaciones y la vista previa arma el paso."""
+    from omnicad.ui.comando import ContextoComando, PanelComando
+    from omnicad.ui.comandos.crear import PatronCircular
+    from omnicad.ui.comandos.patrones import Multitransformar
+    from omnicad.ui.visor3d import Visor3D
+
+    class Ventana:
+        def __init__(self, doc, visor):
+            self.doc, self.visor = doc, visor
+
+        def info_seleccion(self, texto):
+            pass
+
+    doc, _ = _placa_y_agujero()
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_final)
+    ctx = ContextoComando(doc, Ventana(doc, visor))
+    panel = PanelComando(Multitransformar(), ctx, visor)
+    campos = {c.clave: c for c in panel.campos}
+    visibles = lambda: {k for k, c in campos.items() if panel._visible(c)}  # noqa: E731
+    assert {"cuerpos", "t1_tipo", "t1_dir", "t1_n", "t1_d", "t2_tipo"} <= visibles()
+    assert not {"pasos", "t2_plano", "t3_tipo", "fijas"} & visibles()
+    panel.set_valor("t2_tipo", "simetria")
+    panel.set_valor("objeto", "operaciones")
+    assert {"t2_plano", "t3_tipo", "pasos"} <= visibles() and not {"cuerpos", "combinar"} & visibles()
+    panel.cancelar()
+    panel = PanelComando(PatronCircular(), ctx, visor, {"objeto": "operaciones", "pasos": "Agujero1",
+                                                        "eje": [_h(doc, {"tipo": "eje", "id": "Z"})], "n": 4})
+    panel._calcular_previa()
+    assert panel.ultima_op is not None and panel.ultima_op.p["pasos"] == ["op3"]
+    panel.cancelar()
+
+
 def _placa_con_punto(z_plano):
     """Placa 40×40×2 (z 0..2, cuerpo op1.c1) y un boceto con un punto en (20, 20) sobre el plano z = `z_plano`."""
     doc = Documento()
