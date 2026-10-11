@@ -42,8 +42,9 @@ MUESTRAS_EVOLVENTE = 24      # puntos por flanco que interpola la B-spline de la
 DIENTES_MAXIMOS = 1000
 
 # Cadenas de rodillos de ISO 606 (serie europea B y serie americana A = ANSI 40…80): paso p, diámetro del rodillo d1
-# y ancho interior mínimo b1 (mm). Valores de la tabla de la norma tomados de memoria: conviene verificarlos contra
-# la edición vigente antes de fabricar. Para otra cadena: «personalizada» con paso y rodillo propios.
+# y ancho interior mínimo b1 (mm). Verificado el 2026-10-10 contra la tabla de FB Chain (ISO 606:2015 y ASME B29.1,
+# fbchain.com/knowledge-hub/how-to-quickly-and-easily-identify-roller-chain) y la de Cross+Morse: las 10 filas coinciden.
+# Para otra cadena: «personalizada» con paso y rodillo propios.
 CADENAS = {
     "05B": (8.0, 5.0, 3.0), "06B": (9.525, 6.35, 5.72), "08B": (12.7, 8.51, 7.75), "10B": (15.875, 10.16, 9.65),
     "12B": (19.05, 12.07, 11.68), "16B": (25.4, 15.88, 17.02),
