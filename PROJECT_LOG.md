@@ -236,6 +236,14 @@ Cobertura: (a) 86 tipos de operación con parámetros por defecto y con referenc
 - [2026-10-09] `check_interference` reporta contacto cara-con-cara como interferencia (0,004 mm³). · Lámpara en vivo.
 - [2026-10-09] Render: el cilindro chico (Ø28) se ve facetado. · Lámpara en vivo.
 
+**Reporte de otra IA usando el MCP (2026-10-10), evaluado**
+- [2026-10-10] FALSO ALARMA: «no existen `set_material`, `set_appearance`, `list_materials`, `check_geometry`, `multi_transform`, ni `rectangular_pattern` con `features`». Sí existen en `main` (166 herramientas, `docs/agentes/herramientas.md`); el servidor MCP que usó era un proceso o instalador anterior al merge de la nube (`omnicad-mcp.exe` instalado es del 2026-10-10 17:57). Solución: reiniciar el servidor MCP / reinstalar. `list_materials` no es un nombre real: el listado es `define_material` y `get_bill_of_materials`. · Verificado con `api.registro.catalogo()`.
+- [2026-10-10] PENDIENTE (real): `create_box` y los demás `create_*` no aceptan `name` (hay que llamar a `rename` después). Agregar `name` opcional a las primitivas. · Reporte de otra IA; confirmado: `INVALID_ARGUMENTS: Argumentos desconocidos para create_box: name`.
+- [2026-10-10] PENDIENTE (real): `execute_code` en modo en vivo: un bucle de 20 `create_box` pasó los 100 s (`CODE_TIMEOUT`). Medir cuánto cuesta cada llamada en vivo (¿recálculo completo del timeline por paso, repintado del visor?) y acelerar o agrupar. Ya estaba en la lista de la nube («tope de tiempo de `execute_code` en modo en vivo»). · Reporte de otra IA.
+- [2026-10-10] PENDIENTE (sin reproducir): «cut» (extrusión de corte) dejó el volumen sin cambio: «sentido automático mal detectado». Reproducir con la pieza del reporte; probar la dirección automática de `extrude operation=cut` cuando el boceto está por encima o por debajo del cuerpo. · Reporte de otra IA, falta el caso.
+- [2026-10-10] PENDIENTE (mejora): `chamfer` con distancia mayor que la arista vecina devuelve `OPERATION_FAILED` genérico; sumar una pista con la distancia máxima posible. `fillet` con 2 cuerpos pide `body` (`AMBIGUOUS_REFERENCE`): es a propósito, la pista ya lo dice.
+- [2026-10-10] NO ES BUG: JSON `"z": 500 mm` sin comillas (las expresiones van como texto: `"500 mm"`; lo rechaza el cliente MCP antes de OmniCAD) y «la imagen del viewport no se ve desde la terminal» (la imagen llega como contenido de imagen; el cliente no la muestra).
+
 ## Lecciones aprendidas
 - [2026-10-10] Comparar todo surco helicoidal con su volumen exacto: el kernel lo arma o recorta mal sin avisar (Tr20x4 interior de 12 mm dio 3734 mm³ contra 827). · Evidencia: `test_roscas_de_otras_familias_modeladas`, `_exigir_volumen` en `solidos_crear.py`.
 - [2026-10-10] Un parámetro de operación no puede llamarse «clase»: choca con `Comando.crear_op(clase, …)`. · Evidencia: TypeError en `test_agujero_en_cara_y_desde_boceto_roscado`.
