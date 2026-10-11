@@ -444,6 +444,23 @@ def test_proyectar_e_intersecar(app_qt):
     assert len(prims) == 4 and not puntos
 
 
+def test_proyectar_con_tipo_de_linea_construccion(app_qt):
+    """Con «construcción» activa, lo proyectado nace de construcción (sin perfil) y se dibuja como tal;
+    y alternar sobre lo ya proyectado cambia también cómo se ve."""
+    lz = _lienzo(app_qt)
+    lz.construccion = True
+    assert lz.proyectar_forma(g.caja(10, 20, 5, (5, 5, 3)))
+    assert all(c.proyectada and c.construccion for c in lz.b.curvas.values()) and _areas(lz.b) == []
+    c = next(iter(lz.b.curvas.values()))
+    assert lz._color_curva(c, set(), set())[0] != lz._color_curva(
+        type("X", (), {"id": -1, "proyectada": True, "construccion": False, "eje": False,
+                       "puntos": lambda self: []})(), set(), set())[0]
+    lz.construccion = False
+    lz.seleccion = list(lz.b.curvas)
+    lz.alternar_construccion()                     # sobre lo seleccionado: vuelve a normal
+    assert not any(c.construccion for c in lz.b.curvas.values()) and _areas(lz.b) == [pytest.approx(200)]
+
+
 # ---------------------------------------------------------------- serialización y pestaña
 def test_serializacion_de_las_entidades_nuevas_y_proyectos_viejos():
     b = Boceto()

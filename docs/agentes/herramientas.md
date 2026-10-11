@@ -642,6 +642,7 @@ Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: 
   - `mode` ("project" | "intersect"; opcional, por defecto `"project"`): project (proyección ortogonal) o intersect (corte con el plano del boceto).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de edges y faces; vacío = el único cuerpo.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true = la geometría proyectada queda como línea de construcción (no forma perfiles).
 - CLI: `omnicad call project_to_sketch --doc pieza.omnicad`
 
 ### `set_line_type`

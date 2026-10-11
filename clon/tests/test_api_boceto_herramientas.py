@@ -472,6 +472,17 @@ def test_conica_fusion_punto_y_tipo_de_linea(s):
 
 
 # ---------------------------------------------------------------- proyectar el modelo
+def test_proyectar_como_construccion_no_forma_perfiles():
+    """Tipo de línea «construcción» con Proyectar: la geometría proyectada queda de construcción y sin perfiles."""
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=10, height=5)
+    llamar(s, "create_construction_plane", plane="XY", offset=10, name="Arriba")
+    llamar(s, "create_sketch", plane="Arriba", name="P")
+    r = llamar(s, "project_to_sketch", bodies=["Cuerpo1"], construction=True)
+    assert len(r["entities"]) == 4 and areas(s) == []
+    assert all(e["construction"] and e["projected"] for e in por_id(s).values() if e["id"] in [x["id"] for x in r["entities"]])
+
+
 def test_proyectar_e_intersecar():
     s = api.Sesion()
     llamar(s, "create_box", length=20, width=10, height=5)

@@ -1165,9 +1165,10 @@ class Boceto:
             self.agregar_restriccion("tangente", [k, cid])
         return cid
 
-    def agregar_proyeccion(self, primitivas, puntos=()):
+    def agregar_proyeccion(self, primitivas, puntos=(), construccion=False):
         """Agrega geometría proyectada (Proyectar / Intersecar de Fusion): curvas violetas, fijas.
-        Los extremos que coinciden se comparten para que cierren perfiles."""
+        Los extremos que coinciden se comparten para que cierren perfiles. Con `construccion` las curvas quedan
+        como líneas de construcción (no forman perfiles), igual que el tipo de línea de la paleta de Fusion."""
         existentes = [p for p in self.puntos.values() if p.proyectado]
 
         def punto(xy):
@@ -1188,24 +1189,24 @@ class Boceto:
                 if extremos in lineas:        # dos aristas que se proyectan sobre la misma línea: una sola
                     continue
                 lineas.add(extremos)
-                c = Linea(self._nuevo_id(), punto(prim[2]), punto(prim[3]), proyectada=True)
+                c = Linea(self._nuevo_id(), punto(prim[2]), punto(prim[3]), construccion, proyectada=True)
             elif t == "circulo":
-                c = Circulo(self._nuevo_id(), punto(prim[2]), prim[3], proyectada=True)
+                c = Circulo(self._nuevo_id(), punto(prim[2]), prim[3], construccion, proyectada=True)
             elif t == "arco":
                 (cx, cy), r = prim[2], prim[3]
                 c = Arco(self._nuevo_id(), punto((cx, cy)), punto((cx + r * math.cos(prim[4]), cy + r * math.sin(prim[4]))),
-                         punto((cx + r * math.cos(prim[5]), cy + r * math.sin(prim[5]))), proyectada=True)
+                         punto((cx + r * math.cos(prim[5]), cy + r * math.sin(prim[5]))), construccion, proyectada=True)
             elif t in ELIPTICAS:
                 (cx, cy), a, b, ang = prim[2], prim[3], prim[4], prim[5]
                 centro, mayor = punto((cx, cy)), punto((cx + a * math.cos(ang), cy + a * math.sin(ang)))
                 if t == "elipse":
-                    c = Elipse(self._nuevo_id(), centro, mayor, b, proyectada=True)
+                    c = Elipse(self._nuevo_id(), centro, mayor, b, construccion, proyectada=True)
                 else:
                     p0, p1 = evaluar_primitiva(prim, 0.0)[0], evaluar_primitiva(prim, dominio(prim)[1])[0]
-                    c = ArcoElipse(self._nuevo_id(), centro, mayor, b, punto(p0), punto(p1), proyectada=True)
+                    c = ArcoElipse(self._nuevo_id(), centro, mayor, b, punto(p0), punto(p1), construccion, proyectada=True)
             elif t == "spline":
                 polos = [punto(q) for q in prim[2]]
-                c = Spline(self._nuevo_id(), polos, "control", prim[4], False, prim[5], prim[3], proyectada=True)
+                c = Spline(self._nuevo_id(), polos, "control", prim[4], False, prim[5], prim[3], construccion, proyectada=True)
             else:
                 continue
             ids.append(self._agregar_curva(c))

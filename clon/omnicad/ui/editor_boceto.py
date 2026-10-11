@@ -1304,7 +1304,7 @@ class Lienzo(QWidget):
         if not prims and not puntos:
             self.mensaje.emit("Eso no deja nada sobre el plano del boceto.")
             return False
-        return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos))
+        return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos, self.construccion))
 
     def _clic_proyectar(self, pos):
         elegir = getattr(self.visor, "elegir_entidad", None) if self.visor is not None else None
@@ -2944,10 +2944,10 @@ class Lienzo(QWidget):
             return QColor(0, 180, 255), 3.0
         if c.id == self._sobre:
             return QColor(255, 170, 40), 3.0        # lo que se agarraría al hacer clic
+        if c.construccion:                      # tema oscuro de Fusion: gris claro punteado; claro: naranja
+            return (QColor(205, 205, 210) if self._oscuro() else QColor(240, 150, 60)), 1.5   # también la proyectada
         if c.proyectada:
             return VIOLETA, 2.0
-        if c.construccion:                      # tema oscuro de Fusion: gris claro punteado; claro: naranja
-            return (QColor(205, 205, 210) if self._oscuro() else QColor(240, 150, 60)), 1.5
         if set(c.puntos()) <= fijos:
             return QColor(70, 200, 100), 2.0
         if c.id in determinadas:

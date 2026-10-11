@@ -1524,7 +1524,7 @@ def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: f
              modifica=True)
 def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[str] | str | None = None,
                       bodies: list[str] | None = None, mode: Literal["project", "intersect"] = "project",
-                      body: str | None = None, sketch: str | None = None):
+                      body: str | None = None, sketch: str | None = None, construction: bool = False):
     """
     edges: aristas a proyectar: selector ('|Z', '%CIRCLE and >Z') o ids ('Cuerpo1/E3'); vacío = ninguna.
     faces: caras a proyectar (su contorno): selector o ids ('Cuerpo1/F6'); vacío = ninguna.
@@ -1532,6 +1532,7 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     mode: project (proyección ortogonal) o intersect (corte con el plano del boceto).
     body: cuerpo donde se evalúan los selectores de edges y faces; vacío = el único cuerpo.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    construction: true = la geometría proyectada queda como línea de construcción (no forma perfiles).
     """
     from ..nucleo.perfiles import intersecar_forma, proyectar_forma
     op, br = boceto_activo(sesion, sketch)
@@ -1553,7 +1554,7 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     if not prims and not puntos:
         raise error("INVALID_GEOMETRY", "Eso no deja nada sobre el plano del boceto"
                     + (": no corta su plano." if mode == "intersect" else "."))
-    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(prims, puntos), desde_solver=True)
+    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(prims, puntos, construction), desde_solver=True)
     r["mode"] = mode
     return r
 
