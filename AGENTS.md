@@ -122,14 +122,6 @@ modo en vivo y la lista de herramientas). Plan y estado: [docs/plan_mcp_cli.md](
 9. Regenerar la doc: `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
    El archivo es generado: no se edita a mano, y `tests/test_doc_agentes.py` falla si quedó viejo.
 
-## Trabajo en la nube (Claude Code en la web)
-- Rama de la nube: **`nube`**. La nube trabaja ahí y deja un pull request hacia `main`; nunca se empuja a `main` desde la nube.
-- Quien trabaja en la PC sigue en `main`. Para juntar: mergear el PR y, en la PC, `git pull`.
-- Antes de arrancar una sesión en la nube: `git fetch` y llevar `nube` al día con `main` (`git merge main` en `nube`).
-- La nube NO tiene `privado/`, `analisis/`, `evidencias/`, `CLAUDE.local.md` ni `D:\Autodesk`: no puede replicar comandos mirando la ayuda local de Fusion.
-- La prueba de humo abre ventanas OpenGL: en la nube solo `ruff` y `pytest` (sin la humo); la humo la corre quien reciba el PR en la PC.
-- Nunca editar a la vez la misma rama desde la nube y desde la PC.
-
 ## Registrar el trabajo
 En `PROJECT_LOG.md`, al terminar:
 - **Registro** (sección `## Registro`, una viñeta por tarea):
