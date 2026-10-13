@@ -1,6 +1,6 @@
 ---
 name: omnicad
-description: "Diseñar, modelar o modificar piezas 3D con OmniCAD, el CAD paramétrico de este proyecto (bocetos, extruir, empalmes, agujeros, vaciado, parámetros, exportar a STL o STEP), usando su servidor MCP o la CLI omnicad. Usala siempre que el pedido sea crear o cambiar una pieza o un modelo 3D, aunque no diga OmniCAD: 'diseñá un soporte en L', 'modelá una caja con tapa vaciada', 'hacé una brida con agujeros en círculo', 'agregale un empalme de 3 mm', 'exportame esto a STL', 'design a bracket', 'model a 3D part', 'make a CAD model', 'export to STEP'. También cuando pidan mejorar, arreglar o agregar una función al propio programa OmniCAD (código en este repo). NO usarla para Fusion 360 real (otro MCP), Blender o Rhino, editar mallas de IA, imágenes o planos 2D, ni slicers de impresión 3D."
+description: "Diseñar, modelar o modificar piezas 3D con OmniCAD, el CAD paramétrico de este proyecto (bocetos, extruir, empalmes, agujeros, vaciado, parámetros, exportar a STL o STEP), usando su servidor MCP o la CLI omnicad. Usala siempre que el pedido sea crear o cambiar una pieza o un modelo 3D, aunque no diga OmniCAD: 'diseñá un soporte en L', 'modelá una caja con tapa vaciada', 'hacé una brida con agujeros en círculo', 'agregale un empalme de 3 mm', 'exportame esto a STL', 'design a bracket', 'model a 3D part', 'make a CAD model', 'export to STEP'. También cuando pidan mejorar, arreglar o agregar una función al propio programa OmniCAD (código en este repo), o reportar y documentar un bug del programa. NO usarla para Fusion 360 real (otro MCP), Blender o Rhino, editar mallas de IA, imágenes o planos 2D, ni slicers de impresión 3D."
 ---
 
 # OmniCAD: diseñar piezas 3D (y mejorar el programa)
@@ -87,6 +87,43 @@ Decidí por `error_kind`, leé `mensaje` y probá las `pistas`.
 | `CODE_TIMEOUT` | Tu código de `execute_code` pasó su tiempo máximo, timeout (60 s por defecto) y se cortó; el documento no cambió |
 | `APP_BUSY` | (en vivo) el usuario está en un comando: esperá unos segundos y repetí |
 | `APP_NOT_RUNNING` | (en vivo) la app no escucha: abrila con los agentes permitidos o usá `--modo sin_ventana` |
+
+## Si encontrás un bug de OmniCAD: documentalo, no lo arregles
+
+Bug = falla, resultado que no da la cuenta, aviso donde debería haber error, mensaje que engaña o doc que no
+coincide con lo que hace. Una función que falta es una mejora, no un bug: va aparte. Salvo que te lo pidan,
+no toques el código del programa: anotalo con la ficha de abajo y seguí con tu trabajo.
+
+1. **Descartá lo falso**: un servidor viejo no tiene las herramientas nuevas (el MCP en vivo dice su versión
+   con get_mode; `omnicad --version` da la del paquete instalado): mirá `omnicad tools`, no un servidor ya
+   levantado. Verificá los argumentos con `describe_operation` y repetilo con pasos mínimos en un documento nuevo.
+2. **Guardá el caso**: el script o el `.omnicad` (`save_document`) que lo reproduce, para que quien arregle lo
+   corra tal cual. Si el fallo parece del cliente (llamadas duplicadas, argumentos mezclados), anotalo igual
+   y marcalo «origen sin confirmar».
+3. **Dónde anotarlo**:
+   - Con el repo de OmniCAD a mano: `PROJECT_LOG.md`, sección «Bugs pendientes». Una fila en la tabla del
+     área (o una tabla nueva), con el próximo ID libre B-NN, y subí el número de «Bugs conocidos sin
+     corregir» de la tabla Estado.
+   - Sin el repo: un archivo REPORTE_OMNICAD_<tema>.md en la carpeta de trabajo, una ficha por bug con los
+     mismos campos (se pega tal cual en la tabla).
+   - Si el usuario te dio otro destino (una sesión, un issue), mandalo ahí también.
+   - Cerrá con una línea al usuario: cuántos bugs y dónde quedaron.
+4. **Ficha** (que no haga falta preguntarte nada para arreglarlo):
+   - **ID y título**: una línea que diga qué pasa. **Gravedad**: crítico (pierde trabajo o rompe lo
+     paramétrico), alto (resultado malo sin esquive), medio (falla pero hay esquive), bajo (textos, nombres).
+   - **Qué hiciste**: herramienta o comando de CLI con los argumentos EXACTOS, en JSON tal cual los mandaste.
+   - **Esperado y obtenido**: lo que debía pasar (con la cuenta, si es un número) y lo que pasó: `error_kind`
+     y `mensaje` literales, o el valor. Si dio ok pero hizo mal, decí cómo te diste cuenta.
+   - **Reproducir**: pasos mínimos, ruta del script o archivo, y cuántas veces lo viste.
+   - **Entorno**: versión (`omnicad --version`) y modo (en vivo o sin ventana), sistema y cliente (Claude Code,
+     OpenCode, Cline).
+   - **Causa probable**: solo si la leíste en el código, con archivo y línea (`timeline/operaciones.py:224`);
+     si no, «sin analizar». Lo que es hipótesis, dicho como hipótesis.
+   - **Esquive** que usaste. **Estado**: Reproducido, Sin reproducir (falta el caso) u Origen sin confirmar.
+   - **Prueba propuesta** (la que más ayuda): lo que tiene que cumplirse al corregirlo, p. ej. «tras
+     `set_parameter` el volumen del cuerpo coincide con la cuenta».
+5. Una ficha por bug y sin mezclar mejoras. Dos fallas con la misma causa: una sola ficha. Sin rutas ni datos
+   personales del usuario. Al corregirse, el bug pasa al Registro de `PROJECT_LOG.md` y se borra de la lista.
 
 ## Más ayuda (no se copia acá: hay una sola versión)
 

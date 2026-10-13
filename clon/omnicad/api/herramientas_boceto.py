@@ -22,6 +22,7 @@ import math
 from typing import Literal
 
 from ..nucleo import geometria as geo
+from ..nucleo import perfiles as perfiles_mod
 from ..restricciones import Boceto, ErrorBoceto, auto_restringir
 from ..restricciones.boceto import ArcoElipse, Circulo, Elipse, Texto, validar_valor_cota
 from ..timeline.operaciones import OpBoceto, OpPlano
@@ -140,8 +141,25 @@ def boceto_activo(sesion, ref=None):
     return op, br
 
 
+def _letras(br, op, cual):
+    """Perfiles de las letras de los textos del boceto (de todos, o del de id `cual`)."""
+    textos = [c.id for c in br.boceto.curvas.values() if c.tipo == "texto"]
+    if cual:
+        if not cual.isdigit() or int(cual) not in textos:
+            raise error("PROFILE_NOT_FOUND", f"El boceto «{op.nombre}» ({op.id}) no tiene el texto {cual!r}: sus "
+                        f"textos son {textos or 'ninguno'} (ids de get_sketch).")
+        textos = [int(cual)]
+    if not textos:
+        raise error("PROFILE_NOT_FOUND", f"El boceto «{op.nombre}» ({op.id}) no tiene textos.")
+    letras = perfiles_mod.letras_de_texto(br.perfiles, textos)
+    if not letras:
+        raise error("PROFILE_NOT_FOUND", f"Los textos {textos} del boceto «{op.nombre}» no forman perfiles cerrados.")
+    return letras
+
+
 def seleccionar_perfiles(br, op, profile):
-    """Índice, lista de índices, 'all' o 'largest' → lista de perfiles del boceto. Errores PROFILE_*."""
+    """Índice, lista de índices, 'all', 'largest', 'text' (las letras de todos los textos, sin los huecos de la «o»)
+    o 'text:<id>' (las de un texto) → lista de perfiles del boceto. Errores PROFILE_*."""
     perfiles = br.perfiles
     if not perfiles:
         if any(not c.construccion for c in br.boceto.curvas.values()):
@@ -155,11 +173,13 @@ def seleccionar_perfiles(br, op, profile):
             return list(perfiles)
         if clave == "largest":
             return [max(perfiles, key=lambda p: p.area)]
+        if clave == "text" or clave.startswith("text:"):
+            return _letras(br, op, clave[5:].strip())
         if clave.lstrip("-").isdigit():
             profile = int(clave)
         else:
             raise error("PROFILE_NOT_FOUND", f"Selección de perfil desconocida: '{profile}'.",
-                        "Usá un índice, una lista de índices, 'all' o 'largest'.")
+                        "Usá un índice, una lista de índices, 'all', 'largest', 'text' o 'text:<id>'.")
     indices = profile if isinstance(profile, list) else [profile]
     if not indices:
         raise error("PROFILE_NOT_FOUND", "La lista de perfiles está vacía.")
@@ -542,7 +562,15 @@ def _info_curva(b, c):
                  bold=c.negrita, italic=c.cursiva, letter_spacing=_r(c.espaciado), line_spacing=_r(c.interlineado),
                  align={"izq": "left", "centro": "center", "der": "right"}.get(c.alineacion, c.alineacion),
                  anchor={"base": "baseline", "arriba": "top", "medio": "middle", "abajo": "bottom"}.get(
-                     c.ancla_v, c.ancla_v), box_width=_r(c.ancho_caja), flip_h=c.voltear_h, flip_v=c.voltear_v)
+                     c.ancla_v, c.ancla_v), box_width=_r(c.ancho_caja), flip_h=c.voltear_h, flip_v=c.voltear_v,
+                 kerning=c.kerning, skew=_r(c.inclinacion), scale_x=_r(c.escala_h), scale_y=_r(c.escala_v),
+                 baseline_shift=_r(c.desfase_base),
+                 case={"ninguno": "none", "mayusculas": "upper", "minusculas": "lower", "titulo": "title",
+                       "versalitas": "small_caps"}.get(c.capitalizacion, c.capitalizacion),
+                 underline={"ninguno": "none", "simple": "single", "doble": "double"}.get(c.subrayado, c.subrayado),
+                 strikethrough={"ninguno": "none", "simple": "single", "doble": "double"}.get(c.tachado, c.tachado),
+                 decoration_thickness=_r(c.grosor_decoracion), no_wrap=c.sin_division,
+                 kerning_pairs=[[i, _r(x)] for i, x in c.ajustes_kerning])
         if c.camino is not None:
             d.update(path_entity=c.camino, path_side="left" if c.camino_lado == "izq" else "right",
                      path_position=_r(c.camino_pos), path_offset=_r(c.camino_desfase), fit_path=c.camino_ajustar)

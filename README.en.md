@@ -45,7 +45,7 @@ An agent can create parts, measure them, look at a rendered image and export the
 open window.
 
 ```
-omnicad setup --cliente todos            # shows what it would configure in Claude Code and OpenCode
+omnicad setup --cliente todos            # shows what it would configure in Claude Code, OpenCode and Cline CLI
 omnicad setup --cliente todos --aplicar  # does it (backing up each file as .bak)
 ```
 

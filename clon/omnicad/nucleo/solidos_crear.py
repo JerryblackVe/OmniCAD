@@ -17,7 +17,7 @@ import numpy as np
 from OCP.BOPAlgo import BOPAlgo_MakerVolume
 from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepAlgoAPI_Splitter
+from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepAlgoAPI_Splitter
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
                                 BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire,
                                 BRepBuilderAPI_RightCorner, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
@@ -49,7 +49,7 @@ from OCP.OCP.collections import Array1_gp_Pnt2d, HArray1_gp_Pnt, HArray1_gp_Pnt2
 from OCP.ShapeAnalysis import ShapeAnalysis_CanonicalRecognition
 from OCP.ShapeFix import ShapeFix_Face
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID,
+from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID,
                         TopAbs_VERTEX, TopAbs_WIRE)
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
@@ -1171,13 +1171,25 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
 
 
 # ================================================================ 6. repujado
-def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False):
-    """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita (profundidad
-    negativa invierte el efecto, como en Fusion). Devuelve el cuerpo resultante.
+def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False, adaptar=True):
+    """Repujado (Emboss) de Fusion [SLD-EMBOSS] sobre un cuerpo (ver `repujado_en_cuerpos`): `cara_objetivo` es una
+    cara o una LISTA de caras del cuerpo. Devuelve el cuerpo resultante."""
+    return repujado_en_cuerpos([(cuerpo, cara_objetivo)], caras_perfil, profundidad, tipo=tipo, envolver=envolver,
+                               adaptar=adaptar)[0]
 
-    Cara objetivo plana: los perfiles (en un plano paralelo) se proyectan sobre ella y el efecto se limita a la
-    cara. Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el
-    cilindro conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial."""
+
+def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True):
+    """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita (profundidad negativa
+    invierte el efecto, como en Fusion). `objetivos` = [(cuerpo, cara o lista de caras)]; devuelve los cuerpos
+    resultantes en el mismo orden (sin cambios el que no recibe nada).
+
+    Caras planas: el texto se PROYECTA en su lugar sobre las caras elegidas y se REPARTE entre ellas, como en
+    Fusion: cada cara recibe solo la parte que le cae encima (aunque las caras sean de cuerpos distintos o estén a
+    distinta altura); lo que cae fuera de ellas se pierde y una cara tapada por otra elegida más afuera no recibe lo
+    que queda debajo. Si no cae sobre ninguna, error. Perfiles NO paralelos a la cara (p. ej. un costado): con
+    `adaptar` (por defecto) se giran para mirar hacia afuera, se centran en la zona y se achican hasta entrar.
+    Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
+    conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial."""
     if profundidad < 0:
         profundidad, tipo = -profundidad, ("grabado" if tipo == "relieve" else "relieve")
     geo.exigir_longitud(profundidad, "La profundidad del repujado")
@@ -1186,28 +1198,277 @@ def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve"
     perfiles = _caras_de(caras_perfil)
     if not perfiles:
         raise geo.ErrorGeometria("Elegí al menos un perfil para repujar.")
-    cara = TopoDS.Face(cara_objetivo)
-    pl = geo.plano_de_cara(cara)
+    caras = [(i, TopoDS.Face(c)) for i, (_, cs) in enumerate(objetivos) for c in _lista(cs)]
+    if not caras:
+        raise geo.ErrorGeometria("Elegí la cara sobre la que va el repujado.")
     sentido = 1.0 if tipo == "relieve" else -1.0
-    if pl is not None:
-        herr = []
-        for f in perfiles:
-            if abs(abs(float(_normal_superficie(f) @ pl.normal)) - 1) > 1e-6:
-                raise geo.ErrorGeometria("Los perfiles deben estar en un plano paralelo a la cara objetivo.")
-            c = np.array(geo.centro_masa(f, superficie=True))
-            sobre = _trasladar(f, pl.normal * float((pl.origen - c) @ pl.normal))
-            herr.append(_prisma(sobre, pl.normal, sentido * profundidad))
-        herramienta = geo.booleano(_unir(herr), _prisma(cara, pl.normal, sentido * profundidad), "intersecar")
-    elif BRepAdaptor_Surface(cara).GetType() == GeomAbs_Cylinder:
+    herramientas = [[] for _ in objetivos]
+    grupos = []                                       # caras planas con la misma normal: una sola zona
+    for k, (i, cara) in enumerate(caras, 1):
+        pl = geo.plano_de_cara(cara)
+        if pl is not None:
+            grupo = next((g for g in grupos if float(g[0][2].normal @ pl.normal) > 1 - 1e-6), None)
+            if grupo is None:
+                grupos.append([(i, cara, pl)])
+            else:
+                grupo.append((i, cara, pl))
+            continue
+        donde = f" (cara {k})" if len(caras) > 1 else ""
+        if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Cylinder:
+            raise geo.ErrorGeometria("El repujado admite caras planas o cilíndricas (envolviendo)" + donde + ".")
         if not envolver:
-            raise geo.ErrorGeometria("Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True).")
-        herramienta = _envolver_en_cilindro(perfiles, cara, profundidad, tipo)
+            raise geo.ErrorGeometria("Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)"
+                                     + donde + ".")
+        herramientas[i].append(_envolver_en_cilindro(perfiles, cara, profundidad, tipo))
+    for grupo in grupos:
+        for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar):
+            herramientas[i].append(h)
+    herramientas = [[h for h in hs if not geo.esta_vacia(h)] for hs in herramientas]
+    if not any(herramientas):
+        raise geo.ErrorGeometria("Los perfiles no caen sobre las caras elegidas: se proyectan en su lugar, así que "
+                                 "hay que moverlos en el boceto para que queden encima de ellas.")
+    operacion = "unir" if tipo == "relieve" else "cortar"
+    return [_validar(_unificar(_aplicar_a_cuerpo(cuerpo, hs, operacion)), "Repujado") if hs else cuerpo
+            for (cuerpo, _), hs in zip(objetivos, herramientas, strict=True)]
+
+
+def _repujado_en_grupo(perfiles, grupo, prof, adaptar):
+    """[(índice del cuerpo, herramienta)] para un grupo de caras planas paralelas [(índice, cara, plano)]: el texto
+    se ubica una vez para todo el grupo y cada cara recibe lo que le cae encima. Se recorre de la cara más de
+    afuera a la más de adentro: lo que queda debajo de una cara elegida más afuera no se repuja."""
+    pl0 = grupo[0][2]
+    n = np.asarray(pl0.normal, float)
+    sobre = _perfiles_en_zona(perfiles, [c for _, c, _ in grupo], pl0, adaptar)
+    cajas_piezas = [_caja_2d([f], pl0) for f in sobre]
+
+    def altura(pl):
+        return float(np.asarray(pl.origen, float) @ n)
+    orden = sorted(grupo, key=lambda x: -altura(x[2]))
+    cajas = [_caja_2d([c], pl0) for _, c, _ in orden]
+    salida = []
+    for k, (i, cara, pl) in enumerate(orden):
+        dz = altura(pl) - altura(pl0)
+        piezas = [f for f, cj in zip(sobre, cajas_piezas, strict=True) if _cajas_se_tocan(cj, cajas[k])]
+        if not piezas:
+            continue
+        if abs(dz) > 1e-9:
+            piezas = [_trasladar(f, n * dz) for f in piezas]
+        tapan = [j for j in range(k) if altura(orden[j][2]) > altura(pl) + 1e-6 and _cajas_se_tocan(cajas[j], cajas[k])]
+        # lo que cae sobre la cara se recorta en 2D (cara contra cara: ~75 veces más rápido que con sólidos) y
+        # recién después se le da espesor; si una cara de más afuera la tapa, se le resta su sombra
+        limite = cara
+        if tapan:
+            limite = _booleana_caras([cara], [_trasladar(orden[j][1], n * (altura(pl) - altura(orden[j][2])))
+                                              for j in tapan], BRepAlgoAPI_Cut)
+        partes = _booleana_caras(piezas, [limite], BRepAlgoAPI_Common) if limite is not None else None
+        if partes is not None:
+            caras_h = [TopoDS.Face(f) for f in _explorar(partes, TopAbs_FACE)]
+            if caras_h:
+                salida.append((i, geo.compuesto([_prisma(f, n, prof) for f in caras_h])))
+            continue
+        # el kernel no pudo en 2D: el recorte con sólidos (más lento)
+        prismas = [_prisma(f, n, prof) for f in piezas]
+        limite = _prisma(cara, n, prof)
+        if tapan:
+            alto = 2 * abs(prof)
+            sombra = _unir([_prisma(_trasladar(orden[j][1], n * (altura(pl) - altura(orden[j][2]) - alto)), n,
+                                    2 * alto) for j in tapan])
+            limite = geo.booleano(limite, sombra, "cortar")
+        salida.append((i, _comun_rapido(prismas, limite)))
+    return salida
+
+
+def _lista_de_formas(formas):
+    from OCP.collections import List_TopoDS_Shape
+    lista = List_TopoDS_Shape()
+    for f in formas:
+        lista.Append(f)
+    return lista
+
+
+def _booleana_caras(piezas, herramientas, clase):
+    """Booleana 2D entre caras coplanares (`BRepAlgoAPI_Common` o `_Cut`), cada pieza como argumento propio (en un
+    compuesto, las que se tocan salían mal). None si el kernel no la resuelve."""
+    try:
+        op = clase()
+        op.SetArguments(_lista_de_formas(piezas))
+        op.SetTools(_lista_de_formas(herramientas))
+        op.SetRunParallel(True)
+        op.Build()
+        if op.IsDone() and not op.Shape().IsNull():
+            return op.Shape()
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _comun_rapido(piezas, limite):
+    """Parte de `piezas` (sólidos que pueden tocarse, como los perfiles de un boceto) que cae dentro de `limite`,
+    en UNA operación general (cada pieza es un argumento: en un compuesto, las que se tocan salían mal) y sin
+    unificar caras: es lo que más tarda con el texto. Si el kernel no la resuelve, une primero las piezas."""
+    try:
+        op = BRepAlgoAPI_Common()
+        op.SetArguments(_lista_de_formas(piezas))
+        op.SetTools(_lista_de_formas([limite]))
+        op.SetRunParallel(True)                       # OpenCascade reparte el trabajo en varios núcleos
+        op.Build()
+        if op.IsDone() and not op.Shape().IsNull():
+            return op.Shape()
+    except Exception:  # noqa: BLE001
+        pass
+    return geo.booleano(_unir(piezas), limite, "intersecar")
+
+
+def _aplicar_a_cuerpo(cuerpo, herramientas, operacion):
+    """Une o corta al cuerpo todas las herramientas (sólidos que pueden tocarse) en una sola operación general."""
+    solidos = [TopoDS.Solid(x) for h in herramientas for x in _explorar(h, TopAbs_SOLID)]
+    if solidos:
+        try:
+            op = BRepAlgoAPI_Fuse() if operacion == "unir" else BRepAlgoAPI_Cut()
+            op.SetArguments(_lista_de_formas([cuerpo]))
+            op.SetTools(_lista_de_formas(solidos))
+            op.SetRunParallel(True)
+            op.Build()
+            if op.IsDone() and not op.Shape().IsNull():
+                return geo.unificar_caras(op.Shape())
+        except Exception:  # noqa: BLE001
+            pass
+    return geo.booleano(cuerpo, _unir(herramientas), operacion)
+
+
+def _estados_en_cara(formas, cara, maximo=4000):
+    """Estado (adentro, en el borde, afuera) de los vértices de la malla de `formas` (coplanares con la cara) respecto
+    de la cara. Es lo que reemplaza a una booleana para saber si el texto entra: ~13 µs por punto."""
+    pts = np.vstack([np.asarray(geo.teselar(f)[0], float).reshape(-1, 3) for f in formas])
+    if len(pts) > maximo:
+        pts = pts[::len(pts) // maximo + 1]
+    return [BRepClass_FaceClassifier(cara, gp_Pnt(*map(float, p)), 1e-6).State() for p in pts]
+
+
+def _dentro_de_cara(formas, cara):
+    return all(e in (TopAbs_IN, TopAbs_ON) for e in _estados_en_cara(formas, cara))
+
+
+def _matriz_giro(a, b, eje_alterno):
+    """Rotación 4x4 que lleva el vector unitario `a` sobre `b` (`eje_alterno` si son opuestos)."""
+    c = float(a @ b)
+    m = np.identity(4)
+    if c > 1 - 1e-9:
+        return m
+    if c < -1 + 1e-9:
+        eje, ang = np.asarray(eje_alterno, float), math.pi
     else:
-        raise geo.ErrorGeometria("El repujado admite caras planas o cilíndricas (envolviendo).")
-    if geo.esta_vacia(herramienta):
-        raise geo.ErrorGeometria("Los perfiles no caen sobre la cara objetivo.")
-    resultado = geo.booleano(cuerpo, herramienta, "unir" if tipo == "relieve" else "cortar")
-    return _validar(_unificar(resultado), "Repujado")
+        eje, ang = np.cross(a, b), math.acos(c)
+    eje = eje / np.linalg.norm(eje)
+    x, y, z = eje
+    k = np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
+    m[:3, :3] = np.identity(3) + math.sin(ang) * k + (1 - math.cos(ang)) * (k @ k)
+    return m
+
+
+def _puntos_2d(formas, pl):
+    """Vértices de la malla de `formas` en los ejes u, v del plano `pl` (coordenadas absolutas: el punto 3D de (x, y)
+    es `pl.origen + x u + y v`)."""
+    pts = np.vstack([np.asarray(geo.teselar(f)[0], float).reshape(-1, 3) for f in formas])
+    return np.column_stack([pts @ np.asarray(pl.u, float), pts @ np.asarray(pl.v, float)])
+
+
+def _caja_2d(formas, pl):
+    p = _puntos_2d(formas, pl)
+    return p.min(axis=0), p.max(axis=0)
+
+
+def _cajas_se_tocan(a, b, tol=1e-3):         # cajas de la malla (float32): tolerancia en milésimas
+    return bool(np.all(a[0] <= b[1] + tol) and np.all(b[0] <= a[1] + tol))
+
+
+def _zona_convexa(caras, pl):
+    """(A, b, centro) de la envolvente convexa de las caras en u, v: adentro es A x <= b (filas de A unitarias) y
+    `centro` es su centro de áreas. Es la zona donde se ubica el texto que se reparte entre las caras."""
+    from scipy.spatial import ConvexHull
+    pts = _puntos_2d(caras, pl)
+    try:
+        env = ConvexHull(pts)
+        a, b = env.equations[:, :2], -env.equations[:, 2]
+        poli = pts[env.vertices]                      # antihorario
+        x, y = poli[:, 0], poli[:, 1]
+        cruz = x * np.roll(y, -1) - np.roll(x, -1) * y
+        area = cruz.sum() / 2
+        centro = (np.array([((x + np.roll(x, -1)) * cruz).sum(), ((y + np.roll(y, -1)) * cruz).sum()]) / (6 * area)
+                  if abs(area) > 1e-12 else pts.mean(axis=0))
+    except Exception:  # noqa: BLE001 — puntos alineados (cara degenerada): la caja
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        a = np.array([[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]])
+        b = np.array([hi[0], -lo[0], hi[1], -lo[1]])
+        centro = (lo + hi) / 2
+    return a, b, centro
+
+
+def _ubicar_en_zona(rel, a, b, preferido):
+    """(escala, centro) para el texto de puntos `rel` (relativos a su punto de referencia) dentro de la zona A x <= b:
+    la escala es 1 si entra y, si no, el 90 % de la máxima con la que entra (un programa lineal); el centro es el
+    más cercano a `preferido` (se mueve lo menos posible, en línea recta) con un margen chico al borde si cabe."""
+    from scipy.optimize import linprog, minimize
+    soporte = (a @ rel.T).max(axis=1)                 # cuánto se estira el texto hacia cada lado de la zona
+    libre = [(None, None), (None, None)]
+    r = linprog([0, 0, -1], A_ub=np.column_stack([a, soporte]), b_ub=b, bounds=libre + [(0, None)], method="highs")
+    if not r.success or r.x[2] <= 1e-9:
+        return 1.0, np.asarray(preferido, float)
+    s_max = float(r.x[2])
+    escala = 1.0 if s_max >= 1.0 else 0.9 * s_max
+    tam = float(np.ptp(b))                            # ~ tamaño de la zona
+    p = np.asarray(preferido, float)
+    for margen in (0.02 * tam, 0.0):
+        tope = b - escala * soporte - margen          # el centro tiene que cumplir A c <= tope
+        hay = linprog([0, 0], A_ub=a, b_ub=tope, bounds=libre, method="highs")
+        if not hay.success:
+            continue
+        if np.all(a @ p <= tope + 1e-9):
+            return escala, p
+        res = minimize(lambda c: float(((c - p) ** 2).sum()), hay.x, jac=lambda c: 2 * (c - p), method="SLSQP",
+                       constraints=[{"type": "ineq", "fun": lambda c, t=tope: t - a @ c, "jac": lambda c: -a}])
+        ok = res.success and np.all(a @ res.x <= tope + 1e-6)
+        return escala, (res.x if ok else hay.x)
+    return escala, r.x[:2]
+
+
+def _perfiles_en_zona(perfiles, caras, pl, adaptar):
+    """Perfiles apoyados en el plano `pl` del grupo de caras paralelas `caras`. Paralelos al grupo: en su lugar, tal
+    cual (se proyectan: cada cara recibe después lo que le cae encima, como en Fusion). No paralelos: con `adaptar`
+    se giran para mirar hacia afuera, se centran en la zona (envolvente convexa de las caras) y se achican sin
+    deformarse hasta entrar; sin `adaptar`, error."""
+    n = np.asarray(pl.normal, float)
+    origen = np.asarray(pl.origen, float)
+    normales = [_normal_superficie(f) for f in perfiles]
+    if all(abs(abs(float(x @ n)) - 1) < 1e-6 for x in normales):
+        return [_trasladar(f, n * float((origen - np.array(geo.centro_masa(f, superficie=True))) @ n))
+                for f in perfiles]
+    if not adaptar:
+        raise geo.ErrorGeometria("Los perfiles deben estar en un plano paralelo a la cara objetivo.")
+    areas = [geo.area(f) for f in perfiles]           # se gira para mirar hacia afuera (se lee bien desde afuera)
+    c0 = sum(x * np.array(geo.centro_masa(f, superficie=True)) for x, f in zip(areas, perfiles, strict=True)) / sum(areas)
+    m = np.identity(4)
+    m[:3, 3] = c0 - n * float((c0 - origen) @ n)      # el centro, bajado al plano
+    traslado = np.identity(4)
+    traslado[:3, 3] = -c0
+    giro = _matriz_giro(normales[int(np.argmax(areas))], n, pl.v)
+    sobre = [geo.transformar(f, m @ giro @ traslado) for f in perfiles]
+    a, b, centro_zona = _zona_convexa(caras, pl)
+    pts = _puntos_2d(sobre, pl)
+    ref = (pts.min(axis=0) + pts.max(axis=0)) / 2
+    escala, centro = _ubicar_en_zona(pts - ref, a, b, centro_zona)
+    u, v = np.asarray(pl.u, float), np.asarray(pl.v, float)
+    r3, c3 = origen + u * ref[0] + v * ref[1], origen + u * centro[0] + v * centro[1]
+    una = len(caras) == 1
+    for _ in range(30):                               # con una cara no convexa: achica hasta que entre de verdad
+        m = np.identity(4)
+        m[:3, :3] *= escala
+        m[:3, 3] = c3 - escala * r3
+        cand = [geo.transformar(f, m) for f in sobre]
+        if not una or _dentro_de_cara(cand, caras[0]):
+            return cand
+        escala *= 0.9
+    return cand
 
 
 def _normal_orientada(cara, u, v):

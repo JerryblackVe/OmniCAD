@@ -19,7 +19,7 @@ from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..timeline.operaciones import OpCombinar, OpExtrusion, OpPrimitiva, OpRevolucion
-from ..timeline.ops_modificar import OpMover
+from ..timeline.ops_modificar import OpApoyar, OpMover
 from ..timeline.ops_solido import OpBarrido, OpMultitransformar, OpPatron, OpSimetria, OpSolevacion
 from .errores import error
 from .herramientas_boceto import (boceto_activo, nombre_nuevo, referencia_plano, seleccionar_perfiles,
@@ -109,8 +109,9 @@ def _exigir_instancias(total, que):
 
 # ---------------------------------------------------------------- extrusión y revolución
 @herramienta("extrude", "solido",
-             "Extruye perfiles de un boceto. profile: índice, lista de índices, 'all' o 'largest' (el perfil de mayor "
-             "área, p. ej. la placa con sus agujeros). distance acepta un número (mm) o una expresión con parámetros. "
+             "Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor "
+             "área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; "
+             "'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. "
              "El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, "
              "un cut desde un boceto sobre una cara entra al material sin pedirlo (reverse vacío). direction: "
              "one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada "
@@ -122,7 +123,7 @@ def extrude(sesion, sketch: str, profile: Perfiles = 0, distance: Expr = "10 mm"
             target: Cuerpos | None = None, distance2: Expr | None = None, reverse: bool | None = None):
     """
     sketch: id o nombre del boceto.
-    profile: perfil(es): índice (get_sketch los lista), lista de índices, "all" o "largest".
+    profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos) o "text:<id>".
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
     operation: "new_body", "join", "cut" o "intersect".
     direction: "one_side", "two_sides" o "symmetric".
@@ -175,7 +176,7 @@ def revolve(sesion, sketch: str, profile: Perfiles, axis: int | str, angle: Expr
             angle2: Expr | None = None, target: Cuerpos | None = None, reverse: bool = False):
     """
     sketch: id o nombre del boceto.
-    profile: perfil(es): índice, lista de índices, "all" o "largest".
+    profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
     axis: "sketch_x", "sketch_y", "x", "y", "z" o el id de una línea del boceto.
     angle: ángulo de giro: número en grados o expresión, p. ej. "270 deg" o "giro".
     operation: "new_body", "join", "cut" o "intersect".
@@ -211,7 +212,7 @@ def sweep(sesion, sketch: str, profile: Perfiles, path_sketch: str, path_curves:
           taper_angle: Expr = 0, twist_angle: Expr = 0, target: Cuerpos | None = None):
     """
     sketch: id o nombre del boceto con el perfil.
-    profile: perfil(es): índice, lista de índices, "all" o "largest".
+    profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
     path_sketch: id o nombre del boceto con la ruta.
     path_curves: ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
     operation: "new_body", "join", "cut" o "intersect".
@@ -749,6 +750,37 @@ def _menos(expr, valor):
     if abs(valor) < 1e-9:
         return expr.strip()
     return f"({expr.strip()}) - ({round(valor, 6) + 0.0!r} mm)"
+
+
+@herramienta("drop_to_plane", "solido",
+             "Apoya cuerpos en el plano del piso (Z = 0): los baja o sube en Z hasta que lo más bajo toque Z = 0. "
+             "No es 'ground_component' (eso fija una pieza del ensamble). Sin body, apoya todos los cuerpos. El paso "
+             "se recalcula con el modelo. El resultado trae z_min.before y z_min.after.", modifica=True)
+def drop_to_plane(sesion, body: Cuerpos | None = None, keep_relative: bool = True):
+    """
+    body: cuerpo(s) a apoyar (id o nombre); vacío = todos los cuerpos del diseño.
+    keep_relative: true mueve todo junto (conserva las posiciones relativas); false apoya cada cuerpo por su cuenta.
+    """
+    ids = _ids_cuerpos(sesion, body) if body else []
+    doc = sesion.doc
+    estado = doc.estado_final
+    objetivo = ids or list(estado.cuerpos)
+    if not objetivo:
+        raise error("INVALID_ARGUMENTS", "No hay cuerpos para apoyar en el plano.")
+
+    def z_min(cuerpos):
+        zs = [OpApoyar._z_min(c) for c in cuerpos]
+        zs = [z for z in zs if z is not None]
+        return round(min(zs), 6) if zs else None
+    antes = z_min([estado.cuerpos[i] for i in objetivo if i in estado.cuerpos])
+    op = OpApoyar(doc.nuevo_id(), nombre_nuevo(doc, "Apoyar en el plano", OpApoyar), cuerpos=ids,
+                  juntos=bool(keep_relative))
+    foto = _foto(sesion)
+    doc.agregar(op)
+    resultado = _informe(sesion, op, foto)
+    final = sesion.doc.estado_final.cuerpos
+    resultado["z_min"] = {"before": antes, "after": z_min([final[i] for i in objetivo if i in final])}
+    return resultado
 
 
 @herramienta("move_body", "solido",

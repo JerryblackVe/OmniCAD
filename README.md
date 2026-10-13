@@ -23,7 +23,7 @@ Si te ayuda, una donación me ayuda a seguir.
 
 - **Diseño paramétrico:** parámetros con unidades y expresiones (`ancho / 2 + 3 mm`), timeline editable, deshacer y rehacer.
 - **Bocetos 2D con restricciones:** líneas, arcos, círculos, polígonos, splines, cotas y un solver de restricciones.
-- **Texto y vectores:** texto de boceto con todas las fuentes instaladas (TrueType, OpenType, variables), espaciado, interlineado, alineación, caja, parámetros `{ancho}` y **texto sobre una curva**; insertar SVG por capas y colores, vectorizar una imagen, marco para mover, escalar, girar y espejar, unir / restar / intersecar perfiles, desfase y limpieza de geometría importada.
+- **Texto y vectores:** texto de boceto con todas las fuentes instaladas (TrueType, OpenType, variables), espaciado, interlineado, alineación, caja, parámetros `{ancho}`, **texto sobre una curva** y un panel **Carácter** (kerning, inclinación, escala horizontal y vertical, línea base, mayúsculas / versalitas, subrayado y tachado que forman perfiles); el texto se edita con cursor, selección y portapapeles; insertar SVG por capas y colores, vectorizar una imagen, marco para mover, escalar, girar y espejar, unir / restar / intersecar perfiles, desfase y limpieza de geometría importada.
 - **Sólidos:** extrusión, revolución, barrido, solevación, primitivas, empalme, chaflán, vaciado, desmoldeo, agujeros,
   roscas, nervios, patrones, simetría, booleanas, dividir, escalar, mover y más.
 - **Superficies, chapa metálica y mallas:** parches, recortar, coser, engrosar; pestañas, pliegues y desplegado;
@@ -43,7 +43,7 @@ uno lo hace el otro. Un agente puede crear piezas, medirlas, mirar una imagen de
 trabajar **en vivo** sobre la ventana abierta.
 
 ```
-omnicad setup --cliente todos            # muestra qué configuraría en Claude Code y OpenCode
+omnicad setup --cliente todos            # muestra qué configuraría en Claude Code, OpenCode y Cline CLI
 omnicad setup --cliente todos --aplicar  # lo hace (con copia .bak de cada archivo)
 ```
 

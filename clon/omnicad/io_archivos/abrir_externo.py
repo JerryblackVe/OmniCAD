@@ -122,8 +122,6 @@ def _operacion_f3d(ruta, op_id, nombre, avisos):
     except f3d_nativo.ErrorF3D as e:
         raise ErrorAbrir(str(e)) from None
     avisos += extra
-    avisos.append("Abierto sin Fusion: entran los cuerpos (sólidos y superficies) tal como están. El historial, "
-                  "los parámetros y los nombres de los cuerpos no se leen.")
     varios = len(partes) > 1
     cuerpos = [{"id": f"{op_id}.c{k}", "nombre": ruta.stem + (f" ({k})" if varios else ""), "tipo": tipo,
                 "apariencia": None, "brep": intercambio.brep_a_texto(forma)}

@@ -59,6 +59,35 @@ class Perfil:
         return f"área {self.area:.2f} mm², centro ({self.centroide_uv[0]:.1f}; {self.centroide_uv[1]:.1f})"
 
 
+def letras_de_texto(perfiles, ids_texto):
+    """De los perfiles de un boceto, las LETRAS de los textos `ids_texto` (sin los huecos de la «o», la «a»…), como
+    al elegir un texto en Fusion: los perfiles con el borde hecho solo de esos textos que quedan dentro de un número
+    PAR de contornos exteriores de los demás (0 = una letra; 1 = el hueco de una letra; 2 = una isla en un hueco)."""
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.BRepTools import BRepTools
+    from OCP.TopAbs import TopAbs_IN
+    from OCP.gp import gp_Pnt
+    ids = set(ids_texto)
+    del_texto = [p for p in perfiles if p.firma and set(p.firma) <= ids]
+    llenas, cajas, puntos = [], [], []
+    for p in del_texto:
+        llenas.append(BRepBuilderAPI_MakeFace(BRepTools.OuterWire_s(p.cara), True).Face())
+        cajas.append(geo.caja_envolvente(p.cara))
+        tris = np.asarray(geo.teselar(p.cara)[0], float).reshape(-1, 3, 3)
+        areas = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+        puntos.append(tris[int(np.argmax(areas))].mean(axis=0))      # adentro seguro: el centro de un triángulo
+    salida = []
+    tol = 1e-3       # la malla viene en float32: lejos del origen (un plano a z = 177) el punto se corre ~1e-5 mm
+    for i, p in enumerate(del_texto):
+        q = puntos[i]
+        profundidad = sum(1 for j, f in enumerate(llenas) if j != i and cajas[j] is not None
+                          and all(cajas[j][0][k] - tol <= q[k] <= cajas[j][1][k] + tol for k in range(3))
+                          and BRepClass_FaceClassifier(f, gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN)
+        if profundidad % 2 == 0:
+            salida.append(p)
+    return salida
+
+
 def _arista_elipse(plano, c, a, b, ang, t0=None, t1=None):
     xdir = plano.dir_3d(math.cos(ang), math.sin(ang))
     if a < b:      # gp_Elips exige radio mayor >= menor: se gira el marco 90° y se corre el parámetro
@@ -415,7 +444,8 @@ def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=Fa
     izquierda de la línea base (Texto de boceto de Fusion: fuente, altura, negrita, cursiva).
 
     Opciones (ver `fuentes.contornos_texto`): espaciado, interlineado, alineacion, ancla_v, ancho_caja,
-    voltear_h, voltear_v. Usa fontTools; si la fuente no está en el catálogo cae al administrador de
+    voltear_h, voltear_v, kerning, inclinacion, escala_h, escala_v, desfase_base, capitalizacion, subrayado,
+    tachado, grosor_decoracion, sin_division. Usa fontTools; si la fuente no está en el catálogo cae al administrador de
     OpenCascade (que ignora las opciones)."""
     from . import fuentes
     try:

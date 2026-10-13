@@ -757,7 +757,7 @@ def test_editar_un_texto_muestra_sus_opciones_en_la_paleta(app_qt):
     from omnicad.timeline.parametros import TablaParametros
     from omnicad.ui.editor_boceto import Lienzo
     from PySide6.QtWidgets import QFormLayout
-    from omnicad.ui.modo_boceto import PaletaBoceto
+    from omnicad.ui.modo_boceto import PaletaBoceto, PanelCaracter
     b = Boceto()
     tid = b.agregar_texto((0, 0), "HOLA", 10, 0, "Arial", True, False)
     lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
@@ -770,10 +770,333 @@ def test_editar_un_texto_muestra_sus_opciones_en_la_paleta(app_qt):
     lz.editar_texto(tid, lz.rect().center())
     etiquetas = [paleta.form_contexto.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text()
                  for i in range(paleta.form_contexto.rowCount())]
-    assert {"Fuente", "Negrita", "Cursiva", "Alineación"} <= set(etiquetas)
+    assert etiquetas == []                                    # la paleta ya no mezcla opciones de texto
     assert lz.opciones["negrita"] is True                     # parte de lo que ya tiene el texto
+    # la fuente, el estilo y lo demás están en el panel «Carácter», que arranca con lo que ya tiene el texto
+    panel = PanelCaracter()
+    panel.cargar(lz.opciones)
+    assert panel.fuente.currentText() == "Arial" and panel.estilo.currentData() == "negrita"
+    assert panel.alineacion.currentData() == lz.opciones["alineacion"] == "izq"
     lz._cerrar_entrada()
     assert paleta.form_contexto.rowCount() == 0               # «Seleccionar» no tiene opciones propias
+
+
+@hay_arial
+def test_panel_caracter_cambia_las_opciones_y_se_carga_sin_emitir(app_qt):
+    """El panel «Carácter»: cada control emite (clave, valor); `cargar` lo llena sin emitir nada."""
+    from omnicad.ui.modo_boceto import PanelCaracter, familias_filtradas
+    panel = PanelCaracter()
+    cambios = []
+    panel.cambio.connect(lambda k, v: cambios.append((k, v)))
+    panel.cargar({"fuente": "Arial", "negrita": True, "cursiva": True, "kerning": False, "subrayado": "doble",
+                  "tachado": "simple", "grosor_decoracion": 0.4, "desfase_base": 1.5, "inclinacion": 12.0,
+                  "escala_h": 150.0, "escala_v": 80.0, "capitalizacion": "versalitas", "sin_division": True})
+    assert cambios == []
+    assert panel.estilo.currentData() == "negrita_cursiva" and not panel.b_kerning.isChecked()
+    assert panel.subrayado.currentData() == "doble" and panel.tachado.currentData() == "simple"
+    assert panel.grosor.value() == pytest.approx(0.4) and panel.escala_h.value() == pytest.approx(150.0)
+    assert panel.capitalizacion.currentData() == "versalitas" and panel.sin_division.isChecked()
+    panel.escala_v.setValue(120.0)
+    panel.subrayado.setCurrentIndex(panel.subrayado.findData("simple"))
+    panel.estilo.setCurrentIndex(panel.estilo.findData("cursiva"))
+    panel.b_kerning.setChecked(True)
+    assert ("escala_v", 120.0) in cambios and ("subrayado", "simple") in cambios
+    assert ("negrita", False) in cambios and ("cursiva", True) in cambios and ("kerning", True) in cambios
+    # el filtro de familias: «Todo» las trae todas; «Con cursiva» solo las que tienen cursiva real
+    todas = familias_filtradas("todo")
+    assert "Arial" in todas and "Arial" in familias_filtradas("cursiva")
+    assert set(familias_filtradas("variables")) <= set(todas)
+
+
+# ---------------------------------------------------------------- escribir y mover el cursor dentro del texto
+def _lienzo_con_cuadro(texto="", clics=((0.0, 0.0), (80.0, 20.0)), resize=(800, 600)):
+    """Lienzo con la herramienta Texto y el cuadro abierto (con `texto` escrito, o el de relleno si va vacío)."""
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.ajustar_grilla = False
+    lz.resize(*resize)
+    lz.set_herramienta("texto")
+    for xy in clics:
+        lz.clics.append((None, xy))
+        lz._procesar_clics()
+    if texto:
+        lz.entrada.campos[0].setText(texto.replace("\n", "\\n"))
+        lz._previa_texto["reemplazar"] = False
+        lz._previa_texto["ancla"] = None
+        lz._previa_texto["cursor"] = len(texto)
+        lz._actualizar_cursor()
+    return b, lz
+
+
+def _tecla(lz, k, texto="", mod=None):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+    lz.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, k, mod if mod is not None else Qt.NoModifier, texto))
+
+
+def _escribir(lz, cadena):
+    for ch in cadena:
+        _tecla(lz, ord(ch.upper()), ch)
+
+
+@hay_arial
+def test_el_cursor_se_mueve_con_las_flechas_y_se_edita_en_cualquier_parte(app_qt):
+    """Bug: el cursor no se movía y solo se podía agregar o borrar al final. Ahora se edita donde está el cursor."""
+    from PySide6.QtCore import Qt
+    b, lz = _lienzo_con_cuadro()
+    texto = lambda: lz._texto_real()  # noqa: E731
+    _escribir(lz, "HOLA")
+    assert texto() == "HOLA" and lz._previa_texto["cursor"] == 4
+    _tecla(lz, Qt.Key_Left)
+    _tecla(lz, Qt.Key_Left)
+    _tecla(lz, ord("X"), "X")                                  # en el medio, no al final
+    assert texto() == "HOXLA" and lz._previa_texto["cursor"] == 3
+    _tecla(lz, Qt.Key_Home)
+    _tecla(lz, ord("1"), "1")
+    assert texto() == "1HOXLA" and lz._previa_texto["cursor"] == 1
+    _tecla(lz, Qt.Key_Delete)                                  # borra la letra de la derecha
+    assert texto() == "1OXLA"
+    _tecla(lz, Qt.Key_Backspace)                               # y la de la izquierda
+    assert texto() == "OXLA" and lz._previa_texto["cursor"] == 0
+    _tecla(lz, Qt.Key_Backspace)                               # al principio no hace nada
+    assert texto() == "OXLA"
+    _tecla(lz, Qt.Key_End)
+    _tecla(lz, Qt.Key_Left, mod=Qt.ShiftModifier)              # selecciona lo de la izquierda
+    _tecla(lz, Qt.Key_Left, mod=Qt.ShiftModifier)
+    assert lz._seleccion_texto() == (2, 4) and len(lz._sel_texto) == 1
+    _tecla(lz, ord("Z"), "Z")                                  # escribir reemplaza la selección
+    assert texto() == "OXZ" and lz._seleccion_texto() is None
+    _tecla(lz, Qt.Key_Left, mod=Qt.ControlModifier)            # Ctrl+← salta la palabra
+    assert lz._previa_texto["cursor"] == 0
+    _tecla(lz, Qt.Key_A, "a", Qt.ControlModifier)              # Ctrl+A
+    assert lz._seleccion_texto() == (0, 3)
+    _tecla(lz, Qt.Key_Backspace)
+    assert texto() == ""
+    _tecla(lz, Qt.Key_Z, "z", Qt.ControlModifier)              # Ctrl+Z vuelve atrás
+    assert texto() == "OXZ"
+    assert lz._caret is not None                               # el cursor se dibuja donde está
+
+
+@hay_arial
+def test_el_cursor_sube_y_baja_entre_lineas_y_acepta_el_texto_editado(app_qt):
+    from PySide6.QtCore import Qt
+    b, lz = _lienzo_con_cuadro("AAAA\nBBBB\nCC")
+    d = lz._previa_texto
+    assert d["cursor"] == 12
+    _tecla(lz, Qt.Key_Up)                                      # de la 3.ª línea a la 2.ª, misma columna (≈ al final de CC)
+    assert 5 <= d["cursor"] <= 9
+    _tecla(lz, Qt.Key_Home)
+    assert d["cursor"] == 5                                    # principio de la línea 2
+    _tecla(lz, Qt.Key_End)
+    assert d["cursor"] == 9                                    # final de la línea 2 (antes del salto)
+    _tecla(lz, Qt.Key_Up)
+    _tecla(lz, Qt.Key_Up)                                      # ya en la primera línea: va al principio
+    assert d["cursor"] == 0
+    _tecla(lz, Qt.Key_Down)
+    assert 5 <= d["cursor"] <= 9
+    _tecla(lz, Qt.Key_Return)                                  # Enter parte la línea en el cursor
+    assert lz._texto_real().count("\n") == 3
+    _tecla(lz, Qt.Key_Return, mod=Qt.ControlModifier)          # Ctrl+Enter acepta
+    t = next(c for c in b.curvas.values() if c.tipo == "texto")
+    assert t.texto.count("\n") == 3 and t.texto.replace("\n", "") == "AAAABBBBCC"
+
+
+@hay_arial
+def test_clic_arrastre_y_doble_clic_mueven_el_cursor_y_seleccionan(app_qt):
+    """Con el ratón: clic = cursor ahí, arrastrar = selección, doble clic = palabra; clic afuera = aceptar."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    b, lz = _lienzo_con_cuadro("HOLA MUNDO", clics=((-30.0, 0.0), (60.0, 20.0)))
+    lz.show()
+    d = lz._previa_texto
+    paradas = d["mapa"]["paradas"]
+
+    def ev(tipo, xy, boton=Qt.LeftButton, botones=Qt.LeftButton):
+        pos = QPointF(lz.a_px(*xy))
+        return QMouseEvent(tipo, pos, pos, boton, botones, Qt.NoModifier)
+
+    def centro(i):
+        a, c = paradas[i]
+        return ((a[0] + c[0]) / 2, (a[1] + c[1]) / 2)
+    # clic justo en el borde de la 4.ª letra («A»): el cursor queda en la posición 3
+    lz.mousePressEvent(ev(QEvent.Type.MouseButtonPress, centro(3)))
+    lz.mouseReleaseEvent(ev(QEvent.Type.MouseButtonRelease, centro(3), botones=Qt.NoButton))
+    assert d["cursor"] == 3 and d["ancla"] is None and lz.entrada is not None
+    # arrastrar de la posición 1 a la 4 selecciona 1..4
+    lz.mousePressEvent(ev(QEvent.Type.MouseButtonPress, centro(1)))
+    lz.mouseMoveEvent(ev(QEvent.Type.MouseMove, centro(4), boton=Qt.NoButton))
+    lz.mouseReleaseEvent(ev(QEvent.Type.MouseButtonRelease, centro(4), botones=Qt.NoButton))
+    assert lz._seleccion_texto() == (1, 4)
+    # doble clic dentro de «MUNDO» elige la palabra entera
+    lz.mouseDoubleClickEvent(ev(QEvent.Type.MouseButtonDblClick, centro(7)))
+    assert lz._seleccion_texto() == (5, 10)
+    # clic bien lejos del texto: lo acepta
+    lz.mousePressEvent(ev(QEvent.Type.MouseButtonPress, (-30.0, 150.0)))
+    assert lz.entrada is None
+    assert any(c.tipo == "texto" and c.texto == "HOLA MUNDO" for c in b.curvas.values())
+
+
+@hay_arial
+def test_editar_un_texto_existente_pone_el_cursor_donde_se_hizo_doble_clic(app_qt):
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b = Boceto()
+    tid = b.agregar_texto((0, 0), "ABCDEF", 10, 0, "Arial")
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.ajustar_grilla = False
+    lz.resize(800, 600)
+    lz._camara()
+    # el borde entre la 3.ª y la 4.ª letra
+    prim = b.primitivas(tid)
+    xs = sorted({round(q[0], 3) for p in prim for q in ([p[2], p[3]] if p[0] == "linea" else p[2])})
+    lz.editar_texto(tid, lz.a_px(xs[0], 5.0))                  # a la izquierda de todo: cursor al principio
+    assert lz._previa_texto["cursor"] == 0
+    lz._cerrar_entrada()
+    lz.editar_texto(tid, lz.a_px(xs[-1] + 1.0, 5.0))           # a la derecha de todo: cursor al final
+    assert lz._previa_texto["cursor"] == 6
+    # y se escribe ahí
+    _tecla(lz, 0x20, " ")
+    assert lz._texto_real() == "ABCDEF "
+
+
+@hay_arial
+def test_el_cursor_sigue_al_texto_girado_y_con_inclinacion(app_qt):
+    """El cursor es un segmento sobre la letra, girado con el texto e inclinado con el sesgo."""
+    from omnicad.restricciones.boceto import Texto, paradas_cursor
+    t = Texto(1, (0.0, 0.0), "HOLA", "Arial", 10.0, 0.0)
+    recto = paradas_cursor(t, (0.0, 0.0))
+    assert len(recto["paradas"]) == 5 and recto["lineas"] == [(0, 4)]
+    (ax, ay), (bx, by) = recto["paradas"][0]
+    assert ax == pytest.approx(bx) and by > ay                 # vertical y de abajo hacia arriba
+    t.angulo = 90.0
+    (ax, ay), (bx, by) = paradas_cursor(t, (0.0, 0.0))["paradas"][0]
+    assert ay == pytest.approx(by) and bx < ax                 # girado 90°: horizontal, hacia la izquierda
+    t.angulo, t.inclinacion = 0.0, 30.0
+    (ax, ay), (bx, by) = paradas_cursor(t, (0.0, 0.0))["paradas"][0]
+    assert bx - ax == pytest.approx((by - ay) * math.tan(math.radians(30)), rel=1e-6)
+    # texto en curva: un segmento por posición, pegado a la curva
+    t2 = Texto(2, (0.0, 0.0), "HOLA", "Arial", 10.0, 0.0, camino=3)
+    info = paradas_cursor(t2, (0, 0), ("linea", 3, (0.0, 0.0), (100.0, 0.0)))
+    assert len(info["paradas"]) == 5 and info["linea_de"] == [0] * 5
+    xs = [seg[0][0] for seg in info["paradas"]]
+    assert xs == sorted(xs) and xs[-1] - xs[0] > 10
+
+
+# ---------------------------------------------------------------- opciones del panel «Carácter» (núcleo)
+@hay_arial
+def test_kerning_inclinacion_y_escalas_del_texto():
+    base = caja(fuentes.contornos_texto("AVAVA", "Arial", 10))
+    sin = caja(fuentes.contornos_texto("AVAVA", "Arial", 10, kerning=False))
+    assert sin[2] - sin[0] > (base[2] - base[0]) + 0.5          # sin kerning, «AV» queda más ancho
+    h = caja(fuentes.contornos_texto("HHH", "Arial", 10))
+    inclinado = caja(fuentes.contornos_texto("HHH", "Arial", 10, inclinacion=20))
+    assert inclinado[2] - inclinado[0] == pytest.approx((h[2] - h[0]) + (h[3] - h[1]) * math.tan(math.radians(20)),
+                                                        abs=0.05)
+    assert inclinado[1] == pytest.approx(h[1], abs=1e-6) and inclinado[3] == pytest.approx(h[3], abs=1e-6)
+    ancho = caja(fuentes.contornos_texto("HHH", "Arial", 10, escala_h=200))
+    assert ancho[2] - ancho[0] == pytest.approx(2 * (h[2] - h[0]), rel=0.01) and ancho[3] == pytest.approx(h[3])
+    bajo = caja(fuentes.contornos_texto("HHH", "Arial", 10, escala_v=50))
+    assert bajo[3] - bajo[1] == pytest.approx((h[3] - h[1]) / 2, rel=0.01) and bajo[2] == pytest.approx(h[2])
+    sube = caja(fuentes.contornos_texto("HHH", "Arial", 10, desfase_base=3.0))
+    assert sube[1] == pytest.approx(h[1] + 3.0) and sube[2] == pytest.approx(h[2])
+
+
+@hay_arial
+def test_capitalizacion_del_texto():
+    mayus = fuentes.contornos_texto("hola mundo", "Arial", 10, capitalizacion="mayusculas")
+    assert caja(mayus) == pytest.approx(caja(fuentes.contornos_texto("HOLA MUNDO", "Arial", 10)))
+    minus = fuentes.contornos_texto("HOLA", "Arial", 10, capitalizacion="minusculas")
+    assert caja(minus) == pytest.approx(caja(fuentes.contornos_texto("hola", "Arial", 10)))
+    titulo = fuentes.contornos_texto("hola MUNDO", "Arial", 10, capitalizacion="titulo")
+    assert caja(titulo) == pytest.approx(caja(fuentes.contornos_texto("Hola Mundo", "Arial", 10)))
+    # versalitas: la «h» y la «a» salen como mayúsculas más chicas que la «H» de adelante
+    versa = caja(fuentes.contornos_texto("Hh", "Arial", 10, capitalizacion="versalitas"))
+    grande = caja(fuentes.contornos_texto("HH", "Arial", 10))
+    assert versa[3] == pytest.approx(grande[3]) and versa[2] < grande[2] - 0.5
+    with pytest.raises(fuentes.ErrorFuente):
+        fuentes.contornos_texto("a", "Arial", 10, capitalizacion="raro")
+
+
+@hay_arial
+def test_subrayado_y_tachado_son_barras_cerradas_que_forman_perfiles():
+    base = fuentes.contornos_texto("HI", "Arial", 10)
+    sub = fuentes.contornos_texto("HI", "Arial", 10, subrayado="simple", grosor_decoracion=0.8)
+    assert len(sub) == len(base) + 4                           # un rectángulo cerrado por línea
+    barra = sub[len(base):]
+    assert all(p[0] == "linea" for p in barra)
+    ys = sorted({round(q[1], 6) for p in barra for q in (p[2], p[3])})
+    assert len(ys) == 2 and ys[1] - ys[0] == pytest.approx(0.8) and ys[1] < 0      # debajo de la línea base
+    assert caja(barra)[0] == 0.0 and caja(barra)[2] >= caja(base)[2]               # de lado a lado del texto
+    assert len(fuentes.contornos_texto("HI", "Arial", 10, subrayado="doble", tachado="doble")) == len(base) + 16
+    tach = caja(fuentes.contornos_texto("HI", "Arial", 10, tachado="simple")[len(base):])
+    assert 1.5 < (tach[1] + tach[3]) / 2 < 4.5                 # a media altura de la letra
+    dos = fuentes.contornos_texto("HI\nHI", "Arial", 10, subrayado="simple")
+    assert len(dos) == len(fuentes.contornos_texto("HI\nHI", "Arial", 10)) + 8        # una barra por línea
+    with pytest.raises(fuentes.ErrorFuente):
+        fuentes.contornos_texto("a", "Arial", 10, subrayado="triple")
+
+
+@hay_arial
+def test_sin_division_y_mapa_de_posiciones():
+    largo = "uno dos tres cuatro cinco seis"
+    partido = caja(fuentes.contornos_texto(largo, "Arial", 10, ancho_caja=40))
+    entero = caja(fuentes.contornos_texto(largo, "Arial", 10, ancho_caja=40, sin_division=True))
+    assert partido[1] < entero[1] - 10 and entero[2] > 40      # sin división no parte la línea
+    m = fuentes.mapa_texto("ab\ncde", "Arial", 10)
+    assert len(m["paradas"]) == 7 and m["lineas"] == [(0, 2), (3, 6)] and m["linea_de"] == [0, 0, 0, 1, 1, 1, 1]
+    xs = [p[0] for p in m["paradas"][:3]]
+    assert xs[0] == 0.0 and xs == sorted(xs)
+    assert m["paradas"][3][0] == 0.0 and m["paradas"][3][1] < m["paradas"][0][1]       # 2.ª línea, más abajo
+    # con caja que parte líneas, cada posición cae en la línea donde se ve
+    m = fuentes.mapa_texto(largo, "Arial", 10, ancho_caja=40)
+    assert len(m["lineas"]) > 1 and m["linea_de"][len(largo)] == len(m["lineas"]) - 1
+    assert m["paradas"][len(largo)][1] < m["paradas"][0][1]
+    assert fuentes.mapa_texto("", "Arial", 10)["paradas"] == [(0.0, 0.0)]
+
+
+@hay_arial
+def test_opciones_de_caracter_por_api_se_guardan_y_cargan(s):
+    r = ok(api.llamar(s, "add_text", {"text": "Hola", "height": 8, "kerning": False, "skew": 10, "scale_x": 120,
+                                      "scale_y": 90, "baseline_shift": 2, "case": "upper", "underline": "double",
+                                      "strikethrough": "single", "decoration_thickness": 0.5, "no_wrap": True,
+                                      "box_width": 50}))
+    tid = r["entities"][0]["id"]
+    t = next(c for c in ok(api.llamar(s, "get_sketch", {}))["entities"] if c["id"] == tid)
+    assert (t["kerning"], t["skew"], t["scale_x"], t["scale_y"], t["baseline_shift"]) == (False, 10, 120, 90, 2)
+    assert (t["case"], t["underline"], t["strikethrough"], t["decoration_thickness"], t["no_wrap"]) == \
+        ("upper", "double", "single", 0.5, True)
+    assert r["profiles"] > 4                                   # letras y barras
+    ok(api.llamar(s, "edit_text", {"entity": tid, "underline": "none", "case": "none", "skew": 0}))
+    t = next(c for c in ok(api.llamar(s, "get_sketch", {}))["entities"] if c["id"] == tid)
+    assert t["underline"] == "none" and t["case"] == "none" and t["skew"] == 0 and t["strikethrough"] == "single"
+    # los valores por defecto no ensucian el archivo
+    from omnicad.restricciones import Boceto
+    b = Boceto()
+    b.agregar_texto((0, 0), "A", altura=5)
+    d = b.a_dict()["curvas"][0]
+    assert not {"kerning", "inclinacion", "escala_h", "escala_v", "subrayado", "tachado", "capitalizacion"} & set(d)
+    b.agregar_texto((0, 10), "B", altura=5, subrayado="simple", escala_h=150.0)
+    b2 = Boceto.desde_dict(b.a_dict())
+    a, c = list(b2.curvas.values())
+    assert (a.subrayado, c.subrayado, c.escala_h) == ("ninguno", "simple", 150.0)
+
+
+@hay_arial
+def test_opciones_de_caracter_por_api_validan(s):
+    for mal, kind in (({"case": "raro"}, "INVALID_ARGUMENTS"), ({"underline": "triple"}, "INVALID_ARGUMENTS"),
+                      ({"scale_x": 0}, "INVALID_GEOMETRY"), ({"skew": 90}, "INVALID_GEOMETRY"),
+                      ({"decoration_thickness": -1}, "INVALID_GEOMETRY"), ({"scale_y": float("nan")},
+                                                                           "INVALID_ARGUMENTS")):
+        falla(api.llamar(s, "add_text", {"text": "A"} | mal), kind)
+    circulo = ok(api.llamar(s, "draw_circle", {"radius": 20}))["entities"][0]["id"]
+    r = api.llamar(s, "add_text", {"text": "Curva", "path_entity": circulo, "underline": "single"})
+    assert r["ok"] and any("curva" in a for a in r["avisos"])
 
 
 # ---------------------------------------------------------------- bocetos grandes (fase 7)
@@ -1015,3 +1338,226 @@ def test_dibujar_muchas_curvas_usa_cache(app_qt):
     t = time.time()
     lz.grab()
     assert time.time() - t < 1.0                                      # sin caché tardaba ~0,3 s cada 1000 splines
+
+
+# ---------------------------------------------------------------- interletraje, kerning de pares e interlineado
+@hay_arial
+def test_kerning_a_mano_entre_dos_letras_y_por_api(s):
+    base = caja(fuentes.contornos_texto("HHH", "Arial", 10))
+    uno = caja(fuentes.contornos_texto("HHH", "Arial", 10, ajustes_kerning=[(1, 2.0)]))   # entre la 1.ª y la 2.ª
+    assert uno[2] - uno[0] == pytest.approx(base[2] - base[0] + 2.0, abs=0.01)
+    assert caja(fuentes.contornos_texto("HHH", "Arial", 10, ajustes_kerning=[(2, -1.0)]))[2] == \
+        pytest.approx(base[2] - 1.0, abs=0.01)
+    m0, m1 = fuentes.mapa_texto("HHH", "Arial", 10), fuentes.mapa_texto("HHH", "Arial", 10, ajustes_kerning=[(1, 2.0)])
+    assert m1["paradas"][0] == m0["paradas"][0]
+    assert m1["paradas"][1][0] == pytest.approx(m0["paradas"][1][0] + 2.0)       # lo anterior no se mueve
+    with pytest.raises(fuentes.ErrorFuente):
+        fuentes.contornos_texto("HHH", "Arial", 10, ajustes_kerning=[(-1, 1.0)])
+    r = ok(api.llamar(s, "add_text", {"text": "HHH", "height": 10, "kerning_pairs": [[1, 2.0]]}))
+    tid = r["entities"][0]["id"]
+    t = next(c for c in ok(api.llamar(s, "get_sketch", {}))["entities"] if c["id"] == tid)
+    assert t["kerning_pairs"] == [[1, 2.0]]
+    ok(api.llamar(s, "edit_text", {"entity": tid, "kerning_pairs": []}))
+    t = next(c for c in ok(api.llamar(s, "get_sketch", {}))["entities"] if c["id"] == tid)
+    assert t["kerning_pairs"] == []
+    r = api.llamar(s, "add_text", {"text": "A", "kerning_pairs": [[-3, 1]]})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+
+
+@hay_arial
+def test_panel_y_barra_comparten_tamano_interletraje_interlineado_y_kerning_del_cursor(app_qt):
+    from PySide6.QtCore import Qt
+    from omnicad.ui.modo_boceto import PanelCaracter
+    b, lz = _lienzo_con_cuadro("HHH")
+    panel = PanelCaracter()
+    lz.texto_valores.connect(panel.mostrar_valores)
+    lz.refrescar_previa_texto()
+    assert panel.interletraje.value() == 0.0 and panel.interlineado.value() == 1.0 and panel.par.isEnabled()
+    # panel → barra del texto
+    lz.aplicar_opcion_texto("espaciado", 1.5)
+    lz.aplicar_opcion_texto("interlineado", 2.0)
+    assert lz.entrada.campos[3].text() == "1.5" and lz.entrada.campos[4].text() == "2"
+    assert panel.interletraje.value() == pytest.approx(1.5) and panel.interlineado.value() == pytest.approx(2.0)
+    # barra → panel
+    lz.entrada.campos[1].setText("12")
+    assert panel.altura.value() == pytest.approx(12.0) and lz.opciones["altura_texto"] == 5.0   # cuadro dibujado: no pisa el tamaño base
+    # kerning de un par: entre las letras que rodean al cursor (posición 2)
+    _tecla(lz, Qt.Key_Left)                                        # cursor en 2
+    lz.ajustar_kerning_par(0.8)
+    assert lz.opciones["ajustes_kerning"] == [[2, 0.8]] and panel.par.value() == pytest.approx(0.8)
+    _tecla(lz, Qt.Key_Right, mod=Qt.AltModifier)                   # Alt+→ suma un paso
+    assert lz.opciones["ajustes_kerning"][0][1] > 0.8
+    _tecla(lz, Qt.Key_Home)
+    assert panel.par.value() == 0.0                                # en otro lugar, sin ajuste
+    # escribir antes de la letra ajustada la corre junto con ella
+    _tecla(lz, ord("X"), "X")
+    assert lz.opciones["ajustes_kerning"][0][0] == 3
+    lz.entrada.aceptado.emit(["XHHH", "12", "0", "1.5", "2"])
+    t = next(c for c in b.curvas.values() if c.tipo == "texto")
+    assert t.espaciado == 1.5 and t.interlineado == 2.0 and t.altura == 12.0 and t.ajustes_kerning[0][0] == 3
+    assert lz.opciones["ajustes_kerning"] == []                    # el kerning a mano es de ese texto
+
+
+def test_panel_caracter_se_agranda_arrastrando_la_esquina_y_los_controles_lo_siguen(app_qt):
+    from omnicad.ui.modo_boceto import PanelCaracter
+    panel = PanelCaracter()
+    panel.show()
+    ancho0, alto0 = panel.width(), panel.height()
+    panel.set_tamano_usuario(ancho0 + 150, alto0 + 80)
+    assert panel.width() == ancho0 + 150 and panel.height() == alto0 + 80
+    assert panel.fuente.width() > 150 and panel.interletraje.width() > 150     # los campos se estiran con el panel
+    panel.set_tamano_usuario(50, 0)                                            # no baja de lo que hace falta
+    assert panel.width() >= panel.cuerpo.minimumWidth() and panel.height() < alto0 + 80
+    panel.close()                      # una ventana suelta se queda con el ratón de los tests siguientes
+    panel.deleteLater()
+
+
+@hay_arial
+def test_repujar_texto_en_dos_caras_a_la_vez_trae_todas_las_letras_y_no_lo_copia(s):
+    """Las piezas del texto se tocan entre sí (letra y contraforma): no se pueden pasar como un compuesto a la
+    booleana (salían la mitad). El texto se proyecta en su lugar: cae entero sobre la primera cara y la otra no
+    recibe una copia."""
+    ok(api.llamar(s, "create_box", {"length": 60, "width": 10, "height": 90}))
+    ok(api.llamar(s, "create_box", {"length": 60, "width": 10, "height": 90, "x": 100}))
+    ok(api.llamar(s, "create_sketch", {"plane": "XZ", "name": "T"}))
+    # las cajas van de x -30 a 30 y de 70 a 130 (z de 0 a 90): el texto (40 x 65 mm) cae entero sobre la primera
+    ok(api.llamar(s, "add_text", {"text": "Hola\nsoy\nvale", "height": 20, "font": "Arial", "x": -25, "y": 70,
+                                  "sketch": "T"}))
+    sk = ok(api.llamar(s, "get_sketch", {"sketch": "T"}))
+    texto = sum(p["area"] for p in sk["profiles"])
+    v0 = sum(b["volume"] for b in ok(api.llamar(s, "get_scene_info", {}))["bodies"])
+    ok(api.llamar(s, "run_operation", {"type": "repujado", "params": {
+        "perfiles": [{"sketch": "T", "profile": "all"}], "profundidad": "1 mm",
+        "caras": [{"body": "Cuerpo1", "faces": ">Y"}, {"body": "Cuerpo2", "faces": ">Y"}]}}))
+    cuerpos = {b["name"]: b["volume"] for b in ok(api.llamar(s, "get_scene_info", {}))["bodies"]}
+    assert sum(cuerpos.values()) - v0 == pytest.approx(texto, rel=0.01)    # todas las letras (1 mm), una sola vez
+    assert cuerpos["Cuerpo2"] == pytest.approx(60 * 10 * 90)              # el otro cuerpo no recibe copia
+
+
+# ---------------------------------------------------------------- elegir el texto entero (letras sin sus huecos)
+def _boceto_hola(s):
+    """Boceto «Boceto1» (el de la fixture) con el texto «Hola»: 6 perfiles, 4 letras y los huecos de la o y la a."""
+    ok(api.llamar(s, "add_text", {"text": "Hola", "height": 20, "font": "Arial"}))
+    sk = ok(api.llamar(s, "get_sketch", {"sketch": "Boceto1"}))
+    texto = next(e["id"] for e in sk["entities"] if e["type"] == "text")
+    return sk, texto
+
+
+@hay_arial
+def test_letras_de_texto_deja_afuera_los_huecos(s):
+    from omnicad.nucleo.perfiles import letras_de_texto
+    sk, texto = _boceto_hola(s)
+    br = s.doc.estado_final.bocetos[s.paso("Boceto1").id]
+    assert len(br.perfiles) == 6
+    letras = letras_de_texto(br.perfiles, [texto])
+    assert len(letras) == 4                                          # H, o, l, a (sin los dos huecos)
+    huecos = [p for p in br.perfiles if p not in letras]
+    assert all(h.area < min(p.area for p in letras if p.area > 30) for h in huecos)
+
+
+@hay_arial
+def test_extrude_profile_text_elige_las_letras_sin_rellenar_los_huecos(s):
+    _sk, texto = _boceto_hola(s)
+    br = s.doc.estado_final.bocetos[s.paso("Boceto1").id]
+    from omnicad.nucleo.perfiles import letras_de_texto
+    area = sum(p.area for p in letras_de_texto(br.perfiles, [texto]))
+    r = ok(api.llamar(s, "extrude", {"sketch": "Boceto1", "profile": "text", "distance": 2}))
+    vol = sum(b["volume"] for b in ok(api.llamar(s, "get_scene_info", {}))["bodies"])
+    assert vol == pytest.approx(2 * area, rel=1e-3) and r
+    assert vol < 2 * sum(p.area for p in br.perfiles) - 1          # con «all» se rellenaban la o y la a
+    ok(api.llamar(s, "undo"))
+    ok(api.llamar(s, "extrude", {"sketch": "Boceto1", "profile": f"text:{texto}", "distance": 2}))
+    r = api.llamar(s, "extrude", {"sketch": "Boceto1", "profile": "text:999", "distance": 2})
+    assert not r["ok"] and r["error_kind"] == "PROFILE_NOT_FOUND"
+
+
+@hay_arial
+def test_clic_en_una_letra_elige_y_quita_el_texto_entero(app_qt, s):
+    from omnicad.timeline.operaciones import OpExtrusion
+    from omnicad.ui.comando import ContextoComando, PanelComando, hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.visor3d import Visor3D
+    _sk, _texto = _boceto_hola(s)
+    # un cuerpo DEBAJO del texto (el abanico): el clic en el hueco de la «o» no tiene que elegir su cara
+    caja = ok(api.llamar(s, "create_box", {"length": 200, "width": 200, "height": 3}))
+    ok(api.llamar(s, "move_body", {"body": caja["bodies_created"][0]["id"], "translate": [0, 0, -20]}))
+    estado = s.doc.estado_final
+    bid = s.paso("Boceto1").id
+    visor = Visor3D()
+    visor.resize(800, 600)
+    visor.set_modelo(estado)
+    panel = PanelComando(CATALOGO["extruir"](), ContextoComando(s.doc, None), visor, {})
+    campo = next(c for c in panel.campos if c.clave == "perfiles")
+    panel.show()
+    panel._activar(campo)
+    assert visor.texto_entero
+    perfiles = estado.bocetos[bid].perfiles
+    letra = max(perfiles, key=lambda p: p.area)                       # la H
+    hit = hit_desde_ref({"tipo": "perfil", "boceto": bid, **OpExtrusion.referencia_perfil(letra)}, estado)
+    panel._elegida(hit)
+    assert len(panel.valores["perfiles"]) == 4                        # las 4 letras, sin los huecos
+    panel._elegida(hit)                                               # otro clic en una letra: sale el texto
+    assert panel.valores["perfiles"] == []
+    hueco = min(perfiles, key=lambda p: p.area)                       # el hueco de una letra no se elige nunca
+    hit_hueco = hit_desde_ref({"tipo": "perfil", "boceto": bid, **OpExtrusion.referencia_perfil(hueco)}, estado)
+    assert visor.es_hueco_texto(hit_hueco) and not visor.es_hueco_texto(hit)
+    panel._elegida(hit_hueco)
+    assert panel.valores["perfiles"] == []
+    # y el visor no lo da al hacer clic: en su lugar sale lo de atrás (acá nada)
+    import numpy as np
+    from PySide6.QtCore import QPointF
+
+    from omnicad.nucleo import geometria as geo
+    visor.vista("arriba")
+    visor.encuadrar()
+    px = visor.puntos_pantalla(np.array([geo.centro_masa(hueco.cara, superficie=True)], float))[0][0]
+    # ni el hueco ni la cara de atrás (Extruir y Repujado aceptan caras planas como perfil)
+    assert visor.elegir_entidad(QPointF(float(px[0]), float(px[1])), {"perfil", "cara_plana"}) is None
+    assert visor.elegir_entidad(QPointF(float(px[0]), float(px[1])), {"cara"}) is not None    # sin perfiles, sí
+    letra_px = visor.puntos_pantalla(np.array([geo.centro_masa(letra.cara, superficie=True)], float))[0][0]
+    assert visor.elegir_entidad(QPointF(float(letra_px[0]), float(letra_px[1])), {"perfil"}) is not None
+    panel.cancelar()
+    # también en el Repujado
+    panel = PanelComando(CATALOGO["repujado"](), ContextoComando(s.doc, None), visor, {})
+    panel.show()
+    panel._activar(next(c for c in panel.campos if c.clave == "perfiles"))
+    panel._elegida(hit)
+    assert len(panel.valores["perfiles"]) == 4
+    panel.cancelar()
+    visor.deleteLater()
+
+
+@hay_arial
+def test_al_editar_un_repujado_se_sacan_los_huecos_que_tenia_elegidos(app_qt, s):
+    """Un repujado guardado con el hueco de la «o» elegido (antes se podía): al editarlo, el hueco sale solo."""
+    from omnicad.timeline.operaciones import OpExtrusion
+    from omnicad.ui.comando import ContextoComando, PanelComando, hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.visor3d import Visor3D
+    _boceto_hola(s)
+    estado = s.doc.estado_final
+    bid = s.paso("Boceto1").id
+    todos = [hit_desde_ref({"tipo": "perfil", "boceto": bid, **OpExtrusion.referencia_perfil(p)}, estado)
+             for p in estado.bocetos[bid].perfiles]
+    visor = Visor3D()
+    visor.resize(400, 300)
+    visor.set_modelo(estado)
+    panel = PanelComando(CATALOGO["extruir"](), ContextoComando(s.doc, None), visor, {"perfiles": todos})
+    assert len(panel.valores["perfiles"]) == 4                        # de 6: quedan las letras
+    panel.cancelar()
+    visor.deleteLater()
+
+
+@hay_arial
+def test_huecos_de_un_texto_en_un_plano_lejos_del_origen():
+    """Bug: en un plano de construcción a z = 177,77 todos los perfiles salían «letra» (la malla en float32 corría el
+    punto de prueba fuera de la caja del anillo) y el hueco de la «o» entraba al repujado."""
+    from omnicad.nucleo.perfiles import letras_de_texto
+    s = api.Sesion()
+    ok(api.llamar(s, "create_construction_plane", {"plane": "XY", "offset": 177.77, "name": "Alto"}))
+    ok(api.llamar(s, "create_sketch", {"plane": "Alto", "name": "T"}))
+    ok(api.llamar(s, "add_text", {"text": "hola\nhola", "height": 30, "font": "Arial", "sketch": "T"}))
+    br = s.doc.estado_final.bocetos[s.paso("T").id]
+    textos = [c.id for c in br.boceto.curvas.values() if c.tipo == "texto"]
+    assert len(br.perfiles) == 12
+    assert len(letras_de_texto(br.perfiles, textos)) == 8                # h, o, l, a dos veces; sin los 4 huecos

@@ -244,7 +244,7 @@ Algunos clientes no soportan resources ni prompts. Para ellos `get_guide` devuel
 
   No repite la guía: enlaza a `get_guide` y a `docs/agentes/guia_diseno.md`, así no hay dos versiones que se contradigan.
 
-  El comando `omnicad setup` hace la instalación: registra el MCP y copia la skill en Claude Code y en OpenCode.
+  El comando `omnicad setup` hace la instalación: registra el MCP y copia la skill en Claude Code, en OpenCode y en Cline CLI.
 - **Listo cuando:**
   - en una sesión nueva de Claude Code, el pedido "diseñá un soporte en L" activa la skill sola;
   - OpenCode también la ve, o queda anotado que no la soporta.

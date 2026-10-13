@@ -40,12 +40,15 @@ def _direccion(params, estado, defecto=(0.0, 0.0, 1.0)):
     return -d if params.get("invertir") else d
 
 
-def _con_cache(clave, funcion):
+def _con_cache(clave, funcion, forma):
+    """Memoriza `funcion()` bajo `clave`. La clave usa `id(forma)`: la entrada guarda la forma misma para que Python
+    no pueda reciclar ese id en otra forma mientras la entrada viva (si no, un cuerpo nuevo heredaba los colores
+    de uno ya descartado)."""
     if clave not in _cache:
         if len(_cache) > 200:
             _cache.clear()
-        _cache[clave] = funcion()
-    return _cache[clave]
+        _cache[clave] = (forma, funcion())
+    return _cache[clave][1]
 
 
 def calcular(tipo, params, estado):
@@ -68,7 +71,7 @@ def calcular(tipo, params, estado):
         salida["cortes"].append((plano.normal, plano.origen))
         for cid, forma in cuerpos.items():
             datos = _con_cache(("seccion", id(forma), tuple(plano.origen), tuple(plano.normal)),
-                               lambda f=forma: an.seccion(f, plano))
+                               lambda f=forma: an.seccion(f, plano), forma)
             tris = np.asarray(datos["triangulos"], np.float32).reshape(-1, 3)
             if len(tris):
                 salida["capas"].append(("tris", tris, (0.85, 0.30, 0.25), 0.85))
@@ -80,21 +83,21 @@ def calcular(tipo, params, estado):
             d = _direccion(params, estado)
             a0, a1 = float(params.get("angulo_min", 0.0)), float(params.get("angulo_max", 3.0))
             v, n, c = _con_cache(("desmoldeo", id(forma), tuple(d), a0, a1),
-                                 lambda f=forma, d=d, a0=a0, a1=a1: an.colores_desmoldeo(f, d, a0, a1))
+                                 lambda f=forma, d=d, a0=a0, a1=a1: an.colores_desmoldeo(f, d, a0, a1), forma)
         elif tipo == "curvatura":
             t = params.get("tipo_curvatura", "gaussiana")
-            v, n, c = _con_cache(("curvatura", id(forma), t), lambda f=forma, t=t: an.colores_curvatura(f, tipo=t))
+            v, n, c = _con_cache(("curvatura", id(forma), t), lambda f=forma, t=t: an.colores_curvatura(f, tipo=t), forma)
         elif tipo == "accesibilidad":
             d = _direccion(params, estado)
             v, n, c = _con_cache(("accesibilidad", id(forma), tuple(d)),
-                                 lambda f=forma, d=d: an.colores_accesibilidad(f, d))
+                                 lambda f=forma, d=d: an.colores_accesibilidad(f, d), forma)
         elif tipo == "radio_minimo":
             r = float(params.get("radio", 3.0))
-            v, n, c = _con_cache(("radio_minimo", id(forma), r), lambda f=forma, r=r: an.colores_radio_minimo(f, r))
+            v, n, c = _con_cache(("radio_minimo", id(forma), r), lambda f=forma, r=r: an.colores_radio_minimo(f, r), forma)
         elif tipo == "isocurva":
             datos = _con_cache(("isocurva", id(forma), int(params.get("densidad", 10))),
                                lambda f=forma: an.isocurvas(f, n_u=int(params.get("densidad", 10)),
-                                                            n_v=int(params.get("densidad", 10))))
+                                                            n_v=int(params.get("densidad", 10))), forma)
             from .visor3d import _segmentos
             salida["capas"].append(("lineas", _segmentos(datos["u"]), (0.85, 0.25, 0.25), 1.2))
             salida["capas"].append(("lineas", _segmentos(datos["v"]), (0.25, 0.45, 0.90), 1.2))

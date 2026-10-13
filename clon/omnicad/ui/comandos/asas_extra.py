@@ -248,7 +248,8 @@ def _asas_nervio(self, ctx, v):
 def _asas_repujado(self, ctx, v):
     mp = _mp()
     base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
-    cara = _forma_de(ctx, v["cara"][0]) if v.get("cara") else None
+    caras = v.get("caras") or v.get("cara")
+    cara = _forma_de(ctx, caras[0]) if caras else None
     if base is None or cara is None:
         return []
     punto, n = mp.punto_normal_cara(cara)

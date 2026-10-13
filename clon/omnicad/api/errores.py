@@ -100,7 +100,7 @@ PISTAS = {
                      "coordenadas; 'id' es opcional y sirve para citarla en constraints y dimensions.",
                      "Citas: 'id', 'id.start', 'id.end', 'id.center' o, en un rectángulo, 'id.bottom/right/top/left'."],
     "PROFILE_NOT_FOUND": ["get_sketch lista los perfiles con su índice, área y centroide.",
-                          "profile acepta un índice, una lista de índices, 'all' o 'largest'."],
+                          "profile acepta un índice, una lista de índices, 'all', 'largest', 'text' o 'text:<id>'."],
     "PROFILE_NOT_CLOSED": ["El boceto no tiene regiones cerradas: los extremos de las curvas tienen que coincidir.",
                            "Las líneas de construcción no forman perfiles."],
     "NO_TARGET_BODY": ["join, cut e intersect actúan sobre un cuerpo existente: creá uno antes o usá operation=new_body.",

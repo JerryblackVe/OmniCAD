@@ -388,6 +388,7 @@ class AreaVisor(QWidget):
         self.barra = None
         self.capa = None
         self.paleta = None
+        self.caracter = None              # panel «Carácter» del texto del boceto (a la izquierda de la paleta)
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
         self.extras = []                  # visores de las vistas múltiples
         self.multiples = False
@@ -419,8 +420,8 @@ class AreaVisor(QWidget):
             panel.setParent(self)
         self.reubicar()
 
-    def set_capa_boceto(self, capa, paleta):
-        self.capa, self.paleta = capa, paleta
+    def set_capa_boceto(self, capa, paleta, caracter=None):
+        self.capa, self.paleta, self.caracter = capa, paleta, caracter
         self.reubicar()
 
     def mostrar_aviso(self, texto):
@@ -484,6 +485,10 @@ class AreaVisor(QWidget):
             self.paleta.ajustar()
             self.paleta.move(g.right() - self.paleta.width() - 10, y)
             self.paleta.raise_()
+            if self.caracter is not None and self.caracter.isVisible():
+                self.caracter.ajustar()
+                self.caracter.move(max(g.left() + 4, self.paleta.x() - self.caracter.width() - 8), y)
+                self.caracter.raise_()
         if self.barra is not None:
             self.barra.adjustSize()
             self.barra.move((w - self.barra.width()) // 2, h - self.barra.height() - 8)

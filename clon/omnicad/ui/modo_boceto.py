@@ -10,9 +10,10 @@ Modo boceto dentro de la vista 3D (como el entorno de boceto de Fusion 360):
 Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del timeline.
 """
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QFont, QKeySequence
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout,
-                               QMessageBox, QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QCompleter, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
+                               QHBoxLayout, QLabel, QLayout, QMessageBox, QPushButton, QSpinBox, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from ..nucleo.perfiles import detectar
@@ -91,11 +92,11 @@ OPCIONES_HERRAMIENTA = {
     "patron_rectangular": [("patron_distancia", "Distancia", [("extension", "Extensión"), ("espaciado", "Espaciado")])],
     "proyectar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
     "intersecar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
-    "texto": [("alineacion", "Alineación", [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]),
-              ("ancla_v", "Punto de anclaje", [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"),
-                                               ("abajo", "Abajo")]),
-              ("camino_lado", "Lado en curva", [("izq", "Izquierda de la curva"), ("der", "Derecha (al revés)")])],
 }
+# Opciones del texto: viven en el panel «Carácter» (PanelCaracter), no en la paleta de boceto
+ALINEACIONES_TEXTO = [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]
+ANCLAJES_TEXTO = [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"), ("abajo", "Abajo")]
+LADOS_TEXTO = [("izq", "Izquierda de la curva"), ("der", "Derecha (al revés)")]
 _FUENTES = []
 
 
@@ -256,22 +257,11 @@ class PaletaBoceto(QFrame):
             combo.setCurrentIndex(max(0, combo.findData(opciones.get(clave))))
             combo.currentIndexChanged.connect(lambda _i, cb=combo, k=clave: self.ajuste.emit(k, cb.currentData()))
             self.form_contexto.addRow(etiqueta, combo)
-        if h == "texto":
-            fuente = QComboBox()
-            nombres = _fuentes()
-            fuente.addItems(nombres)
-            for i, nombre in enumerate(nombres):      # cada nombre se ve con su propia tipografía
-                fuente.setItemData(i, QFont(nombre), Qt.FontRole)
-            fuente.setCurrentIndex(max(0, fuente.findText(opciones.get("fuente", "Arial"))))
-            fuente.currentTextChanged.connect(lambda t: self.ajuste.emit("fuente", t))
-            self.form_contexto.addRow("Fuente", fuente)
-        if h in ("texto", "mover"):
-            for clave, texto in ((("negrita", "Negrita"), ("cursiva", "Cursiva")) if h == "texto"
-                                 else (("copiar", "Copiar"),)):
-                ch = QCheckBox()
-                ch.setChecked(bool(opciones.get(clave)))
-                ch.toggled.connect(lambda valor, k=clave: self.ajuste.emit(k, valor))
-                self.form_contexto.addRow(texto, ch)
+        if h == "mover":
+            ch = QCheckBox()
+            ch.setChecked(bool(opciones.get("copiar")))
+            ch.toggled.connect(lambda valor: self.ajuste.emit("copiar", valor))
+            self.form_contexto.addRow("Copiar", ch)
         self.contexto.setVisible(self.form_contexto.rowCount() > 0)
         self.ajustar()
 
@@ -290,6 +280,371 @@ class PaletaBoceto(QFrame):
         self.ajustar()
 
 
+FILTROS_FUENTE = [("todo", "Todo"), ("variables", "Variables"), ("negrita", "Con negrita"),
+                  ("cursiva", "Con cursiva")]
+ESTILOS_TEXTO = [("regular", "Regular"), ("negrita", "Negrita"), ("cursiva", "Cursiva"),
+                 ("negrita_cursiva", "Negrita cursiva")]
+_ESTILO_BC = {"regular": (False, False), "negrita": (True, False), "cursiva": (False, True),
+              "negrita_cursiva": (True, True)}
+DECORACIONES_TEXTO = [("ninguno", "Ninguno"), ("simple", "Simple"), ("doble", "Doble")]
+CAPITALIZACIONES_TEXTO = [("ninguno", "Ninguno"), ("mayusculas", "MAYÚSCULAS"), ("minusculas", "minúsculas"),
+                          ("titulo", "Título"), ("versalitas", "Versalitas")]
+
+
+def familias_filtradas(filtro):
+    """Nombres de familia que muestra la lista de fuentes según el filtro (todo, variables, negrita, cursiva)."""
+    nombres = _fuentes()
+    if filtro == "todo":
+        return nombres
+    try:
+        from ..nucleo import fuentes as catalogo
+        registros = catalogo.catalogo()
+    except Exception:  # noqa: BLE001 — sin catálogo no se puede filtrar: queda la lista completa
+        return nombres
+    buenas = {r["familia"] for r in registros
+              if (filtro == "variables" and "wght" in r["ejes"]) or (filtro == "negrita" and r["peso"] >= 600)
+              or (filtro == "cursiva" and r["cursiva"])}
+    return [n for n in nombres if n in buenas]
+
+
+class _AgarreTamano(QWidget):
+    """Esquina inferior izquierda de un panel flotante: arrastrarla lo agranda (a la izquierda y hacia abajo, porque
+    el panel está pegado a la paleta por la derecha)."""
+
+    def __init__(self, panel):
+        super().__init__(panel)
+        self.panel = panel
+        self.setFixedSize(16, 16)
+        self.setCursor(Qt.SizeBDiagCursor)
+        self.setToolTip("Arrastrá para agrandar o achicar el panel")
+        self._inicio = None
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setPen(QPen(QColor(150, 150, 160), 1))
+        for k in (5, 9, 13):
+            p.drawLine(0, 16 - k, k, 16)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._inicio = (e.globalPosition().toPoint(), self.panel.width(), self.panel.height())
+
+    def mouseMoveEvent(self, e):
+        if self._inicio is not None:
+            g0, w0, h0 = self._inicio
+            d = e.globalPosition().toPoint() - g0
+            self.panel.set_tamano_usuario(w0 - d.x(), h0 + d.y())
+
+    def mouseReleaseEvent(self, _e):
+        self._inicio = None
+
+
+class PanelCaracter(QFrame):
+    """Panel «Carácter» del texto del boceto, ordenado de lo más usado a lo avanzado: Fuente (familia con filtro y
+    búsqueda, estilo, tamaño y kerning de la fuente), Espaciado (interletraje, kerning de un par e interlineado),
+    Alineación y curva, y plegadas Decoraciones, Transformaciones y Avanzado. No guarda estado: `cargar` lo llena con
+    las opciones del Lienzo y cada cambio sale por `cambio(clave, valor)`. Con un texto abierto, el Lienzo le avisa
+    sus valores (`mostrar_valores`): tamaño, interletraje e interlineado son los mismos de la barra del texto."""
+    cambio = Signal(str, object)
+    ANCHO = 300                  # ancho mínimo; se puede agrandar arrastrando la esquina inferior izquierda
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("paleta_boceto")
+        self._tam_usuario = [0, 0]
+        v = QVBoxLayout(self)
+        v.setContentsMargins(8, 4, 8, 8)
+        v.setSpacing(4)
+        cab = QHBoxLayout()
+        self.b_plegar = QToolButton(text="–")
+        self.b_plegar.clicked.connect(self._plegar)
+        cab.addWidget(self.b_plegar)
+        titulo = QLabel("CARÁCTER")
+        titulo.setStyleSheet("font-size: 8pt; letter-spacing: 0.3px;")
+        cab.addWidget(titulo)
+        cab.addStretch(1)
+        v.addLayout(cab)
+        self.cuerpo = QWidget()
+        self.cuerpo.setMinimumWidth(self.ANCHO)
+        c = QVBoxLayout(self.cuerpo)
+        c.setContentsMargins(0, 0, 0, 0)
+        c.setSpacing(6)
+        # ---- Fuente: familia (filtro + búsqueda), estilo, tamaño y kerning de la fuente
+        fila = QHBoxLayout()
+        self.filtro = QComboBox()
+        for clave, texto in FILTROS_FUENTE:
+            self.filtro.addItem(texto, clave)
+        self.filtro.setFixedWidth(88)
+        self.filtro.setToolTip("<b>Filtro de fuentes</b><br>Limita las fuentes de la lista: todas, variables "
+                               "(peso ajustable), con negrita real o con cursiva real.")
+        self.filtro.currentIndexChanged.connect(lambda _i: self._poblar_fuentes(self.fuente.currentText()))
+        self.fuente = QComboBox()
+        self.fuente.setEditable(True)
+        self.fuente.setInsertPolicy(QComboBox.NoInsert)
+        self.fuente.setToolTip("<b>Familia tipográfica</b><br>Elegí la fuente de la lista o escribí parte del "
+                               "nombre para buscarla. Cada nombre se ve con su propia tipografía.")
+        self.fuente.currentIndexChanged.connect(self._fuente_elegida)
+        fila.addWidget(self.filtro)
+        fila.addWidget(self.fuente, 1)
+        c.addLayout(fila)
+        fila = QHBoxLayout()
+        self.estilo = QComboBox()
+        for clave, texto in ESTILOS_TEXTO:
+            self.estilo.addItem(texto, clave)
+        self.estilo.setToolTip("<b>Variante</b><br>Regular, negrita, cursiva o negrita cursiva (el peso y la "
+                               "cursiva más cercanos que tenga la familia).")
+        self.estilo.currentIndexChanged.connect(self._estilo_elegido)
+        self.altura = self._spin("altura_texto", 0.1, 10000.0, 0.5, " mm", "<b>Tamaño</b><br>Altura de la letra "
+                                 "en mm (la misma que «Altura» de la barra del texto).")
+        self.altura.setFixedWidth(96)
+        self.b_kerning = QToolButton(text="V/A")
+        self.b_kerning.setCheckable(True)
+        self.b_kerning.setToolTip("<b>Kerning de la fuente</b><br>Usa los pares de letras que trae la fuente "
+                                  "(AV, To…). Apagado, todas las letras van con su avance normal.")
+        self.b_kerning.toggled.connect(lambda x: self.cambio.emit("kerning", bool(x)))
+        fila.addWidget(self.estilo, 1)
+        fila.addWidget(self.altura)
+        fila.addWidget(self.b_kerning)
+        c.addLayout(fila)
+        # ---- Espaciado
+        self._seccion(c, "Espaciado", True)
+        self.interletraje = self._spin("espaciado", -1000.0, 1000.0, 0.1, " mm", "<b>Interletraje (tracking)</b><br>"
+                                       "Suma o resta distancia entre TODAS las letras (mm). Negativo las junta.")
+        self.par = self._spin("kerning_par", -1000.0, 1000.0, 0.05, " mm", "<b>Kerning de un par</b><br>Ajusta la "
+                              "distancia entre las dos letras que rodean al cursor (mm). Con el texto abierto, "
+                              "Alt+← / Alt+→ lo ajustan sin salir del teclado.")
+        self.par.setEnabled(False)
+        self.interlineado = self._spin("interlineado", 0.1, 20.0, 0.05, " ×", "<b>Interlineado (leading)</b><br>"
+                                       "Distancia vertical entre líneas, como factor del salto de la fuente "
+                                       "(1 = el de la fuente).")
+        f = QFormLayout()
+        f.setContentsMargins(10, 0, 0, 0)
+        f.addRow("Interletraje", self.interletraje)
+        f.addRow("Kerning (par)", self.par)
+        f.addRow("Interlineado", self.interlineado)
+        self._cuerpo_de["Espaciado"].setLayout(f)
+        # ---- Alineación y curva
+        self._seccion(c, "Alineación y curva", True)
+        self.alineacion = self._combo(ALINEACIONES_TEXTO, "alineacion", "<b>Alineación</b><br>De cada línea dentro "
+                                      "de la caja (en curva: qué parte del texto cae en su posición).")
+        self.ancla_v = self._combo(ANCLAJES_TEXTO, "ancla_v", "<b>Punto de anclaje</b><br>Qué parte del bloque "
+                                   "de texto cae sobre el punto donde se hizo clic.")
+        self.camino_lado = self._combo(LADOS_TEXTO, "camino_lado", "<b>Lado en curva</b><br>De qué lado de la "
+                                       "curva van las letras (solo para texto sobre una curva).")
+        f = QFormLayout()
+        f.setContentsMargins(10, 0, 0, 0)
+        f.addRow("Alineación", self.alineacion)
+        f.addRow("Anclaje", self.ancla_v)
+        f.addRow("Lado en curva", self.camino_lado)
+        self._cuerpo_de["Alineación y curva"].setLayout(f)
+        # ---- Decoraciones
+        self._seccion(c, "Decoraciones", False)
+        self.subrayado = self._combo(DECORACIONES_TEXTO, "subrayado", "<b>Subrayado</b><br>Barra bajo cada línea; "
+                                     "forma perfiles que se pueden extruir con las letras.")
+        self.tachado = self._combo(DECORACIONES_TEXTO, "tachado", "<b>Tachado</b><br>Barra a media altura de cada "
+                                   "línea; forma perfiles que se pueden extruir.")
+        self.grosor = self._spin("grosor_decoracion", 0.0, 1000.0, 0.1, " mm", "<b>Grosor</b><br>Grosor de las "
+                                 "barras del subrayado y el tachado. «Auto» usa el que trae la fuente.")
+        self.grosor.setSpecialValueText("Auto")
+        f = QFormLayout()
+        f.setContentsMargins(10, 0, 0, 0)
+        f.addRow("Subrayado", self.subrayado)
+        f.addRow("Tachado", self.tachado)
+        f.addRow("Grosor", self.grosor)
+        self._cuerpo_de["Decoraciones"].setLayout(f)
+        # ---- Transformaciones
+        self._seccion(c, "Transformaciones", False)
+        self.base = self._spin("desfase_base", -100000.0, 100000.0, 0.5, " mm", "<b>Línea base</b><br>Sube (+) o "
+                               "baja (−) todo el texto respecto de su ancla.")
+        self.inclinacion = self._spin("inclinacion", -80.0, 80.0, 1.0, " °", "<b>Inclinación</b><br>Sesga las "
+                                      "letras, como una cursiva falsa (no usa la cursiva de la fuente).")
+        self.escala_h = self._spin("escala_h", 1.0, 1000.0, 5.0, " %", "<b>Ancho</b><br>Escala horizontal de las "
+                                   "letras en % del normal.")
+        self.escala_v = self._spin("escala_v", 1.0, 1000.0, 5.0, " %", "<b>Alto</b><br>Escala vertical de las "
+                                   "letras en % del normal.")
+        self.proporcional = QCheckBox("Mantener proporciones (ancho = alto)")
+        self.proporcional.setToolTip("Si está activo, cambiar el ancho cambia también el alto, y al revés.")
+        self.escala_h.valueChanged.connect(lambda x: self._proporcion(self.escala_v, x))
+        self.escala_v.valueChanged.connect(lambda x: self._proporcion(self.escala_h, x))
+        self.capitalizacion = self._combo(CAPITALIZACIONES_TEXTO, "capitalizacion", "<b>Mayúsculas y minúsculas"
+                                          "</b><br>Cambia cómo se escribe el texto sin tocar lo escrito: "
+                                          "MAYÚSCULAS, minúsculas, Título o Versalitas.")
+        f = QFormLayout()
+        f.setContentsMargins(10, 0, 0, 0)
+        f.addRow("Línea base", self.base)
+        f.addRow("Inclinación", self.inclinacion)
+        f.addRow("Ancho", self.escala_h)
+        f.addRow("Alto", self.escala_v)
+        f.addRow("", self.proporcional)
+        f.addRow("Mayúsculas", self.capitalizacion)
+        self._cuerpo_de["Transformaciones"].setLayout(f)
+        # ---- Avanzado
+        self._seccion(c, "Avanzado", False)
+        self.sin_division = QCheckBox("Sin división")
+        self.sin_division.setToolTip("<b>Sin división</b><br>Aunque el texto tenga una caja con ancho, no parte las "
+                                     "líneas en palabras.")
+        self.sin_division.toggled.connect(lambda x: self.cambio.emit("sin_division", bool(x)))
+        f = QVBoxLayout()
+        f.setContentsMargins(10, 0, 0, 0)
+        f.addWidget(self.sin_division)
+        self._cuerpo_de["Avanzado"].setLayout(f)
+        c.addStretch(1)
+        v.addWidget(self.cuerpo, 1)
+        self._agarre = _AgarreTamano(self)
+        self._agarre.raise_()
+        self.ajustar()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._agarre.move(0, self.height() - self._agarre.height())
+        self._agarre.raise_()
+
+    def set_tamano_usuario(self, ancho, alto):
+        """Tamaño elegido arrastrando la esquina: los controles se estiran con él (el alto no baja de lo que
+        hace falta para mostrar las secciones abiertas)."""
+        self._tam_usuario = [max(int(ancho), 0), max(int(alto), 0)]
+        self._reubicar()
+
+    # ------------------------------------------------------------ armado
+    def _seccion(self, layout, titulo, abierta):
+        """Encabezado plegable «▾ Título» y el cuerpo que muestra u oculta (queda en `_cuerpo_de[titulo]`)."""
+        if not hasattr(self, "_cuerpo_de"):
+            self._cuerpo_de = {}
+        boton = QToolButton()
+        boton.setText(("▾ " if abierta else "▸ ") + titulo)
+        boton.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        boton.setAutoRaise(True)
+        boton.setStyleSheet("text-align: left; font-weight: 600;")
+        cuerpo = QWidget()
+        cuerpo.setVisible(abierta)
+        layout.addWidget(boton)
+        layout.addWidget(cuerpo)
+        self._cuerpo_de[titulo] = cuerpo
+
+        def alternar():
+            visible = not cuerpo.isVisible()
+            cuerpo.setVisible(visible)
+            boton.setText(("▾ " if visible else "▸ ") + titulo)
+            self._tam_usuario[1] = 0                  # abrir o plegar una sección: el alto vuelve a ser automático
+            self._reubicar()
+        boton.clicked.connect(alternar)
+
+    def _combo(self, opciones, clave, ayuda):
+        cb = QComboBox()
+        for valor, texto in opciones:
+            cb.addItem(texto, valor)
+        cb.setToolTip(ayuda)
+        cb.currentIndexChanged.connect(lambda _i, k=clave, w=cb: self.cambio.emit(k, w.currentData()))
+        return cb
+
+    def _spin(self, clave, minimo, maximo, paso, sufijo, ayuda):
+        sp = QDoubleSpinBox()
+        sp.setDecimals(2)
+        sp.setRange(minimo, maximo)
+        sp.setSingleStep(paso)
+        sp.setSuffix(sufijo)
+        sp.setAlignment(Qt.AlignRight)
+        sp.setMinimumHeight(24)
+        sp.setToolTip(ayuda)
+        sp.valueChanged.connect(lambda x, k=clave: self.cambio.emit(k, float(x)))
+        return sp
+
+    def _proporcion(self, otro, valor):
+        """Con «mantener proporciones», el otro lado de la escala copia el valor."""
+        if self.proporcional.isChecked() and abs(otro.value() - valor) > 1e-9:
+            otro.setValue(valor)
+
+    # ------------------------------------------------------------ comportamiento
+    def ajustar(self):
+        """Tamaño: el que hace falta para el contenido o el que eligió la persona si es mayor."""
+        self.layout().activate()
+        hint = self.sizeHint()
+        self.resize(max(hint.width(), self._tam_usuario[0]), max(hint.height(), self._tam_usuario[1]))
+
+    def _reubicar(self):
+        self.ajustar()
+        area = self.parentWidget()
+        if area is not None and hasattr(area, "reubicar"):
+            area.reubicar()
+
+    def _plegar(self):
+        self._tam_usuario[1] = 0
+        self.cuerpo.setVisible(not self.cuerpo.isVisible())
+        self.b_plegar.setText("–" if self.cuerpo.isVisible() else "+")
+        self._reubicar()
+
+    def _poblar_fuentes(self, actual):
+        """Llena la lista según el filtro; la fuente en uso queda en la lista aunque el filtro la excluya."""
+        nombres = familias_filtradas(self.filtro.currentData())
+        if actual and actual not in nombres:
+            nombres = [actual] + nombres
+        self.fuente.blockSignals(True)
+        self.fuente.clear()
+        self.fuente.addItems(nombres)
+        for i, nombre in enumerate(nombres):          # cada nombre se ve con su propia tipografía
+            self.fuente.setItemData(i, QFont(nombre), Qt.FontRole)
+        self.fuente.setCurrentIndex(max(0, self.fuente.findText(actual)))
+        if self.fuente.completer() is not None:
+            self.fuente.completer().deleteLater()
+        comp = QCompleter(nombres, self.fuente)
+        comp.setCaseSensitivity(Qt.CaseInsensitive)
+        comp.setFilterMode(Qt.MatchContains)
+        comp.activated.connect(lambda t: self.fuente.setCurrentIndex(max(0, self.fuente.findText(t))))
+        self.fuente.setCompleter(comp)
+        self.fuente.blockSignals(False)
+
+    def _fuente_elegida(self, indice):
+        if indice >= 0:
+            self.cambio.emit("fuente", self.fuente.itemText(indice))
+
+    def _estilo_elegido(self, _i):
+        negrita, cursiva = _ESTILO_BC[self.estilo.currentData()]
+        self.cambio.emit("negrita", negrita)
+        self.cambio.emit("cursiva", cursiva)
+
+    def mostrar_valores(self, altura, interletraje, interlineado, par):
+        """Con un texto abierto: los valores de su barra y el kerning en el cursor (sin emitir cambios)."""
+        for sp, valor in ((self.altura, altura), (self.interletraje, interletraje),
+                          (self.interlineado, interlineado), (self.par, par)):
+            sp.blockSignals(True)
+            sp.setValue(float(valor))
+            sp.blockSignals(False)
+        self.par.setEnabled(True)
+
+    def _widgets(self):
+        return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.subrayado, self.tachado, self.grosor,
+                self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
+                self.alineacion, self.ancla_v, self.camino_lado, self.altura, self.interletraje, self.interlineado,
+                self.par)
+
+    def cargar(self, o):
+        """Muestra las opciones `o` (las del Lienzo) sin emitir cambios."""
+        widgets = self._widgets()
+        for w in widgets:
+            w.blockSignals(True)
+        try:
+            self._poblar_fuentes(o.get("fuente", "Arial"))
+            clave = {v: k for k, v in _ESTILO_BC.items()}[(bool(o.get("negrita")), bool(o.get("cursiva")))]
+            self.estilo.setCurrentIndex(max(0, self.estilo.findData(clave)))
+            self.b_kerning.setChecked(bool(o.get("kerning", True)))
+            for cb, clave, defecto in ((self.subrayado, "subrayado", "ninguno"), (self.tachado, "tachado", "ninguno"),
+                                       (self.capitalizacion, "capitalizacion", "ninguno"),
+                                       (self.alineacion, "alineacion", "izq"), (self.ancla_v, "ancla_v", "base"),
+                                       (self.camino_lado, "camino_lado", "izq")):
+                cb.setCurrentIndex(max(0, cb.findData(o.get(clave, defecto))))
+            for sp, clave, defecto in ((self.grosor, "grosor_decoracion", 0.0), (self.base, "desfase_base", 0.0),
+                                       (self.inclinacion, "inclinacion", 0.0), (self.escala_h, "escala_h", 100.0),
+                                       (self.escala_v, "escala_v", 100.0), (self.altura, "altura_texto", 5.0),
+                                       (self.interletraje, "espaciado", 0.0), (self.interlineado, "interlineado", 1.0)):
+                sp.setValue(float(o.get(clave, defecto)))
+            self.par.setValue(0.0)
+            self.par.setEnabled(False)               # el kerning de un par se ajusta con un texto abierto
+            self.sin_division.setChecked(bool(o.get("sin_division")))
+        finally:
+            for w in widgets:
+                w.blockSignals(False)
+
+
 class ModoBoceto(QObject):
     terminado = Signal(object, object)       # boceto editado, datos de contexto (dict)
 
@@ -298,6 +653,7 @@ class ModoBoceto(QObject):
         self.v = ventana
         self.lienzo = None
         self.paleta = None
+        self.caracter = None
         self.datos = None
         self.plano = None
         self.boceto = None
@@ -367,7 +723,11 @@ class ModoBoceto(QObject):
         self.paleta.construccion.connect(self._construccion)
         self.paleta.eje.connect(self._eje)
         self.paleta.ajuste.connect(self._ajuste)
-        area.set_capa_boceto(self.lienzo, self.paleta)
+        self.caracter = PanelCaracter(area)         # fuente, decoraciones y transformación del texto
+        self.caracter.cambio.connect(self._ajuste)
+        self.lienzo.texto_valores.connect(self.caracter.mostrar_valores)
+        self.caracter.hide()
+        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -428,10 +788,10 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
-        for w in (self.lienzo, self.paleta):
+        for w in (self.lienzo, self.paleta, self.caracter):
             w.hide()
             w.deleteLater()
-        self.lienzo = self.paleta = None
+        self.lienzo = self.paleta = self.caracter = None
         self.v.visor.set_plano_boceto(None)
         self.v.cinta.ocultar_contextual("BOCETO")
         self.v.info_seleccion("")
@@ -456,12 +816,21 @@ class ModoBoceto(QObject):
                 a.setChecked(k == clave)
         if self.paleta is not None:
             self.paleta.set_herramienta(h, self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
+            self._mostrar_caracter(h == "texto")
             self.v.area.reubicar()
+
+    def _mostrar_caracter(self, visible):
+        """El panel «Carácter» se ve con la herramienta Texto (o al editar un texto) y arranca con sus opciones."""
+        if self.caracter is not None:
+            if visible:
+                self.caracter.cargar(self.lienzo.opciones)
+            self.caracter.setVisible(visible)
 
     def _opciones_de_texto(self):
         """Doble clic sobre un texto: la paleta muestra sus opciones aunque la herramienta activa sea otra."""
         if self.paleta is not None:
             self.paleta.set_herramienta("texto", self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
+            self._mostrar_caracter(True)
             self.v.area.reubicar()
 
     def _tipo_de_linea(self):
@@ -484,7 +853,13 @@ class ModoBoceto(QObject):
 
     def _ajuste(self, clave, valor):
         if self.activo:
-            self.lienzo.opciones[clave] = valor
+            if clave in ("altura_texto", "espaciado", "interlineado"):
+                self.lienzo.aplicar_opcion_texto(clave, valor)       # van también a la barra del texto abierto
+            elif clave == "kerning_par":
+                self.lienzo.ajustar_kerning_par(valor)               # entre las dos letras del cursor
+                return
+            else:
+                self.lienzo.opciones[clave] = valor
             self.lienzo.refrescar_previa_texto()          # fuente, estilo y alineación se ven en vivo
 
     def _opciones_visor(self):

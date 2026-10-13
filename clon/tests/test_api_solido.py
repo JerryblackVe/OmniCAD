@@ -45,7 +45,7 @@ def test_herramientas_del_grupo_solido():
     assert [h["nombre"] for h in api.catalogo("solido")] == [
         "extrude", "revolve", "sweep", "loft", "create_box", "create_cylinder", "create_sphere", "create_torus",
         "boolean_operation", "mirror", "rectangular_pattern", "circular_pattern", "point_pattern", "path_pattern",
-        "multi_transform", "move_body",
+        "multi_transform", "drop_to_plane", "move_body",
         "fillet", "chamfer", "shell", "create_hole", "create_thread", "draft",   # herramientas_modificar.py
         "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft"]  # engranajes
     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula

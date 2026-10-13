@@ -566,3 +566,30 @@ def test_m_dentro_del_boceto_es_mover_del_boceto(ventana):
         mb.cancelar()
     assert v.acciones["mover_copiar"].isEnabled() and not _atajos_repetidos(v)
     assert v._info_sel == ""                                     # al salir del boceto se borra
+
+
+# ---------------------------------------------------------------- 9. panel «Carácter» del texto
+def test_panel_caracter_aparece_con_la_herramienta_texto_y_al_editar_un_texto(ventana):
+    """El panel sigue a la herramienta Texto, cambia las opciones del lienzo y al editar parte de lo que ya tiene."""
+    mb = ventana.modo_boceto
+    b = Boceto()
+    tid = b.agregar_texto((0, 0), "HOLA", 10, 0, "Arial", False, False, subrayado="simple", escala_h=130.0)
+    mb.iniciar(b, PLANO, {"op": None, "plano": "XY"})
+    try:
+        assert mb.caracter is not None and not mb.caracter.isVisible()
+        mb.herramienta("texto")
+        assert mb.caracter.isVisible()
+        mb.caracter.escala_v.setValue(80.0)                     # el cambio llega a las opciones del lienzo
+        assert mb.lienzo.opciones["escala_v"] == 80.0
+        mb.herramienta("seleccionar")
+        assert not mb.caracter.isVisible()
+        mb.lienzo.editar_texto(tid, mb.lienzo.rect().center())     # editar: arranca con lo que ya tiene
+        assert mb.caracter.isVisible() and mb.caracter.subrayado.currentData() == "simple"
+        assert mb.caracter.escala_h.value() == 130.0 and mb.lienzo.opciones["escala_v"] == 100.0
+        mb.caracter.inclinacion.setValue(12.0)
+        mb.lienzo.entrada.aceptado.emit(["HOLA", "10", "0", "0", "1"])
+        t = mb.lienzo.b.curvas[tid]
+        assert t.inclinacion == 12.0 and t.escala_h == 130.0 and t.subrayado == "simple"
+        assert not mb.caracter.isVisible()                         # al cerrar la edición, el panel se va
+    finally:
+        mb.cancelar()

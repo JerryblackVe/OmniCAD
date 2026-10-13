@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-166 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+167 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 28 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 29 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -721,7 +721,7 @@ Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesi
 
 ### `add_text`
 
-Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75.
+Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough (simple o doble, forman perfiles) con decoration_thickness, y no_wrap.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -745,6 +745,17 @@ Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles 
   - `path_position` (número; opcional, por defecto `0.5`): fracción 0-1 del largo de la curva (en su sentido propio) donde cae el texto; un círculo empieza a la derecha y gira antihorario (0.25 = arriba).
   - `path_offset` (número; opcional, por defecto `0.0`): mm entre la curva y la línea base (positivo = hacia el lado de las letras).
   - `fit_path` (true/false; opcional, por defecto `false`): true reparte el texto en todo el largo de la curva.
+  - `kerning` (true/false; opcional, por defecto `true`): false ignora los pares de letras (kerning) de la fuente.
+  - `skew` (número; opcional, por defecto `0.0`): inclinación de las letras en grados (-80 a 80; no es la cursiva de la fuente).
+  - `scale_x` (número; opcional, por defecto `100.0`): ancho de las letras en % del normal (1 a 1000).
+  - `scale_y` (número; opcional, por defecto `100.0`): alto de las letras en % del normal (1 a 1000).
+  - `baseline_shift` (número; opcional, por defecto `0.0`): mm que sube (+) o baja (-) todo el texto.
+  - `case` ("none" | "upper" | "lower" | "title" | "small_caps"; opcional, por defecto `"none"`): none, upper (mayúsculas), lower (minúsculas), title (Título) o small_caps (versalitas); no cambia lo escrito.
+  - `underline` ("none" | "single" | "double"; opcional, por defecto `"none"`): none, single o double: barras bajo cada línea, que forman perfiles. No se aplica en curva.
+  - `strikethrough` ("none" | "single" | "double"; opcional, por defecto `"none"`): none, single o double: barras a media altura. No se aplica en curva.
+  - `decoration_thickness` (número; opcional, por defecto `0.0`): grosor en mm de esas barras (0 = el de la fuente).
+  - `no_wrap` (true/false; opcional, por defecto `false`): true hace que box_width no parta las líneas en palabras.
+  - `kerning_pairs` (lista de lista de número o null; opcional, por defecto `null`): kerning a mano entre letras: lista de [posición, mm]; la posición i es el hueco entre la letra i-1 y la i (1 = entre la 1.ª y la 2.ª); mm positivo separa, negativo junta.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call add_text --doc pieza.omnicad text=…`
 
@@ -775,6 +786,17 @@ Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa qu
   - `path_position` (número; opcional, por defecto `null`): fracción 0-1 del largo de la curva.
   - `path_offset` (número; opcional, por defecto `null`): mm entre la curva y la línea base.
   - `fit_path` (true/false; opcional, por defecto `null`): repartir el texto en todo el largo.
+  - `kerning` (true/false; opcional, por defecto `null`): false ignora los pares de letras de la fuente.
+  - `skew` (número; opcional, por defecto `null`): inclinación de las letras en grados (-80 a 80).
+  - `scale_x` (número; opcional, por defecto `null`): ancho de las letras en % (1 a 1000).
+  - `scale_y` (número; opcional, por defecto `null`): alto de las letras en % (1 a 1000).
+  - `baseline_shift` (número; opcional, por defecto `null`): mm que sube (+) o baja (-) todo el texto.
+  - `case` ("none" | "upper" | "lower" | "title" | "small_caps" o null; opcional, por defecto `null`): none, upper, lower, title o small_caps.
+  - `underline` ("none" | "single" | "double" o null; opcional, por defecto `null`): none, single o double.
+  - `strikethrough` ("none" | "single" | "double" o null; opcional, por defecto `null`): none, single o double.
+  - `decoration_thickness` (número; opcional, por defecto `null`): grosor en mm de las barras (0 = el de la fuente).
+  - `no_wrap` (true/false; opcional, por defecto `null`): true hace que box_width no parta las líneas.
+  - `kerning_pairs` (lista de lista de número o null; opcional, por defecto `null`): kerning a mano entre letras: lista de [posición, mm] (reemplaza la anterior; [] la borra).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call edit_text --doc pieza.omnicad entity=…`
 
@@ -963,7 +985,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`extrude`](#extrude) | sí | Extruye perfiles de un boceto. profile: índice, lista de índices, 'all' o 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros). distance acepta un número (mm) o una expresión con parámetros. |
+| [`extrude`](#extrude) | sí | Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. |
 | [`revolve`](#revolve) | sí | Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción). |
 | [`sweep`](#sweep) | sí | Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). |
 | [`loft`](#loft) | sí | Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. |
@@ -978,6 +1000,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`point_pattern`](#point_pattern) | sí | Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que corta— en cada punto. |
 | [`path_pattern`](#path_pattern) | sí | Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de FreeCAD): copias de cuerpos (bodies) —o de operaciones del timeline (features)— a lo largo de curvas de un boceto. count incluye el original. distance es el largo TOTAL de la primera a la última (spacing_mode="extent") o la separación entre copias ("spacing"). start ubica el original sobre la ruta (0 a 1). orientation="path_direction" gira cada copia con la ruta; twist además la gira alrededor de la ruta, de a poco, hasta ese ángulo total en la última. |
 | [`multi_transform`](#multi_transform) | sí | Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). |
+| [`drop_to_plane`](#drop_to_plane) | sí | Apoya cuerpos en el plano del piso (Z = 0): los baja o sube en Z hasta que lo más bajo toque Z = 0. |
 | [`move_body`](#move_body) | sí | Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). |
 | [`fillet`](#fillet) | sí | Redondea aristas (empalme de radio constante). |
 | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
@@ -994,12 +1017,12 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 
 ### `extrude`
 
-Extruye perfiles de un boceto. profile: índice, lista de índices, 'all' o 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut desde un boceto sobre una cara entra al material sin pedirlo (reverse vacío). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut o intersect.
+Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut desde un boceto sobre una cara entra al material sin pedirlo (reverse vacío). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut o intersect.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all" o "largest".
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos) o "text:<id>".
   - `distance` (número o expresión; opcional, por defecto `"10 mm"`): distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `direction` ("one_side" | "two_sides" | "symmetric"; opcional, por defecto `"one_side"`): "one_side", "two_sides" o "symmetric".
@@ -1016,7 +1039,7 @@ Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketc
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `profile` (entero o lista de entero o texto; obligatorio): perfil(es): índice, lista de índices, "all" o "largest".
+  - `profile` (entero o lista de entero o texto; obligatorio): perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
   - `axis` (entero o texto; obligatorio): "sketch_x", "sketch_y", "x", "y", "z" o el id de una línea del boceto.
   - `angle` (número o expresión; opcional, por defecto `"360 deg"`): ángulo de giro: número en grados o expresión, p. ej. "270 deg" o "giro".
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
@@ -1033,7 +1056,7 @@ Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto con el perfil.
-  - `profile` (entero o lista de entero o texto; obligatorio): perfil(es): índice, lista de índices, "all" o "largest".
+  - `profile` (entero o lista de entero o texto; obligatorio): perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
   - `path_sketch` (texto; obligatorio): id o nombre del boceto con la ruta.
   - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
@@ -1220,6 +1243,16 @@ Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón�
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
 - CLI: `omnicad call multi_transform --doc pieza.omnicad transforms=…`
+
+### `drop_to_plane`
+
+Apoya cuerpos en el plano del piso (Z = 0): los baja o sube en Z hasta que lo más bajo toque Z = 0. No es 'ground_component' (eso fija una pieza del ensamble). Sin body, apoya todos los cuerpos. El paso se recalcula con el modelo. El resultado trae z_min.before y z_min.after.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a apoyar (id o nombre); vacío = todos los cuerpos del diseño.
+  - `keep_relative` (true/false; opcional, por defecto `true`): true mueve todo junto (conserva las posiciones relativas); false apoya cada cuerpo por su cuenta.
+- CLI: `omnicad call drop_to_plane --doc pieza.omnicad`
 
 ### `move_body`
 
@@ -1523,7 +1556,7 @@ Pestaña base (CHAPA › Pestaña, tipo base): convierte perfiles cerrados de un
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all" o "largest".
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest" o "text" (las letras de los textos).
   - `rule` (texto; opcional, por defecto `null`): regla de chapa (list_sheet_metal_rules); vacío = "Acero 1 mm".
   - `side` ("side1" | "side2" | "center"; opcional, por defecto `"side1"`): "side1", "side2" o "center".
   - `thickness` (número o expresión; opcional, por defecto `null`): espesor en mm que anula el de la regla (número o expresión).

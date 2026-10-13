@@ -117,6 +117,20 @@ def test_mover_copiar_y_alinear():
     assert (z0, z1) == pytest.approx((50, 70))      # cara superior apoyada sobre el plano: queda del otro lado
 
 
+def test_apoyar_en_plano_baja_o_sube_hasta_z_cero():
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.comandos.modificar import ApoyarEnPlano, MoverCopiar
+    assert CATALOGO["apoyar"] is ApoyarEnPlano
+    doc = _doc_caja()
+    cuerpo = _hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})
+    _ejecutar(doc, MoverCopiar, cuerpos=[cuerpo], tipo="traslacion", dz="-35 mm")
+    assert g.caja_envolvente(_cuerpo(doc).forma)[0][2] == pytest.approx(-35)
+    op = _ejecutar(doc, ApoyarEnPlano, cuerpos=[cuerpo])
+    assert g.caja_envolvente(_cuerpo(doc).forma)[0][2] == pytest.approx(0, abs=1e-6)
+    from omnicad.ui.comando import ContextoComando
+    assert ApoyarEnPlano().desde_op(op, ContextoComando(doc))["cuerpos"]          # se puede editar
+
+
 def test_dividir_cuerpo_escala_y_quitar():
     from omnicad.ui.comandos.modificar import DividirCuerpo, Escala, Quitar
     doc = _doc_caja()

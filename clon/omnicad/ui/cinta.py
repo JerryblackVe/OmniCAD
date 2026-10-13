@@ -100,7 +100,7 @@ SOLIDO = [
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Escala", "escala_3d"), _i("Combinar", "combinar"),
         _i("Cara de desfase", "desfase_cara"), _i("Reemplazar cara", "reemplazar_cara"), _i("Dividir cara", "dividir_cara"),
         _i("Dividir cuerpo", "dividir_cuerpo"), _i("División de silueta", "division_silueta"), SEP,
-        _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
+        _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
         SEP, _sub("Simplificar", []), SEP,
         _i("Material físico", "material_fisico"), _i("Aspecto", "aspecto"), _i("Administrar materiales"), SEP,
         _i("Cambiar parámetros", "parametros"), _i("Calcular todo", "calcular"), SEP,
@@ -128,7 +128,7 @@ SUPERFICIE = [
         _i("Engrosar", "engrosar"), SEP,
         _i("Cara de desfase", "desfase_cara"), _i("Reemplazar cara", "reemplazar_cara"),
         _i("Dividir cara", "dividir_cara"), _i("Dividir cuerpo", "dividir_cuerpo"), SEP,
-        _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Suprimir", "suprimir"), SEP,
+        _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), SEP,
         _i("Aspecto", "aspecto"), _i("Cambiar parámetros", "parametros"), _i("Calcular todo", "calcular")]),
 ] + COMPARTIDOS
 CHAPA = [

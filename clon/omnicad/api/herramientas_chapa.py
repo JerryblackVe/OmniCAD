@@ -299,7 +299,7 @@ def create_base_flange(sesion, sketch: str, profile: int | list[int] | str = 0, 
                        k_factor: Expr | None = None, name: str | None = None):
     """
     sketch: id o nombre del boceto.
-    profile: perfil(es): índice (get_sketch los lista), lista de índices, "all" o "largest".
+    profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest" o "text" (las letras de los textos).
     rule: regla de chapa (list_sheet_metal_rules); vacío = "Acero 1 mm".
     side: "side1", "side2" o "center".
     thickness: espesor en mm que anula el de la regla (número o expresión).

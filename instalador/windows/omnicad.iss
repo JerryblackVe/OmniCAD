@@ -49,8 +49,8 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [CustomMessages]
 es.Asociar=Abrir los archivos .omnicad con OmniCAD
 en.Asociar=Open .omnicad files with OmniCAD
-es.Agentes=Conectar los agentes de IA instalados (Claude Code y OpenCode, con copia .bak de cada archivo)
-en.Agentes=Connect the installed AI agents (Claude Code and OpenCode, with a .bak copy of each file)
+es.Agentes=Conectar los agentes de IA instalados (Claude Code, OpenCode y Cline CLI, con copia .bak de cada archivo)
+en.Agentes=Connect the installed AI agents (Claude Code, OpenCode and Cline CLI, with a .bak copy of each file)
 es.ConectandoAgentes=Conectando los agentes de IA…
 en.ConectandoAgentes=Connecting the AI agents…
 es.TipoProyecto=Proyecto de OmniCAD

@@ -7,4 +7,12 @@
   (`docs/agentes/herramientas.md`).
 - Si encontrás algo de la app sin herramienta, se la agregás en el mismo turno.
 
+## Regla: rendimiento con Rust
+- La app a veces se siente lenta: la meta es optimizar lo más posible.
+- Todo cuello de botella que se pueda pasar a Rust (malla, solver de bocetos, teselado, visor,
+  recálculo del timeline) se pasa, como módulo puntual vía PyO3 llamado desde Python.
+- Medir primero (perfilar), después optimizar. No reescribir la app entera: la geometría ya es
+  OpenCascade (C++).
+- Instalar el toolchain de Rust/maturin requiere permiso del usuario.
+
 @AGENTS.md

@@ -290,9 +290,26 @@ def unificar_caras(forma):
 
 
 def unir_todos(formas):
+    """Une todas las formas. Con más de dos, una sola operación general (una pasada del kernel en vez de una unión
+    por pieza contra un resultado cada vez más grande: con el texto de un repujado era lo que más tardaba)."""
     formas = [f for f in formas if f is not None]
     if not formas:
         raise ErrorGeometria("No hay geometría para unir.")
+    if len(formas) > 2:
+        try:
+            from OCP.collections import List_TopoDS_Shape
+            args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
+            args.Append(formas[0])
+            for f in formas[1:]:
+                herr.Append(f)
+            op = BRepAlgoAPI_Fuse()
+            op.SetArguments(args)
+            op.SetTools(herr)
+            op.Build()
+            if op.IsDone() and not op.Shape().IsNull():
+                return unificar_caras(op.Shape())
+        except Exception:  # noqa: BLE001 — si la operación general no puede, queda la unión de a pares
+            pass
     resultado = formas[0]
     for f in formas[1:]:
         resultado = booleano(resultado, f, "unir")

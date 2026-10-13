@@ -1259,11 +1259,16 @@ class VentanaPrincipal(QMainWindow):
         if self.panel is not None or self.modo_boceto.activo:
             return
         mods = QApplication.keyboardModifiers()
+        # una letra de un texto elige el texto entero (sin los huecos), así pasa completo a Extruir o Repujado
+        grupo = (self.visor.hits_texto(hit) if hit is not None and hit.get("tipo") == "perfil" else None) or [hit]
         if mods & (Qt.ControlModifier | Qt.ShiftModifier):
-            ya = next((h for h in self.seleccion if h["ref"] == hit["ref"]), None)
-            self._seleccionar([h for h in self.seleccion if h is not ya] if ya else self.seleccion + [hit])
+            refs = [h["ref"] for h in grupo]
+            if any(h["ref"] == hit["ref"] for h in self.seleccion):
+                self._seleccionar([h for h in self.seleccion if h["ref"] not in refs])
+            else:
+                self._seleccionar(self.seleccion + [h for h in grupo if all(x["ref"] != h["ref"] for x in self.seleccion)])
         else:
-            self._seleccionar([hit])
+            self._seleccionar(grupo)
 
     def _tecla_suprimir(self):
         """Supr: con algo elegido lo borra enseguida (como Fusion); si no, abre el diálogo Suprimir."""
@@ -1338,6 +1343,17 @@ class VentanaPrincipal(QMainWindow):
             self.crear_boceto()
             self._herramienta_pendiente = clave
 
+    def _apoyar_en_plano(self, clase):
+        """Clic derecho › Apoyar en el plano: apoya los cuerpos elegidos en Z = 0 y lo deja hecho."""
+        from .comando import hit_desde_ref
+        estado = self.doc.estado_final
+        ids = list(dict.fromkeys(h["ref"].get("cuerpo") for h in self.seleccion if h["ref"].get("cuerpo")))
+        valores = {"cuerpos": [hit_desde_ref({"tipo": "cuerpo", "cuerpo": c}, estado) for c in ids
+                               if c in estado.cuerpos]} if ids else None   # cara, arista o cuerpo: su cuerpo
+        panel = self.ejecutar_comando(clase(), valores=valores)
+        if panel is not None:
+            panel.aceptar()
+
     def _contexto_radial(self):
         """Lista de debajo del menú radial: comandos según lo elegido, vista, aislar y espacios de trabajo."""
         from .comandos import CATALOGO
@@ -1359,6 +1375,8 @@ class VentanaPrincipal(QMainWindow):
                 clase = CATALOGO[clave]
                 filas.append((clase.TITULO, lambda c=clase: self.ejecutar_comando(c()),
                               getattr(clase, "ATAJO", "") or ""))
+        if "apoyar" in CATALOGO and self.doc.estado_final.cuerpos:   # con lo elegido, o con todo si no hay nada
+            filas.append((CATALOGO["apoyar"].TITULO, lambda c=CATALOGO["apoyar"]: self._apoyar_en_plano(c)))
         if self.seleccion:
             filas.append(("Borrar la selección", lambda: self._seleccionar([])))
         if filas:

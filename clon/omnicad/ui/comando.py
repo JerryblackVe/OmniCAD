@@ -308,6 +308,13 @@ class PanelComando(QFrame):
             self.valores.update(comando.desde_op(ctx.op, ctx))
         if valores:
             self.valores.update(valores)
+        for c in self.campos:              # los huecos de la «o» de un texto (de antes o preelegidos) no van
+            if isinstance(c, Seleccion) and "perfil" in c.filtros and self.valores.get(c.clave):
+                try:
+                    self.valores[c.clave] = [h for h in self.valores[c.clave]
+                                             if not visor.es_hueco_texto(h, getattr(ctx, "estado", None))]
+                except Exception:  # noqa: BLE001 — sin poder mirarlo, queda como estaba
+                    pass
         self.widgets, self.etiquetas, self.filas_sel = {}, {}, {}
         self.activa = None
         self.ultima_op = None
@@ -477,6 +484,8 @@ class PanelComando(QFrame):
         for clave, fila in self.filas_sel.items():
             fila.set_estado(len(self.valores.get(clave) or []), campo is not None and clave == campo.clave)
         self.visor.set_filtro(campo.filtros if campo is not None else None)
+        # en un campo de varios perfiles, tocar una letra elige el texto entero (como Fusion)
+        self.visor.texto_entero = bool(campo is not None and campo.maximo is None and "perfil" in campo.filtros)
 
     def _limpiar(self, campo):
         self.valores[campo.clave] = []
@@ -494,7 +503,22 @@ class PanelComando(QFrame):
             pass
         lista = list(self.valores.get(campo.clave) or [])
         repetida = next((h for h in lista if h["ref"] == hit["ref"]), None)
-        if repetida is not None:            # clic sobre algo ya elegido: se quita (como Fusion)
+        grupo = None
+        if "perfil" in campo.filtros:
+            try:
+                if self.visor.es_hueco_texto(hit):     # el hueco de la «o» de un texto es aire: no se elige
+                    return
+                if campo.maximo is None:
+                    grupo = self.visor.hits_texto(hit)
+            except Exception:  # noqa: BLE001 — sin el grupo, se elige la letra sola
+                grupo = None
+        if grupo:                           # una letra de un texto: entra (o sale) el texto entero
+            refs = [h["ref"] for h in grupo]
+            if repetida is not None:
+                lista = [h for h in lista if h["ref"] not in refs]
+            else:
+                lista += [h for h in grupo if all(x["ref"] != h["ref"] for x in lista)]
+        elif repetida is not None:          # clic sobre algo ya elegido: se quita (como Fusion)
             lista.remove(repetida)
         elif campo.maximo == 1:
             lista = [hit]

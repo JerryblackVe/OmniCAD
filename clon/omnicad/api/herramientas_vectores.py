@@ -26,6 +26,9 @@ _ALINEACION = {"left": "izq", "center": "centro", "right": "der"}
 _ANCLAJE = {"baseline": "base", "top": "arriba", "middle": "medio", "bottom": "abajo"}
 _ALINEACION_INV = {v: k for k, v in _ALINEACION.items()}
 _ANCLAJE_INV = {v: k for k, v in _ANCLAJE.items()}
+_CAPITALIZACION = {"none": "ninguno", "upper": "mayusculas", "lower": "minusculas", "title": "titulo",
+                   "small_caps": "versalitas"}
+_DECORACION = {"none": "ninguno", "single": "simple", "double": "doble"}
 
 
 def _archivo(path, extensiones, que):
@@ -116,20 +119,47 @@ def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_pat
     return op
 
 
-def _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v):
+def _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning=None,
+                    skew=None, scale_x=None, scale_y=None, baseline_shift=None, case=None, underline=None,
+                    strikethrough=None, decoration_thickness=None, no_wrap=None, kerning_pairs=None):
     if align is not None and align not in _ALINEACION:
         raise error("INVALID_ARGUMENTS", "align es left, center o right.")
     if anchor is not None and anchor not in _ANCLAJE:
         raise error("INVALID_ARGUMENTS", "anchor es baseline, top, middle o bottom.")
+    if case is not None and case not in _CAPITALIZACION:
+        raise error("INVALID_ARGUMENTS", "case es none, upper, lower, title o small_caps.")
+    for nombre, valor in (("underline", underline), ("strikethrough", strikethrough)):
+        if valor is not None and valor not in _DECORACION:
+            raise error("INVALID_ARGUMENTS", f"{nombre} es none, single o double.")
+    if kerning_pairs is not None:
+        try:
+            pares = [[int(i), float(x)] for i, x in kerning_pairs]
+        except (TypeError, ValueError):
+            raise error("INVALID_ARGUMENTS", "kerning_pairs es una lista de [posición, mm].") from None
+        if any(i < 0 or not math.isfinite(x) for i, x in pares):
+            raise error("INVALID_ARGUMENTS", "kerning_pairs: posiciones desde 0 y valores finitos (mm).")
+    _exigir_finitos({k: v for k, v in (("skew", skew), ("scale_x", scale_x), ("scale_y", scale_y),
+                                       ("baseline_shift", baseline_shift),
+                                       ("decoration_thickness", decoration_thickness)) if v is not None})
     op = {}
     for clave, valor in (("espaciado", letter_spacing), ("interlineado", line_spacing), ("ancho_caja", box_width),
-                         ("voltear_h", flip_h), ("voltear_v", flip_v)):
+                         ("voltear_h", flip_h), ("voltear_v", flip_v), ("kerning", kerning), ("inclinacion", skew),
+                         ("escala_h", scale_x), ("escala_v", scale_y), ("desfase_base", baseline_shift),
+                         ("grosor_decoracion", decoration_thickness), ("sin_division", no_wrap)):
         if valor is not None:
             op[clave] = valor
     if align is not None:
         op["alineacion"] = _ALINEACION[align]
     if anchor is not None:
         op["ancla_v"] = _ANCLAJE[anchor]
+    if case is not None:
+        op["capitalizacion"] = _CAPITALIZACION[case]
+    if kerning_pairs is not None:
+        op["ajustes_kerning"] = pares
+    if underline is not None:
+        op["subrayado"] = _DECORACION[underline]
+    if strikethrough is not None:
+        op["tachado"] = _DECORACION[strikethrough]
     return op
 
 
@@ -147,7 +177,10 @@ def _verificar_fuente(font, bold, italic):
              "'\\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada "
              "(list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, "
              "elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, "
-             "texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75.",
+             "texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. "
+             "Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), "
+             "baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough "
+             "(simple o doble, forman perfiles) con decoration_thickness, y no_wrap.",
              modifica=True)
 def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 5.0, angle: float = 0.0,
              font: str = "Arial", bold: bool = False, italic: bool = False, letter_spacing: float = 0.0,
@@ -155,7 +188,12 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
              anchor: Literal["baseline", "top", "middle", "bottom"] = "baseline", box_width: float = 0.0,
              flip_h: bool = False, flip_v: bool = False, path_entity: int | None = None,
              path_side: Literal["left", "right"] = "left", path_position: float = 0.5, path_offset: float = 0.0,
-             fit_path: bool = False, sketch: str | None = None):
+             fit_path: bool = False, kerning: bool = True, skew: float = 0.0, scale_x: float = 100.0,
+             scale_y: float = 100.0, baseline_shift: float = 0.0,
+             case: Literal["none", "upper", "lower", "title", "small_caps"] = "none",
+             underline: Literal["none", "single", "double"] = "none",
+             strikethrough: Literal["none", "single", "double"] = "none", decoration_thickness: float = 0.0,
+             no_wrap: bool = False, kerning_pairs: list[list[float]] | None = None, sketch: str | None = None):
     """
     text: el texto; '\\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo.
     x: x del ancla (mm).
@@ -177,6 +215,17 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
     path_position: fracción 0-1 del largo de la curva (en su sentido propio) donde cae el texto; un círculo empieza a la derecha y gira antihorario (0.25 = arriba).
     path_offset: mm entre la curva y la línea base (positivo = hacia el lado de las letras).
     fit_path: true reparte el texto en todo el largo de la curva.
+    kerning: false ignora los pares de letras (kerning) de la fuente.
+    skew: inclinación de las letras en grados (-80 a 80; no es la cursiva de la fuente).
+    scale_x: ancho de las letras en % del normal (1 a 1000).
+    scale_y: alto de las letras en % del normal (1 a 1000).
+    baseline_shift: mm que sube (+) o baja (-) todo el texto.
+    case: none, upper (mayúsculas), lower (minúsculas), title (Título) o small_caps (versalitas); no cambia lo escrito.
+    underline: none, single o double: barras bajo cada línea, que forman perfiles. No se aplica en curva.
+    strikethrough: none, single o double: barras a media altura. No se aplica en curva.
+    decoration_thickness: grosor en mm de esas barras (0 = el de la fuente).
+    no_wrap: true hace que box_width no parta las líneas en palabras.
+    kerning_pairs: kerning a mano entre letras: lista de [posición, mm]; la posición i es el hueco entre la letra i-1 y la i (1 = entre la 1.ª y la 2.ª); mm positivo separa, negativo junta.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     _exigir_finitos({"x": x, "y": y, "height": height, "angle": angle})
@@ -184,9 +233,13 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
     _verificar_fuente(font, bold, italic)
     if align is None:
         align = "center" if path_entity else "left"
-    op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v)
+    op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
+                         scale_x, scale_y, baseline_shift, case, underline, strikethrough, decoration_thickness,
+                         no_wrap, kerning_pairs)
     if path_entity:
         op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path)
+        if underline != "none" or strikethrough != "none":
+            sesion.avisar("El subrayado y el tachado no se dibujan en un texto en curva.")
     return _dibujar(sesion, sketch, lambda b: b.agregar_texto((x, y), texto, altura=height, angulo=angle,
                                                               fuente=font, negrita=bold, cursiva=italic, **op))
 
@@ -202,7 +255,14 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
               anchor: Literal["baseline", "top", "middle", "bottom"] | None = None, box_width: float | None = None,
               flip_h: bool | None = None, flip_v: bool | None = None, path_entity: int | None = None,
               path_side: Literal["left", "right"] | None = None, path_position: float | None = None,
-              path_offset: float | None = None, fit_path: bool | None = None, sketch: str | None = None):
+              path_offset: float | None = None, fit_path: bool | None = None, kerning: bool | None = None,
+              skew: float | None = None, scale_x: float | None = None, scale_y: float | None = None,
+              baseline_shift: float | None = None,
+              case: Literal["none", "upper", "lower", "title", "small_caps"] | None = None,
+              underline: Literal["none", "single", "double"] | None = None,
+              strikethrough: Literal["none", "single", "double"] | None = None,
+              decoration_thickness: float | None = None, no_wrap: bool | None = None,
+              kerning_pairs: list[list[float]] | None = None, sketch: str | None = None):
     """
     entity: id de la curva de texto (get_sketch).
     text: texto nuevo ('\\n' separa líneas; {parámetro} muestra su valor).
@@ -225,10 +285,23 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     path_position: fracción 0-1 del largo de la curva.
     path_offset: mm entre la curva y la línea base.
     fit_path: repartir el texto en todo el largo.
+    kerning: false ignora los pares de letras de la fuente.
+    skew: inclinación de las letras en grados (-80 a 80).
+    scale_x: ancho de las letras en % (1 a 1000).
+    scale_y: alto de las letras en % (1 a 1000).
+    baseline_shift: mm que sube (+) o baja (-) todo el texto.
+    case: none, upper, lower, title o small_caps.
+    underline: none, single o double.
+    strikethrough: none, single o double.
+    decoration_thickness: grosor en mm de las barras (0 = el de la fuente).
+    no_wrap: true hace que box_width no parta las líneas.
+    kerning_pairs: kerning a mano entre letras: lista de [posición, mm] (reemplaza la anterior; [] la borra).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     _exigir_finitos({k: v for k, v in (("x", x), ("y", y), ("height", height), ("angle", angle)) if v is not None})
-    op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v)
+    op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
+                         scale_x, scale_y, baseline_shift, case, underline, strikethrough, decoration_thickness,
+                         no_wrap, kerning_pairs)
     op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path)
 
     def cambiar(b):
@@ -250,10 +323,13 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
         if angle is not None:
             t.angulo = float(angle)
         for k, v in op.items():
-            if k in ("espaciado", "interlineado", "ancho_caja", "camino_pos", "camino_desfase"):
+            if k in ("espaciado", "interlineado", "ancho_caja", "camino_pos", "camino_desfase", "inclinacion",
+                     "escala_h", "escala_v", "desfase_base", "grosor_decoracion"):
                 v = float(v)
-            elif k.startswith("voltear") or k == "camino_ajustar":
+            elif k.startswith("voltear") or k in ("camino_ajustar", "kerning", "sin_division"):
                 v = bool(v)
+            elif k == "ajustes_kerning":
+                v = [[int(i), float(x)] for i, x in v]
             setattr(t, k, v)
         if x is not None or y is not None:
             px, py = b.coords(t.punto)

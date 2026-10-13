@@ -495,3 +495,25 @@ def test_api_primitivas_aceptan_diametro():
     assert (s.doc.operaciones[-1].p["radio_mayor"], s.doc.operaciones[-1].p["radio_menor"]) == ("20.0", "5.0")
     for args in ({"radius": 5, "diameter": 10}, {}, {"diameter": -2}):
         assert api.llamar(s, "create_sphere", args)["error_kind"] == "INVALID_ARGUMENTS", args
+
+
+def test_cache_de_analisis_retiene_la_forma_de_su_clave():
+    """La caché de análisis usa `id(forma)` como clave: si no retuviera la forma, Python podría reciclar ese id en un
+    cuerpo nuevo y mostrarle los colores del descartado."""
+    import gc
+    import weakref
+
+    from omnicad.ui import analisis_vista as av
+
+    class Forma:           # una clase normal admite referencias débiles (las formas de OCP no siempre)
+        pass
+
+    forma = Forma()
+    viva = weakref.ref(forma)
+    clave = ("prueba_retencion", id(forma))
+    assert av._con_cache(clave, lambda: 42, forma) == 42
+    del forma
+    gc.collect()
+    assert viva() is not None
+    assert av._con_cache(clave, lambda: 99, viva()) == 42     # no recalcula
+    av._cache.pop(clave, None)

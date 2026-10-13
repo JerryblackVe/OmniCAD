@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""`omnicad setup` (conecta OmniCAD a Claude Code y OpenCode) y la skill `.claude/skills/omnicad/SKILL.md`.
+"""`omnicad setup` (conecta OmniCAD a Claude Code, OpenCode y Cline CLI) y la skill `.claude/skills/omnicad/SKILL.md`.
 
 Ninguna prueba toca la configuración real: todo va a una carpeta temporal (`--inicio`), HOME apunta a otra carpeta
 temporal y cualquier subproceso (`claude`) está prohibido salvo el simulado de la prueba que lo pide."""
@@ -30,6 +30,7 @@ def aislar(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("USERPROFILE", str(falso))
     monkeypatch.setenv("HOME", str(falso))
     monkeypatch.setenv("APPDATA", str(falso / "AppData" / "Roaming"))
+    monkeypatch.delenv("CLINE_MCP_SETTINGS_PATH", raising=False)
     monkeypatch.setattr(cmd_setup, "_buscar", lambda nombre: None)
 
     def prohibido(*a, **k):
@@ -68,6 +69,8 @@ def instantanea(carpeta):
 ENTRADA_OPENCODE = {"type": "local", "command": [PYTHON, "-m", "omnicad.servidor_mcp"], "enabled": True,
                     "timeout": 30000}
 ENTRADA_CLAUDE = {"type": "stdio", "command": PYTHON, "args": ["-m", "omnicad.servidor_mcp"], "env": {}}
+ENTRADA_CLINE = {"transport": {"type": "stdio", "command": PYTHON, "args": ["-m", "omnicad.servidor_mcp"]}}
+AJUSTES_CLINE = Path(".cline") / "data" / "settings" / "cline_mcp_settings.json"
 
 
 def _escribir(ruta, datos):
@@ -164,6 +167,100 @@ def test_opencode_con_comentarios_no_se_reescribe(capsys, home):
     assert accion["merge"] == {"mcp": {"omnicad": ENTRADA_OPENCODE}} and "a mano" in accion["message"]
     assert ruta.read_bytes() == antes and not list(ruta.parent.glob("*.bak"))   # intacto y sin respaldo inútil
     assert (home / ".config" / "opencode" / "skills" / "omnicad" / "SKILL.md").is_file()  # la skill sí se copia
+
+
+# ---------------------------------------------------------------- --aplicar: Cline CLI
+def test_aplicar_cline_fusiona_sin_borrar_respalda_y_copia_la_skill(capsys, home):
+    ruta = home / AJUSTES_CLINE
+    otro = {"transport": {"type": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@latest"]}}
+    remoto = {"transport": {"type": "streamableHttp", "url": "https://mcp.vercel.com"},
+              "oauth": {"authorizationRequired": True}}
+    _escribir(ruta, {"mcpServers": {"playwright": otro, "vercel": remoto}})
+    bytes_originales = ruta.read_bytes()
+    codigo, res = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert codigo == 0 and estados(res) == {("cline", "mcp"): "done", ("cline", "skill"): "done"}
+    servidores = json.loads(ruta.read_text(encoding="utf-8"))["mcpServers"]
+    assert list(servidores) == ["playwright", "vercel", "omnicad"]
+    assert servidores["playwright"] == otro and servidores["vercel"] == remoto      # lo demás, intacto
+    assert servidores["omnicad"] == ENTRADA_CLINE
+    assert (ruta.parent / "cline_mcp_settings.json.bak").read_bytes() == bytes_originales
+    assert (home / ".cline" / "skills" / "omnicad" / "SKILL.md").read_bytes() == SKILL.read_bytes()
+    assert not (home / ".claude").exists() and not (home / ".config").exists()      # solo se tocó Cline
+
+
+def test_cline_crea_el_archivo_si_no_existe_y_no_lleva_bom(capsys, home):
+    codigo, _ = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert codigo == 0
+    ruta = home / AJUSTES_CLINE
+    assert not ruta.read_bytes().startswith(b"\xef\xbb\xbf")        # Cline no lee un JSON con BOM
+    assert json.loads(ruta.read_text(encoding="utf-8")) == {"mcpServers": {"omnicad": ENTRADA_CLINE}}
+    assert not list(ruta.parent.glob("*.bak"))                      # no había nada que respaldar
+
+
+def test_cline_sin_aplicar_no_escribe_nada(capsys, home):
+    _escribir(home / AJUSTES_CLINE, {"mcpServers": {}})
+    antes = instantanea(home)
+    codigo, res = setup_json(capsys, home, "--cliente", "cline")
+    assert codigo == 0 and estados(res) == {("cline", "mcp"): "pending", ("cline", "skill"): "pending"}
+    assert next(a for a in res["result"]["actions"] if a["kind"] == "mcp")["merge"] == {"mcpServers": {"omnicad": ENTRADA_CLINE}}
+    assert instantanea(home) == antes
+
+
+def test_cline_idempotente_y_reconoce_la_forma_plana_de_la_documentacion(capsys, home):
+    codigo, res = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert set(estados(res).values()) == {"done"}
+    primera = instantanea(home)
+    codigo, res = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert codigo == 0 and set(estados(res).values()) == {"unchanged"} and instantanea(home) == primera
+    plana = {"mcpServers": {"omnicad": {"command": PYTHON, "args": ["-m", "omnicad.servidor_mcp"], "disabled": False}}}
+    _escribir(home / AJUSTES_CLINE, plana)                          # forma de docs.cline.bot: también vale
+    codigo, res = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert estados(res)[("cline", "mcp")] == "unchanged"
+    assert json.loads((home / AJUSTES_CLINE).read_text(encoding="utf-8")) == plana
+
+
+def test_cline_actualiza_el_comando_y_conserva_lo_del_usuario(capsys, home):
+    _escribir(home / AJUSTES_CLINE, {"mcpServers": {"omnicad": {
+        "command": "C:/viejo/python.exe", "args": ["-m", "omnicad.servidor_mcp"], "env": {"A": "1"},
+        "disabled": True, "autoApprove": ["get_scene_info"]}}})
+    codigo, res = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert codigo == 0 and estados(res)[("cline", "mcp")] == "done"
+    entrada = json.loads((home / AJUSTES_CLINE).read_text(encoding="utf-8"))["mcpServers"]["omnicad"]
+    assert entrada["transport"] == {**ENTRADA_CLINE["transport"], "env": {"A": "1"}}      # comando nuevo, env conservado
+    assert entrada["disabled"] is True and entrada["autoApprove"] == ["get_scene_info"]   # lo que puso el usuario
+    assert "command" not in entrada and "args" not in entrada                             # sin la forma plana vieja
+
+
+def test_cline_json_roto_es_un_error_y_no_se_toca(capsys, home):
+    ruta = home / AJUSTES_CLINE
+    ruta.parent.mkdir(parents=True)
+    ruta.write_text("{esto no es json", encoding="utf-8")
+    codigo, res = setup_json(capsys, home, "--cliente", "cline", "--aplicar")
+    assert codigo == 1 and estados(res)[("cline", "mcp")] == "error"
+    assert ruta.read_text(encoding="utf-8") == "{esto no es json" and not list(ruta.parent.glob("*.bak"))
+    assert estados(res)[("cline", "skill")] == "done"               # una falla no frena lo demás
+
+
+def test_cline_con_todos_solo_si_esta_instalado(capsys, home):
+    codigo, res = setup_json(capsys, home)                          # sin ~/.cline: ni lo toca ni lo crea
+    assert all(c != "cline" for c, _ in estados(res)) and any("Cline CLI no está instalado" in a for a in res["avisos"])
+    (home / ".cline").mkdir()
+    codigo, res = setup_json(capsys, home, "--aplicar")
+    assert codigo == 0 and estados(res)[("cline", "mcp")] == "done" and estados(res)[("cline", "skill")] == "done"
+    assert json.loads((home / AJUSTES_CLINE).read_text(encoding="utf-8"))["mcpServers"]["omnicad"] == ENTRADA_CLINE
+    assert not (home / ".config" / "opencode" / "skills").exists()   # OpenCode sigue con la skill de ~/.claude/skills
+
+
+def test_cline_respeta_cline_mcp_settings_path_salvo_con_inicio(capsys, monkeypatch, aislar, tmp_path):
+    propia = tmp_path / "otro" / "mis_servidores.json"
+    monkeypatch.setenv("CLINE_MCP_SETTINGS_PATH", str(propia))
+    codigo, out, _ = correr(capsys, "setup", "--cliente", "cline", "--aplicar", "--json")
+    assert codigo == 0 and json.loads(propia.read_text(encoding="utf-8"))["mcpServers"]["omnicad"] == ENTRADA_CLINE
+    assert not (aislar / AJUSTES_CLINE).exists()                    # el archivo por defecto no se tocó
+    carpeta = tmp_path / "con_inicio"
+    carpeta.mkdir()
+    setup_json(capsys, carpeta, "--cliente", "cline", "--aplicar")  # con --inicio la variable se ignora
+    assert (carpeta / AJUSTES_CLINE).is_file()
 
 
 def test_json_roto_es_un_error_y_no_se_toca(capsys, home):

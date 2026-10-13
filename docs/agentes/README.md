@@ -11,7 +11,7 @@ y para **desarrollar el programa**, sin abrir la ventana o mirándola en vivo.
 
 | Vía | Para qué | Doc |
 |---|---|---|
-| Servidor MCP (`omnicad-mcp`) | agentes que hablan MCP: Claude Code, Claude Desktop, OpenCode, Codex, Cursor, Gemini CLI, VS Code | [conectar.md](conectar.md) |
+| Servidor MCP (`omnicad-mcp`) | agentes que hablan MCP: Claude Code, Claude Desktop, OpenCode, Cline CLI, Codex, Cursor, Gemini CLI, VS Code | [conectar.md](conectar.md) |
 | CLI (`omnicad`) | agentes sin MCP, scripts y pruebas a mano | [cli.md](cli.md) |
 | Python (`from omnicad import api`) | scripts propios | [ejemplo](../../ejemplos/agentes/soporte_l.py) |
 

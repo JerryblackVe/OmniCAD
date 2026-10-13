@@ -316,7 +316,7 @@ Desde el paso 5 de rendimiento (arranque rápido, 2026-10-09), el arranque da `1
 
 ### setup
 
-Registra el MCP y copia la skill `omnicad` en Claude Code y OpenCode, e instala en Fusion 360 el complemento OmniCADPuente (opcional: los `.f3d`/`.f3z` se abren sin Fusion; el complemento es el respaldo y trae los parámetros). Detalle y rutas: [conectar.md](conectar.md).
+Registra el MCP y copia la skill `omnicad` en Claude Code, OpenCode y Cline CLI, e instala en Fusion 360 el complemento OmniCADPuente (opcional: los `.f3d`/`.f3z` se abren sin Fusion; el complemento es el respaldo y trae los parámetros). Detalle y rutas: [conectar.md](conectar.md).
 
 ```
 $ omnicad setup --cliente todos
@@ -325,7 +325,7 @@ omnicad setup: PLAN, no se escribió nada. Para aplicarlo agregá --aplicar.
 ```
 
 - Sin `--aplicar` solo muestra el plan. Con `--aplicar` escribe, respalda cada archivo con `.bak` y no borra otros servidores; correrlo dos veces no duplica.
-- `--cliente claude-code | opencode | fusion | todos` (por defecto `todos`; con `todos`, Fusion solo si está instalado).
+- `--cliente claude-code | opencode | cline | fusion | todos` (por defecto `todos`; con `todos`, Cline y Fusion solo si están instalados).
 - `--inicio CARPETA`: usa otra carpeta como la del usuario (para pruebas; nunca toca la real).
 
 ## Recetas rápidas

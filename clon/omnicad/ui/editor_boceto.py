@@ -26,17 +26,19 @@ Comportamiento tomado de la ayuda de Fusion (libro "Design: Sketch", SKT-*):
     construcción, violeta = proyectada; los ejes (líneas centrales) van con trazo y punto. X alterna
     normal/construcción. Supr borra. Ctrl+Z deshace dentro del boceto.
 """
+import copy
 import math
 import warnings
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, circunferencia_3_puntos, dominio,
-                                    evaluar_primitiva, fraccion_en_camino, mas_cercano, puntos_primitiva,
-                                    validar_valor_cota)
+                                    evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
+                                    primitivas_entidad, puntos_primitiva, validar_valor_cota,
+                                    _validar_opciones_texto)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion
 from . import formato, temas
 from .iconos import icono
@@ -285,6 +287,40 @@ def _muestras(prim, pasos):
     return r
 
 
+def _inicio_palabra(texto, i):
+    """Dónde empieza la palabra a la izquierda de `i` (Ctrl+← y Ctrl+Retroceso)."""
+    while i > 0 and not texto[i - 1].isalnum():
+        i -= 1
+    while i > 0 and texto[i - 1].isalnum():
+        i -= 1
+    return i
+
+
+def _fin_palabra(texto, i):
+    """Dónde termina la palabra a la derecha de `i` (Ctrl+→ y Ctrl+Supr)."""
+    n = len(texto)
+    while i < n and not texto[i].isalnum():
+        i += 1
+    while i < n and texto[i].isalnum():
+        i += 1
+    return i
+
+
+def _palabra_en(texto, i):
+    """(inicio, fin) de la palabra que toca la posición `i` (doble clic); (i, i) si ahí no hay palabra."""
+    n = len(texto)
+    i = min(max(i, 0), n)
+    ref = i if i < n and texto[i].isalnum() else i - 1
+    if ref < 0 or ref >= n or not texto[ref].isalnum():
+        return i, i
+    a, b = ref, ref + 1
+    while a > 0 and texto[a - 1].isalnum():
+        a -= 1
+    while b < n and texto[b].isalnum():
+        b += 1
+    return a, b
+
+
 class EntradaValor(QFrame):
     """Entrada en pantalla (1 o más campos) para cotas y valores dinámicos; Tab cambia de campo."""
     aceptado = Signal(list)
@@ -391,6 +427,7 @@ class Lienzo(QWidget):
     mensaje = Signal(str)
     herramienta_cambiada = Signal(str)
     texto_en_edicion = Signal()     # se edita un texto ya creado: la paleta muestra sus opciones (fuente, estilo…)
+    texto_valores = Signal(float, float, float, float)   # altura, interletraje, interlineado y kerning en el cursor
     info = Signal(str)          # medidas de lo elegido, como Fusion ("1 línea de boceto | Longitud: …")
     aviso = Signal(str)         # aviso flotante (p. ej. una operación borró restricciones o cotas)
 
@@ -411,7 +448,11 @@ class Lienzo(QWidget):
         self.opciones = {"grado_spline": 3, "continuidad": "G1", "patron_distancia": "extension",
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
                          "negrita": False, "cursiva": False,
-                         "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq"}
+                         "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq",
+                         "altura_texto": 5.0, "espaciado": 0.0, "interlineado": 1.0,
+                         **{k: Texto._PREDETERMINADOS[k] for k in Texto.TIPOGRAFIA}}
+        self._sel_texto = []                       # cuadriláteros de lo seleccionado en el texto que se escribe
+        self._arrastre_texto = False               # se está seleccionando texto arrastrando el ratón
         self._paleta_texto = False                 # la paleta muestra las opciones del texto que se edita
         self._previa_texto = None                  # texto en vivo mientras se escribe en la caja (como Fusion)
         self._previa_polis = []                    # contornos de esa vista previa (coordenadas del boceto)
@@ -1042,7 +1083,7 @@ class Lienzo(QWidget):
                     self.mensaje.emit("Texto: clic en la esquina opuesta para dibujar el cuadro del texto "
                                       "(o clic otra vez en el mismo lugar para un texto de 5 mm).")
                     return                              # falta la 2.ª esquina del cuadro
-            en_curva, caja, altura_ini, rect = {}, {}, 5.0, None
+            en_curva, caja, altura_ini, rect = {}, {}, self.opciones["altura_texto"], None
             if camino is not None:
                 o = self.opciones
                 pos = fraccion_en_camino(self.b.primitivas(camino)[0], xy)
@@ -1062,16 +1103,21 @@ class Lienzo(QWidget):
                 altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
                 espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
                 o = self.opciones
-                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | en_curva | caja
+                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | en_curva | caja \
+                    | {k: o[k] for k in Texto.TIPOGRAFIA}
                 ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
                     pid if pid is not None else xy, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
                     o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
                 self.clics = []
+                self.opciones["ajustes_kerning"] = []          # el kerning a mano es de ESE texto
                 return ok
             if camino is not None:
-                self.mensaje.emit("Texto en curva: las letras siguen la curva elegida (Lado en curva, en la paleta).")
+                self.mensaje.emit("Texto en curva: las letras siguen la curva elegida (Lado en curva, en el panel "
+                                  "Carácter).")
+            self.opciones["ajustes_kerning"] = []
             self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
-                                ["Texto", formato.numero(altura_ini), "0", "0", "1"], self._pos_cursor, aceptar)
+                                ["Texto", formato.numero(altura_ini), "0", formato.numero(self.opciones["espaciado"]),
+                                 formato.numero(self.opciones["interlineado"])], self._pos_cursor, aceptar)
             self._previa_texto = {"pos": pid if pid is not None else xy, "existente": None,
                                   "extra": en_curva | caja, "caja": rect, "reemplazar": True}
             self._conectar_previa_texto()
@@ -1363,7 +1409,9 @@ class Lienzo(QWidget):
         t = self.b.curvas[tid]
         # la paleta parte de lo que ya tiene el texto: aceptar sin tocar nada no le cambia la fuente ni la alineación
         self.opciones.update(fuente=t.fuente, negrita=t.negrita, cursiva=t.cursiva, alineacion=t.alineacion,
-                             ancla_v=t.ancla_v, camino_lado=t.camino_lado)
+                             ancla_v=t.ancla_v, camino_lado=t.camino_lado, altura_texto=t.altura,
+                             espaciado=t.espaciado, interlineado=t.interlineado,
+                             **{k: getattr(t, k) for k in Texto.TIPOGRAFIA})
 
         def aceptar(v):
             v = (list(v) + [""] * 5)[:5]
@@ -1373,6 +1421,7 @@ class Lienzo(QWidget):
                 raise ErrorBoceto("El texto está vacío.")
             if interlineado <= 0:
                 raise ErrorBoceto("El interlineado tiene que ser mayor que cero.")
+            _validar_opciones_texto({k: self.opciones[k] for k in Texto.TIPOGRAFIA})
 
             def cambiar():
                 t.texto, t.altura, t.angulo = v[0].replace("\\n", "\n"), altura, ang
@@ -1380,6 +1429,8 @@ class Lienzo(QWidget):
                 t.espaciado, t.interlineado = espaciado, interlineado
                 t.alineacion, t.ancla_v = self.opciones["alineacion"], self.opciones["ancla_v"]
                 t.camino_lado = self.opciones.get("camino_lado", t.camino_lado)
+                for k, tipo in Texto.TIPOGRAFIA.items():
+                    setattr(t, k, tipo(self.opciones[k]))
             return self.aplicar_cambio(cambiar)
         self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
                             [t.texto.replace("\n", "\\n"), formato.numero(t.altura), formato.numero(t.angulo, True),
@@ -1387,22 +1438,39 @@ class Lienzo(QWidget):
         # como en Fusion, al editar un texto se ven sus opciones (fuente, negrita, alineación…) en la paleta
         self._paleta_texto = True
         self.texto_en_edicion.emit()
-        self._previa_texto = {"pos": None, "existente": tid, "extra": {}, "caja": None, "reemplazar": False}
+        self._previa_texto = {"pos": None, "existente": tid, "extra": {}, "caja": None, "reemplazar": False,
+                              "cursor": len(t.texto)}
         self._texto_oculto = tid                 # mientras se escribe se ve la previa en vivo en su lugar
         self._conectar_previa_texto()
+        i = self._indice_en_texto(pos)           # el cursor queda donde se hizo doble clic
+        if i is not None:
+            self._previa_texto["cursor"] = i
+            self._actualizar_cursor()
 
     # ------------------------------------------------------------ texto en vivo (como Fusion)
+    # El texto se escribe en el lienzo con un cursor que se mueve: flechas, Inicio / Fin, Ctrl+←/→, el ratón
+    # (clic, arrastre, doble clic), selección con Mayús, Ctrl+A, portapapeles y Ctrl+Z / Ctrl+Y.
+    # `_previa_texto` guarda: "cursor" (posición 0..n en el texto), "ancla" (otro extremo de la selección o None),
+    # "col" (columna que se conserva al subir y bajar), "mapa" (dónde cae cada posición, de `paradas_cursor`) y
+    # las pilas "deshacer" / "rehacer".
     def _conectar_previa_texto(self):
         """Cada letra o número que se escribe en la caja redibuja el texto en vivo."""
         for campo in self.entrada.campos:
             campo.textChanged.connect(lambda _t: self.refrescar_previa_texto())
         self.entrada.hacer_movible()
         self.entrada.ocultar_primero()           # el texto se escribe en el cuadro, no en la barra
+        d, n = self._previa_texto, len(self._texto_real())
+        d.setdefault("cursor", n)
+        d.update(ancla=None, col=None, mapa=None, deshacer=[], rehacer=[])
+        if d.get("reemplazar") and n:            # el «Texto» de relleno arranca seleccionado: escribir lo reemplaza
+            d["cursor"], d["ancla"] = n, 0
+        d["cursor"] = min(d["cursor"], n)
         self._caret_on = True
         self._t_caret.start()
         self.setFocus()
-        self.mensaje.emit("Escribí el texto directamente en el cuadro. Enter = línea nueva; Ctrl+Enter o clic "
-                          "afuera = aceptar; Tab = altura y demás; Esc = cancelar.")
+        self.mensaje.emit("Escribí el texto directamente en el cuadro. Flechas o clic = mover el cursor; Mayús = "
+                          "seleccionar; Enter = línea nueva; Ctrl+Enter o clic afuera = aceptar; Tab = altura y "
+                          "demás; Esc = cancelar.")
         self.refrescar_previa_texto()
 
     def confirmar_texto_pendiente(self):
@@ -1411,89 +1479,339 @@ class Lienzo(QWidget):
         if self._previa_texto is not None and self.entrada is not None:
             self.entrada.aceptado.emit([c.text().strip() for c in self.entrada.campos])
 
+    def _texto_real(self):
+        """Lo escrito en el cuadro, con saltos de línea reales (en el campo van como «\\n»)."""
+        return self.entrada.campos[0].text().replace("\\n", "\n")
+
+    def _seleccion_texto(self):
+        """(desde, hasta) de lo seleccionado en el texto, o None si no hay selección."""
+        d = self._previa_texto
+        a, c = d["ancla"], d["cursor"]
+        return None if a is None or a == c else (min(a, c), max(a, c))
+
+    def _escribir_texto(self, texto, cursor, ancla=None, historial=True):
+        """Pone `texto` en el cuadro con el cursor (y la selección) donde se pide; queda para deshacer."""
+        d = self._previa_texto
+        if historial:
+            d["deshacer"].append((self._texto_real(), d["cursor"], d["ancla"]))
+            del d["deshacer"][:-200]
+            d["rehacer"] = []
+        d["cursor"], d["ancla"], d["col"] = cursor, ancla, None
+        campo, nuevo = self.entrada.campos[0], texto.replace("\n", "\\n")
+        if campo.text() != nuevo:
+            campo.setText(nuevo)                 # textChanged vuelve a calcular la vista previa
+        else:
+            self.refrescar_previa_texto()
+
+    def _reemplazar_rango(self, desde, hasta, nuevo):
+        texto = self._texto_real()
+        corrimiento = len(nuevo) - (hasta - desde)
+        self.opciones["ajustes_kerning"] = [          # el kerning a mano sigue a sus letras; el de lo borrado se va
+            [i + (corrimiento if i > hasta else 0), x] for i, x in self.opciones.get("ajustes_kerning", [])
+            if i <= desde or i > hasta]
+        self._escribir_texto(texto[:desde] + nuevo + texto[hasta:], desde + len(nuevo))
+
+    def _kerning_en(self, i):
+        """mm de kerning a mano entre la letra i - 1 y la i."""
+        return next((x for j, x in self.opciones.get("ajustes_kerning", []) if j == i), 0.0)
+
+    def ajustar_kerning_par(self, mm):
+        """Kerning a mano entre las dos letras que rodean al cursor (mm; 0 lo quita)."""
+        d = self._previa_texto
+        if d is None or self.entrada is None or d["cursor"] <= 0:
+            return
+        i = d["cursor"]
+        resto = [[j, x] for j, x in self.opciones.get("ajustes_kerning", []) if j != i]
+        self.opciones["ajustes_kerning"] = resto + ([[i, float(mm)]] if abs(mm) > 1e-9 else [])
+        self.refrescar_previa_texto()
+
+    def aplicar_opcion_texto(self, clave, valor):
+        """Tamaño, interletraje o interlineado desde el panel «Carácter»: quedan en las opciones y, con el cuadro
+        abierto, en su barra (que es donde se leen al aceptar)."""
+        self.opciones[clave] = float(valor)
+        if self._previa_texto is not None and self.entrada is not None:
+            campo = {"altura_texto": 1, "espaciado": 3, "interlineado": 4}[clave]
+            if self.entrada.campos[campo].text() != formato.numero(valor):
+                self.entrada.campos[campo].setText(formato.numero(valor))
+
+    def _insertar_en_texto(self, cadena):
+        """Escribe `cadena` en el cursor (si hay selección, la reemplaza)."""
+        sel = self._seleccion_texto()
+        cur = self._previa_texto["cursor"]
+        self._reemplazar_rango(*(sel if sel else (cur, cur)), cadena)
+
+    def _deshacer_texto(self, rehacer=False):
+        d = self._previa_texto
+        pila, otra = (d["rehacer"], d["deshacer"]) if rehacer else (d["deshacer"], d["rehacer"])
+        if pila:
+            otra.append((self._texto_real(), d["cursor"], d["ancla"]))
+            texto, cursor, ancla = pila.pop()
+            self._escribir_texto(texto, cursor, ancla, historial=False)
+
+    def _mover_cursor(self, destino, extender=False, col=None):
+        """Lleva el cursor a `destino`; con `extender` (Mayús) deja la selección desde donde estaba."""
+        d = self._previa_texto
+        if extender:
+            if d["ancla"] is None:
+                d["ancla"] = d["cursor"]
+        else:
+            d["ancla"] = None
+        d["cursor"], d["col"] = destino, col
+        self._caret_on = True
+        self._t_caret.start()
+        self._actualizar_cursor()
+        self.update()
+
+    def _vertical_texto(self, cur, delta):
+        """Posición del cursor una línea más arriba (-1) o abajo (+1), en la misma columna; (posición, columna)."""
+        d = self._previa_texto
+        info = d.get("mapa")
+        if not info:
+            return (0 if delta < 0 else len(self._texto_real())), None
+        k = info["linea_de"][cur] + delta
+        if k < 0:
+            return 0, None
+        if k >= len(info["lineas"]):
+            return len(info["paradas"]) - 1, None
+        ux, uy = info["dir"]
+
+        def columna(i):
+            x, y = info["paradas"][i][0]
+            return x * ux + y * uy
+        col = d["col"] if d["col"] is not None else columna(cur)
+        ini, fin = info["lineas"][k]
+        return min(range(ini, fin + 1), key=lambda i: abs(columna(i) - col)), col
+
     def _teclado_en_texto(self, e):
-        """Teclas con el cuadro de texto abierto: escriben en el texto del lienzo. True si las atendió."""
+        """Teclas con el cuadro de texto abierto: editan el texto del lienzo en la posición del cursor. True si las
+        atendió."""
         d = self._previa_texto
         if d is None or self.entrada is None:
             return False
-        campo, k = self.entrada.campos[0], e.key()
+        k, mods = e.key(), e.modifiers()
+        ctrl, mayus = bool(mods & Qt.ControlModifier), bool(mods & Qt.ShiftModifier)
         if k == Qt.Key_Escape:
             self.cancelar()
             return True
+        texto = self._texto_real()
+        n = len(texto)
+        cur = min(max(d["cursor"], 0), n)
+        sel = self._seleccion_texto()
+        info = d.get("mapa")
+        linea = info["lineas"][info["linea_de"][cur]] if info else (0, n)
         if k in (Qt.Key_Return, Qt.Key_Enter):
-            if e.modifiers() & Qt.ControlModifier:
+            if ctrl:
                 self.entrada.aceptado.emit([c.text().strip() for c in self.entrada.campos])
-                return True
-            texto = campo.text()
-            campo.setText(("" if d["reemplazar"] else texto) + "\\n")
-        elif k in (Qt.Key_Backspace, Qt.Key_Delete):
-            texto = "" if d["reemplazar"] else campo.text()
-            campo.setText(texto[:-2] if texto.endswith("\\n") else texto[:-1])
-        elif e.text() and e.text().isprintable() and not e.modifiers() & Qt.ControlModifier:
-            campo.setText(("" if d["reemplazar"] else campo.text()) + e.text())
+            else:
+                self._insertar_en_texto("\n")
+        elif k in (Qt.Key_Left, Qt.Key_Right) and mods & Qt.AltModifier and not ctrl:
+            paso = 0.02 * max(self.opciones.get("altura_texto", 5.0), 0.1)         # Alt+←/→: kerning del cursor
+            self.ajustar_kerning_par(self._kerning_en(cur) + (-paso if k == Qt.Key_Left else paso))
+        elif k == Qt.Key_Left:
+            if sel and not mayus and not ctrl:
+                self._mover_cursor(sel[0])
+            else:
+                self._mover_cursor(max(_inicio_palabra(texto, cur) if ctrl else cur - 1, 0), mayus)
+        elif k == Qt.Key_Right:
+            if sel and not mayus and not ctrl:
+                self._mover_cursor(sel[1])
+            else:
+                self._mover_cursor(min(_fin_palabra(texto, cur) if ctrl else cur + 1, n), mayus)
+        elif k in (Qt.Key_Up, Qt.Key_Down):
+            destino, col = self._vertical_texto(cur, -1 if k == Qt.Key_Up else 1)
+            self._mover_cursor(destino, mayus, col)
+        elif k == Qt.Key_Home:
+            self._mover_cursor(0 if ctrl else linea[0], mayus)
+        elif k == Qt.Key_End:
+            self._mover_cursor(n if ctrl else linea[1], mayus)
+        elif k == Qt.Key_Backspace:
+            if sel:
+                self._reemplazar_rango(*sel, "")
+            elif cur > 0:
+                self._reemplazar_rango(_inicio_palabra(texto, cur) if ctrl else cur - 1, cur, "")
+        elif k == Qt.Key_Delete:
+            if sel:
+                self._reemplazar_rango(*sel, "")
+            elif cur < n:
+                self._reemplazar_rango(cur, _fin_palabra(texto, cur) if ctrl else cur + 1, "")
+        elif ctrl and k == Qt.Key_A:
+            d["ancla"] = 0
+            self._mover_cursor(n, True)
+        elif ctrl and k in (Qt.Key_C, Qt.Key_X):
+            if sel:
+                QApplication.clipboard().setText(texto[sel[0]:sel[1]])
+                if k == Qt.Key_X:
+                    self._reemplazar_rango(*sel, "")
+        elif ctrl and k == Qt.Key_V:
+            pegado = QApplication.clipboard().text().replace("\r\n", "\n").replace("\r", "\n")
+            pegado = pegado.replace("\t", "    ")
+            self._insertar_en_texto("".join(c for c in pegado if c == "\n" or c.isprintable()))
+        elif ctrl and k in (Qt.Key_Z, Qt.Key_Y):
+            self._deshacer_texto(rehacer=k == Qt.Key_Y or mayus)
+        elif e.text() and e.text().isprintable() and (not ctrl or mods & Qt.AltModifier):   # AltGr = Ctrl+Alt
+            self._insertar_en_texto(e.text())
         else:
             return False
-        d["reemplazar"] = False
         return True
 
-    def _posicion_cursor(self, texto, altura, inter, polis, d):
-        """Segmento vertical que marca dónde se escribe: al final de la última línea del texto."""
-        pts = [q for poli in polis for q in poli]
-        caja = d.get("caja")
-        if not pts:                                   # sin texto: arranca en la esquina superior izquierda
-            if caja is not None:
-                return ((caja[0], caja[3] - altura), (caja[0], caja[3]))
+    def _indice_en_texto(self, pos):
+        """Posición del texto (0..n) más cercana al punto de pantalla `pos`; None si todavía no hay mapa."""
+        info = (self._previa_texto or {}).get("mapa")
+        if not info:
             return None
-        ymin, xmin = min(q[1] for q in pts), min(q[0] for q in pts)
-        if texto.endswith("\n"):                       # línea nueva vacía: debajo de la última, a la izquierda
-            x = caja[0] if caja is not None else xmin
-            base = ymin - altura * inter
-            return ((x, base), (x, base + altura))
-        corte = ymin + altura * inter * 0.5            # lo que cae en la última línea
-        ultima = [q for poli in polis if sum(q[1] for q in poli) / len(poli) <= corte for q in poli]
-        if not ultima:
-            ultima = pts
-        x = max(q[0] for q in ultima) + altura * 0.08
-        base = min(q[1] for q in ultima)
-        return ((x, base), (x, base + altura))
+        x, y = self.a_mm(pos)
+        mejor, menor = None, None
+        for i, (a, b) in enumerate(info["paradas"]):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            largo2 = dx * dx + dy * dy
+            t = 0.0 if largo2 < 1e-12 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / largo2))
+            dist = math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy))
+            if menor is None or dist < menor:
+                mejor, menor = i, dist
+        return mejor
+
+    def _sobre_texto(self, pos):
+        """True si el punto de pantalla cae sobre el texto que se escribe (o su cuadro): ahí el clic mueve el cursor;
+        afuera, acepta el texto."""
+        d = self._previa_texto
+        if d is None or self.entrada is None:
+            return False
+        info = d.get("mapa")
+        x, y = self.a_mm(pos)
+        margen = 6.0 / max(self.px_por_mm(), 1e-6)
+        cajas = [c for c in (d.get("caja"), info and info.get("caja")) if c]
+        return any(c[0] - margen <= x <= c[2] + margen and c[1] - margen <= y <= c[3] + margen for c in cajas)
+
+    def _clic_en_texto(self, pos, mods):
+        """Clic dentro del texto que se escribe: el cursor va ahí; Mayús extiende la selección; arrastrar selecciona."""
+        d = self._previa_texto
+        i = self._indice_en_texto(pos)
+        if i is None:
+            return
+        if mods & Qt.ShiftModifier:
+            if d["ancla"] is None:
+                d["ancla"] = d["cursor"]
+        else:
+            d["ancla"] = i
+        d["cursor"], d["col"] = i, None
+        self._arrastre_texto = True
+        self._caret_on = True
+        self._t_caret.start()
+        self._actualizar_cursor()
+        self.update()
+
+    def _seleccionar_palabra(self, pos):
+        i = self._indice_en_texto(pos)
+        if i is None:
+            return
+        d = self._previa_texto
+        d["ancla"], d["cursor"] = _palabra_en(self._texto_real(), i)
+        d["col"] = None
+        self._actualizar_cursor()
+        self.update()
+
+    def _actualizar_cursor(self):
+        """Pone el cursor y la selección (cuadriláteros) según el mapa del texto y la posición guardada."""
+        d = self._previa_texto
+        info = d.get("mapa") if d else None
+        self._sel_texto = []
+        if not info:
+            self._caret = None
+            return
+        paradas, n = info["paradas"], len(info["paradas"]) - 1
+        d["cursor"] = cur = min(max(d["cursor"], 0), n)
+        self._caret = paradas[cur]
+        if d.get("valores"):
+            self.texto_valores.emit(*d["valores"], self._kerning_en(cur))
+        sel = self._seleccion_texto()
+        if sel:
+            desde, hasta = sel[0], min(sel[1], n)
+            for ini, fin in info["lineas"]:
+                a, b = max(desde, ini), min(hasta, fin)
+                if a < b:
+                    self._sel_texto.append([paradas[a][0], paradas[b][0], paradas[b][1], paradas[a][1]])
+
+    def _texto_en_vivo(self, texto, altura, ang, esp, inter):
+        """El Texto con lo escrito y las opciones de la paleta (sin tocar el boceto): de ahí salen los contornos
+        de la vista previa y el mapa del cursor."""
+        d, o = self._previa_texto, self.opciones
+        tipografia = {k: o[k] for k in Texto.TIPOGRAFIA}
+        if d["existente"] is not None:
+            t = copy.copy(self.b.curvas[d["existente"]])
+            t.texto, t.altura, t.angulo = texto, altura, ang
+            t.fuente, t.negrita, t.cursiva = o["fuente"], o["negrita"], o["cursiva"]
+            t.espaciado, t.interlineado = esp, inter
+            t.alineacion, t.ancla_v = o["alineacion"], o["ancla_v"]
+            t.camino_lado = o.get("camino_lado", t.camino_lado)
+            for k, v in tipografia.items():
+                setattr(t, k, v)
+            return t
+        extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | d["extra"]
+        return Texto(0, d["pos"], texto, o["fuente"], altura, ang, o["negrita"], o["cursiva"], espaciado=esp,
+                     interlineado=inter, **extra, **tipografia)
+
+    def _mapa_cursor(self, t, P, ang):
+        """Mapa de posiciones del texto `t` para el cursor: ver `paradas_cursor` (más `dir` y `caja`)."""
+        prim_camino = None
+        if t.camino is not None and t.camino != t.id and t.camino in self.b.curvas \
+                and not isinstance(self.b.curvas[t.camino], Texto):
+            base = primitivas_entidad(self.b.curvas[t.camino], P)
+            prim_camino = base[0] if base else None
+        info = paradas_cursor(t, P(t.punto), prim_camino)
+        if info is None:
+            return None
+        a = math.radians(ang)
+        info["dir"] = (math.cos(a), math.sin(a))
+        puntos = [q for seg in info["paradas"] for q in seg]
+        info["caja"] = (min(q[0] for q in puntos), min(q[1] for q in puntos),
+                        max(q[0] for q in puntos), max(q[1] for q in puntos))
+        return info
 
     def _parpadeo(self):
         self._caret_on = not self._caret_on
         self.update()
 
     def refrescar_previa_texto(self):
-        """Recalcula los contornos del texto con lo escrito en la caja y con las opciones de la paleta."""
+        """Recalcula los contornos del texto con lo escrito en la caja y con las opciones de la paleta, y deja el
+        cursor y la selección donde van."""
         d, e = self._previa_texto, self.entrada
         if d is None or e is None:
             return
         v = ([c.text() for c in e.campos] + [""] * 5)[:5]
-        polis, self._caret = [], None
+        polis, info = [], None
         self._caret_on = True
         self._t_caret.start()         # al escribir el cursor queda fijo y vuelve a parpadear
         try:
             texto = v[0].replace("\\n", "\n")
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
             esp, inter = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
-            o = self.opciones
-            if texto.strip() and altura > 0 and inter > 0:
-                copia = self.b.copia()
-                if d["existente"] is not None:
-                    nid = d["existente"]
-                    t = copia.curvas[nid]
-                    t.texto, t.altura, t.angulo = texto, altura, ang
-                    t.fuente, t.negrita, t.cursiva = o["fuente"], o["negrita"], o["cursiva"]
-                    t.espaciado, t.interlineado = esp, inter
-                    t.alineacion, t.ancla_v = o["alineacion"], o["ancla_v"]
-                    t.camino_lado = o.get("camino_lado", t.camino_lado)
-                else:
-                    extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | d["extra"]
-                    nid = copia.agregar_texto(d["pos"], texto, altura, ang, o["fuente"], o["negrita"], o["cursiva"],
-                                              espaciado=esp, interlineado=inter, **extra)
-                polis = [list(puntos_primitiva(prim)) for prim in copia.primitivas(nid)]
-            self._caret = self._posicion_cursor(texto, altura, inter, polis, d)
+            if altura > 0 and inter > 0:
+                t = self._texto_en_vivo(texto, altura, ang, esp, inter)
+
+                def P(q):
+                    return q if isinstance(q, tuple) else self.b.coords(q)
+                if texto.strip():
+                    polis = [list(puntos_primitiva(prim)) for prim in primitivas_entidad(t, P, curvas=self.b.curvas)]
+                info = self._mapa_cursor(t, P, ang)
+                if info is not None and polis:      # la caja también cubre las letras (p. ej. los subrayados)
+                    xs = [q[0] for poli in polis for q in poli]
+                    ys = [q[1] for poli in polis for q in poli]
+                    c = info["caja"]
+                    info["caja"] = (min(c[0], min(xs)), min(c[1], min(ys)), max(c[2], max(xs)), max(c[3], max(ys)))
         except (ErrorBoceto, ErrorExpresion, ValueError, ZeroDivisionError, KeyError):
-            polis = []                      # mientras se escribe un valor a medias, no se dibuja nada
+            polis, info = [], None          # mientras se escribe un valor a medias, no se dibuja nada
+        d["mapa"] = info
         self._previa_polis = polis
+        try:                                  # lo de la barra pasa a las opciones (y de ahí al panel)
+            alt, esp, inter = self.evaluar(v[1] or "5"), self.evaluar(v[3] or "0"), _numero(v[4] or "1")
+            if alt > 0 and inter > 0:
+                d["valores"] = (alt, esp, inter)
+                if not d.get("caja"):
+                    self.opciones["altura_texto"] = alt
+                self.opciones["espaciado"], self.opciones["interlineado"] = esp, inter
+        except (ErrorExpresion, ValueError, ZeroDivisionError, KeyError):
+            pass
+        self._actualizar_cursor()
         self.update()
 
     # ------------------------------------------------------------ entrada dinámica y cotas en pantalla
@@ -1534,8 +1852,9 @@ class Lienzo(QWidget):
             self.update()
         if self._previa_texto is not None:
             self._previa_texto, self._previa_polis, self._texto_oculto = None, [], None
-            self._caret = None
+            self._caret, self._sel_texto, self._arrastre_texto = None, [], False
             self._t_caret.stop()
+            self.unsetCursor()
             self.update()
         if self._paleta_texto:
             self._paleta_texto = False
@@ -2256,6 +2575,9 @@ class Lienzo(QWidget):
         self.setFocus()
         if self._previa_texto is not None and self.entrada is not None and e.button() in (Qt.LeftButton,
                                                                                           Qt.RightButton):
+            if e.button() == Qt.LeftButton and self._sobre_texto(pos):
+                self._clic_en_texto(pos, e.modifiers())      # clic en el texto: mueve el cursor
+                return
             self.confirmar_texto_pendiente()          # clic afuera o clic derecho (menú radial): el texto queda
             if e.button() == Qt.LeftButton:
                 return
@@ -2635,6 +2957,16 @@ class Lienzo(QWidget):
         pos = e.position()
         self._pos_cursor = pos
         self._camara()
+        if self._previa_texto is not None and self.entrada is not None:
+            if self._arrastre_texto and e.buttons() & Qt.LeftButton:       # arrastrando: selecciona texto
+                i = self._indice_en_texto(pos)
+                d = self._previa_texto
+                if i is not None and i != d["cursor"]:
+                    d["cursor"], d["col"] = i, None
+                    self._actualizar_cursor()
+                    self.update()
+                return
+            self.setCursor(Qt.IBeamCursor if self._sobre_texto(pos) else Qt.ArrowCursor)
         if (self.herramienta == "seleccionar" and not (e.buttons() & Qt.LeftButton) and self.entrada is None
                 and self._reenvio is None and self._marco is None):
             self._actualizar_sobre(pos)
@@ -2683,6 +3015,14 @@ class Lienzo(QWidget):
 
     def mouseReleaseEvent(self, e):
         pos = e.position()
+        if self._arrastre_texto:
+            self._arrastre_texto = False
+            d = self._previa_texto
+            if d is not None and d["ancla"] == d["cursor"]:
+                d["ancla"] = None            # un clic sin arrastre no deja selección
+                self._actualizar_cursor()
+                self.update()
+            return
         if self._reenvio is not None:
             boton, inicio = self._reenvio
             self._reenvio = None
@@ -2837,6 +3177,10 @@ class Lienzo(QWidget):
     def mouseDoubleClickEvent(self, e):
         if self.visor is not None and e.button() == Qt.MiddleButton:
             self.visor.mouseDoubleClickEvent(e)
+            return
+        if (e.button() == Qt.LeftButton and self._previa_texto is not None and self.entrada is not None
+                and self._sobre_texto(e.position())):
+            self._seleccionar_palabra(e.position())          # doble clic en el texto: elige la palabra
             return
         if e.button() == Qt.LeftButton:
             zona = self._zona_en(e.position())
@@ -3286,6 +3630,12 @@ class Lienzo(QWidget):
         # Fusion dibuja la vista previa como geometría sin restringir: azul y continua
         acento = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
         if self._previa_polis or self._caret is not None or (self._previa_texto and self._previa_texto.get("caja")):
+            if self._sel_texto:                    # lo seleccionado del texto que se escribe
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(acento.red(), acento.green(), acento.blue(), 80))
+                for cuadro in self._sel_texto:
+                    p.drawPolygon(QPolygonF([self.a_px(*q) for q in cuadro]))
+                p.setBrush(Qt.NoBrush)
             p.setPen(QPen(acento, 2.0))
             for poli in self._previa_polis:
                 self._dibujar_polilinea(p, poli)

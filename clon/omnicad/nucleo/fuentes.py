@@ -6,12 +6,18 @@ Antes el texto dependía del administrador de fuentes de OpenCascade, que no ve 
 para el usuario» ni las variables. Acá se escanean todas (carpetas del sistema, del usuario, el registro de
 Windows y las que se sumen), se guarda un catálogo en caché y los contornos salen directo de los glifos
 (TrueType, OpenType/CFF, colecciones .ttc y variables), con espaciado entre letras, interlineado, caja con
-ajuste de línea, alineación horizontal, anclaje vertical y volteo.
+ajuste de línea, alineación horizontal, anclaje vertical y volteo. Además, las opciones del panel «Carácter» de
+los editores de diseño: kerning de la fuente (sí / no), inclinación (sesgo), escala horizontal y vertical,
+desplazamiento de línea base, capitalización (mayúsculas, minúsculas, título, versalitas), subrayado y
+tachado (simple o doble, con grosor propio) y «sin división» (la caja no parte las líneas).
+
+`mapa_texto` devuelve dónde cae cada posición del cursor (para escribir y mover el cursor dentro del texto).
 
 Limitación: no hay ligaduras ni formas contextuales (árabe, devanagari…): cada carácter es un glifo.
 Equivale al texto de boceto de Fusion (SKT-CREATE-TEXT), con más opciones.
 """
 import json
+import math
 import os
 import sys
 from functools import lru_cache
@@ -21,6 +27,10 @@ EXTENSIONES = (".ttf", ".otf", ".ttc", ".otc")
 CARPETAS_EXTRA = []              # carpetas sumadas en tiempo de ejecución (agregar_carpeta)
 ALINEACIONES = ("izq", "centro", "der")
 ANCLAJES = ("base", "arriba", "medio", "abajo")
+CAPITALIZACIONES = ("ninguno", "mayusculas", "minusculas", "titulo", "versalitas")
+DECORACIONES = ("ninguno", "simple", "doble")
+FACTOR_VERSALITAS = 0.8          # tamaño de las minúsculas pasadas a versalitas
+MAX_INCLINACION = 80.0           # grados de sesgo (más allá la tangente se dispara)
 _CATALOGO = []
 
 
@@ -242,8 +252,14 @@ def _datos(ruta, indice, peso_variable):
     gap = float(getattr(os2, "sTypoLineGap", 0) or hhea.lineGap or 0.0)
     if asc - desc < 0.5 * upem:                     # métricas vacías o absurdas
         asc, desc = float(hhea.ascent), float(hhea.descent)
+    post = f["post"] if "post" in f else None
+    sub_gro = float(getattr(post, "underlineThickness", 0) or 0.05 * upem)
+    sub_pos = float(getattr(post, "underlinePosition", 0) or -0.1 * upem)       # centro de la barra, bajo la base
+    tac_gro = float(getattr(os2, "yStrikeoutSize", 0) or sub_gro)
+    tac_pos = float(getattr(os2, "yStrikeoutPosition", 0) or 0.28 * upem)
     return {"f": f, "upem": upem, "cmap": f.getBestCmap() or {}, "hmtx": f["hmtx"], "gs": f.getGlyphSet(),
-            "asc": asc, "desc": desc, "gap": gap, "kern": _tabla_kern(f)}
+            "asc": asc, "desc": desc, "gap": gap, "kern": _tabla_kern(f),
+            "sub_gro": sub_gro, "sub_pos": sub_pos, "tac_gro": tac_gro, "tac_pos": tac_pos}
 
 
 def _tabla_kern(f):
@@ -298,7 +314,9 @@ def _tabla_kern(f):
     return kern
 
 
-def _lapiz(gs, dx, dy, s, salida):
+def _lapiz(gs, dx, dy, sx, sy, sesgo, salida):
+    """Lápiz que vuelca un glifo como primitivas ('linea' y 'spline') con el origen en (dx, dy), escala sx × sy y
+    `sesgo` (tangente del ángulo de inclinación: cada punto corre y·sesgo en x)."""
     from fontTools.pens.basePen import BasePen
 
     class Lapiz(BasePen):
@@ -308,7 +326,7 @@ def _lapiz(gs, dx, dy, s, salida):
 
         @staticmethod
         def _t(p):
-            return (dx + p[0] * s, dy + p[1] * s)
+            return (dx + p[0] * sx + p[1] * sy * sesgo, dy + p[1] * sy)
 
         def _moveTo(self, p):
             self.ini = self.act = self._t(p)
@@ -345,147 +363,306 @@ def _lapiz(gs, dx, dy, s, salida):
     return Lapiz()
 
 
-def _ajustar_lineas(lineas, ancho_max, ancho_de):
-    """Parte las líneas en palabras para que ninguna pase de `ancho_max` (una palabra más larga queda sola)."""
-    if ancho_max <= 0:
-        return lineas
-    salida = []
-    for linea in lineas:
-        actual = ""
-        for palabra in linea.split(" "):
-            prueba = palabra if not actual else actual + " " + palabra
-            if actual and ancho_de(prueba) > ancho_max:
-                salida.append(actual)
-                actual = palabra
-            else:
-                actual = prueba
-        salida.append(actual)
-    return salida
+# ---------------------------------------------------------------- composición (una sola para contornos y cursor)
+_PREDETERMINADAS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base", "ancho_caja": 0.0,
+                    "voltear_h": False, "voltear_v": False, "kerning": True, "inclinacion": 0.0, "escala_h": 100.0,
+                    "escala_v": 100.0, "desfase_base": 0.0, "capitalizacion": "ninguno", "subrayado": "ninguno",
+                    "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False, "ajustes_kerning": ()}
+_DE_COMPOSICION = ("espaciado", "interlineado", "alineacion", "ancla_v", "ancho_caja", "kerning", "inclinacion",
+                   "escala_h", "escala_v", "capitalizacion", "sin_division", "ajustes_kerning")
 
 
-def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
-                    interlineado=1.0, alineacion="izq", ancla_v="base", ancho_caja=0.0, voltear_h=False,
-                    voltear_v=False):
-    """Contornos de un texto como primitivas 2D ('linea' y 'spline' de Bézier, id None) con el origen en el
-    ancla: la esquina izquierda de la caja y, en vertical, la línea base de la primera línea ("base"), su
-    borde superior ("arriba"), el centro del bloque ("medio") o el borde inferior de la última ("abajo").
-    `altura` es el tamaño de la fuente en mm; `espaciado`, mm extra entre letras; `interlineado`, factor sobre
-    el salto de línea de la fuente; `ancho_caja` > 0 parte las líneas en palabras; `alineacion` izq/centro/der
-    dentro de la caja. Levanta ErrorFuente si la fuente no existe."""
+def _opciones(dadas):
+    """Opciones del texto con sus valores por defecto, validadas. Levanta ErrorFuente si algo no sirve."""
+    desconocidas = set(dadas) - set(_PREDETERMINADAS)
+    if desconocidas:
+        raise ErrorFuente(f"Opciones de texto desconocidas: {', '.join(sorted(desconocidas))}.")
+    o = _PREDETERMINADAS | dict(dadas)
+    if o["alineacion"] not in ALINEACIONES:
+        raise ErrorFuente(f"Alineación desconocida: {o['alineacion']} (izq, centro, der).")
+    if o["ancla_v"] not in ANCLAJES:
+        raise ErrorFuente(f"Anclaje vertical desconocido: {o['ancla_v']} (base, arriba, medio, abajo).")
+    if o["capitalizacion"] not in CAPITALIZACIONES:
+        raise ErrorFuente(f"Capitalización desconocida: {o['capitalizacion']} ({', '.join(CAPITALIZACIONES)}).")
+    for k in ("subrayado", "tachado"):
+        if o[k] not in DECORACIONES:
+            raise ErrorFuente(f"«{k}» desconocido: {o[k]} ({', '.join(DECORACIONES)}).")
+    for k in ("escala_h", "escala_v"):
+        if not (math.isfinite(o[k]) and 1.0 <= o[k] <= 1000.0):
+            raise ErrorFuente(f"«{k}» va de 1 a 1000 (%).")
+    if not (math.isfinite(o["inclinacion"]) and abs(o["inclinacion"]) <= MAX_INCLINACION):
+        raise ErrorFuente(f"La inclinación va de -{MAX_INCLINACION:g} a {MAX_INCLINACION:g} grados.")
+    if not (math.isfinite(o["grosor_decoracion"]) and o["grosor_decoracion"] >= 0):
+        raise ErrorFuente("El grosor de la decoración tiene que ser un número mayor o igual que cero.")
+    if not math.isfinite(o["desfase_base"]):
+        raise ErrorFuente("El desplazamiento de la línea base tiene que ser un número finito.")
+    try:
+        o["ajustes_kerning"] = tuple((int(i), float(x)) for i, x in o["ajustes_kerning"])
+    except (TypeError, ValueError):
+        raise ErrorFuente("Los ajustes de kerning son pares [posición, mm].") from None
+    if not all(i >= 0 and math.isfinite(x) for i, x in o["ajustes_kerning"]):
+        raise ErrorFuente("Los ajustes de kerning necesitan posiciones desde 0 y valores finitos (mm).")
+    return o
+
+
+def _fuente_datos(fuente, negrita, cursiva):
     reg = buscar_fuente(fuente, negrita, cursiva)
     if reg is None:
         raise ErrorFuente(f"No se encontró la fuente «{fuente}».")
-    if alineacion not in ALINEACIONES:
-        raise ErrorFuente(f"Alineación desconocida: {alineacion} (izq, centro, der).")
-    if ancla_v not in ANCLAJES:
-        raise ErrorFuente(f"Anclaje vertical desconocido: {ancla_v} (base, arriba, medio, abajo).")
     peso = (700 if negrita else 400) if "wght" in reg["ejes"] else 0
-    d = _datos(reg["ruta"], reg["indice"], peso)
+    return _datos(reg["ruta"], reg["indice"], peso)
+
+
+def _capitalizar(texto, modo):
+    """(texto, factores): el texto con la capitalización pedida, carácter por carácter (el largo no cambia, así los
+    índices del cursor siguen valiendo) y el tamaño relativo de cada uno (solo las versalitas lo cambian; None si
+    todos valen 1)."""
+    if modo == "ninguno":
+        return texto, None
+    salida, factores, tras_letra = [], [], False
+    for ch in texto:
+        f = 1.0
+        if modo == "mayusculas":
+            nuevo = ch.upper()
+        elif modo == "minusculas":
+            nuevo = ch.lower()
+        elif modo == "titulo":
+            nuevo = ch.lower() if tras_letra else ch.upper()
+        else:                                            # versalitas: las minúsculas pasan a mayúscula más chica
+            nuevo = ch.upper()
+            if nuevo != ch:
+                f = FACTOR_VERSALITAS
+        if len(nuevo) != 1:                              # «ß».upper() = «SS»: cambiaría el largo
+            nuevo, f = ch, 1.0
+        salida.append(nuevo)
+        factores.append(f)
+        tras_letra = ch.isalnum()
+    return "".join(salida), (factores if any(f != 1.0 for f in factores) else None)
+
+
+def _lineas_visuales(texto, ancho_max, ancho_de):
+    """Líneas de composición [(inicio, fin)] como índices de `texto`: una por salto de línea y, si `ancho_max` > 0,
+    partidas en palabras para que ninguna pase de ese ancho (una palabra más larga queda sola). `ancho_de(i, j)`
+    mide el tramo texto[i:j]. El espacio donde se corta (y el salto de línea) quedan fuera de las dos líneas."""
+    salida, pos = [], 0
+    for linea in texto.split("\n"):
+        fin_linea = pos + len(linea)
+        if ancho_max <= 0:
+            salida.append((pos, fin_linea))
+        else:
+            ini = actual_fin = cursor = pos
+            for k, palabra in enumerate(linea.split(" ")):
+                fin_palabra = cursor + len(palabra)
+                if k > 0 and actual_fin > ini and ancho_de(ini, fin_palabra) > ancho_max:
+                    salida.append((ini, actual_fin))
+                    ini = cursor
+                actual_fin = fin_palabra
+                cursor = fin_palabra + 1
+            salida.append((ini, actual_fin))
+        pos = fin_linea + 1
+    return salida
+
+
+def _maquetar(texto, d, altura, *, espaciado=0.0, interlineado=1.0, alineacion="izq", ancla_v="base",
+              ancho_caja=0.0, kerning=True, inclinacion=0.0, escala_h=100.0, escala_v=100.0,
+              capitalizacion="ninguno", sin_division=False, ajustes_kerning=()):
+    """Compone el texto sin dibujarlo: dónde cae cada carácter. Devuelve un dict con `texto` (ya capitalizado, con
+    saltos «\\n»), `gl` (glifo de cada carácter), `f_(i)` (tamaño relativo del carácter i), `avance(i)`, `lineas`
+    (por línea de composición: `ini`, `fin`, `x`, `y` de la línea base, `xs` (x de cada carácter relativa a `x`) y
+    `ancho`), `ancho_bloque`, `y_sup` / `y_inf` (bordes del bloque), `asc` / `desc` (ya con la escala vertical),
+    `sx` / `sy` (escala de los glifos) y `sesgo`."""
+    texto = str(texto).replace("\r\n", "\n").replace("\r", "\n")
+    texto, fc = _capitalizar(texto, capitalizacion)
     s = float(altura) / d["upem"]
+    sh, sv = float(escala_h) / 100.0, float(escala_v) / 100.0
     cmap, hmtx, kern = d["cmap"], d["hmtx"], d["kern"]
     notdef = d["f"].getGlyphOrder()[0]
+    gl = [cmap.get(ord(ch), notdef) for ch in texto]
 
-    def glifo(ch):
-        return cmap.get(ord(ch), notdef)
+    def f_(i):
+        return 1.0 if fc is None else fc[i]
 
-    def avance(g):
+    def avance(i):
         try:
-            return hmtx[g][0]
+            return hmtx[gl[i]][0] * s * sh * f_(i)
         except KeyError:
-            return 0
+            return 0.0
 
-    def ancho_de(linea):
-        w, previo = 0.0, None
-        for ch in linea:
-            g = glifo(ch)
-            if previo is not None:
-                w += (kern(previo, g) * s)
-            w += avance(g) * s + espaciado
-            previo = g
-        return w - (espaciado if linea else 0.0)
+    manual = dict(ajustes_kerning)           # {posición: mm}: ajuste a mano entre la letra i - 1 y la i
 
-    lineas = str(texto).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    lineas = _ajustar_lineas(lineas, float(ancho_caja or 0.0), ancho_de)
-    anchos = [ancho_de(ln) for ln in lineas]
-    ancho_bloque = float(ancho_caja) if ancho_caja and ancho_caja > 0 else max(anchos + [0.0])
+    def posiciones(ini, fin):
+        """x de cada carácter del tramo (con kerning y espaciado) y el ancho del tramo."""
+        xs, x = [], 0.0
+        for i in range(ini, fin):
+            if i > ini:
+                x += manual.get(i, 0.0)
+                if kerning:
+                    x += kern(gl[i - 1], gl[i]) * s * sh * f_(i)
+            xs.append(x)
+            x += avance(i) + espaciado
+        return xs, x - (espaciado if fin > ini else 0.0)
+
+    tramos = _lineas_visuales(texto, 0.0 if sin_division else float(ancho_caja or 0.0),
+                              lambda i, j: posiciones(i, j)[1])
+    medidas = [posiciones(i, j) for i, j in tramos]
+    ancho_bloque = float(ancho_caja) if ancho_caja and ancho_caja > 0 else max([w for _xs, w in medidas] + [0.0])
     paso = (d["asc"] - d["desc"] + d["gap"]) * s * float(interlineado)
-    asc, desc = d["asc"] * s, d["desc"] * s
-    # y de la línea base de la primera línea, según el anclaje
-    n = len(lineas)
+    asc, desc = d["asc"] * s * sv, d["desc"] * s * sv
+    n = len(tramos)
     alto = (n - 1) * paso + (asc - desc)
     y0 = {"base": 0.0, "arriba": -asc, "medio": -asc + alto / 2, "abajo": -asc + alto}[ancla_v]
-    y_sup, y_inf = y0 + asc, y0 - (n - 1) * paso + desc          # bordes del bloque (para el volteo)
+    lineas = []
+    for k, ((i, j), (xs, w)) in enumerate(zip(tramos, medidas, strict=True)):
+        x = {"izq": 0.0, "centro": (ancho_bloque - w) / 2, "der": ancho_bloque - w}[alineacion]
+        lineas.append({"ini": i, "fin": j, "x": x, "y": y0 - k * paso, "xs": xs, "ancho": w})
+    return {"texto": texto, "gl": gl, "f_": f_, "avance": avance, "lineas": lineas, "ancho_bloque": ancho_bloque,
+            "y_sup": y0 + asc, "y_inf": y0 - (n - 1) * paso + desc, "asc": asc, "desc": desc, "s": s,
+            "sx": s * sh, "sy": s * sv, "sesgo": math.tan(math.radians(float(inclinacion)))}
+
+
+def _de_composicion(o):
+    return {k: o[k] for k in _DE_COMPOSICION}
+
+
+def _barras_decoracion(d, m, o):
+    """Barras de subrayado y tachado como [(centro, grosor)] relativas a la línea base (mm). Doble = dos barras
+    separadas un grosor. Con `grosor_decoracion` > 0 ese grosor manda; si no, el de la fuente."""
+    barras = []
+    for modo, pos, gro, abajo in ((o["subrayado"], d["sub_pos"], d["sub_gro"], True),
+                                  (o["tachado"], d["tac_pos"], d["tac_gro"], False)):
+        if modo == "ninguno":
+            continue
+        t = o["grosor_decoracion"] if o["grosor_decoracion"] > 0 else gro * m["s"]
+        c = pos * m["sy"]
+        if modo == "simple":
+            barras.append((c, t))
+        elif abajo:
+            barras += [(c, t), (c - 2 * t, t)]
+        else:
+            barras += [(c + t, t), (c - t, t)]
+    return barras
+
+
+# ---------------------------------------------------------------- contornos
+def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False, **opciones):
+    """Contornos de un texto como primitivas 2D ('linea' y 'spline' de Bézier, id None) con el origen en el
+    ancla: la esquina izquierda de la caja y, en vertical, la línea base de la primera línea ("base"), su
+    borde superior ("arriba"), el centro del bloque ("medio") o el borde inferior de la última ("abajo").
+    `altura` es el tamaño de la fuente en mm.
+
+    Opciones: `espaciado` (mm extra entre letras), `interlineado` (factor sobre el salto de línea de la fuente),
+    `alineacion` (izq / centro / der dentro de la caja), `ancla_v`, `ancho_caja` (> 0 parte las líneas en
+    palabras), `voltear_h` / `voltear_v` (espejo del bloque), `kerning` (False ignora los pares de la fuente),
+    `ajustes_kerning` ([(posición, mm)]: kerning a mano entre la letra anterior y la de esa posición),
+    `inclinacion` (grados de sesgo; no es la cursiva de la fuente), `escala_h` / `escala_v` (% del ancho y del alto
+    de las letras, de 1 a 1000), `desfase_base` (mm que sube todo el texto), `capitalizacion` (ninguno, mayusculas,
+    minusculas, titulo, versalitas), `subrayado` y `tachado` (ninguno, simple, doble: barras cerradas que forman
+    perfiles), `grosor_decoracion` (mm; 0 = el de la fuente) y `sin_division` (True: `ancho_caja` no parte las
+    líneas). Levanta ErrorFuente si la fuente no existe o una opción no sirve."""
+    d = _fuente_datos(fuente, negrita, cursiva)
+    o = _opciones(opciones)
+    m = _maquetar(texto, d, altura, **_de_composicion(o))
     salida = []
-    for i, ln in enumerate(lineas):
-        x = {"izq": 0.0, "centro": (ancho_bloque - anchos[i]) / 2, "der": ancho_bloque - anchos[i]}[alineacion]
-        y = y0 - i * paso
-        previo = None
-        for ch in ln:
-            g = glifo(ch)
-            if previo is not None:
-                x += kern(previo, g) * s
-            if not ch.isspace():
-                try:
-                    d["gs"][g].draw(_lapiz(d["gs"], x, y, s, salida))
-                except KeyError:
-                    pass
-            x += avance(g) * s + espaciado
-            previo = g
-    if voltear_h or voltear_v:
+    for ln in m["lineas"]:
+        for j in range(ln["fin"] - ln["ini"]):
+            i = ln["ini"] + j
+            if m["texto"][i].isspace():
+                continue
+            f = m["f_"](i)
+            try:
+                d["gs"][m["gl"][i]].draw(_lapiz(d["gs"], ln["x"] + ln["xs"][j], ln["y"], m["sx"] * f, m["sy"] * f,
+                                                m["sesgo"], salida))
+            except KeyError:
+                pass
+    barras = _barras_decoracion(d, m, o)
+    if barras:
+        for ln in m["lineas"]:
+            if ln["ancho"] <= 1e-9:
+                continue
+            x1, x2 = ln["x"], ln["x"] + ln["ancho"]
+            for centro, grosor in barras:
+                y1, y2 = ln["y"] + centro - grosor / 2, ln["y"] + centro + grosor / 2
+                esquinas = ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
+                salida += [("linea", None, a, b) for a, b in zip(esquinas, esquinas[1:] + esquinas[:1], strict=True)]
+    if o["voltear_h"] or o["voltear_v"] or o["desfase_base"]:
+        w, y_sum, dy = m["ancho_bloque"], m["y_sup"] + m["y_inf"], o["desfase_base"]
+
         def v(q):
-            return ((ancho_bloque - q[0]) if voltear_h else q[0], (y_sup + y_inf - q[1]) if voltear_v else q[1])
+            return ((w - q[0]) if o["voltear_h"] else q[0],
+                    ((y_sum - q[1]) if o["voltear_v"] else q[1]) + dy)
         salida = [("linea", None, v(p[2]), v(p[3])) if p[0] == "linea"
                   else ("spline", None, tuple(v(q) for q in p[2]), p[3], p[4], p[5]) for p in salida]
     return salida
+
+
+def mapa_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False, **opciones):
+    """Dónde cae cada posición del cursor de un texto recto, en las mismas coordenadas que `contornos_texto`
+    (mismas opciones): {"paradas": [(x, y)] con n + 1 posiciones (y = línea base), "linea_de": [nº de línea de
+    composición de cada posición], "lineas": [(ini, fin)] (índices de cada línea), "abajo" / "arriba": hasta
+    dónde baja y sube el cursor desde la línea base, "sesgo": cuánto corre en x por cada mm de y}. La posición i
+    es el borde izquierdo del carácter i; la n, el final del texto. Con la caja que parte líneas, el espacio donde
+    se corta queda al final de la línea de arriba."""
+    d = _fuente_datos(fuente, negrita, cursiva)
+    o = _opciones(opciones)
+    m = _maquetar(texto, d, altura, **_de_composicion(o))
+    n = len(m["texto"])
+    paradas, linea_de = [(0.0, 0.0)] * (n + 1), [0] * (n + 1)
+    w, y_sum, dy = m["ancho_bloque"], m["y_sup"] + m["y_inf"], o["desfase_base"]
+    for k, ln in enumerate(m["lineas"]):
+        for j, x in enumerate(ln["xs"] + [ln["ancho"]]):
+            x, y = ln["x"] + x, ln["y"]
+            paradas[ln["ini"] + j] = ((w - x) if o["voltear_h"] else x, ((y_sum - y) if o["voltear_v"] else y) + dy)
+            linea_de[ln["ini"] + j] = k
+    abajo, arriba, sesgo = m["desc"], m["asc"], m["sesgo"]
+    if o["voltear_v"]:
+        abajo, arriba, sesgo = -arriba, -abajo, -sesgo
+    if o["voltear_h"]:
+        sesgo = -sesgo
+    return {"paradas": paradas, "linea_de": linea_de, "lineas": [(ln["ini"], ln["fin"]) for ln in m["lineas"]],
+            "abajo": abajo, "arriba": arriba, "sesgo": sesgo}
 
 
 # ---------------------------------------------------------------- texto sobre un camino
 LADOS = ("izq", "der")
 
 
-def glifos_de_linea(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False, espaciado=0.0):
-    """([(x, avance, prims)], ancho) de una línea: un elemento por carácter visible, con sus contornos en
-    coordenadas propias (origen en la línea base, a la izquierda del glifo) y `x` su posición en la línea."""
-    reg = buscar_fuente(fuente, negrita, cursiva)
-    if reg is None:
-        raise ErrorFuente(f"No se encontró la fuente «{fuente}».")
-    peso = (700 if negrita else 400) if "wght" in reg["ejes"] else 0
-    d = _datos(reg["ruta"], reg["indice"], peso)
-    s = float(altura) / d["upem"]
-    notdef = d["f"].getGlyphOrder()[0]
-    x, previo, salida = 0.0, None, []
-    for ch in str(texto):
-        g = d["cmap"].get(ord(ch), notdef)
-        if previo is not None:
-            x += d["kern"](previo, g) * s
+def _glifos_linea(texto, d, altura, espaciado, o):
+    """([(x, avance, prims, índice)], ancho, xs, avances, maqueta) de una sola línea (los saltos pasan a espacios)."""
+    linea = str(texto).replace("\r", "").replace("\n", " ")
+    base = {k: v for k, v in _de_composicion(o).items() if k not in ("espaciado", "ancho_caja", "sin_division",
+                                                                    "interlineado", "alineacion", "ancla_v")}
+    m = _maquetar(linea, d, altura, espaciado=espaciado, **base)
+    ln = m["lineas"][0]
+    salida, avances = [], []
+    for j in range(ln["fin"] - ln["ini"]):
+        i = ln["ini"] + j
+        avances.append(m["avance"](i))
+        if m["texto"][i].isspace():
+            continue
+        prims, f = [], m["f_"](i)
         try:
-            avance = d["hmtx"][g][0] * s
+            d["gs"][m["gl"][i]].draw(_lapiz(d["gs"], 0.0, 0.0, m["sx"] * f, m["sy"] * f, m["sesgo"], prims))
         except KeyError:
-            avance = 0.0
-        if not ch.isspace():
-            prims = []
-            try:
-                d["gs"][g].draw(_lapiz(d["gs"], 0.0, 0.0, s, prims))
-            except KeyError:
-                pass
-            if prims:
-                salida.append((x, avance, prims))
-        x += avance + espaciado
-        previo = g
-    return salida, (x - espaciado if texto else 0.0)
+            pass
+        if prims:
+            salida.append((ln["xs"][j], avances[-1], prims, j))
+    return salida, ln["ancho"], ln["xs"], avances, m
 
 
-def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
-                        alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False):
-    """Texto sobre un camino (Fusion: Texto en trayectoria), con las letras rígidas y perpendiculares a la curva.
+def glifos_de_linea(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=False, espaciado=0.0, **opciones):
+    """([(x, avance, prims)], ancho) de una línea: un elemento por carácter visible, con sus contornos en
+    coordenadas propias (origen en la línea base, a la izquierda del glifo) y `x` su posición en la línea.
+    Acepta las opciones de tipografía de `contornos_texto` (kerning, inclinacion, escala_h, escala_v,
+    capitalizacion)."""
+    d = _fuente_datos(fuente, negrita, cursiva)
+    glifos, ancho, _xs, _av, _m = _glifos_linea(texto, d, altura, espaciado, _opciones(opciones))
+    return [(x, avance, prims) for x, avance, prims, _j in glifos], ancho
 
-    camino: polilínea densa [(x, y)…] que sigue la curva (cerrada si el último punto es el primero). Las letras
-    quedan del lado izquierdo del sentido de recorrido; lado "der" recorre al revés (las letras pasan al otro lado
-    y se siguen leyendo derechas). posicion: fracción 0-1 del largo, medida en el sentido ORIGINAL del camino,
-    donde va el ancla del texto; alineacion: qué parte del texto cae ahí (izq, centro, der). desfase: mm entre la
-    curva y la línea base (positivo = hacia el lado de las letras). ajustar: reparte el texto en todo el largo
-    (ignora posición y alineación). En un camino cerrado el texto da la vuelta; en uno abierto sigue recto más
-    allá de las puntas. Varias líneas se juntan en una."""
+
+def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado,
+                     desfase, ajustar, opciones):
+    """Lo que comparten los contornos y el cursor de un texto en curva: (glifos, ancho, xs, avances, maqueta,
+    inicio, extra, colocar) con `colocar(s)` = (bx, by, cos, sen) del punto a la distancia `s` del camino."""
     import numpy as np
     if lado not in LADOS:
         raise ErrorFuente(f"Lado desconocido: {lado} (izq, der).")
@@ -503,10 +680,8 @@ def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False
     largo = float(acum[-1])
     if largo < 1e-9:
         raise ErrorFuente("El camino del texto no tiene largo.")
-    linea = " ".join(ln for ln in str(texto).replace("\r", "").split("\n"))
-    glifos, ancho = glifos_de_linea(linea, fuente, altura, negrita, cursiva, espaciado)
-    if not glifos:
-        return []
+    d = _fuente_datos(fuente, negrita, cursiva)
+    glifos, ancho, xs, avances, m = _glifos_linea(texto, d, altura, espaciado, _opciones(opciones))
     validos = tramos > 1e-12
     d_ini = np.diff(pts, axis=0)[validos][0] / tramos[validos][0]
     d_fin = np.diff(pts, axis=0)[validos][-1] / tramos[validos][-1]
@@ -530,14 +705,36 @@ def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False
             inicio = (largo - ancho) / 2
     else:
         inicio = posicion * largo - {"izq": 0.0, "centro": ancho / 2, "der": ancho}[alineacion]
-    salida = []
-    for i, (x, avance, prims) in enumerate(glifos):
-        sc = inicio + x + avance / 2 + i * extra
+
+    def colocar(sc):
         p = punto(sc)
         t = punto(sc + h) - punto(sc - h)
         nt = float(np.hypot(*t))
         c, s = (t / nt) if nt > 1e-12 else (1.0, 0.0)
-        bx, by = p[0] - s * desfase, p[1] + c * desfase          # la normal izquierda es (-s, c)
+        return p[0] - s * desfase, p[1] + c * desfase, c, s         # la normal izquierda es (-s, c)
+    return glifos, ancho, xs, avances, m, inicio, extra, colocar
+
+
+def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
+                        alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False, **opciones):
+    """Texto sobre un camino (Fusion: Texto en trayectoria), con las letras rígidas y perpendiculares a la curva.
+
+    camino: polilínea densa [(x, y)…] que sigue la curva (cerrada si el último punto es el primero). Las letras
+    quedan del lado izquierdo del sentido de recorrido; lado "der" recorre al revés (las letras pasan al otro lado
+    y se siguen leyendo derechas). posicion: fracción 0-1 del largo, medida en el sentido ORIGINAL del camino,
+    donde va el ancla del texto; alineacion: qué parte del texto cae ahí (izq, centro, der). desfase: mm entre la
+    curva y la línea base (positivo = hacia el lado de las letras). ajustar: reparte el texto en todo el largo
+    (ignora posición y alineación). En un camino cerrado el texto da la vuelta; en uno abierto sigue recto más
+    allá de las puntas. Varias líneas se juntan en una. `opciones`: kerning, inclinacion, escala_h, escala_v y
+    capitalizacion (como en `contornos_texto`); el subrayado y el tachado no se aplican en curva."""
+    glifos, ancho, _xs, _av, _m, inicio, extra, colocar = _texto_en_camino(
+        texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado, desfase, ajustar,
+        opciones)
+    if not glifos:
+        return []
+    salida = []
+    for i, (x, avance, prims, _j) in enumerate(glifos):
+        bx, by, c, s = colocar(inicio + x + avance / 2 + i * extra)
         medio = avance / 2
 
         def T(q, bx=bx, by=by, c=c, s=s, medio=medio):
@@ -548,4 +745,25 @@ def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False
                 salida.append(("linea", None, T(pr[2]), T(pr[3])))
             else:
                 salida.append(("spline", None, tuple(T(q) for q in pr[2]), pr[3], pr[4], pr[5]))
+    return salida
+
+
+def paradas_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
+                      alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False, **opciones):
+    """Cursor de un texto en curva: n + 1 segmentos ((x, y) de abajo, (x, y) de arriba), uno por posición del
+    texto (la i es el borde izquierdo del carácter i; la n, el final). Mismas opciones que `contornos_en_camino`."""
+    glifos, ancho, xs, avances, m, inicio, extra, colocar = _texto_en_camino(
+        texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado, desfase, ajustar,
+        opciones)
+    visibles = [g[3] for g in glifos]
+    n, salida = len(xs), []
+    for c in range(n + 1):
+        x, av = (xs[c], avances[c]) if c < n else (ancho, 0.0)
+        antes = sum(1 for j in visibles if j < c)
+        bx, by, co, sn = colocar(inicio + x + av / 2 + min(antes, max(len(glifos) - 1, 0)) * extra)
+        punta = []
+        for ly in (m["desc"], m["asc"]):
+            lx = -av / 2 + m["sesgo"] * ly
+            punta.append((float(bx + co * lx - sn * ly), float(by + sn * lx + co * ly)))
+        salida.append(tuple(punta))
     return salida

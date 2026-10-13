@@ -354,10 +354,12 @@ class Visor3D(QOpenGLWidget):
         self._formas = {}                  # id_cuerpo → forma visible (para elegir caras)
         self._pick = {}                    # id(forma) → (caras, triángulos, índice de cara)
         self._pick_aristas = {}            # id(forma) → (aristas, polilíneas, vértices, puntos)
+        self._pick_paquete = {}            # id(forma) → todas las aristas en un solo arreglo (ver _paquete_aristas)
         self._estado = None                # estado del modelo que se muestra (para elegir perfiles y bocetos)
         self._ocultos = frozenset()
         self._excluir_bocetos = ()
         self.filtro = None                 # conjunto de FILTROS activos o None (sin selección en la vista)
+        self.texto_entero = False          # con un campo de perfiles activo: una letra resalta y elige todo su texto
         self._hover_ent = None             # entidad bajo el cursor con el filtro activo
         self._capas = {}                   # nombre → [primitivas a dibujar encima: ("tris"|"lineas"|"puntos", …)]
         self._colores_vertice = {}         # id_cuerpo → colores por vértice (análisis: cebra, curvatura…)
@@ -482,6 +484,7 @@ class Visor3D(QOpenGLWidget):
                 formas[c.id] = c.forma
         self._pick = {k: v for k, v in self._pick.items() if k in cache}
         self._pick_aristas = {k: v for k, v in self._pick_aristas.items() if k in cache}
+        self._pick_paquete = {k: v for k, v in self._pick_paquete.items() if k in cache}
         self._lod = {k: v for k, v in self._lod.items() if k[0] in cache}
         self._lod_pendientes = {k: v for k, v in self._lod_pendientes.items() if k[0] in cache}
         self._lod_datos = (np.array([d[0] for d in lod], float).reshape(-1, 3), np.array([d[1] for d in lod], float),
@@ -880,8 +883,73 @@ class Visor3D(QOpenGLWidget):
         """Activa la selección en la vista con esos filtros (None la apaga). Con filtro, un clic emite
         `entidad_elegida` y lo que está bajo el cursor se resalta en celeste, como en Fusion."""
         self.filtro = set(filtros) if filtros else None
+        # con perfiles elegibles, una letra resalta (y elige) todo su texto; el panel lo apaga en campos de uno solo
+        self.texto_entero = bool(self.filtro and "perfil" in self.filtro)
         self._hover_ent = None
         self.update()
+
+    def _huecos_texto(self, br):
+        """ids (de objeto) de los perfiles de `br` que son huecos de letras de sus textos (la «o», la «a»…)."""
+        clave = ("huecos", id(br))
+        if clave not in self._pick:
+            textos = [c.id for c in br.boceto.curvas.values() if c.tipo == "texto"]
+            huecos = set()
+            if textos:
+                from ..nucleo.perfiles import letras_de_texto
+                ids = set(textos)
+                letras = {id(p) for p in letras_de_texto(br.perfiles, textos)}
+                huecos = {id(p) for p in br.perfiles if p.firma and set(p.firma) <= ids and id(p) not in letras}
+            self._pick[clave] = huecos
+        return self._pick[clave]
+
+    def es_hueco_texto(self, hit, estado=None):
+        """True si `hit` es el hueco de una letra de un texto (la «o», la «a»…): eso no se elige. `estado`: donde
+        buscar el boceto (por defecto, los bocetos visibles)."""
+        ref = hit.get("ref") if hit else None
+        if not ref or ref.get("tipo") != "perfil":
+            return False
+        bocetos = list(estado.bocetos.values()) if estado is not None else self._bocetos_visibles()
+        br = next((b for b in bocetos if b.op_id == ref.get("boceto")), None)
+        if br is None:
+            return False
+        huecos = self._huecos_texto(br)
+        if not huecos:
+            return False
+        # el perfil de la referencia, como lo busca el timeline: misma firma y el centro más cercano
+        firma = sorted(ref.get("firma") or [])
+        c = np.asarray(ref.get("centroide") or (0.0, 0.0), float)
+        mismos = [p for p in br.perfiles if sorted(p.firma) == firma]
+        if not mismos:
+            return False
+        p = min(mismos, key=lambda x: float(np.linalg.norm(np.asarray(x.centroide_uv, float) - c)))
+        return id(p) in huecos
+
+    def hits_texto(self, hit):
+        """Si `hit` es un perfil hecho solo por textos del boceto, los hits de TODAS las letras de ese texto (sin los
+        huecos de la «o», la «a»…), como al elegir un texto en Fusion. None si no es una letra de un texto."""
+        ref = hit.get("ref") if hit else None
+        if not ref or ref.get("tipo") != "perfil":
+            return None
+        br = next((b for b in self._bocetos_visibles() if b.op_id == ref.get("boceto")), None)
+        firma = set(ref.get("firma") or [])
+        if br is None or not firma:
+            return None
+        try:
+            if any(br.boceto.tipo_de(c) != "texto" for c in firma):
+                return None
+        except Exception:  # noqa: BLE001 — una curva que ya no está: no es un texto
+            return None
+        clave = ("letras", id(br), tuple(sorted(firma)))
+        if clave not in self._pick:
+            from ..nucleo.perfiles import letras_de_texto
+            from ..timeline.operaciones import OpExtrusion
+            self._pick[clave] = [({"tipo": "perfil", "boceto": br.op_id, **OpExtrusion.referencia_perfil(p)}, p.cara)
+                                 for p in letras_de_texto(br.perfiles, firma)]
+        letras = self._pick[clave]
+        if all(r != ref for r, _ in letras):
+            return None
+        return [{"tipo": "perfil", "ref": r, "dibujo": [("tris", self._tris_perfil(cara).reshape(-1, 3), None, 0.45)],
+                 "t": hit.get("t"), "punto": hit.get("punto")} for r, cara in letras]
 
     def set_capa(self, nombre, primitivas):
         """Capas de dibujo encima del modelo: [("tris", Nx3, color, alfa) | ("lineas", segmentos Nx3, color,
@@ -961,6 +1029,52 @@ class Visor3D(QOpenGLWidget):
                 pts = np.array([refs.punto_de_vertice(v) for v in vertices]) if vertices else np.zeros((0, 3))
                 self._pick_aristas[clave] = (aristas, polis, vertices, pts)
         return self._pick_aristas[clave]
+
+    @staticmethod
+    def _empaquetar(polis):
+        """Varias polilíneas 3D en un solo arreglo, para medir el cursor contra TODAS de una vez: (puntos, extremos
+        A, extremos B, inicio de cada polilínea entre los segmentos, inicio entre los puntos, índice de origen).
+        Con cientos de aristas o curvas (texto) recorrerlas una por una costaba ~55 ms por evento. None si no hay."""
+        puntos, a_idx, b_idx, ini_seg, ini_pt, quien = [], [], [], [], [], []
+        base = nseg = 0
+        for k, poli in enumerate(polis):
+            p = np.asarray(poli, float).reshape(-1, 3)
+            if len(p) < 2:
+                continue
+            puntos.append(p)
+            idx = np.arange(base, base + len(p) - 1)
+            a_idx.append(idx)
+            b_idx.append(idx + 1)
+            ini_seg.append(nseg)
+            ini_pt.append(base)
+            quien.append(k)
+            base += len(p)
+            nseg += len(p) - 1
+        if not puntos:
+            return None
+        return (np.concatenate(puntos), np.concatenate(a_idx), np.concatenate(b_idx), np.array(ini_seg),
+                np.array(ini_pt), quien)
+
+    def _paquete_aristas(self, cid):
+        clave = id(self._formas[cid])
+        if clave not in self._pick_paquete:
+            self._pick_paquete[clave] = self._empaquetar(self._datos_aristas(cid)[1])
+        return self._pick_paquete[clave]
+
+    def _distancias_paquete(self, paq, q, mvp):
+        """Distancia en píxeles del cursor `q` a cada polilínea del paquete (inf si alguna parte queda detrás de la
+        cámara) y la lista de índices de origen."""
+        if paq is None:
+            return np.zeros(0), []
+        puntos, A, B, ini_seg, ini_pt, quien = paq
+        s, ok = self._a_pantalla(puntos, mvp)
+        a, ab = s[A], s[B] - s[A]
+        L2 = np.einsum("ij,ij->i", ab, ab)
+        t = np.clip(np.einsum("ij,ij->i", q - a, ab) / np.where(L2 > 0, L2, 1.0), 0.0, 1.0)
+        d = np.hypot(*(a + ab * t[:, None] - q).T)
+        por_poli = np.minimum.reduceat(d, ini_seg)
+        todo_ok = np.minimum.reduceat(ok.astype(np.uint8), ini_pt).astype(bool)
+        return np.where(todo_ok, por_poli, np.inf), quien
 
     def _a_pantalla(self, puntos, mvp):
         p = np.asarray(puntos, float).reshape(-1, 3)
@@ -1091,7 +1205,12 @@ class Visor3D(QOpenGLWidget):
             if filtros_arista:
                 for cid in self._formas:
                     aristas, polis, _, _ = self._datos_aristas(cid)
-                    for arista, poli in zip(aristas, polis, strict=True):
+                    dists, quien = self._distancias_paquete(self._paquete_aristas(cid), q, mvp)
+                    # solo las que quedan a menos de la tolerancia, de la más cerca a la más lejos
+                    for j in np.argsort(dists):
+                        if dists[j] >= mejor[0]:
+                            break
+                        arista, poli = aristas[quien[j]], polis[quien[j]]
                         dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
                         if dist >= mejor[0] or p is None or not visible(p):
                             continue
@@ -1115,7 +1234,15 @@ class Visor3D(QOpenGLWidget):
                                             float((p - o) @ d), p))
             if "curva_boceto" in filtros or "eje" in filtros:
                 for br in self._bocetos_visibles():
-                    for curva_id, poli in self._curvas_boceto(br):
+                    curvas = self._curvas_boceto(br)
+                    clave_paq = ("paq_curvas", id(br))
+                    if clave_paq not in self._pick:
+                        self._pick[clave_paq] = self._empaquetar([poli for _id, poli in curvas])
+                    dists, quien = self._distancias_paquete(self._pick[clave_paq], q, mvp)
+                    for j in np.argsort(dists):
+                        if dists[j] >= mejor[0]:
+                            break
+                        curva_id, poli = curvas[quien[j]]
                         if "curva_boceto" not in filtros and br.boceto.tipo_de(curva_id) != "linea":
                             continue
                         dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
@@ -1123,27 +1250,35 @@ class Visor3D(QOpenGLWidget):
                             mejor = (dist, _hit("curva_boceto", {"tipo": "curva_boceto", "boceto": br.op_id,
                                                                  "curva": curva_id},
                                                 [("lineas", _segmentos([poli]), None, 3.5)], float((p - o) @ d), p))
+                            break
             if mejor[1] is not None:
                 return mejor[1]
 
         # 4) perfiles de boceto (están sobre el plano del boceto; ganan a la cara que tengan detrás)
         if filtros & {"perfil", "boceto"}:
-            mejor_t, mejor = math.inf, None
+            mejor_t, mejor, hueco_t = math.inf, None, math.inf
             for br in self._bocetos_visibles():
+                huecos = self._huecos_texto(br)
                 for perfil in br.perfiles:
                     tris = self._tris_perfil(perfil.cara)
                     if not len(tris):
                         continue
                     ts = rayo_triangulos(o, d, tris)
                     t = float(ts.min())
+                    if id(perfil) in huecos:       # el hueco de la «o» de un texto no se elige: es aire
+                        if t <= t_cara + tol_t:
+                            hueco_t = min(hueco_t, t)
+                        continue
                     if t < mejor_t and t <= t_cara + tol_t:
                         from ..timeline.operaciones import OpExtrusion
                         ref = ({"tipo": "perfil", "boceto": br.op_id, **OpExtrusion.referencia_perfil(perfil)}
                                if "perfil" in filtros else {"tipo": "boceto", "boceto": br.op_id})
                         mejor_t, mejor = t, _hit(ref["tipo"], ref, [("tris", tris.reshape(-1, 3), None, 0.45)], t,
                                                  o + d * t)
-            if mejor is not None:
+            if mejor is not None and mejor_t <= hueco_t:
                 return mejor
+            if hueco_t < math.inf and "perfil" in filtros:
+                return None                        # un clic en el hueco no atraviesa: no elige la cara de atrás
 
         # 5) caras, cuerpos y planos
         planos = []
@@ -1859,6 +1994,9 @@ class Visor3D(QOpenGLWidget):
             hit = self.elegir_entidad(pos)
             anterior = self._hover_ent
             if (hit is None) != (anterior is None) or (hit and anterior and hit["ref"] != anterior["ref"]):
+                grupo = self.hits_texto(hit) if self.texto_entero else None
+                if grupo:                          # una letra: se resalta el texto entero
+                    hit = dict(hit, dibujo=[d for h in grupo for d in h["dibujo"]])
                 self._hover_ent = hit
                 self.entidad_sobre.emit(hit)       # Medir: valor en vivo de lo que está bajo el cursor
                 self.update()

@@ -148,6 +148,19 @@ def test_run_operation_traduce_ids_y_selectores():
     assert _volumen(s) == pytest.approx(12000 + math.pi * 25, abs=1e-3)
 
 
+def test_run_operation_repujado_en_varias_caras_a_la_vez():
+    """El repujado acepta varias caras: las que no son paralelas entre sí (tapa, base y costado) reciben cada una
+    el perfil; entre caras paralelas se reparte."""
+    s = api.Sesion()
+    ok(api.llamar(s, "create_box", {"length": 40, "width": 30, "height": 10}))
+    ok(api.llamar(s, "create_sketch", {"plane": ">Z", "name": "Marca"}))
+    ok(api.llamar(s, "draw_circle", {"radius": 5, "sketch": "Marca"}))
+    r = ok(api.llamar(s, "run_operation", {"type": "repujado", "params": {
+        "perfiles": [{"sketch": "Marca", "profile": 0}], "caras": [">Z", "<Z", ">X"], "profundidad": "1 mm"}}))
+    assert r["status"] == "ok" and len(s.paso(r["id"]).p["caras"]) == 3
+    assert _volumen(s) == pytest.approx(12000 + 3 * math.pi * 25, abs=1e-3)
+
+
 def test_run_operation_puntos_de_boceto_perfiles_y_cuerpos():
     s = api.Sesion()
     ok(api.llamar(s, "create_box", {"length": 40, "width": 40, "height": 10}))

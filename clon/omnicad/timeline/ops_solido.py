@@ -154,23 +154,36 @@ class OpRed(OpNervio):
 
 
 class OpRepujado(_OpCrear):
-    """Repujado de Fusion [SLD-EMBOSS]: relieve o grabado de perfiles (o texto) sobre una cara plana o
-    envuelto en un cilindro."""
+    """Repujado de Fusion [SLD-EMBOSS]: relieve o grabado de perfiles (o texto) sobre una o VARIAS caras (también de
+    cuerpos distintos) a la vez: el texto se reparte entre las caras paralelas (cada una recibe lo que le cae
+    encima); o envuelto en un cilindro."""
     TIPO, ETIQUETA, ICONO = "repujado", "Repujado", "Ⓐ"
-    PARAMS = {"perfiles": [], "cara": None, "profundidad": "1 mm", "tipo": "relieve", "envolver": False}
+    PARAMS = {"perfiles": [], "cara": None, "caras": [], "profundidad": "1 mm", "tipo": "relieve",
+              "envolver": False}
     EXPRESIONES = ("profundidad",)
     OPCIONES = {"tipo": ("relieve", "grabado")}
-    REFS = ("perfiles", "cara")
+    REFS = ("perfiles", "cara", "caras")
 
     def ejecutar(self, estado, ctx):
         _, caras = _caras(self.p["perfiles"], estado)
-        if not self.p["cara"]:
+        # «caras» (varias a la vez) y «cara» (una sola: los documentos viejos)
+        cara = self.p.get("cara")
+        refs_cara = [r for r in list(self.p.get("caras") or []) + (cara if isinstance(cara, list) else [cara]) if r]
+        if not refs_cara:
             raise ErrorOperacion("Elegí la cara sobre la que va el repujado.")
-        e = _resolver(self.p["cara"], estado, ("cara",))
-        cuerpo = estado.cuerpo(e.cuerpo)
-        cuerpo.forma = _sc().repujado(cuerpo.forma, caras, e.forma, ctx.evaluar(self.p["profundidad"]),
-                                      tipo=self.p["tipo"], envolver=self.p["envolver"])
-        self._registrar_usados([cuerpo.id])
+        por_cuerpo = {}
+        for r in refs_cara:
+            e = _resolver(r, estado, ("cara",))
+            por_cuerpo.setdefault(e.cuerpo, []).append(e.forma)
+        # todas las caras a la vez (aunque sean de cuerpos distintos): el texto se reparte entre ellas
+        cuerpos = [estado.cuerpo(cid) for cid in por_cuerpo]
+        nuevas = _sc().repujado_en_cuerpos([(c.forma, f) for c, f in zip(cuerpos, por_cuerpo.values(), strict=True)],
+                                           caras,
+                                           ctx.evaluar(self.p["profundidad"]), tipo=self.p["tipo"],
+                                           envolver=self.p["envolver"])
+        for c, forma in zip(cuerpos, nuevas, strict=True):
+            c.forma = forma
+        self._registrar_usados(list(por_cuerpo))
 
 
 # Tipos de rosca: las claves de nucleo.solidos_crear.FAMILIAS_ROSCA (acá sin cargar el núcleo; un test las compara)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Subcomando `setup`: conecta OmniCAD a Claude Code y a OpenCode (registra el MCP y copia la skill `omnicad`) y
-instala en Fusion 360 el complemento OmniCADPuente (para abrir .f3d/.f3z desde OmniCAD).
+"""Subcomando `setup`: conecta OmniCAD a Claude Code, OpenCode y Cline CLI (registra el MCP y copia la skill
+`omnicad`) y instala en Fusion 360 el complemento OmniCADPuente (para abrir .f3d/.f3z desde OmniCAD).
 
 SEGURO POR DEFECTO: sin `--aplicar` solo muestra el plan y no escribe nada. Con `--aplicar`:
   - cada archivo de configuración que se modifica se respalda antes (`archivo.bak`; si ya hay uno, `.bak-FECHA`);
@@ -11,6 +11,8 @@ SEGURO POR DEFECTO: sin `--aplicar` solo muestra el plan y no escribe nada. Con 
 Dónde va cada cosa (ver el epílogo de la ayuda para las fuentes):
   Claude Code: MCP con `claude mcp add --scope user` (queda en ~/.claude.json); skill en ~/.claude/skills/omnicad/.
   OpenCode:    MCP en la clave "mcp" de ~/.config/opencode/opencode.jsonc (o .json); skill en ~/.config/opencode/skills/omnicad/ (con «todos», la de ~/.claude/skills).
+  Cline CLI:   MCP en la clave "mcpServers" de ~/.cline/data/settings/cline_mcp_settings.json (o la ruta de la variable
+               CLINE_MCP_SETTINGS_PATH); skill en ~/.cline/skills/omnicad/. Con «todos» solo si existe ~/.cline.
   Fusion 360:  complemento en la carpeta AddIns DEL USUARIO (%APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns);
                nunca en la instalación de Fusion (p. ej. D:/Autodesk, que es solo lectura).
 
@@ -43,7 +45,7 @@ class _Falla(Exception):
 
 @dataclass
 class Accion:
-    client: str                         # "claude-code" | "opencode"
+    client: str                         # "claude-code" | "opencode" | "cline" | "fusion"
     kind: str                           # "mcp" | "skill"
     status: str                         # pending | unchanged | manual | error | done
     file: str
@@ -339,6 +341,77 @@ def _accion_opencode_mcp(inicio):
                   merge=snippet, aplicar=aplicar)
 
 
+# ---------------------------------------------------------------- Cline CLI
+def _ruta_cline_mcp(ns, inicio):
+    """Archivo de servidores MCP de Cline CLI. La variable CLINE_MCP_SETTINGS_PATH (documentada por Cline) lo
+    reemplaza, salvo con --inicio: las pruebas nunca tocan la configuración real."""
+    propia = "" if ns.inicio else os.environ.get("CLINE_MCP_SETTINGS_PATH", "").strip()
+    if propia:
+        return Path(propia).expanduser()
+    return inicio / ".cline" / "data" / "settings" / "cline_mcp_settings.json"
+
+
+def _cline_instalado(ns, inicio):
+    return (inicio / ".cline").is_dir() or _ruta_cline_mcp(ns, inicio).parent.is_dir()
+
+
+def _entrada_cline():
+    """La forma que escribe la propia CLI de Cline (`cline mcp add`): el comando va dentro de `transport`."""
+    programa, args = _comando_mcp()
+    transporte = {"type": "stdio", "command": programa}
+    if args:
+        transporte["args"] = args
+    return {"transport": transporte}
+
+
+def _transporte_cline(entrada):
+    """El dict que lleva `command` y `args`: `transport` (CLI) o la propia entrada (forma plana de la documentación)."""
+    if not isinstance(entrada, dict):
+        return {}
+    return entrada["transport"] if isinstance(entrada.get("transport"), dict) else entrada
+
+
+def _accion_cline_mcp(ns, inicio):
+    ruta = _ruta_cline_mcp(ns, inicio)
+    deseada = _entrada_cline()
+    snippet = {"mcpServers": {NOMBRE: deseada}}
+    datos = {}
+    if ruta.is_file():
+        datos, error = _leer_json(ruta)
+        if datos is None:
+            return Accion("cline", "mcp", "error", str(ruta), "no se puede leer la configuración",
+                          message=f"{ruta} no es JSON válido ({error}): no se toca.")
+        if not isinstance(datos.get("mcpServers", {}), dict):
+            return Accion("cline", "mcp", "error", str(ruta), "no se puede fusionar",
+                          message='"mcpServers" no es un objeto JSON: no se toca.')
+    existente = datos.get("mcpServers", {}).get(NOMBRE)
+    quiere = deseada["transport"]
+    actual = _transporte_cline(existente)
+    if actual.get("type", "stdio") == "stdio" and _norm(actual.get("command", "")) == quiere["command"] \
+            and list(actual.get("args", [])) == quiere.get("args", []):
+        return Accion("cline", "mcp", "unchanged", str(ruta), f'"{NOMBRE}" ya está registrado con este Python')
+
+    def aplicar():
+        def poner(d):
+            previa = d.setdefault("mcpServers", {}).get(NOMBRE)
+            nueva = {"transport": dict(quiere)}
+            if isinstance(previa, dict):
+                # Se conserva lo que puso el usuario (disabled, autoApprove, oauth, env…); se reemplaza el comando.
+                viejo = _transporte_cline(previa)
+                if isinstance(viejo.get("env"), dict) and viejo["env"]:
+                    nueva["transport"]["env"] = viejo["env"]
+                resto = {k: v for k, v in previa.items() if k not in ("transport", "command", "args", "type", "env")}
+                nueva = {**resto, **nueva}
+            d["mcpServers"][NOMBRE] = nueva
+        return _guardar_fusion(ruta, poner)
+
+    verbo = "fusiona" if ruta.is_file() else "crea"
+    extra = " (reemplaza el comando de la entrada existente)" if existente is not None else ""
+    return Accion("cline", "mcp", "pending", str(ruta),
+                  f"{verbo} la clave mcpServers.{NOMBRE}" + (", con copia .bak" if ruta.is_file() else "") + extra,
+                  merge=snippet, aplicar=aplicar)
+
+
 # ---------------------------------------------------------------- plan y aplicación
 def _planear(ns):
     inicio = Path(ns.inicio) if ns.inicio else Path.home()
@@ -349,6 +422,12 @@ def _planear(ns):
         acciones.append(_accion_skill("claude-code", origen, inicio / ".claude" / "skills" / NOMBRE))
     if ns.cliente in ("opencode", "todos"):
         acciones.append(_accion_opencode_mcp(inicio))
+    if ns.cliente == "cline" or (ns.cliente == "todos" and _cline_instalado(ns, inicio)):
+        acciones.append(_accion_cline_mcp(ns, inicio))
+        acciones.append(_accion_skill("cline", origen, inicio / ".cline" / "skills" / NOMBRE))
+    elif ns.cliente == "todos":
+        avisos.append("Cline CLI no está instalado para este usuario (no existe ~/.cline): no se configura "
+                      "(--cliente cline lo fuerza).")
     if ns.cliente in ("fusion", "todos"):
         accion, aviso = _accion_fusion(ns.inicio, ns.cliente == "fusion")
         acciones += [accion] if accion else []
@@ -380,7 +459,7 @@ def _aplicar(acciones):
 
 
 _ROTULO = {"pending": "HARÍA", "done": "HECHO", "unchanged": "YA ESTÁ", "manual": "A MANO", "error": "ERROR"}
-_CLIENTE = {"claude-code": "Claude Code", "opencode": "OpenCode", "fusion": "Fusion 360"}
+_CLIENTE = {"claude-code": "Claude Code", "opencode": "OpenCode", "cline": "Cline CLI", "fusion": "Fusion 360"}
 
 
 def _mostrar(acciones, avisos, aplicado):
@@ -429,9 +508,15 @@ dónde escribe (carpeta del usuario; --inicio la reemplaza):
   OpenCode     MCP    ~/.config/opencode/opencode.jsonc (o opencode.json), clave "mcp"
                skill  ~/.config/opencode/skills/omnicad/ (solo con --cliente opencode; con «todos» usa la de
                       ~/.claude/skills, que OpenCode también lee)
-fuentes: code.claude.com/docs/en/mcp y /skills; opencode.ai/docs/mcp-servers, /skills y /config. La carpeta de
-OpenCode en Windows se confirmó con `opencode debug paths` (la documentación solo dice ~/.config/opencode/).
-no confirmado: que se respeten CLAUDE_CONFIG_DIR ni XDG_CONFIG_HOME (se usa siempre ~/.claude.json y ~/.config).
+  Cline CLI    MCP    ~/.cline/data/settings/cline_mcp_settings.json, clave "mcpServers" (CLINE_MCP_SETTINGS_PATH la
+                      reemplaza; con --inicio se ignora)
+               skill  ~/.cline/skills/omnicad/ (con «todos» solo si existe ~/.cline; --cliente cline lo fuerza)
+fuentes: code.claude.com/docs/en/mcp y /skills; opencode.ai/docs/mcp-servers, /skills y /config;
+docs.cline.bot/mcp/mcp-overview y /customization/skills. La carpeta de OpenCode en Windows se confirmó con
+`opencode debug paths` (la documentación solo dice ~/.config/opencode/). La entrada de Cline usa la forma que escribe
+su propia CLI (`transport`); `cline config mcp --json` la lista.
+no confirmado: que se respeten CLAUDE_CONFIG_DIR ni XDG_CONFIG_HOME (se usa siempre ~/.claude.json y ~/.config), ni
+CLINE_DATA_DIR (solo se respeta CLINE_MCP_SETTINGS_PATH).
 Un opencode.jsonc con comentarios no se reescribe (se perderían): el comando muestra qué sumar a mano.
   Fusion 360   complemento  %APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns/OmniCADPuente/ (macOS: ~/Library/
                Application Support/...); con «todos» solo si Fusion está instalado. Nunca en D:/Autodesk.
@@ -440,15 +525,15 @@ Un opencode.jsonc con comentarios no se reescribe (se perderían): el comando mu
 
 def registrar(sub, comun):
     p = sub.add_parser("setup", parents=[comun], epilog=EPILOGO,
-                       help="conecta OmniCAD a Claude Code y OpenCode (MCP + skill) y a Fusion 360 (complemento); sin --aplicar "
-                            "solo muestra el plan",
-                       description="Registra el servidor MCP de OmniCAD y copia la skill `omnicad` en Claude Code y/o "
-                                   "OpenCode. SIN --aplicar solo muestra qué haría y no escribe nada. Con --aplicar "
+                       help="conecta OmniCAD a Claude Code, OpenCode y Cline CLI (MCP + skill) y a Fusion 360 "
+                            "(complemento); sin --aplicar solo muestra el plan",
+                       description="Registra el servidor MCP de OmniCAD y copia la skill `omnicad` en Claude Code, "
+                                   "OpenCode y/o Cline CLI. SIN --aplicar solo muestra qué haría y no escribe nada. Con --aplicar "
                                    "respalda (.bak) cada archivo de configuración que modifica, fusiona el JSON sin "
                                    "borrar otros servidores y es idempotente. El MCP se registra con el Python que "
                                    "corre este comando (ruta absoluta).")
-    p.add_argument("--cliente", "-c", choices=["claude-code", "opencode", "fusion", "todos"], default="todos",
-                   help="a quién conectar (defecto todos)")
+    p.add_argument("--cliente", "-c", choices=["claude-code", "opencode", "cline", "fusion", "todos"], default="todos",
+                   help="a quién conectar (defecto todos; con todos, Cline y Fusion solo si están instalados)")
     p.add_argument("--aplicar", action="store_true", help="escribir de verdad (sin esto solo muestra el plan)")
     p.add_argument("--inicio", metavar="DIR", help="usar esta carpeta en lugar de la del usuario (para pruebas); "
                    "implica editar ~/.claude.json a mano en vez de correr `claude`")

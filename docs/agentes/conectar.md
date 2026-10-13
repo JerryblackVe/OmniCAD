@@ -6,7 +6,7 @@ Bloques listos para copiar. Hay uno por cliente.
 > Lo que sí se verificó: el formato de cada cliente contra su documentación oficial (fuente al pie de cada sección)
 > y que el comando del servidor arranca por stdio y lista las herramientas (1,3 s en esta PC).
 
-## Atajo: `omnicad setup` (Claude Code y OpenCode)
+## Atajo: `omnicad setup` (Claude Code, OpenCode y Cline CLI)
 
 Registra el MCP y copia la skill `omnicad` sin editar nada a mano.
 
@@ -15,7 +15,8 @@ omnicad setup --cliente todos            # solo MUESTRA qué haría (no escribe 
 omnicad setup --cliente todos --aplicar  # lo hace: respalda cada archivo con .bak y no borra otros servidores
 ```
 
-- `--cliente claude-code | opencode | fusion | todos`. Correrlo dos veces no duplica nada.
+- `--cliente claude-code | opencode | cline | fusion | todos`. Correrlo dos veces no duplica nada. Con `todos`, Cline y
+  Fusion solo se configuran si están instalados.
 - Fusion 360: copia el complemento OmniCADPuente a la carpeta AddIns DEL USUARIO (`%APPDATA%/Autodesk/Autodesk Fusion 360/API/AddIns/`;
   nunca a la instalación de Fusion). Arranca solo con Fusion; la primera vez, reiniciá Fusion o ejecutalo en Utilidades ›
   Complementos (Mayús+S). Es OPCIONAL: `open_document` y Archivo › Abrir leen los `.f3d`/`.f3z` sin Fusion
@@ -23,6 +24,8 @@ omnicad setup --cliente todos --aplicar  # lo hace: respalda cada archivo con .b
 - Claude Code: usa `claude mcp add --scope user`; la skill va a `~/.claude/skills/omnicad/`.
 - OpenCode: suma `mcp.omnicad` a `~/.config/opencode/opencode.jsonc` (o `.json`). Con `todos`, la skill queda solo en
   `~/.claude/skills/` porque OpenCode también lee esa carpeta (dos copias darían «duplicate skill name»).
+- Cline CLI: suma `mcpServers.omnicad` a `~/.cline/data/settings/cline_mcp_settings.json` y copia la skill a
+  `~/.cline/skills/omnicad/`. Con `todos` solo si existe `~/.cline`; `--cliente cline` lo fuerza.
 - Los otros clientes se configuran a mano con los bloques de abajo.
 
 ## El comando del servidor
@@ -157,6 +160,45 @@ Fuente: <https://modelcontextprotocol.io/docs/develop/connect-local-servers> (ub
 - Apagarlo sin borrarlo: `"enabled": false`.
 
 Fuente: <https://opencode.ai/docs/mcp-servers> (opciones `type`, `command`, `enabled`, `environment`, `timeout`), <https://opencode.ai/docs/config> (ubicaciones) y <https://opencode.ai/docs/cli> (`opencode mcp ls`).
+
+## Cline CLI
+
+**Estado:** `omnicad setup --cliente cline` y la lectura del archivo por `cline config mcp --json` están probados en
+esta PC (Cline CLI 3.0.70). Falta probarlo dentro de una sesión de Cline.
+
+- Archivo del usuario: `~/.cline/data/settings/cline_mcp_settings.json` (en Windows, `C:\Users\<usuario>\.cline\data\settings\`).
+  La variable de entorno `CLINE_MCP_SETTINGS_PATH` lo reemplaza.
+- Más simple: `omnicad setup --cliente cline --aplicar` (ver arriba). Respalda el archivo y no borra tus otros servidores.
+- Si ya existe, sumá solo la clave `omnicad` dentro de `mcpServers`.
+- El archivo tiene que ser JSON **sin BOM**: Cline no lo lee con BOM (en Windows PowerShell 5.1, `Set-Content -Encoding utf8` lo agrega).
+- Por comando: `cline mcp add omnicad --yes -- C:/OmniCAD/clon/.venv/Scripts/python.exe -m omnicad.servidor_mcp`. Correlo
+  desde bash o cmd: **en PowerShell** el `--` no le llega a Cline y falla con «unknown option '-m'».
+- La CLI escribe cada servidor con el comando dentro de `transport` (forma de abajo: es la misma que escribe `setup`).
+  La documentación de Cline muestra `command` y `args` sueltos en la entrada; los dos formatos se leen (probado con
+  `cline config mcp --json`).
+- La skill va a `~/.cline/skills/omnicad/` (global) o `.cline/skills/omnicad/` (proyecto); Cline también descubre
+  `.claude/skills/` del proyecto. Si una skill global y una del proyecto tienen el mismo nombre, gana la global.
+
+```json
+{
+  "mcpServers": {
+    "omnicad": {
+      "transport": {
+        "type": "stdio",
+        "command": "C:/OmniCAD/clon/.venv/Scripts/python.exe",
+        "args": ["-m", "omnicad.servidor_mcp"]
+      }
+    }
+  }
+}
+```
+
+- Verificar: `cline config mcp --json` (tiene que listar `omnicad`) o `cline mcp` (menú: lista y estado).
+- Apagarlo sin borrarlo: `"disabled": true` en la entrada.
+
+Fuente: <https://docs.cline.bot/mcp/mcp-overview> (ruta del archivo, `CLINE_MCP_SETTINGS_PATH`, `cline mcp`,
+`cline config mcp`) y <https://docs.cline.bot/customization/skills> (carpetas de skills). La forma con `transport`, lo
+del BOM y lo del `--` en PowerShell salen de probar la CLI real, no de la documentación.
 
 ## Codex CLI
 

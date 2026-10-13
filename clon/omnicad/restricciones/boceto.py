@@ -228,23 +228,42 @@ class Texto(_Curva):
     qué parte del bloque cae sobre `punto`), `ancho_caja` (mm; 0 = sin caja, >0 parte las líneas) y
     `voltear_h` / `voltear_v` (espejo dentro del bloque).
 
+    Como el panel «Carácter» de los editores de diseño: `kerning` (False ignora los pares de la fuente),
+    `inclinacion` (grados de sesgo), `escala_h` / `escala_v` (% del ancho y del alto de las letras),
+    `desfase_base` (mm que sube el texto), `capitalizacion` ("ninguno", "mayusculas", "minusculas", "titulo",
+    "versalitas"), `subrayado` y `tachado` ("ninguno", "simple", "doble"; barras que también forman perfiles),
+    `grosor_decoracion` (mm; 0 = el de la fuente) y `sin_division` (True: `ancho_caja` no parte las líneas).
+
     Texto en curva (Fusion: texto en trayectoria): `camino` es el id de una curva del mismo boceto; entonces
     `punto` y `angulo` no se usan y las letras siguen la curva. `camino_lado` ("izq" / "der": de qué lado del
     sentido de la curva van las letras), `camino_pos` (fracción 0-1 del largo donde cae el ancla, según
     `alineacion`), `camino_desfase` (mm entre la curva y la línea base) y `camino_ajustar` (repartir en todo el
-    largo). Si la curva se borra, el texto vuelve a ser recto."""
+    largo). Si la curva se borra, el texto vuelve a ser recto. En curva no se dibujan subrayado ni tachado."""
     tipo, PUNTOS = "texto", ("punto",)
     DATOS = ("texto", "fuente", "altura", "angulo", "negrita", "cursiva", "espaciado", "interlineado", "alineacion",
              "ancla_v", "ancho_caja", "voltear_h", "voltear_v", "camino", "camino_lado", "camino_pos",
-             "camino_desfase", "camino_ajustar")
+             "camino_desfase", "camino_ajustar", "kerning", "inclinacion", "escala_h", "escala_v", "desfase_base",
+             "capitalizacion", "subrayado", "tachado", "grosor_decoracion", "sin_division", "ajustes_kerning")
     _PREDETERMINADOS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base",
                         "ancho_caja": 0.0, "voltear_h": False, "voltear_v": False, "camino": None,
-                        "camino_lado": "izq", "camino_pos": 0.5, "camino_desfase": 0.0, "camino_ajustar": False}
+                        "camino_lado": "izq", "camino_pos": 0.5, "camino_desfase": 0.0, "camino_ajustar": False,
+                        "kerning": True, "inclinacion": 0.0, "escala_h": 100.0, "escala_v": 100.0,
+                        "desfase_base": 0.0, "capitalizacion": "ninguno", "subrayado": "ninguno",
+                        "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False,
+                        "ajustes_kerning": []}
+    # opciones del panel «Carácter» que se guardan tal cual (el tipo de cada una, para convertir lo que llega)
+    TIPOGRAFIA = {"kerning": bool, "inclinacion": float, "escala_h": float, "escala_v": float, "desfase_base": float,
+                  "capitalizacion": str, "subrayado": str, "tachado": str, "grosor_decoracion": float,
+                  "sin_division": bool,
+                  "ajustes_kerning": lambda v: [[int(i), float(x)] for i, x in v]}
 
     def __init__(self, id, punto, texto, fuente="Arial", altura=5.0, angulo=0.0, negrita=False, cursiva=False,
                  construccion=False, eje=False, proyectada=False, espaciado=0.0, interlineado=1.0,
                  alineacion="izq", ancla_v="base", ancho_caja=0.0, voltear_h=False, voltear_v=False, camino=None,
-                 camino_lado="izq", camino_pos=0.5, camino_desfase=0.0, camino_ajustar=False):
+                 camino_lado="izq", camino_pos=0.5, camino_desfase=0.0, camino_ajustar=False, kerning=True,
+                 inclinacion=0.0, escala_h=100.0, escala_v=100.0, desfase_base=0.0, capitalizacion="ninguno",
+                 subrayado="ninguno", tachado="ninguno", grosor_decoracion=0.0, sin_division=False,
+                 ajustes_kerning=None):
         self.id, self.punto, self.texto, self.fuente = id, punto, str(texto), str(fuente)
         self.altura, self.angulo = float(altura), float(angulo)
         self.negrita, self.cursiva = bool(negrita), bool(cursiva)
@@ -254,6 +273,11 @@ class Texto(_Curva):
         self.camino = None if camino is None else int(camino)
         self.camino_lado, self.camino_pos = str(camino_lado), float(camino_pos)
         self.camino_desfase, self.camino_ajustar = float(camino_desfase), bool(camino_ajustar)
+        self.kerning, self.inclinacion = bool(kerning), float(inclinacion)
+        self.escala_h, self.escala_v, self.desfase_base = float(escala_h), float(escala_v), float(desfase_base)
+        self.capitalizacion, self.subrayado, self.tachado = str(capitalizacion), str(subrayado), str(tachado)
+        self.grosor_decoracion, self.sin_division = float(grosor_decoracion), bool(sin_division)
+        self.ajustes_kerning = [[int(i), float(x)] for i, x in (ajustes_kerning or [])]
         self._estilo(construccion, eje, proyectada)
 
     def a_dict(self):
@@ -268,7 +292,14 @@ class Texto(_Curva):
     def opciones_contorno(self):
         """Opciones de `fuentes.contornos_texto` en el orden en que se guardan en el caché."""
         return (self.espaciado, self.interlineado, self.alineacion, self.ancla_v, self.ancho_caja,
-                self.voltear_h, self.voltear_v)
+                self.voltear_h, self.voltear_v) + self.opciones_tipografia()
+
+    def opciones_tipografia(self):
+        """Las del panel «Carácter» (kerning, inclinación, escalas, desfase de base, capitalización, subrayado,
+        tachado, grosor y sin división), en el orden de `_contornos_texto`."""
+        return (self.kerning, self.inclinacion, self.escala_h, self.escala_v, self.desfase_base,
+                self.capitalizacion, self.subrayado, self.tachado, self.grosor_decoracion, self.sin_division,
+                tuple((i, x) for i, x in self.ajustes_kerning))
 
 
 class Restriccion:
@@ -687,28 +718,99 @@ def _cruces_circulos(c1, r1, c2, r2):
     return [(m[0] - h * uy, m[1] + h * ux), (m[0] + h * uy, m[1] - h * ux)]
 
 
+_CLAVES_TIPOGRAFIA = ("kerning", "inclinacion", "escala_h", "escala_v", "desfase_base", "capitalizacion", "subrayado",
+                      "tachado", "grosor_decoracion", "sin_division", "ajustes_kerning")
+_TIPOGRAFIA_BASE = (True, 0.0, 100.0, 100.0, 0.0, "ninguno", "ninguno", "ninguno", 0.0, False, ())
+
+
+def _kwargs_texto(opciones):
+    """Opciones de `Texto.opciones_contorno()` como argumentos con nombre de `fuentes.contornos_texto`."""
+    espaciado, interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v, *tipo = opciones
+    tipo = tipo or list(_TIPOGRAFIA_BASE)
+    return dict(zip(("espaciado", "interlineado", "alineacion", "ancla_v", "ancho_caja", "voltear_h", "voltear_v")
+                    + _CLAVES_TIPOGRAFIA, [espaciado, interlineado, alineacion, ancla_v, ancho_caja, voltear_h,
+                                           voltear_v, *tipo], strict=True))
+
+
 @lru_cache(maxsize=256)
 def _contornos_texto(texto, fuente, altura, negrita, cursiva, opciones=(0.0, 1.0, "izq", "base", 0.0, False, False)):
     from ..nucleo.perfiles import contornos_texto      # fontTools / OpenCascade solo hacen falta para el texto
-    espaciado, interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v = opciones
     try:
-        return tuple(contornos_texto(texto, fuente, altura, negrita, cursiva, espaciado=espaciado,
-                                     interlineado=interlineado, alineacion=alineacion, ancla_v=ancla_v,
-                                     ancho_caja=ancho_caja, voltear_h=voltear_h, voltear_v=voltear_v))
+        return tuple(contornos_texto(texto, fuente, altura, negrita, cursiva, **_kwargs_texto(opciones)))
     except Exception:  # noqa: BLE001 — una fuente rota no debe romper el boceto
         return ()
 
 
 @lru_cache(maxsize=128)
 def _contornos_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
-                      camino):
+                      camino, tipografia=()):
     from ..nucleo.fuentes import contornos_en_camino
     try:
         return tuple(contornos_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
                                          alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
-                                         ajustar=ajustar))
+                                         ajustar=ajustar, **_tipografia_camino(tipografia)))
     except Exception:  # noqa: BLE001 — una fuente rota o un camino degenerado no deben romper el boceto
         return ()
+
+
+def _tipografia_camino(tipografia):
+    """De la tupla de `Texto.opciones_tipografia()` lo que se aplica a un texto en curva (sin decoraciones)."""
+    if not tipografia:
+        return {}
+    kerning, inclinacion, escala_h, escala_v, _base, capitalizacion, *_resto, ajustes = tipografia
+    return {"kerning": kerning, "inclinacion": inclinacion, "escala_h": escala_h, "escala_v": escala_v,
+            "capitalizacion": capitalizacion, "ajustes_kerning": ajustes}
+
+
+@lru_cache(maxsize=256)
+def _mapa_texto(texto, fuente, altura, negrita, cursiva, opciones):
+    from ..nucleo.fuentes import mapa_texto
+    try:
+        return mapa_texto(texto, fuente, altura, negrita, cursiva, **_kwargs_texto(opciones))
+    except Exception:  # noqa: BLE001 — sin fuente, no hay mapa del cursor
+        return None
+
+
+@lru_cache(maxsize=64)
+def _paradas_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
+                    camino, tipografia=()):
+    from ..nucleo.fuentes import paradas_en_camino
+    try:
+        return tuple(paradas_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
+                                       alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
+                                       ajustar=ajustar, **_tipografia_camino(tipografia)))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def paradas_cursor(t, origen, prim_camino=None):
+    """Dónde cae el cursor en cada posición del texto `t`, o None si no se pudo componer. Devuelve
+    {"paradas": n + 1 segmentos ((x, y) de abajo, (x, y) de arriba) en coordenadas del boceto, "lineas": [(ini, fin)]
+    de cada línea de composición (índices del texto), "linea_de": nº de línea de cada posición}. `origen` (u, v) es
+    el punto de anclaje; en un texto en curva, `prim_camino` es la primitiva de la curva que sigue. Es lo que usa el
+    editor del lienzo para escribir y mover el cursor dentro del texto."""
+    if t.camino is not None and prim_camino is not None:
+        paradas = _paradas_camino(t.texto, t.fuente, t.altura, t.negrita, t.cursiva, t.espaciado, t.alineacion,
+                                  t.camino_pos, t.camino_lado, t.camino_desfase + t.desfase_base, t.camino_ajustar,
+                                  polilinea_camino(prim_camino), t.opciones_tipografia())
+        if paradas is None:
+            return None
+        n = len(paradas) - 1
+        return {"paradas": list(paradas), "lineas": [(0, n)], "linea_de": [0] * (n + 1)}
+    m = _mapa_texto(t.texto, t.fuente, t.altura, t.negrita, t.cursiva, t.opciones_contorno())
+    if m is None:
+        return None
+    ox, oy = origen
+    ang = math.radians(t.angulo)
+    sesgo, abajo, arriba = m["sesgo"], m["abajo"], m["arriba"]
+    paradas = []
+    for x, y in m["paradas"]:
+        punta = []
+        for off in (abajo, arriba):
+            r = _rot(x + sesgo * off, y + off, ang)
+            punta.append((r[0] + ox, r[1] + oy))
+        paradas.append(tuple(punta))
+    return {"paradas": paradas, "lineas": list(m["lineas"]), "linea_de": list(m["linea_de"])}
 
 
 def polilinea_camino(prim, pasos=720):
@@ -767,7 +869,8 @@ def primitivas_entidad(c, P, R=None, curvas=None):
         if base:
             return [(p[0], c.id) + tuple(p[2:]) for p in _contornos_camino(
                 c.texto, c.fuente, c.altura, c.negrita, c.cursiva, c.espaciado, c.alineacion, c.camino_pos,
-                c.camino_lado, c.camino_desfase, c.camino_ajustar, polilinea_camino(base[0]))]
+                c.camino_lado, c.camino_desfase + c.desfase_base, c.camino_ajustar, polilinea_camino(base[0]),
+                c.opciones_tipografia())]
     if isinstance(c, Texto):
         ox, oy = P(c.punto)
         ang = math.radians(c.angulo)
@@ -839,9 +942,30 @@ def _validar_opciones_texto(op):
         raise ErrorBoceto("El anclaje vertical es base, arriba, medio o abajo.")
     if op.get("camino_lado", "izq") not in ("izq", "der"):
         raise ErrorBoceto("El lado del texto en curva es izq o der.")
-    for k in ("camino_pos", "camino_desfase"):
+    for k in ("camino_pos", "camino_desfase", "desfase_base", "inclinacion", "escala_h", "escala_v",
+              "grosor_decoracion"):
         if k in op and not math.isfinite(float(op[k])):
             raise ErrorBoceto(f"«{k}» tiene que ser un número finito.")
+    for k in ("escala_h", "escala_v"):
+        if k in op and not 1.0 <= float(op[k]) <= 1000.0:
+            raise ErrorBoceto(f"La escala {'horizontal' if k == 'escala_h' else 'vertical'} va de 1 a 1000 %.")
+    if "inclinacion" in op and abs(float(op["inclinacion"])) > 80.0:
+        raise ErrorBoceto("La inclinación va de -80 a 80 grados.")
+    if "grosor_decoracion" in op and float(op["grosor_decoracion"]) < 0:
+        raise ErrorBoceto("El grosor del subrayado y el tachado no puede ser negativo.")
+    if op.get("capitalizacion", "ninguno") not in ("ninguno", "mayusculas", "minusculas", "titulo", "versalitas"):
+        raise ErrorBoceto("La capitalización es ninguno, mayusculas, minusculas, titulo o versalitas.")
+    for k in ("subrayado", "tachado"):
+        if op.get(k, "ninguno") not in ("ninguno", "simple", "doble"):
+            raise ErrorBoceto(f"El {k} es ninguno, simple o doble.")
+    for par in op.get("ajustes_kerning") or []:
+        try:
+            i, x = par
+            valido = int(i) >= 0 and math.isfinite(float(x))
+        except (TypeError, ValueError):
+            valido = False
+        if not valido:
+            raise ErrorBoceto("Los ajustes de kerning son pares [posición desde 0, mm].")
 
 
 # ---------------------------------------------------------------- boceto
@@ -998,7 +1122,9 @@ class Boceto:
     def agregar_texto(self, posicion, texto, altura=5.0, angulo=0.0, fuente="Arial", negrita=False, cursiva=False,
                       **opciones):
         """Texto en el boceto (SKT-CREATE-TEXT): sus contornos dan perfiles para extruir. `opciones`: espaciado,
-        interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v (ver `Texto`)."""
+        interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v, el texto en curva y las del panel
+        «Carácter» (kerning, inclinacion, escala_h, escala_v, desfase_base, capitalizacion, subrayado, tachado,
+        grosor_decoracion, sin_division); ver `Texto`."""
         if not str(texto).strip():
             raise ErrorBoceto("El texto está vacío.")
         if not 0 < altura < math.inf:                       # también NaN
@@ -2290,6 +2416,9 @@ class Boceto:
                 c.espaciado *= factor
                 c.ancho_caja *= factor
                 c.camino_desfase *= factor
+                c.desfase_base *= factor
+                c.grosor_decoracion *= factor
+                c.ajustes_kerning = [[i, x * factor] for i, x in c.ajustes_kerning]
         for k in self.cotas.values():
             if k.tipo != "angulo" and set(k.entidades) <= afectados:
                 try:

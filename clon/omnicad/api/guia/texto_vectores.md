@@ -10,6 +10,12 @@ Grupo `vectores`. Todo entra al boceto como curvas: lo que forma una región cer
   letras), **line_spacing** (factor), `align` (left/center/right dentro de la caja), `anchor` (qué parte del bloque cae
   sobre el ancla: baseline/top/middle/bottom), **box_width** (>0 parte las líneas en palabras), **flip_h** / **flip_v**.
   `\n` en el texto separa líneas.
+- Opciones de carácter (como el panel «Carácter» de un editor de diseño): **kerning** (false ignora los pares de la
+  fuente), **skew** (inclinación en grados), **scale_x** / **scale_y** (% del ancho y del alto), **baseline_shift**
+  (mm que sube todo el texto), **case** (none, upper, lower, title, small_caps; no cambia lo escrito),
+  **underline** / **strikethrough** (none, single, double: barras cerradas que también forman perfiles; con
+  **decoration_thickness** en mm, 0 = el de la fuente) y **no_wrap** (box_width no parte las líneas). En un texto
+  en curva valen kerning, skew, escalas y case; no se dibujan subrayado ni tachado.
 - `edit_text(entity, ...)` cambia lo que se pase; `explode_text(entity)` lo vuelve líneas y splines fijas.
 - `get_sketch` muestra el texto con todas sus opciones (`type: "text"`).
 - Parámetros dentro del texto: `{ancho}`, `{largo / 2}` o con formato `{ancho:.1f}`. Se recalculan solos al cambiar

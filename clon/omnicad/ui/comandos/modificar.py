@@ -2,7 +2,7 @@
 """Comandos de SÓLIDO › MODIFICAR con diálogo al estilo Fusion."""
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
 from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar
-from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpBorrarCaras, OpChaflan, OpDesfaseCara, OpQuitar,
+from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseCara, OpQuitar,
                                        OpDesmoldeo, OpDivisionSilueta, OpDividirCara, OpDividirCuerpo, OpEmpalme,
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.parametros import ANGULO, ESCALAR
@@ -492,6 +492,23 @@ class MoverCopiar(Comando):
         return v
 
 
+class ApoyarEnPlano(Comando):
+    CLAVE, TITULO, ICONO = "apoyar", "Apoyar en el plano", "alinear"
+    AYUDA = "Baja o sube los cuerpos hasta que lo más bajo toque el plano Z = 0. Sin selección: todos."
+    CLASE_OP = OpApoyar
+    verificar = staticmethod(_con_cuerpos)
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Cuerpos (vacío = todos)", {"cuerpo"}, minimo=0, maximo=None),
+                Casilla("juntos", "Mantener posición relativa", True)]
+
+    def construir(self, v, ctx):
+        return self.crear_op(OpApoyar, v, ctx, cuerpos=_cuerpos(v), juntos=bool(v.get("juntos", True)))
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
+
+
 class Alinear(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "alinear", "Alinear", "alinear", "Alt+Shift+A"
     AYUDA = "Lleva un punto, plano o eje de los cuerpos sobre otro (las caras quedan enfrentadas)."
@@ -664,4 +681,4 @@ class MaterialFisico(Comando):
 
 
 registrar(PulsarTirar, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
-          DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, Suprimir, Quitar, Aspecto, MaterialFisico)
+          DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto, MaterialFisico)

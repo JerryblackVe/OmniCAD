@@ -145,18 +145,22 @@ class Repujado(Comando):
     CLASE_OP = OpRepujado
 
     def campos(self, ctx):
-        return [Seleccion("perfiles", "Perfiles", PERFIL, maximo=None), Seleccion("cara", "Cara", {"cara"}),
+        return [Seleccion("perfiles", "Perfiles", PERFIL, maximo=None),
+                Seleccion("caras", "Caras", {"cara"}, maximo=None,
+                          ayuda="Una o varias caras: el texto se proyecta en su lugar y se reparte entre ellas "
+                                "(cada una recibe solo lo que le cae encima)."),
                 Opciones("tipo", "Tipo", {"relieve": "Relieve", "grabado": "Grabado"}),
                 Expresion("profundidad", "Profundidad", "1 mm"), Casilla("envolver", "Envolver en la cara")]
 
     def construir(self, v, ctx):
         exigir(v, "perfiles", "Seleccioná los perfiles.")
-        exigir(v, "cara", "Seleccioná la cara.")
-        return self.crear_op(OpRepujado, v, ctx, perfiles=refs(v, "perfiles"), cara=ref1(v, "cara"),
+        exigir(v, "caras", "Seleccioná al menos una cara.")
+        return self.crear_op(OpRepujado, v, ctx, perfiles=refs(v, "perfiles"), cara=None, caras=refs(v, "caras"),
                              profundidad=v["profundidad"], tipo=v["tipo"], envolver=v["envolver"])
 
     def desde_op(self, op, ctx):
-        return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), cara=_h1(op.p["cara"], ctx.estado))
+        caras = list(op.p.get("caras") or []) + ([op.p["cara"]] if op.p.get("cara") else [])
+        return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), caras=hits(caras, ctx.estado))
 
 
 # ---------------------------------------------------------------- roscas en los diálogos (Agujero y Rosca)

@@ -18,6 +18,7 @@ evidencias/
 
 # Material privado (análisis de programas propietarios, bitácora completa): nunca se publica
 /privado/
+/analisis auto/
 
 # Instrucciones locales de cada máquina
 CLAUDE.local.md

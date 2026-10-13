@@ -381,7 +381,7 @@ def test_abrir_e_insertar_f3d_sin_fusion(tmp_path, monkeypatch):
     cuerpos = list(doc.estado_final.cuerpos.values())
     assert doc.operaciones[0].TIPO == "operacion_base" and len(cuerpos) == 2
     assert sorted(c.nombre for c in cuerpos) == ["soporte (1)", "soporte (2)"]
-    assert any("sin Fusion" in a for a in avisos)
+    assert not any("sin Fusion" in a for a in avisos)          # abrir un .f3d ya no muestra aviso
     sesion = api.Sesion()
     r = api.llamar(sesion, "open_document", {"path": str(f3d)})
     assert r["ok"] and len(r["result"]["bodies"]) == 2

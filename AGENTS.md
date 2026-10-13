@@ -8,8 +8,9 @@ https://github.com/JerryblackVe/OmniCAD (GPL-3.0 o posterior).
 Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen abriendo.
 
 ## Reglas absolutas
-- No se copia código, textos ni recursos de programas propietarios (Fusion 360, Rhino, Grasshopper…): se
-  replican sus FUNCIONES escritas desde cero. Código GPL (p. ej. Blender) sí, citando el origen.
+- Se puede usar el análisis de programas de referencia (Fusion 360, Rhino, Grasshopper…) guardado en
+  `analisis auto/` (fuera de git) como INSPIRACIÓN para mejorar OmniCAD (ideas, casos límite, comportamiento): se escribe todo desde cero, sin copiar código. Código GPL
+  (p. ej. Blender) también, citando el origen.
 - TODO en español: código, docstrings, comentarios, mensajes de error, nombres.
 - No gastar en APIs pagas sin pedido explícito del usuario. No instalar paquetes sin permiso.
 - Git: no commitear ni hacer `push` si no te lo piden. Nunca subir `privado/`, `analisis/` ni `evidencias/`
@@ -23,8 +24,8 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - Funciones PURAS del núcleo: reciben formas OCC, arrays numpy, `geo.Plano` o números; devuelven formas
   OCC (o dicts). Sin Qt y sin timeline. Docstring: a qué comando de Fusion equivale.
 - OCP: los métodos estáticos llevan sufijo `_s` (p. ej. `BRepGProp.VolumeProperties_s`).
-- Para replicar un comando de otro programa, mirá su documentación pública y replicá QUÉ opciones tiene,
-  nunca su texto ni su código.
+- Para replicar un comando de otro programa, mirá su documentación pública y el análisis de
+  `analisis auto/`, y replicá sus opciones y su comportamiento.
 
 ## Mapa de carpetas
 | Ruta | Qué hay |
@@ -38,7 +39,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `clon/omnicad/ui/` | PySide6: `ventana.py`, `cinta.py`, `visor3d.py`, paneles, boceto en 3D |
 | `clon/omnicad/ui/comandos/` | Un módulo por familia de comandos con diálogo (`CATALOGO`) |
 | `clon/tests/` | pytest (un `test_*.py` por área) |
-| `docs/` | `arquitectura.md`, `guia_comandos.md`, `plan_mcp_cli.md`, `brechas_fusion.md` y las demás `brechas_*.md` (índice: `brechas_indice.md`), `agentes/` (MCP y CLI) |
+| `docs/` | `arquitectura.md`, `guia_comandos.md`, `plan_mcp_cli.md`, `plan_rust.md` y `plan_cpp.md` (qué pasa a Rust y a C++, y en qué orden), `brechas_fusion.md` y las demás `brechas_*.md` (índice: `brechas_indice.md`), `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`) |
 | `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno) |

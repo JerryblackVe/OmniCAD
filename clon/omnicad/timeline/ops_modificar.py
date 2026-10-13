@@ -131,6 +131,46 @@ class OpMover(Operacion):
                 c.forma = nueva
 
 
+class OpApoyar(Operacion):
+    """Apoyar en el plano: baja o sube cuerpos en Z hasta que lo más bajo toque el plano Z = 0 (el «piso»).
+    `cuerpos` vacío = todos los del diseño. Con `juntos` los cuerpos conservan su posición relativa (se apoya el
+    conjunto); si no, cada uno se apoya por su cuenta. Se recalcula con el modelo (no guarda un desplazamiento)."""
+    TIPO, ETIQUETA, ICONO = "apoyar", "Apoyar en el plano", "⤓"
+    PARAMS = {"cuerpos": [], "juntos": True}
+
+    def dependencias(self):
+        return _deps_objetivo(self.p["cuerpos"]) - {self.id}
+
+    @staticmethod
+    def _z_min(cuerpo):
+        f = cuerpo.forma
+        caja = f.caja() if hasattr(f, "caja") else geo.caja_envolvente(f)      # malla o B-rep
+        return None if caja is None else float(caja[0][2])
+
+    def ejecutar(self, estado, ctx):
+        ids = [estado.cuerpo(c).id for c in self.p["cuerpos"]] or list(estado.cuerpos)
+        if not ids:
+            raise ErrorOperacion("No hay cuerpos para apoyar en el plano.")
+        zs = {i: self._z_min(estado.cuerpos[i]) for i in ids}
+        validos = [z for z in zs.values() if z is not None]
+        if not validos:
+            raise ErrorOperacion("Los cuerpos están vacíos: no hay nada que apoyar.")
+        for i, z in zs.items():
+            if z is None:
+                continue
+            dz = -(min(validos) if self.p.get("juntos", True) else z)
+            if abs(dz) < 1e-9:
+                continue
+            c = estado.cuerpos[i]
+            m = _matriz_traslacion((0.0, 0.0, dz))
+            if getattr(c, "tipo", "solido") == "malla":
+                nueva = c.forma.copia()
+                nueva.vertices = (np.c_[nueva.vertices, np.ones(len(nueva.vertices))] @ m.T)[:, :3]
+            else:
+                nueva = geo.transformar(c.forma, m)
+            c.forma = nueva
+
+
 class OpQuitar(Operacion):
     """Quitar de Fusion [SLD-REMOVE]: saca cuerpos del diseño pero deja el paso en el timeline
     (suprimiéndolo, los cuerpos vuelven)."""
@@ -431,4 +471,5 @@ class OpBorrarCaras(Operacion):
 
 
 registrar_operacion(OpMover, OpQuitar, OpEmpalme, OpChaflan, OpVaciado, OpDesmoldeo, OpEscala, OpDesfaseCara,
-                    OpReemplazarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras)
+                    OpReemplazarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
+                    OpApoyar)

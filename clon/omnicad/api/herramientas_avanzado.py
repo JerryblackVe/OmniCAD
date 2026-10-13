@@ -110,7 +110,7 @@ FORMATOS_REFERENCIA = [
     'Construcción y bocetos: id o nombre de un plano, eje o punto de construcción ("op3", "Plano1") o de un boceto '
     '(el boceto entero, como plano).',
     'Boceto: {"sketch": "Boceto1", "point": 3} (punto; get_sketch lista los ids), {"sketch": "Boceto1", "curve": 2} '
-    '(curva) o {"sketch": "Boceto1", "profile": 0} (perfil: índice, lista, "all" o "largest"). Siguen al boceto si '
+    '(curva) o {"sketch": "Boceto1", "profile": 0} (perfil: índice, lista, "all", "largest", "text" o "text:<id>"). Siguen al boceto si '
     'cambia.',
     'Cuerpo: {"body": "Cuerpo1"} (id o nombre). En los campos de ids de cuerpo («cuerpos», «objetivos»…) va el id o '
     'el nombre directo ("op2.c1", "Cuerpo1"; se guarda el id).',
@@ -379,7 +379,7 @@ _UN_PUNTO = ('un punto: "O" (origen), un punto de construcción, un punto de boc
 _UN_EJE = ('un eje o una dirección: "X", "Y", "Z", un eje de construcción, una arista recta ("Cuerpo1/E7"), una línea '
            'de boceto ({"sketch": "Boceto1", "curve": 2}) o una cara plana (su normal)')
 _CURVAS = 'curvas de boceto ({"sketch": "Boceto1", "curve": 2}) o aristas ("Cuerpo1/E7", "edges:>Z")'
-_PERFILES = 'perfiles de boceto: {"sketch": "Boceto1", "profile": 0} (índice, lista, "all" o "largest")'
+_PERFILES = 'perfiles de boceto: {"sketch": "Boceto1", "profile": 0} (índice, lista, "all", "largest", "text" o "text:<id>")'
 _ESPERA = {
     "cara": 'una cara ("Cuerpo1/F6", ">Z")', "caras": 'caras ("Cuerpo1/F6", ">Z", "%CYLINDER"…)',
     "caras_a": "caras", "caras_b": "caras", "aristas": 'aristas ("Cuerpo1/E7", "|Z"…)',
@@ -469,7 +469,7 @@ def _formato_de_campo(clase, clave):
     if (clase.TIPO, clave) in _ESPERA_TIPO:
         return _ESPERA_TIPO[(clase.TIPO, clave)]
     if hasattr(clase, "referencia_perfil") and clave == "perfiles":
-        return 'perfiles del boceto de «boceto»: índices (0, [0, 2]), "all", "largest" o {"sketch": "Boceto1", "profile": 0}'
+        return 'perfiles del boceto de «boceto»: índices (0, [0, 2]), "all", "largest", "text" o {"sketch": "Boceto1", "profile": 0}'
     tipo = tipo_de_campo(clase, clave)
     if tipo == "cuerpos":
         return _ESPERA_CUERPOS

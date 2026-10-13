@@ -322,7 +322,94 @@ def test_repujado_plano_relieve_grabado_y_limite_de_cara():
     valido(sc.repujado(caja, [perfil], tapa, 1.5), 8000 + 150)
     valido(sc.repujado(caja, [perfil], tapa, 1.5, tipo="grabado"), 8000 - 150)
     valido(sc.repujado(caja, [perfil], tapa, -1.5), 8000 - 150)       # profundidad negativa = grabado
-    valido(sc.repujado(caja, [rect(35, 5, 45, 15, 20)], tapa, 1.0), 8000 + 50)   # se limita a la cara
+    # un perfil que cruza el borde se proyecta en su lugar y se limita a la cara (como Fusion)
+    valido(sc.repujado(caja, [rect(35, 5, 45, 15, 20)], tapa, 1.0), 8000 + 50)
+    with pytest.raises(g.ErrorGeometria, match="no caen sobre las caras"):        # no cae encima: no se mueve
+        sc.repujado(caja, [rect(60, 5, 70, 15, 20)], tapa, 1.0)
+
+
+def _listones(n=3, ancho=10.0, largo=50.0, hueco=1.0, alto=3.0):
+    """`n` listones de abanico SEPARADOS (un cuerpo cada uno), uno al lado del otro con un hueco entre ellos."""
+    return [g.caja(ancho, largo, alto, (k * (ancho + hueco), 0, 0)) for k in range(n)]
+
+
+def _tapa(cuerpo):
+    return [c for c in g.caras(cuerpo) if g.plano_de_cara(c) is not None and g.plano_de_cara(c).normal[2] > 0.9][0]
+
+
+def _extras(antes, despues):
+    return [g.volumen(d) - g.volumen(a) for a, d in zip(antes, despues, strict=True)]
+
+
+def test_repujado_reparte_el_texto_entre_caras_de_cuerpos_distintos():
+    """Varias caras elegidas son UNA zona: cada listón recibe solo la parte del texto que le cae encima (no una
+    copia entera) y lo que cae en los huecos se pierde."""
+    listones = _listones()                                           # x: 0-10, 11-21, 22-32
+    texto = [rect(2, 20, 30, 30, 10)]                                # cruza los tres, encima de ellos
+    r = sc.repujado_en_cuerpos([(c, _tapa(c)) for c in listones], texto, 1.0)
+    assert all(g.es_valida(c) for c in r)
+    assert _extras(listones, r) == pytest.approx([80, 100, 80])      # 8, 10 y 8 mm de los 28 (los huecos no)
+    # con una sola cara elegida, recibe solo su parte, en su lugar (no una copia del texto entero)
+    solo = sc.repujado(listones[1], texto, _tapa(listones[1]), 1.0)
+    assert g.volumen(solo) - g.volumen(listones[1]) == pytest.approx(100)
+
+
+def test_repujado_texto_fuera_de_las_caras_no_se_copia_ni_se_mueve():
+    """El texto paralelo va en su lugar: si no cae sobre ninguna de las caras elegidas, error (no se mueve)."""
+    listones = _listones()
+    with pytest.raises(g.ErrorGeometria, match="no caen sobre las caras"):
+        sc.repujado_en_cuerpos([(c, _tapa(c)) for c in listones], [rect(-20, 100, 60, 110, 10)], 1.0)
+    # sobre uno solo de los listones elegidos: los otros quedan igual
+    r = sc.repujado_en_cuerpos([(c, _tapa(c)) for c in listones], [rect(12, 10, 20, 20, 10)], 1.0)
+    assert _extras(listones, r) == pytest.approx([0, 80, 0])
+
+
+def test_repujado_en_listones_superpuestos_no_repuja_lo_tapado():
+    """Abanico real: un listón apoya sobre el otro. Lo que queda debajo del de arriba no se repuja."""
+    abajo, arriba = g.caja(20, 40, 3), g.caja(20, 40, 3, (15, 0, 3))  # se solapan en x 15-20
+    texto = [rect(5, 10, 30, 20, 20)]
+    r = sc.repujado_en_cuerpos([(abajo, _tapa(abajo)), (arriba, _tapa(arriba))], texto, 1.0)
+    assert all(g.es_valida(c) for c in r)
+    assert _extras([abajo, arriba], r) == pytest.approx([100, 150])  # x 5-15 abajo; x 15-30 arriba
+
+
+def _cara_con_normal(cuerpo, normal):
+    return [c for c in g.caras(cuerpo) if g.plano_de_cara(c) is not None
+            and abs(float(g.plano_de_cara(c).normal @ normal) - 1) < 1e-6][0]
+
+
+def test_repujado_en_varias_caras_a_la_vez_adaptandose_a_cada_una():
+    """Un perfil sobre la tapa se repuja a la vez en la base (opuesta) y en un costado (perpendicular)."""
+    import numpy as np
+    caja = g.caja(40, 20, 10)
+    perfil = rect(5, 5, 15, 15, 20)                                  # 10 x 10, paralelo a la tapa
+    tapa = cara_superior(caja, 10)
+    base = _cara_con_normal(caja, np.array([0.0, 0.0, -1.0]))
+    lado = _cara_con_normal(caja, np.array([1.0, 0.0, 0.0]))        # x = 40, de 20 x 10
+    r = valido(sc.repujado(caja, [perfil], [tapa, base, lado], 1.5), 8000 + 3 * 150)
+    (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(r)
+    assert (x0, z0, x1, z1) == pytest.approx((0, -1.5, 41.5, 11.5))   # sobresale en la base, la tapa y el costado
+    # solo una cara: el resultado de siempre (en su lugar)
+    valido(sc.repujado(caja, [perfil], tapa, 1.5), 8000 + 150)
+    # grabado en varias caras
+    valido(sc.repujado(caja, [perfil], [tapa, base], 1.5, tipo="grabado"), 8000 - 2 * 150)
+
+
+def test_repujado_adaptado_se_achica_si_no_entra_en_la_cara():
+    caja = g.caja(40, 20, 10)
+    grande = rect(0, 0, 30, 30, 20)                                   # 30 x 30: no entra en el costado de 20 x 10
+    lado = _cara_con_normal(caja, __import__("numpy").array([1.0, 0.0, 0.0]))
+    r = valido(sc.repujado(caja, [grande], [lado], 1.0))
+    extra = g.volumen(r) - 8000
+    assert 0 < extra < 20 * 10 * 1.0                                  # entra entera, achicada y con margen
+
+
+def test_repujado_en_dos_caras_paralelas_no_copia_el_perfil_en_la_otra():
+    caja = g.unir_todos([g.caja(40, 20, 10), g.caja(40, 20, 10, (60, 0, 0))])    # dos bloques separados
+    perfil = rect(5, 5, 15, 15, 20)                                   # solo está sobre el primero
+    t1, t2 = [c for c in g.caras(caja) if g.plano_de_cara(c) is not None and g.plano_de_cara(c).normal[2] > 0.9]
+    r = valido(sc.repujado(caja, [perfil], [t1, t2], 2.0), 16000 + 200)          # se reparte: el otro no recibe
+    assert caja_de(r)[5] == pytest.approx(12)
 
 
 def test_repujado_envolviendo_un_cilindro():
