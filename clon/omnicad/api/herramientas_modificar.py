@@ -502,7 +502,20 @@ def thread_info(sesion, thread: str | None = None, family: Familia | None = None
                "standard": sc.FAMILIAS_ROSCA[d["familia"]]["norma"], "profile_angle": d["angulo"],
                "taper": d["conica"], "major_diameter": round(d["diametro"], 4), "pitch": round(d["paso"], 4),
                "pitch_diameter": round(d["diametro_flancos"], 4), "minor_diameter": round(d["diametro_menor"], 4),
-               "tap_drill": d["broca"], "classes": list(tol.CLASES_POR_FAMILIA.get(d["familia"], {}))}
+               "tap_drill": d["broca"]}
+        # B-31: classes = las que tienen límites verificados para ESTE tamaño (si no, el modo «auto»
+        # avisaba que no hay datos mientras el catálogo las listaba como disponibles).
+        disponibles, sin_datos = [], []
+        for clase in tol.CLASES_POR_FAMILIA.get(d["familia"], {}):
+            try:
+                tol.limites_rosca(d["familia"], d["diametro"], d["paso"], clase)
+            except geo.ErrorGeometria:
+                sin_datos.append(clase)
+            else:
+                disponibles.append(clase)
+        res["classes"] = disponibles
+        if sin_datos:
+            res["classes_without_data"] = sin_datos
         if d["conica"]:
             res["note"] = "Diámetros en el plano de calibre; conicidad 1:16 en el diámetro."
         if d["familia"] == "iso_metrica":

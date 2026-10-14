@@ -26,7 +26,12 @@ SINTAXIS (se evalúa sobre las caras o las aristas de UN cuerpo; "centro" = cent
 
 Se combinan con `and`, `or`, `not` y paréntesis; cada término se evalúa sobre TODAS las caras (o aristas) y
 después se intersecan, unen o complementan (como CadQuery): `|Z and >X` = aristas verticales del lado +X;
-`#Z and not <X`. `not` ata más que `and`, y `and` más que `or`.
+`#Z and not <X`. `not` ata más que `and`, y `and` más que `or`. ENCADENAMIENTO DE RANGO en un `and`: los
+términos de rango (`>Z`, `<Z[i]`, `nearest:[x,y,z]`) se evalúan sobre el subconjunto que eligió el resto de la
+conjunción, no sobre todo el cuerpo (como el encadenado de CadQuery `.faces('%PLANE').faces('>Z')`): así
+`%PLANE and >Z` es la cara plana más alta y `%CIRCLE and nearest:[12,0,45]` el círculo más cercano, aunque el
+centro más alto o la forma más cercana del cuerpo sean de otro tipo (B-45/B-69). Si TODOS los términos del
+`and` son de rango (`>Z and >X`), se intersectan sobre todo el cuerpo (ambos niveles, como siempre).
 
 IDS EFÍMEROS: `find_faces` y `find_edges` devuelven cada elemento con un id corto, "<cuerpo>/F3" (cara) o
 "<cuerpo>/E7" (arista), donde <cuerpo> es el nombre del cuerpo (o su id si el nombre se repite). Valen HASTA EL
@@ -39,6 +44,7 @@ Dónde se espera un elemento suelto (measure_distance, measure_angle, create_ske
 se evalúa sobre las CARAS; para aristas se escribe `edges:|Z` (o `faces:` para ser explícito) o se usa un id.
 Todas esas herramientas tienen `body` para decir sobre qué cuerpo se evalúa el selector cuando hay varios.
 """
+import ast
 import hashlib
 import json
 import math
@@ -293,11 +299,33 @@ def _atomo(a, elementos, tipo, texto):
     raise _invalido(texto, "término desconocido.")   # inalcanzable: el analizador solo emite los de arriba
 
 
+def _conjuntos(nodo):
+    """Términos de una conjunción 'and', aplanados (los 'or'/'not' internos quedan como un solo término)."""
+    if nodo[0] == "and":
+        return _conjuntos(nodo[1]) + _conjuntos(nodo[2])
+    return [nodo]
+
+
+_RANGO = ("mm", "cerca")          # átomos de rango: el más alto/bajo (niveles) o el más cercano
+
+
 def _eval(nodo, elementos, tipo, texto):
     if nodo[0] == "or":
         return _eval(nodo[1], elementos, tipo, texto) | _eval(nodo[2], elementos, tipo, texto)
     if nodo[0] == "and":
-        return _eval(nodo[1], elementos, tipo, texto) & _eval(nodo[2], elementos, tipo, texto)
+        terminos = _conjuntos(nodo)
+        rangos = [t for t in terminos if t[0] in _RANGO]
+        resto = [t for t in terminos if t[0] not in _RANGO]
+        if not rangos or not resto:
+            return _eval(nodo[1], elementos, tipo, texto) & _eval(nodo[2], elementos, tipo, texto)
+        # Encadenamiento: los términos de rango se evalúan sobre el subconjunto del resto de la conjunción.
+        base = set(range(len(elementos)))
+        for t in resto:
+            base &= _eval(t, elementos, tipo, texto)
+        for t in rangos:
+            orden = sorted(base)
+            base &= {orden[i] for i in _atomo(t, [elementos[i] for i in orden], tipo, texto)}
+        return base
     if nodo[0] == "not":
         return set(range(len(elementos))) - _eval(nodo[1], elementos, tipo, texto)
     return _atomo(nodo, elementos, tipo, texto)
@@ -393,10 +421,29 @@ def _separar_prefijo(texto):
     return ("cara" if m.group(1).lower() == "faces" else "arista"), texto[m.end():]
 
 
+def _desempaquetar(spec):
+    """Algunos agentes mandan la lista de ids como TEXTO (B-42: fillet con edges=\"['Cuerpo1/E5']\" dio
+    INVALID_SELECTOR mostrando el array): si el texto es una lista de textos, se usa como lista."""
+    if isinstance(spec, str):
+        t = spec.strip()
+        if t.startswith("[") and t.endswith("]"):
+            try:
+                lista = ast.literal_eval(t)
+            except (ValueError, SyntaxError):
+                return spec
+            if isinstance(lista, (list, tuple)) and all(isinstance(x, str) for x in lista):
+                return list(lista)
+    return spec
+
+
 def elegir(sesion, spec, tipo, body=None, permitir_vacio=False):
     """[(cuerpo, elemento)] de un selector (texto), un id, o una lista mezclada de ids y selectores (se unen).
     Sin repetidos. Los selectores se evalúan sobre `body` o el único cuerpo del documento."""
     items = [spec] if isinstance(spec, str) else list(spec or [])
+    if len(items) == 1 and isinstance(items[0], str):
+        desempaquetado = _desempaquetar(items[0])
+        if not isinstance(desempaquetado, str):
+            items = desempaquetado
     if not items:
         if permitir_vacio:
             return []

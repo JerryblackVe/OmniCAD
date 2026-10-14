@@ -10,7 +10,10 @@ OmniCAD — punto de entrada.
 """
 import argparse
 import logging
+import os
 import sys
+import time
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent
@@ -20,14 +23,17 @@ if str(RAIZ) not in sys.path:
 
 def _manejador_log():
     """Adónde va el registro: a la consola si hay; en la app sin consola (OmniCAD.exe, sys.stderr = None) a
-    omnicad.log en la carpeta de datos. Sin esto cada aviso imprimía «--- Logging error ---»."""
+    omnicad.log en la carpeta de datos. Sin esto cada aviso imprimía «--- Logging error ---». El archivo se
+    ENROULA (2 MB, una copia) en vez de pisarse: el registro de la sesión anterior sobrevive a un crasheo
+    (B-21, incidente de la madrugada del 13/10 sin rastro)."""
     if sys.stderr is not None:
         return logging.StreamHandler()
     try:
         from omnicad import carpeta_datos
         carpeta = carpeta_datos()
         carpeta.mkdir(parents=True, exist_ok=True)
-        return logging.FileHandler(carpeta / "omnicad.log", "w", encoding="utf-8", delay=True)
+        return RotatingFileHandler(carpeta / "omnicad.log", mode="a", maxBytes=2_000_000, backupCount=1,
+                                   encoding="utf-8", delay=True)
     except OSError:
         return logging.NullHandler()
 
@@ -53,6 +59,8 @@ def main(argv=None):
                     help="permitir que agentes IA controlen esta sesión (MCP en vivo, solo 127.0.0.1)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", handlers=[_manejador_log()])
+    logging.getLogger("omnicad").info("=== Arranque %s (pid %s) ===",
+                                      time.strftime("%Y-%m-%d %H:%M:%S"), os.getpid())   # marca de sesión
     _verificar_dependencias()
 
     import omnicad.ui  # noqa: F401 — en Linux elige la plataforma de Qt y la de OpenGL ANTES de crear la aplicación

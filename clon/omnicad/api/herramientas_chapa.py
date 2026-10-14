@@ -237,8 +237,19 @@ def info_chapa(sesion, c):
     m = modelo_actual(c)
     r = chapa.resumen(m)
     doc = sesion.doc
+    regla = _info_regla(m["regla"])
+    # B-34: el nombre de la regla engaña si un valor quedó anulado (p. ej. espesor 4 mm en «Acero 1 mm»):
+    # marcar qué se anuló contra la regla del catálogo con ese nombre.
+    try:
+        base = chapa.regla(m["regla"]["nombre"])
+        anulados = [en for en, es in (("thickness", "espesor"), ("bend_radius", "radio"), ("k_factor", "k"))
+                    if abs(float(m["regla"][es]) - float(base[es])) > 1e-9]
+    except Exception:  # noqa: BLE001 — la regla ya no está en el catálogo: no hay con qué comparar
+        anulados = []
+    if anulados:
+        regla["overrides"] = anulados
     return {"id": c.id, "name": sesion.nombre_cuerpo(c), "is_flat_pattern": es_patron_plano(c),
-            "flat_pattern_of": m.get("patron_de"), "rule": _info_regla(m["regla"]), "rule_step": m.get("op_regla"),
+            "flat_pattern_of": m.get("patron_de"), "rule": regla, "rule_step": m.get("op_regla"),
             "bends": r["pliegues"], "unfolded_bends": r["desplegados"],
             "flat_size": [_r(r["ancho"]), _r(r["alto"])], "flat_area": _r(r["area"]),
             "volume": _r(geo.volumen(c.forma)),

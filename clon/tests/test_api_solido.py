@@ -120,6 +120,65 @@ def test_un_parametro_en_distance_cambia_el_volumen(s):
 
 
 # ---------------------------------------------------------------- errores estructurados
+def test_union_que_comparte_solo_una_cara_avisa(s):
+    """B-38: join automático con tope coplanar al cuerpo vecino: se une compartiendo solo una cara
+    (sin solape) y el paso lo avisa, no lo absorbe en silencio."""
+    llamar(s, "create_box", length=10, width=10, height=10)
+    llamar(s, "create_box", length=5, width=10, height=10, x=7.5, operation="join")   # toca solo la cara x=5
+    pasos = llamar(s, "get_timeline", include_params=False)["steps"]
+    union = pasos[-1]
+    assert union["status"] == "warning" and "solo una cara" in union["message"]
+    assert len(cuerpos(s)) == 1      # se unió (se avisa, no se excluye)
+
+
+def test_perfil_se_reenlaza_cuando_el_contorno_cambia(s):
+    """Extrusión sobre media luna; al quedar la línea fuera, la firma del perfil cambia
+    y la extrusión se re-vincula al disco entero con un aviso (regresión B-27)."""
+    llamar(s, "create_sketch", name="B")
+    llamar(s, "draw_circle", center_x=0, center_y=0, radius=10)
+    llamar(s, "draw_line", start_x=0, start_y=-20, end_x=0, end_y=20)
+    linea = next(e["id"] for e in llamar(s, "get_sketch")["entities"] if e["type"] == "line")
+    perfiles = llamar(s, "get_sketch")["profiles"]
+    assert len(perfiles) == 2
+    derecha = next(i for i, p in enumerate(perfiles) if p["centroid"][0] > 0)
+    llamar(s, "extrude", sketch="B", profile=derecha, distance=10)
+    assert volumen(s) == pytest.approx(50 * math.pi * 10, rel=1e-3)
+    llamar(s, "delete_sketch_entities", entities=[linea])
+    # la firma guardada ({círculo, línea}) ya no existe: antes daba error, ahora re-vincula al disco
+    assert volumen(s) == pytest.approx(100 * math.pi * 10, rel=1e-3)
+    extrusion = next(p for p in llamar(s, "get_timeline", include_params=False)["steps"] if p["type"] == "extrusion")
+    assert extrusion["status"] != "error" and "re-vinculó" in extrusion["message"]
+
+
+def test_el_corte_que_no_toca_avisa_en_el_timeline(s):
+    """Si el perfil de corte queda en el aire (p. ej. un parámetro movió la pieza), el paso
+    queda en warning con «no toca ningún cuerpo», no ok en silencio (B-09/B-30)."""
+    llamar(s, "create_sketch", name="Base")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)
+    llamar(s, "extrude", sketch="Base", distance=10)
+    llamar(s, "create_construction_plane", offset=30)
+    llamar(s, "create_sketch", plane="Plano1", name="Techo")
+    llamar(s, "draw_circle", center_x=5, center_y=5, radius=3)
+    llamar(s, "extrude", sketch="Techo", distance=5, operation="cut")   # corta hacia arriba: no toca
+    corte = [p for p in llamar(s, "get_timeline", include_params=False)["steps"] if p["type"] == "extrusion"]
+    assert corte[-1]["status"] == "warning" and "no toca ningún cuerpo" in corte[-1]["message"]
+
+
+def test_perfil_ambiguo_tras_el_cambio_sigue_dando_error(s):
+    """Empate entre dos perfiles igual de parecidos: NO se adivina ninguno."""
+    from omnicad.nucleo.perfiles import Perfil, buscar_por_firma_tolerante
+    a = Perfil(None, 50.0, (-5.0, 0.0), frozenset({1, 2}))
+    b = Perfil(None, 50.0, (5.0, 0.0), frozenset({1, 3}))
+    assert buscar_por_firma_tolerante([a, b], [1, 2, 3, 4], [0.0, 0.0]) == (None, None)
+    sin_candidatos = buscar_por_firma_tolerante([a, b], [7, 8], None)
+    assert sin_candidatos == (None, None)
+    unico, nota = buscar_por_firma_tolerante([a, b], [1, 2, 3], [-4.0, 0.0])
+    assert unico is a and nota and "re-vinculó" in nota
+    exacto, nota2 = buscar_por_firma_tolerante([a, b], [1, 2], (0, 0))
+    assert exacto is a and nota2 is None    # exacta: sin nota
+
+
+# ---------------------------------------------------------------- errores estructurados
 def test_perfil_inexistente_es_un_error_estructurado(s):
     llamar(s, "create_sketch")
     llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)
@@ -229,6 +288,28 @@ def test_operaciones_y_target(s):
     # target con new_body se ignora con aviso
     ok_ = api.llamar(s, "extrude", {"sketch": "Boceto1", "distance": 1, "target": "Cuerpo2"})
     assert ok_["ok"] and any("ignora" in a for a in ok_["avisos"])
+
+
+def test_extrude_cut_flotante_va_hacia_el_material(s):
+    """B-10: un cut desde un boceto flotante ENCIMA de la pieza extruye hacia la normal y no tocaba
+    nada («sentido automático mal detectado»); ahora con reverse vacío va hacia el lado con material."""
+    llamar(s, "create_box", length=20, width=20, height=20)
+    llamar(s, "create_construction_plane", plane="XY", offset=30, name="Arriba")
+    llamar(s, "sketch_from_spec", plane="Arriba", entities=[{"type": "rectangle", "center": [0, 0], "width": 10,
+                                                             "height": 10}])
+    r = llamar(s, "extrude", sketch="Boceto1", distance=60, operation="cut")
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(8000 - 100 * 20, rel=1e-6)   # atraviesa la caja
+    # forzado al otro lado: no toca nada y avisa (comportamiento anterior, disponible con reverse)
+    r = api.llamar(s, "extrude", {"sketch": "Boceto1", "distance": 60, "operation": "cut", "reverse": False})
+    assert r["ok"] and any("no toca ningún cuerpo" in a for a in r["avisos"])
+    # boceto por debajo de la caja: la normal (+Z) ya mira al material, no se invierte
+    llamar(s, "create_construction_plane", plane="XY", offset=-20, name="Abajo")
+    llamar(s, "sketch_from_spec", plane="Abajo", entities=[{"type": "circle", "center": [8, 0], "radius": 2}])
+    r = llamar(s, "extrude", sketch="Boceto2", distance=60, operation="cut")
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(8000 - 100 * 20 - math.pi * 4 * 20, rel=1e-6)
+    # join desde el boceto flotante NO se invierte (extrude hacia +Z, al aire: cuerpo nuevo aparte)
+    r = llamar(s, "extrude", sketch="Boceto1", distance=60, operation="join")
+    assert not r["bodies_modified"] and r["bodies_created"]
 
 
 # ---------------------------------------------------------------- revolución, barrido y solevación
@@ -520,3 +601,50 @@ def test_guardar_y_abrir_conserva_el_modelo(s, tmp_path):
     llamar(otra, "open_document", path=ruta)
     assert volumen(otra) == pytest.approx(VOLUMEN_L, rel=1e-3)
     llamar(otra, "extrude", sketch="Pared", distance=2, operation="join", reverse=True)     # los ids estables siguen valiendo
+
+
+# ---------------------------------------------------------------- tope de medidas (B-53)
+def test_las_medidas_tienen_tope_de_un_kilometro(s):
+    """B-53: create_cylinder aceptaba height=1e9 y creaba un cilindro de 1.000 km que inutilizaba
+    propiedades y render. El tope documentado (cotas) es 1.000.000 mm."""
+    r = api.llamar(s, "create_cylinder", {"radius": 5, "height": 1e9})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS" and "1.000.000" in r["mensaje"], r
+    r = api.llamar(s, "create_box", {"length": 2e6, "width": 10, "height": 10})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+    r = api.llamar(s, "create_cylinder", {"radius": 5, "height": -3})
+    assert not r["ok"] and "1.000.000" in r["mensaje"]
+    assert llamar(s, "create_cylinder", radius=5, height=10)["bodies_created"]      # dentro del tope: normal
+
+
+# ---------------------------------------------------------------- nivel 2: name en primitivas y copias
+def test_primitivas_con_nombre(s):
+    """B-23: create_* acepta name y nombra el cuerpo creado (el paso sigue «Caja N»)."""
+    r = llamar(s, "create_box", length=30, width=20, height=10, name="Soporte base")
+    cid = r["bodies_created"][0]["id"]
+    assert r["bodies_created"][0]["name"] == "Soporte base"
+    assert cuerpos(s)[cid]["name"] == "Soporte base"
+    assert r["feature"]["name"].startswith("Caja")          # el paso conserva su etiqueta
+    llamar(s, "rename", target=cid, new_name="Otro")        # renombrar después sigue andando
+    assert cuerpos(s)[cid]["name"] == "Otro"
+
+
+def test_primitiva_con_nombre_solo_new_body(s):
+    """B-23: name solo aplica con new_body; en join el cuerpo es el que ya existía."""
+    llamar(s, "create_box", length=10, width=10, height=10, name="Base")
+    r = llamar(s, "create_box", length=4, width=4, height=30, operation="join", target="Base", name="Ignorado")
+    assert not r["bodies_created"]
+    assert [c["name"] for c in r["bodies_modified"]] == ["Base"]
+
+
+def test_patron_de_cuerpos_hereda_nombre(s):
+    """B-32: las copias de un patrón llevan «nombre (copia)», como move_body."""
+    llamar(s, "create_cylinder", height=5, radius=2, name="Perno")
+    llamar(s, "rectangular_pattern", bodies=["Perno"], x_count=3, x_spacing=10)
+    assert sorted(c["name"] for c in cuerpos(s).values()) == ["Perno", "Perno (copia)", "Perno (copia)"]
+
+
+def test_simetria_hereda_nombre(s):
+    """B-32 (twin): la copia de una simetría también lleva «nombre (copia)»."""
+    llamar(s, "create_sphere", radius=3, name="Bola")
+    llamar(s, "mirror", bodies=["Bola"], plane="YZ")
+    assert sorted(c["name"] for c in cuerpos(s).values()) == ["Bola", "Bola (copia)"]

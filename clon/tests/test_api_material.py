@@ -145,6 +145,8 @@ def test_lista_de_materiales_agrupa_piezas_iguales(tmp_path):
     assert filas["Cuerpo5"]["bodies"] == [chasis] and filas["Cuerpo5"]["default_material"] is True
     assert filas["Cuerpo5"]["mass_g"] == pytest.approx(8000 * 7.85e-3)
     assert r["pieces"] == 5 and r["total_mass_g"] == pytest.approx(4 * 0.93 + 62.8)
-    lineas = (tmp_path / "bom.csv").read_text(encoding="utf-8").splitlines()
+    datos = (tmp_path / "bom.csv").read_bytes()
+    assert datos.startswith(b"\xef\xbb\xbf")            # BOM (utf-8-sig): Excel y PowerShell leen «N.º» y «mm³»
+    lineas = datos.decode("utf-8-sig").splitlines()
     assert lineas[0].startswith("N.º,Nombre,Cantidad") and len(lineas) == 3
     falla(s, "get_bill_of_materials", "FILE_EXISTS", csv_path=str(tmp_path / "bom.csv"))

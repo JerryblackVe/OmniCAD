@@ -161,8 +161,25 @@ def _sin_comillas(texto):
     return texto
 
 
+_ENTERO = re.compile(r"-?\d+")
+_FLOTANTE = re.compile(r"-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?")
+
+
+def _numero_de_texto(valor, t):
+    """B-57: algunos clientes mandan los números OPCIONALES como texto («set_marker {position: 1}» llegó como '1';
+    `float | None`, `int | None`). Solo se aplica donde el texto NO es una alternativa válida del tipo (los Expr,
+    `float | str`, quedan intactos). Si no es un número limpio, se devuelve igual y el error lo da la rama que
+    corresponda."""
+    texto = valor.strip()
+    patron = _ENTERO if t is int else _FLOTANTE
+    if patron.fullmatch(texto):
+        return int(texto) if t is int else float(texto)
+    return valor
+
+
 def _convertir(valor, t):
-    """Valida `valor` contra el tipo `t` y lo normaliza (int → float, 2.0 → 2). Lanza _NoCoincide."""
+    """Valida `valor` contra el tipo `t` y lo normaliza (int → float, 2.0 → 2, '1' → 1 cuando el texto no es
+    una alternativa válida del tipo). Lanza _NoCoincide."""
     if t is typing.Any:
         return valor
     if t is type(None):
@@ -195,6 +212,8 @@ def _convertir(valor, t):
     if origen in (Union, types.UnionType):
         if isinstance(valor, str) and set(args) - {type(None)} == {float, str}:
             valor = _sin_comillas(valor)          # Expr (o Expr | None)
+        elif isinstance(valor, str) and str not in args:
+            valor = _numero_de_texto(valor, int if int in args else float)   # B-57: «position: '1'»
         for a in args:
             try:
                 return _convertir(valor, a)

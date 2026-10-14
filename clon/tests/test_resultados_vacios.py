@@ -110,14 +110,20 @@ def test_escala_chica_legitima_sigue_andando(s):
     assert geo.es_valida(forma) and geo.volumen(forma) == pytest.approx(8000 * 1e-9, rel=1e-6)
 
 
-@pytest.mark.parametrize("nombre, args", [
-    ("create_cylinder", {"radius": 1e9, "height": 10}),
-    ("create_cylinder", {"radius": 1e-7, "height": 10}),
-    ("create_sphere", {"radius": 1e9}),
-    ("create_torus", {"major_radius": 1e9, "minor_radius": 5}),
+@pytest.mark.parametrize("nombre, args, kind, texto", [
+    ("create_cylinder", {"radius": 1e9, "height": 10}, "INVALID_ARGUMENTS", "1.000.000"),   # tope de la API (B-53)
+    ("create_cylinder", {"radius": 1e-7, "height": 10}, "OPERATION_FAILED", "demasiado"),   # chico: lo frena el núcleo
+    ("create_sphere", {"radius": 1e9}, "INVALID_ARGUMENTS", "1.000.000"),
+    ("create_torus", {"major_radius": 1e9, "minor_radius": 5}, "INVALID_ARGUMENTS", "1.000.000"),
 ])
-def test_primitivas_con_medidas_extremas_fallan(s, nombre, args):
-    falla(s, nombre, "demasiado", **args)
+def test_primitivas_con_medidas_extremas_fallan(s, nombre, args, kind, texto):
+    """Falla limpio y el documento no cambia: la API topa las medidas en 1.000.000 mm (B-53) y el
+    núcleo sigue frenando las caras demasiado grandes o chicas («demasiado»)."""
+    antes = foto(s)
+    r = api.llamar(s, nombre, args)
+    assert not r["ok"] and r["error_kind"] == kind, r
+    assert texto in r["mensaje"], r["mensaje"]
+    assert foto(s) == antes
 
 
 def test_primitivas_nucleo_validas():

@@ -23,6 +23,23 @@ import numpy as np
 
 from . import geometria as geo
 
+
+_DEFLEXION_MIN, _DEFLEXION_MAX = 0.02, 0.5
+
+
+def deflexion_para(forma, deflexion=None):
+    """Deflexión (mm) de teselado para un B-rep: la dada o, sin argumento, la automática por pieza
+    (fina en piezas chicas: 3e-4 de la diagonal, acotada a [0.02, 0.5] mm). La regla global (0.05 mm o
+    diagonal/2000 de la escena) dejaba una pieza chica facetada dentro de una escena grande (B-15)."""
+    if deflexion is not None:
+        return float(deflexion)
+    try:
+        mn, mx = geo.caja_envolvente(forma)
+        diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
+    except Exception:  # noqa: BLE001 - una forma rara no debe impedir dibujar
+        return 0.05
+    return min(max(diag * 3e-4, _DEFLEXION_MIN), _DEFLEXION_MAX)
+
 # ---------------------------------------------------------------- aspectos
 CATEGORIAS = ("Metal", "Plástico", "Vidrio", "Goma", "Madera", "Pintura")
 ACABADO_DEFECTO = {"nombre": "", "categoria": "", "metalico": 0.0, "rugosidad": 0.4, "transparencia": 0.0,
@@ -302,12 +319,12 @@ def es_malla(forma):
     return hasattr(forma, "vertices") and hasattr(forma, "caras") and not callable(getattr(forma, "caras"))
 
 
-def malla_suave(forma, deflexion=0.05):
-    """(vértices, normales) float32 de triángulos sueltos. B-rep: en cada vértice, la normal EXACTA de la
-    superficie (hacia afuera del material), como la del análisis de cebra; promediar los triángulos torcía
-    la normal en las caras B-spline (teselado irregular) y los brillos salían como franjas dentadas. Una cara
-    sin superficie (solo triangulación, p. ej. de un STEP teselado) usa la normal promediada. Cuerpos de
-    malla: normales promediadas con ángulo de pliegue."""
+def malla_suave(forma, deflexion=0.05, angular=0.25, rehacer=False):
+    """(vǸrtices, normales) float32 de triǭngulos sueltos. B-rep: en cada vǸrtice, la normal EXACTA de la
+    superficie (hacia afuera del material), como la del anǭlisis de cebra; promediar los triǭngulos torcǭa
+    la normal en las caras B-spline (teselado irregular) y los brillos salǭan como franjas dentadas. Una cara
+    sin superficie (solo triangulaciǭn, p. ej. de un STEP teselado) usa la normal promediada. Cuerpos de
+    malla: normales promediadas con ǭngulo de pliegue."""
     if es_malla(forma):
         tris = np.asarray(forma.vertices, float)[np.asarray(forma.caras, int)]
         return normales_suaves(tris, None, 35.0)
@@ -316,7 +333,7 @@ def malla_suave(forma, deflexion=0.05):
 
     from .analisis import _indices, _props_nodos
     verts, norms = [], []
-    for cara, tris in geo.teselar_por_cara(forma, deflexion, 0.25):
+    for cara, tris in geo.teselar_por_cara(forma, deflexion, angular, rehacer=rehacer):
         if BRep_Tool.Surface_s(cara) is None:
             n = normales_suaves(tris, None, 60.0)[1]
         else:

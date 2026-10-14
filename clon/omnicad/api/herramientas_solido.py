@@ -94,8 +94,12 @@ def _ref_perfil(sop, perfil):
 
 
 def _numero_positivo(valor, que):
-    if isinstance(valor, (int, float)) and valor <= 0:
-        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser positivo (recibió {valor}).")
+    """Medida en mm: mayor que 0 y de hasta 1.000.000 (1 km), como las cotas (B-53). Solo números: las
+    expresiones las valida el núcleo al calcular el paso."""
+    from ..restricciones.boceto import MEDIDA_MAXIMA
+    if isinstance(valor, (int, float)) and not 0 < valor <= MEDIDA_MAXIMA:
+        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser mayor que 0 y de hasta 1.000.000 mm (1 km) "
+                                          f"(recibió {valor:g}).")
 
 
 def _exigir_instancias(total, que):
@@ -107,13 +111,27 @@ def _exigir_instancias(total, que):
                                          f"({que} = {pedido}).")
 
 
+def _forma_del_objetivo(sesion, target):
+    """Forma sobre la que medir el lado del material: el cuerpo de `target` si se dio, si no todos los sólidos
+    (o None si no hay ninguno: no se invierte)."""
+    if target is not None and (isinstance(target, str) and target.strip() or target):
+        cuerpos = [sesion.cuerpo(x) for x in (target if isinstance(target, list) else [target])]
+    else:
+        cuerpos = [c for c in sesion.doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
+    if not cuerpos:
+        return None
+    from ..nucleo import geometria as geo
+    return geo.compuesto([c.forma for c in cuerpos]) if len(cuerpos) > 1 else cuerpos[0].forma
+
+
 # ---------------------------------------------------------------- extrusión y revolución
 @herramienta("extrude", "solido",
              "Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor "
              "área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; "
              "'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. "
              "El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, "
-             "un cut desde un boceto sobre una cara entra al material sin pedirlo (reverse vacío). direction: "
+              "un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; "
+              "en un boceto flotante va hacia el lado que tiene material). direction: "
              "one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada "
              "lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo "
              "lo estrecha). operation: new_body, join, cut o intersect.",
@@ -130,13 +148,22 @@ def extrude(sesion, sketch: str, profile: Perfiles = 0, distance: Expr = "10 mm"
     taper_angle: conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     distance2: distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
-    reverse: true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: solo un cut
-        desde un boceto sobre una cara se invierte (entra al material, como Fusion).
+    reverse: true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al
+        material (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene
+        material, como Fusion).
     """
     sop, br = boceto_activo(sesion, sketch)
     perfiles = seleccionar_perfiles(br, sop, profile)
     if reverse is None:
-        reverse = operation == "cut" and sop.p.get("plano") == "cara"
+        if operation == "cut" and sop.p.get("plano") == "cara":
+            reverse = True                        # sobre una cara: entra al material (la normal mira afuera)
+        elif operation == "cut" and direction == "one_side":
+            # B-10: boceto flotante (p. ej. un plano de construcción por encima de la pieza): el cut va
+            # hacia el lado que tiene material, no siempre hacia +normal.
+            from .herramientas_modificar import _hacia_el_material
+            forma = _forma_del_objetivo(sesion, target)
+            if forma is not None and not _hacia_el_material(forma, br.plano.origen, br.plano.normal):
+                reverse = True
     doc = sesion.doc
     p = {"boceto": sop.id, "perfiles": [OpExtrusion.referencia_perfil(x) for x in perfiles],
          "distancia": texto_expr(distance), "operacion": OPERACIONES[operation],
@@ -275,7 +302,7 @@ def loft(sesion, sketches: list[str], profiles: list[int | str] | None = None, o
 
 
 # ---------------------------------------------------------------- primitivas
-def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, **extra):
+def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, name=None, **extra):
     doc = sesion.doc
     objetivos = _objetivos(sesion, operation, target)
     if len(objetivos) > 1:
@@ -285,7 +312,13 @@ def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, **extra
     p.update({k: texto_expr(v) for k, v in medidas.items()})
     p.update(extra)
     op = OpPrimitiva(doc.nuevo_id(), nombre_nuevo(doc, base, OpPrimitiva, lambda o: o.p["forma"] == forma), **p)
-    return _agregar(sesion, op, operation != "new_body")
+    res = _agregar(sesion, op, operation != "new_body")
+    if name and operation == "new_body":          # B-23: nombrar el cuerpo al crearlo (el paso sigue «Caja N»)
+        creados = [c["id"] for c in res["bodies_created"]]
+        doc.set_propiedad(creados, "nombre", name.strip())
+        for c in res["bodies_created"]:
+            c["name"] = name.strip()
+    return res
 
 
 @herramienta("create_box", "solido",
@@ -294,7 +327,7 @@ def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, **extra
              "aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado "
              "(caja_centrada) y edit_feature acepta length, width y height.", modifica=True)
 def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0,
-               operation: Operacion = "new_body", target: Cuerpos | None = None):
+               operation: Operacion = "new_body", target: Cuerpos | None = None, name: str | None = None):
     """
     length: tamaño en X (mm, positivo).
     width: tamaño en Y (mm, positivo).
@@ -304,11 +337,12 @@ def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: 
     z: z de la base (mm).
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     """
     for valor, que in ((length, "length"), (width, "width"), (height, "height")):
         _numero_positivo(valor, que)
     return _primitiva(sesion, "caja", "Caja", {"ancho": length, "largo": width, "alto": height},
-                      x, y, z, operation, target, caja_centrada=True)
+                      x, y, z, operation, target, name, caja_centrada=True)
 
 
 def _radio_o_diametro(radio, diametro, nombre_radio, nombre_diametro):
@@ -327,7 +361,8 @@ def _radio_o_diametro(radio, diametro, nombre_radio, nombre_diametro):
              "Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la "
              "base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo).", modifica=True)
 def create_cylinder(sesion, height: Expr, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, z: Expr = 0,
-                    operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None):
+                    operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None,
+                    name: str | None = None):
     """
     height: altura en mm (positiva).
     radius: radio en mm (positivo). Alternativa: diameter.
@@ -337,16 +372,19 @@ def create_cylinder(sesion, height: Expr, radius: Expr | None = None, x: Expr = 
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     diameter: diámetro en mm, en vez de radius (como el panel Cilindro de la app); el paso guarda la mitad.
+    name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     """
     radio = _radio_o_diametro(radius, diameter, "radius", "diameter")
     _numero_positivo(height, "height")
-    return _primitiva(sesion, "cilindro", "Cilindro", {"radio": radio, "alto": height}, x, y, z, operation, target)
+    return _primitiva(sesion, "cilindro", "Cilindro", {"radio": radio, "alto": height}, x, y, z, operation, target,
+                      name)
 
 
 @herramienta("create_sphere", "solido", "Crea una esfera. (x, y, z) es su centro. La medida va como radius o como "
              "diameter (uno solo).", modifica=True)
 def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, z: Expr = 0,
-                  operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None):
+                  operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None,
+                  name: str | None = None):
     """
     radius: radio en mm (positivo). Alternativa: diameter.
     x: x del centro (mm).
@@ -355,9 +393,10 @@ def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, 
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     diameter: diámetro en mm, en vez de radius (como el panel Esfera de la app); el paso guarda la mitad.
+    name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     """
     radio = _radio_o_diametro(radius, diameter, "radius", "diameter")
-    return _primitiva(sesion, "esfera", "Esfera", {"radio": radio}, x, y, z, operation, target)
+    return _primitiva(sesion, "esfera", "Esfera", {"radio": radio}, x, y, z, operation, target, name)
 
 
 @herramienta("create_torus", "solido", "Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). "
@@ -365,7 +404,7 @@ def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, 
              "minor_diameter), uno de cada par.", modifica=True)
 def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | None = None, x: Expr = 0, y: Expr = 0,
                  z: Expr = 0, operation: Operacion = "new_body", target: Cuerpos | None = None,
-                 major_diameter: Expr | None = None, minor_diameter: Expr | None = None):
+                 major_diameter: Expr | None = None, minor_diameter: Expr | None = None, name: str | None = None):
     """
     major_radius: radio mayor en mm (del centro al centro del tubo); tiene que ser mayor que minor_radius.
     minor_radius: radio menor en mm (del tubo).
@@ -376,11 +415,12 @@ def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | 
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     major_diameter: diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
     minor_diameter: diámetro del tubo, en vez de minor_radius.
+    name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     """
     mayor = _radio_o_diametro(major_radius, major_diameter, "major_radius", "major_diameter")
     menor = _radio_o_diametro(minor_radius, minor_diameter, "minor_radius", "minor_diameter")
     return _primitiva(sesion, "toroide", "Toroide", {"radio_mayor": mayor, "radio_menor": menor},
-                      x, y, z, operation, target)
+                      x, y, z, operation, target, name)
 
 
 # ---------------------------------------------------------------- booleanas, simetría, patrones, movimiento

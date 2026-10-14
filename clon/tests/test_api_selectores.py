@@ -56,7 +56,7 @@ def test_caja_aristas_verticales_son_cuatro(caja):
 @pytest.mark.parametrize("selector,aristas,caras", [
     ("|Z", 4, 2), ("#Z", 8, 4), (">Z", 4, 1), ("<Z", 4, 1), (">X", 4, 1), ("<Y", 4, 1),
     ("+Z", 4, 1), ("-X", 4, 1), ("%LINE", 12, None), ("%PLANE", None, 6), ("all", 12, 6),
-    (">Z and >X", 1, 0), ("|Z and >X", 2, 0), (">Z or <Z", 8, 2), ("not >Z", 8, 5),
+    (">Z and >X", 1, 0), ("|Z and >X", 2, 2), (">Z or <Z", 8, 2), ("not >Z", 8, 5),
     ("(>Z or <Z) and not >X", 6, 2), ("#Z and not <X", 6, 3), (">Z[1]", None, 4), ("<Z[-1]", None, 1),
     ("nearest:[10, 10, 25]", 1, 1), ("  >Z  ", 4, 1), (">z", 4, 1),
 ])
@@ -344,3 +344,50 @@ def test_measure_con_body(dos_cajas):
     # un id no necesita body, aunque body diga otro cuerpo
     id_grande = llamar(s, "find_faces", body="Cuerpo1", selector=">Z")["faces"][0]["id"]
     assert llamar(s, "measure_angle", a=id_grande, b="<Z", body="Cuerpo2")["angle"] == pytest.approx(180)
+
+
+# ---------------------------------------------------------------- nivel 2: la lista como texto (B-42)
+def test_lista_de_ids_como_texto_se_desempaqueta(s):
+    """B-42: fillet con edges=\"['Cuerpo1/E5']\" (la lista mandada como texto) daba INVALID_SELECTOR
+    mostrando el array; el mismo id suelto andaba. Ahora se desempaqueta."""
+    llamar(s, "create_box", length=20, width=20, height=20)
+    e5 = llamar(s, "find_edges", body="Cuerpo1", selector="|Z")["edges"][0]["id"]
+    r = llamar(s, "fillet", edges=f"['{e5}']", radius=2)
+    assert r["edges_used"] == 1
+    # el texto que no es una lista sigue siendo un selector (y sigue fallando igual que antes)
+    assert falla(s, "fillet", edges="['>Z', 12]", radius=2)["error_kind"] == "INVALID_SELECTOR"
+
+
+# ------------------------------------------------------------ rango encadenado en un «and» (B-45 / B-69)
+@pytest.fixture
+def caja_con_agujero(s):
+    llamar(s, "create_box", length=20, width=20, height=20)
+    llamar(s, "create_cylinder", radius=5, height=30, z=-5, operation="cut")   # agujero pasante vertical
+    return s
+
+
+def test_rango_encadenado_tipo_y_nivel(caja_con_agujero):
+    """B-69: '%PLANE and >Z' daba NO_MATCH en un cuerpo cuyo centro más alto era una cara no plana
+    (plataforma del gato con un cubo cilíndrico); los términos de rango de un «and» (niveles y nearest)
+    se evalúan sobre lo que ya eligió el resto de la conjunción, como el encadenado de CadQuery."""
+    s = caja_con_agujero
+    assert llamar(s, "find_faces", selector=">Z")["count"] == 1               # tapa (plana), sin sorpresas
+    # el nivel más bajo global es la base (plana); el cilindro del agujero existe igual
+    r = llamar(s, "find_faces", selector="%CYLINDER and <Z")
+    assert r["count"] == 1 and r["faces"][0]["type"] == "cylinder"
+    r = llamar(s, "find_faces", selector="<Z and %CYLINDER")
+    assert r["count"] == 1
+    # un «and» solo de rangos mantiene la intersección clásica sobre todo el cuerpo
+    assert falla(s, "find_faces", selector=">Z and >X")["error_kind"] == "NO_MATCH"
+    # la tapa sigue ganando entre las planas, incluido con niveles
+    assert llamar(s, "find_faces", selector="%PLANE and >Z")["faces"][0]["type"] == "plane"
+
+
+def test_rango_encadenado_nearest(caja_con_agujero):
+    """B-45: '%CIRCLE and nearest:[12,0,45]' daba NO_MATCH si la arista más cercana del cuerpo era una
+    línea; nearest de un «and» se evalúa dentro de lo que eligió el resto."""
+    s = caja_con_agujero
+    # la arista más cercana a (9, 0, 20) es la línea superior (dist 1), no el círculo (dist 4)
+    r = llamar(s, "find_edges", selector="%CIRCLE and nearest:[9,0,20]")
+    assert r["count"] == 1 and r["edges"][0]["type"] == "circle"
+    assert r["edges"][0]["circle_center"] == pytest.approx([0, 0, 20])

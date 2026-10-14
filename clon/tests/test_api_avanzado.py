@@ -352,8 +352,12 @@ def test_execute_code_errores_de_sintaxis_y_exit(s):
     assert not r["ok"] and r["error_kind"] == "CODE_ERROR" and "SyntaxError" in r["mensaje"] and "línea 1" in r["mensaje"]
     r = api.llamar(s, "execute_code", {"code": "import sys\nsys.exit(3)"})
     assert not r["ok"] and r["error_kind"] == "CODE_ERROR"
+    # B-36: llamar no lanza (el dict llega igual), pero si la única llamada falla el resultado global ya no es ok
     r = api.llamar(s, "execute_code", {"code": "result = llamar('no_existe')['error_kind']"})
-    assert ok(r)["result"] == "UNKNOWN_TOOL"       # llamar no lanza: devuelve el dict de error
+    assert not r["ok"] and r["error_kind"] == "CODE_ERROR" and "no_existe" in r["mensaje"]
+    r = api.llamar(s, "execute_code", {"code": "llamar('get_scene_info')\nresult = llamar('no_existe')['error_kind']"})
+    res = ok(r)
+    assert res["result"] == "UNKNOWN_TOOL" and res["failed_calls"]    # mezclada: ok + la falla a la vista
 
 
 def test_execute_code_falla_dentro_de_la_api_y_traza_larga(s):
@@ -407,7 +411,9 @@ def test_execute_code_timeout_invalido_none_y_anidado(s):
         assert api.llamar(s, "execute_code", {"code": "result = 1", "timeout": malo})["error_kind"] == "INVALID_ARGUMENTS"
     assert ok(api.llamar(s, "execute_code", {"code": "result = 1", "timeout": None}))["result"] == 1
     interno = "llamar('execute_code', {'code': 'while True:\\n    pass', 'timeout': 0.2})['error_kind']"
-    assert ok(api.llamar(s, "execute_code", {"code": "result = " + interno}))["result"] == "CODE_TIMEOUT"
+    # B-36: una llamada buena adelante para que la anidada que falla no vuelque todo el lote
+    assert ok(api.llamar(s, "execute_code", {"code": "llamar('get_scene_info')\nresult = " + interno}))[\
+        "result"] == "CODE_TIMEOUT"
     props = next(h for h in api.catalogo() if h["nombre"] == "execute_code")["esquema"]["properties"]
     assert props["timeout"]["default"] == av.PLAZO_CODIGO == 60
 
@@ -441,3 +447,67 @@ def test_guia_solo_nombra_herramientas_que_existen(s):
                 continue
             assert nombre in conocidas, f"{tema}: la guía nombra '{nombre}', que no es una herramienta"
     assert av._GUIA.is_dir()
+
+
+
+
+# ---------------------------------------------------------------- listas vacías en superficie (B-63)
+def test_operaciones_de_superficie_rechazan_listas_vacias(s):
+    """B-63: descoser, destrimar e invertir_normal con lista vacía creaban un paso ok sin efecto;
+    coser y las demás ya validaban («Elegí…»)."""
+    for tipo, mensaje in (("descoser", "cuerpos a descoser"), ("destrimar", "caras a destrimar"),
+                          ("invertir_normal", "cuerpos a invertir")):
+        r = api.llamar(s, "run_operation", {"type": tipo, "params": {}})
+        assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", (tipo, r)
+        assert "Elegí" in r["mensaje"] and mensaje in r["mensaje"], (tipo, r)
+
+
+# ---------------------------------------------------------------- nivel 2: execute_code honesto y números como texto
+def test_execute_code_con_todas_las_llamadas_fallidas(s):
+    """B-36: si TODAS las llamadas a llamar fallan, CODE_ERROR y el documento vuelve intacto (antes: ok
+    global en silencio, sin pasos ni cuerpos)."""
+    antes = json.dumps(s.doc.a_dict(), sort_keys=True)
+    r = api.llamar(s, "execute_code", {"code": 'llamar("crear_toroide", {})\nllamar("crear_esfera", {})'})
+    assert not r["ok"] and r["error_kind"] == "CODE_ERROR"
+    assert "crear_toroide" in r["mensaje"] and "quedó como estaba" in r["mensaje"]
+    assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
+
+
+def test_execute_code_con_algunas_llamadas_fallidas_avisa(s):
+    """B-36: si solo algunas fallan, ok con failed_calls y aviso (el trabajo bueno no se pierde)."""
+    r = api.llamar(s, "execute_code", {"code": 'a = llamar("create_sphere", {"radius": 3})\n'
+                                                'b = llamar("crear_toroide", {})\n'
+                                                'result = [a["ok"], b["ok"]]'})
+    assert r["ok"], r
+    assert r["result"]["result"] == [True, False]
+    assert any("crear_toroide" in f for f in r["result"]["failed_calls"])
+    assert any("1 de 2" in a for a in r["avisos"])
+
+
+def test_create_hole_resuelve_ids_de_cara_dentro_de_execute_code(s):
+    """B-12: dentro de execute_code los ids de find_faces se resuelven igual que por MCP (un reporte
+    de otra IA lo dudaba, sin caso: confirmado que no falla)."""
+    codigo = ("llamar(\"create_box\", {\"length\": 20, \"width\": 20, \"height\": 20})\n"
+              "f = llamar(\"find_faces\", {\"selector\": \">Z\"})[\"result\"][\"faces\"][0][\"id\"]\n"
+              "r = llamar(\"create_hole\", {\"face\": f, \"diameter\": 6, \"through_all\": True})\n"
+              "assert r[\"ok\"], r")
+    r = api.llamar(s, "execute_code", {"code": codigo})
+    assert r["ok"], r
+    tipos = [p["type"] for p in ok(api.llamar(s, "get_timeline", {"include_params": False}))["steps"]]
+    assert "agujero" in tipos and "primitiva" in tipos
+
+
+def test_opcionales_numericos_como_texto(s):
+    """B-57: los opcionales numéricos que llegan como texto ('1', '100') se aceptan; lo que no es número,
+    no; y las expresiones (float|str) siguen siendo texto."""
+    total = len(s.doc.operaciones)
+    r = api.llamar(s, "set_marker", {"position": "2" if total >= 2 else "0"})
+    assert r["ok"] and r["result"]["marker"] == (2 if total >= 2 else 0)
+    r = api.llamar(s, "execute_code", {"code": "result = 5", "timeout": "100"})
+    assert r["ok"] and r["result"]["result"] == 5
+    r = api.llamar(s, "set_marker", {"position": "abc"})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+    r = api.llamar(s, "create_box", {"length": "30", "width": 20, "height": 10})   # Expr: sigue siendo texto
+    assert r["ok"] and r["result"]["bodies_created"][0]["volume"] == pytest.approx(6000)
+    paso = s.doc.operaciones[s.doc.indice(r["result"]["feature"]["id"])]
+    assert paso.p["ancho"] == "30"          # no se convirtió a número: la expresión queda como expresión

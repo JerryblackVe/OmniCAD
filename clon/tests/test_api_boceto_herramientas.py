@@ -520,3 +520,28 @@ def test_cada_herramienta_es_un_paso_de_deshacer(s):
         llamar(s, "undo")
         assert json.dumps(s.doc.a_dict(), sort_keys=True) == texto, nombre
         llamar(s, "redo")
+
+
+# ---------------------------------------------------------------- nivel 2: el centro del patrón (B-55)
+def test_patron_circular_con_centro_en_coordenadas_sin_punto_extra(s):
+    """B-55: centro por coordenadas NO materializa un punto en (0, 0): antes el punto extra se taladraba
+    sin querer (perforaba el centro del ignitor en el motor)."""
+    p = llamar(s, "draw_point", x=10, y=0)["points"][0]
+    llamar(s, "sketch_circular_pattern", entities=[p], count=3)      # centro (0, 0) por coordenadas
+    sk = boceto(s)
+    assert len(sk["points"]) == 3                                    # el original + 2 copias, NI UNO más
+    assert not any(abs(q["x"]) < 1e-9 and abs(q["y"]) < 1e-9 for q in sk["points"])
+    posiciones = sorted((round(q["x"], 3), round(q["y"], 3)) for q in sk["points"])
+    assert posiciones == [(-5.0, -8.66), (-5.0, 8.66), (10.0, 0.0)]
+
+
+def test_patron_circular_con_centro_punto_crea_punto_de_menos(s):
+    """B-55 (contrapartida): con center_point el patrón usa el punto EXISTENTE como centro; no crea
+    ninguno nuevo y las copias quedan atadas a él."""
+    centro = llamar(s, "draw_point", x=0, y=0)["points"][0]
+    p = llamar(s, "draw_point", x=10, y=0)["points"][0]
+    llamar(s, "sketch_circular_pattern", entities=[p], count=3, center_point=centro)
+    sk = boceto(s)
+    assert len(sk["points"]) == 4                                    # 2 originales + 2 copias
+    posiciones = sorted((round(q["x"], 3), round(q["y"], 3)) for q in sk["points"])
+    assert posiciones == [(-5.0, -8.66), (-5.0, 8.66), (0.0, 0.0), (10.0, 0.0)]

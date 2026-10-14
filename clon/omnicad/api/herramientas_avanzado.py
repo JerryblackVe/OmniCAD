@@ -761,7 +761,9 @@ def _plazo(compilado, segundos, sesion):
 def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     """
     code: código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar
-        (atajo de api.llamar(sesion, nombre, args)). Asigná `result = ...` para devolver un valor.
+        (atajo de api.llamar(sesion, nombre, args); NUNCA lanza: devuelve un dict con ok y, si falló, error_kind).
+        Si alguna llamada falla, el resultado trae failed_calls y un aviso; si fallan TODAS, el resultado es
+        CODE_ERROR y el documento vuelve a como estaba.
     timeout: segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como
         estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se
         vigila tu código: una llamada larga a una herramienta termina antes del corte.
@@ -769,8 +771,17 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     if timeout is not None and not (math.isfinite(timeout) and timeout > 0):
         raise error("INVALID_ARGUMENTS", f"timeout tiene que ser un número de segundos mayor que 0 (o null); vino {timeout!r}.")
     api = importlib.import_module(__package__)
-    espacio = {"__name__": "__codigo__", "api": api, "sesion": sesion, "doc": sesion.doc,
-               "llamar": lambda nombre, args=None: llamar(sesion, nombre, args)}
+    fallidas, total = [], 0        # B-36: llamar nunca lanza; sin esto, un código que ignora los dict da ok global
+
+    def _llamar(nombre, args=None):
+        nonlocal total
+        total += 1
+        r = llamar(sesion, nombre, args)
+        if not r.get("ok"):
+            fallidas.append(f"{nombre}: {r.get('mensaje', '')}")
+        return r
+
+    espacio = {"__name__": "__codigo__", "api": api, "sesion": sesion, "doc": sesion.doc, "llamar": _llamar}
     salida = io.StringIO()
     try:
         compilado = compile(code, "<codigo>", "exec")
@@ -790,6 +801,13 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
         raise error("CODE_ERROR", texto[:_TRAZA_MAXIMA]) from None
     stdout = salida.getvalue()
     resultado = {"stdout": stdout[:_SALIDA_MAXIMA], "stdout_truncated": len(stdout) > _SALIDA_MAXIMA}
+    if fallidas:
+        detalle = "; ".join(fallidas[:3]) + ("…" if len(fallidas) > 3 else "")
+        if total == len(fallidas):      # no hubo NI UNA llamada con éxito: el lote no sirve (B-36)
+            raise error("CODE_ERROR", f"Las {total} llamadas a llamar fallaron y el documento quedó como estaba: "
+                                      f"{detalle}. Revisá el dict que devuelve cada llamada (trae ok y error_kind).")
+        sesion.avisar(f"{len(fallidas)} de {total} llamadas a llamar fallaron: {detalle}.")
+        resultado["failed_calls"] = fallidas
     if "result" in espacio:
         resultado["result"] = _serializable(espacio["result"], sesion)
     return resultado

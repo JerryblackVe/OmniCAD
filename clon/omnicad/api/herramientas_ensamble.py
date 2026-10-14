@@ -10,6 +10,10 @@ cambia con drive_joint. Los marcos salen de la geometría elegida:
   - cara plana: origen en el centro de su contorno exterior y Z = la normal (las caras quedan enfrentadas);
   - cara cilíndrica o cónica, o arista circular: un marco de EJE (Z = el eje, X del mundo); dos ejes quedan en el
     mismo sentido (perno en agujero); `flip` invierte eso;
+  - detalle del marco de eje: Z = el eje del cilindro/círculo, con la componente mayor POSITIVA (empates: Z, Y, X
+    del mundo), y X = el eje del mundo MENOS alineado con Z (empates: X, Y, Z); el origen está sobre el eje, en
+    el medio de la cara (el inicio o el fin con snap). O sea: en un cilindro a lo largo de Y, «Z» del marco es
+    el eje de ese cilindro (gira el perno), y en uno a lo largo de Z, gira alrededor de +Z del mundo (B-51);
   - un origen de unión (create_joint_origin), un plano, eje o punto de construcción: su propio marco.
 Las caras y aristas se eligen como en el resto de la API: selector ('>Z', '%CYLINDER', 'edges:%CIRCLE'…, evaluado
 sobre `body1` / `body2`) o id de find_faces / find_edges ('Cuerpo1/F3', 'Cuerpo1/E5'). Lo que se guarda en el
@@ -29,7 +33,7 @@ from ..timeline.operaciones import Contexto
 from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpComponente, OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion,
                                       OpUnion, OpVinculoMovimiento)
-from ..timeline.parametros import ErrorExpresion
+from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_boceto import nombre_nuevo, texto_expr
@@ -270,10 +274,19 @@ def _info_vinculo(op):
 
 
 def _movidos(sesion, antes):
-    """Componentes cuya posición cambió respecto de `antes` ({id: matriz})."""
+    """Componentes cuya posición cambió respecto de `antes` ({id: matriz}). Cada uno trae
+    `delta_translation`: cuánto se movió su ORIGEN con respecto de antes (B-46: `translation` es la
+    posición respecto de donde se modeló; girar sobre un eje que no pasa por el origen la cambia)."""
     estado = sesion.doc.estado_final
-    return [info_componente(sesion, k) for k in estado.componentes
-            if k not in antes or not np.allclose(_matriz(estado, k), antes[k], atol=1e-9)]
+    movidos = []
+    for k in estado.componentes:
+        m = _matriz(estado, k)
+        if k in antes and np.allclose(m, antes[k], atol=1e-9):
+            continue
+        info = info_componente(sesion, k)
+        info["delta_translation"] = ([_r(v) for v in (m[:3, 3] - antes[k][:3, 3])] if k in antes else None)
+        movidos.append(info)
+    return movidos
 
 
 def _matrices(sesion):
@@ -375,12 +388,25 @@ def _valores(tipo, valores):
     return salida
 
 
-def _limites(tipo, minimum, maximum):
+def _limites(sesion, tipo, minimum, maximum):
     giros, desliz = MOVIMIENTOS[tipo]
     if (minimum is not None or maximum is not None) and not (giros or desliz):
         raise error("INVALID_ARGUMENTS", "Una unión rígida no tiene movimiento que limitar.")
-    if isinstance(minimum, (int, float)) and isinstance(maximum, (int, float)) and minimum > maximum:
-        raise error("INVALID_ARGUMENTS", f"El mínimo ({minimum:g}) es mayor que el máximo ({maximum:g}).")
+    # Se comparan los VALORES (expresiones también): solo con números, "100 deg" > "20 deg" pasaba (B-64)
+    unidad = ANGULO if giros else LONGITUD
+    valores = sesion.doc.parametros.valores()
+
+    def _numero(v):
+        if v is None:
+            return None
+        try:
+            return evaluar(texto_expr(v), unidad, valores)
+        except (ErrorExpresion, ValueError, ZeroDivisionError):
+            return None                    # ilegible ahora: que lo valide quien lo use al calcular
+
+    mn, mx = _numero(minimum), _numero(maximum)
+    if mn is not None and mx is not None and mn > mx:
+        raise error("INVALID_ARGUMENTS", f"El mínimo ({mn:g}) es mayor que el máximo ({mx:g}).")
     return {"minimo": "" if minimum is None else texto_expr(minimum),
             "maximo": "" if maximum is None else texto_expr(maximum)}
 
@@ -426,7 +452,8 @@ def create_joint(sesion, origin1: str, origin2: str, joint_type: TipoUnion = "ri
     angle: giro del componente 1 alrededor del eje Z del marco de la unión, en grados.
     offset: desfase [dx, dy, dz] en mm en el marco de la unión (Z = normal o eje).
     flip: true da vuelta el componente 1 (caras en el mismo sentido o ejes opuestos).
-    rotation_axis: eje del marco para girar (revolute, cylindrical, pin_slot) o normal del plano (planar).
+    rotation_axis: eje del marco para girar (revolute, cylindrical, pin_slot) o normal del plano (planar);
+        "Z" es el eje de un marco de cilindro/arista circular (ver el módulo: marcos de eje).
     slide_axis: eje del marco para deslizar (slider, pin_slot).
     rotation: giro inicial en grados (revolute, cylindrical, pin_slot, planar, ball).
     rotation2: segundo giro (cabeceo) en grados; solo ball.
@@ -450,7 +477,7 @@ def create_joint(sesion, origin1: str, origin2: str, joint_type: TipoUnion = "ri
     params.update(_desfase(offset))
     params.update(_valores(tipo, {"rotation": rotation, "rotation2": rotation2, "rotation3": rotation3,
                                   "slide": slide, "slide2": slide2}))
-    params.update(_limites(tipo, minimum, maximum))
+    params.update(_limites(sesion, tipo, minimum, maximum))
     return _crear_union(sesion, name, params)
 
 
@@ -469,7 +496,8 @@ def create_as_built_joint(sesion, origin: str, component2: str | None = None, jo
     joint_type: "rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar" o "ball".
     body: cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin.
     snap: punto del origen en una arista o cilindro: "center", "start" o "end".
-    rotation_axis: eje del marco para girar (o normal del plano en planar).
+    rotation_axis: eje del marco para girar (o normal del plano en planar); "Z" es el eje de un marco de
+        cilindro/arista circular (ver el módulo: marcos de eje).
     slide_axis: eje del marco para deslizar (slider, pin_slot).
     rotation: giro en grados.
     rotation2: segundo giro en grados (ball).
@@ -497,7 +525,7 @@ def create_as_built_joint(sesion, origin: str, component2: str | None = None, jo
               "eje_giro": rotation_axis, "eje_desliz": slide_axis}
     params.update(_valores(tipo, {"rotation": rotation, "rotation2": rotation2, "rotation3": rotation3,
                                   "slide": slide, "slide2": slide2}))
-    params.update(_limites(tipo, minimum, maximum))
+    params.update(_limites(sesion, tipo, minimum, maximum))
     return _crear_union(sesion, name, params)
 
 
@@ -565,7 +593,7 @@ def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: E
     maximum: límite máximo (número o expresión); vacío = sin límite máximo.
     """
     op = union(sesion, joint)
-    limites = _limites(op.p.get("tipo"), minimum, maximum)
+    limites = _limites(sesion, op.p.get("tipo"), minimum, maximum)
     antes = _matrices(sesion)
     sesion.doc.reemplazar(op.id, OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **limites)))
     return {"joint": info_union(sesion, sesion.doc.operacion(op.id)), "moved_components": _movidos(sesion, antes)}

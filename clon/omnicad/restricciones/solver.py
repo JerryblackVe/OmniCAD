@@ -288,8 +288,17 @@ class _Sistema:
                     T.append(f)
             elif t == "patron":
                 if len(e) == 2:
-                    T.append(lambda x, a=e[0], c=e[1], dx=r.datos.get("dx", 0.0), dy=r.datos.get("dy", 0.0):
-                             [self.P(x, c)[0] - self.P(x, a)[0] - dx, self.P(x, c)[1] - self.P(x, a)[1] - dy])
+                    centro_fijo = r.datos.get("centro")      # B-55: giro alrededor de un centro FIJO (coordenadas)
+                    if centro_fijo is not None:
+                        def f(x, a=e[0], c=e[1], o=centro_fijo, ang=r.datos.get("angulo", 0.0)):
+                            (px, py), (qx, qy) = self.P(x, a), self.P(x, c)
+                            ca, sa = math.cos(ang), math.sin(ang)
+                            return [o[0] + ca * (px - o[0]) - sa * (py - o[1]) - qx,
+                                    o[1] + sa * (px - o[0]) + ca * (py - o[1]) - qy]
+                        T.append(f)
+                    else:
+                        T.append(lambda x, a=e[0], c=e[1], dx=r.datos.get("dx", 0.0), dy=r.datos.get("dy", 0.0):
+                                 [self.P(x, c)[0] - self.P(x, a)[0] - dx, self.P(x, c)[1] - self.P(x, a)[1] - dy])
                 else:
                     def f(x, a=e[0], c=e[1], o=e[2], ang=r.datos.get("angulo", 0.0)):
                         (px, py), (qx, qy), (ox, oy) = self.P(x, a), self.P(x, c), self.P(x, o)
@@ -328,6 +337,9 @@ class _Sistema:
             elif tipos == ["punto", "linea"]:
                 s = _signo(self.dist_signada(x0, self.P(x0, e[0]), e[1]))
                 T.append(lambda x, p=e[0], l=e[1], s=s, v=v: [s * self.dist_signada(x, self.P(x, p), l) - v])
+            elif tipos == ["linea", "punto"]:
+                s = _signo(self.dist_signada(x0, self.P(x0, e[1]), e[0]))
+                T.append(lambda x, l=e[0], p=e[1], s=s, v=v: [s * self.dist_signada(x, self.P(x, p), l) - v])
             elif tipos == ["linea", "linea"]:
                 s = _signo(self.dist_signada(x0, self.P(x0, b.curvas[e[1]].p1), e[0]))
                 T.append(lambda x, l1=e[0], l2=e[1], s=s, v=v:

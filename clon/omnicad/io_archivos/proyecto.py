@@ -167,7 +167,13 @@ def abrir(ruta):
         raise ErrorProyecto("El proyecto fue guardado con una versión más nueva de OmniCAD.")
     try:
         doc = Documento.desde_dict(receta, cache)
-    except (ErrorOperacion, ErrorDocumento, ErrorExpresion, KeyError, TypeError, ValueError) as e:
+    except ErrorOperacion as e:
+        if "Tipo de operación desconocido" in str(e):
+            raise ErrorProyecto(f"El proyecto tiene una operación que esta OmniCAD ({VERSION}) no conoce "
+                                f"({e}): fue guardado con una versión más nueva aunque comparta el mismo "
+                                "número de versión.") from None
+        raise ErrorProyecto(f"La receta del proyecto está dañada o es incompatible: {e}") from None
+    except (ErrorDocumento, ErrorExpresion, KeyError, TypeError, ValueError) as e:
         raise ErrorProyecto(f"La receta del proyecto está dañada o es incompatible: {e}") from None
     doc.nombre = manifiesto.get("nombre") or ruta.stem
     doc.ruta = str(ruta)
@@ -187,11 +193,12 @@ def carpeta_autoguardado():
 
 
 def ruta_autoguardado(doc):
-    """Junto al proyecto si ya tiene ruta; si no, en la carpeta de la aplicación."""
+    """Junto al proyecto si ya tiene ruta; si no, en la carpeta de la aplicación. Cada «Sin título» lleva el
+    token de su documento (B-22): dos documentos abiertos no se pisan el autoguardado entre sí."""
     if doc.ruta:
         r = Path(doc.ruta)
         return r.with_name(r.stem + ".autoguardado" + EXTENSION)
-    return carpeta_autoguardado() / ("sin_titulo.autoguardado" + EXTENSION)
+    return carpeta_autoguardado() / f"sin_titulo_{getattr(doc, 'token', '0')}.autoguardado{EXTENSION}"
 
 
 def autoguardar(doc, miniatura_png=None):
@@ -201,8 +208,15 @@ def autoguardar(doc, miniatura_png=None):
     return destino
 
 
+def autoguardados_pendientes():
+    """Autoguardados de documentos «Sin título», del más nuevo al más viejo (B-22)."""
+    return sorted(carpeta_autoguardado().glob("sin_titulo*.autoguardado" + EXTENSION),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+
+
 def autoguardado_pendiente(ruta_proyecto=None):
-    """Si hay un autoguardado más nuevo que el proyecto (o huérfano), devuelve su ruta."""
+    """Si hay un autoguardado más nuevo que el proyecto (o huérfano), devuelve su ruta. Con varios huérfanos,
+    el más nuevo (el resto los lista `autoguardados_pendientes`)."""
     if ruta_proyecto:
         p = Path(ruta_proyecto)
         a = p.with_name(p.stem + ".autoguardado" + EXTENSION)
@@ -211,8 +225,8 @@ def autoguardado_pendiente(ruta_proyecto=None):
         if a.exists() and (not p.exists() or a.stat().st_mtime >= p.stat().st_mtime):
             return a
         return None
-    a = carpeta_autoguardado() / ("sin_titulo.autoguardado" + EXTENSION)
-    return a if a.exists() else None
+    pendientes = autoguardados_pendientes()
+    return pendientes[0] if pendientes else None
 
 
 def borrar_autoguardado(doc):

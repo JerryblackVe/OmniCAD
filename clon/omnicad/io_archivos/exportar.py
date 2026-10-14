@@ -35,6 +35,12 @@ def _es_malla(forma):
     return hasattr(forma, "vertices") and hasattr(forma, "caras") and not callable(getattr(forma, "caras"))
 
 
+def cuerpos_de_malla(cuerpos):
+    """Los cuerpos de malla de la lista: los formatos B-rep (STEP, IGES, BREP) no los pueden guardar
+    (`_forma_brep` los deja afuera); sirve para avisar cuáles quedaron omitidos (B-68)."""
+    return [c for c in _cuerpos(cuerpos) if _es_malla(c.forma)]
+
+
 def _indexados(forma, deflexion):
     """(vértices, índices) de un cuerpo B-rep (teselado) o de malla (tal cual)."""
     if _es_malla(forma):

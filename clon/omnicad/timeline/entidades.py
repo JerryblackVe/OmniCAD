@@ -17,13 +17,14 @@ Tipos de referencia (dicts serializables):
 punto) y `dependencias` dice de qué pasos del timeline depende la referencia.
 """
 import json
+import logging
 import numbers
 
 import numpy as np
 
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
-from ..nucleo.perfiles import aristas_boceto, buscar_por_firma
+from ..nucleo.perfiles import aristas_boceto, buscar_por_firma_tolerante
 
 EJES_ORIGEN = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0)}
 NOMBRES_ORIGEN = {"XY": "Plano XY", "XZ": "Plano XZ", "YZ": "Plano YZ", "X": "Eje X", "Y": "Eje Y", "Z": "Eje Z",
@@ -217,9 +218,11 @@ def resolver(ref, estado):
         return Entidad(t, punto=np.asarray(estado.puntos[i][0], float))
     if t == "perfil":
         br = _boceto(estado, ref["boceto"])
-        perfil = buscar_por_firma(br.perfiles, ref["firma"], ref.get("centroide"))
+        perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"))
         if perfil is None:
             raise ErrorReferencia("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
+        if nota:
+            logging.getLogger("omnicad").warning(nota + " (boceto %s)", ref["boceto"])
         return Entidad(t, forma=perfil.cara, plano=br.plano, boceto=br, perfil=perfil)
     if t == "curva_boceto":
         br = _boceto(estado, ref["boceto"])

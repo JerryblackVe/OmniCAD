@@ -10,13 +10,14 @@ Al estilo CadQuery. Sirven en `find_faces`, `find_edges`, `fillet`, `chamfer`, `
 | `\|Z` | aristas rectas paralelas al eje; caras con la normal paralela (caja: tapa y base) |
 | `#Z` | lo perpendicular: aristas perpendiculares; caras con la normal perpendicular (caja: las 4 laterales) |
 | `+Z` `-Z` | caras planas con la normal en ese sentido |
-| `\|Z~3` `#Z~3` `+Z~3` | lo mismo con 3° de tolerancia (de 0 a 45): lo apenas inclinado, p. ej. tras un desmoldeo |
+| `\|Z~3` `#Z~3` `+Z~3` | lo mismo con tolerancia de 0° a 45°: lo apenas inclinado, p. ej. tras un desmoldeo |
 | `%PLANE` `%CYLINDER` `%CONE` `%SPHERE` `%TORUS` | tipo de cara |
 | `%LINE` `%CIRCLE` `%ELLIPSE` `%BSPLINE` | tipo de arista |
 | `nearest:[x,y,z]` | la más cercana al punto (una sola) |
 
-Se combinan con `and`, `or`, `not` y paréntesis: `|Z and >X`, `#Z and not <X`, `(>Z or <Z) and %PLANE`.
-Cada término se evalúa sobre todas y después se combinan los resultados.
+Se combinan con `and`, `or`, `not` y paréntesis. Cada término se evalúa sobre todas y se combinan los
+resultados, con UNA excepción de encadenado (como CadQuery): en un `and`, las posiciones (`>Z`, `<Z[1]`) y
+`nearest:[x,y,z]` se evalúan sobre lo que ya eligió el resto (`%PLANE and >Z` = la cara plana más alta).
 
 ## Ejemplos
 
@@ -24,10 +25,11 @@ Cada término se evalúa sobre todas y después se combinan los resultados.
   ya no son exactamente verticales (con 1,5° de desmoldeo las de esquina quedan a 2,1°): `fillet(edges="|Z~3", radius=2)`.
 - Vaciar abriendo la tapa: `shell(body="Cuerpo1", faces=">Z", thickness=2)`.
 - Agujero pasante en la tapa: `create_hole(face=">Z", diameter=6, through_all=true)`.
-- Boceto sobre la tapa: `create_sketch(plane=">Z")`. Ejes: en caras horizontales x→+X; en las demás y→+Z.
-  El origen es la proyección del origen del mundo; `find_faces` da center_uv (el centro de la cara en esos ejes).
-  `extrude` va hacia la normal exterior: `join` crece hacia afuera y `cut` entra al material solo (como Fusion); `reverse` fuerza el sentido.
-  `sketch_from_spec(plane=">Z", entities=[...])` hace lo mismo con el boceto entero en una llamada.
+- Boceto sobre la tapa: `create_sketch(plane=">Z")`. Ejes: horizontales x→+X, y = normal × x (−Z: y→−Y;
+  cuidado al ubicar agujeros con `points` en la cara de abajo); demás y→+Z. El origen es la proyección
+  del origen del mundo; `find_faces` da center_uv (el centro de la cara en esos ejes).
+  `extrude` va hacia la normal exterior: `join` crece hacia afuera y `cut` entra al material solo (como Fusion);
+  `reverse` fuerza el sentido. `sketch_from_spec(plane=">Z", entities=[...])` hace lo mismo en una llamada.
   Con varios cuerpos: `create_sketch(plane=">Z", body="Cuerpo2")`.
 - Ángulo entre la tapa y una lateral: `measure_angle(a=">Z", b=">X")` da 90.
 

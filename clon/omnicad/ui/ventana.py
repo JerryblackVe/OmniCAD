@@ -2049,19 +2049,20 @@ class VentanaPrincipal(QMainWindow):
             log.warning("Autoguardado falló: %s", e)
 
     def verificar_autoguardado_huerfano(self):
-        pendiente = proyecto.autoguardado_pendiente(None)
-        if not pendiente:
-            return
-        if QMessageBox.question(self, "Recuperar trabajo", "Se encontró un autoguardado de un proyecto sin guardar. "
-                                "¿Recuperarlo? (Si respondés No, se descarta.)") != QMessageBox.Yes:
-            pendiente.unlink(missing_ok=True)
-            return
-        try:
-            doc = proyecto.abrir(pendiente)
-            doc.ruta, doc.nombre, doc.modificado = None, "Recuperado", True
-            self.set_documento(doc)
-        except (proyecto.ErrorProyecto, OSError, ValueError) as e:
-            QMessageBox.critical(self, "No se pudo recuperar", str(e))
+        pendientes = proyecto.autoguardados_pendientes()          # B-22: uno por «Sin título», ya no se pisan
+        for pendiente in pendientes:
+            if QMessageBox.question(self, "Recuperar trabajo",
+                                    f"Se encontró un autoguardado de un proyecto sin guardar ({pendiente.name}). "
+                                    "¿Recuperarlo? (Si respondés No, se descarta.)") != QMessageBox.Yes:
+                pendiente.unlink(missing_ok=True)
+                continue
+            try:
+                doc = proyecto.abrir(pendiente)
+                doc.ruta, doc.nombre, doc.modificado = None, "Recuperado", True
+                self.set_documento(doc)
+                return
+            except (proyecto.ErrorProyecto, OSError, ValueError) as e:
+                QMessageBox.critical(self, "No se pudo recuperar", str(e))
 
     def exportar(self, formato_salida=None):
         cuerpos = list(self.doc.estado_final.cuerpos.values())
@@ -2083,7 +2084,11 @@ class VentanaPrincipal(QMainWindow):
         try:
             n = ex.exportar(cuerpos, ruta, self.doc.propiedades)
             extra = f" ({n} triángulos)" if isinstance(n, int) else ""
-            self.mensaje(f"Exportado {len(cuerpos)} cuerpo(s) a {ruta}{extra}", 6000)
+            omitidas = (ex.cuerpos_de_malla(cuerpos)
+                        if sufijo in ("step", "stp", "iges", "igs", "brep", "brp") else [])
+            aviso = (f"; {len(omitidas)} de malla quedaron afuera (los formatos B-rep no las guardan: "
+                     "convertilas antes)") if omitidas else ""
+            self.mensaje(f"Exportado {len(cuerpos)} cuerpo(s) a {ruta}{extra}{aviso}", 6000)
         except (ex.ErrorExportacion, RuntimeError, OSError) as e:
             QMessageBox.critical(self, "No se pudo exportar", str(e))
 

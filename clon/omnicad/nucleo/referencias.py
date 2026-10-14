@@ -169,7 +169,11 @@ def resolver(forma, ref, umbral=0.35):
     """Subforma de `forma` que corresponde a la referencia, o None si ninguna se parece lo bastante.
     Se acepta la mejor candidata si está dentro del umbral, o si (hasta un umbral más amplio) le saca
     una ventaja clara a la segunda: así una referencia sobrevive a cambios grandes de cotas sin
-    confundirse cuando hay dos candidatas parecidas."""
+    confundirse cuando hay dos candidatas parecidas.
+
+    Si ninguna pasa por geometría absoluta y la referencia tiene posición relativa a la caja ("rel"),
+    se reintenta SOLO con términos invariantes a un movimiento rígido (rel, área, largo, radio):
+    cubre las referencias guardadas antes de que una unión mueva el componente (drive_joint)."""
     from .geometria import caja_envolvente
     tipo = ref["tipo"]
     caja = caja_envolvente(forma)
@@ -177,13 +181,33 @@ def resolver(forma, ref, umbral=0.35):
     con_rel = "rel" in ref["firma"]
     distancias = sorted(((_distancia(tipo, ref["firma"], firma(sub, caja if con_rel else None), escala), i, sub)
                          for i, sub in enumerate(subformas(forma, tipo))), key=lambda x: (x[0], x[1]))
-    if not distancias or distancias[0][0] == math.inf:
-        return None
-    mejor_d, _, mejor = distancias[0]
-    segunda = distancias[1][0] if len(distancias) > 1 else math.inf
-    if mejor_d <= umbral or (mejor_d <= 1.2 and mejor_d < 0.5 * segunda):
-        return mejor
+    if distancias and distancias[0][0] != math.inf:
+        mejor_d, _, mejor = distancias[0]
+        segunda = distancias[1][0] if len(distancias) > 1 else math.inf
+        if mejor_d <= umbral or (mejor_d <= 1.2 and mejor_d < 0.5 * segunda):
+            return mejor
+    if con_rel:
+        # Modo invariante al movimiento rígido: compara solo lo que un giro o traslación no cambia.
+        locales = sorted(((_distancia_local(tipo, ref["firma"], firma(sub, caja)), i, sub)
+                          for i, sub in enumerate(subformas(forma, tipo))), key=lambda x: (x[0], x[1]))
+        locales = [x for x in locales if x[0] != math.inf]
+        if locales and locales[0][0] <= 0.2 and (len(locales) == 1 or locales[0][0] < 0.5 * locales[1][0]):
+            return locales[0][2]
     return None
+
+
+def _distancia_local(tipo, f, g):
+    """Solo términos invariantes a un movimiento rígido (rel, área/largo, radio); math.inf si otra geom."""
+    if f["geom"] != g["geom"] or ("rel" not in f or "rel" not in g):
+        return math.inf
+    d = math.dist(f["rel"], g["rel"])
+    if tipo == "arista":
+        d += abs(f["largo"] - g["largo"]) / max(f["largo"], g["largo"], 1e-9) * 0.5
+    elif tipo == "cara":
+        d += abs(f["area"] - g["area"]) / max(f["area"], g["area"], 1e-9) * 0.5
+    if "radio" in f and "radio" in g:
+        d += abs(f["radio"] - g["radio"]) / max(f["radio"], g["radio"], 1e-9) * 0.5
+    return d
 
 
 def resolver_varias(forma, refs, umbral=0.35):

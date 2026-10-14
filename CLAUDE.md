@@ -15,4 +15,11 @@
   OpenCascade (C++).
 - Instalar el toolchain de Rust/maturin requiere permiso del usuario.
 
+## Regla obligatoria: ponytail
+- Usar SIEMPRE la skill `/ponytail` en todo proceso de código donde sea útil o necesario
+  (escribir, arreglar, refactorizar, elegir dependencias): el cambio más chico que resuelve
+  la tarea completa, sin sobre-ingeniería.
+- Usar SIEMPRE la skill `/ponytail-review` antes de dar por terminado un cambio de código:
+  revisión de lógica, seguridad, carga real, tests y que cada línea sea necesaria.
+
 @AGENTS.md

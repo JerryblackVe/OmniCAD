@@ -633,7 +633,8 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
              "(normal +X). Un plano de construcción usa el marco de su plano base. SOBRE UNA CARA (plane = selector como "
              "'>Z' o id de find_faces como 'Cuerpo1/F6'; tiene que ser UNA cara plana): el boceto queda sobre la cara con "
              "la normal exterior como normal (extruir con join crece hacia afuera; con cut entra al material solo, como Fusion). Ejes: en "
-             "caras horizontales x→+X; en las demás y→+Z (hacia arriba) y x = y × normal; el origen es la proyección del "
+             "caras horizontales x→+X e y = normal × x (y→+Y con normal +Z; y→−Y con normal −Z, como en Fusion la "
+             "vista queda espejada al mirarla desde abajo); en las demás y→+Z (hacia arriba) y x = y × normal; el origen es la proyección del "
              "origen del mundo sobre el plano de la cara, no una esquina (plane_frame lo da y find_faces trae center_uv, "
              "el centro de cada cara en estos ejes). El boceto queda asociado a la cara, como en Fusion: si un parámetro "
              "la mueve o la gira, el boceto la sigue; si la cara desaparece, el paso da error. Con varios cuerpos, body dice en cuál se evalúa "
@@ -902,8 +903,8 @@ def add_dimension(sesion, sketch: str,
 @herramienta("get_sketch", "boceto",
              "Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el "
              "solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja "
-             "[min/max en coordenadas del boceto] y curvas del borde) y estado (fully_constrained, "
-             "under_constrained, over_constrained) con los grados de libertad.")
+             "[min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` "
+             "(fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`.")
 def get_sketch(sesion, sketch: str | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.

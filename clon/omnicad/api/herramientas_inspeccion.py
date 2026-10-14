@@ -59,11 +59,12 @@ def _nombre_y_id(sesion, c):
 
 
 # ---------------------------------------------------------------- imagen
-def _objetos_render(sesion, cuerpos, deflexion):
-    """Los mismos objetos que arma el render de la app (`render_cpu.malla_suave` y `color_y_acabado`)."""
+def _objetos_render(sesion, cuerpos):
+    """Los mismos objetos que arma el render de la app (`render_cpu.malla_suave` y `color_y_acabado`,
+    con deflexión automática por pieza)."""
     objetos = []
     for c in cuerpos:
-        v, n = rc.malla_suave(c.forma, deflexion)
+        v, n = rc.malla_suave(c.forma, 0.05 if _es_malla(c) else rc.deflexion_para(c.forma))
         if not len(v):
             continue
         color, acabado = rc.color_y_acabado(c, propiedades_cuerpo(sesion.doc.propiedades, c))
@@ -132,8 +133,7 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
         raise error("NOTHING_TO_RENDER", "No hay cuerpos para dibujar.")
     pts = _esquinas(caja)
     t0 = time.perf_counter()
-    diagonal = float(np.linalg.norm(pts.max(0) - pts.min(0)))
-    objetos = _objetos_render(sesion, cuerpos, max(0.05, diagonal / 2000))
+    objetos = _objetos_render(sesion, cuerpos)          # deflexión por pieza: una chica no se facetea nunca
     if not objetos:
         raise error("NOTHING_TO_RENDER", "Los cuerpos elegidos no tienen caras para dibujar.")
     escena = rc.escena_normalizada(None)

@@ -342,6 +342,10 @@ def test_convertir_placa_y_error_honesto():
                                      "regla": "Acero 2 mm"}, ContextoComando(doc))
     res = doc.agregar(op)
     assert res.estado == "error" and "placa plana de espesor constante" in res.mensaje
+    # B-67: el número ya no se hace pasar por «Espesor medido» (era la altura del perfil, 20 mm):
+    # dice qué es (distancia de la cara al punto más lejano del cuerpo)
+    assert "Espesor medido" not in res.mensaje
+    assert "Distancia de la cara elegida al punto más lejano del cuerpo: 20 mm" in res.mensaje
 
 
 def test_agujero_hecho_con_otra_herramienta_entra_al_patron_plano():

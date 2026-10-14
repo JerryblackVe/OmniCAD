@@ -505,3 +505,34 @@ def test_cota_manejada_por_parametro_fuera_de_rango_avisa(s):
         assert r["ok"] and any(texto in a for a in r.get("avisos", [])), r
     r = api.llamar(s, "set_parameter", {"name": "r", "expression": "7 mm"})
     assert r["ok"] and not any("cota" in a.lower() for a in r.get("avisos", [])), r
+
+
+# ---------------------------------------------------------------- cota distancia, orden (B-56)
+def _punto_y_linea(s, nombre):
+    """Boceto con una línea fija de 10 mm en el eje X y un punto suelto en (4, 3)."""
+    llamar(s, "create_sketch", name=nombre)
+    q = llamar(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=0)
+    punto = llamar(s, "draw_point", x=4, y=3)["points"][0]     # el informe trae el id del punto nuevo
+    linea = q["entities"][0]["id"]
+    llamar(s, "add_constraint", sketch=nombre, type="fix", entities=[linea])
+    return punto, linea
+
+
+def test_cota_distance_punto_y_linea_en_cualquier_orden(s):
+    """B-56: [línea, punto] daba «no aplica a: linea, punto»; la doc no fija orden y el valor es el mismo."""
+    # sin valor: la medida actual sale igual en ambos órdenes (punto a 3 mm de la línea)
+    p, l = _punto_y_linea(s, "Q")
+    a = llamar(s, "add_dimension", sketch="Q", type="distance", entities=[p, l])
+    assert a["dimension"]["value"] == pytest.approx(3, abs=1e-6)
+    p, l = _punto_y_linea(s, "R")
+    b = llamar(s, "add_dimension", sketch="R", type="distance", entities=[l, p])   # orden inverso (B-56)
+    assert b["dimension"]["value"] == pytest.approx(3, abs=1e-6)
+    # con valor: el punto llega a la distancia pedida igual en ambos órdenes (queda 1 dof: puede deslizar
+    # sobre la línea, pero la distancia queda clavada)
+    for sketch, valor in (("S", 2), ("T", 5)):
+        p, l = _punto_y_linea(s, sketch)
+        r = llamar(s, "add_dimension", sketch=sketch, type="distance",
+                   entities=([l, p] if sketch == "T" else [p, l]), value=valor)
+        assert r["dimension"]["value"] == valor and r["dof"] == 1
+        pts = {x["id"]: x for x in llamar(s, "get_sketch", sketch=sketch)["points"]}
+        assert pts[p]["y"] == pytest.approx(valor, abs=1e-6)

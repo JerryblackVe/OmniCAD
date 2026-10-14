@@ -174,6 +174,8 @@ class OpDestrimar(_OpSuperficie):
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
+        if not self.p["caras"]:
+            raise ErrorOperacion("Elegí las caras a destrimar.")
         for e in _resolver_todas(self.p["caras"], estado, ("cara",)):
             c = estado.cuerpo(e.cuerpo)
             nueva = _sf().destrimar(e.forma, contornos=self.p["contornos"])
@@ -227,6 +229,8 @@ class OpDescoser(_OpSuperficie):
     PARAMS = {"cuerpos": []}
 
     def ejecutar(self, estado, ctx):
+        if not self.p["cuerpos"]:
+            raise ErrorOperacion("Elegí los cuerpos a descoser.")
         for cid in self.p["cuerpos"]:
             c = estado.cuerpo(cid)
             caras = _sf().descoser(c.forma)
@@ -241,6 +245,8 @@ class OpInvertirNormal(_OpSuperficie):
     PARAMS = {"cuerpos": []}
 
     def ejecutar(self, estado, ctx):
+        if not self.p["cuerpos"]:
+            raise ErrorOperacion("Elegí los cuerpos a invertir la normal.")
         for cid in self.p["cuerpos"]:
             c = estado.cuerpo(cid)
             c.forma = _sf().invertir_normal(c.forma)

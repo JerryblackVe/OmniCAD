@@ -246,7 +246,8 @@ def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool =
         for f in filas:
             w.writerow([f["item"], f["name"], f["quantity"], f["material"],
                         "" if f["mass_g"] is None else f"{f['mass_g']:.3f}", f"{f['volume']:.3f}"])
-        ruta.write_bytes(buf.getvalue().encode("utf-8"))   # bytes: en Windows write_text duplicaba el retorno de carro
+        # utf-8-sig (con BOM): sin él, Excel y PowerShell en Windows muestran «NÂº» y «mmÂ³» (B-35)
+        ruta.write_bytes(buf.getvalue().encode("utf-8-sig"))   # bytes: en Windows write_text duplicaba el retorno de carro
         resultado["csv_path"] = str(ruta.resolve())
     return resultado
 

@@ -38,11 +38,25 @@ class OpReparar(Operacion):
             malla = getattr(c, "tipo", "solido") == "malla"
             nueva = rv.reparar(c.forma, tolerancia=tol, coser=bool(self.p["coser"]), refinar=bool(self.p["refinar"]),
                                arreglar=bool(self.p["arreglar"]))
-            c.forma = nueva
             if malla:
+                c.forma = nueva
                 if not nueva.es_cerrada():
                     ctx.aviso(f"{c.nombre}: la malla sigue abierta después de reparar.")
                 continue
+            # B-40: reparar nunca empeora en silencio: si el conteo de problemas sube, se revierte.
+            antes = rv._topologia(c.forma)
+            despues = rv._topologia(nueva)
+            n_antes = (len(antes["libres"]) + len(antes["no_manifold"]) + len(antes["abiertas"]) +
+                       (0 if geo.es_valida(c.forma) else 1))
+            n_despues = (len(despues["libres"]) + len(despues["no_manifold"]) + len(despues["abiertas"]) +
+                         (0 if geo.es_valida(nueva) else 1))
+            if n_despues > n_antes or (geo.es_valida(c.forma) and not geo.es_valida(nueva)) or \
+                    (len(antes["solidos"]) >= 1 and len(despues["solidos"]) > len(antes["solidos"])):
+                ctx.aviso(f"{c.nombre}: reparar con esa tolerancia empeoraría el cuerpo "
+                          f"({len(antes['libres'])+len(antes['no_manifold'])} aristas con problema → "
+                          f"{len(despues['libres'])+len(despues['no_manifold'])}): quedó como estaba.")
+                continue
+            c.forma = nueva
             if geo.solidos(nueva):
                 c.tipo = "solido"                     # coser cerró una superficie: pasa a sólido, como Fusion
             if not geo.es_valida(nueva):

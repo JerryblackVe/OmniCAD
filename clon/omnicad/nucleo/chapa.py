@@ -1170,7 +1170,9 @@ def convertir(forma, cara, nombre_regla=REGLA_DEFECTO, definicion=None, **ajuste
     vol = geo.volumen(forma)
     if abs(vol - geo.area(cara) * t) > max(1e-6, 1e-6 * vol):
         raise geo.ErrorGeometria(f"El cuerpo no es una placa plana de espesor constante: por ahora solo se convierten "
-                                 f"placas planas (sin pliegues ni caras inclinadas). Espesor medido: {t:.4g} mm.")
+                                 f"placas planas (sin pliegues ni caras inclinadas). Distancia de la cara elegida al "
+                                 f"punto más lejano del cuerpo: {t:.4g} mm (en una placa de espesor constante, esa "
+                                 "distancia sería el espesor).")   # B-67: antes decía «Espesor medido» y mentía
     mat = np.array(marco(plano.origen - t * plano.normal, plano.u, plano.v, plano.normal))
     r = regla(nombre_regla, definicion, **{**ajustes, "espesor": t})
     return modelo_nuevo(r, mat, caras_a_region(_a_plano(cara, mat)))

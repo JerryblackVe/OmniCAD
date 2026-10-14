@@ -274,3 +274,15 @@ def test_engrosar_superficie():
     assert g.caja_envolvente(neg)[0][2] == pytest.approx(-2)
     tubo = sf.engrosar_superficie(lateral(g.cilindro(5, 10)), 1)
     assert g.volumen(tubo) == pytest.approx(math.pi * (36 - 25) * 10) and g.es_valida(tubo)
+
+
+
+# ---------------------------------------------------------------- parche con contorno abierto (B-66)
+def test_parche_con_contorno_abierto_da_error_amable():
+    """B-66: una curva sola abierta llegaba al kernel con el crudo
+    «Geom_RectangularTrimmedSurface::V1==V2»; ahora valida antes."""
+    with pytest.raises(g.ErrorGeometria) as e:
+        sf.parche([seg((0, 0, 0), (10, 0, 0))])
+    assert "no es cerrado" in str(e.value) and "V1" not in str(e.value)
+    # cerrado sigue andando (cara plana exacta)
+    assert g.es_valida(sf.parche(cuadrado(10)))

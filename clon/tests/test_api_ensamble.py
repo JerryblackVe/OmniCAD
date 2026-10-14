@@ -135,6 +135,38 @@ def _perno_y_placa():
     return s, placa, perno
 
 
+def test_union_contra_cara_anular_partida_engancha_el_circulo():
+    """Regresión B-50: cara plana anular PARTIDA (semianillo: 2 arcos concéntricos + 2 líneas radiales):
+    el origen de la unión es el centro del círculo, no el centroide lateralmente corrido."""
+    s = api.Sesion()
+    placa = llamar(s, "create_cylinder", radius=30, height=10)["bodies_created"][0]["id"]
+    llamar(s, "create_cylinder", radius=10, height=10, operation="cut", target=placa)
+    llamar(s, "create_box", length=40, width=100, height=10, x=-20, operation="cut", target=placa)  # queda x ≥ 0
+    perno = llamar(s, "create_cylinder", radius=10, height=20, x=100)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[placa], name="Placa", grounded=True)
+    llamar(s, "create_component", bodies=[perno], name="Perno")
+    llamar(s, "create_joint", origin1="%CYLINDER", body1=perno, origin2=">Z", body2=placa,
+           joint_type="revolute")
+    c = caja(s, perno)
+    assert (c[0] + c[3]) / 2 == pytest.approx(0, abs=1e-9)     # el eje del perno quedó en el del agujero
+    assert (c[1] + c[4]) / 2 == pytest.approx(0, abs=1e-9)
+
+
+def test_origen_de_union_sobrevive_al_drive_del_componente():
+    """Regresión B-65: un origen de unión guardado sobre una cara de un componente NO pierde la
+    referencia cuando un drive mueve (rota/traslada) ese componente y se recalcula."""
+    s, base, bloque = dos_cajas()
+    r = llamar(s, "create_as_built_joint", origin=">Z", body=bloque, component2="Base", joint_type="revolute")
+    jid = r["joint"]["id"]
+    llamar(s, "create_joint_origin", geometry="nearest:[100, 55, 15]", body=bloque, name="Lateral")
+    llamar(s, "drive_joint", joint=jid, rotation=30)
+    llamar(s, "drive_joint", joint=jid, rotation=60)
+    pasos = llamar(s, "get_timeline", include_params=False)["steps"]
+    assert all(p["status"] != "error" for p in pasos), pasos
+    origen = next(p for p in pasos if p["name"] == "Lateral")
+    assert origen["status"] == "ok"
+
+
 def test_perno_en_agujero_con_ids_de_find_faces_y_con_origen_de_union():
     s, placa, perno = _perno_y_placa()
     agujero = llamar(s, "find_faces", body=placa, selector="%CYLINDER")["faces"][0]["id"]       # «Cuerpo1/F7»
@@ -207,3 +239,35 @@ def test_estudio_de_movimiento_encuentra_el_choque_y_no_cambia_el_documento():
     assert [p["value"] for p in r["steps"]] == [0, 90, 180, 270, 360]
     falla(s, "motion_study", "INVALID_ARGUMENTS", joint="Unión1", motion="slide")
     falla(s, "motion_study", "INVALID_ARGUMENTS", joint="Unión1", steps=1)
+
+
+
+
+# ---------------------------------------------------------------- límites con expresiones y delta (B-64, B-46)
+def test_limites_min_mayor_que_max_tambien_con_expresiones():
+    s, base, bloque = dos_cajas()
+    llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2=base, joint_type="revolute",
+           rotation=30)
+    # B-64: con números ya se validaba; con expresiones ("100 deg") el chequeo se salteaba
+    falla(s, "set_joint_limits", "INVALID_ARGUMENTS", joint="Unión1", minimum="100 deg", maximum="20 deg")
+    llamar(s, "set_joint_limits", joint="Unión1", minimum="10 deg", maximum="80 deg")   # orden bien: entra
+    # B-46: el informe del accionado trae cuánto se MOVIÓ el origen del componente, no solo la pose
+    # (la pose `translation` orbita el eje: era lo que confundía la auditoría del reporte)
+    previa = {c["id"]: c["translation"] for c in llamar(s, "get_assembly")["components"]}
+    r = llamar(s, "drive_joint", joint="Unión1", rotation=40)
+    (m,) = r["moved_components"]
+    assert m["delta_translation"] == pytest.approx([d - o for d, o in zip(m["translation"], previa[m["id"]],
+                                                                           strict=True)], abs=1e-3)
+
+
+def test_delta_translation_del_deslizamiento():
+    s = api.Sesion()
+    base = llamar(s, "create_box", length=100, width=100, height=10)["bodies_created"][0]["id"]
+    piston = llamar(s, "create_box", length=10, width=10, height=10, x=300)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[base], name="Base", grounded=True)
+    llamar(s, "create_component", bodies=[piston], name="Piston")
+    llamar(s, "create_joint", origin1="<Z", body1=piston, origin2=">Z", body2=base, joint_type="slider",
+           slide_axis="X", slide=50, name="J2")
+    r = llamar(s, "drive_joint", joint="J2", slide=100)
+    (m,) = r["moved_components"]
+    assert m["delta_translation"] == pytest.approx([50, 0, 0])    # se deslizó 50 mm más desde los 50 anteriores

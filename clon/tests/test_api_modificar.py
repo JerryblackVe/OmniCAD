@@ -383,6 +383,41 @@ def test_create_thread_exterior_con_clase_y_tamano_automatico(s):
         assert falla(s, "create_thread", **args)["error_kind"] == kind, args
 
 
+def test_create_thread_m5_largo_completo_no_empuja_al_kernel_al_mal_surco(s):
+    """B-44: un perno Ø5×50 con rosca a largo completo fallaba con «El kernel armó mal el surco» (rosca
+    demasiado larga para el barrido único con flancos de clase): hoy se barre por mitades y sale."""
+    llamar(s, "create_cylinder", radius=2.5, height=50)
+    r = llamar(s, "create_thread", faces="%CYLINDER", thread="M5x0.8")
+    from omnicad.nucleo import geometria as geo
+    from omnicad.nucleo import revision as rv
+    c = next(iter(s.doc.estado_final.cuerpos.values()))
+    topo = rv._topologia(c.forma)
+    assert r["threads"][0]["designation"] == "M5x0.8" and not topo["no_manifold"] and not topo["libres"]
+    assert geo.es_valida(c.forma)
+
+
+def test_create_thread_m5_salientes_sin_aristas_no_manifold(s):
+    """B-59: la rosca M5×0,8 modelada (length=12, holgura 0,1) dejaba 33 aristas no manifold."""
+    llamar(s, "create_cylinder", radius=2.5, height=50)
+    from omnicad.nucleo import revision as rv
+    llamar(s, "create_thread", faces="%CYLINDER", thread="M5x0.8", thread_class="auto", length=12,
+           print_clearance=0.1)
+    topo = rv._topologia(next(iter(s.doc.estado_final.cuerpos.values())).forma)
+    assert not topo["no_manifold"] and not topo["libres"]
+
+
+def test_labio_que_no_cambia_nada_avisa(s, monkeypatch):
+    """B-62: labio con la sección entera dentro del material no quedaba vacío sin avisar."""
+    from omnicad.nucleo import solidos_crear as sc
+    llamar(s, "create_cylinder", radius=20, height=20)
+    aristas = [e["id"] for e in llamar(s, "find_edges", selector="%CIRCLE and >Z")["edges"]]
+    monkeypatch.setattr(sc, "labio_ranura", lambda cuerpo, aristas, direccion, **k: cuerpo)
+    llamar(s, "run_operation", type="labio",
+           params={"aristas": aristas, "tipo": "labio", "ancho": "2 mm", "alto": "1.5 mm"})
+    paso = [p for p in llamar(s, "get_timeline", include_params=False)["steps"] if p["type"] == "labio"][0]
+    assert paso["status"] == "warning" and "no cambió el volumen" in paso["message"]
+
+
 def test_create_thread_interior_trapezoidal(s):
     llamar(s, "create_box", length=40, width=40, height=12)
     llamar(s, "create_hole", face=">Z", diameter=16, through_all=True)
@@ -404,6 +439,12 @@ def test_thread_info_y_fit_tolerance(s):
     assert m10["limits"][0]["major_diameter"] == pytest.approx([9.732, 9.968])
     assert m10["limits"][0]["pitch_diameter"] == pytest.approx([8.862, 8.994], abs=6e-4)
     assert [x["class"] for x in llamar(s, "thread_info", thread="M10", thread_class="auto")["limits"]] == ["6H", "6g"]
+    # B-31: classes = las que tienen límites verificados para ESTE tamaño; antes listaba las de la
+    # familia y el modo «auto» avisaba «sin la clase 6g» para M18x1.5 mientras el catálogo la ofrecía.
+    fina = llamar(s, "thread_info", thread="M18x1.5")
+    assert fina["classes"] == [] and set(fina["classes_without_data"]) == {"6H", "6G", "6g", "6h"}
+    gruesa = llamar(s, "thread_info", thread="M10")
+    assert gruesa["classes"] == ["6H", "6G", "6g", "6h"] and "classes_without_data" not in gruesa
     unc = llamar(s, "thread_info", thread="1/4-20", thread_class="2B")["limits"][0]
     assert [round(x / 25.4, 4) for x in unc["pitch_diameter"]] == [0.2175, 0.2224]
     f = llamar(s, "fit_tolerance", nominal=25, hole="H7", shaft="g6")

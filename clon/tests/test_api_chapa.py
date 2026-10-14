@@ -205,6 +205,18 @@ def test_pestana_de_contorno_en_l():
     falla(s, "create_contour_flange", "ENTITY_NOT_FOUND", sketch=bid, curves=[99])
 
 
+def test_plegar_pestana_base_sobre_la_cara_de_arriba():
+    """B-49: fold rechazaba la cara superior de una pestaña base («no es la cara de arriba ni la de abajo»)."""
+    s = api.Sesion()
+    llamar(s, "create_sketch", name="B", plane="XY")
+    llamar(s, "draw_rectangle", sketch="B", x1=-30, y1=-20, x2=30, y2=20)
+    llamar(s, "create_base_flange", sketch="B")
+    lid = llamar(s, "create_sketch", name="L", plane=">Z")["sketch"]["id"]
+    llamar(s, "draw_line", sketch=lid, start_x=0, start_y=-20, end_x=0, end_y=20)
+    r = llamar(s, "fold", face=">Z", body="Cuerpo1", sketch=lid, angle=90)
+    assert r["bodies_modified"]            # sale bien (el aviso «no es la cara de arriba» ya no ocurre)
+
+
 def test_plegar_por_una_linea_de_boceto_sobre_la_cara():
     s = api.Sesion()
     cid, _ = placa(s)
@@ -284,3 +296,18 @@ def test_errores_de_cuerpo_de_chapa():
     falla(s, "refold", "NOT_SHEET_METAL")
     falla(s, "export_flat_pattern_dxf", "NOT_SHEET_METAL", path="x.dxf")
     falla(s, "create_edge_flange", "OPERATION_FAILED", edges=">Z and >Y", body=caja_id)
+
+
+
+# ---------------------------------------------------------------- regla con valores anulados (B-34)
+def test_get_sheet_metal_info_marca_los_valores_anulados_de_la_regla():
+    """B-34: create_base_flange(thickness=4) mostraba rule.name «Acero 1 mm» con thickness 4.0:
+    el nombre engañaba. Ahora la regla del informe trae `overrides` con lo anulado."""
+    s = api.Sesion()
+    cid, _ = placa(s, regla="Acero 1 mm", thickness=4)
+    r = llamar(s, "get_sheet_metal_info", body=cid)
+    regla = r["bodies"][0]["rule"]
+    assert regla["name"] == "Acero 1 mm" and regla["thickness"] == 4.0
+    assert regla["overrides"] == ["thickness", "bend_radius"]   # el radio sigue al espesor (reglas de fábrica)
+    cid, _ = placa(s, regla="Acero 2 mm")                                  # sin anulaciones: sin overrides
+    assert "overrides" not in llamar(s, "get_sheet_metal_info", body=cid)["bodies"][0]["rule"]

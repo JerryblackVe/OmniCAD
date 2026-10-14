@@ -306,6 +306,19 @@ def test_paso_reparar_superficie_que_se_cierra_pasa_a_solido():
     assert c.tipo == "solido" and geo.volumen(c.forma) == pytest.approx(6000)
 
 
+def test_paso_reparar_no_empeora_en_silencio(monkeypatch):
+    """B-40: si reparar devuelve algo peor (más problemas o más sólidos), el paso revierte y avisa."""
+    doc, cid = _doc_con(caja_rota())
+    forma_antes = doc.estado_final.cuerpos[cid].forma
+    n_antes = len(rv._topologia(forma_antes)["libres"]) + len(rv._topologia(forma_antes)["no_manifold"])
+    assert n_antes >= 0 and forma_antes is doc.estado_final.cuerpos[cid].forma
+    peor = geo.compuesto([caja(), caja()])           # doble de sólidos: peor que nunca
+    monkeypatch.setattr(rv, "reparar", lambda f, **k: peor)
+    res = doc.agregar(OpReparar(doc.nuevo_id(), cuerpos=[cid]))
+    assert res.estado == "aviso" and "empeoraría" in res.mensaje
+    assert geo.volumen(doc.estado_final.cuerpos[cid].forma) == pytest.approx(geo.volumen(forma_antes))
+
+
 def test_paso_reparar_avisa_si_sigue_abierto_y_falla_sin_cuerpos():
     doc, cid = _doc_con(caja_sin_tapa(), "superficie")
     res = doc.agregar(OpReparar(doc.nuevo_id(), cuerpos=[cid]))

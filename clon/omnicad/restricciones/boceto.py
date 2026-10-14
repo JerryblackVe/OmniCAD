@@ -1482,6 +1482,8 @@ class Boceto:
             return math.degrees(math.atan2(abs(d1[0] * d2[1] - d1[1] * d2[0]), d1[0] * d2[0] + d1[1] * d2[1]))
         if tipo == "distancia" and t == ["punto", "linea"]:
             return abs(distancia_punto_recta(self.coords(entidades[0]), *self._extremos_linea(entidades[1])))
+        if tipo == "distancia" and t == ["linea", "punto"]:
+            return abs(distancia_punto_recta(self.coords(entidades[1]), *self._extremos_linea(entidades[0])))
         if tipo == "distancia" and t == ["linea", "linea"]:
             a = self.coords(self.curvas[entidades[1]].p1)
             return abs(distancia_punto_recta(a, *self._extremos_linea(entidades[0])))
@@ -1580,7 +1582,8 @@ class Boceto:
     def _validar_cota(self, tipo, entidades):
         t = [self.tipo_de(e) for e in entidades]
         validas = {
-            "distancia": lambda: t in (["punto", "punto"], ["linea"], ["punto", "linea"], ["linea", "linea"]),
+            "distancia": lambda: t in (["punto", "punto"], ["linea"], ["punto", "linea"], ["linea", "punto"],
+                                       ["linea", "linea"]),
             "distancia_h": lambda: t in (["punto", "punto"], ["linea"]),
             "distancia_v": lambda: t in (["punto", "punto"], ["linea"]),
             "radio": lambda: t in (["circulo"], ["arco"]),
@@ -2509,11 +2512,14 @@ class Boceto:
         return self._patron(ids, trans, lambda f, _a: dict(zip(("dx", "dy"), f((0.0, 0.0)), strict=True)))
 
     def patron_circular(self, ids, centro, cantidad, angulo_total=360.0, simetrico=False):
-        """Patrón circular (SKT-CREATE-CIRCULAR-PATTERN) alrededor de `centro` (id de punto o (u, v))."""
+        """Patrón circular (SKT-CREATE-CIRCULAR-PATTERN) alrededor de `centro` (id de punto o (u, v)). Con
+        coordenadas NO se crea un punto en el centro (B-55): el giro queda atado a un centro fijo; con id de
+        punto, las copias lo siguen si se mueve."""
         if cantidad < 2:
             raise ErrorBoceto("El patrón necesita al menos dos copias.")
-        cp = self._punto(centro)
-        c = self.coords(cp)
+        es_punto = isinstance(centro, (int, np.integer)) and not isinstance(centro, bool)
+        cp = self._punto(centro) if es_punto else None
+        c = self.coords(cp) if cp is not None else (float(centro[0]), float(centro[1]))
         completo = abs(abs(angulo_total) - 360.0) < 1e-9
         paso = angulo_total / cantidad if completo else angulo_total / (cantidad - 1)
         desde = -(cantidad - 1) // 2 if simetrico and not completo else 0
@@ -2523,8 +2529,10 @@ class Boceto:
                 continue
             a = math.radians((k + desde) * paso)
             trans.append((lambda q, a=a: (lambda r: (r[0] + c[0], r[1] + c[1]))(_rot(q[0] - c[0], q[1] - c[1], a)),
-                          math.degrees(a), [cp]))
-        return self._patron([i for i in ids if i != cp], trans, lambda _f, ang: {"angulo": math.radians(ang)})
+                          math.degrees(a), [cp] if cp is not None else []))
+        datos = (lambda _f, ang: {"angulo": math.radians(ang), "centro": c}) if cp is None else \
+                (lambda _f, ang: {"angulo": math.radians(ang)})
+        return self._patron([i for i in ids if i != cp], trans, datos)
 
     # ------------------------------------------------------------ MODIFICAR: curva de fusión
     def _salida_extremo(self, cid, pid):

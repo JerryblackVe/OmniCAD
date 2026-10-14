@@ -458,6 +458,9 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None):
         raise geo.ErrorGeometria(f"Continuidad desconocida: {continuidad} (G0, G1 o G2).")
     if continuidad != "G0" and soporte is None:
         raise geo.ErrorGeometria("La continuidad G1/G2 necesita el cuerpo vecino (`soporte`).")
+    if any(not BRep_Tool.IsClosed_s(w) for w in alambres(aristas_contorno)):
+        raise geo.ErrorGeometria("El contorno no es cerrado: el parche tapa un contorno cerrado (uní los "
+                                 "extremos o elegí las aristas que lo cierran).")   # B-66: antes, crudo del kernel
     interior = list(interior)
     if continuidad == "G0" and not interior:
         ws = alambres(aristas_contorno)

@@ -325,6 +325,36 @@ def buscar_por_firma(perfiles, firma, centroide=None):
     return min(candidatos, key=lambda p: math.dist(p.centroide_uv, centroide))
 
 
+def buscar_por_firma_tolerante(perfiles, firma, centroide=None):
+    """Busca por firma exacta; si no hay, re-enlaza al perfil que comparte más curvas de la firma
+
+    (un cambio de parámetro degeneró una curva o una nueva curva parte la región), con el centroide
+    guardado como desempate y ventaja clara. Devuelve (perfil, nota) con nota None en el caso exacto,
+    o (None, None) si no hay un único candidato claro.
+    """
+    exacto = buscar_por_firma(perfiles, firma, centroide)
+    if exacto is not None:
+        return exacto, None
+    objetivo = frozenset(firma)
+    candidatos = [p for p in perfiles if p.firma & objetivo]
+    if not candidatos:
+        return None, None
+    dif = lambda p: len(p.firma ^ objetivo)
+    candidatos.sort(key=dif)
+    mejor = candidatos[0]
+    iguales = [p for p in candidatos if dif(p) == dif(mejor)]
+    if len(iguales) > 1:
+        if centroide is None:
+            return None, None
+        iguales.sort(key=lambda p: math.dist(p.centroide_uv, centroide))
+        d0, d1 = math.dist(iguales[0].centroide_uv, centroide), math.dist(iguales[1].centroide_uv, centroide)
+        if d1 <= 1e-12 or d0 >= 0.25 * d1:
+            return None, None
+        mejor = iguales[0]
+    return mejor, ("El perfil se re-vinculó con firma parcial: un cambio del boceto alteró su "
+                   "contorno (revisá la operación).")
+
+
 # ---------------------------------------------------------------- aristas OCC → primitivas 2D
 def _aristas_unicas(forma):
     vistas, salida = set(), []

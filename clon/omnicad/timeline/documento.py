@@ -23,6 +23,7 @@ import json
 import logging
 import time
 import traceback
+import uuid
 
 from OCP.TopoDS import TopoDS_Shape
 
@@ -112,6 +113,7 @@ class Documento:
     def __init__(self):
         self.nombre = "Sin título"
         self.ruta = None
+        self.token = uuid.uuid4().hex[:8]   # autoguardado de los «Sin título»: un archivo por documento (B-22)
         self.parametros = TablaParametros()
         self.operaciones = []
         self.marcador = 0

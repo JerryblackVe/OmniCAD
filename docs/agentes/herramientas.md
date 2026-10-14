@@ -261,7 +261,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). |
 | [`add_constraint`](#add_constraint) | sí | Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
-| [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado (fully_constrained, under_constrained, over_constrained) con los grados de libertad. |
+| [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. |
 | [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}; todas aceptan id (nombre propio para citarla) y construction. |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
@@ -294,7 +294,7 @@ Crea un plano de construcción desfasado de un plano de origen (XY, XZ, YZ) o de
 
 ### `create_sketch`
 
-Crea un boceto vacío sobre un plano o sobre una cara plana. Coordenadas del boceto (mm): en XY x→X e y→Y (normal +Z); en XZ x→X e y→Z (normal −Y: una extrusión positiva avanza hacia −Y); en YZ x→Y e y→Z (normal +X). Un plano de construcción usa el marco de su plano base. SOBRE UNA CARA (plane = selector como '>Z' o id de find_faces como 'Cuerpo1/F6'; tiene que ser UNA cara plana): el boceto queda sobre la cara con la normal exterior como normal (extruir con join crece hacia afuera; con cut entra al material solo, como Fusion). Ejes: en caras horizontales x→+X; en las demás y→+Z (hacia arriba) y x = y × normal; el origen es la proyección del origen del mundo sobre el plano de la cara, no una esquina (plane_frame lo da y find_faces trae center_uv, el centro de cada cara en estos ejes). El boceto queda asociado a la cara, como en Fusion: si un parámetro la mueve o la gira, el boceto la sigue; si la cara desaparece, el paso da error. Con varios cuerpos, body dice en cuál se evalúa el selector de la cara.
+Crea un boceto vacío sobre un plano o sobre una cara plana. Coordenadas del boceto (mm): en XY x→X e y→Y (normal +Z); en XZ x→X e y→Z (normal −Y: una extrusión positiva avanza hacia −Y); en YZ x→Y e y→Z (normal +X). Un plano de construcción usa el marco de su plano base. SOBRE UNA CARA (plane = selector como '>Z' o id de find_faces como 'Cuerpo1/F6'; tiene que ser UNA cara plana): el boceto queda sobre la cara con la normal exterior como normal (extruir con join crece hacia afuera; con cut entra al material solo, como Fusion). Ejes: en caras horizontales x→+X e y = normal × x (y→+Y con normal +Z; y→−Y con normal −Z, como en Fusion la vista queda espejada al mirarla desde abajo); en las demás y→+Z (hacia arriba) y x = y × normal; el origen es la proyección del origen del mundo sobre el plano de la cara, no una esquina (plane_frame lo da y find_faces trae center_uv, el centro de cada cara en estos ejes). El boceto queda asociado a la cara, como en Fusion: si un parámetro la mueve o la gira, el boceto la sigue; si la cara desaparece, el paso da error. Con varios cuerpos, body dice en cuál se evalúa el selector de la cara.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -425,7 +425,7 @@ Agrega una cota (dimensión) que maneja la geometría. El valor es un número (m
 
 ### `get_sketch`
 
-Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado (fully_constrained, under_constrained, over_constrained) con los grados de libertad.
+Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1017,7 +1017,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 
 ### `extrude`
 
-Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut desde un boceto sobre una cara entra al material sin pedirlo (reverse vacío). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut o intersect.
+Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut o intersect.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1029,7 +1029,7 @@ Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'larg
   - `taper_angle` (número o expresión; opcional, por defecto `0`): conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `distance2` (número o expresión; opcional, por defecto `null`): distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
-  - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: solo un cut desde un boceto sobre una cara se invierte (entra al material, como Fusion).
+  - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al material (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material, como Fusion).
 - CLI: `omnicad call extrude --doc pieza.omnicad sketch=…`
 
 ### `revolve`
@@ -1094,6 +1094,7 @@ Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y hei
   - `z` (número o expresión; opcional, por defecto `0`): z de la base (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+  - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
 - CLI: `omnicad call create_box --doc pieza.omnicad length=… width=… height=…`
 
 ### `create_cylinder`
@@ -1110,6 +1111,7 @@ Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, 
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `diameter` (número o expresión; opcional, por defecto `null`): diámetro en mm, en vez de radius (como el panel Cilindro de la app); el paso guarda la mitad.
+  - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
 - CLI: `omnicad call create_cylinder --doc pieza.omnicad height=…`
 
 ### `create_sphere`
@@ -1125,6 +1127,7 @@ Crea una esfera. (x, y, z) es su centro. La medida va como radius o como diamete
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `diameter` (número o expresión; opcional, por defecto `null`): diámetro en mm, en vez de radius (como el panel Esfera de la app); el paso guarda la mitad.
+  - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
 - CLI: `omnicad call create_sphere --doc pieza.omnicad`
 
 ### `create_torus`
@@ -1142,6 +1145,7 @@ Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `major_diameter` (número o expresión; opcional, por defecto `null`): diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
   - `minor_diameter` (número o expresión; opcional, por defecto `null`): diámetro del tubo, en vez de minor_radius.
+  - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
 - CLI: `omnicad call create_torus --doc pieza.omnicad`
 
 ### `boolean_operation`
@@ -2026,7 +2030,7 @@ Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta
   - `angle` (número o expresión; opcional, por defecto `0`): giro del componente 1 alrededor del eje Z del marco de la unión, en grados.
   - `offset` (lista de número o expresión o null; opcional, por defecto `null`): desfase [dx, dy, dz] en mm en el marco de la unión (Z = normal o eje).
   - `flip` (true/false; opcional, por defecto `false`): true da vuelta el componente 1 (caras en el mismo sentido o ejes opuestos).
-  - `rotation_axis` ("X" | "Y" | "Z"; opcional, por defecto `"Z"`): eje del marco para girar (revolute, cylindrical, pin_slot) o normal del plano (planar).
+  - `rotation_axis` ("X" | "Y" | "Z"; opcional, por defecto `"Z"`): eje del marco para girar (revolute, cylindrical, pin_slot) o normal del plano (planar); "Z" es el eje de un marco de cilindro/arista circular (ver el módulo: marcos de eje).
   - `slide_axis` ("X" | "Y" | "Z"; opcional, por defecto `"X"`): eje del marco para deslizar (slider, pin_slot).
   - `rotation` (número o expresión; opcional, por defecto `null`): giro inicial en grados (revolute, cylindrical, pin_slot, planar, ball).
   - `rotation2` (número o expresión; opcional, por defecto `null`): segundo giro (cabeceo) en grados; solo ball.
@@ -2049,7 +2053,7 @@ Unión como está (ENSAMBLAR › Unión como está): liga el componente de `orig
   - `joint_type` ("rigid" | "revolute" | "slider" | "cylindrical" | "pin_slot" | "planar" | "ball"; opcional, por defecto `"revolute"`): "rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar" o "ball".
   - `body` (texto; opcional, por defecto `null`): cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin.
   - `snap` ("center" | "start" | "end"; opcional, por defecto `"center"`): punto del origen en una arista o cilindro: "center", "start" o "end".
-  - `rotation_axis` ("X" | "Y" | "Z"; opcional, por defecto `"Z"`): eje del marco para girar (o normal del plano en planar).
+  - `rotation_axis` ("X" | "Y" | "Z"; opcional, por defecto `"Z"`): eje del marco para girar (o normal del plano en planar); "Z" es el eje de un marco de cilindro/arista circular (ver el módulo: marcos de eje).
   - `slide_axis` ("X" | "Y" | "Z"; opcional, por defecto `"X"`): eje del marco para deslizar (slider, pin_slot).
   - `rotation` (número o expresión; opcional, por defecto `null`): giro en grados.
   - `rotation2` (número o expresión; opcional, por defecto `null`): segundo giro en grados (ball).
@@ -2436,7 +2440,7 @@ Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `code` (texto; obligatorio): código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar (atajo de api.llamar(sesion, nombre, args)). Asigná `result = ...` para devolver un valor.
+  - `code` (texto; obligatorio): código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar (atajo de api.llamar(sesion, nombre, args); NUNCA lanza: devuelve un dict con ok y, si falló, error_kind). Si alguna llamada falla, el resultado trae failed_calls y un aviso; si fallan TODAS, el resultado es CODE_ERROR y el documento vuelve a como estaba.
   - `timeout` (número; opcional, por defecto `60.0`): segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se vigila tu código: una llamada larga a una herramienta termina antes del corte.
 - CLI: `omnicad call execute_code --doc pieza.omnicad code=…`
 

@@ -159,3 +159,18 @@ def test_primitiva_sigue_funcionando(app_qt):
     doc = Documento()
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
     assert len(doc.estado_final.cuerpos) == 1
+
+
+# ---------------------------------------------------------------- nivel 2: reglas propias en el diálogo (B-25)
+def test_reglas_de_chapa_del_dialogo_incluye_las_propias(app_qt, monkeypatch):
+    """B-25: el diálogo de reglas de chapa lista también las reglas propias del usuario, no solo las de
+    fábrica (se crean con la API o la CLI durante la sesión)."""
+    from omnicad.nucleo import chapa as ch
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.chapa import ReglasChapa, _reglas_biblioteca
+
+    monkeypatch.setattr(ch, "REGLAS_USUARIO", {"Latón 0.8 mm": {"espesor": 0.8}})
+    biblioteca = _reglas_biblioteca()
+    assert "Acero 1 mm" in biblioteca and "Latón 0.8 mm" in biblioteca
+    campo = [c for c in ReglasChapa().campos(ContextoComando(Documento())) if c.clave == "regla"][0]
+    assert "Latón 0.8 mm" in campo.opciones and "Acero 1 mm" in campo.opciones

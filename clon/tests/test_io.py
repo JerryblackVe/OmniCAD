@@ -244,3 +244,43 @@ def test_guardar_y_abrir_con_un_cuerpo_de_malla(tmp_path):
     abierto = proyecto.abrir(proyecto.guardar(doc, tmp_path / "malla"))
     assert [r.estado for r in abierto.resultados] == ["ok", "ok"]
     assert len(abierto.estado_final.cuerpos) == len(doc.estado_final.cuerpos)
+
+
+# ---------------------------------------------------------------- nivel 2: autoguardado y registro (B-21, B-22)
+def test_autoguardados_de_sin_titulo_no_se_pisan(doc, tmp_path, monkeypatch):
+    """B-22: cada «Sin título» lleva su propio autoguardado (token del documento); los pendientes se listan
+    todos y borrar uno no toca el otro."""
+    import omnicad
+    monkeypatch.setattr(omnicad.io_archivos.proyecto, "carpeta_datos", lambda: tmp_path)
+    doc.ruta = None
+    otro = Documento()
+    assert proyecto.ruta_autoguardado(doc) != proyecto.ruta_autoguardado(otro)
+    assert "sin_titulo_" in proyecto.ruta_autoguardado(doc).name
+    proyecto.autoguardar(doc)
+    proyecto.autoguardar(otro)
+    pendientes = proyecto.autoguardados_pendientes()
+    assert len(pendientes) == 2 and len({p.name for p in pendientes}) == 2
+    assert proyecto.autoguardado_pendiente(None) == pendientes[0]      # el más nuevo primero
+    proyecto.borrar_autoguardado(doc)
+    restantes = proyecto.autoguardados_pendientes()
+    assert len(restantes) == 1 and restantes[0] == proyecto.ruta_autoguardado(otro)   # el otro sigue ahí
+
+
+def test_log_se_enroula_y_no_se_pisa(tmp_path, monkeypatch):
+    """B-21: omnicad.log se ENROULA (2 MB, una copia): el registro de la sesión anterior sobrevive al
+    siguiente arranque (antes mode='w' lo pisaba y un crasheo no dejaba rastro)."""
+    import logging
+    import sys
+    from logging.handlers import RotatingFileHandler
+
+    import OmniCAD
+    import omnicad
+    monkeypatch.setattr(sys, "stderr", None)          # la app sin consola es la que escribe al archivo
+    monkeypatch.setattr(omnicad, "carpeta_datos", lambda: tmp_path)
+    for i in (1, 2):                                  # dos «arranques»
+        h = OmniCAD._manejador_log()
+        assert isinstance(h, RotatingFileHandler) and h.maxBytes == 2_000_000 and h.backupCount == 1
+        h.emit(logging.LogRecord("prueba", logging.INFO, "", 0, f"sesion {i}", None, None))
+        h.close()
+    texto = (tmp_path / "omnicad.log").read_text(encoding="utf-8")
+    assert "sesion 1" in texto and "sesion 2" in texto

@@ -57,6 +57,7 @@ from OCP.TopoDS import TopoDS
 from OCP.gp import gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Dir2d, gp_Lin, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
 
 from . import geometria as geo
+from . import revision as rv
 
 _MARGEN = 1.0   # mm que las herramientas "hasta" y "todo" pasan de largo antes de recortarse
 
@@ -2239,10 +2240,35 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     verificar = not (datos["familia"] in ("iso_metrica", "unificada") and flancos == 0)
 
     def cortar(extra):
-        surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], z0, largo, info["interna"], mano, radio,
-                                    partes=True, extra=extra, **_perfil_surco(datos, flancos))
+        def armar_tramo(za, la):
+            return _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"], mano, radio,
+                                partes=True, extra=extra, **_perfil_surco(datos, flancos))
+
+        def por_mitades():
+            mitad = largo / 2
+            s1, t1 = armar_tramo(z0, mitad)
+            s2, t2 = armar_tramo(z0 + mitad, largo - mitad)
+            torno_d = None
+            if t1 is not None and t2 is not None:
+                torno_d = geo.booleano(t1, t2, "unir")
+            return geo.booleano(s1, s2, "unir"), torno_d
+
+        partido = False
+        try:
+            surco, torno = armar_tramo(z0, largo)
+        except geo.ErrorGeometria:
+            # Una rosca larga puede superar la tolerancia del kernel en un barrido (M5 6g×50 no salía): se barre a
+            # la mitad y se une antes de cortar; el torno con el largo total conduce con sus caras a las puntas.
+            surco, torno = por_mitades()
+            partido = True
         base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")   # cresta sin espesor: se tornea
         resultado = _cortar_helicoidal(base, surco)   # sale validado y con el surco cortado
+        if not partido and rv._topologia(resultado)["no_manifold"]:
+            # Un barrido chico y corrido puede dejar la arista de contacto entre la cresta torneada y el surco
+            # compartida por 3 caras (M5×0,8 con holgura): el corte por mitades reubica esa arista.
+            surco, torno = por_mitades()
+            base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")
+            resultado = _cortar_helicoidal(base, surco)
         if verificar:                                 # el corte no puede sacar más que el surco entero
             quitado = geo.volumen_exacto(base) - geo.volumen_exacto(resultado)
             if not 0 < quitado <= 1.01 * geo.volumen_exacto(surco):
@@ -2804,11 +2830,13 @@ def labio_ranura(cuerpo, aristas, direccion_tirado, *, tipo="labio", ancho, alto
     p0, t0 = _punto_en(w, 0.0)
     m = _unit(np.cross(tirar, t0), "arista (no puede ser paralela a la dirección de tirado)")
     # De qué lado de la arista está la pared: se prueba en el medio de la primera arista (no en un vértice,
-    # que suele ser una esquina sobre el borde del cuerpo).
+    # que suele ser una esquina sobre el borde del cuerpo), un poco hacia el lateral, hacia AMBOS lados de
+    # la dirección de tirado (con uno solo el labio crecía mal en el borde superior o en el inferior: B-08).
     pm, tm = _punto_en(w, 0.5 * _longitud(_aristas_de(w)[0]) / _longitud(w))
     mm = _unit(np.cross(tirar, tm))
     eps = min(ancho, alto) * 0.25
-    if BRepClass3d_SolidClassifier(cuerpo, _pnt(pm + mm * eps - tirar * eps), 1e-7).State() != TopAbs_IN:
+    if all(BRepClass3d_SolidClassifier(cuerpo, _pnt(pm + mm * eps + s * eps), 1e-7).State() != TopAbs_IN
+           for s in (tirar, -tirar)):
         m = -m
     a, h = (ancho, alto) if tipo == "labio" else (ancho + holgura, -(alto + holgura))
     seccion = _poligono([p0, p0 + m * a, p0 + m * a + tirar * h, p0 + tirar * h])

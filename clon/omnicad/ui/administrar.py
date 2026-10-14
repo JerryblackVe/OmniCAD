@@ -114,7 +114,7 @@ class DialogoListaMateriales(QDialog):
     def _exportar(self):
         ruta, _ = QFileDialog.getSaveFileName(self, "Exportar lista de materiales", "lista_materiales.csv", "CSV (*.csv)")
         if ruta:
-            Path(ruta).write_text(self.texto_csv(), encoding="utf-8")
+            Path(ruta).write_text(self.texto_csv(), encoding="utf-8-sig")   # con BOM: Excel lee «N.º» y «mm³» bien
 
 
 # ---------------------------------------------------------------- configuraciones

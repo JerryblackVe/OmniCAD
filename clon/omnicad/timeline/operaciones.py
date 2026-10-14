@@ -18,8 +18,9 @@ import numpy as np
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
 from ..nucleo import referencias as refs
+from ..nucleo import revision as rv
 from . import entidades as ent
-from ..nucleo.perfiles import buscar_por_firma, detectar
+from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar
 from ..restricciones import Boceto, resolver
 from ..restricciones.boceto import (ErrorBoceto, Texto, expresiones_de_texto, sustituir_expresiones,
                                     validar_valor_cota)
@@ -209,11 +210,21 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if operacion == "unir":
         resultado = herramienta
         for c in objetivos:
-            resultado = geo.booleano(resultado, c.forma, "unir")
+            nueva = geo.booleano(resultado, c.forma, "unir")
+            if not lista:
+                # Un cuerpo que solo TOCA por cara (tope coplanar) se une sin sumar volumen: avisar, así
+                # no se absorbe un cuerpo ajeno en silencio (el join sobre la cara es lo normal).
+                v_antes = geo.volumen(resultado) + geo.volumen(c.forma)
+                if geo.volumen(nueva) >= v_antes - max(v_antes, 1.0) * 1e-7:
+                    ctx.aviso(f"{c.nombre} se unió a la herramienta compartiendo solo una cara (sin solape).")
+            resultado = nueva
         principal = objetivos[0]
         principal.forma = resultado
         for c in objetivos[1:]:
             del estado.cuerpos[c.id]
+        if len(geo.solidos(resultado)) > len(geo.solidos(herramienta)) or not rv.es_estanca(resultado):
+            ctx.aviso(f"{principal.nombre}: la unión dejó el cuerpo partido, abierto o con aristas compartidas "
+                      "de más (posible contacto tangente o en cuña); revisalo con check_geometry.")
         return [principal.id]
 
     afectados = []
@@ -582,7 +593,7 @@ class _OpConPerfiles(Operacion):
                                     self.p.get("eje_ref"), self.p.get("hasta2"), self.p.get("curvas"))
         return deps - {self.id}
 
-    def _caras(self, estado):
+    def _caras(self, estado, ctx=None):
         """(plano, caras): los perfiles elegidos y las caras planas elegidas, todos coplanares."""
         caras, plano = [], None
         if self.p.get("boceto") is not None and not isinstance(self.p["boceto"], str):    # [] y {} también
@@ -596,9 +607,11 @@ class _OpConPerfiles(Operacion):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-                perfil = buscar_por_firma(br.perfiles, ref["firma"], ref.get("centroide"))
+                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"))
                 if perfil is None:
                     raise ErrorOperacion("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
+                if nota and ctx is not None:
+                    ctx.aviso(nota)
                 caras.append(perfil.cara)
             plano = br.plano
         for e in _resolver_todas(self.p.get("caras"), estado):
@@ -651,7 +664,7 @@ class OpExtrusion(_OpConPerfiles):
                 raise ErrorOperacion("Las curvas abiertas tienen que ser de un boceto.")
             caras = []
         else:
-            plano, caras = self._caras(estado)
+            plano, caras = self._caras(estado, ctx)
         n = -plano.normal if p.get("invertir") else plano.normal
         direccion = "simetrica" if p.get("simetrica") else p.get("direccion", "un_lado")
         medida = "total" if p.get("simetrica") else p.get("medida", "mitad")
@@ -745,7 +758,7 @@ class OpRevolucion(_OpConPerfiles):
         return punto, plano.a_3d(u2, v2) - punto
 
     def ejecutar(self, estado, ctx):
-        plano, caras = self._caras(estado)
+        plano, caras = self._caras(estado, ctx)
         punto, direccion = self._eje(estado, plano)
         direccion = np.asarray(direccion, float) * (-1 if self.p.get("invertir") else 1)
         a1 = 360.0 if self.p.get("extension") == "completa" else ctx.evaluar(self.p["angulo"], ANGULO)

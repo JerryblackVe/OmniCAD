@@ -19,6 +19,10 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - Otros agentes trabajan EN PARALELO: tocá solo los archivos que te asignaron; si necesitás un cambio
   en otro, anotalo en el informe, no lo hagas.
 - No digas "listo" sin correr la verificación y pegar su salida real.
+- Usar SIEMPRE la skill `/ponytail` en todo proceso de código donde sea útil o necesario
+  (escribir, arreglar, refactorizar, elegir dependencias): el cambio más chico que resuelve la
+  tarea completa, sin sobre-ingeniería; y la skill `/ponytail-review` antes de dar por terminado
+  un cambio de código (lógica, seguridad, carga real, tests, y que cada línea sea necesaria).
 - Errores del núcleo: `raise geo.ErrorGeometria("mensaje claro en español")`
   (`from . import geometria as geo` dentro de `nucleo`).
 - Funciones PURAS del núcleo: reciben formas OCC, arrays numpy, `geo.Plano` o números; devuelven formas

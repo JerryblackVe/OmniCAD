@@ -14,7 +14,10 @@ from ..comando import (Casilla, Comando, ErrorComando, Expresion, Info, Opciones
                        hit_desde_ref, hits, refs)
 from . import registrar
 
-REGLAS = {n: n for n in ch.REGLAS}
+def _reglas_biblioteca():
+    """Reglas de la biblioteca al ABRIR el diálogo: las de fábrica y las propias del usuario (B-25; pueden
+    crearse con la API o la CLI durante la sesión)."""
+    return {n: n for n in list(ch.REGLAS) + [r for r in ch.REGLAS_USUARIO if r not in ch.REGLAS]}
 CARA_PLANA = {"cara_plana"}
 
 
@@ -81,7 +84,7 @@ class ReglasChapa(Comando):
         esquina = lambda v: v.get("esquina_forma") in ("redondo", "cuadrado")  # noqa: E731
         return [Seleccion("cuerpo", "Cuerpo de chapa", {"cuerpo"}),
                 Info("actual", "Regla actual", self._actual),
-                Opciones("regla", "Regla de la biblioteca", {"": "La actual", **REGLAS}),
+                Opciones("regla", "Regla de la biblioteca", {"": "La actual", **_reglas_biblioteca()}),
                 Texto("espesor", "Espesor (vacío = sin cambio)"), Texto("radio", "Radio de plegado"),
                 Texto("k", "Factor K"),
                 Opciones("alivio_forma", "Forma del alivio de plegado", {"": "Sin cambio", **ch.FORMAS_ALIVIO}),
@@ -185,7 +188,8 @@ class Pestana(Comando):
             Expresion("ancho1", "Distancia 1", "10 mm", visible_si=arista_y("ancho", "dos_lados")),
             Expresion("ancho2", "Distancia 2", "10 mm", visible_si=arista_y("ancho", "dos_lados")),
             Casilla("invertir", "Invertir", visible_si=es("arista")),
-            Opciones("regla", "Regla de chapa", REGLAS, ch.REGLA_DEFECTO, visible_si=es("base", "contorno")),
+            Opciones("regla", "Regla de chapa", _reglas_biblioteca(), ch.REGLA_DEFECTO,
+                     visible_si=es("base", "contorno")),
             Casilla("anular", "Anular reglas"),
             Texto("espesor", "Espesor (vacío = regla)", visible_si=anula("base", "contorno")),
             Texto("k", "Factor K (vacío = regla)", visible_si=anula("base", "contorno")),
@@ -440,7 +444,7 @@ class ConvertirChapa(Comando):
     def campos(self, ctx):
         return [Seleccion("cara", "Cara", CARA_PLANA, ayuda="Una cara ancha y plana de la placa."),
                 Info("espesor", "Espesor (detectado)", self._espesor),
-                Opciones("regla", "Regla plantilla", REGLAS, ch.REGLA_DEFECTO)]
+                Opciones("regla", "Regla plantilla", _reglas_biblioteca(), ch.REGLA_DEFECTO)]
 
     def _espesor(self, v, ctx):
         if not v.get("cara"):

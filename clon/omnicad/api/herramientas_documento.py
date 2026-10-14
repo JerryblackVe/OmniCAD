@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from ..io_archivos.exportar import FORMATOS, exportar
+from ..io_archivos.exportar import FORMATOS, cuerpos_de_malla, exportar
 from ..nucleo import geometria as geo
 from ..timeline import ops_chapa, parametros
 from .registro import herramienta
@@ -294,6 +294,13 @@ def _exportar_a(sesion, cuerpos, ruta, dxf):
         ops_chapa.exportar_dxf(sesion.doc.estado_final, cuerpos[0].id, ruta, centros=True, extensiones=False)
         return {"path": str(ruta.resolve()), "format": "dxf", "bodies": [cuerpos[0].id],
                 "size_bytes": ruta.stat().st_size}
+    formato = {"stp": "step"}.get(ruta.suffix.lower().lstrip("."), ruta.suffix.lower().lstrip("."))
+    if formato in ("step", "iges", "brep"):   # B-68: los formatos B-rep dejan afuera las mallas: avisarlo
+        omitidas = cuerpos_de_malla(cuerpos)
+        if omitidas:
+            sesion.avisar(f"{len(omitidas)} cuerpo(s) de malla no se pueden guardar en .{formato} "
+                          f"(solo B-rep): {', '.join(sesion.nombre_cuerpo(c) for c in omitidas)} quedaron afuera; "
+                          "convertilos antes con convert_mesh si los querés.")
     n = exportar(cuerpos, ruta, propiedades=sesion.doc.propiedades)
     resultado = {"path": str(ruta.resolve()), "format": ruta.suffix.lower().lstrip("."),
                  "bodies": [c.id for c in cuerpos], "size_bytes": ruta.stat().st_size}
@@ -490,6 +497,20 @@ def _exigir_no_id(nombre, id_propio):
                     "confundiría con él.", "Elegí otro nombre, p. ej. «Brazo izquierdo».")
 
 
+def _avisar_duplicado(sesion, nuevo, id_propio, cuerpos):
+    """B-54: renombrar a un nombre que ya existe deja dos iguales y la búsqueda por nombre pasa a dar
+    AMBIGUOUS_REFERENCE. Se avisa (no se rechaza: las copias de un patrón comparten nombre a propósito)."""
+    if cuerpos:
+        repetidos = [c.id for c in sesion.doc.estado_final.cuerpos.values()
+                     if c.id != id_propio and sesion.nombre_cuerpo(c).casefold() == nuevo.casefold()]
+    else:
+        repetidos = [o.id for o in sesion.doc.operaciones
+                     if o.id != id_propio and o.nombre.casefold() == nuevo.casefold()]
+    if repetidos:
+        sesion.avisar(f"Ya hay {'un cuerpo' if cuerpos else 'un paso'} llamado «{nuevo}» "
+                      f"({', '.join(repetidos)}): buscarlo por nombre va a dar AMBIGUOUS_REFERENCE; usá el id.")
+
+
 @herramienta("rename", "documento", "Renombra un paso del timeline o un cuerpo.", modifica=True)
 def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", "body"] = "auto"):
     """
@@ -508,6 +529,7 @@ def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", 
                 raise
         else:
             _exigir_no_id(nuevo, op.id)
+            _avisar_duplicado(sesion, nuevo, op.id, cuerpos=False)
             anterior = op.nombre
             sesion.doc.renombrar(op.id, nuevo)
             return {"kind": "feature", "id": op.id, "old_name": anterior, "new_name": nuevo}
@@ -518,6 +540,7 @@ def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", 
             raise
         raise error("NOT_FOUND", f"No existe un paso ni un cuerpo '{target}'.") from None
     _exigir_no_id(nuevo, c.id)
+    _avisar_duplicado(sesion, nuevo, c.id, cuerpos=True)
     anterior = sesion.nombre_cuerpo(c)
     sesion.doc.set_propiedad([c.id], "nombre", nuevo)
     return {"kind": "body", "id": c.id, "old_name": anterior, "new_name": nuevo}

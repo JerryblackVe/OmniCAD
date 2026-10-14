@@ -461,3 +461,53 @@ def test_edit_feature_acepta_formas_cortas_de_referencias():
     assert s.paso(paso).p["cuerpos"] == ["op2.c1"]
     esfera = next(b for b in ok(api.llamar(s, "get_scene_info"))["bodies"] if b["id"] == "op2.c1")
     assert esfera["bounding_box"]["min"][:2] == pytest.approx([-1, 99])                    # (100, 0) girado 90°
+
+
+
+def test_exportar_step_avisa_las_mallas_que_quedan_afuera(s, tmp_path):
+    """B-68: exportar a STEP dejaba afuera los cuerpos de malla sin avisar (el ΔV del gabinete:
+    la malla del perno desaparecía en silencio)."""
+    m = ok(api.llamar(s, "tessellate", {"bodies": ["op2.c1"], "keep_original": True}))
+    malla = m["bodies_created"][0]["id"]
+    r = api.llamar(s, "export", {"path": str(tmp_path / "mezcla.step")})
+    assert r["ok"], r
+    assert any("1 cuerpo(s) de malla" in a and "quedaron afuera" in a and "convertilos" in a
+               for a in r["avisos"]), r["avisos"]
+    assert (tmp_path / "mezcla.step").read_text()[:13] == "ISO-10303-21;"
+    # solo mallas: el error claro de siempre (no hace falta el aviso)
+    r = api.llamar(s, "export", {"path": str(tmp_path / "solo.step"), "bodies": [malla]})
+    assert r["error_kind"] == "INVALID_FORMAT" and "convertilos antes" in r["mensaje"]
+
+
+# ---------------------------------------------------------------- nivel 2: rename honesto y pasos con aviso
+def test_rename_cambia_el_nombre_del_estado(s):
+    """B-24: renombrar un cuerpo también cambia Cuerpo.nombre del estado (una sola fuente de verdad)."""
+    cid = ok(api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10}))["bodies_created"][0]["id"]
+    ok(api.llamar(s, "rename", {"target": cid, "new_name": "Bancada"}))
+    assert s.doc.estado_final.cuerpos[cid].nombre == "Bancada"
+    assert s.doc.propiedad(cid, "nombre") == "Bancada"          # y el renombre queda en la receta
+    cuerpo = ok(api.llamar(s, "get_scene_info", {}))["bodies"]
+    assert next(c for c in cuerpo if c["id"] == cid)["name"] == "Bancada"
+
+
+def test_rename_avisa_duplicado(s):
+    """B-54: renombrar a un nombre ya usado avisa que la búsqueda por nombre dará AMBIGUOUS_REFERENCE."""
+    ids = [ok(api.llamar(s, "create_box", {"length": 5, "width": 5, "height": 5}))["bodies_created"][0]["id"]
+           for _ in range(2)]
+    libre = api.llamar(s, "rename", {"target": ids[1], "new_name": "pieza"})
+    assert libre["ok"] and not libre["avisos"]                   # nombre libre: sin aviso
+    duplicado = api.llamar(s, "rename", {"target": ids[0], "new_name": "PIEZA"})
+    assert duplicado["ok"] and any("AMBIGUOUS_REFERENCE" in a for a in duplicado["avisos"])
+    assert ids[1] in next(a for a in duplicado["avisos"] if "AMBIGUOUS" in a)
+    amb = api.llamar(s, "get_physical_properties", {"bodies": ["pieza"]})
+    assert not amb["ok"] and amb["error_kind"] == "AMBIGUOUS_REFERENCE"   # el duplicado de verdad estorba
+
+
+def test_paso_que_no_corta_queda_warning(s):
+    """B-30: un corte que no toca al objetivo deja el paso en warning con el mensaje, no ok en silencio."""
+    cid = ok(api.llamar(s, "create_box", {"length": 20, "width": 20, "height": 5}))["bodies_created"][0]["id"]
+    bid = ok(api.llamar(s, "create_sketch", {"plane": "XY"}))["sketch"]["id"]
+    ok(api.llamar(s, "draw_rectangle", {"origin_x": 300, "origin_y": 300, "width": 5, "height": 5, "sketch": bid}))
+    r = ok(api.llamar(s, "extrude", {"sketch": bid, "distance": 5, "operation": "cut", "target": cid}))
+    paso = [p for p in ok(api.llamar(s, "get_timeline", {}))["steps"] if p["id"] == r["feature"]["id"]][0]
+    assert paso["status"] == "warning" and "no le cortó nada" in paso["message"]

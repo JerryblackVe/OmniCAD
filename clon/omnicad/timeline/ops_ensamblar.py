@@ -162,16 +162,33 @@ def _centro_circular(cara):
 
 def _centro_contorno_exterior(cara):
     """Centro del contorno exterior de una cara plana, sin contar sus agujeros: el centro del círculo si el
-    contorno es circular (disco, arandela) y, si no, el centroide de la región que encierra."""
+    contorno es circular (disco, arandela) o radial partido (semicírculos concéntricos + radios: el agujero
+    pasante partido en dos tapas) y, si no, el centroide de la región que encierra."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.BRepTools import BRepTools
     exterior = BRepTools.OuterWire_s(cara)
     if exterior.IsNull():
         return np.array(refs.firma_cara(cara)["centro"])
     aristas = [refs.firma_arista(a) for a in refs.subformas(exterior, "arista")]
-    if aristas and all(a["geom"] == "circulo" and np.allclose(a["centro"], aristas[0]["centro"], atol=1e-6)
-                       for a in aristas):
-        return np.array(aristas[0]["centro"])
+    circulos = [a for a in aristas if a["geom"] == "circulo"]
+    if circulos and all(np.allclose(c["centro"], circulos[0]["centro"], atol=1e-6) for c in circulos):
+        centro = np.array(circulos[0]["centro"], float)
+        if len(circulos) == len(aristas):
+            return centro
+        radios = [c["radio"] for c in circulos]
+        rmin, rmax = min(radios), max(radios)
+
+        def _radial(h):  # línea con los extremos entre rmin y rmax y la dirección apuntando al centro
+            a, b = (np.array(p, float) for p in h["extremos"])
+            d = b - a
+            medio = (a + b) / 2 - centro
+            n_m = np.linalg.norm(medio)
+            return (rmin - 1e-6 <= np.linalg.norm(a - centro) <= rmax + 1e-6 and
+                    rmin - 1e-6 <= np.linalg.norm(b - centro) <= rmax + 1e-6 and
+                    (n_m < 1e-9 or float(np.linalg.norm(np.cross(d, medio))) < 1e-6 * np.linalg.norm(d) * n_m))
+
+        if all(_radial(a) for a in aristas if a["geom"] != "circulo"):
+            return centro
     region = BRepBuilderAPI_MakeFace(exterior, True)
     return np.array(refs.firma_cara(region.Face() if region.IsDone() else cara)["centro"])
 

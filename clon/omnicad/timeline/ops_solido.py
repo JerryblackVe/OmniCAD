@@ -489,8 +489,8 @@ def repetir_pasos(op, estado, ctx, trsfs):
 
 
 def copiar_cuerpos(op, estado, trsfs):
-    """Copias de los cuerpos de `op.p["cuerpos"]` con cada gp_Trsf de `trsfs`: cuerpos nuevos (heredan aspecto y
-    material) o, con `combinar`, unidas al original."""
+    """Copias de los cuerpos de `op.p["cuerpos"]` con cada gp_Trsf de `trsfs`: cuerpos nuevos (heredan aspecto,
+    material y nombre, con « (copia)») o, con `combinar`, unidas al original."""
     for cid in op.p["cuerpos"]:
         c = estado.cuerpo(cid)
         copias = [_sc().aplicar(c.forma, t) for t in trsfs]
@@ -498,7 +498,7 @@ def copiar_cuerpos(op, estado, trsfs):
             c.forma = geo.unir_todos([c.forma] + copias)
         else:
             for forma in copias:
-                estado.nuevo_cuerpo(op.id, forma, c.tipo, **atributos_copia(c))
+                estado.nuevo_cuerpo(op.id, forma, c.tipo, nombre=f"{c.nombre} (copia)", **atributos_copia(c))
 
 
 class OpPatron(_OpCrear):
@@ -715,7 +715,7 @@ class OpSimetria(_OpCrear):
             if self.p["combinar"]:
                 c.forma = geo.booleano(c.forma, reflejo, "unir")
             else:
-                estado.nuevo_cuerpo(self.id, reflejo, c.tipo, **atributos_copia(c))
+                estado.nuevo_cuerpo(self.id, reflejo, c.tipo, nombre=f"{c.nombre} (copia)", **atributos_copia(c))
 
 
 class OpRellenoContorno(_OpCrear):
@@ -844,9 +844,14 @@ class OpLabio(_OpCrear):
         ents, aristas = _aristas(self.p["aristas"], estado, "las aristas del borde")
         cuerpo = estado.cuerpo(ents[0].cuerpo)
         d = ent.direccion(_resolver(self.p["direccion"], estado)) if self.p["direccion"] else np.array([0, 0, 1.0])
+        antes = geo.volumen(cuerpo.forma)
         cuerpo.forma = _sc().labio_ranura(cuerpo.forma, aristas, -d if self.p["invertir"] else d, tipo=self.p["tipo"],
                                           ancho=ctx.evaluar(self.p["ancho"]), alto=ctx.evaluar(self.p["alto"]),
                                           holgura=ctx.evaluar(self.p["holgura"]))
+        dv = geo.volumen(cuerpo.forma) - antes
+        if abs(dv) <= max(antes, 1.0) * 1e-9:   # un labio que quedó entero dentro no avisa solo (B-62)
+            ctx.aviso(f"{cuerpo.nombre}: el {self.p['tipo']} no cambió el volumen "
+                      "(¿la dirección o el lado lo dejaron dentro de la pared? Probá «Invertir»).")
         self._registrar_usados([cuerpo.id])
 
 

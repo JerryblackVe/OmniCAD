@@ -166,14 +166,16 @@ def rayo_triangulos(origen, direccion, tris):
 
 
 def teselar_cuerpo(forma, deflexion, angular=0.3):
-    """(vértices, normales) de triángulos sueltos para dibujar un cuerpo B-rep o de malla."""
-    if es_malla(forma):
+    """(vǸrtices, normales) de triǭngulos sueltos para dibujar un cuerpo B-rep o de malla."""
+    from ..nucleo import render_cpu as rc
+    if rc.es_malla(forma):
         v = np.asarray(forma.vertices, float)[np.asarray(forma.caras, int)]
         n = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
         largo = np.linalg.norm(n, axis=1, keepdims=True)
         n = n / np.where(largo == 0, 1.0, largo)
         return v.reshape(-1, 3).astype(np.float32), np.repeat(n, 3, axis=0).astype(np.float32)
-    return geo.teselar(forma, deflexion, angular, rehacer=True)    # el detalle elegido manda, aunque haya otra malla
+    # Normales exactas en cada nodo: las promediadas dejaban franjas en las caras B-spline (B-13)
+    return rc.malla_suave(forma, deflexion, angular, rehacer=True)
 
 
 # Detalle «Automático»: la deflexión sigue al tamaño de cada pieza (diagonal de su caja × factor), entre estos topes.
