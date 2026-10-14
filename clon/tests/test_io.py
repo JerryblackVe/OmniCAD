@@ -129,6 +129,16 @@ def test_miembro_del_zip_mas_grande_que_el_tope_no_se_abre(doc, tmp_path, monkey
         proyecto.abrir(bomba)
 
 
+def test_miniatura_mas_grande_que_su_tope_falla(doc, tmp_path, monkeypatch):
+    """BAJO: la miniatura también pasa por el tope (la lee el panel de datos recientes sin abrir el proyecto).
+    Un .omnicad válido con miniatura.png inflada hace fallar leer_miniatura con ErrorProyecto. El tope real
+    es 16 MB: la prueba lo baja a 1 KB."""
+    monkeypatch.setattr(proyecto, "TOPE_MINIATURA", 1024)
+    ruta = proyecto.guardar(doc, tmp_path / "con_mini", miniatura_png=b"\x89PNG\r\n\x1a\n" + b"\0" * 2048)
+    with pytest.raises(proyecto.ErrorProyecto, match="miniatura.png"):
+        proyecto.leer_miniatura(ruta)
+
+
 def test_autoguardado_junto_al_proyecto(doc, tmp_path):
     ruta = proyecto.guardar(doc, tmp_path / "p.omnicad")
     doc.ruta = str(ruta)

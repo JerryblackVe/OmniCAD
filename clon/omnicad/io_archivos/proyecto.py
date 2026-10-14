@@ -46,6 +46,10 @@ VERSION_CACHE = 1
 # Tope de cada miembro del ZIP al abrir un proyecto (512 MB): un .omnicad es un archivo de OTRO (o
 # directamente hostil) y un miembro declarado gigante no puede quedarse con toda la memoria (zip bomb).
 TOPE_MIEMBRO_ZIP = 512 * 1024 * 1024
+# Tope de la miniatura (16 MB): una captura PNG del visor pesa mucho menos que eso, así que un proyecto
+# hostil no necesita el tope general para fallar. `leer_miniatura` la lee sin abrir el proyecto (panel de
+# datos recientes), y sin tope llenaría la memoria igual que cualquier otro miembro.
+TOPE_MINIATURA = 16 * 1024 * 1024
 
 log = logging.getLogger(__name__)
 
@@ -54,12 +58,14 @@ class ErrorProyecto(RuntimeError):
     pass
 
 
-def _leer_miembro(z, nombre):
-    """Lee un miembro del ZIP con tope de tamaño (`TOPE_MIEMBRO_ZIP`): un proyecto hostil (zip bomb) falla
-    con un error claro en vez de quedarse con la memoria."""
-    if z.getinfo(nombre).file_size > TOPE_MIEMBRO_ZIP:
+def _leer_miembro(z, nombre, tope=None):
+    """Lee un miembro del ZIP con tope de tamaño (`TOPE_MIEMBRO_ZIP`, u otro más chico pasado por `tope`):
+    un proyecto hostil (zip bomb) falla con un error claro en vez de quedarse con la memoria."""
+    if tope is None:
+        tope = TOPE_MIEMBRO_ZIP
+    if z.getinfo(nombre).file_size > tope:
         raise ErrorProyecto(f"El miembro «{nombre}» del proyecto pesa {z.getinfo(nombre).file_size} bytes "
-                            f"descomprimidos, más que el tope de {TOPE_MIEMBRO_ZIP}: parece dañado o hostil.")
+                            f"descomprimidos, más que el tope de {tope}: parece dañado o hostil.")
     return z.read(nombre)
 
 
@@ -194,7 +200,7 @@ def abrir(ruta):
 
 def leer_miniatura(ruta):
     with zipfile.ZipFile(ruta) as z:
-        return z.read("miniatura.png") if "miniatura.png" in z.namelist() else None
+        return _leer_miembro(z, "miniatura.png", TOPE_MINIATURA) if "miniatura.png" in z.namelist() else None
 
 
 # ---------------------------------------------------------------- autoguardado
