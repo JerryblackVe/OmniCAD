@@ -64,6 +64,10 @@ def escribir_info(ruta, datos):
     temporal = ruta.with_name(ruta.name + f".{os.getpid()}.tmp")
     temporal.write_text(json.dumps(datos), encoding="utf-8")
     os.replace(temporal, ruta)
+    try:
+        os.chmod(ruta, 0o600)      # el JSON lleva el token: solo el usuario (en Windows chmod casi no aplica)
+    except OSError:
+        pass
 
 
 def borrar_info(ruta, token):

@@ -2,7 +2,9 @@
 """Servidor MCP: cliente en memoria del SDK, stdio REAL (subproceso) y HTTP local REAL."""
 import asyncio
 import base64
+import http.client
 import json
+import os
 import re
 import socket
 import struct
@@ -11,14 +13,18 @@ import sys
 import time
 from pathlib import Path
 
+import httpx2
 import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
+from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
 
 from omnicad import VERSION, api
+from omnicad.api import protocolo_puente as proto
 from omnicad.ejemplo import crear_documento_ejemplo
 from omnicad.servidor_mcp import crear_servidor, main, textos
+from omnicad.servidor_mcp.principal import ExigirBearer
 from omnicad.servidor_mcp.servidor import GRUPOS_POR_DEFECTO
 
 RAIZ = Path(__file__).resolve().parent.parent          # carpeta `clon`
@@ -226,13 +232,25 @@ def _puerto_libre():
         return s.getsockname()[1]
 
 
-def test_http_real_solo_en_127_0_0_1():
+def test_http_real_exige_token_y_solo_escucha_en_127_0_0_1(tmp_path):
+    """En http el acceso exige token (ALTO-01): un pedido sin `Authorization: Bearer` recibe 401 y con el
+    token de mcp_http.json funciona igual que por stdio. El puerto sigue clavado en 127.0.0.1."""
     puerto = _puerto_libre()
     proceso = subprocess.Popen([sys.executable, "-m", "omnicad.servidor_mcp", "--modo", "sin_ventana", "--http",
                                 "--port", str(puerto)],
-                               cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                               cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                               env={**os.environ, "OMNICAD_PUENTE_DIR": str(tmp_path)})
     try:
+        ruta_info = tmp_path / "mcp_http.json"
         limite = time.time() + 60
+        while time.time() < limite:
+            info = proto.leer_info(ruta_info)
+            if info is not None and info.get("port") == puerto:
+                break
+            assert proceso.poll() is None, proceso.stderr.read().decode("utf-8", "replace")
+            time.sleep(0.3)
+        else:
+            pytest.fail("el servidor HTTP no escribió mcp_http.json en 60 s")
         while time.time() < limite:
             try:
                 socket.create_connection(("127.0.0.1", puerto), timeout=1).close()
@@ -242,11 +260,24 @@ def test_http_real_solo_en_127_0_0_1():
                 time.sleep(0.3)
         else:
             pytest.fail("el servidor HTTP no abrió el puerto en 60 s")
+        assert isinstance(info["token"], str) and len(info["token"]) >= 32
+
+        sin_token = http.client.HTTPConnection("127.0.0.1", puerto, timeout=5)
+        sin_token.request("POST", "/mcp", body=b'{"jsonrpc": "2.0"}',
+                          headers={"Content-Type": "application/json"})
+        respuesta = sin_token.getresponse()
+        cuerpo = respuesta.read()
+        assert respuesta.status == 401 and b"UNAUTHORIZED" in cuerpo
 
         async def caso():
-            async with Client(f"http://127.0.0.1:{puerto}/mcp") as c:
-                tools = (await c.list_tools()).tools
-                return len(tools), json_de(await c.call_tool("new_document", {"name": "http"}))
+            cliente_http = httpx2.AsyncClient(headers={"Authorization": f"Bearer {info['token']}"})
+            try:
+                async with Client(streamable_http_client(f"http://127.0.0.1:{puerto}/mcp",
+                                                         http_client=cliente_http)) as c:
+                    tools = (await c.list_tools()).tools
+                    return len(tools), json_de(await c.call_tool("new_document", {"name": "http"}))
+            finally:
+                await cliente_http.aclose()
         cantidad, nuevo = correr(caso())
         assert cantidad == len(api.catalogo(GRUPOS_POR_DEFECTO)) and nuevo["result"]["name"] == "http"
         otra_interfaz = socket.gethostbyname(socket.gethostname())    # la IP de la LAN: NO debe aceptar conexiones
@@ -261,3 +292,36 @@ def test_http_real_solo_en_127_0_0_1():
             proceso.kill()
             proceso.wait(10)
         proceso.stderr.close()
+
+
+def test_el_middleware_http_rechaza_sin_token_y_deja_pasar_con_el_correcto():
+    """`ExigirBearer` solo deja pasar el pedido con el token exacto; ni sin header ni con otro token llega
+    al app (401). Por stdio nada de esto aplica: el que controla stdin ya controla el proceso."""
+    dentro = []
+
+    async def app(scope, receive, send):
+        dentro.append(scope["path"])
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def pedir(authorization):
+        estado = {"status": None, "cuerpo": b""}
+
+        async def receive():
+            return {"type": "http.request"}
+
+        async def send(mensaje):
+            if mensaje["type"] == "http.response.start":
+                estado["status"] = mensaje["status"]
+            estado["cuerpo"] += mensaje.get("body", b"")
+
+        cabeceras = [] if authorization is None else [(b"authorization", authorization.encode("ascii"))]
+        await ExigirBearer(app, "el-token")({"type": "http", "path": "/mcp", "headers": cabeceras,
+                                             "method": "POST"}, receive, send)
+        return estado
+
+    sin, malo, bueno = (asyncio.run(pedir(a)) for a in (None, "Bearer otro-token", "Bearer el-token"))
+    assert sin["status"] == 401 and b"UNAUTHORIZED" in sin["cuerpo"]
+    assert malo["status"] == 401
+    assert bueno["status"] == 200 and bueno["cuerpo"] == b"ok"
+    assert dentro == ["/mcp"]                    # solo el pedido con el token correcto llegó al app

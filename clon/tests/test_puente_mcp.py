@@ -3,6 +3,7 @@
 vivo, el modo auto y el aviso cuando cambia de un modo al otro."""
 import asyncio
 import json
+import os
 import socket
 import threading
 
@@ -93,6 +94,16 @@ def archivo(tmp_path):
 
 def correr(coro):
     return asyncio.run(asyncio.wait_for(coro, 60))
+
+
+# ---------------------------------------------------------------- puente.json / mcp_http.json
+def test_escribir_info_deja_el_json_legible_y_solo_del_usuario(archivo):
+    """escribir_info escribe atómico y legible (BAJO-02). En Unix el JSON queda 0o600 (lleva el token);
+    en Windows chmod casi no aplica: solo se prueba que no rompa la escritura."""
+    proto.escribir_info(archivo, {"port": 1234, "token": "el-token", "pid": 1, "version": "x"})
+    assert proto.leer_info(archivo) == {"port": 1234, "token": "el-token", "pid": 1, "version": "x"}
+    if os.name == "posix":
+        assert archivo.stat().st_mode & 0o777 == 0o600
 
 
 # ---------------------------------------------------------------- cliente

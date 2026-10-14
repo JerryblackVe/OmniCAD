@@ -43,12 +43,24 @@ EXTENSIONES = (EXTENSION, ".fclone")
 FORMATOS_LEGIBLES = (FORMATO, "FusionClone-proyecto")
 VERSION_FORMATO = 1
 VERSION_CACHE = 1
+# Tope de cada miembro del ZIP al abrir un proyecto (512 MB): un .omnicad es un archivo de OTRO (o
+# directamente hostil) y un miembro declarado gigante no puede quedarse con toda la memoria (zip bomb).
+TOPE_MIEMBRO_ZIP = 512 * 1024 * 1024
 
 log = logging.getLogger(__name__)
 
 
 class ErrorProyecto(RuntimeError):
     pass
+
+
+def _leer_miembro(z, nombre):
+    """Lee un miembro del ZIP con tope de tamaño (`TOPE_MIEMBRO_ZIP`): un proyecto hostil (zip bomb) falla
+    con un error claro en vez de quedarse con la memoria."""
+    if z.getinfo(nombre).file_size > TOPE_MIEMBRO_ZIP:
+        raise ErrorProyecto(f"El miembro «{nombre}» del proyecto pesa {z.getinfo(nombre).file_size} bytes "
+                            f"descomprimidos, más que el tope de {TOPE_MIEMBRO_ZIP}: parece dañado o hostil.")
+    return z.read(nombre)
 
 
 def _ahora():
@@ -93,14 +105,14 @@ def _leer_cache(z, receta):
     if "cache/pasos.json" not in z.namelist():
         return None
     try:
-        meta = json.loads(z.read("cache/pasos.json"))
+        meta = json.loads(_leer_miembro(z, "cache/pasos.json"))
         if meta.get("version") != VERSION_CACHE or meta.get("huella") != _huella(receta):
             log.info("La caché del proyecto no corresponde a esta receta o versión: se recalcula todo.")
             return None
         fd, brep = tempfile.mkstemp(suffix=".brep")
         try:
             with os.fdopen(fd, "wb") as f:
-                f.write(z.read("cache/cuerpos.brep"))
+                f.write(_leer_miembro(z, "cache/cuerpos.brep"))
             partes = intercambio.partes_de_brep(brep)
         finally:
             os.remove(brep)
@@ -155,8 +167,8 @@ def abrir(ruta):
             nombres = set(z.namelist())
             if "manifiesto.json" not in nombres or "receta.json" not in nombres:
                 raise ErrorProyecto("El archivo no es un proyecto de OmniCAD (faltan manifiesto o receta).")
-            manifiesto = json.loads(z.read("manifiesto.json"))
-            texto_receta = z.read("receta.json")
+            manifiesto = json.loads(_leer_miembro(z, "manifiesto.json"))
+            texto_receta = _leer_miembro(z, "receta.json")
             receta = json.loads(texto_receta)
             cache = _leer_cache(z, texto_receta)
     except zipfile.BadZipFile:

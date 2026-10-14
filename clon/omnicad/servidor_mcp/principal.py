@@ -1,13 +1,64 @@
 # -*- coding: utf-8 -*-
-"""Línea de comandos del servidor MCP: `omnicad-mcp` o `python -m omnicad.servidor_mcp`."""
+"""Línea de comandos del servidor MCP: `omnicad-mcp` o `python -m omnicad.servidor_mcp`.
+
+En modo `--http` el acceso EXIGE un token: cada arranque genera uno (`secrets.token_urlsafe(32)`) y lo
+escribe en `mcp_http.json` (carpeta de datos del usuario; la variable OMNICAD_PUENTE_DIR la redirige,
+como a `puente.json`). Todo pedido HTTP tiene que llevar el header `Authorization: Bearer <token>` o
+recibe 401: sin eso, cualquier proceso local podría llamar a `execute_code`. Por stdio no hace falta
+token: quien controla la entrada estándar ya controla el proceso.
+"""
 import argparse
+import json
+import os
+import secrets
 import sys
 
 from .. import VERSION, api
+from ..api import protocolo_puente as proto
 from .servidor import GRUPOS_CONOCIDOS, GRUPOS_POR_DEFECTO, MODOS, crear_servidor
 
 HOST = "127.0.0.1"          # fijo a propósito: el servidor HTTP nunca escucha en otra interfaz
 PUERTO_POR_DEFECTO = 27190
+NOMBRE_INFO_HTTP = "mcp_http.json"
+
+
+class ExigirBearer:
+    """Envoltorio ASGI (el app del SDK queda intacto adentro): todo pedido HTTP sin el header
+    `Authorization: Bearer <token>` correcto recibe 401 y nunca llega a las herramientas.
+
+    La comparación va con `secrets.compare_digest` (sin filtraciones por tiempo). Los scopes que no son
+    http (arranque y parada del servidor) pasan tal cual.
+    """
+
+    def __init__(self, app, token):
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            cabeceras = {clave.decode("latin-1").lower(): valor.decode("latin-1")
+                         for clave, valor in scope.get("headers", [])}
+            if not secrets.compare_digest(cabeceras.get("authorization", "").encode("utf-8"),
+                                          f"Bearer {self.token}".encode("utf-8")):
+                cuerpo = json.dumps({"ok": False, "error_kind": "UNAUTHORIZED",
+                                     "mensaje": "Token ausente o incorrecto: mandá el header "
+                                                f"'Authorization: Bearer <token>' (el token está en "
+                                                f"{NOMBRE_INFO_HTTP}, en la carpeta de datos de OmniCAD).",
+                                     "pistas": []}).encode("utf-8")
+                await send({"type": "http.response.start", "status": 401,
+                            "headers": [(b"content-type", b"application/json; charset=utf-8"),
+                                        (b"www-authenticate", b"Bearer")]})
+                await send({"type": "http.response.body", "body": cuerpo})
+                return
+        await self.app(scope, receive, send)
+
+
+def correr_http(servidor, puerto, token, nivel_log):
+    """Sirve por HTTP con el token exigido: lo mismo que `run("streamable-http")` del SDK (uvicorn sobre
+    `streamable_http_app()`), pero con el app envuelto en `ExigirBearer`."""
+    import uvicorn                          # import tardío como en el SDK: el modo stdio no lo necesita
+    app = ExigirBearer(servidor.streamable_http_app(), token)
+    uvicorn.Server(uvicorn.Config(app, host=HOST, port=puerto, log_level=nivel_log.lower())).run()
 
 
 def _parser():
@@ -19,7 +70,9 @@ def _parser():
     p.add_argument("--toolsets", metavar="LISTA", help="grupos de herramientas separados por coma "
                    f"(por defecto: {','.join(GRUPOS_POR_DEFECTO)})")
     p.add_argument("--dev", action="store_true", help="suma el grupo 'dev' (herramientas de desarrollo)")
-    p.add_argument("--http", action="store_true", help=f"servir por HTTP en {HOST} en vez de stdio")
+    p.add_argument("--http", action="store_true", help=f"servir por HTTP en {HOST} en vez de stdio "
+                   f"(exige token: se genera uno por arranque y queda en {NOMBRE_INFO_HTTP}, "
+                   "en la carpeta de datos)")
     p.add_argument("--port", type=int, help=f"puerto del modo --http (por defecto {PUERTO_POR_DEFECTO})")
     p.add_argument("--log-level", default="WARNING", choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                    help="nivel de log (siempre a stderr)")
@@ -63,8 +116,18 @@ def main(argv=None):
     try:
         if args.http:
             puerto = args.port or PUERTO_POR_DEFECTO
-            _log(f"omnicad-mcp {VERSION}: {len(servidor.nombres)} herramientas en http://{HOST}:{puerto}/mcp, modo {modo}")
-            servidor.run("streamable-http", host=HOST, port=puerto)
+            token = secrets.token_urlsafe(32)
+            ruta_info = proto.carpeta_info() / NOMBRE_INFO_HTTP
+            proto.escribir_info(ruta_info, {"port": puerto, "token": token, "pid": os.getpid(),
+                                            "version": VERSION})
+            _log(f"omnicad-mcp {VERSION}: {len(servidor.nombres)} herramientas en http://{HOST}:{puerto}/mcp, "
+                 f"modo {modo}")
+            _log(f"omnicad-mcp: el HTTP exige token (header 'Authorization: Bearer <token>'); "
+                 f"está en {ruta_info}")
+            try:
+                correr_http(servidor, puerto, token, args.log_level)
+            finally:
+                proto.borrar_info(ruta_info, token)       # solo si sigue siendo el nuestro
         else:
             _log(f"omnicad-mcp {VERSION}: {len(servidor.nombres)} herramientas por stdio, modo {modo}")
             servidor.run("stdio")

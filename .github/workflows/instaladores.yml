@@ -23,6 +23,44 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Escaneo de secretos
+        # Sin actions de terceros: Python puro sobre los archivos trackeados. Falsos positivos conocidos:
+        # el token de mentira "no-es-el-token" (clon/tests/test_puente.py) y las contraseñas de los tests.
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re, subprocess, sys
+          PATRONES = [
+              ("clave de Stripe", r"sk_live_[A-Za-z0-9]{16,}"),
+              ("clave de acceso de AWS", r"AKIA[0-9A-Z]{16}"),
+              ("clave de API de Google", r"AIza[0-9A-Za-z_\-]{35}"),
+              ("token de GitHub", r"ghp_[0-9A-Za-z]{36}"),
+              ("token de Slack", r"xox[baprs]-[0-9A-Za-z\-]{10,}"),
+              ("clave privada", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
+              ("contraseña hardcodeada", r"(?i)password\s*=\s*['\"][^'\"$]{8,}['\"]"),
+          ]
+          archivos = subprocess.run(["git", "ls-files"], capture_output=True, text=True).stdout.splitlines()
+          hallados = []
+          for archivo in archivos:
+              try:
+                  texto = open(archivo, encoding="utf-8", errors="ignore").read()
+              except OSError:
+                  continue
+              ruta = archivo.replace("\\", "/")
+              es_test = "/tests/" in ruta or "/test_" in ruta or ruta.startswith("tests/")
+              for n, linea in enumerate(texto.splitlines(), 1):
+                  if "no-es-el-token" in linea:            # falso positivo conocido (test_puente.py)
+                      continue
+                  for nombre, patron in PATRONES:
+                      if nombre == "contraseña hardcodeada" and es_test:  # en los tests hay claves de mentira
+                          continue
+                      if re.search(patron, linea):
+                          hallados.append(f"{archivo}:{n}: {nombre}: {linea.strip()[:100]}")
+          if hallados:
+              print("\n".join(hallados))
+              sys.exit(1)
+          print(f"Escaneo de secretos: 0 hallazgos en {len(archivos)} archivos.")
+          PY
       - name: Dependencias
         run: |
           python -m venv clon/.venv

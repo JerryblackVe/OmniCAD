@@ -112,6 +112,23 @@ def test_proyecto_invalido(tmp_path):
         proyecto.abrir(malo)
 
 
+def test_miembro_del_zip_mas_grande_que_el_tope_no_se_abre(doc, tmp_path, monkeypatch):
+    """Zip bomb (BAJO-03): un .omnicad válido con un miembro que declara más que el tope hace fallar
+    abrir con un error claro, sin leer el miembro. El tope real es 512 MB: la prueba lo baja a 1 MB."""
+    monkeypatch.setattr(proyecto, "TOPE_MIEMBRO_ZIP", 1024 * 1024)
+    ruta = proyecto.guardar(doc, tmp_path / "bomba")
+    with zipfile.ZipFile(ruta) as z:
+        entradas = {n: z.read(n) for n in z.namelist()}
+    receta = json.loads(entradas["receta.json"])
+    receta["relleno"] = "x" * (1024 * 1024)               # receta.json pasa el tope; el resto es válido
+    bomba = tmp_path / "bomba2.omnicad"
+    with zipfile.ZipFile(bomba, "w", zipfile.ZIP_DEFLATED) as z:
+        for n, datos in entradas.items():
+            z.writestr(n, json.dumps(receta).encode("utf-8") if n == "receta.json" else datos)
+    with pytest.raises(proyecto.ErrorProyecto, match="receta.json"):
+        proyecto.abrir(bomba)
+
+
 def test_autoguardado_junto_al_proyecto(doc, tmp_path):
     ruta = proyecto.guardar(doc, tmp_path / "p.omnicad")
     doc.ruta = str(ruta)

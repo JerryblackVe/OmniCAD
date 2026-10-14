@@ -31,6 +31,23 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - Para replicar un comando de otro programa, mirá su documentación pública y el análisis de
   `analisis auto/`, y replicá sus opciones y su comportamiento.
 
+## Seguridad
+- Nunca commitear secretos (tokens, claves, contraseñas): van en variables de entorno; `.env*` ya está
+  en `.gitignore`. Si un secreto se subió por accidente, avisalo: hay que revocarlo (borrarlo del
+  historial no alcanza).
+- Validar toda entrada de archivo: un `.omnicad` (o un STEP/SVG/DXF importado) es un archivo de OTRO:
+  tope de tamaño por miembro del ZIP (`io_archivos/proyecto.py` › `TOPE_MIEMBRO_ZIP`) y nunca
+  `extractall` con rutas sin sanear.
+- Lo que manda un agente o un archivo no llega a `eval`/`exec` fuera de los lugares designados.
+  `execute_code` es una excepción BY DESIGN: corre con transacción atómica, timeout y en UN hilo —
+  no le armes caminos que salteen eso.
+- El servidor MCP con `--http` y el puente en vivo escuchan SOLO en 127.0.0.1 y exigen token
+  (`mcp_http.json` / `puente.json`): no los expongas a la red, no los reenvíes ni los loguees.
+- Al tocar el arranque del servidor o el protocolo de red, dejá el test que pruebe el rechazo sin
+  token (patrón: `tests/test_servidor_mcp.py`).
+- Subir solo con la CI verde: ruff, pytest y el escaneo de secretos del workflow (nada se empuja
+  «para ver si anda»).
+
 ## Mapa de carpetas
 | Ruta | Qué hay |
 |---|---|
