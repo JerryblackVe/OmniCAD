@@ -32,6 +32,9 @@ from . import acis_occ, sab, zstd_puro
 
 CARPETA_BREPS = "Breps.BlobParts/"
 CARAS_MAX_VERIFICAR = 5000        # cuerpos más grandes no se verifican (BRepCheck tarda segundos en ellos)
+# Tope de cada miembro del ZIP de un .f3d/.f3z (512 MB): un archivo hostil (zip bomb, con cualquier método de
+# compresión) falla con un error claro en vez de quedarse con la memoria al leerse.
+TOPE_MIEMBRO_F3D = 512 * 1024 * 1024
 
 
 class ErrorF3D(ValueError):
@@ -122,6 +125,9 @@ def _sin_repetidos(leidos):
 
 def miembro(datos, info):
     """Bytes descomprimidos de un miembro del ZIP. El método 93 (Zstandard) lo descomprime `zstd_puro`."""
+    if info.file_size > TOPE_MIEMBRO_F3D:
+        raise ErrorF3D(f"El miembro «{info.filename}» del archivo pesa {info.file_size} bytes descomprimidos, "
+                       f"más que el tope de {TOPE_MIEMBRO_F3D}: parece dañado o hostil (zip bomb).")
     if info.compress_type != zstd_puro.METODO_ZIP_ZSTD:
         with zipfile.ZipFile(io.BytesIO(datos)) as z:
             return z.read(info)

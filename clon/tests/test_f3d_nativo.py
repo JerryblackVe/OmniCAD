@@ -357,6 +357,15 @@ def test_f3d_sin_geometria_o_danado(tmp_path):
         f3d_nativo.leer(roto)
 
 
+def test_f3d_hostil_miembro_mas_grande_que_el_tope_falla(tmp_path, monkeypatch):
+    """Zip bomb (BAJO): un .f3d con un bloque que declara más que el tope falla con ErrorF3D claro, sin
+    descomprimir el miembro a la RAM. El tope real es 512 MB: la prueba lo baja a 1 KB."""
+    monkeypatch.setattr(f3d_nativo, "TOPE_MIEMBRO_F3D", 1024)
+    f3d = _zip_f3d(tmp_path / "hostil.f3d", [(_CARPETA + "BREP.grande.smbh", b"g" * 2048)])
+    with pytest.raises(f3d_nativo.ErrorF3D, match="hostil"):
+        f3d_nativo.leer(f3d)
+
+
 def test_f3z_toma_el_diseno_principal(tmp_path):
     principal = _zip_f3d(tmp_path / "principal.f3d", [(_CARPETA + "BREP.a.smbh", _sab(_sab_cubo().r))])
     otro = _zip_f3d(tmp_path / "otro.f3d", [(_CARPETA + "BREP.b.smbh", _sab(_sab_cilindro().r))])

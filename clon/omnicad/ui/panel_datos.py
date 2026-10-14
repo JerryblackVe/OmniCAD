@@ -34,7 +34,8 @@ class _Tarjeta(QWidget):
             datos = proyecto.leer_miniatura(ruta)
             if datos:
                 pm.loadFromData(datos)
-        except (OSError, zipfile.BadZipFile, KeyError):
+        # ErrorProyecto: la miniatura supera su tope (proyecto hostil) — la tarjeta muestra el ícono igual.
+        except (OSError, zipfile.BadZipFile, KeyError, proyecto.ErrorProyecto):
             pass
         mini.setPixmap(pm.scaled(62, 62, Qt.KeepAspectRatio, Qt.SmoothTransformation) if not pm.isNull()
                        else icono("componente").pixmap(40, 40))

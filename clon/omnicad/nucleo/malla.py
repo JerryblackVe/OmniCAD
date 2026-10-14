@@ -667,6 +667,22 @@ _RELS_3MF = ('<?xml version="1.0" encoding="UTF-8"?>\n'
              'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
 _NS_3MF = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 
+# Tope de cada miembro del ZIP al abrir un .3mf (512 MB): el archivo es de OTRO (o hostil) y un miembro
+# declarado gigante no puede quedarse con toda la memoria (zip bomb). Misma idea que TOPE_MIEMBRO_ZIP del
+# proyecto .omnicad, pero nucleo/ no conoce ErrorProyecto: falla con geo.ErrorGeometria, como el resto
+# de los errores de formato de este módulo.
+TOPE_MIEMBRO_3MF = 512 * 1024 * 1024
+
+
+def _leer_miembro_3mf(z, nombre):
+    """Lee un miembro del ZIP del 3MF con tope (`TOPE_MIEMBRO_3MF`): un archivo hostil falla con un
+    error claro en vez de descomprimir una zip bomb en la RAM."""
+    if z.getinfo(nombre).file_size > TOPE_MIEMBRO_3MF:
+        raise geo.ErrorGeometria(f"El miembro «{nombre}» del 3MF pesa {z.getinfo(nombre).file_size} bytes "
+                                 f"descomprimidos, más que el tope de {TOPE_MIEMBRO_3MF}: el archivo parece "
+                                 "dañado o hostil.")
+    return z.read(nombre)
+
 
 def escribir_3mf(m, ruta, *, unidades="mm"):
     """Guardar como 3MF [MESH-SAVE-AS-MESH]: un objeto malla, unidad declarada en el archivo."""
@@ -700,10 +716,10 @@ def leer_3mf(ruta, *, unidades=None):
         with zipfile.ZipFile(ruta) as z:
             nombre = "3D/3dmodel.model"
             if "_rels/.rels" in z.namelist():
-                for r in ET.fromstring(z.read("_rels/.rels")).iter():
+                for r in ET.fromstring(_leer_miembro_3mf(z, "_rels/.rels")).iter():
                     if r.get("Type", "").endswith("/3dmodel") and r.get("Target"):
                         nombre = r.get("Target").lstrip("/")
-            raiz = ET.fromstring(z.read(nombre))
+            raiz = ET.fromstring(_leer_miembro_3mf(z, nombre))
     except (zipfile.BadZipFile, KeyError, ET.ParseError) as e:
         raise geo.ErrorGeometria(f"El archivo no es un 3MF válido: {e}") from e
     ns = raiz.tag[1:].split("}")[0] if raiz.tag.startswith("{") else ""

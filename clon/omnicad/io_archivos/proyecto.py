@@ -161,11 +161,6 @@ def guardar(doc, ruta, miniatura_png=None, incluir_cache=True):
     return ruta
 
 
-def leer_manifiesto(ruta):
-    with zipfile.ZipFile(ruta) as z:
-        return json.loads(z.read("manifiesto.json"))
-
-
 def abrir(ruta):
     ruta = Path(ruta)
     try:

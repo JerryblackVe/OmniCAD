@@ -17,6 +17,7 @@ from omnicad.restricciones import Boceto
 from omnicad.timeline import documento
 from omnicad.timeline.documento import Documento, ErrorDocumento
 from omnicad.timeline.operaciones import ErrorOperacion, OpBoceto, OpCombinar, OpImportarSTEP, OpPrimitiva
+from omnicad.ui import panel_datos
 
 
 @pytest.fixture(scope="module")
@@ -137,6 +138,19 @@ def test_miniatura_mas_grande_que_su_tope_falla(doc, tmp_path, monkeypatch):
     ruta = proyecto.guardar(doc, tmp_path / "con_mini", miniatura_png=b"\x89PNG\r\n\x1a\n" + b"\0" * 2048)
     with pytest.raises(proyecto.ErrorProyecto, match="miniatura.png"):
         proyecto.leer_miniatura(ruta)
+
+
+def test_tarjeta_del_panel_no_crasha_con_proyecto_hostil(tmp_path, monkeypatch):
+    """El panel de datos recientes: si leer_miniatura levanta ErrorProyecto (miniatura que supera su tope,
+    proyecto hostil) la tarjeta no propaga la excepción — muestra el ícono por defecto."""
+    from PySide6.QtWidgets import QApplication
+    _ = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(proyecto, "leer_miniatura", lambda ruta: (_ for _ in ()).throw(
+        proyecto.ErrorProyecto("miniatura hostil")))
+    hostil = tmp_path / "hostil.omnicad"
+    hostil.write_bytes(b"PK fake")                    # la tarjeta además lee la fecha de modificación
+    tarjeta = panel_datos._Tarjeta(hostil)
+    assert tarjeta is not None
 
 
 def test_autoguardado_junto_al_proyecto(doc, tmp_path):

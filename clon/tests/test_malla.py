@@ -103,6 +103,22 @@ def test_3mf_sin_perdida_y_unidad_del_archivo(tmp_path, esfera):
     assert ml.leer(tmp_path / "c.3mf", unidades="mm").volumen() == pytest.approx(1.0)
 
 
+def test_3mf_hostil_miembro_mas_grande_que_el_tope_no_se_lee(tmp_path, monkeypatch):
+    """Zip bomb (BAJO): un .3mf con un miembro que declara más que el tope falla con ErrorGeometria, sin
+    leer el miembro a la RAM. El tope real es 512 MB: la prueba lo baja a 64 KB."""
+    monkeypatch.setattr(ml, "TOPE_MIEMBRO_3MF", 64 * 1024)
+    ml.escribir_3mf(cubo(), tmp_path / "sano.3mf")
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "sano.3mf") as z:
+        entradas = {n: z.read(n) for n in z.namelist()}
+    entradas["3D/3dmodel.model"] += b"<!--" + b"x" * (128 * 1024) + b"-->"
+    with zipfile.ZipFile(tmp_path / "hostil.3mf", "w") as z:
+        for n, datos in entradas.items():
+            z.writestr(n, datos)
+    with pytest.raises(g.ErrorGeometria, match="3dmodel.model"):
+        ml.leer_3mf(tmp_path / "hostil.3mf")
+
+
 def test_ply_binario_y_ascii(tmp_path, esfera):
     for binario in (True, False):
         ruta = tmp_path / f"e{binario}.ply"
