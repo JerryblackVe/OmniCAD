@@ -63,7 +63,12 @@ def estados(res):
 
 
 def instantanea(carpeta):
-    return {str(p.relative_to(carpeta)): p.read_bytes() for p in sorted(carpeta.rglob("*")) if p.is_file()}
+    # Se excluyen __pycache__ y *.pyc: son caches de bytecode que el intérprete genera en el
+    # árbol fuente cuando la suite importa el complemento (p. ej. test_abrir_externo); el
+    # instalador (cmd_setup._archivos) no los copia, y el contenido FUENTE se sigue comparando
+    # byte a byte, así que el test no se debilita.
+    return {str(p.relative_to(carpeta)): p.read_bytes() for p in sorted(carpeta.rglob("*"))
+            if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"}
 
 
 ENTRADA_OPENCODE = {"type": "local", "command": [PYTHON, "-m", "omnicad.servidor_mcp"], "enabled": True,
