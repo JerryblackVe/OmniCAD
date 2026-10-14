@@ -1,0 +1,3 @@
+# Dependencias de desarrollo (tests y lint); el instalador no las incluye (instalador/omnicad.spec las excluye).
+pytest==9.1.1
+ruff==0.16.10

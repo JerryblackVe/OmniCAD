@@ -1,17 +1,39 @@
 # Arma los instaladores de OmniCAD (Windows .exe y Linux AppImage) con instalador/armar.py.
 # - Al subir una etiqueta de versión (git tag v0.1.0 && git push origin v0.1.0): los arma y los publica en GitHub Releases.
 # - A mano (pestaña Actions › Instaladores › Run workflow): los arma y los deja como artefactos, sin publicar nada.
+# - En cada pull request: corre los tests del job «test» (los instaladores se arman como artefactos, sin publicar nada).
 name: Instaladores
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read    # solo el job «publicar» necesita escribir
 
 jobs:
+  test:
+    # Corre ruff y pytest (AGENTS.md › Cómo verificar) antes de armar o publicar nada.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencias
+        run: |
+          python -m venv clon/.venv
+          clon/.venv/Scripts/python.exe -m pip install -r clon/requirements.txt -r clon/requirements-dev.txt
+      - name: Ruff
+        run: .venv/Scripts/python.exe -m ruff check .
+        working-directory: clon    # el criterio vive en clon/pyproject.toml › [tool.ruff.lint]
+      - name: Tests
+        run: .venv/Scripts/python.exe -m pytest tests -q
+        working-directory: clon    # AGENTS.md › Cómo verificar: todo se corre desde clon/
+
   windows:
     runs-on: windows-latest
     steps:
@@ -61,14 +83,16 @@ jobs:
 
   publicar:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, linux]
+    needs: [test, windows, linux]
+    permissions:
+      contents: write    # crear la Release de GitHub
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: instaladores
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298a4eeaf626c5b8d85266b0e65    # v2, pineada al SHA (git ls-remote refs/tags/v2)
         with:
           files: instaladores/*
           generate_release_notes: true

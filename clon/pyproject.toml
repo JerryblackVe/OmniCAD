@@ -28,3 +28,6 @@ include = ["omnicad*"]
 "omnicad.api" = ["guia/*.md"]
 "omnicad" = ["integraciones/fusion/OmniCADPuente/*",   # complemento de Fusion (omnicad setup)
              "recursos/*"]                             # ícono y portada
+
+[tool.ruff.lint]
+select = ["F", "B023", "B905"]   # el criterio de AGENTS.md › Cómo verificar; `ruff check .` lo toma de acá

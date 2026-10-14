@@ -23,6 +23,9 @@ evidencias/
 # Instrucciones locales de cada máquina
 CLAUDE.local.md
 
+# Secretos locales (variables de entorno): nunca se publican
+.env*
+
 # Instaladores armados (instalador/README.md): se publican en GitHub Releases, no en el repo
 /instalador/build/
 /instalador/dist/

@@ -62,11 +62,12 @@ Desde `clon/`, con el Python del venv: `.venv/Scripts/python.exe` en Windows, `.
 ## Cómo verificar
 Desde `clon/` (shell Bash; en Linux, `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`):
 ```
-.venv/Scripts/python.exe -m ruff check --select F,B023,B905 .
+.venv/Scripts/python.exe -m ruff check .
 .venv/Scripts/python.exe -m pytest -q
 PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe OmniCAD.py --prueba-humo
 ```
-Sin `--select`, ruff muestra cientos de avisos de estilo viejos que NO son el criterio.
+El criterio de ruff (F, B023, B905) vive en `clon/pyproject.toml` › `[tool.ruff.lint]`: `ruff check .` lo
+toma solo de ahí, sin `--select`.
 **Memoria:** la suite completa y la prueba de humo (abren ventanas OpenGL) usan mucha memoria: se corren de a
 UNA a la vez. Si sos uno de varios agentes en paralelo, corré solo tus archivos de test; la suite completa y la
 humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB). Con varios agentes, cada
