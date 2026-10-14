@@ -4,18 +4,13 @@ from ...timeline.ops_malla import (OpCombinarMallas, OpConvertirMalla, OpCortarP
                                    OpGruposCaras, OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar,
                                    OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits
+from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Opciones, Seleccion, exigir,
+                       hit_desde_ref, hits_cuerpos as _hits)
 from . import registrar
 
 
 def _ids(lista):
     return [h["ref"]["cuerpo"] for h in lista or [] if h["ref"].get("tipo") == "cuerpo"]
-
-
-def _hits(ids, estado):
-    if isinstance(ids, str):
-        ids = [ids] if ids else []
-    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
 
 
 def _mallas(ctx):

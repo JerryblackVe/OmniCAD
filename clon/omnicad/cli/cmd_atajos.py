@@ -3,7 +3,6 @@
 herramientas del catálogo (new_document, save_document, get_scene_info, export, get_viewport_image,
 execute_code) o a la que diga cada paso del batch."""
 import json
-import re
 from pathlib import Path
 
 from . import util
@@ -34,15 +33,8 @@ def exportar(ns):
     return correr("export", args, ns.archivo, ns.json, guardar=False)
 
 
-def _tamano(texto):
-    m = re.fullmatch(r"(\d+)[xX](\d+)", texto.strip())
-    if not m:
-        raise util.UsoError(f"--size tiene que ser ANCHOxALTO (p. ej. 800x600), no '{texto}'.")
-    return int(m.group(1)), int(m.group(2))
-
-
 def render(ns):
-    ancho, alto = _tamano(ns.size)
+    ancho, alto = util.tamano(ns.size)
     if Path(ns.salida).suffix.lower() != ".png":
         raise util.UsoError(f"La salida de render tiene que ser un .png, no '{ns.salida}'.")
     vistas = util.exigir_herramienta("get_viewport_image", util.indice_catalogo())["esquema"]["properties"]["view"]

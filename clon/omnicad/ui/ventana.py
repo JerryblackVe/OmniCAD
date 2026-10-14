@@ -35,6 +35,7 @@ from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
 from . import formato, temas
+from .medidas import NOMBRES as _NOMBRES_ENTIDAD
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
@@ -1420,9 +1421,8 @@ class VentanaPrincipal(QMainWindow):
             item.funcion()
 
     # ------------------------------------------------------------ "Seleccionar otro" (pulsación larga)
-    NOMBRES_ENTIDAD = {"cara": "Cara", "arista": "Arista", "vertice": "Vértice", "cuerpo": "Cuerpo", "perfil": "Perfil",
-                       "curva_boceto": "Curva de boceto", "punto_boceto": "Punto de boceto", "plano": "Plano",
-                       "eje": "Eje", "punto": "Punto", "boceto": "Boceto"}
+    # La tabla de verdad es medidas.NOMBRES (singular y plural); acá quedan solo los singulares.
+    NOMBRES_ENTIDAD = {k: v[0] for k, v in _NOMBRES_ENTIDAD.items()}
 
     def nombre_entidad(self, hit):
         """Texto para la lista de "Seleccionar otro": "Cara (Cuerpo1)", "Plano XY", "Perfil (Boceto1)"…"""

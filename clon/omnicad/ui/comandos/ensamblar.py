@@ -5,16 +5,12 @@ from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (MOVIMIENTOS, TIPOS_UNION, OpComponente, OpGrupoRigido, OpOrigenUnion,
                                        OpUnion, OpVinculoMovimiento, componente_por_ref)
 from ...timeline.parametros import ANGULO
-from ..comando import Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits, ref1
+from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits_cuerpos as _hits_cuerpos, ref1)
 from . import registrar
 
 SNAP = {"cara", "arista", "vertice", "plano", "eje", "punto", "curva_boceto"}
 EJES = {"Z": "Z", "X": "X", "Y": "Y"}
 CLAVES = {"centro": "Centro / punto medio", "inicio": "Inicio (arista o cilindro)", "fin": "Fin (arista o cilindro)"}
-
-
-def _hits_cuerpos(ids, estado):
-    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
 
 
 def _version(ctx, clase, clave):

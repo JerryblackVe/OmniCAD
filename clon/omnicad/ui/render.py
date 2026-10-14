@@ -39,12 +39,12 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QToolButton, QTreeWidget,
                                QTreeWidgetItem, QVBoxLayout, QWidget)
 
-from .. import NOMBRE_APP, VERSION
+from .. import NOMBRE_APP
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
 from ..timeline.operaciones import propiedades_cuerpo
 from . import temas
-from .cinta import ESPACIOS
+from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
 from .iconos import icono
 from .superposiciones import AreaVisor
 from ..nucleo.render_cpu import color_y_acabado, malla_suave  # noqa: F401 — se re-exportan (tests, animación)
@@ -1234,41 +1234,10 @@ class CintaEspacio(QWidget):
         lay.addLayout(derecha, 1)
 
     def _accion(self, ref):
-        if isinstance(ref, str):
-            return self.acciones[ref]
-        a = QAction(ref[0], self)
-        a.setEnabled(False)
-        a.setToolTip(f"<b>{ref[0]}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
-        self.no_disponibles.append(a)
-        return a
+        return accion_secundaria(self, self.acciones, self.no_disponibles, ref)
 
     def _grupo(self, titulo, rapidos, items):
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(2, 2, 2, 0)
-        v.setSpacing(0)
-        botones = QHBoxLayout()
-        botones.setSpacing(2)
-        for clave in rapidos:
-            b = QToolButton()
-            b.setDefaultAction(self._accion(clave))
-            b.setIconSize(QSize(30, 30))
-            b.setFixedSize(38, 38)
-            b.setToolButtonStyle(Qt.ToolButtonIconOnly)
-            botones.addWidget(b)
-        v.addLayout(botones)
-        t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾")
-        t.setPopupMode(QToolButton.InstantPopup)
-        m = QMenu(t)
-        m.setToolTipsVisible(True)
-        for it in items:
-            if it == SEP:
-                m.addSeparator()
-            else:
-                m.addAction(self._accion(it))
-        t.setMenu(m)
-        v.addWidget(t, 0, Qt.AlignHCenter)
-        return w
+        return grupo_secundario(self, self.acciones, self.no_disponibles, titulo, rapidos, items)
 
 
 class PanelFlotante(QFrame):
@@ -1780,6 +1749,12 @@ GRUPOS_RENDER = [
 ]
 
 
+def _resaltar_cuerpos(lienzo, seleccion):
+    """Resalta los cuerpos elegidos en el lienzo (capa «seleccion» semitransparente); lo usan RENDER y ANIMACIÓN."""
+    prims = [("tris", m["v"], None, 0.30) for m in lienzo._mallas if m["id"] in seleccion]
+    lienzo.set_capa("seleccion", prims)
+
+
 class _Oyente:
     """Suscripción al documento que no mantiene viva la ventana (el documento no tiene «desuscribir»)."""
 
@@ -1922,8 +1897,7 @@ class VentanaRender(QMainWindow):
             self.indicar(f"Seleccionado: {nombres}")
 
     def _resaltar(self):
-        prims = [("tris", m["v"], None, 0.30) for m in self.lienzo._mallas if m["id"] in self.seleccion]
-        self.lienzo.set_capa("seleccion", prims)
+        _resaltar_cuerpos(self.lienzo, self.seleccion)
 
     def aplicar_aspecto(self, nombre, ids=None):
         """Aplica un aspecto de la biblioteca a los cuerpos (todos si `ids` está vacío)."""

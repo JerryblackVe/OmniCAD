@@ -28,8 +28,7 @@ from OCP.GeomAbs import (GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs
                          GeomAbs_Sphere, GeomAbs_Torus)
 from OCP.GProp import GProp_GProps
 from OCP.IntTools import IntTools_FClass2d
-from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-                                 IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
+from OCP.OCP.collections import IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
 from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_OUT, TopAbs_REVERSED, TopAbs_VERTEX,
                         TopAbs_WIRE)
 from OCP.TopExp import TopExp, TopExp_Explorer
@@ -209,10 +208,7 @@ def _largo(forma):
     return p.Mass()
 
 
-def _aristas_unicas(forma):
-    mapa = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
-    TopExp.MapShapes_s(forma, TopAbs_EDGE, mapa)
-    return [TopoDS.Edge(mapa.FindKey(i)) for i in range(1, mapa.Size() + 1)]
+_aristas_unicas = geo._aristas_unicas
 
 
 # ---------------------------------------------------------------- medir

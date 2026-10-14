@@ -27,8 +27,6 @@ from ..nucleo import referencias as refs
 from ..nucleo.perfiles import aristas_boceto, buscar_por_firma_tolerante
 
 EJES_ORIGEN = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0)}
-NOMBRES_ORIGEN = {"XY": "Plano XY", "XZ": "Plano XZ", "YZ": "Plano YZ", "X": "Eje X", "Y": "Eje Y", "Z": "Eje Z",
-                  "O": "Origen"}
 
 
 class ErrorReferencia(RuntimeError):

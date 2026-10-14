@@ -208,6 +208,13 @@ def hits(refs_lista, estado):
     return [hit_desde_ref(r, estado) for r in (refs_lista or []) if r]
 
 
+def hits_cuerpos(ids, estado):
+    """Selecciones de cuerpo a partir de sus ids (un id suelto o una lista): lo mismo que elige el usuario."""
+    if isinstance(ids, str):
+        ids = [ids] if ids else []
+    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
+
+
 def acepta(filtros, hit):
     """¿La selección `hit` sirve para un campo con estos filtros? (misma regla que el visor)."""
     t, ref = hit.get("tipo"), hit.get("ref") or {}

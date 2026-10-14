@@ -20,7 +20,7 @@ import os
 import weakref
 
 import numpy as np
-from PySide6.QtCore import QMarginsF, QPointF, QRectF, QSize, QSizeF, Qt, QTimer, Signal
+from PySide6.QtCore import QMarginsF, QPointF, QRectF, QSizeF, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPageLayout,
                            QPageSize, QPainter, QPainterPath, QPdfWriter, QPen, QPixmap, QPolygonF)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
@@ -33,7 +33,7 @@ from ..io_archivos import dxf
 from ..nucleo import dibujo as nd
 from ..nucleo.geometria import ErrorGeometria
 from . import temas
-from .cinta import ESPACIOS
+from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
 
 FONDO_LIENZO = "#a3a3a3"
 COLOR_PREVIA = QColor("#1f7fd0")
@@ -527,41 +527,10 @@ class CintaDibujo(QWidget):
         lay.addLayout(derecha, 1)
 
     def _accion(self, ref):
-        if isinstance(ref, str):
-            return self.acciones[ref]
-        a = QAction(ref[0], self)
-        a.setEnabled(False)
-        a.setToolTip(f"<b>{ref[0]}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
-        self.no_disponibles.append(a)
-        return a
+        return accion_secundaria(self, self.acciones, self.no_disponibles, ref)
 
     def _grupo(self, titulo, rapidos, items):
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(2, 2, 2, 0)
-        v.setSpacing(0)
-        botones = QHBoxLayout()
-        botones.setSpacing(2)
-        for clave in rapidos:
-            b = QToolButton()
-            b.setDefaultAction(self.acciones[clave])
-            b.setIconSize(QSize(30, 30))
-            b.setFixedSize(38, 38)
-            b.setToolButtonStyle(Qt.ToolButtonIconOnly)
-            botones.addWidget(b)
-        v.addLayout(botones)
-        t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾")
-        t.setPopupMode(QToolButton.InstantPopup)
-        m = QMenu(t)
-        m.setToolTipsVisible(True)
-        for it in items:
-            if it == SEP:
-                m.addSeparator()
-            else:
-                m.addAction(self._accion(it))
-        t.setMenu(m)
-        v.addWidget(t, 0, Qt.AlignHCenter)
-        return w
+        return grupo_secundario(self, self.acciones, self.no_disponibles, titulo, rapidos, items)
 
 
 # =============================================================== vista de la hoja (zoom y encuadre)

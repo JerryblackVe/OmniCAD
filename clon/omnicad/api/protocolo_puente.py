@@ -34,9 +34,10 @@ PEDIDOS_ESPECIALES = ("ping", "status")
 VARIABLE_CARPETA = "OMNICAD_PUENTE_DIR"
 
 
-def carpeta_info():
-    """Carpeta de `puente.json`: OMNICAD_PUENTE_DIR o %LOCALAPPDATA%/OmniCAD (por usuario)."""
-    propia = os.environ.get(VARIABLE_CARPETA)
+def carpeta_info(variable=VARIABLE_CARPETA):
+    """Carpeta del archivo del puente (`puente.json`): `variable` del entorno o %LOCALAPPDATA%/OmniCAD.
+    También la usa el puente con Fusion (`io_archivos/puente_fusion.py`, con su propia variable)."""
+    propia = os.environ.get(variable)
     if propia:
         return Path(propia)
     return carpeta_datos()
@@ -46,13 +47,13 @@ def ruta_info():
     return carpeta_info() / "puente.json"
 
 
-def leer_info(ruta=None):
+def leer_info(ruta=None, clave_puerto="port"):
     """Datos de `puente.json` ({port, token, pid, version, protocol}) o None si no hay o está dañado."""
     try:
         datos = json.loads(Path(ruta or ruta_info()).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if not isinstance(datos, dict) or not isinstance(datos.get("port"), int) or not isinstance(datos.get("token"), str):
+    if not isinstance(datos, dict) or not isinstance(datos.get(clave_puerto), int) or not isinstance(datos.get("token"), str):
         return None
     return datos
 

@@ -56,10 +56,7 @@ def _unitario(v, que="La dirección"):
     return v / n
 
 
-def _rotar(v, eje, angulo_rad):
-    """Rotación de Rodrigues de v alrededor del eje unitario."""
-    c, s = math.cos(angulo_rad), math.sin(angulo_rad)
-    return v * c + np.cross(eje, v) * s + eje * float(eje @ v) * (1 - c)
+_rotar = geo._rotar       # rotación de Rodrigues: compartida con nucleo/superficies.py
 
 
 def _tipo(entidad, tipo):

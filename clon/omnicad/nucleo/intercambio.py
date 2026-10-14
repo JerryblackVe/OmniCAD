@@ -50,15 +50,20 @@ def escribir_step(forma, ruta):
         raise ErrorGeometria(f"No se pudo escribir el archivo STEP: {ruta}")
 
 
-def leer_step(ruta):
-    r = STEPControl_Reader()
+def _leer_control(ruta, clase, formato):
+    """Lectura STEP/IGES con el lector de control de OpenCascade (misma mecánica, cambia la clase y el formato)."""
+    r = clase()
     if r.ReadFile(str(ruta)) != IFSelect_RetDone:
-        raise ErrorGeometria(f"No se pudo leer el archivo STEP: {ruta}")
+        raise ErrorGeometria(f"No se pudo leer el archivo {formato}: {ruta}")
     r.TransferRoots()
     forma = r.OneShape()
     if forma is None or forma.IsNull():
-        raise ErrorGeometria("El archivo STEP no contiene geometría.")
+        raise ErrorGeometria(f"El archivo {formato} no contiene geometría.")
     return forma
+
+
+def leer_step(ruta):
+    return _leer_control(ruta, STEPControl_Reader, "STEP")
 
 
 def leer_step_texto(texto):
@@ -74,14 +79,7 @@ def leer_step_texto(texto):
 
 def leer_iges(ruta):
     """IGES → forma (en mm: el lector de OpenCascade convierte desde la unidad del archivo)."""
-    r = IGESControl_Reader()
-    if r.ReadFile(str(ruta)) != IFSelect_RetDone:
-        raise ErrorGeometria(f"No se pudo leer el archivo IGES: {ruta}")
-    r.TransferRoots()
-    forma = r.OneShape()
-    if forma is None or forma.IsNull():
-        raise ErrorGeometria("El archivo IGES no contiene geometría.")
-    return forma
+    return _leer_control(ruta, IGESControl_Reader, "IGES")
 
 
 def leer_iges_texto(texto):

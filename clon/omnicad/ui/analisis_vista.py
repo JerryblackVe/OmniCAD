@@ -18,10 +18,6 @@ from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
 from ..timeline import entidades as ent
 
-NOMBRES = {"seccion": "Análisis de sección", "cebra": "Análisis cebra", "mapa_entorno": "Análisis de mapas de entorno",
-           "desmoldeo": "Análisis de ángulo de desmoldeo", "curvatura": "Análisis del mapa de curvatura",
-           "peine": "Análisis de curvatura en peine", "isocurva": "Análisis de la isocurva",
-           "accesibilidad": "Análisis de accesibilidad", "radio_minimo": "Análisis de radio mínimo"}
 _cache = {}
 
 

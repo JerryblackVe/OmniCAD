@@ -37,18 +37,18 @@ from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_boceto import nombre_nuevo, texto_expr
-from .herramientas_documento import ESTADOS
+from .herramientas_documento import ESTADOS, TIPOS_UNION, _VALORES_UNION
 from .herramientas_solido import _agregar
 from .registro import Expr, herramienta
 
-TIPOS = {"rigid": "rigida", "revolute": "revolucion", "slider": "deslizante", "cylindrical": "cilindrica",
-         "pin_slot": "pasador_ranura", "planar": "planar", "ball": "bola"}
+# La tabla de verdad de los tipos de unión es TIPOS_UNION (ES→EN) de herramientas_documento; acá queda la inversa.
+TIPOS = {en: es for es, en in TIPOS_UNION.items()}
 A_INGLES = {v: k for k, v in TIPOS.items()}
 TipoUnion = Literal["rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar", "ball"]
 SNAP = {"center": "centro", "start": "inicio", "end": "fin"}
 Snap = Literal["center", "start", "end"]
 Eje = Literal["X", "Y", "Z"]
-MOVIMIENTO = {"rotation": "giro", "rotation2": "giro2", "rotation3": "giro3", "slide": "desliz", "slide2": "desliz2"}
+MOVIMIENTO = {en: es for es, en in _VALORES_UNION.items()}
 A_MOVIMIENTO = {v: k for k, v in MOVIMIENTO.items()}
 Movimiento = Literal["rotation", "rotation2", "rotation3", "slide", "slide2"]
 _PASOS_CONSTRUCCION = {"origen_union": "plano", "plano": "plano", "eje": "eje", "punto": "punto"}

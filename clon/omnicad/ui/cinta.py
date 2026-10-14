@@ -196,6 +196,48 @@ def etiqueta_boton(texto):
     return texto + "\n "
 
 
+# ---------------------------------------------------------------- cintas secundarias (DIBUJO, RENDER/ANIMACIÓN)
+def accion_secundaria(owner, acciones, no_disponibles, ref):
+    """Acción de un ítem de cinta secundaria: la real por clave o, con (texto,), una grisada «no disponible»."""
+    if isinstance(ref, str):
+        return acciones[ref]
+    a = QAction(ref[0], owner)
+    a.setEnabled(False)
+    a.setToolTip(f"<b>{ref[0]}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
+    no_disponibles.append(a)
+    return a
+
+
+def grupo_secundario(owner, acciones, no_disponibles, titulo, rapidos, items):
+    """Grupo de cinta secundaria (CintaDibujo y CintaEspacio): botones rápidos con ícono solo y menú «Título ▾»."""
+    w = QWidget()
+    v = QVBoxLayout(w)
+    v.setContentsMargins(2, 2, 2, 0)
+    v.setSpacing(0)
+    botones = QHBoxLayout()
+    botones.setSpacing(2)
+    for clave in rapidos:
+        b = QToolButton()
+        b.setDefaultAction(accion_secundaria(owner, acciones, no_disponibles, clave))
+        b.setIconSize(QSize(30, 30))
+        b.setFixedSize(38, 38)
+        b.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        botones.addWidget(b)
+    v.addLayout(botones)
+    t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾")
+    t.setPopupMode(QToolButton.InstantPopup)
+    m = QMenu(t)
+    m.setToolTipsVisible(True)
+    for it in items:
+        if it == SEP:
+            m.addSeparator()
+        else:
+            m.addAction(accion_secundaria(owner, acciones, no_disponibles, it))
+    t.setMenu(m)
+    v.addWidget(t, 0, Qt.AlignHCenter)
+    return w
+
+
 PESTANAS = [("SÓLIDO", SOLIDO), ("SUPERFICIE", SUPERFICIE), ("MALLA", MALLA), ("CHAPA", CHAPA),
             ("PLÁSTICO", PLASTICO), ("ADMINISTRAR", ADMINISTRAR), ("UTILIDADES", UTILIDADES)]
 ESPACIOS = ["DISEÑO", "DISEÑO GENERATIVO", "RENDERIZAR", "ANIMACIÓN", "SIMULACIÓN", "FABRICACIÓN", "DIBUJO", "ELECTRÓNICA"]

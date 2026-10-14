@@ -48,7 +48,7 @@ from .. import NOMBRE_APP
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
 from . import temas
-from .render import SEP, CintaEspacio, LienzoRender, _Oyente, icono_render
+from .render import SEP, CintaEspacio, LienzoRender, _Oyente, _resaltar_cuerpos, icono_render
 from .superposiciones import AreaVisor
 
 TIPOS = {"transformar": "Transformar", "restaurar": "Restaurar posición", "explosion": "Explosión",
@@ -65,38 +65,24 @@ def suavizado(f):
 
 def matriz_rotacion(giro):
     """Matriz 3x3 de un vector de rotación (eje × ángulo, en grados) — Rodrigues."""
+    from scipy.spatial.transform import Rotation   # diferido: cargar scipy cuesta ~0,8 s de arranque
     rv = np.asarray(giro, float).reshape(3)
-    ang = math.radians(float(np.linalg.norm(rv)))
-    if ang < 1e-12:
+    if float(np.linalg.norm(rv)) < 1e-12:
         return np.identity(3)
-    k = rv / np.linalg.norm(rv)
-    K = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
-    return np.identity(3) + math.sin(ang) * K + (1 - math.cos(ang)) * (K @ K)
+    return Rotation.from_rotvec(np.deg2rad(rv)).as_matrix()
 
 
 def vector_rotacion(R):
     """Vector de rotación (grados) de una matriz 3x3 (logaritmo)."""
-    R = np.asarray(R, float)
-    c = min(1.0, max(-1.0, (np.trace(R) - 1) / 2))
-    ang = math.acos(c)
-    if ang < 1e-9:
-        return np.zeros(3)
-    if math.pi - ang < 1e-6:
-        M = (R + np.identity(3)) / 2
-        i = int(np.argmax(np.diag(M)))
-        eje = M[:, i] / math.sqrt(max(M[i, i], 1e-15))
-    else:
-        eje = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]) / (2 * math.sin(ang))
-    return math.degrees(ang) * eje / np.linalg.norm(eje)
+    from scipy.spatial.transform import Rotation   # diferido, como arriba
+    return np.rad2deg(Rotation.from_matrix(np.asarray(R, float)).as_rotvec())
 
 
 def euler_a_giro(ax, ay, az):
-    """Ángulos X, Y, Z del diálogo (girar en X, después en Y, después en Z) → vector de rotación."""
-    def rot(eje, a):
-        v = np.zeros(3)
-        v[eje] = a
-        return matriz_rotacion(v)
-    return vector_rotacion(rot(2, az) @ rot(1, ay) @ rot(0, ax))
+    """Ángulos X, Y, Z del diálogo (girar en X, después en Y, después en Z) → vector de rotación.
+    'xyz' intrínseca de scipy da la misma matriz que la composición Rz @ Ry @ Rx (medido en tests/test_animacion.py)."""
+    from scipy.spatial.transform import Rotation   # diferido, como arriba
+    return np.rad2deg(Rotation.from_euler('xyz', [ax, ay, az], degrees=True).as_rotvec())
 
 
 def matriz_movimiento(pivote, traslacion, giro, f=1.0):
@@ -109,44 +95,12 @@ def matriz_movimiento(pivote, traslacion, giro, f=1.0):
     return m
 
 
-def _quat(R):
-    R = np.asarray(R, float)
-    t = np.trace(R)
-    if t > 0:
-        s = math.sqrt(t + 1.0) * 2
-        q = [0.25 * s, (R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s, (R[1, 0] - R[0, 1]) / s]
-    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
-        s = math.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
-        q = [(R[2, 1] - R[1, 2]) / s, 0.25 * s, (R[0, 1] + R[1, 0]) / s, (R[0, 2] + R[2, 0]) / s]
-    elif R[1, 1] > R[2, 2]:
-        s = math.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
-        q = [(R[0, 2] - R[2, 0]) / s, (R[0, 1] + R[1, 0]) / s, 0.25 * s, (R[1, 2] + R[2, 1]) / s]
-    else:
-        s = math.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
-        q = [(R[1, 0] - R[0, 1]) / s, (R[0, 2] + R[2, 0]) / s, (R[1, 2] + R[2, 1]) / s, 0.25 * s]
-    q = np.array(q)
-    return q / np.linalg.norm(q)
-
-
-def _matriz_quat(q):
-    w, x, y, z = q / np.linalg.norm(q)
-    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
-
-
 def slerp(R0, R1, f):
     """Interpolación esférica entre dos matrices de rotación."""
-    q0, q1 = _quat(R0), _quat(R1)
-    d = float(q0 @ q1)
-    if d < 0:
-        q1, d = -q1, -d
-    if d > 0.9995:
-        q = q0 + (q1 - q0) * f
-    else:
-        th = math.acos(d)
-        q = (math.sin((1 - f) * th) * q0 + math.sin(f * th) * q1) / math.sin(th)
-    return _matriz_quat(q)
+    from scipy.spatial.transform import Rotation, Slerp   # diferido: cargar scipy cuesta ~0,8 s de arranque
+    par = Rotation.concatenate([Rotation.from_matrix(np.asarray(R0, float)),
+                                Rotation.from_matrix(np.asarray(R1, float))])
+    return Slerp([0.0, 1.0], par)([f]).as_matrix()[0]
 
 
 def interpolar_matriz(A, B, f, centro=(0.0, 0.0, 0.0)):
@@ -1295,8 +1249,7 @@ class VentanaAnimacion(QMainWindow):
             self.indicar("Seleccionado: " + ", ".join(self.lienzo.objetos[c]["nombre"] for c in self.seleccion))
 
     def _resaltar(self):
-        prims = [("tris", m["v"], None, 0.30) for m in self.lienzo._mallas if m["id"] in self.seleccion]
-        self.lienzo.set_capa("seleccion", prims)
+        _resaltar_cuerpos(self.lienzo, self.seleccion)
 
     # ------------------------------------------------------------ crear y editar acciones
     def agregar_accion(self, accion):

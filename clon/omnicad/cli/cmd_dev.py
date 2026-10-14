@@ -3,17 +3,9 @@
 
 Ninguno reimplementa nada: llaman a las herramientas `run_checks`, `app_screenshot` y `run_bench` del catálogo (grupo "dev"),
 o sea, la misma fuente que usa el servidor MCP."""
-import re
 from pathlib import Path
 
 from . import util
-
-
-def _tamano(texto):
-    m = re.fullmatch(r"(\d+)[xX](\d+)", texto.strip())
-    if not m:
-        raise util.UsoError(f"--size tiene que ser ANCHOxALTO (p. ej. 1600x900), no '{texto}'.")
-    return int(m.group(1)), int(m.group(2))
 
 
 def _linea_paso(nombre, paso):
@@ -49,7 +41,7 @@ def check(ns):
 
 
 def captura(ns):
-    ancho, alto = _tamano(ns.size)
+    ancho, alto = util.tamano(ns.size, "1600x900")
     if Path(ns.salida).suffix.lower() != ".png":
         raise util.UsoError(f"La salida tiene que ser un .png, no '{ns.salida}'.")
     if ns.example and ns.project:

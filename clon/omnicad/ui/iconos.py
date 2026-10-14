@@ -8,6 +8,7 @@ extrae ningún ícono de la instalación de Autodesk (regla del proyecto: D:\\Au
 y sin recursos propietarios). El estado deshabilitado lo genera Qt (versión gris).
 """
 import math
+from functools import lru_cache
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRadialGradient
@@ -16,18 +17,15 @@ AZUL_ARRIBA, AZUL_FRENTE, AZUL_LADO, AZUL_BORDE = (QColor("#9fcff5"), QColor("#4
                                                   QColor("#1d5a94"))
 GRIS_OSCURO, GRIS, VERDE, NARANJA, ROJO = (QColor("#4d4d4d"), QColor("#9a9a9a"), QColor("#2fa84f"),
                                            QColor("#ef9a2a"), QColor("#d64545"))
-_cache = {}
 
 
+@lru_cache(maxsize=None)
 def icono(nombre, tam=32):
     """QIcon del nombre pedido (cacheado). Nombre desconocido → ícono vacío (no rompe la UI)."""
-    clave = (nombre, tam)
-    if clave not in _cache:
-        ico = QIcon()
-        for escala in (1, 2):
-            ico.addPixmap(pixmap(nombre, tam, escala))
-        _cache[clave] = ico
-    return _cache[clave]
+    ico = QIcon()
+    for escala in (1, 2):
+        ico.addPixmap(pixmap(nombre, tam, escala))
+    return ico
 
 
 def pixmap(nombre, tam=32, escala=2):

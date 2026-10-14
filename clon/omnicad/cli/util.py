@@ -3,6 +3,7 @@
 import difflib
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -22,6 +23,14 @@ def api():
     """El paquete `omnicad.api` (tarda ~2 s en importarse por OCP/scipy: solo se carga si hace falta)."""
     from .. import api as modulo
     return modulo
+
+
+def tamano(texto, ejemplo="800x600"):
+    """Parsea «ANCHOxALTO» (opción --size de `render` y `dev screenshot`) a (ancho, alto) o UsoError."""
+    m = re.fullmatch(r"(\d+)[xX](\d+)", texto.strip())
+    if not m:
+        raise UsoError(f"--size tiene que ser ANCHOxALTO (p. ej. {ejemplo}), no '{texto}'.")
+    return int(m.group(1)), int(m.group(2))
 
 
 def usar_utf8():

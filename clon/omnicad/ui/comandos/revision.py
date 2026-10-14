@@ -14,7 +14,7 @@ from ...timeline.ops_chapa import cuerpos_del_modelo
 from ...timeline.ops_revision import OpReparar
 from ...timeline.parametros import ANGULO
 from .. import formato
-from ..comando import Casilla, Comando, ErrorComando, Expresion, Info, Seleccion, exigir, hits
+from ..comando import Casilla, Comando, ErrorComando, Expresion, Info, Seleccion, exigir, hits_cuerpos as _hits
 from . import registrar
 
 _ROJO, _NARANJA, _NEGRO = (0.92, 0.12, 0.10), (1.0, 0.6, 0.05), (0.1, 0.1, 0.1)
@@ -24,10 +24,6 @@ _DETALLADOS = 2             # con más cuerpos, el informe es una línea por cue
 
 def _ids(v):
     return [h["ref"]["cuerpo"] for h in v.get("cuerpos") or [] if h["ref"].get("tipo") == "cuerpo"]
-
-
-def _hits(ids, estado):
-    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
 
 
 def _hay_cuerpos(ctx):

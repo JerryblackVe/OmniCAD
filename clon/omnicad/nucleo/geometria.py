@@ -537,6 +537,19 @@ def triangulos_indexados(forma, deflexion=0.05, angular=0.3):
     return unicos, inversos.reshape(-1, 3)
 
 
+def _aristas_unicas(forma):
+    """Las aristas de una forma, sin repetir: TopExp visita una arista compartida una vez por cada cara."""
+    mapa = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapes_s(forma, TopAbs_EDGE, mapa)
+    return [TopoDS.Edge(mapa.FindKey(i)) for i in range(1, mapa.Size() + 1)]
+
+
+def _rotar(v, eje, angulo_rad):
+    """Rotación de Rodrigues del vector v alrededor de un eje unitario."""
+    c, s = math.cos(angulo_rad), math.sin(angulo_rad)
+    return v * c + np.cross(eje, v) * s + eje * float(eje @ v) * (1 - c)
+
+
 def polilinea_arista(arista, deflexion=0.05):
     """Una arista como polilínea 3D (array Kx3); vacía si la arista es degenerada o rara."""
     if BRep_Tool.Degenerated_s(arista):

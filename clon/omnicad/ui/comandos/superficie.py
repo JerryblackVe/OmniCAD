@@ -6,7 +6,8 @@ from ...timeline.ops_superficie import (OpCoser, OpDescoser, OpDestrimar, OpEngr
                                         OpInvertirNormal, OpParche, OpRecortar, OpReglada, OpSupBarrido,
                                         OpSupDesfase, OpSupEmpalme, OpSupExtruir, OpSupRevolucion, OpSupSolevacion)
 from ...timeline.parametros import ANGULO
-from ..comando import Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits, ref1, refs
+from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits,
+                       hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .comunes import OPCIONES_OPERACION, campo_objetivos, objetivos
 
@@ -19,10 +20,6 @@ def _h1(ref, estado):
 
 def _cuerpos(lista):
     return [h["ref"]["cuerpo"] for h in lista or [] if h["ref"].get("tipo") == "cuerpo"]
-
-
-def _hits_cuerpos(ids, estado):
-    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
 
 
 class SupExtruir(Comando):

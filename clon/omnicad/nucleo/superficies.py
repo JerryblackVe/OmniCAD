@@ -490,10 +490,7 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None):
     return _simplificar(rel.Shape())
 
 
-def _rotar(v, eje, angulo_rad):
-    """Rotación de Rodrigues de v alrededor del eje unitario."""
-    c, s = math.cos(angulo_rad), math.sin(angulo_rad)
-    return v * c + np.cross(eje, v) * s + eje * float(eje @ v) * (1 - c)
+_rotar = geo._rotar       # rotación de Rodrigues: compartida con nucleo/construccion.py
 
 
 def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, referencia=None):
@@ -624,36 +621,31 @@ def primitiva_superficie(solido):
     return _juntar(cascarones)
 
 
-def empalme_superficie(forma, aristas, radio):
-    """Empalme (Fillet) de aristas compartidas por dos caras de un cuerpo de superficie [SFC-FILLET-CHAMFER]."""
-    if radio <= 0:
-        raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
-    op = BRepFilletAPI_MakeFillet(forma)
+def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
+    """Empalme (MakeFillet) o chaflán (MakeChamfer) de aristas: misma mecánica, cambia la clase OCC [SFC-FILLET-CHAMFER]."""
+    if valor <= 0:
+        raise geo.ErrorGeometria(f"El {parametro} del {sustantivo} debe ser positivo.")
+    op = clase_api(forma)
     for e in _formas(aristas):
-        op.Add(float(radio), TopoDS.Edge(e))
+        op.Add(float(valor), TopoDS.Edge(e))
+    # OCC lanza Standard_Failure con mensajes poco útiles
     try:
         op.Build()
-    except Exception as exc:  # noqa: BLE001 — OCC lanza Standard_Failure con mensajes poco útiles
-        raise geo.ErrorGeometria("El empalme falló (¿radio demasiado grande?).") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise geo.ErrorGeometria(f"El {sustantivo} falló (¿{parametro} demasiado grande?).") from exc
     if not op.IsDone():
-        raise geo.ErrorGeometria("El empalme falló (¿radio demasiado grande o arista libre?).")
+        raise geo.ErrorGeometria(f"El {sustantivo} falló (¿{parametro} demasiado grande o arista libre?).")
     return _simplificar(op.Shape())
+
+
+def empalme_superficie(forma, aristas, radio):
+    """Empalme (Fillet) de aristas compartidas por dos caras de un cuerpo de superficie [SFC-FILLET-CHAMFER]."""
+    return _filetear_cantos(forma, aristas, radio, BRepFilletAPI_MakeFillet, "empalme", "radio")
 
 
 def chaflan_superficie(forma, aristas, distancia):
     """Chaflán de distancia igual en aristas de un cuerpo de superficie [SFC-FILLET-CHAMFER]."""
-    if distancia <= 0:
-        raise geo.ErrorGeometria("La distancia del chaflán debe ser positiva.")
-    op = BRepFilletAPI_MakeChamfer(forma)
-    for e in _formas(aristas):
-        op.Add(float(distancia), TopoDS.Edge(e))
-    try:
-        op.Build()
-    except Exception as exc:  # noqa: BLE001
-        raise geo.ErrorGeometria("El chaflán falló (¿distancia demasiado grande?).") from exc
-    if not op.IsDone():
-        raise geo.ErrorGeometria("El chaflán falló (¿distancia demasiado grande o arista libre?).")
-    return _simplificar(op.Shape())
+    return _filetear_cantos(forma, aristas, distancia, BRepFilletAPI_MakeChamfer, "chaflán", "distancia")
 
 
 # ---------------------------------------------------------------- modificar

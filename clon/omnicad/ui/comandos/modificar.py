@@ -7,7 +7,7 @@ from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, Op
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, Texto, exigir, hit_desde_ref,
-                       hits, ref1, refs)
+                       hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .comunes import evaluar_o_cero
 
@@ -16,12 +16,6 @@ def _cuerpos(v, clave="cuerpos"):
     """Ids de los cuerpos elegidos (`v` es el dict de valores o directamente la lista de selección)."""
     lista = v if isinstance(v, list) else (v.get(clave) or [])
     return [h["ref"]["cuerpo"] for h in lista if h["ref"].get("tipo") == "cuerpo"]
-
-
-def _hits_cuerpos(ids, estado):
-    if isinstance(ids, str):
-        ids = [ids] if ids else []
-    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
 
 
 def _hit1(ref, estado):

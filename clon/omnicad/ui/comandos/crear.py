@@ -8,7 +8,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
 from ...timeline.ops_solido import TIPOS_REPETIBLES
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
-                       hit_desde_ref, hits, ref1, refs)
+                       hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .comunes import campo_objetivos, campo_operacion, objetivos
 
@@ -22,12 +22,6 @@ def _h1(ref, estado):
 
 def _cuerpos(lista):
     return [h["ref"]["cuerpo"] for h in lista or [] if h["ref"].get("tipo") == "cuerpo"]
-
-
-def _hits_cuerpos(ids, estado):
-    if isinstance(ids, str):
-        ids = [ids] if ids else []
-    return hits([{"tipo": "cuerpo", "cuerpo": c} for c in ids], estado)
 
 
 def _con_objetivos(op, ctx, v):

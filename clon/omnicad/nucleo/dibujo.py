@@ -39,9 +39,8 @@ from OCP.GCPnts import GCPnts_TangentialDeflection
 from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
 from OCP.HLRAlgo import HLRAlgo_Projector
 from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape, HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
-from OCP.OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_REVERSED, TopAbs_WIRE
-from OCP.TopExp import TopExp, TopExp_Explorer
+from OCP.TopExp import TopExp_Explorer
 from OCP.TopoDS import TopoDS, TopoDS_Shape
 from OCP.gp import gp_Ax2, gp_Dir, gp_Pln, gp_Pnt
 
@@ -230,10 +229,7 @@ _COMPUESTOS = {"visibles": "VCompound", "silueta": "OutLineVCompound", "tangente
                "ocultas": "HCompound", "silueta_oculta": "OutLineHCompound", "tangentes_ocultas": "Rg1LineHCompound"}
 
 
-def _aristas_unicas(forma):
-    mapa = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
-    TopExp.MapShapes_s(forma, TopAbs_EDGE, mapa)
-    return [TopoDS.Edge(mapa.FindKey(i)) for i in range(1, mapa.Size() + 1)]
+_aristas_unicas = geo._aristas_unicas
 
 
 def _puntos_arista(arista, deflexion, angular=0.15):
