@@ -180,6 +180,9 @@ PISTAS = {
     "DEV_ONLY": ["Esta herramienta trabaja sobre el código fuente (tests, prueba de humo, ventana en otro proceso) y la "
                  "app instalada no lo trae.",
                  "Cloná el repo y usala desde ahí: README › Instalación."],
+    # --- CLI (omnicad/cli): uso mal formado antes de llegar a una herramienta
+    "CLI_USAGE": ["Revisá la sintaxis del comando: «omnicad <comando> --help» la muestra con ejemplos.",
+                  "Los pares extra van como «clave=valor» (p. ej. name=ancho)."],
 }
 
 # (clases, patrón del mensaje o None, error_kind). Gana la PRIMERA fila que coincide: lo específico va antes.

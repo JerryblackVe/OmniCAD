@@ -160,3 +160,19 @@ Una capa más, por encima del núcleo y del timeline, para que un agente IA use 
 
 - `api/` no importa Qt ni el paquete `mcp` (un test lo comprueba): solo `ui/` conoce Qt. El puente de la ventana es la única pieza de esta capa que usa Qt.
 - Documentación para agentes: [docs/agentes/README.md](agentes/README.md). Ejemplos que corren dentro de pytest: [ejemplos/agentes](../ejemplos/agentes/README.md).
+
+## 8. Publicar una versión y volver atrás (release y rollback)
+
+- **Publicar** es solo un tag: `git tag vN.N.N` y `git push origin vN.N.N`. El workflow
+  `.github/workflows/instaladores.yml` corre al subir un tag `v*`: primero el job `test` (pytest y ruff) y,
+  solo si pasa, arma el `.exe` de Windows y el AppImage de Linux y los publica en GitHub Releases
+  (job `publicar`, `needs: [test, windows, linux]`). Si los tests fallan no se publica nada.
+- **Rollback de un release malo:** borrar (o editar) la Release en GitHub y re-publicar el tag anterior —
+  la CI la regenera igual. Si el código mismo está mal, revertir los commits en `main` y etiquetar un
+  `vN.N.(N+1)` desde el estado bueno.
+- **Los archivos de los usuarios no se rompen al volver atrás:** el `.omnicad` guarda `version_formato` y
+  `io_archivos/proyecto.py` rechaza recetas de una versión más nueva con un mensaje claro
+  ("El proyecto fue guardado con una versión más nueva de OmniCAD"), así que bajar de versión nunca corrompe
+  un proyecto: o abre igual, o avisa y no toca el archivo.
+- Lo que cambia de una versión a otra se lista en [CHANGELOG.md](../CHANGELOG.md); el detalle por sesión está
+  en [PROJECT_LOG.md](../PROJECT_LOG.md).

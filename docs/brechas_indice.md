@@ -24,7 +24,7 @@ prueba con resultado numérico. Recetas de código: A, B y C de `AGENTS.md`.
 
 1. ~~Motor de render~~ DECIDIDO (2026-10-09): los tres, en orden — escena común + OpenGL mejorado → Cycles de
    Blender (B1) → trazador propio. El usuario elige en el combo «Motor».
-2. **Dependencias nuevas**: `rhino3dm` (RH3), ffmpeg (B6), vectorizador tipo potrace (B4), lector `.exr` (KS2),
+2. **Dependencias nuevas**: `rhino3dm` (RH3), ffmpeg (B6), lector `.exr` (KS2),
    motor de física (B17), CalculiX + Gmsh (F19). No instalar sin permiso.
 3. **IA** (KS15): solo con pedido explícito (regla de no gastar en APIs).
 
@@ -53,17 +53,19 @@ prueba con resultado numérico. Recetas de código: A, B y C de `AGENTS.md`.
 | F1 + F7 | Engranajes de evolvente recto/helicoidal, par con unión y vínculo, cremallera, rueda de cadena ISO 606, eje escalonado (`nucleo/engranajes.py`) | Polea dentada (perfil no verificado); valores ISO 606 a verificar contra la norma |
 | GH1, GH2, GH3, GH5, GH8 | Grafo sin ventana: árboles, 76 nodos, motor con caché, horneado paramétrico, `run_graph`/`bake_graph` (`clon/omnicad/grafo/`, `docs/grafo.md`) | GH4 lienzo y el resto |
 | B3 | Exportar glTF/GLB con materiales PBR (`io_archivos/gltf.py`) | FBX y USD |
+| B4 | Vectorizar imagen a curvas de boceto (`io_archivos/vectorizar.py`, comando «Vectorizar imagen», herramienta `trace_image`) | Vista previa de las curvas; esquinas |
+| F3 | Patrón en puntos y en ruta con giro (`point_pattern`, `path_pattern`; también repiten operaciones con `features`) | Vista previa de las copias como fantasmas |
 | B9 | Limpiar malla: fusionar por distancia, disolver degenerados, borrar sueltos, rellenar huecos, recalcular normales | Triángulos → cuadriláteros (la malla es solo de triángulos) |
 
 Ver el Registro de `PROJECT_LOG.md` (2026-10-10, «Nube: …») para el detalle y las herramientas MCP nuevas.
 
 ## Orden sugerido (lo que no pide decisiones)
 
-1. F2+B2+RH13 informe de geometría (útil ya, para STEP y mallas importadas).
-2. F1 engranajes · F3 patrón en puntos · RH6 seleccionar por criterio · PL1 comandos según lo elegido.
+1. F2+B2+RH13 informe de geometría (útil ya, para STEP y mallas importadas) — HECHO (ver arriba).
+2. RH6 seleccionar por criterio · PL1 comandos según lo elegido (F1 engranajes y F3 patrón en puntos ya están hechos, ver arriba).
 3. RH1 mezcla de superficies · RH2 igualar · RH4 desenrollar · RH5 editar agujeros sin historial.
 4. VR10 render en la API/MCP · VR1 mezcla de luces · VR2 postproceso · KS10 variantes en lote.
-5. GH1 → GH2 → GH3 → GH5 → GH8 (grafo sin ventana, ya útil para agentes).
+5. Grafo: GH1–GH3, GH5 y GH8 están hechos (grafo sin ventana ya útil para agentes); sigue GH4 lienzo de nodos.
 6. Prioridad 3 (Simulación, Fabricación, SubD): después de decidir dependencias.
 
 ## Cómo arrancar la próxima sesión

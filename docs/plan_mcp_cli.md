@@ -16,8 +16,8 @@ Los agentes previstos son Claude Code, OpenCode, Codex, Cursor, Gemini CLI, Clau
 | Dato | Evidencia |
 |---|---|
 | El núcleo no usa Qt, así que se puede diseñar sin abrir la ventana. | `grep` de `PySide6` en `nucleo/`, `timeline/`, `io_archivos/` y `restricciones/` no encuentra nada. |
-| Hay 85 tipos de operación registrados en un solo diccionario. | `timeline/operaciones.py:626` (`TIPOS_OPERACION`) más `registrar_operacion`. |
-| Cada operación declara sus parámetros con valores por defecto, sus expresiones y un docstring que dice a qué comando de Fusion equivale. Con eso se puede generar el esquema de las 85 operaciones sin escribirlo a mano. | `operaciones.py:171` (`PARAMS`, `EXPRESIONES`). |
+| Hay 93 tipos de operación registrados en un solo diccionario (85 cuando se escribió el plan; actualización 2026-10-14). | `timeline/operaciones.py` (`TIPOS_OPERACION`) más `registrar_operacion`. |
+| Cada operación declara sus parámetros con valores por defecto, sus expresiones y un docstring que dice a qué comando de Fusion equivale. Con eso se puede generar el esquema de todas las operaciones sin escribirlo a mano. | `operaciones.py:171` (`PARAMS`, `EXPRESIONES`). |
 | La receta del diseño ya se guarda en JSON. | `Documento.a_dict` / `desde_dict` y `operacion_desde_dict`. |
 | El formato `.omnicad` es un ZIP que se guarda de forma atómica. | `io_archivos/proyecto.py`. |
 | Hay deshacer y rehacer, parámetros con expresiones y recálculo. | `Documento` (`deshacer`, `parametros`, `recalcular`). |
@@ -283,7 +283,7 @@ A ──► B ──► C ──► D
 |---|---|
 | El agente y el usuario tocan el mismo diseño en vivo. | Todo pasa por el hilo de Qt. Si hay un comando abierto, la respuesta es `APP_BUSY`, y cada llamada es un paso de deshacer. |
 | El puente es una puerta local: `execute_code` puede correr Python. | Viene apagado, escucha solo en 127.0.0.1, usa un token aleatorio en un archivo del usuario y muestra un indicador visible de "agente conectado". |
-| Demasiadas herramientas confunden a los agentes. | Unas 35 por defecto, en grupos. El resto pasa por `run_operation`. El hito 4 mide los errores reales. |
+| Demasiadas herramientas confunden a los agentes. | Estado real al 2026-10-14: 167 herramientas en 13 grupos (`omnicad tools` las lista; docs/agentes/herramientas.md) — ya son más que las «35 por defecto» previstas cuando se escribió el plan. Las operaciones sin herramienta propia (93 tipos) pasan por `run_operation`. El hito 4 mide los errores reales. |
 | Las caras o aristas referenciadas se pierden al recalcular. | Se usan las firmas persistentes que ya existen, más `REFERENCE_LOST` con pistas para volver a elegir. |
 | Las imágenes sin ventana tardan, porque el render es por software. | 640×480 sin supermuestreo por defecto. En vivo se usa la captura de la GPU. |
 

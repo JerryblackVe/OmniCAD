@@ -53,6 +53,13 @@ def subproceso(*argv, cwd=None, env=None):
                           cwd=cwd, env=entorno, timeout=120)
 
 
+# ---------------------------------------------------------------- errores
+def test_cli_usage_tiene_pistas_en_el_catalogo():
+    """El kind CLI_USAGE que emite cli/__init__.py figura en api/errores.PISTAS (regla de AGENTS.md)."""
+    from omnicad.api import errores
+    assert "CLI_USAGE" in errores.PISTAS and errores.PISTAS["CLI_USAGE"]
+
+
 # ---------------------------------------------------------------- versión y arranque
 def test_version_por_subproceso():
     r = subproceso("--version")
