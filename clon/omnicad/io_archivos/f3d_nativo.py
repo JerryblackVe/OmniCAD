@@ -136,7 +136,7 @@ def miembro(datos, info):
         raise ErrorF3D("ZIP dañado (cabecera local inválida).")
     largo_nombre, largo_extra = struct.unpack_from("<HH", datos, h + 26)
     inicio = h + 30 + largo_nombre + largo_extra
-    salida = zstd_puro.descomprimir(datos[inicio:inicio + info.compress_size])
+    salida = zstd_puro.descomprimir(datos[inicio:inicio + info.compress_size], tope=info.file_size)
     if len(salida) != info.file_size:
         raise ErrorF3D(f"{info.filename}: el tamaño descomprimido no coincide.")
     return salida

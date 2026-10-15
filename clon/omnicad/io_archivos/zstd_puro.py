@@ -37,19 +37,35 @@ _ML_DEFECTO = ([1, 4, 3, 2, 2, 2, 2, 2, 2] + [1] * 37 + [-1] * 7, 6)
 _OF_DEFECTO = ([1, 1, 1, 1, 1, 1, 2, 2, 2] + [1] * 15 + [-1] * 5, 5)
 
 
-def descomprimir(datos):
-    """Descomprime una o varias tramas Zstandard seguidas. Devuelve bytes."""
+def descomprimir(datos, tope=None):
+    """Descomprime una o varias tramas Zstandard seguidas. Devuelve bytes.
+
+    Con `tope` falla apenas la salida pasa esa cantidad de bytes (zip bomb: un miembro que declara poco y se
+    expande a gigas). Con tope va siempre el decodificador propio: `compression.zstd.decompress` no tiene tope."""
     datos = bytes(datos)
-    if _zstd_std is not None:
+    if _zstd_std is not None and tope is None:
         try:
             return _zstd_std.decompress(datos)
         except Exception as e:  # noqa: BLE001 — el error de la biblioteca se traduce al nuestro
             raise ErrorZstd(f"Zstandard inválido: {e}") from None
-    return _descomprimir_puro(datos)
+    return _descomprimir_puro(datos, tope)
 
 
-def _descomprimir_puro(datos):
-    salida = bytearray()
+class _SalidaTopada(bytearray):
+    """Salida con tope: el decodificador escribe siempre con `+=`, así que el control va acá."""
+
+    def __init__(self, tope):
+        super().__init__()
+        self.tope = tope
+
+    def __iadd__(self, mas):
+        if len(self) + len(mas) > self.tope:
+            raise ErrorZstd(f"La salida Zstandard pasa el tope de {self.tope} bytes: el archivo parece dañado o hostil.")
+        return super().__iadd__(mas)
+
+
+def _descomprimir_puro(datos, tope=None):
+    salida = bytearray() if tope is None else _SalidaTopada(tope)
     p = 0
     while p < len(datos):
         if len(datos) - p < 4:

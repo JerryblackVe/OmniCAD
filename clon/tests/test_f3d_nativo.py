@@ -5,6 +5,7 @@ Las piezas se arman acá mismo (un cubo y un cilindro escritos en SAB, metidos e
 pruebas no dependen de archivos de nadie."""
 import base64
 import hashlib
+import io
 import math
 import struct
 import zipfile
@@ -364,6 +365,23 @@ def test_f3d_hostil_miembro_mas_grande_que_el_tope_falla(tmp_path, monkeypatch):
     f3d = _zip_f3d(tmp_path / "hostil.f3d", [(_CARPETA + "BREP.grande.smbh", b"g" * 2048)])
     with pytest.raises(f3d_nativo.ErrorF3D, match="hostil"):
         f3d_nativo.leer(f3d)
+
+
+def test_f3d_hostil_zstd_que_se_expande_mas_de_lo_declarado_falla_sin_llenar_la_memoria(tmp_path):
+    """Zip bomb por la vía Zstandard: el miembro DECLARA 10 bytes (pasa el tope) y 137 bytes de bloques RLE
+    se expanden a 64 MB. El decodificador corta apenas la salida pasa lo declarado, sin generar los 64 MB."""
+    rle = (((1 << 21) - 1) << 3) | (1 << 1)
+    bomba = (struct.pack("<I", zstd_puro.MAGICO) + bytes([0x20 | 0x80]) + struct.pack("<I", 10)
+             + (struct.pack("<I", rle)[:3] + b"z") * 31 + struct.pack("<I", rle | 1)[:3] + b"z")
+    with pytest.raises(zstd_puro.ErrorZstd, match="tope"):
+        zstd_puro.descomprimir(bomba, tope=10)
+    datos = bytearray(_zip_f3d(tmp_path / "bomba.f3d", [(_CARPETA + "BREP.bomba.smbh", bomba)], zstd=False).read_bytes())
+    for firma, metodo, tamano in ((b"PK\x03\x04", 8, 22), (b"PK\x01\x02", 10, 24)):   # método 93 y 10 bytes declarados
+        i = datos.find(firma)
+        struct.pack_into("<H", datos, i + metodo, zstd_puro.METODO_ZIP_ZSTD)
+        struct.pack_into("<I", datos, i + tamano, 10)
+    with pytest.raises(zstd_puro.ErrorZstd, match="tope"):
+        f3d_nativo.miembro(bytes(datos), zipfile.ZipFile(io.BytesIO(datos)).infolist()[0])
 
 
 def test_f3z_toma_el_diseno_principal(tmp_path):

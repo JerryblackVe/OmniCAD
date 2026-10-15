@@ -130,7 +130,7 @@ jobs:
         with:
           path: instaladores
           merge-multiple: true
-      - uses: softprops/action-gh-release@3bb12739c298a4eeaf626c5b8d85266b0e65    # v2, pineada al SHA (git ls-remote refs/tags/v2)
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65   # v2, pineada al SHA (git ls-remote refs/tags/v2)
         with:
           files: instaladores/*
           generate_release_notes: true

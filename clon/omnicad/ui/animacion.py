@@ -80,7 +80,7 @@ def vector_rotacion(R):
 
 def euler_a_giro(ax, ay, az):
     """Ángulos X, Y, Z del diálogo (girar en X, después en Y, después en Z) → vector de rotación.
-    'xyz' intrínseca de scipy da la misma matriz que la composición Rz @ Ry @ Rx (medido en tests/test_animacion.py)."""
+    'xyz' (minúsculas: ejes fijos, extrínseca) de scipy da la misma matriz que la composición Rz @ Ry @ Rx (medido en tests/test_animacion.py)."""
     from scipy.spatial.transform import Rotation   # diferido, como arriba
     return np.rad2deg(Rotation.from_euler('xyz', [ax, ay, az], degrees=True).as_rotvec())
 
