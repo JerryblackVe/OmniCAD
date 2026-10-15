@@ -41,6 +41,56 @@ def test_unir_en_L_fusiona_caras_coplanares():
     assert g.es_valida(redondeada) and g.volumen(redondeada) < g.volumen(ele)
 
 
+def _aristas_libres(forma):
+    """Aristas que tocan una sola cara (sin contar las costuras de caras periódicas): las cuenta
+    «Revisar geometría» como aristas libres."""
+    from OCP.BRep import BRep_Tool
+    from OCP.OCP.collections import IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+    mapa = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapesAndAncestors_s(forma, TopAbs_EDGE, TopAbs_FACE, mapa)
+    libres = 0
+    for i in range(1, mapa.Size() + 1):
+        arista = TopoDS.Edge(mapa.FindKey(i))
+        if BRep_Tool.Degenerated_s(arista):
+            continue
+        unicas = []
+        for f in mapa.FindFromIndex(i):
+            if not any(f.IsSame(u) for u in unicas):
+                unicas.append(f)
+        if len(unicas) == 1 and not BRep_Tool.IsClosed_s(arista, TopoDS.Face(unicas[0])):
+            libres += 1
+    return libres
+
+
+def test_union_tangente_no_deja_aristas_libres():
+    """B-28: unir un cuerpo cuyo disco de apoyo queda TANGENTE a la pared interior de un tubo (el puerto
+    de oxidante del motor cohete contra la camisa r=45) dejaba cables internos abiertos de una cara:
+    el sólido quedaba «no estanco» sin faltarle material."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Plane
+    from OCP.TopoDS import TopoDS
+
+    from omnicad.nucleo import solidos_modificar as sm
+    # camisa: cilindro r48 (z 55..140) vaciado por arriba y abajo con pared de 3 → tubo abierto r 45..48
+    cil = g.cilindro(48, 85, (0, 0, 55))
+    tapas = [TopoDS.Face(c) for c in g.caras(cil)
+             if BRepAdaptor_Surface(TopoDS.Face(c)).GetType() == GeomAbs_Plane]
+    camisa = sm.vaciado(cil, tapas, espesor_interior=3)
+    # puerto: tubo r9 (pared 1) con eje +X a la altura z=108, apoyado justo en x=-45 (tangente a r=45)
+    puerto = g.trasladar(g.cilindro(9, 26, (0, 0, 108), (1, 0, 0)), (-71, 0, 0))
+    puerto = g.booleano(puerto, g.cilindro(7, 46, (-81, 0, 108), (1, 0, 0)), "cortar")   # paso Ø14
+    unido = g.booleano(camisa, puerto, "unir")
+    assert len(g.solidos(unido)) == 1 and g.es_valida(unido)
+    # no se pierde material: tubo + puerto − lo que comparten (el tramo embebido en la pared)
+    solape = g.booleano(puerto, camisa, "intersecar")
+    assert g.volumen(unido) == pytest.approx(
+        g.volumen(camisa) + g.volumen(puerto) - g.volumen(solape), rel=1e-3)
+    assert _aristas_libres(unido) == 0
+
+
 @pytest.mark.parametrize("plano", ["XY", "XZ", "YZ"])
 def test_perfiles_anillo_y_disco(plano):
     b = Boceto()

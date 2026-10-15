@@ -33,11 +33,13 @@ from OCP.GeomAbs import (GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_
 from OCP.GProp import GProp_GProps
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_REVERSED, TopAbs_SOLID, TopAbs_VERTEX
-from OCP.OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher
+from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_REVERSED,
+                        TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
+from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
+                                 IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Compound
+from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
 from OCP.BRep import BRep_Builder
 from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
 
@@ -273,7 +275,7 @@ def booleano(objetivo, herramienta, operacion):
     op = clases[operacion](objetivo, herramienta)
     if not op.IsDone():
         raise ErrorGeometria(f"La operación '{operacion}' falló en el kernel.")
-    return unificar_caras(op.Shape())
+    return _quitar_cables_colgados(unificar_caras(op.Shape()))
 
 
 def unificar_caras(forma):
@@ -287,6 +289,117 @@ def unificar_caras(forma):
     except Exception:  # noqa: BLE001
         return forma
     return resultado if not resultado.IsNull() else forma
+
+
+def _quitar_cables_colgados(forma):
+    """Saca de las caras los cables internos ABIERTOS cuyas aristas tocan una sola cara.
+
+    El kernel deja esos cables cuando una booleana tiene contacto TANGENCIAL: unir un cuerpo cuyo
+    disco de apoyo queda justo tangente a una cara curva del objetivo (B-28: el puerto de
+    oxidante del motor cohete contra la pared interior r=45 de la camisa) cuelga de esa cara los
+    tramos de la línea de tangencia que no unen nada. Son restos topológicos sin volumen ni área:
+    «Revisar geometría» los cuenta como aristas libres y el cuerpo sale «no estanco» con todo su
+    material. Si no hay nada que sacar (lo normal), o la forma reconstruida no queda tan bien como
+    la original, se devuelve tal cual: peor caso, el defecto queda como estaba."""
+    if forma is None or forma.IsNull() or forma.ShapeType() not in (TopAbs_SOLID, TopAbs_COMPOUND):
+        return forma
+    vecinas = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapesAndAncestors_s(forma, TopAbs_EDGE, TopAbs_FACE, vecinas)
+    colgantes = []
+    for i in range(1, vecinas.Size() + 1):
+        arista = TopoDS.Edge(vecinas.FindKey(i))
+        if BRep_Tool.Degenerated_s(arista):
+            continue
+        unicas = []
+        for f in vecinas.FindFromIndex(i):
+            if not any(f.IsSame(u) for u in unicas):
+                unicas.append(f)          # una costura de cara periódica aparece dos veces
+        if len(unicas) == 1 and not BRep_Tool.IsClosed_s(arista, TopoDS.Face(unicas[0])):
+            colgantes.append(arista)
+    if not colgantes:
+        return forma
+
+    def es_colgante(a):
+        return any(a.IsSame(c) for c in colgantes)
+
+    builder = BRep_Builder()
+
+    def reconstruir(cara_cruda):
+        """Cara nueva sin los cables colgados (con las orientaciones ALMACENADAS, sin componer), o None."""
+        vista = TopoDS.Face(cara_cruda)
+        vista.Orientation(TopAbs_FORWARD)      # explorar los cables con su orientación guardada
+        exterior = BRepTools.OuterWire_s(vista)
+        quedan, saco = [], False
+        exw = TopExp_Explorer(vista, TopAbs_WIRE)
+        while exw.More():
+            w = TopoDS.Wire(exw.Current())
+            if (exterior is not None and w.IsSame(exterior)) or w.Closed():
+                quedan.append(w)                # el borde de la cara y los agujeros reales se quedan
+            else:
+                exa = TopExp_Explorer(w, TopAbs_EDGE)
+                while exa.More():
+                    if not es_colgante(TopoDS.Edge(exa.Current())):
+                        quedan.append(w)        # el cable une esta cara con otra: no es un resto
+                        break
+                    exa.Next()
+                else:
+                    saco = True
+            exw.Next()
+        if not saco:
+            return None
+        loc = TopLoc_Location()
+        superficie = BRep_Tool.Surface_s(vista, loc)
+        nueva = TopoDS_Face()
+        builder.MakeFace(nueva, superficie, loc, BRep_Tool.Tolerance_s(vista))
+        for w in quedan:
+            builder.Add(nueva, w)
+        nueva.Orientation(cara_cruda.Orientation())
+        nueva.Location(cara_cruda.Location())
+        return nueva
+
+    def hijos(shape):
+        """Subformas directas con su orientación y ubicación ALMACENADAS (sin componer)."""
+        it = TopoDS_Iterator(shape, False, False)
+        while it.More():
+            yield it.Value()
+            it.Next()
+
+    solidos_crudos = [forma] if forma.ShapeType() == TopAbs_SOLID else list(hijos(forma))
+    if not solidos_crudos or any(s.ShapeType() != TopAbs_SOLID for s in solidos_crudos):
+        return forma
+    caras_antes = len(caras(forma))
+    nuevos = []
+    for solido in solidos_crudos:
+        nuevo_solido = TopoDS_Solid()
+        builder.MakeSolid(nuevo_solido)
+        for cascara in hijos(solido):
+            if cascara.ShapeType() != TopAbs_SHELL:
+                return forma
+            nueva_cascara = TopoDS_Shell()
+            builder.MakeShell(nueva_cascara)
+            for cara in hijos(cascara):
+                nueva = reconstruir(cara)
+                builder.Add(nueva_cascara, cara if nueva is None else nueva)
+            nueva_cascara.Orientation(cascara.Orientation())
+            nueva_cascara.Location(cascara.Location())
+            builder.Add(nuevo_solido, nueva_cascara)
+        nuevo_solido.Orientation(solido.Orientation())
+        nuevo_solido.Location(solido.Location())
+        nuevos.append(nuevo_solido)
+    limpia = nuevos[0] if len(nuevos) == 1 else None
+    if limpia is None:
+        compuesto = TopoDS_Compound()
+        builder.MakeCompound(compuesto)
+        for s in nuevos:
+            builder.Add(compuesto, s)
+        limpia = compuesto
+    try:
+        mejora = (es_valida(limpia) and len(caras(limpia)) == caras_antes
+                  and len(solidos(limpia)) == len(solidos_crudos)
+                  and abs(volumen(limpia) - volumen(forma)) <= 1e-4 * max(volumen(forma), 1e-9))
+    except Exception:  # noqa: BLE001 — si el kernel no sabe medir la reconstrucción, no se usa
+        return forma
+    return limpia if mejora else forma
 
 
 def unir_todos(formas):
@@ -307,7 +420,7 @@ def unir_todos(formas):
             op.SetTools(herr)
             op.Build()
             if op.IsDone() and not op.Shape().IsNull():
-                return unificar_caras(op.Shape())
+                return _quitar_cables_colgados(unificar_caras(op.Shape()))
         except Exception:  # noqa: BLE001 — si la operación general no puede, queda la unión de a pares
             pass
     resultado = formas[0]
