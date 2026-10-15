@@ -125,3 +125,63 @@ def test_deshacer_recalcula_solo_desde_el_paso_que_cambia(monkeypatch):
     corridas.clear()
     doc.deshacer()                                   # vuelve alto = 10: otra vez desde op2
     assert corridas == ["op2", "op4"] and _volumenes(doc) == completo
+
+
+def test_combinar_avisa_si_la_union_no_fusiona_lo_que_se_toca(monkeypatch):
+    """B-52: la unión de la espiral de refrigeración (Combinar7 del motor de la tortura) dejaba el
+    cuerpo partido en dos sólidos sin aviso: OpCombinar no tenía el chequeo post-unión que sí
+    tienen las primitivas. Unir cuerpos que NO se tocan (multi-sólido legítimo) no avisa."""
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8"))
+    # el kernel "no fusiona": devuelve las dos piezas sin unirlas (la fusión degenerada de la espiral)
+    real_booleano = g.booleano
+    monkeypatch.setattr(g, "booleano", lambda a, b, op: g.compuesto([a, b]) if op == "unir"
+                        else real_booleano(a, b, op))
+    r = doc.agregar(OpCombinar(doc.nuevo_id(), objetivo="op1.c1", herramientas=["op2.c1"], operacion="unir"))
+    assert r.estado == "aviso" and "partido" in r.mensaje
+    assert len(g.solidos(doc.estado_final.cuerpos["op1.c1"].forma)) == 2   # el material no se pierde
+    # control: unir dos cajas DISJUNTAS es un cuerpo multi-sólido legítimo y no avisa
+    monkeypatch.undo()
+    doc2 = Documento()
+    doc2.agregar(OpPrimitiva(doc2.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    doc2.agregar(OpPrimitiva(doc2.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="30"))
+    r2 = doc2.agregar(OpCombinar(doc2.nuevo_id(), objetivo="op1.c1", herramientas=["op2.c1"],
+                                 operacion="unir"))
+    assert r2.estado == "ok"
+
+
+def _kernel_que_pierde_material(monkeypatch):
+    """Simula el kernel degenerado de B-52: la unión descarta geometría del objetivo (como la fusión
+    del cilindro del gimbal que se comía el sólido de la espiral dentro del cuerpo compuesto)."""
+    real = g.booleano
+
+    def perder(objetivo, herramienta, operacion):
+        if operacion == "unir":
+            return real(objetivo, herramienta, "cortar")     # devuelve MENOS material del que había
+        return real(objetivo, herramienta, operacion)
+
+    import omnicad.timeline.operaciones as ops  # noqa: PLC0415
+    monkeypatch.setattr(ops.geo, "booleano", perder)
+
+
+def test_combinar_avisa_si_la_union_pierde_material(monkeypatch):
+    """B-52: una unión no puede pesar menos que el cuerpo al que une; si el kernel descarta
+    geometría (contacto degenerado), el paso avisa en vez de perderla en silencio."""
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8"))
+    _kernel_que_pierde_material(monkeypatch)
+    r = doc.agregar(OpCombinar(doc.nuevo_id(), objetivo="op1.c1", herramientas=["op2.c1"], operacion="unir"))
+    assert r.estado == "aviso" and "perdió" in r.mensaje
+
+
+def test_union_de_primitiva_avisa_si_pierde_material(monkeypatch):
+    """B-52 (el caso real): la espiral se perdía al UNIR UNA PRIMITIVA (Cilindro11) al cuerpo
+    compuesto; el chequeo de pérdida tiene que estar también en el camino de las primitivas."""
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    _kernel_que_pierde_material(monkeypatch)
+    r = doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8",
+                                operacion="unir", objetivo="op1.c1"))
+    assert r.estado == "aviso" and "perdió" in r.mensaje

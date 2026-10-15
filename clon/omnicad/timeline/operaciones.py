@@ -209,14 +209,25 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
 
     if operacion == "unir":
         resultado = herramienta
+        v_previa = None                # volumen de lo acumulado hasta acá (se mide una vez)
         for c in objetivos:
             nueva = geo.booleano(resultado, c.forma, "unir")
+            v_nueva = geo.volumen(nueva)
+            if v_previa is None:
+                v_previa = geo.volumen(herramienta)
             if not lista:
                 # Un cuerpo que solo TOCA por cara (tope coplanar) se une sin sumar volumen: avisar, así
                 # no se absorbe un cuerpo ajeno en silencio (el join sobre la cara es lo normal).
-                v_antes = geo.volumen(resultado) + geo.volumen(c.forma)
-                if geo.volumen(nueva) >= v_antes - max(v_antes, 1.0) * 1e-7:
+                v_antes = v_previa + geo.volumen(c.forma)
+                if v_nueva >= v_antes - max(v_antes, 1.0) * 1e-7:
                     ctx.aviso(f"{c.nombre} se unió a la herramienta compartiendo solo una cara (sin solape).")
+            # Una unión no puede pesar menos que lo que ya había (B-52: unir una primitiva a un cuerpo
+            # compuesto descartaba en silencio un sólido entero — la espiral, −3.194 mm³).
+            v_menor = max(v_previa, geo.volumen(c.forma))
+            if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:
+                ctx.aviso(f"{c.nombre}: la unión perdió {v_menor - v_nueva:.2f} mm³ de material (el kernel "
+                          "descartó geometría en un contacto degenerado); revisalo con check_geometry.")
+            v_previa = v_nueva
             resultado = nueva
         principal = objetivos[0]
         principal.forma = resultado
@@ -846,11 +857,36 @@ class OpCombinar(Operacion):
         herramientas = [estado.cuerpo(h) for h in self.p["herramientas"]]
         if any(h.id == objetivo.id for h in herramientas):
             raise ErrorOperacion("El objetivo no puede ser también herramienta.")
-        resultado = objetivo.forma
+        forma_objetivo = objetivo.forma
+        resultado = forma_objetivo
+        v_previa = None
         for h in herramientas:
             if self.p["operacion"] == "cortar" and not geo.se_tocan(resultado, h.forma):
                 ctx.aviso(f"{h.nombre} no toca a {objetivo.nombre}: no le cortó nada.")
+            parcial = resultado
             resultado = geo.booleano(resultado, h.forma, self.p["operacion"])
+            if self.p["operacion"] == "unir":
+                # Una unión no puede pesar menos que lo que ya había (B-52: la unión de la espiral
+                # del motor descartaba un sólido entero del compuesto en silencio).
+                if v_previa is None:
+                    v_previa = geo.volumen(forma_objetivo)
+                v_nueva = geo.volumen(resultado)
+                if v_nueva < v_previa - max(v_previa, 1.0) * 5e-4:
+                    ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} perdió {v_previa - v_nueva:.2f} mm³ "
+                              "de material (el kernel descartó geometría en un contacto degenerado); "
+                              "revisalo con check_geometry.")
+                v_previa = v_nueva
+                # Tampoco puede quedar peor que las entradas (B-37/B-52): más sólidos que la suma de
+                # las partes (explotó), partes que se tocaban y no se fusionaron (la espiral contra la
+                # campana quedaba en 2 sólidos), o un resultado abierto. Unir cuerpos que NO se tocan
+                # es legítimo (cuerpo multi-sólido): eso no avisa.
+                n_antes = len(geo.solidos(parcial)) + len(geo.solidos(h.forma))
+                n_despues = len(geo.solidos(resultado))
+                if (n_despues > n_antes or (geo.se_tocan(parcial, h.forma) and n_despues == n_antes)
+                        or not rv.es_estanca(resultado)):
+                    ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} dejó el cuerpo partido, sin "
+                              "fusionar lo que se toca o abierto (posible contacto tangente o en cuña); "
+                              "revisalo con check_geometry.")
         if geo.esta_vacia(resultado):
             raise ErrorOperacion("El resultado quedó vacío (¿los cuerpos no se intersecan?).")
         objetivo.forma = resultado
