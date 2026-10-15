@@ -10,7 +10,7 @@ Bitácora del proyecto: estado, pendientes, qué se hizo y lecciones aprendidas.
 | Cobertura de comandos de diseño | En curso — ver `docs/brechas_fusion.md` |
 | Capa para agentes IA: API, MCP, CLI, puente en vivo, skill | Hecha (paquetes A–J y L). Prueba con agentes reales: Claude Code OK; faltan OpenCode, solo-CLI y modo en vivo — `docs/plan_mcp_cli.md` |
 | Bugs de la Prueba 10 y pruebas de uso (ola 1) | Corregidos el 2026-10-10 (pytest 1783, humo OK). Próxima sesión: ola 2 (mejoras) y pendientes 13–19 |
-| Bugs conocidos sin corregir | 12 abiertos (71 fichas: B-41 retirada; tanda menores 2026-10-13 y tanda moderados+críticos 2026-10-14 ya corregidas/cerradas; quedan: rendimiento B-16..B-20, crash OCCT B-48 (mitigado por autoguardado), B-26 sin reproducir, estado-dependientes B-58/B-61/B-70, y B-52/B-71 parcialmente mitigadas por el aviso post-unión y el resolver invariante) — ver «Bugs pendientes» |
+| Bugs conocidos sin corregir | 13 abiertos (71 fichas: B-41 retirada; tanda menores 2026-10-13 y tanda moderados+críticos 2026-10-14 ya corregidas/cerradas; quedan: join no estanco B-28 (Alto), rendimiento B-16..B-20, crash OCCT B-48 (mitigado por autoguardado), B-26 sin reproducir, estado-dependientes B-58/B-61/B-70, y B-52/B-71 parcialmente mitigadas por el aviso post-unión y el resolver invariante) — ver «Bugs pendientes» |
 | Rendimiento nativo (Rust y C++) | Plan hecho el 2026-10-12 (`docs/plan_rust.md`, `docs/plan_cpp.md`), sin código nativo todavía. Falta permiso para instalar `rustup`/`maturin` — ver pendiente 10b |
 | Linux nativo, bilingüe ES/EN y hoja de ruta | Pendiente — ver «Pendientes» |
 
