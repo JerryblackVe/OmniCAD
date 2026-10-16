@@ -96,16 +96,19 @@ def plano_o_cara(sesion, plane, body=None):
     return "cara", sl.plano_de_cara(elem).marco(), sl.emitir_id(sesion, cuerpo, elem), sl.referencia(cuerpo, elem)
 
 
-def op_boceto(sesion, ref=None):
-    """`OpBoceto` por id o nombre; sin `ref`, el último boceto activo del timeline."""
+def op_boceto(sesion, ref=None, derivados=False):
+    """`OpBoceto` por id o nombre; sin `ref`, el último boceto activo del timeline. Con `derivados` también los pasos
+    que generan un boceto fijo (`BOCETO_DERIVADO`, p. ej. el desfase de aristas): sirven para leer perfiles, no para
+    dibujar en ellos."""
     doc = sesion.doc
+    es_boceto = lambda o: isinstance(o, OpBoceto) or (derivados and getattr(o, "BOCETO_DERIVADO", False))  # noqa: E731
     if ref is None or not str(ref).strip():
-        activos = [o for o in doc.operaciones[:doc.marcador] if isinstance(o, OpBoceto)]
+        activos = [o for o in doc.operaciones[:doc.marcador] if es_boceto(o)]
         if not activos:
             raise error("SKETCH_NOT_FOUND", "El documento todavía no tiene ningún boceto.")
         return activos[-1]
     ref = str(ref).strip()
-    bocetos = [o for o in doc.operaciones if isinstance(o, OpBoceto)]
+    bocetos = [o for o in doc.operaciones if es_boceto(o)]
     for o in bocetos:
         if o.id == ref:
             return o
@@ -131,7 +134,7 @@ def boceto_resuelto(sesion, op):
 
 def boceto_activo(sesion, ref=None):
     """(op, resuelto) o error SKETCH_NOT_FOUND si el boceto está suprimido, con error o después del marcador."""
-    op = op_boceto(sesion, ref)
+    op = op_boceto(sesion, ref, derivados=True)
     br = boceto_resuelto(sesion, op)
     if br is None:
         estado = next((r.estado for o, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False)
@@ -909,7 +912,7 @@ def get_sketch(sesion, sketch: str | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
-    return info_boceto(sesion, op_boceto(sesion, sketch))
+    return info_boceto(sesion, op_boceto(sesion, sketch, derivados=True))
 
 
 # ---------------------------------------------------------------- sketch_from_spec

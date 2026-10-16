@@ -21,11 +21,11 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..timeline.operaciones import OpPlano
-from ..timeline.ops_modificar import OpChaflan, OpDesmoldeo, OpEmpalme, OpQuitarEmpalmes, OpVaciado
+from ..timeline.ops_modificar import OpChaflan, OpDesfaseAristas, OpDesmoldeo, OpEmpalme, OpQuitarEmpalmes, OpVaciado
 from ..timeline.ops_solido import OpAgujero, OpRosca
 from . import selectores as sl
 from .errores import ErrorAPI, error
-from .herramientas_boceto import boceto_activo, nombre_nuevo, texto_expr
+from .herramientas_boceto import boceto_activo, boceto_resuelto, nombre_nuevo, texto_expr
 from .herramientas_solido import _agregar, _numero_positivo
 from .registro import Expr, herramienta
 
@@ -142,6 +142,55 @@ def remove_fillets(sesion, body: str, max_radius: Expr):
     res["fillets_removed"] = encontrados
     res["bodies_affected"] = [cuerpo.id]
     return res
+
+
+@herramienta("offset_edges", "solido",
+             "Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loop» de Plasticity): crea un "
+             "boceto NUEVO con curvas a `distance` de las elegidas, sin tocar ni cortar el cuerpo. Las aristas (edges: "
+             "selector, ids de find_edges o lista) y las curvas de boceto (curves + sketch) se unen en cadenas y se "
+             "desfasan sobre un plano: `plane` (\"XY\", \"XZ\", \"YZ\" o UNA cara plana: selector o id de find_faces) "
+             "o, si no se da, el plano que las contiene a todas (una recta sola o aristas en línea no lo definen: "
+             "falla y pide plane). distance > 0 va a la derecha del recorrido de la cadena (el sentido de la primera "
+             "arista elegida) y las cadenas cerradas crecen; negativa, al otro lado; symmetric hace los dos lados. "
+             "Las curvas quedan como geometría fija del boceto nuevo (sirve para extruir). " + _PERSISTENTE,
+             modifica=True)
+def offset_edges(sesion, distance: Expr, edges: Elementos | None = None, curves: list[int] | None = None,
+                 sketch: str | None = None, plane: str | None = None, symmetric: bool = False,
+                 corners: Literal["round", "sharp"] = "round", body: str | None = None):
+    """
+    distance: separación en mm (número o expresión con parámetros); negativa = al lado contrario.
+    edges: aristas a desfasar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista; vacío = ninguna.
+    curves: ids de curvas de un boceto (get_sketch) a desfasar; piden `sketch`.
+    sketch: id o nombre del boceto de `curves`; vacío = el último boceto del timeline.
+    plane: plano del desfase: "XY", "XZ", "YZ" o una cara plana (selector o id); vacío = el que contiene a todas.
+    symmetric: true hace el desfase a los dos lados (distance se toma en valor absoluto).
+    corners: round (arcos en las esquinas) o sharp (las esquinas se prolongan hasta cortarse).
+    body: cuerpo donde se evalúan los selectores de edges y de plane; vacío = el único cuerpo.
+    """
+    referencias = []
+    if edges:
+        referencias += _refs(sesion, edges, "arista", body)[0]
+    if curves:
+        op_b, br_b = boceto_activo(sesion, sketch)
+        faltan = [c for c in curves if c not in br_b.boceto.curvas]
+        if faltan:
+            raise error("ENTITY_NOT_FOUND", f"El boceto «{op_b.nombre}» no tiene las curvas {faltan} (get_sketch las lista).")
+        referencias += [{"tipo": "curva_boceto", "boceto": op_b.id, "curva": int(c)} for c in curves]
+    if not referencias:
+        raise error("INVALID_ARGUMENTS", "Elegí qué desfasar: edges o curves.")
+    ref_plano = None
+    if plane is not None and str(plane).strip():
+        texto = str(plane).strip()
+        ref_plano = ({"tipo": "plano", "id": texto.upper()} if texto.upper() in ("XY", "XZ", "YZ")
+                     else _refs(sesion, texto, "cara", body)[0][0])
+    doc = sesion.doc
+    op = OpDesfaseAristas(doc.nuevo_id(), nombre_nuevo(doc, "Desfase de aristas", OpDesfaseAristas),
+                          referencias=referencias, plano=ref_plano, distancia=texto_expr(distance),
+                          simetrico=bool(symmetric), esquinas="redondas" if corners == "round" else "vivas")
+    doc.agregar(op)
+    br = boceto_resuelto(sesion, op)
+    return {"sketch": {"id": op.id, "name": op.nombre, "type": op.TIPO}, "profiles": None if br is None else len(br.perfiles),
+            "curves": None if br is None else len(br.boceto.curvas)}
 
 
 # ---------------------------------------------------------------- agujero

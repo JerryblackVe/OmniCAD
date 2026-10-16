@@ -9,8 +9,8 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .operaciones import (ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _resolver, _resolver_todas,
-                          atributos_copia, registrar_operacion)
+from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
+                          _resolver_todas, atributos_copia, detectar, registrar_operacion, resolver)
 
 
 def _sm():
@@ -336,6 +336,41 @@ class OpDesfaseCara(Operacion):
                                            tangente=self.p["tangente"])
 
 
+class OpDesfaseAristas(Operacion):
+    """Desfase de aristas o curvas (Offset Edge / Offset Face Loop de Plasticity): un boceto NUEVO con curvas a una
+    distancia de las elegidas, sin tocar ni cortar el cuerpo. Las aristas (de cuerpos o curvas de un boceto) se unen en
+    cadenas y se desfasan sobre un plano: el de `plano` (cara o plano) o, si no se da, el que contiene a todas.
+    distancia > 0 = a la derecha del recorrido de la cadena (las cerradas crecen); `simetrico` hace los dos lados.
+    El boceto resultante es fijo (como una proyección): sigue al modelo, pero no se edita a mano."""
+    TIPO, ETIQUETA, ICONO = "desfase_aristas", "Desfase de aristas", "⇉"
+    PARAMS = {"referencias": [], "plano": None, "distancia": "1 mm", "simetrico": False, "esquinas": "redondas"}
+    EXPRESIONES = ("distancia",)
+    OPCIONES = {"esquinas": ("redondas", "vivas")}
+    BOCETO_DERIVADO = True          # genera un boceto (de lectura): la API lo acepta en extruir, revolucionar, etc.
+    boceto = Boceto()               # sin curvas propias: lo que se dibuja sale de `ejecutar`
+
+    def dependencias(self):
+        return _deps_refs(self.p["referencias"], self.p["plano"]) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        from ..nucleo import desfase_aristas as da
+        from ..nucleo.perfiles import proyectar_forma
+        p = self.p
+        if not p["referencias"]:
+            raise ErrorOperacion("Elegí las aristas o curvas a desfasar.")
+        formas = [e.forma for e in _resolver_todas(p["referencias"], estado, ("arista", "curva_boceto"))]
+        try:
+            plano = ent.como_plano(_resolver(p["plano"], estado)) if p["plano"] else da.plano_de_aristas(formas)
+            alambres = da.desfasar_aristas(formas, plano, ctx.evaluar(p["distancia"]), p["simetrico"], p["esquinas"])
+        except geo.ErrorGeometria as e:
+            raise ErrorOperacion(str(e)) from None
+        boceto = Boceto()
+        prims = [prim for w in alambres for prim in proyectar_forma(w, plano)[0]]
+        boceto.agregar_proyeccion(prims, ())
+        estado.bocetos[self.id] = BocetoResuelto(self.id, self.nombre, boceto, plano,
+                                                 detectar(boceto.geometria(), plano), resolver(boceto, {}))
+
+
 class OpReemplazarCara(Operacion):
     """Reemplazar cara de Fusion [GUID-CA081251]: lleva caras del cuerpo hasta una cara o plano destino."""
     TIPO, ETIQUETA, ICONO = "reemplazar_cara", "Reemplazar cara", "⇥"
@@ -492,5 +527,5 @@ class OpBorrarCaras(Operacion):
 
 
 registrar_operacion(OpMover, OpQuitar, OpEmpalme, OpChaflan, OpVaciado, OpDesmoldeo, OpEscala, OpDesfaseCara,
-                    OpReemplazarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
+                    OpDesfaseAristas, OpReemplazarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
                     OpApoyar, OpQuitarEmpalmes)

@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-174 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+175 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 30 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 31 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -1050,6 +1050,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
 | [`remove_fillets`](#remove_fillets) | sí | Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius («Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). |
+| [`offset_edges`](#offset_edges) | sí | Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loop» de Plasticity): crea un boceto NUEVO con curvas a `distance` de las elegidas, sin tocar ni cortar el cuerpo. |
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
 | [`create_thread`](#create_thread) | sí | Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. |
 | [`draft`](#draft) | sí | Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. |
@@ -1360,6 +1361,22 @@ Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max
   - `body` (texto; obligatorio): id o nombre del cuerpo al que sacarle los empalmes.
   - `max_radius` (número o expresión; obligatorio): radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
 - CLI: `omnicad call remove_fillets --doc pieza.omnicad body=… max_radius=…`
+
+### `offset_edges`
+
+Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loop» de Plasticity): crea un boceto NUEVO con curvas a `distance` de las elegidas, sin tocar ni cortar el cuerpo. Las aristas (edges: selector, ids de find_edges o lista) y las curvas de boceto (curves + sketch) se unen en cadenas y se desfasan sobre un plano: `plane` ("XY", "XZ", "YZ" o UNA cara plana: selector o id de find_faces) o, si no se da, el plano que las contiene a todas (una recta sola o aristas en línea no lo definen: falla y pide plane). distance > 0 va a la derecha del recorrido de la cadena (el sentido de la primera arista elegida) y las cadenas cerradas crecen; negativa, al otro lado; symmetric hace los dos lados. Las curvas quedan como geometría fija del boceto nuevo (sirve para extruir). Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `distance` (número o expresión; obligatorio): separación en mm (número o expresión con parámetros); negativa = al lado contrario.
+  - `edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas a desfasar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista; vacío = ninguna.
+  - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas de un boceto (get_sketch) a desfasar; piden `sketch`.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de `curves`; vacío = el último boceto del timeline.
+  - `plane` (texto; opcional, por defecto `null`): plano del desfase: "XY", "XZ", "YZ" o una cara plana (selector o id); vacío = el que contiene a todas.
+  - `symmetric` (true/false; opcional, por defecto `false`): true hace el desfase a los dos lados (distance se toma en valor absoluto).
+  - `corners` ("round" | "sharp"; opcional, por defecto `"round"`): round (arcos en las esquinas) o sharp (las esquinas se prolongan hasta cortarse).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de edges y de plane; vacío = el único cuerpo.
+- CLI: `omnicad call offset_edges --doc pieza.omnicad distance=…`
 
 ### `create_hole`
 
