@@ -393,12 +393,10 @@ def _quitar_cables_colgados(forma):
         for s in nuevos:
             builder.Add(compuesto, s)
         limpia = compuesto
-    try:
-        mejora = (es_valida(limpia) and len(caras(limpia)) == caras_antes
-                  and len(solidos(limpia)) == len(solidos_crudos)
-                  and abs(volumen(limpia) - volumen(forma)) <= 1e-4 * max(volumen(forma), 1e-9))
-    except Exception:  # noqa: BLE001 — si el kernel no sabe medir la reconstrucción, no se usa
-        return forma
+    volumen_original = volumen(forma)
+    mejora = (es_valida(limpia) and len(caras(limpia)) == caras_antes
+              and len(solidos(limpia)) == len(solidos_crudos)
+              and abs(volumen(limpia) - volumen_original) <= 1e-4 * max(volumen_original, 1e-9))
     return limpia if mejora else forma
 
 
