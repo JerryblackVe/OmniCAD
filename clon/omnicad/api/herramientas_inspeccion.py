@@ -103,7 +103,8 @@ def _camara(atras, puntos, aspecto, fov):
              "suelo) desde una vista estándar o una dirección propia. Es la forma de VER el resultado.")
 def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bottom", "left", "right"] = "iso",
                        width: int = 640, height: int = 480, bodies: list[str] | None = None, fit: bool = True,
-                       direction: list[float] | None = None):
+                       direction: list[float] | None = None,
+                       lighting: Literal["three_point", "key_only"] = "three_point"):
     """
     view: vista estándar: las caras del ViewCube de Fusion con Z arriba, nombradas por los ejes del MUNDO (no por
         el frente de la pieza). "front": cámara en -Y, se ve la cara -Y con +X a la derecha; "back": cámara en +Y;
@@ -116,6 +117,8 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
     fit: true encuadra los cuerpos dibujados; false encuadra TODA la escena aunque se dibuje solo una parte
         (sirve para comparar imágenes con el mismo encuadre).
     direction: [x, y, z] vector desde el modelo HACIA la cámara (Z es arriba); si se pasa, reemplaza a view.
+    lighting: "three_point" = iluminación de tres puntos (luz principal, relleno y contorno); "key_only" = solo la
+        luz principal. Es la opción «Iluminación de la vista» de Preferencias › Gráficos.
     """
     for nombre, valor in (("width", width), ("height", height)):
         if not _LADO_MINIMO <= valor <= _LADO_MAXIMO:
@@ -142,7 +145,8 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
     k = min(2.0, max(1.0, math.sqrt(_PIXELES_RENDER / (width * height))))
     w, h = round(width * k), round(height * k)
     res = int(min(2048, max(512, 2 ** math.ceil(math.log2(max(w, h) * 1.5)))))
-    rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, z_suelo=z_suelo, res_sombras=res, mosaico=2048)
+    rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, z_suelo=z_suelo, res_sombras=res, mosaico=2048,
+                         n_luces=1 if lighting == "key_only" else 3)
     from PIL import Image                            # Pillow: ya lo usa render_cpu.guardar_png
     imagen = Image.fromarray(np.ascontiguousarray(rgba[..., :3]), "RGB")
     if (w, h) != (width, height):

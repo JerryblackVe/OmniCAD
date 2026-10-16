@@ -93,6 +93,13 @@ temas.observar(lambda: ENTORNOS.__setitem__("tema", _entorno_tema()))      # al 
 # caras y brillos marcados en las curvas (medido en el video: arriba #666, costados #393939–#5f5f5f).
 LUZ_AMBIENTE = {"tema": 0.11}            # el resto de los entornos: 0.30
 LUZ_BRILLO = {"tema": (1.0, 20.0)}       # (intensidad especular de la luz, shininess); el resto: (0.35, 48)
+# Luces del visor (Preferencias › Gráficos): (dirección hacia la luz en el marco de la cámara, factor difuso, factor
+# especular). «una» es la de siempre; «tres» es la iluminación de tres puntos: principal, relleno del lado opuesto y
+# contorno desde arriba y atrás (marca el borde superior de las piezas).
+LUCES_VISOR = {
+    "una": (((0.3, 0.6, 1.0), 1.0, 1.0),),
+    "tres": (((0.55, 0.60, 0.90), 0.80, 1.0), ((-0.90, -0.10, 0.45), 0.40, 0.30), ((0.0, 0.70, -0.50), 0.60, 0.60)),
+}
 COLOR_EJE = ((0.86, 0.26, 0.26), (0.32, 0.72, 0.32), (0.30, 0.45, 0.95))
 NARANJA_PLANO = (0.95, 0.66, 0.30)
 AZUL_PERFIL = (0.30, 0.55, 0.95)
@@ -315,6 +322,8 @@ class ConfigVista:
         # Menos detalle a la distancia (NIVELES_LOD). Fusion lo hace por dentro, sin opción: acá tampoco se muestra;
         # el interruptor sirve para medir con y sin (bench).
         self.detalle_distancia = True
+        self.luces = "una"                  # clave de LUCES_VISOR (Preferencias › Gráficos)
+        self.indicador_giro = True          # cruz en el centro de giro mientras se orbita, como Fusion
 
     def colores_fondo(self):
         _, arriba, abajo, _ = ENTORNOS.get(self.entorno, ENTORNOS["tema"])
@@ -1719,13 +1728,22 @@ class Visor3D(QOpenGLWidget):
         GL.glMatrixMode(GL.GL_MODELVIEW)
         GL.glLoadIdentity()
         luz = ENTORNOS.get(cfg.entorno, ENTORNOS["tema"])[3]
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, (luz, luz, luz, 1))
         amb = LUZ_AMBIENTE.get(cfg.entorno, 0.30)
         brillo, dureza = LUZ_BRILLO.get(cfg.entorno, (0.35, 48.0))
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, (amb, amb, amb * 1.04, 1))
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, (brillo, brillo, brillo, 1))
         GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, dureza)
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, (0.3, 0.6, 1.0, 0.0))   # luz fija respecto de la cámara
+        luces = LUCES_VISOR.get(cfg.luces, LUCES_VISOR["una"])
+        for i in range(len(LUCES_VISOR["tres"])):
+            ident = GL.GL_LIGHT0 + i
+            if i >= len(luces):
+                GL.glDisable(ident)
+                continue
+            posicion, k_dif, k_esp = luces[i]
+            a = amb if i == 0 else 0.0                       # el ambiente se suma una sola vez
+            GL.glEnable(ident)
+            GL.glLightfv(ident, GL.GL_DIFFUSE, (luz * k_dif, luz * k_dif, luz * k_dif, 1))
+            GL.glLightfv(ident, GL.GL_AMBIENT, (a, a, a * 1.04, 1))
+            GL.glLightfv(ident, GL.GL_SPECULAR, (brillo * k_esp, brillo * k_esp, brillo * k_esp, 1))
+            GL.glLightfv(ident, GL.GL_POSITION, (*posicion, 0.0))   # luces fijas respecto de la cámara
         GL.glLoadMatrixf(vista.T.astype(np.float32))
         GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
         GL.glDisable(GL.GL_LIGHTING)
@@ -1771,8 +1789,20 @@ class Visor3D(QOpenGLWidget):
             self._dibujar_primitivas(prims, AZUL_SELECCION if nombre == "seleccion" else NARANJA_PLANO)
         if self._hover_ent is not None:
             self._dibujar_primitivas(self._hover_ent["dibujo"], AZUL_HOVER)
+        if self.mostrando_centro_giro():
+            self._dibujar_primitivas(self.primitivas_centro_giro(), NARANJA_PLANO)
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
         self.camara_cambiada.emit()
+
+    def mostrando_centro_giro(self):
+        """El indicador del centro de giro se ve solo mientras el arrastre en curso es una órbita."""
+        return self.config.indicador_giro and self._accion == "orbita"
+
+    def primitivas_centro_giro(self):
+        """Cruz y punto en el centro de giro (el objetivo de la cámara), de tamaño fijo en píxeles."""
+        c, r = self.objetivo, 9.0 / self.px_por_mm()
+        cruz = np.array([c - self.R[0] * r, c + self.R[0] * r, c - self.R[1] * r, c + self.R[1] * r], np.float32)
+        return [("lineas", cruz, NARANJA_PLANO, 2.5), ("puntos", c.reshape(1, 3), (1.0, 1.0, 1.0), 6.0)]
 
     # ------------------------------------------------------------ ratón y teclado
     def accion_raton(self, boton, mods):
@@ -1819,6 +1849,8 @@ class Visor3D(QOpenGLWidget):
             return
         self._ultimo, self._boton = pos, e.button()
         self._accion = self.accion_raton(e.button(), e.modifiers())
+        if self._accion == "orbita":
+            self.update()                   # aparece el indicador del centro de giro
         if e.button() == Qt.RightButton and self._accion is None:
             self._gesto_inicio = pos
         if e.button() == Qt.LeftButton and self._accion is None and self.modo is None and self.filtro:
@@ -1862,7 +1894,10 @@ class Visor3D(QOpenGLWidget):
             if self.modo == "sel_libre" and len(puntos) >= 3:
                 self.seleccion_region.emit([(p.x(), p.y()) for p in puntos], False)
             return
+        era_orbita = self._accion == "orbita"
         self._boton, self._accion = None, None
+        if era_orbita:
+            self.update()                   # se oculta el indicador del centro de giro
         self._banda_pendiente = None
         self._t_largo.stop()
         if self._largo_hecho and e.button() == Qt.LeftButton:

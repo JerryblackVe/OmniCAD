@@ -514,6 +514,7 @@ class VentanaPrincipal(QMainWindow):
             p["graficos/preset"] = self._preset_aplicado = "personalizar"
         c.efectos = {k: p[f"vista/efecto_{k}"] for k in EFECTOS}
         c.dinamico, c.fps_minimo, c.limite_fps = p["graficos/dinamico"], p["graficos/fps_minimo"], p["graficos/limite_fps"]
+        c.luces, c.indicador_giro = p["graficos/luces"], p["graficos/indicador_giro"]
         teselado, angular = DETALLES.get(p["graficos/detalle"], DETALLES["automatico"])
         if (teselado, angular) != (c.teselado, c.angular):
             c.teselado, c.angular = teselado, angular

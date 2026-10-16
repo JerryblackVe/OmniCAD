@@ -549,9 +549,10 @@ class MapaSombras:
 
 
 # ---------------------------------------------------------------- sombreado
-def sombrear(p, n, v, albedo, met, rug, barniz, cielo, rotacion, brillo, sombra, ao):
+def sombrear(p, n, v, albedo, met, rug, barniz, cielo, rotacion, brillo, sombra, ao, n_luces=3):
     """Modelo de sombreado (lineal). Devuelve (difuso Nx3, especular Nx3, Fresnel medio N): el color de una
-    superficie opaca es difuso + especular. Igual que el shader GLSL del lienzo."""
+    superficie opaca es difuso + especular. Igual que el shader GLSL del lienzo. `n_luces` = 1 deja solo la luz
+    principal (sin relleno ni contorno)."""
     n = _unit(n)
     nv = np.clip(np.einsum("ij,ij->i", n, v), 1e-4, 1.0)
     f0 = 0.04 * (1 - met[:, None]) + albedo * met[:, None]
@@ -560,7 +561,7 @@ def sombrear(p, n, v, albedo, met, rug, barniz, cielo, rotacion, brillo, sombra,
     s = np.clip(2.0 / (alfa * alfa) - 2.0, 1.0, 4096.0)
     dif = irradiancia(n, cielo, brillo) * ao[:, None]
     esp = np.zeros_like(dif)
-    for i, (L, k) in enumerate(zip(luces(rotacion), INTENSIDAD_LUCES, strict=True)):
+    for i, (L, k) in enumerate(zip(luces(rotacion)[:n_luces], INTENSIDAD_LUCES, strict=False)):
         nl = np.clip(n @ L, 0.0, 1.0)
         vis = sombra if i == 0 else 1.0
         intensidad = k * float(cielo[2]) * brillo * nl * vis
@@ -628,8 +629,9 @@ class RenderCancelado(Exception):
 
 
 class _Escena:
-    def __init__(self, objetos, escena, cielo, z_suelo, res_sombras):
+    def __init__(self, objetos, escena, cielo, z_suelo, res_sombras, n_luces=3):
         self.e = escena_normalizada(escena)
+        self.n_luces = n_luces
         self.cielo = cielo or CIELO_DEFECTO
         tris, nors, locs, albedo, mats = [], [], [], [], []
         for o in objetos:
@@ -733,7 +735,7 @@ def _sombrear_pixeles(esc, p, n, v, t, lw, sombra, ao):
         color[madera] = veta_madera(loc, alb[madera, :3], alb[madera, 3:])
     n = np.where((np.einsum("ij,ij->i", n, v) < 0)[:, None], -n, n)       # doble cara
     dif, esp, fr = sombrear(p, n, v, color, m[:, 0], m[:, 1], m[:, 3], esc.cielo, esc.e["rotacion"],
-                            esc.e["brillo"], sombra, ao)
+                            esc.e["brillo"], sombra, ao, esc.n_luces)
     return dif, esp, fr, color, m[:, 2]
 
 
@@ -835,8 +837,9 @@ def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1
 
 
 def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, cielo=None,
-               fondo_transparente=False, z_suelo=None, res_sombras=2048, progreso=None, mosaico=1024):
-    """Imagen RGBA uint8 (alto, ancho, 4) de la escena.
+               fondo_transparente=False, z_suelo=None, res_sombras=2048, progreso=None, mosaico=1024, n_luces=3):
+    """Imagen RGBA uint8 (alto, ancho, 4) de la escena. n_luces: 3 = principal, relleno y contorno (iluminación de
+    tres puntos); 1 = solo la principal.
 
     objetos: [{"v": triángulos sueltos Nx3 (mundo), "n": normales Nx3, "color": sRGB 0..1, "acabado": dict,
     "material": nombre del material físico (si no hay acabado), "opacidad": 0..1, "local": Nx3 (opcional,
@@ -846,7 +849,7 @@ def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, 
     ancho, alto, ss = int(ancho), int(alto), max(1, int(supermuestreo))
     if ancho < 1 or alto < 1:
         raise geo.ErrorGeometria("La imagen tiene que medir al menos 1 × 1 píxel.")
-    esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras)
+    esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras, n_luces)
     W, H = ancho * ss, alto * ss
     proy, vista = matrices_camara(cam, W / H)
     salida = np.zeros((alto, ancho, 4))

@@ -47,6 +47,16 @@ def _colores_distintos(img, paso=7):
     return len(vistos)
 
 
+def _pixeles_distintos(a, b, paso=3):
+    """Cuántos píxeles (muestreados cada `paso`) difieren bastante entre dos capturas de la misma vista."""
+    n = 0
+    for x in range(0, a.width(), paso):
+        for y in range(0, a.height(), paso):
+            p, q = a.pixelColor(x, y), b.pixelColor(x, y)
+            n += abs(p.red() - q.red()) + abs(p.green() - q.green()) + abs(p.blue() - q.blue()) > 24
+    return n
+
+
 def _interfaz(v, r):
     cinta = v.cinta
     r.check([b.text() for b in cinta.pestanas] == ["SÓLIDO", "SUPERFICIE", "MALLA", "CHAPA", "PLÁSTICO", "ADMINISTRAR",
@@ -130,6 +140,29 @@ def _interfaz(v, r):
     QTest.qWait(30)
     r.check(_colores_distintos(v.visor.grabFramebuffer()) > 50, "Reflejo en el suelo dibuja")
     v.cambiar_vista("efecto:reflejo", False)
+
+    # F16: iluminación de tres puntos (Preferencias › Gráficos) e indicador del centro de giro al orbitar
+    v.visor.vista("iso")
+    QTest.qWait(50)
+    una = v.visor.grabFramebuffer()
+    v.prefs["graficos/luces"] = "tres"
+    v.aplicar_preferencias()
+    QTest.qWait(50)
+    r.check(v.visor.config.luces == "tres" and _pixeles_distintos(una, v.visor.grabFramebuffer()) > 100,
+            "F16: la iluminación de tres puntos cambia la vista")
+    v.prefs["graficos/luces"] = "una"
+    v.aplicar_preferencias()
+    centro = v.visor.rect().center()
+    QTest.qWait(50)
+    quieta = v.visor.grabFramebuffer()
+    QTest.mousePress(v.visor, Qt.MiddleButton, Qt.ShiftModifier, centro)        # Mayús + medio = órbita (esquema Fusion)
+    QTest.qWait(50)
+    r.check(v.visor.mostrando_centro_giro() and _pixeles_distintos(quieta, v.visor.grabFramebuffer(), 1) > 10,
+            "F16: el centro de giro se dibuja mientras se orbita")
+    QTest.mouseRelease(v.visor, Qt.MiddleButton, Qt.ShiftModifier, centro)
+    QTest.qWait(50)
+    r.check(not v.visor.mostrando_centro_giro() and _pixeles_distintos(quieta, v.visor.grabFramebuffer(), 1) == 0,
+            "F16: el centro de giro se oculta al soltar")
 
     # Cámara: perspectiva con caras ortográficas, órbita libre y restringida
     v.cambiar_vista("camara", "persp_orto_caras")

@@ -38,6 +38,8 @@ DEFECTOS = {
     "graficos/dinamico": True,               # Fusion «Dynamic»: menos efectos al navegar si baja de fps_minimo
     "graficos/fps_minimo": 30,               # Fusion «Minimum framerate during navigation (FPS)»
     "graficos/limite_fps": 0,                # 0 = sin límite; 30 o 15 ahorran batería
+    "graficos/luces": "una",                 # iluminación del visor: una (la de siempre) o tres (tres puntos)
+    "graficos/indicador_giro": True,         # cruz en el centro de giro mientras se orbita (como Fusion)
     "unidades/precision": 3,
     "unidades/precision_angular": 1,
     "unidades/ocultar_ceros": True,
@@ -193,6 +195,9 @@ PAGINAS = [
          [(n, str(n)) for n in (15, 20, 30, 45, 60)]),
         ("graficos/limite_fps", "Límite de cuadros por segundo", "combo",
          [(0, "Sin límite"), (60, "60"), (30, "30 (ahorro de batería)"), (15, "15 (máximo ahorro de batería)")]),
+        ("graficos/luces", "Iluminación de la vista", "combo",
+         [("una", "Una luz"), ("tres", "Tres puntos (principal, relleno y contorno)")]),
+        ("graficos/indicador_giro", "Mostrar el centro de giro al orbitar", "check", None),
         ("vista/efecto_cupula", "Cúpula de entorno", "check", None),
         ("vista/efecto_suelo", "Plano del suelo", "check", None),
         ("vista/efecto_sombra_suelo", "Sombra en el suelo", "check", None),
