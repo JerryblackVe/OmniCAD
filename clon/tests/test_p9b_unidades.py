@@ -71,6 +71,32 @@ def test_unidades_ajenas_o_rotas_en_el_archivo_se_ignoran(basura):
     assert Documento.desde_dict(receta).unidades == {"longitud": "mm", "masa": "g"}
 
 
+def test_apply_recipe_trae_las_unidades_de_la_receta_y_las_restaura_si_falla():
+    s = _doc_con_caja()
+    assert api.llamar(s, "set_document_units", {"length": "in"})["ok"]
+    receta = api.llamar(s, "get_recipe", {})["result"]
+    otra = api.Sesion()
+    assert api.llamar(otra, "apply_recipe", {"recipe": receta})["ok"]
+    assert otra.doc.unidades == {"longitud": "in", "masa": "g"}
+    sin_unidades = Documento().a_dict()                          # una receta sin `unidades` = mm y g
+    assert api.llamar(otra, "apply_recipe", {"recipe": sin_unidades})["ok"]
+    assert otra.doc.unidades == {"longitud": "mm", "masa": "g"}
+    assert api.llamar(otra, "set_document_units", {"length": "ft"})["ok"]
+    rota = Documento().a_dict()
+    rota["unidades"] = {"longitud": "cm"}
+    rota["operaciones"] = [{"tipo": "no_existe", "id": "op1"}]
+    assert api.llamar(otra, "apply_recipe", {"recipe": rota})["ok"] is False
+    assert otra.doc.unidades == {"longitud": "ft", "masa": "g"}
+
+
+def test_un_execute_code_que_falla_deja_las_unidades_como_estaban():
+    s = _doc_con_caja()
+    s.doc.modificado = False
+    r = api.llamar(s, "execute_code", {"code": "llamar('set_document_units', {'length': 'in'})\nraise ValueError('x')"})
+    assert r["ok"] is False and r["error_kind"] == "CODE_ERROR"
+    assert s.doc.unidades == {"longitud": "mm", "masa": "g"} and s.doc.modificado is False
+
+
 def test_el_modelo_no_cambia_con_las_unidades():
     s = _doc_con_caja()
     antes = api.llamar(s, "get_physical_properties", {})["result"]["total"]["volume"]

@@ -16,6 +16,7 @@ Esta capa no hace geometría: arma operaciones con los diálogos y se las pasa a
 """
 import logging
 import time
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -28,7 +29,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDia
 from .. import NOMBRE_APP, RECURSOS, VERSION
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
-from .mas_comando import FiltroMas, leer_barra, leer_teclas
+from .mas_comando import FiltroMas, _normal, leer_barra, leer_teclas
 from .sugerencias import TiraSugerencias, comandos_sugeridos
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
@@ -265,13 +266,17 @@ class VentanaPrincipal(QMainWindow):
                      (imagen_ayuda(clave) + PIE_AYUDA if ayuda else ""))
 
     def aplicar_teclas(self):
-        """Pone a cada comando la combinación elegida en «Más» › Cambiar atajo (o la de fábrica)."""
+        """Pone a cada comando la combinación elegida en «Más» › Cambiar atajo (o la de fábrica). Una elegida que ya
+        usa otro comando (preferencia editada a mano, o una versión nueva que le dio esa tecla a otro) no se aplica:
+        dos comandos con la misma tecla hacen que Qt no dispare ninguno."""
         teclas = leer_teclas(self.prefs)
-        for clave, a in self.acciones.items():
-            defecto = a.property("atajo_defecto")
-            if defecto is None:                         # no la hizo `_accion` (p. ej. las del boceto)
-                continue
-            efectivo = teclas.get(clave, defecto)
+        propias = {c: a for c, a in self.acciones.items() if a.property("atajo_defecto") is not None}
+        efectivos = {c: teclas.get(c, a.property("atajo_defecto")) for c, a in propias.items()}
+        usos = Counter(_normal(s) for s in efectivos.values() if _normal(s))
+        for clave, a in propias.items():
+            efectivo = efectivos[clave]
+            if clave in teclas and _normal(efectivo) and usos[_normal(efectivo)] > 1:
+                efectivo = a.property("atajo_defecto")
             if a.shortcut() != QKeySequence(efectivo):
                 self._poner_atajo(a, efectivo)
 

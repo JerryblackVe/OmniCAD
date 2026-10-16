@@ -114,6 +114,7 @@ class Sesion:
         doc = self.doc
         antes = json.dumps(doc.a_dict())
         pila, pila_rehacer, modificado = list(doc._deshacer), list(doc._rehacer), doc.modificado
+        unidades = dict(doc.unidades)    # no entran en deshacer (set_document_units): se restauran a mano
         contador = doc._contador         # una llamada que falla no gasta números de id (la receta queda idéntica)
         previos = self._estados_pasos()
         try:
@@ -139,6 +140,10 @@ class Sesion:
                 doc._cargar(json.loads(antes))
                 doc._deshacer[:], doc._rehacer[:] = pila, pila_rehacer
                 doc.modificado = modificado
+            if self.doc is doc and doc.unidades != unidades:
+                doc.unidades = unidades
+                doc.modificado = modificado
+                doc._notificar()
             if self.doc is doc:
                 doc._contador = contador
             raise

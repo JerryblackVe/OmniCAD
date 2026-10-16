@@ -642,6 +642,19 @@ class Documento:
                 "espacios": self.espacios, "comentarios": self.comentarios,
                 **({"unidades": self.unidades} if self.unidades != UNIDADES_DEFECTO else {})}
 
+    @staticmethod
+    def unidades_de(datos):
+        """Las unidades de pantalla de una receta; un archivo viejo o ajeno: lo que no sirve se ignora (puede venir
+        una lista, un número…) y queda mm/g."""
+        unidades = dict(UNIDADES_DEFECTO)
+        guardadas = datos.get("unidades")
+        guardadas = guardadas if isinstance(guardadas, dict) else {}
+        for magnitud, validas in (("longitud", LONGITUDES), ("masa", MASAS)):
+            valor = guardadas.get(magnitud)
+            if isinstance(valor, str) and valor in validas:
+                unidades[magnitud] = valor
+        return unidades
+
     @classmethod
     def desde_dict(cls, datos, cache=None):
         """Documento desde una receta. `cache` ({índice de paso: (datos, formas)}, lo que guardó `pasos_para_cache`
@@ -654,12 +667,7 @@ class Documento:
         doc.vistas = dict(datos.get("vistas", {}))
         doc.espacios = dict(datos.get("espacios", {}))
         doc.comentarios = [dict(c) for c in datos.get("comentarios", [])]
-        guardadas = datos.get("unidades")
-        guardadas = guardadas if isinstance(guardadas, dict) else {}
-        for magnitud, validas in (("longitud", LONGITUDES), ("masa", MASAS)):    # un archivo viejo o ajeno: lo que no sirve
-            valor = guardadas.get(magnitud)                                       # se ignora (puede venir una lista, etc.)
-            if isinstance(valor, str) and valor in validas:
-                doc.unidades[magnitud] = valor
+        doc.unidades = cls.unidades_de(datos)
         doc._cache = cache or {}
         try:
             doc._cargar(datos)

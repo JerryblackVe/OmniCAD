@@ -610,8 +610,8 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
         recipe = recipe["recipe"]                     # el resultado de get_recipe tal cual
     _validar_receta(recipe)
     doc = sesion.doc
-    # Nombre, vistas, espacios y comentarios no son parte de `_cargar` ni de la transacción: se restauran acá.
-    previos = (doc.nombre, doc.vistas, doc.espacios, doc.comentarios)
+    # Nombre, vistas, espacios, comentarios y unidades no son parte de `_cargar` ni de la transacción: se restauran acá.
+    previos = (doc.nombre, doc.vistas, doc.espacios, doc.comentarios, doc.unidades)
     estados = sesion._estados_pasos()
     try:
         if mode == "replace":
@@ -620,6 +620,7 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
             doc.nombre = recipe.get("nombre", "Sin título")
             doc.vistas, doc.espacios = dict(recipe.get("vistas", {})), dict(recipe.get("espacios", {}))
             doc.comentarios = [dict(c) for c in recipe.get("comentarios", [])]
+            doc.unidades = type(doc).unidades_de(recipe)
         else:
             combinada = doc.a_dict()
             existentes = {p["nombre"]: p for p in combinada["parametros"]}
@@ -643,7 +644,7 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
             if r.estado == "error" and estados.get(o.id, ("",))[0] != "error":
                 raise desde_mensaje(r.mensaje, f"El paso «{o.nombre}» ({o.id}) de la receta quedó con error: ")
     except Exception as e:  # noqa: BLE001 — la transacción restaura el resto del documento al relanzar
-        doc.nombre, doc.vistas, doc.espacios, doc.comentarios = previos
+        doc.nombre, doc.vistas, doc.espacios, doc.comentarios, doc.unidades = previos
         if hasattr(e, "error_kind"):
             raise
         raise error("INVALID_RECIPE", f"No se pudo cargar la receta: {type(e).__name__}: {e}") from e

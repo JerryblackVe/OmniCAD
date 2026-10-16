@@ -23,12 +23,15 @@ ANCHO_MAS = 22           # px de la zona del «⋮» contra el borde derecho de 
 
 # ---------------------------------------------------------------- preferencias
 def leer_teclas(prefs):
-    """{clave de comando: combinación elegida por el usuario}; un JSON roto o ajeno se ignora."""
+    """{clave de comando: combinación elegida por el usuario}; un JSON roto o ajeno se ignora, y también cada valor
+    que no es una combinación de teclas ("" = sin atajo)."""
     try:
         datos = json.loads(prefs["atajos/teclas"] or "{}")
-    except ValueError:
+    except (ValueError, RecursionError):
         return {}
-    return {str(c): str(t) for c, t in datos.items()} if isinstance(datos, dict) else {}
+    if not isinstance(datos, dict):
+        return {}
+    return {str(c): t for c, t in datos.items() if isinstance(t, str) and (t == "" or _normal(t))}
 
 
 def guardar_teclas(prefs, teclas):
@@ -120,7 +123,7 @@ class FiltroMas(QObject):
         """La clave del comando de la ventana, o None (separadores, submenús, ítems grisados «no disponible»)."""
         if accion is None or accion.menu() is not None or accion.property("atajo_defecto") is None:
             return None
-        return next((c for c, a in self.ventana.acciones.items() if a is accion), None)
+        return accion.property("clave")
 
     @staticmethod
     def zona(menu, accion):

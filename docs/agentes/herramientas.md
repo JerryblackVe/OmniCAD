@@ -67,8 +67,8 @@ Elige las unidades con que la app MUESTRA las medidas del documento (el menú «
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `length` ("mm" | "cm" | "m" | "in" | "ft" o null; opcional, por defecto `null`): unidad de longitud para mostrar (vacío = no cambia).
-  - `mass` ("g" | "kg" | "lb" o null; opcional, por defecto `null`): unidad de masa para mostrar (vacío = no cambia).
+  - `length` ("mm" | "cm" | "m" | "in" | "ft" o null; opcional, por defecto `null`): unidad de longitud para mostrar (omitido o null = no cambia).
+  - `mass` ("g" | "kg" | "lb" o null; opcional, por defecto `null`): unidad de masa para mostrar (omitido o null = no cambia).
 - CLI: `omnicad call set_document_units --doc pieza.omnicad`
 
 ### `new_document`

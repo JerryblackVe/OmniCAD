@@ -155,8 +155,8 @@ def get_scene_info(sesion):
 def set_document_units(sesion, length: Literal["mm", "cm", "m", "in", "ft"] | None = None,
                        mass: Literal["g", "kg", "lb"] | None = None):
     """
-    length: unidad de longitud para mostrar (vacío = no cambia).
-    mass: unidad de masa para mostrar (vacío = no cambia).
+    length: unidad de longitud para mostrar (omitido o null = no cambia).
+    mass: unidad de masa para mostrar (omitido o null = no cambia).
     """
     try:
         sesion.doc.fijar_unidades(length, mass)

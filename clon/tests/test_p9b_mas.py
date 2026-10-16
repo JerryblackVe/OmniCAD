@@ -155,6 +155,21 @@ def test_un_json_roto_de_teclas_no_rompe_la_ventana(ini):
     assert leer_teclas(prefs) == {}
     prefs["atajos/teclas"] = "[1, 2]"
     assert leer_teclas(prefs) == {}
+    prefs["atajos/teclas"] = "[" * 100000                         # anidado sin fin: RecursionError, no ValueError
+    assert leer_teclas(prefs) == {}
+    prefs["atajos/teclas"] = json.dumps({"extruir": None, "vaciado": "Ctrl+Foo", "chaflan_3d": {"a": 1},
+                                         "empalme_3d": "Ctrl+Alt+F", "medir": ""})
+    assert leer_teclas(prefs) == {"empalme_3d": "Ctrl+Alt+F", "medir": ""}
+
+
+def test_una_tecla_repetida_a_mano_en_las_preferencias_no_deja_dos_comandos_con_la_misma(ini):
+    QApplication.instance() or QApplication([])
+    prefs = Preferencias(QSettings(ini, QSettings.IniFormat))
+    prefs["atajos/teclas"] = json.dumps({"vaciado": "E"})          # E es la de fábrica de Extruir
+    v = _ventana(ini)
+    assert v.acciones["extruir"].shortcut() == QKeySequence("E")
+    assert v.acciones["vaciado"].shortcut().isEmpty()              # la repetida no se aplica (Qt no dispararía ninguna)
+    _cerrar(v)
 
 
 def test_el_dialogo_avisa_del_conflicto_y_bloquea_aceptar(v):

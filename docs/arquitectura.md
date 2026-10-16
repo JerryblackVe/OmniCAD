@@ -99,8 +99,8 @@ ZIP (deflate) con:
 
 | Entrada | Contenido |
 |---|---|
-| `manifiesto.json` | `formato: "OmniCAD-proyecto"`, `version_formato: 1`, app, fecha, unidades |
-| `receta.json` | `version_receta`, parámetros, `marcador`, operaciones con sus parámetros y bocetos completos |
+| `manifiesto.json` | `formato: "OmniCAD-proyecto"`, `version_formato: 1`, app, fecha, unidades del modelo (siempre mm y grados) |
+| `receta.json` | `version_receta`, parámetros, `marcador`, operaciones con sus parámetros y bocetos completos; `unidades` (solo si no son mm y g): las de PANTALLA del documento, `{"longitud": "in", "masa": "kg"}` (P9) |
 | `cache/cuerpos.brep` | Compuesto B-rep (opcional, sin la malla del visor): primero los cuerpos finales que no son malla (útil para otras herramientas), después las formas de los pasos lentos |
 | `cache/pasos.json` | Resultado de los pasos que tardaron ≥ 0,1 s y solo cambiaron cuerpos: huella de la receta, cuántas formas son finales y, por paso, sus cuerpos y formas |
 | `miniatura.png` | Captura del visor |
