@@ -87,3 +87,9 @@ de Mac, `Worksession`, líneas de comando con macros (la CLI de OmniCAD ya cubre
 - Las descripciones de cada comando (arriba): de mi conocimiento, no de la ayuda de McNeel.
 - RH6: los nombres `Sel*` son los de la lista; las opciones de cada uno no se leyeron.
 - Qué hace hoy OmniCAD en RH12, RH13 y RH16: buscado en el código, no probado en la app.
+
+## Novedades automáticas (2026-10, sin clasificar)
+
+- [AUTO 2026-10] Notilus Composite for Rhino 8 released — pendiente de clasificar (fuente: https://www.rhino3d.com/news/)
+- [AUTO 2026-10] Notilus Scantling for Rhino 8 released — pendiente de clasificar (fuente: https://www.rhino3d.com/news/)
+- [AUTO 2026-10] Getting to know Notilus Piping: Piping and HVAC design in Rhino — pendiente de clasificar (fuente: https://www.rhino3d.com/news/)
