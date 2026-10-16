@@ -37,6 +37,12 @@ def test_solo_salen_los_comandos_que_existen():
     assert comandos_sugeridos({"cara"}, set()) == []
 
 
+def test_las_claves_sugeridas_son_comandos_que_existen():
+    """Si se renombra un comando, su botón desaparecería de la tira (y del clic derecho) sin que nada falle."""
+    from omnicad.ui.comandos import CATALOGO
+    assert TODOS <= set(CATALOGO)
+
+
 @pytest.fixture
 def ventana(tmp_path):
     QApplication.instance() or QApplication([])
@@ -100,6 +106,25 @@ def test_en_un_boceto_abierto_no_hay_tira(ventana):
     v._seleccionar([_hit_cara_de_arriba(v)])
     assert not v.tira.isVisible()
     v.modo_boceto.terminar()
+
+
+def test_un_documento_nuevo_borra_lo_elegido_y_la_tira(ventana):
+    v = ventana
+    v._seleccionar([_hit_cara_de_arriba(v)])
+    assert v.tira.isVisible()
+    v.doc.modificado = False
+    v.nuevo()
+    assert v.seleccion == [] and not v.tira.isVisible()
+
+
+def test_sin_barra_de_navegacion_la_tira_baja_al_borde(ventana):
+    v = ventana
+    v._seleccionar([_hit_cara_de_arriba(v)])
+    con_barra = v.tira.geometry().bottom()
+    v.area.barra.hide()
+    v.area.reubicar()
+    assert v.tira.geometry().bottom() > con_barra                 # no queda flotando sobre el hueco de la barra
+    assert v.tira.geometry().bottom() == v.area.height() - 8 - 1
 
 
 def test_el_clic_derecho_usa_la_misma_lista(ventana):

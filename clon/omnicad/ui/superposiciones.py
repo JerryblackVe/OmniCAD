@@ -534,7 +534,7 @@ class AreaVisor(QWidget):
             self.barra.raise_()
         if self.tira is not None and self.tira.isVisible():
             self.tira.adjustSize()
-            abajo = h - (self.barra.height() + 8 if self.barra is not None else 0) - 8
+            abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8
             self.tira.move((w - self.tira.width()) // 2, abajo - self.tira.height())
             self.tira.raise_()
         if self.aviso.isVisible():

@@ -6,7 +6,7 @@ navegación, con los 4–5 comandos que aplican; un clic ejecuta el comando con 
 clic derecho (menú radial) muestra debajo, pero siempre visible. Se oculta si no hay nada elegido, si hay un comando
 abierto o si se está dibujando un boceto.
 """
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QToolButton
 
 MAXIMO = 5
@@ -28,8 +28,8 @@ def comandos_sugeridos(tipos, disponibles, maximo=MAXIMO):
 
 
 class TiraSugerencias(QFrame):
-    """La tira de botones. `acciones`: dict clave → QAction de la ventana; se usan su título, su ícono y su globo."""
-    elegido = Signal(str)
+    """La tira de botones. `acciones`: dict clave → QAction de la ventana; se usan su título, su ícono y su globo, y
+    el clic dispara la acción."""
 
     def __init__(self, acciones, parent=None):
         super().__init__(parent)
@@ -53,12 +53,12 @@ class TiraSugerencias(QFrame):
             for clave in claves:
                 a = self.acciones[clave]
                 b = QToolButton(self)
-                b.setText(a.property("titulo") or a.text().split("\t")[0])
+                b.setText(a.property("titulo"))
                 b.setIcon(a.icon())
                 b.setIconSize(QSize(18, 18))
                 b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
                 b.setToolTip(a.toolTip())
-                b.clicked.connect(lambda _=False, c=clave: self.elegido.emit(c))
+                b.clicked.connect(a.trigger)
                 lay.addWidget(b)
         self.setVisible(bool(claves))
         self.adjustSize()

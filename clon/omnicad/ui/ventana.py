@@ -161,7 +161,6 @@ class VentanaPrincipal(QMainWindow):
         self.barra_nav = BarraNavegacion(self.visor, self)
         self.area.set_barra(self.barra_nav)
         self.tira = TiraSugerencias(self.acciones)          # PL5: comandos sugeridos según lo elegido
-        self.tira.elegido.connect(lambda clave: self.acciones[clave].trigger())
         self.area.set_tira(self.tira)
         self.navegador.ojo.connect(self._ojo)
         self.navegador.seleccionado.connect(self._propiedades)
@@ -863,6 +862,7 @@ class VentanaPrincipal(QMainWindow):
         self.vis = dict(VISIBILIDAD_INICIAL)
         doc.suscribir(self._actualizar)
         self._actualizar()
+        self._seleccionar([])           # lo elegido era del documento anterior (y la tira de sugeridos con ello)
         if hasattr(self, "comentarios"):
             self.comentarios.set_documento(doc)
         QTimer.singleShot(0, self.visor, self.visor.encuadrar)
