@@ -927,7 +927,12 @@ class OpOperacionBase(Operacion):
 
     `cuerpos`: lista de copias congeladas {"id", "nombre", "tipo" ("solido"|"superficie"), "apariencia",
     "brep" (texto B-rep de OpenCascade)}. Por run_operation alcanza con los ids o nombres de los cuerpos
-    (["op1.c1"]): se congelan en ese momento. Las mallas no entran."""
+    (["op1.c1"]): se congelan en ese momento. Las mallas no entran.
+
+    Opcionales por cuerpo (los trae la apertura de un .f3d con componentes repetidos o movidos): "matriz" (16 números,
+    matriz 4×4 por filas, en mm) mueve el B-rep a su lugar, y "ref" (id de un cuerpo anterior de este paso) en vez de
+    "brep" toma el B-rep de ese cuerpo: es una copia LIGERA, comparte su geometría sin repetirla en el archivo
+    (`solidos_crear.instanciar`). Sin estos campos el cuerpo queda tal cual está guardado."""
     TIPO, ETIQUETA, ICONO = "operacion_base", "Operación base", "▣"
     PARAMS = {"cuerpos": []}
 
@@ -940,16 +945,39 @@ class OpOperacionBase(Operacion):
         return cls(op_id, cuerpos=datos)
 
     def ejecutar(self, estado, ctx):
+        locales = {}                                      # B-rep de cada cuerpo con "brep", en su propio lugar
         for d in self.p["cuerpos"]:
-            if not isinstance(d, dict) or not isinstance(d.get("id"), str) or not isinstance(d.get("brep"), str):
+            if (not isinstance(d, dict) or not isinstance(d.get("id"), str)
+                    or not (isinstance(d.get("brep"), str) or isinstance(d.get("ref"), str))):
                 raise ParametroMalFormado(d, 'se esperaba un cuerpo congelado: {"id": "op1.c1", "brep": "…", …} (lo '
                                              'arma Crear operación base, no se escribe a mano)')
-            forma = intercambio.forma_de_texto(d["brep"])
+            if isinstance(d.get("brep"), str):
+                local = locales[d["id"]] = intercambio.forma_de_texto(d["brep"])
+            else:
+                local = locales.get(d["ref"])
+                if local is None:
+                    raise ParametroMalFormado(d, f'"ref" apunta a «{d["ref"]}», que no es un cuerpo con "brep" '
+                                                 'anterior de este mismo paso')
+            forma = local if d.get("matriz") is None else _ubicar_cuerpo(local, d)
             if d["id"] in estado.cuerpos:
                 estado.cuerpos[d["id"]].forma = forma
             else:
                 estado.nuevo_cuerpo(self.id, forma, d.get("tipo", "solido"), nombre=d.get("nombre"),
                                     apariencia=d.get("apariencia"))
+
+
+def _ubicar_cuerpo(forma, d):
+    """`forma` movida por la "matriz" del cuerpo congelado `d` (copia ligera si el movimiento es rígido)."""
+    m = d["matriz"]
+    if not (isinstance(m, list) and len(m) == 16
+            and all(type(x) in (int, float) and np.isfinite(x) and abs(x) < 1e6 for x in m)):   # 1e6 mm = 1 km
+        raise ParametroMalFormado(d, '"matriz" tiene que ser una lista de 16 números finitos (matriz 4×4 por filas, '
+                                     'en mm)')
+    from ..nucleo import solidos_crear
+    try:
+        return solidos_crear.instanciar(forma, np.array(m, float).reshape(4, 4))
+    except Exception as e:                                # noqa: BLE001 - OpenCascade lanza Standard_Failure
+        raise ParametroMalFormado(d, f'"matriz" no es un movimiento válido ({e})') from None
 
 
 TIPOS_OPERACION = {c.TIPO: c for c in (OpBoceto, OpExtrusion, OpRevolucion, OpPrimitiva, OpCombinar, OpImportarSTEP,

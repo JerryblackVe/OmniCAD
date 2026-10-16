@@ -11,9 +11,13 @@ Filtros (medidos en archivos reales de Fusion, ver PROJECT_LOG): los cuerpos sin
 auxiliares y quedan afuera (`acis_occ.convertir`); si un componente está guardado dos veces (versión vieja y
 actual) entra la versión más nueva; un cuerpo idéntico a otro no se repite (`_sin_repetidos`).
 
-Qué NO trae (vive en el flujo de diseño propietario de Fusion, que no se lee): el historial, los parámetros, los
-nombres de los cuerpos y la posición de los componentes movidos en un ensamblaje (cada uno entra donde está
-guardado su B-rep). Un .f3z es un paquete con varios .f3d: se lee el diseño principal (el que nadie referencia).
+Posición de los componentes (P11.a): el B-rep de cada componente está en SUS coordenadas; dónde va en el ensamblaje
+lo dicen las matrices de la escena de dibujo que el archivo guarda aparte (`f3d_escena`). Cada cuerpo se ubica con la
+matriz de su componente, y un componente repetido entra una vez por copia, como instancias que comparten la geometría
+(`solidos_crear.instanciar`). Lo que no se puede ubicar queda donde está guardado, con un aviso.
+
+Qué NO trae (vive en el flujo de diseño propietario de Fusion, que no se lee): el historial, los parámetros y los
+nombres de los cuerpos. Un .f3z es un paquete con varios .f3d: se lee el diseño principal (el que nadie referencia).
 
 Sin Qt.
 """
@@ -23,12 +27,14 @@ import struct
 import zipfile
 from pathlib import Path
 
+import numpy as np
+
 from OCP.Bnd import Bnd_Box
 from OCP.BRepBndLib import BRepBndLib
 from OCP.TopAbs import TopAbs_FACE
 from OCP.TopExp import TopExp_Explorer
 
-from . import acis_occ, sab, zstd_puro
+from . import acis_occ, f3d_escena, sab, zstd_puro
 
 CARPETA_BREPS = "Breps.BlobParts/"
 CARAS_MAX_VERIFICAR = 5000        # cuerpos más grandes no se verifican (BRepCheck tarda segundos en ellos)
@@ -42,8 +48,18 @@ class ErrorF3D(ValueError):
 
 
 def leer(ruta):
-    """Cuerpos de un .f3d o .f3z. Devuelve (partes, avisos): `partes` = lista de (forma OCC en mm,
-    "solido" | "superficie"); `avisos` = textos para el usuario."""
+    """Cuerpos de un .f3d o .f3z, cada uno en su lugar del ensamblaje y con una copia por cada ocurrencia de su
+    componente. Devuelve (partes, avisos): `partes` = lista de (forma OCC en mm, "solido" | "superficie"); `avisos` =
+    textos para el usuario."""
+    comps, avisos = leer_componentes(ruta)
+    return expandir(comps), avisos
+
+
+def leer_componentes(ruta, resumen=None):
+    """Como `leer`, pero sin repetir la geometría de las copias: devuelve (componentes, avisos) con una lista
+    `{"forma": B-rep en las coordenadas del componente, "tipo", "bloque", "marcos": [matriz 4×4 de columnas en mm, una
+    por copia]}`. Si se pasa un dict en `resumen`, se llena con lo que se vio en la escena (`nodos`, `copias`,
+    `cuerpos_escena`, `cuerpos_con_malla`, `bloques`, `bloques_ubicados`)."""
     ruta = Path(ruta)
     try:
         datos = ruta.read_bytes()
@@ -51,10 +67,22 @@ def leer(ruta):
         raise ErrorF3D(f"No se pudo leer {ruta.name}: {e}") from None
     if ruta.suffix.lower() == ".f3z":
         datos = _f3d_principal(datos, ruta.name)
-    return leer_bytes(datos, ruta.stem)
+    return leer_componentes_bytes(datos, ruta.stem, resumen)
 
 
-def leer_bytes(datos, nombre="Fusion"):
+def expandir(componentes):
+    """[(forma, tipo)] con una entrada por copia: la forma del componente movida a cada matriz; las copias rígidas
+    comparten la geometría (`solidos_crear.instanciar`)."""
+    from ..nucleo import solidos_crear
+    salida = []
+    for c in componentes:
+        for M in c["marcos"]:
+            forma = c["forma"] if f3d_escena.es_identidad(M) else solidos_crear.instanciar(c["forma"], M)
+            salida.append((forma, c["tipo"]))
+    return salida
+
+
+def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
     try:
         z = zipfile.ZipFile(io.BytesIO(datos))
     except zipfile.BadZipFile:
@@ -77,11 +105,65 @@ def leer_bytes(datos, nombre="Fusion"):
     if not partes:
         raise ErrorF3D(f"{nombre} no tiene sólidos ni superficies que se puedan leer."
                        + (f" {avisos[0]}" if avisos else ""))
-    malos = sum(1 for forma, tipo, n in partes if n <= CARAS_MAX_VERIFICAR and not acis_occ.es_valida(forma))
+    malos = sum(1 for forma, tipo, firma, _ in partes if firma[1] <= CARAS_MAX_VERIFICAR
+                and not acis_occ.es_valida(forma))
     if malos:
         avisos.append(f"{malos} de {len(partes)} cuerpos quedaron con errores de geometría (caras que tocan un polo "
                       "o un vértice de cono): se ven y se miden, pero una operación booleana con ellos puede fallar.")
-    return [(forma, tipo) for forma, tipo, _ in partes], avisos
+    marcos = _ubicar(datos, partes, avisos, resumen)
+    uno = [np.eye(4)]
+    return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno}
+            for (forma, tipo, _, bloque), m in zip(partes, marcos, strict=True)], avisos
+
+
+def _ubicar(datos, partes, avisos, resumen=None):
+    """Matrices de cada parte según la escena del archivo (`f3d_escena`): una lista de 4×4 por parte o None si no
+    se la pudo ubicar (queda donde está guardado su B-rep). Sin escena, o si ningún componente se mueve, todo None."""
+    ninguna = [None] * len(partes)
+    try:
+        with zipfile.ZipFile(io.BytesIO(datos)) as z:
+            info = {i.filename: i for i in z.infolist()}
+        mundo = next((i for n, i in info.items() if n.endswith("OGS/DefaultScene/world")), None)
+        malla = next((i for n, i in info.items() if n.endswith("OGS/DefaultScene/Fusion_mesh_000")), None)
+        if mundo is None or malla is None:
+            return ninguna
+        escena = f3d_escena.Escena(miembro(datos, mundo), miembro(datos, malla))
+        if not escena.nodos:
+            return ninguna
+        from ..nucleo import geometria as geo
+        solidos = []
+        for forma, tipo, firma, bloque in partes:
+            lo, hi = (np.array(firma[2:5]), np.array(firma[5:8])) if len(firma) >= 8 else (np.full(3, 1e9),) * 2
+            solidos.append({"bloque": bloque, "tipo": tipo, "caras": firma[1], "lo": lo, "hi": hi,
+                            "caja": _una_vez(lambda f=forma: tuple(np.array(p) for p in geo.caja_envolvente(f))),
+                            "vol": _una_vez(lambda f=forma: geo.volumen(f))})
+        matrices, visto = f3d_escena.asignar(escena, solidos)
+        if resumen is not None:
+            resumen.update(visto, nodos=len(escena.nodos), copias=sum(1 for n in escena.nodos if n["es_ref"]),
+                           cuerpos_escena=len(escena.cuerpos),
+                           cuerpos_con_malla=sum(1 for c in escena.cuerpos if c["vol_mm3"] is not None))
+    except Exception as e:                    # noqa: BLE001 - ubicar es una mejora: si algo falla, el archivo abre igual
+        avisos.append(f"No se pudo leer la posición de los componentes ({e}): cada cuerpo queda donde está guardado "
+                      "su B-rep.")
+        return ninguna
+    if not any(m and (len(m) > 1 or not f3d_escena.es_identidad(m[0])) for m in matrices):
+        return ninguna
+    sin = sum(1 for m in matrices if m is None)
+    if sin:
+        avisos.append(f"{sin} de {len(partes)} cuerpos no se pudieron ubicar en el ensamblaje: quedan donde está "
+                      "guardado su B-rep.")
+    return matrices
+
+
+def _una_vez(funcion):
+    """Función sin argumentos que calcula una sola vez y recuerda el resultado."""
+    guardado = []
+
+    def f():
+        if not guardado:
+            guardado.append(funcion())
+        return guardado[0]
+    return f
 
 
 def _firma(forma, tipo):
@@ -100,7 +182,7 @@ def _firma(forma, tipo):
 
 
 def _sin_repetidos(leidos):
-    """Junta los cuerpos de todos los bloques sin repetir: lista de (forma, tipo, cantidad de caras). Fusion puede guardar el mismo componente en dos bloques
+    """Junta los cuerpos de todos los bloques sin repetir: lista de (forma, tipo, firma, bloque). Fusion puede guardar el mismo componente en dos bloques
     (una versión vieja y la actual): si la mitad o más de los cuerpos de un bloque están, idénticos, en otro bloque
     más nuevo (marca de tiempo mayor), el viejo se descarta entero. Después, un cuerpo idéntico a otro ya tomado
     (mismas caras y misma caja) no se repite."""
@@ -113,13 +195,13 @@ def _sin_repetidos(leidos):
         viejo = any(j != i and mas_nueva(leidos[j]) > mas_nueva(b) and len(firmas[i] & firmas[j]) * 2 >= len(firmas[i])
                     for j in range(len(leidos)))
         if not viejo:
-            vivos.append(b)
+            vivos.append((i, b))
     partes, vistas = [], set()
-    for b in vivos:
+    for i, b in vivos:
         for forma, tipo, firma, _ in b:
             if firma not in vistas:
                 vistas.add(firma)
-                partes.append((forma, tipo, firma[1]))
+                partes.append((forma, tipo, firma, i))
     return partes
 
 

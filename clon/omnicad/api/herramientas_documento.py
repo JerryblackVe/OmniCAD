@@ -190,8 +190,9 @@ _UNIDADES_MALLA = {"mm": "mm", "cm": "cm", "m": "m", "in": "pulgadas", "ft": "pi
 @herramienta("open_document", "documento", "Abre un archivo y lo deja como documento activo: proyecto .omnicad (o "
              ".fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y "
              "componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, "
-             "como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; "
-             "el historial, los parámetros y los nombres de los cuerpos no se leen). Si el actual tiene cambios "
+             "como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada "
+             "componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los "
+             "parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). Si el actual tiene cambios "
              "sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el "
              "documento actual: insert_file.", modifica=True,
              transaccion=False)
@@ -211,7 +212,7 @@ def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", 
 
 @herramienta("insert_file", "documento", "Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline "
              "(Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla "
-             ".stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño "
+             ".stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño "
              ".omnicad/.fclone (entra como componente). El contenido se copia "
              "dentro de la receta. Para abrirlo como documento nuevo: open_document.", modifica=True)
 def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", name: str | None = None):
@@ -237,6 +238,50 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
     nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
     return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": r.estado, "message": r.mensaje,
             "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos)}
+
+
+@herramienta("inspect_f3d", "documento", "Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos "
+             "guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos "
+             "salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro "
+             "(mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que "
+             "se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya "
+             "ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies).")
+def inspect_f3d(sesion, path: str):
+    """
+    path: ruta del archivo .f3d o .f3z.
+    """
+    import numpy as np
+
+    from ..io_archivos import f3d_nativo
+    ruta = Path(path).expanduser()
+    if ruta.suffix.lower() not in (".f3d", ".f3z"):
+        raise error("UNSUPPORTED_FILE_TYPE", f"inspect_f3d lee .f3d y .f3z; llegó {ruta.suffix or '(sin extensión)'}.")
+    if not ruta.is_file():
+        raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
+    visto = {}
+    try:
+        componentes, avisos = f3d_nativo.leer_componentes(ruta, visto)
+    except f3d_nativo.ErrorF3D as e:
+        raise error("IMPORT_FAILED", str(e)) from e
+    filas, guardado, colocado = [], 0.0, 0.0
+    for c in componentes:
+        vol = geo.volumen(c["forma"]) if c["tipo"] == "solido" else 0.0
+        marcos = c["marcos"]
+        movido = any(not np.allclose(M, np.eye(4), atol=1e-6) for M in marcos)
+        guardado += vol
+        colocado += vol * len(marcos)
+        filas.append({"block": c["bloque"], "type": c["tipo"], "volume_mm3": _r(vol), "copies": len(marcos),
+                      "moved": movido, "positions_mm": [[_r(x) for x in M[:3, 3]] for M in marcos],
+                      "rotated": any(not np.allclose(M[:3, :3], np.eye(3), atol=1e-6) for M in marcos)})
+    sin_ubicar = max(0, len(componentes) - visto.get("ubicados", 0)) if visto else 0
+    return {"path": str(ruta), "bodies_stored": len(componentes), "bodies_placed": sum(f["copies"] for f in filas),
+            "volume_stored_mm3": _r(guardado), "volume_placed_mm3": _r(colocado),
+            "components_moved": sum(1 for f in filas if f["moved"]),
+            "components_with_copies": sum(1 for f in filas if f["copies"] > 1), "unplaced_bodies": sin_ubicar,
+            "scene": {"nodes": visto.get("nodos", 0), "copies": visto.get("copias", 0),
+                      "bodies": visto.get("cuerpos_escena", 0), "bodies_with_mesh": visto.get("cuerpos_con_malla", 0),
+                      "blocks": visto.get("bloques", 0), "blocks_placed": visto.get("bloques_ubicados", 0)},
+            "components": filas, "warnings": avisos}
 
 
 @herramienta("save_document", "documento", "Guarda el documento como proyecto .omnicad. Sin path, guarda en su "

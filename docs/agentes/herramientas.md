@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-178 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+179 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 19 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 20 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -35,8 +35,9 @@ Archivo, escena, timeline y deshacer.
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. |
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
 | [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
-| [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; el historial, los parámetros y los nombres de los cuerpos no se leen). |
-| [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño .omnicad/.fclone (entra como componente). |
+| [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). |
+| [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
+| [`inspect_f3d`](#inspect_f3d) | no | Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
 | [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
 | [`undo`](#undo) | sí | Deshace el último cambio del documento (cada herramienta que modifica es un paso). |
@@ -82,7 +83,7 @@ Empieza un documento vacío en lugar del actual. Si el actual tiene cambios sin 
 
 ### `open_document`
 
-Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base; el historial, los parámetros y los nombres de los cuerpos no se leen). Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el documento actual: insert_file.
+Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el documento actual: insert_file.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -93,7 +94,7 @@ Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), 
 
 ### `insert_file`
 
-Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion) u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia dentro de la receta. Para abrirlo como documento nuevo: open_document.
+Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia dentro de la receta. Para abrirlo como documento nuevo: open_document.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -101,6 +102,15 @@ Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Inser
   - `mesh_units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Importar archivo.ext» / «Insertar archivo».
 - CLI: `omnicad call insert_file --doc pieza.omnicad path=…`
+
+### `inspect_f3d`
+
+Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo .f3d o .f3z.
+- CLI: `omnicad call inspect_f3d --doc pieza.omnicad path=…`
 
 ### `save_document`
 

@@ -308,6 +308,38 @@ def test_cubo_de_acis_a_solido_en_mm():
     assert len(g.caras(forma)) == 6
 
 
+def test_cuerpo_que_shapefix_no_puede_arreglar_entra_igual_con_aviso(monkeypatch):
+    """EXTRUSOR XOX.f3z fallaba entero por un cuerpo (Standard_DomainError en ShapeFix): ahora entra sin reparar."""
+    class Roto:
+        def __init__(self, forma):
+            pass
+
+        def SetPrecision(self, precision):
+            pass
+
+        def SetMaxTolerance(self, precision):
+            pass
+
+        def Perform(self):
+            raise RuntimeError("Geom_BSplineCurve::Segment")
+
+        def Shape(self):
+            raise AssertionError("no debería pedirse la forma de un arreglo que falló")
+    monkeypatch.setattr(acis_occ, "ShapeFix_Shape", Roto)
+    partes, avisos = acis_occ.convertir(sab.leer(_sab(_sab_cubo().r)), "pieza")
+    assert len(partes) == 1 and partes[0][1] == "solido"
+    assert g.volumen(partes[0][0]) == pytest.approx(1000.0, rel=1e-9)
+    assert len(avisos) == 1 and "no se pudieron reparar" in avisos[0]
+
+
+def test_cuerpo_que_opencascade_no_puede_armar_queda_afuera_con_aviso(monkeypatch):
+    def roto(*a, **k):
+        raise RuntimeError("Geom_TrimmedCurve::parameters out of range")
+    monkeypatch.setattr(acis_occ, "BRepBuilderAPI_Transform", roto)
+    partes, avisos = acis_occ.convertir(sab.leer(_sab(_sab_cubo().r)), "pieza")
+    assert partes == [] and len(avisos) == 1 and "quedaron afuera" in avisos[0]
+
+
 def test_cilindro_sin_costura_queda_cerrado():
     partes, _ = acis_occ.convertir(sab.leer(_sab(_sab_cilindro().r)))
     forma, tipo, _ = partes[0]

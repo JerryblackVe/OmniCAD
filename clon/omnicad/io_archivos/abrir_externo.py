@@ -116,16 +116,27 @@ def _paso_fusion(ruta, doc, nombre, avisos):
 
 def _operacion_f3d(ruta, op_id, nombre, avisos):
     """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede."""
-    from . import f3d_nativo                    # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
+    from . import f3d_escena, f3d_nativo        # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
     try:
-        partes, extra = f3d_nativo.leer(ruta)
+        componentes, extra = f3d_nativo.leer_componentes(ruta)
     except f3d_nativo.ErrorF3D as e:
         raise ErrorAbrir(str(e)) from None
     avisos += extra
-    varios = len(partes) > 1
-    cuerpos = [{"id": f"{op_id}.c{k}", "nombre": ruta.stem + (f" ({k})" if varios else ""), "tipo": tipo,
-                "apariencia": None, "brep": intercambio.brep_a_texto(forma)}
-               for k, (forma, tipo) in enumerate(partes, 1)]
+    varios = sum(len(c["marcos"]) for c in componentes) > 1
+    cuerpos = []
+    for c in componentes:
+        base = None
+        for M in c["marcos"]:                         # una copia por ocurrencia: la primera lleva el B-rep, las demás lo citan
+            k = len(cuerpos) + 1
+            d = {"id": f"{op_id}.c{k}", "nombre": ruta.stem + (f" ({k})" if varios else ""), "tipo": c["tipo"],
+                 "apariencia": None}
+            if base is None:
+                d["brep"], base = intercambio.brep_a_texto(c["forma"]), d["id"]
+            else:
+                d["ref"] = base
+            if not f3d_escena.es_identidad(M):
+                d["matriz"] = [round(float(x), 9) for x in M.ravel()]
+            cuerpos.append(d)
     return OpOperacionBase(op_id, nombre, cuerpos=cuerpos)
 
 

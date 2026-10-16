@@ -65,6 +65,11 @@ def convertir(archivo, nombre="Cuerpo"):
         detalle = ", ".join(f"{n} × {t}" for t, n in conv.omitidas.most_common())
         avisos.append(f"{nombre}: no se pudieron leer {sum(conv.omitidas.values())} caras ({detalle}); "
                       "esos cuerpos entran como superficie abierta.")
+    if conv.sin_reparar:
+        avisos.append(f"{nombre}: {conv.sin_reparar} cuerpos no se pudieron reparar (OpenCascade falló al "
+                      "arreglarlos): entran como están y una operación con ellos puede fallar.")
+    if conv.sin_convertir:
+        avisos.append(f"{nombre}: {conv.sin_convertir} cuerpos quedaron afuera porque OpenCascade no pudo armarlos.")
     return partes, avisos
 
 
@@ -75,6 +80,7 @@ class _Convertidor:
         self.d = self._desplazamiento()
         self.vertices, self.aristas, self.curvas, self.superficies = {}, {}, {}, {}
         self.omitidas = Counter()
+        self.sin_reparar = self.sin_convertir = 0
 
     # ------------------------------------------------------------ campos
     def _desplazamiento(self):
@@ -129,7 +135,13 @@ class _Convertidor:
                 if caras:
                     partes.append(self._cerrar(caras, completas))
         trsf = self._transformacion(self._ent(self._c(body, 5)))
-        return [(self._a_mm(forma, trsf), tipo) for forma, tipo in partes]
+        salida = []
+        for forma, tipo in partes:
+            try:
+                salida.append((self._a_mm(forma, trsf), tipo))
+            except Exception:                  # noqa: BLE001 - un cuerpo roto (curvas fuera de rango) no tumba el archivo
+                self.sin_convertir += 1
+        return salida
 
     def _cerrar(self, caras, completas):
         shell = TopoDS_Shell()
@@ -145,8 +157,11 @@ class _Convertidor:
         arreglo = ShapeFix_Shape(forma)
         arreglo.SetPrecision(PRECISION_ARREGLO)
         arreglo.SetMaxTolerance(PRECISION_ARREGLO * 100)
-        arreglo.Perform()
-        forma = arreglo.Shape()
+        try:
+            arreglo.Perform()
+            forma = arreglo.Shape()
+        except Exception:                      # noqa: BLE001 - Standard_DomainError y otras no comparten base en OCP
+            self.sin_reparar += 1              # un cuerpo que ShapeFix no puede arreglar no tumba todo el archivo
         if _tiene_solido(forma):
             if _volumen(forma) < 0:
                 forma.Reverse()
