@@ -9,8 +9,9 @@ dependen de la nube o de licencias (Tokens, Red, Recopilación de datos…) no s
 """
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPushButton,
-                               QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+                               QPushButton, QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from . import iconos_tema, temas
@@ -246,6 +247,7 @@ class DialogoPreferencias(QDialog):
         self.cabecera = QLabel(objectName="cabecera_pref", alignment=Qt.AlignCenter)
         self.pila = QStackedWidget(objectName="pagina_pref")
         items = {}
+        self._items = items
         for pagina, padre, titulo, descripcion, filas in PAGINAS:
             it = QTreeWidgetItem([titulo])
             it.setData(0, Qt.UserRole, (self.pila.count(), descripcion))
@@ -253,6 +255,8 @@ class DialogoPreferencias(QDialog):
             items[pagina] = it
             self.pila.addWidget(self._pagina(filas, descripcion))
         self.arbol.expandAll()
+        self.buscar = QLineEdit(placeholderText="Buscar en preferencias…", clearButtonEnabled=True)
+        self.buscar.textChanged.connect(self._buscar)
         # Gráficos al instante: cada cambio se escribe y se ve en la vista; Cancelar vuelve a lo que había.
         self._sincronizando = False
         self._graficos_originales = {k: prefs[k] for k in CLAVES_GRAFICOS}
@@ -264,7 +268,10 @@ class DialogoPreferencias(QDialog):
         self.arbol.setCurrentItem(items.get(inicial, items["general"]))    # p. ej. "valores" desde la barra de unidades
 
         cuerpo = QHBoxLayout()
-        cuerpo.addWidget(self.arbol)
+        izq = QVBoxLayout()
+        izq.addWidget(self.buscar)              # F16: buscador arriba del árbol de preferencias
+        izq.addWidget(self.arbol)
+        cuerpo.addLayout(izq)
         derecha = QVBoxLayout()
         derecha.addWidget(self.cabecera)
         derecha.addWidget(self.pila, 1)
@@ -289,6 +296,21 @@ class DialogoPreferencias(QDialog):
         lay = QVBoxLayout(self)
         lay.addLayout(cuerpo, 1)
         lay.addLayout(botones)
+
+    def _buscar(self, texto):
+        """F16 (FreeCAD 1.0: buscador dentro de Preferencias): atenua las páginas sin coincidencias y
+        salta a la primera que tiene una. Busca en el título, la descripción y las etiquetas de las
+        filas, sin distinguir mayúsculas."""
+        t = texto.strip().lower()
+        primera = None
+        for pagina, _padre, titulo, descripcion, filas in PAGINAS:
+            coincide = (not t or t in titulo.lower() or t in descripcion.lower()
+                        or any(t in str(f[0]).lower() or t in str(f[1]).lower() for f in filas))
+            self._items[pagina].setDisabled(not coincide)
+            if coincide and t and primera is None:
+                primera = self._items[pagina]
+        if primera is not None:
+            self.arbol.setCurrentItem(primera)
 
     def _pagina(self, filas, descripcion):
         w = QWidget()
