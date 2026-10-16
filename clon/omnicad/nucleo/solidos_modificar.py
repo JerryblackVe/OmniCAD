@@ -345,7 +345,11 @@ def empalme(forma, grupos, *, cadena_tangente=True):
     except Exception:  # noqa: BLE001 — StdFail_NotDone
         pass
     if not mf.IsDone():
-        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas.")
+        # PL4 (tutorial «Fillet Order of Operations» de Plasticity): el orden de los empalmes es de
+        # lo GRANDE a lo chico; un empalme chico hecho primero puede comerse el material del grande.
+        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas. "
+                                 "Probá primero el radio MAYOR y después los más chicos (de lo grande a "
+                                 "lo chico) y reordená los empalmes del timeline en ese orden.")
     return _validar(mf.Shape(), "Empalme")
 
 

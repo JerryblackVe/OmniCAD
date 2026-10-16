@@ -5,6 +5,29 @@ from .errores import error
 from .registro import herramienta
 
 
+@herramienta("move_feature", "documento",
+             "Mueve un paso del timeline a otro índice (como arrastrarlo en la app). Si no se puede (un "
+             "paso que depende de otro quedaría antes), falla con OPERATION_FAILED y el motivo. Es lo que "
+             "usa la pista del error de empalme: reordenar los empalmes de mayor a menor radio.",
+             modifica=True, transaccion=False)
+def move_feature(sesion, feature: str, index: int):
+    """
+    feature: id o nombre del paso a mover.
+    index: índice nuevo (0 = primero, se recorta al final del timeline).
+    """
+    doc = sesion.doc
+    try:
+        op = sesion.paso(feature)
+    except Exception as e:                     # noqa: BLE001 — el paso que no existe ya trae su mensaje
+        raise error("FEATURE_NOT_FOUND", str(e).split(".")[0] + ".") from None
+    antes = doc.indice(op.id)
+    try:
+        doc.mover(op.id, int(index))
+    except Exception as e:                     # noqa: BLE001 — ErrorDocumento con el motivo
+        raise error("OPERATION_FAILED", str(e)) from None
+    return {"id": op.id, "name": op.nombre, "before": antes, "now": doc.indice(op.id)}
+
+
 def _pasos(doc, desde):
     return [{"id": o.id, "name": o.nombre, "type": o.TIPO} for o in doc.operaciones[desde:]]
 
