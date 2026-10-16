@@ -302,6 +302,9 @@ class OpAgujero(_OpCrear):
         """Sólidos a restar, uno por agujero."""
         p, sc = self.p, _sc()
         solidos = [c.forma for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
+        if p["extension"] == "todo" and p["objetivos"]:
+            # El pasante abarca sus objetivos: cuerpos ajenos no deben alargar el barrido de la rosca.
+            solidos = [estado.cuerpo(cid).forma for cid in p["objetivos"]]
         if not solidos:
             raise ErrorOperacion("No hay cuerpos sólidos para agujerear.")
         opciones = self.opciones_herramienta(ctx, rapido)
