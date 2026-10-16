@@ -146,7 +146,8 @@ def _ubicar(datos, partes, avisos, resumen=None):
             lo, hi = (np.array(firma[2:5]), np.array(firma[5:8])) if len(firma) >= 8 else (np.full(3, 1e9),) * 2
             solidos.append({"bloque": bloque, "tipo": tipo, "caras": firma[1], "lo": lo, "hi": hi,
                             "caja": _una_vez(lambda f=forma: tuple(np.array(p) for p in geo.caja_envolvente(f))),
-                            "vol": _una_vez(lambda f=forma: geo.volumen(f))})
+                            "vol": _una_vez(lambda f=forma: geo.volumen(f)),
+                            "centro": _una_vez(lambda f=forma: geo.centro_masa(f))})
         matrices, visto = f3d_escena.asignar(escena, solidos)
         fuera = set(visto.pop("descartados"))
         if resumen is not None:

@@ -54,7 +54,7 @@ class Escena:
     """Nodos de componente y cuerpos de la escena de un .f3d.
 
     `nodos[i]`: dict(pos, ini, M (4×4 en filas, traslación en cm), W, C, padre, primario, es_ref).
-    `cuerpos[k]`: dict(pos, nodo, caras (n), vol_mm3, lo, hi (mm) — None si el cuerpo no trae malla)."""
+    `cuerpos[k]`: dict(pos, nodo, caras (n), vol_mm3, lo, hi, centro (mm) — None si el cuerpo no trae malla)."""
 
     def __init__(self, world, malla):
         self.w, self.m = world, malla
@@ -153,16 +153,19 @@ class Escena:
     def _malla_del_cuerpo(self, c):
         fines = c.pop("caras_fin")
         c["caras"] = len(fines)
-        c["vol_mm3"] = c["lo"] = c["hi"] = None
+        c["vol_mm3"] = c["lo"] = c["hi"] = c["centro"] = None
         mallas = [self._malla_cara(f) for f in fines]
         if not mallas or any(x is None for x in mallas):               # sin malla (cuerpo oculto) o incompleta
             return
         puntos = np.vstack([v for v, _ in mallas]) * _CM_A_MM
-        vol = 0.0
-        for v, t in mallas:
+        vol, momento = 0.0, np.zeros(3)
+        for v, t in mallas:                                          # tetraedros contra el origen
             a, b, c3 = v[t[:, 0]] * _CM_A_MM, v[t[:, 1]] * _CM_A_MM, v[t[:, 2]] * _CM_A_MM
-            vol += float(np.einsum("ij,ij->i", a, np.cross(b, c3)).sum()) / 6.0
+            dv = np.einsum("ij,ij->i", a, np.cross(b, c3)) / 6.0
+            vol += float(dv.sum())
+            momento += (dv[:, None] * (a + b + c3)).sum(axis=0) / 4.0
         c["vol_mm3"], c["lo"], c["hi"] = abs(vol), puntos.min(axis=0), puntos.max(axis=0)
+        c["centro"] = momento / vol if abs(vol) > 1e-12 else None
 
     # ------------------------------------------------------------------ marcos
     def marcos(self):
@@ -218,11 +221,11 @@ TOL_VOLUMEN = 0.03           # y su volumen difiere un par de décimas de por ci
 def asignar(escena, solidos):
     """Ubica los cuerpos B-rep de un .f3d en el diseño. `solidos`: lista de dicts con `bloque` (de qué archivo
     BREP.*.smbh salió: un componente), `tipo`, `caras`, `lo`/`hi` (una caja en mm que puede ser holgada, barata de
-    calcular) y dos funciones sin argumentos que se llaman solo cuando hace falta: `caja` (la caja exacta, `(lo, hi)`) y
-    `vol` (el volumen en mm³).
+    calcular) y funciones sin argumentos que se llaman solo cuando hace falta: `caja` (la caja exacta, `(lo, hi)`),
+    `vol` (el volumen en mm³) y, si está, `centro` (el centro de masa en mm).
 
     Cada cuerpo de la escena con malla se empareja con el sólido de igual caja y volumen (una superficie: igual caja
-    y cantidad de caras); los emparejamientos votan qué componente de la escena es cada bloque BREP, y todos los
+    y cantidad de caras); entre dos iguales en caja y volumen (dos piezas espejo) gana el de centro de masa más cercano; los emparejamientos votan qué componente de la escena es cada bloque BREP, y todos los
     cuerpos del bloque (también los ocultos, que no traen malla) toman las matrices de ese componente. Un componente que
     se quedó sin bloque porque era una copia idéntica de otro (el lector descarta los cuerpos repetidos) comparte el
     bloque de su gemelo; un bloque sin malla visible se empareja por la cantidad de caras de sus cuerpos.
@@ -258,7 +261,10 @@ def asignar(escena, solidos):
             vol = solidos[j]["vol"]()
             dv = abs(c["vol_mm3"] - vol) / max(vol, 1e-9)
             if dv <= TOL_VOLUMEN or abs(c["vol_mm3"] - vol) < 0.5:
-                candidatos.append((dv + d_lo + d_hi, i, int(j)))
+                d_c = 0.0
+                if c.get("centro") is not None and "centro" in solidos[j]:
+                    d_c = float(np.linalg.norm(c["centro"] - np.asarray(solidos[j]["centro"]())))
+                candidatos.append((dv + d_lo + d_hi + d_c, i, int(j)))
     candidatos.sort()
     cuerpo_usado, solido_usado, votos = set(), set(), {}
     for _, i, j in candidatos:

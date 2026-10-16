@@ -368,3 +368,43 @@ def test_open_document_e_insert_file_traen_las_copias(tmp_path):
     assert len(s.doc.estado_final.cuerpos) == 2
     r = api.llamar(s, "insert_file", {"path": str(f3d)})
     assert r["ok"] and len(r["result"]["new_bodies"]) == 2
+
+
+# ---------------------------------------------------------------- piezas espejo (upgrades3)
+class _EscenaFalsa:
+    """Lo que `asignar` lee de una escena: nodos, cuerpos con su malla medida y las matrices de cada componente."""
+
+    def __init__(self, nodos, cuerpos, marcos):
+        self.nodos, self.cuerpos, self._marcos = nodos, cuerpos, marcos
+
+    def marcos(self):
+        return self._marcos
+
+
+def _traslacion(x):
+    M = np.eye(4)
+    M[0, 3] = x
+    return M
+
+
+def test_dos_piezas_espejo_con_la_misma_caja_y_volumen_no_se_cruzan():
+    """Una escuadra izquierda y una derecha: misma caja, mismo volumen, centro de masa a un lado u otro. El emparejado
+    tiene que dar a cada componente SU pieza (antes, a igual puntaje, ganaba el orden de los bloques)."""
+    caja = (np.zeros(3), np.full(3, 10.0))
+    nodos = [{"primario": 0}, {"primario": 1}]
+    cuerpos = [{"nodo": 0, "caras": 8, "vol_mm3": 500.0, "lo": caja[0], "hi": caja[1], "centro": np.array([3.0, 5, 5])},
+               {"nodo": 1, "caras": 8, "vol_mm3": 500.0, "lo": caja[0], "hi": caja[1], "centro": np.array([7.0, 5, 5])}]
+    marcos = {0: [_traslacion(100.0)], 1: [_traslacion(-100.0)]}
+
+    def solido(bloque, centro):
+        return {"bloque": bloque, "tipo": "solido", "caras": 8, "lo": caja[0], "hi": caja[1], "caja": lambda: caja,
+                "vol": lambda: 500.0, "centro": lambda: centro}
+    derecha, izquierda = solido(0, (7.0, 5, 5)), solido(1, (3.0, 5, 5))     # el bloque 0 es la pieza del componente 1
+    matrices, _ = f3d_escena.asignar(_EscenaFalsa(nodos, cuerpos, marcos), [derecha, izquierda])
+    assert matrices[0][0][0, 3] == pytest.approx(-100.0) and matrices[1][0][0, 3] == pytest.approx(100.0)
+
+
+def test_la_escena_mide_el_centro_de_masa_de_la_malla():
+    malla = _Malla()
+    e = f3d_escena.Escena(_nodo(0x10, 0xC0, _matriz(), _cuerpo(malla)), bytes(malla.datos))
+    assert e.cuerpos[0]["centro"] == pytest.approx([5, 5, 5], abs=1e-6)       # el cubo de 1 cm, en mm
