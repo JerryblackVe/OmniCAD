@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDia
 
 from .. import NOMBRE_APP, VERSION
 from ..ejemplo import crear_documento_ejemplo
+from .. import informes_error
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
@@ -237,6 +238,9 @@ class VentanaPrincipal(QMainWindow):
         self.set_documento(doc or Documento())
         if self._avisos_tema:
             self.mensaje(self._avisos_tema[0], 10000)
+        # Los informes de error (P20) anotan los últimos pasos del timeline al fallar.
+        informes_error.poner_contexto(
+            lambda: [f"{op.id} {op.nombre}" for op in self.doc.operaciones[-informes_error.MAX_PASOS:]])
 
     # ------------------------------------------------------------ acciones (comandos)
     def _accion(self, clave, texto, funcion, atajo=None, ayuda=None, ico=None, marcable=False):
@@ -353,6 +357,9 @@ class VentanaPrincipal(QMainWindow):
               True)
         A("preferencias", "Preferencias…", self.preferencias, None, "Preferencias de OmniCAD", "engranaje")
         A("acerca", f"Acerca de {NOMBRE_APP}", self.acerca_de)
+        A("reportar", "Reportar problema…", self.reportar_problema, None,
+          "Abre la página de issues de GitHub con el informe del último error ya cargado (sin datos "
+          "personales); vos lo revisás y lo mandás. Antes de enviar podés borrar lo que quieras.")
         A("panel_datos", "Panel de datos", self._mostrar_panel_datos, None,
           "Mostrar u ocultar el panel de datos (proyectos recientes)", "datos", True)
         for clave, texto in (("ver_navegador", "Navegador"), ("ver_viewcube", "ViewCube"),
@@ -415,6 +422,10 @@ class VentanaPrincipal(QMainWindow):
         ayuda.setPopupMode(QToolButton.InstantPopup)
         menu_ayuda = QMenu(self)
         menu_ayuda.addAction(self.acciones["acerca"])
+        menu_ayuda.addSeparator()
+        menu_ayuda.addAction(self.acciones["reportar"])
+        menu_ayuda.aboutToShow.connect(lambda: self.acciones["reportar"].setEnabled(
+            informes_error.ultimo() is not None))
         ayuda.setMenu(menu_ayuda)
         h.addWidget(ayuda)
         h.addWidget(self._boton(self.acciones["preferencias"]))
@@ -2138,9 +2149,16 @@ class VentanaPrincipal(QMainWindow):
                           f"<b>{NOMBRE_APP} {VERSION}</b><br>CAD 3D paramétrico libre, inspirado en el flujo de trabajo "
                           f"de Fusion 360. Los íconos y la interfaz están dibujados desde cero; no usa código ni "
                           f"recursos de otros programas.<br><br>"
-                          f"Licencia GNU GPL v3.0 o posterior · "
+                          f"Licencia GNU GPL v3.0 o posterior — "
                           f"<a href='https://github.com/JerryblackVe/OmniCAD'>github.com/JerryblackVe/OmniCAD</a><br>"
                           f"Kernel: OpenCascade (cadquery-ocp) · UI: PySide6 · {self.visor.info_gl}")
+
+    def reportar_problema(self):
+        """Ayuda › «Reportar problema» (pendiente 20): abre la página de issues de GitHub con el informe
+        del último error ya cargado. Nada se manda solo: la persona revisa y envía."""
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl(informes_error.url_issue()))
 
     def closeEvent(self, e):
         if self._salir_de_boceto() and self._confirmar_descartar():

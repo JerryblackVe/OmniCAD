@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-167 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+169 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -24,7 +24,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [inspeccion](#grupo-inspeccion) | 12 | Ver y medir el resultado. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
-| [dev](#grupo-dev) | 3 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
+| [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
 
 ## Grupo documento
 
@@ -2511,6 +2511,8 @@ Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`).
 |---|---|---|
 | [`run_checks`](#run_checks) | no | Corre la verificación del proyecto (ruff, pytest y, si se pide, la prueba de humo de la interfaz) y devuelve un resumen por paso. |
 | [`app_screenshot`](#app_screenshot) | no | Abre la ventana REAL de OmniCAD en otro proceso, espera a que dibuje, captura la ventana entera y la cierra. |
+| [`list_error_reports`](#list_error_reports) | no | Lista los informes de error guardados por las sesiones de OmniCAD (uno por sesión, del más nuevo al más viejo). |
+| [`read_error_report`](#read_error_report) | no | Devuelve el contenido de un informe de error (versión, sistema y la traza de cada error de esa sesión). |
 | [`run_bench`](#run_bench) | no | Mide el rendimiento de OmniCAD con la ventana real: arranque, memoria, recálculo de un modelo grande (placa con N×N agujeros) y cuadros por segundo al girar la vista. |
 
 ### `run_checks`
@@ -2536,6 +2538,23 @@ Abre la ventana REAL de OmniCAD en otro proceso, espera a que dibuje, captura la
   - `height` (entero; opcional, por defecto `900`): alto de la captura en píxeles (240 a 3000).
   - `theme` (texto; opcional, por defecto `null`): tema de la interfaz: oscuro_moderno, claro_moderno, azul_profesional, minimalista, clasico o usuario:<archivo>; vacío = el de fábrica.
 - CLI: `omnicad call app_screenshot --doc pieza.omnicad`
+
+### `list_error_reports`
+
+Lista los informes de error guardados por las sesiones de OmniCAD (uno por sesión, del más nuevo al más viejo).
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call list_error_reports --doc pieza.omnicad`
+
+### `read_error_report`
+
+Devuelve el contenido de un informe de error (versión, sistema y la traza de cada error de esa sesión).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `name` (texto; opcional, por defecto `""`): nombre del archivo del informe (de list_error_reports); vacío = el más reciente.
+- CLI: `omnicad call read_error_report --doc pieza.omnicad`
 
 ### `run_bench`
 

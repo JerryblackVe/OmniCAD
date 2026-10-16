@@ -197,6 +197,36 @@ def app_screenshot(sesion, path: str | None = None, example: bool = False, proje
             shutil.rmtree(temporal, ignore_errors=True)
 
 
+# ---------------------------------------------------------------- informes de error de la app (P20)
+@herramienta("list_error_reports", "dev", "Lista los informes de error guardados por las sesiones de OmniCAD "
+             "(uno por sesión, del más nuevo al más viejo).", modifica=False)
+def list_error_reports(sesion):
+    from .. import informes_error
+    return {"folder": str(informes_error.carpeta_informes()),
+            "reports": informes_error.listar()}
+
+
+@herramienta("read_error_report", "dev", "Devuelve el contenido de un informe de error (versión, sistema y la traza "
+             "de cada error de esa sesión).", modifica=False)
+def read_error_report(sesion, name: str = ""):
+    """
+    name: nombre del archivo del informe (de list_error_reports); vacío = el más reciente.
+    """
+    from .. import informes_error
+    if not name:
+        ultimo = informes_error.ultimo()
+        if ultimo is None:
+            raise error("FILE_NOT_FOUND", "No hay ningún informe de error guardado todavía.")
+        name = ultimo.name
+    try:
+        texto = informes_error.leer(name)
+    except (FileNotFoundError, OSError):
+        existentes = [r["name"] for r in informes_error.listar()]
+        raise error("FILE_NOT_FOUND", f"No existe el informe '{name}'.",
+                    *(["Informes que sí hay: " + ", ".join(existentes)] if existentes else [])) from None
+    return {"name": name, "text": texto}
+
+
 # ---------------------------------------------------------------- medición de rendimiento
 def mediana_de_corridas(corridas):
     """Une varias corridas de `omnicad.ui.bench` (dicts, quizás anidados) tomando la mediana de cada número; lo que

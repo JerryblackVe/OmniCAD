@@ -38,6 +38,39 @@ def _manejador_log():
         return logging.NullHandler()
 
 
+def _abrir_issue(ruta):
+    """Abre el navegador en la página de «nuevo issue» de GitHub con el informe ya cargado (sin rutas
+    de la casa ni datos personales: se recortan a «~»). Nada se manda solo: la persona revisa y envía
+    (pendiente 20 del PROJECT_LOG)."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+
+    from omnicad import informes_error
+    QDesktopServices.openUrl(QUrl(informes_error.url_issue(ruta.name, ruta.parent)))
+
+
+def _avisar_error(ruta):
+    """Cartel después de un error no capturado (pendiente 20): el detalle quedó en el informe y se puede
+    abrir la carpeta de errores o reportarlo en GitHub."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtWidgets import QMessageBox
+
+    caja = QMessageBox()
+    caja.setIcon(QMessageBox.Icon.Critical)
+    caja.setWindowTitle("OmniCAD tuvo un problema")
+    caja.setText("Se produjo un error y el detalle quedó guardado en el informe de esta sesión:\n"
+                 f"{ruta}")
+    b_carpeta = caja.addButton("Abrir carpeta de errores", QMessageBox.ButtonRole.ActionRole)
+    b_reporte = caja.addButton("Reportar problema", QMessageBox.ButtonRole.ActionRole)
+    caja.addButton("Cerrar", QMessageBox.ButtonRole.RejectRole)
+    caja.exec()
+    if caja.clickedButton() is b_carpeta:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(ruta.parent)))
+    elif caja.clickedButton() is b_reporte:
+        _abrir_issue(ruta)
+
+
 def _verificar_dependencias():
     """Avisa si falta algún paquete. Solo los BUSCA (find_spec), sin importarlos: scipy, p. ej., se carga recién al
     usar una malla o el solver de bocetos (arranque rápido)."""
@@ -61,6 +94,8 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", handlers=[_manejador_log()])
     logging.getLogger("omnicad").info("=== Arranque %s (pid %s) ===",
                                       time.strftime("%Y-%m-%d %H:%M:%S"), os.getpid())   # marca de sesión
+    from omnicad import informes_error
+    informes_error.instalar()          # informes/ de la carpeta de datos: un archivo por sesión (P20)
     _verificar_dependencias()
 
     import omnicad.ui  # noqa: F401 — en Linux elige la plataforma de Qt y la de OpenGL ANTES de crear la aplicación
@@ -84,6 +119,7 @@ def main(argv=None):
     if args.prueba_humo:
         from omnicad.prueba_humo import ejecutar
         return ejecutar()
+    informes_error.instalar(avisar=_avisar_error)   # el cartel con «Abrir carpeta de errores», solo en la app
 
     portada = arranque.mostrar_portada(app)      # mientras se importa lo pesado (OCP, OpenGL…), como Fusion
     from omnicad.ui.ventana import VentanaPrincipal
