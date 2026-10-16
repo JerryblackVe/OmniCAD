@@ -180,6 +180,8 @@ class FiltroMas(QObject):
     def abrir(self, menu, accion, pos=None):
         """Abre el menú «Más» del comando de la fila (sin bloquear: `popup`)."""
         self._origen = menu
+        if self.menu_abierto is not None:                           # cada clic arma un menú hijo de la ventana: no se juntan
+            self.menu_abierto.deleteLater()
         self.menu_abierto = self.construir_menu(accion)
         self.menu_abierto.aboutToHide.connect(self._cerrar_menus)   # al elegir algo, el menú de la cinta también se va
         zona = self.zona(menu, accion)

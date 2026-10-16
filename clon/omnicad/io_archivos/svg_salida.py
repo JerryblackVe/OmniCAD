@@ -9,7 +9,7 @@ Lo contrario, leer un SVG, está en `svg.py`.
 """
 import math
 from pathlib import Path
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, quoteattr
 
 # Color ACI de las capas del dibujo → color de papel (el 7 es negro sobre blanco).
 _COLOR = {1: "#d02020", 3: "#2a8a2a", 7: "#000000", 8: "#808080", 9: "#a0a0a0"}
@@ -129,7 +129,7 @@ def a_texto_svg(entidades, capas=None, ancho=None, alto=None):
         atributos = (f'fill="none" stroke="{_COLOR.get(estilo.get("color", 7), "#000000")}" '
                      f'stroke-width="{_n(estilo.get("grosor", 0.25))}" stroke-linecap="round" stroke-linejoin="round"'
                      + (f' stroke-dasharray="{trazo}"' if trazo else ""))
-        salida.append(f'<g id="{escape(str(capa))}" {atributos}>')
+        salida.append(f'<g id={quoteattr(str(capa))} {atributos}>')
         salida += [f"  {e}" for e in elementos if e]
         salida.append("</g>")
     salida.append("</svg>")
