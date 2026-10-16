@@ -361,7 +361,7 @@ class Desfase(Comando):
             op = self.crear_op(OpDesfaseAristas, v, ctx, referencias=refs(v, "objetos"), plano=ref1(v, "plano"),
                                distancia=v["distancia"], simetrico=v["simetrico"], esquinas=v["esquinas"])
             base = "Desfase de aristas"
-        if ctx.op is None:
+        if ctx.op is None or ctx.op.TIPO != op.TIPO:          # al editar y pasar de aristas a caras cambia el paso
             op.nombre = _siguiente(ctx, base)
         return op
 

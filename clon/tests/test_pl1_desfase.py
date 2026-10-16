@@ -160,3 +160,19 @@ def test_offset_faces_mueve_la_cara_y_deja_un_paso_editable():
     r = api.llamar(s, "offset_faces", {"faces": ">Z", "distance": -10, "tangent": False})
     assert r["result"]["bodies_modified"][0]["volume"] == pytest.approx(20 * 20 * 15)
     assert api.llamar(s, "offset_faces", {"faces": ">Z", "distance": -100})["ok"] is False      # más que el espesor
+
+
+def test_editar_un_desfase_de_aristas_y_elegir_caras_cambia_el_nombre():
+    """El paso pasa a ser un desfase de cara: conservar «Desfase de aristas1» confundía en el timeline."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Desfase
+    doc, cmd = _doc_caja(), Desfase()
+    aristas = cmd.construir(_valores(cmd, ContextoComando(doc), objetos=_aristas_de_arriba(doc), distancia="3 mm"),
+                            ContextoComando(doc))
+    doc.agregar(aristas)
+    ctx = ContextoComando(doc, op=aristas)
+    editado = cmd.construir(_valores(cmd, ctx, objetos=[_cara_de_arriba(doc)], distancia="5 mm"), ctx)
+    assert editado.TIPO == "desfase_cara" and editado.nombre == "Desfase de cara1"
+    ctx = ContextoComando(doc, op=aristas)                                   # editar sin cambiar el tipo: mismo nombre
+    igual = cmd.construir(_valores(cmd, ctx, objetos=_aristas_de_arriba(doc), distancia="4 mm"), ctx)
+    assert igual.nombre == "Desfase de aristas1"
