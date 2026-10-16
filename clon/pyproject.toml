@@ -29,5 +29,8 @@ include = ["omnicad*"]
 "omnicad" = ["integraciones/fusion/OmniCADPuente/*",   # complemento de Fusion (omnicad setup)
              "recursos/*", "recursos/ayuda/*"]         # ícono, portada e imágenes del globo de ayuda
 
+[tool.pytest.ini_options]
+markers = ["lento: tarda más de 10 s (p. ej. los .f3d reales de tests/test_f3d_reales.py); `-m \"not lento\"` los deja afuera"]
+
 [tool.ruff.lint]
 select = ["F", "B023", "B905"]   # el criterio de AGENTS.md › Cómo verificar; `ruff check .` lo toma de acá
