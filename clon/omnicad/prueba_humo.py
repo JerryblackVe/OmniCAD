@@ -61,7 +61,7 @@ def _interfaz(v, r):
         cinta.pestanas[i].click()
     r.check(cinta.pestana_actual() == "UTILIDADES", "Las pestañas cambian el contenido de la cinta")
     cinta.pestanas[0].click()
-    QTest.keyClick(v.visor, Qt.Key_S)
+    _tecla_s(v, v.visor)
     caja = v.caja
     fijados = [caja.atajos.item(i).text() for i in range(caja.atajos.count())] if caja else []
     r.check(caja is not None and caja.isVisible() and caja.titulo.text() == "ATAJOS DE DISEÑO"
@@ -222,6 +222,16 @@ def _punto_del_plano(visor, nombre):
     return None
 
 
+def _tecla_s(v, w):
+    """Tecla S sobre `w`. El atajo es de la ventana y Qt solo lo dispara con la ventana ACTIVA: Windows le niega el foco
+    a un proceso de fondo y la caja no abría (B-72: 1 de cada 3 corridas). Sin foco, se dispara la acción del atajo."""
+    v.activateWindow()
+    if QTest.qWaitForWindowActive(v, 2000):
+        QTest.keyClick(w, Qt.Key_S)
+    else:
+        v.acciones["caja_herramientas"].trigger()
+
+
 def _mover(w, pos):
     """Movimiento del ratón SIMULADO, enviado al widget. QTest.mouseMove mueve el cursor REAL de Windows: si la persona
     usa el ratón mientras corre la prueba gana el suyo, el boceto no ve el movimiento y «Entrada dinámica» fallaba
@@ -254,7 +264,7 @@ def _boceto_en_3d(v, r):
             "Clic en el plano XY: entra al boceto (pestaña BOCETO, paleta y lienzo sobre la vista 3D)")
     r.check(abs(float(v.visor.R[2] @ (0, 0, 1)) - 1) < 1e-9, "La cámara mira el plano del boceto («Mirar a» automático)")
     lz = mb.lienzo
-    QTest.keyClick(lz, Qt.Key_S)
+    _tecla_s(v, lz)
     QTest.keyClicks(v.caja.campo, "linea")
     hallados = [v.caja.resultados.item(i).data(Qt.UserRole) for i in range(v.caja.resultados.count())]
     r.check(v.caja.isVisible() and v.caja.titulo.text() == "ATAJOS DE BOCETO" and "sk_linea" in hallados,
