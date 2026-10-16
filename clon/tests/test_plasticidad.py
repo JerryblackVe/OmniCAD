@@ -93,3 +93,25 @@ def test_el_panel_del_comando_muestra_las_teclas_al_pie(ventana, monkeypatch):
     assert "Mayús: centrado" in panel2.pie_teclas.text()
     panel2.cancelar()
     monkeypatch.setattr(CATALOGO["caja"], "MODIFICADORES", {})   # panel 1 ya lo cerró ejecutar_comando
+
+
+# ---------------------------------------------------------------- PL3: boceto sobre la cara con Espacio
+def test_espacio_arranca_el_boceto_sobre_la_cara_ya_elegida(ventana):
+    from omnicad.nucleo import geometria as geo
+    assert ventana.acciones["boceto_cara"].shortcut().toString() == "Space"
+    ventana.seleccion = [{"tipo": "cara", "plano": geo.Plano("XY"),
+                          "ref": {"tipo": "plano", "id": "XY"}, "marco": None, "cara_ref": None}]
+    try:
+        ventana.boceto_sobre_cara_elegida()
+        assert ventana.modo_boceto.activo                 # arrancó el boceto, sin elección de plano
+    finally:
+        ventana.seleccion = []
+        if ventana.modo_boceto.activo:
+            ventana.modo_boceto.cancelar()
+
+
+def test_espacio_sin_cara_elegida_avisa_y_no_arranca(ventana):
+    ventana.seleccion = [{"tipo": "arista"}]
+    ventana.boceto_sobre_cara_elegida()
+    assert not ventana.modo_boceto.activo
+    ventana.seleccion = []

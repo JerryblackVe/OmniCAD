@@ -59,7 +59,7 @@ FILTRO_ABRIR = ";;".join([
     "IGES (*.iges *.igs)", "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)", "BREP de OpenCascade (*.brep *.brp)"])
 VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True}
 CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos")
-NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"))
+NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"), ("Space", "Espacio"))
 
 
 # Lo que se puede elegir con un clic sin comando abierto (Fusion: caras, aristas, vértices, perfiles…).
@@ -330,6 +330,9 @@ class VentanaPrincipal(QMainWindow):
           "Buscá y usá cualquier comando, y fijá los que más usás (en un boceto, con su propia lista).", "chinche")
         A("repetir", "Repetir el último comando", self.repetir_ultimo, "Shift+R",
           "Vuelve a abrir el último comando usado (lo mismo que «Repetir» del menú radial).")
+        A("boceto_cara", "Boceto sobre la cara elegida", self.boceto_sobre_cara_elegida, "Space",
+          "Con una cara plana ya elegida, arranca el boceto directamente en ella, sin pasar por la "
+          "elección del plano (como «Boceto sobre cara»).")
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
           "Con el ratón sobre un comando de la cinta o de un menú, muestra su ayuda.")
         A("renombrar", "Renombrar", lambda: self.navegador.renombrar_en_linea(), "F2",
@@ -1862,6 +1865,17 @@ class VentanaPrincipal(QMainWindow):
 
     def crear_boceto(self):
         self._elegir_plano("boceto", "Seleccione un plano o una cara plana   (Esc: cancelar)")
+
+    def boceto_sobre_cara_elegida(self):
+        """Espacio (PL3, Plasticity: plano de trabajo con una tecla): con una cara plana ya
+        elegida, arranca el boceto sobre ella sin pasar por la elección del plano."""
+        for h in self.seleccion:
+            if h.get("tipo") == "cara" and h.get("plano") is not None:
+                self._iniciar_boceto(Boceto(), h["plano"],
+                                     {"op": None, "plano": h["ref"], "marco": h["marco"],
+                                      "cara": h.get("cara_ref")})
+                return
+        self.mensaje("Elegí primero una cara plana: Espacio arranca el boceto sobre ella.")
 
     def _plano_elegido(self, hit):
         proposito = self._eleccion
