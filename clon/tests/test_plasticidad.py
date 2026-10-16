@@ -115,3 +115,21 @@ def test_espacio_sin_cara_elegida_avisa_y_no_arranca(ventana):
     ventana.boceto_sobre_cara_elegida()
     assert not ventana.modo_boceto.activo
     ventana.seleccion = []
+
+
+# ---------------------------------------------------------------- PL11: buscador del navegador
+def test_el_buscador_del_navegador_filtra_por_nombre(ventana):
+    from omnicad.ejemplo import crear_documento_ejemplo
+    ventana.set_documento(crear_documento_ejemplo())
+    nav, arbol = ventana.navegador, ventana.navegador.arbol
+    QTest.qWait(30)
+    top = arbol.topLevelItem(0)
+    assert top is not None and top.childCount() > 0
+
+    nav.filtro.setText("zzz-nada-de-nada")                     # nada coincide: todo oculto
+    assert all(arbol.topLevelItem(i).isHidden() for i in range(arbol.topLevelItemCount()))
+    nav.filtro.setText("")                                     # filtro vacío: vuelve todo
+    assert not top.isHidden()
+    nav.filtro.setText("cuerpo")                               # busca por nombre, sin distinguir mayúsculas
+    assert not top.isHidden()                                  # tiene un hijo que coincide
+    nav.filtro.setText("")

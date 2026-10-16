@@ -9,8 +9,8 @@ restaura. Clic derecho: nueva vista con nombre, renombrar o eliminar vistas, edi
 """
 from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMenu, QStyle, QStyledItemDelegate, QToolButton,
-                               QTreeWidget, QTreeWidgetItem, QVBoxLayout)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
+                               QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
 from . import temas
 from .iconos import icono
@@ -151,9 +151,32 @@ class Navegador(QFrame):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(4)
         v.addWidget(cabecera)
+        self.filtro = QLineEdit(objectName="filtro_navegador", placeholderText="Buscar…",
+                                 clearButtonEnabled=True)
+        self.filtro.textChanged.connect(self._filtrar)
+        v.addWidget(self.filtro)
         v.addWidget(self.arbol)
         self._expandidos = set(EXPANDIDOS_INICIALES)
         self._items = {}
+
+    def _filtrar(self, texto):
+        """PL11 (Plasticity: buscador en el Outliner): lo que no contiene el texto (ni tiene un hijo
+        que lo tenga) queda oculto; con el filtro vacío vuelve todo. Los que coinciden se expanden
+        para que se vea el hallazgo."""
+        t = texto.strip().lower()
+
+        def coincide(item):
+            return t in item.text(0).lower() or any(coincide(item.child(i))
+                                                    for i in range(item.childCount()))
+
+        raiz = self.arbol.invisibleRootItem()
+        for i in range(raiz.childCount()):
+            it = raiz.child(i)
+            mostrar = not t or coincide(it)
+            it.setHidden(not mostrar)
+            if mostrar and t:
+                it.setExpanded(True)
+        self.ajustar_alto()
 
     # ------------------------------------------------------------ contenido
     def _item(self, padre, clave, texto, ico, tipo, ojo=None):

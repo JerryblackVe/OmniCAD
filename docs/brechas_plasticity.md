@@ -49,7 +49,7 @@ que comparte con Rhino está en `docs/brechas_rhino.md` y acá solo se apunta.
 
 | # | Detalle (2026.1 y manual) | Nota |
 |---|---|---|
-| PL11 | **Buscador en el Outliner** y agrupar objetos. | El navegador ya agrupa; falta buscar por nombre. |
+| PL11 | **Buscador en el Outliner** y agrupar objetos. | El navegador ya agrupa; falta buscar por nombre. **HECHO (2026-10-16):** buscador arriba del árbol (`ui/navegador.py` › `filtro`): filtra por nombre sin distinguir mayúsculas, muestra el padre de lo que coincide y con el texto vacío vuelve todo. Prueba: `tests/test_plasticidad.py`. |
 | PL12 | **Soporte de SpaceMouse** (3Dconnexion) con refinamientos en 2026.1. | Buscado en el código: no hay nada de SpaceMouse/3Dconnexion. Fusion sí lo soporta. |
 | PL13 | **Modo Render** dentro del visor con HDRI integrados. | Va con el pendiente 4 (render). |
 
