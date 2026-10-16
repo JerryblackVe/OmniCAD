@@ -8,23 +8,28 @@ del papel), con una capa `<g>` por tipo de línea: las ocultas en trazos, como e
 Lo contrario, leer un SVG, está en `svg.py`.
 """
 import math
+import re
 from pathlib import Path
 from xml.sax.saxutils import escape, quoteattr
+
+from .svg import _n
 
 # Color ACI de las capas del dibujo → color de papel (el 7 es negro sobre blanco).
 _COLOR = {1: "#d02020", 3: "#2a8a2a", 7: "#000000", 8: "#808080", 9: "#a0a0a0"}
 _TRAZOS = {"trazos": "3 1.5", "trazo_punto": "6 1.5 0.5 1.5"}
 _VIVAS = {"grosor": 0.25, "tipo": "continua", "color": 7}      # una capa usada sin datos, como en el DXF
 _PASOS_CURVA = 48
-
-
-def _n(x):
-    return f"{x:.4f}".rstrip("0").rstrip(".") if abs(x) >= 5e-5 else "0"
+MARGEN = 5.0                 # mm alrededor de lo dibujado cuando la hoja no trae su tamaño
+# La altura de un texto del dibujo es la de las MAYÚSCULAS (como en el DXF y el PDF de la hoja); en SVG font-size es el
+# cuerpo entero (em): en Arial las mayúsculas miden 0,716 em.
+_MAYUSCULA_ARIAL = 0.716
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")     # caracteres que XML 1.0 no admite
 
 
 def _es_par(e):
     """¿Es (capa, primitiva)? Una primitiva sola es («linea», punto, punto…): su segundo elemento no empieza con texto."""
-    return len(e) == 2 and isinstance(e[0], str) and isinstance(e[1], (tuple, list)) and bool(e[1])         and isinstance(e[1][0], str)
+    return (len(e) == 2 and isinstance(e[0], str) and isinstance(e[1], (tuple, list)) and bool(e[1])
+            and isinstance(e[1][0], str))
 
 
 def _cajas(prim):
@@ -91,8 +96,9 @@ def _elemento(prim, y):
         rot = prim[4] if len(prim) > 4 else 0.0
         ancla = {"izq": "start", "centro": "middle", "der": "end"}.get(prim[5] if len(prim) > 5 else "izq", "start")
         giro = f' transform="rotate({_n(-rot)} {_n(px)} {_n(y(py))})"' if rot else ""
-        return (f'<text x="{_n(px)}" y="{_n(y(py))}" font-size="{_n(altura)}" text-anchor="{ancla}" '
-                f'font-family="sans-serif" fill="currentColor" stroke="none"{giro}>{escape(str(texto))}</text>')
+        return (f'<text x="{_n(px)}" y="{_n(y(py))}" font-size="{_n(altura / _MAYUSCULA_ARIAL)}" text-anchor="{ancla}" '
+                f'font-family="Arial, sans-serif" fill="currentColor" stroke="none"{giro}>'
+                f'{escape(_CONTROL.sub("", str(texto)))}</text>')
     if t == "solido":
         pts = [tuple(p) for p in prim[1]]
         if len(pts) < 3:
@@ -105,14 +111,14 @@ def _elemento(prim, y):
 def a_texto_svg(entidades, capas=None, ancho=None, alto=None):
     """Contenido SVG (str). entidades: primitivas (capa "0") o pares (capa, primitiva); capas: {nombre: {"color": ACI,
     "tipo": "continua" | "trazos" | "trazo_punto", "grosor": mm}}. Con `ancho` y `alto` (mm) la hoja mide eso, con el
-    origen del dibujo abajo a la izquierda; sin ellos, la caja de lo dibujado más 5 mm de margen."""
+    origen del dibujo abajo a la izquierda; sin ellos, la caja de lo dibujado más MARGEN mm alrededor."""
     pares = [e if _es_par(e) else ("0", e) for e in entidades]
     if ancho is None or alto is None:
         pts = [p for _c, prim in pares for p in _cajas(prim)]
         if not pts:
             raise ValueError("No hay nada que escribir en el SVG.")
-        x0, y0 = min(p[0] for p in pts) - 5.0, min(p[1] for p in pts) - 5.0
-        ancho, alto = max(p[0] for p in pts) + 5.0 - x0, max(p[1] for p in pts) + 5.0 - y0
+        x0, y0 = min(p[0] for p in pts) - MARGEN, min(p[1] for p in pts) - MARGEN
+        ancho, alto = max(p[0] for p in pts) + MARGEN - x0, max(p[1] for p in pts) + MARGEN - y0
         techo = y0 + alto
     else:
         x0, y0, techo = 0.0, 0.0, float(alto)

@@ -560,8 +560,9 @@ def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "to
     """
     import numpy as np
 
-    from ..io_archivos.svg_salida import escribir_svg
+    from ..io_archivos.svg_salida import MARGEN, escribir_svg
     from ..nucleo import dibujo as nd
+    from ..timeline.ops_chapa import cuerpos_del_modelo
     from ..nucleo import geometria as geo
     ruta = Path(str(path)).expanduser()
     if ruta.suffix.lower() != ".svg":
@@ -572,7 +573,8 @@ def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "to
         raise error("FILE_EXISTS", f"Ya existe el archivo: {ruta}")
     if not ruta.parent.is_dir():
         raise error("FILE_NOT_FOUND", f"No existe la carpeta: {ruta.parent}")
-    cuerpos = [sesion.cuerpo(b) for b in bodies] if bodies else list(sesion.doc.estado_final.cuerpos.values())
+    cuerpos = ([sesion.cuerpo(b) for b in bodies] if bodies
+               else cuerpos_del_modelo(sesion.doc.estado_final))          # sin los patrones planos de chapa
     mallas = [c for c in cuerpos if getattr(c, "tipo", "solido") == "malla"]
     if mallas and bodies:
         raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(mallas[0])}» es una malla: no se proyecta.")
@@ -603,8 +605,8 @@ def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "to
     todas = [q for _c, p in prims for q in (p[1:3] if p[0] == "linea" else p[1])]
     return {"path": str(ruta.resolve()), "view": view, "visible_lines": len(capas["VISIBLE"]),
             "hidden_lines": len(capas["OCULTA"]), "tangent_lines": len(capas["TANGENTE"]), "scale": scale,
-            "size_mm": [round(max(q[0] for q in todas) - min(q[0] for q in todas) + 10.0, 4),
-                        round(max(q[1] for q in todas) - min(q[1] for q in todas) + 10.0, 4)],
+            "size_mm": [round(max(q[0] for q in todas) - min(q[0] for q in todas) + 2 * MARGEN, 4),
+                        round(max(q[1] for q in todas) - min(q[1] for q in todas) + 2 * MARGEN, 4)],
             "size_bytes": archivo.stat().st_size}
 
 

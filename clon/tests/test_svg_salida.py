@@ -95,6 +95,15 @@ def test_todas_las_primitivas_y_el_texto_con_caracteres_raros():
         svg_salida.a_texto_svg([])
 
 
+def test_el_texto_mide_la_altura_de_mayusculas_y_sin_caracteres_de_control():
+    """La altura del dibujo es la de las mayúsculas (como en el DXF y el PDF): font-size = altura / 0,716 (Arial); un
+    carácter de control pegado de Word rompía el XML."""
+    texto = svg_salida.a_texto_svg([("texto", (0, 0), 3.5, "Nota\x0bcon\x01control")], None, 20, 10)
+    assert 'font-size="4.8883"' in texto and "Arial" in texto and "Notaconcontrol" in texto
+    from xml.etree import ElementTree
+    ElementTree.fromstring(texto)
+
+
 def test_sin_tamano_la_hoja_es_la_caja_mas_margen():
     texto = svg_salida.a_texto_svg([("linea", (10, 20), (30, 25))])
     assert 'width="30mm" height="15mm"' in texto
@@ -129,6 +138,18 @@ def test_el_svg_de_lineas_ocultas_trae_el_agujero_en_trazos(tmp_path):
     assert "stroke-dasharray" not in texto.split('id="VISIBLE"')[1].split(">")[0] and visible.count("<") >= 4
     from xml.etree import ElementTree
     ElementTree.fromstring(texto)
+
+
+def test_el_patron_plano_de_chapa_no_entra_en_el_svg(tmp_path):
+    """Como export y la lista de materiales: el patrón plano no es una pieza del modelo."""
+    from omnicad import api
+    s = api.Sesion()
+    cid = api.llamar(s, "create_box", {"length": 40, "width": 30, "height": 3})["result"]["bodies_created"][0]["id"]
+    assert api.llamar(s, "convert_to_sheet_metal", {"face": ">Z"})["ok"]
+    assert api.llamar(s, "create_flat_pattern", {"face": ">Z", "body": cid, "location": "beside"})["ok"]
+    r = _exportar(s, tmp_path / "chapa.svg", view="top")
+    assert r["ok"], r
+    assert r["result"]["size_mm"] == pytest.approx([50.0, 40.0], abs=0.01)    # solo la pieza (antes: 100 × 40)
 
 
 def test_desde_arriba_el_agujero_es_visible_y_sin_ocultas(tmp_path):
