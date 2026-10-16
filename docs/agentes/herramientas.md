@@ -2398,7 +2398,7 @@ Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde
   - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a dibujar; vacío = todos.
   - `fit` (true/false; opcional, por defecto `true`): true encuadra los cuerpos dibujados; false encuadra TODA la escena aunque se dibuje solo una parte (sirve para comparar imágenes con el mismo encuadre).
   - `direction` (lista de número o null; opcional, por defecto `null`): [x, y, z] vector desde el modelo HACIA la cámara (Z es arriba); si se pasa, reemplaza a view.
-  - `lighting` ("three_point" | "key_only"; opcional, por defecto `"three_point"`): "three_point" = iluminación de tres puntos (luz principal, relleno y contorno); "key_only" = solo la luz principal. Es la opción «Iluminación de la vista» de Preferencias › Gráficos.
+  - `lighting` ("three_point" | "key_only"; opcional, por defecto `"three_point"`): "three_point" (por defecto) = iluminación de tres puntos (luz principal, relleno y contorno); "key_only" = solo la luz principal. No depende de Preferencias › Gráficos › «Iluminación de la vista» (esa opción es la del visor de la ventana).
 - CLI: `omnicad call get_viewport_image --doc pieza.omnicad`
 
 ### `get_physical_properties`

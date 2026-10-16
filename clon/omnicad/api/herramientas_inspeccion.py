@@ -117,8 +117,9 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
     fit: true encuadra los cuerpos dibujados; false encuadra TODA la escena aunque se dibuje solo una parte
         (sirve para comparar imágenes con el mismo encuadre).
     direction: [x, y, z] vector desde el modelo HACIA la cámara (Z es arriba); si se pasa, reemplaza a view.
-    lighting: "three_point" = iluminación de tres puntos (luz principal, relleno y contorno); "key_only" = solo la
-        luz principal. Es la opción «Iluminación de la vista» de Preferencias › Gráficos.
+    lighting: "three_point" (por defecto) = iluminación de tres puntos (luz principal, relleno y contorno);
+        "key_only" = solo la luz principal. No depende de Preferencias › Gráficos › «Iluminación de la vista»
+        (esa opción es la del visor de la ventana).
     """
     for nombre, valor in (("width", width), ("height", height)):
         if not _LADO_MINIMO <= valor <= _LADO_MAXIMO:
