@@ -103,7 +103,7 @@ class Multitransformar(Comando):
         if not lista:
             raise ErrorComando("Elegí al menos una transformación.")
         return self.crear_op(OpMultitransformar, v, ctx, transformaciones=lista, combinar=bool(v.get("combinar")),
-                             ligeras=bool(v.get("ligeras")), **objeto)
+                             ligeras=bool(v.get("ligeras")) and _de_cuerpos(v) and not v.get("combinar"), **objeto)
 
     def desde_op(self, op, ctx):
         v = dict(objeto_valores(op, ctx), combinar=op.p.get("combinar", False), ligeras=op.p.get("ligeras", False))

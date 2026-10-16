@@ -466,15 +466,17 @@ def mirror(sesion, bodies: Cuerpos, plane: str = "YZ", combine: bool = False):
 Pasos = str | list[str]
 
 
-def _objeto_patron(sesion, bodies, features, lightweight=False):
+def _objeto_patron(sesion, bodies, features, lightweight, combine):
     """objeto, cuerpos y pasos de un patrón: cuerpos (bodies) u operaciones del timeline (features). `ligeras` solo
-    tiene sentido con cuerpos."""
+    tiene sentido con cuerpos y sin combine (las copias unidas al original no quedan como instancias)."""
     from ..timeline.ops_solido import TIPOS_REPETIBLES
     ids = _ids_cuerpos(sesion, bodies)
     pasos = [sesion.paso(f) for f in _lista(features)]
     if lightweight and pasos:
         raise error("INVALID_ARGUMENTS", "lightweight (copias ligeras) es para cuerpos (bodies): las operaciones "
                                          "(features) no se pueden instanciar.")
+    if lightweight and combine:
+        sesion.avisar("lightweight se ignora con combine: las copias se unen al original y no quedan como instancias.")
     if ids and pasos:
         raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies) u operaciones (features), no las dos cosas.")
     if not ids and not pasos:
@@ -512,7 +514,8 @@ def realize_copies(sesion, feature: str):
     """
     op = sesion.paso(feature)
     clave = "ligera" if op.TIPO == "mover" else "ligeras"
-    if clave not in op.PARAMS or not op.p.get(clave):
+    sin_copias = op.p.get("combinar") if op.TIPO != "mover" else not op.p.get("copiar")   # unidas al original / sin copia
+    if clave not in op.PARAMS or not op.p.get(clave) or sin_copias:
         raise error("INVALID_ARGUMENTS", f"El paso «{op.nombre}» ({op.TIPO}) no tiene copias ligeras.",
                     "Las crean los patrones y la multitransformación con lightweight=true, y move_body con "
                     "copy=true y lightweight=true.")
@@ -546,7 +549,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
     if x_count < 1 or y_count < 1:
         raise error("INVALID_ARGUMENTS", "x_count e y_count tienen que ser 1 o más.")
     if x_count == 1 and y_count == 1:
@@ -559,7 +562,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                                                lambda o: o.p["forma_patron"] == "rectangular"),
                   forma_patron="rectangular", dir1={"tipo": "eje", "id": axis1.upper()}, n1=x_count,
                   d1=texto_expr(x_spacing), dir2={"tipo": "eje", "id": axis2.upper()} if y_count > 1 else None,
-                  n2=y_count, d2=texto_expr(y_spacing), distribucion="espaciado", combinar=combine, ligeras=lightweight,
+                  n2=y_count, d2=texto_expr(y_spacing), distribucion="espaciado", combinar=combine, ligeras=lightweight and not combine,
                   **objeto)
     return _agregar_patron(sesion, op)
 
@@ -580,7 +583,7 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: Li
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
     _exigir_instancias(count, "count")
@@ -588,7 +591,7 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: Li
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón circular", OpPatron,
                                                lambda o: o.p["forma_patron"] == "circular"),
                   forma_patron="circular", eje={"tipo": "eje", "id": axis.upper()}, n=count,
-                  angulo=texto_expr(total_angle), distribucion="extension", combinar=combine, ligeras=lightweight,
+                  angulo=texto_expr(total_angle), distribucion="extension", combinar=combine, ligeras=lightweight and not combine,
                   **objeto)
     return _agregar_patron(sesion, op)
 
@@ -662,13 +665,13 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
     params = _params_puntos(sesion, points, sketch, reference)
     _exigir_instancias(len(params["coordenadas"]) + 1, "points")
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón en puntos", OpPatron,
                                                lambda o: o.p["forma_patron"] == "puntos"),
-                  combinar=combine, **params, **objeto, ligeras=lightweight)
+                  combinar=combine, **params, **objeto, ligeras=lightweight and not combine)
     return _agregar_patron(sesion, op)
 
 
@@ -699,12 +702,12 @@ def path_pattern(sesion, path_sketch: str, count: int, distance: Expr, bodies: C
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
     params = _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist,
                           symmetric)
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón en ruta", OpPatron, lambda o: o.p["forma_patron"] == "ruta"),
-                  combinar=combine, **params, **objeto, ligeras=lightweight)
+                  combinar=combine, **params, **objeto, ligeras=lightweight and not combine)
     return _agregar_patron(sesion, op)
 
 
@@ -791,7 +794,7 @@ def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = Non
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
     if not transforms:
         raise error("INVALID_ARGUMENTS", "transforms necesita al menos una transformación.")
     lista, total = [], 1
@@ -800,9 +803,12 @@ def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = Non
         lista.append(d)
         total *= n
     _exigir_instancias(total, "el producto de las transformaciones")
+    if lightweight and any(d["tipo"] == "simetria" for d in lista):
+        sesion.avisar("Las copias de una simetría son copias de verdad (un espejo no es un movimiento rígido): solo las "
+                      "demás transformaciones quedan como copias ligeras.")
     doc = sesion.doc
     op = OpMultitransformar(doc.nuevo_id(), nombre_nuevo(doc, "Multitransformación", OpMultitransformar),
-                            transformaciones=lista, combinar=combine, **objeto, ligeras=lightweight)
+                            transformaciones=lista, combinar=combine, **objeto, ligeras=lightweight and not combine)
     return _agregar_patron(sesion, op)
 
 

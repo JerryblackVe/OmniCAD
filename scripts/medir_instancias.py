@@ -36,6 +36,8 @@ def memoria_mb():
     gc.collect()
     c = _Contadores()
     c.cb = ctypes.sizeof(c)
+    if sys.platform != "win32":
+        raise OSError("La medición de memoria usa la API de Windows: en otro sistema este script no da ese número.")
     kernel, psapi = ctypes.WinDLL("kernel32"), ctypes.WinDLL("psapi")
     kernel.GetCurrentProcess.restype = wintypes.HANDLE
     psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Contadores), wintypes.DWORD]

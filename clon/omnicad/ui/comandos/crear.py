@@ -747,8 +747,8 @@ class _Patron(Comando):
                        Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
                        Casilla("ligeras", "Copias ligeras (comparten la geometría)",
                                visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
-                               ayuda="Cada copia es la MISMA geometría con otra ubicación: pesa casi nada y editar la "
-                                     "original cambia todas. Para volverlas copias de verdad, destildá la casilla.")]
+                               ayuda="Cada copia es la MISMA geometría con otra ubicación: pesa casi nada en memoria "
+                                     "y en el visor. Para volverlas copias de verdad, destildá la casilla.")]
 
     def construir(self, v, ctx):
         objeto = objeto_params(v, ctx)
@@ -763,6 +763,7 @@ class _Patron(Comando):
         params.update(objeto, forma_patron=self.FORMA, dir1=ref1(v, "dir1"), dir2=ref1(v, "dir2"), eje=ref1(v, "eje"),
                       ruta=refs(v, "ruta"), puntos=refs(v, "puntos"), referencia=ref1(v, "referencia"),
                       suprimir=suprimir)
+        params["ligeras"] = bool(v.get("ligeras")) and _de_cuerpos(v) and not v.get("combinar")   # la casilla oculta no cuenta
         if self.FORMA == "puntos" and ctx.op is not None:            # lo que el diálogo no muestra (de la API)
             params.update(coordenadas=ctx.op.p.get("coordenadas") or [],
                           referencia_xyz=[] if params["referencia"] else ctx.op.p.get("referencia_xyz") or [])

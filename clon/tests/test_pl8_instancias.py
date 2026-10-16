@@ -246,3 +246,52 @@ def test_el_dialogo_del_patron_tiene_la_casilla_de_instancias():
     formas = [c.forma for c in doc.estado_final.cuerpos.values()]
     assert len(formas) == 3 and all(f.IsPartner(formas[0]) for f in formas)
     assert cmd.desde_op(op, ContextoComando(doc, op=op))["ligeras"] is True
+
+
+# ---------------------------------------------------------------- revisión ponytail (upgrades3)
+def test_con_combine_lightweight_se_ignora_avisa_y_realize_copies_no_miente():
+    s = api.Sesion()
+    cid = _caja(s)
+    r = api.llamar(s, "rectangular_pattern", {"bodies": [cid], "x_count": 3, "x_spacing": 8, "combine": True,
+                                              "lightweight": True})
+    assert r["ok"] and any("combine" in a for a in r["avisos"])
+    paso = r["result"]["feature"]["id"]
+    assert s.doc.operaciones[-1].p["ligeras"] is False
+    falla = api.llamar(s, "realize_copies", {"feature": paso})                    # antes: ok con realized=1
+    assert falla["ok"] is False and falla["error_kind"] == "INVALID_ARGUMENTS"
+
+
+def test_realize_copies_de_un_mover_sin_copia_falla():
+    s = api.Sesion()
+    cid = _caja(s)
+    paso = _ok(api.llamar(s, "move_body", {"body": [cid], "translate": [5, 0, 0]}))["feature"]["id"]
+    _ok(api.llamar(s, "edit_feature", {"feature": paso, "params": {"ligera": True}}))
+    falla = api.llamar(s, "realize_copies", {"feature": paso})
+    assert falla["ok"] is False and falla["error_kind"] == "INVALID_ARGUMENTS"
+
+
+def test_la_multitransformacion_avisa_que_la_simetria_no_queda_ligera():
+    s = api.Sesion()
+    cid = _caja(s, x=20)
+    r = api.llamar(s, "multi_transform", {"bodies": [cid], "lightweight": True,
+                                          "transforms": [{"type": "mirror", "plane": "YZ"}]})
+    assert r["ok"] and any("simetría" in a for a in r["avisos"])
+
+
+def test_el_dialogo_no_guarda_ligeras_con_la_casilla_oculta_por_unir():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from omnicad.timeline.documento import Documento
+    from omnicad.timeline.operaciones import OpPrimitiva
+    from omnicad.ui.comando import ContextoComando, hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10 mm", largo="10 mm", alto="10 mm"))
+    cmd = CATALOGO["patron_rectangular_3d"]()
+    ctx = ContextoComando(doc)
+    v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in cmd.campos(ctx)}
+    v.update(cuerpos=[hit_desde_ref({"tipo": "cuerpo", "cuerpo": "op1.c1"}, doc.estado_final)],
+             dir1=[hit_desde_ref({"tipo": "eje", "id": "X"}, doc.estado_final)], ligeras=True, combinar=True)
+    assert cmd.construir(v, ctx).p["ligeras"] is False
