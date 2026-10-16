@@ -259,17 +259,23 @@ class Cinta(QWidget):
         self.espacio = QToolButton(objectName="espacio_trabajo", text="DISEÑO  ▾")
         self.espacio.setFixedSize(108, 62)
         self.espacio.setPopupMode(QToolButton.InstantPopup)
+        self.espacio.setToolTip("<b>Espacio de trabajo</b><br>Cambia de pestaña según lo que vayas a hacer: "
+                                "diseñar, dibujar planos, renderizar o animar.")
         menu = QMenu(self.espacio)
         self.acciones_espacio = {}
+        AYUDAS = {"DISEÑO": "Modelado 3D: bocetos, operaciones y timeline.",
+                  "DIBUJO": "Planos 2D con vistas, cotas y lista de piezas.",
+                  "RENDERIZAR": "Render de la escena con materiales y entornos.",
+                  "ANIMACIÓN": "Explosión y animación del ensamble."}
         for nombre in ESPACIOS:
             a = menu.addAction(nombre)
             self.acciones_espacio[nombre] = a
+            a.setToolTip(f"<b>{nombre}</b><br>{AYUDAS.get(nombre, 'Espacio de trabajo.')}")
             if nombre == "DISEÑO":
                 a.setCheckable(True)
                 a.setChecked(True)
             else:
                 a.setEnabled(False)     # la ventana habilita los espacios que existen (DIBUJO, RENDERIZAR…)
-                a.setToolTip(f"<b>{nombre}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
         menu.setToolTipsVisible(True)
         self.espacio.setMenu(menu)
         lay.addWidget(self.espacio, 0, Qt.AlignVCenter)
@@ -319,8 +325,10 @@ class Cinta(QWidget):
     def _fila_grupos(self, grupos):
         w = QWidget()
         h = QHBoxLayout(w)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(4)
+        # Un poco de aire alrededor de la fila de grupos (auditoría P9: toda la cinta iba pegada, con
+        # margen 0 en los cuatro lados) y separación mayor entre grupos, como la cinta de Fusion.
+        h.setContentsMargins(4, 3, 4, 3)
+        h.setSpacing(8)
         for n, (titulo, rapidos, items) in enumerate(grupos):
             if n:
                 sep = QFrame(objectName="separador_grupo")

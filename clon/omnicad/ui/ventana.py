@@ -198,8 +198,7 @@ class VentanaPrincipal(QMainWindow):
         for nombre, clave in (("DIBUJO", "dibujo"), ("RENDERIZAR", "render"), ("ANIMACIÓN", "animacion")):
             a = self.cinta.acciones_espacio[nombre]
             if self._clase_espacio(clave) is not None:
-                a.setEnabled(True)
-                a.setToolTip("")
+                a.setEnabled(True)      # el tooltip de ayuda ya viene de la cinta para todos
                 a.triggered.connect(lambda _=False, c=clave: self.abrir_espacio(c))
 
         derecha = QVBoxLayout()
@@ -275,7 +274,8 @@ class VentanaPrincipal(QMainWindow):
         A("impresion3d", "Impresión en 3D…", lambda: self.exportar("stl"), None,
           "Exporta los cuerpos a STL para abrirlos en el laminador", "impresion3d")
         A("captura", "Capturar imagen…", self.capturar_imagen, None, "Guardar la vista actual como PNG", "captura")
-        A("ejemplo", "Cargar modelo de ejemplo", self.cargar_ejemplo)
+        A("ejemplo", "Cargar modelo de ejemplo", self.cargar_ejemplo, None,
+          "Abre el modelo de ejemplo (placa con aro) para probar los comandos.")
         A("salir", "Salir", self.close, "Ctrl+Q")
         A("deshacer", "Deshacer", self._deshacer, "Ctrl+Z", None, "deshacer")
         A("rehacer", "Rehacer", lambda: self._intentar(self.doc.rehacer), "Ctrl+Y", None, "rehacer")
@@ -333,9 +333,11 @@ class VentanaPrincipal(QMainWindow):
         A("renombrar", "Renombrar", lambda: self.navegador.renombrar_en_linea(), "F2",
           "Renombra en el navegador el elemento elegido.")
         A("ajustar", "Ajustar", lambda: self.visor.encuadrar(), "F6", "Encuadra todo el modelo en la vista.", "ajustar")
-        for clave, texto in (("iso", "Vista inicial (isométrica)"), ("frente", "Frente"), ("arriba", "Superior"),
-                             ("derecha", "Derecha")):
-            A(f"vista_{clave}", texto, lambda _=False, c=clave: self.visor.vista(c))
+        for clave, texto, ayuda in (("iso", "Vista inicial (isométrica)", "Vuelve la cámara a la vista inicial."),
+                                    ("frente", "Frente", "Mira el modelo de frente."),
+                                    ("arriba", "Superior", "Mira el modelo desde arriba."),
+                                    ("derecha", "Derecha", "Mira el modelo desde la derecha.")):
+            A(f"vista_{clave}", texto, lambda _=False, c=clave: self.visor.vista(c), None, ayuda)
         # SELECCIONAR (en Fusion 1, 2 y 3 son los modos de selección por región)
         A("sel_ventana", "Selección en ventana", lambda: self._modo_seleccion("sel_ventana"), "1",
           "Arrastrá un rectángulo: de izquierda a derecha elige lo que queda adentro; al revés, lo que toca.",
@@ -349,24 +351,40 @@ class VentanaPrincipal(QMainWindow):
         A("seleccion_nombre", "Seleccionar por nombre…", self._seleccion_nombre, None, "Elige cuerpos por su nombre.")
         A("seleccion_tamano", "Seleccionar por tamaño…", self._seleccion_tamano, None,
           "Elige cuerpos cuya caja envolvente está entre dos tamaños.")
-        for clave, texto in (("cuerpo", "Prioridad de cuerpo"), ("cara", "Prioridad de cara"),
-                             ("arista", "Prioridad de arista"), ("componente", "Prioridad de componente")):
-            A(f"prioridad_{clave}", texto, lambda _=False, c=clave: self._prioridad(c), None, None, None, True)
-        for clave, texto in (("caras", "Caras"), ("aristas", "Aristas"), ("vertices", "Vértices"),
-                             ("cuerpos", "Cuerpos"), ("bocetos", "Perfiles y curvas de boceto"),
-                             ("construccion", "Planos, ejes y puntos")):
-            A(f"filtro_{clave}", texto, lambda activo, c=clave: self._filtro_seleccion(c, activo), None, None, None,
-              True)
+        for clave, texto, ayuda in (("cuerpo", "Prioridad de cuerpo",
+                                     "Al hacer clic, elige primero el cuerpo entero."),
+                                    ("cara", "Prioridad de cara",
+                                     "Al hacer clic, elige primero la cara bajo el cursor."),
+                                    ("arista", "Prioridad de arista",
+                                     "Al hacer clic, elige primero la arista bajo el cursor."),
+                                    ("componente", "Prioridad de componente",
+                                     "Al hacer clic, elige primero el componente entero.")):
+            A(f"prioridad_{clave}", texto, lambda _=False, c=clave: self._prioridad(c), None, ayuda, None, True)
+        for clave, texto, ayuda in (("caras", "Caras", "Mostrar las caras como elegibles."),
+                                    ("aristas", "Aristas", "Mostrar las aristas como elegibles."),
+                                    ("vertices", "Vértices", "Mostrar los vértices como elegibles."),
+                                    ("cuerpos", "Cuerpos", "Mostrar los cuerpos como elegibles."),
+                                    ("bocetos", "Perfiles y curvas de boceto",
+                                     "Mostrar los perfiles y curvas de boceto como elegibles."),
+                                    ("construccion", "Planos, ejes y puntos",
+                                     "Mostrar los planos, ejes y puntos como elegibles.")):
+            A(f"filtro_{clave}", texto, lambda activo, c=clave: self._filtro_seleccion(c, activo), None, ayuda,
+              None, True)
         A("preferencias", "Preferencias…", self.preferencias, None, "Preferencias de OmniCAD", "engranaje")
-        A("acerca", f"Acerca de {NOMBRE_APP}", self.acerca_de)
+        A("acerca", f"Acerca de {NOMBRE_APP}", self.acerca_de, None,
+          "Versión, kernel de geometría y licencia de OmniCAD.")
         A("reportar", "Reportar problema…", self.reportar_problema, None,
           "Abre la página de issues de GitHub con el informe del último error ya cargado (sin datos "
           "personales); vos lo revisás y lo mandás. Antes de enviar podés borrar lo que quieras.")
         A("panel_datos", "Panel de datos", self._mostrar_panel_datos, None,
           "Mostrar u ocultar el panel de datos (proyectos recientes)", "datos", True)
-        for clave, texto in (("ver_navegador", "Navegador"), ("ver_viewcube", "ViewCube"),
-                             ("ver_barra_nav", "Barra de navegación"), ("ver_timeline", "Timeline")):
-            A(clave, texto, lambda activo, c=clave: self._mostrar_elemento(c, activo), None, None, None, True)
+        for clave, texto, ayuda in (("ver_navegador", "Navegador", "Mostrar u ocultar el navegador de cuerpos."),
+                                    ("ver_viewcube", "ViewCube", "Mostrar u ocultar el ViewCube de la esquina."),
+                                    ("ver_barra_nav", "Barra de navegación",
+                                     "Mostrar u ocultar la barra de navegación de la vista."),
+                                    ("ver_timeline", "Timeline",
+                                     "Mostrar u ocultar el timeline paramétrico de abajo.")):
+            A(clave, texto, lambda activo, c=clave: self._mostrar_elemento(c, activo), None, ayuda, None, True)
 
     def _boton(self, accion, ico_tam=18):
         b = QToolButton()
@@ -409,6 +427,7 @@ class VentanaPrincipal(QMainWindow):
         archivo.setToolTip("<b>Archivo</b>")
         archivo.setPopupMode(QToolButton.InstantPopup)
         archivo.setMenu(m)
+        archivo.setMinimumWidth(archivo.sizeHint().width())   # sin esto la flecha «▾» se corta (P9)
         h.addWidget(archivo)
         for clave in ("guardar", "deshacer", "rehacer"):
             h.addWidget(self._boton(self.acciones[clave]))

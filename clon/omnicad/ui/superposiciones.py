@@ -236,15 +236,20 @@ class BarraNavegacion(QFrame):
         b.setToolTip(f"<b>{ayuda}</b>")
         b.setPopupMode(QToolButton.InstantPopup)
         b.setMenu(menu)
+        # Sin esto el botón queda más angosto que icono + «▾» + flecha del menú (medido: 48 px para
+        # 51 necesarios): la flecha se corta (auditoría P9, 2026-10-16).
+        b.setMinimumWidth(b.sizeHint().width())
         return b
 
-    def _opcion(self, menu, texto, clave, valor=None, atajo=None, grupo=None, activa=True):
+    def _opcion(self, menu, texto, clave, valor=None, atajo=None, grupo=None, activa=True, ayuda=None):
         """Ítem que lee y escribe una opción de vista (`clave`). Con `valor` es de opción única."""
         a = menu.addAction(texto)
         a.setCheckable(True)
         a.setEnabled(activa)
         if not activa:
             a.setToolTip("No disponible en OmniCAD.")
+        elif ayuda:
+            a.setToolTip(f"<b>{texto.split(chr(9))[0]}</b><br>{ayuda}")
         if atajo:
             a.setShortcut(QKeySequence(atajo))
             a.setText(f"{texto}\t{atajo.replace('Ctrl', 'Control').replace('Shift', 'Mayúsculas')}")
@@ -266,27 +271,40 @@ class BarraNavegacion(QFrame):
     def _menu_visualizacion(self):
         from .visor3d import ENTORNOS, ESTILOS
         m = self._menu("visualizacion")
+        AYUDA_ESTILO = {"sombreado": "Superficies pintadas, con la luz del entorno.",
+                        "sombreado_ocultas": "Superficies pintadas y las aristas tapadas en punteado.",
+                        "sombreado_aristas": "Superficies pintadas y solo las aristas que se ven.",
+                        "alambrico": "Solo las aristas del modelo, sin superficies.",
+                        "alambrico_ocultas": "Solo aristas, con las tapadas en punteado.",
+                        "alambrico_visibles": "Solo las aristas que se ven, sin superficies."}
         sub = m.addMenu("Estilo visual")
         g = QActionGroup(self)
         self.estilos = {}
         for i, (clave, texto) in enumerate(ESTILOS.items()):
-            self.estilos[clave] = self._opcion(sub, texto, "estilo_visual", clave, f"Ctrl+{i + 4}", g)
+            self.estilos[clave] = self._opcion(sub, texto, "estilo_visual", clave, f"Ctrl+{i + 4}", g,
+                                               ayuda=AYUDA_ESTILO.get(clave))
         sub = m.addMenu("Entorno")
         g = QActionGroup(self)
-        self._opcion(sub, ENTORNOS["tema"][0], "entorno", "tema", grupo=g)
+        self._opcion(sub, ENTORNOS["tema"][0], "entorno", "tema", grupo=g,
+                     ayuda="El fondo de la vista sale del tema activo de la interfaz.")
         sub.addSeparator()
         self._titulo(sub, "Entornos de temas")
         for clave in ("fotomaton", "rubicon", "cielo_oscuro"):
-            self._opcion(sub, "   " + ENTORNOS[clave][0], "entorno", clave, grupo=g)
+            self._opcion(sub, "   " + ENTORNOS[clave][0], "entorno", clave, grupo=g,
+                         ayuda="Cambia el fondo y la luz con que se ve el modelo.")
         sub.addSeparator()
         self._titulo(sub, "Entornos heredados")
         for clave in ("infinito", "habitacion_gris", "azul_tranquilidad"):
-            self._opcion(sub, "   " + ENTORNOS[clave][0], "entorno", clave, grupo=g)
+            self._opcion(sub, "   " + ENTORNOS[clave][0], "entorno", clave, grupo=g,
+                         ayuda="Cambia el fondo y la luz con que se ve el modelo.")
         sub = m.addMenu("Valor predefinido de gráficos")
         g = QActionGroup(self)
-        for clave, texto in (("rendimiento", "Rendimiento"), ("equilibrado", "Equilibrado"), ("calidad", "Calidad"),
-                             ("personalizar", "Personalizar")):
-            self._opcion(sub, texto, "preset", clave, grupo=g)
+        for clave, texto, ayuda in (
+                ("rendimiento", "Rendimiento", "Lo más rápido: menos efectos, para modelos grandes."),
+                ("equilibrado", "Equilibrado", "Buen punto medio entre velocidad y calidad."),
+                ("calidad", "Calidad", "Todos los efectos, al costo de cuadros por segundo."),
+                ("personalizar", "Personalizar", "Elegir a mano cada efecto (menú Efectos).")):
+            self._opcion(sub, texto, "preset", clave, grupo=g, ayuda=ayuda)
         sub = m.addMenu("Efectos")
         indicador = sub.addAction("Valor predefinido de gráficos")
         indicador.setCheckable(True)
@@ -294,13 +312,18 @@ class BarraNavegacion(QFrame):
         sub.aboutToShow.connect(lambda: (indicador.setChecked(True), indicador.setText(
             f"Valor predefinido de gráficos: {self.ctl.valor_vista('preset')}")))
         sub.addSeparator()
-        for clave, texto, activa in (("cupula", "Cúpula de entorno", True), ("suelo", "Plano del suelo", True),
-                                     ("sombra_suelo", "Sombra en el suelo", True),
-                                     ("reflejo", "Reflejo en el suelo", True), ("sombra_objeto", "Sombra de objeto", False),
-                                     ("oclusion", "Oclusión ambiental", False), ("aa", "Anti-aliasing", True)):
-            self._opcion(sub, texto, f"efecto:{clave}", activa=activa)
+        for clave, texto, activa, ayuda in (
+                ("cupula", "Cúpula de entorno", True, "Dibujar el degradado del entorno alrededor del modelo."),
+                ("suelo", "Plano del suelo", True, "Dibujar el plano que apoya al modelo."),
+                ("sombra_suelo", "Sombra en el suelo", True, "La sombra del modelo sobre el plano del suelo."),
+                ("reflejo", "Reflejo en el suelo", True, "Reflejar el modelo en el plano del suelo."),
+                ("sombra_objeto", "Sombra de objeto", False, ""),
+                ("oclusion", "Oclusión ambiental", False, ""),
+                ("aa", "Anti-aliasing", True, "Suaviza las aristas diagonales de la vista.")):
+            self._opcion(sub, texto, f"efecto:{clave}", activa=activa, ayuda=ayuda)
         sub = m.addMenu("Visibilidad del objeto")
-        self._opcion(sub, "Todas las operaciones de trabajo", "visibilidad:todas")
+        self._opcion(sub, "Todas las operaciones de trabajo", "visibilidad:todas",
+                     ayuda="Mostrar todo, apagado o no en el navegador.")
         sub.addSeparator()
         for clave, texto, activa in (
                 ("planos_origen", "Planos de origen", True), ("ejes_origen", "Ejes de origen", True),
@@ -309,16 +332,22 @@ class BarraNavegacion(QFrame):
                 ("bocetos", "Bocetos", True), ("scu", "Sistemas de coordenadas del usuario", False),
                 ("origenes_union", "Orígenes de unión", False), ("ejes_union", "Ejes de origen de unión", False),
                 ("uniones", "Uniones", False)):
-            self._opcion(sub, texto, f"visibilidad:{clave}", activa=activa)
+            self._opcion(sub, texto, f"visibilidad:{clave}", activa=activa,
+                         ayuda="Mostrar este tipo de elemento aunque esté apagado en el navegador.")
         sub = m.addMenu("Cámara")
         g = QActionGroup(self)
         self.camaras = {}
-        for clave, texto in (("ortografica", "Ortográfica"), ("perspectiva", "Perspectiva"),
-                             ("persp_orto_caras", "Perspectiva con caras ortográficas")):
-            self.camaras[clave] = self._opcion(sub, texto, "camara", clave, grupo=g)
-        self._opcion(m, "Desfase de plano de suelo", "desfase_suelo")
+        for clave, texto, ayuda in (("ortografica", "Ortográfica",
+                                     "Sin perspectiva: lo lejano no se achica (dibujos técnicos)."),
+                                    ("perspectiva", "Perspectiva", "Como el ojo: lo lejano se ve más chico."),
+                                    ("persp_orto_caras", "Perspectiva con caras ortográficas",
+                                     "Perspectiva general con las caras frontales sin deformación.")):
+            self.camaras[clave] = self._opcion(sub, texto, "camara", clave, grupo=g, ayuda=ayuda)
+        self._opcion(m, "Desfase de plano de suelo", "desfase_suelo",
+                     ayuda="Sube o baja el plano del suelo (el valor de Preferencias › Visualización).")
         m.addSeparator()
         a = m.addAction(icono("pantalla_completa"), "Activar pantalla completa\tControl+Mayúsculas+F")
+        a.setToolTip("<b>Activar pantalla completa</b><br>La ventana ocupa toda la pantalla (mismo atajo para salir).")
         a.setShortcut(QKeySequence("Ctrl+Shift+F"))
         a.triggered.connect(self.ctl.pantalla_completa)
         self.ctl.addAction(a)
@@ -326,10 +355,13 @@ class BarraNavegacion(QFrame):
 
     def _menu_rejilla(self):
         m = self._menu("rejilla")
-        self._opcion(m, "Rejilla de esbozo", "rejilla")
-        self._opcion(m, "Bloqueo de rejilla de esbozo", "rejilla_bloqueada")
-        self._opcion(m, "Forzar objetos a rejilla", "forzar_rejilla")
+        self._opcion(m, "Rejilla de esbozo", "rejilla", ayuda="Mostrar la rejilla de la vista.")
+        self._opcion(m, "Bloqueo de rejilla de esbozo", "rejilla_bloqueada",
+                     ayuda="Fija la rejilla: ya no se mueve con la cámara.")
+        self._opcion(m, "Forzar objetos a rejilla", "forzar_rejilla",
+                     ayuda="Los clics y puntos se pegan a los pasos de la rejilla.")
         a = m.addAction(icono("rejilla"), "Parámetros de rejilla")
+        a.setToolTip("<b>Parámetros de rejilla</b><br>Paso y estilo de la rejilla (igual que Preferencias).")
         a.triggered.connect(self.ctl.parametros_rejilla)
         m.addSeparator()
         for texto in ("Desplazamiento incremental", "Definir incrementos"):
@@ -341,8 +373,10 @@ class BarraNavegacion(QFrame):
     def _menu_ventanas(self):
         m = self._menu("ventanas")
         g = QActionGroup(self)
-        self._opcion(m, "Vista única", "vistas_multiples", False, grupo=g)
-        self._opcion(m, "Vistas múltiples", "vistas_multiples", True, "Shift+1", g)
+        self._opcion(m, "Vista única", "vistas_multiples", False, grupo=g,
+                     ayuda="Una sola vista del modelo.")
+        self._opcion(m, "Vistas múltiples", "vistas_multiples", True, "Shift+1", g,
+                     ayuda="Cuatro vistas a la vez: frente, arriba, derecha e isométrica.")
         return m
 
     # ------------------------------------------------------------ modos de navegación
