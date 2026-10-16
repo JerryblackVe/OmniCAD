@@ -288,6 +288,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #panel_comando { background: $flotante; border: 1px solid $borde; }
 #cabecera_comando { background: $flotante_cabecera; border-bottom: 1px solid $borde_suave; }
 #titulo_comando { font-weight: 600; letter-spacing: 0.3px; }
+#pie_comando { color: $texto_tenue; padding: 3px 8px 5px 8px; }
 #panel_comando QLabel#etiqueta_cmd { color: $texto; }
 #seleccion_cmd { text-align: left; padding: 3px 8px; border: 1px solid $borde; background: $entrada; }
 #seleccion_cmd[activa="true"] { border: 1px solid $acento; background: $activo; color: $enlace; }

@@ -328,6 +328,8 @@ class VentanaPrincipal(QMainWindow):
           "navegación (órbita, encuadre, zoom) y de selección por región.", "seleccionar")
         A("caja_herramientas", "Caja de herramientas", self.abrir_caja_herramientas, "S",
           "Buscá y usá cualquier comando, y fijá los que más usás (en un boceto, con su propia lista).", "chinche")
+        A("repetir", "Repetir el último comando", self.repetir_ultimo, "Shift+R",
+          "Vuelve a abrir el último comando usado (lo mismo que «Repetir» del menú radial).")
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
           "Con el ratón sobre un comando de la cinta o de un menú, muestra su ayuda.")
         A("renombrar", "Renombrar", lambda: self.navegador.renombrar_en_linea(), "F2",
@@ -1326,6 +1328,14 @@ class VentanaPrincipal(QMainWindow):
                 QMessageBox.warning(self, NOMBRE_APP, str(e))
 
     # ------------------------------------------------------------ menú radial (marking menu de Fusion)
+    def repetir_ultimo(self):
+        """Shift+R (PL2, Plasticity: teclas de opción a la vista): repite el último comando, el mismo
+        ítem «Repetir» del menú radial."""
+        if self._ultimo_comando is None:
+            self.mensaje("Todavía no hay un comando para repetir.")
+            return
+        self.ejecutar_comando(self._ultimo_comando())
+
     def _items_radial(self):
         """Los 8 comandos del primer nivel, en el orden de la referencia de Fusion (horario desde arriba):
         Repetir, Pulsar/Tirar, Rehacer, Agujero, Boceto ▸, Mover/copiar, Deshacer, Suprimir. Con un comando

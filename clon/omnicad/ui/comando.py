@@ -104,6 +104,9 @@ class Comando:
     PREVIA = True            # mostrar la vista previa del resultado
     TEXTO_ACEPTAR = "Aceptar"
     SIN_OP = False           # comandos que no agregan un paso al timeline (aspecto, medir…): usan `aplicar`
+    # PL2 (Plasticity: teclas de opción a la vista): lo que hace cada tecla MIENTRAS el comando está
+    # abierto, p. ej. {"Mayús": "simétrico", "Ctrl": "copiar"}; el panel lo muestra en el pie.
+    MODIFICADORES = {}
 
     def campos(self, ctx):
         return []
@@ -360,6 +363,14 @@ class PanelComando(QFrame):
             self.grilla.addWidget(w, fila, 1)
             self.etiquetas[campo.clave], self.widgets[campo.clave] = et, w
         v.addWidget(cuerpo)
+
+        # PL2 (Plasticity: teclas de opción a la vista): el pie del panel muestra qué hace cada
+        # tecla MIENTRAS el comando está abierto; cada comando puede sumar las suyas en MODIFICADORES.
+        teclas = [*(f"{k}: {d}" for k, d in getattr(comando, "MODIFICADORES", {}).items()),
+                  "Enter: aceptar", "Esc: cancelar"]
+        self.pie_teclas = QLabel("  ·  ".join(teclas), objectName="pie_comando", wordWrap=True)
+        self.pie_teclas.setMaximumWidth(330)
+        v.addWidget(self.pie_teclas)
 
         self.mensaje = QLabel(objectName="mensaje_comando", wordWrap=True)
         self.mensaje.setContentsMargins(10, 0, 10, 4)
