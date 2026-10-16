@@ -400,7 +400,7 @@ def matrices_camara(cam, aspecto):
 
 
 # ---------------------------------------------------------------- rasterizador (z-buffer vectorizado)
-_LIMITE = 1 << 21          # muestras por tanda (acota la memoria)
+_LIMITE = 1 << 17          # tandas de 1 MB por arreglo float64: menos temporales grandes a la vez
 
 
 def _merge(zbuf, idbuf, pix, z, tid):
@@ -471,10 +471,12 @@ def _rasterizar_tanda(s, w, f0, h, sx, sy, sz, x0, x1, y0, y1, area, ancho, zbuf
     m = caja & (la >= -1e-7) & (lb >= -1e-7) & (lc >= -1e-7)
     if not m.any():
         return
-    z = la * sz[s, 0, None, None] + lb * sz[s, 1, None, None] + lc * sz[s, 2, None, None]
-    pix = np.broadcast_to(py * ancho + px, m.shape)[m]
-    tid = np.broadcast_to(s[:, None, None] + base, m.shape)[m]
-    _merge(zbuf, idbuf, pix, z[m], tid)
+    # Profundidad e índices solo donde el triángulo cubre el píxel (no en toda su caja).
+    triangulo, fila, columna = np.nonzero(m)
+    ids = s[triangulo]
+    z = la[m] * sz[ids, 0] + lb[m] * sz[ids, 1] + lc[m] * sz[ids, 2]
+    pix = py[triangulo, fila, 0] * ancho + px[triangulo, 0, columna]
+    _merge(zbuf, idbuf, pix, z, ids + base)
 
 
 def baricentricas(sx, sy, idbuf, ancho):
