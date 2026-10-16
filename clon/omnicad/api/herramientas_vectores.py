@@ -658,7 +658,7 @@ def export_sketch(sesion, path: str, sketch: str | None = None, include_construc
 # ---------------------------------------------------------------- operaciones con perfiles (fase 6)
 def _perfiles_y_boceto(sesion, sketch, profiles, tool_profiles):
     from .herramientas_boceto import seleccionar_perfiles
-    op, br = boceto_activo(sesion, sketch)
+    op, br = boceto_activo(sesion, sketch, derivados=False)       # el resultado se escribe en el boceto
     a = seleccionar_perfiles(br, op, profiles)
     b_ = seleccionar_perfiles(br, op, tool_profiles) if tool_profiles is not None else []
     return op, br, a, b_

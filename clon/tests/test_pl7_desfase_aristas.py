@@ -149,3 +149,70 @@ def test_el_proyecto_guarda_y_reabre_el_desfase(caja, tmp_path):
     proyecto.guardar(caja.doc, ruta)
     abierto = proyecto.abrir(ruta)
     assert abierto.estado_final.bocetos[r["sketch"]["id"]].perfiles
+
+
+# ---------------------------------------------------------------- revisión ponytail (upgrades3)
+def _arco(p1, medio, p2):
+    from OCP.GC import GC_MakeArcOfCircle
+    return BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(gp_Pnt(*p1), gp_Pnt(*medio), gp_Pnt(*p2)).Value()).Edge()
+
+
+def _distancia_al_origen(forma):
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    return BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(gp_Pnt(0, 0, 0)).Vertex(), forma).Value()
+
+
+def test_dos_cadenas_que_no_se_tocan_dan_dos_desfases():
+    """Antes el último Add fallido dejaba el MakeWire «no hecho» y Wire() lanzaba StdFail_NotDone."""
+    resultado = da.desfasar_aristas([_arista((0, 0, 0), (10, 0, 0)), _arista((0, 20, 0), (10, 20, 0))], XY, 2)
+    assert len(resultado) == 2
+
+
+def test_un_desfase_que_hace_desaparecer_el_lazo_falla_con_mensaje():
+    with pytest.raises(geo.ErrorGeometria, match="desaparecer"):
+        da.desfasar_aristas(_cuadrado(), XY, -6)
+
+
+def test_un_arco_abierto_va_a_la_derecha_de_su_recorrido():
+    r = 5 / math.sqrt(2)
+    antihorario = _arco((5, 0, 0), (r, r, 0), (0, 5, 0))           # yendo antihorario, la derecha es hacia afuera
+    horario = _arco((0, 5, 0), (r, r, 0), (5, 0, 0))
+    (afuera,) = da.desfasar_aristas([antihorario], XY, 2)
+    (adentro,) = da.desfasar_aristas([horario], XY, 2)
+    assert _distancia_al_origen(afuera) == pytest.approx(7, abs=1e-6)
+    assert _distancia_al_origen(adentro) == pytest.approx(3, abs=1e-6)
+
+
+def test_aristas_que_no_son_paralelas_al_plano_fallan_claro(caja):
+    with pytest.raises(geo.ErrorGeometria, match="paralelas"):
+        da.desfasar_aristas([_arista((0, 0, 0), (0, 0, 10))], XY, 2)        # antes: NaN y un alambre vacío
+    r = api.llamar(caja, "offset_edges", {"edges": ">Z", "distance": 2, "plane": "XZ"})   # antes: ok con 0 perfiles
+    assert r["ok"] is False and "paralelas" in r["mensaje"]
+
+
+def test_plane_que_elige_varias_caras_y_curvas_repetidas(caja):
+    r = api.llamar(caja, "offset_edges", {"edges": ">Z", "distance": 2, "plane": "|Z"})
+    assert r["ok"] is False and r["error_kind"] == "INVALID_ARGUMENTS" and "2 caras" in r["mensaje"]      # arriba y abajo
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"plane": "XY"}))
+    linea = _ok(api.llamar(s, "draw_line", {"start_x": 0, "start_y": 0, "end_x": 10, "end_y": 0}))["entities"][0]["id"]
+    assert _ok(api.llamar(s, "offset_edges", {"curves": [linea, linea], "distance": 2, "plane": "XY"}))["curves"] == 1
+
+
+def test_las_herramientas_que_escriben_no_toman_el_boceto_derivado(caja):
+    from omnicad.timeline.ops_modificar import OpDesfaseAristas
+    boceto = _ok(api.llamar(caja, "create_sketch", {"plane": "XY"}))["sketch"]["id"]
+    _ok(api.llamar(caja, "draw_line", {"start_x": 0, "start_y": 0, "end_x": 10, "end_y": 0}))
+    derivado = _ok(api.llamar(caja, "offset_edges", {"edges": ">Z", "distance": 3}))["sketch"]["id"]
+    assert _ok(api.llamar(caja, "auto_constrain", {}))["sketch"]["id"] == boceto     # antes: SKETCH_NOT_FOUND
+    r = api.llamar(caja, "combine_profiles", {"profiles": "all", "sketch": derivado})
+    assert r["ok"] is False and r["error_kind"] == "SKETCH_NOT_FOUND"              # antes: ok sin cambiar nada
+    assert not OpDesfaseAristas.boceto.curvas                                     # y ensuciaba el atributo de clase
+
+
+def test_run_operation_acepta_los_perfiles_del_boceto_derivado(caja):
+    derivado = _ok(api.llamar(caja, "offset_edges", {"edges": ">Z", "distance": 3, "corners": "sharp"}))["sketch"]["id"]
+    r = _ok(api.llamar(caja, "run_operation", {"type": "extrusion", "params": {
+        "perfiles": [{"sketch": derivado, "profile": 0}], "distancia": "5 mm"}}))
+    assert r["status"] == "ok"

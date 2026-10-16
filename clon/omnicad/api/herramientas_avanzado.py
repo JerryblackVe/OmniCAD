@@ -320,7 +320,7 @@ def _perfiles_de_extrusion(sesion, valor, salida, actuales):
             if set(item) != {"sketch", "profile"}:
                 raise error("INVALID_ARGUMENTS", f"«perfiles»: {item!r} no es un perfil.",
                             'Usá {"sketch": "Boceto1", "profile": 0} o el índice con «boceto».')
-            sop = op_boceto(sesion, item["sketch"])
+            sop = op_boceto(sesion, item["sketch"], derivados=True)
             if boceto and boceto != sop.id:
                 raise error("INVALID_ARGUMENTS", f"Los perfiles tienen que ser del boceto del paso ({boceto}), no de "
                             f"«{sop.nombre}» ({sop.id}).")
@@ -329,7 +329,7 @@ def _perfiles_de_extrusion(sesion, valor, salida, actuales):
             if not boceto:
                 raise error("INVALID_ARGUMENTS", "Para elegir perfiles por índice, pasá también «boceto» (id o nombre).",
                             'O usá {"sketch": "Boceto1", "profile": 0}.')
-            sop, seleccion = op_boceto(sesion, boceto), item
+            sop, seleccion = op_boceto(sesion, boceto, derivados=True), item
         sop, br = boceto_activo(sesion, sop.id)
         lista.extend(OpExtrusion.referencia_perfil(p) for p in seleccionar_perfiles(br, sop, seleccion))
     return lista
@@ -346,7 +346,7 @@ def traducir_referencias(sesion, clase, params, actuales=None, elementos=True):
     actuales = clase.PARAMS if actuales is None else actuales
     con_boceto = hasattr(clase, "referencia_perfil") and "boceto" in clase.PARAMS
     if con_boceto and isinstance(params.get("boceto"), str) and params["boceto"].strip():
-        salida["boceto"] = op_boceto(sesion, params["boceto"]).id
+        salida["boceto"] = op_boceto(sesion, params["boceto"], derivados=True).id
     for clave, valor in params.items():
         if con_boceto and clave == "perfiles":
             salida[clave] = _perfiles_de_extrusion(sesion, valor, salida, actuales)

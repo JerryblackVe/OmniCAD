@@ -9,36 +9,21 @@ unen en cadenas por sus extremos (un lazo de cara es una cadena cerrada) y cada 
 import numpy as np
 from OCP.BRep import BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+from OCP.BRepTools import BRepTools_WireExplorer
 from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
-from OCP.gp import gp_Dir, gp_Pln
-from OCP.TopAbs import TopAbs_WIRE
-from OCP.TopExp import TopExp_Explorer
+from OCP.gp import gp_Dir, gp_Pln, gp_Pnt, gp_Vec
+from OCP.TopAbs import TopAbs_REVERSED, TopAbs_WIRE
 from OCP.TopoDS import TopoDS
 
 from . import geometria as geo
 from . import referencias as refs
+from .solidos_crear import _cadenas as cadenas
+from .vectores import ESQUINAS
 
-ESQUINAS = ("redondas", "vivas")
-
-
-def cadenas(aristas):
-    """Une aristas en cadenas por sus extremos: lista de alambres (un lazo cerrado es una sola cadena)."""
-    pendientes, salida = list(aristas), []
-    while pendientes:
-        mk = BRepBuilderAPI_MakeWire()
-        mk.Add(pendientes.pop(0))
-        avanzo = True
-        while avanzo and pendientes:
-            avanzo = False
-            for a in list(pendientes):
-                mk.Add(a)                                   # no se une: queda para otra cadena
-                if mk.IsDone():
-                    pendientes.remove(a)
-                    avanzo = True
-        salida.append(mk.Wire())
-    return salida
+TOL_PLANO = 1e-3          # mm: cuánto pueden apartarse las aristas de un plano paralelo al elegido
 
 
 def desfasar_aristas(aristas, plano, distancia, simetrico=False, esquinas="redondas"):
@@ -47,16 +32,21 @@ def desfasar_aristas(aristas, plano, distancia, simetrico=False, esquinas="redon
     distancia > 0: una cadena abierta se desfasa a la derecha de su recorrido (el de la primera arista, mirando de
     frente al plano con la normal hacia vos) y una cerrada crece hacia afuera; < 0 va al lado contrario.
     simetrico=True hace los dos lados a la vez (la distancia se toma en valor absoluto). esquinas: "redondas" (arcos)
-    o "vivas" (se prolongan hasta cortarse). Levanta ErrorGeometria si la distancia es cero, las aristas no están en el
-    plano o el desfase desaparece."""
+    o "vivas" (se prolongan hasta cortarse). Levanta ErrorGeometria si la distancia es cero, las aristas no son
+    paralelas al plano o el desfase desaparece."""
     if esquinas not in ESQUINAS:
         raise geo.ErrorGeometria(f"Esquinas desconocidas: {esquinas} (redondas o vivas).")
     if abs(distancia) < 1e-9:
         raise geo.ErrorGeometria("La distancia del desfase no puede ser cero.")
+    normal = np.asarray(plano.normal, float)
+    alturas = [float(np.dot(p, normal)) for a in aristas for p in _muestras(a, 9)]
+    if alturas and max(alturas) - min(alturas) > TOL_PLANO:
+        raise geo.ErrorGeometria("Las aristas no son paralelas al plano elegido: elegí la cara o el plano donde "
+                                 "están.")
     union = GeomAbs_Arc if esquinas == "redondas" else GeomAbs_Intersection
     lados = (abs(distancia), -abs(distancia)) if simetrico else (float(distancia),)
     salida = []
-    for cadena in cadenas(aristas):
+    for cadena in cadenas(list(aristas)):
         for d in lados:
             salida.append(_desfasar_cadena(cadena, plano, d, union))
     return salida
@@ -75,13 +65,37 @@ def _desfasar_cadena(cadena, plano, d, union):
         m = np.identity(4)
         m[:3, 3] = n / np.linalg.norm(n) * d
         return geo.transformar(cadena, m)
-    return _offset(cadena, d, union, True)
+    forma = _offset(cadena, d, union, True)
+    if not _del_lado(forma, cadena, plano, d):              # OpenCascade elige el lado con SU plano, no con el nuestro
+        forma = _offset(cadena, -d, union, True)
+    return forma
+
+
+def _del_lado(forma, cadena, plano, d):
+    """¿El desfase `forma` quedó del lado pedido? Lado de `d` > 0 = a la derecha del recorrido de la cadena (su
+    primera arista, en el sentido del alambre) mirando con la normal del plano hacia vos."""
+    ex = BRepTools_WireExplorer(cadena)
+    arista = ex.Current()
+    curva = BRepAdaptor_Curve(arista)
+    p, v = gp_Pnt(), gp_Vec()
+    curva.D1((curva.FirstParameter() + curva.LastParameter()) / 2, p, v)
+    tangente = np.array([v.X(), v.Y(), v.Z()]) * (-1.0 if arista.Orientation() == TopAbs_REVERSED else 1.0)
+    derecha = np.cross(tangente, np.asarray(plano.normal, float))
+    derecha /= np.linalg.norm(derecha)
+    medio = np.array([p.X(), p.Y(), p.Z()])
+
+    def distancia(punto):
+        vertice = BRepBuilderAPI_MakeVertex(gp_Pnt(*map(float, punto))).Vertex()
+        return BRepExtrema_DistShapeShape(vertice, forma).Value()
+
+    pedido = medio + derecha * np.sign(d) * abs(d)
+    return distancia(pedido) <= distancia(medio - derecha * np.sign(d) * abs(d))
 
 
 def _offset(cadena, d, union, abierta):
     mk = BRepOffsetAPI_MakeOffset(cadena, union, abierta)
     mk.Perform(float(d))
-    if not mk.IsDone() or mk.Shape().IsNull():
+    if not mk.IsDone() or mk.Shape().IsNull() or not refs.subformas(mk.Shape(), "arista"):
         raise geo.ErrorGeometria(f"El desfase de {d:g} mm no se pudo calcular: ¿las aristas están en el plano elegido, "
                                  "o el desfase hace desaparecer la curva?")
     return mk.Shape()
@@ -89,16 +103,9 @@ def _offset(cadena, d, union, abierta):
 
 def _area(forma, plano):
     """Área que encierra el primer lazo de `forma` sobre el plano."""
-    lazo = TopoDS.Wire(next(iter(_explorar(forma, TopAbs_WIRE))))
+    lazo = TopoDS.Wire(next(iter(geo._explorar(forma, TopAbs_WIRE))))
     cara = BRepBuilderAPI_MakeFace(gp_Pln(plano.ax2().Location(), gp_Dir(*map(float, plano.normal))), lazo).Face()
     return geo.area(cara)
-
-
-def _explorar(forma, tipo):
-    ex = TopExp_Explorer(forma, tipo)
-    while ex.More():
-        yield ex.Current()
-        ex.Next()
 
 
 def _tangente_recta(cadena):

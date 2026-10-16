@@ -132,9 +132,10 @@ def boceto_resuelto(sesion, op):
     return sesion.doc.estado_final.bocetos.get(op.id)
 
 
-def boceto_activo(sesion, ref=None):
-    """(op, resuelto) o error SKETCH_NOT_FOUND si el boceto está suprimido, con error o después del marcador."""
-    op = op_boceto(sesion, ref, derivados=True)
+def boceto_activo(sesion, ref=None, derivados=True):
+    """(op, resuelto) o error SKETCH_NOT_FOUND si el boceto está suprimido, con error o después del marcador. Con
+    `derivados=False` (las herramientas que escriben en el boceto) no vale un boceto fijo como el desfase de aristas."""
+    op = op_boceto(sesion, ref, derivados=derivados)
     br = boceto_resuelto(sesion, op)
     if br is None:
         estado = next((r.estado for o, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False)
@@ -874,7 +875,7 @@ def add_dimension(sesion, sketch: str,
     entities: ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo.
     value: valor: número (mm; grados en angle) o expresión con parámetros, p. ej. "radio_agujero * 2". Vacío = medida actual.
     """
-    op, br = boceto_activo(sesion, sketch)
+    op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     b = nueva.boceto
     _exigir_entidades(b, entities)
@@ -1567,7 +1568,7 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     construction: true = la geometría proyectada queda como línea de construcción (no forma perfiles).
     """
     from ..nucleo.perfiles import intersecar_forma, proyectar_forma
-    op, br = boceto_activo(sesion, sketch)
+    op, br = boceto_activo(sesion, sketch, derivados=False)
     formas = [e.sub for _c, e in sl.elegir(sesion, edges, "arista", body, permitir_vacio=True)]
     formas += [e.sub for _c, e in sl.elegir(sesion, faces, "cara", body, permitir_vacio=True)]
     for ref in bodies or []:
@@ -1629,7 +1630,7 @@ def edit_dimension(sesion, dimension: int, value: Expr, sketch: str | None = Non
     value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2").
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
-    op, br = boceto_activo(sesion, sketch)
+    op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     k = nueva.boceto.cotas.get(dimension) if isinstance(dimension, int) and not isinstance(dimension, bool) else None
     if k is None:
@@ -1662,7 +1663,7 @@ def auto_constrain(sesion, sketch: str | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
-    op, _br = boceto_activo(sesion, sketch)
+    op, _br = boceto_activo(sesion, sketch, derivados=False)
     valores = valores_cotas(sesion, op.boceto)
     agregado = []
     r = _dibujar(sesion, op.id, lambda b: agregado.extend(auto_restringir(b, valores)), desde_solver=True)

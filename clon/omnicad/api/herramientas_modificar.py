@@ -196,14 +196,20 @@ def offset_edges(sesion, distance: Expr, edges: Elementos | None = None, curves:
         faltan = [c for c in curves if c not in br_b.boceto.curvas]
         if faltan:
             raise error("ENTITY_NOT_FOUND", f"El boceto «{op_b.nombre}» no tiene las curvas {faltan} (get_sketch las lista).")
-        referencias += [{"tipo": "curva_boceto", "boceto": op_b.id, "curva": int(c)} for c in curves]
+        referencias += [{"tipo": "curva_boceto", "boceto": op_b.id, "curva": int(c)} for c in dict.fromkeys(curves)]
     if not referencias:
         raise error("INVALID_ARGUMENTS", "Elegí qué desfasar: edges o curves.")
     ref_plano = None
     if plane is not None and str(plane).strip():
         texto = str(plane).strip()
-        ref_plano = ({"tipo": "plano", "id": texto.upper()} if texto.upper() in ("XY", "XZ", "YZ")
-                     else _refs(sesion, texto, "cara", body)[0][0])
+        if texto.upper() in ("XY", "XZ", "YZ"):
+            ref_plano = {"tipo": "plano", "id": texto.upper()}
+        else:
+            caras = _refs(sesion, texto, "cara", body)[0]
+            if len(caras) != 1:
+                raise error("INVALID_ARGUMENTS", f"plane «{texto}» elige {len(caras)} caras: tiene que ser una sola cara "
+                            "plana (o XY, XZ, YZ).")
+            ref_plano = caras[0]
     doc = sesion.doc
     op = OpDesfaseAristas(doc.nuevo_id(), nombre_nuevo(doc, "Desfase de aristas", OpDesfaseAristas),
                           referencias=referencias, plano=ref_plano, distancia=texto_expr(distance),
