@@ -717,6 +717,21 @@ def ejecutar():
     v.abrir_ruta(str(ruta))
     QTest.qWait(100)
 
+    # PL8: las copias ligeras (instancias) se dibujan cada una en su lugar
+    from . import api
+    inst = api.Sesion()
+    caja = api.llamar(inst, "create_box", {"length": 10, "width": 10, "height": 10})["result"]["bodies_created"][0]["id"]
+    api.llamar(inst, "rectangular_pattern", {"bodies": [caja], "x_count": 3, "x_spacing": 30, "lightweight": True})
+    v.set_documento(inst.doc)
+    QTest.qWait(80)
+    centros = sorted(float(v.visor.triangulos_cuerpo(cid)[:, 0].mean()) for cid in inst.doc.estado_final.cuerpos)
+    r.check(len(centros) == 3 and all(abs(c - e) < 1.0 for c, e in zip(centros, (0.0, 30.0, 60.0), strict=True)),
+            f"PL8: las copias ligeras se dibujan cada una en su lugar ({[round(c, 1) for c in centros]})")
+    r.check(_colores_distintos(v.visor.grabFramebuffer()) > 50, "PL8: el visor dibuja las copias ligeras")
+    v.doc.modificado = False
+    v.abrir_ruta(str(ruta))
+    QTest.qWait(100)
+
     # 8) Autoguardado
     v.doc.modificado = True
     v.autoguardar()

@@ -2651,6 +2651,19 @@ def aplicar(forma, trsf):
     return _tipado(BRepBuilderAPI_Transform(forma, trsf, True).Shape())
 
 
+def instanciar(forma, trsf):
+    """Copia LIGERA de una forma (instancia: PL8, F17 y RH17): la MISMA geometría con otra ubicación (`TopLoc_Location`),
+    sin duplicarla. Solo para movimientos rígidos; una simetría o un cambio de escala no se pueden ubicar así y salen
+    como copia de verdad (`aplicar`). Acepta una gp_Trsf o una matriz 4x4."""
+    if not isinstance(trsf, gp_Trsf):
+        m = np.asarray(trsf, float)
+        trsf = gp_Trsf()
+        trsf.SetValues(*(float(c) for fila in m[:3, :4] for c in fila))
+    if trsf.IsNegative() or abs(trsf.ScaleFactor() - 1.0) > 1e-9:
+        return aplicar(forma, trsf)
+    return _tipado(forma.Moved(TopLoc_Location(trsf)))
+
+
 def a_matriz(trsf):
     """gp_Trsf → matriz 4x4 de numpy (para guardar el patrón en el documento)."""
     m = np.eye(4)

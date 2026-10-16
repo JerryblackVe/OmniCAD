@@ -18,6 +18,11 @@ def _sm():
     return solidos_modificar
 
 
+def _sc_crear():
+    from ..nucleo import solidos_crear
+    return solidos_crear
+
+
 def _por_cuerpo(refs, estado, que="aristas"):
     """{id de cuerpo: [subformas]} a partir de referencias a caras o aristas (pueden ser de varios cuerpos)."""
     grupos = {}
@@ -66,7 +71,7 @@ class OpMover(Operacion):
     PARAMS = {"cuerpos": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
               "ry": "0 deg", "rz": "0 deg", "pivote": None, "direccion": None, "distancia": "10 mm", "eje": None,
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
-              "copiar": False}
+              "copiar": False, "ligera": False}
     EXPRESIONES = ("dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z")
     OPCIONES = {"tipo": TIPOS_MOVIMIENTO}
 
@@ -122,6 +127,8 @@ class OpMover(Operacion):
             if getattr(c, "tipo", "solido") == "malla":
                 nueva = c.forma.copia()
                 nueva.vertices = (np.c_[nueva.vertices, np.ones(len(nueva.vertices))] @ m.T)[:, :3]
+            elif self.p.get("copiar") and self.p.get("ligera"):      # copia ligera: comparte la geometría del original
+                nueva = _sc_crear().instanciar(c.forma, m)
             else:
                 nueva = geo.transformar(c.forma, m)
             if self.p.get("copiar"):

@@ -744,7 +744,11 @@ class _Patron(Comando):
         if self.FORMA != "puntos":
             base.append(Casilla("simetrico", "Simétrico"))
         return base + [Texto("suprimir", "Suprimir copias (n.º, separados por coma)", ""),
-                       Casilla("combinar", "Unir al original", visible_si=_de_cuerpos)]
+                       Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
+                       Casilla("ligeras", "Copias ligeras (comparten la geometría)",
+                               visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
+                               ayuda="Cada copia es la MISMA geometría con otra ubicación: pesa casi nada y editar la "
+                                     "original cambia todas. Para volverlas copias de verdad, destildá la casilla.")]
 
     def construir(self, v, ctx):
         objeto = objeto_params(v, ctx)
@@ -755,7 +759,7 @@ class _Patron(Comando):
         except ValueError as e:
             raise ErrorComando("En «Suprimir copias» van números separados por coma.") from e
         params = {k: v.get(k) for k in ("n1", "d1", "n2", "d2", "distribucion", "simetrico", "n", "angulo", "orientacion",
-                                         "inicio", "giro", "combinar") if k in v}
+                                         "inicio", "giro", "combinar", "ligeras") if k in v}
         params.update(objeto, forma_patron=self.FORMA, dir1=ref1(v, "dir1"), dir2=ref1(v, "dir2"), eje=ref1(v, "eje"),
                       ruta=refs(v, "ruta"), puntos=refs(v, "puntos"), referencia=ref1(v, "referencia"),
                       suprimir=suprimir)

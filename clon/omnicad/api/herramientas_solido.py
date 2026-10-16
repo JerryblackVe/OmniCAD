@@ -466,11 +466,15 @@ def mirror(sesion, bodies: Cuerpos, plane: str = "YZ", combine: bool = False):
 Pasos = str | list[str]
 
 
-def _objeto_patron(sesion, bodies, features):
-    """objeto, cuerpos y pasos de un patrón: cuerpos (bodies) u operaciones del timeline (features)."""
+def _objeto_patron(sesion, bodies, features, lightweight=False):
+    """objeto, cuerpos y pasos de un patrón: cuerpos (bodies) u operaciones del timeline (features). `ligeras` solo
+    tiene sentido con cuerpos."""
     from ..timeline.ops_solido import TIPOS_REPETIBLES
     ids = _ids_cuerpos(sesion, bodies)
     pasos = [sesion.paso(f) for f in _lista(features)]
+    if lightweight and pasos:
+        raise error("INVALID_ARGUMENTS", "lightweight (copias ligeras) es para cuerpos (bodies): las operaciones "
+                                         "(features) no se pueden instanciar.")
     if ids and pasos:
         raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies) u operaciones (features), no las dos cosas.")
     if not ids and not pasos:
@@ -497,6 +501,30 @@ def _agregar_patron(sesion, op):
     return _agregar(sesion, op, op.p["objeto"] == "operaciones")
 
 
+@herramienta("realize_copies", "solido",
+             "Vuelve copias de verdad las copias ligeras (instancias) de un patrón o de Mover/copiar («Realizar "
+             "instancias» de Plasticity): cada copia pasa a tener su propia geometría y deja de seguir a la original. "
+             "Las posiciones y los volúmenes no cambian. Falla con INVALID_ARGUMENTS si el paso no tiene copias "
+             "ligeras (lightweight=true en el patrón o en move_body).", modifica=True)
+def realize_copies(sesion, feature: str):
+    """
+    feature: id (p. ej. "op3") o nombre del paso (patrón, multitransformación o mover) con copias ligeras.
+    """
+    op = sesion.paso(feature)
+    clave = "ligera" if op.TIPO == "mover" else "ligeras"
+    if clave not in op.PARAMS or not op.p.get(clave):
+        raise error("INVALID_ARGUMENTS", f"El paso «{op.nombre}» ({op.TIPO}) no tiene copias ligeras.",
+                    "Las crean los patrones y la multitransformación con lightweight=true, y move_body con "
+                    "copy=true y lightweight=true.")
+    nueva = op.copia()
+    nueva.p[clave] = False
+    antes = _foto(sesion)
+    sesion.doc.reemplazar(op.id, nueva)
+    resultado = _informe(sesion, nueva, antes)
+    resultado["realized"] = len(resultado["bodies_modified"]) + len(resultado["bodies_created"])
+    return resultado
+
+
 @herramienta("rectangular_pattern", "solido",
              "Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una "
              "extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o "
@@ -504,7 +532,8 @@ def _agregar_patron(sesion, op):
              "son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.", modifica=True)
 def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1, x_spacing: Expr = "10 mm",
                         y_count: int = 1, y_spacing: Expr = "10 mm", axis1: Literal["x", "y", "z"] = "x",
-                        axis2: Literal["x", "y", "z"] = "y", combine: bool = False, features: Pasos | None = None):
+                        axis2: Literal["x", "y", "z"] = "y", combine: bool = False, features: Pasos | None = None,
+                        lightweight: bool = False):
     """
     bodies: cuerpo(s) a repetir (id o nombre).
     x_count: cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
@@ -515,8 +544,9 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     axis2: eje de la dirección 2.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
+    lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight)
     if x_count < 1 or y_count < 1:
         raise error("INVALID_ARGUMENTS", "x_count e y_count tienen que ser 1 o más.")
     if x_count == 1 and y_count == 1:
@@ -529,7 +559,8 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                                                lambda o: o.p["forma_patron"] == "rectangular"),
                   forma_patron="rectangular", dir1={"tipo": "eje", "id": axis1.upper()}, n1=x_count,
                   d1=texto_expr(x_spacing), dir2={"tipo": "eje", "id": axis2.upper()} if y_count > 1 else None,
-                  n2=y_count, d2=texto_expr(y_spacing), distribucion="espaciado", combinar=combine, **objeto)
+                  n2=y_count, d2=texto_expr(y_spacing), distribucion="espaciado", combinar=combine, ligeras=lightweight,
+                  **objeto)
     return _agregar_patron(sesion, op)
 
 
@@ -538,7 +569,8 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
              "origen (x, y o z). Con 360° las copias se reparten en toda la vuelta; con menos, entre el original y el "
              "ángulo total. count incluye el original.", modifica=True)
 def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: Literal["x", "y", "z"] = "z",
-                     total_angle: Expr = 360, combine: bool = False, features: Pasos | None = None):
+                     total_angle: Expr = 360, combine: bool = False, features: Pasos | None = None,
+                     lightweight: bool = False):
     """
     count: cantidad de instancias, original incluido (2 a 10.000).
     bodies: cuerpo(s) a repetir (id o nombre).
@@ -546,8 +578,9 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: Li
     total_angle: ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
     combine: true para unir las copias al cuerpo original (solo con bodies).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+    lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight)
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
     _exigir_instancias(count, "count")
@@ -555,7 +588,8 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: Li
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón circular", OpPatron,
                                                lambda o: o.p["forma_patron"] == "circular"),
                   forma_patron="circular", eje={"tipo": "eje", "id": axis.upper()}, n=count,
-                  angulo=texto_expr(total_angle), distribucion="extension", combinar=combine, **objeto)
+                  angulo=texto_expr(total_angle), distribucion="extension", combinar=combine, ligeras=lightweight,
+                  **objeto)
     return _agregar_patron(sesion, op)
 
 
@@ -618,7 +652,7 @@ def _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode
              "referencia no repite la copia.", modifica=True)
 def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None = None,
                   points: list[list[Expr]] | None = None, sketch: str | None = None,
-                  reference: list[Expr] | None = None, combine: bool = False):
+                  reference: list[Expr] | None = None, combine: bool = False, lightweight: bool = False):
     """
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
@@ -626,14 +660,15 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     sketch: id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
     reference: punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
     combine: true para unir las copias al cuerpo original (solo con bodies).
+    lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight)
     params = _params_puntos(sesion, points, sketch, reference)
     _exigir_instancias(len(params["coordenadas"]) + 1, "points")
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón en puntos", OpPatron,
                                                lambda o: o.p["forma_patron"] == "puntos"),
-                  combinar=combine, **params, **objeto)
+                  combinar=combine, **params, **objeto, ligeras=lightweight)
     return _agregar_patron(sesion, op)
 
 
@@ -648,7 +683,7 @@ def path_pattern(sesion, path_sketch: str, count: int, distance: Expr, bodies: C
                  features: Pasos | None = None, path_curves: list[int] | None = None,
                  spacing_mode: Literal["extent", "spacing"] = "extent", start: Expr = 0,
                  orientation: Literal["identical", "path_direction"] = "identical", twist: Expr = 0,
-                 symmetric: bool = False, combine: bool = False):
+                 symmetric: bool = False, combine: bool = False, lightweight: bool = False):
     """
     path_sketch: id o nombre del boceto con la ruta.
     count: cantidad de instancias, original incluido (2 a 10.000).
@@ -662,13 +697,14 @@ def path_pattern(sesion, path_sketch: str, count: int, distance: Expr, bodies: C
     twist: giro total alrededor de la ruta en grados (número o expresión): la copia k gira twist · k / (count − 1).
     symmetric: true para repartir count copias hacia cada lado del original.
     combine: true para unir las copias al cuerpo original (solo con bodies).
+    lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight)
     params = _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist,
                           symmetric)
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón en ruta", OpPatron, lambda o: o.p["forma_patron"] == "ruta"),
-                  combinar=combine, **params, **objeto)
+                  combinar=combine, **params, **objeto, ligeras=lightweight)
     return _agregar_patron(sesion, op)
 
 
@@ -747,14 +783,15 @@ def _transformacion_api(sesion, t, i):
              "\"count\": 4, \"distance\": 60, \"twist\": 90} (las mismas opciones que path_pattern). Repite cuerpos "
              "(bodies) u operaciones del timeline (features).", modifica=True)
 def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = None, features: Pasos | None = None,
-                    combine: bool = False):
+                    combine: bool = False, lightweight: bool = False):
     """
     transforms: lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     combine: true para unir las copias al cuerpo original (solo con bodies).
+    lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight)
     if not transforms:
         raise error("INVALID_ARGUMENTS", "transforms necesita al menos una transformación.")
     lista, total = [], 1
@@ -765,7 +802,7 @@ def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = Non
     _exigir_instancias(total, "el producto de las transformaciones")
     doc = sesion.doc
     op = OpMultitransformar(doc.nuevo_id(), nombre_nuevo(doc, "Multitransformación", OpMultitransformar),
-                            transformaciones=lista, combinar=combine, **objeto)
+                            transformaciones=lista, combinar=combine, **objeto, ligeras=lightweight)
     return _agregar_patron(sesion, op)
 
 
@@ -833,7 +870,8 @@ def drop_to_plane(sesion, body: Cuerpos | None = None, keep_relative: bool = Tru
              "cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae "
              "center.before y center.after.", modifica=True)
 def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate: list[Expr] | None = None,
-              pivot: Literal["center", "origin"] = "center", copy: bool = False, position: list[Expr] | None = None):
+              pivot: Literal["center", "origin"] = "center", copy: bool = False, position: list[Expr] | None = None,
+              lightweight: bool = False):
     """
     body: cuerpo(s) a mover (id o nombre).
     translate: DESPLAZAMIENTO [dx, dy, dz] en mm que se suma a la posición actual (números o expresiones); vacío = sin desplazamiento.
@@ -843,7 +881,11 @@ def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate
     position: posición ABSOLUTA [x, y, z] en mm (números o expresiones) del centro de la caja de los cuerpos; no se
         combina con translate. El paso guarda el desplazamiento que hace falta ahora (position − centro, con los
         parámetros de position): si después cambia la forma de la pieza, el centro se corre con ella.
+    lightweight: true (con copy=true) deja una copia ligera: comparte la geometría del original y editar el original la cambia; realize_copies la vuelve copia de verdad.
     """
+    if lightweight and not copy:
+        raise error("INVALID_ARGUMENTS", "lightweight (copia ligera) necesita copy=true: sin copia no hay "
+                                         "qué compartir.")
     ids = _ids_cuerpos(sesion, body)
     if not ids:
         raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'body'.")
@@ -858,7 +900,7 @@ def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate
     op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, tipo="libre",
                  dx=texto_expr(t[0]), dy=texto_expr(t[1]), dz=texto_expr(t[2]),
                  rx=texto_expr(g[0]), ry=texto_expr(g[1]), rz=texto_expr(g[2]),
-                 pivote={"tipo": "punto", "id": "O"} if pivot == "origin" else None, copiar=copy)
+                 pivote={"tipo": "punto", "id": "O"} if pivot == "origin" else None, copiar=copy, ligera=lightweight)
     cuerpos = sesion.doc.estado_final.cuerpos
     antes = _centro([cuerpos[i] for i in ids])
     foto = _foto(sesion)

@@ -71,7 +71,10 @@ class Multitransformar(Comando):
                           visible_si=lambda v, k=k, f=_es(k, "rectangular"): f(v) and not v.get("_fijas")),
                 Expresion(f"t{k}_angulo", "   Ángulo", "360 deg", ANGULO,
                           visible_si=lambda v, k=k, f=_es(k, "circular"): f(v) and not v.get("_fijas"))]
-        return campos + [Casilla("combinar", "Unir al original", visible_si=_de_cuerpos)]
+        return campos + [Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
+                         Casilla("ligeras", "Copias ligeras (comparten la geometría)",
+                                 visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
+                                 ayuda="Las copias rígidas comparten la geometría del original (las simetrías, no).")]
 
     def construir(self, v, ctx):
         objeto = objeto_params(v, ctx)
@@ -100,10 +103,10 @@ class Multitransformar(Comando):
         if not lista:
             raise ErrorComando("Elegí al menos una transformación.")
         return self.crear_op(OpMultitransformar, v, ctx, transformaciones=lista, combinar=bool(v.get("combinar")),
-                             **objeto)
+                             ligeras=bool(v.get("ligeras")), **objeto)
 
     def desde_op(self, op, ctx):
-        v = dict(objeto_valores(op, ctx), combinar=op.p.get("combinar", False))
+        v = dict(objeto_valores(op, ctx), combinar=op.p.get("combinar", False), ligeras=op.p.get("ligeras", False))
         lista = op.p.get("transformaciones") or []
         ranuras = [_ranura_desde(t) for t in lista]
         if len(lista) > RANURAS or any(r is None for r in ranuras):

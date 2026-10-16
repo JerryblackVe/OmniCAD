@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-177 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+178 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 32 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 33 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -1054,6 +1054,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
 | [`boolean_operation`](#boolean_operation) | sí | Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). |
 | [`mirror`](#mirror) | sí | Refleja cuerpos respecto de un plano (origen o de construcción). |
+| [`realize_copies`](#realize_copies) | sí | Vuelve copias de verdad las copias ligeras (instancias) de un patrón o de Mover/copiar («Realizar instancias» de Plasticity): cada copia pasa a tener su propia geometría y deja de seguir a la original. |
 | [`rectangular_pattern`](#rectangular_pattern) | sí | Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. |
 | [`circular_pattern`](#circular_pattern) | sí | Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del origen (x, y o z). |
 | [`point_pattern`](#point_pattern) | sí | Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios puntos de boceto): copia cuerpos (bodies) —o repite operaciones del timeline (features), p. ej. un agujero o una extrusión que corta— en cada punto. |
@@ -1233,6 +1234,15 @@ Refleja cuerpos respecto de un plano (origen o de construcción). Crea cuerpos n
   - `combine` (true/false; opcional, por defecto `false`): true para unir el reflejo al cuerpo original en vez de crear un cuerpo nuevo.
 - CLI: `omnicad call mirror --doc pieza.omnicad bodies=…`
 
+### `realize_copies`
+
+Vuelve copias de verdad las copias ligeras (instancias) de un patrón o de Mover/copiar («Realizar instancias» de Plasticity): cada copia pasa a tener su propia geometría y deja de seguir a la original. Las posiciones y los volúmenes no cambian. Falla con INVALID_ARGUMENTS si el paso no tiene copias ligeras (lightweight=true en el patrón o en move_body).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `feature` (texto; obligatorio): id (p. ej. "op3") o nombre del paso (patrón, multitransformación o mover) con copias ligeras.
+- CLI: `omnicad call realize_copies --doc pieza.omnicad feature=…`
+
 ### `rectangular_pattern`
 
 Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. Con bodies las copias son cuerpos nuevos (o se unen al original con combine). Cantidades incluyen el original.
@@ -1248,6 +1258,7 @@ Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features:
   - `axis2` ("x" | "y" | "z"; opcional, por defecto `"y"`): eje de la dirección 2.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
+  - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
 - CLI: `omnicad call rectangular_pattern --doc pieza.omnicad`
 
 ### `circular_pattern`
@@ -1262,6 +1273,7 @@ Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) al
   - `total_angle` (número o expresión; opcional, por defecto `360`): ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+  - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
 - CLI: `omnicad call circular_pattern --doc pieza.omnicad count=…`
 
 ### `point_pattern`
@@ -1276,6 +1288,7 @@ Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios p
   - `sketch` (texto; opcional, por defecto `null`): id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
   - `reference` (lista de número o expresión o null; opcional, por defecto `null`): punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+  - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
 - CLI: `omnicad call point_pattern --doc pieza.omnicad`
 
 ### `path_pattern`
@@ -1296,6 +1309,7 @@ Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de 
   - `twist` (número o expresión; opcional, por defecto `0`): giro total alrededor de la ruta en grados (número o expresión): la copia k gira twist · k / (count − 1).
   - `symmetric` (true/false; opcional, por defecto `false`): true para repartir count copias hacia cada lado del original.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+  - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
 - CLI: `omnicad call path_pattern --doc pieza.omnicad path_sketch=… count=… distance=…`
 
 ### `multi_transform`
@@ -1308,6 +1322,7 @@ Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón�
   - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
+  - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
 - CLI: `omnicad call multi_transform --doc pieza.omnicad transforms=…`
 
 ### `drop_to_plane`
@@ -1332,6 +1347,7 @@ Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira
   - `pivot` ("center" | "origin"; opcional, por defecto `"center"`): centro del giro: "center" (centro de las cajas de los cuerpos, se recalcula) u "origin" (origen, estable).
   - `copy` (true/false; opcional, por defecto `false`): true para dejar el original y crear cuerpos nuevos con el movimiento.
   - `position` (lista de número o expresión o null; opcional, por defecto `null`): posición ABSOLUTA [x, y, z] en mm (números o expresiones) del centro de la caja de los cuerpos; no se combina con translate. El paso guarda el desplazamiento que hace falta ahora (position − centro, con los parámetros de position): si después cambia la forma de la pieza, el centro se corre con ella.
+  - `lightweight` (true/false; opcional, por defecto `false`): true (con copy=true) deja una copia ligera: comparte la geometría del original y editar el original la cambia; realize_copies la vuelve copia de verdad.
 - CLI: `omnicad call move_body --doc pieza.omnicad body=…`
 
 ### `fillet`

@@ -493,10 +493,12 @@ def repetir_pasos(op, estado, ctx, trsfs):
 
 def copiar_cuerpos(op, estado, trsfs):
     """Copias de los cuerpos de `op.p["cuerpos"]` con cada gp_Trsf de `trsfs`: cuerpos nuevos (heredan aspecto,
-    material y nombre, con « (copia)») o, con `combinar`, unidas al original."""
+    material y nombre, con « (copia)») o, con `combinar`, unidas al original. Con `ligeras` las copias son instancias
+    (`solidos_crear.instanciar`: comparten la geometría del original); al combinar se unen de verdad."""
+    copiar = _sc().instanciar if op.p.get("ligeras") and not op.p["combinar"] else _sc().aplicar
     for cid in op.p["cuerpos"]:
         c = estado.cuerpo(cid)
-        copias = [_sc().aplicar(c.forma, t) for t in trsfs]
+        copias = [copiar(c.forma, t) for t in trsfs]
         if op.p["combinar"]:
             c.forma = geo.unir_todos([c.forma] + copias)
         else:
@@ -511,6 +513,8 @@ class OpPatron(_OpCrear):
     original con «Combinar») u "operaciones" (`pasos`: ids de pasos anteriores —una extrusión que corta, un
     agujero…—; su herramienta se repite transformada y se aplica con la misma operación a los mismos cuerpos: ver
     `repetir_pasos`).
+    `ligeras` (PL8, copias ligeras): las copias de cuerpos son instancias que comparten la geometría del original
+    (no se duplica), cada una con su ubicación; con `combinar` no se usan.
     `distribucion` es el «Tipo de distancia» de Fusion: con "extension" (por defecto) d1/d2 son la distancia TOTAL
     entre la primera y la última instancia y, en el circular, `angulo` es el ángulo total; con "espaciado" son la
     separación (o el ángulo) entre instancias consecutivas.
@@ -523,7 +527,7 @@ class OpPatron(_OpCrear):
               "n2": 1, "d2": "30 mm", "distribucion": "extension", "simetrico": False, "eje": None, "n": 6,
               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
               "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
-              "referencia_xyz": [], "objeto": "cuerpos", "pasos": []}
+              "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
     OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"), "distribucion": ("extension", "espaciado"),
                 "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON}
@@ -636,7 +640,8 @@ class OpMultitransformar(_OpCrear):
     eje, n, angulo, ruta, orientacion, inicio, giro, puntos, coordenadas, referencia, referencia_xyz, suprimir) o,
     en la simetría, "plano". `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
     TIPO, ETIQUETA, ICONO = "multitransformar", "Multitransformación", "✣"
-    PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False}
+    PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False,
+              "ligeras": False}
     OPCIONES = {"objeto": OBJETOS_PATRON}
 
     def _lista(self):

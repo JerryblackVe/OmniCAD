@@ -493,12 +493,14 @@ class MoverCopiar(Comando):
             Expresion("y", "Y", "0 mm", visible_si=t("punto_a_posicion")),
             Expresion("z", "Z", "0 mm", visible_si=t("punto_a_posicion")),
             Casilla("copiar", "Crear copia"),
+            Casilla("ligera", "Copia ligera (comparte la geometría)", visible_si=lambda v: bool(v.get("copiar")),
+                    ayuda="La copia es la MISMA geometría con otra ubicación: editar el original la cambia también."),
         ]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos a mover.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
-                                    "copiar")}
+                                    "copiar", "ligera")}
         p.update(cuerpos=_cuerpos(v), pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
                  origen=ref1(v, "origen"), destino=ref1(v, "destino"))
         return self.crear_op(OpMover, v, ctx, **p)
