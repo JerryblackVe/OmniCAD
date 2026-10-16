@@ -420,6 +420,7 @@ class AreaVisor(QWidget):
         self.abajo_izq = []               # panel COMENTARIOS (abajo a la izquierda, sobre el timeline)
         self.viewcube = ViewCube(visor, self)
         self.barra = None
+        self.tira = None                  # comandos sugeridos según lo elegido (ui/sugerencias.py), sobre la barra
         self.capa = None
         self.paleta = None
         self.caracter = None              # panel «Carácter» del texto del boceto (a la izquierda de la paleta)
@@ -439,6 +440,10 @@ class AreaVisor(QWidget):
     def set_barra(self, barra):
         self.barra = barra
         barra.setParent(self)
+
+    def set_tira(self, tira):
+        self.tira = tira
+        tira.setParent(self)
 
     def anclar_arriba_izq(self, w):
         w.setParent(self)
@@ -527,6 +532,11 @@ class AreaVisor(QWidget):
             self.barra.adjustSize()
             self.barra.move((w - self.barra.width()) // 2, h - self.barra.height() - 8)
             self.barra.raise_()
+        if self.tira is not None and self.tira.isVisible():
+            self.tira.adjustSize()
+            abajo = h - (self.barra.height() + 8 if self.barra is not None else 0) - 8
+            self.tira.move((w - self.tira.width()) // 2, abajo - self.tira.height())
+            self.tira.raise_()
         if self.aviso.isVisible():
             self.aviso.move((w - self.aviso.width()) // 2, 12)
             self.aviso.raise_()

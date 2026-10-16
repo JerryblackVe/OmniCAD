@@ -29,6 +29,7 @@ from .. import NOMBRE_APP, RECURSOS, VERSION
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
 from .mas_comando import FiltroMas, leer_barra, leer_teclas
+from .sugerencias import TiraSugerencias, comandos_sugeridos
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
@@ -159,6 +160,9 @@ class VentanaPrincipal(QMainWindow):
         self.area.anclar_arriba_izq(self.navegador)
         self.barra_nav = BarraNavegacion(self.visor, self)
         self.area.set_barra(self.barra_nav)
+        self.tira = TiraSugerencias(self.acciones)          # PL5: comandos sugeridos según lo elegido
+        self.tira.elegido.connect(lambda clave: self.acciones[clave].trigger())
+        self.area.set_tira(self.tira)
         self.navegador.ojo.connect(self._ojo)
         self.navegador.seleccionado.connect(self._propiedades)
         self.navegador.editar.connect(self.editar_operacion)
@@ -1358,6 +1362,13 @@ class VentanaPrincipal(QMainWindow):
         self.visor.set_capa("preseleccion", prims)
         from .medidas import texto_medidas
         self.info_seleccion(texto_medidas(self.seleccion, self._estado_visible()))
+        self._actualizar_sugerencias()
+
+    def _actualizar_sugerencias(self):
+        """La tira de comandos sugeridos (PL5): solo con algo elegido y sin un comando ni un boceto abiertos."""
+        libre = self.panel is None and not self.modo_boceto.activo
+        self.tira.mostrar_para({h["tipo"] for h in self.seleccion} if libre else set())
+        self.area.reubicar()
 
     def _clic_en_vista(self, hit):
         if self.panel is not None or self.modo_boceto.activo:
@@ -1473,20 +1484,9 @@ class VentanaPrincipal(QMainWindow):
         tipos = {h["tipo"] for h in self.seleccion}
         if "cara" in tipos and any(h.get("plano") is not None for h in self.seleccion):
             filas.append(("Crear boceto", self._boceto_en_seleccion))
-        sugeridos = []
-        if "cara" in tipos:
-            sugeridos += ["pulsar_tirar", "desfase_cara", "vaciado", "aspecto", "medir"]
-        if "arista" in tipos:
-            sugeridos += ["empalme_3d", "chaflan_3d", "medir"]
-        if "perfil" in tipos:
-            sugeridos += ["extruir", "revolucion"]
-        if "cuerpo" in tipos:
-            sugeridos += ["mover_copiar", "aspecto", "material_fisico", "quitar"]
-        for clave in dict.fromkeys(sugeridos):
-            if clave in CATALOGO:
-                clase = CATALOGO[clave]
-                filas.append((clase.TITULO, lambda c=clase: self.ejecutar_comando(c()),
-                              getattr(clase, "ATAJO", "") or ""))
+        for clave in comandos_sugeridos(tipos, CATALOGO, maximo=None):
+            clase = CATALOGO[clave]
+            filas.append((clase.TITULO, lambda c=clase: self.ejecutar_comando(c()), getattr(clase, "ATAJO", "") or ""))
         if "apoyar" in CATALOGO and self.doc.estado_final.cuerpos:   # con lo elegido, o con todo si no hay nada
             filas.append((CATALOGO["apoyar"].TITULO, lambda c=CATALOGO["apoyar"]: self._apoyar_en_plano(c)))
         if self.seleccion:
@@ -1963,6 +1963,7 @@ class VentanaPrincipal(QMainWindow):
         self.modo_boceto.iniciar(boceto, plano, datos, mirar=self.prefs["general/auto_mirar_boceto"])
         self.modo_boceto.set_forzar(self.prefs["vista/forzar_rejilla"])
         self._refrescar_visibilidad()
+        self._actualizar_sugerencias()              # dentro del boceto no hay tira de sugerencias
         pendiente, self._herramienta_pendiente = self._herramienta_pendiente, None
         if pendiente in self.modo_boceto.acciones:
             self.modo_boceto.acciones[pendiente].trigger()

@@ -242,6 +242,8 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #espacio_trabajo:hover { background: $boton_primario_hover; }  /* relleno con el acento, como en docs/diseno/ */
 #separador_grupo { background: $borde_suave; }
 #caja_herramientas { background: $flotante; border: 1px solid $borde; border-radius: 6px; }
+#tira_sugerencias { background: $flotante; border: 1px solid $borde; border-radius: 6px; }
+#tira_sugerencias QToolButton { padding: 3px 8px; }
 #titulo_caja { font-size: 8pt; letter-spacing: 0.4px; color: $texto_tenue; }
 #atajos_caja, #resultados_caja { background: transparent; border: 0; }
 #atajos_caja::item { border-radius: 4px; padding: 2px; }
