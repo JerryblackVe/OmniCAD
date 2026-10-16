@@ -99,7 +99,7 @@ SOLIDO = [
         _i("Pulsar/Tirar", "pulsar_tirar"), _i("Empalme", "empalme_3d"), _i("Chaflán", "chaflan_3d"),
         _i("Quitar empalmes", "quitar_empalmes"), SEP,
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Escala", "escala_3d"), _i("Combinar", "combinar"),
-        _i("Cara de desfase", "desfase_cara"), _i("Reemplazar cara", "reemplazar_cara"), _i("Dividir cara", "dividir_cara"),
+        _i("Desfase", "desfase"), _i("Reemplazar cara", "reemplazar_cara"), _i("Dividir cara", "dividir_cara"),
         _i("Dividir cuerpo", "dividir_cuerpo"), _i("División de silueta", "division_silueta"), SEP,
         _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
         SEP, _sub("Simplificar", []), SEP,

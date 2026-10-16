@@ -2,12 +2,13 @@
 """Comandos de SÓLIDO › MODIFICAR con diálogo al estilo Fusion."""
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
 from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar
-from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseCara,
+from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseAristas,
+                                       OpDesfaseCara,
                                        OpQuitar, OpQuitarEmpalmes,
                                        OpDesmoldeo, OpDivisionSilueta, OpDividirCara, OpDividirCuerpo, OpEmpalme,
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, Texto, exigir, hit_desde_ref,
+from ..comando import (Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir, hit_desde_ref,
                        hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .comunes import evaluar_o_cero
@@ -304,6 +305,75 @@ class PulsarTirar(Comando):
             return _flecha_arista(ctx, sel, "distancia")
         base = _cara_y_normal(ctx, sel)
         return [mp.Flecha("distancia", base[0], base[1])] if base is not None else []
+
+
+def _tipos_elegidos(v):
+    return {h["ref"].get("tipo") for h in v.get("objetos") or []}
+
+
+def _con_caras(v):
+    return "cara" in _tipos_elegidos(v)
+
+
+def _con_aristas(v):
+    return bool(_tipos_elegidos(v) & {"arista", "curva_boceto"})
+
+
+class Desfase(Comando):
+    """Desfase (PL1, «un comando según lo elegido» de Plasticity): con caras las mueve a lo largo de su normal (el
+    desfase de cara de siempre); con aristas o curvas de boceto crea curvas nuevas a esa distancia (PL7)."""
+    CLAVE, TITULO, ICONO = "desfase", "Desfase", "desfase_cara"
+    AYUDA = ("Un solo comando para desfasar. Con caras: las mueve a lo largo de su normal (agrega o quita material). "
+             "Con aristas o curvas de un boceto: crea un boceto nuevo con curvas a esa distancia, sin cortar el cuerpo.")
+    CLASE_OP = OpDesfaseAristas          # al editar un paso «Desfase de aristas»; el de cara lo edita «Cara de desfase»
+
+    def verificar(self, ctx):
+        return None if ctx.estado.cuerpos or ctx.estado.bocetos else "Este comando necesita un cuerpo o un boceto."
+
+    def campos(self, ctx):
+        return [Seleccion("objetos", "Caras, aristas o curvas", {"cara", "arista", "curva_boceto"}, maximo=None),
+                Seleccion("plano", "Plano (opcional)", {"cara", "plano"}, minimo=0, visible_si=_con_aristas,
+                          ayuda="Dónde se hace el desfase; sin elegir, el plano que contiene a todas las aristas."),
+                Expresion("distancia", "Distancia", "1 mm"),
+                Casilla("tangente", "Cadena tangente", True, visible_si=_con_caras),
+                Casilla("simetrico", "Simétrico", False, visible_si=_con_aristas),
+                Opciones("esquinas", "Esquinas", {"redondas": "Redondas", "vivas": "Vivas"}, visible_si=_con_aristas),
+                Info("modo", "Qué hace", self._modo)]
+
+    @staticmethod
+    def _modo(v, ctx):
+        if _con_caras(v):
+            return "Desfase de cara: mueve las caras elegidas a lo largo de su normal."
+        if _con_aristas(v):
+            return "Desfase de aristas: crea un boceto nuevo con curvas a esa distancia; no corta el cuerpo."
+        return "Elegí caras (las mueve), aristas o curvas de un boceto (crea curvas nuevas)."
+
+    def construir(self, v, ctx):
+        exigir(v, "objetos", "Seleccioná caras, aristas o curvas.")
+        if _con_caras(v) and _con_aristas(v):
+            raise ErrorComando("Elegí solo caras (desfase de cara) o solo aristas y curvas (desfase de aristas).")
+        ctx.evaluar(v["distancia"])
+        if _con_caras(v):
+            op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"],
+                               tangente=v["tangente"])
+            base = "Desfase de cara"
+        else:
+            op = self.crear_op(OpDesfaseAristas, v, ctx, referencias=refs(v, "objetos"), plano=ref1(v, "plano"),
+                               distancia=v["distancia"], simetrico=v["simetrico"], esquinas=v["esquinas"])
+            base = "Desfase de aristas"
+        if ctx.op is None:
+            op.nombre = _siguiente(ctx, base)
+        return op
+
+    def manipuladores(self, ctx, v):
+        from .. import manipuladores as mp
+        if not _con_caras(v):
+            return []
+        base = _cara_y_normal(ctx, v.get("objetos"))
+        return [mp.Flecha("distancia", base[0], base[1])] if base is not None else []
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, objetos=hits(op.p["referencias"], ctx.estado), plano=_hit1(op.p["plano"], ctx.estado))
 
 
 class ReemplazarCara(Comando):
@@ -716,6 +786,6 @@ class QuitarEmpalmes(Comando):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
 
 
-registrar(PulsarTirar, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
+registrar(PulsarTirar, Desfase, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
           DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto,
           MaterialFisico, QuitarEmpalmes)

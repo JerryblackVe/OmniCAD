@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-175 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+176 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 31 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 32 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -1050,6 +1050,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
 | [`remove_fillets`](#remove_fillets) | sí | Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius («Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). |
+| [`offset_faces`](#offset_faces) | sí | Mueve caras de un cuerpo a lo largo de su normal (la mitad «cara» del comando Desfase; «Cara de desfase» de Fusion): distance > 0 agrega material, < 0 lo quita. |
 | [`offset_edges`](#offset_edges) | sí | Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loop» de Plasticity): crea un boceto NUEVO con curvas a `distance` de las elegidas, sin tocar ni cortar el cuerpo. |
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
 | [`create_thread`](#create_thread) | sí | Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. |
@@ -1361,6 +1362,18 @@ Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max
   - `body` (texto; obligatorio): id o nombre del cuerpo al que sacarle los empalmes.
   - `max_radius` (número o expresión; obligatorio): radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
 - CLI: `omnicad call remove_fillets --doc pieza.omnicad body=… max_radius=…`
+
+### `offset_faces`
+
+Mueve caras de un cuerpo a lo largo de su normal (la mitad «cara» del comando Desfase; «Cara de desfase» de Fusion): distance > 0 agrega material, < 0 lo quita. Con tangent=true la cadena de caras tangentes se mueve junta. Se elige con un selector estilo CadQuery (p. ej. '>Z'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F6', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Si el desfase no se puede calcular, falla con OPERATION_FAILED y el documento queda igual.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o lista de texto; obligatorio): caras a mover: selector (">Z"), id de find_faces ("Cuerpo1/F6") o lista de ids y selectores.
+  - `distance` (número o expresión; obligatorio): desplazamiento en mm sobre la normal exterior (número o expresión); negativo = hacia adentro.
+  - `tangent` (true/false; opcional, por defecto `true`): true mueve también las caras tangentes encadenadas.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+- CLI: `omnicad call offset_faces --doc pieza.omnicad faces=… distance=…`
 
 ### `offset_edges`
 

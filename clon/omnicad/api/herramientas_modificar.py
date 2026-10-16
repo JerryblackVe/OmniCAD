@@ -21,7 +21,8 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..timeline.operaciones import OpPlano
-from ..timeline.ops_modificar import OpChaflan, OpDesfaseAristas, OpDesmoldeo, OpEmpalme, OpQuitarEmpalmes, OpVaciado
+from ..timeline.ops_modificar import (OpChaflan, OpDesfaseAristas, OpDesfaseCara, OpDesmoldeo, OpEmpalme, OpQuitarEmpalmes,
+                                      OpVaciado)
 from ..timeline.ops_solido import OpAgujero, OpRosca
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -142,6 +143,26 @@ def remove_fillets(sesion, body: str, max_radius: Expr):
     res["fillets_removed"] = encontrados
     res["bodies_affected"] = [cuerpo.id]
     return res
+
+
+@herramienta("offset_faces", "solido",
+             "Mueve caras de un cuerpo a lo largo de su normal (la mitad «cara» del comando Desfase; «Cara de desfase» "
+             "de Fusion): distance > 0 agrega material, < 0 lo quita. Con tangent=true la cadena de caras tangentes se "
+             "mueve junta. " + _ELEGIR.format(ej=">Z", que="faces", id="Cuerpo1/F6") + _PERSISTENTE +
+             "Si el desfase no se puede calcular, falla con OPERATION_FAILED y el documento queda igual.",
+             modifica=True)
+def offset_faces(sesion, faces: Elementos, distance: Expr, tangent: bool = True, body: str | None = None):
+    """
+    faces: caras a mover: selector (">Z"), id de find_faces ("Cuerpo1/F6") o lista de ids y selectores.
+    distance: desplazamiento en mm sobre la normal exterior (número o expresión); negativo = hacia adentro.
+    tangent: true mueve también las caras tangentes encadenadas.
+    body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+    """
+    refs, elegidos = _refs(sesion, faces, "cara", body)
+    doc = sesion.doc
+    op = OpDesfaseCara(doc.nuevo_id(), nombre_nuevo(doc, "Desfase de cara", OpDesfaseCara), caras=refs,
+                       distancia=texto_expr(distance), tangente=bool(tangent))
+    return _informe(_agregar(sesion, op), elegidos, "faces_moved")
 
 
 @herramienta("offset_edges", "solido",
