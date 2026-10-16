@@ -176,7 +176,10 @@ def _interfaz(v, r):
     menu.setActiveAction(v.acciones["extruir"])
     QTest.qWait(80)
     zona = v._filtro_mas.zona(menu, v.acciones["extruir"]).center()
-    foto = QApplication.primaryScreen().grabWindow(int(menu.winId())).toImage()
+    # Foto del widget, no de la pantalla: otra ventana encima o el cursor real sobre el menú (que cambia la fila
+    # activa) hacían fallar el paso 1 de cada 2 corridas. La fila se vuelve a fijar justo antes de la foto.
+    menu.setActiveAction(v.acciones["extruir"])
+    foto = menu.grab().toImage()
     r.check(foto.pixelColor(zona) != foto.pixelColor(zona - QPoint(7, 0)), "P9: la fila activa de un menú muestra el «⋮» de «Más»")
     menu.hide()
 
