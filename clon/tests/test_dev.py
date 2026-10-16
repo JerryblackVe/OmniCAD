@@ -58,7 +58,8 @@ def simular_pasos(monkeypatch, pytest_codigo=0):
 
 def test_grupo_dev_registrado():
     herramientas = {h["nombre"]: h for h in api.catalogo("dev")}
-    assert set(herramientas) == {"run_checks", "app_screenshot", "run_bench"}
+    assert set(herramientas) == {"run_checks", "app_screenshot", "run_bench",
+                                 "list_error_reports", "read_error_report"}
     assert not any(h["modifica"] for h in herramientas.values())
 
 
