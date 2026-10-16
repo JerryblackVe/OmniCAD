@@ -78,6 +78,33 @@ def test_create_parameter_y_get_parameters():
     assert lista.structured_content is None                       # el JSON va una sola vez (en el texto)
 
 
+@pytest.mark.parametrize("transporte", ["memoria", "stdio"])
+def test_payloads_largos_consecutivos_no_mezclan_argumentos(transporte):
+    """B-26: herramientas distintas con argumentos de más de 4 KB, mediante el cliente del SDK."""
+    primero = {"name": "primero", "expression": "17 mm", "comment": "primera_" * 800}
+    marca = "segunda_" * 800
+    segundo = {"code": f"result = {marca!r}"}
+    assert len(json.dumps(primero).encode("utf-8")) >= 4096
+    assert len(json.dumps(segundo).encode("utf-8")) >= 4096
+
+    async def caso():
+        servidor = memoria(api.Sesion()) if transporte == "memoria" else parametros_stdio()
+        async with Client(servidor) as cliente:
+            creado = await cliente.call_tool("create_parameter", primero)
+            ejecutado = await cliente.call_tool("execute_code", segundo)
+            lista = await cliente.call_tool("get_parameters", {})
+            return creado, ejecutado, lista
+
+    creado, ejecutado, lista = correr(caso())
+    assert not creado.is_error and not ejecutado.is_error and not lista.is_error
+    assert json_de(creado)["result"]["name"] == "primero"
+    assert json_de(creado)["result"]["value"] == 17
+    assert json_de(ejecutado)["result"]["result"] == marca
+    parametros = json_de(lista)["result"]["parameters"]
+    assert [p["name"] for p in parametros] == ["primero"]
+    assert parametros[0]["comment"] == primero["comment"]
+
+
 def test_imagen_del_viewport_es_contenido_de_imagen_png_valido():
     async def caso():
         async with Client(memoria()) as c:
