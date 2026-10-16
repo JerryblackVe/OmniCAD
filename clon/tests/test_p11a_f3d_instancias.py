@@ -163,6 +163,16 @@ def test_escena_dañada_deja_los_cuerpos_donde_estaban(tmp_path):
     assert len(partes) == 1 and _centro(partes[0][0]) == pytest.approx([5, 5, 5], abs=1e-3)
 
 
+def test_si_ubicar_falla_con_un_error_de_geometria_el_archivo_abre_igual(tmp_path, monkeypatch):
+    """Ubicar es una mejora: `geo.volumen` lanza ErrorGeometria (un RuntimeError) con un cuerpo inválido y el .f3d abre igual."""
+    def roto(forma):
+        raise geo.ErrorGeometria("la integración falló")
+    monkeypatch.setattr(geo, "volumen", roto)
+    partes, avisos = f3d_nativo.leer(_ensamble(tmp_path))
+    assert len(partes) == 1 and _centro(partes[0][0]) == pytest.approx([5, 5, 5], abs=1e-3)
+    assert any("No se pudo leer la posición" in a and "integración" in a for a in avisos)
+
+
 def test_un_bloque_que_no_aparece_en_la_escena_no_se_mueve(tmp_path):
     otro = _sab(_sab_cubo(lado=2.0).r)
     malla = _Malla()
