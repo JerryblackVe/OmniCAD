@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMenu
 
 from .io_archivos import exportar as ex
 from .io_archivos import proyecto
@@ -163,6 +163,22 @@ def _interfaz(v, r):
     QTest.qWait(50)
     r.check(not v.visor.mostrando_centro_giro() and _pixeles_distintos(quieta, v.visor.grabFramebuffer(), 1) == 0,
             "F16: el centro de giro se oculta al soltar")
+
+    # P9: unidades del documento, imagen en el globo de ayuda y «⋮» del menú «Más»
+    v.elegir_unidad("longitud", "in")
+    r.check(v.timeline.unidades.text() == "Unidades: in, g  ▾" and v.navegador.item("__unidades__").text(0) == "Unidades: in, g",
+            "P9: el menú Unidades cambia las unidades del documento (botón y navegador)")
+    v.elegir_unidad("longitud", "mm")
+    r.check("vaciado.png" in v.acciones["vaciado"].toolTip(), "P9: el globo de Vaciado lleva su imagen «antes → después»")
+    menu = next(m for m in v.findChildren(QMenu) if v.acciones["extruir"] in m.actions() and any(a.menu() for a in m.actions()))
+    menu.popup(v.mapToGlobal(QPoint(300, 200)))
+    QTest.qWait(80)
+    menu.setActiveAction(v.acciones["extruir"])
+    QTest.qWait(80)
+    zona = v._filtro_mas.zona(menu, v.acciones["extruir"]).center()
+    foto = QApplication.primaryScreen().grabWindow(int(menu.winId())).toImage()
+    r.check(foto.pixelColor(zona) != foto.pixelColor(zona - QPoint(7, 0)), "P9: la fila activa de un menú muestra el «⋮» de «Más»")
+    menu.hide()
 
     # Cámara: perspectiva con caras ortográficas, órbita libre y restringida
     v.cambiar_vista("camara", "persp_orto_caras")

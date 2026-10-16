@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros, validar_nombre
-from . import temas
+from . import formato, temas
 
 ETIQUETAS_CAMPO = {"ancho": "Ancho (X)", "largo": "Largo (Y)", "alto": "Alto (Z)", "radio": "Radio",
                    "radio_mayor": "Radio mayor", "radio_menor": "Radio menor", "x": "Posición X",
@@ -36,8 +36,7 @@ class CampoExpresion(QLineEdit):
     def _validar(self):
         try:
             v = self.tabla.evaluar(self.text(), self.tipo)
-            unidad = "°" if self.tipo == ANGULO else ("" if self.tipo == ESCALAR else " mm")
-            self.setToolTip(f"= {v:.4g}{unidad}")
+            self.setToolTip(formato.tooltip_valor(v, self.tipo == ANGULO, self.tipo == ESCALAR))
             self.setStyleSheet("")
             self.valido = True
         except ErrorExpresion as e:

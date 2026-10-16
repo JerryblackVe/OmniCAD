@@ -12,7 +12,7 @@ from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
-from . import temas
+from . import formato, temas
 from .iconos import icono
 
 ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO = Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
@@ -200,7 +200,7 @@ class Navegador(QFrame):
         self._items = {}
         raiz = self._item(None, "__raiz__", titulo, "componente", "raiz", vis["todo"])
         config = self._item(raiz, "__config__", "Configuración del documento", "engranaje", "info")
-        self._item(config, "__unidades__", "Unidades: mm, g", "unidades", "info")
+        self._item(config, "__unidades__", f"Unidades: {formato.unidad_longitud()}, {formato.unidad_masa()}", "unidades", "info")
         self._item(config, "__tipo_diseno__", "Diseño de piezas", "unidades", "info")   # como Fusion 2026
         carpeta = self._item(raiz, "__vistas__", "Vistas guardadas", "carpeta", "vistas")
         for nombre in vistas:

@@ -2,6 +2,7 @@
 """Texto de medidas de lo elegido para la barra de abajo a la derecha, como Fusion:
 "1 Cara | Área: 3892.358 mm^2", "1 Arista | Longitud: 100.000 mm", "1 Perfil | Área: 1341.141 mm^2"."""
 from ..nucleo import geometria as geo
+from . import formato
 
 NOMBRES = {"cara": ("Cara", "Caras"), "arista": ("Arista", "Aristas"), "vertice": ("Vértice", "Vértices"),
            "cuerpo": ("Cuerpo", "Cuerpos"), "perfil": ("Perfil", "Perfiles"),
@@ -35,14 +36,14 @@ def texto_medidas(hits, estado=None):
         return cabecera
     try:
         if tipo in ("cara", "perfil"):
-            return f"{cabecera} | Área: {sum(geo.area(f) for f in formas):.3f} mm^2"
+            return f"{cabecera} | Área: {formato.longitud(sum(geo.area(f) for f in formas), 2):.3f} {formato.sufijo(2, True)}"
         if tipo in ("arista", "curva_boceto"):
-            return f"{cabecera} | Longitud: {sum(geo.longitud(f) for f in formas):.3f} mm"
+            return f"{cabecera} | Longitud: {formato.longitud(sum(geo.longitud(f) for f in formas)):.3f} {formato.sufijo()}"
         if tipo == "cuerpo":
-            return f"{cabecera} | Volumen: {sum(geo.volumen(f) for f in formas):.3f} mm^3"
+            return f"{cabecera} | Volumen: {formato.longitud(sum(geo.volumen(f) for f in formas), 3):.3f} {formato.sufijo(3, True)}"
     except Exception:  # noqa: BLE001 — una medida que no se puede calcular no debe romper la selección
         return cabecera
     if tipo in ("vertice", "punto") and n == 1 and hits[0].get("punto") is not None:
-        x, y, z = (float(c) for c in hits[0]["punto"])
-        return f"{cabecera} | Posición: {x:.3f}, {y:.3f}, {z:.3f} mm"
+        x, y, z = (formato.longitud(float(c)) for c in hits[0]["punto"])
+        return f"{cabecera} | Posición: {x:.3f}, {y:.3f}, {z:.3f} {formato.sufijo()}"
     return cabecera

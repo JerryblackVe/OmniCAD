@@ -8,6 +8,7 @@ from typing import Literal
 from ..io_archivos.exportar import FORMATOS, cuerpos_de_malla, exportar
 from ..nucleo import geometria as geo
 from ..timeline import ops_chapa, parametros
+from ..timeline.documento import ErrorDocumento
 from .registro import herramienta
 from .errores import ErrorAPI, error
 from .sesion import borrar_carpetas, crear_carpeta
@@ -81,7 +82,8 @@ def _resumen(sesion):
     doc = sesion.doc
     estado = doc.estado_final
     return {"name": doc.nombre, "path": doc.ruta, "modified": doc.modificado,
-            "units": {"length": "mm", "angle": "deg"},
+            "units": {"length": "mm", "angle": "deg"},          # en lo que vienen TODOS los números de la API
+            "display_units": {"length": doc.unidades["longitud"], "mass": doc.unidades["masa"]},   # lo que muestra la app
             "bodies": [_info_cuerpo(sesion, c) for c in estado.cuerpos.values()],
             "sketches": [_info_boceto(sesion, b) for b in estado.bocetos.values()],
             "components": _info_componentes(sesion, estado), "joints": _info_uniones(estado),
@@ -144,6 +146,23 @@ def _paso_info(op):
              "parámetros.")
 def get_scene_info(sesion):
     return _resumen(sesion)
+
+
+@herramienta("set_document_units", "documento", "Elige las unidades con que la app MUESTRA las medidas del documento "
+             "(el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. Se guardan "
+             "con el proyecto. No cambia el modelo ni los números de la API, que siguen en mm y g; get_scene_info las "
+             "informa en display_units. Sin parámetros solo las consulta.", modifica=True, transaccion=False)
+def set_document_units(sesion, length: Literal["mm", "cm", "m", "in", "ft"] | None = None,
+                       mass: Literal["g", "kg", "lb"] | None = None):
+    """
+    length: unidad de longitud para mostrar (vacío = no cambia).
+    mass: unidad de masa para mostrar (vacío = no cambia).
+    """
+    try:
+        sesion.doc.fijar_unidades(length, mass)
+    except ErrorDocumento as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from None
+    return {"display_units": {"length": sesion.doc.unidades["longitud"], "mass": sesion.doc.unidades["masa"]}}
 
 
 def _exigir_sin_cambios(sesion, discard):

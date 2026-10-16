@@ -29,17 +29,22 @@ def _n(x, dec=3):
     return formato.numero(float(x), miles=True) if hasattr(formato, "numero") else f"{x:.{dec}f}"
 
 
+def _mm(x, potencia=1):
+    """Un valor del modelo (mm, mm², mm³) con la unidad de longitud del documento: «1.575 in»."""
+    return f"{_n(formato.longitud(float(x), potencia))} {formato.sufijo(potencia)}"
+
+
 def _vec(v):
-    return "(" + "; ".join(_n(c) for c in v) + ")"
+    return "(" + "; ".join(_n(formato.longitud(float(c))) for c in v) + ")"
 
 
 def _texto_medida(info, prefijo=""):
     lineas = []
-    claves = [("largo", "Longitud", " mm"), ("area", "Área", " mm²"), ("perimetro", "Perímetro", " mm"),
-              ("radio", "Radio", " mm"), ("diametro", "Diámetro", " mm"), ("volumen", "Volumen", " mm³")]
-    for k, t, u in claves:
+    claves = [("largo", "Longitud", 1), ("area", "Área", 2), ("perimetro", "Perímetro", 1),
+              ("radio", "Radio", 1), ("diametro", "Diámetro", 1), ("volumen", "Volumen", 3)]
+    for k, t, p in claves:
         if info.get(k) is not None:
-            lineas.append(f"{prefijo}{t}: {_n(info[k])}{u}")
+            lineas.append(f"{prefijo}{t}: {_mm(info[k], p)}")
     for k, t in (("posicion", "Posición"), ("punto", "Posición"), ("centro", "Centro")):
         if info.get(k) is not None and np.ndim(info[k]) == 1:
             lineas.append(f"{prefijo}{t}: {_vec(info[k])}")
@@ -68,10 +73,11 @@ class Medir(Comando):
             return "Elegí una o dos entidades."
         lineas = []
         if "distancia" in r:
-            lineas.append(f"Distancia: {_n(r['distancia'])} mm")
+            lineas.append(f"Distancia: {_mm(r['distancia'])}")
             if r.get("delta") is not None:
                 dx, dy, dz = r["delta"]
-                lineas.append(f"ΔX {_n(dx)} · ΔY {_n(dy)} · ΔZ {_n(dz)} mm")
+                lineas.append(f"ΔX {_n(formato.longitud(dx))} · ΔY {_n(formato.longitud(dy))} · ΔZ {_n(formato.longitud(dz))} "
+                              f"{formato.sufijo()}")
         if r.get("angulo") is not None:
             lineas.append(f"Ángulo: {_n(r['angulo'])}°")
         for clave, prefijo in (("a", "1 › "), ("b", "2 › ")):
@@ -105,7 +111,7 @@ class Medir(Comando):
             return self._tam_flecha(visor, p) if visor is not None else 2.0
         if r.get("punto_a") is not None and r.get("punto_b") is not None:
             pa, pb = np.asarray(r["punto_a"], float), np.asarray(r["punto_b"], float)
-            texto = f"{_n(r['distancia'])} mm"
+            texto = _mm(r["distancia"])
             if r.get("angulo") is not None and r["angulo"] > 1e-6:
                 texto += f" · {_n(r['angulo'])}°"
             return analisis_vista.cota_guia(pa, pb, texto, tam((pa + pb) / 2), vista, color)
@@ -114,16 +120,16 @@ class Medir(Comando):
         if info.get("centro") is not None and info.get("radio"):
             centro = np.asarray(info["centro"], float)
             return analisis_vista.cota_diametro(centro, info["radio"], info.get("eje") or info.get("normal"),
-                                                f"Ø {_n(info['diametro'])} mm", tam(centro), vista, color)
+                                                f"Ø {_mm(info['diametro'])}", tam(centro), vista, color)
         if info.get("tipo") == "arista":
             from ...nucleo import geometria as geo
             poli = np.asarray(geo.polilinea_arista(_entrada(hit, ctx.estado)), float)
             if info.get("direccion") is not None:          # recta: cota de punta a punta
-                return analisis_vista.cota_guia(poli[0], poli[-1], f"{_n(info['largo'])} mm", tam(poli[0]),
+                return analisis_vista.cota_guia(poli[0], poli[-1], _mm(info["largo"]), tam(poli[0]),
                                                 vista, color)
             from ..visor3d import _segmentos
             return {"capas": [("lineas", _segmentos([poli]), color, 2.5)],
-                    "etiquetas": [(poli[len(poli) // 2], f"{_n(info['largo'])} mm")]}
+                    "etiquetas": [(poli[len(poli) // 2], _mm(info["largo"]))]}
         if info.get("posicion") is not None:
             p = np.asarray(info["posicion"], float)
             return {"capas": [("puntos", np.array([p]), color, 9)], "etiquetas": [(p, _vec(p))]}
@@ -133,10 +139,10 @@ class Medir(Comando):
             else:
                 from ..manipuladores import centroide
                 p = centroide(_entrada(hit, ctx.estado))
-            return {"capas": [], "etiquetas": [(p, f"{_n(info['area'])} mm²")]}
+            return {"capas": [], "etiquetas": [(p, _mm(info["area"], 2))]}
         if info.get("volumen") is not None and info.get("centro_masa") is not None:
             p = np.asarray(info["centro_masa"], float)
-            return {"capas": [("puntos", np.array([p]), color, 8)], "etiquetas": [(p, f"{_n(info['volumen'])} mm³")]}
+            return {"capas": [("puntos", np.array([p]), color, 8)], "etiquetas": [(p, _mm(info["volumen"], 3))]}
         return vacio
 
     def mostrar(self, v, ctx):
@@ -219,7 +225,7 @@ class Interferencia(Comando):
             return "No hay interferencias."
         nombre = lambda c: ctx.estado.cuerpos[c].nombre  # noqa: E731
         return "\n".join(f"{nombre(r['a'])} ↔ {nombre(r['b'])}: " +
-                         (f"{_n(r['volumen'])} mm³" if not r.get("coincidente") else "caras coincidentes")
+                         (_mm(r["volumen"], 3) if not r.get("coincidente") else "caras coincidentes")
                          for r in res)
 
     def construir(self, v, ctx):
@@ -264,7 +270,7 @@ class CentroMasa(Comando):
 
     def _resultado(self, v, ctx):
         c, masa = self._calcular(v, ctx)
-        return "No hay cuerpos sólidos." if c is None else f"{_vec(c)} mm\nMasa total: {_n(masa)} g"
+        return "No hay cuerpos sólidos." if c is None else f"{_vec(c)} {formato.sufijo()}\nMasa total: {_n(formato.masa(masa))} {formato.unidad_masa()}"
 
     def construir(self, v, ctx):
         return None

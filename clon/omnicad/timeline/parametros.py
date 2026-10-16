@@ -25,6 +25,9 @@ UNIDADES = {
     "in": (LONGITUD, 25.4), "ft": (LONGITUD, 304.8),
     "deg": (ANGULO, 1.0), "rad": (ANGULO, 180.0 / math.pi),
 }
+# Unidades con que el documento MUESTRA longitudes y masas (el modelo trabaja siempre en mm y g): factor a mm / a g.
+LONGITUDES = {u: f for u, (magnitud, f) in UNIDADES.items() if magnitud == LONGITUD}
+MASAS = {"g": 1.0, "kg": 1000.0, "lb": 453.59237}
 FUNCIONES = {
     "sin": lambda g: math.sin(math.radians(g)), "cos": lambda g: math.cos(math.radians(g)),
     "tan": lambda g: math.tan(math.radians(g)), "sqrt": math.sqrt, "abs": abs,

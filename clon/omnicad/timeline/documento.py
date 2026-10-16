@@ -32,11 +32,12 @@ from ..restricciones import ErrorBoceto
 from .entidades import ErrorReferencia
 from .operaciones import (HEREDABLES, TIPOS_OPERACION, Contexto, Cuerpo, ErrorOperacion, EstadoModelo,
                           operacion_desde_dict, propiedades_cuerpo)
-from .parametros import ErrorExpresion, TablaParametros, nombres_usados
+from .parametros import LONGITUDES, MASAS, ErrorExpresion, TablaParametros, nombres_usados
 
 log = logging.getLogger(__name__)
 
 VERSION_RECETA = 1
+UNIDADES_DEFECTO = {"longitud": "mm", "masa": "g"}      # con qué se MUESTRAN las medidas; el modelo siempre va en mm y g
 _LIMITE_DESHACER = 50
 _LIMITE_BYTES_DESHACER = 150_000_000   # un STEP importado viaja en cada instantánea: se acota la memoria
 # Un paso que tarda al menos esto guarda su resultado con el proyecto: al abrirlo no se recalcula. Los más rápidos
@@ -145,6 +146,22 @@ class Documento:
         # Tabla de configuraciones (CONFIGURAR): {"columnas": [{"tipo": "parametro", "nombre"} |
         # {"tipo": "suprimir", "op"}], "filas": [{"nombre", "valores"}], "activa": nombre}.
         self.configuraciones = {}
+        # Unidades de pantalla del documento (cm, m, in, ft; kg, lb): solo cambian cómo se muestran las medidas. Como los
+        # comentarios, se guardan con el proyecto (solo si no son las de siempre) pero no entran en deshacer.
+        self.unidades = dict(UNIDADES_DEFECTO)
+
+    def fijar_unidades(self, longitud=None, masa=None):
+        """Cambia las unidades con que se muestran longitudes (mm, cm, m, in, ft) y masas (g, kg, lb). No toca el
+        modelo ni las expresiones: «2 in» sigue valiendo 50.8 mm en cualquier documento."""
+        if longitud is not None and longitud not in LONGITUDES:
+            raise ErrorDocumento(f"Unidad de longitud desconocida «{longitud}»: {', '.join(LONGITUDES)}.")
+        if masa is not None and masa not in MASAS:
+            raise ErrorDocumento(f"Unidad de masa desconocida «{masa}»: {', '.join(MASAS)}.")
+        nuevas = {"longitud": longitud or self.unidades["longitud"], "masa": masa or self.unidades["masa"]}
+        if nuevas != self.unidades:
+            self.unidades = nuevas
+            self.modificado = True
+            self._notificar()
 
     # ------------------------------------------------------------ notificación
     def suscribir(self, funcion):
@@ -622,7 +639,8 @@ class Documento:
                 "contador": self._contador, "operaciones": [o.a_dict() for o in self.operaciones],
                 "vistas": self.vistas, "propiedades": self.propiedades, "analisis": self.analisis,
                 "configuraciones": self.configuraciones,
-                "espacios": self.espacios, "comentarios": self.comentarios}
+                "espacios": self.espacios, "comentarios": self.comentarios,
+                **({"unidades": self.unidades} if self.unidades != UNIDADES_DEFECTO else {})}
 
     @classmethod
     def desde_dict(cls, datos, cache=None):
@@ -636,6 +654,12 @@ class Documento:
         doc.vistas = dict(datos.get("vistas", {}))
         doc.espacios = dict(datos.get("espacios", {}))
         doc.comentarios = [dict(c) for c in datos.get("comentarios", [])]
+        guardadas = datos.get("unidades")
+        guardadas = guardadas if isinstance(guardadas, dict) else {}
+        for magnitud, validas in (("longitud", LONGITUDES), ("masa", MASAS)):    # un archivo viejo o ajeno: lo que no sirve
+            valor = guardadas.get(magnitud)                                       # se ignora (puede venir una lista, etc.)
+            if isinstance(valor, str) and valor in validas:
+                doc.unidades[magnitud] = valor
         doc._cache = cache or {}
         try:
             doc._cargar(datos)

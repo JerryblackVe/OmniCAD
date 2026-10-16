@@ -39,11 +39,12 @@ def test_boton_y_unidades_actuales(ventana):
     assert acciones["Gramo (g)"].isChecked() and acciones["Gramo (g)"].isEnabled()
 
 
-def test_las_unidades_no_implementadas_estan_grisadas_y_explican_por_que(ventana):
+def test_las_unidades_ya_se_pueden_elegir_y_explican_que_cambia(ventana):
+    # P9 (2026-10-16): antes estaban grisadas («No disponible»); ahora cambian cómo muestra las medidas el documento.
     acciones = _acciones(ventana.menu_unidades)
     for texto in ("Centímetro (cm)", "Metro (m)", "Pulgada (in)", "Pie (ft)", "Kilogramo (kg)", "Libra (lb)"):
-        assert not acciones[texto].isEnabled() and "No disponible" in acciones[texto].toolTip()
-    assert "2 in" in acciones["Pulgada (in)"].toolTip()
+        assert acciones[texto].isEnabled() and "No disponible" not in acciones[texto].toolTip()
+    assert "2 in" in acciones["Pulgada (in)"].toolTip() and "milímetros" in acciones["Pulgada (in)"].toolTip()
 
 
 def test_elegir_precision_la_guarda_y_la_aplica(ventana):

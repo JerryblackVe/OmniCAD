@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxL
                                QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
-from . import temas
+from . import formato, temas
 from .iconos import icono
 
 
@@ -465,8 +465,7 @@ class PanelComando(QFrame):
                 w = self.widgets[c.clave]
                 try:
                     val = self.ctx.evaluar(w.text(), c.tipo)
-                    unidad = "°" if c.tipo == ANGULO else ("" if c.tipo == ESCALAR else " mm")
-                    w.setToolTip(f"= {val:.4g}{unidad}")
+                    w.setToolTip(formato.tooltip_valor(val, c.tipo == ANGULO, c.tipo == ESCALAR))
                     w.setStyleSheet("")
                 except ErrorExpresion as e:
                     w.setToolTip(str(e))

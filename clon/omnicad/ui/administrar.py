@@ -78,13 +78,15 @@ class DialogoListaMateriales(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Lista de materiales")
         self.resize(820, 420)
+        # Masa y volumen en las unidades del documento (menú «Unidades»); el modelo guarda g y mm³.
+        self.COLUMNAS = self.COLUMNAS[:4] + [f"Masa ({formato.unidad_masa()})", f"Volumen ({formato.sufijo(3)})"]
         self.filas = filas_bom(doc, nombre_de)
         t = _tabla(self.COLUMNAS)
         for fila in self.filas:
             r = t.rowCount()
             t.insertRow(r)
-            textos = [str(fila[0]), fila[1], str(fila[2]), fila[3], formato.numero(fila[4], miles=True),
-                      formato.numero(fila[5], miles=True)]
+            textos = [str(fila[0]), fila[1], str(fila[2]), fila[3], formato.numero(formato.masa(fila[4]), miles=True),
+                      formato.numero(formato.longitud(fila[5], 3), miles=True)]
             for c, texto in enumerate(textos):
                 it = QTableWidgetItem(texto)
                 it.setFlags(it.flags() & ~Qt.ItemIsEditable)
@@ -97,7 +99,7 @@ class DialogoListaMateriales(QDialog):
         lay = QVBoxLayout(self)
         lay.addWidget(t)
         pie = QHBoxLayout()
-        pie.addWidget(QLabel(f"{sum(f[2] for f in self.filas)} pieza(s) · masa total {formato.numero(total, miles=True)} g"))
+        pie.addWidget(QLabel(f"{sum(f[2] for f in self.filas)} pieza(s) · masa total {formato.numero(formato.masa(total), miles=True)} {formato.unidad_masa()}"))
         pie.addStretch()
         pie.addWidget(exportar)
         pie.addWidget(botones)
@@ -108,7 +110,7 @@ class DialogoListaMateriales(QDialog):
         w = csv.writer(buf)
         w.writerow(self.COLUMNAS)
         for f in self.filas:
-            w.writerow([f[0], f[1], f[2], f[3], f"{f[4]:.3f}", f"{f[5]:.3f}"])
+            w.writerow([f[0], f[1], f[2], f[3], f"{formato.masa(f[4]):.3f}", f"{formato.longitud(f[5], 3):.3f}"])
         return buf.getvalue()
 
     def _exportar(self):

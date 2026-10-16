@@ -42,6 +42,37 @@ def _capturar_menu(boton, menu, ruta, submenu=None):
     menu.hide()
 
 
+def _foto(widget, ruta):
+    """Captura de pantalla real de una ventana emergente: `widget.grab()` no pasa por el filtro de eventos que dibuja el «⋮»."""
+    QApplication.primaryScreen().grabWindow(int(widget.winId())).save(str(ruta))
+
+
+def _p9b(v, destino):
+    """P9 (segunda tanda): globo con imagen, menú con «⋮», menú «Más» y menú de unidades."""
+    from PySide6.QtWidgets import QToolTip
+    boton = next(b for b in v.cinta.findChildren(QToolButton) if b.defaultAction() is v.acciones["vaciado"])
+    QToolTip.showText(boton.mapToGlobal(QPoint(10, boton.height())), v.acciones["vaciado"].toolTip(), boton)
+    QTest.qWait(300)
+    globo = next(w for w in QApplication.topLevelWidgets() if w.metaObject().className() == "QTipLabel" and w.isVisible())
+    _foto(globo, destino / "globo_vaciado.png")
+    QToolTip.hideText()
+    boton, menu = _menu_del_grupo(v, 0, "CREAR")
+    menu.popup(boton.mapToGlobal(QPoint(0, boton.height())))
+    QTest.qWait(250)
+    menu.setActiveAction(v.acciones["extruir"])
+    QTest.qWait(250)
+    _foto(menu, destino / "menu_crear_mas.png")
+    mas = v._filtro_mas.abrir(menu, v.acciones["extruir"])
+    QTest.qWait(250)
+    _foto(mas, destino / "menu_mas.png")
+    mas.hide()
+    menu.hide()
+    v.menu_unidades.popup(v.timeline.unidades.mapToGlobal(QPoint(0, -v.menu_unidades.sizeHint().height())))
+    QTest.qWait(250)
+    _foto(v.menu_unidades, destino / "menu_unidades.png")
+    v.menu_unidades.hide()
+
+
 def main():
     fmt = QSurfaceFormat()
     fmt.setDepthBufferSize(24)
@@ -53,7 +84,7 @@ def main():
     from omnicad.ui.preferencias import DialogoPreferencias, Preferencias
     from omnicad.ui.ventana import VentanaPrincipal
 
-    destino = RAIZ / "evidencias" / "capturas"
+    destino = Path(sys.argv[1]) if len(sys.argv) > 1 else RAIZ / "evidencias" / "capturas"   # carpeta opcional
     destino.mkdir(parents=True, exist_ok=True)
     temporal = Path(tempfile.mkdtemp(prefix="omnicad_capturas_"))
     prefs = Preferencias(QSettings(str(temporal / "prefs.ini"), QSettings.IniFormat))
@@ -122,6 +153,7 @@ def main():
     QTest.qWait(400)
     v.grab().save(str(destino / "vistas_multiples.png"))
     v.cambiar_vista("vistas_multiples", False)
+    _p9b(v, destino)
     v.doc.modificado = False
     v.close()
     print("Capturas en", destino)

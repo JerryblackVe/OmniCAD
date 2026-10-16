@@ -32,6 +32,8 @@ DEFECTOS = {
     "general/puente_codigo": False,          # execute_code en vivo (corre Python en la interfaz)
     "atajos/diseno": "extruir,empalme_3d",   # caja de herramientas (S): los que Fusion trae fijados
     "atajos/boceto": "",
+    "atajos/barra": "",                      # comandos fijados en la barra de arriba (menú «Más» ⋮)
+    "atajos/teclas": "{}",                   # combinaciones cambiadas por el usuario (JSON clave → combinación)
     "material/aspecto": "acero",
     "graficos/preset": "personalizar",
     "graficos/detalle": "automatico",        # teselado: automatico (según el tamaño de cada pieza), bajo, medio, alto

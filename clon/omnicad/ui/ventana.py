@@ -25,9 +25,10 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
-from .. import NOMBRE_APP, VERSION
+from .. import NOMBRE_APP, RECURSOS, VERSION
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
+from .mas_comando import FiltroMas, leer_barra, leer_teclas
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
@@ -102,6 +103,12 @@ class _FiltroInfoHerramientas(QObject):
 
 
 PIE_AYUDA = "<br><br><span style='color:#9a9a9a'>Pulse Ctrl+/ para obtener más ayuda.</span>"
+
+
+def imagen_ayuda(clave):
+    """HTML de la imagen «antes → después» del comando (`scripts/ayuda_imagenes.py`), o "" si no tiene."""
+    ruta = RECURSOS / "ayuda" / f"{clave}.png"
+    return f"<br><img src='{ruta.as_uri()}'>" if ruta.exists() else ""
 
 
 class _FiltroAyuda(QObject):
@@ -232,8 +239,10 @@ class VentanaPrincipal(QMainWindow):
         self.comentarios = PanelComentarios()
         self.area.anclar_abajo_izq(self.comentarios)
         self._filtro_ayuda = _FiltroAyuda(self)
+        self._filtro_mas = FiltroMas(self)
         for menu in self.findChildren(QMenu):
             menu.installEventFilter(self._filtro_ayuda)
+            menu.installEventFilter(self._filtro_mas)
         self.set_documento(doc or Documento())
         if self._avisos_tema:
             self.mensaje(self._avisos_tema[0], 10000)
@@ -242,16 +251,49 @@ class VentanaPrincipal(QMainWindow):
             lambda: [f"{op.id} {op.nombre}" for op in self.doc.operaciones[-informes_error.MAX_PASOS:]])
 
     # ------------------------------------------------------------ acciones (comandos)
+    @staticmethod
+    def _poner_atajo(a, atajo):
+        """Fija la combinación de una acción hecha por `_accion` y rehace su texto de menú y su globo."""
+        clave, texto, ayuda = a.property("clave"), a.property("titulo"), a.property("ayuda")
+        a.setShortcut(QKeySequence(atajo or ""))
+        a.setText(f"{texto}\t{texto_atajo(atajo)}" if atajo else texto)
+        a.setToolTip(f"<b>{texto}</b>" + (f"<br>{ayuda}" if ayuda else "") +
+                     (f"<br><span style='color:#bbbbbb'>{texto_atajo(atajo)}</span>" if atajo else "") +
+                     (imagen_ayuda(clave) + PIE_AYUDA if ayuda else ""))
+
+    def aplicar_teclas(self):
+        """Pone a cada comando la combinación elegida en «Más» › Cambiar atajo (o la de fábrica)."""
+        teclas = leer_teclas(self.prefs)
+        for clave, a in self.acciones.items():
+            defecto = a.property("atajo_defecto")
+            if defecto is None:                         # no la hizo `_accion` (p. ej. las del boceto)
+                continue
+            efectivo = teclas.get(clave, defecto)
+            if a.shortcut() != QKeySequence(efectivo):
+                self._poner_atajo(a, efectivo)
+
+    def contexto_atajos(self):
+        """Qué lista de la caja de herramientas (tecla S) usa «Fijar en atajos» ahora."""
+        return "boceto" if self.modo_boceto.activo else "diseno"
+
+    def refrescar_barra_fijados(self):
+        """Los botones fijados con «Más» › Fijar en la barra, a la derecha de Rehacer."""
+        lay = self._lay_fijados
+        while lay.count():
+            lay.takeAt(0).widget().deleteLater()
+        for clave in leer_barra(self.prefs):
+            if clave in self.acciones:
+                lay.addWidget(self._boton(self.acciones[clave]))
+
     def _accion(self, clave, texto, funcion, atajo=None, ayuda=None, ico=None, marcable=False):
         a = QAction(texto, self)
         if ico:
             a.setIcon(icono(ico))
-        if atajo:
-            a.setShortcut(QKeySequence(atajo))
-            a.setText(f"{texto}\t{texto_atajo(atajo)}")
-        a.setToolTip(f"<b>{texto}</b>" + (f"<br>{ayuda}" if ayuda else "") +
-                     (f"<br><span style='color:#bbbbbb'>{texto_atajo(atajo)}</span>" if atajo else "") +
-                     (PIE_AYUDA if ayuda else ""))
+        a.setProperty("clave", clave)
+        a.setProperty("titulo", texto)
+        a.setProperty("ayuda", ayuda or "")
+        a.setProperty("atajo_defecto", atajo or "")          # el de fábrica: «Más» › Cambiar atajo puede volver a él
+        self._poner_atajo(a, atajo)
         a.setCheckable(marcable)
         a.triggered.connect(funcion)
         self.addAction(a)                   # así el atajo funciona aunque el menú esté cerrado
@@ -436,6 +478,9 @@ class VentanaPrincipal(QMainWindow):
         h.addWidget(archivo)
         for clave in ("guardar", "deshacer", "rehacer"):
             h.addWidget(self._boton(self.acciones[clave]))
+        self._lay_fijados = QHBoxLayout()              # comandos fijados con «Más» › Fijar en la barra
+        self._lay_fijados.setSpacing(2)
+        h.addLayout(self._lay_fijados)
         h.addSpacing(10)
         self.pestana_doc = QLabel(objectName="pestana_doc", alignment=Qt.AlignCenter)
         self.pestana_doc.setMinimumWidth(200)
@@ -515,6 +560,8 @@ class VentanaPrincipal(QMainWindow):
         c.efectos = {k: p[f"vista/efecto_{k}"] for k in EFECTOS}
         c.dinamico, c.fps_minimo, c.limite_fps = p["graficos/dinamico"], p["graficos/fps_minimo"], p["graficos/limite_fps"]
         c.luces, c.indicador_giro = p["graficos/luces"], p["graficos/indicador_giro"]
+        self.aplicar_teclas()
+        self.refrescar_barra_fijados()
         teselado, angular = DETALLES.get(p["graficos/detalle"], DETALLES["automatico"])
         if (teselado, angular) != (c.teselado, c.angular):
             c.teselado, c.angular = teselado, angular
@@ -682,26 +729,28 @@ class VentanaPrincipal(QMainWindow):
         return caja
 
     def _crear_menu_unidades(self):
-        """Menú de «Unidades: mm, g ▾» en la barra de abajo. El modelo trabaja en mm y g: las demás unidades se ven
-        grisadas (no implementadas, como en la cinta). Lo que sí cambia es la precisión con que se muestran los
-        valores, la misma preferencia que Preferencias › Visualización de unidad y valor."""
+        """Menú de «Unidades: mm, g ▾» en la barra de abajo: las unidades con que el documento MUESTRA las medidas
+        (medir, propiedades, lista de materiales, globos de los campos). Se guardan con el proyecto. El modelo sigue
+        en mm y g y los campos de entrada toman mm si se escribe un número solo: para otra unidad, «2 in» o «5 cm».
+        La precisión es la misma preferencia que Preferencias › Visualización de unidad y valor."""
         m = QMenu(self)
         m.setToolTipsVisible(True)
-        no_disp = f"No disponible en {NOMBRE_APP} {VERSION}: el modelo trabaja en milímetros y gramos."
-        for titulo, unidades, nota in (
-                ("Longitud", ["Milímetro (mm)", "Centímetro (cm)", "Metro (m)", "Pulgada (in)", "Pie (ft)"],
-                 "<br>En cualquier campo se puede escribir otra unidad (2 in, 5 cm) y se pasa a mm."),
-                ("Masa", ["Gramo (g)", "Kilogramo (kg)", "Libra (lb)"], "")):
-            m.addSection(titulo)
+        nota = ("Cómo se muestran las medidas de este documento. Los campos siguen tomando milímetros si escribís un "
+                "número solo; para otra unidad escribila: 2 in, 5 cm.")
+        self._acciones_unidad = {}
+        for titulo, magnitud, unidades in (
+                ("Longitud", "longitud", [("mm", "Milímetro (mm)"), ("cm", "Centímetro (cm)"), ("m", "Metro (m)"),
+                                          ("in", "Pulgada (in)"), ("ft", "Pie (ft)")]),
+                ("Masa", "masa", [("g", "Gramo (g)"), ("kg", "Kilogramo (kg)"), ("lb", "Libra (lb)")])):
+            m.addAction(titulo).setEnabled(False)                  # el título del grupo (addSection no se ve con el tema)
             grupo = QActionGroup(m)
-            for i, texto in enumerate(unidades):
+            for u, texto in unidades:
                 a = m.addAction(texto)
                 a.setCheckable(True)
-                a.setChecked(i == 0)
-                a.setEnabled(i == 0)
-                if i:
-                    a.setToolTip(no_disp + nota)
+                a.setToolTip(nota)
+                a.triggered.connect(lambda _=False, magnitud=magnitud, u=u: self.elegir_unidad(magnitud, u))
                 grupo.addAction(a)
+                self._acciones_unidad[(magnitud, u)] = a
         m.addSeparator()
         precision = m.addMenu("Precisión")
         grupo = QActionGroup(precision)
@@ -718,6 +767,7 @@ class VentanaPrincipal(QMainWindow):
         m.addAction("Preferencias de unidades…").triggered.connect(lambda: self.preferencias(pagina="valores"))
 
         def sincronizar():                  # Preferencias puede haberlas cambiado desde la última vez
+            self._actualizar_unidades()
             for a in grupo.actions():
                 a.setChecked(a.data() == self.prefs["unidades/precision"])
             ceros.setChecked(bool(self.prefs["unidades/ocultar_ceros"]))
@@ -738,6 +788,20 @@ class VentanaPrincipal(QMainWindow):
     def _pref_unidades(self, clave, valor):
         self.prefs[clave] = valor
         self.aplicar_preferencias()
+
+    def elegir_unidad(self, magnitud, unidad):
+        """«Unidades» de la barra de abajo: cambia cómo muestra las medidas el documento (`Documento.fijar_unidades`)."""
+        self._intentar(lambda: self.doc.fijar_unidades(**{magnitud: unidad}))
+        from .medidas import texto_medidas
+        self.info_seleccion(texto_medidas(self.seleccion, self._estado_visible()))    # lo elegido, en la unidad nueva
+
+    def _actualizar_unidades(self):
+        """Lleva las unidades del documento al formato de pantalla, al botón de la barra y a sus casillas."""
+        u = self.doc.unidades
+        formato.configurar_unidades(u["longitud"], u["masa"])
+        self.timeline.unidades.setText(f"Unidades: {u['longitud']}, {u['masa']}  ▾")
+        for (magnitud, unidad), a in self._acciones_unidad.items():
+            a.setChecked(u[magnitud] == unidad)
 
     def _mostrar_panel_datos(self, visible):
         self.panel_datos.setVisible(visible)
@@ -800,6 +864,7 @@ class VentanaPrincipal(QMainWindow):
         QTimer.singleShot(0, self.visor, self.visor.encuadrar)
 
     def _actualizar(self):
+        self._actualizar_unidades()
         estado = self.doc.estado_final
         self._refrescar_visibilidad()
         self.timeline.actualizar(self.doc)
@@ -1641,8 +1706,8 @@ class VentanaPrincipal(QMainWindow):
         cuerpo = estado.cuerpos.get(ident)
         if cuerpo:
             n = formato.numero
-            self.mensaje(f"{cuerpo.nombre}: volumen {n(geo.volumen(cuerpo.forma), miles=True)} mm³ · "
-                         f"área {n(geo.area(cuerpo.forma), miles=True)} mm² · "
+            self.mensaje(f"{cuerpo.nombre}: volumen {n(formato.longitud(geo.volumen(cuerpo.forma), 3), miles=True)} {formato.sufijo(3)} · "
+                         f"área {n(formato.longitud(geo.area(cuerpo.forma), 2), miles=True)} {formato.sufijo(2)} · "
                          f"{'sólido válido' if geo.es_valida(cuerpo.forma) else '⚠ geometría inválida'}", 10000)
         elif ident in estado.bocetos:
             b = estado.bocetos[ident]
