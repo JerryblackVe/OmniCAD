@@ -204,12 +204,12 @@ def _vertice(m, p):
     return m.nuevo("vertex", m.N, 0, punto)
 
 
-def _sab_cubo(lado=1.0, con_marca=True):
-    """Cubo de `lado` cm con 6 planos, 12 rectas y 8 vértices."""
-    m = _Modelo()
+def _sab_cubo(lado=1.0, con_marca=True, m=None, origen=(0.0, 0.0, 0.0)):
+    """Cubo de `lado` cm con 6 planos, 12 rectas y 8 vértices (con `m`, un cuerpo más en ese modelo, en `origen`)."""
+    m = _Modelo() if m is None else m
     _, shell = _cuerpo_vacio(m, con_marca)
     p = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
-    p = [tuple(float(c) * lado for c in q) for q in p]
+    p = [tuple(float(c) * lado + o for c, o in zip(q, origen, strict=True)) for q in p]
     vs = [_vertice(m, q) for q in p]
     aristas = {}
 

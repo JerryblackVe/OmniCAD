@@ -105,7 +105,7 @@ Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Inser
 
 ### `inspect_f3d`
 
-Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies).
+Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies); los cuerpos viejos del historial que Fusion deja en el archivo y la escena no muestra no se importan (discarded_bodies).
 
 - Modifica el documento: no.
 - Parámetros:

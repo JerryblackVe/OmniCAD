@@ -245,7 +245,9 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
              "salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro "
              "(mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que "
              "se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya "
-             "ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies).")
+             "ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies); los "
+             "cuerpos viejos del historial que Fusion deja en el archivo y la escena no muestra no se importan "
+             "(discarded_bodies).")
 def inspect_f3d(sesion, path: str):
     """
     path: ruta del archivo .f3d o .f3z.
@@ -273,11 +275,11 @@ def inspect_f3d(sesion, path: str):
         filas.append({"block": c["bloque"], "type": c["tipo"], "volume_mm3": _r(vol), "copies": len(marcos),
                       "moved": movido, "positions_mm": [[_r(x) for x in M[:3, 3]] for M in marcos],
                       "rotated": any(not np.allclose(M[:3, :3], np.eye(3), atol=1e-6) for M in marcos)})
-    sin_ubicar = max(0, len(componentes) - visto.get("ubicados", 0)) if visto else 0
     return {"path": str(ruta), "bodies_stored": len(componentes), "bodies_placed": sum(f["copies"] for f in filas),
             "volume_stored_mm3": _r(guardado), "volume_placed_mm3": _r(colocado),
             "components_moved": sum(1 for f in filas if f["moved"]),
-            "components_with_copies": sum(1 for f in filas if f["copies"] > 1), "unplaced_bodies": sin_ubicar,
+            "components_with_copies": sum(1 for f in filas if f["copies"] > 1),
+            "unplaced_bodies": visto.get("sin_ubicar", 0), "discarded_bodies": visto.get("descartados", 0),
             "scene": {"nodes": visto.get("nodos", 0), "copies": visto.get("copias", 0),
                       "bodies": visto.get("cuerpos_escena", 0), "bodies_with_mesh": visto.get("cuerpos_con_malla", 0),
                       "blocks": visto.get("bloques", 0), "blocks_placed": visto.get("bloques_ubicados", 0)},

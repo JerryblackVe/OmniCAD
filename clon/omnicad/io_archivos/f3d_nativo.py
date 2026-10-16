@@ -9,7 +9,9 @@ BREP.*.smbh`: un bloque SAB de ShapeManager (el núcleo de Autodesk, derivado de
 
 Filtros (medidos en archivos reales de Fusion, ver PROJECT_LOG): los cuerpos sin la marca de tiempo de Fusion son
 auxiliares y quedan afuera (`acis_occ.convertir`); si un componente está guardado dos veces (versión vieja y
-actual) entra la versión más nueva; un cuerpo idéntico a otro no se repite (`_sin_repetidos`).
+actual) entra la versión más nueva; un cuerpo idéntico a otro no se repite (`_sin_repetidos`); y los cuerpos viejos
+del historial que Fusion deja en el bloque de un componente, que la escena del archivo no muestra, tampoco entran
+(`f3d_escena.asignar`).
 
 Posición de los componentes (P11.a): el B-rep de cada componente está en SUS coordenadas; dónde va en el ensamblaje
 lo dicen las matrices de la escena de dibujo que el archivo guarda aparte (`f3d_escena`). Cada cuerpo se ubica con la
@@ -105,21 +107,29 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
     if not partes:
         raise ErrorF3D(f"{nombre} no tiene sólidos ni superficies que se puedan leer."
                        + (f" {avisos[0]}" if avisos else ""))
+    marcos, fuera = _ubicar(datos, partes, avisos, resumen)
+    if fuera:
+        avisos.append(f"{len(fuera)} cuerpos guardados en el archivo no están en el diseño actual (versiones viejas "
+                      "del historial de Fusion que la escena del archivo no muestra): no se importan.")
+        partes = [p for k, p in enumerate(partes) if k not in fuera]
+        marcos = [m for k, m in enumerate(marcos) if k not in fuera]
     malos = sum(1 for forma, tipo, firma, _ in partes if firma[1] <= CARAS_MAX_VERIFICAR
                 and not acis_occ.es_valida(forma))
     if malos:
         avisos.append(f"{malos} de {len(partes)} cuerpos quedaron con errores de geometría (caras que tocan un polo "
                       "o un vértice de cono): se ven y se miden, pero una operación booleana con ellos puede fallar.")
-    marcos = _ubicar(datos, partes, avisos, resumen)
+    if resumen is not None:
+        resumen.update(descartados=len(fuera), sin_ubicar=sum(1 for m in marcos if m is None) if any(marcos) else 0)
     uno = [np.eye(4)]
     return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno}
             for (forma, tipo, _, bloque), m in zip(partes, marcos, strict=True)], avisos
 
 
 def _ubicar(datos, partes, avisos, resumen=None):
-    """Matrices de cada parte según la escena del archivo (`f3d_escena`): una lista de 4×4 por parte o None si no
-    se la pudo ubicar (queda donde está guardado su B-rep). Sin escena, o si ningún componente se mueve, todo None."""
-    ninguna = [None] * len(partes)
+    """(matrices, fuera) según la escena del archivo (`f3d_escena`): `matrices` = una lista de 4×4 por parte o None
+    si no se la pudo ubicar (queda donde está guardado su B-rep); sin escena, o si ningún componente se mueve, todo
+    None. `fuera` = índices de las partes que no están en el diseño actual (cuerpos viejos del historial)."""
+    ninguna = ([None] * len(partes), set())
     try:
         with zipfile.ZipFile(io.BytesIO(datos)) as z:
             info = {i.filename: i for i in z.infolist()}
@@ -138,6 +148,7 @@ def _ubicar(datos, partes, avisos, resumen=None):
                             "caja": _una_vez(lambda f=forma: tuple(np.array(p) for p in geo.caja_envolvente(f))),
                             "vol": _una_vez(lambda f=forma: geo.volumen(f))})
         matrices, visto = f3d_escena.asignar(escena, solidos)
+        fuera = set(visto.pop("descartados"))
         if resumen is not None:
             resumen.update(visto, nodos=len(escena.nodos), copias=sum(1 for n in escena.nodos if n["es_ref"]),
                            cuerpos_escena=len(escena.cuerpos),
@@ -147,12 +158,12 @@ def _ubicar(datos, partes, avisos, resumen=None):
                       "su B-rep.")
         return ninguna
     if not any(m and (len(m) > 1 or not f3d_escena.es_identidad(m[0])) for m in matrices):
-        return ninguna
-    sin = sum(1 for m in matrices if m is None)
+        return [None] * len(partes), fuera
+    sin = sum(1 for k, m in enumerate(matrices) if m is None and k not in fuera)
     if sin:
-        avisos.append(f"{sin} de {len(partes)} cuerpos no se pudieron ubicar en el ensamblaje: quedan donde está "
-                      "guardado su B-rep.")
-    return matrices
+        avisos.append(f"{sin} de {len(partes) - len(fuera)} cuerpos no se pudieron ubicar en el ensamblaje: quedan "
+                      "donde está guardado su B-rep.")
+    return matrices, fuera
 
 
 def _una_vez(funcion):

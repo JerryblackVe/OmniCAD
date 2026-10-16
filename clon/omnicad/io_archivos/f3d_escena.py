@@ -221,12 +221,19 @@ def asignar(escena, solidos):
     calcular) y dos funciones sin argumentos que se llaman solo cuando hace falta: `caja` (la caja exacta, `(lo, hi)`) y
     `vol` (el volumen en mm³).
 
-    Cada cuerpo de la escena con malla se empareja con el sólido de igual caja y volumen; los emparejamientos votan
-    qué componente de la escena es cada bloque BREP, y todos los cuerpos del bloque (también los ocultos, que no traen
-    malla) toman las matrices de ese componente. Un componente que se quedó sin bloque porque era una copia idéntica de
-    otro (el lector descarta los cuerpos repetidos) comparte el bloque de su gemelo; un bloque sin malla visible se
-    empareja por la cantidad de caras de sus cuerpos. Devuelve (matrices, info): `matrices[j]` = lista de matrices 4×4
-    de columnas en mm (una por copia) o None si no se pudo ubicar; `info` = contadores para informar."""
+    Cada cuerpo de la escena con malla se empareja con el sólido de igual caja y volumen (una superficie: igual caja
+    y cantidad de caras); los emparejamientos votan qué componente de la escena es cada bloque BREP, y todos los
+    cuerpos del bloque (también los ocultos, que no traen malla) toman las matrices de ese componente. Un componente que
+    se quedó sin bloque porque era una copia idéntica de otro (el lector descarta los cuerpos repetidos) comparte el
+    bloque de su gemelo; un bloque sin malla visible se empareja por la cantidad de caras de sus cuerpos.
+
+    Fusion guarda en el bloque de un componente también cuerpos VIEJOS de su historial (el del panel de la cartera de
+    ejemplo trae 83 cuerpos y el diseño tiene 1). Si todos los cuerpos de la escena de los componentes de un bloque ya
+    tienen su sólido, los demás sólidos de ese bloque no están en el diseño actual: van en `info["descartados"]`
+    (comprobado abriendo los ejemplos en Fusion: ninguno de esos cuerpos existe en el diseño).
+
+    Devuelve (matrices, info): `matrices[j]` = lista de matrices 4×4 de columnas en mm (una por copia) o None si no se
+    pudo ubicar (o se descarta); `info` = contadores para informar y `descartados` (índices de `solidos`)."""
     marcos = escena.marcos()
     nodos = escena.nodos
     visibles = [(i, c) for i, c in enumerate(escena.cuerpos) if c["vol_mm3"] is not None and c["nodo"] is not None]
@@ -236,12 +243,17 @@ def asignar(escena, solidos):
     es_solido = np.array([s["tipo"] == "solido" for s in solidos], bool)
     candidatos = []
     for i, c in visibles:
-        dentro = es_solido & (c["lo"] >= lo_s - TOL_CAJA_MM).all(axis=1) & (c["hi"] <= hi_s + TOL_CAJA_MM).all(axis=1)
+        dentro = (c["lo"] >= lo_s - TOL_CAJA_MM).all(axis=1) & (c["hi"] <= hi_s + TOL_CAJA_MM).all(axis=1)
         for j in np.nonzero(dentro)[0]:                              # la malla cabe en la caja holgada: se mide de cerca
+            if not es_solido[j] and solidos[j]["caras"] != c["caras"]:
+                continue
             lo, hi = solidos[j]["caja"]()
             d_lo = float(np.abs(c["lo"] - lo).max())
             d_hi = float(np.abs(c["hi"] - hi).max())
             if d_lo > TOL_CAJA_MM or d_hi > TOL_CAJA_MM:
+                continue
+            if not es_solido[j]:                                    # una superficie abierta no tiene volumen
+                candidatos.append((d_lo + d_hi, i, int(j)))
                 continue
             vol = solidos[j]["vol"]()
             dv = abs(c["vol_mm3"] - vol) / max(vol, 1e-9)
@@ -290,11 +302,33 @@ def asignar(escena, solidos):
         if len(parecidos) == 1 and len(rivales) == 1:
             bloque_de[b], nodo_de[parecidos[0]] = [parecidos[0]], b
             libres_n.remove(parecidos[0])
+    # cuerpos viejos del historial: en un bloque con algún sólido emparejado, cuyos componentes ya tienen todos sus
+    # cuerpos con malla emparejados. Un cuerpo actual puede no traer malla (la «tela» del abanico de ejemplo): un registro
+    # de la escena sin malla con la misma cantidad de caras lo salva (no todos esos registros son cuerpos: en el
+    # extrusor de ejemplo casi cada cuerpo con malla trae otro sin malla, y Fusion muestra un solo cuerpo).
+    con_par = {solidos[j]["bloque"] for j in solido_usado}
+    cubiertos = {p for p, cs in visibles_de.items() if cs <= cuerpo_usado}
+    sin_malla = {}
+    for c in escena.cuerpos:
+        if c["vol_mm3"] is None and c["nodo"] is not None:
+            caras_p = sin_malla.setdefault(nodos[c["nodo"]]["primario"], {})
+            caras_p[c["caras"]] = caras_p.get(c["caras"], 0) + 1
+    descartados = []
+    for j, s in enumerate(solidos):
+        componentes = bloque_de.get(s["bloque"], [None])
+        if j in solido_usado or s["bloque"] not in con_par or not all(p in cubiertos for p in componentes):
+            continue
+        salva = next((p for p in componentes if sin_malla.get(p, {}).get(s["caras"], 0) > 0), None)
+        if salva is None:
+            descartados.append(j)
+        else:
+            sin_malla[salva][s["caras"]] -= 1
+    fuera = set(descartados)
     matrices = []
     ubicados = copias = 0
-    for s in solidos:
+    for j, s in enumerate(solidos):
         componentes = bloque_de.get(s["bloque"])
-        if componentes is None:
+        if componentes is None or j in fuera:
             matrices.append(None)
             continue
         propias = [M for p in componentes for M in marcos[p]]
@@ -304,7 +338,8 @@ def asignar(escena, solidos):
         if sum(len(m) for m in matrices if m) > CUERPOS_COLOCADOS_MAX:
             raise ValueError("demasiados cuerpos al colocar las copias")
     return matrices, {"bloques": len(por_bloque), "bloques_ubicados": len(bloque_de), "ubicados": ubicados,
-                      "copias": copias, "componentes": len(por_nodo), "componentes_ubicados": len(nodo_de)}
+                      "copias": copias, "componentes": len(por_nodo), "componentes_ubicados": len(nodo_de),
+                      "descartados": descartados}
 
 
 def _caras_parecidas(a, b):

@@ -184,6 +184,50 @@ def test_un_bloque_que_no_aparece_en_la_escena_no_se_mueve(tmp_path):
     assert any("no se pudieron ubicar" in a for a in avisos)
 
 
+def _bloque_con_un_cuerpo_viejo():
+    """Un bloque como los de Fusion: el cubo actual y un cuerpo viejo del historial (otro cubo, a 5 cm)."""
+    m = _sab_cubo()
+    _sab_cubo(m=m, origen=(5.0, 5.0, 5.0))
+    return [(_CARPETA + "BREP.aaaa.smbh", _sab(m.r))]
+
+
+def test_un_cuerpo_viejo_del_historial_que_la_escena_no_muestra_no_entra(tmp_path):
+    """El bloque de un componente guarda también cuerpos viejos (el panel de la cartera de ejemplo: 83 cuerpos y el
+    diseño tiene 1). Si la escena ya explica todos los cuerpos del componente, los demás no están en el diseño."""
+    malla = _Malla()
+    world = _nodo(0x10, 0xC0, _matriz(), _nodo(0x11, 0xC1, _matriz(2, 0, 0), _cuerpo(malla)))
+    visto = {}
+    comps, avisos = f3d_nativo.leer_componentes(_f3d(tmp_path, world, malla, _bloque_con_un_cuerpo_viejo()), visto)
+    assert len(comps) == 1 and _centro(f3d_nativo.expandir(comps)[0][0]) == pytest.approx([25, 5, 5], abs=1e-3)
+    assert visto["descartados"] == 1 and visto["sin_ubicar"] == 0
+    assert any("no están en el diseño actual" in a for a in avisos)
+
+
+def test_un_cuerpo_actual_sin_malla_en_la_escena_no_se_descarta(tmp_path):
+    """La «tela» del abanico de ejemplo es un cuerpo del diseño sin malla en la escena: su registro (mismas caras) lo
+    salva; el cuerpo viejo no tiene registro y se descarta."""
+    malla = _Malla()
+    m = _sab_cubo()
+    _sab_cubo(m=m, origen=(5.0, 5.0, 5.0))
+    _sab_cubo(m=m, origen=(9.0, 9.0, 9.0), lado=0.5)                 # también 6 caras: el registro sin malla salva a uno
+    bloques = [(_CARPETA + "BREP.aaaa.smbh", _sab(m.r))]
+    contenido = _cuerpo(malla) + _cuerpo(malla, con_malla=False)
+    world = _nodo(0x10, 0xC0, _matriz(), _nodo(0x11, 0xC1, _matriz(2, 0, 0), contenido))
+    visto = {}
+    comps, _ = f3d_nativo.leer_componentes(_f3d(tmp_path, world, malla, bloques), visto)
+    assert len(comps) == 2 and visto["descartados"] == 1
+
+
+def test_si_la_escena_tiene_un_cuerpo_sin_su_solido_no_se_descarta_nada(tmp_path):
+    """Con un cuerpo de la escena sin explicar no se puede saber cuál sobra: queda todo, como antes."""
+    malla = _Malla()
+    dos = _cuerpo(malla) + _cuerpo(malla)                            # el segundo no tiene sólido propio
+    world = _nodo(0x10, 0xC0, _matriz(), _nodo(0x11, 0xC1, _matriz(2, 0, 0), dos))
+    visto = {}
+    comps, _ = f3d_nativo.leer_componentes(_f3d(tmp_path, world, malla, _bloque_con_un_cuerpo_viejo()), visto)
+    assert len(comps) == 2 and visto["descartados"] == 0
+
+
 def test_dos_componentes_iguales_hechos_a_mano_entran_los_dos(tmp_path):
     """Copiar/pegar un componente como nuevo deja dos bloques BREP idénticos: el lector descarta uno y la escena sigue
     teniendo dos componentes (sale de revisar `EXTRUSOR XOX.f3z`: 36 componentes en la escena y 35 bloques)."""

@@ -15,14 +15,16 @@ pytestmark = pytest.mark.skipif(not EJEMPLOS.is_dir(), reason=f"faltan los ejemp
 LENTOS = {"CARTERA GOTICA v2.f3d", "EXTRUSOR SHERPA MINI MOD v6.f3d", "EXTRUSOR XOX.f3z"}      # más de 10 s cada uno
 
 # archivo: (cuerpos guardados, cuerpos colocados, volumen colocado en mm³, componentes movidos, sin ubicar)
-# Tabla medida en la tanda «upgrades2» (privado/reportes/upgrades2-p11a-ejemplos.md).
+# Tabla medida en la tanda «upgrades3» sin los cuerpos viejos del historial que Fusion deja en cada bloque y la escena no
+# muestra (privado/reportes/upgrades3/item4_ejemplos.md). Abiertos en Fusion: Tela 21 cuerpos, Cartera 11, Sherpa 50
+# (los 2 de más son los «sin ubicar»), Corazón 10, Sin guardar 1.
 ESPERADO = {
     "(Sin guardar).f3d": (1, 1, 1005.7, 0, 0),
     "ABANICO CORAZON PLANTILLA v1.f3d": (10, 10, 68606.7, 0, 0),
-    "ABANICO TELA  CAE v1.f3d": (28, 28, 282051.2, 0, 0),
-    "CARTERA GOTICA v2.f3d": (113, 134, 1310593.7, 113, 0),
-    "EXTRUSOR SHERPA MINI MOD v6.f3d": (36, 54, 42706.7, 33, 2),
-    "EXTRUSOR XOX.f3z": (80, 119, 201534.9, 65, 3),
+    "ABANICO TELA  CAE v1.f3d": (21, 21, 265209.8, 0, 0),
+    "CARTERA GOTICA v2.f3d": (10, 11, 394734.7, 10, 0),
+    "EXTRUSOR SHERPA MINI MOD v6.f3d": (34, 52, 38635.9, 31, 2),
+    "EXTRUSOR XOX.f3z": (72, 111, 173767.6, 64, 3),
 }
 
 
