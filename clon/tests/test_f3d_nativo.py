@@ -446,3 +446,46 @@ def test_abrir_e_insertar_f3d_sin_fusion(tmp_path, monkeypatch):
     assert r["ok"] and len(r["result"]["bodies"]) == 2
     r = api.llamar(sesion, "insert_file", {"path": str(f3d)})
     assert r["ok"] and len(r["result"]["new_bodies"]) == 2
+
+
+def test_un_toro_entero_de_una_sola_cara_entra_como_solido():
+    """Así guarda Fusion un aro (la cartera de ejemplo): una cara toroidal sin aristas. Antes entraba como superficie."""
+    from types import SimpleNamespace
+
+    from OCP.BRep import BRep_Builder
+    from OCP.Geom import Geom_ToroidalSurface
+    from OCP.gp import gp_Ax3
+    from OCP.TopoDS import TopoDS_Face
+
+    from omnicad.io_archivos import acis_occ
+    cara = TopoDS_Face()
+    BRep_Builder().MakeFace(cara, Geom_ToroidalSurface(gp_Ax3(), 10.0, 1.0), 1e-7)
+    forma, tipo = acis_occ._Convertidor(SimpleNamespace(entidades=[]))._cerrar([cara], True)
+    assert tipo == "solido" and acis_occ.es_valida(forma)
+    assert g.volumen(forma) == pytest.approx(2 * math.pi ** 2 * 10.0 * 1.0 ** 2, rel=1e-3)
+
+
+def test_un_cuerpo_con_una_arista_de_cuatro_caras_entra_como_solido():
+    """Dos cubos que se tocan en una arista, en un solo shell (el soporte del abanico de ejemplo): antes superficie."""
+    from types import SimpleNamespace
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
+
+    from omnicad.io_archivos import acis_occ
+    costura = BRepBuilderAPI_Sewing(1e-6)
+    costura.SetNonManifoldMode(True)
+    for esquina in ((0, 0, 0), (10, 10, 0)):                        # comparten la arista vertical x = y = 10
+        for cara in g.caras(BRepPrimAPI_MakeBox(gp_Pnt(*esquina), 10, 10, 10).Shape()):
+            costura.Add(cara)
+    costura.Perform()
+    caras = g.caras(costura.SewedShape())
+    shell = acis_occ.TopoDS_Shell()
+    acis_occ.BRep_Builder().MakeShell(shell)
+    for cara in caras:
+        acis_occ.BRep_Builder().Add(shell, cara)
+    assert acis_occ._con_aristas_de_cuatro(shell) and not acis_occ._cerrado(shell)
+    forma, tipo = acis_occ._Convertidor(SimpleNamespace(entidades=[]))._cerrar(caras, True)
+    assert tipo == "solido" and acis_occ.es_valida(forma)
+    assert g.volumen(forma) == pytest.approx(2000.0, rel=1e-6)

@@ -15,7 +15,8 @@ Sin Qt.
 import math
 from collections import Counter
 
-from OCP.BRep import BRep_Builder
+from OCP.BOPAlgo import BOPAlgo_MakerVolume
+from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepGProp import BRepGProp
@@ -26,10 +27,11 @@ from OCP.GProp import GProp_GProps
 from OCP.gp import gp_Ax2, gp_Ax3, gp_Dir, gp_Pnt, gp_Trsf
 from OCP.ShapeFix import ShapeFix_Shape
 from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, Array1_int, Array2_double, Array2_gp_Pnt,
-                                 IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher)
+                                 IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
+                                 List_TopoDS_Shape)
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_REVERSED, TopAbs_SOLID
 from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopoDS import TopoDS_Edge, TopoDS_Face, TopoDS_Shell, TopoDS_Solid, TopoDS_Vertex, TopoDS_Wire
+from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shell, TopoDS_Solid, TopoDS_Vertex, TopoDS_Wire
 
 from .sab import Puntero, Subtipo
 
@@ -162,6 +164,8 @@ class _Convertidor:
             forma = arreglo.Shape()
         except Exception:                      # noqa: BLE001 - Standard_DomainError y otras no comparten base en OCP
             self.sin_reparar += 1              # un cuerpo que ShapeFix no puede arreglar no tumba todo el archivo
+        if completas and not _tiene_solido(forma) and _con_aristas_de_cuatro(forma):   # ya con las curvas de ShapeFix
+            forma = _volumen_no_manifold(list(_explorar(forma, TopAbs_FACE))) or forma
         if _tiene_solido(forma):
             if _volumen(forma) < 0:
                 forma.Reverse()
@@ -488,10 +492,55 @@ def _bspline_superficie(bs3):
 
 # ---------------------------------------------------------------- utilidades
 def _cerrado(shell):
-    """Cada arista (con curva) la usan exactamente dos caras: el shell encierra un volumen."""
+    """Cada arista (con curva) la usan exactamente dos caras: el shell encierra un volumen. Sin ninguna arista, cerrado
+    si cada cara es una superficie cerrada en U y en V sin bordes (un toro o una esfera enteros: así guarda Fusion un aro
+    de una sola cara; antes entraba como superficie)."""
     mapa = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
     TopExp.MapShapesAndAncestors_s(shell, TopAbs_EDGE, TopAbs_FACE, mapa)
-    return mapa.Extent() > 0 and all(mapa.FindFromIndex(k).Size() == 2 for k in range(1, mapa.Extent() + 1))
+    if mapa.Extent() == 0:
+        caras = list(_explorar(shell, TopAbs_FACE))
+        return bool(caras) and all(_superficie_cerrada(c) for c in caras)
+    return all(mapa.FindFromIndex(k).Size() == 2 for k in range(1, mapa.Extent() + 1))
+
+
+def _con_aristas_de_cuatro(shell):
+    """¿Cerrado salvo aristas que comparten 4 caras (dos partes del cuerpo que se tocan en una arista, como el soporte
+    del abanico de ejemplo)? Todas las aristas en 2 o 4 caras y al menos una en 4."""
+    mapa = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapesAndAncestors_s(shell, TopAbs_EDGE, TopAbs_FACE, mapa)
+    usos = [mapa.FindFromIndex(k).Size() for k in range(1, mapa.Extent() + 1)]
+    return bool(usos) and 4 in usos and all(u in (2, 4) for u in usos)
+
+
+def _volumen_no_manifold(caras):
+    """El sólido que encierran `caras` (BOPAlgo_MakerVolume, sin intersecar: ya se tocan donde deben), o None si no da
+    uno válido. Fusion muestra esos cuerpos como sólidos: el soporte del abanico mide 36 725,7 mm³ en los dos."""
+    mv = BOPAlgo_MakerVolume()
+    lista = List_TopoDS_Shape()
+    for cara in caras:
+        lista.Append(cara)
+    mv.SetArguments(lista)
+    mv.SetIntersect(False)
+    try:
+        mv.Perform()
+    except Exception:                          # noqa: BLE001 - las excepciones de OCP no comparten base: queda superficie
+        return None
+    forma = mv.Shape()
+    if mv.HasErrors() or forma.IsNull() or not _tiene_solido(forma) or not es_valida(forma):
+        return None
+    return forma
+
+
+def _superficie_cerrada(cara):
+    s = BRep_Tool.Surface_s(TopoDS.Face(cara))
+    return s.IsUClosed() and s.IsVClosed()
+
+
+def _explorar(forma, tipo):
+    ex = TopExp_Explorer(forma, tipo)
+    while ex.More():
+        yield ex.Current()
+        ex.Next()
 
 
 def _tiene_solido(forma):
