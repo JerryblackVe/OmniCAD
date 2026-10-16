@@ -406,7 +406,8 @@ def escribir_svg(ruta, primitivas, construccion=()):
             ini = (cx + r * math.cos(a0), cy + r * math.sin(a0))
             fin = (cx + r * math.cos(a1), cy + r * math.sin(a1))
             grande = 1 if barrido > math.pi else 0
-            d = (f"<path d=\"M {X(ini[0])} {Y(ini[1])} A {_n(r)} {_n(r)} 0 {grande} 1 {X(fin[0])} {Y(fin[1])}\"/>")
+            # El arco del boceto es antihorario y con la Y dada vuelta sigue siéndolo en pantalla: sweep-flag 0.
+            d = (f"<path d=\"M {X(ini[0])} {Y(ini[1])} A {_n(r)} {_n(r)} 0 {grande} 0 {X(fin[0])} {Y(fin[1])}\"/>")
         elif t == "elipse":
             (cx, cy), a, b, ang = p[2], p[3], p[4], p[5]
             d = (f"<ellipse cx=\"{X(cx)}\" cy=\"{Y(cy)}\" rx=\"{_n(a)}\" ry=\"{_n(b)}\" "

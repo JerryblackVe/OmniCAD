@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
                                QMainWindow, QMenu, QMessageBox, QToolButton, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION
-from ..io_archivos import dxf
+from ..io_archivos import dxf, svg_salida
 from ..nucleo import dibujo as nd
 from ..nucleo.geometria import ErrorGeometria
 from . import temas
@@ -432,6 +432,7 @@ _DIBUJOS_ICONO = {
     "cota_radial": _i_cota_radial, "cota_radio": _i_cota_radial, "cota_diametro": _i_cota_diametro,
     "cota_angular": _i_cota_angular, "texto": _i_texto, "nota": _i_nota, "tabla": _i_tabla, "globo": _i_globo,
     "exportar_pdf": lambda p: _i_exportar(p, "PDF", _ROJO), "exportar_dxf": lambda p: _i_exportar(p, "DXF", _AZUL),
+    "exportar_svg": lambda p: _i_exportar(p, "SVG", _AZUL_OSC),
     "hoja": _i_hoja,
 }
 _ICONOS = {}
@@ -470,8 +471,8 @@ GRUPOS = [  # (título, botones rápidos, menú); un ítem ("texto",) es un coma
       SEP, ("Cota de línea base",), ("Cota en cadena",), ("Corte de cota",)]),
     ("TEXTO", ["texto", "nota"], ["texto", "nota"]),
     ("TABLAS", ["tabla", "globo"], ["tabla", "globo", SEP, ("Renumerar",)]),
-    ("EXPORTAR", ["exportar_pdf", "exportar_dxf"],
-     ["exportar_pdf", "exportar_dxf", SEP, ("Exportar DWG",), ("Exportar CSV",)]),
+    ("EXPORTAR", ["exportar_pdf", "exportar_dxf", "exportar_svg"],
+     ["exportar_pdf", "exportar_dxf", "exportar_svg", SEP, ("Exportar DWG",), ("Exportar CSV",)]),
     ("HOJA", ["hoja"], ["hoja"]),
 ]
 
@@ -1470,6 +1471,7 @@ class VentanaDibujo(QMainWindow):
             ("globo", "Globo", lambda: self.usar(HerrGlobo(self))),
             ("exportar_pdf", "Exportar PDF…", self.dialogo_exportar_pdf),
             ("exportar_dxf", "Exportar hoja como DXF…", self.dialogo_exportar_dxf),
+            ("exportar_svg", "Exportar hoja como SVG…", self.dialogo_exportar_svg),
             ("hoja", "Hoja y cajetín…", self.editar_hoja),
         ]
         acciones = {}
@@ -1761,6 +1763,10 @@ class VentanaDibujo(QMainWindow):
         """Hoja a DXF (mm, una capa por tipo de línea: VISIBLE, OCULTA, CENTRO, COTAS…)."""
         return dxf.escribir_dxf(ruta, self.dibujo.primitivas(), capas=nd.CAPAS, version=version)
 
+    def exportar_svg(self, ruta):
+        """Hoja a SVG (PL9): mm, una capa por tipo de línea; las ocultas salen en trazos, como en la hoja y el DXF."""
+        return svg_salida.escribir_svg(ruta, self.dibujo.primitivas(), nd.CAPAS, self.dibujo.ancho, self.dibujo.alto)
+
     def _ruta_salida(self, filtro, extension):
         nombre = (self.dibujo.cajetin.get("titulo") or self.doc.nombre or "dibujo").strip() + extension
         base = os.path.dirname(self.doc.ruta) if getattr(self.doc, "ruta", None) else os.path.expanduser("~")
@@ -1784,6 +1790,16 @@ class VentanaDibujo(QMainWindow):
                 self.aviso(f"No se pudo guardar el DXF: {e}")
                 return
             self.indicar(f"DXF guardado: {ruta}")
+
+    def dialogo_exportar_svg(self):
+        ruta = self._ruta_salida("SVG (*.svg)", ".svg")
+        if ruta:
+            try:
+                self.exportar_svg(ruta)
+            except (OSError, ValueError) as e:
+                self.aviso(f"No se pudo guardar el SVG: {e}")
+                return
+            self.indicar(f"SVG guardado: {ruta}")
 
     # ------------------------------------------------------------ persistencia
     def a_dict(self):

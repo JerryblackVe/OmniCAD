@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-176 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+177 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -15,7 +15,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [documento](#grupo-documento) | 19 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
-| [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
+| [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 32 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
@@ -735,6 +735,7 @@ Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.
 | [`insert_svg`](#insert_svg) | sí | Inserta un dibujo SVG en un boceto (Fusion: Insertar > Insertar SVG) y lo deja como curvas editables (las curvas Bézier pasan a splines de control; círculos y arcos quedan exactos). |
 | [`insert_dxf`](#insert_dxf) | sí | Inserta la geometría 2D de un archivo DXF en un boceto (Fusion: Insertar > Insertar DXF): líneas, arcos, círculos, polilíneas, splines y textos. |
 | [`trace_image`](#trace_image) | sí | Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como contornos cerrados (logos, siluetas, dibujos en blanco y negro). |
+| [`export_hidden_line_svg`](#export_hidden_line_svg) | no | Guarda un SVG de líneas ocultas de los cuerpos vistos desde una vista estándar («Export Hidden Line» de Plasticity): las aristas visibles en línea continua gruesa y, con hidden="dashed", las tapadas en trazos finos, en milímetros reales (por scale) y con la Y hacia arriba; cada tipo de línea va en su grupo (VISIBLE, OCULTA, TANGENTE). |
 | [`export_sketch`](#export_sketch) | no | Guarda un boceto como archivo 2D para corte láser, vinilo o CNC (Fusion: Guardar como DXF); el formato sale de la extensión: .dxf o .svg. |
 | [`combine_profiles`](#combine_profiles) | sí | Une, resta o interseca perfiles (regiones cerradas) del boceto y deja el contorno resultante como curvas nuevas, sin las líneas internas: juntar letras que se pisan, restar un marco, quedarse con lo común. |
 | [`offset_profiles`](#offset_profiles) | sí | Desfase (offset) del contorno de perfiles del boceto, con agujeros incluidos: distance > 0 agranda, < 0 achica. |
@@ -931,6 +932,20 @@ Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como c
   - `name` (texto; opcional, por defecto `null`): nombre del boceto nuevo (con plane).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de cara de plane.
 - CLI: `omnicad call trace_image --doc pieza.omnicad path=…`
+
+### `export_hidden_line_svg`
+
+Guarda un SVG de líneas ocultas de los cuerpos vistos desde una vista estándar («Export Hidden Line» de Plasticity): las aristas visibles en línea continua gruesa y, con hidden="dashed", las tapadas en trazos finos, en milímetros reales (por scale) y con la Y hacia arriba; cada tipo de línea va en su grupo (VISIBLE, OCULTA, TANGENTE). Las vistas son las del ViewCube, con Z arriba y nombradas por los ejes del MUNDO (front: cámara en -Y, se ve la cara -Y con +X a la derecha). Dibuja con eliminación exacta de líneas ocultas de OpenCascade; las mallas no se proyectan.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo .svg a escribir.
+  - `view` ("front" | "back" | "top" | "bottom" | "right" | "left" | "iso"; opcional, por defecto `"front"`): vista estándar: front, back, top, bottom, right, left o iso (esquina frente-derecha-arriba).
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a dibujar; vacío = todos los sólidos y superficies.
+  - `hidden` ("dashed" | "none"; opcional, por defecto `"dashed"`): dashed = las aristas tapadas salen en trazos; none = no se dibujan.
+  - `scale` (número; opcional, por defecto `1.0`): factor de escala del dibujo (1 = 1 mm del modelo es 1 mm del SVG; 0,5 = a la mitad).
+  - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo si ya existe.
+- CLI: `omnicad call export_hidden_line_svg --doc pieza.omnicad path=…`
 
 ### `export_sketch`
 

@@ -535,6 +535,79 @@ def trace_image(sesion, path: str, plane: str | None = None, sketch: str | None 
     return _insertar(sesion, prims, plane, sketch, name, body, **transf)
 
 
+_VISTAS_SVG = {"front": "frontal", "back": "trasera", "top": "superior", "bottom": "inferior", "right": "derecha",
+               "left": "izquierda", "iso": "iso_se"}
+
+
+@herramienta("export_hidden_line_svg", "vectores",
+             "Guarda un SVG de líneas ocultas de los cuerpos vistos desde una vista estándar («Export Hidden Line» de "
+             "Plasticity): las aristas visibles en línea continua gruesa y, con hidden=\"dashed\", las tapadas en "
+             "trazos finos, en milímetros reales (por scale) y con la Y hacia arriba; cada tipo de línea va en su "
+             "grupo (VISIBLE, OCULTA, TANGENTE). Las vistas son las del ViewCube, con Z arriba y nombradas por los "
+             "ejes del MUNDO (front: cámara en -Y, se ve la cara -Y con +X a la derecha). Dibuja con eliminación "
+             "exacta de líneas ocultas de OpenCascade; las mallas no se proyectan.")
+def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "top", "bottom", "right", "left",
+                                                           "iso"] = "front",
+                           bodies: list[str] | None = None, hidden: Literal["dashed", "none"] = "dashed",
+                           scale: float = 1.0, overwrite: bool = False):
+    """
+    path: ruta del archivo .svg a escribir.
+    view: vista estándar: front, back, top, bottom, right, left o iso (esquina frente-derecha-arriba).
+    bodies: ids o nombres de los cuerpos a dibujar; vacío = todos los sólidos y superficies.
+    hidden: dashed = las aristas tapadas salen en trazos; none = no se dibujan.
+    scale: factor de escala del dibujo (1 = 1 mm del modelo es 1 mm del SVG; 0,5 = a la mitad).
+    overwrite: true para reemplazar el archivo si ya existe.
+    """
+    import numpy as np
+
+    from ..io_archivos.svg_salida import escribir_svg
+    from ..nucleo import dibujo as nd
+    from ..nucleo import geometria as geo
+    ruta = Path(str(path)).expanduser()
+    if ruta.suffix.lower() != ".svg":
+        raise error("INVALID_FORMAT", f"export_hidden_line_svg escribe .svg; llegó {ruta.suffix or '(sin extensión)'}.")
+    if not math.isfinite(scale) or scale <= 0:
+        raise error("INVALID_ARGUMENTS", "scale tiene que ser un número mayor que cero.")
+    if ruta.exists() and not overwrite:
+        raise error("FILE_EXISTS", f"Ya existe el archivo: {ruta}")
+    if not ruta.parent.is_dir():
+        raise error("FILE_NOT_FOUND", f"No existe la carpeta: {ruta.parent}")
+    cuerpos = [sesion.cuerpo(b) for b in bodies] if bodies else list(sesion.doc.estado_final.cuerpos.values())
+    mallas = [c for c in cuerpos if getattr(c, "tipo", "solido") == "malla"]
+    if mallas and bodies:
+        raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(mallas[0])}» es una malla: no se proyecta.")
+    formas = [c.forma for c in cuerpos if getattr(c, "tipo", "solido") != "malla"]
+    if not formas:
+        raise error("NOTHING_TO_EXPORT", "No hay cuerpos para dibujar.")
+    try:
+        proy = nd.proyectar(geo.compuesto(formas) if len(formas) > 1 else formas[0],
+                            nd.marco_orientacion(_VISTAS_SVG[view]))
+    except geo.ErrorGeometria as e:
+        raise error("OPERATION_FAILED", str(e)) from e
+    capas = {"VISIBLE": proy["visibles"] + proy["silueta"], "TANGENTE": proy["tangentes"],
+             "OCULTA": (proy["ocultas"] + proy["silueta_oculta"]) if hidden == "dashed" else []}
+    prims = []
+    for capa, lineas in capas.items():
+        for pl in lineas:
+            pl = np.asarray(pl, float) * scale
+            prims.append((capa, ("linea", tuple(pl[0]), tuple(pl[1])) if len(pl) == 2
+                          else ("polilinea", [tuple(q) for q in pl], False)))
+    if not prims:
+        raise error("NOTHING_TO_EXPORT", "La vista no deja ninguna línea para guardar.")
+    try:
+        archivo = escribir_svg(ruta, prims, nd.CAPAS)
+    except PermissionError as e:
+        raise error("PERMISSION_DENIED", str(e)) from e
+    except OSError as e:
+        raise error("FILE_ERROR", str(e)) from e
+    todas = [q for _c, p in prims for q in (p[1:3] if p[0] == "linea" else p[1])]
+    return {"path": str(ruta.resolve()), "view": view, "visible_lines": len(capas["VISIBLE"]),
+            "hidden_lines": len(capas["OCULTA"]), "tangent_lines": len(capas["TANGENTE"]), "scale": scale,
+            "size_mm": [round(max(q[0] for q in todas) - min(q[0] for q in todas) + 10.0, 4),
+                        round(max(q[1] for q in todas) - min(q[1] for q in todas) + 10.0, 4)],
+            "size_bytes": archivo.stat().st_size}
+
+
 @herramienta("export_sketch", "vectores",
              "Guarda un boceto como archivo 2D para corte láser, vinilo o CNC (Fusion: Guardar como DXF); el formato "
              "sale de la extensión: .dxf o .svg. Las letras del texto salen como curvas. En SVG el dibujo queda con "
