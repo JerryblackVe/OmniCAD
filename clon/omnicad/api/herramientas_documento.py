@@ -247,7 +247,7 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
              "se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya "
              "ubicados. Los cuerpos que no se pueden ubicar quedan donde están guardados (unplaced_bodies); los "
              "cuerpos viejos del historial que Fusion deja en el archivo y la escena no muestra no se importan "
-             "(discarded_bodies).")
+             "(discarded_bodies). components[].name es el nombre del componente, si el archivo lo dice.")
 def inspect_f3d(sesion, path: str):
     """
     path: ruta del archivo .f3d o .f3z.
@@ -272,7 +272,8 @@ def inspect_f3d(sesion, path: str):
         movido = any(not np.allclose(M, np.eye(4), atol=1e-6) for M in marcos)
         guardado += vol
         colocado += vol * len(marcos)
-        filas.append({"block": c["bloque"], "type": c["tipo"], "volume_mm3": _r(vol), "copies": len(marcos),
+        filas.append({"block": c["bloque"], "name": c.get("nombre"), "type": c["tipo"], "volume_mm3": _r(vol),
+                      "copies": len(marcos),
                       "moved": movido, "positions_mm": [[_r(x) for x in M[:3, 3]] for M in marcos],
                       "rotated": any(not np.allclose(M[:3, :3], np.eye(3), atol=1e-6) for M in marcos)})
     return {"path": str(ruta), "bodies_stored": len(componentes), "bodies_placed": sum(f["copies"] for f in filas),

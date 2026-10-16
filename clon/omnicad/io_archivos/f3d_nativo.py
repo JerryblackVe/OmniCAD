@@ -18,13 +18,16 @@ lo dicen las matrices de la escena de dibujo que el archivo guarda aparte (`f3d_
 matriz de su componente, y un componente repetido entra una vez por copia, como instancias que comparten la geometría
 (`solidos_crear.instanciar`). Lo que no se puede ubicar queda donde está guardado, con un aviso.
 
-Qué NO trae (vive en el flujo de diseño propietario de Fusion, que no se lee): el historial, los parámetros y los
-nombres de los cuerpos. Un .f3z es un paquete con varios .f3d: se lee el diseño principal (el que nadie referencia).
+Nombres (P11.a d): el flujo de diseño (`FusionDesignSegmentType1/BulkStream.dat`, propietario) escribe el nombre
+del componente en el registro que precede al texto «BREP.<guid>.smbh» de su bloque; si lo que precede no es un nombre
+(un material, un GUID, el de un boceto: así guarda Fusion los componentes que vienen de un STEP), no se inventa uno.
+Qué NO trae: el historial, los parámetros y los nombres de los cuerpos. Un .f3z es un paquete con varios .f3d: se lee el diseño principal (el que nadie referencia).
 
 Sin Qt.
 """
 import io
 import json
+import re
 import struct
 import zipfile
 from pathlib import Path
@@ -92,7 +95,7 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
     bloques = [i for i in z.infolist() if CARPETA_BREPS in i.filename and i.filename.lower().endswith(".smbh")]
     if not bloques:
         raise ErrorF3D(f"{nombre} no trae geometría 3D (el diseño está vacío o solo tiene bocetos).")
-    leidos, avisos = [], []
+    leidos, archivos, avisos = [], [], []
     for k, info in enumerate(sorted(bloques, key=lambda i: i.filename), 1):
         try:
             archivo = sab.leer(miembro(datos, info))
@@ -103,6 +106,7 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
         avisos += a
         if p:
             leidos.append([(forma, tipo, _firma(forma, tipo), marca) for forma, tipo, marca in p])
+            archivos.append(info.filename.rsplit("/", 1)[-1])
     partes = _sin_repetidos(leidos)
     if not partes:
         raise ErrorF3D(f"{nombre} no tiene sólidos ni superficies que se puedan leer."
@@ -121,8 +125,38 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
     if resumen is not None:
         resumen.update(descartados=len(fuera), sin_ubicar=sum(1 for m in marcos if m is None) if any(marcos) else 0)
     uno = [np.eye(4)]
-    return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno}
+    nombres = _nombres_de_componentes(datos, archivos)
+    return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno, "nombre": nombres.get(archivos[bloque])}
             for (forma, tipo, _, bloque), m in zip(partes, marcos, strict=True)], avisos
+
+
+_TEXTO = re.compile(rb"(?:[\x20-\x7e\xa0-\xff]\x00){1,200}")     # caracteres UTF-16; el largo va en los 4 bytes previos
+_NO_ES_NOMBRE = re.compile(r"[0-9A-Fa-f-]{36}.*|BREP\..*|Prism.*|\d+_\d+|\d+")
+_VENTANA_NOMBRE = 2000      # bytes entre el nombre y el texto del bloque (reales: 288 a 1324)
+
+
+def _nombres_de_componentes(datos, archivos):
+    """{archivo BREP.*.smbh: nombre de su componente} según el flujo de diseño. Lo que no se encuentra no está."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(datos)) as z:
+            info = next((i for i in z.infolist() if i.filename.endswith("FusionDesignSegmentType1/BulkStream.dat")), None)
+        if info is None:
+            return {}
+        flujo = miembro(datos, info)
+    except (ErrorF3D, zstd_puro.ErrorZstd, zipfile.BadZipFile):
+        return {}
+    nombres = {}
+    for archivo in archivos:
+        q = flujo.find(archivo.encode("utf-16-le"))
+        if q < 4:
+            continue
+        previo = None
+        for m in _TEXTO.finditer(flujo, max(4, q - 4 - _VENTANA_NOMBRE), q - 4):
+            if struct.unpack_from("<I", flujo, m.start() - 4)[0] == len(m.group()) // 2:
+                previo = m.group().decode("utf-16-le")
+        if previo and not _NO_ES_NOMBRE.fullmatch(previo.strip()) and previo.strip():
+            nombres[archivo] = previo.strip()
+    return nombres
 
 
 def _ubicar(datos, partes, avisos, resumen=None):

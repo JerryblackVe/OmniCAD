@@ -123,13 +123,23 @@ def _operacion_f3d(ruta, op_id, nombre, avisos):
         raise ErrorAbrir(str(e)) from None
     avisos += extra
     varios = sum(len(c["marcos"]) for c in componentes) > 1
+    cuerpos_del = {}                                  # nombre de componente → cuerpos que lo llevan (para numerarlos)
+    for c in componentes:
+        if c.get("nombre"):
+            cuerpos_del.setdefault(c["nombre"], []).append(c)
     cuerpos = []
     for c in componentes:
         base = None
-        for M in c["marcos"]:                         # una copia por ocurrencia: la primera lleva el B-rep, las demás lo citan
+        hermanos = cuerpos_del.get(c.get("nombre"), [])
+        for n, M in enumerate(c["marcos"], 1):       # una copia por ocurrencia: la primera lleva el B-rep, las demás lo citan
             k = len(cuerpos) + 1
-            d = {"id": f"{op_id}.c{k}", "nombre": ruta.stem + (f" ({k})" if varios else ""), "tipo": c["tipo"],
-                 "apariencia": None}
+            if hermanos:                              # «Panel», «Pernos (2)», «Panel:2» (la copia, como en Fusion)
+                orden = next(i for i, h in enumerate(hermanos, 1) if h is c)
+                nombre_c = c["nombre"] + (f" ({orden})" if len(hermanos) > 1 else "")
+                nombre_c += f":{n}" if len(c["marcos"]) > 1 else ""
+            else:
+                nombre_c = ruta.stem + (f" ({k})" if varios else "")
+            d = {"id": f"{op_id}.c{k}", "nombre": nombre_c, "tipo": c["tipo"], "apariencia": None}
             if base is None:
                 d["brep"], base = intercambio.brep_a_texto(c["forma"]), d["id"]
             else:

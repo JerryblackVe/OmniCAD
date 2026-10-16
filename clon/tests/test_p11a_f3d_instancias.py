@@ -408,3 +408,47 @@ def test_la_escena_mide_el_centro_de_masa_de_la_malla():
     malla = _Malla()
     e = f3d_escena.Escena(_nodo(0x10, 0xC0, _matriz(), _cuerpo(malla)), bytes(malla.datos))
     assert e.cuerpos[0]["centro"] == pytest.approx([5, 5, 5], abs=1e-6)       # el cubo de 1 cm, en mm
+
+
+# ---------------------------------------------------------------- nombres (upgrades3, P11.a d)
+_FLUJO = "FusionAssetName[Active]/FusionDesignSegmentType1/BulkStream.dat"
+
+
+def _con_flujo(tmp_path, previo, entre=None):
+    """Ensamble con el flujo de diseño: `previo` es el texto que Fusion escribió antes del bloque BREP.aaaa.smbh (y
+    `entre`, otro texto en medio)."""
+    malla = _Malla()
+    cubo = _nodo(0x11, 0xC1, _matriz(2, 0, 0), _cuerpo(malla))
+    copia = _nodo(0x12, 0xC1, _matriz(0, 3, 0, giro_z=90))
+    flujo = (b"\x00" * 30 + _s(previo) + b"\x00\x00\x03\x00\x00\x00370" + b"\x00" * 300
+             + (_s(entre) + b"\x00" * 40 if entre else b"") + _s("BREP.aaaa.smbh"))
+    return _zip_f3d(tmp_path / "con_nombre.f3d", [
+        (_CARPETA + "BREP.aaaa.smbh", _sab(_sab_cubo().r)),
+        ("FusionAssetName[Active]/" + _ESCENA + "world", _nodo(0x10, 0xC0, _matriz(), cubo + copia)),
+        ("FusionAssetName[Active]/" + _ESCENA + "Fusion_mesh_000", bytes(malla.datos)), (_FLUJO, flujo)])
+
+
+def test_el_nombre_del_componente_sale_del_flujo_de_diseno(tmp_path):
+    """Como en la cartera de ejemplo («Pernos», «Panel», «Asa (1)»…: los de Fusion): el registro anterior al bloque."""
+    f3d = _con_flujo(tmp_path, "Perno M3")
+    comps, _ = f3d_nativo.leer_componentes(f3d)
+    assert comps[0]["nombre"] == "Perno M3"
+    doc, _ = documento_desde_archivo(f3d)
+    assert [c.nombre for c in doc.estado_final.cuerpos.values()] == ["Perno M3:1", "Perno M3:2"]
+    r = api.llamar(api.Sesion(), "inspect_f3d", {"path": str(f3d)})
+    assert r["ok"] and r["result"]["components"][0]["name"] == "Perno M3"
+
+
+@pytest.mark.parametrize("previo", ["PrismOpaque", "00000000-0000-0000-0000-000000000000", "BREP.bbbb.smb", "1_1513"])
+def test_si_lo_que_precede_no_es_un_nombre_no_se_inventa(tmp_path, previo):
+    """Así guarda Fusion los componentes que vienen de un STEP (el extrusor de ejemplo): material, GUID o boceto."""
+    comps, _ = f3d_nativo.leer_componentes(_con_flujo(tmp_path, previo))
+    assert comps[0]["nombre"] is None
+    doc, _ = documento_desde_archivo(_con_flujo(tmp_path, previo))
+    assert all(c.nombre.startswith("con_nombre") for c in doc.estado_final.cuerpos.values())
+
+
+def test_un_texto_separado_del_bloque_por_el_de_un_boceto_no_es_su_nombre(tmp_path):
+    """El extrusor de ejemplo: «CrearComponentes» (una operación), el BREP.*.smb del boceto y recién el bloque."""
+    comps, _ = f3d_nativo.leer_componentes(_con_flujo(tmp_path, "CrearComponentes", entre="BREP.cccc.smb"))
+    assert comps[0]["nombre"] is None
