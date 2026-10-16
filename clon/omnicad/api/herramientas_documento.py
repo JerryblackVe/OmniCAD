@@ -544,3 +544,41 @@ def rename(sesion, target: str, new_name: str, kind: Literal["auto", "feature", 
     anterior = sesion.nombre_cuerpo(c)
     sesion.doc.set_propiedad([c.id], "nombre", nuevo)
     return {"kind": "body", "id": c.id, "old_name": anterior, "new_name": nuevo}
+
+
+# ---------------------------------------------------------------- recuperación (P21)
+@herramienta("list_recoverable_documents", "documento", "Lista los autoguardados pendientes de recuperar "
+             "(cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan "
+             "`recent`, el autoguardado más nuevo de cada uno de esos proyectos.", modifica=False)
+def list_recoverable_documents(sesion, recent: list[str] | None = None):
+    """
+    recent: rutas de proyectos propios que también revisar; vacío = solo los «Sin título» huérfanos.
+    """
+    from ..io_archivos import proyecto
+    return {"pending": proyecto.pendientes_de_recuperacion(recent or [])}
+
+
+@herramienta("recover_document", "documento", "Recupera una copia de autoguardado y la deja como documento "
+             "activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin "
+             "ruta; con project, guardar a mano pisa el proyecto original. Si el actual tiene cambios sin "
+             "guardar falla con UNSAVED_CHANGES, salvo discard=true.", modifica=True, transaccion=False)
+def recover_document(sesion, path: str, project: str | None = None, discard: bool = False):
+    """
+    path: ruta de la copia de autoguardado (de list_recoverable_documents).
+    project: ruta del proyecto original si la copia era de un proyecto con ruta; vacío = huérfano.
+    discard: true para descartar los cambios sin guardar del documento actual.
+    """
+    from ..io_archivos import proyecto
+    if not Path(path).is_file():
+        raise error("FILE_NOT_FOUND", f"No existe el autoguardado: {path}")
+    if project is not None and not Path(project).is_file():
+        raise error("FILE_NOT_FOUND", f"No existe el proyecto original: {project}")
+    _exigir_sin_cambios(sesion, discard)
+    try:
+        sesion.abrir(path)
+    except (proyecto.ErrorProyecto, OSError, ValueError) as e:
+        raise error("OPERATION_FAILED", f"No se pudo recuperar el autoguardado: {e}") from None
+    sesion.doc.ruta = project
+    sesion.doc.nombre = Path(project).stem if project else "Recuperado"
+    sesion.doc.modificado = True
+    return _resumen(sesion)

@@ -242,6 +242,34 @@ def autoguardado_pendiente(ruta_proyecto=None):
     return pendientes[0] if pendientes else None
 
 
+def pendientes_de_recuperacion(recientes=()):
+    """Lista del diálogo «Documentos recuperados» (pendiente 21, como Fusion 360), del más nuevo al más
+    viejo: los autoguardados huérfanos (documentos «Sin título») y, de cada proyecto dado en
+    ``recientes``, el autoguardado más nuevo que el proyecto. Cada fila trae el nombre a mostrar, la
+    fecha de recuperación, la carpeta de la copia, la copia misma (``backup``) y el proyecto original
+    (``project``, None para huérfanos). Pura: solo mira archivos."""
+    filas = {}
+    for copia in autoguardados_pendientes():
+        filas.setdefault(copia, {"backup": str(copia), "name": "Sin título", "project": None})
+    for ruta in recientes:
+        try:
+            copia = autoguardado_pendiente(ruta)
+        except OSError:
+            continue                     # un reciente borrado o inaccesible no puede frenar la lista
+        if copia is not None:
+            filas.setdefault(copia, {"backup": str(copia), "name": Path(ruta).stem, "project": str(ruta)})
+    resultado = []
+    for copia, fila in filas.items():
+        try:
+            mtime = copia.stat().st_mtime
+        except OSError:
+            continue
+        resultado.append({**fila,
+                          "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"),
+                          "folder": str(copia.parent)})
+    return sorted(resultado, key=lambda fila: fila["date"], reverse=True)
+
+
 def borrar_autoguardado(doc):
     destino = ruta_autoguardado(doc)
     if destino.exists():

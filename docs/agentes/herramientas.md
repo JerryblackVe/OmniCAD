@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-169 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+171 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 15 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 17 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -45,6 +45,8 @@ Archivo, escena, timeline y deshacer.
 | [`suppress_feature`](#suppress_feature) | sí | Suprime o reactiva un paso del timeline (suprimido = no se calcula). |
 | [`delete_feature`](#delete_feature) | sí | Borra un paso del timeline. |
 | [`rename`](#rename) | sí | Renombra un paso del timeline o un cuerpo. |
+| [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
+| [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
 
@@ -175,6 +177,26 @@ Renombra un paso del timeline o un cuerpo.
   - `new_name` (texto; obligatorio): nombre nuevo (no vacío).
   - `kind` ("auto" | "feature" | "body"; opcional, por defecto `"auto"`): "feature" o "body" para desambiguar; "auto" busca primero entre los pasos y después entre los cuerpos.
 - CLI: `omnicad call rename --doc pieza.omnicad target=… new_name=…`
+
+### `list_recoverable_documents`
+
+Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `recent` (lista de texto o null; opcional, por defecto `null`): rutas de proyectos propios que también revisar; vacío = solo los «Sin título» huérfanos.
+- CLI: `omnicad call list_recoverable_documents --doc pieza.omnicad`
+
+### `recover_document`
+
+Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta de la copia de autoguardado (de list_recoverable_documents).
+  - `project` (texto; opcional, por defecto `null`): ruta del proyecto original si la copia era de un proyecto con ruta; vacío = huérfano.
+  - `discard` (true/false; opcional, por defecto `false`): true para descartar los cambios sin guardar del documento actual.
+- CLI: `omnicad call recover_document --doc pieza.omnicad path=…`
 
 ### `set_marker`
 

@@ -8,9 +8,11 @@ Para editar un paso existente se usa el estado del modelo ANTERIOR a ese paso, c
 al editar una feature del timeline.
 """
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
-                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
-                               QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
+                               QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
+                               QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
+                               QVBoxLayout)
+from pathlib import Path
 
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros, validar_nombre
@@ -334,3 +336,74 @@ class DialogoParametros(QDialog):
             QMessageBox.warning(self, "Parámetros inválidos", self.error.text())
             return
         self.accept()
+
+
+class DialogoRecuperados(QDialog):
+    """«Documentos recuperados» al arrancar (pendiente 21, como el de Fusion 360): tabla con el nombre
+    del archivo, la fecha de recuperación y la carpeta de cada copia de autoguardado, y los botones
+    Abrir, Suprimir y Cerrar. Suprimir borra SOLO la copia de autoguardado, nunca el proyecto guardado.
+    Tras exec(), ``resultado`` es la fila elegida con Abrir (None si cerró); las suprimidas ya se
+    borraron de disco."""
+
+    def __init__(self, filas, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Documentos recuperados")
+        self.setModal(True)
+        self.resultado = None
+        self._filas = list(filas)
+        v = QVBoxLayout(self)
+        v.addWidget(QLabel("Se encontraron copias de autoguardado con cambios que no se llegaron a guardar."))
+        self.tabla = QTableWidget(len(self._filas), 3)
+        self.tabla.setHorizontalHeaderLabels(["Archivo", "Fecha de recuperación", "Carpeta"])
+        self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabla.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.tabla.horizontalHeader().setStretchLastSection(True)
+        for i, fila in enumerate(self._filas):
+            for c, valor in enumerate((fila["name"], fila["date"], fila["folder"])):
+                self.tabla.setItem(i, c, QTableWidgetItem(valor))
+        self.tabla.selectRow(0)
+        v.addWidget(self.tabla, 1)
+        nota = QLabel("Para acceder más tarde, seleccione Archivo › Recuperar documentos.")
+        nota.setWordWrap(True)
+        v.addWidget(nota)
+        botones = QHBoxLayout()
+        self.b_abrir = QPushButton("Abrir")
+        self.b_abrir.setDefault(True)
+        self.b_suprimir = QPushButton("Suprimir")
+        b_cerrar = QPushButton("Cerrar")
+        botones.addStretch(1)
+        botones.addWidget(self.b_abrir)
+        botones.addWidget(self.b_suprimir)
+        botones.addWidget(b_cerrar)
+        v.addLayout(botones)
+        self.b_abrir.clicked.connect(self._abrir)
+        self.b_suprimir.clicked.connect(self._suprimir)
+        b_cerrar.clicked.connect(self.reject)
+        self.tabla.itemDoubleClicked.connect(lambda _item: self._abrir())
+
+    def _seleccion(self):
+        fila = self.tabla.currentRow()
+        return self._filas[fila] if 0 <= fila < len(self._filas) else None
+
+    def _abrir(self):
+        fila = self._seleccion()
+        if fila is not None:
+            self.resultado = fila
+            self.accept()
+
+    def _suprimir(self):
+        """Borra la copia de autoguardado elegida (solo la copia) y la saca de la tabla."""
+        fila = self._seleccion()
+        if fila is None:
+            return
+        try:
+            Path(fila["backup"]).unlink(missing_ok=True)
+        except OSError as e:
+            QMessageBox.critical(self, "No se pudo suprimir", str(e))
+            return
+        indice = self._filas.index(fila)
+        self._filas.remove(fila)
+        self.tabla.removeRow(indice)
+        if not self._filas:
+            self.reject()                  # no queda nada por recuperar: el diálogo se cierra solo

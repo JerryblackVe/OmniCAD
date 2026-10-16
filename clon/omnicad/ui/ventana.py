@@ -40,7 +40,7 @@ from .medidas import NOMBRES as _NOMBRES_ENTIDAD
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
-from .dialogos import DialogoParametros, DialogoRejilla
+from .dialogos import DialogoParametros, DialogoRecuperados, DialogoRejilla
 from .iconos import icono
 from .modo_boceto import ModoBoceto
 from .navegador import ORIGEN, Navegador
@@ -263,7 +263,9 @@ class VentanaPrincipal(QMainWindow):
         A = self._accion
         A("nuevo", "Nuevo diseño", self.nuevo, "Ctrl+N")
         A("abrir", "Abrir…", self.abrir, "Ctrl+O", "Abrir un proyecto .omnicad")
-        A("recuperados", "Abrir documentos recuperados", self.verificar_autoguardado_huerfano)
+        A("recuperados", "Recuperar documentos…", self.verificar_autoguardado_huerfano,
+          "Abre «Documentos recuperados»: las copias de autoguardado con cambios sin guardar, con su "
+          "fecha y carpeta; se pueden abrir o suprimir (la copia, nunca el proyecto).")
         A("guardar", "Guardar", self.guardar, "Ctrl+S", "Guardar el proyecto", "guardar")
         A("guardar_como", "Guardar como…", self.guardar_como, "Ctrl+Shift+S")
         A("exportar", "Exportar…", lambda: self.exportar(None), None,
@@ -397,7 +399,7 @@ class VentanaPrincipal(QMainWindow):
         m.addSeparator()
         m.addAction(self.acciones["salir"])
         m.aboutToShow.connect(lambda: self.acciones["recuperados"].setEnabled(
-            proyecto.autoguardado_pendiente(None) is not None))
+            bool(proyecto.pendientes_de_recuperacion(self.prefs.recientes()))))
         self.menu_archivo = m
         archivo = QToolButton()
         archivo.setIcon(icono("archivo"))
@@ -2060,20 +2062,28 @@ class VentanaPrincipal(QMainWindow):
             log.warning("Autoguardado falló: %s", e)
 
     def verificar_autoguardado_huerfano(self):
-        pendientes = proyecto.autoguardados_pendientes()          # B-22: uno por «Sin título», ya no se pisan
-        for pendiente in pendientes:
-            if QMessageBox.question(self, "Recuperar trabajo",
-                                    f"Se encontró un autoguardado de un proyecto sin guardar ({pendiente.name}). "
-                                    "¿Recuperarlo? (Si respondés No, se descarta.)") != QMessageBox.Yes:
-                pendiente.unlink(missing_ok=True)
-                continue
-            try:
-                doc = proyecto.abrir(pendiente)
-                doc.ruta, doc.nombre, doc.modificado = None, "Recuperado", True
-                self.set_documento(doc)
-                return
-            except (proyecto.ErrorProyecto, OSError, ValueError) as e:
-                QMessageBox.critical(self, "No se pudo recuperar", str(e))
+        """«Documentos recuperados» al arrancar y desde Archivo (pendiente 21, como Fusion 360): la
+        tabla con TODAS las copias de autoguardado pendientes (huérfanos y de proyectos recientes), con
+        nombre, fecha de recuperación y carpeta; botones Abrir, Suprimir y Cerrar. Sin pendientes no
+        abre nada. Las copias que quedan siguen accesibles por Archivo › Recuperar documentos."""
+        filas = proyecto.pendientes_de_recuperacion(self.prefs.recientes())
+        if not filas:
+            return
+        caja = DialogoRecuperados(filas, self)
+        caja.exec()
+        fila = caja.resultado
+        if fila is None:
+            return
+        try:
+            doc = proyecto.abrir(fila["backup"])
+        except (proyecto.ErrorProyecto, OSError, ValueError) as e:
+            QMessageBox.critical(self, "No se pudo recuperar", str(e))
+            return
+        # Huérfano: documento «Recuperado» sin ruta. Con proyecto original: guardar a mano pisa SU archivo.
+        doc.ruta = fila.get("project")
+        doc.nombre = Path(fila["project"]).stem if fila.get("project") else "Recuperado"
+        doc.modificado = True
+        self.set_documento(doc)
 
     def exportar(self, formato_salida=None):
         cuerpos = list(self.doc.estado_final.cuerpos.values())
