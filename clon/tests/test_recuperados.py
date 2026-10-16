@@ -85,23 +85,24 @@ def test_dialogo_tabla_suprimir_y_abrir(app_qt, carpeta_auto):
     from omnicad.ui.dialogos import DialogoRecuperados
     copia1 = carpeta_auto / "sin_titulo_1.autoguardado.omnicad"
     copia2 = carpeta_auto / "sin_titulo_2.autoguardado.omnicad"
-    for copia in (copia1, copia2):
-        _crear_autoguardado(Documento(), copia)
+    _crear_autoguardado(Documento(), copia1, hace_minutos=30)   # la vieja
+    _crear_autoguardado(Documento(), copia2)                   # la nueva (queda primera en la tabla)
     filas = proyecto.pendientes_de_recuperacion()
+    assert [f["backup"] for f in filas] == [str(copia2), str(copia1)]
     caja = DialogoRecuperados(filas)
     assert caja.tabla.rowCount() == 2
     assert caja.tabla.item(0, 1).text() == filas[0]["date"]          # fecha de recuperación a la vista
     assert caja.resultado is None
-    # Suprimir la primera: borra SOLO esa copia y queda la otra en la tabla
+    # Suprimir la primera (la MÁS NUEVA): borra SOLO esa copia y queda la otra en la tabla
     caja.tabla.selectRow(0)
     caja._suprimir()
-    assert not copia1.exists() and copia2.exists()
+    assert copia1.exists() and not copia2.exists()
     assert caja.tabla.rowCount() == 1 and caja.b_abrir.isEnabled()
     # Abrir la que queda: el resultado es su fila
     caja.tabla.selectRow(0)
     caja._abrir()
-    assert caja.resultado is not None and caja.resultado["backup"] == str(copia2)
-    assert copia2.exists()                                          # abrir NO borra la copia
+    assert caja.resultado is not None and caja.resultado["backup"] == str(copia1)
+    assert copia1.exists()                                          # abrir NO borra la copia
 
 
 # ---------------------------------------------------------------- ventana
