@@ -455,6 +455,27 @@ class OpAlinear(Operacion):
                 c.forma = nueva
 
 
+class OpQuitarEmpalmes(Operacion):
+    """«Quitar empalmes» (PL6, Remove Fillets de Plasticity): quita de cada cuerpo TODOS los
+    redondeos con radio <= radio_max (defeaturing, caras cilíndricas con arista recta contra una cara
+    plana: los agujeros taladrados no entran) y une la topología que queda."""
+    TIPO, ETIQUETA, ICONO = "quitar_empalmes", "Quitar empalmes", "⌒"
+    PARAMS = {"cuerpos": [], "radio_max": "5 mm"}
+    EXPRESIONES = ("radio_max",)
+
+    def dependencias(self):
+        return _deps_objetivo(self.p["cuerpos"]) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        p = self.p
+        r = ctx.evaluar(p["radio_max"])
+        for cid in p["cuerpos"]:
+            c = estado.cuerpo(cid)
+            c.forma, radios = _sm().quitar_empalmes(c.forma, r)
+            ctx.aviso(f"{c.nombre}: se quitaron {sum(n for _r, n in radios)} empalme(s) con radio "
+                      + ", ".join(f"{radio:g} mm ×{n}" for radio, n in radios))
+
+
 class OpBorrarCaras(Operacion):
     """Borrar caras (Suprimir de Fusion sobre caras [SLD-DELETE]): quita caras y cierra el hueco
     extendiendo las vecinas (defeaturing)."""
@@ -472,4 +493,4 @@ class OpBorrarCaras(Operacion):
 
 registrar_operacion(OpMover, OpQuitar, OpEmpalme, OpChaflan, OpVaciado, OpDesmoldeo, OpEscala, OpDesfaseCara,
                     OpReemplazarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
-                    OpApoyar)
+                    OpApoyar, OpQuitarEmpalmes)

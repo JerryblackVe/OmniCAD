@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-172 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+173 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 16 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 29 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 30 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -1038,6 +1038,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`fillet`](#fillet) | sí | Redondea aristas (empalme de radio constante). |
 | [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
+| [`remove_fillets`](#remove_fillets) | sí | Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius («Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). |
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
 | [`create_thread`](#create_thread) | sí | Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. |
 | [`draft`](#draft) | sí | Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. |
@@ -1338,6 +1339,16 @@ Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quita
   - `thickness` (número o expresión; obligatorio): espesor de pared en mm (número o expresión con parámetros).
   - `direction` ("inside" | "outside" | "both"; opcional, por defecto `"inside"`): "inside", "outside" o "both".
 - CLI: `omnicad call shell --doc pieza.omnicad body=… faces=… thickness=…`
+
+### `remove_fillets`
+
+Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius («Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). No toca los agujeros taladrados. Deja un paso editable en el timeline; si no hay empalmes con ese filtro, falla con OPERATION_FAILED y el documento queda igual.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto; obligatorio): id o nombre del cuerpo al que sacarle los empalmes.
+  - `max_radius` (número o expresión; obligatorio): radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
+- CLI: `omnicad call remove_fillets --doc pieza.omnicad body=… max_radius=…`
 
 ### `create_hole`
 

@@ -516,6 +516,31 @@ def _multitransformar(p):
     _caja_en(p, q, 11, 8, 0, 5, 5, 5, FANTASMA, BORDE_FANTASMA)
 
 
+def _quitar_empalmes(p):
+    """PL6 (Remove Fillets de Plasticity): el bloque redondeado (fantasma, se va) y el mismo bloque
+    con la esquina viva, que es lo que queda."""
+    redonda = QPainterPath()
+    redonda.moveTo(11, 5)
+    redonda.lineTo(23, 5)
+    redonda.lineTo(23, 23)
+    redonda.lineTo(5, 23)
+    redonda.lineTo(5, 11)
+    redonda.arcTo(QRectF(5, 5, 12, 12), 180, -90)          # la esquina que se quita
+    redonda.closeSubpath()
+    p.setPen(QPen(BORDE_FANTASMA, 1.0, Qt.PenStyle.DashLine))
+    p.setBrush(QBrush(FANTASMA[0]))
+    p.drawPath(redonda)
+    viva = QPainterPath()
+    viva.moveTo(9, 9)
+    viva.lineTo(19, 9)
+    viva.lineTo(19, 19)
+    viva.lineTo(9, 19)
+    viva.closeSubpath()
+    p.setPen(QPen(BORDE_METAL, 1.0))
+    p.setBrush(QBrush(METAL[1]))
+    p.drawPath(viva)
+
+
 def _engrosar(p):
     arriba = QPainterPath(QPointF(3, 12))
     arriba.cubicTo(10, 4, 17, 16, 24, 8)
@@ -2046,6 +2071,7 @@ DIBUJOS_EXTRA = {
     "escala_3d": _escala_3d, "desfase_cara": _desfase_cara, "reemplazar_cara": _reemplazar_cara,
     "dividir_cara": _dividir_cara, "dividir_cuerpo": _dividir_cuerpo, "division_silueta": _division_silueta,
     "mover_copiar": _mover_copiar, "alinear": _alinear, "suprimir": _suprimir, "quitar": _quitar,
+    "quitar_empalmes": _quitar_empalmes,
     "material_fisico": _material_fisico, "aspecto": _aspecto, "administrar_materiales": _administrar_materiales,
     "lista_materiales": _lista_materiales,
     # construir

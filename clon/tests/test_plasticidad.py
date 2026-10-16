@@ -133,3 +133,45 @@ def test_el_buscador_del_navegador_filtra_por_nombre(ventana):
     nav.filtro.setText("cuerpo")                               # busca por nombre, sin distinguir mayúsculas
     assert not top.isHidden()                                  # tiene un hijo que coincide
     nav.filtro.setText("")
+
+
+# ---------------------------------------------------------------- PL6: quitar empalmes
+def test_quitar_empalmes_vuelve_a_la_caja_original_y_no_toca_agujeros():
+    from omnicad.nucleo import referencias as refs
+    from omnicad.nucleo.solidos_crear import agujero
+    from omnicad.nucleo.solidos_modificar import caras_de_empalme, empalme, quitar_empalmes
+    caja = geo.caja(30, 20, 10)
+    largas = [e for e in refs.subformas(caja, "arista")
+              if refs.firma_arista(e)["geom"] == "linea" and abs(refs.firma_arista(e)["largo"] - 30) < 1e-6]
+    redonda = empalme(caja, [{"aristas": largas, "tipo": "constante", "radio": 2.0}])
+    assert len(caras_de_empalme(redonda, 3.0)) == 4              # 4 caras de empalme R2
+    assert len(caras_de_empalme(redonda, 1.0)) == 0              # el filtro por radio funciona
+    nueva, radios = quitar_empalmes(redonda, 3.0)
+    assert radios == [(2.0, 4)]
+    assert geo.es_valida(nueva) and abs(geo.volumen(nueva) - geo.volumen(caja)) < 1e-6
+    assert len(refs.subformas(nueva, "cara")) == len(refs.subformas(caja, "cara")) == 6
+
+    taladrada = agujero(caja, (0, 0, 10), (0, 0, -1), diametro=4, profundidad=10)
+    assert len(caras_de_empalme(taladrada, 3.0)) == 0           # el agujero r2 NO es un empalme
+
+
+def test_api_remove_fillets_y_el_comando_del_catalogo():
+    from omnicad.ui.comandos import CATALOGO
+    sesion = api.Sesion()
+    api.llamar(sesion, "create_box", {"length": 30, "width": 20, "height": 10})
+    api.llamar(sesion, "fillet", {"edges": "|Z", "radius": 2})
+    con_empalme = sesion.doc.estado_final.cuerpos["op1.c1"].forma
+    assert abs(geo.volumen(con_empalme) - 6000) > 1             # el empalme sacó material
+
+    r = api.llamar(sesion, "remove_fillets", {"body": "op1.c1", "max_radius": 3})
+    assert r["ok"] and r["result"]["fillets_removed"] == 4     # las 4 caras de empalme R2
+    assert r["result"]["bodies_modified"] and abs(
+        r["result"]["bodies_modified"][0]["volume"] - 6000) < 1e-6   # volvió a la caja
+    assert sesion.doc.operaciones[-1].TIPO == "quitar_empalmes"
+
+    r = api.llamar(sesion, "remove_fillets", {"body": "op1.c1", "max_radius": 3})
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED"  # sin empalmes: falla y no cambia nada
+    assert "No se encontraron empalmes" in r["mensaje"]
+
+    comando = CATALOGO["quitar_empalmes"]
+    assert comando.CLASE_OP.TIPO == "quitar_empalmes" and comando.ICONO == "quitar_empalmes"

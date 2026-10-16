@@ -21,7 +21,8 @@ SECCIONES = {
                        "patron_ruta", "patron_puntos", "multitransformar", "simetria_3d", "engrosar",
                        "relleno_contorno", "cuerpo_envolvente",
                        "operacion_base", "derivar", "crear_forma", "engranaje_3d", "eje_escalonado"],
-    "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "vaciado", "desmoldeo", "escala_3d", "desfase_cara",
+    "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "quitar_empalmes", "vaciado", "desmoldeo",
+                  "escala_3d", "desfase_cara",
                   "reemplazar_cara", "dividir_cara", "dividir_cuerpo", "division_silueta", "mover_copiar", "alinear",
                   "suprimir", "quitar", "material_fisico", "aspecto", "administrar_materiales", "lista_materiales"],
     "CONSTRUIR": ["scu", "plano_angulo", "plano_tangente", "plano_medio", "plano_perpendicular", "plano_dos_aristas",
@@ -86,7 +87,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 147
+    assert len(NOMBRES) == len(set(NOMBRES)) == 148
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

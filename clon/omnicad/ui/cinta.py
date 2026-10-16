@@ -96,7 +96,8 @@ SOLIDO = [
         _i("Crear operación base", "operacion_base"), _sub("Crear placa de circuito impreso", []),
         _i("Origen de la unión", "origen_union")]),
     ("MODIFICAR", ["empalme_3d", "vaciado", "combinar", "dividir_cuerpo", "mover_copiar"], [
-        _i("Pulsar/Tirar", "pulsar_tirar"), _i("Empalme", "empalme_3d"), _i("Chaflán", "chaflan_3d"), SEP,
+        _i("Pulsar/Tirar", "pulsar_tirar"), _i("Empalme", "empalme_3d"), _i("Chaflán", "chaflan_3d"),
+        _i("Quitar empalmes", "quitar_empalmes"), SEP,
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Escala", "escala_3d"), _i("Combinar", "combinar"),
         _i("Cara de desfase", "desfase_cara"), _i("Reemplazar cara", "reemplazar_cara"), _i("Dividir cara", "dividir_cara"),
         _i("Dividir cuerpo", "dividir_cuerpo"), _i("División de silueta", "division_silueta"), SEP,

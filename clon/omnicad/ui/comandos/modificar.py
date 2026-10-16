@@ -2,7 +2,8 @@
 """Comandos de SÓLIDO › MODIFICAR con diálogo al estilo Fusion."""
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
 from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar
-from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseCara, OpQuitar,
+from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseCara,
+                                       OpQuitar, OpQuitarEmpalmes,
                                        OpDesmoldeo, OpDivisionSilueta, OpDividirCara, OpDividirCuerpo, OpEmpalme,
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.parametros import ANGULO, ESCALAR
@@ -674,5 +675,47 @@ class MaterialFisico(Comando):
         ctx.doc.set_propiedad(ids, "material", v["material"])
 
 
+class QuitarEmpalmes(Comando):
+    """PL6 (Remove Fillets de Plasticity): quita de una vez todos los redondeos de los cuerpos
+    elegidos, con filtro por radio máximo; las caras que se van a quitar se resaltan en la vista."""
+    CLAVE, TITULO, ICONO = "quitar_empalmes", "Quitar empalmes", "quitar_empalmes"
+    AYUDA = ("Saca todos los redondeos (radio <= Radio máximo) de los cuerpos elegidos y une la "
+             "topología que queda. Los agujeros taladrados no se tocan.")
+    CLASE_OP = OpQuitarEmpalmes
+    verificar = staticmethod(_con_cuerpos)
+    MODIFICADORES = {}          # el pie del panel muestra Enter/Esc (PL2)
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None),
+                Expresion("radio_max", "Radio máximo", "5 mm")]
+
+    def previa_vista(self, ctx, v, op):
+        """PL6: en la vista se resaltan las caras de empalme que el radio actual detecta."""
+        from ...nucleo import geometria as geo
+        from ...nucleo.solidos_modificar import caras_de_empalme
+        prims = []
+        try:
+            radio = ctx.evaluar(v["radio_max"])
+        except Exception:                       # noqa: BLE001 — expresión a medias: sin resaltado
+            return None
+        for h in v["cuerpos"]:
+            try:
+                forma = ctx.estado.cuerpos[h["ref"]["cuerpo"]].forma
+            except KeyError:
+                continue
+            for cara, _radio in caras_de_empalme(forma, radio):
+                tris, _norm = geo.teselar(cara)
+                prims.append(("tris", tris, None, 0.6))
+        return prims or None
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos con empalmes a quitar.")
+        return self.crear_op(OpQuitarEmpalmes, v, ctx, cuerpos=_cuerpos(v))
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
+
+
 registrar(PulsarTirar, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
-          DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto, MaterialFisico)
+          DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto,
+          MaterialFisico, QuitarEmpalmes)

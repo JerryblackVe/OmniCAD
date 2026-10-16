@@ -21,7 +21,7 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..timeline.operaciones import OpPlano
-from ..timeline.ops_modificar import OpChaflan, OpDesmoldeo, OpEmpalme, OpVaciado
+from ..timeline.ops_modificar import OpChaflan, OpDesmoldeo, OpEmpalme, OpQuitarEmpalmes, OpVaciado
 from ..timeline.ops_solido import OpAgujero, OpRosca
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -113,6 +113,35 @@ def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Liter
     op = OpVaciado(doc.nuevo_id(), nombre_nuevo(doc, "Vaciado", OpVaciado), caras=refs, cuerpos=[] if refs else [cuerpo.id],
                    espesor_interior=espesor, espesor_exterior=espesor, direccion=_DIRECCION_VACIADO[direction])
     return _informe(_agregar(sesion, op), elegidos, "faces_removed")
+
+
+@herramienta("remove_fillets", "solido",
+             "Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius "
+             "(«Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). No toca los "
+             "agujeros taladrados. Deja un paso editable en el timeline; si no hay empalmes con ese "
+             "filtro, falla con OPERATION_FAILED y el documento queda igual.", modifica=True)
+def remove_fillets(sesion, body: str, max_radius: Expr):
+    """
+    body: id o nombre del cuerpo al que sacarle los empalmes.
+    max_radius: radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
+    """
+    from ..nucleo.solidos_modificar import caras_de_empalme
+    _numero_positivo(max_radius, "max_radius")
+    cuerpo = sl.cuerpo_objetivo(sesion, body)
+    doc = sesion.doc
+    op = OpQuitarEmpalmes(doc.nuevo_id(), nombre_nuevo(doc, "Quitar empalmes", OpQuitarEmpalmes),
+                          cuerpos=[cuerpo.id], radio_max=texto_expr(max_radius))
+    try:
+        # El conteo del informe se mide con el MISMO contexto con el que se calculará el paso.
+        from ..timeline.operaciones import Contexto
+        radio = Contexto(doc.parametros.valores()).evaluar(op.p["radio_max"])
+        encontrados = len(caras_de_empalme(cuerpo.forma, radio))
+    except Exception:                       # noqa: BLE001 — expresión con parámetros a medias: sin conteo previo
+        encontrados = 0
+    res = _agregar(sesion, op)
+    res["fillets_removed"] = encontrados
+    res["bodies_affected"] = [cuerpo.id]
+    return res
 
 
 # ---------------------------------------------------------------- agujero

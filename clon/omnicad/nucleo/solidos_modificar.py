@@ -43,7 +43,7 @@ from OCP.OCP.collections import (Array1_gp_Pnt2d, IndexedDataMap_TopoDS_Shape_Li
 from OCP.ShapeFix import ShapeFix_Shape
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_VERTEX
-from OCP.TopExp import TopExp
+from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape
 from OCP.gp import (gp_Ax3, gp_Cylinder, gp_Dir, gp_GTrsf, gp_Lin, gp_Mat, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf,
                     gp_Vec, gp_XYZ)
@@ -1142,3 +1142,51 @@ def quitar_caras(forma, caras):
         raise geo.ErrorGeometria("No se pueden borrar esas caras: las caras vecinas no alcanzan a cerrar el hueco "
                                  "(por ejemplo, la tapa de una caja).")
     return _validar(df.Shape(), "Quitar caras")
+
+
+# ---------------------------------------------------------------- PL6: quitar empalmes (defeaturing)
+def _aristas_de_cara(cara):
+    """Aristas de una cara en el orden en que las recorre el cuerpo (iterator de TopExp a lista)."""
+    salida, it = [], TopExp_Explorer(cara, TopAbs_EDGE)
+    while it.More():
+        salida.append(TopoDS.Edge(it.Current()))
+        it.Next()
+    return salida
+
+
+def caras_de_empalme(forma, radio_max):
+    """«Remove Fillets» de Plasticity: qué caras del cuerpo son un empalme/redondeo, como las
+    marcaría el comando. Criterio: cara CILÍNDRICA de radio <= radio_max que comparte al menos una
+    arista RECTA con una cara plana — así entra el redondeo de una arista y queda afuera el agujero
+    taladrado (toca al resto por aristas circulares). Devuelve [(cara, radio)], en el orden del cuerpo."""
+    from . import referencias as refs
+    caras = [TopoDS.Face(f) for f in _unicos(forma, TopAbs_FACE)]
+    arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    encontradas = []
+    for cara in caras:
+        f = refs.firma_cara(cara)
+        if f.get("geom") != "cilindro" or f.get("radio", float("inf")) > radio_max:
+            continue
+        for e in _aristas_de_cara(cara):
+            if refs.firma_arista(e).get("geom") != "linea":
+                continue
+            if any(not vecina.IsSame(cara) and refs.firma_cara(TopoDS.Face(vecina)).get("geom") == "plano"
+                   for vecina in _padres(arista_caras, e)):
+                encontradas.append((cara, f["radio"]))
+                break
+    return encontradas
+
+
+def quitar_empalmes(forma, radio_max):
+    """«Remove Fillets from Shell» de Plasticity: quita TODOS los empalmes (radio <= radio_max) de
+    una vez con defeaturing y une lo que queda (la topología redundante de esquinas: UnifySameDomain).
+    Devuelve (forma nueva, [(radio, cuántas caras)]) con los radios que sacó. Falla si no hay
+    ninguno con ese filtro."""
+    caras = caras_de_empalme(forma, radio_max)
+    if not caras:
+        raise geo.ErrorGeometria(f"No se encontraron empalmes con radio <= {radio_max:g} mm en el cuerpo.")
+    radios = {}
+    for _cara, radio in caras:
+        radios[radio] = radios.get(radio, 0) + 1
+    nueva = quitar_caras(forma, [cara for cara, _r in caras])
+    return geo.unificar_caras(nueva), sorted(radios.items())
