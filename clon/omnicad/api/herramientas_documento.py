@@ -77,10 +77,22 @@ def _info_uniones(estado):
             for k, u in estado.uniones.items()]
 
 
-def _resumen(sesion):
+def _resumen(sesion, resumido=False):
     from .herramientas_parametros import info_parametros   # import diferido: "documento" se registra primero
     doc = sesion.doc
     estado = doc.estado_final
+    if resumido:         # solo nombres y cantidades: con decenas de cuerpos el resumen entero pasa de los 100 KB (T-18)
+        tipos = {"solido": "solid", "superficie": "surface", "malla": "mesh"}
+        return {"name": doc.nombre, "path": doc.ruta, "modified": doc.modificado,
+                "units": {"length": "mm", "angle": "deg"},
+                "display_units": {"length": doc.unidades["longitud"], "mass": doc.unidades["masa"]},
+                "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c), "type": tipos.get(getattr(c, "tipo", "solido"))}
+                           for c in estado.cuerpos.values()],
+                "sketches": [{"id": b.op_id, "name": b.nombre} for b in estado.bocetos.values()],
+                "counts": {"bodies": len(estado.cuerpos), "sketches": len(estado.bocetos),
+                           "components": len(estado.componentes), "joints": len(estado.uniones),
+                           "parameters": len(doc.parametros)},
+                "timeline_steps": len(doc.operaciones), "marker": doc.marcador}
     return {"name": doc.nombre, "path": doc.ruta, "modified": doc.modificado,
             "units": {"length": "mm", "angle": "deg"},          # en lo que vienen TODOS los números de la API
             "display_units": {"length": doc.unidades["longitud"], "mass": doc.unidades["masa"]},   # lo que muestra la app
@@ -143,9 +155,12 @@ def _paso_info(op):
              "cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), "
              "componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve "
              "y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y "
-             "parámetros.")
-def get_scene_info(sesion):
-    return _resumen(sesion)
+             "parámetros. Con summary=true devuelve solo nombres y cantidades (corto, para modelos grandes).")
+def get_scene_info(sesion, summary: bool = False):
+    """
+    summary: true devuelve solo nombre, ruta, unidades, cuerpos (id, nombre, tipo), bocetos (id, nombre) y cantidades.
+    """
+    return _resumen(sesion, summary)
 
 
 @herramienta("select_bodies", "documento", "Selecciona cuerpos en la ventana y los revela en el navegador. "
@@ -208,23 +223,25 @@ _UNIDADES_MALLA = {"mm": "mm", "cm": "cm", "m": "m", "in": "pulgadas", "ft": "pi
              "sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el "
              "documento actual: insert_file.", modifica=True,
              transaccion=False)
-def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", discard: bool = False):
+def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", discard: bool = False,
+                  summary: bool = False):
     """
     path: ruta del archivo.
     mesh_units: unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
     discard: true para descartar los cambios sin guardar del documento actual.
+    summary: true devuelve solo nombres y cantidades (como get_scene_info con summary=true), no el detalle de todo.
     """
     _exigir_sin_cambios(sesion, discard)
     sesion.abrir(path, _UNIDADES_MALLA[mesh_units])
     for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False):
         if r.estado in ("error", "aviso"):
             sesion.avisar(f"{op.nombre} ({op.id}) [{ESTADOS[r.estado]}]: {r.mensaje}")
-    return _resumen(sesion)
+    return _resumen(sesion, summary)
 
 
 @herramienta("insert_file", "documento", "Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline "
              "(Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla "
-             ".stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño "
+             ".stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño "
              ".omnicad/.fclone (entra como componente). El contenido se copia "
              "dentro de la receta. Para abrirlo como documento nuevo: open_document.", modifica=True)
 def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "ft"] = "mm", name: str | None = None):
@@ -238,7 +255,7 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
     if ruta.suffix.lower() not in abrir_externo.INSERTABLES:
         raise error("UNSUPPORTED_FILE_TYPE", f"Formato no soportado para insertar: {ruta.suffix or '(sin extensión)'}."
                     f" Se insertan: {', '.join(abrir_externo.INSERTABLES)}.",
-                    "Un .dxf o .brep se abre como documento nuevo con open_document.")
+                    "Un .dxf se abre como documento nuevo con open_document.")
     if not ruta.is_file():
         raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
     doc = sesion.doc
@@ -248,6 +265,11 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
     antes = set(doc.estado_final.cuerpos)
     r = doc.agregar(op)
     nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
+    if ruta.suffix.lower() == ".3mf" and nuevos:
+        grupos = len({int(g) for g in getattr(doc.estado_final.cuerpos[nuevos[0]].forma, "grupos", [])})
+        if grupos > 1:
+            sesion.avisar(f"El 3MF tiene {grupos} objetos: entran como UN cuerpo de malla con un grupo de caras por "
+                          "objeto. separate_mesh con by=face_groups los separa en cuerpos.")
     return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": r.estado, "message": r.mensaje,
             "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos)}
 
@@ -342,7 +364,11 @@ def export(sesion, path: str, bodies: list[str] | None = None, overwrite: bool =
     overwrite: true para reemplazar el archivo si ya existe.
     create_folders: true (por defecto) crea las carpetas de la ruta que no existen (se avisa); false = FILE_NOT_FOUND.
     """
+    if not str(path).strip():
+        raise error("INVALID_ARGUMENTS", "path está vacío: tiene que ser la ruta del archivo a escribir, con extensión.")
     ruta = Path(path)
+    if ruta.is_dir():
+        raise error("INVALID_ARGUMENTS", f"path es una carpeta ({ruta}): tiene que ser un archivo, con extensión.")
     dxf = ruta.suffix.lower() == ".dxf"
     if dxf:
         cuerpos = [_cuerpo_chapa(sesion, bodies)]

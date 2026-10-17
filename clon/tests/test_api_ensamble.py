@@ -271,3 +271,31 @@ def test_delta_translation_del_deslizamiento():
     r = llamar(s, "drive_joint", joint="J2", slide=100)
     (m,) = r["moved_components"]
     assert m["delta_translation"] == pytest.approx([50, 0, 0])    # se deslizó 50 mm más desde los 50 anteriores
+
+
+# ---------------------------------------------------------------- hallazgos de la prueba de tortura (T-09, T-11)
+def test_t09_una_union_nueva_avisa_si_el_componente_ya_tenia_otra():
+    s, base, bloque = dos_cajas()
+    llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2="Base", joint_type="revolute",
+           rotation=20, name="Giro")
+    r = api.llamar(s, "create_joint", {"origin1": "<Z", "body1": bloque, "origin2": ">Z", "body2": "Base"})
+    assert r["ok"] and any("ya tiene Giro" in a and "deja de cumplirse" in a for a in r["avisos"]), r
+    llamar(s, "suppress_feature", feature="Giro")
+    r = api.llamar(s, "create_joint", {"origin1": "<Z", "body1": bloque, "origin2": ">Z", "body2": "Base"})
+    assert r["ok"] and not any("ya tiene" in a and "Giro" in a for a in r["avisos"])        # la suprimida no cuenta
+
+
+def test_t11_accionar_una_union_que_sigue_un_vinculo_no_guarda_el_valor_ignorado():
+    s, base, manivela, piston = _mecanismo()
+    llamar(s, "create_motion_link", joint1="J1", joint2="J2", ratio=0.2)
+    receta = json.dumps(s.doc.a_dict(), sort_keys=True)
+    r = api.llamar(s, "drive_joint", {"joint": "J2", "slide": 30})
+    assert r["ok"] and "vínculo" in r["avisos"][0] and r["result"]["moved_components"] == []
+    assert json.dumps(s.doc.a_dict(), sort_keys=True) == receta         # si se suprimiera el vínculo, no reaparece el 30
+
+
+def test_t11_el_estudio_de_movimiento_lista_tambien_al_componente_que_sigue_el_vinculo():
+    s, base, manivela, piston = _mecanismo()
+    llamar(s, "create_motion_link", joint1="J1", joint2="J2", ratio=0.2)
+    r = llamar(s, "motion_study", joint="J1", values=[0, 90])
+    assert {c["name"] for c in r["steps"][1]["components"]} == {"Manivela", "Piston"}

@@ -43,6 +43,8 @@ COTAS_POSITIVAS = ("distancia", "distancia_h", "distancia_v", "radio", "diametro
 # mm (1 km): tope de una cota de largo. Más allá el núcleo ya no calcula bien (un barrido por una ruta de 1 km da el
 # volumen exacto; por una de 10 km falla); nucleo/perfiles.py busca regiones cerradas en ±MEDIDA_MAXIMA
 MEDIDA_MAXIMA = 1e6
+MAX_CARACTERES_TEXTO = 1000      # crear los perfiles de las letras cuesta ~10 ms por letra: 100.000 colgaban la ventana
+ALTURA_MAXIMA_TEXTO = 10_000.0   # mm (10 m)
 CIRCULARES = ("circulo", "arco")
 ELIPTICAS = ("elipse", "arco_elipse")
 LIBRES = ("spline", "conica")
@@ -68,6 +70,22 @@ def validar_valor_cota(tipo, valor):
         miles = f"{MEDIDA_MAXIMA:,.0f}".replace(",", ".")
         raise ErrorBoceto(f"La cota de {nombre} no puede pasar de {miles} mm (1 km; vale {valor:g} mm): más grande, "
                           "el núcleo geométrico ya no calcula bien.")
+
+
+def validar_texto_boceto(texto=None, altura=None):
+    """Tope del largo y de la altura de un texto de boceto (los que se pasan; None = no se mira)."""
+    if texto is not None:
+        if not str(texto).strip():
+            raise ErrorBoceto("El texto está vacío.")
+        if len(str(texto)) > MAX_CARACTERES_TEXTO:
+            raise ErrorBoceto(f"El texto tiene {len(str(texto)):,} caracteres y el máximo es {MAX_CARACTERES_TEXTO:,}: "
+                              "cada letra se vuelve un perfil y más de eso congela la ventana.".replace(",", "."))
+    if altura is not None:
+        if not 0 < altura < math.inf:                   # también NaN
+            raise ErrorBoceto("La altura del texto debe ser positiva.")
+        if altura > ALTURA_MAXIMA_TEXTO:
+            raise ErrorBoceto(f"La altura del texto no puede pasar de {ALTURA_MAXIMA_TEXTO:,.0f} mm (vale "
+                              f"{altura:g}).".replace(",", "."))
 
 
 # ---------------------------------------------------------------- entidades
@@ -1125,10 +1143,7 @@ class Boceto:
         interlineado, alineacion, ancla_v, ancho_caja, voltear_h, voltear_v, el texto en curva y las del panel
         «Carácter» (kerning, inclinacion, escala_h, escala_v, desfase_base, capitalizacion, subrayado, tachado,
         grosor_decoracion, sin_division); ver `Texto`."""
-        if not str(texto).strip():
-            raise ErrorBoceto("El texto está vacío.")
-        if not 0 < altura < math.inf:                       # también NaN
-            raise ErrorBoceto("La altura del texto debe ser positiva.")
+        validar_texto_boceto(texto, altura)
         _validar_opciones_texto(opciones)
         self._validar_camino(opciones.get("camino"))
         return self._agregar_curva(Texto(self._nuevo_id(), self._punto(posicion), texto, fuente, altura, angulo,

@@ -18,6 +18,12 @@ import unicodedata
 
 LONGITUD, ANGULO, ESCALAR = "longitud", "angulo", "escalar"
 TIPOS = (LONGITUD, ANGULO, ESCALAR)
+# Topes de lo que puede valer una longitud o un ángulo AL USARSE en un paso (`acotar`, que llama `Contexto.evaluar`;
+# T-07 de la prueba de tortura: 1e300 mm y 1e9° pasaban sin error y rompían el modelo en silencio). Un parámetro suelto
+# sí puede valer más (las cotas de boceto lo avisan por su cuenta). LONGITUD_MAXIMA es la de las primitivas
+# (restricciones.boceto.MEDIDA_MAXIMA: un test comprueba que sean iguales).
+LONGITUD_MAXIMA = 1e6           # mm (1 km)
+ANGULO_MAXIMO = 1e6             # grados (unas 2.800 vueltas)
 
 # Factor a la unidad interna de cada magnitud.
 UNIDADES = {
@@ -103,6 +109,16 @@ def _real(v):
     if math.isnan(v) or math.isinf(v):
         raise ErrorExpresion("El resultado no es un número finito.")
     return v
+
+
+def acotar(valor, tipo):
+    """El valor, si cabe en el tope de su magnitud (LONGITUD_MAXIMA, ANGULO_MAXIMO); si no, ErrorExpresion."""
+    if tipo == LONGITUD and abs(valor) > LONGITUD_MAXIMA:
+        raise ErrorExpresion(f"La longitud ({valor:g} mm) pasa de {LONGITUD_MAXIMA:,.0f} mm (1 km): más grande, el "
+                             "núcleo geométrico ya no calcula bien.".replace(",", "."))
+    if tipo == ANGULO and abs(valor) > ANGULO_MAXIMO:
+        raise ErrorExpresion(f"El ángulo ({valor:g}°) pasa de {ANGULO_MAXIMO:,.0f}°.".replace(",", "."))
+    return valor
 
 
 def evaluar(expr, tipo=LONGITUD, nombres=None):

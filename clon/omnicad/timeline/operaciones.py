@@ -12,6 +12,7 @@ Equivalencias con Fusion 360 (informe_analisis.md §3.1, §3.3, §5):
     como BoxFeature… TorusFeature en Fusion.
 """
 import copy
+import re
 
 import numpy as np
 
@@ -24,7 +25,7 @@ from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar
 from ..restricciones import Boceto, resolver
 from ..restricciones.boceto import (ErrorBoceto, Texto, expresiones_de_texto, sustituir_expresiones,
                                     validar_valor_cota)
-from .parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, evaluar
+from .parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, acotar, evaluar
 
 OPERACIONES_CUERPO = {"nuevo": "Cuerpo nuevo", "unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
 OPERACIONES_COMBINAR = {"unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
@@ -143,6 +144,17 @@ class EstadoModelo:
         self.cuerpos[cid] = Cuerpo(cid, nombre or f"Cuerpo{self.contador_cuerpos}", forma, op_id, tipo, **atributos)
         return cid
 
+    def nombre_de_copia(self, nombre):
+        """«X (copia)» para la copia de «X»; si ya existe, «X (copia 2)», «X (copia 3)»… La copia de una copia sale de
+        la original («Banco (copia)» → «Banco (copia 2)», no «Banco (copia) (copia)»): nombres repetidos obligaban a
+        usar el id (T-16 de la prueba de tortura)."""
+        base = re.sub(r" \(copia(?: \d+)?\)$", "", nombre)
+        usados = {c.nombre for c in self.cuerpos.values()}
+        candidato, n = f"{base} (copia)", 2
+        while candidato in usados:
+            candidato, n = f"{base} (copia {n})", n + 1
+        return candidato
+
     def cuerpo(self, cid):
         cid = id_cuerpo(cid)
         if cid not in self.cuerpos:
@@ -174,7 +186,8 @@ class Contexto:
         self.avisos = []
 
     def evaluar(self, expr, tipo=LONGITUD):
-        return evaluar(expr, tipo, self.valores)
+        """Valor de `expr` para un paso: una longitud de más de 1 km o un ángulo de más de 1e6° es un error."""
+        return acotar(evaluar(expr, tipo, self.valores), tipo)
 
     def aviso(self, texto):
         self.avisos.append(texto)
@@ -475,7 +488,9 @@ class OpBoceto(Operacion):
         self.boceto = boceto if boceto is not None else Boceto()
 
     def valores_cotas(self, ctx):
-        return {c.id: ctx.evaluar(c.expresion, ANGULO if c.tipo == "angulo" else LONGITUD)
+        """Valor de cada cota. Sin el tope de `Contexto.evaluar`: una cota fuera de rango no falla el boceto, la
+        valida el propio boceto y avisa (test_cota_manejada_por_parametro_fuera_de_rango_avisa)."""
+        return {c.id: evaluar(c.expresion, ANGULO if c.tipo == "angulo" else LONGITUD, ctx.valores)
                 for c in self.boceto.cotas.values()}
 
     def expresiones(self):

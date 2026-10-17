@@ -73,6 +73,19 @@ def _calcular(ctx, nombre, m, **opciones):
     return guardado[0]
 
 
+def _avisar_si_queda_rota(ctx, malla):
+    """Aviso cuando un paso que repara, limpia o combina deja la malla abierta, no manifold o con triángulos
+    degenerados: antes devolvía ok sin decir nada y la malla seguía rota (T-05 de la prueba de tortura)."""
+    a = _ml().analizar(malla)
+    problemas = [f"{n} {texto}" for n, texto in ((a["aristas_borde"], "arista(s) de borde abierta(s)"),
+                                                 (a["aristas_no_manifold"], "arista(s) no manifold"),
+                                                 (a["degenerados"], "triángulo(s) degenerado(s)")) if n]
+    if problemas:
+        ctx.aviso(f"La malla quedó con problemas: {', '.join(problemas)}. get_mesh_info los cuenta; clean_mesh con "
+                  "fill_holes=true tapa los agujeros y repair_mesh con kind=stitch_and_remove cose y quita lo degenerado.")
+    return malla
+
+
 def _mallas(estado, ids):
     if not ids:
         raise ErrorOperacion("Elegí los cuerpos de malla.")
@@ -146,7 +159,7 @@ class OpRepararMalla(_OpMallaSimple):
     OPCIONES = {"tipo": ("cerrar_agujeros", "unir_vertices", "coser_y_quitar", "reconstruir")}
 
     def transformar(self, m, ctx):
-        return _ml().reparar(m, tipo=self.p["tipo"])
+        return _avisar_si_queda_rota(ctx, _ml().reparar(m, tipo=self.p["tipo"]))
 
 
 class OpLimpiarMalla(_OpMallaSimple):
@@ -158,11 +171,11 @@ class OpLimpiarMalla(_OpMallaSimple):
     EXPRESIONES = ("distancia", "area_minima")
 
     def transformar(self, m, ctx):
-        return _calcular(ctx, "limpiar", m, fusionar=bool(self.p["fusionar"]),
-                         distancia=ctx.evaluar(self.p["distancia"]), degenerados=bool(self.p["degenerados"]),
-                         sueltos=bool(self.p["sueltos"]), area_minima=ctx.evaluar(self.p["area_minima"], "escalar"),
-                         normales=bool(self.p["normales"]), rellenar=bool(self.p["rellenar"]),
-                         lados_maximos=self.entero("lados", minimo=0))
+        return _avisar_si_queda_rota(ctx, _calcular(
+            ctx, "limpiar", m, fusionar=bool(self.p["fusionar"]), distancia=ctx.evaluar(self.p["distancia"]),
+            degenerados=bool(self.p["degenerados"]), sueltos=bool(self.p["sueltos"]),
+            area_minima=ctx.evaluar(self.p["area_minima"], "escalar"), normales=bool(self.p["normales"]),
+            rellenar=bool(self.p["rellenar"]), lados_maximos=self.entero("lados", minimo=0)))
 
 
 class OpGruposCaras(_OpMallaSimple):
@@ -241,7 +254,8 @@ class OpCombinarMallas(_OpMalla):
     def ejecutar(self, estado, ctx):
         (obj,) = _mallas(estado, [self.p["objetivo"]] if self.p["objetivo"] else [])
         herramientas = _mallas(estado, self.p["herramientas"])
-        obj.forma = _ml().combinar([obj.forma] + [h.forma for h in herramientas], operacion=self.p["operacion"])
+        obj.forma = _avisar_si_queda_rota(ctx, _ml().combinar([obj.forma] + [h.forma for h in herramientas],
+                                                              operacion=self.p["operacion"]))
         if not self.p["mantener"]:
             for h in herramientas:
                 del estado.cuerpos[h.id]

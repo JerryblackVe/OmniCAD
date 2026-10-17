@@ -292,7 +292,9 @@ def test_vectorizar_imagen_da_contornos_con_agujero(anillo):
     assert caja_px[1][0] - caja_px[0][0] == pytest.approx(180, abs=2)
     assert caja_px[1][1] == pytest.approx(110, abs=2)                # Y hacia arriba: el borde de arriba está en 110
     curvas = vectorizar_imagen(anillo, curvas=True)
-    assert all(p[0] == "curva" for p in curvas)
+    # disco y agujero son splines; el rectángulo (pocos vértices) queda polígono: un spline cerrado por 4 a 8 vértices se
+    # pasaba de largo en las esquinas (T-10 de la prueba de tortura)
+    assert sorted(p[0] for p in curvas) == ["curva", "curva", "polilinea"]
     from PIL import Image
     blanca = anillo.parent / "blanca.png"
     Image.new("RGB", (40, 40), "white").save(blanca)
@@ -309,11 +311,11 @@ def test_trace_image_en_boceto(s, anillo, tmp_path):
     sk = ok(api.llamar(s, "get_sketch", {}))
     xs = [v[0] for c in sk["entities"] if c["type"] == "line" for v in (c["start"], c["end"])]
     assert max(xs) - min(xs) == pytest.approx(90, abs=0.5)
-    # splines: una entidad por contorno
+    # splines: una entidad por contorno redondo; el rectángulo queda en líneas (ver arriba)
     ok(api.llamar(s, "create_sketch", {"plane": "XY"}))
     c = ok(api.llamar(s, "trace_image", {"path": str(anillo), "sketch": "Boceto2", "width": 90, "curves": True,
                                          "name": "x"}))
-    assert c["entities_added"] == 3 and c["profiles"] == 3
+    assert 3 < c["entities_added"] < r["entities_added"] and c["profiles"] == 3
     # invertir: la tinta pasa a ser el fondo, y queda otra cantidad de contornos
     i = ok(api.llamar(s, "trace_image", {"path": str(anillo), "plane": "XY", "invert": True, "dpi": 25.4}))
     assert i["sketch"]["name"] == "Boceto3"

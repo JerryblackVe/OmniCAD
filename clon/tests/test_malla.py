@@ -313,6 +313,18 @@ def test_combinar_fusionar_y_grupos():
         assert len(np.unique(u.grupos)) == 12                               # 6 + 6 caras planas conservadas
 
 
+@pytest.mark.parametrize("normal", [(0, 0, 1), (1, 1, 1)])
+def test_unir_mitades_no_conserva_las_tapas_internas(normal):
+    esfera = ml.desde_brep(g.esfera(10), refinamiento="personalizado", desviacion=0.5, angulo=45)
+    partes = ml.cortar_plano(esfera, (0, 0, 0), normal, tipo="partir")
+    resultado = ml.combinar(partes)
+    assert resultado.es_cerrada() and len(ml.separar(resultado)) == 1
+    assert resultado.volumen() == pytest.approx(esfera.volumen(), rel=1e-7)
+    assert resultado.area() == pytest.approx(esfera.area(), rel=1e-7)
+    assert ml.analizar(resultado)["degenerados"] == 0
+    assert g.es_valida(ml.a_brep(resultado))
+
+
 # ---------------------------------------------------------------- suavizar, normales, separar, escalar, alinear
 def test_suavizar_taubin_no_encoge(esfera):
     rng = np.random.default_rng(0)

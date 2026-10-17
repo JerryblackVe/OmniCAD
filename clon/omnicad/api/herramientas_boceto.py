@@ -26,7 +26,7 @@ from ..nucleo import perfiles as perfiles_mod
 from ..restricciones import Boceto, ErrorBoceto, auto_restringir
 from ..restricciones.boceto import ArcoElipse, Circulo, Elipse, Texto, validar_valor_cota
 from ..timeline.operaciones import OpBoceto, OpPlano
-from ..timeline.parametros import ANGULO, LONGITUD, evaluar
+from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .registro import Expr, herramienta
@@ -51,7 +51,7 @@ def _r(x):
 
 def texto_expr(valor):
     """Número (mm o grados) o expresión de texto → texto de expresión del timeline."""
-    return valor.strip() if isinstance(valor, str) else repr(float(valor))
+    return valor.strip() if isinstance(valor, str) else repr(float(valor) + 0.0)         # + 0.0: el −0.0 sale «0.0»
 
 
 # ---------------------------------------------------------------- búsqueda de planos y bocetos
@@ -1407,7 +1407,15 @@ def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | No
         raise error("INVALID_ARGUMENTS", "Pasá side_x y side_y juntos, o ninguno de los dos.")
     expresion, valor = _valor_expr(sesion, distance)
     if valor < 0:
-        expresion = f"-({expresion})" if isinstance(distance, str) else repr(abs(valor))
+        if not isinstance(distance, str):
+            expresion = repr(abs(valor))
+        else:                       # «-4 mm» → «4 mm» si lo que sigue al menos vale lo mismo; si no, «-(…)»
+            resto = expresion.lstrip()[1:].strip() if expresion.lstrip().startswith("-") else None
+            try:
+                simple = resto is not None and abs(_valor_expr(sesion, resto)[1] - abs(valor)) < 1e-9
+            except ErrorExpresion:
+                simple = False
+            expresion = resto if simple else f"-({expresion})"
     _cota_valida("desfase", abs(valor), "distance")
     lado = None if side_x is None else (float(side_x), float(side_y))
 

@@ -34,6 +34,7 @@ Elementos = str | list[str]
 
 _ELEGIR = ("Se elige con un selector estilo CadQuery (p. ej. '{ej}'; get_guide topic=selectores), con ids de "
            "find_{que} (p. ej. '{id}', válidos hasta el próximo cambio del documento) o con una lista de ambos. ")
+_MEDIDA_MINIMA = 1e-4           # mm: un empalme o chaflán más chico no lo distingue el kernel (T-07 de la prueba de tortura)
 _PERSISTENTE = "Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. "
 
 
@@ -60,7 +61,7 @@ def fillet(sesion, edges: Elementos, radius: Expr, body: str | None = None):
     radius: radio en mm (número o expresión con parámetros, p. ej. "espesor / 2").
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
     """
-    _numero_positivo(radius, "radius")
+    _numero_positivo(radius, "radius", _MEDIDA_MINIMA)
     refs, elegidos = _refs(sesion, edges, "arista", body)
     doc = sesion.doc
     op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), aristas=refs, tipo_radio="constante",
@@ -76,7 +77,7 @@ def chamfer(sesion, edges: Elementos, distance: Expr, body: str | None = None):
     distance: distancia del chaflán en mm sobre cada cara (número o expresión con parámetros).
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
     """
-    _numero_positivo(distance, "distance")
+    _numero_positivo(distance, "distance", _MEDIDA_MINIMA)
     refs, elegidos = _refs(sesion, edges, "arista", body)
     doc = sesion.doc
     op = OpChaflan(doc.nuevo_id(), nombre_nuevo(doc, "Chaflán", OpChaflan), aristas=refs, tipo="distancia_igual",
@@ -93,7 +94,8 @@ _DIRECCION_VACIADO = {"inside": "interior", "outside": "exterior", "both": "ambo
              "direction: inside (las paredes quedan hacia adentro: el cuerpo no crece), outside (hacia afuera) o both. "
              "Con faces=[] (lista vacía) el cuerpo queda hueco y cerrado. Si el espesor es igual o mayor que el radio de un "
              "empalme de las caras vaciadas, el kernel no puede (radio interior cero o negativo): OPERATION_FAILED. "
-             "thickness acepta número (mm) o expresión.",
+             "En algunas caras B-spline el vaciado hacia afuera no se puede calcular: el error indica cómo armar "
+             "dos solevaciones y restarlas. thickness acepta número (mm) o expresión.",
              modifica=True)
 def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Literal["inside", "outside", "both"] = "inside"):
     """

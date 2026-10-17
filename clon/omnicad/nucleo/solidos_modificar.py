@@ -505,7 +505,80 @@ def _falla_kernel(forma, espesor, hueco=False):
         "vaciar antes de cortar.")
 
 
+def _tapa_del_hueco(cavidad, plano, profundidad):
+    """Caras de `cavidad` paralelas al plano de una cara quitada y `profundidad` mm por debajo de ella."""
+    n = np.asarray(plano.normal, float)
+    o = np.asarray(plano.origen, float)
+    salida = []
+    for cara in geo.caras(cavidad):
+        if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Plane:
+            continue
+        p, normal = _punto_normal(cara)
+        if float(np.dot(normal, n)) > 1 - 1e-6 and abs(float(np.dot(np.asarray(p) - o, n)) + profundidad) < 1e-4:
+            salida.append(cara)
+    return salida
+
+
+def _cascara_por_desfase(forma, caras, espesor):
+    """Plan B de `_cascara` hacia adentro (`espesor` > 0) cuando MakeThickSolid no puede, p. ej. con caras B-spline de una
+    solevación (T-04 de la prueba de tortura): se desfasa el cuerpo ENTERO hacia adentro con unión redondeada (la que el
+    kernel sostiene en superficies libres), se le suma un prisma que sale por cada cara quitada plana y se resta del
+    cuerpo. None si no se pudo (cara quitada no plana, sin tapa en el desfase o resultado imposible)."""
+    if not caras or any(_plano_de_cara(c) is None for c in caras):
+        return None
+    try:
+        cavidad = _desfase_cuerpo(forma, -espesor, GeomAbs_Arc)
+        herramientas = [cavidad]
+        for cara in caras:
+            plano = _plano_de_cara(cara)
+            tapas = _tapa_del_hueco(cavidad, plano, espesor)
+            if not tapas:
+                return None
+            salida = gp_Vec(*(np.asarray(plano.normal, float) * espesor * 1.5))
+            herramientas += [BRepPrimAPI_MakePrism(tapa, salida).Shape() for tapa in tapas]
+        resultado = geo.booleano(forma, geo.unir_todos(herramientas), "cortar")
+    except Exception:  # noqa: BLE001 — cualquier fallo del plan B deja el error original del kernel, que es el que se informa
+        return None
+    if geo.volumen_exacto(resultado) >= geo.volumen_exacto(forma) or _resultado_imposible(forma, resultado, -espesor):
+        return None
+    return resultado
+
+
+def _borde_con_bisel(forma, caras, espesor):
+    """True si alguna cara vecina de las quitadas es una franja más angosta que el espesor: un chaflán o un empalme en
+    el borde de la abertura (el kernel no puede desfasarlos hacia adentro y el vaciado falla culpando a otra cosa)."""
+    arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    for cara in caras:
+        for e in _unicos(cara, TopAbs_EDGE):
+            e = TopoDS.Edge(e)
+            largo = geo.longitud(e)
+            for otra in _padres(arista_caras, e):
+                if not _contiene(caras, otra) and largo > 1e-9 and geo.area(otra) / largo < abs(espesor):
+                    return True
+    return False
+
+
 def _cascara(forma, caras, espesor, union):
+    try:
+        return _validar(_cascara_del_kernel(forma, caras, espesor, union), "Vaciado")
+    except geo.ErrorGeometria as e:
+        alternativo = _cascara_por_desfase(forma, caras, -espesor) if espesor < 0 else None
+        if alternativo is not None:
+            return alternativo
+        if espesor > 0 and geo.es_forma_libre(forma):
+            raise geo.ErrorGeometria(
+                f"El vaciado hacia afuera falló con {espesor:g} mm: el kernel no pudo construir una pared válida "
+                "sobre estas caras B-spline. No se modificó el cuerpo. Como alternativa, solevá los perfiles "
+                "exteriores e interiores por separado y restalos con boolean_operation(operation='cut').") from e
+        if not _demasiado_grueso(forma, espesor) and _borde_con_bisel(forma, caras, espesor):    # «muy grueso» manda
+            raise geo.ErrorGeometria(
+                f"El vaciado falló: la cara quitada tiene un chaflán o un empalme en su borde más angosto que el "
+                f"espesor ({abs(espesor):g} mm) y el kernel no puede desfasarlo. Hacé el chaflán o el empalme "
+                "DESPUÉS del vaciado.") from e
+        raise
+
+
+def _cascara_del_kernel(forma, caras, espesor, union):
     ts = BRepOffsetAPI_MakeThickSolid()
     try:
         ts.MakeThickSolidByJoin(forma, _lista_occ(caras), float(espesor), TOL, BRepOffset_Skin, False, False, union)
@@ -533,9 +606,20 @@ def _cascara(forma, caras, espesor, union):
 
 def _desfase_cuerpo(forma, distancia, union):
     """El cuerpo desfasado `distancia` (negativa = hacia adentro) para un hueco cerrado. Hacia adentro, si el
-    espesor no deja cavidad falla antes de llamar al kernel (devolvía el cuerpo sin cambios o un error del corte)."""
+    espesor no deja cavidad falla antes de llamar al kernel (devolvía el cuerpo sin cambios o un error del corte).
+    Hacia adentro, si la unión afilada falla (el kernel es caprichoso con superficies B-spline: con 1 mm sí y con
+    1,2 mm no), se reintenta con la redondeada, que ahí es equivalente y más robusta."""
     if distancia < 0 and (mensaje := _demasiado_grueso(forma, distancia, hueco=True)):
         raise geo.ErrorGeometria(mensaje)
+    try:
+        return _desfase_una_vez(forma, distancia, union)
+    except geo.ErrorGeometria:
+        if distancia < 0 and union != GeomAbs_Arc:
+            return _desfase_una_vez(forma, distancia, GeomAbs_Arc)
+        raise
+
+
+def _desfase_una_vez(forma, distancia, union):
     mo = BRepOffsetAPI_MakeOffsetShape()
     try:
         mo.PerformByJoin(forma, float(distancia), TOL, BRepOffset_Skin, False, False, union)

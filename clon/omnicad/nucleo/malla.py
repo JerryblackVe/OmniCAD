@@ -685,21 +685,26 @@ def _leer_miembro_3mf(z, nombre):
 
 
 def escribir_3mf(m, ruta, *, unidades="mm"):
-    """Guardar como 3MF [MESH-SAVE-AS-MESH]: un objeto malla, unidad declarada en el archivo."""
-    v = m.vertices / _factor(unidades)
+    """Guardar como 3MF [MESH-SAVE-AS-MESH]: un objeto por malla (`m` es una malla o una lista de mallas: así cada
+    cuerpo exportado queda como una pieza aparte), unidad declarada en el archivo. Devuelve los triángulos escritos."""
+    mallas = list(m) if isinstance(m, (list, tuple)) else [m]
     partes = ['<?xml version="1.0" encoding="UTF-8"?>',
               f'<model unit="{_NOMBRE_3MF[unidades]}" xml:lang="es-AR" xmlns="{_NS_3MF}">',
-              '<metadata name="Application">OmniCAD</metadata>',
-              '<resources><object id="1" type="model"><mesh><vertices>']
-    partes += [f'<vertex x="{x!r}" y="{y!r}" z="{z!r}"/>' for x, y, z in v.tolist()]
-    partes.append("</vertices><triangles>")
-    partes += [f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in m.caras.tolist()]
-    partes.append('</triangles></mesh></object></resources><build><item objectid="1"/></build></model>')
+              '<metadata name="Application">OmniCAD</metadata>', "<resources>"]
+    for k, malla in enumerate(mallas, 1):
+        partes.append(f'<object id="{k}" type="model"><mesh><vertices>')
+        partes += [f'<vertex x="{x!r}" y="{y!r}" z="{z!r}"/>'
+                   for x, y, z in (malla.vertices / _factor(unidades)).tolist()]
+        partes.append("</vertices><triangles>")
+        partes += [f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in malla.caras.tolist()]
+        partes.append("</triangles></mesh></object>")
+    partes.append("</resources><build>" + "".join(f'<item objectid="{k}"/>' for k in range(1, len(mallas) + 1))
+                  + "</build></model>")
     with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", _TIPOS_3MF)
         z.writestr("_rels/.rels", _RELS_3MF)
         z.writestr("3D/3dmodel.model", "\n".join(partes))
-    return len(m.caras)
+    return sum(len(malla.caras) for malla in mallas)
 
 
 def _transformada_3mf(texto):
@@ -1970,7 +1975,9 @@ def combinar(mallas, *, operacion="unir", motor="auto"):
     'unir' (Join), 'cortar' (Cut) e 'intersecar' (Intersect) son booleanas reales y exigen mallas cerradas;
     'fusionar' (Merge) junta las mallas sin tocarlas (conserva las estructuras internas).
     motor: 'manifold' (paquete manifold3d, conserva los grupos), 'brep' (kernel OpenCascade: convierte a
-    sólido prismático, opera y vuelve a teselar; más lento y regenera los grupos) o 'auto'."""
+    sólido prismático, opera y vuelve a teselar; más lento y regenera los grupos) o 'auto'. En automático,
+    una unión que conserva el área interna de un contacto sin solape se reintenta con B-rep (hasta 50.000
+    triángulos por entrada), que suelda el contacto aunque las tapas tengan triangulaciones distintas."""
     mallas = list(mallas)
     if operacion not in ("unir", "cortar", "intersecar", "fusionar"):
         raise geo.ErrorGeometria(f"Operación desconocida: {operacion}")
@@ -1996,7 +2003,30 @@ def combinar(mallas, *, operacion="unir", motor="auto"):
         raise geo.ErrorGeometria("Falta el paquete opcional manifold3d (pip install manifold3d).")
     if motor == "brep" or _manifold is None:
         return _combinar_brep(mallas, operacion)
-    return _combinar_manifold(mallas, operacion)
+    resultado = _combinar_manifold(mallas, operacion)
+    if motor == "auto" and operacion == "unir" and _contacto_sin_soldar(mallas, resultado):
+        return _combinar_brep(mallas, operacion)
+    return resultado
+
+
+def _contacto_sin_soldar(mallas, resultado):
+    """Manifold puede conservar ambas tapas del corte: volumen sumado y área sin quitar el contacto."""
+    from scipy.spatial import cKDTree
+
+    if not math.isclose(resultado.volumen(), sum(m.volumen() for m in mallas), rel_tol=1e-9, abs_tol=1e-9):
+        return False
+    area_intacta = math.isclose(resultado.area(), sum(m.area() for m in mallas), rel_tol=1e-9, abs_tol=1e-9)
+    if not area_intacta and len(np.unique(_cascaras(resultado.caras, len(resultado.vertices))[0])) <= 1:
+        return False
+    cajas = [np.asarray(m.caja()) for m in mallas]
+    for i, a in enumerate(cajas):
+        for j, b in enumerate(cajas[i + 1:], i + 1):
+            tolerancia = 1e-9 * max(float(np.linalg.norm(a[1] - a[0])), float(np.linalg.norm(b[1] - b[0])), 1.0)
+            if np.all(np.minimum(a[1], b[1]) - np.maximum(a[0], b[0]) >= -tolerancia):
+                distancias, _ = cKDTree(mallas[i].vertices).query(mallas[j].vertices, distance_upper_bound=tolerancia)
+                if np.any(np.isfinite(distancias)):
+                    return True
+    return False
 
 
 def _combinar_manifold(mallas, operacion):

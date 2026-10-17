@@ -885,7 +885,7 @@ class Visor3D(QOpenGLWidget):
                     mejor_t = ts[i]
                     mejor = {"ref": "cara" if pl is not None else None, "plano": pl,
                              "marco": pl.marco() if pl is not None else None,
-                             "cara_ref": refs.referencia(cid, cara, caja=self._caja(cid)) if pl is not None else None,
+                             "cara_ref": self._referencia(cid, cara) if pl is not None else None,
                              "tris": tris[indice == indice[i]].reshape(-1, 3).astype(np.float32), "cuerpo": cid}
         return mejor
 
@@ -1019,6 +1019,15 @@ class Visor3D(QOpenGLWidget):
     def triangulos_cuerpo(self, cid):
         m = next((m for m in self._mallas if m["id"] == cid), None)
         return m["v"] if m else np.zeros((0, 3), np.float32)
+
+    def _referencia(self, cid, sub):
+        """Referencia persistente de una cara, arista o vértice del cuerpo `cid`, con su posición entre las del cuerpo
+        (así sobrevive a cambios grandes de cotas: T-03). El mapa de subformas se arma una vez por forma."""
+        forma = self._formas[cid]
+        clave = ("mapa", id(forma), refs.tipo_topologico(sub))
+        if clave not in self._pick:
+            self._pick[clave] = None if es_malla(forma) else refs.mapa_de_subformas(forma, clave[2])
+        return refs.referencia(cid, sub, caja=self._caja(cid), mapa=self._pick[clave])
 
     def _caja(self, cid):
         forma = self._formas[cid]
@@ -1190,7 +1199,7 @@ class Visor3D(QOpenGLWidget):
                 i = int(np.argmin(dist))
                 if dist[i] < mejor[0] and visible(pts[i]):
                     v = vertices[i]
-                    mejor = (dist[i], _hit("vertice", refs.referencia(cid, v, caja=self._caja(cid)), [("puntos", pts[i:i + 1], None, 9)],
+                    mejor = (dist[i], _hit("vertice", self._referencia(cid, v), [("puntos", pts[i:i + 1], None, 9)],
                                           float((pts[i] - o) @ d), pts[i], cuerpo=cid, forma=v))
             if "punto" in filtros:
                 candidatos = [("O", np.zeros(3), {"tipo": "punto", "id": "O"})] if self.config.origen.get("o") else []
@@ -1229,7 +1238,7 @@ class Visor3D(QOpenGLWidget):
                         if not ({"arista"} & filtros or ("arista_lineal" in filtros or "eje" in filtros)
                                 and f["geom"] == "linea" or "arista_circular" in filtros and f["geom"] == "circulo"):
                             continue
-                        mejor = (dist, _hit("arista", refs.referencia(cid, arista, caja=self._caja(cid)), [("lineas", _segmentos([poli]),
+                        mejor = (dist, _hit("arista", self._referencia(cid, arista), [("lineas", _segmentos([poli]),
                                             None, 3.5)], float((p - o) @ d), p, cuerpo=cid, forma=arista))
             if "eje" in filtros:
                 L = self._tam_planos() * 1.4
@@ -1322,7 +1331,7 @@ class Visor3D(QOpenGLWidget):
             acepta = ("cara" in filtros or ("cara_plana" in filtros or "plano" in filtros) and plano is not None
                       or "eje" in filtros and "eje" in refs.firma_cara(cara))
             if acepta:
-                return _hit("cara", refs.referencia(cid, cara, caja=self._caja(cid)), [("tris", tris, None, 0.45)], t_cara,
+                return _hit("cara", self._referencia(cid, cara), [("tris", tris, None, 0.45)], t_cara,
                             o + d * t_cara, cuerpo=cid, forma=cara, plano=plano)
             if "cuerpo" in filtros:
                 return _hit("cuerpo", {"tipo": "cuerpo", "cuerpo": cid},
@@ -1983,7 +1992,7 @@ class Visor3D(QOpenGLWidget):
                         continue
                     vistas.add(k)
                     cara = lista[k]
-                    salida.append({"tipo": "cara", "ref": refs.referencia(cid, cara, caja=self._caja(cid)),
+                    salida.append({"tipo": "cara", "ref": self._referencia(cid, cara),
                                    "dibujo": [("tris", tris[indice == k].reshape(-1, 3), None, 0.45)], "t": t,
                                    "punto": o + d * t, "cuerpo": cid, "forma": cara, "plano": geo.plano_de_cara(cara)})
                 if "cuerpo" in filtros and math.isfinite(t_min):

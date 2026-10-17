@@ -7,6 +7,8 @@
   paso «Reparar cuerpo».
 - «Reparar cuerpo» crea o edita ese paso (doble clic en el timeline).
 """
+import time
+
 import numpy as np
 
 from ...nucleo import revision as rv
@@ -100,12 +102,13 @@ class RevisarGeometria(Comando):
         clave = (tuple((c.id, id(c.forma)) for c in cuerpos), auto, impresion)
         if getattr(self, "_clave", None) != clave:
             res = []
+            hasta = time.monotonic() + rv.PRESUPUESTO_AUTOINTERSECCION
             for c in cuerpos:
                 imp = None
                 if impresion:
                     imp = rv.revisar_impresion(c.forma, espesor_minimo=impresion[0], angulo_voladizo=impresion[1],
                                                angulo_filoso=impresion[2])
-                res.append((c, rv.revisar(c.forma, autointersecciones=auto), imp))
+                res.append((c, rv.revisar(c.forma, autointersecciones=auto, hasta=hasta), imp))
             self._clave, self._res = clave, res
         return self._res
 

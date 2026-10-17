@@ -9,13 +9,14 @@ trazado externas: Pillow, numpy, scipy y contourpy.
 
 Salida: primitivas como las de `svg.leer_svg` — ('polilinea', [(x, y)…], True) en píxeles, Y hacia arriba —
 o, con `curvas=True`, ('curva', [(x, y)…], True): una spline de ajuste cerrada por contorno (más suave y con
-muchas menos entidades). El paso a milímetros lo hace `boceto_archivos.boceto_desde_primitivas`.
+muchas menos entidades; los contornos de menos de MIN_PUNTOS_CURVA vértices quedan polilíneas). El paso a milímetros lo hace `boceto_archivos.boceto_desde_primitivas`.
 """
 from pathlib import Path
 
 import numpy as np
 
 CANALES = ("auto", "luminosidad", "alfa")
+MIN_PUNTOS_CURVA = 12       # con curvas=True, un contorno con menos vértices que esto queda polígono (ver `vectorizar_imagen`)
 
 
 class ErrorVectorizar(ValueError):
@@ -156,7 +157,11 @@ def vectorizar_imagen(ruta, *, umbral=None, invertir=False, suavizado=1.0, toler
         pts = _simplificar_cerrado(pts, tolerancia / factor)
         if len(pts) < 3 or abs(_area(pts)) < 1e-9:
             continue
-        salida.append(("curva" if curvas else "polilinea", [tuple(q) for q in pts], True))
+        # Un spline de ajuste cerrado por pocos vértices se pasa de largo en las esquinas (un rectángulo de la tinta
+        # invertida, pegado al borde de la imagen, salía 53 × 45 en vez de 45 × 30: T-10 de la prueba de tortura): ese
+        # contorno es casi un polígono y, simplificado a `tolerancia`, el polígono ya es igual de fiel.
+        salida.append(("curva" if curvas and len(pts) >= MIN_PUNTOS_CURVA else "polilinea",
+                       [tuple(q) for q in pts], True))
     if not salida:
         raise ErrorVectorizar("No se encontró nada para vectorizar con ese umbral: probá con otro umbral, "
                               "invertir o canal.")

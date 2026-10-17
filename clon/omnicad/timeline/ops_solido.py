@@ -503,7 +503,7 @@ def copiar_cuerpos(op, estado, trsfs):
             c.forma = geo.unir_todos([c.forma] + copias)
         else:
             for forma in copias:
-                estado.nuevo_cuerpo(op.id, forma, c.tipo, nombre=f"{c.nombre} (copia)", **atributos_copia(c))
+                estado.nuevo_cuerpo(op.id, forma, c.tipo, nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
 
 
 class OpPatron(_OpCrear):
@@ -723,7 +723,7 @@ class OpSimetria(_OpCrear):
             if self.p["combinar"]:
                 c.forma = geo.booleano(c.forma, reflejo, "unir")
             else:
-                estado.nuevo_cuerpo(self.id, reflejo, c.tipo, nombre=f"{c.nombre} (copia)", **atributos_copia(c))
+                estado.nuevo_cuerpo(self.id, reflejo, c.tipo, nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
 
 
 class OpRellenoContorno(_OpCrear):

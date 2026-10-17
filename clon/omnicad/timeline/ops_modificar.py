@@ -132,7 +132,7 @@ class OpMover(Operacion):
             else:
                 nueva = geo.transformar(c.forma, m)
             if self.p.get("copiar"):
-                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=f"{c.nombre} (copia)",
+                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=estado.nombre_de_copia(c.nombre),
                                     **atributos_copia(c))
             else:
                 c.forma = nueva
@@ -491,7 +491,7 @@ class OpAlinear(Operacion):
             c = estado.cuerpo(cid)
             nueva = geo.transformar(c.forma, m)
             if p["copiar"]:
-                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=f"{c.nombre} (copia)",
+                estado.nuevo_cuerpo(self.id, nueva, c.tipo, nombre=estado.nombre_de_copia(c.nombre),
                                     **atributos_copia(c))
             else:
                 c.forma = nueva

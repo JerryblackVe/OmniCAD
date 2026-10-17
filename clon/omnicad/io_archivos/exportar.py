@@ -142,9 +142,13 @@ def exportar_brep(cuerpos, ruta):
 
 
 def exportar_malla(cuerpos, ruta, deflexion=0.02):
-    """3MF o PLY (también sirve para STL/OBJ) con todos los cuerpos juntos."""
+    """3MF o PLY (también sirve para STL/OBJ) con todos los cuerpos. El 3MF guarda un objeto por cuerpo (el PLY, una
+    sola malla): al volver a traerlo, cada objeto es un grupo de caras que `separate_mesh` vuelve a separar."""
     from ..nucleo import malla
-    m = _malla_total(_cuerpos(cuerpos), deflexion)
+    lista = _cuerpos(cuerpos)
+    if Path(ruta).suffix.lower() == ".3mf" and len(lista) > 1:
+        return malla.escribir([_malla_total([c], deflexion) for c in lista], ruta)
+    m = _malla_total(lista, deflexion)
     malla.escribir(m, ruta)
     return len(m.caras)
 

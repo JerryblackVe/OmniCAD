@@ -419,7 +419,22 @@ def _desfase(offset):
     return {k: texto_expr(v) for k, v in zip(("dx", "dy", "dz"), offset, strict=True)}
 
 
+def _avisar_uniones_previas(sesion, params):
+    """Si el componente que se va a mover ya tiene otra unión, la nueva lo lleva a su marco y la vieja deja de
+    cumplirse sin decirlo (T-09 de la prueba de tortura): se avisa con el nombre de cada una."""
+    estado = sesion.doc.estado_final
+    cuerpo = estado.cuerpos.get((params.get("origen1") or {}).get("cuerpo"))
+    if cuerpo is None or not cuerpo.componente:
+        return
+    previas = [o.nombre for o in sesion.doc.operaciones if isinstance(o, OpUnion) and not o.suprimida
+               and (estado.uniones.get(o.id) or {}).get("comp1") == cuerpo.componente]
+    if previas:
+        sesion.avisar(f"El componente «{_nombre_comp(estado, cuerpo.componente)}» ya tiene {', '.join(previas)}: la unión "
+                      "nueva lo lleva a su marco y esa deja de cumplirse. Suprimila o borrala si no la querés.")
+
+
 def _crear_union(sesion, nombre, params):
+    _avisar_uniones_previas(sesion, params)
     antes = _matrices(sesion)
     doc = sesion.doc
     op = OpUnion(doc.nuevo_id(), nombre_paso(sesion, nombre, "Unión", OpUnion), **params)
@@ -575,9 +590,10 @@ def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | 
     nuevos = _valores(tipo, pedidos)
     vinculos = [o for o in sesion.doc.operaciones if isinstance(o, OpVinculoMovimiento) and not o.suprimida
                 and o.p.get("union2") == op.id]
-    if vinculos:
+    if vinculos:        # no se guarda el valor pedido: el vínculo lo ignora y, si se lo suprimiera, la unión lo usaría
         sesion.avisar(f"La unión «{op.nombre}» la mueve el vínculo «{vinculos[0].nombre}»: su valor sale de la otra "
-                      "unión. Accioná esa.")
+                      "unión y no se cambió nada. Accioná esa.")
+        return {"joint": info_union(sesion, op), "moved_components": []}
     antes = _matrices(sesion)
     sesion.doc.reemplazar(op.id, OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **nuevos)))
     return {"joint": info_union(sesion, sesion.doc.operacion(op.id)), "moved_components": _movidos(sesion, antes)}
@@ -727,13 +743,15 @@ def motion_study(sesion, joint: str, values: list[float] | None = None, start: f
         revisar = {sesion.cuerpo(b).id for b in bodies}
     unidad = "deg" if gira else "mm"
     pasos, choques = [], []
+    base = _matrices(sesion)
     for v in lista:
         estado, avisos, fallo = _simular(doc, op, {clave: repr(v)})
         u = estado.uniones.get(op.id)
         paso = {"value": _r(v), "applied_value": _r(u["valores"].get(clave)) if u else None, "warnings": avisos,
                 "error": fallo}
         if u:
-            movidos = sorted(set(u["componentes"]))
+            movidos = sorted(set(u["componentes"]) | {k for k in estado.componentes       # también los que sigue un vínculo
+                                                      if k in base and not np.allclose(_matriz(estado, k), base[k])})
             paso["components"] = [{"id": k, "name": _nombre_comp(estado, k),
                                    "translation": [_r(x) for x in _matriz(estado, k)[:3, 3]],
                                    "bounding_box": _caja([c for c in estado.cuerpos.values() if c.componente == k])}

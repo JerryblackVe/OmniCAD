@@ -21,6 +21,7 @@ arista o un borde, "segmentos" (pares de puntos 2Kx3, como GL_LINES) para resalt
 algo traen "valor" (mm o mm²).
 """
 import math
+import time
 
 import numpy as np
 from OCP.BOPAlgo import BOPAlgo_ArgumentAnalyzer, BOPAlgo_CheckStatus
@@ -40,6 +41,7 @@ from OCP.TopExp import TopExp
 from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Shape
 from OCP.gp import gp_Pnt
 
+from . import aislado
 from . import analisis as an
 from . import geometria as geo
 from . import malla as ml
@@ -47,6 +49,8 @@ from . import malla as ml
 TOLERANCIA_ALTA = 0.01        # mm: una tolerancia de vértice, arista o cara mayor que esto se avisa
 LARGO_DIMINUTO = 1e-4         # mm: aristas más cortas (restos de booleanas o de un STEP mal exportado)
 _AREA_DEGENERADA = 1e-12      # fracción de diagonal² por debajo de la cual una cara es degenerada (área ~0)
+PLAZO_AUTOINTERSECCION = 10.0  # s por cuerpo para buscar autointersecciones en un proceso aparte (formas libres)
+PRESUPUESTO_AUTOINTERSECCION = 30.0  # s en total para varios cuerpos seguidos (quien itera arma `hasta`)
 MAX_PROBLEMAS = 200           # problemas que se devuelven con su ubicación (los conteos son siempre completos)
 MUESTRAS_ESPESOR = 2000       # rayos para medir el espesor (triángulos elegidos al azar, pesados por área)
 _PARES_POR_TANDA = 1_000_000  # rayos × triángulos por tanda en el cálculo del espesor (8 MB por arreglo)
@@ -300,8 +304,23 @@ def _autointersecciones(forma, limite):
     return cantidad, problemas, completo
 
 
+def _autointersecciones_seguras(forma, limite, plazo):
+    """Igual que `_autointersecciones`, pero las formas con caras libres (B-spline: roscas modeladas, solevados) van a
+    un proceso aparte con tope de `plazo` segundos: ahí el análisis puede no terminar nunca y congelaba la ventana
+    (T-01 de la prueba de tortura). Si pasa el tope no hay conteo (None) y queda un aviso."""
+    if not geo.es_forma_libre(forma):
+        return _autointersecciones(forma, limite)
+    try:
+        cantidad, problemas, completo = aislado.correr("autointersecciones", forma, plazo, limite=limite)
+    except aislado.TareaAislada as e:
+        aviso = _problema("autointerseccion_omitida", "aviso", f"No se revisaron las autointersecciones: {e}. "
+                          "Pasa con roscas modeladas y superficies B-spline muy densas.")
+        return None, [aviso], False
+    return cantidad, [{**p, "punto": None if p["punto"] is None else tuple(p["punto"])} for p in problemas], completo
+
+
 # ---------------------------------------------------------------- revisar (B-rep)
-def _revisar_brep(forma, autointersecciones, tolerancia_maxima, max_problemas):
+def _revisar_brep(forma, autointersecciones, tolerancia_maxima, max_problemas, plazo):
     _exigir_forma(forma)
     caja = geo.caja_envolvente(forma)
     diag = _diagonal_caja(caja) or 1.0
@@ -324,7 +343,7 @@ def _revisar_brep(forma, autointersecciones, tolerancia_maxima, max_problemas):
     n_auto, completo = None, True
     if autointersecciones:
         try:
-            n_auto, extra, completo = _autointersecciones(forma, max_problemas)
+            n_auto, extra, completo = _autointersecciones_seguras(forma, max_problemas, plazo)
             problemas += extra
         except Exception:  # noqa: BLE001 — el análisis booleano puede fallar en formas muy rotas
             n_auto, completo = None, False
@@ -453,7 +472,8 @@ def _revisar_malla(m, max_problemas):
     }, problemas, max_problemas, max(0, len(degenerados) - max_problemas))
 
 
-def revisar(forma, *, autointersecciones=True, tolerancia_maxima=TOLERANCIA_ALTA, max_problemas=MAX_PROBLEMAS):
+def revisar(forma, *, autointersecciones=True, tolerancia_maxima=TOLERANCIA_ALTA, max_problemas=MAX_PROBLEMAS,
+            hasta=None):
     """Revisar geometría (FreeCAD Part › Check Geometry; Rhino ShowEdges): diagnóstico de un cuerpo.
 
     `forma`: forma OCC (sólido, superficie, compuesto) o `nucleo.malla.Malla`. Devuelve un dict con:
@@ -463,14 +483,18 @@ def revisar(forma, *, autointersecciones=True, tolerancia_maxima=TOLERANCIA_ALTA
     "aristas_diminutas", "tolerancias_altas"), "tolerancias" máximas {"vertice", "arista", "cara"} (None en
     mallas), "volumen" (None si no es cerrado), "area", "caja" y "problemas" (los primeros `max_problemas`,
     errores primero; "truncado" dice si había más; "errores" y "avisos" los cuentan a todos).
-    `autointersecciones=False` saltea BOPAlgo_ArgumentAnalyzer (lo más lento en piezas grandes).
+    `autointersecciones=False` saltea BOPAlgo_ArgumentAnalyzer (lo más lento en piezas grandes). Con caras libres
+    (B-spline) corre en un proceso aparte con tope de `PLAZO_AUTOINTERSECCION` s, o hasta el instante `hasta`
+    (time.monotonic) si es antes: así revisar muchos cuerpos seguidos no se come minutos. Si no termina, queda
+    "autointersecciones" en None y un aviso "autointerseccion_omitida".
     `tolerancia_maxima` (mm): tolerancias mayores se avisan; None no las avisa.
     """
     if int(max_problemas) < 0:
         raise geo.ErrorGeometria("La cantidad máxima de problemas no puede ser negativa.")
     if isinstance(forma, ml.Malla):
         return _revisar_malla(forma, int(max_problemas))
-    return _revisar_brep(forma, bool(autointersecciones), tolerancia_maxima, int(max_problemas))
+    plazo = PLAZO_AUTOINTERSECCION if hasta is None else min(PLAZO_AUTOINTERSECCION, hasta - time.monotonic())
+    return _revisar_brep(forma, bool(autointersecciones), tolerancia_maxima, int(max_problemas), plazo)
 
 
 # ---------------------------------------------------------------- impresión 3D

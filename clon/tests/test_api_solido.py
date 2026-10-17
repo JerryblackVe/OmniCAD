@@ -637,10 +637,11 @@ def test_primitiva_con_nombre_solo_new_body(s):
 
 
 def test_patron_de_cuerpos_hereda_nombre(s):
-    """B-32: las copias de un patrón llevan «nombre (copia)», como move_body."""
+    """B-32: las copias de un patrón llevan «nombre (copia)», como move_body; si ya existe, «(copia 2)», «(copia 3)»
+    (T-16 de la prueba de tortura: nombres repetidos obligaban a usar el id)."""
     llamar(s, "create_cylinder", height=5, radius=2, name="Perno")
     llamar(s, "rectangular_pattern", bodies=["Perno"], x_count=3, x_spacing=10)
-    assert sorted(c["name"] for c in cuerpos(s).values()) == ["Perno", "Perno (copia)", "Perno (copia)"]
+    assert sorted(c["name"] for c in cuerpos(s).values()) == ["Perno", "Perno (copia 2)", "Perno (copia)"]
 
 
 def test_simetria_hereda_nombre(s):

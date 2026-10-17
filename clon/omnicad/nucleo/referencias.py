@@ -39,10 +39,16 @@ def _xyz(p):
     return [float(p.X()), float(p.Y()), float(p.Z())]
 
 
-def subformas(forma, tipo):
-    """Caras, aristas o vértices ÚNICOS de la forma, en orden estable."""
+def mapa_de_subformas(forma, tipo):
+    """Mapa indexado de las subformas únicas (caras, aristas o vértices) de `forma`: el orden de `subformas`."""
     mapa = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
     TopExp.MapShapes_s(forma, _TIPOS_TOPO[tipo], mapa)
+    return mapa
+
+
+def subformas(forma, tipo):
+    """Caras, aristas o vértices ÚNICOS de la forma, en orden estable."""
+    mapa = mapa_de_subformas(forma, tipo)
     conv = {"cara": TopoDS.Face, "arista": TopoDS.Edge, "vertice": TopoDS.Vertex}[tipo]
     return [conv(mapa.FindKey(i)) for i in range(1, mapa.Size() + 1)]
 
@@ -111,17 +117,28 @@ def firma(sub, caja=None):
     return f
 
 
-def referencia(cuerpo_id, sub, forma=None, caja=None):
+def referencia(cuerpo_id, sub, forma=None, caja=None, mapa=None):
     """Referencia serializable a una subforma de un cuerpo (con `forma` o su `caja`, la firma lleva la
-    posición relativa a la caja envolvente)."""
+    posición relativa a la caja envolvente). Con `forma` guarda además la POSICIÓN de la subforma entre las del
+    cuerpo ("indice" y cuántas había, "de"): cambiar una cota no reordena la topología, y esa posición reconoce la
+    misma cara o arista cuando la firma geométrica ya no alcanza (T-03 de la prueba de tortura). Quien arma muchas
+    referencias del mismo cuerpo (el visor, al pasar el ratón) puede pasar el `mapa` ya calculado de `mapa_de_subformas`."""
     from .geometria import caja_envolvente
     if caja is None and forma is not None:
         caja = caja_envolvente(forma)
-    return {"tipo": tipo_topologico(sub), "cuerpo": cuerpo_id, "firma": firma(sub, caja)}
+    ref = {"tipo": tipo_topologico(sub), "cuerpo": cuerpo_id, "firma": firma(sub, caja)}
+    if mapa is None and forma is not None:
+        mapa = mapa_de_subformas(forma, ref["tipo"])
+    if mapa is not None:
+        posicion = mapa.FindIndex(sub)
+        if posicion:
+            ref["indice"], ref["de"] = posicion - 1, mapa.Size()
+    return ref
 
 
 # ---------------------------------------------------------------- búsqueda
 _GEOM_LIBRE = ("bspline", "otra")
+_UMBRAL_POR_POSICION = 1.0      # distancia máxima para aceptar la subforma que ocupa la misma posición (ver `resolver`)
 
 
 def _distancia(tipo, f, g, escala):
@@ -171,7 +188,9 @@ def resolver(forma, ref, umbral=0.35):
     una ventaja clara a la segunda: así una referencia sobrevive a cambios grandes de cotas sin
     confundirse cuando hay dos candidatas parecidas.
 
-    Si ninguna pasa por geometría absoluta y la referencia tiene posición relativa a la caja ("rel"),
+    Si ninguna pasa por geometría absoluta, la referencia recuerda su posición ("indice") y el cuerpo tiene las
+    mismas subformas ("de"), vale la que ocupa esa posición (con un umbral laxo). Si no y la referencia tiene
+    posición relativa a la caja ("rel"),
     se reintenta SOLO con términos invariantes a un movimiento rígido (rel, área, largo, radio):
     cubre las referencias guardadas antes de que una unión mueva el componente (drive_joint)."""
     from .geometria import caja_envolvente
@@ -179,17 +198,24 @@ def resolver(forma, ref, umbral=0.35):
     caja = caja_envolvente(forma)
     escala = max(math.dist(caja[0], caja[1]), 1e-6) if caja else 1.0
     con_rel = "rel" in ref["firma"]
+    subs = subformas(forma, tipo)
     distancias = sorted(((_distancia(tipo, ref["firma"], firma(sub, caja if con_rel else None), escala), i, sub)
-                         for i, sub in enumerate(subformas(forma, tipo))), key=lambda x: (x[0], x[1]))
+                         for i, sub in enumerate(subs)), key=lambda x: (x[0], x[1]))
     if distancias and distancias[0][0] != math.inf:
         mejor_d, _, mejor = distancias[0]
         segunda = distancias[1][0] if len(distancias) > 1 else math.inf
         if mejor_d <= umbral or (mejor_d <= 1.2 and mejor_d < 0.5 * segunda):
             return mejor
+    if "indice" in ref and ref.get("de") == len(subs) and 0 <= ref["indice"] < len(subs):
+        # La topología no cambió (mismas subformas, mismo orden): la que ocupa la misma posición ES la misma, si
+        # sigue siendo del mismo tipo y no cambió de lugar o de tamaño más allá de lo razonable.
+        candidata = subs[ref["indice"]]
+        if _distancia(tipo, ref["firma"], firma(candidata, caja if con_rel else None), escala) <= _UMBRAL_POR_POSICION:
+            return candidata
     if con_rel:
         # Modo invariante al movimiento rígido: compara solo lo que un giro o traslación no cambia.
         locales = sorted(((_distancia_local(tipo, ref["firma"], firma(sub, caja)), i, sub)
-                          for i, sub in enumerate(subformas(forma, tipo))), key=lambda x: (x[0], x[1]))
+                          for i, sub in enumerate(subs)), key=lambda x: (x[0], x[1]))
         locales = [x for x in locales if x[0] != math.inf]
         if locales and locales[0][0] <= 0.2 and (len(locales) == 1 or locales[0][0] < 0.5 * locales[1][0]):
             return locales[0][2]

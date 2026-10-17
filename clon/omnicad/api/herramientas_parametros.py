@@ -2,7 +2,7 @@
 """Herramientas del grupo "parametros": parámetros de usuario con expresiones y unidades."""
 import difflib
 
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, LONGITUD_MAXIMA, ErrorExpresion, TablaParametros
 from .registro import Expr, herramienta
 from .errores import error
 
@@ -32,6 +32,17 @@ def _parametro(doc, nombre):
     return next(p for p in info_parametros(doc) if p["name"] == nombre)
 
 
+def _avisar_valor_raro(sesion, info):
+    """Una longitud negativa no falla: invierte la dirección de lo que la usa (una caja se extruye hacia −Z). Una de
+    más de 1 km tampoco, mientras nada la use: el paso que la use sí falla. En los dos casos se avisa."""
+    if info["kind"] == "length" and info["value"] < 0:
+        sesion.avisar(f"«{info['name']}» vale {info['value']:g} mm (negativo): lo que la usa puede invertir su "
+                      "dirección o fallar.")
+    elif info["kind"] == "length" and info["value"] > LONGITUD_MAXIMA:
+        sesion.avisar(f"«{info['name']}» vale {info['value']:g} mm, más de 1 km: el paso que la use va a fallar.")
+    return info
+
+
 def _texto(expresion):
     return expresion if isinstance(expresion, str) else repr(float(expresion))
 
@@ -58,7 +69,7 @@ def create_parameter(sesion, name: str, expression: Expr, comment: str = ""):
             raise
         tabla.agregar(name, texto, ANGULO, comment)
     sesion.doc.aplicar_parametros(tabla)
-    return _parametro(sesion.doc, name)
+    return _avisar_valor_raro(sesion, _parametro(sesion.doc, name))
 
 
 @herramienta("set_parameter", "parametros", "Cambia la expresión de un parámetro existente y recalcula el modelo. "
@@ -72,7 +83,7 @@ def set_parameter(sesion, name: str, expression: Expr):
     tabla = _copia(sesion.doc.parametros)
     tabla.modificar(name, _texto(expression))
     sesion.doc.aplicar_parametros(tabla)
-    return dict(_parametro(sesion.doc, name), previous_expression=anterior)
+    return dict(_avisar_valor_raro(sesion, _parametro(sesion.doc, name)), previous_expression=anterior)
 
 
 @herramienta("delete_parameter", "parametros", "Borra un parámetro que no use ningún paso ni otro parámetro.",

@@ -93,11 +93,14 @@ def _ref_perfil(sop, perfil):
     return dict(OpExtrusion.referencia_perfil(perfil), tipo="perfil", boceto=sop.id)
 
 
-def _numero_positivo(valor, que):
-    """Medida en mm: mayor que 0 y de hasta 1.000.000 (1 km), como las cotas (B-53). Solo números: las
-    expresiones las valida el núcleo al calcular el paso."""
+def _numero_positivo(valor, que, minimo=0.0):
+    """Medida en mm: mayor que `minimo` (0 por defecto) y de hasta 1.000.000 (1 km), como las cotas (B-53). Solo
+    números: las expresiones las valida el núcleo al calcular el paso (y también les pone el tope de 1 km)."""
     from ..restricciones.boceto import MEDIDA_MAXIMA
-    if isinstance(valor, (int, float)) and not 0 < valor <= MEDIDA_MAXIMA:
+    if isinstance(valor, (int, float)) and not minimo < valor <= MEDIDA_MAXIMA:
+        if minimo:
+            raise error("INVALID_ARGUMENTS", f"{que} tiene que ser de más de {minimo:g} mm y de hasta 1.000.000 mm "
+                                              f"(1 km) (recibió {valor:g}): menos que eso el kernel no lo distingue.")
         raise error("INVALID_ARGUMENTS", f"{que} tiene que ser mayor que 0 y de hasta 1.000.000 mm (1 km) "
                                           f"(recibió {valor:g}).")
 
@@ -524,7 +527,9 @@ def realize_copies(sesion, feature: str):
     antes = _foto(sesion)
     sesion.doc.reemplazar(op.id, nueva)
     resultado = _informe(sesion, nueva, antes)
-    resultado["realized"] = len(resultado["bodies_modified"]) + len(resultado["bodies_created"])
+    propios = f"{nueva.id}.c"      # los cuerpos de otro paso que siguen a estos (otro patrón) cambian de forma pero no son copias de acá
+    resultado["realized"] = sum(1 for c in resultado["bodies_modified"] + resultado["bodies_created"]
+                                if c["id"].startswith(propios))
     return resultado
 
 

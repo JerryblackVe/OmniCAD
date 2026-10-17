@@ -731,6 +731,27 @@ def _convertir(tipo, datos, extra, bloques, profundidad):
     return []
 
 
+COORDENADA_MAXIMA = 1e6      # mm (1 km): como las cotas del boceto (restricciones.boceto.MEDIDA_MAXIMA)
+
+
+def _numeros(x):
+    if isinstance(x, (int, float)):
+        yield x
+    elif isinstance(x, (tuple, list)):
+        for y in x:
+            yield from _numeros(y)
+
+
+def _exigir_coordenadas_validas(primitivas):
+    """Un DXF con nan, inf o coordenadas de miles de km no se puede dibujar: se dice acá con claridad (antes salía
+    «cannot convert float NaN to integer» de más adentro: T-16 de la prueba de tortura)."""
+    for p in primitivas:
+        for v in _numeros(p[1:]):
+            if not abs(v) <= COORDENADA_MAXIMA:                   # también NaN
+                raise ErrorDXF(f"El DXF tiene una coordenada que no es un número razonable ({v:g}): el máximo es "
+                               f"{COORDENADA_MAXIMA:,.0f} mm (1 km).".replace(",", "."))
+
+
 def leer_dxf_texto(texto, con_capas=False, a_mm=True):
     """Como `leer_dxf`, pero desde el contenido del archivo (str)."""
     pares = _pares(texto)
@@ -801,6 +822,7 @@ def leer_dxf_texto(texto, con_capas=False, a_mm=True):
             if p[0] == "texto":
                 p = ("texto", (float(p[1][0]), float(p[1][1])), float(p[2]), p[3])
             salida.append((_texto_dxf(capa), p) if con_capas else p)
+    _exigir_coordenadas_validas([p for _c, p in salida] if con_capas else salida)
     return salida
 
 

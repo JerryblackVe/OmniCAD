@@ -266,7 +266,8 @@ def reduce_mesh(sesion, bodies: Cuerpos, mode: Literal["proportion", "face_count
 
 
 @herramienta("remesh", "malla", "Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de "
-             "Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density). "
+             "Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density; si la "
+             "malla original tiene triángulos mucho más chicos que el promedio, el total puede bajar igual). "
              "Tiene un tope de 100.000 triángulos: si se pasaría, falla antes de calcular y dice cuánto bajar.",
              modifica=True)
 def remesh(sesion, bodies: Cuerpos, density: Expr = 1, preserve_boundaries: bool = True,
@@ -354,7 +355,9 @@ _COMBINAR = {"join": "unir", "cut": "cortar", "intersect": "intersecar", "merge"
 @herramienta("combine_meshes", "malla", "Combina cuerpos de malla (MALLA › MODIFICAR › Combinar de Fusion). operation: "
              "join, cut o intersect (booleanas reales: las mallas tienen que ser cerradas; repair_mesh o clean_mesh "
              "antes si no) o merge (junta los triángulos sin tocarlos). El resultado queda en target; las "
-             "herramientas se borran salvo keep_tools=true.", modifica=True)
+             "herramientas se borran salvo keep_tools=true. Si join conserva las tapas internas de un contacto "
+             "sin solape, reintenta con el kernel B-rep para soldarlas (hasta 50.000 triángulos por entrada; "
+             "regenera los grupos de caras).", modifica=True)
 def combine_meshes(sesion, target: str, tools: Cuerpos, operation: Literal["join", "cut", "intersect", "merge"] = "join",
                    keep_tools: bool = False, name: str | None = None):
     """

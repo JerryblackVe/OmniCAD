@@ -130,7 +130,7 @@ def _leer_cache(z, receta):
             cache[int(datos["indice"])] = (datos, [partes[k] for k in ks])
         return cache
     except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zipfile.BadZipFile,
-            geo.ErrorGeometria) as e:
+            geo.ErrorGeometria, RecursionError) as e:
         log.warning("La caché del proyecto está dañada (%s): se recalcula todo.", e)
         return None
 
@@ -161,6 +161,17 @@ def guardar(doc, ruta, miniatura_png=None, incluir_cache=True):
     return ruta
 
 
+def _json(texto):
+    """json.loads de un miembro del proyecto: el JSON roto o anidado a más no poder (RecursionError) es un proyecto
+    dañado, no un error interno (T-08 de la prueba de tortura)."""
+    try:
+        return json.loads(texto)
+    except RecursionError:
+        raise ErrorProyecto("El archivo está dañado: su JSON está anidado a una profundidad imposible.") from None
+    except ValueError as e:
+        raise ErrorProyecto(f"El archivo está dañado: no se pudo leer su JSON ({e}).") from None
+
+
 def abrir(ruta):
     ruta = Path(ruta)
     try:
@@ -168,9 +179,9 @@ def abrir(ruta):
             nombres = set(z.namelist())
             if "manifiesto.json" not in nombres or "receta.json" not in nombres:
                 raise ErrorProyecto("El archivo no es un proyecto de OmniCAD (faltan manifiesto o receta).")
-            manifiesto = json.loads(_leer_miembro(z, "manifiesto.json"))
+            manifiesto = _json(_leer_miembro(z, "manifiesto.json"))
             texto_receta = _leer_miembro(z, "receta.json")
-            receta = json.loads(texto_receta)
+            receta = _json(texto_receta)
             cache = _leer_cache(z, texto_receta)
     except zipfile.BadZipFile:
         raise ErrorProyecto("El archivo está dañado o no es un ZIP.") from None

@@ -14,7 +14,7 @@ from typing import Literal
 from ..io_archivos.boceto_archivos import boceto_desde_primitivas, caja_primitivas
 from ..nucleo import fuentes
 from ..restricciones import ErrorBoceto
-from ..restricciones.boceto import Texto, _validar_opciones_texto
+from ..restricciones.boceto import Texto, _validar_opciones_texto, validar_texto_boceto
 from ..timeline.operaciones import OpBoceto, texto_con_valores
 from ..timeline.parametros import ErrorExpresion
 from .errores import error
@@ -307,10 +307,7 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     def cambiar(b):
         t = _texto_de(b, entity)
         nuevo_texto = t.texto if text is None else str(text).replace("\\n", "\n")
-        if not nuevo_texto.strip():
-            raise ErrorBoceto("El texto está vacío.")
-        if height is not None and not 0 < height < math.inf:
-            raise ErrorBoceto("La altura del texto debe ser positiva.")
+        validar_texto_boceto(nuevo_texto, height)
         _f, _b, _i = (t.fuente if font is None else font), (t.negrita if bold is None else bold), \
             (t.cursiva if italic is None else italic)
         _verificar_fuente(_f, _b, _i)
@@ -545,11 +542,14 @@ _VISTAS_SVG = {"front": "frontal", "back": "trasera", "top": "superior", "bottom
              "trazos finos, en milímetros reales (por scale) y con la Y hacia arriba; cada tipo de línea va en su "
              "grupo (VISIBLE, OCULTA, TANGENTE). Las vistas son las del ViewCube, con Z arriba y nombradas por los "
              "ejes del MUNDO (front: cámara en -Y, se ve la cara -Y con +X a la derecha). Dibuja con eliminación "
-             "exacta de líneas ocultas de OpenCascade; las mallas no se proyectan.")
+             "exacta de líneas ocultas de OpenCascade; con roscas modeladas o superficies B-spline el método exacto "
+             "tiene tope de tiempo (15 s) y, si no termina, sigue con el rápido (aristas curvas poligonales) y lo "
+             "avisa. Las mallas no se proyectan.")
 def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "top", "bottom", "right", "left",
                                                            "iso"] = "front",
                            bodies: list[str] | None = None, hidden: Literal["dashed", "none"] = "dashed",
-                           scale: float = 1.0, overwrite: bool = False):
+                           scale: float = 1.0, overwrite: bool = False,
+                           method: Literal["auto", "exact", "fast"] = "auto"):
     """
     path: ruta del archivo .svg a escribir.
     view: vista estándar: front, back, top, bottom, right, left o iso (esquina frente-derecha-arriba).
@@ -557,6 +557,8 @@ def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "to
     hidden: dashed = las aristas tapadas salen en trazos; none = no se dibujan.
     scale: factor de escala del dibujo (1 = 1 mm del modelo es 1 mm del SVG; 0,5 = a la mitad).
     overwrite: true para reemplazar el archivo si ya existe.
+    method: auto = exacto y, si pasa el tope de tiempo, rápido; exact = solo exacto (falla si no termina);
+        fast = rápido siempre (aristas curvas poligonales).
     """
     import numpy as np
 
@@ -581,11 +583,15 @@ def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "to
     formas = [c.forma for c in cuerpos if getattr(c, "tipo", "solido") != "malla"]
     if not formas:
         raise error("NOTHING_TO_EXPORT", "No hay cuerpos para dibujar.")
+    info = {}
     try:
         proy = nd.proyectar(geo.compuesto(formas) if len(formas) > 1 else formas[0],
-                            nd.marco_orientacion(_VISTAS_SVG[view]))
+                            nd.marco_orientacion(_VISTAS_SVG[view]), "rapido" if method == "fast" else "exacto",
+                            respaldo=method != "exact", info=info)
     except geo.ErrorGeometria as e:
         raise error("OPERATION_FAILED", str(e)) from e
+    if "motivo" in info:
+        sesion.avisar(f"El método exacto no terminó ({info['motivo']}): se dibujó con el rápido.")
     capas = {"VISIBLE": proy["visibles"] + proy["silueta"], "TANGENTE": proy["tangentes"],
              "OCULTA": (proy["ocultas"] + proy["silueta_oculta"]) if hidden == "dashed" else []}
     prims = []
@@ -605,6 +611,7 @@ def export_hidden_line_svg(sesion, path: str, view: Literal["front", "back", "to
     todas = [q for _c, p in prims for q in (p[1:3] if p[0] == "linea" else p[1])]
     return {"path": str(ruta.resolve()), "view": view, "visible_lines": len(capas["VISIBLE"]),
             "hidden_lines": len(capas["OCULTA"]), "tangent_lines": len(capas["TANGENTE"]), "scale": scale,
+            "method": "fast" if info["metodo"] == "rapido" else "exact",
             "size_mm": [round(max(q[0] for q in todas) - min(q[0] for q in todas) + 2 * MARGEN, 4),
                         round(max(q[1] for q in todas) - min(q[1] for q in todas) + 2 * MARGEN, 4)],
             "size_bytes": archivo.stat().st_size}
@@ -837,7 +844,8 @@ def clean_sketch(sesion, tolerance: float = 0.01, remove_duplicates: bool = True
              "Mueve un punto del boceto (edición de nodos): extremos de líneas y arcos, puntos de control de splines "
              "(las curvas Bézier de un SVG), centros. Como arrastrar en la interfaz: el punto va a (x, y) y el resto se "
              "acomoda para seguir cumpliendo restricciones y cotas; si ellas no lo dejan llegar (por ejemplo, una cota "
-             "fija su distancia), queda lo más cerca posible: reached dice si llegó y point dónde quedó.",
+             "fija su distancia), queda lo más cerca posible: reached indica si quedó a menos de 0,001 mm "
+             "del destino pedido y point dónde quedó.",
              modifica=True)
 def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None = None):
     """
@@ -865,7 +873,7 @@ def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None
     br = boceto_resuelto(sesion, op_boceto(sesion, r["sketch"]["id"]))
     px, py = (br.boceto if br is not None else op_boceto(sesion, r["sketch"]["id"]).boceto).coords(point)
     r["point"] = {"id": point, "x": round(px, 4) + 0.0, "y": round(py, 4) + 0.0}
-    r["reached"] = math.hypot(px - x, py - y) < 1e-6
+    r["reached"] = math.hypot(px - x, py - y) < 1e-3       # el solver converge a ~1e-5 mm: <1e-6 daba false estando en el lugar
     return r
 
 

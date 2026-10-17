@@ -44,6 +44,7 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopoDS import TopoDS, TopoDS_Shape
 from OCP.gp import gp_Ax2, gp_Dir, gp_Pln, gp_Pnt
 
+from . import aislado
 from . import geometria as geo
 
 # ---------------------------------------------------------------- hoja
@@ -224,6 +225,7 @@ def marco_proyectado(padre, direccion, diedro="primero"):
 
 
 # ---------------------------------------------------------------- proyección con líneas ocultas
+PLAZO_HLR = 15.0      # s que se le da al método exacto con superficies B-spline antes de pasar al rápido
 CATEGORIAS = ("visibles", "silueta", "tangentes", "ocultas", "silueta_oculta", "tangentes_ocultas")
 _COMPUESTOS = {"visibles": "VCompound", "silueta": "OutLineVCompound", "tangentes": "Rg1LineVCompound",
                "ocultas": "HCompound", "silueta_oculta": "OutLineHCompound", "tangentes_ocultas": "Rg1LineHCompound"}
@@ -302,18 +304,8 @@ def _quitar_superpuestas(ocultas, visibles, tol):
     return [np.asarray(s) for s in salida]
 
 
-def proyectar(forma, marco, metodo="exacto", deflexion=None):
-    """Proyección con eliminación de líneas ocultas: {categoría: [arrays Kx2]} en mm del modelo.
-
-    Categorías: visibles, silueta, tangentes (aristas suaves), ocultas, silueta_oculta, tangentes_ocultas.
-    metodo="exacto" usa HLRBRep_Algo; "rapido" usa HLRBRep_PolyAlgo sobre el teselado (más veloz en piezas
-    complejas, aristas curvas poligonales)."""
-    vacio = {c: [] for c in CATEGORIAS}
-    if forma is None or geo.esta_vacia(forma):
-        return vacio
-    caja = geo.caja_envolvente(forma)
-    diag = float(np.linalg.norm(np.subtract(caja[1], caja[0]))) if caja else 1.0
-    deflexion = deflexion or max(diag * 2e-4, 1e-3)
+def _hlr(forma, marco, metodo, deflexion):
+    """El HLR de OpenCascade sobre `forma`: {categoría: [arrays Kx2]} crudo (sin quitar las ocultas tapadas)."""
     proyector = HLRAlgo_Projector(marco.ax2())
     try:
         if metodo == "rapido":
@@ -331,9 +323,46 @@ def proyectar(forma, marco, metodo="exacto", deflexion=None):
             algo.Update()
             algo.Hide()
             conv = HLRBRep_HLRToShape(algo)
-        salida = {c: _polilineas(getattr(conv, n)(), deflexion) for c, n in _COMPUESTOS.items()}
+        return {c: _polilineas(getattr(conv, n)(), deflexion) for c, n in _COMPUESTOS.items()}
     except Exception as e:  # noqa: BLE001
         raise geo.ErrorGeometria(f"No se pudo proyectar la vista: {e}") from e
+
+
+def proyectar(forma, marco, metodo="exacto", deflexion=None, respaldo=True, info=None):
+    """Proyección con eliminación de líneas ocultas: {categoría: [arrays Kx2]} en mm del modelo.
+
+    Categorías: visibles, silueta, tangentes (aristas suaves), ocultas, silueta_oculta, tangentes_ocultas.
+    metodo="exacto" usa HLRBRep_Algo; "rapido" usa HLRBRep_PolyAlgo sobre el teselado (más veloz en piezas
+    complejas, aristas curvas poligonales).
+
+    El método exacto con superficies B-spline (roscas modeladas) puede no terminar nunca y congelar la ventana (T-02 de
+    la prueba de tortura): ahí corre en un proceso aparte con tope de PLAZO_HLR s. Si pasa el tope sigue con "rapido"
+    (o, con respaldo=False, lanza ErrorGeometria). `info`, si es un dict, recibe "metodo" (el que se usó) y, si hubo
+    respaldo, "motivo"."""
+    vacio = {c: [] for c in CATEGORIAS}
+    if info is not None:
+        info["metodo"] = metodo
+    if forma is None or geo.esta_vacia(forma):
+        return vacio
+    caja = geo.caja_envolvente(forma)
+    diag = float(np.linalg.norm(np.subtract(caja[1], caja[0]))) if caja else 1.0
+    deflexion = deflexion or max(diag * 2e-4, 1e-3)
+    salida = None
+    if metodo != "rapido" and geo.es_forma_libre(forma):
+        try:
+            crudo = aislado.correr("proyeccion_exacta", forma, PLAZO_HLR, e=marco.e.tolist(), x=marco.x.tolist(),
+                                   deflexion=deflexion)
+            salida = {c: [np.asarray(p, float) for p in crudo[c]] for c in CATEGORIAS}
+        except aislado.TareaAislada as ex:
+            if not respaldo:
+                raise geo.ErrorGeometria(f"El método exacto no terminó: {ex}. Probá con el método rápido.") from None
+            metodo = "rapido"
+            if info is not None:
+                info["motivo"] = str(ex)
+    if salida is None:
+        salida = _hlr(forma, marco, metodo, deflexion)
+    if info is not None:
+        info["metodo"] = metodo                  # el que se usó (puede ser «rapido» si el exacto no terminó)
     tol = max(diag * 1e-5, 1e-5)
     visibles = salida["visibles"] + salida["silueta"] + salida["tangentes"]
     for c in ("ocultas", "silueta_oculta", "tangentes_ocultas"):

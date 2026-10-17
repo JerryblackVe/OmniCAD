@@ -231,6 +231,7 @@ class _VaciadoQueRevienta(_VaciadoFalso):
 
 def test_vaciado_que_deja_la_cara_puesta_falla(monkeypatch):
     caja = geo.caja(20, 20, 10)
+    monkeypatch.setattr(sm, "_cascara_por_desfase", lambda *a: None)      # sin el plan B (otro test): solo el kernel
     monkeypatch.setattr(sm, "BRepOffsetAPI_MakeThickSolid", _VaciadoFalso)
     with pytest.raises(geo.ErrorGeometria, match="El vaciado falló: el kernel no pudo quitar esas caras"):
         sm.vaciado(caja, [_tapa(caja)], espesor_interior=2)

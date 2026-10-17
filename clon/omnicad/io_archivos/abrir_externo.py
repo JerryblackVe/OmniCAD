@@ -38,7 +38,7 @@ FORMATOS = {".step": "STEP", ".stp": "STEP", ".iges": "IGES", ".igs": "IGES", ".
             ".f3d": "Fusion 360", ".f3z": "Fusion 360"}
 MALLAS = (".stl", ".obj", ".3mf", ".ply")
 UNIDADES_MALLA = ("mm", "cm", "m", "pulgadas", "pies")
-INSERTABLES = (".step", ".stp", ".iges", ".igs") + MALLAS + (".f3d", ".f3z", ".omnicad", ".fclone")
+INSERTABLES = (".step", ".stp", ".iges", ".igs", ".brep", ".brp") + MALLAS + (".f3d", ".f3z", ".omnicad", ".fclone")
 _LONGITUDES_FUSION = {"mm", "cm", "m", "in", "ft"}
 _TOLERANCIA_VOLUMEN = 0.01            # con Fusion: 1 % (en superficies libres los núcleos difieren ~0,5 %)
 
@@ -167,6 +167,8 @@ def operacion_para_insertar(ruta, op_id, unidades="mm"):
                               estructura=True)
     if ext in (".iges", ".igs"):
         return OpImportarIGES(op_id, f"Importar {ruta.name}", archivo=ruta.name, contenido=_texto(ruta))
+    if ext in (".brep", ".brp"):
+        return OpOperacionBase(op_id, f"Insertar {ruta.name}", cuerpos=_cuerpos_brep(ruta, op_id))
     if ext in MALLAS:
         return OpInsertarMalla(op_id, f"Insertar {ruta.name}", archivo=ruta.stem, datos=_malla(ruta, unidades))
     if ext in (".f3d", ".f3z"):

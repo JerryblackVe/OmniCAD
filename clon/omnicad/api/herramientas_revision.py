@@ -6,6 +6,7 @@
 El cálculo está en `nucleo.revision`; acá se traduce el informe a claves en inglés. Unidades: mm, mm², mm³ y grados.
 """
 import math
+import time
 
 from ..nucleo import revision as rv
 from ..timeline.ops_revision import OpReparar
@@ -18,7 +19,8 @@ from .registro import Expr, herramienta
 # Tipos de problema del núcleo → kind estable del resultado.
 _TIPOS = {"invalido": "invalid_shape", "cara_invalida": "invalid_face", "cascara_invalida": "invalid_shell",
           "solido_invalido": "invalid_solid", "arista_libre": "free_edge", "arista_no_manifold": "non_manifold_edge",
-          "autointerseccion": "self_intersection", "cara_degenerada": "degenerate_face", "arista_diminuta": "tiny_edge",
+          "autointerseccion": "self_intersection", "autointerseccion_omitida": "self_intersection_skipped",
+          "cara_degenerada": "degenerate_face", "arista_diminuta": "tiny_edge",
           "tolerancia_alta": "high_tolerance", "normales_invertidas": "inverted_normals",
           "volumen_negativo": "negative_volume", "abierto": "not_closed", "espesor_fino": "thin_wall",
           "voladizo": "overhang", "arista_filosa": "sharp_edge"}
@@ -89,12 +91,15 @@ def _informe_geometria(sesion, c, informe):
              "manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes "
              "abiertos, no manifold, normales invertidas y triángulos degenerados. Cada problema trae kind, severity "
              "(error o warning), un mensaje y su posición [x, y, z]; max_tolerance es la mayor tolerancia del kernel "
-             "por tipo. No cambia el documento: para arreglar, repair_body.")
+             "por tipo. La búsqueda de autointersecciones en cuerpos con superficies B-spline (roscas modeladas) corre "
+             "con tope de tiempo: si no termina, self_intersections queda en null y sale el aviso "
+             "self_intersection_skipped. No cambia el documento: para arreglar, repair_body.")
 def check_geometry(sesion, body: str | None = None, self_intersection: bool = True, tolerance_limit: float = 0.01,
                    max_issues: int = 50):
     """
     body: id o nombre del cuerpo; vacío = todos los cuerpos del modelo.
-    self_intersection: true busca caras que se cortan entre sí (análisis booleano, lo más lento en piezas grandes).
+    self_intersection: true busca caras que se cortan entre sí (análisis booleano, lo más lento en piezas grandes;
+        con superficies B-spline tiene tope de 10 s por cuerpo y 30 s en total).
     tolerance_limit: tolerancia en mm de vértice, arista o cara por encima de la cual se avisa (high_tolerance).
     max_issues: cuántos problemas devolver por cuerpo como máximo; los conteos son siempre completos.
     """
@@ -103,9 +108,10 @@ def check_geometry(sesion, body: str | None = None, self_intersection: bool = Tr
         raise error("INVALID_ARGUMENTS", f"tolerance_limit tiene que ser un número mayor que cero en mm (recibió "
                     f"{tolerance_limit}).")
     informes = []
+    hasta = time.monotonic() + rv.PRESUPUESTO_AUTOINTERSECCION      # un tope para todos los cuerpos juntos
     for c in _elegidos(sesion, body):
         informe = rv.revisar(c.forma, autointersecciones=self_intersection, tolerancia_maxima=tolerance_limit,
-                             max_problemas=max_issues)
+                             max_problemas=max_issues, hasta=hasta)
         informes.append(_informe_geometria(sesion, c, informe))
     return {"bodies": informes, "count": len(informes), "all_valid": all(i["valid"] for i in informes),
             "all_closed": all(i["closed"] for i in informes)}

@@ -84,6 +84,9 @@ def _verificar_dependencias():
 
 
 def main(argv=None):
+    if (sys.argv[1:] if argv is None else argv)[:1] == ["--tarea-aislada"]:
+        from omnicad.nucleo import aislado      # hijo de `aislado.correr` en la app instalada (sin ventana ni Qt)
+        return aislado.principal((sys.argv[2:] if argv is None else argv[1:]))
     ap = argparse.ArgumentParser(description="OmniCAD — CAD 3D paramétrico minimalista")
     ap.add_argument("proyecto", nargs="?", help="archivo .omnicad a abrir")
     ap.add_argument("--ejemplo", action="store_true", help="cargar el modelo de ejemplo")
