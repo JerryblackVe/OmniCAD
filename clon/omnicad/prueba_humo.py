@@ -300,6 +300,78 @@ def _clic(lz, u, v):
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz.a_px(u, v).toPoint())
 
 
+def _gizmo_calcomania(v, r, carpeta):
+    """Usa cada asa con eventos al visor y guarda su captura, sin mover el ratón del sistema."""
+    import math
+    import numpy as np
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from .ui import manipuladores as mp
+
+    p, visor = v.panel, v.visor
+    g = p.manipuladores
+    inicial = dict(p.valores)
+
+    def manip(clave):
+        if clave == "libre":
+            return next(m for m in g.manips if isinstance(m, mp.PosicionCalcomania))
+        return next(m for m in g.manips if getattr(m, "clave", None) == clave)
+
+    def tirar(desde, hasta):
+        xy, ok = g.pantalla([desde, hasta])
+        assert ok.all()
+        # Con píxeles enteros, tres gestos seguidos acumulan error de redondeo en mm.
+        a, b = (QPointF(*q) for q in xy)
+        _mover(visor, a)
+        QApplication.sendEvent(visor, QMouseEvent(QEvent.MouseButtonPress, a, visor.mapToGlobal(a),
+                                                 Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+        _mover(visor, b)
+        QApplication.sendEvent(visor, QMouseEvent(QEvent.MouseButtonRelease, b, visor.mapToGlobal(b),
+                                                 Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+        p._calcular_previa()
+
+    for clave in ("dx", "dy"):
+        m = manip(clave)
+        a, b = m.puntos(g)
+        tirar((a + b) / 2, (a + b) / 2 + m.direccion * 2)
+        r.check(abs(g.valor(clave) - p.ctx.evaluar(inicial[clave]) - 2) < 0.1,
+                f"Calcomanía: flecha {clave[-1].upper()} desplaza 2 mm")
+    m = manip("libre")
+    tirar(m.punto, m.punto + m.u * 3 + m.v * 4)
+    r.check(abs(g.valor("dx") - p.ctx.evaluar(inicial["dx"]) - 5) < 0.1
+            and abs(g.valor("dy") - p.ctx.evaluar(inicial["dy"]) - 6) < 0.1,
+            f"Calcomanía: cuadrado central desplaza X/Y (3 y 4 mm; finales {g.valor('dx')}, {g.valor('dy')})")
+    m = manip("angulo")
+    d = m.asa(g) - m.centro
+    tirar(m.asa(g), m.centro + d * math.cos(math.pi / 6) + np.cross(m.eje, d) * math.sin(math.pi / 6))
+    r.check(abs(g.valor("angulo") - p.ctx.evaluar(inicial["angulo"], "angulo") - 30) < 1,
+            "Calcomanía: manija superior gira 30 grados")
+    m = manip("ancho")
+    _, asa = m.puntos(g)
+    tirar(asa, m.origen + (asa - m.origen) * 1.5)
+    r.check(abs(g.valor("escala") - 1.5) < 0.03, "Calcomanía: codo azul escala uniformemente a 1.50")
+    caja = g.cajas["escala"]
+    caja.setText("2.00")
+    QTest.keyClick(caja, Qt.Key_Return)
+    r.check(g.valor("escala") == 2, "Calcomanía: la caja editable aplica 2.00 al panel")
+    for clave in ("voltear", "voltear_v"):
+        for _ in range(2):
+            m = manip(clave)
+            punto = g.pantalla([m._geom(g)[0]])[0][0]
+            q = QPointF(*punto).toPoint()
+            previo = p.valores[clave]
+            _mover(visor, q)
+            QTest.mouseClick(visor, Qt.LeftButton, Qt.NoModifier, q)
+            r.check(p.valores[clave] is not previo, f"Calcomanía: clic en {clave} alterna su casilla")
+    for clave in ("dx", "dy", "angulo", "escala", "voltear", "voltear_v"):
+        p.set_valor(clave, inicial[clave])
+    visor.setFocus()
+    p._calcular_previa()
+    _mover(visor, QPoint(5, 5))
+    QTest.qWait(100)
+    r.check(v.grab().save(str(carpeta / "gizmo_calcomania.png")), "Calcomanía: captura del gizmo guardada")
+
+
 def _boceto_en_3d(v, r):
     # Linux (WSLg): al cerrar los diálogos de las fases anteriores la ventana queda sin activar y los atajos de
     # teclado (la S de abajo) no le llegan; en Windows la activación vuelve sola.
@@ -781,6 +853,9 @@ def ejecutar():
     r.check(r23["ok"] and {"archivo", "plano", "encadenar", "opacidad", "mantener_proporcion", "ancho", "alto", "dx",
                            "dy", "angulo", "voltear", "voltear_v"} <= claves and not v.panel.grab().isNull(),
             "P23d: el panel de la calcomanía trae todas sus opciones")
+    v.visor.vista("arriba")
+    v.panel._calcular_previa()
+    _gizmo_calcomania(v, r, carpeta)
     v.panel.cancelar()
     b = Boceto()
     b.agregar_rectangulo((50, 20), (70, 30))
