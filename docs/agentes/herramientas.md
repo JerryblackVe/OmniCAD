@@ -61,7 +61,7 @@ Archivo, escena, timeline y deshacer.
 
 ### `set_decal`
 
-Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.
+Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. El factor de escala multiplica uniformemente anchura y altura. En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -80,6 +80,7 @@ Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tan
   - `angle` (número o expresión; opcional, por defecto `null`): ángulo Z en grados.
   - `flip_h` (true/false; opcional, por defecto `null`): volteo horizontal de imagen.
   - `flip_v` (true/false; opcional, por defecto `null`): volteo vertical de imagen.
+  - `scale` (número o expresión; opcional, por defecto `null`): factor uniforme positivo sobre anchura y altura; 1 conserva el tamaño (también con keep_aspect=false).
 - CLI: `omnicad call set_decal --doc pieza.omnicad`
 
 ### `get_scene_info`

@@ -24,7 +24,7 @@ import math
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer
 from PySide6.QtGui import QPolygonF
-from PySide6.QtWidgets import QLineEdit
+from PySide6.QtWidgets import QLineEdit, QToolTip
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
 
@@ -283,24 +283,6 @@ class AsaRadial(Flecha):
         return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "asa"
 
 
-class Volteo(AsaRadial):
-    """Botón circular de volteo de la calcomanía; un clic alterna la casilla del panel."""
-    def __init__(self, clave, centro, direccion, distancia_px):
-        super().__init__(clave, centro, direccion, caja=False)
-        self.distancia_px = distancia_px
-
-    def _geom(self, g):
-        k = g.escala(self.origen)
-        return self.origen + self.direccion * self.distancia_px * k, self.direccion, k
-
-    def empezar(self, g, pos, sub):
-        g.escribir({self.clave: not bool(g.panel.valores.get(self.clave))})
-        return {}
-
-    def mover(self, g, estado, pos):
-        return {}
-
-
 class Posicion(Manipulador):
     """Asa de posición: un punto sobre un plano que se arrastra con el ratón (el agujero sobre una cara, el
     desplazamiento de un dibujo insertado). Es un aro con cruz de ~15 px de radio de agarre.
@@ -455,11 +437,199 @@ class Angulo(Manipulador):
         return []
 
 
-class GiroCalcomania(Angulo):
-    """El arco de Calcomanía se ve completo incluso antes de girar."""
+AYUDA_CALCOMANIA = "Modificar el tamaño de la imagen o la colocación"
+GRIS_CALCOMANIA = _rgb("#c9c9c9")
+BORDE_CALCOMANIA = _rgb("#444444")
+AZUL_CALCOMANIA = _rgb("#289acb")
+
+
+def _figura_calcomania(g, centro, u, v, puntos, color, activo, borde=BORDE_CALCOMANIA):
+    """Silueta propia sobre el plano, rellena con líneas para que el modelo no tape el asa."""
+    puntos = np.asarray(puntos, float)
+    k = g.escala(centro)
+    mundo = lambda xy: centro + (xy[:, :1] * u + xy[:, 1:] * v) * k  # noqa: E731
+    relleno = []
+    for y in np.arange(puntos[:, 1].min() + 0.3, puntos[:, 1].max(), 0.6):
+        cortes = []
+        for a, b in zip(puntos, np.roll(puntos, -1, axis=0), strict=True):
+            if min(a[1], b[1]) <= y < max(a[1], b[1]):
+                cortes.append(a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]))
+        cortes.sort()
+        for i in range(0, len(cortes) - 1, 2):
+            relleno.extend(((cortes[i], y), (cortes[i + 1], y)))
+    contorno = mundo(np.vstack((puntos, puntos[0])))
+    return [("lineas", mundo(np.asarray(relleno)), _aclarar(color, 0.4) if activo else color, 1.4),
+            ("lineas", _segs(contorno), AZUL_CALCOMANIA if activo else borde, 2.0)]
+
+
+def _tocar_figura(g, centro, u, v, puntos, q):
+    k = g.escala(centro)
+    puntos = np.asarray(puntos, float)
+    s, ok = g.pantalla(centro + (puntos[:, :1] * u + puntos[:, 1:] * v) * k)
+    if not ok.all():
+        return math.inf
+    if QPolygonF([QPointF(*p) for p in s]).containsPoint(QPointF(*q), Qt.OddEvenFill):
+        return 0.0
+    return _dist_segmentos_px(q, np.vstack((s, s[0])), np.ones(len(s) + 1, bool))
+
+
+class FlechaCalcomania(Flecha):
+    """Traslación axial con flecha plana gris, separada del cuadrado central."""
+    ayuda = AYUDA_CALCOMANIA
+    _contorno = ((22, -31), (40, -31), (40, -38), (54, -28), (40, -18), (40, -25), (22, -25))
+
+    def __init__(self, clave, centro, u, v):
+        super().__init__(clave, centro, u if clave == "dx" else v, caja="arrastre")
+        self.u, self.v = np.asarray(u), np.asarray(v)
+
+    def _ejes(self):
+        return (self.u, self.v) if self.clave == "dx" else (self.v, self.u)
+
+    def puntos(self, g):
+        u, v = self._ejes()
+        k = g.escala(self.origen)
+        return self.origen + (u * 22 - v * 28) * k, self.origen + (u * 54 - v * 28) * k
+
     def dibujar(self, g, activo):
-        return super().dibujar(g, activo) + [("lineas", _segs(_arco(self.centro, self.u, self.v,
-                                                                  self._r(g), 0, 2 * math.pi)), AZUL, 1.5)]
+        return _figura_calcomania(g, self.origen, *self._ejes(), self._contorno, GRIS_CALCOMANIA, activo is not None)
+
+    def tocar(self, g, q):
+        return _tocar_figura(g, self.origen, *self._ejes(), self._contorno, q), "flecha"
+
+
+class PosicionCalcomania(Posicion):
+    """Cuadrado central de traslación libre en las dos direcciones del plano."""
+    ayuda = AYUDA_CALCOMANIA
+    _contorno = ((-10, -10), (10, -10), (10, 10), (-10, 10))
+
+    def __init__(self, centro, plano):
+        super().__init__("calcomania", centro, plano.normal,
+                         lambda q: {"dx": float((q - plano.origen) @ plano.u),
+                                    "dy": float((q - plano.origen) @ plano.v)})
+        self.u, self.v = np.asarray(plano.u), np.asarray(plano.v)
+
+    def dibujar(self, g, activo):
+        return _figura_calcomania(g, self.punto, self.u, self.v, self._contorno, GRIS_CALCOMANIA, activo is not None)
+
+    def tocar(self, g, q):
+        return _tocar_figura(g, self.punto, self.u, self.v, self._contorno, q), "mover"
+
+
+class GiroCalcomania(Angulo):
+    """Arco gris superior con círculo y punto, sin radios ni círculo completo."""
+    ayuda = "Girar la imagen sobre su centro"
+
+    def _r(self, g):
+        return 86 * g.escala(self.centro)
+
+    def asa(self, g):
+        return self.centro + self.u * self._r(g) + self.v * 28 * g.escala(self.centro)
+
+    def dibujar(self, g, activo):
+        k = g.escala(self.centro)
+        origen = self.centro + self.v * 28 * k - self.u * 10 * k
+        arco = _arco(origen, -self.v, self.u, 96 * k, math.radians(30), math.radians(150))
+        color = AZUL_CALCOMANIA if activo is not None else BORDE_CALCOMANIA
+        asa = self.asa(g)
+        circulo = [(10 * math.cos(t), 10 * math.sin(t)) for t in np.linspace(0, 2 * math.pi, 40)[:-1]]
+        punto = [(2 * math.cos(t), 2 * math.sin(t)) for t in np.linspace(0, 2 * math.pi, 20)[:-1]]
+        tramos = [("lineas", np.array([a, b]),
+                   color if activo is not None else _aclarar(color, abs(2 * (i + 0.5) / (len(arco) - 1) - 1) ** 2), 1.6)
+                  for i, (a, b) in enumerate(zip(arco[:-1], arco[1:], strict=True))]
+        return (tramos
+                + _figura_calcomania(g, asa, -self.v, self.u, circulo, GRIS_CALCOMANIA, activo is not None)
+                + _figura_calcomania(g, asa, -self.v, self.u, punto, BORDE_CALCOMANIA, False))
+
+    def tocar(self, g, q):
+        s, ok = g.pantalla([self.asa(g)])
+        return (max(0.0, float(np.linalg.norm(s[0] - q)) - 10) if ok[0] else math.inf), "asa"
+
+
+class EscalaCalcomania(AsaRadial):
+    """Codo azul y factor uniforme; conserva también las proporciones personalizadas."""
+    ayuda = AYUDA_CALCOMANIA
+    _contorno = ((-18, 25), (10, 25), (10, 31), (-18, 31))
+    _vertical = ((25, -18), (31, -18), (31, 10), (25, 10))
+    _codo = ([(12 + 19 * math.cos(t), 12 + 19 * math.sin(t)) for t in np.linspace(0, math.pi / 2, 17)]
+             + [(12 + 13 * math.cos(t), 12 + 13 * math.sin(t)) for t in np.linspace(math.pi / 2, 0, 17)])
+
+    def __init__(self, centro, u, v):
+        super().__init__("ancho", centro, u, caja=False)
+        self.u, self.v = np.asarray(u), np.asarray(v)
+        self.ident = "escala:calcomania"
+
+    def puntos(self, g):
+        asa = self.origen + (self.u + self.v) * 24 * g.escala(self.origen)
+        return self.origen, asa
+
+    def dibujar(self, g, activo):
+        prims = []
+        for contorno, color in ((self._contorno, GRIS_CALCOMANIA), (self._vertical, GRIS_CALCOMANIA),
+                                (self._codo, AZUL_CALCOMANIA)):
+            prims += _figura_calcomania(g, self.origen, self.u, self.v, contorno, color, activo is not None,
+                                       (1.0, 1.0, 1.0) if contorno is self._codo else BORDE_CALCOMANIA)
+        k = g.escala(self.origen)
+        centro = self.origen + (self.u + self.v) * 12 * k
+        prims.append(("lineas", _segs(_arco(centro, self.u, self.v, 16 * k, 0, math.pi / 2)), (1.0, 1.0, 1.0), 1.0))
+        return prims
+
+    def tocar(self, g, q):
+        return _tocar_figura(g, self.origen, self.u, self.v, self._codo, q), "escala"
+
+    def empezar(self, g, pos, sub):
+        normal = np.cross(self.u, self.v)
+        p = plano_rayo(*g.rayo(pos), self.origen, normal)
+        if p is None or np.linalg.norm(p - self.origen) < 1e-9:
+            return None
+        return {"radio": float(np.linalg.norm(p - self.origen)), "v0": g.valor("escala"), "normal": normal}
+
+    def mover(self, g, estado, pos):
+        p = plano_rayo(*g.rayo(pos), self.origen, estado["normal"])
+        if p is None:
+            return {}
+        return {"escala": max(0.001, estado["v0"] * float(np.linalg.norm(p - self.origen)) / estado["radio"])}
+
+    def cajas(self, g, arrastre):
+        return [("escala", self.puntos(g)[1])]
+
+
+class Volteo(AsaRadial):
+    """Moño o reloj de arena con flecha curva; un clic alterna el volteo."""
+    ayuda = AYUDA_CALCOMANIA
+    _triangulos = (((-9, -8), (-9, 8), (0, 0)), ((9, -8), (0, 0), (9, 8)))
+
+    def __init__(self, clave, centro, u, v):
+        super().__init__(clave, centro, u, caja=False)
+        self.u, self.v = np.asarray(u), np.asarray(v)
+
+    def _geom(self, g):
+        k = g.escala(self.origen)
+        x, y = (-58, -28) if self.clave == "voltear" else (-28, -58)
+        return self.origen + (self.u * x + self.v * y) * k, self.direccion, k
+
+    def dibujar(self, g, activo):
+        centro, _, k = self._geom(g)
+        u, v = (self.u, self.v) if self.clave == "voltear" else (self.v, -self.u)
+        invertida = bool(g.panel.valores.get(self.clave))
+        prims = []
+        for i, triangulo in enumerate(self._triangulos):
+            color = AZUL_CALCOMANIA if (i == 1) != invertida else GRIS_CALCOMANIA
+            prims += _figura_calcomania(g, centro, u, v, triangulo, color, activo is not None)
+        arco = _arco(centro + v * 7 * k, u, v, 10 * k, math.radians(25), math.radians(165))
+        prims += [("lineas", _segs(arco), AZUL_CALCOMANIA if activo is not None else BORDE_CALCOMANIA, 1.5)]
+        prims += _figura_calcomania(g, centro, u, v, ((7, 9), (12, 12), (7, 15)), BORDE_CALCOMANIA, activo is not None)
+        return [("lineas", puntos, (1.0, 1.0, 1.0), grosor + 2) for _, puntos, _, grosor in prims] + prims
+
+    def tocar(self, g, q):
+        centro, _, _ = self._geom(g)
+        return _tocar_figura(g, centro, self.u, self.v, ((-11, -11), (11, -11), (11, 18), (-11, 18)), q), "volteo"
+
+    def empezar(self, g, pos, sub):
+        g.escribir({self.clave: not bool(g.panel.valores.get(self.clave))})
+        return {}
+
+    def mover(self, g, estado, pos):
+        return {}
 
 
 class Triada(Manipulador):
@@ -814,9 +984,13 @@ class GestorManipuladores(QObject):
             caja = self.cajas.get(clave)
             if caja is None:
                 caja = self.cajas[clave] = CajaValor(self, clave)
+                if clave == "escala" and self.comando.CLAVE == "calcomania":
+                    caja.setAlignment(Qt.AlignCenter)
             caja.punto = np.asarray(punto, float)
             if not caja.hasFocus():
                 texto = str(self.panel.valores.get(clave, ""))
+                if clave == "escala" and self.comando.CLAVE == "calcomania":
+                    texto = f"{self.valor(clave):.2f}"
                 if caja.text() != texto:
                     caja.setText(texto)
                     caja.setCursorPosition(0)
@@ -842,7 +1016,9 @@ class GestorManipuladores(QObject):
     def aplicar_caja(self, caja):
         texto = caja.text().strip()
         try:
-            self.ctx.evaluar(texto, self.tipo(caja.clave))
+            valor = self.ctx.evaluar(texto, self.tipo(caja.clave))
+            if caja.clave == "escala" and self.comando.CLAVE == "calcomania" and valor <= 0:
+                raise ValueError("El factor de escala debe ser positivo.")
         except Exception as e:  # noqa: BLE001 — se marca la caja en rojo, como el panel
             caja.setStyleSheet(QSS_CAJA + "QLineEdit#caja_manipulador { background: #ffd9d9; }")
             caja.setToolTip(str(e))
@@ -949,6 +1125,12 @@ class GestorManipuladores(QObject):
         if obj is not self.visor or self._cerrado or (not self.manips and self._arrastre is None):
             return False
         t = e.type()
+        if t == QEvent.ToolTip:
+            tocado = self._tocado(e.pos())
+            ayuda = getattr(tocado[0], "ayuda", "") if tocado else ""
+            if ayuda:
+                QToolTip.showText(e.globalPos(), ayuda, self.visor)
+                return True
         if t == QEvent.MouseButtonPress and e.button() == Qt.LeftButton:
             if self.empezar_arrastre(e.position()):
                 e.accept()

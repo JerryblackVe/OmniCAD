@@ -224,6 +224,7 @@ class Calcomania(Lienzo):
                 Casilla("encadenar", "Encadenar caras", True), Porcentaje("opacidad", "Opacidad"),
                 Casilla("mantener_proporcion", "Mantener relación de aspecto", True),
                 Expresion("ancho", "Anchura", "0 mm"), Expresion("alto", "Altura", "0 mm"),
+                Expresion("escala", "Factor de escala", "1.00", ESCALAR),
                 Expresion("dx", "Distancia X", "0 mm"), Expresion("dy", "Distancia Y", "0 mm"),
                 Expresion("angulo", "Ángulo Z", "0 deg", ANGULO),
                 Casilla("voltear", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
@@ -273,6 +274,7 @@ class Calcomania(Lienzo):
             if getattr(self, "_panel", None) is not None:
                 self._panel.set_valor("ancho", f"{ancho:.12g} mm")
         op.p.update(ancho=f"{ancho:.12g} mm", alto=v["alto"], encadenar=v["encadenar"],
+                    escala=v["escala"],
                     mantener_proporcion=v["mantener_proporcion"], voltear_v=v["voltear_v"],
                     usar_opacidad=v.get("usar_opacidad", True),
                     centrada=ctx.op.p.get("centrada", False) if ctx.op else True)
@@ -295,13 +297,12 @@ class Calcomania(Lienzo):
         pl = superficie(e.forma, centrada=ctx.op.p.get("centrada", False) if ctx.op else True)["plano"]
         dx, dy = ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])
         o = pl.a_3d(dx, dy)
-        return [mp.Posicion("calcomania", o, pl.normal,
-                            lambda q: {"dx": float((q - pl.origen) @ pl.u), "dy": float((q - pl.origen) @ pl.v)}),
-                mp.Flecha("dx", pl.a_3d(0, dy), pl.u, caja="arrastre"),
-                mp.Flecha("dy", pl.a_3d(dx, 0), pl.v, caja="arrastre"),
+        return [mp.PosicionCalcomania(o, pl),
+                mp.FlechaCalcomania("dx", o, pl.u, pl.v),
+                mp.FlechaCalcomania("dy", o, pl.u, pl.v),
                 mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja="arrastre"),
-                mp.AsaRadial("ancho", o, pl.u, factor=0.5, minimo=0.001, caja="arrastre"),
-                mp.Volteo("voltear", o, pl.u, -28), mp.Volteo("voltear_v", o, pl.v, -28)]
+                mp.EscalaCalcomania(o, pl.u, pl.v),
+                mp.Volteo("voltear", o, pl.u, pl.v), mp.Volteo("voltear_v", o, pl.u, pl.v)]
 
 
 registrar(InsertarDXF, InsertarSVG, VectorizarImagen, Lienzo, Calcomania)

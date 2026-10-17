@@ -14,13 +14,14 @@ from .herramientas_solido import _agregar, texto_expr
 
 @herramienta("set_decal", "documento", "Crea o edita una calcomanía sobre una cara, con tamaño, "
              "proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. "
+             "El factor de escala multiplica uniformemente anchura y altura. "
              "En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.", modifica=True)
 def set_decal(sesion, image: str | None = None, face: str | None = None, body: str | None = None,
               feature: str | None = None, width: Expr | None = None, height: Expr | None = None,
               keep_aspect: bool | None = None, chain_faces: bool | None = None,
               opacity: int | None = None, use_opacity: bool | None = None,
               x: Expr | None = None, y: Expr | None = None, angle: Expr | None = None,
-              flip_h: bool | None = None, flip_v: bool | None = None):
+              flip_h: bool | None = None, flip_v: bool | None = None, scale: Expr | None = None):
     """
     image: ruta de imagen PNG/JPEG/BMP/TIFF; omitida al editar conserva la embebida.
     face: selector o id de UNA cara; omitida al editar conserva su referencia.
@@ -37,6 +38,7 @@ def set_decal(sesion, image: str | None = None, face: str | None = None, body: s
     angle: ángulo Z en grados.
     flip_h: volteo horizontal de imagen.
     flip_v: volteo vertical de imagen.
+    scale: factor uniforme positivo sobre anchura y altura; 1 conserva el tamaño (también con keep_aspect=false).
     """
     anterior = sesion.paso(feature) if feature else None
     if anterior is not None and (not isinstance(anterior, OpLienzo) or not anterior.p["calcomania"]):
@@ -68,7 +70,7 @@ def set_decal(sesion, image: str | None = None, face: str | None = None, body: s
         raise error("INVALID_ARGUMENTS", "Elegí la cara de la calcomanía.")
     cambios = {"mantener_proporcion": keep_aspect, "encadenar": chain_faces, "opacidad": opacity,
                "usar_opacidad": use_opacity, "dx": x, "dy": y, "angulo": angle,
-               "voltear": flip_h, "voltear_v": flip_v, "ancho": width, "alto": height}
+               "voltear": flip_h, "voltear_v": flip_v, "ancho": width, "alto": height, "escala": scale}
     for clave, valor in cambios.items():
         if valor is not None:
             params[clave] = texto_expr(valor) if clave in OpLienzo.EXPRESIONES else valor

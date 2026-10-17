@@ -10,6 +10,7 @@ También Importar IGES (Archivo › Abrir de un .iges/.igs): como Importar STEP,
 from ..nucleo import intercambio
 from . import entidades as ent
 from .operaciones import ANGULO, ErrorOperacion, Operacion, _resolver, aplicar_resultado, registrar_operacion
+from .parametros import ESCALAR
 
 
 class OpLienzo(Operacion):
@@ -19,8 +20,8 @@ class OpLienzo(Operacion):
     PARAMS = {"plano": None, "archivo": "", "imagen": "", "proporcion": 1.0, "ancho": "100 mm", "dx": "0 mm",
               "dy": "0 mm", "angulo": "0 deg", "opacidad": 50, "calcomania": False, "voltear": False,
               "alto": "100 mm", "mantener_proporcion": True, "voltear_v": False, "encadenar": False,
-              "usar_opacidad": True, "centrada": False}
-    EXPRESIONES = ("ancho", "alto", "dx", "dy", "angulo")
+              "usar_opacidad": True, "centrada": False, "escala": "1"}
+    EXPRESIONES = ("ancho", "alto", "dx", "dy", "angulo", "escala")
 
     def dependencias(self):
         return ent.dependencias_de(self.p["plano"]) - {self.id}
@@ -46,6 +47,10 @@ class OpLienzo(Operacion):
                 else ctx.evaluar(self.p["alto"]))
         if alto <= 0:
             raise ErrorOperacion("La altura de la calcomanía tiene que ser positiva.")
+        escala = ctx.evaluar(self.p["escala"], ESCALAR)
+        if escala <= 0:
+            raise ErrorOperacion("El factor de escala debe ser positivo.")
+        ancho, alto = ancho * escala, alto * escala
         estado.lienzos[self.id] = {"nombre": self.nombre, "plano": plano, "ancho": ancho,
                                    "alto": alto, "malla": malla,
                                    "dx": ctx.evaluar(self.p["dx"]), "dy": ctx.evaluar(self.p["dy"]),
