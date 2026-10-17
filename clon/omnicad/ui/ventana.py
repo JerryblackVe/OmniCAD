@@ -963,11 +963,16 @@ class VentanaPrincipal(QMainWindow):
         self.navegador.lienzos = [(k, d["nombre"], k not in self.ocultos) for k, d in estado.lienzos.items()]
         from ..api.herramientas_navegador import datos_navegador
         self.navegador.organizacion = datos_navegador(self.doc)
+        bocetos_nav = dict(estado.bocetos)
+        if self.modo_boceto.activo:
+            op = self.modo_boceto.datos.get("op")
+            if op is not None and op.id in self.doc.estado_final.bocetos:
+                bocetos_nav[op.id] = self.doc.estado_final.bocetos[op.id]
         self.navegador.actualizar(titulo, [(k.id, self.nombre_cuerpo(k)) for k in estado.cuerpos.values()
                                            if not k.componente],
                                   [(b.op_id, b.nombre, "boceto_bloqueado" if b.boceto.curvas and b.solver is not None
                                     and b.solver.totalmente_restringido else "boceto")
-                                   for b in estado.bocetos.values()], self.ocultos, self.vis,
+                                   for b in bocetos_nav.values()], self.ocultos, self.vis,
                                   [(i, pl.nombre, "plano_desfase") for i, pl in estado.planos.items()] +
                                   [(i, n, "eje_arista") for i, (_p, _d, n) in estado.ejes.items()] +
                                   [(i, n, "punto_vertice") for i, (_p, n) in estado.puntos.items()],
@@ -1392,6 +1397,10 @@ class VentanaPrincipal(QMainWindow):
     def mostrar_elementos(self, ids, visible):
         from .acciones_navegador import mostrar
         mostrar(self, ids, visible)
+
+    def vista_boceto(self, clave, accion, visible=None):
+        from .acciones_navegador import vista_boceto
+        return vista_boceto(self, clave, accion, visible)
 
     def _alternar_visibilidad_elegida(self):
         claves = [it.data(0, Qt.UserRole) for it in self.navegador.arbol.selectedItems()]
@@ -2000,6 +2009,10 @@ class VentanaPrincipal(QMainWindow):
         if proposito == "boceto":
             self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": hit["ref"], "marco": hit["marco"],
                                                                 "cara": hit.get("cara_ref")})
+        elif proposito and proposito.startswith("redefinir:"):
+            from .acciones_navegador import llamar
+            params = {"plano": hit["ref"], "marco": hit.get("marco"), "cara": hit.get("cara_ref")}
+            llamar(self, "edit_feature", feature=proposito.split(":", 1)[1], params=params)
 
     def _nombre_nuevo(self, clase, base):
         """Nombres como los de Fusion: Boceto1, Boceto2…, Plano1…"""

@@ -713,8 +713,8 @@ class Visor3D(QOpenGLWidget):
             self.modo_cambiado.emit(modo)
             self.update()
 
-    def encuadrar(self):
-        caja = self._caja_escena()
+    def encuadrar(self, puntos=None):
+        caja = self._caja_escena() if puntos is None else (np.min(puntos, axis=0), np.max(puntos, axis=0))
         if caja is None:
             self.objetivo, self.distancia = np.zeros(3), 250.0
         else:

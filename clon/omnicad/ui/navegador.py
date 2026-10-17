@@ -349,7 +349,7 @@ class Navegador(QFrame):
         if item is None:
             return
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)
-        if tipo in ("cuerpo", "grupo") and self.menu_elemento is not None:
+        if tipo in ("cuerpo", "grupo", "boceto") and self.menu_elemento is not None:
             self.menu_elemento(item).exec(self.arbol.viewport().mapToGlobal(pos))
             return
         m = QMenu(self)

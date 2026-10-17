@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-184 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+185 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 25 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 26 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -54,6 +54,7 @@ Archivo, escena, timeline y deshacer.
 | [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
 | [`manage_browser`](#manage_browser) | sí | Organiza cuerpos y bocetos: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
 | [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, bocetos o grupos en vivo. |
+| [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
@@ -286,6 +287,17 @@ Muestra u oculta cuerpos, bocetos o grupos en vivo. Sin items, muestra todo. No 
   - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos o grupos; vacío muestra todo.
   - `visible` (true/false; opcional, por defecto `true`): true muestra; false oculta los elementos pedidos.
 - CLI: `omnicad call set_browser_visibility --doc pieza.omnicad`
+
+### `sketch_view`
+
+Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. Las capas solo están disponibles mientras se edita ese boceto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto.
+  - `action` ("edit" | "select_plane" | "look_at" | "find_in_window" | "find_in_timeline" | "profile" | "dimensions" | "projected" | "construction"; obligatorio): edit, select_plane, look_at, find_in_window, find_in_timeline, profile, dimensions, projected o construction.
+  - `visible` (true/false; opcional, por defecto `null`): estado de la capa; omitido la alterna (solo las cuatro acciones de capa).
+- CLI: `omnicad call sketch_view --doc pieza.omnicad sketch=… action=…`
 
 ### `move_feature`
 

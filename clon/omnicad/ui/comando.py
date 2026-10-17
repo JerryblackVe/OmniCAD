@@ -230,7 +230,8 @@ def hits_cuerpos(ids, estado):
 def acepta(filtros, hit):
     """¿La selección `hit` sirve para un campo con estos filtros? (misma regla que el visor)."""
     t, ref = hit.get("tipo"), hit.get("ref") or {}
-    geom = (ref.get("firma") or {}).get("geom")
+    firma = ref.get("firma")
+    geom = firma.get("geom") if isinstance(firma, dict) else None
     if t == "cara":
         return "cara" in filtros or (bool(filtros & {"cara_plana", "plano"}) and hit.get("plano") is not None) or \
             ("eje" in filtros and geom in ("cilindro", "cono"))

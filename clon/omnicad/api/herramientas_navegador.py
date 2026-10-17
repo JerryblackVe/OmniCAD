@@ -99,3 +99,24 @@ def set_browser_visibility(sesion, items: list[str] | None = None, visible: bool
     ids = _elementos(sesion, ids)
     mostrar(ids, visible)
     return {"items": ids, "visible": visible}
+
+
+@herramienta("sketch_view", "documento", "Opera el boceto en la ventana: editar, seleccionar su plano, mirar "
+             "de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. "
+             "Las capas solo están disponibles mientras se edita ese boceto.")
+def sketch_view(sesion, sketch: str,
+                action: Literal["edit", "select_plane", "look_at", "find_in_window", "find_in_timeline",
+                                "profile", "dimensions", "projected", "construction"],
+                visible: bool | None = None):
+    """
+    sketch: id o nombre del boceto.
+    action: edit, select_plane, look_at, find_in_window, find_in_timeline, profile, dimensions, projected o construction.
+    visible: estado de la capa; omitido la alterna (solo las cuatro acciones de capa).
+    """
+    op = sesion.paso(sketch)
+    if op.id not in sesion.doc.estado_final.bocetos:
+        raise error("SKETCH_NOT_FOUND", "El paso elegido no es un boceto disponible.")
+    operar = getattr(sesion, "vista_boceto", None)
+    if operar is None:
+        raise error("APP_NOT_RUNNING", "sketch_view necesita la ventana de OmniCAD en vivo.")
+    return operar(op.id, action, visible)

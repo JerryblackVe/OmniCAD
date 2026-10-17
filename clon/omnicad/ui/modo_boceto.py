@@ -764,6 +764,8 @@ class ModoBoceto(QObject):
         """Sale del boceto SIN guardar (al cambiar de documento)."""
         if self.activo:
             self._limpiar()
+            self.v._indice_boceto = None
+            self.v._refrescar_visibilidad()
 
     def set_forzar(self, valor):
         if self.activo:
