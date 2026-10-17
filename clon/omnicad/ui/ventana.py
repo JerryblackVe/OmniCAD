@@ -1363,11 +1363,24 @@ class VentanaPrincipal(QMainWindow):
 
     def _seleccionar(self, hits):
         self.seleccion = list(hits)
+        claves = [h["ref"].get("cuerpo") or h["ref"].get("boceto") or h["ref"].get("id")
+                  for h in self.seleccion]
+        self.navegador.seleccionar(claves)
+        if claves:
+            self.acciones["ver_navegador"].setChecked(True)
+            self.navegador.show()
         prims = [p for h in self.seleccion for p in (h.get("dibujo") or [])]
         self.visor.set_capa("preseleccion", prims)
         from .medidas import texto_medidas
         self.info_seleccion(texto_medidas(self.seleccion, self._estado_visible()))
         self._actualizar_sugerencias()
+
+    def seleccionar_cuerpos(self, ids):
+        """Selección en vivo por API, por el mismo camino que el clic del visor."""
+        from ..api.errores import error
+        if self.panel is not None or self.modo_boceto.activo:
+            raise error("APP_BUSY", "Terminá el comando o el boceto antes de cambiar la selección.")
+        self._seleccionar(self._hits_cuerpos(ids))
 
     def _actualizar_sugerencias(self):
         """La tira de comandos sugeridos (PL5): solo con algo elegido y sin un comando ni un boceto abiertos."""

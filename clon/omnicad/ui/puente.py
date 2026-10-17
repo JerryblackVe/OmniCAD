@@ -51,6 +51,7 @@ class PuenteAgentes(QObject):
         self.puerto = None
         self.token = None
         self.sesion = api.Sesion(ventana.doc)
+        self.sesion.seleccionar_cuerpos = getattr(ventana, "seleccionar_cuerpos", None)
         self._conexiones = {}               # socket → {"buffer": bytearray, "autenticado": bool, "cerrando": bool}
         self._cola = deque()                # (socket, línea) pendientes: se atienden de a uno, sin reentrar
         self._atendiendo = False

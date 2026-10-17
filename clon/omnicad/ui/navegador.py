@@ -7,7 +7,7 @@ Cada fila es una "cajita" clara sobre el fondo oscuro; el ojo muestra/oculta (cl
 Doble clic sobre un boceto lo edita (como "Editar boceto" en Fusion); sobre una vista guardada, la
 restaura. Clic derecho: nueva vista con nombre, renombrar o eliminar vistas, editar boceto o plano.
 """
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QItemSelectionModel, QPointF, QRectF, QSignalBlocker, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
@@ -247,6 +247,30 @@ class Navegador(QFrame):
 
     def item(self, clave):
         return self._items.get(clave)
+
+    def seleccionar(self, claves):
+        """Refleja la selección de la vista y revela sus filas, sin emitir otro clic."""
+        with QSignalBlocker(self.arbol):
+            self.arbol.clearSelection()
+            ultimo = None
+            for clave in dict.fromkeys(claves):
+                it = self.item(clave)
+                if it is None:
+                    continue
+                if self.filtro.text():
+                    self.filtro.clear()
+                padre = it.parent()
+                while padre is not None:
+                    padre.setExpanded(True)
+                    padre = padre.parent()
+                it.setSelected(True)
+                ultimo = it
+            if ultimo is not None:
+                self.arbol.show()
+                self.b_plegar.setText("–")
+                self.arbol.setCurrentItem(ultimo, 0, QItemSelectionModel.NoUpdate)
+                self.ajustar_alto()
+                self.arbol.scrollToItem(ultimo)
 
     # ------------------------------------------------------------ interacción
     def _clic(self, item, _col):

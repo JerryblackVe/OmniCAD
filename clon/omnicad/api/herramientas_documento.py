@@ -148,6 +148,18 @@ def get_scene_info(sesion):
     return _resumen(sesion)
 
 
+@herramienta("select_bodies", "documento", "Selecciona cuerpos en la ventana y los revela en el navegador. "
+             "Solo en vivo; una lista vacía limpia la selección. No cambia el documento.")
+def select_bodies(sesion, bodies: list[str]):
+    """bodies: ids o nombres de los cuerpos a seleccionar; [] limpia la selección."""
+    seleccionar = getattr(sesion, "seleccionar_cuerpos", None)
+    if seleccionar is None:
+        raise error("APP_NOT_RUNNING", "select_bodies necesita la ventana de OmniCAD en vivo.")
+    ids = list(dict.fromkeys(sesion.cuerpo(c).id for c in bodies))
+    seleccionar(ids)
+    return {"selected_bodies": ids}
+
+
 @herramienta("set_document_units", "documento", "Elige las unidades con que la app MUESTRA las medidas del documento "
              "(el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. Se guardan "
              "con el proyecto. No cambia el modelo ni los números de la API, que siguen en mm y g; get_scene_info las "
