@@ -300,7 +300,7 @@ class Calcomania(Lienzo):
         return [mp.PosicionCalcomania(o, pl),
                 mp.FlechaCalcomania("dx", o, pl.u, pl.v),
                 mp.FlechaCalcomania("dy", o, pl.u, pl.v),
-                mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja="arrastre"),
+                mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja=True),
                 mp.EscalaCalcomania(o, pl.u, pl.v),
                 mp.Volteo("voltear", o, pl.u, pl.v), mp.Volteo("voltear_v", o, pl.u, pl.v)]
 

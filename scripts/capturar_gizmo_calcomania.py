@@ -1,6 +1,6 @@
 """Captura reproducible del gizmo sobre el abanico de ejemplo, sin cambiar el archivo original.
 
-Uso desde clon/: python ../scripts/capturar_gizmo_calcomania.py modelo.omnicad carpeta_destino
+Uso desde clon/: python ../scripts/capturar_gizmo_calcomania.py modelo.omnicad carpeta_destino [angulo_grados]
 """
 import os
 import sys
@@ -40,7 +40,8 @@ dibujo.ellipse((80, 95, 270, 285), outline="#b75294", width=8)
 dibujo.text((112, 168), "OmniCAD", fill="#333333", font_size=24)
 dibujo.text((480, 160), "CALCOMANIA", fill="#333333", font_size=24)
 img.save(imagen)
-resultado = api.llamar(s, "set_decal", {"image": str(imagen), "face": cara["id"], "width": 420})
+angulo = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+resultado = api.llamar(s, "set_decal", {"image": str(imagen), "face": cara["id"], "width": 420, "angle": angulo})
 assert resultado["ok"], resultado
 prefs = Preferencias(QSettings(str(destino / "prefs.ini"), QSettings.IniFormat))
 v = VentanaPrincipal(s.doc, prefs=prefs)

@@ -66,14 +66,82 @@ def estado_previo(p):
 def test_rotacion_por_manija_cambia_angulo_y_uv_sin_mover_centro(panel):
     p = panel
     m = control(p, "angulo")
-    desde = m.asa(p.manipuladores) - m.centro
+    origen = m._origen_arco(p.manipuladores)
+    desde = m.asa(p.manipuladores) - origen
     a = math.radians(30)
-    destino = m.centro + desde * math.cos(a) + np.cross(m.eje, desde) * math.sin(a)
+    destino = origen + desde * math.cos(a) + np.cross(m.eje, desde) * math.sin(a)
     uv = estado_previo(p)["malla"]["uv"].copy()
     arrastrar(p, "angulo", destino)
     assert p.manipuladores.valor("angulo") == pytest.approx(30, abs=0.1)
     assert (p.manipuladores.valor("dx"), p.manipuladores.valor("dy")) == (0, 0)
     assert not np.allclose(uv, estado_previo(p)["malla"]["uv"])
+
+
+def test_arrastrar_rotacion_a_90_deja_manija_en_pantalla_y_reabre_guardada(panel):
+    p, g = panel, panel.manipuladores
+    m = control(p, "angulo")
+    destino = m._origen_arco(g) + m.v * m._r(g)
+    pantalla = g.pantalla([destino])[0][0]
+    arrastrar(p, "angulo", destino)
+    assert g.valor("angulo") == pytest.approx(90, abs=0.1)
+    assert g._arrastre is None
+    assert g.pantalla([control(p, "angulo").asa(g)])[0][0] == pytest.approx(pantalla, abs=0.1)
+    assert control(p, "angulo").dibujar(g, None)[-5][1][-1] == pytest.approx(destino)
+    ventana, ident = p.ctx.ventana, p.ultima_op.id
+    p.aceptar()
+    ventana.editar_operacion(ident)
+    nuevo = ventana.panel
+    g = nuevo.manipuladores
+    assert g.valor("angulo") == pytest.approx(90, abs=0.1)
+    assert g.pantalla([control(nuevo, "angulo").asa(g)])[0][0] == pytest.approx(pantalla, abs=0.1)
+
+
+def test_caja_grados_permanente_y_panel_sin_cambiar_otros_controles(panel):
+    p, g = panel, panel.manipuladores
+    caja = g.cajas["angulo"]
+    assert not caja.isHidden() and caja.isVisible() and g._arrastre is None
+    otros = {m.ident: m.dibujar(g, None) for m in g.manips if not isinstance(m, mp.GiroCalcomania)}
+    p.set_valor("angulo", "90 deg")
+    assert p.ctx.evaluar(caja.text(), "angulo") == 90
+    m = control(p, "angulo")
+    assert m.asa(g) == pytest.approx(m._origen_arco(g) + m.v * m._r(g))
+    assert np.allclose(caja.punto, m.asa(g)) and not caja.isHidden()
+    for m in g.manips:
+        if m.ident not in otros:
+            continue
+        for a, b in zip(otros[m.ident], m.dibujar(g, None), strict=True):
+            assert a[0] == b[0] and a[2:] == b[2:] and np.array_equal(a[1], b[1])
+
+
+def test_escribir_45_en_caja_gira_imagen_manija_y_campo_z(panel):
+    p, g = panel, panel.manipuladores
+    caja = g.cajas["angulo"]
+    uv = estado_previo(p)["malla"]["uv"].copy()
+    inicial = control(p, "angulo").asa(g).copy()
+    caja.setFocus()
+    caja.selectAll()
+    QTest.keyClicks(caja, "45")
+    QTest.keyClick(caja, Qt.Key_Return)
+    p._calcular_previa()
+    assert g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45"
+    assert estado_previo(p)["angulo"] == 45
+    assert not np.allclose(uv, estado_previo(p)["malla"]["uv"])
+    m = control(p, "angulo")
+    assert not np.allclose(inicial, m.asa(g))
+    assert m.asa(g) == pytest.approx(m._origen_arco(g) + (m.u + m.v) * m._r(g) / math.sqrt(2))
+    assert not caja.isHidden() and np.allclose(caja.punto, m.asa(g))
+
+
+def test_texto_invalido_en_caja_grados_no_cambia_angulo_ni_manija(panel):
+    p, g = panel, panel.manipuladores
+    p.set_valor("angulo", "45 deg")
+    antes = control(p, "angulo").asa(g).copy()
+    caja = g.cajas["angulo"]
+    caja.setText("no_es_un_numero")
+    QTest.keyClick(caja, Qt.Key_Return)
+    assert g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45 deg"
+    assert control(p, "angulo").asa(g) == pytest.approx(antes)
+    assert caja.toolTip() and not caja.isHidden()
 
 
 @pytest.mark.parametrize("clave,otra", [("dx", "dy"), ("dy", "dx")])

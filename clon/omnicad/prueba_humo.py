@@ -342,10 +342,20 @@ def _gizmo_calcomania(v, r, carpeta):
             and abs(g.valor("dy") - p.ctx.evaluar(inicial["dy"]) - 6) < 0.1,
             f"Calcomanía: cuadrado central desplaza X/Y (3 y 4 mm; finales {g.valor('dx')}, {g.valor('dy')})")
     m = manip("angulo")
-    d = m.asa(g) - m.centro
-    tirar(m.asa(g), m.centro + d * math.cos(math.pi / 6) + np.cross(m.eje, d) * math.sin(math.pi / 6))
+    origen = m._origen_arco(g)
+    d = m.asa(g) - origen
+    tirar(m.asa(g), origen + d * math.cos(math.pi / 6) + np.cross(m.eje, d) * math.sin(math.pi / 6))
     r.check(abs(g.valor("angulo") - p.ctx.evaluar(inicial["angulo"], "angulo") - 30) < 1,
             "Calcomanía: manija superior gira 30 grados")
+    grados = g.cajas["angulo"]
+    _mover(visor, grados.geometry().center())
+    grados.setText("45")
+    QTest.keyClick(grados, Qt.Key_Return)
+    p._calcular_previa()
+    m = manip("angulo")
+    esperado = m._origen_arco(g) + (m.u + m.v) * m._r(g) / math.sqrt(2)
+    r.check(g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45" and grados.isVisible()
+            and np.allclose(m.asa(g), esperado), "Calcomanía: caja permanente de grados gira imagen y manija a 45")
     m = manip("ancho")
     _, asa = m.puntos(g)
     tirar(asa, m.origen + (asa - m.origen) * 1.5)

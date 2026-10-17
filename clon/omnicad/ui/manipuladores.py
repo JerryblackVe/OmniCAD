@@ -520,15 +520,31 @@ class GiroCalcomania(Angulo):
     ayuda = "Girar la imagen sobre su centro"
 
     def _r(self, g):
-        return 86 * g.escala(self.centro)
+        return 96 * g.escala(self.centro)
+
+    def _origen_arco(self, g):
+        return self.centro + (self.v * 28 - self.u * 10) * g.escala(self.centro)
 
     def asa(self, g):
-        return self.centro + self.u * self._r(g) + self.v * 28 * g.escala(self.centro)
+        t = self._theta(g)
+        return self._origen_arco(g) + (self.u * math.cos(t) + self.v * math.sin(t)) * self._r(g)
+
+    def _angulo_en(self, g, pos, previo):
+        o, r = g.rayo(pos)
+        if abs(float(unitario(r) @ self.eje)) < 0.08:
+            return None
+        origen = self._origen_arco(g)
+        p = plano_rayo(o, r, origen, self.eje)
+        if p is None:
+            return None
+        w = p - origen
+        return _desenvolver(math.atan2(float(w @ self.v), float(w @ self.u)), previo)
 
     def dibujar(self, g, activo):
-        k = g.escala(self.centro)
-        origen = self.centro + self.v * 28 * k - self.u * 10 * k
-        arco = _arco(origen, -self.v, self.u, 96 * k, math.radians(30), math.radians(150))
+        t = (self._theta(g) + math.pi) % (2 * math.pi) - math.pi
+        # Conserva el tramo aprobado y lo prolonga si la manija lo supera.
+        arco = _arco(self._origen_arco(g), -self.v, self.u, self._r(g),
+                     min(math.pi / 6, math.pi / 2 + t), max(5 * math.pi / 6, math.pi / 2 + t))
         color = AZUL_CALCOMANIA if activo is not None else BORDE_CALCOMANIA
         asa = self.asa(g)
         circulo = [(10 * math.cos(t), 10 * math.sin(t)) for t in np.linspace(0, 2 * math.pi, 40)[:-1]]
