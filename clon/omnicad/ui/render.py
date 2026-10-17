@@ -944,9 +944,12 @@ class LienzoRender(Visor3D):
             GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
             GL.glEnable(GL.GL_DEPTH_TEST)
             GL.glColorMask(GL.GL_FALSE, GL.GL_FALSE, GL.GL_FALSE, GL.GL_FALSE)
+            GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)       # el contorno (líneas sobre la superficie) no parpadea con ella
+            GL.glPolygonOffset(1.0, 1.0)
             for m in self._clasificar()[0]:
                 GL.glVertexPointer(3, GL.GL_FLOAT, 0, m["v"])
                 GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(m["v"]))
+            GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
             GL.glColorMask(GL.GL_TRUE, GL.GL_TRUE, GL.GL_TRUE, GL.GL_TRUE)
         GL.glEnable(GL.GL_BLEND)
         GL.glBlendFuncSeparate(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA, GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA)
@@ -1918,6 +1921,7 @@ class VentanaRender(QMainWindow):
     def _modo_aspecto(self, _modo=None):
         """Cambió «Aplicar a» (o se abrió o cerró el panel): el lienzo elige cuerpos o caras y se suelta lo elegido."""
         caras = not self.panel_aspecto.isHidden() and self.panel_aspecto.modo() == "caras"
+        self.lienzo.set_resalte_contorno(not self.panel_aspecto.isHidden())      # el relleno azul taparía el color
         filtro = {"cara"} if caras else {"cuerpo"}
         if self.lienzo.filtro != filtro:
             self.lienzo.set_filtro(filtro)

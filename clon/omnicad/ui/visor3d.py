@@ -259,6 +259,32 @@ def _segmentos(polilineas):
     return np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
 
 
+def contorno_de_triangulos(tris, angulo=30.0):
+    """Pares de puntos (GL_LINES) del contorno de una malla de triángulos: las aristas de un solo triángulo y las que
+    unen dos con un quiebre de más de `angulo` grados. Sirve para resaltar sin tapar el color de lo elegido."""
+    v = np.asarray(tris, float).reshape(-1, 3, 3)
+    if not len(v):
+        return np.zeros((0, 3), np.float32)
+    p = v.reshape(-1, 3)
+    paso = max(0.01, float(np.ptp(p, axis=0).max()) / (1 << 20))      # suelda al centésimo de mm (más grueso si es enorme)
+    q = np.round((p - p.min(axis=0)) / paso).astype(np.int64)
+    _u, primero_p, ind = np.unique((q[:, 0] << 42) | (q[:, 1] << 21) | q[:, 2], return_index=True, return_inverse=True)
+    puntos, ind = p[primero_p], ind.reshape(-1, 3)                    # un número por punto: mucho más rápido que filas
+    n = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
+    n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+    a, b = ind.ravel(), np.roll(ind, -1, axis=1).ravel()           # las 3 aristas de cada triángulo
+    clave = np.minimum(a, b).astype(np.int64) * len(puntos) + np.maximum(a, b)
+    orden = np.argsort(clave, kind="stable")
+    _unicas, primero, cuenta = np.unique(clave[orden], return_index=True, return_counts=True)
+    dos = primero[cuenta == 2]
+    t1, t2 = orden[dos] // 3, orden[dos + 1] // 3
+    quiebre = np.einsum("ij,ij->i", n[t1], n[t2]) < math.cos(math.radians(angulo))
+    elegidas = orden[np.concatenate([primero[cuenta != 2], dos[quiebre]])]
+    seg = np.empty((2 * len(elegidas), 3), np.float32)
+    seg[0::2], seg[1::2] = puntos[a[elegidas]], puntos[b[elegidas]]
+    return seg
+
+
 def _muestrear_basico(prim, pasos_circulo=72):
     """Puntos (u, v) de una línea, círculo o arco del boceto."""
     if prim[0] == "linea":
@@ -374,6 +400,8 @@ class Visor3D(QOpenGLWidget):
         self.texto_entero = False          # con un campo de perfiles activo: una letra resalta y elige todo su texto
         self._hover_ent = None             # entidad bajo el cursor con el filtro activo
         self._capas = {}                   # nombre → [primitivas a dibujar encima: ("tris"|"lineas"|"puntos", …)]
+        self.resalte_contorno = False      # lo elegido se resalta solo en el contorno: deja ver el color real (Aspecto)
+        self._contornos = {}               # id(triángulos) → (triángulos, contorno): se calcula una vez por selección
         self._colores_vertice = {}         # id_cuerpo → colores por vértice (análisis: cebra, curvatura…)
         self.opacidad = {}                 # id_cuerpo → opacidad (navegador › Opacidad)
         self.mallas_analisis = {}          # id_cuerpo → (vértices, normales, colores) que reemplazan su sombreado
@@ -972,6 +1000,21 @@ class Visor3D(QOpenGLWidget):
             self._capas.pop(nombre, None)
         self.update()
 
+    def set_resalte_contorno(self, activo):
+        """Con `activo`, la selección y el cursor se resaltan solo con el contorno (sin el relleno translúcido que
+        tapa el color): así se ve el color real mientras se lo elige."""
+        activo = bool(activo)
+        if activo != self.resalte_contorno:
+            self.resalte_contorno = activo
+            self.update()
+
+    def _contorno(self, tris):
+        if len(self._contornos) > 32:
+            self._contornos.clear()
+        if id(tris) not in self._contornos:
+            self._contornos[id(tris)] = (tris, contorno_de_triangulos(tris))     # guarda `tris`: su id no se reutiliza
+        return self._contornos[id(tris)][1]
+
     def set_etiquetas(self, nombre, etiquetas):
         """Textos anclados a puntos 3D encima del modelo (el valor de una cota guía de Medir): [(punto, texto)].
         Siguen al punto al mover la cámara; lista vacía o None las borra. Van en un QLabel hijo del visor, como las
@@ -1343,11 +1386,18 @@ class Visor3D(QOpenGLWidget):
     def _dibujar_primitivas(self, prims, color_defecto, alfa_defecto=None):
         for prim in prims:
             tipo, datos, color, extra = prim[0], prim[1], prim[2] or color_defecto, prim[3]
+            if tipo == "tris" and self.resalte_contorno:
+                datos, extra = self._contorno(datos), 3.0          # solo el contorno, a la profundidad del modelo
+                tipo = "contorno"
             datos = np.asarray(datos, np.float32)
             if not len(datos):
                 continue
             GL.glVertexPointer(3, GL.GL_FLOAT, 0, datos)
-            if tipo == "tris":
+            if tipo == "contorno":
+                GL.glLineWidth(extra)
+                GL.glColor4f(*color[:3], 1.0)
+                GL.glDrawArrays(GL.GL_LINES, 0, len(datos))
+            elif tipo == "tris":
                 GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
                 GL.glPolygonOffset(-2.0, -2.0)
                 GL.glDepthMask(GL.GL_FALSE)

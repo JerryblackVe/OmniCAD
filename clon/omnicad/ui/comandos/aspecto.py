@@ -97,6 +97,9 @@ class Aspecto(Comando):
             previa["caras"] += [(c, r, rgb) for c, r in caras]
         return previa
 
+    def preparar_panel(self, panel):
+        panel.visor.set_resalte_contorno(True)       # lo elegido se marca con el contorno: el color real se ve entero
+
     def mostrar(self, v, ctx):
         ventana = ctx.ventana
         if ventana is None:
@@ -106,6 +109,8 @@ class Aspecto(Comando):
 
     def al_cerrar(self, ctx):
         ventana = ctx.ventana
+        if ventana is not None:
+            ventana.visor.set_resalte_contorno(False)
         if ventana is not None and ventana._previa_aspecto:
             ventana._previa_aspecto = {}
             ventana._refrescar_visibilidad()
