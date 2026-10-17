@@ -57,6 +57,8 @@ Regla para todo lo que sigue (actualizada 2026-10-11, pedido del usuario): de lo
 
    - **P23c · avance 2026-10-16:** menú de grupo/cuerpo con los diez textos de Fusion; grupos persistentes y conjuntos reutilizables, propiedades agregadas, suprimir, renombrar, visibilidad/V y mostrar todo. API: `manage_browser`, `get_browser_state`, `set_browser_visibility`. **SIN RESOLVER:** Copiar/Cortar (grisados: no hay portapapeles paramétrico) y mover un grupo dentro de otro (grisado: sin grupos anidados). Verificación: 47 passed in 7.61s + doc/MCP 55 passed in 19.60s; ruff limpio. Capturas `p23c_cuerpo.png` y `p23c_grupo.png`. d)–e) pendientes.
 
+   - **P23d · avance 2026-10-16:** calcomanía sobre triángulos de la cara (respeta recortes y agujeros), cilindro desarrollado por arco, cadena de caras tangentes; panel completo con proporción/altura, opacidad casilla+número+deslizador, volteos y gizmo (posición X/Y, giro, anchura y dos volteos); doble clic del timeline conectado a `OpLienzo`. API `set_decal`; apertura de receta antigua y Cancelar probados. Verificación: 104 passed in 8.28s, ruff limpio; captura `evidencias/capturas/p23/p23d.png`. Límite: en curvas no cilíndricas la textura se proyecta desde el plano tangente, no hay desarrollo isométrico general. e) pendiente.
+
 ## Registro
 
 Una viñeta por tarea: `- **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`

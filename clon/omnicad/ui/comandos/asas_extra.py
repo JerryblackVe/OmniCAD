@@ -398,7 +398,7 @@ def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
-        "lienzo": _asas_desplazar_en_plano, "calcomania": _asas_desplazar_en_plano,
+        "lienzo": _asas_desplazar_en_plano,
         "scu": _asas_scu, "union": _asas_union("origen2"), "origen_union": _asas_union("origen"),
         "bobina": _asas_bobina,
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,

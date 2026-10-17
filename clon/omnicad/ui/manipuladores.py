@@ -283,6 +283,24 @@ class AsaRadial(Flecha):
         return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "asa"
 
 
+class Volteo(AsaRadial):
+    """Botón circular de volteo de la calcomanía; un clic alterna la casilla del panel."""
+    def __init__(self, clave, centro, direccion, distancia_px):
+        super().__init__(clave, centro, direccion, caja=False)
+        self.distancia_px = distancia_px
+
+    def _geom(self, g):
+        k = g.escala(self.origen)
+        return self.origen + self.direccion * self.distancia_px * k, self.direccion, k
+
+    def empezar(self, g, pos, sub):
+        g.escribir({self.clave: not bool(g.panel.valores.get(self.clave))})
+        return {}
+
+    def mover(self, g, estado, pos):
+        return {}
+
+
 class Posicion(Manipulador):
     """Asa de posición: un punto sobre un plano que se arrastra con el ratón (el agujero sobre una cara, el
     desplazamiento de un dibujo insertado). Es un aro con cruz de ~15 px de radio de agarre.
@@ -435,6 +453,13 @@ class Angulo(Manipulador):
         if self.caja is True or (self.caja == "arrastre" and arrastre is not None):
             return [(self.clave, self.asa(g))]
         return []
+
+
+class GiroCalcomania(Angulo):
+    """El arco de Calcomanía se ve completo incluso antes de girar."""
+    def dibujar(self, g, activo):
+        return super().dibujar(g, activo) + [("lineas", _segs(_arco(self.centro, self.u, self.v,
+                                                                  self._r(g), 0, 2 * math.pi)), AZUL, 1.5)]
 
 
 class Triada(Manipulador):
@@ -895,7 +920,7 @@ class GestorManipuladores(QObject):
         self._escribiendo = True
         try:
             for clave, v in nuevos.items():
-                if not isinstance(v, (int, float)):       # una selección u otro valor ya armado
+                if isinstance(v, bool) or not isinstance(v, (int, float)):  # selección o casilla
                     self.panel.set_valor(clave, v)
                     cambio = True
                     continue

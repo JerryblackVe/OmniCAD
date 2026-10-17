@@ -17,8 +17,10 @@ class OpLienzo(Operacion):
     opacidad; no crea geometría."""
     TIPO, ETIQUETA, ICONO = "lienzo", "Lienzo", "🖼"
     PARAMS = {"plano": None, "archivo": "", "imagen": "", "proporcion": 1.0, "ancho": "100 mm", "dx": "0 mm",
-              "dy": "0 mm", "angulo": "0 deg", "opacidad": 50, "calcomania": False, "voltear": False}
-    EXPRESIONES = ("ancho", "dx", "dy", "angulo")
+              "dy": "0 mm", "angulo": "0 deg", "opacidad": 50, "calcomania": False, "voltear": False,
+              "alto": "100 mm", "mantener_proporcion": True, "voltear_v": False, "encadenar": False,
+              "usar_opacidad": True, "centrada": False}
+    EXPRESIONES = ("ancho", "alto", "dx", "dy", "angulo")
 
     def dependencias(self):
         return ent.dependencias_de(self.p["plano"]) - {self.id}
@@ -28,17 +30,35 @@ class OpLienzo(Operacion):
             raise ErrorOperacion("El lienzo no tiene imagen.")
         if not self.p["plano"]:
             raise ErrorOperacion("Elegí el plano o la cara del lienzo.")
-        plano = ent.como_plano(_resolver(self.p["plano"], estado))
+        entidad = _resolver(self.p["plano"], estado)
+        malla = None
+        if self.p["calcomania"] and entidad.forma is not None:
+            from ..nucleo.calcomanias import superficie
+            cuerpo = estado.cuerpos.get(entidad.cuerpo)
+            malla = superficie(entidad.forma, cuerpo.forma if cuerpo else None, self.p["encadenar"], self.p["centrada"])
+            plano = malla["plano"]
+        else:
+            plano = ent.como_plano(entidad)
         ancho = ctx.evaluar(self.p["ancho"])
         if ancho <= 0:
             raise ErrorOperacion("El ancho del lienzo tiene que ser positivo.")
+        alto = (ancho * float(self.p.get("proporcion") or 1.0) if self.p["mantener_proporcion"]
+                else ctx.evaluar(self.p["alto"]))
+        if alto <= 0:
+            raise ErrorOperacion("La altura de la calcomanía tiene que ser positiva.")
         estado.lienzos[self.id] = {"nombre": self.nombre, "plano": plano, "ancho": ancho,
-                                   "alto": ancho * float(self.p.get("proporcion") or 1.0),
+                                   "alto": alto, "malla": malla,
                                    "dx": ctx.evaluar(self.p["dx"]), "dy": ctx.evaluar(self.p["dy"]),
                                    "angulo": ctx.evaluar(self.p["angulo"], ANGULO),
-                                   "opacidad": max(0, min(100, int(self.p["opacidad"]))) / 100.0,
+                                   "opacidad": (max(0, min(100, int(self.p["opacidad"]))) / 100.0
+                                                if self.p["usar_opacidad"] else 1.0),
                                    "calcomania": bool(self.p["calcomania"]), "voltear": bool(self.p["voltear"]),
-                                   "imagen": self.p["imagen"]}
+                                   "voltear_v": bool(self.p["voltear_v"]), "imagen": self.p["imagen"]}
+        if malla is not None:
+            from ..nucleo.calcomanias import textura
+            d = estado.lienzos[self.id]
+            malla["uv"] = textura(malla["coordenadas"], ancho, alto, d["dx"], d["dy"], d["angulo"],
+                                  d["voltear"], d["voltear_v"])
 
 
 class OpImportarIGES(Operacion):

@@ -1388,6 +1388,9 @@ class Visor3D(QOpenGLWidget):
             GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_BORDER)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_BORDER)
+            GL.glTexParameterfv(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_BORDER_COLOR, [0, 0, 0, 0])
             datos = bytes(img.constBits())[: img.width() * img.height() * 4]
             GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, img.width(), img.height(), 0, GL.GL_RGBA,
                             GL.GL_UNSIGNED_BYTE, datos)
@@ -1403,12 +1406,24 @@ class Visor3D(QOpenGLWidget):
             if tex is None:
                 continue
             GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
-            GL.glColor4f(1, 1, 1, 1.0 if datos.get("calcomania") else datos.get("opacidad", 0.5))
+            GL.glColor4f(1, 1, 1, datos.get("opacidad", 0.5))
+            malla = datos.get("malla")
+            if malla is not None:
+                GL.glDepthMask(GL.GL_FALSE)
+                GL.glBegin(GL.GL_TRIANGLES)
+                for t, p in zip(malla["uv"], malla["vertices"], strict=True):
+                    GL.glTexCoord2f(*map(float, t))
+                    GL.glVertex3f(*map(float, p))
+                GL.glEnd()
+                GL.glDepthMask(GL.GL_TRUE)
+                continue
             if not datos.get("calcomania"):
                 GL.glDepthMask(GL.GL_FALSE)
             uvs = [(0, 0), (1, 0), (1, 1), (0, 1)]
             if datos.get("voltear"):
                 uvs = [(1, 0), (0, 0), (0, 1), (1, 1)]
+            if datos.get("voltear_v"):
+                uvs = [(u, 1 - v) for u, v in uvs]
             GL.glBegin(GL.GL_QUADS)
             for (tu, tv), p in zip(uvs, self.esquinas_lienzo(datos), strict=True):
                 GL.glTexCoord2f(tu, tv)

@@ -5,8 +5,9 @@ from pathlib import Path
 import numpy as np
 
 from ...timeline.operaciones import OpBoceto
+from ...timeline.ops_insertar import OpLienzo
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Seleccion, Texto, exigir
+from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Porcentaje, Seleccion, Texto, exigir
 from . import registrar
 
 
@@ -156,6 +157,7 @@ class Lienzo(Comando):
     """INSERTAR › Lienzo [SLD-INSERT-CANVAS]: imagen de referencia sobre un plano o una cara. El ancho es la
     medida real (lo que en Fusion se ajusta con «Calibrar»)."""
     CLAVE, TITULO, ICONO = "lienzo", "Lienzo", "lienzo"
+    CLASE_OP = OpLienzo
     AYUDA = "Pone una imagen de referencia sobre un plano o una cara (para dibujar encima)."
     EXTENSIONES = ("png", "jpg", "jpeg", "bmp")
     CALCOMANIA = False
@@ -180,6 +182,8 @@ class Lienzo(Comando):
         if ruta and getattr(self, "_ruta", None) != ruta:
             if not Path(ruta).is_file():
                 raise ErrorComando("No encuentro la imagen.")
+            if Path(ruta).stat().st_size > 32 * 1024 * 1024:
+                raise ErrorComando("La imagen supera 32 MB.")
             datos = Path(ruta).read_bytes()
             img = QImage.fromData(datos)
             if img.isNull():
@@ -211,9 +215,93 @@ class Lienzo(Comando):
 
 class Calcomania(Lienzo):
     CLAVE, TITULO, ICONO = "calcomania", "Calcomanía", "calcomania"
-    AYUDA = "Pega una imagen sobre una cara plana del cuerpo."
+    AYUDA = "Pega una imagen sobre una cara plana o curva, con tamaño, giro, opacidad y volteos."
     CALCOMANIA = True
     VARIANTE = ("calcomania", True)
+
+    def campos(self, ctx):
+        return [Texto("archivo", "Imagen"), Seleccion("plano", "Cara", {"cara"}),
+                Casilla("encadenar", "Encadenar caras", True), Porcentaje("opacidad", "Opacidad"),
+                Casilla("mantener_proporcion", "Mantener relación de aspecto", True),
+                Expresion("ancho", "Anchura", "0 mm"), Expresion("alto", "Altura", "0 mm"),
+                Expresion("dx", "Distancia X", "0 mm"), Expresion("dy", "Distancia Y", "0 mm"),
+                Expresion("angulo", "Ángulo Z", "0 deg", ANGULO),
+                Casilla("voltear", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
+
+    def preparar_panel(self, panel):
+        self._panel = panel
+        self._sincronizando = False
+        if panel.ctx.op is not None:
+            panel.widgets["archivo"].setPlaceholderText(panel.ctx.op.p["archivo"])
+            panel.widgets["archivo"].setToolTip("Imagen embebida; escribí una ruta para reemplazarla.")
+        panel.valores["plano"] = [dict(h, dibujo=[]) for h in panel.valores.get("plano", [])]
+        panel._refrescar_seleccion()
+        for clave in ("ancho", "alto"):
+            panel.widgets[clave].textChanged.connect(lambda _t, k=clave: self._proporcion(k))
+        panel.widgets["mantener_proporcion"].toggled.connect(lambda activa: self._proporcion("ancho") if activa else None)
+
+    def ajustar_hit(self, campo, hit, ctx, visor):
+        return dict(hit, dibujo=[])
+
+    def _proporcion(self, clave):
+        p = self._panel
+        if self._sincronizando or not p.valores.get("mantener_proporcion") or not getattr(self, "_prop", None):
+            return
+        try:
+            valor = p.ctx.evaluar(p.valores[clave])
+        except ValueError:
+            return
+        self._sincronizando = True
+        try:
+            p.set_valor("alto" if clave == "ancho" else "ancho",
+                        f"{valor * self._prop if clave == 'ancho' else valor / self._prop:.12g} mm")
+        finally:
+            self._sincronizando = False
+
+    def construir(self, v, ctx):
+        from ...nucleo.calcomanias import superficie
+        from ...timeline import entidades
+        proporcion_anterior = getattr(self, "_prop", None)
+        op = super().construir(v, ctx)
+        if self._prop != proporcion_anterior and getattr(self, "_panel", None) is not None:
+            self._proporcion("ancho")
+        e = entidades.resolver(op.p["plano"], ctx.estado)
+        malla = superficie(e.forma, centrada=ctx.op.p.get("centrada", False) if ctx.op else True)
+        ancho = ctx.evaluar(v["ancho"])
+        if ancho == 0:
+            ancho = min(malla["tamano"][0], malla["tamano"][1] / self._prop) * 0.9
+            if getattr(self, "_panel", None) is not None:
+                self._panel.set_valor("ancho", f"{ancho:.12g} mm")
+        op.p.update(ancho=f"{ancho:.12g} mm", alto=v["alto"], encadenar=v["encadenar"],
+                    mantener_proporcion=v["mantener_proporcion"], voltear_v=v["voltear_v"],
+                    usar_opacidad=v.get("usar_opacidad", True),
+                    centrada=ctx.op.p.get("centrada", False) if ctx.op else True)
+        return op
+
+    def desde_op(self, op, ctx):
+        self._b64, self._prop = op.p["imagen"], op.p["proporcion"]
+        valores = super().desde_op(op, ctx)
+        valores["alto"] = (f"{ctx.evaluar(op.p['ancho']) * self._prop:.12g} mm"
+                           if op.p["mantener_proporcion"] else op.p["alto"])
+        return valores
+
+    def manipuladores(self, ctx, v):
+        from .. import manipuladores as mp
+        from ...nucleo.calcomanias import superficie
+        from ...timeline import entidades
+        if not v.get("plano"):
+            return []
+        e = entidades.resolver(v["plano"][0]["ref"], ctx.estado)
+        pl = superficie(e.forma, centrada=ctx.op.p.get("centrada", False) if ctx.op else True)["plano"]
+        dx, dy = ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])
+        o = pl.a_3d(dx, dy)
+        return [mp.Posicion("calcomania", o, pl.normal,
+                            lambda q: {"dx": float((q - pl.origen) @ pl.u), "dy": float((q - pl.origen) @ pl.v)}),
+                mp.Flecha("dx", pl.a_3d(0, dy), pl.u, caja="arrastre"),
+                mp.Flecha("dy", pl.a_3d(dx, 0), pl.v, caja="arrastre"),
+                mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja="arrastre"),
+                mp.AsaRadial("ancho", o, pl.u, factor=0.5, minimo=0.001, caja="arrastre"),
+                mp.Volteo("voltear", o, pl.u, -28), mp.Volteo("voltear_v", o, pl.v, -28)]
 
 
 registrar(InsertarDXF, InsertarSVG, VectorizarImagen, Lienzo, Calcomania)

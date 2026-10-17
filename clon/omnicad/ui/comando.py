@@ -15,7 +15,7 @@ operación sigue apuntando a "su" cara o arista al recalcular.
 """
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit,
-                               QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget)
+                               QPushButton, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
 from . import formato, temas
@@ -68,6 +68,12 @@ class Entero(Campo):
 class Texto(Campo):
     def __init__(self, clave, etiqueta, defecto="", **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
+
+
+class Porcentaje(Entero):
+    """Opacidad con casilla de activación y deslizador sincronizado con su número."""
+    def __init__(self, clave, etiqueta, defecto=100, **kw):
+        super().__init__(clave, etiqueta, defecto, 0, 100, **kw)
 
 
 class Info(Campo):
@@ -138,6 +144,9 @@ class Comando:
 
     def al_cerrar(self, ctx):
         """Limpieza al cerrar el panel (capas de análisis, colores…)."""
+
+    def preparar_panel(self, panel):
+        """Conecta controles dependientes después de crear todos los campos."""
 
     def aplicar(self, v, ctx):
         """Para los comandos SIN_OP: lo que hace Aceptar."""
@@ -401,6 +410,7 @@ class PanelComando(QFrame):
         primera = next((c for c in self.campos if isinstance(c, Seleccion) and self._visible(c)
                         and not self.valores.get(c.clave)), None)
         self._activar(primera)
+        comando.preparar_panel(self)
         self._programar()
 
     # ------------------------------------------------------------ armado
@@ -431,6 +441,24 @@ class PanelComando(QFrame):
             w = QCheckBox()
             w.setChecked(bool(val))
             w.toggled.connect(lambda b, c=campo: self._cambiar(c.clave, b))
+            return w
+        if isinstance(campo, Porcentaje):
+            w = QWidget()
+            fila = QHBoxLayout(w)
+            fila.setContentsMargins(0, 0, 0, 0)
+            casilla = QCheckBox()
+            casilla.setChecked(bool(self.valores.get("usar_opacidad", True)))
+            numero = QSpinBox(minimum=0, maximum=100)
+            deslizador = QSlider(Qt.Horizontal, minimum=0, maximum=100)
+            numero.setValue(int(val))
+            deslizador.setValue(int(val))
+            casilla.toggled.connect(lambda b: self._cambiar("usar_opacidad", b))
+            numero.valueChanged.connect(deslizador.setValue)
+            deslizador.valueChanged.connect(numero.setValue)
+            numero.valueChanged.connect(lambda n: self._cambiar(campo.clave, n))
+            for hijo in (casilla, numero, deslizador):
+                fila.addWidget(hijo)
+            w.numero, w.deslizador, w.casilla = numero, deslizador, casilla
             return w
         if isinstance(campo, Entero):
             w = QSpinBox(minimum=campo.minimo, maximum=campo.maximo)
@@ -491,6 +519,8 @@ class PanelComando(QFrame):
             w.setChecked(bool(valor))
         elif isinstance(w, QSpinBox):
             w.setValue(int(valor))
+        elif isinstance(campo, Porcentaje):
+            w.numero.setValue(int(valor))
         self.valores[clave] = valor if not isinstance(campo, Seleccion) else list(valor)
         self._actualizar_visibles()
         self._programar()

@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-183 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+184 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 24 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 25 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -32,6 +32,7 @@ Archivo, escena, timeline y deshacer.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
+| [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. |
 | [`select_bodies`](#select_bodies) | no | Selecciona cuerpos en la ventana y los revela en el navegador. |
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
@@ -56,6 +57,29 @@ Archivo, escena, timeline y deshacer.
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
+
+### `set_decal`
+
+Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `image` (texto; opcional, por defecto `null`): ruta de imagen PNG/JPEG/BMP/TIFF; omitida al editar conserva la embebida.
+  - `face` (texto; opcional, por defecto `null`): selector o id de UNA cara; omitida al editar conserva su referencia.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúa el selector de face.
+  - `feature` (texto; opcional, por defecto `null`): id o nombre del paso a editar; vacío crea uno.
+  - `width` (número o expresión; opcional, por defecto `null`): anchura en mm; omitida al crear ajusta la imagen dentro de la cara.
+  - `height` (número o expresión; opcional, por defecto `null`): altura en mm; con keep_aspect ajusta también la anchura.
+  - `keep_aspect` (true/false; opcional, por defecto `null`): conserva la proporción de la imagen; por defecto true al crear.
+  - `chain_faces` (true/false; opcional, por defecto `null`): incluye las caras tangentes encadenadas.
+  - `opacity` (entero; opcional, por defecto `null`): porcentaje de opacidad (0 a 100).
+  - `use_opacity` (true/false; opcional, por defecto `null`): false ignora el porcentaje y usa 100 por ciento.
+  - `x` (número o expresión; opcional, por defecto `null`): distancia X sobre la cara, en mm.
+  - `y` (número o expresión; opcional, por defecto `null`): distancia Y sobre la cara, en mm.
+  - `angle` (número o expresión; opcional, por defecto `null`): ángulo Z en grados.
+  - `flip_h` (true/false; opcional, por defecto `null`): volteo horizontal de imagen.
+  - `flip_v` (true/false; opcional, por defecto `null`): volteo vertical de imagen.
+- CLI: `omnicad call set_decal --doc pieza.omnicad`
 
 ### `get_scene_info`
 
