@@ -117,6 +117,8 @@ class Navegador(QFrame):
         self.componentes = []        # [(id, nombre, fijo, [(id de cuerpo, nombre)])]
         self.uniones = []            # [(id de la operación, nombre)]
         self.lienzos = []            # [(id, nombre, visible)] (Lienzos y calcomanías)
+        self.organizacion = {"grupos": {}, "conjuntos": {}}
+        self.menu_elemento = None
         self.setFixedWidth(300)
         cabecera = QFrame(objectName="cabecera_navegador")
         h = QHBoxLayout(cabecera)
@@ -244,6 +246,17 @@ class Navegador(QFrame):
             carpeta = self._item(raiz, "__analisis__", "Análisis", "carpeta", "carpeta")
             for ident, nombre, visible in self.analisis:
                 self._item(carpeta, ident, nombre, "seccion", "analisis", visible)
+        for gid, fila in self.organizacion["grupos"].items():
+            grupo = self._item(raiz, gid, fila["nombre"], "carpeta", "grupo", True)
+            for cid in fila["miembros"]:
+                it = self.item(cid)
+                if it is not None and it.data(0, ROL_TIPO) in ("cuerpo", "boceto"):
+                    padre = it.parent()
+                    grupo.addChild(padre.takeChild(padre.indexOfChild(it)))
+        if self.organizacion["conjuntos"]:
+            carpeta = self._item(raiz, "__conjuntos__", "Conjuntos de selección", "carpeta", "carpeta")
+            for cid, fila in self.organizacion["conjuntos"].items():
+                self._item(carpeta, cid, fila["nombre"], "seleccionar", "conjunto")
         for clave, it in self._items.items():
             it.setExpanded(clave in self._expandidos)
             it.setSelected(clave in elegidos)
@@ -289,6 +302,9 @@ class Navegador(QFrame):
                                      if it.data(0, ROL_TIPO) in RENOMBRABLES])
 
     def _clic(self, item, _col):
+        if item.data(0, ROL_TIPO) == "conjunto":
+            self.accion.emit("elegir_conjunto", item.data(0, ROL_CLAVE))
+            return
         if item.data(0, ROL_TIPO) in ("cuerpo", "boceto", "plano", "eje", "punto", "origen"):
             self.seleccionado.emit(item.data(0, ROL_CLAVE))
 
@@ -333,6 +349,9 @@ class Navegador(QFrame):
         if item is None:
             return
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)
+        if tipo in ("cuerpo", "grupo") and self.menu_elemento is not None:
+            self.menu_elemento(item).exec(self.arbol.viewport().mapToGlobal(pos))
+            return
         m = QMenu(self)
         if tipo == "vistas":
             m.addAction("Nueva vista con nombre", self.vista_nueva.emit)

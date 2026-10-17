@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-180 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+183 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 21 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 24 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -50,6 +50,9 @@ Archivo, escena, timeline y deshacer.
 | [`rename`](#rename) | sí | Renombra un paso del timeline o un cuerpo. |
 | [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
+| [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
+| [`manage_browser`](#manage_browser) | sí | Organiza cuerpos y bocetos: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
+| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, bocetos o grupos en vivo. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
@@ -229,6 +232,36 @@ Recupera una copia de autoguardado y la deja como documento activo, como el bot�
   - `project` (texto; opcional, por defecto `null`): ruta del proyecto original si la copia era de un proyecto con ruta; vacío = huérfano.
   - `discard` (true/false; opcional, por defecto `false`): true para descartar los cambios sin guardar del documento actual.
 - CLI: `omnicad call recover_document --doc pieza.omnicad path=…`
+
+### `get_browser_state`
+
+Lista los grupos y conjuntos de selección guardados en el navegador.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_browser_state --doc pieza.omnicad`
+
+### `manage_browser`
+
+Organiza cuerpos y bocetos: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). Se guarda en el proyecto y admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("create_group" | "create_set" | "move" | "rename_group" | "delete_group"; obligatorio): create_group, create_set, move, rename_group o delete_group.
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos o bocetos; los cuerpos también aceptan nombres.
+  - `name` (texto; opcional, por defecto `""`): nombre del grupo o conjunto que se crea, o nombre nuevo con rename_group.
+  - `group` (texto; opcional, por defecto `null`): id del grupo destino; vacío con move devuelve los elementos a su carpeta original.
+- CLI: `omnicad call manage_browser --doc pieza.omnicad action=…`
+
+### `set_browser_visibility`
+
+Muestra u oculta cuerpos, bocetos o grupos en vivo. Sin items, muestra todo. No modifica geometría.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos o grupos; vacío muestra todo.
+  - `visible` (true/false; opcional, por defecto `true`): true muestra; false oculta los elementos pedidos.
+- CLI: `omnicad call set_browser_visibility --doc pieza.omnicad`
 
 ### `move_feature`
 

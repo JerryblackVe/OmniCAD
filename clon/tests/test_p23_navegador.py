@@ -107,3 +107,112 @@ def test_ctrl_clic_vista_refleja_tres_cuerpos_y_quita_uno(v, monkeypatch):
     QTest.mouseClick(v.visor, Qt.LeftButton, Qt.ControlModifier, QPoint(600, 300))
     assert elegidos(v) == set(ids[:2])
     assert len(v.seleccion) == 2
+
+
+def menu_de(v, clave):
+    return v.navegador.menu_elemento(v.navegador.item(clave))
+
+
+def accion(menu, texto):
+    return next(a for a in menu.actions() if a.text().split("\t")[0] == texto)
+
+
+def test_menu_nuevo_grupo_desplazar_y_deshacer(v, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+    ids = list(v.doc.estado_final.cuerpos)
+    v.seleccionar_cuerpos(ids[:2])
+    monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_kw: ("Grupo de piezas", True))
+    accion(menu_de(v, ids[0]), "Nuevo grupo").trigger()
+    assert v.navegador.item(ids[0]).parent().text(0) == "Grupo de piezas"
+    gid = v.navegador.item(ids[0]).parent().data(0, ROL_CLAVE)
+    v.seleccionar_cuerpos(ids[2:])
+    mover = accion(menu_de(v, ids[2]), "Desplazar al grupo").menu()
+    accion(mover, "Grupo de piezas").trigger()
+    assert v.navegador.item(ids[2]).parent().data(0, ROL_CLAVE) == gid
+    v.doc.deshacer()
+    assert v.navegador.item(ids[2]).parent().data(0, ROL_CLAVE) == "__cuerpos__"
+
+
+def test_conjunto_guarda_y_reselecciona_tres_cuerpos(v, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+    ids = list(v.doc.estado_final.cuerpos)
+    v.seleccionar_cuerpos(ids)
+    monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_kw: ("Mis piezas", True))
+    accion(menu_de(v, ids[0]), "Crear conjunto de selección").trigger()
+    s = api.Sesion(v.doc)
+    conjuntos = api.llamar(s, "get_browser_state", {})["result"]["selection_sets"]
+    assert conjuntos[0]["items"] == ids
+    v._seleccionar([])
+    v.navegador._clic(v.navegador.item(conjuntos[0]["id"]), 0)
+    assert elegidos(v) == set(ids)
+
+
+def test_propiedades_mide_los_cuerpos_del_grupo(v):
+    ids = list(v.doc.estado_final.cuerpos)
+    r = api.llamar(api.Sesion(v.doc), "manage_browser", {"action": "create_group", "name": "G", "items": ids})
+    accion(menu_de(v, r["result"]["id"]), "Propiedades").trigger()
+    assert "24000" in v._texto_estado or "24000" in v._info_sel or "24000" in v.timeline.estado.text()
+
+
+@pytest.mark.parametrize("texto", ["Copiar", "Cortar"])
+def test_portapapeles_no_implementado_queda_gris_con_razon(v, texto):
+    a = accion(menu_de(v, next(iter(v.doc.estado_final.cuerpos))), texto)
+    assert not a.isEnabled() and "portapapeles" in a.toolTip()
+
+
+def test_suprimir_cuerpo_y_grupo_conserva_contenido(v):
+    ids = list(v.doc.estado_final.cuerpos)
+    s = api.Sesion(v.doc)
+    r = api.llamar(s, "manage_browser", {"action": "create_group", "name": "G", "items": ids})
+    accion(menu_de(v, r["result"]["id"]), "Suprimir").trigger()
+    assert len(v.doc.estado_final.cuerpos) == 3
+    assert not api.llamar(s, "get_browser_state", {})["result"]["groups"]
+    accion(menu_de(v, ids[0]), "Suprimir").trigger()
+    assert ids[0] not in v.doc.estado_final.cuerpos
+    v.doc.deshacer()
+    assert ids[0] in v.doc.estado_final.cuerpos
+
+
+def test_cambiar_nombre_cuerpo_en_linea_y_grupo(v, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+    cid = next(iter(v.doc.estado_final.cuerpos))
+    accion(menu_de(v, cid), "Cambiar nombre").trigger()
+    v.navegador.item(cid).setText(0, "Pieza renombrada")
+    assert v.doc.estado_final.cuerpos[cid].nombre == "Pieza renombrada"
+    r = api.llamar(api.Sesion(v.doc), "manage_browser", {"action": "create_group", "name": "G"})
+    monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_kw: ("Nuevo nombre", True))
+    accion(menu_de(v, r["result"]["id"]), "Cambiar nombre").trigger()
+    assert v.navegador.item(r["result"]["id"]).text(0) == "Nuevo nombre"
+
+
+def test_ojo_y_mostrar_todo_tienen_efecto_en_vista(v):
+    ids = list(v.doc.estado_final.cuerpos)
+    accion(menu_de(v, ids[0]), "Mostrar/ocultar").trigger()
+    assert ids[0] in v.ocultos
+    assert ids[0] not in {m["id"] for m in v.visor._mallas}
+    accion(menu_de(v, ids[1]), "Mostrar todo").trigger()
+    assert not v.ocultos
+    assert {m["id"] for m in v.visor._mallas} == set(ids)
+
+
+def test_grupos_persisten_y_entrada_invalida_no_modifica(v, tmp_path):
+    from omnicad.io_archivos import proyecto
+    ids = list(v.doc.estado_final.cuerpos)
+    s = api.Sesion(v.doc)
+    assert api.llamar(s, "manage_browser", {"action": "create_group", "name": "G", "items": ids})["ok"]
+    antes = v.doc.a_dict()
+    assert not api.llamar(s, "manage_browser", {"action": "move", "group": "nada", "items": ids})["ok"]
+    assert v.doc.a_dict() == antes
+    ruta = proyecto.guardar(v.doc, tmp_path / "grupos.omnicad")
+    assert api.llamar(api.Sesion(proyecto.abrir(ruta)), "get_browser_state", {}) == api.llamar(s, "get_browser_state", {})
+
+
+def test_api_visibilidad_y_atajo_v_comparten_efecto(v, tmp_path):
+    from omnicad.ui.puente import PuenteAgentes
+    ids = list(v.doc.estado_final.cuerpos)
+    puente = PuenteAgentes(v, archivo=tmp_path / "puente.json")
+    assert puente.ejecutar("set_browser_visibility", {"items": ids, "visible": False})["ok"]
+    assert v.ocultos.issuperset(ids)
+    v.seleccionar_cuerpos(ids)
+    v.acciones["alternar_visibilidad"].trigger()
+    assert not v.ocultos.intersection(ids)

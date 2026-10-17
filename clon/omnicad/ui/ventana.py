@@ -158,6 +158,8 @@ class VentanaPrincipal(QMainWindow):
         self.visor = Visor3D()
         self.area = AreaVisor(self.visor)
         self.navegador = Navegador()
+        from . import acciones_navegador
+        self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
         self.area.anclar_arriba_izq(self.navegador)
         self.barra_nav = BarraNavegacion(self.visor, self)
         self.area.set_barra(self.barra_nav)
@@ -387,7 +389,9 @@ class VentanaPrincipal(QMainWindow):
         A("ayuda_comando", "Ayuda del comando", lambda: self.ayuda_comando(), "Ctrl+/",
           "Con el ratón sobre un comando de la cinta o de un menú, muestra su ayuda.")
         A("renombrar", "Renombrar", lambda: self.navegador.renombrar_en_linea(), "F2",
-          "Renombra en el navegador el elemento elegido.")
+           "Renombra en el navegador el elemento elegido.")
+        A("alternar_visibilidad", "Mostrar/ocultar", self._alternar_visibilidad_elegida, "V",
+          "Muestra u oculta los cuerpos y bocetos elegidos.")
         A("ajustar", "Ajustar", lambda: self.visor.encuadrar(), "F6", "Encuadra todo el modelo en la vista.", "ajustar")
         for clave, texto, ayuda in (("iso", "Vista inicial (isométrica)", "Vuelve la cámara a la vista inicial."),
                                     ("frente", "Frente", "Mira el modelo de frente."),
@@ -957,6 +961,8 @@ class VentanaPrincipal(QMainWindow):
             for k, comp in estado.componentes.items()]
         self.navegador.uniones = [(k, u["nombre"]) for k, u in estado.uniones.items()]
         self.navegador.lienzos = [(k, d["nombre"], k not in self.ocultos) for k, d in estado.lienzos.items()]
+        from ..api.herramientas_navegador import datos_navegador
+        self.navegador.organizacion = datos_navegador(self.doc)
         self.navegador.actualizar(titulo, [(k.id, self.nombre_cuerpo(k)) for k in estado.cuerpos.values()
                                            if not k.componente],
                                   [(b.op_id, b.nombre, "boceto_bloqueado" if b.boceto.curvas and b.solver is not None
@@ -1383,6 +1389,17 @@ class VentanaPrincipal(QMainWindow):
             raise error("APP_BUSY", "Terminá el comando o el boceto antes de cambiar la selección.")
         self._seleccionar(self._hits_cuerpos(ids))
 
+    def mostrar_elementos(self, ids, visible):
+        from .acciones_navegador import mostrar
+        mostrar(self, ids, visible)
+
+    def _alternar_visibilidad_elegida(self):
+        claves = [it.data(0, Qt.UserRole) for it in self.navegador.arbol.selectedItems()]
+        if claves:
+            from .acciones_navegador import elementos
+            ids = list(dict.fromkeys(i for k in claves for i in elementos(self, k)))
+            self.mostrar_elementos(ids, any(i in self.ocultos for i in ids))
+
     def _seleccion_desde_navegador(self, claves):
         if self.panel is not None or self.modo_boceto.activo:
             return
@@ -1615,6 +1632,11 @@ class VentanaPrincipal(QMainWindow):
         from .comandos.modificar import Aspecto, MaterialFisico, MoverCopiar, Quitar, Suprimir
         from .comando import hit_desde_ref
         estado = self.doc.estado_final
+        if accion == "elegir_conjunto":
+            from ..api.herramientas_navegador import datos_navegador
+            ids = datos_navegador(self.doc)["conjuntos"].get(clave, {}).get("miembros", [])
+            self._seleccion_desde_navegador([i for i in ids if i in estado.cuerpos or i in estado.bocetos])
+            return
         if accion == "renombrar_cuerpo" and clave in estado.cuerpos:
             nombre, ok = QInputDialog.getText(self, "Renombrar", "Nombre:", text=self.nombre_cuerpo(estado.cuerpos[clave]))
             if ok and nombre.strip():

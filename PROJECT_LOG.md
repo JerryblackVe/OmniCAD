@@ -55,6 +55,8 @@ Regla para todo lo que sigue (actualizada 2026-10-11, pedido del usuario): de lo
 
    - **P23b · avance 2026-10-16:** selección extendida nativa Ctrl/Mayús en el navegador, sincronizada con la capa 3D y Ctrl+clic del visor; sobrevive al refresco del árbol. Reusa API `select_bodies`. Verificación: 28 passed in 3.88s (`p23b_tests.txt`), ruff limpio; captura `evidencias/capturas/p23/p23b.png`. c)–e) pendientes.
 
+   - **P23c · avance 2026-10-16:** menú de grupo/cuerpo con los diez textos de Fusion; grupos persistentes y conjuntos reutilizables, propiedades agregadas, suprimir, renombrar, visibilidad/V y mostrar todo. API: `manage_browser`, `get_browser_state`, `set_browser_visibility`. **SIN RESOLVER:** Copiar/Cortar (grisados: no hay portapapeles paramétrico) y mover un grupo dentro de otro (grisado: sin grupos anidados). Verificación: 47 passed in 7.61s + doc/MCP 55 passed in 19.60s; ruff limpio. Capturas `p23c_cuerpo.png` y `p23c_grupo.png`. d)–e) pendientes.
+
 ## Registro
 
 Una viñeta por tarea: `- **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
