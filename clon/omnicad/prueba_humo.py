@@ -731,6 +731,70 @@ def ejecutar():
     r.check(len(centros) == 3 and all(abs(c - e) < 1.0 for c, e in zip(centros, (0.0, 30.0, 60.0), strict=True)),
             f"PL8: las copias ligeras se dibujan cada una en su lugar ({[round(c, 1) for c in centros]})")
     r.check(_colores_distintos(v.visor.grabFramebuffer()) > 50, "PL8: el visor dibuja las copias ligeras")
+
+    # P23: la vista y el navegador se marcan mutuamente; menús contextuales del grupo y del boceto; panel de calcomanía
+    from .restricciones import Boceto
+    from .timeline.documento import Documento
+    from .timeline.operaciones import OpPrimitiva
+    from .ui.navegador import ROL_CLAVE
+    doc23 = Documento()
+    for i in range(3):
+        doc23.agregar(OpPrimitiva(doc23.nuevo_id(), f"Pieza {i + 1}", forma="caja", x=i * 40, ancho=20, largo=20,
+                                  alto=20))
+    v.set_documento(doc23)
+    QTest.qWait(80)
+    piezas = list(doc23.estado_final.cuerpos)
+    nav = v.navegador
+    v._seleccionar(v._hits_cuerpos(piezas[:1]))
+    r.check({it.data(0, ROL_CLAVE) for it in nav.arbol.selectedItems()} == {piezas[0]},
+            "P23a: elegir un cuerpo en la vista lo marca en el navegador")
+    nav.arbol.clearSelection()
+    for cid in piezas:
+        nav.item(cid).setSelected(True)
+    QTest.qWait(30)
+    r.check(sorted(h["ref"]["cuerpo"] for h in v.seleccion) == sorted(piezas),
+            "P23b: la selección múltiple del navegador se marca en la vista")
+    grupo = api.llamar(api.Sesion(doc23), "manage_browser", {"action": "create_group", "name": "Grupo1",
+                                                             "items": piezas})["result"]["id"]
+    v._actualizar()
+    menu = nav.menu_elemento(nav.item(grupo))
+    textos = [a.text().split("\t")[0] for a in menu.actions() if not a.isSeparator()]
+    r.check(textos == ["Desplazar al grupo", "Nuevo grupo", "Crear conjunto de selección", "Propiedades", "Copiar",
+                       "Cortar", "Suprimir", "Cambiar nombre", "Mostrar/ocultar", "Mostrar todo"],
+            "P23c: el menú del grupo tiene las opciones de Fusion")
+    menu.popup(nav.mapToGlobal(nav.rect().center()))
+    QTest.qWait(80)
+    r.check(not menu.grab().isNull(), "P23c: el menú del grupo se dibuja")
+    next(a for a in menu.actions() if a.text().startswith("Mostrar/ocultar")).trigger()
+    menu.close()
+    r.check(set(piezas) <= v.ocultos, "P23c: Mostrar/ocultar del grupo oculta sus cuerpos")
+    from PySide6.QtGui import QColor, QImage
+    foto = QImage(80, 40, QImage.Format_RGB32)
+    foto.fill(QColor("orange"))
+    imagen = carpeta / "calcomania_humo.png"
+    foto.save(str(imagen))
+    api.llamar(api.Sesion(doc23), "set_browser_visibility", {"visible": True})
+    r23 = api.llamar(api.Sesion(doc23), "set_decal", {"image": str(imagen), "face": ">Z", "body": piezas[1]})
+    v.editar_operacion(doc23.operaciones[-1].id)
+    QTest.qWait(80)
+    claves = set(v.panel.widgets) if v.panel is not None else set()
+    r.check(r23["ok"] and {"archivo", "plano", "encadenar", "opacidad", "mantener_proporcion", "ancho", "alto", "dx",
+                           "dy", "angulo", "voltear", "voltear_v"} <= claves and not v.panel.grab().isNull(),
+            "P23d: el panel de la calcomanía trae todas sus opciones")
+    v.panel.cancelar()
+    b = Boceto()
+    b.agregar_rectangulo((50, 20), (70, 30))
+    sk23 = doc23.nuevo_id()
+    doc23.agregar(OpBoceto(sk23, "Boceto1", plano="XY", boceto=b))
+    QTest.qWait(50)
+    menu = nav.menu_elemento(nav.item(sk23))
+    textos = [a.text().split("\t")[0] for a in menu.actions() if not a.isSeparator()]
+    r.check(len(textos) == 19 and textos[0] == "Desplazar al grupo" and textos[-1] == "Buscar en la secuencia temporal",
+            f"P23e: el menú del boceto tiene las 19 opciones de Fusion ({len(textos)})")
+    next(a for a in menu.actions() if a.text() == "Buscar en la ventana").trigger()
+    r.check(abs(v.visor.objetivo[0] - 60) < 1e-6 and abs(v.visor.objetivo[1] - 25) < 1e-6,
+            "P23e: «Buscar en la ventana» encuadra el boceto")
+    doc23.modificado = False
     v.doc.modificado = False
     v.abrir_ruta(str(ruta))
     QTest.qWait(100)
