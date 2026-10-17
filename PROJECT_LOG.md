@@ -53,6 +53,8 @@ Regla para todo lo que sigue (actualizada 2026-10-11, pedido del usuario): de lo
 
    - **P23 · avance 2026-10-16:** a) implementado: clic en el visor revela y selecciona la fila del cuerpo, incluso con carpeta plegada o filtro activo; API en vivo `select_bodies`. Verificación: `p23a_tests.txt`, 34 passed in 29.32s; ruff limpio. Captura: `evidencias/capturas/p23/p23a.png`. b)–e) pendientes (el «Sin programar» de la ficha original ya no aplica a a).
 
+   - **P23b · avance 2026-10-16:** selección extendida nativa Ctrl/Mayús en el navegador, sincronizada con la capa 3D y Ctrl+clic del visor; sobrevive al refresco del árbol. Reusa API `select_bodies`. Verificación: 28 passed in 3.88s (`p23b_tests.txt`), ruff limpio; captura `evidencias/capturas/p23/p23b.png`. c)–e) pendientes.
+
 ## Registro
 
 Una viñeta por tarea: `- **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`

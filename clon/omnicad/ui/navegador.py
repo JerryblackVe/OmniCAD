@@ -9,7 +9,7 @@ restaura. Clic derecho: nueva vista con nombre, renombrar o eliminar vistas, edi
 """
 from PySide6.QtCore import QEvent, QItemSelectionModel, QPointF, QRectF, QSignalBlocker, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
+from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
 from . import formato, temas
@@ -102,6 +102,7 @@ RENOMBRABLES = {"cuerpo", "boceto", "plano", "eje", "punto"}
 class Navegador(QFrame):
     ojo = Signal(str)            # clave de lo que se mostró/ocultó
     seleccionado = Signal(str)   # id de cuerpo o de boceto
+    seleccion_cambiada = Signal(list)  # selección completa, incluidos Ctrl y Mayús
     editar = Signal(str)         # id de la operación de boceto o de plano (doble clic / menú)
     vista_nueva = Signal()
     vista_ir = Signal(str)
@@ -132,6 +133,7 @@ class Navegador(QFrame):
         self.arbol.setHeaderHidden(True)
         self.arbol.setIndentation(18)
         self.arbol.setRootIsDecorated(True)
+        self.arbol.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.arbol.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.arbol.setFocusPolicy(Qt.NoFocus)
         self.arbol.viewport().setAutoFillBackground(False)
@@ -139,6 +141,7 @@ class Navegador(QFrame):
         self.delegado.ojo_clic.connect(self.ojo)
         self.arbol.setItemDelegate(self.delegado)
         self.arbol.itemClicked.connect(self._clic)
+        self.arbol.itemSelectionChanged.connect(self._seleccion_cambiada)
         self.arbol.itemDoubleClicked.connect(self._doble_clic)
         self.arbol.itemChanged.connect(self._cambio_nombre)
         self._renombrando = None            # (ítem, nombre anterior) mientras se edita el nombre en el lugar
@@ -196,6 +199,8 @@ class Navegador(QFrame):
             self._expandidos = {k for k, it in self._items.items() if it.isExpanded()}
         actual = self.arbol.currentItem()
         clave_actual = actual.data(0, ROL_CLAVE) if actual else None
+        elegidos = {it.data(0, ROL_CLAVE) for it in self.arbol.selectedItems()}
+        bloqueo = QSignalBlocker(self.arbol)
         self.arbol.clear()
         self._items = {}
         raiz = self._item(None, "__raiz__", titulo, "componente", "raiz", vis["todo"])
@@ -241,8 +246,10 @@ class Navegador(QFrame):
                 self._item(carpeta, ident, nombre, "seccion", "analisis", visible)
         for clave, it in self._items.items():
             it.setExpanded(clave in self._expandidos)
+            it.setSelected(clave in elegidos)
         if clave_actual in self._items:
-            self.arbol.setCurrentItem(self._items[clave_actual])
+            self.arbol.setCurrentItem(self._items[clave_actual], 0, QItemSelectionModel.NoUpdate)
+        bloqueo.unblock()
         self.ajustar_alto()
 
     def item(self, clave):
@@ -250,8 +257,11 @@ class Navegador(QFrame):
 
     def seleccionar(self, claves):
         """Refleja la selección de la vista y revela sus filas, sin emitir otro clic."""
+        claves = list(dict.fromkeys(k for k in claves if k in self._items))
+        cambia = set(claves) != {it.data(0, ROL_CLAVE) for it in self.arbol.selectedItems()}
         with QSignalBlocker(self.arbol):
-            self.arbol.clearSelection()
+            if cambia:
+                self.arbol.clearSelection()
             ultimo = None
             for clave in dict.fromkeys(claves):
                 it = self.item(clave)
@@ -268,11 +278,16 @@ class Navegador(QFrame):
             if ultimo is not None:
                 self.arbol.show()
                 self.b_plegar.setText("–")
-                self.arbol.setCurrentItem(ultimo, 0, QItemSelectionModel.NoUpdate)
+                if cambia:
+                    self.arbol.setCurrentItem(ultimo, 0, QItemSelectionModel.NoUpdate)
                 self.ajustar_alto()
                 self.arbol.scrollToItem(ultimo)
 
     # ------------------------------------------------------------ interacción
+    def _seleccion_cambiada(self):
+        self.seleccion_cambiada.emit([it.data(0, ROL_CLAVE) for it in self.arbol.selectedItems()
+                                     if it.data(0, ROL_TIPO) in RENOMBRABLES])
+
     def _clic(self, item, _col):
         if item.data(0, ROL_TIPO) in ("cuerpo", "boceto", "plano", "eje", "punto", "origen"):
             self.seleccionado.emit(item.data(0, ROL_CLAVE))

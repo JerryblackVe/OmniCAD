@@ -165,6 +165,7 @@ class VentanaPrincipal(QMainWindow):
         self.area.set_tira(self.tira)
         self.navegador.ojo.connect(self._ojo)
         self.navegador.seleccionado.connect(self._propiedades)
+        self.navegador.seleccion_cambiada.connect(self._seleccion_desde_navegador)
         self.navegador.editar.connect(self.editar_operacion)
         self.navegador.vista_nueva.connect(self._vista_nueva)
         self.navegador.vista_ir.connect(self._vista_ir)
@@ -1381,6 +1382,16 @@ class VentanaPrincipal(QMainWindow):
         if self.panel is not None or self.modo_boceto.activo:
             raise error("APP_BUSY", "Terminá el comando o el boceto antes de cambiar la selección.")
         self._seleccionar(self._hits_cuerpos(ids))
+
+    def _seleccion_desde_navegador(self, claves):
+        if self.panel is not None or self.modo_boceto.activo:
+            return
+        from .comando import hit_desde_ref
+        estado = self._estado_visible()
+        hits = self._hits_cuerpos([k for k in claves if k in estado.cuerpos])
+        hits += [hit_desde_ref({"tipo": "boceto", "boceto": k}, estado)
+                 for k in claves if k in estado.bocetos]
+        self._seleccionar(hits)
 
     def _actualizar_sugerencias(self):
         """La tira de comandos sugeridos (PL5): solo con algo elegido y sin un comando ni un boceto abiertos."""
