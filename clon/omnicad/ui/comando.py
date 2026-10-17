@@ -76,6 +76,15 @@ class Porcentaje(Entero):
         super().__init__(clave, etiqueta, defecto, 0, 100, **kw)
 
 
+class Personalizado(Campo):
+    """Campo con un widget propio: `crear(panel)` devuelve el widget y es quien avisa los cambios con
+    `panel._cambiar(clave, valor)`. `ancho_completo` lo extiende sobre las dos columnas (sin etiqueta)."""
+
+    def __init__(self, clave, etiqueta, crear, defecto=None, ancho_completo=False, **kw):
+        super().__init__(clave, etiqueta, defecto, **kw)
+        self.crear, self.ancho_completo = crear, ancho_completo
+
+
 class Info(Campo):
     """Texto de solo lectura calculado con `funcion(valores, ctx) -> str` (resultados de medir…)."""
 
@@ -369,8 +378,12 @@ class PanelComando(QFrame):
             if campo.ayuda:
                 et.setToolTip(campo.ayuda)
             w = self._widget(campo)
-            self.grilla.addWidget(et, fila, 0)
-            self.grilla.addWidget(w, fila, 1)
+            if getattr(campo, "ancho_completo", False):
+                et.hide()                                       # sin etiqueta: el widget ocupa las dos columnas
+                self.grilla.addWidget(w, fila, 0, 1, 2)
+            else:
+                self.grilla.addWidget(et, fila, 0)
+                self.grilla.addWidget(w, fila, 1)
             self.etiquetas[campo.clave], self.widgets[campo.clave] = et, w
         v.addWidget(cuerpo)
 
@@ -470,6 +483,8 @@ class PanelComando(QFrame):
             w = QLineEdit(str(val or ""))
             w.textChanged.connect(lambda t, c=campo: self._cambiar(c.clave, t))
             return w
+        if isinstance(campo, Personalizado):
+            return campo.crear(self)
         if isinstance(campo, Info):
             w = QLabel(wordWrap=True)
             w.setMaximumWidth(220)
@@ -485,7 +500,8 @@ class PanelComando(QFrame):
         for c in self.campos:
             vis = self._visible(c)
             self.widgets[c.clave].setVisible(vis)
-            self.etiquetas[c.clave].setVisible(vis)
+            if not getattr(c, "ancho_completo", False):
+                self.etiquetas[c.clave].setVisible(vis)
         self._validar_expresiones()
 
     def _validar_expresiones(self):

@@ -303,6 +303,25 @@ class Documento:
             self._renombrar_cuerpos(ids_cuerpos, valor)
         self._notificar()
 
+    def set_propiedades(self, cambios):
+        """Varias propiedades de varios ids con UNA sola instantánea de deshacer (`set_propiedad` toma una por
+        llamada y, con decenas de cuerpos y una imagen embebida, cada una cuesta): {id: {clave: valor | None}}.
+        No sirve para «nombre» (renombrar recalcula): para eso, `set_propiedad`."""
+        if any("nombre" in claves for claves in cambios.values()):
+            raise ErrorDocumento("set_propiedades no cambia nombres: usá set_propiedad.")
+        self._guardar_para_deshacer()
+        for cid, claves in cambios.items():
+            props = self.propiedades.setdefault(cid, {})
+            for clave, valor in claves.items():
+                if valor is None:
+                    props.pop(clave, None)
+                else:
+                    props[clave] = valor
+            if not props:
+                del self.propiedades[cid]
+        self.modificado = True
+        self._notificar()
+
     def _nombres_cuerpos(self):
         """{id de cuerpo: nombre} de los cuerpos renombrados en el navegador."""
         return {cid: p["nombre"] for cid, p in self.propiedades.items() if p.get("nombre")}

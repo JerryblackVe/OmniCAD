@@ -362,6 +362,7 @@ class Visor3D(QOpenGLWidget):
         self.fov = 40.0
         self.modo = None   # None | orbita | encuadre | zoom | ventana | mirar | elegir_plano
         self._mallas = []                  # [dict(v, n, seg, indice, id, color, tipo)] de los cuerpos visibles
+        self.caras_pintadas = []           # [(id de cuerpo, v, n, color)]: caras con aspecto propio, sobre su cuerpo
         self._formas = {}                  # id_cuerpo → forma visible (para elegir caras)
         self._pick = {}                    # id(forma) → (caras, triángulos, índice de cara)
         self._pick_aristas = {}            # id(forma) → (aristas, polilíneas, vértices, puntos)
@@ -1623,6 +1624,36 @@ class Visor3D(QOpenGLWidget):
             GL.glDisableClientState(GL.GL_COLOR_ARRAY)
         GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
 
+    def set_caras_pintadas(self, caras):
+        """Caras con un aspecto propio (Aspecto › Aplicar a: Caras): [(id de cuerpo, vértices, normales, color)]."""
+        self.caras_pintadas = list(caras)
+        self.update()
+
+    def _dibujar_caras_pintadas(self):
+        """Cada cara pintada se dibuja otra vez con su color, un pelo más cerca que la del cuerpo (offset de polígono)."""
+        if not self.caras_pintadas:
+            return
+        GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
+        GL.glPolygonOffset(-1.0, -1.0)
+        for cid, v, n, color in self.caras_pintadas:
+            op = self.opacidad.get(cid, 1.0)
+            if not len(v) or op <= 0.001:
+                continue
+            GL.glColor4f(*color, op)
+            if op < 0.999:
+                GL.glDepthMask(GL.GL_FALSE)
+            t = self.transformaciones.get(cid)
+            if t is not None:
+                GL.glPushMatrix()
+                GL.glMultMatrixf(np.asarray(t, float).T.astype(np.float32))
+            self._apuntar(v, n)
+            GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(v))
+            if t is not None:
+                GL.glPopMatrix()
+            GL.glDepthMask(GL.GL_TRUE)
+        GL.glPolygonOffset(1.0, 1.0)
+        GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
+
     def _dibujar_aristas(self):
         for m in self._mallas:
             seg = m["seg"]
@@ -1650,6 +1681,7 @@ class Visor3D(QOpenGLWidget):
             self._dibujar_caras()
             if not solo_profundidad:
                 self._dibujar_caras(transparentes=True)
+                self._dibujar_caras_pintadas()
             GL.glColorMask(GL.GL_TRUE, GL.GL_TRUE, GL.GL_TRUE, GL.GL_TRUE)
             GL.glDisable(GL.GL_LIGHTING)
             GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)

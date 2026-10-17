@@ -14,6 +14,7 @@ import numpy as np
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
 from ..nucleo import render_cpu as rc
+from ..timeline import aspectos_doc as ad
 from ..timeline import ops_chapa
 from ..timeline.operaciones import propiedades_cuerpo
 from . import selectores as sl
@@ -64,12 +65,19 @@ def _objetos_render(sesion, cuerpos):
     con deflexión automática por pieza)."""
     objetos = []
     for c in cuerpos:
-        v, n = rc.malla_suave(c.forma, 0.05 if _es_malla(c) else rc.deflexion_para(c.forma))
-        if not len(v):
-            continue
-        color, acabado = rc.color_y_acabado(c, propiedades_cuerpo(sesion.doc.propiedades, c))
-        objetos.append({"v": v, "n": n, "color": color, "acabado": acabado,
-                        "opacidad": float(sesion.doc.propiedad(c.id, "opacidad", 1.0))})
+        props = propiedades_cuerpo(sesion.doc.propiedades, c)
+        pintadas = [(cara, p) for r, p in ad.caras_propias(props)
+                    if (cara := ad.cara_de(sesion.doc.estado_final, r)) is not None]
+        v, n, partes = rc.malla_suave_aparte(c.forma, [cara for cara, _p in pintadas],
+                                             0.05 if _es_malla(c) else rc.deflexion_para(c.forma))
+        opacidad = float(sesion.doc.propiedad(c.id, "opacidad", 1.0))
+        if len(v):
+            color, acabado = rc.color_y_acabado(c, props)
+            objetos.append({"v": v, "n": n, "color": color, "acabado": acabado, "opacidad": opacidad})
+        for (_cara, p), (cv, cn) in zip(pintadas, partes, strict=True):       # cada cara con aspecto propio, aparte
+            if len(cv):
+                color, acabado = rc.color_y_acabado_cara(c, props, p)
+                objetos.append({"v": cv, "n": cn, "color": color, "acabado": acabado, "opacidad": opacidad})
     return objetos
 
 
@@ -100,7 +108,8 @@ def _camara(atras, puntos, aspecto, fov):
 
 
 @herramienta("get_viewport_image", "inspeccion", "Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y "
-             "suelo) desde una vista estándar o una dirección propia. Es la forma de VER el resultado.")
+             "suelo) desde una vista estándar o una dirección propia. Usa Rust si está disponible, con respaldo "
+             "Python (OMNICAD_SIN_RUST=1 lo fuerza). Es la forma de VER el resultado.")
 def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bottom", "left", "right"] = "iso",
                        width: int = 640, height: int = 480, bodies: list[str] | None = None, fit: bool = True,
                        direction: list[float] | None = None,

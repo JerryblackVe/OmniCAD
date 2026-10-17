@@ -40,7 +40,7 @@ def mostrar(v, ids, visible):
     if ids:
         if visible:
             v.ocultos.difference_update(ids)
-            v.vis["todo"] = v.vis["cuerpos"] = v.vis["bocetos"] = True
+            v.vis["todo"] = v.vis["cuerpos"] = v.vis["bocetos"] = v.vis["calcomanias"] = True
         else:
             v.ocultos.update(ids)
     else:
@@ -53,6 +53,8 @@ def menu(v, item):
     clave, tipo = item.data(0, ROL_CLAVE), item.data(0, ROL_TIPO)
     if tipo == "boceto":
         return menu_boceto(v, item)
+    if tipo == "calcomania":
+        return menu_calcomania(v, item)
     ids = elementos(v, clave)
     m = QMenu(v.navegador)
     m.setToolTipsVisible(True)
@@ -201,4 +203,57 @@ def menu_boceto(v, item):
     m.addSeparator()
     m.addAction("Buscar en la ventana", lambda: vista_boceto(v, clave, "find_in_window"))
     m.addAction("Buscar en la secuencia temporal", lambda: vista_boceto(v, clave, "find_in_timeline"))
+    return m
+
+
+def vista_calcomania(v, clave, accion, imagen=None):
+    """Lo que hace el menú de una calcomanía del navegador (y la herramienta `decal_view`): editar (reabre su panel
+    con sus valores), encuadrarla en la ventana, encontrarla en la secuencia temporal o cambiar su imagen."""
+    import numpy as np
+
+    from ..api.errores import error
+    from ..timeline.ops_insertar import calcomanias_vigentes
+    if accion == "edit":
+        v.editar_operacion(clave)
+    elif accion == "find_in_window":
+        datos = dict(calcomanias_vigentes(v.doc, v.doc.estado_final)).get(clave)
+        if datos is None:
+            raise error("INVALID_ARGUMENTS", "La calcomanía no está sobre un cuerpo visible en este punto del timeline.")
+        malla = datos.get("malla")
+        puntos = np.asarray(malla["vertices"], float) if malla is not None else np.array(v.visor.esquinas_lienzo(datos))
+        v.visor.encuadrar(puntos)
+    elif accion == "find_in_timeline":
+        v.acciones["ver_timeline"].setChecked(True)
+        v.timeline.show()
+        v.timeline.resaltar(clave)
+    elif accion == "replace_image":
+        if imagen is None:
+            from PySide6.QtWidgets import QFileDialog
+            imagen, _ = QFileDialog.getOpenFileName(v, "Reemplazar archivo de imagen", "",
+                                                    "Imágenes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff)")
+            if not imagen:
+                return {"decal": clave, "action": accion}
+        r = llamar(v, "set_decal", image=imagen, feature=clave)
+        if not r["ok"]:
+            raise error("OPERATION_FAILED", r["mensaje"])
+    return {"decal": clave, "action": accion}
+
+
+def menu_calcomania(v, item):
+    """Menú de la calcomanía en el navegador, con las opciones de Fusion."""
+    clave = item.data(0, ROL_CLAVE)
+    m = QMenu(v.navegador)
+    m.setToolTipsVisible(True)
+    m.addAction("Crear conjunto de selección", lambda: organizar(v, "create_set", clave))
+    m.addSeparator()
+    editar = m.addAction("Editar calcomanía", lambda: vista_calcomania(v, clave, "edit"))
+    editar.setToolTip("Reabre el panel de la calcomanía con sus valores.")
+    m.addAction("Reemplazar archivo de imagen", lambda: vista_calcomania(v, clave, "replace_image"))
+    m.addSeparator()
+    m.addAction("Suprimir\tSuprimir", lambda: v._accion_navegador("borrar_paso", clave))
+    m.addAction("Cambiar nombre", lambda: v.navegador.renombrar_en_linea(item))
+    m.addAction("Mostrar/ocultar\tV", lambda: mostrar(v, [clave], clave in v.ocultos))
+    m.addSeparator()
+    m.addAction("Buscar en la ventana", lambda: vista_calcomania(v, clave, "find_in_window"))
+    m.addAction("Buscar en la secuencia temporal", lambda: vista_calcomania(v, clave, "find_in_timeline"))
     return m

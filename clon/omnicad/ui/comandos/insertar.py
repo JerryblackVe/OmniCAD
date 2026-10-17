@@ -207,6 +207,12 @@ class Lienzo(Comando):
     def nombre_nuevo(self, ctx):
         base = "Calcomanía" if self.CALCOMANIA else "Lienzo"
         usados = {o.nombre for o in ctx.doc.operaciones}
+        propio = Path(getattr(self, "_ruta", None) or "").stem
+        if self.CALCOMANIA and propio:                  # como Fusion: la calcomanía se llama como su imagen
+            candidato, n = propio, 2
+            while candidato in usados:
+                candidato, n = f"{propio} ({n})", n + 1
+            return candidato
         n = 1
         while f"{base}{n}" in usados:
             n += 1

@@ -18,7 +18,7 @@ from .iconos import icono
 ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO = Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
 ALTO_FILA = 24
 EXPANDIDOS_INICIALES = {"__raiz__", "__config__", "__cuerpos__", "__bocetos__", "__planos__", "__analisis__",
-                        "__uniones__"}
+                        "__uniones__", "__calcomanias__"}
 ORIGEN = [("__o__", "O", "punto"), ("__x__", "X", "linea"), ("__y__", "Y", "linea"), ("__z__", "Z", "linea"),
           ("__xy__", "XY", "plano_desfase"), ("__xz__", "XZ", "plano_desfase"), ("__yz__", "YZ", "plano_desfase")]
 
@@ -96,7 +96,7 @@ class _Arbol(QTreeWidget):
         p.restore()
 
 
-RENOMBRABLES = {"cuerpo", "boceto", "plano", "eje", "punto"}
+RENOMBRABLES = {"cuerpo", "boceto", "plano", "eje", "punto", "calcomania"}
 
 
 class Navegador(QFrame):
@@ -116,7 +116,8 @@ class Navegador(QFrame):
         self.analisis = []           # [(clave "analisis:Nombre", nombre, visible)] (los pasa la ventana)
         self.componentes = []        # [(id, nombre, fijo, [(id de cuerpo, nombre)])]
         self.uniones = []            # [(id de la operación, nombre)]
-        self.lienzos = []            # [(id, nombre, visible)] (Lienzos y calcomanías)
+        self.lienzos = []            # [(id, nombre, visible)] (Lienzos)
+        self.calcomanias = []        # [(id, nombre)] (INSERTAR › Calcomanía), cada una con el cuerpo al que está pegada
         self.organizacion = {"grupos": {}, "conjuntos": {}}
         self.menu_elemento = None
         self.setFixedWidth(300)
@@ -197,8 +198,9 @@ class Navegador(QFrame):
     def actualizar(self, titulo, cuerpos, bocetos, ocultos, vis, planos=(), vistas=()):
         """cuerpos / bocetos / planos: [(id, nombre)]; vistas: [nombre];
         vis: dict con 'todo', 'origen', 'planos', 'cuerpos', 'bocetos'."""
-        if self._items:
-            self._expandidos = {k for k, it in self._items.items() if it.isExpanded()}
+        if self._items:      # lo que estaba abierto sigue abierto; una carpeta que aparece recién (Calcomanías) se abre
+            self._expandidos = {k for k, it in self._items.items() if it.isExpanded()} | (EXPANDIDOS_INICIALES
+                                                                                         - set(self._items))
         actual = self.arbol.currentItem()
         clave_actual = actual.data(0, ROL_CLAVE) if actual else None
         elegidos = {it.data(0, ROL_CLAVE) for it in self.arbol.selectedItems()}
@@ -217,6 +219,7 @@ class Navegador(QFrame):
             self._item(origen, clave, texto, ico, "origen", clave not in ocultos)
         for clave, titulo_c, ico, elementos in (("__planos__", "Construcción", "plano_desfase", planos),
                                                 ("__cuerpos__", "Cuerpos", "cuerpo", cuerpos),
+                                                ("__calcomanias__", "Calcomanías", "calcomania", self.calcomanias),
                                                 ("__bocetos__", "Bocetos", "boceto", bocetos)):
             if not elementos:
                 continue
@@ -312,7 +315,9 @@ class Navegador(QFrame):
         """Como el navegador de Fusion: doble clic sobre el nombre lo renombra en el lugar (editar un boceto o
         un plano queda en el clic derecho y en el timeline)."""
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)
-        if tipo in RENOMBRABLES:
+        if tipo == "calcomania":
+            self.editar.emit(clave)              # como «Editar calcomanía» del menú: reabre su panel con sus valores
+        elif tipo in RENOMBRABLES:
             self.renombrar_en_linea(item)
         elif tipo == "union":
             self.editar.emit(clave.split("_")[0])
@@ -349,7 +354,7 @@ class Navegador(QFrame):
         if item is None:
             return
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)
-        if tipo in ("cuerpo", "grupo", "boceto") and self.menu_elemento is not None:
+        if tipo in ("cuerpo", "grupo", "boceto", "calcomania") and self.menu_elemento is not None:
             self.menu_elemento(item).exec(self.arbol.viewport().mapToGlobal(pos))
             return
         m = QMenu(self)
@@ -422,6 +427,10 @@ class Navegador(QFrame):
             filas += 1
             if it.isExpanded():
                 pila.extend(it.child(i) for i in range(it.childCount()))
-        alto = self.cabecera.sizeHint().height() + (filas * ALTO_FILA + 8 if not self.arbol.isHidden() else 0)
+        # cabecera + buscador (y los 4 px entre cada widget) + las filas: sin contar el buscador, la última fila quedaba
+        # tapada (la última carpeta, con lo que tuviera adentro, parecía no estar)
+        fijo = self.cabecera.sizeHint().height() + (self.filtro.sizeHint().height() + 4 if self.filtro.isVisibleTo(self)
+                                                    else 0)
+        alto = fijo + (filas * ALTO_FILA + 12 if not self.arbol.isHidden() else 0)
         limite = (self.parentWidget().height() - 150) if self.parentWidget() else alto
-        self.setFixedHeight(max(self.cabecera.sizeHint().height(), min(alto, max(limite, 120))))
+        self.setFixedHeight(max(fijo, min(alto, max(limite, 120))))

@@ -23,7 +23,7 @@ def _elementos(sesion, items):
     estado = sesion.doc.estado_final
     ids = []
     for ident in items:
-        if ident in estado.bocetos:
+        if ident in estado.bocetos or ident in estado.lienzos:      # bocetos, lienzos y calcomanías por id
             ids.append(ident)
         else:
             ids.append(sesion.cuerpo(ident).id)
@@ -39,14 +39,14 @@ def get_browser_state(sesion):
                                for k, v in datos["conjuntos"].items()]}
 
 
-@herramienta("manage_browser", "documento", "Organiza cuerpos y bocetos: crea grupos y conjuntos de selección, "
+@herramienta("manage_browser", "documento", "Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, "
              "mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). "
              "Se guarda en el proyecto y admite deshacer.", modifica=True)
 def manage_browser(sesion, action: Literal["create_group", "create_set", "move", "rename_group", "delete_group"],
                    items: list[str] | None = None, name: str = "", group: str | None = None):
     """
     action: create_group, create_set, move, rename_group o delete_group.
-    items: ids de cuerpos o bocetos; los cuerpos también aceptan nombres.
+    items: ids de cuerpos, bocetos o calcomanías; los cuerpos también aceptan nombres.
     name: nombre del grupo o conjunto que se crea, o nombre nuevo con rename_group.
     group: id del grupo destino; vacío con move devuelve los elementos a su carpeta original.
     """
@@ -82,11 +82,11 @@ def manage_browser(sesion, action: Literal["create_group", "create_set", "move",
     return {"id": ident, **get_browser_state(sesion)}
 
 
-@herramienta("set_browser_visibility", "documento", "Muestra u oculta cuerpos, bocetos o grupos en vivo. "
+@herramienta("set_browser_visibility", "documento", "Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. "
              "Sin items, muestra todo. No modifica geometría.")
 def set_browser_visibility(sesion, items: list[str] | None = None, visible: bool = True):
     """
-    items: ids de cuerpos, bocetos o grupos; vacío muestra todo.
+    items: ids de cuerpos, bocetos, calcomanías o grupos; vacío muestra todo.
     visible: true muestra; false oculta los elementos pedidos.
     """
     mostrar = getattr(sesion, "mostrar_elementos", None)

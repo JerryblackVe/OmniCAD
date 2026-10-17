@@ -8,9 +8,10 @@ from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, Op
                                        OpDesmoldeo, OpDivisionSilueta, OpDividirCara, OpDividirCuerpo, OpEmpalme,
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir, hit_desde_ref,
+from ..comando import (Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Seleccion, exigir, hit_desde_ref,
                        hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
+from .aspecto import Aspecto  # noqa: F401  (el comando vive en aspecto.py; se sigue pudiendo importar desde acá)
 from .comunes import evaluar_o_cero
 
 
@@ -693,41 +694,6 @@ def _siguiente(ctx, base):
 
 
 # ---------------------------------------------------------------- propiedades (no son pasos del timeline)
-class Aspecto(Comando):
-    CLAVE, TITULO, ICONO, ATAJO = "aspecto", "Aspecto", "aspecto", "A"
-    AYUDA = "Cambia el color con que se ven los cuerpos (no cambia el material físico)."
-    SIN_OP, PREVIA = True, False
-    COLORES = {"acero": ("Acero - Satinado", (0.74, 0.76, 0.79)), "aluminio": ("Aluminio - Pulido", (0.85, 0.86, 0.88)),
-               "negro": ("Plástico - Negro mate", (0.12, 0.12, 0.13)), "blanco": ("Plástico - Blanco", (0.95, 0.95, 0.95)),
-               "rojo": ("Pintura - Rojo", (0.80, 0.15, 0.15)), "azul": ("Pintura - Azul", (0.15, 0.35, 0.80)),
-               "verde": ("Pintura - Verde", (0.20, 0.60, 0.25)), "amarillo": ("Pintura - Amarillo", (0.95, 0.80, 0.15)),
-               "naranja": ("Pintura - Naranja", (0.95, 0.50, 0.10)), "laton": ("Latón - Pulido", (0.80, 0.65, 0.30)),
-               "cobre": ("Cobre", (0.78, 0.45, 0.28)), "madera": ("Madera - Pino", (0.85, 0.70, 0.48)),
-               "vidrio": ("Vidrio", (0.70, 0.85, 0.85)), "goma": ("Goma - Negra", (0.18, 0.18, 0.18)),
-               "ninguno": ("(quitar el aspecto)", None)}
-    verificar = staticmethod(_con_cuerpos)
-
-    def campos(self, ctx):
-        return [Seleccion("cuerpos", "Aplicar a", {"cuerpo"}, maximo=None),
-                Opciones("aspecto", "Aspecto", {k: t for k, (t, _) in self.COLORES.items()}, "rojo"),
-                Texto("hex", "Color personalizado (#rrggbb)", "")]
-
-    def construir(self, v, ctx):
-        return None
-
-    def aplicar(self, v, ctx):
-        ids = _cuerpos(exigir(v, "cuerpos", "Seleccioná los cuerpos."))
-        texto = (v.get("hex") or "").strip().lstrip("#")
-        if texto:
-            try:
-                color = [int(texto[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-            except ValueError as e:
-                raise ErrorComando("El color tiene que tener el formato #rrggbb.") from e
-        else:
-            color = self.COLORES[v["aspecto"]][1]
-        ctx.doc.set_propiedad(ids, "apariencia", list(color) if color else None)
-
-
 class MaterialFisico(Comando):
     CLAVE, TITULO, ICONO = "material_fisico", "Material físico", "material_fisico"
     AYUDA = "Asigna el material (densidad para la masa y su aspecto) a los cuerpos."

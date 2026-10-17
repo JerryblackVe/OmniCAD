@@ -329,11 +329,24 @@ def malla_suave(forma, deflexion=0.05, angular=0.25, rehacer=False):
     if es_malla(forma):
         tris = np.asarray(forma.vertices, float)[np.asarray(forma.caras, int)]
         return normales_suaves(tris, None, 35.0)
+    return _juntar([(v, n) for _c, v, n in _mallas_por_cara(forma, deflexion, angular, rehacer)])
+
+
+def _juntar(partes):
+    """(vértices, normales) float32 de una lista de (vértices, normales); vacía = mallas vacías."""
+    if not partes:
+        return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32)
+    return (np.concatenate([v for v, _n in partes]).astype(np.float32),
+            _unit(np.concatenate([n for _v, n in partes])).astype(np.float32))
+
+
+def _mallas_por_cara(forma, deflexion, angular, rehacer=False):
+    """[(cara OCC, vértices, normales)] de un cuerpo B-rep con la normal exacta de la superficie en cada vértice."""
     from OCP.BRep import BRep_Tool
     from OCP.TopLoc import TopLoc_Location
 
     from .analisis import _indices, _props_nodos
-    verts, norms = [], []
+    salida = []
     for cara, tris in geo.teselar_por_cara(forma, deflexion, angular, rehacer=rehacer):
         if BRep_Tool.Surface_s(cara) is None:
             n = normales_suaves(tris, None, 60.0)[1]
@@ -341,11 +354,22 @@ def malla_suave(forma, deflexion=0.05, angular=0.25, rehacer=False):
             tri = BRep_Tool.Triangulation_s(cara, TopLoc_Location())
             idx = _indices(tri, cara)
             n = _props_nodos(cara, tri, idx, tris, False)[0][idx].reshape(-1, 3)
-        verts.append(tris.reshape(-1, 3))
-        norms.append(n)
-    if not verts:
-        return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32)
-    return np.concatenate(verts).astype(np.float32), _unit(np.concatenate(norms)).astype(np.float32)
+        salida.append((cara, tris.reshape(-1, 3), n))
+    return salida
+
+
+def malla_suave_aparte(forma, caras, deflexion=0.05, angular=0.25):
+    """(vértices, normales del cuerpo sin esas caras, [(vértices, normales) de cada una de `caras`]). Sirve para
+    dibujar una cara con su propio aspecto (Aspecto › Aplicar a: Caras): la malla es la misma de `malla_suave`, solo
+    partida. Una cara que no es del cuerpo (o un cuerpo de malla, sin caras B-rep) devuelve su malla vacía."""
+    vacia = (np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32))
+    if es_malla(forma) or not caras:
+        return (*malla_suave(forma, deflexion, angular), [vacia] * len(caras))
+    resto, aparte = [], [[] for _ in caras]
+    for cara, v, n in _mallas_por_cara(forma, deflexion, angular):
+        k = next((i for i, c in enumerate(caras) if cara.IsSame(c)), None)
+        (resto if k is None else aparte[k]).append((v, n))
+    return (*_juntar(resto), [_juntar(partes) if partes else vacia for partes in aparte])
 
 
 def color_y_acabado(cuerpo, props):
@@ -367,6 +391,12 @@ def color_y_acabado(cuerpo, props):
         tipo = getattr(cuerpo, "tipo", "solido")
         color = COLOR_SUPERFICIE if tipo == "superficie" else COLOR_MALLA if tipo == "malla" else ACERO
     return [float(c) for c in color][:3], acabado_normalizado(props.get("acabado"), material)
+
+
+def color_y_acabado_cara(cuerpo, props, cara):
+    """Color y acabado de una cara con aspecto propio (`cara`: sus propiedades {"apariencia", "acabado"}); lo que no
+    trae lo toma del cuerpo, como `color_y_acabado`."""
+    return color_y_acabado(cuerpo, dict(props, apariencia=cara["apariencia"], acabado=cara.get("acabado")))
 
 
 # ---------------------------------------------------------------- cámara

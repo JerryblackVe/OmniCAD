@@ -25,6 +25,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -282,6 +283,40 @@ def pendientes_de_recuperacion(recientes=()):
 
 
 def borrar_autoguardado(doc):
+    """Borra la copia de autoguardado del documento. Un archivo bloqueado no puede hacer fallar un guardado que
+    ya salió bien: se avisa en el registro y se sigue."""
     destino = ruta_autoguardado(doc)
-    if destino.exists():
-        destino.unlink()
+    try:
+        destino.unlink(missing_ok=True)
+    except OSError as e:
+        log.warning("No se pudo borrar el autoguardado %s: %s", destino, e)
+
+
+def es_copia_de_autoguardado(ruta):
+    """True si el archivo es una copia de autoguardado (`*.autoguardado.omnicad`), nunca un proyecto."""
+    return Path(ruta).name.lower().endswith(".autoguardado" + EXTENSION)
+
+
+def suprimir_copia(ruta):
+    """«Suprimir» de Documentos recuperados: borra SOLO una copia de autoguardado. Un proyecto guardado (o
+    cualquier otro archivo) que llegue por error se rechaza, no se borra."""
+    if not es_copia_de_autoguardado(ruta):
+        raise ErrorProyecto(f"«{Path(ruta).name}» no es una copia de autoguardado (*.autoguardado{EXTENSION}): "
+                            "no se borra.")
+    Path(ruta).unlink(missing_ok=True)
+
+
+def abrir_recuperado(copia, proyecto_original=None):
+    """Documento de una copia de autoguardado, como lo deja «Abrir» de Documentos recuperados: con
+    `proyecto_original` guardar a mano pisa ESE proyecto; sin él es un «Recuperado» sin ruta que hereda el
+    token de la copia (sin_titulo_<token>), así su autoguardado vuelve a ser la misma copia y al guardar se borra:
+    si no, la copia vieja seguía apareciendo en cada arranque."""
+    doc = abrir(copia)
+    doc.ruta = str(proyecto_original) if proyecto_original else None
+    doc.nombre = Path(proyecto_original).stem if proyecto_original else "Recuperado"
+    if not proyecto_original:
+        m = re.fullmatch(r"sin_titulo_(\w+)\.autoguardado" + re.escape(EXTENSION), Path(copia).name, re.IGNORECASE)
+        if m:
+            doc.token = m.group(1)
+    doc.modificado = True
+    return doc

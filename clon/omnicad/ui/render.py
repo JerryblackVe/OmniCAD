@@ -9,9 +9,11 @@ Punto de entrada para la ventana principal:
     ventana.desde_dict(datos)                # opcional: escena y cámara guardadas con `a_dict()`
     ventana.show()
     datos = ventana.a_dict()                 # {"version", "escena", "camara", "lienzo"}; `cambiado` avisa
-Los aspectos se guardan EN EL DOCUMENTO (entran en deshacer y en el proyecto), con dos propiedades por
-cuerpo: "apariencia" [r, g, b] (la que ya usa el visor del diseño) y "acabado" {nombre, categoria, metalico,
-rugosidad, transparencia, barniz, patron, color2}.
+Los aspectos se guardan EN EL DOCUMENTO (entran en deshacer y en el proyecto) con las mismas funciones que el panel
+Aspecto del espacio Diseño y las herramientas `set_appearance` / `edit_appearance` (`timeline/aspectos_doc.py`): cada
+aspecto aplicado entra en «En este diseño» y cada cuerpo (o cara) guarda "apariencia" [r, g, b], "acabado" {nombre,
+categoria, metalico, rugosidad, transparencia, barniz, patron, color2} y el id de su aspecto. El lienzo dibuja aparte
+cada cara con aspecto propio.
 
 Lienzo (`LienzoRender`, también lo usa ANIMACIÓN): un Visor3D (misma navegación con el ratón y ViewCube)
 con un camino GLSL propio: sombreado por píxel (Fresnel + Blinn-Phong según la rugosidad, reflejo del
@@ -21,6 +23,7 @@ el lienzo», supermuestreo). Es el mismo modelo que `nucleo.render_cpu`, que hac
 OpenGL o si se elige el motor de CPU. Si el GLSL no compila, el lienzo dibuja como el Visor3D.
 """
 import ctypes
+import json
 import logging
 import math
 import os
@@ -31,23 +34,26 @@ from pathlib import Path
 import numpy as np
 from OpenGL import GL
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import (QAction, QBrush, QColor, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen,
-                           QPixmap, QRadialGradient)
+from PySide6.QtGui import (QAction, QBrush, QColor, QIcon, QImage, QLinearGradient, QPainter, QPen, QPixmap,
+                           QRadialGradient)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
                                QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressDialog,
-                               QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QToolButton, QTreeWidget,
-                               QTreeWidgetItem, QVBoxLayout, QWidget)
+                               QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QToolButton, QVBoxLayout,
+                               QWidget)
 
-from .. import NOMBRE_APP
+from .. import NOMBRE_APP, api
+from ..nucleo import aspectos as asp
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
+from ..timeline import aspectos_doc as ad
 from ..timeline.operaciones import propiedades_cuerpo
 from . import temas
+from .aspectos_ui import PanelAspectos, RadiosAplicarA
 from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
 from .iconos import icono
 from .superposiciones import AreaVisor
-from ..nucleo.render_cpu import color_y_acabado, malla_suave  # noqa: F401 — se re-exportan (tests, animación)
+from ..nucleo.render_cpu import color_y_acabado, malla_suave, malla_suave_aparte  # noqa: F401 — se re-exportan (tests, animación)
 from .visor3d import ENTORNOS, ConfigVista, Visor3D, aristas_cuerpo, rayo_triangulos
 
 log = logging.getLogger(__name__)
@@ -383,6 +389,10 @@ class _FBO:
 
 
 # =============================================================== lienzo
+def _clave_cara(ref):
+    return json.dumps(ref, sort_keys=True, default=str)
+
+
 class LienzoRender(Visor3D):
     """Visor3D con aspectos, entorno, sombras, suelo y oclusión (ver el docstring del módulo). Admite una
     matriz 4x4 por cuerpo (`set_transformaciones`) y opacidad por cuerpo (`opacidad`), para la animación."""
@@ -423,32 +433,53 @@ class LienzoRender(Visor3D):
     def cielo(self):
         return cielo_de(self.escena["entorno"])
 
-    def _malla(self, forma):
-        clave = id(forma)
+    def _malla(self, forma, estado, caras=()):
+        """(clave, (forma, v, n, aristas, {referencia: (v, n)})) del cuerpo sin sus caras con aspecto propio y de cada
+        una de ellas. `caras`: [(referencia de la cara, sus propiedades)]; una que ya no existe no se dibuja."""
+        refs = {_clave_cara(r): r for r, _p in caras}
+        clave = (id(forma), tuple(sorted(refs)))
         if clave not in self._cache_mallas:
-            v, n = malla_suave(forma, self.deflexion)
+            pintadas = {k: c for k, r in refs.items() if (c := ad.cara_de(estado, r)) is not None}
+            if pintadas:
+                v, n, partes = malla_suave_aparte(forma, list(pintadas.values()), self.deflexion)
+            else:
+                (v, n), partes = malla_suave(forma, self.deflexion), []
             seg = aristas_cuerpo(forma) if self.aristas else np.zeros((0, 3), _F)
-            self._cache_mallas[clave] = (forma, v, n, seg)
-        return self._cache_mallas[clave]
+            self._cache_mallas[clave] = (forma, v, n, seg, dict(zip(pintadas, partes, strict=True)))
+        return clave, self._cache_mallas[clave]
 
     def cargar(self, estado, propiedades=None, ocultos=()):
-        """Muestra un estado del modelo con los aspectos de `propiedades` (las de `Documento.propiedades`)."""
+        """Muestra un estado del modelo con los aspectos de `propiedades` (las de `Documento.propiedades`), también
+        los de las caras con aspecto propio (cada una se dibuja aparte, con su color y su acabado)."""
         propiedades = propiedades or {}
         self._estado, self._ocultos, self._excluir_bocetos = estado, frozenset(ocultos), ()
         objetos, formas, cache = {}, {}, {}
         for i, c in enumerate(estado.cuerpos.values()):
-            forma, v, n, seg = self._malla(c.forma)
-            cache[id(forma)] = (forma, v, n, seg)
-            if c.id in ocultos or not len(v):
+            props = propiedades_cuerpo(propiedades, c)
+            caras = ad.caras_propias(props)
+            clave, (forma, v, n, seg, aparte) = self._malla(c.forma, estado, caras)
+            cache[clave] = self._cache_mallas[clave]
+            partes = []
+            for r, p in caras:
+                cara = aparte.get(_clave_cara(r))
+                if cara is not None and len(cara[0]):
+                    cc, ac = rc.color_y_acabado_cara(c, props, p)
+                    partes.append({"v0": cara[0], "n0": cara[1], "seg0": np.zeros((0, 3), _F), "color": cc,
+                                   "acabado": ac})
+            if c.id in ocultos or not (len(v) or partes):
                 continue
-            color, acabado = color_y_acabado(c, propiedades_cuerpo(propiedades, c))
+            color, acabado = color_y_acabado(c, props)
             objetos[c.id] = {"v0": v, "n0": n, "seg0": seg, "color": color, "acabado": acabado, "indice": i,
                              "tipo": getattr(c, "tipo", "solido"), "nombre": propiedades.get(c.id, {}).get("nombre")
-                             or c.nombre}
+                             or c.nombre, "caras": partes}
             formas[c.id] = c.forma
         self._cache_mallas, self.objetos, self._formas = cache, objetos, formas
+        vivos = {id(c.forma) for c in estado.cuerpos.values()}
+        self._pick = {k: x for k, x in self._pick.items() if k in vivos}      # lo de formas que ya no existen se suelta
+        self._pick_aristas = {k: x for k, x in self._pick_aristas.items() if k in vivos}
+        self._pick_paquete = {k: x for k, x in self._pick_paquete.items() if k in vivos}
         self._bocetos = np.zeros((0, 3), _F)
-        zs = [float(o["v0"][:, 2].min()) for o in objetos.values()]
+        zs = [float(p["v0"][:, 2].min()) for o in objetos.values() for p in (o, *o["caras"]) if len(p["v0"])]
         self.z_suelo = min(zs) if zs else 0.0
         self._aplicar()
 
@@ -465,16 +496,19 @@ class LienzoRender(Visor3D):
         mallas = []
         for cid, o in self.objetos.items():
             M = self.transformaciones.get(cid)
-            v, n, seg = o["v0"], o["n0"], o["seg0"]
-            if M is not None and not np.allclose(M, np.identity(4)):
-                R, t = M[:3, :3], M[:3, 3]
-                v = (v @ R.T + t).astype(_F)
-                n = (n @ R.T).astype(_F)
-                seg = (seg @ R.T + t).astype(_F) if len(seg) else seg
-            mallas.append({"v": np.ascontiguousarray(v, _F), "n": np.ascontiguousarray(n, _F),
-                           "seg": np.ascontiguousarray(seg, _F), "loc": o["v0"], "indice": o["indice"], "id": cid,
-                           "color": tuple(o["color"]), "tipo": o["tipo"], "acabado": o["acabado"],
-                           "caja": (v.min(0).astype(float), v.max(0).astype(float))})
+            for parte in (o, *o["caras"]):               # el cuerpo y, aparte, sus caras con aspecto propio
+                v, n, seg = parte["v0"], parte["n0"], parte["seg0"]
+                if not len(v):
+                    continue
+                if M is not None and not np.allclose(M, np.identity(4)):
+                    R, t = M[:3, :3], M[:3, 3]
+                    v = (v @ R.T + t).astype(_F)
+                    n = (n @ R.T).astype(_F)
+                    seg = (seg @ R.T + t).astype(_F) if len(seg) else seg
+                mallas.append({"v": np.ascontiguousarray(v, _F), "n": np.ascontiguousarray(n, _F),
+                               "seg": np.ascontiguousarray(seg, _F), "loc": parte["v0"], "indice": o["indice"],
+                               "id": cid, "color": tuple(parte["color"]), "tipo": o["tipo"],
+                               "acabado": parte["acabado"], "caja": (v.min(0).astype(float), v.max(0).astype(float))})
         self._mallas = mallas
         self._hover_ent = None
         self.update()
@@ -506,9 +540,16 @@ class LienzoRender(Visor3D):
     def _matrices(self):
         return self._matrices_tam(self.width(), self.height())
 
-    # ------------------------------------------------------------ selección de cuerpos (con transformaciones)
-    def elegir_entidad(self, pos, filtros=None, a_traves=False):   # misma firma que Visor3D (solo elige cuerpos)
+    # ------------------------------------------------------------ selección de cuerpos y caras
+    def triangulos_cuerpo(self, cid):
+        """Todos los triángulos del cuerpo, también los de sus caras con aspecto propio."""
+        partes = [m["v"] for m in self._mallas if m["id"] == cid]
+        return np.concatenate(partes) if partes else np.zeros((0, 3), _F)
+
+    def elegir_entidad(self, pos, filtros=None, a_traves=False):   # misma firma que Visor3D (cuerpos y caras)
         filtros = set(filtros if filtros is not None else (self.filtro or ()))
+        if "cara" in filtros and not self.transformaciones:     # las caras las elige el visor, sobre la forma
+            return super().elegir_entidad(pos, {"cara"}, a_traves)
         if "cuerpo" not in filtros:
             return None
         o, d = self.rayo(pos)
@@ -523,7 +564,8 @@ class LienzoRender(Visor3D):
         if mejor[1] is None:
             return None
         t, m = mejor
-        return {"tipo": "cuerpo", "ref": {"tipo": "cuerpo", "cuerpo": m["id"]}, "dibujo": [("tris", m["v"], None, 0.35)],
+        return {"tipo": "cuerpo", "ref": {"tipo": "cuerpo", "cuerpo": m["id"]},
+                "dibujo": [("tris", self.triangulos_cuerpo(m["id"]), None, 0.35)],
                 "t": t, "punto": o + d * t, "cuerpo": m["id"]}
 
     def mouseReleaseEvent(self, e):
@@ -1117,50 +1159,6 @@ def icono_render(nombre):
     return _ICONOS[nombre]
 
 
-def icono_aspecto(nombre, tam=30):
-    """Muestra (esfera) de un aspecto de la biblioteca."""
-    color, ac = rc.aspecto(nombre)
-    base = QColor.fromRgbF(*color)
-    pm = QPixmap(tam * 2, tam * 2)
-    pm.setDevicePixelRatio(2)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    r = tam / 2 - 1.5
-    c = QPointF(tam / 2, tam / 2)
-    if ac["transparencia"] > 0.5:
-        for i in range(4):
-            for j in range(4):
-                p.fillRect(QRectF(i * tam / 4, j * tam / 4, tam / 4, tam / 4), QColor("#cfcfcf" if (i + j) % 2 else "#ffffff"))
-    g = QRadialGradient(c.x() - r * 0.35, c.y() - r * 0.4, r * 1.5)
-    if ac["metalico"] > 0.5:
-        paradas = ((0, QColor("#ffffff")), (0.35, base.lighter(115)), (0.7, base.darker(170)), (1, base.lighter(130)))
-    else:
-        paradas = ((0, base.lighter(150)), (0.6, base), (1, base.darker(200)))
-    for pos, col in paradas:
-        if ac["transparencia"] > 0.5:
-            col.setAlphaF(0.45)
-        g.setColorAt(pos, col)
-    path = QPainterPath()
-    path.addEllipse(c, r, r)
-    p.setPen(QPen(base.darker(250), 0.8))
-    p.setBrush(QBrush(g))
-    p.drawPath(path)
-    if ac["patron"] == "madera":
-        p.setClipPath(path)
-        oscuro = QColor.fromRgbF(*ac["color2"])
-        p.setPen(QPen(oscuro, 1.2))
-        for k in range(-3, 4):
-            p.drawArc(QRectF(c.x() - 18 + k * 4, c.y() - 30, 36, 60), 60 * 16, 60 * 16)
-        p.setClipping(False)
-    if ac["rugosidad"] < 0.4 or ac["barniz"] > 0:
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(255, 255, 255, 220))
-        p.drawEllipse(QPointF(c.x() - r * 0.38, c.y() - r * 0.42), r * 0.2, r * 0.14)
-    p.end()
-    return QIcon(pm)
-
-
 def icono_entorno(clave, tam=40):
     _n, arriba, abajo, _l = ENTORNOS[clave]
     pm = QPixmap(tam * 2, tam * 2)
@@ -1440,46 +1438,24 @@ class PanelEscena(PanelFlotante):
 
 
 class PanelAspecto(PanelFlotante):
-    """CONFIGURAR › Aspecto [GUID-118C6889]: biblioteca por familias y los aspectos usados en el diseño.
-    Elegí un aspecto y hacé clic en un cuerpo para aplicarlo (como arrastrarlo en Fusion), o usá
-    «Aplicar a la selección»."""
-    aplicar = Signal(str)          # nombre del aspecto → a los cuerpos seleccionados
+    """CONFIGURAR › Aspecto [GUID-118C6889]: el mismo panel del espacio Diseño (`aspectos_ui.PanelAspectos`): «Aplicar a»
+    cuerpos o caras, «En este diseño» (con su menú, el selector rápido y el Editor de materiales) y la biblioteca
+    (OmniCAD, Mis aspectos, Favoritos). Elegí un aspecto y hacé clic en un cuerpo o una cara para aplicarlo (como
+    arrastrarlo en Fusion), o usá «Aplicar a la selección». Lo que se edita en «En este diseño» se ve en el lienzo al
+    instante y la ventana lo escribe en el diseño al aplicar, al cerrar el panel o al salir."""
+    aplicar = Signal()                  # «Aplicar a la selección»
     quitar = Signal()
+    cambiado = Signal()                 # se editó «En este diseño» o se eligió otro aspecto
+    modo_cambiado = Signal(str)         # "cuerpos" | "caras"
 
-    def __init__(self, parent=None):
+    def __init__(self, doc, parent=None):
         super().__init__("Aspecto", parent)
-        fila = QHBoxLayout()
-        fila.addWidget(QLabel("Aplicar a:"))
-        self.aplicar_a = QComboBox()
-        self.aplicar_a.addItem("Cuerpos/componentes")
-        self.aplicar_a.addItem("Caras")
-        self.aplicar_a.model().item(1).setEnabled(False)
-        self.aplicar_a.setToolTip("Aplicar aspectos a caras sueltas no está disponible.")
-        fila.addWidget(self.aplicar_a, 1)
-        self.cuerpo.addLayout(fila)
-        self.cuerpo.addWidget(_seccion("En este diseño"))
-        self.en_diseno = QListWidget()
-        self.en_diseno.setIconSize(QSize(24, 24))
-        self.en_diseno.setMaximumHeight(74)
-        self.cuerpo.addWidget(self.en_diseno)
-        self.cuerpo.addWidget(_seccion("Biblioteca"))
-        self.arbol = QTreeWidget()
-        self.arbol.setHeaderHidden(True)
-        self.arbol.setIconSize(QSize(26, 26))
-        self.arbol.setMinimumHeight(170)
-        familias = {}
-        for nombre, datos in rc.BIBLIOTECA_ASPECTOS.items():
-            cat = datos["categoria"]
-            if cat not in familias:
-                familias[cat] = QTreeWidgetItem(self.arbol, [cat])
-            hoja = QTreeWidgetItem(familias[cat], [nombre])
-            hoja.setIcon(0, icono_aspecto(nombre))
-            hoja.setData(0, Qt.UserRole, nombre)
-        for cat in ("Metal", "Plástico"):
-            if cat in familias:
-                familias[cat].setExpanded(True)
-        self.cuerpo.addWidget(self.arbol, 1)
-        self.ayuda = QLabel("Elegí un aspecto y hacé clic en un cuerpo para aplicarlo.")
+        self.doc = doc
+        self.radios = RadiosAplicarA()
+        self.cuerpo.addWidget(self.radios)
+        self.aspectos = PanelAspectos(ad.lista(doc))
+        self.cuerpo.addWidget(self.aspectos, 1)
+        self.ayuda = QLabel()
         self.ayuda.setWordWrap(True)
         temas.poner_rol(self.ayuda, "tenue")
         self.cuerpo.addWidget(self.ayuda)
@@ -1490,31 +1466,52 @@ class PanelAspecto(PanelFlotante):
         botones.addWidget(self.b_aplicar)
         botones.addWidget(self.b_quitar)
         self.cuerpo.addLayout(botones)
-        self.b_aplicar.clicked.connect(lambda: self.aplicar.emit(self.elegido()) if self.elegido() else None)
+        self.b_aplicar.clicked.connect(self.aplicar.emit)
         self.b_quitar.clicked.connect(self.quitar.emit)
-        self.en_diseno.itemClicked.connect(lambda it: self._seleccionar(it.data(Qt.UserRole)))
+        self.aspectos.cambiado.connect(self.cambiado.emit)
+        self.radios.cambiado.connect(self._modo)
+        self.sincronizar()
+        self._modo(self.modo())
+
+    def modo(self):
+        return "caras" if self.radios.r_caras.isChecked() else "cuerpos"
+
+    def _modo(self, modo):
+        self.ayuda.setText("Elegí un aspecto y hacé clic en " + ("una cara" if modo == "caras" else "un cuerpo")
+                           + " para aplicarlo.")
+        self.modo_cambiado.emit(modo)
 
     def elegido(self):
-        it = self.arbol.currentItem()
-        return it.data(0, Qt.UserRole) if it is not None else None
+        """Nombre del aspecto elegido (de la biblioteca o de «En este diseño») o None."""
+        return self.aspectos.elegido["nombre"] if self.aspectos.elegido is not None else None
+
+    def por_nombre(self, nombre):
+        """El aspecto con ese nombre: uno de «En este diseño» (con lo editado sin escribir) o, si no está, el de la
+        biblioteca o de «Mis aspectos». None si no existe."""
+        propio = next((a for a in self.aspectos.diseno if a["nombre"].casefold() == nombre.strip().casefold()), None)
+        return propio if propio is not None else asp.buscar(nombre)
 
     def _seleccionar(self, nombre):
-        for i in range(self.arbol.topLevelItemCount()):
-            fam = self.arbol.topLevelItem(i)
-            for j in range(fam.childCount()):
-                if fam.child(j).data(0, Qt.UserRole) == nombre:
-                    self.arbol.setCurrentItem(fam.child(j))
-                    return
+        """Elige un aspecto por su nombre."""
+        a = self.por_nombre(nombre)
+        if a is not None:
+            self.aspectos.elegir(a["id"] if "id" in a else a, desde_biblioteca="id" not in a)
 
-    def set_usados(self, usados):
-        """usados: {nombre del aspecto: cantidad de cuerpos}."""
-        self.en_diseno.clear()
-        for nombre, n in sorted(usados.items()):
-            it = QListWidgetItem(f"{nombre}  ({n})")
-            if nombre in rc.BIBLIOTECA_ASPECTOS:
-                it.setIcon(icono_aspecto(nombre))
-            it.setData(Qt.UserRole, nombre)
-            self.en_diseno.addItem(it)
+    # ------------------------------------------------------------ el diseño
+    def pendiente(self):
+        """True si «En este diseño» tiene cambios que todavía no se escribieron en el documento."""
+        return self.aspectos.diseno != self._base
+
+    def sincronizar(self, mapa=None):
+        """Copia el «En este diseño» del documento al panel (`mapa`: ids definitivos de los aspectos nuevos)."""
+        self._base = ad.lista(self.doc)
+        self.aspectos.sincronizar(self._base, {a["id"] for a in self._base if any(ad.usos(self.doc, a["id"]))}, mapa)
+
+    def refrescar(self):
+        """El documento cambió: se trae su «En este diseño», salvo que haya cambios propios sin escribir y el diseño siga
+        igual (si lo cambió otro lado —deshacer, una herramienta— esos cambios ya no valen)."""
+        if not self.pendiente() or ad.lista(self.doc) != self._base:
+            self.sincronizar()
 
 
 # =============================================================== diálogos
@@ -1749,10 +1746,11 @@ GRUPOS_RENDER = [
 ]
 
 
-def _resaltar_cuerpos(lienzo, seleccion):
-    """Resalta los cuerpos elegidos en el lienzo (capa «seleccion» semitransparente); lo usan RENDER y ANIMACIÓN."""
+def _resaltar_cuerpos(lienzo, seleccion, extra=()):
+    """Resalta los cuerpos elegidos en el lienzo (capa «seleccion» semitransparente); lo usan RENDER y ANIMACIÓN.
+    `extra`: otras primitivas a dibujar en la misma capa (las caras elegidas)."""
     prims = [("tris", m["v"], None, 0.30) for m in lienzo._mallas if m["id"] in seleccion]
-    lienzo.set_capa("seleccion", prims)
+    lienzo.set_capa("seleccion", prims + list(extra))
 
 
 class _Oyente:
@@ -1784,6 +1782,7 @@ class VentanaRender(QMainWindow):
         self.resize(1400, 900)
         self.renders = []                  # galería de la sesión
         self.seleccion = []                # ids de cuerpos elegidos en el lienzo
+        self.caras_elegidas = []           # [(id de cuerpo, referencia de la cara, primitivas del resalte)]
         self._programado = self._pendiente = False
         self.lienzo = LienzoRender()
         self.area = AreaVisor(self.lienzo)
@@ -1806,9 +1805,11 @@ class VentanaRender(QMainWindow):
         self.panel_escena = PanelEscena()
         self.panel_escena.escena_cambiada.connect(self.set_escena)
         self.panel_escena.cerrado.connect(lambda: self._panel_cerrado(self.panel_escena))
-        self.panel_aspecto = PanelAspecto()
-        self.panel_aspecto.aplicar.connect(lambda nombre: self.aplicar_aspecto(nombre, self.seleccion))
-        self.panel_aspecto.quitar.connect(lambda: self.quitar_aspecto(self.seleccion))
+        self.panel_aspecto = PanelAspecto(doc)
+        self.panel_aspecto.aplicar.connect(self._aplicar_a_la_seleccion)
+        self.panel_aspecto.quitar.connect(self._quitar_de_la_seleccion)
+        self.panel_aspecto.cambiado.connect(self._vista)
+        self.panel_aspecto.modo_cambiado.connect(self._modo_aspecto)
         self.panel_aspecto.cerrado.connect(lambda: self._panel_cerrado(self.panel_aspecto))
         for p in (self.panel_escena, self.panel_aspecto):
             p.hide()
@@ -1850,17 +1851,19 @@ class VentanaRender(QMainWindow):
 
     # ------------------------------------------------------------ modelo
     def actualizar(self):
+        """El documento cambió: el panel Aspecto trae su «En este diseño» y el lienzo se vuelve a cargar."""
         self._programado = self._pendiente = False
-        estado = self.doc.estado_final
-        self.lienzo.cargar(estado, self.doc.propiedades)
+        self.panel_aspecto.refrescar()
+        self.caras_elegidas = []                 # el modelo pudo cambiar: el resalte de las caras ya no vale
+        self._vista()
+        self.setWindowTitle(f"{self.doc.nombre} — Renderizar — {NOMBRE_APP}")
+
+    def _vista(self):
+        """El lienzo muestra el diseño más lo que el panel Aspecto tiene editado sin escribir (vista previa)."""
+        props = ad.propiedades_con(self.doc, self.panel_aspecto.aspectos.diseno)
+        self.lienzo.cargar(self.doc.estado_final, props)
         self.seleccion = [c for c in self.seleccion if c in self.lienzo.objetos]
         self._resaltar()
-        usados = {}
-        for o in self.lienzo.objetos.values():
-            nombre = o["acabado"].get("nombre") or rc.ASPECTO_DEFECTO
-            usados[nombre] = usados.get(nombre, 0) + 1
-        self.panel_aspecto.set_usados(usados)
-        self.setWindowTitle(f"{self.doc.nombre} — Renderizar — {NOMBRE_APP}")
 
     def _modelo_cambio(self):
         if not self.isVisible():
@@ -1877,63 +1880,140 @@ class VentanaRender(QMainWindow):
 
     # ------------------------------------------------------------ selección y aspectos
     def _clic_cuerpo(self, hit):
+        """Clic en el lienzo sobre un cuerpo o una cara. Con el panel Aspecto abierto y un aspecto elegido, lo aplica."""
         cid = hit.get("cuerpo")
-        nombre = self.panel_aspecto.elegido() if not self.panel_aspecto.isHidden() else None
-        if nombre:
-            self.aplicar_aspecto(nombre, [cid])
-            self.seleccionar([cid])
+        cara = (cid, hit["ref"], hit.get("dibujo") or []) if hit.get("tipo") == "cara" else None
+        elegido = self.panel_aspecto.aspectos.elegido if not self.panel_aspecto.isHidden() else None
+        if elegido is not None:
+            if cara:
+                self.aplicar_aspecto(elegido, caras=[cara[:2]])
+            else:
+                self.aplicar_aspecto(elegido, [cid])
+                self.seleccionar([cid])
             return
-        if QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier):
-            sel = [c for c in self.seleccion if c != cid] + ([] if cid in self.seleccion else [cid])
+        sumar = bool(QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
+        if cara:
+            ya = any(x[:2] == cara[:2] for x in self.caras_elegidas)
+            self.caras_elegidas = ([x for x in self.caras_elegidas if x[:2] != cara[:2]] + ([] if ya else [cara])
+                                   if sumar else [cara])
+            self.seleccion = []
+            self._resaltar()
+            self.indicar(f"{len(self.caras_elegidas)} cara(s) elegida(s).")
+        elif sumar:
+            self.seleccionar([c for c in self.seleccion if c != cid] + ([] if cid in self.seleccion else [cid]))
         else:
-            sel = [cid]
-        self.seleccionar(sel)
+            self.seleccionar([cid])
 
     def seleccionar(self, ids):
         self.seleccion = [c for c in ids if c in self.lienzo.objetos]
+        self.caras_elegidas = []
         self._resaltar()
         if self.seleccion:
             nombres = ", ".join(self.lienzo.objetos[c]["nombre"] for c in self.seleccion)
             self.indicar(f"Seleccionado: {nombres}")
 
     def _resaltar(self):
-        _resaltar_cuerpos(self.lienzo, self.seleccion)
+        _resaltar_cuerpos(self.lienzo, self.seleccion, [p for _c, _r, prims in self.caras_elegidas for p in prims])
 
-    def aplicar_aspecto(self, nombre, ids=None):
-        """Aplica un aspecto de la biblioteca a los cuerpos (todos si `ids` está vacío)."""
-        ids = [c for c in (ids or list(self.lienzo.objetos)) if c in self.doc.estado_final.cuerpos]
-        if not ids:
-            self.indicar("Elegí un cuerpo en el lienzo.")
+    def _modo_aspecto(self, _modo=None):
+        """Cambió «Aplicar a» (o se abrió o cerró el panel): el lienzo elige cuerpos o caras y se suelta lo elegido."""
+        caras = not self.panel_aspecto.isHidden() and self.panel_aspecto.modo() == "caras"
+        filtro = {"cara"} if caras else {"cuerpo"}
+        if self.lienzo.filtro != filtro:
+            self.lienzo.set_filtro(filtro)
+            self.seleccion, self.caras_elegidas = [], []
+            self._resaltar()
+
+    def _aplicar_a_la_seleccion(self):
+        elegido = self.panel_aspecto.aspectos.elegido
+        if elegido is None:
+            self.indicar("Elegí un aspecto de la biblioteca o de «En este diseño».")
             return
-        color, acabado = rc.aspecto(nombre)
-        self.doc.set_propiedad(ids, "acabado", acabado)
-        self.doc.set_propiedad(ids, "apariencia", color)
+        self.aplicar_aspecto(elegido, *self._objetivos())
+
+    def _quitar_de_la_seleccion(self):
+        self.quitar_aspecto(*self._objetivos())
+
+    def _objetivos(self):
+        """(ids de cuerpos, [(id de cuerpo, referencia de cara)]) elegidos en el lienzo según «Aplicar a»."""
+        if self.panel_aspecto.modo() == "caras":
+            return [], [x[:2] for x in self.caras_elegidas]
+        return list(self.seleccion), []
+
+    def _escribir_aspectos(self, elegido=None, cuerpos=(), caras=()):
+        """Escribe en el documento, en UN paso de deshacer y con las mismas funciones que las herramientas
+        `set_appearance` y `edit_appearance` (`timeline/aspectos_doc.py`), lo editado de «En este diseño» y, si hay, el
+        aspecto `elegido` en los cuerpos y las caras."""
+        with api.Sesion(self.doc).transaccion():
+            mapa = ad.aplicar_panel(self.doc, self.panel_aspecto.aspectos.diseno, elegido, cuerpos, caras)
+        self.panel_aspecto.sincronizar(mapa)
+
+    def _confirmar_aspectos(self):
+        """Lo editado en «En este diseño» que todavía no está en el documento se escribe (al cerrar el panel o la ventana)."""
+        if self.panel_aspecto.pendiente():
+            try:
+                self._escribir_aspectos()
+            except ErrorGeometria as e:
+                self.indicar(str(e))
+                self.panel_aspecto.sincronizar()
+                self._vista()
+
+    def aplicar_aspecto(self, aspecto, ids=(), caras=()):
+        """Aplica un aspecto a cuerpos (`ids`) o a caras (`caras`: [(id de cuerpo, referencia de cara)]) y lo suma a «En este
+        diseño». `aspecto`: su nombre (del diseño, de «Mis aspectos» o de la biblioteca) o su dict. Devuelve si aplicó."""
+        existentes = self.doc.estado_final.cuerpos
+        ids, caras = [c for c in ids if c in existentes], [(c, r) for c, r in caras if c in existentes]
+        if not ids and not caras:
+            self.indicar("Elegí una cara en el lienzo." if self.panel_aspecto.modo() == "caras"
+                         else "Elegí un cuerpo en el lienzo.")
+            return False
+        if isinstance(aspecto, str):
+            nombre, aspecto = aspecto, self.panel_aspecto.por_nombre(aspecto)
+            if aspecto is None:
+                self.indicar(f"No existe el aspecto «{nombre}».")
+                return False
+        try:
+            self._escribir_aspectos(aspecto, ids, caras)
+        except ErrorGeometria as e:
+            self.indicar(str(e))
+            return False
         self.actualizar()
-        self.indicar(f"Aspecto «{nombre}» aplicado a {len(ids)} cuerpo(s).")
+        self.indicar(f"Aspecto «{aspecto['nombre']}» aplicado a "
+                     + (f"{len(ids)} cuerpo(s)." if ids else f"{len(caras)} cara(s)."))
         self.cambiado.emit()
+        return True
 
-    def quitar_aspecto(self, ids=None):
-        ids = [c for c in (ids or []) if c in self.doc.estado_final.cuerpos]
-        if not ids:
-            self.indicar("Elegí los cuerpos a los que querés quitarles el aspecto.")
+    def quitar_aspecto(self, ids=(), caras=()):
+        """Saca el aspecto de los cuerpos (queda el color de su material) y de las caras (vuelven al del cuerpo)."""
+        existentes = self.doc.estado_final.cuerpos
+        ids, caras = [c for c in ids if c in existentes], [(c, r) for c, r in caras if c in existentes]
+        if not ids and not caras:
+            self.indicar("Elegí los cuerpos o las caras a los que querés quitarles el aspecto.")
             return
-        self.doc.set_propiedad(ids, "acabado", None)
-        self.doc.set_propiedad(ids, "apariencia", None)
+        ad.quitar(self.doc, ids, caras)
         self.actualizar()
         self.cambiado.emit()
 
     # ------------------------------------------------------------ escena y paneles
     def _mostrar_panel(self, panel):
+        self._confirmar_aspectos()
         for p in (self.panel_escena, self.panel_aspecto):
             if p is not panel:
                 p.hide()
         self.area.set_panel(panel)          # cambia el padre (eso lo oculta): mostrar después
         panel.show()
         self.area.reubicar()
+        self._modo_aspecto()
 
     def _panel_cerrado(self, panel):
         if self.area.panel is panel:
             self.area.set_panel(None)
+        self._confirmar_aspectos()
+        self._modo_aspecto()
+
+    def closeEvent(self, e):
+        self._confirmar_aspectos()
+        super().closeEvent(e)
 
     def mostrar_escena(self):
         self.panel_escena.set_escena(self.lienzo.escena)

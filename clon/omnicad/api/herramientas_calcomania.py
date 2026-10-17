@@ -2,6 +2,7 @@
 import base64
 import io
 from pathlib import Path
+from typing import Literal
 
 from PIL import Image
 
@@ -10,6 +11,25 @@ from .errores import error
 from .registro import Expr, herramienta
 from .herramientas_modificar import _refs
 from .herramientas_solido import _agregar, texto_expr
+
+
+def info_calcomanias(sesion):
+    """Las calcomanías del documento para `get_scene_info`: de qué cuerpo son y si se ven (`on_body`: su cuerpo
+    existe en este punto del timeline)."""
+    from ..timeline.ops_insertar import calcomanias_vigentes
+    doc = sesion.doc
+    vigentes = dict(calcomanias_vigentes(doc, doc.estado_final))
+    salida = []
+    for op in doc.operaciones:
+        if not isinstance(op, OpLienzo) or not op.p["calcomania"]:
+            continue
+        datos = doc.estado_final.lienzos.get(op.id)
+        salida.append({"id": op.id, "name": op.nombre, "image": op.p["archivo"],
+                       "body": datos["cuerpo"] if datos else None, "on_body": op.id in vigentes,
+                       "opacity": op.p["opacidad"] if op.p["usar_opacidad"] else 100,
+                       "x": op.p["dx"], "y": op.p["dy"], "angle": op.p["angulo"],
+                       "width": op.p["ancho"], "suppressed": op.suprimida})
+    return salida
 
 
 @herramienta("set_decal", "documento", "Crea o edita una calcomanía sobre una cara, con tamaño, "
@@ -21,7 +41,8 @@ def set_decal(sesion, image: str | None = None, face: str | None = None, body: s
               keep_aspect: bool | None = None, chain_faces: bool | None = None,
               opacity: int | None = None, use_opacity: bool | None = None,
               x: Expr | None = None, y: Expr | None = None, angle: Expr | None = None,
-              flip_h: bool | None = None, flip_v: bool | None = None, scale: Expr | None = None):
+              flip_h: bool | None = None, flip_v: bool | None = None, scale: Expr | None = None,
+              name: str | None = None):
     """
     image: ruta de imagen PNG/JPEG/BMP/TIFF; omitida al editar conserva la embebida.
     face: selector o id de UNA cara; omitida al editar conserva su referencia.
@@ -39,6 +60,7 @@ def set_decal(sesion, image: str | None = None, face: str | None = None, body: s
     flip_h: volteo horizontal de imagen.
     flip_v: volteo vertical de imagen.
     scale: factor uniforme positivo sobre anchura y altura; 1 conserva el tamaño (también con keep_aspect=false).
+    name: nombre en el navegador (carpeta Calcomanías); omitido al crear toma el de la imagen, como Fusion.
     """
     anterior = sesion.paso(feature) if feature else None
     if anterior is not None and (not isinstance(anterior, OpLienzo) or not anterior.p["calcomania"]):
@@ -85,9 +107,38 @@ def set_decal(sesion, image: str | None = None, face: str | None = None, body: s
     if height is not None and width is None and params["mantener_proporcion"]:
         params["ancho"] = f"({params['alto']}) / {params['proporcion']}"
     doc = sesion.doc
-    op = OpLienzo(anterior.id if anterior else doc.nuevo_id(), anterior.nombre if anterior else "Calcomanía",
+    if name is not None and not name.strip():
+        raise error("INVALID_ARGUMENTS", "El nombre de la calcomanía no puede estar vacío.")
+    nombre = (name.strip() if name is not None else anterior.nombre if anterior else
+              Path(params["archivo"]).stem or "Calcomanía")
+    op = OpLienzo(anterior.id if anterior else doc.nuevo_id(), nombre,
                   anterior.suprimida if anterior else False, **params)
     if anterior:
         doc.reemplazar(op.id, op)
         return {"feature": op.id}
     return _agregar(sesion, op)
+
+
+@herramienta("decal_view", "documento", "Opera una calcomanía como el menú de su fila en el navegador: edit reabre su "
+             "panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en "
+             "la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. "
+             "Para suprimirla usá delete_feature, para renombrarla rename, para ocultarla set_browser_visibility.")
+def decal_view(sesion, decal: str, action: Literal["edit", "find_in_window", "find_in_timeline", "replace_image"],
+               image: str | None = None):
+    """
+    decal: id o nombre de la calcomanía.
+    action: edit, find_in_window, find_in_timeline o replace_image.
+    image: ruta de la imagen nueva (solo con replace_image).
+    """
+    op = sesion.paso(decal)
+    if not isinstance(op, OpLienzo) or not op.p["calcomania"]:
+        raise error("INVALID_ARGUMENTS", f"«{op.nombre}» no es una calcomanía.")
+    if action == "replace_image":
+        if not image:
+            raise error("INVALID_ARGUMENTS", "replace_image necesita image: la ruta de la imagen nueva.")
+        r = set_decal(sesion, image=image, feature=op.id)
+        return {"decal": op.id, "action": action, **r}
+    operar = getattr(sesion, "vista_calcomania", None)
+    if operar is None:
+        raise error("APP_NOT_RUNNING", "decal_view necesita la ventana de OmniCAD en vivo (menos replace_image).")
+    return operar(op.id, action)

@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-185 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+190 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 26 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 28 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -20,7 +20,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
-| [material](#grupo-material) | 6 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
+| [material](#grupo-material) | 9 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 12 | Ver y medir el resultado. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
@@ -33,12 +33,13 @@ Archivo, escena, timeline y deshacer.
 | Herramienta | Modifica | Resumen |
 |---|---|---|
 | [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
+| [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. |
 | [`select_bodies`](#select_bodies) | no | Selecciona cuerpos en la ventana y los revela en el navegador. |
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
 | [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
 | [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). |
-| [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
+| [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
 | [`inspect_f3d`](#inspect_f3d) | no | Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
 | [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
@@ -51,9 +52,10 @@ Archivo, escena, timeline y deshacer.
 | [`rename`](#rename) | sí | Renombra un paso del timeline o un cuerpo. |
 | [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
+| [`discard_recoverable_document`](#discard_recoverable_document) | no | Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). |
 | [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
-| [`manage_browser`](#manage_browser) | sí | Organiza cuerpos y bocetos: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
-| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, bocetos o grupos en vivo. |
+| [`manage_browser`](#manage_browser) | sí | Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
+| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. |
 | [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
@@ -81,14 +83,27 @@ Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tan
   - `flip_h` (true/false; opcional, por defecto `null`): volteo horizontal de imagen.
   - `flip_v` (true/false; opcional, por defecto `null`): volteo vertical de imagen.
   - `scale` (número o expresión; opcional, por defecto `null`): factor uniforme positivo sobre anchura y altura; 1 conserva el tamaño (también con keep_aspect=false).
+  - `name` (texto; opcional, por defecto `null`): nombre en el navegador (carpeta Calcomanías); omitido al crear toma el de la imagen, como Fusion.
 - CLI: `omnicad call set_decal --doc pieza.omnicad`
+
+### `decal_view`
+
+Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. Para suprimirla usá delete_feature, para renombrarla rename, para ocultarla set_browser_visibility.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `decal` (texto; obligatorio): id o nombre de la calcomanía.
+  - `action` ("edit" | "find_in_window" | "find_in_timeline" | "replace_image"; obligatorio): edit, find_in_window, find_in_timeline o replace_image.
+  - `image` (texto; opcional, por defecto `null`): ruta de la imagen nueva (solo con replace_image).
+- CLI: `omnicad call decal_view --doc pieza.omnicad decal=… action=…`
 
 ### `get_scene_info`
 
-Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros.
+Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. Con summary=true devuelve solo nombres y cantidades (corto, para modelos grandes).
 
 - Modifica el documento: no.
-- Parámetros: ninguno.
+- Parámetros:
+  - `summary` (true/false; opcional, por defecto `false`): true devuelve solo nombre, ruta, unidades, cuerpos (id, nombre, tipo), bocetos (id, nombre) y cantidades.
 - CLI: `omnicad call get_scene_info --doc pieza.omnicad`
 
 ### `select_bodies`
@@ -129,11 +144,12 @@ Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), 
   - `path` (texto; obligatorio): ruta del archivo.
   - `mesh_units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
   - `discard` (true/false; opcional, por defecto `false`): true para descartar los cambios sin guardar del documento actual.
+  - `summary` (true/false; opcional, por defecto `false`): true devuelve solo nombres y cantidades (como get_scene_info con summary=true), no el detalle de todo.
 - CLI: `omnicad call open_document --doc pieza.omnicad path=…`
 
 ### `insert_file`
 
-Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia dentro de la receta. Para abrirlo como documento nuevo: open_document.
+Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). El contenido se copia dentro de la receta. Para abrirlo como documento nuevo: open_document.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -259,6 +275,15 @@ Recupera una copia de autoguardado y la deja como documento activo, como el bot�
   - `discard` (true/false; opcional, por defecto `false`): true para descartar los cambios sin guardar del documento actual.
 - CLI: `omnicad call recover_document --doc pieza.omnicad path=…`
 
+### `discard_recoverable_document`
+
+Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). Borra SOLO la copia (*.autoguardado.omnicad), nunca el proyecto guardado ni otro archivo; no cambia el documento abierto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta de la copia de autoguardado (de list_recoverable_documents).
+- CLI: `omnicad call discard_recoverable_document --doc pieza.omnicad path=…`
+
 ### `get_browser_state`
 
 Lista los grupos y conjuntos de selección guardados en el navegador.
@@ -269,23 +294,23 @@ Lista los grupos y conjuntos de selección guardados en el navegador.
 
 ### `manage_browser`
 
-Organiza cuerpos y bocetos: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). Se guarda en el proyecto y admite deshacer.
+Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). Se guarda en el proyecto y admite deshacer.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `action` ("create_group" | "create_set" | "move" | "rename_group" | "delete_group"; obligatorio): create_group, create_set, move, rename_group o delete_group.
-  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos o bocetos; los cuerpos también aceptan nombres.
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos o calcomanías; los cuerpos también aceptan nombres.
   - `name` (texto; opcional, por defecto `""`): nombre del grupo o conjunto que se crea, o nombre nuevo con rename_group.
   - `group` (texto; opcional, por defecto `null`): id del grupo destino; vacío con move devuelve los elementos a su carpeta original.
 - CLI: `omnicad call manage_browser --doc pieza.omnicad action=…`
 
 ### `set_browser_visibility`
 
-Muestra u oculta cuerpos, bocetos o grupos en vivo. Sin items, muestra todo. No modifica geometría.
+Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. Sin items, muestra todo. No modifica geometría.
 
 - Modifica el documento: no.
 - Parámetros:
-  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos o grupos; vacío muestra todo.
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos, calcomanías o grupos; vacío muestra todo.
   - `visible` (true/false; opcional, por defecto `true`): true muestra; false oculta los elementos pedidos.
 - CLI: `omnicad call set_browser_visibility --doc pieza.omnicad`
 
@@ -1025,7 +1050,7 @@ Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como c
 
 ### `export_hidden_line_svg`
 
-Guarda un SVG de líneas ocultas de los cuerpos vistos desde una vista estándar («Export Hidden Line» de Plasticity): las aristas visibles en línea continua gruesa y, con hidden="dashed", las tapadas en trazos finos, en milímetros reales (por scale) y con la Y hacia arriba; cada tipo de línea va en su grupo (VISIBLE, OCULTA, TANGENTE). Las vistas son las del ViewCube, con Z arriba y nombradas por los ejes del MUNDO (front: cámara en -Y, se ve la cara -Y con +X a la derecha). Dibuja con eliminación exacta de líneas ocultas de OpenCascade; las mallas no se proyectan.
+Guarda un SVG de líneas ocultas de los cuerpos vistos desde una vista estándar («Export Hidden Line» de Plasticity): las aristas visibles en línea continua gruesa y, con hidden="dashed", las tapadas en trazos finos, en milímetros reales (por scale) y con la Y hacia arriba; cada tipo de línea va en su grupo (VISIBLE, OCULTA, TANGENTE). Las vistas son las del ViewCube, con Z arriba y nombradas por los ejes del MUNDO (front: cámara en -Y, se ve la cara -Y con +X a la derecha). Dibuja con eliminación exacta de líneas ocultas de OpenCascade; con roscas modeladas o superficies B-spline el método exacto tiene tope de tiempo (15 s) y, si no termina, sigue con el rápido (aristas curvas poligonales) y lo avisa. Las mallas no se proyectan.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1035,6 +1060,7 @@ Guarda un SVG de líneas ocultas de los cuerpos vistos desde una vista estándar
   - `hidden` ("dashed" | "none"; opcional, por defecto `"dashed"`): dashed = las aristas tapadas salen en trazos; none = no se dibujan.
   - `scale` (número; opcional, por defecto `1.0`): factor de escala del dibujo (1 = 1 mm del modelo es 1 mm del SVG; 0,5 = a la mitad).
   - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo si ya existe.
+  - `method` ("auto" | "exact" | "fast"; opcional, por defecto `"auto"`): auto = exacto y, si pasa el tope de tiempo, rápido; exact = solo exacto (falla si no termina); fast = rápido siempre (aristas curvas poligonales).
 - CLI: `omnicad call export_hidden_line_svg --doc pieza.omnicad path=…`
 
 ### `export_sketch`
@@ -1108,7 +1134,7 @@ Limpia geometría importada (SVG, DXF, imagen vectorizada): borra curvas repetid
 
 ### `move_sketch_point`
 
-Mueve un punto del boceto (edición de nodos): extremos de líneas y arcos, puntos de control de splines (las curvas Bézier de un SVG), centros. Como arrastrar en la interfaz: el punto va a (x, y) y el resto se acomoda para seguir cumpliendo restricciones y cotas; si ellas no lo dejan llegar (por ejemplo, una cota fija su distancia), queda lo más cerca posible: reached dice si llegó y point dónde quedó.
+Mueve un punto del boceto (edición de nodos): extremos de líneas y arcos, puntos de control de splines (las curvas Bézier de un SVG), centros. Como arrastrar en la interfaz: el punto va a (x, y) y el resto se acomoda para seguir cumpliendo restricciones y cotas; si ellas no lo dejan llegar (por ejemplo, una cota fija su distancia), queda lo más cerca posible: reached indica si quedó a menos de 0,001 mm del destino pedido y point dónde quedó.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1464,7 +1490,7 @@ Achaflana aristas (distancia igual en las dos caras). Se elige con un selector e
 
 ### `shell`
 
-Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). Se elige con un selector estilo CadQuery (p. ej. '>Z'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F6', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. direction: inside (las paredes quedan hacia adentro: el cuerpo no crece), outside (hacia afuera) o both. Con faces=[] (lista vacía) el cuerpo queda hueco y cerrado. Si el espesor es igual o mayor que el radio de un empalme de las caras vaciadas, el kernel no puede (radio interior cero o negativo): OPERATION_FAILED. thickness acepta número (mm) o expresión.
+Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). Se elige con un selector estilo CadQuery (p. ej. '>Z'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F6', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. direction: inside (las paredes quedan hacia adentro: el cuerpo no crece), outside (hacia afuera) o both. Con faces=[] (lista vacía) el cuerpo queda hueco y cerrado. Si el espesor es igual o mayor que el radio de un empalme de las caras vaciadas, el kernel no puede (radio interior cero o negativo): OPERATION_FAILED. En algunas caras B-spline el vaciado hacia afuera no se puede calcular: el error indica cómo armar dos solevaciones y restarlas. thickness acepta número (mm) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1979,7 +2005,7 @@ Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, v
 | [`clean_mesh`](#clean_mesh) | sí | Limpia mallas paso por paso (Malla › Limpiar de Blender), en este orden y cada uno con su casilla: merge_by_distance (une los vértices a distance mm o menos), dissolve_degenerate (colapsa aristas de distance o menos y arregla triángulos sin área y caras dobles), delete_loose (vértices sin caras, triángulos aislados y, con min_shell_fraction, partes chicas), recalculate_normals (orientación consistente y hacia afuera) y fill_holes (tapa los agujeros de hasta max_hole_sides lados; 0 = todos). |
 | [`generate_face_groups`](#generate_face_groups) | sí | Agrupa las caras de mallas por ángulo (MALLA › PREPARAR › Generar grupos de caras de Fusion): las vecinas cuyas normales difieren menos de angle quedan en el mismo grupo. |
 | [`reduce_mesh`](#reduce_mesh) | sí | Baja la cantidad de triángulos de mallas (MALLA › MODIFICAR › Reducir de Fusion; colapso de aristas con error cuadrático). mode: proportion (fracción de los triángulos actuales), face_count (cantidad objetivo) o tolerance (desvío máximo en mm). |
-| [`remesh`](#remesh) | sí | Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density). |
+| [`remesh`](#remesh) | sí | Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density; si la malla original tiene triángulos mucho más chicos que el promedio, el total puede bajar igual). |
 | [`smooth_mesh`](#smooth_mesh) | sí | Suaviza mallas sin encogerlas (MALLA › MODIFICAR › Suavizar de Fusion; filtro de Taubin). |
 | [`shell_mesh`](#shell_mesh) | sí | Ahueca mallas cerradas con un espesor de pared (MALLA › MODIFICAR › Vaciado de Fusion): suma una cáscara interior desplazada thickness mm hacia adentro. |
 | [`plane_cut_mesh`](#plane_cut_mesh) | sí | Corta mallas con un plano (MALLA › MODIFICAR › Corte de plano de Fusion). kind: trim (queda el lado hacia donde apunta la normal del plano; flip conserva el otro), split_body (dos cuerpos, uno por lado) o split_faces (una malla con los triángulos partidos sobre el plano). fill tapa el corte (un grupo de caras nuevo). |
@@ -2066,7 +2092,7 @@ Baja la cantidad de triángulos de mallas (MALLA › MODIFICAR › Reducir de Fu
 
 ### `remesh`
 
-Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density). Tiene un tope de 100.000 triángulos: si se pasaría, falla antes de calcular y dice cuánto bajar.
+Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density; si la malla original tiene triángulos mucho más chicos que el promedio, el total puede bajar igual). Tiene un tope de 100.000 triángulos: si se pasaría, falla antes de calcular y dice cuánto bajar.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2116,7 +2142,7 @@ Corta mallas con un plano (MALLA › MODIFICAR › Corte de plano de Fusion). ki
 
 ### `combine_meshes`
 
-Combina cuerpos de malla (MALLA › MODIFICAR › Combinar de Fusion). operation: join, cut o intersect (booleanas reales: las mallas tienen que ser cerradas; repair_mesh o clean_mesh antes si no) o merge (junta los triángulos sin tocarlos). El resultado queda en target; las herramientas se borran salvo keep_tools=true.
+Combina cuerpos de malla (MALLA › MODIFICAR › Combinar de Fusion). operation: join, cut o intersect (booleanas reales: las mallas tienen que ser cerradas; repair_mesh o clean_mesh antes si no) o merge (junta los triángulos sin tocarlos). El resultado queda en target; las herramientas se borran salvo keep_tools=true. Si join conserva las tapas internas de un contacto sin solape, reintenta con el kernel B-rep para soldarlas (hasta 50.000 triángulos por entrada; regenera los grupos de caras).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2360,7 +2386,10 @@ Materiales físicos (densidad para la masa), materiales propios y aspecto de los
 | [`delete_material`](#delete_material) | no | Borra un material propio de la biblioteca (los de fábrica no se borran). |
 | [`set_material`](#set_material) | sí | Asigna el material físico a cuerpos (MODIFICAR › Material físico): da la densidad para la masa (get_physical_properties) y, si el cuerpo no tiene aspecto, su color. material=null quita la asignación (vuelve al material que le dio su operación, p. ej. el de la regla de chapa). list_materials lista los nombres. |
 | [`get_bill_of_materials`](#get_bill_of_materials) | no | Lista de materiales (ADMINISTRAR › Lista de materiales): las piezas sólidas del modelo agrupadas (cuerpos iguales del mismo componente y material = una fila con su cantidad), con material, masa (g) y volumen (mm³) por unidad. |
-| [`set_appearance`](#set_appearance) | sí | Cambia cómo se ven cuerpos (MODIFICAR › Aspecto): un aspecto de la biblioteca (appearance, p. ej. |
+| [`set_appearance`](#set_appearance) | sí | Cambia cómo se ven cuerpos o CARAS (MODIFICAR › Aspecto, «Aplicar a»: Cuerpos/componentes o Caras): un aspecto del diseño, de la biblioteca o de Mis aspectos (appearance, p. ej. |
+| [`list_appearances`](#list_appearances) | no | Lista aspectos con todas sus propiedades: los del diseño («En este diseño», con id y quién los usa), los de la biblioteca (por familia: Metal, Plástico, Cristal, Madera, Piedra, Hormigón…), «Mis aspectos» o los favoritos. |
+| [`edit_appearance`](#edit_appearance) | sí | Edita un aspecto (el «Editor de materiales» de Fusion) o crea uno nuevo: color, reflectancia, aspereza, metálico, transparencia, translucidez, emisividad, relieve, corte y resaltes. |
+| [`manage_appearance`](#manage_appearance) | sí | Administra un aspecto como el menú de «En este diseño» de Fusion: duplicate (copia con nombre «X (1)»), delete (Suprimir; si lo usan cuerpos o caras pide remove_users=true), rename, copy_to_mine (Copiar en Mis aspectos), add_favorite / remove_favorite (Añadir a Favoritos) y delete_mine (borra uno de Mis aspectos). |
 
 ### `list_materials`
 
@@ -2416,14 +2445,71 @@ Lista de materiales (ADMINISTRAR › Lista de materiales): las piezas sólidas d
 
 ### `set_appearance`
 
-Cambia cómo se ven cuerpos (MODIFICAR › Aspecto): un aspecto de la biblioteca (appearance, p. ej. 'Aluminio - Anodizado (rojo)'; list_materials los lista por categoría) y/o un color propio (color «#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Sin ninguno, quita el aspecto (vuelve al color del material). No cambia la masa.
+Cambia cómo se ven cuerpos o CARAS (MODIFICAR › Aspecto, «Aplicar a»: Cuerpos/componentes o Caras): un aspecto del diseño, de la biblioteca o de Mis aspectos (appearance, p. ej. 'Aluminio - Anodizado (rojo)', 'Hormigón - Liso'; list_appearances los lista) y/o un color propio (color «#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Con solo el color, pinta con un color suelto. Sin ninguno, quita el aspecto (vuelve al color del material, o al del cuerpo en las caras). No cambia la masa.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (lista de texto; obligatorio): ids o nombres de los cuerpos.
-  - `appearance` (texto; opcional, por defecto `null`): nombre de un aspecto de la biblioteca (sin distinguir mayúsculas); vacío = solo el color.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos (Aplicar a: Cuerpos/componentes).
+  - `appearance` (texto; opcional, por defecto `null`): nombre o id de un aspecto del diseño, de la biblioteca o de Mis aspectos (sin distinguir mayúsculas); vacío = solo el color.
   - `color` (texto o lista de número o null; opcional, por defecto `null`): color propio «#rrggbb» o [r, g, b] (0..1 o 0..255); vacío = el del aspecto.
-- CLI: `omnicad call set_appearance --doc pieza.omnicad bodies=…`
+  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras en vez de cuerpos (Aplicar a: Caras): selector (">Z"), id de find_faces ("Cuerpo1/F6") o lista de ellos.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores de faces; vacío = el único cuerpo del documento.
+- CLI: `omnicad call set_appearance --doc pieza.omnicad`
+
+### `list_appearances`
+
+Lista aspectos con todas sus propiedades: los del diseño («En este diseño», con id y quién los usa), los de la biblioteca (por familia: Metal, Plástico, Cristal, Madera, Piedra, Hormigón…), «Mis aspectos» o los favoritos. No cambia el documento.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `scope` ("design" | "library" | "mine" | "favorites" | "all"; opcional, por defecto `"design"`): design (En este diseño), library (biblioteca de OmniCAD), mine (Mis aspectos), favorites o all.
+  - `query` (texto; opcional, por defecto `null`): texto a buscar en el nombre o la familia (sin distinguir mayúsculas); vacío = todos.
+- CLI: `omnicad call list_appearances --doc pieza.omnicad`
+
+### `edit_appearance`
+
+Edita un aspecto (el «Editor de materiales» de Fusion) o crea uno nuevo: color, reflectancia, aspereza, metálico, transparencia, translucidez, emisividad, relieve, corte y resaltes. En el diseño, todos los cuerpos y caras que lo usan se ven con el cambio al instante. Con un aspecto de la biblioteca o de Mis aspectos, hace una copia en el diseño («X (1)») sin tocar el original. create=true crea uno nuevo (partiendo de base). scope=mine lo guarda en Mis aspectos.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `appearance` (texto; obligatorio): nombre o id del aspecto a editar (o el nombre del nuevo con create=true).
+  - `scope` ("design" | "mine"; opcional, por defecto `"design"`): design (En este diseño, por defecto) o mine (Mis aspectos).
+  - `create` (true/false; opcional, por defecto `false`): true crea un aspecto nuevo llamado appearance; falla si ya existe.
+  - `base` (texto; opcional, por defecto `null`): con create, el aspecto del que parte (diseño, Mis aspectos o biblioteca); vacío = gris liso.
+  - `name` (texto; opcional, por defecto `null`): nombre nuevo (renombra).
+  - `color` (texto o lista de número o null; opcional, por defecto `null`): color «#rrggbb» o [r, g, b] (0..1 o 0..255).
+  - `reflectance` (número; opcional, por defecto `null`): reflectancia de 0 a 1 (Fresnel: 0,05 en plásticos).
+  - `roughness` (número; opcional, por defecto `null`): aspereza de 0 (espejo) a 1 (mate).
+  - `metallic` (número; opcional, por defecto `null`): 0 a 1.
+  - `transparency` (número; opcional, por defecto `null`): 0 (opaco) a 1 (transparente).
+  - `varnish` (número; opcional, por defecto `null`): capa de barniz de 0 a 1.
+  - `translucency` (true/false; opcional, por defecto `null`): activa la translucidez.
+  - `translucency_depth` (número; opcional, por defecto `null`): profundidad de la translucidez en mm.
+  - `translucency_color` (texto o lista de número o null; opcional, por defecto `null`): color del grosor translúcido.
+  - `emissive` (true/false; opcional, por defecto `null`): activa la emisividad (el material emite luz).
+  - `luminance` (número; opcional, por defecto `null`): luminancia en cd/m².
+  - `filter_color` (texto o lista de número o null; opcional, por defecto `null`): color de filtro de la emisividad.
+  - `bump_image` (texto; opcional, por defecto `null`): ruta de la imagen del patrón de relieve; "" la quita.
+  - `bump_amount` (número; opcional, por defecto `null`): intensidad del relieve de 0 a 10.
+  - `cutout_image` (texto; opcional, por defecto `null`): ruta de la imagen del patrón de corte; "" la quita.
+  - `anisotropy` (número; opcional, por defecto `null`): anisotropía de los resaltes de 0 a 1.
+  - `orientation` (número; opcional, por defecto `null`): orientación de los resaltes en grados.
+  - `highlight_color` (texto o lista de número o null; opcional, por defecto `null`): color de los resaltes.
+  - `highlight_shape` ("Difuminación larga" | "Difuminación corta" | "Nítida" o null; opcional, por defecto `null`): forma del resalte: Difuminación larga, Difuminación corta o Nítida.
+  - `category` (texto; opcional, por defecto `null`): familia de la biblioteca (Metal, Plástico, Cristal, Madera, Piedra, Hormigón, Otro…).
+- CLI: `omnicad call edit_appearance --doc pieza.omnicad appearance=…`
+
+### `manage_appearance`
+
+Administra un aspecto como el menú de «En este diseño» de Fusion: duplicate (copia con nombre «X (1)»), delete (Suprimir; si lo usan cuerpos o caras pide remove_users=true), rename, copy_to_mine (Copiar en Mis aspectos), add_favorite / remove_favorite (Añadir a Favoritos) y delete_mine (borra uno de Mis aspectos).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("duplicate" | "delete" | "rename" | "copy_to_mine" | "add_favorite" | "remove_favorite" | "delete_mine"; obligatorio): duplicate, delete, rename, copy_to_mine, add_favorite, remove_favorite o delete_mine.
+  - `appearance` (texto; obligatorio): nombre o id del aspecto (del diseño; los favoritos y delete_mine usan el nombre de la biblioteca o de Mis aspectos).
+  - `name` (texto; opcional, por defecto `null`): nombre nuevo (rename) o del duplicado (duplicate).
+  - `remove_users` (true/false; opcional, por defecto `false`): con delete, true saca también el aspecto de los cuerpos y caras que lo usan.
+- CLI: `omnicad call manage_appearance --doc pieza.omnicad action=… appearance=…`
 
 ## Grupo inspeccion
 
@@ -2468,7 +2554,7 @@ Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones 
 
 ### `get_viewport_image`
 
-Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde una vista estándar o una dirección propia. Es la forma de VER el resultado.
+Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde una vista estándar o una dirección propia. Usa Rust si está disponible, con respaldo Python (OMNICAD_SIN_RUST=1 lo fuerza). Es la forma de VER el resultado.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -2544,12 +2630,12 @@ Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un sele
 
 ### `check_geometry`
 
-Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. Cada problema trae kind, severity (error o warning), un mensaje y su posición [x, y, z]; max_tolerance es la mayor tolerancia del kernel por tipo. No cambia el documento: para arreglar, repair_body.
+Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. Cada problema trae kind, severity (error o warning), un mensaje y su posición [x, y, z]; max_tolerance es la mayor tolerancia del kernel por tipo. La búsqueda de autointersecciones en cuerpos con superficies B-spline (roscas modeladas) corre con tope de tiempo: si no termina, self_intersections queda en null y sale el aviso self_intersection_skipped. No cambia el documento: para arreglar, repair_body.
 
 - Modifica el documento: no.
 - Parámetros:
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo; vacío = todos los cuerpos del modelo.
-  - `self_intersection` (true/false; opcional, por defecto `true`): true busca caras que se cortan entre sí (análisis booleano, lo más lento en piezas grandes).
+  - `self_intersection` (true/false; opcional, por defecto `true`): true busca caras que se cortan entre sí (análisis booleano, lo más lento en piezas grandes; con superficies B-spline tiene tope de 10 s por cuerpo y 30 s en total).
   - `tolerance_limit` (número; opcional, por defecto `0.01`): tolerancia en mm de vértice, arista o cara por encima de la cual se avisa (high_tolerance).
   - `max_issues` (entero; opcional, por defecto `50`): cuántos problemas devolver por cuerpo como máximo; los conteos son siempre completos.
 - CLI: `omnicad call check_geometry --doc pieza.omnicad`

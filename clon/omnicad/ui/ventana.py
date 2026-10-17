@@ -35,9 +35,11 @@ from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
 from ..restricciones import Boceto
+from ..timeline import entidades as ent
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
+from ..timeline.ops_insertar import calcomanias_vigentes
 from . import formato, temas
 from .medidas import NOMBRES as _NOMBRES_ENTIDAD
 from .cinta import Cinta
@@ -60,7 +62,8 @@ FILTRO_ABRIR = ";;".join([
     "Todos los archivos que se pueden abrir (*.omnicad *.fclone *.f3d *.f3z *.step *.stp *.iges *.igs *.stl *.obj "
     "*.3mf *.ply *.dxf *.brep *.brp)", FILTRO_PROYECTO, "Fusion 360 (*.f3d *.f3z)", "STEP (*.step *.stp)",
     "IGES (*.iges *.igs)", "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)", "BREP de OpenCascade (*.brep *.brp)"])
-VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True}
+VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True,
+                       "calcomanias": True}
 CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos")
 NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"), ("Space", "Espacio"))
 
@@ -146,6 +149,9 @@ class VentanaPrincipal(QMainWindow):
         self._eleccion = None               # "boceto" | "plano": qué se está eligiendo en la vista
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
+        self._autoguardado_fallo = None     # último error del autoguardado ya avisado en la barra
+        self._previa_aspecto = {}           # lo que el panel Aspecto muestra sin haberlo aplicado: {"cuerpos": {id: rgb},
+        self._malla_caras = {}              # "caras": [(id de cuerpo, referencia, rgb)]}; mallas de caras con aspecto propio
         self.caja = None                    # caja de herramientas (tecla S), se crea al primer uso
         self._estado_previa = None          # vista previa del comando abierto
         self._indice_boceto = None          # paso del boceto que se edita (vista "retrocedida")
@@ -917,6 +923,7 @@ class VentanaPrincipal(QMainWindow):
             ocultos |= set(estado.cuerpos)
         if not (self.vis["todo"] and self.vis["bocetos"]):
             ocultos |= set(estado.bocetos)
+        ocultos |= {cid for cid, c in estado.cuerpos.items() if c.componente and c.componente in self.ocultos}
         patrones = {cid for cid, c in estado.cuerpos.items() if es_patron_plano(c)}
         if self.patron_activo in patrones:  # como Fusion: el patrón plano solo, en su propio modo
             ocultos |= (set(estado.cuerpos) - {self.patron_activo}) | set(estado.bocetos)
@@ -939,18 +946,22 @@ class VentanaPrincipal(QMainWindow):
                           if construccion and ident not in self.ocultos]
         c.puntos_usuario = [(ident, nombre, p) for ident, (p, nombre) in estado.puntos.items()
                             if construccion and ident not in self.ocultos]
-        c.lienzos = [(ident, datos) for ident, datos in estado.lienzos.items()
-                     if self.vis["todo"] and ident not in self.ocultos]
         activo = self.modo_boceto.datos.get("op") if self.modo_boceto.activo else None
         excluir = (activo.id,) if activo is not None else ()
         ocultos = frozenset(self._ocultos_efectivos(estado))
+        vigentes = calcomanias_vigentes(self.doc, estado)      # cada calcomanía con su cuerpo (copias incluidas)
+        c.lienzos = [(ident, datos) for ident, datos in vigentes if self.vis["todo"]
+                     and ident.split("@")[0] not in self.ocultos
+                     and (not datos.get("calcomania") or (self.vis["calcomanias"] and datos["cuerpo"] not in ocultos))]
         apariencias = self._apariencias(estado)
         if self.prefs_colores_componente:
             from .visor3d import PALETA
             apariencias = {cid: PALETA[i % len(PALETA)] for i, cid in enumerate(estado.cuerpos)}
+        caras = self._caras_pintadas(estado, ocultos)
         for v in self.area.visores:
             v.opacidad = {cid: props["opacidad"] for cid, props in self.doc.propiedades.items() if "opacidad" in props}
             v.set_modelo(estado, ocultos, excluir, apariencias)
+            v.set_caras_pintadas(caras)
         if self.panel is None or not self.panel.comando.SIN_OP:
             self.aplicar_analisis(estado)
         titulo = self.doc.nombre if self.doc.ruta else "(Sin guardar)"
@@ -960,7 +971,11 @@ class VentanaPrincipal(QMainWindow):
              [(c.id, self.nombre_cuerpo(c)) for c in estado.cuerpos.values() if c.componente == k])
             for k, comp in estado.componentes.items()]
         self.navegador.uniones = [(k, u["nombre"]) for k, u in estado.uniones.items()]
-        self.navegador.lienzos = [(k, d["nombre"], k not in self.ocultos) for k, d in estado.lienzos.items()]
+        nombres = {o.id: o.nombre for o in self.doc.operaciones}     # el nombre vigente: renombrar no recalcula el estado
+        self.navegador.lienzos = [(k, nombres.get(k, d["nombre"]), k not in self.ocultos)
+                                  for k, d in estado.lienzos.items() if not d.get("calcomania")]
+        self.navegador.calcomanias = [(k, nombres.get(k, d["nombre"])) for k, d in vigentes
+                                      if "@" not in k and d.get("calcomania")]
         from ..api.herramientas_navegador import datos_navegador
         self.navegador.organizacion = datos_navegador(self.doc)
         bocetos_nav = dict(estado.bocetos)
@@ -1002,6 +1017,40 @@ class VentanaPrincipal(QMainWindow):
                 salida[cid] = tuple(props["apariencia"])
             elif props.get("material") in TABLA_MATERIALES:
                 salida[cid] = TABLA_MATERIALES[props["material"]]["color"]
+        salida.update({cid: tuple(rgb) for cid, rgb in self._previa_aspecto.get("cuerpos", {}).items()
+                       if cid in estado.cuerpos})
+        return salida
+
+    def _caras_pintadas(self, estado, ocultos):
+        """[(id de cuerpo, vértices, normales, color)] de las caras con aspecto propio (las guardadas y la vista previa
+        del panel Aspecto) de los cuerpos visibles. La malla de cada una se guarda por (forma del cuerpo, referencia)."""
+        import json
+
+        from ..nucleo import render_cpu as rc
+        from ..timeline import aspectos_doc
+        previa = [p for p in self._previa_aspecto.get("caras", []) if p[0] in estado.cuerpos]
+        propias = [p for p in aspectos_doc.caras_con_aspecto(self.doc, estado)
+                   if not any(p[0] == q[0] and p[1] == q[1] for q in previa)]
+        salida, usadas = [], set()
+        for cid, ref, rgb in propias + previa:
+            if cid in ocultos:
+                continue
+            forma = estado.cuerpos[cid].forma
+            clave = (id(forma), json.dumps(ref, sort_keys=True, default=str))
+            usadas.add(clave)
+            if clave not in self._malla_caras:
+                try:
+                    cara = ent.resolver(ref, estado).forma
+                    v, n = geo.teselar(cara, rc.deflexion_para(forma))
+                    datos = (forma, np.asarray(v, np.float32), np.asarray(n, np.float32))
+                except Exception:  # noqa: BLE001 — una cara que se perdió (la geometría cambió) no se pinta
+                    datos = (forma, None, None)
+                self._malla_caras[clave] = datos
+            _f, v, n = self._malla_caras[clave]
+            if v is not None and len(v):
+                salida.append((cid, v, n, tuple(float(x) for x in rgb)))
+        for clave in [k for k in self._malla_caras if k not in usadas]:      # lo que ya no se usa no se retiene
+            del self._malla_caras[clave]
         return salida
 
     def nombre_cuerpo(self, cuerpo):
@@ -1232,7 +1281,7 @@ class VentanaPrincipal(QMainWindow):
             self.doc.alternar_analisis(clave.split(":", 1)[1])
             return
         especiales = {"__raiz__": "todo", "__origen__": "origen", "__planos__": "planos", "__cuerpos__": "cuerpos",
-                      "__bocetos__": "bocetos"}
+                      "__bocetos__": "bocetos", "__calcomanias__": "calcomanias"}
         if clave in especiales:
             self.vis[especiales[clave]] = not self.vis[especiales[clave]]
         elif clave in self.ocultos:
@@ -1401,6 +1450,10 @@ class VentanaPrincipal(QMainWindow):
     def vista_boceto(self, clave, accion, visible=None):
         from .acciones_navegador import vista_boceto
         return vista_boceto(self, clave, accion, visible)
+
+    def vista_calcomania(self, clave, accion, imagen=None):
+        from .acciones_navegador import vista_calcomania
+        return vista_calcomania(self, clave, accion, imagen)
 
     def _alternar_visibilidad_elegida(self):
         claves = [it.data(0, Qt.UserRole) for it in self.navegador.arbol.selectedItems()]
@@ -2084,14 +2137,31 @@ class VentanaPrincipal(QMainWindow):
                 self.modo_boceto.lienzo.resolver()
 
     # ------------------------------------------------------------ archivos
+    def _preguntar(self, texto, botones, detalle="", titulo=NOMBRE_APP):
+        """Pregunta con botones en español, en el orden dado. Devuelve el índice del botón elegido; Esc o cerrar
+        la ventana eligen el ÚLTIMO (la salida segura: Cancelar) y el primero es el que responde a Enter."""
+        caja = QMessageBox(QMessageBox.Icon.Question, titulo, texto, QMessageBox.StandardButton.NoButton, self)
+        if detalle:
+            caja.setInformativeText(detalle)
+        roles = [QMessageBox.ButtonRole.AcceptRole] + [QMessageBox.ButtonRole.ActionRole] * (len(botones) - 2) \
+            + [QMessageBox.ButtonRole.RejectRole]
+        puestos = [caja.addButton(t, r) for t, r in zip(botones, roles, strict=True)]
+        caja.setDefaultButton(puestos[0])
+        caja.setEscapeButton(puestos[-1])
+        caja.exec()
+        elegido = caja.clickedButton()
+        return puestos.index(elegido) if elegido in puestos else len(puestos) - 1
+
     def _confirmar_descartar(self):
+        """«¿Guardar los cambios?» (Guardar / No guardar / Cancelar, como Fusion). True si se puede seguir con
+        el documento actual descartado o guardado; «No guardar» borra también su copia de autoguardado."""
         if not self.doc.modificado:
             return True
-        r = QMessageBox.question(self, NOMBRE_APP, f"«{self.doc.nombre}» tiene cambios sin guardar. ¿Guardar?",
-                                 QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
-        if r == QMessageBox.Save:
+        r = self._preguntar(f"¿Guardar los cambios de «{self.doc.nombre}»?", ("Guardar", "No guardar", "Cancelar"),
+                            "Si no los guardás, se pierden.")
+        if r == 0:
             return self.guardar()
-        if r == QMessageBox.Discard:
+        if r == 1:
             proyecto.borrar_autoguardado(self.doc)
             return True
         return False
@@ -2108,23 +2178,33 @@ class VentanaPrincipal(QMainWindow):
             self.abrir_ruta(ruta)
 
     def _abrir_reciente(self, ruta):
-        if self._confirmar_descartar():
+        if self._salir_de_boceto() and self._confirmar_descartar():
             self.abrir_ruta(ruta)
 
-    def abrir_ruta(self, ruta):
+    def abrir_ruta(self, ruta, preguntar=True):
+        """Abre un proyecto o un archivo de otro programa. Con un autoguardado más nuevo pregunta cuál abrir; con
+        `preguntar=False` (la app arrancó con el puente para agentes: un diálogo modal lo dejaría en APP_BUSY) abre
+        el guardado, deja la copia donde está y avisa en la barra."""
         if abrir_externo.es_externo(ruta):
             self._abrir_externo(ruta)
             return
         try:
             pendiente = proyecto.autoguardado_pendiente(ruta)
-            origen = ruta
-            if pendiente:
-                if QMessageBox.question(self, "Recuperar", "Hay un autoguardado más reciente que el proyecto. "
-                                        "¿Abrir el autoguardado? (Si respondés No, se descarta.)") == QMessageBox.Yes:
-                    origen = pendiente
-                else:
-                    pendiente.unlink(missing_ok=True)
+            origen, descartar = ruta, False
+            if pendiente and not preguntar:
+                self.mensaje(f"«{Path(ruta).stem}» tiene un autoguardado más nuevo: Archivo › Recuperar documentos… "
+                             "(o recover_document).", 15000)
+            elif pendiente:
+                # Esc o cerrar = Cancelar: descartar la copia pide un botón con ese nombre, nunca un «No» suelto.
+                r = self._preguntar(f"«{Path(ruta).stem}» tiene un autoguardado más nuevo, con cambios que no se "
+                                    "llegaron a guardar.", ("Abrir el autoguardado", "Abrir el guardado y descartar "
+                                                            "la copia", "Cancelar"), titulo="Recuperar")
+                if r == 2:
+                    return
+                origen, descartar = (pendiente, False) if r == 0 else (ruta, True)
             doc = proyecto.abrir(origen)
+            if descartar:                              # eligió el guardado: recién ahora, con el guardado ya abierto,
+                proyecto.suprimir_copia(pendiente)     # se descarta la copia (si no abría, la copia era lo único que quedaba)
             doc.ruta, doc.nombre = str(ruta), Path(ruta).stem
             doc.modificado = origen != ruta
             self.set_documento(doc)
@@ -2209,15 +2289,13 @@ class VentanaPrincipal(QMainWindow):
     def _guardar_en(self, ruta):
         # El documento toma el nombre del archivo ANTES de escribir, para que el manifiesto guarde el mismo nombre.
         nombre_anterior, self.doc.nombre = self.doc.nombre, Path(ruta).stem
+        copia_anterior = proyecto.ruta_autoguardado(self.doc)   # junto a la ruta de antes (o la del «Sin título»)
         final = None
         try:
             final = proyecto.guardar(self.doc, ruta, self.visor.captura_png())
-            proyecto.borrar_autoguardado(self.doc)   # el de la ubicación anterior (o el huérfano "sin título")
             self.doc.ruta = str(final)
             self.doc.modificado = False
-            proyecto.borrar_autoguardado(self.doc)   # el de la ubicación nueva, si quedaba uno viejo
-            self._actualizar()
-            self._recordar(final)
+            self._guardado(final, copia_anterior)
             self.mensaje(f"Guardado en {final}", 5000)
             return True
         except (OSError, RuntimeError) as e:
@@ -2226,22 +2304,46 @@ class VentanaPrincipal(QMainWindow):
             QMessageBox.critical(self, "No se pudo guardar", str(e))
             return False
 
+    def _guardado(self, final, copia_anterior):
+        """Lo que sigue a un guardado que salió bien, lo haya hecho la persona o un agente por el puente: las copias
+        de autoguardado (la de antes y la de la ruta nueva) ya no valen, y el título, el «*» y los recientes
+        se ponen al día."""
+        try:
+            copia_anterior.unlink(missing_ok=True)
+        except OSError as e:                          # un archivo bloqueado no puede hacer fallar un guardado que salió bien
+            log.warning("No se pudo borrar el autoguardado %s: %s", copia_anterior, e)
+        proyecto.borrar_autoguardado(self.doc)
+        self._actualizar()
+        self._recordar(final)
+
     def autoguardar(self):
         if not self.doc.modificado:
             return
         try:
             destino = proyecto.autoguardar(self.doc)
+            self._autoguardado_fallo = None
             self.mensaje(f"Autoguardado {time.strftime('%H:%M')} → {destino.name}", 4000)
         except (OSError, RuntimeError) as e:
             log.warning("Autoguardado falló: %s", e)
+            if str(e) != self._autoguardado_fallo:                          # se avisa una vez, no cada minuto
+                self._autoguardado_fallo = str(e)
+                self.mensaje(f"⚠ No se pudo autoguardar: {e}. Guardá el proyecto a mano.", 10000)
 
-    def verificar_autoguardado_huerfano(self):
+    def verificar_autoguardado_huerfano(self, solo_avisar=False):
         """«Documentos recuperados» al arrancar y desde Archivo (pendiente 21, como Fusion 360): la
         tabla con TODAS las copias de autoguardado pendientes (huérfanos y de proyectos recientes), con
         nombre, fecha de recuperación y carpeta; botones Abrir, Suprimir y Cerrar. Sin pendientes no
-        abre nada. Las copias que quedan siguen accesibles por Archivo › Recuperar documentos."""
-        filas = proyecto.pendientes_de_recuperacion(self.prefs.recientes())
+        abre nada. Las copias que quedan siguen accesibles por Archivo › Recuperar documentos.
+        `solo_avisar` (la app arrancó con el puente para agentes): en vez del diálogo, que es modal y dejaba al puente
+        respondiendo APP_BUSY hasta que alguien hiciera clic (T-15 de la prueba de tortura), un mensaje en la barra."""
+        propia = proyecto.ruta_autoguardado(self.doc)         # la copia del documento abierto no es «recuperable»
+        filas = [f for f in proyecto.pendientes_de_recuperacion(self.prefs.recientes())
+                 if Path(f["backup"]) != propia]
         if not filas:
+            return
+        if solo_avisar:
+            self.mensaje(f"Hay {len(filas)} documento(s) recuperable(s): Archivo › Recuperar documentos… "
+                         "(o list_recoverable_documents).", 15000)
             return
         caja = DialogoRecuperados(filas, self)
         caja.exec()
@@ -2249,15 +2351,14 @@ class VentanaPrincipal(QMainWindow):
         if fila is None:
             return
         try:
-            doc = proyecto.abrir(fila["backup"])
+            # Huérfano: documento «Recuperado» sin ruta. Con proyecto original: guardar a mano pisa SU archivo.
+            doc = proyecto.abrir_recuperado(fila["backup"], fila.get("project"))
         except (proyecto.ErrorProyecto, OSError, ValueError) as e:
             QMessageBox.critical(self, "No se pudo recuperar", str(e))
             return
-        # Huérfano: documento «Recuperado» sin ruta. Con proyecto original: guardar a mano pisa SU archivo.
-        doc.ruta = fila.get("project")
-        doc.nombre = Path(fila["project"]).stem if fila.get("project") else "Recuperado"
-        doc.modificado = True
-        self.set_documento(doc)
+        # El documento que está abierto no se pisa sin preguntar (si tiene cambios: ¿Guardar los cambios?).
+        if self._salir_de_boceto() and self._confirmar_descartar():
+            self.set_documento(doc)
 
     def exportar(self, formato_salida=None):
         cuerpos = list(self.doc.estado_final.cuerpos.values())

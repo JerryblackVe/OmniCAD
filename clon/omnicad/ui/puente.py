@@ -23,6 +23,7 @@ import json
 import os
 import secrets
 from collections import deque
+from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtNetwork import QHostAddress, QTcpServer
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import QApplication, QLabel
 from .. import VERSION, api
 from ..api import protocolo_puente as proto
 from ..api.errores import error
+from ..io_archivos import proyecto
 from . import temas
 
 PLAZO_MAXIMO_CODIGO = 100.0   # s: execute_code en vivo; menos que puente_cliente.TIEMPO_RESPUESTA (120 s)
@@ -54,6 +56,7 @@ class PuenteAgentes(QObject):
         self.sesion.seleccionar_cuerpos = getattr(ventana, "seleccionar_cuerpos", None)
         self.sesion.mostrar_elementos = getattr(ventana, "mostrar_elementos", None)
         self.sesion.vista_boceto = getattr(ventana, "vista_boceto", None)
+        self.sesion.vista_calcomania = getattr(ventana, "vista_calcomania", None)
         self._conexiones = {}               # socket → {"buffer": bytearray, "autenticado": bool, "cerrando": bool}
         self._cola = deque()                # (socket, línea) pendientes: se atienden de a uno, sin reentrar
         self._atendiendo = False
@@ -248,11 +251,17 @@ class PuenteAgentes(QObject):
                              "El usuario está usando la app: esperá o pedile que termine lo que está haciendo.").a_dict()
         doc = self.sesion.doc = v.doc
         pasos = len(doc.operaciones)
+        copia_anterior = proyecto.ruta_autoguardado(doc)     # por si la herramienta guarda en otra ruta o cambia de documento
+        habia_cambios = doc.modificado
         respuesta = api.llamar(self.sesion, herramienta, args)
-        if self.sesion.doc is not doc:                       # new_document / open_document
+        if self.sesion.doc is not doc:                       # new_document / open_document / recover_document
+            if habia_cambios and proyecto.ruta_autoguardado(self.sesion.doc) != copia_anterior:
+                proyecto.borrar_autoguardado(doc)            # descartó el trabajo del anterior: su copia ya no es de nadie
             v.set_documento(self.sesion.doc)
             if herramienta == "open_document" and respuesta["ok"] and self.sesion.doc.ruta:
                 v._recordar(self.sesion.doc.ruta)
+        elif herramienta == "save_document" and respuesta["ok"]:
+            v._guardado(Path(doc.ruta), copia_anterior)      # título sin «*», sin autoguardado viejo, reciente nuevo
         elif modifica:
             if v.seleccion:
                 v._seleccionar([])                           # lo elegido puede ya no existir

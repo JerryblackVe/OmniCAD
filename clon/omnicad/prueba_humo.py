@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMenu
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
 
 from .io_archivos import exportar as ex
 from .io_archivos import proyecto
@@ -879,6 +879,121 @@ def ejecutar():
     next(a for a in menu.actions() if a.text() == "Buscar en la ventana").trigger()
     r.check(abs(v.visor.objetivo[0] - 60) < 1e-6 and abs(v.visor.objetivo[1] - 25) < 1e-6,
             "P23e: «Buscar en la ventana» encuadra el boceto")
+    # P24: la calcomanía en el navegador (carpeta, menú de Fusion) y atada a su cuerpo
+    deco = r23["result"]["feature"]["id"]
+    v.ocultos.clear()
+    v._refrescar_visibilidad()
+    carpeta_c = nav.item("__calcomanias__")
+    r.check(carpeta_c is not None and nav.item(deco) is not None and nav.item(deco).parent() is carpeta_c
+            and carpeta_c.isExpanded(), "P24a: la calcomanía está en la carpeta «Calcomanías» del navegador")
+    menu = nav.menu_elemento(nav.item(deco))
+    textos = [a.text().split("	")[0] for a in menu.actions() if not a.isSeparator()]
+    r.check(len(textos) == 8 and textos[1] == "Editar calcomanía" and textos[2] == "Reemplazar archivo de imagen"
+            and textos[-1] == "Buscar en la secuencia temporal",
+            f"P24b: el menú de la calcomanía tiene las 8 opciones de Fusion ({len(textos)})")
+    menu.popup(nav.mapToGlobal(nav.rect().center()))
+    QTest.qWait(80)
+    r.check(not menu.grab().isNull(), "P24b: el menú de la calcomanía se dibuja")
+    menu.close()
+    r.check(deco in [i for i, _ in v.visor.config.lienzos], "P24c: la calcomanía se ve con su cuerpo")
+    v._ojo(piezas[1])
+    r.check(deco not in [i for i, _ in v.visor.config.lienzos], "P24c: ocultar el cuerpo oculta su calcomanía")
+    v._ojo(piezas[1])
+    next(a for a in menu.actions() if a.text() == "Editar calcomanía").trigger()
+    QTest.qWait(80)
+    r.check(v.panel is not None and v.panel.comando.CLAVE == "calcomania",
+            "P24d: «Editar calcomanía» reabre su panel")
+    v.panel.cancelar()
+    # P25: panel Aspecto (biblioteca, «En este diseño», caras, selector rápido, editor): lo elegido se ve en vivo y
+    # Cancelar lo descarta; Aceptar lo aplica en un paso
+    import os as _os
+    _os.environ["OMNICAD_ASPECTOS"] = str(carpeta / "aspectos_humo.json")      # nunca el archivo del usuario
+    from .nucleo import aspectos as aspectos_core
+    from .timeline import aspectos_doc
+    from .ui.comando import hit_desde_ref
+    from .ui.comandos import CATALOGO as _CATALOGO
+    v.ocultos.clear()
+    v.ejecutar_comando(_CATALOGO["aspecto"]())
+    QTest.qWait(80)
+    p25 = v.panel
+    w25 = p25.widgets["aspecto"]
+    r.check(w25.arbol.topLevelItemCount() >= 10 and w25.pestanas.count() == 3 and not p25.grab().isNull(),
+            "P25a: el panel Aspecto trae la biblioteca por familias, el buscador y las tres pestañas")
+    p25.valores["cuerpos"] = [hit_desde_ref({"tipo": "cuerpo", "cuerpo": piezas[0]}, doc23.estado_final)]
+    antes_color = v._apariencias(doc23.estado_final).get(piezas[0])
+    w25.elegir(aspectos_core.buscar("Hormigón - Liso"), desde_biblioteca=True)
+    p25._t_previa.stop()
+    p25._calcular_previa()
+    hormigon = aspectos_core.BIBLIOTECA["Hormigón - Liso"]["color"]
+    en_vivo = v._apariencias(doc23.estado_final).get(piezas[0])
+    r.check(en_vivo is not None and max(abs(a - b) for a, b in zip(en_vivo, hormigon, strict=True)) < 1e-6
+            and piezas[0] not in doc23.propiedades, "P25b: el aspecto elegido se ve en el modelo al instante, sin Aceptar")
+    p25.cancelar()
+    r.check(v._apariencias(doc23.estado_final).get(piezas[0]) == antes_color and not aspectos_doc.lista(doc23),
+            "P25b: Cancelar descarta lo elegido")
+    v.ejecutar_comando(_CATALOGO["aspecto"]())
+    QTest.qWait(80)
+    p25 = v.panel
+    w25 = p25.widgets["aspecto"]
+    p25.widgets["aplicar_a"].set_valor("caras")
+    from .api import selectores as _sl
+    (cuerpo_c, elem_c), = _sl.elegir(api.Sesion(doc23), ">Z", "cara", piezas[2])
+    cara_hit = hit_desde_ref(_sl.referencia(cuerpo_c, elem_c), doc23.estado_final)
+    p25.valores["caras"] = [cara_hit]
+    w25.elegir(aspectos_core.buscar("Pintura - Brillante (Rojo)"), desde_biblioteca=True)
+    p25._t_previa.stop()
+    p25._calcular_previa()
+    r.check(len(v.visor.caras_pintadas) == 1 and v.visor.caras_pintadas[0][0] == piezas[2],
+            "P25c: «Aplicar a: Caras» pinta solo la cara elegida, en vivo")
+    p25.aceptar()
+    r.check(len(doc23.propiedades.get(piezas[2], {}).get("caras", [])) == 1 and len(v.visor.caras_pintadas) == 1,
+            "P25c: Aceptar guarda la cara pintada (un paso de deshacer)")
+    doc23.deshacer()
+    r.check(not v.visor.caras_pintadas, "P25c: deshacer quita la cara pintada")
+    v.ejecutar_comando(_CATALOGO["aspecto"]())
+    QTest.qWait(80)
+    w25 = v.panel.widgets["aspecto"]
+    selector = w25.editar_de_biblioteca(aspectos_core.buscar("Acero - Pulido"))
+    QTest.qWait(60)
+    selector.cambiado.emit({"color": [0.2, 0.3, 0.8]})
+    selector.avanzada.emit()
+    QTest.qWait(60)
+    r.check(w25.editor is not None and not w25.editor.grab().isNull() and w25.elegido["color"] == [0.2, 0.3, 0.8],
+            "P25d: el selector rápido y el Editor de materiales abren y cambian el aspecto en vivo")
+    w25.editor.close()
+    v.panel.cancelar()
+    # P25e: el mismo panel en RENDERIZAR: aplicar pasa por «En este diseño» (cuerpos y caras, un paso de deshacer)
+    rv = v.abrir_espacio("render")
+    QTest.qWait(120)
+    rv.mostrar_aspecto()
+    QTest.qWait(60)
+    pa = rv.panel_aspecto
+    r.check(rv.isVisible() and pa.aspectos.arbol.topLevelItemCount() >= 10 and pa.aspectos.pestanas.count() == 3
+            and not pa.grab().isNull(), "P25e: RENDERIZAR › Aspecto trae la biblioteca por familias y las tres pestañas")
+    pa._seleccionar("Hormigón - Liso")
+    rv._clic_cuerpo({"cuerpo": piezas[0]})
+    lista_r = aspectos_doc.lista(doc23)
+    r.check(len(lista_r) == 1 and doc23.propiedades[piezas[0]].get("aspecto") == lista_r[0]["id"]
+            and pa.aspectos.diseno == lista_r and rv.lienzo.objetos[piezas[0]]["acabado"]["nombre"] == "Hormigón - Liso",
+            "P25e: aplicar en RENDERIZAR crea la entrada en «En este diseño» y se ve en el lienzo")
+    pa.radios.r_caras.setChecked(True)
+    rv.lienzo.encuadrar()
+    pa._seleccionar("Pintura - Brillante (Rojo)")
+    ancho_l, alto_l = rv.lienzo.width(), rv.lienzo.height()
+    hit_r = next((h for fx in (0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65)
+                  if (h := rv.lienzo.elegir_entidad(QPoint(int(ancho_l * fx), alto_l // 2), {"cara"}))), None)
+    r.check(hit_r is not None and hit_r["tipo"] == "cara", "P25e: el lienzo de RENDERIZAR elige caras")
+    rv._clic_cuerpo(hit_r)
+    cuerpo_r = hit_r["cuerpo"]
+    r.check(len(doc23.propiedades[cuerpo_r].get("caras", [])) == 1
+            and len([m for m in rv.lienzo._mallas if m["id"] == cuerpo_r]) == 2,
+            "P25e: «Aplicar a: Caras» pinta solo esa cara en el lienzo de RENDERIZAR")
+    for _ in range(2):                                     # cada aplicar es UN paso de deshacer
+        doc23.deshacer()
+    rv.actualizar()
+    r.check(not aspectos_doc.lista(doc23) and not any(doc23.propiedades.get(c) for c in piezas),
+            "P25e: deshacer saca lo aplicado en RENDERIZAR (un paso por aplicar)")
+    rv.close()
     doc23.modificado = False
     v.doc.modificado = False
     v.abrir_ruta(str(ruta))
@@ -889,6 +1004,25 @@ def ejecutar():
     v.autoguardar()
     auto = proyecto.ruta_autoguardado(v.doc)
     r.check(auto.exists(), f"Autoguardado escrito: {auto.name}")
+    # 8b) Recuperación y alerta de cambios sin guardar (revisión del 2026-10-17)
+    sin_titulo = Documento()
+    sin_titulo.modificado = True
+    huerfana = proyecto.autoguardar(sin_titulo)
+    rec = proyecto.abrir_recuperado(huerfana)
+    r.check(rec.modificado and rec.nombre == "Recuperado" and proyecto.ruta_autoguardado(rec) == huerfana,
+            "Recuperar una copia «Sin título» la deja como documento «Recuperado» con la misma copia")
+    proyecto.guardar(rec, carpeta / "recuperado.omnicad")
+    proyecto.borrar_autoguardado(rec)
+    r.check(not huerfana.exists(), "Guardar un recuperado borra la copia original (no vuelve a ofrecerse)")
+    exec_real = QMessageBox.exec
+    QMessageBox.exec = lambda self: 0                        # como cerrar el cartel con Esc o con la X
+    try:
+        elegido = v._preguntar("¿Guardar los cambios?", ("Guardar", "No guardar", "Cancelar"))
+    finally:
+        QMessageBox.exec = exec_real
+    r.check(elegido == 2, "Esc en «¿Guardar los cambios?» elige Cancelar, no «No guardar»")
+    v.doc.modificado = True
+    v.autoguardar()
     proyecto.borrar_autoguardado(v.doc)
     v.doc.modificado = False
     v.close()

@@ -252,33 +252,59 @@ def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool =
     return resultado
 
 
-@herramienta("set_appearance", "material", "Cambia cómo se ven cuerpos (MODIFICAR › Aspecto): un aspecto de la "
-             "biblioteca (appearance, p. ej. 'Aluminio - Anodizado (rojo)'; list_materials los lista por categoría) "
-             "y/o un color propio (color «#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Sin "
-             "ninguno, quita el aspecto (vuelve al color del material). No cambia la masa.", modifica=True)
-def set_appearance(sesion, bodies: list[str], appearance: str | None = None, color: str | list[float] | None = None):
+@herramienta("set_appearance", "material", "Cambia cómo se ven cuerpos o CARAS (MODIFICAR › Aspecto, «Aplicar a»: "
+             "Cuerpos/componentes o Caras): un aspecto del diseño, de la biblioteca o de Mis aspectos (appearance, p. ej. "
+             "'Aluminio - Anodizado (rojo)', 'Hormigón - Liso'; list_appearances los lista) y/o un color propio (color "
+             "«#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Con solo el color, pinta con "
+             "un color suelto. Sin ninguno, quita el aspecto (vuelve al color del material, o al del cuerpo en las "
+             "caras). No cambia la masa.", modifica=True)
+def set_appearance(sesion, bodies: list[str] | None = None, appearance: str | None = None,
+                   color: str | list[float] | None = None, faces: str | list[str] | None = None,
+                   body: str | None = None):
     """
-    bodies: ids o nombres de los cuerpos.
-    appearance: nombre de un aspecto de la biblioteca (sin distinguir mayúsculas); vacío = solo el color.
+    bodies: ids o nombres de los cuerpos (Aplicar a: Cuerpos/componentes).
+    appearance: nombre o id de un aspecto del diseño, de la biblioteca o de Mis aspectos (sin distinguir mayúsculas); vacío = solo el color.
     color: color propio «#rrggbb» o [r, g, b] (0..1 o 0..255); vacío = el del aspecto.
+    faces: caras en vez de cuerpos (Aplicar a: Caras): selector (">Z"), id de find_faces ("Cuerpo1/F6") o lista de ellos.
+    body: cuerpo sobre el que se evalúan los selectores de faces; vacío = el único cuerpo del documento.
     """
-    ids = _cuerpos(sesion, bodies)
-    acabado, rgb = None, None
-    if appearance is not None and str(appearance).strip():
-        texto = str(appearance).strip()
-        nombre = next((a for a in rc.BIBLIOTECA_ASPECTOS if a.casefold() == texto.casefold()), None)
-        if nombre is None:
-            parecidos = difflib.get_close_matches(texto, list(rc.BIBLIOTECA_ASPECTOS), n=3, cutoff=0.4)
-            raise error("NOT_FOUND", f"No existe el aspecto «{texto}».",
-                        *([f"¿Quisiste decir: {', '.join(parecidos)}?"] if parecidos else []),
-                        "list_materials devuelve los aspectos por categoría (appearances).")
-        rgb, acabado = rc.aspecto(nombre)
-    if color is not None:
-        rgb = color_rgb(color)
+    from ..nucleo import aspectos as asp
+    from ..timeline import aspectos_doc as ad
+    from .herramientas_aspecto import aspecto_por_nombre
+    from .herramientas_modificar import _refs
     doc = sesion.doc
-    doc.set_propiedad(ids, "apariencia", None if rgb is None else [float(x) for x in rgb])
-    doc.set_propiedad(ids, "acabado", acabado)
-    return {"bodies": [{"id": cid, "name": sesion.nombre_cuerpo(doc.estado_final.cuerpos[cid]),
-                        "color": None if rgb is None else _hex(rgb),
-                        "appearance": None if acabado is None else acabado.get("nombre")} for cid in ids],
-            "cleared": rgb is None}
+    if faces is not None and bodies:
+        raise error("INVALID_ARGUMENTS", "Pasá cuerpos (bodies) o caras (faces), no los dos: «Aplicar a» es uno solo.")
+    caras = []
+    if faces is not None:
+        refs, elegidos = _refs(sesion, faces, "cara", body)
+        caras = [(c.id, ref) for (c, _e), ref in zip(elegidos, refs, strict=True)]
+        ids = list(dict.fromkeys(cid for cid, _ in caras))
+    else:
+        ids = _cuerpos(sesion, bodies)
+    rgb = None if color is None else color_rgb(color)
+    cuerpos = [] if faces is not None else ids
+    entrada = None
+    try:
+        if appearance is not None and str(appearance).strip():
+            a = aspecto_por_nombre(doc, str(appearance).strip())
+            origen = None if "id" in a else ("mis" if a["nombre"] in asp.cargar_usuario()["mis"] else "biblioteca")
+            if rgb is not None:
+                a = dict(a, color=[float(x) for x in rgb])
+            entrada = ad.asignar(doc, a, cuerpos, caras, origen)
+            rgb = entrada["color"]
+        elif rgb is not None:
+            ad.asignar_color(doc, [float(x) for x in rgb], cuerpos, caras)
+        else:
+            ad.quitar(doc, cuerpos, caras)
+    except geo.ErrorGeometria as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from e
+    salida = {"bodies": [{"id": cid, "name": sesion.nombre_cuerpo(doc.estado_final.cuerpos[cid]),
+                          "color": None if rgb is None else _hex(rgb),
+                          "appearance": None if entrada is None else entrada["nombre"]} for cid in ids],
+              "cleared": rgb is None}
+    if faces is not None:
+        salida["faces"] = len(caras)
+    if entrada is not None:
+        salida["appearance_id"] = entrada["id"]
+    return salida

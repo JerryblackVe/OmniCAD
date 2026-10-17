@@ -175,3 +175,17 @@ def test_api_recover_con_cambios_sin_guardar_pide_confirmar(carpeta_auto):
     assert not r["ok"] and r["error_kind"] == "UNSAVED_CHANGES"
     r = api.llamar(sesion, "recover_document", {"path": str(copia), "discard": True})
     assert r["ok"] and sesion.doc.nombre == "Recuperado"
+
+
+def test_t15_con_el_puente_la_ventana_avisa_en_vez_de_abrir_el_dialogo_modal(v, carpeta_auto, monkeypatch):
+    """Un diálogo modal al arrancar dejaba al puente respondiendo APP_BUSY hasta que alguien hacía clic."""
+    from omnicad.ui import ventana as modulo_ventana
+    _crear_autoguardado(Documento(), carpeta_auto / "sin_titulo_9.autoguardado.omnicad")
+
+    class _Guardia:
+        def __init__(self, *a, **k):
+            raise AssertionError("con el puente no se abre el diálogo modal")
+
+    monkeypatch.setattr(modulo_ventana, "DialogoRecuperados", _Guardia)
+    v.verificar_autoguardado_huerfano(solo_avisar=True)
+    assert "1 documento(s) recuperable(s)" in v.timeline.estado.toolTip()

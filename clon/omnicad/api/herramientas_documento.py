@@ -78,6 +78,7 @@ def _info_uniones(estado):
 
 
 def _resumen(sesion, resumido=False):
+    from .herramientas_calcomania import info_calcomanias
     from .herramientas_parametros import info_parametros   # import diferido: "documento" se registra primero
     doc = sesion.doc
     estado = doc.estado_final
@@ -89,6 +90,7 @@ def _resumen(sesion, resumido=False):
                 "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c), "type": tipos.get(getattr(c, "tipo", "solido"))}
                            for c in estado.cuerpos.values()],
                 "sketches": [{"id": b.op_id, "name": b.nombre} for b in estado.bocetos.values()],
+                "decals": [{"id": d["id"], "name": d["name"], "body": d["body"]} for d in info_calcomanias(sesion)],
                 "counts": {"bodies": len(estado.cuerpos), "sketches": len(estado.bocetos),
                            "components": len(estado.componentes), "joints": len(estado.uniones),
                            "parameters": len(doc.parametros)},
@@ -98,6 +100,7 @@ def _resumen(sesion, resumido=False):
             "display_units": {"length": doc.unidades["longitud"], "mass": doc.unidades["masa"]},   # lo que muestra la app
             "bodies": [_info_cuerpo(sesion, c) for c in estado.cuerpos.values()],
             "sketches": [_info_boceto(sesion, b) for b in estado.bocetos.values()],
+            "decals": info_calcomanias(sesion),
             "components": _info_componentes(sesion, estado), "joints": _info_uniones(estado),
             "rigid_groups": [list(g) for g in estado.grupos_rigidos],
             "timeline_steps": len(doc.operaciones), "marker": doc.marcador,
@@ -233,6 +236,11 @@ def open_document(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", 
     """
     _exigir_sin_cambios(sesion, discard)
     sesion.abrir(path, _UNIDADES_MALLA[mesh_units])
+    from ..io_archivos import proyecto
+    if sesion.doc.ruta and proyecto.autoguardado_pendiente(sesion.doc.ruta):
+        sesion.avisar("Este proyecto tiene un autoguardado más nuevo que el archivo (cambios que no se guardaron): "
+                      "se abrió el guardado. list_recoverable_documents con recent lo muestra y recover_document "
+                      "lo abre.")
     for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False):
         if r.estado in ("error", "aviso"):
             sesion.avisar(f"{op.nombre} ({op.id}) [{ESTADOS[r.estado]}]: {r.mensaje}")
@@ -680,10 +688,29 @@ def recover_document(sesion, path: str, project: str | None = None, discard: boo
         raise error("FILE_NOT_FOUND", f"No existe el proyecto original: {project}")
     _exigir_sin_cambios(sesion, discard)
     try:
-        sesion.abrir(path)
+        sesion.doc = proyecto.abrir_recuperado(path, project or None)
     except (proyecto.ErrorProyecto, OSError, ValueError) as e:
         raise error("OPERATION_FAILED", f"No se pudo recuperar el autoguardado: {e}") from None
-    sesion.doc.ruta = project
-    sesion.doc.nombre = Path(project).stem if project else "Recuperado"
-    sesion.doc.modificado = True
     return _resumen(sesion)
+
+
+@herramienta("discard_recoverable_document", "documento", "Suprime una copia de autoguardado de la lista de "
+             "documentos recuperables (el botón Suprimir de «Documentos recuperados»). Borra SOLO la copia "
+             "(*.autoguardado.omnicad), nunca el proyecto guardado ni otro archivo; no cambia el documento abierto.",
+             modifica=False)
+def discard_recoverable_document(sesion, path: str):
+    """
+    path: ruta de la copia de autoguardado (de list_recoverable_documents).
+    """
+    from ..io_archivos import proyecto
+    ruta = Path(path)
+    if not proyecto.es_copia_de_autoguardado(ruta):
+        raise error("INVALID_ARGUMENTS", f"«{ruta.name}» no es una copia de autoguardado (*.autoguardado.omnicad): "
+                    "no se borra.", "Las copias salen de list_recoverable_documents (campo backup).")
+    if not ruta.is_file():
+        raise error("FILE_NOT_FOUND", f"No existe el autoguardado: {path}")
+    try:
+        proyecto.suprimir_copia(ruta)
+    except OSError as e:
+        raise error("OPERATION_FAILED", f"No se pudo suprimir el autoguardado: {e}") from None
+    return {"discarded": str(ruta)}

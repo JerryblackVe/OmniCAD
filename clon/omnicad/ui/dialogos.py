@@ -12,8 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
                                QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
-from pathlib import Path
-
+from ..io_archivos import proyecto
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros, validar_nombre
 from . import formato, temas
@@ -397,8 +396,8 @@ class DialogoRecuperados(QDialog):
         if fila is None:
             return
         try:
-            Path(fila["backup"]).unlink(missing_ok=True)
-        except OSError as e:
+            proyecto.suprimir_copia(fila["backup"])
+        except (proyecto.ErrorProyecto, OSError) as e:
             QMessageBox.critical(self, "No se pudo suprimir", str(e))
             return
         indice = self._filas.index(fila)
