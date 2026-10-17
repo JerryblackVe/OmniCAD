@@ -8,8 +8,11 @@ quedó «en espera porque los números no lo justifican»: con los bocetos y las
 Segunda pasada (C++ y reparto entre Python, Rust y C++): [plan_cpp.md](plan_cpp.md) (resumen en la sección 10). Allí quedó además la regla
 de qué lenguaje va dónde y los arreglos P14–P24 de OpenCascade.
 
-Estado: **solo diseño y mediciones. No hay código Rust todavía.** Falta el permiso para instalar el toolchain
-(`rustup`, `maturin`) y los crates: ver «Qué hay que autorizar».
+Estado (2026-10-17): **primer módulo Rust implementado: R11**, rasterizador, sombras y SSAO del render CPU,
+en `clon/rust/` con PyO3/numpy; respaldo Python. Rust 1.99.1 ya estaba instalado; el usuario autorizó instalar
+maturin y descargar los crates. Medición: rasterizador 17×, API caja 2,129 → 1,139 s, reductor 4,928 → 4,313 s,
+PNG byte-idénticos. Detalle en `informe_tortura_2026-10-17.md`; comandos en `clon/rust/README.md`.
+El resto de este documento sigue siendo el plan de las próximas migraciones; R1 no se implementó.
 
 ## 1. Resumen en una pantalla
 
@@ -205,8 +208,9 @@ cada una reutiliza tipos de la anterior.
 
 ## 8. Qué hay que autorizar (AGENTS.md: «no instalar paquetes sin permiso»)
 
-Hoy `cargo`, `rustc` y `maturin` **no están instalados** en esta PC (comprobado el 2026-10-12). Para la fase 1 hace
-falta, con permiso del usuario:
+Al medir el 2026-10-12 no estaban instalados. Actualización 2026-10-17: `cargo`/`rustc` 1.99.1 encontrados en
+`D:/rust/cargo/bin`; maturin 1.15.0 instalado en el venv con permiso explícito, igual que los crates PyO3/numpy
+de R11. Las demás dependencias de esta lista no se instalaron en esta tanda:
 
 - `rustup` (toolchain estable de Rust, target `x86_64-pc-windows-msvc`; requiere las Build Tools de MSVC).
 - `maturin` en el venv de `clon/` (o `pip install maturin` global).

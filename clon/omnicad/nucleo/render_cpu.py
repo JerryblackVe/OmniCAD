@@ -21,6 +21,7 @@ import math
 
 import numpy as np
 
+from .. import nativo
 from . import geometria as geo
 
 
@@ -442,6 +443,10 @@ def rasterizar(sx, sy, sz, ancho, alto, validos=None, zbuf=None, idbuf=None, bas
     clave = cw * 65536 + ch
     orden = np.argsort(clave, kind="stable")
     idx, clave = idx[orden], clave[orden]
+    motor = nativo.disponible()
+    if motor is not None and zbuf.flags.c_contiguous and idbuf.flags.c_contiguous:
+        motor.rasterizar(sx, sy, sz, idx, ancho, alto, zbuf, idbuf, base)
+        return zbuf, idbuf
     cortes = np.r_[np.nonzero(np.diff(clave))[0] + 1, len(clave)]
     inicio = 0
     for fin in cortes:
@@ -538,6 +543,9 @@ class MapaSombras:
         sesgo = 1.5 * self.texel / self.radio
         fuera = (sx < 0) | (sy < 0) | (sx >= self.n) | (sy >= self.n)
         radio = max(1.0, self.blando * self.radio / self.texel)        # penumbra en texeles
+        motor = nativo.disponible()
+        if motor is not None:
+            return motor.visibilidad(np.c_[sx, sy, sz], self.z, np.asarray(DISCO_PCF), radio, sesgo)
         luz = np.zeros(len(sx))
         for ox, oy in DISCO_PCF:
             jx = np.clip(np.floor(sx + ox * radio).astype(np.int64), 0, self.n - 1)
@@ -590,6 +598,9 @@ def _ssao(pv, nv, zvista, proy, ancho, alto, radio, muestras=12):
     rng = np.random.default_rng(7)
     dirs = _unit(rng.normal(size=(muestras, 3)))
     escalas = 0.25 + 0.75 * (np.arange(1, muestras + 1) / muestras) ** 2
+    motor = nativo.disponible()
+    if motor is not None:
+        return motor.oclusion(pv, nv, zvista, proy, dirs, escalas, ancho, alto, radio)
     giro = (np.arange(len(pv)) * 2654435761 % 4096) / 4096.0 * 2 * math.pi
     c, s = np.cos(giro), np.sin(giro)
     ocl = np.zeros(len(pv))
