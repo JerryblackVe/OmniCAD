@@ -38,6 +38,16 @@ If it is useful to you, a donation helps keep it going.
   in a JSON file; toolbox on the S key (search and pin commands).
 - **Geometry kernel:** [OpenCascade](https://dev.opencascade.org/) (B-rep).
 
+## Examples of what has been built
+
+A **1:1 scale turbofan engine** (3.86 m long, Ø1.43 m), designed by an AI agent in the running app (live mode) and
+rendered with the OpenGL canvas of the RENDER space: 86 bodies and 174 parametric steps. Revolved profiles for the
+nacelle, core and nozzle; a 22-blade twisted fan (loft and circular pattern); a 9-stage compressor and a 5-stage turbine
+(hundreds of blades per pattern); metals and paints from the appearance library, and a carbon-fibre decal on the nacelle.
+
+![1:1 turbofan engine, front view](docs/img/motor_reaccion_frente.png)
+![1:1 turbofan engine, rear view](docs/img/motor_reaccion_atras.png)
+
 ## For AI agents
 
 OmniCAD ships an **MCP server** and a **CLI** (`omnicad`) generated from a single tool catalog, so both always match.

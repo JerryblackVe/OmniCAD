@@ -64,7 +64,7 @@ def test_cli_usage_tiene_pistas_en_el_catalogo():
 def test_version_por_subproceso():
     r = subproceso("--version")
     assert r.returncode == 0
-    assert r.stdout.decode("utf-8").strip() == "omnicad 0.1.2"
+    assert r.stdout.decode("utf-8").strip() == "omnicad 0.1.3"
 
 
 def test_version_y_ayuda_no_cargan_la_api():

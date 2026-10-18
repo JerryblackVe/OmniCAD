@@ -36,6 +36,17 @@ Si te ayuda, una donación me ayuda a seguir.
   usuario en un archivo JSON; caja de herramientas con la tecla S (buscar y fijar comandos).
 - **Kernel geométrico:** [OpenCascade](https://dev.opencascade.org/) (B-rep), el mismo tipo de núcleo que usan los CAD comerciales.
 
+## Ejemplos de lo que se hizo
+
+Un **motor turbofán a escala 1:1** (3,86 m de largo, Ø1,43 m), diseñado por un agente de IA en la app abierta (modo en vivo)
+y renderizado con el lienzo OpenGL de RENDERIZAR: 86 cuerpos y 174 pasos paramétricos. Perfiles girados para la góndola, el
+núcleo y la tobera; fan de 22 álabes con torsión (solevación y patrón circular); compresor de 9 etapas y turbina de 5
+(cientos de álabes por patrón); metales y pinturas de la biblioteca de aspectos, y una calcomanía de fibra de carbono
+sobre la góndola.
+
+![Motor turbofán 1:1, vista de frente](docs/img/motor_reaccion_frente.png)
+![Motor turbofán 1:1, vista trasera](docs/img/motor_reaccion_atras.png)
+
 ## Para agentes de IA
 
 OmniCAD trae un **servidor MCP** y una **CLI** (`omnicad`) que salen de un único catálogo de herramientas: lo que hace
