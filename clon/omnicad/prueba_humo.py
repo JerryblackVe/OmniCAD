@@ -970,6 +970,16 @@ def ejecutar():
     pa = rv.panel_aspecto
     r.check(rv.isVisible() and pa.aspectos.arbol.topLevelItemCount() >= 10 and pa.aspectos.pestanas.count() == 3
             and not pa.grab().isNull(), "P25e: RENDERIZAR › Aspecto trae la biblioteca por familias y las tres pestañas")
+    # P24e: la calcomanía también está en RENDERIZAR (antes solo la dibujaba el visor de Diseño)
+    r.check(deco in [i for i, _ in rv.lienzo.config.lienzos], "P24e: RENDERIZAR recibe la calcomanía del diseño")
+    if rv.lienzo.gl_disponible():
+        import numpy as _np
+        rv.lienzo.encuadrar()
+        con = rv.lienzo.renderizar_imagen(240, 160, 1, "gl").astype(int)
+        puestas, rv.lienzo.config.lienzos = rv.lienzo.config.lienzos, []
+        sin = rv.lienzo.renderizar_imagen(240, 160, 1, "gl").astype(int)
+        rv.lienzo.config.lienzos = puestas
+        r.check(int((_np.abs(con - sin).sum(axis=2) > 60).sum()) > 50, "P24e: el render GL pinta la calcomanía sobre su cara")
     pa._seleccionar("Hormigón - Liso")
     rv._clic_cuerpo({"cuerpo": piezas[0]})
     lista_r = aspectos_doc.lista(doc23)

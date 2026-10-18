@@ -47,6 +47,7 @@ from ..nucleo import aspectos as asp
 from ..nucleo import render_cpu as rc
 from ..nucleo.geometria import ErrorGeometria
 from ..timeline import aspectos_doc as ad
+from ..timeline.ops_insertar import calcomanias_vigentes
 from ..timeline.operaciones import propiedades_cuerpo
 from . import temas
 from .aspectos_ui import PanelAspectos, RadiosAplicarA
@@ -854,6 +855,8 @@ class LienzoRender(Visor3D):
                     GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
                     GL.glVertexPointer(3, GL.GL_FLOAT, 0, m["seg"])
                     GL.glDrawArrays(GL.GL_LINES, 0, len(m["seg"]))
+        if self.config.lienzos:
+            self._pintar_calcomanias(proy, vista)
         if transp:
             GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
             GL.glEnableClientState(GL.GL_TEXTURE_COORD_ARRAY)
@@ -910,6 +913,26 @@ class LienzoRender(Visor3D):
         GL.glEnable(GL.GL_DEPTH_TEST)
         self._barrer_buffers()          # búferes de la placa: los comparte con Visor3D
         return proy, vista
+
+    def _pintar_calcomanias(self, proy, vista):
+        """Las calcomanías (INSERTAR › Calcomanía) pegadas a su cara, con la tubería fija y la profundidad de los
+        cuerpos opacos. Antes solo las dibujaba el visor de Diseño: en RENDERIZAR no aparecían."""
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glLoadMatrixf(proy.T.astype(_F))
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadMatrixf(vista.T.astype(_F))
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glDisable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glDepthFunc(GL.GL_LEQUAL)
+        GL.glEnable(GL.GL_BLEND)
+        GL.glBlendFuncSeparate(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA, GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA)
+        GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)           # sobre la cara, sin parpadeo
+        GL.glPolygonOffset(-2.0, -2.0)
+        self._dibujar_lienzos()
+        GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
+        GL.glDepthFunc(GL.GL_LESS)
+        GL.glDisable(GL.GL_BLEND)
 
     @staticmethod
     def _caja_mallas(mallas):
@@ -1871,6 +1894,8 @@ class VentanaRender(QMainWindow):
         """El lienzo muestra el diseño más lo que el panel Aspecto tiene editado sin escribir (vista previa)."""
         props = ad.propiedades_con(self.doc, self.panel_aspecto.aspectos.diseno)
         self.lienzo.cargar(self.doc.estado_final, props)
+        self.lienzo.config.lienzos = [(i, d) for i, d in calcomanias_vigentes(self.doc, self.doc.estado_final)
+                                      if d.get("calcomania")]        # las imágenes de referencia no se renderizan
         self.seleccion = [c for c in self.seleccion if c in self.lienzo.objetos]
         self._resaltar()
 
