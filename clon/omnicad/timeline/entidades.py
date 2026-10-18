@@ -314,11 +314,8 @@ def como_eje(ent):
     if ent.tipo == "cara" and ent.forma is not None:
         f = refs.firma_cara(ent.forma)
         if "eje" in f:
-            from OCP.BRepAdaptor import BRepAdaptor_Surface
-            s = BRepAdaptor_Surface(ent.forma)
-            ax = s.Cylinder().Axis() if f["geom"] == "cilindro" else s.Cone().Axis()
-            p, d = ax.Location(), ax.Direction()
-            return np.array([p.X(), p.Y(), p.Z()]), np.array([d.X(), d.Y(), d.Z()])
+            from ..nucleo.consultas import eje_cara
+            return eje_cara(ent.forma, f["geom"])
         if ent.plano is not None:
             return ent.plano.origen, ent.plano.normal
     if ent.tipo == "plano" and ent.plano is not None:

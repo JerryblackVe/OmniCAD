@@ -17,36 +17,59 @@ Límites del kernel (no los tiene OpenCascade, no se emulan):
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
-                                BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Transform)
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepFeat import BRepFeat_SplitShape
-from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
-from OCP.BRepGProp import BRepGProp_Face
-from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
-from OCP.BRepLib import BRepLib
-from OCP.BRepOffset import BRepOffset_Analyse, BRepOffset_MakeOffset, BRepOffset_Skin
-from OCP.BRepOffsetAPI import (BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffsetShape,
-                               BRepOffsetAPI_MakeThickSolid)
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
-from OCP.BRepTools import BRepTools
-from OCP.ChFiDS import ChFiDS_Concave, ChFiDS_Convex, ChFiDS_Tangential
-from OCP.Geom2dAPI import Geom2dAPI_PointsToBSpline
-from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C2, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Intersection,
-                         GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus)
-from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
-from OCP.OCP.collections import (Array1_gp_Pnt2d, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-                                 IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape)
-from OCP.ShapeFix import ShapeFix_Shape
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_VERTEX
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape
-from OCP.gp import (gp_Ax3, gp_Cylinder, gp_Dir, gp_GTrsf, gp_Lin, gp_Mat, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf,
-                    gp_Vec, gp_XYZ)
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global Array1_gp_Pnt2d, BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    global BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter, BRepBuilderAPI_GTransform
+    global BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    global BRepBuilderAPI_Transform, BRepExtrema_DistShapeShape, BRepFeat_SplitShape, BRepFilletAPI_MakeChamfer
+    global BRepFilletAPI_MakeFillet, BRepGProp_Face, BRepIntCurveSurface_Inter, BRepLib
+    global BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakeThickSolid
+    global BRepOffset_Analyse, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism, BRepTools
+    global BRep_Tool, ChFiDS_Concave, ChFiDS_Convex, ChFiDS_Tangential, Geom2dAPI_PointsToBSpline
+    global GeomAPI_ProjectPointOnSurf, GeomAbs_Arc, GeomAbs_C2, GeomAbs_Cone, GeomAbs_Cylinder
+    global GeomAbs_Intersection, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
+    global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape, ShapeFix_Shape
+    global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_VERTEX, TopExp, TopExp_Explorer
+    global TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape, gp_Ax3, gp_Cylinder, gp_Dir, gp_GTrsf, gp_Lin
+    global gp_Mat, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec, gp_XYZ
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
+                                    BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Transform)
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepFeat import BRepFeat_SplitShape
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
+    from OCP.BRepGProp import BRepGProp_Face
+    from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
+    from OCP.BRepLib import BRepLib
+    from OCP.BRepOffset import BRepOffset_Analyse, BRepOffset_MakeOffset, BRepOffset_Skin
+    from OCP.BRepOffsetAPI import (BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffsetShape,
+                                   BRepOffsetAPI_MakeThickSolid)
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.BRepTools import BRepTools
+    from OCP.ChFiDS import ChFiDS_Concave, ChFiDS_Convex, ChFiDS_Tangential
+    from OCP.Geom2dAPI import Geom2dAPI_PointsToBSpline
+    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C2, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Intersection,
+                             GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus)
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from OCP.OCP.collections import (Array1_gp_Pnt2d, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
+                                     IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape)
+    from OCP.ShapeFix import ShapeFix_Shape
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_VERTEX
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape
+    from OCP.gp import (gp_Ax3, gp_Cylinder, gp_Dir, gp_GTrsf, gp_Lin, gp_Mat, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf,
+                        gp_Vec, gp_XYZ)
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -1274,3 +1297,6 @@ def quitar_empalmes(forma, radio_max):
         radios[radio] = radios.get(radio, 0) + 1
     nueva = quitar_caras(forma, [cara for cara, _r in caras])
     return geo.unificar_caras(nueva), sorted(radios.items())
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

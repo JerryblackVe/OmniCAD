@@ -558,6 +558,9 @@ class VentanaPrincipal(QMainWindow):
 
     def aplicar_preferencias(self):
         p, c = self.prefs, self.visor.config
+        from ..nucleo import motor
+        if self.doc is not None and self.doc.motor != motor.motor_activo():
+            self.doc.recalcular(0)
         avisos = self.aplicar_tema()
         if avisos and self.isVisible():
             self.mensaje(avisos[0], 10000)

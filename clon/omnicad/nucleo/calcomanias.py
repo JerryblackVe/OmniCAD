@@ -2,9 +2,18 @@
 import math
 
 import numpy as np
-from OCP.BRepAdaptor import BRepAdaptor_Surface
-from OCP.GeomAbs import GeomAbs_Cylinder
-from OCP.TopAbs import TopAbs_REVERSED
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Surface, GeomAbs_Cylinder, TopAbs_REVERSED
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder
+    from OCP.TopAbs import TopAbs_REVERSED
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 from .solidos_modificar import caras_tangentes
@@ -82,3 +91,6 @@ def textura(coordenadas, ancho, alto, dx=0, dy=0, angulo=0, voltear_h=False, vol
     if voltear_v:
         uv[:, 1] = 1 - uv[:, 1]
     return uv
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

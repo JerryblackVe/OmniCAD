@@ -54,10 +54,11 @@ def crear_documento_ejemplo():
     rev = OpRevolucion(doc.nuevo_id(), "Aro", boceto=sk2.id, perfiles=[OpRevolucion.referencia_perfil(perfil)],
                        eje="v", angulo="360 deg")
     doc.agregar(rev)
-    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Toroide", forma="toroide", radio_mayor="12 mm",
-                            radio_menor="3 mm", x="-40 mm", y="0", z="5 mm"))
-    cuerpos = list(doc.estado_final.cuerpos)
-    doc.agregar(OpCombinar(doc.nuevo_id(), "Unir aro y toroide", objetivo=cuerpos[1],
-                           herramientas=[cuerpos[2]], operacion="unir"))
+    toroide = OpPrimitiva(doc.nuevo_id(), "Toroide", forma="toroide", radio_mayor="12 mm",
+                          radio_menor="3 mm", x="-40 mm", y="0", z="5 mm")
+    doc.agregar(toroide)
+    # Por id (no por la lista de cuerpos vivos): si un paso queda con error (otro motor), la receta no cambia.
+    doc.agregar(OpCombinar(doc.nuevo_id(), "Unir aro y toroide", objetivo=f"{rev.id}.c1",
+                           herramientas=[f"{toroide.id}.c1"], operacion="unir"))
     doc.modificado = False
     return doc

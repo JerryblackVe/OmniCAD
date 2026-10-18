@@ -22,24 +22,40 @@ import math
 from pathlib import Path
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
-                                BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire)
-from OCP.BRepClass import BRepClass_FaceClassifier
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
-from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
-from OCP.GC import GC_MakeArcOfCircle
-from OCP.GCPnts import GCPnts_QuasiUniformDeflection
-from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
-from OCP.gp import gp_Ax1, gp_Ax2, gp_Circ, gp_Dir, gp_Pnt, gp_Vec
-from OCP.OCP.collections import List_TopoDS_Shape
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_VERTEX, TopAbs_WIRE
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepAdaptor_Surface, BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    global BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    global BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, BRepClass_FaceClassifier
+    global BRepExtrema_DistShapeShape, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol, BRepTools
+    global BRepTools_WireExplorer, BRep_Tool, GCPnts_QuasiUniformDeflection, GC_MakeArcOfCircle, GeomAbs_Circle
+    global GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane, List_TopoDS_Shape, ShapeUpgrade_UnifySameDomain
+    global TopAbs_EDGE, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_VERTEX, TopAbs_WIRE, TopExp_Explorer
+    global TopoDS, gp_Ax1, gp_Ax2, gp_Circ, gp_Dir, gp_Pnt, gp_Vec
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
+                                    BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire)
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
+    from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+    from OCP.GC import GC_MakeArcOfCircle
+    from OCP.GCPnts import GCPnts_QuasiUniformDeflection
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Circ, gp_Dir, gp_Pnt, gp_Vec
+    from OCP.OCP.collections import List_TopoDS_Shape
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_VERTEX, TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -1641,3 +1657,6 @@ def resumen(modelo):
             "pliegues": len(modelo["pliegues"]),
             "desplegados": sum(1 for b in modelo["pliegues"].values() if b["desplegado"]),
             "ancho": x1 - x0, "alto": y1 - y0, "area": c["area"]}
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

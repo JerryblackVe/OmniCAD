@@ -23,6 +23,7 @@ import numpy as np
 
 from .. import nativo
 from . import geometria as geo
+from . import motor as _motor
 
 
 _DEFLEXION_MIN, _DEFLEXION_MAX = 0.02, 0.5
@@ -371,6 +372,13 @@ def _mallas_por_cara(forma, deflexion, angular, rehacer=False):
             n = _props_nodos(cara, tri, idx, tris, False)[0][idx].reshape(-1, 3)
         salida.append((cara, tris.reshape(-1, 3), n))
     return salida
+
+
+def _iniciar_opencascade():
+    pass  # Las dos importaciones del teselado ya son locales.
+
+
+_motor.registrar(globals(), _iniciar_opencascade, nombres=("_mallas_por_cara",))
 
 
 def malla_suave_aparte(forma, caras, deflexion=0.05, angular=0.25):

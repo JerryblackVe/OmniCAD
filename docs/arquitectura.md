@@ -176,3 +176,49 @@ Una capa más, por encima del núcleo y del timeline, para que un agente IA use 
   un proyecto: o abre igual, o avisa y no toca el archivo.
 - Lo que cambia de una versión a otra se lista en [CHANGELOG.md](../CHANGELOG.md); el detalle por sesión está
   en [PROJECT_LOG.md](../PROJECT_LOG.md).
+
+## 9. Motores geométricos: OpenCascade y OmniKernel
+
+OmniCAD tiene dos motores completos e independientes; el usuario elige uno en **Preferencias › Geometría**
+(`geometria/motor`, por defecto `opencascade`). La variable `OMNICAD_MOTOR` tiene prioridad (CLI, MCP, pruebas).
+Con OmniKernel activo no se ejecuta ninguna línea de OCP: ni respaldo automático, ni conversión por STEP/BREP.
+
+```
+timeline/ · io_archivos/ · api/ · ui/ ──► nucleo/<modulo>.py  (firma pública única)
+                                              │  motor.registrar() envuelve cada función
+                                              ├─► "opencascade": la implementación de siempre (OCP)
+                                              └─► "omnikernel":  nucleo/omnikernel/<modulo>.py ──► módulo nativo
+                                                                 `omnikernel` (crate rust-kernel/crates/omnikernel_py)
+```
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Elección y despacho | `clon/omnicad/nucleo/motor.py` | `motor_activo()`, `fijar_motor()`, `registrar()`, `sin_soporte()`, `@recalculo` |
+| Adaptadores | `clon/omnicad/nucleo/omnikernel/` | un módulo por archivo de `nucleo/`, mismos nombres de función |
+| Binding | `D:/rea/cad/rust-kernel/crates/omnikernel_py` (PyO3 0.23) | clase `Cuerpo` opaca e inmutable; mm↔cm solo en `src/unidades.rs` |
+| Compilación | `scripts/compilar_omnikernel.py` | copia verificada a `evidencias/motor_omnikernel/` y `maturin develop --release` (`--test`: cargo test) |
+| Guardia | `clon/omnicad/bloqueo_ocp.py` | con `OMNICAD_BLOQUEAR_OCP=1` todo `import OCP` falla (pruebas y comprobaciones) |
+| Paridad | `clon/tests/test_paridad_motor.py` + `caso_paridad_motor.py` | cada caso corre con un solo motor por proceso y compara volumen, área, conteos, validez y firmas |
+| Estado | `docs/inventario_motor.md` (`scripts/estado_motor.py`) y `docs/comparacion_motores.md` (`scripts/comparar_motores.py`) | qué función está conectada, común o sin soporte; tiempos y documentos |
+| Faltantes del kernel | `D:/rea/cad/rust-kernel/docs/faltantes_omnicad.md` | cada cosa que OmniKernel no hace o hace distinto, con caso mínimo |
+
+Reglas:
+- **Un motor por recálculo.** `Documento.recalcular` (decorado con `@motor.recalculo`) fija el motor al empezar; si el
+  documento venía de otro motor descarta la caché y recalcula desde el paso 0. Una forma del otro motor da
+  `MOTOR_INCOMPATIBLE`. La caché del `.omnicad` se guarda por motor (BREP para OpenCascade, formato v1 para OmniKernel).
+- **Qué se despacha.** Solo las funciones que nombran algo de OCP (los nombres que declara `_iniciar_opencascade`).
+  Las que no (validaciones, búsquedas de perfiles, política de referencias) son comunes y corren igual en los dos.
+- **Lo que falta no se tapa.** Si `nucleo/omnikernel/<modulo>.py` no tiene la función, o el kernel no da el mismo
+  resultado, la llamada lanza `ErrorGeometria` con `error_kind = "MOTOR_SIN_SOPORTE"` y el mensaje
+  «OmniKernel todavía no hace <operación>. Podés elegir OpenCascade en Preferencias.». Nunca geometría en Python.
+
+**Cómo pasar una función nueva a OmniKernel:**
+1. Si el binding no expone la operación del kernel, agregala en `omnikernel_py/src/lib.rs` (medidas en mm con
+   `unidades::cm`/`mm`, dentro de `ejecutar(...)` para liberar el GIL y aceptar `CancelToken` y plazo) y compilá con
+   `clon/.venv/Scripts/python.exe scripts/compilar_omnikernel.py` (y `--test`).
+2. Escribí el caso en `clon/tests/caso_paridad_motor.py` llamando a la función pública de `nucleo/` (la misma para los
+   dos motores) y corré `pytest tests/test_paridad_motor.py`: hasta que no dé verde no se conecta.
+3. Implementala en `nucleo/omnikernel/<modulo>.py` con la misma firma. Las variantes sin paridad llaman a
+   `motor.sin_soporte("…")` y su caso va a la lista `SIN_SOPORTE`; la diferencia, con caso mínimo, a
+   `faltantes_omnicad.md`.
+4. Sumá el caso a `CONECTADOS` y regenerá `docs/inventario_motor.md` con `scripts/estado_motor.py`.

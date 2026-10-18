@@ -51,12 +51,8 @@ import math
 import re
 
 import numpy as np
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepGProp import BRepGProp
-from OCP.GProp import GProp_GProps
-from OCP.gp import gp_Pnt
 
+from ..nucleo import consultas
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from .errores import error
@@ -86,10 +82,7 @@ class Elemento:
             if "normal" in firma:
                 self.normal = np.array(firma["normal"], float)
         else:
-            p = GProp_GProps()
-            BRepGProp.LinearProperties_s(sub, p)
-            c = p.CentreOfMass()
-            self.centro = np.array([c.X(), c.Y(), c.Z()], float)
+            self.centro = consultas.centro_lineal(sub)
             if self.geom == "LINE":
                 a, b = (np.array(x, float) for x in firma["extremos"])
                 d = b - a
@@ -244,8 +237,7 @@ def _niveles(valores):
 
 
 def _distancia_a_punto(e, p):
-    d = BRepExtrema_DistShapeShape(e.sub, BRepBuilderAPI_MakeVertex(gp_Pnt(*map(float, p))).Vertex())
-    return d.Value() if d.IsDone() else math.inf
+    return consultas.distancia_a_punto(e.sub, p)
 
 
 def _atomo(a, elementos, tipo, texto):

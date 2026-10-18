@@ -16,23 +16,35 @@ Formato serializable de una referencia: {"tipo": "cara" | "arista" | "vertice", 
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepGProp import BRepGProp
-from OCP.GeomAbs import (GeomAbs_BSplineCurve, GeomAbs_BSplineSurface, GeomAbs_Circle, GeomAbs_Cone,
-                         GeomAbs_Cylinder, GeomAbs_Ellipse, GeomAbs_Line, GeomAbs_Plane, GeomAbs_Sphere,
-                         GeomAbs_Torus)
-from OCP.GProp import GProp_GProps
-from OCP.OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_VERTEX
-from OCP.TopExp import TopExp
-from OCP.TopoDS import TopoDS
+from . import motor as _motor
 
-_SUPERFICIES = {GeomAbs_Plane: "plano", GeomAbs_Cylinder: "cilindro", GeomAbs_Cone: "cono",
-                GeomAbs_Sphere: "esfera", GeomAbs_Torus: "toro", GeomAbs_BSplineSurface: "bspline"}
-_CURVAS = {GeomAbs_Line: "linea", GeomAbs_Circle: "circulo", GeomAbs_Ellipse: "elipse",
-           GeomAbs_BSplineCurve: "bspline"}
-_TIPOS_TOPO = {"cara": TopAbs_FACE, "arista": TopAbs_EDGE, "vertice": TopAbs_VERTEX}
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepAdaptor_Surface, BRepGProp, BRep_Tool, GProp_GProps
+    global GeomAbs_BSplineCurve, GeomAbs_BSplineSurface, GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder
+    global GeomAbs_Ellipse, GeomAbs_Line, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
+    global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED
+    global TopAbs_VERTEX, TopExp, TopoDS, _CURVAS, _SUPERFICIES, _TIPOS_TOPO
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GeomAbs import (GeomAbs_BSplineCurve, GeomAbs_BSplineSurface, GeomAbs_Circle, GeomAbs_Cone,
+                             GeomAbs_Cylinder, GeomAbs_Ellipse, GeomAbs_Line, GeomAbs_Plane, GeomAbs_Sphere,
+                             GeomAbs_Torus)
+    from OCP.GProp import GProp_GProps
+    from OCP.OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_VERTEX
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+    _SUPERFICIES = {GeomAbs_Plane: "plano", GeomAbs_Cylinder: "cilindro", GeomAbs_Cone: "cono",
+                    GeomAbs_Sphere: "esfera", GeomAbs_Torus: "toro", GeomAbs_BSplineSurface: "bspline"}
+    _CURVAS = {GeomAbs_Line: "linea", GeomAbs_Circle: "circulo", GeomAbs_Ellipse: "elipse",
+               GeomAbs_BSplineCurve: "bspline"}
+    _TIPOS_TOPO = {"cara": TopAbs_FACE, "arista": TopAbs_EDGE, "vertice": TopAbs_VERTEX}
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 
 def _xyz(p):
@@ -250,3 +262,6 @@ def resolver_varias(forma, refs, umbral=0.35):
 
 def punto_de_vertice(v):
     return np.array(_xyz(BRep_Tool.Pnt_s(v)))
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

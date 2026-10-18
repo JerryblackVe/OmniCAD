@@ -3,7 +3,7 @@
 Arranque de la app: ícono de las ventanas y portada (pantalla de carga) mientras se importa lo pesado.
 
 Como Fusion, que muestra su portada al abrir: `OmniCAD.py` la muestra apenas existe la QApplication, ANTES de importar
-la ventana (OCP, OpenGL… casi 1 s), y la cierra cuando la ventana principal ya está a la vista.
+la ventana (kernel, OpenGL… casi 1 s), y la cierra cuando la ventana principal ya está a la vista.
 """
 import sys
 

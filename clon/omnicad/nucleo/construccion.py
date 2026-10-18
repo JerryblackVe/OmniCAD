@@ -16,19 +16,33 @@ import math
 from typing import NamedTuple
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape, BRepExtrema_IsOnEdge
-from OCP.BRepTools import BRepTools
-from OCP.GCPnts import GCPnts_AbscissaPoint
-from OCP.GeomAbs import (GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Ellipse, GeomAbs_Line,
-                         GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfRevolution, GeomAbs_Torus)
-from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
-from OCP.OCP.collections import List_TopoDS_Shape
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_VERTEX, TopAbs_WIRE
-from OCP.TopoDS import TopoDS, TopoDS_Shape
-from OCP.gp import gp_Ax1, gp_Pnt, gp_Vec
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface, BRepBuilderAPI_MakeVertex
+    global BRepBuilderAPI_MakeWire, BRepExtrema_DistShapeShape, BRepExtrema_IsOnEdge, BRepTools, BRep_Tool
+    global GCPnts_AbscissaPoint, GeomAPI_ProjectPointOnSurf, GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder
+    global GeomAbs_Ellipse, GeomAbs_Line, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfRevolution
+    global GeomAbs_Torus, List_TopoDS_Shape, TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_VERTEX
+    global TopAbs_WIRE, TopoDS, TopoDS_Shape, gp_Ax1, gp_Pnt, gp_Vec
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape, BRepExtrema_IsOnEdge
+    from OCP.BRepTools import BRepTools
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.GeomAbs import (GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Ellipse, GeomAbs_Line,
+                             GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfRevolution, GeomAbs_Torus)
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from OCP.OCP.collections import List_TopoDS_Shape
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_VERTEX, TopAbs_WIRE
+    from OCP.TopoDS import TopoDS, TopoDS_Shape
+    from OCP.gp import gp_Ax1, gp_Pnt, gp_Vec
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -480,3 +494,6 @@ def scu(origen, eje_x, eje_y=None, *, angulos=(0.0, 0.0, 0.0), desfase=(0.0, 0.0
     m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x, y, z, o
     return {"origen": o, "x": x, "y": y, "z": z, "matriz": m,
             "plano": geo.Plano.desde_marco(o, z, x, "SCU")}
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

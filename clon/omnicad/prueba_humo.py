@@ -692,6 +692,12 @@ def ejecutar():
         if flujo is not None and hasattr(flujo, "reconfigure"):
             flujo.reconfigure(encoding="utf-8", errors="replace")
     _app = QApplication.instance() or QApplication([])  # noqa: F841 — mantiene viva la app
+    from .nucleo import motor
+    if motor.motor_activo() == "omnikernel":
+        # Los pasos que OmniKernel todavía no hace quedan con error y la ventana avisa con un cartel modal: acá se
+        # anota (cuenta como FALLA en el check de ese paso) en vez de esperar a alguien que lo cierre.
+        QMessageBox.warning = lambda _padre, titulo, texto, *a, **k: print(f"AVISO  {titulo}: {texto}"[:300],
+                                                                          flush=True)
     r = _Registro()
     carpeta = Path(tempfile.mkdtemp(prefix="omnicad_humo_"))
     prefs = Preferencias(QSettings(str(carpeta / "preferencias.ini"), QSettings.IniFormat))

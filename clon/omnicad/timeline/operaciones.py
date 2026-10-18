@@ -561,7 +561,7 @@ def texto_con_valores(texto, valores):
 
 def _exigir_tipos(ref, tipos):
     """Con `tipos` (p. ej. ("cara",)), una referencia bien formada de otro tipo es un ParametroMalFormado: sin esto,
-    un cuerpo en un campo de caras llega al núcleo y OCP falla con un TypeError sin nombre de campo."""
+    un cuerpo en un campo de caras llega al núcleo y el kernel falla con un TypeError sin nombre de campo."""
     if tipos and ref["tipo"] not in tipos:
         raise ParametroMalFormado(ref, f"se esperaba una referencia de tipo {' o '.join(tipos)}, no «{ref['tipo']}» "
                                        f"(p. ej. {ent._EJEMPLOS[tipos[0]]})")

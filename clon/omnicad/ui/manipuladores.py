@@ -1183,15 +1183,8 @@ def entidad(hit, estado):
 
 def centroide(forma):
     """Centro de una cara (superficie) o de una arista/alambre (longitud)."""
-    from OCP.BRepGProp import BRepGProp
-    from OCP.GProp import GProp_GProps
-    p = GProp_GProps()
-    BRepGProp.SurfaceProperties_s(forma, p)
-    if p.Mass() <= 1e-12:
-        p = GProp_GProps()
-        BRepGProp.LinearProperties_s(forma, p)
-    c = p.CentreOfMass()
-    return np.array([c.X(), c.Y(), c.Z()])
+    from ..nucleo.consultas import centroide as consultar
+    return consultar(forma)
 
 
 def base_perfiles(seleccion, estado):
@@ -1230,38 +1223,15 @@ def punto_borde(formas, centro, direccion):
 
 def punto_en_cara(cara, punto, tolerancia=1e-3):
     """True si `punto` (sobre el plano de la cara) cae dentro de la cara o en su borde."""
-    from OCP.BRepClass import BRepClass_FaceClassifier
-    from OCP.gp import gp_Pnt
-    from OCP.TopAbs import TopAbs_IN, TopAbs_ON
-    c = BRepClass_FaceClassifier(cara, gp_Pnt(*[float(x) for x in punto]), tolerancia)
-    return c.State() in (TopAbs_IN, TopAbs_ON)
+    from ..nucleo.consultas import punto_en_cara as consultar
+    return consultar(cara, punto, tolerancia)
 
 
 def puntos_enganche_cara(cara, maximo=60):
     """Puntos donde se engancha un agujero (o lo que se coloque) sobre una cara: [(punto 3D, tipo)], tipo en
     "centro" (centro de la cara), "vertice", "medio" (punto medio de una arista) y "centro_arco" (de un círculo)."""
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.GeomAbs import GeomAbs_Circle
-    from OCP.TopAbs import TopAbs_EDGE
-    from OCP.TopoDS import TopoDS
-
-    from ..nucleo import geometria as geo
-    salida = [(np.array(geo.centro_masa(cara, True), float), "centro")]
-
-    def sumar(p, tipo):
-        p = np.array([p.X(), p.Y(), p.Z()], float) if hasattr(p, "X") else np.asarray(p, float)
-        if len(salida) < maximo and all(float(np.linalg.norm(p - q)) > 1e-4 for q, _ in salida):
-            salida.append((p, tipo))
-
-    for e in geo._explorar(cara, TopAbs_EDGE):
-        c = BRepAdaptor_Curve(TopoDS.Edge(e))
-        a, b = c.FirstParameter(), c.LastParameter()
-        sumar(c.Value(a), "vertice")
-        sumar(c.Value(b), "vertice")
-        if c.GetType() == GeomAbs_Circle:
-            sumar(c.Circle().Location(), "centro_arco")
-        sumar(c.Value((a + b) / 2), "medio")
-    return salida
+    from ..nucleo.consultas import puntos_enganche_cara as consultar
+    return consultar(cara, maximo)
 
 
 def punto_normal_cara(cara):
@@ -1274,34 +1244,8 @@ def punto_normal_cara(cara):
 def datos_arista(arista, forma_cuerpo):
     """(punto medio, dirección hacia donde avanza la superficie del empalme/chaflán al crecer, ángulo
     entre las normales de las caras en radianes) de una arista del cuerpo."""
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-    from OCP.gp import gp_Pnt
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN
-    from OCP.TopoDS import TopoDS
-
-    from ..nucleo.solidos_modificar import _ancestros, _normal_en_arista, _padres
-    c = BRepAdaptor_Curve(arista)
-    t = (c.FirstParameter() + c.LastParameter()) / 2
-    p = c.Value(t)
-    medio = np.array([p.X(), p.Y(), p.Z()])
-    caras = _padres(_ancestros(forma_cuerpo, TopAbs_EDGE, TopAbs_FACE), arista)
-    if len(caras) != 2:
-        d = c.DN(t, 1)
-        return medio, perpendiculares([d.X(), d.Y(), d.Z()])[0], math.pi / 2
-    n1 = _normal_en_arista(arista, TopoDS.Face(caras[0]), t)
-    n2 = _normal_en_arista(arista, TopoDS.Face(caras[1]), t)
-    bis = unitario(n1 + n2)
-    if np.linalg.norm(bis) < 1e-9:
-        bis = unitario(n1)
-    fi = math.acos(max(-1.0, min(1.0, float(n1 @ n2))))
-    # Arista convexa: el material queda del lado contrario a las normales y el empalme avanza hacia
-    # adentro; cóncava: el empalme agrega material en el hueco (hacia afuera).
-    paso = max(1e-3, 1e-3 * float(np.linalg.norm(medio)))
-    q = medio - bis * paso
-    clas = BRepClass3d_SolidClassifier(forma_cuerpo, gp_Pnt(*map(float, q)), 1e-7)
-    hacia = -bis if clas.State() == TopAbs_IN else bis
-    return medio, hacia, fi
+    from ..nucleo.consultas import datos_arista as consultar
+    return consultar(arista, forma_cuerpo)
 
 
 def herramientas_rojas(formas, deflexion=0.1):

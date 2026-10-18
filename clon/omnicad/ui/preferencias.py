@@ -14,11 +14,13 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBox
                                QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
+from ..nucleo import motor
 from . import iconos_tema, temas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
 
 DEFECTOS = {
+    "geometria/motor": "opencascade",
     "general/tema": temas.DEFECTO,            # ui/temas.py: oscuro_moderno, claro_moderno, … o usuario:<archivo>
     "general/raton": "fusion",               # como Fusion: medio desplaza, Mayús+medio orbita
     "general/invertir_zoom": False,
@@ -107,6 +109,7 @@ class Preferencias:
             ajustes = QSettings(NOMBRE_APP, NOMBRE_APP)
             migrar_ajustes(ajustes, QSettings(NOMBRE_ANTERIOR, NOMBRE_ANTERIOR))
         self.q = ajustes
+        motor.configurar_preferencias(self)
 
     def __getitem__(self, clave):
         defecto = DEFECTOS[clave]
@@ -158,6 +161,11 @@ def _combo(opciones, actual):
 
 # (página, padre, título en el árbol, descripción, [(clave, etiqueta, tipo, opciones)])
 PAGINAS = [
+    ("geometria", None, "Geometría", "Motor geométrico del documento: se recalcula entero al cambiarlo", [
+        ("geometria/motor", "Motor geométrico", "combo",
+         [("opencascade", "OpenCascade"), ("omnikernel", "OmniKernel")]),
+        (None, "Versión de OmniKernel", "version_motor", None),
+    ]),
     ("general", None, "General", "Preferencias que controlan el comportamiento general de la interfaz de usuario", [
         (None, "Idioma del usuario", "combo", [("es", "Español | Español")]),
         (None, "Orientación de modelado por defecto", "combo", [("z", "Z hacia arriba")]),
@@ -331,6 +339,9 @@ class DialogoPreferencias(QDialog):
             form.addRow(QLabel("Elegí una subcategoría en el árbol de la izquierda."))
         for clave, etiqueta, tipo, opciones in filas:
             actual = self.prefs[clave] if clave else None
+            if tipo == "version_motor":
+                form.addRow(etiqueta, QLabel(motor.version_omnikernel() or "No instalado"))
+                continue
             if tipo == "acciones_tema":
                 form.addRow(etiqueta, self._acciones_tema())
                 continue
@@ -349,6 +360,8 @@ class DialogoPreferencias(QDialog):
                 continue
             if tipo == "combo":
                 c = _combo(opciones, actual)
+                if clave == "geometria/motor" and motor.version_omnikernel() is None:
+                    c.model().item(c.findData("omnikernel")).setEnabled(False)
                 c.setEnabled(len(opciones) > 1)
                 c.currentIndexChanged.connect(self._cambio)
             elif tipo == "check":

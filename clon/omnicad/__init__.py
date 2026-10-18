@@ -7,6 +7,10 @@ VERSION = "0.1.3"
 NOMBRE_APP = "OmniCAD"
 RECURSOS = Path(__file__).resolve().parent / "recursos"     # ícono (.ico y .png) y portada de la pantalla de carga
 
+if os.environ.get("OMNICAD_BLOQUEAR_OCP") == "1":
+    from .bloqueo_ocp import activar
+    activar()
+
 
 def carpeta_datos():
     """Donde la app guarda lo suyo (autoguardado, temas, puente.json…): %LOCALAPPDATA%/OmniCAD en Windows y

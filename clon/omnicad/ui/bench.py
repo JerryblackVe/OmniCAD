@@ -7,7 +7,7 @@ números de antes y después).
 
 Abre la ventana como `OmniCAD.py` (preferencias en un .ini temporal), espera el primer cuadro del visor y mide:
   - arranque: desde `--t0` (la hora en que el proceso padre lanzó este) hasta el primer cuadro; sin `--t0`, desde
-    que empezó este módulo. `importar_s`: lo que tarda en importar la ventana (PySide6, OpenGL, OCP…).
+    que empezó este módulo. `importar_s`: lo que tarda en importar la ventana (PySide6, OpenGL, kernel…).
   - memoria (MB) al arrancar, con el modelo grande cargado, y el pico.
   - recálculo del MODELO GRANDE (placa con N×N agujeros cortados y N esferas unidas, un paso por agujero):
     todo el timeline, solo el último paso (lo que hace editar un paso) y cambiar un parámetro.

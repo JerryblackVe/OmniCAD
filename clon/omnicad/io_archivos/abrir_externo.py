@@ -20,9 +20,7 @@ Sin Qt: lo usan la ventana, la API, la CLI y el MCP.
 import math
 from pathlib import Path
 
-from OCP.TopAbs import TopAbs_COMPOUND
-from OCP.TopoDS import TopoDS_Iterator
-
+from ..nucleo import consultas
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
 from ..timeline.documento import Documento
@@ -208,14 +206,7 @@ def _cuerpos_brep(ruta, op_id):
     except geo.ErrorGeometria:
         raise ErrorAbrir(f"No se pudo leer el BREP {ruta.name}: el archivo está dañado o no es un BREP de "
                          "OpenCascade.") from None
-    hijos = []
-    if forma.ShapeType() == TopAbs_COMPOUND:
-        it = TopoDS_Iterator(forma)
-        while it.More():
-            hijos.append(it.Value())
-            it.Next()
-    else:
-        hijos = [forma]
+    hijos = consultas.hijos_compuesto(forma)
     partes = []
     for h in hijos:
         solidos = geo.solidos(h)

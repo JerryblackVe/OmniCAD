@@ -168,28 +168,10 @@ def _asas_bobina(self, ctx, v):
 
 
 # ---------------------------------------------------------------- ayudas de curvas y aristas
-def _curva_de(forma):
-    """BRepAdaptor_Curve de la primera arista de una forma (arista o alambre); None si no hay."""
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.TopAbs import TopAbs_EDGE
-    from OCP.TopoDS import TopoDS
-    for e in geo._explorar(forma, TopAbs_EDGE):
-        return BRepAdaptor_Curve(TopoDS.Edge(e))
-    return None
-
-
 def _punto_y_tangente(forma, fraccion=0.5):
     """(punto, tangente unitaria) de la primera arista de `forma` a esa fracción de su recorrido."""
-    from OCP.gp import gp_Pnt, gp_Vec
-    c = _curva_de(forma)
-    if c is None:
-        return None
-    a, b = c.FirstParameter(), c.LastParameter()
-    p, d = gp_Pnt(), gp_Vec()
-    c.D1(a + (b - a) * fraccion, p, d)
-    t = np.array([d.X(), d.Y(), d.Z()], float)
-    n = float(np.linalg.norm(t))
-    return np.array([p.X(), p.Y(), p.Z()], float), (t / n if n > 1e-12 else t)
+    from ...nucleo.consultas import punto_y_tangente
+    return punto_y_tangente(forma, fraccion)
 
 
 def _forma_de(ctx, hit):
@@ -199,30 +181,12 @@ def _forma_de(ctx, hit):
 
 def _saliente_de_arista(ctx, hit):
     """(punto medio de la arista, dirección que sale de su cara) para tirar de dobladillos y extensiones."""
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-
-    from ...nucleo.solidos_modificar import _ancestros, _padres, _punto_normal
+    from ...nucleo.consultas import saliente_de_arista
     e = _mp().entidad(hit, ctx.estado)
     if e is None or e.forma is None or getattr(e, "cuerpo", None) not in ctx.estado.cuerpos:
         return None
-    punto_tang = _punto_y_tangente(e.forma)
-    if punto_tang is None:
-        return None
-    medio, t = punto_tang
     cuerpo = ctx.estado.cuerpos[e.cuerpo].forma
-    caras = _padres(_ancestros(cuerpo, TopAbs_EDGE, TopAbs_FACE), e.forma)
-    if not caras:
-        return None
-    from OCP.TopoDS import TopoDS
-    cara = TopoDS.Face(caras[0])
-    _p, n = _punto_normal(cara)
-    d = np.cross(np.asarray(n, float), t)
-    if np.linalg.norm(d) < 1e-9:
-        return None
-    d = d / np.linalg.norm(d)
-    if float(d @ (medio - np.array(geo.centro_masa(cara, True)))) < 0:
-        d = -d
-    return medio, d
+    return saliente_de_arista(e.forma, cuerpo)
 
 
 # ---------------------------------------------------------------- nervio, red, repujado, rosca, tubería
@@ -258,24 +222,17 @@ def _asas_repujado(self, ctx, v):
 
 
 def _asas_rosca(self, ctx, v):
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_Cylinder
+    from ...nucleo.consultas import inicio_rosca
     mp = _mp()
     if v.get("largo_completo") or not v.get("caras"):
         return []
     forma = _forma_de(ctx, v["caras"][0])
     if forma is None:
         return []
-    sup = BRepAdaptor_Surface(forma)
-    if sup.GetType() != GeomAbs_Cylinder:
+    datos = inicio_rosca(forma, bool(v.get("invertir")))
+    if datos is None:
         return []
-    eje = sup.Cylinder().Axis()
-    loc = np.array([eje.Location().X(), eje.Location().Y(), eje.Location().Z()], float)
-    d = np.array([eje.Direction().X(), eje.Direction().Y(), eje.Direction().Z()], float)
-    if v.get("invertir"):
-        inicio, d = loc + d * sup.LastVParameter(), -d
-    else:
-        inicio = loc + d * sup.FirstVParameter()
+    inicio, d = datos
     return [mp.Flecha("desfase", inicio, d),
             mp.Flecha("longitud", inicio + d * evaluar_o_cero(ctx, v.get("desfase")), d, minimo=0.0)]
 

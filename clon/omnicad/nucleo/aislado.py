@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 
 from . import intercambio
+from . import motor as _motor
 
 _RAIZ = Path(__file__).resolve().parents[2]      # la carpeta que contiene el paquete `omnicad`
 _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -75,6 +76,10 @@ def correr(tarea, forma, tope, **args):
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
     if tope <= 0:
         raise TiempoAgotado("no quedó tiempo para correrla")
+    if _motor.motor_activo() == "omnikernel":
+        # Sin subproceso ni BREP: cada llamada al kernel nativo lleva su CancelToken con plazo (binding omnikernel_py).
+        # Las tareas de hoy son de OpenCascade: su despacho informa MOTOR_SIN_SOPORTE en vez de tapar el error.
+        return json.loads(json.dumps(_TAREAS[tarea](forma, **args), default=_a_json))
     with tempfile.TemporaryDirectory(prefix="omnicad_tarea_", ignore_cleanup_errors=True) as tmp:   # en Windows el hijo
         # recién muerto puede tardar en soltar el archivo: borrar la carpeta no tiene que tumbar la revisión
         carpeta = Path(tmp)

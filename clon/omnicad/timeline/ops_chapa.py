@@ -10,7 +10,6 @@ arma uno nuevo, así `copia()` los comparte sin riesgo. Si otra herramienta camb
 extruido, por ejemplo), la siguiente operación de chapa incorpora esos cortes a las partes planas.
 """
 import numpy as np
-from OCP.BRepAdaptor import BRepAdaptor_Curve
 
 from ..nucleo import chapa
 from ..nucleo import geometria as geo
@@ -123,9 +122,8 @@ def _expresiones_ajustes(p):
 
 
 def _extremos(arista):
-    c = BRepAdaptor_Curve(arista)
-    p, q = c.Value(c.FirstParameter()), c.Value(c.LastParameter())
-    return np.array([p.X(), p.Y(), p.Z()]), np.array([q.X(), q.Y(), q.Z()])
+    from ..nucleo.consultas import extremos_arista
+    return extremos_arista(arista)
 
 
 def _por_cuerpo(ents, que):

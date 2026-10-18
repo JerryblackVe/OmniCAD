@@ -13,41 +13,64 @@ se encadenan solas en alambres.
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
-                                BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire,
-                                BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepFill import BRepFill
-from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
-from OCP.BRepLib import BRepLib
-from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
-from OCP.BRepOffsetAPI import (BRepOffsetAPI_MakeDraft, BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakeOffsetShape,
-                               BRepOffsetAPI_MakePipeShell, BRepOffsetAPI_ThruSections)
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
-from OCP.BRepTools import BRepTools
-from OCP.GCPnts import GCPnts_AbscissaPoint
-from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C0, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_G2,
-                         GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane)
-from OCP.GeomAPI import GeomAPI_PointsToBSpline
-from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-                                 List_TopoDS_Shape)
-from OCP.ShapeFix import ShapeFix_Face
-from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_REVERSED, TopAbs_SHELL,
-                        TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
-from OCP.TopExp import TopExp
-from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex
-from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global Array1_double, Array1_gp_Pnt, BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Curve2d
+    global BRepAdaptor_Surface, BRepAlgoAPI_Splitter, BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge
+    global BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex
+    global BRepBuilderAPI_MakeWire, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform, BRepExtrema_DistShapeShape
+    global BRepFill, BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet, BRepLib, BRepOffsetAPI_MakeDraft
+    global BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakePipeShell
+    global BRepOffsetAPI_ThruSections, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism
+    global BRepPrimAPI_MakeRevol, BRepTools, BRep_Tool, GCPnts_AbscissaPoint, GeomAPI_PointsToBSpline
+    global GeomAbs_Arc, GeomAbs_C0, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_G2, GeomAbs_Intersection
+    global GeomAbs_Line, GeomAbs_Plane, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    global List_TopoDS_Shape, ShapeFix_Face, TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD
+    global TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopoDS, TopoDS_Face
+    global TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex, _CAST, _CONTINUIDAD, gp_Ax1, gp_Ax2, gp_Dir, gp_Pln
+    global gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
+                                    BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire,
+                                    BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepFill import BRepFill
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
+    from OCP.BRepLib import BRepLib
+    from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
+    from OCP.BRepOffsetAPI import (BRepOffsetAPI_MakeDraft, BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakeOffsetShape,
+                                   BRepOffsetAPI_MakePipeShell, BRepOffsetAPI_ThruSections)
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
+    from OCP.BRepTools import BRepTools
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C0, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_G2,
+                             GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane)
+    from OCP.GeomAPI import GeomAPI_PointsToBSpline
+    from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
+                                     List_TopoDS_Shape)
+    from OCP.ShapeFix import ShapeFix_Face
+    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_REVERSED, TopAbs_SHELL,
+                            TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
+    _CAST = {TopAbs_COMPOUND: TopoDS.Compound, TopAbs_SOLID: TopoDS.Solid, TopAbs_SHELL: TopoDS.Shell,
+             TopAbs_FACE: TopoDS.Face, TopAbs_WIRE: TopoDS.Wire, TopAbs_EDGE: TopoDS.Edge, TopAbs_VERTEX: TopoDS.Vertex}
+    _CONTINUIDAD = {"G0": GeomAbs_C0, "G1": GeomAbs_G1, "G2": GeomAbs_G2}
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
 _TOL = 1e-6        # tolerancia de costura "exacta" (piezas que ya comparten aristas)
 _TOL_EXTREMO = 1e-4  # mm: dos aristas se encadenan si sus extremos están a menos de esto
 
-_CAST = {TopAbs_COMPOUND: TopoDS.Compound, TopAbs_SOLID: TopoDS.Solid, TopAbs_SHELL: TopoDS.Shell,
-         TopAbs_FACE: TopoDS.Face, TopAbs_WIRE: TopoDS.Wire, TopAbs_EDGE: TopoDS.Edge, TopAbs_VERTEX: TopoDS.Vertex}
 
 
 # ---------------------------------------------------------------- utilidades
@@ -444,7 +467,6 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False):
     return _simplificar(ts.Shape())
 
 
-_CONTINUIDAD = {"G0": GeomAbs_C0, "G1": GeomAbs_G1, "G2": GeomAbs_G2}
 
 
 def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None):
@@ -895,3 +917,6 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
                                  "curvatura de la superficie de ese lado. Probá un espesor menor o engrosar hacia el "
                                  "otro lado.")
     return resultado
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

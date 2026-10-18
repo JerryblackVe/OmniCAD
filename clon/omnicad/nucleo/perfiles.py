@@ -22,23 +22,40 @@ intersección de aristas, caras y cuerpos sobre el plano del boceto (Proyectar /
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.BRepLib import BRepLib
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_NurbsConvert
-from OCP.Font import Font_FA_Bold, Font_FA_BoldItalic, Font_FA_Italic, Font_FA_Regular, Font_FontMgr, Font_StrictLevel_Any
-from OCP.Geom import Geom_BSplineCurve
-from OCP.GeomAbs import GeomAbs_BezierCurve, GeomAbs_Circle, GeomAbs_Line
-from OCP.NCollection import NCollection_String
-from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, Array1_int, List_TopoDS_Shape,
-                                 Sequence_TCollection_HAsciiString)
-from OCP.StdPrs import StdPrs_BRepFont, StdPrs_BRepTextBuilder
-from OCP.TCollection import TCollection_AsciiString
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS
-from OCP.gp import gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global Array1_double, Array1_gp_Pnt, Array1_int, BRepAdaptor_Curve, BRepAlgoAPI_Section
+    global BRepAlgoAPI_Splitter, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_NurbsConvert
+    global BRepLib, BRep_Tool, Font_FA_Bold, Font_FA_BoldItalic, Font_FA_Italic, Font_FA_Regular, Font_FontMgr
+    global Font_StrictLevel_Any, GeomAbs_BezierCurve, GeomAbs_Circle, GeomAbs_Line, Geom_BSplineCurve
+    global List_TopoDS_Shape, NCollection_String, Sequence_TCollection_HAsciiString, StdPrs_BRepFont
+    global StdPrs_BRepTextBuilder, TCollection_AsciiString, TopAbs_EDGE, TopAbs_VERTEX, TopExp_Explorer, TopoDS
+    global _ASPECTOS, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepLib import BRepLib
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_NurbsConvert
+    from OCP.Font import Font_FA_Bold, Font_FA_BoldItalic, Font_FA_Italic, Font_FA_Regular, Font_FontMgr, Font_StrictLevel_Any
+    from OCP.Geom import Geom_BSplineCurve
+    from OCP.GeomAbs import GeomAbs_BezierCurve, GeomAbs_Circle, GeomAbs_Line
+    from OCP.NCollection import NCollection_String
+    from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, Array1_int, List_TopoDS_Shape,
+                                     Sequence_TCollection_HAsciiString)
+    from OCP.StdPrs import StdPrs_BRepFont, StdPrs_BRepTextBuilder
+    from OCP.TCollection import TCollection_AsciiString
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+    from OCP.gp import gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln
+    _ASPECTOS = {(False, False): Font_FA_Regular, (True, False): Font_FA_Bold, (False, True): Font_FA_Italic,
+                 (True, True): Font_FA_BoldItalic}
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from ..restricciones.boceto import MEDIDA_MAXIMA, distancia_primitiva, puntos_primitiva
 from . import geometria as geo
@@ -431,8 +448,6 @@ def arista_a_primitiva(arista, a_uv, normal=None):
 
 
 # ---------------------------------------------------------------- texto
-_ASPECTOS = {(False, False): Font_FA_Regular, (True, False): Font_FA_Bold, (False, True): Font_FA_Italic,
-             (True, True): Font_FA_BoldItalic}
 
 
 def fuentes_disponibles():
@@ -529,3 +544,6 @@ def intersecar_forma(forma, plano):
             prims.append(prim)
     puntos = [] if prims else [a_uv(p) for p in _vertices(sec.Shape())]
     return prims, puntos
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

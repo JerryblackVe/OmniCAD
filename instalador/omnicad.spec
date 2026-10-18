@@ -15,6 +15,7 @@ empaquetan esa carpeta.
 """
 import sys
 from pathlib import Path
+from importlib.util import find_spec
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
@@ -28,6 +29,8 @@ ICONO = str(RECURSOS / ("omnicad.ico" if WINDOWS else "omnicad_256.png"))
 
 # `omnicad.api` y `omnicad.cli` descubren sus módulos con pkgutil (herramientas_*, cmd_*): PyInstaller no los ve solo.
 OCULTOS = collect_submodules("omnicad")
+if find_spec("omnikernel") is not None:
+    OCULTOS += collect_submodules("omnikernel")  # incluye la extensión .pyd, no solo su paquete Python
 DATOS = collect_data_files("omnicad") + [
     (str(REPO / ".claude" / "skills" / "omnicad"), "skill_omnicad"),      # la copia `omnicad setup` (cmd_setup._origen_skill)
 ]

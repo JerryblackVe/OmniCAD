@@ -7,16 +7,27 @@ unen en cadenas por sus extremos (un lazo de cara es una cadena cerrada) y cada 
 `BRepOffsetAPI_MakeOffset` sobre el plano. Pura: recibe formas OCC y un `geo.Plano`, devuelve alambres.
 """
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
-from OCP.BRepTools import BRepTools_WireExplorer
-from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
-from OCP.gp import gp_Dir, gp_Pln, gp_Pnt, gp_Vec
-from OCP.TopAbs import TopAbs_REVERSED, TopAbs_WIRE
-from OCP.TopoDS import TopoDS
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    global BRepExtrema_DistShapeShape, BRepOffsetAPI_MakeOffset, BRepTools_WireExplorer, BRep_Tool, GeomAbs_Arc
+    global GeomAbs_Intersection, TopAbs_REVERSED, TopAbs_WIRE, TopoDS, gp_Dir, gp_Pln, gp_Pnt, gp_Vec
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt, gp_Vec
+    from OCP.TopAbs import TopAbs_REVERSED, TopAbs_WIRE
+    from OCP.TopoDS import TopoDS
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 from . import referencias as refs
@@ -147,3 +158,6 @@ def _muestras(arista, n):
     curva = BRepAdaptor_Curve(arista)
     a, b = curva.FirstParameter(), curva.LastParameter()
     return [[p.X(), p.Y(), p.Z()] for p in (curva.Value(a + (b - a) * k / (n - 1)) for k in range(n))]
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

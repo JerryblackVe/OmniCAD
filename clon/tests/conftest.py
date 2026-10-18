@@ -10,6 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # esto la API de contexto de PyOpenGL (GLX para offscreen) y algunos archivos de prueba importan la interfaz sin fijarlo.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+if os.environ.get("OMNICAD_BLOQUEAR_OCP") == "1":
+    from omnicad.bloqueo_ocp import activar
+    activar()
+
 
 def pytest_sessionfinish(session, exitstatus):
     """Cierra y borra las ventanas que quedaron ANTES de que Python se apague: si las destruye el cierre del intérprete,

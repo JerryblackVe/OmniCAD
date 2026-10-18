@@ -4,24 +4,37 @@ import os
 import re
 import tempfile
 
-from OCP.BRep import BRep_Builder
-from OCP.BRepTools import BRepTools
-from OCP.IFSelect import IFSelect_RetDone
-from OCP.IGESControl import IGESControl_Reader
-from OCP.Interface import Interface_Static
-from OCP.Message import Message
-from OCP.OCP.collections import Sequence_TDF_Label
-from OCP.Quantity import Quantity_Color
-from OCP.STEPCAFControl import STEPCAFControl_Reader
-from OCP.STEPControl import STEPControl_AsIs, STEPControl_Reader, STEPControl_Writer
-from OCP.TCollection import TCollection_ExtendedString
-from OCP.TDataStd import TDataStd_Name
-from OCP.TDF import TDF_Label
-from OCP.TDocStd import TDocStd_Document
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS_Iterator, TopoDS_Shape
-from OCP.TopTools import TopTools_FormatVersion
-from OCP.XCAFDoc import XCAFDoc_ColorTool, XCAFDoc_ColorType, XCAFDoc_DocumentTool
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepTools, BRep_Builder, IFSelect_RetDone, IGESControl_Reader, IGESControl_Writer
+    global Interface_Static, Message, Quantity_Color, STEPCAFControl_Reader, STEPControl_AsIs
+    global STEPControl_Reader, STEPControl_Writer, Sequence_TDF_Label, TCollection_ExtendedString, TDF_Label
+    global TDataStd_Name, TDocStd_Document, TopLoc_Location, TopTools_FormatVersion, TopoDS_Iterator
+    global TopoDS_Shape, XCAFDoc_ColorTool, XCAFDoc_ColorType, XCAFDoc_DocumentTool
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepTools import BRepTools
+    from OCP.IFSelect import IFSelect_RetDone
+    from OCP.IGESControl import IGESControl_Reader, IGESControl_Writer
+    from OCP.Interface import Interface_Static
+    from OCP.Message import Message
+    from OCP.OCP.collections import Sequence_TDF_Label
+    from OCP.Quantity import Quantity_Color
+    from OCP.STEPCAFControl import STEPCAFControl_Reader
+    from OCP.STEPControl import STEPControl_AsIs, STEPControl_Reader, STEPControl_Writer
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDataStd import TDataStd_Name
+    from OCP.TDF import TDF_Label
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS_Iterator, TopoDS_Shape
+    from OCP.TopTools import TopTools_FormatVersion
+    from OCP.XCAFDoc import XCAFDoc_ColorTool, XCAFDoc_ColorType, XCAFDoc_DocumentTool
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from .geometria import ErrorGeometria, caras, solidos
 
@@ -37,7 +50,8 @@ def _silenciar_kernel():
             break
 
 
-_silenciar_kernel()
+if _motor.motor_activo() == "opencascade":
+    _silenciar_kernel()
 
 
 def escribir_step(forma, ruta):
@@ -80,6 +94,19 @@ def leer_step_texto(texto):
 def leer_iges(ruta):
     """IGES → forma (en mm: el lector de OpenCascade convierte desde la unidad del archivo)."""
     return _leer_control(ruta, IGESControl_Reader, "IGES")
+
+
+def escribir_iges(forma, ruta):
+    """Exportar IGES de Fusion: devuelve el resultado del escritor del kernel."""
+    w = IGESControl_Writer("MM", 1)
+    w.AddShape(forma)
+    w.ComputeModel()
+    return w.Write(str(ruta))
+
+
+def escribir_brep_exportacion(forma, ruta):
+    """Guardar el B-rep completo; conserva las opciones del exportador original."""
+    return BRepTools.Write_s(forma, str(ruta))
 
 
 def leer_iges_texto(texto):
@@ -296,3 +323,6 @@ def forma_de_texto(texto):
         return leer_brep(ruta)
     finally:
         os.remove(ruta)
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

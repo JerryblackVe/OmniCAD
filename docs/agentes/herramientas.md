@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-190 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+191 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 28 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 29 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -37,6 +37,7 @@ Archivo, escena, timeline y deshacer.
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. |
 | [`select_bodies`](#select_bodies) | no | Selecciona cuerpos en la ventana y los revela en el navegador. |
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
+| [`set_geometry_engine`](#set_geometry_engine) | sí | Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). |
 | [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
 | [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). |
 | [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
@@ -124,6 +125,15 @@ Elige las unidades con que la app MUESTRA las medidas del documento (el menú «
   - `length` ("mm" | "cm" | "m" | "in" | "ft" o null; opcional, por defecto `null`): unidad de longitud para mostrar (omitido o null = no cambia).
   - `mass` ("g" | "kg" | "lb" o null; opcional, por defecto `null`): unidad de masa para mostrar (omitido o null = no cambia).
 - CLI: `omnicad call set_document_units --doc pieza.omnicad`
+
+### `set_geometry_engine`
+
+Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). Al cambiarlo el documento se recalcula entero con el motor nuevo; lo que OmniKernel no hace todavía queda con error MOTOR_SIN_SOPORTE en su paso. Sin parámetros solo informa el motor activo y la versión de OmniKernel.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `engine` ("opencascade" | "omnikernel" o null; opcional, por defecto `null`): motor a usar desde ahora (omitido o null = no cambia).
+- CLI: `omnicad call set_geometry_engine --doc pieza.omnicad`
 
 ### `new_document`
 

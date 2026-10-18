@@ -22,13 +22,24 @@ import zlib
 from pathlib import Path
 
 import numpy as np
-from OCP.BRep import BRep_Builder
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
-                                BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire)
-from OCP.BRepLib import BRepLib
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.TopoDS import TopoDS_Shell
-from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace
+    global BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, BRepLib, BRep_Builder
+    global ShapeUpgrade_UnifySameDomain, TopoDS_Shell, gp_Dir, gp_Pln, gp_Pnt
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
+                                    BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire)
+    from OCP.BRepLib import BRepLib
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopoDS import TopoDS_Shell
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -2456,3 +2467,6 @@ def limpiar(m, *, fusionar=True, distancia=0.001, degenerados=True, sueltos=True
         if normales:
             r = recalcular_normales(r)
     return r if r is not m else m.copia()
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

@@ -127,17 +127,12 @@ def exportar_step(cuerpos, ruta):
 
 
 def exportar_iges(cuerpos, ruta):
-    from OCP.IGESControl import IGESControl_Writer
-    w = IGESControl_Writer("MM", 1)
-    w.AddShape(_forma_brep(cuerpos))
-    w.ComputeModel()
-    if not w.Write(str(ruta)):
+    if not intercambio.escribir_iges(_forma_brep(cuerpos), ruta):
         raise ErrorExportacion(f"No se pudo escribir el IGES: {ruta}")
 
 
 def exportar_brep(cuerpos, ruta):
-    from OCP.BRepTools import BRepTools
-    if not BRepTools.Write_s(_forma_brep(cuerpos), str(ruta)):
+    if not intercambio.escribir_brep_exportacion(_forma_brep(cuerpos), ruta):
         raise ErrorExportacion(f"No se pudo escribir el BREP: {ruta}")
 
 

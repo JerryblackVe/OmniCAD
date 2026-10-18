@@ -17,20 +17,33 @@ ISO de 60°, con las piezas de hélice de `solidos_crear`) hasta el largo roscad
 import math
 
 import numpy as np
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
-                                BRepBuilderAPI_MakeWire)
-from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
-from OCP.GC import GC_MakeArcOfCircle
-from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder
-from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
-from OCP.OCP.collections import List_TopoDS_Shape
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.TopAbs import TopAbs_IN
-from OCP.TopoDS import TopoDS
-from OCP.gp import gp_Ax1, gp_Dir, gp_Lin, gp_Pnt, gp_Vec
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepAdaptor_Surface, BRepAlgoAPI_Cut, BRepBuilderAPI_MakeEdge
+    global BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeWire
+    global BRepClass3d_SolidClassifier, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol, GC_MakeArcOfCircle
+    global GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, IntCurvesFace_ShapeIntersector, List_TopoDS_Shape
+    global ShapeUpgrade_UnifySameDomain, TopAbs_IN, TopoDS, gp_Ax1, gp_Dir, gp_Lin, gp_Pnt, gp_Vec
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
+                                    BRepBuilderAPI_MakeWire)
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
+    from OCP.GC import GC_MakeArcOfCircle
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder
+    from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
+    from OCP.OCP.collections import List_TopoDS_Shape
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopAbs import TopAbs_IN
+    from OCP.TopoDS import TopoDS
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Lin, gp_Pnt, gp_Vec
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 from . import referencias as rf
@@ -754,3 +767,6 @@ def espesor_material(cuerpo, punto, direccion, radio=0.0):
     if len(ws) < 2 or ws[0] > 2e-3 + 1e-6 or not _dentro(cuerpo, q - z * (ws[0] + ws[1]) / 2):
         return None
     return float(ws[1] - 1e-3)
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

@@ -46,9 +46,9 @@ def _cuerpo_objetivo(estado, ents, p):
     solidos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
     if not solidos:
         raise ErrorOperacion("No hay un cuerpo sólido sobre el que trabajar.")
-    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from ..nucleo.consultas import distancia
     forma = ents[0].forma
-    return min(solidos, key=lambda c: BRepExtrema_DistShapeShape(c.forma, forma).Value())
+    return min(solidos, key=lambda c: distancia(c.forma, forma))
 
 
 class _OpCrear(Operacion):
@@ -679,7 +679,7 @@ class OpMultitransformar(_OpCrear):
         lista = self._lista()
         if not lista:
             raise ErrorOperacion("Agregá al menos una transformación (rectangular, circular, ruta, puntos o simetria).")
-        from OCP.gp import gp_Trsf
+        from ..nucleo.consultas import transformacion_identidad
         sc, listas = _sc(), []
         for i, t in enumerate(lista, start=1):
             tipo = t.get("tipo")
@@ -691,7 +691,7 @@ class OpMultitransformar(_OpCrear):
                     if not t.get("plano"):
                         raise ErrorOperacion("elegí el plano de simetría.")
                     plano = ent.como_plano(_resolver(t["plano"], estado))
-                    listas.append([gp_Trsf(), sc.transformacion_simetria(plano)])
+                    listas.append([transformacion_identidad(), sc.transformacion_simetria(plano)])
                     continue
                 patron = self._patron(t)
                 patron.revisar_parametros()
@@ -814,16 +814,13 @@ def _sentido_saliente(forma, punto, normal):
     """Sentido automático del saliente sobre `normal`: si `punto` está sobre una cara de `forma` (material de un
     solo lado), hacia afuera del material; si está en el aire (o dentro), hacia el cuerpo: +normal cuando el cuerpo
     entero queda de ese lado y −normal si no (lo de antes)."""
-    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-    from OCP.TopAbs import TopAbs_IN
-    from OCP.gp import gp_Pnt
+    from ..nucleo.consultas import dentro_solidos
     n = np.asarray(normal, float) / np.linalg.norm(normal)
     p = np.asarray(punto, float)
     solidos = geo.solidos(forma) or [forma]
 
     def dentro(q):
-        return any(BRepClass3d_SolidClassifier(s, gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN
-                   for s in solidos)
+        return dentro_solidos(solidos, q)
 
     arriba, abajo = dentro(p + 1e-3 * n), dentro(p - 1e-3 * n)
     if arriba != abajo:
@@ -834,9 +831,8 @@ def _sentido_saliente(forma, punto, normal):
 
 
 def _vertice(p):
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
-    from OCP.gp import gp_Pnt
-    return BRepBuilderAPI_MakeVertex(gp_Pnt(*map(float, p))).Vertex()
+    from ..nucleo.consultas import vertice
+    return vertice(p)
 
 
 class OpLabio(_OpCrear):

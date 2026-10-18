@@ -8,14 +8,25 @@ Fusion no las tiene como comandos de boceto (lo más parecido es elegir varios p
 solo con curvas encadenadas de líneas y arcos). Funciones puras: reciben caras OCC y devuelven formas OCC o
 primitivas 2D del boceto.
 """
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
-from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
-from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
-from OCP.OCP.collections import List_TopoDS_Shape
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.TopAbs import TopAbs_EDGE
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepOffsetAPI_MakeOffset, GeomAbs_Arc
+    global GeomAbs_Intersection, List_TopoDS_Shape, ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopExp_Explorer
+    global TopoDS
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+    from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
+    from OCP.OCP.collections import List_TopoDS_Shape
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 from .perfiles import _a_uv, arista_a_primitiva
@@ -106,3 +117,6 @@ def primitivas_de_formas(formas, plano):
             if prim is not None:
                 salida.append(prim)
     return salida
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

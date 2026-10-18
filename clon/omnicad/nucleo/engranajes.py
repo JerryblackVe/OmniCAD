@@ -26,13 +26,24 @@ Unidades: mm y grados.
 import math
 
 import numpy as np
-from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
-                                BRepBuilderAPI_MakeWire)
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
-from OCP.GC import GC_MakeArcOfCircle
-from OCP.GeomAPI import GeomAPI_Interpolate
-from OCP.OCP.collections import HArray1_gp_Pnt
-from OCP.gp import gp_Pnt, gp_Vec
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    global BRepBuilderAPI_MakeWire, BRepPrimAPI_MakePrism, GC_MakeArcOfCircle, GeomAPI_Interpolate
+    global HArray1_gp_Pnt, gp_Pnt, gp_Vec
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon,
+                                    BRepBuilderAPI_MakeWire)
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.GC import GC_MakeArcOfCircle
+    from OCP.GeomAPI import GeomAPI_Interpolate
+    from OCP.OCP.collections import HArray1_gp_Pnt
+    from OCP.gp import gp_Pnt, gp_Vec
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -694,3 +705,6 @@ def volumen_eje(tramos):
             radio_c = r - desde_esquina if convexa else r + desde_esquina
             vol += (-1 if convexa else 1) * 2 * math.pi * radio_c * area
     return vol
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

@@ -33,6 +33,7 @@ from pathlib import Path
 from .. import NOMBRE_APP, VERSION, carpeta_datos
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
+from ..nucleo import motor
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import ErrorOperacion
 from ..timeline.parametros import ErrorExpresion
@@ -82,6 +83,9 @@ def _huella(receta):
 def _escribir_cache(z, doc, receta):
     """cache/cuerpos.brep (cuerpos finales + formas de los pasos lentos, en un solo compuesto: comparten caras y
     no ocupan dos veces) y cache/pasos.json. Las mallas no son B-rep: viajan solo en la receta."""
+    if doc.motor == "omnikernel":
+        _escribir_cache_omnikernel(z, doc, receta)
+        return
     formas = [c.forma for c in doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") != "malla"]
     finales = len(formas)
     indice = {id(f): k for k, f in enumerate(formas)}
@@ -102,18 +106,21 @@ def _escribir_cache(z, doc, receta):
     finally:
         os.remove(brep)
     if pasos:
-        z.writestr("cache/pasos.json", json.dumps({"version": VERSION_CACHE, "huella": _huella(receta),
+        z.writestr("cache/pasos.json", json.dumps({"version": VERSION_CACHE, "motor": "opencascade", "huella": _huella(receta),
                                                    "finales": finales, "pasos": pasos}, ensure_ascii=False))
 
 
 def _leer_cache(z, receta):
     """{índice de paso: (datos, formas)} para `Documento.desde_dict`, o None si no hay caché de pasos, es de otra
     receta o versión (huella distinta) o está dañada: entonces se recalcula todo, como en los proyectos viejos."""
+    if motor.motor_activo() == "omnikernel":
+        return _leer_cache_omnikernel(z, receta)
     if "cache/pasos.json" not in z.namelist():
         return None
     try:
         meta = json.loads(_leer_miembro(z, "cache/pasos.json"))
-        if meta.get("version") != VERSION_CACHE or meta.get("huella") != _huella(receta):
+        if (meta.get("motor", "opencascade") != "opencascade" or meta.get("version") != VERSION_CACHE
+                or meta.get("huella") != _huella(receta)):
             log.info("La caché del proyecto no corresponde a esta receta o versión: se recalcula todo.")
             return None
         fd, brep = tempfile.mkstemp(suffix=".brep")
@@ -133,6 +140,49 @@ def _leer_cache(z, receta):
     except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zipfile.BadZipFile,
             geo.ErrorGeometria, RecursionError) as e:
         log.warning("La caché del proyecto está dañada (%s): se recalcula todo.", e)
+        return None
+
+
+def _escribir_cache_omnikernel(z, doc, receta):
+    formas, indice, pasos = [], {}, []
+    for datos, propias in doc.pasos_para_cache():
+        for f in propias:
+            if id(f) not in indice:
+                indice[id(f)] = len(formas)
+                formas.append(f)
+        pasos.append(dict(datos, formas=[indice[id(f)] for f in propias]))
+    for i, forma in enumerate(formas):
+        z.writestr(f"cache/omnikernel/{i}.v1", forma.exportar("v1"))
+    if pasos:
+        z.writestr("cache/omnikernel/pasos.json", json.dumps(
+            {"version": VERSION_CACHE, "motor": "omnikernel", "huella": _huella(receta), "pasos": pasos},
+            ensure_ascii=False))
+
+
+def _leer_cache_omnikernel(z, receta):
+    nombre = "cache/omnikernel/pasos.json"
+    if nombre not in z.namelist():
+        return None
+    import omnikernel
+    try:
+        meta = json.loads(_leer_miembro(z, nombre))
+        if (meta.get("motor") != "omnikernel" or meta.get("version") != VERSION_CACHE
+                or meta.get("huella") != _huella(receta)):
+            return None
+        formas, cache = {}, {}
+        for datos in meta["pasos"]:
+            propias = []
+            for i in datos["formas"]:
+                if not isinstance(i, int) or i < 0:
+                    raise ValueError("Índice de forma inválido en la caché OmniKernel.")
+                if i not in formas:
+                    formas[i] = omnikernel.importar(_leer_miembro(z, f"cache/omnikernel/{i}.v1"))
+                propias.append(formas[i])
+            cache[int(datos["indice"])] = (datos, propias)
+        return cache
+    except (KeyError, IndexError, AttributeError, TypeError, ValueError, OSError, RecursionError,
+            zipfile.BadZipFile, omnikernel.ErrorOmniKernel) as e:
+        log.warning("La caché OmniKernel está dañada (%s): se recalcula todo.", e)
         return None
 
 

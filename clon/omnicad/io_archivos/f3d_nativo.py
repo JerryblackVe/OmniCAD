@@ -34,10 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-from OCP.Bnd import Bnd_Box
-from OCP.BRepBndLib import BRepBndLib
-from OCP.TopAbs import TopAbs_FACE
-from OCP.TopExp import TopExp_Explorer
+from ..nucleo import consultas
 
 from . import acis_occ, f3d_escena, sab, zstd_puro
 
@@ -214,17 +211,7 @@ def _una_vez(funcion):
 
 def _firma(forma, tipo):
     """Huella barata de un cuerpo: tipo, cantidad de caras y caja envolvente redondeada a 0,01 mm."""
-    caja = Bnd_Box()
-    BRepBndLib.Add_s(forma, caja, False)
-    caras = TopExp_Explorer(forma, TopAbs_FACE)
-    n = 0
-    while caras.More():
-        n += 1
-        caras.Next()
-    if caja.IsVoid():
-        return (tipo, n)
-    p0, p1 = caja.CornerMin(), caja.CornerMax()
-    return (tipo, n) + tuple(round(v, 2) for v in (p0.X(), p0.Y(), p0.Z(), p1.X(), p1.Y(), p1.Z()))
+    return consultas.firma_importacion(forma, tipo)
 
 
 def _sin_repetidos(leidos):

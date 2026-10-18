@@ -37,6 +37,8 @@ _VER_PARAMETROS = "get_parameters lista los parámetros con su expresión y valo
 
 # Pistas por error_kind (las herramientas pueden sumar pistas propias, p. ej. la lista de nombres válidos).
 PISTAS = {
+    "MOTOR_SIN_SOPORTE": ["Podés elegir OpenCascade en Preferencias › Geometría."],
+    "MOTOR_INCOMPATIBLE": ["Recalculá el documento completo con el motor elegido."],
     "INVALID_ARGUMENTS": ["Revisá nombres y tipos de los argumentos contra el esquema de la herramienta."],
     "UNKNOWN_TOOL": ["catalogo() o la lista de herramientas del MCP dice qué nombres existen."],
     "FEATURE_NOT_FOUND": ["Usá el id (p. ej. 'op3') o el nombre exacto del paso.", _VER_TIMELINE],
@@ -217,6 +219,8 @@ _TABLA = [
 ]
 # Los mensajes de un paso del timeline solo traen texto: patrones propios además de los de la tabla.
 _MENSAJES_PASO = [
+    (r"^OmniKernel todavía no hace ", "MOTOR_SIN_SOPORTE"),
+    (r"^La forma pertenece al otro motor geométrico", "MOTOR_INCOMPATIBLE"),
     (r"^Nombre desconocido", "INVALID_EXPRESSION"),
     (r"^Sintaxis inválida|^Expresión vacía|^Expresión no permitida|^División por cero", "INVALID_EXPRESSION"),
     (r"^No hay cuerpos sobre los que", "NO_TARGET_BODY"),
@@ -233,6 +237,9 @@ def traducir(exc):
     if isinstance(exc, ErrorAPI):
         return exc
     mensaje = str(exc) or type(exc).__name__
+    if isinstance(exc, ErrorGeometria) and getattr(exc, "error_kind", None) in (
+            "MOTOR_SIN_SOPORTE", "MOTOR_INCOMPATIBLE"):
+        return error(exc.error_kind, mensaje)
     if isinstance(exc, ErrorPuenteFusion):
         return error("FUSION_NOT_AVAILABLE" if exc.motivo == "sin_puente" else "FUSION_CONVERSION_FAILED", mensaje)
     if isinstance(exc, KeyError):

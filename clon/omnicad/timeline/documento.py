@@ -25,8 +25,8 @@ import time
 import traceback
 import uuid
 
-from OCP.TopoDS import TopoDS_Shape
-
+from ..nucleo import consultas
+from ..nucleo import motor
 from ..nucleo.geometria import ErrorGeometria
 from ..restricciones import ErrorBoceto
 from .entidades import ErrorReferencia
@@ -86,7 +86,7 @@ def _cambios_de_cuerpos(antes, despues):
         except (TypeError, ValueError):
             se_guarda = False
         if (not se_guarda or type(c) is not Cuerpo or set(vars(c)) != {"id", "forma", "origen", *_CAMPOS_CUERPO}
-                or c.tipo == "malla" or not isinstance(c.forma, TopoDS_Shape) or c.forma.IsNull()):
+                or c.tipo == "malla" or not consultas.es_forma(c.forma)):
             return None
         lista.append([cid, datos])
         formas.append(c.forma)
@@ -124,6 +124,7 @@ class Documento:
         self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
         self._duraciones = []     # por paso: segundos que tardó su último cálculo (0 si no se ejecutó)
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
+        self.motor = motor.motor_activo()
         self._contador = 0
         self.modificado = False
         self._oyentes = []
@@ -523,6 +524,7 @@ class Documento:
         op.calcular(estado, ctx)
         return estado, ctx.avisos
 
+    @motor.recalculo
     def recalcular(self, desde=0):
         desde = max(0, min(desde, len(self._estados), len(self.resultados)))
         desde = min(desde, len(self._usados), len(self._duraciones))

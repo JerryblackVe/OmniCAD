@@ -7,6 +7,7 @@ from typing import Literal
 
 from ..io_archivos.exportar import FORMATOS, cuerpos_de_malla, exportar
 from ..nucleo import geometria as geo
+from ..nucleo import motor
 from ..timeline import ops_chapa, parametros
 from ..timeline.documento import ErrorDocumento
 from .registro import herramienta
@@ -193,6 +194,27 @@ def set_document_units(sesion, length: Literal["mm", "cm", "m", "in", "ft"] | No
     except ErrorDocumento as e:
         raise error("INVALID_ARGUMENTS", str(e)) from None
     return {"display_units": {"length": sesion.doc.unidades["longitud"], "mass": sesion.doc.unidades["masa"]}}
+
+
+@herramienta("set_geometry_engine", "documento", "Elige el motor geométrico (Preferencias › Geometría): "
+             "«opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). Al cambiarlo el documento se recalcula "
+             "entero con el motor nuevo; lo que OmniKernel no hace todavía queda con error MOTOR_SIN_SOPORTE en su "
+             "paso. Sin parámetros solo informa el motor activo y la versión de OmniKernel.", modifica=True,
+             transaccion=False)
+def set_geometry_engine(sesion, engine: Literal["opencascade", "omnikernel"] | None = None):
+    """
+    engine: motor a usar desde ahora (omitido o null = no cambia).
+    """
+    if engine is not None and engine != motor.motor_activo():
+        try:
+            motor.elegir_motor(engine)
+        except ValueError as e:
+            raise error("INVALID_ARGUMENTS", str(e)) from None
+        sesion.doc.recalcular(0)
+    fallidos = [{"id": op.id, "name": op.nombre, "message": r.mensaje}
+                for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False) if r.estado == "error"]
+    return {"engine": motor.motor_activo(), "omnikernel_version": motor.version_omnikernel(),
+            "failed_steps": fallidos}
 
 
 def _exigir_sin_cambios(sesion, discard):

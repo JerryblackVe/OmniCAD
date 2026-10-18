@@ -15,26 +15,42 @@ Curvaturas con signo de "material": positivas en zonas convexas, negativas en c√
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Section
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepGProp import BRepGProp
-from OCP.BRepLProp import BRepLProp_CLProps, BRepLProp_SLProps
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
-from OCP.BRepTools import BRepTools
-from OCP.GeomAbs import (GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane,
-                         GeomAbs_Sphere, GeomAbs_Torus)
-from OCP.GProp import GProp_GProps
-from OCP.IntTools import IntTools_FClass2d
-from OCP.OCP.collections import IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
-from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_OUT, TopAbs_REVERSED, TopAbs_VERTEX,
-                        TopAbs_WIRE)
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Shape
-from OCP.gp import gp_Ax2, gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Vec
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface, BRepAlgoAPI_Common
+    global BRepAlgoAPI_Section, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex, BRepExtrema_DistShapeShape
+    global BRepGProp, BRepLProp_CLProps, BRepLProp_SLProps, BRepPrimAPI_MakeBox, BRepTools, BRep_Tool
+    global GProp_GProps, GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
+    global GeomAbs_Sphere, GeomAbs_Torus, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    global IntTools_FClass2d, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_OUT, TopAbs_REVERSED
+    global TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopExp_Explorer, TopLoc_Location, TopoDS, TopoDS_Shape, gp_Ax2
+    global gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Vec
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Section
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepGProp import BRepGProp
+    from OCP.BRepLProp import BRepLProp_CLProps, BRepLProp_SLProps
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomAbs import (GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane,
+                             GeomAbs_Sphere, GeomAbs_Torus)
+    from OCP.GProp import GProp_GProps
+    from OCP.IntTools import IntTools_FClass2d
+    from OCP.OCP.collections import IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_OUT, TopAbs_REVERSED, TopAbs_VERTEX,
+                            TopAbs_WIRE)
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS, TopoDS_Shape
+    from OCP.gp import gp_Ax2, gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Vec
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -1103,3 +1119,6 @@ def cortar_medio_espacio(forma, plano, *, invertir=False):
     caja = BRepPrimAPI_MakeBox(gp_Ax2(gp_Pnt(*map(float, esquina)), gp_Dir(*map(float, n)),
                                       gp_Dir(*map(float, plano.u))), 2 * lado, 2 * lado, lado).Shape()
     return geo.booleano(forma, caja, "intersecar")
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

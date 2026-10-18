@@ -107,11 +107,11 @@ def _marco(e, punto_clave="centro", version=1):
     if e.tipo in ("arista", "curva_boceto") and e.forma is not None:
         f = refs.firma_arista(e.forma)
         if f["geom"] == "circulo":
-            from OCP.BRepAdaptor import BRepAdaptor_Curve
-            ax = BRepAdaptor_Curve(e.forma).Circle().Axis().Direction()
+            from ..nucleo.consultas import eje_circulo
+            eje = eje_circulo(e.forma)
             if nuevo:
-                return _marco_de_eje(f["centro"], (ax.X(), ax.Y(), ax.Z())), True
-            return marco_desde(f["centro"], (ax.X(), ax.Y(), ax.Z())), False
+                return _marco_de_eje(f["centro"], eje), True
+            return marco_desde(f["centro"], eje), False
         return _marco_resto(e, f, punto_clave), False
     if nuevo and e.tipo == "eje":
         # Eje de construcción: marco de eje como el del cilindro del que suele salir.
@@ -124,15 +124,8 @@ def _punto_del_eje(cara, p, z, punto_clave):
     """Punto del eje (p, z) en el medio, el inicio o el fin del largo de la cara cilíndrica o cónica: los
     centros de sus aristas circulares extremas. El largo sale de los límites de la cara en el parámetro
     axial de la superficie."""
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
-    s = BRepAdaptor_Surface(cara)
-    u = (s.FirstUParameter() + s.LastUParameter()) / 2
-    ts = []
-    for v in (s.FirstVParameter(), s.LastVParameter()):
-        q = s.Value(u, v)
-        ts.append(float((np.array([q.X(), q.Y(), q.Z()]) - p) @ z))
-    t0, t1 = min(ts), max(ts)
-    return p + z * {"inicio": t0, "fin": t1}.get(punto_clave, (t0 + t1) / 2)
+    from ..nucleo.consultas import punto_del_eje
+    return punto_del_eje(cara, p, z, punto_clave)
 
 
 def _marco_resto(e, f, punto_clave):
@@ -164,10 +157,9 @@ def _centro_contorno_exterior(cara):
     """Centro del contorno exterior de una cara plana, sin contar sus agujeros: el centro del círculo si el
     contorno es circular (disco, arandela) o radial partido (semicírculos concéntricos + radios: el agujero
     pasante partido en dos tapas) y, si no, el centroide de la región que encierra."""
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-    from OCP.BRepTools import BRepTools
-    exterior = BRepTools.OuterWire_s(cara)
-    if exterior.IsNull():
+    from ..nucleo.consultas import cara_del_contorno, contorno_exterior
+    exterior = contorno_exterior(cara)
+    if exterior is None:
         return np.array(refs.firma_cara(cara)["centro"])
     aristas = [refs.firma_arista(a) for a in refs.subformas(exterior, "arista")]
     circulos = [a for a in aristas if a["geom"] == "circulo"]
@@ -189,8 +181,7 @@ def _centro_contorno_exterior(cara):
 
         if all(_radial(a) for a in aristas if a["geom"] != "circulo"):
             return centro
-    region = BRepBuilderAPI_MakeFace(exterior, True)
-    return np.array(refs.firma_cara(region.Face() if region.IsDone() else cara)["centro"])
+    return np.array(refs.firma_cara(cara_del_contorno(exterior, cara))["centro"])
 
 
 def _rot(eje, grados):

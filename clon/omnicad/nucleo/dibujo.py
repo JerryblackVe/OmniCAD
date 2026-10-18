@@ -28,21 +28,35 @@ import datetime
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
-from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
-from OCP.GCPnts import GCPnts_TangentialDeflection
-from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
-from OCP.HLRAlgo import HLRAlgo_Projector
-from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape, HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_REVERSED, TopAbs_WIRE
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS, TopoDS_Shape
-from OCP.gp import gp_Ax2, gp_Dir, gp_Pln, gp_Pnt
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepAdaptor_Surface, BRepAlgoAPI_Cut, BRepBuilderAPI_MakeFace
+    global BRepMesh_IncrementalMesh, BRepPrimAPI_MakeHalfSpace, BRepTools, BRepTools_WireExplorer, BRep_Tool
+    global GCPnts_TangentialDeflection, GeomAbs_Circle, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
+    global HLRAlgo_Projector, HLRBRep_Algo, HLRBRep_HLRToShape, HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
+    global TopAbs_EDGE, TopAbs_REVERSED, TopAbs_WIRE, TopExp_Explorer, TopoDS, TopoDS_Shape, gp_Ax2, gp_Dir
+    global gp_Pln, gp_Pnt
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
+    from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+    from OCP.GCPnts import GCPnts_TangentialDeflection
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
+    from OCP.HLRAlgo import HLRAlgo_Projector
+    from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape, HLRBRep_PolyAlgo, HLRBRep_PolyHLRToShape
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_REVERSED, TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS, TopoDS_Shape
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pln, gp_Pnt
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import aislado
 from . import geometria as geo
@@ -1694,3 +1708,6 @@ class Dibujo:
         d.vistas = [Vista(**{k: v for k, v in vd.items() if k in Vista.CAMPOS}) for vd in datos.get("vistas", [])]
         d.anotaciones = [dict(a) for a in datos.get("anotaciones", [])]
         return d
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

@@ -13,35 +13,57 @@ por `perfiles.py`, así la capa de kernel queda aislada.
 import math
 
 import numpy as np
-from OCP.BRepTools import BRepTools
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
-from OCP.BRepBndLib import BRepBndLib
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_Transform
-from OCP.BRepCheck import BRepCheck_Analyzer
-from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepGProp import BRepGProp
-from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.BRepPrimAPI import (BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism,
-                             BRepPrimAPI_MakeRevol, BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus)
-from OCP.Bnd import Bnd_Box
-from OCP.GCPnts import GCPnts_TangentialDeflection
-from OCP.GeomAbs import (GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion,
-                         GeomAbs_SurfaceOfRevolution, GeomAbs_Torus)
-from OCP.GProp import GProp_GProps
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+from . import motor as _motor
 
-from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_REVERSED,
-                        TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
-from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-                                 IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
-from OCP.BRep import BRep_Builder
-from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+
+def _iniciar_opencascade():
+    global BRepAdaptor_Curve, BRepAdaptor_Surface, BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    global BRepBndLib, BRepBuilderAPI_Copy, BRepBuilderAPI_Transform, BRepCheck_Analyzer
+    global BRepClass3d_SolidClassifier, BRepExtrema_DistShapeShape, BRepGProp, BRepMesh_IncrementalMesh
+    global BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
+    global BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus, BRepTools, BRep_Builder, BRep_Tool, Bnd_Box
+    global GCPnts_TangentialDeflection, GProp_GProps, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane
+    global GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion, GeomAbs_SurfaceOfRevolution, GeomAbs_Torus
+    global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, ShapeUpgrade_UnifySameDomain, TopAbs_COMPOUND
+    global TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID
+    global TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopExp_Explorer, TopLoc_Location, TopoDS, TopoDS_Compound
+    global TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid, _ANALITICAS, gp_Ax1, gp_Ax2, gp_Dir
+    global gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.BRepTools import BRepTools
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_Transform
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepGProp import BRepGProp
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.BRepPrimAPI import (BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism,
+                                 BRepPrimAPI_MakeRevol, BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus)
+    from OCP.Bnd import Bnd_Box
+    from OCP.GCPnts import GCPnts_TangentialDeflection
+    from OCP.GeomAbs import (GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion,
+                             GeomAbs_SurfaceOfRevolution, GeomAbs_Torus)
+    from OCP.GProp import GProp_GProps
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_REVERSED,
+                            TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
+    from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
+                                     IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
+    from OCP.BRep import BRep_Builder
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    _ANALITICAS = (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus, GeomAbs_SurfaceOfExtrusion,
+                   GeomAbs_SurfaceOfRevolution)
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 
 class ErrorGeometria(RuntimeError):
@@ -126,7 +148,13 @@ def plano_de_cara(cara):
         n = -n
     if cara.Orientation() == TopAbs_REVERSED:
         n = -n
-    origen = n * float(n @ np.array([loc.X(), loc.Y(), loc.Z()]))
+    return plano_desde_normal(n, (loc.X(), loc.Y(), loc.Z()))
+
+
+def plano_desde_normal(n, punto):
+    """Plano de boceto con normal saliente `n` que pasa por `punto`, con los ejes de `plano_de_cara`."""
+    n = np.asarray(n, float)
+    origen = n * float(n @ np.asarray(punto, float))
     if abs(n[2]) > 0.9:
         u = np.array([1.0, 0.0, 0.0])
     else:
@@ -438,8 +466,6 @@ def compuesto(formas):
 
 # ---------------------------------------------------------------- consultas
 # Caras que la integración de OpenCascade resuelve bien (las barridas por una curva también: es una sola dirección).
-_ANALITICAS = (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus, GeomAbs_SurfaceOfExtrusion,
-               GeomAbs_SurfaceOfRevolution)
 _CONTROL_RELATIVO = 1e-3          # malla de control: desvío relativo al tamaño de cada cara (rápida, ~0,3 s)
 _DEFLEXION_FINA = 3e-5            # malla fina: de la diagonal de la caja (~0,01 mm en una pieza de 300 mm)
 _DEFLEXION_MINIMA = 0.01          # mm: menos hace fallar el mallado de algunas B-spline (queda una cara sin malla)
@@ -691,3 +717,6 @@ def polilineas_aristas(forma, deflexion=0.05):
         if len(pts) >= 2:
             salida.append(np.array([[p.X(), p.Y(), p.Z()] for p in pts], np.float32))
     return salida
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

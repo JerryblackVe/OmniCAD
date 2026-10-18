@@ -24,22 +24,39 @@ import math
 import time
 
 import numpy as np
-from OCP.BOPAlgo import BOPAlgo_ArgumentAnalyzer, BOPAlgo_CheckStatus
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeVertex
-from OCP.BRepCheck import BRepCheck_Analyzer, BRepCheck_Face, BRepCheck_Shell, BRepCheck_Status, BRepCheck_Wire
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepGProp import BRepGProp
-from OCP.GProp import GProp_GProps
-from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-                                 IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
-from OCP.ShapeFix import ShapeFix_Shape, ShapeFix_ShapeTolerance
-from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX,
-                        TopAbs_WIRE)
-from OCP.TopExp import TopExp
-from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Shape
-from OCP.gp import gp_Pnt
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BOPAlgo_ArgumentAnalyzer, BOPAlgo_CheckStatus, BRepAdaptor_Curve, BRepBuilderAPI_Copy
+    global BRepBuilderAPI_MakeVertex, BRepCheck_Analyzer, BRepCheck_Face, BRepCheck_Shell, BRepCheck_Status
+    global BRepCheck_Wire, BRepExtrema_DistShapeShape, BRepGProp, BRep_Tool, GProp_GProps
+    global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
+    global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, ShapeFix_Shape, ShapeFix_ShapeTolerance
+    global TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE
+    global TopExp, TopoDS, TopoDS_Edge, TopoDS_Shape, _NOMBRE_TIPO, gp_Pnt
+    from OCP.BOPAlgo import BOPAlgo_ArgumentAnalyzer, BOPAlgo_CheckStatus
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeVertex
+    from OCP.BRepCheck import BRepCheck_Analyzer, BRepCheck_Face, BRepCheck_Shell, BRepCheck_Status, BRepCheck_Wire
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
+                                     IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
+    from OCP.ShapeFix import ShapeFix_Shape, ShapeFix_ShapeTolerance
+    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX,
+                            TopAbs_WIRE)
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Shape
+    from OCP.gp import gp_Pnt
+    _NOMBRE_TIPO = {TopAbs_VERTEX: "vértice", TopAbs_EDGE: "arista", TopAbs_WIRE: "contorno", TopAbs_FACE: "cara",
+                    TopAbs_SHELL: "cáscara", TopAbs_SOLID: "sólido", TopAbs_COMPOUND: "compuesto"}
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import aislado
 from . import analisis as an
@@ -58,8 +75,6 @@ _PARES_POR_TANDA = 1_000_000  # rayos × triángulos por tanda en el cálculo de
 _PARES_TOTALES = 400_000_000  # tope de rayos × triángulos: con mallas enormes se usan menos rayos
 _RAYOS_POR_TANDA = 16         # rayos vecinos (orden de Morton) que comparten la caja de búsqueda
 
-_NOMBRE_TIPO = {TopAbs_VERTEX: "vértice", TopAbs_EDGE: "arista", TopAbs_WIRE: "contorno", TopAbs_FACE: "cara",
-                TopAbs_SHELL: "cáscara", TopAbs_SOLID: "sólido", TopAbs_COMPOUND: "compuesto"}
 # Qué quiere decir cada estado de BRepCheck (los que usa el detalle de una cara o una cáscara inválida).
 _ESTADOS = {
     "BRepCheck_SelfIntersectingWire": "el contorno se cruza a sí mismo",
@@ -868,3 +883,6 @@ def resumen(informe):
         tam = np.subtract(caja[1], caja[0])
         lineas.append(f"Caja: {_n(tam[0])} × {_n(tam[1])} × {_n(tam[2])} mm")
     return lineas
+
+
+_motor.registrar(globals(), _iniciar_opencascade)

@@ -472,10 +472,8 @@ def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbo
 
 
 def _dentro(solidos, punto):
-    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-    from OCP.gp import gp_Pnt
-    from OCP.TopAbs import TopAbs_IN
-    return any(BRepClass3d_SolidClassifier(s, gp_Pnt(*map(float, punto)), 1e-7).State() == TopAbs_IN for s in solidos)
+    from ..nucleo.consultas import dentro_solidos
+    return dentro_solidos(solidos, punto)
 
 
 def _hacia_el_material(forma, punto, normal):

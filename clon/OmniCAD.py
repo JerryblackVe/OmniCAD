@@ -75,7 +75,9 @@ def _verificar_dependencias():
     """Avisa si falta algún paquete. Solo los BUSCA (find_spec), sin importarlos: scipy, p. ej., se carga recién al
     usar una malla o el solver de bocetos (arranque rápido)."""
     from importlib.util import find_spec
-    faltan = [paquete for modulo, paquete in (("PySide6", "PySide6"), ("OpenGL", "PyOpenGL"), ("OCP", "cadquery-ocp"),
+    from omnicad.nucleo.motor import motor_activo
+    kernel = ("omnikernel", "omnikernel") if motor_activo() == "omnikernel" else ("OCP", "cadquery-ocp")
+    faltan = [paquete for modulo, paquete in (("PySide6", "PySide6"), ("OpenGL", "PyOpenGL"), kernel,
                                                ("numpy", "numpy"), ("scipy", "scipy"))
               if find_spec(modulo) is None]
     if faltan:
