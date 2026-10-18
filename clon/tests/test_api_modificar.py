@@ -340,6 +340,18 @@ def test_agujero_con_holgura_roscado_y_conico(caja):
     assert volumen(caja) == pytest.approx(8000 - math.pi * 6.25 * 6, abs=1e-2)
 
 
+def test_tornillo_y_tuerca_modelados_sobre_el_mismo_eje_encajan(s):
+    """B-79: una rosca exterior (create_thread) y una interior (create_hole modeled) sobre el mismo eje tienen que
+    encajar sin girar ninguna (antes chocaban 68 mm³ en M10). El tornillo arranca dos pasos más abajo y su cilindro
+    está dado vuelta (el eje de la cara apunta a −Z y la rosca empieza en la otra punta), como el eje del motor."""
+    llamar(s, "create_cylinder", radius=5, height=18, name="Tornillo")
+    llamar(s, "move_body", body="Tornillo", rotate=[180, 0, 0], pivot="origin", translate=[0, 0, 15])
+    llamar(s, "create_thread", body="Tornillo", faces="%CYLINDER", thread="M10", thread_class="6g")
+    llamar(s, "create_cylinder", radius=9, height=15, name="Tuerca")
+    llamar(s, "create_hole", body="Tuerca", face="<Z", depth=15, hole_tap="modeled", thread="M10", thread_class="6H")
+    assert llamar(s, "check_interference", bodies=["Tornillo", "Tuerca"])["count"] == 0
+
+
 def test_agujero_hasta_y_por_referencias(caja):
     llamar(caja, "create_hole", face=">Z", diameter=4, to="XY", to_offset=-2, points=[[5, 5]])   # z = 20 → z = 2
     assert volumen(caja) == pytest.approx(8000 - math.pi * 4 * 18, abs=1e-2)

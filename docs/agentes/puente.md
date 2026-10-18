@@ -81,7 +81,7 @@ Se suman a los errores de la API ([guia_diseno.md](guia_diseno.md)). Siempre vue
 | `UNAUTHORIZED` | el token no coincide con el de `puente.json` | volver a leer `puente.json` (la app se reinició) |
 | `APP_BUSY` | una herramienta que **modifica** llegó mientras tenés un comando abierto, editás un boceto, elegís un plano en la vista o hay un diálogo modal | esperar o pedirle al usuario que termine; las de lectura siguen andando |
 | `APP_NOT_RUNNING` | no hay app escuchando según `puente.json` | abrir OmniCAD con `--puente`, o usar `--modo sin_ventana` |
-| `APP_NOT_RESPONDING` | la app no contestó en 120 s (se corta esa conexión) | revisar si la app está colgada; reintentar |
+| `APP_NOT_RESPONDING` | la app no contestó en 300 s (se corta esa conexión; la app puede seguir y terminar, y esa respuesta se pierde) | `get_mode` dice si sigue ocupada; partir el trabajo en llamadas más cortas (p. ej. `motion_study` con pocos `values`) |
 | `UNSAVED_CHANGES` | `new_document` u `open_document` con cambios sin guardar en la ventana (sin ventana pasa lo mismo) | guardar en la ventana, o pedirle al usuario que decida; `discard=true` los descarta |
 | `LIVE_NOT_ALLOWED` | `execute_code` sin la preferencia `general/puente_codigo`, o una herramienta del grupo `dev` | usar herramientas normales; para `dev`, correr sin pasar por el puente |
 | `BRIDGE_ERROR` | se cortó la conexión a mitad de una llamada, o la respuesta vino mal | **no se sabe si se aplicó**: mirar `get_scene_info` o `get_timeline` antes de repetir |

@@ -144,6 +144,13 @@ def test_cliente_con_app_que_no_contesta_da_app_not_responding(archivo):
         falso.apagar()
 
 
+def test_el_puente_espera_un_calculo_largo():
+    """B-78: un motion_study de 13 pasos con choques tardó ~130 s y el cliente cortaba a los 120 s (la app terminaba
+    y la respuesta se perdía). El plazo por defecto deja el doble de margen."""
+    from omnicad.servidor_mcp.puente_cliente import TIEMPO_RESPUESTA
+    assert ClientePuente().tiempo_respuesta == TIEMPO_RESPUESTA >= 2 * 130
+
+
 def test_cliente_reconecta_si_la_app_se_reinicio(archivo):
     falso = PuenteFalso(archivo)
     c = ClientePuente(archivo)

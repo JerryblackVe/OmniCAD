@@ -140,6 +140,16 @@ def test_placa_de_0_3_mm_da_espesor_minimo_0_3():
     assert r["volumen"] == pytest.approx(120) and r["muestras"] == rv.MUESTRAS_ESPESOR
 
 
+def test_alabe_inclinado_cortado_a_ras_no_da_pared_fina():
+    """B-76: un álabe de 1,2 mm inclinado 35° y cortado a ras tiene aristas de 55°; el rayo que sale pegado a una
+    arista choca enseguida con la cara vecina (daba «Pared de 0,01 mm» e «Imprimible: NO»)."""
+    placa = geo.rotar(geo.caja(20, 1.2, 20, (0, -0.6, -10)), (0, 0, 0), (1, 0, 0), 35)
+    alabe = geo.booleano(placa, geo.caja(30, 30, 5, (-5, -15, 0)), "intersecar")
+    r = rv.revisar_impresion(alabe, espesor_minimo=0.8)
+    assert geo.es_valida(alabe) and r["zonas_finas"] == 0 and r["imprimible"]
+    assert r["espesor_minimo"] == pytest.approx(1.2, abs=1e-6)
+
+
 def test_caja_inclinada_30_grados_tiene_100_mm2_de_voladizo():
     inclinada = geo.rotar(geo.caja(10, 10, 10), (0, 0, 0), (1, 0, 0), 30)
     r = rv.revisar_impresion(inclinada)

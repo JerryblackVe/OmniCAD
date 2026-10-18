@@ -2019,11 +2019,26 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
                             round(float(rel_extra), 9))
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(*map(float, o + z * z0)))
+    giro = _fase_rosca(z)
+    if giro:
+        rot = gp_Trsf()
+        rot.SetRotation(gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), _gdir(z)), giro)
+        trsf.Multiply(rot)                         # primero gira sobre su eje, después se traslada
     # copias trasladadas: el corte no toca lo guardado en la caché
     surco, torno = (None if f is None else BRepBuilderAPI_Transform(f, trsf, True).Shape() for f in base)
     if partes:
         return surco, torno
     return surco if torno is None else geo.booleano(surco, torno, "unir")
+
+
+def _fase_rosca(eje):
+    """Giro (rad) del surco alrededor de su eje para que su arranque no dependa del sentido del eje de la cara:
+    `_perpendicular(−z) = −_perpendicular(z)`, así que con el eje al revés va media vuelta (B-79). Con eso, macho y
+    hembra sobre el mismo eje encajan si sus arranques están a un número entero de pasos (el mismo plano, o la otra
+    punta de una cara de largo entero). Una fase cualquiera no: la punta del surco puede caer en la costura de la
+    cara cilíndrica y el corte falla (M5 y la rosca con holgura de los tests); con 0 o media vuelta queda a 90°."""
+    k = next(i for i in (2, 1, 0) if abs(eje[i]) > 1e-9)
+    return math.pi if eje[k] < 0 else 0.0
 
 
 _ANCHO_LIMITE, _ANCHO_TOPE, _ANCHO_TORNO = 0.995, 0.97, 0.93     # anchos del surco en pasos (ver _surco_en_origen)
@@ -2104,7 +2119,9 @@ def _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, 
     algunos largos (el recorte no hacía nada o se comía de más); con otro `extra` salen bien (`_EXTRAS`)."""
     o = np.zeros(3)
     z_ini = -paso                                  # la hélice pasa de largo un paso en cada punta
-    base = o + z * (z_ini + paso / 2)
+    # el surco exterior (hueco del tornillo) va centrado a P/2 y el interior (lugar del filete del tornillo) a 0:
+    # con la fase de `_fase_rosca`, tornillo y tuerca encajan sin girar ninguno (B-79: chocaban medio paso)
+    base = o + z * (z_ini + (0.0 if interna else paso / 2))
     perfil = _poligono([base + x * r_in - z * w_in / 2, base + x * r_out - z * w_out / 2,
                         base + x * r_out + z * w_out / 2, base + x * r_in + z * w_in / 2])
     surco = _barrido_helicoidal(perfil, _helice(base, z, x, (r_in + r_out) / 2, paso, largo + 2 * paso, mano))

@@ -5,6 +5,17 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 
 ## [No publicada]
 
+### Corregido
+- Roscas modeladas: un tornillo (Rosca) y su tuerca (Agujero roscado) sobre el mismo eje encajan sin girar ninguno,
+  aunque una cara tenga el eje al revés. ⚠ Las roscas interiores de documentos viejos quedan medio paso corridas al
+  recalcularse: si se había girado una pieza para compensar, hay que sacar ese giro.
+- `check_printability`: ya no marca paredes finas falsas en aristas agudas (un álabe inclinado cortado a ras daba
+  «Pared de 0,01 mm» e «Imprimible: NO»).
+- `sketch_from_spec`: las líneas seguidas comparten la esquina; mover un vértice con `move_sketch_point` ya no abre
+  el perfil.
+- Modo en vivo: el MCP espera 300 s a la app (antes 120 s); un `motion_study` largo con choques ya no corta con
+  `APP_NOT_RESPONDING` mientras la app sigue calculando.
+
 ## [0.1.3] — 2026-10-17
 
 ### Agregado

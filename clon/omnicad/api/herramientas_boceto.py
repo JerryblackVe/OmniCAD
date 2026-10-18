@@ -250,10 +250,22 @@ def _xy(v, que):
     return x, y
 
 
-def _linea(b, x1, y1, x2, y2, construccion=False):
+def _extremo_de_linea(b, x, y):
+    """El punto de un extremo de línea ya dibujado en (x, y), o (x, y) si no hay: así las líneas seguidas comparten
+    la esquina, como al dibujar en cadena (dos puntos sueltos superpuestos abren el perfil al mover uno)."""
+    for c in b.curvas.values():
+        if c.tipo == "linea":
+            for pid in (c.p1, c.p2):
+                if abs(b.puntos[pid].x - x) < 1e-9 and abs(b.puntos[pid].y - y) < 1e-9:
+                    return pid
+    return (x, y)
+
+
+def _linea(b, x1, y1, x2, y2, construccion=False, encadenar=False):
     if math.hypot(x2 - x1, y2 - y1) < 1e-9:
         raise ErrorBoceto("Una línea necesita dos puntos distintos.")
-    lid = b.agregar_linea((x1, y1), (x2, y2), construccion)
+    a, z = ((_extremo_de_linea(b, x1, y1), _extremo_de_linea(b, x2, y2)) if encadenar else ((x1, y1), (x2, y2)))
+    lid = b.agregar_linea(a, z, construccion)
     ln = b.curvas[lid]
     return {"": lid, "start": ln.p1, "end": ln.p2}
 
@@ -940,7 +952,7 @@ def _construir_entidad(b, i, e):
     p = lambda k, *alt: _xy(_campo(e, i, k, alt), f"'{k}' de la entidad {i}")  # noqa: E731
     if tipo == "line":
         (x1, y1), (x2, y2) = p("start"), p("end")
-        return _linea(b, x1, y1, x2, y2, c)
+        return _linea(b, x1, y1, x2, y2, c, encadenar=True)
     if tipo == "rectangle":
         if "corner1" in e or "corner2" in e:
             (x1, y1), (x2, y2) = p("corner1"), p("corner2")
@@ -1064,6 +1076,8 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             if tipo not in RESTRICCIONES:
                 raise error("INVALID_CONSTRAINT", f"Restricción {j}: tipo '{tipo}' desconocido.")
             ids = [_citar(t, alias, b, f"Restricción {j}") for t in (r.get("entities") or [])]
+            if tipo == "coincident" and len(ids) == 2 and ids[0] == ids[1]:
+                continue                                    # extremos ya unidos al encadenar las líneas
             try:
                 b.agregar_restriccion(RESTRICCIONES[tipo], ids)
             except ErrorBoceto as e:

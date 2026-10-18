@@ -320,6 +320,20 @@ def test_boceto_completo_en_una_llamada(s):
     assert api.llamar(s, "get_sketch", {"sketch": "Placa"})["error_kind"] == "SKETCH_NOT_FOUND"
 
 
+def test_spec_lineas_seguidas_comparten_la_esquina(s):
+    """B-77: cuatro `line` en cadena comparten sus esquinas, así mover una no abre el perfil; una coincidencia
+    pedida entre extremos que ya quedaron unidos se acepta (no hay nada que restringir)."""
+    pts = [(0, 0), (40, 0), (40, 20), (0, 20)]
+    lineas = [{"type": "line", "start": list(pts[i]), "end": list(pts[(i + 1) % 4])} for i in range(4)]
+    r = llamar(s, "sketch_from_spec", plane="XY", name="Marco", entities=lineas,
+               constraints=[{"type": "coincident", "entities": ["e0.end", "e1.start"]}])
+    assert r["profiles"] == 1 and r["handles"]["e0.end"] == r["handles"]["e1.start"]
+    assert len(llamar(s, "get_sketch", sketch="Marco")["points"]) == 4
+    llamar(s, "move_sketch_point", sketch="Marco", point=r["handles"]["e1.end"], x=40, y=30)
+    perfiles = llamar(s, "get_sketch", sketch="Marco")["profiles"]
+    assert len(perfiles) == 1 and perfiles[0]["area"] == pytest.approx(40 * 20 + 40 * 10 / 2, abs=1e-6)
+
+
 def test_spec_con_todos_los_tipos_de_entidad(s):
     r = llamar(s, "sketch_from_spec", plane="YZ", entities=[
         {"type": "line", "start": [0, 0], "end": [10, 0], "construction": True},

@@ -35,7 +35,7 @@ from ..api.errores import error
 from ..io_archivos import proyecto
 from . import temas
 
-PLAZO_MAXIMO_CODIGO = 100.0   # s: execute_code en vivo; menos que puente_cliente.TIEMPO_RESPUESTA (120 s)
+PLAZO_MAXIMO_CODIGO = 100.0   # s: execute_code en vivo; menos que puente_cliente.TIEMPO_RESPUESTA
 
 
 

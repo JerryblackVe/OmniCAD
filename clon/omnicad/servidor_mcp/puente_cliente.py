@@ -17,7 +17,9 @@ from ..api import protocolo_puente as proto
 from ..api.errores import error
 
 TIEMPO_CONEXION = 2.0       # segundos para conectar a 127.0.0.1
-TIEMPO_RESPUESTA = 120.0    # segundos para que la app conteste (un recálculo pesado puede tardar)
+# segundos para que la app conteste: un recálculo pesado o un estudio de movimiento con choques pasan los 120 s (B-78:
+# 13 pasos de motion_study ~130 s); si la app está colgada de verdad, el agente espera esto antes del error
+TIEMPO_RESPUESTA = 300.0
 
 
 class ClientePuente:

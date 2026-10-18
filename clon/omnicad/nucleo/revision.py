@@ -53,6 +53,7 @@ PLAZO_AUTOINTERSECCION = 10.0  # s por cuerpo para buscar autointersecciones en 
 PRESUPUESTO_AUTOINTERSECCION = 30.0  # s en total para varios cuerpos seguidos (quien itera arma `hasta`)
 MAX_PROBLEMAS = 200           # problemas que se devuelven con su ubicación (los conteos son siempre completos)
 MUESTRAS_ESPESOR = 2000       # rayos para medir el espesor (triángulos elegidos al azar, pesados por área)
+_COS_ENFRENTADAS = math.cos(math.radians(45))   # caras de una pared: normales a menos de 45° de opuestas
 _PARES_POR_TANDA = 1_000_000  # rayos × triángulos por tanda en el cálculo del espesor (8 MB por arreglo)
 _PARES_TOTALES = 400_000_000  # tope de rayos × triángulos: con mallas enormes se usan menos rayos
 _RAYOS_POR_TANDA = 16         # rayos vecinos (orden de Morton) que comparten la caja de búsqueda
@@ -752,12 +753,19 @@ def revisar_impresion(forma, *, espesor_minimo=0.8, angulo_voladizo=45.0, angulo
         centro = None if caja is None else (np.array(caja[0]) + np.array(caja[1])) / 2
         problemas.append(_problema("abierto", "error", "El cuerpo no es estanco (tiene bordes abiertos): no se puede "
                                    "imprimir así. Usá Reparar o revisá la geometría.", centro))
-    puntos, espesor, origen, _opuesto = espesores(m, muestras=muestras)
+    puntos, espesor, origen, opuesto = espesores(m, muestras=muestras)
+    normales = m.normales_caras()
+    # Pegado a una arista aguda (un álabe inclinado cortado a ras) el rayo choca enseguida con la cara vecina, que no
+    # mira de frente: eso no es una pared fina (B-76). Cuenta solo si la cara opuesta está a menos de 45° de
+    # enfrentada; un filo más agudo que 45° se sigue marcando.
+    con = opuesto >= 0
+    de_frente = np.ones(len(espesor), bool)
+    de_frente[con] = np.einsum("ij,ij->i", normales[origen[con]], normales[opuesto[con]]) < -_COS_ENFRENTADAS
+    espesor = np.where(de_frente, espesor, np.nan)
     medidos = np.isfinite(espesor)
     minimo = float(np.nanmin(espesor)) if medidos.any() else None
     diag = _diagonal_caja(caja) or 1.0
     zonas_finas = _zonas_finas(puntos, espesor, espesor_minimo, max(2.0 * espesor_minimo, diag / 50.0, 1e-6))
-    normales = m.normales_caras()
     for k, _cuantas in zonas_finas:
         medio = puntos[k] - normales[origen[k]] * espesor[k] / 2          # el centro de la pared
         problemas.append(_problema("espesor_fino", "error", f"Pared de {_n(espesor[k])} mm (mínimo {_n(espesor_minimo)}"
