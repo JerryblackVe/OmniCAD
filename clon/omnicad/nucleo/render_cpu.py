@@ -272,13 +272,28 @@ def color_fondo_entorno(d, cielo):
     return np.asarray(cielo[1], np.float64) * (1 - t) + np.asarray(cielo[0], np.float64) * t
 
 
+def coordenadas_veta(v, marco=None):
+    """Coordenadas de veta de los vértices `v` de un cuerpo: centradas en su caja y con el eje Y a lo largo de su lado más
+    largo, así la fibra de la madera corre a lo largo de cada pieza (un lateral alto tiene la veta vertical). `marco`:
+    todos los vértices del cuerpo, cuando `v` es solo una parte (una cara con aspecto propio)."""
+    v = np.asarray(v, np.float64).reshape(-1, 3)
+    ref = v if marco is None or not len(marco) else np.asarray(marco, np.float64).reshape(-1, 3)
+    if not len(ref):
+        return v
+    mn, mx = ref.min(0), ref.max(0)
+    largo = int(np.argmax(mx - mn))
+    a, b = (i for i in range(3) if i != largo)
+    return (v - (mn + mx) / 2)[:, [a, largo, b]]
+
+
 def veta_madera(local, color, color2):
-    """Vetas 3D de madera maciza (anillos alrededor del eje Y del cuerpo) en coordenadas propias."""
+    """Vetas de madera maciza en coordenadas de veta (`coordenadas_veta`): anillos de unos 7 mm alrededor del eje Y,
+    con la fibra corriendo a lo largo de Y. Igual en el GLSL de `ui/render.py`."""
     q = np.asarray(local, np.float64).reshape(-1, 3)
     r = np.sqrt(q[:, 0] ** 2 + q[:, 2] ** 2)
-    w = r * 0.42 + 1.3 * np.sin(q[:, 1] * 0.07 + q[:, 0] * 0.05) + 0.4 * np.sin(q[:, 1] * 0.29 + q[:, 2] * 0.11)
+    w = r * 0.15 + 0.6 * np.sin(q[:, 1] * 0.02 + q[:, 0] * 0.05) + 0.2 * np.sin(q[:, 1] * 0.08 + q[:, 2] * 0.11)
     anillo = (0.5 + 0.5 * np.sin(2 * math.pi * w)) ** 3
-    fibra = 0.5 + 0.5 * np.sin(q[:, 1] * 2.1 + np.sin(q[:, 0] * 0.9) * 3.0)
+    fibra = 0.5 + 0.5 * np.sin(q[:, 0] * 1.7 + np.sin(q[:, 1] * 0.03) * 2.0)
     t = np.clip(anillo * 0.45 + fibra * 0.10, 0.0, 1.0)[:, None]
     return np.asarray(color, np.float64) * (1 - t) + np.asarray(color2, np.float64) * t
 
@@ -685,7 +700,9 @@ class _Escena:
             tris.append(v[:k * 3].reshape(k, 3, 3))
             nors.append(np.asarray(o["n"], np.float64).reshape(-1, 3)[:k * 3].reshape(k, 3, 3))
             loc = o.get("local")
-            locs.append((np.asarray(loc, np.float64).reshape(-1, 3) if loc is not None else v)[:k * 3].reshape(k, 3, 3))
+            if loc is None:
+                loc = coordenadas_veta(v) if ac["patron"] == "madera" else v
+            locs.append(np.asarray(loc, np.float64).reshape(-1, 3)[:k * 3].reshape(k, 3, 3))
             color = srgb_a_lineal(o.get("color") or BIBLIOTECA_ASPECTOS[ASPECTO_DEFECTO]["color"])
             c2 = srgb_a_lineal(ac["color2"]) if ac.get("color2") else color * 0.6
             albedo.append(np.tile(np.r_[color, c2], (k, 1)))

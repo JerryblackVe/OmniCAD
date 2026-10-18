@@ -146,9 +146,9 @@ const float ESCALA[12] = float[12](%(esc)s);
 const float INTENS[3] = float[3](%(intens)s);
 vec3 veta(vec3 q, vec3 c1, vec3 c2) {
     float r = sqrt(q.x * q.x + q.z * q.z);
-    float w = r * 0.42 + 1.3 * sin(q.y * 0.07 + q.x * 0.05) + 0.4 * sin(q.y * 0.29 + q.z * 0.11);
+    float w = r * 0.15 + 0.6 * sin(q.y * 0.02 + q.x * 0.05) + 0.2 * sin(q.y * 0.08 + q.z * 0.11);
     float anillo = pow(0.5 + 0.5 * sin(6.2831853 * w), 3.0);
-    float fibra = 0.5 + 0.5 * sin(q.y * 2.1 + sin(q.x * 0.9) * 3.0);
+    float fibra = 0.5 + 0.5 * sin(q.x * 1.7 + sin(q.y * 0.03) * 2.0);
     return mix(c1, c2, clamp(anillo * 0.45 + fibra * 0.10, 0.0, 1.0));
 }
 float vista_z(vec2 uv) {
@@ -393,6 +393,11 @@ def _clave_cara(ref):
     return json.dumps(ref, sort_keys=True, default=str)
 
 
+def _coordenadas_veta(v, acabado, cuerpo):
+    """Las coordenadas que mira la veta de la madera (`rc.coordenadas_veta`); los demás acabados no las usan."""
+    return rc.coordenadas_veta(v, cuerpo).astype(_F) if acabado.get("patron") == "madera" else v
+
+
 class LienzoRender(Visor3D):
     """Visor3D con aspectos, entorno, sombras, suelo y oclusión (ver el docstring del módulo). Admite una
     matriz 4x4 por cuerpo (`set_transformaciones`) y opacidad por cuerpo (`opacidad`), para la animación."""
@@ -465,11 +470,12 @@ class LienzoRender(Visor3D):
                 if cara is not None and len(cara[0]):
                     cc, ac = rc.color_y_acabado_cara(c, props, p)
                     partes.append({"v0": cara[0], "n0": cara[1], "seg0": np.zeros((0, 3), _F), "color": cc,
-                                   "acabado": ac})
+                                   "acabado": ac, "loc0": _coordenadas_veta(cara[0], ac, v)})
             if c.id in ocultos or not (len(v) or partes):
                 continue
             color, acabado = color_y_acabado(c, props)
             objetos[c.id] = {"v0": v, "n0": n, "seg0": seg, "color": color, "acabado": acabado, "indice": i,
+                             "loc0": _coordenadas_veta(v, acabado, v),
                              "tipo": getattr(c, "tipo", "solido"), "nombre": propiedades.get(c.id, {}).get("nombre")
                              or c.nombre, "caras": partes}
             formas[c.id] = c.forma
@@ -506,7 +512,7 @@ class LienzoRender(Visor3D):
                     n = (n @ R.T).astype(_F)
                     seg = (seg @ R.T + t).astype(_F) if len(seg) else seg
                 mallas.append({"v": np.ascontiguousarray(v, _F), "n": np.ascontiguousarray(n, _F),
-                               "seg": np.ascontiguousarray(seg, _F), "loc": parte["v0"], "indice": o["indice"],
+                               "seg": np.ascontiguousarray(seg, _F), "loc": parte["loc0"], "indice": o["indice"],
                                "id": cid, "color": tuple(parte["color"]), "tipo": o["tipo"],
                                "acabado": parte["acabado"], "caja": (v.min(0).astype(float), v.max(0).astype(float))})
         self._mallas = mallas
