@@ -29,18 +29,32 @@ from . import motor as _motor
 _DEFLEXION_MIN, _DEFLEXION_MAX = 0.02, 0.5
 
 
-def deflexion_para(forma, deflexion=None):
+def deflexion_para(forma, deflexion=None, *, cam=None, alto=600, caja=None):
     """Deflexión (mm) de teselado para un B-rep: la dada o, sin argumento, la automática por pieza
     (fina en piezas chicas: 3e-4 de la diagonal, acotada a [0.02, 0.5] mm). La regla global (0.05 mm o
-    diagonal/2000 de la escena) dejaba una pieza chica facetada dentro de una escena grande (B-15)."""
+    diagonal/2000 de la escena) dejaba una pieza chica facetada dentro de una escena grande (B-15).
+    Con cámara: hasta medio píxel de error, acotado al 0,5 % de la pieza; desde 200 px conserva el detalle original.
+    `caja`: caja ya calculada para encuadrar, evita repetir la consulta exacta de superficies loftadas."""
     if deflexion is not None:
         return float(deflexion)
     try:
-        mn, mx = geo.caja_envolvente(forma)
+        mn, mx = caja if caja is not None else geo.caja_envolvente(forma)
         diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
     except Exception:  # noqa: BLE001 - una forma rara no debe impedir dibujar
         return 0.05
-    return min(max(diag * 3e-4, _DEFLEXION_MIN), _DEFLEXION_MAX)
+    fina = min(max(diag * 3e-4, _DEFLEXION_MIN), _DEFLEXION_MAX)
+    if cam is None:
+        return fina
+    profundidad = float(cam["distancia"])
+    if not cam.get("ortografica"):
+        esquinas = np.array([(x, y, z) for x in (mn[0], mx[0]) for y in (mn[1], mx[1]) for z in (mn[2], mx[2])])
+        profundidad -= float(((esquinas - np.asarray(cam["objetivo"])) @ np.asarray(cam["R"])[2]).max())
+    if profundidad <= 0:
+        return fina
+    mm_pixel = 2 * profundidad * math.tan(math.radians(cam.get("fov", 40.0)) / 2) / alto
+    if diag >= 200 * mm_pixel:
+        return fina
+    return max(fina, min(0.5 * mm_pixel, diag * 0.005))
 
 # ---------------------------------------------------------------- aspectos
 CATEGORIAS = ("Metal", "Plástico", "Vidrio", "Goma", "Madera", "Pintura")
@@ -381,10 +395,20 @@ def _iniciar_opencascade():
 _motor.registrar(globals(), _iniciar_opencascade, nombres=("_mallas_por_cara",))
 
 
-def malla_suave_aparte(forma, caras, deflexion=0.05, angular=0.25):
+def malla_suave_aparte(forma, caras, deflexion=0.05, angular=0.25, *, independiente=False):
     """(vértices, normales del cuerpo sin esas caras, [(vértices, normales) de cada una de `caras`]). Sirve para
     dibujar una cara con su propio aspecto (Aspecto › Aplicar a: Caras): la malla es la misma de `malla_suave`, solo
-    partida. Una cara que no es del cuerpo (o un cuerpo de malla, sin caras B-rep) devuelve su malla vacía."""
+    partida. Una cara que no es del cuerpo (o un cuerpo de malla, sin caras B-rep) devuelve su malla vacía.
+    `independiente`: tesela una copia sin reutilizar ni alterar la malla del visor (render CPU por píxeles)."""
+    if independiente and not es_malla(forma) and _motor.motor_activo() == "opencascade":
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+        from OCP.BRepTools import BRepTools
+        copia = BRepBuilderAPI_Copy(forma, False, True)
+        if caras:
+            originales = geo.caras(forma)
+            caras = [copia.ModifiedShape(c) if any(c.IsSame(o) for o in originales) else c for c in caras]
+        forma = copia.Shape()
+        BRepTools.Clean_s(forma)  # Conserva las caras sin geometría que solo tienen triangulación.
     vacia = (np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32))
     if es_malla(forma) or not caras:
         return (*malla_suave(forma, deflexion, angular), [vacia] * len(caras))
