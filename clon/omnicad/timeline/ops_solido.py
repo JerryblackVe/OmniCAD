@@ -409,19 +409,46 @@ class OpBobina(_OpCrear):
 
 
 class OpTuberia(_OpCrear):
-    """Tubería de Fusion [SLD-PIPE-SOLID]: ruta, distancia, sección y tamaño, hueca con espesor."""
+    """Tubería de Fusion [SLD-PIPE-SOLID]: cadena tangente, límites fraccionales distancia2 (inicio) y
+    distancia (fin), sección y tamaño, hueca con espesor. Sin cadena se conserva solo la ruta elegida."""
     TIPO, ETIQUETA, ICONO = "tuberia", "Tubería", "⊃"
     PARAMS = {"ruta": [], "distancia": "1", "seccion": "circular", "tamano": "5 mm", "hueca": False,
-              "espesor": "0.5 mm", "operacion": "nuevo", "objetivos": []}
-    EXPRESIONES = ("distancia", "tamano", "espesor")
+              "espesor": "0.5 mm", "operacion": "nuevo", "objetivos": [], "cadena": False, "distancia2": "0"}
+    EXPRESIONES = ("distancia", "distancia2", "tamano", "espesor")
     OPCIONES = {"seccion": ("circular", "cuadrada", "triangular"), "operacion": OPERACIONES_CUERPO}
     REFS = ("ruta",)
 
     def ejecutar(self, estado, ctx):
-        _, ruta = _aristas(self.p["ruta"], estado, "la ruta")
+        ents, ruta = _aristas(self.p["ruta"], estado, "la ruta")
+        if self.p["cadena"]:
+            from ..nucleo import referencias
+            from ..nucleo.perfiles import aristas_boceto
+            from ..nucleo.solidos_modificar import aristas_cadena_tangente
+            ruta = []
+            formas_boceto = {}
+            for e in ents:
+                arista = e.forma
+                if e.cuerpo:
+                    forma = estado.cuerpo(e.cuerpo).forma
+                elif e.boceto:
+                    br = e.boceto
+                    if br.op_id not in formas_boceto:
+                        aristas = [a for _, a in aristas_boceto(br.boceto.geometria(), br.plano)]
+                        # MakeWire comparte los vértices coincidentes de las curvas independientes del boceto.
+                        formas_boceto[br.op_id] = geo.compuesto(_sc()._cadenas(aristas))
+                    forma = formas_boceto[br.op_id]
+                    arista = referencias.resolver(forma, {"tipo": "arista", "firma": referencias.firma_arista(arista)})
+                    if arista is None:
+                        raise ErrorOperacion("No se encontró la curva en la cadena del boceto.")
+                else:
+                    forma = arista
+                for a in aristas_cadena_tangente(forma, arista):
+                    if not any(a.IsSame(otra) for otra in ruta):
+                        ruta.append(a)
         forma = _sc().tuberia(ruta, seccion=self.p["seccion"], tamano=ctx.evaluar(self.p["tamano"]),
                               hueca=self.p["hueca"], espesor=ctx.evaluar(self.p["espesor"]),
-                              distancia=ctx.evaluar(self.p["distancia"], "escalar"))
+                              distancia=ctx.evaluar(self.p["distancia"], "escalar"),
+                              distancia2=ctx.evaluar(self.p["distancia2"], "escalar"))
         self._aplicar(estado, ctx, forma)
 
 

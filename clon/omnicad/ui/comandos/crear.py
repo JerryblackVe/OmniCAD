@@ -642,17 +642,20 @@ class Tuberia(Comando):
     CLASE_OP = OpTuberia
 
     def campos(self, ctx):
-        return [Seleccion("ruta", "Ruta", CURVA, maximo=None), Expresion("distancia", "Distancia", "1", ESCALAR),
+        return [Seleccion("ruta", "Ruta", CURVA, maximo=None), Casilla("cadena", "Selección de cadena", True),
+                Expresion("distancia", "Distancia", "1.00", ESCALAR, ayuda="Fin de la ruta: fracción entre 0 y 1."),
+                Expresion("distancia2", "Distancia", "0.00", ESCALAR, ayuda="Inicio de la ruta: fracción entre 0 y 1."),
                 Opciones("seccion", "Sección", {"circular": "Circular", "cuadrada": "Cuadrada",
                                                 "triangular": "Triangular"}),
                 Expresion("tamano", "Tamaño de la sección", "5 mm"), Casilla("hueca", "Hueco"),
-                Expresion("espesor", "Grosor de pared", "0.5 mm", visible_si=lambda v: bool(v.get("hueca"))),
+                Expresion("espesor", "Espesor de sección", "0.5 mm", visible_si=lambda v: bool(v.get("hueca"))),
                 campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
         exigir(v, "ruta", "Seleccioná la ruta.")
         return self.crear_op(OpTuberia, v, ctx, ruta=refs(v, "ruta"), objetivos=objetivos(v),
-                             **{k: v[k] for k in ("distancia", "seccion", "tamano", "hueca", "espesor", "operacion")})
+                             **{k: v[k] for k in ("cadena", "distancia", "distancia2", "seccion", "tamano", "hueca",
+                                                  "espesor", "operacion")})
 
     def desde_op(self, op, ctx):
         return _con_objetivos(op, ctx, dict(op.p, ruta=hits(op.p["ruta"], ctx.estado)))
