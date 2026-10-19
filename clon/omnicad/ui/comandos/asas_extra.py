@@ -152,19 +152,17 @@ def _asas_union(clave_origen):
 
 # ---------------------------------------------------------------- bobina
 def _asas_bobina(self, ctx, v):
-    """Asa redonda en el borde de la hélice: el valor es el diámetro (como el agujero)."""
+    """Asa de diámetro sobre X del plano y flecha de altura sobre su normal, si el tipo usa altura."""
     mp = _mp()
     sel = v.get("plano") or []
-    plano = sel[0].get("plano") if sel else None
-    if plano is not None:
-        origen, normal = np.asarray(plano.origen, float), np.asarray(plano.normal, float)
-    else:
-        origen, normal = np.zeros(3), np.array([0.0, 0.0, 1.0])
-    centro = _punto_de(ctx, v["centro"][0]) if v.get("centro") else origen
+    plano = ent.como_plano(mp.entidad(sel[0], ctx.estado)) if sel else geo.Plano("XY")
+    centro = _punto_de(ctx, v["centro"][0]) if v.get("centro") else plano.origen
     if centro is None:
         return []
-    radial, _ = mp.perpendiculares(normal)
-    return [mp.AsaRadial("diametro", centro, radial, factor=0.5, minimo=0.1)]
+    asas = [mp.AsaRadial("diametro", centro, plano.u, factor=0.5, minimo=0.1)]
+    if v.get("tipo") in ("rev_altura", "altura_paso"):
+        asas.append(mp.Flecha("altura", centro, plano.normal, minimo=0.0))
+    return asas
 
 
 # ---------------------------------------------------------------- ayudas de curvas y aristas

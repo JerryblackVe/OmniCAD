@@ -434,6 +434,66 @@ def test_agujero_diametro_con_asa_en_el_borde(app_qt):
     panel.cancelar()
 
 
+def test_bobina_arrastrar_el_asa_cambia_el_diametro(app_qt):
+    from omnicad.ui.comandos.crear import Bobina
+    from omnicad.ui.manipuladores import AsaRadial
+    panel, visor, _ = _panel(Bobina(), Documento(), {})
+    gestor = panel.manipuladores
+    asa = _manip(panel, "flecha:diametro")
+    assert isinstance(asa, AsaRadial)
+    assert asa.origen == pytest.approx((0, 0, 0))
+    assert asa.direccion == pytest.approx((1, 0, 0))
+    punto = asa.puntos(gestor)[0]
+    assert punto == pytest.approx((10, 0, 0))
+    desde, hasta = gestor.pantalla([punto, punto + asa.direccion * 5])[0]
+    _arrastrar(visor, desde, hasta)
+    assert panel.ctx.evaluar(panel.valores["diametro"]) == pytest.approx(30, abs=0.1)
+    assert panel.widgets["diametro"].text() == panel.valores["diametro"]
+    assert panel.valores["altura"] == "30 mm"
+    panel.cancelar()
+
+
+@pytest.mark.parametrize("tipo", ["rev_altura", "altura_paso"])
+def test_bobina_arrastrar_la_flecha_cambia_la_altura(app_qt, tipo):
+    from omnicad.ui.comandos.crear import Bobina
+    panel, visor, _ = _panel(Bobina(), Documento(), {"tipo": tipo})
+    flecha = _manip(panel, "flecha:altura")
+    assert flecha.origen == pytest.approx((0, 0, 0))
+    assert flecha.direccion == pytest.approx((0, 0, 1))
+    medio, d = _sobre_flecha(panel, "flecha:altura")
+    _arrastrar(visor, medio, medio + d * 40)
+    assert panel.ctx.evaluar(panel.valores["altura"]) > 30
+    assert panel.widgets["altura"].text() == panel.valores["altura"]
+    assert panel.valores["diametro"] == "20 mm"
+    for sin_altura in ("espiral", "rev_paso"):
+        panel.set_valor("tipo", sin_altura)
+        assert [m.ident for m in panel.manipuladores.manips] == ["flecha:diametro"]
+        assert set(panel.manipuladores.cajas) == {"diametro"}
+    panel.cancelar()
+
+
+@pytest.mark.parametrize("cara", [False, True])
+def test_bobina_asas_respetan_el_plano_y_el_centro_elegidos(app_qt, cara):
+    from omnicad.nucleo import referencias as refs
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.crear import Bobina
+    doc = _doc_caja()
+    plano = _cara_de_arriba(doc) if cara else hit_desde_ref({"tipo": "plano", "id": "YZ"}, doc.estado_final)
+    panel, _, _ = _panel(Bobina(), doc, {"plano": [plano]})
+    marco = plano["plano"]
+    assert _manip(panel, "flecha:diametro").origen == pytest.approx(marco.origen)
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    vertice = next(v for v in refs.subformas(forma, "vertice") if np.allclose(refs.punto_de_vertice(v), (20, 20, 20)))
+    centro = hit_desde_ref(refs.referencia("op1.c1", vertice, caja=g.caja_envolvente(forma)), doc.estado_final)
+    panel.set_valor("centro", [centro])
+    asa, flecha = (_manip(panel, ident) for ident in ("flecha:diametro", "flecha:altura"))
+    assert asa.origen == pytest.approx((20, 20, 20))
+    assert flecha.origen == pytest.approx((20, 20, 20))
+    assert asa.direccion == pytest.approx(marco.u)
+    assert flecha.direccion == pytest.approx(marco.normal)
+    panel.cancelar()
+
+
 def test_puntos_de_enganche_de_una_cara(app_qt):
     from omnicad.ui import manipuladores as mp
     doc = _doc_caja()
