@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
 """Consultas y primitivas con paridad verificada en procesos separados."""
+from functools import lru_cache
+
 import numpy as np
 import omnikernel as k
+
+
+@lru_cache(maxsize=32)                  # referencias fuertes: pocas, para no retener documentos cerrados
+def _propiedades(forma):
+    """Volumen, área, centros y validez en una sola pasada: una forma del kernel no cambia (es inmutable)."""
+    return forma.propiedades()
 
 
 def caja(ancho, largo, alto, origen=(0, 0, 0)):
@@ -13,19 +21,19 @@ def cilindro(radio, alto, base=(0, 0, 0), eje=(0, 0, 1)):
 
 
 def volumen(forma):
-    return forma.propiedades()["volumen"] if forma.tipo == "cuerpo" else 0.0
+    return _propiedades(forma)["volumen"] if forma.tipo == "cuerpo" else 0.0
 
 
 volumen_exacto = volumen
 
 
 def area(forma):
-    return forma.propiedades()["area"] if forma.tipo == "cuerpo" else forma.firma().get("area", 0.0)
+    return _propiedades(forma)["area"] if forma.tipo == "cuerpo" else forma.firma().get("area", 0.0)
 
 
 def centro_masa(forma, superficie=False):
     if forma.tipo == "cuerpo":
-        return tuple(forma.propiedades()["centro_superficie" if superficie else "centro"])
+        return tuple(_propiedades(forma)["centro_superficie" if superficie else "centro"])
     return tuple(forma.firma()["centro"])
 
 
@@ -35,11 +43,16 @@ def caja_envolvente(forma):
     if forma.tipo != "cuerpo":
         from .. import motor
         motor.sin_soporte("la caja envolvente de una cara, arista o vértice sueltos")
-    return forma.caja()
+    return _caja(forma)
+
+
+@lru_cache(maxsize=32)
+def _caja(forma):
+    return tuple(tuple(p) for p in forma.caja())
 
 
 def es_valida(forma):
-    return forma.propiedades()["valida"]
+    return _propiedades(forma)["valida"]
 
 
 def caras(forma):
@@ -97,42 +110,26 @@ def trasladar(forma, vector):
     return transformar(forma, m)
 
 
-def rotar(forma, punto, eje, angulo_grados):
-    # Matriz de Rodrigues: solo arma la transformación; el kernel la aplica.
+def matriz_rotacion(punto, eje, radianes):
+    """Matriz 4x4 del giro alrededor de la recta (punto, eje), regla de la mano derecha (Rodrigues): solo arma la
+    transformación; el kernel la aplica."""
     e = np.asarray(eje, float) / np.linalg.norm(eje)
-    a = np.radians(angulo_grados)
     x = np.array([[0, -e[2], e[1]], [e[2], 0, -e[0]], [-e[1], e[0], 0]])
-    r = np.eye(3) + np.sin(a) * x + (1 - np.cos(a)) * x @ x
+    r = np.eye(3) + np.sin(radianes) * x + (1 - np.cos(radianes)) * x @ x
     m = np.eye(4)
     m[:3, :3], m[:3, 3] = r, np.asarray(punto, float) - r @ np.asarray(punto, float)
-    return transformar(forma, m)
+    return m
+
+
+def rotar(forma, punto, eje, angulo_grados):
+    return transformar(forma, matriz_rotacion(punto, eje, np.radians(angulo_grados)))
 
 
 def booleano(objetivo, herramienta, operacion):
     from ..geometria import ErrorGeometria
     if operacion not in ("unir", "cortar", "intersecar"):
         raise ErrorGeometria(f"Operación booleana desconocida: {operacion}")
-    if _curvo(objetivo) or _curvo(herramienta):
-        from .. import motor
-        motor.sin_soporte("booleanas entre cuerpos con caras curvas")
-    return _mallable(objetivo.booleano(herramienta, operacion))
-
-
-def _mallable(forma):
-    """El mallador del kernel no triangula algunas caras planas con agujeros (faltante FK-007)."""
-    try:
-        forma.teselar(1.0)
-    except k.ErrorOmniKernel as e:
-        if e.codigo != "PrecisionLost":
-            raise
-        from .. import motor
-        motor.sin_soporte("mallar una cara plana con agujeros")
-    return forma
-
-
-def _curvo(forma):
-    """La booleana de caras curvas deja aristas partidas (faltante FK-005)."""
-    return any(c.firma()["geom"] != "plano" for c in forma.subformas("cara"))
+    return objetivo.booleano(herramienta, operacion)
 
 
 def unir_todos(formas):
@@ -146,25 +143,38 @@ def unir_todos(formas):
     return resultado
 
 
-def _poligonal(cara):
-    """Las caras con curvas dan otra firma de superficie que OpenCascade (faltante FK-003)."""
-    return all(a.firma()["geom"] == "linea" for a in cara.subformas("arista"))
-
-
 def extruir(caras, normal, distancia, simetrica=False):
-    from .. import motor
     from .. import geometria as comun
     comun.exigir_longitud.__wrapped__(distancia, "La distancia de extrusión")
     n = np.asarray(normal, float) / np.linalg.norm(normal)
     solidos = []
     for cara in caras:
-        if not _poligonal(cara):
-            motor.sin_soporte("extruir un perfil con arcos, círculos o curvas")
         if simetrica:
-            solidos.append(trasladar(_mallable(cara.extruir((n * abs(distancia)).tolist())), -n * abs(distancia) / 2))
+            solidos.append(trasladar(cara.extruir((n * abs(distancia)).tolist()), -n * abs(distancia) / 2))
         else:
-            solidos.append(_mallable(cara.extruir((n * distancia).tolist())))
+            solidos.append(cara.extruir((n * distancia).tolist()))
     return unir_todos(solidos)
+
+
+def revolver(caras, punto_eje, dir_eje, angulo_grados):
+    from ..geometria import ErrorGeometria
+    if abs(angulo_grados) < 1e-9:
+        raise ErrorGeometria("El ángulo de revolución no puede ser cero.")
+    angulo = max(-360.0, min(360.0, angulo_grados))
+    eje = np.asarray(dir_eje, float) * (1 if angulo > 0 else -1)      # el kernel gira solo en sentido positivo
+    return unir_todos([c.revolver(list(map(float, punto_eje)), eje.tolist(), abs(angulo)) for c in caras])
+
+
+def esfera(radio, centro=(0, 0, 0)):
+    from ..geometria import ErrorGeometria
+    if radio <= 0:
+        raise ErrorGeometria("El radio de la esfera debe ser positivo.")
+    return k.primitiva("esfera", [radio], centro)
+
+
+def se_tocan(a, b, tolerancia=1e-6):
+    """Contacto, superposición o una forma entera dentro de un sólido de la otra (FK-008)."""
+    return a.distancia(b) <= tolerancia
 
 
 def compuesto(formas):

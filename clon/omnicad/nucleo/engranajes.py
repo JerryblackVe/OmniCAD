@@ -432,6 +432,17 @@ def cremallera(modulo, dientes, *, angulo_presion=20.0, ancho=10.0, alto=None, h
     rectos inclinados el ángulo de presión, cabeza m y pie (1 + c)·m. Sólido en XY extruido en +Z: la línea
     primitiva sobre el eje X de x = 0 a x = dientes·π·m (los extremos caen en el medio de un hueco), los dientes
     hacia +Y y la base en y = −alto (`alto`: de la base a la línea primitiva; por defecto el pie más un módulo, 2,25·m)."""
+    puntos, b = _contorno_cremallera(modulo, dientes, angulo_presion, ancho, alto, holgura, juego)
+    pol = BRepBuilderAPI_MakePolygon()
+    for x, y in puntos:
+        pol.Add(_pnt(x, y))
+    pol.Close()
+    cara = BRepBuilderAPI_MakeFace(pol.Wire(), True).Face()
+    return _validar(_extruir(cara, b), "Cremallera")
+
+
+def _contorno_cremallera(modulo, dientes, angulo_presion, ancho, alto, holgura, juego):
+    """Valida las medidas y da los vértices del perfil (en orden, sin cerrar) y el ancho; común a los dos motores."""
     m = _positivo(modulo, "El módulo")
     n = _entero(dientes, "La cantidad de dientes", 1)
     alfa = _finito(angulo_presion, "El ángulo de presión")
@@ -459,17 +470,11 @@ def cremallera(modulo, dientes, *, angulo_presion=20.0, ancho=10.0, alto=None, h
         raise geo.ErrorGeometria("Los dientes de la cremallera se tocan en el fondo: bajá la holgura o el ángulo de "
                                  "presión.")
     largo = n * p
-    pol = BRepBuilderAPI_MakePolygon()
-    for x, y in [(0.0, -alto), (largo, -alto), (largo, -hf)]:
-        pol.Add(_pnt(x, y))
+    puntos = [(0.0, -alto), (largo, -alto), (largo, -hf)]
     for k in reversed(range(n)):
         xc = (k + 0.5) * p
-        for x, y in ((xc + w_pie, -hf), (xc + w_cabeza, ha), (xc - w_cabeza, ha), (xc - w_pie, -hf)):
-            pol.Add(_pnt(x, y))
-    pol.Add(_pnt(0.0, -hf))
-    pol.Close()
-    cara = BRepBuilderAPI_MakeFace(pol.Wire(), True).Face()
-    return _validar(_extruir(cara, b), "Cremallera")
+        puntos += [(xc + w_pie, -hf), (xc + w_cabeza, ha), (xc - w_cabeza, ha), (xc - w_pie, -hf)]
+    return puntos + [(0.0, -hf)], b
 
 
 # ---------------------------------------------------------------- rueda de cadena (ISO 606)

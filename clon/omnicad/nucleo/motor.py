@@ -13,6 +13,7 @@ from types import CodeType
 
 MOTORES = ("opencascade", "omnikernel")
 _fijo = ContextVar("motor_geometrico", default=None)
+_publica = ContextVar("operacion_publica", default=None)     # la función pública más externa en curso
 _preferencias = None
 
 
@@ -112,10 +113,23 @@ def registrar(espacio, iniciar, nombres=None):
 
     def envolver(funcion):
         comun = not _usa_opencascade(funcion.__code__, nombres_occ)
+        nombre = f"{modulo}.{funcion.__name__}"
+        privada = funcion.__name__.startswith("_")
 
         @wraps(funcion)
         def ejecutar(*args, **kwargs):
+            if privada or _publica.get() is not None:
+                return despachar(*args, **kwargs)
+            token = _publica.set(nombre)
+            try:
+                return despachar(*args, **kwargs)
+            finally:
+                _publica.reset(token)
+
+        def despachar(*args, **kwargs):
             nonlocal cargado
+            # Un faltante en una función interna se informa con la operación que el usuario pidió.
+            que = (_publica.get() or nombre) if privada else nombre
             elegido = motor_activo()
             _comprobar_formas(args, elegido)
             _comprobar_formas(kwargs, elegido)
@@ -131,16 +145,16 @@ def registrar(espacio, iniciar, nombres=None):
                 alternativa = import_module(ruta)
             except ModuleNotFoundError as e:
                 if e.name == ruta:
-                    sin_soporte(f"{modulo}.{funcion.__name__}")
+                    sin_soporte(que)
                 raise
             implementacion = getattr(alternativa, funcion.__name__, None)
             if implementacion is None:
-                sin_soporte(f"{modulo}.{funcion.__name__}")
+                sin_soporte(que)
             try:
                 return implementacion(*args, **kwargs)
             except import_module("omnikernel").ErrorOmniKernel as e:
                 if e.codigo in ("UnsupportedGeometry", "UnsupportedMode"):
-                    sin_soporte(f"{modulo}.{funcion.__name__} ({e.mensaje})")
+                    sin_soporte(f"{que} ({e.mensaje})")
                 from .geometria import ErrorGeometria
                 raise ErrorGeometria(e.mensaje) from e
         return ejecutar

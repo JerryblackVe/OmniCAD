@@ -9,15 +9,18 @@ def es_forma(forma):
 
 
 def centro_lineal(forma):
-    """Centro de longitud de una recta (su punto medio) o de un círculo entero (su centro); de un arco u otra curva el
-    kernel no lo da todavía (faltante FK-010)."""
-    f = forma.firma() if forma.tipo == "arista" else {}
-    if f.get("geom") == "linea":
-        return np.array(f["medio"], float)
-    if f.get("geom") == "circulo" and np.allclose(*f["extremos"], rtol=0, atol=1e-9):
-        return np.array(f["centro"], float)
-    from .. import motor
-    motor.sin_soporte("el centro de longitud de un arco, una curva o una cara")
+    if forma.tipo != "arista":
+        from .. import motor
+        motor.sin_soporte("el centro de longitud de una cara o un cuerpo")
+    return np.array(forma.centro_lineal(), float)
+
+
+def distancia(a, b):
+    return a.distancia(b)
+
+
+def dentro_solidos(solidos, punto, tolerancia=1e-7):
+    return any(s.clasificar(list(map(float, punto)), float(tolerancia)) == "adentro" for s in solidos)
 
 
 def centroide(forma):
@@ -28,3 +31,7 @@ def centroide(forma):
 
 def hijos_compuesto(forma):
     return forma.subformas("solido") if forma.tipo == "cuerpo" else [forma]
+
+
+def transformacion_identidad():
+    return np.eye(4)

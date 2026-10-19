@@ -1692,8 +1692,29 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
     ("6H", "2B", "auto"…: ver `tolerancias`) lleva el diámetro menor y los flancos al centro de su tolerancia y
     `holgura` (mm, radial) agranda todo para imprimir en 3D. `conicidad` (diámetro por mm de profundidad, p. ej.
     1/16 en las roscas de tubería cónicas) angosta el agujero hacia el fondo (Roscado cónico)."""
+    a = _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
+                        prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad)
+    p, d = a["punto"], a["direccion"]
+    e = _perpendicular(d)
+    perfil = _cara(_poligono([p + e * rho + d * zz for rho, zz in a["medio"]]))
+    herramienta = BRepPrimAPI_MakeRevol(perfil, gp_Ax1(_pnt(p), _gdir(d)), 2 * math.pi).Shape()
+    if roscado:
+        datos = a["rosca"]
+        surco, torno = _armar_surco(lambda extra: _surco_rosca(
+            p, d, datos["diametro"], datos["paso"], 0.0, profundidad, True, mano, radio_cara=a["radio"], partes=True,
+            extra=extra, **_perfil_surco(datos, a["flancos"])))
+        if torno is not None:                         # la holgura deja sin espesor la cresta: se agranda el agujero
+            herramienta = geo.booleano(herramienta, torno, "unir")
+        herramienta = geo.booleano(herramienta, surco, "unir")
+    return _validar(herramienta, "Agujero")
+
+
+def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
+                    prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad):
+    """Valida un agujero y da su medio perfil [(radio, profundidad)…] desde el eje (común a los dos motores)."""
     d = _unit(direccion, "dirección del agujero")
     p = np.asarray(punto, float)
+    datos = flancos = None
     if roscado:
         datos = datos_rosca(roscado)
         if datos["conica"]:
@@ -1740,17 +1761,7 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
         medio.append((0.0, profundidad))
     else:
         raise geo.ErrorGeometria(f"Punta de broca desconocida: {punta}")
-    e = _perpendicular(d)
-    perfil = _cara(_poligono([p + e * rho + d * zz for rho, zz in medio]))
-    herramienta = BRepPrimAPI_MakeRevol(perfil, gp_Ax1(_pnt(p), _gdir(d)), 2 * math.pi).Shape()
-    if roscado:
-        surco, torno = _armar_surco(lambda extra: _surco_rosca(
-            p, d, datos["diametro"], datos["paso"], 0.0, profundidad, True, mano, radio_cara=r, partes=True,
-            extra=extra, **_perfil_surco(datos, flancos)))
-        if torno is not None:                         # la holgura deja sin espesor la cresta: se agranda el agujero
-            herramienta = geo.booleano(herramienta, torno, "unir")
-        herramienta = geo.booleano(herramienta, surco, "unir")
-    return _validar(herramienta, "Agujero")
+    return {"punto": p, "direccion": d, "medio": medio, "radio": r, "rosca": datos, "flancos": flancos}
 
 
 def agujero(cuerpo, punto, direccion, *, profundidad=None, **opciones):
@@ -2513,6 +2524,21 @@ def _traslacion(v):
     return t
 
 
+def _rotacion(punto, eje, radianes):
+    t = gp_Trsf()
+    t.SetRotation(gp_Ax1(_pnt(punto), _gdir(eje)), radianes)
+    return t
+
+
+def _identidad():
+    return gp_Trsf()
+
+
+def _componer(t, previa):
+    """Primero `previa`, después `t`."""
+    return t.Multiplied(previa)
+
+
 def transformaciones_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribucion="extension",
                                    simetrico1=False, simetrico2=False, suprimir=()):
     """Patrón rectangular [SLD-REF-PATTERN]: lista de gp_Trsf en orden (i, j) — i por dir1, j por dir2 —
@@ -2547,16 +2573,9 @@ def transformaciones_circulares(punto, eje, n, *, angulo_total=360.0, distribuci
         paso = angulo_total
     else:
         raise geo.ErrorGeometria(f"Distribución desconocida: {distribucion}")
-    ax = gp_Ax1(_pnt(punto), _gdir(_unit(eje, "eje del patrón")))
+    u = _unit(eje, "eje del patrón")
     fuera = set(suprimir) - {0}
-    salida = []
-    for k in _indices(n, simetrico):
-        if k in fuera:
-            continue
-        t = gp_Trsf()
-        t.SetRotation(ax, math.radians(k * paso))
-        salida.append(t)
-    return salida
+    return [_rotacion(punto, u, math.radians(k * paso)) for k in _indices(n, simetrico) if k not in fuera]
 
 
 def _trsf_de_marcos(p0, f0, p1, f1):
@@ -2638,7 +2657,7 @@ def transformaciones_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=(
     _exigir_instancias(len(pts) + 1)
     fuera = {int(i) for i in suprimir} - {0}
     usados = [ref]
-    salida = [gp_Trsf()]
+    salida = [_identidad()]
     for k, p in enumerate(pts, start=1):
         if any(np.linalg.norm(p - q) < 1e-6 for q in usados):
             continue
@@ -2674,15 +2693,15 @@ def componer_transformaciones(listas):
             raise geo.ErrorGeometria("Una transformación de la lista no dejó ninguna instancia.")
         total *= len(lista)
     _exigir_instancias(total)
-    salida = [gp_Trsf()]
+    salida = [_identidad()]
     for lista in listas:
         nuevas = {}
         for t in lista:
             for previa in salida:
-                c = t.Multiplied(previa)     # primero las transformaciones anteriores, después esta
+                c = _componer(t, previa)     # primero las transformaciones anteriores, después esta
                 nuevas.setdefault(_clave_trsf(c), c)
         salida = list(nuevas.values())
-    identidad = gp_Trsf()
+    identidad = _identidad()
     return [identidad] + [t for t in salida if _clave_trsf(t) != _clave_trsf(identidad)]
 
 

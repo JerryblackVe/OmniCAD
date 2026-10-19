@@ -2,27 +2,44 @@
 """Operaciones locales de OmniKernel con la firma de `nucleo/solidos_modificar.py`.
 
 Las variantes que el kernel no tiene (radio variable, dos distancias, vaciado exterior…) informan
-MOTOR_SIN_SOPORTE. La paridad está probada sobre cuerpos de caras planas (donde la cadena tangente no
-agrega aristas); sobre caras curvas todo queda sin soporte (faltante FK-004).
+MOTOR_SIN_SOPORTE. Las cadenas tangentes salen del kernel (FK-004). Sobre cuerpos con caras curvas el kernel deja
+aristas de más o superficies libres donde OpenCascade pone cilindros, conos y toros: sin soporte (faltante FK-013).
 """
 import numpy as np
 
 from .. import motor
 from ..geometria import ErrorGeometria
-from .geometria import _mallable
 
 
 def _sin_curvas(forma, que):
-    """La paridad está probada en cuerpos de caras planas; con caras curvas faltan las cadenas tangentes (FK-004)."""
+    """Paridad probada solo en cuerpos de caras planas (faltante FK-013)."""
     if any(c.firma()["geom"] != "plano" for c in forma.subformas("cara")):
         motor.sin_soporte(f"{que} sobre un cuerpo con caras curvas")
+
+
+def aristas_cadena_tangente(forma, arista, tol_ang=1.0):
+    return arista.tangentes(tol_ang)
+
+
+def caras_tangentes(forma, cara, tol_ang=1.0):
+    return cara.tangentes(tol_ang)
+
+
+def _ampliar(subformas, activo):
+    """Cada arista o cara con su cadena tangente, sin repetir (opción «Tangent Chain»)."""
+    if not activo:
+        return list(subformas)
+    salida = []
+    for s in subformas:
+        salida += [t for t in s.tangentes(1.0) if not any(t.IsSame(o) for o in salida)]
+    return salida
 
 
 def _modificar(forma, operacion, subformas, valor=0.0, plano=None):
     resultado = forma.modificar(operacion, list(subformas), float(valor), plano)
     if not resultado.propiedades()["valida"]:
         raise ErrorGeometria(f"{operacion.capitalize()}: el resultado no es un sólido válido.")
-    return _mallable(resultado)
+    return resultado
 
 
 def _aristas_de_grupos(forma, grupos, que, tipo_valido, clave):
@@ -45,25 +62,16 @@ def _aristas_de_grupos(forma, grupos, que, tipo_valido, clave):
     return aristas, valor
 
 
-def _sin_esquinas(aristas, que):
-    """Las esquinas de varias aristas dan otra topología que OpenCascade (faltante FK-006)."""
-    puntos = [tuple(np.round(p, 6)) for a in aristas for p in a.firma()["extremos"]]
-    if len(puntos) != len(set(puntos)):
-        motor.sin_soporte(f"{que} de aristas que se juntan en una esquina")
-
-
 def empalme(forma, grupos, *, cadena_tangente=True):
     aristas, radio = _aristas_de_grupos(forma, grupos, "empalme", "constante", "radio")
-    _sin_esquinas(aristas, "el empalme")
-    return _modificar(forma, "empalme", aristas, radio)
+    return _modificar(forma, "empalme", _ampliar(aristas, cadena_tangente), radio)
 
 
 def chaflan(forma, grupos, *, cadena_tangente=True):
     if any(g.get("cara") is not None or g.get("voltear") for g in grupos or []):
         motor.sin_soporte("chaflán con cara de referencia o volteado")
     aristas, d = _aristas_de_grupos(forma, grupos, "chaflán", "distancia_igual", "distancia")
-    _sin_esquinas(aristas, "el chaflán")
-    return _modificar(forma, "chaflan", aristas, d)
+    return _modificar(forma, "chaflan", _ampliar(aristas, cadena_tangente), d)
 
 
 def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, direccion="interior",
@@ -75,7 +83,7 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
     if float(espesor_interior) <= 0:
         raise ErrorGeometria("Los espesores del vaciado deben ser positivos.")
     _sin_curvas(forma, "vaciado")
-    return _modificar(forma, "vaciado", caras_quitar, espesor_interior)
+    return _modificar(forma, "vaciado", _ampliar(caras_quitar, tangente), espesor_interior)
 
 
 def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados="uno", angulo2=None):
@@ -101,7 +109,7 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
     if abs(float(distancia)) < 1e-9:
         return forma
     _sin_curvas(forma, "desfase de caras")
-    return _modificar(forma, "desfase_caras", caras, distancia)
+    return _modificar(forma, "desfase_caras", _ampliar(caras, tangente), distancia)
 
 
 def quitar_caras(forma, caras):

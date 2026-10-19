@@ -15,7 +15,7 @@ import time
 
 RAIZ = Path(__file__).resolve().parents[1]
 CLON = RAIZ / "clon"
-PLAZO = 900
+PLAZO = 300           # por documento: las booleanas curvas lentas (FK-016) pasan los 15 minutos
 
 
 def _entorno(motor):

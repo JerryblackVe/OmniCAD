@@ -75,9 +75,9 @@ def test_formas_de_otro_motor_se_rechazan(monkeypatch):
 def test_faltante_es_error_tipado_sin_respaldo(monkeypatch):
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")
     with pytest.raises(geo.ErrorGeometria) as e:
-        geo.revolver([], (0, 0, 0), (0, 0, 1), 90)
+        geo.longitud(geo.caja(1, 2, 3))
     assert e.value.error_kind == "MOTOR_SIN_SOPORTE"
-    assert str(e.value) == ("OmniKernel todavía no hace geometria.revolver. "
+    assert str(e.value) == ("OmniKernel todavía no hace geometria.longitud. "
                             "Podés elegir OpenCascade en Preferencias.")
 
 
@@ -176,3 +176,12 @@ def test_preferencia_omnikernel_sin_modulo_usa_opencascade(monkeypatch):
     monkeypatch.setattr(motor, "_preferencias", {"geometria/motor": "omnikernel"})
     monkeypatch.setattr(motor, "version_omnikernel", lambda: None)
     assert motor.motor_activo() == "opencascade"
+
+
+def test_faltante_en_funcion_interna_nombra_la_operacion_publica(monkeypatch):
+    from omnicad.nucleo import engranajes
+    monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")
+    with pytest.raises(geo.ErrorGeometria) as e:
+        engranajes.engranaje(2.5, 30)           # el perfil usa `_linea`, interna y sin versión nativa
+    assert e.value.error_kind == "MOTOR_SIN_SOPORTE"
+    assert "engranajes.engranaje." in str(e.value) and "_linea" not in str(e.value)
