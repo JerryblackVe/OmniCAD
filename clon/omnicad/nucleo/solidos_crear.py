@@ -2372,13 +2372,38 @@ def _seccion_bobina(seccion, tamano):
     raise geo.ErrorGeometria(f"Sección de bobina desconocida: {seccion}")
 
 
+def _espiral(origen, eje, x, radio, paso, revoluciones, horario):
+    """Espiral de Arquímedes plana: el radio aumenta un paso por vuelta."""
+    y = np.cross(eje, x)
+    # shortcut: interpolación a 64 muestras/vuelta; usar aproximación adaptativa si se exige tolerancia radial.
+    cantidad = max(8, math.ceil(revoluciones * 64) + 1)
+    puntos = HArray1_gp_Pnt(1, cantidad)
+    for i in range(cantidad):
+        vueltas = revoluciones * i / (cantidad - 1)
+        angulo = vueltas * 2 * math.pi * (-1 if horario else 1)
+        puntos.SetValue(i + 1, _pnt(origen + (radio + paso * vueltas) *
+                                   (math.cos(angulo) * x + math.sin(angulo) * y)))
+    curva = GeomAPI_Interpolate(puntos, False, 1e-7)
+    curva.Perform()
+    if not curva.IsDone():
+        raise geo.ErrorGeometria("No se pudo construir la espiral de la bobina.")
+    return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(curva.Curve()).Edge()).Wire()
+
+
 def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=None, angulo=0.0,
-           seccion="circular", tamano_seccion, posicion_seccion="sobre", horario=False, eje_x=None):
+           seccion="circular", tamano_seccion, posicion_seccion="sobre", horario=False, eje_x=None,
+           tipo="rev_altura", girar=False):
     """Bobina (Coil) de Fusion [SLD-COIL-SOLID, SLD-REF-COIL]: hélice de `diametro` con base en `base_punto`.
     Se dan dos de `revoluciones`, `altura` y `paso` (la altura va del centro de la sección inicial al de la
     final). `angulo` = inclinación (positivo = el radio crece con la altura). Sección "circular", "cuadrada",
     "triangular_externa" o "triangular_interna" de tamaño = diámetro del círculo circunscrito, ubicada
-    "dentro", "sobre" o "fuera" del diámetro. `horario` invierte el giro."""
+    "dentro", "sobre" o "fuera" del diámetro. `horario` invierte el sentido. `tipo="espiral"` usa
+    revoluciones y paso radial, sin altura ni ángulo. `girar` rota 90° alrededor de Y local en la base."""
+    if tipo not in ("rev_altura", "rev_paso", "altura_paso", "espiral"):
+        raise geo.ErrorGeometria(f"Tipo de bobina desconocido: {tipo}")
+    espiral = tipo == "espiral"
+    if espiral and (revoluciones is None or paso is None or altura is not None):
+        raise geo.ErrorGeometria("La espiral necesita revoluciones y paso, sin altura.")
     if sum(v is not None for v in (revoluciones, altura, paso)) != 2:
         raise geo.ErrorGeometria("Dá exactamente dos de: revoluciones, altura y paso.")
     if revoluciones is not None and revoluciones <= 0:     # antes de dividir por ellas
@@ -2406,7 +2431,8 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
         raise geo.ErrorGeometria(f"Posición de sección desconocida: {posicion_seccion}")
     if r_c + min(radiales) <= 0:
         raise geo.ErrorGeometria("La sección no entra: cruza el eje de la bobina.")
-    if paso <= max(axiales) - min(axiales) + 1e-6:
+    ancho = max(radiales) - min(radiales) if espiral else max(axiales) - min(axiales)
+    if paso <= ancho + 1e-6:
         raise geo.ErrorGeometria("El paso es menor que la sección: las espiras se superpondrían.")
     centro = o + x * r_c
     if pts is None:
@@ -2414,8 +2440,12 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
             gp_Circ(gp_Ax2(_pnt(centro), _gdir(np.cross(z, x))), tamano_seccion / 2)).Edge()).Wire()
     else:
         perfil = _poligono([centro + x * a + z * b for a, b in pts])
-    helice = _helice(o, z, x, r_c, paso, altura, "izquierda" if horario else "derecha", angulo)
-    return _validar(_barrido_helicoidal(perfil, helice), "Bobina")
+    helice = (_espiral(o, z, x, r_c, paso, revoluciones, horario) if espiral else
+              _helice(o, z, x, r_c, paso, altura, "izquierda" if horario else "derecha", angulo))
+    forma = _barrido_helicoidal(perfil, helice)
+    if girar:
+        forma = _girar(forma, gp_Ax1(_pnt(o), _gdir(np.cross(z, x))), 90)
+    return _validar(forma, "Bobina")
 
 
 # ================================================================ 10. tubería
