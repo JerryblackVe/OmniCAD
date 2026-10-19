@@ -159,8 +159,9 @@ class OpRepujado(_OpCrear):
     encima); o envuelto en un cilindro."""
     TIPO, ETIQUETA, ICONO = "repujado", "Repujado", "Ⓐ"
     PARAMS = {"perfiles": [], "cara": None, "caras": [], "profundidad": "1 mm", "tipo": "relieve",
-              "envolver": False}
-    EXPRESIONES = ("profundidad",)
+              "envolver": False, "cadena_tangente": False, "desfase_h": "0 mm", "desfase_v": "0 mm",
+              "giro": "0 deg", "invertir": False}
+    EXPRESIONES = ("profundidad", "desfase_h", "desfase_v", "giro")
     OPCIONES = {"tipo": ("relieve", "grabado")}
     REFS = ("perfiles", "cara", "caras")
 
@@ -180,7 +181,10 @@ class OpRepujado(_OpCrear):
         nuevas = _sc().repujado_en_cuerpos([(c.forma, f) for c, f in zip(cuerpos, por_cuerpo.values(), strict=True)],
                                            caras,
                                            ctx.evaluar(self.p["profundidad"]), tipo=self.p["tipo"],
-                                           envolver=self.p["envolver"])
+                                           envolver=self.p["envolver"], cadena_tangente=self.p["cadena_tangente"],
+                                           desfase_h=ctx.evaluar(self.p["desfase_h"]),
+                                           desfase_v=ctx.evaluar(self.p["desfase_v"]),
+                                           giro=ctx.evaluar(self.p["giro"], ANGULO), invertir=self.p["invertir"])
         for c, forma in zip(cuerpos, nuevas, strict=True):
             c.forma = forma
         self._registrar_usados(list(por_cuerpo))

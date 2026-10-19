@@ -1205,14 +1205,17 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
 
 
 # ================================================================ 6. repujado
-def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False, adaptar=True):
+def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
+             cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
     """Repujado (Emboss) de Fusion [SLD-EMBOSS] sobre un cuerpo (ver `repujado_en_cuerpos`): `cara_objetivo` es una
     cara o una LISTA de caras del cuerpo. Devuelve el cuerpo resultante."""
     return repujado_en_cuerpos([(cuerpo, cara_objetivo)], caras_perfil, profundidad, tipo=tipo, envolver=envolver,
-                               adaptar=adaptar)[0]
+                               adaptar=adaptar, cadena_tangente=cadena_tangente, desfase_h=desfase_h,
+                               desfase_v=desfase_v, giro=giro, invertir=invertir)[0]
 
 
-def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True):
+def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
+                        cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
     """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita (profundidad negativa
     invierte el efecto, como en Fusion). `objetivos` = [(cuerpo, cara o lista de caras)]; devuelve los cuerpos
     resultantes en el mismo orden (sin cambios el que no recibe nada).
@@ -1223,7 +1226,10 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     que queda debajo. Si no cae sobre ninguna, error. Perfiles NO paralelos a la cara (p. ej. un costado): con
     `adaptar` (por defecto) se giran para mirar hacia afuera, se centran en la zona y se achican hasta entrar.
     Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
-    conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial."""
+    conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial.
+    `cadena_tangente` agrega caras conectadas tangencialmente. La alineación gira alrededor del centro de
+    los perfiles y después desplaza en los ejes locales horizontal/vertical (mm); `giro` va en grados.
+    `invertir` cambia la dirección normal sin cambiar el efecto elegido (unión o corte)."""
     if profundidad < 0:
         profundidad, tipo = -profundidad, ("grabado" if tipo == "relieve" else "relieve")
     geo.exigir_longitud(profundidad, "La profundidad del repujado")
@@ -1232,10 +1238,22 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     perfiles = _caras_de(caras_perfil)
     if not perfiles:
         raise geo.ErrorGeometria("Elegí al menos un perfil para repujar.")
-    caras = [(i, TopoDS.Face(c)) for i, (_, cs) in enumerate(objetivos) for c in _lista(cs)]
+    if not all(math.isfinite(x) for x in (desfase_h, desfase_v, giro)):
+        raise geo.ErrorGeometria("La alineación del repujado debe tener valores finitos.")
+    caras = []
+    for i, (cuerpo, cs) in enumerate(objetivos):
+        for c in _lista(cs):
+            if cadena_tangente:
+                from .solidos_modificar import caras_tangentes
+                cadena = caras_tangentes(cuerpo, c)
+            else:
+                cadena = [c]
+            for cara in cadena:
+                if not any(j == i and cara.IsSame(otra) for j, otra in caras):
+                    caras.append((i, TopoDS.Face(cara)))
     if not caras:
         raise geo.ErrorGeometria("Elegí la cara sobre la que va el repujado.")
-    sentido = 1.0 if tipo == "relieve" else -1.0
+    sentido = (1.0 if tipo == "relieve" else -1.0) * (-1.0 if invertir else 1.0)
     herramientas = [[] for _ in objetivos]
     grupos = []                                       # caras planas con la misma normal: una sola zona
     for k, (i, cara) in enumerate(caras, 1):
@@ -1250,12 +1268,15 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
         donde = f" (cara {k})" if len(caras) > 1 else ""
         if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Cylinder:
             raise geo.ErrorGeometria("El repujado admite caras planas o cilíndricas (envolviendo)" + donde + ".")
-        if not envolver:
+        if not (envolver or cadena_tangente):
             raise geo.ErrorGeometria("Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)"
                                      + donde + ".")
-        herramientas[i].append(_envolver_en_cilindro(perfiles, cara, profundidad, tipo))
+        pl_perfil = geo.plano_de_cara(perfiles[0])
+        alineados = _alinear_repujado(perfiles, pl_perfil, desfase_h, desfase_v, giro)
+        herramientas[i].append(_envolver_en_cilindro(alineados, cara, -profundidad if invertir else profundidad, tipo,
+                                                    recortar=cadena_tangente))
     for grupo in grupos:
-        for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar):
+        for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar, desfase_h, desfase_v, giro):
             herramientas[i].append(h)
     herramientas = [[h for h in hs if not geo.esta_vacia(h)] for hs in herramientas]
     if not any(herramientas):
@@ -1266,13 +1287,24 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
             for (cuerpo, _), hs in zip(objetivos, herramientas, strict=True)]
 
 
-def _repujado_en_grupo(perfiles, grupo, prof, adaptar):
+def _alinear_repujado(perfiles, plano, desfase_h, desfase_v, giro):
+    if not (desfase_h or desfase_v or giro):
+        return perfiles
+    areas = [geo.area(f) for f in perfiles]
+    centro = sum(a * np.array(geo.centro_masa(f, superficie=True))
+                 for a, f in zip(areas, perfiles, strict=True)) / sum(areas)
+    desplazamiento = plano.u * desfase_h + plano.v * desfase_v
+    return [TopoDS.Face(geo.trasladar(geo.rotar(f, centro, plano.normal, giro), desplazamiento)) for f in perfiles]
+
+
+def _repujado_en_grupo(perfiles, grupo, prof, adaptar, desfase_h, desfase_v, giro):
     """[(índice del cuerpo, herramienta)] para un grupo de caras planas paralelas [(índice, cara, plano)]: el texto
     se ubica una vez para todo el grupo y cada cara recibe lo que le cae encima. Se recorre de la cara más de
     afuera a la más de adentro: lo que queda debajo de una cara elegida más afuera no se repuja."""
     pl0 = grupo[0][2]
     n = np.asarray(pl0.normal, float)
     sobre = _perfiles_en_zona(perfiles, [c for _, c, _ in grupo], pl0, adaptar)
+    sobre = _alinear_repujado(sobre, pl0, desfase_h, desfase_v, giro)
     cajas_piezas = [_caja_2d([f], pl0) for f in sobre]
 
     def altura(pl):
@@ -1552,7 +1584,7 @@ def _aristas_envueltas(e, a_uv, superficie):
     return aristas
 
 
-def _envolver_en_cilindro(perfiles, cara, profundidad, tipo):
+def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
     sup = BRepAdaptor_Surface(cara)
     cil = sup.Cylinder()
     radio = cil.Radius()
@@ -1595,13 +1627,17 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo):
         arreglo = ShapeFix_Face(mf.Face())
         arreglo.Perform()
         lamina = arreglo.Face()
-        bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(lamina)
-        p_l, n_l = _normal_orientada(lamina, (bu0 + bu1) / 2, (bv0 + bv1) / 2)
-        normal_afuera = float(n_l @ (p_l - o - z * float((p_l - o) @ z))) > 0
-        # relieve: hacia afuera del material (lejos del eje en un macizo, hacia el eje en un agujero)
-        lejos_del_eje = (tipo == "relieve") == afuera
-        herramientas.append(_engrosar_lamina(lamina, profundidad if lejos_del_eje == normal_afuera else -profundidad))
-    return _unir(herramientas)
+        partes = _booleana_caras([lamina], [cara], BRepAlgoAPI_Common) if recortar else lamina
+        if partes is None:
+            raise geo.ErrorGeometria("No se pudo recortar el repujado sobre la cara tangente.")
+        for parte in _caras_de(partes):
+            bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(parte)
+            p_l, n_l = _normal_orientada(parte, (bu0 + bu1) / 2, (bv0 + bv1) / 2)
+            normal_afuera = float(n_l @ (p_l - o - z * float((p_l - o) @ z))) > 0
+            # relieve: hacia afuera del material (lejos del eje en un macizo, hacia el eje en un agujero)
+            lejos_del_eje = (tipo == "relieve") == afuera
+            herramientas.append(_engrosar_lamina(parte, profundidad if lejos_del_eje == normal_afuera else -profundidad))
+    return _unir(herramientas) if herramientas else geo.compuesto([])
 
 
 # ================================================================ 7. agujero

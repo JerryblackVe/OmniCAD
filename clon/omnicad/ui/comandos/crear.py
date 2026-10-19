@@ -143,14 +143,20 @@ class Repujado(Comando):
                 Seleccion("caras", "Caras", {"cara"}, maximo=None,
                           ayuda="Una o varias caras: el texto se proyecta en su lugar y se reparte entre ellas "
                                 "(cada una recibe solo lo que le cae encima)."),
+                Casilla("cadena_tangente", "Cadena tangente"),
                 Opciones("tipo", "Tipo", {"relieve": "Relieve", "grabado": "Grabado"}),
-                Expresion("profundidad", "Profundidad", "1 mm"), Casilla("envolver", "Envolver en la cara")]
+                Casilla("invertir", "Invertir normal"),
+                Expresion("profundidad", "Profundidad", "1 mm"), Casilla("envolver", "Envolver en la cara"),
+                Expresion("desfase_h", "Distancia horizontal", "0 mm"),
+                Expresion("desfase_v", "Distancia vertical", "0 mm"),
+                Expresion("giro", "Ángulo de giro", "0 deg", ANGULO)]
 
     def construir(self, v, ctx):
         exigir(v, "perfiles", "Seleccioná los perfiles.")
         exigir(v, "caras", "Seleccioná al menos una cara.")
         return self.crear_op(OpRepujado, v, ctx, perfiles=refs(v, "perfiles"), cara=None, caras=refs(v, "caras"),
-                             profundidad=v["profundidad"], tipo=v["tipo"], envolver=v["envolver"])
+                             **{k: v[k] for k in ("profundidad", "tipo", "envolver", "cadena_tangente",
+                                                   "desfase_h", "desfase_v", "giro", "invertir")})
 
     def desde_op(self, op, ctx):
         caras = list(op.p.get("caras") or []) + ([op.p["cara"]] if op.p.get("cara") else [])
