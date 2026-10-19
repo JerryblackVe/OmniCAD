@@ -604,7 +604,7 @@ class Rosca(Comando):
 
 class Bobina(Comando):
     CLAVE, TITULO, ICONO = "bobina", "Bobina", "bobina"
-    AYUDA = "Resorte o hélice con sección circular, cuadrada o triangular."
+    AYUDA = "Resorte, hélice o espiral plana con sección circular, cuadrada o triangular; giro de 90° en Y local."
     CLASE_OP = OpBobina
 
     def campos(self, ctx):
@@ -613,23 +613,24 @@ class Bobina(Comando):
                 Seleccion("centro", "Centro", {"punto", "vertice"}, minimo=0, ayuda="Sin selección: el origen del plano."),
                 Expresion("diametro", "Diámetro", "20 mm"),
                 Opciones("tipo", "Tipo", {"rev_altura": "Revoluciones y altura", "rev_paso": "Revoluciones y paso",
-                                          "altura_paso": "Altura y paso"}),
-                Expresion("revoluciones", "Revoluciones", "5", ESCALAR, visible_si=t("rev_altura", "rev_paso")),
+                                          "altura_paso": "Altura y paso", "espiral": "Espiral"}),
+                Expresion("revoluciones", "Revoluciones", "5", ESCALAR, visible_si=t("rev_altura", "rev_paso", "espiral")),
                 Expresion("altura", "Altura", "30 mm", visible_si=t("rev_altura", "altura_paso")),
-                Expresion("paso", "Paso", "6 mm", visible_si=t("rev_paso", "altura_paso")),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
+                Expresion("paso", "Paso", "6 mm", visible_si=t("rev_paso", "altura_paso", "espiral")),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=lambda v: v.get("tipo") != "espiral"),
                 Opciones("seccion", "Sección", {"circular": "Circular", "cuadrada": "Cuadrada",
                                                 "triangular_externa": "Triangular (externa)",
                                                 "triangular_interna": "Triangular (interna)"}),
                 Opciones("posicion", "Posición de la sección", {"sobre": "Sobre", "dentro": "Dentro", "fuera": "Fuera"}),
                 Expresion("tamano", "Tamaño de la sección", "3 mm"), Casilla("horario", "Sentido horario"),
+                Casilla("girar", "Giro", ayuda="Rotar 90° alrededor del eje Y local de la bobina."),
                 campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
         ctx.evaluar(v["diametro"])
         return self.crear_op(OpBobina, v, ctx, plano=ref1(v, "plano"), centro=ref1(v, "centro"), objetivos=objetivos(v),
                              **{k: v[k] for k in ("diametro", "tipo", "revoluciones", "altura", "paso", "angulo",
-                                                  "seccion", "tamano", "posicion", "horario", "operacion")})
+                                                  "seccion", "tamano", "posicion", "horario", "girar", "operacion")})
 
     def desde_op(self, op, ctx):
         return _con_objetivos(op, ctx, dict(op.p, plano=_h1(op.p["plano"], ctx.estado),

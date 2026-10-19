@@ -383,14 +383,14 @@ class OpRosca(_OpCrear):
 
 class OpBobina(_OpCrear):
     """Bobina de Fusion [SLD-COIL-SOLID]: plano/cara + centro, diámetro, tipo (revoluciones y altura,
-    revoluciones y paso, altura y paso), ángulo, sección y su posición."""
+    revoluciones y paso, altura y paso o espiral plana), ángulo, sección, su posición y giro de 90° en Y local."""
     TIPO, ETIQUETA, ICONO = "bobina", "Bobina", "➰"
     PARAMS = {"plano": None, "centro": None, "diametro": "20 mm", "tipo": "rev_altura", "revoluciones": "5",
               "altura": "30 mm", "paso": "6 mm", "angulo": "0 deg", "seccion": "circular", "tamano": "3 mm",
-              "posicion": "sobre", "horario": False, "operacion": "nuevo", "objetivos": []}
+              "posicion": "sobre", "horario": False, "girar": False, "operacion": "nuevo", "objetivos": []}
     EXPRESIONES = ("diametro", "revoluciones", "altura", "paso", "angulo", "tamano")
     DATOS = {"rev_altura": ("revoluciones", "altura"), "rev_paso": ("revoluciones", "paso"),
-             "altura_paso": ("altura", "paso")}           # tipo → los dos datos que se dan
+             "altura_paso": ("altura", "paso"), "espiral": ("revoluciones", "paso")}  # tipo → los dos datos
     OPCIONES = {"tipo": DATOS, "seccion": ("circular", "cuadrada", "triangular_externa", "triangular_interna"),
                 "posicion": ("dentro", "sobre", "fuera"), "operacion": OPERACIONES_CUERPO}
     REFS = ("plano", "centro")
@@ -402,9 +402,10 @@ class OpBobina(_OpCrear):
         datos = {"revoluciones": None, "altura": None, "paso": None}
         for k in self.DATOS[p["tipo"]]:
             datos[k] = ctx.evaluar(p[k], "escalar" if k == "revoluciones" else "longitud")
-        forma = _sc().bobina(centro, plano.normal, diametro=ctx.evaluar(p["diametro"]), angulo=ctx.evaluar(p["angulo"], ANGULO),
+        angulo = 0.0 if p["tipo"] == "espiral" else ctx.evaluar(p["angulo"], ANGULO)
+        forma = _sc().bobina(centro, plano.normal, diametro=ctx.evaluar(p["diametro"]), angulo=angulo,
                              seccion=p["seccion"], tamano_seccion=ctx.evaluar(p["tamano"]), posicion_seccion=p["posicion"],
-                             horario=p["horario"], eje_x=plano.u, **datos)
+                             horario=p["horario"], eje_x=plano.u, tipo=p["tipo"], girar=p["girar"], **datos)
         self._aplicar(estado, ctx, forma)
 
 
