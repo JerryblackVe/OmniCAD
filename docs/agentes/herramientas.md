@@ -1174,7 +1174,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`revolve`](#revolve) | sí | Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción). |
 | [`sweep`](#sweep) | sí | Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). |
 | [`loft`](#loft) | sí | Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. |
-| [`create_box`](#create_box) | sí | Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. |
+| [`create_box`](#create_box) | sí | Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. |
 | [`create_cylinder`](#create_cylinder) | sí | Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo). |
 | [`create_sphere`](#create_sphere) | sí | Crea una esfera. (x, y, z) es su centro. |
 | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
@@ -1271,19 +1271,20 @@ Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden
 
 ### `create_box`
 
-Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. Medidas y posición aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado (caja_centrada) y edit_feature acepta length, width y height.
+Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. Medidas y posición aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado (caja_centrada) y edit_feature acepta length, width y height.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `length` (número o expresión; obligatorio): tamaño en X (mm, positivo).
   - `width` (número o expresión; obligatorio): tamaño en Y (mm, positivo).
   - `height` (número o expresión; obligatorio): tamaño en Z (mm, positivo).
-  - `x` (número o expresión; opcional, por defecto `0`): x del centro de la base (mm).
-  - `y` (número o expresión; opcional, por defecto `0`): y del centro de la base (mm).
+  - `x` (número o expresión; opcional, por defecto `0`): x del centro de la base o de la esquina mínima, según anchor (mm).
+  - `y` (número o expresión; opcional, por defecto `0`): y del centro de la base o de la esquina mínima, según anchor (mm).
   - `z` (número o expresión; opcional, por defecto `0`): z de la base (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
+  - `anchor` ("center" | "corner"; opcional, por defecto `"center"`): "center" sitúa (x, y, z) en el centro de la base; "corner", en la esquina mínima (crece hacia +X, +Y, +Z).
 - CLI: `omnicad call create_box --doc pieza.omnicad length=… width=… height=…`
 
 ### `create_cylinder`
