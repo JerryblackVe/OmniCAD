@@ -154,6 +154,19 @@ def test_propiedades_mide_los_cuerpos_del_grupo(v):
     assert "24000" in v._texto_estado or "24000" in v._info_sel or "24000" in v.timeline.estado.text()
 
 
+def test_menu_del_cuerpo_trae_opacidad_aislar_y_aspecto(v):
+    """El menú del cuerpo reusaba el del grupo y la opacidad quedó sin ningún camino en la interfaz."""
+    cid = next(iter(v.doc.estado_final.cuerpos))
+    menu = menu_de(v, cid)
+    textos = {a.text().split("\t")[0] for a in menu.actions()}
+    assert {"Mover/copiar", "Material físico…", "Aspecto…", "Quitar", "Control de opacidad", "Aislar",
+            "Desaislar", "Buscar en la secuencia temporal"} <= textos
+    accion(accion(menu, "Control de opacidad").menu(), "50 %").trigger()
+    assert v.doc.propiedades[cid]["opacidad"] == 0.5
+    accion(menu_de(v, cid), "Aislar").trigger()
+    assert v.ocultos == set(v.doc.estado_final.cuerpos) - {cid}
+
+
 @pytest.mark.parametrize("texto", ["Copiar", "Cortar"])
 def test_portapapeles_no_implementado_queda_gris_con_razon(v, texto):
     a = accion(menu_de(v, next(iter(v.doc.estado_final.cuerpos))), texto)

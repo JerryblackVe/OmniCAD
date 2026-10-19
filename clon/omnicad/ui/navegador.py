@@ -365,15 +365,6 @@ class Navegador(QFrame):
             m.addAction("Ir a la vista", lambda: self.vista_ir.emit(nombre))
             m.addAction("Renombrar…", lambda: self.vista_renombrar.emit(nombre))
             m.addAction("Eliminar", lambda: self.vista_borrar.emit(nombre))
-        elif tipo == "boceto":
-            m.addAction("Editar boceto", lambda: self.editar.emit(clave))
-            m.addAction("Guardar como DXF…", lambda: self.accion.emit("boceto_dxf", clave))
-            m.addAction("Guardar como SVG…", lambda: self.accion.emit("boceto_svg", clave))
-            m.addAction("Limpiar geometría", lambda: self.accion.emit("boceto_limpiar", clave))
-            m.addAction("Renombrar…", lambda: self.accion.emit("renombrar_paso", clave))
-            m.addAction("Buscar en el timeline", lambda: self.accion.emit("buscar_timeline", clave))
-            m.addSeparator()
-            m.addAction("Suprimir", lambda: self.accion.emit("borrar_paso", clave))
         elif tipo in ("plano", "eje", "punto"):
             m.addAction("Editar…", lambda: self.editar.emit(clave.split("_")[0]))
             m.addAction("Buscar en el timeline", lambda: self.accion.emit("buscar_timeline", clave.split("_")[0]))
@@ -394,23 +385,6 @@ class Navegador(QFrame):
         elif tipo == "analisis":
             m.addAction("Mostrar u ocultar", lambda: self.accion.emit("analisis_ojo", clave))
             m.addAction("Suprimir", lambda: self.accion.emit("analisis_borrar", clave))
-        elif tipo == "cuerpo":
-            m.addAction("Mover/copiar", lambda: self.accion.emit("mover", clave))
-            m.addSeparator()
-            m.addAction("Renombrar…", lambda: self.accion.emit("renombrar_cuerpo", clave))
-            m.addAction("Aspecto…", lambda: self.accion.emit("aspecto", clave))
-            m.addAction("Material físico…", lambda: self.accion.emit("material", clave))
-            m.addAction("Propiedades", lambda: self.accion.emit("propiedades", clave))
-            m.addSeparator()
-            opacidad = m.addMenu("Control de opacidad")
-            for pct in (100, 70, 50, 30, 10):
-                opacidad.addAction(f"{pct} %", lambda p=pct: self.accion.emit(f"opacidad:{p}", clave))
-            m.addAction("Aislar", lambda: self.accion.emit("aislar", clave))
-            m.addAction("Desaislar", lambda: self.accion.emit("desaislar", clave))
-            m.addAction("Buscar en el timeline", lambda: self.accion.emit("buscar_timeline", clave.split(".c")[0]))
-            m.addSeparator()
-            m.addAction("Quitar", lambda: self.accion.emit("quitar", clave))
-            m.addAction("Suprimir", lambda: self.accion.emit("suprimir", clave))
         if not m.isEmpty():
             m.exec(self.arbol.viewport().mapToGlobal(pos))
 
