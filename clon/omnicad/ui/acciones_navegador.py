@@ -71,6 +71,10 @@ def menu(v, item):
     conjunto.setEnabled(bool(ids))
     conjunto.setToolTip("Elegí al menos un cuerpo o boceto." if not ids else "Guarda y permite reutilizar esta selección.")
     m.addSeparator()
+    if tipo == "cuerpo":
+        m.addAction("Mover/copiar", lambda: v._accion_navegador("mover", clave))
+        m.addAction("Material físico…", lambda: v._accion_navegador("material", clave))
+        m.addAction("Aspecto…", lambda: v._accion_navegador("aspecto", clave))
     prop = m.addAction("Propiedades", lambda: propiedades(v, ids))
     prop.setEnabled(bool(ids))
     prop.setToolTip("El grupo está vacío." if not ids else "Mide las propiedades de los elementos elegidos.")
@@ -80,6 +84,8 @@ def menu(v, item):
         a.setEnabled(False)
         a.setToolTip("El portapapeles de cuerpos con referencias paramétricas todavía no está implementado.")
     m.addAction("Suprimir\tSuprimir", lambda: suprimir(v, clave, tipo))
+    if tipo == "cuerpo":
+        m.addAction("Quitar", lambda: v._accion_navegador("quitar", clave))
     m.addAction("Cambiar nombre", lambda: (organizar(v, "rename_group", clave, clave) if tipo == "grupo"
                                            else v.navegador.renombrar_en_linea(item)))
     m.addSeparator()
@@ -87,6 +93,14 @@ def menu(v, item):
     ojo.setEnabled(bool(ids))
     ojo.setToolTip("El grupo está vacío." if not ids else "Alterna la visibilidad de los elementos elegidos.")
     m.addAction("Mostrar todo", lambda: mostrar(v, [], True))
+    if tipo == "cuerpo":
+        opacidad = m.addMenu("Control de opacidad")
+        for pct in (100, 70, 50, 30, 10):
+            opacidad.addAction(f"{pct} %", lambda _=False, p=pct: v._accion_navegador(f"opacidad:{p}", clave))
+        m.addAction("Aislar", lambda: v._accion_navegador("aislar", clave))
+        m.addAction("Desaislar", lambda: v._accion_navegador("desaislar", clave))
+        m.addSeparator()
+        m.addAction("Buscar en la secuencia temporal", lambda: v._accion_navegador("buscar_timeline", clave.split(".c")[0]))
     return m
 
 
