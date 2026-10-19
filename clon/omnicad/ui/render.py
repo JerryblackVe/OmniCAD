@@ -1007,7 +1007,7 @@ class LienzoRender(Visor3D):
         res = int(min(2048, max(512, 2 ** math.ceil(math.log2(max(ancho, alto) * ss * 1.5)))))
         return rc.renderizar(self.objetos_render(), self.camara_dict(), self.escena, ancho, alto, ss, cielo=self.cielo(),
                              fondo_transparente=fondo_transparente, z_suelo=self.z_suelo, progreso=progreso,
-                             res_sombras=res)
+                             res_sombras=res, calcomanias=[d for _i, d in self.config.lienzos])
 
     def _renderizar_gl(self, ancho, alto, ss, transparente):
         self.makeCurrent()

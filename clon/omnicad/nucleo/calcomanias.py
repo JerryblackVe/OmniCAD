@@ -25,7 +25,7 @@ def superficie(cara, cuerpo=None, encadenar=False, centrada=True):
     En cilindros la anchura mide arco (desarrollo exacto); en las demás caras se proyecta
     desde el plano tangente. El recorte conserva bordes y agujeros de la cara.
     """
-    s = BRepAdaptor_Surface(cara)
+    s = BRepAdaptor_Surface(cara, True)
     cilindro = s.GetType() == GeomAbs_Cylinder
     pl = geo.plano_de_cara(cara)
     if pl is None:
@@ -48,7 +48,7 @@ def superficie(cara, cuerpo=None, encadenar=False, centrada=True):
         pos = cil.Position()
         centro = np.array(pos.Location().Coord())
         x, y, z = (np.array(d.Coord()) for d in (pos.XDirection(), pos.YDirection(), pos.Direction()))
-        a0 = math.atan2((origen - centro) @ y, (origen - centro) @ x)
+        a0 = (s.FirstUParameter() + s.LastUParameter()) / 2
     for f in caras:
         pts, ns = geo.teselar(f, 0.05)
         if cilindro:
@@ -69,12 +69,14 @@ def superficie(cara, cuerpo=None, encadenar=False, centrada=True):
         raise geo.ErrorGeometria("La cara no tiene una malla utilizable para la calcomanía.")
     base = coords[0]
     minimo, maximo = base.min(axis=0), base.max(axis=0)
+    tamano = (np.array([(s.LastUParameter() - s.FirstUParameter()) * cil.Radius(),
+                       s.LastVParameter() - s.FirstVParameter()]) if cilindro else maximo - minimo)
     desplazamiento = (minimo + maximo) / 2 if centrada and not cilindro else np.zeros(2)
     if np.any(desplazamiento):
         pl = geo.Plano.desde_marco(pl.a_3d(*desplazamiento), pl.normal, pl.u)
     return {"plano": pl, "vertices": np.concatenate(vertices), "normales": np.concatenate(normales),
             "coordenadas": np.concatenate(coords) - desplazamiento,
-            "tamano": maximo - minimo, "caras": len(caras)}
+            "tamano": tamano, "caras": len(caras)}
 
 
 def textura(coordenadas, ancho, alto, dx=0, dy=0, angulo=0, voltear_h=False, voltear_v=False):

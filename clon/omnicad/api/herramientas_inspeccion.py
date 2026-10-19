@@ -155,8 +155,12 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
     k = min(2.0, max(1.0, math.sqrt(_PIXELES_RENDER / (width * height))))
     w, h = round(width * k), round(height * k)
     res = int(min(2048, max(512, 2 ** math.ceil(math.log2(max(w, h) * 1.5)))))
+    from ..timeline.ops_insertar import calcomanias_vigentes
+    ids = {c.id for c in cuerpos}
+    calcomanias = [d for _i, d in calcomanias_vigentes(sesion.doc, sesion.doc.estado_final)
+                  if d.get("calcomania") and d.get("cuerpo") in ids]
     rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, z_suelo=z_suelo, res_sombras=res, mosaico=2048,
-                         n_luces=1 if lighting == "key_only" else 3)
+                         n_luces=1 if lighting == "key_only" else 3, calcomanias=calcomanias)
     from PIL import Image                            # Pillow: ya lo usa render_cpu.guardar_png
     imagen = Image.fromarray(np.ascontiguousarray(rgba[..., :3]), "RGB")
     if (w, h) != (width, height):
