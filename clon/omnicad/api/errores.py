@@ -229,6 +229,8 @@ _MENSAJES_PASO = [
 
 def error(error_kind, mensaje, *pistas_extra):
     """ErrorAPI con las pistas de la tabla más las propias (máximo 3)."""
+    if error_kind == "OPERATION_FAILED" and "Distancia máxima aproximada:" in mensaje:
+        pistas_extra = (*pistas_extra, "Distancia máxima aproximada:" + mensaje.split("Distancia máxima aproximada:", 1)[1])
     return ErrorAPI(error_kind, mensaje, (list(pistas_extra) + PISTAS.get(error_kind, []))[:3])
 
 
