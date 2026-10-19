@@ -244,33 +244,39 @@ def _punto_en(alambre, fraccion):
     return _xyz(p), _unit(_xyz(v), "tangente de la ruta")
 
 
-def _recortar_alambre(alambre, fraccion):
-    """Primer tramo del alambre hasta una fracción de su longitud (opción Distancia de barrido y tubería)."""
-    if fraccion >= 1.0 - 1e-9:
+def _recortar_alambre(alambre, fraccion, inicio=0.0):
+    """Tramo entre dos fracciones de longitud (opción Distancia de barrido y tubería)."""
+    if fraccion >= 1.0 - 1e-9 and inicio == 0:
         return alambre
-    if fraccion <= 1e-6:
+    if fraccion - inicio <= 1e-6:
         raise geo.ErrorGeometria("La distancia sobre la ruta debe ser mayor que cero.")
-    objetivo, acumulado = fraccion * _longitud(alambre), 0.0
+    total = _longitud(alambre)
+    objetivo, desde, acumulado = min(fraccion, 1.0) * total, inicio * total, 0.0
     mk = BRepBuilderAPI_MakeWire()
     for e in _aristas_de(alambre):
         largo = _longitud(e)
-        if acumulado + largo < objetivo - 1e-9:
+        a, b = max(0.0, desde - acumulado), min(largo, objetivo - acumulado)
+        acumulado += largo
+        if b - a <= 1e-9:
+            continue
+        if a <= 1e-9 and b >= largo - 1e-9:
             mk.Add(e)
-            acumulado += largo
             continue
         curva = BRepAdaptor_Curve(e)
         geom = BRep_Tool.Curve_s(e, 0.0, 0.0)
-        resto = objetivo - acumulado
         if e.Orientation() == TopAbs_REVERSED:
-            u1 = curva.LastParameter()
-            u0 = GCPnts_AbscissaPoint(curva, -resto, u1).Parameter()
+            extremo = curva.LastParameter()
+            u1 = extremo if a <= 1e-9 else GCPnts_AbscissaPoint(curva, -a, extremo).Parameter()
+            u0 = GCPnts_AbscissaPoint(curva, -b, extremo).Parameter()
             nueva = BRepBuilderAPI_MakeEdge(geom, u0, u1).Edge().Reversed()
         else:
-            u0 = curva.FirstParameter()
-            u1 = GCPnts_AbscissaPoint(curva, resto, u0).Parameter()
+            extremo = curva.FirstParameter()
+            u0 = extremo if a <= 1e-9 else GCPnts_AbscissaPoint(curva, a, extremo).Parameter()
+            u1 = GCPnts_AbscissaPoint(curva, b, extremo).Parameter()
             nueva = BRepBuilderAPI_MakeEdge(geom, u0, u1).Edge()
         mk.Add(TopoDS.Edge(nueva))
-        break
+        if acumulado >= objetivo - 1e-9:
+            break
     return mk.Wire()
 
 
@@ -2461,11 +2467,15 @@ def _seccion_tuberia(seccion, centro, u, v, radio):
                                         + math.sin(giro + 2 * math.pi * k / lados) * v) for k in range(lados)])
 
 
-def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, distancia=1.0):
+def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, distancia=1.0, distancia2=0.0):
     """Tubería (Pipe) de Fusion [SLD-PIPE-SOLID]: sección "circular", "cuadrada" o "triangular" de tamaño =
-    diámetro del círculo circunscrito, barrida por la ruta (fracción `distancia`). `hueca` con `espesor` de
+    diámetro del círculo circunscrito, barrida entre las fracciones `distancia2` y `distancia` de la ruta.
+    `distancia2=0` conserva el inicio original. `hueca` con `espesor` de
     pared (paredes paralelas a las exteriores)."""
-    w = _recortar_alambre(_alambre(ruta), float(distancia))
+    distancia, distancia2 = float(distancia), float(distancia2)
+    if not math.isfinite(distancia) or not math.isfinite(distancia2) or not 0 <= distancia2 < min(distancia, 1.0):
+        raise geo.ErrorGeometria("Las distancias deben ser finitas: el inicio debe estar entre cero y el fin de la ruta.")
+    w = _recortar_alambre(_alambre(ruta), distancia, distancia2)
     if tamano <= 0:
         raise geo.ErrorGeometria("El tamaño de la sección debe ser positivo.")
     p0, t0 = _punto_en(w, 0.0)
