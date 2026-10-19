@@ -185,14 +185,42 @@ def test_cambiar_nombre_cuerpo_en_linea_y_grupo(v, monkeypatch):
     assert v.navegador.item(r["result"]["id"]).text(0) == "Nuevo nombre"
 
 
-def test_ojo_y_mostrar_todo_tienen_efecto_en_vista(v):
+@pytest.mark.parametrize("propiedades", [{}, {"organizacion": {}}])
+def test_ojo_y_mostrar_todo_tienen_efecto_en_vista(v, propiedades):
+    v.doc.propiedades["__navegador__"] = dict(propiedades)
     ids = list(v.doc.estado_final.cuerpos)
     accion(menu_de(v, ids[0]), "Mostrar/ocultar").trigger()
     assert ids[0] in v.ocultos
+    assert v.doc.propiedad("__navegador__", "ocultos") == [ids[0]]
     assert ids[0] not in {m["id"] for m in v.visor._mallas}
     accion(menu_de(v, ids[1]), "Mostrar todo").trigger()
     assert not v.ocultos
+    assert v.doc.propiedades.get("__navegador__") == (propiedades or None)
     assert {m["id"] for m in v.visor._mallas} == set(ids)
+
+
+def test_cuerpo_oculto_persiste_al_guardar_y_reabrir(v, tmp_path):
+    from omnicad.io_archivos import proyecto
+    cid = next(iter(v.doc.estado_final.cuerpos))
+    deshacer = list(v.doc._deshacer)
+    v._ojo(cid)
+    assert v.doc._deshacer == deshacer
+    ruta = proyecto.guardar(v.doc, tmp_path / "ocultos.omnicad")
+    v.set_documento(Documento())
+    assert not v.ocultos
+    v.set_documento(proyecto.abrir(ruta))
+    assert v.ocultos == {cid}
+    assert cid not in {m["id"] for m in v.visor._mallas}
+    assert {m["id"] for m in v.visor._mallas} == set(v.doc.estado_final.cuerpos) - {cid}
+
+
+@pytest.mark.parametrize("ocultos", [None, "op1.c1", {}, 42, ["op1.c1", 1], [[]]])
+def test_ocultos_invalidos_se_ignoran_al_abrir(v, ocultos):
+    v.doc.propiedades["__navegador__"] = {"ocultos": ocultos}
+    v.set_documento(v.doc)
+    assert not v.ocultos
+    assert "__navegador__" not in v.doc.propiedades
+    assert {m["id"] for m in v.visor._mallas} == set(v.doc.estado_final.cuerpos)
 
 
 def test_grupos_persisten_y_entrada_invalida_no_modifica(v, tmp_path):

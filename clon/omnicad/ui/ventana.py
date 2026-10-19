@@ -876,7 +876,8 @@ class VentanaPrincipal(QMainWindow):
         self._cancelar_eleccion()
         self.doc = doc
         self._avisos_vistos = None
-        self.ocultos = set()
+        ocultos = doc.propiedad("__navegador__", "ocultos", [])
+        self.ocultos = set(ocultos) if isinstance(ocultos, list) and all(isinstance(i, str) for i in ocultos) else set()
         self.patron_activo = None
         self.vis = dict(VISIBILIDAD_INICIAL)
         doc.suscribir(self._actualizar)
@@ -936,6 +937,13 @@ class VentanaPrincipal(QMainWindow):
         return ocultos
 
     def _refrescar_visibilidad(self):
+        if self.ocultos:
+            self.doc.propiedades.setdefault("__navegador__", {})["ocultos"] = sorted(self.ocultos)
+        elif "__navegador__" in self.doc.propiedades:
+            datos = self.doc.propiedades["__navegador__"]
+            datos.pop("ocultos", None)
+            if not datos:
+                del self.doc.propiedades["__navegador__"]
         if self.patron_activo is not None and self.patron_activo not in self.doc.estado_final.cuerpos:
             self._poner_patron_activo(None)     # lo borraron o se deshizo: vuelve el modelo plegado
             return

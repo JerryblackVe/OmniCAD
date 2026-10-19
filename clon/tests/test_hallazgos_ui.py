@@ -517,3 +517,18 @@ def test_cache_de_analisis_retiene_la_forma_de_su_clave():
     assert viva() is not None
     assert av._con_cache(clave, lambda: 99, viva()) == 42     # no recalcula
     av._cache.pop(clave, None)
+
+
+def test_encuadrar_pieza_larga_respeta_el_aspecto_de_la_ventana(app_qt):
+    from omnicad.ui.visor3d import Visor3D
+
+    visor = Visor3D()
+    visor.vista("frente")
+    puntos = np.array([[0, 0, 0], [3860, 200, 200]])
+    visor.resize(1400, 735)
+    visor.encuadrar(puntos)
+    assert 3860 * visor.px_por_mm() / 1400 >= 0.7
+    assert visor.objetivo == pytest.approx((1930, 100, 100))
+    visor.resize(400, 900)
+    visor.encuadrar(puntos)
+    assert 3860 * visor.px_por_mm() / 400 <= 1.0

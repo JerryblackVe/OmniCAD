@@ -237,16 +237,19 @@ class Flecha(Manipulador):
         s, ok = g.pantalla([a, b])
         return _dist_segmentos_px(q, s, ok), "flecha"
 
+    def _sobre_eje(self, o, r, origen, direccion):
+        return recta_rayo(o, r, origen, direccion)
+
     def empezar(self, g, pos, sub):
         o, r = g.rayo(pos)
-        s0 = recta_rayo(o, r, self.origen, self.direccion)
+        s0 = self._sobre_eje(o, r, self.origen, self.direccion)
         if s0 is None:
             return None
         return {"s0": s0, "v0": g.valor(self.clave), "origen": self.origen, "dir": self.direccion}
 
     def mover(self, g, estado, pos):
         o, r = g.rayo(pos)
-        s = recta_rayo(o, r, estado["origen"], estado["dir"])
+        s = self._sobre_eje(o, r, estado["origen"], estado["dir"])
         if s is None or abs(self.factor) < 1e-12:
             return {}
         v = estado["v0"] + (s - estado["s0"]) / self.factor
@@ -481,6 +484,14 @@ class FlechaCalcomania(Flecha):
     def __init__(self, clave, centro, u, v):
         super().__init__(clave, centro, u if clave == "dx" else v, caja="arrastre")
         self.u, self.v = np.asarray(u), np.asarray(v)
+
+    def _sobre_eje(self, o, r, origen, direccion):
+        # La flecha se agarra lejos del eje: en perspectiva, la recta más cercana al rayo se corre; el plano no.
+        n = np.cross(self.u, self.v)
+        den = float(r @ n)
+        if abs(den) < 1e-9:
+            return recta_rayo(o, r, origen, direccion)
+        return float((o + r * (float((origen - o) @ n) / den) - origen) @ direccion)
 
     def _ejes(self):
         return (self.u, self.v) if self.clave == "dx" else (self.v, self.u)

@@ -749,8 +749,14 @@ class Visor3D(QOpenGLWidget):
         else:
             mn, mx = caja
             self.objetivo = (mn + mx) / 2
-            radio = max(float(np.linalg.norm(mx - mn)) / 2, 1.0)
-            self.distancia = radio / math.sin(math.radians(self.fov) / 2) * 1.1
+            esquinas = np.array([(x, y, z) for x in (mn[0], mx[0]) for y in (mn[1], mx[1])
+                                 for z in (mn[2], mx[2])])
+            ancho, alto, profundidad = np.max(np.abs((esquinas - self.objetivo) @ self.R.T), axis=0)
+            aspecto = max(self.width(), 1) / max(self.height(), 1)
+            angulo = math.radians(self.fov) / 2
+            tangente = math.tan(angulo)
+            self.distancia = max(max(ancho / (tangente * aspecto), alto / tangente) + profundidad,
+                                 1.0 / math.sin(angulo)) * 1.1
         self.update()
 
     def orbitar(self, dx, dy):
