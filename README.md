@@ -123,14 +123,26 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 
 ## Hoja de ruta
 
-- Primer arranque guiado: elegir idioma y conectar los agentes con un botón.
-- Linux: probarlo en una PC con Linux nativo (hoy está probado en WSL2).
-- Español e inglés en todo: interfaz, mensajes, herramientas y documentación.
-- Integración con Blender en los dos sentidos.
-- Mejor render: materiales, colores e iluminación.
-- Más vectores: editar curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
-- Ensamblajes, animación, simulaciones y movimiento de piezas.
-- Funciones al estilo Rhino y programación visual al estilo Grasshopper.
+**¿Querés ayudar? Elegí cualquiera de estos pendientes y abrí un [Issue](https://github.com/JerryblackVe/OmniCAD/issues) o un Pull Request.** Antes leé [CONTRIBUTING.md](CONTRIBUTING.md) y [AGENTS.md](AGENTS.md).
+
+- **Más plataformas:** Linux en una PC nativa (hoy probado en WSL2); macOS (hay que adaptar OpenGL 4.1, compilar el módulo Rust para Mac y firmar el instalador); validar el instalador de Windows en una PC limpia.
+- **Impresión 3D:** cortar y dividir con conectores, moldes, canales internos, jarrones y macetas paramétricos, articulaciones, booleanas con holgura, corte por contorno, relieve desde imagen, texturas, color y 3MF multicolor, soportes, disposición en cama, vista en realidad aumentada y video de presentación.
+- **Base para imprimir:** perfil de impresora y material, orientación recomendada, estimación de filamento y tiempo, cajas con tapa, bolsillos para imanes, insertos y rodamientos, agujeros que imprimen sin soportes y pieza de calibración de holguras.
+- **Engranajes de todo tipo:** una galería con imágenes y explicación corta para crear engranajes cilíndricos, cónicos, sin fin, planetarios, especiales, cremalleras y mecanismos (Ginebra, trinquete, reductores), desde la interfaz, la CLI o un agente de IA.
+- **Idioma:** español e inglés en todo (interfaz, mensajes, herramientas y documentación); primer arranque guiado.
+- **Integración:** Blender en los dos sentidos; conectar más agentes de IA y completar las herramientas MCP/CLI que faltan.
+- **Render:** materiales, colores e iluminación; ideas de KeyShot y V-Ray.
+- **Vectores y texto:** curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
+- **Ensamblajes:** animación, simulaciones y movimiento de piezas.
+- **Funciones nuevas:** estilo Rhino, programación visual estilo Grasshopper, ideas de FreeCAD y Plasticity.
+- **Ideas de SolidCraft:** piezas de referencia para verificar el motor, pruebas de robustez automáticas, nombres estables de caras y aristas, bocetos que no saltan, configuraciones, conjuntos de contacto, vistas guardadas y ratón 3D.
+- **Ideas de otros CAD libres:** que cada herramienta para agentes diga qué cambió de verdad, cambios de agente que se revisan antes de aplicarse, colores en el boceto para ver qué se puede mover, elegir caras por descripción y tutoriales que se reproducen paso a paso.
+- **Espacio FORMA** (superficies de subdivisión T-splines): no existe todavía; es el pendiente más grande.
+- **Menús y navegador:** los menús contextuales y varias opciones de la cinta que faltan frente a Fusion 360.
+- **Abrir `.f3d`** de Fusion con su historial; recuperación de trabajo como Fusion.
+- **Rendimiento:** pasar los cuellos de botella a Rust y C++.
+- **Interfaz:** pulido visual y sistema de temas propios que el usuario pueda crear y compartir.
+- **Corrección de errores:** la lista de errores abiertos está en el PROJECT_LOG.
 
 Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
 

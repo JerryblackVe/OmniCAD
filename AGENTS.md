@@ -146,6 +146,10 @@ modo en vivo y la lista de herramientas). Plan y estado: [docs/plan_mcp_cli.md](
    El archivo es generado: no se edita a mano, y `tests/test_doc_agentes.py` falla si quedó viejo.
 
 ## Registrar el trabajo
+**Hoja de ruta pública:** el README (sección «Hoja de ruta») resume los pendientes para que cualquiera pueda
+tomar uno. Cada vez que se agregue, cambie o termine un pendiente en `PROJECT_LOG.md` › «Pendientes», se
+actualiza también esa sección del README en el mismo turno (una línea por tema, sin detalle técnico).
+
 En `PROJECT_LOG.md`, al terminar:
 - **Registro** (sección `## Registro`, una viñeta por tarea):
   `- **AAAA-MM-DD · Fase/tema.** Qué se hizo, archivos clave, verificación (pytest N OK, humo N/N, ruff limpio), bugs hallados y corregidos.`

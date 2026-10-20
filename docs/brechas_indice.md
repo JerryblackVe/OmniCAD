@@ -15,6 +15,9 @@ incorporar, en qué orden y qué hay que decidir antes. El detalle de cada ítem
 | Grasshopper | `brechas_grasshopper.md` | GH1–GH12 | 17 | propietario |
 | KeyShot | `brechas_keyshot.md` | KS1–KS15 | 18 | propietario |
 | V-Ray | `brechas_vray.md` | VR1–VR13 | 19 | propietario |
+| Herramientas MCP/CLI faltantes (propias) | `brechas_mcp.md` | MCP-0a–MCP-55 | B-80 | — |
+| SolidCraft (CAD en Rust) | `brechas_solidcraft.md` | SC1–SC17 | 30 | MIT o Apache-2.0: se puede tomar código citando |
+| Otros CAD libres de GitHub | `brechas_cad_libres.md` | CL1–CL8 | 31 | varía por proyecto; de los AGPL-3.0, solo ideas |
 
 Toda herramienta lleva la «receta de experiencia Fusion» (ver `brechas_freecad.md`): botón en la cinta y en la
 tecla S, panel con vista previa viva, manipuladores, un paso editable del timeline, equivalente en API/MCP/CLI y

@@ -283,7 +283,7 @@ A ──► B ──► C ──► D
 |---|---|
 | El agente y el usuario tocan el mismo diseño en vivo. | Todo pasa por el hilo de Qt. Si hay un comando abierto, la respuesta es `APP_BUSY`, y cada llamada es un paso de deshacer. |
 | El puente es una puerta local: `execute_code` puede correr Python. | Viene apagado, escucha solo en 127.0.0.1, usa un token aleatorio en un archivo del usuario y muestra un indicador visible de "agente conectado". |
-| Demasiadas herramientas confunden a los agentes. | Estado real al 2026-10-14: 167 herramientas en 13 grupos (`omnicad tools` las lista; docs/agentes/herramientas.md) — ya son más que las «35 por defecto» previstas cuando se escribió el plan. Las operaciones sin herramienta propia (93 tipos) pasan por `run_operation`. El hito 4 mide los errores reales. |
+| Demasiadas herramientas confunden a los agentes. | Estado real al 2026-10-18: 190 herramientas en 13 grupos (`omnicad tools` las lista; docs/agentes/herramientas.md) — ya son más que las «35 por defecto» previstas cuando se escribió el plan. De los 95 tipos de operación, 38 no tienen herramienta propia y pasan por `run_operation`; inventario completo de lo que falta en `docs/brechas_mcp.md`. El hito 4 mide los errores reales. |
 | Las caras o aristas referenciadas se pierden al recalcular. | Se usan las firmas persistentes que ya existen, más `REFERENCE_LOST` con pistas para volver a elegir. |
 | Las imágenes sin ventana tardan, porque el render es por software. | 640×480 sin supermuestreo por defecto. En vivo se usa la captura de la GPU. |
 

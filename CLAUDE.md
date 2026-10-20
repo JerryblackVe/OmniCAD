@@ -1,7 +1,11 @@
 # OmniCAD
 
-## Regla obligatoria: MCP y CLI siempre completos
-- Toda función nueva o cambiada (operación, comando de la UI, opción de un diálogo) lleva SIEMPRE su
+## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
+- TODAS las herramientas de la app están en el MCP y en la CLI, siempre. Vale para todo: operaciones,
+  comandos de la cinta, menús contextuales, opciones de cada diálogo y espacios de trabajo (DIBUJO,
+  RENDERIZAR, ANIMACIÓN…). Lo único que queda afuera es lo que no le sirve a un agente (tema, atajos,
+  paneles), y eso se escribe con su razón en `docs/brechas_mcp.md`.
+- Toda función nueva o cambiada lleva SIEMPRE su
   herramienta en `clon/omnicad/api/` (receta C de AGENTS.md), y con eso queda en el MCP y en la CLI.
 - No se da por terminada una tarea si falta la herramienta, su test o la doc regenerada
   (`docs/agentes/herramientas.md`).
