@@ -19,7 +19,8 @@ ESPERADAS = {"documento": {"get_scene_info", "new_document", "open_document", "s
                            "list_recoverable_documents", "recover_document", "discard_recoverable_document", "move_feature",
                            "decal_view",
                             "set_document_units", "select_bodies", "get_browser_state", "manage_browser",
-                            "set_browser_visibility", "set_decal", "sketch_view", "set_geometry_engine"},
+                            "set_browser_visibility", "set_decal", "sketch_view", "set_geometry_engine",
+                            "find_in_window", "set_body_opacity"},
              "parametros": {"get_parameters", "create_parameter", "set_parameter", "delete_parameter"}}
 
 
@@ -39,7 +40,7 @@ def temporales():
 def test_herramientas_registradas_por_grupo():
     for grupo, nombres in ESPERADAS.items():
         assert {h["nombre"] for h in api.catalogo(grupo)} == nombres
-    assert len(api.catalogo(["documento", "parametros"])) == 33
+    assert len(api.catalogo(["documento", "parametros"])) == 35
 
 
 def test_esquemas_validos_y_documentados():
