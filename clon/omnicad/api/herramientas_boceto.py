@@ -623,6 +623,27 @@ def _valor_cota(sesion, k):
         return None
 
 
+def _ubicacion_cota(k):
+    """Dónde dibuja el editor la cota (si se la movió): offset de la línea y del texto, en mm."""
+    return {n: k.datos[c] for n, c in (("offset", "desfase"), ("text_offset", "texto")) if c in k.datos}
+
+
+def _fijar_ubicacion(b, k, offset, text_offset):
+    """Guarda `offset` y `text_offset` (mm) en la cota k; solo las cotas lineales de una línea o de dos puntos."""
+    if offset is None and text_offset is None:
+        return
+    for nombre, v in (("offset", offset), ("text_offset", text_offset)):
+        if v is not None and not _finito(v):
+            raise error("INVALID_ARGUMENTS", f"'{nombre}' tiene que ser un número finito (llegó {v!r}).")
+    if b.ejes_cota(k) is None:
+        raise error("INVALID_DIMENSION", "offset y text_offset solo valen en una cota lineal (distance, horizontal "
+                    "o vertical) de una línea o de dos puntos.")
+    if offset is not None:
+        k.datos["desfase"] = float(offset)
+    if text_offset is not None:
+        k.datos["texto"] = float(text_offset)
+
+
 def info_boceto(sesion, op):
     """Informe completo de un boceto (lo que devuelve get_sketch)."""
     br = boceto_resuelto(sesion, op)
@@ -640,7 +661,8 @@ def info_boceto(sesion, op):
             "constraints": [{"id": r.id, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo), "entities": r.entidades}
                             for r in b.restricciones.values()],
             "dimensions": [{"id": k.id, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "entities": k.entidades,
-                            "expression": k.expresion, "value": _valor_cota(sesion, k)} for k in b.cotas.values()],
+                            "expression": k.expresion, "value": _valor_cota(sesion, k), **_ubicacion_cota(k)}
+                           for k in b.cotas.values()],
             "profiles": info_perfiles(br) if br is not None else []}
     return info
 
@@ -1051,16 +1073,21 @@ def _exigir_entidades(b, ids):
              "con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y "
              "desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos "
              "puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; "
-             "radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos.",
+             "radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. En una cota "
+             "lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan "
+             "dónde se dibuja: no cambian el valor ni la geometría.",
              modifica=True)
 def add_dimension(sesion, sketch: str,
                   type: Literal["distance", "horizontal", "vertical", "radius", "diameter", "angle", "offset"],  # noqa: A002
-                  entities: list[int], value: Expr | None = None):
+                  entities: list[int], value: Expr | None = None, offset: float | None = None,
+                  text_offset: float | None = None):
     """
     sketch: id o nombre del boceto.
     type: tipo de cota.
     entities: ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo.
     value: valor: número (mm; grados en angle) o expresión con parámetros, p. ej. "radio_agujero * 2". Vacío = medida actual.
+    offset: mm que se separa la línea de cota de la medida (con signo, hacia +Y en horizontal, +X en vertical, a la izquierda de la línea en distance); vacío = lo automático.
+    text_offset: mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = centrado.
     """
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
@@ -1082,12 +1109,14 @@ def add_dimension(sesion, sketch: str,
         validar_valor_cota(interno, valor)
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", str(e)) from e
+    _fijar_ubicacion(b, b.cotas[kid], offset, text_offset)
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota «{type}» = {expresion}")
     informe = _informe_edicion(sesion, nueva, b, antes)
     valor = _valor_cota(sesion, b.cotas[kid])
     return {"sketch": informe["sketch"], "dimension": {"id": kid, "type": type, "entities": list(entities),
-                                                       "expression": expresion, "value": valor},
+                                                       "expression": expresion, "value": valor,
+                                                       **_ubicacion_cota(b.cotas[kid])},
             "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"]}
 
 
@@ -1833,14 +1862,20 @@ def set_line_type(sesion, entities: list[int], line_type: Literal["normal", "con
 @herramienta("edit_dimension", "boceto",
              "Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con "
              "parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y "
-             "el boceto queda como estaba. Para borrar una cota o una restricción: delete_sketch_entities con su id.",
+             "el boceto queda como estaba. Con `offset` y `text_offset` mueve la línea de cota y su texto sin cambiar el "
+             "valor (cotas lineales). Para borrar una cota o una restricción: delete_sketch_entities con su id.",
              modifica=True)
-def edit_dimension(sesion, dimension: int, value: Expr, sketch: str | None = None):
+def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: str | None = None,
+                   offset: float | None = None, text_offset: float | None = None):
     """
     dimension: id de la cota (get_sketch la lista en dimensions).
-    value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2").
+    value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    offset: mm que se separa la línea de cota de la medida (con signo); vacío = no cambia.
+    text_offset: mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = no cambia.
     """
+    if value is None and offset is None and text_offset is None:
+        raise error("INVALID_ARGUMENTS", "Falta qué cambiar: value, offset o text_offset.")
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     k = nueva.boceto.cotas.get(dimension) if isinstance(dimension, int) and not isinstance(dimension, bool) else None
@@ -1849,18 +1884,21 @@ def edit_dimension(sesion, dimension: int, value: Expr, sketch: str | None = Non
         raise error("ENTITY_NOT_FOUND", f"El boceto «{op.nombre}» ({op.id}) no tiene la cota {dimension!r} (cotas: "
                     f"{hay}).", "get_sketch lista las cotas (dimensions) con su id.")
     tipo = _COTA_A_INGLES.get(k.tipo, k.tipo)
-    expresion, valor = _valor_expr(sesion, value, ANGULO if k.tipo == "angulo" else LONGITUD)
-    _cota_valida(k.tipo, valor, f"La cota {dimension} ({tipo})")
-    if k.tipo == "angulo" and not 0 < valor < 180:
-        raise error("INVALID_DIMENSION", f"Una cota de ángulo va entre 0 y 180 grados (llegó {valor:g}).")
     anterior = k.expresion
-    k.expresion = expresion
+    if value is not None:
+        expresion, valor = _valor_expr(sesion, value, ANGULO if k.tipo == "angulo" else LONGITUD)
+        _cota_valida(k.tipo, valor, f"La cota {dimension} ({tipo})")
+        if k.tipo == "angulo" and not 0 < valor < 180:
+            raise error("INVALID_DIMENSION", f"Una cota de ángulo va entre 0 y 180 grados (llegó {valor:g}).")
+        k.expresion = expresion
+    expresion = k.expresion
+    _fijar_ubicacion(nueva.boceto, k, offset, text_offset)
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota {dimension} ({tipo}) = {expresion}")
     estado, gdl = estado_solver(boceto_resuelto(sesion, nueva))
     return {"sketch": _paso(nueva), "dimension": {"id": dimension, "type": tipo, "entities": list(k.entidades),
                                                   "previous_expression": anterior, "expression": expresion,
-                                                  "value": _valor_cota(sesion, k)},
+                                                  "value": _valor_cota(sesion, k), **_ubicacion_cota(k)},
             "dof": gdl, "status": estado}
 
 

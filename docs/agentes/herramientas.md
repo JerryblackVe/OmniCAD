@@ -803,7 +803,7 @@ Agrega una restricción geométrica entre entidades del boceto (ids de get_sketc
 
 ### `add_dimension`
 
-Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos.
+Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. En una cota lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan dónde se dibuja: no cambian el valor ni la geometría.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -811,6 +811,8 @@ Agrega una cota (dimensión) que maneja la geometría. El valor es un número (m
   - `type` ("distance" | "horizontal" | "vertical" | "radius" | "diameter" | "angle" | "offset"; obligatorio): tipo de cota.
   - `entities` (lista de entero; obligatorio): ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo.
   - `value` (número o expresión; opcional, por defecto `null`): valor: número (mm; grados en angle) o expresión con parámetros, p. ej. "radio_agujero * 2". Vacío = medida actual.
+  - `offset` (número; opcional, por defecto `null`): mm que se separa la línea de cota de la medida (con signo, hacia +Y en horizontal, +X en vertical, a la izquierda de la línea en distance); vacío = lo automático.
+  - `text_offset` (número; opcional, por defecto `null`): mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = centrado.
 - CLI: `omnicad call add_dimension --doc pieza.omnicad sketch=… type=… entities=…`
 
 ### `get_sketch`
@@ -1049,14 +1051,16 @@ Cambia el tipo de línea de curvas del boceto (Fusion: Construcción / Línea ce
 
 ### `edit_dimension`
 
-Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y el boceto queda como estaba. Para borrar una cota o una restricción: delete_sketch_entities con su id.
+Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y el boceto queda como estaba. Con `offset` y `text_offset` mueve la línea de cota y su texto sin cambiar el valor (cotas lineales). Para borrar una cota o una restricción: delete_sketch_entities con su id.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `dimension` (entero; obligatorio): id de la cota (get_sketch la lista en dimensions).
-  - `value` (número o expresión; obligatorio): valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2").
+  - `value` (número o expresión; opcional, por defecto `null`): valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
-- CLI: `omnicad call edit_dimension --doc pieza.omnicad dimension=… value=…`
+  - `offset` (número; opcional, por defecto `null`): mm que se separa la línea de cota de la medida (con signo); vacío = no cambia.
+  - `text_offset` (número; opcional, por defecto `null`): mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = no cambia.
+- CLI: `omnicad call edit_dimension --doc pieza.omnicad dimension=…`
 
 ### `auto_constrain`
 
@@ -1577,8 +1581,8 @@ Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'larg
   - `taper_angle` (número o expresión; opcional, por defecto `0`): conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `distance2` (número o expresión; opcional, por defecto `null`): distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
-  - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al material (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material, como Fusion).
-  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares.
+  - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material, como Fusion).
+  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
   - `thin` (true/false; opcional, por defecto `false`): true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
   - `wall_thickness` (número o expresión; opcional, por defecto `1`): espesor de la pared en mm (número o expresión); solo con thin.
   - `wall_location` ("side1" | "side2" | "center"; opcional, por defecto `"side1"`): lado del contorno donde va la pared: "side1", "side2" o "center"; solo con thin.

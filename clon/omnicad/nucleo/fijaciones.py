@@ -632,9 +632,12 @@ def colocar(forma, punto, direccion):
     return geo.transformar(forma, matriz_colocacion(punto, direccion))
 
 
-def _dentro(cuerpo, punto):
-    c = BRepClass3d_SolidClassifier(cuerpo, gp_Pnt(*map(float, punto)), 1e-7)
-    return c.State() == TopAbs_IN
+def _dentro(cuerpo, punto, clasificador=None):
+    """True si `punto` cae dentro de `cuerpo`; con `clasificador` (uno por cuerpo) se reusa en vez de armar otro por punto."""
+    if clasificador is None:
+        clasificador = BRepClass3d_SolidClassifier(cuerpo)
+    clasificador.Perform(gp_Pnt(*map(float, punto)), 1e-7)
+    return clasificador.State() == TopAbs_IN
 
 
 def _muestras(centro, n, radio, desplazamiento, k=8):
@@ -651,8 +654,9 @@ def _delta(radio):
 def _material(cuerpo, centro, n, radio, desplazamiento):
     """(puntos dentro del material por fuera del radio, por dentro del radio) a `desplazamiento` sobre n."""
     dlt = _delta(radio)
-    fuera = sum(_dentro(cuerpo, p) for p in _muestras(centro, n, radio + dlt, desplazamiento))
-    adentro = sum(_dentro(cuerpo, p) for p in _muestras(centro, n, max(radio - dlt, radio * 0.5), desplazamiento))
+    clf = BRepClass3d_SolidClassifier(cuerpo)
+    fuera = sum(_dentro(cuerpo, p, clf) for p in _muestras(centro, n, radio + dlt, desplazamiento))
+    adentro = sum(_dentro(cuerpo, p, clf) for p in _muestras(centro, n, max(radio - dlt, radio * 0.5), desplazamiento))
     return fuera, adentro
 
 

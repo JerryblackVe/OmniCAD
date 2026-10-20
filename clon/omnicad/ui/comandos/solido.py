@@ -4,7 +4,8 @@ import numpy as np
 
 from ...timeline.operaciones import DIRECCIONES, OpExtrusion, OpRevolucion
 from ...timeline.parametros import ANGULO, LONGITUD
-from ..comando import Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, hit_desde_ref, hits, ref1
+from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits,
+                      ref1)
 from . import registrar
 from .comunes import (campo_objetivos, campo_operacion, evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op,
                       perfiles_a_params, perfiles_desde_op)
@@ -122,6 +123,45 @@ class Extruir(Comando):
         return v
 
 
+class ExtruirCara(Comando):
+    """Extruye SOLO la cara elegida: hacia afuera agrega material (unir) y hacia adentro lo corta."""
+
+    CLAVE, TITULO, ICONO = "extruir_cara", "Extruir cara", "extruir"
+    AYUDA = "Extruye la cara plana elegida hacia afuera (agrega material) o hacia adentro (corta)."
+    CLASE_OP = None          # el paso creado se edita con el comando «Extruir» de siempre
+
+    def verificar(self, ctx):
+        return None if ctx.estado.cuerpos else "Este comando necesita un cuerpo."
+
+    def campos(self, ctx):
+        return [
+            Seleccion("caras", "Cara plana", {"cara_plana"}, maximo=None),
+            Opciones("sentido", "Sentido", {"afuera": "Hacia afuera (agrega)", "adentro": "Hacia adentro (corta)"}),
+            Expresion("distancia", "Distancia", "5 mm"),
+        ]
+
+    def construir(self, v, ctx):
+        exigir(v, "caras", "Elegí una cara plana.")
+        if ctx.evaluar(v.get("distancia") or "0") <= 0:
+            raise ErrorComando("La distancia tiene que ser mayor que cero.")
+        adentro = v.get("sentido") == "adentro"
+        return self.crear_op(OpExtrusion, v, ctx,
+                             caras=[h["ref"] for h in v["caras"]],
+                             distancia=v.get("distancia") or "5 mm",
+                             operacion="cortar" if adentro else "unir",
+                             invertir=adentro)
+
+    def manipuladores(self, ctx, v):
+        """Flecha de distancia sobre la cara: apunta hacia donde crece la distancia."""
+        from .. import manipuladores as mp
+        base = mp.base_perfiles(v.get("caras"), ctx.estado)
+        if base is None:
+            return []
+        centro, plano, _formas = base
+        n = mp.unitario(plano.normal) * (-1.0 if v.get("sentido") == "adentro" else 1.0)
+        return [mp.Flecha("distancia", centro, n)]
+
+
 class Revolucion(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "revolucion", "Revolución", "revolucion", None
     AYUDA = "Gira perfiles de boceto o caras planas alrededor de un eje."
@@ -212,4 +252,4 @@ class Revolucion(Comando):
 
 
 
-registrar(Extruir, Revolucion)
+registrar(Extruir, ExtruirCara, Revolucion)

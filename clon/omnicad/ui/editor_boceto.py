@@ -37,7 +37,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap,
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
-from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
+from ..restricciones.boceto import (Arco, Circulo, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
@@ -509,6 +509,7 @@ class Lienzo(QWidget):
         self._ultimo = None              # arrastre de curvas: última posición del ratón (mm)
         self._info = None                # último texto de medidas emitido
         self._cota_editada = None
+        self._cota_previa = None         # Cota provisional (id -1) mientras se escribe su valor
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         if visor is None:
@@ -1850,7 +1851,7 @@ class Lienzo(QWidget):
             self._paleta_texto = False
             self.herramienta_cambiada.emit(self.herramienta)     # la paleta vuelve a las opciones de la herramienta
         self._editando = None
-        self._cota_editada = None
+        self._cota_editada = self._cota_previa = None
 
     def _entrada_dinamica(self, primera):
         """Entrada escrita de las herramientas sin cajas de valor (círculo de 2 tangentes, mover/copiar)."""
@@ -2374,19 +2375,23 @@ class Lienzo(QWidget):
             self.mensaje.emit(str(e))
             self.picks = []
             return
+        previa = Cota(-1, tipo, entidades, "", {})
+        self.b.ubicar_cota(previa, self.a_mm(pos))      # el clic ubica la línea de cota y su texto
 
         def aceptar(v):
             texto = v[0] or formato.numero(actual, angular=tipo == "angulo")
             validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo)))     # −5 o 0: la caja queda en rojo
 
             def crear():
-                self.b.agregar_cota(tipo, entidades, texto)
+                self.b.agregar_cota(tipo, entidades, texto, previa.datos)
             self.aplicar_cambio(crear)
             self.picks = []
             self._esperando_ubicacion = False
         unidad = "°" if tipo == "angulo" else ""
         self._abrir_entrada([TIPOS_COTA[tipo] + (f" ({unidad})" if unidad else "")],
                             [f"{actual:.3f}".rstrip("0").rstrip(".")], pos, aceptar)
+        if self.b.ejes_cota(previa) is not None:        # cota lineal: se dibuja con sus líneas mientras se escribe
+            self._cota_previa, self._cota_editada = previa, -1
 
     def editar_cota(self, cid, pos):
         cota = self.b.cotas[cid]
@@ -2404,6 +2409,37 @@ class Lienzo(QWidget):
         if zona is not None:
             self.entrada.move(int(zona.left()) - 4, int(zona.top()) - 4)
 
+    def _tipo_dos_puntos(self, pos):
+        """Tipo de la cota entre los dos puntos elegidos, según dónde esté `pos` (px)."""
+        (x1, y1), (x2, y2) = self.b.coords(self.picks[0]), self.b.coords(self.picks[1])
+        if self.opcion_cota == "alineada":
+            return "distancia"
+        if abs(y2 - y1) < 1e-6:
+            return "distancia_h"
+        if abs(x2 - x1) < 1e-6:
+            return "distancia_v"
+        medio = self.a_px((x1 + x2) / 2, (y1 + y2) / 2)
+        return "distancia_h" if abs(pos.y() - medio.y()) > abs(pos.x() - medio.x()) else "distancia_v"
+
+    def _cota_viva(self):
+        """Cota provisional que se dibuja: la que se está escribiendo o, con la herramienta Cota y una línea (o
+        dos puntos) ya elegidos, la que sigue al cursor hasta el clic que la ubica."""
+        if self._cota_previa is not None:
+            return self._cota_previa
+        if self.herramienta != "cota" or self.entrada is not None or not self.picks or self._pos_cursor is None:
+            return None
+        if self._esperando_ubicacion:
+            tipo = self._tipo_dos_puntos(self._pos_cursor)
+        elif len(self.picks) == 1 and self.b.tipo_de(self.picks[0]) == "linea":
+            tipo = "distancia"
+        else:
+            return None
+        previa = Cota(-1, tipo, list(self.picks), "", {})
+        if self.b.ejes_cota(previa) is None:
+            return None
+        self.b.ubicar_cota(previa, self.a_mm(self._pos_cursor))
+        return previa
+
     def _clic_cota(self, pos):
         ent = self.entidad_en(pos)
         if not self.picks:
@@ -2418,17 +2454,7 @@ class Lienzo(QWidget):
             return
         primero, t1 = self.picks[0], self.b.tipo_de(self.picks[0])
         if self._esperando_ubicacion:        # dos puntos: la ubicación decide horizontal / vertical
-            (x1, y1), (x2, y2) = self.b.coords(self.picks[0]), self.b.coords(self.picks[1])
-            if self.opcion_cota == "alineada":
-                tipo = "distancia"
-            elif abs(y2 - y1) < 1e-6:
-                tipo = "distancia_h"
-            elif abs(x2 - x1) < 1e-6:
-                tipo = "distancia_v"
-            else:
-                medio = self.a_px((x1 + x2) / 2, (y1 + y2) / 2)
-                tipo = "distancia_h" if abs(pos.y() - medio.y()) > abs(pos.x() - medio.x()) else "distancia_v"
-            self._abrir_cota(tipo, list(self.picks), pos)
+            self._abrir_cota(self._tipo_dos_puntos(pos), list(self.picks), pos)
             return
         if ent is None or ent == primero:
             if t1 == "linea":
@@ -2829,6 +2855,8 @@ class Lienzo(QWidget):
                 return
             self._arrastre = ("curva", ent, self._modo_arrastre(ent))
             self._ultimo = self.a_mm(pos)
+        elif ent in self.b.cotas and self.b.ejes_cota(self.b.cotas[ent]) is not None:
+            self._arrastre = ("cota", ent, None)     # solo mueve la línea de cota y su texto
         else:
             return
         self._movio = False
@@ -2983,6 +3011,9 @@ class Lienzo(QWidget):
             _, cid, modo = self._arrastre
             if cid in self.b.curvas:
                 self._mover_curva(cid, modo, self.a_mm(pos))
+                self._movio = True
+            elif cid in self.b.cotas:
+                self.b.ubicar_cota(self.b.cotas[cid], self.a_mm(pos))
                 self._movio = True
         elif self._arrastre is not None:
             self._mover_punto(self._arrastre, self.cursor)
@@ -3473,7 +3504,8 @@ class Lienzo(QWidget):
         fm = p.fontMetrics()
         pts = [self.b.coords(k) for k in self.b.puntos]
         centroide = (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)) if pts else (0.0, 0.0)
-        for c in self.b.cotas.values():
+        viva = self._cota_viva()
+        for c in [*self.b.cotas.values(), *([viva] if viva is not None else [])]:
             girar = None                             # ángulo del texto (grados) en las cotas lineales
             try:
                 valor = self.b.medir_cota(c.tipo, c.entidades)
@@ -3484,33 +3516,32 @@ class Lienzo(QWidget):
             texto = f"{prefijo}{formato.numero(valor, angular=c.tipo == 'angulo')}{unidad}"
             if not _es_numero(c.expresion):
                 texto = f"{c.expresion} = {texto}"
-            tipos = [self.b.tipo_de(e) for e in c.entidades]
             color = QColor(0, 180, 255) if c.id in self.seleccion else base
             p.setPen(QPen(color, 1))
             p.setBrush(color)
             afuera = QPointF(0, -1)                  # hacia dónde se aleja el texto de la línea de cota
-            if c.tipo in ("distancia", "distancia_h", "distancia_v") and tipos in (["linea"], ["punto", "punto"]):
-                a, b = self.b._extremos_cota(c.entidades)
-                if c.tipo == "distancia_h":
-                    v = max(a[1], b[1]) + desfase
-                    da, db = (a[0], v), (b[0], v)
-                elif c.tipo == "distancia_v":
-                    u = max(a[0], b[0]) + desfase
-                    da, db = (u, a[1]), (u, b[1])
-                else:                                # del lado de afuera de la figura, como Fusion
-                    L = math.dist(a, b) or 1.0
-                    n = (-(b[1] - a[1]) / L * desfase, (b[0] - a[0]) / L * desfase)
-                    medio = ((a[0] + b[0]) / 2 - centroide[0], (a[1] + b[1]) / 2 - centroide[1])
-                    if medio[0] * n[0] + medio[1] * n[1] < 0:
-                        n = (-n[0], -n[1])
-                    da, db = (a[0] + n[0], a[1] + n[1]), (b[0] + n[0], b[1] + n[1])
+            marco = self.b.ejes_cota(c)
+            if marco is not None:
+                a, b, u, n, s0 = marco
+                off = c.datos.get("desfase")        # si el usuario la movió, manda su posición guardada
+                if off is None:
+                    off = desfase
+                    if c.tipo == "distancia":        # del lado de afuera de la figura, como Fusion
+                        medio = ((a[0] + b[0]) / 2 - centroide[0], (a[1] + b[1]) / 2 - centroide[1])
+                        if medio[0] * n[0] + medio[1] * n[1] < 0:
+                            off = -off
+                s = s0 + off
+                ua, ub = a[0] * u[0] + a[1] * u[1], b[0] * u[0] + b[1] * u[1]
+                da = (u[0] * ua + n[0] * s, u[1] * ua + n[1] * s)
+                db = (u[0] * ub + n[0] * s, u[1] * ub + n[1] * s)
+                um = (ua + ub) / 2 + c.datos.get("texto", 0.0)
                 qa, qb, pa, pb = self.a_px(*da), self.a_px(*db), self.a_px(*a), self.a_px(*b)
                 p.drawLine(pa, qa)
                 p.drawLine(pb, qb)
                 p.drawLine(qa, qb)
                 self._flecha(p, qa, qb)
                 self._flecha(p, qb, qa)
-                q = (qa + qb) / 2
+                q = self.a_px(u[0] * um + n[0] * s, u[1] * um + n[1] * s)
                 d = (qa + qb) / 2 - (pa + pb) / 2
                 largo = math.hypot(d.x(), d.y())
                 if largo > 1e-6:
@@ -3543,12 +3574,13 @@ class Lienzo(QWidget):
             paso = QPointF(afuera.x() * (w + 4), afuera.y() * (h + 2))
             if math.hypot(paso.x(), paso.y()) < 1:
                 paso = QPointF(0, h + 2)
-            for _ in range(20):
+            for _ in range(0 if "texto" in c.datos else 20):      # un texto que el usuario ubicó no se corre
                 if not any(caja.intersects(o) for o in ocupadas):
                     break
                 caja.translate(paso)
             ocupadas.append(caja)
-            zonas[c.id] = caja
+            if c.id >= 0:
+                zonas[c.id] = caja
             if c.id != self._cota_editada:
                 p.setPen(color)
                 if girar is not None and abs(girar) > 1:

@@ -440,7 +440,7 @@ class Cota:
 
     def a_dict(self):
         return {"id": self.id, "tipo": self.tipo, "entidades": self.entidades,
-                "expresion": self.expresion, "datos": self.datos}
+                "expresion": self.expresion, "datos": dict(self.datos)}
 
 
 _CURVAS = {k.tipo: k for k in (Linea, Circulo, Arco, Elipse, ArcoElipse, Spline, Conica, Texto)}
@@ -1613,6 +1613,36 @@ class Boceto:
         ln = self.curvas[entidades[0]]
         return self.coords(ln.p1), self.coords(ln.p2)
 
+    def ejes_cota(self, c):
+        """Marco de una cota lineal (línea sola o dos puntos): (a, b, u, n, s0) —extremos medidos, eje a lo largo
+        de la cota, eje normal y coordenada normal de la referencia—. None si la cota no se puede ubicar."""
+        if c.tipo not in ("distancia", "distancia_h", "distancia_v"):
+            return None
+        if [self.tipo_de(e) for e in c.entidades] not in (["linea"], ["punto", "punto"]):
+            return None
+        a, b = self._extremos_cota(c.entidades)
+        if c.tipo == "distancia_h":
+            u, n = (1.0, 0.0), (0.0, 1.0)
+        elif c.tipo == "distancia_v":
+            u, n = (0.0, 1.0), (1.0, 0.0)
+        else:
+            largo = math.dist(a, b)
+            if largo < 1e-12:
+                return None
+            u = ((b[0] - a[0]) / largo, (b[1] - a[1]) / largo)
+            n = (-u[1], u[0])
+        return a, b, u, n, max(a[0] * n[0] + a[1] * n[1], b[0] * n[0] + b[1] * n[1])
+
+    def ubicar_cota(self, c, punto):
+        """Guarda dónde van la línea de cota y su texto (datos «desfase» y «texto», en mm): la línea pasa por
+        `punto` (x, y) y el texto queda a su altura. No cambia el valor ni la geometría."""
+        marco = self.ejes_cota(c)
+        if marco is not None:
+            a, b, u, n, s0 = marco
+            c.datos["desfase"] = round(punto[0] * n[0] + punto[1] * n[1] - s0, 6)
+            medio = ((a[0] + b[0]) * u[0] + (a[1] + b[1]) * u[1]) / 2
+            c.datos["texto"] = round(punto[0] * u[0] + punto[1] * u[1] - medio, 6)
+
     def separacion(self, original, desfasada):
         """Distancia entre una curva y su desfase (líneas paralelas o círculos/arcos concéntricos)."""
         o, d = self.curvas[original], self.curvas[desfasada]
@@ -2575,6 +2605,9 @@ class Boceto:
                 c.ajustes_kerning = [[i, x * factor] for i, x in c.ajustes_kerning]
         for k in self.cotas.values():
             if k.tipo != "angulo" and set(k.entidades) <= afectados:
+                for clave in ("desfase", "texto"):      # la ubicación de la cota crece con la figura
+                    if clave in k.datos:
+                        k.datos[clave] *= factor
                 try:
                     k.expresion = _numero(float(k.expresion.replace(",", ".")) * factor)
                 except ValueError:

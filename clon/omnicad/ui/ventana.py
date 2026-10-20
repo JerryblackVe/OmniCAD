@@ -30,7 +30,7 @@ from .. import NOMBRE_APP, RECURSOS, VERSION
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
 from .mas_comando import FiltroMas, _normal, leer_barra, leer_teclas
-from .sugerencias import TiraSugerencias, comandos_sugeridos
+from .sugerencias import TiraSugerencias, comandos_sugeridos, tipos_de_seleccion
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
@@ -1570,7 +1570,7 @@ class VentanaPrincipal(QMainWindow):
     def _actualizar_sugerencias(self):
         """La tira de comandos sugeridos (PL5): solo con algo elegido y sin un comando ni un boceto abiertos."""
         libre = self.panel is None and not self.modo_boceto.activo
-        self.tira.mostrar_para({h["tipo"] for h in self.seleccion} if libre else set())
+        self.tira.mostrar_para(tipos_de_seleccion(self.seleccion) if libre else set())
         self.area.reubicar()
 
     def _clic_en_vista(self, hit):
@@ -1684,7 +1684,7 @@ class VentanaPrincipal(QMainWindow):
         """Lista de debajo del menú radial: comandos según lo elegido, vista, aislar y espacios de trabajo."""
         from .comandos import CATALOGO
         filas = []
-        tipos = {h["tipo"] for h in self.seleccion}
+        tipos = tipos_de_seleccion(self.seleccion)
         if "cara" in tipos and any(h.get("plano") is not None for h in self.seleccion):
             filas.append(("Crear boceto", self._boceto_en_seleccion))
         for clave in comandos_sugeridos(tipos, CATALOGO, maximo=None):

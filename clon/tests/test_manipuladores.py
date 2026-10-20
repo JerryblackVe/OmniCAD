@@ -581,8 +581,21 @@ def test_asa_de_extruir_superficie(app_qt):
     curva = next(iter(doc.estado_final.bocetos["op1"].boceto.curvas))
     hit = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, doc.estado_final)
     panel, _visor, _e = _panel(CATALOGO["sup_extruir"](), doc, {"curvas": [hit]})
-    assert "flecha:distancia" in [m.ident for m in panel.manipuladores.manips]
+    assert {"flecha:distancia", "angulo:conicidad"} <= {m.ident for m in panel.manipuladores.manips}
     panel.cancelar()
+
+
+def test_asas_de_extruir_superficie_con_la_arista_de_un_cuerpo(app_qt):
+    """Con aristas de un cuerpo (sin plano de boceto) también salen las asas, y con dirección elegida."""
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_caja()
+    arista = _arista_de_arriba(doc)
+    eje_x = hit_desde_ref({"tipo": "eje", "id": "X"}, doc.estado_final)
+    for valores in ({"curvas": [arista]}, {"curvas": [arista], "direccion": [eje_x]}):
+        panel, _visor, _e = _panel(CATALOGO["sup_extruir"](), doc, valores)
+        assert {"flecha:distancia", "angulo:conicidad"} <= {m.ident for m in panel.manipuladores.manips}
+        panel.cancelar()
 
 
 def test_asas_en_la_vista_lote_2(app_qt):

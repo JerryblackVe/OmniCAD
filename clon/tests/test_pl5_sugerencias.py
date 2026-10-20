@@ -12,13 +12,16 @@ from PySide6.QtWidgets import QApplication, QToolButton  # noqa: E402
 
 from omnicad.nucleo import geometria as geo  # noqa: E402
 from omnicad.nucleo import referencias as refs  # noqa: E402
-from omnicad.ui.sugerencias import MAXIMO, SUGERIDOS, comandos_sugeridos  # noqa: E402
+from omnicad.ui.sugerencias import MAXIMO, SUGERIDOS, comandos_sugeridos, tipos_de_seleccion  # noqa: E402
 
 TODOS = {c for lista in SUGERIDOS.values() for c in lista}
 
 
 def test_cada_tipo_sugiere_sus_comandos_en_orden_y_sin_pasar_del_maximo():
     assert comandos_sugeridos({"cara"}, TODOS) == ["pulsar_tirar", "desfase", "vaciado", "aspecto", "medir"]
+    assert comandos_sugeridos({"cara_plana"}, TODOS) == ["extruir_cara"]
+    assert comandos_sugeridos({"cara_plana", "cara"}, TODOS) == ["extruir_cara", "pulsar_tirar", "desfase", "vaciado",
+                                                                 "aspecto", "medir"]
     assert comandos_sugeridos({"arista"}, TODOS) == ["empalme_3d", "chaflan_3d", "desfase", "medir"]
     assert comandos_sugeridos({"perfil"}, TODOS) == ["extruir", "revolucion"]
     assert comandos_sugeridos({"cuerpo"}, TODOS) == ["mover_copiar", "aspecto", "material_fisico", "quitar"]
@@ -30,6 +33,14 @@ def test_varios_tipos_no_repiten_y_el_tope_se_puede_levantar():
     mezcla = comandos_sugeridos({"cara", "arista"}, TODOS)
     assert len(mezcla) == MAXIMO == len(set(mezcla)) and mezcla[:3] == ["pulsar_tirar", "desfase", "vaciado"]
     assert len(comandos_sugeridos({"cara", "arista"}, TODOS, maximo=None)) == 7
+
+
+def test_una_cara_plana_suma_el_pseudo_tipo():
+    """Una cara plana de la vista avisa que además es «cara_plana» (para «Extruir cara»)."""
+    assert tipos_de_seleccion([{"tipo": "cara", "plano": object()}]) == {"cara", "cara_plana"}
+    assert tipos_de_seleccion([{"tipo": "cara", "plano": None}]) == {"cara"}
+    assert tipos_de_seleccion([{"tipo": "arista"}]) == {"arista"}
+    assert tipos_de_seleccion([]) == set()
 
 
 def test_solo_salen_los_comandos_que_existen():
@@ -76,8 +87,9 @@ def test_al_elegir_una_cara_aparece_la_tira_con_sus_comandos(ventana):
     v = ventana
     assert not v.tira.isVisible()
     v._seleccionar([_hit_cara_de_arriba(v)])
-    assert v.tira.isVisible() and v.tira.claves == ["pulsar_tirar", "desfase", "vaciado", "aspecto", "medir"]
-    assert _botones(v) == ["Pulsar/tirar", "Desfase", "Vaciado", "Aspecto", "Medir"]
+    assert v.tira.isVisible() and v.tira.claves == ["extruir_cara", "pulsar_tirar", "desfase", "vaciado", "aspecto",
+                                                   "medir"]
+    assert _botones(v) == ["Extruir cara", "Pulsar/tirar", "Desfase", "Vaciado", "Aspecto", "Medir"]
     g = v.area.geometry()
     assert v.tira.geometry().bottom() < v.area.barra.geometry().top() and abs(v.tira.geometry().center().x() - g.center().x()) < 3
     v._seleccionar([])
@@ -87,7 +99,7 @@ def test_al_elegir_una_cara_aparece_la_tira_con_sus_comandos(ventana):
 def test_un_clic_ejecuta_el_comando_con_lo_elegido(ventana):
     v = ventana
     v._seleccionar([_hit_cara_de_arriba(v)])
-    v.tira.findChildren(QToolButton)[1].click()                    # «Desfase»
+    v.tira.findChildren(QToolButton)[2].click()                    # «Desfase»
     assert v.panel is not None and type(v.panel.comando).__name__ == "Desfase"
     assert len(v.panel.valores["objetos"]) == 1                    # la cara quedó en el campo del comando
     assert not v.tira.isVisible()                                  # con un comando abierto la tira se va
@@ -131,5 +143,5 @@ def test_el_clic_derecho_usa_la_misma_lista(ventana):
     v = ventana
     v._seleccionar([_hit_cara_de_arriba(v)])
     titulos = [f[0] for f in v._contexto_radial() if f]
-    for esperado in ("Pulsar/tirar", "Desfase", "Vaciado", "Aspecto", "Medir"):
+    for esperado in ("Extruir cara", "Pulsar/tirar", "Desfase", "Vaciado", "Aspecto", "Medir"):
         assert esperado in titulos

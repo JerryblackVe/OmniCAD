@@ -69,14 +69,26 @@ def _asas_engrosar(self, ctx, v):
 
 
 def _asas_extruir_superficie(self, ctx, v):
+    """Flecha de distancia y asa de conicidad; la dirección es la que usa la operación: la elegida, la normal
+    del boceto o, con aristas de un cuerpo (sin plano), el eje Z."""
     mp = _mp()
-    if v.get("direccion"):                    # con una dirección elegida el origen no es la normal del boceto
+    ents = [e for e in (mp.entidad(h, ctx.estado) for h in v.get("curvas") or []) if e is not None and e.forma is not None]
+    if not ents:
         return []
-    base = mp.base_perfiles(v.get("curvas"), ctx.estado)
-    if base is None:
+    centro = np.mean([mp.centroide(e.forma) for e in ents], axis=0)
+    if v.get("direccion"):
+        n = _direccion_de(ctx, v["direccion"][0])
+    else:
+        plano = next((e.plano for e in ents if e.plano is not None), None)
+        n = mp.unitario(plano.normal) if plano is not None else np.array([0.0, 0.0, 1.0])
+    if n is None:
         return []
-    centro, plano, _formas = base
-    return [mp.Flecha("distancia", centro, mp.unitario(plano.normal), factor=0.5 if v.get("simetrica") else 1.0)]
+    salida = [mp.Flecha("distancia", centro, n, factor=0.5 if v.get("simetrica") else 1.0)]
+    lateral = mp.perpendiculares(n)[0]
+    borde = mp.punto_borde([e.forma for e in ents], centro, lateral)
+    t = n * (-1.0 if evaluar_o_cero(ctx, v.get("distancia")) < 0 else 1.0)
+    salida.append(mp.Angulo("conicidad", borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0, caja="arrastre"))
+    return salida
 
 
 # ---------------------------------------------------------------- patrones

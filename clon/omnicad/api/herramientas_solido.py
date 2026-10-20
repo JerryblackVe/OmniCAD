@@ -165,9 +165,9 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     distance2: distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
     reverse: true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al
-        material (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene
-        material, como Fusion).
-    faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares.
+        material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante
+        va hacia el lado que tiene material, como Fusion).
+    faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
     thin: true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
     wall_thickness: espesor de la pared en mm (número o expresión); solo con thin.
     wall_location: lado del contorno donde va la pared: "side1", "side2" o "center"; solo con thin.
@@ -207,6 +207,8 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             forma = _forma_del_objetivo(sesion, target)
             if forma is not None and not _hacia_el_material(forma, br.plano.origen, br.plano.normal):
                 reverse = True
+    elif reverse is None and br is None and operation == "cut" and direction == "one_side":
+        reverse = True                            # solo caras: su normal mira afuera, el cut entra al material
     from .herramientas_construccion import _referencia
     doc = sesion.doc
     p = {"boceto": sop.id if sop is not None else "", "perfiles": [OpExtrusion.referencia_perfil(x) for x in perfiles],
