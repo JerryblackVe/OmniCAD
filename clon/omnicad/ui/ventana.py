@@ -2330,6 +2330,8 @@ class VentanaPrincipal(QMainWindow):
     def autoguardar(self):
         if not self.doc.modificado:
             return
+        if self.puente is not None and getattr(self.puente.sesion, "latido", None) is not None:
+            return      # B-16: corre execute_code (su latido procesa eventos): no guardar un estado a medio aplicar
         try:
             destino = proyecto.autoguardar(self.doc)
             self._autoguardado_fallo = None
