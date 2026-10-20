@@ -152,7 +152,11 @@ PISTAS = {
     "CODE_TIMEOUT": ["El documento quedó como estaba: no hace falta deshacer.",
                      "Subí timeout (en vivo, como mucho 100 s) o partí el trabajo en llamadas más cortas.",
                      "Si es un bucle sin salida, revisá la condición del while."],
+    "CODE_CANCELLED": ["El documento quedó como estaba: no hace falta deshacer.",
+                       "Lo canceló quien llama (en vivo, el botón Cancelar del diálogo): no es un error del código."],
     "TOPIC_NOT_FOUND": ["get_guide sin argumentos devuelve el índice con los temas."],
+    "STORYBOARD_NOT_FOUND": ["list_storyboards lista los guiones gráficos con su nombre y su índice."],
+    "ACTION_NOT_FOUND": ["get_storyboard lista las acciones del guion con su id (a1, a2, …)."],
     "INTERNAL_ERROR": ["Es una falla interna de OmniCAD: el documento no cambió. Probá con otros valores o reportalo."],
     # --- puente en vivo (la app abierta; ver api/protocolo_puente.py)
     "UNAUTHORIZED": ["El token no coincide con el de puente.json: la app se reinició o el archivo es de otra instancia.",
@@ -229,6 +233,8 @@ _MENSAJES_PASO = [
 
 def error(error_kind, mensaje, *pistas_extra):
     """ErrorAPI con las pistas de la tabla más las propias (máximo 3)."""
+    if error_kind == "OPERATION_FAILED" and "Distancia máxima aproximada:" in mensaje:
+        pistas_extra = (*pistas_extra, "Distancia máxima aproximada:" + mensaje.split("Distancia máxima aproximada:", 1)[1])
     return ErrorAPI(error_kind, mensaje, (list(pistas_extra) + PISTAS.get(error_kind, []))[:3])
 
 

@@ -143,14 +143,20 @@ class Repujado(Comando):
                 Seleccion("caras", "Caras", {"cara"}, maximo=None,
                           ayuda="Una o varias caras: el texto se proyecta en su lugar y se reparte entre ellas "
                                 "(cada una recibe solo lo que le cae encima)."),
+                Casilla("cadena_tangente", "Cadena tangente"),
                 Opciones("tipo", "Tipo", {"relieve": "Relieve", "grabado": "Grabado"}),
-                Expresion("profundidad", "Profundidad", "1 mm"), Casilla("envolver", "Envolver en la cara")]
+                Casilla("invertir", "Invertir normal"),
+                Expresion("profundidad", "Profundidad", "1 mm"), Casilla("envolver", "Envolver en la cara"),
+                Expresion("desfase_h", "Distancia horizontal", "0 mm"),
+                Expresion("desfase_v", "Distancia vertical", "0 mm"),
+                Expresion("giro", "Ángulo de giro", "0 deg", ANGULO)]
 
     def construir(self, v, ctx):
         exigir(v, "perfiles", "Seleccioná los perfiles.")
         exigir(v, "caras", "Seleccioná al menos una cara.")
         return self.crear_op(OpRepujado, v, ctx, perfiles=refs(v, "perfiles"), cara=None, caras=refs(v, "caras"),
-                             profundidad=v["profundidad"], tipo=v["tipo"], envolver=v["envolver"])
+                             **{k: v[k] for k in ("profundidad", "tipo", "envolver", "cadena_tangente",
+                                                   "desfase_h", "desfase_v", "giro", "invertir")})
 
     def desde_op(self, op, ctx):
         caras = list(op.p.get("caras") or []) + ([op.p["cara"]] if op.p.get("cara") else [])
@@ -604,7 +610,7 @@ class Rosca(Comando):
 
 class Bobina(Comando):
     CLAVE, TITULO, ICONO = "bobina", "Bobina", "bobina"
-    AYUDA = "Resorte o hélice con sección circular, cuadrada o triangular."
+    AYUDA = "Resorte, hélice o espiral plana con sección circular, cuadrada o triangular; giro de 90° en Y local."
     CLASE_OP = OpBobina
 
     def campos(self, ctx):
@@ -613,23 +619,24 @@ class Bobina(Comando):
                 Seleccion("centro", "Centro", {"punto", "vertice"}, minimo=0, ayuda="Sin selección: el origen del plano."),
                 Expresion("diametro", "Diámetro", "20 mm"),
                 Opciones("tipo", "Tipo", {"rev_altura": "Revoluciones y altura", "rev_paso": "Revoluciones y paso",
-                                          "altura_paso": "Altura y paso"}),
-                Expresion("revoluciones", "Revoluciones", "5", ESCALAR, visible_si=t("rev_altura", "rev_paso")),
+                                          "altura_paso": "Altura y paso", "espiral": "Espiral"}),
+                Expresion("revoluciones", "Revoluciones", "5", ESCALAR, visible_si=t("rev_altura", "rev_paso", "espiral")),
                 Expresion("altura", "Altura", "30 mm", visible_si=t("rev_altura", "altura_paso")),
-                Expresion("paso", "Paso", "6 mm", visible_si=t("rev_paso", "altura_paso")),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
+                Expresion("paso", "Paso", "6 mm", visible_si=t("rev_paso", "altura_paso", "espiral")),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=lambda v: v.get("tipo") != "espiral"),
                 Opciones("seccion", "Sección", {"circular": "Circular", "cuadrada": "Cuadrada",
                                                 "triangular_externa": "Triangular (externa)",
                                                 "triangular_interna": "Triangular (interna)"}),
                 Opciones("posicion", "Posición de la sección", {"sobre": "Sobre", "dentro": "Dentro", "fuera": "Fuera"}),
                 Expresion("tamano", "Tamaño de la sección", "3 mm"), Casilla("horario", "Sentido horario"),
+                Casilla("girar", "Giro", ayuda="Rotar 90° alrededor del eje Y local de la bobina."),
                 campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
         ctx.evaluar(v["diametro"])
         return self.crear_op(OpBobina, v, ctx, plano=ref1(v, "plano"), centro=ref1(v, "centro"), objetivos=objetivos(v),
                              **{k: v[k] for k in ("diametro", "tipo", "revoluciones", "altura", "paso", "angulo",
-                                                  "seccion", "tamano", "posicion", "horario", "operacion")})
+                                                  "seccion", "tamano", "posicion", "horario", "girar", "operacion")})
 
     def desde_op(self, op, ctx):
         return _con_objetivos(op, ctx, dict(op.p, plano=_h1(op.p["plano"], ctx.estado),
@@ -642,17 +649,20 @@ class Tuberia(Comando):
     CLASE_OP = OpTuberia
 
     def campos(self, ctx):
-        return [Seleccion("ruta", "Ruta", CURVA, maximo=None), Expresion("distancia", "Distancia", "1", ESCALAR),
+        return [Seleccion("ruta", "Ruta", CURVA, maximo=None), Casilla("cadena", "Selección de cadena", True),
+                Expresion("distancia", "Distancia", "1.00", ESCALAR, ayuda="Fin de la ruta: fracción entre 0 y 1."),
+                Expresion("distancia2", "Distancia", "0.00", ESCALAR, ayuda="Inicio de la ruta: fracción entre 0 y 1."),
                 Opciones("seccion", "Sección", {"circular": "Circular", "cuadrada": "Cuadrada",
                                                 "triangular": "Triangular"}),
                 Expresion("tamano", "Tamaño de la sección", "5 mm"), Casilla("hueca", "Hueco"),
-                Expresion("espesor", "Grosor de pared", "0.5 mm", visible_si=lambda v: bool(v.get("hueca"))),
+                Expresion("espesor", "Espesor de sección", "0.5 mm", visible_si=lambda v: bool(v.get("hueca"))),
                 campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
         exigir(v, "ruta", "Seleccioná la ruta.")
         return self.crear_op(OpTuberia, v, ctx, ruta=refs(v, "ruta"), objetivos=objetivos(v),
-                             **{k: v[k] for k in ("distancia", "seccion", "tamano", "hueca", "espesor", "operacion")})
+                             **{k: v[k] for k in ("cadena", "distancia", "distancia2", "seccion", "tamano", "hueca",
+                                                  "espesor", "operacion")})
 
     def desde_op(self, op, ctx):
         return _con_objetivos(op, ctx, dict(op.p, ruta=hits(op.p["ruta"], ctx.estado)))

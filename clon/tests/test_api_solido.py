@@ -355,6 +355,29 @@ def test_barrido_y_solevacion(s):
 
 
 # ---------------------------------------------------------------- primitivas
+@pytest.mark.parametrize("anclaje, minimo, maximo", [
+    ({}, [90, 45, 7], [110, 55, 12]),
+    ({"anchor": "center"}, [90, 45, 7], [110, 55, 12]),
+    ({"anchor": "corner"}, [100, 50, 7], [120, 60, 12]),
+])
+def test_caja_con_anclaje(s, anclaje, minimo, maximo):
+    r = llamar(s, "create_box", length=20, width=10, height=5, x=100, y=50, z=7, **anclaje)
+    cuerpo = r["bodies_created"][0]
+    assert caja(s, cuerpo["id"]) == pytest.approx((minimo, maximo), abs=1e-6)
+    assert cuerpo["volume"] == pytest.approx(1000)
+    assert s.paso(r["feature"]["id"]).p["caja_centrada"] is (anclaje.get("anchor", "center") == "center")
+
+
+def test_chaflan_demasiado_grande_indica_distancia_maxima(s):
+    llamar(s, "create_box", length=100, width=20, height=8)
+    antes = foto(s)
+    r = api.llamar(s, "chamfer", {"edges": "|Z", "distance": 30})
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
+    assert "Distancia máxima aproximada: 10 mm" in r["mensaje"]
+    assert any("Distancia máxima aproximada: 10 mm" in p for p in r["pistas"])
+    assert foto(s) == antes
+
+
 def test_primitivas_y_su_posicion(s):
     llamar(s, "create_parameter", name="largo", expression="20 mm")
     caja_ = llamar(s, "create_box", length="largo", width=10, height=5, x=100, y=50, z=7)["bodies_created"][0]

@@ -101,6 +101,86 @@ class BocetoResuelto:
         self.perfiles, self.solver = perfiles, solver
 
 
+TODAS = None     # lectura de un diccionario entero (se recorrió)
+
+
+class _DictLeido(dict):
+    """Diccionario del estado que anota qué claves lee un paso al calcularse (`TODAS` si lo recorrió): con eso el
+    documento sabe si un paso posterior a una edición puede reusar su último resultado (memo por paso)."""
+
+    def __init__(self, datos):
+        super().__init__(datos)
+        self.leidas = set()
+
+    def _anotar(self, clave):
+        if self.leidas is not TODAS:
+            self.leidas.add(clave)
+
+    def _todo(self):
+        self.leidas = TODAS
+
+    def __getitem__(self, clave):
+        self._anotar(clave)
+        return super().__getitem__(clave)
+
+    def get(self, clave, defecto=None):
+        self._anotar(clave)
+        return super().get(clave, defecto)
+
+    def __contains__(self, clave):
+        self._anotar(clave)
+        return super().__contains__(clave)
+
+    def pop(self, clave, *defecto):
+        self._anotar(clave)
+        return super().pop(clave, *defecto)
+
+    def setdefault(self, clave, defecto=None):
+        self._anotar(clave)
+        return super().setdefault(clave, defecto)
+
+    def __iter__(self):
+        self._todo()
+        return super().__iter__()
+
+    def __len__(self):
+        self._todo()
+        return super().__len__()
+
+    def keys(self):
+        self._todo()
+        return super().keys()
+
+    def values(self):
+        self._todo()
+        return super().values()
+
+    def items(self):
+        self._todo()
+        return super().items()
+
+    def copy(self):
+        self._todo()
+        return dict(super().items())
+
+    def __eq__(self, otro):
+        self._todo()
+        return super().__eq__(otro)
+
+    def __reversed__(self):
+        self._todo()
+        return super().__reversed__()
+
+    def popitem(self):
+        self._todo()
+        return super().popitem()
+
+    __hash__ = None
+
+
+DICTS_ESTADO = ("cuerpos", "bocetos", "planos", "ejes", "puntos", "componentes", "uniones", "lienzos", "herramientas")
+
+
 class EstadoModelo:
     """Resultado acumulado del timeline hasta un paso: cuerpos y bocetos disponibles."""
 
@@ -134,9 +214,28 @@ class EstadoModelo:
         e.contador_cuerpos = self.contador_cuerpos
         return e
 
+    def anotar_lecturas(self):
+        """Desde ahora los diccionarios del estado anotan qué claves se leen (ver `_DictLeido`)."""
+        for nombre in DICTS_ESTADO:
+            setattr(self, nombre, _DictLeido(getattr(self, nombre)))
+
+    def cerrar_lecturas(self):
+        """Vuelve a diccionarios comunes y devuelve {diccionario: claves leídas o TODAS}."""
+        lecturas = {}
+        for nombre in DICTS_ESTADO:
+            d = getattr(self, nombre)
+            if isinstance(d, _DictLeido):
+                lecturas[nombre] = d.leidas
+                setattr(self, nombre, dict.copy(d))
+            else:                       # el paso reemplazó el diccionario entero: cuenta como leído todo
+                lecturas[nombre] = TODAS
+        return lecturas
+
     def nuevo_cuerpo(self, op_id, forma, tipo="solido", nombre=None, **atributos):
         self.contador_cuerpos += 1
-        k = sum(1 for c in self.cuerpos.values() if c.op_id == op_id) + 1
+        # Solo cuentan los cuerpos de este mismo paso (sin anotar que se leyeron todos: así un paso que crea un cuerpo
+        # no depende de los cuerpos ajenos y la memoria del documento puede reusarlo).
+        k = sum(1 for c in dict.values(self.cuerpos) if c.op_id == op_id) + 1
         cid = f"{op_id}.c{k}"
         while cid in self.cuerpos:
             k += 1
@@ -293,6 +392,9 @@ class Operacion:
     # Claves de `p` con una lista cerrada de valores → los valores válidos (tupla o dict valor → etiqueta). Es la
     # única fuente: `validar_opciones` la usa al calcular y describe_operation la muestra como «choices».
     OPCIONES = {}
+    # False si el resultado depende de algo fuera del estado y de los parámetros (un archivo externo) o el paso cambia
+    # el documento al calcularse: entonces la memoria por paso del documento nunca lo reusa (`Documento._de_memo`).
+    MEMORIZABLE = True
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
         self.id = id
@@ -613,7 +715,7 @@ class _OpConPerfiles(Operacion):
     def dependencias(self):
         deps = super().dependencias()
         if self.p.get("boceto") and isinstance(self.p["boceto"], str):
-            deps.add(self.p["boceto"])
+            deps.add(self.p["boceto"].split(".", 1)[0])
         deps |= _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("objetivos"))
         deps |= ent.dependencias_de(self.p.get("caras"), self.p.get("hasta"), self.p.get("inicio_objeto"),
                                     self.p.get("eje_ref"), self.p.get("hasta2"), self.p.get("curvas"))
@@ -1018,5 +1120,5 @@ def operacion_desde_dict(d):
 
 
 # Operaciones de los otros módulos (se registran al importarse; van al final por el import circular).
-from . import (ops_chapa, ops_construir, ops_engranaje, ops_ensamblar, ops_fijacion, ops_grafo,  # noqa: E402,F401
-               ops_insertar, ops_malla, ops_modificar, ops_revision, ops_solido, ops_superficie)
+from . import (ops_chapa, ops_construir, ops_derivacion, ops_engranaje, ops_ensamblar, ops_fijacion,  # noqa: E402,F401
+                ops_grafo, ops_insertar, ops_malla, ops_modificar, ops_revision, ops_solido, ops_superficie)

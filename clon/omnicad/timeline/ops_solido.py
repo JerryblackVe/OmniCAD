@@ -159,8 +159,9 @@ class OpRepujado(_OpCrear):
     encima); o envuelto en un cilindro."""
     TIPO, ETIQUETA, ICONO = "repujado", "Repujado", "Ⓐ"
     PARAMS = {"perfiles": [], "cara": None, "caras": [], "profundidad": "1 mm", "tipo": "relieve",
-              "envolver": False}
-    EXPRESIONES = ("profundidad",)
+              "envolver": False, "cadena_tangente": False, "desfase_h": "0 mm", "desfase_v": "0 mm",
+              "giro": "0 deg", "invertir": False}
+    EXPRESIONES = ("profundidad", "desfase_h", "desfase_v", "giro")
     OPCIONES = {"tipo": ("relieve", "grabado")}
     REFS = ("perfiles", "cara", "caras")
 
@@ -180,7 +181,10 @@ class OpRepujado(_OpCrear):
         nuevas = _sc().repujado_en_cuerpos([(c.forma, f) for c, f in zip(cuerpos, por_cuerpo.values(), strict=True)],
                                            caras,
                                            ctx.evaluar(self.p["profundidad"]), tipo=self.p["tipo"],
-                                           envolver=self.p["envolver"])
+                                           envolver=self.p["envolver"], cadena_tangente=self.p["cadena_tangente"],
+                                           desfase_h=ctx.evaluar(self.p["desfase_h"]),
+                                           desfase_v=ctx.evaluar(self.p["desfase_v"]),
+                                           giro=ctx.evaluar(self.p["giro"], ANGULO), invertir=self.p["invertir"])
         for c, forma in zip(cuerpos, nuevas, strict=True):
             c.forma = forma
         self._registrar_usados(list(por_cuerpo))
@@ -301,10 +305,12 @@ class OpAgujero(_OpCrear):
     def herramientas(self, estado, ctx, rapido=False):
         """Sólidos a restar, uno por agujero."""
         p, sc = self.p, _sc()
-        solidos = [c.forma for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
-        if p["extension"] == "todo" and p["objetivos"]:
-            # El pasante abarca sus objetivos: cuerpos ajenos no deben alargar el barrido de la rosca.
+        if p["objetivos"]:
+            # Solo sus objetivos: el pasante los abarca (cuerpos ajenos no deben alargar el barrido de la rosca) y el
+            # paso no lee los demás cuerpos, así la memoria del documento lo reusa si otro cuerpo cambia.
             solidos = [estado.cuerpo(cid).forma for cid in p["objetivos"]]
+        else:
+            solidos = [c.forma for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
         if not solidos:
             raise ErrorOperacion("No hay cuerpos sólidos para agujerear.")
         opciones = self.opciones_herramienta(ctx, rapido)
@@ -383,14 +389,14 @@ class OpRosca(_OpCrear):
 
 class OpBobina(_OpCrear):
     """Bobina de Fusion [SLD-COIL-SOLID]: plano/cara + centro, diámetro, tipo (revoluciones y altura,
-    revoluciones y paso, altura y paso), ángulo, sección y su posición."""
+    revoluciones y paso, altura y paso o espiral plana), ángulo, sección, su posición y giro de 90° en Y local."""
     TIPO, ETIQUETA, ICONO = "bobina", "Bobina", "➰"
     PARAMS = {"plano": None, "centro": None, "diametro": "20 mm", "tipo": "rev_altura", "revoluciones": "5",
               "altura": "30 mm", "paso": "6 mm", "angulo": "0 deg", "seccion": "circular", "tamano": "3 mm",
-              "posicion": "sobre", "horario": False, "operacion": "nuevo", "objetivos": []}
+              "posicion": "sobre", "horario": False, "girar": False, "operacion": "nuevo", "objetivos": []}
     EXPRESIONES = ("diametro", "revoluciones", "altura", "paso", "angulo", "tamano")
     DATOS = {"rev_altura": ("revoluciones", "altura"), "rev_paso": ("revoluciones", "paso"),
-             "altura_paso": ("altura", "paso")}           # tipo → los dos datos que se dan
+             "altura_paso": ("altura", "paso"), "espiral": ("revoluciones", "paso")}  # tipo → los dos datos
     OPCIONES = {"tipo": DATOS, "seccion": ("circular", "cuadrada", "triangular_externa", "triangular_interna"),
                 "posicion": ("dentro", "sobre", "fuera"), "operacion": OPERACIONES_CUERPO}
     REFS = ("plano", "centro")
@@ -402,26 +408,54 @@ class OpBobina(_OpCrear):
         datos = {"revoluciones": None, "altura": None, "paso": None}
         for k in self.DATOS[p["tipo"]]:
             datos[k] = ctx.evaluar(p[k], "escalar" if k == "revoluciones" else "longitud")
-        forma = _sc().bobina(centro, plano.normal, diametro=ctx.evaluar(p["diametro"]), angulo=ctx.evaluar(p["angulo"], ANGULO),
+        angulo = 0.0 if p["tipo"] == "espiral" else ctx.evaluar(p["angulo"], ANGULO)
+        forma = _sc().bobina(centro, plano.normal, diametro=ctx.evaluar(p["diametro"]), angulo=angulo,
                              seccion=p["seccion"], tamano_seccion=ctx.evaluar(p["tamano"]), posicion_seccion=p["posicion"],
-                             horario=p["horario"], eje_x=plano.u, **datos)
+                             horario=p["horario"], eje_x=plano.u, tipo=p["tipo"], girar=p["girar"], **datos)
         self._aplicar(estado, ctx, forma)
 
 
 class OpTuberia(_OpCrear):
-    """Tubería de Fusion [SLD-PIPE-SOLID]: ruta, distancia, sección y tamaño, hueca con espesor."""
+    """Tubería de Fusion [SLD-PIPE-SOLID]: cadena tangente, límites fraccionales distancia2 (inicio) y
+    distancia (fin), sección y tamaño, hueca con espesor. Sin cadena se conserva solo la ruta elegida."""
     TIPO, ETIQUETA, ICONO = "tuberia", "Tubería", "⊃"
     PARAMS = {"ruta": [], "distancia": "1", "seccion": "circular", "tamano": "5 mm", "hueca": False,
-              "espesor": "0.5 mm", "operacion": "nuevo", "objetivos": []}
-    EXPRESIONES = ("distancia", "tamano", "espesor")
+              "espesor": "0.5 mm", "operacion": "nuevo", "objetivos": [], "cadena": False, "distancia2": "0"}
+    EXPRESIONES = ("distancia", "distancia2", "tamano", "espesor")
     OPCIONES = {"seccion": ("circular", "cuadrada", "triangular"), "operacion": OPERACIONES_CUERPO}
     REFS = ("ruta",)
 
     def ejecutar(self, estado, ctx):
-        _, ruta = _aristas(self.p["ruta"], estado, "la ruta")
+        ents, ruta = _aristas(self.p["ruta"], estado, "la ruta")
+        if self.p["cadena"]:
+            from ..nucleo import referencias
+            from ..nucleo.perfiles import aristas_boceto
+            from ..nucleo.solidos_modificar import aristas_cadena_tangente
+            ruta = []
+            formas_boceto = {}
+            for e in ents:
+                arista = e.forma
+                if e.cuerpo:
+                    forma = estado.cuerpo(e.cuerpo).forma
+                elif e.boceto:
+                    br = e.boceto
+                    if br.op_id not in formas_boceto:
+                        aristas = [a for _, a in aristas_boceto(br.boceto.geometria(), br.plano)]
+                        # MakeWire comparte los vértices coincidentes de las curvas independientes del boceto.
+                        formas_boceto[br.op_id] = geo.compuesto(_sc()._cadenas(aristas))
+                    forma = formas_boceto[br.op_id]
+                    arista = referencias.resolver(forma, {"tipo": "arista", "firma": referencias.firma_arista(arista)})
+                    if arista is None:
+                        raise ErrorOperacion("No se encontró la curva en la cadena del boceto.")
+                else:
+                    forma = arista
+                for a in aristas_cadena_tangente(forma, arista):
+                    if not any(a.IsSame(otra) for otra in ruta):
+                        ruta.append(a)
         forma = _sc().tuberia(ruta, seccion=self.p["seccion"], tamano=ctx.evaluar(self.p["tamano"]),
                               hueca=self.p["hueca"], espesor=ctx.evaluar(self.p["espesor"]),
-                              distancia=ctx.evaluar(self.p["distancia"], "escalar"))
+                              distancia=ctx.evaluar(self.p["distancia"], "escalar"),
+                              distancia2=ctx.evaluar(self.p["distancia2"], "escalar"))
         self._aplicar(estado, ctx, forma)
 
 

@@ -326,26 +326,28 @@ def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, name=No
 
 @herramienta("create_box", "solido",
              "Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) "
-             "es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. Medidas y posición "
+             "es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. Medidas y posición "
              "aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado "
              "(caja_centrada) y edit_feature acepta length, width y height.", modifica=True)
 def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0,
-               operation: Operacion = "new_body", target: Cuerpos | None = None, name: str | None = None):
+               operation: Operacion = "new_body", target: Cuerpos | None = None, name: str | None = None,
+               anchor: Literal["center", "corner"] = "center"):
     """
     length: tamaño en X (mm, positivo).
     width: tamaño en Y (mm, positivo).
     height: tamaño en Z (mm, positivo).
-    x: x del centro de la base (mm).
-    y: y del centro de la base (mm).
+    x: x del centro de la base o de la esquina mínima, según anchor (mm).
+    y: y del centro de la base o de la esquina mínima, según anchor (mm).
     z: z de la base (mm).
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
+    anchor: "center" sitúa (x, y, z) en el centro de la base; "corner", en la esquina mínima (crece hacia +X, +Y, +Z).
     """
     for valor, que in ((length, "length"), (width, "width"), (height, "height")):
         _numero_positivo(valor, que)
     return _primitiva(sesion, "caja", "Caja", {"ancho": length, "largo": width, "alto": height},
-                      x, y, z, operation, target, name, caja_centrada=True)
+                      x, y, z, operation, target, name, caja_centrada=anchor == "center")
 
 
 def _radio_o_diametro(radio, diametro, nombre_radio, nombre_diametro):

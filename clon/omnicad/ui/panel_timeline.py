@@ -129,6 +129,12 @@ class PanelTimeline(QWidget):
 
     # ------------------------------------------------------------ contenido
     def actualizar(self, doc):
+        # Sin cambios en lo que se muestra no se reconstruye (llega en cada aviso del documento).
+        firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, icono_operacion(op), res.estado, res.mensaje)
+                                         for op, res in zip(doc.operaciones, doc.resultados, strict=True)])
+        if doc is self.doc and firma == getattr(self, "_firma", None):
+            return
+        self._firma = firma
         self.doc = doc
         self.lista.clear()
         for i, (op, res) in enumerate(zip(doc.operaciones, doc.resultados, strict=True)):

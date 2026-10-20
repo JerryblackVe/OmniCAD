@@ -23,7 +23,7 @@ def _elementos(sesion, items):
     estado = sesion.doc.estado_final
     ids = []
     for ident in items:
-        if ident in estado.bocetos or ident in estado.lienzos:      # bocetos, lienzos y calcomanías por id
+        if ident in estado.bocetos or ident in estado.lienzos or ident in estado.componentes:
             ids.append(ident)
         else:
             ids.append(sesion.cuerpo(ident).id)
@@ -82,11 +82,11 @@ def manage_browser(sesion, action: Literal["create_group", "create_set", "move",
     return {"id": ident, **get_browser_state(sesion)}
 
 
-@herramienta("set_browser_visibility", "documento", "Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. "
+@herramienta("set_browser_visibility", "documento", "Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. "
              "Sin items, muestra todo. No modifica geometría.")
 def set_browser_visibility(sesion, items: list[str] | None = None, visible: bool = True):
     """
-    items: ids de cuerpos, bocetos, calcomanías o grupos; vacío muestra todo.
+    items: ids de cuerpos, componentes, bocetos, calcomanías o grupos; vacío muestra todo.
     visible: true muestra; false oculta los elementos pedidos.
     """
     mostrar = getattr(sesion, "mostrar_elementos", None)
@@ -99,6 +99,35 @@ def set_browser_visibility(sesion, items: list[str] | None = None, visible: bool
     ids = _elementos(sesion, ids)
     mostrar(ids, visible)
     return {"items": ids, "visible": visible}
+
+
+@herramienta("find_in_window", "documento", "Selecciona cuerpos, los encuadra en la ventana y resalta su paso "
+             "creador en el timeline, como Buscar en la ventana del navegador. Necesita la app en vivo.")
+def find_in_window(sesion, bodies: list[str] | None = None):
+    """
+    bodies: ids o nombres de cuerpos; omitido o vacío busca todos los cuerpos del componente raíz.
+    """
+    buscar = getattr(sesion, "buscar_en_ventana", None)
+    if buscar is None:
+        raise error("APP_NOT_RUNNING", "Buscar en la ventana necesita la ventana de OmniCAD en vivo.")
+    ids = list(dict.fromkeys(sesion.cuerpo(b).id for b in bodies)) if bodies else list(sesion.doc.estado_final.cuerpos)
+    return buscar(ids)
+
+
+@herramienta("set_body_opacity", "documento", "Cambia el Control de opacidad de cuerpos del navegador. "
+             "Sin cuerpos, se aplica a todos los del componente raíz. Admite deshacer.", modifica=True)
+def set_body_opacity(sesion, opacity: float, bodies: list[str] | None = None):
+    """
+    opacity: porcentaje de opacidad entre 0 y 100; 100 quita la anulación de opacidad.
+    bodies: ids o nombres de cuerpos; omitido o vacío cambia todos los cuerpos del componente raíz.
+    """
+    if not 0 <= opacity <= 100:
+        raise error("INVALID_ARGUMENTS", "La opacidad debe estar entre 0 y 100.")
+    ids = list(dict.fromkeys(sesion.cuerpo(b).id for b in bodies)) if bodies else list(sesion.doc.estado_final.cuerpos)
+    if not ids:
+        raise error("INVALID_ARGUMENTS", "No hay cuerpos para cambiar la opacidad.")
+    sesion.doc.set_propiedad(ids, "opacidad", None if opacity == 100 else opacity / 100)
+    return {"bodies": ids, "opacity": opacity}
 
 
 @herramienta("sketch_view", "documento", "Opera el boceto en la ventana: editar, seleccionar su plano, mirar "

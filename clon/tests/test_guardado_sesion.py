@@ -20,6 +20,13 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 
+
+def _autoguardar(v):
+    """El autoguardado escribe en un hilo y avisa por una señal: se espera a los dos."""
+    v.autoguardar()
+    proyecto.esperar_autoguardado()
+    QApplication.processEvents()
+
 @pytest.fixture(scope="module")
 def app_qt():
     return QApplication.instance() or QApplication([])
@@ -152,7 +159,7 @@ def test_confirmar_descartar_guardar_no_guardar_y_cancelar(v, carpeta_auto, monk
     sin_cambios = _responder(monkeypatch, v)
     assert v._confirmar_descartar() is True and not sin_cambios          # nada que preguntar
     v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
-    v.autoguardar()
+    _autoguardar(v)
     copia = proyecto.ruta_autoguardado(v.doc)
     assert copia.exists()
 
@@ -245,7 +252,7 @@ def test_la_copia_del_documento_abierto_no_se_ofrece_como_recuperable(v, carpeta
 
     monkeypatch.setattr(modulo_ventana, "DialogoRecuperados", _Guardia)
     v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
-    v.autoguardar()
+    _autoguardar(v)
     assert proyecto.ruta_autoguardado(v.doc).exists()
     v.verificar_autoguardado_huerfano()                                  # solo está la suya: no abre el diálogo
 
@@ -267,14 +274,30 @@ def test_un_autoguardado_que_falla_avisa_una_sola_vez(v, monkeypatch):
     avisos = []
     monkeypatch.setattr(v, "mensaje", lambda texto, ms=0: avisos.append(texto))
 
-    def sin_espacio(doc, miniatura=None):
+    def sin_espacio(*_a, **_k):
         raise OSError("disco lleno")
 
-    monkeypatch.setattr(proyecto, "autoguardar", sin_espacio)
+    monkeypatch.setattr(proyecto, "_escribir", sin_espacio)
     v.doc.modificado = True
-    v.autoguardar()
-    v.autoguardar()
+    _autoguardar(v)
+    _autoguardar(v)
     assert len([a for a in avisos if "No se pudo autoguardar" in a]) == 1 and "disco lleno" in avisos[0]
+
+
+def test_no_autoguarda_mientras_corre_codigo_de_un_agente(v, carpeta_auto):
+    """B-16: el latido de execute_code procesa eventos de Qt; el temporizador no guarda un estado a medio aplicar."""
+    assert v.encender_puente()
+    v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
+    v.puente.sesion.latido = lambda: False
+    try:
+        v.autoguardar()
+        proyecto.esperar_autoguardado()
+        assert not proyecto.ruta_autoguardado(v.doc).exists()
+    finally:
+        v.puente.sesion.latido = None
+    v.autoguardar()
+    proyecto.esperar_autoguardado()     # el ZIP se escribe en un hilo
+    assert proyecto.ruta_autoguardado(v.doc).exists()
 
 
 # ---------------------------------------------------------------- puente (agentes)
@@ -282,7 +305,7 @@ def test_guardar_por_el_puente_deja_el_titulo_la_copia_y_los_recientes_al_dia(v,
     """save_document por el puente dejaba el «*» en el título, el autoguardado en disco y los recientes sin la ruta."""
     assert v.encender_puente()
     v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
-    v.autoguardar()
+    _autoguardar(v)
     copia = proyecto.ruta_autoguardado(v.doc)
     assert copia.exists() and "*" in v.windowTitle()
     destino = tmp_path / "proy" / "agente.omnicad"
@@ -295,7 +318,7 @@ def test_guardar_por_el_puente_deja_el_titulo_la_copia_y_los_recientes_al_dia(v,
 def test_descartar_por_el_puente_borra_la_copia_del_documento_descartado(v, carpeta_auto):
     assert v.encender_puente()
     v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
-    v.autoguardar()
+    _autoguardar(v)
     copia = proyecto.ruta_autoguardado(v.doc)
     assert copia.exists()
     r = v.puente.ejecutar("new_document", {"discard": True})
@@ -350,7 +373,7 @@ def test_recuperar_por_el_puente_la_copia_del_documento_abierto_no_la_borra(v, c
     """El documento abierto y el recuperado comparten la copia: descartar el viejo no puede borrar la del nuevo."""
     assert v.encender_puente()
     v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
-    v.autoguardar()
+    _autoguardar(v)
     copia = proyecto.ruta_autoguardado(v.doc)
     r = v.puente.ejecutar("recover_document", {"path": str(copia), "discard": True})
     assert r["ok"], r

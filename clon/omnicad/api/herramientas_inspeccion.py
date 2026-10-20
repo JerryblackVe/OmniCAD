@@ -60,16 +60,20 @@ def _nombre_y_id(sesion, c):
 
 
 # ---------------------------------------------------------------- imagen
-def _objetos_render(sesion, cuerpos):
+def _objetos_render(sesion, cuerpos, cam=None, alto=600, cajas=None):
     """Los mismos objetos que arma el render de la app (`render_cpu.malla_suave` y `color_y_acabado`,
-    con deflexión automática por pieza)."""
+    con deflexión automática por pieza y, si hay cámara, por tamaño en píxeles)."""
     objetos = []
     for c in cuerpos:
         props = propiedades_cuerpo(sesion.doc.propiedades, c)
         pintadas = [(cara, p) for r, p in ad.caras_propias(props)
                     if (cara := ad.cara_de(sesion.doc.estado_final, r)) is not None]
-        v, n, partes = rc.malla_suave_aparte(c.forma, [cara for cara, _p in pintadas],
-                                             0.05 if _es_malla(c) else rc.deflexion_para(c.forma))
+        caja = cajas.get(c.id) if cajas is not None else None
+        fina = 0.05 if _es_malla(c) else rc.deflexion_para(c.forma, caja=caja)
+        deflexion = fina if _es_malla(c) else rc.deflexion_para(c.forma, cam=cam, alto=alto, caja=caja)
+        angular = min(0.5, 0.25 * math.sqrt(deflexion / fina))
+        v, n, partes = rc.malla_suave_aparte(c.forma, [cara for cara, _p in pintadas], deflexion, angular,
+                                           independiente=cam is not None)
         opacidad = float(sesion.doc.propiedad(c.id, "opacidad", 1.0))
         if len(v):
             color, acabado = rc.color_y_acabado(c, props)
@@ -140,23 +144,27 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
         atras, vista = direction, "custom"
     cuerpos = _cuerpos(sesion, bodies)
     todos = list(sesion.doc.estado_final.cuerpos.values())
-    caja = [geo.caja_envolvente(c.forma) if not _es_malla(c) else c.forma.caja() for c in (cuerpos if fit else todos)]
-    caja = [b for b in caja if b]
-    if not cuerpos or not caja:
+    cajas = {c.id: geo.caja_envolvente(c.forma) if not _es_malla(c) else c.forma.caja()
+             for c in (cuerpos if fit else todos)}
+    if not cuerpos or not any(cajas.values()):
         raise error("NOTHING_TO_RENDER", "No hay cuerpos para dibujar.")
-    pts = _esquinas(caja)
+    pts = _esquinas([b for b in cajas.values() if b])
     t0 = time.perf_counter()
-    objetos = _objetos_render(sesion, cuerpos)          # deflexión por pieza: una chica no se facetea nunca
-    if not objetos:
-        raise error("NOTHING_TO_RENDER", "Los cuerpos elegidos no tienen caras para dibujar.")
     escena = rc.escena_normalizada(None)
     cam, _ = _camara(atras, pts, width / height, rc.focal_a_fov(escena["focal"]))
+    objetos = _objetos_render(sesion, cuerpos, cam, height, cajas)
+    if not objetos:
+        raise error("NOTHING_TO_RENDER", "Los cuerpos elegidos no tienen caras para dibujar.")
     z_suelo = min(float(o["v"][:, 2].min()) for o in objetos)
     k = min(2.0, max(1.0, math.sqrt(_PIXELES_RENDER / (width * height))))
     w, h = round(width * k), round(height * k)
     res = int(min(2048, max(512, 2 ** math.ceil(math.log2(max(w, h) * 1.5)))))
+    from ..timeline.ops_insertar import calcomanias_vigentes
+    ids = {c.id for c in cuerpos}
+    calcomanias = [d for _i, d in calcomanias_vigentes(sesion.doc, sesion.doc.estado_final)
+                  if d.get("calcomania") and d.get("cuerpo") in ids]
     rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, z_suelo=z_suelo, res_sombras=res, mosaico=2048,
-                         n_luces=1 if lighting == "key_only" else 3)
+                         n_luces=1 if lighting == "key_only" else 3, calcomanias=calcomanias)
     from PIL import Image                            # Pillow: ya lo usa render_cpu.guardar_png
     imagen = Image.fromarray(np.ascontiguousarray(rgba[..., :3]), "RGB")
     if (w, h) != (width, height):

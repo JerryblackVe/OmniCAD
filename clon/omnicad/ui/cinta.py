@@ -53,7 +53,7 @@ INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Insertar archivos DXF", "insertar_dxf"),
     _i("Insertar malla", "insertar_malla"),
     _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijación", "fijacion"),
-    _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación")])
+    _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación", "insertar_derivacion")])
 ENSAMBLAR = ("ENSAMBLAR", ["union"], [
     _i("Nuevo componente", "nuevo_componente"), _i("Unión", "union"), _i("Unión como está", "union_construida"),
     _i("Origen de la unión", "origen_union"), _i("Grupo rígido", "grupo_rigido"), SEP,
@@ -166,7 +166,7 @@ MALLA = [
         _i("Alinear"), _i("Extruir textura"), _i("Separar", "separar_malla"), _i("Escalar malla", "escalar_malla"),
         SEP, _i("Convertir malla", "convertir_malla")]),
 ] + COMPARTIDOS + [
-    ("EXPORTAR", ["exportar_malla"], [_i("Exportar como malla (STL, OBJ, 3MF, PLY, GLB)…", "exportar_malla"),
+    ("EXPORTAR", ["exportar_malla"], [_i("Guardar como malla…", "exportar_malla"),
                                       _i("Exportar STL…", "exportar_stl"), _i("Exportar OBJ…", "exportar_obj")])]
 ADMINISTRAR = [("LISTA DE MATERIALES", ["lista_materiales"], [_i("Lista de materiales", "lista_materiales")])]
 UTILIDADES = [

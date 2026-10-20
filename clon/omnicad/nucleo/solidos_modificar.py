@@ -102,7 +102,7 @@ def _padres(mapa, hijo):
     if not mapa.Contains(hijo):
         return []
     salida = []
-    for p in mapa.FindFromKey(hijo):
+    for p in geo.lista_occ(mapa.FindFromKey(hijo)):
         if not any(p.IsSame(q) for q in salida):
             salida.append(p)
     return salida
@@ -422,6 +422,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True):
         raise geo.ErrorGeometria("Elegí al menos una arista para el chaflán.")
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
     mc = BRepFilletAPI_MakeChamfer(forma)
+    elegidas = []
     for grupo in grupos:
         tipo = grupo.get("tipo", "distancia_igual")
         d1 = float(grupo.get("distancia", 0))
@@ -433,6 +434,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True):
         for e in aristas:
             if mc.Contour(e):
                 continue
+            elegidas.append(e)
             if tipo == "distancia_igual":
                 mc.Add(d1, e)
                 continue
@@ -464,7 +466,21 @@ def chaflan(forma, grupos, *, cadena_tangente=True):
     except Exception:  # noqa: BLE001 — StdFail_NotDone
         pass
     if not mc.IsDone():
-        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas.")
+        longitudes = []
+        for e in elegidas:
+            vertices = _unicos(e, TopAbs_VERTEX)
+            for cara in _padres(arista_caras, e):
+                for vecina in _aristas(cara):
+                    if not vecina.IsSame(e) and any(_contiene(vertices, v) for v in _unicos(vecina, TopAbs_VERTEX)):
+                        longitud = geo.longitud(vecina)
+                        if longitud > TOL:
+                            longitudes.append(longitud)
+        pista = ""
+        if longitudes:
+            # shortcut: estimación local, usar búsqueda geométrica si se necesita un límite exacto.
+            pista = (f" Distancia máxima aproximada: {min(longitudes) / 2:g} mm "
+                     "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
+        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas." + pista)
     return _validar(mc.Shape(), "Chaflán")
 
 
@@ -886,7 +902,7 @@ def _cara_dada_vuelta(mo, forma, caras, resultado, dist):
         if (dist > 0 and despues < antes) or (dist < 0 and despues > antes):
             return True
     for cara in caras:
-        for nueva in mo.Generated(cara):
+        for nueva in geo.lista_occ(mo.Generated(cara)):
             medida = BRepExtrema_DistShapeShape(nueva, cara)
             medida.Perform()
             if medida.IsDone() and abs(medida.Value() - abs(dist)) > 1e-3 * abs(dist) + 1e-6:

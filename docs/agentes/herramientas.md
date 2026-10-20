@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-191 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+211 herramientas en 14 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 29 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 34 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -22,6 +22,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 9 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 12 | Ver y medir el resultado. |
+| [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
@@ -32,15 +33,15 @@ Archivo, escena, timeline y deshacer.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
-| [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
 | [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. |
 | [`select_bodies`](#select_bodies) | no | Selecciona cuerpos en la ventana y los revela en el navegador. |
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
+| [`recompute_all`](#recompute_all) | sí | Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. |
 | [`set_geometry_engine`](#set_geometry_engine) | sí | Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). |
 | [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
 | [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). |
 | [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
+| [`insert_derive`](#insert_derive) | sí | Deriva de OTRO proyecto .omnicad al documento actual (Insert Derive de Fusion): los cuerpos, bocetos y parámetros elegidos entran como UN paso del timeline que guarda la ruta del origen y qué se derivó; al recalcular vuelve a leer el origen (si cambió, se actualiza; si falta, el paso queda con error). |
 | [`inspect_f3d`](#inspect_f3d) | no | Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
 | [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
@@ -54,49 +55,18 @@ Archivo, escena, timeline y deshacer.
 | [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
 | [`discard_recoverable_document`](#discard_recoverable_document) | no | Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). |
+| [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
+| [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
+| [`export_mesh`](#export_mesh) | no | Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. |
 | [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
 | [`manage_browser`](#manage_browser) | sí | Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
-| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. |
+| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. |
+| [`find_in_window`](#find_in_window) | no | Selecciona cuerpos, los encuadra en la ventana y resalta su paso creador en el timeline, como Buscar en la ventana del navegador. |
+| [`set_body_opacity`](#set_body_opacity) | sí | Cambia el Control de opacidad de cuerpos del navegador. |
 | [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
-
-### `set_decal`
-
-Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. El factor de escala multiplica uniformemente anchura y altura. En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.
-
-- Modifica el documento: sí, es un paso de deshacer.
-- Parámetros:
-  - `image` (texto; opcional, por defecto `null`): ruta de imagen PNG/JPEG/BMP/TIFF; omitida al editar conserva la embebida.
-  - `face` (texto; opcional, por defecto `null`): selector o id de UNA cara; omitida al editar conserva su referencia.
-  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúa el selector de face.
-  - `feature` (texto; opcional, por defecto `null`): id o nombre del paso a editar; vacío crea uno.
-  - `width` (número o expresión; opcional, por defecto `null`): anchura en mm; omitida al crear ajusta la imagen dentro de la cara.
-  - `height` (número o expresión; opcional, por defecto `null`): altura en mm; con keep_aspect ajusta también la anchura.
-  - `keep_aspect` (true/false; opcional, por defecto `null`): conserva la proporción de la imagen; por defecto true al crear.
-  - `chain_faces` (true/false; opcional, por defecto `null`): incluye las caras tangentes encadenadas.
-  - `opacity` (entero; opcional, por defecto `null`): porcentaje de opacidad (0 a 100).
-  - `use_opacity` (true/false; opcional, por defecto `null`): false ignora el porcentaje y usa 100 por ciento.
-  - `x` (número o expresión; opcional, por defecto `null`): distancia X sobre la cara, en mm.
-  - `y` (número o expresión; opcional, por defecto `null`): distancia Y sobre la cara, en mm.
-  - `angle` (número o expresión; opcional, por defecto `null`): ángulo Z en grados.
-  - `flip_h` (true/false; opcional, por defecto `null`): volteo horizontal de imagen.
-  - `flip_v` (true/false; opcional, por defecto `null`): volteo vertical de imagen.
-  - `scale` (número o expresión; opcional, por defecto `null`): factor uniforme positivo sobre anchura y altura; 1 conserva el tamaño (también con keep_aspect=false).
-  - `name` (texto; opcional, por defecto `null`): nombre en el navegador (carpeta Calcomanías); omitido al crear toma el de la imagen, como Fusion.
-- CLI: `omnicad call set_decal --doc pieza.omnicad`
-
-### `decal_view`
-
-Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. Para suprimirla usá delete_feature, para renombrarla rename, para ocultarla set_browser_visibility.
-
-- Modifica el documento: no.
-- Parámetros:
-  - `decal` (texto; obligatorio): id o nombre de la calcomanía.
-  - `action` ("edit" | "find_in_window" | "find_in_timeline" | "replace_image"; obligatorio): edit, find_in_window, find_in_timeline o replace_image.
-  - `image` (texto; opcional, por defecto `null`): ruta de la imagen nueva (solo con replace_image).
-- CLI: `omnicad call decal_view --doc pieza.omnicad decal=… action=…`
 
 ### `get_scene_info`
 
@@ -125,6 +95,14 @@ Elige las unidades con que la app MUESTRA las medidas del documento (el menú «
   - `length` ("mm" | "cm" | "m" | "in" | "ft" o null; opcional, por defecto `null`): unidad de longitud para mostrar (omitido o null = no cambia).
   - `mass` ("g" | "kg" | "lb" o null; opcional, por defecto `null`): unidad de masa para mostrar (omitido o null = no cambia).
 - CLI: `omnicad call set_document_units --doc pieza.omnicad`
+
+### `recompute_all`
+
+Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. Sirve si algo se ve mal o para medir cuánto tarda el modelo entero. No cambia la receta.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros: ninguno.
+- CLI: `omnicad call recompute_all --doc pieza.omnicad`
 
 ### `set_geometry_engine`
 
@@ -167,6 +145,19 @@ Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Inser
   - `mesh_units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Importar archivo.ext» / «Insertar archivo».
 - CLI: `omnicad call insert_file --doc pieza.omnicad path=…`
+
+### `insert_derive`
+
+Deriva de OTRO proyecto .omnicad al documento actual (Insert Derive de Fusion): los cuerpos, bocetos y parámetros elegidos entran como UN paso del timeline que guarda la ruta del origen y qué se derivó; al recalcular vuelve a leer el origen (si cambió, se actualiza; si falta, el paso queda con error). Los parámetros derivados se copian también al documento. A diferencia de insert_file con un .omnicad (que copia el diseño adentro), la derivación queda asociada al archivo de origen.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `source_path` (texto; obligatorio): ruta del proyecto .omnicad (o .fclone) de origen.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos del origen a derivar (get_scene_info del origen los lista).
+  - `sketches` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los bocetos del origen a derivar.
+  - `parameters` (lista de texto o null; opcional, por defecto `null`): nombres de los parámetros del origen a derivar; quedan también como parámetros del documento.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Derivación de <archivo>».
+- CLI: `omnicad call insert_derive --doc pieza.omnicad source_path=…`
 
 ### `inspect_f3d`
 
@@ -294,6 +285,62 @@ Suprime una copia de autoguardado de la lista de documentos recuperables (el bot
   - `path` (texto; obligatorio): ruta de la copia de autoguardado (de list_recoverable_documents).
 - CLI: `omnicad call discard_recoverable_document --doc pieza.omnicad path=…`
 
+### `set_decal`
+
+Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. El factor de escala multiplica uniformemente anchura y altura. En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `image` (texto; opcional, por defecto `null`): ruta de imagen PNG/JPEG/BMP/TIFF; omitida al editar conserva la embebida.
+  - `face` (texto; opcional, por defecto `null`): selector o id de UNA cara; omitida al editar conserva su referencia.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúa el selector de face.
+  - `feature` (texto; opcional, por defecto `null`): id o nombre del paso a editar; vacío crea uno.
+  - `width` (número o expresión; opcional, por defecto `null`): anchura en mm; omitida al crear ajusta la imagen dentro de la cara.
+  - `height` (número o expresión; opcional, por defecto `null`): altura en mm; con keep_aspect ajusta también la anchura.
+  - `keep_aspect` (true/false; opcional, por defecto `null`): conserva la proporción de la imagen; por defecto true al crear.
+  - `chain_faces` (true/false; opcional, por defecto `null`): incluye las caras tangentes encadenadas.
+  - `opacity` (entero; opcional, por defecto `null`): porcentaje de opacidad (0 a 100).
+  - `use_opacity` (true/false; opcional, por defecto `null`): false ignora el porcentaje y usa 100 por ciento.
+  - `x` (número o expresión; opcional, por defecto `null`): distancia X sobre la cara, en mm.
+  - `y` (número o expresión; opcional, por defecto `null`): distancia Y sobre la cara, en mm.
+  - `angle` (número o expresión; opcional, por defecto `null`): ángulo Z en grados.
+  - `flip_h` (true/false; opcional, por defecto `null`): volteo horizontal de imagen.
+  - `flip_v` (true/false; opcional, por defecto `null`): volteo vertical de imagen.
+  - `scale` (número o expresión; opcional, por defecto `null`): factor uniforme positivo sobre anchura y altura; 1 conserva el tamaño (también con keep_aspect=false).
+  - `name` (texto; opcional, por defecto `null`): nombre en el navegador (carpeta Calcomanías); omitido al crear toma el de la imagen, como Fusion.
+- CLI: `omnicad call set_decal --doc pieza.omnicad`
+
+### `decal_view`
+
+Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. Para suprimirla usá delete_feature, para renombrarla rename, para ocultarla set_browser_visibility.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `decal` (texto; obligatorio): id o nombre de la calcomanía.
+  - `action` ("edit" | "find_in_window" | "find_in_timeline" | "replace_image"; obligatorio): edit, find_in_window, find_in_timeline o replace_image.
+  - `image` (texto; opcional, por defecto `null`): ruta de la imagen nueva (solo con replace_image).
+- CLI: `omnicad call decal_view --doc pieza.omnicad decal=… action=…`
+
+### `export_mesh`
+
+Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. Las mallas existentes conservan sus facetas; los controles personalizados de arista y aspecto también las subdividen.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): archivo de destino con extensión correspondiente al formato (.3mf, .stl u .obj).
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos; vacío = todos los del modelo, sin patrones planos.
+  - `format` ("3mf" | "stl_binario" | "stl_ascii" | "obj"; opcional, por defecto `"stl_binario"`): 3mf, stl_binario, stl_ascii u obj.
+  - `units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidad del archivo: mm, cm, m, in o ft; el modelo sigue en mm.
+  - `structure` ("un_archivo" | "uno_por_cuerpo"; opcional, por defecto `"un_archivo"`): un_archivo o uno_por_cuerpo; los separados llevan índice y nombre del cuerpo.
+  - `refinement` ("bajo" | "medio" | "alto" | "personalizado"; opcional, por defecto `"personalizado"`): bajo, medio, alto o personalizado; solo este último usa los cuatro controles numéricos.
+  - `surface_deviation` (número; opcional, por defecto `0.02`): desviación máxima de superficie en mm (por defecto 0,02).
+  - `normal_deviation` (número; opcional, por defecto `17.188733853924695`): desviación angular en grados (por defecto 0,3 radianes expresados en grados).
+  - `maximum_edge_length` (número; opcional, por defecto `0.0`): longitud máxima de arista en mm; 0 = sin límite.
+  - `aspect_ratio` (número; opcional, por defecto `0.0`): arista mayor / altura menor, mayor que 1,154701; 0 = sin límite.
+  - `overwrite` (true/false; opcional, por defecto `false`): true permite reemplazar archivos existentes; se comprueban todos antes de escribir.
+  - `create_folders` (true/false; opcional, por defecto `true`): true crea las carpetas que faltan; false falla si la carpeta no existe.
+- CLI: `omnicad call export_mesh --doc pieza.omnicad path=…`
+
 ### `get_browser_state`
 
 Lista los grupos y conjuntos de selección guardados en el navegador.
@@ -316,13 +363,32 @@ Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección,
 
 ### `set_browser_visibility`
 
-Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. Sin items, muestra todo. No modifica geometría.
+Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. Sin items, muestra todo. No modifica geometría.
 
 - Modifica el documento: no.
 - Parámetros:
-  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos, calcomanías o grupos; vacío muestra todo.
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, componentes, bocetos, calcomanías o grupos; vacío muestra todo.
   - `visible` (true/false; opcional, por defecto `true`): true muestra; false oculta los elementos pedidos.
 - CLI: `omnicad call set_browser_visibility --doc pieza.omnicad`
+
+### `find_in_window`
+
+Selecciona cuerpos, los encuadra en la ventana y resalta su paso creador en el timeline, como Buscar en la ventana del navegador. Necesita la app en vivo.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos; omitido o vacío busca todos los cuerpos del componente raíz.
+- CLI: `omnicad call find_in_window --doc pieza.omnicad`
+
+### `set_body_opacity`
+
+Cambia el Control de opacidad de cuerpos del navegador. Sin cuerpos, se aplica a todos los del componente raíz. Admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `opacity` (número; obligatorio): porcentaje de opacidad entre 0 y 100; 100 quita la anulación de opacidad.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos; omitido o vacío cambia todos los cuerpos del componente raíz.
+- CLI: `omnicad call set_body_opacity --doc pieza.omnicad opacity=…`
 
 ### `sketch_view`
 
@@ -358,7 +424,7 @@ Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú conte
 
 ### `get_profile_sketches`
 
-Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. Sus ids sirven como «sketch» de las herramientas de boceto (get_sketch, draw_line…).
+Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. Sus ids sirven como «sketch» de las herramientas de boceto (get_sketch, draw_line…); los derivados externos son de solo lectura.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1174,7 +1240,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`revolve`](#revolve) | sí | Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción). |
 | [`sweep`](#sweep) | sí | Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). |
 | [`loft`](#loft) | sí | Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. |
-| [`create_box`](#create_box) | sí | Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. |
+| [`create_box`](#create_box) | sí | Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. |
 | [`create_cylinder`](#create_cylinder) | sí | Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo). |
 | [`create_sphere`](#create_sphere) | sí | Crea una esfera. (x, y, z) es su centro. |
 | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
@@ -1271,19 +1337,20 @@ Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden
 
 ### `create_box`
 
-Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo: la caja queda centrada en X e Y y apoyada en z. Medidas y posición aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado (caja_centrada) y edit_feature acepta length, width y height.
+Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. Medidas y posición aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado (caja_centrada) y edit_feature acepta length, width y height.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `length` (número o expresión; obligatorio): tamaño en X (mm, positivo).
   - `width` (número o expresión; obligatorio): tamaño en Y (mm, positivo).
   - `height` (número o expresión; obligatorio): tamaño en Z (mm, positivo).
-  - `x` (número o expresión; opcional, por defecto `0`): x del centro de la base (mm).
-  - `y` (número o expresión; opcional, por defecto `0`): y del centro de la base (mm).
+  - `x` (número o expresión; opcional, por defecto `0`): x del centro de la base o de la esquina mínima, según anchor (mm).
+  - `y` (número o expresión; opcional, por defecto `0`): y del centro de la base o de la esquina mínima, según anchor (mm).
   - `z` (número o expresión; opcional, por defecto `0`): z de la base (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
+  - `anchor` ("center" | "corner"; opcional, por defecto `"center"`): "center" sitúa (x, y, z) en el centro de la base; "corner", en la esquina mínima (crece hacia +X, +Y, +Z).
 - CLI: `omnicad call create_box --doc pieza.omnicad length=… width=… height=…`
 
 ### `create_cylinder`
@@ -2527,8 +2594,6 @@ Ver y medir el resultado.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`thread_info`](#thread_info) | no | Datos de roscas normalizadas (no cambia el documento). |
-| [`fit_tolerance`](#fit_tolerance) | no | Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). |
 | [`get_viewport_image`](#get_viewport_image) | no | Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde una vista estándar o una dirección propia. |
 | [`get_physical_properties`](#get_physical_properties) | no | Volumen (mm³), área (mm²), masa (g), centro de masa y caja envolvente de cada cuerpo y del total. |
 | [`measure_distance`](#measure_distance) | no | Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista o un punto. |
@@ -2536,31 +2601,11 @@ Ver y medir el resultado.
 | [`find_faces`](#find_faces) | no | Lista las caras de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`find_edges`](#find_edges) | no | Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`measure_angle`](#measure_angle) | no | Ángulo (grados) entre dos caras planas, dos aristas rectas, o una cara y una arista. |
+| [`thread_info`](#thread_info) | no | Datos de roscas normalizadas (no cambia el documento). |
+| [`fit_tolerance`](#fit_tolerance) | no | Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). |
 | [`check_geometry`](#check_geometry) | no | Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. |
 | [`check_printability`](#check_printability) | no | Revisión de impresión 3D de un cuerpo (o de todos), como la caja de herramientas de impresión 3D de Blender: si es estanco, espesor mínimo de pared (rayos hacia adentro desde la superficie; zonas más finas que min_thickness), zonas en voladizo que necesitan soportes (más de overhang_angle desde la vertical, sin contar la cara apoyada en la cama: el plano Z más bajo del cuerpo) y aristas filosas (ángulo interior menor que sharp_angle). printable = estanco y sin paredes finas. |
 | [`repair_body`](#repair_body) | sí | Repara un cuerpo y deja un paso «Reparar cuerpo» en el timeline (editable; un paso de deshacer): cose las aristas abiertas (si queda estanco pasa a sólido), baja las tolerancias mayores que tolerance, corrige con ShapeFix (orientación de caras, contornos) y refina (une caras coplanares). |
-
-### `thread_info`
-
-Datos de roscas normalizadas (no cambia el documento). Sin argumentos: los tipos (familias) con su norma, ángulo de perfil y clases. Con family: sus tamaños y designaciones. Con thread: diámetro mayor, paso, diámetros de flancos y menor básicos, broca para roscar, agujero de paso ISO 273 (métricas) y, con thread_class, los diámetros límite de la clase (ISO 965-1 o ASME B1.1; 'auto' da los de las dos clases por defecto). Todo en mm.
-
-- Modifica el documento: no.
-- Parámetros:
-  - `thread` (texto; opcional, por defecto `null`): designación ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "1/2-10 ACME", "G1/2", "R1/2", "1/2 NPT").
-  - `family` ("iso_metric" | "unified" | "trapezoidal" | "acme" | "bsp_parallel" | "bsp_taper" | "npt" o null; opcional, por defecto `null`): tipo de rosca cuyos tamaños listar: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
-  - `thread_class` (texto; opcional, por defecto `null`): clase para los diámetros límite: "6g", "6H", "2A", "2B"…, o "auto" (las dos por defecto).
-- CLI: `omnicad call thread_info --doc pieza.omnicad`
-
-### `fit_tolerance`
-
-Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). Hay grados IT5 a IT11 hasta 500 mm; agujeros D, E, F, G, H y ejes d, e, f, g, h, j6, k, n, p, s. Ej.: nominal=25, hole='H7', shaft='g6'. Todo en mm.
-
-- Modifica el documento: no.
-- Parámetros:
-  - `nominal` (número; obligatorio): medida nominal en mm (más de 0 y hasta 500).
-  - `hole` (texto; opcional, por defecto `"H7"`): clase del agujero, letra mayúscula y grado: "H7", "H8", "H11", "G7", "F8"…
-  - `shaft` (texto; opcional, por defecto `"g6"`): clase del eje, letra minúscula y grado: "g6", "h6", "h7", "f7", "k6", "n6", "p6", "s6", "j6"…
-- CLI: `omnicad call fit_tolerance --doc pieza.omnicad nominal=…`
 
 ### `get_viewport_image`
 
@@ -2638,6 +2683,28 @@ Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un sele
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids no lo necesitan.
 - CLI: `omnicad call measure_angle --doc pieza.omnicad a=… b=…`
 
+### `thread_info`
+
+Datos de roscas normalizadas (no cambia el documento). Sin argumentos: los tipos (familias) con su norma, ángulo de perfil y clases. Con family: sus tamaños y designaciones. Con thread: diámetro mayor, paso, diámetros de flancos y menor básicos, broca para roscar, agujero de paso ISO 273 (métricas) y, con thread_class, los diámetros límite de la clase (ISO 965-1 o ASME B1.1; 'auto' da los de las dos clases por defecto). Todo en mm.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `thread` (texto; opcional, por defecto `null`): designación ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "1/2-10 ACME", "G1/2", "R1/2", "1/2 NPT").
+  - `family` ("iso_metric" | "unified" | "trapezoidal" | "acme" | "bsp_parallel" | "bsp_taper" | "npt" o null; opcional, por defecto `null`): tipo de rosca cuyos tamaños listar: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
+  - `thread_class` (texto; opcional, por defecto `null`): clase para los diámetros límite: "6g", "6H", "2A", "2B"…, o "auto" (las dos por defecto).
+- CLI: `omnicad call thread_info --doc pieza.omnicad`
+
+### `fit_tolerance`
+
+Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). Hay grados IT5 a IT11 hasta 500 mm; agujeros D, E, F, G, H y ejes d, e, f, g, h, j6, k, n, p, s. Ej.: nominal=25, hole='H7', shaft='g6'. Todo en mm.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `nominal` (número; obligatorio): medida nominal en mm (más de 0 y hasta 500).
+  - `hole` (texto; opcional, por defecto `"H7"`): clase del agujero, letra mayúscula y grado: "H7", "H8", "H11", "G7", "F8"…
+  - `shaft` (texto; opcional, por defecto `"g6"`): clase del eje, letra minúscula y grado: "g6", "h6", "h7", "f7", "k6", "n6", "p6", "s6", "j6"…
+- CLI: `omnicad call fit_tolerance --doc pieza.omnicad nominal=…`
+
 ### `check_geometry`
 
 Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. Cada problema trae kind, severity (error o warning), un mensaje y su posición [x, y, z]; max_tolerance es la mayor tolerancia del kernel por tipo. La búsqueda de autointersecciones en cuerpos con superficies B-spline (roscas modeladas) corre con tope de tiempo: si no termina, self_intersections queda en null y sale el aviso self_intersection_skipped. No cambia el documento: para arreglar, repair_body.
@@ -2676,6 +2743,204 @@ Repara un cuerpo y deja un paso «Reparar cuerpo» en el timeline (editable; un 
   - `refine` (true/false; opcional, por defecto `true`): true une las caras coplanares y las aristas colineales (Refine Shape).
   - `fix` (true/false; opcional, por defecto `true`): true corrige con ShapeFix (orientación de caras, contornos, curvas sobre las caras).
 - CLI: `omnicad call repair_body --doc pieza.omnicad body=…`
+
+## Grupo animacion
+
+Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video.
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`create_storyboard`](#create_storyboard) | sí | Crea un guion gráfico (storyboard) del espacio ANIMACIÓN: limpio o que continúa desde el final del actual, como Nuevo guion gráfico. |
+| [`list_storyboards`](#list_storyboards) | no | Lista los guiones gráficos (storyboards) del documento con su duración y su cantidad de acciones. |
+| [`get_storyboard`](#get_storyboard) | no | Devuelve un guion gráfico completo: estado inicial (posición de los cuerpos y cámara) y la lista de acciones con sus tiempos (para edit_animation_action y delete_animation_action). |
+| [`rename_storyboard`](#rename_storyboard) | sí | Cambia el nombre de un guion gráfico. |
+| [`copy_storyboard`](#copy_storyboard) | sí | Duplica un guion gráfico con todas sus acciones (Copia de la ventana; el nuevo se llama «… (copia)»). |
+| [`delete_storyboard`](#delete_storyboard) | sí | Elimina un guion gráfico. |
+| [`reverse_storyboard`](#reverse_storyboard) | sí | Invierte un guion gráfico (Invertir de la ventana): empieza donde terminaba y hace las acciones al revés. |
+| [`add_animation_action`](#add_animation_action) | sí | Agrega una acción al guion gráfico: transform (mover y girar componentes), restore (volver a la posición del diseño) o visibility (mostrar/ocultar), como TRANSFORMAR de ANIMACIÓN. |
+| [`edit_animation_action`](#edit_animation_action) | sí | Edita una acción del guion gráfico: moverla o estirar su barra (start, duration) y sus valores (movimiento, visibilidad, texto, cámara). |
+| [`delete_animation_action`](#delete_animation_action) | sí | Elimina una acción del guion gráfico. |
+| [`auto_explode`](#auto_explode) | sí | Explosión automática (EXPLOSIÓN AUTOMÁTICA de ANIMACIÓN): agrega una acción que separa las piezas hacia afuera del centro, de un nivel o de todos los niveles. |
+| [`set_animation_camera`](#set_animation_camera) | sí | Agrega una acción Vista al guion: la cámara va (con la misma vista orbital de la ventana) desde la cámara inicial hasta la nueva. |
+| [`add_animation_annotation`](#add_animation_annotation) | sí | Agrega una anotación (globo con texto) al guion gráfico: fija en un punto del mundo o pegada a un cuerpo, a la que sigue si se mueve. |
+| [`get_animation_frame`](#get_animation_frame) | no | Devuelve el estado de la escena en un instante del guion gráfico (matrices y visibilidad de cada cuerpo, cámara, anotaciones) y una imagen renderizada del cuadro, sin abrir la ventana (como Ir a de ANIMACIÓN). |
+| [`export_animation_video`](#export_animation_video) | no | Publica la animación como GIF animado o secuencia de imágenes PNG, renderizando cada cuadro con el renderizador por software (como PUBLICAR de ANIMACIÓN, sin abrir la ventana). |
+
+### `create_storyboard`
+
+Crea un guion gráfico (storyboard) del espacio ANIMACIÓN: limpio o que continúa desde el final del actual, como Nuevo guion gráfico.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `name` (texto; opcional, por defecto `null`): nombre del guion nuevo; vacío = «Guion gráficoN» sin repetir (como la ventana).
+  - `from_final` (true/false; opcional, por defecto `false`): true arranca donde termina el guion actual (posición de los cuerpos y cámara); false = limpio.
+- CLI: `omnicad call create_storyboard --doc pieza.omnicad`
+
+### `list_storyboards`
+
+Lista los guiones gráficos (storyboards) del documento con su duración y su cantidad de acciones.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call list_storyboards --doc pieza.omnicad`
+
+### `get_storyboard`
+
+Devuelve un guion gráfico completo: estado inicial (posición de los cuerpos y cámara) y la lista de acciones con sus tiempos (para edit_animation_action y delete_animation_action).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual (list_storyboards los lista).
+- CLI: `omnicad call get_storyboard --doc pieza.omnicad`
+
+### `rename_storyboard`
+
+Cambia el nombre de un guion gráfico.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `new_name` (texto; opcional, por defecto `""`): nombre nuevo (no puede repetirse).
+- CLI: `omnicad call rename_storyboard --doc pieza.omnicad`
+
+### `copy_storyboard`
+
+Duplica un guion gráfico con todas sus acciones (Copia de la ventana; el nuevo se llama «… (copia)»).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico a copiar, índice (desde 0) o vacío = el actual.
+- CLI: `omnicad call copy_storyboard --doc pieza.omnicad`
+
+### `delete_storyboard`
+
+Elimina un guion gráfico. Si es el único, queda uno limpio con el mismo nombre (como la ventana).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico a eliminar, índice (desde 0) o vacío = el actual.
+- CLI: `omnicad call delete_storyboard --doc pieza.omnicad`
+
+### `reverse_storyboard`
+
+Invierte un guion gráfico (Invertir de la ventana): empieza donde terminaba y hace las acciones al revés.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico a invertir, índice (desde 0) o vacío = el actual.
+- CLI: `omnicad call reverse_storyboard --doc pieza.omnicad`
+
+### `add_animation_action`
+
+Agrega una acción al guion gráfico: transform (mover y girar componentes), restore (volver a la posición del diseño) o visibility (mostrar/ocultar), como TRANSFORMAR de ANIMACIÓN.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `type` ("transform" | "restore" | "visibility"; opcional, por defecto `"transform"`): "transform" mueve y gira; "restore" vuelve a la posición del diseño; "visibility" muestra u oculta.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos (get_scene_info); obligatorio en los tres tipos.
+  - `translation` (lista de número o null; opcional, por defecto `null`): [x, y, z] en mm (solo transform).
+  - `rotation` (lista de número o null; opcional, por defecto `null`): [rx, ry, rz] ángulos en grados, primero X después Y después Z (solo transform).
+  - `visible` (true/false; opcional, por defecto `false`): true muestra, false oculta (solo visibility); con duration > 0 se desvanece.
+  - `start` (número; opcional, por defecto `0.0`): instante en que empieza la acción, en segundos.
+  - `duration` (número; opcional, por defecto `1.0`): cuánto dura, en segundos (0 = instantáneo).
+- CLI: `omnicad call add_animation_action --doc pieza.omnicad`
+
+### `edit_animation_action`
+
+Edita una acción del guion gráfico: moverla o estirar su barra (start, duration) y sus valores (movimiento, visibilidad, texto, cámara). Solo cambian los parámetros pasados.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `action` (texto; opcional, por defecto `""`): id de la acción (a1, a2, …; lo lista get_storyboard).
+  - `start` (número; opcional, por defecto `null`): nuevo instante de inicio, en segundos.
+  - `duration` (número; opcional, por defecto `null`): nueva duración, en segundos (0 = instantáneo).
+  - `translation` (lista de número o null; opcional, por defecto `null`): [x, y, z] en mm (solo acciones transform).
+  - `rotation` (lista de número o null; opcional, por defecto `null`): [rx, ry, rz] ángulos en grados (solo acciones transform).
+  - `visible` (true/false; opcional, por defecto `null`): true muestra, false oculta (solo acciones visibility).
+  - `text` (texto; opcional, por defecto `null`): texto nuevo (solo anotaciones).
+  - `camera` (objeto; opcional, por defecto `null`): cámara nueva, {"R", "objetivo", "distancia", "fov"} (solo acciones vista).
+- CLI: `omnicad call edit_animation_action --doc pieza.omnicad`
+
+### `delete_animation_action`
+
+Elimina una acción del guion gráfico.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `action` (texto; opcional, por defecto `""`): id de la acción a eliminar (a1, a2, …; lo lista get_storyboard).
+- CLI: `omnicad call delete_animation_action --doc pieza.omnicad`
+
+### `auto_explode`
+
+Explosión automática (EXPLOSIÓN AUTOMÁTICA de ANIMACIÓN): agrega una acción que separa las piezas hacia afuera del centro, de un nivel o de todos los niveles.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a separar; vacío = todo el modelo.
+  - `level` ("one" | "all"; opcional, por defecto `"one"`): "one" = un nivel (los cuerpos de un mismo componente van juntos); "all" = todos los niveles (cada cuerpo por su lado).
+  - `distance` (número; opcional, por defecto `null`): escala de la explosión en mm: cuánto se aparta la pieza más lejana; vacío = 60 % del tamaño del modelo (como la ventana).
+  - `sequential` (true/false; opcional, por defecto `false`): true = las piezas explotan una después de la otra; false = todas a la vez.
+  - `start` (número; opcional, por defecto `0.0`): instante en que empieza la acción, en segundos.
+  - `duration` (número; opcional, por defecto `1.0`): cuánto dura, en segundos.
+- CLI: `omnicad call auto_explode --doc pieza.omnicad`
+
+### `set_animation_camera`
+
+Agrega una acción Vista al guion: la cámara va (con la misma vista orbital de la ventana) desde la cámara inicial hasta la nueva.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `camera` (objeto; opcional, por defecto `null`): cámara completa {"R": 3x3, "objetivo": [x, y, z], "distancia", "fov", "ortografica"} (la guarda el guion); si no se pasa, se arma una que encuadra todo el modelo.
+  - `view` ("iso" | "front" | "back" | "right" | "left" | "top" | "bottom"; opcional, por defecto `"iso"`): vista estándar para la cámara cuando no se pasa camera: iso, front, back, right, left, top o bottom.
+  - `start` (número; opcional, por defecto `0.0`): instante en que empieza la acción, en segundos.
+  - `duration` (número; opcional, por defecto `1.0`): cuánto dura el viaje de cámara, en segundos.
+- CLI: `omnicad call set_animation_camera --doc pieza.omnicad`
+
+### `add_animation_annotation`
+
+Agrega una anotación (globo con texto) al guion gráfico: fija en un punto del mundo o pegada a un cuerpo, a la que sigue si se mueve.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `text` (texto; opcional, por defecto `""`): texto de la anotación.
+  - `point` (lista de número o null; opcional, por defecto `null`): [x, y, z] en mm donde va el alfiler de la anotación.
+  - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo al que se pega (la anotación lo sigue); con body, point va en coordenadas del cuerpo; vacío = fija en el mundo.
+  - `start` (número; opcional, por defecto `0.0`): instante en que aparece, en segundos.
+  - `duration` (número; opcional, por defecto `2.0`): cuánto dura visible, en segundos (0 = hasta el final del guion).
+- CLI: `omnicad call add_animation_annotation --doc pieza.omnicad`
+
+### `get_animation_frame`
+
+Devuelve el estado de la escena en un instante del guion gráfico (matrices y visibilidad de cada cuerpo, cámara, anotaciones) y una imagen renderizada del cuadro, sin abrir la ventana (como Ir a de ANIMACIÓN).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico, índice (desde 0) o vacío = el actual.
+  - `time` (número; opcional, por defecto `0.0`): instante en segundos (0 = comienzo; get_storyboard dice la duración total).
+  - `width` (entero; opcional, por defecto `640`): ancho de la imagen en píxeles (16 a 2048).
+  - `height` (entero; opcional, por defecto `480`): alto de la imagen en píxeles (16 a 2048).
+- CLI: `omnicad call get_animation_frame --doc pieza.omnicad`
+
+### `export_animation_video`
+
+Publica la animación como GIF animado o secuencia de imágenes PNG, renderizando cada cuadro con el renderizador por software (como PUBLICAR de ANIMACIÓN, sin abrir la ventana).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): archivo .gif a escribir, o carpeta para la secuencia de PNG (se crea si no existe).
+  - `storyboard` (texto o entero; opcional, por defecto `null`): nombre del guion gráfico a publicar, índice (desde 0) o vacío = el actual.
+  - `all_storyboards` (true/false; opcional, por defecto `false`): true publica todos los guiones del documento, uno tras otro.
+  - `format` ("gif" | "png"; opcional, por defecto `"gif"`): "gif" = GIF animado que se repite; "png" = secuencia de imágenes PNG (cuadro_0001.png, …).
+  - `width` (entero; opcional, por defecto `640`): ancho del video en píxeles (16 a 2048).
+  - `height` (entero; opcional, por defecto `360`): alto del video en píxeles (16 a 2048).
+  - `fps` (entero; opcional, por defecto `15`): cuadros por segundo (1 a 60).
+- CLI: `omnicad call export_animation_video --doc pieza.omnicad path=…`
 
 ## Grupo avanzado
 
@@ -2739,12 +3004,12 @@ Carga una receta JSON (la de get_recipe): 'replace' reemplaza todo el documento;
 
 ### `execute_code`
 
-Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. Devuelve lo impreso (stdout) y la variable `result` si el código la define. Todo es un paso de deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` segundos (60 por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve a como estaba.
+Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. Devuelve lo impreso (stdout) y la variable `result` si el código la define. Todo es un paso de deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` segundos (60 por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve a como estaba. En vivo se puede cancelar mientras corre (botón Cancelar del diálogo): responde CODE_CANCELLED y el documento también vuelve a como estaba.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `code` (texto; obligatorio): código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar (atajo de api.llamar(sesion, nombre, args); NUNCA lanza: devuelve un dict con ok y, si falló, error_kind). Si alguna llamada falla, el resultado trae failed_calls y un aviso; si fallan TODAS, el resultado es CODE_ERROR y el documento vuelve a como estaba.
-  - `timeout` (número; opcional, por defecto `60.0`): segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se vigila tu código: una llamada larga a una herramienta termina antes del corte.
+  - `timeout` (número; opcional, por defecto `60.0`): segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se vigila tu código: una llamada larga a una herramienta termina antes del corte. También se puede cancelar desde afuera (en vivo, el botón Cancelar): responde CODE_CANCELLED con el mismo rollback.
 - CLI: `omnicad call execute_code --doc pieza.omnicad code=…`
 
 ### `get_guide`

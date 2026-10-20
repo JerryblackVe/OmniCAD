@@ -17,6 +17,8 @@ Aspectos (Fusion › CONFIGURAR › Aspecto): `BIBLIOTECA_ASPECTOS` reproduce la
 biblioteca de Fusion (Metal, Plástico, Vidrio, Goma, Madera, Pintura). Cada aspecto es un color sRGB
 0..1 más un «acabado»: metálico, rugosidad, transparencia, barniz y patrón ("madera" = vetas 3D).
 """
+import base64
+import io
 import math
 
 import numpy as np
@@ -29,18 +31,32 @@ from . import motor as _motor
 _DEFLEXION_MIN, _DEFLEXION_MAX = 0.02, 0.5
 
 
-def deflexion_para(forma, deflexion=None):
+def deflexion_para(forma, deflexion=None, *, cam=None, alto=600, caja=None):
     """Deflexión (mm) de teselado para un B-rep: la dada o, sin argumento, la automática por pieza
     (fina en piezas chicas: 3e-4 de la diagonal, acotada a [0.02, 0.5] mm). La regla global (0.05 mm o
-    diagonal/2000 de la escena) dejaba una pieza chica facetada dentro de una escena grande (B-15)."""
+    diagonal/2000 de la escena) dejaba una pieza chica facetada dentro de una escena grande (B-15).
+    Con cámara: hasta medio píxel de error, acotado al 0,5 % de la pieza; desde 200 px conserva el detalle original.
+    `caja`: caja ya calculada para encuadrar, evita repetir la consulta exacta de superficies loftadas."""
     if deflexion is not None:
         return float(deflexion)
     try:
-        mn, mx = geo.caja_envolvente(forma)
+        mn, mx = caja if caja is not None else geo.caja_envolvente(forma)
         diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
     except Exception:  # noqa: BLE001 - una forma rara no debe impedir dibujar
         return 0.05
-    return min(max(diag * 3e-4, _DEFLEXION_MIN), _DEFLEXION_MAX)
+    fina = min(max(diag * 3e-4, _DEFLEXION_MIN), _DEFLEXION_MAX)
+    if cam is None:
+        return fina
+    profundidad = float(cam["distancia"])
+    if not cam.get("ortografica"):
+        esquinas = np.array([(x, y, z) for x in (mn[0], mx[0]) for y in (mn[1], mx[1]) for z in (mn[2], mx[2])])
+        profundidad -= float(((esquinas - np.asarray(cam["objetivo"])) @ np.asarray(cam["R"])[2]).max())
+    if profundidad <= 0:
+        return fina
+    mm_pixel = 2 * profundidad * math.tan(math.radians(cam.get("fov", 40.0)) / 2) / alto
+    if diag >= 200 * mm_pixel:
+        return fina
+    return max(fina, min(0.5 * mm_pixel, diag * 0.005))
 
 # ---------------------------------------------------------------- aspectos
 CATEGORIAS = ("Metal", "Plástico", "Vidrio", "Goma", "Madera", "Pintura")
@@ -141,7 +157,7 @@ def acabado_normalizado(acabado=None, material=None):
 
 # ---------------------------------------------------------------- escena (Configuración de escena)
 ESCENA_DEFECTO = {
-    "entorno": "fotomaton",        # clave de visor3d.ENTORNOS
+    "entorno": "fotomaton",        # clave de ENTORNOS (más abajo en este módulo)
     "brillo": 1.0,                 # intensidad de las luces del entorno («Brillo»)
     "rotacion": 0.0,               # grados: giro de las luces alrededor de Z («Posición»)
     "fondo": "entorno",            # "entorno" | "color"
@@ -156,6 +172,25 @@ ESCENA_DEFECTO = {
     "exposicion": 0.0,             # EV
 }
 CIELO_DEFECTO = ((0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95)       # «Fotomatón»: arriba, abajo, luz
+# Entornos: Fusion usa imágenes HDR; acá cada uno es un degradado de fondo (la "cúpula") con su
+# intensidad de luz. Los nombres son los del menú de Fusion; el aspecto es una aproximación.
+# La interfaz actualiza "tema" al cambiar de tema (ui/visor3d.py › _entorno_tema): sin ventana queda
+# el valor de fábrica de acá.
+ENTORNOS = {
+    "tema": ("Tema (por defecto)", (0.25, 0.27, 0.30), (0.16, 0.17, 0.19), 0.26),
+    "fotomaton": ("Fotomatón", (0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95),
+    "rubicon": ("Rubicon River", (0.72, 0.81, 0.90), (0.42, 0.47, 0.40), 0.90),
+    "cielo_oscuro": ("Cielo oscuro", (0.14, 0.17, 0.27), (0.03, 0.03, 0.06), 0.80),
+    "infinito": ("Grupo de infinito", (0.97, 0.97, 0.98), (0.84, 0.86, 0.90), 0.95),
+    "habitacion_gris": ("Habitación gris", (0.62, 0.62, 0.63), (0.40, 0.40, 0.41), 0.90),
+    "azul_tranquilidad": ("Azul tranquilidad", (0.62, 0.75, 0.90), (0.26, 0.36, 0.56), 0.90),
+}
+
+
+def cielo_de(entorno):
+    """(arriba, abajo, intensidad) del entorno de ENTORNOS (sRGB)."""
+    _n, arriba, abajo, luz = ENTORNOS.get(entorno, ENTORNOS["fotomaton"])
+    return tuple(arriba), tuple(abajo), float(luz)
 
 
 def escena_normalizada(datos=None):
@@ -381,10 +416,20 @@ def _iniciar_opencascade():
 _motor.registrar(globals(), _iniciar_opencascade, nombres=("_mallas_por_cara",))
 
 
-def malla_suave_aparte(forma, caras, deflexion=0.05, angular=0.25):
+def malla_suave_aparte(forma, caras, deflexion=0.05, angular=0.25, *, independiente=False):
     """(vértices, normales del cuerpo sin esas caras, [(vértices, normales) de cada una de `caras`]). Sirve para
     dibujar una cara con su propio aspecto (Aspecto › Aplicar a: Caras): la malla es la misma de `malla_suave`, solo
-    partida. Una cara que no es del cuerpo (o un cuerpo de malla, sin caras B-rep) devuelve su malla vacía."""
+    partida. Una cara que no es del cuerpo (o un cuerpo de malla, sin caras B-rep) devuelve su malla vacía.
+    `independiente`: tesela una copia sin reutilizar ni alterar la malla del visor (render CPU por píxeles)."""
+    if independiente and not es_malla(forma) and _motor.motor_activo() == "opencascade":
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+        from OCP.BRepTools import BRepTools
+        copia = BRepBuilderAPI_Copy(forma, False, True)
+        if caras:
+            originales = geo.caras(forma)
+            caras = [copia.ModifiedShape(c) if any(c.IsSame(o) for o in originales) else c for c in caras]
+        forma = copia.Shape()
+        BRepTools.Clean_s(forma)  # Conserva las caras sin geometría que solo tienen triangulación.
     vacia = (np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32))
     if es_malla(forma) or not caras:
         return (*malla_suave(forma, deflexion, angular), [vacia] * len(caras))
@@ -693,7 +738,7 @@ class RenderCancelado(Exception):
 
 
 class _Escena:
-    def __init__(self, objetos, escena, cielo, z_suelo, res_sombras, n_luces=3):
+    def __init__(self, objetos, escena, cielo, z_suelo, res_sombras, n_luces=3, calcomanias=()):
         self.e = escena_normalizada(escena)
         self.n_luces = n_luces
         self.cielo = cielo or CIELO_DEFECTO
@@ -733,6 +778,18 @@ class _Escena:
         self.z_suelo = float(self.min[2]) if z_suelo is None else float(z_suelo)
         self.res_sombras = res_sombras
         self._sombras = None
+        self.calcomanias = []
+        for datos in calcomanias:
+            malla = datos.get("malla")
+            if not datos.get("calcomania") or malla is None or datos["opacidad"] <= 0:
+                continue
+            from PIL import Image
+            try:
+                with Image.open(io.BytesIO(base64.b64decode(datos["imagen"]))) as imagen:
+                    textura = np.asarray(imagen.convert("RGBA"))
+            except (OSError, ValueError, Image.DecompressionBombError) as e:
+                raise geo.ErrorGeometria("No se pudo leer la imagen de la calcomanía.") from e
+            self.calcomanias.append((malla, textura, datos["opacidad"]))
 
     @property
     def sombras(self):
@@ -803,6 +860,34 @@ def _sombrear_pixeles(esc, p, n, v, t, lw, sombra, ao):
     dif, esp, fr = sombrear(p, n, v, color, m[:, 0], m[:, 1], m[:, 3], esc.cielo, esc.e["rotacion"],
                             esc.e["brillo"], sombra, ao, esc.n_luces)
     return dif, esp, fr, color, m[:, 2]
+
+
+def _pintar_calcomanias(esc, mvp, ancho, alto, zbuf, rgb, alfa):
+    """Calcomanía de Fusion: las UV del visor, sin iluminación y mezcladas por alfa sobre la cara."""
+    for malla, textura, opacidad in esc.calcomanias:
+        sx, sy, sz, w = _proyectar(malla["vertices"], mvp, ancho, alto)
+        sx, sy, sz, w = (a.reshape(-1, 3) for a in (sx, sy, sz, w))
+        _z, ids = rasterizar(sx, sy, sz, ancho, alto, (w > 1e-9).all(1),
+                             zbuf.copy(), np.full(ancho * alto, -1, np.int64))
+        pix, t, lam = baricentricas(sx, sy, ids, ancho)
+        lw = lam / w[t]
+        lw /= lw.sum(1, keepdims=True)
+        uv = np.einsum("ij,ijk->ik", lw, malla["uv"].reshape(-1, 3, 2)[t])
+        dentro = ((uv >= 0) & (uv <= 1)).all(1)
+        pix, uv = pix[dentro], uv[dentro]
+        h, w = textura.shape[:2]
+        xy = uv * [w, -h] + [-0.5, h - 0.5]
+        ij = np.floor(xy).astype(np.int64)
+        fraccion = xy - ij
+        color = np.zeros((len(pix), 4))
+        for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1)):
+            x, y = ij[:, 0] + dx, ij[:, 1] + dy
+            peso = np.prod(np.where([dx, dy], fraccion, 1 - fraccion), axis=1)
+            valida = (x >= 0) & (x < w) & (y >= 0) & (y < h)
+            color[valida] += textura[y[valida], x[valida]] * (peso[valida, None] / 255)
+        a = color[:, 3] * opacidad
+        rgb[pix] = color[:, :3] * a[:, None] + rgb[pix] * (1 - a[:, None])
+        alfa[pix] = a + alfa[pix] * (1 - a)
 
 
 def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1, fondo_transparente):
@@ -879,6 +964,8 @@ def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1
         rgb[pix] = mapa_tonos(dif + esp, e["exposicion"])
         alfa[pix] = 1.0
 
+    _pintar_calcomanias(esc, mvp, w, h, zbuf, rgb, alfa)
+
     # cuerpos transparentes (la capa más cercana delante de lo opaco)
     transp = ~esc.opacos
     if transp.any():
@@ -903,19 +990,21 @@ def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1
 
 
 def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, cielo=None,
-               fondo_transparente=False, z_suelo=None, res_sombras=2048, progreso=None, mosaico=1024, n_luces=3):
+               fondo_transparente=False, z_suelo=None, res_sombras=2048, progreso=None, mosaico=1024, n_luces=3,
+               calcomanias=()):
     """Imagen RGBA uint8 (alto, ancho, 4) de la escena. n_luces: 3 = principal, relleno y contorno (iluminación de
     tres puntos); 1 = solo la principal.
 
     objetos: [{"v": triángulos sueltos Nx3 (mundo), "n": normales Nx3, "color": sRGB 0..1, "acabado": dict,
     "material": nombre del material físico (si no hay acabado), "opacidad": 0..1, "local": Nx3 (opcional,
     coordenadas propias para las vetas)}]. cam: dict de `camara()`. escena: Configuración de escena
-    (`ESCENA_DEFECTO`). cielo: (arriba, abajo, intensidad) del entorno, en sRGB (visor3d.ENTORNOS).
+    (`ESCENA_DEFECTO`). cielo: (arriba, abajo, intensidad) del entorno, en sRGB (ENTORNOS, `cielo_de`).
+    calcomanias: datos del estado (malla con vértices y UV, imagen embebida y opacidad), como en el visor.
     progreso(fracción) puede devolver False para cancelar (lanza RenderCancelado)."""
     ancho, alto, ss = int(ancho), int(alto), max(1, int(supermuestreo))
     if ancho < 1 or alto < 1:
         raise geo.ErrorGeometria("La imagen tiene que medir al menos 1 × 1 píxel.")
-    esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras, n_luces)
+    esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras, n_luces, calcomanias)
     W, H = ancho * ss, alto * ss
     proy, vista = matrices_camara(cam, W / H)
     salida = np.zeros((alto, ancho, 4))

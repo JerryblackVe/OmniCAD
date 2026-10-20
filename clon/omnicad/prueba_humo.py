@@ -1018,6 +1018,7 @@ def ejecutar():
     # 8) Autoguardado
     v.doc.modificado = True
     v.autoguardar()
+    proyecto.esperar_autoguardado()                          # el ZIP se escribe en un hilo
     auto = proyecto.ruta_autoguardado(v.doc)
     r.check(auto.exists(), f"Autoguardado escrito: {auto.name}")
     # 8b) Recuperación y alerta de cambios sin guardar (revisión del 2026-10-17)

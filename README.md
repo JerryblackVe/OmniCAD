@@ -140,7 +140,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Espacio FORMA** (superficies de subdivisión T-splines): no existe todavía; es el pendiente más grande.
 - **Menús y navegador:** los menús contextuales y varias opciones de la cinta que faltan frente a Fusion 360.
 - **Abrir `.f3d`** de Fusion con su historial; recuperación de trabajo como Fusion.
-- **Rendimiento:** pasar los cuellos de botella a Rust y C++.
+- **Rendimiento:** pasar los cuellos de botella a Rust y C++ (mallas, solver de bocetos) y calcular la vista previa en un proceso aparte.
 - **Interfaz:** pulido visual y sistema de temas propios que el usuario pueda crear y compartir.
 - **Corrección de errores:** la lista de errores abiertos está en el PROJECT_LOG.
 

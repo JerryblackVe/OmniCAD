@@ -94,6 +94,11 @@ def correr(tarea, forma, tope, **args):
             raise TareaAislada(f"no pudo arrancar el proceso aparte ({e})") from e
         salida = carpeta / "salida.json"
         if hijo.returncode != 0 or not salida.is_file():
+            if hijo.returncode < 0 or hijo.returncode >= 0x80000000:
+                # B-48: caída nativa del kernel (p. ej. 0xC0000005 en TKernel). Acá llega como error en español
+                # y la app sigue viva; sin el proceso aparte mataba a todo el programa.
+                raise TareaAislada(f"el kernel cayó por un error nativo (código {hijo.returncode:#x}) dentro "
+                                   "del proceso aparte; OmniCAD sigue andando")
             ultima = (hijo.stderr or b"").decode("utf-8", "replace").strip().splitlines()[-1:] or ["sin detalle"]
             raise TareaAislada(f"el proceso aparte falló ({ultima[0][:200]})")
         try:

@@ -81,11 +81,16 @@ def set_marker(sesion, position: int | None = None, after: str | None = None, be
 @herramienta("get_profile_sketches", "documento",
              "Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), "
              "en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. Sus ids sirven como «sketch» "
-             "de las herramientas de boceto (get_sketch, draw_line…).")
+             "de las herramientas de boceto (get_sketch, draw_line…); los derivados externos son de solo lectura.")
 def get_profile_sketches(sesion, feature: str):
     """
     feature: id o nombre del paso (p. ej. una extrusión).
     """
     op = sesion.paso(feature)
+    bocetos = [{"id": b.id, "name": b.nombre} for b in bocetos_de_perfil(sesion.doc, op)]
+    bid = op.p.get("boceto")
+    br = sesion.doc.estado_final.bocetos.get(bid) if isinstance(bid, str) else None
+    if br is not None and br.op_id not in {b["id"] for b in bocetos}:
+        bocetos.append({"id": br.op_id, "name": br.nombre})
     return {"feature": {"id": op.id, "name": op.nombre, "type": op.TIPO},
-            "sketches": [{"id": b.id, "name": b.nombre} for b in bocetos_de_perfil(sesion.doc, op)]}
+            "sketches": bocetos}

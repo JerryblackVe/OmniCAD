@@ -6,6 +6,7 @@ Equivalencia con Fusion 360: `ExportManager.createSTLExportOptions / createOBJEx
 createSTEPExportOptions` y `ImportManager.createSTEPImportOptions` (informe_analisis.md §3.5).
 STL y OBJ son mallas (se teselan desde el B-rep); STEP conserva el B-rep exacto.
 """
+import math
 import struct
 from pathlib import Path
 
@@ -18,6 +19,10 @@ FORMATOS = {"stl": "STL (malla)", "obj": "OBJ (malla)", "3mf": "3MF (malla para 
             "glb": "glTF binario (malla con colores: web y realidad aumentada)",
             "gltf": "glTF (JSON con la malla embebida)",
             "step": "STEP (sólido exacto)", "iges": "IGES (superficies exactas)", "brep": "BREP de OpenCascade"}
+
+FORMATOS_MALLA = {"3mf": "3MF", "stl_binario": "STL (binario)", "stl_ascii": "STL (ASCII)", "obj": "OBJ"}
+UNIDADES_MALLA = {"mm": "mm", "cm": "cm", "m": "m", "in": "pulgadas", "ft": "pies"}
+ANGULO_MALLA = math.degrees(0.3)
 
 
 class ErrorExportacion(RuntimeError):
@@ -48,17 +53,17 @@ def _indexados(forma, deflexion):
     return geo.triangulos_indexados(forma, deflexion)
 
 
-def _malla_total(cuerpos, deflexion):
+def _unir_mallas(mallas):
     from ..nucleo.malla import Malla
-    vs, cs, base = [], [], 0
-    for c in cuerpos:
-        v, i = _indexados(c.forma, deflexion)
-        vs.append(v)
-        cs.append(np.asarray(i, int) + base)
-        base += len(v)
+    vs, cs, gs, base = [], [], [], 0
+    for k, m in enumerate(mallas):
+        vs.append(m.vertices)
+        cs.append(m.caras + base)
+        gs.append(np.full(len(m.caras), k))
+        base += len(m.vertices)
     if not base:
         raise ErrorExportacion("La malla quedó vacía.")
-    return Malla(np.concatenate(vs), np.concatenate(cs))
+    return Malla(np.concatenate(vs), np.concatenate(cs), np.concatenate(gs))
 
 
 def exportar_stl(cuerpos, ruta, deflexion=0.02, binario=True):
@@ -67,10 +72,11 @@ def exportar_stl(cuerpos, ruta, deflexion=0.02, binario=True):
     triangulos = []
     for c in cuerpos:
         v, i = _indexados(c.forma, deflexion)
-        triangulos.extend(v[t] for t in i)
+        if len(i):
+            triangulos.append(np.asarray(v, np.float64)[np.asarray(i, int)])
     if not triangulos:
         raise ErrorExportacion("La malla quedó vacía.")
-    tri = np.array(triangulos, dtype=np.float64)
+    tri = np.concatenate(triangulos)
     normales = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     largo = np.linalg.norm(normales, axis=1, keepdims=True)
     largo[largo == 0] = 1
@@ -80,8 +86,10 @@ def exportar_stl(cuerpos, ruta, deflexion=0.02, binario=True):
         with open(ruta, "wb") as f:
             f.write(b"OmniCAD STL".ljust(80, b" "))
             f.write(struct.pack("<I", len(tri)))
-            for n, t in zip(normales, tri, strict=True):
-                f.write(struct.pack("<12fH", *n, *t[0], *t[1], *t[2], 0))
+            # Todo de una: un registro de 50 bytes por triángulo (struct.pack por triángulo: 1,6 s con 327 k).
+            registros = np.zeros(len(tri), dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("atributo", "<u2")])
+            registros["n"], registros["v"] = normales, tri
+            f.write(registros.tobytes())
     else:
         with open(ruta, "w", encoding="ascii") as f:
             f.write("solid omnicad\n")
@@ -136,16 +144,78 @@ def exportar_brep(cuerpos, ruta):
         raise ErrorExportacion(f"No se pudo escribir el BREP: {ruta}")
 
 
-def exportar_malla(cuerpos, ruta, deflexion=0.02):
-    """3MF o PLY (también sirve para STL/OBJ) con todos los cuerpos. El 3MF guarda un objeto por cuerpo (el PLY, una
-    sola malla): al volver a traerlo, cada objeto es un grupo de caras que `separate_mesh` vuelve a separar."""
+def preparar_mallas(cuerpos, *, refinamiento="personalizado", desviacion=0.02, angulo=ANGULO_MALLA,
+                    longitud_maxima=0.0, relacion_aspecto=0.0):
+    """Mallas por cuerpo para Guardar como malla y su recuento; nunca modifica la geometría del documento."""
+    from ..nucleo import malla
+    if refinamiento not in ("bajo", "medio", "alto", "personalizado"):
+        raise ErrorExportacion(f"Refinamiento desconocido: {refinamiento}")
+    opciones = {"refinamiento": refinamiento, "longitud_maxima": longitud_maxima,
+                "relacion_aspecto": relacion_aspecto}
+    if refinamiento == "personalizado":
+        opciones.update(desviacion=desviacion, angulo=angulo)
+    else:
+        opciones.update(longitud_maxima=0.0, relacion_aspecto=0.0)
+    resultado = []
+    for c in _cuerpos(cuerpos):
+        if _es_malla(c.forma):
+            m = malla.refinar_triangulos(c.forma, longitud_maxima=opciones["longitud_maxima"],
+                                         relacion_aspecto=opciones["relacion_aspecto"])
+        else:
+            m = malla.desde_brep(c.forma, **opciones)
+        if not len(m.caras):
+            raise ErrorExportacion("La malla quedó vacía.")
+        resultado.append(m)
+    return resultado
+
+
+def rutas_malla(cuerpos, ruta, *, formato=None, estructura="un_archivo"):
+    """Destinos de Guardar como malla, con nombres seguros y únicos aun con cuerpos homónimos."""
+    lista, ruta = _cuerpos(cuerpos), Path(ruta)
+    formato = formato or {"stl": "stl_binario"}.get(ruta.suffix[1:].lower(), ruta.suffix[1:].lower())
+    if formato not in (*FORMATOS_MALLA, "ply"):
+        raise ErrorExportacion(f"Formato no soportado: {formato}")
+    extension = ".stl" if formato.startswith("stl_") else f".{formato}"
+    if ruta.suffix.lower() != extension:
+        raise ErrorExportacion(f"El formato {formato} necesita la extensión {extension}.")
+    if estructura == "un_archivo":
+        return [ruta]
+    if estructura != "uno_por_cuerpo":
+        raise ErrorExportacion(f"Estructura desconocida: {estructura}")
+    return [ruta.with_name(f"{ruta.stem}_{i}_{''.join(ch if ch.isalnum() else '_' for ch in c.nombre)[:80]}{extension}")
+            for i, c in enumerate(lista, 1)]
+
+
+def exportar_malla(cuerpos, ruta, deflexion=0.02, *, formato=None, unidades="mm", estructura="un_archivo",
+                   refinamiento="personalizado", desviacion=None, angulo=ANGULO_MALLA,
+                   longitud_maxima=0.0, relacion_aspecto=0.0, sobrescribir=True):
+    """Guardar como malla: 3MF, STL binario/ASCII u OBJ; conserva PLY para los llamadores anteriores.
+    Devuelve los triángulos escritos; unidades mm/cm/m/in/ft. 0 desactiva arista/aspecto.
+    Por defecto conserva 0,02 mm, 0,3 radianes y un archivo; 3MF conserva un objeto por cuerpo."""
     from ..nucleo import malla
     lista = _cuerpos(cuerpos)
-    if Path(ruta).suffix.lower() == ".3mf" and len(lista) > 1:
-        return malla.escribir([_malla_total([c], deflexion) for c in lista], ruta)
-    m = _malla_total(lista, deflexion)
-    malla.escribir(m, ruta)
-    return len(m.caras)
+    rutas = rutas_malla(lista, ruta, formato=formato, estructura=estructura)
+    if unidades not in UNIDADES_MALLA:
+        raise ErrorExportacion(f"Unidad desconocida: {unidades}")
+    for destino in rutas:
+        if destino.is_dir():
+            raise ErrorExportacion(f"El destino es una carpeta: {destino}")
+        if destino.exists() and not sobrescribir:
+            raise FileExistsError(f"Ya existe el archivo: {destino}")
+    mallas = preparar_mallas(lista, refinamiento=refinamiento,
+                            desviacion=deflexion if desviacion is None else desviacion, angulo=angulo,
+                            longitud_maxima=longitud_maxima, relacion_aspecto=relacion_aspecto)
+    lotes = [[m] for m in mallas] if estructura == "uno_por_cuerpo" else [mallas]
+    for destino, lote in zip(rutas, lotes, strict=True):
+        opciones = {"unidades": UNIDADES_MALLA[unidades]}
+        if destino.suffix.lower() == ".3mf":
+            malla.escribir_3mf(lote, destino, **opciones)
+        else:
+            total = _unir_mallas(lote)
+            if destino.suffix.lower() == ".stl":
+                opciones["binario"] = formato != "stl_ascii"
+            malla.escribir(total, destino, **opciones)
+    return sum(len(m.caras) for m in mallas)
 
 
 def exportar_gltf(cuerpos, ruta, propiedades=None):

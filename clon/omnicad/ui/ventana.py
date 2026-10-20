@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
@@ -133,8 +133,11 @@ class _FiltroAyuda(QObject):
 
 
 class VentanaPrincipal(QMainWindow):
+    _autoguardado_listo = Signal(object, object)    # (destino, error) desde el hilo del autoguardado
+
     def __init__(self, doc=None, prefs=None):
         super().__init__()
+        self._autoguardado_listo.connect(self._al_autoguardar)
         self.resize(1600, 950)
         self._filtro_info = _FiltroInfoHerramientas(self)
         self.prefs = prefs or Preferencias()
@@ -337,7 +340,7 @@ class VentanaPrincipal(QMainWindow):
           "Abre el modelo de ejemplo (placa con aro) para probar los comandos.")
         A("salir", "Salir", self.close, "Ctrl+Q")
         A("deshacer", "Deshacer", self._deshacer, "Ctrl+Z", None, "deshacer")
-        A("rehacer", "Rehacer", lambda: self._intentar(self.doc.rehacer), "Ctrl+Y", None, "rehacer")
+        A("rehacer", "Rehacer", self._rehacer, "Ctrl+Y", None, "rehacer")
         A("boceto", "Crear boceto", self.crear_boceto, "B", "Elegí un plano de origen, un plano de construcción o "
           "una cara plana y dibujá sobre él en la vista 3D. Los contornos cerrados se pueden extruir o revolucionar.",
           "boceto")
@@ -380,8 +383,8 @@ class VentanaPrincipal(QMainWindow):
           "Anima una unión en todo su recorrido.", "estudio_movimiento")
         A("insertar_malla", "Insertar malla…", self.insertar_malla, None,
           "Inserta un archivo STL, OBJ, 3MF o PLY como cuerpo de malla.", "insertar_malla")
-        A("exportar_malla", "Exportar como malla…", lambda: self.exportar(("3mf", "stl", "obj", "ply", "glb", "gltf")),
-          None, "Guarda los cuerpos como malla: STL, OBJ, 3MF, PLY o glTF/GLB (con colores).", "exportar_malla")
+        A("exportar_malla", "Guardar como malla…", self.exportar_malla,
+          None, "Guarda cuerpos como STL, OBJ o 3MF con unidades, estructura y refinado.", "exportar_malla")
         A("seleccionar", "Seleccionar", self.accion_seleccionar, None,
           "Vuelve a seleccionar: sale de la herramienta de boceto activa (línea, círculo…) y de los modos de "
           "navegación (órbita, encuadre, zoom) y de selección por región.", "seleccionar")
@@ -1174,6 +1177,14 @@ class VentanaPrincipal(QMainWindow):
         self.doc.espacios[clave] = ventana.a_dict()
         self.doc.modificado = True
 
+    def releer_espacios(self):
+        """Cada espacio abierto vuelve a leer `doc.espacios` si cambió por fuera (una herramienta del agente,
+        deshacer o rehacer): si no, su copia vieja pisaría el cambio la próxima vez que se guarde (MCP-0c)."""
+        for clave, w in list(self._espacios.items()):
+            datos = self.doc.espacios.get(clave)
+            if datos and w.doc is self.doc and hasattr(w, "desde_dict") and datos != w.a_dict():
+                w.desde_dict(datos)
+
     # ------------------------------------------------------------ ADMINISTRAR / CONFIGURAR / UTILIDADES
     def lista_materiales(self):
         from .administrar import DialogoListaMateriales
@@ -1466,6 +1477,10 @@ class VentanaPrincipal(QMainWindow):
         from .acciones_navegador import vista_calcomania
         return vista_calcomania(self, clave, accion, imagen)
 
+    def buscar_en_ventana(self, ids):
+        from .acciones_navegador import buscar_en_ventana
+        return buscar_en_ventana(self, ids)
+
     def _alternar_visibilidad_elegida(self):
         claves = [it.data(0, Qt.UserRole) for it in self.navegador.arbol.selectedItems()]
         if claves:
@@ -1715,8 +1730,15 @@ class VentanaPrincipal(QMainWindow):
             if ok and nombre.strip():
                 self.doc.set_propiedad([clave], "nombre", nombre.strip())
         elif accion.startswith("opacidad:"):
-            pct = int(accion.split(":")[1])
-            self.doc.set_propiedad([clave], "opacidad", None if pct >= 100 else pct / 100)
+            from .acciones_navegador import llamar
+            llamar(self, "set_body_opacity", opacity=int(accion.split(":")[1]),
+                   bodies=None if clave == "__raiz__" else [clave])
+        elif accion == "buscar_ventana":
+            self.buscar_en_ventana(list(estado.cuerpos) if clave == "__raiz__" else [clave])
+        elif accion in ("nuevo_componente", "exportar_malla", "exportar"):
+            from .acciones_navegador import elementos
+            self._seleccion_desde_navegador([] if clave == "__raiz__" else elementos(self, clave))
+            self.acciones[accion].trigger()
         elif accion == "aislar":
             self.ocultos |= {c for c in estado.cuerpos if c != clave}
             self.ocultos.discard(clave)
@@ -1759,8 +1781,9 @@ class VentanaPrincipal(QMainWindow):
         elif accion in ("mover", "aspecto", "material", "quitar", "suprimir"):
             clase = {"mover": MoverCopiar, "aspecto": Aspecto, "material": MaterialFisico, "quitar": Quitar,
                      "suprimir": Suprimir}[accion]
+            ids = list(estado.cuerpos) if clave == "__raiz__" else [clave]
             self.ejecutar_comando(clase(), valores={"cuerpos" if accion != "suprimir" else "objetos":
-                                                     [hit_desde_ref({"tipo": "cuerpo", "cuerpo": clave}, estado)]})
+                                                     [hit_desde_ref({"tipo": "cuerpo", "cuerpo": c}, estado) for c in ids]})
 
     def claves_navegador_de(self, op_id):
         """Claves del navegador de lo que crea el paso `op_id` (su boceto, plano, unión, componente o cuerpos); si
@@ -1879,6 +1902,11 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.lienzo.deshacer()
         else:
             self._intentar(self.doc.deshacer)
+            self.releer_espacios()      # deshacer también revierte doc.espacios (guiones de animación)
+
+    def _rehacer(self):
+        self._intentar(self.doc.rehacer)
+        self.releer_espacios()
 
     def _salir_de_boceto(self):
         """Antes de otro comando: termina el boceto activo (como Fusion), cancela la elección de plano y
@@ -2033,6 +2061,7 @@ class VentanaPrincipal(QMainWindow):
 
     def calcular_todo(self):
         inicio = time.perf_counter()
+        self.doc.olvidar_memoria()            # «Calcular todo» ejecuta de verdad cada paso
         self.doc.recalcular(0)
         self.mensaje(f"Calculado todo: {len(self.doc.operaciones)} paso(s) en {time.perf_counter() - inicio:.2f} s")
 
@@ -2319,6 +2348,7 @@ class VentanaPrincipal(QMainWindow):
         """Lo que sigue a un guardado que salió bien, lo haya hecho la persona o un agente por el puente: las copias
         de autoguardado (la de antes y la de la ruta nueva) ya no valen, y el título, el «*» y los recientes
         se ponen al día."""
+        proyecto.esperar_autoguardado()               # un autoguardado en curso no puede reescribir la copia después
         try:
             copia_anterior.unlink(missing_ok=True)
         except OSError as e:                          # un archivo bloqueado no puede hacer fallar un guardado que salió bien
@@ -2328,17 +2358,26 @@ class VentanaPrincipal(QMainWindow):
         self._recordar(final)
 
     def autoguardar(self):
+        """La receta se lee acá; el ZIP se escribe en un hilo (con un proyecto grande trababa la ventana) y el
+        resultado vuelve por `_autoguardado_listo`, que Qt entrega en el hilo de la ventana."""
         if not self.doc.modificado:
             return
+        if self.puente is not None and getattr(self.puente.sesion, "latido", None) is not None:
+            return      # B-16: corre execute_code (su latido procesa eventos): no guardar un estado a medio aplicar
         try:
-            destino = proyecto.autoguardar(self.doc)
+            proyecto.autoguardar_en_hilo(self.doc, lambda destino, error: self._autoguardado_listo.emit(destino, error))
+        except (OSError, RuntimeError) as e:          # al leer la receta o crear la carpeta, antes del hilo
+            self._al_autoguardar(None, e)
+
+    def _al_autoguardar(self, destino, error):
+        if error is None:
             self._autoguardado_fallo = None
             self.mensaje(f"Autoguardado {time.strftime('%H:%M')} → {destino.name}", 4000)
-        except (OSError, RuntimeError) as e:
-            log.warning("Autoguardado falló: %s", e)
-            if str(e) != self._autoguardado_fallo:                          # se avisa una vez, no cada minuto
-                self._autoguardado_fallo = str(e)
-                self.mensaje(f"⚠ No se pudo autoguardar: {e}. Guardá el proyecto a mano.", 10000)
+            return
+        log.warning("Autoguardado falló: %s", error)
+        if str(error) != self._autoguardado_fallo:                          # se avisa una vez, no cada minuto
+            self._autoguardado_fallo = str(error)
+            self.mensaje(f"⚠ No se pudo autoguardar: {error}. Guardá el proyecto a mano.", 10000)
 
     def verificar_autoguardado_huerfano(self, solo_avisar=False):
         """«Documentos recuperados» al arrancar y desde Archivo (pendiente 21, como Fusion 360): la
@@ -2370,6 +2409,40 @@ class VentanaPrincipal(QMainWindow):
         # El documento que está abierto no se pisa sin preguntar (si tiene cambios: ¿Guardar los cambios?).
         if self._salir_de_boceto() and self._confirmar_descartar():
             self.set_documento(doc)
+
+    def exportar_malla(self):
+        from .guardar_malla import DialogoGuardarMalla
+        cuerpos = [c for c in self.doc.estado_final.cuerpos.values() if not es_patron_plano(c)]
+        if not cuerpos:
+            QMessageBox.information(self, NOMBRE_APP, "No hay cuerpos para exportar.")
+            return
+        elegidos = {h["ref"].get("cuerpo") for h in self.seleccion}
+        nombres = {c.id: self.doc.propiedades.get(c.id, {}).get("nombre", c.nombre) for c in cuerpos}
+        caja = DialogoGuardarMalla(cuerpos, elegidos - {None}, nombres, self)
+        if not caja.exec():
+            return
+        opciones = caja.opciones()
+        formato = opciones["formato"]
+        extension = "stl" if formato.startswith("stl_") else formato
+        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar como malla", f"{self.doc.nombre}.{extension}",
+                                             f"{ex.FORMATOS_MALLA[formato]} (*.{extension})")
+        if not ruta:
+            return
+        if Path(ruta).suffix.lower() != f".{extension}":
+            ruta += f".{extension}"
+        try:
+            cuerpos = caja.cuerpos_elegidos()
+            rutas = ex.rutas_malla(cuerpos, ruta, formato=formato, estructura=opciones["estructura"])
+            existentes = [p for p in rutas if p.exists()]
+            if opciones["estructura"] == "uno_por_cuerpo" and existentes:
+                if QMessageBox.question(self, "Reemplazar archivos", f"Ya existen {len(existentes)} archivo(s). "
+                                        "¿Reemplazarlos?", QMessageBox.Yes | QMessageBox.No,
+                                        QMessageBox.No) != QMessageBox.Yes:
+                    return
+            n = ex.exportar_malla(cuerpos, ruta, **opciones)
+            self.mensaje(f"Guardados {len(rutas)} archivo(s), {n} triángulos → {ruta}", 6000)
+        except (geo.ErrorGeometria, ex.ErrorExportacion, RuntimeError, OSError) as e:
+            QMessageBox.critical(self, "No se pudo guardar la malla", str(e))
 
     def exportar(self, formato_salida=None):
         cuerpos = list(self.doc.estado_final.cuerpos.values())
@@ -2458,6 +2531,7 @@ class VentanaPrincipal(QMainWindow):
 
     def closeEvent(self, e):
         if self._salir_de_boceto() and self._confirmar_descartar():
+            proyecto.esperar_autoguardado()   # no cortar un ZIP a medio escribir (quedaría el temporal)
             if self.puente is not None:
                 self.puente.detener()         # cierra las conexiones y borra puente.json
             e.accept()

@@ -33,7 +33,7 @@ from PySide6.QtWidgets import QWidget
 
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
-from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, es_malla  # noqa: F401 — se re-exportan
+from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, ENTORNOS, es_malla  # noqa: F401 — se re-exportan
 from . import temas
 
 
@@ -77,17 +77,8 @@ def _entorno_tema():
     return ("Tema (por defecto)", temas.rgb_f(c["visor_arriba"]), temas.rgb_f(c["visor_abajo"]), 0.26)
 
 
-# Entornos: Fusion usa imágenes HDR; acá cada uno es un degradado de fondo (la "cúpula") con su
-# intensidad de luz. Los nombres son los del menú de Fusion; el aspecto es una aproximación.
-ENTORNOS = {
-    "tema": _entorno_tema(),
-    "fotomaton": ("Fotomatón", (0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95),
-    "rubicon": ("Rubicon River", (0.72, 0.81, 0.90), (0.42, 0.47, 0.40), 0.90),
-    "cielo_oscuro": ("Cielo oscuro", (0.14, 0.17, 0.27), (0.03, 0.03, 0.06), 0.80),
-    "infinito": ("Grupo de infinito", (0.97, 0.97, 0.98), (0.84, 0.86, 0.90), 0.95),
-    "habitacion_gris": ("Habitación gris", (0.62, 0.62, 0.63), (0.40, 0.40, 0.41), 0.90),
-    "azul_tranquilidad": ("Azul tranquilidad", (0.62, 0.75, 0.90), (0.26, 0.36, 0.56), 0.90),
-}
+# Los entornos viven en nucleo/render_cpu.py (sin Qt); este actualiza el «tema» al cambiar de tema.
+ENTORNOS["tema"] = _entorno_tema()
 temas.observar(lambda: ENTORNOS.__setitem__("tema", _entorno_tema()))      # al cambiar de tema, cambia el fondo
 # Con el tema oscuro Fusion ilumina con el entorno: los cuerpos se ven gris medio, con poco contraste entre
 # caras y brillos marcados en las curvas (medido en el video: arriba #666, costados #393939–#5f5f5f).
@@ -170,6 +161,17 @@ def rayo_triangulos(origen, direccion, tris):
     toca = ok & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9) & (t > 1e-9)
     return np.where(toca, t, np.inf)
 
+
+def rayo_caja(origen, direccion, minimo, maximo):
+    """Distancia a la que el rayo entra en la caja [minimo, maximo] (inf si no la toca). Sirve para descartar un
+    cuerpo entero sin probar sus triángulos (el rayo contra todos costaba 49 ms con 400 k triángulos)."""
+    holgura = 1e-6 * (1.0 + float(np.max(np.abs(maximo - minimo))))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t1 = (np.asarray(minimo, float) - holgura - origen) / direccion
+        t2 = (np.asarray(maximo, float) + holgura - origen) / direccion
+    lo, hi = np.fmin(t1, t2), np.fmax(t1, t2)    # fmin/fmax ignoran el NaN de un eje paralelo con 0/0
+    entra, sale = float(np.nanmax(lo)), float(np.nanmin(hi))
+    return max(entra, 0.0) if sale >= max(entra, 0.0) else np.inf
 
 
 def teselar_cuerpo(forma, deflexion, angular=0.3):
@@ -893,6 +895,20 @@ class Visor3D(QOpenGLWidget):
             self._pick[id(forma)] = ([c for c, _ in caras], tris, indice)
         return self._pick[id(forma)]
 
+    def _rayo_cuerpo(self, cid, o, d, limite=math.inf):
+        """Distancias del rayo a cada triángulo del cuerpo, o None si no tiene triángulos o el rayo no entra en su
+        caja antes de `limite` (lo que ya tapa otra cosa no se prueba)."""
+        _lista, tris, _indice = self._datos_pick(cid)
+        if not len(tris):
+            return None
+        clave = ("caja_tris", id(self._formas[cid]))
+        if clave not in self._pick:
+            v = tris.reshape(-1, 3)
+            self._pick[clave] = (v.min(0), v.max(0))
+        if rayo_caja(o, d, *self._pick[clave]) >= limite:
+            return None
+        return rayo_triangulos(o, d, tris)
+
     def elegir(self, pos, planos=True, caras=True):
         """Lo que hay bajo el cursor: {"ref", "plano", "marco", "tris"} (plano None = cara no plana); en una cara
         plana además "cara_ref", su referencia persistente (el boceto sobre la cara la sigue con ella)."""
@@ -909,10 +925,10 @@ class Visor3D(QOpenGLWidget):
                     mejor_t, mejor = t, {"ref": ref, "plano": pl, "marco": None, "tris": None}
         if caras:
             for cid in self._formas:
-                lista, tris, indice = self._datos_pick(cid)
-                if not len(tris):
+                ts = self._rayo_cuerpo(cid, o, d, mejor_t)
+                if ts is None:
                     continue
-                ts = rayo_triangulos(o, d, tris)
+                lista, tris, indice = self._datos_pick(cid)
                 i = int(np.argmin(ts))
                 if ts[i] < mejor_t - 1e-6:
                     cara = lista[indice[i]]
@@ -1220,10 +1236,10 @@ class Visor3D(QOpenGLWidget):
         # 1) cara más cercana (oculta lo que esté detrás)
         t_cara, cara_hit = math.inf, None
         for cid in self._formas:
-            lista, tris, indice = self._datos_pick(cid)
-            if not len(tris):
+            ts = self._rayo_cuerpo(cid, o, d, t_cara)
+            if ts is None:
                 continue
-            ts = rayo_triangulos(o, d, tris)
+            lista, tris, indice = self._datos_pick(cid)
             i = int(np.argmin(ts))
             if ts[i] < t_cara:
                 t_cara = float(ts[i])
@@ -1904,7 +1920,15 @@ class Visor3D(QOpenGLWidget):
         if self.mostrando_centro_giro():
             self._dibujar_primitivas(self.primitivas_centro_giro(), NARANJA_PLANO)
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
-        self.camara_cambiada.emit()
+        self._avisar_camara()
+
+    def _avisar_camara(self):
+        """Emite `camara_cambiada` al final de un cuadro solo si la proyección o el tamaño cambiaron desde el último
+        aviso: emitirla en cada cuadro repintaba el ViewCube, la capa del boceto y las notas aunque nada se moviera."""
+        firma = (self.matriz_mvp().tobytes(), self.width(), self.height())
+        if firma != getattr(self, "_firma_aviso", None):
+            self._firma_aviso = firma
+            self.camara_cambiada.emit()
 
     def mostrando_centro_giro(self):
         """El indicador del centro de giro se ve solo mientras el arrastre en curso es una órbita."""
@@ -2065,10 +2089,10 @@ class Visor3D(QOpenGLWidget):
         if filtros & {"cara", "cuerpo"}:
             o, d = self.rayo(pos)
             for cid in self._formas:
-                lista, tris, indice = self._datos_pick(cid)
-                if not len(tris):
+                ts = self._rayo_cuerpo(cid, o, d)
+                if ts is None:
                     continue
-                ts = rayo_triangulos(o, d, tris)
+                lista, tris, indice = self._datos_pick(cid)
                 vistas, t_min = set(), math.inf
                 for i in np.argsort(ts):
                     t = float(ts[i])

@@ -244,33 +244,39 @@ def _punto_en(alambre, fraccion):
     return _xyz(p), _unit(_xyz(v), "tangente de la ruta")
 
 
-def _recortar_alambre(alambre, fraccion):
-    """Primer tramo del alambre hasta una fracción de su longitud (opción Distancia de barrido y tubería)."""
-    if fraccion >= 1.0 - 1e-9:
+def _recortar_alambre(alambre, fraccion, inicio=0.0):
+    """Tramo entre dos fracciones de longitud (opción Distancia de barrido y tubería)."""
+    if fraccion >= 1.0 - 1e-9 and inicio == 0:
         return alambre
-    if fraccion <= 1e-6:
+    if fraccion - inicio <= 1e-6:
         raise geo.ErrorGeometria("La distancia sobre la ruta debe ser mayor que cero.")
-    objetivo, acumulado = fraccion * _longitud(alambre), 0.0
+    total = _longitud(alambre)
+    objetivo, desde, acumulado = min(fraccion, 1.0) * total, inicio * total, 0.0
     mk = BRepBuilderAPI_MakeWire()
     for e in _aristas_de(alambre):
         largo = _longitud(e)
-        if acumulado + largo < objetivo - 1e-9:
+        a, b = max(0.0, desde - acumulado), min(largo, objetivo - acumulado)
+        acumulado += largo
+        if b - a <= 1e-9:
+            continue
+        if a <= 1e-9 and b >= largo - 1e-9:
             mk.Add(e)
-            acumulado += largo
             continue
         curva = BRepAdaptor_Curve(e)
         geom = BRep_Tool.Curve_s(e, 0.0, 0.0)
-        resto = objetivo - acumulado
         if e.Orientation() == TopAbs_REVERSED:
-            u1 = curva.LastParameter()
-            u0 = GCPnts_AbscissaPoint(curva, -resto, u1).Parameter()
+            extremo = curva.LastParameter()
+            u1 = extremo if a <= 1e-9 else GCPnts_AbscissaPoint(curva, -a, extremo).Parameter()
+            u0 = GCPnts_AbscissaPoint(curva, -b, extremo).Parameter()
             nueva = BRepBuilderAPI_MakeEdge(geom, u0, u1).Edge().Reversed()
         else:
-            u0 = curva.FirstParameter()
-            u1 = GCPnts_AbscissaPoint(curva, resto, u0).Parameter()
+            extremo = curva.FirstParameter()
+            u0 = extremo if a <= 1e-9 else GCPnts_AbscissaPoint(curva, a, extremo).Parameter()
+            u1 = GCPnts_AbscissaPoint(curva, b, extremo).Parameter()
             nueva = BRepBuilderAPI_MakeEdge(geom, u0, u1).Edge()
         mk.Add(TopoDS.Edge(nueva))
-        break
+        if acumulado >= objetivo - 1e-9:
+            break
     return mk.Wire()
 
 
@@ -1199,14 +1205,17 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
 
 
 # ================================================================ 6. repujado
-def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False, adaptar=True):
+def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
+             cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
     """Repujado (Emboss) de Fusion [SLD-EMBOSS] sobre un cuerpo (ver `repujado_en_cuerpos`): `cara_objetivo` es una
     cara o una LISTA de caras del cuerpo. Devuelve el cuerpo resultante."""
     return repujado_en_cuerpos([(cuerpo, cara_objetivo)], caras_perfil, profundidad, tipo=tipo, envolver=envolver,
-                               adaptar=adaptar)[0]
+                               adaptar=adaptar, cadena_tangente=cadena_tangente, desfase_h=desfase_h,
+                               desfase_v=desfase_v, giro=giro, invertir=invertir)[0]
 
 
-def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True):
+def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
+                        cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
     """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita (profundidad negativa
     invierte el efecto, como en Fusion). `objetivos` = [(cuerpo, cara o lista de caras)]; devuelve los cuerpos
     resultantes en el mismo orden (sin cambios el que no recibe nada).
@@ -1217,7 +1226,10 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     que queda debajo. Si no cae sobre ninguna, error. Perfiles NO paralelos a la cara (p. ej. un costado): con
     `adaptar` (por defecto) se giran para mirar hacia afuera, se centran en la zona y se achican hasta entrar.
     Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
-    conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial."""
+    conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial.
+    `cadena_tangente` agrega caras conectadas tangencialmente. La alineación gira alrededor del centro de
+    los perfiles y después desplaza en los ejes locales horizontal/vertical (mm); `giro` va en grados.
+    `invertir` cambia la dirección normal sin cambiar el efecto elegido (unión o corte)."""
     if profundidad < 0:
         profundidad, tipo = -profundidad, ("grabado" if tipo == "relieve" else "relieve")
     geo.exigir_longitud(profundidad, "La profundidad del repujado")
@@ -1226,10 +1238,22 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     perfiles = _caras_de(caras_perfil)
     if not perfiles:
         raise geo.ErrorGeometria("Elegí al menos un perfil para repujar.")
-    caras = [(i, TopoDS.Face(c)) for i, (_, cs) in enumerate(objetivos) for c in _lista(cs)]
+    if not all(math.isfinite(x) for x in (desfase_h, desfase_v, giro)):
+        raise geo.ErrorGeometria("La alineación del repujado debe tener valores finitos.")
+    caras = []
+    for i, (cuerpo, cs) in enumerate(objetivos):
+        for c in _lista(cs):
+            if cadena_tangente:
+                from .solidos_modificar import caras_tangentes
+                cadena = caras_tangentes(cuerpo, c)
+            else:
+                cadena = [c]
+            for cara in cadena:
+                if not any(j == i and cara.IsSame(otra) for j, otra in caras):
+                    caras.append((i, TopoDS.Face(cara)))
     if not caras:
         raise geo.ErrorGeometria("Elegí la cara sobre la que va el repujado.")
-    sentido = 1.0 if tipo == "relieve" else -1.0
+    sentido = (1.0 if tipo == "relieve" else -1.0) * (-1.0 if invertir else 1.0)
     herramientas = [[] for _ in objetivos]
     grupos = []                                       # caras planas con la misma normal: una sola zona
     for k, (i, cara) in enumerate(caras, 1):
@@ -1244,12 +1268,15 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
         donde = f" (cara {k})" if len(caras) > 1 else ""
         if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Cylinder:
             raise geo.ErrorGeometria("El repujado admite caras planas o cilíndricas (envolviendo)" + donde + ".")
-        if not envolver:
+        if not (envolver or cadena_tangente):
             raise geo.ErrorGeometria("Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)"
                                      + donde + ".")
-        herramientas[i].append(_envolver_en_cilindro(perfiles, cara, profundidad, tipo))
+        pl_perfil = geo.plano_de_cara(perfiles[0])
+        alineados = _alinear_repujado(perfiles, pl_perfil, desfase_h, desfase_v, giro)
+        herramientas[i].append(_envolver_en_cilindro(alineados, cara, -profundidad if invertir else profundidad, tipo,
+                                                    recortar=cadena_tangente))
     for grupo in grupos:
-        for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar):
+        for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar, desfase_h, desfase_v, giro):
             herramientas[i].append(h)
     herramientas = [[h for h in hs if not geo.esta_vacia(h)] for hs in herramientas]
     if not any(herramientas):
@@ -1260,13 +1287,24 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
             for (cuerpo, _), hs in zip(objetivos, herramientas, strict=True)]
 
 
-def _repujado_en_grupo(perfiles, grupo, prof, adaptar):
+def _alinear_repujado(perfiles, plano, desfase_h, desfase_v, giro):
+    if not (desfase_h or desfase_v or giro):
+        return perfiles
+    areas = [geo.area(f) for f in perfiles]
+    centro = sum(a * np.array(geo.centro_masa(f, superficie=True))
+                 for a, f in zip(areas, perfiles, strict=True)) / sum(areas)
+    desplazamiento = plano.u * desfase_h + plano.v * desfase_v
+    return [TopoDS.Face(geo.trasladar(geo.rotar(f, centro, plano.normal, giro), desplazamiento)) for f in perfiles]
+
+
+def _repujado_en_grupo(perfiles, grupo, prof, adaptar, desfase_h, desfase_v, giro):
     """[(índice del cuerpo, herramienta)] para un grupo de caras planas paralelas [(índice, cara, plano)]: el texto
     se ubica una vez para todo el grupo y cada cara recibe lo que le cae encima. Se recorre de la cara más de
     afuera a la más de adentro: lo que queda debajo de una cara elegida más afuera no se repuja."""
     pl0 = grupo[0][2]
     n = np.asarray(pl0.normal, float)
     sobre = _perfiles_en_zona(perfiles, [c for _, c, _ in grupo], pl0, adaptar)
+    sobre = _alinear_repujado(sobre, pl0, desfase_h, desfase_v, giro)
     cajas_piezas = [_caja_2d([f], pl0) for f in sobre]
 
     def altura(pl):
@@ -1546,7 +1584,7 @@ def _aristas_envueltas(e, a_uv, superficie):
     return aristas
 
 
-def _envolver_en_cilindro(perfiles, cara, profundidad, tipo):
+def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
     sup = BRepAdaptor_Surface(cara)
     cil = sup.Cylinder()
     radio = cil.Radius()
@@ -1589,13 +1627,17 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo):
         arreglo = ShapeFix_Face(mf.Face())
         arreglo.Perform()
         lamina = arreglo.Face()
-        bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(lamina)
-        p_l, n_l = _normal_orientada(lamina, (bu0 + bu1) / 2, (bv0 + bv1) / 2)
-        normal_afuera = float(n_l @ (p_l - o - z * float((p_l - o) @ z))) > 0
-        # relieve: hacia afuera del material (lejos del eje en un macizo, hacia el eje en un agujero)
-        lejos_del_eje = (tipo == "relieve") == afuera
-        herramientas.append(_engrosar_lamina(lamina, profundidad if lejos_del_eje == normal_afuera else -profundidad))
-    return _unir(herramientas)
+        partes = _booleana_caras([lamina], [cara], BRepAlgoAPI_Common) if recortar else lamina
+        if partes is None:
+            raise geo.ErrorGeometria("No se pudo recortar el repujado sobre la cara tangente.")
+        for parte in _caras_de(partes):
+            bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(parte)
+            p_l, n_l = _normal_orientada(parte, (bu0 + bu1) / 2, (bv0 + bv1) / 2)
+            normal_afuera = float(n_l @ (p_l - o - z * float((p_l - o) @ z))) > 0
+            # relieve: hacia afuera del material (lejos del eje en un macizo, hacia el eje en un agujero)
+            lejos_del_eje = (tipo == "relieve") == afuera
+            herramientas.append(_engrosar_lamina(parte, profundidad if lejos_del_eje == normal_afuera else -profundidad))
+    return _unir(herramientas) if herramientas else geo.compuesto([])
 
 
 # ================================================================ 7. agujero
@@ -2372,13 +2414,38 @@ def _seccion_bobina(seccion, tamano):
     raise geo.ErrorGeometria(f"Sección de bobina desconocida: {seccion}")
 
 
+def _espiral(origen, eje, x, radio, paso, revoluciones, horario):
+    """Espiral de Arquímedes plana: el radio aumenta un paso por vuelta."""
+    y = np.cross(eje, x)
+    # shortcut: interpolación a 64 muestras/vuelta; usar aproximación adaptativa si se exige tolerancia radial.
+    cantidad = max(8, math.ceil(revoluciones * 64) + 1)
+    puntos = HArray1_gp_Pnt(1, cantidad)
+    for i in range(cantidad):
+        vueltas = revoluciones * i / (cantidad - 1)
+        angulo = vueltas * 2 * math.pi * (-1 if horario else 1)
+        puntos.SetValue(i + 1, _pnt(origen + (radio + paso * vueltas) *
+                                   (math.cos(angulo) * x + math.sin(angulo) * y)))
+    curva = GeomAPI_Interpolate(puntos, False, 1e-7)
+    curva.Perform()
+    if not curva.IsDone():
+        raise geo.ErrorGeometria("No se pudo construir la espiral de la bobina.")
+    return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(curva.Curve()).Edge()).Wire()
+
+
 def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=None, angulo=0.0,
-           seccion="circular", tamano_seccion, posicion_seccion="sobre", horario=False, eje_x=None):
+           seccion="circular", tamano_seccion, posicion_seccion="sobre", horario=False, eje_x=None,
+           tipo="rev_altura", girar=False):
     """Bobina (Coil) de Fusion [SLD-COIL-SOLID, SLD-REF-COIL]: hélice de `diametro` con base en `base_punto`.
     Se dan dos de `revoluciones`, `altura` y `paso` (la altura va del centro de la sección inicial al de la
     final). `angulo` = inclinación (positivo = el radio crece con la altura). Sección "circular", "cuadrada",
     "triangular_externa" o "triangular_interna" de tamaño = diámetro del círculo circunscrito, ubicada
-    "dentro", "sobre" o "fuera" del diámetro. `horario` invierte el giro."""
+    "dentro", "sobre" o "fuera" del diámetro. `horario` invierte el sentido. `tipo="espiral"` usa
+    revoluciones y paso radial, sin altura ni ángulo. `girar` rota 90° alrededor de Y local en la base."""
+    if tipo not in ("rev_altura", "rev_paso", "altura_paso", "espiral"):
+        raise geo.ErrorGeometria(f"Tipo de bobina desconocido: {tipo}")
+    espiral = tipo == "espiral"
+    if espiral and (revoluciones is None or paso is None or altura is not None):
+        raise geo.ErrorGeometria("La espiral necesita revoluciones y paso, sin altura.")
     if sum(v is not None for v in (revoluciones, altura, paso)) != 2:
         raise geo.ErrorGeometria("Dá exactamente dos de: revoluciones, altura y paso.")
     if revoluciones is not None and revoluciones <= 0:     # antes de dividir por ellas
@@ -2406,7 +2473,8 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
         raise geo.ErrorGeometria(f"Posición de sección desconocida: {posicion_seccion}")
     if r_c + min(radiales) <= 0:
         raise geo.ErrorGeometria("La sección no entra: cruza el eje de la bobina.")
-    if paso <= max(axiales) - min(axiales) + 1e-6:
+    ancho = max(radiales) - min(radiales) if espiral else max(axiales) - min(axiales)
+    if paso <= ancho + 1e-6:
         raise geo.ErrorGeometria("El paso es menor que la sección: las espiras se superpondrían.")
     centro = o + x * r_c
     if pts is None:
@@ -2414,8 +2482,12 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
             gp_Circ(gp_Ax2(_pnt(centro), _gdir(np.cross(z, x))), tamano_seccion / 2)).Edge()).Wire()
     else:
         perfil = _poligono([centro + x * a + z * b for a, b in pts])
-    helice = _helice(o, z, x, r_c, paso, altura, "izquierda" if horario else "derecha", angulo)
-    return _validar(_barrido_helicoidal(perfil, helice), "Bobina")
+    helice = (_espiral(o, z, x, r_c, paso, revoluciones, horario) if espiral else
+              _helice(o, z, x, r_c, paso, altura, "izquierda" if horario else "derecha", angulo))
+    forma = _barrido_helicoidal(perfil, helice)
+    if girar:
+        forma = _girar(forma, gp_Ax1(_pnt(o), _gdir(np.cross(z, x))), 90)
+    return _validar(forma, "Bobina")
 
 
 # ================================================================ 10. tubería
@@ -2431,11 +2503,15 @@ def _seccion_tuberia(seccion, centro, u, v, radio):
                                         + math.sin(giro + 2 * math.pi * k / lados) * v) for k in range(lados)])
 
 
-def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, distancia=1.0):
+def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, distancia=1.0, distancia2=0.0):
     """Tubería (Pipe) de Fusion [SLD-PIPE-SOLID]: sección "circular", "cuadrada" o "triangular" de tamaño =
-    diámetro del círculo circunscrito, barrida por la ruta (fracción `distancia`). `hueca` con `espesor` de
+    diámetro del círculo circunscrito, barrida entre las fracciones `distancia2` y `distancia` de la ruta.
+    `distancia2=0` conserva el inicio original. `hueca` con `espesor` de
     pared (paredes paralelas a las exteriores)."""
-    w = _recortar_alambre(_alambre(ruta), float(distancia))
+    distancia, distancia2 = float(distancia), float(distancia2)
+    if not math.isfinite(distancia) or not math.isfinite(distancia2) or not 0 <= distancia2 < min(distancia, 1.0):
+        raise geo.ErrorGeometria("Las distancias deben ser finitas: el inicio debe estar entre cero y el fin de la ruta.")
+    w = _recortar_alambre(_alambre(ruta), distancia, distancia2)
     if tamano <= 0:
         raise geo.ErrorGeometria("El tamaño de la sección debe ser positivo.")
     p0, t0 = _punto_en(w, 0.0)

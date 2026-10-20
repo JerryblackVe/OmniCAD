@@ -10,10 +10,17 @@ Unidades: milímetros y grados (los grados se pasan a radianes solo acá).
 El resto de la aplicación no importa OCP directamente: todo pasa por este módulo y
 por `perfiles.py`, así la capa de kernel queda aislada.
 """
+import itertools
 import math
 
 import numpy as np
 from . import motor as _motor
+
+
+def lista_occ(lista):
+    """Los elementos de una lista de OCP (TopTools_ListOfShape…) como lista de Python. Recorrerla con `for` cuesta
+    ~0,5 ms fijos por recorrido (su iterador); con `islice` y el tamaño, ~5 µs (`bench_rendimiento.py frontera`)."""
+    return list(itertools.islice(lista, lista.Size()))
 
 
 def _iniciar_opencascade():
@@ -300,7 +307,15 @@ def booleano(objetivo, herramienta, operacion):
     clases = {"unir": BRepAlgoAPI_Fuse, "cortar": BRepAlgoAPI_Cut, "intersecar": BRepAlgoAPI_Common}
     if operacion not in clases:
         raise ErrorGeometria(f"Operación booleana desconocida: {operacion}")
-    op = clases[operacion](objetivo, herramienta)
+    from OCP.collections import List_TopoDS_Shape
+    args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
+    args.Append(objetivo)
+    herr.Append(herramienta)
+    op = clases[operacion]()
+    op.SetArguments(args)
+    op.SetTools(herr)
+    op.SetRunParallel(True)          # OpenCascade reparte el trabajo en varios núcleos (1,9–2× medido)
+    op.Build()
     if not op.IsDone():
         raise ErrorGeometria(f"La operación '{operacion}' falló en el kernel.")
     return _quitar_cables_colgados(unificar_caras(op.Shape()))
@@ -339,7 +354,7 @@ def _quitar_cables_colgados(forma):
         if BRep_Tool.Degenerated_s(arista):
             continue
         unicas = []
-        for f in vecinas.FindFromIndex(i):
+        for f in lista_occ(vecinas.FindFromIndex(i)):
             if not any(f.IsSame(u) for u in unicas):
                 unicas.append(f)          # una costura de cara periódica aparece dos veces
         if len(unicas) == 1 and not BRep_Tool.IsClosed_s(arista, TopoDS.Face(unicas[0])):
@@ -444,6 +459,7 @@ def unir_todos(formas):
             op = BRepAlgoAPI_Fuse()
             op.SetArguments(args)
             op.SetTools(herr)
+            op.SetRunParallel(True)
             op.Build()
             if op.IsDone() and not op.Shape().IsNull():
                 return _quitar_cables_colgados(unificar_caras(op.Shape()))
@@ -568,7 +584,7 @@ def caja_envolvente(forma):
 
 
 def es_valida(forma):
-    return BRepCheck_Analyzer(forma).IsValid()
+    return BRepCheck_Analyzer(forma, True, True).IsValid()    # en paralelo: 125 → 68 ms medido (plan_cpp.md P19)
 
 
 def _explorar(forma, tipo):

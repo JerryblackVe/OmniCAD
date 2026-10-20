@@ -171,12 +171,27 @@ def _boceto(estado, bid):
     return br
 
 
+def _resolver_en_componente(cuerpo, ref, estado):
+    """B-71: si una unión movió el componente del cuerpo, la firma (tomada donde se modeló) se busca en las
+    coordenadas del componente; con la pose del mundo, otra cara equivalente (la opuesta de una caja) la confunde
+    y la unión que cuelga de ese componente no lo sigue o pierde la referencia. None: no se movió o no está."""
+    m = estado.componentes.get(cuerpo.componente, {}).get("matriz") if cuerpo.componente else None
+    if m is None or np.allclose(m, np.identity(4), atol=1e-9):
+        return None
+    local = geo.transformar(cuerpo.forma, np.linalg.inv(np.asarray(m, float)))
+    sub = refs.resolver(local, ref)
+    if sub is None:
+        return None
+    i = next((k for k, s in enumerate(refs.subformas(local, ref["tipo"])) if s.IsSame(sub)), None)
+    return None if i is None else refs.subformas(cuerpo.forma, ref["tipo"])[i]
+
+
 def resolver(ref, estado):
     validar(ref)
     t = ref["tipo"]
     if t in ("cara", "arista", "vertice"):
         cuerpo = _cuerpo(estado, ref["cuerpo"])
-        sub = refs.resolver(cuerpo.forma, ref)
+        sub = _resolver_en_componente(cuerpo, ref, estado) or refs.resolver(cuerpo.forma, ref)
         if sub is None:
             raise ErrorReferencia(f"Se perdió la referencia a una {t} de {cuerpo.nombre}: la geometría cambió "
                                   "demasiado. Editá la operación y volvé a elegirla.")
@@ -283,7 +298,7 @@ def dependencias(ref):
         return set() if i in geo.Plano.DEFINICIONES or i in EJES_ORIGEN or i == "O" else {i.split("_")[0]}
     if t in ("perfil", "curva_boceto", "punto_boceto", "boceto"):
         b = ref.get("boceto")
-        return {b} if b and isinstance(b, str) else set()
+        return {b.split(".", 1)[0]} if b and isinstance(b, str) else set()
     return set()
 
 

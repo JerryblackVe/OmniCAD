@@ -2,6 +2,7 @@
 """Herramientas del grupo "documento": archivo, escena, timeline, deshacer y rehacer."""
 import copy
 import re
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -11,7 +12,7 @@ from ..nucleo import motor
 from ..timeline import ops_chapa, parametros
 from ..timeline.documento import ErrorDocumento
 from .registro import herramienta
-from .errores import ErrorAPI, error
+from .errores import ErrorAPI, desde_mensaje, error
 from .sesion import borrar_carpetas, crear_carpeta
 
 # Extensiones que escribe export (las de io_archivos.exportar, sus alias y el .dxf del patrón plano).
@@ -196,6 +197,20 @@ def set_document_units(sesion, length: Literal["mm", "cm", "m", "in", "ft"] | No
     return {"display_units": {"length": sesion.doc.unidades["longitud"], "mass": sesion.doc.unidades["masa"]}}
 
 
+@herramienta("recompute_all", "documento", "Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS "
+             "los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. Sirve si algo "
+             "se ve mal o para medir cuánto tarda el modelo entero. No cambia la receta.", modifica=True,
+             transaccion=False)
+def recompute_all(sesion):
+    inicio = time.perf_counter()
+    sesion.doc.olvidar_memoria()
+    sesion.doc.recalcular(0)
+    fallidos = [{"id": op.id, "name": op.nombre, "message": r.mensaje}
+                for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False) if r.estado == "error"]
+    return {"steps": len(sesion.doc.operaciones), "seconds": round(time.perf_counter() - inicio, 3),
+            "failed_steps": fallidos}
+
+
 @herramienta("set_geometry_engine", "documento", "Elige el motor geométrico (Preferencias › Geometría): "
              "«opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). Al cambiarlo el documento se recalcula "
              "entero con el motor nuevo; lo que OmniKernel no hace todavía queda con error MOTOR_SIN_SOPORTE en su "
@@ -302,6 +317,63 @@ def insert_file(sesion, path: str, mesh_units: Literal["mm", "cm", "m", "in", "f
                           "objeto. separate_mesh con by=face_groups los separa en cuerpos.")
     return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": r.estado, "message": r.mensaje,
             "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos)}
+
+
+@herramienta("insert_derive", "documento", "Deriva de OTRO proyecto .omnicad al documento actual (Insert Derive "
+             "de Fusion): los cuerpos, bocetos y parámetros elegidos entran como UN paso del timeline que guarda "
+             "la ruta del origen y qué se derivó; al recalcular vuelve a leer el origen (si cambió, se actualiza; "
+             "si falta, el paso queda con error). Los parámetros derivados se copian también al documento. "
+             "A diferencia de insert_file con un .omnicad (que copia el diseño adentro), la derivación queda "
+             "asociada al archivo de origen.", modifica=True)
+def insert_derive(sesion, source_path: str, bodies: list[str] | None = None, sketches: list[str] | None = None,
+                  parameters: list[str] | None = None, name: str | None = None):
+    """
+    source_path: ruta del proyecto .omnicad (o .fclone) de origen.
+    bodies: ids o nombres de los cuerpos del origen a derivar (get_scene_info del origen los lista).
+    sketches: ids o nombres de los bocetos del origen a derivar.
+    parameters: nombres de los parámetros del origen a derivar; quedan también como parámetros del documento.
+    name: nombre del paso en el timeline; vacío = «Derivación de <archivo>».
+    """
+    from ..io_archivos import proyecto
+    from ..timeline.ops_derivacion import OpDerivacion
+    ruta = Path(source_path).expanduser().resolve()
+    if ruta.suffix.lower() not in proyecto.EXTENSIONES:
+        raise error("UNSUPPORTED_FILE_TYPE", f"insert_derive deriva de un proyecto {proyecto.EXTENSION} (o "
+                    f"{'/'.join(proyecto.EXTENSIONES)}); llegó {ruta.suffix or '(sin extensión)'}.",
+                    "Para copiar un archivo de otro formato al documento: insert_file.")
+    if not ruta.is_file():
+        raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
+    try:
+        otro = proyecto.abrir(ruta)
+    except proyecto.ErrorProyecto as e:
+        raise error("IMPORT_FAILED", f"No se pudo leer el proyecto de origen: {e}") from e
+    from ..timeline.ops_derivacion import boceto_origen, cuerpo_origen
+    bodies, sketches, parameters = list(bodies or []), list(sketches or []), list(parameters or [])
+    if not (bodies or sketches or parameters):
+        raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo, boceto o parámetro del origen "
+                    "(bodies, sketches, parameters).")
+    for ref in bodies:
+        if cuerpo_origen(otro.estado_final, ref) is None:
+            raise error("ENTITY_NOT_FOUND", f"El origen no tiene el cuerpo '{ref}'.",
+                        "get_scene_info sobre el documento de origen lista sus cuerpos.")
+    for ref in sketches:
+        if boceto_origen(otro.estado_final, ref) is None:
+            raise error("ENTITY_NOT_FOUND", f"El origen no tiene el boceto '{ref}'.")
+    for nombre in parameters:
+        if nombre not in otro.parametros:
+            raise error("ENTITY_NOT_FOUND", f"El origen no tiene el parámetro '{nombre}'.",
+                        ", ".join(p.nombre for p in otro.parametros) or "El origen no tiene parámetros.")
+    doc = sesion.doc
+    op = OpDerivacion(doc.nuevo_id(), name or f"Derivación de {ruta.stem}", archivo=str(ruta), cuerpos=bodies,
+                      bocetos=sketches, parametros=parameters)
+    antes = set(doc.estado_final.cuerpos)
+    r = doc.agregar(op)
+    if r.estado == "error":
+        raise desde_mensaje(r.mensaje, f"El paso «{op.nombre}» quedó con error: ")
+    nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
+    return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": r.estado, "message": r.mensaje,
+            "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos), "parameters": parameters,
+            "source": str(ruta)}
 
 
 @herramienta("inspect_f3d", "documento", "Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos "
@@ -456,6 +528,8 @@ def undo(sesion):
     if not sesion.doc.puede_deshacer():
         raise error("NOTHING_TO_UNDO", "No hay nada para deshacer.")
     sesion.doc.deshacer()
+    if sesion.al_cambiar_espacios is not None:      # deshacer también revierte doc.espacios: la ventana relee
+        sesion.al_cambiar_espacios()
     return _pila(sesion)
 
 
@@ -464,6 +538,8 @@ def redo(sesion):
     if not sesion.doc.puede_rehacer():
         raise error("NOTHING_TO_REDO", "No hay nada para rehacer.")
     sesion.doc.rehacer()
+    if sesion.al_cambiar_espacios is not None:
+        sesion.al_cambiar_espacios()
     return _pila(sesion)
 
 
