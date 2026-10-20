@@ -291,10 +291,12 @@ def test_no_autoguarda_mientras_corre_codigo_de_un_agente(v, carpeta_auto):
     v.puente.sesion.latido = lambda: False
     try:
         v.autoguardar()
+        proyecto.esperar_autoguardado()
         assert not proyecto.ruta_autoguardado(v.doc).exists()
     finally:
         v.puente.sesion.latido = None
     v.autoguardar()
+    proyecto.esperar_autoguardado()     # el ZIP se escribe en un hilo
     assert proyecto.ruta_autoguardado(v.doc).exists()
 
 
