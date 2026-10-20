@@ -1581,7 +1581,8 @@ def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: f
 @herramienta("project_to_sketch", "boceto",
              "Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde "
              "cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en "
-             "la interfaz), sirve para restricciones, cotas y perfiles, y NO sigue al modelo si después cambia. "
+             "la interfaz), sirve para restricciones, cotas y perfiles, y sigue al modelo si después cambia. "
+             "Las proyecciones de proyectos viejos siguen congeladas. "
              "edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces.",
              modifica=True)
 def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[str] | str | None = None,
@@ -1598,13 +1599,16 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     """
     from ..nucleo.perfiles import intersecar_forma, proyectar_forma
     op, br = boceto_activo(sesion, sketch, derivados=False)
-    formas = [e.sub for _c, e in sl.elegir(sesion, edges, "arista", body, permitir_vacio=True)]
-    formas += [e.sub for _c, e in sl.elegir(sesion, faces, "cara", body, permitir_vacio=True)]
+    elegidos = sl.elegir(sesion, edges, "arista", body, permitir_vacio=True)
+    elegidos += sl.elegir(sesion, faces, "cara", body, permitir_vacio=True)
+    formas = [e.sub for _c, e in elegidos]
+    refs = [sl.referencia(c, e) for c, e in elegidos]
     for ref in bodies or []:
         c = sesion.cuerpo(ref)
         if getattr(c, "tipo", "solido") == "malla":
             raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(c)}» es una malla: no se proyecta.")
         formas.append(c.forma)
+        refs.append({"tipo": "cuerpo", "cuerpo": c.id})
     if not formas:
         raise error("INVALID_ARGUMENTS", "Elegí qué proyectar: edges, faces o bodies.")
     funcion = intersecar_forma if mode == "intersect" else proyectar_forma
@@ -1616,7 +1620,8 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     if not prims and not puntos:
         raise error("INVALID_GEOMETRY", "Eso no deja nada sobre el plano del boceto"
                     + (": no corta su plano." if mode == "intersect" else "."))
-    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(prims, puntos, construction), desde_solver=True)
+    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(
+        prims, puntos, construction, origen={"modo": mode, "refs": refs}), desde_solver=True)
     r["mode"] = mode
     return r
 

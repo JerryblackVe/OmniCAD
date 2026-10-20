@@ -299,3 +299,20 @@ def test_t11_el_estudio_de_movimiento_lista_tambien_al_componente_que_sigue_el_v
     llamar(s, "create_motion_link", joint1="J1", joint2="J2", ratio=0.2)
     r = llamar(s, "motion_study", joint="J1", values=[0, 90])
     assert {c["name"] for c in r["steps"][1]["components"]} == {"Manivela", "Piston"}
+
+
+def test_union_con_deslizamiento_avisa_que_movio_el_componente():
+    """Regresión B-50: una unión con deslizamiento avisa que movió el componente (el origen de cada cara es su
+    centro); una rígida y una como está no avisan."""
+    s, base, bloque = dos_cajas()
+    r = api.llamar(s, "create_joint", {"origin1": "<Z", "body1": bloque, "origin2": ">Z", "body2": "Base",
+                                       "joint_type": "slider"})
+    assert r["ok"] and any("se movió" in a and "create_as_built_joint" in a for a in r["avisos"]), r
+    s, base, bloque = dos_cajas()
+    r = api.llamar(s, "create_joint", {"origin1": "<Z", "body1": bloque, "origin2": ">Z", "body2": "Base",
+                                       "joint_type": "rigid"})
+    assert r["ok"] and not any("se movió" in a for a in r["avisos"]), r
+    s, base, bloque = dos_cajas()
+    r = api.llamar(s, "create_as_built_joint", {"origin": ">Z", "body": bloque, "component2": "Base",
+                                                "joint_type": "slider"})
+    assert r["ok"] and not any("se movió" in a for a in r["avisos"]), r

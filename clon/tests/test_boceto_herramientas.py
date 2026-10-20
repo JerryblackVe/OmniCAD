@@ -624,3 +624,13 @@ def test_simetria_de_elipses_y_splines_y_punto_medio_de_arco():
         assert b.coords(q2) == pytest.approx((-b.coords(q1)[0], b.coords(q1)[1]))
     prim = b.primitivas(arco)[0]
     assert b.coords(p) == pytest.approx(evaluar_primitiva(prim, dominio(prim)[1] / 2)[0])
+
+
+def test_proyectar_con_referencia_queda_asociado_al_modelo(app_qt):
+    """B-09: con la referencia de lo elegido, el lienzo registra la proyección para que siga al modelo."""
+    lz = _lienzo(app_qt)
+    ref = {"tipo": "cuerpo", "cuerpo": "op1.c1"}
+    assert lz.proyectar_forma(g.caja(10, 20, 5, (5, 5, 3)), ref=ref)
+    assert [(r["modo"], r["refs"]) for r in lz.b.proyecciones] == [("project", [ref])]
+    assert lz.proyectar_forma(g.cilindro(4, 10, (30, 0, -5)), "intersecar")      # sin referencia: congelada
+    assert len(lz.b.proyecciones) == 1

@@ -78,6 +78,19 @@ HERRAMIENTAS = {
     "restaurar": "add_animation_action", "explosion_uno": "auto_explode", "explosion_todos": "auto_explode",
     "visibilidad": "add_animation_action", "anotacion": "add_animation_annotation",
     "vista": "set_animation_camera", "publicar": "export_animation_video",
+    # --- espacio DIBUJO (api/herramientas_dibujo*.py) y RENDER (api/herramientas_render.py)
+    "vista_base": "add_drawing_view", "vista_proyectada": "add_drawing_view", "vista_seccion": "add_drawing_view",
+    "vista_detalle": "add_drawing_view", "girar": "edit_drawing_view", "mover": "move_drawing_element",
+    "borrar": "delete_drawing_element", "linea_centro": "add_drawing_centerline",
+    "marca_centro": "add_drawing_center_mark", "cota": "add_drawing_dimension",
+    "cota_ordenadas": "add_drawing_dimension", "cota_lineal": "add_drawing_dimension",
+    "cota_alineada": "add_drawing_dimension", "cota_angular": "add_drawing_dimension",
+    "cota_radial": "add_drawing_dimension", "cota_radio": "add_drawing_dimension",
+    "cota_diametro": "add_drawing_dimension", "texto": "add_drawing_text", "nota": "add_drawing_note",
+    "tabla": "add_drawing_table", "globo": "add_drawing_balloon", "exportar_pdf": "export_drawing",
+    "exportar_dxf": "export_drawing", "exportar_svg": "export_drawing", "hoja": "set_drawing_sheet",
+    "escena": "set_render_scene", "config_lienzo": "set_render_scene", "renderizar": "render_image",
+    "galeria": "render_image",             # las imágenes vuelven en la respuesta (o a path); no hay galería de sesión
     "Calcomanía": "set_decal",
     "calcular": "recompute_all",
 }
@@ -112,8 +125,9 @@ EXCUSAS = {
     "plano_angulo": "pendiente MCP-39", "plano_tangente": "pendiente MCP-39", "plano_medio": "pendiente MCP-39",
     "plano_perpendicular": "pendiente MCP-39", "plano_dos_aristas": "pendiente MCP-39",
     "plano_tres_puntos": "pendiente MCP-39", "plano_ruta": "pendiente MCP-39",
-    "fijacion": "pendiente MCP-41", "lienzo": "pendiente MCP-41 (insertar lienzo); el render en el lienzo es "
-                                               "pendiente MCP-22", "operacion_base": "pendiente MCP-41",
+    "fijacion": "pendiente MCP-41", "lienzo": "pendiente MCP-41 (insertar lienzo); «Renderizar en el lienzo» lo "
+                                               "cubre set_render_scene (canvas_high_quality)",
+    "operacion_base": "pendiente MCP-41",
     "activar_patron_plano": "pendiente MCP-53", "impresion3d": "prepara un archivo para la impresora 3D; export "
                                                               "(.stl) alcanza para obtener la malla",
     "secuencias": "la cubre execute_code (docs/brechas_mcp.md › Ola 7, «Se descartan»)",
@@ -138,23 +152,13 @@ EXCUSAS = {
     "sk_arco_tangente": "pendiente MCP-94",
     "sk_alargar": "pendiente MCP-91",
     "sk_partir": "pendiente MCP-92",
-    # --- espacio DIBUJO (ola 2)
-    "vista_base": "pendiente MCP-13", "vista_proyectada": "pendiente MCP-13", "vista_seccion": "pendiente MCP-13",
-    "vista_detalle": "pendiente MCP-13", "girar": "pendiente MCP-14", "mover": "pendiente MCP-15",
-    "borrar": "pendiente MCP-15", "linea_centro": "pendiente MCP-17", "marca_centro": "pendiente MCP-17",
-    "cota": "pendiente MCP-16", "cota_ordenadas": "pendiente MCP-16", "cota_lineal": "pendiente MCP-16",
-    "cota_alineada": "pendiente MCP-16", "cota_angular": "pendiente MCP-16", "cota_radial": "pendiente MCP-16",
-    "cota_radio": "pendiente MCP-16", "cota_diametro": "pendiente MCP-16",
-    "texto": "pendiente MCP-18", "nota": "pendiente MCP-18", "tabla": "pendiente MCP-18", "globo": "pendiente MCP-18",
-    "exportar_pdf": "pendiente MCP-20", "exportar_dxf": "pendiente MCP-20", "exportar_svg": "pendiente MCP-20",
-    "hoja": "pendiente MCP-12",
+    # --- espacio DIBUJO: lo que no se puede o no hace falta (el resto está en HERRAMIENTAS)
     "Vista de rotura": _GRISADO, "Vista de sección parcial": _GRISADO, "Vista recortada": _GRISADO,
     "Crear boceto": _GRISADO, "Patrón de marcas de centro": _GRISADO, "Extensión de arista": _GRISADO,
     "Cota de línea base": _GRISADO, "Cota en cadena": _GRISADO, "Corte de cota": _GRISADO,
     "Renumerar": _GRISADO, "Exportar DWG": _GRISADO, "Exportar CSV": _GRISADO,
-    # --- espacio RENDER (ola 3)
-    "escena": "pendiente MCP-22", "config_lienzo": "pendiente MCP-22", "capturar": "pendiente MCP-46",
-    "renderizar": "pendiente MCP-25", "galeria": "pendiente MCP-25",
+    # --- espacio RENDER
+    "capturar": "pendiente MCP-46",
     "terminar": "cierra el espacio RENDERIZAR de la ventana: no aplica a un agente",
     "Mapeo de texturas": _GRISADO,
     # --- espacio ANIMACIÓN (ola 1): lo que queda fuera de las herramientas
@@ -221,6 +225,19 @@ def test_los_diccionarios_no_tienen_entradas_viejas():
     claves = set(_todas())
     sobran = sorted((set(HERRAMIENTAS) | set(EXCUSAS)) - claves)
     assert not sobran, f"Claves que ya no existen en la interfaz: {', '.join(sobran)}."
+
+
+def test_hay_herramientas_de_dibujo_y_render():
+    """B-80: los espacios DIBUJO y RENDERIZAR quedan cubiertos por sus herramientas."""
+    dibujo = {h["nombre"] for h in api.catalogo("dibujo")}
+    assert {"create_drawing", "get_drawing", "set_drawing_sheet", "add_drawing_view", "edit_drawing_view",
+            "move_drawing_element", "delete_drawing_element", "add_drawing_dimension", "add_drawing_centerline",
+            "add_drawing_center_mark", "add_drawing_text", "add_drawing_note", "add_drawing_balloon",
+            "add_drawing_table", "edit_drawing_annotation", "get_drawing_geometry", "export_drawing",
+            "get_drawing_image"} <= dibujo
+    render = {h["nombre"] for h in api.catalogo("render")}
+    assert {"list_render_environments", "get_render_scene", "set_render_scene", "set_render_camera",
+            "render_image"} <= render
 
 
 def test_hay_herramientas_de_animacion():

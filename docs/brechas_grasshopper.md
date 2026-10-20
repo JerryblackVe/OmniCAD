@@ -46,7 +46,7 @@ Decisión de diseño que conviene tomar antes de programar:
 | **B** | El grafo se evalúa como flujo de datos puro y produce cuerpos; «Hornear» los pasa al timeline. | **Recomendada.** Mantiene la receta y suma lo que le falta a Grasshopper. |
 | C | Los dos a la vez. | Es B más tiempo: queda para después. |
 
-Lo que ya existe y baja el costo: el catálogo único `api/` (211 herramientas con nombre, parámetros tipados y
+Lo que ya existe y baja el costo: el catálogo único `api/` (234 herramientas con nombre, parámetros tipados y
 docstring) y los 96 tipos de operación del timeline. Los nodos de la primera tanda se escribieron a mano sobre esa base (GH3).
 
 ## Para hacer

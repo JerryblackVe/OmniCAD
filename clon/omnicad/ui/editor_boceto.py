@@ -1371,8 +1371,9 @@ class Lienzo(QWidget):
         return max(round(v / e) * e, 1e-3)
 
     # ------------------------------------------------------------ Proyectar / Intersecar / Incluir
-    def proyectar_forma(self, forma, modo="proyectar"):
-        """Agrega al boceto la proyección (o la intersección) de una forma OCC sobre su plano."""
+    def proyectar_forma(self, forma, modo="proyectar", ref=None):
+        """Agrega al boceto la proyección (o la intersección) de una forma OCC sobre su plano. Con `ref` (la
+        referencia persistente de lo elegido) la proyección sigue al modelo cuando este cambia (B-09)."""
         from ..nucleo.perfiles import intersecar_forma, proyectar_forma
         if self.plano is None:
             raise ErrorBoceto("El boceto no tiene plano.")
@@ -1380,7 +1381,8 @@ class Lienzo(QWidget):
         if not prims and not puntos:
             self.mensaje.emit("Eso no deja nada sobre el plano del boceto.")
             return False
-        return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos, self.construccion))
+        origen = {"modo": "intersect" if modo == "intersecar" else "project", "refs": [ref]} if ref else None
+        return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos, self.construccion, origen))
 
     def _clic_proyectar(self, pos):
         elegir = getattr(self.visor, "elegir_entidad", None) if self.visor is not None else None
@@ -1399,7 +1401,7 @@ class Lienzo(QWidget):
         if not info or info.get("forma") is None:
             self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
             return
-        if self.proyectar_forma(info["forma"], "intersecar" if h == "intersecar" else "proyectar"):
+        if self.proyectar_forma(info["forma"], "intersecar" if h == "intersecar" else "proyectar", info.get("ref")):
             self.mensaje.emit(f"{HERRAMIENTAS[h][0]}: listo ({info.get('tipo', 'geometría')}). Seguí eligiendo o Esc.")
 
     # ------------------------------------------------------------ AutoConstrain, tipo de línea, texto

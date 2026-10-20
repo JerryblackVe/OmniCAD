@@ -681,17 +681,17 @@ def revolver_avanzado(caras, punto_eje, dir_eje, *, direccion="un_lado", angulo1
 
 # ================================================================ 3. barrido
 # Torsión máxima del barrido: 10 vueltas, elegida por tiempo. La guía de torsión lleva un punto cada 5°. El modo plano
-# (rutas abiertas sin quiebres) es rápido: 3600° en 50 mm, 0,1 s. El curvilíneo (rutas cerradas y las lisas donde el
-# plano falla) crece con los grados y tiene su propio tope (TORSION_MAXIMA_CURVILINEA). Medido en curvilíneo,
-# rectángulo 4×2: 3600° tarda 27 s en una ruta de 100 mm con empalme de R ≤ 4; 5400° en esa ruta, 57 s; 36.000° en
-# 50 mm, más de 100 s.
+# (rutas abiertas sin quiebres y mitades de rutas cerradas) es rápido: 3600° en 50 mm, 0,1 s. El curvilíneo (rutas
+# abiertas lisas donde el plano falla) crece con los grados y tiene su propio tope (TORSION_MAXIMA_CURVILINEA). Medido
+# en curvilíneo, rectángulo 4×2: 3600° tarda 27 s en una ruta de 100 mm con empalme de R ≤ 4; 5400° en esa ruta, 57 s;
+# 36.000° en 50 mm, más de 100 s.
 # Cambios de compatibilidad, a propósito: una receta vieja con más de 3600°, con más de 1800° donde va el curvilíneo, o
 # con torsión en una ruta con esquinas ahora falla con un mensaje que dice el tope. Antes tardaban de 15 s a minutos, y
 # las de esquinas daban un sólido inválido o tiraban abajo el proceso.
 TORSION_MAXIMA = 3600.0
-# En el modo curvilíneo (rutas cerradas, y las lisas donde el plano falla) el tope es más bajo: recta de 20 mm + arco
+# En el modo curvilíneo (rutas abiertas lisas donde el plano falla) el tope es más bajo: recta de 20 mm + arco
 # tangente de R2 (el perfil se autointerseca), 1800° anda en 5,8 s y 3600° tira abajo el proceso (0xC0000005, violación
-# de acceso, a los 18 s); círculo de R30 cerrado, 1800° en 5 s.
+# de acceso, a los 18 s). Se conserva también como tope de seguridad de las rutas cerradas, ahora partidas en dos.
 TORSION_MAXIMA_CURVILINEA = 1800.0
 # Quiebre (ángulo entre las tangentes de dos aristas seguidas) desde el que la torsión no se calcula. Medido, rectángulo
 # 4 × 2 con 90°, dos rectas de 50 mm: con 0,5° el modo plano anda (0,2 s con 3600°); con 1°, 2° y 10° da un sólido
@@ -731,11 +731,10 @@ def _quiebre_maximo(ruta):
 
 
 def _guia_plana_posible(ruta, tolerancia=QUIEBRE_MAXIMO_TORSION):
-    """¿La guía de torsión puede ir en modo plano (el plano normal a la ruta corta la guía)? Solo en rutas abiertas
-    sin quiebres de más de `tolerancia` grados. El modo curvilíneo (empareja ruta y guía por longitud de arco) pierde
-    volumen (−2 % con 90°), tarda segundos y no resuelve rutas de 100 mm o más ni splines; el plano es exacto, pero en
-    un quiebre da un sólido inválido o tira abajo el kernel (codo de 90° con 3600°: violación de acceso) y en las rutas
-    cerradas no resuelve."""
+    """¿La guía de torsión puede ir en modo plano sobre la ruta entera? Solo en rutas abiertas sin quiebres de más
+    de `tolerancia` grados. El modo plano conserva la sección; el curvilíneo empareja por longitud de arco y puede
+    deformarla. Una ruta cerrada necesita dos barridos abiertos en modo plano; un quiebre puede dar un sólido
+    inválido o tirar abajo el kernel (codo de 90° con 3600°: violación de acceso)."""
     return not _es_cerrado(ruta) and _quiebre_maximo(ruta) <= tolerancia
 
 
@@ -794,49 +793,62 @@ def _ley_escala_carril(ruta, carril, n=33):
 
 def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, escala_carril, solido, radio_guia,
                      guia_plana=False):
-    ps = BRepOffsetAPI_MakePipeShell(ruta)
-    ley = None
-    if carril is not None:
-        if abs(torsion) > 1e-9 or abs(conicidad) > 1e-9:
-            raise geo.ErrorGeometria("La torsión y la inclinación no se combinan con un carril guía.")
-        if escala_carril not in ("escalar", "estirar", "ninguna"):
-            raise geo.ErrorGeometria(f"Escala de carril desconocida: {escala_carril}")
-        # El carril orienta el perfil (normal hacia el carril) y, salvo "ninguna", lo escala con la distancia
-        # ruta→carril (ley propia: el modo ContactOnBorder de OCC solo funciona con perfiles suaves).
-        ps.SetMode(carril, True, BRepFill_NoContact)
-        if escala_carril != "ninguna":
-            ley = _ley_escala_carril(ruta, carril)
-    elif abs(torsion) > 1e-9:       # segundo argumento: True = curvilíneo, False = plano (ver _guia_plana_posible)
-        ps.SetMode(_guia_torsion(ruta, torsion, radio_guia), not guia_plana, BRepFill_NoContact)
-    elif orientacion == "paralela":
-        p0, t0 = _punto_en(ruta, 0.0)
-        ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(_perpendicular(t0))))
-    elif orientacion == "perpendicular":
-        ps.SetMode(False)           # triedro de Frenet corregido
-    else:
-        raise geo.ErrorGeometria(f"Orientación de barrido desconocida: {orientacion}")
-    ps.SetTransitionMode(BRepBuilderAPI_RightCorner)
-    if abs(conicidad) > 1e-9:
-        p0, _ = _punto_en(ruta, 0.0)
-        escala = 1.0 + _longitud(ruta) * math.tan(math.radians(conicidad)) / _radio_referencia(perfil, p0)
-        if escala <= 0.01:
-            raise geo.ErrorGeometria("La inclinación del barrido hace desaparecer el perfil antes del final.")
-        ley = Law_Linear()
-        ley.Set(0.0, 1.0, 1.0, escala)
-    if ley is not None:
-        ps.SetLaw(perfil, ley, False, False)
-    else:
-        ps.Add(perfil, False, False)
-    try:
-        ps.Build()
-        hecho = ps.IsDone()
-    except Exception:  # noqa: BLE001 — OCC lanza Standard_ConstructionError en los casos que no resuelve
-        hecho = False
-    if not hecho:
-        raise geo.ErrorGeometria("El kernel no pudo barrer el perfil por la ruta.")
-    if solido and not ps.MakeSolid():
-        raise geo.ErrorGeometria("El barrido no cierra un sólido (¿el perfil está abierto?).")
-    return ps.Shape()
+    cerrada_con_torsion = carril is None and abs(torsion) > 1e-9 and _es_cerrado(ruta)
+    rutas = [_recortar_alambre(ruta, 0.5), _recortar_alambre(ruta, 1.0, 0.5)] if cerrada_con_torsion else [ruta]
+    torsion /= len(rutas)
+    partes = []
+    for tramo in rutas:
+        ps = BRepOffsetAPI_MakePipeShell(tramo)
+        ley = None
+        if carril is not None:
+            if abs(torsion) > 1e-9 or abs(conicidad) > 1e-9:
+                raise geo.ErrorGeometria("La torsión y la inclinación no se combinan con un carril guía.")
+            if escala_carril not in ("escalar", "estirar", "ninguna"):
+                raise geo.ErrorGeometria(f"Escala de carril desconocida: {escala_carril}")
+            # El carril orienta el perfil (normal hacia el carril) y, salvo "ninguna", lo escala con la distancia
+            # ruta→carril (ley propia: el modo ContactOnBorder de OCC solo funciona con perfiles suaves).
+            ps.SetMode(carril, True, BRepFill_NoContact)
+            if escala_carril != "ninguna":
+                ley = _ley_escala_carril(tramo, carril)
+        elif abs(torsion) > 1e-9:       # True = curvilíneo, False = plano (ver _guia_plana_posible)
+            ps.SetMode(_guia_torsion(tramo, torsion, radio_guia),
+                       not (guia_plana or cerrada_con_torsion), BRepFill_NoContact)
+        elif orientacion == "paralela":
+            p0, t0 = _punto_en(tramo, 0.0)
+            ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(_perpendicular(t0))))
+        elif orientacion == "perpendicular":
+            ps.SetMode(False)           # triedro de Frenet corregido
+        else:
+            raise geo.ErrorGeometria(f"Orientación de barrido desconocida: {orientacion}")
+        ps.SetTransitionMode(BRepBuilderAPI_RightCorner)
+        if abs(conicidad) > 1e-9:
+            p0, _ = _punto_en(tramo, 0.0)
+            escala = 1.0 + _longitud(tramo) * math.tan(math.radians(conicidad)) / _radio_referencia(perfil, p0)
+            if escala <= 0.01:
+                raise geo.ErrorGeometria("La inclinación del barrido hace desaparecer el perfil antes del final.")
+            ley = Law_Linear()
+            ley.Set(0.0, 1.0, 1.0, escala)
+        if ley is not None:
+            ps.SetLaw(perfil, ley, False, False)
+        else:
+            ps.Add(perfil, False, False)
+        try:
+            ps.Build()
+            hecho = ps.IsDone()
+        except Exception:  # noqa: BLE001 — OCC lanza Standard_ConstructionError en los casos que no resuelve
+            hecho = False
+        if not hecho:
+            raise geo.ErrorGeometria("El kernel no pudo barrer el perfil por la ruta.")
+        if cerrada_con_torsion:
+            # OCC toma el perfil inicial como referencia del triedro de cada tramo: LastShape conserva el giro
+            # acumulado aunque _marcos elija otro u,v inicial para la segunda mitad.
+            perfil = TopoDS.Wire(ps.LastShape())
+        if solido and not ps.MakeSolid():
+            raise geo.ErrorGeometria("El barrido no cierra un sólido (¿el perfil está abierto?).")
+        partes.append(ps.Shape())
+    if len(partes) == 1:
+        return partes[0]
+    return _unir(partes) if solido else geo.compuesto(partes)
 
 
 def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distancia=1.0, torsion=0.0,
@@ -849,9 +861,9 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     `escala_carril` "escalar" (el perfil se agranda con la distancia ruta→carril), "ninguna" (el carril solo
     orienta); "estirar" (escala en una sola dirección) no existe en OCC y se hace como "escalar".
     `solido=False` devuelve la superficie. La torsión admite como máximo ±TORSION_MAXIMA grados y una ruta
-    sin quiebres (QUIEBRE_MAXIMO_TORSION); en las rutas abiertas va primero la guía en modo plano (ver
-    _guia_plana_posible) y, en las cerradas o si el plano falla en una ruta lisa, el curvilíneo, con
-    ±TORSION_MAXIMA_CURVILINEA como máximo.
+    sin quiebres (QUIEBRE_MAXIMO_TORSION). Las rutas cerradas se barren por mitades abiertas en modo plano,
+    continuando desde el perfil final anterior y uniendo los resultados. Si el plano falla en una ruta abierta
+    lisa, se prueba el curvilíneo. Se conserva el tope ±TORSION_MAXIMA_CURVILINEA en rutas cerradas y en ese respaldo.
     """
     validar_torsion(torsion)
     ruta = _recortar_alambre(_alambre(ruta), float(distancia))
@@ -874,8 +886,8 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
 
 
 def _exigir_ruta_para_torsion(ruta, torsion):
-    """Antes de calcular: la torsión necesita una ruta sin quiebres (QUIEBRE_MAXIMO_TORSION) y, si es cerrada (va en
-    modo curvilíneo), no más de ±TORSION_MAXIMA_CURVILINEA grados."""
+    """Antes de calcular: la torsión necesita una ruta sin quiebres (QUIEBRE_MAXIMO_TORSION) y, si es cerrada,
+    conserva el tope de seguridad de ±TORSION_MAXIMA_CURVILINEA grados."""
     quiebre = _quiebre_maximo(ruta)
     if quiebre > QUIEBRE_MAXIMO_TORSION:
         grados = (f"{x:.3g}°".replace(".", ",") for x in (quiebre, QUIEBRE_MAXIMO_TORSION))

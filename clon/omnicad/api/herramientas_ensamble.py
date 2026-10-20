@@ -441,6 +441,15 @@ def _crear_union(sesion, nombre, params):
     resultado = _agregar(sesion, op)
     resultado["joint"] = info_union(sesion, op)
     resultado["moved_components"] = _movidos(sesion, antes)
+    # B-50: con deslizamiento, el snap al centro de cada cara puede correr el componente sobre el eje: se avisa.
+    if not params["como_esta"] and MOVIMIENTOS[params["tipo"]][1]:
+        for c in resultado["moved_components"]:
+            d = c["delta_translation"]
+            if d is not None and np.linalg.norm(d) > 1e-6:
+                sesion.avisar(f"El componente «{c['name']}» se movió [{d[0]}, {d[1]}, {d[2]}] mm para que los "
+                              "centros de las caras coincidan (snap al centro); con caras de distinto largo queda "
+                              "corrido sobre el eje de deslizamiento. Para conservar su posición usá "
+                              "create_as_built_joint, o ajustá offset / snap1 / snap2.")
     return resultado
 
 
@@ -449,7 +458,8 @@ def _crear_union(sesion, nombre, params):
              "el mismo sentido) y define cómo se mueve después. " + _DESC_ORIGEN + _DESC_TIPOS +
              "angle gira el componente 1 alrededor del Z del marco, offset lo corre [dx, dy, dz] y flip lo da vuelta. "
              "Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. Devuelve la unión "
-             "y los componentes que se movieron con su traslación y caja envolvente.", modifica=True)
+             "y los componentes que se movieron con su traslación y caja envolvente. En uniones con deslizamiento "
+             "avisa si el componente se movió (snap al centro de cada cara).", modifica=True)
 def create_joint(sesion, origin1: str, origin2: str, joint_type: TipoUnion = "rigid", body1: str | None = None,
                  body2: str | None = None, snap1: Snap = "center", snap2: Snap = "center", angle: Expr = 0,
                  offset: list[Expr] | None = None, flip: bool = False, rotation_axis: Eje = "Z", slide_axis: Eje = "X",

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Test para B-71: uniones encadenadas y lazos cerrados (biela-manivela).
+"""Test para B-71: uniones encadenadas y lazos cerrados (biela-manivela, cuadrilátero articulado).
 Reproduce el bug: al accionar una unión, el componente atado a OTRA unión que
 depende de la movida no la sigue, y un mecanismo con lazo cerrado no se resuelve.
 """
@@ -96,108 +96,126 @@ def test_b71_cadena_abierta():
     assert abs(t_c[0]) < 1.0 and abs(t_c[1] - 17.5) < 1.0, f"C no siguió a B: trans={t_c}"
 
 
-# =================================================================== BIELA-MANIVELA (LAZO CERRADO)
-@pytest.mark.xfail(strict=True, reason="B-71 sigue abierto: el lazo cerrado (biela-manivela) no se resuelve; las uniones se aplican de a una y la última pisa a la corredera")
-def test_b71_biela_manivela():
-    """Lazo cerrado: bastidor fijo; manivela r=20 revolute al bastidor; biela l=60
-    revolute a la manivela; corredera con revolute a la biela y slider al bastidor
-    sobre eje X que pasa por el eje de la manivela.
+# =================================================================== LAZOS CERRADOS
+# Los eslabones son una barra (caja) más un perno cilíndrico (eje Z) en cada extremo; los pernos miden lo
+# mismo, así que dos pernos unidos quedan con sus centros coincidentes. La posición de una pieza es la
+# traslación de su componente: el origen local de cada eslabón es su primer perno.
+def _eslabon(s, nombre, largo, pernos=None, ancho=10, fijo=False):
+    """Componente de una barra de `largo` mm sobre +X con pernos en x = `pernos` (por defecto en 0 y `largo`).
+    Devuelve los ids de los cuerpos de los pernos."""
+    pernos = [0.0, largo] if pernos is None else pernos
+    barra = llamar(s, "create_box", length=largo + 10, width=ancho, height=10, x=largo / 2)["bodies_created"][0]["id"]
+    ids = [llamar(s, "create_cylinder", radius=3, height=14, x=x)["bodies_created"][0]["id"] for x in pernos]
+    llamar(s, "create_component", bodies=[barra, *ids], name=nombre, grounded=fijo)
+    return ids
 
-    Accionar manivela a θ = 0, 30, 90, 135°:
-    - Corredera queda en x = r·cosθ + sqrt(l² − (r·sinθ)²) (±1e-3 mm)
-    - Extremos de la biela coinciden con sus pernos (±1e-3 mm)
-    """
-    r = 20.0  # radio de manivela (distancia del centro al perno)
-    l = 60.0  # largo de biela (distancia entre pernos)
 
-    def posicion_corredera_esperada(theta_deg):
-        """x = r*cosθ + sqrt(l² - (r*sinθ)²)"""
-        th = math.radians(theta_deg)
-        return r * math.cos(th) + math.sqrt(l**2 - (r * math.sin(th))**2)
+def _perno(s, nombre, perno, otro, tipo="revolute", **extra):
+    """Une el perno `perno` (el componente que se mueve) con el perno `otro` (el componente al que va)."""
+    llamar(s, "create_joint", origin1="%CYLINDER", body1=perno, origin2="%CYLINDER", body2=otro,
+           joint_type=tipo, name=nombre, **extra)
 
-    for theta in [0, 30, 90, 135]:
-        s = api.Sesion()
 
-        # Bastidor fijo: caja 100x50x10 en origen
-        bastidor = llamar(s, "create_box", length=100, width=50, height=10)["bodies_created"][0]["id"]
-        llamar(s, "create_component", bodies=[bastidor], name="Bastidor", grounded=True)
+def _pose(s):
+    """{nombre de componente: (R 3x3, traslación)} con la matriz exacta del estado (get_assembly redondea a 4
+    decimales, y con brazos de 60 mm eso ya pasa de 0,001 mm)."""
+    comps = s.doc.estado_final.componentes
+    mats = {c["nombre"]: np.asarray(c["matriz"], float) for c in comps.values()}
+    return {n: (m[:3, :3], m[:3, 3]) for n, m in mats.items()}
 
-        # Manivela: caja 40x10x10, modelada horizontal en X, con perno en x=20 (radio r=20)
-        # El centro de la manivela está en el origen, el perno en x=20
-        manivela = llamar(s, "create_box", length=40, width=10, height=10)["bodies_created"][0]["id"]
-        llamar(s, "create_component", bodies=[manivela], name="Manivela")
 
-        # Biela: caja 60x10x10, modelada horizontal en X, pernos en extremos (x=-30 y x=30)
-        biela = llamar(s, "create_box", length=60, width=10, height=10)["bodies_created"][0]["id"]
-        llamar(s, "create_component", bodies=[biela], name="Biela")
+def _estados(s):
+    """{nombre de unión: (estado, mensaje)} desde get_assembly."""
+    return {j["name"]: (j["status"], j.get("message") or "") for j in llamar(s, "get_assembly")["joints"]}
 
-        # Corredera: caja 20x20x10
-        corredera = llamar(s, "create_box", length=20, width=20, height=10)["bodies_created"][0]["id"]
-        llamar(s, "create_component", bodies=[corredera], name="Corredera")
 
-        # J1: Manivela → Bastidor (revolute en Z en el origen)
-        # Cara >Z de manivela (z=5) contra cara >Z de bastidor (z=10)
-        # Manivela modelada en X, pero J1 usa >Z para girar en Z
-        llamar(s, "create_joint",
-               origin1=">Z", body1=manivela,
-               origin2=">Z", body2=bastidor,
-               joint_type="revolute", rotation=0, name="J1_manivela")
+def _biela_manivela(r=20.0, l=60.0, theta=0.0):
+    """Manivela de radio r, biela de largo l y corredera sobre el eje X que pasa por el eje de la manivela.
+    Uniones: J1 manivela-bastidor (se acciona), J2 biela-manivela, J3 corredera-biela y J4 corredera-bastidor
+    (deslizante en X), que cierra el lazo."""
+    s = api.Sesion()
+    (p0,) = _eslabon(s, "Bastidor", 0.0, pernos=[0.0], ancho=60, fijo=True)
+    a0, a1 = _eslabon(s, "Manivela", r)
+    b1, b2 = _eslabon(s, "Biela", l)
+    (pc,) = _eslabon(s, "Corredera", 0.0, pernos=[0.0], ancho=20)
+    _perno(s, "J1", a0, p0, rotation=theta)
+    _perno(s, "J2", b1, a1, rotation=0)
+    _perno(s, "J3", pc, b2, rotation=0)
+    _perno(s, "J4", pc, p0, tipo="slider", slide_axis="X", slide=0)
+    return s
 
-        # J2: Biela → Manivela (revolute en el perno de la manivela en x=20)
-        # Biela cara <X (x=-30) contra origen de unión en manivela en x=20
-        # Crear origen de unión en manivela en el perno (x=20, y=0, z=5)
-        llamar(s, "create_joint_origin", geometry=">X", body=manivela, name="PernoManivela",
-               offset=[20, 0, 0])  # en la cara >X de manivela, offset +20 en X local
-        llamar(s, "create_joint",
-               origin1="<X", body1=biela,
-               origin2="PernoManivela",
-               joint_type="revolute", rotation=0, name="J2_biela_manivela")
 
-        # J3: Corredera → Biela (revolute en el otro extremo de la biela x=30)
-        # Corredera cara <X (x=-10) contra biela cara >X (x=30)
-        llamar(s, "create_joint",
-               origin1="<X", body1=corredera,
-               origin2=">X", body2=biela,
-               joint_type="revolute", rotation=0, name="J3_corredera_biela")
+def _comprobar_biela_manivela(s, theta, r=20.0, l=60.0):
+    th = math.radians(theta)
+    x_esperado = r * math.cos(th) + math.sqrt(l ** 2 - (r * math.sin(th)) ** 2)
+    pose = _pose(s)
+    r_man, t_man = pose["Manivela"]
+    r_bie, t_bie = pose["Biela"]
+    _, t_cor = pose["Corredera"]
+    # la corredera queda en x = r·cosθ + sqrt(l² − (r·sinθ)²), sobre el eje X
+    assert abs(t_cor[0] - x_esperado) < 1e-3, f"θ={theta}°: corredera x={t_cor[0]:.4f}, esperado {x_esperado:.4f}"
+    assert abs(t_cor[1]) < 1e-3, f"θ={theta}°: corredera salió del eje X (y={t_cor[1]:.4f})"
+    # el perno de la manivela es el primer perno de la biela, y el segundo de la biela es el perno de la corredera
+    perno_manivela = r_man @ np.array([r, 0.0, 0.0]) + t_man
+    assert np.linalg.norm(t_bie - perno_manivela) < 1e-3, f"θ={theta}°: J2 abierta"
+    perno_biela = r_bie @ np.array([l, 0.0, 0.0]) + t_bie
+    assert np.linalg.norm(t_cor - perno_biela) < 1e-3, f"θ={theta}°: J3 abierta"
+    assert abs(np.linalg.norm(perno_biela - t_bie) - l) < 1e-3     # la biela no se estira
+    for nombre, (estado, mensaje) in _estados(s).items():
+        assert estado != "error", f"θ={theta}°: unión {nombre} en error: {mensaje}"
 
-        # J4: Corredera → Bastidor (slider en X)
-        # Corredera cara <Z (z=-5) contra bastidor cara >Z (z=10), slider en X
-        llamar(s, "create_joint",
-               origin1="<Z", body1=corredera,
-               origin2=">Z", body2=bastidor,
-               joint_type="slider", slide_axis="X", slide=0, name="J4_corredera_bastidor")
 
-        # Accionar J1 a theta
-        llamar(s, "drive_joint", joint="J1_manivela", rotation=theta)
+@pytest.mark.parametrize("theta", [0, 30, 90, 135, 180, 270, -40])
+def test_b71_biela_manivela(theta):
+    """Lazo cerrado biela-manivela: al accionar la manivela a θ, la corredera queda en
+    x = r·cosθ + sqrt(l² − (r·sinθ)²) (±1e-3 mm) y los pernos de la biela coinciden con los de la manivela y la
+    corredera. Antes del arreglo J4 se aplicaba última y arrastraba a la corredera al origen, rompiendo J3."""
+    s = _biela_manivela(theta=0)
+    if theta:
+        llamar(s, "drive_joint", joint="J1", rotation=theta)
+    _comprobar_biela_manivela(s, theta)
 
-        # Verificar posición de la corredera
-        ensamblaje = llamar(s, "get_assembly")
-        comp_corredera = next(c for c in ensamblaje["components"] if c["name"] == "Corredera")
-        t_corredera = np.array(comp_corredera["translation"])
-        x_esperado = posicion_corredera_esperada(theta)
-        assert abs(t_corredera[0] - x_esperado) < 1e-3, \
-            f"θ={theta}°: corredera en x={t_corredera[0]:.3f}, esperado {x_esperado:.3f}"
 
-        # Verificar que la biela mantiene su longitud l=60
-        comp_biela = next(c for c in ensamblaje["components"] if c["name"] == "Biela")
-        m_biela = np.array(comp_biela["rotation_matrix"]).reshape(3, 3)
-        t_biela = np.array(comp_biela["translation"])
-        # Biela pernos en extremos locales: (-30,0,0) y (30,0,0)
-        extremo1 = m_biela @ np.array([-30.0, 0.0, 0.0]) + t_biela
-        extremo2 = m_biela @ np.array([30.0, 0.0, 0.0]) + t_biela
-        largo_biela = np.linalg.norm(extremo2 - extremo1)
-        assert abs(largo_biela - l) < 1e-3, f"θ={theta}°: largo biela = {largo_biela:.3f}, esperado {l}"
+def test_b71_biela_manivela_barrido():
+    """Accionar la manivela de a pasos seguidos (cada paso recalcula el mecanismo) mantiene el lazo cerrado y
+    ninguna unión pierde su referencia."""
+    s = _biela_manivela()
+    for theta in range(0, 361, 20):
+        llamar(s, "drive_joint", joint="J1", rotation=theta)
+        _comprobar_biela_manivela(s, theta)
+    for nombre, (estado, mensaje) in _estados(s).items():
+        assert "REFERENCE_LOST" not in mensaje, nombre
 
-        # Verificar J3: extremo de biela coincide con perno de corredera
-        comp_corredera = next(c for c in ensamblaje["components"] if c["name"] == "Corredera")
-        m_corr = np.array(comp_corredera["rotation_matrix"]).reshape(3, 3)
-        t_corr = np.array(comp_corredera["translation"])
-        # Corredera: origin1="<X" (cara x=-10, centro (-10,0,0) local)
-        perno_j3_corr_local = np.array([-10.0, 0.0, 0.0])
-        perno_j3_corr_global = m_corr @ perno_j3_corr_local + t_corr
-        extremo_biela_j3 = m_biela @ np.array([30.0, 0.0, 0.0]) + t_biela
-        dist_j3 = np.linalg.norm(extremo_biela_j3 - perno_j3_corr_global)
-        assert dist_j3 < 1e-3, f"θ={theta}°: J3 abierto, distancia = {dist_j3:.6f}"
+
+def test_b71_cuadrilatero_articulado():
+    """Lazo de cuatro barras con todas las uniones de giro: bastidor con pernos en (0,0) y (50,0); manivela
+    a=20, acoplador b=50 y balancín c=40. Para cada θ los pernos de unión coinciden y las barras no se
+    estiran (cualquiera de las dos configuraciones del cuadrilátero vale)."""
+    a, b, c, d = 20.0, 50.0, 40.0, 50.0
+    s = api.Sesion()
+    p0, p3 = _eslabon(s, "Bastidor", d, ancho=60, fijo=True)
+    m0, m1 = _eslabon(s, "Manivela", a)
+    c0, c1 = _eslabon(s, "Acoplador", b)
+    r0, r1 = _eslabon(s, "Balancin", c)
+    _perno(s, "J1", m0, p0, rotation=0)
+    _perno(s, "J2", c0, m1, rotation=0)
+    _perno(s, "J3", r1, c1, rotation=0)       # el balancín entra por su extremo libre...
+    _perno(s, "J4", r0, p3, rotation=0)       # ...y su otro perno cierra el lazo contra el bastidor
+    for theta in (0, 60, 150, 230, 320):
+        llamar(s, "drive_joint", joint="J1", rotation=theta)
+        pose = _pose(s)
+        rm, tm = pose["Manivela"]
+        rc, tc = pose["Acoplador"]
+        rr, tr = pose["Balancin"]
+        perno_m = rm @ np.array([a, 0, 0]) + tm
+        perno_c = rc @ np.array([b, 0, 0]) + tc
+        perno_r = rr @ np.array([c, 0, 0]) + tr
+        assert np.linalg.norm(tc - perno_m) < 1e-3, f"θ={theta}°: J2 abierta"
+        assert np.linalg.norm(perno_r - perno_c) < 1e-3, f"θ={theta}°: J3 abierta"
+        assert np.linalg.norm(tr[:2] - np.array([d, 0.0])) < 1e-3, f"θ={theta}°: J4 abierta (balancín fuera de su perno)"
+        assert abs(np.linalg.norm(perno_m - tm) - a) < 1e-3
+        for nombre, (estado, mensaje) in _estados(s).items():
+            assert estado != "error", f"θ={theta}°: unión {nombre} en error: {mensaje}"
 
 
 # =================================================================== ACCIONAR VARIAS VECES
@@ -236,65 +254,18 @@ def test_b71_accionar_varias_veces():
 
 
 # =================================================================== LAZO SIN SOLUCIÓN
-@pytest.mark.xfail(strict=True, reason="B-71 sigue abierto: el lazo cerrado (biela-manivela) no se resuelve; las uniones se aplican de a una y la última pisa a la corredera")
 def test_b71_lazo_sin_solucion():
-    """Biela más corta de lo necesario: el paso avisa y deja la última posición válida."""
-    s = api.Sesion()
-
-    # Bastidor fijo
-    bastidor = llamar(s, "create_box", length=100, width=50, height=10)["bodies_created"][0]["id"]
-    llamar(s, "create_component", bodies=[bastidor], name="Bastidor", grounded=True)
-
-    # Manivela r=50
-    manivela = llamar(s, "create_cylinder", radius=5, height=25)["bodies_created"][0]["id"]
-    llamar(s, "create_component", bodies=[manivela], name="Manivela")
-
-    # Biela l=30 (demasiado corta: r=50 > l=30, no puede alcanzar)
-    biela = llamar(s, "create_box", length=30, width=10, height=10)["bodies_created"][0]["id"]
-    llamar(s, "create_component", bodies=[biela], name="Biela")
-
-    # Corredera
-    corredera = llamar(s, "create_box", length=20, width=20, height=10)["bodies_created"][0]["id"]
-    llamar(s, "create_component", bodies=[corredera], name="Corredera")
-
-    # J1: Manivela → Bastidor
-    llamar(s, "create_joint",
-           origin1=">Z", body1=manivela,
-           origin2=">Z", body2=bastidor,
-           joint_type="revolute", rotation=0, name="J1")
-
-    # J2: Biela → Manivela
-    llamar(s, "create_joint",
-           origin1="<X", body1=biela,
-           origin2="%CYLINDER", body2=manivela,
-           joint_type="revolute", rotation=0, name="J2")
-
-    # J3: Corredera → Biela
-    llamar(s, "create_joint",
-           origin1="<X", body1=corredera,
-           origin2=">X", body2=biela,
-           joint_type="revolute", rotation=0, name="J3")
-
-    # J4: Corredera → Bastidor (slider X)
-    llamar(s, "create_joint",
-           origin1="<Z", body1=corredera,
-           origin2=">Z", body2=bastidor,
-           joint_type="slider", slide_axis="X", slide=0, name="J4")
-
-    # Accionar a 90°: manivela en (0, 50), biela de 30 no alcanza el slider en X
+    """Manivela r=50 con biela l=30 (más corta que la manivela): a 0° el lazo cierra, pero a 90° la biela no
+    alcanza el eje X. drive_joint se rechaza con un error que habla del lazo y el mecanismo se queda en la última
+    posición válida (la de 0°); después, un ángulo alcanzable lo recupera."""
+    s = _biela_manivela(r=50.0, l=30.0, theta=0)
+    _comprobar_biela_manivela(s, 0, r=50.0, l=30.0)
     r = api.llamar(s, "drive_joint", {"joint": "J1", "rotation": 90})
-
-    # Debe avisar que el lazo no tiene solución
-    assert not r["ok"] or any("lazo" in a.lower() or "sin solución" in a.lower() or "imposible" in a.lower()
-                               for a in r.get("avisos", [])), \
-        f"Debe avisar de lazo imposible, avisos: {r.get('avisos')}, error: {r.get('mensaje')}"
-
-    # Verificar que quedó en la última posición válida (θ=0 o cercano)
-    ensamblaje = llamar(s, "get_assembly")
-    comp_corredera = next(c for c in ensamblaje["components"] if c["name"] == "Corredera")
-    # En θ=0, corredera debería estar en x = 50 + 30 = 80
-    # Si falló, no debería haber saltado a una posición aleatoria
-    assert comp_corredera["translation"][0] > 70, "Corredera en posición inválida tras fallo"
+    assert not r["ok"], r
+    assert "lazo" in r["mensaje"].lower(), r
+    _comprobar_biela_manivela(s, 0, r=50.0, l=30.0)           # no saltó a una posición arbitraria
+    llamar(s, "drive_joint", joint="J1", rotation=30)
+    _comprobar_biela_manivela(s, 30, r=50.0, l=30.0)
 
 
 if __name__ == "__main__":

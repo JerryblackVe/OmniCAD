@@ -21,10 +21,10 @@ from ..nucleo import intercambio
 from ..nucleo import referencias as refs
 from ..nucleo import revision as rv
 from . import entidades as ent
-from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar
+from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar, intersecar_forma, proyectar_forma
 from ..restricciones import Boceto, resolver
-from ..restricciones.boceto import (ErrorBoceto, Texto, expresiones_de_texto, sustituir_expresiones,
-                                    validar_valor_cota)
+from ..restricciones.boceto import (ErrorBoceto, Texto, distancia_punto_recta, expresiones_de_texto,
+                                    sustituir_expresiones, validar_valor_cota)
 from .parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, acotar, evaluar
 
 OPERACIONES_CUERPO = {"nuevo": "Cuerpo nuevo", "unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
@@ -606,6 +606,8 @@ class OpBoceto(Operacion):
             deps.add(self.p["plano"])
         if self.p["plano"] == "cara":
             deps |= ent.dependencias_de(self.p.get("cara"))
+        for registro in self.boceto.proyecciones:
+            deps |= ent.dependencias_de(registro["refs"])
         return deps
 
     def plano(self, estado, ctx):
@@ -613,11 +615,56 @@ class OpBoceto(Operacion):
         d = ctx.evaluar(self.p["desplazamiento"])
         return base.desplazado(d) if d else base
 
+    def _reproyectar(self, boceto, plano, estado, ctx):
+        """Recalcula las proyecciones asociativas antes del solver, sin alterar el boceto guardado."""
+        for registro in boceto.proyecciones:
+            primitivas, puntos = [], []
+            funcion = intersecar_forma if registro["modo"] == "intersect" else proyectar_forma
+            try:
+                formas = [ent.resolver(ref, estado).forma for ref in registro["refs"]]
+            except (ent.ErrorReferencia, ent.ReferenciaMalFormada):
+                coincide = False
+            else:
+                for forma in formas:
+                    p, q = funcion(forma, plano)
+                    primitivas.extend(p)
+                    puntos.extend(q)
+                coincide = boceto.reproyectar(registro, primitivas, puntos)
+            if not coincide:
+                ctx.aviso(f"{self.nombre}: la proyección ya no coincide con el modelo; queda como estaba.")
+
+    def _conservar_lado_cotas(self, boceto):
+        """Si un borde proyectado cruzó una entidad acotada, inicia el solver del lado original de la cota."""
+        fijos = boceto.puntos_fijos()
+        for cota in boceto.cotas.values():
+            if cota.tipo != "distancia" or len(cota.entidades) != 2:
+                continue
+            linea, entidad = cota.entidades
+            curva = boceto.curvas.get(entidad)
+            if curva is not None and curva.tipo == "linea" and curva.proyectada:
+                linea, entidad = entidad, linea
+            curva = boceto.curvas.get(linea)
+            if curva is None or curva.tipo != "linea" or not curva.proyectada:
+                continue
+            puntos = boceto.puntos_de([entidad])
+            if not puntos or any(p in fijos for p in puntos):
+                continue
+            antes = distancia_punto_recta(self.boceto.coords(puntos[0]), *self.boceto._extremos_linea(linea))
+            despues = distancia_punto_recta(boceto.coords(puntos[0]), *boceto._extremos_linea(linea))
+            if antes != 0 and antes * despues <= 0:
+                ux, uy = boceto._direccion(linea)
+                for pid in puntos:
+                    boceto.puntos[pid].x -= uy * (antes - despues)
+                    boceto.puntos[pid].y += ux * (antes - despues)
+
     def ejecutar(self, estado, ctx):
         plano = self.plano(estado, ctx)
         # Se resuelve una COPIA: el boceto guardado no se toca. Si un parámetro deja el boceto en
         # conflicto, al volver a un valor válido se parte otra vez de la geometría original.
         boceto = self.boceto.copia()
+        self._reproyectar(boceto, plano, estado, ctx)
+        if boceto.proyecciones:
+            self._conservar_lado_cotas(boceto)
         for c in boceto.curvas.values():               # {parámetro} dentro de un texto (el fx de Fusion)
             if isinstance(c, Texto) and "{" in c.texto:
                 try:

@@ -993,6 +993,7 @@ class Boceto:
         self.curvas = {}
         self.restricciones = {}
         self.cotas = {}
+        self.proyecciones = []
         self._siguiente = 1
 
     # ------------------------------------------------------------ ids
@@ -1306,10 +1307,10 @@ class Boceto:
             self.agregar_restriccion("tangente", [k, cid])
         return cid
 
-    def agregar_proyeccion(self, primitivas, puntos=(), construccion=False):
+    def agregar_proyeccion(self, primitivas, puntos=(), construccion=False, origen=None):
         """Agrega geometría proyectada (Proyectar / Intersecar de Fusion): curvas violetas, fijas.
         Los extremos que coinciden se comparten para que cierren perfiles. Con `construccion` las curvas quedan
-        como líneas de construcción (no forman perfiles), igual que el tipo de línea de la paleta de Fusion."""
+        como líneas de construcción (no forman perfiles). Con `origen` recuerda las referencias para reproyectar."""
         existentes = [p for p in self.puntos.values() if p.proyectado]
 
         def punto(xy):
@@ -1353,7 +1354,41 @@ class Boceto:
             ids.append(self._agregar_curva(c))
         for xy in puntos:
             ids.append(punto(xy))
+        if origen is not None and ids:
+            self.proyecciones.append({"modo": origen["modo"], "refs": copy.deepcopy(origen["refs"]),
+                                      "construccion": construccion, "ids": list(ids)})
         return ids
+
+    def reproyectar(self, registro, primitivas, puntos) -> bool:
+        """Actualiza Proyectar / Intersecar de Fusion conservando ids; si cambia la topología, no toca nada."""
+        nuevo = Boceto()
+        ids = nuevo.agregar_proyeccion(primitivas, puntos, registro["construccion"])
+        if len(ids) != len(registro["ids"]):
+            return False
+        coordenadas, curvas = {}, []
+        for anterior_id, nuevo_id in zip(registro["ids"], ids, strict=True):
+            anterior = self.curvas.get(anterior_id, self.puntos.get(anterior_id))
+            actual = nuevo.entidad(nuevo_id)
+            if anterior is None or type(anterior) is not type(actual):
+                return False
+            if isinstance(anterior, Punto):
+                anteriores, actuales = [anterior.id], [actual.id]
+            else:
+                anteriores, actuales = anterior.puntos(), actual.puntos()
+                curvas.append((anterior, actual))
+            if len(anteriores) != len(actuales) or any(p not in self.puntos for p in anteriores):
+                return False
+            for pid, qid in zip(anteriores, actuales, strict=True):
+                xy = nuevo.coords(qid)
+                if pid in coordenadas and math.dist(coordenadas[pid], xy) > 1e-6:
+                    return False
+                coordenadas[pid] = xy
+        for pid, xy in coordenadas.items():
+            self.puntos[pid].x, self.puntos[pid].y = xy
+        for anterior, actual in curvas:
+            for atributo in type(anterior).DATOS:
+                setattr(anterior, atributo, copy.deepcopy(getattr(actual, atributo)))
+        return True
 
     def agregar_restriccion(self, tipo, entidades, datos=None):
         self._validar_restriccion(tipo, entidades)
@@ -2617,16 +2652,20 @@ class Boceto:
 
     # ------------------------------------------------------------ serialización
     def a_dict(self):
-        return {"siguiente_id": self._siguiente,
-                "puntos": [p.a_dict() for p in self.puntos.values()],
-                "curvas": [c.a_dict() for c in self.curvas.values()],
-                "restricciones": [r.a_dict() for r in self.restricciones.values()],
-                "cotas": [c.a_dict() for c in self.cotas.values()]}
+        d = {"siguiente_id": self._siguiente,
+             "puntos": [p.a_dict() for p in self.puntos.values()],
+             "curvas": [c.a_dict() for c in self.curvas.values()],
+             "restricciones": [r.a_dict() for r in self.restricciones.values()],
+             "cotas": [c.a_dict() for c in self.cotas.values()]}
+        if self.proyecciones:
+            d["proyecciones"] = copy.deepcopy(self.proyecciones)
+        return d
 
     @classmethod
     def desde_dict(cls, d):
         b = cls()
         b._siguiente = d.get("siguiente_id", 1)
+        b.proyecciones = copy.deepcopy(d.get("proyecciones", []))
         for p in d.get("puntos", []):
             b.puntos[p["id"]] = Punto(p["id"], p["x"], p["y"], p.get("proyectado", False))
         for c in d.get("curvas", []):

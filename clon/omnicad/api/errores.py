@@ -157,6 +157,9 @@ PISTAS = {
     "TOPIC_NOT_FOUND": ["get_guide sin argumentos devuelve el índice con los temas."],
     "STORYBOARD_NOT_FOUND": ["list_storyboards lista los guiones gráficos con su nombre y su índice."],
     "ACTION_NOT_FOUND": ["get_storyboard lista las acciones del guion con su id (a1, a2, …)."],
+    "DRAWING_NOT_FOUND": ["create_drawing crea el dibujo del documento (o add_drawing_view, que lo crea con la primera vista)."],
+    "DRAWING_EXISTS": ["Pasá replace=true para reemplazarlo, o seguí con add_drawing_view sobre el dibujo que hay."],
+    "DRAWING_ELEMENT_NOT_FOUND": ["get_drawing lista las vistas (v1, v2, …) y las anotaciones (a1, a2, …) con su id."],
     "INTERNAL_ERROR": ["Es una falla interna de OmniCAD: el documento no cambió. Probá con otros valores o reportalo."],
     # --- puente en vivo (la app abierta; ver api/protocolo_puente.py)
     "UNAUTHORIZED": ["El token no coincide con el de puente.json: la app se reinició o el archivo es de otra instancia.",

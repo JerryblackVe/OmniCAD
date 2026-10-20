@@ -53,7 +53,7 @@ Se agregan a `args` (o al comando). Todas son opcionales.
 | Opción | Qué hace |
 |---|---|
 | `--doc RUTA` | abre ese proyecto `.omnicad` al arrancar (trabaja sin ventana) |
-| `--toolsets LISTA` | solo estos grupos, separados por coma. Por defecto: `documento,parametros,boceto,vectores,solido,chapa,malla,ensamble,material,inspeccion,avanzado,grafo` |
+| `--toolsets LISTA` | solo estos grupos, separados por coma. Por defecto: `documento,parametros,boceto,vectores,solido,chapa,malla,ensamble,material,inspeccion,animacion,dibujo,render,avanzado,grafo` |
 | `--modo auto\|vivo\|sin_ventana` | de dónde salen las herramientas; por defecto `auto`. Ver [puente.md](puente.md) |
 | `--dev` | suma el grupo `dev` (`run_checks`, `app_screenshot`, `run_bench`). Ver [puente.md](puente.md) y [cli.md](cli.md) |
 | `--http` y `--port N` | sirve por HTTP en `127.0.0.1` (puerto por defecto 27190, ruta `/mcp`) en vez de stdio. EXIGE token: cada arranque genera uno y lo escribe en `mcp_http.json` (carpeta de datos; OMNICAD_PUENTE_DIR la redirige); todo pedido lleva `Authorization: Bearer <token>` o recibe 401 |

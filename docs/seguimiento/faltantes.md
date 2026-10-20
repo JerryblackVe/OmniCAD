@@ -224,7 +224,6 @@ Abierto 10 · Parcial 2. Especificación: [brechas_vray.md](../brechas_vray.md).
 | VR12 | Reducción de ruido (OIDN) | Abierto | Alta | Solo con trazador propio; con Cycles ya viene. | sin trazador de rayos: no hay ruido que reducir | 2026-10-20 |
 | VR11 | Iluminación global, cáusticas, IES, subsuperficie, pelo | Abierto | Muy alta | Pide trazado de rayos (Cycles de Blender o trazador propio). | grep cycles sin resultados | 2026-10-20 |
 | VR4 | Cámara física: ISO, obturador, f, auto-exposición, DOF | Parcial | Media | Faltan ISO, obturador, f, exposición automática, balance de blancos y DOF. | render_cpu.py:171-172 (focal y exposición EV ya existen) | 2026-10-20 |
-| VR10 | Herramienta de render en la API: aspecto, cámara, entorno, imagen | Parcial | Media | Faltan cámara, entorno y escena de render (= MCP-22 a MCP-25); get_viewport_image ignora la escena. | api/herramientas_aspecto.py (set_appearance, edit_appearance); api/herramientas_inspeccion.py:153 (escena_normalizada(None)) | 2026-10-20 |
 
 ## Herramientas MCP/CLI que faltan (B-80)
 
@@ -232,16 +231,6 @@ Abierto 49 · Parcial 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| MCP-11 | create_drawing y get_drawing del espacio DIBUJO | Abierto | Baja | Crear y consultar el plano (vistas, anotaciones, cotas). | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-12 | set_drawing_sheet: hoja y cajetín | Abierto | Baja | Norma, tamaño, orientación, método y campos del cajetín. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-14 | edit_drawing_view: propiedades y giro de la vista | Abierto | Baja | Estilo, escala, tangentes, nombre y giro. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-15 | move_drawing_element y delete_drawing_element | Abierto | Baja | Mover y borrar elementos del plano. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-17 | Líneas y marcas de centro del dibujo | Abierto | Baja | Dos herramientas sobre nucleo/dibujo.py. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-18 | Texto, nota, globo y tabla en el dibujo | Abierto | Baja | Cuatro herramientas; la tabla no debe duplicar la lista de materiales. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-19 | edit_drawing_annotation: editar texto de cota, nota o globo | Abierto | Baja | Una herramienta de edición. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-22 | get_render_scene y set_render_scene | Abierto | Baja | Entorno, brillo, giro, exposición, fondo, suelo, cámara y lienzo del render. | tests/test_cobertura_ui_api.py:155-156 (excusa pendiente); sin herramienta de render en api/; get_viewport_image usa escena_normalizada(None) (herramientas_inspeccion.py:153) | 2026-10-20 |
-| MCP-23 | list_render_environments | Abierto | Baja | Listar la biblioteca de entornos (ENTORNOS ya está en nucleo/). | tests/test_cobertura_ui_api.py:155-156 (excusa pendiente); sin herramienta de render en api/ | 2026-10-20 |
-| MCP-24 | set_render_camera: cámara guardada del render | Abierto | Baja | Guardar y fijar la cámara del render. | tests/test_cobertura_ui_api.py:155-156 (excusa pendiente); sin herramienta de render en api/ | 2026-10-20 |
 | MCP-29 | draw_spiral: espiral en el boceto | Abierto | Baja | Sacar la cuenta a una función pura y exponerla. | tests/test_cobertura_ui_api.py:135 (pendiente MCP-29) | 2026-10-20 |
 | MCP-30 | add_constraint con tipo polígono | Abierto | Baja | Agregar type=polygon. | tests/test_cobertura_ui_api.py:135 (pendiente MCP-30); add_constraint no lista «polygon» (herramientas_boceto.py:846) | 2026-10-20 |
 | MCP-32 | create_coil y create_pipe (bobina, tubería) | Abierto | Baja | Dos herramientas con nombre propio. | tests/test_cobertura_ui_api.py:95 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
@@ -255,17 +244,12 @@ Abierto 49 · Parcial 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
 | MCP-53 | set_flat_pattern_view: activar o terminar patrón plano | Abierto | Baja | Una herramienta de chapa. | tests/test_cobertura_ui_api.py:116 (pendiente MCP-53) | 2026-10-20 |
 | MCP-78 | redefine_sketch_plane: redefinir el plano de un boceto | Abierto | Baja | Herramienta nueva sin pasar marco/cara por edit_feature. | sin herramienta redefine_sketch_plane en api/ | 2026-10-20 |
 | MCP-82 | export_parameters e import_parameters (CSV de Fusion) | Abierto | Baja | Dos herramientas nuevas. | sin esas herramientas en api/ | 2026-10-20 |
-| MCP-85 | Marcas y líneas de centro automáticas de la vista de dibujo | Abierto | Baja | Opción en las herramientas de vista; depende de MCP-13/14. | tests/test_cobertura_ui_api.py:141-149; MCP-13 y MCP-14 aún sin herramienta | 2026-10-20 |
 | NOV-brechas_mcp-1 | sk_alargar: alargar curvas del boceto sin herramienta | Abierto | Baja | Auditar y crear la herramienta (alargar curvas). | tests/test_cobertura_ui_api.py:138 (excusa «pendiente de auditar») | 2026-10-20 |
 | NOV-brechas_mcp-2 | sk_partir: partir curvas del boceto sin herramienta | Abierto | Baja | Auditar y crear la herramienta (partir curvas). | tests/test_cobertura_ui_api.py:139 (excusa «pendiente de auditar») | 2026-10-20 |
 | MCP-91 | extend_sketch_curve: alargar curvas del boceto (sk_alargar) | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
 | MCP-92 | split_sketch_curve: partir curvas del boceto (sk_partir) | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
 | MCP-93 | select_bodies con invert, by_name y by_size | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
 | MCP-94 | draw_arc con la forma tangente (sk_arco_tangente) | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
-| MCP-13 | add_drawing_view: base, proyectada, sección, detalle | Abierto | Media | Cuatro tipos de vista; la sección es más difícil. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-16 | add_drawing_dimension: cotas lineales, radiales, angulares, ordenadas | Abierto | Media | Seis subtipos; enganchar al punto más cercano. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-20 | export_drawing: DXF, SVG y PDF | Abierto | Media | DXF y SVG baratos; el PDF depende de QPdfWriter. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
-| MCP-25 | render_image: renderizar y capturar con la escena del documento | Abierto | Media | Presets, calidad, fondo transparente y PNG; render CPU ya funciona sin ventana. | tests/test_cobertura_ui_api.py:155-156 (excusa pendiente); sin herramienta de render en api/ | 2026-10-20 |
 | MCP-26 | manage_analysis y analyze_geometry (cebra, curvatura, sección…) | Abierto | Media | Nueve análisis; la parte numérica es pura, dibujarla en la imagen es alta. | tests/test_cobertura_ui_api.py:89-91 (pendiente MCP-26); nucleo/analisis.py existe | 2026-10-20 |
 | MCP-27 | manage_configurations: tabla de variantes | Abierto | Media | Herramienta sobre doc.aplicar_configuracion. | tests/test_cobertura_ui_api.py:93 (pendiente MCP-27); timeline/documento.py:403; tests/test_administrar.py::test_configuraciones_aplican_parametros_y_supresion | 2026-10-20 |
 | MCP-31 | Opción component_colors en get_viewport_image | Abierto | Media | Parámetro nuevo en la imagen. | tests/test_cobertura_ui_api.py:92 (pendiente MCP-31); firma de get_viewport_image sin esa opción | 2026-10-20 |
@@ -278,7 +262,6 @@ Abierto 49 · Parcial 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
 | MCP-46 | capture_viewport: capturar la ventana real en vivo | Abierto | Media | Captura de la sesión en vivo con estilo y corte; falta callback en el puente. | tests/test_cobertura_ui_api.py:155 (pendiente MCP-46); app_screenshot (herramientas_dev.py:142) abre otro proceso, no la sesión en vivo | 2026-10-20 |
 | MCP-50 | get_selection y select_entities | Abierto | Media | Leer la selección del usuario y elegir caras, aristas o perfiles. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
 | MCP-54 | get_preferences y set_preference con lista blanca | Abierto | Media | Lista blanca; nunca puente_agentes ni puente_codigo. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-21 | get_drawing_image: ver la hoja como imagen | Abierto | Alta | Dibujar la hoja sin Qt o con captura offscreen. | tests/test_cobertura_ui_api.py:141-149 (excusa pendiente); sin herramienta de dibujo en api/herramientas_*.py | 2026-10-20 |
 | MCP-44 | set_visual_style: estilos visuales, entorno, efectos | Abierto | Alta | En la imagen: la CPU no tiene alámbrico. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
 | MCP-45 | section_view: análisis de sección en la imagen | Abierto | Alta | La CPU no corta con planos. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
 | MCP-48 | set_body_opacity e isolate_bodies | Parcial | Baja | Falta isolate_bodies (Aislar). | omnicad/api/herramientas_navegador.py:117; tests/test_api_navegador.py::test_opacidad_por_nombre_y_raiz_es_atomica_y_se_guarda; commit 3aa7ad3 | 2026-10-20 |

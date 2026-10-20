@@ -188,6 +188,15 @@ def test_barrido_con_torsion_gira_el_perfil():
     assert (x1 - x0, y1 - y0) == pytest.approx((1, 4), abs=1e-3)       # la tapa final quedó girada 90°
 
 
+@pytest.mark.parametrize("torsion", [90, 360, 720, 1080, -360])
+def test_barrido_cerrado_con_torsion_conserva_el_volumen(torsion):
+    """B-05: la sección centrada conserva área × longitud, incluso con costura o giro inverso."""
+    perfil = poligono([(28, 0, -0.5), (32, 0, -0.5), (32, 0, 0.5), (28, 0, 0.5)])
+    ruta = alambre_circulo((0, 0, 0), 30)
+    forma = valido(sc.barrer([perfil], ruta, torsion=torsion), 4 * 2 * math.pi * 30, rel=5e-3)
+    assert len(g.solidos(forma)) == 1
+
+
 def test_barrido_por_arco_y_por_esquina():
     arco = BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(gp_Pnt(20, 0, 0), gp_Pnt(20 * math.sqrt(0.5), 0, 20 * math.sqrt(0.5)),
                                                       gp_Pnt(0, 0, 20)).Value()).Edge()

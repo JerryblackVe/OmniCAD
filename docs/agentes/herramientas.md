@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-211 herramientas en 14 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+234 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -23,6 +23,8 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [material](#grupo-material) | 9 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 12 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
+| [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
+| [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
@@ -867,7 +869,7 @@ Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de cu
 
 ### `project_to_sketch`
 
-Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y NO sigue al modelo si después cambia. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces.
+Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y sigue al modelo si después cambia. Las proyecciones de proyectos viejos siguen congeladas. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2325,7 +2327,7 @@ Fija o libera un componente (ENSAMBLAR › Fijar). Un componente fijo no se muev
 
 ### `create_joint`
 
-Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). angle gira el componente 1 alrededor del Z del marco, offset lo corre [dx, dy, dz] y flip lo da vuelta. Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. Devuelve la unión y los componentes que se movieron con su traslación y caja envolvente.
+Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). angle gira el componente 1 alrededor del Z del marco, offset lo corre [dx, dy, dz] y flip lo da vuelta. Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. Devuelve la unión y los componentes que se movieron con su traslación y caja envolvente. En uniones con deslizamiento avisa si el componente se movió (snap al centro de cada cara).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2941,6 +2943,329 @@ Publica la animación como GIF animado o secuencia de imágenes PNG, renderizand
   - `height` (entero; opcional, por defecto `360`): alto del video en píxeles (16 a 2048).
   - `fps` (entero; opcional, por defecto `15`): cuadros por segundo (1 a 60).
 - CLI: `omnicad call export_animation_video --doc pieza.omnicad path=…`
+
+## Grupo dibujo
+
+Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación.
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`create_drawing`](#create_drawing) | sí | Crea el dibujo (plano 2D) del documento, como DIBUJO › Nuevo dibujo desde el diseño: hoja y cajetín vacíos, o ya con la vista base frontal de los cuerpos que pidas. |
+| [`get_drawing`](#get_drawing) | no | Devuelve el dibujo del documento: hoja (tamaño, norma, área útil), cajetín, cada vista (tipo, padre, escala, posición y recuadro en la hoja) y cada anotación (cotas con su valor, notas, globos, líneas y marcas de centro), más la lista de piezas. |
+| [`set_drawing_sheet`](#set_drawing_sheet) | sí | Cambia la hoja del dibujo y los campos del cajetín, como DIBUJO › Hoja y cajetín: norma (ISO/ASME, que fija el diedro), tamaño, orientación, método de cálculo de las vistas y los textos del cajetín. |
+| [`add_drawing_view`](#add_drawing_view) | sí | Agrega una vista al dibujo: base (de cuerpos, con orientación), proyectada (de una vista padre; la posición elige la dirección: a la derecha, arriba, en diagonal = isométrica…), de sección (corte por una línea sobre la vista padre) o de detalle (un círculo ampliado de la padre). |
+| [`edit_drawing_view`](#edit_drawing_view) | sí | Cambia las propiedades de una vista del dibujo (escala, estilo de aristas, tangentes, marcas de centro, nombre/etiqueta) o la gira. |
+| [`get_drawing_geometry`](#get_drawing_geometry) | no | Puntos clave, circunferencias y aristas rectas visibles de una vista, en mm de la hoja. |
+| [`add_drawing_dimension`](#add_drawing_dimension) | sí | Agrega una cota asociada a una vista; puntos y colocación en mm de la hoja. |
+| [`add_drawing_centerline`](#add_drawing_centerline) | sí | Agrega una línea de centro entre puntos enganchados de una vista. |
+| [`add_drawing_center_mark`](#add_drawing_center_mark) | sí | Agrega una marca de centro en la circunferencia más cercana (3 mm). |
+| [`add_drawing_text`](#add_drawing_text) | sí | Agrega texto libre a la hoja del plano. |
+| [`add_drawing_note`](#add_drawing_note) | sí | Agrega una nota con directriz, asociada a la vista bajo la flecha si no se indica otra. |
+| [`add_drawing_balloon`](#add_drawing_balloon) | sí | Agrega un globo de pieza con número automático o propio. |
+| [`add_drawing_table`](#add_drawing_table) | sí | Agrega la lista de piezas del plano (parts_list de get_drawing). |
+| [`edit_drawing_annotation`](#edit_drawing_annotation) | sí | Edita el texto de una cota, nota, texto libre o el número de un globo. |
+| [`move_drawing_element`](#move_drawing_element) | sí | Mueve una vista o anotación y devuelve el desplazamiento real permitido por su alineación. |
+| [`delete_drawing_element`](#delete_drawing_element) | sí | Borra una anotación o una vista con todas sus hijas y anotaciones asociadas. |
+| [`export_drawing`](#export_drawing) | no | Exporta la hoja del dibujo (vistas, cotas, marco y cajetín) a DXF (capas por tipo de línea, en mm), SVG (mm, una capa por tipo de línea) o PDF vectorial a escala real; el formato sale de la extensión o de format. |
+| [`get_drawing_image`](#get_drawing_image) | no | Devuelve la hoja del dibujo como imagen PNG (fondo blanco, líneas negras con los grosores y tipos de línea reales, cotas, texto, marco y cajetín): es la forma de VER el plano. |
+
+### `create_drawing`
+
+Crea el dibujo (plano 2D) del documento, como DIBUJO › Nuevo dibujo desde el diseño: hoja y cajetín vacíos, o ya con la vista base frontal de los cuerpos que pidas. Un dibujo por documento; con replace=true se reemplaza el que haya.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `size` (texto; opcional, por defecto `"A3"`): tamaño de hoja: ISO "A4", "A3", "A2", "A1", "A0" o ASME "ANSI A" a "ANSI E" (nd.TAMANOS_HOJA).
+  - `orientation` ("horizontal" | "vertical"; opcional, por defecto `"horizontal"`): "horizontal" o "vertical".
+  - `standard` ("ISO" | "ASME"; opcional, por defecto `"ISO"`): "ISO" (primer diedro) o "ASME" (tercer diedro).
+  - `title` (texto; opcional, por defecto `null`): título del cajetín; vacío = el nombre del documento.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos; si se pasa, agrega la vista base frontal de esos cuerpos (la escala se elige sola para que entre en la hoja). Vacío = hoja sin vistas (add_drawing_view agrega las vistas).
+  - `replace` (true/false; opcional, por defecto `false`): true reemplaza el dibujo que ya tenga el documento; false lo rechaza (DRAWING_EXISTS).
+- CLI: `omnicad call create_drawing --doc pieza.omnicad`
+
+### `get_drawing`
+
+Devuelve el dibujo del documento: hoja (tamaño, norma, área útil), cajetín, cada vista (tipo, padre, escala, posición y recuadro en la hoja) y cada anotación (cotas con su valor, notas, globos, líneas y marcas de centro), más la lista de piezas.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_drawing --doc pieza.omnicad`
+
+### `set_drawing_sheet`
+
+Cambia la hoja del dibujo y los campos del cajetín, como DIBUJO › Hoja y cajetín: norma (ISO/ASME, que fija el diedro), tamaño, orientación, método de cálculo de las vistas y los textos del cajetín. Solo cambia lo que pasás.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `standard` ("ISO" | "ASME" o null; opcional, por defecto `null`): "ISO" (primer diedro) o "ASME" (tercer diedro).
+  - `size` (texto; opcional, por defecto `null`): tamaño de hoja: "A4" a "A0" o "ANSI A" a "ANSI E".
+  - `orientation` ("horizontal" | "vertical" o null; opcional, por defecto `null`): "horizontal" o "vertical".
+  - `method` ("exact" | "fast" o null; opcional, por defecto `null`): cálculo de las vistas: "exact" (HLR exacto, más lento) o "fast" (aproximado).
+  - `title` (texto; opcional, por defecto `null`): título del cajetín.
+  - `part_number` (texto; opcional, por defecto `null`): número de pieza del cajetín.
+  - `author` (texto; opcional, por defecto `null`): quién dibujó (cajetín).
+  - `material` (texto; opcional, por defecto `null`): material (cajetín y lista de piezas).
+  - `sheet` (texto; opcional, por defecto `null`): hoja, p. ej. "1 / 1".
+  - `date` (texto; opcional, por defecto `null`): fecha (texto libre, p. ej. "20/10/2026").
+  - `scale` (texto; opcional, por defecto `null`): texto de escala del cajetín; vacío ("") = la de la vista base.
+- CLI: `omnicad call set_drawing_sheet --doc pieza.omnicad`
+
+### `add_drawing_view`
+
+Agrega una vista al dibujo: base (de cuerpos, con orientación), proyectada (de una vista padre; la posición elige la dirección: a la derecha, arriba, en diagonal = isométrica…), de sección (corte por una línea sobre la vista padre) o de detalle (un círculo ampliado de la padre). Las posiciones, líneas y círculos van en mm de la HOJA (get_drawing da el tamaño y el recuadro de cada vista).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `type` ("base" | "projected" | "section" | "detail"; opcional, por defecto `"base"`): "base" (cuerpos + orientación), "projected" (sale de parent), "section" (corte de parent), "detail" (círculo ampliado de parent).
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): base: ids o nombres de los cuerpos de la vista; vacío = todos los sólidos. Las demás vistas toman los de su padre.
+  - `orientation` ("front" | "back" | "top" | "bottom" | "right" | "left" | "iso_se" | "iso_sw" | "iso_ne" | "iso_nw"; opcional, por defecto `"front"`): base: "front" (cámara en -Y), "back", "top", "bottom", "right", "left" o isométricas "iso_se", "iso_sw", "iso_ne", "iso_nw".
+  - `parent` (texto; opcional, por defecto `null`): projected, section y detail: id de la vista padre («v1», de get_drawing).
+  - `position` (lista de número o null; opcional, por defecto `null`): [x, y] mm de la hoja donde va el CENTRO de la vista. Base: vacío = arriba a la izquierda del área útil. Projected: obligatorio, respecto de la padre (a la derecha, abajo, arriba…). Section y detail: obligatorio.
+  - `section_line` (lista de lista de número o null; opcional, por defecto `null`): section: [[x1, y1], [x2, y2]] mm de la hoja, la línea de corte sobre la vista padre. Se muestra el lado donde está position.
+  - `detail_center` (lista de número o null; opcional, por defecto `null`): detail: [x, y] mm de la hoja, centro del círculo de detalle sobre la vista padre.
+  - `detail_radius` (número; opcional, por defecto `null`): detail: radio del círculo de detalle en mm de la hoja.
+  - `scale` (número o expresión; opcional, por defecto `null`): razón de escala (0.5 = 1:2, 2 = 2:1) o texto "1:2", "2:1", "1/2". Base: vacío = la normalizada mayor que entra en la hoja. Projected y section heredan la de la padre. Detail: vacío = el doble de la padre.
+  - `style` ("visible" | "visible_hidden"; opcional, por defecto `"visible_hidden"`): "visible" (solo aristas visibles) o "visible_hidden" (con las ocultas, en trazos). Solo en la base.
+  - `tangents` ("full" | "shortened" | "off" o null; opcional, por defecto `null`): "full", "shortened" u "off": cómo se muestran las aristas tangentes. Vacío = "full" en la base y lo de la vista padre en las demás.
+  - `center_marks` (true/false; opcional, por defecto `null`): true/false las marcas de centro de las circunferencias. Vacío = true en la base y lo de la padre en las demás.
+- CLI: `omnicad call add_drawing_view --doc pieza.omnicad`
+
+### `edit_drawing_view`
+
+Cambia las propiedades de una vista del dibujo (escala, estilo de aristas, tangentes, marcas de centro, nombre/etiqueta) o la gira. Las vistas proyectadas y de sección heredan la escala nueva; las alineadas con su padre se vuelven a alinear.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; obligatorio): id de la vista («v1», de get_drawing).
+  - `scale` (número o expresión; opcional, por defecto `null`): nueva escala: razón (0.5 = 1:2) o texto "1:2", "2:1".
+  - `style` ("visible" | "visible_hidden" o null; opcional, por defecto `null`): "visible" o "visible_hidden" (aristas ocultas en trazos).
+  - `tangents` ("full" | "shortened" | "off" o null; opcional, por defecto `null`): "full", "shortened" u "off".
+  - `center_marks` (true/false; opcional, por defecto `null`): true/false las marcas de centro de las circunferencias.
+  - `label` (texto; opcional, por defecto `null`): nombre/letra de la vista («A»; las secciones y detalles la usan en su rótulo).
+  - `rotate` (número; opcional, por defecto `null`): grados que se SUMAN al giro actual de la vista, antihorario (el giro queda entre 0 y 360).
+- CLI: `omnicad call edit_drawing_view --doc pieza.omnicad view=…`
+
+### `get_drawing_geometry`
+
+Puntos clave, circunferencias y aristas rectas visibles de una vista, en mm de la hoja.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `view` (texto; obligatorio): id de la vista.
+  - `limit` (entero; opcional, por defecto `200`): máximo de puntos, círculos y segmentos por separado; entero no negativo.
+- CLI: `omnicad call get_drawing_geometry --doc pieza.omnicad view=…`
+
+### `add_drawing_dimension`
+
+Agrega una cota asociada a una vista; puntos y colocación en mm de la hoja.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; obligatorio): id de la vista.
+  - `type` ("horizontal" | "vertical" | "aligned" | "radius" | "diameter" | "angle" | "ordinate_x" | "ordinate_y"; obligatorio): horizontal, vertical, aligned, radius, diameter, angle, ordinate_x u ordinate_y.
+  - `points` (lista de lista de número; obligatorio): dos puntos; radial: uno sobre la circunferencia; angular: dos sobre aristas o cuatro extremos explícitos.
+  - `place` (lista de número; obligatorio): posición de la cota [x, y] en mm de la hoja.
+  - `text` (texto; opcional, por defecto `null`): texto propio que reemplaza el valor; vacío restaura el valor medido.
+  - `snap` (true/false; opcional, por defecto `true`): enganchar puntos a puntos clave de esta vista dentro de 3 mm de hoja.
+- CLI: `omnicad call add_drawing_dimension --doc pieza.omnicad view=… type=… points=… place=…`
+
+### `add_drawing_centerline`
+
+Agrega una línea de centro entre puntos enganchados de una vista.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; obligatorio): id de la vista.
+  - `start` (lista de número; obligatorio): primer punto [x, y] en mm de hoja; enganche a 3 mm.
+  - `end` (lista de número; obligatorio): segundo punto [x, y] en mm de hoja; enganche a 3 mm.
+- CLI: `omnicad call add_drawing_centerline --doc pieza.omnicad view=… start=… end=…`
+
+### `add_drawing_center_mark`
+
+Agrega una marca de centro en la circunferencia más cercana (3 mm).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; obligatorio): id de la vista.
+  - `point` (lista de número; obligatorio): punto [x, y] de hoja sobre el borde del círculo o arco.
+- CLI: `omnicad call add_drawing_center_mark --doc pieza.omnicad view=… point=…`
+
+### `add_drawing_text`
+
+Agrega texto libre a la hoja del plano.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `position` (lista de número; obligatorio): posición [x, y] en mm de hoja.
+  - `text` (texto; obligatorio): texto no vacío, admite varias líneas.
+  - `height` (número; opcional, por defecto `3.5`): altura positiva y finita del texto en mm.
+- CLI: `omnicad call add_drawing_text --doc pieza.omnicad position=… text=…`
+
+### `add_drawing_note`
+
+Agrega una nota con directriz, asociada a la vista bajo la flecha si no se indica otra.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `arrow` (lista de número; obligatorio): punto señalado [x, y] en mm de hoja, con enganche a 3 mm.
+  - `position` (lista de número; obligatorio): posición del texto [x, y] en mm de hoja.
+  - `text` (texto; obligatorio): texto no vacío de la nota.
+  - `view` (texto; opcional, por defecto `null`): id de vista; vacío deduce la vista bajo la flecha.
+- CLI: `omnicad call add_drawing_note --doc pieza.omnicad arrow=… position=… text=…`
+
+### `add_drawing_balloon`
+
+Agrega un globo de pieza con número automático o propio.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; obligatorio): id de la vista.
+  - `point` (lista de número; obligatorio): punto señalado [x, y] en mm de hoja, con enganche a 3 mm.
+  - `position` (lista de número; obligatorio): posición del globo [x, y] en mm de hoja.
+  - `number` (texto; opcional, por defecto `null`): número propio; vacío usa el elemento de la lista de piezas.
+- CLI: `omnicad call add_drawing_balloon --doc pieza.omnicad view=… point=… position=…`
+
+### `add_drawing_table`
+
+Agrega la lista de piezas del plano (parts_list de get_drawing). La lista de materiales del MODELO es get_bill_of_materials; esta tabla no la duplica.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `position` (lista de número; obligatorio): posición [x, y] en mm de hoja de la tabla de piezas del plano.
+- CLI: `omnicad call add_drawing_table --doc pieza.omnicad position=…`
+
+### `edit_drawing_annotation`
+
+Edita el texto de una cota, nota, texto libre o el número de un globo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `annotation` (texto; obligatorio): id de la anotación editable.
+  - `text` (texto; obligatorio): texto nuevo; en cotas, vacío restaura el valor medido.
+- CLI: `omnicad call edit_drawing_annotation --doc pieza.omnicad annotation=… text=…`
+
+### `move_drawing_element`
+
+Mueve una vista o anotación y devuelve el desplazamiento real permitido por su alineación.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `element` (texto; obligatorio): id de vista o anotación.
+  - `delta` (lista de número; obligatorio): desplazamiento [dx, dy] en mm de hoja.
+- CLI: `omnicad call move_drawing_element --doc pieza.omnicad element=… delta=…`
+
+### `delete_drawing_element`
+
+Borra una anotación o una vista con todas sus hijas y anotaciones asociadas.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `element` (texto; obligatorio): id de vista o anotación a borrar.
+- CLI: `omnicad call delete_drawing_element --doc pieza.omnicad element=…`
+
+### `export_drawing`
+
+Exporta la hoja del dibujo (vistas, cotas, marco y cajetín) a DXF (capas por tipo de línea, en mm), SVG (mm, una capa por tipo de línea) o PDF vectorial a escala real; el formato sale de la extensión o de format. Crea las carpetas que falten (create_folders=false para que falle con FILE_NOT_FOUND).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo a escribir; si no tiene la extensión del formato, se la agrega.
+  - `format` ("dxf" | "svg" | "pdf" o null; opcional, por defecto `null`): "dxf", "svg" o "pdf"; vacío = el de la extensión de path.
+  - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo si ya existe.
+  - `create_folders` (true/false; opcional, por defecto `true`): true (por defecto) crea las carpetas de la ruta que no existen (se avisa); false = FILE_NOT_FOUND.
+  - `dxf_version` ("2000" | "R12"; opcional, por defecto `"2000"`): solo para DXF: "2000" (AC1015) o "R12" (AC1009).
+- CLI: `omnicad call export_drawing --doc pieza.omnicad path=…`
+
+### `get_drawing_image`
+
+Devuelve la hoja del dibujo como imagen PNG (fondo blanco, líneas negras con los grosores y tipos de línea reales, cotas, texto, marco y cajetín): es la forma de VER el plano.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `width` (entero; opcional, por defecto `1200`): ancho de la imagen en píxeles (200 a 4000); el alto sale de la proporción de la hoja.
+- CLI: `omnicad call get_drawing_image --doc pieza.omnicad`
+
+## Grupo render
+
+Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render.
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`list_render_environments`](#list_render_environments) | no | Lista la biblioteca de entornos del render y el entorno inicial. |
+| [`get_render_scene`](#get_render_scene) | no | Devuelve la escena, las opciones del lienzo y la cámara guardada. |
+| [`set_render_scene`](#set_render_scene) | sí | Cambia solo las propiedades indicadas de la escena del render. |
+| [`set_render_camera`](#set_render_camera) | sí | Guarda o borra la cámara del espacio RENDERIZAR. |
+| [`render_image`](#render_image) | no | Renderiza un PNG por CPU con la escena y la cámara guardadas del documento. |
+
+### `list_render_environments`
+
+Lista la biblioteca de entornos del render y el entorno inicial.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call list_render_environments --doc pieza.omnicad`
+
+### `get_render_scene`
+
+Devuelve la escena, las opciones del lienzo y la cámara guardada.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_render_scene --doc pieza.omnicad`
+
+### `set_render_scene`
+
+Cambia solo las propiedades indicadas de la escena del render.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `environment` (texto; opcional, por defecto `null`): id del entorno de list_render_environments.
+  - `brightness` (número; opcional, por defecto `null`): intensidad de las luces, acotada a 0..4.
+  - `rotation` (número; opcional, por defecto `null`): giro del entorno en grados, normalizado a 0..360.
+  - `background` ("environment" | "color" o null; opcional, por defecto `null`): fondo del entorno (environment) o color uniforme (color).
+  - `background_color` (lista de número o null; opcional, por defecto `null`): tres componentes sRGB, acotadas a 0..1.
+  - `ground` (true/false; opcional, por defecto `null`): activa el plano de suelo.
+  - `reflections` (true/false; opcional, por defecto `null`): activa los reflejos sobre el suelo.
+  - `ground_roughness` (número; opcional, por defecto `null`): rugosidad del suelo, acotada a 0..1.
+  - `shadows` (true/false; opcional, por defecto `null`): activa las sombras.
+  - `ambient_occlusion` (true/false; opcional, por defecto `null`): activa la oclusión ambiental.
+  - `camera_type` ("perspective" | "orthographic" o null; opcional, por defecto `null`): proyección perspectiva (perspective) u ortográfica (orthographic).
+  - `focal_length` (número; opcional, por defecto `null`): distancia focal en mm, acotada a 8..300.
+  - `exposure` (número; opcional, por defecto `null`): exposición en EV, acotada a -6..6.
+  - `canvas_high_quality` (true/false; opcional, por defecto `null`): activa la alta calidad en el lienzo.
+  - `canvas_supersampling` (entero; opcional, por defecto `null`): supermuestreo del lienzo, de 1 a 3.
+- CLI: `omnicad call set_render_scene --doc pieza.omnicad`
+
+### `set_render_camera`
+
+Guarda o borra la cámara del espacio RENDERIZAR.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right"; opcional, por defecto `"iso"`): vista estándar desde la que encuadrar los cuerpos.
+  - `direction` (lista de número o null; opcional, por defecto `null`): vector [x, y, z] hacia la cámara; reemplaza a view.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a encuadrar; vacío = todos.
+  - `distance` (número; opcional, por defecto `null`): distancia al objetivo en mm; vacío = encuadre automático.
+  - `clear` (true/false; opcional, por defecto `false`): true borra la cámara guardada y vuelve al encuadre automático.
+- CLI: `omnicad call set_render_camera --doc pieza.omnicad`
+
+### `render_image`
+
+Renderiza un PNG por CPU con la escena y la cámara guardadas del documento.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `width` (entero; opcional, por defecto `1280`): ancho de la imagen, de 16 a 4096 píxeles.
+  - `height` (entero; opcional, por defecto `720`): alto de la imagen, de 16 a 4096 píxeles.
+  - `preset` ("web" | "hd" | "full_hd" o null; opcional, por defecto `null`): tamaño predefinido web, hd o full_hd; reemplaza a width y height.
+  - `quality` ("draft" | "standard" | "final"; opcional, por defecto `"standard"`): draft (1×), standard (2×) o final (3×) de supermuestreo.
+  - `transparent_background` (true/false; opcional, por defecto `false`): true genera un PNG RGBA con fondo transparente.
+  - `path` (texto; opcional, por defecto `null`): ruta .png opcional, en una carpeta existente.
+  - `overwrite` (true/false; opcional, por defecto `false`): true permite reemplazar un archivo existente.
+  - `view` ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right" o null; opcional, por defecto `null`): vista estándar; reemplaza la cámara guardada solo para esta imagen.
+  - `direction` (lista de número o null; opcional, por defecto `null`): vector [x, y, z] hacia la cámara; reemplaza a view y a la cámara guardada.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a renderizar; vacío = todos.
+- CLI: `omnicad call render_image --doc pieza.omnicad`
 
 ## Grupo avanzado
 
