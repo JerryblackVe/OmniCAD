@@ -152,6 +152,8 @@ PISTAS = {
     "CODE_TIMEOUT": ["El documento quedó como estaba: no hace falta deshacer.",
                      "Subí timeout (en vivo, como mucho 100 s) o partí el trabajo en llamadas más cortas.",
                      "Si es un bucle sin salida, revisá la condición del while."],
+    "CODE_CANCELLED": ["El documento quedó como estaba: no hace falta deshacer.",
+                       "Lo canceló quien llama (en vivo, el botón Cancelar del diálogo): no es un error del código."],
     "TOPIC_NOT_FOUND": ["get_guide sin argumentos devuelve el índice con los temas."],
     "INTERNAL_ERROR": ["Es una falla interna de OmniCAD: el documento no cambió. Probá con otros valores o reportalo."],
     # --- puente en vivo (la app abierta; ver api/protocolo_puente.py)
