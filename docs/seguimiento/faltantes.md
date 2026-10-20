@@ -2,11 +2,11 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Verificado contra el código el 2026-10-20 (suite: 3500 tests en verde). Total 293: Abierto 171 · Parcial 31 · Bloqueado 17 · Sin verificar 3 · Hecho 70 · Descartado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 222: Abierto 171 · Parcial 31 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
-Abierto 54 · Parcial 2 · Bloqueado 2 · Hecho 19.
+Abierto 54 · Parcial 2 · Bloqueado 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -68,43 +68,20 @@ Abierto 54 · Parcial 2 · Bloqueado 2 · Hecho 19.
 | P-27-6 | Booleanas con holgura y formas listas para insertar (cono, pirámide, cuña, cápsula…) | Parcial | Media | Existen create_box/cylinder/sphere/torus; faltan holgura en booleanas y las demás formas. | omnicad/api/herramientas_solido.py:327 (create_box); herramientas create_cylinder/sphere/torus | 2026-10-20 |
 | P-26d | .app firmada y notarizada (Apple Developer, USD 99 al año) | Bloqueado | Media | Pide cuenta de Apple Developer del usuario. | Sin carpeta instalador/macos | 2026-10-20 |
 | P-25g2 | g) McMaster-Carr, pieza de fabricante y TraceParts | Bloqueado | Alta | Dependen de servicios en línea: decidir si se hacen. | PROJECT_LOG.md:71 | 2026-10-20 |
-| P-5a | Vectorizar imagen a curvas de boceto | Hecho | — | — | omnicad/io_archivos/vectorizar.py; herramienta trace_image; tests/test_texto_vectores.py | 2026-10-20 |
-| P-8a | Instalador .exe de Windows, AppImage de Linux y GitHub Actions por etiqueta v* | Hecho | — | — | instalador/windows/omnicad.iss; instalador/linux/armar_appimage.sh; .github/workflows/instaladores.yml; tags v0.1.0, v0.1.1, v0.1.2, v0.1.3 | 2026-10-20 |
-| P-9e | Sistema de temas: varios incluidos y temas del usuario compartibles | Hecho | — | — | omnicad/ui/temas.py:362-526 (temas_usuario, exportar_plantilla, activar); tests/test_temas.py (27 pruebas) | 2026-10-20 |
-| P-11a | a) Instancias y componentes movidos al abrir .f3d (matriz por componente) | Hecho | — | — | omnicad/io_archivos/f3d_escena.py; f3d_nativo.leer_componentes; herramienta inspect_f3d; tests/test_p11a_f3d_instancias.py | 2026-10-20 |
-| P-11f | d) Nombre del componente desde el flujo de diseño | Hecho | — | — | omnicad/io_archivos/f3d_nativo.py:135 _nombres_de_componentes; inspect_f3d components[].name | 2026-10-20 |
-| P-12f | Texto sobre una curva | Hecho | — | — | omnicad/restricciones/boceto.py Texto.camino; herramienta add_text (path_entity); tests/test_texto_vectores.py | 2026-10-20 |
-| P-12i | Aspecto completo (caras, muestras, editor) | Hecho | — | — | omnicad/api/herramientas_material.py:262 (faces); herramientas_aspecto.py; omnicad/ui/aspectos_ui.py; tests/test_aspecto_panel.py; tests/test_aspectos_api.py | 2026-10-20 |
-| P-20 | Recolectar bugs: informes de error por sesión y «Reportar problema» | Hecho | — | — | omnicad/informes_error.py:121-127; herramientas list_error_reports y read_error_report (api/herramientas_dev.py:201,209); omnicad/ui/ventana.py:445; tests/test_informes_error.py | 2026-10-20 |
-| P-21 | Recuperación de trabajo igual a Fusion (diálogo Documentos recuperados) | Hecho | — | — | omnicad/ui/dialogos.py:339 DialogoRecuperados; omnicad/io_archivos/proyecto.py:350; herramientas list_recoverable_documents, recover_document; tests/test_recuperados.py | 2026-10-20 |
-| P-23a | a) Elegir un cuerpo en la vista lo marca en el navegador | Hecho | — | — | herramienta select_bodies (api/herramientas_documento.py:173); tests/test_p23_navegador.py | 2026-10-20 |
-| P-23b | b) Selección múltiple de cuerpos en el navegador (Ctrl/Mayús) | Hecho | — | — | tests/test_p23_navegador.py; omnicad/ui/navegador.py | 2026-10-20 |
-| P-23c | c) Menú contextual de grupo/cuerpo con los diez textos de Fusion | Hecho | — | — | omnicad/ui/acciones_navegador.py; herramientas manage_browser, get_browser_state, set_browser_visibility (api/herramientas_navegador.py:45); tests/test_p23_navegador.py | 2026-10-20 |
-| P-23d | d) Calcomanía como Fusion (panel completo, gizmo, cadena de caras) | Hecho | — | — | herramienta set_decal; tests/test_p23_calcomania.py; tests/test_gizmo_calcomania.py; tests/test_calcomania_cilindro.py; Límite: Límite: en curvas no cilíndricas se proyecta desde el plano tangente. | 2026-10-20 |
-| P-23e | e) Menú contextual del boceto con los 19 textos de Fusion | Hecho | — | — | omnicad/ui/acciones_navegador.py:275-295; herramienta sketch_view (api/herramientas_navegador.py:136); tests/test_p23_bocetos.py | 2026-10-20 |
-| P-25a | a) Menú contextual del componente raíz (21 opciones) y find_in_window, set_body_opacity | Hecho | — | — | omnicad/ui/acciones_navegador.py; herramientas find_in_window y set_body_opacity; tests/test_p23_navegador.py; Límite: Varias opciones quedan grisadas con «Todavía no disponible». | 2026-10-20 |
-| P-25b | b) Menú del cuerpo: componentes desde cuerpos, configurar, aspecto, malla, seleccionable | Hecho | — | — | omnicad/ui/acciones_navegador.py; set_appearance sin aspecto; tests/test_p23_navegador.py | 2026-10-20 |
-| P-25c | c) Diálogo «Guardar como malla» (formato, unidad, estructura, refinado) y export_mesh | Hecho | — | — | omnicad/ui/guardar_malla.py; omnicad/api/herramientas_guardar_malla.py:16; omnicad/io_archivos/exportar.py; tests/test_guardar_malla.py | 2026-10-20 |
-| P-25g | g) Insertar derivación asociativa | Hecho | — | — | omnicad/timeline/ops_derivacion.py; herramienta insert_derive (api/herramientas_documento.py:328); tests/test_derivacion.py; commit 3b22608 | 2026-10-20 |
-| P-28a | Engranajes ya existentes: recto/helicoidal, par, cremallera recta, rueda de cadena, eje, gear_info | Hecho | — | — | omnicad/nucleo/engranajes.py; omnicad/api/herramientas_engranajes.py:139,175,331; tests/test_engranajes.py; tests/test_api_engranajes.py | 2026-10-20 |
 
 ## Hallazgos de pruebas de uso
 
-Abierto 1 · Parcial 2 · Hecho 4.
+Abierto 1 · Parcial 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación hecha; faltan Duplicar con uniones y catálogo | Parcial | Media | Falta «Duplicar con uniones» y un catálogo local de piezas estándar (sin servicios en línea). | ui/cinta.py:56; ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; sin «duplicar con uniones» en omnicad/ | 2026-10-20 |
 | H-6 | Menú del timeline: faltan Configurar, Desactivar, conjunto y Buscar en ventana | Parcial | Media | Faltan Crear conjunto de selección, Configurar, Desactivar operaciones y Buscar en la ventana. | ui/panel_timeline.py:196-232; tests/test_hallazgos_ui.py::test_menu_del_timeline_es_distinto_para_boceto_operacion_y_union (marca Configurar y Desactivar fuera de alcance) | 2026-10-20 |
-| H-1 | Bobina: tipo Espiral, casilla Giro y manipuladores | Hecho | — | — | ui/comandos/crear.py:611-637; ui/comandos/asas_extra.py:154; tests/test_bobina_espiral.py; tests/test_manipuladores.py::test_bobina_arrastrar_el_asa_cambia_el_diametro; 0b3c22e; 210b388 | 2026-10-20 |
-| H-2 | Tubería: selección de cadena, segunda distancia y textos de Fusion | Hecho | — | — | ui/comandos/crear.py:646-665; tests/test_tuberia_cadena.py; cb91d48 | 2026-10-20 |
-| H-3 | Repujado: cadena tangente, alineación e invertir normal | Hecho | — | — | ui/comandos/crear.py:135-158; tests/test_repujado_alineacion.py; e9b0c9f | 2026-10-20 |
-| H-10 | Patrones repiten operaciones (features), no solo cuerpos | Hecho | — | — | api/herramientas_solido.py:538-575 (features=); tests/test_api_solido.py::test_patron_de_operaciones_repite_el_agujero | 2026-10-20 |
 
 ## Fusion 360
 
-Abierto 3 · Bloqueado 1 · Hecho 2 · Descartado 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
+Abierto 3 · Bloqueado 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -112,13 +89,10 @@ Abierto 3 · Bloqueado 1 · Hecho 2 · Descartado 1. Especificación: [brechas_f
 | FU-1 | Boceto 3D con tríada para dibujar fuera del plano | Abierto | Muy alta | Curvas con marco 3D propio, solver y perfiles por plano; la opción sigue grisada | ui/modo_boceto.py:139 (opción «Boceto 3D» con False,False); PROJECT_LOG.md:40 | 2026-10-20 |
 | FU-8 | Historial de pasos al abrir un .f3d | Abierto | Muy alta | Descifrar el flujo de diseño de Fusion o traducirlo con su API pública | io_archivos/f3d_nativo.py:24 (no trae historial); integraciones/fusion/OmniCADPuente (parámetros con Fusion) | 2026-10-20 |
 | FU-12 | Simulación, Fabricación y Forma (T-Splines) | Bloqueado | Muy alta | Decidir dependencias (CalculiX, Gmsh) y alcance antes de empezar | ui/cinta.py:244 (espacios grisados); sin código FEM, CAM ni T-Splines (grep) | 2026-10-20 |
-| FU-9 | Instancias y componentes movidos al abrir un .f3d | Hecho | — | — | 25ac9fa P11.a; io_archivos/f3d_escena.py (matrices OGS e instancias); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-20 |
-| FU-13 | Recuperación de trabajo tras un cierre inesperado | Hecho | — | — | 01a5086 P21; ui/ventana.py:327,2386 (Archivo › Recuperar documentos…); api list_recoverable_documents, recover_document, discard_recoverable_document; tests/test_recuperados.py | 2026-10-20 |
-| FU-11 | Electrónica y Diseño generativo | Descartado | — | — | ui/cinta.py:244 (espacios solo rotulados); sin código; fuera del alcance desde el recorte del MVP | 2026-10-20 |
 
 ## FreeCAD
 
-Abierto 5 · Parcial 7 · Bloqueado 4 · Hecho 2. Especificación: [brechas_freecad.md](../brechas_freecad.md).
+Abierto 5 · Parcial 7 · Bloqueado 4. Especificación: [brechas_freecad.md](../brechas_freecad.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -138,21 +112,16 @@ Abierto 5 · Parcial 7 · Bloqueado 4 · Hecho 2. Especificación: [brechas_free
 | F22 | Nube de puntos e importar .scad | Bloqueado | Media | Importar PLY/XYZ como nube de puntos; .scad pide OpenSCAD instalado (decisión del usuario) | io_archivos/abrir_externo.py solo importa PLY como malla; sin código de nube de puntos ni OpenSCAD | 2026-10-20 |
 | F19 | Simulación estática FEM (CalculiX + Gmsh) | Bloqueado | Muy alta | Decidir las dependencias externas y construir la simulación estática | sin código FEM (grep); ui/cinta.py:244 espacio SIMULACIÓN grisado | 2026-10-20 |
 | F20 | Fabricación CAM (contorno, bolsillo, taladrado, G-code) | Bloqueado | Muy alta | Decidir el alcance de un proyecto aparte y construir el CAM | sin código CAM ni G-code (grep); ui/cinta.py:244 espacio FABRICACIÓN grisado | 2026-10-20 |
-| F7 | Asistente de ejes escalonados | Hecho | — | — | ed0c4dc; timeline/ops_engranaje.py (eje_escalonado); ui/comandos/engranaje.py:174; api create_shaft; tests/test_engranajes.py | 2026-10-20 |
-| F17 | Copias ligeras (instancias) | Hecho | — | — | 4b50c6f; nucleo/solidos_crear.py:2793 instanciar; api realize_copies y lightweight; tests/test_pl8_instancias.py | 2026-10-20 |
 
 ## Plasticity
 
-Abierto 1 · Parcial 1 · Bloqueado 1 · Hecho 3. Especificación: [brechas_plasticity.md](../brechas_plasticity.md).
+Abierto 1 · Parcial 1 · Bloqueado 1. Especificación: [brechas_plasticity.md](../brechas_plasticity.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PL10 | Puente en vivo con Blender | Abierto | Alta | Add-on de Blender, botón «Enviar a Blender» y refresco al cambiar un parámetro | sin código de Blender (grep); ui/puente.py es el puente de agentes MCP, no transmite mallas a Blender | 2026-10-20 |
 | PL8 | Instancias que comparten geometría y Realizar instancias | Parcial | Media | Instancias de curvas de boceto y de operaciones del timeline | 4b50c6f; nucleo/solidos_crear.py:2793; api realize_copies; tests/test_pl8_instancias.py | 2026-10-20 |
 | PL12 | Soporte de SpaceMouse (3Dconnexion) | Bloqueado | Media | Requiere el dispositivo 3Dconnexion para probar y su biblioteca de entrada | sin código SpaceMouse ni 3Dconnexion (grep) | 2026-10-20 |
-| PL6 | Quitar empalmes y borrar topología redundante | Hecho | — | — | 4b25b22; nucleo/solidos_modificar.py quitar_empalmes; api remove_fillets; tests/test_plasticidad.py::test_quitar_empalmes_vuelve_a_la_caja_original_y_no_toca_agujeros; ::test_api_remove_fillets_y_el_comando_del_catalogo; repair_body con refine cubre la topología sobrante | 2026-10-20 |
-| PL7 | Desfasar aristas o un lazo de caras | Hecho | — | — | 84a2d1f; nucleo/desfase_aristas.py; timeline/ops_modificar.py OpDesfaseAristas; api offset_edges; tests/test_pl7_desfase_aristas.py | 2026-10-20 |
-| PL9 | Exportar líneas ocultas a SVG | Hecho | — | — | 0d3d057; io_archivos/svg_salida.py; api export_hidden_line_svg; ui/dibujo.py:1767; tests/test_svg_salida.py | 2026-10-20 |
 
 ## Blender
 
@@ -204,7 +173,7 @@ Abierto 9 · Parcial 3 · Bloqueado 4 · Sin verificar 3. Especificación: [brec
 
 ## Grasshopper
 
-Abierto 6 · Parcial 2 · Hecho 4. Especificación: [brechas_grasshopper.md](../brechas_grasshopper.md).
+Abierto 6 · Parcial 2. Especificación: [brechas_grasshopper.md](../brechas_grasshopper.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -216,14 +185,10 @@ Abierto 6 · Parcial 2 · Hecho 4. Especificación: [brechas_grasshopper.md](../
 | GH12 | Nodos de terceros mediante complementos | Abierto | Alta | Todo; depende del gestor de complementos B5 (no encontrado en el código). | grep complemento/plugin en clon/omnicad sin gestor de nodos | 2026-10-20 |
 | GH3 | Catálogo de nodos (≈80 previstos) con tipos de puerto | Parcial | Media | Faltan solevación, revolución, barrido, divisiones de curva, matrices y lista de valores (64 nodos hoy). | omnicad/grafo/nodos_basicos.py, nodos_geometria.py, nodos_vectores.py (64 @nodo); tests/test_grafo.py::test_catalogo_por_categoria_y_bien_descripto; test_nodos_de_curvas_y_solidos | 2026-10-20 |
 | GH6 | Nodo de script Python y nodo de expresión | Parcial | Media | Falta el nodo de script Python con editor; el de expresión ya existe. | omnicad/grafo/nodos_basicos.py:207 (nodo expresion); docs/grafo.md «Pendiente» | 2026-10-20 |
-| GH1 | Modelo de datos: árboles, rutas, emparejado, aplanar, injertar | Hecho | — | — | omnicad/grafo/arbol.py; tests/test_grafo.py::test_aplanar_injertar_simplificar_invertir; test_emparejado_de_listas | 2026-10-20 |
-| GH2 | Motor de evaluación con caché, orden topológico y JSON en .omnicad | Hecho | — | — | omnicad/grafo/motor.py; omnicad/timeline/ops_grafo.py; tests/test_grafo.py::test_cache_recalcula_solo_lo_que_cuelga_de_la_entrada_cambiada; tests/test_api_grafo.py::test_la_receta_guardada_y_abierta_reevalua_igual | 2026-10-20 |
-| GH5 | Hornear el grafo al timeline y enlazar parámetros | Hecho | — | — | omnicad/api/herramientas_grafo.py (bake_graph); omnicad/timeline/ops_grafo.py; tests/test_api_grafo.py::test_bake_graph_es_un_paso_parametrico | 2026-10-20 |
-| GH8 | Correr grafos sin ventana (run_graph) por API, MCP y CLI | Hecho | — | — | omnicad/api/herramientas_grafo.py (run_graph); tests/test_api_grafo.py::test_run_graph_exporta_step_y_stl; test_run_graph_variantes_recalculan_solo_lo_que_cambia | 2026-10-20 |
 
 ## KeyShot
 
-Abierto 10 · Parcial 3 · Bloqueado 1 · Hecho 2. Especificación: [brechas_keyshot.md](../brechas_keyshot.md).
+Abierto 10 · Parcial 3 · Bloqueado 1. Especificación: [brechas_keyshot.md](../brechas_keyshot.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -241,8 +206,6 @@ Abierto 10 · Parcial 3 · Bloqueado 1 · Hecho 2. Especificación: [brechas_key
 | KS8 | Giratoria (turntable) y explosionada en un clic | Parcial | Media | Falta la acción Giratoria (ángulo, duración, cuadros) en ANIMACIÓN. | omnicad/api/herramientas_animacion.py (auto_explode hecho); grep giratoria/turntable sin resultados | 2026-10-20 |
 | KS-S1 | Exportar a GLB y USD para web y AR | Parcial | Alta | Falta USD (necesita escritor propio o pxr). | omnicad/io_archivos/gltf.py; io_archivos/exportar.py:19-20; commit c1c40f2 (2026-10-10) | 2026-10-20 |
 | KS15 | «AI Shots»: restilizar y generar variantes con modelo local | Bloqueado | Muy alta | Espera decisión del usuario: no gastar en APIs y exige un modelo local grande. | docs/brechas_keyshot.md:72 (decisión del usuario); sin código | 2026-10-20 |
-| KS4 | Aspecto por cara o región (multimaterial) | Hecho | — | — | tests/test_aspectos_api.py::test_set_appearance_en_caras_pinta_la_cara_y_no_el_cuerpo; omnicad/ui/aspectos_ui.py:471 (Aplicar a: Caras); arrastrar y soltar no está (ver KS5) | 2026-10-20 |
-| KS6 | Calcomanías y etiquetas sobre una cara | Hecho | — | — | omnicad/api/herramientas_calcomania.py (set_decal); tests/test_p23_calcomania.py; tests/test_gizmo_calcomania.py; tests/test_calcomania_render.py::test_la_calcomania_llega_al_lienzo_de_render_y_sigue_al_documento; commits 2516293, 629ecb1, b93f278 | 2026-10-20 |
 
 ## V-Ray
 
@@ -265,7 +228,7 @@ Abierto 10 · Parcial 2. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Herramientas MCP/CLI que faltan (B-80)
 
-Abierto 49 · Parcial 1 · Hecho 16. Especificación: [brechas_mcp.md](../brechas_mcp.md).
+Abierto 49 · Parcial 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -319,43 +282,18 @@ Abierto 49 · Parcial 1 · Hecho 16. Especificación: [brechas_mcp.md](../brecha
 | MCP-44 | set_visual_style: estilos visuales, entorno, efectos | Abierto | Alta | En la imagen: la CPU no tiene alámbrico. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
 | MCP-45 | section_view: análisis de sección en la imagen | Abierto | Alta | La CPU no corta con planos. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
 | MCP-48 | set_body_opacity e isolate_bodies | Parcial | Baja | Falta isolate_bodies (Aislar). | omnicad/api/herramientas_navegador.py:117; tests/test_api_navegador.py::test_opacidad_por_nombre_y_raiz_es_atomica_y_se_guarda; commit 3aa7ad3 | 2026-10-20 |
-| MCP-0a | Test de cobertura UI → API con excusas escritas | Hecho | — | — | tests/test_cobertura_ui_api.py::test_cada_clave_tiene_herramienta_o_excusa; commit 3ae4f74 | 2026-10-20 |
-| MCP-0b | doc.espacios dentro de la transacción y del deshacer | Hecho | — | — | omnicad/api/sesion.py:123,142-157; tests/test_api_animacion.py::test_una_herramienta_que_falla_deja_los_espacios_iguales; test_deshacer_revierte_un_cambio_de_guion | 2026-10-20 |
-| MCP-0c | La ventana relee lo que escribe una herramienta | Hecho | — | — | omnicad/ui/puente.py:64; ui/ventana.py:1180 (releer_espacios); tests/test_api_animacion.py::test_la_transaccion_avisa_cambio_de_espacios | 2026-10-20 |
-| MCP-0d | Extraer nucleo/animacion.py sin Qt | Hecho | — | — | omnicad/nucleo/animacion.py (importa solo geometria y render_cpu); tests/test_api_animacion.py::test_el_formato_es_el_de_la_ventana | 2026-10-20 |
-| MCP-0e | Pasar ENTORNOS a nucleo/ | Hecho | — | — | omnicad/nucleo/render_cpu.py:179 (ENTORNOS); ui/visor3d.py:36 lo reexporta; ui/render.py:57 | 2026-10-20 |
-| MCP-1 | create_storyboard: nuevo guion limpio o desde el final | Hecho | — | — | omnicad/api/herramientas_animacion.py:144; tests/test_api_animacion.py::test_crear_guion_y_transformar_mueve_a_mitad_de_camino; commit 3ae4f74 | 2026-10-20 |
-| MCP-2 | list_storyboards y get_storyboard | Hecho | — | — | omnicad/api/herramientas_animacion.py:163,172; tests/test_api_animacion.py::test_copiar_renombrar_borrar | 2026-10-20 |
-| MCP-3 | Renombrar, copiar, eliminar e invertir guiones | Hecho | — | — | omnicad/api/herramientas_animacion.py:185,204,220,239; tests/test_api_animacion.py::test_copiar_renombrar_borrar; test_invertir_guion | 2026-10-20 |
-| MCP-4 | add_animation_action: transformar, restaurar, visibilidad | Hecho | — | — | omnicad/api/herramientas_animacion.py:254; tests/test_api_animacion.py::test_crear_guion_y_transformar_mueve_a_mitad_de_camino | 2026-10-20 |
-| MCP-5 | Editar y borrar acciones del guion | Hecho | — | — | omnicad/api/herramientas_animacion.py:291,336; tests/test_api_animacion.py::test_editar_y_borrar_acciones | 2026-10-20 |
-| MCP-6 | auto_explode: explosión automática | Hecho | — | — | omnicad/api/herramientas_animacion.py:356; tests/test_api_animacion.py::test_explosion_automatica_mueve_las_piezas | 2026-10-20 |
-| MCP-7 | set_animation_camera: guardar la cámara del guion | Hecho | — | — | omnicad/api/herramientas_animacion.py:399; tests/test_api_animacion.py::test_camara_y_anotacion_del_guion | 2026-10-20 |
-| MCP-8 | add_animation_annotation: globo con texto | Hecho | — | — | omnicad/api/herramientas_animacion.py:428; tests/test_api_animacion.py::test_camara_y_anotacion_del_guion | 2026-10-20 |
-| MCP-9 | get_animation_frame: estado e imagen de un cuadro | Hecho | — | — | omnicad/api/herramientas_animacion.py:457; tests/test_api_animacion.py (helper de test, usado por varios tests) | 2026-10-20 |
-| MCP-10 | export_animation_video: GIF o secuencia PNG | Hecho | — | — | omnicad/api/herramientas_animacion.py:484-530 (usa rc.renderizar, sin LienzoRender); tests/test_api_animacion.py::test_publicar_gif_y_secuencia_png | 2026-10-20 |
-| MCP-28 | recompute_all: Calcular todo | Hecho | — | — | omnicad/api/herramientas_documento.py:200; tests/test_rendimiento_arreglos.py::test_recompute_all_ejecuta_todos_los_pasos | 2026-10-20 |
 
 ## Capa para agentes (paquetes del plan)
 
-Abierto 1 · Hecho 9. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
+Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PAQ-H5 | Hito 5: carpeta complementos/ con registrar(api) | Abierto | Alta | Opcional; solo si el usuario lo pide. Es la misma tarea que B5/GH12. | no existe complementos/ en el repo | 2026-10-20 |
-| PAQ-B | Paquete B: sesión, catálogo, errores y grupos documento/parámetros | Hecho | — | — | omnicad/api/registro.py; tests/test_api_catalogo.py; tests/test_api_documento.py; tests/test_api_parametros.py | 2026-10-20 |
-| PAQ-C | Paquete C: boceto y sólidos con nombres compatibles con Fusion | Hecho | — | — | tests/test_api_boceto.py; tests/test_api_solido.py; tests/test_api_boceto_herramientas.py | 2026-10-20 |
-| PAQ-D | Paquete D: selectores de caras y aristas | Hecho | — | — | omnicad/api/selectores.py; tests/test_api_selectores.py | 2026-10-20 |
-| PAQ-E | Paquete E: inspección y modo avanzado (run_operation, execute_code) | Hecho | — | — | tests/test_api_inspeccion.py; tests/test_api_avanzado.py | 2026-10-20 |
-| PAQ-F | Paquete F: CLI omnicad (tools, call, new, info, export, render, run, batch, describe) | Hecho | — | — | omnicad/cli/cmd_atajos.py:129-166; cmd_catalogo.py:101; tests/test_cli.py | 2026-10-20 |
-| PAQ-G | Paquete G: servidor MCP (stdio y HTTP 127.0.0.1, resources, prompts, toolsets) | Hecho | — | — | omnicad/servidor_mcp/principal.py:70; servidor.py:152-181; tests/test_servidor_mcp.py | 2026-10-20 |
-| PAQ-H | Paquete H: puente en vivo con token y APP_BUSY | Hecho | — | — | omnicad/ui/puente.py; omnicad/api/protocolo_puente.py; tests/test_puente.py; tests/test_puente_mcp.py | 2026-10-20 |
-| PAQ-I | Paquete I: herramientas de desarrollo (dev check, screenshot, bench) | Hecho | — | — | omnicad/cli/cmd_dev.py; omnicad/api/herramientas_dev.py; tests/test_dev.py | 2026-10-20 |
-| PAQ-L | Paquete L: skill omnicad y comando omnicad setup | Hecho | — | — | .claude/skills/omnicad/SKILL.md; omnicad/cli/cmd_setup.py:488; tests/test_setup.py; Límite: Falta probar que la skill se active sola en una sesión nueva (va en el paquete K). | 2026-10-20 |
 
 ## SolidCraft
 
-Abierto 12 · Parcial 3 · Bloqueado 1 · Hecho 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
+Abierto 12 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -375,7 +313,6 @@ Abierto 12 · Parcial 3 · Bloqueado 1 · Hecho 1. Especificación: [brechas_sol
 | SC5 | Configuraciones: tabla de filas con parámetros, supresiones y material | Parcial | Media | Falta material/aspecto por cuerpo en la fila, herramienta MCP-27 y robustez al renombrar. | omnicad/timeline/documento.py:168-170,403; tests/test_administrar.py::test_configuraciones_aplican_parametros_y_supresion | 2026-10-20 |
 | SC7 | Análisis del estudio de movimiento: gráficos, rastro, choques | Parcial | Media | Faltan gráficos de valor, velocidad y aceleración y el rastro de un punto. | omnicad/api/herramientas_ensamble.py:703-714 (motion_study con check_interference por valor); tests/test_api_ensamble.py:230 | 2026-10-20 |
 | SC16 | Pruebas de mutación (mutmut) juzgadas por SC1 y SC2 | Bloqueado | Media | Espera permiso para instalar mutmut y que existan SC1 y SC2. | sin mutmut en pyproject.toml | 2026-10-20 |
-| SC10 | Vistas guardadas: guardar, renombrar, restaurar, borrar | Hecho | — | — | omnicad/ui/ventana.py:2031-2060; timeline/documento.py:153; tests/test_boceto_3d.py::test_vistas_guardadas_se_guardan_con_el_documento; prueba_humo.py:212 | 2026-10-20 |
 
 ## Otros CAD libres
 
@@ -385,21 +322,6 @@ Abierto 2. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
 |---|---|---|---|---|---|---|
 | CL1 | Cambio de agente con vista previa y control de revisión | Abierto | Media | Comparar la revisión del documento antes de aplicar en modo en vivo. | grep revision/expected_revision sin resultados en api/protocolo_puente.py y ui/puente.py | 2026-10-20 |
 | CL3 | Tutoriales reproducibles con capítulos y cámara | Abierto | Media | Todo. | grep tutorial sin resultados | 2026-10-20 |
-
-## Texto y vectores
-
-Hecho 8. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
-
-| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
-|---|---|---|---|---|---|---|
-| TXT-1 | Fase 1 fuentes completas (Windows, usuario, carpeta extra, TTF/OTF/TTC) | Hecho | — | — | omnicad/nucleo/fuentes.py; herramientas list_fonts y add_font_folder; tests/test_texto_vectores.py | 2026-10-20 |
-| TXT-2 | Fase 2 texto completo (multilínea, alineación, espaciado, {parámetro} en el texto) | Hecho | — | — | herramientas add_text y edit_text; tests/test_texto_vectores.py | 2026-10-20 |
-| TXT-3 | Fase 3 texto en curva | Hecho | — | — | omnicad/restricciones/boceto.py Texto.camino; add_text(path_entity); tests/test_texto_vectores.py | 2026-10-20 |
-| TXT-4 | Fase 4 SVG en el boceto activo (UI y MCP) | Hecho | — | — | herramientas insert_svg e inspect_svg (api/herramientas_vectores.py:427); omnicad/ui/ventana.py:1924,1955 (insertar en el boceto abierto) | 2026-10-20 |
-| TXT-5 | Fase 5 caja de transformación | Hecho | — | — | herramienta transform_sketch; marco de control en el editor; tests/test_texto_vectores.py | 2026-10-20 |
-| TXT-6 | Fase 6 herramientas vectoriales (unir, restar, offset, limpiar, nodos) | Hecho | — | — | herramientas combine_profiles, clean_sketch, move_sketch_point, offset_sketch_curves | 2026-10-20 |
-| TXT-8 | Fase 8 imagen a vector (vectorizar) | Hecho | — | — | herramienta trace_image; omnicad/io_archivos/vectorizar.py | 2026-10-20 |
-| TXT-9 | Fase 9 exportar boceto a SVG/DXF | Hecho | — | — | herramienta export_sketch; omnicad/io_archivos/svg_salida.py | 2026-10-20 |
 
 ## C++
 

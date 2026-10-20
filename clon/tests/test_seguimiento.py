@@ -1,7 +1,8 @@
-"""Las tablas de docs/seguimiento/ (bugs, faltantes, mejoras) no se contradicen ni prometen sin evidencia.
+"""Las listas de docs/seguimiento/ (bugs, faltantes, mejoras) tienen solo lo que falta resolver y no se contradicen.
 
-Reglas en docs/seguimiento/README.md: IDs únicos, estados y dificultades de la lista cerrada, y todo lo
-«Corregido» o «Hecho» nombra su evidencia; si la evidencia es un test, el test existe.
+Reglas en docs/seguimiento/README.md: lo resuelto se borra (no hay estados de cerrado), IDs únicos, estados y
+dificultades de la lista cerrada, y si la evidencia nombra un test, el test existe. Las tablas del README solo
+nombran IDs que siguen en las listas.
 """
 import re
 from pathlib import Path
@@ -10,13 +11,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 CARPETA = REPO / "docs" / "seguimiento"
-ESTADOS = {
-    "bugs.md": {"Abierto", "Parcial", "Corregido", "No reproducido", "Retirado", "Sin verificar"},
-    "faltantes.md": {"Abierto", "Parcial", "Hecho", "Bloqueado", "Descartado", "Sin verificar"},
-    "mejoras.md": {"Abierto", "Parcial", "Hecho", "Bloqueado", "Descartado", "Sin verificar"},
-}
-DIFICULTADES = {"Baja", "Media", "Alta", "Muy alta", "—"}
-CERRADOS = {"Corregido", "Hecho"}
+LISTAS = ("bugs.md", "faltantes.md", "mejoras.md")
+ESTADOS = {"Abierto", "Parcial", "Bloqueado", "Sin verificar"}
+DIFICULTADES = {"Baja", "Media", "Alta", "Muy alta"}
 
 
 def _filas(nombre):
@@ -32,11 +29,11 @@ def _filas(nombre):
     return filas
 
 
-TODAS = [f for nombre in ESTADOS for f in _filas(nombre)]
+TODAS = [f for nombre in LISTAS for f in _filas(nombre)]
 
 
 def test_hay_filas_en_cada_archivo():
-    for nombre in ESTADOS:
+    for nombre in LISTAS:
         assert _filas(nombre), f"{nombre} no tiene ninguna fila de 7 columnas"
 
 
@@ -49,17 +46,20 @@ def test_ids_unicos():
 
 @pytest.mark.parametrize("donde, ident, que, estado, dificultad, queda, evidencia, fecha", TODAS)
 def test_fila_valida(donde, ident, que, estado, dificultad, queda, evidencia, fecha):
-    archivo = donde.split(":")[0]
-    assert estado in ESTADOS[archivo], f"{donde}: estado «{estado}» no vale; usar {sorted(ESTADOS[archivo])}"
+    assert estado in ESTADOS, (f"{donde}: estado «{estado}» no vale; usar {sorted(ESTADOS)}. "
+                               "Lo resuelto se borra de la lista (docs/seguimiento/README.md).")
     assert dificultad in DIFICULTADES, f"{donde}: dificultad «{dificultad}» no vale"
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha), f"{donde}: «Verificado» tiene que ser una fecha AAAA-MM-DD"
-    if estado in CERRADOS:
-        assert evidencia not in {"", "—"}, f"{donde}: {ident} está «{estado}» sin evidencia"
-        assert dificultad == "—", f"{donde}: {ident} está «{estado}» y todavía tiene dificultad"
     for ruta in re.findall(r"tests/[\w/]+\.py", evidencia):
         assert (REPO / "clon" / ruta).is_file(), f"{donde}: {ruta} no existe"
     for ruta, nombre in re.findall(r"(tests/[\w/]+\.py)::(\w+)", evidencia):
-        archivo_test = REPO / "clon" / ruta
-        assert archivo_test.is_file(), f"{donde}: {ruta} no existe"
-        assert re.search(rf"^\s*(?:async\s+)?(?:def|class)\s+{nombre}\b", archivo_test.read_text(encoding="utf-8"),
-                         re.M), f"{donde}: {ruta} no tiene {nombre}"
+        texto = (REPO / "clon" / ruta).read_text(encoding="utf-8")
+        assert re.search(rf"^\s*(?:async\s+)?(?:def|class)\s+{nombre}\b", texto, re.M), f"{donde}: {ruta} no tiene {nombre}"
+
+
+def test_el_readme_solo_nombra_ids_que_siguen_en_las_listas():
+    vivos = {f[1] for f in TODAS}
+    for linea in (CARPETA / "README.md").read_text(encoding="utf-8").splitlines():
+        if linea.startswith("| ") and "·" in linea:
+            for ident in linea.strip().strip("|").split("|")[-1].split("·"):
+                assert ident.strip() in vivos, f"README.md nombra {ident.strip()}, que ya no está en las listas"

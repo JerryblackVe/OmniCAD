@@ -1,6 +1,6 @@
 # Brechas frente a otros CAD libres de GitHub
 
-> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-19. Fuente: búsqueda profunda en GitHub, corrida en OpenCode con GPT-6.1 Sol y verificada después
 (estrellas, licencias y 2 afirmaciones de contenido contrastadas con `gh api`). Informe completo, fuera del repo:

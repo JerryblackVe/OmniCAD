@@ -1,6 +1,6 @@
 # Plan: texto y vectores en OmniCAD (2026-10-10)
 
-> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Objetivo: superar a Fusion en texto y SVG (Fusion: SVG no editable después de insertar, lento, pocas fuentes,
 texto en curva limitado).

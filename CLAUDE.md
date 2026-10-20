@@ -11,8 +11,15 @@
   (`docs/agentes/herramientas.md`).
 - Si encontrás algo de la app sin herramienta, se la agregás en el mismo turno.
 
-## Regla estricta: proyecto ordenado y estado verificado
-- El estado de bugs, faltantes y mejoras vive SOLO en `docs/seguimiento/` (índice de toda la doc: `docs/README.md`).
+## Regla estricta: bugs, faltantes y mejoras en un solo lugar
+- Todo lo que falta resolver se recopila SOLO en `docs/seguimiento/`:
+  - `bugs.md`: lo que falla.
+  - `faltantes.md`: funciones que no existen.
+  - `mejoras.md`: upgrades de lo que ya existe.
+  Método y columnas: `docs/seguimiento/README.md`. Índice de toda la doc: `docs/README.md`.
+- Lo que se encuentra se agrega ahí al momento, con el siguiente ID libre.
+- **Al resolverse, la fila se BORRA** en el mismo commit que el arreglo, y se anota en el Registro de
+  `PROJECT_LOG.md` con el ID y la prueba que lo cubre. Las listas tienen solo lo pendiente.
 - Antes de informar qué está hecho o qué falta, se verifica contra el código y los tests. Nunca solo con el log.
 - Cada tarea deja el proyecto limpio: sin archivos sueltos ni contradicciones entre documentos.
 

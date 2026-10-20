@@ -96,7 +96,7 @@ Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lle
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
 **Definición de terminado**: ruff limpio, pytest verde, prueba de humo OK (la UI se toca → obligatoria),
-entrada nueva en `PROJECT_LOG.md`, fila actualizada en `docs/seguimiento/` (estado, evidencia, fecha) y lección
+entrada nueva en `PROJECT_LOG.md`, `docs/seguimiento/` al día (lo resuelto, borrado; lo nuevo, agregado) y lección
 anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz.
 
 ## Receta A: agregar una operación al timeline
@@ -147,12 +147,14 @@ modo en vivo y la lista de herramientas). Plan y estado: [docs/plan_mcp_cli.md](
    El archivo es generado: no se edita a mano, y `tests/test_doc_agentes.py` falla si quedó viejo.
 
 ## Registrar el trabajo
-**Estado: una sola fuente de verdad.** Bugs, faltantes y mejoras viven en `docs/seguimiento/` (`bugs.md`,
-`faltantes.md`, `mejoras.md`; método en su `README.md`). Reglas:
+**Pendientes: una sola fuente de verdad.** Todo lo que falta resolver vive en `docs/seguimiento/` (`bugs.md`,
+`faltantes.md`, `mejoras.md`; método en su `README.md`). Las listas tienen SOLO lo pendiente. Reglas:
 - Antes de decir qué está hecho o qué falta, se comprueba en el código y los tests: el log y la memoria envejecen.
-- Bug nuevo: fila nueva en `bugs.md` con el siguiente B-n libre. Al cerrar algo: estado, evidencia (test o commit)
-  y fecha en la misma tanda que el arreglo. `tests/test_seguimiento.py` falla si una fila cerrada no tiene evidencia
-  o nombra un test que no existe.
+- Bug, faltante o mejora nueva: fila nueva en su lista con el siguiente ID libre.
+- **Al resolverse, la fila se borra** en el mismo commit que el arreglo (también su ficha de «Detalle» y su ID en
+  las tablas del `README.md` de seguimiento), y el Registro de `PROJECT_LOG.md` anota el ID y la prueba que lo cubre.
+  `tests/test_seguimiento.py` falla si queda una fila con estado de cerrado o si una evidencia nombra un test que
+  no existe.
 - Los `docs/brechas_*.md` y `docs/plan_*.md` son especificación: no llevan estados que contradigan el seguimiento.
 - Documento nuevo, movido o borrado: se actualiza `docs/README.md` (índice) en el mismo commit.
 

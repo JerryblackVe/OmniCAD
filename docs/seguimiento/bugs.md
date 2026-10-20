@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Verificado contra el código el 2026-10-20 (suite: 3500 tests en verde). Total 108: Abierto 3 · Parcial 9 · Corregido 82 · No reproducido 9 · Retirado 5.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 12: Abierto 3 · Parcial 9.
 
 ## Abiertos y parciales
 
@@ -21,112 +21,9 @@ Verificado contra el código el 2026-10-20 (suite: 3500 tests en verde). Total 1
 | B-52 | Unión de espiral: fusión degenerada, pérdida silenciosa y STEP en dos sólidos | Parcial | Muy alta | La fusión degenerada del kernel sigue; solo se avisa la pérdida o el corte. | timeline/operaciones.py:336,986-1005; tests/test_documento.py::test_combinar_avisa_si_la_union_pierde_material; ::test_union_de_primitiva_avisa_si_pierde_material | 2026-10-20 |
 | T-04 | shell hacia afuera falla en un solevado de caras B-spline | Parcial | Muy alta | Hacia adentro anda; hacia afuera el kernel no da una pared válida | tests/test_hallazgos_tortura.py::test_t04_vaciado_exterior_bspline_falla_con_alternativa_y_sin_modificar | 2026-10-20 |
 
-## Cerrados
-
-Corregidos, no reproducidos (se reabren si vuelven) y retirados (no eran bugs).
-
-| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
-|---|---|---|---|---|---|---|
-| B-01 | coser/descoser/engrosar con dict dan «unhashable»; no validan tipo | Corregido | — | — | tests/test_referencias_mal_formadas.py::test_parametro_mal_formado_nombra_el_campo; ::test_descoser_y_coser_con_referencias | 2026-10-20 |
-| B-02 | Loft entre círculos deja aristas bspline en vez de círculo | Corregido | — | — | omnicad/nucleo/solidos_crear.py:982 (_canonizar); tests/test_solidos_crear.py::test_solevado_entre_circulos_da_aristas_circulares | 2026-10-20 |
-| B-03 | Loft entre octógonos: caras planas salen bspline sin normal | Corregido | — | — | solidos_crear.py:982; tests/test_solidos_crear.py::test_solevado_entre_poligonos_da_caras_planas | 2026-10-20 |
-| B-04 | Vaciado del loft: caras equivalentes con tipos distintos (plane/other) | Corregido | — | — | tests/test_solidos_crear.py::test_solevado_entre_poligonos_da_caras_planas (vaciado: 19 caras planas) | 2026-10-20 |
-| B-07 | check_interference reporta contacto cara con cara como interferencia | Corregido | — | — | api/herramientas_inspeccion.py:412 (espesor medio); tests/test_analisis.py::test_interferencias_ignora_contacto_con_error_de_redondeo | 2026-10-20 |
-| B-08 | Labio sin lado: queda dentro del contorno y pisa la pared | Corregido | — | — | solidos_crear.py:2984-2993 (prueba ambos lados del tirado); tests/test_solidos_crear.py::test_saliente_y_labio_ranura (genérico) | 2026-10-20 |
-| B-10 | extrude cut con boceto fuera del cuerpo no cambia el volumen | Corregido | — | — | api/herramientas_solido.py:164; tests/test_api_solido.py::test_extrude_cut_flotante_va_hacia_el_material | 2026-10-20 |
-| B-13 | Franjas claras en superficies de solevación (normales del teselado) | Corregido | — | — | ui/visor3d.py:186 (rc.malla_suave); tests/test_render.py::test_malla_suave_solevacion_sin_franjas_dentadas | 2026-10-20 |
-| B-15 | Cilindro Ø28 facetado en el render | Corregido | — | — | nucleo/render_cpu.py:34-59 (deflexion_para por pieza); tests/test_render_rapido.py::test_deflexion_depende_de_pixeles_y_conserva_el_primer_plano; tests/test_graficos_rendimiento.py::test_deflexion_automatica_sigue_al_tamano_con_topes | 2026-10-20 |
-| B-16 | execute_code en vivo congela la ventana sin poder cancelar | Corregido | — | — | commits a5b356a, 7514dd6 (en motor-omnikernel); tests/test_b16_cancelar.py::test_latido_que_cancela_corta_revierte_y_respeta_el_intervalo; ::test_execute_code_en_vivo_dialogo_cancela_y_la_cola_espera; api/herramientas_avanzado.py:840 (CODE_CANCELLED) | 2026-10-20 |
-| B-20 | Render de 2048×2048 tarda 18 s | Corregido | — | — | commit 3ec54fa; tests/test_b20_raster.py::test_triangulo_fino_no_reserva_profundidad_de_toda_su_caja | 2026-10-20 |
-| B-21 | omnicad.log se pisa en cada arranque | Corregido | — | — | clon/OmniCAD.py:24-38 (RotatingFileHandler); tests/test_io.py::test_log_se_enroula_y_no_se_pisa | 2026-10-20 |
-| B-22 | Autoguardados de documentos sin título se pisan entre sí | Corregido | — | — | io_archivos/proyecto.py:282,328; timeline/documento.py:136; tests/test_io.py (autoguardado por token, línea 292) | 2026-10-20 |
-| B-23 | create_* no aceptan name | Corregido | — | — | api/herramientas_solido.py:319; tests/test_api_solido.py (líneas 644 y 655) | 2026-10-20 |
-| B-24 | rename no actualiza Cuerpo.nombre del estado | Corregido | — | — | tests/test_api_documento.py:484 (rename cambia Cuerpo.nombre) | 2026-10-20 |
-| B-25 | Reglas de chapa propias no aparecen en la interfaz | Corregido | — | — | ui/comandos/chapa.py; tests/test_comandos.py:166 | 2026-10-20 |
-| B-27 | set_parameter rompe la revolución: el perfil ya no existe | Corregido | — | — | nucleo/perfiles.py:345 (buscar_por_firma_tolerante); tests/test_api_solido.py::test_perfil_se_reenlaza_cuando_el_contorno_cambia | 2026-10-20 |
-| B-28 | join tangente deja aristas libres: cuerpo no cerrado | Corregido | — | — | nucleo/geometria.py:337 (_quitar_cables_colgados); tests/test_geometria.py::test_union_tangente_no_deja_aristas_libres | 2026-10-20 |
-| B-29 | create_hole en cara −Z: eje Y del boceto contradice la doc | Corregido | — | — | api/herramientas_boceto.py:659 y api/guia/selectores.md:28 (corregida la doc; el marco no cambia por diseño) | 2026-10-20 |
-| B-30 | Herramienta que no corta nada deja el paso ok sin aviso | Corregido | — | — | timeline/operaciones.py:358,367 y 982; tests/test_api_documento.py:507; tests/test_api_solido.py::test_el_corte_que_no_toca_avisa_en_el_timeline | 2026-10-20 |
-| B-31 | create_thread auto dice sin datos aunque thread_info lista clases | Corregido | — | — | api/herramientas_modificar.py:611; tests/test_api_modificar.py:454 | 2026-10-20 |
-| B-32 | Copia de patrón de cuerpos no hereda el nombre | Corregido | — | — | tests/test_api_solido.py (líneas 663 y 671: «nombre (copia)») | 2026-10-20 |
-| B-33 | get_sketch: clave status contra descripción «estado» | Corregido | — | — | api/herramientas_boceto.py:929 (descripción dice «clave status») | 2026-10-20 |
-| B-34 | get_sheet_metal_info muestra nombre de regla que no corresponde | Corregido | — | — | api/herramientas_chapa.py:241; tests/test_api_chapa.py:302-304 | 2026-10-20 |
-| B-35 | CSV de lista de materiales sin BOM: Excel muestra Âº y mmÂ³ | Corregido | — | — | api/herramientas_material.py:250; ui/administrar.py:119 (utf-8-sig); tests/test_api_material.py:141-148 | 2026-10-20 |
-| B-36 | execute_code con llamar a herramienta inexistente da ok sin efecto | Corregido | — | — | api/herramientas_avanzado.py:810,850; tests/test_api_avanzado.py:467 y :477 | 2026-10-20 |
-| B-37 | join tangente: ok pero aristas no manifold sin aviso | Corregido | — | — | timeline/operaciones.py:349 (aviso partido/abierto) y :1004; tests/test_documento.py::test_combinar_avisa_si_la_union_no_fusiona_lo_que_se_toca | 2026-10-20 |
-| B-38 | join con tope coplanar absorbe un cuerpo ajeno en silencio | Corregido | — | — | timeline/operaciones.py:335; tests/test_api_solido.py:124 (aviso «solo una cara») | 2026-10-20 |
-| B-40 | repair_body puede empeorar el cuerpo sin avisar | Corregido | — | — | timeline/ops_revision.py:46; tests/test_revision.py::test_paso_reparar_no_empeora_en_silencio | 2026-10-20 |
-| B-42 | fillet con lista de un id da INVALID_SELECTOR | Corregido | — | — | api/selectores.py:417; tests/test_api_selectores.py:349-359 | 2026-10-20 |
-| B-44 | create_thread modelada en perno Ø5×50 falla con surco mal armado | Corregido | — | — | tests/test_api_modificar.py::test_create_thread_m5_largo_completo_no_empuja_al_kernel_al_mal_surco | 2026-10-20 |
-| B-45 | Selector %CIRCLE and nearest: da NO_MATCH | Corregido | — | — | api/selectores.py:33; tests/test_api_selectores.py:387 | 2026-10-20 |
-| B-46 | drive_joint informa traslaciones que no cuadran con el giro | Corregido | — | — | api/herramientas_ensamble.py:278 (delta_translation); tests/test_api_ensamble.py:246-256 | 2026-10-20 |
-| B-47 | Build instalado no abre proyectos del build del repo | Corregido | — | — | io_archivos/proyecto.py:252-258 (mensaje «versión más nueva aunque comparta el número»); tests/test_regresiones.py::test_receta_con_operacion_desconocida_da_error_de_proyecto (solo comprueba el tipo de error) | 2026-10-20 |
-| B-51 | Eje de giro de unión «como está» depende de marco sin documentar | Corregido | — | — | api/herramientas_ensamble.py:16 (docstring con el marco); solo documentación | 2026-10-20 |
-| B-53 | create_cylinder acepta height=1e9 | Corregido | — | — | api/herramientas_solido.py:97; tests/test_api_solido.py:631; tests/test_resultados_vacios.py:114 | 2026-10-20 |
-| B-54 | rename permite nombres duplicados | Corregido | — | — | api/herramientas_documento.py:712; tests/test_api_documento.py:494 (avisa AMBIGUOUS_REFERENCE) | 2026-10-20 |
-| B-55 | sketch_circular_pattern materializa un punto extra en el centro | Corregido | — | — | restricciones/boceto.py:2530; tests/test_api_boceto_herramientas.py:527 y :539 | 2026-10-20 |
-| B-56 | add_dimension distance depende del orden línea-punto | Corregido | — | — | tests/test_api_boceto.py:536-542 | 2026-10-20 |
-| B-57 | Argumentos numéricos opcionales llegan como texto desde OpenCode | Corregido | — | — | api/registro.py:169,216; tests/test_api_avanzado.py:501 | 2026-10-20 |
-| B-59 | Rosca M5 modelada deja 33 aristas no manifold | Corregido | — | — | tests/test_api_modificar.py::test_create_thread_m5_salientes_sin_aristas_no_manifold | 2026-10-20 |
-| B-62 | labio con invertir=false no agrega nada y no avisa | Corregido | — | — | timeline/ops_solido.py:890; tests/test_api_modificar.py::test_labio_que_no_cambia_nada_avisa | 2026-10-20 |
-| B-63 | descoser/destrimar con listas vacías dan ok sin efecto | Corregido | — | — | tests/test_api_avanzado.py:454-464 | 2026-10-20 |
-| B-64 | set_joint_limits acepta mínimo mayor que máximo | Corregido | — | — | api/herramientas_ensamble.py:395; tests/test_api_ensamble.py:246-256 | 2026-10-20 |
-| B-65 | Origen de unión por nearest: bloquea todo drive_joint | Corregido | — | — | tests/test_api_ensamble.py::test_origen_de_union_sobrevive_al_drive_del_componente | 2026-10-20 |
-| B-66 | parche con curva abierta devuelve el error crudo del kernel | Corregido | — | — | nucleo/superficies.py:485; tests/test_superficies.py:282 | 2026-10-20 |
-| B-67 | convert_to_sheet_metal informa altura como «espesor medido» | Corregido | — | — | nucleo/chapa.py:1191; tests/test_chapa.py:345 | 2026-10-20 |
-| B-68 | Exportar a STEP omite cuerpos de malla sin avisar | Corregido | — | — | api/herramientas_documento.py:505; io_archivos/exportar.py:45; tests/test_api_documento.py:468 | 2026-10-20 |
-| B-69 | find_faces con %PLANE and >Z da NO_MATCH | Corregido | — | — | api/selectores.py:33; tests/test_api_selectores.py:370 | 2026-10-20 |
-| B-70 | create_hole roscado Tr12×3 falla por el eje ajeno en el documento | Corregido | — | — | commit c91a6da; tests/test_b70_pasante.py::test_pasante_roscado_no_se_alarga_por_un_cuerpo_ajeno | 2026-10-20 |
-| B-72 | La prueba de humo falla en «Tecla S dentro del boceto» | Corregido | — | — | prueba_humo.py:279; commit 6049c70 (humo 2/2 según la ficha, no re-corrida acá) | 2026-10-20 |
-| B-73 | encuadrar() deja la pieza larga chica en imagen apaisada | Corregido | — | — | commit 885106c; tests/test_hallazgos_ui.py::test_encuadrar_pieza_larga_respeta_el_aspecto_de_la_ventana | 2026-10-20 |
-| B-74 | get_viewport_image tarda 10-19 s con 85 cuerpos | Corregido | — | — | commit 8ed55c0 (en motor-omnikernel); tests/test_render_rapido.py (límite 5,95 s) | 2026-10-20 |
-| B-75 | set_decal en cara cilíndrica recortada queda corrido; render CPU no la dibuja | Corregido | — | — | commit b93f278 (en motor-omnikernel); tests/test_calcomania_cilindro.py | 2026-10-20 |
-| B-76 | check_printability marca paredes finas falsas en aristas agudas | Corregido | — | — | nucleo/revision.py:774; tests/test_revision.py:144; commit 2f686fa (también en main) | 2026-10-20 |
-| B-77 | sketch_from_spec: líneas en cadena no comparten esquina | Corregido | — | — | tests/test_api_boceto.py::test_spec_lineas_seguidas_comparten_la_esquina; commit 2f686fa | 2026-10-20 |
-| B-78 | El cliente del puente corta a los 120 s en motion_study largo | Corregido | — | — | servidor_mcp/puente_cliente.py:20-22 (300 s); tests/test_puente_mcp.py:148; commit 2f686fa | 2026-10-20 |
-| B-79 | Rosca interior y exterior no encajan (medio paso corrido) | Corregido | — | — | nucleo/solidos_crear.py:2116,2203; tests/test_api_modificar.py:344; tests/test_solidos_crear.py:552; commit 2f686fa | 2026-10-20 |
-| B-81 | Menú del cuerpo en el navegador sin opacidad, aislar ni aspecto | Corregido | — | — | ui/acciones_navegador.py; tests/test_p23_navegador.py::test_menu_del_cuerpo_trae_opacidad_aislar_y_aspecto | 2026-10-20 |
-| B-82 | Lo que oculta set_browser_visibility no se guarda | Corregido | — | — | commit 885106c; tests/test_p23_navegador.py::test_cuerpo_oculto_persiste_al_guardar_y_reabrir | 2026-10-20 |
-| AUD-14 | Lectura de ZIP del complemento Fusion sin tope de tamaño | Corregido | — | — | tests/test_abrir_externo.py::test_f3z_con_un_miembro_gigante_no_se_extrae | 2026-10-20 |
-| P-10b-k | Bug latente de la caché de ui/analisis_vista.py (id sin retener la forma) | Corregido | — | — | omnicad/ui/analisis_vista.py:39-47; tests/test_hallazgos_ui.py::test_cache_de_analisis_retiene_la_forma_de_su_clave | 2026-10-20 |
-| P-11b | Descartar cuerpos viejos del historial que Fusion no tiene | Corregido | — | — | omnicad/io_archivos/f3d_escena.py:322-348 (descartados); tests/test_p11a_f3d_instancias.py:194,206,221 | 2026-10-20 |
-| P-11c | Piezas espejo con la misma caja y volumen no se cruzan | Corregido | — | — | tests/test_p11a_f3d_instancias.py::test_dos_piezas_espejo_con_la_misma_caja_y_volumen_no_se_cruzan; Límite: Límite: piezas quirales con el mismo centro de masa siguen indistinguibles. | 2026-10-20 |
-| P-11d | b) Caras inválidas (cono con ápice, spline con polo) en la cartera gótica | Corregido | — | — | tests/test_f3d_nativo.py; omnicad/nucleo/acis_occ.py (_cerrar); PROJECT_LOG.md:32 (11 cuerpos válidos) | 2026-10-20 |
-| P-11e | c) Cuerpos con aristas de 4 caras y toro de una sola cara entran como sólido | Corregido | — | — | omnicad/nucleo/acis_occ.py:532 (BOPAlgo_MakerVolume); tests/test_f3d_nativo.py:451; Límite: Sin ejemplo a mano de mallas convertidas (BINCHA): no probado con ese archivo. | 2026-10-20 |
-| T-01 | check_geometry colgaba la app con roscas modeladas | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t01_el_hijo_se_mata_al_pasar_el_tope | 2026-10-20 |
-| T-02 | export_hidden_line_svg colgaba la app con roscas | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t02_si_el_exacto_no_termina_sigue_el_rapido_o_falla_si_se_pidio_exacto | 2026-10-20 |
-| T-03 | Referencias perdidas con cambios de cota moderados | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t03_el_chaflan_del_borde_tras_un_vaciado_sobrevive_a_un_cambio_de_cota_del_29_por_ciento | 2026-10-20 |
-| T-05 | repair_mesh y clean_mesh decían ok con la malla abierta | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t05_reparar_o_limpiar_una_malla_que_sigue_abierta_lo_avisa | 2026-10-20 |
-| T-06 | add_text sin tope de largo | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t06_un_texto_demasiado_largo_o_gigante_se_rechaza | 2026-10-20 |
-| T-07 | Sin validación de rango en longitudes y ángulos | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t07_valores_absurdos_se_rechazan_sin_tocar_el_documento | 2026-10-20 |
-| T-08 | JSON anidado al abrir daba INTERNAL_ERROR | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t08_un_json_roto_tambien | 2026-10-20 |
-| T-09 | create_joint pisaba otra unión sin avisar | Corregido | — | — | api/herramientas_ensamble.py (aviso); informe T-09 | 2026-10-20 |
-| T-10 | trace_image invertido se pasaba del contorno | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t10_trace_image_con_tinta_invertida_pegada_al_borde_no_se_pasa_de_largo | 2026-10-20 |
-| T-11 | drive_joint guardaba un valor que ignoraba | Corregido | — | — | api/herramientas_ensamble.py; informe T-11 | 2026-10-20 |
-| T-12 | move_sketch_point decía reached:false estando exacto | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t12_reached_distingue_un_residuo_submilimetrico_de_un_destino_imposible | 2026-10-20 |
-| T-13 | shell tras un chaflán culpaba a cortes o agujeros | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t13_vaciar_despues_de_un_chaflan_en_el_borde_dice_que_el_chaflan_va_despues | 2026-10-20 |
-| T-14 | insert_file no aceptaba .brep; 3MF de 2 cuerpos volvía en 1 | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t14_insert_file_acepta_brep | 2026-10-20 |
-| T-15 | Diálogo de recuperados bloqueaba el puente (APP_BUSY) | Corregido | — | — | OmniCAD.py --puente; informe T-15 | 2026-10-20 |
-| T-16 | Mensajes engañosos en export e insert_dxf; nombres repetidos | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t16_export_con_ruta_vacia_o_de_carpeta_es_un_argumento_invalido | 2026-10-20 |
-| T-17 | Cosméticos: -0.0, -(-4), conteo de realize_copies | Corregido | — | — | tests/test_hallazgos_tortura.py::test_t17_realize_copies_cuenta_solo_las_copias_de_su_paso | 2026-10-20 |
-| B-06 | fillet quita 1,4 % más volumen que la cuenta, sin avisar | No reproducido | — | Reabrir si vuelve, con el modelo de la Prueba 9. | Medición del 2026-10-13 citada en la ficha (−3,35 %, correcto); sin test propio | 2026-10-20 |
-| B-11 | Corte desde cara de cuerpo partido no quita material, sin error | No reproducido | — | Reabrir si reaparece el caso del reporte. | Verificación del 2026-10-13 citada en la ficha (REFERENCE_LOST avisa); sin test propio | 2026-10-20 |
-| B-17 | Bucle de 20 create_box en vivo supera los 100 s | No reproducido | — | No se midió el repintado OpenGL en el escritorio real del usuario. | Medición 2026-10-15 en la ficha: 0,50 s por 20 llamadas; sin código nuevo | 2026-10-20 |
-| B-18 | Rosca M3 modelada tarda 7,5 s por agujero y bloquea | No reproducido | — | Falta el modelo exacto de Prueba 2 y probar cancelar desde la interfaz. | Medición 2026-10-15 en la ficha: 1,18 s/agujero; privado/reportes/b18_*.txt | 2026-10-20 |
-| B-19 | .omnicad de 55 pasos tarda 44 s al abrir | No reproducido | — | No se halló el modelo original de 55 pasos. | Medición 2026-10-15 en la ficha: reabrir con caché 0,38 s; 7 pasos cacheados no se ejecutan | 2026-10-20 |
-| B-26 | Llamada MCP fantasma con argumentos fusionados en payloads largos | No reproducido | — | No se probó el cliente Cline original. | tests/test_servidor_mcp.py::test_payloads_largos_consecutivos_no_mezclan_argumentos (memoria y stdio) | 2026-10-20 |
-| B-49 | fold rechaza la cara superior de una pestaña base | No reproducido | — | Reabrir si reaparece con el soporte exacto. | tests/test_api_chapa.py::test_plegar_pestana_base_sobre_la_cara_de_arriba | 2026-10-20 |
-| B-58 | Agujeros de brida a r=29,57 en vez de 30,5 en el motor | No reproducido | — | Si reaparece, guardar el .omnicad del momento exacto. | Recálculo y repro mínima exactas (r=30,5) según la ficha; commit db0f0cf | 2026-10-20 |
-| B-61 | sup_barrido produce superficie 12 veces mayor en el gabinete | No reproducido | — | Si reaparece, guardar el .omnicad del momento exacto. | Repro guardada da área exacta 1973,92 mm² (commit fa39b03) | 2026-10-20 |
-| B-12 | create_hole con face no resuelve el id dentro de execute_code | Retirado | — | — | tests/test_api_avanzado.py::test_create_hole_resuelve_ids_de_cara_dentro_de_execute_code | 2026-10-20 |
-| B-14 | Vista right del render muestra la trasera del auto | Retirado | — | — | tests/test_api_inspeccion.py::test_vistas_estandar_como_el_viewcube_de_fusion (decisión: eje de cámara como ViewCube) | 2026-10-20 |
-| B-41 | Lista de materiales no agrupa cuerpos sueltos | Retirado | — | — | Retirada por el propio reporte (tanda 3): sí agrupa componentes | 2026-10-20 |
-| B-43 | check_interference da 242 mm³ en contacto cara con cara | Retirado | — | — | Verificado 2026-10-13 en la ficha: el solape es real; filtro del falso positivo = B-07 (tests/test_analisis.py:94) | 2026-10-20 |
-| B-60 | bbox de cuerpo multicáscara mezcla las cajas | Retirado | — | — | Verificado 2026-10-13 en la ficha: la bbox por eje es correcta; causa real = B-52 | 2026-10-20 |
-
 ## Detalle de lo abierto
 
-Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20). Lo que diga la tabla
+Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
 ### B-05 · Barrido con torsión 90° pierde 2,1 % de volumen

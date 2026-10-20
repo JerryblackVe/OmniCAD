@@ -1,6 +1,6 @@
 # Plan de C++ para OmniCAD (Python + Rust + C++)
 
-> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Segunda pasada de la auditoría de rendimiento del 2026-10-12. La primera (`docs/plan_rust.md`) buscó lo que pasa a
 Rust. Esta busca **qué gana con C++** y reparte el trabajo entre los tres lenguajes. Las mediciones son de esta PC

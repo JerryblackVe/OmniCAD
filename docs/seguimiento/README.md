@@ -1,6 +1,7 @@
 # Seguimiento: bugs, faltantes y mejoras
 
-Única fuente de verdad del estado del proyecto. Si otro archivo dice otra cosa, vale lo de acá y el otro se corrige.
+Única fuente de verdad de lo que **falta resolver**. Si otro archivo dice otra cosa, vale lo de acá y el otro se
+corrige. Lo que se resuelve **se borra** de la lista: la historia queda en el Registro de `PROJECT_LOG.md` y en git.
 
 | Archivo | Qué tiene |
 |---|---|
@@ -16,30 +17,28 @@ los `docs/brechas_*.md`. Esos archivos describen; **el estado vive solo acá**.
 `| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |`
 
 - **ID**: el de origen (B-71, T-04, H-12, P-26, RH3, MCP-26…). Nunca se reutiliza ni se renumera.
-- **Estado**:
-  - Bugs: `Abierto` · `Parcial` · `Corregido` · `No reproducido` · `Retirado`.
-  - Faltantes y mejoras: `Abierto` · `Parcial` · `Hecho` · `Bloqueado` (espera algo del usuario) · `Descartado`.
-  - En los dos: `Sin verificar` cuando nadie lo comprobó contra el código. Es preferible a adivinar.
+- **Estado**: `Abierto` · `Parcial` (resuelto en parte: «Queda» dice qué falta) · `Bloqueado` (espera algo del
+  usuario) · `Sin verificar` (nadie lo comprobó contra el código; es preferible a adivinar). No hay estados de
+  cerrado: lo resuelto se borra.
 - **Dificultad** de lo que queda:
   - `Baja`: horas, un archivo.
   - `Media`: medio día, varios archivos o interfaz.
   - `Alta`: días, arquitectura o geometría difícil.
   - `Muy alta`: semanas, el kernel, investigación o una dependencia nueva.
-  - `—` si ya no queda nada.
-- **Evidencia**: un test (`tests/archivo.py::nombre`), un `archivo:línea` o un commit corto. Es obligatoria
-  para `Corregido` y `Hecho`; `tests/test_seguimiento.py` falla si falta o si el test nombrado no existe.
+- **Evidencia**: dónde está hoy en el código (un test `tests/archivo.py::nombre`, un `archivo:línea` o un commit).
+  `tests/test_seguimiento.py` falla si nombra un test que no existe.
 - **Verificado**: fecha (AAAA-MM-DD) de la última vez que alguien lo comprobó contra el código.
 
 ## Cómo se trabaja
 
 1. **Antes de informar un estado**, se mira el código y los tests. El log y la memoria pueden estar viejos.
 2. **Bug nuevo**: una fila en `bugs.md` con el siguiente número B-n libre, cómo reproducirlo y dónde está.
-3. **Al terminar algo**: se cambia el estado, se pone la evidencia y la fecha, en el mismo commit que el arreglo.
-   La viñeta del trabajo va al Registro de `PROJECT_LOG.md`, y si cambia un tema público, también al README
-   (sección «Hoja de ruta»).
-4. **Lo cerrado no se borra**: queda en la tabla de cerrados, con su evidencia.
-5. **Detalle largo** (pasos para reproducir, mediciones): en la sección «Detalle» del mismo archivo, solo para
-   lo que sigue abierto. Lo de antes del 2026-10-20 está en el historial de git (`git show dbef824:PROJECT_LOG.md`).
+3. **Al resolver algo**: en el mismo commit que el arreglo se **borra su fila** (y su ficha de «Detalle», si
+   tiene) y se anota en el Registro de `PROJECT_LOG.md` el ID, qué se hizo y la prueba que lo cubre.
+   Si se resolvió solo en parte: queda `Parcial`, con «Queda» y la fecha al día.
+4. **Lo que no se va a hacer** (no era un bug, no se reproduce, se descarta): también se borra, con una línea en
+   el Registro que diga por qué. Si un bug vuelve a aparecer, se carga de nuevo con un B-n nuevo.
+5. **Detalle largo** (pasos para reproducir, mediciones): en la sección «Detalle» del mismo archivo.
 
 ## Decisiones que esperan al usuario (estado `Bloqueado`)
 
@@ -54,13 +53,13 @@ No se empiezan sin su OK, porque instalan algo, gastan plata o cambian el alcanc
 
 ## Tareas que aparecen en varias listas
 
-Son UNA sola tarea: al hacerla se cierran todas sus filas juntas.
+Son UNA sola tarea: al hacerla se borran todas sus filas juntas (y su ID de estas dos tablas).
 
 | Tarea | IDs |
 |---|---|
 | Informe de geometría e impresión 3D | F2 · B2 · RH13 |
 | Imanes y manipulador contextual | RH12 · B7 |
-| Instancias o copias ligeras | F17 · RH17 · PL8 |
+| Instancias o copias ligeras | RH17 · PL8 |
 | Puntos de control y B-spline | F12 · RH9 |
 | Deformar y ajustar a superficie | RH7 · B10 · P-27-8 |
 | Relieve desde imagen o textura | RH10 · B13 · P-27-9 |

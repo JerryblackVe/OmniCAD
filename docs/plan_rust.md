@@ -1,6 +1,6 @@
 # Plan de Rust para OmniCAD
 
-> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Auditoría de rendimiento del 2026-10-12, pedida por el usuario: «todo lo que se pueda escribir en Rust para mejorar el
 rendimiento, que se haga; a veces la app se siente laggy». Este documento dice **qué** pasa a Rust, **qué no** (y por

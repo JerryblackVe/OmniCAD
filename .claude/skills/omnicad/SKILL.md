@@ -123,8 +123,8 @@ no toques el código del programa: anotalo con la ficha de abajo y seguí con tu
    - **Prueba propuesta** (la que más ayuda): lo que tiene que cumplirse al corregirlo, p. ej. «tras
      `set_parameter` el volumen del cuerpo coincide con la cuenta».
 5. Una ficha por bug y sin mezclar mejoras. Dos fallas con la misma causa: una sola ficha. Sin rutas ni datos
-   personales del usuario. Al corregirse, la fila pasa a «Cerrados» con su evidencia (no se borra) y el
-   trabajo se anota en el Registro de `PROJECT_LOG.md`.
+   personales del usuario. Al corregirse, la fila se borra de la lista y el trabajo se anota en el
+   Registro de `PROJECT_LOG.md` con el ID y la prueba que lo cubre.
 
 ## Más ayuda (no se copia acá: hay una sola versión)
 

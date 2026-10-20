@@ -2,11 +2,11 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Verificado contra el código el 2026-10-20 (suite: 3500 tests en verde). Total 185: Abierto 78 · Parcial 47 · Bloqueado 4 · Sin verificar 7 · Hecho 48 · Descartado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 136: Abierto 78 · Parcial 47 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
-Abierto 13 · Parcial 10 · Bloqueado 3 · Sin verificar 2 · Hecho 14 · Descartado 1.
+Abierto 13 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -38,34 +38,16 @@ Abierto 13 · Parcial 10 · Bloqueado 3 · Sin verificar 2 · Hecho 14 · Descar
 | P-1b | Probar en Linux nativo (GNOME/KDE, GPU real, atajos, diálogos de archivo) | Bloqueado | Media | Falta una PC con Linux nativo para probar a mano atajos y diálogos de archivo. | Solo hay corridas en WSL2 (Registro); el CI de Linux arma AppImage pero no prueba la interfaz | 2026-10-20 |
 | P-11k | Comparar EXTRUSOR XOX.f3z contra Fusion y probar mallas convertidas | Sin verificar | Baja | Importarlo en Fusion puede crear diseños en la nube del usuario; sin ejemplo BINCHA a mano. | PROJECT_LOG.md:32 | 2026-10-20 |
 | P-31-lic | Respetar licencias AGPL-3.0 (PartMode, QymCAD, Chili3D): solo ideas, nunca código | Sin verificar | Media | Regla de proceso, no tarea; no se puede comprobar contra el código. | PROJECT_LOG.md:117 | 2026-10-20 |
-| P-1a | Linux probado en Ubuntu 24.04 sobre WSL2 (ruff, pytest, humo) | Hecho | — | — | tests/test_linux.py; omnicad/ui/__init__.py:11-19 (xcb si hay DISPLAY); .github/workflows/instaladores.yml:97 (job ubuntu-22.04) | 2026-10-20 |
-| P-9a | Tooltips con ayuda, aire en la cinta, mínimo de botones «▾» y auditoría numérica de la UI | Hecho | — | — | tests/test_p9_ui.py (5 pruebas); scripts/auditoria_ui.py; evidencias/capturas/p9_antes y p9_despues | 2026-10-20 |
-| P-9b | Globo de ayuda con imagen «antes → después» en 8 comandos | Hecho | — | — | tests/test_p9b_ayuda.py; scripts/ayuda_imagenes.py; omnicad/recursos/ayuda/ | 2026-10-20 |
-| P-9c | Botón «Más» (⋮): fijar atajo, fijar en barra y cambiar tecla con aviso de conflicto | Hecho | — | — | tests/test_p9b_mas.py; omnicad/ui/mas_comando.py:71,113 | 2026-10-20 |
-| P-9d | Unidades del documento (mm/cm/m/in/ft y g/kg/lb) que cambian lo que se muestra | Hecho | — | — | tests/test_p9b_unidades.py; omnicad/timeline/documento.py:175 fijar_unidades; omnicad/ui/formato.py; tests/test_barra_unidades.py; Límite: Límite declarado: el modelo y los números sueltos siguen en mm y g. | 2026-10-20 |
-| P-9h | Disposición nueva: texto bajo cada ícono, barra inferior con unidades y Caja de herramientas (S) | Hecho | — | — | tests/test_cinta_textos.py; tests/test_barra_unidades.py; tests/test_caja_herramientas.py | 2026-10-20 |
-| P-10a | Medir: omnicad dev bench (arranque, memoria, giro, recálculo) y guardar la base | Hecho | — | — | scripts/bench_rendimiento.py (modos solver, malla, recalculo, frontera, memoria, interfaz); omnicad/cli/cmd_dev.py:2; omnicad/ui/bench.py | 2026-10-20 |
-| P-10b | Preferencias de rendimiento (Rendimiento/Equilibrado/Calidad, detalle, vista simplificada) | Hecho | — | — | omnicad/ui/preferencias.py:40,78,197; tests/test_graficos_rendimiento.py | 2026-10-20 |
-| P-10c | Recálculo parcial del timeline | Hecho | — | — | tests/test_recalculo_parcial.py; tests/test_rendimiento_arreglos.py:100-137 | 2026-10-20 |
-| P-10d | Mallas en GPU una vez y menos detalle a la distancia (LOD) | Hecho | — | — | omnicad/ui/visor3d.py:198-204 (NIVELES_LOD, PRESUPUESTO_LOD_S) | 2026-10-20 |
-| P-10e | Arranque rápido: portada y módulos pesados cargados al usarlos | Hecho | — | — | omnicad/ui/arranque.py (portada); carga diferida de OCP en nucleo (ej. nucleo/geometria.py:29) | 2026-10-20 |
-| P-10b-a | R11: rasterizador, sombras y SSAO del render CPU en Rust | Hecho | — | — | clon/rust/src/lib.rs:6,75,118; omnicad/nucleo/render_cpu.py:544,644,699; tests/test_render_nativo.py; omnicad/_rs.cp312-win_amd64.pyd | 2026-10-20 |
-| P-10b-b | Fase 0: arreglos de Python P1-P5, P10-P12, P14, P19, P22 | Hecho | — | — | tests/test_rendimiento_arreglos.py (13 pruebas); PROJECT_LOG.md:341 (bench: arrastre 56 a 14 ms, hover 62 a 1 ms) | 2026-10-20 |
-| P-12a | Informe mensual de novedades de Fusion, Blender y Rhino | Hecho | — | — | scripts/novedades.py; tests/test_novedades.py; docs/novedades/2026-10.md | 2026-10-20 |
-| P-9i | Buscador Ctrl+K, botón «+ Operación» y panel «Ayuda rápida» de las referencias | Descartado | — | — | El buscador se sacó a pedido del usuario; «+ Operación» y «Ayuda rápida» no existen en Fusion (grep Ctrl+K en omnicad/ui: sin resultados) | 2026-10-20 |
 
 ## Hallazgos de pruebas de uso
 
-Abierto 1 · Parcial 2 · Hecho 3.
+Abierto 1 · Parcial 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-49 | Parámetro body frente a bodies entre herramientas | Parcial | Baja | Aceptar `body` como alias de `bodies` o sugerir «¿quisiste decir bodies?» en el error. | api/registro.py:243-252 (el error lista argumentos válidos y firma); api/herramientas_inspeccion.py:207 (solo bodies); sin alias | 2026-10-20 |
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | Falta barrido automático de tipos sin caso válido; solo hay tests sueltos por tipo. | tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py; tests/test_chapa.py (unir plegando); tests/test_fijaciones.py; humo 168 pasos según el log (no corrido acá) | 2026-10-20 |
-| H-16 | Unir plegando sin probar | Hecho | — | — | tests/test_api_chapa.py::test_unir_plegando_dos_chapas; tests/test_chapa.py::test_unir_plegando_dos_chapas | 2026-10-20 |
-| H-44 | chamfer demasiado grande: error con la distancia máxima | Hecho | — | — | 5be6a25; tests/test_api_solido.py::test_chaflan_demasiado_grande_indica_distancia_maxima | 2026-10-20 |
-| H-48 | create_box con anchor center o corner | Hecho | — | — | api/herramientas_solido.py:334,345; tests/test_api_solido.py::test_caja_con_anclaje; 5be6a25 | 2026-10-20 |
 
 ## Fusion 360
 
@@ -82,7 +64,7 @@ Abierto 4 · Parcial 1 · Sin verificar 1. Especificación: [brechas_fusion.md](
 
 ## FreeCAD
 
-Parcial 4 · Hecho 1. Especificación: [brechas_freecad.md](../brechas_freecad.md).
+Parcial 4. Especificación: [brechas_freecad.md](../brechas_freecad.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -90,32 +72,26 @@ Parcial 4 · Hecho 1. Especificación: [brechas_freecad.md](../brechas_freecad.m
 | F5 | Diagnóstico del boceto: restricciones en conflicto y redundantes | Parcial | Media | Decir cuáles restricciones chocan o sobran y elegirlas desde la lista de avisos | restricciones/solver.py:36-57; ui/editor_boceto.py:616-645 (deshace la que sobre-restringe); ui/modo_boceto.py:754 | 2026-10-20 |
 | F12 | Herramientas de B-spline | Parcial | Media | Insertar nudo, subir/bajar grado, unir curvas y convertir a B-spline como herramientas | restricciones/boceto.py:198-207 (spline por control, grado 3 o 5, pesos y nudos), :486 _insertar_nudo interno; ui/editor_boceto.py:2654 (marco de control); ui/modo_boceto.py:90 | 2026-10-20 |
 | F14 | Piezas estándar ampliadas (rodamientos, pasadores, insertos) | Parcial | Media | Rodamientos, pasadores e insertos roscados (hay tornillos, tuercas, arandelas, varilla y espárragos) | nucleo/fijaciones.py:52 FAMILIAS; tests/test_fijaciones.py | 2026-10-20 |
-| F16 | Pulidos de uso: buscador, tres luces, centro de giro, navegación | Hecho | — | — | 97640d5; 1b67efe; ui/preferencias.py:315 _buscar; ui/visor3d.py:90 LUCES_VISOR; tests/test_f16_visor.py; tests/test_freecad.py::test_buscador_de_preferencias_encuentra_por_etiqueta | 2026-10-20 |
 
 ## Plasticity
 
-Parcial 3 · Hecho 4. Especificación: [brechas_plasticity.md](../brechas_plasticity.md).
+Parcial 3. Especificación: [brechas_plasticity.md](../brechas_plasticity.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PL3 | Plano de trabajo con una tecla (Espacio) | Parcial | Baja | Mayús+Espacio desde la cámara y que primitivas y Mover arranquen en ese plano | fdc9366; ui/ventana.py:395,2088; tests/test_plasticidad.py::test_espacio_arranca_el_boceto_sobre_la_cara_ya_elegida | 2026-10-20 |
 | PL1 | Un comando contextual según lo elegido (Desfase, Unir, Extender…) | Parcial | Media | Unir, Invertir, Extender, Reconstruir, Alinear e Imprimir siguen como botones propios | 22c252d; ui/comandos/modificar.py:757 (Desfase); api offset_faces, offset_edges; tests/test_pl1_desfase.py | 2026-10-20 |
 | PL13 | Modo Render en el visor con HDRI integrados | Parcial | Media | HDRI integrados (hoy los entornos son degradés de cielo) | ui/render.py:399 (visor con aspectos, entorno y sombras); nucleo/render_cpu.py ENTORNOS; sin HDRI (grep) | 2026-10-20 |
-| PL2 | Teclas de opción al pie del panel y Mayús+R para repetir | Hecho | — | — | 0bc957e; ui/comando.py:124 MODIFICADORES; ui/ventana.py:393 (Shift+R); tests/test_plasticidad.py::test_shift_r_repite_el_ultimo_comando; ::test_el_panel_del_comando_muestra_las_teclas_al_pie | 2026-10-20 |
-| PL4 | Orden de empalme: probar primero el radio mayor | Hecho | — | — | f80a5ac; api move_feature; tests/test_plasticidad.py::test_el_empalme_imposible_ensenia_el_orden_de_lo_grande_a_lo_chico; ::test_la_pista_llega_por_la_api_y_move_feature_reordena | 2026-10-20 |
-| PL5 | Tira de comandos sugeridos según la selección | Hecho | — | — | 1385c1f; ui/sugerencias.py:22,30; tests/test_pl5_sugerencias.py | 2026-10-20 |
-| PL11 | Buscador por nombre en el navegador del diseño | Hecho | — | — | 9f2c8fc; ui/navegador.py (filtro); tests/test_plasticidad.py::test_el_buscador_del_navegador_filtra_por_nombre | 2026-10-20 |
 
 ## Blender
 
-Parcial 3 · Hecho 1. Especificación: [brechas_blender.md](../brechas_blender.md).
+Parcial 3. Especificación: [brechas_blender.md](../brechas_blender.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | B19 | Normales y sombreado al exportar mallas | Parcial | Baja | Elegir suavizado por ángulo y normales ponderadas al exportar mallas | io_archivos/gltf.py:10,46 (normales por vértice con ángulo de pliegue) | 2026-10-20 |
 | B8 | Orientaciones y pivotes (global, local, normal, vista, cursor 3D) | Parcial | Media | Selector de orientación y pivote (mediana, caja, activo) y cursor 3D | ui/comandos/modificar.py:462-500 (Mover/copiar con pivote elegible y tríada); ui/manipuladores.py Triada | 2026-10-20 |
 | B9 | Limpieza de malla ampliada | Parcial | Media | Disolver por ángulo, hacer plano y simetrizar (triángulos a cuadriláteros no cabe) | c1c40f2; nucleo/malla.py:2403-2420; api clean_mesh; timeline OpLimpiarMalla; tests/test_api_malla.py::test_limpiar_deja_una_malla_cerrada_y_es_editable | 2026-10-20 |
-| B14 | Texto avanzado: párrafos, interlineado, kerning, versalitas, texto sobre ruta | Hecho | — | — | 1d4829d; 32c9e2d; restricciones/boceto.py:238-264; ui/modo_boceto.py; api add_text/edit_text; tests/test_texto_vectores.py | 2026-10-20 |
 
 ## Rhino 8
 
@@ -149,7 +125,7 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Herramientas MCP/CLI que faltan (B-80)
 
-Abierto 31 · Parcial 3 · Bloqueado 1 · Hecho 4. Especificación: [brechas_mcp.md](../brechas_mcp.md).
+Abierto 31 · Parcial 3 · Bloqueado 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -188,24 +164,18 @@ Abierto 31 · Parcial 3 · Bloqueado 1 · Hecho 4. Especificación: [brechas_mcp
 | MCP-81 | Parámetros: sin unidad, renombrar, comentario | Parcial | Baja | Parámetro sin unidad y renombrar; el comentario ya existe. | omnicad/api/herramientas_parametros.py:58 (create_parameter con comment); tests/test_api_parametros.py:35 | 2026-10-20 |
 | MCP-61 | Patrones y multi-transform: eje por arista/cara, suprimir copias, puntos sueltos | Parcial | Media | Eje por arista/plano/cara, ángulo entre copias, suprimir copias, ruta de aristas, puntos de construcción. | omnicad/api/herramientas_solido.py:543-795 (path_pattern ya tiene spacing_mode, symmetric, path_curves; rectangular_pattern solo axis x/y/z) | 2026-10-20 |
 | MCP-HAL3 | Menú del boceto sin «Guardar como SVG» ni «Limpiar geometría» | Bloqueado | Baja | Espera decisión del usuario: agregarlos rompe la lista exacta de Fusion. | omnicad/ui/ventana.py:1258 (manejador SVG sigue); export_sketch y clean_sketch existen | 2026-10-20 |
-| MCP-83 | get_bill_of_materials: exportar a CSV | Hecho | — | — | omnicad/api/herramientas_material.py:198 (csv_path, overwrite); tests/test_api_material.py:141,152 | 2026-10-20 |
-| MCP-86 | export_animation_video: todos los guiones y estilo render | Hecho | — | — | omnicad/api/herramientas_animacion.py:484-525 (all_storyboards, rc.renderizar); tests/test_api_animacion.py::test_publicar_gif_y_secuencia_png | 2026-10-20 |
-| MCP-87 | Guardar como malla completo: refinado, STL ASCII, unidad, uno por cuerpo | Hecho | — | — | omnicad/api/herramientas_guardar_malla.py:13-16; tests/test_guardar_malla.py::test_api_con_todos_los_parametros_y_proteccion_de_destinos; commit b049357 | 2026-10-20 |
-| MCP-HAL4 | Corregir conteo de herramientas en docs/plan_mcp_cli.md | Hecho | — | — | docs/plan_mcp_cli.md:286 (190 herramientas, 38 de 95 tipos) | 2026-10-20 |
 
 ## Capa para agentes (paquetes del plan)
 
-Parcial 1 · Hecho 2. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
+Parcial 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PAQ-K | Paquete K: prueba real con agentes (Claude Code, OpenCode, solo CLI, modo en vivo) | Parcial | Media | Según el log solo Claude Code pasó; faltan OpenCode, solo CLI y modo en vivo (no verificable desde el código). | PROJECT_LOG.md:11; tests/test_setup.py | 2026-10-20 |
-| PAQ-A | Paquete A: git, AGENTS.md, CLAUDE.md, pyproject con comandos, mcp==2.3.0 | Hecho | — | — | AGENTS.md; CLAUDE.md; clon/pyproject.toml:17-19; clon/requirements.txt:8 | 2026-10-20 |
-| PAQ-J | Paquete J: docs/agentes y ejemplos ejecutables | Hecho | — | — | docs/agentes/*.md; ejemplos/agentes/; tests/test_doc_agentes.py; tests/test_ejemplos_agentes.py | 2026-10-20 |
 
 ## Otros CAD libres
 
-Abierto 1 · Parcial 4 · Hecho 1. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
+Abierto 1 · Parcial 4. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -214,7 +184,6 @@ Abierto 1 · Parcial 4 · Hecho 1. Especificación: [brechas_cad_libres.md](../b
 | CL4 | Elegir caras por descripción con candidatos y motivo | Parcial | Media | Faltan selectores por intención, propiedades devueltas y aviso de ambigüedad. | omnicad/api/herramientas_inspeccion.py:367-382 (find_faces, find_edges con selectores) | 2026-10-20 |
 | CL5 | Diagnóstico para el agente: registro de operaciones y fallos | Parcial | Media | Registro de operaciones y contexto de restricciones y kernel. | omnicad/api/herramientas_dev.py:201-209 (list_error_reports, read_error_report) | 2026-10-20 |
 | CL8 | Importar declarando qué se reconstruyó y qué quedó fijo | Parcial | Alta | Informe de cobertura al abrir archivos de otros programas. | omnicad/api/herramientas_documento.py (inspect_f3d); sin informe de cobertura | 2026-10-20 |
-| CL6 | Colores por grados de libertad y conflictos en el boceto | Hecho | — | — | omnicad/restricciones/solver.py:705-731 (SVD del jacobiano, determinadas); ui/editor_boceto.py:25,2835; tests/test_solver.py::test_conflicto_se_detecta | 2026-10-20 |
 
 ## Texto y vectores
 
@@ -226,7 +195,7 @@ Parcial 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
 
 ## Rust
 
-Abierto 12 · Parcial 2 · Hecho 12. Especificación: [plan_rust.md](../plan_rust.md).
+Abierto 12 · Parcial 2. Especificación: [plan_rust.md](../plan_rust.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -244,22 +213,10 @@ Abierto 12 · Parcial 2 · Hecho 12. Especificación: [plan_rust.md](../plan_rus
 | RS-R4 | R4 kernel del solver (jacobiano analítico) en Rust | Abierto | Muy alta | Solver sigue en scipy. | omnicad/restricciones/solver.py | 2026-10-20 |
 | RS-P3 | P3 repintado del boceto proyectando en bloque | Parcial | Media | Proyección 64,6 a 13,9 ms con 10 000 puntos; la meta < 5 ms del repintado completo no se cumple (Qt suma 11,5 ms). | omnicad/ui/editor_boceto.py _poli_px; PROJECT_LOG.md:341 | 2026-10-20 |
 | RS-P6 | P6 vista previa de comandos fuera del hilo de la interfaz | Parcial | Alta | La previa se reusa al aceptar; sigue en el hilo de la ventana (haría falta un proceso). | tests/test_rendimiento_arreglos.py:147; omnicad/ui/comando.py | 2026-10-20 |
-| RS-R11 | R11 rasterizador CPU, mapa de sombras y SSAO en Rust | Hecho | — | — | clon/rust/src/lib.rs:6,75,118; omnicad/nucleo/render_cpu.py:544,644,699; tests/test_render_nativo.py (paridad); omnicad/nativo.py | 2026-10-20 |
-| RS-P1 | P1 evaluar parámetros una vez por evento (caché de ast) | Hecho | — | — | omnicad/timeline/parametros.py:141 lru_cache; tests/test_rendimiento_arreglos.py:19 | 2026-10-20 |
-| RS-P2 | P2 solver: resolver solo el grupo arrastrado, sin pulido ni rango | Hecho | — | — | omnicad/restricciones/solver.py:608-667 (previo=); tests/test_rendimiento_arreglos.py:44,57 | 2026-10-20 |
-| RS-P4 | P4 hover de aristas con un solo matmul | Hecho | — | — | omnicad/ui/visor3d.py:1161-1162 (reduceat); hover 62 a 1,1 ms | 2026-10-20 |
-| RS-P5 | P5 rayo con descarte por caja de cada cuerpo | Hecho | — | — | omnicad/ui/visor3d.py:165,908 rayo_caja; omnicad/ui/render.py:573; tests/test_rendimiento_arreglos.py:168 | 2026-10-20 |
-| RS-P7 | P7 memo por paso en el recálculo | Hecho | — | — | omnicad/timeline/documento.py _de_memo/_aplicar_memo; tests/test_rendimiento_arreglos.py:100-159 | 2026-10-20 |
-| RS-P8 | P8 firmas de referencias topológicas una vez por cuerpo | Hecho | — | — | omnicad/nucleo/referencias.py:198-203 _firmas | 2026-10-20 |
-| RS-P9 | P9 animación reusa lo transformado entre cuadros | Hecho | — | — | omnicad/ui/render.py:498 _aplicar; PROJECT_LOG.md:341 | 2026-10-20 |
-| RS-P10 | P10 camara_cambiada solo si cambia la cámara; diff antes de reconstruir | Hecho | — | — | omnicad/ui/visor3d.py:1929-1931 (_firma_aviso); navegador.py y panel_timeline.py | 2026-10-20 |
-| RS-P11 | P11 exportar STL binario con dtype estructurado | Hecho | — | — | omnicad/io_archivos/exportar.py; tests/test_rendimiento_arreglos.py:178 | 2026-10-20 |
-| RS-P12 | P12 es_cerrada y _corregir_degenerados sin dict de 3M | Hecho | — | — | omnicad/nucleo/malla.py; tests/test_rendimiento_arreglos.py:193 | 2026-10-20 |
-| RS-P13 | P13 autoguardado en hilo con instantánea ya serializada | Hecho | — | — | omnicad/io_archivos/proyecto.py autoguardar_en_hilo; tests/test_guardado_sesion.py; Límite: Pendiente aparte: deshacer serializado en un hilo. | 2026-10-20 |
 
 ## C++
 
-Abierto 6 · Parcial 4 · Sin verificar 1 · Hecho 5. Especificación: [plan_cpp.md](../plan_cpp.md).
+Abierto 6 · Parcial 4 · Sin verificar 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -274,15 +231,10 @@ Abierto 6 · Parcial 4 · Sin verificar 1 · Hecho 5. Especificación: [plan_cpp
 | CPP-C4 | C4 hojas cancelables (booleana, sección, revisión) | Parcial | Alta | Se cancela matando el subproceso solo en autointersecciones y HLR; no en booleanas ni sección. | omnicad/nucleo/aislado.py; tests/test_b16_cancelar.py | 2026-10-20 |
 | CPP-F1 | Fase 1 proceso trabajador en Python (teselado por cuerpo, HLR por vista, botón Cancelar) | Parcial | Alta | Existe el subproceso para tareas que pueden no terminar; falta el pool paralelo y el botón en la interfaz. | omnicad/nucleo/aislado.py | 2026-10-20 |
 | CPP-P21 | P21 sección del análisis usando el contorno que ya calcula | Sin verificar | Media | El log la deja pendiente; no pude confirmar en el código si seccion() ya evita el cálculo repetido. | omnicad/nucleo/analisis.py:1088 seccion; omnicad/ui/analisis_vista.py:60-70 (caché) | 2026-10-20 |
-| CPP-P14 | P14 iterar colecciones OCP con islice | Hecho | — | — | omnicad/nucleo/geometria.py:20 lista_occ (14 usos) | 2026-10-20 |
-| CPP-P16 | P16 _es_concava cuadrático | Hecho | — | — | PROJECT_LOG.md:341 (cubierto por P14) | 2026-10-20 |
-| CPP-P19 | P19 SetRunParallel(True) en booleanas y es_valida | Hecho | — | — | omnicad/nucleo/geometria.py:317,462 | 2026-10-20 |
-| CPP-P22 | P22 autointersecciones bajo demanda | Hecho | — | — | omnicad/ui/comandos/revision.py:77 (casilla); omnicad/nucleo/revision.py | 2026-10-20 |
-| CPP-P24 | P24 la vista previa recalcula todos los análisis visibles | Hecho | — | — | omnicad/ui/analisis_vista.py:39 (caché); PROJECT_LOG.md:341 («ya tenía caché») | 2026-10-20 |
 
 ## Auditoría del 2026-10-14
 
-Abierto 9 · Sin verificar 3 · Hecho 1. Especificación: [auditorias/](../auditorias/).
+Abierto 9 · Sin verificar 3. Especificación: [auditorias/](../auditorias/).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -298,7 +250,6 @@ Abierto 9 · Sin verificar 3 · Hecho 1. Especificación: [auditorias/](../audit
 | AUD-9 | Dependencias sin escaneo de CVE (pip-audit nunca corrido) | Sin verificar | Baja | Correr pip-audit una vez cuando el usuario autorice instalarlo. | Sin rastro de pip-audit en .github ni en PROJECT_LOG | 2026-10-20 |
 | AUD-6 | Cuellos O(n²) posibles en máscara de aristas cóncavas y empalme | Sin verificar | Media | Medir con un modelo grande antes de tocar; la máscara ya usa caché por arista. | nucleo/analisis.py:860-883 leído; no se midió | 2026-10-20 |
 | AUD-10 | El .exe publicado sin probar en una máquina limpia sin Python | Sin verificar | Media | Instalar la Release en una VM limpia y abrir un proyecto. | uar-loop-2026-10-14.md:28 lo deja «pendiente de usuario» | 2026-10-20 |
-| AUD-12 | plan_mcp_cli.md aún dice «85 operaciones» en tres lugares | Hecho | — | — | docs/plan_mcp_cli.md (conteos corregidos a 96 operaciones y 211 herramientas) | 2026-10-20 |
 
 ## Prueba de tortura
 

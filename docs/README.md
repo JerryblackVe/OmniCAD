@@ -7,10 +7,10 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 
 | Documento | Qué tiene |
 |---|---|
-| [seguimiento/README.md](seguimiento/README.md) | Método de seguimiento: estados, dificultad y evidencia |
-| [seguimiento/bugs.md](seguimiento/bugs.md) | Bugs abiertos y cerrados, verificados contra el código |
-| [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones que todavía no existen |
-| [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras de lo que ya existe: rendimiento, interfaz, instalador |
+| [seguimiento/README.md](seguimiento/README.md) | Método: dónde se anota cada cosa y cómo se borra al resolverse |
+| [seguimiento/bugs.md](seguimiento/bugs.md) | Bugs pendientes, verificados contra el código |
+| [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
+| [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |
 | [../PROJECT_LOG.md](../PROJECT_LOG.md) | Bitácora: estado en una tabla, registro de cada tarea y lecciones aprendidas |
 | [../CHANGELOG.md](../CHANGELOG.md) | Cambios de cada versión publicada |
 
@@ -51,8 +51,8 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 
 ## Especificación de faltantes (brechas)
 
-Describen cada función de otro programa que queremos tener. El estado de cada ID está en
-[seguimiento/faltantes.md](seguimiento/faltantes.md), no en estos archivos.
+Describen cada función de otro programa que queremos tener. Lo que falta de cada ID está en
+[seguimiento/faltantes.md](seguimiento/faltantes.md); si un ID no figura allá, ya está resuelto.
 
 | Documento | IDs |
 |---|---|

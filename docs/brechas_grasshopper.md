@@ -1,6 +1,6 @@
 # Brechas frente a Grasshopper (programación visual)
 
-> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [Grasshopper 2 — documentación](https://www.rhino3d.com/docs/grasshopper2/) (glosario, temas y
