@@ -51,6 +51,8 @@ def mostrar(v, ids, visible):
 
 def menu(v, item):
     clave, tipo = item.data(0, ROL_CLAVE), item.data(0, ROL_TIPO)
+    if tipo == "raiz":
+        return menu_raiz(v)
     if tipo == "boceto":
         return menu_boceto(v, item)
     if tipo == "calcomania":
@@ -73,35 +75,105 @@ def menu(v, item):
     m.addSeparator()
     if tipo == "cuerpo":
         m.addAction("Mover/copiar", lambda: v._accion_navegador("mover", clave))
+        m.addAction("Crear componentes a partir de cuerpos", lambda: v._accion_navegador("nuevo_componente", clave))
+        m.addAction("Configurar", v.acciones["configurar"].trigger)
+        no_disponible(m, "Activar conjuntos de contactos")
         m.addAction("Material físico…", lambda: v._accion_navegador("material", clave))
         m.addAction("Aspecto…", lambda: v._accion_navegador("aspecto", clave))
+        no_disponible(m, "Controles de mapa de textura")
+        m.addAction("Eliminar anulación de aspecto", lambda: llamar(v, "set_appearance", bodies=ids))
     prop = m.addAction("Propiedades", lambda: propiedades(v, ids))
     prop.setEnabled(bool(ids))
     prop.setToolTip("El grupo está vacío." if not ids else "Mide las propiedades de los elementos elegidos.")
     m.addSeparator()
+    if tipo == "cuerpo":
+        m.addAction("Guardar como malla", lambda: v._accion_navegador("exportar_malla", clave))
+        m.addSeparator()
     for texto in ("Copiar\tControl+C", "Cortar\tControl+X"):
-        a = m.addAction(texto)
-        a.setEnabled(False)
-        a.setToolTip("El portapapeles de cuerpos con referencias paramétricas todavía no está implementado.")
+        no_disponible(m, texto, "El portapapeles de cuerpos con referencias paramétricas todavía no está implementado.")
     m.addAction("Suprimir\tSuprimir", lambda: suprimir(v, clave, tipo))
     if tipo == "cuerpo":
         m.addAction("Quitar", lambda: v._accion_navegador("quitar", clave))
     m.addAction("Cambiar nombre", lambda: (organizar(v, "rename_group", clave, clave) if tipo == "grupo"
                                            else v.navegador.renombrar_en_linea(item)))
     m.addSeparator()
+    if tipo == "cuerpo":
+        no_disponible(m, "Control de detalles de visualización")
     ojo = m.addAction("Mostrar/ocultar\tV", lambda: mostrar(v, ids, any(i in v.ocultos for i in ids)))
     ojo.setEnabled(bool(ids))
     ojo.setToolTip("El grupo está vacío." if not ids else "Alterna la visibilidad de los elementos elegidos.")
     m.addAction("Mostrar todo", lambda: mostrar(v, [], True))
     if tipo == "cuerpo":
-        opacidad = m.addMenu("Control de opacidad")
-        for pct in (100, 70, 50, 30, 10):
-            opacidad.addAction(f"{pct} %", lambda _=False, p=pct: v._accion_navegador(f"opacidad:{p}", clave))
+        menu_opacidad(v, m, clave)
+        no_disponible(m, "Seleccionable/no seleccionable")
         m.addAction("Aislar", lambda: v._accion_navegador("aislar", clave))
         m.addAction("Desaislar", lambda: v._accion_navegador("desaislar", clave))
         m.addSeparator()
+        m.addAction("Buscar en la ventana", lambda: v._accion_navegador("buscar_ventana", clave))
         m.addAction("Buscar en la secuencia temporal", lambda: v._accion_navegador("buscar_timeline", clave.split(".c")[0]))
     return m
+
+
+def no_disponible(m, texto, ayuda=""):
+    a = m.addAction(texto)
+    a.setEnabled(False)
+    a.setToolTip("Todavía no disponible" + (f": {ayuda}" if ayuda else ""))
+
+
+def menu_opacidad(v, m, clave):
+    opacidad = m.addMenu("Control de opacidad")
+    opacidad.setEnabled(bool(v.doc.estado_final.cuerpos))
+    for pct in (100, 70, 50, 30, 10):
+        opacidad.addAction(f"{pct} %", lambda _=False, p=pct: v._accion_navegador(f"opacidad:{p}", clave))
+
+
+def menu_raiz(v):
+    m = QMenu(v.navegador)
+    m.setToolTipsVisible(True)
+    no_disponible(m, "Añadir a ensamblaje")
+    m.addAction("Crear dibujo", v.acciones["nuevo_dibujo"].trigger)
+    m.addAction("Configurar", v.acciones["configurar"].trigger)
+    m.addAction("Grupo rígido", v.acciones["grupo_rigido"].trigger)
+    no_disponible(m, "Activar conjuntos de contactos")
+    m.addSeparator()
+    for texto, clave in (("Material físico", "material"), ("Aspecto", "aspecto")):
+        a = m.addAction(texto, lambda _=False, c=clave: v._accion_navegador(c, "__raiz__"))
+        a.setEnabled(bool(v.doc.estado_final.cuerpos))
+    no_disponible(m, "Controles de mapa de textura")
+    prop = m.addAction("Propiedades", lambda: propiedades(v, list(v.doc.estado_final.cuerpos)))
+    prop.setEnabled(bool(v.doc.estado_final.cuerpos))
+    m.addSeparator()
+    no_disponible(m, "Solo lectura para mí")
+    m.addAction("Exportar…", lambda: v._accion_navegador("exportar", "__raiz__"))
+    no_disponible(m, "Guardar copia como")
+    m.addAction("Guardar como malla", lambda: v._accion_navegador("exportar_malla", "__raiz__"))
+    no_disponible(m, "Mostrar en ubicación")
+    no_disponible(m, "Historial")
+    m.addSeparator()
+    no_disponible(m, "Control de detalles de visualización")
+    for texto, ids in (("Mostrar todos los componentes", list(v.doc.estado_final.componentes)),
+                       ("Mostrar todos los cuerpos", list(v.doc.estado_final.cuerpos))):
+        a = m.addAction(texto, lambda _=False, elegidos=ids: mostrar(v, elegidos, True))
+        a.setEnabled(bool(ids))
+    menu_opacidad(v, m, "__raiz__")
+    m.addSeparator()
+    buscar = m.addAction("Buscar en la ventana", lambda: v._accion_navegador("buscar_ventana", "__raiz__"))
+    buscar.setEnabled(bool(v.doc.estado_final.cuerpos))
+    m.addSeparator()
+    no_disponible(m, "Cambiar al modelado directo")
+    return m
+
+
+def buscar_en_ventana(v, ids):
+    """Fusion › Find in Window: selecciona, encuadra y resalta el paso creador."""
+    import numpy as np
+    v.seleccionar_cuerpos(ids)
+    puntos = [p[1] for h in v.seleccion for p in h["dibujo"] if len(p[1])]
+    if puntos:
+        v.visor.encuadrar(np.concatenate(puntos))
+    if ids:
+        v.timeline.resaltar(v.doc.estado_final.cuerpos[ids[-1]].op_id)
+    return {"bodies": ids}
 
 
 def propiedades(v, ids):

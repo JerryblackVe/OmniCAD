@@ -1466,6 +1466,10 @@ class VentanaPrincipal(QMainWindow):
         from .acciones_navegador import vista_calcomania
         return vista_calcomania(self, clave, accion, imagen)
 
+    def buscar_en_ventana(self, ids):
+        from .acciones_navegador import buscar_en_ventana
+        return buscar_en_ventana(self, ids)
+
     def _alternar_visibilidad_elegida(self):
         claves = [it.data(0, Qt.UserRole) for it in self.navegador.arbol.selectedItems()]
         if claves:
@@ -1715,8 +1719,15 @@ class VentanaPrincipal(QMainWindow):
             if ok and nombre.strip():
                 self.doc.set_propiedad([clave], "nombre", nombre.strip())
         elif accion.startswith("opacidad:"):
-            pct = int(accion.split(":")[1])
-            self.doc.set_propiedad([clave], "opacidad", None if pct >= 100 else pct / 100)
+            from .acciones_navegador import llamar
+            llamar(self, "set_body_opacity", opacity=int(accion.split(":")[1]),
+                   bodies=None if clave == "__raiz__" else [clave])
+        elif accion == "buscar_ventana":
+            self.buscar_en_ventana(list(estado.cuerpos) if clave == "__raiz__" else [clave])
+        elif accion in ("nuevo_componente", "exportar_malla", "exportar"):
+            from .acciones_navegador import elementos
+            self._seleccion_desde_navegador([] if clave == "__raiz__" else elementos(self, clave))
+            self.acciones[accion].trigger()
         elif accion == "aislar":
             self.ocultos |= {c for c in estado.cuerpos if c != clave}
             self.ocultos.discard(clave)
@@ -1759,8 +1770,9 @@ class VentanaPrincipal(QMainWindow):
         elif accion in ("mover", "aspecto", "material", "quitar", "suprimir"):
             clase = {"mover": MoverCopiar, "aspecto": Aspecto, "material": MaterialFisico, "quitar": Quitar,
                      "suprimir": Suprimir}[accion]
+            ids = list(estado.cuerpos) if clave == "__raiz__" else [clave]
             self.ejecutar_comando(clase(), valores={"cuerpos" if accion != "suprimir" else "objetos":
-                                                     [hit_desde_ref({"tipo": "cuerpo", "cuerpo": clave}, estado)]})
+                                                     [hit_desde_ref({"tipo": "cuerpo", "cuerpo": c}, estado) for c in ids]})
 
     def claves_navegador_de(self, op_id):
         """Claves del navegador de lo que crea el paso `op_id` (su boceto, plano, unión, componente o cuerpos); si
