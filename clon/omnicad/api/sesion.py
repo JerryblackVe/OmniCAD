@@ -6,9 +6,13 @@ Sesión de trabajo de la API: el documento activo y cómo se modifica.
 en vivo). Las herramientas con `modifica=True` corren dentro de `transaccion()`:
   - son UN paso de deshacer aunque por dentro toquen el documento varias veces;
   - son atómicas: si fallan, o si algún paso del timeline queda en "error" que antes no lo estaba, el
-    documento vuelve exactamente a como estaba (operaciones, parámetros, deshacer y rehacer);
+    documento vuelve exactamente a como estaba (operaciones, parámetros, espacios, deshacer y rehacer);
+  - lo que escriban en `doc.espacios` (dibujo, render, guiones de animación) entra en esa misma
+    transacción: un cambio es UN paso de deshacer y avisa por `al_cambiar_espacios` (lo arma el puente
+    en vivo para que la ventana relea su copia);
   - los pasos que quedan con "aviso" nuevo se informan en `avisos` sin deshacer nada.
 """
+import copy
 import difflib
 import json
 from contextlib import contextmanager
@@ -24,6 +28,7 @@ class Sesion:
         self.doc = documento if documento is not None else Documento()
         self.avisos = []
         self._llamadas = 0       # llamadas en curso de registro.llamar (más de una: anidadas, p. ej. execute_code)
+        self.al_cambiar_espacios = None   # lo arma el puente en vivo: la ventana vuelve a leer doc.espacios
 
     @property
     def ruta(self):
@@ -115,6 +120,7 @@ class Sesion:
         antes = json.dumps(doc.a_dict())
         pila, pila_rehacer, modificado = list(doc._deshacer), list(doc._rehacer), doc.modificado
         unidades = dict(doc.unidades)    # no entran en deshacer (set_document_units): se restauran a mano
+        espacios = copy.deepcopy(doc.espacios)   # _cargar los restaura; sin paso de deshacer, a mano (MCP-0b)
         contador = doc._contador         # una llamada que falla no gasta números de id (la receta queda idéntica)
         previos = self._estados_pasos()
         try:
@@ -126,20 +132,28 @@ class Sesion:
             rotos = [(o, r) for o, r in nuevos if r.estado == "error" and previos.get(o.id, ("",))[0] != "error"]
             if rotos:
                 o, r = rotos[0]
-                otros = f" También quedaron con error: {', '.join(x.nombre for x, _ in rotos[1:])}." if rotos[1:] else ""
+                otros = f" También quedaron con error: {', '.join(x.nombre for x, _r in rotos[1:])}." if rotos[1:] else ""
                 e = desde_mensaje(r.mensaje, f"El paso «{o.nombre}» ({o.id}) quedó con error: ")
                 e.mensaje += otros
                 raise e
             for o, r in nuevos:
                 if r.estado == "aviso":
                     self.avisar(f"{o.nombre} ({o.id}): {r.mensaje}")
-            if doc._deshacer != pila:        # varios cambios internos → un solo paso de deshacer
+            if doc._deshacer != pila or doc.espacios != espacios:   # varios cambios internos → un solo paso
                 doc._deshacer[:] = (pila + [antes])[-_LIMITE_DESHACER:]
+            if doc.espacios != espacios:    # una herramienta escribió los espacios (guiones, dibujo, render)
+                doc.modificado = True
+                if self.al_cambiar_espacios is not None:
+                    self.al_cambiar_espacios()
         except BaseException:
             if self.doc is doc and doc._deshacer != pila:
                 doc._cargar(json.loads(antes))
                 doc._deshacer[:], doc._rehacer[:] = pila, pila_rehacer
                 doc.modificado = modificado
+            if self.doc is doc and doc.espacios != espacios:   # falló sin paso de deshacer: se restauran igual
+                doc.espacios = espacios
+                doc.modificado = modificado
+                doc._notificar()
             if self.doc is doc and doc.unidades != unidades:
                 doc.unidades = unidades
                 doc.modificado = modificado

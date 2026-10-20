@@ -157,7 +157,7 @@ def acabado_normalizado(acabado=None, material=None):
 
 # ---------------------------------------------------------------- escena (Configuración de escena)
 ESCENA_DEFECTO = {
-    "entorno": "fotomaton",        # clave de visor3d.ENTORNOS
+    "entorno": "fotomaton",        # clave de ENTORNOS (más abajo en este módulo)
     "brillo": 1.0,                 # intensidad de las luces del entorno («Brillo»)
     "rotacion": 0.0,               # grados: giro de las luces alrededor de Z («Posición»)
     "fondo": "entorno",            # "entorno" | "color"
@@ -172,6 +172,25 @@ ESCENA_DEFECTO = {
     "exposicion": 0.0,             # EV
 }
 CIELO_DEFECTO = ((0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95)       # «Fotomatón»: arriba, abajo, luz
+# Entornos: Fusion usa imágenes HDR; acá cada uno es un degradado de fondo (la "cúpula") con su
+# intensidad de luz. Los nombres son los del menú de Fusion; el aspecto es una aproximación.
+# La interfaz actualiza "tema" al cambiar de tema (ui/visor3d.py › _entorno_tema): sin ventana queda
+# el valor de fábrica de acá.
+ENTORNOS = {
+    "tema": ("Tema (por defecto)", (0.25, 0.27, 0.30), (0.16, 0.17, 0.19), 0.26),
+    "fotomaton": ("Fotomatón", (0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95),
+    "rubicon": ("Rubicon River", (0.72, 0.81, 0.90), (0.42, 0.47, 0.40), 0.90),
+    "cielo_oscuro": ("Cielo oscuro", (0.14, 0.17, 0.27), (0.03, 0.03, 0.06), 0.80),
+    "infinito": ("Grupo de infinito", (0.97, 0.97, 0.98), (0.84, 0.86, 0.90), 0.95),
+    "habitacion_gris": ("Habitación gris", (0.62, 0.62, 0.63), (0.40, 0.40, 0.41), 0.90),
+    "azul_tranquilidad": ("Azul tranquilidad", (0.62, 0.75, 0.90), (0.26, 0.36, 0.56), 0.90),
+}
+
+
+def cielo_de(entorno):
+    """(arriba, abajo, intensidad) del entorno de ENTORNOS (sRGB)."""
+    _n, arriba, abajo, luz = ENTORNOS.get(entorno, ENTORNOS["fotomaton"])
+    return tuple(arriba), tuple(abajo), float(luz)
 
 
 def escena_normalizada(datos=None):
@@ -979,7 +998,7 @@ def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, 
     objetos: [{"v": triángulos sueltos Nx3 (mundo), "n": normales Nx3, "color": sRGB 0..1, "acabado": dict,
     "material": nombre del material físico (si no hay acabado), "opacidad": 0..1, "local": Nx3 (opcional,
     coordenadas propias para las vetas)}]. cam: dict de `camara()`. escena: Configuración de escena
-    (`ESCENA_DEFECTO`). cielo: (arriba, abajo, intensidad) del entorno, en sRGB (visor3d.ENTORNOS).
+    (`ESCENA_DEFECTO`). cielo: (arriba, abajo, intensidad) del entorno, en sRGB (ENTORNOS, `cielo_de`).
     calcomanias: datos del estado (malla con vértices y UV, imagen embebida y opacidad), como en el visor.
     progreso(fracción) puede devolver False para cancelar (lanza RenderCancelado)."""
     ancho, alto, ss = int(ancho), int(alto), max(1, int(supermuestreo))

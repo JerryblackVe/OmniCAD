@@ -33,7 +33,7 @@ from PySide6.QtWidgets import QWidget
 
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
-from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, es_malla  # noqa: F401 — se re-exportan
+from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, ENTORNOS, es_malla  # noqa: F401 — se re-exportan
 from . import temas
 
 
@@ -77,17 +77,8 @@ def _entorno_tema():
     return ("Tema (por defecto)", temas.rgb_f(c["visor_arriba"]), temas.rgb_f(c["visor_abajo"]), 0.26)
 
 
-# Entornos: Fusion usa imágenes HDR; acá cada uno es un degradado de fondo (la "cúpula") con su
-# intensidad de luz. Los nombres son los del menú de Fusion; el aspecto es una aproximación.
-ENTORNOS = {
-    "tema": _entorno_tema(),
-    "fotomaton": ("Fotomatón", (0.93, 0.93, 0.94), (0.70, 0.71, 0.73), 0.95),
-    "rubicon": ("Rubicon River", (0.72, 0.81, 0.90), (0.42, 0.47, 0.40), 0.90),
-    "cielo_oscuro": ("Cielo oscuro", (0.14, 0.17, 0.27), (0.03, 0.03, 0.06), 0.80),
-    "infinito": ("Grupo de infinito", (0.97, 0.97, 0.98), (0.84, 0.86, 0.90), 0.95),
-    "habitacion_gris": ("Habitación gris", (0.62, 0.62, 0.63), (0.40, 0.40, 0.41), 0.90),
-    "azul_tranquilidad": ("Azul tranquilidad", (0.62, 0.75, 0.90), (0.26, 0.36, 0.56), 0.90),
-}
+# Los entornos viven en nucleo/render_cpu.py (sin Qt); este actualiza el «tema» al cambiar de tema.
+ENTORNOS["tema"] = _entorno_tema()
 temas.observar(lambda: ENTORNOS.__setitem__("tema", _entorno_tema()))      # al cambiar de tema, cambia el fondo
 # Con el tema oscuro Fusion ilumina con el entorno: los cuerpos se ven gris medio, con poco contraste entre
 # caras y brillos marcados en las curvas (medido en el video: arriba #666, costados #393939–#5f5f5f).

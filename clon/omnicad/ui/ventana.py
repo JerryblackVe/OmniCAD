@@ -340,7 +340,7 @@ class VentanaPrincipal(QMainWindow):
           "Abre el modelo de ejemplo (placa con aro) para probar los comandos.")
         A("salir", "Salir", self.close, "Ctrl+Q")
         A("deshacer", "Deshacer", self._deshacer, "Ctrl+Z", None, "deshacer")
-        A("rehacer", "Rehacer", lambda: self._intentar(self.doc.rehacer), "Ctrl+Y", None, "rehacer")
+        A("rehacer", "Rehacer", self._rehacer, "Ctrl+Y", None, "rehacer")
         A("boceto", "Crear boceto", self.crear_boceto, "B", "Elegí un plano de origen, un plano de construcción o "
           "una cara plana y dibujá sobre él en la vista 3D. Los contornos cerrados se pueden extruir o revolucionar.",
           "boceto")
@@ -1177,6 +1177,14 @@ class VentanaPrincipal(QMainWindow):
         self.doc.espacios[clave] = ventana.a_dict()
         self.doc.modificado = True
 
+    def releer_espacios(self):
+        """Cada espacio abierto vuelve a leer `doc.espacios` si cambió por fuera (una herramienta del agente,
+        deshacer o rehacer): si no, su copia vieja pisaría el cambio la próxima vez que se guarde (MCP-0c)."""
+        for clave, w in list(self._espacios.items()):
+            datos = self.doc.espacios.get(clave)
+            if datos and w.doc is self.doc and hasattr(w, "desde_dict") and datos != w.a_dict():
+                w.desde_dict(datos)
+
     # ------------------------------------------------------------ ADMINISTRAR / CONFIGURAR / UTILIDADES
     def lista_materiales(self):
         from .administrar import DialogoListaMateriales
@@ -1894,6 +1902,11 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.lienzo.deshacer()
         else:
             self._intentar(self.doc.deshacer)
+            self.releer_espacios()      # deshacer también revierte doc.espacios (guiones de animación)
+
+    def _rehacer(self):
+        self._intentar(self.doc.rehacer)
+        self.releer_espacios()
 
     def _salir_de_boceto(self):
         """Antes de otro comando: termina el boceto activo (como Fusion), cancela la elección de plano y
