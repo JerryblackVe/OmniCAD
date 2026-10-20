@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Insertar derivación: vínculo externo, parámetros, bocetos, API y diálogo."""
 import copy
+import math
 
 import pytest
 
@@ -105,6 +106,35 @@ def test_boceto_derivado_utilizable_y_dependiente(origen):
     proyecto.guardar(fuente, ruta)
     doc.recalcular()
     _volumen(doc, "op2.c1", 120)
+
+
+@pytest.mark.parametrize("herramienta, argumentos, volumen", [
+    ("extrude", {"sketch": "op1.op3", "distance": 5}, 60),
+    ("revolve", {"sketch": "op1.op3", "profile": 0, "axis": "sketch_y"}, 48 * math.pi),
+    ("run_operation", {"type": "extrusion", "params": {
+        "boceto": "op1.op3", "perfiles": [0], "distancia": "5"}}, 60),
+    ("run_operation", {"type": "revolucion", "params": {
+        "perfiles": [{"sketch": "op1.op3", "profile": 0}], "eje": "v", "angulo": "360"}}, 48 * math.pi),
+])
+def test_api_perfil_derivado_utilizable_y_de_solo_lectura(origen, herramienta, argumentos, volumen):
+    _, ruta = origen
+    sesion = api.Sesion()
+    _ok(api.llamar(sesion, "insert_derive", {"source_path": str(ruta), "sketches": ["op3"]}))
+    info = _ok(api.llamar(sesion, "get_sketch", {"sketch": "op1.op3"}))
+    assert info["id"] == "op1.op3" and info["name"] == "Rectángulo" and info["available"]
+    assert len(info["entities"]) == 4 and info["profiles"][0]["area"] == pytest.approx(12)
+    assert info["plane_frame"]["normal"] == [0, 0, 1]
+    _ok(api.llamar(sesion, herramienta, argumentos))
+    _volumen(sesion.doc, "op2.c1", volumen)
+    perfiles = _ok(api.llamar(sesion, "get_profile_sketches", {"feature": "op2"}))
+    assert perfiles["sketches"] == [{"id": "op1.op3", "name": "Rectángulo"}]
+    antes = sesion.doc.a_dict()
+    resultado = api.llamar(sesion, "draw_line", {"sketch": "op1.op3", "start_x": 0, "start_y": 0,
+                                               "end_x": 1, "end_y": 1})
+    assert not resultado["ok"] and resultado["error_kind"] == "INVALID_ARGUMENTS"
+    assert "solo lectura" in resultado["mensaje"]
+    assert sesion.doc.a_dict() == antes
+    assert _ok(api.llamar(sesion, "get_sketch", {"sketch": "op1.op3"})) == info
 
 
 def test_guardar_abrir_ignora_cache_local_del_vinculo_y_sus_dependientes(origen, tmp_path):
