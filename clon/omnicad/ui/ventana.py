@@ -380,8 +380,8 @@ class VentanaPrincipal(QMainWindow):
           "Anima una unión en todo su recorrido.", "estudio_movimiento")
         A("insertar_malla", "Insertar malla…", self.insertar_malla, None,
           "Inserta un archivo STL, OBJ, 3MF o PLY como cuerpo de malla.", "insertar_malla")
-        A("exportar_malla", "Exportar como malla…", lambda: self.exportar(("3mf", "stl", "obj", "ply", "glb", "gltf")),
-          None, "Guarda los cuerpos como malla: STL, OBJ, 3MF, PLY o glTF/GLB (con colores).", "exportar_malla")
+        A("exportar_malla", "Guardar como malla…", self.exportar_malla,
+          None, "Guarda cuerpos como STL, OBJ o 3MF con unidades, estructura y refinado.", "exportar_malla")
         A("seleccionar", "Seleccionar", self.accion_seleccionar, None,
           "Vuelve a seleccionar: sale de la herramienta de boceto activa (línea, círculo…) y de los modos de "
           "navegación (órbita, encuadre, zoom) y de selección por región.", "seleccionar")
@@ -2370,6 +2370,40 @@ class VentanaPrincipal(QMainWindow):
         # El documento que está abierto no se pisa sin preguntar (si tiene cambios: ¿Guardar los cambios?).
         if self._salir_de_boceto() and self._confirmar_descartar():
             self.set_documento(doc)
+
+    def exportar_malla(self):
+        from .guardar_malla import DialogoGuardarMalla
+        cuerpos = [c for c in self.doc.estado_final.cuerpos.values() if not es_patron_plano(c)]
+        if not cuerpos:
+            QMessageBox.information(self, NOMBRE_APP, "No hay cuerpos para exportar.")
+            return
+        elegidos = {h["ref"].get("cuerpo") for h in self.seleccion}
+        nombres = {c.id: self.doc.propiedades.get(c.id, {}).get("nombre", c.nombre) for c in cuerpos}
+        caja = DialogoGuardarMalla(cuerpos, elegidos - {None}, nombres, self)
+        if not caja.exec():
+            return
+        opciones = caja.opciones()
+        formato = opciones["formato"]
+        extension = "stl" if formato.startswith("stl_") else formato
+        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar como malla", f"{self.doc.nombre}.{extension}",
+                                             f"{ex.FORMATOS_MALLA[formato]} (*.{extension})")
+        if not ruta:
+            return
+        if Path(ruta).suffix.lower() != f".{extension}":
+            ruta += f".{extension}"
+        try:
+            cuerpos = caja.cuerpos_elegidos()
+            rutas = ex.rutas_malla(cuerpos, ruta, formato=formato, estructura=opciones["estructura"])
+            existentes = [p for p in rutas if p.exists()]
+            if opciones["estructura"] == "uno_por_cuerpo" and existentes:
+                if QMessageBox.question(self, "Reemplazar archivos", f"Ya existen {len(existentes)} archivo(s). "
+                                        "¿Reemplazarlos?", QMessageBox.Yes | QMessageBox.No,
+                                        QMessageBox.No) != QMessageBox.Yes:
+                    return
+            n = ex.exportar_malla(cuerpos, ruta, **opciones)
+            self.mensaje(f"Guardados {len(rutas)} archivo(s), {n} triángulos → {ruta}", 6000)
+        except (geo.ErrorGeometria, ex.ErrorExportacion, RuntimeError, OSError) as e:
+            QMessageBox.critical(self, "No se pudo guardar la malla", str(e))
 
     def exportar(self, formato_salida=None):
         cuerpos = list(self.doc.estado_final.cuerpos.values())
