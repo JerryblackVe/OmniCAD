@@ -947,11 +947,13 @@ def escribir(m, ruta, **opciones):
 _REFINAMIENTO = {"bajo": (2e-3, 30.0), "medio": (5e-4, 15.0), "alto": (1e-4, 8.0)}
 
 
-def desde_brep(forma, *, refinamiento="medio", desviacion=None, angulo=None):
+def desde_brep(forma, *, refinamiento="medio", desviacion=None, angulo=None,
+               longitud_maxima=0.0, relacion_aspecto=0.0):
     """Teselar [MESH-TESSELLATE]: sólido o superficie → malla, un grupo de caras por cara B-rep.
     refinamiento 'bajo' | 'medio' | 'alto' (desvío = 0,2 % / 0,05 % / 0,01 % de la diagonal de la caja y
     30° / 15° / 8°; Fusion no publica sus valores) o 'personalizado'. `desviacion` (mm, Surface Deviation)
-    y `angulo` (grados, Normal Deviation) pisan al preset."""
+    y `angulo` (grados, Normal Deviation) pisan al preset. Guardar como malla también admite
+    `longitud_maxima` (mm) y `relacion_aspecto` (arista mayor / altura menor); 0 desactiva cada límite."""
     if refinamiento not in (*_REFINAMIENTO, "personalizado"):
         raise geo.ErrorGeometria(f"Refinamiento desconocido: {refinamiento}")
     if refinamiento == "personalizado" and desviacion is None and angulo is None:
@@ -963,7 +965,7 @@ def desde_brep(forma, *, refinamiento="medio", desviacion=None, angulo=None):
     frac, ang = _REFINAMIENTO.get(refinamiento, _REFINAMIENTO["medio"])
     desv = float(desviacion) if desviacion is not None else frac * diag
     ang = float(angulo) if angulo is not None else ang
-    if desv <= 0 or not 0 < ang < 180:
+    if not math.isfinite(desv) or desv <= 0 or not 0 < ang < 180:
         raise geo.ErrorGeometria("La desviación debe ser positiva y el ángulo estar entre 0° y 180°.")
     copia = BRepBuilderAPI_Copy(forma, True, False).Shape()   # sin la malla de visualización previa
     tris, grupos = [], []
@@ -973,7 +975,89 @@ def desde_brep(forma, *, refinamiento="medio", desviacion=None, angulo=None):
     if not tris:
         raise geo.ErrorGeometria("La forma no tiene caras para teselar.")
     m = Malla.desde_triangulos(np.concatenate(tris), np.concatenate(grupos))
-    return _soldar(m, 1e-7 * diag)
+    return refinar_triangulos(_soldar(m, 1e-7 * diag), longitud_maxima=longitud_maxima,
+                              relacion_aspecto=relacion_aspecto)
+
+
+def _mejorar_diagonales(ed):
+    """Quita astillas cambiando solo diagonales coplanares dentro del mismo grupo, sin alterar la superficie."""
+    for a, b in ed.aristas().tolist():
+        comunes = sorted(ed.vf[a] & ed.vf[b])
+        if len(comunes) != 2 or ed.g[comunes[0]] != ed.g[comunes[1]]:
+            continue
+        opuestos = [x for f in comunes for x in ed.c[f] if x not in (a, b)]
+        if len(set(opuestos)) != 2:
+            continue
+        t = ed.v[np.array([ed.c[f] for f in comunes])]
+        normales = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+        areas = np.linalg.norm(normales, axis=1)
+        if np.any(areas == 0) or np.dot(*normales) < (1 - 1e-12) * np.prod(areas):
+            continue
+        c, d = opuestos
+        nuevos = ed.v[np.array([[a, c, d], [b, c, d]])]
+        areas_nuevas = np.linalg.norm(np.cross(nuevos[:, 1] - nuevos[:, 0], nuevos[:, 2] - nuevos[:, 0]), axis=1)
+        if np.any(areas_nuevas == 0):
+            continue
+        antes = np.sum((t[:, [1, 2, 0]] - t) ** 2, axis=(1, 2)) / areas
+        despues = np.sum((nuevos[:, [1, 2, 0]] - nuevos) ** 2, axis=(1, 2)) / areas_nuevas
+        if despues.sum() < antes.sum() * (1 - 1e-12):
+            ed.voltear(a, b)
+
+
+def _relajar_planos(ed):
+    """Distribuye vértices interiores solo dentro de un plano; congela pliegues y límites de grupos."""
+    caras = np.asarray(ed.c)
+    t = ed.v[caras]
+    normales = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    normales /= np.maximum(np.linalg.norm(normales, axis=1, keepdims=True), 1e-300)
+    for x, incidentes in enumerate(ed.vf):
+        fs = sorted(incidentes)
+        ed.fijo[x] = (not fs or len({ed.g[f] for f in fs}) != 1
+                      or np.any(normales[fs] @ normales[fs[0]] < 1 - 1e-12))
+    anteriores = ed.v.copy()
+    _relajar(ed, None, True, 1)
+    t = ed.v[caras]
+    nuevas = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    if np.any(np.einsum("ij,ij->i", normales, nuevas) <= ed.area_min):
+        ed.v[:] = anteriores
+
+
+def refinar_triangulos(m, *, longitud_maxima=0.0, relacion_aspecto=0.0):
+    """Controles de Guardar como malla [MESH-SAVE-AS-MESH]: divide aristas compartidas sin abrir grietas
+    ni mover la superficie teselada. 0 desactiva el límite. La relación es arista mayor / altura menor;
+    si la geometría no permite alcanzarla por subdivisión, falla en vez de exportar incumpliéndola."""
+    if not math.isfinite(longitud_maxima) or longitud_maxima < 0:
+        raise geo.ErrorGeometria("La longitud máxima debe ser finita y no negativa (0 = sin límite).")
+    if not math.isfinite(relacion_aspecto) or (relacion_aspecto != 0 and relacion_aspecto <= 2 / math.sqrt(3)):
+        raise geo.ErrorGeometria("La relación de aspecto debe ser mayor que 1,154701 (0 = sin límite).")
+    if not longitud_maxima and not relacion_aspecto:
+        return m
+    for _ in range(24):
+        t = m.triangulos()
+        largos = np.linalg.norm(t[:, [1, 2, 0]] - t, axis=2)
+        mayor = largos.max(1)
+        malas = mayor > longitud_maxima * (1 + 1e-12) if longitud_maxima else np.zeros(len(t), bool)
+        if relacion_aspecto:
+            doble_area = 2 * m.areas_caras()
+            if np.any(doble_area == 0):
+                raise geo.ErrorGeometria("No se puede controlar el aspecto de triángulos sin área.")
+            malas |= mayor ** 2 > relacion_aspecto * doble_area * (1 + 1e-12)
+        if not malas.any():
+            return m
+        j = largos[malas].argmax(1)
+        caras = m.caras[malas]
+        aristas = np.unique(np.sort(np.stack([caras[np.arange(len(j)), j],
+                                              caras[np.arange(len(j)), (j + 1) % 3]], axis=1), axis=1), axis=0)
+        if len(m.caras) + 2 * len(aristas) > TRIANGULOS_MAXIMOS_REMALLADO:
+            raise geo.ErrorGeometria("El refinado supera los 100.000 triángulos: aumentá los límites personalizados.")
+        ed = _Editor(m.vertices, m.caras, m.grupos)
+        for a, b in aristas.tolist():
+            ed.dividir(a, b)
+        if relacion_aspecto:
+            _mejorar_diagonales(ed)
+            _relajar_planos(ed)
+        m = ed.exportar()
+    raise geo.ErrorGeometria("No se pudieron alcanzar los límites por subdivisión: aumentá la longitud o el aspecto.")
 
 
 # ---------------------------------------------------------------- reparar
