@@ -742,7 +742,7 @@ class _Escena:
         self.e = escena_normalizada(escena)
         self.n_luces = n_luces
         self.cielo = cielo or CIELO_DEFECTO
-        tris, nors, locs, albedo, mats = [], [], [], [], []
+        tris, nors, locs, albedo, mats, vcols, emis = [], [], [], [], [], [], []
         for o in objetos:
             op = float(o.get("opacidad", 1.0))
             v = np.asarray(o["v"], np.float64).reshape(-1, 3)
@@ -756,6 +756,9 @@ class _Escena:
             if loc is None:
                 loc = coordenadas_veta(v) if ac["patron"] == "madera" else v
             locs.append(np.asarray(loc, np.float64).reshape(-1, 3)[:k * 3].reshape(k, 3, 3))
+            vc = o.get("colores")                      # color sRGB por vértice (análisis): reemplaza al albedo
+            vcols.append(None if vc is None else srgb_a_lineal(np.asarray(vc, np.float64).reshape(-1, 3)[:k * 3]).reshape(k, 3, 3))
+            emis.append(np.full(k, 1.0 if o.get("emisivo") else 0.0))     # sin iluminación: sale su color tal cual
             color = srgb_a_lineal(o.get("color") or BIBLIOTECA_ASPECTOS[ASPECTO_DEFECTO]["color"])
             c2 = srgb_a_lineal(ac["color2"]) if ac.get("color2") else color * 0.6
             albedo.append(np.tile(np.r_[color, c2], (k, 1)))
@@ -767,6 +770,11 @@ class _Escena:
         self.tris = np.concatenate(tris) if tris else vacio
         self.nors = np.concatenate(nors) if nors else vacio
         self.locs = np.concatenate(locs) if locs else vacio
+        self.vcol = self.tvc = None
+        if any(c is not None for c in vcols):
+            self.tvc = np.concatenate([np.full(len(t), c is not None) for t, c in zip(tris, vcols, strict=True)])
+            self.vcol = np.concatenate([np.zeros_like(t) if c is None else c for t, c in zip(tris, vcols, strict=True)])
+        self.emis = np.concatenate(emis) if emis else np.zeros(0)
         self.albedo = np.concatenate(albedo) if albedo else np.zeros((0, 6))
         self.mats = np.concatenate(mats) if mats else np.zeros((0, 6))
         self.opacos = self.mats[:, 2] < 0.02
@@ -794,7 +802,7 @@ class _Escena:
     @property
     def sombras(self):
         if self._sombras is None and self.e["sombras"] and len(self.tris):
-            casters = self.tris[self.mats[:, 2] < 0.6]
+            casters = self.tris[(self.mats[:, 2] < 0.6) & (self.emis < 0.5)]
             if len(casters):
                 self._sombras = MapaSombras(casters, luces(self.e["rotacion"])[0], self.res_sombras)
         return self._sombras
@@ -852,6 +860,10 @@ def _sombrear_pixeles(esc, p, n, v, t, lw, sombra, ao):
     m = esc.mats[t]
     alb = esc.albedo[t]
     color = alb[:, :3].copy()
+    if esc.tvc is not None:
+        hv = esc.tvc[t]
+        if hv.any():
+            color[hv] = np.einsum("ij,ijk->ik", lw[hv], esc.vcol[t[hv]])
     madera = m[:, 4] > 0.5
     if madera.any():
         loc = np.einsum("ij,ijk->ik", lw[madera], esc.locs[t[madera]])
@@ -960,8 +972,11 @@ def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1
             zv[pix] = pv[:, 2]
             ao = _ssao(pv, nvista, zv, proy, w, h, esc.radio * 0.07)
         sombra = esc.visibilidad(p, np.where((np.einsum("ij,ij->i", n, v) < 0)[:, None], -n, n))
-        dif, esp, _fr, _c, _t = _sombrear_pixeles(esc, p, n, v, t, lw, sombra, ao)
+        dif, esp, _fr, color, _t = _sombrear_pixeles(esc, p, n, v, t, lw, sombra, ao)
         rgb[pix] = mapa_tonos(dif + esp, e["exposicion"])
+        emisivo = esc.emis[t] > 0.5
+        if emisivo.any():
+            rgb[pix[emisivo]] = lineal_a_srgb(color[emisivo])
         alfa[pix] = 1.0
 
     _pintar_calcomanias(esc, mvp, w, h, zbuf, rgb, alfa)
@@ -997,7 +1012,8 @@ def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, 
 
     objetos: [{"v": triángulos sueltos Nx3 (mundo), "n": normales Nx3, "color": sRGB 0..1, "acabado": dict,
     "material": nombre del material físico (si no hay acabado), "opacidad": 0..1, "local": Nx3 (opcional,
-    coordenadas propias para las vetas)}]. cam: dict de `camara()`. escena: Configuración de escena
+    coordenadas propias para las vetas), "colores": Nx3 sRGB por vértice (opcional; reemplaza a "color"),
+    "emisivo": True para dibujar el color tal cual, sin luces (líneas, tapas de corte)}]. cam: dict de `camara()`. escena: Configuración de escena
     (`ESCENA_DEFECTO`). cielo: (arriba, abajo, intensidad) del entorno, en sRGB (ENTORNOS, `cielo_de`).
     calcomanias: datos del estado (malla con vértices y UV, imagen embebida y opacidad), como en el visor.
     progreso(fracción) puede devolver False para cancelar (lanza RenderCancelado)."""

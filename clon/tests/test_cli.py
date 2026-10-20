@@ -270,7 +270,7 @@ def test_call_imagen_a_temporal_si_no_hay_image_out(pieza, capsys):
 
 def test_render_vista_invalida_es_uso(pieza, tmp_path, capsys):
     codigo, _, err = correr(capsys, "render", pieza, tmp_path / "x.png", "--view", "diagonal")
-    assert codigo == 2 and "iso" in err
+    assert codigo == 1 and "iso" in err and "diagonal" in err         # no es estándar ni guardada: la herramienta lo dice
 
 
 def test_export_stl(pieza, tmp_path, capsys):

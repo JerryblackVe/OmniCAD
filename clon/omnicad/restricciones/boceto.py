@@ -57,6 +57,107 @@ class ErrorBoceto(ValueError):
     pass
 
 
+def centro_arco_tangente(inicio, otro, fin):
+    """(centro, antihorario) del arco tangente a la línea otro→inicio (Fusion: Arco tangente).
+
+    None si el final está sobre la recta tangente o coincide con el inicio, como en el editor.
+    """
+    t = (inicio[0] - otro[0], inicio[1] - otro[1])
+    nt = math.hypot(*t) or 1.0
+    t = (t[0] / nt, t[1] / nt)
+    d = (fin[0] - inicio[0], fin[1] - inicio[1])
+    izquierda = t[0] * d[1] - t[1] * d[0] > 0
+    n = (-t[1], t[0]) if izquierda else (t[1], -t[0])
+    den = 2 * (d[0] * n[0] + d[1] * n[1])
+    if abs(den) < 1e-9:
+        return None
+    r = (d[0] ** 2 + d[1] ** 2) / den
+    return (inicio[0] + n[0] * r, inicio[1] + n[1] * r), izquierda
+
+
+def cambiar_radio(b, cid, radio):
+    """Cambia el radio de un círculo o un arco SIN cota (lo que hace arrastrarlo en el editor): el círculo guarda el
+    radio nuevo; en un arco, sus extremos libres se corren sobre el radio nuevo. Devuelve el punto movido (o None)."""
+    c = b.curvas[cid]
+    if isinstance(c, Circulo):
+        c.radio = radio
+        return None
+    cx, cy = b.coords(c.centro)
+    fijos = b.puntos_fijos()
+    movidos = []
+    for pid in (c.inicio, c.fin):
+        if pid in fijos:
+            continue
+        p = b.puntos[pid]
+        d = math.hypot(p.x - cx, p.y - cy) or 1.0
+        p.x, p.y = cx + (p.x - cx) * radio / d, cy + (p.y - cy) * radio / d
+        movidos.append(pid)
+    return movidos[0] if movidos else None
+
+
+def agregar_linea_medio(b, medio, extremo, construccion=False):
+    """Línea de punto medio (Fusion: Línea › Punto medio): `medio` (punto id o coordenadas) es su punto medio y
+    `extremo` uno de sus extremos; el otro es el simétrico. Deja la restricción «punto medio». Devuelve el id."""
+    pm, m = (medio, b.coords(medio)) if isinstance(medio, int) else (None, tuple(medio))
+    pe, e = (extremo, b.coords(extremo)) if isinstance(extremo, int) else (None, tuple(extremo))
+    inicio = (2 * m[0] - e[0], 2 * m[1] - e[1])
+    lid = b.agregar_linea(inicio, pe if pe is not None else e, construccion)
+    b.agregar_restriccion("punto_medio", [pm if pm is not None else b.agregar_punto(*m), lid])
+    return lid
+
+
+def agregar_rectangulo_centro(b, centro, esquina, construccion=False):
+    """Rectángulo central (Fusion: Rectángulo › Centro): centro (punto id o coordenadas) y una esquina, con sus dos
+    diagonales de construcción y el centro como punto medio de una. Devuelve los ids de las 4 líneas."""
+    pc, m = (centro, b.coords(centro)) if isinstance(centro, int) else (None, tuple(centro))
+    k = tuple(esquina)
+    ls = b.agregar_rectangulo((2 * m[0] - k[0], 2 * m[1] - k[1]), k, construccion)
+    d1 = b.agregar_linea(b.curvas[ls[0]].p1, b.curvas[ls[2]].p1, True)
+    b.agregar_linea(b.curvas[ls[1]].p1, b.curvas[ls[3]].p1, True)
+    b.agregar_restriccion("punto_medio", [pc if pc is not None else b.agregar_punto(*m), d1])
+    return ls
+
+
+def agregar_rectangulo_3p(b, a, bb, c, construccion=False):
+    """Rectángulo de 3 puntos (Fusion: Rectángulo › 3 puntos): el lado A→B y un tercer punto C que da el ancho,
+    perpendicular al lado. Queda con perpendicular y paralelas. Devuelve los ids de las 4 líneas."""
+    (ax, ay), (bx, by), (cx, cy) = a, bb, c
+    ux, uy = bx - ax, by - ay
+    L = math.hypot(ux, uy)
+    if L < 1e-9:
+        raise ErrorBoceto("Los dos primeros puntos coinciden.")
+    nx, ny = -uy / L, ux / L
+    w = (cx - ax) * nx + (cy - ay) * ny
+    if abs(w) < 1e-9:
+        raise ErrorBoceto("El rectángulo no puede tener ancho cero.")
+    esquinas = [b.agregar_punto(ax, ay), b.agregar_punto(bx, by),
+                b.agregar_punto(bx + nx * w, by + ny * w), b.agregar_punto(ax + nx * w, ay + ny * w)]
+    ls = [b.agregar_linea(esquinas[i], esquinas[(i + 1) % 4], construccion) for i in range(4)]
+    b.agregar_restriccion("perpendicular", [ls[0], ls[1]])
+    b.agregar_restriccion("paralela", [ls[0], ls[2]])
+    b.agregar_restriccion("paralela", [ls[1], ls[3]])
+    return ls
+
+
+def puntos_espiral(centro, inicio, vueltas, paso):
+    """Puntos de ajuste de la espiral plana del editor, en mm (no una hélice 3D de Fusion)."""
+    if not all(math.isfinite(v) for v in (*centro, *inicio, vueltas, paso)):
+        raise ErrorBoceto("La espiral necesita coordenadas, vueltas y paso finitos.")
+    r0 = math.dist(centro, inicio)
+    a0 = math.atan2(inicio[1] - centro[1], inicio[0] - centro[0])
+    if vueltas <= 0:
+        raise ErrorBoceto("La espiral necesita al menos una fracción de vuelta.")
+    n = max(4, int(math.ceil(8 * vueltas)))
+    pts = []
+    for i in range(n + 1):
+        th = 2 * math.pi * vueltas * i / n
+        r = r0 + paso * th / (2 * math.pi)
+        pts.append((centro[0] + r * math.cos(a0 + th), centro[1] + r * math.sin(a0 + th)))
+    if r0 < 1e-9 and paso <= 0:
+        raise ErrorBoceto("La espiral necesita un radio o un paso.")
+    return pts
+
+
 def validar_valor_cota(tipo, valor):
     """Como Fusion, una cota de largo, radio, diámetro o desfase tiene que ser mayor que cero (el solver
     toma el valor absoluto del radio: −5 quedaba guardado y dibujaba 5) y de hasta MEDIDA_MAXIMA (1 km; frena

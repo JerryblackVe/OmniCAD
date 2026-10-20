@@ -40,11 +40,15 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "draw_ellipse", "draw_slot", "draw_point", "draw_conic", "draw_tangent_circle", "draw_blend_curve",
                 "sketch_fillet", "sketch_chamfer", "trim_sketch_curve", "offset_sketch_curves", "mirror_sketch",
                 "sketch_rectangular_pattern", "sketch_circular_pattern", "project_to_sketch", "set_line_type",
-                "edit_dimension", "auto_constrain"]
+                "edit_dimension", "auto_constrain",
+                # MCP-29, MCP-91 y MCP-92 (tests/test_api_boceto_extra.py) y MCP-76
+                "draw_spiral", "set_circle_radius", "extend_sketch_curve", "split_sketch_curve",
+                # B-80: redefinir plano y construcción (tests/test_api_misc.py, tests/test_api_construccion.py)
+                "redefine_sketch_plane", "create_construction_axis", "create_construction_point", "create_ucs"]
 
 
 def test_herramientas_del_grupo_boceto():
-    assert [h["nombre"] for h in api.catalogo("boceto")] == HERRAMIENTAS
+    assert sorted(h["nombre"] for h in api.catalogo("boceto")) == sorted(HERRAMIENTAS)     # el orden depende de qué módulo se importó antes
     lecturas = {h["nombre"] for h in api.catalogo("boceto") if not h["modifica"]}
     assert lecturas == {"get_sketch"}
 

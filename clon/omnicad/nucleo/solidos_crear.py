@@ -2595,7 +2595,7 @@ def _indices(n, simetrico):
     if int(n) < 1:
         raise geo.ErrorGeometria("La cantidad del patrón debe ser al menos 1.")
     n = int(n)
-    return list(range(-(n - 1), n)) if simetrico else list(range(n))
+    return [0] + [s * i for i in range(1, n) for s in (-1, 1)] if simetrico else list(range(n))
 
 
 def _paso(n, distancia, distribucion):

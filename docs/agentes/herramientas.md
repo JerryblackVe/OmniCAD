@@ -5,23 +5,23 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-234 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+297 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 34 | Archivo, escena, timeline y deshacer. |
-| [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
+| [documento](#grupo-documento) | 43 | Archivo, escena, timeline y deshacer. |
+| [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
+| [boceto](#grupo-boceto) | 37 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 33 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
-| [chapa](#grupo-chapa) | 17 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
+| [solido](#grupo-solido) | 68 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 9 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
-| [inspeccion](#grupo-inspeccion) | 12 | Ver y medir el resultado. |
+| [inspeccion](#grupo-inspeccion) | 20 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
@@ -40,7 +40,7 @@ Archivo, escena, timeline y deshacer.
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
 | [`recompute_all`](#recompute_all) | sí | Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. |
 | [`set_geometry_engine`](#set_geometry_engine) | sí | Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). |
-| [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
+| [`new_document`](#new_document) | sí | Empieza un documento vacío (o el modelo de ejemplo con example=true) en lugar del actual. |
 | [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). |
 | [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
 | [`insert_derive`](#insert_derive) | sí | Deriva de OTRO proyecto .omnicad al documento actual (Insert Derive de Fusion): los cuerpos, bocetos y parámetros elegidos entran como UN paso del timeline que guarda la ruta del origen y qué se derivó; al recalcular vuelve a leer el origen (si cambió, se actualiza; si falta, el paso queda con error). |
@@ -59,16 +59,25 @@ Archivo, escena, timeline y deshacer.
 | [`discard_recoverable_document`](#discard_recoverable_document) | no | Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). |
 | [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
 | [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
+| [`manage_configurations`](#manage_configurations) | sí | Consulta y edita la tabla de variantes de CONFIGURAR. Solo apply aplica parámetros y supresiones; cada edición o aplicación es un deshacer. |
+| [`manage_comments`](#manage_comments) | sí | Lista, agrega o borra comentarios del proyecto. |
+| [`list_recent_documents`](#list_recent_documents) | no | Lista los proyectos recientes existentes, en el orden del panel de datos. |
 | [`export_mesh`](#export_mesh) | no | Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. |
 | [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
 | [`manage_browser`](#manage_browser) | sí | Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
-| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. |
+| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo, y los análisis (por su nombre: se guarda en el documento, sin ventana). |
+| [`set_object_visibility`](#set_object_visibility) | sí | Muestra u oculta tipos de objetos de trabajo en la vista, como Visibilidad del objeto del menú de visualización: planos, ejes y punto de origen, planos, ejes y puntos de usuario, bocetos, sistemas de coordenadas, orígenes y ejes de unión y uniones. |
 | [`find_in_window`](#find_in_window) | no | Selecciona cuerpos, los encuadra en la ventana y resalta su paso creador en el timeline, como Buscar en la ventana del navegador. |
 | [`set_body_opacity`](#set_body_opacity) | sí | Cambia el Control de opacidad de cuerpos del navegador. |
-| [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. |
+| [`isolate_bodies`](#isolate_bodies) | sí | Muestra solo los cuerpos elegidos; restore vuelve a mostrar todos. |
+| [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). |
+| [`get_preferences`](#get_preferences) | no | Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas. |
+| [`set_preference`](#set_preference) | sí | Valida y guarda una preferencia autorizada. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
+| [`get_selection`](#get_selection) | no | Lee lo que la persona tiene elegido en la ventana: cuerpos, caras, aristas, perfiles, bocetos, planos… Cada elemento trae su referencia persistente (ref), que sirve como argumento de las herramientas que reciben referencias. |
+| [`select_entities`](#select_entities) | no | Elige en la ventana cuerpos, caras, aristas o perfiles de boceto, por el mismo camino que el clic: quedan resaltados y en el navegador. |
 
 ### `get_scene_info`
 
@@ -85,8 +94,11 @@ Selecciona cuerpos en la ventana y los revela en el navegador. Solo en vivo; una
 
 - Modifica el documento: no.
 - Parámetros:
-  - `bodies` (lista de texto; obligatorio): ids o nombres de los cuerpos a seleccionar; [] limpia la selección.
-- CLI: `omnicad call select_bodies --doc pieza.omnicad bodies=…`
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos; [] limpia la selección. Omitido con filtros = todos; sin filtros = ninguno.
+  - `by_name` (texto; opcional, por defecto `null`): parte del nombre o patrón con * y ?, sin distinguir mayúsculas; se combina con los demás filtros.
+  - `by_size` (objeto; opcional, por defecto `null`): límites inclusivos {"min": mm, "max": mm} de la diagonal de la caja envolvente; ambos opcionales.
+  - `invert` (true/false; opcional, por defecto `false`): true selecciona el complemento de los cuerpos elegidos por bodies y los filtros.
+- CLI: `omnicad call select_bodies --doc pieza.omnicad`
 
 ### `set_document_units`
 
@@ -117,12 +129,13 @@ Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de
 
 ### `new_document`
 
-Empieza un documento vacío en lugar del actual. Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta).
+Empieza un documento vacío (o el modelo de ejemplo con example=true) en lugar del actual. Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `name` (texto; opcional, por defecto `"Sin título"`): nombre del documento nuevo.
+  - `name` (texto; opcional, por defecto `"Sin título"`): nombre del documento nuevo (con example, vacío = «Ejemplo»).
   - `discard` (true/false; opcional, por defecto `false`): true para descartar los cambios sin guardar del documento actual.
+  - `example` (true/false; opcional, por defecto `false`): true abre el modelo de ejemplo (placa con agujero, aro, parámetros y booleanos) en lugar de uno vacío, como Ayuda › Cargar ejemplo.
 - CLI: `omnicad call new_document --doc pieza.omnicad`
 
 ### `open_document`
@@ -323,6 +336,39 @@ Opera una calcomanía como el menú de su fila en el navegador: edit reabre su p
   - `image` (texto; opcional, por defecto `null`): ruta de la imagen nueva (solo con replace_image).
 - CLI: `omnicad call decal_view --doc pieza.omnicad decal=… action=…`
 
+### `manage_configurations`
+
+Consulta y edita la tabla de variantes de CONFIGURAR. Solo apply aplica parámetros y supresiones; cada edición o aplicación es un deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("get" | "set" | "add_row" | "delete_row" | "apply" | "clear"; opcional, por defecto `"get"`): get consulta; set reemplaza; add_row agrega; delete_row borra; apply activa; clear vacía la tabla.
+  - `columns` (lista de objeto o null; opcional, por defecto `null`): columnas para set: {"type": "parameter", "name": parámetro} o {"type": "suppress", "feature": id o nombre de paso}.
+  - `rows` (lista de objeto o null; opcional, por defecto `null`): filas para set: [{"name": nombre, "values": [expresión o sí/no por columna]}].
+  - `row` (texto; opcional, por defecto `null`): nombre de la fila a agregar, borrar o aplicar.
+  - `values` (lista; opcional, por defecto `null`): valores por columna para add_row.
+  - `active` (texto; opcional, por defecto `null`): nombre activo al guardar set; omitido = sin fila activa. set solo guarda la tabla, no aplica la fila.
+- CLI: `omnicad call manage_configurations --doc pieza.omnicad`
+
+### `manage_comments`
+
+Lista, agrega o borra comentarios del proyecto. Se guardan con el diseño, pero no entran en deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("list" | "add" | "delete"; opcional, por defecto `"list"`): list consulta, add agrega texto y delete borra por índice.
+  - `text` (texto; opcional, por defecto `null`): texto no vacío del comentario para add.
+  - `index` (entero; opcional, por defecto `null`): índice del comentario para delete (desde cero).
+- CLI: `omnicad call manage_comments --doc pieza.omnicad`
+
+### `list_recent_documents`
+
+Lista los proyectos recientes existentes, en el orden del panel de datos.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call list_recent_documents --doc pieza.omnicad`
+
 ### `export_mesh`
 
 Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. Las mallas existentes conservan sus facetas; los controles personalizados de arista y aspecto también las subdividen.
@@ -365,13 +411,23 @@ Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección,
 
 ### `set_browser_visibility`
 
-Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. Sin items, muestra todo. No modifica geometría.
+Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo, y los análisis (por su nombre: se guarda en el documento, sin ventana). Sin items, muestra todo. No modifica geometría.
 
 - Modifica el documento: no.
 - Parámetros:
-  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, componentes, bocetos, calcomanías o grupos; vacío muestra todo.
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, componentes, bocetos, calcomanías o grupos, o nombres de análisis (get_scene_info / manage_analysis los lista); vacío muestra todo.
   - `visible` (true/false; opcional, por defecto `true`): true muestra; false oculta los elementos pedidos.
 - CLI: `omnicad call set_browser_visibility --doc pieza.omnicad`
+
+### `set_object_visibility`
+
+Muestra u oculta tipos de objetos de trabajo en la vista, como Visibilidad del objeto del menú de visualización: planos, ejes y punto de origen, planos, ejes y puntos de usuario, bocetos, sistemas de coordenadas, orígenes y ejes de unión y uniones. El estado se guarda con el documento (doc.espacios['visor']) y la ventana en vivo lo aplica. Admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `types` (lista de "planos_origen" | "ejes_origen" | "punto_origen" | "planos_usuario" | "ejes_usuario" | "puntos_usuario" | "bocetos" | "scu" | "origenes_union" | "ejes_union" | "uniones" | "all" o null; opcional, por defecto `null`): tipos de objeto: planos_origen, ejes_origen, punto_origen, planos_usuario, ejes_usuario, puntos_usuario, bocetos, scu, origenes_union, ejes_union, uniones, o "all" (todos); vacío = solo consulta el estado.
+  - `visible` (true/false; opcional, por defecto `true`): true muestra esos tipos; false los oculta.
+- CLI: `omnicad call set_object_visibility --doc pieza.omnicad`
 
 ### `find_in_window`
 
@@ -392,16 +448,45 @@ Cambia el Control de opacidad de cuerpos del navegador. Sin cuerpos, se aplica a
   - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos; omitido o vacío cambia todos los cuerpos del componente raíz.
 - CLI: `omnicad call set_body_opacity --doc pieza.omnicad opacity=…`
 
+### `isolate_bodies`
+
+Muestra solo los cuerpos elegidos; restore vuelve a mostrar todos. Guarda la visibilidad del navegador y admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): nombres o ids de los cuerpos que deben quedar visibles.
+  - `restore` (true/false; opcional, por defecto `false`): true vuelve a mostrar todos los cuerpos.
+- CLI: `omnicad call isolate_bodies --doc pieza.omnicad`
+
 ### `sketch_view`
 
-Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. Las capas solo están disponibles mientras se edita ese boceto.
+Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). Las opciones y finish solo están disponibles mientras se edita ese boceto.
 
 - Modifica el documento: no.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `action` ("edit" | "select_plane" | "look_at" | "find_in_window" | "find_in_timeline" | "profile" | "dimensions" | "projected" | "construction"; obligatorio): edit, select_plane, look_at, find_in_window, find_in_timeline, profile, dimensions, projected o construction.
-  - `visible` (true/false; opcional, por defecto `null`): estado de la capa; omitido la alterna (solo las cuatro acciones de capa).
+  - `action` ("edit" | "select_plane" | "look_at" | "find_in_window" | "find_in_timeline" | "finish" | "profile" | "dimensions" | "projected" | "construction" | "grid" | "snap" | "cut" | "points" | "constraints"; obligatorio): edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
+  - `visible` (true/false; opcional, por defecto `null`): estado de la opción de la paleta; omitido la alterna (solo las acciones de opción).
 - CLI: `omnicad call sketch_view --doc pieza.omnicad sketch=… action=…`
+
+### `get_preferences`
+
+Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `keys` (lista de texto o null; opcional, por defecto `null`): claves a consultar; omitido devuelve toda la lista blanca de preferencias.
+- CLI: `omnicad call get_preferences --doc pieza.omnicad`
+
+### `set_preference`
+
+Valida y guarda una preferencia autorizada. No modifica el documento ni entra en deshacer; los ajustes se usan cuando la aplicación los relee.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
+  - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences.
+- CLI: `omnicad call set_preference --doc pieza.omnicad key=… value=…`
 
 ### `move_feature`
 
@@ -433,6 +518,28 @@ Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, 
   - `feature` (texto; obligatorio): id o nombre del paso (p. ej. una extrusión).
 - CLI: `omnicad call get_profile_sketches --doc pieza.omnicad feature=…`
 
+### `get_selection`
+
+Lee lo que la persona tiene elegido en la ventana: cuerpos, caras, aristas, perfiles, bocetos, planos… Cada elemento trae su referencia persistente (ref), que sirve como argumento de las herramientas que reciben referencias. Solo en vivo; no cambia el documento.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_selection --doc pieza.omnicad`
+
+### `select_entities`
+
+Elige en la ventana cuerpos, caras, aristas o perfiles de boceto, por el mismo camino que el clic: quedan resaltados y en el navegador. Solo en vivo; no cambia el documento. Las caras y aristas se eligen con selectores (">Z", "|Z") o ids de find_faces / find_edges.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `kind` ("body" | "face" | "edge" | "profile"; obligatorio): body (cuerpos), face (caras), edge (aristas) o profile (perfiles de un boceto).
+  - `selector` (texto o lista de texto o null; opcional, por defecto `null`): body: ids o nombres de cuerpos; face y edge: selector o ids de find_faces / find_edges (o lista). No se usa con profile.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de face y edge; vacío = el único cuerpo.
+  - `sketch` (texto; opcional, por defecto `null`): profile: id o nombre del boceto.
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `"all"`): profile: índice, lista de índices, "all" o "largest".
+  - `mode` ("replace" | "add" | "remove"; opcional, por defecto `"replace"`): replace (por defecto) cambia la selección; add suma a la actual; remove la resta.
+- CLI: `omnicad call select_entities --doc pieza.omnicad kind=…`
+
 ## Grupo parametros
 
 Medidas con nombre que gobiernan el modelo.
@@ -441,8 +548,10 @@ Medidas con nombre que gobiernan el modelo.
 |---|---|---|
 | [`get_parameters`](#get_parameters) | no | Lista los parámetros de usuario: expresión, valor calculado, unidad (mm o deg) y qué pasos del timeline los usan. |
 | [`create_parameter`](#create_parameter) | sí | Crea un parámetro de usuario. |
-| [`set_parameter`](#set_parameter) | sí | Cambia la expresión de un parámetro existente y recalcula el modelo. |
+| [`set_parameter`](#set_parameter) | sí | Cambia la expresión, el comentario o el nombre de un parámetro existente y recalcula el modelo. |
 | [`delete_parameter`](#delete_parameter) | sí | Borra un parámetro que no use ningún paso ni otro parámetro. |
+| [`export_parameters`](#export_parameters) | no | Exporta parámetros a CSV (Name, Unit, Expression, Value, Comments), compatible con la tabla de parámetros de la ventana. |
+| [`import_parameters`](#import_parameters) | sí | Importa parámetros CSV con validación de expresiones y unidades. merge agrega o actualiza por nombre; replace reemplaza la tabla. |
 
 ### `get_parameters`
 
@@ -454,24 +563,27 @@ Lista los parámetros de usuario: expresión, valor calculado, unidad (mm o deg)
 
 ### `create_parameter`
 
-Crea un parámetro de usuario. La magnitud sale de la expresión: con unidad de ángulo (deg, rad, °) es un ángulo; si no, una longitud en mm.
+Crea un parámetro de usuario. Con kind=auto la magnitud sale de la expresión: con unidad de ángulo (deg, rad, °) es un ángulo; si no, una longitud en mm. kind=scalar crea un parámetro sin unidad (cantidades de un patrón, factores).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `name` (texto; obligatorio): nombre del parámetro (letras, números y '_', sin empezar con número), p. ej. "ancho".
   - `expression` (número o expresión; obligatorio): valor: número (mm) o expresión con unidades y otros parámetros, p. ej. "60 mm", "ancho / 2", "30 deg".
   - `comment` (texto; opcional, por defecto `""`): comentario opcional que se ve en la tabla de parámetros.
+  - `kind` ("auto" | "length" | "angle" | "scalar"; opcional, por defecto `"auto"`): "auto" (por defecto: longitud o ángulo según la expresión), "length", "angle" o "scalar" (sin unidad: un número puro, p. ej. la cantidad de copias de un patrón).
 - CLI: `omnicad call create_parameter --doc pieza.omnicad name=… expression=…`
 
 ### `set_parameter`
 
-Cambia la expresión de un parámetro existente y recalcula el modelo. Si algún paso queda con error, el cambio se descarta.
+Cambia la expresión, el comentario o el nombre de un parámetro existente y recalcula el modelo. Si algún paso queda con error (p. ej. renombrar un parámetro que usa un paso), el cambio se descarta.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `name` (texto; obligatorio): nombre exacto del parámetro.
-  - `expression` (número o expresión; obligatorio): valor nuevo: número (en la unidad del parámetro) o expresión, p. ej. "80 mm" o "ancho * 2".
-- CLI: `omnicad call set_parameter --doc pieza.omnicad name=… expression=…`
+  - `expression` (número o expresión; opcional, por defecto `null`): valor nuevo: número (en la unidad del parámetro) o expresión, p. ej. "80 mm" o "ancho * 2"; vacío = no cambia.
+  - `comment` (texto; opcional, por defecto `null`): comentario nuevo ("" lo borra); vacío = no cambia.
+  - `new_name` (texto; opcional, por defecto `null`): nombre nuevo (letras, números y '_'); falla si algún paso u otro parámetro usa el nombre actual, porque quedarían apuntando a un parámetro que ya no existe; vacío = no cambia.
+- CLI: `omnicad call set_parameter --doc pieza.omnicad name=…`
 
 ### `delete_parameter`
 
@@ -482,17 +594,38 @@ Borra un parámetro que no use ningún paso ni otro parámetro.
   - `name` (texto; obligatorio): nombre exacto del parámetro.
 - CLI: `omnicad call delete_parameter --doc pieza.omnicad name=…`
 
+### `export_parameters`
+
+Exporta parámetros a CSV (Name, Unit, Expression, Value, Comments), compatible con la tabla de parámetros de la ventana.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta del archivo CSV a escribir.
+  - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar un archivo existente.
+  - `create_folders` (true/false; opcional, por defecto `true`): true crea las carpetas que falten; false devuelve FILE_NOT_FOUND.
+- CLI: `omnicad call export_parameters --doc pieza.omnicad path=…`
+
+### `import_parameters`
+
+Importa parámetros CSV con validación de expresiones y unidades. merge agrega o actualiza por nombre; replace reemplaza la tabla. Un solo deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path` (texto; obligatorio): archivo CSV UTF-8, hasta 2 MB, 1000 filas y 4096 caracteres por campo; acepta las cabeceras de la ventana.
+  - `mode` ("merge" | "replace"; opcional, por defecto `"merge"`): merge conserva los parámetros ajenos al CSV; replace los elimina salvo que los use el modelo.
+- CLI: `omnicad call import_parameters --doc pieza.omnicad path=…`
+
 ## Grupo boceto
 
 Bocetos 2D: geometría, restricciones y cotas.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`create_construction_plane`](#create_construction_plane) | sí | Crea un plano de construcción desfasado de un plano de origen (XY, XZ, YZ) o de otro plano de construcción. |
+| [`create_construction_plane`](#create_construction_plane) | sí | Crea un plano de construcción (CONSTRUIR › Plano). type=offset (por defecto): desfasado de un plano de origen (XY, XZ, YZ), de otro plano de construcción o de una CARA PLANA (selector o id de find_faces), sobre su normal. |
 | [`create_sketch`](#create_sketch) | sí | Crea un boceto vacío sobre un plano o sobre una cara plana. |
 | [`draw_line`](#draw_line) | sí | Dibuja una línea en el boceto (un paso de deshacer). |
 | [`draw_rectangle`](#draw_rectangle) | sí | Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). |
-| [`draw_circle`](#draw_circle) | sí | Dibuja un círculo por centro y radio (un paso de deshacer). |
+| [`draw_circle`](#draw_circle) | sí | Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 2 puntos (los extremos de un diámetro) o por 3 puntos (points). |
 | [`draw_arc`](#draw_arc) | sí | Dibuja un arco. |
 | [`create_polygon`](#create_polygon) | sí | Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía de construcción, como la interfaz). |
 | [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). |
@@ -517,16 +650,29 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`set_line_type`](#set_line_type) | sí | Cambia el tipo de línea de curvas del boceto (Fusion: Construcción / Línea central de la paleta): normal (forma perfiles), construction (de construcción: guía, no forma perfiles) o centerline (eje: forma perfiles y sirve de eje de revolución). |
 | [`edit_dimension`](#edit_dimension) | sí | Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. |
 | [`auto_constrain`](#auto_constrain) | sí | Restringe automáticamente el boceto (Fusion: Restringir automáticamente): agrega coincidencias, horizontales, verticales e igualdades que ya se cumplen y después cotas (largos, radios, ángulos y posiciones desde un punto fijo en el origen) con las medidas actuales, hasta dejarlo totalmente restringido si se puede. |
+| [`create_construction_axis`](#create_construction_axis) | sí | Crea un eje con cualquiera de las cinco variantes de CONSTRUIR. |
+| [`create_construction_point`](#create_construction_point) | sí | Crea un punto con las seis variantes de CONSTRUIR. |
+| [`create_ucs`](#create_ucs) | sí | Crea un sistema de coordenadas de usuario con origen, ejes, giros y desfases. |
+| [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
+| [`set_circle_radius`](#set_circle_radius) | sí | Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. |
+| [`extend_sketch_curve`](#extend_sketch_curve) | sí | Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. |
+| [`split_sketch_curve`](#split_sketch_curve) | sí | Parte una curva en las intersecciones más cercanas al punto, como el editor; el punto debe caer sobre la curva. |
+| [`redefine_sketch_plane`](#redefine_sketch_plane) | sí | Redefine el plano o la cara de un boceto existente conservando curvas, restricciones y cotas. |
 
 ### `create_construction_plane`
 
-Crea un plano de construcción desfasado de un plano de origen (XY, XZ, YZ) o de otro plano de construcción. Sirve para dibujar bocetos fuera del origen. Va en el grupo «boceto» porque su uso típico es create_sketch(plane=<este plano>). El desfase es sobre la normal del plano base.
+Crea un plano de construcción (CONSTRUIR › Plano). type=offset (por defecto): desfasado de un plano de origen (XY, XZ, YZ), de otro plano de construcción o de una CARA PLANA (selector o id de find_faces), sobre su normal. Los demás tipos usan references en orden: angle (un eje o arista + angle), tangent (una cara curva + angle, y opcional un plano de referencia), middle (dos planos o caras), two_edges (dos aristas o ejes), three_points (tres puntos o vértices), perpendicular (una arista, curva o plano + un punto) y path (una arista o curva + position entre 0 y 1). Sirve para dibujar bocetos fuera del origen: va en el grupo «boceto» porque su uso típico es create_sketch(plane=<este plano>).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `plane` (texto; opcional, por defecto `"XY"`): plano base: "XY", "XZ", "YZ" o el id/nombre de otro plano de construcción.
-  - `offset` (número o expresión; opcional, por defecto `"10 mm"`): desfase en mm sobre la normal del plano base (número o expresión con parámetros, p. ej. "alto / 2").
+  - `plane` (texto; opcional, por defecto `"XY"`): type=offset: plano base: "XY", "XZ", "YZ", el id/nombre de otro plano de construcción, o una cara plana (selector ">Z" o id de find_faces).
+  - `offset` (número o expresión; opcional, por defecto `"10 mm"`): type=offset: desfase en mm sobre la normal del plano base (número o expresión con parámetros, p. ej. "alto / 2").
   - `name` (texto; opcional, por defecto `null`): nombre del plano; vacío = "Plano1", "Plano2"…
+  - `type` ("offset" | "angle" | "tangent" | "middle" | "two_edges" | "three_points" | "perpendicular" | "path"; opcional, por defecto `"offset"`): "offset" (desfase), "angle" (en ángulo), "tangent" (tangente a una cara curva), "middle" (plano medio), "two_edges" (por dos aristas), "three_points" (por tres puntos), "perpendicular" (perpendicular a una curva en un punto) o "path" (en un punto de una ruta).
+  - `references` (lista de texto o objeto o lista de número o null; opcional, por defecto `null`): referencias en orden según type (ver la descripción): planos de origen o de construcción, ejes, caras, aristas, selectores, ids de find_faces / find_edges, puntos de construcción, vértices [x, y, z] o {sketch, point | curve}.
+  - `angle` (número o expresión; opcional, por defecto `0`): type=angle o tangent: ángulo en grados (número o expresión).
+  - `position` (número o expresión; opcional, por defecto `0.5`): type=path: posición sobre la ruta entre 0 (inicio) y 1 (fin).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de references y de plane (cara); vacío = el único cuerpo.
 - CLI: `omnicad call create_construction_plane --doc pieza.omnicad`
 
 ### `create_sketch`
@@ -542,21 +688,22 @@ Crea un boceto vacío sobre un plano o sobre una cara plana. Coordenadas del boc
 
 ### `draw_line`
 
-Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el plano del boceto. Devuelve los ids creados (línea y puntos) y la cantidad de perfiles.
+Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el plano del boceto. Con midpoint=true es una línea de punto medio: el primer punto es su punto medio y el segundo un extremo (el otro es el simétrico) y queda con la restricción de punto medio. Devuelve los ids creados (línea y puntos) y la cantidad de perfiles.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `start_x` (número; obligatorio): x del punto inicial (mm).
-  - `start_y` (número; obligatorio): y del punto inicial (mm).
-  - `end_x` (número; obligatorio): x del punto final (mm).
-  - `end_y` (número; obligatorio): y del punto final (mm).
+  - `start_x` (número; obligatorio): x del punto inicial (mm); con midpoint, x del punto medio.
+  - `start_y` (número; obligatorio): y del punto inicial (mm); con midpoint, y del punto medio.
+  - `end_x` (número; obligatorio): x del punto final (mm); con midpoint, x de un extremo.
+  - `end_y` (número; obligatorio): y del punto final (mm); con midpoint, y de un extremo.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una línea de construcción (no forma perfiles).
+  - `midpoint` (true/false; opcional, por defecto `false`): true dibuja la línea desde su punto medio (start) y un extremo (end), con la restricción de punto medio.
 - CLI: `omnicad call draw_line --doc pieza.omnicad start_x=… start_y=… end_x=… end_y=…`
 
 ### `draw_rectangle`
 
-Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). Tres formas de darlo: dos esquinas opuestas (x1, y1, x2, y2); centro y tamaño (center_x, center_y, width, height); o esquina mínima y tamaño (origin_x, origin_y, width, height). width es el tamaño en x del boceto y height en y.
+Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). Tres formas de darlo: dos esquinas opuestas (x1, y1, x2, y2); centro y tamaño (center_x, center_y, width, height); o esquina mínima y tamaño (origin_x, origin_y, width, height). width es el tamaño en x del boceto y height en y. Con center_diagonals=true, la forma centro y tamaño agrega las dos diagonales de construcción y deja el centro como punto medio de una (el «Rectángulo central» de la interfaz). Con three_points=[A, B, C] es el rectángulo de 3 puntos: el lado A→B y un punto C que da el ancho, perpendicular al lado (queda girado si A→B no es horizontal).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -572,24 +719,28 @@ Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). Tres 
   - `height` (número; opcional, por defecto `null`): tamaño en y del boceto (mm, mayor que cero), para las formas con tamaño.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para un rectángulo de construcción (no forma perfiles).
+  - `center_diagonals` (true/false; opcional, por defecto `false`): true (con center_x/center_y y tamaño) agrega las diagonales de construcción y el punto central con restricción de punto medio.
+  - `three_points` (lista de lista de número o null; opcional, por defecto `null`): [[ax, ay], [bx, by], [cx, cy]]: lado A→B y punto C que da el ancho; no se combina con las otras formas.
 - CLI: `omnicad call draw_rectangle --doc pieza.omnicad`
 
 ### `draw_circle`
 
-Dibuja un círculo por centro y radio (un paso de deshacer). Un círculo cerrado forma un perfil; dentro de un rectángulo da dos perfiles (el anillo y el disco).
+Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 2 puntos (los extremos de un diámetro) o por 3 puntos (points). Un círculo cerrado forma un perfil; dentro de un rectángulo da dos perfiles (el anillo y el disco).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `radius` (número; obligatorio): radio en mm (positivo).
-  - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm).
-  - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
+  - `radius` (número; opcional, por defecto `null`): radio en mm (positivo); obligatorio con kind=center_radius.
+  - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm); solo con kind=center_radius.
+  - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm); solo con kind=center_radius.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para un círculo de construcción (no forma perfiles).
-- CLI: `omnicad call draw_circle --doc pieza.omnicad radius=…`
+  - `kind` ("center_radius" | "two_points" | "three_points"; opcional, por defecto `"center_radius"`): "center_radius" (centro y radio), "two_points" (extremos de un diámetro) o "three_points" (pasa por tres puntos).
+  - `points` (lista de lista de número o null; opcional, por defecto `null`): [[x, y], …] con dos puntos (two_points) o tres (three_points), en mm sobre el plano del boceto.
+- CLI: `omnicad call draw_circle --doc pieza.omnicad`
 
 ### `draw_arc`
 
-Dibuja un arco. Dos formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, end_y). Un arco solo forma un perfil si se cierra con otras curvas.
+Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, end_y), o tangente al extremo de una línea (tangent_to, start_x/start_y y end_x/end_y). La forma tangente comparte el extremo y agrega la restricción de tangencia. Un arco solo forma un perfil si se cierra con otras curvas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -600,10 +751,11 @@ Dibuja un arco. Dos formas: centro + punto inicial + ángulo de barrido (center_
   - `sweep_angle` (número; opcional, por defecto `null`): ángulo de barrido en grados, entre -360 y 360 sin incluirlos; positivo = antihorario.
   - `mid_x` (número; opcional, por defecto `null`): x de un punto intermedio del arco (forma de tres puntos).
   - `mid_y` (número; opcional, por defecto `null`): y del punto intermedio.
-  - `end_x` (número; opcional, por defecto `null`): x del punto final (forma de tres puntos).
+  - `end_x` (número; opcional, por defecto `null`): x del punto final (forma de tres puntos o tangente).
   - `end_y` (número; opcional, por defecto `null`): y del punto final.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para un arco de construcción (no forma perfiles).
+  - `tangent_to` (entero; opcional, por defecto `null`): id de la línea de partida; start_x/start_y debe coincidir con uno de sus extremos. No se combina con centro, barrido ni punto intermedio.
 - CLI: `omnicad call draw_arc --doc pieza.omnicad start_x=… start_y=…`
 
 ### `create_polygon`
@@ -613,15 +765,16 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sides` (entero; obligatorio): cantidad de lados (3 a 64).
-  - `radius` (número o expresión; obligatorio): radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2").
+  - `radius` (número o expresión; opcional, por defecto `null`): radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2"). No se usa con kind=edge.
   - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm).
   - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
   - `rotation` (número; opcional, por defecto `0.0`): ángulo en grados del primer vértice respecto del eje x del boceto.
-  - `kind` ("inscribed" | "circumscribed"; opcional, por defecto `"inscribed"`): "inscribed" (vértices sobre el círculo) o "circumscribed" (lados tangentes al círculo).
+  - `kind` ("inscribed" | "circumscribed" | "edge"; opcional, por defecto `"inscribed"`): "inscribed" (vértices sobre el círculo), "circumscribed" (lados tangentes al círculo) o "edge" (polígono por arista: se da un lado con edge_points).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para un polígono de construcción (no forma perfiles).
   - `fully_constrained` (true/false; opcional, por defecto `false`): true para dejarlo totalmente acotado (radio, giro y posición del centro): dof 0.
-- CLI: `omnicad call create_polygon --doc pieza.omnicad sides=… radius=…`
+  - `edge_points` (lista de lista de número o null; opcional, por defecto `null`): kind=edge: [[x, y], [x, y], [x, y]] = extremos A y B del primer lado y un punto del lado hacia donde crece el polígono.
+- CLI: `omnicad call create_polygon --doc pieza.omnicad sides=…`
 
 ### `draw_spline`
 
@@ -639,12 +792,12 @@ Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado
 
 ### `add_constraint`
 
-Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). Si choca con las que ya hay, falla y el boceto queda como estaba. Entidades por tipo: horizontal y vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también dos círculos/arcos); coincident: un punto y otro punto o una curva; midpoint: un punto y una línea o arco; tangent y concentric: dos curvas; fix: una o más entidades; symmetry: dos entidades y la línea eje.
+Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). Si choca con las que ya hay, falla y el boceto queda como estaba. Entidades por tipo: horizontal y vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también dos círculos/arcos); coincident: un punto y otro punto o una curva; midpoint: un punto y una línea o arco; tangent y concentric: dos curvas; fix: una o más entidades; symmetry: dos entidades y la línea eje; polygon: al menos tres líneas que comparten vértices y forman una cadena cerrada, o un solo lado para tomar automáticamente su cadena cerrada de líneas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `type` ("coincident" | "horizontal" | "vertical" | "parallel" | "perpendicular" | "equal" | "tangent" | "concentric" | "midpoint" | "fix" | "collinear" | "symmetry" | "curvature"; obligatorio): tipo de restricción.
+  - `type` ("coincident" | "horizontal" | "vertical" | "parallel" | "perpendicular" | "equal" | "tangent" | "concentric" | "midpoint" | "fix" | "collinear" | "symmetry" | "curvature" | "polygon"; obligatorio): tipo de restricción.
   - `entities` (lista de entero; obligatorio): ids de las entidades (curvas o puntos), en el orden que pide el tipo.
 - CLI: `omnicad call add_constraint --doc pieza.omnicad sketch=… type=… entities=…`
 
@@ -869,7 +1022,7 @@ Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de cu
 
 ### `project_to_sketch`
 
-Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y sigue al modelo si después cambia. Las proyecciones de proyectos viejos siguen congeladas. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces.
+Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y sigue al modelo si después cambia. Las proyecciones de proyectos viejos siguen congeladas. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -880,6 +1033,7 @@ Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: 
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de edges y faces; vacío = el único cuerpo.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true = la geometría proyectada queda como línea de construcción (no forma perfiles).
+  - `vertices` (lista de lista de número o null; opcional, por defecto `null`): vértices del modelo por sus coordenadas [[x, y, z], …] (a menos de 0,001 mm de un vértice; con body, solo los de ese cuerpo): se proyectan (o intersecan) como puntos del boceto.
 - CLI: `omnicad call project_to_sketch --doc pieza.omnicad`
 
 ### `set_line_type`
@@ -912,6 +1066,108 @@ Restringe automáticamente el boceto (Fusion: Restringir automáticamente): agre
 - Parámetros:
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call auto_constrain --doc pieza.omnicad`
+
+### `create_construction_axis`
+
+Crea un eje con cualquiera de las cinco variantes de CONSTRUIR.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `type` ("cilindro" | "perpendicular_cara" | "dos_planos" | "dos_puntos" | "arista"; obligatorio): variante de TIPOS_EJE: cilindro, perpendicular_cara, dos_planos, dos_puntos o arista.
+  - `references` (lista de texto o objeto o lista de número; obligatorio): referencias en orden: cara de revolución; cara/plano y punto; dos planos; dos puntos; arista/eje. Acepta XY/XZ/YZ, X/Y/Z, O, construcción por id/nombre, selectores, ids de find_faces/find_edges, {sketch, point} o {sketch, curve}; edges: selecciona aristas, faces: caras.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+  - `name` (texto; opcional, por defecto `null`): nombre del eje; vacío = automático.
+- CLI: `omnicad call create_construction_axis --doc pieza.omnicad type=… references=…`
+
+### `create_construction_point`
+
+Crea un punto con las seis variantes de CONSTRUIR.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `type` ("vertice" | "dos_aristas" | "tres_planos" | "centro" | "arista_plano" | "ruta"; obligatorio): variante de TIPOS_PUNTO: vertice, dos_aristas, tres_planos, centro, arista_plano o ruta.
+  - `references` (lista de texto o objeto o lista de número; obligatorio): referencias en orden: punto/vértice; dos aristas/ejes; tres planos; círculo/esfera/toroide; arista/eje y plano; curva de ruta. Formatos como create_construction_axis, incluidos puntos de boceto.
+  - `position` (número o expresión; opcional, por defecto `0.5`): proporción del largo de la ruta entre 0 y 1, número o expresión; solo con ruta.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+  - `name` (texto; opcional, por defecto `null`): nombre del punto; vacío = automático.
+- CLI: `omnicad call create_construction_point --doc pieza.omnicad type=… references=…`
+
+### `create_ucs`
+
+Crea un sistema de coordenadas de usuario con origen, ejes, giros y desfases.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `origin` (texto o objeto o lista de número; obligatorio): punto/vértice de origen: O, construcción o {sketch, point}.
+  - `x_axis` (texto o objeto o lista de número; opcional, por defecto `"X"`): dirección X: eje, arista recta o línea de boceto; por defecto X.
+  - `y_axis` (texto o objeto o lista de número o null; opcional, por defecto `null`): dirección Y opcional; se ortogonaliza respecto de X.
+  - `dx` (número o expresión; opcional, por defecto `0`): desfase local X en mm o expresión.
+  - `dy` (número o expresión; opcional, por defecto `0`): desfase local Y en mm o expresión.
+  - `dz` (número o expresión; opcional, por defecto `0`): desfase local Z en mm o expresión.
+  - `rx` (número o expresión; opcional, por defecto `0`): giro X en grados o expresión.
+  - `ry` (número o expresión; opcional, por defecto `0`): giro Y en grados o expresión.
+  - `rz` (número o expresión; opcional, por defecto `0`): giro Z en grados o expresión.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+  - `name` (texto; opcional, por defecto `null`): nombre del sistema; vacío = automático.
+- CLI: `omnicad call create_ucs --doc pieza.omnicad origin=…`
+
+### `draw_spiral`
+
+Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. El radio crece pitch mm por vuelta antihoraria. Hasta 200 puntos de ajuste.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto.
+  - `center` (lista de número; obligatorio): centro [x, y] en mm sobre el plano del boceto.
+  - `start` (lista de número; obligatorio): inicio [x, y] en mm; su distancia al centro es el radio inicial.
+  - `turns` (número; obligatorio): cantidad positiva de vueltas, admite fracciones; hasta 200 puntos (8 tramos por vuelta).
+  - `pitch` (número; obligatorio): incremento de radio por vuelta en mm, admite valores negativos como el editor.
+  - `construction` (true/false; opcional, por defecto `false`): true para una spline de construcción (no forma perfiles).
+- CLI: `omnicad call draw_spiral --doc pieza.omnicad sketch=… center=… start=… turns=… pitch=…`
+
+### `set_circle_radius`
+
+Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. Si tiene una cota de radio o diámetro, o las demás restricciones lo impiden, falla (para eso, edit_dimension).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto.
+  - `curve` (entero; obligatorio): id del círculo o arco (get_sketch).
+  - `radius` (número; obligatorio): radio nuevo en mm (positivo).
+- CLI: `omnicad call set_circle_radius --doc pieza.omnicad sketch=… curve=… radius=…`
+
+### `extend_sketch_curve`
+
+Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. Falla si no hay una curva que alcanzar.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto.
+  - `curve` (entero; obligatorio): id de la línea o arco (get_sketch).
+  - `point` (lista de número; obligatorio): [x, y] en mm del plano, cerca del extremo que se quiere alargar.
+- CLI: `omnicad call extend_sketch_curve --doc pieza.omnicad sketch=… curve=… point=…`
+
+### `split_sketch_curve`
+
+Parte una curva en las intersecciones más cercanas al punto, como el editor; el punto debe caer sobre la curva. Devuelve los ids en pieces.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto.
+  - `curve` (entero; obligatorio): id de la curva (get_sketch); no admite textos ni geometría proyectada.
+  - `point` (lista de número; obligatorio): [x, y] en mm sobre la curva (tolerancia 1e-7 mm); elige las intersecciones donde partir.
+- CLI: `omnicad call split_sketch_curve --doc pieza.omnicad sketch=… curve=… point=…`
+
+### `redefine_sketch_plane`
+
+Redefine el plano o la cara de un boceto existente conservando curvas, restricciones y cotas. Los perfiles fuera del contorno de la cara se conservan y se informan.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto existente.
+  - `plane` (texto; obligatorio): plano XY, XZ, YZ, id/nombre de plano de construcción, selector de cara plana o id de find_faces.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde evaluar el selector de cara; omitido usa el único cuerpo, como create_sketch.
+- CLI: `omnicad call redefine_sketch_plane --doc pieza.omnicad sketch=… plane=…`
 
 ## Grupo vectores
 
@@ -1239,7 +1495,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | Herramienta | Modifica | Resumen |
 |---|---|---|
 | [`extrude`](#extrude) | sí | Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. |
-| [`revolve`](#revolve) | sí | Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción). |
+| [`revolve`](#revolve) | sí | Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción); también un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id de find_edges / find_faces) o una línea de OTRO boceto ({"sketch": id, "curve": n}). |
 | [`sweep`](#sweep) | sí | Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). |
 | [`loft`](#loft) | sí | Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. |
 | [`create_box`](#create_box) | sí | Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. |
@@ -1247,7 +1503,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_sphere`](#create_sphere) | sí | Crea una esfera. (x, y, z) es su centro. |
 | [`create_torus`](#create_torus) | sí | Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es su centro. |
 | [`boolean_operation`](#boolean_operation) | sí | Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). |
-| [`mirror`](#mirror) | sí | Refleja cuerpos respecto de un plano (origen o de construcción). |
+| [`mirror`](#mirror) | sí | Refleja cuerpos respecto de un plano (origen, de construcción o una CARA PLANA de un cuerpo: selector o id de find_faces). |
 | [`realize_copies`](#realize_copies) | sí | Vuelve copias de verdad las copias ligeras (instancias) de un patrón o de Mover/copiar («Realizar instancias» de Plasticity): cada copia pasa a tener su propia geometría y deja de seguir a la original. |
 | [`rectangular_pattern`](#rectangular_pattern) | sí | Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features: un agujero, una extrusión que corta… se repiten sobre la pieza, como el patrón de features de Fusion): copias en una o dos direcciones (ejes del origen), con la separación entre copias consecutivas. |
 | [`circular_pattern`](#circular_pattern) | sí | Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) alrededor de un eje del origen (x, y o z). |
@@ -1256,8 +1512,11 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`multi_transform`](#multi_transform) | sí | Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). |
 | [`drop_to_plane`](#drop_to_plane) | sí | Apoya cuerpos en el plano del piso (Z = 0): los baja o sube en Z hasta que lo más bajo toque Z = 0. |
 | [`move_body`](#move_body) | sí | Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). |
-| [`fillet`](#fillet) | sí | Redondea aristas (empalme de radio constante). |
-| [`chamfer`](#chamfer) | sí | Achaflana aristas (distancia igual en las dos caras). |
+| [`insert_fastener`](#insert_fastener) | sí | Inserta fijaciones normalizadas sobre agujeros o puntos, con tamaño automático. |
+| [`insert_canvas`](#insert_canvas) | sí | Embebe una imagen de referencia sobre un plano o cara plana (máximo 32 MB). |
+| [`create_base_feature`](#create_base_feature) | sí | Congela cuerpos sólidos o superficies como B-rep en un paso del timeline. |
+| [`fillet`](#fillet) | sí | Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerda (radius_type=chord) o de radio variable entre el inicio y el final de la arista (radius_type=variable, end_radius). |
+| [`chamfer`](#chamfer) | sí | Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancias (type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera distancia a la otra cara. |
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
 | [`remove_fillets`](#remove_fillets) | sí | Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius («Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). |
 | [`offset_faces`](#offset_faces) | sí | Mueve caras de un cuerpo a lo largo de su normal (la mitad «cara» del comando Desfase; «Cara de desfase» de Fusion): distance > 0 agrega material, < 0 lo quita. |
@@ -1265,21 +1524,53 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
 | [`create_thread`](#create_thread) | sí | Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. |
 | [`draft`](#draft) | sí | Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. |
+| [`split_face`](#split_face) | sí | Divide caras con un plano, cara, arista o curva de boceto. |
+| [`split_body`](#split_body) | sí | Parte un cuerpo en varios con un plano, una cara u otro cuerpo. |
+| [`silhouette_split`](#silhouette_split) | sí | Divide las caras de un cuerpo por su silueta vista desde una dirección. |
+| [`replace_face`](#replace_face) | sí | Lleva caras de un cuerpo hasta otra cara o un plano. |
+| [`remove_bodies`](#remove_bodies) | sí | Quita cuerpos del diseño conservando la operación en el timeline. |
+| [`delete_faces`](#delete_faces) | sí | Borra caras y cierra el hueco extendiendo sus vecinas. |
 | [`gear_info`](#gear_info) | no | Calcula las medidas de un engranaje cilíndrico de evolvente sin modelarlo (ISO 21771, perfil de referencia ISO 53): diámetros primitivo, base, exterior y de fondo, paso, espesor del diente, dientes mínimos sin socavado (criterio estricto: 18 con 20°; el límite teórico, 17,1, va en min_teeth_theoretical) y desplazamiento mínimo. |
 | [`create_gear`](#create_gear) | sí | Crea un engranaje cilíndrico de evolvente (perfil de referencia ISO 53), recto o, con helix_angle, helicoidal, como un paso del timeline (tipo «engranaje»; medidas como expresiones con parámetros). |
 | [`create_gear_pair`](#create_gear_pair) | sí | Crea dos engranajes de evolvente que engranan, en UN paso del timeline: el segundo a la distancia entre centros de trabajo (m·(z1+z2)/2 sin desplazamientos), en la dirección dada y girado medio diente para que los dientes entren en los huecos (con hélice, el segundo es de la mano contraria). |
 | [`create_rack`](#create_rack) | sí | Crea una cremallera recta con el perfil de referencia ISO 53 (paso π·módulo, flancos rectos al ángulo de presión) como un paso del timeline. |
 | [`create_sprocket`](#create_sprocket) | sí | Crea una rueda dentada para cadena de rodillos con la forma de diente de ISO 606 (hueco medio) como un paso del timeline. chain elige la cadena (05B…16B, 08A…16A = ANSI 40…80) o 'custom' con pitch y roller_diameter propios; sin width, el ancho del diente sale de la norma (0,93 o 0,95 × ancho interior de la cadena). |
 | [`create_shaft`](#create_shaft) | sí | Asistente de ejes: crea un eje escalonado de revolución a partir de una tabla de tramos (diámetro, largo y, en cada extremo, chaflán a 45° o empalme) como un paso del timeline (tipo «eje_escalonado»). |
+| [`create_coil`](#create_coil) | sí | Crea una bobina o espiral con las opciones del comando Bobina. |
+| [`create_pipe`](#create_pipe) | sí | Crea una tubería maciza o hueca sobre curvas de boceto o aristas. |
+| [`create_rib`](#create_rib) | sí | Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. |
+| [`create_web`](#create_web) | sí | Crea una red de nervios perpendicular al plano del boceto. |
+| [`create_emboss`](#create_emboss) | sí | Repuja o graba perfiles en una o varias caras, con envoltura opcional. |
+| [`create_boss`](#create_boss) | sí | Crea columnas para tornillo en puntos de boceto o vértices. |
+| [`create_lip_groove`](#create_lip_groove) | sí | Crea un labio o una ranura a lo largo del borde de una pared. |
+| [`create_boundary_fill`](#create_boundary_fill) | sí | Rellena celdas encerradas por cuerpos, caras y planos. |
+| [`create_bounding_solid`](#create_bounding_solid) | sí | Crea una caja o cilindro envolvente de los cuerpos elegidos. |
+| [`thicken`](#thicken) | sí | Da espesor a caras o cuerpos de superficie y crea un sólido. |
+| [`align_bodies`](#align_bodies) | sí | Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional. |
+| [`scale_body`](#scale_body) | sí | Escala sólidos respecto de un punto, uniforme o con un factor por eje. |
+| [`create_surface_extrude`](#create_surface_extrude) | sí | Extruye curvas abiertas o cerradas en una superficie. |
+| [`create_surface_revolve`](#create_surface_revolve) | sí | Gira curvas alrededor de un eje para crear una superficie. |
+| [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta con orientación y torsión. |
+| [`create_surface_loft`](#create_surface_loft) | sí | Crea una superficie entre secciones ordenadas, abiertas o cerradas. |
+| [`offset_surface`](#offset_surface) | sí | Crea una superficie paralela a caras o cuerpos. |
+| [`fillet_surface`](#fillet_surface) | sí | Redondea o bisela aristas entre superficies. |
+| [`create_patch`](#create_patch) | sí | Tapa un contorno cerrado con continuidad G0, G1 o G2. |
+| [`create_ruled_surface`](#create_ruled_surface) | sí | Crea superficies rectas desde aristas, con dirección y ángulo. |
+| [`extend_surface`](#extend_surface) | sí | Alarga bordes libres de superficies. |
+| [`trim_surface`](#trim_surface) | sí | Recorta una superficie y quita la región indicada por un punto. |
+| [`untrim_surface`](#untrim_surface) | sí | Restaura límites naturales de caras recortadas. |
+| [`stitch_surfaces`](#stitch_surfaces) | sí | Cose superficies; un cierre completo produce un sólido. |
+| [`unstitch_surfaces`](#unstitch_surfaces) | sí | Separa cada cara en un cuerpo de superficie independiente. |
+| [`reverse_surface_normal`](#reverse_surface_normal) | sí | Invierte la orientación de cuerpos de superficie. |
 
 ### `extrude`
 
-Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut o intersect.
+Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; 'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut o intersect. Opciones de Extruir de Fusion: faces (caras planas como perfil, con o sin sketch), thin (extrusión delgada: wall_thickness, wall_location; con open_curves se extruyen curvas abiertas), start (profile_plane, offset u object: el inicio no es el plano del perfil), symmetric_measure (media longitud o largo total), extent (distance, to_object: hasta una cara, plano o cuerpo con to, to_mode y to_offset, o all: atraviesa todo) y taper_angle2 (conicidad propia del lado 2).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos) o "text:<id>".
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos) o "text:<id>". Se ignora con open_curves.
   - `distance` (número o expresión; opcional, por defecto `"10 mm"`): distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `direction` ("one_side" | "two_sides" | "symmetric"; opcional, por defecto `"one_side"`): "one_side", "two_sides" o "symmetric".
@@ -1287,55 +1578,83 @@ Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'larg
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `distance2` (número o expresión; opcional, por defecto `null`): distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
   - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al material (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material, como Fusion).
-- CLI: `omnicad call extrude --doc pieza.omnicad sketch=…`
+  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares.
+  - `thin` (true/false; opcional, por defecto `false`): true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
+  - `wall_thickness` (número o expresión; opcional, por defecto `1`): espesor de la pared en mm (número o expresión); solo con thin.
+  - `wall_location` ("side1" | "side2" | "center"; opcional, por defecto `"side1"`): lado del contorno donde va la pared: "side1", "side2" o "center"; solo con thin.
+  - `start` ("profile_plane" | "offset" | "object"; opcional, por defecto `"profile_plane"`): dónde empieza la extrusión: "profile_plane" (el plano del perfil), "offset" (a start_offset de él) o "object" (en la cara plana o plano start_object).
+  - `start_offset` (número o expresión; opcional, por defecto `0`): desfase del inicio en mm (número o expresión); con start=offset.
+  - `start_object` (texto; opcional, por defecto `null`): cara plana (selector o id) o plano de construcción donde empieza; con start=object.
+  - `symmetric_measure` ("total" | "half"; opcional, por defecto `"total"`): con direction=symmetric, "total" (distance es el largo total) o "half" (distance es la mitad, a cada lado).
+  - `extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos).
+  - `to` (texto; opcional, por defecto `null`): con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
+  - `to_mode` ("face" | "body" | "through"; opcional, por defecto `"face"`): con to_object: "face" (hasta la cara), "body" (hasta el cuerpo) o "through" (a través del cuerpo).
+  - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
+  - `taper_angle2` (número o expresión; opcional, por defecto `null`): conicidad del lado 2 en grados con direction=two_sides; vacío = la misma que taper_angle.
+  - `open_curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas ABIERTAS de sketch (get_sketch) para extruir con thin=true; reemplazan a profile.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces, start_object y to; vacío = el único cuerpo.
+- CLI: `omnicad call extrude --doc pieza.omnicad`
 
 ### `revolve`
 
-Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción). El perfil no debe cruzar el eje. angle acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric.
+Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción); también un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id de find_edges / find_faces) o una línea de OTRO boceto ({"sketch": id, "curve": n}). El perfil no debe cruzar el eje; puede ser una cara plana (faces). angle acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `profile` (entero o lista de entero o texto; obligatorio): perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
-  - `axis` (entero o texto; obligatorio): "sketch_x", "sketch_y", "x", "y", "z" o el id de una línea del boceto.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
+  - `axis` (entero o texto o objeto; opcional, por defecto `null`): "sketch_x", "sketch_y", "x", "y", "z", el id de una línea del boceto, un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id) o {"sketch": id, "curve": n} (línea de otro boceto).
   - `angle` (número o expresión; opcional, por defecto `"360 deg"`): ángulo de giro: número en grados o expresión, p. ej. "270 deg" o "giro".
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `direction` ("one_side" | "two_sides" | "symmetric"; opcional, por defecto `"one_side"`): "one_side", "two_sides" o "symmetric" (el ángulo se reparte a los dos lados).
   - `angle2` (número o expresión; opcional, por defecto `null`): ángulo del segundo lado con direction="two_sides"; vacío = igual a angle.
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `reverse` (true/false; opcional, por defecto `false`): true para girar en el sentido contrario.
-- CLI: `omnicad call revolve --doc pieza.omnicad sketch=… profile=… axis=…`
+  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
+- CLI: `omnicad call revolve --doc pieza.omnicad`
 
 ### `sweep`
 
-Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es una cadena continua de curvas: path_curves da sus ids (get_sketch) o, vacío, se usan todas las curvas no de construcción del boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta.
+Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es una cadena continua de curvas: path_curves da sus ids (get_sketch) o, vacío, se usan todas las curvas no de construcción del boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta. Opciones: faces (una cara plana como perfil), path_edges (aristas de un cuerpo como ruta, en lugar de path_sketch), rail_sketch y rail_curves (ruta + carril guía; rail_scale elige cómo sigue el perfil al carril: scale, stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto con el perfil.
-  - `profile` (entero o lista de entero o texto; obligatorio): perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
-  - `path_sketch` (texto; obligatorio): id o nombre del boceto con la ruta.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto con el perfil; vacío si el perfil es una cara (faces).
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
+  - `path_sketch` (texto; opcional, por defecto `null`): id o nombre del boceto con la ruta; vacío si la ruta son aristas de un cuerpo (path_edges).
   - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `orientation` ("perpendicular" | "parallel"; opcional, por defecto `"perpendicular"`): "perpendicular" (el perfil sigue la tangente de la ruta) o "parallel" (mantiene su orientación).
   - `taper_angle` (número o expresión; opcional, por defecto `0`): ángulo de conicidad en grados.
   - `twist_angle` (número o expresión; opcional, por defecto `0`): torsión total en grados (máximo ±3600; ±1800 en rutas cerradas; la ruta no puede tener esquinas).
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
-- CLI: `omnicad call sweep --doc pieza.omnicad sketch=… profile=… path_sketch=…`
+  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): cara plana (selector o id de find_faces) usada como perfil, sola o junto con los perfiles de sketch.
+  - `path_edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas de un cuerpo (selector "edges:…" o ids de find_edges, o lista) como ruta continua, en lugar de path_sketch.
+  - `rail_sketch` (texto; opcional, por defecto `null`): id o nombre del boceto del carril guía (tipo «ruta + carril»); vacío = sin carril.
+  - `rail_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas del carril; vacío = todas las curvas no de construcción de rail_sketch.
+  - `rail_scale` ("scale" | "stretch" | "none"; opcional, por defecto `"scale"`): con carril, cómo sigue el perfil al carril: "scale" (escala), "stretch" (se estira) o "none" (no cambia).
+  - `path_distance` (número o expresión; opcional, por defecto `1`): fracción de la ruta que se barre, mayor que 0 y hasta 1 (número o expresión); 1 = toda.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
+- CLI: `omnicad call sweep --doc pieza.omnicad`
 
 ### `loft`
 
-Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera.
+Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketches` (lista de texto; obligatorio): ids o nombres de los bocetos, en el orden de las secciones.
+  - `sketches` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los bocetos, en el orden de las secciones; vacío si se da sections.
   - `profiles` (lista de entero o texto o null; opcional, por defecto `null`): un perfil por boceto (índice o "largest"); vacío = el perfil 0 de cada boceto.
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `ruled` (true/false; opcional, por defecto `false`): true para tramos rectos entre secciones.
   - `closed` (true/false; opcional, por defecto `false`): true para cerrar el sólido uniendo la última sección con la primera.
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
-- CLI: `omnicad call loft --doc pieza.omnicad sketches=…`
+  - `sections` (lista de texto o objeto o lista de número o null; opcional, por defecto `null`): secciones en orden, en lugar de sketches: {"sketch": id, "profile": índice} (profile 0 por defecto), una cara o arista (selector o id de find_faces / find_edges), un vértice [x, y, z] o un punto de construcción (id o nombre). Mínimo dos.
+  - `rails` (lista de texto o objeto o null; opcional, por defecto `null`): curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
+  - `center_line` (lista de texto o objeto o null; opcional, por defecto `null`): la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
+- CLI: `omnicad call loft --doc pieza.omnicad`
 
 ### `create_box`
 
@@ -1420,13 +1739,14 @@ Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o inters
 
 ### `mirror`
 
-Refleja cuerpos respecto de un plano (origen o de construcción). Crea cuerpos nuevos, o con combine=true une cada reflejo a su cuerpo original.
+Refleja cuerpos respecto de un plano (origen, de construcción o una CARA PLANA de un cuerpo: selector o id de find_faces). Crea cuerpos nuevos, o con combine=true une cada reflejo a su cuerpo original.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `bodies` (texto o lista de texto; obligatorio): cuerpo(s) a reflejar (id o nombre).
-  - `plane` (texto; opcional, por defecto `"YZ"`): plano de simetría: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `plane` (texto; opcional, por defecto `"YZ"`): plano de simetría: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana (selector ">X" o id de find_faces).
   - `combine` (true/false; opcional, por defecto `false`): true para unir el reflejo al cuerpo original en vez de crear un cuerpo nuevo.
+  - `plane_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo.
 - CLI: `omnicad call mirror --doc pieza.omnicad bodies=…`
 
 ### `realize_copies`
@@ -1449,11 +1769,15 @@ Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features:
   - `x_spacing` (número o expresión; opcional, por defecto `"10 mm"`): separación entre instancias consecutivas en la dirección 1 (mm o expresión). Se guarda como d1 con distribucion="espaciado": edit_feature d1 sigue siendo la separación.
   - `y_count` (entero; opcional, por defecto `1`): cantidad de instancias en la dirección 2, original incluido (x_count × y_count ≤ 10.000).
   - `y_spacing` (número o expresión; opcional, por defecto `"10 mm"`): separación entre instancias consecutivas en la dirección 2 (se guarda como d2).
-  - `axis1` ("x" | "y" | "z"; opcional, por defecto `"x"`): eje de la dirección 1 ("x", "y" o "z").
-  - `axis2` ("x" | "y" | "z"; opcional, por defecto `"y"`): eje de la dirección 2.
+  - `axis1` (texto; opcional, por defecto `"x"`): dirección 1: "x", "y", "z", o un eje de construcción (id o nombre), una arista recta, una cara plana (su normal) o un plano (selector o id).
+  - `axis2` (texto; opcional, por defecto `"y"`): dirección 2 (mismas formas que axis1).
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
+  - `distribution` ("spacing" | "extent"; opcional, por defecto `"spacing"`): "spacing" (x_spacing e y_spacing son la separación entre copias consecutivas) o "extent" (son la distancia TOTAL de la primera a la última).
+  - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original.
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): copias a suprimir de la primera fila, por su posición en la dirección 1 (1 a x_count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de axis1 y axis2; vacío = el único cuerpo.
 - CLI: `omnicad call rectangular_pattern --doc pieza.omnicad`
 
 ### `circular_pattern`
@@ -1464,11 +1788,15 @@ Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) al
 - Parámetros:
   - `count` (entero; obligatorio): cantidad de instancias, original incluido (2 a 10.000).
   - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
-  - `axis` ("x" | "y" | "z"; opcional, por defecto `"z"`): eje de giro del origen: "x", "y" o "z".
-  - `total_angle` (número o expresión; opcional, por defecto `360`): ángulo total en grados (número o expresión); 360 = vuelta completa. Se guarda como angulo con distribucion="extension".
+  - `axis` (texto; opcional, por defecto `"z"`): eje de giro: "x", "y", "z", o un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id).
+  - `total_angle` (número o expresión; opcional, por defecto `360`): ángulo en grados (número o expresión): con distribution=extent, el total (360 = vuelta completa); con spacing, el ángulo entre copias consecutivas.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
+  - `distribution` ("extent" | "spacing"; opcional, por defecto `"extent"`): "extent" (total_angle es el ángulo TOTAL entre la primera y la última copia) o "spacing" (es el ángulo entre copias consecutivas).
+  - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original.
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): copias a suprimir por su posición (1 a count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de axis; vacío = el único cuerpo.
 - CLI: `omnicad call circular_pattern --doc pieza.omnicad count=…`
 
 ### `point_pattern`
@@ -1484,6 +1812,10 @@ Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios p
   - `reference` (lista de número o expresión o null; opcional, por defecto `null`): punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
+  - `point_refs` (lista de texto o objeto o lista de número o null; opcional, por defecto `null`): puntos asociativos: vértices [x, y, z] del modelo, puntos de construcción (id o nombre) o {"sketch", "point"}; siguen al modelo si cambia.
+  - `reference_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): punto de referencia asociativo (vértice [x, y, z], punto de construcción o de boceto) en lugar de reference.
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de las copias a suprimir (1 a N−1; 0 es el original), en este orden de puntos: primero los de point_refs y sketch y al final los de points.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se buscan los vértices de point_refs y reference_point; vacío = todos.
 - CLI: `omnicad call point_pattern --doc pieza.omnicad`
 
 ### `path_pattern`
@@ -1492,9 +1824,9 @@ Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de 
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `path_sketch` (texto; obligatorio): id o nombre del boceto con la ruta.
-  - `count` (entero; obligatorio): cantidad de instancias, original incluido (2 a 10.000).
-  - `distance` (número o expresión; obligatorio): largo total (extent) o separación entre copias (spacing), en mm o expresión.
+  - `path_sketch` (texto; opcional, por defecto `null`): id o nombre del boceto con la ruta; vacío si la ruta son aristas de un cuerpo (path_edges).
+  - `count` (entero; opcional, por defecto `0`): cantidad de instancias, original incluido (2 a 10.000).
+  - `distance` (número o expresión; opcional, por defecto `null`): largo total (extent) o separación entre copias (spacing), en mm o expresión.
   - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
@@ -1505,7 +1837,10 @@ Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de 
   - `symmetric` (true/false; opcional, por defecto `false`): true para repartir count copias hacia cada lado del original.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
-- CLI: `omnicad call path_pattern --doc pieza.omnicad path_sketch=… count=… distance=…`
+  - `path_edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas de un cuerpo (selector "edges:…" o ids de find_edges, o lista) como ruta continua, en lugar de path_sketch.
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): copias a suprimir por su posición sobre la ruta (1 a count−1; 0 es el original; con symmetric también negativos).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de path_edges; vacío = el único cuerpo.
+- CLI: `omnicad call path_pattern --doc pieza.omnicad`
 
 ### `multi_transform`
 
@@ -1532,7 +1867,7 @@ Apoya cuerpos en el plano del piso (Z = 0): los baja o sube en Z hasta que lo m�
 
 ### `move_body`
 
-Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). Para llevarlo a una posición absoluta usá position = [x, y, z]: el centro de la caja de los cuerpos (después del giro) queda ahí. pivot='center' es el promedio de los centros de las cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae center.before y center.after.
+Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). Para llevarlo a una posición absoluta usá position = [x, y, z]: el centro de la caja de los cuerpos (después del giro) queda ahí. pivot='center' es el promedio de los centros de las cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae center.before y center.after. Otros tipos de movimiento (type): translate con direction (un eje, arista recta, cara plana o plano) y distance; rotate alrededor de axis (eje de construcción o arista recta) un angle; point_to_point lleva origin_point (vértice [x, y, z] o punto de construcción) a destination_point. pivot_point fija el pivote del giro libre en un vértice o punto.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1543,28 +1878,96 @@ Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira
   - `copy` (true/false; opcional, por defecto `false`): true para dejar el original y crear cuerpos nuevos con el movimiento.
   - `position` (lista de número o expresión o null; opcional, por defecto `null`): posición ABSOLUTA [x, y, z] en mm (números o expresiones) del centro de la caja de los cuerpos; no se combina con translate. El paso guarda el desplazamiento que hace falta ahora (position − centro, con los parámetros de position): si después cambia la forma de la pieza, el centro se corre con ella.
   - `lightweight` (true/false; opcional, por defecto `false`): true (con copy=true) deja una copia ligera: comparte la geometría del original y editar el original la cambia; realize_copies la vuelve copia de verdad.
+  - `type` ("free" | "translate" | "rotate" | "point_to_point"; opcional, por defecto `"free"`): "free" (translate/rotate/position, por defecto), "translate" (con direction y distance, o con translate si no hay direction), "rotate" (alrededor de axis un angle) o "point_to_point".
+  - `direction` (texto o objeto; opcional, por defecto `null`): type=translate: eje de construcción, arista recta, cara plana o plano (selector, id o nombre); se mueve distance a lo largo de él.
+  - `distance` (número o expresión; opcional, por defecto `10`): type=translate con direction: desplazamiento en mm (número o expresión).
+  - `axis` (texto o objeto; opcional, por defecto `null`): type=rotate: eje de construcción (id o nombre), arista recta o línea de boceto {"sketch", "curve"}.
+  - `angle` (número o expresión; opcional, por defecto `90`): type=rotate: ángulo en grados (número o expresión).
+  - `origin_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de partida: vértice [x, y, z], punto de construcción (id o nombre) o {"sketch", "point"}.
+  - `destination_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de llegada (mismas formas que origin_point).
+  - `pivot_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=free: pivote del giro en un vértice [x, y, z], punto de construcción o {"sketch", "point"}; reemplaza a pivot.
+  - `ref_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de direction, axis y los puntos; vacío = el único cuerpo.
 - CLI: `omnicad call move_body --doc pieza.omnicad body=…`
 
-### `fillet`
+### `insert_fastener`
 
-Redondea aristas (empalme de radio constante). Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. El empalme sigue las aristas tangentes encadenadas. Si el radio no cabe, falla con OPERATION_FAILED y el documento queda igual. radius acepta número (mm) o expresión.
+Inserta fijaciones normalizadas sobre agujeros o puntos, con tamaño automático.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `edges` (texto o lista de texto; obligatorio): aristas a redondear: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores.
-  - `radius` (número o expresión; obligatorio): radio en mm (número o expresión con parámetros, p. ej. "espesor / 2").
+  - `positions` (lista de texto o objeto o lista de número; obligatorio): aristas circulares, caras cilíndricas/cónicas, puntos o ejes; ids, selectores o {sketch, point}. En un eje se usa su origen y dirección.
+  - `family` ("screw" | "nut" | "washer" | "rod" | "stud"; opcional, por defecto `"screw"`): screw (tornillo), nut (tuerca), washer (arandela), rod (varilla) o stud (espárrago).
+  - `standard` (texto; opcional, por defecto `null`): norma ISO/DIN de la familia; vacío = la primera de su catálogo.
+  - `size` (texto; opcional, por defecto `"auto"`): tamaño nominal, por ejemplo M6, o auto según el agujero; se corrige al tamaño normalizado más cercano.
+  - `length` (número o expresión; opcional, por defecto `"auto"`): largo nominal en mm o auto según el espesor; se corrige al largo normalizado más cercano.
+  - `thread` ("cosmetic" | "modeled"; opcional, por defecto `"cosmetic"`): cosmetic o modeled (filete helicoidal real).
+  - `similar` (true/false; opcional, por defecto `true`): agrega agujeros iguales de la misma cara.
+  - `direction` (texto o objeto o lista de número o null; opcional, por defecto `null`): dirección en puntos: eje, arista recta, plano o cara plana; vacío = normal del boceto o Z.
+  - `flip` (true/false; opcional, por defecto `false`): invierte la colocación; sobre una cara usa el otro extremo.
+  - `material` (texto; opcional, por defecto `"Acero"`): Acero, Acero inoxidable, Latón, Aluminio 6061, Titanio o Nylon.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+- CLI: `omnicad call insert_fastener --doc pieza.omnicad positions=…`
+
+### `insert_canvas`
+
+Embebe una imagen de referencia sobre un plano o cara plana (máximo 32 MB).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path` (texto; obligatorio): ruta de una imagen PNG, JPG o BMP; se copia embebida y no depende del archivo original.
+  - `plane` (texto o objeto o lista de número; opcional, por defecto `"XY"`): plano XY/XZ/YZ, construcción por id/nombre o una cara plana (selector o id).
+  - `width` (número o expresión; opcional, por defecto `100`): ancho real en mm, positivo; la altura conserva la proporción de la imagen.
+  - `dx` (número o expresión; opcional, por defecto `0`): desplazamiento X sobre el plano, en mm o expresión.
+  - `dy` (número o expresión; opcional, por defecto `0`): desplazamiento Y sobre el plano, en mm o expresión.
+  - `angle` (número o expresión; opcional, por defecto `0`): giro sobre el plano en grados o expresión.
+  - `opacity` (entero; opcional, por defecto `50`): opacidad de 0 a 100 por ciento.
+  - `flip` (true/false; opcional, por defecto `false`): volteo horizontal de la imagen.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+  - `name` (texto; opcional, por defecto `null`): nombre del lienzo; vacío = automático.
+- CLI: `omnicad call insert_canvas --doc pieza.omnicad path=…`
+
+### `create_base_feature`
+
+Congela cuerpos sólidos o superficies como B-rep en un paso del timeline.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): cuerpos a congelar (id, nombre o lista); conservan su geometría aunque cambien pasos anteriores.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = automático.
+- CLI: `omnicad call create_base_feature --doc pieza.omnicad bodies=…`
+
+### `fillet`
+
+Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerda (radius_type=chord) o de radio variable entre el inicio y el final de la arista (radius_type=variable, end_radius). Con faces_a hace un EMPALME DE REGLAS: todas las aristas de esas caras, o solo las que están entre faces_a y faces_b; rounds elige redondeos (aristas convexas), empalmes (cóncavas) o ambos. Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Con tangent_chain (por defecto) el empalme sigue las aristas tangentes encadenadas. Si el radio no cabe, falla con OPERATION_FAILED y el documento queda igual. radius acepta número (mm) o expresión.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas a redondear: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores. No se usa con faces_a.
+  - `radius` (número o expresión; opcional, por defecto `null`): radio en mm (número o expresión con parámetros, p. ej. "espesor / 2"); con radius_type=variable es el radio inicial; en el empalme de reglas, el radio de las reglas.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
-- CLI: `omnicad call fillet --doc pieza.omnicad edges=… radius=…`
+  - `radius_type` ("constant" | "chord" | "variable"; opcional, por defecto `"constant"`): "constant", "chord" (se da chord_length en lugar del radio) o "variable" (de radius a end_radius a lo largo de la arista).
+  - `end_radius` (número o expresión; opcional, por defecto `null`): radio final en mm (número o expresión); obligatorio con radius_type=variable.
+  - `chord_length` (número o expresión; opcional, por defecto `null`): longitud de cuerda en mm (número o expresión); obligatoria con radius_type=chord.
+  - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) suma las aristas tangentes encadenadas; false empalma solo las elegidas.
+  - `faces_a` (texto o lista de texto o null; opcional, por defecto `null`): empalme de reglas: caras (selector, ids o lista) cuyas aristas se redondean; reemplaza a edges.
+  - `faces_b` (texto o lista de texto o null; opcional, por defecto `null`): empalme de reglas «entre»: segundo grupo de caras; solo se redondean las aristas entre faces_a y faces_b; vacío = todas las aristas de faces_a.
+  - `rounds` ("both" | "rounds" | "fillets"; opcional, por defecto `"both"`): empalme de reglas: "both" (por defecto), "rounds" (solo aristas convexas) o "fillets" (solo cóncavas).
+- CLI: `omnicad call fillet --doc pieza.omnicad`
 
 ### `chamfer`
 
-Achaflana aristas (distancia igual en las dos caras). Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. distance acepta número (mm) o expresión.
+Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancias (type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera distancia a la otra cara. Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Con tangent_chain (por defecto) sigue las aristas tangentes encadenadas. distance, distance2 y angle aceptan número (mm o grados) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `edges` (texto o lista de texto; obligatorio): aristas a achaflanar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores.
-  - `distance` (número o expresión; obligatorio): distancia del chaflán en mm sobre cada cara (número o expresión con parámetros).
+  - `distance` (número o expresión; obligatorio): distancia del chaflán en mm sobre cada cara (número o expresión con parámetros); con two_distances o distance_angle, la primera distancia.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+  - `type` ("equal" | "two_distances" | "distance_angle"; opcional, por defecto `"equal"`): "equal" (distancia igual), "two_distances" (distance y distance2) o "distance_angle" (distance y angle).
+  - `distance2` (número o expresión; opcional, por defecto `null`): segunda distancia en mm; obligatoria con type=two_distances.
+  - `angle` (número o expresión; opcional, por defecto `null`): ángulo en grados (entre 0 y 90, excluidos); obligatorio con type=distance_angle.
+  - `flip` (true/false; opcional, por defecto `false`): true pasa la primera distancia a la otra cara (no hace nada con type=equal).
+  - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) suma las aristas tangentes encadenadas; false achaflana solo las elegidas.
 - CLI: `omnicad call chamfer --doc pieza.omnicad edges=… distance=…`
 
 ### `shell`
@@ -1575,8 +1978,11 @@ Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quita
 - Parámetros:
   - `body` (texto; obligatorio): id o nombre del cuerpo a vaciar.
   - `faces` (texto o lista de texto; obligatorio): caras a quitar: selector (">Z" = la tapa), id de find_faces ("Cuerpo1/F6") o lista; [] = hueco cerrado.
-  - `thickness` (número o expresión; obligatorio): espesor de pared en mm (número o expresión con parámetros).
+  - `thickness` (número o expresión; obligatorio): espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness.
   - `direction` ("inside" | "outside" | "both"; opcional, por defecto `"inside"`): "inside", "outside" o "both".
+  - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) quita también las caras tangentes encadenadas a las elegidas.
+  - `outside_thickness` (número o expresión; opcional, por defecto `null`): espesor exterior en mm distinto del interior (con direction=both u outside); vacío = el mismo que thickness.
+  - `corners` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): "sharp" (desfase afilado, por defecto) o "rounded" (desfase redondeado en las esquinas).
 - CLI: `omnicad call shell --doc pieza.omnicad body=… faces=… thickness=…`
 
 ### `remove_fillets`
@@ -1585,7 +1991,7 @@ Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `body` (texto; obligatorio): id o nombre del cuerpo al que sacarle los empalmes.
+  - `body` (texto o lista de texto; obligatorio): id o nombre del cuerpo (o lista de cuerpos) al que sacarle los empalmes.
   - `max_radius` (número o expresión; obligatorio): radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
 - CLI: `omnicad call remove_fillets --doc pieza.omnicad body=… max_radius=…`
 
@@ -1611,7 +2017,7 @@ Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loo
   - `edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas a desfasar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista; vacío = ninguna.
   - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas de un boceto (get_sketch) a desfasar; piden `sketch`.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de `curves`; vacío = el último boceto del timeline.
-  - `plane` (texto; opcional, por defecto `null`): plano del desfase: "XY", "XZ", "YZ" o una cara plana (selector o id); vacío = el que contiene a todas.
+  - `plane` (texto; opcional, por defecto `null`): plano del desfase: "XY", "XZ", "YZ", el id o nombre de un plano de construcción o una cara plana (selector o id); vacío = el que contiene a todas.
   - `symmetric` (true/false; opcional, por defecto `false`): true hace el desfase a los dos lados (distance se toma en valor absoluto).
   - `corners` ("round" | "sharp"; opcional, por defecto `"round"`): round (arcos en las esquinas) o sharp (las esquinas se prolongan hasta cortarse).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de edges y de plane; vacío = el único cuerpo.
@@ -1619,7 +2025,7 @@ Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loo
 
 ### `create_hole`
 
-Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). Tres formas de ubicarlos: (1) ASOCIATIVA, en puntos de un boceto: sketch + sketch_points (ids de get_sketch, p. ej. el centro de un círculo); el agujero sigue al punto si el boceto o sus cotas cambian, perpendicular al plano del boceto y hacia el lado del material (flip lo invierte); face es opcional (elige el cuerpo). (2) FIJA, sobre una cara plana: face con un selector (p. ej. '>Z') o un id de find_faces ('Cuerpo1/F6'; UNA cara plana) y points: [u, v] en mm en los ejes x,y de un boceto sobre esa cara (find_faces da el center_uv) o [x, y, z] del mundo (se proyecta sobre la cara); sin points, el centro de la cara. Esos puntos quedan fijos en el espacio aunque la cara se mueva. (3) REFERENCIAS: face + reference_edges y reference_distances ubican el agujero a esas distancias de dos aristas rectas (paramétrico). hole_tap: simple, clearance (agujero de paso ISO 273 para el tornillo thread='M8' con fit close/normal/loose), cosmetic (rosca solo informativa; diámetro = diameter o la broca de roscar), modeled (rosca real: thread, thread_class '6H', '2B', 'auto' o '' y print_clearance para imprimir en 3D) o taper (rosca cónica de tubería R/NPT: agujero cónico 1:16, rosca cosmética). El fondo es plano salvo drill_tip=true (cono de 118°). Medidas en número (mm) o expresión.
+Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). Tres formas de ubicarlos: (1) ASOCIATIVA, en puntos de un boceto: sketch + sketch_points (ids de get_sketch, p. ej. el centro de un círculo); el agujero sigue al punto si el boceto o sus cotas cambian, perpendicular al plano del boceto y hacia el lado del material (flip lo invierte); face es opcional (elige el cuerpo). (2) FIJA, sobre una cara plana: face con un selector (p. ej. '>Z') o un id de find_faces ('Cuerpo1/F6'; UNA cara plana) y points: [u, v] en mm en los ejes x,y de un boceto sobre esa cara (find_faces da el center_uv) o [x, y, z] del mundo (se proyecta sobre la cara); sin points, el centro de la cara. Esos puntos quedan fijos en el espacio aunque la cara se mueva. (3) REFERENCIAS: face + reference_edges y reference_distances ubican el agujero a esas distancias de dos aristas rectas (paramétrico). hole_tap: simple, clearance (agujero de paso ISO 273 para el tornillo thread='M8' con fit close/normal/loose), cosmetic (rosca solo informativa; diámetro = diameter o la broca de roscar), modeled (rosca real: thread, thread_class '6H', '2B', 'auto' o '' y print_clearance para imprimir en 3D) o taper (rosca cónica de tubería R/NPT: agujero cónico 1:16, rosca cosmética). El fondo es plano salvo drill_tip=true (cono de tip_angle, 118° por defecto). Una cuarta forma, ASOCIATIVA: positions con vértices [x, y, z] del modelo o puntos de construcción (el agujero entra hacia −Z; flip lo invierte). flip vale en todas las formas y bodies agujerea varios cuerpos a la vez. Medidas en número (mm) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1633,11 +2039,11 @@ Hace agujeros redondos hacia adentro del material: simples, abocardados (counter
   - `counterbore_depth` (número o expresión; opcional, por defecto `null`): profundidad del abocardado en mm; solo con counterbore.
   - `countersink_diameter` (número o expresión; opcional, por defecto `null`): diámetro del avellanado en la superficie en mm; solo con countersink.
   - `countersink_angle` (número o expresión; opcional, por defecto `90`): ángulo total del avellanado en grados; solo con countersink.
-  - `drill_tip` (true/false; opcional, por defecto `false`): true deja el fondo en cono de 118° como una broca; false, fondo plano.
+  - `drill_tip` (true/false; opcional, por defecto `false`): true deja el fondo en cono como una broca (ángulo tip_angle); false, fondo plano.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores (y que se agujerea con sketch_points); vacío = el único cuerpo del documento.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de sketch_points; vacío = el último boceto.
   - `sketch_points` (lista de entero o null; opcional, por defecto `null`): ids de puntos del boceto (get_sketch los lista; el centro de un círculo también es un punto): un agujero asociativo en cada uno.
-  - `flip` (true/false; opcional, por defecto `false`): con sketch_points, true invierte el sentido automático (hacia el material).
+  - `flip` (true/false; opcional, por defecto `false`): true invierte el sentido del agujero: con sketch_points el automático (hacia el material); con las demás formas, el normal (hacia adentro de la cara, o −Z con positions).
   - `hole_tap` ("simple" | "clearance" | "cosmetic" | "modeled" | "taper"; opcional, por defecto `"simple"`): "simple", "clearance" (paso libre ISO 273), "cosmetic", "modeled" (rosca real) o "taper" (tubería cónica).
   - `thread` (texto; opcional, por defecto `null`): rosca: "M8", "M8x1", "1/4-20 UNC", "Tr20x4", "G1/2" (taper: "R1/2" o "1/2 NPT"); con clearance, el tornillo ("M8").
   - `thread_class` (texto; opcional, por defecto `"auto"`): clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), "auto" (6H o 2B si hay datos) o "" (perfil básico).
@@ -1648,6 +2054,9 @@ Hace agujeros redondos hacia adentro del material: simples, abocardados (counter
   - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más hondo).
   - `reference_edges` (lista de texto o null; opcional, por defecto `null`): posición por referencias: DOS aristas rectas (selector o id de find_edges), no paralelas.
   - `reference_distances` (lista de número o expresión o null; opcional, por defecto `null`): las DOS distancias en mm del centro del agujero a cada arista de reference_edges.
+  - `positions` (lista de texto o objeto o lista de número o null; opcional, por defecto `null`): posición asociativa en puntos del modelo: vértices [x, y, z] (a menos de 0,001 mm de un vértice), puntos de construcción (id o nombre) o {"sketch", "point"}; el agujero va hacia −Z. No se combina con points, sketch_points ni reference_edges.
+  - `tip_angle` (número o expresión; opcional, por defecto `118`): ángulo total de la punta de broca en grados (con drill_tip); 118 por defecto.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos extra que se agujerean con el mismo agujero (ids o nombres), además del de face/body; vacío = solo ese.
 - CLI: `omnicad call create_hole --doc pieza.omnicad`
 
 ### `create_thread`
@@ -1677,10 +2086,75 @@ Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el pl
 - Parámetros:
   - `faces` (texto o lista de texto; obligatorio): caras a inclinar: selector ("#Z" = las laterales de una caja), id de find_faces o lista.
   - `angle` (número o expresión; obligatorio): ángulo de desmoldeo en grados (número o expresión), p. ej. 3.
-  - `neutral` (texto; opcional, por defecto `"XY"`): plano neutro: "XY", "XZ", "YZ" o una cara plana (selector o id, p. ej. "<Z"); define la dirección de extracción.
+  - `neutral` (texto; opcional, por defecto `"XY"`): plano neutro: "XY", "XZ", "YZ", el id o nombre de un plano de construcción, o una cara plana (selector o id, p. ej. "<Z"); define la dirección de extracción.
   - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de extracción.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+  - `sides` ("one" | "two" | "symmetric"; opcional, por defecto `"one"`): "one" (un lado, por defecto), "two" (dos lados: angle y angle2) o "symmetric" (simétrico: el mismo ángulo a los dos lados del plano neutro).
+  - `angle2` (número o expresión; opcional, por defecto `null`): ángulo del segundo lado en grados; obligatorio con sides=two.
 - CLI: `omnicad call draft --doc pieza.omnicad faces=… angle=…`
+
+### `split_face`
+
+Divide caras con un plano, cara, arista o curva de boceto.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o lista de texto; obligatorio): caras a dividir: selector, ids de find_faces o lista de ambos.
+  - `tool` (texto o objeto o lista de número; obligatorio): plano, cara, arista o {sketch, curve}; acepta id/nombre de construcción, selector o id de find_faces/find_edges.
+  - `extend` (true/false; opcional, por defecto `true`): extiende la herramienta de división.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+- CLI: `omnicad call split_face --doc pieza.omnicad faces=… tool=…`
+
+### `split_body`
+
+Parte un cuerpo en varios con un plano, una cara u otro cuerpo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto; obligatorio): id o nombre del cuerpo a dividir.
+  - `tool` (texto o objeto o lista de número; obligatorio): plano de origen/construcción, una cara (selector o id), o cuerpo herramienta por id/nombre o {body: nombre}.
+  - `extend` (true/false; opcional, por defecto `true`): extiende la herramienta de división.
+- CLI: `omnicad call split_body --doc pieza.omnicad body=… tool=…`
+
+### `silhouette_split`
+
+Divide las caras de un cuerpo por su silueta vista desde una dirección.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto; obligatorio): id o nombre del cuerpo de destino.
+  - `direction` (texto o objeto o lista de número; opcional, por defecto `"Z"`): eje, arista recta, plano o cara plana: X/Y/Z, XY/XZ/YZ, construcción, selector o id.
+- CLI: `omnicad call silhouette_split --doc pieza.omnicad body=…`
+
+### `replace_face`
+
+Lleva caras de un cuerpo hasta otra cara o un plano.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o lista de texto; obligatorio): caras de origen: selector, ids de find_faces o lista.
+  - `target` (texto o objeto o lista de número; obligatorio): una cara o plano de destino: selector, id de find_faces, XY/XZ/YZ o construcción por id/nombre.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+- CLI: `omnicad call replace_face --doc pieza.omnicad faces=… target=…`
+
+### `remove_bodies`
+
+Quita cuerpos del diseño conservando la operación en el timeline.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id, nombre o lista de cuerpos a quitar.
+- CLI: `omnicad call remove_bodies --doc pieza.omnicad bodies=…`
+
+### `delete_faces`
+
+Borra caras y cierra el hueco extendiendo sus vecinas.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o lista de texto; obligatorio): caras a borrar: selector, ids de find_faces o lista.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+- CLI: `omnicad call delete_faces --doc pieza.omnicad faces=…`
 
 ### `gear_info`
 
@@ -1715,8 +2189,10 @@ Crea un engranaje cilíndrico de evolvente (perfil de referencia ISO 53), recto 
   - `backlash` (número o expresión; opcional, por defecto `0`): juego del par en el primitivo, en mm (este engranaje adelgaza la mitad).
   - `bore` (número o expresión; opcional, por defecto `0`): diámetro del agujero central en mm; 0 = macizo.
   - `rotation` (número o expresión; opcional, por defecto `0`): giro del engranaje alrededor de su eje, en grados.
-  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
   - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del centro sobre el plano, en mm; vacío = el origen del plano.
+  - `center_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
 - CLI: `omnicad call create_gear --doc pieza.omnicad module=… teeth=…`
 
 ### `create_gear_pair`
@@ -1739,8 +2215,10 @@ Crea dos engranajes de evolvente que engranan, en UN paso del timeline: el segun
   - `bore2` (número o expresión; opcional, por defecto `0`): diámetro del agujero central del segundo en mm; 0 = macizo.
   - `direction` (número o expresión; opcional, por defecto `0`): dirección del centro del segundo vista desde el primero, en grados desde el eje x del plano.
   - `rotation` (número o expresión; opcional, por defecto `0`): giro del primero alrededor de su eje, en grados (el segundo gira lo que le corresponde para engranar).
-  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoyan: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoyan: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
   - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del centro del primero sobre el plano, en mm; vacío = el origen del plano.
+  - `center_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
   - `assembly` (true/false; opcional, por defecto `true`): true para crear además los componentes, las uniones de revolución y el vínculo de movimiento.
 - CLI: `omnicad call create_gear_pair --doc pieza.omnicad module=… teeth1=… teeth2=…`
 
@@ -1758,8 +2236,10 @@ Crea una cremallera recta con el perfil de referencia ISO 53 (paso π·módulo, 
   - `clearance` (número o expresión; opcional, por defecto `0.25`): holgura de fondo como fracción del módulo.
   - `backlash` (número o expresión; opcional, por defecto `0`): juego en la línea primitiva, en mm (el diente adelgaza la mitad).
   - `rotation` (número o expresión; opcional, por defecto `0`): giro alrededor de la normal del plano, en grados.
-  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
   - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del inicio de la línea primitiva sobre el plano, en mm; vacío = el origen del plano.
+  - `center_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
 - CLI: `omnicad call create_rack --doc pieza.omnicad module=… teeth=…`
 
 ### `create_sprocket`
@@ -1775,8 +2255,10 @@ Crea una rueda dentada para cadena de rodillos con la forma de diente de ISO 606
   - `width` (número o expresión; opcional, por defecto `null`): ancho del diente en mm; vacío = el de ISO 606 para la cadena (obligatorio con "custom").
   - `bore` (número o expresión; opcional, por defecto `0`): diámetro del agujero central en mm; 0 = macizo.
   - `rotation` (número o expresión; opcional, por defecto `0`): giro alrededor del eje, en grados.
-  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
   - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del centro sobre el plano, en mm; vacío = el origen del plano.
+  - `center_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
 - CLI: `omnicad call create_sprocket --doc pieza.omnicad teeth=…`
 
 ### `create_shaft`
@@ -1786,11 +2268,375 @@ Asistente de ejes: crea un eje escalonado de revolución a partir de una tabla d
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `segments` (lista de objeto; obligatorio): tramos en orden, cada uno {"diameter": mm, "length": mm, "start": "none"|"chamfer"|"fillet", "start_size": mm, "end": "none"|"chamfer"|"fillet", "end_size": mm}; diameter y length son obligatorios y todos aceptan expresiones.
-  - `plane` (texto; opcional, por defecto `"XY"`): plano de donde sale el eje: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+  - `plane` (texto; opcional, por defecto `"XY"`): plano de donde sale el eje: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
   - `center` (lista de número o expresión o null; opcional, por defecto `null`): [x, y] del comienzo del eje sobre el plano, en mm; vacío = el origen del plano.
+  - `center_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
 - CLI: `omnicad call create_shaft --doc pieza.omnicad segments=…`
+
+### `create_coil`
+
+Crea una bobina o espiral con las opciones del comando Bobina.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `diameter` (número o expresión; opcional, por defecto `20`): diámetro de la bobina en mm o expresión.
+  - `coil_type` ("revolutions_height" | "revolutions_pitch" | "height_pitch" | "spiral"; opcional, por defecto `"revolutions_height"`): revolutions_height, revolutions_pitch, height_pitch o spiral.
+  - `revolutions` (número o expresión; opcional, por defecto `5`): cantidad de vueltas (número o expresión escalar).
+  - `height` (número o expresión; opcional, por defecto `30`): altura axial en mm para los modos con altura.
+  - `pitch` (número o expresión; opcional, por defecto `6`): paso axial o radial de la espiral en mm.
+  - `angle` (número o expresión; opcional, por defecto `0`): ángulo de conicidad en grados; no se usa en espiral.
+  - `section` ("circular" | "square" | "triangle_external" | "triangle_internal"; opcional, por defecto `"circular"`): circular, square, triangle_external o triangle_internal.
+  - `section_size` (número o expresión; opcional, por defecto `3`): diámetro del círculo circunscrito de la sección en mm.
+  - `position` ("on" | "inside" | "outside"; opcional, por defecto `"on"`): sección on (sobre), inside (dentro) u outside (fuera).
+  - `clockwise` (true/false; opcional, por defecto `false`): true invierte el sentido helicoidal.
+  - `rotate` (true/false; opcional, por defecto `false`): true gira 90 grados alrededor del eje Y local.
+  - `plane` (texto o objeto; opcional, por defecto `"XY"`): plano XY/XZ/YZ, nombre/id de plano de construcción o selector/id de una cara plana.
+  - `center` (texto o objeto; opcional, por defecto `null`): punto del centro; O, nombre/id de punto, {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}.
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpos afectados por la booleana, por nombre o id; vacío = automático.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan selectores del plano o del centro.
+- CLI: `omnicad call create_coil --doc pieza.omnicad`
+
+### `create_pipe`
+
+Crea una tubería maciza o hueca sobre curvas de boceto o aristas.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `path_sketch` (texto; opcional, por defecto `null`): nombre/id del boceto de ruta; se combina con aristas si se dan ambas fuentes.
+  - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas; requiere path_sketch.
+  - `edges` (texto o lista de texto o null; opcional, por defecto `null`): selector o ids de find_edges, o lista, como ruta adicional.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de aristas.
+  - `chain` (true/false; opcional, por defecto `true`): true incluye la cadena tangente conectada a la ruta seleccionada.
+  - `end` (número o expresión; opcional, por defecto `1`): fracción final de la ruta, entre 0 y 1.
+  - `start` (número o expresión; opcional, por defecto `0`): fracción inicial de la ruta, entre 0 y 1, menor que end.
+  - `section` ("circular" | "square" | "triangle"; opcional, por defecto `"circular"`): circular, square o triangle.
+  - `section_size` (número o expresión; opcional, por defecto `5`): diámetro exterior del círculo circunscrito de la sección en mm.
+  - `hollow` (true/false; opcional, por defecto `false`): true crea una sección hueca.
+  - `thickness` (número o expresión; opcional, por defecto `0.5`): espesor de la pared en mm cuando hollow=true.
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpos afectados por la booleana; vacío = automático.
+- CLI: `omnicad call create_pipe --doc pieza.omnicad`
+
+### `create_rib`
+
+Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): nombre/id del boceto con curvas abiertas.
+  - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas.
+  - `thickness` (número o expresión; opcional, por defecto `2`): grosor en mm.
+  - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
+  - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
+  - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 o side2.
+  - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de crecimiento.
+  - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
+- CLI: `omnicad call create_rib --doc pieza.omnicad sketch=…`
+
+### `create_web`
+
+Crea una red de nervios perpendicular al plano del boceto.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): nombre/id del boceto con curvas abiertas.
+  - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas.
+  - `thickness` (número o expresión; opcional, por defecto `2`): grosor en mm.
+  - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
+  - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
+  - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 o side2.
+  - `reverse` (true/false; opcional, por defecto `false`): true invierte la normal usada por el comando Red.
+  - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
+- CLI: `omnicad call create_web --doc pieza.omnicad sketch=…`
+
+### `create_emboss`
+
+Repuja o graba perfiles en una o varias caras, con envoltura opcional.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): nombre/id del boceto de perfiles o textos.
+  - `faces` (texto o lista de texto; obligatorio): selector, ids de find_faces o lista de ambos.
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): índice, lista, all, largest, text o text:<id>, como extrude.
+  - `depth` (número o expresión; opcional, por defecto `1`): profundidad firmada en mm; negativa invierte relieve/grabado.
+  - `emboss_type` ("emboss" | "deboss"; opcional, por defecto `"emboss"`): emboss (relieve) o deboss (grabado).
+  - `wrap` (true/false; opcional, por defecto `false`): true envuelve sobre la cara.
+  - `tangent_chain` (true/false; opcional, por defecto `false`): true incluye las caras tangentes.
+  - `horizontal_offset` (número o expresión; opcional, por defecto `0`): desplazamiento horizontal en mm.
+  - `vertical_offset` (número o expresión; opcional, por defecto `0`): desplazamiento vertical en mm.
+  - `rotation` (número o expresión; opcional, por defecto `0`): giro de los perfiles en grados.
+  - `reverse` (true/false; opcional, por defecto `false`): true invierte la normal.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan selectores; vacío = el único cuerpo.
+- CLI: `omnicad call create_emboss --doc pieza.omnicad sketch=… faces=…`
+
+### `create_boss`
+
+Crea columnas para tornillo en puntos de boceto o vértices.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `positions` (lista de texto o objeto; obligatorio): puntos O o de construcción, {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice desde 1}.
+  - `outer_diameter` (número o expresión; opcional, por defecto `8`): diámetro exterior en mm.
+  - `hole_diameter` (número o expresión; opcional, por defecto `3`): diámetro del agujero en mm, positivo y menor que outer_diameter.
+  - `height` (número o expresión; opcional, por defecto `null`): altura en mm; vacío = hasta el cuerpo.
+  - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados.
+  - `reverse` (true/false; opcional, por defecto `false`): true invierte el sentido automático respecto al material.
+- CLI: `omnicad call create_boss --doc pieza.omnicad positions=…`
+
+### `create_lip_groove`
+
+Crea un labio o una ranura a lo largo del borde de una pared.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `edges` (texto o lista de texto; obligatorio): selector o ids de find_edges, o lista; todas deben pertenecer al mismo cuerpo.
+  - `lip_type` ("lip" | "groove"; opcional, por defecto `"lip"`): lip (labio) o groove (ranura).
+  - `width` (número o expresión; opcional, por defecto `1`): ancho en mm.
+  - `height` (número o expresión; opcional, por defecto `1.5`): alto en mm.
+  - `clearance` (número o expresión; opcional, por defecto `0.1`): holgura en mm para groove.
+  - `direction` (texto o objeto; opcional, por defecto `null`): eje X/Y/Z, plano XY/XZ/YZ, geometría de construcción o selector/id de cara plana o arista recta; vacío = Z.
+  - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de tirado.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores.
+- CLI: `omnicad call create_lip_groove --doc pieza.omnicad edges=…`
+
+### `create_boundary_fill`
+
+Rellena celdas encerradas por cuerpos, caras y planos.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `tools` (texto o lista de texto; obligatorio): nombres/ids de cuerpos o planos, XY/XZ/YZ y selectores/ids de caras, solos o en lista.
+  - `cells` (lista de entero o null; opcional, por defecto `null`): números de celda desde 1, ordenadas por centroide XYZ como el diálogo; vacío = celda 1.
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpos afectados por la booleana; vacío = automático.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan selectores de caras.
+- CLI: `omnicad call create_boundary_fill --doc pieza.omnicad tools=…`
+
+### `create_bounding_solid`
+
+Crea una caja o cilindro envolvente de los cuerpos elegidos.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): nombres/ids de los cuerpos a envolver.
+  - `shape` ("box" | "cylinder"; opcional, por defecto `"box"`): box (caja) o cylinder (cilindro).
+  - `axis` ("x" | "y" | "z"; opcional, por defecto `"z"`): eje del cilindro x, y o z.
+  - `margin` (número o expresión; opcional, por defecto `0`): desfase de la envolvente en mm.
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpos afectados por la booleana; vacío = automático.
+- CLI: `omnicad call create_bounding_solid --doc pieza.omnicad bodies=…`
+
+### `thicken`
+
+Da espesor a caras o cuerpos de superficie y crea un sólido.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o lista de texto; obligatorio): selector/ids de caras o nombres/ids de cuerpos de superficie, solos o en lista.
+  - `thickness` (número o expresión; opcional, por defecto `2`): grosor firmado en mm; negativo invierte el lado.
+  - `direction` ("one_side" | "symmetric"; opcional, por defecto `"one_side"`): one_side (un lado) o symmetric (mitad a cada lado).
+  - `thicken_type` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): sharp (afilado) o rounded (redondeado).
+  - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.
+  - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpos afectados por la booleana; vacío = automático.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan selectores de caras.
+- CLI: `omnicad call thicken --doc pieza.omnicad faces=…`
+
+### `align_bodies`
+
+Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): nombres/ids de los cuerpos a mover o copiar.
+  - `source` (texto o objeto; obligatorio): plano/eje/punto de origen, nombre/id de construcción, selector/id de cara o arista; {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}.
+  - `destination` (texto o objeto; obligatorio): geometría de destino, con el mismo formato que source.
+  - `flip` (true/false; opcional, por defecto `false`): true voltea 180 grados la alineación.
+  - `copy` (true/false; opcional, por defecto `false`): true crea copias; false mueve los originales.
+  - `source_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de source.
+  - `destination_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de destination.
+- CLI: `omnicad call align_bodies --doc pieza.omnicad bodies=… source=… destination=…`
+
+### `scale_body`
+
+Escala sólidos respecto de un punto, uniforme o con un factor por eje.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): nombres/ids de los sólidos a escalar.
+  - `factor` (número o expresión; opcional, por defecto `1`): factor escalar uniforme, número o expresión.
+  - `scale_type` ("uniform" | "non_uniform"; opcional, por defecto `"uniform"`): uniform o non_uniform.
+  - `factor_x` (número o expresión; opcional, por defecto `1`): factor del eje X para non_uniform.
+  - `factor_y` (número o expresión; opcional, por defecto `1`): factor del eje Y para non_uniform.
+  - `factor_z` (número o expresión; opcional, por defecto `1`): factor del eje Z para non_uniform.
+  - `point` (texto o objeto; opcional, por defecto `null`): punto base O o de construcción, {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}; vacío = origen.
+- CLI: `omnicad call scale_body --doc pieza.omnicad bodies=…`
+
+### `create_surface_extrude`
+
+Extruye curvas abiertas o cerradas en una superficie.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `profiles` (texto o objeto o lista de texto o objeto; obligatorio): curvas {"sketch": "Boceto1", "curve": [1, 2]}, perfiles {"sketch": "Boceto1", "profile": 0}, caras, aristas o cuerpos; admite listas, ids y selectores.
+  - `distance` (número o expresión; opcional, por defecto `"10 mm"`): distancia en mm o expresión; negativa invierte el sentido.
+  - `direction` (texto o objeto; opcional, por defecto `null`): eje, plano, cara plana o arista lineal; vacío = normal del boceto (o Z).
+  - `symmetric` (true/false; opcional, por defecto `false`): reparte la distancia total a ambos lados.
+  - `taper_angle` (número o expresión; opcional, por defecto `0`): ángulo de conicidad en grados o expresión.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores sin cuerpo explícito.
+- CLI: `omnicad call create_surface_extrude --doc pieza.omnicad profiles=…`
+
+### `create_surface_revolve`
+
+Gira curvas alrededor de un eje para crear una superficie.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `profiles` (texto o objeto o lista de texto o objeto; obligatorio): curvas o perfiles de boceto ({"sketch": "Boceto1", "curve": 1} o "profile": 0), caras, aristas o cuerpos; admite listas, ids y selectores.
+  - `axis` (texto o objeto; obligatorio): eje X, Y, Z, eje de construcción o referencia a una línea de boceto/arista lineal.
+  - `angle` (número o expresión; opcional, por defecto `"360 deg"`): ángulo en grados o expresión.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call create_surface_revolve --doc pieza.omnicad profiles=… axis=…`
+
+### `create_surface_sweep`
+
+Barre curvas por una ruta con orientación y torsión.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `profiles` (texto o objeto o lista de texto o objeto; obligatorio): curvas o perfiles {"sketch": "Boceto1", "curve": 1} o {"sketch": "Boceto1", "profile": 0}; también caras, aristas o cuerpos.
+  - `path` (texto o objeto o lista de texto o objeto; obligatorio): cadena de curvas de boceto, aristas (ids o selectores), caras o cuerpos.
+  - `orientation` ("perpendicular" | "parallel"; opcional, por defecto `"perpendicular"`): perpendicular sigue la ruta; parallel mantiene la orientación.
+  - `twist_angle` (número o expresión; opcional, por defecto `0`): torsión total en grados o expresión; solo con orientación perpendicular.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call create_surface_sweep --doc pieza.omnicad profiles=… path=…`
+
+### `create_surface_loft`
+
+Crea una superficie entre secciones ordenadas, abiertas o cerradas.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `profiles` (lista de texto o objeto; obligatorio): secciones ordenadas: curvas o perfiles {"sketch": "Boceto1", "profile": 0}, caras, aristas, cuerpos o puntos de boceto {"sketch": "Boceto1", "point": 1}.
+  - `closed` (true/false; opcional, por defecto `false`): une la última sección con la primera.
+  - `ruled` (true/false; opcional, por defecto `false`): usa tramos rectos entre secciones.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call create_surface_loft --doc pieza.omnicad profiles=…`
+
+### `offset_surface`
+
+Crea una superficie paralela a caras o cuerpos.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o objeto o lista de texto o objeto; obligatorio): caras (ids o selectores) o cuerpos por id, nombre o {"body": "Cuerpo1"}; admite listas.
+  - `distance` (número o expresión; opcional, por defecto `"2 mm"`): desfase en mm o expresión; admite valores negativos.
+  - `offset_type` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): sharp para esquinas agudas; rounded para redondeadas.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call offset_surface --doc pieza.omnicad faces=…`
+
+### `fillet_surface`
+
+Redondea o bisela aristas entre superficies.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `edges` (texto o objeto o lista de texto o objeto; obligatorio): aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}.
+  - `size` (número o expresión; opcional, por defecto `"1 mm"`): radio del empalme o distancia del chaflán en mm o expresión.
+  - `fillet_type` ("fillet" | "chamfer"; opcional, por defecto `"fillet"`): fillet (empalme) o chamfer (chaflán).
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call fillet_surface --doc pieza.omnicad edges=…`
+
+### `create_patch`
+
+Tapa un contorno cerrado con continuidad G0, G1 o G2.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `boundary` (texto o objeto o lista de texto o objeto; obligatorio): curvas o perfiles {"sketch": "Boceto1", "profile": 0}, aristas, caras o cuerpos; admite listas, ids y selectores.
+  - `continuity` ("G0" | "G1" | "G2"; opcional, por defecto `"G0"`): G0 conexión, G1 tangencia o G2 curvatura; G1/G2 necesitan caras de soporte.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call create_patch --doc pieza.omnicad boundary=…`
+
+### `create_ruled_surface`
+
+Crea superficies rectas desde aristas, con dirección y ángulo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `edges` (texto o objeto o lista de texto o objeto; obligatorio): curvas o perfiles de boceto, aristas, caras o cuerpos; admite listas, ids y selectores.
+  - `distance` (número o expresión; opcional, por defecto `"10 mm"`): largo en mm o expresión.
+  - `surface_type` ("normal" | "tangent" | "direction"; opcional, por defecto `"normal"`): normal, tangent o direction.
+  - `direction` (texto o objeto; opcional, por defecto `null`): eje, plano, cara plana o arista lineal; obligatorio con surface_type=direction.
+  - `angle` (número o expresión; opcional, por defecto `0`): giro de la dirección en grados o expresión.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call create_ruled_surface --doc pieza.omnicad edges=…`
+
+### `extend_surface`
+
+Alarga bordes libres de superficies.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `edges` (texto o objeto o lista de texto o objeto; obligatorio): bordes libres por id o selector; admite listas y {"body": "Cuerpo1", "edges": ">X"}.
+  - `distance` (número o expresión; opcional, por defecto `"5 mm"`): extensión en mm o expresión.
+  - `extension_type` ("natural" | "tangent" | "perpendicular"; opcional, por defecto `"natural"`): natural, tangent o perpendicular.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call extend_surface --doc pieza.omnicad edges=…`
+
+### `trim_surface`
+
+Recorta una superficie y quita la región indicada por un punto.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `surface` (texto; obligatorio): id o nombre del cuerpo de superficie que se recorta.
+  - `tool` (texto o objeto; obligatorio): plano, cara, cuerpo o curva de boceto {"sketch": "Boceto1", "curve": 1} que corta la superficie.
+  - `remove_point` (lista de número; obligatorio): punto [x, y, z] en mm sobre la región que se quita.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar el selector de tool.
+- CLI: `omnicad call trim_surface --doc pieza.omnicad surface=… tool=… remove_point=…`
+
+### `untrim_surface`
+
+Restaura límites naturales de caras recortadas.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (texto o objeto o lista de texto o objeto; obligatorio): caras por id o selector; admite listas y {"body": "Cuerpo1", "faces": "all"}.
+  - `boundaries` ("outer" | "inner" | "all"; opcional, por defecto `"outer"`): outer exteriores, inner interiores o all todos los contornos.
+  - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+- CLI: `omnicad call untrim_surface --doc pieza.omnicad faces=…`
+
+### `stitch_surfaces`
+
+Cose superficies; un cierre completo produce un sólido.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): ids o nombres de los cuerpos que se cosen; se conserva el primero y se consumen los demás.
+  - `tolerance` (número o expresión; opcional, por defecto `"0.01 mm"`): tolerancia de costura en mm o expresión.
+- CLI: `omnicad call stitch_surfaces --doc pieza.omnicad bodies=…`
+
+### `unstitch_surfaces`
+
+Separa cada cara en un cuerpo de superficie independiente.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): ids o nombres de cuerpos; cada cara pasa a ser un cuerpo nuevo.
+- CLI: `omnicad call unstitch_surfaces --doc pieza.omnicad bodies=…`
+
+### `reverse_surface_normal`
+
+Invierte la orientación de cuerpos de superficie.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): ids o nombres de superficies cuya normal se invierte.
+- CLI: `omnicad call reverse_surface_normal --doc pieza.omnicad bodies=…`
 
 ## Grupo chapa
 
@@ -1811,10 +2657,11 @@ Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, pat
 | [`refold`](#refold) | sí | Volver a plegar (CHAPA › Volver a plegar): vuelve a plegar los pliegues desplegados del cuerpo. face (opcional) es la cara que queda quieta; sin ella, la misma que al desplegar. |
 | [`create_flat_pattern`](#create_flat_pattern) | sí | Crear patrón plano (CHAPA › Crear patrón plano): cuerpo nuevo con la pieza desplegada (desarrollo exacto con el factor K) sobre la cara estacionaria (in_place) o al lado de la pieza sin tocar otros cuerpos (beside). |
 | [`convert_to_sheet_metal`](#convert_to_sheet_metal) | sí | Convertir a chapa (CHAPA › Convertir a chapa): una placa plana de espesor constante (p. ej. una caja delgada) pasa a ser de chapa; el espesor se mide desde la cara elegida y reemplaza al de la regla, que aporta radio, K, alivios y material. |
-| [`rip`](#rip) | sí | Desgarro (CHAPA › Desgarro): mode=face quita la cara elegida (un pliegue —cara curva— o una parte plana); mode=points corta una ranura de ancho gap entre dos puntos del borde de la cara elegida (vértices [x, y, z] de la chapa o puntos de un boceto {"sketch", "point"}), del lado side. |
+| [`rip`](#rip) | sí | Desgarro (CHAPA › Desgarro): mode=face quita la cara elegida (un pliegue —cara curva— o una parte plana); mode=points corta una ranura de ancho gap entre dos puntos del borde de la cara elegida (vértices [x, y, z] de la chapa, puntos de un boceto {"sketch", "point"} o puntos de construcción por id o nombre), del lado side. |
 | [`join_by_bend`](#join_by_bend) | sí | Unir plegando (CHAPA › Unir plegando): une dos cuerpos de chapa del MISMO espesor con un pliegue entre dos aristas rectas paralelas (una de cada cuerpo, del borde de la cara de arriba o de abajo); quedan en un solo cuerpo. |
 | [`set_sheet_metal_rule`](#set_sheet_metal_rule) | sí | Cambia la regla de un cuerpo de chapa (CHAPA › Reglas de chapa): otra regla de la biblioteca y/o valores que la anulan (espesor, radio, K, alivios, separación). |
 | [`export_flat_pattern_dxf`](#export_flat_pattern_dxf) | no | Exporta el patrón plano de un cuerpo de chapa (o de su patrón plano) a DXF en mm para corte láser o plegadora (CHAPA › Exportar DXF del patrón plano): capas CONTORNO_EXTERIOR, CONTORNOS_INTERIORES, LINEAS_PLIEGUE (centros de pliegue) y EXTENSION_PLIEGUE (límites de cada pliegue). |
+| [`set_flat_pattern_view`](#set_flat_pattern_view) | sí | Activa solo el desarrollo de chapa o vuelve al modelo plegado. |
 
 ### `list_sheet_metal_rules`
 
@@ -2012,13 +2859,13 @@ Convertir a chapa (CHAPA › Convertir a chapa): una placa plana de espesor cons
 
 ### `rip`
 
-Desgarro (CHAPA › Desgarro): mode=face quita la cara elegida (un pliegue —cara curva— o una parte plana); mode=points corta una ranura de ancho gap entre dos puntos del borde de la cara elegida (vértices [x, y, z] de la chapa o puntos de un boceto {"sketch", "point"}), del lado side. Si la pieza queda partida, cada pedazo es un cuerpo de chapa (bodies_created).
+Desgarro (CHAPA › Desgarro): mode=face quita la cara elegida (un pliegue —cara curva— o una parte plana); mode=points corta una ranura de ancho gap entre dos puntos del borde de la cara elegida (vértices [x, y, z] de la chapa, puntos de un boceto {"sketch", "point"} o puntos de construcción por id o nombre), del lado side. Si la pieza queda partida, cada pedazo es un cuerpo de chapa (bodies_created).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `face` (texto; obligatorio): con mode="face", la cara a quitar; con mode="points", la cara cuyo borde tiene los dos puntos (selector o id).
   - `mode` ("face" | "points"; opcional, por defecto `"face"`): "face" o "points".
-  - `points` (lista de lista de número o objeto o null; opcional, por defecto `null`): con mode="points", dos puntos del borde: [x, y, z] de un vértice o {"sketch": id, "point": id}.
+  - `points` (lista de lista de número o objeto o texto o null; opcional, por defecto `null`): con mode="points", dos puntos del borde: [x, y, z] de un vértice, {"sketch": id, "point": id} o el id o nombre de un punto de construcción (create_construction_point).
   - `side` ("side1" | "side2" | "center"; opcional, por defecto `"center"`): con mode="points", de qué lado de la línea p1→p2 va la ranura: "side1", "side2" o "center".
   - `gap` (número o expresión; opcional, por defecto `null`): ancho de la ranura en mm; vacío = la separación de la regla.
   - `body` (texto; opcional, por defecto `null`): cuerpo de chapa sobre el que se evalúa el selector.
@@ -2071,6 +2918,16 @@ Exporta el patrón plano de un cuerpo de chapa (o de su patrón plano) a DXF en 
   - `bend_extensions` (true/false; opcional, por defecto `false`): true dibuja las líneas de inicio y fin de cada pliegue.
   - `overwrite` (true/false; opcional, por defecto `false`): true para reemplazar el archivo si ya existe.
 - CLI: `omnicad call export_flat_pattern_dxf --doc pieza.omnicad path=…`
+
+### `set_flat_pattern_view`
+
+Activa solo el desarrollo de chapa o vuelve al modelo plegado. Admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `active` (true/false; opcional, por defecto `true`): true activa el patrón plano; false termina su visualización.
+  - `body` (texto; opcional, por defecto `null`): cuerpo de chapa o su patrón por nombre o id; vacío elige el último patrón.
+- CLI: `omnicad call set_flat_pattern_view --doc pieza.omnicad`
 
 ## Grupo malla
 
@@ -2212,11 +3069,12 @@ Corta mallas con un plano (MALLA › MODIFICAR › Corte de plano de Fusion). ki
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
-  - `plane` (texto; obligatorio): "XY", "XZ", "YZ" o el id o nombre de un plano de construcción.
+  - `plane` (texto; obligatorio): "XY", "XZ", "YZ", el id o nombre de un plano de construcción, o UNA cara plana de un sólido (selector como ">Z" o id de find_faces, p. ej. "Cuerpo1/F6": el plano de la cara).
   - `kind` ("trim" | "split_body" | "split_faces"; opcional, por defecto `"trim"`): "trim", "split_body" o "split_faces".
   - `fill` (true/false; opcional, por defecto `true`): true tapa el corte con triángulos.
   - `flip` (true/false; opcional, por defecto `false`): true invierte el lado que se conserva (en trim) o el orden de las partes (en split_body).
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+  - `plane_body` (texto; opcional, por defecto `null`): cuerpo sólido donde se evalúa el selector de cara de plane; vacío = el único sólido del documento.
 - CLI: `omnicad call plane_cut_mesh --doc pieza.omnicad bodies=… plane=…`
 
 ### `combine_meshes`
@@ -2331,8 +3189,8 @@ Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `origin1` (texto; obligatorio): dónde se toma el componente que SE MUEVE: cara o arista (selector o id), del cuerpo body1.
-  - `origin2` (texto; obligatorio): dónde va: cara o arista de otro componente (o de la raíz), origen de unión, plano, eje o punto de construcción.
+  - `origin1` (texto o lista de número; obligatorio): dónde se toma el componente que SE MUEVE: cara o arista (selector o id), o un vértice por sus coordenadas [x, y, z], del cuerpo body1.
+  - `origin2` (texto o lista de número o objeto; obligatorio): dónde va: cara o arista de otro componente (o de la raíz), un vértice [x, y, z], un punto o una curva de boceto {"sketch", "point" | "curve"}, origen de unión, plano, eje o punto de construcción.
   - `joint_type` ("rigid" | "revolute" | "slider" | "cylindrical" | "pin_slot" | "planar" | "ball"; opcional, por defecto `"rigid"`): "rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar" o "ball".
   - `body1` (texto; opcional, por defecto `null`): cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin1; con un id no hace falta.
   - `body2` (texto; opcional, por defecto `null`): cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin2.
@@ -2359,7 +3217,7 @@ Unión como está (ENSAMBLAR › Unión como está): liga el componente de `orig
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `origin` (texto; obligatorio): cara o arista del componente que se mueve (selector evaluado sobre body, o id); define el marco del movimiento.
+  - `origin` (texto o lista de número; obligatorio): cara o arista del componente que se mueve (selector evaluado sobre body, o id), o un vértice por sus coordenadas [x, y, z]; define el marco del movimiento.
   - `component2` (texto; opcional, por defecto `null`): componente al que queda ligado (id, nombre o uno de sus cuerpos); vacío = la raíz.
   - `joint_type` ("rigid" | "revolute" | "slider" | "cylindrical" | "pin_slot" | "planar" | "ball"; opcional, por defecto `"revolute"`): "rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar" o "ball".
   - `body` (texto; opcional, por defecto `null`): cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin.
@@ -2382,7 +3240,7 @@ Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `geometry` (texto; obligatorio): cara o arista donde va el origen (selector evaluado sobre body, o id de find_faces / find_edges).
+  - `geometry` (texto o lista de número o objeto; obligatorio): cara o arista donde va el origen (selector evaluado sobre body, o id de find_faces / find_edges), un vértice [x, y, z] o un punto o una curva de boceto {"sketch", "point" | "curve"}.
   - `body` (texto; opcional, por defecto `null`): cuerpo (o componente de un solo cuerpo) donde se evalúa el selector.
   - `snap` ("center" | "start" | "end"; opcional, por defecto `"center"`): punto en una arista o cilindro: "center", "start" o "end".
   - `angle` (número o expresión; opcional, por defecto `0`): giro del marco alrededor de su Z, en grados.
@@ -2596,6 +3454,12 @@ Ver y medir el resultado.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
+| [`thread_info`](#thread_info) | no | Datos de roscas normalizadas (no cambia el documento). |
+| [`fit_tolerance`](#fit_tolerance) | no | Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). |
+| [`manage_analysis`](#manage_analysis) | sí | Carpeta «Análisis» del documento: agrega, lista, muestra, oculta y quita análisis de INSPECCIONAR: sección, cebra, mapa de entorno, desmoldeo, curvatura, peine de curvatura, isocurvas, accesibilidad y radio mínimo. |
+| [`analyze_geometry`](#analyze_geometry) | no | Mide con un análisis de INSPECCIONAR sin guardarlo: section (área y contorno), curvature (mínimo, máximo, media y percentiles), draft (ángulos y porcentaje de caras con desmoldeo suficiente), accessibility (porcentaje accesible), min_radius (porcentaje que la fresa no alcanza) e isocurve. |
+| [`section_view`](#section_view) | sí | Análisis de sección: corta con un plano (XY, XZ, YZ, un plano de construcción o una cara plana), lo guarda en la carpeta «Análisis» y devuelve el área y el contorno de cada cuerpo. get_viewport_image dibuja la parte de atrás del plano con su tapa. show=false lo deja oculto; manage_analysis (hide o remove) lo apaga. |
+| [`set_visual_style`](#set_visual_style) | sí | Guarda el estilo visual del visor: uno de los seis de Fusion (shaded, shaded_hidden_edges, shaded_visible_edges, wireframe, wireframe_hidden_edges, wireframe_visible_edges), el entorno de iluminación y los efectos (sombras, reflejos, oclusión ambiental y suelo). get_viewport_image lo usa cuando no se le pide otro estilo. |
 | [`get_viewport_image`](#get_viewport_image) | no | Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde una vista estándar o una dirección propia. |
 | [`get_physical_properties`](#get_physical_properties) | no | Volumen (mm³), área (mm²), masa (g), centro de masa y caja envolvente de cada cuerpo y del total. |
 | [`measure_distance`](#measure_distance) | no | Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista o un punto. |
@@ -2603,11 +3467,111 @@ Ver y medir el resultado.
 | [`find_faces`](#find_faces) | no | Lista las caras de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`find_edges`](#find_edges) | no | Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`measure_angle`](#measure_angle) | no | Ángulo (grados) entre dos caras planas, dos aristas rectas, o una cara y una arista. |
-| [`thread_info`](#thread_info) | no | Datos de roscas normalizadas (no cambia el documento). |
-| [`fit_tolerance`](#fit_tolerance) | no | Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). |
 | [`check_geometry`](#check_geometry) | no | Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. |
 | [`check_printability`](#check_printability) | no | Revisión de impresión 3D de un cuerpo (o de todos), como la caja de herramientas de impresión 3D de Blender: si es estanco, espesor mínimo de pared (rayos hacia adentro desde la superficie; zonas más finas que min_thickness), zonas en voladizo que necesitan soportes (más de overhang_angle desde la vertical, sin contar la cara apoyada en la cama: el plano Z más bajo del cuerpo) y aristas filosas (ángulo interior menor que sharp_angle). printable = estanco y sin paredes finas. |
 | [`repair_body`](#repair_body) | sí | Repara un cuerpo y deja un paso «Reparar cuerpo» en el timeline (editable; un paso de deshacer): cose las aristas abiertas (si queda estanco pasa a sólido), baja las tolerancias mayores que tolerance, corrige con ShapeFix (orientación de caras, contornos) y refina (une caras coplanares). |
+| [`set_view`](#set_view) | sí | Guarda la cámara del visor: vista, órbita, proyección, zoom y objetivo. |
+| [`manage_named_views`](#manage_named_views) | sí | Lista, guarda, aplica, renombra o elimina vistas con nombre compatibles con el navegador de la ventana. |
+| [`set_grid`](#set_grid) | sí | Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. |
+| [`capture_viewport`](#capture_viewport) | no | Captura la vista 3D REAL de la ventana de OmniCAD tal como la ve la persona: cámara, estilo visual, entorno, selección y análisis mostrados. |
+
+### `thread_info`
+
+Datos de roscas normalizadas (no cambia el documento). Sin argumentos: los tipos (familias) con su norma, ángulo de perfil y clases. Con family: sus tamaños y designaciones. Con thread: diámetro mayor, paso, diámetros de flancos y menor básicos, broca para roscar, agujero de paso ISO 273 (métricas) y, con thread_class, los diámetros límite de la clase (ISO 965-1 o ASME B1.1; 'auto' da los de las dos clases por defecto). Todo en mm.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `thread` (texto; opcional, por defecto `null`): designación ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "1/2-10 ACME", "G1/2", "R1/2", "1/2 NPT").
+  - `family` ("iso_metric" | "unified" | "trapezoidal" | "acme" | "bsp_parallel" | "bsp_taper" | "npt" o null; opcional, por defecto `null`): tipo de rosca cuyos tamaños listar: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
+  - `thread_class` (texto; opcional, por defecto `null`): clase para los diámetros límite: "6g", "6H", "2A", "2B"…, o "auto" (las dos por defecto).
+- CLI: `omnicad call thread_info --doc pieza.omnicad`
+
+### `fit_tolerance`
+
+Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). Hay grados IT5 a IT11 hasta 500 mm; agujeros D, E, F, G, H y ejes d, e, f, g, h, j6, k, n, p, s. Ej.: nominal=25, hole='H7', shaft='g6'. Todo en mm.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `nominal` (número; obligatorio): medida nominal en mm (más de 0 y hasta 500).
+  - `hole` (texto; opcional, por defecto `"H7"`): clase del agujero, letra mayúscula y grado: "H7", "H8", "H11", "G7", "F8"…
+  - `shaft` (texto; opcional, por defecto `"g6"`): clase del eje, letra minúscula y grado: "g6", "h6", "h7", "f7", "k6", "n6", "p6", "s6", "j6"…
+- CLI: `omnicad call fit_tolerance --doc pieza.omnicad nominal=…`
+
+### `manage_analysis`
+
+Carpeta «Análisis» del documento: agrega, lista, muestra, oculta y quita análisis de INSPECCIONAR: sección, cebra, mapa de entorno, desmoldeo, curvatura, peine de curvatura, isocurvas, accesibilidad y radio mínimo. Los visibles se dibujan en get_viewport_image. Para los números (áreas, ángulos, curvaturas) usá analyze_geometry. Admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("list" | "add" | "remove" | "show" | "hide"; opcional, por defecto `"list"`): list (los del documento), add (crea uno), remove, show o hide (por name).
+  - `type` ("section" | "zebra" | "environment_map" | "draft" | "curvature" | "comb" | "isocurve" | "accessibility" | "min_radius" o null; opcional, por defecto `null`): con add: section (corte con plano), zebra, environment_map, draft (desmoldeo), curvature, comb (peine de curvatura de aristas), isocurve, accessibility o min_radius (fresa).
+  - `name` (texto; opcional, por defecto `null`): nombre del análisis (con add, vacío = automático, p. ej. «Sección1»).
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos que se analizan (id o nombre); vacío = todos los sólidos. Para section, draft, curvature, isocurve, accessibility y min_radius.
+  - `plane` (texto o objeto; opcional, por defecto `null`): section: XY, XZ, YZ, un plano de construcción (id o nombre) o una cara plana (selector).
+  - `offset` (número; opcional, por defecto `null`): section: desfase del plano en mm sobre su normal; 0 por defecto.
+  - `flip` (true/false; opcional, por defecto `null`): section: conserva el otro lado; draft y accessibility: invierte la dirección.
+  - `frequency` (entero; opcional, por defecto `null`): zebra: cantidad de franjas (1 a 100); 8 por defecto.
+  - `orientation` ("horizontal" | "vertical" o null; opcional, por defecto `null`): zebra: horizontal (por defecto) o vertical.
+  - `direction` (texto o objeto; opcional, por defecto `null`): draft y accessibility: "x", "y", "z", un eje, una arista recta o una cara plana (hacia afuera del material); vacío = +Z.
+  - `min_angle` (número; opcional, por defecto `null`): draft: ángulo en grados bajo el cual la cara se pinta de rojo; 0 por defecto.
+  - `max_angle` (número; opcional, por defecto `null`): draft: ángulo en grados desde el cual la cara se pinta de verde; 3 por defecto.
+  - `curvature_type` ("gaussian" | "mean" | "max" | "min" o null; opcional, por defecto `null`): curvature: gaussian (por defecto), mean, max o min.
+  - `edges` (texto o lista de texto o null; opcional, por defecto `null`): comb: aristas (selector o ids de find_edges, o lista).
+  - `density` (entero; opcional, por defecto `null`): comb: púas por arista (30 por defecto); isocurve: curvas por dirección (10 por defecto).
+  - `scale` (número; opcional, por defecto `null`): comb: largo de las púas (1 por defecto).
+  - `radius` (número; opcional, por defecto `null`): min_radius: radio de la fresa en mm (3 por defecto).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane, direction y edges; vacío = el único cuerpo.
+- CLI: `omnicad call manage_analysis --doc pieza.omnicad`
+
+### `analyze_geometry`
+
+Mide con un análisis de INSPECCIONAR sin guardarlo: section (área y contorno), curvature (mínimo, máximo, media y percentiles), draft (ángulos y porcentaje de caras con desmoldeo suficiente), accessibility (porcentaje accesible), min_radius (porcentaje que la fresa no alcanza) e isocurve. Por cuerpo. Los análisis puramente visuales (zebra, environment_map, comb) se ven con manage_analysis y get_viewport_image.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `type` ("section" | "curvature" | "draft" | "accessibility" | "min_radius" | "isocurve"; obligatorio): section, curvature, draft, accessibility, min_radius o isocurve.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos a medir (id o nombre); vacío = todos los sólidos.
+  - `plane` (texto o objeto; opcional, por defecto `null`): section: XY, XZ, YZ, un plano de construcción o una cara plana.
+  - `offset` (número; opcional, por defecto `null`): section: desfase del plano en mm; 0 por defecto.
+  - `flip` (true/false; opcional, por defecto `null`): draft y accessibility: invierte la dirección.
+  - `direction` (texto o objeto; opcional, por defecto `null`): draft y accessibility: "x", "y", "z", un eje, una arista recta o una cara plana; vacío = +Z.
+  - `min_angle` (número; opcional, por defecto `null`): draft: ángulo en grados bajo el cual el desmoldeo es insuficiente; 0 por defecto.
+  - `max_angle` (número; opcional, por defecto `null`): draft: ángulo en grados desde el cual es suficiente; 3 por defecto.
+  - `curvature_type` ("gaussian" | "mean" | "max" | "min" o null; opcional, por defecto `null`): curvature: gaussian (por defecto), mean, max o min.
+  - `density` (entero; opcional, por defecto `null`): isocurve: curvas por dirección; 10 por defecto.
+  - `radius` (número; opcional, por defecto `null`): min_radius: radio de la fresa en mm; 3 por defecto.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane y direction; vacío = el único cuerpo.
+- CLI: `omnicad call analyze_geometry --doc pieza.omnicad type=…`
+
+### `section_view`
+
+Análisis de sección: corta con un plano (XY, XZ, YZ, un plano de construcción o una cara plana), lo guarda en la carpeta «Análisis» y devuelve el área y el contorno de cada cuerpo. get_viewport_image dibuja la parte de atrás del plano con su tapa. show=false lo deja oculto; manage_analysis (hide o remove) lo apaga.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `plane` (texto o objeto; obligatorio): XY, XZ, YZ, un plano de construcción (id o nombre) o una cara plana (selector).
+  - `offset` (número; opcional, por defecto `0`): desfase del plano en mm sobre su normal.
+  - `flip` (true/false; opcional, por defecto `false`): true conserva el lado de la normal en vez del lado de atrás.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos a cortar (id o nombre); vacío = todos los sólidos.
+  - `name` (texto; opcional, por defecto `null`): nombre del análisis; vacío = automático (Sección1…).
+  - `show` (true/false; opcional, por defecto `true`): false deja el análisis creado pero oculto.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
+- CLI: `omnicad call section_view --doc pieza.omnicad plane=…`
+
+### `set_visual_style`
+
+Guarda el estilo visual del visor: uno de los seis de Fusion (shaded, shaded_hidden_edges, shaded_visible_edges, wireframe, wireframe_hidden_edges, wireframe_visible_edges), el entorno de iluminación y los efectos (sombras, reflejos, oclusión ambiental y suelo). get_viewport_image lo usa cuando no se le pide otro estilo. Sin parámetros solo lo consulta; clear=true vuelve a los valores de fábrica. Admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `style` ("shaded" | "shaded_hidden_edges" | "shaded_visible_edges" | "wireframe" | "wireframe_hidden_edges" | "wireframe_visible_edges" o null; opcional, por defecto `null`): shaded, shaded_hidden_edges (sombreado con aristas ocultas), shaded_visible_edges (sombreado con solo aristas visibles), wireframe, wireframe_hidden_edges o wireframe_visible_edges.
+  - `environment` (texto; opcional, por defecto `null`): entorno de iluminación (clave de render_cpu.ENTORNOS, p. ej. fotomaton o tema).
+  - `shadows` (true/false; opcional, por defecto `null`): sombras del suelo.
+  - `reflections` (true/false; opcional, por defecto `null`): reflejos en el suelo.
+  - `ambient_occlusion` (true/false; opcional, por defecto `null`): oclusión ambiental.
+  - `ground_plane` (true/false; opcional, por defecto `null`): plano de suelo que recibe las sombras.
+  - `clear` (true/false; opcional, por defecto `false`): true borra el estilo guardado y vuelve a los valores de fábrica.
+- CLI: `omnicad call set_visual_style --doc pieza.omnicad`
 
 ### `get_viewport_image`
 
@@ -2615,13 +3579,17 @@ Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde
 
 - Modifica el documento: no.
 - Parámetros:
-  - `view` ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right"; opcional, por defecto `"iso"`): vista estándar: las caras del ViewCube de Fusion con Z arriba, nombradas por los ejes del MUNDO (no por el frente de la pieza). "front": cámara en -Y, se ve la cara -Y con +X a la derecha; "back": cámara en +Y; "right": cámara en +X, se ve la cara +X con +Y a la derecha; "left": cámara en -X; "top": cámara en +Z, X a la derecha e Y hacia arriba; "bottom": cámara en -Z; "iso": esquina frente-derecha-arriba. Si la pieza mira hacia otro eje, usá direction.
+  - `view` (texto; opcional, por defecto `null`): vista estándar: las caras del ViewCube de Fusion con Z arriba, nombradas por los ejes del MUNDO (no por el frente de la pieza). "front": cámara en -Y, se ve la cara -Y con +X a la derecha; "back": cámara en +Y; "right": cámara en +X, se ve la cara +X con +Y a la derecha; "left": cámara en -X; "top": cámara en +Z, X a la derecha e Y hacia arriba; "bottom": cámara en -Z; "iso": esquina frente-derecha-arriba. Si la pieza mira hacia otro eje, usá direction. También acepta nombres de vistas guardadas; omitida usa set_view o iso.
   - `width` (entero; opcional, por defecto `640`): ancho de la imagen en píxeles (16 a 2048).
   - `height` (entero; opcional, por defecto `480`): alto de la imagen en píxeles (16 a 2048).
-  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a dibujar; vacío = todos.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a dibujar (también los ocultos); vacío = todos los visibles.
   - `fit` (true/false; opcional, por defecto `true`): true encuadra los cuerpos dibujados; false encuadra TODA la escena aunque se dibuje solo una parte (sirve para comparar imágenes con el mismo encuadre).
   - `direction` (lista de número o null; opcional, por defecto `null`): [x, y, z] vector desde el modelo HACIA la cámara (Z es arriba); si se pasa, reemplaza a view.
   - `lighting` ("three_point" | "key_only"; opcional, por defecto `"three_point"`): "three_point" (por defecto) = iluminación de tres puntos (luz principal, relleno y contorno); "key_only" = solo la luz principal. No depende de Preferencias › Gráficos › «Iluminación de la vista» (esa opción es la del visor de la ventana).
+  - `camera` ("perspective" | "orthographic" o null; opcional, por defecto `null`): perspective u orthographic; omitida conserva la cámara guardada o usa perspectiva.
+  - `component_colors` (true/false; opcional, por defecto `false`): pinta cada componente con un color de la paleta del visor; las piezas sueltas conservan su aspecto.
+  - `style` ("shaded" | "shaded_hidden_edges" | "shaded_visible_edges" | "wireframe" | "wireframe_hidden_edges" | "wireframe_visible_edges" o null; opcional, por defecto `null`): estilo visual (los seis de Fusion: shaded, shaded_hidden_edges, shaded_visible_edges, wireframe, wireframe_hidden_edges, wireframe_visible_edges); omitido usa el de set_visual_style (shaded de fábrica). Las aristas son las exactas de los cuerpos: una malla no las tiene.
+  - `analysis` (lista de texto o null; opcional, por defecto `null`): nombres de los análisis a dibujar (manage_analysis los lista); [] ninguno; omitido dibuja los visibles del documento, como la ventana.
 - CLI: `omnicad call get_viewport_image --doc pieza.omnicad`
 
 ### `get_physical_properties`
@@ -2636,22 +3604,24 @@ Volumen (mm³), área (mm²), masa (g), centro de masa y caja envolvente de cada
 
 ### `measure_distance`
 
-Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista o un punto. Caras y aristas se dan por id (find_faces / find_edges) o por selector (>Z elige sobre las caras; edges:|Z sobre las aristas; con varios cuerpos, body dice en cuál se evalúan los selectores). Devuelve la distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b.
+Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista o un punto. Caras y aristas se dan por id (find_faces / find_edges) o por selector (>Z elige sobre las caras; edges:|Z sobre las aristas; con varios cuerpos, body dice en cuál se evalúan los selectores). Devuelve la distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b; con center_to_center, la de centro a centro.
 
 - Modifica el documento: no.
 - Parámetros:
   - `a` (texto o lista de número; obligatorio): cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
   - `b` (texto o lista de número; obligatorio): cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids y los nombres de cuerpo no lo necesitan.
+  - `center_to_center` (true/false; opcional, por defecto `false`): true mide de centro a centro (opción «Centro a centro» de Fusion): a y b tienen que ser círculos, arcos o cilindros; distance y los puntos son entonces los de los centros, y se agrega center_to_center con las distancias mínima y máxima según los diámetros.
 - CLI: `omnicad call measure_distance --doc pieza.omnicad a=… b=…`
 
 ### `check_interference`
 
-Busca pares de cuerpos sólidos que se superponen y devuelve cada par con el volumen común (mm³) y su caja envolvente. Los que solo se tocan por una cara no cuentan.
+Busca pares de cuerpos sólidos que se superponen y devuelve cada par con el volumen común (mm³) y su caja envolvente. Los que solo se tocan por una cara no cuentan, salvo con coincident_faces.
 
 - Modifica el documento: no.
 - Parámetros:
   - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos a comparar entre sí; vacío = todos los sólidos.
+  - `coincident_faces` (true/false; opcional, por defecto `false`): true también informa los pares que solo se tocan por caras coincidentes (opción «Incluir caras coincidentes»): volume 0, area de contacto y coincident=true.
 - CLI: `omnicad call check_interference --doc pieza.omnicad`
 
 ### `find_faces`
@@ -2684,28 +3654,6 @@ Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un sele
   - `b` (texto; obligatorio): cara o arista: id ("Cuerpo1/F3") o selector (">X", "edges:|X").
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids no lo necesitan.
 - CLI: `omnicad call measure_angle --doc pieza.omnicad a=… b=…`
-
-### `thread_info`
-
-Datos de roscas normalizadas (no cambia el documento). Sin argumentos: los tipos (familias) con su norma, ángulo de perfil y clases. Con family: sus tamaños y designaciones. Con thread: diámetro mayor, paso, diámetros de flancos y menor básicos, broca para roscar, agujero de paso ISO 273 (métricas) y, con thread_class, los diámetros límite de la clase (ISO 965-1 o ASME B1.1; 'auto' da los de las dos clases por defecto). Todo en mm.
-
-- Modifica el documento: no.
-- Parámetros:
-  - `thread` (texto; opcional, por defecto `null`): designación ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "1/2-10 ACME", "G1/2", "R1/2", "1/2 NPT").
-  - `family` ("iso_metric" | "unified" | "trapezoidal" | "acme" | "bsp_parallel" | "bsp_taper" | "npt" o null; opcional, por defecto `null`): tipo de rosca cuyos tamaños listar: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
-  - `thread_class` (texto; opcional, por defecto `null`): clase para los diámetros límite: "6g", "6H", "2A", "2B"…, o "auto" (las dos por defecto).
-- CLI: `omnicad call thread_info --doc pieza.omnicad`
-
-### `fit_tolerance`
-
-Ajuste ISO 286 entre un agujero y un eje (no cambia el documento): desviaciones y medidas límite de cada uno, juego máximo y mínimo (negativo = apriete) y tipo de ajuste (clearance, transition o interference). Hay grados IT5 a IT11 hasta 500 mm; agujeros D, E, F, G, H y ejes d, e, f, g, h, j6, k, n, p, s. Ej.: nominal=25, hole='H7', shaft='g6'. Todo en mm.
-
-- Modifica el documento: no.
-- Parámetros:
-  - `nominal` (número; obligatorio): medida nominal en mm (más de 0 y hasta 500).
-  - `hole` (texto; opcional, por defecto `"H7"`): clase del agujero, letra mayúscula y grado: "H7", "H8", "H11", "G7", "F8"…
-  - `shaft` (texto; opcional, por defecto `"g6"`): clase del eje, letra minúscula y grado: "g6", "h6", "h7", "f7", "k6", "n6", "p6", "s6", "j6"…
-- CLI: `omnicad call fit_tolerance --doc pieza.omnicad nominal=…`
 
 ### `check_geometry`
 
@@ -2745,6 +3693,55 @@ Repara un cuerpo y deja un paso «Reparar cuerpo» en el timeline (editable; un 
   - `refine` (true/false; opcional, por defecto `true`): true une las caras coplanares y las aristas colineales (Refine Shape).
   - `fix` (true/false; opcional, por defecto `true`): true corrige con ShapeFix (orientación de caras, contornos, curvas sobre las caras).
 - CLI: `omnicad call repair_body --doc pieza.omnicad body=…`
+
+### `set_view`
+
+Guarda la cámara del visor: vista, órbita, proyección, zoom y objetivo. Admite deshacer y clear vuelve al encuadre automático.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; opcional, por defecto `"iso"`): vista estándar o nombre de una vista guardada.
+  - `direction` (lista de número o null; opcional, por defecto `null`): vector [x, y, z] hacia la cámara; reemplaza a view.
+  - `projection` ("perspective" | "orthographic"; opcional, por defecto `"perspective"`): perspective u orthographic.
+  - `azimuth` (número; opcional, por defecto `0`): órbita horizontal en grados relativa a la vista indicada.
+  - `elevation` (número; opcional, por defecto `0`): órbita vertical en grados relativa a la vista indicada.
+  - `zoom` (número; opcional, por defecto `1`): factor positivo sobre la distancia de encuadre; mayor que uno acerca.
+  - `look_at` (lista de número o null; opcional, por defecto `null`): objetivo [x, y, z] en mm; vacío usa el centro de los cuerpos.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos a encuadrar por nombre o id; vacío encuadra todos.
+  - `clear` (true/false; opcional, por defecto `false`): borra la cámara guardada y vuelve al encuadre automático.
+- CLI: `omnicad call set_view --doc pieza.omnicad`
+
+### `manage_named_views`
+
+Lista, guarda, aplica, renombra o elimina vistas con nombre compatibles con el navegador de la ventana. Como en la ventana, no entran en deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("list" | "save" | "apply" | "rename" | "delete"; obligatorio): list, save, apply, rename o delete.
+  - `name` (texto; opcional, por defecto `""`): nombre de la vista guardada.
+  - `new_name` (texto; opcional, por defecto `""`): nombre nuevo para rename.
+- CLI: `omnicad call manage_named_views --doc pieza.omnicad action=…`
+
+### `set_grid`
+
+Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. La imagen dibuja la rejilla del suelo cuando está visible.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `show` (true/false; opcional, por defecto `null`): muestra u oculta la rejilla del suelo.
+  - `snap` (true/false; opcional, por defecto `null`): activa o desactiva forzar a la rejilla.
+  - `four_views` (true/false; opcional, por defecto `null`): activa o desactiva la opción de cuatro vistas.
+- CLI: `omnicad call set_grid --doc pieza.omnicad`
+
+### `capture_viewport`
+
+Captura la vista 3D REAL de la ventana de OmniCAD tal como la ve la persona: cámara, estilo visual, entorno, selección y análisis mostrados. Solo en vivo. Para una imagen sin ventana, con la cámara que pidas, usá get_viewport_image.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `width` (entero; opcional, por defecto `null`): ancho en píxeles de la imagen devuelta (16 a 4096); con height. Vacío = el tamaño de la vista en pantalla.
+  - `height` (entero; opcional, por defecto `null`): alto en píxeles de la imagen devuelta (16 a 4096); con width.
+- CLI: `omnicad call capture_viewport --doc pieza.omnicad`
 
 ## Grupo animacion
 

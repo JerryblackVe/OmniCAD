@@ -130,7 +130,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Base para imprimir:** perfil de impresora y material, orientación recomendada, estimación de filamento y tiempo, cajas con tapa, bolsillos para imanes, insertos y rodamientos, agujeros que imprimen sin soportes y pieza de calibración de holguras.
 - **Engranajes de todo tipo:** una galería con imágenes y explicación corta para crear engranajes cilíndricos, cónicos, sin fin, planetarios, especiales, cremalleras y mecanismos (Ginebra, trinquete, reductores), desde la interfaz, la CLI o un agente de IA.
 - **Idioma:** español e inglés en todo (interfaz, mensajes, herramientas y documentación); primer arranque guiado.
-- **Integración:** Blender en los dos sentidos; conectar más agentes de IA y completar las herramientas MCP/CLI que faltan.
+- **Integración:** Blender en los dos sentidos; conectar más agentes de IA.
 - **Render:** materiales, colores e iluminación; ideas de KeyShot y V-Ray.
 - **Vectores y texto:** curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
 - **Ensamblajes:** animación, simulaciones y movimiento de piezas.

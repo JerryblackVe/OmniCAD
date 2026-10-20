@@ -268,5 +268,132 @@ def test_b71_lazo_sin_solucion():
     _comprobar_biela_manivela(s, 30, r=50.0, l=30.0)
 
 
+# =================================================================== LAZOS «COMO ESTÁ» Y QUIÉN ACCIONA
+def _eslabon_modelado(s, nombre, x0, largo, pernos=None, ancho=10, fijo=False):
+    """Como `_eslabon`, pero modelado ya armado: la barra empieza en x = x0 (pernos en x0 + p)."""
+    pernos = [0.0, largo] if pernos is None else pernos
+    barra = llamar(s, "create_box", length=largo + 10, width=ancho, height=10,
+                   x=x0 + largo / 2)["bodies_created"][0]["id"]
+    ids = [llamar(s, "create_cylinder", radius=3, height=14, x=x0 + x)["bodies_created"][0]["id"] for x in pernos]
+    llamar(s, "create_component", bodies=[barra, *ids], name=nombre, grounded=fijo)
+    return ids
+
+
+def _como_esta(s, nombre, perno, componente2, tipo="revolute", **extra):
+    llamar(s, "create_as_built_joint", origin="%CYLINDER", body=perno, component2=componente2,
+           joint_type=tipo, name=nombre, **extra)
+
+
+def _biela_manivela_como_esta(r=20.0, l=60.0, theta=0.0):
+    """El mismo mecanismo ya armado en 0° (manivela de (0,0) a (r,0), biela hasta (r+l,0)) y unido con uniones
+    «como está»: las piezas no se mueven al crear las uniones."""
+    s = api.Sesion()
+    (p0,) = _eslabon_modelado(s, "Bastidor", 0.0, 0.0, pernos=[0.0], ancho=60, fijo=True)
+    a0, a1 = _eslabon_modelado(s, "Manivela", 0.0, r)
+    b1, b2 = _eslabon_modelado(s, "Biela", r, l)
+    (pc,) = _eslabon_modelado(s, "Corredera", r + l, 0.0, pernos=[0.0], ancho=20)
+    _como_esta(s, "J1", a0, "Bastidor", rotation=theta)
+    _como_esta(s, "J2", b1, "Manivela", rotation=0)
+    _como_esta(s, "J3", pc, "Biela", rotation=0)
+    _como_esta(s, "J4", pc, "Bastidor", tipo="slider", slide_axis="X", slide=0)
+    return s
+
+
+def _comprobar_modelado(s, theta, r=20.0, l=60.0):
+    """Comprueba el lazo con las matrices de desplazamiento respecto de la pose modelada en 0°."""
+    th = math.radians(theta)
+    pose = _pose(s)
+
+    def punto(pieza, x):
+        rot, t = pose[pieza]
+        return rot @ np.array([x, 0.0, 0.0]) + t
+
+    assert np.linalg.norm(punto("Manivela", 0.0)) < 1e-3, f"θ={theta}°: la manivela se corrió de su eje"
+    perno_manivela = punto("Manivela", r)
+    assert np.linalg.norm(perno_manivela - np.array([r * math.cos(th), r * math.sin(th), 0.0])) < 1e-3
+    assert np.linalg.norm(punto("Biela", r) - perno_manivela) < 1e-3, f"θ={theta}°: J2 abierta"
+    perno_biela = punto("Biela", r + l)
+    assert np.linalg.norm(punto("Corredera", r + l) - perno_biela) < 1e-3, f"θ={theta}°: J3 abierta"
+    assert abs(np.linalg.norm(perno_biela - punto("Biela", r)) - l) < 1e-3
+    x_esperado = r * math.cos(th) + math.sqrt(l ** 2 - (r * math.sin(th)) ** 2)
+    corredera = punto("Corredera", r + l)
+    assert abs(corredera[0] - x_esperado) < 1e-3 and abs(corredera[1]) < 1e-3, \
+        f"θ={theta}°: corredera en {corredera[:2]}, esperado x={x_esperado:.4f}"
+    for nombre, (estado, mensaje) in _estados(s).items():
+        assert estado != "error", f"θ={theta}°: unión {nombre} en error: {mensaje}"
+
+
+def test_b71_como_esta_cadena_abierta():
+    """Cadena abierta de uniones «como está» (sin lazo): al accionar la primera, las siguientes la siguen."""
+    s = api.Sesion()
+    (p0,) = _eslabon_modelado(s, "Bastidor", 0.0, 0.0, pernos=[0.0], ancho=60, fijo=True)
+    a0, a1 = _eslabon_modelado(s, "Manivela", 0.0, 20.0)
+    b1, b2 = _eslabon_modelado(s, "Biela", 20.0, 60.0)
+    _como_esta(s, "J1", a0, "Bastidor", rotation=0)
+    _como_esta(s, "J2", b1, "Manivela", rotation=0)
+    llamar(s, "drive_joint", joint="J1", rotation=90)
+    pose = _pose(s)
+    rot, t = pose["Biela"]
+    assert np.linalg.norm(rot @ np.array([20.0, 0, 0]) + t - np.array([0.0, 20.0, 0.0])) < 1e-3
+    assert np.linalg.norm(rot @ np.array([80.0, 0, 0]) + t - np.array([0.0, 80.0, 0.0])) < 1e-3
+    for nombre, (estado, mensaje) in _estados(s).items():
+        assert estado != "error" and "REFERENCE_LOST" not in mensaje, (nombre, mensaje)
+
+
+@pytest.mark.parametrize("theta", [0, 30, 90, 135, 180, 270, -40])
+def test_b71_biela_manivela_como_esta(theta):
+    """El lazo biela-manivela hecho con uniones «como está» se resuelve igual que el de uniones normales."""
+    s = _biela_manivela_como_esta(theta=0)
+    if theta:
+        llamar(s, "drive_joint", joint="J1", rotation=theta)
+    _comprobar_modelado(s, theta)
+
+
+def test_b71_biela_manivela_como_esta_barrido():
+    """Accionar de a pasos el lazo de uniones «como está» mantiene el cierre sin avisos de lazo sin resolver."""
+    s = _biela_manivela_como_esta()
+    for theta in range(0, 361, 30):
+        llamar(s, "drive_joint", joint="J1", rotation=theta)
+        _comprobar_modelado(s, theta)
+        for nombre, (estado, mensaje) in _estados(s).items():
+            assert "Lazo cerrado no resuelto" not in mensaje, (theta, nombre, mensaje)
+
+
+def test_b71_accionar_la_corredera():
+    """Se puede accionar cualquier unión del lazo: si se acciona la corredera (J4 a x=70), la manivela y la biela
+    se resuelven (la rama de la manivela puede ser cualquiera de las dos)."""
+    s = _biela_manivela()
+    llamar(s, "drive_joint", joint="J4", slide=70)
+    pose = _pose(s)
+    r_man, t_man = pose["Manivela"]
+    r_bie, t_bie = pose["Biela"]
+    _, t_cor = pose["Corredera"]
+    perno_manivela = r_man @ np.array([20.0, 0, 0]) + t_man
+    perno_biela = r_bie @ np.array([60.0, 0, 0]) + t_bie
+    assert np.linalg.norm(t_cor - np.array([70.0, 0.0, t_cor[2]])) < 1e-3, t_cor
+    assert np.linalg.norm(t_bie - perno_manivela) < 1e-3
+    assert np.linalg.norm(t_cor - perno_biela) < 1e-3
+    assert abs(np.linalg.norm(perno_manivela[:2]) - 20.0) < 1e-3
+    for nombre, (estado, mensaje) in _estados(s).items():
+        assert estado != "error", (nombre, mensaje)
+
+
+def test_b71_accionar_la_biela_y_volver_a_la_manivela():
+    """Accionar J2 (ángulo de la biela −5°) resuelve la manivela y la corredera; después accionar J1 vuelve a
+    mandar la manivela."""
+    s = _biela_manivela()
+    llamar(s, "drive_joint", joint="J2", rotation=-5)
+    pose = _pose(s)
+    r_bie, t_bie = pose["Biela"]
+    r_man, t_man = pose["Manivela"]
+    _, t_cor = pose["Corredera"]
+    assert abs(math.degrees(math.atan2(r_bie[1, 0], r_bie[0, 0])) + 5.0) < 1e-3
+    assert np.linalg.norm(t_bie - (r_man @ np.array([20.0, 0, 0]) + t_man)) < 1e-3
+    assert np.linalg.norm(t_cor - (r_bie @ np.array([60.0, 0, 0]) + t_bie)) < 1e-3
+    assert abs(t_cor[1]) < 1e-3
+    llamar(s, "drive_joint", joint="J1", rotation=60)
+    _comprobar_biela_manivela(s, 60)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

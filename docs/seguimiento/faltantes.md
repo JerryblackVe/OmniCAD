@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 222: Abierto 171 · Parcial 31 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 171: Abierto 122 · Parcial 29 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -209,7 +209,7 @@ Abierto 10 · Parcial 3 · Bloqueado 1. Especificación: [brechas_keyshot.md](..
 
 ## V-Ray
 
-Abierto 10 · Parcial 2. Especificación: [brechas_vray.md](../brechas_vray.md).
+Abierto 10 · Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -220,51 +220,10 @@ Abierto 10 · Parcial 2. Especificación: [brechas_vray.md](../brechas_vray.md).
 | VR8 | Material dibujo animado (Toon) y de borde | Abierto | Media | Tipo de material con contorno y bandas de color. | grep toon sin resultados en clon/omnicad | 2026-10-20 |
 | VR9 | Dispersión (Scatter) de copias sobre una superficie | Abierto | Media | Reparto aleatorio con densidad, escala y giro; ampliar el patrón. | grep scatter/dispersión sin resultados | 2026-10-20 |
 | VR3 | Elementos de render (pases) y máscaras por píxel | Abierto | Alta | Pases difuso, reflejo, sombra, oclusión, normales, profundidad e ID. | grep de pases en render_cpu.py sin resultados | 2026-10-20 |
-| VR5 | Corte en el render (Clipper) con tapa de color | Abierto | Alta | Plano de corte dentro de la imagen final; la CPU no corta con planos. | docs/brechas_mcp.md:128 (MCP-45: la CPU no corta con planos); grep clipper sin resultados | 2026-10-20 |
+| VR5 | Corte en el render (Clipper) con tapa de color | Abierto | Alta | Control «Clipper» en RENDERIZAR (ventana y render_image) con tapa de color; el motor de CPU ya recorta por planos y dibuja la tapa. | omnicad/nucleo/render_estilos.py (recortar, capas_a_objetos) y get_viewport_image con section_view; grep clipper en ui/render.py sin resultados | 2026-10-20 |
 | VR12 | Reducción de ruido (OIDN) | Abierto | Alta | Solo con trazador propio; con Cycles ya viene. | sin trazador de rayos: no hay ruido que reducir | 2026-10-20 |
 | VR11 | Iluminación global, cáusticas, IES, subsuperficie, pelo | Abierto | Muy alta | Pide trazado de rayos (Cycles de Blender o trazador propio). | grep cycles sin resultados | 2026-10-20 |
 | VR4 | Cámara física: ISO, obturador, f, auto-exposición, DOF | Parcial | Media | Faltan ISO, obturador, f, exposición automática, balance de blancos y DOF. | render_cpu.py:171-172 (focal y exposición EV ya existen) | 2026-10-20 |
-
-## Herramientas MCP/CLI que faltan (B-80)
-
-Abierto 49 · Parcial 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
-
-| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
-|---|---|---|---|---|---|---|
-| MCP-29 | draw_spiral: espiral en el boceto | Abierto | Baja | Sacar la cuenta a una función pura y exponerla. | tests/test_cobertura_ui_api.py:135 (pendiente MCP-29) | 2026-10-20 |
-| MCP-30 | add_constraint con tipo polígono | Abierto | Baja | Agregar type=polygon. | tests/test_cobertura_ui_api.py:135 (pendiente MCP-30); add_constraint no lista «polygon» (herramientas_boceto.py:846) | 2026-10-20 |
-| MCP-32 | create_coil y create_pipe (bobina, tubería) | Abierto | Baja | Dos herramientas con nombre propio. | tests/test_cobertura_ui_api.py:95 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-34 | create_boundary_fill, create_bounding_solid, thicken | Abierto | Baja | Tres herramientas. | tests/test_cobertura_ui_api.py:98 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-37 | align_bodies y scale_body | Abierto | Baja | Dos herramientas (hoy solo scale_mesh). | tests/test_cobertura_ui_api.py:94 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-42 | set_view y cámara en get_viewport_image | Abierto | Baja | Vistas estándar, órbita, ortográfica; rc.camara ya acepta ortográfica. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-43 | manage_named_views: vistas guardadas por herramienta | Abierto | Baja | Herramienta y view=<nombre> en la imagen. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta); la UI tiene doc.vistas (ventana.py:2031) | 2026-10-20 |
-| MCP-49 | set_grid: rejilla, forzar a la rejilla, 4 vistas | Abierto | Baja | Una herramienta de visor. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-51 | manage_comments: comentarios del documento | Abierto | Baja | Una herramienta sobre los comentarios. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-52 | list_recent_documents: proyectos recientes | Abierto | Baja | Una herramienta de lectura. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-53 | set_flat_pattern_view: activar o terminar patrón plano | Abierto | Baja | Una herramienta de chapa. | tests/test_cobertura_ui_api.py:116 (pendiente MCP-53) | 2026-10-20 |
-| MCP-78 | redefine_sketch_plane: redefinir el plano de un boceto | Abierto | Baja | Herramienta nueva sin pasar marco/cara por edit_feature. | sin herramienta redefine_sketch_plane en api/ | 2026-10-20 |
-| MCP-82 | export_parameters e import_parameters (CSV de Fusion) | Abierto | Baja | Dos herramientas nuevas. | sin esas herramientas en api/ | 2026-10-20 |
-| NOV-brechas_mcp-1 | sk_alargar: alargar curvas del boceto sin herramienta | Abierto | Baja | Auditar y crear la herramienta (alargar curvas). | tests/test_cobertura_ui_api.py:138 (excusa «pendiente de auditar») | 2026-10-20 |
-| NOV-brechas_mcp-2 | sk_partir: partir curvas del boceto sin herramienta | Abierto | Baja | Auditar y crear la herramienta (partir curvas). | tests/test_cobertura_ui_api.py:139 (excusa «pendiente de auditar») | 2026-10-20 |
-| MCP-91 | extend_sketch_curve: alargar curvas del boceto (sk_alargar) | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
-| MCP-92 | split_sketch_curve: partir curvas del boceto (sk_partir) | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
-| MCP-93 | select_bodies con invert, by_name y by_size | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
-| MCP-94 | draw_arc con la forma tangente (sk_arco_tangente) | Abierto | Baja | Herramienta u opción nueva (receta C) | tests/test_cobertura_ui_api.py (EXCUSAS) | 2026-10-20 |
-| MCP-26 | manage_analysis y analyze_geometry (cebra, curvatura, sección…) | Abierto | Media | Nueve análisis; la parte numérica es pura, dibujarla en la imagen es alta. | tests/test_cobertura_ui_api.py:89-91 (pendiente MCP-26); nucleo/analisis.py existe | 2026-10-20 |
-| MCP-27 | manage_configurations: tabla de variantes | Abierto | Media | Herramienta sobre doc.aplicar_configuracion. | tests/test_cobertura_ui_api.py:93 (pendiente MCP-27); timeline/documento.py:403; tests/test_administrar.py::test_configuraciones_aplican_parametros_y_supresion | 2026-10-20 |
-| MCP-31 | Opción component_colors en get_viewport_image | Abierto | Media | Parámetro nuevo en la imagen. | tests/test_cobertura_ui_api.py:92 (pendiente MCP-31); firma de get_viewport_image sin esa opción | 2026-10-20 |
-| MCP-33 | Nervio, red, repujado, saliente, labio | Abierto | Media | Cinco herramientas create_rib/web/emboss/boss/lip_groove. | tests/test_cobertura_ui_api.py:96-97 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-35 | Superficies: extruir, revolución, barrido, solevación, desfase, empalme, parche, reglada | Abierto | Media | Ocho herramientas de superficie. | tests/test_cobertura_ui_api.py:99-101 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-36 | Extender, recortar, destrimar, coser, descoser, invertir normal | Abierto | Media | Seis herramientas de superficie. | tests/test_cobertura_ui_api.py:102-103 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-38 | Dividir cara/cuerpo, división por silueta, reemplazar cara, quitar, borrar caras | Abierto | Media | Seis herramientas. | tests/test_cobertura_ui_api.py:104-105 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-40 | Ejes, puntos de construcción y sistema de coordenadas (UCS) | Abierto | Media | Tres herramientas con 5 y 6 variantes. | tests/test_cobertura_ui_api.py:106-110 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-41 | insert_fastener, insert_canvas, create_base_feature | Abierto | Media | Tres herramientas; set_decal rechaza el lienzo. | tests/test_cobertura_ui_api.py:114-115 (excusa pendiente); sin herramienta en api/; la operación existe por run_operation | 2026-10-20 |
-| MCP-46 | capture_viewport: capturar la ventana real en vivo | Abierto | Media | Captura de la sesión en vivo con estilo y corte; falta callback en el puente. | tests/test_cobertura_ui_api.py:155 (pendiente MCP-46); app_screenshot (herramientas_dev.py:142) abre otro proceso, no la sesión en vivo | 2026-10-20 |
-| MCP-50 | get_selection y select_entities | Abierto | Media | Leer la selección del usuario y elegir caras, aristas o perfiles. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-54 | get_preferences y set_preference con lista blanca | Abierto | Media | Lista blanca; nunca puente_agentes ni puente_codigo. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-44 | set_visual_style: estilos visuales, entorno, efectos | Abierto | Alta | En la imagen: la CPU no tiene alámbrico. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-45 | section_view: análisis de sección en la imagen | Abierto | Alta | La CPU no corta con planos. | sin herramienta equivalente en api/herramientas_*.py (grep @herramienta) | 2026-10-20 |
-| MCP-48 | set_body_opacity e isolate_bodies | Parcial | Baja | Falta isolate_bodies (Aislar). | omnicad/api/herramientas_navegador.py:117; tests/test_api_navegador.py::test_opacidad_por_nombre_y_raiz_es_atomica_y_se_guarda; commit 3aa7ad3 | 2026-10-20 |
 
 ## Capa para agentes (paquetes del plan)
 
@@ -293,7 +252,7 @@ Abierto 12 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md]
 | SC3 | Nombres persistentes por historia del kernel | Abierto | Muy alta | Usar Modified/Generated de OpenCascade para nombrar caras y aristas. | omnicad/timeline/entidades.py (firma geométrica tolerante); sin BRepTools_History | 2026-10-20 |
 | SC4 | Solver de bocetos constructivo antes del numérico | Abierto | Muy alta | Colocación exacta por construcción y grupos rígidos antes de Levenberg-Marquardt. | omnicad/restricciones/solver.py:14,687-690 (solo least_squares lm) | 2026-10-20 |
 | SC1 | Suite de piezas de referencia con valores analíticos | Parcial | Media | Faltan esperado.json con fórmulas cerradas (Pappus, Steiner) y la herramienta run_reference_tests. | tests/test_paridad_motor.py (paridad OpenCascade vs OmniKernel, ~55 casos); caso_paridad_motor.py | 2026-10-20 |
-| SC5 | Configuraciones: tabla de filas con parámetros, supresiones y material | Parcial | Media | Falta material/aspecto por cuerpo en la fila, herramienta MCP-27 y robustez al renombrar. | omnicad/timeline/documento.py:168-170,403; tests/test_administrar.py::test_configuraciones_aplican_parametros_y_supresion | 2026-10-20 |
+| SC5 | Configuraciones: tabla de filas con parámetros, supresiones y material | Parcial | Media | Falta material/aspecto por cuerpo en la fila y robustez al renombrar (la herramienta manage_configurations ya existe). | omnicad/timeline/documento.py:168-170,403; tests/test_administrar.py::test_configuraciones_aplican_parametros_y_supresion | 2026-10-20 |
 | SC7 | Análisis del estudio de movimiento: gráficos, rastro, choques | Parcial | Media | Faltan gráficos de valor, velocidad y aceleración y el rastro de un punto. | omnicad/api/herramientas_ensamble.py:703-714 (motion_study con check_interference por valor); tests/test_api_ensamble.py:230 | 2026-10-20 |
 | SC16 | Pruebas de mutación (mutmut) juzgadas por SC1 y SC2 | Bloqueado | Media | Espera permiso para instalar mutmut y que existan SC1 y SC2. | sin mutmut en pyproject.toml | 2026-10-20 |
 

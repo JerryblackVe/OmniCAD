@@ -42,12 +42,20 @@ def caja(sesion, cuerpo):
 
 
 def test_herramientas_del_grupo_solido():
-    assert [h["nombre"] for h in api.catalogo("solido")] == [
+    assert sorted(h["nombre"] for h in api.catalogo("solido")) == sorted([     # el orden depende de qué módulo se importó antes
         "extrude", "revolve", "sweep", "loft", "create_box", "create_cylinder", "create_sphere", "create_torus",
-        "boolean_operation", "mirror", "realize_copies", "rectangular_pattern", "circular_pattern", "point_pattern", "path_pattern",
-        "multi_transform", "drop_to_plane", "move_body",
-            "fillet", "chamfer", "shell", "remove_fillets", "offset_faces", "offset_edges", "create_hole", "create_thread", "draft",  # herramientas_modificar.py
-        "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft"]  # engranajes
+        "boolean_operation", "mirror", "realize_copies", "rectangular_pattern", "circular_pattern", "point_pattern",
+        "path_pattern", "multi_transform", "drop_to_plane", "move_body",
+        "fillet", "chamfer", "shell", "remove_fillets", "offset_faces", "offset_edges", "create_hole", "create_thread",
+        "draft",                                                                                # herramientas_modificar.py
+        "insert_fastener", "insert_canvas", "create_base_feature", "split_face", "split_body", "silhouette_split",
+        "replace_face", "remove_bodies", "delete_faces",                                      # herramientas_solido_extra / dividir
+        "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft",  # engranajes
+        "create_coil", "create_pipe", "create_rib", "create_web", "create_emboss", "create_boss", "create_lip_groove",
+        "create_boundary_fill", "create_bounding_solid", "thicken", "align_bodies", "scale_body",
+        "create_surface_extrude", "create_surface_revolve", "create_surface_sweep", "create_surface_loft",
+        "offset_surface", "fillet_surface", "create_patch", "create_ruled_surface", "extend_surface", "trim_surface",
+        "untrim_surface", "stitch_surfaces", "unstitch_surfaces", "reverse_surface_normal"])
     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
 
 

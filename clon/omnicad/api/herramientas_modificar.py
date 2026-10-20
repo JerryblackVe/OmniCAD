@@ -26,7 +26,7 @@ from ..timeline.ops_modificar import (OpChaflan, OpDesfaseAristas, OpDesfaseCara
 from ..timeline.ops_solido import OpAgujero, OpRosca
 from . import selectores as sl
 from .errores import ErrorAPI, error
-from .herramientas_boceto import boceto_activo, boceto_resuelto, nombre_nuevo, texto_expr
+from .herramientas_boceto import boceto_activo, boceto_resuelto, nombre_nuevo, referencia_plano, texto_expr
 from .herramientas_solido import _agregar, _numero_positivo
 from .registro import Expr, herramienta
 
@@ -51,37 +51,107 @@ def _informe(res, elegidos, clave):
 
 
 # ---------------------------------------------------------------- empalme y chaflán
-@herramienta("fillet", "solido", "Redondea aristas (empalme de radio constante). " + _ELEGIR.format(
-    ej="|Z", que="edges", id="Cuerpo1/E7") + _PERSISTENTE + "El empalme sigue las aristas tangentes encadenadas. Si el "
-             "radio no cabe, falla con OPERATION_FAILED y el documento queda igual. radius acepta número (mm) o expresión.",
-             modifica=True)
-def fillet(sesion, edges: Elementos, radius: Expr, body: str | None = None):
+_REDONDEOS = {"both": "ambos", "rounds": "redondeos", "fillets": "empalmes"}
+
+
+@herramienta("fillet", "solido", "Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerda "
+             "(radius_type=chord) o de radio variable entre el inicio y el final de la arista (radius_type=variable, "
+             "end_radius). Con faces_a hace un EMPALME DE REGLAS: todas las aristas de esas caras, o solo las que están "
+             "entre faces_a y faces_b; rounds elige redondeos (aristas convexas), empalmes (cóncavas) o ambos. "
+             + _ELEGIR.format(ej="|Z", que="edges", id="Cuerpo1/E7") + _PERSISTENTE + "Con tangent_chain (por defecto) "
+             "el empalme sigue las aristas tangentes encadenadas. Si el radio no cabe, falla con OPERATION_FAILED y el "
+             "documento queda igual. radius acepta número (mm) o expresión.", modifica=True)
+def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, body: str | None = None,
+           radius_type: Literal["constant", "chord", "variable"] = "constant", end_radius: Expr | None = None,
+           chord_length: Expr | None = None, tangent_chain: bool = True, faces_a: Elementos | None = None,
+           faces_b: Elementos | None = None, rounds: Literal["both", "rounds", "fillets"] = "both"):
     """
-    edges: aristas a redondear: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores.
-    radius: radio en mm (número o expresión con parámetros, p. ej. "espesor / 2").
+    edges: aristas a redondear: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores. No se usa con faces_a.
+    radius: radio en mm (número o expresión con parámetros, p. ej. "espesor / 2"); con radius_type=variable es el radio inicial; en el empalme de reglas, el radio de las reglas.
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+    radius_type: "constant", "chord" (se da chord_length en lugar del radio) o "variable" (de radius a end_radius a lo largo de la arista).
+    end_radius: radio final en mm (número o expresión); obligatorio con radius_type=variable.
+    chord_length: longitud de cuerda en mm (número o expresión); obligatoria con radius_type=chord.
+    tangent_chain: true (por defecto) suma las aristas tangentes encadenadas; false empalma solo las elegidas.
+    faces_a: empalme de reglas: caras (selector, ids o lista) cuyas aristas se redondean; reemplaza a edges.
+    faces_b: empalme de reglas «entre»: segundo grupo de caras; solo se redondean las aristas entre faces_a y faces_b; vacío = todas las aristas de faces_a.
+    rounds: empalme de reglas: "both" (por defecto), "rounds" (solo aristas convexas) o "fillets" (solo cóncavas).
     """
-    _numero_positivo(radius, "radius", _MEDIDA_MINIMA)
+    if radius is None and (faces_a is not None or radius_type != "chord"):
+        raise error("INVALID_ARGUMENTS", "Falta radius (solo radius_type=chord lo reemplaza con chord_length).")
+    if faces_a is not None:
+        if edges:
+            raise error("INVALID_ARGUMENTS", "Pasá edges o faces_a (empalme de reglas), no los dos.")
+        _numero_positivo(radius, "radius", _MEDIDA_MINIMA)
+        caras_a, elegidos = _refs(sesion, faces_a, "cara", body)
+        caras_b = _refs(sesion, faces_b, "cara", body)[0] if faces_b else []
+        doc = sesion.doc
+        op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), tipo="reglas", caras_a=caras_a,
+                       caras_b=caras_b, regla="entre" if caras_b else "todas", redondeos=_REDONDEOS[rounds],
+                       radio=texto_expr(radius))
+        return _informe(_agregar(sesion, op), elegidos, "faces_used")
+    if not edges:
+        raise error("INVALID_ARGUMENTS", "Elegí qué redondear: edges (o faces_a para un empalme de reglas).")
+    if radius_type == "chord":
+        if chord_length is None:
+            raise error("INVALID_ARGUMENTS", "radius_type=chord necesita chord_length.")
+        _numero_positivo(chord_length, "chord_length", _MEDIDA_MINIMA)
+    else:
+        _numero_positivo(radius, "radius", _MEDIDA_MINIMA)
+    if radius_type == "variable":
+        if end_radius is None:
+            raise error("INVALID_ARGUMENTS", "radius_type=variable necesita end_radius.")
+        _numero_positivo(end_radius, "end_radius", _MEDIDA_MINIMA)
     refs, elegidos = _refs(sesion, edges, "arista", body)
     doc = sesion.doc
-    op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), aristas=refs, tipo_radio="constante",
-                   radio=texto_expr(radius))
+    extra = {}
+    if chord_length is not None:
+        extra["cuerda"] = texto_expr(chord_length)
+    if end_radius is not None:
+        extra["radio_fin"] = texto_expr(end_radius)
+    op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), aristas=refs,
+                   tipo_radio={"constant": "constante", "chord": "cuerda", "variable": "variable"}[radius_type],
+                   radio=texto_expr(1 if radius is None else radius), cadena_tangente=bool(tangent_chain), **extra)
     return _informe(_agregar(sesion, op), elegidos, "edges_used")
 
 
-@herramienta("chamfer", "solido", "Achaflana aristas (distancia igual en las dos caras). " + _ELEGIR.format(
-    ej="|Z", que="edges", id="Cuerpo1/E7") + _PERSISTENTE + "distance acepta número (mm) o expresión.", modifica=True)
-def chamfer(sesion, edges: Elementos, distance: Expr, body: str | None = None):
+@herramienta("chamfer", "solido", "Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancias "
+             "(type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera "
+             "distancia a la otra cara. " + _ELEGIR.format(ej="|Z", que="edges", id="Cuerpo1/E7") + _PERSISTENTE +
+             "Con tangent_chain (por defecto) sigue las aristas tangentes encadenadas. distance, distance2 y angle "
+             "aceptan número (mm o grados) o expresión.", modifica=True)
+def chamfer(sesion, edges: Elementos, distance: Expr, body: str | None = None,
+            type: Literal["equal", "two_distances", "distance_angle"] = "equal", distance2: Expr | None = None,
+            angle: Expr | None = None, flip: bool = False, tangent_chain: bool = True):
     """
     edges: aristas a achaflanar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores.
-    distance: distancia del chaflán en mm sobre cada cara (número o expresión con parámetros).
+    distance: distancia del chaflán en mm sobre cada cara (número o expresión con parámetros); con two_distances o distance_angle, la primera distancia.
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+    type: "equal" (distancia igual), "two_distances" (distance y distance2) o "distance_angle" (distance y angle).
+    distance2: segunda distancia en mm; obligatoria con type=two_distances.
+    angle: ángulo en grados (entre 0 y 90, excluidos); obligatorio con type=distance_angle.
+    flip: true pasa la primera distancia a la otra cara (no hace nada con type=equal).
+    tangent_chain: true (por defecto) suma las aristas tangentes encadenadas; false achaflana solo las elegidas.
     """
     _numero_positivo(distance, "distance", _MEDIDA_MINIMA)
+    extra = {}
+    if type == "two_distances":
+        if distance2 is None:
+            raise error("INVALID_ARGUMENTS", "type=two_distances necesita distance2.")
+        _numero_positivo(distance2, "distance2", _MEDIDA_MINIMA)
+        extra["distancia2"] = texto_expr(distance2)
+    elif type == "distance_angle":
+        if angle is None:
+            raise error("INVALID_ARGUMENTS", "type=distance_angle necesita angle.")
+        if isinstance(angle, (int, float)) and not 0 < angle < 90:
+            raise error("INVALID_ARGUMENTS", f"angle tiene que estar entre 0 y 90 grados (recibió {angle}).")
+        extra["angulo"] = texto_expr(angle)
     refs, elegidos = _refs(sesion, edges, "arista", body)
     doc = sesion.doc
-    op = OpChaflan(doc.nuevo_id(), nombre_nuevo(doc, "Chaflán", OpChaflan), aristas=refs, tipo="distancia_igual",
-                   distancia=texto_expr(distance))
+    op = OpChaflan(doc.nuevo_id(), nombre_nuevo(doc, "Chaflán", OpChaflan), aristas=refs,
+                   tipo={"equal": "distancia_igual", "two_distances": "dos_distancias",
+                         "distance_angle": "distancia_angulo"}[type],
+                   distancia=texto_expr(distance), voltear=bool(flip), cadena_tangente=bool(tangent_chain), **extra)
     return _informe(_agregar(sesion, op), elegidos, "edges_used")
 
 
@@ -97,14 +167,21 @@ _DIRECCION_VACIADO = {"inside": "interior", "outside": "exterior", "both": "ambo
              "En algunas caras B-spline el vaciado hacia afuera no se puede calcular: el error indica cómo armar "
              "dos solevaciones y restarlas. thickness acepta número (mm) o expresión.",
              modifica=True)
-def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Literal["inside", "outside", "both"] = "inside"):
+def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Literal["inside", "outside", "both"] = "inside",
+          tangent_chain: bool = True, outside_thickness: Expr | None = None,
+          corners: Literal["sharp", "rounded"] = "sharp"):
     """
     body: id o nombre del cuerpo a vaciar.
     faces: caras a quitar: selector (">Z" = la tapa), id de find_faces ("Cuerpo1/F6") o lista; [] = hueco cerrado.
-    thickness: espesor de pared en mm (número o expresión con parámetros).
+    thickness: espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness.
     direction: "inside", "outside" o "both".
+    tangent_chain: true (por defecto) quita también las caras tangentes encadenadas a las elegidas.
+    outside_thickness: espesor exterior en mm distinto del interior (con direction=both u outside); vacío = el mismo que thickness.
+    corners: "sharp" (desfase afilado, por defecto) o "rounded" (desfase redondeado en las esquinas).
     """
     _numero_positivo(thickness, "thickness")
+    if outside_thickness is not None:
+        _numero_positivo(outside_thickness, "outside_thickness")
     cuerpo = sl.cuerpo_objetivo(sesion, body)
     refs, elegidos = _refs(sesion, faces, "cara", cuerpo.id, permitir_vacio=True)
     ajenas = {c.id for c, _ in elegidos} - {cuerpo.id}
@@ -114,7 +191,10 @@ def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Liter
     espesor = texto_expr(thickness)
     doc = sesion.doc
     op = OpVaciado(doc.nuevo_id(), nombre_nuevo(doc, "Vaciado", OpVaciado), caras=refs, cuerpos=[] if refs else [cuerpo.id],
-                   espesor_interior=espesor, espesor_exterior=espesor, direccion=_DIRECCION_VACIADO[direction])
+                   espesor_interior=espesor,
+                   espesor_exterior=espesor if outside_thickness is None else texto_expr(outside_thickness),
+                   direccion=_DIRECCION_VACIADO[direction], tangente=bool(tangent_chain),
+                   tipo="afilado" if corners == "sharp" else "redondeado")
     return _informe(_agregar(sesion, op), elegidos, "faces_removed")
 
 
@@ -123,27 +203,30 @@ def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Liter
              "(«Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). No toca los "
              "agujeros taladrados. Deja un paso editable en el timeline; si no hay empalmes con ese "
              "filtro, falla con OPERATION_FAILED y el documento queda igual.", modifica=True)
-def remove_fillets(sesion, body: str, max_radius: Expr):
+def remove_fillets(sesion, body: str | list[str], max_radius: Expr):
     """
-    body: id o nombre del cuerpo al que sacarle los empalmes.
+    body: id o nombre del cuerpo (o lista de cuerpos) al que sacarle los empalmes.
     max_radius: radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
     """
     from ..nucleo.solidos_modificar import caras_de_empalme
     _numero_positivo(max_radius, "max_radius")
-    cuerpo = sl.cuerpo_objetivo(sesion, body)
+    pedidos = [body] if isinstance(body, str) else list(body)
+    if not pedidos:
+        raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo en body.")
+    cuerpos = list(dict.fromkeys(sl.cuerpo_objetivo(sesion, b).id for b in pedidos))
     doc = sesion.doc
     op = OpQuitarEmpalmes(doc.nuevo_id(), nombre_nuevo(doc, "Quitar empalmes", OpQuitarEmpalmes),
-                          cuerpos=[cuerpo.id], radio_max=texto_expr(max_radius))
+                          cuerpos=cuerpos, radio_max=texto_expr(max_radius))
     try:
         # El conteo del informe se mide con el MISMO contexto con el que se calculará el paso.
         from ..timeline.operaciones import Contexto
         radio = Contexto(doc.parametros.valores()).evaluar(op.p["radio_max"])
-        encontrados = len(caras_de_empalme(cuerpo.forma, radio))
+        encontrados = sum(len(caras_de_empalme(sesion.cuerpo(c).forma, radio)) for c in cuerpos)
     except Exception:                       # noqa: BLE001 — expresión con parámetros a medias: sin conteo previo
         encontrados = 0
     res = _agregar(sesion, op)
     res["fillets_removed"] = encontrados
-    res["bodies_affected"] = [cuerpo.id]
+    res["bodies_affected"] = cuerpos
     return res
 
 
@@ -167,6 +250,15 @@ def offset_faces(sesion, faces: Elementos, distance: Expr, tangent: bool = True,
     return _informe(_agregar(sesion, op), elegidos, "faces_moved")
 
 
+def _es_plano_de_construccion(sesion, texto):
+    """True si `texto` es el id o el nombre de un plano de construcción (ni selector ni id de find_faces)."""
+    try:
+        referencia_plano(sesion, texto)
+    except ErrorAPI:
+        return False
+    return True
+
+
 @herramienta("offset_edges", "solido",
              "Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loop» de Plasticity): crea un "
              "boceto NUEVO con curvas a `distance` de las elegidas, sin tocar ni cortar el cuerpo. Las aristas (edges: "
@@ -185,7 +277,7 @@ def offset_edges(sesion, distance: Expr, edges: Elementos | None = None, curves:
     edges: aristas a desfasar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista; vacío = ninguna.
     curves: ids de curvas de un boceto (get_sketch) a desfasar; piden `sketch`.
     sketch: id o nombre del boceto de `curves`; vacío = el último boceto del timeline.
-    plane: plano del desfase: "XY", "XZ", "YZ" o una cara plana (selector o id); vacío = el que contiene a todas.
+    plane: plano del desfase: "XY", "XZ", "YZ", el id o nombre de un plano de construcción o una cara plana (selector o id); vacío = el que contiene a todas.
     symmetric: true hace el desfase a los dos lados (distance se toma en valor absoluto).
     corners: round (arcos en las esquinas) o sharp (las esquinas se prolongan hasta cortarse).
     body: cuerpo donde se evalúan los selectores de edges y de plane; vacío = el único cuerpo.
@@ -206,6 +298,8 @@ def offset_edges(sesion, distance: Expr, edges: Elementos | None = None, curves:
         texto = str(plane).strip()
         if texto.upper() in ("XY", "XZ", "YZ"):
             ref_plano = {"tipo": "plano", "id": texto.upper()}
+        elif _es_plano_de_construccion(sesion, texto):
+            ref_plano = {"tipo": "plano", "id": referencia_plano(sesion, texto)}
         else:
             caras = _refs(sesion, texto, "cara", body)[0]
             if len(caras) != 1:
@@ -335,7 +429,10 @@ def _referencias_agujero(sesion, edges, distances, body):
              "thread='M8' con fit close/normal/loose), cosmetic (rosca solo informativa; diámetro = diameter o la broca "
              "de roscar), modeled (rosca real: thread, thread_class '6H', '2B', 'auto' o '' y print_clearance para "
              "imprimir en 3D) o taper (rosca cónica de tubería R/NPT: agujero cónico 1:16, rosca cosmética). El fondo "
-             "es plano salvo drill_tip=true (cono de 118°). Medidas en número (mm) o expresión.", modifica=True)
+             "es plano salvo drill_tip=true (cono de tip_angle, 118° por defecto). Una cuarta forma, ASOCIATIVA: "
+             "positions con vértices [x, y, z] del modelo o puntos de construcción (el agujero entra hacia −Z; flip lo "
+             "invierte). flip vale en todas las formas y bodies agujerea varios cuerpos a la vez. Medidas en número "
+             "(mm) o expresión.", modifica=True)
 def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, points: list[list[float]] | None = None,
                 depth: Expr | None = None, through_all: bool = False,
                 hole_type: Literal["simple", "counterbore", "countersink"] = "simple",
@@ -347,7 +444,9 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
                 thread: str | None = None, thread_class: str | None = "auto",
                 fit: Literal["close", "normal", "loose"] = "normal", print_clearance: Expr = 0,
                 left_hand: bool = False, to: str | None = None, to_offset: Expr = 0,
-                reference_edges: list[str] | None = None, reference_distances: list[Expr] | None = None):
+                reference_edges: list[str] | None = None, reference_distances: list[Expr] | None = None,
+                positions: list[str | dict | list[float]] | None = None, tip_angle: Expr = 118,
+                bodies: list[str] | None = None):
     """
     diameter: diámetro del agujero en mm (número o expresión); obligatorio con hole_tap simple, opcional con cosmetic.
     face: la cara plana donde se empieza: selector (">Z"), id de find_faces ("Cuerpo1/F6"). Tiene que dar UNA cara.
@@ -362,13 +461,13 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     counterbore_depth: profundidad del abocardado en mm; solo con counterbore.
     countersink_diameter: diámetro del avellanado en la superficie en mm; solo con countersink.
     countersink_angle: ángulo total del avellanado en grados; solo con countersink.
-    drill_tip: true deja el fondo en cono de 118° como una broca; false, fondo plano.
+    drill_tip: true deja el fondo en cono como una broca (ángulo tip_angle); false, fondo plano.
     body: cuerpo sobre el que se evalúan los selectores (y que se agujerea con sketch_points); vacío = el único cuerpo
         del documento.
     sketch: id o nombre del boceto de sketch_points; vacío = el último boceto.
     sketch_points: ids de puntos del boceto (get_sketch los lista; el centro de un círculo también es un punto): un
         agujero asociativo en cada uno.
-    flip: con sketch_points, true invierte el sentido automático (hacia el material).
+    flip: true invierte el sentido del agujero: con sketch_points el automático (hacia el material); con las demás formas, el normal (hacia adentro de la cara, o −Z con positions).
     hole_tap: "simple", "clearance" (paso libre ISO 273), "cosmetic", "modeled" (rosca real) o "taper" (tubería cónica).
     thread: rosca: "M8", "M8x1", "1/4-20 UNC", "Tr20x4", "G1/2" (taper: "R1/2" o "1/2 NPT"); con clearance, el tornillo ("M8").
     thread_class: clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), "auto" (6H o 2B si hay datos) o "" (perfil básico).
@@ -379,16 +478,35 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     to_offset: desfase en mm sobre el «hasta» (positivo = más hondo).
     reference_edges: posición por referencias: DOS aristas rectas (selector o id de find_edges), no paralelas.
     reference_distances: las DOS distancias en mm del centro del agujero a cada arista de reference_edges.
+    positions: posición asociativa en puntos del modelo: vértices [x, y, z] (a menos de 0,001 mm de un vértice), puntos de construcción (id o nombre) o {"sketch", "point"}; el agujero va hacia −Z. No se combina con points, sketch_points ni reference_edges.
+    tip_angle: ángulo total de la punta de broca en grados (con drill_tip); 118 por defecto.
+    bodies: cuerpos extra que se agujerean con el mismo agujero (ids o nombres), además del de face/body; vacío = solo ese.
     """
     referencias = reference_edges is not None or reference_distances is not None
     comunes = _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbore_diameter,
                                 counterbore_depth, countersink_diameter, countersink_angle, drill_tip, hole_tap, thread,
                                 thread_class, fit, print_clearance, left_hand, to, to_offset, body)
+    if drill_tip:
+        comunes["angulo_punta"] = texto_expr(tip_angle)
+    extras = [sesion.cuerpo(b).id for b in bodies or []]
+    if positions:
+        if points or referencias or sketch_points:
+            raise error("INVALID_ARGUMENTS", "positions no se combina con points, sketch_points ni reference_edges.")
+        from .herramientas_construccion import _PUNTO, _referencia
+        refs = [_referencia(sesion, p, _PUNTO, body) for p in positions]
+        principal = sl.cuerpo_objetivo(sesion, body).id if not extras else extras[0]
+        op = OpAgujero(sesion.doc.nuevo_id(), nombre_nuevo(sesion.doc, "Agujero", OpAgujero), posiciones=refs,
+                       invertir=bool(flip), objetivos=list(dict.fromkeys([principal, *extras])), **comunes)
+        res = _agregar(sesion, op, combina=True)
+        res["holes"] = len(refs)
+        if hole_tap != "simple":
+            res["thread"] = comunes["designacion"]
+        return res
     if sketch_points:
         if points or referencias:
             raise error("INVALID_ARGUMENTS", "sketch_points (puntos de un boceto) no se combina con points ni con "
                         "reference_edges en un mismo agujero.", "Hacé dos llamadas a create_hole.")
-        return _agujero_en_boceto(sesion, comunes, face, body, sketch, sketch_points, flip, hole_tap)
+        return _agujero_en_boceto(sesion, comunes, face, body, sketch, sketch_points, flip, hole_tap, extras)
     if sketch is not None and str(sketch).strip():
         raise error("INVALID_ARGUMENTS", "Con sketch hay que decir en qué puntos: sketch_points (ids de get_sketch).")
     if face is None or not str(face).strip():
@@ -409,8 +527,8 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
                                      for p in puntos]}
         cantidad = len(puntos)
     doc = sesion.doc
-    op = OpAgujero(doc.nuevo_id(), nombre_nuevo(doc, "Agujero", OpAgujero), objetivos=[cuerpo.id], **ubicacion,
-                   **comunes)
+    op = OpAgujero(doc.nuevo_id(), nombre_nuevo(doc, "Agujero", OpAgujero),
+                   objetivos=list(dict.fromkeys([cuerpo.id, *extras])), invertir=bool(flip), **ubicacion, **comunes)
     res = _agregar(sesion, op, combina=True)
     res.update(holes=cantidad, face=sl.emitir_id(sesion, cuerpo, elem))
     if hole_tap != "simple":
@@ -491,7 +609,7 @@ def _hacia_el_material(forma, punto, normal):
     return float((centro - p) @ n) > 0
 
 
-def _agujero_en_boceto(sesion, comunes, face, body, sketch, sketch_points, flip, hole_tap):
+def _agujero_en_boceto(sesion, comunes, face, body, sketch, sketch_points, flip, hole_tap, extras=()):
     """create_hole con sketch_points: posiciones = referencias a puntos del boceto (siguen al boceto)."""
     sop, br = boceto_activo(sesion, sketch)
     ids = list(dict.fromkeys(sketch_points))
@@ -508,7 +626,7 @@ def _agujero_en_boceto(sesion, comunes, face, body, sketch, sketch_points, flip,
     doc = sesion.doc
     op = OpAgujero(doc.nuevo_id(), nombre_nuevo(doc, "Agujero", OpAgujero),
                    posiciones=[{"tipo": "punto_boceto", "boceto": sop.id, "punto": i} for i in ids],
-                   invertir=invertir, objetivos=[cuerpo.id], **comunes)
+                   invertir=invertir, objetivos=list(dict.fromkeys([cuerpo.id, *extras])), **comunes)
     res = _agregar(sesion, op, combina=True)
     direccion = -np.asarray(br.plano.normal, float) * (-1 if invertir else 1)
     res.update(holes=len(ids), sketch=sop.id, sketch_points=ids, direction=[round(float(c), 6) + 0.0 for c in direccion])
@@ -682,24 +800,39 @@ def fit_tolerance(sesion, nominal: float, hole: str = "H7", shaft: str = "g6"):
              "que no se mueve), para poder sacar la pieza del molde. Las caras que se alejan del plano neutro "
              "se angostan (ángulo positivo). " + _ELEGIR.format(ej="#Z", que="faces", id="Cuerpo1/F2") +
              _PERSISTENTE + "angle acepta número (grados) o expresión.", modifica=True)
-def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: bool = False, body: str | None = None):
+def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: bool = False, body: str | None = None,
+          sides: Literal["one", "two", "symmetric"] = "one", angle2: Expr | None = None):
     """
     faces: caras a inclinar: selector ("#Z" = las laterales de una caja), id de find_faces o lista.
     angle: ángulo de desmoldeo en grados (número o expresión), p. ej. 3.
-    neutral: plano neutro: "XY", "XZ", "YZ" o una cara plana (selector o id, p. ej. "<Z"); define la dirección de extracción.
+    neutral: plano neutro: "XY", "XZ", "YZ", el id o nombre de un plano de construcción, o una cara plana (selector o id, p. ej. "<Z"); define la dirección de extracción.
     reverse: true invierte la dirección de extracción.
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
+    sides: "one" (un lado, por defecto), "two" (dos lados: angle y angle2) o "symmetric" (simétrico: el mismo ángulo a los dos lados del plano neutro).
+    angle2: ángulo del segundo lado en grados; obligatorio con sides=two.
     """
+    if sides == "two":
+        if angle2 is None:
+            raise error("INVALID_ARGUMENTS", "sides=two necesita angle2.")
+        if isinstance(angle2, (int, float)) and not 0 < abs(angle2) < 90:
+            raise error("INVALID_ARGUMENTS", f"angle2 tiene que estar entre 0 y 90 grados (recibió {angle2}).")
     if isinstance(angle, (int, float)) and not 0 < abs(angle) < 90:
         raise error("INVALID_ARGUMENTS", f"angle tiene que estar entre 0 y 90 grados (recibió {angle}).")
     refs, elegidos = _refs(sesion, faces, "cara", body)
     if neutral.strip().upper() in ("XY", "XZ", "YZ"):
         plano = {"tipo": "plano", "id": neutral.strip().upper()}
     else:
-        c, e = _unica_cara(sesion, neutral, body)[0]
-        sl.plano_de_cara(e)
-        plano = sl.referencia(c, e)
+        try:
+            plano = {"tipo": "plano", "id": referencia_plano(sesion, neutral)}      # plano de construcción
+        except ErrorAPI as e:
+            if e.error_kind != "PLANE_NOT_FOUND" or not (sl.es_id(neutral) or sl.parece_selector(neutral)):
+                raise
+            c, e = _unica_cara(sesion, neutral, body)[0]
+            sl.plano_de_cara(e)
+            plano = sl.referencia(c, e)
     doc = sesion.doc
     op = OpDesmoldeo(doc.nuevo_id(), nombre_nuevo(doc, "Desmoldeo", OpDesmoldeo), plano=plano, caras=refs,
-                     angulo=texto_expr(angle), voltear=reverse)
+                     angulo=texto_expr(angle), voltear=reverse,
+                     lados={"one": "uno", "two": "dos", "symmetric": "simetrico"}[sides],
+                     **({"angulo2": texto_expr(angle2)} if angle2 is not None else {}))
     return _informe(_agregar(sesion, op), elegidos, "faces_used")

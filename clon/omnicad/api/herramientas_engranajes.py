@@ -17,7 +17,8 @@ from ..timeline.operaciones import Contexto
 from ..timeline.ops_engranaje import PERSONALIZADA, OpEje, OpEngranaje, agregar_ensamblaje
 from . import herramientas_modificar  # noqa: F401  (antes: el grupo «solido» lista primero empalmes, vaciado…)
 from .errores import error
-from .herramientas_boceto import nombre_nuevo, referencia_plano, texto_expr
+from .herramientas_boceto import nombre_nuevo, referencia_plano_o_cara, texto_expr
+from .herramientas_construccion import _PUNTO, _referencia
 from .herramientas_solido import OPERACIONES, Cuerpos, Operacion, _agregar, _numero_positivo, _objetivos
 from .registro import Expr, herramienta
 
@@ -38,12 +39,17 @@ def _entero_expr(valor):
     return texto_expr(valor)
 
 
-def _ubicacion(sesion, plane, center):
-    ref = referencia_plano(sesion, plane)
+def _ubicacion(sesion, plane, center, center_point=None, body=None):
+    """Plano (de origen, de construcción o una cara plana) y centro: un punto asociativo (vértice, punto de
+    construcción o de boceto) si hay `center_point`, y [x, y] sobre el plano a partir de él."""
+    ref = referencia_plano_o_cara(sesion, plane, body)
     c = [0, 0] if center is None else list(center)
     if len(c) != 2:
         raise error("INVALID_ARGUMENTS", f"center tiene que ser [x, y] sobre el plano (2 valores); llegaron {len(c)}.")
-    return {"plano": {"tipo": "plano", "id": ref}, "x": texto_expr(c[0]), "y": texto_expr(c[1])}
+    ubicacion = {"plano": ref, "x": texto_expr(c[0]), "y": texto_expr(c[1])}
+    if center_point is not None:
+        ubicacion["centro"] = _referencia(sesion, center_point, _PUNTO, body)
+    return ubicacion
 
 
 def _ctx(sesion):
@@ -138,7 +144,8 @@ def _crear(sesion, nombre, params):
              "(gear). Para dos que engranan, create_gear_pair.", modifica=True)
 def create_gear(sesion, module: Expr, teeth: Expr, width: Expr = 10, pressure_angle: Expr = 20,
                 helix_angle: Expr = 0, profile_shift: Expr = 0, clearance: Expr = 0.25, backlash: Expr = 0,
-                bore: Expr = 0, rotation: Expr = 0, plane: str = "XY", center: list[Expr] | None = None):
+                bore: Expr = 0, rotation: Expr = 0, plane: str = "XY", center: list[Expr] | None = None, center_point: str | dict | list[float] | None = None,
+                body: str | None = None):
     """
     module: módulo normal en mm (número o expresión).
     teeth: cantidad de dientes (entero, o expresión que dé un entero).
@@ -150,12 +157,14 @@ def create_gear(sesion, module: Expr, teeth: Expr, width: Expr = 10, pressure_an
     backlash: juego del par en el primitivo, en mm (este engranaje adelgaza la mitad).
     bore: diámetro del agujero central en mm; 0 = macizo.
     rotation: giro del engranaje alrededor de su eje, en grados.
-    plane: plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+    plane: plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
     center: [x, y] del centro sobre el plano, en mm; vacío = el origen del plano.
+    center_point: punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+    body: cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
     """
     params = dict(_comunes(module, width, pressure_angle, helix_angle, clearance, backlash), tipo="engranaje",
                   dientes=_entero_expr(teeth), desplazamiento=texto_expr(profile_shift), agujero=texto_expr(bore),
-                  giro=texto_expr(rotation), **_ubicacion(sesion, plane, center))
+                  giro=texto_expr(rotation), **_ubicacion(sesion, plane, center, center_point, body))
     op, resultado, calculado = _crear(sesion, "Engranaje", params)
     if not calculado:
         return resultado
@@ -176,7 +185,8 @@ def create_gear_pair(sesion, module: Expr, teeth1: Expr, teeth2: Expr, width: Ex
                      pressure_angle: Expr = 20, helix_angle: Expr = 0, profile_shift1: Expr = 0,
                      profile_shift2: Expr = 0, clearance: Expr = 0.25, backlash: Expr = 0, bore1: Expr = 0,
                      bore2: Expr = 0, direction: Expr = 0, rotation: Expr = 0, plane: str = "XY",
-                     center: list[Expr] | None = None, assembly: bool = True):
+                     center: list[Expr] | None = None, center_point: str | dict | list[float] | None = None,
+                body: str | None = None, assembly: bool = True):
     """
     module: módulo normal en mm de los dos engranajes.
     teeth1: dientes del primer engranaje (el del centro).
@@ -192,15 +202,17 @@ def create_gear_pair(sesion, module: Expr, teeth1: Expr, teeth2: Expr, width: Ex
     bore2: diámetro del agujero central del segundo en mm; 0 = macizo.
     direction: dirección del centro del segundo vista desde el primero, en grados desde el eje x del plano.
     rotation: giro del primero alrededor de su eje, en grados (el segundo gira lo que le corresponde para engranar).
-    plane: plano donde se apoyan: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+    plane: plano donde se apoyan: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
     center: [x, y] del centro del primero sobre el plano, en mm; vacío = el origen del plano.
+    center_point: punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+    body: cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
     assembly: true para crear además los componentes, las uniones de revolución y el vínculo de movimiento.
     """
     params = dict(_comunes(module, width, pressure_angle, helix_angle, clearance, backlash), tipo="engranaje",
                   par=True, dientes=_entero_expr(teeth1), dientes2=_entero_expr(teeth2),
                   desplazamiento=texto_expr(profile_shift1), desplazamiento2=texto_expr(profile_shift2),
                   agujero=texto_expr(bore1), agujero2=texto_expr(bore2), direccion=texto_expr(direction),
-                  giro=texto_expr(rotation), **_ubicacion(sesion, plane, center))
+                  giro=texto_expr(rotation), **_ubicacion(sesion, plane, center, center_point, body))
     op, resultado, calculado = _crear(sesion, "Par de engranajes", params)
     if not calculado:
         return resultado
@@ -223,7 +235,8 @@ def create_gear_pair(sesion, module: Expr, teeth1: Expr, teeth2: Expr, width: Ex
              modifica=True)
 def create_rack(sesion, module: Expr, teeth: Expr, width: Expr = 10, height: Expr = 10,
                 pressure_angle: Expr = 20, clearance: Expr = 0.25, backlash: Expr = 0, rotation: Expr = 0,
-                plane: str = "XY", center: list[Expr] | None = None):
+                plane: str = "XY", center: list[Expr] | None = None, center_point: str | dict | list[float] | None = None,
+                body: str | None = None):
     """
     module: módulo en mm.
     teeth: cantidad de dientes (el largo es teeth × π × module).
@@ -233,12 +246,14 @@ def create_rack(sesion, module: Expr, teeth: Expr, width: Expr = 10, height: Exp
     clearance: holgura de fondo como fracción del módulo.
     backlash: juego en la línea primitiva, en mm (el diente adelgaza la mitad).
     rotation: giro alrededor de la normal del plano, en grados.
-    plane: plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+    plane: plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
     center: [x, y] del inicio de la línea primitiva sobre el plano, en mm; vacío = el origen del plano.
+    center_point: punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+    body: cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
     """
     params = dict(_comunes(module, width, pressure_angle, 0, clearance, backlash), tipo="cremallera",
                   dientes=_entero_expr(teeth), alto=texto_expr(height), giro=texto_expr(rotation),
-                  **_ubicacion(sesion, plane, center))
+                  **_ubicacion(sesion, plane, center, center_point, body))
     op, resultado, calculado = _crear(sesion, "Cremallera", params)
     if not calculado:
         return resultado
@@ -256,7 +271,8 @@ def create_rack(sesion, module: Expr, teeth: Expr, width: Expr = 10, height: Exp
              "de la cadena).", modifica=True)
 def create_sprocket(sesion, teeth: Expr, chain: Cadena = "08B", pitch: Expr | None = None,
                     roller_diameter: Expr | None = None, width: Expr | None = None, bore: Expr = 0,
-                    rotation: Expr = 0, plane: str = "XY", center: list[Expr] | None = None):
+                    rotation: Expr = 0, plane: str = "XY", center: list[Expr] | None = None, center_point: str | dict | list[float] | None = None,
+                body: str | None = None):
     """
     teeth: cantidad de dientes (6 o más).
     chain: designación ISO 606 de la cadena ("08B", "10A"…) o "custom".
@@ -265,8 +281,10 @@ def create_sprocket(sesion, teeth: Expr, chain: Cadena = "08B", pitch: Expr | No
     width: ancho del diente en mm; vacío = el de ISO 606 para la cadena (obligatorio con "custom").
     bore: diámetro del agujero central en mm; 0 = macizo.
     rotation: giro alrededor del eje, en grados.
-    plane: plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+    plane: plano donde se apoya: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
     center: [x, y] del centro sobre el plano, en mm; vacío = el origen del plano.
+    center_point: punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+    body: cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
     """
     propia = chain == "custom"
     if propia and (pitch is None or roller_diameter is None or width is None):
@@ -285,7 +303,7 @@ def create_sprocket(sesion, teeth: Expr, chain: Cadena = "08B", pitch: Expr | No
         width = round(en.ancho_diente_cadena(b1, p), 3)
     _numero_positivo(width, "width")
     params["ancho"] = texto_expr(width)
-    params.update(_ubicacion(sesion, plane, center))
+    params.update(_ubicacion(sesion, plane, center, center_point, body))
     op, resultado, calculado = _crear(sesion, "Rueda de cadena", params)
     if not calculado:
         return resultado
@@ -334,12 +352,15 @@ def _tramo(i, s):
              "sale de center por la normal del plano (en XY, hacia +Z), con los tramos en orden. Un chaflán o empalme "
              "va sobre la esquina de ese tramo: convexa en la punta o en un escalón que baja, cóncava en uno que sube. "
              "operation cut hace un agujero escalonado.", modifica=True)
-def create_shaft(sesion, segments: list[dict], plane: str = "XY", center: list[Expr] | None = None,
+def create_shaft(sesion, segments: list[dict], plane: str = "XY", center: list[Expr] | None = None, center_point: str | dict | list[float] | None = None,
+                body: str | None = None,
                  operation: Operacion = "new_body", target: Cuerpos | None = None):
     """
     segments: tramos en orden, cada uno {"diameter": mm, "length": mm, "start": "none"|"chamfer"|"fillet", "start_size": mm, "end": "none"|"chamfer"|"fillet", "end_size": mm}; diameter y length son obligatorios y todos aceptan expresiones.
-    plane: plano de donde sale el eje: "XY", "XZ", "YZ" o el id/nombre de un plano de construcción.
+    plane: plano de donde sale el eje: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana (selector o id de find_faces).
     center: [x, y] del comienzo del eje sobre el plano, en mm; vacío = el origen del plano.
+    center_point: punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
+    body: cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
     operation: "new_body", "join", "cut" o "intersect".
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     """
@@ -348,7 +369,7 @@ def create_shaft(sesion, segments: list[dict], plane: str = "XY", center: list[E
     tramos = [_tramo(i, s) for i, s in enumerate(segments)]
     doc = sesion.doc
     op = OpEje(doc.nuevo_id(), nombre_nuevo(doc, "Eje", OpEje), tramos=tramos, operacion=OPERACIONES[operation],
-               objetivos=_objetivos(sesion, operation, target), **_ubicacion(sesion, plane, center))
+               objetivos=_objetivos(sesion, operation, target), **_ubicacion(sesion, plane, center, center_point, body))
     resultado = _agregar(sesion, op, operation != "new_body")
     if doc.resultado(op.id).estado == "error":
         return resultado                    # la transacción informa el error del paso y deja el documento como estaba

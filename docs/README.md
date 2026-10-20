@@ -64,7 +64,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_grasshopper.md](brechas_grasshopper.md) | GH1–GH12 |
 | [brechas_keyshot.md](brechas_keyshot.md) | KS1–KS15 |
 | [brechas_vray.md](brechas_vray.md) | VR1–VR13 |
-| [brechas_mcp.md](brechas_mcp.md) | MCP-0a–MCP-77: herramientas para agentes que faltan |
+| [brechas_mcp.md](brechas_mcp.md) | MCP-0a–MCP-94: especificación de las herramientas para agentes (todas hechas; B-80 cerrado) |
 | [brechas_solidcraft.md](brechas_solidcraft.md) | SC1–SC17 |
 | [brechas_cad_libres.md](brechas_cad_libres.md) | CL1–CL8 |
 

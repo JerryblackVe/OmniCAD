@@ -37,9 +37,6 @@ def render(ns):
     ancho, alto = util.tamano(ns.size)
     if Path(ns.salida).suffix.lower() != ".png":
         raise util.UsoError(f"La salida de render tiene que ser un .png, no '{ns.salida}'.")
-    vistas = util.exigir_herramienta("get_viewport_image", util.indice_catalogo())["esquema"]["properties"]["view"]
-    if ns.view not in vistas.get("enum", [ns.view]):
-        raise util.UsoError(f"Vista inválida: '{ns.view}'.", [f"Vistas: {', '.join(vistas['enum'])}."])
     return correr("get_viewport_image", {"view": ns.view, "width": ancho, "height": alto},
                   ns.archivo, ns.json, guardar=False, image_out=ns.salida)
 
@@ -150,7 +147,7 @@ def registrar(sub, comun):
                        description="Dibuja el modelo y escribe un PNG (nunca base64 por consola).")
     p.add_argument("archivo", metavar="archivo.omnicad")
     p.add_argument("salida", metavar="salida.png")
-    p.add_argument("--view", "-v", default="iso", metavar="V", help="iso, front, back, top, bottom, left o right (defecto iso)")
+    p.add_argument("--view", "-v", default="iso", metavar="V", help="iso, front, back, top, bottom, left, right o el nombre de una vista guardada (defecto iso)")
     p.add_argument("--size", "-s", default="800x600", metavar="ANCHOxALTO", help="tamaño en píxeles (defecto 800x600)")
     p.set_defaults(func=render)
 

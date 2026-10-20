@@ -488,6 +488,35 @@ def referencia(cuerpo, elem):
     return refs.referencia(cuerpo.id, elem.sub, cuerpo.forma)
 
 
+TOL_VERTICE = 1e-3          # mm: un punto [x, y, z] elige un vértice solo si cae sobre él
+
+
+def es_punto3(valor):
+    """True si `valor` es [x, y, z] con tres números finitos (no booleanos)."""
+    return (isinstance(valor, (list, tuple)) and len(valor) == 3
+            and all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in valor))
+
+
+def vertice_cercano(sesion, punto, body=None):
+    """(cuerpo, referencia persistente, vértice OCC) del vértice que está en `punto` [x, y, z] (a menos de TOL_VERTICE mm), entre
+    los de `body` o, sin él, los de todos los cuerpos que no son mallas. No hay selector ni id de vértices: un
+    vértice se elige por sus coordenadas."""
+    cuerpos = ([cuerpo_objetivo(sesion, body)] if body is not None and str(body).strip()
+               else [c for c in sesion.doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") != "malla"])
+    p = np.asarray(punto, float)
+    mejor = None
+    for c in cuerpos:
+        for v in refs.subformas(c.forma, "vertice"):
+            d = float(np.linalg.norm(np.asarray(refs.firma_vertice(v)["punto"], float) - p))
+            if mejor is None or d < mejor[0]:
+                mejor = (d, c, v)
+    if mejor is None or mejor[0] > TOL_VERTICE:
+        cerca = "" if mejor is None else f" El más cercano está a {mejor[0]:.3g} mm."
+        raise error("ELEMENT_NOT_FOUND", f"No hay un vértice en {list(punto)}.{cerca}",
+                    "Un punto que no es un vértice se dibuja en un boceto o se crea con create_construction_point.")
+    return mejor[1], refs.referencia(mejor[1].id, mejor[2], mejor[1].forma), mejor[2]
+
+
 def plano_de_cara(elem):
     """`geo.Plano` de una cara plana (con el marco de ejes que usa el boceto sobre cara), o UNSUPPORTED_ELEMENT."""
     plano = geo.plano_de_cara(elem.sub) if elem.tipo == "cara" else None

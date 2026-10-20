@@ -4,9 +4,8 @@ pestaña contextual BOCETO) y cada ítem con comando real de los espacios DIBUJO
 herramienta del catálogo (`api.catalogo()`) o una excusa escrita acá. Si aparece una clave nueva sin ninguna de
 las dos, el test falla: es lo que dejó pasar el bug B-80 (todo ANIMACIÓN sin herramientas).
 
-Las excusas «pendiente MCP-n» citan el plan de docs/brechas_mcp.md (el ID de la herramienta que falta); las que
-dicen que algo no le sirve a un agente son las que ese documento descarta (selección con el ratón, prioridad,
-tema…). Los botones grisados («no disponible en OmniCAD») no son comandos: se anotan para que no se pierdan.
+Las excusas dicen que algo no le sirve a un agente (selección con el ratón, prioridad, tema…, lo que
+docs/brechas_mcp.md descarta). No queda ninguna «pendiente MCP-n»: B-80 está cerrado. Los botones grisados («no disponible en OmniCAD») no son comandos: se anotan para que no se pierdan.
 """
 import os
 
@@ -93,75 +92,65 @@ HERRAMIENTAS = {
     "galeria": "render_image",             # las imágenes vuelven en la respuesta (o a path); no hay galería de sesión
     "Calcomanía": "set_decal",
     "calcular": "recompute_all",
+    # --- B-80, olas 4 a 7: análisis, configuraciones, construcción, superficies, división, visor y boceto
+    "accesibilidad": "manage_analysis", "angulo_desmoldeo": "manage_analysis", "cebra": "manage_analysis",
+    "curvatura_peine": "manage_analysis", "mapa_entorno": "manage_analysis", "mapa_curvatura": "manage_analysis",
+    "isocurva": "manage_analysis", "radio_minimo": "manage_analysis", "seccion": "section_view",
+    "colores_componente": "get_viewport_image", "configurar": "manage_configurations",
+    "mostrar_configuracion": "manage_configurations", "alinear": "align_bodies", "escala_3d": "scale_body",
+    "bobina": "create_coil", "tuberia": "create_pipe", "nervio": "create_rib", "red": "create_web",
+    "repujado": "create_emboss", "saliente": "create_boss", "labio": "create_lip_groove",
+    "relleno_contorno": "create_boundary_fill", "cuerpo_envolvente": "create_bounding_solid", "engrosar": "thicken",
+    "sup_extruir": "create_surface_extrude", "sup_revolucion": "create_surface_revolve",
+    "sup_barrido": "create_surface_sweep", "sup_solevacion": "create_surface_loft", "sup_desfase": "offset_surface",
+    "sup_empalme": "fillet_surface", "parche": "create_patch", "reglada": "create_ruled_surface",
+    "recortar_sup": "trim_surface", "extender_sup": "extend_surface", "coser": "stitch_surfaces",
+    "descoser": "unstitch_surfaces", "destrimar": "untrim_surface", "invertir_normal": "reverse_surface_normal",
+    "reemplazar_cara": "replace_face", "dividir_cara": "split_face", "dividir_cuerpo": "split_body",
+    "division_silueta": "silhouette_split", "quitar": "remove_bodies", "scu": "create_ucs",
+    "eje_cilindro": "create_construction_axis", "eje_perpendicular": "create_construction_axis",
+    "eje_dos_planos": "create_construction_axis", "eje_dos_puntos": "create_construction_axis",
+    "eje_arista": "create_construction_axis", "punto_vertice": "create_construction_point",
+    "punto_dos_aristas": "create_construction_point", "punto_tres_planos": "create_construction_point",
+    "punto_centro": "create_construction_point", "punto_arista_plano": "create_construction_point",
+    "punto_ruta": "create_construction_point", "plano_angulo": "create_construction_plane",
+    "plano_tangente": "create_construction_plane", "plano_medio": "create_construction_plane",
+    "plano_perpendicular": "create_construction_plane", "plano_dos_aristas": "create_construction_plane",
+    "plano_tres_puntos": "create_construction_plane", "plano_ruta": "create_construction_plane",
+    "fijacion": "insert_fastener", "lienzo": "insert_canvas", "operacion_base": "create_base_feature",
+    "activar_patron_plano": "set_flat_pattern_view", "invertir_seleccion": "select_bodies",
+    "seleccion_nombre": "select_bodies", "seleccion_tamano": "select_bodies",
+    "sk_linea_medio": "draw_line", "sk_rectangulo_3p": "draw_rectangle", "sk_rectangulo_centro": "draw_rectangle",
+    "sk_circulo_2p": "draw_circle", "sk_circulo_3p": "draw_circle", "sk_poligono_arista": "create_polygon",
+    "sk_espiral": "draw_spiral", "sk_r_poligono": "add_constraint", "sk_terminar": "sketch_view",
+    "sk_intersecar": "project_to_sketch", "sk_incluir_3d": "project_to_sketch", "sk_arco_tangente": "draw_arc",
+    "sk_alargar": "extend_sketch_curve", "sk_partir": "split_sketch_curve", "capturar": "capture_viewport",
 }
 
-# clave → motivo por el que no tiene herramienta. «pendiente MCP-n» = el ID del plan docs/brechas_mcp.md.
+# clave → motivo por el que no tiene herramienta.
 _RATON = "se elige con el ratón en la vista: un agente elige por id y no por clic (docs/brechas_mcp.md › Ola 4)"
 _GRISADO = "comando no implementado en la ventana (botón grisado, regla de honestidad de la cinta)"
 EXCUSAS = {
-    # --- cinta DISEÑO: análisis, configuraciones y operaciones sin herramienta propia (olas 4 y 5)
-    "accesibilidad": "pendiente MCP-26", "angulo_desmoldeo": "pendiente MCP-26", "cebra": "pendiente MCP-26",
-    "curvatura_peine": "pendiente MCP-26", "mapa_entorno": "pendiente MCP-26", "mapa_curvatura": "pendiente MCP-26",
-    "isocurva": "pendiente MCP-26", "radio_minimo": "pendiente MCP-26", "seccion": "pendiente MCP-26",
-    "colores_componente": "pendiente MCP-31",
-    "configurar": "pendiente MCP-27", "mostrar_configuracion": "pendiente MCP-27",
-    "alinear": "pendiente MCP-37", "escala_3d": "pendiente MCP-37",
-    "bobina": "pendiente MCP-32", "tuberia": "pendiente MCP-32",
-    "nervio": "pendiente MCP-33", "red": "pendiente MCP-33", "repujado": "pendiente MCP-33",
-    "saliente": "pendiente MCP-33", "labio": "pendiente MCP-33",
-    "relleno_contorno": "pendiente MCP-34", "cuerpo_envolvente": "pendiente MCP-34", "engrosar": "pendiente MCP-34",
-    "sup_extruir": "pendiente MCP-35", "sup_revolucion": "pendiente MCP-35", "sup_barrido": "pendiente MCP-35",
-    "sup_solevacion": "pendiente MCP-35", "sup_desfase": "pendiente MCP-35", "sup_empalme": "pendiente MCP-35",
-    "parche": "pendiente MCP-35", "reglada": "pendiente MCP-35",
-    "recortar_sup": "pendiente MCP-36", "extender_sup": "pendiente MCP-36", "coser": "pendiente MCP-36",
-    "descoser": "pendiente MCP-36", "destrimar": "pendiente MCP-36", "invertir_normal": "pendiente MCP-36",
-    "reemplazar_cara": "pendiente MCP-38", "dividir_cara": "pendiente MCP-38", "dividir_cuerpo": "pendiente MCP-38",
-    "division_silueta": "pendiente MCP-38", "quitar": "pendiente MCP-38",
-    "scu": "pendiente MCP-40", "eje_cilindro": "pendiente MCP-40", "eje_perpendicular": "pendiente MCP-40",
-    "eje_dos_planos": "pendiente MCP-40", "eje_dos_puntos": "pendiente MCP-40", "eje_arista": "pendiente MCP-40",
-    "punto_vertice": "pendiente MCP-40", "punto_dos_aristas": "pendiente MCP-40",
-    "punto_tres_planos": "pendiente MCP-40", "punto_centro": "pendiente MCP-40",
-    "punto_arista_plano": "pendiente MCP-40", "punto_ruta": "pendiente MCP-40",
-    "plano_angulo": "pendiente MCP-39", "plano_tangente": "pendiente MCP-39", "plano_medio": "pendiente MCP-39",
-    "plano_perpendicular": "pendiente MCP-39", "plano_dos_aristas": "pendiente MCP-39",
-    "plano_tres_puntos": "pendiente MCP-39", "plano_ruta": "pendiente MCP-39",
-    "fijacion": "pendiente MCP-41", "lienzo": "pendiente MCP-41 (insertar lienzo); «Renderizar en el lienzo» lo "
-                                               "cubre set_render_scene (canvas_high_quality)",
-    "operacion_base": "pendiente MCP-41",
-    "activar_patron_plano": "pendiente MCP-53", "impresion3d": "prepara un archivo para la impresora 3D; export "
-                                                              "(.stl) alcanza para obtener la malla",
+    "impresion3d": "prepara un archivo para la impresora 3D; export (.stl) alcanza para obtener la malla",
     "secuencias": "la cubre execute_code (docs/brechas_mcp.md › Ola 7, «Se descartan»)",
     "biblioteca_roscas": "la cubre thread_info (docs/brechas_mcp.md › Ola 7, «Se descartan»)",
     "pulsar_tirar": "la cubren offset_faces (caras) y fillet (aristas): es lo que hace el comando",
     # --- selección: un agente no necesita el ratón
     "seleccionar": _RATON, "sel_ventana": _RATON, "sel_libre": _RATON, "sel_pintura": _RATON,
     "seleccionar_todo": "un agente elige por id: get_scene_info lista todos los cuerpos",
-    "invertir_seleccion": "pendiente MCP-93 (invert en select_bodies)",
-    "seleccion_nombre": "pendiente MCP-93 (by_name en select_bodies)",
-    "seleccion_tamano": "pendiente MCP-93 (by_size en select_bodies)",
     "prioridad_cuerpo": _RATON, "prioridad_cara": _RATON, "prioridad_arista": _RATON,
     "prioridad_componente": _RATON,
     "filtro_caras": _RATON, "filtro_aristas": _RATON, "filtro_vertices": _RATON, "filtro_cuerpos": _RATON,
     "filtro_bocetos": _RATON, "filtro_construccion": _RATON,
-    # --- boceto: opciones que la herramienta todavía no tiene (ola 7 y huecos parciales de la 4)
-    "sk_linea_medio": "pendiente MCP-74", "sk_rectangulo_3p": "pendiente MCP-74",
-    "sk_rectangulo_centro": "pendiente MCP-74", "sk_circulo_2p": "pendiente MCP-72",
-    "sk_circulo_3p": "pendiente MCP-72", "sk_poligono_arista": "pendiente MCP-73",
-    "sk_espiral": "pendiente MCP-29", "sk_r_poligono": "pendiente MCP-30", "sk_terminar": "pendiente MCP-77",
-    "sk_intersecar": "pendiente MCP-75", "sk_incluir_3d": "pendiente MCP-75",
-    "sk_arco_tangente": "pendiente MCP-94",
-    "sk_alargar": "pendiente MCP-91",
-    "sk_partir": "pendiente MCP-92",
     # --- espacio DIBUJO: lo que no se puede o no hace falta (el resto está en HERRAMIENTAS)
     "Vista de rotura": _GRISADO, "Vista de sección parcial": _GRISADO, "Vista recortada": _GRISADO,
     "Crear boceto": _GRISADO, "Patrón de marcas de centro": _GRISADO, "Extensión de arista": _GRISADO,
     "Cota de línea base": _GRISADO, "Cota en cadena": _GRISADO, "Corte de cota": _GRISADO,
     "Renumerar": _GRISADO, "Exportar DWG": _GRISADO, "Exportar CSV": _GRISADO,
     # --- espacio RENDER
-    "capturar": "pendiente MCP-46",
     "terminar": "cierra el espacio RENDERIZAR de la ventana: no aplica a un agente",
     "Mapeo de texturas": _GRISADO,
-    # --- espacio ANIMACIÓN (ola 1): lo que queda fuera de las herramientas
+    # --- espacio ANIMACIÓN: lo que queda fuera de las herramientas
     "grabar_vista": "grabación interactiva de la cámara (agrega acciones mientras se orbita); set_animation_camera "
                     "agrega la misma acción Vista",
     "Explosión manual": _GRISADO, "Mostrar trayectorias": _GRISADO,

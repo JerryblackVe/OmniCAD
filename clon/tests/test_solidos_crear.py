@@ -752,7 +752,7 @@ def test_patron_rectangular_extension_espaciado_simetrico_y_suprimir():
     assert traslaciones(ts) == [(0, 0, 0), (0, 5, 0), (10, 0, 0), (10, 5, 0), (20, 0, 0), (20, 5, 0)]
     ts = sc.transformaciones_rectangulares((1, 0, 0), 3, 5, distribucion="espaciado", simetrico1=True,
                                            suprimir=[(1, 0), (0, 0)])
-    assert traslaciones(ts) == [(-10, 0, 0), (-5, 0, 0), (0, 0, 0), (10, 0, 0)]
+    assert traslaciones(ts) == [(0, 0, 0), (-5, 0, 0), (-10, 0, 0), (10, 0, 0)]
 
 
 def test_patron_circular_de_6_copias():

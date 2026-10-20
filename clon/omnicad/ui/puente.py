@@ -61,6 +61,9 @@ class PuenteAgentes(QObject):
         self.sesion.vista_boceto = getattr(ventana, "vista_boceto", None)
         self.sesion.vista_calcomania = getattr(ventana, "vista_calcomania", None)
         self.sesion.buscar_en_ventana = getattr(ventana, "buscar_en_ventana", None)
+        self.sesion.capturar_visor = getattr(ventana, "capturar_visor", None)
+        self.sesion.leer_seleccion = getattr(ventana, "leer_seleccion", None)
+        self.sesion.seleccionar_entidades = getattr(ventana, "seleccionar_entidades", None)
         self.sesion.al_cambiar_espacios = getattr(ventana, "releer_espacios", None)
         self._conexiones = {}               # socket → {"buffer": bytearray, "autenticado": bool, "cerrando": bool}
         self._cola = deque()                # (socket, línea) pendientes: se atienden de a uno, sin reentrar

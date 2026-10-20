@@ -33,14 +33,18 @@ def _apoyos(p, estado):
                 salida.append(dict(ap, cuerpo=cuerpo))
         elif e.tipo == "cara" and cuerpo is not None:
             salida.append(dict(fj.apoyo_cara(cuerpo, e.forma, otro_extremo=voltear), cuerpo=cuerpo))
-        elif e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None:
-            d = extra if extra is not None else (e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0]))
+        elif e.tipo == "eje" or (e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None):
+            if e.tipo == "eje":
+                punto, d = ent.como_eje(e)
+            else:
+                punto = e.punto
+                d = extra if extra is not None else (e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0]))
             d = np.asarray(d, float) * (-1 if voltear else 1)
-            salida.append({"punto": np.asarray(e.punto, float), "direccion": d, "diametro": None, "interior": True,
+            salida.append({"punto": np.asarray(punto, float), "direccion": d, "diametro": None, "interior": True,
                            "cuerpo": cuerpo})
         else:
             raise ErrorOperacion("Para colocar una fijación elegí una arista circular, una cara cilíndrica o cónica "
-                                 "o un punto.")
+                                 "o un punto o eje.")
     unicos = []
     for ap in salida:                              # la misma posición elegida dos veces da una sola fijación
         if not any(np.allclose(ap["punto"], u["punto"], atol=1e-6) and np.allclose(ap["direccion"], u["direccion"])

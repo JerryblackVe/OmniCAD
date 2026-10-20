@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Herramientas del grupo "documento": archivo, escena, timeline, deshacer y rehacer."""
 import copy
+import fnmatch
+import math
 import re
 import time
 from pathlib import Path
@@ -170,12 +172,46 @@ def get_scene_info(sesion, summary: bool = False):
 
 @herramienta("select_bodies", "documento", "Selecciona cuerpos en la ventana y los revela en el navegador. "
              "Solo en vivo; una lista vacía limpia la selección. No cambia el documento.")
-def select_bodies(sesion, bodies: list[str]):
-    """bodies: ids o nombres de los cuerpos a seleccionar; [] limpia la selección."""
+def select_bodies(sesion, bodies: list[str] | None = None, by_name: str | None = None,
+                  by_size: dict | None = None, invert: bool = False):
+    """
+    bodies: ids o nombres de los cuerpos; [] limpia la selección. Omitido con filtros = todos; sin filtros = ninguno.
+    by_name: parte del nombre o patrón con * y ?, sin distinguir mayúsculas; se combina con los demás filtros.
+    by_size: límites inclusivos {"min": mm, "max": mm} de la diagonal de la caja envolvente; ambos opcionales.
+    invert: true selecciona el complemento de los cuerpos elegidos por bodies y los filtros.
+    """
     seleccionar = getattr(sesion, "seleccionar_cuerpos", None)
     if seleccionar is None:
         raise error("APP_NOT_RUNNING", "select_bodies necesita la ventana de OmniCAD en vivo.")
-    ids = list(dict.fromkeys(sesion.cuerpo(c).id for c in bodies))
+    todos = sesion.doc.estado_final.cuerpos
+    ids = (list(dict.fromkeys(sesion.cuerpo(c).id for c in bodies)) if bodies is not None
+           else list(todos) if by_name is not None or by_size is not None else [])
+    if by_name is not None:
+        patron = by_name.strip().casefold()
+        if not any(c in patron for c in "*?"):
+            patron = f"*{patron}*"
+        ids = [cid for cid in ids if fnmatch.fnmatchcase(sesion.nombre_cuerpo(todos[cid]).casefold(), patron)]
+    if by_size is not None:
+        if set(by_size) - {"min", "max"}:
+            raise error("INVALID_ARGUMENTS", "by_size solo acepta min y max (mm).")
+        for valor in by_size.values():
+            if (isinstance(valor, bool) or not isinstance(valor, (int, float))
+                    or not math.isfinite(valor) or valor < 0):
+                raise error("INVALID_ARGUMENTS", "Los límites de by_size deben ser números finitos no negativos.")
+        minimo, maximo = by_size.get("min", 0), by_size.get("max", math.inf)
+        if minimo > maximo:
+            raise error("INVALID_ARGUMENTS", "El mínimo de by_size no puede superar el máximo.")
+        elegidos = []
+        for cid in ids:
+            c = todos[cid]
+            caja = c.forma.caja() if getattr(c, "tipo", "solido") == "malla" else geo.caja_envolvente(c.forma)
+            diagonal = math.dist(*caja) if caja else 0.0
+            if minimo <= diagonal <= maximo:
+                elegidos.append(cid)
+        ids = elegidos
+    if invert:
+        elegidos = set(ids)
+        ids = [cid for cid in todos if cid not in elegidos]
     seleccionar(ids)
     return {"selected_bodies": ids}
 
@@ -238,16 +274,23 @@ def _exigir_sin_cambios(sesion, discard):
         raise error("UNSAVED_CHANGES", f"«{sesion.doc.nombre}» tiene cambios sin guardar.")
 
 
-@herramienta("new_document", "documento", "Empieza un documento vacío en lugar del actual. Si el actual tiene cambios "
+@herramienta("new_document", "documento", "Empieza un documento vacío (o el modelo de ejemplo con example=true) en lugar del actual. Si el actual tiene cambios "
              "sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta).", modifica=True,
              transaccion=False)
-def new_document(sesion, name: str = "Sin título", discard: bool = False):
+def new_document(sesion, name: str = "Sin título", discard: bool = False, example: bool = False):
     """
-    name: nombre del documento nuevo.
+    name: nombre del documento nuevo (con example, vacío = «Ejemplo»).
     discard: true para descartar los cambios sin guardar del documento actual.
+    example: true abre el modelo de ejemplo (placa con agujero, aro, parámetros y booleanos) en lugar de uno vacío, como Ayuda › Cargar ejemplo.
     """
     _exigir_sin_cambios(sesion, discard)
-    sesion.nuevo(name)
+    if example:
+        from ..ejemplo import crear_documento_ejemplo
+        sesion.doc = crear_documento_ejemplo()
+        if name != "Sin título":
+            sesion.doc.nombre = name
+    else:
+        sesion.nuevo(name)
     return {"name": sesion.doc.nombre}
 
 

@@ -37,9 +37,11 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap,
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
-from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, circunferencia_3_puntos, dominio,
+from ..restricciones.boceto import (Arco, Circulo, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
+                                    agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
+                                    circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
-                                    primitivas_entidad, puntos_primitiva, validar_valor_cota,
+                                    primitivas_entidad, puntos_espiral, puntos_primitiva, validar_valor_cota,
                                     _validar_opciones_texto)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion
 from . import formato, temas
@@ -823,17 +825,10 @@ class Lienzo(QWidget):
         p = self.b.coords(pid)
         ln = self.b.curvas[linea]
         otro = self.b.coords(ln.p1 if ln.p2 == pid else ln.p2)
-        t = (p[0] - otro[0], p[1] - otro[1])
-        nt = math.hypot(*t) or 1.0
-        t = (t[0] / nt, t[1] / nt)
-        d = (xyf[0] - p[0], xyf[1] - p[1])
-        izquierda = t[0] * d[1] - t[1] * d[0] > 0
-        n = (-t[1], t[0]) if izquierda else (t[1], -t[0])
-        den = 2 * (d[0] * n[0] + d[1] * n[1])
-        if abs(den) < 1e-9:
+        geometria = centro_arco_tangente(p, otro, xyf)
+        if geometria is None:
             return None
-        r = (d[0] ** 2 + d[1] ** 2) / den
-        centro = (p[0] + n[0] * r, p[1] + n[1] * r)
+        centro, izquierda = geometria
         nuevo = {}
 
         def crear():
@@ -848,22 +843,7 @@ class Lienzo(QWidget):
         return None
 
     def _rectangulo_3p(self, a, b, c):
-        (ax, ay), (bx, by), (cx, cy) = a, b, c
-        ux, uy = bx - ax, by - ay
-        L = math.hypot(ux, uy)
-        if L < 1e-9:
-            raise ErrorBoceto("Los dos primeros puntos coinciden.")
-        nx, ny = -uy / L, ux / L
-        w = (cx - ax) * nx + (cy - ay) * ny
-        if abs(w) < 1e-9:
-            raise ErrorBoceto("El rectángulo no puede tener ancho cero.")
-        esquinas = [self.b.agregar_punto(ax, ay), self.b.agregar_punto(bx, by),
-                    self.b.agregar_punto(bx + nx * w, by + ny * w), self.b.agregar_punto(ax + nx * w, ay + ny * w)]
-        ls = [self.b.agregar_linea(esquinas[i], esquinas[(i + 1) % 4], self.construccion) for i in range(4)]
-        self.b.agregar_restriccion("perpendicular", [ls[0], ls[1]])
-        self.b.agregar_restriccion("paralela", [ls[0], ls[2]])
-        self.b.agregar_restriccion("paralela", [ls[1], ls[3]])
-        return ls
+        return agregar_rectangulo_3p(self.b, a, b, c, self.construccion)
 
     def _poligono(self, centro, vertice, lados, tipo, centro_pid=None):
         r, esquinas = _vertices_poligono(centro, vertice, lados, tipo)
@@ -922,18 +902,7 @@ class Lienzo(QWidget):
         self.aplicar_cambio(lambda: self.b.agregar_ranura(tipo, puntos, ancho, self.construccion))
 
     def _espiral(self, centro, inicio, vueltas, paso):
-        r0 = math.dist(centro, inicio)
-        a0 = math.atan2(inicio[1] - centro[1], inicio[0] - centro[0])
-        if vueltas <= 0:
-            raise ErrorBoceto("La espiral necesita al menos una fracción de vuelta.")
-        n = max(4, int(math.ceil(8 * vueltas)))
-        pts = []
-        for i in range(n + 1):
-            th = 2 * math.pi * vueltas * i / n
-            r = r0 + paso * th / (2 * math.pi)
-            pts.append((centro[0] + r * math.cos(a0 + th), centro[1] + r * math.sin(a0 + th)))
-        if r0 < 1e-9 and paso <= 0:
-            raise ErrorBoceto("La espiral necesita un radio o un paso.")
+        pts = puntos_espiral(centro, inicio, vueltas, paso)
         return self.b.agregar_spline(pts, "ajuste", 3, False, construccion=self.construccion)
 
     def _procesar_clics(self):
@@ -950,13 +919,8 @@ class Lienzo(QWidget):
                 self.clics = []
         elif h == "linea_medio" and len(c) == 2:
             (pm, m), (pe, e) = c
-            inicio = (2 * m[0] - e[0], 2 * m[1] - e[1])
-
-            def crear():
-                lid = self.b.agregar_linea(inicio, pe if pe is not None else e, self.construccion)
-                medio = pm if pm is not None else self.b.agregar_punto(*m)
-                self.b.agregar_restriccion("punto_medio", [medio, lid])
-            self.aplicar_cambio(crear)
+            self.aplicar_cambio(lambda: agregar_linea_medio(self.b, pm if pm is not None else m,
+                                                            pe if pe is not None else e, self.construccion))
             self.clics = []
         elif h == "rectangulo" and len(c) == 2:
             (p1, a), (p2, b) = c
@@ -974,14 +938,8 @@ class Lienzo(QWidget):
             self.clics = []
         elif h == "rectangulo_centro" and len(c) == 2:
             (pc, m), (_, k) = c
-            a, b = (2 * m[0] - k[0], 2 * m[1] - k[1]), k
-
-            def crear():
-                ls = self.b.agregar_rectangulo(a, b, self.construccion)
-                d1 = self.b.agregar_linea(self.b.curvas[ls[0]].p1, self.b.curvas[ls[2]].p1, True)
-                self.b.agregar_linea(self.b.curvas[ls[1]].p1, self.b.curvas[ls[3]].p1, True)
-                self.b.agregar_restriccion("punto_medio", [pc if pc is not None else self.b.agregar_punto(*m), d1])
-            self.aplicar_cambio(crear)
+            self.aplicar_cambio(lambda: agregar_rectangulo_centro(self.b, pc if pc is not None else m, k,
+                                                                  self.construccion))
             self.clics = []
         elif h == "circulo" and len(c) == 2:
             (pc, a), (_, b) = c
@@ -2877,21 +2835,7 @@ class Lienzo(QWidget):
         self._instantanea()
 
     def _cambiar_radio(self, b, cid, radio):
-        c = b.curvas[cid]
-        if isinstance(c, Circulo):
-            c.radio = radio
-            return None
-        cx, cy = b.coords(c.centro)
-        fijos = b.puntos_fijos()
-        movidos = []
-        for pid in (c.inicio, c.fin):
-            if pid in fijos:
-                continue
-            p = b.puntos[pid]
-            d = math.hypot(p.x - cx, p.y - cy) or 1.0
-            p.x, p.y = cx + (p.x - cx) * radio / d, cy + (p.y - cy) * radio / d
-            movidos.append(pid)
-        return movidos[0] if movidos else None
+        return cambiar_radio(b, cid, radio)
 
     def _modo_arrastre(self, cid):
         """"radio" si arrastrar la curva puede cambiar el radio (está libre); si no, "mover"."""

@@ -1180,10 +1180,44 @@ class VentanaPrincipal(QMainWindow):
     def releer_espacios(self):
         """Cada espacio abierto vuelve a leer `doc.espacios` si cambió por fuera (una herramienta del agente,
         deshacer o rehacer): si no, su copia vieja pisaría el cambio la próxima vez que se guarde (MCP-0c)."""
+        self.aplicar_estado_visor()
         for clave, w in list(self._espacios.items()):
             datos = self.doc.espacios.get(clave)
             if datos and w.doc is self.doc and hasattr(w, "desde_dict") and datos != w.a_dict():
                 w.desde_dict(datos)
+
+    def aplicar_estado_visor(self):
+        """Lo que un agente deja en `doc.espacios["visor"]` (set_visual_style, set_view, set_grid) se ve en la ventana;
+        al borrarlo (clear o deshacer) vuelve a lo que eligió la persona en las preferencias. Solo se toca lo que
+        cambió: no pisa la cámara que la persona movió. La oclusión ambiental solo existe en las imágenes de la API."""
+        from ..nucleo.render_estilos import ESTILOS as ESTILOS_API
+        datos = self.doc.espacios.get("visor") or {}
+        previo, self._visor_aplicado = getattr(self, "_visor_aplicado", {}), datos
+        c, p = self.visor.config, self.prefs
+        estilo = datos.get("estilo") or {}
+        if estilo != (previo.get("estilo") or {}):
+            c.estilo_visual = p["vista/estilo_visual"] if p["vista/estilo_visual"] in ESTILOS else "sombreado_aristas"
+            c.entorno = p["vista/entorno"] if p["vista/entorno"] in ENTORNOS else "tema"
+            c.efectos = {k: p[f"vista/efecto_{k}"] for k in EFECTOS}
+            if estilo.get("estilo") in ESTILOS_API:
+                c.estilo_visual = ESTILOS_API[estilo["estilo"]]
+            if estilo.get("entorno") in ENTORNOS:
+                c.entorno = estilo["entorno"]
+            for clave_api, clave in (("sombras", "sombra_suelo"), ("reflejos", "reflejo"), ("suelo", "suelo")):
+                if clave_api in (estilo.get("efectos") or {}):
+                    c.efectos[clave] = bool(estilo["efectos"][clave_api])
+            self.barra_nav.set_estilo(c.estilo_visual)
+        rejilla = datos.get("rejilla") or {}
+        if rejilla != (previo.get("rejilla") or {}):
+            c.rejilla = bool(rejilla["mostrar"]) if "mostrar" in rejilla else p["vista/rejilla"]
+        cam = datos.get("camara")
+        if cam and cam != previo.get("camara"):
+            self.visor.R = np.asarray(cam["R"], float)
+            self.visor.objetivo = np.asarray(cam["objetivo"], float)
+            self.visor.distancia = float(cam["distancia"])
+            c.camara = "ortografica" if cam.get("ortografica") else "perspectiva"
+        for v in self.area.visores:
+            v.update()
 
     # ------------------------------------------------------------ ADMINISTRAR / CONFIGURAR / UTILIDADES
     def lista_materiales(self):
@@ -1464,6 +1498,41 @@ class VentanaPrincipal(QMainWindow):
         if self.panel is not None or self.modo_boceto.activo:
             raise error("APP_BUSY", "Terminá el comando o el boceto antes de cambiar la selección.")
         self._seleccionar(self._hits_cuerpos(ids))
+
+    def leer_seleccion(self):
+        """Referencias de lo elegido ahora (get_selection)."""
+        return [h["ref"] for h in self.seleccion]
+
+    def seleccionar_entidades(self, refs, modo="replace"):
+        """Elige por referencia caras, aristas, perfiles o cuerpos (select_entities), como el clic del visor:
+        `modo` replace cambia la selección, add suma a la actual y remove la resta."""
+        from ..api.errores import error
+        if self.panel is not None or self.modo_boceto.activo:
+            raise error("APP_BUSY", "Terminá el comando o el boceto antes de cambiar la selección.")
+        actuales = self.leer_seleccion()
+        if modo == "add":
+            refs = actuales + [r for r in refs if r not in actuales]
+        elif modo == "remove":
+            refs = [r for r in actuales if r not in refs]
+        from .comando import hit_desde_ref
+        estado = self._estado_visible()
+        self._seleccionar([hit_desde_ref(r, estado) for r in refs])
+
+    def capturar_visor(self, ancho=None, alto=None):
+        """(PNG, ancho, alto) de la vista 3D tal como se ve ahora (capture_viewport); con ancho y alto la reescala."""
+        from PySide6.QtCore import QBuffer, QIODevice
+        imagen = self.visor.grabFramebuffer()
+        if imagen.isNull():                       # el contexto GL todavía no dibujó (ventana recién abierta u oculta)
+            imagen = self.visor.grab().toImage()
+        if imagen.isNull():
+            from ..api.errores import error
+            raise error("APP_BUSY", "La vista 3D todavía no tiene imagen: esperá a que la ventana termine de abrir.")
+        if ancho and alto and (ancho, alto) != (imagen.width(), imagen.height()):
+            imagen = imagen.scaled(ancho, alto, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        buf = QBuffer()
+        buf.open(QIODevice.WriteOnly)
+        imagen.save(buf, "PNG")
+        return bytes(buf.data()), imagen.width(), imagen.height()
 
     def mostrar_elementos(self, ids, visible):
         from .acciones_navegador import mostrar

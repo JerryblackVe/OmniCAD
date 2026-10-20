@@ -32,7 +32,7 @@ from ..nucleo import geometria as geo
 from ..timeline.operaciones import Contexto
 from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpComponente, OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion,
-                                      OpUnion, OpVinculoMovimiento)
+                                      OpUnion, OpVinculoMovimiento, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -167,6 +167,12 @@ def _origen(sesion, spec, body=None):
     """Referencia persistente de un origen de unión: cara o arista (selector o id), un paso de construcción (origen de
     unión, plano, eje o punto, por id o nombre) o un plano de origen. Devuelve (referencia, cuerpo o None)."""
     body = _cuerpo_de(sesion, body)
+    if sl.es_punto3(spec):                       # un vértice, por sus coordenadas
+        c, ref, _v = sl.vertice_cercano(sesion, spec, body)
+        return ref, c
+    if isinstance(spec, dict) and "sketch" in spec:     # punto o curva de un boceto: {"sketch", "point"|"curve"}
+        from .herramientas_avanzado import _de_boceto
+        return _de_boceto(sesion, "origen", spec)[0], None
     if not isinstance(spec, str) or not spec.strip():
         raise error("INVALID_ARGUMENTS", "Falta el origen de la unión: una cara o arista (selector o id de find_faces "
                     "/ find_edges) o un origen de unión.")
@@ -460,15 +466,15 @@ def _crear_union(sesion, nombre, params):
              "Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. Devuelve la unión "
              "y los componentes que se movieron con su traslación y caja envolvente. En uniones con deslizamiento "
              "avisa si el componente se movió (snap al centro de cada cara).", modifica=True)
-def create_joint(sesion, origin1: str, origin2: str, joint_type: TipoUnion = "rigid", body1: str | None = None,
+def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] | dict, joint_type: TipoUnion = "rigid", body1: str | None = None,
                  body2: str | None = None, snap1: Snap = "center", snap2: Snap = "center", angle: Expr = 0,
                  offset: list[Expr] | None = None, flip: bool = False, rotation_axis: Eje = "Z", slide_axis: Eje = "X",
                  rotation: Expr | None = None, rotation2: Expr | None = None, rotation3: Expr | None = None,
                  slide: Expr | None = None, slide2: Expr | None = None, minimum: Expr | None = None,
                  maximum: Expr | None = None, name: str | None = None):
     """
-    origin1: dónde se toma el componente que SE MUEVE: cara o arista (selector o id), del cuerpo body1.
-    origin2: dónde va: cara o arista de otro componente (o de la raíz), origen de unión, plano, eje o punto de construcción.
+    origin1: dónde se toma el componente que SE MUEVE: cara o arista (selector o id), o un vértice por sus coordenadas [x, y, z], del cuerpo body1.
+    origin2: dónde va: cara o arista de otro componente (o de la raíz), un vértice [x, y, z], un punto o una curva de boceto {"sketch", "point" | "curve"}, origen de unión, plano, eje o punto de construcción.
     joint_type: "rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar" o "ball".
     body1: cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin1; con un id no hace falta.
     body2: cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin2.
@@ -510,13 +516,13 @@ def create_joint(sesion, origin1: str, origin2: str, joint_type: TipoUnion = "ri
              "de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del "
              "marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 "
              "lo sigue. Sin component2, la unión es contra la raíz. " + _DESC_TIPOS, modifica=True)
-def create_as_built_joint(sesion, origin: str, component2: str | None = None, joint_type: TipoUnion = "revolute",
+def create_as_built_joint(sesion, origin: str | list[float], component2: str | None = None, joint_type: TipoUnion = "revolute",
                           body: str | None = None, snap: Snap = "center", rotation_axis: Eje = "Z",
                           slide_axis: Eje = "X", rotation: Expr | None = None, rotation2: Expr | None = None,
                           rotation3: Expr | None = None, slide: Expr | None = None, slide2: Expr | None = None,
                           minimum: Expr | None = None, maximum: Expr | None = None, name: str | None = None):
     """
-    origin: cara o arista del componente que se mueve (selector evaluado sobre body, o id); define el marco del movimiento.
+    origin: cara o arista del componente que se mueve (selector evaluado sobre body, o id), o un vértice por sus coordenadas [x, y, z]; define el marco del movimiento.
     component2: componente al que queda ligado (id, nombre o uno de sus cuerpos); vacío = la raíz.
     joint_type: "rigid", "revolute", "slider", "cylindrical", "pin_slot", "planar" o "ball".
     body: cuerpo (o componente de un solo cuerpo) donde se evalúa el selector de origin.
@@ -557,10 +563,10 @@ def create_as_built_joint(sesion, origin: str, component2: str | None = None, jo
 @herramienta("create_joint_origin", "ensamble", "Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco "
              "(punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de "
              "create_joint. Sobre un cilindro o una arista circular sigue siendo un marco de eje.", modifica=True)
-def create_joint_origin(sesion, geometry: str, body: str | None = None, snap: Snap = "center", angle: Expr = 0,
+def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | None = None, snap: Snap = "center", angle: Expr = 0,
                         offset: list[Expr] | None = None, name: str | None = None):
     """
-    geometry: cara o arista donde va el origen (selector evaluado sobre body, o id de find_faces / find_edges).
+    geometry: cara o arista donde va el origen (selector evaluado sobre body, o id de find_faces / find_edges), un vértice [x, y, z] o un punto o una curva de boceto {"sketch", "point" | "curve"}.
     body: cuerpo (o componente de un solo cuerpo) donde se evalúa el selector.
     snap: punto en una arista o cilindro: "center", "start" o "end".
     angle: giro del marco alrededor de su Z, en grados.
@@ -605,6 +611,7 @@ def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | 
                       "unión y no se cambió nada. Accioná esa.")
         return {"joint": info_union(sesion, op), "moved_components": []}
     antes = _matrices(sesion)
+    nuevos["accionada"] = siguiente_accion(sesion.doc.operaciones)
     sesion.doc.reemplazar(op.id, OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **nuevos)))
     return {"joint": info_union(sesion, sesion.doc.operacion(op.id)), "moved_components": _movidos(sesion, antes)}
 
@@ -689,6 +696,7 @@ def _simular(doc, op, params):
         valores = {}
     estado = doc.estado_en(i)
     avisos, fallo = [], None
+    params = dict(params, accionada=siguiente_accion(doc.operaciones))
     for j in range(i, doc.marcador):
         o = OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **params)) if j == i else doc.operaciones[j].copia()
         if o.suprimida:

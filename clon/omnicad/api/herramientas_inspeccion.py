@@ -14,6 +14,7 @@ import numpy as np
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
 from ..nucleo import render_cpu as rc
+from ..nucleo import render_estilos as rs
 from ..timeline import aspectos_doc as ad
 from ..timeline import ops_chapa
 from ..timeline.operaciones import propiedades_cuerpo
@@ -60,11 +61,16 @@ def _nombre_y_id(sesion, c):
 
 
 # ---------------------------------------------------------------- imagen
-def _objetos_render(sesion, cuerpos, cam=None, alto=600, cajas=None):
+def _objetos_render(sesion, cuerpos, cam=None, alto=600, cajas=None, colores_componente=False):
     """Los mismos objetos que arma el render de la app (`render_cpu.malla_suave` y `color_y_acabado`,
     con deflexión automática por pieza y, si hay cámara, por tamaño en píxeles)."""
     objetos = []
+    # Misma paleta que ui.visor3d, sin importar Qt en la API.
+    paleta = [(0.62, 0.68, 0.76), (0.80, 0.62, 0.45), (0.55, 0.75, 0.58),
+              (0.75, 0.58, 0.78), (0.85, 0.80, 0.50), (0.55, 0.72, 0.82)]
+    colores = {cid: paleta[i % len(paleta)] for i, cid in enumerate(sesion.doc.estado_final.componentes)}
     for c in cuerpos:
+        inicio = len(objetos)
         props = propiedades_cuerpo(sesion.doc.propiedades, c)
         pintadas = [(cara, p) for r, p in ad.caras_propias(props)
                     if (cara := ad.cara_de(sesion.doc.estado_final, r)) is not None]
@@ -77,12 +83,59 @@ def _objetos_render(sesion, cuerpos, cam=None, alto=600, cajas=None):
         opacidad = float(sesion.doc.propiedad(c.id, "opacidad", 1.0))
         if len(v):
             color, acabado = rc.color_y_acabado(c, props)
-            objetos.append({"v": v, "n": n, "color": color, "acabado": acabado, "opacidad": opacidad})
+            objetos.append({"v": v, "n": n, "color": color, "acabado": acabado, "opacidad": opacidad, "cuerpo": c.id})
         for (_cara, p), (cv, cn) in zip(pintadas, partes, strict=True):       # cada cara con aspecto propio, aparte
             if len(cv):
                 color, acabado = rc.color_y_acabado_cara(c, props, p)
-                objetos.append({"v": cv, "n": cn, "color": color, "acabado": acabado, "opacidad": opacidad})
+                objetos.append({"v": cv, "n": cn, "color": color, "acabado": acabado, "opacidad": opacidad,
+                                "cuerpo": c.id})
+        if colores_componente and c.componente in colores:
+            for objeto in objetos[inicio:]:
+                objeto["color"] = colores[c.componente]
     return objetos
+
+
+def _con_analisis(sesion, objetos, cam, alto, analisis):
+    """Los objetos con los análisis dibujados como los dibuja la ventana: mallas de colores que reemplazan a un cuerpo,
+    colores que dependen de la cámara (cebra, mapa de entorno), recorte por planos y capas (tapas, líneas).
+    `analisis`: nombres, [] ninguno, None = los visibles del documento. Devuelve (objetos, cortes, nombres)."""
+    from ..timeline import analisis_vista as av
+    doc = sesion.doc
+    explicitos = analisis is not None
+    nombres = list(analisis) if explicitos else [n for n, a in doc.analisis.items() if a.get("visible", True)]
+    for n in nombres:
+        if n not in doc.analisis:
+            raise error("INVALID_ARGUMENTS", f"No existe el análisis «{n}».",
+                        f"Existen: {', '.join(doc.analisis) or 'ninguno'}.")
+    resultados, aplicados = [], []
+    for n in nombres:
+        a = doc.analisis[n]
+        try:
+            resultados.append(av.calcular(a["tipo"], a["params"], doc.estado_final))
+            aplicados.append(n)
+        except Exception as e:  # noqa: BLE001 — como la ventana: un análisis cuya referencia se perdió no rompe la imagen
+            if explicitos:
+                raise error("OPERATION_FAILED", f"No se pudo calcular el análisis «{n}»: {e}") from e
+            sesion.avisar(f"Análisis «{n}» omitido: {e}")
+    if not resultados:
+        return objetos, [], []
+    datos = av.combinar(resultados)
+    salida = []
+    for o in objetos:
+        if o.get("cuerpo") in datos["mallas"]:
+            continue
+        if datos["colores"] is not None:
+            o = dict(o, colores=np.asarray(datos["colores"](np.asarray(o["n"], float), np.asarray(cam["R"], float)[2]),
+                                           float))
+        salida.append(o)
+    for cid, (v, n, c) in datos["mallas"].items():
+        base = next((o for o in objetos if o.get("cuerpo") == cid), None)
+        if base is not None and len(v):
+            salida.append(dict(base, v=v, n=n, colores=c, acabado={}))
+    cortes = datos["cortes"]
+    if cortes:
+        salida = rs.recortar(salida, cortes)
+    return salida + rs.capas_a_objetos(datos["capas"], cam, alto), cortes, aplicados
 
 
 def _esquinas(cajas):
@@ -114,35 +167,55 @@ def _camara(atras, puntos, aspecto, fov):
 @herramienta("get_viewport_image", "inspeccion", "Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y "
              "suelo) desde una vista estándar o una dirección propia. Usa Rust si está disponible, con respaldo "
              "Python (OMNICAD_SIN_RUST=1 lo fuerza). Es la forma de VER el resultado.")
-def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bottom", "left", "right"] = "iso",
+def get_viewport_image(sesion, view: str | None = None,
                        width: int = 640, height: int = 480, bodies: list[str] | None = None, fit: bool = True,
                        direction: list[float] | None = None,
-                       lighting: Literal["three_point", "key_only"] = "three_point"):
+                       lighting: Literal["three_point", "key_only"] = "three_point",
+                       camera: Literal["perspective", "orthographic"] | None = None, component_colors: bool = False,
+                       style: Literal["shaded", "shaded_hidden_edges", "shaded_visible_edges", "wireframe",
+                                      "wireframe_hidden_edges", "wireframe_visible_edges"] | None = None,
+                       analysis: list[str] | None = None):
     """
     view: vista estándar: las caras del ViewCube de Fusion con Z arriba, nombradas por los ejes del MUNDO (no por
         el frente de la pieza). "front": cámara en -Y, se ve la cara -Y con +X a la derecha; "back": cámara en +Y;
         "right": cámara en +X, se ve la cara +X con +Y a la derecha; "left": cámara en -X; "top": cámara en +Z,
         X a la derecha e Y hacia arriba; "bottom": cámara en -Z; "iso": esquina frente-derecha-arriba. Si la
-        pieza mira hacia otro eje, usá direction.
+        pieza mira hacia otro eje, usá direction. También acepta nombres de vistas guardadas; omitida usa set_view o iso.
     width: ancho de la imagen en píxeles (16 a 2048).
     height: alto de la imagen en píxeles (16 a 2048).
-    bodies: ids o nombres de los cuerpos a dibujar; vacío = todos.
+    bodies: ids o nombres de los cuerpos a dibujar (también los ocultos); vacío = todos los visibles.
     fit: true encuadra los cuerpos dibujados; false encuadra TODA la escena aunque se dibuje solo una parte
         (sirve para comparar imágenes con el mismo encuadre).
     direction: [x, y, z] vector desde el modelo HACIA la cámara (Z es arriba); si se pasa, reemplaza a view.
     lighting: "three_point" (por defecto) = iluminación de tres puntos (luz principal, relleno y contorno);
         "key_only" = solo la luz principal. No depende de Preferencias › Gráficos › «Iluminación de la vista»
         (esa opción es la del visor de la ventana).
+    camera: perspective u orthographic; omitida conserva la cámara guardada o usa perspectiva.
+    component_colors: pinta cada componente con un color de la paleta del visor; las piezas sueltas conservan su aspecto.
+    style: estilo visual (los seis de Fusion: shaded, shaded_hidden_edges, shaded_visible_edges, wireframe, wireframe_hidden_edges, wireframe_visible_edges); omitido usa el de set_visual_style (shaded de fábrica). Las aristas son las exactas de los cuerpos: una malla no las tiene.
+    analysis: nombres de los análisis a dibujar (manage_analysis los lista); [] ninguno; omitido dibuja los visibles del documento, como la ventana.
     """
     for nombre, valor in (("width", width), ("height", height)):
         if not _LADO_MINIMO <= valor <= _LADO_MAXIMO:
             raise error("INVALID_ARGUMENTS", f"{nombre} tiene que estar entre {_LADO_MINIMO} y {_LADO_MAXIMO} píxeles.")
-    atras, vista = _VISTAS[view], view
+    from .herramientas_visor import _vista_guardada
+    datos = sesion.doc.espacios.get("visor") or {}
+    cam_guardada = datos.get("camara")
+    atras, vista = _VISTAS.get(view or "iso", _VISTAS["iso"]), view or ("custom" if cam_guardada else "iso")
+    if view is not None and view not in _VISTAS and direction is None:
+        cam_guardada = _vista_guardada(sesion, view)
+    elif view is not None or direction is not None:
+        cam_guardada = None
     if direction is not None:
         if len(direction) != 3 or not all(math.isfinite(x) for x in direction) or not any(direction):
             raise error("INVALID_ARGUMENTS", "direction tiene que ser [x, y, z] con números y no todos cero.")
-        atras, vista = direction, "custom"
+        atras, vista = np.asarray(direction) / max(abs(x) for x in direction), "custom"
     cuerpos = _cuerpos(sesion, bodies)
+    if datos.get("patron_activo") in sesion.doc.estado_final.cuerpos:
+        cuerpos = [sesion.doc.estado_final.cuerpos[datos["patron_activo"]]]
+    elif not bodies:                                # los cuerpos pedidos por nombre se dibujan aunque estén ocultos
+        ocultos = set(sesion.doc.propiedad("__navegador__", "ocultos", []))
+        cuerpos = [c for c in cuerpos if c.id not in ocultos and c.componente not in ocultos]
     todos = list(sesion.doc.estado_final.cuerpos.values())
     cajas = {c.id: geo.caja_envolvente(c.forma) if not _es_malla(c) else c.forma.caja()
              for c in (cuerpos if fit else todos)}
@@ -150,12 +223,23 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
         raise error("NOTHING_TO_RENDER", "No hay cuerpos para dibujar.")
     pts = _esquinas([b for b in cajas.values() if b])
     t0 = time.perf_counter()
-    escena = rc.escena_normalizada(None)
-    cam, _ = _camara(atras, pts, width / height, rc.focal_a_fov(escena["focal"]))
-    objetos = _objetos_render(sesion, cuerpos, cam, height, cajas)
+    from .herramientas_analisis import estilo_guardado
+    guardado = estilo_guardado(sesion)
+    escena = rc.escena_normalizada(({"entorno": guardado["entorno"]} if guardado["entorno"] else {}) | guardado["efectos"])
+    cielo = rc.cielo_de(escena["entorno"]) if guardado["entorno"] else None
+    estilo = style or guardado["estilo"]
+    cam = dict(cam_guardada) if cam_guardada else _camara(atras, pts, width / height, rc.focal_a_fov(escena["focal"]))[0]
+    if camera is not None:
+        cam["ortografica"] = camera == "orthographic"
+    objetos = _objetos_render(sesion, cuerpos, cam, height, cajas, component_colors)
     if not objetos:
         raise error("NOTHING_TO_RENDER", "Los cuerpos elegidos no tienen caras para dibujar.")
+    objetos, cortes, aplicados = _con_analisis(sesion, objetos, cam, height, analysis)
+    if not objetos:
+        raise error("NOTHING_TO_RENDER", "Los cortes de los análisis dejaron la escena vacía.")
     z_suelo = min(float(o["v"][:, 2].min()) for o in objetos)
+    if datos.get("rejilla", {}).get("mostrar"):
+        objetos.append(_rejilla(cam, z_suelo, height))
     k = min(2.0, max(1.0, math.sqrt(_PIXELES_RENDER / (width * height))))
     w, h = round(width * k), round(height * k)
     res = int(min(2048, max(512, 2 ** math.ceil(math.log2(max(w, h) * 1.5)))))
@@ -163,8 +247,15 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
     ids = {c.id for c in cuerpos}
     calcomanias = [d for _i, d in calcomanias_vigentes(sesion.doc, sesion.doc.estado_final)
                   if d.get("calcomania") and d.get("cuerpo") in ids]
-    rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, z_suelo=z_suelo, res_sombras=res, mosaico=2048,
-                         n_luces=1 if lighting == "key_only" else 3, calcomanias=calcomanias)
+    opciones = dict(z_suelo=z_suelo, res_sombras=res, mosaico=2048, n_luces=1 if lighting == "key_only" else 3,
+                    calcomanias=calcomanias)
+    if estilo == "shaded":
+        rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, cielo=cielo, **opciones)
+    else:
+        aristas = rs.segmentos_de_polilineas([p for c in cuerpos if not _es_malla(c)
+                                              for p in geo.polilineas_aristas(c.forma)])
+        rgba = rs.aplicar_estilo(estilo, objetos, rs.recortar_segmentos(aristas, cortes) if cortes else aristas, cam,
+                                 escena, w, h, cielo=cielo, **opciones)
     from PIL import Image                            # Pillow: ya lo usa render_cpu.guardar_png
     imagen = Image.fromarray(np.ascontiguousarray(rgba[..., :3]), "RGB")
     if (w, h) != (width, height):
@@ -172,7 +263,30 @@ def get_viewport_image(sesion, view: Literal["iso", "front", "back", "top", "bot
     buf = io.BytesIO()
     imagen.save(buf, "PNG", compress_level=3)
     return {"image": Imagen(buf.getvalue(), width, height), "view": vista, "bodies": [c.id for c in cuerpos],
-            "seconds": round(time.perf_counter() - t0, 2)}
+            "style": estilo, "analyses": aplicados, "seconds": round(time.perf_counter() - t0, 2)}
+
+
+def _rejilla(cam, suelo, alto):
+    """Franjas finas sobre el suelo: el rasterizador resuelve su oclusión por las piezas."""
+    paso = 10 ** math.floor(math.log10(cam["distancia"] / 5))
+    centro = np.round(np.asarray(cam["objetivo"][:2]) / paso) * paso
+    radio = 20 * paso
+    fino = cam["distancia"] * math.tan(math.radians(cam["fov"]) / 2) / alto * 0.4
+    z = suelo + paso * 1e-5
+    vertices = []
+    for eje in (0, 1):
+        for i in range(-20, 21):
+            a, b = centro.copy(), centro.copy()
+            a[eje] += i * paso
+            b[eje] += i * paso
+            a[1 - eje] -= radio
+            b[1 - eje] += radio
+            d = np.zeros(2)
+            d[eje] = fino
+            p = [(float(x), float(y), z) for x, y in (a - d, b - d, b + d, a + d)]
+            vertices.extend([p[0], p[1], p[2], p[0], p[2], p[3]])
+    v = np.asarray(vertices)
+    return {"v": v, "n": np.tile([0., 0., 1.], (len(v), 1)), "color": (0.45, 0.48, 0.52), "acabado": {}}
 
 
 # ---------------------------------------------------------------- propiedades físicas
@@ -283,27 +397,35 @@ def _elemento(sesion, ref, body=None):
 @herramienta("measure_distance", "inspeccion", "Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista "
              "o un punto. Caras y aristas se dan por id (find_faces / find_edges) o por selector (>Z elige sobre las caras; "
              "edges:|Z sobre las aristas; con varios cuerpos, body dice en cuál se evalúan los selectores). Devuelve la "
-             "distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b.")
-def measure_distance(sesion, a: str | list[float], b: str | list[float], body: str | None = None):
+             "distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b; con center_to_center, la de centro a centro.")
+def measure_distance(sesion, a: str | list[float], b: str | list[float], body: str | None = None,
+                     center_to_center: bool = False):
     """
     a: cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
     b: cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
     body: id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids y los nombres de cuerpo no lo necesitan.
+    center_to_center: true mide de centro a centro (opción «Centro a centro» de Fusion): a y b tienen que ser círculos, arcos o cilindros; distance y los puntos son entonces los de los centros, y se agrega center_to_center con las distancias mínima y máxima según los diámetros.
     """
     ea, da = _resolver_ref(sesion, a, body)
     eb, db = _resolver_ref(sesion, b, body)
-    m = an.medir(ea, eb)
-    return {"distance": _r(m["distancia"]), "point_a": [_r(x) for x in m["punto_a"]],
+    try:
+        m = an.medir(ea, eb, centro_a_centro=center_to_center)
+    except geo.ErrorGeometria as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from None
+    centros = {"center_to_center": {k: ([_r(x) for x in v] if isinstance(v, (list, tuple)) else _r(v))
+                                    for k, v in m["centro_a_centro"].items()}} if "centro_a_centro" in m else {}
+    return {**centros, "distance": _r(m["distancia"]), "point_a": [_r(x) for x in m["punto_a"]],
             "point_b": [_r(x) for x in m["punto_b"]], "delta": [_r(x) for x in m["delta"]],
             "intersecting": m["distancia"] < 1e-6, "a": da, "b": db}
 
 
 # ---------------------------------------------------------------- interferencias
 @herramienta("check_interference", "inspeccion", "Busca pares de cuerpos sólidos que se superponen y devuelve cada par "
-             "con el volumen común (mm³) y su caja envolvente. Los que solo se tocan por una cara no cuentan.")
-def check_interference(sesion, bodies: list[str] | None = None):
+             "con el volumen común (mm³) y su caja envolvente. Los que solo se tocan por una cara no cuentan, salvo con coincident_faces.")
+def check_interference(sesion, bodies: list[str] | None = None, coincident_faces: bool = False):
     """
     bodies: ids o nombres de los cuerpos a comparar entre sí; vacío = todos los sólidos.
+    coincident_faces: true también informa los pares que solo se tocan por caras coincidentes (opción «Incluir caras coincidentes»): volume 0, area de contacto y coincident=true.
     """
     cuerpos = _cuerpos(sesion, bodies)
     solidos = [c for c in cuerpos if _es_solido(c)]
@@ -314,10 +436,11 @@ def check_interference(sesion, bodies: list[str] | None = None):
         sesion.avisar("Hacen falta al menos 2 cuerpos sólidos para buscar interferencias.")
     por_id = {c.id: c for c in solidos}
     pares = []
-    for i in an.interferencias({c.id: c.forma for c in solidos}):
+    for i in an.interferencias({c.id: c.forma for c in solidos}, caras_coincidentes=coincident_faces):
         caja = geo.caja_envolvente(i["forma"])
         pares.append({"a": _nombre_y_id(sesion, por_id[i["a"]]), "b": _nombre_y_id(sesion, por_id[i["b"]]),
-                      "volume": _r(i["volumen"]),
+                      "volume": _r(i["volumen"]), "coincident": i["coincidente"],
+                      **({"area": _r(i["area"])} if i["coincidente"] else {}),
                       "bounding_box": None if not caja else {"min": [_r(x) for x in caja[0]],
                                                               "max": [_r(x) for x in caja[1]]}})
     return {"checked": len(solidos), "count": len(pares), "pairs": pares, "interference": bool(pares)}

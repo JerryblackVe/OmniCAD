@@ -82,23 +82,64 @@ def manage_browser(sesion, action: Literal["create_group", "create_set", "move",
     return {"id": ident, **get_browser_state(sesion)}
 
 
-@herramienta("set_browser_visibility", "documento", "Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. "
-             "Sin items, muestra todo. No modifica geometría.")
+@herramienta("set_browser_visibility", "documento", "Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo, "
+             "y los análisis (por su nombre: se guarda en el documento, sin ventana). Sin items, muestra todo. No "
+             "modifica geometría.")
 def set_browser_visibility(sesion, items: list[str] | None = None, visible: bool = True):
     """
-    items: ids de cuerpos, componentes, bocetos, calcomanías o grupos; vacío muestra todo.
+    items: ids de cuerpos, componentes, bocetos, calcomanías o grupos, o nombres de análisis (get_scene_info / manage_analysis los lista); vacío muestra todo.
     visible: true muestra; false oculta los elementos pedidos.
     """
-    mostrar = getattr(sesion, "mostrar_elementos", None)
-    if mostrar is None:
-        raise error("APP_NOT_RUNNING", "La visibilidad del navegador necesita la ventana en vivo.")
-    grupos = datos_navegador(sesion.doc)["grupos"]
+    doc = sesion.doc
+    analisis = [i for i in items or [] if i in doc.analisis]
+    resto = [i for i in items or [] if i not in analisis]
     ids = []
-    for ident in items or []:
-        ids.extend(grupos[ident]["miembros"] if ident in grupos else [ident])
-    ids = _elementos(sesion, ids)
-    mostrar(ids, visible)
-    return {"items": ids, "visible": visible}
+    if not items or resto:
+        mostrar = getattr(sesion, "mostrar_elementos", None)
+        if mostrar is None:
+            raise error("APP_NOT_RUNNING", "La visibilidad del navegador necesita la ventana en vivo.")
+        grupos = datos_navegador(sesion.doc)["grupos"]
+        for ident in resto:
+            ids.extend(grupos[ident]["miembros"] if ident in grupos else [ident])
+        ids = _elementos(sesion, ids)                  # todo se comprueba antes de tocar el documento
+    for nombre in analisis:
+        doc.analisis[nombre]["visible"] = visible
+    if analisis:
+        doc.modificado = True
+        doc._notificar()
+    if ids or not items:
+        mostrar(ids, visible)
+    return {"items": analisis + ids, "visible": visible}
+
+
+TIPOS_OBJETO = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "ejes_usuario", "puntos_usuario",
+                "bocetos", "scu", "origenes_union", "ejes_union", "uniones")
+_VISIBLES_DE_ORIGEN = {"planos_origen": True, "ejes_origen": True, "punto_origen": True, "planos_usuario": True,
+                       "ejes_usuario": False, "puntos_usuario": False, "bocetos": True, "scu": False,
+                       "origenes_union": False, "ejes_union": False, "uniones": False}
+
+
+@herramienta("set_object_visibility", "documento", "Muestra u oculta tipos de objetos de trabajo en la vista, como Visibilidad "
+             "del objeto del menú de visualización: planos, ejes y punto de origen, planos, ejes y puntos de usuario, "
+             "bocetos, sistemas de coordenadas, orígenes y ejes de unión y uniones. El estado se guarda con el documento "
+             "(doc.espacios['visor']) y la ventana en vivo lo aplica. Admite deshacer.", modifica=True)
+def set_object_visibility(sesion, types: list[Literal["planos_origen", "ejes_origen", "punto_origen", "planos_usuario",
+                                                     "ejes_usuario", "puntos_usuario", "bocetos", "scu",
+                                                     "origenes_union", "ejes_union", "uniones", "all"]] | None = None,
+                          visible: bool = True):
+    """
+    types: tipos de objeto: planos_origen, ejes_origen, punto_origen, planos_usuario, ejes_usuario, puntos_usuario, bocetos, scu, origenes_union, ejes_union, uniones, o "all" (todos); vacío = solo consulta el estado.
+    visible: true muestra esos tipos; false los oculta.
+    """
+    datos = copy.deepcopy(sesion.doc.espacios.get("visor") or {})
+    estado = {**_VISIBLES_DE_ORIGEN, **datos.get("visibilidad", {})}
+    pedidos = TIPOS_OBJETO if "all" in (types or []) else list(types or [])
+    for t in pedidos:
+        estado[t] = bool(visible)
+    if pedidos:
+        datos["visibilidad"] = estado
+        sesion.doc.espacios["visor"] = datos
+    return {"visibility": estado}
 
 
 @herramienta("find_in_window", "documento", "Selecciona cuerpos, los encuadra en la ventana y resalta su paso "
@@ -130,17 +171,40 @@ def set_body_opacity(sesion, opacity: float, bodies: list[str] | None = None):
     return {"bodies": ids, "opacity": opacity}
 
 
+@herramienta("isolate_bodies", "documento", "Muestra solo los cuerpos elegidos; restore vuelve a mostrar todos. "
+             "Guarda la visibilidad del navegador y admite deshacer.", modifica=True)
+def isolate_bodies(sesion, bodies: list[str] | None = None, restore: bool = False):
+    """
+    bodies: nombres o ids de los cuerpos que deben quedar visibles.
+    restore: true vuelve a mostrar todos los cuerpos.
+    """
+    todos = sesion.doc.estado_final.cuerpos
+    ids = set(sesion.cuerpo(b).id for b in bodies or [])
+    if not restore and not ids:
+        raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo para aislar.")
+    ocultos = set(sesion.doc.propiedad("__navegador__", "ocultos", [])) - set(todos)
+    if not restore:
+        ocultos.update(set(todos) - ids)
+    # Un componente oculto no debe impedir ver sus cuerpos elegidos.
+    ocultos.difference_update(c.componente for c in todos.values() if restore or c.id in ids)
+    sesion.doc.set_propiedad(["__navegador__"], "ocultos", sorted(ocultos))
+    return {"bodies": [cid for cid in todos if cid not in ocultos], "count": len(todos) - len(set(todos) & ocultos)}
+
+
 @herramienta("sketch_view", "documento", "Opera el boceto en la ventana: editar, seleccionar su plano, mirar "
-             "de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. "
-             "Las capas solo están disponibles mientras se edita ese boceto.")
+             "de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda) o "
+             "mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, "
+             "forzar a la rejilla, corte, puntos y restricciones). Las opciones y finish solo están disponibles "
+             "mientras se edita ese boceto.")
 def sketch_view(sesion, sketch: str,
-                action: Literal["edit", "select_plane", "look_at", "find_in_window", "find_in_timeline",
-                                "profile", "dimensions", "projected", "construction"],
+                action: Literal["edit", "select_plane", "look_at", "find_in_window", "find_in_timeline", "finish",
+                                "profile", "dimensions", "projected", "construction", "grid", "snap", "cut", "points",
+                                "constraints"],
                 visible: bool | None = None):
     """
     sketch: id o nombre del boceto.
-    action: edit, select_plane, look_at, find_in_window, find_in_timeline, profile, dimensions, projected o construction.
-    visible: estado de la capa; omitido la alterna (solo las cuatro acciones de capa).
+    action: edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
+    visible: estado de la opción de la paleta; omitido la alterna (solo las acciones de opción).
     """
     op = sesion.paso(sketch)
     if op.id not in sesion.doc.estado_final.bocetos:

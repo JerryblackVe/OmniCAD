@@ -332,10 +332,13 @@ def _resolver_lazo(estado, ctx, cierre, camino):
 
     uniones = [(uid, u) for uid, u in estado.uniones.items() if uid in camino] + [(None, cierre)]
     if any(not u.get("reaplicar") or u.get("cierra_lazo") for _, u in uniones):
-        ctx.aviso(f"Lazo cerrado no resuelto: «{cierre['nombre']}» incluye una unión como está o un lazo "
-                  "previo que no se puede re-aplicar como cadena.")
+        ctx.aviso(f"Lazo cerrado no resuelto: «{cierre['nombre']}» incluye una unión como está sobre una pieza "
+                  "ya movida o un lazo previo que no se puede re-aplicar como cadena.")
         return False
-    variables = [(i, k) for i, (_, u) in enumerate(uniones) if i > 0
+    accionada = max(range(len(uniones)), key=lambda i: uniones[i][1]["accionada"])
+    if not uniones[accionada][1]["accionada"] or not any(MOVIMIENTOS[uniones[accionada][1]["tipo"]]):
+        accionada = 0
+    variables = [(i, k) for i, (_, u) in enumerate(uniones) if i != accionada
                  for k in sum(MOVIMIENTOS[u["tipo"]], [])]
     inicial = np.array([uniones[i][1]["valores"][k] for i, k in variables], float)
     poses = {k: _matriz_de(estado, k) for k in estado.componentes}
@@ -420,8 +423,12 @@ def _resolver_lazo(estado, ctx, cierre, camino):
         _mover_componentes(estado, {comp}, nuevas[comp] @ np.linalg.inv(poses[comp]))
     # Verificación independiente con la geometría real, no solo con los marcos guardados.
     datos = cierre["reaplicar"]
-    f1 = _marco(_resolver(datos["origen1"], estado), datos["clave1"], datos["version"])[0]
-    f2 = _marco(_resolver(datos["origen2"], estado), datos["clave2"], datos["version"])[0]
+    if datos.get("como_esta"):
+        f1 = _marco_en_pose(datos["marco1"], _matriz_de(estado, cierre["comp1"]))
+        f2 = _marco_en_pose(datos["marco2"], _matriz_de(estado, cierre["comp2"]))
+    else:
+        f1 = _marco(_resolver(datos["origen1"], estado), datos["clave1"], datos["version"])[0]
+        f2 = _marco(_resolver(datos["origen2"], estado), datos["clave2"], datos["version"])[0]
     objetivo = (f2 @ movimiento(cierre["tipo"], valores[-1], cierre["eje_giro"], cierre["eje_desliz"])
                 @ np.asarray(datos["alinear"]))
     if (np.linalg.norm(f1[:3, 3] - objetivo[:3, 3]) >= 1e-6 or
@@ -435,7 +442,7 @@ def _resolver_lazo(estado, ctx, cierre, camino):
             cierre.update(actualizado)  # cierre todavía no pertenece a ningún estado anterior
         else:
             estado.uniones[uid] = actualizado
-        if i > 0:
+        if i != accionada and any(MOVIMIENTOS[u["tipo"]]):
             clave = "giro" if MOVIMIENTOS[u["tipo"]][0] else "desliz"
             v = valores[i][clave]
             minimo, maximo = datos["limites"]
@@ -451,14 +458,14 @@ class OpUnion(Operacion):
     el marco es el de `_marco` y dos marcos de eje (perno en agujero, rueda en eje, también a través de un
     «Origen de unión» puesto sobre ellos) quedan con los ejes en el mismo sentido; «Voltear» los opone. La unión «como está» con `origen2` (un cuerpo del componente 2)
     liga el componente 1 al 2: conserva la posición modelada respecto de él y lo sigue cuando se mueve.
-    Al cerrar un lazo, la primera unión del camino en el timeline conserva su movimiento (es la accionada);
-    se resuelven numéricamente los giros y deslizamientos de las demás, incluida la unión de cierre.
-    Las uniones como está y los lazos superpuestos conservan el comportamiento secuencial con un aviso."""
+    Al cerrar un lazo, la última unión accionada conserva su movimiento (por defecto, la primera del timeline);
+    se resuelven numéricamente los giros y deslizamientos de las demás. Los lazos superpuestos y las uniones
+    como está sobre piezas ya movidas conservan el comportamiento secuencial con un aviso."""
     TIPO, ETIQUETA, ICONO = "union", "Unión", "⚙"
     PARAMS = {"tipo": "rigida", "origen1": None, "origen2": None, "clave1": "centro", "clave2": "centro",
               "angulo": "0 deg", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "voltear": False, "como_esta": False,
               "eje_giro": "Z", "eje_desliz": "X", "giro": "0 deg", "giro2": "0 deg", "giro3": "0 deg",
-              "desliz": "0 mm", "desliz2": "0 mm", "minimo": "", "maximo": "", "version_marco": 2}
+              "desliz": "0 mm", "desliz2": "0 mm", "minimo": "", "maximo": "", "version_marco": 2, "accionada": 0}
     EXPRESIONES = ("angulo", "dx", "dy", "dz", "giro", "giro2", "giro3", "desliz", "desliz2")
     OPCIONES = {"tipo": TIPOS_UNION, "clave1": PUNTOS_CLAVE, "clave2": PUNTOS_CLAVE, "eje_giro": EJES,
                 "eje_desliz": EJES}
@@ -490,6 +497,7 @@ class OpUnion(Operacion):
     def ejecutar(self, estado, ctx):
         p = self.p
         version = _version_de(p, "version_marco")
+        accionada = self.entero("accionada", minimo=0)
         if not p["origen1"]:
             raise ErrorOperacion("Elegí el origen de la unión en el componente 1.")
         e1 = _resolver(p["origen1"], estado)
@@ -504,21 +512,32 @@ class OpUnion(Operacion):
         mov = movimiento(p["tipo"], valores, p["eje_giro"], p["eje_desliz"])
         reaplicar = None
         comps = _grupo(estado, comp1)
+        tipo_limite = ANGULO if MOVIMIENTOS[p["tipo"]][0] else "longitud"
         if p["como_esta"]:
             comp2, seguir = "", np.identity(4)
             if p["origen2"]:
                 comp2 = _componente_de(estado, _resolver(p["origen2"], estado)) or ""
                 if comp2 == comp1:
                     raise ErrorOperacion("Los dos orígenes están en el mismo componente.")
-            if comp2 and not np.allclose(_matriz_de(estado, comp1), np.identity(4), atol=1e-9):
+            camino = _camino_lazo(estado, comp1, comp2)
+            ya_movida = not np.allclose(_matriz_de(estado, comp1), np.identity(4), atol=1e-9)
+            if comp2 and ya_movida and not camino:
                 # Otra unión anterior ya movió el componente 1: se queda donde está (no se pisa ese movimiento).
                 ctx.aviso("Otra unión ya mueve el componente 1: la unión como está lo deja donde está. Para que "
                           "siga al componente 2, elegí como componente 1 la pieza que no tiene otra unión.")
-            elif comp2:
+            elif comp2 and not ya_movida:
                 # Posición modelada respecto del componente 2: lo que él se movió, el 1 también.
                 seguir = _matriz_de(estado, comp2) @ np.linalg.inv(_matriz_de(estado, comp1))
             F2 = seguir @ F1
             m = F2 @ mov @ np.linalg.inv(F2) @ seguir
+            if not (comp2 and ya_movida) or camino:
+                marco = _marco_local(estado, comp1, F1, False)
+                if version >= 2 and eje1 and e1.tipo != "plano":
+                    local = np.asarray(marco["local"], float)
+                    marco["local"] = _marco_de_eje(local[:3, 3], local[:3, 2]).tolist()
+                # El marco modelado es compartido y rígido: el movimiento es relativo al componente 2.
+                reaplicar = {"marco1": marco, "marco2": marco, "alinear": np.identity(4).tolist(),
+                             "como_esta": True}
         else:
             if not p["origen2"]:
                 raise ErrorOperacion("Elegí el origen de la unión en el componente 2.")
@@ -537,26 +556,30 @@ class OpUnion(Operacion):
                 ctx.aviso("La unión dejó el componente 1 dado vuelta respecto de cómo está modelado; si no es lo "
                           "que querías, marcá «Voltear».")
             m = F2 @ mov @ alinear @ np.linalg.inv(F1)
-            tipo_limite = ANGULO if MOVIMIENTOS[p["tipo"]][0] else "longitud"
             reaplicar = {"marco1": _marco_local(estado, comp1, F1, version >= 2 and eje1 and e1.tipo != "plano"),
                          "marco2": _marco_local(estado, comp2, F2, version >= 2 and eje2 and e2.tipo != "plano"),
-                         "bases": {c: _matriz_de(estado, c).tolist() for c in comps}, "alinear": alinear.tolist(),
-                         "origen1": p["origen1"], "origen2": p["origen2"], "clave1": p["clave1"],
-                         "clave2": p["clave2"], "version": version,
-                         "limites": [ctx.evaluar(p[k], tipo_limite) if str(p.get(k) or "").strip() else None
-                                     for k in ("minimo", "maximo")]}
+                         "alinear": alinear.tolist()}
+        if reaplicar is not None:
+            reaplicar.update(bases={c: _matriz_de(estado, c).tolist() for c in comps},
+                             origen1=p["origen1"], origen2=p["origen2"], clave1=p["clave1"], clave2=p["clave2"],
+                             version=version,
+                             limites=[ctx.evaluar(p[k], tipo_limite) if str(p.get(k) or "").strip() else None
+                                      for k in ("minimo", "maximo")])
         union = {"nombre": self.nombre, "tipo": p["tipo"], "comp1": comp1, "comp2": comp2,
                  "componentes": sorted(comps), "marco": F2.tolist(), "eje_giro": p["eje_giro"],
-                 "eje_desliz": p["eje_desliz"], "valores": valores, "reaplicar": reaplicar}
+                 "eje_desliz": p["eje_desliz"], "valores": valores, "reaplicar": reaplicar, "accionada": accionada}
         camino = _camino_lazo(estado, comp1, comp2)
-        if camino and not p["como_esta"]:
+        if camino:
             if _resolver_lazo(estado, ctx, union, camino):
                 estado.uniones[self.id] = dict(union, cierra_lazo=True)
                 return
-        elif camino and p["como_esta"]:
-            ctx.aviso(f"Lazo cerrado no resuelto: «{self.nombre}» es una unión como está.")
         _mover_componentes(estado, comps, m)
         estado.uniones[self.id] = union
+
+
+def siguiente_accion(operaciones):
+    """Prioridad de la próxima unión accionada en el documento; conserva el orden entre recálculos."""
+    return 1 + max((o.entero("accionada", minimo=0) for o in operaciones if isinstance(o, OpUnion)), default=0)
 
 
 class OpOrigenUnion(Operacion):

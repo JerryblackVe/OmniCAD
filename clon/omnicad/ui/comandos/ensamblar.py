@@ -3,7 +3,7 @@
 accionar uniones, vínculo de movimiento y fijar componente."""
 from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (MOVIMIENTOS, TIPOS_UNION, OpComponente, OpGrupoRigido, OpOrigenUnion,
-                                       OpUnion, OpVinculoMovimiento, componente_por_ref)
+                                       OpUnion, OpVinculoMovimiento, componente_por_ref, siguiente_accion)
 from ...timeline.parametros import ANGULO
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits_cuerpos as _hits_cuerpos, ref1)
 from . import registrar
@@ -208,6 +208,7 @@ class AccionarUniones(Comando):
         if MOVIMIENTOS[op.p["tipo"]][1]:
             ctx.evaluar(v["desliz"])
             params["desliz"] = v["desliz"]
+        params["accionada"] = siguiente_accion(ctx.doc.operaciones)
         nueva = OpUnion(op.id, op.nombre, op.suprimida, **params)
         (ctx.ventana._reemplazar if ctx.ventana else lambda o: ctx.doc.reemplazar(o.id, o))(nueva)
 

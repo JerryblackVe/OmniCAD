@@ -5,7 +5,7 @@
 Fecha: 2026-10-18. Origen: bug B-80. Pedido del usuario: un agente que quería animar el motor no tenía herramientas para el
 espacio ANIMACIÓN. Regla que se rompe: `CLAUDE.md` › «MCP y CLI siempre completos».
 
-Base al escribir (2026-10-18): 190 herramientas en 13 grupos y 95 tipos de operación. Hoy son 234 herramientas en 16 grupos (`docs/agentes/herramientas.md`) y 96 tipos de operación; la ola 1 ya está hecha. Se revisaron 4 zonas, cada una contra el catálogo
+Base al escribir (2026-10-18): 190 herramientas en 13 grupos y 95 tipos de operación. Hoy son 297 herramientas en 16 grupos (`docs/agentes/herramientas.md`) y 96 tipos de operación; las olas 1 a 7 están hechas (B-80 cerrado el 2026-10-20). Se revisaron 4 zonas, cada una contra el catálogo
 (`api/registro.py` › `_CATALOGO`): la cinta DISEÑO con sus comandos, DIBUJO, RENDERIZAR con ANIMACIÓN, y los paneles y
 menús. Cada fila cita el archivo y la línea leídos. Rutas relativas a `clon/omnicad/`.
 
@@ -160,7 +160,7 @@ cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pa
 | MCP-58 | `sweep` | Tipo ruta + carril guía, carril, escala del perfil, distancia parcial de la ruta, cara plana como perfil, aristas de cuerpo como ruta | `ui/comandos/crear.py:39-45` | media |
 | MCP-59 | `loft` | Tipo de guía, carriles, línea central; caras, aristas, vértices o puntos como perfiles | `ui/comandos/crear.py:71-75` | media |
 | MCP-60 | `create_hole` | Ubicar en vértice o punto de construcción (asociativo), ángulo de la punta (hoy fijo 118°), invertir dirección en todas las ubicaciones (`flip` existe, pero solo con `sketch_points`), varios cuerpos | `ui/comandos/crear.py:325-367` | baja |
-| MCP-61 | `rectangular_pattern`, `circular_pattern`, `path_pattern`, `point_pattern`, `multi_transform` | **Parcial:** `path_pattern` ya tiene distribución por extensión (`spacing_mode`), simétrico y ruta por curvas (`path_curves`, desde 2026-10-10). Sigue pendiente: dirección o eje = arista, eje de construcción, plano o cara (`rectangular_pattern` acepta solo x/y/z); distribución por extensión o ángulo entre copias y simétrico en los demás patrones; suprimir copias; ruta = aristas de cuerpo; puntos sueltos, vértices o puntos de construcción; punto de referencia asociativo; plano de simetría = cara | `ui/comandos/crear.py:720-746`, `ui/comandos/patrones.py:60-66` | media |
+| MCP-61 | `rectangular_pattern`, `circular_pattern`, `path_pattern`, `point_pattern`, `multi_transform` | **Hecho (2026-10-20):** dirección o eje = arista, eje de construcción, plano o cara; distribución por extensión o ángulo entre copias y simétrico en los patrones; suprimir copias; ruta = aristas de cuerpo; puntos de construcción y vértices; punto de referencia asociativo; plano de simetría = cara (`tests/test_api_opciones_solido2.py`) | `ui/comandos/crear.py:720-746`, `ui/comandos/patrones.py:60-66` | media |
 | MCP-62 | `mirror` | Cara plana como plano de simetría | `ui/comandos/crear.py:805` | baja |
 | MCP-63 | `fillet` | Empalme de reglas (caras A/B, regla, topología), radio variable (radio final), por cuerda (longitud), cadena tangente | `ui/comandos/modificar.py:74-92` | media |
 | MCP-64 | `chamfer` | Dos distancias, distancia y ángulo, voltear, cadena tangente | `ui/comandos/modificar.py:127-133` | baja |
@@ -231,7 +231,7 @@ Se descartan, porque no le sirven a un agente:
 | B-81: el menú del cuerpo en el navegador reusaba el del grupo. La opacidad no se podía cambiar desde ningún lado, y Mover/copiar, Aspecto, Material, Aislar, Quitar y Buscar en el timeline quedaron como código muerto (`ui/navegador.py:368-413`). | Corregido el 2026-10-18 |
 | B-82: lo que oculta `set_browser_visibility` no se guarda. `self.ocultos` se vacía al abrir un documento (`ui/ventana.py:876`). | Corregido el 2026-10-19 (`tests/test_p23_navegador.py::test_cuerpo_oculto_persiste_al_guardar_y_reabrir`) |
 | El menú del boceto (P23e, 19 opciones de Fusion) ya no ofrece «Guardar como SVG» ni «Limpiar geometría». Los manejadores siguen en `ui/ventana.py:1726-1729`. Las herramientas `export_sketch` y `clean_sketch` existen. | Lo decide el usuario: agregarlos rompe la lista exacta de Fusion |
-| `docs/plan_mcp_cli.md:286` decía «93 tipos sin herramienta propia» y 167 herramientas. | Corregido el 2026-10-18: 38 de 95 y 190. Hoy: 234 herramientas y 96 tipos |
+| `docs/plan_mcp_cli.md:286` decía «93 tipos sin herramienta propia» y 167 herramientas. | Corregido el 2026-10-18: 38 de 95 y 190. Hoy: 297 herramientas y 96 tipos |
 
 ## Orden sugerido
 

@@ -39,7 +39,8 @@ def _sesion(cantidad):
         copia = BRepBuilderAPI_Copy(forma, False, False).Shape()
         copia = geo.trasladar(copia, ((i % 10) * 40, (i // 10) * 40, 0))
         estado.nuevo_cuerpo("alabes", copia)
-    doc = SimpleNamespace(estado_final=estado, propiedades={}, propiedad=lambda *args: 1.0)
+    doc = SimpleNamespace(estado_final=estado, propiedades={}, espacios={}, analisis={}, vistas={},
+                          propiedad=lambda _cid, clave, defecto=None: 1.0 if clave == "opacidad" else defecto)
     return SimpleNamespace(doc=doc)
 
 
@@ -58,7 +59,7 @@ def test_pieza_cerca_cambia_menos_del_uno_por_ciento(monkeypatch):
     sesion = _sesion(1)
     objetos_render = hi._objetos_render
     with monkeypatch.context() as m:
-        m.setattr(hi, "_objetos_render", lambda s, cuerpos, cam, alto, cajas: objetos_render(s, cuerpos))
+        m.setattr(hi, "_objetos_render", lambda s, cuerpos, cam, alto, cajas, *_: objetos_render(s, cuerpos))
         antes = hi.get_viewport_image(sesion, width=400, height=300)["image"]
     despues = hi.get_viewport_image(sesion, width=400, height=300)["image"]
     a, b = (np.array(Image.open(BytesIO(imagen.png))) for imagen in (antes, despues))

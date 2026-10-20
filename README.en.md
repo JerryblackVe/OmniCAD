@@ -124,7 +124,7 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
 - **3D printing:** split with connectors, molds, printer and material profiles, print-friendly holes, multicolor 3MF.
 - **Gears of every kind:** a gallery to create bevel, worm, planetary and special gears and mechanisms.
 - **Language:** Spanish and English everywhere; guided first launch.
-- **Integration:** two-way Blender integration; the MCP/CLI tools still missing (Drawing and Render workspaces).
+- **Integration:** two-way Blender integration; connecting more AI agents.
 - **Rendering:** materials, lighting, ideas from KeyShot and V-Ray.
 - **New tools:** Rhino-style surfaces, Grasshopper-style visual node canvas, ideas from FreeCAD, Plasticity,
   SolidCraft and other open-source CAD.

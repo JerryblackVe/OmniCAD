@@ -617,6 +617,14 @@ def _vertice(sesion, cuerpo, p):
 
 
 def _ref_punto(sesion, cuerpo, item):
+    if isinstance(item, str):                       # punto de construcción (create_construction_point): id o nombre
+        puntos = [o for o in sesion.doc.operaciones[:sesion.doc.marcador] if o.TIPO == "punto"]
+        hallados = [o for o in puntos if o.id == item] or [o for o in puntos if o.nombre.casefold() == item.casefold()]
+        if len(hallados) != 1:
+            raise error("ENTITY_NOT_FOUND" if not hallados else "AMBIGUOUS_REFERENCE",
+                        f"No hay un único punto de construcción «{item}».",
+                        "Puntos: " + (", ".join(f"{o.id} ({o.nombre})" for o in puntos) or "ninguno (create_construction_point)") + ".")
+        return {"tipo": "punto", "id": hallados[0].id}
     if isinstance(item, dict):
         if set(item) != {"sketch", "point"} or not isinstance(item["point"], int) or isinstance(item["point"], bool):
             raise error("INVALID_ARGUMENTS", f"Un punto de boceto va como {{\"sketch\": id o nombre, \"point\": id}}: "
@@ -628,20 +636,21 @@ def _ref_punto(sesion, cuerpo, item):
     if isinstance(item, (list, tuple)) and len(item) == 3 and all(
             isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in item):
         return _vertice(sesion, cuerpo, item)
-    raise error("INVALID_ARGUMENTS", f"Cada punto va como [x, y, z] (un vértice de la chapa) o {{\"sketch\": …, "
-                f"\"point\": id}}: llegó {item!r}.")
+    raise error("INVALID_ARGUMENTS", f"Cada punto va como [x, y, z] (un vértice de la chapa), {{\"sketch\": …, "
+                f"\"point\": id}} o el id/nombre de un punto de construcción: llegó {item!r}.")
 
 
 @herramienta("rip", "chapa", "Desgarro (CHAPA › Desgarro): mode=face quita la cara elegida (un pliegue —cara curva— o "
              "una parte plana); mode=points corta una ranura de ancho gap entre dos puntos del borde de la cara "
-             "elegida (vértices [x, y, z] de la chapa o puntos de un boceto {\"sketch\", \"point\"}), del lado side. Si "
+             "elegida (vértices [x, y, z] de la chapa, puntos de un boceto {\"sketch\", \"point\"} o puntos de construcción "
+             "por id o nombre), del lado side. Si "
              "la pieza queda partida, cada pedazo es un cuerpo de chapa (bodies_created).", modifica=True)
-def rip(sesion, face: str, mode: Literal["face", "points"] = "face", points: list[list[float] | dict] | None = None,
+def rip(sesion, face: str, mode: Literal["face", "points"] = "face", points: list[list[float] | dict | str] | None = None,
         side: Lado = "center", gap: Expr | None = None, body: str | None = None, name: str | None = None):
     """
     face: con mode="face", la cara a quitar; con mode="points", la cara cuyo borde tiene los dos puntos (selector o id).
     mode: "face" o "points".
-    points: con mode="points", dos puntos del borde: [x, y, z] de un vértice o {"sketch": id, "point": id}.
+    points: con mode="points", dos puntos del borde: [x, y, z] de un vértice, {"sketch": id, "point": id} o el id o nombre de un punto de construcción (create_construction_point).
     side: con mode="points", de qué lado de la línea p1→p2 va la ranura: "side1", "side2" o "center".
     gap: ancho de la ranura en mm; vacío = la separación de la regla.
     body: cuerpo de chapa sobre el que se evalúa el selector.

@@ -138,3 +138,25 @@ def test_api_sketch_view_actua_en_la_ventana(boceto, tmp_path):
     assert puente.ejecutar("sketch_view", {"sketch": ident, "action": "edit"})["ok"]
     assert puente.ejecutar("sketch_view", {"sketch": ident, "action": "projected", "visible": False})["ok"]
     assert v.modo_boceto.lienzo.mostrar["proyectadas"] is False
+
+
+def test_api_sketch_view_opciones_de_la_paleta_y_terminar(boceto, tmp_path):
+    """MCP-55 y MCP-77: rejilla, forzar, corte, puntos y restricciones se alternan por la API y «finish» guarda."""
+    from omnicad.ui.puente import PuenteAgentes
+    v, ident = boceto
+    puente = PuenteAgentes(v, archivo=tmp_path / "puente.json")
+    r = puente.ejecutar("sketch_view", {"sketch": ident, "action": "grid"})
+    assert r["ok"] is False and r["error_kind"] == "INVALID_ARGUMENTS"          # fuera del editor
+    assert puente.ejecutar("sketch_view", {"sketch": ident, "action": "edit"})["ok"]
+    paleta = v.modo_boceto.paleta
+    for accion_api, clave in (("grid", "rejilla"), ("snap", "forzar"), ("cut", "corte"), ("points", "puntos"),
+                              ("constraints", "restricciones")):
+        antes = paleta.checks[clave].isChecked()
+        r = puente.ejecutar("sketch_view", {"sketch": ident, "action": accion_api})
+        assert r["ok"] and r["result"]["visible"] is (not antes) and paleta.checks[clave].isChecked() is (not antes)
+        r = puente.ejecutar("sketch_view", {"sketch": ident, "action": accion_api, "visible": antes})
+        assert r["ok"] and paleta.checks[clave].isChecked() is antes
+    assert v.modo_boceto.activo
+    assert puente.ejecutar("sketch_view", {"sketch": ident, "action": "finish"})["ok"]
+    assert not v.modo_boceto.activo                                              # salió del editor guardando
+    assert puente.ejecutar("sketch_view", {"sketch": ident, "action": "finish"})["ok"] is False

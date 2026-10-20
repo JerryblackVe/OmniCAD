@@ -21,7 +21,7 @@ from ..timeline.ops_malla import (OpCombinarMallas, OpConvertirMalla, OpCortarPl
                                   OpGruposCaras, OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar,
                                   OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from .errores import error
-from .herramientas_boceto import referencia_plano, texto_expr
+from .herramientas_boceto import referencia_plano_o_cara, texto_expr
 from .herramientas_ensamble import nombre_paso
 from .registro import Expr, herramienta
 
@@ -329,17 +329,18 @@ _CORTES = {"trim": "recortar", "split_body": "partir", "split_faces": "partir_ca
              "tapa el corte (un grupo de caras nuevo). Normales: XY = +Z, YZ = +X, XZ = −Y; kept_side_normal en el "
              "resultado dice cuál quedó.", modifica=True)
 def plane_cut_mesh(sesion, bodies: Cuerpos, plane: str, kind: Literal["trim", "split_body", "split_faces"] = "trim",
-                   fill: bool = True, flip: bool = False, name: str | None = None):
+                   fill: bool = True, flip: bool = False, name: str | None = None, plane_body: str | None = None):
     """
     bodies: id o nombre de los cuerpos de malla.
-    plane: "XY", "XZ", "YZ" o el id o nombre de un plano de construcción.
+    plane: "XY", "XZ", "YZ", el id o nombre de un plano de construcción, o UNA cara plana de un sólido (selector como ">Z" o id de find_faces, p. ej. "Cuerpo1/F6": el plano de la cara).
     kind: "trim", "split_body" o "split_faces".
     fill: true tapa el corte con triángulos.
     flip: true invierte el lado que se conserva (en trim) o el orden de las partes (en split_body).
     name: nombre del paso en el timeline; vacío = automático.
+    plane_body: cuerpo sólido donde se evalúa el selector de cara de plane; vacío = el único sólido del documento.
     """
     ids = [c.id for c in _cuerpos(sesion, bodies)]
-    ref = {"tipo": "plano", "id": referencia_plano(sesion, plane)}
+    ref = referencia_plano_o_cara(sesion, plane, plane_body)
     resultado = _agregar(sesion, _paso(sesion, OpCortarPlanoMalla, name, "Corte de plano", cuerpos=ids, plano=ref,
                                        tipo=_CORTES[kind], rellenar=fill, invertir=flip))
     plano = ent.resolver(ref, sesion.doc.estado_final).plano

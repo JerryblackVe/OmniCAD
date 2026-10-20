@@ -2,14 +2,18 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 136: Abierto 78 · Parcial 47 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 106: Abierto 51 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
-Abierto 13 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
+Abierto 17 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| NOV-b80-1 | Dos `_referencia` casi iguales con dialectos distintos | Abierto | Baja | Unificar: borrar la de solido_extra y aceptar `{"body", "vertex"}` en la de construcción (≈55 líneas menos; hoy un agente aprende dos formatos). | omnicad/api/herramientas_solido_extra.py:49 y omnicad/api/herramientas_construccion.py:31 | 2026-10-20 |
+| NOV-b80-2 | Radio de círculo y arco sin tope de tamaño | Abierto | Baja | `set_circle_radius` y `draw_circle` aceptan 1e12 mm; aplicar `MEDIDA_MAXIMA` como hace extrude. | omnicad/api/herramientas_boceto_extra.py:63; omnicad/api/herramientas_boceto.py:832 | 2026-10-20 |
+| NOV-b80-3 | create_hole(positions) usa un solo cuerpo objetivo | Abierto | Baja | Si el vértice es de otro cuerpo, el agujero se hace en el principal y solo avisa que no cambió el volumen: resolver el cuerpo desde la referencia. | omnicad/api/herramientas_modificar.py:492 | 2026-10-20 |
+| NOV-b80-4 | export_parameters no neutraliza celdas que empiezan con = + - @ | Abierto | Baja | Un comentario `=HYPERLINK(...)` sale tal cual y Excel lo ejecuta; decidir si se antepone `'` sin romper la ida y vuelta con la tabla de la ventana. | omnicad/api/herramientas_parametros_csv.py:23 | 2026-10-20 |
 | P-12b | Registrar la tarea programada de Windows para el informe mensual | Abierto | Baja | La tarea no se registra sola; el comando está en el docstring del script. | scripts/novedades.py | 2026-10-20 |
 | P-23e3 | Íconos en los menús contextuales del navegador | Abierto | Baja | Ningún menú contextual los lleva. | omnicad/ui/acciones_navegador.py | 2026-10-20 |
 | P-26a | CI en macOS (ruff + pytest + humo) para ver qué falla | Abierto | Baja | El workflow solo tiene jobs de Windows y Ubuntu. | .github/workflows/instaladores.yml | 2026-10-20 |
@@ -123,46 +127,12 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 |---|---|---|---|---|---|---|
 | VR13 | Render por mosaicos en varios procesos, cancelable y pausable | Parcial | Alta | Faltan varios procesos, pausa y no bloquear la ventana. | render_cpu.py:736,992-1030 (mosaicos, RenderCancelado); ui/render.py:2131 (QProgressDialog con Cancelar) | 2026-10-20 |
 
-## Herramientas MCP/CLI que faltan (B-80)
+## Menú del boceto (decisión del usuario)
 
-Abierto 31 · Parcial 3 · Bloqueado 1. Especificación: [brechas_mcp.md](../brechas_mcp.md).
+Bloqueado 1. Las herramientas export_sketch y clean_sketch ya existen: lo que falta es solo el menú.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| MCP-55 | Ampliar sketch_view: rejilla, forzar, corte, puntos, restricciones | Abierto | Baja | Sumar las acciones de la paleta del boceto; hoy solo cuatro capas. | omnicad/api/herramientas_navegador.py:136-139 (acciones sin rejilla ni corte) | 2026-10-20 |
-| MCP-57 | revolve: eje de construcción, arista, cara cilíndrica, otro boceto | Abierto | Baja | Ampliar axis más allá de x/y/z y línea del boceto. | omnicad/api/herramientas_solido.py:204-212 (axis: sketch_x, sketch_y, x, y, z o línea) | 2026-10-20 |
-| MCP-60 | create_hole: vértice o punto de construcción, ángulo de punta, varios cuerpos | Abierto | Baja | Vértice/punto asociativo, ángulo de punta (118° fijo), varios cuerpos, flip por cara. | omnicad/api/herramientas_modificar.py:339 (drill_tip bool, flip solo con sketch_points, body único) | 2026-10-20 |
-| MCP-62 | mirror: cara plana como plano de simetría | Abierto | Baja | Aceptar una cara plana en plane. | omnicad/api/herramientas_solido.py:455-458 (plane: XY/XZ/YZ o plano de construcción) | 2026-10-20 |
-| MCP-64 | chamfer: dos distancias, distancia y ángulo, voltear, cadena tangente | Abierto | Baja | Los tres tipos de chaflán y cadena tangente. | omnicad/api/herramientas_modificar.py:74 (solo edges, distance, body) | 2026-10-20 |
-| MCP-65 | shell: cadena tangente, espesor exterior distinto, esquinas | Abierto | Baja | Tres opciones. | omnicad/api/herramientas_modificar.py:100 (body, faces, thickness, direction) | 2026-10-20 |
-| MCP-66 | draft: plano fijo de construcción, dos lados, ángulo 2 | Abierto | Baja | Tres opciones. | omnicad/api/herramientas_modificar.py:685 (faces, angle, neutral, reverse, body) | 2026-10-20 |
-| MCP-67 | offset_edges: plano de construcción opcional | Abierto | Baja | Aceptar un plano de construcción además de XY/XZ/YZ o cara. | omnicad/api/herramientas_modificar.py:180-188 (plane: XY/XZ/YZ o cara plana) | 2026-10-20 |
-| MCP-68 | move_body: giro por eje/arista, punto a punto, pivote en vértice | Abierto | Baja | Tipos de movimiento con eje, arista y punto a punto. | omnicad/api/herramientas_solido.py:885 (translate, rotate, pivot center/origin, position) | 2026-10-20 |
-| MCP-69 | remove_fillets: varios cuerpos | Abierto | Baja | Aceptar lista de cuerpos. | omnicad/api/herramientas_modificar.py:126 (body: str) | 2026-10-20 |
-| MCP-70 | create_construction_plane: cara plana como base del desfase | Abierto | Baja | Aceptar una cara plana como base. | omnicad/api/herramientas_boceto.py:638-643 (plane: XY/XZ/YZ o plano de construcción) | 2026-10-20 |
-| MCP-71 | Engranajes y ejes: plano por cara, centro asociativo | Abierto | Baja | plane = cara plana y centro = punto o vértice asociativo. | omnicad/api/herramientas_engranajes.py:139-337 (plane: XY/XZ/YZ o plano de construcción; center [x, y]) | 2026-10-20 |
-| MCP-72 | draw_circle: círculo por 2 y por 3 puntos | Abierto | Baja | Dos modos nuevos. | omnicad/api/herramientas_boceto.py:747 (radius, center) | 2026-10-20 |
-| MCP-73 | create_polygon: polígono por arista | Abierto | Baja | kind=edge. | omnicad/api/herramientas_boceto.py:801 (kind inscribed/circumscribed) | 2026-10-20 |
-| MCP-74 | draw_line y draw_rectangle: punto medio, rectángulo central y de 3 puntos | Abierto | Baja | Punto medio con restricción; rectángulo central con diagonales; rectángulo de 3 puntos. | tests/test_cobertura_ui_api.py:132 (pendiente MCP-74); herramientas_boceto.py:687-705 | 2026-10-20 |
-| MCP-75 | project_to_sketch: vértices, intersecar e incluir 3D | Abierto | Baja | Proyectar, intersecar e incluir vértices del modelo. | tests/test_cobertura_ui_api.py:136 (pendiente MCP-75); herramientas_boceto.py:1587 (edges, faces, bodies, mode project/intersect) | 2026-10-20 |
-| MCP-76 | Cambiar el radio de un círculo libre sin cota | Abierto | Baja | Herramienta o modo que arrastre el radio. | omnicad/api/herramientas_boceto.py:1656 (edit_dimension exige cota) | 2026-10-20 |
-| MCP-77 | sketch_view: acción terminar (guardar el boceto) | Abierto | Baja | Agregar la acción terminar. | tests/test_cobertura_ui_api.py:135 (pendiente MCP-77); herramientas_navegador.py:136-139 | 2026-10-20 |
-| MCP-79 | measure_distance: centro a centro | Abierto | Baja | Opción de medir centro a centro. | omnicad/api/herramientas_inspeccion.py:287 (a, b, body) | 2026-10-20 |
-| MCP-80 | check_interference: incluir caras coincidentes | Abierto | Baja | Opción nueva. | omnicad/api/herramientas_inspeccion.py:304 (solo bodies) | 2026-10-20 |
-| MCP-84 | new_document: abrir el modelo de ejemplo | Abierto | Baja | Parámetro example. | omnicad/api/herramientas_documento.py:244 (name, discard) | 2026-10-20 |
-| MCP-88 | plane_cut_mesh: cara plana como plano de corte | Abierto | Baja | Aceptar una cara plana. | omnicad/api/herramientas_malla.py:331-335 (plane: XY/XZ/YZ o plano de construcción) | 2026-10-20 |
-| MCP-89 | Uniones: origen en vértice o curva de boceto | Abierto | Baja | Aceptar vértice y curva de boceto en el origen. | omnicad/api/herramientas_ensamble.py:453-550 (snap center/start/end sobre cara, arista o construcción) | 2026-10-20 |
-| MCP-90 | rip: punto de construcción como punto del desgarro | Abierto | Baja | Aceptar puntos de construcción. | omnicad/api/herramientas_chapa.py:639 (puntos [x,y,z] o {sketch, point}); sin herramienta de puntos de construcción (MCP-40) | 2026-10-20 |
-| NOV-brechas_mcp-3 | draw_arc: forma tangente (sk_arco_tangente) | Abierto | Baja | Agregar el arco tangente a draw_arc. | tests/test_cobertura_ui_api.py:137; herramientas_boceto.py:764 | 2026-10-20 |
-| NOV-brechas_mcp-4 | select_bodies: by_name, by_size e invert | Abierto | Baja | Agregar tres modos a select_bodies. | tests/test_cobertura_ui_api.py:124-126; herramientas_documento.py:173 (solo bodies) | 2026-10-20 |
-| MCP-39 | Tipos de plano de construcción (ángulo, tangente, medio, tres puntos…) | Abierto | Media | Agregar type a create_construction_plane; hoy solo desfase. | tests/test_cobertura_ui_api.py:111-113 (pendiente MCP-39); herramientas_boceto.py:638 (plane, offset, name) | 2026-10-20 |
-| MCP-56 | extrude: delgada, inicio en desfase, extensión al objeto, perfil de cara | Abierto | Media | Delgada, desfase, media longitud, «al objeto», conicidad lado 2, cara como perfil. | omnicad/api/herramientas_solido.py:142 (solo distance, distance2, direction, taper_angle, reverse) | 2026-10-20 |
-| MCP-58 | sweep: guía, escala, distancia parcial, cara como perfil | Abierto | Media | Carril guía, escala, distancia parcial, cara plana, aristas de ruta. | omnicad/api/herramientas_solido.py:240 (orientation, taper_angle, twist_angle) | 2026-10-20 |
-| MCP-59 | loft: guías, carriles, línea central, caras/vértices como perfiles | Abierto | Media | Guías y perfiles de otras entidades. | omnicad/api/herramientas_solido.py:282 (sketches, profiles, ruled, closed) | 2026-10-20 |
-| MCP-63 | fillet: reglas, radio variable, por cuerda, cadena tangente | Abierto | Media | Cuatro modos de empalme. | omnicad/api/herramientas_modificar.py:58 (solo edges, radius, body) | 2026-10-20 |
-| MCP-47 | set_object_visibility y ampliar set_browser_visibility | Parcial | Baja | Faltan planos, ejes, origen y análisis; cuerpos, componentes, bocetos y calcomanías ya van. | omnicad/api/herramientas_navegador.py:22-30,85-101 | 2026-10-20 |
-| MCP-81 | Parámetros: sin unidad, renombrar, comentario | Parcial | Baja | Parámetro sin unidad y renombrar; el comentario ya existe. | omnicad/api/herramientas_parametros.py:58 (create_parameter con comment); tests/test_api_parametros.py:35 | 2026-10-20 |
-| MCP-61 | Patrones y multi-transform: eje por arista/cara, suprimir copias, puntos sueltos | Parcial | Media | Eje por arista/plano/cara, ángulo entre copias, suprimir copias, ruta de aristas, puntos de construcción. | omnicad/api/herramientas_solido.py:543-795 (path_pattern ya tiene spacing_mode, symmetric, path_curves; rectangular_pattern solo axis x/y/z) | 2026-10-20 |
 | MCP-HAL3 | Menú del boceto sin «Guardar como SVG» ni «Limpiar geometría» | Bloqueado | Baja | Espera decisión del usuario: agregarlos rompe la lista exacta de Fusion. | omnicad/ui/ventana.py:1258 (manejador SVG sigue); export_sketch y clean_sketch existen | 2026-10-20 |
 
 ## Capa para agentes (paquetes del plan)
