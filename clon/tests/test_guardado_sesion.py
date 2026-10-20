@@ -284,6 +284,20 @@ def test_un_autoguardado_que_falla_avisa_una_sola_vez(v, monkeypatch):
     assert len([a for a in avisos if "No se pudo autoguardar" in a]) == 1 and "disco lleno" in avisos[0]
 
 
+def test_no_autoguarda_mientras_corre_codigo_de_un_agente(v, carpeta_auto):
+    """B-16: el latido de execute_code procesa eventos de Qt; el temporizador no guarda un estado a medio aplicar."""
+    assert v.encender_puente()
+    v.doc.agregar(OpPrimitiva(v.doc.nuevo_id(), forma="caja", ancho=10, largo=10, alto=10))
+    v.puente.sesion.latido = lambda: False
+    try:
+        v.autoguardar()
+        assert not proyecto.ruta_autoguardado(v.doc).exists()
+    finally:
+        v.puente.sesion.latido = None
+    v.autoguardar()
+    assert proyecto.ruta_autoguardado(v.doc).exists()
+
+
 # ---------------------------------------------------------------- puente (agentes)
 def test_guardar_por_el_puente_deja_el_titulo_la_copia_y_los_recientes_al_dia(v, carpeta_auto, tmp_path):
     """save_document por el puente dejaba el «*» en el título, el autoguardado en disco y los recientes sin la ruta."""

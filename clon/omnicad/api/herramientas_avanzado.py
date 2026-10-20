@@ -33,6 +33,7 @@ _CONTENIDO_EMBEBIDO = {"importar_step": "contenido", "importar_iges": "contenido
 _SALIDA_MAXIMA = 20000        # caracteres de stdout que devuelve execute_code
 _TRAZA_MAXIMA = 1500          # caracteres del mensaje de error de execute_code
 PLAZO_CODIGO = 60.0           # segundos que corre execute_code por defecto antes de cortarse
+INTERVALO_LATIDO = 0.1        # s entre consultas al latido de execute_code (no en cada línea)
 
 
 # ---------------------------------------------------------------- tipos de operación
@@ -691,14 +692,37 @@ class _TiempoAgotado(BaseException):
         self.linea = linea
 
 
+class _Cancelado(BaseException):
+    """Corte de execute_code porque el latido pidió cancelar (hermana de _TiempoAgotado: igual de
+    inatrapable, para que el agente no pueda frenar la cancelación con un `except:`)."""
+
+    def __init__(self, linea):
+        super().__init__(linea)
+        self.linea = linea
+
+
 _VIGIA = {"id": None}         # id de sys.monitoring reservado (perezosamente) para vigilar el plazo
 _limites = {}                 # objeto de código del agente → instante (monotonic) en que se corta
+_latidos = {}                 # objeto de código del agente → [latido, instante de la próxima consulta]
+
+
+def _llamar_latido(code, linea):
+    """Cada INTERVALO_LATIDO s consulta el latido que puso quien llamó (sesion.latido): si pide cancelar,
+    corta como el plazo, con la misma garantía (nunca a mitad de una llamada interna)."""
+    entrada = _latidos.get(code)
+    if entrada is not None:
+        ahora = time.monotonic()
+        if ahora >= entrada[1]:
+            entrada[1] = ahora + INTERVALO_LATIDO
+            if entrada[0]():
+                raise _Cancelado(linea)
 
 
 def _al_cambiar_de_linea(code, linea):
     limite = _limites.get(code)
     if limite is not None and time.monotonic() > limite:
         raise _TiempoAgotado(linea)
+    _llamar_latido(code, linea)
 
 
 def _al_saltar(code, desde, _hacia):
@@ -707,6 +731,7 @@ def _al_saltar(code, desde, _hacia):
     if limite is not None and time.monotonic() > limite:
         linea = next((ln for ini, fin, ln in code.co_lines() if ini <= desde < fin), None)
         raise _TiempoAgotado(linea)
+    _llamar_latido(code, None)
 
 
 _EVENTOS = sys.monitoring.events.LINE | sys.monitoring.events.JUMP
@@ -736,7 +761,9 @@ def _codigos(co):
 @contextlib.contextmanager
 def _plazo(compilado, segundos, sesion):
     """Vigila SOLO las líneas del código del agente (eventos LINE locales): una llamada interna larga no se
-    corta a la mitad, el corte llega cuando vuelve al código del agente (nunca queda un recálculo a medias)."""
+    corta a la mitad, el corte llega cuando vuelve al código del agente (nunca queda un recálculo a medias).
+    Además consulta cada INTERVALO_LATIDO s el latido opcional de quien llamó (sesion.latido, una función
+    cualquiera: la api no conoce Qt): si devuelve que hay que cancelar, corta igual que el plazo."""
     vigia = _id_vigia() if segundos is not None else None
     if vigia is None:
         if segundos is not None:
@@ -745,8 +772,11 @@ def _plazo(compilado, segundos, sesion):
         return
     codigos = [c for c in _codigos(compilado) if c not in _limites]
     limite = min([time.monotonic() + segundos, *_limites.values()])   # uno anidado no dura más que el de afuera
+    latido = getattr(sesion, "latido", None)
     for c in codigos:
         _limites[c] = limite
+        if callable(latido):
+            _latidos[c] = [latido, time.monotonic()]     # primera consulta en el primer evento
         sys.monitoring.set_local_events(vigia, c, _EVENTOS)
     try:
         yield
@@ -754,13 +784,15 @@ def _plazo(compilado, segundos, sesion):
         for c in codigos:
             sys.monitoring.set_local_events(vigia, c, 0)
             _limites.pop(c, None)
+            _latidos.pop(c, None)
 
 
 @herramienta("execute_code", "avanzado", "Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. "
              "Devuelve lo impreso (stdout) y la variable `result` si el código la define. Todo es un paso de "
              "deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` "
              f"segundos ({PLAZO_CODIGO:g} por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve "
-             "a como estaba.", modifica=True)
+             "a como estaba. En vivo se puede cancelar mientras corre (botón Cancelar del diálogo): responde "
+             "CODE_CANCELLED y el documento también vuelve a como estaba.", modifica=True)
 def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     """
     code: código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar
@@ -769,7 +801,8 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
         CODE_ERROR y el documento vuelve a como estaba.
     timeout: segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como
         estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se
-        vigila tu código: una llamada larga a una herramienta termina antes del corte.
+        vigila tu código: una llamada larga a una herramienta termina antes del corte. También se puede
+        cancelar desde afuera (en vivo, el botón Cancelar): responde CODE_CANCELLED con el mismo rollback.
     """
     if timeout is not None and not (math.isfinite(timeout) and timeout > 0):
         raise error("INVALID_ARGUMENTS", f"timeout tiene que ser un número de segundos mayor que 0 (o null); vino {timeout!r}.")
@@ -797,6 +830,14 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
         if salida.getvalue():
             texto += "\nSalida hasta el corte:\n" + salida.getvalue()[-500:]
         raise error("CODE_TIMEOUT", texto[:_TRAZA_MAXIMA]) from None
+    except _Cancelado as e:
+        lineas = code.splitlines()
+        fuente = lineas[e.linea - 1].strip() if e.linea and 0 < e.linea <= len(lineas) else ""
+        texto = (f"El código se canceló en la línea {e.linea}: {fuente}" if e.linea
+                 else "El código se canceló.") + " El documento volvió a como estaba."
+        if salida.getvalue():
+            texto += "\nSalida hasta el corte:\n" + salida.getvalue()[-500:]
+        raise error("CODE_CANCELLED", texto[:_TRAZA_MAXIMA]) from None
     except (Exception, SystemExit) as e:  # noqa: BLE001
         texto = _traza(e, code)
         if salida.getvalue():

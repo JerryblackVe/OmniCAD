@@ -2805,12 +2805,12 @@ Carga una receta JSON (la de get_recipe): 'replace' reemplaza todo el documento;
 
 ### `execute_code`
 
-Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. Devuelve lo impreso (stdout) y la variable `result` si el código la define. Todo es un paso de deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` segundos (60 por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve a como estaba.
+Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. Devuelve lo impreso (stdout) y la variable `result` si el código la define. Todo es un paso de deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` segundos (60 por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve a como estaba. En vivo se puede cancelar mientras corre (botón Cancelar del diálogo): responde CODE_CANCELLED y el documento también vuelve a como estaba.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `code` (texto; obligatorio): código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar (atajo de api.llamar(sesion, nombre, args); NUNCA lanza: devuelve un dict con ok y, si falló, error_kind). Si alguna llamada falla, el resultado trae failed_calls y un aviso; si fallan TODAS, el resultado es CODE_ERROR y el documento vuelve a como estaba.
-  - `timeout` (número; opcional, por defecto `60.0`): segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se vigila tu código: una llamada larga a una herramienta termina antes del corte.
+  - `timeout` (número; opcional, por defecto `60.0`): segundos como máximo (60 por defecto); al vencer se corta el código, el documento vuelve a como estaba y responde CODE_TIMEOUT. null = sin límite (en vivo no se acepta; el máximo es 100 s). Solo se vigila tu código: una llamada larga a una herramienta termina antes del corte. También se puede cancelar desde afuera (en vivo, el botón Cancelar): responde CODE_CANCELLED con el mismo rollback.
 - CLI: `omnicad call execute_code --doc pieza.omnicad code=…`
 
 ### `get_guide`

@@ -13,10 +13,13 @@ Decisiones:
   - `new_document` / `open_document`: si la ventana tiene cambios sin guardar → UNSAVED_CHANGES (no se
     descarta nada), salvo discard=true; si no, la ventana pasa a mostrar el documento nuevo. La regla es de las
     herramientas (`api/herramientas_documento.py`): vale igual sin ventana.
-  - `execute_code` en vivo: NO se permite salvo la preferencia `general/puente_codigo`. Corre Python en el hilo
-    de la interfaz: la ventana no responde mientras corre. Se corta al vencer su `timeout` (como mucho
-    PLAZO_MAXIMO_CODIGO, menos que la espera del cliente) y el documento vuelve atrás. Sin ventana (servidor MCP
-    --modo sin_ventana) no tiene ese riesgo.
+  - `execute_code` en vivo: NO se permite salvo la preferencia `general/puente_codigo`. Corre Python en el
+    hilo de la interfaz; mientras corre, un diálogo modal «Ejecutando código del agente…» mantiene la ventana
+    viva: el vigía del plazo consulta un latido cada ~0,1 s que procesa eventos de Qt (la ventana repinta y
+    responde) y su botón Cancelar corta el código con CODE_CANCELLED; el documento vuelve atrás en los dos
+    cortes. También se corta al vencer su `timeout` (como mucho PLAZO_MAXIMO_CODIGO, menos que la espera del
+    cliente). Un pedido que llega mientras corre queda en la cola y se atiende recién al terminar (no se
+    atiende adentro del latido). Sin ventana (servidor MCP --modo sin_ventana) no tiene ese riesgo.
   - Las herramientas del grupo `dev` no corren en vivo: son del servidor MCP (pytest, capturas…).
 """
 import json
@@ -25,9 +28,9 @@ import secrets
 from collections import deque
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal
 from PySide6.QtNetwork import QHostAddress, QTcpServer
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QProgressDialog
 
 from .. import VERSION, api
 from ..api import protocolo_puente as proto
@@ -204,6 +207,36 @@ class PuenteAgentes(QObject):
         except RuntimeError:
             pass
 
+    # ------------------------------------------------------------ execute_code en vivo
+    def _dialogo_codigo(self):
+        """Diálogo modal con botón Cancelar mientras corre execute_code. Devuelve (latido, diálogo): el vigía
+        del plazo (api.herramientas_avanzado._plazo) llama al latido cada ~0,1 s; este procesa eventos de Qt
+        (la ventana repinta y responde) y devuelve True cuando apretaron Cancelar (o cerraron el diálogo).
+        Los pedidos que llegan mientras tanto quedan en la cola: `_atendiendo` ya está en True y el guardia de
+        `_atender_cola` no deja atenderlos adentro del latido."""
+        dlg = QProgressDialog("Ejecutando código del agente…", "Cancelar", 0, 0, self.ventana)
+        dlg.setWindowTitle("OmniCAD")
+        dlg.setWindowModality(Qt.WindowModality.ApplicationModal)     # bloquea cualquier edición del usuario
+        dlg.setAutoClose(False)
+        dlg.show()
+
+        def latido():
+            QApplication.processEvents()
+            self._recibir_pendientes()      # el readyRead no vuelve a dispararse adentro del dispatch: se drena
+            return dlg.wasCanceled() or not dlg.isVisible()
+        return latido, dlg
+
+    def _recibir_pendientes(self):
+        """Lee los pedidos que llegaron mientras se atendía otro (readyRead de Qt no se re-emite mientras corre
+        el handler del mismo socket: sin esto, un pedido enviado durante execute_code se perdía). Solo los
+        encola: `_atendiendo` está en True y `_atender_cola` no reentra; se atienden al terminar el actual."""
+        for socket in list(self._conexiones):
+            try:
+                if socket.bytesAvailable() > 0:
+                    self._leer(socket)
+            except RuntimeError:              # el objeto de Qt ya no existe
+                pass
+
     # ------------------------------------------------------------ pedidos
     def _atender(self, datos, linea):
         try:
@@ -242,7 +275,7 @@ class PuenteAgentes(QObject):
             plazo = args["timeout"]
             if plazo is None or (isinstance(plazo, (int, float)) and plazo > PLAZO_MAXIMO_CODIGO):
                 return error("INVALID_ARGUMENTS", f"En vivo, execute_code corre como mucho {PLAZO_MAXIMO_CODIGO:g} s "
-                             "(timeout): la ventana no responde mientras corre.",
+                             "(timeout): a ese plazo se corta solo.",
                              "Partí el trabajo en llamadas más cortas o usá el servidor MCP con --modo sin_ventana.").a_dict()
         modifica = h is not None and h["modifica"]
         if modifica:
@@ -254,7 +287,16 @@ class PuenteAgentes(QObject):
         pasos = len(doc.operaciones)
         copia_anterior = proyecto.ruta_autoguardado(doc)     # por si la herramienta guarda en otra ruta o cambia de documento
         habia_cambios = doc.modificado
-        respuesta = api.llamar(self.sesion, herramienta, args)
+        latido, dialogo = self._dialogo_codigo() if herramienta == "execute_code" else (None, None)
+        self.sesion.latido = latido
+        try:
+            respuesta = api.llamar(self.sesion, herramienta, args)
+        finally:
+            self.sesion.latido = None
+            if dialogo is not None:
+                dialogo.close()
+                dialogo.deleteLater()
+                self._recibir_pendientes()     # un pedido de última hora queda en la cola, atendido después
         if self.sesion.doc is not doc:                       # new_document / open_document / recover_document
             if habia_cambios and proyecto.ruta_autoguardado(self.sesion.doc) != copia_anterior:
                 proyecto.borrar_autoguardado(doc)            # descartó el trabajo del anterior: su copia ya no es de nadie

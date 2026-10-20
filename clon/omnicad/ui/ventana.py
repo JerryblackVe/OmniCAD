@@ -2349,6 +2349,8 @@ class VentanaPrincipal(QMainWindow):
         resultado vuelve por `_autoguardado_listo`, que Qt entrega en el hilo de la ventana."""
         if not self.doc.modificado:
             return
+        if self.puente is not None and getattr(self.puente.sesion, "latido", None) is not None:
+            return      # B-16: corre execute_code (su latido procesa eventos): no guardar un estado a medio aplicar
         try:
             proyecto.autoguardar_en_hilo(self.doc, lambda destino, error: self._autoguardado_listo.emit(destino, error))
         except (OSError, RuntimeError) as e:          # al leer la receta o crear la carpeta, antes del hilo
