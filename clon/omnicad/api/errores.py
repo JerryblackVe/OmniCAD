@@ -153,6 +153,8 @@ PISTAS = {
                      "Subí timeout (en vivo, como mucho 100 s) o partí el trabajo en llamadas más cortas.",
                      "Si es un bucle sin salida, revisá la condición del while."],
     "TOPIC_NOT_FOUND": ["get_guide sin argumentos devuelve el índice con los temas."],
+    "STORYBOARD_NOT_FOUND": ["list_storyboards lista los guiones gráficos con su nombre y su índice."],
+    "ACTION_NOT_FOUND": ["get_storyboard lista las acciones del guion con su id (a1, a2, …)."],
     "INTERNAL_ERROR": ["Es una falla interna de OmniCAD: el documento no cambió. Probá con otros valores o reportalo."],
     # --- puente en vivo (la app abierta; ver api/protocolo_puente.py)
     "UNAUTHORIZED": ["El token no coincide con el de puente.json: la app se reinició o el archivo es de otra instancia.",

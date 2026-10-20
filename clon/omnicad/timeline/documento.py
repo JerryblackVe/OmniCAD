@@ -242,6 +242,7 @@ class Documento:
         self.propiedades = {k: dict(v) for k, v in (datos.get("propiedades") or {}).items()}
         self.analisis = {k: dict(v) for k, v in (datos.get("analisis") or {}).items()}
         self.configuraciones = dict(datos.get("configuraciones") or {})
+        self.espacios = dict(datos.get("espacios", {}))    # deshacer/rehacer también revierten los espacios
         nuevas = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
         self.marcador = min(datos.get("marcador", len(nuevas)), len(nuevas))
         self._contador = datos.get("contador", len(nuevas))

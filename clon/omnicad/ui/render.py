@@ -54,18 +54,14 @@ from .aspectos_ui import PanelAspectos, RadiosAplicarA
 from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
 from .iconos import icono
 from .superposiciones import AreaVisor
-from ..nucleo.render_cpu import color_y_acabado, malla_suave, malla_suave_aparte  # noqa: F401 — se re-exportan (tests, animación)
-from .visor3d import ENTORNOS, ConfigVista, Visor3D, aristas_cuerpo, rayo_triangulos
+from ..nucleo.render_cpu import ENTORNOS, cielo_de, color_y_acabado, malla_suave, malla_suave_aparte  # noqa: F401 — se re-exportan (tests, animación)
+from .visor3d import ConfigVista, Visor3D, aristas_cuerpo, rayo_triangulos
 
 log = logging.getLogger(__name__)
 _F = np.float32
 
 
 # =============================================================== utilidades
-def cielo_de(entorno):
-    """(arriba, abajo, intensidad) del entorno de visor3d.ENTORNOS (sRGB)."""
-    _n, arriba, abajo, luz = ENTORNOS.get(entorno, ENTORNOS["fotomaton"])
-    return tuple(arriba), tuple(abajo), float(luz)
 
 
 # =============================================================== GLSL

@@ -31,6 +31,7 @@ GRUPOS = {
     "ensamble": "Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento.",
     "material": "Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos.",
     "inspeccion": "Ver y medir el resultado.",
+    "animacion": "Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video.",
     "avanzado": "Cualquier operación, receta, código y guía.",
     "grafo": "Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline.",
     "dev": "Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`).",
