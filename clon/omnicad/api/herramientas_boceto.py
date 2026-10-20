@@ -99,7 +99,7 @@ def plano_o_cara(sesion, plane, body=None):
 def op_boceto(sesion, ref=None, derivados=False):
     """`OpBoceto` por id o nombre; sin `ref`, el último boceto activo del timeline. Con `derivados` también los pasos
     que generan un boceto fijo (`BOCETO_DERIVADO`, p. ej. el desfase de aristas): sirven para leer perfiles, no para
-    dibujar en ellos."""
+    dibujar en ellos. También admite los ids compuestos de bocetos de una derivación externa."""
     doc = sesion.doc
     es_boceto = lambda o: isinstance(o, OpBoceto) or (derivados and getattr(o, "BOCETO_DERIVADO", False))  # noqa: E731
     if ref is None or not str(ref).strip():
@@ -108,6 +108,13 @@ def op_boceto(sesion, ref=None, derivados=False):
             raise error("SKETCH_NOT_FOUND", "El documento todavía no tiene ningún boceto.")
         return activos[-1]
     ref = str(ref).strip()
+    if "." in ref and ref in doc.estado_final.bocetos:
+        br = doc.estado_final.bocetos[ref]
+        if not derivados:
+            raise error("INVALID_ARGUMENTS", f"El boceto «{br.nombre}» ({ref}) es derivado y de solo lectura: "
+                        "no se puede dibujar ni editar en él.")
+        # Vista de lectura: este boceto resuelto no tiene un paso propio en el timeline.
+        return OpBoceto(ref, br.nombre, boceto=br.boceto, plano=None, marco=br.plano.marco())
     bocetos = [o for o in doc.operaciones if es_boceto(o)]
     for o in bocetos:
         if o.id == ref:

@@ -522,6 +522,8 @@ class Documento:
             valores = {}
         ctx = Contexto(valores)
         op.calcular(estado, ctx)
+        if op.TIPO == "derivacion" and op.p["parametros"]:
+            op.copiar_parametros(self.parametros)
         return estado, ctx.avisos
 
     @motor.recalculo
@@ -561,6 +563,12 @@ class Documento:
                 inicio = time.perf_counter()
                 try:
                     op.calcular(nuevo, ctx)
+                    if op.TIPO == "derivacion" and op.p["parametros"]:
+                        tabla = op.copiar_parametros(self.parametros)
+                        nuevos_valores = tabla.valores()
+                        self.parametros = tabla
+                        valores.clear()
+                        valores.update(nuevos_valores)
                     estado = nuevo
                     if ctx.avisos:
                         self.resultados.append(ResultadoPaso("aviso", " ".join(ctx.avisos)))
@@ -609,6 +617,11 @@ class Documento:
             pasos = getattr(op, "pasos_repetidos", None)
             if pasos is not None and not op.suprimida:
                 salida |= set(pasos())
+        # Un origen externo puede cambiar aunque la receta local conserve la misma huella.
+        for i, op in enumerate(self.operaciones):
+            if op.TIPO == "derivacion" and not op.suprimida:
+                salida.update(o.id for o in self.operaciones[i:])
+                break
         return salida
 
     def _de_cache(self, i, op, estado):

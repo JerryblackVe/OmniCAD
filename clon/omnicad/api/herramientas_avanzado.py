@@ -132,6 +132,8 @@ _LETRA_ID = re.compile(r"/([FE])\d+\s*$", re.IGNORECASE)
 def tipo_de_campo(clase, clave):
     """Qué guarda el campo `clave` de la operación: "cuerpos" (ids de cuerpo como texto), "una" (UNA referencia),
     "lista" (lista de referencias) o None (otra cosa: números, textos, expresiones, marcos, contenido embebido)."""
+    if clase.TIPO == "derivacion":
+        return None    # nombra cuerpos, bocetos y parámetros del ARCHIVO de origen, no de este documento
     if clave not in clase.PARAMS or clave in _SIN_REFERENCIAS or clave in clase.EXPRESIONES:
         return None
     if clave in _CAMPOS_CUERPO and clave not in getattr(clase, "REFS", ()):

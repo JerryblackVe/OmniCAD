@@ -53,7 +53,7 @@ INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Insertar archivos DXF", "insertar_dxf"),
     _i("Insertar malla", "insertar_malla"),
     _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijación", "fijacion"),
-    _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación")])
+    _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación", "insertar_derivacion")])
 ENSAMBLAR = ("ENSAMBLAR", ["union"], [
     _i("Nuevo componente", "nuevo_componente"), _i("Unión", "union"), _i("Unión como está", "union_construida"),
     _i("Origen de la unión", "origen_union"), _i("Grupo rígido", "grupo_rigido"), SEP,
