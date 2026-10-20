@@ -17,6 +17,8 @@ Aspectos (Fusion › CONFIGURAR › Aspecto): `BIBLIOTECA_ASPECTOS` reproduce la
 biblioteca de Fusion (Metal, Plástico, Vidrio, Goma, Madera, Pintura). Cada aspecto es un color sRGB
 0..1 más un «acabado»: metálico, rugosidad, transparencia, barniz y patrón ("madera" = vetas 3D).
 """
+import base64
+import io
 import math
 
 import numpy as np
@@ -717,7 +719,7 @@ class RenderCancelado(Exception):
 
 
 class _Escena:
-    def __init__(self, objetos, escena, cielo, z_suelo, res_sombras, n_luces=3):
+    def __init__(self, objetos, escena, cielo, z_suelo, res_sombras, n_luces=3, calcomanias=()):
         self.e = escena_normalizada(escena)
         self.n_luces = n_luces
         self.cielo = cielo or CIELO_DEFECTO
@@ -757,6 +759,18 @@ class _Escena:
         self.z_suelo = float(self.min[2]) if z_suelo is None else float(z_suelo)
         self.res_sombras = res_sombras
         self._sombras = None
+        self.calcomanias = []
+        for datos in calcomanias:
+            malla = datos.get("malla")
+            if not datos.get("calcomania") or malla is None or datos["opacidad"] <= 0:
+                continue
+            from PIL import Image
+            try:
+                with Image.open(io.BytesIO(base64.b64decode(datos["imagen"]))) as imagen:
+                    textura = np.asarray(imagen.convert("RGBA"))
+            except (OSError, ValueError, Image.DecompressionBombError) as e:
+                raise geo.ErrorGeometria("No se pudo leer la imagen de la calcomanía.") from e
+            self.calcomanias.append((malla, textura, datos["opacidad"]))
 
     @property
     def sombras(self):
@@ -827,6 +841,34 @@ def _sombrear_pixeles(esc, p, n, v, t, lw, sombra, ao):
     dif, esp, fr = sombrear(p, n, v, color, m[:, 0], m[:, 1], m[:, 3], esc.cielo, esc.e["rotacion"],
                             esc.e["brillo"], sombra, ao, esc.n_luces)
     return dif, esp, fr, color, m[:, 2]
+
+
+def _pintar_calcomanias(esc, mvp, ancho, alto, zbuf, rgb, alfa):
+    """Calcomanía de Fusion: las UV del visor, sin iluminación y mezcladas por alfa sobre la cara."""
+    for malla, textura, opacidad in esc.calcomanias:
+        sx, sy, sz, w = _proyectar(malla["vertices"], mvp, ancho, alto)
+        sx, sy, sz, w = (a.reshape(-1, 3) for a in (sx, sy, sz, w))
+        _z, ids = rasterizar(sx, sy, sz, ancho, alto, (w > 1e-9).all(1),
+                             zbuf.copy(), np.full(ancho * alto, -1, np.int64))
+        pix, t, lam = baricentricas(sx, sy, ids, ancho)
+        lw = lam / w[t]
+        lw /= lw.sum(1, keepdims=True)
+        uv = np.einsum("ij,ijk->ik", lw, malla["uv"].reshape(-1, 3, 2)[t])
+        dentro = ((uv >= 0) & (uv <= 1)).all(1)
+        pix, uv = pix[dentro], uv[dentro]
+        h, w = textura.shape[:2]
+        xy = uv * [w, -h] + [-0.5, h - 0.5]
+        ij = np.floor(xy).astype(np.int64)
+        fraccion = xy - ij
+        color = np.zeros((len(pix), 4))
+        for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1)):
+            x, y = ij[:, 0] + dx, ij[:, 1] + dy
+            peso = np.prod(np.where([dx, dy], fraccion, 1 - fraccion), axis=1)
+            valida = (x >= 0) & (x < w) & (y >= 0) & (y < h)
+            color[valida] += textura[y[valida], x[valida]] * (peso[valida, None] / 255)
+        a = color[:, 3] * opacidad
+        rgb[pix] = color[:, :3] * a[:, None] + rgb[pix] * (1 - a[:, None])
+        alfa[pix] = a + alfa[pix] * (1 - a)
 
 
 def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1, fondo_transparente):
@@ -903,6 +945,8 @@ def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1
         rgb[pix] = mapa_tonos(dif + esp, e["exposicion"])
         alfa[pix] = 1.0
 
+    _pintar_calcomanias(esc, mvp, w, h, zbuf, rgb, alfa)
+
     # cuerpos transparentes (la capa más cercana delante de lo opaco)
     transp = ~esc.opacos
     if transp.any():
@@ -927,7 +971,8 @@ def _render_mosaico(esc, cam, proy_total, vista, ancho_t, alto_t, x0, y0, x1, y1
 
 
 def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, cielo=None,
-               fondo_transparente=False, z_suelo=None, res_sombras=2048, progreso=None, mosaico=1024, n_luces=3):
+               fondo_transparente=False, z_suelo=None, res_sombras=2048, progreso=None, mosaico=1024, n_luces=3,
+               calcomanias=()):
     """Imagen RGBA uint8 (alto, ancho, 4) de la escena. n_luces: 3 = principal, relleno y contorno (iluminación de
     tres puntos); 1 = solo la principal.
 
@@ -935,11 +980,12 @@ def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, 
     "material": nombre del material físico (si no hay acabado), "opacidad": 0..1, "local": Nx3 (opcional,
     coordenadas propias para las vetas)}]. cam: dict de `camara()`. escena: Configuración de escena
     (`ESCENA_DEFECTO`). cielo: (arriba, abajo, intensidad) del entorno, en sRGB (visor3d.ENTORNOS).
+    calcomanias: datos del estado (malla con vértices y UV, imagen embebida y opacidad), como en el visor.
     progreso(fracción) puede devolver False para cancelar (lanza RenderCancelado)."""
     ancho, alto, ss = int(ancho), int(alto), max(1, int(supermuestreo))
     if ancho < 1 or alto < 1:
         raise geo.ErrorGeometria("La imagen tiene que medir al menos 1 × 1 píxel.")
-    esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras, n_luces)
+    esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras, n_luces, calcomanias)
     W, H = ancho * ss, alto * ss
     proy, vista = matrices_camara(cam, W / H)
     salida = np.zeros((alto, ancho, 4))
