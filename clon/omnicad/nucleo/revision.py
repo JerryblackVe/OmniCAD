@@ -182,7 +182,7 @@ def _area(forma):
 def _caras_de(vecinas, i):
     """Caras distintas que comparten la arista i del mapa arista → caras (una costura aparece dos veces)."""
     unicas = []
-    for f in vecinas.FindFromIndex(i):
+    for f in geo.lista_occ(vecinas.FindFromIndex(i)):
         if not any(f.IsSame(g) for g in unicas):
             unicas.append(f)
     return unicas

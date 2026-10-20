@@ -11,7 +11,7 @@ enfoque estándar y propio:
     elipses no fijos, y parámetros auxiliares de contacto (punto sobre spline, tangencia entre curvas
     libres) que se estiman en cada resolución.
   - Cada restricción/cota aporta residuos que valen 0 cuando se cumple.
-  - Se minimiza la suma de cuadrados con `scipy.optimize.least_squares` (región de confianza),
+  - Se minimiza la suma de cuadrados con `scipy.optimize.least_squares` (Levenberg-Marquardt),
     más una regularización muy débil hacia la posición actual: así lo que queda libre
     (sub-restringido) no "salta", se mueve lo mínimo.
   - Grados de libertad restantes = incógnitas − rango del jacobiano de las restricciones.
@@ -463,14 +463,58 @@ class _Sistema:
                 c.radio_menor = float(abs(x[i]))
 
 
-def _jacobiano(fun, x, h=1e-7):
-    f0 = fun(x)
-    J = np.zeros((len(f0), len(x)))
-    for j in range(len(x)):
+def _jacobiano(sis, x, h=1e-7):
+    """Jacobiano de los residuos por diferencias finitas, perturbando a la vez las incógnitas que ningún término
+    comparte (columnas de un mismo «color»). Da lo mismo, bit a bit, que perturbar de a una, con muchas menos
+    evaluaciones: el polígono de 24 lados pasaba de 95 evaluaciones por jacobiano a unas 5."""
+    patron = _patron(sis, x)
+    f0 = sis.residuos(x)
+    J = np.zeros(patron.shape)
+    for cols in _colorear(patron):
         xp = x.copy()
-        xp[j] += h
-        J[:, j] = (fun(xp) - f0) / h
+        xp[cols] += h
+        J[:, cols] = ((sis.residuos(xp) - f0) / h)[:, None] * patron[:, cols]
     return J
+
+
+def _patron(sis, x):
+    """Matriz booleana (filas de residuos × incógnitas): qué incógnitas lee cada término al evaluarlo en x. Todo
+    término lee x solo con `x[i]`, así que basta una evaluación con un lector que anota los índices."""
+    leidos = set()
+
+    class _Lector:
+        def __getitem__(self, i):
+            leidos.add(i)
+            return x[i]
+
+        def __len__(self):
+            return len(x)
+
+    lector, filas = _Lector(), []
+    for f in sis.terminos:
+        leidos.clear()
+        k = len(f(lector))
+        filas += [tuple(leidos)] * k
+    patron = np.zeros((len(filas), len(x)), dtype=bool)
+    for r, cols in enumerate(filas):
+        patron[r, list(cols)] = True
+    return patron
+
+
+def _colorear(patron):
+    """Columnas agrupadas sin filas en común (coloreo voraz): cada grupo se perturba en una sola evaluación."""
+    colores, filas_de = [], []
+    for j in range(patron.shape[1]):
+        col = patron[:, j]
+        for k, usadas in enumerate(filas_de):
+            if not (usadas & col).any():
+                colores[k].append(j)
+                usadas |= col
+                break
+        else:
+            colores.append([j])
+            filas_de.append(col.copy())
+    return colores
 
 
 def _claves(b, eid):
@@ -561,11 +605,15 @@ def _fijos(b):
     return fijos_p, fijos_r
 
 
-def resolver(boceto, valores_cotas=None, arrastrado=None):
+def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     """Resuelve el boceto en el lugar (modifica coordenadas y radios). Devuelve ResultadoSolver.
 
     valores_cotas: {id_cota: valor} en mm o grados (ya evaluados desde sus expresiones).
     arrastrado: id de un punto que el usuario está moviendo; se intenta respetar su posición.
+    previo: resultado del último `resolver` completo, para un evento de arrastre del ratón: se resuelve solo la
+        parte que contiene a `arrastrado` (las otras ya estaban resueltas y no cambian) y se conservan los grados de
+        libertad y las entidades determinadas de `previo` (arrastrar no cambia las restricciones). Al soltar, el
+        editor vuelve a resolver todo sin `previo`.
 
     Se resuelve cada parte independiente por separado (`_grupos`): la geometría sin restricciones no entra,
     así un dibujo importado de miles de curvas no arma un sistema gigante (antes, 30 000 incógnitas pedían
@@ -573,6 +621,8 @@ def resolver(boceto, valores_cotas=None, arrastrado=None):
     """
     valores = valores_cotas or {}
     grupos = _grupos(boceto)
+    if previo is not None and arrastrado is not None:
+        return _resolver_arrastre(boceto, valores, grupos, arrastrado, previo)
     fijos = _fijos(boceto)
     sueltos_p, sueltos_r = _sueltas(boceto, grupos, fijos)
     libres_p, libres_r = set(sueltos_p), set(sueltos_r)
@@ -600,8 +650,26 @@ def resolver(boceto, valores_cotas=None, arrastrado=None):
     return ResultadoSolver("ok", gdl, err_max, determinadas=determinadas)
 
 
-def _resolver_grupo(sis, arrastrado):
-    """(x resuelto o None, error máximo, jacobiano, rango) de un grupo."""
+def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
+    """`resolver` para un evento de arrastre: solo la parte del punto arrastrado y sin el rango ni el núcleo del
+    jacobiano (se conservan los de `previo`)."""
+    err = 0.0
+    for g in grupos:
+        if arrastrado in g["p"]:
+            sis = _Sistema(boceto, valores, g)
+            x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
+            if x is not None:
+                sis.escribir(x)
+            break
+    if err >= TOLERANCIA:
+        return ResultadoSolver("inconsistente", previo.gdl, err, "Revisá las últimas restricciones o cotas.",
+                               previo.determinadas)
+    return ResultadoSolver("ok", previo.gdl, err, determinadas=previo.determinadas)
+
+
+def _resolver_grupo(sis, arrastrado, con_rango=True):
+    """(x resuelto o None, error máximo, jacobiano, rango) de un grupo. Sin `con_rango`, el jacobiano y el rango
+    quedan en None (un evento de arrastre no los usa)."""
     n = len(sis.x0)
     if n == 0 or not sis.terminos:
         r = sis.residuos(sis.x0) if sis.terminos else np.zeros(0)
@@ -615,15 +683,21 @@ def _resolver_grupo(sis, arrastrado):
 
     def corrida(x_inicio, ancla, w):
         fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla)])  # noqa: E731
+        jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)])  # noqa: E731
         from scipy.optimize import least_squares   # perezoso: importarlo cuesta ~0,8 s al arrancar la CLI y el MCP
-        return least_squares(fun, x_inicio, method="trf", xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=200 * (n + 1)).x
+        # Levenberg-Marquardt (MINPACK, QR): "trf" hacía una SVD por iteración y con los hilos de OpenBLAS cada
+        # una costaba ~2,4 ms en matrices de 100×100; con "lm" el arrastre del polígono de 24 lados baja a ~15 ms.
+        return least_squares(fun, x_inicio, jac=jac, method="lm", xtol=1e-14, ftol=1e-14, gtol=1e-14,
+                             max_nfev=200 * (n + 1)).x
 
     x = corrida(sis.x0, sis.x0, pesos)
     # Pulido: re-anclar en la solución elimina el sesgo de la regularización.
     x = corrida(x, x, np.full(n, _PESO_REGULARIZACION))
     res = sis.residuos(x)
     err = float(np.max(np.abs(res))) if len(res) else 0.0
-    J = _jacobiano(sis.residuos, x)
+    if not con_rango:
+        return x, err, None, None
+    J = _jacobiano(sis, x)
     rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
     return x, err, J, rango
 
@@ -689,7 +763,7 @@ def grados_de_libertad(boceto, valores_cotas=None):
         if not sis.terminos:
             gdl += len(sis.x0)
             continue
-        J = _jacobiano(sis.residuos, sis.x0)
+        J = _jacobiano(sis, sis.x0)
         gdl += len(sis.x0) - int(np.linalg.matrix_rank(J, tol=1e-6))
     return gdl
 

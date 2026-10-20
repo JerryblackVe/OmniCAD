@@ -830,7 +830,7 @@ def _normal_en(cara, arista, t):
 def _es_concava(arista, vecinas):
     """Arista viva cóncava (rincón interior): la cara 1 avanza hacia afuera de la cara 2."""
     caras = []
-    for f in vecinas:
+    for f in geo.lista_occ(vecinas):
         if not any(f.IsSame(g) for g in caras):
             caras.append(f)
     if len(caras) != 2:

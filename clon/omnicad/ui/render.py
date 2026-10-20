@@ -55,7 +55,7 @@ from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
 from .iconos import icono
 from .superposiciones import AreaVisor
 from ..nucleo.render_cpu import color_y_acabado, malla_suave, malla_suave_aparte  # noqa: F401 — se re-exportan (tests, animación)
-from .visor3d import ENTORNOS, ConfigVista, Visor3D, aristas_cuerpo, rayo_triangulos
+from .visor3d import ENTORNOS, ConfigVista, Visor3D, aristas_cuerpo, rayo_caja, rayo_triangulos
 
 log = logging.getLogger(__name__)
 _F = np.float32
@@ -501,6 +501,9 @@ class LienzoRender(Visor3D):
 
     def _aplicar(self):
         mallas = []
+        # Lo transformado en el cuadro anterior, por parte y matriz: un cuerpo que no se movió conserva sus arreglos
+        # (y su búfer en la placa de video, que se cachea por arreglo) en vez de recalcularlos y subirlos cada cuadro.
+        anteriores, self._transformados = getattr(self, "_transformados", {}), {}
         for cid, o in self.objetos.items():
             M = self.transformaciones.get(cid)
             for parte in (o, *o["caras"]):               # el cuerpo y, aparte, sus caras con aspecto propio
@@ -508,14 +511,22 @@ class LienzoRender(Visor3D):
                 if not len(v):
                     continue
                 if M is not None and not np.allclose(M, np.identity(4)):
-                    R, t = M[:3, :3], M[:3, 3]
-                    v = (v @ R.T + t).astype(_F)
-                    n = (n @ R.T).astype(_F)
-                    seg = (seg @ R.T + t).astype(_F) if len(seg) else seg
+                    clave = (id(parte), M.tobytes())
+                    hecho = anteriores.get(clave)
+                    if hecho is None or hecho[0] is not parte:
+                        R, t = M[:3, :3], M[:3, 3]
+                        hecho = (parte, (v @ R.T + t).astype(_F), (n @ R.T).astype(_F),
+                                 (seg @ R.T + t).astype(_F) if len(seg) else seg)
+                    self._transformados[clave] = hecho
+                    v, n, seg = hecho[1:]
+                caja = anteriores.get(("caja", id(v)))
+                if caja is None or caja[0] is not v:      # la caja también, por arreglo (retenido en la entrada)
+                    caja = (v, (v.min(0).astype(float), v.max(0).astype(float)))
+                self._transformados[("caja", id(v))] = caja
                 mallas.append({"v": np.ascontiguousarray(v, _F), "n": np.ascontiguousarray(n, _F),
                                "seg": np.ascontiguousarray(seg, _F), "loc": parte["loc0"], "indice": o["indice"],
                                "id": cid, "color": tuple(parte["color"]), "tipo": o["tipo"],
-                               "acabado": parte["acabado"], "caja": (v.min(0).astype(float), v.max(0).astype(float))})
+                               "acabado": parte["acabado"], "caja": caja[1]})
         self._mallas = mallas
         self._hover_ent = None
         self.update()
@@ -562,7 +573,8 @@ class LienzoRender(Visor3D):
         o, d = self.rayo(pos)
         mejor = (np.inf, None)
         for m in self._mallas:
-            if self.opacidad.get(m["id"], 1.0) < 0.05 or not len(m["v"]):
+            if (self.opacidad.get(m["id"], 1.0) < 0.05 or not len(m["v"])
+                    or rayo_caja(o, d, *m["caja"]) >= mejor[0]):
                 continue
             ts = rayo_triangulos(o, d, m["v"].reshape(-1, 3, 3).astype(float))
             i = int(np.argmin(ts))
@@ -987,7 +999,7 @@ class LienzoRender(Visor3D):
         if self._hover_ent is not None:
             self._dibujar_primitivas(self._hover_ent["dibujo"], (0.45, 0.70, 1.0))
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
-        self.camara_cambiada.emit()
+        self._avisar_camara()
 
     # ------------------------------------------------------------ imagen final
     def renderizar_imagen(self, ancho, alto, supermuestreo=2, motor="gl", fondo_transparente=False, progreso=None):

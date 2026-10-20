@@ -197,8 +197,15 @@ class Navegador(QFrame):
 
     def actualizar(self, titulo, cuerpos, bocetos, ocultos, vis, planos=(), vistas=()):
         """cuerpos / bocetos / planos: [(id, nombre)]; vistas: [nombre];
-        vis: dict con 'todo', 'origen', 'planos', 'cuerpos', 'bocetos'."""
-        if self._items:      # lo que estaba abierto sigue abierto; una carpeta que aparece recién (Calcomanías) se abre
+        vis: dict con 'todo', 'origen', 'planos', 'cuerpos', 'bocetos'.
+        Si no cambió nada de lo que se muestra, no se reconstruye (la ventana lo llama en cada aviso del documento)."""
+        firma = repr((titulo, cuerpos, bocetos, sorted(ocultos), vis, planos, vistas, self.calcomanias,
+                      self.componentes, self.lienzos, self.uniones, self.analisis, self.organizacion,
+                      formato.unidad_longitud(), formato.unidad_masa()))
+        if self._items and firma == getattr(self, "_firma", None):
+            return
+        self._firma = firma
+        if self._items:     # lo que estaba abierto sigue abierto; una carpeta que aparece recién (Calcomanías) se abre
             self._expandidos = {k for k, it in self._items.items() if it.isExpanded()} | (EXPANDIDOS_INICIALES
                                                                                          - set(self._items))
         actual = self.arbol.currentItem()
@@ -330,6 +337,7 @@ class Navegador(QFrame):
         if item is None or item.data(0, ROL_TIPO) not in RENOMBRABLES:
             return False
         self._renombrando = (item, item.text(0))
+        self._firma = None                  # la fila queda editable: el próximo `actualizar` la rehace limpia
         item.setFlags(item.flags() | Qt.ItemIsEditable)
         self.arbol.editItem(item, 0)
         return True

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
@@ -133,8 +133,11 @@ class _FiltroAyuda(QObject):
 
 
 class VentanaPrincipal(QMainWindow):
+    _autoguardado_listo = Signal(object, object)    # (destino, error) desde el hilo del autoguardado
+
     def __init__(self, doc=None, prefs=None):
         super().__init__()
+        self._autoguardado_listo.connect(self._al_autoguardar)
         self.resize(1600, 950)
         self._filtro_info = _FiltroInfoHerramientas(self)
         self.prefs = prefs or Preferencias()
@@ -2033,6 +2036,7 @@ class VentanaPrincipal(QMainWindow):
 
     def calcular_todo(self):
         inicio = time.perf_counter()
+        self.doc.olvidar_memoria()            # «Calcular todo» ejecuta de verdad cada paso
         self.doc.recalcular(0)
         self.mensaje(f"Calculado todo: {len(self.doc.operaciones)} paso(s) en {time.perf_counter() - inicio:.2f} s")
 
@@ -2319,6 +2323,7 @@ class VentanaPrincipal(QMainWindow):
         """Lo que sigue a un guardado que salió bien, lo haya hecho la persona o un agente por el puente: las copias
         de autoguardado (la de antes y la de la ruta nueva) ya no valen, y el título, el «*» y los recientes
         se ponen al día."""
+        proyecto.esperar_autoguardado()               # un autoguardado en curso no puede reescribir la copia después
         try:
             copia_anterior.unlink(missing_ok=True)
         except OSError as e:                          # un archivo bloqueado no puede hacer fallar un guardado que salió bien
@@ -2328,17 +2333,24 @@ class VentanaPrincipal(QMainWindow):
         self._recordar(final)
 
     def autoguardar(self):
+        """La receta se lee acá; el ZIP se escribe en un hilo (con un proyecto grande trababa la ventana) y el
+        resultado vuelve por `_autoguardado_listo`, que Qt entrega en el hilo de la ventana."""
         if not self.doc.modificado:
             return
         try:
-            destino = proyecto.autoguardar(self.doc)
+            proyecto.autoguardar_en_hilo(self.doc, lambda destino, error: self._autoguardado_listo.emit(destino, error))
+        except (OSError, RuntimeError) as e:          # al leer la receta o crear la carpeta, antes del hilo
+            self._al_autoguardar(None, e)
+
+    def _al_autoguardar(self, destino, error):
+        if error is None:
             self._autoguardado_fallo = None
             self.mensaje(f"Autoguardado {time.strftime('%H:%M')} → {destino.name}", 4000)
-        except (OSError, RuntimeError) as e:
-            log.warning("Autoguardado falló: %s", e)
-            if str(e) != self._autoguardado_fallo:                          # se avisa una vez, no cada minuto
-                self._autoguardado_fallo = str(e)
-                self.mensaje(f"⚠ No se pudo autoguardar: {e}. Guardá el proyecto a mano.", 10000)
+            return
+        log.warning("Autoguardado falló: %s", error)
+        if str(error) != self._autoguardado_fallo:                          # se avisa una vez, no cada minuto
+            self._autoguardado_fallo = str(error)
+            self.mensaje(f"⚠ No se pudo autoguardar: {error}. Guardá el proyecto a mano.", 10000)
 
     def verificar_autoguardado_huerfano(self, solo_avisar=False):
         """«Documentos recuperados» al arrancar y desde Archivo (pendiente 21, como Fusion 360): la
@@ -2458,6 +2470,7 @@ class VentanaPrincipal(QMainWindow):
 
     def closeEvent(self, e):
         if self._salir_de_boceto() and self._confirmar_descartar():
+            proyecto.esperar_autoguardado()   # no cortar un ZIP a medio escribir (quedaría el temporal)
             if self.puente is not None:
                 self.puente.detener()         # cierra las conexiones y borra puente.json
             e.accept()

@@ -279,7 +279,7 @@ def _origen_aristas(aristas, caras, sp):
                 usadas[i] = True
     for i, (cid, e) in enumerate(aristas):
         if not usadas[i]:                  # se partió (o se superpone con otra): sus hijas por el historial
-            for hija in sp.Modified(e):
+            for hija in geo.lista_occ(sp.Modified(e)):
                 origen.setdefault(hash(hija), cid)
     return origen
 
@@ -305,7 +305,7 @@ def _detectar(geometria, plano, tolerancia=1e-4):
     origen = _origen_aristas(aristas, caras, sp)
     borde = {hash(a) for a in _aristas_de(grande)}
     for a in _aristas_de(grande):
-        borde.update(hash(h) for h in sp.Modified(a))
+        borde.update(hash(h) for h in geo.lista_occ(sp.Modified(a)))
 
     perfiles = []
     for cara in caras:

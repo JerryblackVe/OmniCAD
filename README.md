@@ -131,6 +131,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - Más vectores: editar curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
 - Ensamblajes, animación, simulaciones y movimiento de piezas.
 - Funciones al estilo Rhino y programación visual al estilo Grasshopper.
+- Más rápido: pasar a Rust las partes lentas (mallas, solver de bocetos) y calcular la vista previa en un proceso aparte.
 
 Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
 

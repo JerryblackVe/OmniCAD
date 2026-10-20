@@ -2,6 +2,7 @@
 """Herramientas del grupo "documento": archivo, escena, timeline, deshacer y rehacer."""
 import copy
 import re
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -194,6 +195,20 @@ def set_document_units(sesion, length: Literal["mm", "cm", "m", "in", "ft"] | No
     except ErrorDocumento as e:
         raise error("INVALID_ARGUMENTS", str(e)) from None
     return {"display_units": {"length": sesion.doc.unidades["longitud"], "mass": sesion.doc.unidades["masa"]}}
+
+
+@herramienta("recompute_all", "documento", "Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS "
+             "los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. Sirve si algo "
+             "se ve mal o para medir cuánto tarda el modelo entero. No cambia la receta.", modifica=True,
+             transaccion=False)
+def recompute_all(sesion):
+    inicio = time.perf_counter()
+    sesion.doc.olvidar_memoria()
+    sesion.doc.recalcular(0)
+    fallidos = [{"id": op.id, "name": op.nombre, "message": r.mensaje}
+                for op, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False) if r.estado == "error"]
+    return {"steps": len(sesion.doc.operaciones), "seconds": round(time.perf_counter() - inicio, 3),
+            "failed_steps": fallidos}
 
 
 @herramienta("set_geometry_engine", "documento", "Elige el motor geométrico (Preferencias › Geometría): "

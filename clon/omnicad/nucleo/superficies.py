@@ -214,7 +214,7 @@ def _mapa_aristas(forma):
 def _caras_de(mapa, arista):
     if not mapa.Contains(arista):
         return []
-    return [TopoDS.Face(f) for f in mapa.FindFromKey(arista)]
+    return [TopoDS.Face(f) for f in geo.lista_occ(mapa.FindFromKey(arista))]
 
 
 def _orientacion_en(cara, arista):
@@ -708,7 +708,7 @@ def regiones_recorte(forma, herramienta):
 
     for k in range(1, mapa.Extent() + 1):
         arista = TopoDS.Edge(mapa.FindKey(k))
-        vecinas = [TopoDS.Face(f) for f in mapa.FindFromIndex(k)]
+        vecinas = [TopoDS.Face(f) for f in geo.lista_occ(mapa.FindFromIndex(k))]
         if len(vecinas) < 2:
             continue
         curva = BRepAdaptor_Curve(arista)

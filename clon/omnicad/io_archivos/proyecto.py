@@ -187,21 +187,31 @@ def _leer_cache_omnikernel(z, receta):
 
 
 def guardar(doc, ruta, miniatura_png=None, incluir_cache=True):
+    return _escribir(*_preparar(doc, ruta), miniatura_png, doc if incluir_cache else None)
+
+
+def _preparar(doc, ruta):
+    """(ruta con extensión, manifiesto, receta en bytes): lo que hay que leer del documento para guardarlo."""
     ruta = Path(ruta)
     if ruta.suffix.lower() not in EXTENSIONES:
         ruta = ruta.with_suffix(EXTENSION)
     manifiesto = {"formato": FORMATO, "version_formato": VERSION_FORMATO, "aplicacion": NOMBRE_APP,
                   "version_aplicacion": VERSION, "guardado": _ahora(), "nombre": doc.nombre,
                   "unidades": {"longitud": "mm", "angulo": "deg"}}
+    return ruta, manifiesto, json.dumps(doc.a_dict(), indent=1, ensure_ascii=False).encode("utf-8")
+
+
+def _escribir(ruta, manifiesto, receta, miniatura_png=None, doc_cache=None):
+    """Escribe el ZIP (por un temporal, así un corte no deja el archivo a medias). Sin `doc_cache` no lee nada del
+    documento: el autoguardado lo corre en un hilo."""
     fd, temporal = tempfile.mkstemp(suffix=EXTENSION, dir=str(ruta.parent))
     os.close(fd)
     try:
         with zipfile.ZipFile(temporal, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("manifiesto.json", json.dumps(manifiesto, indent=2, ensure_ascii=False))
-            receta = json.dumps(doc.a_dict(), indent=1, ensure_ascii=False).encode("utf-8")
             z.writestr("receta.json", receta)
-            if incluir_cache:
-                _escribir_cache(z, doc, receta)
+            if doc_cache is not None:
+                _escribir_cache(z, doc_cache, receta)
             if miniatura_png:
                 z.writestr("miniatura.png", miniatura_png)
         os.replace(temporal, ruta)
@@ -278,13 +288,45 @@ def ruta_autoguardado(doc):
 
 def autoguardar(doc, miniatura_png=None):
     """Guarda una copia de seguridad SIN marcar el documento como guardado."""
+    esperar_autoguardado()
     destino = ruta_autoguardado(doc)
     guardar(doc, destino, miniatura_png, incluir_cache=False)
     return destino
 
 
+_HILOS = []        # autoguardados que se están escribiendo (`autoguardar_en_hilo`)
+
+
+def esperar_autoguardado():
+    """Espera a que terminen los autoguardados en curso. Se llama antes de borrar o leer una copia: si no, el hilo la
+    volvería a escribir después de un guardado a mano."""
+    while _HILOS:
+        _HILOS.pop().join()
+
+
+def autoguardar_en_hilo(doc, al_terminar):
+    """Como `autoguardar`, pero solo la receta se lee acá (rápido, y queda la foto de este momento); comprimir y
+    escribir el ZIP va en un hilo, así la ventana no se traba con un proyecto grande. `al_terminar(destino, error)`
+    se llama EN EL HILO (error es None o la excepción OSError/RuntimeError). Devuelve el hilo."""
+    import threading
+    esperar_autoguardado()
+    ruta, manifiesto, receta = _preparar(doc, ruta_autoguardado(doc))
+
+    def trabajar():
+        try:
+            al_terminar(_escribir(ruta, manifiesto, receta), None)
+        except (OSError, RuntimeError) as e:
+            al_terminar(ruta, e)
+
+    hilo = threading.Thread(target=trabajar, name="autoguardado", daemon=True)
+    hilo.start()
+    _HILOS.append(hilo)
+    return hilo
+
+
 def autoguardados_pendientes():
     """Autoguardados de documentos «Sin título», del más nuevo al más viejo (B-22)."""
+    esperar_autoguardado()
     return sorted(carpeta_autoguardado().glob("sin_titulo*.autoguardado" + EXTENSION),
                    key=lambda p: p.stat().st_mtime, reverse=True)
 
@@ -292,6 +334,7 @@ def autoguardados_pendientes():
 def autoguardado_pendiente(ruta_proyecto=None):
     """Si hay un autoguardado más nuevo que el proyecto (o huérfano), devuelve su ruta. Con varios huérfanos,
     el más nuevo (el resto los lista `autoguardados_pendientes`)."""
+    esperar_autoguardado()
     if ruta_proyecto:
         p = Path(ruta_proyecto)
         a = p.with_name(p.stem + ".autoguardado" + EXTENSION)
@@ -335,6 +378,7 @@ def pendientes_de_recuperacion(recientes=()):
 def borrar_autoguardado(doc):
     """Borra la copia de autoguardado del documento. Un archivo bloqueado no puede hacer fallar un guardado que
     ya salió bien: se avisa en el registro y se sigue."""
+    esperar_autoguardado()
     destino = ruta_autoguardado(doc)
     try:
         destino.unlink(missing_ok=True)
