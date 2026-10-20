@@ -283,7 +283,7 @@ def dependencias(ref):
         return set() if i in geo.Plano.DEFINICIONES or i in EJES_ORIGEN or i == "O" else {i.split("_")[0]}
     if t in ("perfil", "curva_boceto", "punto_boceto", "boceto"):
         b = ref.get("boceto")
-        return {b} if b and isinstance(b, str) else set()
+        return {b.split(".", 1)[0]} if b and isinstance(b, str) else set()
     return set()
 
 

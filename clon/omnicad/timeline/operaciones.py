@@ -613,7 +613,7 @@ class _OpConPerfiles(Operacion):
     def dependencias(self):
         deps = super().dependencias()
         if self.p.get("boceto") and isinstance(self.p["boceto"], str):
-            deps.add(self.p["boceto"])
+            deps.add(self.p["boceto"].split(".", 1)[0])
         deps |= _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("objetivos"))
         deps |= ent.dependencias_de(self.p.get("caras"), self.p.get("hasta"), self.p.get("inicio_objeto"),
                                     self.p.get("eje_ref"), self.p.get("hasta2"), self.p.get("curvas"))
@@ -1018,5 +1018,5 @@ def operacion_desde_dict(d):
 
 
 # Operaciones de los otros módulos (se registran al importarse; van al final por el import circular).
-from . import (ops_chapa, ops_construir, ops_engranaje, ops_ensamblar, ops_fijacion, ops_grafo,  # noqa: E402,F401
-               ops_insertar, ops_malla, ops_modificar, ops_revision, ops_solido, ops_superficie)
+from . import (ops_chapa, ops_construir, ops_derivacion, ops_engranaje, ops_ensamblar, ops_fijacion,  # noqa: E402,F401
+                ops_grafo, ops_insertar, ops_malla, ops_modificar, ops_revision, ops_solido, ops_superficie)
