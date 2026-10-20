@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-191 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+195 herramientas en 13 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 29 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 33 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 4 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 29 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -41,6 +41,7 @@ Archivo, escena, timeline y deshacer.
 | [`new_document`](#new_document) | sí | Empieza un documento vacío en lugar del actual. |
 | [`open_document`](#open_document) | sí | Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). |
 | [`insert_file`](#insert_file) | sí | Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Insertar de Fusion): STEP .step/.stp (con nombres, colores y componentes), IGES .iges/.igs, malla .stl/.obj/.3mf/.ply, B-rep de OpenCascade .brep/.brp, Fusion 360 .f3d/.f3z (sus cuerpos, leídos sin Fusion y con cada componente en su lugar) u otro diseño .omnicad/.fclone (entra como componente). |
+| [`insert_derive`](#insert_derive) | sí | Deriva de OTRO proyecto .omnicad al documento actual (Insert Derive de Fusion): los cuerpos, bocetos y parámetros elegidos entran como UN paso del timeline que guarda la ruta del origen y qué se derivó; al recalcular vuelve a leer el origen (si cambió, se actualiza; si falta, el paso queda con error). |
 | [`inspect_f3d`](#inspect_f3d) | no | Mira un archivo de Fusion 360 (.f3d o .f3z) SIN abrirlo: cuántos cuerpos guarda su geometría tal cual (bodies_stored, cada uno en las coordenadas de su componente) y cuántos salen al poner cada componente en su lugar del ensamblaje (bodies_placed), con el volumen de uno y otro (mm³), qué componentes se mueven y cuáles tienen copias (instancias que comparten la geometría), y lo que se vio en la escena del archivo. open_document e insert_file abren el archivo con los cuerpos ya ubicados. |
 | [`save_document`](#save_document) | no | Guarda el documento como proyecto .omnicad. |
 | [`export`](#export) | no | Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf, .ply (mallas), .glb/.gltf (glTF 2.0 para web y realidad aumentada: malla con el color y el acabado de cada cuerpo como material PBR, en metros y con Y arriba), .step/.stp, .iges/.igs, .brep (sólidos exactos) o .dxf (patrón plano de un cuerpo de chapa). |
@@ -54,9 +55,12 @@ Archivo, escena, timeline y deshacer.
 | [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
 | [`discard_recoverable_document`](#discard_recoverable_document) | no | Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). |
+| [`export_mesh`](#export_mesh) | no | Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. |
 | [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
 | [`manage_browser`](#manage_browser) | sí | Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
-| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. |
+| [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. |
+| [`find_in_window`](#find_in_window) | no | Selecciona cuerpos, los encuadra en la ventana y resalta su paso creador en el timeline, como Buscar en la ventana del navegador. |
+| [`set_body_opacity`](#set_body_opacity) | sí | Cambia el Control de opacidad de cuerpos del navegador. |
 | [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline o mostrar/ocultar capas del editor. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
@@ -167,6 +171,19 @@ Inserta un archivo en el documento ACTUAL como un paso nuevo del timeline (Inser
   - `mesh_units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Importar archivo.ext» / «Insertar archivo».
 - CLI: `omnicad call insert_file --doc pieza.omnicad path=…`
+
+### `insert_derive`
+
+Deriva de OTRO proyecto .omnicad al documento actual (Insert Derive de Fusion): los cuerpos, bocetos y parámetros elegidos entran como UN paso del timeline que guarda la ruta del origen y qué se derivó; al recalcular vuelve a leer el origen (si cambió, se actualiza; si falta, el paso queda con error). Los parámetros derivados se copian también al documento. A diferencia de insert_file con un .omnicad (que copia el diseño adentro), la derivación queda asociada al archivo de origen.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `source_path` (texto; obligatorio): ruta del proyecto .omnicad (o .fclone) de origen.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos del origen a derivar (get_scene_info del origen los lista).
+  - `sketches` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los bocetos del origen a derivar.
+  - `parameters` (lista de texto o null; opcional, por defecto `null`): nombres de los parámetros del origen a derivar; quedan también como parámetros del documento.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Derivación de <archivo>».
+- CLI: `omnicad call insert_derive --doc pieza.omnicad source_path=…`
 
 ### `inspect_f3d`
 
@@ -294,6 +311,26 @@ Suprime una copia de autoguardado de la lista de documentos recuperables (el bot
   - `path` (texto; obligatorio): ruta de la copia de autoguardado (de list_recoverable_documents).
 - CLI: `omnicad call discard_recoverable_document --doc pieza.omnicad path=…`
 
+### `export_mesh`
+
+Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. Las mallas existentes conservan sus facetas; los controles personalizados de arista y aspecto también las subdividen.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `path` (texto; obligatorio): archivo de destino con extensión correspondiente al formato (.3mf, .stl u .obj).
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos; vacío = todos los del modelo, sin patrones planos.
+  - `format` ("3mf" | "stl_binario" | "stl_ascii" | "obj"; opcional, por defecto `"stl_binario"`): 3mf, stl_binario, stl_ascii u obj.
+  - `units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidad del archivo: mm, cm, m, in o ft; el modelo sigue en mm.
+  - `structure` ("un_archivo" | "uno_por_cuerpo"; opcional, por defecto `"un_archivo"`): un_archivo o uno_por_cuerpo; los separados llevan índice y nombre del cuerpo.
+  - `refinement` ("bajo" | "medio" | "alto" | "personalizado"; opcional, por defecto `"personalizado"`): bajo, medio, alto o personalizado; solo este último usa los cuatro controles numéricos.
+  - `surface_deviation` (número; opcional, por defecto `0.02`): desviación máxima de superficie en mm (por defecto 0,02).
+  - `normal_deviation` (número; opcional, por defecto `17.188733853924695`): desviación angular en grados (por defecto 0,3 radianes expresados en grados).
+  - `maximum_edge_length` (número; opcional, por defecto `0.0`): longitud máxima de arista en mm; 0 = sin límite.
+  - `aspect_ratio` (número; opcional, por defecto `0.0`): arista mayor / altura menor, mayor que 1,154701; 0 = sin límite.
+  - `overwrite` (true/false; opcional, por defecto `false`): true permite reemplazar archivos existentes; se comprueban todos antes de escribir.
+  - `create_folders` (true/false; opcional, por defecto `true`): true crea las carpetas que faltan; false falla si la carpeta no existe.
+- CLI: `omnicad call export_mesh --doc pieza.omnicad path=…`
+
 ### `get_browser_state`
 
 Lista los grupos y conjuntos de selección guardados en el navegador.
@@ -316,13 +353,32 @@ Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección,
 
 ### `set_browser_visibility`
 
-Muestra u oculta cuerpos, bocetos, calcomanías o grupos en vivo. Sin items, muestra todo. No modifica geometría.
+Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo. Sin items, muestra todo. No modifica geometría.
 
 - Modifica el documento: no.
 - Parámetros:
-  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, bocetos, calcomanías o grupos; vacío muestra todo.
+  - `items` (lista de texto o null; opcional, por defecto `null`): ids de cuerpos, componentes, bocetos, calcomanías o grupos; vacío muestra todo.
   - `visible` (true/false; opcional, por defecto `true`): true muestra; false oculta los elementos pedidos.
 - CLI: `omnicad call set_browser_visibility --doc pieza.omnicad`
+
+### `find_in_window`
+
+Selecciona cuerpos, los encuadra en la ventana y resalta su paso creador en el timeline, como Buscar en la ventana del navegador. Necesita la app en vivo.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos; omitido o vacío busca todos los cuerpos del componente raíz.
+- CLI: `omnicad call find_in_window --doc pieza.omnicad`
+
+### `set_body_opacity`
+
+Cambia el Control de opacidad de cuerpos del navegador. Sin cuerpos, se aplica a todos los del componente raíz. Admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `opacity` (número; obligatorio): porcentaje de opacidad entre 0 y 100; 100 quita la anulación de opacidad.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos; omitido o vacío cambia todos los cuerpos del componente raíz.
+- CLI: `omnicad call set_body_opacity --doc pieza.omnicad opacity=…`
 
 ### `sketch_view`
 
@@ -358,7 +414,7 @@ Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú conte
 
 ### `get_profile_sketches`
 
-Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. Sus ids sirven como «sketch» de las herramientas de boceto (get_sketch, draw_line…).
+Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. Sus ids sirven como «sketch» de las herramientas de boceto (get_sketch, draw_line…); los derivados externos son de solo lectura.
 
 - Modifica el documento: no.
 - Parámetros:

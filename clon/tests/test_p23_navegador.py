@@ -365,11 +365,16 @@ def test_exportar_reutiliza_accion_y_preselecciona_contexto(v, monkeypatch, raiz
     v.seleccionar_cuerpos([ids[0]])
     llamados = []
     monkeypatch.setattr(v, "exportar", lambda formato: llamados.append((formato, list(v.seleccion))))
+    from omnicad.ui.guardar_malla import DialogoGuardarMalla
+    monkeypatch.setattr(DialogoGuardarMalla, "exec",       # se cierra sin guardar: solo importa qué preseleccionó
+                        lambda dlg: llamados.append(("malla", [c.id for c in dlg.cuerpos_elegidos()])) or 0)
     accion(menu_de(v, "__raiz__" if raiz else ids[1]), texto).trigger()
     assert len(llamados) == 1
-    formato, seleccion = llamados[0]
-    assert formato == (None if texto == "Exportar…" else ("3mf", "stl", "obj", "ply", "glb", "gltf"))
-    assert [h["ref"]["cuerpo"] for h in seleccion] == ([] if raiz else [ids[1]])
+    if texto == "Exportar…":
+        formato, seleccion = llamados[0]
+        assert formato is None and seleccion == []
+    else:
+        assert llamados[0] == ("malla", ids if raiz else [ids[1]])
 
 
 def test_quitar_anulacion_de_aspecto_reusa_api_y_admite_deshacer(v):
