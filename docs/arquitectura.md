@@ -195,12 +195,12 @@ timeline/ · io_archivos/ · api/ · ui/ ──► nucleo/<modulo>.py  (firma p�
 |---|---|---|
 | Elección y despacho | `clon/omnicad/nucleo/motor.py` | `motor_activo()`, `fijar_motor()`, `registrar()`, `sin_soporte()`, `@recalculo` |
 | Adaptadores | `clon/omnicad/nucleo/omnikernel/` | un módulo por archivo de `nucleo/`, mismos nombres de función |
-| Binding | `D:/rea/cad/rust-kernel/crates/omnikernel_py` (PyO3 0.23) | clase `Cuerpo` opaca e inmutable; mm↔cm solo en `src/unidades.rs` |
+| Binding | `$OMNIKERNEL_DIR/crates/omnikernel_py` (repo aparte del kernel) (PyO3 0.23) | clase `Cuerpo` opaca e inmutable; mm↔cm solo en `src/unidades.rs` |
 | Compilación | `scripts/compilar_omnikernel.py` | copia verificada a `evidencias/motor_omnikernel/` y `maturin develop --release` (`--test`: cargo test) |
 | Guardia | `clon/omnicad/bloqueo_ocp.py` | con `OMNICAD_BLOQUEAR_OCP=1` todo `import OCP` falla (pruebas y comprobaciones) |
 | Paridad | `clon/tests/test_paridad_motor.py` + `caso_paridad_motor.py` | cada caso corre con un solo motor por proceso y compara volumen, área, conteos, validez y firmas |
 | Estado | `docs/inventario_motor.md` (`scripts/estado_motor.py`) y `docs/comparacion_motores.md` (`scripts/comparar_motores.py`) | qué función está conectada, común o sin soporte; tiempos y documentos |
-| Faltantes del kernel | `D:/rea/cad/rust-kernel/docs/faltantes_omnicad.md` | cada cosa que OmniKernel no hace o hace distinto, con caso mínimo |
+| Faltantes del kernel | `$OMNIKERNEL_DIR/docs/faltantes_omnicad.md` | cada cosa que OmniKernel no hace o hace distinto, con caso mínimo |
 
 Reglas:
 - **Un motor por recálculo.** `Documento.recalcular` (decorado con `@motor.recalculo`) fija el motor al empezar; si el
@@ -215,7 +215,7 @@ Reglas:
 **Cómo pasar una función nueva a OmniKernel:**
 1. Si el binding no expone la operación del kernel, agregala en `omnikernel_py/src/lib.rs` (medidas en mm con
    `unidades::cm`/`mm`, dentro de `ejecutar(...)` para liberar el GIL y aceptar `CancelToken` y plazo) y compilá con
-   `clon/.venv/Scripts/python.exe scripts/compilar_omnikernel.py` (y `--test`).
+   `clon/.venv/Scripts/python.exe scripts/compilar_omnikernel.py` (y `--test`), con `OMNIKERNEL_DIR` apuntando al repo del kernel.
 2. Escribí el caso en `clon/tests/caso_paridad_motor.py` llamando a la función pública de `nucleo/` (la misma para los
    dos motores) y corré `pytest tests/test_paridad_motor.py`: hasta que no dé verde no se conecta.
 3. Implementala en `nucleo/omnikernel/<modulo>.py` con la misma firma. Las variantes sin paridad llaman a

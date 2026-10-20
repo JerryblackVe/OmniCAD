@@ -101,9 +101,9 @@ no toques el código del programa: anotalo con la ficha de abajo y seguí con tu
    corra tal cual. Si el fallo parece del cliente (llamadas duplicadas, argumentos mezclados), anotalo igual
    y marcalo «origen sin confirmar».
 3. **Dónde anotarlo**:
-   - Con el repo de OmniCAD a mano: `PROJECT_LOG.md`, sección «Bugs pendientes». Una fila en la tabla del
-     área (o una tabla nueva), con el próximo ID libre B-NN, y subí el número de «Bugs conocidos sin
-     corregir» de la tabla Estado.
+   - Con el repo de OmniCAD a mano: `docs/seguimiento/bugs.md`, una fila en «Abiertos y parciales» con el
+     próximo ID libre B-NN (columnas y estados en `docs/seguimiento/README.md`). El detalle largo va en su
+     sección «Detalle».
    - Sin el repo: un archivo REPORTE_OMNICAD_<tema>.md en la carpeta de trabajo, una ficha por bug con los
      mismos campos (se pega tal cual en la tabla).
    - Si el usuario te dio otro destino (una sesión, un issue), mandalo ahí también.
@@ -123,7 +123,8 @@ no toques el código del programa: anotalo con la ficha de abajo y seguí con tu
    - **Prueba propuesta** (la que más ayuda): lo que tiene que cumplirse al corregirlo, p. ej. «tras
      `set_parameter` el volumen del cuerpo coincide con la cuenta».
 5. Una ficha por bug y sin mezclar mejoras. Dos fallas con la misma causa: una sola ficha. Sin rutas ni datos
-   personales del usuario. Al corregirse, el bug pasa al Registro de `PROJECT_LOG.md` y se borra de la lista.
+   personales del usuario. Al corregirse, la fila pasa a «Cerrados» con su evidencia (no se borra) y el
+   trabajo se anota en el Registro de `PROJECT_LOG.md`.
 
 ## Más ayuda (no se copia acá: hay una sola versión)
 

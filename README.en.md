@@ -118,9 +118,20 @@ The goal is to grow the project collaboratively. Start with [CONTRIBUTING.md](CO
 
 ## Roadmap
 
-Guided first launch (language, connect agents) · testing on native Linux (WSL2 is tested) · Spanish and English everywhere · two-way Blender integration · better rendering (materials, colors,
-lighting) · vectors, SVG, text and vectorizing · assemblies, animation, simulations · Rhino-style tools and
-Grasshopper-style visual programming.
+Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues) or a Pull Request.
+
+- **More platforms:** native Linux (WSL2 is tested), macOS, and a clean-machine test of the Windows installer.
+- **3D printing:** split with connectors, molds, printer and material profiles, print-friendly holes, multicolor 3MF.
+- **Gears of every kind:** a gallery to create bevel, worm, planetary and special gears and mechanisms.
+- **Language:** Spanish and English everywhere; guided first launch.
+- **Integration:** two-way Blender integration; the MCP/CLI tools still missing (Drawing and Render workspaces).
+- **Rendering:** materials, lighting, ideas from KeyShot and V-Ray.
+- **New tools:** Rhino-style surfaces, Grasshopper-style visual node canvas, ideas from FreeCAD, Plasticity,
+  SolidCraft and other open-source CAD.
+- **FORM workspace** (T-spline subdivision surfaces): not started yet.
+- **Fusion `.f3d` files** with their operation history.
+- **Performance:** more hot paths in Rust and C++.
+- **Bug fixing:** open bugs are listed in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md) (Spanish).
 
 ## Disclaimer
 

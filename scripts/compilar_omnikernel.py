@@ -27,7 +27,7 @@ def preparar(origen, destino):
 
 def main():
     raiz = Path(__file__).resolve().parents[1]
-    origen = Path("D:/rea/cad/rust-kernel")
+    origen = Path(os.environ.get("OMNIKERNEL_DIR") or sys.exit("Definí OMNIKERNEL_DIR con la carpeta del repo del kernel."))
     destino = raiz / "evidencias" / "motor_omnikernel" / "compilacion"
     destino.mkdir(parents=True, exist_ok=True)
     preparar(origen, destino)

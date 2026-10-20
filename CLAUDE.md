@@ -11,6 +11,11 @@
   (`docs/agentes/herramientas.md`).
 - Si encontrás algo de la app sin herramienta, se la agregás en el mismo turno.
 
+## Regla estricta: proyecto ordenado y estado verificado
+- El estado de bugs, faltantes y mejoras vive SOLO en `docs/seguimiento/` (índice de toda la doc: `docs/README.md`).
+- Antes de informar qué está hecho o qué falta, se verifica contra el código y los tests. Nunca solo con el log.
+- Cada tarea deja el proyecto limpio: sin archivos sueltos ni contradicciones entre documentos.
+
 ## Regla: rendimiento con Rust
 - La app a veces se siente lenta: la meta es optimizar lo más posible.
 - Todo cuello de botella que se pueda pasar a Rust (malla, solver de bocetos, teselado, visor,

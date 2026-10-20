@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Informes de error de cada sesión (pendiente 20 del PROJECT_LOG).
+"""Informes de error de cada sesión (P-20 de docs/seguimiento/faltantes.md).
 
 Como el «Reportar problema» de otros programas: cada error NO capturado (excepción del hilo principal,
 de los hilos de Python o caída dura de C vía ``faulthandler``) queda escrito en UN archivo por sesión

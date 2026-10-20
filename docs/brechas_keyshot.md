@@ -1,5 +1,7 @@
 # Brechas frente a KeyShot
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [keyshot.com](https://www.keyshot.com/), manual de KeyShot
 ([iluminación](https://manual.keyshot.com/manual/lighting), [materiales y su índice](https://manuals.keyshot.com/kss2025/en-us/manual/materials.html),
@@ -50,12 +52,12 @@ solo si el usuario quiere el modo «en vivo». Es decisión del usuario: cuesta 
 | KS3 | **Material más completo**: índice de refracción, color de absorción, subsuperficie simple, anisotropía, emisivo, pintura metálica con escamas; mapas de textura (color, relieve, normal, rugosidad). | Panel «Aspecto» con las mismas pestañas y vista previa en una esfera; mismos controles en el boceto de material de Fusion. | Hay `acabado {metalico, rugosidad, transparencia, barniz, patron, color2}`. Ampliar `render_cpu.color_y_acabado`. |
 | KS4 | **Aspecto por cara o región** (multimaterial). | Clic en una cara con «Aspecto» abierto y arrastrar el material; las caras sin aspecto heredan el del cuerpo. | **Hecho** (2026-10-17): «Aplicar a: Caras» en Diseño y en RENDERIZAR; el lienzo y la imagen dibujan cada cara con su aspecto. Falta arrastrar y soltar; se aplica con clic. |
 | KS5 | **Biblioteca de materiales**: buscar, arrastrar y soltar sobre una pieza, favoritos, «materiales del proyecto», copiar y pegar el aspecto entre piezas. Categorías de KeyShot: básicos, avanzados, fuentes de luz, especiales. | Panel «Aspecto» con buscador (como la tecla S) y arrastrar a la vista; menú contextual «Copiar aspecto». | Hecho en parte: la biblioteca por familias, «Mis aspectos» (archivo `.json` de la carpeta del usuario), favoritos y «En este diseño» son los mismos en Diseño y RENDERIZAR. Falta arrastrar y soltar y «Copiar aspecto» entre piezas. |
-| KS6 | **Calcomanías y etiquetas**: una imagen sobre una cara con tamaño, giro y mezcla; varias a la vez. | INSERTAR › «Calcomanía»: cara + imagen + tamaño con manipulador en la vista; transparencia (alfa) respetada. | No existe. Muy útil para logos en piezas de producto. ⚠ Que KeyShot trae «Labels»: de memoria, no leído hoy. |
+| KS6 | **Calcomanías y etiquetas**: una imagen sobre una cara con tamaño, giro y mezcla; varias a la vez. | INSERTAR › «Calcomanía»: cara + imagen + tamaño con manipulador en la vista; transparencia (alfa) respetada. | **Hecho (KS6, 2026-10-17):** hay calcomanía con gizmo y dibujo en el visor y en el render GL y CPU (API `set_decal`). Muy útil para logos en piezas de producto. ⚠ Que KeyShot trae «Labels»: de memoria, no leído hoy. |
 | KS7 | **Cámaras guardadas y profundidad de campo**: lista de cámaras con nombre, apertura y distancia de enfoque, perspectiva u ortográfica, desplazamiento de lente. | «Configuración de escena › Cámaras»: lista con «Guardar vista actual como cámara», miniatura y campos. | Hay cámara guardada con la escena (`a_dict()`); falta la lista y el desenfoque. |
 | KS8 | **Giratoria (turntable) y vistas explosionadas en un clic**. Hecho en Animación con «explosión automática» según el ensamblaje. | ANIMACIÓN › «Giratoria»: ángulo, duración, cuadros; sale una animación lista. | Hay explosión, transformar, visibilidad y publicar video GIF/PNG. Buscado en el código: los tipos de `animacion.py` son transformar, restaurar, explosión, visibilidad, vista y anotación; no hay giratoria. |
 | KS9 | **Cola de render y lotes**: encolar trabajos (imagen, animación) con resolución y cuadros; correr en segundo plano. | «Galería de renders» con pestaña «Cola»: orden, estado, cancelar, abrir carpeta. | Hay galería; buscado en el código: no hay cola. |
 | KS10 | **Variantes y configurador**: renderizar TODAS las combinaciones de configuración × aspecto × cámara a una carpeta, con nombres por variante. | «Renderizar variantes»: tilda configuraciones, aspectos y cámaras; la cola hace el resto. Para fotos de catálogo. | OmniCAD ya tiene `configuraciones` en el documento (`administrar.py`): falta unirlas con el render y la cola. |
-| KS11 | **Salida con alfa y por pases**: PNG con fondo transparente y sombra, EXR/TIFF 32 bits, PSD por capas (sombras, reflejos, oclusión, ID de material). Es parte de lo que KeyShot guarda como formatos. | En el diálogo de render: «Formato» y «Capas»; el archivo sale listo para componer. | Buscado en el código: el render hoy guarda solo PNG (`ui/render.py`, «Imagen PNG (*.png)»). Pases y máscaras: VR3 de `brechas_vray.md`. |
+| KS11 | **Salida con alfa y por pases**: PNG con fondo transparente y sombra, EXR/TIFF 32 bits, PSD por capas (sombras, reflejos, oclusión, ID de material). Es parte de lo que KeyShot guarda como formatos. | En el diálogo de render: «Formato» y «Capas»; el archivo sale listo para componer. | El render guarda solo PNG (`ui/render.py`, «Imagen PNG (*.png)»), pero ese PNG ya admite fondo transparente. **Parcial (KS11):** faltan EXR/TIFF/PSD y los pases (difuso, reflejo, sombra, ID). Pases y máscaras: VR3 de `brechas_vray.md`. |
 
 ### Piden trazado de rayos (A o B de arriba)
 
@@ -75,7 +77,7 @@ solo si el usuario quiere el modo «en vivo». Es decisión del usuario: cuesta 
 
 | Función | Estado |
 |---|---|
-| Exportar a **GLB** y **USD** para web, AR y comercio electrónico. | B3 de `brechas_blender.md` (hoy no hay). |
+| Exportar a **GLB** y **USD** para web, AR y comercio electrónico. | B3 de `brechas_blender.md`. **Parcial (KS-S1):** GLB/glTF se exporta desde el 2026-10-10 (`io_archivos/gltf.py`); falta USD. |
 | **Configurador web**: variantes en una página. | Pendiente a futuro; sigue de KS10 y de B3. |
 | **Complementos de CAD** (KeyShot trae plugin para Blender y otros). | OmniCAD ya tiene puente en vivo (`ui/puente.py`) y MCP: un «Enviar a KeyShot» exportaría a glTF/USD con materiales. ⚠ De memoria: no leído hoy. |
 

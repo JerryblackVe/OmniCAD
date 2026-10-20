@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Topes al tamaño del trabajo (Hallazgos de pruebas de uso, «SIN TOPES»): torsión del barrido, instancias de un
+"""Topes al tamaño del trabajo (hallazgo «SIN TOPES» de las pruebas de uso, docs/seguimiento/): torsión del barrido, instancias de un
 patrón, lados de un polígono y triángulos de un remallado. Se validan ANTES de calcular y el mensaje dice el máximo.
 
 Los valores pedidos quedan apenas por encima de cada tope (nunca 1e9): si el tope faltara, la prueba no debe

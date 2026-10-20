@@ -139,19 +139,18 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Ideas de otros CAD libres:** que cada herramienta para agentes diga qué cambió de verdad, cambios de agente que se revisan antes de aplicarse, colores en el boceto para ver qué se puede mover, elegir caras por descripción y tutoriales que se reproducen paso a paso.
 - **Espacio FORMA** (superficies de subdivisión T-splines): no existe todavía; es el pendiente más grande.
 - **Menús y navegador:** los menús contextuales y varias opciones de la cinta que faltan frente a Fusion 360.
-- **Abrir `.f3d`** de Fusion con su historial; recuperación de trabajo como Fusion.
+- **Abrir `.f3d`** de Fusion con su historial de operaciones y los diseños referenciados de un `.f3z`.
 - **Rendimiento:** pasar los cuellos de botella a Rust y C++ (mallas, solver de bocetos) y calcular la vista previa en un proceso aparte.
 - **Interfaz:** pulido visual y sistema de temas propios que el usuario pueda crear y compartir.
-- **Corrección de errores:** la lista de errores abiertos está en el PROJECT_LOG.
+- **Corrección de errores:** la lista de errores abiertos está en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md).
 
 Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
 
 - Boceto 3D: mover los puntos del boceto en altura.
-- Hélice como curva de boceto (hoy hay solo espiral plana).
-- Aspecto completo: pintar caras sueltas, muestras del diseño y editor de color, brillo y rugosidad.
+- Hélice 3D como curva de boceto (hoy hay solo espiral plana).
 - Grupos en la línea de tiempo.
 
-Detalle en [PROJECT_LOG.md](PROJECT_LOG.md#pendientes).
+Estado de cada punto, verificado contra el código: [docs/seguimiento/](docs/seguimiento/README.md).
 
 ## Aviso
 

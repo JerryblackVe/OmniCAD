@@ -554,7 +554,7 @@ def test_skill_md_cada_error_kind_existe_y_cada_herramienta_de_ejemplo_acepta_su
 
 def test_skill_md_los_enlaces_a_archivos_del_repo_existen():
     cuerpo = _separar(SKILL.read_text(encoding="utf-8"))[1]
-    rutas = {r for s in _codigo_en_linea(cuerpo) for r in re.findall(r"(?:docs/agentes/)?[\w]+\.md", s)}
+    rutas = {r for s in _codigo_en_linea(cuerpo) for r in re.findall(r"(?:[\w-]+/)*\w+\.md", s)}
     assert {"docs/agentes/guia_diseno.md", "docs/agentes/conectar.md", "AGENTS.md", "PROJECT_LOG.md"} <= rutas
     for r in rutas:
         assert (REPO / r).is_file(), f"SKILL.md nombra {r} y no existe en el repo"

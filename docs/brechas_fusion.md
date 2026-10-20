@@ -1,5 +1,7 @@
 # Brechas frente a Fusion 360
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-09.
 Fuentes: la ayuda pública de Fusion 360, cómo se usa Fusion en la práctica (videos y cursos públicos) y la propia
 app. Se comparan funciones, no se copia nada.
@@ -45,8 +47,8 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Tabla de grupos de aristas en Empalme (radios distintos por grupo) | Hoy hay un solo radio por operación. |
 | Configuración del timeline (engranaje abajo a la derecha) | No implementado. |
 | Historial de pasos al abrir un `.f3d` (hoy entran los cuerpos sin historial; con Fusion abierto, además los parámetros de usuario) | El historial vive en el flujo de diseño propietario de Fusion (`FusionDesignSegmentType1/BulkStream.dat`, clases por GUID sin nombres): hay que descifrarlo o traducirlo por la API pública con Fusion. Es una fase propia. |
-| Instancias y componentes movidos al abrir un `.f3d` sin Fusion: cada componente entra donde está guardado su B-rep; faltan las copias (p. ej. las piezas acomodadas en las camas de impresión del sello) y la posición de los componentes movidos | Las matrices de posición están en el flujo de diseño y en la escena `OGS/DefaultScene/world` (nodos `Instance`/`TransformAttribute`), pero falta saber a qué bloque `BREP.*.smbh` corresponde cada una. |
-| `.f3z` con referencias externas: se abre el diseño de arriba del paquete; los diseños referenciados pueden no venir | La importación de archivo de Fusion solo acepta `.f3d` sueltos. |
+| Instancias y componentes movidos al abrir un `.f3d` sin Fusion: cada componente entra donde está guardado su B-rep; **las copias y la posición de los componentes movidos ya se leen** (FU-9, hecho: `io_archivos/f3d_escena.py` las ubica como instancias) | Las matrices de posición salen de la escena `OGS/DefaultScene/world` (nodos `Instance`/`TransformAttribute`). |
+| `.f3z` con referencias externas: se abre el diseño de arriba del paquete; los diseños referenciados pueden no venir | **Parcial (FU-10):** `io_archivos/abrir_externo.py:39` admite `.f3z` y abre el diseño de arriba del paquete; falta resolver los diseños referenciados. |
 | Electrónica y Diseño generativo | Fuera del alcance por ahora: quedaron afuera desde el recorte del MVP. Un optimizador de parámetros simple está en GH11 de `brechas_grasshopper.md`. |
 | Simulación, Fabricación y Forma (T-Splines) | Pendientes de prioridad 3 desde el 2026-10-09 (antes, fuera del alcance por el recorte del MVP): F19 y F20 de `brechas_freecad.md`, B17 de `brechas_blender.md`, RH19 de `brechas_rhino.md`. Antes de empezar hay que decidir las dependencias (p. ej. CalculiX y Gmsh). |
-| **Recuperación de trabajo** al arrancar tras un cierre inesperado: lista de documentos recuperados con «Abrir» y «Suprimir», y «Archivo › Recuperar documentos» | Hoy el arranque solo ofrece un autoguardado de documento sin título (Sí/No); los proyectos con ruta se ofrecen solo al reabrirlos. Pendiente 21 de `PROJECT_LOG.md`. |
+| **Recuperación de trabajo** al arrancar tras un cierre inesperado: lista de documentos recuperados con «Abrir» y «Suprimir», y «Archivo › Recuperar documentos» | **Hecho (FU-13):** existe el diálogo «Documentos recuperados» con «Abrir» y «Suprimir» y «Archivo › Recuperar documentos…» (`ui/ventana.py`, `io_archivos/proyecto.py`; API `list_recoverable_documents`, `recover_document`, `discard_recoverable_document`). Pendiente 21 de `PROJECT_LOG.md`. |

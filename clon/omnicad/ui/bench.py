@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Medición de rendimiento de OmniCAD con la ventana REAL (pendiente 10 de PROJECT_LOG.md: nada se optimiza sin
+Medición de rendimiento de OmniCAD con la ventana REAL (P-10 de docs/seguimiento/mejoras.md: nada se optimiza sin
 números de antes y después).
 
     python -m omnicad.ui.bench [--lado N] [--cuadros N] [--t0 SEGUNDOS_EPOCH]

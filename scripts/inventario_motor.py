@@ -6,6 +6,8 @@ Ejecutar desde el repo: clon/.venv/Scripts/python.exe scripts/inventario_motor.p
 """
 import ast
 import json
+import os
+import sys
 from pathlib import Path
 
 
@@ -117,7 +119,7 @@ def guardar(filas):
         if clave:
             faltantes.setdefault(clave, []).append(f"IM-{i:03d}: {ubicacion}")
     ruta.write_text("\n".join(lineas) + "\n", encoding="utf-8", newline="\n")
-    destino = Path("D:/rea/cad/rust-kernel/docs/faltantes_omnicad.md")
+    destino = Path(os.environ.get("OMNIKERNEL_DIR") or sys.exit("Definí OMNIKERNEL_DIR con la carpeta del repo del kernel.")) / "docs" / "faltantes_omnicad.md"
     anterior = destino.read_text(encoding="utf-8").split("## Inventario estático de la app")[0]
     bloques = [anterior.rstrip(), "", "## Inventario estático de la app", "",
                "Correspondencias sin API equivalente identificada; se documentan y no frenan la integración.", ""]

@@ -1,5 +1,7 @@
 # Brechas frente a V-Ray
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [V-Ray para Blender — funciones](https://www.chaos.com/vray/blender/features) y
 [novedades](https://www.chaos.com/vray/blender/whats-new), [novedades de V-Ray 7 para 3ds Max](https://documentation.chaos.com/space/VMAX/113586464),
@@ -41,7 +43,7 @@ Alimenta el **pendiente 4**.
 | VR7 | **Regiones de render** con forma propia (rectángulo, círculo, a mano) para probar una parte. | Dibujar la región en el lienzo; solo se renderiza eso. | Nuevo; en `LienzoRender`. |
 | VR8 | **Material «dibujo animado» (Toon) y de borde**: contorno y bandas de color para ilustración técnica. | Un tipo más en el panel «Aspecto». Va con los modos de pantalla de RH16. | Nuevo. |
 | VR9 | **Dispersión (Scatter)**: repartir copias de una pieza sobre una superficie con densidad, escala y giro al azar; en grupos. | Parte de «Patrón» (B12 de `brechas_blender.md`); sirve para césped, tachas, tornillos. | Ampliar `patron`. |
-| VR10 | **Herramienta de render en la API/MCP**: cambiar el aspecto de un cuerpo, elegir cámara y entorno, y devolver la imagen. | Para agentes y `omnicad render`. Es también lo que usa el modo por lote. | ⚠ Hoy la API solo tiene `get_viewport_image`; el registro de la lámpara de pie anotó que faltaba una herramienta de aspecto. |
+| VR10 | **Herramienta de render en la API/MCP**: cambiar el aspecto de un cuerpo, elegir cámara y entorno, y devolver la imagen. | Para agentes y `omnicad render`. Es también lo que usa el modo por lote. | **Parcial (VR10):** la API ya tiene `set_appearance`, `edit_appearance`, `manage_appearance` y `list_appearances` para el aspecto, además de `get_viewport_image`; faltan cámara, entorno y escena de render (= MCP-22 a MCP-25 de `brechas_mcp.md`), y `get_viewport_image` ignora la escena del documento. |
 
 ### Piden trazado de rayos
 

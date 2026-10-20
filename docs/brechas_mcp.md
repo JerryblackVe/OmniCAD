@@ -1,13 +1,17 @@
 # Brechas MCP: lo que la app hace y un agente no puede
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-18. Origen: bug B-80. Pedido del usuario: un agente que quería animar el motor no tenía herramientas para el
 espacio ANIMACIÓN. Regla que se rompe: `CLAUDE.md` › «MCP y CLI siempre completos».
 
-Base: 190 herramientas en 13 grupos y 95 tipos de operación. Se revisaron 4 zonas, cada una contra el catálogo
+Base al escribir (2026-10-18): 190 herramientas en 13 grupos y 95 tipos de operación. Hoy son 211 herramientas en 14 grupos (`docs/agentes/herramientas.md`) y 96 tipos de operación; la ola 1 ya está hecha. Se revisaron 4 zonas, cada una contra el catálogo
 (`api/registro.py` › `_CATALOGO`): la cinta DISEÑO con sus comandos, DIBUJO, RENDERIZAR con ANIMACIÓN, y los paneles y
 menús. Cada fila cita el archivo y la línea leídos. Rutas relativas a `clon/omnicad/`.
 
 ## Resumen
+
+> Medición del 2026-10-18. ANIMACIÓN (ola 1) quedó hecha el 2026-10-20.
 
 | Zona | Funciones sin herramienta | Qué tan difícil | Por qué |
 |---|---|---|---|
@@ -23,28 +27,28 @@ menús. Cada fila cita el archivo y la línea leídos. Rutas relativas a `clon/o
 
 | ID | Requisito | Evidencia |
 |---|---|---|
-| MCP-0a | **Test de cobertura UI → API.** Debe fallar si una clave de la cinta, o un ítem de DIBUJO, RENDER o ANIMACIÓN, no tiene herramienta ni una excusa escrita. Sin este test, el hueco vuelve a abrirse. | No existe. `tests/test_api_catalogo.py` solo valida esquemas. |
-| MCP-0b | **`doc.espacios` dentro de la transacción y del deshacer.** Hoy, si una herramienta escribe ahí y después falla, el cambio no se revierte. | `api/sesion.py:140` restaura solo si se agregó un paso de deshacer. `apply_recipe` lo hace a mano (`api/herramientas_avanzado.py:613-647`). |
-| MCP-0c | **La ventana tiene que releer lo que escribe una herramienta.** Con la app abierta, la copia de la ventana pisa lo que haya escrito una herramienta. Pasa con guiones, dibujo y escena de render. | `ui/animacion.py:1045` (`self.guiones`), `ui/ventana.py:1131-1164` (`_guardar_espacio`). Falta un callback en `ui/puente.py:56-59`. |
-| MCP-0d | **Extraer `nucleo/animacion.py`.** `Guion`, `evaluar`, `invertir`, explosión y GIF no usan Qt, pero viven en un módulo que sí la importa. | `ui/animacion.py:40-51` y `:133` (`centros_de` importa `ui.visor3d`) |
-| MCP-0e | **Pasar `ENTORNOS` a `nucleo/`.** | `ui/visor3d.py:82`, `ui/render.py:65` (`cielo_de`) |
+| MCP-0a | **Test de cobertura UI → API.** Debe fallar si una clave de la cinta, o un ítem de DIBUJO, RENDER o ANIMACIÓN, no tiene herramienta ni una excusa escrita. Sin este test, el hueco vuelve a abrirse. | **Hecho:** `tests/test_cobertura_ui_api.py::test_cada_clave_tiene_herramienta_o_excusa`. Antes `tests/test_api_catalogo.py` solo validaba esquemas. |
+| MCP-0b | **`doc.espacios` dentro de la transacción y del deshacer.** Hoy, si una herramienta escribe ahí y después falla, el cambio no se revierte. | **Hecho:** `api/sesion.py` restaura los espacios en la transacción y en el deshacer (`tests/test_api_animacion.py::test_una_herramienta_que_falla_deja_los_espacios_iguales`). Antes restauraba solo si se agregaba un paso de deshacer (`sesion.py:140`). |
+| MCP-0c | **La ventana tiene que releer lo que escribe una herramienta.** Con la app abierta, la copia de la ventana pisa lo que haya escrito una herramienta. Pasa con guiones, dibujo y escena de render. | **Hecho:** el callback está en `ui/puente.py` y la ventana relee con `releer_espacios` (`ui/ventana.py`; `tests/test_api_animacion.py::test_la_transaccion_avisa_cambio_de_espacios`). Antes: `ui/animacion.py:1045` (`self.guiones`), `ui/ventana.py:1131-1164` (`_guardar_espacio`). |
+| MCP-0d | **Extraer `nucleo/animacion.py`.** `Guion`, `evaluar`, `invertir`, explosión y GIF no usan Qt, pero viven en un módulo que sí la importa. | **Hecho:** `nucleo/animacion.py` existe y no importa Qt. Antes: `ui/animacion.py:40-51` y `:133` (`centros_de` importa `ui.visor3d`). |
+| MCP-0e | **Pasar `ENTORNOS` a `nucleo/`.** | **Hecho:** `ENTORNOS` vive en `nucleo/render_cpu.py` y `ui/visor3d.py` lo reexporta. Antes: `ui/visor3d.py:82`, `ui/render.py:65` (`cielo_de`). |
 
-## Ola 1: ANIMACIÓN (cierra B-80)
+## Ola 1: ANIMACIÓN (cierra B-80) — HECHA el 2026-10-20 (MCP-1 a MCP-10 y MCP-86)
 
 Datos: `doc.espacios["animacion"]` = `{version, actual, guiones[]}` (`ui/animacion.py:1525`; formato en `:14-27`).
 
 | ID | Herramienta | Función en la interfaz | Dónde | Dificultad |
 |---|---|---|---|---|
-| MCP-1 | `create_storyboard` | Nuevo guion (limpio o desde el final) | `ui/animacion.py:1397`, `:318` | media |
-| MCP-2 | `list_storyboards`, `get_storyboard` | Elegir guion, duración | `:1418`, `:205` | baja |
-| MCP-3 | `rename_storyboard`, `copy_storyboard`, `delete_storyboard`, `reverse_storyboard` | Renombrar, copiar, eliminar, invertir | `:1425`, `:1433`, `:1446`, `:1440` | baja (invertir: media) |
-| MCP-4 | `add_animation_action` (`type`: transform, restore, visibility) | Transformar (mover XYZ en mm, girar XYZ en grados), restaurar, mostrar/ocultar | `:1278`, `:851-860`, `:286`, `:301` | media |
-| MCP-5 | `edit_animation_action`, `delete_animation_action` | Editar, mover o estirar barras, borrar | `:1303`, `:1320`, `:1327` | baja |
-| MCP-6 | `auto_explode` | Explosión automática (un nivel o todos, escala, secuencial) | `:1258-1262`, `:145`, `:167` | media |
-| MCP-7 | `set_animation_camera` | VISTA: guardar la cámara | `:1299`, `:1110` | baja |
-| MCP-8 | `add_animation_annotation` | ANOTACIÓN | `:1341` | media |
-| MCP-9 | `get_animation_frame` | Reproducir o ir a un tiempo: estado y una imagen del cuadro | `:1162-1230` | media |
-| MCP-10 | `export_animation_video` | PUBLICAR (GIF o PNG, resolución, fps, bucle) | `:1466`, `:929-1019` | alta: hay que cambiar `LienzoRender` (`:1501`) por `rc.renderizar` |
+| MCP-1 (hecho) | `create_storyboard` | Nuevo guion (limpio o desde el final) | `ui/animacion.py:1397`, `:318` | media |
+| MCP-2 (hecho) | `list_storyboards`, `get_storyboard` | Elegir guion, duración | `:1418`, `:205` | baja |
+| MCP-3 (hecho) | `rename_storyboard`, `copy_storyboard`, `delete_storyboard`, `reverse_storyboard` | Renombrar, copiar, eliminar, invertir | `:1425`, `:1433`, `:1446`, `:1440` | baja (invertir: media) |
+| MCP-4 (hecho) | `add_animation_action` (`type`: transform, restore, visibility) | Transformar (mover XYZ en mm, girar XYZ en grados), restaurar, mostrar/ocultar | `:1278`, `:851-860`, `:286`, `:301` | media |
+| MCP-5 (hecho) | `edit_animation_action`, `delete_animation_action` | Editar, mover o estirar barras, borrar | `:1303`, `:1320`, `:1327` | baja |
+| MCP-6 (hecho) | `auto_explode` | Explosión automática (un nivel o todos, escala, secuencial) | `:1258-1262`, `:145`, `:167` | media |
+| MCP-7 (hecho) | `set_animation_camera` | VISTA: guardar la cámara | `:1299`, `:1110` | baja |
+| MCP-8 (hecho) | `add_animation_annotation` | ANOTACIÓN | `:1341` | media |
+| MCP-9 (hecho) | `get_animation_frame` | Reproducir o ir a un tiempo: estado y una imagen del cuadro | `:1162-1230` | media |
+| MCP-10 (hecho) | `export_animation_video` | PUBLICAR (GIF o PNG, resolución, fps, bucle) | `:1466`, `:929-1019` | alta: hay que cambiar `LienzoRender` (`:1501`) por `rc.renderizar` |
 
 ## Ola 2: DIBUJO (planos 2D)
 
@@ -90,7 +94,7 @@ Aspecto (`ui/render.py:1996`, `:2021`) ya está cubierto por `set_appearance`, `
 |---|---|---|---|---|
 | MCP-26 | `manage_analysis`, `analyze_geometry` | `seccion`, `cebra`, `mapa_entorno`, `angulo_desmoldeo`, `mapa_curvatura`, `curvatura_peine`, `isocurva`, `accesibilidad`, `radio_minimo` | Guarda el análisis en `doc.analisis` y lo pinta en el visor (`ui/comandos/inspeccionar.py:291-450`, `ui/analisis_vista.py:50`) | media. La parte numérica es pura (`nucleo/analisis.py`). Dibujarla en la imagen es alta. |
 | MCP-27 | `manage_configurations` | `configurar`, `mostrar_configuracion` | Tabla de variantes (`ui/ventana.py:1173`, `ui/administrar.py:123`, `timeline/documento.py:373`) | media |
-| MCP-28 | `recompute_all` | `calcular` | `doc.recalcular(0)` (`ui/ventana.py:2023`) | baja |
+| MCP-28 (hecho) | `recompute_all` | `calcular` | `doc.recalcular(0)` (`ui/ventana.py:2023`). La herramienta ya existe (`api/herramientas_documento.py`; `tests/test_rendimiento_arreglos.py`). | baja |
 | MCP-29 | `draw_spiral` | `sk_espiral` | Espiral en el editor (`ui/editor_boceto.py:894`) | baja: sacar la cuenta a una función pura |
 | MCP-30 | `add_constraint(type="polygon")` | `sk_r_poligono` | `ui/editor_boceto.py:123`, `restricciones/boceto.py:1583` | baja |
 | MCP-31 | Opción `component_colors` en `get_viewport_image` | `colores_componente` | `ui/ventana.py:1275` | media |
@@ -99,11 +103,11 @@ No necesitan herramienta, porque un agente elige por id y no por clic: modos, fi
 (`ui/ventana.py:1313-1336`), Terminar boceto y Activar patrón plano. Ya están cubiertos por `get_viewport_image(bodies=…)`.
 
 Huecos parciales, que se pueden armar con otras herramientas: `draw_rectangle` no hace rectángulos rotados
-(`sk_rectangulo_3p`), `draw_arc` no tiene la forma tangente, y a `select_bodies` le faltan `by_name`, `by_size` e `invert`.
+(`sk_rectangulo_3p`, MCP-74), `draw_arc` no tiene la forma tangente (MCP-94), y a `select_bodies` le faltan `by_name`, `by_size` e `invert` (MCP-93; no son MCP-50, que es `get_selection`).
 
 ## Ola 5: cinta DISEÑO solo con `run_operation`
 
-La operación existe y funciona por `run_operation`. Falta la herramienta con nombre propio. Son 38 tipos de 95.
+La operación existe y funciona por `run_operation`. Falta la herramienta con nombre propio. Eran 38 tipos de 95 el 2026-10-18 (hoy hay 96 tipos; no se recontaron los que no tienen herramienta).
 
 | ID | Herramientas propuestas | Tipos de operación |
 |---|---|---|
@@ -136,6 +140,7 @@ La operación existe y funciona por `run_operation`. Falta la herramienta con no
 | MCP-53 | `set_flat_pattern_view` | Activar o terminar el patrón plano | `ui/ventana.py:1968` | baja |
 | MCP-54 | `get_preferences`, `set_preference` (con lista blanca) | Cámara, órbita, gráficos, teselado, autoguardado | `ui/preferencias.py:160-221` | media. Nunca `puente_agentes` ni `puente_codigo`: un agente no debe darse permisos solo (`:180-182`). |
 | MCP-55 | Ampliar `sketch_view` | Paleta del boceto: rejilla, forzar, corte, puntos, restricciones | `ui/modo_boceto.py:135-139` | baja |
+| MCP-93 | Ampliar `select_bodies` | Opciones `invert`, `by_name` y `by_size` (claves de cinta `invertir_seleccion`, `seleccion_nombre`, `seleccion_tamano`). No es MCP-50 | `ui/ventana.py:420-421` | baja |
 
 Se descartan porque no le sirven a un agente: tema, paneles, pantalla completa, atajos, caja de herramientas, menú
 radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y del ViewCube, ayuda.
@@ -144,7 +149,7 @@ radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y
 
 La primera pasada miró si cada comando tenía herramienta. Esta mira **opción por opción**: el comando tiene herramienta,
 pero al diálogo le sobran opciones que la herramienta no acepta. `run_operation` y `edit_feature` no cuentan como
-cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pasada (siguen siendo 190 herramientas).
+cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pasada (seguían siendo 190 herramientas el 2026-10-18; hoy son 211).
 
 ### Sólido: 83 opciones en 22 comandos
 
@@ -154,8 +159,8 @@ cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pa
 | MCP-57 | `revolve` | Eje = eje de construcción, arista recta, cara cilíndrica o línea de otro boceto; cara plana como perfil | `ui/comandos/solido.py:135-136` | baja |
 | MCP-58 | `sweep` | Tipo ruta + carril guía, carril, escala del perfil, distancia parcial de la ruta, cara plana como perfil, aristas de cuerpo como ruta | `ui/comandos/crear.py:39-45` | media |
 | MCP-59 | `loft` | Tipo de guía, carriles, línea central; caras, aristas, vértices o puntos como perfiles | `ui/comandos/crear.py:71-75` | media |
-| MCP-60 | `create_hole` | Ubicar en vértice o punto de construcción (asociativo), ángulo de la punta (hoy fijo 118°), invertir dirección, varios cuerpos | `ui/comandos/crear.py:325-367` | baja |
-| MCP-61 | `rectangular_pattern`, `circular_pattern`, `path_pattern`, `point_pattern`, `multi_transform` | Dirección o eje = arista, eje de construcción, plano o cara (hoy solo x/y/z); distribución por extensión o ángulo entre copias; simétrico; suprimir copias; ruta = aristas de cuerpo; puntos sueltos, vértices o puntos de construcción; punto de referencia asociativo; plano de simetría = cara | `ui/comandos/crear.py:720-746`, `ui/comandos/patrones.py:60-66` | media |
+| MCP-60 | `create_hole` | Ubicar en vértice o punto de construcción (asociativo), ángulo de la punta (hoy fijo 118°), invertir dirección en todas las ubicaciones (`flip` existe, pero solo con `sketch_points`), varios cuerpos | `ui/comandos/crear.py:325-367` | baja |
+| MCP-61 | `rectangular_pattern`, `circular_pattern`, `path_pattern`, `point_pattern`, `multi_transform` | **Parcial:** `path_pattern` ya tiene distribución por extensión (`spacing_mode`), simétrico y ruta por curvas (`path_curves`, desde 2026-10-10). Sigue pendiente: dirección o eje = arista, eje de construcción, plano o cara (`rectangular_pattern` acepta solo x/y/z); distribución por extensión o ángulo entre copias y simétrico en los demás patrones; suprimir copias; ruta = aristas de cuerpo; puntos sueltos, vértices o puntos de construcción; punto de referencia asociativo; plano de simetría = cara | `ui/comandos/crear.py:720-746`, `ui/comandos/patrones.py:60-66` | media |
 | MCP-62 | `mirror` | Cara plana como plano de simetría | `ui/comandos/crear.py:805` | baja |
 | MCP-63 | `fillet` | Empalme de reglas (caras A/B, regla, topología), radio variable (radio final), por cuerda (longitud), cadena tangente | `ui/comandos/modificar.py:74-92` | media |
 | MCP-64 | `chamfer` | Dos distancias, distancia y ángulo, voltear, cadena tangente | `ui/comandos/modificar.py:127-133` | baja |
@@ -176,10 +181,13 @@ cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pa
 | MCP-72 | `draw_circle` | Círculo por 2 puntos (diámetro) y por 3 puntos | `ui/editor_boceto.py:964-979` | baja |
 | MCP-73 | `create_polygon` | Polígono por arista (`kind="edge"`) | `ui/editor_boceto.py:1026-1037` | baja |
 | MCP-74 | `draw_line`, `draw_rectangle` | Línea de punto medio con su restricción; rectángulo central con diagonales de construcción y punto central | `ui/editor_boceto.py:921-953` | baja |
-| MCP-75 | `project_to_sketch` | Proyectar, intersecar e incluir **vértices** del modelo | `ui/editor_boceto.py:1361-1366` | baja |
+| MCP-75 | `project_to_sketch` | Proyectar, intersecar e incluir **vértices** del modelo (`mode="intersect"` ya existe para aristas, caras y cuerpos; faltan los vértices) | `ui/editor_boceto.py:1361-1366` | baja |
 | MCP-76 | `edit_dimension` o nueva | Cambiar el radio de un círculo libre sin agregar cota (lo que hace arrastrarlo) | `ui/editor_boceto.py:2847-2899` | baja |
 | MCP-77 | `sketch_view` | Acción «terminar» (salir del editor en vivo y guardar el boceto) | `ui/modo_boceto.py:679` | baja |
 | MCP-78 | `redefine_sketch_plane` (nueva) | Redefinir el plano de un boceto sobre una cara, sin pasar `marco` y `cara` internos por `edit_feature` | `ui/acciones_navegador.py:193`, `ui/ventana.py:2065-2068` | baja |
+| MCP-91 | `extend_sketch_curve` (nueva, nombre propuesto) | Alargar curvas del boceto (clave de cinta `sk_alargar`, Shift+V); sin herramienta hoy | `ui/cinta_boceto.py:37`, `ui/modo_boceto.py:69` | baja |
+| MCP-92 | `split_sketch_curve` (nueva, nombre propuesto) | Partir curvas del boceto (clave de cinta `sk_partir`); sin herramienta hoy | `ui/cinta_boceto.py:38`, `ui/modo_boceto.py:70` | baja |
+| MCP-94 | `draw_arc` | Forma tangente (clave de cinta `sk_arco_tangente`) | `ui/modo_boceto.py:38` | baja |
 
 ### Inspección, parámetros, archivo y espacios: 12 opciones
 
@@ -189,11 +197,11 @@ cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pa
 | MCP-80 | `check_interference` | Incluir caras coincidentes | `ui/comandos/inspeccionar.py:210` | baja |
 | MCP-81 | `create_parameter`, `set_parameter` | Parámetro sin unidad (cantidades de patrón); renombrar; comentario | `ui/dialogos.py:182-183` | baja |
 | MCP-82 | `export_parameters`, `import_parameters` (nuevas) | CSV de parámetros, formato de Fusion | `ui/dialogos.py:207-270` | baja |
-| MCP-83 | `get_bill_of_materials` | Exportar a CSV (`path`) | `ui/administrar.py:95-120` | baja |
+| MCP-83 | `get_bill_of_materials` | **Hecho (2026-10-10):** exporta a CSV con `csv_path` (`api/herramientas_material.py`, `tests/test_api_material.py`) | `ui/administrar.py:95-120` | baja |
 | MCP-84 | `new_document` | Abrir el modelo de ejemplo | `ui/ventana.py:336`, `:2428` | baja |
 | MCP-85 | MCP-13 y MCP-14 (DIBUJO) | Marcas y líneas de centro automáticas de la vista | `ui/dibujo.py:1313`, `:1357` | baja |
-| MCP-86 | MCP-10 (ANIMACIÓN) | Publicar todos los guiones del documento; estilo render o como el lienzo | `ui/animacion.py:939-968` | baja |
-| MCP-87 | `export` o `export_mesh` | Todo el diálogo «Guardar como malla» de Fusion (refinado, STL ASCII, unidad, un archivo por cuerpo): ver el pendiente 25 c) del `PROJECT_LOG.md` | `ui/ventana.py:2363` | media |
+| MCP-86 | MCP-10 (ANIMACIÓN) | **Hecho** (ola 1, `3ae4f74`): publica todos los guiones (`all_storyboards`) con el estilo de render (`rc.renderizar`) | `ui/animacion.py:939-968` | baja |
+| MCP-87 | `export` o `export_mesh` | **Hecho (2026-10-19):** `export_mesh` (`api/herramientas_guardar_malla.py`) cubre el diálogo «Guardar como malla» de Fusion (refinado, STL ASCII, unidad, un archivo por cuerpo) | `ui/ventana.py:2363` | media |
 
 ### Chapa, superficie, malla, ensamble, insertar, aspecto y revisión
 
@@ -221,9 +229,9 @@ Se descartan, porque no le sirven a un agente:
 | Hallazgo | Estado |
 |---|---|
 | B-81: el menú del cuerpo en el navegador reusaba el del grupo. La opacidad no se podía cambiar desde ningún lado, y Mover/copiar, Aspecto, Material, Aislar, Quitar y Buscar en el timeline quedaron como código muerto (`ui/navegador.py:368-413`). | Corregido el 2026-10-18 |
-| B-82: lo que oculta `set_browser_visibility` no se guarda. `self.ocultos` se vacía al abrir un documento (`ui/ventana.py:876`). | Abierto |
+| B-82: lo que oculta `set_browser_visibility` no se guarda. `self.ocultos` se vacía al abrir un documento (`ui/ventana.py:876`). | Corregido el 2026-10-19 (`tests/test_p23_navegador.py::test_cuerpo_oculto_persiste_al_guardar_y_reabrir`) |
 | El menú del boceto (P23e, 19 opciones de Fusion) ya no ofrece «Guardar como SVG» ni «Limpiar geometría». Los manejadores siguen en `ui/ventana.py:1726-1729`. Las herramientas `export_sketch` y `clean_sketch` existen. | Lo decide el usuario: agregarlos rompe la lista exacta de Fusion |
-| `docs/plan_mcp_cli.md:286` decía «93 tipos sin herramienta propia» y 167 herramientas. | Corregido: 38 de 95 y 190 |
+| `docs/plan_mcp_cli.md:286` decía «93 tipos sin herramienta propia» y 167 herramientas. | Corregido el 2026-10-18: 38 de 95 y 190. Hoy: 211 herramientas y 96 tipos |
 
 ## Orden sugerido
 

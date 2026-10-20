@@ -1,10 +1,12 @@
 # Plan de C++ para OmniCAD (Python + Rust + C++)
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Segunda pasada de la auditoría de rendimiento del 2026-10-12. La primera (`docs/plan_rust.md`) buscó lo que pasa a
 Rust. Esta busca **qué gana con C++** y reparte el trabajo entre los tres lenguajes. Las mediciones son de esta PC
 (12 hilos lógicos, Windows 11, Python 3.12.10, `cadquery-ocp 8.0.1.1` = OpenCascade 8.0).
 
-Estado: **solo diseño y mediciones. No hay código C++.** Un bug latente hallado en el camino ya está corregido
+Estado: **solo diseño y mediciones. No hay código C++** (ni carpeta `cxx`). Aparte de este plan existe OmniKernel, un kernel B-rep en Rust usado como motor alternativo (`docs/arquitectura.md` § 9, `clon/omnicad/nucleo/omnikernel/`); no es C++ y ningún plan de rendimiento lo cubre. Un bug latente hallado en el camino ya está corregido
 (sección 7).
 
 ## 1. Cómo se reparte el trabajo
@@ -66,7 +68,7 @@ Orden = valor ÷ riesgo. «Python primero» indica el arreglo sin C++ que hay qu
 
 | # | Candidato | Dónde (hoy) | Evidencia medida | Ganancia esperada (estimada) | Python primero |
 |---|---|---|---|---|---|
-| C1 | **Malla en bloque**: `BRepMesh` + extracción a `float32 Nx3` / `int32` con **id de cara**, de varios cuerpos en una llamada | `geometria.py:466-486` (`teselar_por_cara`), `visor3d.py:456-496` y `831-845`, `analisis.py:487-491`, `render_cpu.py:305`, glTF | 5,5 µs por triángulo; `set_modelo` de motor_cohete 241 ms (136 de extracción); placa de 900 agujeros 6,7 s (1,15 de extracción); la malla se extrae 2–4 veces (dibujo, pick, LOD, render, otro visor) | extracción 10–20×; `set_modelo` −50 %; mallar N cuerpos con `parallel` y sin GIL | Un solo `BRepMesh` por lote/compuesto (4 placas: 5,5 → 2,1 s); extraer una vez y compartir entre visores (P20) |
+| C1 | (abierto, sin código) **Malla en bloque**: `BRepMesh` + extracción a `float32 Nx3` / `int32` con **id de cara**, de varios cuerpos en una llamada | `geometria.py:466-486` (`teselar_por_cara`), `visor3d.py:456-496` y `831-845`, `analisis.py:487-491`, `render_cpu.py:305`, glTF | 5,5 µs por triángulo; `set_modelo` de motor_cohete 241 ms (136 de extracción); placa de 900 agujeros 6,7 s (1,15 de extracción); la malla se extrae 2–4 veces (dibujo, pick, LOD, render, otro visor) | extracción 10–20×; `set_modelo` −50 %; mallar N cuerpos con `parallel` y sin GIL | Un solo `BRepMesh` por lote/compuesto (4 placas: 5,5 → 2,1 s); extraer una vez y compartir entre visores (P20) |
 | C2 | **Evaluación de superficies por lote**: normales y curvatura por nodo en B-spline, isocurvas, peine de curvatura, silueta | `analisis.py:519-527` (`_props_nodos`), `1011-1062` (`isocurvas`), `965-1007`, `solidos_modificar.py:1013-1040` | 5,8 µs por nodo (9 con curvatura); `isocurvas` 3,55 s con 306 caras donde `Perform` solo cuesta 2,1 µs por punto; peine 311 ms con 912 aristas; silueta 56 ms por cara | 10–30× y paralelo por cara | Normal/curvatura de caras **analíticas** en numpy (cerrado); C++ solo para B-spline |
 | C3 | **Ejecutor sin GIL de hojas OCC independientes**: interferencias por par, HLR por vista, revisión de impresión por cuerpo | `analisis.py:391-424` (107 ms por par), `dibujo.py:1104-1113` (frontal 279 ms, isométrica 1,33 s), `revision.py:279-300` (430 ms) | Los hilos Python no escalan (ver sección 2) | Hasta ~N× con N cuerpos/vistas independientes (12 hilos lógicos; la RAM de 13 GB limita) | **Proceso trabajador en Python** (sección 3-B) y las banderas `SetRunParallel` |
 | C4 | **Hojas cancelables**: booleana, sección, `ArgumentAnalyzer` con `Message_ProgressRange` | `geometria.py:268`, `analisis.py:580-615`, `revision.py:279-292` | camisa del motor: sección 11,6 s, revisión 15 s, HLR exacto 143,6 s, sin forma de cortar | Cancelar en < 100 ms | **Matar el proceso trabajador** |

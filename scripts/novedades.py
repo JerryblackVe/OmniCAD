@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""Novedades mensuales de Fusion 360, Blender y Rhino (pendiente 12 del PROJECT_LOG).
+r"""Novedades mensuales de Fusion 360, Blender y Rhino (P-12 de docs/seguimiento/).
 
 Baja las páginas oficiales de novedades de los tres programas, escribe un informe corto en
 `docs/novedades/<AAAA-MM>.md` y agrega cada titular que no estaba como pendiente sin clasificar al final

@@ -85,7 +85,7 @@ pytest -q --showlocals  (con turno.py --plazo 3000)
 2798 passed, 8 warnings in 879.57s (0:14:39)
 
 OmniCAD.py --prueba-humo  (con turno, PYTHONIOENCODING=utf-8)
-Resultado: TODO OK — archivos en C:\Users\mosos\AppData\Local\Temp\omnicad_humo_gvgngpzf
+Resultado: TODO OK — archivos en %TEMP%\omnicad_humo_…
 
 cargo clippy -- -D warnings
 Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.92s

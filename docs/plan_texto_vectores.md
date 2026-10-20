@@ -1,5 +1,7 @@
 # Plan: texto y vectores en OmniCAD (2026-10-10)
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Objetivo: superar a Fusion en texto y SVG (Fusion: SVG no editable después de insertar, lento, pocas fuentes,
 texto en curva limitado).
 
@@ -35,9 +37,9 @@ Cada fase: herramienta MCP/CLI equivalente (`api/`), prueba numérica en `tests/
 | 1 Fuentes completas | HECHA (`nucleo/fuentes.py`, `list_fonts`, `add_font_folder`) | Sonnet |
 | 2 Texto completo | HECHA (incluye `{parámetro}` dentro del texto y vista previa de fuentes en el combo) | Sonnet |
 | 3 Texto en curva | HECHA (núcleo, MCP/CLI y clic sobre una curva en la UI) | Opus |
-| 4 SVG en boceto activo | HECHA por MCP/CLI (`insert_svg`, `inspect_svg`, capas y colores); en la UI falta insertar dentro del boceto abierto | Sonnet |
+| 4 SVG en boceto activo | HECHA por MCP/CLI (`insert_svg`, `inspect_svg`, capas y colores) y en la UI (`ui/ventana.py` inserta dentro del boceto abierto) | Sonnet |
 | 5 Caja de transformación | HECHA (marco de control en el boceto + `transform_sketch`) | Opus |
 | 6 Herramientas vectoriales | HECHA: unir/restar/intersecar, offset, limpiar (repetidas, huecos, alineadas) y nodos (arrastre en la UI, `move_sketch_point`) | Opus |
-| 7 Velocidad | HECHA: SVG de 5000 nodos fallaba → 2,5 s (solver por grupos, perfiles 2,4×, caché) | Opus |
+| 7 Velocidad | PARCIAL: el SVG de 5000 nodos fallaba y ahora tarda 2,5 s (solver por grupos, perfiles 2,4×, caché); la meta era < 1 s y no se cumple | Opus |
 | 8 Imagen a vector | HECHA (`trace_image`, comando «Vectorizar imagen») con librerías ya instaladas | Sonnet |
 | 9 Exportar boceto a SVG/DXF | HECHA (`export_sketch` y «Guardar como SVG…» en el menú del boceto) | Sonnet |

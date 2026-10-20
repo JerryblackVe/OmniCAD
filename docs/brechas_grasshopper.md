@@ -1,5 +1,7 @@
 # Brechas frente a Grasshopper (programación visual)
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [Grasshopper 2 — documentación](https://www.rhino3d.com/docs/grasshopper2/) (glosario, temas y
 los **1385 componentes** de [specs](https://www.rhino3d.com/docs/grasshopper2/specs/)),
@@ -44,21 +46,21 @@ Decisión de diseño que conviene tomar antes de programar:
 | **B** | El grafo se evalúa como flujo de datos puro y produce cuerpos; «Hornear» los pasa al timeline. | **Recomendada.** Mantiene la receta y suma lo que le falta a Grasshopper. |
 | C | Los dos a la vez. | Es B más tiempo: queda para después. |
 
-Lo que ya existe y baja el costo: el catálogo único `api/` (167 herramientas con nombre, parámetros tipados y
-docstring) y los 93 tipos de operación del timeline. Casi todos los primeros nodos salen SOLOS de ahí.
+Lo que ya existe y baja el costo: el catálogo único `api/` (211 herramientas con nombre, parámetros tipados y
+docstring) y los 96 tipos de operación del timeline. Los nodos de la primera tanda se escribieron a mano sobre esa base (GH3).
 
 ## Para hacer
 
 | # | Pieza | Cómo debe sentirse (Fusion) | Estado / dónde engancha |
 |---|---|---|---|
-| GH1 | **Modelo de datos**: `Arbol`, `Ruta`, emparejado de listas (más larga, más corta, producto cruzado), nulos y errores por nodo; aplanar, injertar, simplificar, invertir. | Sin pantalla: módulo puro `nucleo/flujo/` (sin Qt, sin OCP), con pruebas pytest antes de cualquier interfaz. | Nuevo. Es el corazón: sin esto no hay patrones paramétricos reales. |
-| GH2 | **Motor de evaluación**: grafo sin ciclos, recálculo solo de lo que cambió, orden topológico, caché por nodo, JSON dentro del `.omnicad`. | `omnicad grafo correr` por CLI; mide tiempos por nodo (como `dev bench`). | Nuevo. Reusa la idea de recálculo parcial del timeline. |
-| GH3 | **Catálogo de nodos**: generado desde `api/` y las operaciones; tipos de puerto (número, punto, vector, plano, curva, cuerpo, lista, árbol). Primera tanda ≈ 80: entradas (deslizador, interruptor, panel, lista de valores), matemática y trigonometría, secuencias y rango, aleatorio, vectores y planos, listas y árboles, curvas básicas, divisiones, extrusión/solevación/revolución/barrido, mover/girar/escalar/simetría/matriz, booleanas. | Buscador de nodos como la caja de la tecla S: escribir y elegir; ayuda en un globo con el nombre y el tipo de cada puerto. | `api/registro.py` ya describe los parámetros: generar nodos es mecánico. |
+| GH1 | **Modelo de datos**: `Arbol`, `Ruta`, emparejado de listas (más larga, más corta, producto cruzado), nulos y errores por nodo; aplanar, injertar, simplificar, invertir. | Sin pantalla: módulo puro, hoy `omnicad/grafo/` (sin Qt, sin OCP), con pruebas pytest antes de cualquier interfaz. | **Hecho (GH1):** existe como `omnicad/grafo/arbol.py` (no en `nucleo/flujo/`; `docs/grafo.md` lo declara hecho). |
+| GH2 | **Motor de evaluación**: grafo sin ciclos, recálculo solo de lo que cambió, orden topológico, caché por nodo, JSON dentro del `.omnicad`. | Por CLI: `omnicad call run_graph` (no existe `omnicad grafo correr`); mide tiempos por nodo (como `dev bench`). | **Hecho (GH2):** `omnicad/grafo/motor.py` y `timeline/ops_grafo.py`; reusa la idea de recálculo parcial del timeline. |
+| GH3 | **Catálogo de nodos**: escrito a mano (`omnicad/grafo/nodos_*.py`); tipos de puerto (número, punto, vector, plano, curva, cuerpo, lista, árbol). Primera tanda ≈ 80: entradas (deslizador, interruptor, panel, lista de valores), matemática y trigonometría, secuencias y rango, aleatorio, vectores y planos, listas y árboles, curvas básicas, divisiones, extrusión/solevación/revolución/barrido, mover/girar/escalar/simetría/matriz, booleanas. | Buscador de nodos como la caja de la tecla S: escribir y elegir; ayuda en un globo con el nombre y el tipo de cada puerto. | **Parcial (GH3):** los nodos están escritos a mano, no generados desde `api/` (64 hoy: `nodos_basicos.py`, `nodos_geometria.py`, `nodos_vectores.py`); faltan solevación, revolución, barrido, divisiones de curva, matrices y lista de valores. |
 | GH4 | **Lienzo de nodos**: arrastrar, cables, zoom y paneo, grupos, aislar, vista previa en el visor (se resalta lo del nodo elegido), errores en rojo con el mensaje. Pestaña «DISEÑO ALGORÍTMICO». | Mismo tema (claro/oscuro) y los mismos atajos que el resto de la app. | Nuevo, en `ui/`. Lleva Qt: va DESPUÉS de GH1 y GH2. |
-| GH5 | **Hornear y enlazar**: convertir el resultado en pasos del timeline o en cuerpos fijos; deslizadores enlazados a parámetros del documento. | «Hornear» como botón de Aceptar; los parámetros se ven en la tabla de siempre. | Hay parámetros y expresiones (`timeline/parametros.py`). |
-| GH6 | **Nodo de script** (Python) con editor y autocompletado de la API; nodo de expresión. | Panel de código dentro del nodo. | Hay `execute_code` en la API y «Secuencias de comandos…». |
+| GH5 | **Hornear y enlazar**: convertir el resultado en pasos del timeline o en cuerpos fijos; deslizadores enlazados a parámetros del documento. | «Hornear» como botón de Aceptar; los parámetros se ven en la tabla de siempre. | **Hecho (GH5):** `bake_graph` (`api/herramientas_grafo.py`, `timeline/ops_grafo.py`) hornea el grafo al timeline, solo cuerpos (no curvas). Hay parámetros y expresiones (`timeline/parametros.py`). |
+| GH6 | **Nodo de script** (Python) con editor y autocompletado de la API; nodo de expresión. | Panel de código dentro del nodo. | **Parcial (GH6):** el nodo de expresión ya existe (`omnicad/grafo/nodos_basicos.py`); falta el nodo de script Python con editor. Hay `execute_code` en la API y «Secuencias de comandos…». |
 | GH7 | **Grafo como comando** (estilo Grasshopper Player): publicar un grafo y que aparezca en la caja de la tecla S con un panel de campos armado con sus entradas. | Es lo más Fusion: el usuario ve un comando normal con campos y vista previa, sin saber que hay un grafo. | Se apoya en `ui/comando.py` (Receta B). |
-| GH8 | **Correr sin ventana**: herramienta `run_graph` en la API/MCP/CLI, con entradas por nombre y salida a STEP/STL. | Para agentes: «hacé 20 variantes de este grafo». | Se arma sobre la API. Estilo Hops/Compute, pero local. |
+| GH8 | **Correr sin ventana**: herramienta `run_graph` en la API/MCP/CLI, con entradas por nombre y salida a STEP/STL. | Para agentes: «hacé 20 variantes de este grafo». | **Hecho (GH8):** `run_graph` existe (`api/herramientas_grafo.py`; por CLI, `omnicad call run_graph`). Estilo Hops/Compute, pero local. |
 | GH9 | **Clústeres**: un grupo de nodos pasa a ser un nodo propio, reutilizable y compartible. | Seleccionar → «Agrupar en nodo». | Después de GH4. |
 | GH10 | **Bucles y campos**: repetir hasta cumplir una condición; campos escalares para modular geometría. | Nodos «Repetir» y «Campo»; vista de isolíneas en el visor. | Después de GH3. Referencia: nodos de geometría de Blender (B15). |
 | GH11 | **Optimizador de parámetros**: elegir un número de salida (volumen, masa, distancia) y pedir que lo minimice o maximice cambiando parámetros dentro de un rango. ⚠ En Grasshopper se hace con un complemento (Galapagos): de memoria, no leído hoy. | ANALIZAR › «Optimizar»: parámetros + rangos + objetivo; barra de progreso y botón «Aplicar el mejor». Sirve SIN grafo, sobre el timeline. | `scipy` ya es dependencia (`restricciones/solver.py`). |

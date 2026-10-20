@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Hallazgos de las pruebas de uso (PROJECT_LOG.md › «Hallazgos de pruebas de uso»), uno por prueba:
+"""Hallazgos de las pruebas de uso (docs/seguimiento/, IDs H-n), uno por prueba:
 Seleccionar sale de la herramienta de boceto, Insertar SVG/DXF/imagen dentro del boceto abierto, Medir con cota
 guía y valor en vivo, menú del timeline según el tipo de paso y primitivas como comando con panel."""
 import math

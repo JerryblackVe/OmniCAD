@@ -1,5 +1,7 @@
 # Plan de Rust para OmniCAD
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Auditoría de rendimiento del 2026-10-12, pedida por el usuario: «todo lo que se pueda escribir en Rust para mejorar el
 rendimiento, que se haga; a veces la app se siente laggy». Este documento dice **qué** pasa a Rust, **qué no** (y por
 qué), **en qué orden** y **cómo se prueba**. Es el desarrollo del paso 6 del pendiente 10 del `PROJECT_LOG.md`, que
@@ -12,7 +14,7 @@ Estado (2026-10-17): **primer módulo Rust implementado: R11**, rasterizador, so
 en `clon/rust/` con PyO3/numpy; respaldo Python. Rust 1.99.1 ya estaba instalado; el usuario autorizó instalar
 maturin y descargar los crates. Medición: rasterizador 17×, API caja 2,129 → 1,139 s, reductor 4,928 → 4,313 s,
 PNG byte-idénticos. Detalle en `informe_tortura_2026-10-17.md`; comandos en `clon/rust/README.md`.
-El resto de este documento sigue siendo el plan de las próximas migraciones; R1 no se implementó.
+El resto de este documento sigue siendo el plan de las próximas migraciones; R1 no se implementó: hoy el crate es un solo `clon/rust/src/lib.rs` (sin `src/zstd.rs`) y el descompresor sigue en Python puro (`io_archivos/zstd_puro.py`).
 
 Estado (2026-10-19): **fases 0 y 5 hechas en Python** (sección 4): P1–P5, P10–P12, P14, P19, P22 y P6–P9, P13; P16 y
 P24 quedaron cubiertos. Medido con `scripts/bench_rendimiento.py` (modos nuevos `memoria` e `interfaz`): arrastrar un
@@ -84,7 +86,7 @@ por cuadro con datos chicos, la ganancia se la come el cruce y hay que pasarle l
 
 | # | Candidato | Dónde (hoy) | Hoy | Ganancia esperada | Riesgo | Depende de |
 |---|---|---|---|---|---|---|
-| R1 | **Descompresor Zstandard** | `io_archivos/zstd_puro.py:40-435`, lo llama `f3d_nativo.py:123-136` | Python puro, 1 MB/s comprimido; un `.f3d` de 20 MB ≈ 20 s. El venv es 3.12: nunca usa `compression.zstd` (3.14+) | 50–100× | Bajo (función `bytes→bytes`, crate `zstd`) | — |
+| R1 | **Descompresor Zstandard** (abierto: sigue en Python puro) | `io_archivos/zstd_puro.py:40-435`, lo llama `f3d_nativo.py:123-136` | Python puro, 1 MB/s comprimido; un `.f3d` de 20 MB ≈ 20 s. El venv es 3.12: nunca usa `compression.zstd` (3.14+) | 50–100× | Bajo (función `bytes→bytes`, crate `zstd`) | — |
 | R2 | **Reducir malla (QEM)** | `malla.py:1363-1420`, `_Editor` 1140-1305, `_optimo_qem` 1308, `_cuadricas` 1331 | `heapq` + sets + numpy sobre arreglos de 3–12 elementos por colapso (~300 µs/colapso) | 20–100× | Medio (replicar penalización de bordes de grupo, condición de enlace, umbral anti-pliegue) | Núcleo half-edge (R7) |
 | R3 | **BVH de triángulos**: primer choque, cualquier choque, punto más cercano | `revision.py:477-588` (`espesores`, `primer_choque`), `analisis.py:705-787`, `malla.py:1472-1495`, `vaciar` 1944; picking en `ui/visor3d.py:151-164` | Möller-Trumbore en numpy, O(rayos × triángulos de la caja) | 20–100× y sin recortar rayos por fidelidad | Bajo (BVH estándar con SAH, una sola pieza para 4 usos) | — |
 | R4 | **Kernel del solver**: residuos + jacobiano analítico + trf/LM | `solver.py:437`, `181-334` (`_armar`), `454` (`_jacobiano`), `591-616`, `619` | scipy `least_squares` con diferencias finitas sobre closures | 10–50× por evento de arrastre | **Medio-alto** (16 tipos de restricción; paridad numérica 1e-6; conteo de GDL por rango) | Primero los arreglos de Python (sección 4) |
@@ -94,7 +96,7 @@ por cuadro con datos chicos, la ganancia se la come el cruce y hay que pasarle l
 | R8 | **Dedupe de filas, soldado y normales suaves** | `render_cpu.py:269-290`, `malla.py:90-99`, `948-969`, `1008`, `2275-2294`, `geometria.py:513-520`, `gltf.py:45-74` | `np.unique(axis=0)` (ordena filas como `void`) + `np.add.at` | 10–30× (absoluto: 1–2 s por 300 k triángulos) | Bajo | — |
 | R9 | **Hit-testing del boceto** (punto/curva más cercano, selección por ventana) | `ui/editor_boceto.py:631`, `642`, `2612`, `2740` | Doble bucle Python con `QPointF`; 400 curvas = 17,5 ms por movimiento (50–60 ms en 3D, estimado); el resaltado se apaga con más de 400 curvas | 20–50× | Bajo-medio (hay que mantener el índice sincronizado con Qt) | R5 |
 | R10 | **Lectura/escritura de mallas en texto** (STL ASCII, OBJ, PLY ASCII, 3MF) | `malla.py:562-681`, `696-798`, `exportar.py:58-109` | Bucles por línea/triángulo, `struct.pack` por triángulo | 10–30× | Bajo | — |
-| R11 | **Rasterizador CPU y mapa de sombras** | `render_cpu.py:401-529` | numpy por tandas con `lexsort` para el z-buffer; 1280×720 con 327 k triángulos = 2,6 s | 10–30× en esa parte | Medio (centro de píxel, tolerancia −1e-7, desempate estable: `test_render.py:80`) | R3 |
+| R11 | **Rasterizador CPU y mapa de sombras** (**HECHO 2026-10-17**, sin BVH) | `render_cpu.py:401-529` | numpy por tandas con `lexsort` para el z-buffer; 1280×720 con 327 k triángulos = 2,6 s | 10–30× en esa parte | Medio (centro de píxel, tolerancia −1e-7, desempate estable: `test_render.py:80`) | R3 (previsto; se hizo sin BVH) |
 | R12 | **Quitar aristas ocultas superpuestas** (vistas de dibujo) | `nucleo/dibujo.py:269-306` | Broadcast denso k×m×2; 1500 ocultas × 1500 visibles = 1,6 s | 10–30× | Bajo | — |
 | R13 | **Menores**: RDP del vectorizador, lectores DXF/SVG, `recortar_a_circulo`, `generar_grupos` con tamaño mínimo (cuadrático: 20 k triángulos = 85 s, pero hoy inalcanzable desde timeline/MCP) | `vectorizar.py:49-84`, `dxf.py:467-804`, `svg.py:104-194`, `dibujo.py:507-540`, `malla.py:1092-1111` | Python puro | 5–30×, ganancia absoluta ≤ 1 s | Bajo | — |
 
@@ -151,7 +153,7 @@ clon/rust/                     # nuevo; el resto del repo no cambia
   Cargo.toml                   # workspace
   omnicad_rs/                  # crate PyO3 + rust-numpy (arreglos sin copia)
     src/lib.rs                 # #[pymodule] omnicad_rs
-    src/zstd.rs                # R1
+    src/zstd.rs                # R1 (previsto; hoy no existe: el crate es un solo src/lib.rs)
     src/malla/{halfedge,qem,remallado,io,soldado}.rs   # R2, R6, R7, R8, R10
     src/bvh.rs                 # R3
     src/boceto/{solver,spline,cortes,golpe}.rs         # R4, R5, R9
@@ -205,7 +207,7 @@ Cada ítem Rust entra solo si cumple **todo**:
 | 1 | Andamiaje: toolchain, crate vacío, `nativo.py`, empaquetado de punta a punta con **R1 (Zstandard)** | `.f3d` grande abre 50× más rápido; el instalador lleva el `.pyd`; CI con y sin Rust | Corto |
 | 2 | Malla: R7 → R2 (reducir) → R8 → R10, con R3 (BVH) en paralelo | `reducir` 50 k en < 0,3 s; `espesores` con 2000 rayos en < 0,1 s a 82 k | Medio |
 | 3 | Boceto: R5 → solver R4 con jacobiano analítico → R9 (hit-testing) | Arrastre del polígono de 24 en < 5 ms; sin tope de 400 curvas para el resaltado | Medio-largo |
-| 4 | Remallar R6 y subir los topes; rasterizador R11; R12–R13 | `remallar` 50 k en < 0,5 s; render 1280×720 a 327 k triángulos < 0,5 s | Largo |
+| 4 | Remallar R6 y subir los topes; rasterizador R11 (ya hecho); R12–R13 | `remallar` 50 k en < 0,5 s; render 1280×720 a 327 k triángulos < 0,5 s | Largo |
 | 5 | Sección 4 restante (P6–P9, P13): previa asíncrona, memo por paso, firmas | Editar un paso al final de un timeline largo no recalcula lo anterior ni lo independiente | Medio |
 
 La fase 0 y la fase 5 no dependen de Rust y se pueden hacer en cualquier momento; las fases 1–4 van en orden porque

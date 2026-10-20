@@ -1,5 +1,7 @@
 # Plan: MCP + CLI para que cualquier agente IA diseñe y desarrolle con OmniCAD
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-09. Estado: **aprobado, en ejecución**. El programa se llama **OmniCAD** (hasta el 2026-10-09 fue FusionClone).
 
 ## Objetivo
@@ -16,7 +18,7 @@ Los agentes previstos son Claude Code, OpenCode, Codex, Cursor, Gemini CLI, Clau
 | Dato | Evidencia |
 |---|---|
 | El núcleo no usa Qt, así que se puede diseñar sin abrir la ventana. | `grep` de `PySide6` en `nucleo/`, `timeline/`, `io_archivos/` y `restricciones/` no encuentra nada. |
-| Hay 93 tipos de operación registrados en un solo diccionario (85 cuando se escribió el plan; actualización 2026-10-14). | `timeline/operaciones.py` (`TIPOS_OPERACION`) más `registrar_operacion`. |
+| Hay 96 tipos de operación registrados en un solo diccionario (85 cuando se escribió el plan; recuento del 2026-10-20: 96 clases con `TIPO` en `timeline/`, sin contar la base vacía). | `timeline/operaciones.py` (`TIPOS_OPERACION`) más `registrar_operacion`. |
 | Cada operación declara sus parámetros con valores por defecto, sus expresiones y un docstring que dice a qué comando de Fusion equivale. Con eso se puede generar el esquema de todas las operaciones sin escribirlo a mano. | `operaciones.py:171` (`PARAMS`, `EXPRESIONES`). |
 | La receta del diseño ya se guarda en JSON. | `Documento.a_dict` / `desde_dict` y `operacion_desde_dict`. |
 | El formato `.omnicad` es un ZIP que se guarda de forma atómica. | `io_archivos/proyecto.py`. |
@@ -26,8 +28,8 @@ Los agentes previstos son Claude Code, OpenCode, Codex, Cursor, Gemini CLI, Clau
 | Se pueden sacar imágenes en vivo desde la GPU. | `ui/visor3d.py:1594` (`captura_png`). |
 | Exporta a STL, OBJ, STEP, IGES y BREP. | `io_archivos/exportar.py`. |
 | La versión vigente del SDK oficial de MCP para Python es la 2.3.0. En la v2, `FastMCP` pasó a llamarse `MCPServer` y se importa con `from mcp.server import MCPServer`. | PyPI y la documentación v2, consultados el 2026-10-09. |
-| El SDK de MCP no está instalado en el venv. | `pip list`. |
-| La carpeta no tiene git. | `git status` devuelve "not a git repository". |
+| El SDK de MCP no estaba instalado cuando se escribió el plan; ya lo está (`mcp==2.3.0` en `requirements.txt`). | `pip list`. |
+| La carpeta no tenía git cuando se escribió el plan; ya lo tiene (`git init` del 2026-10-09). | `git status` devolvía "not a git repository". |
 | En esta PC hay dos agentes instalados para las pruebas reales: `claude` y `opencode`. No están `codex`, `gemini` ni `cursor`. | `command -v`. |
 | Hay un MCP de Fusion 360 de terceros (Faust Machines) que sirve de referencia de nombres. Tiene unas 90 herramientas en inglés (`create_sketch`, `draw_rectangle`, `extrude`, `fillet`, …) y errores con `error_kind` más pistas. | `%APPDATA%\Autodesk\…\AddIns\Fusion360MCP\server\command_handler.py`. Solo se leyó: no se copia código. |
 
@@ -43,7 +45,7 @@ Los agentes previstos son Claude Code, OpenCode, Codex, Cursor, Gemini CLI, Clau
 3. **Dos modos de trabajo con las mismas herramientas.**
    - Modo **sin ventana**: es el modo por defecto. Es rápido, sirve para tests y no necesita la app abierta.
    - Modo **en vivo**: la app abierta muestra en tiempo real lo que hace el agente. Hay que encenderlo a mano.
-4. **Las 85 operaciones quedan disponibles sin crear 85 herramientas.**
+4. **Las 96 operaciones quedan disponibles sin crear 96 herramientas** (eran 85 al escribir el plan).
    - Unas 25 herramientas cómodas cubren lo común: boceto, extruir, revolución, empalme, agujero, patrón, etc.
    - Para el resto están `describe_operation` y `run_operation`, que usan el formato de receta que ya existe.
 
@@ -116,7 +118,7 @@ Algunos clientes no soportan resources ni prompts. Para ellos `get_guide` devuel
 - ✅ Commit base y cambio de nombre a OmniCAD.
 - `pyproject.toml` con los comandos `omnicad` y `omnicad-mcp` (`pip install -e .`). Se pasa a los paquetes F y G: no se crean comandos que todavía no hacen nada.
 - ✅ `mcp==2.3.0` agregado a `requirements.txt` e instalado.
-- ✅ `AGENTS.md` en la raíz, que es el estándar que leen Codex, OpenCode, Cursor, Gemini y Copilot. Junta las reglas de `docs/brief_agentes.md`, que queda como enlace.
+- ✅ `AGENTS.md` en la raíz, que es el estándar que leen Codex, OpenCode, Cursor, Gemini y Copilot. Junta las reglas del viejo `docs/brief_agentes.md` (borrado el 2026-10-20).
 - `CLAUDE.md`, que importa `@AGENTS.md`.
 
 **Listo cuando:**
@@ -129,7 +131,7 @@ Algunos clientes no soportan resources ni prompts. Para ellos `get_guide` devuel
 
 ### Hito 1. La API única: el corazón
 
-**Paquete B. Sesión, catálogo y errores.** ✅ Hecho el 2026-10-09: 16 herramientas, 52 tests. El catálogo vive en `api/registro.py`.
+**Paquete B. Sesión, catálogo y errores.** ✅ Hecho el 2026-10-09 con 16 herramientas y 52 tests (el catálogo hoy tiene 211 herramientas). El catálogo vive en `api/registro.py`.
 - **Qué incluye:**
   - `omnicad/api/` con `Sesion` (nuevo, abrir, guardar, deshacer y documento activo);
   - el decorador `@herramienta(nombre, grupo, descripcion)`, que genera el esquema JSON a partir de los tipos;
@@ -160,10 +162,10 @@ Algunos clientes no soportan resources ni prompts. Para ellos `get_guide` devuel
 - **Qué incluye:**
   - `get_viewport_image` sin ventana, usando `render_cpu`;
   - propiedades físicas, medición e interferencia;
-  - `describe_operation` y `run_operation` para las 85 operaciones;
+  - `describe_operation` y `run_operation` para las 96 operaciones (85 al escribir el plan);
   - `apply_recipe` y `execute_code`.
 - **Listo cuando:**
-  - un test recorre las 85 operaciones y `describe_operation` responde en todas;
+  - un test recorre todas las operaciones (85 al escribir el plan, 96 hoy) y `describe_operation` responde en todas;
   - la imagen del ejemplo a 640×480 sale en menos de 2 s y es un PNG válido.
 - **Ejecutor:** Sonnet 5, esfuerzo medio.
 
@@ -185,7 +187,7 @@ Algunos clientes no soportan resources ni prompts. Para ellos `get_guide` devuel
   - imágenes como contenido de imagen;
   - resources, prompts e `instructions`;
   - transporte stdio, y HTTP solo en 127.0.0.1;
-  - `.mcp.json` del proyecto.
+  - `.mcp.json` del proyecto: no existe en el repo; lo escribe `omnicad setup`.
 - **Listo cuando:**
   - un test con un cliente en memoria lista las herramientas, llama a `create_box` y recibe la imagen;
   - `claude mcp list` muestra omnicad ✓ Connected;
@@ -283,7 +285,7 @@ A ──► B ──► C ──► D
 |---|---|
 | El agente y el usuario tocan el mismo diseño en vivo. | Todo pasa por el hilo de Qt. Si hay un comando abierto, la respuesta es `APP_BUSY`, y cada llamada es un paso de deshacer. |
 | El puente es una puerta local: `execute_code` puede correr Python. | Viene apagado, escucha solo en 127.0.0.1, usa un token aleatorio en un archivo del usuario y muestra un indicador visible de "agente conectado". |
-| Demasiadas herramientas confunden a los agentes. | Estado real al 2026-10-18: 190 herramientas en 13 grupos (`omnicad tools` las lista; docs/agentes/herramientas.md) — ya son más que las «35 por defecto» previstas cuando se escribió el plan. De los 95 tipos de operación, 38 no tienen herramienta propia y pasan por `run_operation`; inventario completo de lo que falta en `docs/brechas_mcp.md`. El hito 4 mide los errores reales. |
+| Demasiadas herramientas confunden a los agentes. | Estado real al 2026-10-20: 211 herramientas en 14 grupos (`omnicad tools` las lista; docs/agentes/herramientas.md) — ya son más que las «35 por defecto» previstas cuando se escribió el plan. De los 96 tipos de operación, 38 no tenían herramienta propia el 2026-10-18 (sobre 95; no se recontó) y pasan por `run_operation`; inventario completo de lo que falta en `docs/brechas_mcp.md`. El hito 4 mide los errores reales. |
 | Las caras o aristas referenciadas se pierden al recalcular. | Se usan las firmas persistentes que ya existen, más `REFERENCE_LOST` con pistas para volver a elegir. |
 | Las imágenes sin ventana tardan, porque el render es por software. | 640×480 sin supermuestreo por defecto. En vivo se usa la captura de la GPU. |
 

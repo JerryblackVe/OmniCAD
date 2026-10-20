@@ -49,8 +49,6 @@ def auditar(v):
     hallazgos = []
 
     # 1. Textos que no caben en su widget (botones de la cinta, pestañas, etiquetas del panel inferior).
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QLabel, QTabBar, QToolButton, QTreeWidget, QTableView
     for w in v.findChildren(QToolButton):
         if not w.isVisible() or w.toolButtonStyle() == Qt.ToolButtonIconOnly or not w.text():
             continue                     # con IconOnly el texto no se muestra: no hay nada que truncar

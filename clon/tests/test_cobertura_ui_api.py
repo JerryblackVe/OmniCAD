@@ -79,6 +79,7 @@ HERRAMIENTAS = {
     "visibilidad": "add_animation_action", "anotacion": "add_animation_annotation",
     "vista": "set_animation_camera", "publicar": "export_animation_video",
     "Calcomanía": "set_decal",
+    "calcular": "recompute_all",
 }
 
 # clave → motivo por el que no tiene herramienta. «pendiente MCP-n» = el ID del plan docs/brechas_mcp.md.
@@ -89,7 +90,7 @@ EXCUSAS = {
     "accesibilidad": "pendiente MCP-26", "angulo_desmoldeo": "pendiente MCP-26", "cebra": "pendiente MCP-26",
     "curvatura_peine": "pendiente MCP-26", "mapa_entorno": "pendiente MCP-26", "mapa_curvatura": "pendiente MCP-26",
     "isocurva": "pendiente MCP-26", "radio_minimo": "pendiente MCP-26", "seccion": "pendiente MCP-26",
-    "colores_componente": "pendiente MCP-31", "calcular": "pendiente MCP-28",
+    "colores_componente": "pendiente MCP-31",
     "configurar": "pendiente MCP-27", "mostrar_configuracion": "pendiente MCP-27",
     "alinear": "pendiente MCP-37", "escala_3d": "pendiente MCP-37",
     "bobina": "pendiente MCP-32", "tuberia": "pendiente MCP-32",
@@ -121,9 +122,9 @@ EXCUSAS = {
     # --- selección: un agente no necesita el ratón
     "seleccionar": _RATON, "sel_ventana": _RATON, "sel_libre": _RATON, "sel_pintura": _RATON,
     "seleccionar_todo": "un agente elige por id: get_scene_info lista todos los cuerpos",
-    "invertir_seleccion": "pendiente MCP-50 (invert en select_bodies)",
-    "seleccion_nombre": "pendiente MCP-50 (by_name en select_bodies)",
-    "seleccion_tamano": "pendiente MCP-50 (by_size en select_bodies)",
+    "invertir_seleccion": "pendiente MCP-93 (invert en select_bodies)",
+    "seleccion_nombre": "pendiente MCP-93 (by_name en select_bodies)",
+    "seleccion_tamano": "pendiente MCP-93 (by_size en select_bodies)",
     "prioridad_cuerpo": _RATON, "prioridad_cara": _RATON, "prioridad_arista": _RATON,
     "prioridad_componente": _RATON,
     "filtro_caras": _RATON, "filtro_aristas": _RATON, "filtro_vertices": _RATON, "filtro_cuerpos": _RATON,
@@ -134,9 +135,9 @@ EXCUSAS = {
     "sk_circulo_3p": "pendiente MCP-72", "sk_poligono_arista": "pendiente MCP-73",
     "sk_espiral": "pendiente MCP-29", "sk_r_poligono": "pendiente MCP-30", "sk_terminar": "pendiente MCP-77",
     "sk_intersecar": "pendiente MCP-75", "sk_incluir_3d": "pendiente MCP-75",
-    "sk_arco_tangente": "draw_arc no tiene la forma tangente (docs/brechas_mcp.md › Ola 4, huecos parciales)",
-    "sk_alargar": "sin herramienta (alargar curvas); no figura en docs/brechas_mcp.md: pendiente de auditar",
-    "sk_partir": "sin herramienta (partir curvas); no figura en docs/brechas_mcp.md: pendiente de auditar",
+    "sk_arco_tangente": "pendiente MCP-94",
+    "sk_alargar": "pendiente MCP-91",
+    "sk_partir": "pendiente MCP-92",
     # --- espacio DIBUJO (ola 2)
     "vista_base": "pendiente MCP-13", "vista_proyectada": "pendiente MCP-13", "vista_seccion": "pendiente MCP-13",
     "vista_detalle": "pendiente MCP-13", "girar": "pendiente MCP-14", "mover": "pendiente MCP-15",

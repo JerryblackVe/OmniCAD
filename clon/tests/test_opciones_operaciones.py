@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Valores de lista cerrada (OPCIONES) de las operaciones, enteros y distancias mínimas (PROJECT_LOG L219 y L175):
+"""Valores de lista cerrada (OPCIONES) de las operaciones, enteros y distancias mínimas (hallazgos de las pruebas de uso, docs/seguimiento/):
 un valor inválido da un error claro con el campo y los valores válidos, y describe_operation los lista."""
 import json
 import math

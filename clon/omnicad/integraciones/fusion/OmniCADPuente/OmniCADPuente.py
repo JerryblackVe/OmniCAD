@@ -37,6 +37,7 @@ TIEMPO_INICIO_S = 60       # para que Fusion EMPIECE a atender un pedido
 TIEMPO_MAXIMO_S = 600      # para que lo termine (un ensamblaje grande tarda)
 LARGO_MAXIMO = 64 * 1024
 EXTENSIONES = (".f3d", ".f3z")
+TOPE_MIEMBRO_ZIP = 512 * 1024 * 1024   # por miembro del .f3z (corre dentro de Fusion: no importa omnicad)
 VARIABLE_CARPETA = "OMNICAD_PUENTE_FUSION_DIR"
 
 _activo = {}               # lo que tiene que seguir vivo mientras corre el complemento (servidor, manejadores)
@@ -147,15 +148,21 @@ class Servidor:
         self.http.server_close()
 
 
-def f3d_principal(f3z, carpeta):
+def f3d_principal(f3z, carpeta, tope=TOPE_MIEMBRO_ZIP):
     """Un .f3z es un paquete ZIP con los diseños (.f3d), dibujos (.f2d) y un `DesignDescription.json` que dice quién
     referencia a quién. Extrae a `carpeta` y devuelve la ruta del diseño principal: el .f3d que ningún otro .f3d
-    referencia (el ensamblaje de arriba); si hay varios, el más grande."""
+    referencia (el ensamblaje de arriba); si hay varios, el más grande. Un miembro que declara más de `tope` bytes
+    no se extrae (zip bomb), igual que `TOPE_MIEMBRO_ZIP` de `io_archivos/proyecto.py`."""
     import zipfile
     with zipfile.ZipFile(f3z) as z:
         nombres = [n for n in z.namelist() if n.lower().endswith(".f3d") and "/" not in n.strip("/")]
         if not nombres:
             raise ValueError("El .f3z no trae ningún diseño .f3d.")
+        grandes = [i.filename for i in z.infolist()
+                   if (i.filename.lower().endswith(".f3d") or i.filename == "DesignDescription.json")
+                   and i.file_size > tope]
+        if grandes:
+            raise ValueError(f"El .f3z trae miembros de más de {tope // 2**20} MB: {', '.join(grandes)}.")
         try:
             objetos = json.loads(z.read("DesignDescription.json"))["designDescription"]["designGraphs"][0]["designObjects"]
         except (KeyError, IndexError, ValueError, TypeError):

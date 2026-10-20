@@ -60,11 +60,11 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `clon/omnicad/ui/` | PySide6: `ventana.py`, `cinta.py`, `visor3d.py`, paneles, boceto en 3D |
 | `clon/omnicad/ui/comandos/` | Un módulo por familia de comandos con diálogo (`CATALOGO`) |
 | `clon/tests/` | pytest (un `test_*.py` por área) |
-| `docs/` | `arquitectura.md`, `guia_comandos.md`, `plan_mcp_cli.md`, `plan_rust.md` y `plan_cpp.md` (qué pasa a Rust y a C++, y en qué orden), `brechas_fusion.md` y las demás `brechas_*.md` (índice: `brechas_indice.md`), `agentes/` (MCP y CLI) |
+| `docs/` | Índice de todo en `docs/README.md`. Estado (bugs, faltantes, mejoras) en `docs/seguimiento/`; especificación de faltantes en `brechas_*.md`; planes `plan_*.md`; `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`) |
 | `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno) |
-| `PROJECT_LOG.md` | Bitácora y "Lecciones aprendidas" |
+| `PROJECT_LOG.md` | Bitácora (Registro) y "Lecciones aprendidas" |
 
 **`nucleo/`, `timeline/`, `restricciones/` e `io_archivos/` NO importan Qt** (comprobado: cero
 `PySide`/`QtCore`/`QtGui` ahí). Mantenelo: solo `ui/` conoce Qt.
@@ -96,7 +96,8 @@ Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lle
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
 **Definición de terminado**: ruff limpio, pytest verde, prueba de humo OK (la UI se toca → obligatoria),
-entrada nueva en `PROJECT_LOG.md`, y lección anotada si hubo un error verificable.
+entrada nueva en `PROJECT_LOG.md`, fila actualizada en `docs/seguimiento/` (estado, evidencia, fecha) y lección
+anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz.
 
 ## Receta A: agregar una operación al timeline
 Modelo: `OpFijacion` en `clon/omnicad/timeline/ops_fijacion.py`; base `Operacion` en `timeline/operaciones.py`.
@@ -146,9 +147,18 @@ modo en vivo y la lista de herramientas). Plan y estado: [docs/plan_mcp_cli.md](
    El archivo es generado: no se edita a mano, y `tests/test_doc_agentes.py` falla si quedó viejo.
 
 ## Registrar el trabajo
-**Hoja de ruta pública:** el README (sección «Hoja de ruta») resume los pendientes para que cualquiera pueda
-tomar uno. Cada vez que se agregue, cambie o termine un pendiente en `PROJECT_LOG.md` › «Pendientes», se
-actualiza también esa sección del README en el mismo turno (una línea por tema, sin detalle técnico).
+**Estado: una sola fuente de verdad.** Bugs, faltantes y mejoras viven en `docs/seguimiento/` (`bugs.md`,
+`faltantes.md`, `mejoras.md`; método en su `README.md`). Reglas:
+- Antes de decir qué está hecho o qué falta, se comprueba en el código y los tests: el log y la memoria envejecen.
+- Bug nuevo: fila nueva en `bugs.md` con el siguiente B-n libre. Al cerrar algo: estado, evidencia (test o commit)
+  y fecha en la misma tanda que el arreglo. `tests/test_seguimiento.py` falla si una fila cerrada no tiene evidencia
+  o nombra un test que no existe.
+- Los `docs/brechas_*.md` y `docs/plan_*.md` son especificación: no llevan estados que contradigan el seguimiento.
+- Documento nuevo, movido o borrado: se actualiza `docs/README.md` (índice) en el mismo commit.
+
+**Hoja de ruta pública:** el README (sección «Hoja de ruta», y su par en `README.en.md`) resume por tema lo que
+falta para que cualquiera pueda tomar algo. Cuando un tema entero se termina o aparece uno nuevo en el
+seguimiento, se actualizan los dos README en el mismo turno (una línea por tema, sin detalle técnico).
 
 En `PROJECT_LOG.md`, al terminar:
 - **Registro** (sección `## Registro`, una viñeta por tarea):

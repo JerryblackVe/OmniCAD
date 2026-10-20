@@ -1,5 +1,7 @@
 # Brechas frente a otros CAD libres de GitHub
 
+> Estado de cada ID: [docs/seguimiento/](seguimiento/README.md). Este archivo es la especificación; si un estado de acá no coincide con el seguimiento, vale el seguimiento.
+
 Fecha: 2026-10-19. Fuente: búsqueda profunda en GitHub, corrida en OpenCode con GPT-6.1 Sol y verificada después
 (estrellas, licencias y 2 afirmaciones de contenido contrastadas con `gh api`). Informe completo, fuera del repo:
 `D:\IA\DEEP RESEACH\2026-10-19_cad-parametrico-open-source-similares-omnicad.md` (45 repos, 44 README leídos).
@@ -19,7 +21,7 @@ Cada ítem lleva su herramienta MCP/CLI (receta C de `AGENTS.md`), test y doc re
 | CL3 | **Tutoriales reproducibles.** Recetas con capítulos, explicación y cámara, que se reproducen paso a paso y se pueden retocar. | [Limo CAD](https://github.com/limo-cad/Limo-CAD/blob/main/README.md#make-your-first-part) (LGPL-2.1) | Hay animación y recetas (`get_recipe`), pero no tutoriales con capítulos. | medio |
 | CL4 | **Elegir caras por descripción.** Selectores por propiedades e intención («las caras cilíndricas del agujero de montaje»), que devuelven candidatos, propiedades y por qué coinciden, y avisan si es ambiguo. | [SimpleCADAPI](https://github.com/PhySpace/SimpleCADAPI/blob/master/README.md#3--code-first-editor) | En parte: `find_faces` y `find_edges`. | medio |
 | CL5 | **Diagnóstico para el agente.** Registro de operaciones y captura de fallos con contexto (restricciones, error del kernel) que el agente puede consultar. | [freecad-mcp](https://github.com/blwfish/freecad-mcp/blob/main/README.md#built-in-diagnostics) | En parte: `list_error_reports` y `read_error_report`. | medio |
-| CL6 | **Ver qué se mueve en el boceto.** Colores según los grados de libertad que quedan (espacio nulo del jacobiano) y detección de restricciones en conflicto. | [DATUM](https://github.com/Artis-98/datum/blob/main/README.md#what-it-does) (MIT, Python + OpenCascade como nosotros) | En parte: el solver ya cuenta los grados de libertad (`restricciones/solver.py`). | medio |
+| CL6 | **Ver qué se mueve en el boceto.** Colores según los grados de libertad que quedan (espacio nulo del jacobiano) y detección de restricciones en conflicto. | [DATUM](https://github.com/Artis-98/datum/blob/main/README.md#what-it-does) (MIT, Python + OpenCascade como nosotros) | **Hecho (CL6):** el solver usa el espacio nulo del jacobiano (SVD) para saber qué entidades quedan determinadas y el editor las pinta (`restricciones/solver.py`, `ui/editor_boceto.py`); el conflicto de restricciones se detecta (`tests/test_solver.py::test_conflicto_se_detecta`). | medio |
 | CL7 | **Ayuda del MCP según la versión.** El servidor entrega la guía de la misma versión que está corriendo. | [FluidCAD](https://github.com/Fluid-CAD/FluidCAD/blob/main/README.md#ai-agents) (MIT) | En parte: `get_guide` y la skill `omnicad`. | bajo |
 | CL8 | **Importar con cobertura declarada.** Al abrir un archivo de otro programa, decir qué pasos se reconstruyeron y cuáles quedaron como cuerpo fijo. | [Extrudo](https://github.com/zoltanf/extrudo/blob/main/README.md#what-it-does) (GPL-3.0), [cadmpeg](https://github.com/cadmpeg/cadmpeg) | En parte: se abre `.f3d` con historial (`inspect_f3d`). | alto |
 

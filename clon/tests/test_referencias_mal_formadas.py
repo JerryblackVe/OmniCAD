@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Parámetros mal formados en un paso del timeline (prueba de uso del 2026-10-09, PROJECT_LOG «Hallazgos»):
+"""Parámetros mal formados en un paso del timeline (prueba de uso del 2026-10-09, B-01 en docs/seguimiento/bugs.md):
 una referencia que es texto, [None] o un dict sin sus claves, o una lista que llega como texto o None, tiene
 que dar un error que nombre el campo (INVALID_ARGUMENTS), nunca «Error inesperado». Y los campos de cuerpos
 aceptan las dos formas: el id («op1.c1») o la referencia {"tipo": "cuerpo", "cuerpo": "op1.c1"}."""

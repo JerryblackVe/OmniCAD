@@ -250,10 +250,10 @@ def test_hojas_y_escalas():
 
 def test_cajetin_y_marco():
     d = nd.Dibujo("A3")
-    d.cajetin.update(titulo="Soporte", numero_pieza="FC-001", autor="Gerardo", material="Acero")
+    d.cajetin.update(titulo="Soporte", numero_pieza="FC-001", autor="Ana López", material="Acero")
     prims = d.primitivas_hoja()
     textos = [p[3] for _, p in prims if p[0] == "texto"]
-    for t in ("Soporte", "FC-001", "Gerardo", "Acero", "A3", "1 / 1", "Título", "Material"):
+    for t in ("Soporte", "FC-001", "Ana López", "Acero", "A3", "1 / 1", "Título", "Material"):
         assert t in textos
     for t in [str(i) for i in range(1, 9)] + list("ABCDEF"):   # zonas de un A3 (ISO 5457): 8 × 6
         assert textos.count(t) == 2

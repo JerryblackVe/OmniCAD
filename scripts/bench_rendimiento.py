@@ -165,7 +165,6 @@ def interfaz():
     import numpy as np
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
-    from PySide6.QtCore import QPointF
     from PySide6.QtGui import QImage, QPainter, QPainterPath
     from PySide6.QtWidgets import QApplication
 

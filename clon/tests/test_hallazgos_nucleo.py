@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Hallazgos de las pruebas de uso (PROJECT_LOG «Hallazgos de pruebas de uso») que quedaban después de la ola 1:
+"""Hallazgos de las pruebas de uso (docs/seguimiento/, IDs H-n y B-n) que quedaban después de la ola 1:
 resultados imposibles que pasaban como «ok», mensajes que culpaban a lo que no era y casos borde del núcleo."""
 import json
 import math

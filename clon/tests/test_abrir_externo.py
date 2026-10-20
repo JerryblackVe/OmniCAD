@@ -311,6 +311,18 @@ def test_f3z_elige_el_diseno_de_arriba(tmp_path):
         comp.f3d_principal(str(tmp_path / "vacio.f3z"), str(tmp_path / "y"))
 
 
+def test_f3z_con_un_miembro_gigante_no_se_extrae(tmp_path):
+    """AUD-14: el tope por miembro frena una zip bomb antes de extraer nada."""
+    import zipfile
+    comp = _complemento()
+    f3z = tmp_path / "bomba.f3z"
+    with zipfile.ZipFile(f3z, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("pieza.f3d", b"\0" * 4096)
+    with pytest.raises(ValueError, match="más de"):
+        comp.f3d_principal(str(f3z), str(tmp_path / "x"), tope=1024)
+    assert not (tmp_path / "x").exists()
+
+
 def test_volumen_y_area_en_forma_libre():
     """Una esfera pasada a NURBS va por el control con malla y se queda con la integración de OpenCascade (que en
     NURBS ya difería del valor exacto: volumen −0,04 %, área +0,37 %: el control solo la descarta si se aleja más de 1 %)."""
