@@ -30,7 +30,7 @@ from ..nucleo import motor
 from ..nucleo.geometria import ErrorGeometria
 from ..restricciones import ErrorBoceto
 from .entidades import ErrorReferencia
-from .operaciones import (HEREDABLES, TIPOS_OPERACION, Contexto, Cuerpo, ErrorOperacion, EstadoModelo,
+from .operaciones import (HEREDABLES, TIPOS_OPERACION, TODAS, Contexto, Cuerpo, ErrorOperacion, EstadoModelo,
                           operacion_desde_dict, propiedades_cuerpo)
 from .parametros import LONGITUDES, MASAS, ErrorExpresion, TablaParametros, nombres_usados
 
@@ -93,6 +93,25 @@ def _cambios_de_cuerpos(antes, despues):
     return lista, formas
 
 
+_FALTA = object()      # parámetro que un paso consultó y no existía
+
+
+def _mismo_valor(a, b):
+    """Igualdad de un valor del estado entre dos cálculos: los cuerpos se copian en cada paso, así que se comparan sus
+    atributos (la forma, por identidad); lo demás, como `_igual`."""
+    if isinstance(a, Cuerpo) and type(a) is type(b):
+        return _igual(vars(a), vars(b))
+    return _igual(a, b)
+
+
+def _receta(op):
+    """La receta del paso como texto (para saber si cambió desde su último cálculo); None si no se puede escribir."""
+    try:
+        return json.dumps(op.a_dict(), sort_keys=True)
+    except (TypeError, ValueError):
+        return None
+
+
 def _migrar(d):
     """Un paso de una receta leída (archivo, receta aplicada o diseño insertado): si su operación cambió de
     cálculo, `migrar_receta` le completa lo que le falta para que se calcule como antes (p. ej. las uniones
@@ -124,6 +143,8 @@ class Documento:
         self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
         self._duraciones = []     # por paso: segundos que tardó su último cálculo (0 si no se ejecutó)
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
+        self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
+        self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
         self.motor = motor.motor_activo()
         self._contador = 0
         self.modificado = False
@@ -258,6 +279,11 @@ class Documento:
                    and not (self._usados[desde] & cambiados)):
                 nuevas[desde] = antes_ops[desde]          # el mismo objeto: guarda lo que leyó al calcularse
                 desde += 1
+        viejas = {o.id: o for o in antes_ops}
+        for k in range(desde, len(nuevas)):             # también los posteriores: la memoria por paso los reusa
+            o = viejas.get(nuevas[k].id)
+            if o is not None and type(o) is type(nuevas[k]) and o.a_dict() == nuevas[k].a_dict():
+                nuevas[k] = o
         self.operaciones = nuevas
         self.recalcular(desde)
 
@@ -340,6 +366,8 @@ class Documento:
             nombres = self._nombres_cuerpos()
             for estado in self._estados:
                 self._poner_nombres(estado, nombres)
+            for m in self._memo.values():      # los estados de la memoria son estos mismos: quedan al día
+                m["nombres"] = nombres
             return
         # Se quitó el renombre: el nombre original lo pone la operación que creó el cuerpo (op3.c1 → op3).
         indices = [i for i, o in enumerate(self.operaciones) for cid in ids_cuerpos if cid.split(".c")[0] == o.id]
@@ -515,16 +543,45 @@ class Documento:
         documento: es la vista previa de los diálogos de comando. Devuelve (estado, avisos); los errores
         de la operación se propagan para que el diálogo los muestre."""
         indice = self.marcador if indice is None else indice
-        estado = self.estado_en(indice).copia()
+        entrada = self.estado_en(indice)
         try:
             valores = self.parametros.valores()
         except ErrorExpresion:
             valores = {}
+        receta, m = _receta(op), self._previa
+        # La misma previa otra vez (el temporizador del diálogo con los mismos valores): no se vuelve a calcular.
+        if (m is not None and receta is not None and op.MEMORIZABLE and m["receta"] == receta and m["entrada"] is entrada
+                and m["motor"] == self.motor and all(valores.get(n, _FALTA) == v for n, v in m["valores"].items())):
+            op._usados = set(m["op_usados"])
+            return m["salida"], list(m["resultado"])
+        estado = entrada.copia()
+        estado.anotar_lecturas()
         ctx = Contexto(valores)
-        op.calcular(estado, ctx)
+        inicio = time.perf_counter()
+        try:
+            op.calcular(estado, ctx)
+        finally:
+            lecturas = estado.cerrar_lecturas()
         if op.TIPO == "derivacion" and op.p["parametros"]:
             op.copiar_parametros(self.parametros)
+        if receta is not None:      # para la próxima previa igual y para el recálculo al aceptar (`_de_previa`)
+            self._previa = {"receta": receta, "motor": self.motor, "entrada": entrada, "salida": estado,
+                            "lecturas": lecturas, "resultado": list(ctx.avisos), "usados": frozenset(ctx.usados),
+                            "valores": {n: valores.get(n, _FALTA) for n in ctx.usados},
+                            "duracion": time.perf_counter() - inicio, "op_usados": set(op._usados)}
         return estado, ctx.avisos
+
+    def _de_previa(self, op, estado, valores):
+        """El paso tal como lo calculó la última vista previa, si es la misma operación sobre el mismo estado: al
+        aceptar un comando no se vuelve a calcular la booleana o el empalme que ya mostró la previa."""
+        m, self._previa = self._previa, None
+        if (m is None or not op.MEMORIZABLE or m["entrada"] is not estado or m["motor"] != self.motor
+                or _receta(op) != m["receta"] or any(valores.get(n, _FALTA) != v for n, v in m["valores"].items())):
+            return None
+        op._usados = set(m["op_usados"])
+        resultado = ResultadoPaso("aviso", " ".join(m["resultado"])) if m["resultado"] else ResultadoPaso("ok")
+        self._memo[op.id] = dict(m, op=op, resultado=resultado, nombres=self._nombres_cuerpos())
+        return m["salida"], resultado, m["usados"], m["duracion"]
 
     @motor.recalculo
     def recalcular(self, desde=0):
@@ -556,8 +613,13 @@ class Documento:
             elif guardado is not None:
                 estado, resultado, usados, duracion = guardado
                 self.resultados.append(resultado)
+            elif (memo := self._de_memo(op, estado, valores) or self._de_previa(op, estado, valores)) is not None:
+                estado, resultado, usados, duracion = memo
+                self.resultados.append(resultado)
             else:
+                entrada, receta = estado, _receta(op)
                 nuevo = estado.copia()
+                nuevo.anotar_lecturas()
                 ctx = Contexto(valores)
                 usados = ctx.usados
                 inicio = time.perf_counter()
@@ -579,12 +641,81 @@ class Documento:
                 except Exception as e:  # noqa: BLE001 — un fallo del kernel no debe tumbar la app
                     log.error("Error inesperado en %s:\n%s", op.id, traceback.format_exc())
                     self.resultados.append(ResultadoPaso("error", f"Error inesperado: {e}"))
+                finally:
+                    lecturas = nuevo.cerrar_lecturas()
                 duracion = time.perf_counter() - inicio
+                if receta is not None:
+                    self._memo[op.id] = {"op": op, "receta": receta, "motor": self.motor, "entrada": entrada,
+                                         "salida": estado if estado is nuevo else None, "lecturas": lecturas,
+                                         "resultado": self.resultados[-1], "usados": frozenset(usados),
+                                         "valores": {n: valores.get(n, _FALTA) for n in usados},
+                                         "duracion": duracion, "op_usados": set(op._usados), "nombres": nombres}
             self._poner_nombres(estado, nombres)   # antes del paso siguiente: la copia de «Placa» sale «Placa (copia)»
             self._estados.append(estado)
             self._usados.append(usados)
             self._duraciones.append(duracion)
+        vigentes = {id(op) for op in self.operaciones}
+        self._memo = {k: m for k, m in self._memo.items() if id(m["op"]) in vigentes}
+        self._previa = None
         self._notificar()
+
+    # ------------------------------------------------------------ memoria por paso (P7 de docs/plan_rust.md)
+    def olvidar_memoria(self):
+        """El próximo `recalcular` ejecuta todos los pasos («Calcular todo» de Fusion: Compute All)."""
+        self._memo.clear()
+
+    def _de_memo(self, op, estado, valores):
+        """El último resultado del paso, si con `estado` y `valores` daría lo mismo: misma operación (mismo objeto y
+        receta), mismo motor, mismos parámetros leídos y lo que leyó del estado sin cambios. Así, editar un paso no
+        recalcula los posteriores que no dependen de él. (estado, resultado, parámetros leídos, duración) o None."""
+        m = self._memo.get(op.id)
+        if (m is None or m["op"] is not op or m["motor"] != self.motor or not op.MEMORIZABLE
+                or m.get("nombres") != self._nombres_cuerpos()):     # los renombres viven en los estados guardados
+            return None
+        if any(valores.get(n, _FALTA) != v for n, v in m["valores"].items()) or _receta(op) != m["receta"]:
+            return None
+        viejo = m["entrada"]
+        if set(vars(viejo)) != set(vars(estado)):
+            return None
+        for nombre, antes in vars(viejo).items():
+            ahora = getattr(estado, nombre)
+            if nombre not in m["lecturas"]:     # contador de cuerpos, grupos rígidos: tienen que ser iguales
+                if not _igual(ahora, antes):
+                    return None
+                continue
+            leidas = m["lecturas"][nombre]
+            if leidas is TODAS and list(ahora) != list(antes):
+                return None
+            for k in (antes if leidas is TODAS else leidas):
+                if (k in ahora) != (k in antes) or (k in antes and not _mismo_valor(ahora[k], antes[k])):
+                    return None
+        op._usados = set(m["op_usados"])
+        nuevo = self._aplicar_memo(m, estado)
+        # La entrada y la salida de ahora valen igual (mismas lecturas, mismo cambio) y así la memoria no retiene los
+        # estados viejos (con sus formas) de cálculos anteriores.
+        m["entrada"], m["salida"] = estado, (nuevo if m["salida"] is not None else None)
+        return nuevo, m["resultado"], m["usados"], m["duracion"]
+
+    @staticmethod
+    def _aplicar_memo(m, estado):
+        """`estado` con lo que el paso cambió en su último cálculo (de su entrada a su salida)."""
+        viejo, salida = m["entrada"], m["salida"]
+        if salida is None:                      # terminó en error: no tocó el estado
+            return estado
+        nuevo = estado.copia()
+        for nombre, antes in vars(viejo).items():
+            despues = getattr(salida, nombre)
+            if nombre not in m["lecturas"]:
+                setattr(nuevo, nombre, despues)
+                continue
+            d = getattr(nuevo, nombre)
+            for k in antes:
+                if k not in despues:
+                    d.pop(k, None)
+            for k, v in despues.items():
+                if k not in antes or not _mismo_valor(v, antes[k]):
+                    d[k] = v.copia() if isinstance(v, Cuerpo) else dict(v) if nombre == "componentes" else v
+        return nuevo
 
     # ------------------------------------------------------------ caché de pasos lentos (abrir sin recalcular)
     def pasos_para_cache(self, minimo=None):

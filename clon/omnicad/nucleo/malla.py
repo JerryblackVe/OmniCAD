@@ -155,10 +155,12 @@ class Malla:
             return False
         n = len(self.vertices)
         he = _medias_aristas(c)
-        directa = he[:, 0] * n + he[:, 1]
-        if len(np.unique(directa)) != len(directa):
+        directa = np.sort(he[:, 0] * n + he[:, 1])
+        if np.any(directa[1:] == directa[:-1]):
             return False
-        return bool(np.isin(he[:, 1] * n + he[:, 0], directa).all())
+        # Sin repetidas, «cada media arista tiene su opuesta» equivale a que las opuestas sean el mismo conjunto
+        # (dos ordenamientos; np.isin costaba 0,75 s con 327 k triángulos).
+        return bool(np.array_equal(directa, np.sort(he[:, 1] * n + he[:, 0])))
 
     def a_dict(self):
         """Forma serializable a JSON (arrays comprimidos en base64) para la receta del proyecto."""
@@ -1101,13 +1103,21 @@ def _corregir_degenerados(m):
     malas = np.flatnonzero(areas <= (1e-9 * (_diagonal(v) or 1.0)) ** 2)
     if not len(malas):
         return m
-    duenio = {(a, b): k // 3 for k, (a, b) in enumerate(_medias_aristas(c).tolist())}
-    tocadas, quitar = set(), []
+    ternas = []                             # (cara, i, j, k): i-j es su arista más larga
     for f in malas.tolist():
         cf = c[f].tolist()
         largos = [np.linalg.norm(v[cf[(r + 1) % 3]] - v[cf[r]]) for r in range(3)]
         r = int(np.argmax(largos))
-        i, j, k = cf[r], cf[(r + 1) % 3], cf[(r + 2) % 3]
+        ternas.append((f, cf[r], cf[(r + 1) % 3], cf[(r + 2) % 3]))
+    # Dueño de cada media arista j→i buscada (la última cara que la tiene, como antes); solo de esas: armar el
+    # diccionario de las 3M medias aristas costaba lo mismo con una sola cara degenerada.
+    n = len(v)
+    he = _medias_aristas(c)
+    codigos = he[:, 0].astype(np.int64) * n + he[:, 1]
+    hallados = np.flatnonzero(np.isin(codigos, [j * n + i for _f, i, j, _k in ternas]))
+    duenio = {(int(he[h, 0]), int(he[h, 1])): int(h) // 3 for h in hallados}
+    tocadas, quitar = set(), []
+    for f, i, j, k in ternas:
         vecina = duenio.get((j, i))
         if vecina is None or vecina in tocadas or f in tocadas or areas[vecina] <= areas[f]:
             quitar.append(f)

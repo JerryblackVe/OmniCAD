@@ -30,8 +30,10 @@ import copy
 import math
 import warnings
 
+import numpy as np
+
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
@@ -593,13 +595,16 @@ class Lienzo(QWidget):
     def valores_cotas(self):
         return {c.id: self.evaluar(c.expresion, _tipo_valor(c.tipo)) for c in self.b.cotas.values()}
 
-    def resolver(self, arrastrado=None):
+    def resolver(self, arrastrado=None, rapido=False):
+        """`rapido` (arrastrar un punto): solo se resuelve la parte de ese punto y sin recontar grados de libertad;
+        al soltar se resuelve todo."""
         try:
             valores = self.valores_cotas()
         except ErrorExpresion as e:
             self.mensaje.emit(f"Hay una cota con expresión inválida: {e}")
             valores = {}
-        self.resultado = resolver(self.b, valores, arrastrado)
+        previo = self.resultado if rapido and arrastrado is not None else None
+        self.resultado = resolver(self.b, valores, arrastrado, previo)
         self._cache_cortes = {}
         if arrastrado is None:
             self.cambio.emit()
@@ -663,7 +668,32 @@ class Lienzo(QWidget):
             s, cx, cy = self.escala, self.centro[0], self.centro[1]
             w2, h2 = self.width() / 2, self.height() / 2
             return [QPointF((x - cx) * s + w2, h2 - (y - cy) * s) for x, y in puntos]
-        return [self.a_px(*p) for p in puntos]
+        if self._mvp is None:
+            self._camara()
+        # Con la cámara quieta (repintar por el hover, una selección…) se reusa lo proyectado. Solo se guardan las
+        # tuplas (las muestras cacheadas de `_muestras`, que no cambian); la entrada retiene la tupla: su id no se recicla.
+        firma = (self._mvp.tobytes(), self.visor.width(), self.visor.height())
+        if firma != getattr(self, "_firma_px", None):
+            self._firma_px, self._cache_px = firma, {}
+        hecho = self._cache_px.get(id(puntos))
+        if hecho is not None and hecho[0] is puntos:
+            return hecho[1]
+        # En bloque, como a_px pero con un solo producto de matrices (punto a punto: 5 µs por punto).
+        uv = np.asarray(puntos, dtype=float).reshape(-1, 2)
+        pl = self.plano
+        p3 = pl.origen + uv[:, :1] * pl.u + uv[:, 1:] * pl.v
+        c = np.hstack([p3, np.ones((len(uv), 1))]) @ self._mvp.T
+        w = c[:, 3]
+        delante = w > 1e-9
+        w = np.where(delante, w, 1.0)
+        x = np.where(delante, (c[:, 0] / w + 1) / 2 * self.visor.width(), -1e5)
+        y = np.where(delante, (1 - c[:, 1] / w) / 2 * self.visor.height(), -1e5)
+        poli = [QPointF(a, b) for a, b in zip(x.tolist(), y.tolist(), strict=True)]
+        if isinstance(puntos, tuple):
+            if len(self._cache_px) > 20000:
+                self._cache_px.clear()
+            self._cache_px[id(puntos)] = (puntos, poli)
+        return poli
 
     def _visible(self, c):
         return not ((c.construccion and not self.mostrar["construccion"])
@@ -2919,7 +2949,9 @@ class Lienzo(QWidget):
                     if q not in fijos and q != pid:
                         self.b.puntos[q].x += dx
                         self.b.puntos[q].y += dy
-        self.resolver(arrastrado=pid)
+        # Rápido: lo movido es un punto (y, si es centro de arcos, sus arcos: misma parte del boceto). Arrastrar una
+        # curva entera mueve puntos que pueden estar en partes distintas, por eso `_mover_curva` resuelve todo.
+        self.resolver(arrastrado=pid, rapido=True)
 
     def _manija_en(self, pos):
         """Nombre de la manija del marco de control bajo `pos` (o None)."""
@@ -3301,12 +3333,8 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ dibujo
     def _dibujar_polilinea(self, p, puntos):
         poli = self._poli_px(puntos)
-        if not poli:
-            return
-        camino = QPainterPath(poli[0])
-        for q in poli[1:]:
-            camino.lineTo(q)
-        p.drawPath(camino)
+        if poli:
+            p.drawPolyline(poli)
 
     def _ancla(self, ent):
         """Posición (px) donde dibujar textos asociados a una entidad."""

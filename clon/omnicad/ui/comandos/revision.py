@@ -74,7 +74,7 @@ class RevisarGeometria(Comando):
         def impresion(v):
             return bool(v.get("impresion"))
         return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, minimo=0, maximo=None, ayuda="Sin selección: todos."),
-                Casilla("autointersecciones", "Buscar autointersecciones", True),
+                Casilla("autointersecciones", "Buscar autointersecciones"),   # bajo demanda: tardaba 15 s al abrir
                 Casilla("impresion", "Revisión de impresión 3D"),
                 Expresion("espesor", "Espesor mínimo", "0.8 mm", visible_si=impresion,
                           ayuda="Pared más fina que esto: error (p. ej. 2 veces la boquilla)."),

@@ -14,6 +14,11 @@ maturin y descargar los crates. Medición: rasterizador 17×, API caja 2,129 →
 PNG byte-idénticos. Detalle en `informe_tortura_2026-10-17.md`; comandos en `clon/rust/README.md`.
 El resto de este documento sigue siendo el plan de las próximas migraciones; R1 no se implementó.
 
+Estado (2026-10-19): **fases 0 y 5 hechas en Python** (sección 4): P1–P5, P10–P12, P14, P19, P22 y P6–P9, P13; P16 y
+P24 quedaron cubiertos. Medido con `scripts/bench_rendimiento.py` (modos nuevos `memoria` e `interfaz`): arrastrar un
+punto del polígono de 24 en el editor 56 → 14 ms, hover de 1000 aristas 62 → 1 ms, editar un paso independiente de 4
+roscas M3 1,3 s → 1 ms. Faltan: P6 en un proceso aparte, P17, P18, P20, P21, P23 (detalle en `PROJECT_LOG.md`).
+
 ## 1. Resumen en una pantalla
 
 | Verdad | Consecuencia |

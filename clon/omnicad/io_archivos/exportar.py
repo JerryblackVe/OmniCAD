@@ -72,10 +72,11 @@ def exportar_stl(cuerpos, ruta, deflexion=0.02, binario=True):
     triangulos = []
     for c in cuerpos:
         v, i = _indexados(c.forma, deflexion)
-        triangulos.extend(v[t] for t in i)
+        if len(i):
+            triangulos.append(np.asarray(v, np.float64)[np.asarray(i, int)])
     if not triangulos:
         raise ErrorExportacion("La malla quedó vacía.")
-    tri = np.array(triangulos, dtype=np.float64)
+    tri = np.concatenate(triangulos)
     normales = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     largo = np.linalg.norm(normales, axis=1, keepdims=True)
     largo[largo == 0] = 1
@@ -85,8 +86,10 @@ def exportar_stl(cuerpos, ruta, deflexion=0.02, binario=True):
         with open(ruta, "wb") as f:
             f.write(b"OmniCAD STL".ljust(80, b" "))
             f.write(struct.pack("<I", len(tri)))
-            for n, t in zip(normales, tri, strict=True):
-                f.write(struct.pack("<12fH", *n, *t[0], *t[1], *t[2], 0))
+            # Todo de una: un registro de 50 bytes por triángulo (struct.pack por triángulo: 1,6 s con 327 k).
+            registros = np.zeros(len(tri), dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("atributo", "<u2")])
+            registros["n"], registros["v"] = normales, tri
+            f.write(registros.tobytes())
     else:
         with open(ruta, "w", encoding="ascii") as f:
             f.write("solid omnicad\n")

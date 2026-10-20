@@ -121,10 +121,10 @@ def test_deshacer_recalcula_solo_desde_el_paso_que_cambia(monkeypatch):
     tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
     tabla.modificar("alto", "20 mm")
     doc.aplicar_parametros(tabla)                  # el parámetro lo lee «Taco» (op2): desde ahí
-    assert corridas == ["op2", "op4"]
+    assert corridas == ["op2"]                     # «Otra» (op4) no depende de op2: sale de la memoria por paso
     corridas.clear()
     doc.deshacer()                                   # vuelve alto = 10: otra vez desde op2
-    assert corridas == ["op2", "op4"] and _volumenes(doc) == completo
+    assert corridas == ["op2"] and _volumenes(doc) == completo
 
 
 def test_combinar_avisa_si_la_union_no_fusiona_lo_que_se_toca(monkeypatch):

@@ -305,10 +305,12 @@ class OpAgujero(_OpCrear):
     def herramientas(self, estado, ctx, rapido=False):
         """Sólidos a restar, uno por agujero."""
         p, sc = self.p, _sc()
-        solidos = [c.forma for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
-        if p["extension"] == "todo" and p["objetivos"]:
-            # El pasante abarca sus objetivos: cuerpos ajenos no deben alargar el barrido de la rosca.
+        if p["objetivos"]:
+            # Solo sus objetivos: el pasante los abarca (cuerpos ajenos no deben alargar el barrido de la rosca) y el
+            # paso no lee los demás cuerpos, así la memoria del documento lo reusa si otro cuerpo cambia.
             solidos = [estado.cuerpo(cid).forma for cid in p["objetivos"]]
+        else:
+            solidos = [c.forma for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
         if not solidos:
             raise ErrorOperacion("No hay cuerpos sólidos para agujerear.")
         opciones = self.opciones_herramienta(ctx, rapido)

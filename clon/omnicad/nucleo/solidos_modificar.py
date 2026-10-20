@@ -102,7 +102,7 @@ def _padres(mapa, hijo):
     if not mapa.Contains(hijo):
         return []
     salida = []
-    for p in mapa.FindFromKey(hijo):
+    for p in geo.lista_occ(mapa.FindFromKey(hijo)):
         if not any(p.IsSame(q) for q in salida):
             salida.append(p)
     return salida
@@ -902,7 +902,7 @@ def _cara_dada_vuelta(mo, forma, caras, resultado, dist):
         if (dist > 0 and despues < antes) or (dist < 0 and despues > antes):
             return True
     for cara in caras:
-        for nueva in mo.Generated(cara):
+        for nueva in geo.lista_occ(mo.Generated(cara)):
             medida = BRepExtrema_DistShapeShape(nueva, cara)
             medida.Perform()
             if medida.IsDone() and abs(medida.Value() - abs(dist)) > 1e-3 * abs(dist) + 1e-6:

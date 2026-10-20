@@ -68,6 +68,7 @@ class OpDerivacion(Operacion):
     «parametros»: nombres de los parámetros del origen."""
     TIPO, ETIQUETA, ICONO = "derivacion", "Derivación", "⇊"
     PARAMS = {"archivo": "", "cuerpos": [], "bocetos": [], "parametros": []}
+    MEMORIZABLE = False     # el origen es otro archivo: la receta igual no garantiza el mismo resultado
 
     def ejecutar(self, estado, ctx):
         if not str(self.p["archivo"] or "").strip():

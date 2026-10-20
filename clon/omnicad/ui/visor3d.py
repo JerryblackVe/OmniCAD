@@ -171,6 +171,17 @@ def rayo_triangulos(origen, direccion, tris):
     return np.where(toca, t, np.inf)
 
 
+def rayo_caja(origen, direccion, minimo, maximo):
+    """Distancia a la que el rayo entra en la caja [minimo, maximo] (inf si no la toca). Sirve para descartar un
+    cuerpo entero sin probar sus triángulos (el rayo contra todos costaba 49 ms con 400 k triángulos)."""
+    holgura = 1e-6 * (1.0 + float(np.max(np.abs(maximo - minimo))))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t1 = (np.asarray(minimo, float) - holgura - origen) / direccion
+        t2 = (np.asarray(maximo, float) + holgura - origen) / direccion
+    lo, hi = np.fmin(t1, t2), np.fmax(t1, t2)    # fmin/fmax ignoran el NaN de un eje paralelo con 0/0
+    entra, sale = float(np.nanmax(lo)), float(np.nanmin(hi))
+    return max(entra, 0.0) if sale >= max(entra, 0.0) else np.inf
+
 
 def teselar_cuerpo(forma, deflexion, angular=0.3):
     """(vǸrtices, normales) de triǭngulos sueltos para dibujar un cuerpo B-rep o de malla."""
@@ -893,6 +904,20 @@ class Visor3D(QOpenGLWidget):
             self._pick[id(forma)] = ([c for c, _ in caras], tris, indice)
         return self._pick[id(forma)]
 
+    def _rayo_cuerpo(self, cid, o, d, limite=math.inf):
+        """Distancias del rayo a cada triángulo del cuerpo, o None si no tiene triángulos o el rayo no entra en su
+        caja antes de `limite` (lo que ya tapa otra cosa no se prueba)."""
+        _lista, tris, _indice = self._datos_pick(cid)
+        if not len(tris):
+            return None
+        clave = ("caja_tris", id(self._formas[cid]))
+        if clave not in self._pick:
+            v = tris.reshape(-1, 3)
+            self._pick[clave] = (v.min(0), v.max(0))
+        if rayo_caja(o, d, *self._pick[clave]) >= limite:
+            return None
+        return rayo_triangulos(o, d, tris)
+
     def elegir(self, pos, planos=True, caras=True):
         """Lo que hay bajo el cursor: {"ref", "plano", "marco", "tris"} (plano None = cara no plana); en una cara
         plana además "cara_ref", su referencia persistente (el boceto sobre la cara la sigue con ella)."""
@@ -909,10 +934,10 @@ class Visor3D(QOpenGLWidget):
                     mejor_t, mejor = t, {"ref": ref, "plano": pl, "marco": None, "tris": None}
         if caras:
             for cid in self._formas:
-                lista, tris, indice = self._datos_pick(cid)
-                if not len(tris):
+                ts = self._rayo_cuerpo(cid, o, d, mejor_t)
+                if ts is None:
                     continue
-                ts = rayo_triangulos(o, d, tris)
+                lista, tris, indice = self._datos_pick(cid)
                 i = int(np.argmin(ts))
                 if ts[i] < mejor_t - 1e-6:
                     cara = lista[indice[i]]
@@ -1220,10 +1245,10 @@ class Visor3D(QOpenGLWidget):
         # 1) cara más cercana (oculta lo que esté detrás)
         t_cara, cara_hit = math.inf, None
         for cid in self._formas:
-            lista, tris, indice = self._datos_pick(cid)
-            if not len(tris):
+            ts = self._rayo_cuerpo(cid, o, d, t_cara)
+            if ts is None:
                 continue
-            ts = rayo_triangulos(o, d, tris)
+            lista, tris, indice = self._datos_pick(cid)
             i = int(np.argmin(ts))
             if ts[i] < t_cara:
                 t_cara = float(ts[i])
@@ -1904,7 +1929,15 @@ class Visor3D(QOpenGLWidget):
         if self.mostrando_centro_giro():
             self._dibujar_primitivas(self.primitivas_centro_giro(), NARANJA_PLANO)
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
-        self.camara_cambiada.emit()
+        self._avisar_camara()
+
+    def _avisar_camara(self):
+        """Emite `camara_cambiada` al final de un cuadro solo si la proyección o el tamaño cambiaron desde el último
+        aviso: emitirla en cada cuadro repintaba el ViewCube, la capa del boceto y las notas aunque nada se moviera."""
+        firma = (self.matriz_mvp().tobytes(), self.width(), self.height())
+        if firma != getattr(self, "_firma_aviso", None):
+            self._firma_aviso = firma
+            self.camara_cambiada.emit()
 
     def mostrando_centro_giro(self):
         """El indicador del centro de giro se ve solo mientras el arrastre en curso es una órbita."""
@@ -2065,10 +2098,10 @@ class Visor3D(QOpenGLWidget):
         if filtros & {"cara", "cuerpo"}:
             o, d = self.rayo(pos)
             for cid in self._formas:
-                lista, tris, indice = self._datos_pick(cid)
-                if not len(tris):
+                ts = self._rayo_cuerpo(cid, o, d)
+                if ts is None:
                     continue
-                ts = rayo_triangulos(o, d, tris)
+                lista, tris, indice = self._datos_pick(cid)
                 vistas, t_min = set(), math.inf
                 for i in np.argsort(ts):
                     t = float(ts[i])

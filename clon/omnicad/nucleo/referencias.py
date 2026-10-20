@@ -14,6 +14,7 @@ Formato serializable de una referencia: {"tipo": "cara" | "arista" | "vertice", 
 "firma": {...}}. Las referencias a planos, ejes, puntos y bocetos las resuelve `operaciones`.
 """
 import math
+from collections import OrderedDict
 
 import numpy as np
 from . import motor as _motor
@@ -194,6 +195,26 @@ def _distancia(tipo, f, g, escala):
     return d
 
 
+_FIRMAS = OrderedDict()     # (id(forma), tipo, con caja) → (forma, caja, subformas, firmas); ver `_firmas`
+
+
+def _firmas(forma, tipo, con_caja):
+    """(caja, subformas, firmas) de un cuerpo, calculadas una sola vez: resolver 40 referencias en un cuerpo de 300
+    aristas recalculaba ~12.000 firmas por paso. La entrada retiene la forma: su id no se recicla mientras está acá."""
+    from .geometria import caja_envolvente
+    clave = (id(forma), tipo, con_caja)
+    e = _FIRMAS.get(clave)
+    if e is None or e[0] is not forma:
+        caja = caja_envolvente(forma)
+        subs = subformas(forma, tipo)
+        e = _FIRMAS[clave] = (forma, caja, subs, [firma(s, caja if con_caja else None) for s in subs])
+        while len(_FIRMAS) > 16:
+            _FIRMAS.popitem(last=False)
+    else:
+        _FIRMAS.move_to_end(clave)
+    return e[1:]
+
+
 def resolver(forma, ref, umbral=0.35):
     """Subforma de `forma` que corresponde a la referencia, o None si ninguna se parece lo bastante.
     Se acepta la mejor candidata si está dentro del umbral, o si (hasta un umbral más amplio) le saca
@@ -205,14 +226,12 @@ def resolver(forma, ref, umbral=0.35):
     posición relativa a la caja ("rel"),
     se reintenta SOLO con términos invariantes a un movimiento rígido (rel, área, largo, radio):
     cubre las referencias guardadas antes de que una unión mueva el componente (drive_joint)."""
-    from .geometria import caja_envolvente
     tipo = ref["tipo"]
-    caja = caja_envolvente(forma)
-    escala = max(math.dist(caja[0], caja[1]), 1e-6) if caja else 1.0
     con_rel = "rel" in ref["firma"]
-    subs = subformas(forma, tipo)
-    distancias = sorted(((_distancia(tipo, ref["firma"], firma(sub, caja if con_rel else None), escala), i, sub)
-                         for i, sub in enumerate(subs)), key=lambda x: (x[0], x[1]))
+    caja, subs, firmas = _firmas(forma, tipo, con_rel)
+    escala = max(math.dist(caja[0], caja[1]), 1e-6) if caja else 1.0
+    distancias = sorted(((_distancia(tipo, ref["firma"], firmas[i], escala), i, sub) for i, sub in enumerate(subs)),
+                        key=lambda x: (x[0], x[1]))
     if distancias and distancias[0][0] != math.inf:
         mejor_d, _, mejor = distancias[0]
         segunda = distancias[1][0] if len(distancias) > 1 else math.inf
@@ -222,12 +241,12 @@ def resolver(forma, ref, umbral=0.35):
         # La topología no cambió (mismas subformas, mismo orden): la que ocupa la misma posición ES la misma, si
         # sigue siendo del mismo tipo y no cambió de lugar o de tamaño más allá de lo razonable.
         candidata = subs[ref["indice"]]
-        if _distancia(tipo, ref["firma"], firma(candidata, caja if con_rel else None), escala) <= _UMBRAL_POR_POSICION:
+        if _distancia(tipo, ref["firma"], firmas[ref["indice"]], escala) <= _UMBRAL_POR_POSICION:
             return candidata
     if con_rel:
         # Modo invariante al movimiento rígido: compara solo lo que un giro o traslación no cambia.
-        locales = sorted(((_distancia_local(tipo, ref["firma"], firma(sub, caja)), i, sub)
-                          for i, sub in enumerate(subs)), key=lambda x: (x[0], x[1]))
+        locales = sorted(((_distancia_local(tipo, ref["firma"], firmas[i]), i, sub) for i, sub in enumerate(subs)),
+                         key=lambda x: (x[0], x[1]))
         locales = [x for x in locales if x[0] != math.inf]
         if locales and locales[0][0] <= 0.2 and (len(locales) == 1 or locales[0][0] < 0.5 * locales[1][0]):
             return locales[0][2]

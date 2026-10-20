@@ -11,6 +11,7 @@ y las expresiones llevan unidades explícitas o toman la unidad por defecto:
 Las expresiones se evalúan con `ast` y una lista blanca de nodos: nunca con eval().
 """
 import ast
+import functools
 import keyword
 import math
 import re
@@ -131,16 +132,23 @@ def evaluar(expr, tipo=LONGITUD, nombres=None):
     if not texto:
         raise ErrorExpresion("Expresión vacía.")
     try:
-        arbol = ast.parse(_preprocesar(texto, tipo), mode="eval")
+        arbol = _compilar(texto, tipo)
     except SyntaxError:
         raise ErrorExpresion(f"Sintaxis inválida: '{texto}'.") from None
     return _real(_evaluar_nodo(arbol, nombres or {}))
 
 
+@functools.lru_cache(maxsize=4096)
+def _compilar(texto, tipo):
+    """Árbol de una expresión. Con caché: al arrastrar un boceto se evalúan las mismas cotas en cada evento del
+    ratón y `ast.parse` era lo que más costaba. `_evaluar_nodo` no modifica el árbol."""
+    return ast.parse(_preprocesar(texto, tipo), mode="eval")
+
+
 def nombres_usados(expr):
     """Nombres de parámetros que aparecen en una expresión (sin unidades ni funciones)."""
     try:
-        arbol = ast.parse(_preprocesar(str(expr), ESCALAR), mode="eval")
+        arbol = _compilar(str(expr), ESCALAR)
     except (SyntaxError, ErrorExpresion):
         return set()
     return {n.id for n in ast.walk(arbol) if isinstance(n, ast.Name) and n.id not in RESERVADOS}
@@ -224,7 +232,14 @@ class TablaParametros:
         del self._params[nombre]
 
     def valores(self):
-        """Resuelve todos los parámetros (orden topológico). Lanza ErrorExpresion ante ciclos."""
+        """Resuelve todos los parámetros (orden topológico). Lanza ErrorExpresion ante ciclos. Con caché por el
+        contenido de la tabla (nombre, expresión, tipo): el editor de bocetos lo pide por cada cota en cada evento."""
+        clave = tuple((p.nombre, p.expresion, p.tipo) for p in self._params.values())
+        if getattr(self, "_memo", (None,))[0] != clave:
+            self._memo = (clave, self._resolver_todos())
+        return dict(self._memo[1])
+
+    def _resolver_todos(self):
         resueltos, en_curso = {}, set()
 
         def resolver(nombre):
