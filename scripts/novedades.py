@@ -22,13 +22,14 @@ import sys
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 RAIZ = Path(__file__).resolve().parent.parent          # raíz del repo (docs/ vive ahí)
 
 # (nombre, página oficial de novedades, archivo de brechas donde anotar lo nuevo, dentro de docs/)
 FUENTES = {
-    "fusion": ("Fusion 360", "https://help.autodesk.com/view/fusion360/ENU/?guid=WHATSNEW",
+    "fusion": ("Fusion 360", "https://www.autodesk.com/products/fusion-360/blog/category/whatsnew/",
                "brechas_fusion.md"),
     "blender": ("Blender", "https://www.blender.org/news/", "brechas_blender.md"),
     "rhino": ("Rhino", "https://www.rhino3d.com/news/", "brechas_rhino.md"),
@@ -104,17 +105,34 @@ def titulares_de(html):
     return resultado
 
 
+COPIAS = {}                    # url -> AAAA-MM-DD de la copia de archive.org que se leyó (solo si hubo que usarla)
+
+
 def bajar(url, timeout=20):
-    """HTML de una página pública con User-Agent honesto. Falla con OSError/HTTPError."""
-    pedido = Request(url, headers={"User-Agent": UA, "Accept-Language": "en"})
-    with urlopen(pedido, timeout=timeout) as r:      # noqa: S310 — URLs fijas de arriba, no de usuario
-        return r.read(2_000_000).decode("utf-8", errors="replace")
+    """HTML de una página pública con User-Agent honesto. Falla con OSError/HTTPError. Si el sitio le
+    responde 403 al script (Autodesk lo hace con su blog), lee la última copia de archive.org y anota su
+    fecha en ``COPIAS`` para que el informe lo diga."""
+    def leer(destino):
+        with urlopen(Request(destino, headers={"User-Agent": UA, "Accept-Language": "en"}),   # noqa: S310
+                     timeout=timeout) as r:           # URLs fijas de arriba, no de usuario
+            return r.read(2_000_000).decode("utf-8", errors="replace"), r.geturl()
+    try:
+        return leer(url)[0]
+    except HTTPError as e:
+        if e.code != 403:
+            raise
+    html, final = leer("https://web.archive.org/web/2/" + url)
+    m = re.search(r"/web/(\d{4})(\d{2})(\d{2})\d*/", final)
+    COPIAS[url] = "-".join(m.groups()) if m else "fecha desconocida"
+    return html
 
 
 def informe(clave, url, titulares, error=None):
     """Bloque de una fuente para el informe mensual: encabezado, fuente y titulares (o el error)."""
     nombre = FUENTES[clave][0]
     lineas = [f"## {nombre}", "", f"Fuente: {url}"]
+    if url in COPIAS:
+        lineas.append(f"(copia de archive.org del {COPIAS[url]}: el sitio bloquea los scripts; puede faltar lo más nuevo)")
     if error is not None:
         lineas += ["", f"⚠ No se pudo leer la página este mes: {error}"]
     elif not titulares:

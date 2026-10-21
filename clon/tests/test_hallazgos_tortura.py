@@ -240,13 +240,37 @@ def test_t04_el_vaciado_de_un_solevado_de_caras_bspline_ya_no_falla():
     assert geo.volumen_exacto(pared) == pytest.approx(2592.8, rel=1e-3)           # 10.324,4 − 7.731,6 del desfase
 
 
-def test_t04_vaciado_exterior_bspline_falla_con_alternativa_y_sin_modificar():
+def test_t04_shell_exterior_de_la_herramienta_sobre_el_solevado():
     s = _solevado()
-    antes = geo.volumen_exacto(_forma(s))
-    r = falla(s, "shell", "OPERATION_FAILED", body="Cuerpo1", faces=[">Z", "<Z"],
-              thickness=1.2, direction="outside")
-    assert "B-spline" in r["mensaje"] and "boolean_operation" in r["mensaje"]
-    assert geo.es_valida(_forma(s)) and geo.volumen_exacto(_forma(s)) == pytest.approx(antes)
+    llamar(s, "shell", body="Cuerpo1", faces=[">Z", "<Z"], thickness=1.2, direction="outside")
+    forma = _forma(s)
+    assert geo.es_valida(forma) and rv.es_estanca(forma) and len(geo.solidos(forma)) == 1
+    assert geo.volumen_exacto(forma) == pytest.approx(2680.5633, rel=0.01)
+
+
+@pytest.mark.parametrize("abertura,casquetes,z_min,z_max", [
+    ("ambas", 803.3921 + 238.2443, 0.0, 30.0),
+    ("inferior", 803.3921, 0.0, 31.2),
+    ("superior", 238.2443, -1.2, 30.0),
+])
+def test_t04_vaciado_exterior_bspline_valido_y_estanco(abertura, casquetes, z_min, z_max):
+    forma = _forma(_solevado())
+    extremos = sorted(_extremos(forma), key=lambda c: geo.centro_masa(c, True)[2])
+    quitar = extremos if abertura == "ambas" else [extremos[0 if abertura == "inferior" else 1]]
+    r = sm.vaciado(forma, quitar, espesor_interior=0, espesor_exterior=1.2, direccion="exterior")
+    assert geo.es_valida(r) and rv.es_estanca(r) and len(geo.solidos(r)) == 1
+    # Referencia en mm³: desfase cerrado (14.046,6429) menos cuerpo (10.324,4432)
+    # y casquetes recortados en las aberturas (803,3921 abajo; 238,2443 arriba).
+    # A·t corresponde al desfase CERRADO: deja de ser una cota al quitar las tapas.
+    esperado = 14046.6429 - geo.volumen_exacto(forma) - casquetes
+    assert geo.volumen_exacto(r) == pytest.approx(esperado, rel=0.01)
+    a, b = geo.caja_envolvente(r)
+    assert a == pytest.approx((-13.2, -13.2, z_min), abs=1e-3)
+    assert b == pytest.approx((13.2, 13.2, z_max), abs=1e-3)
+    informe = rv.revisar(r)
+    assert informe["autointersecciones_completo"] and informe["autointersecciones"] == 0
+    assert informe["problemas"] == []
+    assert geo.es_valida(forma) and geo.volumen_exacto(forma) == pytest.approx(10324.4432, rel=1e-7)
 
 
 def test_t04_shell_de_la_herramienta_sobre_el_solevado():

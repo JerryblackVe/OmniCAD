@@ -132,8 +132,8 @@ class Sesion:
             rotos = [(o, r) for o, r in nuevos if r.estado == "error" and previos.get(o.id, ("",))[0] != "error"]
             if rotos:
                 o, r = rotos[0]
-                otros = f" También quedaron con error: {', '.join(x.nombre for x, _r in rotos[1:])}." if rotos[1:] else ""
-                e = desde_mensaje(r.mensaje, f"El paso «{o.nombre}» ({o.id}) quedó con error: ")
+                otros = f" También fallaron: {', '.join(x.nombre for x, _r in rotos[1:])}." if rotos[1:] else ""
+                e = desde_mensaje(r.mensaje, f"El paso «{o.nombre}» ({o.id}) falló y se deshizo (el documento quedó como estaba): ")
                 e.mensaje += otros
                 raise e
             for o, r in nuevos:

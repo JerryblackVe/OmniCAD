@@ -54,3 +54,40 @@ def test_anota_solo_encabezados_nuevos_y_es_idempotente(tmp_path):
     assert "## Novedades automáticas (2026-10, sin clasificar)" in texto
     assert nov.anotar_en_brechas(brechas, "blender", titulares, "2026-10") == 0   # idempotente
     assert brechas.read_text(encoding="utf-8") == texto
+
+
+def test_fusion_apunta_al_blog_y_cae_a_archive_org_si_autodesk_bloquea(monkeypatch):
+    """P-12c: la ayuda de Fusion es un shell JS sin titulares; el blog de novedades sí los trae, pero Autodesk
+    le responde 403 a los scripts: se lee la última copia de archive.org y el informe dice de qué día es."""
+    from urllib.error import HTTPError
+    assert "fusion-360/blog/category/whatsnew" in nov.FUENTES["fusion"][1]
+    pedidos = []
+
+    class Resp:
+        def __init__(self, url):
+            self.url = url
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n=-1):
+            return "<h2>September 2026 Major Product Update</h2>".encode()
+
+        def geturl(self):
+            return "https://web.archive.org/web/20261005123000/" + nov.FUENTES["fusion"][1]
+
+    def falso(pedido, timeout=0):
+        pedidos.append(pedido.full_url)
+        if "web.archive.org" not in pedido.full_url:
+            raise HTTPError(pedido.full_url, 403, "Forbidden", {}, None)
+        return Resp(pedido.full_url)
+
+    monkeypatch.setattr(nov, "urlopen", falso)
+    html = nov.bajar(nov.FUENTES["fusion"][1])
+    assert "September 2026" in html and len(pedidos) == 2
+    assert nov.COPIAS[nov.FUENTES["fusion"][1]] == "2026-10-05"
+    bloque, _ = nov.informe("fusion", nov.FUENTES["fusion"][1], nov.titulares_de(html))
+    assert "copia de archive.org del 2026-10-05" in bloque

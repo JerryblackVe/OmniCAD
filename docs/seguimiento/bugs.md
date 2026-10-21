@@ -2,19 +2,17 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 7: Abierto 3 · Parcial 4.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 5: Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| P-12c | Fuente de novedades de Fusion (la ayuda es un shell JS sin titulares) | Abierto | Baja | Revisar a mano cada mes o cambiar la fuente. | PROJECT_LOG.md:33 | 2026-10-20 |
-| P-1c | Wayland nativo: menús emergentes se cierran solos | Abierto | Alta | Con QT_QPA_PLATFORM=wayland se cierran el menú radial y «Seleccionar otro»; hoy se fuerza xcb. | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
-| P-11j | Cuerpos «sin ubicar» (2 del Sherpa, 3 de XOX) que Fusion no tiene | Abierto | Alta | Siguen entrando con aviso porque el flujo de diseño no se decodifica de forma confiable. | omnicad/io_archivos/f3d_nativo.py:123 (sin_ubicar); tests/test_p11a_f3d_instancias.py:176 | 2026-10-20 |
-| B-39 | join con herramienta enterrada deja arista libre y cuerpo no estanco | Parcial | Muy alta | La arista libre sigue (defecto del kernel); solo se detecta y avisa. | timeline/operaciones.py:349 y :1004 (aviso post-unión) | 2026-10-20 |
-| B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | Recálculo sigue en el proceso de la app; solo el autoguardado protege. | commit d706002; nucleo/aislado.py:98; tests/test_b48_crash.py::test_b48_un_crash_nativo_del_kernel_vuelve_como_error_y_no_mata_al_padre | 2026-10-20 |
-| B-52 | Unión de espiral: fusión degenerada, pérdida silenciosa y STEP en dos sólidos | Parcial | Muy alta | La fusión degenerada del kernel sigue; solo se avisa la pérdida o el corte. | timeline/operaciones.py:336,986-1005; tests/test_documento.py::test_combinar_avisa_si_la_union_pierde_material; ::test_union_de_primitiva_avisa_si_pierde_material | 2026-10-20 |
-| T-04 | shell hacia afuera falla en un solevado de caras B-spline | Parcial | Muy alta | Hacia adentro anda; hacia afuera el kernel no da una pared válida | tests/test_hallazgos_tortura.py::test_t04_vaciado_exterior_bspline_falla_con_alternativa_y_sin_modificar | 2026-10-20 |
+| P-12c | Fuente de novedades de Fusion (la ayuda es un shell JS sin titulares) | Parcial | Baja | Autodesk le responde 403 a los scripts: ahora se lee la última copia de archive.org del blog «What's New» (hoy del 2026-05-16, 5 meses atrás) y el informe lo avisa; falta una fuente al día que no bloquee (feed o API) o seguir revisando a mano. | scripts/novedades.py (`bajar`, `COPIAS`); tests/test_novedades.py::test_fusion_apunta_al_blog_y_cae_a_archive_org_si_autodesk_bloquea | 2026-10-20 |
+| P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Necesita PC con Linux nativo (ver P-1b): el fallo solo aparece con Wayland y esta PC es Windows, así que no se pudo reproducir ni probar un arreglo; hoy se fuerza xcb y no molesta. | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
+| P-11j | Cuerpos «sin ubicar» de XOX (3) que quizá Fusion no tiene | Parcial | Alta | Sherpa resuelto (2026-10-21): comparado con Fusion, no tiene los 2 cuerpos (1593 y 952 mm³) y todos sus componentes con cuerpos están emparejados; ahora se descartan los bloques sin dueño cuando ningún componente de la escena queda sin bloque. Queda XOX: 3 componentes de la escena sin bloque y 3 bloques sin dueño (152,9; 494,8 y 4365,4 mm³): no se pueden descartar sin ver Fusion, y la versión en la nube (v35, 202 componentes) no es la del .f3z local (72 cuerpos): hace falta abrir en Fusion ese mismo archivo. | omnicad/io_archivos/f3d_escena.py (huerfanos); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-21 |
+| B-39 | join con herramienta enterrada deja arista libre y cuerpo no estanco | Parcial | Muy alta | No se reproduce: el modelo original no existe y 4 montajes de pared + cilindro enterrado (incl. tangente a la cara interior, sin `_quitar_cables_colgados`) salen estancos. Si reaparece, hace falta el .omnicad que lo dispare. | timeline/operaciones.py:349 y :1004 (aviso post-unión); tests/test_b39_enterrada.py (guarda); `_quitar_cables_colgados` (B-28) | 2026-10-20 |
+| B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | La causa en OCCT sigue sin reproducirse ni curarse. El cambio de parámetros en documentos de 60 pasos o más ya se ensaya antes en un proceso aparte (si el kernel cae, no se aplica y la app sigue); no cubre editar/suprimir pasos ni abrir archivos. | nucleo/aislado.py (`correr_json`, `UMBRAL_PREVUELO_PARAMETROS`); timeline/documento.py `_prevuelo_parametros`; tests/test_b48_prevuelo.py; tests/test_b48_crash.py | 2026-10-20 |
 
 ## Detalle de lo abierto
 
@@ -43,12 +41,3 @@ Reproducido (firma de Windows): no se puede curar desde la app; queda la protecc
 
 Crítico
 
-### B-52 · Unión de espiral: fusión degenerada, pérdida silenciosa y STEP en dos sólidos
-
-La unión de la espiral de refrigeración (bobina cónica con 0,5 mm de incrustación contra la campana) es una **fusión degenerada**: Cuerpo1 queda NO estanco (1 arista libre + 18 no manifold); suprimir el chaflán del labio (op28, ajeno) hace perder la espiral en silencio (−3.118 mm³, sin error ni aviso; vuelve al reactivar, 2 ciclos); el bbox del cuerpo mezcla las cajas de sus carcasas (xy de la campana con z de la espiral, ocultando r44,5); y el STEP exportado entra como DOS sólidos (bloque 150.657,28 + espiral 3.495,73) que suman el volumen que el .omnicad reporta como uno. Familia B-37 (tangencias) en «join».
-
-booleana `join` con contacto en cuña; `suppress_feature`; bbox multicáscara
-
-Corregido el 2026-10-15 en la DETECCIÓN (la degeneración del kernel no se puede curar, familia B-37): OpCombinar no tenía NINGÚN chequeo post-unión (op121 nunca avisaba) y la espiral se perdía al unir DESPUÉS una primitiva (op48 Caja3) al cuerpo compuesto: la fusión descartaba el sólido de la espiral (−3.193,74 mm³, sólidos 2→1, estanca=True: invisible para el chequeo de estanqueidad). Ahora toda unión avisa si PIERDE material (con los mm³) y OpCombinar avisa si explota en sólidos, si no fusiona lo que se tocaba o si queda abierto; unir cuerpos que no se tocan (multi-sólido legítimo, como el aro+toroide del ejemplo) sigue sin avisar. En la copia del motor recalculada: op28 activo → op121 avisa «partido/sin fusionar»; op28 suprimido → op48 avisa «perdió 3193,74 mm³». Volúmenes bit-idénticos. Regresiones en test_documento (toque sin fusión, pérdida en Combinar y en primitiva)
-
-Crítico

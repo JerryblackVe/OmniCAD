@@ -173,15 +173,29 @@ def test_si_ubicar_falla_con_un_error_de_geometria_el_archivo_abre_igual(tmp_pat
     assert any("No se pudo leer la posición" in a and "integración" in a for a in avisos)
 
 
-def test_un_bloque_que_no_aparece_en_la_escena_no_se_mueve(tmp_path):
+def _dos_bloques(tmp_path, escena_extra=b""):
     otro = _sab(_sab_cubo(lado=2.0).r)
     malla = _Malla()
-    f3d = _f3d(tmp_path, _nodo(0x10, 0xC0, _matriz(), _nodo(0x11, 0xC1, _matriz(2, 0, 0), _cuerpo(malla))), malla,
-               [(_CARPETA + "BREP.aaaa.smbh", _sab(_sab_cubo().r)), (_CARPETA + "BREP.bbbb.smbh", otro)])
-    partes, avisos = f3d_nativo.leer(f3d)
+    world = _nodo(0x10, 0xC0, _matriz(), _nodo(0x11, 0xC1, _matriz(2, 0, 0), _cuerpo(malla)) + escena_extra)
+    f3d = _f3d(tmp_path, world, malla, [(_CARPETA + "BREP.aaaa.smbh", _sab(_sab_cubo().r)), (_CARPETA + "BREP.bbbb.smbh", otro)])
+    return f3d_nativo.leer(f3d)
+
+
+def test_un_bloque_sin_componente_en_la_escena_no_entra(tmp_path):
+    """P-11j: todos los componentes de la escena tienen su bloque: el bloque que sobra es de un componente borrado
+    (Sherpa: 2 bloques de 1593 y 952 mm³ que Fusion no tiene)."""
+    partes, avisos = _dos_bloques(tmp_path)
+    assert [tuple(np.round(_centro(p), 1)) for p, _ in partes] == [(25.0, 5.0, 5.0)]
+    assert any("no están en el diseño actual" in a for a in avisos)
+
+
+def test_un_bloque_se_queda_si_la_escena_tiene_un_componente_sin_bloque(tmp_path):
+    """Un cuerpo actual sin malla (la «tela» del abanico) deja un componente de la escena sin bloque: el bloque
+    suelto es suyo (mismas caras) y se conserva."""
+    sin_malla = _nodo(0x12, 0xC2, _matriz(), _cuerpo(_Malla(), con_malla=False))
+    partes, avisos = _dos_bloques(tmp_path, sin_malla)
     centros = sorted(tuple(np.round(_centro(p), 1)) for p, _ in partes)
-    assert centros == [(10.0, 10.0, 10.0), (25.0, 5.0, 5.0)]         # el cubo de 2 cm no está en la escena: queda
-    assert any("no se pudieron ubicar" in a for a in avisos)
+    assert centros == [(10.0, 10.0, 10.0), (25.0, 5.0, 5.0)]
 
 
 def _bloque_con_un_cuerpo_viejo():

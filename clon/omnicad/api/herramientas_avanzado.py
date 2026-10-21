@@ -645,7 +645,7 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
             doc._cargar(combinada)
         for o, r in zip(doc.operaciones, doc.resultados, strict=False):      # un paso nuevo con error = receta mala
             if r.estado == "error" and estados.get(o.id, ("",))[0] != "error":
-                raise desde_mensaje(r.mensaje, f"El paso «{o.nombre}» ({o.id}) de la receta quedó con error: ")
+                raise desde_mensaje(r.mensaje, f"El paso «{o.nombre}» ({o.id}) de la receta falló y se deshizo (el documento quedó como estaba): ")
     except Exception as e:  # noqa: BLE001 — la transacción restaura el resto del documento al relanzar
         doc.nombre, doc.vistas, doc.espacios, doc.comentarios, doc.unidades = previos
         if hasattr(e, "error_kind"):

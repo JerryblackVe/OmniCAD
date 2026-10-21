@@ -212,7 +212,8 @@ void main() {
         gl_FragColor = vec4(tonos(dif + esp) * (1.0 - u_transp), 1.0 - u_transp);
     } else if (u_modo == 1) {
         float frm = (fr.x + fr.y + fr.z) / 3.0;
-        gl_FragColor = vec4(tonos((1.0 - u_transp) * (dif + esp) + u_transp * esp), 1.0 - u_transp * (1.0 - frm));
+        float cobertura = 1.0 - u_transp * (1.0 - frm);        // lo que tapa el cuerpo; el resto deja ver lo de atrás
+        gl_FragColor = vec4(tonos((1.0 - u_transp) * (dif + esp) + u_transp * esp) * cobertura, cobertura);
     } else {
         gl_FragColor = vec4(tonos(dif + esp), 1.0);
     }

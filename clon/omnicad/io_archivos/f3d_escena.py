@@ -319,8 +319,13 @@ def asignar(escena, solidos):
         if c["vol_mm3"] is None and c["nodo"] is not None:
             caras_p = sin_malla.setdefault(nodos[c["nodo"]]["primario"], {})
             caras_p[c["caras"]] = caras_p.get(c["caras"], 0) + 1
-    descartados = []
+    # bloques de componentes que ya no existen: si TODOS los componentes de la escena con cuerpos tienen su bloque, un
+    # bloque sin componente no es de ninguno (comprobado en Fusion: Sherpa, 2 bloques sin dueño que el diseño no tiene)
+    huerfanos = not [p for p in por_nodo if p not in nodo_de]
+    descartados = [j for j, s in enumerate(solidos) if huerfanos and s["bloque"] not in bloque_de]
     for j, s in enumerate(solidos):
+        if j in descartados:
+            continue
         componentes = bloque_de.get(s["bloque"], [None])
         if j in solido_usado or s["bloque"] not in con_par or not all(p in cubiertos for p in componentes):
             continue

@@ -511,16 +511,36 @@ class Documento:
         return usos
 
     def aplicar_parametros(self, tabla):
+        """Aplica la tabla (UserParameters de Fusion). En documentos grandes con OpenCascade ensaya primero en un
+        hijo: cuesta reconstruir la receta y recalcular allí, además del recálculo real. Es una defensa frente a
+        caídas nativas, no su curación: que el hijo termine no garantiza que el kernel no caiga luego en el padre.
+        """
         tabla.valores()  # valida antes de tocar el documento
         faltan = {n: pasos for n, pasos in self.parametros_usados().items() if n in self.parametros and n not in tabla}
         if faltan:
             detalle = "; ".join(f"«{n}» (lo usa {', '.join(sorted(p))})" for n, p in sorted(faltan.items()))
             raise ErrorDocumento(f"No se puede quitar ni renombrar un parámetro en uso: {detalle}.")
-        self._guardar_para_deshacer()
         desde = self._primer_afectado(tabla)
+        self._prevuelo_parametros(tabla, desde)
+        self._guardar_para_deshacer()
         self.parametros = tabla
         self.modificado = True
         self.recalcular(desde)
+
+    def _prevuelo_parametros(self, tabla, desde):
+        """Ensaya sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
+        from ..nucleo import aislado
+
+        if (aislado.EN_HIJO or motor.motor_activo() != "opencascade"
+                or sum(not op.suprimida for op in self.operaciones[:self.marcador])
+                < aislado.UMBRAL_PREVUELO_PARAMETROS):
+            return
+        try:
+            aislado.correr_json("prevuelo_parametros", {"receta": self.a_dict(), "parametros": tabla.a_lista(),
+                                                      "desde": desde}, aislado.TOPE_PREVUELO_PARAMETROS)
+        except aislado.TareaAislada as e:
+            raise ErrorDocumento(f"El prevuelo de parámetros falló: {e}. No se aplicó el cambio y el documento quedó "
+                                 "como estaba. Guardá una copia y probá valores distintos.") from e
 
     def _primer_afectado(self, tabla):
         """Índice del primer paso que leyó un parámetro cuyo valor cambia con `tabla` (Fusion también

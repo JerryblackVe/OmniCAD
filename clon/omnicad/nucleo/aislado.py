@@ -7,8 +7,9 @@ eliminación exacta de líneas ocultas (HLRBRep_Algo) sobre una rosca modelada (
 tardar horas, y en la app congelan la ventana (prueba de tortura del 2026-10-17, T-01 y T-02). Acá la forma viaja
 como BREP a un hijo que hace la cuenta; si pasa el tope se lo mata y la app sigue viva.
 
-`correr(tarea, forma, tope, **args)` devuelve el resultado (JSON) o lanza `TareaAislada` (`TiempoAgotado` si pasó
-el tope). Módulo puro: sin Qt ni timeline. En la app instalada el hijo es la misma `OmniCAD.exe --tarea-aislada`.
+`correr(tarea, forma, tope, **args)` y `correr_json(tarea, datos, tope)` devuelven JSON o lanzan `TareaAislada`
+(`TiempoAgotado` si pasó el tope). Sin Qt; solo el hijo de prevuelo importa timeline para reconstruir la receta.
+En la app instalada el hijo es la misma `OmniCAD.exe --tarea-aislada`.
 """
 import json
 import subprocess
@@ -21,6 +22,9 @@ from . import motor as _motor
 
 _RAIZ = Path(__file__).resolve().parents[2]      # la carpeta que contiene el paquete `omnicad`
 _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
+TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
+EN_HIJO = False
 
 
 class TareaAislada(Exception):
@@ -45,6 +49,20 @@ def _proyeccion_exacta(forma, e, x, deflexion):
 _TAREAS = {"autointersecciones": _autointersecciones, "proyeccion_exacta": _proyeccion_exacta}
 
 
+def _prevuelo_parametros(receta, parametros, desde):
+    from ..timeline.documento import Documento
+    from ..timeline.parametros import TablaParametros
+
+    with _motor.fijar_motor("opencascade"):
+        doc = Documento.desde_dict(receta)
+        doc.parametros = TablaParametros.desde_lista(parametros)
+        doc.recalcular(desde)
+    return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones)}
+
+
+_TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros}
+
+
 def _a_json(o):
     if hasattr(o, "tolist"):
         return o.tolist()
@@ -52,12 +70,18 @@ def _a_json(o):
 
 
 def principal(argv):
-    """Punto de entrada del hijo: `tarea carpeta`. Lee forma.brep y args.json, escribe salida.json."""
+    """Punto de entrada del hijo: `tarea carpeta`. Lee args.json y, si corresponde, forma.brep; escribe salida.json."""
+    # Con «-m» este módulo es __main__; timeline importa la instancia con su nombre de paquete.
+    from . import aislado
+    aislado.EN_HIJO = True
     tarea, carpeta = argv[0], Path(argv[1])
-    forma = intercambio.leer_brep(carpeta / "forma.brep")
     args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
-    salida = _TAREAS[tarea](forma, **args)
-    (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8")
+    if tarea in _TAREAS_JSON:
+        salida = _TAREAS_JSON[tarea](**args)
+    else:
+        forma = intercambio.leer_brep(carpeta / "forma.brep")
+        salida = _TAREAS[tarea](forma, **args)
+    (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
     return 0
 
 
@@ -74,9 +98,20 @@ def correr(tarea, forma, tope, **args):
     """Hace `tarea` sobre `forma` en un proceso aparte y devuelve su resultado. `tope`: segundos como máximo."""
     if tarea not in _TAREAS:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
+    return _correr(tarea, tope, args, forma)
+
+
+def correr_json(tarea, datos, tope):
+    """Hace `tarea` en un hijo con argumentos JSON (`datos`), sin BREP. `tope`: segundos como máximo."""
+    if tarea not in _TAREAS_JSON:
+        raise ValueError(f"Tarea aislada desconocida: {tarea}")
+    return _correr(tarea, tope, datos)
+
+
+def _correr(tarea, tope, args, forma=None):
     if tope <= 0:
         raise TiempoAgotado("no quedó tiempo para correrla")
-    if _motor.motor_activo() == "omnikernel":
+    if forma is not None and _motor.motor_activo() == "omnikernel":
         # Sin subproceso ni BREP: cada llamada al kernel nativo lleva su CancelToken con plazo (binding omnikernel_py).
         # Las tareas de hoy son de OpenCascade: su despacho informa MOTOR_SIN_SOPORTE en vez de tapar el error.
         return json.loads(json.dumps(_TAREAS[tarea](forma, **args), default=_a_json))
@@ -84,13 +119,14 @@ def correr(tarea, forma, tope, **args):
         # recién muerto puede tardar en soltar el archivo: borrar la carpeta no tiene que tumbar la revisión
         carpeta = Path(tmp)
         try:
-            intercambio.escribir_brep(forma, carpeta / "forma.brep")
-            (carpeta / "args.json").write_text(json.dumps(args, default=_a_json), encoding="utf-8")
+            if forma is not None:
+                intercambio.escribir_brep(forma, carpeta / "forma.brep")
+            (carpeta / "args.json").write_text(json.dumps(args, default=_a_json), encoding="utf-8", newline="\n")
             hijo = subprocess.run(_comando(tarea, carpeta), cwd=_RAIZ, capture_output=True, timeout=tope,
                                   creationflags=_SIN_VENTANA, check=False)
         except subprocess.TimeoutExpired:         # run() ya mató al hijo
             raise TiempoAgotado(f"pasó de {tope:.3g} s y se cortó".replace(".", ",")) from None
-        except (OSError, ValueError, intercambio.ErrorGeometria) as e:
+        except (OSError, TypeError, ValueError, intercambio.ErrorGeometria) as e:
             raise TareaAislada(f"no pudo arrancar el proceso aparte ({e})") from e
         salida = carpeta / "salida.json"
         if hijo.returncode != 0 or not salida.is_file():

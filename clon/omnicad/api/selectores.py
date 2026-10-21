@@ -9,9 +9,9 @@ SINTAXIS (se evalúa sobre las caras o las aristas de UN cuerpo; "centro" = cent
     >X  >Y  >Z      las de centro más alto en ese eje (con tolerancia: pueden ser varias).
                     >Z[1] es el segundo nivel más alto, >Z[-1] el más bajo.
     <X  <Y  <Z      las de centro más bajo (<Z[1]: el segundo nivel más bajo).
-    |X  |Y  |Z      aristas rectas paralelas al eje; caras planas con la NORMAL paralela al eje (como CadQuery:
+    |X  |Y  |Z      aristas paralelas al eje (una circunferencia es paralela si su plano contiene el eje); caras planas con la NORMAL paralela al eje (como CadQuery:
                     |Z en una caja = tapa y base).
-    #X  #Y  #Z      lo perpendicular: aristas rectas perpendiculares al eje; caras planas con la normal
+    #X  #Y  #Z      lo perpendicular: aristas perpendiculares al eje (circunferencias con el eje por normal); caras planas con la normal
                     perpendicular al eje (#Z en una caja = las 4 laterales).
     +X  -X  +Y ...  caras planas cuya normal apunta en ese sentido. En aristas +Z y -Z valen como |Z (una
                     arista no tiene sentido).
@@ -76,7 +76,7 @@ class Elemento:
     def __init__(self, tipo, i, sub, firma):
         self.tipo, self.i, self.sub, self.firma = tipo, i, sub, firma
         self.geom = (TIPOS_CARA if tipo == "cara" else TIPOS_ARISTA).get(firma["geom"], "OTHER")
-        self.normal = self.direccion = None
+        self.normal = self.direccion = self.eje = None
         if tipo == "cara":
             self.centro = np.array(firma["centro"], float)
             if "normal" in firma:
@@ -86,7 +86,10 @@ class Elemento:
             if self.geom == "LINE":
                 a, b = (np.array(x, float) for x in firma["extremos"])
                 d = b - a
-                self.direccion = d / (np.linalg.norm(d) or 1.0)
+                self.direccion = self.eje = d / (np.linalg.norm(d) or 1.0)
+            elif self.geom == "CIRCLE":                 # el eje de la circunferencia: lo que miran |Z y #Z
+                a = consultas.BRepAdaptor_Curve(sub).Circle().Axis().Direction()
+                self.eje = np.array([a.X(), a.Y(), a.Z()], float)
 
     @property
     def vector(self):
@@ -263,12 +266,15 @@ def _atomo(a, elementos, tipo, texto):
         tol = TOL_DIR if grados is None else math.sin(math.radians(grados))   # seno del desvío admitido
         salida = set()
         for i, e in enumerate(elementos):
-            v = e.vector
+            v = e.eje if tipo == "arista" else e.vector
             if v is None:
                 continue
             paralelo = float(np.linalg.norm(np.cross(v, d))) < tol
-            if simbolo == "#":
-                ok = abs(float(v @ d)) < tol
+            perpendicular = abs(float(v @ d)) < tol
+            if tipo == "arista" and e.geom == "CIRCLE":   # su eje paralelo a d = la circunferencia ⟂ d
+                ok = paralelo if simbolo == "#" else perpendicular
+            elif simbolo == "#":
+                ok = perpendicular
             elif simbolo == "|" or tipo == "arista":
                 ok = paralelo
             else:                                    # + o - sobre una cara plana: sentido de la normal

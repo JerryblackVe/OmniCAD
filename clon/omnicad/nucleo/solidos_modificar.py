@@ -23,7 +23,8 @@ from . import motor as _motor
 def _iniciar_opencascade():
     global Array1_gp_Pnt2d, BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
     global BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter, BRepBuilderAPI_GTransform
-    global BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    global BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex
+    global BRepBuilderAPI_Sewing
     global BRepBuilderAPI_Transform, BRepExtrema_DistShapeShape, BRepFeat_SplitShape, BRepFilletAPI_MakeChamfer
     global BRepFilletAPI_MakeFillet, BRepGProp_Face, BRepIntCurveSurface_Inter, BRepLib
     global BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakeThickSolid
@@ -32,15 +33,16 @@ def _iniciar_opencascade():
     global GeomAPI_ProjectPointOnSurf, GeomAbs_Arc, GeomAbs_C2, GeomAbs_Cone, GeomAbs_Cylinder
     global GeomAbs_Intersection, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
     global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
-    global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape, ShapeFix_Shape
-    global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_VERTEX, TopExp, TopExp_Explorer
+    global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape, ShapeFix_Face, ShapeFix_Shape
+    global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_VERTEX, TopExp, TopExp_Explorer
     global TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape, gp_Ax3, gp_Cylinder, gp_Dir, gp_GTrsf, gp_Lin
     global gp_Mat, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec, gp_XYZ
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
     from OCP.BRepBuilderAPI import (BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
-                                    BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Transform)
+                                    BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Sewing,
+                                    BRepBuilderAPI_Transform)
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.BRepFeat import BRepFeat_SplitShape
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
@@ -59,9 +61,9 @@ def _iniciar_opencascade():
     from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
     from OCP.OCP.collections import (Array1_gp_Pnt2d, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
                                      IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape)
-    from OCP.ShapeFix import ShapeFix_Shape
+    from OCP.ShapeFix import ShapeFix_Face, ShapeFix_Shape
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_VERTEX
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_VERTEX
     from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape
     from OCP.gp import (gp_Ax3, gp_Cylinder, gp_Dir, gp_GTrsf, gp_Lin, gp_Mat, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf,
@@ -597,11 +599,63 @@ def _borde_con_bisel(forma, caras, espesor):
     return False
 
 
+def _cascara_exterior_por_desfase(forma, caras, espesor):
+    """Plan B de `_cascara` hacia afuera (`espesor` > 0) cuando MakeThickSolid no puede con caras B-spline (T-04): se
+    desfasa el cuerpo ENTERO hacia afuera con unión redondeada, se le resta el cuerpo (queda la pared cerrada) y se
+    corta todo lo que pasa del plano de cada cara quitada. Solo vale si cada cara quitada es plana y extrema (el
+    cuerpo entero queda de su lado de adentro). Las caras degeneradas del desfase B-spline se reparan y recosen
+    antes del booleano; solo se acepta un sólido cerrado válido que conserve el volumen del desfase.
+    None si no se pudo."""
+    if not caras or any(_plano_de_cara(c) is None for c in caras):
+        return None
+    try:
+        a, b = geo.caja_envolvente(forma)
+        esquinas = [(x, y, z) for x in (a[0], b[0]) for y in (a[1], b[1]) for z in (a[2], b[2])]
+        tolerancia = 1e-6 * max(1.0, math.dist(a, b))
+        planos = [_plano_de_cara(c) for c in caras]
+        if any(max(float((np.asarray(q) - pl.origen) @ pl.normal) for q in esquinas) > tolerancia for pl in planos):
+            return None
+        exterior = _desfase_cuerpo(forma, espesor, GeomAbs_Arc)
+        if not geo.es_valida(exterior):
+            volumen = geo.volumen_exacto(exterior)
+            costura = BRepBuilderAPI_Sewing(TOL)
+            for cara in geo.caras(exterior):
+                arreglo = ShapeFix_Face(cara)
+                arreglo.Perform()
+                costura.Add(arreglo.Face())
+            costura.Perform()
+            cosida = costura.SewedShape()
+            if (cosida.IsNull() or cosida.ShapeType() != TopAbs_SHELL
+                    or costura.NbFreeEdges() or costura.NbMultipleEdges()):
+                return None
+            exterior = BRepBuilderAPI_MakeSolid(TopoDS.Shell(cosida)).Solid()
+            if (not geo.es_valida(exterior) or _resultado_imposible(forma, exterior, espesor)
+                    or abs(geo.volumen_exacto(exterior) - volumen) > abs(volumen) * 1e-4):
+                return None
+        pared = geo.booleano(exterior, forma, "cortar")
+        semilado = 4.0 * (math.dist(a, b) + espesor)
+        sobrante = [BRepPrimAPI_MakePrism(_cara_plana(pl, pl.origen, semilado),
+                                          gp_Vec(*(np.asarray(pl.normal, float) * (espesor * 3 + 1.0)))).Shape()
+                    for pl in planos]
+        resultado = geo.booleano(pared, geo.unir_todos(sobrante), "cortar")
+        # La pared es parte del desfase menos el cuerpo: más volumen que eso, o sin sólidos, es una cáscara rota.
+        if (not geo.solidos(resultado)
+                or geo.volumen_exacto(resultado) > abs(geo.volumen_exacto(exterior)) - geo.volumen_exacto(forma)
+                + 1e-6 * abs(geo.volumen_exacto(exterior))):
+            return None
+    except Exception:  # noqa: BLE001 — cualquier fallo del plan B deja el error original del kernel, que es el que se informa
+        return None
+    if not geo.es_valida(resultado) or _resultado_imposible(forma, resultado, espesor):
+        return None
+    return resultado
+
+
 def _cascara(forma, caras, espesor, union):
     try:
         return _validar(_cascara_del_kernel(forma, caras, espesor, union), "Vaciado")
     except geo.ErrorGeometria as e:
-        alternativo = _cascara_por_desfase(forma, caras, -espesor) if espesor < 0 else None
+        alternativo = (_cascara_por_desfase(forma, caras, -espesor) if espesor < 0
+                       else _cascara_exterior_por_desfase(forma, caras, espesor))
         if alternativo is not None:
             return alternativo
         if espesor > 0 and geo.es_forma_libre(forma):

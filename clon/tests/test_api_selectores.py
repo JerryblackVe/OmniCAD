@@ -391,3 +391,21 @@ def test_rango_encadenado_nearest(caja_con_agujero):
     r = llamar(s, "find_edges", selector="%CIRCLE and nearest:[9,0,20]")
     assert r["count"] == 1 and r["edges"][0]["type"] == "circle"
     assert r["edges"][0]["circle_center"] == pytest.approx([0, 0, 20])
+
+
+def test_selector_eje_aristas_circulares(s):
+    """B-85: en un cilindro, `#Z` elige las dos circunferencias (su eje es Z) y `|Z` la recta."""
+    llamar(s, "create_cylinder", radius=20, height=50)
+    r = llamar(s, "find_edges", selector="#Z")
+    assert r["count"] == 2 and {e["type"] for e in r["edges"]} == {"circle"}
+    r = llamar(s, "find_edges", selector="|Z")
+    assert r["count"] == 1 and r["edges"][0]["type"] == "line"
+    assert llamar(s, "find_edges", selector="#X")["count"] == 1      # solo la recta; las circunferencias son paralelas a X
+
+
+def test_error_de_paso_dice_que_se_deshizo(s):
+    """B-86: un empalme imposible falla con un mensaje que aclara que el paso se deshizo (no está en la línea de tiempo)."""
+    llamar(s, "create_box", length=20, width=20, height=20)
+    r = falla(s, "fillet", edges=">Z", radius=500)
+    assert "se deshizo" in r["mensaje"] and "quedó con error" not in r["mensaje"]
+    assert all("Empalme" not in p["name"] for p in llamar(s, "get_timeline")["steps"])

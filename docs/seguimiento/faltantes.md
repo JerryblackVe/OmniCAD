@@ -6,7 +6,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 ## Pendientes generales
 
-Abierto 54 · Parcial 2 · Bloqueado 2.
+Abierto 55 · Parcial 2 · Bloqueado 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -68,6 +68,7 @@ Abierto 54 · Parcial 2 · Bloqueado 2.
 | P-27-6 | Booleanas con holgura y formas listas para insertar (cono, pirámide, cuña, cápsula…) | Parcial | Media | Existen create_box/cylinder/sphere/torus; faltan holgura en booleanas y las demás formas. | omnicad/api/herramientas_solido.py:327 (create_box); herramientas create_cylinder/sphere/torus | 2026-10-20 |
 | P-26d | .app firmada y notarizada (Apple Developer, USD 99 al año) | Bloqueado | Media | Pide cuenta de Apple Developer del usuario. | Sin carpeta instalador/macos | 2026-10-20 |
 | P-25g2 | g) McMaster-Carr, pieza de fabricante y TraceParts | Bloqueado | Alta | Dependen de servicios en línea: decidir si se hacen. | PROJECT_LOG.md:71 | 2026-10-20 |
+| MP1 | Mini programas: el usuario crea scripts Python con panel de campos armado solo (distancia, ángulo, cuerpo), pestaña «Mini programas» en la cinta para crear, guardar, correr y compartir | Abierto | Media | Todo. Base ya hecha: `execute_code` (transacción, timeout, deshacer) y el motor de grafos. Se junta con GH7, B5 y PAQ-H5. Un mini programa ajeno puede romper el trabajo: mostrar qué hace y pedir confirmación antes de correrlo. Después, el lienzo de nodos (GH4) para quien no programa. | `omnicad/api/` (`execute_code`); `docs/grafo.md` «Pendiente»; sin pestaña ni panel de campos en `omnicad/ui/` | 2026-10-20 |
 
 ## Hallazgos de pruebas de uso
 

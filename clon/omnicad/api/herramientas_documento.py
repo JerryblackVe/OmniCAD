@@ -412,7 +412,7 @@ def insert_derive(sesion, source_path: str, bodies: list[str] | None = None, ske
     antes = set(doc.estado_final.cuerpos)
     r = doc.agregar(op)
     if r.estado == "error":
-        raise desde_mensaje(r.mensaje, f"El paso «{op.nombre}» quedó con error: ")
+        raise desde_mensaje(r.mensaje, f"El paso «{op.nombre}» falló y se deshizo (el documento quedó como estaba): ")
     nuevos = [c for c in doc.estado_final.cuerpos if c not in antes]
     return {"id": op.id, "name": op.nombre, "type": op.TIPO, "status": r.estado, "message": r.mensaje,
             "new_bodies": nuevos, "bodies": list(doc.estado_final.cuerpos), "parameters": parameters,

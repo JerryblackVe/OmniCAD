@@ -302,6 +302,39 @@ def revolver(caras, punto_eje, dir_eje, angulo_grados):
     return unir_todos(solidos)
 
 
+def _segmentar_tubo_cerrado(forma):
+    """Divide longitudinalmente el lateral B-spline de un tubo antes de clasificarlo en una booleana.
+
+    B-52: un lateral cerrado que recorre varias vueltas confunde al BOP al cruzar un toroide;
+    dividir su dominio conserva la superficie y permite clasificar cada tramo por separado.
+    shortcut: solo tubos de tres caras; ampliar a otros barridos cuando haya un reproductor.
+    """
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
+    from OCP.ShapeUpgrade import ShapeUpgrade_ShapeDivideArea
+
+    cs = caras(forma)
+    if len(cs) != 3:
+        return forma
+    for cara in cs:
+        sup = BRepAdaptor_Surface(cara)
+        if (sup.GetType() != GeomAbs_BSplineSurface or not sup.IsUClosed() or sup.IsVClosed()
+                or sup.BSpline().NbVPoles() <= 4 * sup.BSpline().NbUPoles()):
+            continue
+        # Dos tramos por intervalo de nudos del barrido, sin aproximar ni mover sus caras.
+        cantidad = 2 * (sup.BSpline().NbVKnots() - 1)
+        division = ShapeUpgrade_ShapeDivideArea(forma)
+        division.SetSplittingByNumber(True)
+        division.NbParts = cantidad
+        division.SetNumbersUVSplits(1, cantidad)
+        division.Perform()
+        resultado = division.Result()
+        if (resultado.IsNull() or not es_valida(resultado)
+                or abs(volumen_exacto(resultado) - volumen_exacto(forma)) > 1e-6 * abs(volumen_exacto(forma))):
+            return forma                  # no se pudo dividir sin alterar nada: la booleana sigue como antes
+        return resultado
+    return forma
+
+
 def booleano(objetivo, herramienta, operacion):
     """'unir' | 'cortar' | 'intersecar' (FeatureOperations Join/Cut/Intersect de Fusion)."""
     clases = {"unir": BRepAlgoAPI_Fuse, "cortar": BRepAlgoAPI_Cut, "intersecar": BRepAlgoAPI_Common}
@@ -309,8 +342,8 @@ def booleano(objetivo, herramienta, operacion):
         raise ErrorGeometria(f"Operación booleana desconocida: {operacion}")
     from OCP.collections import List_TopoDS_Shape
     args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
-    args.Append(objetivo)
-    herr.Append(herramienta)
+    args.Append(_segmentar_tubo_cerrado(objetivo))
+    herr.Append(_segmentar_tubo_cerrado(herramienta))
     op = clases[operacion]()
     op.SetArguments(args)
     op.SetTools(herr)

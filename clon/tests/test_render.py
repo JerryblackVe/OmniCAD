@@ -376,3 +376,32 @@ def test_dialogos_y_paneles(qapp, monkeypatch, tmp_path):
     assert len(v.renders) == 1 and v.renders[0]["imagen"].shape == (30, 40, 4)
     assert (tmp_path / "b.png").exists()
     v.close()
+
+
+def test_vidrio_en_opengl_deja_ver_lo_de_atras(qapp):
+    """B-84: una esfera de vidrio (transparencia 0,88) delante de un cubo rojo no sale blanca maciza: el rojo se ve a
+    través. Necesita OpenGL real (QT_QPA_PLATFORM=windows); offscreen se salta."""
+    from omnicad import api
+    from omnicad.ui.render import LienzoRender
+    s = api.Sesion()
+    for nombre, args in (("create_box", dict(length=30, width=30, height=30)),
+                         ("create_sphere", dict(radius=24, y=-40, z=15, operation="new_body"))):
+        assert api.llamar(s, nombre, args)["ok"]
+    caja, esfera = [c for c in s.doc.estado_final.cuerpos]
+    s.doc.propiedades[caja] = {"apariencia": [0.9, 0.1, 0.1]}
+    s.doc.propiedades[esfera] = {"apariencia": [0.9, 0.95, 1.0],
+                                 "acabado": rc.acabado_normalizado({"transparencia": 0.88, "rugosidad": 0.12})}
+    lz = LienzoRender()
+    lz.resize(320, 240)
+    lz.show()
+    qapp.processEvents()
+    lz.cargar(s.doc.estado_final, s.doc.propiedades)
+    lz.encuadrar()
+    qapp.processEvents()
+    if not lz.gl_disponible():
+        pytest.skip("Sin OpenGL (offscreen): se prueba con QT_QPA_PLATFORM=windows.")
+    img = lz.renderizar_imagen(320, 240, 1, "gl")
+    assert lz.ultimo_motor == "OpenGL"
+    pix = img[110:125, 150:160, :3].reshape(-1, 3).astype(int)         # borde del cubo visto a través de la esfera
+    assert (pix[:, 0] - pix[:, 2]).max() > 30                          # hay rojo: no es un blanco plano
+    lz.close()

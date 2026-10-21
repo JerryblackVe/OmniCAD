@@ -104,7 +104,7 @@ def test_run_operation_claves_invalidas(s):
 def test_run_operation_que_falla_deja_el_documento_igual(s):
     antes = foto(s)
     r = api.llamar(s, "run_operation", {"type": "primitiva", "params": {"ancho": "sin_parametro"}})
-    assert not r["ok"] and r["error_kind"] == "INVALID_EXPRESSION" and "quedó con error" in r["mensaje"]
+    assert not r["ok"] and r["error_kind"] == "INVALID_EXPRESSION" and "se deshizo" in r["mensaje"]
     assert foto(s) == antes
     r = api.llamar(s, "run_operation", {"type": "extrusion", "params": {"boceto": "no_existe"}})
     assert not r["ok"] and foto(s) == antes
