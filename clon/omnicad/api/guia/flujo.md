@@ -42,6 +42,8 @@ Los `avisos` de una respuesta correcta no son fallas, pero conviene leerlos.
 - `create_thread`: rosca sobre caras cilíndricas (eje o agujero); sin `thread="..."`, tamaño automático del tipo.
 - `thread_info` (tipos, tamaños, diámetros límite de una clase) y `fit_tolerance` (ajuste ISO 286, p. ej. H7/g6)
   solo consultan: no cambian el documento.
+- `create_clearance_test`: placa de agujeros con holgura creciente y su peine de pernos, para imprimir y ver qué
+  `print_clearance` encaja en TU impresora (el valor grabado junto al agujero que mejor ajusta).
 
 ## Atajos
 

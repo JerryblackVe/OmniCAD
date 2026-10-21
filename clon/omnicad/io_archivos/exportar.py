@@ -218,6 +218,56 @@ def exportar_malla(cuerpos, ruta, deflexion=0.02, *, formato=None, unidades="mm"
     return sum(len(m.caras) for m in mallas)
 
 
+# Utilidades de impresión que Fusion también detecta: nombre → rutas relativas (con comodines) bajo las carpetas de programas.
+UTILIDADES_IMPRESION = {
+    "OrcaSlicer": ("OrcaSlicer/orca-slicer.exe",),
+    "PrusaSlicer": ("Prusa3D/PrusaSlicer*/prusa-slicer.exe",),
+    "Bambu Studio": ("Bambu Studio/bambu-studio.exe",),
+    "UltiMaker Cura": ("UltiMaker Cura*/UltiMaker-Cura.exe", "Ultimaker Cura*/Cura.exe"),
+    "Creality Print": ("Creality Print*/CrealityPrint.exe",),
+}
+
+
+def utilidades_impresion():
+    """Utilidades de impresión instaladas: {nombre: Path del ejecutable} (Windows; en otros sistemas, por PATH)."""
+    import os
+    import shutil
+    carpetas = [Path(p) for v in ("ProgramFiles", "ProgramFiles(x86)") if (p := os.environ.get(v))]
+    if local := os.environ.get("LOCALAPPDATA"):
+        carpetas.append(Path(local) / "Programs")
+    encontradas = {}
+    for nombre, patrones in UTILIDADES_IMPRESION.items():
+        for patron in patrones:
+            exe = next((e for c in carpetas for e in sorted(c.glob(patron))), None) \
+                or ((w := shutil.which(Path(patron).stem.lower())) and Path(w))
+            if exe:
+                encontradas[nombre] = exe
+                break
+    return encontradas
+
+
+def resolver_utilidad(aplicacion):
+    """Ejecutable de la utilidad de impresión: '' = la primera instalada (o None si no hay), un nombre de
+    `utilidades_impresion()` o la ruta de un archivo existente (Personalizada)."""
+    instaladas = utilidades_impresion()
+    if not aplicacion:
+        return next(iter(instaladas.values()), None)
+    if aplicacion in instaladas:
+        return instaladas[aplicacion]
+    if Path(aplicacion).is_file():
+        return Path(aplicacion)
+    raise ErrorExportacion(f"No se encontró la utilidad de impresión: {aplicacion}")
+
+
+def abrir_en_utilidad(ejecutable, rutas):
+    """Abre los archivos exportados en la utilidad de impresión (proceso aparte, sin shell)."""
+    import subprocess
+    try:
+        subprocess.Popen([str(ejecutable), *map(str, rutas)])
+    except OSError as e:
+        raise ErrorExportacion(f"No se pudo abrir {Path(ejecutable).name}: {e}") from e
+
+
 def exportar_gltf(cuerpos, ruta, propiedades=None):
     """glTF 2.0 (.glb binario o .gltf con el búfer embebido), con el color y el acabado de cada cuerpo."""
     from .gltf import escribir_gltf

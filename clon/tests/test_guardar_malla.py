@@ -149,7 +149,7 @@ def test_api_con_todos_los_parametros_y_proteccion_de_destinos(tmp_path):
     args = dict(path=str(tmp_path / "subcarpeta" / "modelo.stl"), bodies=["op1.c1", "op2.c1"],
                 format="stl_ascii", units="cm", structure="uno_por_cuerpo", refinement="personalizado",
                 surface_deviation=0.03, normal_deviation=15, maximum_edge_length=2, aspect_ratio=3,
-                overwrite=False, create_folders=True)
+                overwrite=False, create_folders=True, purpose="export", application="")
     r = api.llamar(sesion, "export_mesh", args)
     assert r["ok"], r
     resultado = r["result"]
@@ -196,5 +196,76 @@ def test_dialogo_recuento_cambia_con_refinado_y_seleccion():
     caja.objetos.item(1).setCheckState(Qt.Unchecked)
     QTest.qWait(250)
     assert caja.triangulos == 0 and not caja.botones.button(QDialogButtonBox.Ok).isEnabled()
+    caja.close()
+    app.processEvents()
+
+
+@pytest.fixture
+def slicers(tmp_path, monkeypatch):
+    """Un «OrcaSlicer» falso instalado; abrir_en_utilidad anota la llamada en vez de lanzar un proceso."""
+    exe = tmp_path / "Programas" / "OrcaSlicer" / "orca-slicer.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "Programas"))
+    for variable in ("ProgramFiles(x86)", "LOCALAPPDATA"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setattr("shutil.which", lambda _nombre: None)
+    abiertos = []
+    monkeypatch.setattr(ex, "abrir_en_utilidad", lambda ejecutable, rutas: abiertos.append((ejecutable, list(rutas))))
+    return exe, abiertos
+
+
+def test_utilidades_instaladas_y_resolucion(slicers, tmp_path):
+    exe, _ = slicers
+    assert ex.utilidades_impresion() == {"OrcaSlicer": exe}
+    assert ex.resolver_utilidad("") == exe and ex.resolver_utilidad("OrcaSlicer") == exe
+    otro = tmp_path / "mi_slicer.exe"
+    otro.write_bytes(b"")
+    assert ex.resolver_utilidad(str(otro)) == otro
+    with pytest.raises(ex.ErrorExportacion, match="No se encontró"):
+        ex.resolver_utilidad("NoExiste")
+
+
+def test_api_utilidad_de_impresion_guarda_y_abre(slicers, tmp_path):
+    exe, abiertos = slicers
+    ruta = tmp_path / "salida" / "pieza.3mf"
+    r = api.llamar(_sesion(), "export_mesh", {"path": str(ruta), "format": "3mf", "purpose": "print_utility"})
+    assert r["ok"], r
+    assert r["result"]["opened_in"] == str(exe) and ruta.is_file()
+    assert abiertos == [(exe, [ruta])]
+    # Una utilidad que no existe falla antes de escribir nada.
+    r = api.llamar(_sesion(), "export_mesh", {"path": str(tmp_path / "otra.stl"), "purpose": "print_utility",
+                                              "application": "NoExiste"})
+    assert r["error_kind"] == "FILE_NOT_FOUND" and not (tmp_path / "otra.stl").exists()
+    # purpose=export nunca abre nada.
+    assert api.llamar(_sesion(), "export_mesh", {"path": str(tmp_path / "e.stl")})["result"]["opened_in"] is None
+    assert len(abiertos) == 1
+
+
+def test_api_sin_utilidad_instalada_guarda_y_avisa(slicers, tmp_path, monkeypatch):
+    _, abiertos = slicers
+    monkeypatch.setattr(ex, "utilidades_impresion", dict)
+    r = api.llamar(_sesion(), "export_mesh", {"path": str(tmp_path / "p.stl"), "purpose": "print_utility"})
+    assert r["ok"] and r["result"]["opened_in"] is None and (tmp_path / "p.stl").is_file()
+    assert "ninguna utilidad de impresión" in " ".join(r["avisos"]) and not abiertos
+
+
+def test_dialogo_tipo_exportar_o_utilidad(slicers):
+    exe, _ = slicers
+    app = QApplication.instance() or QApplication([])
+    caja = DialogoGuardarMalla([_cuerpo()])
+    caja.show()
+    assert caja.tipo() == "exportar" and caja.tipo_envio.count() == 2
+    assert not caja.aplicacion.isVisible() and caja.aplicacion_elegida() == "OrcaSlicer"
+    caja.tipo_envio.setCurrentIndex(caja.tipo_envio.findData("utilidad"))
+    assert caja.aplicacion.isVisible() and not caja.aviso_aplicacion.isVisible()
+    assert not caja.aplicacion_ruta.isVisible()
+    # Personalizada sin ruta válida: el diálogo lo dice y no hay nada que abrir.
+    caja.aplicacion_combo.setCurrentIndex(caja.aplicacion_combo.findData(""))
+    assert caja.aplicacion_ruta.isVisible() and caja.aplicacion_elegida() == ""
+    assert caja.aviso_aplicacion.isVisible() and "solo se guardará" in caja.aviso_aplicacion.text()
+    caja.aplicacion_ruta.setText(str(exe))
+    assert caja.aplicacion_elegida() == str(exe) and not caja.aviso_aplicacion.isVisible()
+    assert "tipo" not in caja.opciones() and "aplicacion" not in caja.opciones()
     caja.close()
     app.processEvents()

@@ -32,6 +32,7 @@ _OPCIONES = {
     "vista/efecto_sombra_suelo": (False, [False, True]),
     "vista/efecto_reflejo": (False, [False, True]),
     "vista/efecto_aa": (True, [False, True]),
+    "timeline/color_componente": (False, [False, True]),
 }
 _EFECTOS_BASE = {"vista/efecto_cupula": True, "vista/efecto_suelo": False,
                  "vista/efecto_sombra_suelo": False, "vista/efecto_reflejo": False}

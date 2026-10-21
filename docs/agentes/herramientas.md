@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-297 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+298 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 37 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 68 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 69 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -371,7 +371,7 @@ Lista los proyectos recientes existentes, en el orden del panel de datos.
 
 ### `export_mesh`
 
-Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. Las mallas existentes conservan sus facetas; los controles personalizados de arista y aspecto también las subdividen.
+Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. Las mallas existentes conservan sus facetas; los controles personalizados de arista y aspecto también las subdividen. Con purpose=print_utility abre además el archivo en una utilidad de impresión (slicer) instalada.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -387,6 +387,8 @@ Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por
   - `aspect_ratio` (número; opcional, por defecto `0.0`): arista mayor / altura menor, mayor que 1,154701; 0 = sin límite.
   - `overwrite` (true/false; opcional, por defecto `false`): true permite reemplazar archivos existentes; se comprueban todos antes de escribir.
   - `create_folders` (true/false; opcional, por defecto `true`): true crea las carpetas que faltan; false falla si la carpeta no existe.
+  - `purpose` ("export" | "print_utility"; opcional, por defecto `"export"`): export solo guarda el archivo; print_utility lo guarda y lo abre en la utilidad de impresión.
+  - `application` (texto; opcional, por defecto `""`): con print_utility, nombre de una utilidad instalada (OrcaSlicer, PrusaSlicer, Bambu Studio, UltiMaker Cura, Creality Print) o ruta de un programa (Personalizada); vacío = la primera instalada. Sin ninguna, solo guarda y avisa.
 - CLI: `omnicad call export_mesh --doc pieza.omnicad path=…`
 
 ### `get_browser_state`
@@ -1528,6 +1530,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
 | [`create_thread`](#create_thread) | sí | Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el comando Rosca de Fusion. |
 | [`draft`](#draft) | sí | Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. |
+| [`create_clearance_test`](#create_clearance_test) | sí | Crea la pieza de calibración de holguras para impresión 3D (como la tira de tolerancias de Cura): una placa con count agujeros pasantes de Ø diameter + 2·holgura, con la holgura radial creciente desde start_clearance en saltos de step y su valor grabado junto a cada agujero, más un peine con los pernos de Ø diameter a la misma distancia. |
 | [`split_face`](#split_face) | sí | Divide caras con un plano, cara, arista o curva de boceto. |
 | [`split_body`](#split_body) | sí | Parte un cuerpo en varios con un plano, una cara u otro cuerpo. |
 | [`silhouette_split`](#silhouette_split) | sí | Divide las caras de un cuerpo por su silueta vista desde una dirección. |
@@ -2096,6 +2099,20 @@ Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el pl
   - `sides` ("one" | "two" | "symmetric"; opcional, por defecto `"one"`): "one" (un lado, por defecto), "two" (dos lados: angle y angle2) o "symmetric" (simétrico: el mismo ángulo a los dos lados del plano neutro).
   - `angle2` (número o expresión; opcional, por defecto `null`): ángulo del segundo lado en grados; obligatorio con sides=two.
 - CLI: `omnicad call draft --doc pieza.omnicad faces=… angle=…`
+
+### `create_clearance_test`
+
+Crea la pieza de calibración de holguras para impresión 3D (como la tira de tolerancias de Cura): una placa con count agujeros pasantes de Ø diameter + 2·holgura, con la holgura radial creciente desde start_clearance en saltos de step y su valor grabado junto a cada agujero, más un peine con los pernos de Ø diameter a la misma distancia. Se imprimen los dos (quedan lado a lado en el plano XY, apoyados en Z = 0), se prueba cuál agujero encaja bien y ese valor es el print_clearance de create_hole y create_thread. Es UN paso del timeline con dos cuerpos nuevos.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `diameter` (número o expresión; obligatorio): diámetro del perno en mm; los agujeros miden diameter + 2·holgura.
+  - `start_clearance` (número o expresión; opcional, por defecto `0.1`): holgura radial del primer agujero en mm (0 o más).
+  - `step` (número o expresión; opcional, por defecto `0.1`): lo que sube la holgura de un agujero al siguiente, en mm (positivo).
+  - `count` (entero; opcional, por defecto `5`): cantidad de agujeros (de 1 a 20).
+  - `thickness` (número o expresión; opcional, por defecto `3`): espesor de la placa en mm; el peine tiene un perno que la atraviesa.
+  - `labels` (true/false; opcional, por defecto `true`): true para grabar la holgura de cada agujero (0,4 mm de profundidad).
+- CLI: `omnicad call create_clearance_test --doc pieza.omnicad diameter=…`
 
 ### `split_face`
 

@@ -67,6 +67,7 @@ DEFECTOS = {
     "vista/vis_planos_usuario": True,
     "vista/vis_bocetos": True,
     "vista/panel_datos": False,             # Fusion arranca con el panel de datos cerrado
+    "timeline/color_componente": False,     # engranaje del timeline › «Muestra de color por componente»
 }
 EFECTOS = ("cupula", "suelo", "sombra_suelo", "reflejo", "aa")
 # Valores predefinidos de gráficos. Fusion trae Rendimiento, Calidad y Personalizar; «Equilibrado» lo pidió el usuario

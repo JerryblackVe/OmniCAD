@@ -45,7 +45,7 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 | Asas para la conicidad del lado 2 y para el desfase de inicio de Extruir | Solo hay asa de distancia y de conicidad del lado 1. |
 | Relleno azul del perfil en la vista previa mientras se dibuja | La geometría aparece rellena recién al crearse. |
 | Tabla de grupos de aristas en Empalme (radios distintos por grupo) | Hoy hay un solo radio por operación. |
-| Configuración del timeline (engranaje abajo a la derecha) | No implementado. |
+| Engranaje del timeline: «Ocultar pasos inactivos» y «Cambiar a modelado directo» (FU-14; la «Muestra de color por componente» ya está) | Sin componente activo que filtre el timeline ni modo sin historial. |
 | Historial de pasos al abrir un `.f3d` (hoy entran los cuerpos sin historial; con Fusion abierto, además los parámetros de usuario) | El historial vive en el flujo de diseño propietario de Fusion (`FusionDesignSegmentType1/BulkStream.dat`, clases por GUID sin nombres): hay que descifrarlo o traducirlo por la API pública con Fusion. Es una fase propia. |
 | Instancias y componentes movidos al abrir un `.f3d` sin Fusion: cada componente entra donde está guardado su B-rep; **las copias y la posición de los componentes movidos ya se leen** (FU-9, hecho: `io_archivos/f3d_escena.py` las ubica como instancias) | Las matrices de posición salen de la escena `OGS/DefaultScene/world` (nodos `Instance`/`TransformAttribute`). |
 | `.f3z` con referencias externas: se abre el diseño de arriba del paquete; los diseños referenciados pueden no venir | **Parcial (FU-10):** `io_archivos/abrir_externo.py:39` admite `.f3z` y abre el diseño de arriba del paquete; falta resolver los diseños referenciados. |

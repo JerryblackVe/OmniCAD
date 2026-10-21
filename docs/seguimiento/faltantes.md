@@ -2,16 +2,14 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 171: Abierto 122 · Parcial 29 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 169: Abierto 120 · Parcial 29 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
-Abierto 55 · Parcial 2 · Bloqueado 2.
+Abierto 53 · Parcial 2 · Bloqueado 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| P-25c2 | c) «Guardar como malla»: Tipo (Fabricación/Exportar/Utilidad de impresión) y Aplicación | Abierto | Baja | Siguen sin hacer. | omnicad/ui/guardar_malla.py | 2026-10-20 |
-| P-29-6 | Pieza de calibración de holguras | Abierto | Baja | Sin programar. | sin función en omnicad/ | 2026-10-20 |
 | P-2d | Selector de idioma en Preferencias y test de cadenas sin traducir | Abierto | Media | Sin selector ni test que falle por cadena sin traducción; AGENTS.md aún exige TODO en español. | omnicad/ui/preferencias.py sin clave de idioma | 2026-10-20 |
 | P-8c | Primer arranque guiado dentro de la app (idioma, conectar agentes con un botón) | Abierto | Media | Hoy conectar agentes es una tarea opcional del instalador; la app no tiene asistente de primer arranque. | instalador/windows/omnicad.iss:62,79 (tarea «agentes»); grep de «primer arranque» en omnicad/: sin resultados | 2026-10-20 |
 | P-9f | Temas con tipografía propia y fondo con imagen en el visor | Abierto | Media | Los temas solo definen colores; la fuente está fija en el QSS y no hay imagen de fondo. | omnicad/ui/temas.py:208 (font-family fija «Segoe UI») | 2026-10-20 |
@@ -86,7 +84,7 @@ Abierto 3 · Bloqueado 1. Especificación: [brechas_fusion.md](../brechas_fusion
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| FU-7 | Configuración del timeline (engranaje abajo a la derecha) | Abierto | Baja | Menú de configuración de la línea de tiempo | ui/panel_timeline.py: sin ajustes ni engranaje (grep) | 2026-10-20 |
+| FU-14 | Engranaje del timeline: «Ocultar pasos inactivos» y «Cambiar a modelado directo» | Abierto | Alta | Hace falta un componente activo (que filtre el timeline) y un modo sin historial; el engranaje ya existe con «Muestra de color por componente» | ui/panel_timeline.py (engranaje con una sola opción); ui/acciones_navegador.py:164 («Cambiar al modelado directo» grisado) | 2026-10-21 |
 | FU-1 | Boceto 3D con tríada para dibujar fuera del plano | Abierto | Muy alta | Curvas con marco 3D propio, solver y perfiles por plano; la opción sigue grisada | ui/modo_boceto.py:139 (opción «Boceto 3D» con False,False); PROJECT_LOG.md:40 | 2026-10-20 |
 | FU-8 | Historial de pasos al abrir un .f3d | Abierto | Muy alta | Descifrar el flujo de diseño de Fusion o traducirlo con su API pública | io_archivos/f3d_nativo.py:24 (no trae historial); integraciones/fusion/OmniCADPuente (parámetros con Fusion) | 2026-10-20 |
 | FU-12 | Simulación, Fabricación y Forma (T-Splines) | Bloqueado | Muy alta | Decidir dependencias (CalculiX, Gmsh) y alcance antes de empezar | ui/cinta.py:244 (espacios grisados); sin código FEM, CAM ni T-Splines (grep) | 2026-10-20 |

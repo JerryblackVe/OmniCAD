@@ -8,6 +8,9 @@ Se arrastra el marcador o un paso para moverlos; doble clic edita. El clic derec
 según el tipo de paso, como Fusion: boceto (Editar boceto), operación (Editar operación y «Editar boceto de
 perfil»), unión (Editar unión, Animar unión); todos con Renombrar, Suprimir, Mover, «Rodar marcador aquí»,
 «Retroceder antes de este paso», «Buscar en navegador» y Eliminar.
+El engranaje de la derecha («Opciones» de Fusion) tiene «Muestra de color por componente»: pinta el fondo de cada
+paso con el color de su componente. «Ocultar pasos inactivos» y «Cambiar a modelado directo» no están: OmniCAD no
+tiene componente activo ni modo sin historial.
 """
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon
@@ -18,6 +21,9 @@ from .iconos import icono
 
 COLORES = {"aviso": QColor(255, 214, 102), "error": QColor(255, 140, 140)}
 MARCADOR = "__marcador__"
+# Colores de la muestra por componente (suaves, para que el ícono se siga viendo); se repiten si hay más componentes.
+PALETA_COMPONENTES = [QColor(*c) for c in ((141, 196, 255), (255, 183, 120), (168, 225, 148), (214, 170, 240),
+                                           (255, 165, 175), (130, 220, 215), (240, 220, 120), (190, 190, 200))]
 ICONO_TIPO = {"boceto": "boceto", "extrusion": "extruir", "revolucion": "revolucion", "combinar": "combinar",
               "importar_step": "importar", "plano": "plano_desfase",
               "engranaje": "engranaje_3d", "eje_escalonado": "eje_escalonado", "reparar_cuerpo": "reparar_cuerpo",
@@ -26,6 +32,23 @@ ICONO_TIPO = {"boceto": "boceto", "extrusion": "extruir", "revolucion": "revoluc
 
 def icono_operacion(op):
     return op.p["forma"] if op.TIPO == "primitiva" else ICONO_TIPO.get(op.TIPO, "caja")
+
+
+def colores_por_componente(doc):
+    """{id de paso: color} de los pasos que pertenecen a un componente: el propio paso Componente y los que crearon
+    cuerpos que hoy están dentro de uno (el color sigue el orden en que se crearon los componentes). Los demás no
+    figuran."""
+    ids = [op.id for op in doc.operaciones if op.TIPO == "componente"]
+    de_cuerpo = {}
+    for c in doc.estado_final.cuerpos.values():
+        if c.componente:
+            de_cuerpo.setdefault(c.op_id, c.componente)
+    colores = {}
+    for op in doc.operaciones:
+        comp = op.id if op.TIPO == "componente" else de_cuerpo.get(op.id)
+        if comp in ids:
+            colores[op.id] = PALETA_COMPONENTES[ids.index(comp) % len(PALETA_COMPONENTES)]
+    return colores
 
 
 def destino_arrastre(claves, origen, fila_destino):
@@ -64,12 +87,14 @@ class PanelTimeline(QWidget):
     marcador = Signal(int)
     buscar_navegador = Signal(str)      # «Buscar en navegador»: elige el elemento del paso en el navegador
     animar_union = Signal(str)          # «Animar unión» (menú de un paso de unión)
+    color_componente_cambiado = Signal(bool)    # casilla «Muestra de color por componente» del engranaje
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("barra_timeline")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.doc = None
+        self.color_componente = False
         self.lista = _Lista()
         self.lista.setFlow(QListView.LeftToRight)
         self.lista.setWrapping(False)
@@ -112,6 +137,21 @@ class PanelTimeline(QWidget):
         lay.addSpacing(12)
         self.estado = QLabel(objectName="estado_timeline")
         lay.addWidget(self.estado)
+        # Engranaje de la derecha (Opciones del timeline de Fusion).
+        self.engranaje = QToolButton(objectName="opciones_timeline")
+        self.engranaje.setIcon(icono("engranaje"))
+        self.engranaje.setIconSize(QSize(16, 16))
+        self.engranaje.setAutoRaise(True)
+        self.engranaje.setPopupMode(QToolButton.InstantPopup)
+        self.engranaje.setToolTip("<b>Opciones del timeline</b>")
+        menu = QMenu(self.engranaje)
+        self.accion_color = menu.addAction("Muestra de color por componente")
+        self.accion_color.setCheckable(True)
+        self.accion_color.setToolTip("Pinta cada paso con el color del componente al que pertenece.")
+        self.accion_color.triggered.connect(self.poner_color_componente)
+        menu.setToolTipsVisible(True)
+        self.engranaje.setMenu(menu)
+        lay.addWidget(self.engranaje)
 
     # ------------------------------------------------------------ navegación
     def _paso(self, delta):
@@ -127,11 +167,22 @@ class PanelTimeline(QWidget):
         for i in range(1, total + 1):
             QTimer.singleShot(350 * i, lambda i=i: self.marcador.emit(i))
 
+    def poner_color_componente(self, activo):
+        """Enciende o apaga la muestra de color por componente (la ventana lo guarda en las preferencias)."""
+        activo = bool(activo)
+        self.accion_color.setChecked(activo)
+        if activo != self.color_componente:
+            self.color_componente = activo
+            self.color_componente_cambiado.emit(activo)
+            if self.doc is not None:
+                self.actualizar(self.doc)
+
     # ------------------------------------------------------------ contenido
     def actualizar(self, doc):
         # Sin cambios en lo que se muestra no se reconstruye (llega en cada aviso del documento).
-        firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, icono_operacion(op), res.estado, res.mensaje)
-                                         for op, res in zip(doc.operaciones, doc.resultados, strict=True)])
+        colores = colores_por_componente(doc) if self.color_componente else {}
+        firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, icono_operacion(op), res.estado, res.mensaje,
+                                          colores.get(op.id)) for op, res in zip(doc.operaciones, doc.resultados, strict=True)])
         if doc is self.doc and firma == getattr(self, "_firma", None):
             return
         self._firma = firma
@@ -145,8 +196,9 @@ class PanelTimeline(QWidget):
             it = QListWidgetItem(QIcon(ico.pixmap(48, 48, QIcon.Disabled)) if apagado else ico, "")
             it.setSizeHint(QSize(32, 34))
             it.setData(Qt.UserRole, op.id)
-            if res.estado in COLORES:
-                it.setBackground(QBrush(COLORES[res.estado]))
+            fondo = COLORES.get(res.estado) or colores.get(op.id)       # aviso o error mandan sobre el componente
+            if fondo is not None:
+                it.setBackground(QBrush(fondo))
             estado = {"ok": "OK", "aviso": "Aviso", "error": "Error", "suprimida": "Suprimida",
                       "retrocedida": "Retrocedida (después del marcador)"}[res.estado]
             it.setToolTip(f"<b>{op.nombre}</b><br>{op.ETIQUETA} · {op.id}<br>Estado: {estado}"

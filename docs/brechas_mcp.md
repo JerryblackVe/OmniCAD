@@ -201,7 +201,7 @@ cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pa
 | MCP-84 | `new_document` | Abrir el modelo de ejemplo | `ui/ventana.py:336`, `:2428` | baja |
 | MCP-85 | MCP-13 y MCP-14 (DIBUJO) | Marcas y líneas de centro automáticas de la vista | `ui/dibujo.py:1313`, `:1357` | baja |
 | MCP-86 | MCP-10 (ANIMACIÓN) | **Hecho** (ola 1, `3ae4f74`): publica todos los guiones (`all_storyboards`) con el estilo de render (`rc.renderizar`) | `ui/animacion.py:939-968` | baja |
-| MCP-87 | `export` o `export_mesh` | **Hecho (2026-10-19):** `export_mesh` (`api/herramientas_guardar_malla.py`) cubre el diálogo «Guardar como malla» de Fusion (refinado, STL ASCII, unidad, un archivo por cuerpo) | `ui/ventana.py:2363` | media |
+| MCP-87 | `export` o `export_mesh` | **Hecho (2026-10-19):** `export_mesh` (`api/herramientas_guardar_malla.py`) cubre el diálogo «Guardar como malla» de Fusion (refinado, STL ASCII, unidad, un archivo por cuerpo, `purpose`/`application` para abrir en una utilidad de impresión; el Tipo «Fabricación» de Fusion no se replica: depende del espacio FABRICACIÓN, FU-12/F20) | `ui/ventana.py:2363` | media |
 
 ### Chapa, superficie, malla, ensamble, insertar, aspecto y revisión
 

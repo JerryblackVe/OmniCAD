@@ -15,6 +15,7 @@ se muestra el modelo como estaba en ese punto del timeline.
 Esta capa no hace geometría: arma operaciones con los diálogos y se las pasa al Documento.
 """
 import logging
+import tempfile
 import time
 from collections import Counter
 from pathlib import Path
@@ -211,6 +212,7 @@ class VentanaPrincipal(QMainWindow):
         self.timeline.marcador.connect(lambda n: self._intentar(lambda: self.doc.mover_marcador(n)))
         self.timeline.buscar_navegador.connect(self.buscar_en_navegador)
         self.timeline.animar_union.connect(self.animar_union)
+        self.timeline.color_componente_cambiado.connect(self._guardar_color_componente)
         self._crear_menu_unidades()
 
         self.panel_datos = PanelDatos(self.prefs)
@@ -597,6 +599,7 @@ class VentanaPrincipal(QMainWindow):
         self.area.viewcube.set_tamano(p["general/tamano_viewcube"])
         self.area.reubicar()
         self._info_herramientas(p["general/info_herramientas"])
+        self.timeline.poner_color_componente(p["timeline/color_componente"])
         formato.configurar(p["unidades/precision"], p["unidades/precision_angular"], p["unidades/ocultar_ceros"])
         for v in self.area.visores:
             v.update()
@@ -809,6 +812,9 @@ class VentanaPrincipal(QMainWindow):
         if not self.rect().contains(pos):
             pos = self.rect().center()
         self.caja.abrir("boceto" if self.modo_boceto.activo else "diseno", pos)
+
+    def _guardar_color_componente(self, activo):
+        self.prefs["timeline/color_componente"] = activo
 
     def _pref_unidades(self, clave, valor):
         self.prefs[clave] = valor
@@ -2493,8 +2499,14 @@ class VentanaPrincipal(QMainWindow):
         opciones = caja.opciones()
         formato = opciones["formato"]
         extension = "stl" if formato.startswith("stl_") else formato
-        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar como malla", f"{self.doc.nombre}.{extension}",
-                                             f"{ex.FORMATOS_MALLA[formato]} (*.{extension})")
+        utilidad = caja.aplicacion_elegida() if caja.tipo() == "utilidad" else ""
+        if utilidad:                      # como en Fusion: sin «Guardar como», va a una carpeta temporal y se abre
+            carpeta = Path(tempfile.gettempdir()) / "OmniCAD_impresion"
+            carpeta.mkdir(exist_ok=True)
+            ruta = str(carpeta / f"{self.doc.nombre}.{extension}")
+        else:
+            ruta, _ = QFileDialog.getSaveFileName(self, "Guardar como malla", f"{self.doc.nombre}.{extension}",
+                                                 f"{ex.FORMATOS_MALLA[formato]} (*.{extension})")
         if not ruta:
             return
         if Path(ruta).suffix.lower() != f".{extension}":
@@ -2503,12 +2515,16 @@ class VentanaPrincipal(QMainWindow):
             cuerpos = caja.cuerpos_elegidos()
             rutas = ex.rutas_malla(cuerpos, ruta, formato=formato, estructura=opciones["estructura"])
             existentes = [p for p in rutas if p.exists()]
-            if opciones["estructura"] == "uno_por_cuerpo" and existentes:
+            if opciones["estructura"] == "uno_por_cuerpo" and existentes and not utilidad:
                 if QMessageBox.question(self, "Reemplazar archivos", f"Ya existen {len(existentes)} archivo(s). "
                                         "¿Reemplazarlos?", QMessageBox.Yes | QMessageBox.No,
                                         QMessageBox.No) != QMessageBox.Yes:
                     return
             n = ex.exportar_malla(cuerpos, ruta, **opciones)
+            if utilidad:
+                ex.abrir_en_utilidad(ex.resolver_utilidad(utilidad), rutas)
+                self.mensaje(f"{len(rutas)} archivo(s), {n} triángulos → abiertos en {Path(utilidad).stem}", 6000)
+                return
             self.mensaje(f"Guardados {len(rutas)} archivo(s), {n} triángulos → {ruta}", 6000)
         except (geo.ErrorGeometria, ex.ErrorExportacion, RuntimeError, OSError) as e:
             QMessageBox.critical(self, "No se pudo guardar la malla", str(e))

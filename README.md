@@ -127,7 +127,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 
 - **Más plataformas:** Linux en una PC nativa (hoy probado en WSL2); macOS (hay que adaptar OpenGL 4.1, compilar el módulo Rust para Mac y firmar el instalador); validar el instalador de Windows en una PC limpia.
 - **Impresión 3D:** cortar y dividir con conectores, moldes, canales internos, jarrones y macetas paramétricos, articulaciones, booleanas con holgura, corte por contorno, relieve desde imagen, texturas, color y 3MF multicolor, soportes, disposición en cama, vista en realidad aumentada y video de presentación.
-- **Base para imprimir:** perfil de impresora y material, orientación recomendada, estimación de filamento y tiempo, cajas con tapa, bolsillos para imanes, insertos y rodamientos, agujeros que imprimen sin soportes y pieza de calibración de holguras.
+- **Base para imprimir:** perfil de impresora y material, orientación recomendada, estimación de filamento y tiempo, cajas con tapa, bolsillos para imanes, insertos y rodamientos, y agujeros que imprimen sin soportes.
 - **Engranajes de todo tipo:** una galería con imágenes y explicación corta para crear engranajes cilíndricos, cónicos, sin fin, planetarios, especiales, cremalleras y mecanismos (Ginebra, trinquete, reductores), desde la interfaz, la CLI o un agente de IA.
 - **Idioma:** español e inglés en todo (interfaz, mensajes, herramientas y documentación); primer arranque guiado.
 - **Integración:** Blender en los dos sentidos; conectar más agentes de IA.
