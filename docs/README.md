@@ -39,6 +39,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [agentes/herramientas.md](agentes/herramientas.md) | Lista de herramientas. **Generado**: `omnicad tools --markdown` |
 | [../ejemplos/agentes/README.md](../ejemplos/agentes/README.md) | Ejemplos ejecutables |
 | [../.claude/skills/omnicad/SKILL.md](../.claude/skills/omnicad/SKILL.md) | Skill `omnicad` que instala `omnicad setup` |
+| [../.claude/skills/omnicad-test/SKILL.md](../.claude/skills/omnicad-test/SKILL.md) | Skill `omnicad-test`: probar el programa y anotar lo que falla en `seguimiento/` (Claude Code y OpenCode la leen del repo) |
 
 ## Planes
 

@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 107: Abierto 52 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 109: Abierto 54 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
@@ -46,10 +46,12 @@ Abierto 18 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 1 · Parcial 2.
+Abierto 3 · Parcial 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| H-51 | El test de seguimiento saltea sin avisar una fila con una barra vertical en una celda | Abierto | Baja | `_filas` parte la línea por la barra vertical, aunque esté escapada en un selector: la fila da 8 celdas y se descarta, así que su ID, estado y evidencia quedan sin validar. Partir respetando la barra escapada, o fallar si una fila de tabla no da 7 celdas. | tests/test_seguimiento.py::_filas | 2026-10-21 |
+| H-50 | La pista del chaflán propone como máximo la misma distancia que falló | Abierto | Baja | Caja 20×20×10, `chamfer` de las 4 aristas verticales con `distance=10`: falla (OPERATION_FAILED, bien) y la pista dice «Distancia máxima aproximada: 10 mm». Ese máximo no se alcanza: decir «menor que 10 mm». Con 9,99 da 2003,998 mm³, la cuenta exacta. | omnicad/nucleo/solidos_modificar.py:483 | 2026-10-21 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-49 | Parámetro body frente a bodies entre herramientas | Parcial | Baja | Aceptar `body` como alias de `bodies` o sugerir «¿quisiste decir bodies?» en el error. | api/registro.py:243-252 (el error lista argumentos válidos y firma); api/herramientas_inspeccion.py:207 (solo bodies); sin alias | 2026-10-20 |
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | Falta barrido automático de tipos sin caso válido; solo hay tests sueltos por tipo. | tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py; tests/test_chapa.py (unir plegando); tests/test_fijaciones.py; humo 168 pasos según el log (no corrido acá) | 2026-10-20 |

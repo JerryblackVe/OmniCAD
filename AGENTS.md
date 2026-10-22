@@ -62,7 +62,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `clon/tests/` | pytest (un `test_*.py` por área) |
 | `docs/` | Índice de todo en `docs/README.md`. Estado (bugs, faltantes, mejoras) en `docs/seguimiento/`; especificación de faltantes en `brechas_*.md`; planes `plan_*.md`; `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
-| `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`) |
+| `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`). Al lado, `omnicad-test/`: probar el programa y anotar los hallazgos (no la instala `setup`) |
 | `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno) |
 | `PROJECT_LOG.md` | Bitácora (Registro) y "Lecciones aprendidas" |
 
