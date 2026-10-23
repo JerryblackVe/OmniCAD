@@ -811,11 +811,39 @@ def esta_vacia(forma):
 def se_tocan(a, b, tolerancia=1e-6):
     """True si las formas se tocan o se superponen, también cuando una queda entera dentro de un sólido de la otra.
     BRepExtrema_DistShapeShape solo mira «adentro» cuando la forma es un SOLID: con un COMPOUND (lo que devuelve toda
-    booleana) mide entre los bordes, y una cavidad interna daba «no se tocan» (el corte automático la salteaba)."""
-    d = BRepExtrema_DistShapeShape(a, b)
-    if d.IsDone() and d.Value() <= tolerancia:
+    booleana) mide entre los bordes, y una cavidad interna daba «no se tocan» (el corte automático la salteaba).
+    La distancia exacta entre formas enteras cuesta 2–7 s por par en piezas de 20–230 caras, así que se mide cara con
+    cara, solo entre las que se solapan por caja envolvente, y se corta al primer contacto."""
+    ba, bb = _caja_occ(a, tolerancia), _caja_occ(b, tolerancia)
+    if ba is not None and bb is not None and ba.IsOut(bb):
+        return False
+    if _adentro(a, b, tolerancia) or _adentro(b, a, tolerancia):     # ~4 ms; resuelve superposición y contención
         return True
-    return _adentro(a, b, tolerancia) or _adentro(b, a, tolerancia)
+    caras_a, caras_b = caras(a), caras(b)
+    if ba is None or bb is None or not caras_a or not caras_b:       # un vértice o aristas sueltas: forma entera
+        d = BRepExtrema_DistShapeShape(a, b)
+        return d.IsDone() and d.Value() <= tolerancia
+    cercanas_b = [(f, x) for f in caras_b if (x := _caja_occ(f, tolerancia)) is not None and not x.IsOut(ba)]
+    for fa in caras_a:
+        xa = _caja_occ(fa, tolerancia)
+        if xa is None or xa.IsOut(bb):
+            continue
+        for fb, xb in cercanas_b:
+            if not xa.IsOut(xb):
+                d = BRepExtrema_DistShapeShape(fa, fb)
+                if d.IsDone() and d.Value() <= tolerancia:
+                    return True
+    return False
+
+
+def _caja_occ(forma, holgura):
+    """Bnd_Box de OCC de `forma` agrandada en `holgura` (con la tolerancia de la forma), o None si no tiene geometría."""
+    b = Bnd_Box()
+    BRepBndLib.AddOptimal_s(forma, b, False, True)
+    if b.IsVoid():
+        return None
+    b.Enlarge(holgura)
+    return b
 
 
 def _adentro(a, b, tolerancia):

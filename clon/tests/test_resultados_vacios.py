@@ -3,6 +3,7 @@
 de las pruebas de uso). Ahora fallan con un error claro y el documento queda intacto, o avisan."""
 import json
 import math
+import time
 
 import pytest
 
@@ -304,6 +305,28 @@ def test_se_tocan_ve_lo_que_queda_adentro_de_un_compound():
     assert not geo.se_tocan(mellada, geo.esfera(5, (100, 0, 0)))
     hueca = geo.booleano(caja, geo.caja(30, 30, 30, (5, 5, 5)), "cortar")      # la cavidad es aire: no toca
     assert not geo.se_tocan(hueca, geo.esfera(3, (20, 20, 20))) and geo.se_tocan(hueca, geo.esfera(1, (2, 20, 20)))
+
+
+def test_se_tocan_descarta_por_cajas_sin_medir_la_distancia_exacta():
+    """B-39b: la distancia exacta de OpenCascade tardaba 2–7 s por par en piezas con caras B-spline aunque estuvieran
+    lejos; con las cajas envolventes separadas ya no se mide (medido: 1,7 s antes, 0,08 s ahora)."""
+    pieza = geo.toroide(20, 6)
+    for i in range(24):
+        a = 2 * math.pi * i / 24
+        pieza = geo.booleano(pieza, geo.cilindro(1.5, 30, (20 * math.cos(a), 20 * math.sin(a), -15)), "cortar")
+    pieza = geo.BRepBuilderAPI_NurbsConvert(pieza, True).Shape()
+    lejos = geo.BRepBuilderAPI_NurbsConvert(geo.trasladar(pieza, (60, 0, 0)), True).Shape()
+    t = time.perf_counter()
+    assert not geo.se_tocan(pieza, lejos)
+    assert time.perf_counter() - t < 0.5
+    # Cajas que se solapan pero formas separadas, contacto exacto y tolerancia: se siguen midiendo bien.
+    caja = geo.caja(10, 10, 10)
+    assert geo.se_tocan(caja, geo.caja(10, 10, 10, (10, 0, 0)))              # caras en contacto
+    assert not geo.se_tocan(caja, geo.caja(10, 10, 10, (10.1, 0, 0)))
+    assert geo.se_tocan(caja, geo.caja(10, 10, 10, (10.1, 0, 0)), 0.2)
+    anillo = geo.booleano(geo.caja(40, 40, 10), geo.caja(30, 30, 12, (5, 5, -1)), "cortar")   # cajas solapadas, aire en medio
+    assert not geo.se_tocan(anillo, geo.caja(10, 10, 10, (15, 15, 0)))
+    assert geo.se_tocan(anillo, geo.caja(10, 10, 10, (0, 15, 0)))
 
 
 def test_cortar_una_cavidad_interna_no_avisa(s):

@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 109: Abierto 54 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 110: Abierto 55 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
@@ -46,10 +46,11 @@ Abierto 18 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 3 · Parcial 2.
+Abierto 4 · Parcial 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| H-52 | `extrude` con `profile="all"` ignora en silencio las curvas del boceto que no cierran región | Abierto | Baja | Si hay AL MENOS una región cerrada, el corte sale `ok` y solo se hacen esas: la respuesta trae `profiles_used` pero no dice cuántas curvas quedaron afuera ni cuáles. En un boceto con 7 perfiles, 3 de ellos abiertos por un error propio, el corte salió `ok` y la pieza quedó con 4 huecos de 7, sin aviso. Avisar el número de curvas ignoradas (y sus ids) cuando el boceto tenga curvas que no forman perfil. | omnicad/api/herramientas_solido.py:253 (devuelve `profiles_used`, sin aviso de lo que quedó afuera); omnicad/api/herramientas_boceto.py:190-199 (solo avisa cuando NO hay ninguna región) | 2026-10-21 |
 | H-51 | El test de seguimiento saltea sin avisar una fila con una barra vertical en una celda | Abierto | Baja | `_filas` parte la línea por la barra vertical, aunque esté escapada en un selector: la fila da 8 celdas y se descarta, así que su ID, estado y evidencia quedan sin validar. Partir respetando la barra escapada, o fallar si una fila de tabla no da 7 celdas. | tests/test_seguimiento.py::_filas | 2026-10-21 |
 | H-50 | La pista del chaflán propone como máximo la misma distancia que falló | Abierto | Baja | Caja 20×20×10, `chamfer` de las 4 aristas verticales con `distance=10`: falla (OPERATION_FAILED, bien) y la pista dice «Distancia máxima aproximada: 10 mm». Ese máximo no se alcanza: decir «menor que 10 mm». Con 9,99 da 2003,998 mm³, la cuenta exacta. | omnicad/nucleo/solidos_modificar.py:483 | 2026-10-21 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
