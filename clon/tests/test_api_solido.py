@@ -51,6 +51,7 @@ def test_herramientas_del_grupo_solido():
         "insert_fastener", "insert_canvas", "create_base_feature", "split_face", "split_body", "silhouette_split",
         "replace_face", "remove_bodies", "delete_faces",                                      # herramientas_solido_extra / dividir
         "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft",  # engranajes
+        "create_clearance_test",                                                              # herramientas_calibracion
         "create_coil", "create_pipe", "create_rib", "create_web", "create_emboss", "create_boss", "create_lip_groove",
         "create_boundary_fill", "create_bounding_solid", "thicken", "align_bodies", "scale_body",
         "create_surface_extrude", "create_surface_revolve", "create_surface_sweep", "create_surface_loft",
