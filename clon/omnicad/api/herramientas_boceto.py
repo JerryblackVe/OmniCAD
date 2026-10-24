@@ -30,6 +30,7 @@ from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Ci
                                     centro_arco_tangente, circunferencia_3_puntos, evaluar_primitiva,
                                     mas_cercano, validar_valor_cota)
 from ..restricciones.solver import restricciones_en_conflicto
+from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
@@ -836,6 +837,13 @@ def info_boceto(sesion, op):
                             **_ubicacion_cota(k)}
                            for k in b.cotas.values()],
             "profiles": info_perfiles(br) if br is not None else []}
+    if b.proyecciones:
+        info["projections"] = [{"id": r["id"], "mode": r["modo"], "lost": r["id"] in op.perdidas, "entities": r["ids"]}
+                               for r in b.proyecciones]
+    if b.patrones:
+        info["patterns"] = [{"id": r["id"], "type": "rectangular" if r["tipo"] == "rectangular" else "circular",
+                             "entities": r["ids"], "suppressed": r["suprimidos"],
+                             "instances": {n: ids for n, ids in r["copias"].items()}} for r in b.patrones]
     return info
 
 
@@ -911,11 +919,13 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
              "la mueve o la gira, el boceto la sigue; si la cara desaparece, el paso da error. Con varios cuerpos, body dice en cuál se evalúa "
              "el selector de la cara.",
              modifica=True)
-def create_sketch(sesion, plane: str = "XY", name: str | None = None, body: str | None = None):
+def create_sketch(sesion, plane: str = "XY", name: str | None = None, body: str | None = None,
+                  project_edges: bool = False):
     """
     plane: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
     name: nombre del boceto; vacío = "Boceto1", "Boceto2"…
     body: id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
+    project_edges: true (solo sobre una cara) proyecta sus aristas de forma asociativa, como Fusion al crear el boceto; false la deja vacía.
     """
     doc = sesion.doc
     ref, marco, cara, ref_cara = plano_o_cara(sesion, plane, body)
@@ -927,7 +937,22 @@ def create_sketch(sesion, plane: str = "XY", name: str | None = None, body: str 
             "profiles": 0}
     if cara:
         info["face"] = cara
+    if project_edges:
+        info.update(_proyectar_aristas_de_cara(sesion, op, ref_cara))
     return info
+
+
+def _proyectar_aristas_de_cara(sesion, op, ref_cara):
+    """Proyecta de forma asociativa el contorno de la cara sobre la que está el boceto `op` (Fusion lo hace al crear
+    el boceto). Devuelve lo que cambió en el informe: perfiles y cantidad de entidades proyectadas; con un plano, nada."""
+    if ref_cara is None:
+        sesion.avisar("project_edges solo vale sobre una cara plana: el boceto quedó vacío.")
+        return {}
+    br = boceto_resuelto(sesion, op)
+    prims, puntos = ent.proyectar_entidad(ent.resolver(ref_cara, sesion.doc.estado_final), br.plano)
+    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(
+        prims, puntos, origen={"modo": "project", "refs": [ref_cara]}), desde_solver=True)
+    return {"profiles": r["profiles"], "projected": len(r["entities"])}
 
 
 @herramienta("draw_line", "boceto", "Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el "
@@ -1590,7 +1615,7 @@ def _citar(token, alias, b, que):
              "Sin entities crea un boceto vacío y devuelve un aviso. reference=true mide sin restringir.", modifica=True)
 def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = None,
                      constraints: list[dict] | None = None, dimensions: list[dict] | None = None,
-                     name: str | None = None, body: str | None = None):
+                     name: str | None = None, body: str | None = None, project_edges: bool = False):
     """
     plane: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
     entities: geometría del boceto (ver la descripción de la herramienta).
@@ -1598,6 +1623,7 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
     dimensions: cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión, "reference": false}; reference=true mide sin restringir y permite omitir value.
     name: nombre del boceto; vacío = "Boceto1", "Boceto2"…
     body: id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
+    project_edges: true (solo sobre una cara) proyecta además el contorno de la cara de forma asociativa; false no proyecta nada.
     """
     ref, marco, cara, ref_cara = plano_o_cara(sesion, plane, body)
     doc = sesion.doc
@@ -1666,6 +1692,9 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             "status": estado}
     if cara:
         info["face"] = cara
+    if project_edges:
+        info.update(_proyectar_aristas_de_cara(sesion, op, ref_cara))
+        info["entities"] += info.get("projected", 0)
     return info
 
 
@@ -1952,37 +1981,97 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
              "un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena "
              "cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la "
              "izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un "
-             "punto. Para letras, splines o cualquier contorno (sin parámetros) está offset_profiles.", modifica=True)
+             "punto. direction=two desfasa distance a un lado y distance2 al otro; direction=symmetric, distance a "
+             "los dos lados. Una spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para "
+             "soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): "
+             "offset_profiles.", modifica=True)
 def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | None = None,
-                         side_y: float | None = None, sketch: str | None = None):
+                         side_y: float | None = None, sketch: str | None = None,
+                         direction: Literal["one", "two", "symmetric"] = "one", distance2: Expr | None = None):
     """
-    entity: id de una curva de la cadena (línea o arco) o de un círculo.
+    entity: id de una curva de la cadena (línea o arco), de un círculo, elipse o spline.
     distance: separación en mm, número o expresión con parámetros; negativa = al lado contrario.
     side_x: x de un punto del lado donde va el desfase; vacío = el lado por defecto.
     side_y: y de ese punto.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    direction: one (un lado), two (distance a un lado y distance2 al contrario) o symmetric (distance a los dos lados).
+    distance2: separación del segundo lado con direction=two (obligatoria en ese caso).
     """
     _exigir_finitos(locals())
     if (side_x is None) != (side_y is None):
         raise error("INVALID_ARGUMENTS", "Pasá side_x y side_y juntos, o ninguno de los dos.")
-    expresion, valor = _valor_expr(sesion, distance)
-    if valor < 0:
-        if not isinstance(distance, str):
-            expresion = repr(abs(valor))
-        else:                       # «-4 mm» → «4 mm» si lo que sigue al menos vale lo mismo; si no, «-(…)»
-            resto = expresion.lstrip()[1:].strip() if expresion.lstrip().startswith("-") else None
-            try:
-                simple = resto is not None and abs(_valor_expr(sesion, resto)[1] - abs(valor)) < 1e-9
-            except ErrorExpresion:
-                simple = False
-            expresion = resto if simple else f"-({expresion})"
-    _cota_valida("desfase", abs(valor), "distance")
+    if direction == "two" and distance2 is None:
+        raise error("INVALID_ARGUMENTS", "direction=two necesita distance2 (la separación del segundo lado).")
     lado = None if side_x is None else (float(side_x), float(side_y))
 
+    def par(d):
+        """(expresión positiva, valor positivo, ¿al lado contrario?) de una distancia con signo."""
+        expresion, valor = _valor_expr(sesion, d)
+        if valor < 0:
+            if not isinstance(d, str):
+                expresion = repr(abs(valor))
+            else:                   # «-4 mm» → «4 mm» si lo que sigue al menos vale lo mismo; si no, «-(…)»
+                resto = expresion.lstrip()[1:].strip() if expresion.lstrip().startswith("-") else None
+                try:
+                    simple = resto is not None and abs(_valor_expr(sesion, resto)[1] - abs(valor)) < 1e-9
+                except ErrorExpresion:
+                    simple = False
+                expresion = resto if simple else f"-({expresion})"
+        _cota_valida("desfase", abs(valor), "distance")
+        return expresion, abs(valor), valor < 0
+    primero = par(distance)
+    segundo = None
+    if direction != "one":
+        e2, v2, inv2 = par(distance2 if direction == "two" else distance)
+        segundo = (e2, v2, (not primero[2]) != inv2 if direction == "two" else not primero[2])
+
     def desfasar(b):
-        _curva(b, entity, ("linea", "arco", "circulo"))
-        b.desfase(entity, abs(valor), lado, expresion, invertir=valor < 0)
+        _curva(b, entity, ("linea", "arco", "circulo", "elipse", "arco_elipse", "spline"))
+        for expresion, valor, invertir in filter(None, (primero, segundo)):
+            b.desfase(entity, valor, lado, expresion, invertir=invertir)
     return _dibujar(sesion, sketch, desfasar, desde_solver=True)
+
+
+@herramienta("release_offset", "boceto",
+             "Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): la copia deja de seguir a la "
+             "original, pero las curvas quedan. Con keep_dimension=true se conserva la cota del desfase.",
+             modifica=True)
+def release_offset(sesion, entity: int, keep_dimension: bool = False, sketch: str | None = None):
+    """
+    entity: id de la curva original o de su copia desfasada (get_sketch).
+    keep_dimension: true = deja la cota de desfase; false = la borra junto con la asociación.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    def soltar(b):
+        _curva(b, entity)
+        b.soltar_desfase(entity, keep_dimension)
+    return _dibujar(sesion, sketch, soltar, desde_solver=True)
+
+
+@herramienta("copy_sketch_entities", "boceto",
+             "Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de "
+             "source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las "
+             "restricciones y cotas que quedan enteras dentro de la selección. Lo pegado es geometría normal y "
+             "nueva: no queda asociada al original. Para copiar dentro del mismo boceto con vínculo: transform_sketch "
+             "con copy.", modifica=True)
+def copy_sketch_entities(sesion, entities: list[int], source_sketch: str, sketch: str | None = None,
+                         dx: float = 0.0, dy: float = 0.0):
+    """
+    entities: ids de las curvas o puntos de source_sketch a copiar (get_sketch).
+    source_sketch: id o nombre del boceto de origen.
+    sketch: id o nombre del boceto de destino; vacío = el último boceto del timeline.
+    dx: corrimiento en x del pegado, en mm; 0 = en el mismo lugar.
+    dy: corrimiento en y del pegado, en mm.
+    """
+    _exigir_finitos(locals())
+    origen = op_boceto(sesion, source_sketch)
+    fuente = origen.copia().boceto
+    _sincronizar_con_solver(sesion, origen, fuente)
+    _exigir_seleccion(fuente, entities)
+
+    def pegar(b):
+        b.pegar_de(fuente, list(entities), dx, dy)
+    return _dibujar(sesion, sketch, pegar, desde_solver=True)
 
 
 # ---------------------------------------------------------------- crear: simetría y patrones
@@ -2036,29 +2125,12 @@ def _exigir_tamano_patron(b, entities, copias, sin=()):
                     "circular_pattern) o la operación.")
 
 
-@herramienta("sketch_rectangular_pattern", "boceto",
-             "Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una "
-             "o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo "
-             "siguen). La dirección 1 sale del ángulo angle y la 2 es perpendicular (+90°). Con spacing=extent la "
-             "distancia es la total (de la primera a la última copia); con spacing la de cada paso. Tope: 200 puntos "
-             "copiados (copias × puntos de la selección; un rectángulo tiene 4), para que el boceto no se vuelva lento.",
-             modifica=True)
-def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distance1: float, count2: int = 1,
-                               distance2: float = 0.0, angle: float = 0.0,
-                               spacing: Literal["extent", "spacing"] = "extent", symmetric: bool = False,
-                               sketch: str | None = None):
-    """
-    entities: ids de las curvas o puntos a repetir (get_sketch).
-    count1: cantidad en la dirección 1, contando el original.
-    distance1: distancia en la dirección 1 (mm; total o por paso según spacing; negativa = sentido contrario).
-    count2: cantidad en la dirección 2 (1 = una sola fila).
-    distance2: distancia en la dirección 2 (mm).
-    angle: dirección 1 en grados respecto del eje x del boceto; la dirección 2 queda a +90°.
-    spacing: extent (distancia total) o spacing (distancia entre copias).
-    symmetric: true para repartir las copias a los dos lados del original.
-    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
-    """
-    _exigir_finitos(locals())
+def _exigir_supresion(suppress):
+    if suppress is not None and any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in suppress):
+        raise error("INVALID_ARGUMENTS", "suppress lleva índices de copia enteros desde 0 (get_sketch › patterns).")
+
+
+def _exigir_rectangular(count1, count2):
     _exigir_cantidad(count1, "count1")
     _exigir_cantidad(count2, "count2")
     if count1 * count2 < 2:
@@ -2066,37 +2138,9 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
     if count1 * count2 - 1 > MAX_COPIAS_PATRON:
         raise error("INVALID_ARGUMENTS", f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió "
                     f"{count1 * count2 - 1}): para más, usá un patrón de cuerpos (rectangular_pattern).")
-    a = math.radians(angle)
-    d1, d2 = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
-    modo = "extension" if spacing == "extent" else "espaciado"
-
-    def repetir(b):
-        _exigir_seleccion(b, entities)
-        _exigir_tamano_patron(b, entities, count1 * count2 - 1)
-        b.patron_rectangular(list(entities), count1, distance1, count2, distance2, d1, d2, modo, symmetric)
-    return _dibujar(sesion, sketch, repetir, desde_solver=True)
 
 
-@herramienta("sketch_circular_pattern", "boceto",
-             "Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de "
-             "un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la "
-             "vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. Tope: 200 puntos copiados "
-             "(copias × puntos de la selección; un círculo tiene 1).",
-             modifica=True)
-def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: float = 0.0, center_y: float = 0.0,
-                            center_point: int | None = None, total_angle: float = 360.0, symmetric: bool = False,
-                            sketch: str | None = None):
-    """
-    entities: ids de las curvas o puntos a repetir (get_sketch).
-    count: cantidad total, contando el original (2 o más).
-    center_x: x del centro (mm), si no se da center_point.
-    center_y: y del centro (mm).
-    center_point: id de un punto del boceto que hace de centro (las copias lo siguen); pisa center_x/center_y.
-    total_angle: ángulo total en grados (360 = vuelta entera; negativo = sentido horario).
-    symmetric: true para repartir las copias a los dos lados del original (si total_angle no es 360).
-    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
-    """
-    _exigir_finitos(locals())
+def _exigir_circular(count, total_angle):
     _exigir_cantidad(count, "count")
     if count < 2:
         raise error("INVALID_ARGUMENTS", "El patrón circular necesita al menos 2 ejemplares (count ≥ 2).")
@@ -2106,29 +2150,246 @@ def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: f
     if not 0 < abs(total_angle) <= 360:
         raise error("INVALID_ARGUMENTS", "total_angle va de -360 a 360 grados, distinto de cero.")
 
+
+def _informar_patron(r, b):
+    """Agrega al informe de edición el patrón recién hecho o editado: su id y las copias por índice."""
+    registro = next(x for x in b.patrones if x["id"] == b.ultimo_patron)
+    r["pattern"] = registro["id"]
+    r["instances"] = {n: ids for n, ids in registro["copias"].items()}
+    return r
+
+
+@herramienta("sketch_rectangular_pattern", "boceto",
+             "Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una "
+             "o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo "
+             "siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por "
+             "defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la "
+             "primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › "
+             "patterns); después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la "
+             "selección; un rectángulo tiene 4), para que el boceto no se vuelva lento.",
+             modifica=True)
+def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distance1: float, count2: int = 1,
+                               distance2: float = 0.0, angle: float = 0.0,
+                               spacing: Literal["extent", "spacing"] = "extent", symmetric: bool = False,
+                               sketch: str | None = None, angle2: float | None = None,
+                               direction1_line: int | None = None, direction2_line: int | None = None,
+                               suppress: list[int] | None = None):
+    """
+    entities: ids de las curvas o puntos a repetir (get_sketch).
+    count1: cantidad en la dirección 1, contando el original.
+    distance1: distancia en la dirección 1 (mm; total o por paso según spacing; negativa = sentido contrario).
+    count2: cantidad en la dirección 2 (1 = una sola fila).
+    distance2: distancia en la dirección 2 (mm).
+    angle: dirección 1 en grados respecto del eje x del boceto.
+    spacing: extent (distancia total) o spacing (distancia entre copias).
+    symmetric: true para repartir las copias a los dos lados del original.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    angle2: dirección 2 en grados respecto del eje x; vacío = angle + 90°.
+    direction1_line: id de una línea del boceto que da la dirección 1 (de su inicio a su fin); pisa a angle.
+    direction2_line: id de una línea del boceto que da la dirección 2; pisa a angle2.
+    suppress: índices de las copias que no se crean (get_sketch › patterns las lista).
+    """
+    _exigir_finitos(locals())
+    _exigir_rectangular(count1, count2)
+    _exigir_supresion(suppress)
+    a = math.radians(angle)
+    a2 = a + math.pi / 2 if angle2 is None else math.radians(angle2)
+    d1, d2 = (math.cos(a), math.sin(a)), (math.cos(a2), math.sin(a2))
+    modo = "extension" if spacing == "extent" else "espaciado"
+    hecho = {}
+
+    def repetir(b):
+        _exigir_seleccion(b, entities)
+        for linea in (direction1_line, direction2_line):
+            if linea is not None:
+                _curva(b, linea, ("linea",), "la dirección")
+        _exigir_tamano_patron(b, entities, count1 * count2 - 1)
+        b.patron_rectangular(list(entities), count1, distance1, count2, distance2, d1, d2, modo, symmetric,
+                             direction1_line, direction2_line, suppress or ())
+        hecho["b"] = b
+    r = _dibujar(sesion, sketch, repetir, desde_solver=True)
+    return _informar_patron(r, hecho["b"])
+
+
+@herramienta("sketch_circular_pattern", "boceto",
+             "Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de "
+             "un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la "
+             "vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por "
+             "índice; después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la "
+             "selección; un círculo tiene 1).",
+             modifica=True)
+def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: float = 0.0, center_y: float = 0.0,
+                            center_point: int | None = None, total_angle: float = 360.0, symmetric: bool = False,
+                            sketch: str | None = None, suppress: list[int] | None = None):
+    """
+    entities: ids de las curvas o puntos a repetir (get_sketch).
+    count: cantidad total, contando el original (2 o más).
+    center_x: x del centro (mm), si no se da center_point.
+    center_y: y del centro (mm).
+    center_point: id de un punto del boceto que hace de centro (las copias lo siguen); pisa center_x/center_y.
+    total_angle: ángulo total en grados (360 = vuelta entera; negativo = sentido horario).
+    symmetric: true para repartir las copias a los dos lados del original (si total_angle no es 360).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    suppress: índices de las copias que no se crean (get_sketch › patterns las lista).
+    """
+    _exigir_finitos(locals())
+    _exigir_circular(count, total_angle)
+    _exigir_supresion(suppress)
+    hecho = {}
+
     def repetir(b):
         _exigir_seleccion(b, entities)
         if center_point is not None and center_point not in b.puntos:
             raise error("ENTITY_NOT_FOUND", f"center_point {center_point} no es un punto del boceto.")
         centro = center_point if center_point is not None else (float(center_x), float(center_y))
         _exigir_tamano_patron(b, entities, count - 1, sin=(center_point,))
-        b.patron_circular(list(entities), centro, count, total_angle, symmetric)
-    return _dibujar(sesion, sketch, repetir, desde_solver=True)
+        b.patron_circular(list(entities), centro, count, total_angle, symmetric, suppress or ())
+        hecho["b"] = b
+    r = _dibujar(sesion, sketch, repetir, desde_solver=True)
+    return _informar_patron(r, hecho["b"])
+
+
+@herramienta("edit_sketch_pattern", "boceto",
+             "Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón): cantidades, distancias, "
+             "direcciones, simetría y copias suprimidas. Borra las copias y las regenera, así que las cotas puestas "
+             "sobre las copias se pierden. pattern es el id que devolvió la herramienta que lo creó (o get_sketch › "
+             "patterns). Los parámetros count1, distance1, count2, distance2, angle, angle2, spacing, "
+             "direction1_line y direction2_line son de un patrón rectangular; count y total_angle, de uno circular. "
+             "suppress reemplaza la lista de copias suprimidas ([] = ninguna).", modifica=True)
+def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distance1: float | None = None,
+                        count2: int | None = None, distance2: float | None = None, angle: float | None = None,
+                        angle2: float | None = None, spacing: Literal["extent", "spacing"] | None = None,
+                        symmetric: bool | None = None, direction1_line: int | None = None,
+                        direction2_line: int | None = None, count: int | None = None,
+                        total_angle: float | None = None, suppress: list[int] | None = None,
+                        sketch: str | None = None):
+    """
+    pattern: id del patrón (lo devuelve la herramienta que lo creó; get_sketch › patterns lo lista).
+    count1: cantidad en la dirección 1 (rectangular).
+    distance1: distancia en la dirección 1 (rectangular).
+    count2: cantidad en la dirección 2 (rectangular).
+    distance2: distancia en la dirección 2 (rectangular).
+    angle: dirección 1 en grados (rectangular); si no se da angle2, la dirección 2 pasa a angle + 90°.
+    angle2: dirección 2 en grados (rectangular).
+    spacing: extent o spacing (rectangular).
+    symmetric: repartir las copias a los dos lados del original.
+    direction1_line: id de una línea que da la dirección 1 (rectangular).
+    direction2_line: id de una línea que da la dirección 2 (rectangular).
+    count: cantidad total, contando el original (circular).
+    total_angle: ángulo total en grados (circular).
+    suppress: índices de copias suprimidas; reemplaza la lista actual ([] = ninguna).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    _exigir_supresion(suppress)
+    hecho = {}
+
+    def editar(b):
+        registro = next((r for r in b.patrones if r["id"] == pattern), None)
+        if registro is None:
+            hay = ", ".join(str(r["id"]) for r in b.patrones) or "ninguno"
+            raise error("ENTITY_NOT_FOUND", f"El boceto no tiene el patrón {pattern!r} (patrones: {hay}).")
+        cambios = {}
+        p = registro["params"]
+        if registro["tipo"] == "rectangular":
+            if any(v is not None for v in (count, total_angle)):
+                raise error("INVALID_ARGUMENTS", "count y total_angle son de un patrón circular: usá count1 y count2.")
+            n1, n2 = count1 or p["cantidad1"], count2 or p["cantidad2"]
+            _exigir_rectangular(n1, n2)
+            for linea in (direction1_line, direction2_line):
+                if linea is not None:
+                    _curva(b, linea, ("linea",), "la dirección")
+            cambios = {"cantidad1": n1, "cantidad2": n2}
+            if distance1 is not None:
+                cambios["distancia1"] = distance1
+            if distance2 is not None:
+                cambios["distancia2"] = distance2
+            if spacing is not None:
+                cambios["modo"] = "extension" if spacing == "extent" else "espaciado"
+            if symmetric is not None:
+                cambios["simetrico"] = symmetric
+            if angle is not None:
+                a = math.radians(angle)
+                cambios.update(dir1=[math.cos(a), math.sin(a)], linea1=None)
+                if angle2 is None and direction2_line is None:
+                    cambios.update(dir2=[-math.sin(a), math.cos(a)], linea2=None)
+            if angle2 is not None:
+                a2 = math.radians(angle2)
+                cambios.update(dir2=[math.cos(a2), math.sin(a2)], linea2=None)
+            if direction1_line is not None:
+                cambios["linea1"] = direction1_line
+            if direction2_line is not None:
+                cambios["linea2"] = direction2_line
+            _exigir_tamano_patron(b, registro["ids"], n1 * n2 - 1)
+        else:
+            if any(v is not None for v in (count1, distance1, count2, distance2, angle, angle2, spacing,
+                                           direction1_line, direction2_line)):
+                raise error("INVALID_ARGUMENTS", "Ese parámetro es de un patrón rectangular: acá van count y total_angle.")
+            n, total = count or p["cantidad"], p["angulo_total"] if total_angle is None else total_angle
+            _exigir_circular(n, total)
+            cambios = {"cantidad": n, "angulo_total": total}
+            if symmetric is not None:
+                cambios["simetrico"] = symmetric
+            _exigir_tamano_patron(b, registro["ids"], n - 1, sin=(p["centro"],) if isinstance(p["centro"], int) else ())
+        if suppress is not None:
+            cambios["suprimidos"] = suppress
+        b.editar_patron(pattern, **cambios)
+        hecho["b"] = b
+    r = _dibujar(sesion, sketch, editar, desde_solver=True)
+    return _informar_patron(r, hecho["b"])
 
 
 # ---------------------------------------------------------------- proyectar, tipo de línea, cotas y AutoConstrain
+_REFERENCIAS_PROYECTABLES = {"plano", "eje", "punto", "curva_boceto", "punto_boceto"}
+
+
+def _proyectar_seleccion(sesion, plano, mode, edges, faces, bodies, vertices, references, body, giro=None):
+    """(primitivas, puntos, referencias) de lo elegido proyectado (o intersecado) sobre `plano`: aristas, caras,
+    cuerpos y vértices del modelo, y `references` (planos, ejes y puntos de trabajo, curvas y puntos de otro boceto)."""
+    from .herramientas_construccion import _referencia
+    elegidos = sl.elegir(sesion, edges, "arista", body, permitir_vacio=True)
+    elegidos += sl.elegir(sesion, faces, "cara", body, permitir_vacio=True)
+    entidades = [ent.Entidad("forma", forma=e.sub) for _c, e in elegidos]
+    refs = [sl.referencia(c, e) for c, e in elegidos]
+    for punto in vertices or []:
+        if not sl.es_punto3(punto):
+            raise error("INVALID_ARGUMENTS", f"Cada vértice va como [x, y, z] con números finitos: llegó {punto!r}.")
+        _c, ref, v = sl.vertice_cercano(sesion, punto, body)
+        entidades.append(ent.Entidad("vertice", forma=v))
+        refs.append(ref)
+    for ref in bodies or []:
+        c = sesion.cuerpo(ref)
+        if getattr(c, "tipo", "solido") == "malla":
+            raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(c)}» es una malla: no se proyecta.")
+        entidades.append(ent.Entidad("cuerpo", forma=c.forma, cuerpo=c.id))
+        refs.append({"tipo": "cuerpo", "cuerpo": c.id})
+    for valor in references or []:
+        ref = _referencia(sesion, valor, _REFERENCIAS_PROYECTABLES, body)
+        entidades.append(ent.resolver(ref, sesion.doc.estado_final))
+        refs.append(ref)
+    prims, puntos = [], []
+    for e in entidades:
+        p, q = ent.proyectar_entidad(e, plano, mode, giro)
+        prims += p
+        puntos += q
+    return prims, puntos, refs
+
+
 @herramienta("project_to_sketch", "boceto",
-             "Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde "
-             "cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en "
-             "la interfaz), sirve para restricciones, cotas y perfiles, y sigue al modelo si después cambia. "
-             "Las proyecciones de proyectos viejos siguen congeladas. "
+             "Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, "
+             "sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; "
+             "Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para "
+             "restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con "
+             "link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: "
+             "break_projection_link. Un eje o la traza de un plano se dibujan como línea de ±100 mm. "
              "edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; "
              "vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).",
              modifica=True)
 def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[str] | str | None = None,
                       bodies: list[str] | None = None, mode: Literal["project", "intersect"] = "project",
                       body: str | None = None, sketch: str | None = None, construction: bool = False,
-                      vertices: list[list[float]] | None = None):
+                      vertices: list[list[float]] | None = None, link: bool = True,
+                      references: list[str | dict] | None = None):
     """
     edges: aristas a proyectar: selector ('|Z', '%CIRCLE and >Z') o ids ('Cuerpo1/E3'); vacío = ninguna.
     faces: caras a proyectar (su contorno): selector o ids ('Cuerpo1/F6'); vacío = ninguna.
@@ -2138,40 +2399,139 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true = la geometría proyectada queda como línea de construcción (no forma perfiles).
     vertices: vértices del modelo por sus coordenadas [[x, y, z], …] (a menos de 0,001 mm de un vértice; con body, solo los de ese cuerpo): se proyectan (o intersecan) como puntos del boceto.
+    link: true = asociativa (sigue al modelo); false = congelada, sin vínculo.
+    references: planos ("XY", id o nombre), ejes ("X", id o nombre), puntos de trabajo ("O", id o nombre), y curvas o puntos de otro boceto ({"sketch": "Boceto1", "curve": 3} o {"sketch": …, "point": 2}).
     """
-    from ..nucleo.perfiles import intersecar_forma, proyectar_forma
     op, br = boceto_activo(sesion, sketch, derivados=False)
-    elegidos = sl.elegir(sesion, edges, "arista", body, permitir_vacio=True)
-    elegidos += sl.elegir(sesion, faces, "cara", body, permitir_vacio=True)
-    formas = [e.sub for _c, e in elegidos]
-    refs = [sl.referencia(c, e) for c, e in elegidos]
-    for punto in vertices or []:
-        if not sl.es_punto3(punto):
-            raise error("INVALID_ARGUMENTS", f"Cada vértice va como [x, y, z] con números finitos: llegó {punto!r}.")
-        _c, ref, v = sl.vertice_cercano(sesion, punto, body)
-        formas.append(v)
-        refs.append(ref)
-    for ref in bodies or []:
-        c = sesion.cuerpo(ref)
-        if getattr(c, "tipo", "solido") == "malla":
-            raise error("UNSUPPORTED_BODY_TYPE", f"«{sesion.nombre_cuerpo(c)}» es una malla: no se proyecta.")
-        formas.append(c.forma)
-        refs.append({"tipo": "cuerpo", "cuerpo": c.id})
-    if not formas:
-        raise error("INVALID_ARGUMENTS", "Elegí qué proyectar: edges, faces, vertices o bodies.")
-    funcion = intersecar_forma if mode == "intersect" else proyectar_forma
-    prims, puntos = [], []
-    for f in formas:
-        p, q = funcion(f, br.plano)
-        prims += p
-        puntos += q
+    prims, puntos, refs = _proyectar_seleccion(sesion, br.plano, mode, edges, faces, bodies, vertices, references, body)
+    if not refs:
+        raise error("INVALID_ARGUMENTS", "Elegí qué proyectar: edges, faces, vertices, bodies o references.")
     if not prims and not puntos:
         raise error("INVALID_GEOMETRY", "Eso no deja nada sobre el plano del boceto"
                     + (": no corta su plano." if mode == "intersect" else "."))
-    r = _dibujar(sesion, op.id, lambda b: b.agregar_proyeccion(
-        prims, puntos, construction, origen={"modo": mode, "refs": refs}), desde_solver=True)
+    hecho = {}
+
+    def proyectar(b):
+        b.agregar_proyeccion(prims, puntos, construction, origen={"modo": mode, "refs": refs} if link else None)
+        hecho["id"] = b.proyecciones[-1]["id"] if link else None
+    r = _dibujar(sesion, op.id, proyectar, desde_solver=True)
     r["mode"] = mode
+    r["projection"] = hecho["id"]
     return r
+
+
+@herramienta("project_spun_profile", "boceto",
+             "Proyecta el perfil giratorio de la geometría (Fusion: Proyectar › Spun Profile): gira aristas, caras, "
+             "cuerpos o vértices alrededor de un eje y deja su perfil sobre el plano del boceto, para referenciarlo en el "
+             "boceto o en operaciones de revolución y torneado. El eje se proyecta en el plano; cada punto va a su "
+             "posición a lo largo del eje y su distancia a él (hacia +u del boceto, o al otro lado con flip). Las curvas se aproximan "
+             "con segmentos a tolerance mm. Con link=true (por defecto) sigue al modelo, igual que project_to_sketch "
+             "(break_projection_link, manage_lost_projections). Limitación: gira todas las aristas, sin quitar las que "
+             "quedan dentro del cuerpo.", modifica=True)
+def project_spun_profile(sesion, axis: str | dict, edges: list[str] | str | None = None,
+                         faces: list[str] | str | None = None, bodies: list[str] | None = None,
+                         vertices: list[list[float]] | None = None, tolerance: float = 0.1, flip: bool = False,
+                         link: bool = True, construction: bool = False, body: str | None = None,
+                         sketch: str | None = None):
+    """
+    axis: eje de giro: "X", "Y", "Z", un eje de construcción (id o nombre), una arista recta, una línea de boceto ({"sketch", "curve"}) o una cara cilíndrica.
+    edges: aristas a girar: selector o ids ('Cuerpo1/E3').
+    faces: caras a girar: selector o ids ('Cuerpo1/F6').
+    bodies: ids o nombres de cuerpos enteros.
+    vertices: vértices del modelo por sus coordenadas [[x, y, z], …].
+    tolerance: distancia máxima en mm entre la curva y los segmentos del perfil (mayor que cero).
+    flip: true pone el perfil del otro lado del eje.
+    link: true = asociativo (sigue al modelo); false = congelado.
+    construction: true = el perfil queda como líneas de construcción.
+    body: cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    from .herramientas_construccion import _referencia
+    _exigir_finitos(locals())
+    if tolerance <= 0:
+        raise error("INVALID_ARGUMENTS", "tolerance tiene que ser mayor que cero.")
+    op, br = boceto_activo(sesion, sketch, derivados=False)
+    ref_eje = _referencia(sesion, axis, {"eje", "arista", "curva_boceto", "cara"}, body, "eje")
+    giro = {"eje": ent.como_eje(ent.resolver(ref_eje, sesion.doc.estado_final)), "tolerancia": tolerance,
+            "invertir": flip}
+    try:
+        prims, puntos, refs = _proyectar_seleccion(sesion, br.plano, "giro", edges, faces, bodies, vertices, None, body, giro)
+    except geo.ErrorGeometria as e:
+        raise error("INVALID_GEOMETRY", str(e)) from e
+    if not refs:
+        raise error("INVALID_ARGUMENTS", "Elegí qué girar: edges, faces, vertices o bodies.")
+    if not prims and not puntos:
+        raise error("INVALID_GEOMETRY", "Eso no deja ningún perfil sobre el plano del boceto.")
+    origen = {"modo": "giro", "refs": refs, "eje": ref_eje, "tolerancia": tolerance, "invertir": flip}
+    hecho = {}
+
+    def proyectar(b):
+        b.agregar_proyeccion(prims, puntos, construction, origen=origen if link else None)
+        hecho["id"] = b.proyecciones[-1]["id"] if link else None
+    r = _dibujar(sesion, op.id, proyectar, desde_solver=True)
+    r["projection"] = hecho["id"]
+    return r
+
+
+def _proyecciones_a_tratar(op, pid):
+    """Ids de las proyecciones a tratar: la pedida (que tiene que estar perdida) o todas las perdidas."""
+    if pid is None:
+        return list(op.perdidas)
+    if not any(r["id"] == pid for r in op.boceto.proyecciones):
+        raise error("ENTITY_NOT_FOUND", f"El boceto no tiene la proyección {pid!r} (get_sketch › projections).")
+    return [pid]
+
+
+@herramienta("break_projection_link", "boceto",
+             "Rompe el vínculo de una proyección (Fusion: Break Link): la geometría proyectada queda donde está como "
+             "geometría normal, editable y ya no fija, y no sigue más al modelo.", modifica=True)
+def break_projection_link(sesion, projection: int, sketch: str | None = None):
+    """
+    projection: id de la proyección (lo devuelve project_to_sketch; get_sketch › projections lo lista).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op = op_boceto(sesion, sketch)
+    _proyecciones_a_tratar(op, projection)
+    return _dibujar(sesion, sketch, lambda b: b.romper_vinculo(projection), desde_solver=True)
+
+
+@herramienta("manage_lost_projections", "boceto",
+             "Administra las proyecciones perdidas de un boceto (Fusion: Manage Lost Projections): las que ya no "
+             "coinciden con el modelo (get_sketch › projections las marca con lost). relink las vuelve a vincular a otra selección (misma forma "
+             "que la original: edges, faces, bodies, vertices o references); break les rompe el vínculo y delete borra "
+             "su geometría. Con break y delete, sin projection actúa sobre todas las perdidas (Break Link All / "
+             "Delete All).", modifica=True)
+def manage_lost_projections(sesion, action: Literal["relink", "break", "delete"], projection: int | None = None, edges: list[str] | str | None = None,
+                            faces: list[str] | str | None = None, bodies: list[str] | None = None,
+                            vertices: list[list[float]] | None = None, references: list[str | dict] | None = None,
+                            body: str | None = None, sketch: str | None = None):
+    """
+    action: relink, break o delete.
+    projection: id de la proyección; vacío = todas las perdidas (solo con break y delete).
+    edges: relink: aristas nuevas (selector o ids).
+    faces: relink: caras nuevas.
+    bodies: relink: cuerpos nuevos.
+    vertices: relink: vértices nuevos por coordenadas [x, y, z].
+    references: relink: planos, ejes, puntos de trabajo o curvas de otro boceto, como en project_to_sketch.
+    body: cuerpo donde se evalúan los selectores.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op = op_boceto(sesion, sketch)
+    if action == "relink":
+        if projection is None:
+            raise error("INVALID_ARGUMENTS", "relink necesita projection (el id de la proyección a vincular).")
+        _proyecciones_a_tratar(op, projection)
+        _op, br = boceto_activo(sesion, sketch, derivados=False)
+        modo = next(r["modo"] for r in op.boceto.proyecciones if r["id"] == projection)
+        prims, puntos, refs = _proyectar_seleccion(sesion, br.plano, modo, edges, faces, bodies, vertices, references, body)
+        if not refs:
+            raise error("INVALID_ARGUMENTS", "Elegí a qué re-vincular: edges, faces, vertices, bodies o references.")
+        return _dibujar(sesion, sketch, lambda b: b.revincular(projection, refs, prims, puntos), desde_solver=True)
+    ids = _proyecciones_a_tratar(op, projection)
+    if not ids:
+        raise error("INVALID_ARGUMENTS", "El boceto no tiene proyecciones perdidas.")
+    accion = (lambda b, i: b.romper_vinculo(i)) if action == "break" else (lambda b, i: b.eliminar_proyeccion(i))
+    return _dibujar(sesion, sketch, lambda b: [accion(b, i) for i in ids], desde_solver=True)
 
 
 @herramienta("set_line_type", "boceto",

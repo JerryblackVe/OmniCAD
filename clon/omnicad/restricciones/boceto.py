@@ -1118,6 +1118,8 @@ class Boceto:
         self.restricciones = {}
         self.cotas = {}
         self.proyecciones = []
+        self.patrones = []             # patrones de boceto editables (ver `_patron`)
+        self.ultimo_patron = None
         self._siguiente = 1
 
     # ------------------------------------------------------------ ids
@@ -1491,9 +1493,46 @@ class Boceto:
         for xy in puntos:
             ids.append(punto(xy))
         if origen is not None and ids:
-            self.proyecciones.append({"modo": origen["modo"], "refs": copy.deepcopy(origen["refs"]),
-                                      "construccion": construccion, "ids": list(ids)})
+            self.proyecciones.append({"id": max((r["id"] for r in self.proyecciones), default=0) + 1,
+                                      "construccion": construccion, "ids": list(ids),
+                                      **copy.deepcopy(origen)})
         return ids
+
+    def _proyeccion(self, pid):
+        r = next((r for r in self.proyecciones if r["id"] == pid), None)
+        if r is None:
+            raise ErrorBoceto(f"No existe la proyección {pid}.")
+        return r
+
+    def romper_vinculo(self, pid):
+        """Romper vínculo (Fusion: Break Link): la geometría proyectada queda donde está, como geometría normal
+        (editable, ya no fija) que no sigue más al modelo."""
+        r = self.proyecciones.pop(self.proyecciones.index(self._proyeccion(pid)))
+        siguen = {i for otra in self.proyecciones for i in otra["ids"]}
+        for i in r["ids"]:
+            if i in self.curvas:
+                self.curvas[i].proyectada = False
+                for q in self.curvas[i].puntos():
+                    if not any(q in self.curvas[k].puntos() for k in siguen if k in self.curvas):
+                        self.puntos[q].proyectado = False
+            elif i in self.puntos and i not in siguen:
+                self.puntos[i].proyectado = False
+
+    def eliminar_proyeccion(self, pid):
+        """Borrar geometría (Manage Lost Projections › Delete Geometry): quita la proyección y sus curvas y puntos."""
+        r = self.proyecciones.pop(self.proyecciones.index(self._proyeccion(pid)))
+        for i in r["ids"]:
+            if i in self.curvas or i in self.puntos:
+                self.eliminar(i)
+
+    def revincular(self, pid, refs, primitivas, puntos):
+        """Re-vincular (Manage Lost Projections › Re-Link): la proyección pasa a seguir las referencias `refs`, cuya
+        proyección (`primitivas`, `puntos`) tiene que tener la misma forma que la que había."""
+        r = self._proyeccion(pid)
+        if not self.reproyectar(r, primitivas, puntos):
+            raise ErrorBoceto("Lo que elegiste no se proyecta con la misma forma que la proyección original (otra "
+                              "cantidad o tipo de curvas): usá Romper vínculo o Borrar geometría y proyectá de nuevo.")
+        r["refs"] = copy.deepcopy(refs)
 
     def reproyectar(self, registro, primitivas, puntos) -> bool:
         """Actualiza Proyectar / Intersecar de Fusion conservando ids; si cambia la topología, no toca nada."""
@@ -2526,8 +2565,10 @@ class Boceto:
         lado e `invertir` pasa al lado contrario del que tocaba. Devuelve los ids nuevos."""
         if distancia <= 0:
             raise ErrorBoceto("La distancia de desfase debe ser positiva.")
-        cadena, cerrada = self.cadena(cid)
         c0 = self.curvas[cid]
+        if isinstance(c0, (Spline, Elipse, ArcoElipse)):
+            return [self._desfase_libre(cid, distancia, punto_lado, invertir)]
+        cadena, cerrada = self.cadena(cid)
         if len(cadena) == 1 and isinstance(c0, Circulo):
             r = c0.radio
             fuera = (punto_lado is None or math.dist(punto_lado, self.coords(c0.centro)) > r) != bool(invertir)
@@ -2537,7 +2578,7 @@ class Boceto:
             self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(distancia))
             return [nuevo]
         if any(not isinstance(self.curvas[k], (Linea, Arco)) for k, _ in cadena):
-            raise ErrorBoceto("El desfase funciona con cadenas de líneas y arcos, y con círculos.")
+            raise ErrorBoceto("El desfase funciona con cadenas de líneas y arcos, círculos, elipses y splines.")
         elems = []
         for k, inv in cadena:
             c = self.curvas[k]
@@ -2635,6 +2676,88 @@ class Boceto:
             self.agregar_restriccion("desfase", [elems[-1][0], elems[-1][6], extremos[-1][1]], {"grupo": grupo})
         self.agregar_cota("desfase", [k0, n0], expresion or _numero(distancia))
         return nuevos
+
+    def _desfase_libre(self, cid, d, punto_lado, invertir, muestras=48):
+        """Desfase de una spline, elipse o arco de elipse: spline de ajuste por puntos de la curva corridos `d` a
+        lo largo de su normal (mismo lado por defecto que en las cadenas). shortcut: no queda asociada (sin
+        restricción ni cota de desfase, la curva nueva es libre); pasar a un desfase exacto si hace falta."""
+        c = self.curvas[cid]
+        prim = self.primitivas(cid)[0]
+        t0, t1, _ = dominio(prim)
+        cerrada = isinstance(c, Elipse) or (isinstance(c, Spline) and c.cerrada)
+
+        def normales(cantidad):
+            salida = []
+            for t in np.linspace(t0, t1, cantidad, endpoint=not cerrada):
+                C, D = evaluar_primitiva(prim, float(t), 1)
+                n = math.hypot(*D) or 1.0
+                salida.append((C, (-D[1] / n, D[0] / n)))     # normal a la izquierda del recorrido
+            return salida
+        pts = normales(muestras)
+        if punto_lado is not None:
+            C, n = min(pts, key=lambda cn: math.dist(cn[0], punto_lado))
+            s = 1.0 if n[0] * (punto_lado[0] - C[0]) + n[1] * (punto_lado[1] - C[1]) > 0 else -1.0
+        elif cerrada:
+            area = sum(p[0][0] * q[0][1] - q[0][0] * p[0][1] for p, q in zip(pts, pts[1:] + pts[:1], strict=True))
+            s = -1.0 if area > 0 else 1.0
+        else:
+            s = 1.0
+        if invertir:
+            s = -s
+        nuevos = [(C[0] + s * d * n[0], C[1] + s * d * n[1]) for C, n in pts]
+        densos = [C for C, _n in normales(4 * muestras)]
+        if any(min(math.dist(q, C) for C in densos) < 0.9 * d for q in nuevos):
+            raise ErrorBoceto("El desfase es mayor que el radio de curvatura de la curva: se pliega sobre sí mismo.")
+        return self.agregar_spline(nuevos, "ajuste", 3, cerrada, construccion=c.construccion)
+
+    def soltar_desfase(self, cid, conservar_cota=False):
+        """Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): quita las restricciones de
+        desfase y de paralelismo entre la curva original y su copia, y la cota (salvo `conservar_cota`). Las
+        curvas quedan. `cid` puede ser la original o la copia; si la original tiene varios desfases, los suelta todos."""
+        cotas = [k for k in self.cotas.values() if k.tipo == "desfase" and cid in k.entidades]
+        semilla = {cid}.union(*(k.entidades for k in cotas))
+        grupos = {r.datos.get("grupo") for r in self.restricciones.values()
+                  if r.tipo == "desfase" and semilla & set(r.entidades)}
+        viejas = [r for r in self.restricciones.values() if r.tipo == "desfase" and r.datos.get("grupo") in grupos]
+        if not viejas and not cotas:
+            raise ErrorBoceto(f"La entidad {cid} no forma parte de un desfase.")
+        pares = {frozenset(k.entidades) for k in cotas}
+        for r in viejas:
+            if len(r.entidades) == 4:
+                pares |= {frozenset(r.entidades[:2]), frozenset(r.entidades[2:])}
+        borrar = [r.id for r in viejas] + [r.id for r in self.restricciones.values()
+                                           if r.tipo == "paralela" and frozenset(r.entidades) in pares]
+        borrar += [] if conservar_cota else [k.id for k in cotas]
+        for i in borrar:
+            self.eliminar(i)
+
+    def pegar_de(self, origen, ids, dx=0.0, dy=0.0):
+        """Pegar elementos de OTRO boceto (Fusion: Copiar y Pegar entre bocetos): copia las curvas y los puntos
+        `ids` de `origen`, corridos (dx, dy), con las restricciones y cotas que quedan enteras dentro de la selección.
+        Lo pegado es geometría normal (la proyectada deja de ser fija). Devuelve los ids de las curvas y puntos nuevos."""
+        ids = [i for i in ids if i > 0 and (i in origen.curvas or i in origen.puntos)]
+        if not ids:
+            raise ErrorBoceto("Seleccioná la geometría a copiar (el origen y los ejes no se copian).")
+        mapa = {p: self.agregar_punto(origen.puntos[p].x + dx, origen.puntos[p].y + dy) for p in origen.puntos_de(ids)}
+        mapa_c = {}
+        for i in ids:
+            if i in origen.curvas:
+                c = origen.curvas[i].remapear(mapa, self._nuevo_id())
+                c.proyectada = False
+                self.curvas[c.id] = c
+                mapa_c[i] = c.id
+        for c in self.curvas.values():                      # el texto sobre una curva no copiada vuelve a ser recto
+            if isinstance(c, Texto) and c.id in mapa_c.values():
+                c.camino = mapa_c.get(c.camino)
+        todo = {**mapa, **mapa_c}
+        for r in origen.restricciones.values():
+            if r.tipo not in ("fijo", "patron", "desfase") and set(r.entidades) <= set(todo):
+                self.agregar_restriccion(r.tipo, [todo[e] for e in r.entidades], copy.deepcopy(r.datos))
+        for k in origen.cotas.values():
+            if set(k.entidades) <= set(todo):
+                self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, copy.deepcopy(k.datos),
+                                  k.referencia)
+        return list(mapa_c.values()) + [q for p, q in mapa.items() if p in ids]
 
     # ------------------------------------------------------------ MODIFICAR: escala, mover/copiar
     def _transformar_puntos(self, pids, f):
@@ -2830,12 +2953,13 @@ class Boceto:
 
     def escalar(self, ids, base, factor):
         """Escala del boceto (SKT-SCALE): agranda o achica la geometría desde el punto base; las cotas
-        de longitud de esa geometría se multiplican por el factor."""
+        de longitud de esa geometría se multiplican por el factor. Un punto fijo puede ser la base."""
         if factor <= 0:
             raise ErrorBoceto("El factor de escala debe ser positivo.")
         pts = self.puntos_de(ids)
-        if any(p in self.puntos_fijos() for p in pts):
-            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede escalar.")
+        fijos = self.puntos_fijos()          # un punto fijo puede ser la base: escalar desde él no lo mueve
+        if any(p in fijos and math.dist(self.coords(p), base) > 1e-9 for p in pts):
+            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección que no está en la base: no se puede escalar.")
         self._transformar_puntos(pts, lambda q: (base[0] + factor * (q[0] - base[0]), base[1] + factor * (q[1] - base[1])))
         afectados = set(pts) | set(ids)
         for i in ids:
@@ -2901,71 +3025,129 @@ class Boceto:
                 self.agregar_restriccion("igual", [i, c.id])
         return nuevos
 
-    def _patron(self, ids, transformaciones, datos_restriccion):
+    def _patron(self, ids, trans, tipo, params, suprimidos=(), pid=None):
+        """Copia `ids` por cada transformación `(f, ángulo, extra, datos)` de `trans` (salvo las suprimidas, por
+        índice) y registra el patrón para poder editarlo (`editar_patron`). Devuelve las curvas nuevas."""
         ids = [i for i in ids if i in self.curvas or i in self.puntos]
         if not ids:
             raise ErrorBoceto("Seleccioná la geometría del patrón.")
         grupo = self._siguiente
-        nuevos = []
-        for f, angulo, extra in transformaciones:
+        nuevos, copias = [], {}
+        for n, (f, angulo, extra, datos) in enumerate(trans):
+            if n in suprimidos:
+                continue
             mapa, mapa_c = self._copiar(ids, f, False, angulo, extra)
             for p, q in mapa.items():
-                self.agregar_restriccion("patron", [p, q] + extra, {**datos_restriccion(f, angulo), "grupo": grupo})
+                self.agregar_restriccion("patron", [p, q] + extra, {**datos, "grupo": grupo})
             for i, k in mapa_c.items():
                 if isinstance(self.curvas[i], (Circulo, Elipse, ArcoElipse)):
                     self.agregar_restriccion("igual", [i, k])
+            copias[str(n)] = list(mapa_c.values()) + list(mapa.values())
             nuevos += list(mapa_c.values())
+        registro = {"id": pid if pid is not None else self._nuevo_id(), "tipo": tipo, "ids": list(ids),
+                    "params": params, "suprimidos": sorted(suprimidos), "copias": copias}
+        self.patrones = [r for r in self.patrones if r["id"] != registro["id"]] + [registro]
+        self.ultimo_patron = registro["id"]
         return nuevos
 
-    def patron_rectangular(self, ids, cantidad1, distancia1, cantidad2=1, distancia2=0.0, dir1=(1.0, 0.0),
-                           dir2=(0.0, 1.0), modo="extension", simetrico=False):
-        """Patrón rectangular (SKT-CREATE-RECTANGULAR-PATTERN). modo "extension": la distancia es la total;
-        "espaciado": la de cada paso. Las copias quedan atadas al original (restricción de patrón)."""
-        if cantidad1 < 1 or cantidad2 < 1 or cantidad1 * cantidad2 < 2:
+    def _dir_patron(self, vector, linea):
+        """Dirección de un patrón: la de la línea del boceto (de su inicio a su fin) o el vector dado."""
+        if linea is None:
+            return vector
+        a, b = self._extremos_linea(linea)
+        return b[0] - a[0], b[1] - a[1]
+
+    def _trans_rectangular(self, p):
+        n1, n2 = p["cantidad1"], p["cantidad2"]
+        if n1 < 1 or n2 < 1 or n1 * n2 < 2:
             raise ErrorBoceto("El patrón necesita al menos dos copias.")
+        dir1 = self._dir_patron(p["dir1"], p.get("linea1"))
+        dir2 = self._dir_patron(p["dir2"], p.get("linea2"))
+        largo1, largo2 = math.hypot(*dir1), math.hypot(*dir2)
+        if largo1 < 1e-9 or largo2 < 1e-9:
+            raise ErrorBoceto("La dirección del patrón no puede ser una línea de largo cero.")
 
         def paso(n, d):
             if n <= 1:
                 return 0.0
-            return d / (n - 1) if modo == "extension" else d
-        n1 = math.hypot(*dir1) or 1.0
-        n2 = math.hypot(*dir2) or 1.0
-        u, w = (dir1[0] / n1, dir1[1] / n1), (dir2[0] / n2, dir2[1] / n2)
-        s1, s2 = paso(cantidad1, distancia1), paso(cantidad2, distancia2)
-        o1 = -(cantidad1 - 1) // 2 if simetrico else 0
-        o2 = -(cantidad2 - 1) // 2 if simetrico else 0
+            return d / (n - 1) if p["modo"] == "extension" else d
+        u, w = (dir1[0] / largo1, dir1[1] / largo1), (dir2[0] / largo2, dir2[1] / largo2)
+        s1, s2 = paso(n1, p["distancia1"]), paso(n2, p["distancia2"])
+        o1 = -(n1 - 1) // 2 if p["simetrico"] else 0
+        o2 = -(n2 - 1) // 2 if p["simetrico"] else 0
         trans = []
-        for i in range(cantidad1):
-            for j in range(cantidad2):
+        for i in range(n1):
+            for j in range(n2):
                 if i + o1 == 0 and j + o2 == 0:
                     continue
                 dx = (i + o1) * s1 * u[0] + (j + o2) * s2 * w[0]
                 dy = (i + o1) * s1 * u[1] + (j + o2) * s2 * w[1]
-                trans.append((lambda q, dx=dx, dy=dy: (q[0] + dx, q[1] + dy), 0.0, []))
-        return self._patron(ids, trans, lambda f, _a: dict(zip(("dx", "dy"), f((0.0, 0.0)), strict=True)))
+                trans.append((lambda q, dx=dx, dy=dy: (q[0] + dx, q[1] + dy), 0.0, [], {"dx": dx, "dy": dy}))
+        return trans
 
-    def patron_circular(self, ids, centro, cantidad, angulo_total=360.0, simetrico=False):
-        """Patrón circular (SKT-CREATE-CIRCULAR-PATTERN) alrededor de `centro` (id de punto o (u, v)). Con
-        coordenadas NO se crea un punto en el centro (B-55): el giro queda atado a un centro fijo; con id de
-        punto, las copias lo siguen si se mueve."""
-        if cantidad < 2:
+    def patron_rectangular(self, ids, cantidad1, distancia1, cantidad2=1, distancia2=0.0, dir1=(1.0, 0.0),
+                           dir2=(0.0, 1.0), modo="extension", simetrico=False, linea1=None, linea2=None,
+                           suprimir=()):
+        """Patrón rectangular (SKT-CREATE-RECTANGULAR-PATTERN). modo "extension": la distancia es la total;
+        "espaciado": la de cada paso. `linea1` / `linea2` toman la dirección de una línea del boceto. Las copias
+        quedan atadas al original (restricción de patrón); `suprimir` son índices de copia que no se crean."""
+        params = {"cantidad1": cantidad1, "distancia1": distancia1, "cantidad2": cantidad2, "distancia2": distancia2,
+                  "dir1": list(dir1), "dir2": list(dir2), "modo": modo, "simetrico": simetrico,
+                  "linea1": linea1, "linea2": linea2}
+        return self._patron(ids, self._trans_rectangular(params), "rectangular", params, set(suprimir))
+
+    def _trans_circular(self, p):
+        if p["cantidad"] < 2:
             raise ErrorBoceto("El patrón necesita al menos dos copias.")
+        centro = p["centro"]
         es_punto = isinstance(centro, (int, np.integer)) and not isinstance(centro, bool)
         cp = self._punto(centro) if es_punto else None
         c = self.coords(cp) if cp is not None else (float(centro[0]), float(centro[1]))
-        completo = abs(abs(angulo_total) - 360.0) < 1e-9
-        paso = angulo_total / cantidad if completo else angulo_total / (cantidad - 1)
-        desde = -(cantidad - 1) // 2 if simetrico and not completo else 0
+        cantidad, total = p["cantidad"], p["angulo_total"]
+        completo = abs(abs(total) - 360.0) < 1e-9
+        paso = total / cantidad if completo else total / (cantidad - 1)
+        desde = -(cantidad - 1) // 2 if p["simetrico"] and not completo else 0
         trans = []
         for k in range(cantidad):
             if k + desde == 0:
                 continue
             a = math.radians((k + desde) * paso)
+            datos = {"angulo": a} if cp is not None else {"angulo": a, "centro": c}
             trans.append((lambda q, a=a: (lambda r: (r[0] + c[0], r[1] + c[1]))(_rot(q[0] - c[0], q[1] - c[1], a)),
-                          math.degrees(a), [cp] if cp is not None else []))
-        datos = (lambda _f, ang: {"angulo": math.radians(ang), "centro": c}) if cp is None else \
-                (lambda _f, ang: {"angulo": math.radians(ang)})
-        return self._patron([i for i in ids if i != cp], trans, datos)
+                          math.degrees(a), [cp] if cp is not None else [], datos))
+        return trans, cp
+
+    def patron_circular(self, ids, centro, cantidad, angulo_total=360.0, simetrico=False, suprimir=()):
+        """Patrón circular (SKT-CREATE-CIRCULAR-PATTERN) alrededor de `centro` (id de punto o (u, v)). Con
+        coordenadas NO se crea un punto en el centro (B-55): el giro queda atado a un centro fijo; con id de
+        punto, las copias lo siguen si se mueve. `suprimir`: índices de copia que no se crean."""
+        es_punto = isinstance(centro, (int, np.integer)) and not isinstance(centro, bool)
+        params = {"centro": int(centro) if es_punto else list(centro), "cantidad": cantidad,
+                  "angulo_total": angulo_total, "simetrico": simetrico}
+        trans, cp = self._trans_circular(params)
+        return self._patron([i for i in ids if i != cp], trans, "circular", params, set(suprimir))
+
+    def editar_patron(self, pid, **cambios):
+        """Edita un patrón ya hecho (cantidades, distancias, direcciones, `suprimidos`): borra sus copias y las
+        regenera con los parámetros nuevos, así que las cotas puestas sobre las copias se pierden. Devuelve las
+        curvas nuevas."""
+        registro = next((r for r in self.patrones if r["id"] == pid), None)
+        if registro is None:
+            raise ErrorBoceto(f"No existe el patrón {pid}.")
+        suprimidos = set(cambios.pop("suprimidos", registro["suprimidos"]))
+        params = {**registro["params"], **cambios}
+        ids = [i for i in registro["ids"] if i in self.curvas or i in self.puntos]
+        if not ids:
+            raise ErrorBoceto("El patrón ya no tiene geometría original.")
+        if registro["tipo"] == "rectangular":
+            trans, cp = self._trans_rectangular(params), None
+        else:
+            trans, cp = self._trans_circular(params)
+        copiado = [i for lista in registro["copias"].values() for i in lista]
+        for i in [i for i in copiado if i in self.curvas] + [i for i in copiado if i in self.puntos]:
+            if i in self.curvas or i in self.puntos:
+                self.eliminar(i)
+        return self._patron([i for i in ids if i != cp], trans, registro["tipo"], params, suprimidos, pid)
 
     # ------------------------------------------------------------ MODIFICAR: curva de fusión
     def _salida_extremo(self, cid, pid):
@@ -3054,6 +3236,8 @@ class Boceto:
              "cotas": [c.a_dict() for c in self.cotas.values()]}
         if self.proyecciones:
             d["proyecciones"] = copy.deepcopy(self.proyecciones)
+        if self.patrones:
+            d["patrones"] = copy.deepcopy(self.patrones)
         return d
 
     @classmethod
@@ -3061,6 +3245,9 @@ class Boceto:
         b = cls()
         b._siguiente = d.get("siguiente_id", 1)
         b.proyecciones = copy.deepcopy(d.get("proyecciones", []))
+        for n, r in enumerate(b.proyecciones, 1):          # los proyectos viejos no numeraban sus proyecciones
+            r.setdefault("id", n)
+        b.patrones = copy.deepcopy(d.get("patrones", []))
         for p in d.get("puntos", []):
             b.puntos[p["id"]] = Punto(p["id"], p["x"], p["y"], p.get("proyectado", False))
         for c in d.get("curvas", []):

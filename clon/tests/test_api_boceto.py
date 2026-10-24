@@ -44,7 +44,10 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 # MCP-29, MCP-91 y MCP-92 (tests/test_api_boceto_extra.py) y MCP-76
                 "draw_spiral", "set_circle_radius", "extend_sketch_curve", "split_sketch_curve",
                 # B-80: redefinir plano y construcción (tests/test_api_misc.py, tests/test_api_construccion.py)
-                "redefine_sketch_plane", "create_construction_axis", "create_construction_point", "create_ucs"]
+                "redefine_sketch_plane", "create_construction_axis", "create_construction_point", "create_ucs",
+                # Fase 6 del boceto (tests/test_boceto_fase6.py)
+                "release_offset", "edit_sketch_pattern", "break_projection_link", "manage_lost_projections",
+                "copy_sketch_entities", "project_spun_profile"]
 
 
 def test_herramientas_del_grupo_boceto():

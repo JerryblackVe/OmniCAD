@@ -33,7 +33,7 @@ import warnings
 import numpy as np
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QKeySequence, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
@@ -45,7 +45,7 @@ from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, 
                                     evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
                                     primitivas_entidad, puntos_espiral, puntos_primitiva, validar_valor_cota,
                                     _validar_opciones_texto)
-from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
 from . import formato, temas
 from .iconos import icono
 
@@ -151,6 +151,7 @@ SELECCION = ("simetria", "patron_rectangular", "patron_circular", "escala", "mov
 SPLINES = ("spline_ajuste", "spline_control")
 PROYECCION = ("proyectar", "intersecar", "incluir_3d")
 MODIFICAN = tuple(PICKS) + SELECCION + PROYECCION       # no aplican el tipo de línea a lo que crean
+PORTAPAPELES = {}         # Ctrl+C / Ctrl+V entre bocetos: {"boceto": copia del origen, "ids": [...]}
 VIOLETA = QColor(170, 90, 230)
 TOL_PX = 8.0
 TOL_PUNTO = 11.0          # radio (px) para agarrar un punto: más grande que lo que se ve
@@ -683,7 +684,7 @@ class Lienzo(QWidget):
         self.update()
         return texto
 
-    def aplicar_cambio(self, funcion, operacion=False):
+    def aplicar_cambio(self, funcion, operacion=False, anclar=True):
         """Aplica una modificación. Si deja en conflicto un boceto que estaba bien, se deshace sola.
         Lo que crean las herramientas de dibujo toma el tipo de línea elegido (normal / línea central).
         Con `operacion` (empalme, chaflán, recortar…), si se perdieron restricciones o cotas se avisa
@@ -697,14 +698,14 @@ class Lienzo(QWidget):
             funcion()
             if self._post_crear is not None:        # cotas de lo escrito en las cajas de valor
                 self._post_crear(sorted(set(self.b.curvas) - antes))
-            if self.herramienta not in MODIFICAN:
+            if anclar and self.herramienta not in MODIFICAN:
                 self._anclar_al_origen(set(self.b.puntos) - puntos_antes)
         except (ErrorBoceto, ErrorExpresion) as e:
             self._restaurar(self.historial.pop())
             self.mensaje.emit(str(e))
             self.update()
             return False
-        if self.eje and self.herramienta not in MODIFICAN:
+        if anclar and self.eje and self.herramienta not in MODIFICAN:
             for cid in set(self.b.curvas) - antes:
                 c = self.b.curvas[cid]
                 if not c.construccion and not isinstance(c, Texto):
@@ -1321,7 +1322,7 @@ class Lienzo(QWidget):
             self._abrir_entrada(["Cantidad", "∠ total"], ["6", "360"], self._pos_cursor, aceptar)
         elif self.fase == "base" and h == "escala":
             def aceptar(v):
-                f = _numero(v[0] or "1")
+                f = self.evaluar(v[0] or "1", ESCALAR)
                 ok = self.aplicar_cambio(lambda: self.b.escalar(ids, xy, f))
                 if ok:
                     self.seleccion, self.fase = [], "seleccion"
@@ -2873,6 +2874,22 @@ class Lienzo(QWidget):
         self.seleccion = []
         self._notificar_seleccion()
 
+    def copiar_seleccion(self):
+        """Ctrl+C: guarda la selección (con una copia del boceto) para pegarla en este u otro boceto."""
+        ids = [i for i in self.seleccion if i > 0 and (i in self.b.puntos or i in self.b.curvas)]
+        if ids:
+            PORTAPAPELES.update(boceto=self.b.copia(), ids=ids)
+            self.mensaje.emit(f"{len(ids)} elemento(s) copiado(s): Ctrl+V los pega.")
+
+    def pegar(self):
+        """Ctrl+V: pega lo copiado en el mismo lugar, como geometría normal, y lo deja seleccionado."""
+        nuevos = []
+        origen, ids = PORTAPAPELES["boceto"], PORTAPAPELES["ids"]
+        if self.aplicar_cambio(lambda: nuevos.extend(self.b.pegar_de(origen, ids)), operacion=True, anclar=False):
+            self.seleccion = nuevos
+            self._notificar_seleccion()
+            self.update()
+
     def alternar_construccion(self):
         curvas = [i for i in self.seleccion if i in self.b.curvas]
         if not curvas:
@@ -3620,6 +3637,10 @@ class Lienzo(QWidget):
                 self.visor.set_modo(None)
             else:
                 self.cancelar()
+        elif e.matches(QKeySequence.Copy) and self.seleccion:
+            self.copiar_seleccion()
+        elif e.matches(QKeySequence.Paste) and PORTAPAPELES:
+            self.pegar()
         elif k in (Qt.Key_Delete, Qt.Key_Backspace):
             self.borrar_seleccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in SPLINES and self.clics:

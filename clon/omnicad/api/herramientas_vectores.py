@@ -16,11 +16,11 @@ from ..nucleo import fuentes
 from ..restricciones import ErrorBoceto
 from ..restricciones.boceto import MEDIDA_MINIMA, Texto, _validar_opciones_texto, validar_texto_boceto
 from ..timeline.operaciones import OpBoceto, texto_con_valores
-from ..timeline.parametros import ErrorExpresion
+from ..timeline.parametros import ESCALAR, ErrorExpresion
 from .errores import error
-from .herramientas_boceto import (_dibujar, _exigir_finitos, _exigir_tamano, _paso, boceto_activo, boceto_resuelto,
-                                  estado_solver, nombre_nuevo, op_boceto, plano_o_cara, valores_cotas)
-from .registro import herramienta
+from .herramientas_boceto import (_dibujar, _exigir_finitos, _exigir_tamano, _paso, _valor_expr, boceto_activo,
+                                  boceto_resuelto, estado_solver, nombre_nuevo, op_boceto, plano_o_cara, valores_cotas)
+from .registro import Expr, herramienta
 
 _ALINEACION = {"left": "izq", "center": "centro", "right": "der"}
 _ANCLAJE = {"baseline": "base", "top": "arriba", "middle": "medio", "bottom": "abajo"}
@@ -761,7 +761,7 @@ def offset_profiles(sesion, profiles: list[int] | str, distance: float,
              "defecto el de la caja de la selección). Con copy=true trabaja sobre una copia. Las cotas de largo de "
              "lo escalado se multiplican por el factor.", modifica=True)
 def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0, dy: float = 0.0, angle: float = 0.0,
-                     scale: float = 1.0, mirror: Literal["none", "horizontal", "vertical"] = "none",
+                     scale: Expr = 1.0, mirror: Literal["none", "horizontal", "vertical"] = "none",
                      center_x: float | None = None, center_y: float | None = None, copy: bool = False,
                      sketch: str | None = None):
     """
@@ -769,7 +769,7 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
     dx: desplazamiento en X (mm).
     dy: desplazamiento en Y (mm).
     angle: giro en grados (antihorario) alrededor del centro.
-    scale: factor de escala entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
+    scale: factor de escala, número o expresión con parámetros ("ancho / 20"), entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
     mirror: horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
     center_x: x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
     center_y: y del centro; vacío = centro de la caja de la selección.
@@ -777,6 +777,10 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     from ..restricciones.boceto import puntos_primitiva
+    try:
+        scale = _valor_expr(sesion, scale, ESCALAR)[1]
+    except ErrorExpresion as e:
+        raise error("INVALID_ARGUMENTS", f"scale: {e}") from e
     _exigir_finitos({"dx": dx, "dy": dy, "angle": angle, "scale": scale})
     if not MEDIDA_MINIMA <= scale <= 1 / MEDIDA_MINIMA:
         raise error("INVALID_ARGUMENTS", f"scale tiene que estar entre {MEDIDA_MINIMA:g} y {1 / MEDIDA_MINIMA:,.0f} "

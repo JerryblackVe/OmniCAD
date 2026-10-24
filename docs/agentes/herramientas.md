@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-299 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+305 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 43 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 38 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 44 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 69 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -645,10 +645,16 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`sketch_chamfer`](#sketch_chamfer) | sí | Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). |
 | [`trim_sketch_curve`](#trim_sketch_curve) | sí | Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea o un arco hasta la próxima curva; break la parte en los cruces más cercanos. |
 | [`offset_sketch_curves`](#offset_sketch_curves) | sí | Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). |
+| [`release_offset`](#release_offset) | sí | Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): la copia deja de seguir a la original, pero las curvas quedan. |
+| [`copy_sketch_entities`](#copy_sketch_entities) | sí | Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las restricciones y cotas que quedan enteras dentro de la selección. |
 | [`mirror_sketch`](#mirror_sketch) | sí | Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respecto de una línea del boceto, con restricciones de simetría (si la geometría original cambia, la copia la sigue). |
 | [`sketch_rectangular_pattern`](#sketch_rectangular_pattern) | sí | Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). |
-| [`sketch_circular_pattern`](#sketch_circular_pattern) | sí | Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. |
-| [`project_to_sketch`](#project_to_sketch) | sí | Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). |
+| [`sketch_circular_pattern`](#sketch_circular_pattern) | sí | Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. |
+| [`edit_sketch_pattern`](#edit_sketch_pattern) | sí | Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón): cantidades, distancias, direcciones, simetría y copias suprimidas. |
+| [`project_to_sketch`](#project_to_sketch) | sí | Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). |
+| [`project_spun_profile`](#project_spun_profile) | sí | Proyecta el perfil giratorio de la geometría (Fusion: Proyectar › Spun Profile): gira aristas, caras, cuerpos o vértices alrededor de un eje y deja su perfil sobre el plano del boceto, para referenciarlo en el boceto o en operaciones de revolución y torneado. |
+| [`break_projection_link`](#break_projection_link) | sí | Rompe el vínculo de una proyección (Fusion: Break Link): la geometría proyectada queda donde está como geometría normal, editable y ya no fija, y no sigue más al modelo. |
+| [`manage_lost_projections`](#manage_lost_projections) | sí | Administra las proyecciones perdidas de un boceto (Fusion: Manage Lost Projections): las que ya no coinciden con el modelo (get_sketch › projections las marca con lost). relink las vuelve a vincular a otra selección (misma forma que la original: edges, faces, bodies, vertices o references); break les rompe el vínculo y delete borra su geometría. |
 | [`set_line_type`](#set_line_type) | sí | Cambia el tipo de línea de curvas del boceto (Fusion: Construcción / Línea central de la paleta): normal (forma perfiles), construction (de construcción: guía, no forma perfiles) o centerline (eje: forma perfiles y sirve de eje de revolución). |
 | [`edit_dimension`](#edit_dimension) | sí | Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. |
 | [`auto_constrain`](#auto_constrain) | sí | Restringe automáticamente el boceto (Fusion: AutoConstrain): detecta lo que ya se cumple y lo agrega como restricción (coincidente, concéntrica, horizontal, vertical, colineal, paralela, perpendicular, tangente, igual, punto medio, simetría respecto de una línea central o de construcción) y después cotas con las medidas actuales (largos, radios, ángulos y posiciones desde un punto fijo en el origen o desde el datum) hasta dejarlo totalmente restringido si se puede. |
@@ -687,6 +693,7 @@ Crea un boceto vacío sobre un plano o sobre una cara plana. Coordenadas del boc
   - `plane` (texto; opcional, por defecto `"XY"`): "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
   - `name` (texto; opcional, por defecto `null`): nombre del boceto; vacío = "Boceto1", "Boceto2"…
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
+  - `project_edges` (true/false; opcional, por defecto `false`): true (solo sobre una cara) proyecta sus aristas de forma asociativa, como Fusion al crear el boceto; false la deja vacía.
 - CLI: `omnicad call create_sketch --doc pieza.omnicad`
 
 ### `draw_line`
@@ -850,6 +857,7 @@ Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, r
   - `dimensions` (lista de objeto o null; opcional, por defecto `null`): cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión, "reference": false}; reference=true mide sin restringir y permite omitir value.
   - `name` (texto; opcional, por defecto `null`): nombre del boceto; vacío = "Boceto1", "Boceto2"…
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
+  - `project_edges` (true/false; opcional, por defecto `false`): true (solo sobre una cara) proyecta además el contorno de la cara de forma asociativa; false no proyecta nada.
 - CLI: `omnicad call sketch_from_spec --doc pieza.omnicad`
 
 ### `draw_ellipse`
@@ -984,16 +992,42 @@ Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Pa
 
 ### `offset_sketch_curves`
 
-Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un punto. Para letras, splines o cualquier contorno (sin parámetros) está offset_profiles.
+Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un punto. direction=two desfasa distance a un lado y distance2 al otro; direction=symmetric, distance a los dos lados. Una spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): offset_profiles.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `entity` (entero; obligatorio): id de una curva de la cadena (línea o arco) o de un círculo.
+  - `entity` (entero; obligatorio): id de una curva de la cadena (línea o arco), de un círculo, elipse o spline.
   - `distance` (número o expresión; obligatorio): separación en mm, número o expresión con parámetros; negativa = al lado contrario.
   - `side_x` (número; opcional, por defecto `null`): x de un punto del lado donde va el desfase; vacío = el lado por defecto.
   - `side_y` (número; opcional, por defecto `null`): y de ese punto.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `direction` ("one" | "two" | "symmetric"; opcional, por defecto `"one"`): one (un lado), two (distance a un lado y distance2 al contrario) o symmetric (distance a los dos lados).
+  - `distance2` (número o expresión; opcional, por defecto `null`): separación del segundo lado con direction=two (obligatoria en ese caso).
 - CLI: `omnicad call offset_sketch_curves --doc pieza.omnicad entity=… distance=…`
+
+### `release_offset`
+
+Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): la copia deja de seguir a la original, pero las curvas quedan. Con keep_dimension=true se conserva la cota del desfase.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entity` (entero; obligatorio): id de la curva original o de su copia desfasada (get_sketch).
+  - `keep_dimension` (true/false; opcional, por defecto `false`): true = deja la cota de desfase; false = la borra junto con la asociación.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call release_offset --doc pieza.omnicad entity=…`
+
+### `copy_sketch_entities`
+
+Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las restricciones y cotas que quedan enteras dentro de la selección. Lo pegado es geometría normal y nueva: no queda asociada al original. Para copiar dentro del mismo boceto con vínculo: transform_sketch con copy.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entities` (lista de entero; obligatorio): ids de las curvas o puntos de source_sketch a copiar (get_sketch).
+  - `source_sketch` (texto; obligatorio): id o nombre del boceto de origen.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de destino; vacío = el último boceto del timeline.
+  - `dx` (número; opcional, por defecto `0.0`): corrimiento en x del pegado, en mm; 0 = en el mismo lugar.
+  - `dy` (número; opcional, por defecto `0.0`): corrimiento en y del pegado, en mm.
+- CLI: `omnicad call copy_sketch_entities --doc pieza.omnicad entities=… source_sketch=…`
 
 ### `mirror_sketch`
 
@@ -1008,7 +1042,7 @@ Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respe
 
 ### `sketch_rectangular_pattern`
 
-Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). La dirección 1 sale del ángulo angle y la 2 es perpendicular (+90°). Con spacing=extent la distancia es la total (de la primera a la última copia); con spacing la de cada paso. Tope: 200 puntos copiados (copias × puntos de la selección; un rectángulo tiene 4), para que el boceto no se vuelva lento.
+Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › patterns); después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un rectángulo tiene 4), para que el boceto no se vuelva lento.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1017,15 +1051,19 @@ Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias
   - `distance1` (número; obligatorio): distancia en la dirección 1 (mm; total o por paso según spacing; negativa = sentido contrario).
   - `count2` (entero; opcional, por defecto `1`): cantidad en la dirección 2 (1 = una sola fila).
   - `distance2` (número; opcional, por defecto `0.0`): distancia en la dirección 2 (mm).
-  - `angle` (número; opcional, por defecto `0.0`): dirección 1 en grados respecto del eje x del boceto; la dirección 2 queda a +90°.
+  - `angle` (número; opcional, por defecto `0.0`): dirección 1 en grados respecto del eje x del boceto.
   - `spacing` ("extent" | "spacing"; opcional, por defecto `"extent"`): extent (distancia total) o spacing (distancia entre copias).
   - `symmetric` (true/false; opcional, por defecto `false`): true para repartir las copias a los dos lados del original.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `angle2` (número; opcional, por defecto `null`): dirección 2 en grados respecto del eje x; vacío = angle + 90°.
+  - `direction1_line` (entero; opcional, por defecto `null`): id de una línea del boceto que da la dirección 1 (de su inicio a su fin); pisa a angle.
+  - `direction2_line` (entero; opcional, por defecto `null`): id de una línea del boceto que da la dirección 2; pisa a angle2.
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de las copias que no se crean (get_sketch › patterns las lista).
 - CLI: `omnicad call sketch_rectangular_pattern --doc pieza.omnicad entities=… count1=… distance1=…`
 
 ### `sketch_circular_pattern`
 
-Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. Tope: 200 puntos copiados (copias × puntos de la selección; un círculo tiene 1).
+Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un círculo tiene 1).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1037,11 +1075,35 @@ Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de cu
   - `total_angle` (número; opcional, por defecto `360.0`): ángulo total en grados (360 = vuelta entera; negativo = sentido horario).
   - `symmetric` (true/false; opcional, por defecto `false`): true para repartir las copias a los dos lados del original (si total_angle no es 360).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de las copias que no se crean (get_sketch › patterns las lista).
 - CLI: `omnicad call sketch_circular_pattern --doc pieza.omnicad entities=… count=…`
+
+### `edit_sketch_pattern`
+
+Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón): cantidades, distancias, direcciones, simetría y copias suprimidas. Borra las copias y las regenera, así que las cotas puestas sobre las copias se pierden. pattern es el id que devolvió la herramienta que lo creó (o get_sketch › patterns). Los parámetros count1, distance1, count2, distance2, angle, angle2, spacing, direction1_line y direction2_line son de un patrón rectangular; count y total_angle, de uno circular. suppress reemplaza la lista de copias suprimidas ([] = ninguna).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `pattern` (entero; obligatorio): id del patrón (lo devuelve la herramienta que lo creó; get_sketch › patterns lo lista).
+  - `count1` (entero; opcional, por defecto `null`): cantidad en la dirección 1 (rectangular).
+  - `distance1` (número; opcional, por defecto `null`): distancia en la dirección 1 (rectangular).
+  - `count2` (entero; opcional, por defecto `null`): cantidad en la dirección 2 (rectangular).
+  - `distance2` (número; opcional, por defecto `null`): distancia en la dirección 2 (rectangular).
+  - `angle` (número; opcional, por defecto `null`): dirección 1 en grados (rectangular); si no se da angle2, la dirección 2 pasa a angle + 90°.
+  - `angle2` (número; opcional, por defecto `null`): dirección 2 en grados (rectangular).
+  - `spacing` ("extent" | "spacing" o null; opcional, por defecto `null`): extent o spacing (rectangular).
+  - `symmetric` (true/false; opcional, por defecto `null`): repartir las copias a los dos lados del original.
+  - `direction1_line` (entero; opcional, por defecto `null`): id de una línea que da la dirección 1 (rectangular).
+  - `direction2_line` (entero; opcional, por defecto `null`): id de una línea que da la dirección 2 (rectangular).
+  - `count` (entero; opcional, por defecto `null`): cantidad total, contando el original (circular).
+  - `total_angle` (número; opcional, por defecto `null`): ángulo total en grados (circular).
+  - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de copias suprimidas; reemplaza la lista actual ([] = ninguna).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call edit_sketch_pattern --doc pieza.omnicad pattern=…`
 
 ### `project_to_sketch`
 
-Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y sigue al modelo si después cambia. Las proyecciones de proyectos viejos siguen congeladas. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).
+Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: break_projection_link. Un eje o la traza de un plano se dibujan como línea de ±100 mm. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1053,7 +1115,55 @@ Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: 
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true = la geometría proyectada queda como línea de construcción (no forma perfiles).
   - `vertices` (lista de lista de número o null; opcional, por defecto `null`): vértices del modelo por sus coordenadas [[x, y, z], …] (a menos de 0,001 mm de un vértice; con body, solo los de ese cuerpo): se proyectan (o intersecan) como puntos del boceto.
+  - `link` (true/false; opcional, por defecto `true`): true = asociativa (sigue al modelo); false = congelada, sin vínculo.
+  - `references` (lista de texto o objeto o null; opcional, por defecto `null`): planos ("XY", id o nombre), ejes ("X", id o nombre), puntos de trabajo ("O", id o nombre), y curvas o puntos de otro boceto ({"sketch": "Boceto1", "curve": 3} o {"sketch": …, "point": 2}).
 - CLI: `omnicad call project_to_sketch --doc pieza.omnicad`
+
+### `project_spun_profile`
+
+Proyecta el perfil giratorio de la geometría (Fusion: Proyectar › Spun Profile): gira aristas, caras, cuerpos o vértices alrededor de un eje y deja su perfil sobre el plano del boceto, para referenciarlo en el boceto o en operaciones de revolución y torneado. El eje se proyecta en el plano; cada punto va a su posición a lo largo del eje y su distancia a él (hacia +u del boceto, o al otro lado con flip). Las curvas se aproximan con segmentos a tolerance mm. Con link=true (por defecto) sigue al modelo, igual que project_to_sketch (break_projection_link, manage_lost_projections). Limitación: gira todas las aristas, sin quitar las que quedan dentro del cuerpo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `axis` (texto o objeto; obligatorio): eje de giro: "X", "Y", "Z", un eje de construcción (id o nombre), una arista recta, una línea de boceto ({"sketch", "curve"}) o una cara cilíndrica.
+  - `edges` (lista de texto o texto o null; opcional, por defecto `null`): aristas a girar: selector o ids ('Cuerpo1/E3').
+  - `faces` (lista de texto o texto o null; opcional, por defecto `null`): caras a girar: selector o ids ('Cuerpo1/F6').
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos enteros.
+  - `vertices` (lista de lista de número o null; opcional, por defecto `null`): vértices del modelo por sus coordenadas [[x, y, z], …].
+  - `tolerance` (número; opcional, por defecto `0.1`): distancia máxima en mm entre la curva y los segmentos del perfil (mayor que cero).
+  - `flip` (true/false; opcional, por defecto `false`): true pone el perfil del otro lado del eje.
+  - `link` (true/false; opcional, por defecto `true`): true = asociativo (sigue al modelo); false = congelado.
+  - `construction` (true/false; opcional, por defecto `false`): true = el perfil queda como líneas de construcción.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call project_spun_profile --doc pieza.omnicad axis=…`
+
+### `break_projection_link`
+
+Rompe el vínculo de una proyección (Fusion: Break Link): la geometría proyectada queda donde está como geometría normal, editable y ya no fija, y no sigue más al modelo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `projection` (entero; obligatorio): id de la proyección (lo devuelve project_to_sketch; get_sketch › projections lo lista).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call break_projection_link --doc pieza.omnicad projection=…`
+
+### `manage_lost_projections`
+
+Administra las proyecciones perdidas de un boceto (Fusion: Manage Lost Projections): las que ya no coinciden con el modelo (get_sketch › projections las marca con lost). relink las vuelve a vincular a otra selección (misma forma que la original: edges, faces, bodies, vertices o references); break les rompe el vínculo y delete borra su geometría. Con break y delete, sin projection actúa sobre todas las perdidas (Break Link All / Delete All).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `action` ("relink" | "break" | "delete"; obligatorio): relink, break o delete.
+  - `projection` (entero; opcional, por defecto `null`): id de la proyección; vacío = todas las perdidas (solo con break y delete).
+  - `edges` (lista de texto o texto o null; opcional, por defecto `null`): relink: aristas nuevas (selector o ids).
+  - `faces` (lista de texto o texto o null; opcional, por defecto `null`): relink: caras nuevas.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): relink: cuerpos nuevos.
+  - `vertices` (lista de lista de número o null; opcional, por defecto `null`): relink: vértices nuevos por coordenadas [x, y, z].
+  - `references` (lista de texto o objeto o null; opcional, por defecto `null`): relink: planos, ejes, puntos de trabajo o curvas de otro boceto, como en project_to_sketch.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call manage_lost_projections --doc pieza.omnicad action=…`
 
 ### `set_line_type`
 
@@ -1492,7 +1602,7 @@ Mueve, gira, escala y/o espeja curvas de un boceto (un paso de deshacer): lo imp
   - `dx` (número; opcional, por defecto `0.0`): desplazamiento en X (mm).
   - `dy` (número; opcional, por defecto `0.0`): desplazamiento en Y (mm).
   - `angle` (número; opcional, por defecto `0.0`): giro en grados (antihorario) alrededor del centro.
-  - `scale` (número; opcional, por defecto `1.0`): factor de escala entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
+  - `scale` (número o expresión; opcional, por defecto `1.0`): factor de escala, número o expresión con parámetros ("ancho / 20"), entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
   - `mirror` ("none" | "horizontal" | "vertical"; opcional, por defecto `"none"`): horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
   - `center_x` (número; opcional, por defecto `null`): x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
   - `center_y` (número; opcional, por defecto `null`): y del centro; vacío = centro de la caja de la selección.

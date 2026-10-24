@@ -1808,8 +1808,8 @@ class VentanaPrincipal(QMainWindow):
             return
         self._seleccionar([])
         if self._salir_de_boceto():
-            self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": "cara", "marco": hit["plano"].marco(),
-                                                                "cara": hit["ref"]})
+            self._iniciar_boceto(self._boceto_nuevo(hit["plano"], hit["ref"]), hit["plano"],
+                                 {"op": None, "plano": "cara", "marco": hit["plano"].marco(), "cara": hit["ref"]})
 
     def _accion_navegador(self, accion, clave):
         """Menú contextual del navegador (como el de Fusion sobre cuerpos, bocetos y construcción)."""
@@ -2184,12 +2184,24 @@ class VentanaPrincipal(QMainWindow):
     def crear_boceto(self):
         self._elegir_plano("boceto", "Seleccione un plano o una cara plana   (Esc: cancelar)")
 
+    def _boceto_nuevo(self, plano, cara):
+        """Boceto vacío. Sobre una cara arranca con sus aristas proyectadas y asociadas a ella (Fusion: Auto Project
+        Edges): si la cara cambia, esas aristas la siguen."""
+        b = Boceto()
+        if cara is not None:
+            try:
+                prims, puntos = ent.proyectar_entidad(ent.resolver(cara, self.doc.estado_final), plano)
+            except ent.ErrorReferencia:
+                return b
+            b.agregar_proyeccion(prims, puntos, origen={"modo": "project", "refs": [cara]})
+        return b
+
     def boceto_sobre_cara_elegida(self):
         """Espacio (PL3, Plasticity: plano de trabajo con una tecla): con una cara plana ya
         elegida, arranca el boceto sobre ella sin pasar por la elección del plano."""
         for h in self.seleccion:
             if h.get("tipo") == "cara" and h.get("plano") is not None:
-                self._iniciar_boceto(Boceto(), h["plano"],
+                self._iniciar_boceto(self._boceto_nuevo(h["plano"], h.get("cara_ref")), h["plano"],
                                      {"op": None, "plano": h["ref"], "marco": h["marco"],
                                       "cara": h.get("cara_ref")})
                 return
@@ -2199,8 +2211,8 @@ class VentanaPrincipal(QMainWindow):
         proposito = self._eleccion
         self._cancelar_eleccion()
         if proposito == "boceto":
-            self._iniciar_boceto(Boceto(), hit["plano"], {"op": None, "plano": hit["ref"], "marco": hit["marco"],
-                                                                "cara": hit.get("cara_ref")})
+            self._iniciar_boceto(self._boceto_nuevo(hit["plano"], hit.get("cara_ref")), hit["plano"],
+                                 {"op": None, "plano": hit["ref"], "marco": hit["marco"], "cara": hit.get("cara_ref")})
         elif proposito and proposito.startswith("redefinir:"):
             from .acciones_navegador import llamar
             params = {"plano": hit["ref"], "marco": hit.get("marco"), "cara": hit.get("cara_ref")}

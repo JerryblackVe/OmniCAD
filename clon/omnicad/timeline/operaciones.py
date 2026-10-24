@@ -21,7 +21,7 @@ from ..nucleo import intercambio
 from ..nucleo import referencias as refs
 from ..nucleo import revision as rv
 from . import entidades as ent
-from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar, intersecar_forma, proyectar_forma
+from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar
 from ..restricciones import Boceto, resolver
 from ..restricciones.boceto import (ErrorBoceto, Texto, distancia_punto_recta, expresiones_de_texto,
                                     sustituir_expresiones, validar_valor_cota)
@@ -588,6 +588,7 @@ class OpBoceto(Operacion):
     def __init__(self, id, nombre=None, suprimida=False, boceto=None, **params):
         super().__init__(id, nombre, suprimida, **params)
         self.boceto = boceto if boceto is not None else Boceto()
+        self.perdidas = []              # ids de las proyecciones que no coincidieron en el último cálculo (solo memoria)
 
     def valores_cotas(self, ctx):
         """Valor de cada cota. Sin el tope de `Contexto.evaluar`: una cota fuera de rango no falla el boceto, la
@@ -609,7 +610,7 @@ class OpBoceto(Operacion):
         if self.p["plano"] == "cara":
             deps |= ent.dependencias_de(self.p.get("cara"))
         for registro in self.boceto.proyecciones:
-            deps |= ent.dependencias_de(registro["refs"])
+            deps |= ent.dependencias_de(registro["refs"], [registro["eje"]] if registro.get("eje") else [])
         return deps
 
     def plano(self, estado, ctx):
@@ -618,21 +619,26 @@ class OpBoceto(Operacion):
         return base.desplazado(d) if d else base
 
     def _reproyectar(self, boceto, plano, estado, ctx):
-        """Recalcula las proyecciones asociativas antes del solver, sin alterar el boceto guardado."""
+        """Recalcula las proyecciones asociativas antes del solver, sin alterar el boceto guardado. Las que ya no
+        coinciden con el modelo quedan como estaban y se anotan en `perdidas` (Manage Lost Projections)."""
+        self.perdidas = []
         for registro in boceto.proyecciones:
             primitivas, puntos = [], []
-            funcion = intersecar_forma if registro["modo"] == "intersect" else proyectar_forma
             try:
-                formas = [ent.resolver(ref, estado).forma for ref in registro["refs"]]
+                entidades = [ent.resolver(ref, estado) for ref in registro["refs"]]
+                giro = None if registro["modo"] != "giro" else {
+                    "eje": ent.como_eje(ent.resolver(registro["eje"], estado)), "tolerancia": registro["tolerancia"],
+                    "invertir": registro["invertir"]}
             except (ent.ErrorReferencia, ent.ReferenciaMalFormada):
                 coincide = False
             else:
-                for forma in formas:
-                    p, q = funcion(forma, plano)
+                for e in entidades:
+                    p, q = ent.proyectar_entidad(e, plano, registro["modo"], giro)
                     primitivas.extend(p)
                     puntos.extend(q)
                 coincide = boceto.reproyectar(registro, primitivas, puntos)
             if not coincide:
+                self.perdidas.append(registro["id"])
                 ctx.aviso(f"{self.nombre}: la proyección ya no coincide con el modelo; queda como estaba.")
 
     def _conservar_lado_cotas(self, boceto):

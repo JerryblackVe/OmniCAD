@@ -24,7 +24,8 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
-from ..nucleo.perfiles import aristas_boceto, buscar_por_firma_tolerante
+from ..nucleo.perfiles import (aristas_boceto, buscar_por_firma_tolerante, intersecar_forma, proyectar_forma,
+                               proyectar_giro_forma)
 
 EJES_ORIGEN = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0)}
 
@@ -356,3 +357,48 @@ def direccion(ent):
     if ent.plano is not None:
         return ent.plano.normal
     return como_eje(ent)[1]
+
+
+EXTENSION_EJE = 100.0       # mm a cada lado: un eje o la traza de un plano son infinitos y el boceto no
+
+
+def proyectar_entidad(e, plano, modo="project", giro=None):
+    """(primitivas, puntos) de la entidad resuelta `e` proyectada (o intersecada, `modo="intersect"`) sobre el plano de
+    un boceto: formas con `proyectar_forma` / `intersecar_forma`; un punto de trabajo, su proyección; un eje, una
+    línea; un plano, su traza en el plano del boceto. shortcut: el eje y la traza se dibujan de ±EXTENSION_EJE mm.
+    Con `giro` ({"eje": (punto, dirección), "tolerancia", "invertir"}) es el perfil giratorio de la forma."""
+    n = plano.normal
+    if giro is not None:
+        if e.forma is None:
+            return [], []
+        return proyectar_giro_forma(e.forma, plano, giro["eje"], giro["tolerancia"], giro["invertir"])
+    if e.forma is not None:
+        return (intersecar_forma if modo == "intersect" else proyectar_forma)(e.forma, plano)
+    if e.punto is not None:
+        if modo == "intersect" and abs(float((e.punto - plano.origen) @ n)) > 1e-6:
+            return [], []
+        return [], [plano.a_uv(e.punto)]
+    if e.eje is not None:
+        p, d = e.eje
+        den = float(d @ n)
+        if modo == "intersect":
+            if abs(den) < 1e-9:
+                return [], []
+            return [], [plano.a_uv(p - d * (float((p - plano.origen) @ n) / den))]
+        q = p - n * float((p - plano.origen) @ n)
+        d2 = d - n * den
+        largo = float(np.linalg.norm(d2))
+        if largo < 1e-9:                        # eje perpendicular al plano: se ve como un punto
+            return [], [plano.a_uv(q)]
+        d2 = d2 / largo
+        return [("linea", None, plano.a_uv(q - d2 * EXTENSION_EJE), plano.a_uv(q + d2 * EXTENSION_EJE))], []
+    if e.plano is not None:
+        n2 = e.plano.normal
+        d = np.cross(n, n2)
+        largo = float(np.linalg.norm(d))
+        if largo < 1e-9:                        # planos paralelos: no hay traza
+            return [], []
+        d = d / largo
+        p = np.linalg.solve(np.array([n, n2, d]), [float(n @ plano.origen), float(n2 @ e.plano.origen), 0.0])
+        return [("linea", None, plano.a_uv(p - d * EXTENSION_EJE), plano.a_uv(p + d * EXTENSION_EJE))], []
+    return [], []

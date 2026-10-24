@@ -356,7 +356,7 @@ def test_reproyectar_rechaza_cambio_de_cantidad_y_conserva_el_registro():
     ids = b.agregar_proyeccion(primitivas, origen=origen)
     datos = b.a_dict()
     registro = b.proyecciones[0]
-    assert registro == {**origen, "construccion": False, "ids": ids}
+    assert registro == {**origen, "id": 1, "construccion": False, "ids": ids}
     assert not b.reproyectar(registro, [("linea", None, (20, 0), (30, 0))], [])
     assert b.a_dict() == datos
     assert Boceto.desde_dict(datos).a_dict() == datos

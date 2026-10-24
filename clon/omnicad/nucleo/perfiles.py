@@ -546,4 +546,55 @@ def intersecar_forma(forma, plano):
     return prims, puntos
 
 
+def _simplificar(puntos, tolerancia):
+    """Douglas-Peucker: la polilínea con los menos vértices que quedan a `tolerancia` de la original."""
+    if len(puntos) < 3:
+        return list(puntos)
+    a, b = np.asarray(puntos[0], float), np.asarray(puntos[-1], float)
+    ab = b - a
+    largo = float(np.linalg.norm(ab))
+    resto = np.asarray(puntos[1:-1], float) - a
+    d = np.linalg.norm(resto, axis=1) if largo < 1e-12 else np.abs(resto[:, 0] * ab[1] - resto[:, 1] * ab[0]) / largo
+    k = int(np.argmax(d))
+    if d[k] <= tolerancia:
+        return [puntos[0], puntos[-1]]
+    return _simplificar(puntos[:k + 2], tolerancia)[:-1] + _simplificar(puntos[k + 1:], tolerancia)
+
+
+def proyectar_giro_forma(forma, plano, eje, tolerancia=0.1, invertir=False, muestras=64):
+    """Perfil giratorio (Fusion: Project/Include > Spun Profile): gira la forma alrededor de `eje` (punto, dirección) y
+    deja su perfil sobre el plano del boceto. Cada punto va a (h, r): h a lo largo del eje y r su distancia a él, sobre la
+    proyección del eje en el plano (r hacia +u del boceto, o +v si el eje corre a lo largo de u; al lado contrario con `invertir`). Las aristas se muestrean y se
+    simplifican a segmentos que quedan a `tolerancia` mm de la curva. Devuelve (primitivas, puntos sueltos (u, v)).
+    shortcut: gira todas las aristas, sin sacar las que quedan dentro del cuerpo (no es solo el contorno exterior)."""
+    p0, d = np.asarray(eje[0], float), np.asarray(eje[1], float)
+    d = d / (np.linalg.norm(d) or 1.0)
+    n = np.asarray(plano.normal, float)
+    d2 = d - n * float(d @ n)
+    largo = float(np.linalg.norm(d2))
+    if largo < 1e-9:
+        raise geo.ErrorGeometria("El eje es perpendicular al plano del boceto: no hay perfil giratorio que proyectar.")
+    d2 = d2 / largo
+    v2 = np.cross(n, d2)
+    lado = float(v2 @ plano.u) if abs(float(v2 @ plano.u)) > 1e-9 else float(v2 @ plano.v)
+    v2 = v2 * (-1.0 if (lado < 0) != bool(invertir) else 1.0)       # por defecto, r va hacia +u (o +v si el eje es horizontal)
+    q = p0 - n * float((p0 - plano.origen) @ n)
+
+    def a_uv(p):
+        rel = np.array([p.X(), p.Y(), p.Z()]) - p0
+        h = float(rel @ d)
+        r = float(np.linalg.norm(rel - h * d))
+        return plano.a_uv(q + d2 * h + v2 * r)
+    prims = []
+    for e in _aristas_unicas(forma):
+        curva = BRepAdaptor_Curve(e)
+        f, l = curva.FirstParameter(), curva.LastParameter()
+        ts = np.linspace(f, l, muestras)
+        pts = _simplificar([a_uv(curva.Value(float(t))) for t in ts], tolerancia)
+        prims += [("linea", None, a, b) for a, b in zip(pts, pts[1:], strict=False) if math.dist(a, b) > 1e-9]
+    if prims:
+        return prims, []
+    return [], [a_uv(p) for p in _vertices(forma)]
+
+
 _motor.registrar(globals(), _iniciar_opencascade)
