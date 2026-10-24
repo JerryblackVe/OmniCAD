@@ -1595,8 +1595,11 @@ class VentanaPrincipal(QMainWindow):
             self._seleccionar(grupo)
 
     def _tecla_suprimir(self):
-        """Supr: con algo elegido lo borra enseguida (como Fusion); si no, abre el diálogo Suprimir."""
-        if self.seleccion and self.panel is None:
+        """Supr: con algo elegido lo borra enseguida (como Fusion); si no, abre el diálogo Suprimir.
+        Dentro del boceto borra lo elegido del boceto, sin salir."""
+        if self.modo_boceto.activo:
+            self.modo_boceto.lienzo.borrar_seleccion()
+        elif self.seleccion and self.panel is None:
             self.suprimir_seleccion()
         else:
             from .comandos.modificar import Suprimir
@@ -1619,7 +1622,14 @@ class VentanaPrincipal(QMainWindow):
     # ------------------------------------------------------------ menú radial (marking menu de Fusion)
     def repetir_ultimo(self):
         """Shift+R (PL2, Plasticity: teclas de opción a la vista): repite el último comando, el mismo
-        ítem «Repetir» del menú radial."""
+        ítem «Repetir» del menú radial. Dentro del boceto repite la última herramienta de boceto, sin salir."""
+        if self.modo_boceto.activo:
+            h = self.modo_boceto.lienzo.ultima_herramienta
+            if h is None:
+                self.mensaje("Todavía no hay una herramienta de boceto para repetir.")
+            else:
+                self.modo_boceto.herramienta(h)
+            return
         if self._ultimo_comando is None:
             self.mensaje("Todavía no hay un comando para repetir.")
             return
@@ -1637,8 +1647,15 @@ class VentanaPrincipal(QMainWindow):
             return I(a.text().split("\t")[0], a.trigger, a.icon(), a.isEnabled())
 
         ultimo = self._ultimo_comando
-        repetir = I(f"Repetir {ultimo.TITULO}" if ultimo else "Repetir", (lambda: self.ejecutar_comando(ultimo()))
-                    if ultimo else None, icono(ultimo.ICONO) if ultimo else None, ultimo is not None)
+        if self.modo_boceto.activo:
+            from .editor_boceto import HERRAMIENTAS
+            h = self.modo_boceto.lienzo.ultima_herramienta
+            accion = self.modo_boceto.acciones.get(f"sk_{h}")
+            repetir = I(f"Repetir {HERRAMIENTAS.get(h, (h,))[0]}" if h else "Repetir", self.repetir_ultimo if h else None,
+                        accion.icon() if accion else None, h is not None)
+        else:
+            repetir = I(f"Repetir {ultimo.TITULO}" if ultimo else "Repetir", (lambda: self.ejecutar_comando(ultimo()))
+                        if ultimo else None, icono(ultimo.ICONO) if ultimo else None, ultimo is not None)
         items = [repetir, de_accion("pulsar_tirar"), de_accion("rehacer"), de_accion("agujero"),
                  I("Boceto", None, icono("boceto"), True, sub=self._items_radial_boceto()), de_accion("mover_copiar"),
                  de_accion("deshacer"), I("Suprimir", self._tecla_suprimir, icono("suprimir"))]
@@ -1980,6 +1997,9 @@ class VentanaPrincipal(QMainWindow):
             self.releer_espacios()      # deshacer también revierte doc.espacios (guiones de animación)
 
     def _rehacer(self):
+        if self.modo_boceto.activo:
+            self.modo_boceto.lienzo.rehacer()
+            return
         self._intentar(self.doc.rehacer)
         self.releer_espacios()
 

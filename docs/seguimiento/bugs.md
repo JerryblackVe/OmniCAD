@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23. Total 15: Abierto 10 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23. Total 12: Abierto 7 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -20,10 +20,7 @@ Cada fila se reprodujo con una prueba real (scripts de la auditoría, no incluid
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-94 | Rehacer (Ctrl+Y) dentro del boceto rehace el documento | Abierto | Media | El `Lienzo` no tiene pila de rehacer: 3 curvas, deshacer 2, rehacer 2 no vuelve a 3. | omnicad/ui/editor_boceto.py:589; omnicad/ui/ventana.py:1982 (`_rehacer`) | 2026-10-23 |
-| B-95 | «Suprimir» y «Repetir» del menú radial sacan del boceto | Abierto | Baja | `_tecla_suprimir` ejecuta el comando 3D `Suprimir`, termina el boceto y abre su diálogo; en Fusion borra la selección del boceto. | omnicad/ui/ventana.py:1597 | 2026-10-23 |
 | B-96 | Curva de fusión G2 con un arco deforma el arco | Abierto | Media | Con arco r=10 y línea, el arco queda con curvatura 0,0930 (r≈10,75): los polos internos salen colineales (curvatura 0 en la unión) y el solver mueve la curva original. | omnicad/restricciones/boceto.py:2745-2749 (`curva_fusion`) | 2026-10-23 |
-| B-97 | «Voltear» del texto no existe en la UI | Abierto | Baja | El editor manda a «Voltear del texto» y no hay tal comando; `flip_h` y `flip_v` solo están en la API. | omnicad/ui/editor_boceto.py:2741 | 2026-10-23 |
 | B-98 | Desfase hacia adentro devuelve contornos invertidos o de largo 0 | Abierto | Media | Rectángulo 20×10: `-5` da líneas de largo 0 y `-6` un contorno invertido, con OK. Solo se controla el radio de arcos y círculos. Fallar si un segmento se invierte o llega a 0. | omnicad/restricciones/boceto.py:2331-2343 (`desfase`) | 2026-10-23 |
 | B-99 | Proyectar un cuerpo cilíndrico deja círculos duplicados | Abierto | Baja | Quedan 2 círculos idénticos superpuestos; las líneas coincidentes sí se deduplican. | omnicad/restricciones/boceto.py:1425-1436 | 2026-10-23 |
 | B-100 | Simetría de arcos no refleja los extremos | Abierto | Media | 2 arcos con eje: dof 14 → 11 (debía ser 9); los círculos sí dan 7. El solver solo empareja centros. | omnicad/restricciones/solver.py:430 | 2026-10-23 |

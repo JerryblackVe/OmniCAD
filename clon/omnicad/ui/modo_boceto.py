@@ -405,6 +405,12 @@ class PanelCaracter(QFrame):
         fila.addWidget(self.estilo, 1)
         fila.addWidget(self.altura)
         fila.addWidget(self.b_kerning)
+        self.b_voltear_h = self._boton_voltear("↔", "voltear_h", "<b>Voltear horizontal</b><br>Espeja el texto "
+                                               "de izquierda a derecha dentro de su bloque.")
+        self.b_voltear_v = self._boton_voltear("↕", "voltear_v", "<b>Voltear vertical</b><br>Espeja el texto "
+                                               "de arriba abajo dentro de su bloque.")
+        fila.addWidget(self.b_voltear_h)
+        fila.addWidget(self.b_voltear_v)
         c.addLayout(fila)
         # ---- Espaciado
         self._seccion(c, "Espaciado", True)
@@ -597,6 +603,13 @@ class PanelCaracter(QFrame):
         if indice >= 0:
             self.cambio.emit("fuente", self.fuente.itemText(indice))
 
+    def _boton_voltear(self, texto, clave, ayuda):
+        b = QToolButton(text=texto)
+        b.setCheckable(True)
+        b.setToolTip(ayuda)
+        b.toggled.connect(lambda x: self.cambio.emit(clave, bool(x)))
+        return b
+
     def _estilo_elegido(self, _i):
         negrita, cursiva = _ESTILO_BC[self.estilo.currentData()]
         self.cambio.emit("negrita", negrita)
@@ -612,7 +625,7 @@ class PanelCaracter(QFrame):
         self.par.setEnabled(True)
 
     def _widgets(self):
-        return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.subrayado, self.tachado, self.grosor,
+        return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.b_voltear_h, self.b_voltear_v, self.subrayado, self.tachado, self.grosor,
                 self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
                 self.alineacion, self.ancla_v, self.camino_lado, self.altura, self.interletraje, self.interlineado,
                 self.par)
@@ -627,6 +640,8 @@ class PanelCaracter(QFrame):
             clave = {v: k for k, v in _ESTILO_BC.items()}[(bool(o.get("negrita")), bool(o.get("cursiva")))]
             self.estilo.setCurrentIndex(max(0, self.estilo.findData(clave)))
             self.b_kerning.setChecked(bool(o.get("kerning", True)))
+            self.b_voltear_h.setChecked(bool(o.get("voltear_h")))
+            self.b_voltear_v.setChecked(bool(o.get("voltear_v")))
             for cb, clave, defecto in ((self.subrayado, "subrayado", "ninguno"), (self.tachado, "tachado", "ninguno"),
                                        (self.capitalizacion, "capitalizacion", "ninguno"),
                                        (self.alineacion, "alineacion", "izq"), (self.ancla_v, "ancla_v", "base"),

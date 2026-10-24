@@ -441,6 +441,7 @@ class Lienzo(QWidget):
         self.evaluar = evaluar
         self.visor, self.plano = visor, plano
         self.herramienta = "seleccionar"
+        self.ultima_herramienta = None
         self.construccion = False
         self.eje = False                           # tipo de línea "línea central" para lo nuevo
         self.ajustar_grilla = visor is None          # en la vista 3D, "Forzar" arranca apagado (Fusion)
@@ -454,6 +455,7 @@ class Lienzo(QWidget):
                          "negrita": False, "cursiva": False,
                          "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq",
                          "altura_texto": 5.0, "espaciado": 0.0, "interlineado": 1.0,
+                         "voltear_h": False, "voltear_v": False,
                          **{k: Texto._PREDETERMINADOS[k] for k in Texto.TIPOGRAFIA}}
         self._sel_texto = []                       # cuadriláteros de lo seleccionado en el texto que se escribe
         self._arrastre_texto = False               # se está seleccionando texto arrastrando el ratón
@@ -478,6 +480,7 @@ class Lienzo(QWidget):
         self.cursor = None
         self.inferencia = None
         self.historial = []
+        self.pila_rehacer = []
         self.resultado = None
         self.entrada = None
         self._mvp = None
@@ -589,7 +592,19 @@ class Lienzo(QWidget):
     def deshacer(self):
         if not self.historial:
             return
+        self.pila_rehacer.append(self.b.a_dict())
         self._restaurar(self.historial.pop())
+        self._tras_deshacer()
+
+    def rehacer(self):
+        """Ctrl+Y dentro del boceto: vuelve lo último que se deshizo (cualquier cambio nuevo vacía la pila)."""
+        if not self.pila_rehacer:
+            return
+        self.historial.append(self.b.a_dict())
+        self._restaurar(self.pila_rehacer.pop())
+        self._tras_deshacer()
+
+    def _tras_deshacer(self):
         self.seleccion, self.clics, self.picks, self.picks_xy = [], [], [], []
         self._reiniciar_vivo()
         self.resolver()
@@ -647,6 +662,7 @@ class Lienzo(QWidget):
             self.resolver()
             self.mensaje.emit("Eso entra en conflicto con las restricciones que ya había (sobre-restringe): se deshizo.")
             return False
+        self.pila_rehacer.clear()
         if operacion and not vinculos <= (set(self.b.restricciones) | set(self.b.cotas)):
             self.aviso.emit(AVISO_BORRADAS)
         return True
@@ -768,6 +784,8 @@ class Lienzo(QWidget):
     def set_herramienta(self, h):
         self.confirmar_texto_pendiente()          # cambiar de herramienta no pierde el texto escrito
         self.herramienta = h
+        if h != "seleccionar":
+            self.ultima_herramienta = h           # para «Repetir» del menú radial
         self.clics, self.picks, self.picks_xy = [], [], []
         self.fase = None
         self._previa_recorte = None
@@ -1092,8 +1110,8 @@ class Lienzo(QWidget):
                 altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
                 espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
                 o = self.opciones
-                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | en_curva | caja \
-                    | {k: o[k] for k in Texto.TIPOGRAFIA}
+                extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"], "voltear_h": o["voltear_h"],
+                         "voltear_v": o["voltear_v"]} | en_curva | caja | {k: o[k] for k in Texto.TIPOGRAFIA}
                 ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
                     pid if pid is not None else xy, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
                     o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
@@ -1401,6 +1419,7 @@ class Lienzo(QWidget):
         # la paleta parte de lo que ya tiene el texto: aceptar sin tocar nada no le cambia la fuente ni la alineación
         self.opciones.update(fuente=t.fuente, negrita=t.negrita, cursiva=t.cursiva, alineacion=t.alineacion,
                              ancla_v=t.ancla_v, camino_lado=t.camino_lado, altura_texto=t.altura,
+                             voltear_h=t.voltear_h, voltear_v=t.voltear_v,
                              espaciado=t.espaciado, interlineado=t.interlineado,
                              **{k: getattr(t, k) for k in Texto.TIPOGRAFIA})
 
@@ -1419,6 +1438,7 @@ class Lienzo(QWidget):
                 t.fuente, t.negrita, t.cursiva = self.opciones["fuente"], self.opciones["negrita"], self.opciones["cursiva"]
                 t.espaciado, t.interlineado = espaciado, interlineado
                 t.alineacion, t.ancla_v = self.opciones["alineacion"], self.opciones["ancla_v"]
+                t.voltear_h, t.voltear_v = bool(self.opciones["voltear_h"]), bool(self.opciones["voltear_v"])
                 t.camino_lado = self.opciones.get("camino_lado", t.camino_lado)
                 for k, tipo in Texto.TIPOGRAFIA.items():
                     setattr(t, k, tipo(self.opciones[k]))
@@ -1733,11 +1753,13 @@ class Lienzo(QWidget):
             t.fuente, t.negrita, t.cursiva = o["fuente"], o["negrita"], o["cursiva"]
             t.espaciado, t.interlineado = esp, inter
             t.alineacion, t.ancla_v = o["alineacion"], o["ancla_v"]
+            t.voltear_h, t.voltear_v = bool(o["voltear_h"]), bool(o["voltear_v"])
             t.camino_lado = o.get("camino_lado", t.camino_lado)
             for k, v in tipografia.items():
                 setattr(t, k, v)
             return t
-        extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"]} | d["extra"]
+        extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"], "voltear_h": o["voltear_h"],
+                 "voltear_v": o["voltear_v"]} | d["extra"]
         return Texto(0, d["pos"], texto, o["fuente"], altura, ang, o["negrita"], o["cursiva"], espaciado=esp,
                      interlineado=inter, **extra, **tipografia)
 
@@ -2738,7 +2760,7 @@ class Lienzo(QWidget):
     def _espejar_marco(self, ids, centro, horizontal):
         _hechos, textos = self.b.reflejar(ids, centro, horizontal)
         if textos:
-            self.mensaje.emit("Los textos rectos no se espejan con el marco: usá Voltear del texto.")
+            self.mensaje.emit("Los textos rectos no se espejan con el marco: usá los botones de volteo del panel «Carácter».")
 
     def _soltar_marco(self):
         m, self._marco = self._marco, None
@@ -3050,6 +3072,7 @@ class Lienzo(QWidget):
             if not self._movio:
                 self.historial.pop()
             else:
+                self.pila_rehacer.clear()
                 self.resolver()
             self._arrastre = None
         if self._presion is not None and e.button() == Qt.LeftButton:
