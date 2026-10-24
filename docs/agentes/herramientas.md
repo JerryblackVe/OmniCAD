@@ -634,7 +634,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`add_constraint`](#add_constraint) | sí | Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
 | [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. |
-| [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}; todas aceptan id (nombre propio para citarla) y construction. |
+| [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Todas aceptan id (nombre propio para citarla), construction y centerline (mutuamente excluyentes; texto no admite centerline, los puntos sueltos no tienen tipo de línea). |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
 | [`draw_point`](#draw_point) | sí | Agrega un punto suelto al boceto (Fusion: Punto): sirve de referencia para cotas, restricciones, agujeros o el centro de un patrón circular. |
@@ -702,6 +702,7 @@ Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una línea de construcción (no forma perfiles).
   - `midpoint` (true/false; opcional, por defecto `false`): true dibuja la línea desde su punto medio (start) y un extremo (end), con la restricción de punto medio.
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_line --doc pieza.omnicad start_x=… start_y=… end_x=… end_y=…`
 
 ### `draw_rectangle`
@@ -724,6 +725,7 @@ Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). Tres 
   - `construction` (true/false; opcional, por defecto `false`): true para un rectángulo de construcción (no forma perfiles).
   - `center_diagonals` (true/false; opcional, por defecto `false`): true (con center_x/center_y y tamaño) agrega las diagonales de construcción y el punto central con restricción de punto medio.
   - `three_points` (lista de lista de número o null; opcional, por defecto `null`): [[ax, ay], [bx, by], [cx, cy]]: lado A→B y punto C que da el ancho; no se combina con las otras formas.
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_rectangle --doc pieza.omnicad`
 
 ### `draw_circle`
@@ -739,11 +741,12 @@ Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 
   - `construction` (true/false; opcional, por defecto `false`): true para un círculo de construcción (no forma perfiles).
   - `kind` ("center_radius" | "two_points" | "three_points"; opcional, por defecto `"center_radius"`): "center_radius" (centro y radio), "two_points" (extremos de un diámetro) o "three_points" (pasa por tres puntos).
   - `points` (lista de lista de número o null; opcional, por defecto `null`): [[x, y], …] con dos puntos (two_points) o tres (three_points), en mm sobre el plano del boceto.
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_circle --doc pieza.omnicad`
 
 ### `draw_arc`
 
-Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, end_y), o tangente al extremo de una línea (tangent_to, start_x/start_y y end_x/end_y). La forma tangente comparte el extremo y agrega la restricción de tangencia. Un arco solo forma un perfil si se cierra con otras curvas.
+Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, end_y), o tangente a una curva (tangent_to, start_x/start_y y end_x/end_y). La forma tangente comparte el extremo y agrega la restricción de tangencia. Un arco solo forma un perfil si se cierra con otras curvas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -758,7 +761,8 @@ Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center
   - `end_y` (número; opcional, por defecto `null`): y del punto final.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para un arco de construcción (no forma perfiles).
-  - `tangent_to` (entero; opcional, por defecto `null`): id de la línea de partida; start_x/start_y debe coincidir con uno de sus extremos. No se combina con centro, barrido ni punto intermedio.
+  - `tangent_to` (entero; opcional, por defecto `null`): id de la línea, arco, arco de elipse, spline abierta o cónica de partida; start_x/start_y debe coincidir con uno de sus extremos. También acepta una elipse cerrada si el inicio está sobre ella. No se combina con centro, barrido ni punto intermedio.
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_arc --doc pieza.omnicad start_x=… start_y=…`
 
 ### `create_polygon`
@@ -777,11 +781,12 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
   - `construction` (true/false; opcional, por defecto `false`): true para un polígono de construcción (no forma perfiles).
   - `fully_constrained` (true/false; opcional, por defecto `false`): true para dejarlo totalmente acotado (radio, giro y posición del centro): dof 0.
   - `edge_points` (lista de lista de número o null; opcional, por defecto `null`): kind=edge: [[x, y], [x, y], [x, y]] = extremos A y B del primer lado y un punto del lado hacia donde crece el polígono.
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call create_polygon --doc pieza.omnicad sides=…`
 
 ### `draw_spline`
 
-Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos).
+Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). Con tangent_to, una spline de ajuste abierta comparte el extremo de otra curva y agrega tangencia; el solver ajusta los puntos libres.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -791,6 +796,9 @@ Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado
   - `closed` (true/false; opcional, por defecto `false`): true para cerrar la spline de ajuste (forma un perfil).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una spline de construcción (no forma perfiles).
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
+  - `tangent_to` (entero; opcional, por defecto `null`): id de la curva de partida (línea, arco, arco de elipse, spline abierta, cónica o elipse); solo para una spline de ajuste abierta. El primer punto debe coincidir con su extremo (o estar sobre la elipse cerrada).
+  - `tangent_end` ("start" | "end"; opcional, por defecto `"end"`): extremo de la curva de partida, "start" o "end"; se ignora en una elipse cerrada. El solver puede ajustar los puntos libres para cumplir la tangencia.
 - CLI: `omnicad call draw_spline --doc pieza.omnicad points=…`
 
 ### `add_constraint`
@@ -806,7 +814,7 @@ Agrega una restricción geométrica entre entidades del boceto (ids de get_sketc
 
 ### `add_dimension`
 
-Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la distancia a la curva). En una cota lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan dónde se dibuja: no cambian el valor ni la geometría. Referencias fijas reservadas: origen 0, eje X -1 y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving redundante o en conflicto se crea como referencia con aviso y converted_to_reference=true. En angle, `near` [x, y] elige qué ángulo se mide, como el cursor en Fusion: el del cuadrante entre las dos rectas que contiene ese punto (45° o 135° en la misma figura); sin near mide entre las líneas tal como se dibujaron. El cuadrante (0..3) se guarda y get_sketch lo muestra como quadrant.
+Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco (diameter también acepta un punto o una línea con una línea central: mide el doble de la distancia al eje, como Fusion); angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la distancia a la curva). En una cota lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan dónde se dibuja: no cambian el valor ni la geometría. Referencias fijas reservadas: origen 0, eje X -1 y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving redundante o en conflicto se crea como referencia con aviso y converted_to_reference=true. En angle, `near` [x, y] elige qué ángulo se mide, como el cursor en Fusion: el del cuadrante entre las dos rectas que contiene ese punto (45° o 135° en la misma figura); sin near mide entre las líneas tal como se dibujaron. El cuadrante (0..3) se guarda y get_sketch lo muestra como quadrant.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -832,14 +840,14 @@ Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenad
 
 ### `sketch_from_spec`
 
-Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 | center,width,height | origin,width,height}, circle{center,radius}, arc{center,start,sweep | start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}; todas aceptan id (nombre propio para citarla) y construction. Las coordenadas son [x, y] en mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value}] (value puede ser una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', 'id.center', en un rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas), en un polígono 'id.side1..', 'id.v1..' y 'id.circle', en una elipse 'id.major' y 'id.major_axis/minor_axis', en una ranura 'id.side1/side2/end1/end2/axis/center1/center2'; un entero cita un id de entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano).
+Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 | center,width,height | origin,width,height}, circle{center,radius}, arc{center,start,sweep | start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Todas aceptan id (nombre propio para citarla), construction y centerline (mutuamente excluyentes; texto no admite centerline, los puntos sueltos no tienen tipo de línea). Las coordenadas son [x, y] en mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value, reference?}] (value puede ser una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', 'id.center', en un rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas), en un polígono 'id.side1..', 'id.v1..' y 'id.circle', en una elipse 'id.major' y 'id.major_axis/minor_axis', en una ranura 'id.side1/side2/end1/end2/axis/center1/center2'; un entero cita un id de entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano). Sin entities crea un boceto vacío y devuelve un aviso. reference=true mide sin restringir.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `plane` (texto; opcional, por defecto `"XY"`): "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
   - `entities` (lista de objeto o null; opcional, por defecto `null`): geometría del boceto (ver la descripción de la herramienta).
   - `constraints` (lista de objeto o null; opcional, por defecto `null`): restricciones, cada una {"type": ..., "entities": [citas]}.
-  - `dimensions` (lista de objeto o null; opcional, por defecto `null`): cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión}.
+  - `dimensions` (lista de objeto o null; opcional, por defecto `null`): cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión, "reference": false}; reference=true mide sin restringir y permite omitir value.
   - `name` (texto; opcional, por defecto `null`): nombre del boceto; vacío = "Boceto1", "Boceto2"…
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
 - CLI: `omnicad call sketch_from_spec --doc pieza.omnicad`
@@ -857,6 +865,7 @@ Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro d
   - `angle` (número; opcional, por defecto `0.0`): giro del eje mayor en grados respecto del eje x del boceto (antihorario).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una elipse de construcción (no forma perfiles).
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_ellipse --doc pieza.omnicad major_radius=… minor_radius=…`
 
 ### `draw_slot`
@@ -870,6 +879,7 @@ Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes,
   - `kind` ("center_to_center" | "overall" | "center_point" | "arc_three_points" | "arc_center"; opcional, por defecto `"center_to_center"`): center_to_center, overall, center_point, arc_three_points o arc_center.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una ranura de construcción (no forma perfiles).
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_slot --doc pieza.omnicad points=… width=…`
 
 ### `draw_point`
@@ -898,6 +908,7 @@ Dibuja una curva cónica (Fusion: Curva cónica) entre dos extremos, con el vér
   - `rho` (número; opcional, por defecto `0.5`): forma de la curva, entre 0 y 1 sin incluirlos.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una cónica de construcción.
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call draw_conic --doc pieza.omnicad start_x=… start_y=… end_x=… end_y=… vertex_x=… vertex_y=…`
 
 ### `draw_tangent_circle`

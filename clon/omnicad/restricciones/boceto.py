@@ -1576,7 +1576,8 @@ class Boceto:
         if "cuadrante" in datos:
             _validar_cuadrante(tipo, datos["cuadrante"])
         if referencia:
-            expresion = repr(self.medir_cota(tipo, entidades, modo, datos.get("cuadrante")))
+            expresion = repr(self.medir_cota(tipo, entidades, modo, datos.get("cuadrante"))
+                             * (2 if datos.get("diametral") else 1))
         c = Cota(self._nuevo_id(), tipo, entidades, expresion, datos, referencia=referencia)
         self.cotas[c.id] = c
         return c.id
@@ -1767,7 +1768,8 @@ class Boceto:
 
     def medir(self, cota):
         """Valor actual de una cota existente (con su modo)."""
-        return self.medir_cota(cota.tipo, cota.entidades, cota.datos.get("modo", "centro"), cota.datos.get("cuadrante"))
+        medida = self.medir_cota(cota.tipo, cota.entidades, cota.datos.get("modo", "centro"), cota.datos.get("cuadrante"))
+        return medida * 2 if cota.datos.get("diametral") else medida     # cota con la línea central: diámetro
 
     def cuadrante_angulo(self, l1, l2, punto):
         """Cuadrante (0..3) entre las rectas de l1 y l2 que contiene `punto` (x, y), como Fusion elige el ángulo
@@ -1983,9 +1985,9 @@ class Boceto:
         atras, _ = caminar(ini, cid, {cid} | {k for k, _ in adelante})
         return [(k, not inv) for k, inv in reversed(atras)] + [(cid, False)] + adelante, False
 
-    def _cortes(self, cid):
+    def _cortes(self, cid, prim=None):
         """[(t, (x, y), id de la otra curva)] donde `cid` cruza o toca a otras curvas, ordenados."""
-        prim = self.primitivas(cid)[0]
+        prim = self.primitivas(cid)[0] if prim is None else prim
         t0, t1, per = dominio(prim)
         caja = caja_primitiva(prim)
         cortes = []
@@ -2174,11 +2176,12 @@ class Boceto:
         return ids
 
     def alargar(self, cid, punto):
-        """Alargar (SKT-TRIM-EXTEND): extiende el extremo de una línea o un arco más cercano al clic
-        hasta la próxima intersección."""
+        """Alargar (SKT-TRIM-EXTEND): extiende el extremo más cercano al clic hasta la próxima
+        intersección. Una spline abierta se prolonga por su tangente, sin cambiar el tramo original;
+        pasa a puntos de control. Un arco circular o elíptico continúa sobre su curva portadora."""
         c = self._curva_modificable(cid)
-        if not isinstance(c, (Linea, Arco)):
-            raise ErrorBoceto("Alargar funciona con líneas y arcos.")
+        if not isinstance(c, (Linea, Arco, ArcoElipse, Spline)) or not c.extremos():
+            raise ErrorBoceto("Alargar funciona con líneas, arcos circulares o elípticos y splines abiertas.")
         ini, fin = c.extremos()
         lado_fin = math.dist(self.coords(fin), punto) <= math.dist(self.coords(ini), punto)
         extremo = fin if lado_fin else ini
@@ -2190,29 +2193,58 @@ class Boceto:
             if not lado_fin:
                 a, b = b, a
             L = math.dist(a, b)
+            if L < 1e-9:
+                raise ErrorBoceto("No se puede alargar una línea de longitud cero.")
             d = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
             rayo = ("linea", None, b, (b[0] + d[0] * grande, b[1] + d[1] * grande))
         else:
             prim = self.primitivas(cid)[0]
-            (cx, cy), r = prim[2], prim[3]
-            rayo = ("arco", None, (cx, cy), r, prim[5], prim[4])     # lo que le falta al arco para ser círculo
+            if isinstance(c, Spline):
+                t0, t1, _ = dominio(prim)
+                b, tangente = evaluar_primitiva(prim, t1 if lado_fin else t0, 1)
+                rapidez = math.hypot(*tangente)
+                if rapidez < 1e-12:
+                    raise ErrorBoceto("La spline no tiene una tangente definida en ese extremo.")
+                signo = 1 if lado_fin else -1
+                d = (signo * tangente[0] / rapidez, signo * tangente[1] / rapidez)
+                rayo = ("linea", None, b, (b[0] + d[0] * grande, b[1] + d[1] * grande))
+            else:
+                # El complemento del arco, recorrido hacia adelante o hacia atrás según el extremo.
+                rayo = prim[:4] + (prim[5], prim[4]) if isinstance(c, Arco) else prim[:6] + (prim[7], prim[6])
         mejor = None
-        for oid, otra in self.curvas.items():
-            if oid == cid or isinstance(otra, Texto):
+        for t, xy, oid in self._cortes(cid, rayo):
+            if math.dist(xy, self.coords(extremo)) < 1e-7:
                 continue
-            for q in self.primitivas(oid):
-                for t, _tb, xy in intersecciones(rayo, q):
-                    if math.dist(xy, self.coords(extremo)) < 1e-7:
-                        continue
-                    clave = t if (isinstance(c, Linea) or lado_fin) else -t
-                    if mejor is None or clave < mejor[0]:
-                        mejor = (clave, xy, oid)
+            clave = t if (isinstance(c, (Linea, Spline)) or lado_fin) else -t
+            if mejor is None or clave < mejor[0]:
+                mejor = (clave, xy, oid)
         if mejor is None:
             raise ErrorBoceto("No hay ninguna curva para alcanzar en esa dirección.")
         _, xy, oid = mejor
         nuevos, viejos = [], []
         otras = [k for k in self.curvas.values() if k.id != cid and extremo in k.puntos()]
-        if otras or self._punto_referenciado(extremo):
+        if isinstance(c, Spline):
+            polos, nudos, grado, pesos = prim[2:]
+            ids = list(c.pts) if c.modo == "control" else (
+                [ini] + [self.agregar_punto(*q) for q in polos[1:-1]] + [fin])
+            viejos.extend(c.puntos())
+            nuevo = self._punto_corte((0, xy, oid), nuevos)
+            b = self.coords(extremo)
+            internos = [self.agregar_punto(b[0] + (xy[0] - b[0]) * j / grado,
+                                          b[1] + (xy[1] - b[1]) * j / grado) for j in range(1, grado)]
+            delta = math.dist(b, xy) / rapidez
+            # Un tramo Bézier recto, unido con multiplicidad grado: conserva exactamente la curva anterior.
+            if lado_fin:
+                ids += internos + [nuevo]
+                nudos = list(nudos[:-1]) + [t1 + delta] * (grado + 1)
+                pesos = None if pesos is None else list(pesos) + [pesos[-1]] * grado
+            else:
+                ids = [nuevo] + internos[::-1] + ids
+                nudos = [t0 - delta] * (grado + 1) + list(nudos[1:])
+                pesos = None if pesos is None else [pesos[0]] * grado + list(pesos)
+            self.curvas[cid] = Spline(cid, ids, "control", grado, False, pesos, nudos,
+                                      c.construccion, c.eje, c.proyectada)
+        elif otras or self._punto_referenciado(extremo):
             nuevo = self._punto_corte((0, xy, oid), nuevos)
             for a in ("p1", "p2", "inicio", "fin"):
                 if getattr(c, a, None) == extremo:
@@ -2283,13 +2315,21 @@ class Boceto:
 
     def empalme(self, c1, c2, radio, pick1=None, pick2=None, expresion=None):
         """Empalme (SKT-ADD-FILLETS): redondea la esquina entre dos curvas con un arco tangente de
-        radio dado; recorta las curvas, agrega las tangencias y la cota de radio. Devuelve el arco."""
+        radio dado; recorta las curvas, agrega las tangencias y la cota de radio. Entre paralelas,
+        crea un semicírculo de radio igual a la mitad de su separación. Devuelve el arco."""
         if radio <= 0:
             raise ErrorBoceto("El radio del empalme debe ser positivo.")
         for k in (c1, c2):
             self._curva_modificable(k)
         tipos = (self.tipo_de(c1), self.tipo_de(c2))
+        paralelas = False
         if tipos == ("linea", "linea"):
+            d1, d2 = self._direccion(c1), self._direccion(c2)
+            paralelas = abs(d1[0] * d2[1] - d1[1] * d2[0]) < 1e-12
+        if paralelas:
+            F, pt1, pt2, radio = self._empalme_paralelas(c1, c2, pick1, pick2)
+            expresion = None       # el radio lo determina la separación, no la expresión pedida
+        elif tipos == ("linea", "linea"):
             X, lados = self._esquina(c1, c2, pick1, pick2)
             (d1, *_r1), (d2, *_r2) = lados
             theta = math.acos(max(-1.0, min(1.0, d1[0] * d2[0] + d1[1] * d2[1])))
@@ -2309,12 +2349,59 @@ class Boceto:
             F, pt1, pt2 = self._empalme_general(c1, c2, radio, pick1, pick2)
         a = (self.coords(pt1)[0] - F[0], self.coords(pt1)[1] - F[1])
         b = (self.coords(pt2)[0] - F[0], self.coords(pt2)[1] - F[1])
-        ini, fin = (pt1, pt2) if a[0] * b[1] - a[1] * b[0] > 0 else (pt2, pt1)
+        ini, fin = (pt1, pt2) if paralelas or a[0] * b[1] - a[1] * b[0] > 0 else (pt2, pt1)
         arco = self.agregar_arco_centro(F, ini, fin)
         self.agregar_restriccion("tangente", [c1, arco])
         self.agregar_restriccion("tangente", [c2, arco])
         self.agregar_cota("radio", [arco], expresion or _numero(radio))
         return arco
+
+    def _empalme_paralelas(self, c1, c2, pick1, pick2):
+        """Semicírculo tangente entre paralelas: cierra del lado opuesto a los puntos que se conservan."""
+        a1, b1 = self._extremos_linea(c1)
+        a2, b2 = self._extremos_linea(c2)
+        if min(math.dist(a1, b1), math.dist(a2, b2)) < 1e-9:
+            raise ErrorBoceto("El empalme necesita dos líneas de longitud positiva.")
+        d = self._direccion(c1)
+        if pick1 is not None:
+            invertir = math.dist(pick1, a1) > math.dist(pick1, b1)
+        elif pick2 is not None:
+            conservar, cerrar = (a2, b2) if math.dist(pick2, a2) <= math.dist(pick2, b2) else (b2, a2)
+            invertir = (cerrar[0] - conservar[0]) * d[0] + (cerrar[1] - conservar[1]) * d[1] < 0
+        else:
+            invertir = False
+        if invertir:
+            d = (-d[0], -d[1])
+        distancia = (a2[0] - a1[0]) * -d[1] + (a2[1] - a1[1]) * d[0]
+        if abs(distancia) < 1e-9:
+            raise ErrorBoceto("Las líneas son colineales: no hay separación para un empalme.")
+        lados = []
+        for cid, pick in ((c1, pick1), (c2, pick2)):
+            ids = sorted(self.curvas[cid].extremos(), key=lambda pid: (
+                (self.coords(pid)[0] - a1[0]) * d[0] + (self.coords(pid)[1] - a1[1]) * d[1]))
+            if pick is not None and math.dist(pick, self.coords(ids[0])) > math.dist(pick, self.coords(ids[1])):
+                raise ErrorBoceto("Elegí el mismo lado a conservar en las dos líneas paralelas.")
+            lados.append(ids)
+        cierre = max((self.coords(ids[1])[0] - a1[0]) * d[0] +
+                     (self.coords(ids[1])[1] - a1[1]) * d[1] for ids in lados)
+        t1 = (a1[0] + cierre * d[0], a1[1] + cierre * d[1])
+        t2 = (t1[0] - distancia * d[1], t1[1] + distancia * d[0])
+        F = ((t1[0] + t2[0]) / 2, (t1[1] + t2[1]) / 2)
+        pts, viejos = [], []
+        for cid, ids, t in zip((c1, c2), lados, (t1, t2), strict=True):
+            pid = self.agregar_punto(*t)
+            pts.append(pid)
+            ln = self.curvas[cid]
+            if ln.p1 == ids[1]:
+                ln.p1 = pid
+            else:
+                ln.p2 = pid
+            viejos.append(ids[1])
+            self._sin_cotas_de_largo(cid)
+        self._depurar(viejos)
+        if (t1[0] - F[0]) * d[1] - (t1[1] - F[1]) * d[0] < 0:
+            pts.reverse()
+        return F, *pts, abs(distancia) / 2
 
     def _empalme_general(self, c1, c2, r, pick1, pick2):
         """Empalme con arcos o círculos: el centro sale de cruzar las curvas desfasadas en r."""

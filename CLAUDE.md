@@ -45,6 +45,28 @@
   artículo no está, decirlo y recurrir a `analisis/fusion_doc/paginas/` (copia de solo texto) o a
   `privado/scripts/ayuda_fusion.py`. Los briefs a sub-sesiones y a OpenCode deben nombrar esta carpeta.
 
+## Cómo correr un plan por fases en loop, sin que el usuario apruebe nada
+Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presente:
+- **El chat coordinador ya corre en `bypassPermissions`**: sus comandos no piden permiso. Lo que SÍ pide
+  aprobación y corta el loop es **borrar sesiones** (tarjeta en todos los modos) y **abrir sesiones nuevas desde un
+  aviso automático** (solo se puede proponer una tarjeta). Por eso **no se borran ni se abren sesiones entre fases**.
+- **Reusar UNA sesión de ejecución**: al cerrar una fase y commitearla, vaciarla con `clear_session` (en bypass no
+  pide aprobación) y mandarle el brief de la fase siguiente con `SendMessage` (anda desde un aviso automático). El
+  brief tiene que ser autocontenido (el clear borra el contexto). Se borra la sesión solo al terminar el plan o si
+  Gerardo lo pide. La primera sesión la inicia Gerardo con un clic en la tarjeta.
+- **Implementar en OpenCode con GPT-6.1 Sol** (`openai/gpt-6.1-sol --variant high`): la sesión orquesta con
+  `/orquestador-opencode` y manda corridas chicas (una tarea por corrida) con **`timeout 1500`**; respaldo con `cp`
+  antes de cada una. Si una corrida se cuelga (log en 0 bytes, sin CPU ni archivos tocados) o Sol se queda sin cupo,
+  se corta solo ese proceso (por hora de inicio) y la pieza la hace Claude (Opus alto). Una sesión inactiva no
+  detecta un cuelgue: el coordinador mira el log y los archivos a los ~25 min.
+- **Cierre de cada fase (lo hace el coordinador, no la sesión):** `ruff check .` limpio; **suite completa** con
+  `scripts/turno.py` en dos mitades (corta a los 900 s): la lista de `tests/test_*.py` ordenada, primera y segunda
+  mitad; la prueba de humo si se tocó la UI. Fallos en tests lejanos son regresiones reales: devolverlos a la
+  sesión. Recién con todo verde: `git add` explícito (sin `docs/fusion_docs/`, que está ignorada) y commit; el
+  `push` solo si Gerardo lo pide. El brief siguiente nombra `docs/fusion_docs/` y exige `ponytail` y
+  `ponytail-review`.
+- Los informes llegan solos como avisos; no sondear. El estado de cada fase vive en `docs/seguimiento/`.
+
 ## Regla obligatoria: ponytail
 - **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
   (también las sub-sesiones y las que orquestan OpenCode) arranca con `ponytail`, termina con `ponytail-review`,

@@ -215,8 +215,8 @@ def test_esc_descarta_lo_escrito(app_qt):
     ("arco_centro", [(0, 0)], (10, 0), {"radio": "10.000 mm"}),
     ("arco_centro", [(0, 0), (10, 0)], (0, 10), {"barrido": "90.0 deg"}),
     ("poligono_inscrito", [(0, 0)], (10, 0), {"radio": "10.000 mm", "lados": "6"}),
-    ("ranura_centro", [(0, 0)], (20, 0), {"largo": "20.000 mm"}),
-    ("ranura_punto", [(0, 0)], (10, 0), {"largo": "20.000 mm"}),
+    ("ranura_centro", [(0, 0)], (20, 0), {"largo": "20.000 mm", "angulo": "0.0 deg"}),
+    ("ranura_punto", [(0, 0)], (10, 0), {"largo": "20.000 mm", "angulo": "0.0 deg"}),
     ("ranura_centro", [(0, 0), (20, 0)], (10, 3), {"ancho": "6.000 mm"}),
     ("ranura_arco_centro", [(0, 0), (10, 0), (0, 10)], (0, 12), {"ancho": "4.000 mm"}),
 ])

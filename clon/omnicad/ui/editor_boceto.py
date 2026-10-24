@@ -38,7 +38,8 @@ from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
-from ..restricciones.boceto import (Arco, Circulo, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
+from ..restricciones.inferencia import inferir
+from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
@@ -65,7 +66,7 @@ HERRAMIENTAS = {
     "circulo_3t": ("Círculo de 3 tangentes", "Clic en tres líneas."),
     "arco": ("Arco de 3 puntos", "Clic en el inicio, clic en el final y clic para la curvatura."),
     "arco_centro": ("Arco de punto central", "Clic en el centro, clic en el inicio (radio) y clic en el final."),
-    "arco_tangente": ("Arco tangente", "Clic en el extremo de una línea y clic en el final del arco."),
+    "arco_tangente": ("Arco tangente", "Clic en el extremo de una curva y clic en el final del arco."),
     "poligono_circunscrito": ("Polígono circunscrito", "Clic en el centro y clic para el tamaño y la "
                               "orientación (o escribí el radio, Tab, la cantidad de lados)."),
     "poligono_inscrito": ("Polígono inscrito", "Clic en el centro y clic en un vértice (o escribí el radio, "
@@ -85,7 +86,8 @@ HERRAMIENTAS = {
                       "termina; clic en el primer punto la cierra."),
     "spline_control": ("Spline de puntos de control", "Clic, clic… en los puntos de control. Enter o doble clic "
                        "termina."),
-    "conica": ("Curva cónica", "Clic en un extremo, clic en el otro y clic en el vértice; escribí Rho y Enter."),
+    "conica": ("Curva cónica", "Clic en los extremos y en el vértice; mové el ratón para ajustar Rho o escribilo. "
+                              "Clic o Enter confirma."),
     "punto": ("Punto", "Clic para ubicar puntos."),
     "texto": ("Texto", "Clic en una esquina y clic en la opuesta: el cuadro fija la altura y el ancho del texto; "
                        "escribí y mirá los cambios en vivo, Enter acepta (fuente y estilo en la paleta)."),
@@ -158,7 +160,8 @@ TOL_INFERENCIA = math.radians(3.0)
 # Cotas en vivo mientras se dibuja (las cajas de valor de Fusion): herramientas que las muestran.
 RANURAS_RECTAS = ("ranura_centro", "ranura_total", "ranura_punto")
 VIVAS = ("linea", "rectangulo", "rectangulo_3p", "rectangulo_centro", "circulo", "arco", "arco_centro",
-         "poligono_inscrito", "poligono_circunscrito") + RANURAS_RECTAS + ("ranura_arco_3p", "ranura_arco_centro")
+         "poligono_inscrito", "poligono_circunscrito", "circulo_2p", "linea_medio", "elipse", "arco_tangente",
+         "poligono_arista") + RANURAS_RECTAS + ("ranura_arco_3p", "ranura_arco_centro")
 ANGULARES = ("angulo", "barrido")
 # Colores de Fusion: cotas verde oliva sobre el fondo oscuro (#2d323f); gris oscuro sobre fondo claro.
 COTA_OSCURO, COTA_CLARO = QColor(0xa9, 0xc4, 0x6c), QColor(70, 72, 78)
@@ -482,6 +485,9 @@ class Lienzo(QWidget):
         self.fase = None             # en herramientas de varios pasos: seleccion | eje | base | destino | centro
         self.cursor = None
         self.inferencia = None
+        self.inf_actual = None
+        self._inf_inicio = None
+        self._modificadores_raton = Qt.NoModifier
         self.historial = []
         self.pila_rehacer = []
         self.resultado = None
@@ -504,6 +510,7 @@ class Lienzo(QWidget):
         self._esperando_ubicacion = False
         self._pos_cursor = QPointF(0, 0)
         self._presion_inferencia = None
+        self._presion_inf_actual = None
         self._cache_cortes = {}
         self._previa_recorte = None
         self._base = (0.0, 0.0)          # punto base de Mover/copiar
@@ -611,6 +618,7 @@ class Lienzo(QWidget):
 
     def _tras_deshacer(self):
         self.seleccion, self.clics, self.picks, self.picks_xy = [], [], [], []
+        self.inf_actual = self.inferencia = self._inf_inicio = None
         self._reiniciar_vivo()
         self.resolver()
 
@@ -799,8 +807,8 @@ class Lienzo(QWidget):
         return pid if pid is not None else self._curva_cercana(pos, interior=True)
 
     def _ajustar(self, pos, excluir=None, base=None):
-        """(id de punto enganchado o None, (u, v)). Con `base`, infiere horizontal/vertical."""
-        self.inferencia = None
+        """Punto existente y origen primero; después ajustes a objetos, H/V y rejilla."""
+        self.inf_actual = self.inferencia = None
         pid = self._punto_cercano(pos, excluir)
         if pid is not None:
             return pid, self.b.coords(pid)
@@ -808,16 +816,20 @@ class Lienzo(QWidget):
         if math.hypot(o.x() - pos.x(), o.y() - pos.y()) < TOL_PX:
             return None, (0.0, 0.0)                     # el origen del boceto también engancha
         x, y = self.a_mm(pos)
+        excluidos = [excluir] if excluir is not None else []
+        if self.herramienta == "linea" and self.clics and self._ultima_linea is not None:
+            excluidos.append(self._ultima_linea)
+        self.inf_actual = inferir(self.b, (x, y), TOL_PX / self.px_por_mm(), base=base,
+                                  excluir=excluidos,
+                                  coincidente=bool(self._modificadores_raton & Qt.ShiftModifier),
+                                  angulo_tol=TOL_INFERENCIA)
+        if self.inf_actual is not None:
+            if self.inf_actual.tipo in ("horizontal", "vertical"):
+                self.inferencia = self.inf_actual.tipo
+            return None, self.inf_actual.xy
         if self.ajustar_grilla:
             s = self.paso_grilla()
             x, y = round(x / s) * s, round(y / s) * s
-        if base is not None:
-            ang = math.atan2(y - base[1], x - base[0])
-            if math.hypot(x - base[0], y - base[1]) > 1e-9:
-                if min(abs(ang), abs(abs(ang) - math.pi)) < TOL_INFERENCIA:
-                    y, self.inferencia = base[1], "horizontal"
-                elif abs(abs(ang) - math.pi / 2) < TOL_INFERENCIA:
-                    x, self.inferencia = base[0], "vertical"
         return None, (x, y)
 
     # ------------------------------------------------------------ herramientas
@@ -827,6 +839,7 @@ class Lienzo(QWidget):
         if h != "seleccionar":
             self.ultima_herramienta = h           # para «Repetir» del menú radial
         self.clics, self.picks, self.picks_xy = [], [], []
+        self.inf_actual = self.inferencia = self._inf_inicio = None
         self.fase = None
         self._previa_recorte = None
         self._esperando_ubicacion = False
@@ -847,6 +860,7 @@ class Lienzo(QWidget):
 
     def cancelar(self):
         """Esc: primero corta lo que se está dibujando; después vuelve a Seleccionar."""
+        self.inf_actual = self.inferencia = self._inf_inicio = None
         if self.entrada is not None:
             self._cerrar_entrada()
         elif self.clics or self.picks or (self.fase not in (None, "seleccion")):
@@ -866,25 +880,61 @@ class Lienzo(QWidget):
     def _crear_linea(self, a, b, inferencia=None, cota=None):
         (p1, xa), (p2, xb) = a, b
         nueva = {}
+        inf_inicio, inf_fin = self._inf_inicio, self.inf_actual
+        post_crear = self._post_crear
+
+        def restringir(nuevas):
+            if post_crear is not None:
+                post_crear(nuevas)
+            linea = self.b.curvas[nueva["id"]]
+            pendientes = [(linea.p1, inf_inicio), (linea.p2, inf_fin)]
+            if not inferencia or (p1 is not None and p2 is not None):
+                pendientes = [(pid, inf) for pid, inf in pendientes
+                              if inf is None or inf.tipo not in ("horizontal", "vertical")]
+            self._restringir_inferencias(linea.id, pendientes)
 
         def crear():
             lid = self.b.agregar_linea(p1 if p1 is not None else xa, p2 if p2 is not None else xb, self.construccion)
             nueva["id"] = lid
-            if inferencia and not (p1 is not None and p2 is not None):
+            if inferencia and inf_fin is None and not (p1 is not None and p2 is not None):
                 self.b.agregar_restriccion(inferencia, [lid])
             if cota:
                 self.b.agregar_cota("distancia", [lid], cota)
-        if self.aplicar_cambio(crear):
-            return nueva["id"]
+        self._post_crear = restringir
+        try:
+            if self.aplicar_cambio(crear):
+                return nueva["id"]
+        finally:
+            self._post_crear = post_crear
         return None
 
+    def _restringir_inferencias(self, linea, extremos):
+        """Ensaya las restricciones inferidas sin perder la geometría si alguna entra en conflicto."""
+        pendientes = [(pid, inf) for pid, inf in extremos if inf is not None and inf.restriccion]
+        if not pendientes:
+            return
+        antes = self.b.a_dict()
+        try:
+            for pid, inf in pendientes:
+                tipo, *objetivos = inf.restriccion
+                entidad = pid if tipo in ("punto_medio", "coincidente") else linea
+                self.b.agregar_restriccion(tipo, [entidad, objetivos[0]] if objetivos else [entidad])
+                for adicional, destino in objetivos[1:]:
+                    self.b.agregar_restriccion(adicional, [pid, destino])
+            if not resolver(self.b.copia(), self.valores_cotas()).ok:
+                raise ErrorBoceto("La inferencia entra en conflicto con las restricciones existentes.")
+        except ErrorBoceto:
+            self._restaurar(antes)
+
+    def _curvas_con_extremo(self, pid):
+        """Curvas abiertas (línea, arco, spline, cónica…) que terminan en el punto `pid`."""
+        return [k.id for k in self.b.curvas.values() if pid in (k.extremos() or ())]
+
     def _crear_arco_tangente(self, pid, linea, fin):
-        """Arco desde el punto `pid` (extremo de `linea`) hasta `fin`, tangente a la línea."""
+        """Arco desde el punto `pid` (extremo de la curva `linea`) hasta `fin`, tangente a ella."""
         (pfin, xyf) = fin
-        p = self.b.coords(pid)
-        ln = self.b.curvas[linea]
-        otro = self.b.coords(ln.p1 if ln.p2 == pid else ln.p2)
-        geometria = centro_arco_tangente(p, otro, xyf)
+        p, salida = self.b._salida_extremo(linea, pid)
+        geometria = centro_arco_tangente(p, (p[0] - salida[0], p[1] - salida[1]), xyf)
         if geometria is None:
             return None
         centro, izquierda = geometria
@@ -963,6 +1013,26 @@ class Lienzo(QWidget):
     def _espiral(self, centro, inicio, vueltas, paso):
         pts = puntos_espiral(centro, inicio, vueltas, paso)
         return self.b.agregar_spline(pts, "ajuste", 3, False, construccion=self.construccion)
+
+    def _rho_conica(self, punto):
+        """Rho de Fusion: proyección relativa sobre el segmento punto medio–vértice."""
+        a, b, v = [xy for _, xy in self.clics[:3]]
+        m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+        dx, dy = v[0] - m[0], v[1] - m[1]
+        largo2 = dx * dx + dy * dy
+        if largo2 < 1e-18:
+            return 0.5
+        rho = ((punto[0] - m[0]) * dx + (punto[1] - m[1]) * dy) / largo2
+        return max(1e-6, min(1 - 1e-6, rho))      # 0 y 1 son cónicas degeneradas
+
+    def _actualizar_rho_conica(self, pos):
+        """El ratón cambia Rho sin ajuste a rejilla; lo escrito conserva prioridad."""
+        self.cursor = self.a_mm(pos)
+        self.inf_actual = self.inferencia = None
+        campo = self.entrada.campos[0]
+        if not campo.isModified():
+            campo.setText(f"{self._rho_conica(self.cursor):.12g}")
+            campo.selectAll()
 
     def _procesar_clics(self):
         h, c = self.herramienta, self.clics
@@ -1055,15 +1125,12 @@ class Lienzo(QWidget):
             self.clics = []
         elif h == "arco_tangente":
             if len(c) == 1:
-                pid = c[0][0]
-                lineas = [k.id for k in self.b.curvas.values() if isinstance(k, Linea) and pid in k.puntos()]
-                if pid is None or not lineas:
-                    self.mensaje.emit("Hacé clic en el extremo de una línea.")
+                if c[0][0] is None or not self._curvas_con_extremo(c[0][0]):
+                    self.mensaje.emit("Hacé clic en el extremo de una curva abierta.")
                     self.clics = []
             elif len(c) == 2:
                 pid = c[0][0]
-                linea = next(k.id for k in self.b.curvas.values() if isinstance(k, Linea) and pid in k.puntos())
-                self._crear_arco_tangente(pid, linea, c[1])
+                self._crear_arco_tangente(pid, self._curvas_con_extremo(pid)[0], c[1])
                 self.clics = []
         elif h in ("poligono_inscrito", "poligono_circunscrito") and len(c) == 2:
             (pc, ce), (_, v) = c
@@ -1108,9 +1175,11 @@ class Lienzo(QWidget):
                                                                        pv if pv is not None else vx,
                                                                        p2 if p2 is not None else b, rho,
                                                                        self.construccion))
-                self.clics = []
+                if ok:
+                    self.clics = []
                 return ok
             self._abrir_entrada(["Rho"], ["0.5"], self._pos_cursor, aceptar)
+            self.entrada.campos[0].textChanged.connect(lambda _t: self.update())
         elif h == "punto" and len(c) == 1:
             if c[0][0] is None:
                 self.aplicar_cambio(lambda: self.b.agregar_punto(*c[0][1]))
@@ -1986,11 +2055,26 @@ class Lienzo(QWidget):
             return {1: ["cuerda"], 2: ["radio"]}.get(n, [])
         if h == "arco_centro":
             return {1: ["radio"], 2: ["barrido"]}.get(n, [])
+        if h == "circulo_2p":
+            return ["diametro"] if n == 1 else []
+        if h == "linea_medio":
+            return ["largo", "angulo"] if n == 1 else []
+        if h == "elipse":
+            return {1: ["radio_mayor", "angulo"], 2: ["radio_menor"]}.get(n, [])
+        if h == "arco_tangente":
+            return ["radio"] if n == 1 and self._tangente_de(self.clics[0][0]) is not None else []
+        if h == "poligono_arista":
+            return ["largo", "angulo", "lados"] if n == 1 else []
         if h.startswith("poligono_"):
             return ["radio", "lados"] if n == 1 else []
         if h in RANURAS_RECTAS:
-            return {1: ["largo"], 2: ["ancho"]}.get(n, [])
+            return {1: ["largo", "angulo"], 2: ["ancho"]}.get(n, [])
         return ["ancho"] if n == 3 else []                 # ranuras de arco: el ancho en el último paso
+
+    def _tangente_de(self, pid):
+        """(punto, dirección unitaria de salida) de la curva abierta que termina en `pid`; None si no hay."""
+        curvas = self._curvas_con_extremo(pid) if pid is not None else []
+        return self.b._salida_extremo(curvas[0], pid) if curvas else None
 
     def _evaluar_campo(self, clave, texto):
         if clave == "lados":
@@ -2119,11 +2203,33 @@ class Lienzo(QWidget):
             ini = pts[1]
             t = math.atan2(ini[1] - a[1], ini[0] - a[0]) + self._sentido_barrido() * math.radians(vals["barrido"])
             return desde(a, (math.cos(t), math.sin(t)), math.dist(a, ini))
+        d = self._direccion_angulo(u, vals["angulo"]) if "angulo" in vals else u
+
+        def libre():
+            return max((cur[0] - a[0]) * d[0] + (cur[1] - a[1]) * d[1], 0.0)
+        if h == "circulo_2p":
+            return desde(a, u, vals["diametro"])
+        if h == "linea_medio":
+            return desde(a, d, vals["largo"] / 2 if "largo" in vals else libre())
+        if h == "elipse":
+            if len(pts) == 2:
+                return self._a_distancia_de_recta(cur, a, pts[1], vals["radio_menor"])
+            return desde(a, d, vals["radio_mayor"] if "radio_mayor" in vals else libre())
+        if h == "arco_tangente":                 # el final queda sobre el círculo de ese radio, tangente a la curva
+            p, s = self._tangente_de(self.clics[0][0])
+            n = (-s[1], s[0])
+            lado = 1 if (cur[0] - p[0]) * n[0] + (cur[1] - p[1]) * n[1] >= 0 else -1
+            c = (p[0] + n[0] * lado * vals["radio"], p[1] + n[1] * lado * vals["radio"])
+            return desde(c, _unitario(cur[0] - c[0], cur[1] - c[1]), vals["radio"])
+        if h == "poligono_arista":
+            if vals.keys() & {"largo", "angulo"}:
+                return desde(a, d, vals["largo"] if "largo" in vals else libre())
+            return cur
         if h.startswith("poligono_"):
             return desde(a, u, vals["radio"]) if "radio" in vals else cur
         if h in RANURAS_RECTAS:
             if len(pts) == 1:
-                return desde(a, u, vals["largo"] / (2 if h == "ranura_punto" else 1))
+                return desde(a, d, vals["largo"] / (2 if h == "ranura_punto" else 1) if "largo" in vals else libre())
             ini, fin = self._eje_ranura(h, pts)
             return self._a_distancia_de_recta(cur, ini, fin, vals["ancho"] / 2)
         centro, R = self._arco_ranura(h, pts)
@@ -2193,13 +2299,38 @@ class Lienzo(QWidget):
                 barrido = _barrido(a0, a1) if s > 0 else _barrido(a1, a0)
                 t0, t1 = (a0, a0 + barrido) if s > 0 else (a0 - barrido, a0)
                 campos.append(CampoVivo("barrido", math.degrees(barrido), ("angular", a, t0, t1, False), True))
+        elif h == "circulo_2p":
+            campos.append(CampoVivo("diametro", math.dist(a, cur), ("lineal", a, cur, None)))
+        elif h == "linea_medio":
+            ini = (2 * a[0] - cur[0], 2 * a[1] - cur[1])
+            campos += [CampoVivo("largo", math.dist(ini, cur), ("lineal", ini, cur, None)), self._campo_angulo(a, u)]
+        elif h == "elipse":
+            if len(pts) == 1:
+                campos += [CampoVivo("radio_mayor", math.dist(a, cur), ("radial", a, cur)), self._campo_angulo(a, u)]
+            else:
+                ue = _unitario(pts[1][0] - a[0], pts[1][1] - a[1])
+                n = (-ue[1], ue[0])
+                dn = (cur[0] - a[0]) * n[0] + (cur[1] - a[1]) * n[1]
+                campos.append(CampoVivo("radio_menor", abs(dn), ("lineal", a, (a[0] + n[0] * dn, a[1] + n[1] * dn), pts[1])))
+        elif h == "arco_tangente":
+            p, s = self._tangente_de(self.clics[0][0])
+            n = (-s[1], s[0])
+            v = (cur[0] - p[0], cur[1] - p[1])
+            alto = v[0] * n[0] + v[1] * n[1]
+            if abs(alto) > 1e-9:
+                r = (v[0] ** 2 + v[1] ** 2) / (2 * abs(alto))
+                lado = 1 if alto > 0 else -1
+                campos.append(CampoVivo("radio", r, ("radial", (p[0] + n[0] * lado * r, p[1] + n[1] * lado * r), cur)))
+        elif h == "poligono_arista":
+            campos += [CampoVivo("largo", math.dist(a, cur), ("lineal", a, cur, None)), self._campo_angulo(a, u),
+                       CampoVivo("lados", self.lados, None, entero=True)]
         elif h.startswith("poligono_"):
             campos += [CampoVivo("radio", math.dist(a, cur), ("radial", a, cur)),
                        CampoVivo("lados", self.lados, None, entero=True)]
         elif h in RANURAS_RECTAS:
             if len(pts) == 1:
                 ini = (2 * a[0] - cur[0], 2 * a[1] - cur[1]) if h == "ranura_punto" else a
-                campos.append(CampoVivo("largo", math.dist(ini, cur), ("lineal", ini, cur, None)))
+                campos += [CampoVivo("largo", math.dist(ini, cur), ("lineal", ini, cur, None)), self._campo_angulo(a, u)]
             else:
                 ini, fin = self._eje_ranura(h, pts)
                 ue = _unitario(fin[0] - ini[0], fin[1] - ini[1])
@@ -2214,6 +2345,12 @@ class Lienzo(QWidget):
             otro = (centro[0] + (2 * R - rc) * uc[0], centro[1] + (2 * R - rc) * uc[1])
             campos.append(CampoVivo("ancho", 2 * abs(rc - R), ("lineal", otro, cur, None)))
         return [c for c in campos if c.clave in claves]
+
+    @staticmethod
+    def _campo_angulo(a, u):
+        """Caja de ángulo absoluto (contra el eje X del boceto) de la dirección unitaria `u` desde `a`."""
+        ang = math.atan2(u[1], u[0]) % (2 * math.pi)
+        return CampoVivo("angulo", math.degrees(ang), ("angular", a, 0.0, ang, True), True)
 
     def _editar_campo_vivo(self, primera):
         """Escribir sobre la caja activa: se abre su campo con lo tecleado (Tab o Enter lo bloquean)."""
@@ -2272,6 +2409,8 @@ class Lienzo(QWidget):
         fase = [k for k in self._claves_vivas() if k in self._bloqueos]
         if fase:
             xy, pid = self._aplicar_bloqueos(xy), None
+            if self.inf_actual is not None and math.dist(xy, self.inf_actual.xy) > 1e-9:
+                self.inf_actual = None       # la cota escrita manda sobre el ajuste del ratón
             if h == "linea" and "angulo" in fase:
                 self.inferencia = None          # el ángulo escrito manda (y da su propia cota o restricción)
             if h == "arco_centro" and "barrido" in fase:
@@ -2279,6 +2418,8 @@ class Lienzo(QWidget):
         bloqueos = dict(self._bloqueos) if h in VIVAS else {}
         previa = self._linea_previa()
         antes, n = set(self.b.curvas), len(self.clics)
+        if n == 0:
+            self._inf_inicio = self.inf_actual
         if bloqueos:
             self._post_crear = lambda nuevas: self._cotas_de_lo_escrito(h, bloqueos, nuevas, previa)
         self.clics.append((pid, xy))
@@ -2289,9 +2430,24 @@ class Lienzo(QWidget):
             self._sentido_vivo = None
         if h in VIVAS:
             if set(self.b.curvas) != antes or len(self.clics) <= n:
+                if set(self.b.curvas) != antes or not self.clics:
+                    self._inf_inicio = None
                 self._reiniciar_vivo()          # se creó la geometría (o se cortó): cajas nuevas
             else:
                 self._activo = 0                # paso siguiente de la misma herramienta
+
+    def _horizontal_o_vertical(self, lineas, bloqueos):
+        """Un ángulo escrito de 0°/180° o 90°/270° se vuelve horizontal o vertical en la línea que lo cumple."""
+        if "angulo" not in bloqueos:
+            return
+        ang = math.radians(bloqueos["angulo"][1])
+        tipo = "horizontal" if abs(math.sin(ang)) < 1e-9 else "vertical" if abs(math.cos(ang)) < 1e-9 else None
+        for lid in lineas:
+            (x1, y1), (x2, y2) = self.b._extremos_linea(lid)
+            fuera = abs(y2 - y1) if tipo == "horizontal" else abs(x2 - x1)     # lo que se aparta del eje pedido
+            if tipo and fuera < 1e-6 * max(math.dist((x1, y1), (x2, y2)), 1.0):
+                self.b.agregar_restriccion(tipo, [lid])
+                return
 
     def _cotas_de_lo_escrito(self, h, bloqueos, nuevas, previa):
         """Lo escrito en las cajas se vuelve cota de boceto (como Fusion), sobre la geometría recién creada."""
@@ -2322,19 +2478,34 @@ class Lienzo(QWidget):
                 cota("distancia", [lineas[0]], texto["ancho"])
             if "alto" in texto:
                 cota("distancia", [lineas[1]], texto["alto"])
-        elif h == "circulo" and circulos and "diametro" in texto:
+        elif h in ("circulo", "circulo_2p") and circulos and "diametro" in texto:
             cota("diametro", [circulos[0]], texto["diametro"])
+        elif h == "linea_medio" and lineas:
+            if "largo" in texto:
+                cota("distancia", [lineas[0]], texto["largo"])
+            self._horizontal_o_vertical(lineas, bloqueos)
+        elif h == "elipse" and len(lineas) >= 2:        # los ejes de construcción: la cota es el eje entero
+            for clave, lid in (("radio_mayor", lineas[0]), ("radio_menor", lineas[1])):
+                if clave in texto:
+                    t = texto[clave]
+                    cota("distancia", [lid], formato.numero(2 * _numero(t)) if _es_numero(t) else f"2 * ({t})")
+            self._horizontal_o_vertical(lineas[:1], bloqueos)
+        elif h == "poligono_arista" and lineas:
+            if "largo" in texto:
+                cota("distancia", [lineas[0]], texto["largo"])
+            self._horizontal_o_vertical(lineas, bloqueos)
         elif h == "arco" and arcos:
             arco = self.b.curvas[arcos[0]]
             if "cuerda" in texto:
                 cota("distancia", [arco.inicio, arco.fin], texto["cuerda"])
             if "radio" in texto:
                 cota("radio", [arcos[0]], texto["radio"])
-        elif h == "arco_centro" and arcos and "radio" in texto:
+        elif h in ("arco_centro", "arco_tangente") and arcos and "radio" in texto:
             cota("radio", [arcos[0]], texto["radio"])
         elif h.startswith("poligono_") and circulos and "radio" in texto:
             cota("radio", [circulos[0]], texto["radio"])
         elif h.startswith("ranura_") and arcos:
+            self._horizontal_o_vertical(lineas[-1:], bloqueos)
             tapa = min(arcos, key=self.b.radio)            # los extremos: los arcos de radio = medio ancho
             if "ancho" in texto:
                 cota("diametro", [tapa], texto["ancho"])
@@ -2458,6 +2629,8 @@ class Lienzo(QWidget):
 
     def _abrir_cota(self, tipo, entidades, pos):
         previa = Cota(-1, tipo, entidades, "", {})
+        if tipo == "distancia" and sum(bool(getattr(self.b.curvas.get(i), "eje", False)) for i in entidades) == 1:
+            previa.datos["diametral"] = True        # Fusion: una cota con la línea central es un diámetro
         try:
             self.b._validar_cota(tipo, entidades)
             self.b.ubicar_cota(previa, self.a_mm(pos))  # el clic ubica la línea de cota y su texto (o el cuadrante)
@@ -2734,6 +2907,7 @@ class Lienzo(QWidget):
 
     def mousePressEvent(self, e):
         pos = e.position()
+        self._modificadores_raton = e.modifiers()
         self._camara()
         self.setFocus()
         if self._previa_texto is not None and self.entrada is not None and e.button() in (Qt.LeftButton,
@@ -2744,6 +2918,12 @@ class Lienzo(QWidget):
             self.confirmar_texto_pendiente()          # clic afuera o clic derecho (menú radial): el texto queda
             if e.button() == Qt.LeftButton:
                 return
+        if (self.herramienta == "conica" and len(self.clics) == 3 and self.entrada is not None
+                and e.button() == Qt.LeftButton and not self._para_visor(e)):
+            self._actualizar_rho_conica(pos)
+            self._presion = (pos, None, self.cursor)
+            self.update()
+            return
         if self.entrada is not None and e.button() == Qt.LeftButton:
             if self._editando is not None:          # clic con una caja a medio escribir: el valor queda fijo
                 texto = self.entrada.campos[0].text()
@@ -2785,6 +2965,7 @@ class Lienzo(QWidget):
             base = self.clics[-1][1] if self.clics else None
             self._presion = (pos, *self._ajustar(pos, base=base))
             self._presion_inferencia = self.inferencia
+            self._presion_inf_actual = self.inf_actual
         self.update()
 
     # ------------------------------------------------------------ marco de control (mover, escalar, girar, espejar)
@@ -3111,6 +3292,7 @@ class Lienzo(QWidget):
 
     def mouseMoveEvent(self, e):
         pos = e.position()
+        self._modificadores_raton = e.modifiers()
         self._pos_cursor = pos
         self._camara()
         if self._previa_texto is not None and self.entrada is not None:
@@ -3149,14 +3331,21 @@ class Lienzo(QWidget):
             self._marco["shift"] = bool(e.modifiers() & Qt.ShiftModifier)
             self.update()
             return
+        if self.herramienta == "conica" and len(self.clics) == 3 and self.entrada is not None:
+            self._actualizar_rho_conica(pos)
+            self.update()
+            return
         base = self.clics[-1][1] if self.clics and self.herramienta not in ("circulo_3p",) else None
         excluir = self._arrastre if isinstance(self._arrastre, int) else None
         self.cursor = self._ajustar(pos, excluir=excluir, base=base)[1]
         if (self._presion is not None and self.herramienta == "linea" and e.buttons() & Qt.LeftButton
                 and self.clics and self._presion[1] is not None and self._presion[1] == self.clics[-1][0]
-                and self._ultima_linea is not None
                 and math.hypot(pos.x() - self._presion[0].x(), pos.y() - self._presion[0].y()) > 8):
-            self._tangente = (self._presion[1], self._ultima_linea)
+            # arrastrar desde el extremo de la línea anterior, o de un arco, spline o cónica (BOC-12), da un arco tangente
+            curvas = [k for k in self._curvas_con_extremo(self._presion[1]) if k == self._ultima_linea
+                      or not isinstance(self.b.curvas[k], Linea)]
+            if curvas:
+                self._tangente = (self._presion[1], curvas[0])
         if isinstance(self._arrastre, tuple):
             _, cid, modo = self._arrastre
             if cid in self.b.curvas:
@@ -3174,6 +3363,7 @@ class Lienzo(QWidget):
 
     def mouseReleaseEvent(self, e):
         pos = e.position()
+        self._modificadores_raton = e.modifiers()
         if self._arrastre_texto:
             self._arrastre_texto = False
             d = self._previa_texto
@@ -3204,6 +3394,12 @@ class Lienzo(QWidget):
                 self.resolver()
             self._arrastre = None
         if self._presion is not None and e.button() == Qt.LeftButton:
+            if self.herramienta == "conica" and len(self.clics) == 3 and self.entrada is not None:
+                self._actualizar_rho_conica(pos)
+                self._presion = None
+                self.entrada.aceptado.emit([self.entrada.campos[0].text()])
+                self.update()
+                return
             _pos, pid, xy = self._presion
             self._presion = None
             if self._tangente is not None:
@@ -3219,6 +3415,7 @@ class Lienzo(QWidget):
                     self.mensaje.emit("Arco tangente creado. Seguí con la línea o Esc.")
             else:
                 self.inferencia = self._presion_inferencia
+                self.inf_actual = self._presion_inf_actual
                 if (self.herramienta == "spline_ajuste" and len(self.clics) >= 3 and pid is not None
                         and pid == self.clics[0][0]):
                     xy = self.clics[0][1]            # clic en el primer punto: cierra la spline
@@ -3557,6 +3754,8 @@ class Lienzo(QWidget):
             if isinstance(c, Spline) and c.modo == "control" and not c.proyectada:
                 p.setPen(QPen(QColor(150, 150, 160), 1, Qt.DotLine))      # marco de control, como Fusion
                 self._dibujar_polilinea(p, [self.b.coords(q) for q in c.pts])
+            if isinstance(c, Conica) and c.id in self.seleccion:
+                self._dibujar_guias_conica(p, self.b.coords(c.inicio), self.b.coords(c.vertice), self.b.coords(c.fin))
         if self.mostrar["puntos"]:
             visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
             ancho, alto = self.width() + 8, self.height() + 8
@@ -3799,6 +3998,13 @@ class Lienzo(QWidget):
         return zonas
 
     # ------------------------------------------------------------ vistas previas
+    def _dibujar_guias_conica(self, p, inicio, vertice, fin):
+        """Las rectas extremo–vértice son las tangentes de la cónica en sus extremos."""
+        p.save()
+        p.setPen(QPen(QColor(150, 150, 160), 1, Qt.DotLine))
+        self._dibujar_polilinea(p, [inicio, vertice, fin])
+        p.restore()
+
     def _tramo_a_recortar(self, pos):
         """Polilínea (u, v) del tramo que quitaría Recortar con el cursor en `pos` (para resaltarlo)."""
         cid = self._curva_cercana(pos)
@@ -3886,6 +4092,8 @@ class Lienzo(QWidget):
             polis = []
             if h in ("linea", "linea_medio"):
                 ini = self.clics[-1][1] if h == "linea" else (2 * a[0] - cur[0], 2 * a[1] - cur[1])
+                if h == "linea" and self.inf_actual is not None and self.inf_actual.guias:
+                    p.setPen(QPen(acento, 1.5, Qt.DashLine))
                 p.drawLine(self.a_px(*ini), self.a_px(*cur))
             elif h == "rectangulo" or (h == "texto" and self.entrada is None):
                 self._dibujar_polilinea(p, [a, (cur[0], a[1]), cur, (a[0], cur[1]), a])
@@ -3948,8 +4156,25 @@ class Lienzo(QWidget):
                     p.setPen(QPen(QColor(150, 150, 160), 1, Qt.DotLine))
                     self._dibujar_polilinea(p, todos)
                     p.setPen(QPen(acento, 1.5, Qt.DashLine))
-            elif h == "conica" and len(pts) == 2:
-                polis = self._temporal(lambda t: t.agregar_conica(pts[0], cur, pts[1], 0.5))
+            elif h == "conica" and len(pts) >= 2:
+                vertice = pts[2] if len(pts) == 3 else cur
+                rho = 0.5
+                if len(pts) == 3 and self.entrada is not None:
+                    try:
+                        rho = _numero(self.entrada.campos[0].text() or "0.5")
+                    except ValueError:
+                        rho = 0.0
+                self._dibujar_guias_conica(p, a, vertice, pts[1])
+                if 0 < rho < 1:
+                    polis = self._temporal(lambda t: t.agregar_conica(a, vertice, pts[1], rho))
+                    if len(pts) == 3:
+                        medio = ((a[0] + pts[1][0]) / 2, (a[1] + pts[1][1]) / 2)
+                        p.setPen(QPen(acento, 1, Qt.DashLine))
+                        self._dibujar_polilinea(p, [medio, vertice])
+                        asa = self.a_px(medio[0] + rho * (vertice[0] - medio[0]),
+                                        medio[1] + rho * (vertice[1] - medio[1]))
+                        p.drawRect(QRectF(asa.x() - 4, asa.y() - 4, 8, 8))
+                        p.setPen(QPen(acento, 2.0))
             elif h in ("circulo_3p", "arco", "arco_centro", "arco_tangente", "poligono_arista", "conica") \
                     or h.startswith("ranura_"):
                 self._dibujar_polilinea(p, pts + [cur])
@@ -3967,9 +4192,6 @@ class Lienzo(QWidget):
             q = self.a_px(*cur)
             p.setPen(QPen(acento, 1))
             p.drawEllipse(q, 4, 4)
-            if self.inferencia and self.clics:
-                p.drawPixmap(QRectF(q.x() + 10, q.y() + 6, 14, 14), icono("r_horizontal_vertical").pixmap(28, 28),
-                             QRectF(0, 0, 28, 28))
         elif cur is not None and self.visor is None and self.herramienta != "seleccionar":
             q = self.a_px(*cur)
             p.setPen(QPen(acento, 1))
@@ -3977,6 +4199,15 @@ class Lienzo(QWidget):
             if not self._claves_vivas():           # con cajas de valor, las coordenadas estorban
                 p.setPen(QPen(QColor(80, 80, 90), 1))
                 p.drawText(q + QPointF(10, -8), f"({cur[0]:.2f}; {cur[1]:.2f})")
+        if cur is not None and self.inf_actual is not None and h != "seleccionar" and self.entrada is None:
+            p.setPen(QPen(acento, 1, Qt.DashLine))
+            for guia in self.inf_actual.guias:
+                self._dibujar_polilinea(p, guia)
+            q = self.a_px(*cur)
+            tipo = self.inf_actual.restriccion[0] if self.inf_actual.restriccion else "coincidente"
+            nombre = ICONO_RESTRICCION.get(tipo, "r_coincidente")
+            p.drawPixmap(QRectF(q.x() + 10, q.y() + 6, 14, 14), icono(nombre).pixmap(28, 28),
+                         QRectF(0, 0, 28, 28))
 
     def describir(self, ids):
         return ", ".join(f"{NOMBRES_ENTIDAD[self.b.tipo_de(i)]} {i}" for i in ids if i in self.b.puntos or i in self.b.curvas)

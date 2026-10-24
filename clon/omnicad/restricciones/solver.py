@@ -316,6 +316,8 @@ class _Sistema:
             if c.id not in self.valores:
                 continue
             v, e, t = self.valores[c.id], c.entidades, c.tipo
+            if c.datos.get("diametral"):
+                v /= 2                    # cota con la línea central: el valor es el diámetro
             tipos = [b.tipo_de(i) for i in e]
             if t in ("radio", "diametro"):
                 k = 1.0 if t == "radio" else 2.0

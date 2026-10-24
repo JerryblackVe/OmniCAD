@@ -303,8 +303,6 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
     faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch.
     body: cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
     """
-    if axis is None:
-        raise error("INVALID_ARGUMENTS", "Falta axis: el eje de giro.")
     if sketch is None and not faces:
         raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
     sop = br = None
@@ -312,6 +310,14 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
     if sketch is not None:
         sop, br = boceto_activo(sesion, sketch)
         perfiles = seleccionar_perfiles(br, sop, profile)
+        if axis is None:                        # Fusion: la línea central del boceto es el eje
+            centrales = [c.id for c in br.boceto.curvas.values() if c.eje and c.tipo == "linea"]
+            if len(centrales) > 1:
+                raise error("INVALID_AXIS", f"El boceto tiene {len(centrales)} líneas centrales ({centrales}): "
+                            "indicá cuál es el eje con axis.")
+            axis = centrales[0] if centrales else None
+    if axis is None:
+        raise error("INVALID_ARGUMENTS", "Falta axis: el eje de giro (o una línea central en el boceto).")
     doc = sesion.doc
     p = {"boceto": sop.id if sop is not None else "", "perfiles": [OpRevolucion.referencia_perfil(x) for x in perfiles],
          "angulo": texto_expr(angle), "operacion": OPERACIONES[operation],

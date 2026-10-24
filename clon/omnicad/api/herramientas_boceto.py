@@ -27,7 +27,8 @@ from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, r
                              sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
-                                    centro_arco_tangente, circunferencia_3_puntos, validar_valor_cota)
+                                    centro_arco_tangente, circunferencia_3_puntos, evaluar_primitiva,
+                                    mas_cercano, validar_valor_cota)
 from ..restricciones.solver import restricciones_en_conflicto
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
@@ -332,6 +333,69 @@ def _arco_3_puntos(b, p1, p2, p3, construccion=False):
             "end": arco.inicio if horario else arco.fin}
 
 
+def _inicio_tangente(b, curva, inicio, extremo=None):
+    """Punto compartido y dirección de salida; una elipse cerrada recibe un punto sobre su curva."""
+    c = _curva(b, curva, ("linea", "arco", "elipse", "arco_elipse", "spline", "conica"), "tangent_to")
+    ext = c.extremos()
+    if ext:
+        pid = min(ext, key=lambda p: math.dist(b.coords(p), inicio)) if extremo is None else ext[extremo == "end"]
+        if math.dist(b.coords(pid), inicio) > 1e-7:
+            raise ErrorBoceto("El inicio debe coincidir con el extremo indicado de la curva tangente.")
+        _p, direccion = b._salida_extremo(curva, pid)
+    elif isinstance(c, Elipse):
+        prim = b.primitivas(curva)[0]
+        t, distancia, p = mas_cercano(prim, inicio)
+        if distancia > 1e-7:
+            raise ErrorBoceto("El inicio debe estar sobre la elipse tangente.")
+        direccion = evaluar_primitiva(prim, t, 1)[1]
+        pid = b.agregar_punto(*p)
+        b.agregar_restriccion("coincidente", [pid, curva])
+    else:
+        raise ErrorBoceto("La curva tangente debe tener extremos: la spline cerrada no los tiene.")
+    n = math.hypot(*direccion)
+    if n < 1e-9:
+        raise ErrorBoceto("La curva no tiene una tangente definida en ese extremo.")
+    return pid, (direccion[0] / n, direccion[1] / n)
+
+
+def _arco_tangente(b, curva, inicio, fin, construccion=False):
+    """Arco tangente a otra curva; comparte el extremo y guarda la tangencia."""
+    pid, direccion = _inicio_tangente(b, curva, inicio)
+    p = b.coords(pid)
+    otro = (p[0] - direccion[0], p[1] - direccion[1])
+    geometria = centro_arco_tangente(p, otro, fin)
+    if geometria is None:
+        raise ErrorBoceto("El final no puede coincidir con el inicio ni estar sobre la recta tangente.")
+    centro, izquierda = geometria
+    ini, z = (pid, fin) if izquierda else (fin, pid)
+    aid = b.agregar_arco_centro(centro, ini, z, construccion)
+    b.agregar_restriccion("tangente", [curva, aid])
+    arco = b.curvas[aid]
+    return {"": aid, "center": arco.centro, "start": pid, "end": arco.fin if izquierda else arco.inicio}
+
+
+def _circulo_tangente(b, lineas, x=None, y=None, radio=None, construccion=False):
+    """Círculo de dos o tres tangentes, compartido por dibujo y especificación."""
+    if len(lineas) not in (2, 3):
+        raise error("INVALID_ARGUMENTS", f"lines lleva 2 o 3 ids de líneas (llegaron {len(lineas)}).")
+    if (x is None) != (y is None):
+        raise error("INVALID_ARGUMENTS", "Pasá x e y juntos, o ninguno de los dos.")
+    if radio is not None and (len(lineas) == 3 or not radio > 0):
+        raise error("INVALID_ARGUMENTS", "radius va solo con 2 líneas y tiene que ser positivo.")
+    q = None if x is None else (float(x), float(y))
+    for k in lineas:
+        _curva(b, k, ("linea",), "la línea")
+    if len(set(lineas)) != len(lineas):
+        raise ErrorBoceto("Elegí líneas distintas.")
+    if len(lineas) == 2:
+        medios = [tuple((u + v) / 2 for u, v in zip(*b._extremos_linea(k), strict=True)) for k in lineas]
+        ubicacion = q or ((medios[0][0] + medios[1][0]) / 2, (medios[0][1] + medios[1][1]) / 2)
+        cid = b.agregar_circulo_tangente(list(lineas), ubicacion, radio, None, construccion)
+    else:
+        cid = b.agregar_circulo_tangente(list(lineas), None, None, None if q is None else [q] * 3, construccion)
+    return {"": cid, "center": b.curvas[cid].centro}
+
+
 def _origen_fijo(b):
     """Punto fijo en (0, 0): el dato del boceto al que se acota (como el origen de Fusion). Usa uno que ya esté
     fijo ahí (también un punto proyectado) o lo crea con la restricción «fijo»."""
@@ -418,16 +482,41 @@ def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False, a
     return alias
 
 
-def _spline(b, puntos, tipo, grado, cerrada, construccion=False):
+def _poligono_arista(b, lados, puntos, construccion=False, acotar=False):
+    """Polígono por arista A→B y punto del lado elegido, como create_polygon."""
+    if len(puntos) != 3:
+        raise ErrorBoceto("kind=edge necesita tres edge_points: A, B y un punto del lado hacia donde crece.")
+    a, z, lado = (_xy(q, "Cada punto de edge_points") for q in puntos)
+    largo = math.dist(a, z)
+    if largo < 1e-9:
+        raise ErrorBoceto("El lado del polígono no puede medir cero.")
+    mx, my = (a[0] + z[0]) / 2, (a[1] + z[1]) / 2
+    nx, ny = -(z[1] - a[1]) / largo, (z[0] - a[0]) / largo
+    if (lado[0] - mx) * nx + (lado[1] - my) * ny < 0:
+        nx, ny = -nx, -ny
+    apotema = largo / (2 * math.tan(math.pi / lados)) if lados >= 3 else 0.0
+    cx, cy = mx + nx * apotema, my + ny * apotema
+    radio = math.dist((cx, cy), a)
+    giro = math.degrees(math.atan2(a[1] - cy, a[0] - cx))
+    return _poligono(b, lados, radio, cx, cy, giro, False, construccion, acotar)
+
+
+def _spline(b, puntos, tipo, grado, cerrada, construccion=False, tangente=None, extremo="end"):
     pts = [_xy(p, "Cada punto de la spline") for p in puntos]
     control = tipo == "control_points"
     if control and grado not in (3, 5):
         raise ErrorBoceto(f"Una spline de puntos de control tiene grado 3 o 5 (llegó {grado}).")
     if control and len(pts) < grado + 1:
         raise ErrorBoceto(f"Una spline de puntos de control de grado {grado} necesita al menos {grado + 1} puntos.")
+    if tangente is not None:
+        if len(pts) < 2:
+            raise ErrorBoceto("La spline necesita al menos dos puntos.")
+        pts[0], _direccion = _inicio_tangente(b, tangente, pts[0], extremo)
     # como Fusion, la spline de ajuste es siempre cúbica: su grado se ignora (con 0 o −1 rompía la interpolación)
     sid = b.agregar_spline(pts, "control" if control else "ajuste", grado if control else 3, cerrada,
                            construccion=construccion)
+    if tangente is not None:
+        b.agregar_restriccion("tangente", [tangente, sid])
     ids = b.curvas[sid].pts
     alias = {"": sid, "start": ids[0], "end": ids[-1]}
     alias.update({f"p{i + 1}": p for i, p in enumerate(ids)})
@@ -533,9 +622,20 @@ def _sincronizar_con_solver(sesion, op, b):
             c.radio_menor = k.radio_menor
 
 
-def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False):
+def _marcar_centrales(b, anteriores):
+    """Marca las curvas nuevas normales como centrales; conserva las guías de construcción."""
+    for cid, c in b.curvas.items():
+        if cid not in anteriores and not c.construccion:
+            if isinstance(c, Texto):
+                raise ErrorBoceto("Un texto no puede ser línea central.")
+            c.eje = True
+
+
+def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, construccion=False, central=False):
     """Edita el boceto con `constructor(boceto)` sobre una copia y la reemplaza en el timeline (un paso). Con
     `desde_solver`, la copia parte de la geometría resuelta (ver `_sincronizar_con_solver`)."""
+    if construccion and central:
+        raise error("INVALID_ARGUMENTS", "construction y centerline no pueden ser true a la vez.")
     op = op_boceto(sesion, ref)
     nueva = op.copia()
     b = nueva.boceto
@@ -544,6 +644,8 @@ def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False):
     antes = _claves(b)
     try:
         constructor(b)
+        if central:
+            _marcar_centrales(b, antes["curvas"])
         _exigir_tamano(b, antes)
         if anclar:
             b.anclar_al_origen(set(b.puntos) - antes["puntos"])
@@ -834,7 +936,7 @@ def create_sketch(sesion, plane: str = "XY", name: str | None = None, body: str 
              "cae sobre el de otra línea comparte su punto (cadena); si no, queda suelto. Devuelve los ids creados "
              "(línea y puntos) y la cantidad de perfiles.", modifica=True)
 def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float, sketch: str | None = None,
-              construction: bool = False, midpoint: bool = False):
+              construction: bool = False, midpoint: bool = False, centerline: bool = False):
     """
     start_x: x del punto inicial (mm); con midpoint, x del punto medio.
     start_y: y del punto inicial (mm); con midpoint, y del punto medio.
@@ -843,6 +945,7 @@ def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una línea de construcción (no forma perfiles).
     midpoint: true dibuja la línea desde su punto medio (start) y un extremo (end), con la restricción de punto medio.
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     if midpoint:
@@ -852,9 +955,10 @@ def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float
             lid = agregar_linea_medio(b, (start_x, start_y), (end_x, end_y), construction)
             ln = b.curvas[lid]
             return {"": lid, "start": ln.p1, "end": ln.p2}
-        return _dibujar(sesion, sketch, crear)
+        return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline)
     # un extremo que cae sobre el de otra línea la une (como al dibujar en cadena); si no, la línea queda suelta
-    return _dibujar(sesion, sketch, lambda b: _linea(b, start_x, start_y, end_x, end_y, construction, encadenar=True))
+    return _dibujar(sesion, sketch, lambda b: _linea(b, start_x, start_y, end_x, end_y, construction, encadenar=True),
+                    construccion=construction, central=centerline)
 
 
 @herramienta("draw_rectangle", "boceto",
@@ -869,7 +973,8 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
                    y2: float | None = None, center_x: float | None = None, center_y: float | None = None,
                    origin_x: float | None = None, origin_y: float | None = None, width: float | None = None,
                    height: float | None = None, sketch: str | None = None, construction: bool = False,
-                   center_diagonals: bool = False, three_points: list[list[float]] | None = None):
+                   center_diagonals: bool = False, three_points: list[list[float]] | None = None,
+                   centerline: bool = False):
     """
     x1: x de la primera esquina (forma de dos esquinas).
     y1: y de la primera esquina.
@@ -885,6 +990,7 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
     construction: true para un rectángulo de construcción (no forma perfiles).
     center_diagonals: true (con center_x/center_y y tamaño) agrega las diagonales de construcción y el punto central con restricción de punto medio.
     three_points: [[ax, ay], [bx, by], [cx, cy]]: lado A→B y punto C que da el ancho; no se combina con las otras formas.
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     if three_points is not None:
@@ -893,7 +999,8 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if len(three_points) != 3:
             raise error("INVALID_ARGUMENTS", "three_points necesita tres puntos [x, y]: A, B y C.")
         a, b_, c = (_xy(p, "Cada punto de three_points") for p in three_points)
-        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_3p(b, a, b_, c, construction)[0]}, anclar=True)
+        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_3p(b, a, b_, c, construction)[0]}, anclar=True,
+                        construccion=construction, central=centerline)
     esquinas = (x1, y1, x2, y2)
     if any(v is not None for v in esquinas):
         if any(v is None for v in esquinas):
@@ -919,8 +1026,10 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if center_x is None and center_y is None:
             raise error("INVALID_ARGUMENTS", "center_diagonals necesita la forma de centro y tamaño (center_x/center_y, width, height).")
         centro = ((a[0] + b_[0]) / 2, (a[1] + b_[1]) / 2)
-        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_centro(b, centro, b_, construction)[0]}, anclar=True)
-    return _dibujar(sesion, sketch, lambda b: _rectangulo(b, a[0], a[1], b_[0], b_[1], construction), anclar=True)
+        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_centro(b, centro, b_, construction)[0]}, anclar=True,
+                        construccion=construction, central=centerline)
+    return _dibujar(sesion, sketch, lambda b: _rectangulo(b, a[0], a[1], b_[0], b_[1], construction), anclar=True,
+                    construccion=construction, central=centerline)
 
 
 @herramienta("draw_circle", "boceto", "Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por "
@@ -929,7 +1038,7 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
 def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, center_y: float = 0.0,
                 sketch: str | None = None, construction: bool = False,
                 kind: Literal["center_radius", "two_points", "three_points"] = "center_radius",
-                points: list[list[float]] | None = None):
+                points: list[list[float]] | None = None, centerline: bool = False):
     """
     radius: radio en mm (positivo); obligatorio con kind=center_radius.
     center_x: x del centro (mm); solo con kind=center_radius.
@@ -938,6 +1047,7 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
     construction: true para un círculo de construcción (no forma perfiles).
     kind: "center_radius" (centro y radio), "two_points" (extremos de un diámetro) o "three_points" (pasa por tres puntos).
     points: [[x, y], …] con dos puntos (two_points) o tres (three_points), en mm sobre el plano del boceto.
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     if kind == "center_radius":
@@ -945,7 +1055,8 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
             raise error("INVALID_ARGUMENTS", "kind=center_radius necesita radius.")
         if points is not None:
             raise error("INVALID_ARGUMENTS", "points es de two_points y three_points; con center_radius usá radius.")
-        return _dibujar(sesion, sketch, lambda b: _circulo(b, center_x, center_y, radius, construction))
+        return _dibujar(sesion, sketch, lambda b: _circulo(b, center_x, center_y, radius, construction),
+                        construccion=construction, central=centerline)
     if radius is not None:
         raise error("INVALID_ARGUMENTS", f"kind={kind} no usa radius: el círculo sale de los puntos.")
     n = 2 if kind == "two_points" else 3
@@ -963,19 +1074,19 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
         if circ is None:
             raise ErrorBoceto("Los tres puntos están alineados: no definen un círculo.")
         return _circulo(b, circ[0], circ[1], circ[2], construction)
-    return _dibujar(sesion, sketch, crear)
+    return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline)
 
 
 @herramienta("draw_arc", "boceto",
              "Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, "
              "start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, "
-             "end_y), o tangente al extremo de una línea (tangent_to, start_x/start_y y end_x/end_y). "
+             "end_y), o tangente a una curva (tangent_to, start_x/start_y y end_x/end_y). "
              "La forma tangente comparte el extremo y agrega la restricción de tangencia. "
              "Un arco solo forma un perfil si se cierra con otras curvas.", modifica=True)
 def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = None, center_y: float | None = None,
              sweep_angle: float | None = None, mid_x: float | None = None, mid_y: float | None = None,
              end_x: float | None = None, end_y: float | None = None, sketch: str | None = None,
-             construction: bool = False, tangent_to: int | None = None):
+             construction: bool = False, tangent_to: int | None = None, centerline: bool = False):
     """
     start_x: x del punto inicial (mm).
     start_y: y del punto inicial (mm).
@@ -988,7 +1099,8 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
     end_y: y del punto final.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un arco de construcción (no forma perfiles).
-    tangent_to: id de la línea de partida; start_x/start_y debe coincidir con uno de sus extremos. No se combina con centro, barrido ni punto intermedio.
+    tangent_to: id de la línea, arco, arco de elipse, spline abierta o cónica de partida; start_x/start_y debe coincidir con uno de sus extremos. También acepta una elipse cerrada si el inicio está sobre ella. No se combina con centro, barrido ni punto intermedio.
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     if tangent_to is not None:
@@ -998,25 +1110,9 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
                         "barrido ni punto intermedio.")
         op, previo = boceto_activo(sesion, sketch, derivados=False)
 
-        def crear(b):
-            ln = _curva(b, tangent_to, ("linea",), "tangent_to")
-            pid = min(ln.extremos(), key=lambda p: math.dist(b.coords(p), (start_x, start_y)))
-            p = b.coords(pid)
-            if math.dist(p, (start_x, start_y)) > 1e-7:
-                raise ErrorBoceto("El inicio debe coincidir con un extremo de la línea tangente.")
-            otro = b.coords(ln.p1 if ln.p2 == pid else ln.p2)
-            largo = math.dist(p, otro)
-            if largo < 1e-9:
-                raise ErrorBoceto("La línea tangente necesita longitud positiva.")
-            geometria = centro_arco_tangente(p, otro, (end_x, end_y))
-            if geometria is None:
-                raise ErrorBoceto("El final no puede coincidir con el inicio ni estar sobre la recta tangente.")
-            centro, izquierda = geometria
-            ini, fin = (pid, (end_x, end_y)) if izquierda else ((end_x, end_y), pid)
-            aid = b.agregar_arco_centro(centro, ini, fin, construction)
-            b.agregar_restriccion("tangente", [tangent_to, aid])
-
-        informe = _dibujar(sesion, op.id, crear, desde_solver=True)
+        informe = _dibujar(sesion, op.id, lambda b: _arco_tangente(
+            b, tangent_to, (start_x, start_y), (end_x, end_y), construction), desde_solver=True,
+            construccion=construction, central=centerline)
         _exigir_sin_conflicto(sesion, op, previo.solver.ok, "El arco tangente")
         return informe
     if sweep_angle is not None:
@@ -1026,7 +1122,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
             raise error("INVALID_ARGUMENTS", "La forma centro + barrido no se combina con mid_x/mid_y ni "
                         "end_x/end_y (son de la forma de tres puntos).")
         return _dibujar(sesion, sketch, lambda b: _arco(b, center_x, center_y, start_x, start_y, sweep_angle,
-                                                        construction))
+                                                         construction), construccion=construction, central=centerline)
     if None in (mid_x, mid_y, end_x, end_y):
         raise error("INVALID_ARGUMENTS", "Indicá center_x, center_y y sweep_angle, o los tres puntos: "
                     "start, mid_x/mid_y y end_x/end_y.")
@@ -1034,7 +1130,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
         raise error("INVALID_ARGUMENTS", "La forma de tres puntos no usa center_x/center_y (sí la de centro + "
                     "sweep_angle).")
     return _dibujar(sesion, sketch, lambda b: _arco_3_puntos(b, (start_x, start_y), (mid_x, mid_y), (end_x, end_y),
-                                                             construction))
+                                                             construction), construccion=construction, central=centerline)
 
 
 @herramienta("create_polygon", "boceto", "Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía "
@@ -1047,7 +1143,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
 def create_polygon(sesion, sides: int, radius: Expr | None = None, center_x: float = 0.0, center_y: float = 0.0,
                    rotation: float = 0.0, kind: Literal["inscribed", "circumscribed", "edge"] = "inscribed",
                    sketch: str | None = None, construction: bool = False, fully_constrained: bool = False,
-                   edge_points: list[list[float]] | None = None):
+                   edge_points: list[list[float]] | None = None, centerline: bool = False):
     """
     sides: cantidad de lados (3 a 64).
     radius: radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2"). No se usa con kind=edge.
@@ -1059,38 +1155,30 @@ def create_polygon(sesion, sides: int, radius: Expr | None = None, center_x: flo
     construction: true para un polígono de construcción (no forma perfiles).
     fully_constrained: true para dejarlo totalmente acotado (radio, giro y posición del centro): dof 0.
     edge_points: kind=edge: [[x, y], [x, y], [x, y]] = extremos A y B del primer lado y un punto del lado hacia donde crece el polígono.
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     if kind == "edge":
         if edge_points is None or len(edge_points) != 3:
             raise error("INVALID_ARGUMENTS", "kind=edge necesita edge_points: los extremos A y B del lado y un punto del lado hacia donde crece.")
-        a, b_, lado = (_xy(q, "Cada punto de edge_points") for q in edge_points)
-        largo = math.dist(a, b_)
-        if largo < 1e-9:
-            raise error("INVALID_GEOMETRY", "El lado del polígono no puede medir cero.")
-        mx, my = (a[0] + b_[0]) / 2, (a[1] + b_[1]) / 2
-        nx, ny = -(b_[1] - a[1]) / largo, (b_[0] - a[0]) / largo
-        if (lado[0] - mx) * nx + (lado[1] - my) * ny < 0:
-            nx, ny = -nx, -ny
-        apotema = largo / (2 * math.tan(math.pi / sides)) if sides >= 3 else 0.0
-        cx, cy = mx + nx * apotema, my + ny * apotema
-        circunradio = math.dist((cx, cy), a)
-        giro = math.degrees(math.atan2(a[1] - cy, a[0] - cx))
-        return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, circunradio, cx, cy, giro, False, construction,
-                                                            fully_constrained))
+        return _dibujar(sesion, sketch, lambda b: _poligono_arista(b, sides, edge_points, construction, fully_constrained),
+                        construccion=construction, central=centerline)
     if radius is None:
         raise error("INVALID_ARGUMENTS", "radius es obligatorio salvo con kind=edge.")
     expresion = texto_expr(radius)
     valor = evaluar(expresion, LONGITUD, sesion.doc.parametros.valores())
     return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, valor, center_x, center_y, rotation,
-                                                        kind == "circumscribed", construction, fully_constrained,
-                                                        expresion))
+                                                         kind == "circumscribed", construction, fully_constrained,
+                                                         expresion), construccion=construction, central=centerline)
 
 
 @herramienta("draw_spline", "boceto", "Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control "
-             "(grado 3 o 5, necesita al menos grado+1 puntos).", modifica=True)
+             "(grado 3 o 5, necesita al menos grado+1 puntos). Con tangent_to, una spline de ajuste abierta "
+             "comparte el extremo de otra curva y agrega tangencia; el solver ajusta los puntos libres.", modifica=True)
 def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_points", "control_points"] = "fit_points",
-                degree: int = 3, closed: bool = False, sketch: str | None = None, construction: bool = False):
+                degree: int = 3, closed: bool = False, sketch: str | None = None, construction: bool = False,
+                centerline: bool = False, tangent_to: int | None = None,
+                tangent_end: Literal["start", "end"] = "end"):
     """
     points: lista de puntos [x, y] en mm sobre el plano del boceto.
     spline_type: "fit_points" (pasa por los puntos) o "control_points" (los puntos son los polos).
@@ -1098,10 +1186,23 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
     closed: true para cerrar la spline de ajuste (forma un perfil).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una spline de construcción (no forma perfiles).
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
+    tangent_to: id de la curva de partida (línea, arco, arco de elipse, spline abierta, cónica o elipse); solo para una spline de ajuste abierta. El primer punto debe coincidir con su extremo (o estar sobre la elipse cerrada).
+    tangent_end: extremo de la curva de partida, "start" o "end"; se ignora en una elipse cerrada. El solver puede ajustar los puntos libres para cumplir la tangencia.
     """
     _exigir_finitos(locals())
+    if tangent_to is not None:
+        if spline_type != "fit_points" or closed:
+            raise error("INVALID_ARGUMENTS", "tangent_to requiere una spline de ajuste abierta (fit_points, closed=false).")
+        op, previo = boceto_activo(sesion, sketch, derivados=False)
+        informe = _dibujar(sesion, op.id, lambda b: _spline(
+            b, points, spline_type, degree, closed, construction, tangent_to, tangent_end), desde_solver=True,
+            construccion=construction, central=centerline)
+        _exigir_sin_conflicto(sesion, op, previo.solver.ok, "La spline tangente")
+        return informe
     _avisar_cerrada_ignorada(sesion, spline_type, closed)
-    return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction))
+    return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction),
+                    construccion=construction, central=centerline)
 
 
 def _avisar_cerrada_ignorada(sesion, spline_type, closed):
@@ -1170,7 +1271,7 @@ def _exigir_entidades(b, ids):
              "con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y "
              "desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos "
              "puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; "
-             "radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance "
+             "radius y diameter: un círculo o arco (diameter también acepta un punto o una línea con una línea central: mide el doble de la distancia al eje, como Fusion); angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance "
              "también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al "
              "centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la "
              "distancia a la curva). En una cota "
@@ -1207,18 +1308,24 @@ def add_dimension(sesion, sketch: str,
     b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
     interno = COTAS[type]
+    # Fusion: una cota con la línea central es un DIÁMETRO (el doble de la distancia al eje).
+    diametral = type == "diameter" and len(entities) == 2 and any(
+        getattr(b.curvas.get(i), "eje", False) for i in entities)
+    if diametral:
+        interno = "distancia"
     try:
         b._validar_cota(interno, list(entities))     # el tipo de entidad, antes de medir
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", str(e)) from e
     cuadrante = _cuadrante(b, interno, list(entities), near)
-    datos = {"modo": _MODOS[mode], **({} if cuadrante is None else {"cuadrante": cuadrante})}
+    datos = {"modo": _MODOS[mode], **({} if cuadrante is None else {"cuadrante": cuadrante}),
+             **({"diametral": True} if diametral else {})}
     if value is None or reference:
         try:
             medida = b.medir_cota(interno, list(entities), _MODOS[mode], cuadrante)
         except (ErrorBoceto, KeyError, ValueError, IndexError) as e:
             raise error("INVALID_DIMENSION", f"No se pudo medir la cota «{type}» con esas entidades: {e}") from e
-        expresion = repr(round(medida, 6))
+        expresion = repr(round(medida * (2 if diametral else 1), 6))
     else:
         expresion = texto_expr(value)
     valor = evaluar(expresion, ANGULO if interno == "angulo" else LONGITUD, sesion.doc.parametros.valores())
@@ -1295,13 +1402,55 @@ def _booleano(e, i, clave):
     return v
 
 
-def _construir_entidad(b, i, e):
+def _texto_spec(b, i, e, alias, sesion):
+    """Texto de especificación con las mismas opciones y validaciones que add_text."""
+    from .herramientas_vectores import _opciones_camino, _opciones_texto, _verificar_fuente
+
+    for clave in ("bold", "italic", "flip_h", "flip_v", "kerning", "fit_path", "no_wrap"):
+        if clave in e:
+            _booleano(e, i, clave)
+    for clave in ("x", "y", "height", "angle", "letter_spacing", "line_spacing", "box_width", "skew", "scale_x",
+                  "scale_y", "baseline_shift", "decoration_thickness", "path_position", "path_offset"):
+        if clave in e:
+            _numero(e[clave], i, "text", clave)
+    texto = str(_campo(e, i, "text")).replace("\\n", "\n")
+    fuente, negrita, cursiva = e.get("font", "Arial"), e.get("bold", False), e.get("italic", False)
+    _verificar_fuente(fuente, negrita, cursiva)
+    camino = _citar(e["path_entity"], alias, b, f"Texto {i}") if e.get("path_entity") is not None else None
+    alineacion = e.get("align")
+    if alineacion is None:
+        alineacion = "center" if camino else "left"
+    opciones = _opciones_texto(e.get("letter_spacing", 0.0), e.get("line_spacing", 1.0), alineacion,
+                              e.get("anchor", "baseline"), e.get("box_width", 0.0), e.get("flip_h", False),
+                              e.get("flip_v", False), **{k: e[k] for k in (
+                                  "kerning", "skew", "scale_x", "scale_y", "baseline_shift", "case", "underline",
+                                  "strikethrough", "decoration_thickness", "no_wrap", "kerning_pairs") if k in e})
+    if camino is not None:
+        opciones |= _opciones_camino(camino, e.get("path_side", "left"), e.get("path_position", 0.5),
+                                    e.get("path_offset", 0.0), e.get("fit_path", False))
+        if e.get("underline", "none") != "none" or e.get("strikethrough", "none") != "none":
+            sesion.avisar("El subrayado y el tachado no se dibujan en un texto en curva.")
+    tid = b.agregar_texto((e.get("x", 0.0), e.get("y", 0.0)), texto, altura=e.get("height", 5.0),
+                          angulo=e.get("angle", 0.0), fuente=fuente, negrita=negrita, cursiva=cursiva, **opciones)
+    b.curvas[tid].construccion = _booleano(e, i, "construction")
+    return {"": tid, "position": b.curvas[tid].punto}
+
+
+def _construir_entidad(b, i, e, alias, sesion):
     tipo = e.get("type")
     c = _booleano(e, i, "construction")
     p = lambda k, *alt: _xy(_campo(e, i, k, alt), f"'{k}' de la entidad {i}")  # noqa: E731
     if tipo == "line":
         (x1, y1), (x2, y2) = p("start"), p("end")
         return _linea(b, x1, y1, x2, y2, c, encadenar=True)
+    if tipo == "midpoint_line":
+        centro, extremo = p("center"), p("end")
+        if math.dist(centro, extremo) < 1e-9:
+            raise ErrorBoceto("Una línea necesita dos puntos distintos.")
+        medio = b.agregar_punto(*centro)
+        lid = agregar_linea_medio(b, medio, extremo, c)
+        ln = b.curvas[lid]
+        return {"": lid, "start": ln.p1, "end": ln.p2, "center": medio}
     if tipo == "rectangle":
         if "corner1" in e or "corner2" in e:
             (x1, y1), (x2, y2) = p("corner1"), p("corner2")
@@ -1325,15 +1474,47 @@ def _construir_entidad(b, i, e):
             return _arco_3_puntos(b, p("start"), p("mid"), p("end"), c)
         (cx, cy), (sx, sy) = p("center"), p("start")
         return _arco(b, cx, cy, sx, sy, _numero(_campo(e, i, "sweep"), i, tipo, "'sweep'"), c)
+    if tipo == "tangent_arc":
+        cita = _campo(e, i, "from")
+        pid = _citar(cita, alias, b, f"Arco tangente {i}")
+        lineas = [ln.id for ln in b.curvas.values() if ln.tipo == "linea" and pid in ln.extremos()]
+        origen = alias.get(cita.rsplit(".", 1)[0]) if isinstance(cita, str) and "." in cita else None
+        if origen in lineas:
+            lineas = [origen]
+        if len(lineas) != 1:
+            raise _spec_error(i, tipo, "'from' debe citar un extremo de una sola línea.")
+        return _arco_tangente(b, lineas[0], b.coords(pid), p("end"), c)
+    if tipo == "tangent_circle":
+        citas = _campo(e, i, "lines")
+        if not isinstance(citas, list):
+            raise _spec_error(i, tipo, "'lines' debe ser una lista de 2 o 3 citas de líneas.")
+        lineas = [_citar(t, alias, b, f"Círculo tangente {i}") for t in citas]
+        numeros = {k: None if e.get(k) is None else _numero(e[k], i, tipo, k) for k in ("x", "y", "radius")}
+        return _circulo_tangente(b, lineas, numeros["x"], numeros["y"], numeros["radius"], c)
+    if tipo == "conic":
+        cid = b.agregar_conica(p("start"), p("vertex"), p("end"), _numero(e.get("rho", 0.5), i, tipo, "rho"), c)
+        curva = b.curvas[cid]
+        return {"": cid, "start": curva.inicio, "end": curva.fin, "vertex": curva.vertice}
+    if tipo == "text":
+        return _texto_spec(b, i, e, alias, sesion)
     if tipo == "polygon":
         cx, cy = p("center") if "center" in e else (0.0, 0.0)
         lados = _campo(e, i, "sides")
         if isinstance(lados, bool) or not isinstance(lados, int):
             raise _spec_error(i, tipo, "'sides' tiene que ser un entero.")
         kind = e.get("kind", "inscribed")
+        if kind == "edge":
+            if "edge_points" in e:
+                puntos = e["edge_points"]
+                if not isinstance(puntos, list):
+                    raise _spec_error(i, tipo, "'edge_points' debe ser una lista de tres puntos.")
+            else:
+                a, z = p("start"), p("end")
+                # Sin punto de orientación crece a la izquierda del lado dirigido A→B.
+                puntos = [a, z, (a[0] - (z[1] - a[1]), a[1] + (z[0] - a[0]))]
+            return _poligono_arista(b, lados, puntos, c, _booleano(e, i, "fully_constrained"))
         if kind not in ("inscribed", "circumscribed"):
-            raise _spec_error(i, tipo, "'kind' es inscribed o circumscribed (el polígono por arista solo está en "
-                              "create_polygon).")
+            raise _spec_error(i, tipo, "'kind' es inscribed, circumscribed o edge.")
         return _poligono(b, lados, _numero(_campo(e, i, "radius"), i, tipo, "'radius'"), cx, cy,
                          _numero(e.get("rotation", 0.0), i, tipo, "'rotation'"), kind == "circumscribed", c,
                          _booleano(e, i, "fully_constrained"))
@@ -1360,8 +1541,8 @@ def _construir_entidad(b, i, e):
     if tipo == "point":
         x, y = p("at", "position")
         return {"": b.agregar_punto(x, y)}
-    raise _spec_error(i, tipo, "tipo desconocido. Tipos: line, rectangle, circle, arc, polygon, ellipse, slot, "
-                      "spline, point.")
+    raise _spec_error(i, tipo, "tipo desconocido. Tipos: line, midpoint_line, rectangle, circle, tangent_circle, "
+                      "arc, tangent_arc, polygon, ellipse, slot, spline, conic, text, point.")
 
 
 def _citar(token, alias, b, que):
@@ -1370,6 +1551,8 @@ def _citar(token, alias, b, que):
     if isinstance(token, int):
         _exigir_entidades(b, [token])
         return token
+    if not isinstance(token, str):
+        raise error("INVALID_SPEC", f"{que}: {token!r} no es una cita válida (texto o entero).")
     if token in alias:
         return alias[token]
     base = str(token).split(".")[0]
@@ -1389,8 +1572,13 @@ def _citar(token, alias, b, que):
              "origin,width,height}, circle{center,radius}, arc{center,start,sweep | start,mid,end}, "
              "polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,"
              "angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, "
-             "point{at}; todas aceptan id (nombre propio para citarla) y construction. Las coordenadas son [x, y] en "
-             "mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value}] "
+             "point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), "
+             "midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la "
+             "izquierda de start→end; edge_points permite elegir el lado como create_polygon), "
+             "tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. "
+             "Todas aceptan id (nombre propio para citarla), construction y centerline (mutuamente excluyentes; "
+             "texto no admite centerline, los puntos sueltos no tienen tipo de línea). Las coordenadas son [x, y] en "
+             "mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value, reference?}] "
              "(value puede ser una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', "
              "'id.center', en un rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas), en un "
              "polígono 'id.side1..', 'id.v1..' y 'id.circle', en una elipse 'id.major' y 'id.major_axis/minor_axis', "
@@ -1398,7 +1586,8 @@ def _citar(token, alias, b, que):
              "entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un "
              "plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre "
              "esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve "
-             "handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano).", modifica=True)
+             "handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano). "
+             "Sin entities crea un boceto vacío y devuelve un aviso. reference=true mide sin restringir.", modifica=True)
 def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = None,
                      constraints: list[dict] | None = None, dimensions: list[dict] | None = None,
                      name: str | None = None, body: str | None = None):
@@ -1406,7 +1595,7 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
     plane: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana: selector (">Z") o id ("Cuerpo1/F6").
     entities: geometría del boceto (ver la descripción de la herramienta).
     constraints: restricciones, cada una {"type": ..., "entities": [citas]}.
-    dimensions: cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión}.
+    dimensions: cotas, cada una {"type": ..., "entities": [citas], "value": número o expresión, "reference": false}; reference=true mide sin restringir y permite omitir value.
     name: nombre del boceto; vacío = "Boceto1", "Boceto2"…
     body: id o nombre del cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo. No se usa con un plano ni con un id de cara.
     """
@@ -1414,11 +1603,19 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
     doc = sesion.doc
     b = Boceto()
     alias = {}
+    if not entities:
+        sesion.avisar("entities está vacío: se creó un boceto vacío.")
     try:
         for i, e in enumerate(entities or []):
             if not isinstance(e, dict):
                 raise error("INVALID_SPEC", f"Entidad {i}: tiene que ser un objeto con 'type'.")
-            partes = _construir_entidad(b, i, e)
+            central = _booleano(e, i, "centerline")
+            if central and _booleano(e, i, "construction"):
+                raise _spec_error(i, e.get("type"), "construction y centerline no pueden ser true a la vez.")
+            anteriores = set(b.curvas) if central else ()
+            partes = _construir_entidad(b, i, e, alias, sesion)
+            if central:
+                _marcar_centrales(b, anteriores)
             if e.get("type") == "spline":
                 _avisar_cerrada_ignorada(sesion, e.get("spline_type"), e.get("closed"))
             manejador = str(e.get("id", f"e{i}"))
@@ -1444,15 +1641,17 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             if tipo not in COTAS:
                 raise error("INVALID_DIMENSION", f"Cota {j}: tipo '{tipo}' desconocido.")
             ids = [_citar(t, alias, b, f"Cota {j}") for t in (d.get("entities") or [])]
-            if d.get("value") is None:
+            referencia = _booleano(d, j, "reference")
+            if d.get("value") is None and not referencia:
                 raise error("INVALID_DIMENSION", f"Cota {j}: falta 'value' (número o expresión).")
-            expresion = texto_expr(d["value"])
-            valor = evaluar(expresion, ANGULO if tipo == "angle" else LONGITUD, valores)
+            expresion = texto_expr(d["value"]) if d.get("value") is not None else "0"
             try:
-                b.agregar_cota(COTAS[tipo], ids, expresion)
+                if not referencia:
+                    valor = evaluar(expresion, ANGULO if tipo == "angle" else LONGITUD, valores)
+                    _cota_valida(COTAS[tipo], valor, f"Cota {j}")
+                b.agregar_cota(COTAS[tipo], ids, expresion, referencia=referencia)
             except ErrorBoceto as e:
                 raise error("INVALID_DIMENSION", f"Cota {j}: {e}") from e
-            _cota_valida(COTAS[tipo], valor, f"Cota {j}")
     except ErrorBoceto as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
     nombre = name.strip() if name and name.strip() else nombre_nuevo(doc, "Boceto", OpBoceto)
@@ -1513,7 +1712,7 @@ def _cota_valida(tipo, valor, que):
              "interfaz, suma sus ejes mayor y menor como líneas de construcción, con el centro en su punto medio "
              "(sirven para acotarla). Una elipse cerrada forma un perfil.", modifica=True)
 def draw_ellipse(sesion, major_radius: float, minor_radius: float, center_x: float = 0.0, center_y: float = 0.0,
-                 angle: float = 0.0, sketch: str | None = None, construction: bool = False):
+                 angle: float = 0.0, sketch: str | None = None, construction: bool = False, centerline: bool = False):
     """
     major_radius: semieje mayor en mm (positivo): distancia del centro al extremo del eje mayor.
     minor_radius: semieje menor en mm (positivo).
@@ -1522,10 +1721,11 @@ def draw_ellipse(sesion, major_radius: float, minor_radius: float, center_x: flo
     angle: giro del eje mayor en grados respecto del eje x del boceto (antihorario).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una elipse de construcción (no forma perfiles).
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _elipse(b, center_x, center_y, major_radius, minor_radius, angle,
-                                                      construction))
+                                                      construction), construccion=construction, central=centerline)
 
 
 @herramienta("draw_slot", "boceto",
@@ -1538,16 +1738,18 @@ def draw_ellipse(sesion, major_radius: float, minor_radius: float, center_x: flo
 def draw_slot(sesion, points: list[list[float]], width: float,
               kind: Literal["center_to_center", "overall", "center_point", "arc_three_points",
                             "arc_center"] = "center_to_center",
-              sketch: str | None = None, construction: bool = False):
+              sketch: str | None = None, construction: bool = False, centerline: bool = False):
     """
     points: 2 puntos [x, y] (ranuras rectas) o 3 (ranuras de arco), en mm; qué es cada uno depende de kind.
     width: ancho total de la ranura en mm (positivo; en una de arco, menor que el doble del radio del eje).
     kind: center_to_center, overall, center_point, arc_three_points o arc_center.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una ranura de construcción (no forma perfiles).
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
-    return _dibujar(sesion, sketch, lambda b: _ranura(b, kind, points, width, construction))
+    return _dibujar(sesion, sketch, lambda b: _ranura(b, kind, points, width, construction),
+                    construccion=construction, central=centerline)
 
 
 @herramienta("draw_point", "boceto", "Agrega un punto suelto al boceto (Fusion: Punto): sirve de referencia para cotas, "
@@ -1566,7 +1768,7 @@ def draw_point(sesion, x: float, y: float, sketch: str | None = None):
              "Dibuja una curva cónica (Fusion: Curva cónica) entre dos extremos, con el vértice (donde se cruzan las "
              "tangentes de los extremos) y Rho: 0.5 = parábola, menos = elipse, más = hipérbola.", modifica=True)
 def draw_conic(sesion, start_x: float, start_y: float, end_x: float, end_y: float, vertex_x: float, vertex_y: float,
-               rho: float = 0.5, sketch: str | None = None, construction: bool = False):
+               rho: float = 0.5, sketch: str | None = None, construction: bool = False, centerline: bool = False):
     """
     start_x: x del primer extremo (mm).
     start_y: y del primer extremo (mm).
@@ -1577,10 +1779,12 @@ def draw_conic(sesion, start_x: float, start_y: float, end_x: float, end_y: floa
     rho: forma de la curva, entre 0 y 1 sin incluirlos.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una cónica de construcción.
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: b.agregar_conica((start_x, start_y), (vertex_x, vertex_y),
-                                                               (end_x, end_y), rho, construction))
+                                                               (end_x, end_y), rho, construction),
+                    construccion=construction, central=centerline)
 
 
 @herramienta("draw_tangent_circle", "boceto",
@@ -1600,27 +1804,7 @@ def draw_tangent_circle(sesion, lines: list[int], x: float | None = None, y: flo
     construction: true para un círculo de construcción.
     """
     _exigir_finitos(locals())
-    if len(lines) not in (2, 3):
-        raise error("INVALID_ARGUMENTS", f"lines lleva 2 o 3 ids de líneas (llegaron {len(lines)}).")
-    if (x is None) != (y is None):
-        raise error("INVALID_ARGUMENTS", "Pasá x e y juntos, o ninguno de los dos.")
-    if radius is not None and (len(lines) == 3 or not radius > 0):
-        raise error("INVALID_ARGUMENTS", "radius va solo con 2 líneas y tiene que ser positivo.")
-    q = None if x is None else (float(x), float(y))
-
-    def crear(b):
-        for k in lines:
-            _curva(b, k, ("linea",), "la línea")
-        if len(set(lines)) != len(lines):
-            raise ErrorBoceto("Elegí líneas distintas.")
-        if len(lines) == 2:
-            # sin punto: entre los puntos medios de las dos líneas (adentro del ángulo que forman, como al dibujar)
-            medios = [tuple((u + v) / 2 for u, v in zip(*b._extremos_linea(k), strict=True)) for k in lines]
-            ubicacion = q or ((medios[0][0] + medios[1][0]) / 2, (medios[0][1] + medios[1][1]) / 2)
-            b.agregar_circulo_tangente(list(lines), ubicacion, radius, None, construction)
-        else:
-            b.agregar_circulo_tangente(list(lines), None, None, None if q is None else [q] * 3, construction)
-    return _dibujar(sesion, sketch, crear, desde_solver=True)
+    return _dibujar(sesion, sketch, lambda b: _circulo_tangente(b, lines, x, y, radius, construction), desde_solver=True)
 
 
 @herramienta("draw_blend_curve", "boceto",
@@ -1677,7 +1861,11 @@ def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list
             _curva(b, k, ("linea", "arco", "circulo"), que)
         if entity1 == entity2:
             raise ErrorBoceto("Elegí dos curvas distintas.")
-        b.empalme(entity1, entity2, valor, p1, p2, expresion)
+        arco = b.empalme(entity1, entity2, valor, p1, p2, expresion)
+        radio_final = b.radio(arco)
+        if not math.isclose(radio_final, valor, rel_tol=1e-9, abs_tol=1e-9):
+            sesion.avisar(f"Entre líneas paralelas el radio es la mitad de su separación: {radio_final:g} mm; "
+                         "se ignoró el radio pedido.")
     return _dibujar(sesion, sketch, empalmar, desde_solver=True)
 
 
