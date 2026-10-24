@@ -23,10 +23,11 @@ from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..nucleo import perfiles as perfiles_mod
-from ..restricciones import Boceto, ErrorBoceto, auto_restringir
+from ..restricciones import Boceto, ErrorBoceto, auto_restringir, resolver
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
                                     centro_arco_tangente, circunferencia_3_puntos, validar_valor_cota)
+from ..restricciones.solver import restricciones_en_conflicto
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
@@ -276,7 +277,7 @@ def _extremo_de_linea(b, x, y):
     """El punto de un extremo de línea ya dibujado en (x, y), o (x, y) si no hay: así las líneas seguidas comparten
     la esquina, como al dibujar en cadena (dos puntos sueltos superpuestos abren el perfil al mover uno)."""
     for c in b.curvas.values():
-        if c.tipo == "linea":
+        if c.tipo == "linea" and c.id > 0:
             for pid in (c.p1, c.p2):
                 if abs(b.puntos[pid].x - x) < 1e-9 and abs(b.puntos[pid].y - y) < 1e-9:
                     return pid
@@ -494,7 +495,7 @@ def _informe_edicion(sesion, op, b, antes):
                "constraints": [{"id": r.id, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo)}
                                for rid, r in b.restricciones.items() if rid not in antes["restricciones"]],
                "profiles": None if br is None else len(br.perfiles), "dof": gdl, "status": estado}
-    cotas = [{"id": k.id, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "expression": k.expresion}
+    cotas = [{"id": k.id, "name": k.nombre, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "expression": k.expresion}
              for kid, k in b.cotas.items() if kid not in antes["cotas"]]
     if cotas:
         informe["dimensions"] = cotas
@@ -507,7 +508,8 @@ def _informe_edicion(sesion, op, b, antes):
 def valores_cotas(sesion, b):
     """{id de cota: valor en mm o grados} con los parámetros actuales (lo que el solver necesita)."""
     valores = sesion.doc.parametros.valores()
-    return {k.id: evaluar(k.expresion, ANGULO if k.tipo == "angulo" else LONGITUD, valores) for k in b.cotas.values()}
+    return {k.id: evaluar(k.expresion, ANGULO if k.tipo == "angulo" else LONGITUD, valores)
+            for k in b.cotas.values() if not k.referencia}
 
 
 def _sincronizar_con_solver(sesion, op, b):
@@ -530,7 +532,7 @@ def _sincronizar_con_solver(sesion, op, b):
             c.radio_menor = k.radio_menor
 
 
-def _dibujar(sesion, ref, constructor, desde_solver=False):
+def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False):
     """Edita el boceto con `constructor(boceto)` sobre una copia y la reemplaza en el timeline (un paso). Con
     `desde_solver`, la copia parte de la geometría resuelta (ver `_sincronizar_con_solver`)."""
     op = op_boceto(sesion, ref)
@@ -542,6 +544,8 @@ def _dibujar(sesion, ref, constructor, desde_solver=False):
     try:
         constructor(b)
         _exigir_tamano(b, antes)
+        if anclar:
+            b.anclar_al_origen(set(b.puntos) - antes["puntos"])
     except ErrorBoceto as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
     sesion.doc.reemplazar(op.id, nueva)
@@ -638,14 +642,35 @@ def _info_curva(b, c):
 def _valor_cota(sesion, k):
     try:
         valores = sesion.doc.parametros.valores()
-        return _r(evaluar(k.expresion, ANGULO if k.tipo == "angulo" else LONGITUD, valores))
+        return _r(evaluar(k.nombre if k.referencia and k.nombre else k.expresion,
+                         ANGULO if k.tipo == "angulo" else LONGITUD, valores))
     except Exception:  # noqa: BLE001 — informe: un valor ilegible no debe tumbar get_sketch
         return None
 
 
 def _ubicacion_cota(k):
-    """Dónde dibuja el editor la cota (si se la movió): offset de la línea y del texto, en mm."""
-    return {n: k.datos[c] for n, c in (("offset", "desfase"), ("text_offset", "texto")) if c in k.datos}
+    """Dónde dibuja el editor la cota (si se la movió): offset de la línea y del texto, en mm; `mode` (center o
+    tangent) en una distancia con un círculo o arco; y `quadrant` (0..3) en un ángulo con cuadrante elegido."""
+    return {**{n: k.datos[c] for n, c in (("offset", "desfase"), ("text_offset", "texto"), ("quadrant", "cuadrante"))
+               if c in k.datos},
+            **({"mode": _MODOS_A_INGLES[k.datos["modo"]]} if "modo" in k.datos else {})}
+
+
+def _cuadrante(b, tipo, entities, near):
+    """Cuadrante (0..3) de una cota de ángulo según el punto `near` [x, y] (BOC-25); None si no hay `near`."""
+    if near is None:
+        return None
+    if tipo != "angulo":
+        raise error("INVALID_DIMENSION", "near solo vale en una cota de ángulo (type=angle).")
+    punto = _xy(near, "near")
+    try:
+        return b.cuadrante_angulo(*entities, punto)
+    except ErrorBoceto as e:
+        raise error("INVALID_DIMENSION", str(e)) from e
+
+
+_MODOS = {"center": "centro", "tangent": "tangente"}
+_MODOS_A_INGLES = {v: k for k, v in _MODOS.items()}
 
 
 def _fijar_ubicacion(b, k, offset, text_offset):
@@ -670,18 +695,42 @@ def info_boceto(sesion, op):
     b = br.boceto if br is not None else op.boceto
     estado, gdl = estado_solver(br)
     fijos = b.puntos_fijos()
+    determinadas = br.solver.determinadas if br is not None else frozenset()
+    fijas = {e for r in b.restricciones.values() if r.tipo == "fijo" for e in r.entidades}
+    fijas.update(c.id for c in b.curvas.values() if c.proyectada)
+    # Una coincidencia con el origen también es un anclaje, aunque no sea un «fijo» explícito.
+    anclados = {b.ORIGEN} | {e for r in b.restricciones.values() if r.datos.get("origen") for e in r.entidades}
+    coincidencias = [r.entidades for r in b.restricciones.values() if r.tipo == "coincidente"
+                    and all(e in b.puntos for e in r.entidades)]
+    while True:
+        nuevos = {e for par in coincidencias if anclados.intersection(par) for e in par} - anclados
+        if not nuevos:
+            break
+        anclados.update(nuevos)
+    fijos.update(anclados)
+
+    def estado_entidad(ident):
+        if ident in fijos or ident in fijas:
+            return "fixed"
+        return "determined" if ident in determinadas else "free"
+
     resultado = next((r for o, r in zip(sesion.doc.operaciones, sesion.doc.resultados, strict=False) if o.id == op.id),
                      None)
     info = {"id": op.id, "name": op.nombre, "plane": op.p.get("plano"), "available": br is not None,
             "plane_frame": _info_plano(br.plano) if br is not None else None,
-            "status": estado, "dof": gdl,
+            "status": estado, "dof": gdl, "origin": b.ORIGEN, "axes": {"x": b.EJE_X, "y": b.EJE_Y},
+            "conflicts": restricciones_en_conflicto(op.boceto, valores_cotas(sesion, op.boceto))
+            if estado == "over_constrained" else [],
             "message": br.solver.descripcion() if br is not None else (resultado.mensaje if resultado else ""),
-            "entities": [_info_curva(b, c) for c in b.curvas.values()],
-            "points": [{"id": p.id, "x": _r(p.x), "y": _r(p.y), "fixed": p.id in fijos} for p in b.puntos.values()],
+            "entities": [{**_info_curva(b, c), "state": estado_entidad(c.id)} for c in b.curvas.values()],
+            "points": [{"id": p.id, "x": _r(p.x), "y": _r(p.y), "fixed": p.id in fijos,
+                        "state": estado_entidad(p.id)} for p in b.puntos.values()],
             "constraints": [{"id": r.id, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo), "entities": r.entidades}
                             for r in b.restricciones.values()],
-            "dimensions": [{"id": k.id, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "entities": k.entidades,
-                            "expression": k.expresion, "value": _valor_cota(sesion, k), **_ubicacion_cota(k)}
+            "dimensions": [{"id": k.id, "name": k.nombre, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "entities": k.entidades,
+                            "expression": k.expresion, "reference": k.referencia,
+                            "value": _r(b.medir(k)) if k.referencia else _valor_cota(sesion, k),
+                            **_ubicacion_cota(k)}
                            for k in b.cotas.values()],
             "profiles": info_perfiles(br) if br is not None else []}
     return info
@@ -814,7 +863,7 @@ def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float
              "center_diagonals=true, la forma centro y tamaño agrega las dos diagonales de construcción y deja el "
              "centro como punto medio de una (el «Rectángulo central» de la interfaz). Con three_points=[A, B, C] es "
              "el rectángulo de 3 puntos: el lado A→B y un punto C que da el ancho, perpendicular al lado (queda "
-             "girado si A→B no es horizontal).", modifica=True)
+             "girado si A→B no es horizontal). Un punto nuevo sobre (0,0) queda anclado al origen, como en la interfaz.", modifica=True)
 def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2: float | None = None,
                    y2: float | None = None, center_x: float | None = None, center_y: float | None = None,
                    origin_x: float | None = None, origin_y: float | None = None, width: float | None = None,
@@ -843,7 +892,7 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if len(three_points) != 3:
             raise error("INVALID_ARGUMENTS", "three_points necesita tres puntos [x, y]: A, B y C.")
         a, b_, c = (_xy(p, "Cada punto de three_points") for p in three_points)
-        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_3p(b, a, b_, c, construction)[0]})
+        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_3p(b, a, b_, c, construction)[0]}, anclar=True)
     esquinas = (x1, y1, x2, y2)
     if any(v is not None for v in esquinas):
         if any(v is None for v in esquinas):
@@ -869,8 +918,8 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if center_x is None and center_y is None:
             raise error("INVALID_ARGUMENTS", "center_diagonals necesita la forma de centro y tamaño (center_x/center_y, width, height).")
         centro = ((a[0] + b_[0]) / 2, (a[1] + b_[1]) / 2)
-        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_centro(b, centro, b_, construction)[0]})
-    return _dibujar(sesion, sketch, lambda b: _rectangulo(b, a[0], a[1], b_[0], b_[1], construction))
+        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_centro(b, centro, b_, construction)[0]}, anclar=True)
+    return _dibujar(sesion, sketch, lambda b: _rectangulo(b, a[0], a[1], b_[0], b_[1], construction), anclar=True)
 
 
 @herramienta("draw_circle", "boceto", "Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por "
@@ -1067,7 +1116,8 @@ def _avisar_cerrada_ignorada(sesion, spline_type, closed):
              "dos círculos/arcos); coincident: un punto y otro punto o una curva; midpoint: un punto y una línea o "
              "arco; tangent y concentric: dos curvas; fix: una o más entidades; symmetry: dos entidades y la línea eje; "
              "polygon: al menos tres líneas que comparten vértices y forman una cadena cerrada, o un solo lado "
-             "para tomar automáticamente su cadena cerrada de líneas.",
+             "para tomar automáticamente su cadena cerrada de líneas. Referencias reservadas: origen 0, eje X -1, "
+             "eje Y -2 (origin/axes de get_sketch). Repetir fix sobre las mismas entidades devuelve el fix existente.",
              modifica=True)
 def add_constraint(sesion, sketch: str,
                    type: Literal["coincident", "horizontal", "vertical", "parallel", "perpendicular", "equal",  # noqa: A002
@@ -1076,12 +1126,15 @@ def add_constraint(sesion, sketch: str,
     """
     sketch: id o nombre del boceto.
     type: tipo de restricción.
-    entities: ids de las entidades (curvas o puntos), en el orden que pide el tipo.
+    entities: ids de las entidades (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
     """
     op = op_boceto(sesion, sketch)
     previo = boceto_resuelto(sesion, op)
     nueva = op.copia()
     b = nueva.boceto
+    if type == "fix":
+        _sincronizar_con_solver(sesion, op, b)
+    b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
     antes = _claves(b)
     try:
@@ -1094,10 +1147,11 @@ def add_constraint(sesion, sketch: str,
         rid = b.agregar_restriccion(RESTRICCIONES[type], list(entities))
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
-    sesion.doc.reemplazar(op.id, nueva)
+    if rid not in antes["restricciones"]:
+        sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, previo is None or previo.solver.ok, f"La restricción «{type}»")
     informe = _informe_edicion(sesion, nueva, b, antes)
-    return {"sketch": informe["sketch"], "constraint": {"id": rid, "type": type, "entities": list(entities)},
+    return {"sketch": informe["sketch"], "constraint": {"id": rid, "type": type, "entities": b.restricciones[rid].entidades},
             "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"]}
 
 
@@ -1115,59 +1169,99 @@ def _exigir_entidades(b, ids):
              "con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y "
              "desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos "
              "puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; "
-             "radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. En una cota "
+             "radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance "
+             "también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al "
+             "centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la "
+             "distancia a la curva). En una cota "
              "lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan "
-             "dónde se dibuja: no cambian el valor ni la geometría.",
+             "dónde se dibuja: no cambian el valor ni la geometría. Referencias fijas reservadas: origen 0, eje X -1 "
+             "y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, "
+             "visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. "
+             "reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving "
+             "redundante o en conflicto se crea como referencia con aviso y converted_to_reference=true. En angle, "
+             "`near` [x, y] elige qué ángulo se mide, como el cursor en Fusion: el del cuadrante entre las dos rectas "
+             "que contiene ese punto (45° o 135° en la misma figura); sin near mide entre las líneas tal como se "
+             "dibujaron. El cuadrante (0..3) se guarda y get_sketch lo muestra como quadrant.",
              modifica=True)
 def add_dimension(sesion, sketch: str,
                   type: Literal["distance", "horizontal", "vertical", "radius", "diameter", "angle", "offset"],  # noqa: A002
                   entities: list[int], value: Expr | None = None, offset: float | None = None,
-                  text_offset: float | None = None):
+                  text_offset: float | None = None, reference: bool = False,
+                  mode: Literal["center", "tangent"] = "center", near: list[float] | None = None):
     """
     sketch: id o nombre del boceto.
     type: tipo de cota.
-    entities: ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo.
+    entities: ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
     value: valor: número (mm; grados en angle) o expresión con parámetros, p. ej. "radio_agujero * 2". Vacío = medida actual.
     offset: mm que se separa la línea de cota de la medida (con signo, hacia +Y en horizontal, +X en vertical, a la izquierda de la línea en distance); vacío = lo automático.
     text_offset: mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = centrado.
+    reference: true = cota de referencia (driven): mide la geometría sin restringirla; ignora value.
+    mode: en una distancia con un círculo o arco: "center" (al centro) o "tangent" (al borde más cercano).
+    near: [x, y] en mm, solo en angle: el ángulo medido es el del cuadrante entre las dos rectas que contiene este punto; vacío = entre las líneas tal como se dibujaron.
     """
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     b = nueva.boceto
+    _sincronizar_con_solver(sesion, op, b)
+    b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
     interno = COTAS[type]
     try:
         b._validar_cota(interno, list(entities))     # el tipo de entidad, antes de medir
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", str(e)) from e
-    if value is None:
+    cuadrante = _cuadrante(b, interno, list(entities), near)
+    datos = {"modo": _MODOS[mode], **({} if cuadrante is None else {"cuadrante": cuadrante})}
+    if value is None or reference:
         try:
-            medida = br.boceto.medir_cota(interno, list(entities))
+            medida = b.medir_cota(interno, list(entities), _MODOS[mode], cuadrante)
         except (ErrorBoceto, KeyError, ValueError, IndexError) as e:
             raise error("INVALID_DIMENSION", f"No se pudo medir la cota «{type}» con esas entidades: {e}") from e
         expresion = repr(round(medida, 6))
     else:
         expresion = texto_expr(value)
     valor = evaluar(expresion, ANGULO if interno == "angulo" else LONGITUD, sesion.doc.parametros.valores())
-    _cota_valida(interno, valor, f"La cota «{type}»")
+    if not reference:
+        _cota_valida(interno, valor, f"La cota «{type}»")
     antes = _claves(b)
-    kid = b.agregar_cota(interno, list(entities), expresion)
+    try:
+        kid = b.agregar_cota(interno, list(entities), expresion, datos, referencia=reference)
+    except ErrorBoceto as e:
+        raise error("INVALID_DIMENSION", str(e)) from e
     _fijar_ubicacion(b, b.cotas[kid], offset, text_offset)
+    convertida = not reference and _cota_sobre_restringe(sesion, b, br.solver)
+    if convertida:
+        b.cotas[kid].referencia = True
+        b.cotas[kid].expresion = repr(b.medir(b.cotas[kid]))
+        sesion.avisar("La cota sobre-restringiría el boceto: se creó como cota de referencia (driven).")
     sesion.doc.reemplazar(op.id, nueva)
-    _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota «{type}» = {expresion}")
     informe = _informe_edicion(sesion, nueva, b, antes)
-    valor = _valor_cota(sesion, b.cotas[kid])
-    return {"sketch": informe["sketch"], "dimension": {"id": kid, "type": type, "entities": list(entities),
-                                                       "expression": expresion, "value": valor,
-                                                       **_ubicacion_cota(b.cotas[kid])},
-            "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"]}
+    k = b.cotas[kid]
+    valor = _valor_cota(sesion, k)
+    return {"sketch": informe["sketch"], "dimension": {"id": kid, "name": b.cotas[kid].nombre, "type": type, "entities": list(entities),
+                                                       "expression": k.expresion, "value": valor, "reference": k.referencia,
+                                                        **_ubicacion_cota(b.cotas[kid])},
+            "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"],
+            "converted_to_reference": convertida}
+
+
+def _cota_sobre_restringe(sesion, boceto, anterior):
+    """Prueba sin mover el documento: una cota driving debe bajar los GDL sin dejar residuo."""
+    resultado = resolver(boceto.copia(), valores_cotas(sesion, boceto))
+    return not resultado.ok or resultado.gdl >= anterior.gdl
 
 
 @herramienta("get_sketch", "boceto",
              "Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el "
              "solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja "
              "[min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` "
-             "(fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`.")
+             "(fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto "
+             "y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya "
+             "retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). "
+             "origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias "
+             "se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), "
+             "el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica "
+             "una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof.")
 def get_sketch(sesion, sketch: str | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
@@ -1922,19 +2016,32 @@ def set_line_type(sesion, entities: list[int], line_type: Literal["normal", "con
              "Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con "
              "parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y "
              "el boceto queda como estaba. Con `offset` y `text_offset` mueve la línea de cota y su texto sin cambiar el "
-             "valor (cotas lineales). Para borrar una cota o una restricción: delete_sketch_entities con su id.",
+             "valor (cotas lineales). Mantiene sincronizado el parámetro dN; rechaza dependencias circulares. "
+             "reference alterna driving/driven. Al pasar a referencia se pierde la expresión y se mide la geometría; "
+             "su valor no es editable. Si volver a driving sobre-restringiría, sigue de referencia con aviso "
+             "y el documento queda como estaba. `type` alterna radius ↔ diameter conservando el valor equivalente "
+             "(la geometría no cambia). `mode` cambia una distancia con un círculo o arco entre center y tangent: la "
+             "expresión queda y la geometría se mueve para cumplirla. `near` [x, y] cambia qué ángulo mide una cota "
+             "de ángulo (el del cuadrante que contiene el punto): igual que mode, la expresión queda. "
+             "Para borrar una cota o una restricción: delete_sketch_entities con su id.",
              modifica=True)
 def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: str | None = None,
-                   offset: float | None = None, text_offset: float | None = None):
+                   offset: float | None = None, text_offset: float | None = None, reference: bool | None = None,
+                   type: Literal["radius", "diameter"] | None = None,  # noqa: A002
+                   mode: Literal["center", "tangent"] | None = None, near: list[float] | None = None):
     """
     dimension: id de la cota (get_sketch la lista en dimensions).
     value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     offset: mm que se separa la línea de cota de la medida (con signo); vacío = no cambia.
     text_offset: mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = no cambia.
+    reference: true = convertir a referencia (driven); false = driving; vacío = no cambia. Una alternancia redundante o en conflicto avisa y conserva la referencia sin modificar el documento.
+    type: radius o diameter: pasa una cota de radio a diámetro (o al revés) con el valor equivalente; vacío = no cambia.
+    mode: center o tangent en una distancia con un círculo o arco; vacío = no cambia.
+    near: [x, y] en mm, solo en una cota de ángulo: pasa a medir el ángulo del cuadrante que contiene este punto; vacío = no cambia.
     """
-    if value is None and offset is None and text_offset is None:
-        raise error("INVALID_ARGUMENTS", "Falta qué cambiar: value, offset o text_offset.")
+    if all(v is None for v in (value, offset, text_offset, reference, type, mode, near)):
+        raise error("INVALID_ARGUMENTS", "Falta qué cambiar: value, offset, text_offset, reference, type, mode o near.")
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     k = nueva.boceto.cotas.get(dimension) if isinstance(dimension, int) and not isinstance(dimension, bool) else None
@@ -1942,8 +2049,29 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
         hay = ", ".join(str(i) for i in nueva.boceto.cotas) or "ninguna"
         raise error("ENTITY_NOT_FOUND", f"El boceto «{op.nombre}» ({op.id}) no tiene la cota {dimension!r} (cotas: "
                     f"{hay}).", "get_sketch lista las cotas (dimensions) con su id.")
-    tipo = _COTA_A_INGLES.get(k.tipo, k.tipo)
     anterior = k.expresion
+    if near is not None:                       # el cuadrante se mide sobre la geometría resuelta
+        _sincronizar_con_solver(sesion, op, nueva.boceto)
+    cuadrante = _cuadrante(nueva.boceto, k.tipo, k.entidades, near)
+    try:
+        nueva.boceto.cambiar_cota(dimension, None if type is None else COTAS[type], None if mode is None else _MODOS[mode],
+                                  cuadrante)
+    except ErrorBoceto as e:
+        raise error("INVALID_DIMENSION", str(e)) from e
+    tipo = _COTA_A_INGLES.get(k.tipo, k.tipo)
+    era_referencia = k.referencia
+    if value is not None and (era_referencia or reference is True):
+        raise error("INVALID_DIMENSION", "Una cota de referencia mide la geometría: su valor no se puede editar.",
+                    "Convertí primero la cota a driving con reference=false.")
+    if reference is not None and reference != era_referencia:
+        _sincronizar_con_solver(sesion, op, nueva.boceto)
+        k.referencia = reference
+        k.expresion = repr(nueva.boceto.medir(k))
+        if not reference and _cota_sobre_restringe(sesion, nueva.boceto, br.solver):
+            sesion.avisar("La cota sobre-restringiría el boceto: sigue como cota de referencia (driven).")
+            return {"sketch": _paso(op), "dimension": next(c for c in info_boceto(sesion, op)["dimensions"]
+                                                         if c["id"] == dimension),
+                    "dof": br.solver.gdl, "status": estado_solver(br)[0]}
     if value is not None:
         expresion, valor = _valor_expr(sesion, value, ANGULO if k.tipo == "angulo" else LONGITUD)
         _cota_valida(k.tipo, valor, f"La cota {dimension} ({tipo})")
@@ -1953,9 +2081,10 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota {dimension} ({tipo}) = {expresion}")
     estado, gdl = estado_solver(boceto_resuelto(sesion, nueva))
-    return {"sketch": _paso(nueva), "dimension": {"id": dimension, "type": tipo, "entities": list(k.entidades),
+    return {"sketch": _paso(nueva), "dimension": {"id": dimension, "name": k.nombre, "type": tipo, "entities": list(k.entidades),
                                                   "previous_expression": anterior, "expression": expresion,
-                                                  "value": _valor_cota(sesion, k), **_ubicacion_cota(k)},
+                                                  "value": _valor_cota(sesion, k), "reference": k.referencia,
+                                                  **_ubicacion_cota(k)},
             "dof": gdl, "status": estado}
 
 

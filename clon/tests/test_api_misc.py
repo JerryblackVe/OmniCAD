@@ -162,7 +162,7 @@ def test_exportar_e_importar_parametros_ida_y_vuelta(s, tmp_path):
     ok(s, "export_parameters", path=str(csv_ruta), overwrite=True)
     nueva = api.Sesion()
     ok(nueva, "import_parameters", path=str(csv_ruta))
-    original = {p["name"]: p["expression"] for p in ok(s, "get_parameters")["parameters"]}
+    original = {p["name"]: p["expression"] for p in ok(s, "get_parameters")["parameters"] if "source" not in p}   # los dN de cotas no se exportan
     assert {p["name"]: p["expression"] for p in ok(nueva, "get_parameters")["parameters"]} == original
     ok(nueva, "undo")
     assert ok(nueva, "get_parameters")["parameters"] == []                # un solo paso de deshacer

@@ -30,13 +30,22 @@ def _elementos(sesion, items):
     return list(dict.fromkeys(ids))
 
 
-@herramienta("get_browser_state", "documento", "Lista los grupos y conjuntos de selección guardados en el navegador.")
+@herramienta("get_browser_state", "documento", "Lista los grupos y conjuntos de selección guardados en el navegador "
+             "y los bocetos con su estado, como los marca el navegador: status (fully_constrained = candado, "
+             "over_constrained = marca roja de conflicto, under_constrained) y dof (grados de libertad). Qué choca: "
+             "get_sketch › conflicts.")
 def get_browser_state(sesion):
+    from .herramientas_boceto import estado_solver
     datos = datos_navegador(sesion.doc)
+    bocetos = []
+    for b in sesion.doc.estado_final.bocetos.values():
+        status, dof = estado_solver(b)
+        bocetos.append({"id": b.op_id, "name": b.nombre, "status": status, "dof": dof})
     return {"groups": [{"id": k, "name": v["nombre"], "items": v["miembros"]}
                        for k, v in datos["grupos"].items()],
             "selection_sets": [{"id": k, "name": v["nombre"], "items": v["miembros"]}
-                               for k, v in datos["conjuntos"].items()]}
+                               for k, v in datos["conjuntos"].items()],
+            "sketches": bocetos}
 
 
 @herramienta("manage_browser", "documento", "Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, "

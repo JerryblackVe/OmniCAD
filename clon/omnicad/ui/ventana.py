@@ -999,14 +999,18 @@ class VentanaPrincipal(QMainWindow):
         from ..api.herramientas_navegador import datos_navegador
         self.navegador.organizacion = datos_navegador(self.doc)
         bocetos_nav = dict(estado.bocetos)
+        en_edicion = {}                         # el boceto abierto muestra el estado del editor, no el guardado
         if self.modo_boceto.activo:
             op = self.modo_boceto.datos.get("op")
             if op is not None and op.id in self.doc.estado_final.bocetos:
                 bocetos_nav[op.id] = self.doc.estado_final.bocetos[op.id]
+                en_edicion[op.id] = (self.modo_boceto.lienzo.resultado if self.modo_boceto.boceto.curvas else None)
+        from .navegador import estado_boceto
         self.navegador.actualizar(titulo, [(k.id, self.nombre_cuerpo(k)) for k in estado.cuerpos.values()
                                            if not k.componente],
-                                  [(b.op_id, b.nombre, "boceto_bloqueado" if b.boceto.curvas and b.solver is not None
-                                    and b.solver.totalmente_restringido else "boceto")
+                                  [(b.op_id, b.nombre,
+                                    *estado_boceto(en_edicion[b.op_id] if b.op_id in en_edicion
+                                                   else b.solver if b.boceto.curvas else None))
                                    for b in bocetos_nav.values()], self.ocultos, self.vis,
                                   [(i, pl.nombre, "plano_desfase") for i, pl in estado.planos.items()] +
                                   [(i, n, "eje_arista") for i, (_p, _d, n) in estado.ejes.items()] +

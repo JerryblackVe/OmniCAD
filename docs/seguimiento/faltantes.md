@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23). Total 195: Abierto 146 · Parcial 29 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-24). Total 190: Abierto 141 · Parcial 29 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -80,17 +80,12 @@ Abierto 1 · Parcial 2.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 26. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
+Abierto 20. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-1 | Cotas de referencia (driven) y alternar driving/driven | Abierto | Alta | Hoy una cota redundante entra en silencio (dos `distance 5=40` y `horizontal=40` dejan el dof igual). Fusion la vuelve de referencia sola al sobre-restringir y se puede alternar. | grep driven sin resultados en omnicad/restricciones/ | 2026-10-23 |
-| BOC-2 | Nombre de cota como parámetro (d1, d2…) citable en expresiones | Abierto | Media | Tras `add_dimension`, `get_parameters` da lista vacía y `value="d1/2"` falla con «Nombre desconocido». | omnicad/restricciones/boceto.py (cotas); omnicad/api/herramientas_parametros.py | 2026-10-23 |
-| BOC-3 | Cotas entre curvas y menú contextual de cota | Abierto | Media | Punto-círculo, círculo-círculo, línea-círculo y punto-spline (centro o tangente); elegir radio o diámetro y driven en el clic derecho. | omnicad/restricciones/boceto.py:1766 (solo punto y línea); omnicad/ui/editor_boceto.py:2614 (el clic derecho solo cancela) | 2026-10-23 |
 | BOC-4 | Auto-restringir que infiera todos los tipos | Abierto | Alta | Solo detecta coincidente, horizontal/vertical e igual. Faltan tangente, perpendicular, paralela, concéntrica, colineal, punto medio y simetría: dos círculos concéntricos dan 2 diámetros y 2 distancias; una L girada da cotas en vez de «perpendicular». | omnicad/restricciones/solver.py (`auto_restringir`) | 2026-10-23 |
 | BOC-5 | Diálogo de AutoConstrain y «Finish with AutoConstrain» | Abierto | Media | Varios resultados con deslizador de cantidad, tolerancia, Generate more, Start Over, borrar sugerencia, Set datum y estado de candado; terminar el boceto restringiendo. Hoy es un clic que aplica todo y la API no tiene opciones. | omnicad/ui/editor_boceto.py:1367; omnicad/api/herramientas_boceto.py (`auto_constrain`) | 2026-10-23 |
-| BOC-6 | `get_sketch` con estado por entidad y origen citable | Abierto | Media | Exponer libre, determinada o fija por entidad y la lista de restricciones en choque (el solver ya calcula `determinadas`). Poder citar el origen y los ejes X/Y en restricciones; hoy `draw_rectangle` desde (0,0) da dof 4 por API y 2 en la UI. Fijar dos veces deja dos `fix`. | omnicad/restricciones/solver.py (`determinadas`); omnicad/ui/editor_boceto.py:654 | 2026-10-23 |
-| BOC-7 | Conflictos en rojo y candado en el navegador | Abierto | Media | Hoy solo hay texto con aviso; Fusion pinta en rojo la geometría en conflicto y marca el boceto en el navegador. Une con F5 (cuáles restricciones chocan). | omnicad/ui/modo_boceto.py:272; omnicad/ui/navegador.py | 2026-10-23 |
 | BOC-8 | Proyectar solo las aristas de la cara al crear un boceto sobre ella | Abierto | Media | `create_sketch` sobre una cara plana y `sketch_from_spec` devuelven 0 entidades y la UI arranca con `Boceto()` vacío; Fusion proyecta el contorno de la cara de forma asociativa. | omnicad/ui/ventana.py:1790,2168,2178 | 2026-10-23 |
 | BOC-9 | Inferencia y ajuste (snaps) completos | Abierto | Alta | Hoy solo engancha a puntos, origen, rejilla y horizontal/vertical. Faltan punto medio, punto sobre curva, tangente y perpendicular inferidas, líneas guía punteadas y Mayús = coincidente en el punto medio. | omnicad/ui/editor_boceto.py:745 (`_ajustar`) | 2026-10-23 |
 | BOC-10 | Copiar y pegar elementos entre bocetos | Abierto | Media | No hay Ctrl+C / Ctrl+V en el `Lienzo` ni herramienta con boceto de origen y de destino; `transform_sketch copy` solo copia dentro del mismo boceto. | omnicad/ui/editor_boceto.py (sin `copiar`/`pegar`) | 2026-10-23 |
@@ -108,7 +103,6 @@ Abierto 26. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye
 | BOC-22 | Ajustar curvas a secciones de malla | Abierto | Alta | No está ni grisado en el menú; «Crear boceto de sección de malla» está grisado y no hay API. | omnicad/ui/cinta.py:158 | 2026-10-23 |
 | BOC-23 | Seleccionar un perfil con clic dentro del editor | Abierto | Baja | `entidad_en` solo toma puntos y curvas; fuera del editor ya existen `select_entities(kind=profile)` y `get_profile_sketches`. | omnicad/ui/editor_boceto.py (`entidad_en`) | 2026-10-23 |
 | BOC-24 | Escribir valores a mano en todas las herramientas | Abierto | Media | `VIVAS` no incluye elipse (eje y ángulo), círculo de 2 puntos, círculo de 2 tangentes, arco tangente, polígono por arista ni línea de punto medio; las ranuras no aceptan ángulo. Con arcos tangentes encadenados no se puede escribir el radio. | omnicad/ui/editor_boceto.py:159 (`VIVAS`) | 2026-10-23 |
-| BOC-25 | Cota de ángulo elegida por el cursor y chaflán con 2.ª distancia ligada | Abierto | Baja | La misma figura mide 45° o 135° según el sentido en que se dibujó; en el chaflán, `edit_dimension` de la 1.ª distancia deja la 2.ª sin seguir. Une con FU-3. | omnicad/restricciones/boceto.py:1606,2277 | 2026-10-23 |
 | BOC-26 | Cónica con el parámetro Rho arrastrable y guías de tangencia | Abierto | Baja | Rho solo se escribe. | omnicad/ui/editor_boceto.py:1055 | 2026-10-23 |
 
 ## Fusion 360

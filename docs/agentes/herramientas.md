@@ -63,7 +63,7 @@ Archivo, escena, timeline y deshacer.
 | [`manage_comments`](#manage_comments) | sí | Lista, agrega o borra comentarios del proyecto. |
 | [`list_recent_documents`](#list_recent_documents) | no | Lista los proyectos recientes existentes, en el orden del panel de datos. |
 | [`export_mesh`](#export_mesh) | no | Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por cuerpo y refinado con recuento de triángulos. |
-| [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador. |
+| [`get_browser_state`](#get_browser_state) | no | Lista los grupos y conjuntos de selección guardados en el navegador y los bocetos con su estado, como los marca el navegador: status (fully_constrained = candado, over_constrained = marca roja de conflicto, under_constrained) y dof (grados de libertad). |
 | [`manage_browser`](#manage_browser) | sí | Organiza cuerpos, bocetos y calcomanías: crea grupos y conjuntos de selección, mueve elementos entre grupos, renombra o suprime un grupo (sin borrar su contenido). |
 | [`set_browser_visibility`](#set_browser_visibility) | no | Muestra u oculta cuerpos, componentes, bocetos, calcomanías o grupos en vivo, y los análisis (por su nombre: se guarda en el documento, sin ventana). |
 | [`set_object_visibility`](#set_object_visibility) | sí | Muestra u oculta tipos de objetos de trabajo en la vista, como Visibilidad del objeto del menú de visualización: planos, ejes y punto de origen, planos, ejes y puntos de usuario, bocetos, sistemas de coordenadas, orígenes y ejes de unión y uniones. |
@@ -393,7 +393,7 @@ Guardar como malla: 3MF, STL binario/ASCII u OBJ, unidades, un archivo o uno por
 
 ### `get_browser_state`
 
-Lista los grupos y conjuntos de selección guardados en el navegador.
+Lista los grupos y conjuntos de selección guardados en el navegador y los bocetos con su estado, como los marca el navegador: status (fully_constrained = candado, over_constrained = marca roja de conflicto, under_constrained) y dof (grados de libertad). Qué choca: get_sketch › conflicts.
 
 - Modifica el documento: no.
 - Parámetros: ninguno.
@@ -548,7 +548,7 @@ Medidas con nombre que gobiernan el modelo.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`get_parameters`](#get_parameters) | no | Lista los parámetros de usuario: expresión, valor calculado, unidad (mm o deg) y qué pasos del timeline los usan. |
+| [`get_parameters`](#get_parameters) | no | Lista los parámetros de usuario y de cotas: expresión, valor calculado, unidad (mm o deg) y qué pasos del timeline los usan. |
 | [`create_parameter`](#create_parameter) | sí | Crea un parámetro de usuario. |
 | [`set_parameter`](#set_parameter) | sí | Cambia la expresión, el comentario o el nombre de un parámetro existente y recalcula el modelo. |
 | [`delete_parameter`](#delete_parameter) | sí | Borra un parámetro que no use ningún paso ni otro parámetro. |
@@ -557,7 +557,7 @@ Medidas con nombre que gobiernan el modelo.
 
 ### `get_parameters`
 
-Lista los parámetros de usuario: expresión, valor calculado, unidad (mm o deg) y qué pasos del timeline los usan.
+Lista los parámetros de usuario y de cotas: expresión, valor calculado, unidad (mm o deg) y qué pasos del timeline los usan. Las cotas tienen source=sketch, sketch (id del boceto) y dimension (id de cota); sus nombres d1, d2… se pueden citar en cualquier expresión.
 
 - Modifica el documento: no.
 - Parámetros: ninguno.
@@ -577,7 +577,7 @@ Crea un parámetro de usuario. Con kind=auto la magnitud sale de la expresión: 
 
 ### `set_parameter`
 
-Cambia la expresión, el comentario o el nombre de un parámetro existente y recalcula el modelo. Si algún paso queda con error (p. ej. renombrar un parámetro que usa un paso), el cambio se descarta.
+Cambia la expresión, el comentario o el nombre de un parámetro existente y recalcula el modelo. Si algún paso queda con error (p. ej. renombrar un parámetro que usa un paso), el cambio se descarta. Con un parámetro dN de boceto también cambia la cota y mueve su geometría; los nombres de cota son estables y no se pueden renombrar. El valor de una cota de referencia (driven) es medido y no se puede editar; se puede citar en otras expresiones.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -589,7 +589,7 @@ Cambia la expresión, el comentario o el nombre de un parámetro existente y rec
 
 ### `delete_parameter`
 
-Borra un parámetro que no use ningún paso ni otro parámetro.
+Borra un parámetro que no use ningún paso ni otro parámetro. Para quitar un dN de boceto, borrá su cota con delete_sketch_entities; falla si una expresión ajena la usa.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -633,7 +633,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). |
 | [`add_constraint`](#add_constraint) | sí | Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
-| [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. |
+| [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. |
 | [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}; todas aceptan id (nombre propio para citarla) y construction. |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
@@ -705,7 +705,7 @@ Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el
 
 ### `draw_rectangle`
 
-Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). Tres formas de darlo: dos esquinas opuestas (x1, y1, x2, y2); centro y tamaño (center_x, center_y, width, height); o esquina mínima y tamaño (origin_x, origin_y, width, height). width es el tamaño en x del boceto y height en y. Con center_diagonals=true, la forma centro y tamaño agrega las dos diagonales de construcción y deja el centro como punto medio de una (el «Rectángulo central» de la interfaz). Con three_points=[A, B, C] es el rectángulo de 3 puntos: el lado A→B y un punto C que da el ancho, perpendicular al lado (queda girado si A→B no es horizontal).
+Dibuja un rectángulo (4 líneas con restricciones horizontal y vertical). Tres formas de darlo: dos esquinas opuestas (x1, y1, x2, y2); centro y tamaño (center_x, center_y, width, height); o esquina mínima y tamaño (origin_x, origin_y, width, height). width es el tamaño en x del boceto y height en y. Con center_diagonals=true, la forma centro y tamaño agrega las dos diagonales de construcción y deja el centro como punto medio de una (el «Rectángulo central» de la interfaz). Con three_points=[A, B, C] es el rectángulo de 3 puntos: el lado A→B y un punto C que da el ancho, perpendicular al lado (queda girado si A→B no es horizontal). Un punto nuevo sobre (0,0) queda anclado al origen, como en la interfaz.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -794,32 +794,35 @@ Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado
 
 ### `add_constraint`
 
-Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). Si choca con las que ya hay, falla y el boceto queda como estaba. Entidades por tipo: horizontal y vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también dos círculos/arcos); coincident: un punto y otro punto o una curva; midpoint: un punto y una línea o arco; tangent y concentric: dos curvas; fix: una o más entidades; symmetry: dos entidades y la línea eje; polygon: al menos tres líneas que comparten vértices y forman una cadena cerrada, o un solo lado para tomar automáticamente su cadena cerrada de líneas.
+Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). Si choca con las que ya hay, falla y el boceto queda como estaba. Entidades por tipo: horizontal y vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también dos círculos/arcos); coincident: un punto y otro punto o una curva; midpoint: un punto y una línea o arco; tangent y concentric: dos curvas; fix: una o más entidades; symmetry: dos entidades y la línea eje; polygon: al menos tres líneas que comparten vértices y forman una cadena cerrada, o un solo lado para tomar automáticamente su cadena cerrada de líneas. Referencias reservadas: origen 0, eje X -1, eje Y -2 (origin/axes de get_sketch). Repetir fix sobre las mismas entidades devuelve el fix existente.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `type` ("coincident" | "horizontal" | "vertical" | "parallel" | "perpendicular" | "equal" | "tangent" | "concentric" | "midpoint" | "fix" | "collinear" | "symmetry" | "curvature" | "polygon"; obligatorio): tipo de restricción.
-  - `entities` (lista de entero; obligatorio): ids de las entidades (curvas o puntos), en el orden que pide el tipo.
+  - `entities` (lista de entero; obligatorio): ids de las entidades (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
 - CLI: `omnicad call add_constraint --doc pieza.omnicad sketch=… type=… entities=…`
 
 ### `add_dimension`
 
-Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. En una cota lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan dónde se dibuja: no cambian el valor ni la geometría.
+Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco; angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la distancia a la curva). En una cota lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan dónde se dibuja: no cambian el valor ni la geometría. Referencias fijas reservadas: origen 0, eje X -1 y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving redundante o en conflicto se crea como referencia con aviso y converted_to_reference=true. En angle, `near` [x, y] elige qué ángulo se mide, como el cursor en Fusion: el del cuadrante entre las dos rectas que contiene ese punto (45° o 135° en la misma figura); sin near mide entre las líneas tal como se dibujaron. El cuadrante (0..3) se guarda y get_sketch lo muestra como quadrant.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `type` ("distance" | "horizontal" | "vertical" | "radius" | "diameter" | "angle" | "offset"; obligatorio): tipo de cota.
-  - `entities` (lista de entero; obligatorio): ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo.
+  - `entities` (lista de entero; obligatorio): ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
   - `value` (número o expresión; opcional, por defecto `null`): valor: número (mm; grados en angle) o expresión con parámetros, p. ej. "radio_agujero * 2". Vacío = medida actual.
   - `offset` (número; opcional, por defecto `null`): mm que se separa la línea de cota de la medida (con signo, hacia +Y en horizontal, +X en vertical, a la izquierda de la línea en distance); vacío = lo automático.
   - `text_offset` (número; opcional, por defecto `null`): mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = centrado.
+  - `reference` (true/false; opcional, por defecto `false`): true = cota de referencia (driven): mide la geometría sin restringirla; ignora value.
+  - `mode` ("center" | "tangent"; opcional, por defecto `"center"`): en una distancia con un círculo o arco: "center" (al centro) o "tangent" (al borde más cercano).
+  - `near` (lista de número o null; opcional, por defecto `null`): [x, y] en mm, solo en angle: el ángulo medido es el del cuadrante entre las dos rectas que contiene este punto; vacío = entre las líneas tal como se dibujaron.
 - CLI: `omnicad call add_dimension --doc pieza.omnicad sketch=… type=… entities=…`
 
 ### `get_sketch`
 
-Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`.
+Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1053,7 +1056,7 @@ Cambia el tipo de línea de curvas del boceto (Fusion: Construcción / Línea ce
 
 ### `edit_dimension`
 
-Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y el boceto queda como estaba. Con `offset` y `text_offset` mueve la línea de cota y su texto sin cambiar el valor (cotas lineales). Para borrar una cota o una restricción: delete_sketch_entities con su id.
+Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y el boceto queda como estaba. Con `offset` y `text_offset` mueve la línea de cota y su texto sin cambiar el valor (cotas lineales). Mantiene sincronizado el parámetro dN; rechaza dependencias circulares. reference alterna driving/driven. Al pasar a referencia se pierde la expresión y se mide la geometría; su valor no es editable. Si volver a driving sobre-restringiría, sigue de referencia con aviso y el documento queda como estaba. `type` alterna radius ↔ diameter conservando el valor equivalente (la geometría no cambia). `mode` cambia una distancia con un círculo o arco entre center y tangent: la expresión queda y la geometría se mueve para cumplirla. `near` [x, y] cambia qué ángulo mide una cota de ángulo (el del cuadrante que contiene el punto): igual que mode, la expresión queda. Para borrar una cota o una restricción: delete_sketch_entities con su id.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1062,6 +1065,10 @@ Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): núme
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `offset` (número; opcional, por defecto `null`): mm que se separa la línea de cota de la medida (con signo); vacío = no cambia.
   - `text_offset` (número; opcional, por defecto `null`): mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = no cambia.
+  - `reference` (true/false; opcional, por defecto `null`): true = convertir a referencia (driven); false = driving; vacío = no cambia. Una alternancia redundante o en conflicto avisa y conserva la referencia sin modificar el documento.
+  - `type` ("radius" | "diameter" o null; opcional, por defecto `null`): radius o diameter: pasa una cota de radio a diámetro (o al revés) con el valor equivalente; vacío = no cambia.
+  - `mode` ("center" | "tangent" o null; opcional, por defecto `null`): center o tangent en una distancia con un círculo o arco; vacío = no cambia.
+  - `near` (lista de número o null; opcional, por defecto `null`): [x, y] en mm, solo en una cota de ángulo: pasa a medir el ángulo del cuadrante que contiene este punto; vacío = no cambia.
 - CLI: `omnicad call edit_dimension --doc pieza.omnicad dimension=…`
 
 ### `auto_constrain`

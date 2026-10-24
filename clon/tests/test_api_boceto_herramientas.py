@@ -374,12 +374,15 @@ def test_editar_cota(s):
 def test_editar_cota_invalida_no_cambia_nada(s):
     abajo, derecha, arriba, izquierda = rectangulo(s)
     d = llamar(s, "add_dimension", sketch="B", type="distance", entities=[abajo], value=40)["dimension"]["id"]
-    a = llamar(s, "add_dimension", sketch="B", type="angle", entities=[abajo, derecha])["dimension"]["id"]
+    a = llamar(s, "add_dimension", sketch="B", type="angle", entities=[abajo, derecha])["dimension"]
+    assert a["reference"] is True             # el rectángulo ya fija los 90°: queda de referencia (BOC-1)
+    a = a["id"]
+    llamar(s, "add_constraint", sketch="B", type="fix", entities=por_id(s)[abajo]["points"])
     antes = foto(s)
     assert falla(s, "edit_dimension", dimension=d, value=-1)["error_kind"] == "INVALID_DIMENSION"
     assert falla(s, "edit_dimension", dimension=d, value=1e9)["error_kind"] == "INVALID_DIMENSION"
-    assert falla(s, "edit_dimension", dimension=a, value=200)["error_kind"] == "INVALID_DIMENSION"
-    assert falla(s, "edit_dimension", dimension=a, value=60)["error_kind"] == "SKETCH_OVERCONSTRAINED"
+    assert falla(s, "edit_dimension", dimension=a, value=60)["error_kind"] == "INVALID_DIMENSION"    # de referencia
+    assert falla(s, "edit_dimension", dimension=d, value=60)["error_kind"] == "SKETCH_OVERCONSTRAINED"
     assert falla(s, "edit_dimension", dimension=abajo, value=3)["error_kind"] == "ENTITY_NOT_FOUND"
     assert falla(s, "edit_dimension", dimension=d, value="nada * 2")["error_kind"] == "INVALID_EXPRESSION"
     assert foto(s) == antes
@@ -444,7 +447,7 @@ def test_circulo_tangente(s):
 
 def test_conica_fusion_punto_y_tipo_de_linea(s):
     r = llamar(s, "draw_point", x=3, y=4)
-    assert boceto(s)["points"][0] == {"id": r["points"][0], "x": 3, "y": 4, "fixed": False}
+    assert boceto(s)["points"][0] == {"id": r["points"][0], "x": 3, "y": 4, "fixed": False, "state": "free"}
     a = llamar(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0)["entities"][0]["id"]
     k = llamar(s, "draw_conic", start_x=30, start_y=10, end_x=50, end_y=10, vertex_x=40, vertex_y=20)
     con = por_id(s)[k["entities"][0]["id"]]

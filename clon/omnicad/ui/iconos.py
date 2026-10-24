@@ -126,6 +126,17 @@ def _boceto_bloqueado(p):
     p.restore()
 
 
+def _boceto_conflicto(p):
+    """Boceto con restricciones en conflicto en el navegador (BOC-7): el boceto en rojo con un «!»."""
+    _punteado(p, QRectF(4, 5, 19, 17), ROJO)
+    p.setPen(Qt.NoPen)
+    p.setBrush(ROJO)
+    p.drawEllipse(QRectF(16, 16, 14, 14))
+    p.setPen(QPen(QColor("white"), 2.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(23, 19), QPointF(23, 24))
+    p.drawPoint(QPointF(23, 27))
+
+
 def _extruir(p):
     _caja(p, 9, 9, 8, 13, 15, 1.0)
     _flecha(p, 27, 24, 27, 4)
@@ -1062,7 +1073,7 @@ def _plano_desfase(p):
 
 
 DIBUJOS = {
-    "boceto": _boceto, "boceto_bloqueado": _boceto_bloqueado, "extruir": _extruir, "revolucion": _revolucion, "caja": _caja_ico,
+    "boceto": _boceto, "boceto_bloqueado": _boceto_bloqueado, "boceto_conflicto": _boceto_conflicto, "extruir": _extruir, "revolucion": _revolucion, "caja": _caja_ico,
     "cilindro": _cilindro_ico, "esfera": _esfera, "toroide": _toroide, "combinar": _combinar,
     "parametros": _parametros, "calcular": _calcular, "importar": _importar, "exportar": _exportar,
     "seleccionar": _seleccionar, "plano": _plano, "medir": _medir, "lienzo": _lienzo, "ensamblar": _ensamblar,

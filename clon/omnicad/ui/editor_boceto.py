@@ -34,9 +34,10 @@ import numpy as np
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap, QPolygonF
-from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
+from ..restricciones.solver import restricciones_en_conflicto
 from ..restricciones.boceto import (Arco, Circulo, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
@@ -101,7 +102,7 @@ HERRAMIENTAS = {
     "incluir_3d": ("Incluir geometría 3D", "Clic en aristas o vértices del modelo para incluirlos en el boceto "
                    "(el boceto es plano: se llevan al plano)."),
     "cota": ("Cota de boceto", "Clic en una línea, círculo o arco (o en dos entidades) y clic para ubicar; "
-             "escribí el valor o una expresión y Enter."),
+             "escribí el valor o una expresión y Enter. Mayús + doble clic en una cota: de referencia ↔ driving."),
     "empalme": ("Empalme", "Clic en dos curvas cerca de la esquina; escribí el radio y Enter."),
     "chaflan": ("Chaflán de distancias iguales", "Clic en dos líneas; escribí la distancia y Enter."),
     "chaflan_dist_angulo": ("Chaflán de distancia y ángulo", "Clic en dos líneas; escribí la distancia y el ángulo."),
@@ -161,7 +162,9 @@ VIVAS = ("linea", "rectangulo", "rectangulo_3p", "rectangulo_centro", "circulo",
 ANGULARES = ("angulo", "barrido")
 # Colores de Fusion: cotas verde oliva sobre el fondo oscuro (#2d323f); gris oscuro sobre fondo claro.
 COTA_OSCURO, COTA_CLARO = QColor(0xa9, 0xc4, 0x6c), QColor(70, 72, 78)
+REFERENCIA = QColor(140, 140, 146)        # cota de referencia (driven): gris medio, legible en los dos temas
 AZUL_CAJA = QColor(0, 120, 215)
+CONFLICTO = QColor(225, 45, 45)           # BOC-7: restricciones, cotas y geometría en choque, en rojo como Fusion
 # Ventana de selección: de izquierda a derecha (adentro) y de derecha a izquierda (lo que toca).
 VENTANA_RELLENO, VENTANA_BORDE = QColor(237, 120, 0, 70), QColor(140, 150, 180)
 VENTANA_CRUCE = QColor(193, 191, 0, 70)
@@ -482,6 +485,7 @@ class Lienzo(QWidget):
         self.historial = []
         self.pila_rehacer = []
         self.resultado = None
+        self._conflictos = []            # BOC-7: ids de restricciones/cotas en choque (se pintan en rojo)
         self.entrada = None
         self._mvp = None
         self._sobre = None               # entidad bajo el ratón en Seleccionar (se resalta y cambia el cursor)
@@ -625,10 +629,50 @@ class Lienzo(QWidget):
         self.resultado = resolver(self.b, valores, arrastrado, previo)
         self._cache_cortes = {}
         if arrastrado is None:
+            self._conflictos = [] if self.resultado.ok else None      # None: se diagnostica al pedirlo (al pintar)
             self.cambio.emit()
             self._notificar_seleccion()
         self.update()
         return self.resultado
+
+    @property
+    def conflictos(self):
+        """BOC-7: ids de restricciones/cotas cuya retirada sola resuelve el conflicto (vacía si no hay conflicto).
+        shortcut: una resolución por vínculo; se calcula una vez por estado y solo si hay conflicto."""
+        if self._conflictos is None:
+            try:
+                valores = self.valores_cotas()
+            except ErrorExpresion:
+                valores = {}
+            self._conflictos = restricciones_en_conflicto(self.b, valores)
+        return self._conflictos
+
+    def geometria_en_conflicto(self):
+        """Puntos y curvas que tocan las restricciones/cotas en conflicto (se dibujan en rojo)."""
+        vinculos = {**self.b.restricciones, **self.b.cotas}
+        return {e for i in self.conflictos if i in vinculos for e in vinculos[i].entidades}
+
+    def texto_conflictos(self):
+        """Qué choca, en palabras: «cota d3 = 30, horizontal (5)»; vacío si el boceto está bien."""
+        if self.resultado is None or self.resultado.ok:
+            return ""
+        nombres = []
+        for i in self.conflictos:
+            if i in self.b.cotas:
+                k = self.b.cotas[i]
+                nombres.append(f"cota {k.nombre or TIPOS_COTA[k.tipo].lower()} = {k.expresion}")
+            elif i in self.b.restricciones:
+                nombres.append(f"{TIPOS_RESTRICCION[self.b.restricciones[i].tipo].lower()} ({i})")
+        if not nombres:
+            return "No hay un solo vínculo que sobre: hay que quitar o cambiar varios."
+        return f"Chocan: {', '.join(nombres)}. Quitá o cambiá uno para resolverlo."
+
+    def mostrar_conflictos(self):
+        """F5 «Qué choca»: lista las restricciones y cotas en conflicto (ya pintadas en rojo)."""
+        texto = self.texto_conflictos() or "No hay restricciones ni cotas en conflicto."
+        self.mensaje.emit(texto)
+        self.update()
+        return texto
 
     def aplicar_cambio(self, funcion, operacion=False):
         """Aplica una modificación. Si deja en conflicto un boceto que estaba bien, se deshace sola.
@@ -668,13 +712,8 @@ class Lienzo(QWidget):
         return True
 
     def _anclar_al_origen(self, puntos_nuevos):
-        """Como Fusion: un punto dibujado sobre el origen del boceto queda pegado a él (el origen es fijo),
-        así un rectángulo centrado en el origen con sus dos cotas queda totalmente restringido."""
-        for pid in sorted(puntos_nuevos):
-            x, y = self.b.coords(pid)
-            if abs(x) < 1e-9 and abs(y) < 1e-9:
-                self.b.agregar_restriccion("fijo", [pid], {"origen": True})
-                return                                  # un solo punto puede estar en el origen
+        """Anclaje compartido con los rectángulos de la API."""
+        return self.b.anclar_al_origen(puntos_nuevos)
 
     # ------------------------------------------------------------ geometría en pantalla
     def _polilineas(self, c, pasos=64):
@@ -2390,22 +2429,25 @@ class Lienzo(QWidget):
         p.setBrush(Qt.NoBrush)
 
     def _abrir_cota(self, tipo, entidades, pos):
+        previa = Cota(-1, tipo, entidades, "", {})
         try:
             self.b._validar_cota(tipo, entidades)
-            actual = self.b.medir_cota(tipo, entidades)
+            self.b.ubicar_cota(previa, self.a_mm(pos))  # el clic ubica la línea de cota y su texto (o el cuadrante)
+            actual = self.b.medir(previa)
         except ErrorBoceto as e:
             self.mensaje.emit(str(e))
             self.picks = []
             return
-        previa = Cota(-1, tipo, entidades, "", {})
-        self.b.ubicar_cota(previa, self.a_mm(pos))      # el clic ubica la línea de cota y su texto
 
         def aceptar(v):
             texto = v[0] or formato.numero(actual, angular=tipo == "angulo")
             validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo)))     # −5 o 0: la caja queda en rojo
 
             def crear():
-                self.b.agregar_cota(tipo, entidades, texto, previa.datos)
+                cota = self.b.cotas[self.b.agregar_cota(tipo, entidades, texto, previa.datos)]
+                if self._sobre_restringe(cota.id):   # Fusion: la cota que sobra entra de referencia (driven)
+                    cota.referencia, cota.expresion = True, repr(actual)
+                    self.mensaje.emit("La cota sobre-restringiría el boceto: se creó como cota de referencia.")
             self.aplicar_cambio(crear)
             self.picks = []
             self._esperando_ubicacion = False
@@ -2415,8 +2457,52 @@ class Lienzo(QWidget):
         if self.b.ejes_cota(previa) is not None:        # cota lineal: se dibuja con sus líneas mientras se escribe
             self._cota_previa, self._cota_editada = previa, -1
 
+    def _sobre_restringe(self, cid):
+        """Criterio de la API (BOC-1): la cota driving `cid` debe bajar los GDL sin dejar el boceto en conflicto."""
+        valores, sin = self.valores_cotas(), self.b.copia()
+        del sin.cotas[cid]
+        con = resolver(self.b.copia(), valores)
+        return not con.ok or con.gdl >= resolver(sin, valores).gdl
+
+    def alternar_referencia(self, cid):
+        """Cota de referencia (driven) ↔ driving, con Mayús + doble clic (BOC-3 la suma al menú de la cota).
+        Toma la medida actual; si volver a driving sobre-restringiría, sigue de referencia y avisa."""
+        cota = self.b.cotas[cid]
+
+        def cambiar():
+            cota.referencia = not cota.referencia
+            cota.expresion = repr(self.b.medir(cota))
+            if not cota.referencia and self._sobre_restringe(cid):
+                raise ErrorBoceto("La cota sobre-restringiría el boceto: sigue como cota de referencia.")
+        self.aplicar_cambio(cambiar)
+
+    def _menu_cota(self, cid):
+        """Clic derecho en una cota (Fusion): referencia, radio/diámetro, centro/tangente y borrar."""
+        cota = self.b.cotas[cid]
+        m = QMenu(self)
+        a = m.addAction("Cota de referencia", lambda: self.alternar_referencia(cid))
+        a.setCheckable(True)
+        a.setChecked(cota.referencia)
+        m.addSeparator()
+        opciones = ((("radio", "Radio"), ("diametro", "Diámetro")) if cota.tipo in ("radio", "diametro") else ())
+        for tipo, texto in opciones:
+            a = m.addAction(texto, lambda t=tipo: self.aplicar_cambio(lambda: self.b.cambiar_cota(cid, tipo=t)))
+            a.setCheckable(True)
+            a.setChecked(cota.tipo == tipo)
+        if self.b.admite_modo(cota.tipo, cota.entidades):
+            for modo, texto in (("centro", "Centro"), ("tangente", "Tangente")):
+                a = m.addAction(texto, lambda md=modo: self.aplicar_cambio(lambda: self.b.cambiar_cota(cid, modo=md)))
+                a.setCheckable(True)
+                a.setChecked(cota.datos.get("modo", "centro") == modo)
+        m.addSeparator()
+        m.addAction("Borrar", lambda: self.aplicar_cambio(lambda: self.b.eliminar(cid)))
+        return m
+
     def editar_cota(self, cid, pos):
         cota = self.b.cotas[cid]
+        if cota.referencia:
+            self.mensaje.emit("Es una cota de referencia: mide la geometría. Mayús + doble clic la vuelve driving.")
+            return
 
         def aceptar(v):
             texto = v[0]
@@ -2450,6 +2536,10 @@ class Lienzo(QWidget):
             return self._cota_previa
         if self.herramienta != "cota" or self.entrada is not None or not self.picks or self._pos_cursor is None:
             return None
+        if self._esperando_ubicacion and self.b.tipo_de(self.picks[0]) == "linea":
+            previa = Cota(-1, "angulo", list(self.picks), "", {})     # BOC-25: el ángulo del cuadrante del cursor
+            self.b.ubicar_cota(previa, self.a_mm(self._pos_cursor))
+            return previa
         if self._esperando_ubicacion:
             tipo = self._tipo_dos_puntos(self._pos_cursor)
         elif len(self.picks) == 1 and self.b.tipo_de(self.picks[0]) == "linea":
@@ -2475,8 +2565,9 @@ class Lienzo(QWidget):
                 self.picks = [ent]
             return
         primero, t1 = self.picks[0], self.b.tipo_de(self.picks[0])
-        if self._esperando_ubicacion:        # dos puntos: la ubicación decide horizontal / vertical
-            self._abrir_cota(self._tipo_dos_puntos(pos), list(self.picks), pos)
+        if self._esperando_ubicacion:        # dos puntos: la ubicación decide horizontal / vertical; dos líneas, el ángulo
+            tipo = "angulo" if t1 == "linea" else self._tipo_dos_puntos(pos)
+            self._abrir_cota(tipo, list(self.picks), pos)
             return
         if ent is None or ent == primero:
             if t1 == "linea":
@@ -2492,8 +2583,14 @@ class Lienzo(QWidget):
             self._abrir_cota("distancia", ents, pos)
         elif t1 == "linea" and t2 == "linea":
             d1, d2 = self.b._direccion(primero), self.b._direccion(ent)
-            paralelas = abs(d1[0] * d2[1] - d1[1] * d2[0]) < 1e-6
-            self._abrir_cota("distancia" if paralelas else "angulo", [primero, ent], pos)
+            if abs(d1[0] * d2[1] - d1[1] * d2[0]) < 1e-6:
+                self._abrir_cota("distancia", [primero, ent], pos)
+            else:                            # Fusion: el ángulo sigue al cursor hasta el clic que elige el cuadrante
+                self.picks = [primero, ent]
+                self._esperando_ubicacion = True
+                self.mensaje.emit("Clic para ubicar la cota de ángulo: se mide el ángulo del lado donde está el cursor.")
+        elif {t1, t2} & {"circulo", "arco"} or {t1, t2} == {"punto", "spline"}:
+            self._abrir_cota("distancia", [primero, ent], pos)    # al centro; el menú de la cota pasa a tangente
         else:
             self.mensaje.emit("Esa combinación no se puede acotar.")
             self.picks = []
@@ -2626,6 +2723,9 @@ class Lienzo(QWidget):
                     self._cerrar_entrada()
             else:
                 self._cerrar_entrada()
+        if e.button() == Qt.RightButton and not self.clics and self._zona_en(pos) in self.b.cotas:
+            self._menu_cota(self._zona_en(pos)).exec(e.globalPosition().toPoint())
+            return
         if self._para_visor(e):
             self._reenvio = (e.button(), pos)
             self.visor.mousePressEvent(e)
@@ -3216,7 +3316,9 @@ class Lienzo(QWidget):
             return
         if e.button() == Qt.LeftButton:
             zona = self._zona_en(e.position())
-            if zona in self.b.cotas:
+            if zona in self.b.cotas and e.modifiers() & Qt.ShiftModifier:
+                self.alternar_referencia(zona)
+            elif zona in self.b.cotas:
                 self.editar_cota(zona, e.position())
             elif self.herramienta in SPLINES:
                 self._terminar_spline()
@@ -3315,11 +3417,13 @@ class Lienzo(QWidget):
     def _oscuro(self):
         return self.visor is not None and self.visor.config.oscuro()
 
-    def _color_curva(self, c, determinadas, fijos):
+    def _color_curva(self, c, determinadas, fijos, en_conflicto=frozenset()):
         if c.id in self.seleccion or c.id in self.picks:
             return QColor(0, 180, 255), 3.0
         if c.id == self._sobre:
             return QColor(255, 170, 40), 3.0        # lo que se agarraría al hacer clic
+        if c.id in en_conflicto or set(c.puntos()) & en_conflicto:
+            return CONFLICTO, 2.5
         if c.construccion:                      # tema oscuro de Fusion: gris claro punteado; claro: naranja
             return (QColor(205, 205, 210) if self._oscuro() else QColor(240, 150, 60)), 1.5   # también la proyectada
         if c.proyectada:
@@ -3405,6 +3509,7 @@ class Lienzo(QWidget):
         en_origen = {e for r in self.b.restricciones.values() if r.tipo == "fijo" and r.datos.get("origen")
                      for e in r.entidades}
         fijos_verdes = fijos - en_origen
+        en_conflicto = self.geometria_en_conflicto() if res is not None and not res.ok else set()
         ocultos = set()
         for c in self.b.curvas.values():
             if c.id == self._texto_oculto:
@@ -3412,7 +3517,7 @@ class Lienzo(QWidget):
             if not self._visible(c):
                 ocultos.update(c.puntos())
                 continue
-            color, ancho = self._color_curva(c, determinadas | en_origen, fijos_verdes)
+            color, ancho = self._color_curva(c, determinadas | en_origen, fijos_verdes, en_conflicto)
             pluma = QPen(color, ancho)
             if c.construccion:
                 pluma.setStyle(Qt.DashLine)
@@ -3437,6 +3542,8 @@ class Lienzo(QWidget):
                     color, relleno = QColor(0, 180, 255), QColor(0, 180, 255)
                 elif pt.proyectado:
                     color, relleno = VIOLETA, VIOLETA
+                elif pt.id in en_conflicto:
+                    color, relleno = CONFLICTO, CONFLICTO
                 elif pt.id in fijos_verdes:
                     color, relleno = QColor(70, 200, 100), QColor(70, 200, 100)
                 elif pt.id in determinadas or pt.id in en_origen:
@@ -3471,6 +3578,7 @@ class Lienzo(QWidget):
 
     def _dibujar_glifos(self, p):
         zonas, cuenta, grupos = {}, {}, set()
+        en_conflicto = set(self.conflictos) if self.resultado is not None and not self.resultado.ok else set()
         p.setPen(QPen(QColor(150, 150, 150), 1))
         for r in self.b.restricciones.values():
             if r.datos.get("origen"):                 # pegado al origen: Fusion no le dibuja ícono aparte
@@ -3502,6 +3610,8 @@ class Lienzo(QWidget):
             else:
                 p.setPen(QPen(QColor(150, 150, 150), 1))
                 p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(250, 250, 250, 230))
+            if r.id in en_conflicto:                    # BOC-7: el glifo que choca, con borde rojo
+                p.setPen(QPen(CONFLICTO, 2))
             p.drawRoundedRect(caja, 2, 2)
             pm = icono(ICONO_RESTRICCION.get(r.tipo, "")).pixmap(24, 24)
             if oscuro and r.tipo not in ("fijo", "punto_medio"):
@@ -3522,6 +3632,7 @@ class Lienzo(QWidget):
         editarla (doble clic). Los textos no se pisan (ni entre ellos ni con los íconos de restricción)."""
         zonas, ocupadas = {}, list(self._zonas_glifos.values())
         base = self._color_cota()
+        en_conflicto = set(self.conflictos) if self.resultado is not None and not self.resultado.ok else set()
         desfase = 22 / max(self.px_por_mm(), 1e-9)       # 22 px expresados en mm del boceto
         p.setFont(QFont("Segoe UI", 9))
         fm = p.fontMetrics()
@@ -3531,15 +3642,18 @@ class Lienzo(QWidget):
         for c in [*self.b.cotas.values(), *([viva] if viva is not None else [])]:
             girar = None                             # ángulo del texto (grados) en las cotas lineales
             try:
-                valor = self.b.medir_cota(c.tipo, c.entidades)
+                valor = self.b.medir(c)
             except (ErrorBoceto, KeyError, ZeroDivisionError):
                 continue
             unidad = "°" if c.tipo == "angulo" else ""
             prefijo = {"radio": "R", "diametro": "⌀"}.get(c.tipo, "")
             texto = f"{prefijo}{formato.numero(valor, angular=c.tipo == 'angulo')}{unidad}"
-            if not _es_numero(c.expresion):
+            if c.referencia:                         # driven: entre paréntesis y en gris, como Fusion
+                texto = f"({texto})"
+            elif not _es_numero(c.expresion):
                 texto = f"{c.expresion} = {texto}"
-            color = QColor(0, 180, 255) if c.id in self.seleccion else base
+            color = (QColor(0, 180, 255) if c.id in self.seleccion else CONFLICTO if c.id in en_conflicto
+                     else REFERENCIA if c.referencia else base)
             p.setPen(QPen(color, 1))
             p.setBrush(color)
             afuera = QPointF(0, -1)                  # hacia dónde se aleja el texto de la línea de cota

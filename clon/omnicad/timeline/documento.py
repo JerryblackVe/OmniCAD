@@ -30,9 +30,10 @@ from ..nucleo import motor
 from ..nucleo.geometria import ErrorGeometria
 from ..restricciones import ErrorBoceto
 from .entidades import ErrorReferencia
-from .operaciones import (HEREDABLES, TIPOS_OPERACION, TODAS, Contexto, Cuerpo, ErrorOperacion, EstadoModelo,
+from .operaciones import (HEREDABLES, TIPOS_OPERACION, TODAS, Contexto, Cuerpo, ErrorOperacion, EstadoModelo, OpBoceto,
                           operacion_desde_dict, propiedades_cuerpo)
-from .parametros import LONGITUDES, MASAS, ErrorExpresion, TablaParametros, nombres_usados
+from .parametros import (ANGULO, LONGITUD, LONGITUDES, MASAS, ErrorExpresion, TablaParametros, evaluar,
+                         nombres_usados, validar_nombre)
 
 log = logging.getLogger(__name__)
 
@@ -147,6 +148,7 @@ class Documento:
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
         self.motor = motor.motor_activo()
         self._contador = 0
+        self._contador_cotas = 0
         self.modificado = False
         self._oyentes = []
         self._deshacer, self._rehacer = [], []
@@ -265,6 +267,9 @@ class Documento:
         self.configuraciones = dict(datos.get("configuraciones") or {})
         self.espacios = dict(datos.get("espacios", {}))    # deshacer/rehacer también revierten los espacios
         nuevas = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
+        self._contador_cotas = datos.get("contador_cotas", 0)
+        conocidos = {c.nombre for o in nuevas if isinstance(o, OpBoceto) for c in o.boceto.cotas.values() if c.nombre}
+        self.parametros, self._contador_cotas = self._tabla_cotas(nuevas, conocidos)
         self.marcador = min(datos.get("marcador", len(nuevas)), len(nuevas))
         self._contador = datos.get("contador", len(nuevas))
         self.modificado = True
@@ -297,22 +302,28 @@ class Documento:
     # ------------------------------------------------------------ edición del timeline
     def agregar(self, op):
         """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta."""
+        tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
+        desde = min(self.marcador, self._primer_afectado(tabla))
         self._guardar_para_deshacer()
         i = self.marcador
         self.operaciones.insert(i, op)
+        self.parametros, self._contador_cotas = tabla, contador
         self.marcador += 1
         self.modificado = True
-        self.recalcular(i)
+        self.recalcular(desde)
         return self.resultados[i]
 
     def reemplazar(self, op_id, nueva):
         """Edita un paso: la nueva versión conserva el id (las referencias siguen valiendo)."""
-        self._guardar_para_deshacer()
         i = self.indice(op_id)
         nueva.id = op_id
+        tabla, contador = self._tabla_cotas(self.operaciones[:i] + [nueva] + self.operaciones[i + 1:])
+        desde = min(i, self._primer_afectado(tabla))
+        self._guardar_para_deshacer()
         self.operaciones[i] = nueva
+        self.parametros, self._contador_cotas = tabla, contador
         self.modificado = True
-        self.recalcular(i)
+        self.recalcular(desde)
         return self.resultados[i]
 
     def set_propiedad(self, ids_cuerpos, clave, valor):
@@ -415,9 +426,11 @@ class Documento:
                 elif col["tipo"] == "suprimir":
                     supresiones[col["op"]] = str(valor).strip().lower() in ("sí", "si", "1", "true", "x", "s")
         tabla.valores()                                # valida antes de tocar el documento
+        operaciones = self._cotas_desde_parametros(tabla)
         self._guardar_para_deshacer()
         self.configuraciones = dict(datos, activa=activa)
         desde = self._primer_afectado(tabla)
+        self.operaciones = operaciones
         self.parametros = tabla
         for i, op in enumerate(self.operaciones):
             if op.id in supresiones and op.suprimida != supresiones[op.id]:
@@ -454,15 +467,18 @@ class Documento:
 
     def eliminar(self, op_id):
         i = self.indice(op_id)
+        tabla, contador = self._tabla_cotas(self.operaciones[:i] + self.operaciones[i + 1:])
+        desde = min(i, self._primer_afectado(tabla))
         deps = self.dependientes(op_id)
         if deps:
             raise ErrorDocumento("No se puede eliminar: la usan " + ", ".join(d.nombre for d in deps) + ".")
         self._guardar_para_deshacer()
         del self.operaciones[i]
+        self.parametros, self._contador_cotas = tabla, contador
         if i < self.marcador:
             self.marcador -= 1
         self.modificado = True
-        self.recalcular(i)
+        self.recalcular(desde)
 
     def puede_mover(self, op_id, nuevo_indice):
         """Como TimelineObject.canReorder: un paso no puede quedar antes de lo que usa ni después de quien lo usa."""
@@ -501,6 +517,130 @@ class Documento:
         self.recalcular(min(anterior, posicion))
 
     # ------------------------------------------------------------ parámetros
+    def _tabla_cotas(self, operaciones, conocidos=None, parametros=None):
+        """Prepara los parámetros de modelo (Fusion: d1, d2…) antes de editar el historial.
+
+        La expresión vive en la cota; la tabla comparte su evaluador y detección de ciclos con los parámetros
+        de usuario. Solo al validar todo se nombran las cotas nuevas de las operaciones entrantes.
+        """
+        if conocidos is None:
+            conocidos = {c.nombre for o in self.operaciones if isinstance(o, OpBoceto)
+                         for c in o.boceto.cotas.values() if c.nombre}
+        fuente = self.parametros if parametros is None else parametros
+        datos = [p.a_dict() for p in fuente if p.nombre not in conocidos]
+        ocupados = {p["nombre"] for p in datos}
+        cotas = [(o, c) for o in operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()]
+        reservados = ocupados | conocidos | {c.nombre for _, c in cotas if c.nombre}
+        contador = self._contador_cotas
+        asignaciones = []
+        nombres = {}                 # (op, id de cota) → nombre, para las cotas ligadas (chaflán de distancias iguales)
+        for op, cota in cotas:
+            nombre = cota.nombre
+            if not nombre:
+                contador += 1
+                while f"d{contador}" in reservados:
+                    contador += 1
+                nombre = f"d{contador}"
+                reservados.add(nombre)
+            validar_nombre(nombre)
+            if nombre.startswith("d") and nombre[1:].isascii() and nombre[1:].isdigit():
+                contador = max(contador, int(nombre[1:]))
+            if nombre in ocupados:
+                raise ErrorExpresion(f"Ya existe el parámetro '{nombre}': dos cotas no pueden compartir nombre.")
+            ocupados.add(nombre)
+            comentario = fuente.obtener(nombre).comentario if nombre in fuente else ""
+            nombres[(id(op), cota.id)] = nombre
+            ligada = None if cota.referencia else nombres.get((id(op), cota.datos.get("igual_a")))
+            expresion = repr(op.boceto.medir(cota)) if cota.referencia else ligada or cota.expresion
+            datos.append({"nombre": nombre, "expresion": expresion,
+                          "tipo": ANGULO if cota.tipo == "angulo" else LONGITUD, "comentario": comentario})
+            asignaciones.append((cota, nombre, ligada))
+        quitados = conocidos - {nombre for _, nombre, _l in asignaciones}
+        for nombre in sorted(quitados):
+            usuarios = {p["nombre"] for p in datos if nombre in nombres_usados(p["expresion"])}
+            usuarios.update(o.nombre for o in operaciones if any(nombre in nombres_usados(e) for e in o.expresiones()))
+            if usuarios:
+                raise ErrorExpresion(f"No se puede borrar '{nombre}': lo usan {', '.join(sorted(usuarios))}.")
+        tabla = TablaParametros.desde_lista(datos)
+        for cota, nombre, ligada in asignaciones:
+            cota.nombre = nombre
+            if "igual_a" in cota.datos:          # se liga una sola vez, al nombrarse: después es una expresión más
+                del cota.datos["igual_a"]
+                if ligada:
+                    cota.expresion = ligada
+        self._medir_referencias(tabla, cotas)
+        return tabla, contador
+
+    @staticmethod
+    def _medir_referencias(tabla, cotas):
+        """Resuelve los dN de referencia en orden de dependencia geométrica, sin alterar las recetas.
+
+        Una medida depende de las cotas driving de sus grupos del solver. Esto permite citarla en
+        otros grupos/bocetos y detecta el ciclo si intenta gobernar la misma geometría que mide.
+        """
+        referencias = {c.nombre: (o.boceto, c) for o, c in cotas if c.referencia}
+        if not referencias:
+            return
+        from ..restricciones.solver import _grupos, resolver
+
+        grupos = {id(b): _grupos(b) for b, _ in referencias.values()}
+        resueltos, en_curso = {}, set()
+
+        def valor(nombre):
+            if nombre in resueltos:
+                return resueltos[nombre]
+            if nombre in en_curso:
+                raise ErrorExpresion(f"Referencia circular en el parámetro '{nombre}' (cota de referencia).")
+            en_curso.add(nombre)
+            if nombre in referencias:
+                b, c = referencias[nombre]
+                puntos = set(b.puntos_de(c.entidades))
+                necesarias = {k.id: k for g in grupos[id(b)]
+                              if puntos & g["p"] or set(c.entidades) & g["r"] for k in g["cotas"]}
+                valores = {i: valor(k.nombre) for i, k in necesarias.items()}
+                copia = b.copia()
+                copia.cotas = {i: copia.cotas[i] for i in necesarias}
+                resolver(copia, valores)
+                resultado = copia.medir(c)
+            else:
+                p = tabla.obtener(nombre)
+                deps = {n: valor(n) for n in nombres_usados(p.expresion) if n in tabla}
+                resultado = evaluar(p.expresion, p.tipo, deps)
+            en_curso.remove(nombre)
+            resueltos[nombre] = resultado
+            return resultado
+
+        for nombre in referencias:
+            valor(nombre)
+        for nombre in referencias:
+            tabla.obtener(nombre).expresion = repr(resueltos[nombre])
+        tabla.valores()
+
+    def _cotas_desde_parametros(self, tabla):
+        """Copias de los bocetos cuyas cotas se editaron desde la tabla, sin tocar la receta anterior."""
+        operaciones = list(self.operaciones)
+        for i, op in enumerate(operaciones):
+            if not isinstance(op, OpBoceto):
+                continue
+            cambios = {}
+            for cota in op.boceto.cotas.values():
+                if cota.nombre not in tabla:
+                    raise ErrorExpresion(f"No se puede borrar '{cota.nombre}': lo usa su cota de boceto. "
+                                         "Borrá la cota con delete_sketch_entities.")
+                expresion = tabla.obtener(cota.nombre).expresion
+                if cota.referencia:
+                    if expresion != self.parametros.obtener(cota.nombre).expresion:
+                        raise ErrorBoceto("Una cota de referencia mide la geometría: su valor no se puede editar.")
+                    continue
+                if expresion != cota.expresion:
+                    cambios[cota.id] = expresion
+            if cambios:
+                nueva = op.copia()
+                for cid, expresion in cambios.items():
+                    nueva.boceto.cotas[cid].expresion = expresion
+                operaciones[i] = nueva
+        return operaciones
+
     def parametros_usados(self):
         """{nombre de parámetro: [pasos que lo usan]} recorriendo todas las expresiones del timeline."""
         usos = {}
@@ -516,6 +656,8 @@ class Documento:
         caídas nativas, no su curación: que el hijo termine no garantiza que el kernel no caiga luego en el padre.
         """
         tabla.valores()  # valida antes de tocar el documento
+        operaciones = self._cotas_desde_parametros(tabla)
+        tabla, _ = self._tabla_cotas(operaciones, parametros=tabla)
         faltan = {n: pasos for n, pasos in self.parametros_usados().items() if n in self.parametros and n not in tabla}
         if faltan:
             detalle = "; ".join(f"«{n}» (lo usa {', '.join(sorted(p))})" for n, p in sorted(faltan.items()))
@@ -523,6 +665,7 @@ class Documento:
         desde = self._primer_afectado(tabla)
         self._prevuelo_parametros(tabla, desde)
         self._guardar_para_deshacer()
+        self.operaciones = operaciones
         self.parametros = tabla
         self.modificado = True
         self.recalcular(desde)
@@ -565,8 +708,14 @@ class Documento:
         de la operación se propagan para que el diálogo los muestre."""
         indice = self.marcador if indice is None else indice
         entrada = self.estado_en(indice)
+        tabla = self.parametros
+        if isinstance(op, OpBoceto):
+            operaciones = [op if o.id == op.id else o for o in self.operaciones]
+            if not any(o.id == op.id for o in self.operaciones):
+                operaciones.insert(indice, op)
+            tabla, _ = self._tabla_cotas(operaciones)
         try:
-            valores = self.parametros.valores()
+            valores = tabla.valores()
         except ErrorExpresion:
             valores = {}
         receta, m = _receta(op), self._previa
@@ -823,6 +972,7 @@ class Documento:
         return {"version_receta": VERSION_RECETA, "nombre": self.nombre,
                 "parametros": self.parametros.a_lista(), "marcador": self.marcador,
                 "contador": self._contador, "operaciones": [o.a_dict() for o in self.operaciones],
+                **({"contador_cotas": self._contador_cotas} if self._contador_cotas else {}),
                 "vistas": self.vistas, "propiedades": self.propiedades, "analisis": self.analisis,
                 "configuraciones": self.configuraciones,
                 "espacios": self.espacios, "comentarios": self.comentarios,

@@ -5,6 +5,7 @@ from typing import Literal
 
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, LONGITUD_MAXIMA, ErrorExpresion, TablaParametros,
                                    validar_nombre)
+from ..timeline.operaciones import OpBoceto
 from .registro import Expr, herramienta
 from .errores import error
 
@@ -19,9 +20,11 @@ def _copia(tabla):
 def info_parametros(doc):
     valores = doc.parametros.valores()
     usos = doc.parametros_usados()
+    cotas = {c.nombre: {"source": "sketch", "sketch": o.id, "dimension": c.id}
+             for o in doc.operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()}
     return [{"name": p.nombre, "expression": p.expresion, "value": round(valores[p.nombre], 6),
              "unit": _UNIDAD[p.tipo], "kind": _TIPO[p.tipo], "comment": p.comentario,
-             "used_by": sorted(usos.get(p.nombre, ()))} for p in doc.parametros]
+             "used_by": sorted(usos.get(p.nombre, ())), **cotas.get(p.nombre, {})} for p in doc.parametros]
 
 
 def _parametro(doc, nombre):
@@ -49,8 +52,9 @@ def _texto(expresion):
     return expresion if isinstance(expresion, str) else repr(float(expresion))
 
 
-@herramienta("get_parameters", "parametros", "Lista los parámetros de usuario: expresión, valor calculado, "
-             "unidad (mm o deg) y qué pasos del timeline los usan.")
+@herramienta("get_parameters", "parametros", "Lista los parámetros de usuario y de cotas: expresión, valor calculado, "
+             "unidad (mm o deg) y qué pasos del timeline los usan. Las cotas tienen source=sketch, sketch (id del "
+             "boceto) y dimension (id de cota); sus nombres d1, d2… se pueden citar en cualquier expresión.")
 def get_parameters(sesion):
     return {"parameters": info_parametros(sesion.doc)}
 
@@ -82,7 +86,9 @@ def create_parameter(sesion, name: str, expression: Expr, comment: str = "",
 
 @herramienta("set_parameter", "parametros", "Cambia la expresión, el comentario o el nombre de un parámetro existente y "
              "recalcula el modelo. Si algún paso queda con error (p. ej. renombrar un parámetro que usa un paso), el "
-             "cambio se descarta.", modifica=True)
+             "cambio se descarta. Con un parámetro dN de boceto también cambia la cota y mueve su geometría; "
+             "los nombres de cota son estables y no se pueden renombrar. El valor de una cota de referencia "
+             "(driven) es medido y no se puede editar; se puede citar en otras expresiones.", modifica=True)
 def set_parameter(sesion, name: str, expression: Expr | None = None, comment: str | None = None,
                   new_name: str | None = None):
     """
@@ -94,6 +100,11 @@ def set_parameter(sesion, name: str, expression: Expr | None = None, comment: st
     anterior = _parametro(sesion.doc, name)["expression"]
     if expression is None and comment is None and new_name is None:
         raise error("INVALID_ARGUMENTS", "No pediste ningún cambio: pasá expression, comment o new_name.")
+    if expression is not None and any(c.nombre == name and c.referencia
+                                      for o in sesion.doc.operaciones if isinstance(o, OpBoceto)
+                                      for c in o.boceto.cotas.values()):
+        raise error("INVALID_DIMENSION", "Una cota de referencia mide la geometría: su valor no se puede editar.",
+                    "Convertí primero la cota a driving con edit_dimension(reference=false).")
     tabla = _copia(sesion.doc.parametros)
     if expression is not None or comment is not None:
         tabla.modificar(name, None if expression is None else _texto(expression), comment)
@@ -108,7 +119,8 @@ def set_parameter(sesion, name: str, expression: Expr | None = None, comment: st
     return dict(_avisar_valor_raro(sesion, _parametro(sesion.doc, name)), previous_expression=anterior)
 
 
-@herramienta("delete_parameter", "parametros", "Borra un parámetro que no use ningún paso ni otro parámetro.",
+@herramienta("delete_parameter", "parametros", "Borra un parámetro que no use ningún paso ni otro parámetro. "
+             "Para quitar un dN de boceto, borrá su cota con delete_sketch_entities; falla si una expresión ajena la usa.",
              modifica=True)
 def delete_parameter(sesion, name: str):
     """

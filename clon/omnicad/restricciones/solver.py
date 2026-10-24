@@ -23,7 +23,8 @@ import math
 import numpy as np
 
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
-                     _numero, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad, puntos_primitiva)
+                     _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
+                     puntos_primitiva, signos_cuadrante)
 
 TOLERANCIA = 1e-6
 _PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas durante el arrastre.
@@ -81,7 +82,7 @@ class _Sistema:
         self.valores = valores_cotas
         self._curvas = list(boceto.curvas.values()) if grupo is None else grupo["curvas"]
         self._restricciones = list(boceto.restricciones.values()) if grupo is None else grupo["restricciones"]
-        self._cotas = list(boceto.cotas.values()) if grupo is None else grupo["cotas"]
+        self._cotas = [c for c in (boceto.cotas.values() if grupo is None else grupo["cotas"]) if not c.referencia]
         self.fijos_p, self.fijos_r = _fijos(boceto)
         self.idx_p, self.idx_r, x0 = {}, {}, []
         for pid, p in boceto.puntos.items():
@@ -318,10 +319,10 @@ class _Sistema:
             elif t == "desfase":
                 T.append(lambda x, o=e[0], d=e[1], v=v: [self.separacion(x, o, d) - v])
             elif t == "angulo":
-                def f(x, l1=e[0], l2=e[1], v=math.radians(v)):
+                def f(x, l1=e[0], l2=e[1], v=math.radians(v), s=signos_cuadrante(c.datos.get("cuadrante"))):
                     (a, bb), (cc, d) = self.L(x, l1), self.L(x, l2)
-                    u = (bb[0] - a[0], bb[1] - a[1])
-                    w = (d[0] - cc[0], d[1] - cc[1])
+                    u = (s[0] * (bb[0] - a[0]), s[0] * (bb[1] - a[1]))
+                    w = (s[1] * (d[0] - cc[0]), s[1] * (d[1] - cc[1]))
                     # Como paralela/perpendicular: residuo en mm, sin perder peso ni rango al crecer las líneas.
                     escala = (math.hypot(*u) + math.hypot(*w)) / 2
                     return [(math.atan2(abs(u[0] * w[1] - u[1] * w[0]), u[0] * w[0] + u[1] * w[1]) - v) * escala]
@@ -333,6 +334,10 @@ class _Sistema:
                     T.append(lambda x, l=e[0], k=k, s=s, v=v: [s * (self.L(x, l)[1][k] - self.L(x, l)[0][k]) - v])
                 else:
                     T.append(lambda x, p1=e[0], p2=e[1], k=k, s=s, v=v: [s * (self.P(x, p2)[k] - self.P(x, p1)[k]) - v])
+            elif set(tipos) & set(CIRCULARES):
+                self._distancia_circulo(e, tipos, c.datos.get("modo", "centro"), v)
+            elif sorted(tipos) == ["punto", "spline"]:
+                self._distancia_spline(e, tipos, v)
             elif tipos == ["punto", "punto"]:
                 T.append(lambda x, p1=e[0], p2=e[1], v=v: [math.dist(self.P(x, p1), self.P(x, p2)) - v])
             elif tipos == ["linea"]:
@@ -347,6 +352,34 @@ class _Sistema:
                 s = _signo(self.dist_signada(x0, self.P(x0, b.curvas[e[1]].p1), e[0]))
                 T.append(lambda x, l1=e[0], l2=e[1], s=s, v=v:
                          [s * self.dist_signada(x, self.P(x, b.curvas[l2].p1), l1) - v])
+
+    def _distancia_circulo(self, e, tipos, modo, v):
+        """Distancia con un círculo o arco (BOC-3): el signo y si dos círculos están anidados se toman de la
+        geometría inicial, así el residuo es suave."""
+        x0 = self.x0
+        anidados = None
+        if all(t in CIRCULARES for t in tipos):
+            anidados = math.dist(self.C(x0, e[0]), self.C(x0, e[1])) < abs(self.R(x0, e[0]) - self.R(x0, e[1]))
+
+        def medida(x):
+            return distancia_con_circulo(tipos, e, modo, lambda p: self.P(x, p), lambda k: self.C(x, k),
+                                         lambda k: self.R(x, k), lambda k: self.L(x, k), anidados)
+        s = _signo(medida(x0))
+        self.terminos.append(lambda x: [s * medida(x) - v])
+
+    def _distancia_spline(self, e, tipos, v):
+        """Punto a spline (BOC-3): parámetro auxiliar t del pie, |P − S(t)| = v y P − S(t) perpendicular a la curva.
+        shortcut: si el pie más cercano es un extremo, el solver lo busca en la prolongación de la curva; recortarlo
+        al dominio si hace falta."""
+        p, k = e if tipos[0] == "punto" else e[::-1]
+        j = self._parametro(mas_cercano(self.prim(self.x0, k), self.P(self.x0, p))[0])
+
+        def f(x):
+            q, d = evaluar_primitiva(self.prim(x, k), x[j], 1)
+            a = self.P(x, p)
+            w = (a[0] - q[0], a[1] - q[1])
+            return [math.hypot(*w) - v, (w[0] * d[0] + w[1] * d[1]) / (math.hypot(*d) or 1e-12)]
+        self.terminos.append(f)
 
     def _contacto_punto(self, pid, cid):
         """Punto sobre una curva libre (spline o cónica): un parámetro auxiliar t y P(t) = punto."""
@@ -563,7 +596,8 @@ def _grupos(b):
         if r.tipo != "fijo":
             con_terminos.append(("restricciones", r, [k for e in r.entidades for k in _claves(b, e)]))
     for k in b.cotas.values():
-        con_terminos.append(("cotas", k, [q for e in k.entidades for q in _claves(b, e)]))
+        if not k.referencia:
+            con_terminos.append(("cotas", k, [q for e in k.entidades for q in _claves(b, e)]))
     for _tipo, _obj, claves in con_terminos:
         unir(claves)
     grupos = {}
@@ -653,6 +687,24 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
         return ResultadoSolver("inconsistente", gdl, 0.0,
                                f"Para cumplirse, la geometría colapsa (largo o radio cero): {colapsadas}.")
     return ResultadoSolver("ok", gdl, err_max, determinadas=determinadas)
+
+
+def restricciones_en_conflicto(boceto, valores_cotas=None):
+    """Ids de restricciones/cotas cuya retirada individual deja el boceto consistente.
+
+    Trabaja sobre copias: consultar el diagnóstico no mueve ni modifica el boceto.
+    shortcut: prueba una retirada por vínculo, no busca conjuntos mínimos de varios
+    conflictos independientes; ampliar si se necesita ese diagnóstico completo.
+    """
+    if resolver(boceto.copia(), valores_cotas).ok:
+        return []
+    conflictos = []
+    for ident in sorted(set(boceto.restricciones) | {i for i, k in boceto.cotas.items() if not k.referencia}):
+        prueba = boceto.copia()
+        prueba.eliminar(ident)
+        if resolver(prueba, valores_cotas).ok:
+            conflictos.append(ident)
+    return conflictos
 
 
 def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):

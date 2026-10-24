@@ -177,7 +177,7 @@ def test_b92_transform_sketch_que_se_sale_de_rango(s):
 
 
 def test_b92_transform_sketch_valido_sigue_andando(s):
-    ok(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)
+    ok(s, "draw_rectangle", x1=5, y1=5, x2=15, y2=15)     # lejos del origen: no queda anclado
     ok(s, "transform_sketch", scale=2)
 
 

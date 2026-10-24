@@ -1203,7 +1203,7 @@ def test_offset_profiles_circulo_cuadrado_y_texto(s):
 
 
 def test_transform_sketch_mueve_escala_gira_espeja_y_copia(s):
-    ok(api.llamar(s, "draw_rectangle", {"x1": 0, "y1": 0, "x2": 10, "y2": 4}))
+    ok(api.llamar(s, "draw_rectangle", {"x1": 1, "y1": 1, "x2": 11, "y2": 5}))
     arco = ok(api.llamar(s, "draw_arc", {"center_x": 20, "center_y": 0, "start_x": 25, "start_y": 0,
                                          "sweep_angle": 90}))["entities"][0]["id"]
 
@@ -1212,12 +1212,12 @@ def test_transform_sketch_mueve_escala_gira_espeja_y_copia(s):
         pts = [v for c in sk["entities"] if c["type"] == "line" for v in (c["start"], c["end"])]
         return min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts)
     lineas = [c["id"] for c in ok(api.llamar(s, "get_sketch", {}))["entities"] if c["type"] == "line"]
-    ok(api.llamar(s, "transform_sketch", {"entities": lineas, "scale": 2}))          # alrededor de su centro (5, 2)
-    assert caja_lineas() == pytest.approx((-5, -2, 15, 6))
+    ok(api.llamar(s, "transform_sketch", {"entities": lineas, "scale": 2}))          # alrededor de su centro (6, 3)
+    assert caja_lineas() == pytest.approx((-4, -1, 16, 7))
     ok(api.llamar(s, "transform_sketch", {"entities": lineas, "dx": 5, "dy": 2}))
-    assert caja_lineas() == pytest.approx((0, 0, 20, 8))
-    ok(api.llamar(s, "transform_sketch", {"entities": lineas, "angle": 90}))         # gira alrededor de (10, 4)
-    assert caja_lineas() == pytest.approx((6, -6, 14, 14))
+    assert caja_lineas() == pytest.approx((1, 1, 21, 9))
+    ok(api.llamar(s, "transform_sketch", {"entities": lineas, "angle": 90}))         # gira alrededor de (11, 5)
+    assert caja_lineas() == pytest.approx((7, -5, 15, 15))
     # espejo de un arco: sigue siendo un cuarto de círculo, ahora del otro lado
     ok(api.llamar(s, "transform_sketch", {"entities": [arco], "mirror": "horizontal", "center_x": 20,
                                           "center_y": 0}))

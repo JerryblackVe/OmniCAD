@@ -39,7 +39,8 @@ def test_escena_del_ejemplo(s):
     assert placa["bounding_box"]["size"] == pytest.approx([60, 40, 20], abs=1e-3)
     assert {b["plane"] for b in info["sketches"]} == {"XY", "XZ"}
     assert all(b["profiles"] >= 1 for b in info["sketches"])
-    assert [p["name"] for p in info["parameters"]] == ["ancho", "alto_placa", "radio_agujero"]
+    assert [p["name"] for p in info["parameters"]] == ["ancho", "alto_placa", "radio_agujero", "d1", "d2", "d3", "d4", "d5"]
+    assert [p["value"] for p in info["parameters"] if p.get("source") == "sketch"] == [60, 40, 6, 30, 20]
 
 
 def test_timeline(s):

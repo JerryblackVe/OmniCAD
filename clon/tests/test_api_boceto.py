@@ -106,7 +106,7 @@ def test_linea_circulo_y_perfiles(s):
     llamar(s, "create_sketch")
     r = llamar(s, "draw_rectangle", x1=0, y1=0, x2=60, y2=40)
     assert [e["type"] for e in r["entities"]] == ["line"] * 4 and len(r["points"]) == 4
-    assert r["profiles"] == 1 and {c["type"] for c in r["constraints"]} == {"horizontal", "vertical"}
+    assert r["profiles"] == 1 and {c["type"] for c in r["constraints"]} == {"horizontal", "vertical", "fix"}
     c = llamar(s, "draw_circle", radius=6, center_x=30, center_y=20)
     assert c["profiles"] == 2 and c["entities"][0]["type"] == "circle"
     info = llamar(s, "get_sketch")
@@ -281,14 +281,15 @@ def test_errores_de_restricciones_y_cotas(s):
         r = api.llamar(s, nombre, args)
         assert r["error_kind"] == kind, (nombre, args, r)
         assert foto(s) == antes
-    # conflicto: dos cotas incompatibles → atómico
+    # conflicto: una cota incompatible no falla, entra de referencia con la medida actual (BOC-1, como Fusion)
     llamar(s, "add_dimension", sketch="P", type="distance", entities=[bajo], value=50)
-    llamar(s, "add_constraint", sketch="P", type="fix", entities=entidades(s)[bajo]["points"])
-    antes = foto(s)
+    dof = llamar(s, "add_constraint", sketch="P", type="fix", entities=entidades(s)[bajo]["points"])["dof"]
     r = api.llamar(s, "add_dimension", {"sketch": "P", "type": "horizontal", "entities": entidades(s)[bajo]["points"],
                                          "value": 70})
-    assert r["error_kind"] == "SKETCH_OVERCONSTRAINED" and "conflicto" in r["mensaje"]
-    assert foto(s) == antes
+    assert r["ok"] and r["result"]["converted_to_reference"] is True and r["result"]["dof"] == dof
+    assert r["result"]["dimension"]["reference"] is True and abs(r["result"]["dimension"]["value"]) == 50
+    assert any("referencia" in a for a in r["avisos"])
+    assert entidades(s)[bajo]["length"] == pytest.approx(50, abs=1e-6)
 
 
 # ---------------------------------------------------------------- sketch_from_spec

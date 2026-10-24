@@ -598,6 +598,38 @@ def _renumerar(doc, ops_nuevas, propiedades):
     return salida, cambiar(propiedades)
 
 
+def _renombrar_cotas(doc, ops_nuevas, parametros):
+    """Las cotas de una receta que se agrega traen su nombre dN (BOC-2): las que chocan con un parámetro del
+    documento toman uno libre, también en las expresiones que las citan. Los dN de la receta no entran como
+    parámetros: se regeneran desde sus cotas. Devuelve (ops, parámetros)."""
+    nombres = []
+
+    def buscar(x):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k == "cotas" and isinstance(v, list):
+                    nombres.extend(c["nombre"] for c in v if isinstance(c, dict) and c.get("nombre"))
+                buscar(v)
+        elif isinstance(x, list):
+            for v in x:
+                buscar(v)
+    buscar(ops_nuevas)
+    parametros = [p for p in parametros if p["nombre"] not in nombres]
+    ocupados = {p.nombre for p in doc.parametros}
+    mapa, contador = {}, doc._contador_cotas
+    for viejo in (n for n in nombres if n in ocupados):
+        ocupados.add(viejo)
+        while f"d{contador + 1}" in ocupados or f"d{contador + 1}" in nombres:
+            contador += 1
+        contador += 1
+        mapa[viejo] = f"d{contador}"
+        ocupados.add(mapa[viejo])
+    if not mapa:
+        return ops_nuevas, parametros
+    patron = re.compile(r"(?<![\w])(" + "|".join(map(re.escape, mapa)) + r")(?![\w])")
+    return json.loads(patron.sub(lambda m: mapa[m.group(1)], json.dumps(ops_nuevas))), parametros
+
+
 @herramienta("apply_recipe", "avanzado", "Carga una receta JSON (la de get_recipe): 'replace' reemplaza todo el "
              "documento; 'append' agrega sus pasos y parámetros al final. Es un paso de deshacer; si algo falla, el "
              "documento queda intacto.", modifica=True)
@@ -627,7 +659,8 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
         else:
             combinada = doc.a_dict()
             existentes = {p["nombre"]: p for p in combinada["parametros"]}
-            for p in recipe.get("parametros") or []:
+            ops_receta, params_receta = _renombrar_cotas(doc, recipe["operaciones"], recipe.get("parametros") or [])
+            for p in params_receta:
                 previo = existentes.get(p["nombre"])
                 if previo is None:
                     combinada["parametros"].append(p)
@@ -635,7 +668,7 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
                     raise error("PARAMETER_EXISTS", f"El parámetro '{p['nombre']}' ya existe con otra expresión "
                                 f"('{previo['expresion']}' en el documento, '{p['expresion']}' en la receta).",
                                 "Renombralo en la receta o usá mode='replace'.")
-            ops, props = _renumerar(doc, recipe["operaciones"], recipe.get("propiedades") or {})
+            ops, props = _renumerar(doc, ops_receta, recipe.get("propiedades") or {})
             combinada["operaciones"] += ops
             combinada["marcador"] = len(combinada["operaciones"])
             combinada["contador"] = max(doc._contador, len(combinada["operaciones"]))

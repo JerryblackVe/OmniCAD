@@ -592,13 +592,15 @@ class OpBoceto(Operacion):
     def valores_cotas(self, ctx):
         """Valor de cada cota. Sin el tope de `Contexto.evaluar`: una cota fuera de rango no falla el boceto, la
         valida el propio boceto y avisa (test_cota_manejada_por_parametro_fuera_de_rango_avisa)."""
-        return {c.id: evaluar(c.expresion, ANGULO if c.tipo == "angulo" else LONGITUD, ctx.valores)
-                for c in self.boceto.cotas.values()}
+        return {c.id: evaluar(c.nombre or c.expresion, ANGULO if c.tipo == "angulo" else LONGITUD, ctx.valores)
+                for c in self.boceto.cotas.values() if not c.referencia}
 
     def expresiones(self):
         en_textos = [e for c in self.boceto.curvas.values() if isinstance(c, Texto)
                      for e in expresiones_de_texto(c.texto)]
-        return super().expresiones() + [c.expresion for c in self.boceto.cotas.values()] + en_textos
+        return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
+                                       for e in (c.nombre, c.expresion)]
+                + en_textos)
 
     def dependencias(self):
         deps = super().dependencias()
@@ -637,7 +639,7 @@ class OpBoceto(Operacion):
         """Si un borde proyectado cruzó una entidad acotada, inicia el solver del lado original de la cota."""
         fijos = boceto.puntos_fijos()
         for cota in boceto.cotas.values():
-            if cota.tipo != "distancia" or len(cota.entidades) != 2:
+            if cota.referencia or cota.tipo != "distancia" or len(cota.entidades) != 2:
                 continue
             linea, entidad = cota.entidades
             curva = boceto.curvas.get(entidad)
@@ -673,6 +675,8 @@ class OpBoceto(Operacion):
                     ctx.aviso(f"{self.nombre}: texto «{c.texto}»: {e}")
         valores = self.valores_cotas(ctx)
         for c in self.boceto.cotas.values():           # una cota manejada por parámetro puede quedar fuera de rango
+            if c.referencia:
+                continue
             try:
                 validar_valor_cota(c.tipo, valores[c.id])
             except ErrorBoceto as e:                   # aviso y no error: los proyectos viejos abren igual

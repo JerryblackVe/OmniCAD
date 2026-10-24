@@ -42,7 +42,7 @@ def test_crear_usar_y_borrar(s):
     ok(api.llamar(s, "set_parameter", {"name": "alto_placa", "expression": "8 mm"}))
     assert ok(api.llamar(s, "delete_parameter", {"name": "espesor"})) == {"name": "espesor", "deleted": True}
     nombres = [p["name"] for p in ok(api.llamar(s, "get_parameters"))["parameters"]]
-    assert nombres == ["ancho", "alto_placa", "radio_agujero"]
+    assert nombres == ["ancho", "alto_placa", "radio_agujero", "d1", "d2", "d3", "d4", "d5"]
 
 
 def test_parametro_de_angulo():

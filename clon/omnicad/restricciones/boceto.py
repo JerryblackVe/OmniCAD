@@ -54,6 +54,20 @@ CON_CENTRO = CIRCULARES + ELIPTICAS
 _DOS_PI = 2 * math.pi
 
 
+def signos_cuadrante(cuadrante):
+    """(s1, s2): signos de las direcciones de las dos líneas de una cota de ángulo según su cuadrante (BOC-25).
+    Sin cuadrante (None) mide entre las dos direcciones tal como se dibujaron, como antes."""
+    q = cuadrante or 0
+    return (-1.0 if q in (1, 2) else 1.0), (-1.0 if q in (2, 3) else 1.0)
+
+
+def _validar_cuadrante(tipo, cuadrante):
+    if tipo != "angulo":
+        raise ErrorBoceto("El cuadrante solo vale en una cota de ángulo.")
+    if isinstance(cuadrante, bool) or cuadrante not in (0, 1, 2, 3):
+        raise ErrorBoceto(f"Cuadrante inválido: {cuadrante!r} (0, 1, 2 o 3).")
+
+
 class ErrorBoceto(ValueError):
     pass
 
@@ -433,15 +447,19 @@ class Restriccion:
 
 
 class Cota:
-    def __init__(self, id, tipo, entidades, expresion, datos=None):
+    def __init__(self, id, tipo, entidades, expresion, datos=None, nombre="", referencia=False):
         if tipo not in TIPOS_COTA:
             raise ErrorBoceto(f"Cota desconocida: {tipo}")
         self.id, self.tipo, self.entidades, self.expresion = id, tipo, list(entidades), str(expresion)
         self.datos = dict(datos or {})
+        self.nombre = nombre
+        self.referencia = referencia
 
     def a_dict(self):
         return {"id": self.id, "tipo": self.tipo, "entidades": self.entidades,
-                "expresion": self.expresion, "datos": dict(self.datos)}
+                "expresion": self.expresion, "datos": dict(self.datos),
+                **({"nombre": self.nombre} if self.nombre else {}),
+                **({"referencia": True} if self.referencia else {})}
 
 
 _CURVAS = {k.tipo: k for k in (Linea, Circulo, Arco, Elipse, ArcoElipse, Spline, Conica, Texto)}
@@ -1090,6 +1108,10 @@ def _validar_opciones_texto(op):
 
 # ---------------------------------------------------------------- boceto
 class Boceto:
+    ORIGEN = 0
+    EJE_X = -1
+    EJE_Y = -2
+
     def __init__(self):
         self.puntos = {}
         self.curvas = {}
@@ -1506,29 +1528,106 @@ class Boceto:
 
     def agregar_restriccion(self, tipo, entidades, datos=None):
         self._validar_restriccion(tipo, entidades)
+        if tipo == "fijo":
+            for r in self.restricciones.values():
+                if r.tipo == tipo and set(r.entidades) == set(entidades):
+                    return r.id
         r = Restriccion(self._nuevo_id(), tipo, entidades, datos)
         self.restricciones[r.id] = r
         return r.id
 
-    def agregar_cota(self, tipo, entidades, expresion, datos=None):
+    def anclar_al_origen(self, puntos_nuevos):
+        """Fija el primer punto nuevo dibujado sobre (0, 0), como el editor de Fusion."""
+        for pid in sorted(puntos_nuevos):
+            x, y = self.coords(pid)
+            if abs(x) < 1e-9 and abs(y) < 1e-9:
+                return self.agregar_restriccion("fijo", [pid], {"origen": True})
+        return None
+
+    def asegurar_referencias(self, ids):
+        """Materializa solo las referencias citadas: origen 0, eje X -1 y eje Y -2.
+
+        Son geometría de construcción fija (proyectada); sus puntos auxiliares -3/-4
+        no consumen ids de usuario ni aportan grados de libertad o perfiles.
+        """
+        if any(i in (self.ORIGEN, self.EJE_X, self.EJE_Y) for i in ids):
+            self.puntos.setdefault(self.ORIGEN, Punto(self.ORIGEN, 0, 0, proyectado=True))
+        for eje, pid, x, y in ((self.EJE_X, -3, 1, 0), (self.EJE_Y, -4, 0, 1)):
+            if eje in ids:
+                self.puntos.setdefault(pid, Punto(pid, x, y, proyectado=True))
+                self.curvas.setdefault(eje, Linea(eje, self.ORIGEN, pid, construccion=True, proyectada=True))
+
+    def agregar_cota(self, tipo, entidades, expresion, datos=None, referencia=False):
+        """Crea una cota (Sketch Dimension); una referencia mide sin restringir la geometría. `datos["modo"]`
+        ("centro" o "tangente") vale en una distancia con un círculo o arco; ahí se guarda siempre (falta = centro)."""
         datos = dict(datos or {})
         self._validar_cota(tipo, entidades)
+        modo = datos.pop("modo", "centro")
+        if modo not in ("centro", "tangente"):
+            raise ErrorBoceto(f"Modo de cota desconocido: {modo} (centro o tangente).")
+        if self.admite_modo(tipo, entidades):
+            datos["modo"] = modo
+        elif modo == "tangente":
+            raise ErrorBoceto("El modo tangente solo vale en una cota de distancia con un círculo o un arco.")
         if tipo in ("distancia_h", "distancia_v") and "signo" not in datos:
             (x1, y1), (x2, y2) = self._extremos_cota(entidades)
             d = (x2 - x1) if tipo == "distancia_h" else (y2 - y1)
             datos["signo"] = 1.0 if d >= 0 else -1.0
-        c = Cota(self._nuevo_id(), tipo, entidades, expresion, datos)
+        if "cuadrante" in datos:
+            _validar_cuadrante(tipo, datos["cuadrante"])
+        if referencia:
+            expresion = repr(self.medir_cota(tipo, entidades, modo, datos.get("cuadrante")))
+        c = Cota(self._nuevo_id(), tipo, entidades, expresion, datos, referencia=referencia)
         self.cotas[c.id] = c
         return c.id
+
+    def admite_modo(self, tipo, entidades):
+        """True si la cota mide al centro o tangente: una distancia con un círculo o un arco (BOC-3)."""
+        return tipo == "distancia" and any(self.tipo_de(e) in CIRCULARES for e in entidades)
+
+    def cambiar_cota(self, cid, tipo=None, modo=None, cuadrante=None):
+        """Menú de la cota (BOC-3). `tipo`: radio ↔ diámetro conservando el valor equivalente (la expresión se
+        multiplica o divide por 2: la geometría no cambia). `modo`: centro ↔ tangente; la expresión queda y la
+        geometría la cumple al resolver (una cota de referencia vuelve a medir). `cuadrante` (0..3, BOC-25): qué
+        ángulo mide una cota de ángulo; igual que `modo`, la expresión queda."""
+        k = self.cotas[cid]
+        if cuadrante is not None:
+            _validar_cuadrante(k.tipo, cuadrante)
+            k.datos["cuadrante"] = cuadrante
+            if k.referencia:
+                k.expresion = repr(self.medir(k))
+        if tipo is not None:
+            if not {tipo, k.tipo} <= {"radio", "diametro"}:
+                raise ErrorBoceto("Solo una cota de radio pasa a diámetro (o al revés).")
+            if tipo != k.tipo:
+                try:
+                    v = float(k.expresion.replace(",", "."))      # como en escalar: el editor admite "6,5"
+                    k.expresion = repr(v * 2 if tipo == "diametro" else v / 2)
+                except ValueError:
+                    k.expresion = f"({k.expresion}) {'* 2' if tipo == 'diametro' else '/ 2'}"
+                k.tipo = tipo
+        if modo is not None:
+            if modo not in ("centro", "tangente"):
+                raise ErrorBoceto(f"Modo de cota desconocido: {modo} (centro o tangente).")
+            if not self.admite_modo(k.tipo, k.entidades):
+                raise ErrorBoceto("Centro o tangente solo vale en una cota de distancia con un círculo o un arco.")
+            k.datos["modo"] = modo
+            if k.referencia:
+                k.expresion = repr(self.medir(k))
 
     # ------------------------------------------------------------ borrado
     def eliminar(self, id):
         """Borra una entidad, restricción o cota, y en cascada lo que dependa de ella."""
+        if id <= 0:
+            raise ErrorBoceto("El origen y los ejes del boceto son referencias fijas: no se pueden borrar.")
         if id in self.restricciones:
             del self.restricciones[id]
             return
         if id in self.cotas:
-            del self.cotas[id]
+            borrada = self.cotas.pop(id)
+            for k in self.cotas.values():      # chaflán ligado (BOC-25): la que la citaba hereda su expresión
+                if borrada.nombre and k.expresion == borrada.nombre:
+                    k.expresion = borrada.expresion
             return
         if id in self.curvas:
             curva = self.curvas.pop(id)
@@ -1649,6 +1748,9 @@ class Boceto:
     def ubicar_cota(self, c, punto):
         """Guarda dónde van la línea de cota y su texto (datos «desfase» y «texto», en mm): la línea pasa por
         `punto` (x, y) y el texto queda a su altura. No cambia el valor ni la geometría."""
+        if c.tipo == "angulo":                # BOC-25: el cuadrante bajo el cursor elige qué ángulo se mide
+            c.datos["cuadrante"] = self.cuadrante_angulo(*c.entidades, punto)
+            return
         marco = self.ejes_cota(c)
         if marco is not None:
             a, b, u, n, s0 = marco
@@ -1663,9 +1765,36 @@ class Boceto:
             return abs(distancia_punto_recta(self.coords(d.p1), *self._extremos_linea(o.id)))
         return abs(self.radio(d.id) - self.radio(o.id))
 
-    def medir_cota(self, tipo, entidades):
-        """Valor actual (mm o grados) de una cota sobre la geometría actual: sirve de valor por defecto."""
+    def medir(self, cota):
+        """Valor actual de una cota existente (con su modo)."""
+        return self.medir_cota(cota.tipo, cota.entidades, cota.datos.get("modo", "centro"), cota.datos.get("cuadrante"))
+
+    def cuadrante_angulo(self, l1, l2, punto):
+        """Cuadrante (0..3) entre las rectas de l1 y l2 que contiene `punto` (x, y), como Fusion elige el ángulo
+        con el cursor: 0 entre +d1 y +d2, 1 entre −d1 y +d2, 2 entre −d1 y −d2, 3 entre +d1 y −d2 (d = p1→p2)."""
+        (a, _), (c, _) = self._extremos_linea(l1), self._extremos_linea(l2)
+        d1, d2 = self._direccion(l1), self._direccion(l2)
+        det = d1[0] * d2[1] - d1[1] * d2[0]
+        if abs(det) < 1e-9:
+            raise ErrorBoceto("Las líneas son paralelas: no forman ángulo.")
+        # Cruce de las rectas: a + s·d1 = c + t·d2. Después, el punto en la base (d1, d2) desde el cruce.
+        s = ((c[0] - a[0]) * d2[1] - (c[1] - a[1]) * d2[0]) / det
+        o = (a[0] + s * d1[0], a[1] + s * d1[1])
+        v = (punto[0] - o[0], punto[1] - o[1])
+        k1 = (v[0] * d2[1] - v[1] * d2[0]) / det
+        k2 = (d1[0] * v[1] - d1[1] * v[0]) / det
+        return (0, 3, 1, 2)[(k1 < 0) * 2 + (k2 < 0)]
+
+    def medir_cota(self, tipo, entidades, modo="centro", cuadrante=None):
+        """Valor actual (mm o grados) de una cota sobre la geometría actual: sirve de valor por defecto. `modo`
+        ("centro" o "tangente") vale en una distancia con un círculo o arco; `cuadrante` (0..3) en un ángulo."""
         t = [self.tipo_de(e) for e in entidades]
+        if tipo == "distancia" and set(t) & set(CIRCULARES):
+            return abs(distancia_con_circulo(t, entidades, modo, self.coords, lambda c: self.coords(self.curvas[c].centro),
+                                             self.radio, self._extremos_linea))
+        if tipo == "distancia" and sorted(t) == ["punto", "spline"]:
+            p, s = entidades if t[0] == "punto" else entidades[::-1]
+            return mas_cercano(self.primitivas(s)[0], self.coords(p))[1]
         if tipo in ("radio", "diametro"):
             r = self.radio(entidades[0])
             return r if tipo == "radio" else 2 * r
@@ -1673,6 +1802,8 @@ class Boceto:
             return self.separacion(*entidades)
         if tipo == "angulo":
             d1, d2 = (self._direccion(e) for e in entidades)
+            s1, s2 = signos_cuadrante(cuadrante)
+            d1, d2 = (s1 * d1[0], s1 * d1[1]), (s2 * d2[0], s2 * d2[1])
             return math.degrees(math.atan2(abs(d1[0] * d2[1] - d1[1] * d2[0]), d1[0] * d2[0] + d1[1] * d2[1]))
         if tipo == "distancia" and t == ["punto", "linea"]:
             return abs(distancia_punto_recta(self.coords(entidades[0]), *self._extremos_linea(entidades[1])))
@@ -1776,8 +1907,10 @@ class Boceto:
     def _validar_cota(self, tipo, entidades):
         t = [self.tipo_de(e) for e in entidades]
         validas = {
-            "distancia": lambda: t in (["punto", "punto"], ["linea"], ["punto", "linea"], ["linea", "punto"],
-                                       ["linea", "linea"]),
+            "distancia": lambda: (t in (["punto", "punto"], ["linea"], ["punto", "linea"], ["linea", "punto"],
+                                        ["linea", "linea"]) or sorted(t) == ["punto", "spline"]
+                                  or (len(t) == 2 and set(t) & set(CIRCULARES)
+                                      and set(t) <= {"punto", "linea", *CIRCULARES})),
             "distancia_h": lambda: t in (["punto", "punto"], ["linea"]),
             "distancia_v": lambda: t in (["punto", "punto"], ["linea"]),
             "radio": lambda: t in (["circulo"], ["arco"]),
@@ -1789,6 +1922,8 @@ class Boceto:
             raise ErrorBoceto(f"La cota '{TIPOS_COTA[tipo]}' no aplica a: {', '.join(t) or 'nada'}.")
         if tipo == "angulo" and entidades[0] == entidades[1]:
             raise ErrorBoceto("Una cota de ángulo necesita dos líneas distintas.")
+        if tipo == "distancia" and len(entidades) == 2 and entidades[0] == entidades[1]:
+            raise ErrorBoceto("Una cota de distancia necesita dos entidades distintas.")
 
     # ------------------------------------------------------------ geometría para perfiles y dibujo
     def primitivas(self, cid):
@@ -2284,12 +2419,16 @@ class Boceto:
                 self.agregar_restriccion("coincidente", [virtual, lid])
         ln = self.agregar_linea(pt1, pt2)
         expr = expresion or _numero(e1)
-        self.agregar_cota("distancia", [virtual, pt1], expr)
+        primera = self.agregar_cota("distancia", [virtual, pt1], expr)
         if angulo is not None:
             medido = self.medir_cota("angulo", [ln, l1])
             self.agregar_cota("angulo", [ln, l1], _numero(angulo if abs(medido - angulo) < 1e-6 else 180 - angulo))
+        elif distancia2 is None:
+            # Distancias iguales (BOC-25): al nombrarse las cotas, la 2.ª pasa a ser «dN» de la 1.ª
+            # (Documento._tabla_cotas), así editar una arrastra a la otra. Con distancia2, cada una es independiente.
+            self.agregar_cota("distancia", [virtual, pt2], expr, {"igual_a": primera})
         else:
-            self.agregar_cota("distancia", [virtual, pt2], expr if distancia2 is None else _numero(e2))
+            self.agregar_cota("distancia", [virtual, pt2], _numero(e2))
         return ln
 
     # ------------------------------------------------------------ MODIFICAR: desfase
@@ -2439,7 +2578,7 @@ class Boceto:
                     self.agregar_restriccion(r.tipo, [todo[e] for e in r.entidades], r.datos)
             for k in list(self.cotas.values()):
                 if set(k.entidades) <= set(todo) and not (gira and k.tipo in _COTAS_ORIENTADAS):
-                    self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, k.datos)
+                    self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, k.datos, k.referencia)
         return mapa, mapa_c
 
     def transformar(self, ids, dx=0.0, dy=0.0, angulo=0.0, centro=(0.0, 0.0), copiar=False):
@@ -2843,7 +2982,8 @@ class Boceto:
         for r in d.get("restricciones", []):
             b.restricciones[r["id"]] = Restriccion(r["id"], r["tipo"], r["entidades"], r.get("datos"))
         for c in d.get("cotas", []):
-            b.cotas[c["id"]] = Cota(c["id"], c["tipo"], c["entidades"], c["expresion"], c.get("datos"))
+            b.cotas[c["id"]] = Cota(c["id"], c["tipo"], c["entidades"], c["expresion"], c.get("datos"), c.get("nombre", ""),
+                                   c.get("referencia", False))
         todos = list(b.puntos) + list(b.curvas) + list(b.restricciones) + list(b.cotas)
         b._siguiente = max([b._siguiente] + [i + 1 for i in todos])
         return b
@@ -2870,6 +3010,29 @@ def circunferencia_3_puntos(a, b, c):
     ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
     uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
     return ux, uy, math.hypot(ax - ux, ay - uy)
+
+
+def distancia_con_circulo(tipos, entidades, modo, P, C, R, L, anidados=None):
+    """Distancia CON signo de una cota de distancia con un círculo o arco (BOC-3; la medida es su valor absoluto).
+    `P(pid)`, `C(cid)` (centro), `R(cid)` y `L(lid)` (extremos) dan la geometría: la usan el boceto y el solver.
+    modo "centro": hasta el centro; "tangente": hasta el borde más cercano (entre círculos, de borde a borde;
+    `anidados` congela si uno está adentro del otro, None = según la geometría)."""
+    if tipos[0] not in CIRCULARES:
+        tipos, entidades = tipos[::-1], entidades[::-1]
+    c, o = entidades
+    if tipos[1] == "punto":
+        d = math.dist(P(o), C(c))
+        return d if modo == "centro" else d - R(c)
+    if tipos[1] == "linea":
+        d = distancia_punto_recta(C(c), *L(o))
+        return d if modo == "centro" else abs(d) - R(c)
+    d = math.dist(C(c), C(o))
+    if modo == "centro":
+        return d
+    r1, r2 = R(c), R(o)
+    if anidados is None:
+        anidados = d < abs(r1 - r2)
+    return abs(r1 - r2) - d if anidados else d - r1 - r2
 
 
 def distancia_punto_recta(p, a, b):

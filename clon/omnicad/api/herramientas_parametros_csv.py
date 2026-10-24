@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
+from ..timeline.operaciones import OpBoceto
 from ..timeline.parametros import ESCALAR, UNIDADES, TablaParametros, validar_nombre
 from .errores import error
 from .herramientas_parametros import _UNIDAD, info_parametros
@@ -35,7 +36,9 @@ def export_parameters(sesion, path: str, overwrite: bool = False, create_folders
     buf = io.StringIO(newline="")
     escritor = csv.writer(buf)
     escritor.writerow(_COLUMNAS)
-    for p in sesion.doc.parametros:
+    cotas = {c.nombre for o in sesion.doc.operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()}
+    propios = [p for p in sesion.doc.parametros if p.nombre not in cotas]     # los dN se regeneran desde sus cotas
+    for p in propios:
         escritor.writerow([p.nombre, _UNIDAD[p.tipo], p.expresion, repr(valores[p.nombre]), p.comentario])
     nuevas = crear_carpeta(ruta.parent) if create_folders else []
     temporal = None
@@ -59,7 +62,7 @@ def export_parameters(sesion, path: str, overwrite: bool = False, create_folders
     finally:
         if temporal is not None:
             temporal.unlink(missing_ok=True)
-    return {"path": str(ruta.resolve()), "count": len(sesion.doc.parametros), "size_bytes": ruta.stat().st_size}
+    return {"path": str(ruta.resolve()), "count": len(propios), "size_bytes": ruta.stat().st_size}
 
 
 @herramienta("import_parameters", "parametros", "Importa parámetros CSV con validación de expresiones y unidades. "

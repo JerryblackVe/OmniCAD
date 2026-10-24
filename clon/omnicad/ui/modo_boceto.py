@@ -265,11 +265,12 @@ class PaletaBoceto(QFrame):
         self.contexto.setVisible(self.form_contexto.rowCount() > 0)
         self.ajustar()
 
-    def set_estado(self, resultado):
+    def set_estado(self, resultado, conflictos=""):
+        """`conflictos`: qué restricciones o cotas chocan, en palabras (BOC-7)."""
         if resultado is None:
             self.estado.setText("")
         elif not resultado.ok:
-            self.estado.setText(f"⚠ {resultado.descripcion()}")
+            self.estado.setText(f"⚠ {resultado.descripcion()} {conflictos}".strip())
             temas.poner_rol(self.estado, "error")
         elif resultado.gdl == 0:
             self.estado.setText("Totalmente restringido.")
@@ -699,7 +700,9 @@ class ModoBoceto(QObject):
                  "Alterna la geometría seleccionada entre normal y línea central (eje)."),
                 ("sk_autorestringir", "Restringir automáticamente", None, "r_fijo", self._autorestringir,
                  "AutoConstrain: detecta horizontales, verticales, coincidencias e igualdades y agrega las cotas que "
-                 "faltan hasta dejar el boceto totalmente restringido.")):
+                 "faltan hasta dejar el boceto totalmente restringido."),
+                ("sk_conflictos", "Qué choca", "F5", "boceto_conflicto", self._conflictos,
+                 "Lista las restricciones y cotas en conflicto (en rojo en el boceto): quitando una se resuelve.")):
             a = QAction(icono(ico), texto, ventana)
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}")
             if atajo:
@@ -868,6 +871,10 @@ class ModoBoceto(QObject):
         if self.activo:
             self.lienzo.auto_restringir()
 
+    def _conflictos(self):
+        if self.activo:
+            self.lienzo.mostrar_conflictos()
+
     def _ajuste(self, clave, valor):
         if self.activo:
             if clave in ("altura_texto", "espaciado", "interlineado"):
@@ -895,8 +902,11 @@ class ModoBoceto(QObject):
 
     def _cambio(self):
         if self.paleta is not None:
-            self.paleta.set_estado(self.lienzo.resultado)
+            self.paleta.set_estado(self.lienzo.resultado, self.lienzo.texto_conflictos())
             self.v.area.reubicar()
+        op = (self.datos or {}).get("op")
+        if op is not None:                   # BOC-7: candado o marca roja del boceto en el navegador, en vivo
+            self.v.navegador.marcar_boceto(op.id, self.lienzo.resultado if self.boceto.curvas else None)
         self._t_perfiles.start()
 
     def _actualizar_perfiles(self):

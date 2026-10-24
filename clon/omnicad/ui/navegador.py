@@ -99,6 +99,18 @@ class _Arbol(QTreeWidget):
 RENOMBRABLES = {"cuerpo", "boceto", "plano", "eje", "punto", "calcomania"}
 
 
+def estado_boceto(resultado):
+    """(ícono, tooltip) de un boceto en el navegador según su solver (BOC-7, como Fusion): candado si está
+    totalmente restringido, marca roja si está en conflicto. `resultado` None = boceto vacío o sin resolver."""
+    if resultado is None:
+        return "boceto", ""
+    if not resultado.ok:
+        return "boceto_conflicto", "Boceto en conflicto: hay restricciones o cotas que chocan (F5 dentro del boceto las lista)."
+    if resultado.gdl == 0:
+        return "boceto_bloqueado", "Boceto totalmente restringido."
+    return "boceto", f"Boceto sub-restringido: faltan {resultado.gdl} grado(s) de libertad."
+
+
 class Navegador(QFrame):
     ojo = Signal(str)            # clave de lo que se mostró/ocultó
     seleccionado = Signal(str)   # id de cuerpo o de boceto
@@ -236,7 +248,9 @@ class Navegador(QFrame):
                 ident, nombre = elemento[0], elemento[1]
                 ico_e = elemento[2] if len(elemento) > 2 else ico
                 tipo_e = {"plano_desfase": "plano", "eje_arista": "eje", "punto_vertice": "punto"}.get(ico_e, tipo)
-                self._item(carpeta, ident, nombre, ico_e, tipo_e, ident not in ocultos)
+                it = self._item(carpeta, ident, nombre, ico_e, tipo_e, ident not in ocultos)
+                if len(elemento) > 3:
+                    it.setToolTip(0, elemento[3])
         for ident, nombre, fijo, cuerpos_c in self.componentes:     # componentes con sus cuerpos
             comp = self._item(raiz, ident, nombre + ("  (fijo)" if fijo else ""), "componente", "componente",
                               ident not in ocultos)
@@ -277,6 +291,14 @@ class Navegador(QFrame):
 
     def item(self, clave):
         return self._items.get(clave)
+
+    def marcar_boceto(self, ident, resultado):
+        """Actualiza en el lugar el ícono y el tooltip del boceto mientras se lo edita (sin rearmar el árbol)."""
+        it = self.item(ident)
+        if it is not None:
+            ico, tip = estado_boceto(resultado)
+            it.setData(0, ROL_ICONO, ico)
+            it.setToolTip(0, tip)
 
     def seleccionar(self, claves):
         """Refleja la selección de la vista y revela sus filas, sin emitir otro clic."""
