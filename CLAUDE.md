@@ -32,6 +32,10 @@
 - Instalar el toolchain de Rust/maturin requiere permiso del usuario.
 
 ## Regla obligatoria: ponytail
+- **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
+  (también las sub-sesiones y las que orquestan OpenCode) arranca con `ponytail`, termina con `ponytail-review`,
+  y usa `ponytail-audit` / `ponytail-debt` cuando haga falta. Un hook de `.claude/settings.json` lo recuerda
+  al abrir la sesión y antes de cada `git commit`. Los briefs a OpenCode llevan ponytail embebido.
 - Usar SIEMPRE la skill `/ponytail` en todo proceso de código donde sea útil o necesario
   (escribir, arreglar, refactorizar, elegir dependencias): el cambio más chico que resuelve
   la tarea completa, sin sobre-ingeniería.
