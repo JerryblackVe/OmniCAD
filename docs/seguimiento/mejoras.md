@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20. Total 110: Abierto 55 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23). Total 113: Abierto 58 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
@@ -11,7 +11,6 @@ Abierto 18 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | NOV-b80-1 | Dos `_referencia` casi iguales con dialectos distintos | Abierto | Baja | Unificar: borrar la de solido_extra y aceptar `{"body", "vertex"}` en la de construcción (≈55 líneas menos; hoy un agente aprende dos formatos). | omnicad/api/herramientas_solido_extra.py:49 y omnicad/api/herramientas_construccion.py:31 | 2026-10-20 |
-| NOV-b80-2 | Radio de círculo y arco sin tope de tamaño | Abierto | Baja | `set_circle_radius` y `draw_circle` aceptan 1e12 mm; aplicar `MEDIDA_MAXIMA` como hace extrude. | omnicad/api/herramientas_boceto_extra.py:63; omnicad/api/herramientas_boceto.py:832 | 2026-10-20 |
 | NOV-b80-3 | create_hole(positions) usa un solo cuerpo objetivo | Abierto | Baja | Si el vértice es de otro cuerpo, el agujero se hace en el principal y solo avisa que no cambió el volumen: resolver el cuerpo desde la referencia. | omnicad/api/herramientas_modificar.py:492 | 2026-10-20 |
 | NOV-b80-4 | export_parameters no neutraliza celdas que empiezan con = + - @ | Abierto | Baja | Un comentario `=HYPERLINK(...)` sale tal cual y Excel lo ejecuta; decidir si se antepone `'` sin romper la ida y vuelta con la tabla de la ventana. | omnicad/api/herramientas_parametros_csv.py:23 | 2026-10-20 |
 | P-12b | Registrar la tarea programada de Windows para el informe mensual | Abierto | Baja | La tarea no se registra sola; el comando está en el docstring del script. | scripts/novedades.py | 2026-10-20 |
@@ -130,6 +129,17 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | VR13 | Render por mosaicos en varios procesos, cancelable y pausable | Parcial | Alta | Faltan varios procesos, pausa y no bloquear la ventana. | render_cpu.py:736,992-1030 (mosaicos, RenderCancelado); ui/render.py:2131 (QProgressDialog con Cancelar) | 2026-10-20 |
+
+## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
+
+Abierto 4. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| BOC-27 | Arrastre y soltado del solver con boceto grande | Abierto | Alta | Evento de arrastre: 100 líneas 100 ms, 200 líneas 480 ms, 400 líneas 3,4 s; soltar con 400 líneas 3,9 s. Va con SC4 y el módulo Rust de P-10b-f. | omnicad/restricciones/solver.py (`least_squares lm`) | 2026-10-23 |
+| BOC-28 | Texto largo y glifos faltantes | Abierto | Baja | 200 «W» sobre un círculo dan 11 979 perfiles en 6,2 s; un emoji sin glifo dibuja el cuadrito `.notdef` sin avisar. | omnicad/nucleo/fuentes.py:479 | 2026-10-23 |
+| BOC-29 | Verificar los topes de Fusion: 64 lados de polígono y 200 copias de patrón | Abierto | Baja | La ayuda local no dice cuál es el límite de Fusion; decidirlo y documentarlo. | omnicad/api/herramientas_boceto.py:1679 | 2026-10-23 |
+| BOC-30 | Escala con factor como expresión y con un punto fijo | Abierto | Baja | `scale` es `float` (Fusion admite expresión) y con una línea fija dice «Hay geometría fija en la selección». | omnicad/restricciones/boceto.py:2436,2589 | 2026-10-23 |
 
 ## Menú del boceto (decisión del usuario)
 

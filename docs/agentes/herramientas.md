@@ -690,7 +690,7 @@ Crea un boceto vacío sobre un plano o sobre una cara plana. Coordenadas del boc
 
 ### `draw_line`
 
-Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el plano del boceto. Con midpoint=true es una línea de punto medio: el primer punto es su punto medio y el segundo un extremo (el otro es el simétrico) y queda con la restricción de punto medio. Devuelve los ids creados (línea y puntos) y la cantidad de perfiles.
+Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el plano del boceto. Con midpoint=true es una línea de punto medio: el primer punto es su punto medio y el segundo un extremo (el otro es el simétrico) y queda con la restricción de punto medio. Un extremo que cae sobre el de otra línea comparte su punto (cadena); si no, queda suelto. Devuelve los ids creados (línea y puntos) y la cantidad de perfiles.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1139,7 +1139,7 @@ Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo e
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `curve` (entero; obligatorio): id del círculo o arco (get_sketch).
-  - `radius` (número; obligatorio): radio nuevo en mm (positivo).
+  - `radius` (número; obligatorio): radio nuevo en mm, entre 0,000001 y 1.000.000 (1 km).
 - CLI: `omnicad call set_circle_radius --doc pieza.omnicad sketch=… curve=… radius=…`
 
 ### `extend_sketch_curve`
@@ -1451,7 +1451,7 @@ Mueve, gira, escala y/o espeja curvas de un boceto (un paso de deshacer): lo imp
   - `dx` (número; opcional, por defecto `0.0`): desplazamiento en X (mm).
   - `dy` (número; opcional, por defecto `0.0`): desplazamiento en Y (mm).
   - `angle` (número; opcional, por defecto `0.0`): giro en grados (antihorario) alrededor del centro.
-  - `scale` (número; opcional, por defecto `1.0`): factor de escala (positivo; 1 = igual).
+  - `scale` (número; opcional, por defecto `1.0`): factor de escala entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
   - `mirror` ("none" | "horizontal" | "vertical"; opcional, por defecto `"none"`): horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
   - `center_x` (número; opcional, por defecto `null`): x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
   - `center_y` (número; opcional, por defecto `null`): y del centro; vacío = centro de la caja de la selección.

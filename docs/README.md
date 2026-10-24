@@ -49,6 +49,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |
+| [plan_boceto.md](plan_boceto.md) | Plan por fases para llevar el boceto al nivel de Fusion (auditoría 2026-10-23) |
 
 ## Especificación de faltantes (brechas)
 

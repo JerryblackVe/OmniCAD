@@ -18,6 +18,8 @@ def redefine_sketch_plane(sesion, sketch: str, plane: str, body: str | None = No
     """
     op, previo = boceto_activo(sesion, sketch, derivados=False)
     ref, marco, cara, ref_cara = plano_o_cara(sesion, plane, body)
+    # el id de find_faces solo vale hasta el próximo cambio del documento: la cara se resuelve ahora, antes de reemplazar
+    elem = sl.elegir_uno(sesion, plane, "cara", body)[1] if cara else None
     nueva = op.copia()
     nueva.p.update(plano=ref, marco=marco, cara=ref_cara, desplazamiento="0")
     indice = sesion.doc.indice(op.id)
@@ -30,7 +32,6 @@ def redefine_sketch_plane(sesion, sketch: str, plane: str, body: str | None = No
     _, br = boceto_activo(sesion, op.id, derivados=False)
     fuera = []
     if cara:
-        _, elem = sl.elegir_uno(sesion, plane, "cara", body)
         for i, perfil in enumerate(br.perfiles):
             comun = geo.booleano(perfil.cara, elem.sub, "intersecar")
             if geo.area(comun) < perfil.area - max(1e-7, perfil.area * 1e-7):

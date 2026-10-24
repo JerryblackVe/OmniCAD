@@ -60,7 +60,7 @@ Son UNA sola tarea: al hacerla se borran todas sus filas juntas (y su ID de esta
 | Informe de geometría e impresión 3D | F2 · B2 · RH13 |
 | Imanes y manipulador contextual | RH12 · B7 |
 | Instancias o copias ligeras | RH17 · PL8 |
-| Puntos de control y B-spline | F12 · RH9 |
+| Puntos de control y B-spline | F12 · RH9 · BOC-11 |
 | Deformar y ajustar a superficie | RH7 · B10 · P-27-8 |
 | Relieve desde imagen o textura | RH10 · B13 · P-27-9 |
 | Patrón en puntos y esparcir | F3 · B12 · VR9 |

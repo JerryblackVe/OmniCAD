@@ -102,8 +102,7 @@ Aspecto (`ui/render.py:1996`, `:2021`) ya está cubierto por `set_appearance`, `
 No necesitan herramienta, porque un agente elige por id y no por clic: modos, filtros y prioridad de selección
 (`ui/ventana.py:1313-1336`), Terminar boceto y Activar patrón plano. Ya están cubiertos por `get_viewport_image(bodies=…)`.
 
-Huecos parciales, que se pueden armar con otras herramientas: `draw_rectangle` no hace rectángulos rotados
-(`sk_rectangulo_3p`, MCP-74), `draw_arc` no tiene la forma tangente (MCP-94), y a `select_bodies` le faltan `by_name`, `by_size` e `invert` (MCP-93; no son MCP-50, que es `get_selection`).
+Huecos parciales que había al escribir esto: `draw_rectangle` sin rectángulos rotados (MCP-74), `draw_arc` sin la forma tangente (MCP-94) y `select_bodies` sin `by_name`, `by_size` e `invert` (MCP-93; no son MCP-50, que es `get_selection`). Los tres están hechos (`three_points` y `tangent_to` en la API; MCP-93 en `test_api_misc.py`).
 
 ## Ola 5: cinta DISEÑO solo con `run_operation`
 
@@ -175,6 +174,8 @@ cubierta. Se confirmó que nada de las olas 1 a 6 se agregó desde la primera pa
 100 % cubiertos: caja, cilindro, esfera, toroide, rosca, combinar, apoyar y desfase de cara.
 
 ### Boceto: 9 opciones
+
+Hechas, verificadas con llamadas reales el 2026-10-24 (MCP-72: `draw_circle kind=two_points|three_points`; MCP-73: `create_polygon kind=edge`; MCP-74: `draw_line midpoint`, `draw_rectangle center_diagonals|three_points`; MCP-94: `draw_arc tangent_to`) y con sus pruebas en `tests/test_api_opciones_boceto.py`. La tabla queda como especificación.
 
 | ID | Herramienta a ampliar | Opciones que faltan | Dónde (UI) | Dificultad |
 |---|---|---|---|---|

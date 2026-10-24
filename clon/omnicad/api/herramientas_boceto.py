@@ -24,9 +24,9 @@ from typing import Literal
 from ..nucleo import geometria as geo
 from ..nucleo import perfiles as perfiles_mod
 from ..restricciones import Boceto, ErrorBoceto, auto_restringir
-from ..restricciones.boceto import (ArcoElipse, Circulo, Elipse, Texto, agregar_linea_medio, agregar_rectangulo_3p,
-                                    agregar_rectangulo_centro, centro_arco_tangente, circunferencia_3_puntos,
-                                    validar_valor_cota)
+from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
+                                    agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
+                                    centro_arco_tangente, circunferencia_3_puntos, validar_valor_cota)
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
@@ -541,10 +541,30 @@ def _dibujar(sesion, ref, constructor, desde_solver=False):
     antes = _claves(b)
     try:
         constructor(b)
+        _exigir_tamano(b, antes)
     except ErrorBoceto as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
     sesion.doc.reemplazar(op.id, nueva)
     return _informe_edicion(sesion, nueva, b, antes)
+
+
+def _exigir_tamano(b, antes=None):
+    """ErrorBoceto si un punto o una curva (los nuevos respecto de `antes`; con None, todos) se sale de lo que el
+    núcleo calcula bien: coordenadas hasta MEDIDA_MAXIMA del origen y radios de círculo o elipse entre MEDIDA_MINIMA
+    y MEDIDA_MAXIMA (mm), como el tope de las cotas."""
+    def fuera(v, minimo=0.0):
+        return not minimo <= abs(v) <= MEDIDA_MAXIMA
+    nuevos = lambda todos, previos: [k for k in todos if antes is None or k not in antes[previos]]  # noqa: E731
+    for pid in nuevos(b.puntos, "puntos"):
+        if any(fuera(v) for v in b.coords(pid)):
+            raise ErrorBoceto(f"El punto {pid} cae fuera del rango del boceto: las coordenadas llegan hasta "
+                              f"{MEDIDA_MAXIMA:,.0f} mm (1 km) del origen.".replace(",", "."))
+    for cid in nuevos(b.curvas, "curvas"):
+        c = b.curvas[cid]
+        radios = [c.radio] if isinstance(c, Circulo) else [c.radio_menor] if isinstance(c, (Elipse, ArcoElipse)) else []
+        if any(fuera(r, MEDIDA_MINIMA) for r in radios):
+            raise ErrorBoceto(f"El radio de la curva {cid} tiene que medir entre {MEDIDA_MINIMA:g} mm y "
+                              f"{MEDIDA_MAXIMA:,.0f} mm (1 km).".replace(",", "."))
 
 
 def _info_plano(plano):
@@ -760,8 +780,9 @@ def create_sketch(sesion, plane: str = "XY", name: str | None = None, body: str 
 
 @herramienta("draw_line", "boceto", "Dibuja una línea en el boceto (un paso de deshacer). Coordenadas en mm sobre el "
              "plano del boceto. Con midpoint=true es una línea de punto medio: el primer punto es su punto medio y el "
-             "segundo un extremo (el otro es el simétrico) y queda con la restricción de punto medio. Devuelve los "
-             "ids creados (línea y puntos) y la cantidad de perfiles.", modifica=True)
+             "segundo un extremo (el otro es el simétrico) y queda con la restricción de punto medio. Un extremo que "
+             "cae sobre el de otra línea comparte su punto (cadena); si no, queda suelto. Devuelve los ids creados "
+             "(línea y puntos) y la cantidad de perfiles.", modifica=True)
 def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float, sketch: str | None = None,
               construction: bool = False, midpoint: bool = False):
     """
@@ -782,7 +803,8 @@ def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float
             ln = b.curvas[lid]
             return {"": lid, "start": ln.p1, "end": ln.p2}
         return _dibujar(sesion, sketch, crear)
-    return _dibujar(sesion, sketch, lambda b: _linea(b, start_x, start_y, end_x, end_y, construction))
+    # un extremo que cae sobre el de otra línea la une (como al dibujar en cadena); si no, la línea queda suelta
+    return _dibujar(sesion, sketch, lambda b: _linea(b, start_x, start_y, end_x, end_y, construction, encadenar=True))
 
 
 @herramienta("draw_rectangle", "boceto",
@@ -826,6 +848,9 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
     if any(v is not None for v in esquinas):
         if any(v is None for v in esquinas):
             raise error("INVALID_ARGUMENTS", "Para la forma de dos esquinas hacen falta x1, y1, x2 e y2.")
+        if any(v is not None for v in (center_x, center_y, origin_x, origin_y, width, height)):
+            raise error("INVALID_ARGUMENTS", "La forma de dos esquinas (x1, y1, x2, y2) no se combina con "
+                        "center_x/center_y, origin_x/origin_y, width ni height.")
         a, b_ = (x1, y1), (x2, y2)
     else:
         if width is None or height is None:
@@ -868,7 +893,11 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
     if kind == "center_radius":
         if radius is None:
             raise error("INVALID_ARGUMENTS", "kind=center_radius necesita radius.")
+        if points is not None:
+            raise error("INVALID_ARGUMENTS", "points es de two_points y three_points; con center_radius usá radius.")
         return _dibujar(sesion, sketch, lambda b: _circulo(b, center_x, center_y, radius, construction))
+    if radius is not None:
+        raise error("INVALID_ARGUMENTS", f"kind={kind} no usa radius: el círculo sale de los puntos.")
     n = 2 if kind == "two_points" else 3
     if points is None or len(points) != n:
         raise error("INVALID_ARGUMENTS", f"kind={kind} necesita {n} puntos [x, y] en points.")
@@ -943,11 +972,17 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
     if sweep_angle is not None:
         if center_x is None or center_y is None:
             raise error("INVALID_ARGUMENTS", "Con sweep_angle hacen falta center_x y center_y.")
+        if any(v is not None for v in (mid_x, mid_y, end_x, end_y)):
+            raise error("INVALID_ARGUMENTS", "La forma centro + barrido no se combina con mid_x/mid_y ni "
+                        "end_x/end_y (son de la forma de tres puntos).")
         return _dibujar(sesion, sketch, lambda b: _arco(b, center_x, center_y, start_x, start_y, sweep_angle,
                                                         construction))
     if None in (mid_x, mid_y, end_x, end_y):
         raise error("INVALID_ARGUMENTS", "Indicá center_x, center_y y sweep_angle, o los tres puntos: "
                     "start, mid_x/mid_y y end_x/end_y.")
+    if center_x is not None or center_y is not None:
+        raise error("INVALID_ARGUMENTS", "La forma de tres puntos no usa center_x/center_y (sí la de centro + "
+                    "sweep_angle).")
     return _dibujar(sesion, sketch, lambda b: _arco_3_puntos(b, (start_x, start_y), (mid_x, mid_y), (end_x, end_y),
                                                              construction))
 
@@ -1015,7 +1050,14 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
     construction: true para una spline de construcción (no forma perfiles).
     """
     _exigir_finitos(locals())
+    _avisar_cerrada_ignorada(sesion, spline_type, closed)
     return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction))
+
+
+def _avisar_cerrada_ignorada(sesion, spline_type, closed):
+    if closed and spline_type == "control_points":
+        sesion.avisar("closed se ignora en una spline de puntos de control (queda abierta): solo la de ajuste "
+                      "(fit_points) se cierra.")
 
 
 @herramienta("add_constraint", "boceto",
@@ -1094,6 +1136,10 @@ def add_dimension(sesion, sketch: str,
     b = nueva.boceto
     _exigir_entidades(b, entities)
     interno = COTAS[type]
+    try:
+        b._validar_cota(interno, list(entities))     # el tipo de entidad, antes de medir
+    except ErrorBoceto as e:
+        raise error("INVALID_DIMENSION", str(e)) from e
     if value is None:
         try:
             medida = br.boceto.medir_cota(interno, list(entities))
@@ -1103,12 +1149,9 @@ def add_dimension(sesion, sketch: str,
     else:
         expresion = texto_expr(value)
     valor = evaluar(expresion, ANGULO if interno == "angulo" else LONGITUD, sesion.doc.parametros.valores())
+    _cota_valida(interno, valor, f"La cota «{type}»")
     antes = _claves(b)
-    try:
-        kid = b.agregar_cota(interno, list(entities), expresion)
-        validar_valor_cota(interno, valor)
-    except ErrorBoceto as e:
-        raise error("INVALID_DIMENSION", str(e)) from e
+    kid = b.agregar_cota(interno, list(entities), expresion)
     _fijar_ubicacion(b, b.cotas[kid], offset, text_offset)
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota «{type}» = {expresion}")
@@ -1150,9 +1193,16 @@ def _numero(v, i, tipo, que):
     return float(v)
 
 
+def _booleano(e, i, clave):
+    v = e.get(clave, False)
+    if not isinstance(v, bool):
+        raise _spec_error(i, e.get("type"), f"'{clave}' tiene que ser true o false (llegó {v!r}).")
+    return v
+
+
 def _construir_entidad(b, i, e):
     tipo = e.get("type")
-    c = bool(e.get("construction", False))
+    c = _booleano(e, i, "construction")
     p = lambda k, *alt: _xy(_campo(e, i, k, alt), f"'{k}' de la entidad {i}")  # noqa: E731
     if tipo == "line":
         (x1, y1), (x2, y2) = p("start"), p("end")
@@ -1185,9 +1235,13 @@ def _construir_entidad(b, i, e):
         lados = _campo(e, i, "sides")
         if isinstance(lados, bool) or not isinstance(lados, int):
             raise _spec_error(i, tipo, "'sides' tiene que ser un entero.")
+        kind = e.get("kind", "inscribed")
+        if kind not in ("inscribed", "circumscribed"):
+            raise _spec_error(i, tipo, "'kind' es inscribed o circumscribed (el polígono por arista solo está en "
+                              "create_polygon).")
         return _poligono(b, lados, _numero(_campo(e, i, "radius"), i, tipo, "'radius'"), cx, cy,
-                         _numero(e.get("rotation", 0.0), i, tipo, "'rotation'"), e.get("kind") == "circumscribed", c,
-                         bool(e.get("fully_constrained", False)))
+                         _numero(e.get("rotation", 0.0), i, tipo, "'rotation'"), kind == "circumscribed", c,
+                         _booleano(e, i, "fully_constrained"))
     if tipo == "ellipse":
         cx, cy = p("center") if "center" in e else (0.0, 0.0)
         return _elipse(b, cx, cy, _numero(_campo(e, i, "major_radius"), i, tipo, "'major_radius'"),
@@ -1207,7 +1261,7 @@ def _construir_entidad(b, i, e):
             grado = int(grado)
         if isinstance(grado, bool) or not isinstance(grado, int):
             raise _spec_error(i, tipo, "'degree' tiene que ser un entero (3 o 5).")
-        return _spline(b, _campo(e, i, "points"), tipo_spline, grado, bool(e.get("closed", False)), c)
+        return _spline(b, _campo(e, i, "points"), tipo_spline, grado, _booleano(e, i, "closed"), c)
     if tipo == "point":
         x, y = p("at", "position")
         return {"": b.agregar_punto(x, y)}
@@ -1270,11 +1324,14 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             if not isinstance(e, dict):
                 raise error("INVALID_SPEC", f"Entidad {i}: tiene que ser un objeto con 'type'.")
             partes = _construir_entidad(b, i, e)
+            if e.get("type") == "spline":
+                _avisar_cerrada_ignorada(sesion, e.get("spline_type"), e.get("closed"))
             manejador = str(e.get("id", f"e{i}"))
             if any(k == manejador or k.startswith(manejador + ".") for k in alias):
                 raise error("INVALID_SPEC", f"Entidad {i}: el id '{manejador}' está repetido.")
             for sufijo, eid in partes.items():
                 alias[f"{manejador}.{sufijo}" if sufijo else manejador] = eid
+        _exigir_tamano(b)
         for j, r in enumerate(constraints or []):
             tipo = r.get("type") if isinstance(r, dict) else None
             if tipo not in RESTRICCIONES:
@@ -1298,9 +1355,9 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             valor = evaluar(expresion, ANGULO if tipo == "angle" else LONGITUD, valores)
             try:
                 b.agregar_cota(COTAS[tipo], ids, expresion)
-                validar_valor_cota(COTAS[tipo], valor)
             except ErrorBoceto as e:
                 raise error("INVALID_DIMENSION", f"Cota {j}: {e}") from e
+            _cota_valida(COTAS[tipo], valor, f"Cota {j}")
     except ErrorBoceto as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
     nombre = name.strip() if name and name.strip() else nombre_nuevo(doc, "Boceto", OpBoceto)
@@ -1350,6 +1407,8 @@ def _valor_expr(sesion, valor, tipo=LONGITUD):
 def _cota_valida(tipo, valor, que):
     try:
         validar_valor_cota(tipo, valor)
+        if tipo == "angulo" and not 0 < valor < 180:
+            raise ErrorBoceto(f"Una cota de ángulo va entre 0 y 180 grados (llegó {valor:g}).")
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", f"{que}: {e}") from e
 
@@ -1888,8 +1947,6 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
     if value is not None:
         expresion, valor = _valor_expr(sesion, value, ANGULO if k.tipo == "angulo" else LONGITUD)
         _cota_valida(k.tipo, valor, f"La cota {dimension} ({tipo})")
-        if k.tipo == "angulo" and not 0 < valor < 180:
-            raise error("INVALID_DIMENSION", f"Una cota de ángulo va entre 0 y 180 grados (llegó {valor:g}).")
         k.expresion = expresion
     expresion = k.expresion
     _fijar_ubicacion(nueva.boceto, k, offset, text_offset)

@@ -43,6 +43,7 @@ COTAS_POSITIVAS = ("distancia", "distancia_h", "distancia_v", "radio", "diametro
 # mm (1 km): tope de una cota de largo. Más allá el núcleo ya no calcula bien (un barrido por una ruta de 1 km da el
 # volumen exacto; por una de 10 km falla); nucleo/perfiles.py busca regiones cerradas en ±MEDIDA_MAXIMA
 MEDIDA_MAXIMA = 1e6
+MEDIDA_MINIMA = 1e-6      # mm (1 nm): por debajo el solver ya no distingue una medida de cero
 MAX_CARACTERES_TEXTO = 1000      # crear los perfiles de las letras cuesta ~10 ms por letra: 100.000 colgaban la ventana
 ALTURA_MAXIMA_TEXTO = 10_000.0   # mm (10 m)
 CIRCULARES = ("circulo", "arco")
@@ -1235,6 +1236,8 @@ class Boceto:
         if not 0 < rho < 1:
             raise ErrorBoceto("Rho tiene que estar entre 0 y 1.")
         a, v, b = self._punto(inicio), self._punto(vertice), self._punto(fin)
+        if math.dist(self.coords(a), self.coords(b)) < 1e-9:
+            raise ErrorBoceto("Los dos extremos de la cónica coinciden.")
         if abs(distancia_punto_recta(self.coords(v), self.coords(a), self.coords(b))) < 1e-9:
             raise ErrorBoceto("El vértice no puede estar alineado con los extremos.")
         return self._agregar_curva(Conica(self._nuevo_id(), a, v, b, rho, construccion))
@@ -1298,9 +1301,14 @@ class Boceto:
         elif tipo == "arco_centro":
             centro, a, b2 = coords
             R = math.dist(centro, a)
+            if math.dist(centro, b2) < 1e-9:
+                raise ErrorBoceto("El tercer punto de la ranura de arco no puede coincidir con el centro.")
             ang = math.atan2(b2[1] - centro[1], b2[0] - centro[0])
             b = (centro[0] + R * math.cos(ang), centro[1] + R * math.sin(ang))
             a0 = math.atan2(a[1] - centro[1], a[0] - centro[0])
+            if math.dist(a, b) < 1e-9:
+                raise ErrorBoceto("El barrido de la ranura de arco es cero: el tercer punto está en la dirección del "
+                                  "extremo inicial.")
             if _barrido(a0, ang) > math.pi:
                 a, b = b, a
         else:
@@ -1774,6 +1782,8 @@ class Boceto:
         }
         if not validas[tipo]():
             raise ErrorBoceto(f"La cota '{TIPOS_COTA[tipo]}' no aplica a: {', '.join(t) or 'nada'}.")
+        if tipo == "angulo" and entidades[0] == entidades[1]:
+            raise ErrorBoceto("Una cota de ángulo necesita dos líneas distintas.")
 
     # ------------------------------------------------------------ geometría para perfiles y dibujo
     def primitivas(self, cid):

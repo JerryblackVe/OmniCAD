@@ -258,8 +258,7 @@ def test_circulo_cotado_y_angulo(s):
     assert entidades(s)[c]["radius"] == 6 and d["dimension"]["value"] == 12
     l1 = llamar(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=0)["entities"][0]["id"]
     l2 = llamar(s, "draw_line", start_x=0, start_y=0, end_x=0, end_y=10)["entities"][0]["id"]
-    llamar(s, "add_constraint", sketch="Boceto1", type="coincident", entities=[entidades(s)[l2]["points"][0],
-                                                                             entidades(s)[l1]["points"][0]])
+    assert entidades(s)[l2]["points"][0] == entidades(s)[l1]["points"][0]      # B-88: comparten la esquina
     a = llamar(s, "add_dimension", sketch="Boceto1", type="angle", entities=[l1, l2], value="60 deg")
     assert a["dimension"]["value"] == 60 and a["dimension"]["type"] == "angle"
 

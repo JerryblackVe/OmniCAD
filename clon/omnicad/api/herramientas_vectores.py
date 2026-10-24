@@ -14,11 +14,11 @@ from typing import Literal
 from ..io_archivos.boceto_archivos import boceto_desde_primitivas, caja_primitivas
 from ..nucleo import fuentes
 from ..restricciones import ErrorBoceto
-from ..restricciones.boceto import Texto, _validar_opciones_texto, validar_texto_boceto
+from ..restricciones.boceto import MEDIDA_MINIMA, Texto, _validar_opciones_texto, validar_texto_boceto
 from ..timeline.operaciones import OpBoceto, texto_con_valores
 from ..timeline.parametros import ErrorExpresion
 from .errores import error
-from .herramientas_boceto import (_dibujar, _exigir_finitos, _paso, boceto_activo, boceto_resuelto,
+from .herramientas_boceto import (_dibujar, _exigir_finitos, _exigir_tamano, _paso, boceto_activo, boceto_resuelto,
                                   estado_solver, nombre_nuevo, op_boceto, plano_o_cara, valores_cotas)
 from .registro import herramienta
 
@@ -769,7 +769,7 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
     dx: desplazamiento en X (mm).
     dy: desplazamiento en Y (mm).
     angle: giro en grados (antihorario) alrededor del centro.
-    scale: factor de escala (positivo; 1 = igual).
+    scale: factor de escala entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
     mirror: horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
     center_x: x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
     center_y: y del centro; vacío = centro de la caja de la selección.
@@ -778,8 +778,9 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
     """
     from ..restricciones.boceto import puntos_primitiva
     _exigir_finitos({"dx": dx, "dy": dy, "angle": angle, "scale": scale})
-    if not scale > 0:
-        raise error("INVALID_ARGUMENTS", "scale tiene que ser positivo.")
+    if not MEDIDA_MINIMA <= scale <= 1 / MEDIDA_MINIMA:
+        raise error("INVALID_ARGUMENTS", f"scale tiene que estar entre {MEDIDA_MINIMA:g} y {1 / MEDIDA_MINIMA:,.0f} "
+                    f"(llegó {scale:g}): fuera de eso las cotas quedan en cero o más allá de 1 km.".replace(",", "."))
     avisos = []
 
     def cambiar(b):
@@ -807,6 +808,7 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
             b.escalar(ids, (cx, cy), scale)
         if angle or dx or dy:
             b.transformar(ids, dx=dx, dy=dy, angulo=angle, centro=(cx, cy))
+        _exigir_tamano(b)
     r = _dibujar(sesion, sketch, cambiar)
     for a in avisos:
         sesion.avisar(a)

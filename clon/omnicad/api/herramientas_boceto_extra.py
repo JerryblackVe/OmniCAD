@@ -2,7 +2,9 @@
 import math
 
 from ..restricciones import ErrorBoceto
-from ..restricciones.boceto import Arco, Circulo, cambiar_radio, mas_cercano, puntos_espiral
+from ..restricciones.boceto import (
+    MEDIDA_MAXIMA, MEDIDA_MINIMA, Arco, Circulo, cambiar_radio, mas_cercano, puntos_espiral,
+)
 from .errores import error
 from .herramientas_boceto import (
     _curva, _dibujar, _exigir_finitos, _exigir_sin_conflicto, _xy, boceto_activo,
@@ -64,11 +66,12 @@ def set_circle_radius(sesion, sketch: str, curve: int, radius: float):
     """
     sketch: id o nombre del boceto.
     curve: id del círculo o arco (get_sketch).
-    radius: radio nuevo en mm (positivo).
+    radius: radio nuevo en mm, entre 0,000001 y 1.000.000 (1 km).
     """
     _exigir_finitos(locals())
-    if radius <= 1e-9:
-        raise error("INVALID_GEOMETRY", "El radio tiene que ser positivo.")
+    if not MEDIDA_MINIMA <= radius <= MEDIDA_MAXIMA:
+        raise error("INVALID_GEOMETRY", f"El radio tiene que medir entre {MEDIDA_MINIMA:g} mm y "
+                    f"{MEDIDA_MAXIMA:,.0f} mm (1 km); llegó {radius:g}.".replace(",", "."))
     op, previo = boceto_activo(sesion, sketch, derivados=False)
 
     def modificar(b):
