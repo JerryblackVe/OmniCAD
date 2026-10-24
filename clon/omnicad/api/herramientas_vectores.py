@@ -45,7 +45,9 @@ def _archivo(path, extensiones, que):
 @herramienta("list_fonts", "vectores",
              "Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y "
              "carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de "
-             "la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf.")
+             "la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf. Las de un trazo "
+             "(single_line, nombre terminado en SHX, como en Fusion) van primero: sus letras son líneas abiertas "
+             "para grabar o marcar, no forman perfiles.")
 def list_fonts(sesion, query: str | None = None, limit: int = 100, include_styles: bool = False):
     """
     query: texto a buscar dentro del nombre de la familia (sin distinguir mayúsculas); vacío = todas.
@@ -60,11 +62,12 @@ def list_fonts(sesion, query: str | None = None, limit: int = 100, include_style
     for r in todas:
         if not q or q in r["familia"].casefold():
             por_familia.setdefault(r["familia"], []).append(r)
-    nombres = sorted(por_familia, key=str.casefold)
+    nombres = sorted(por_familia, key=lambda n: (not por_familia[n][0].get("una_linea", False), n.casefold()))
     salida = []
     for n in nombres[:int(limit)]:
         regs = por_familia[n]
-        e = {"name": n, "styles_count": len(regs), "variable": any("wght" in r["ejes"] for r in regs)}
+        e = {"name": n, "styles_count": len(regs), "variable": any("wght" in r["ejes"] for r in regs),
+             "single_line": any(r.get("una_linea", False) for r in regs)}
         if include_styles:
             e["styles"] = [{"style": r["estilo"], "weight": r["peso"], "italic": r["cursiva"], "file": r["ruta"]}
                            for r in sorted(regs, key=lambda r: (r["peso"], r["cursiva"]))]
@@ -163,6 +166,39 @@ def _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip
     return op
 
 
+def _altura(sesion, height):
+    """(mm, expresión o None) de la altura del texto: un número, o una expresión con parámetros que queda ligada
+    (el «Text height» de Fusion)."""
+    if not isinstance(height, str):
+        return float(height), None
+    try:
+        expresion, valor = _valor_expr(sesion, height)
+    except ErrorExpresion as e:
+        raise error("INVALID_ARGUMENTS", f"height: {e}") from e
+    try:
+        float(expresion)
+    except ValueError:
+        return valor, expresion
+    return valor, None
+
+
+def _avisos_texto(sesion, texto, font, bold, italic):
+    """Avisa si un {parámetro} del texto no se puede calcular (se dibuja tal cual) o si a la fuente le faltan
+    glifos (se dibujaría el cuadrito vacío .notdef)."""
+    if "{" in texto:
+        try:
+            texto = texto_con_valores(texto, sesion.doc.parametros.valores())
+        except ErrorExpresion as e:
+            sesion.avisar(f"El texto «{texto}» no se puede calcular ({e}): se dibuja tal cual.")
+    try:
+        faltan = fuentes.glifos_faltantes(texto, font, bold, italic)
+    except fuentes.ErrorFuente:
+        return
+    if faltan:
+        sesion.avisar(f"La fuente «{font}» no tiene glifo para {' '.join(faltan)}: se dibuja un cuadrito vacío "
+                      "(.notdef). Probá otra fuente (list_fonts).")
+
+
 def _verificar_fuente(font, bold, italic):
     if fuentes.buscar_fuente(font, bold, italic) is None:
         cercanas = [f for f in fuentes.familias() if str(font).casefold() in f.casefold()][:5]
@@ -180,9 +216,12 @@ def _verificar_fuente(font, bold, italic):
              "texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. "
              "Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), "
              "baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough "
-             "(simple o doble, forman perfiles) con decoration_thickness, y no_wrap.",
+             "(simple o doble, forman perfiles) con decoration_thickness, y no_wrap. MARCO (Fusion: el rectángulo "
+             "de Text): frame=true dibuja 4 líneas de construcción desde (x, y) (esquina de abajo a la izquierda) que "
+             "se acotan y restringen; el texto se acomoda adentro según align y anchor. height acepta un parámetro "
+             "(«h_texto») y lo sigue. Dentro de {…} vale 'texto' + parámetro, p. ej. {'Rev ' + rev}.",
              modifica=True)
-def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 5.0, angle: float = 0.0,
+def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5.0, angle: float = 0.0,
              font: str = "Arial", bold: bool = False, italic: bool = False, letter_spacing: float = 0.0,
              line_spacing: float = 1.0, align: Literal["left", "center", "right"] | None = None,
              anchor: Literal["baseline", "top", "middle", "bottom"] = "baseline", box_width: float = 0.0,
@@ -193,12 +232,13 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
              case: Literal["none", "upper", "lower", "title", "small_caps"] = "none",
              underline: Literal["none", "single", "double"] = "none",
              strikethrough: Literal["none", "single", "double"] = "none", decoration_thickness: float = 0.0,
-             no_wrap: bool = False, kerning_pairs: list[list[float]] | None = None, sketch: str | None = None):
+             no_wrap: bool = False, kerning_pairs: list[list[float]] | None = None, frame: bool = False,
+             frame_height: float = 0.0, sketch: str | None = None):
     """
-    text: el texto; '\\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo.
+    text: el texto; '\\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo; {'Rev ' + rev} junta texto y valores.
     x: x del ancla (mm).
     y: y del ancla (mm).
-    height: tamaño de la fuente en mm (positivo).
+    height: tamaño de la fuente en mm (positivo), o una expresión con parámetros que queda ligada.
     angle: giro del texto en grados alrededor del ancla (antihorario).
     font: familia (Arial, Segoe UI…) o ruta a un archivo de fuente.
     bold: negrita (el peso más cercano a 700 de la familia).
@@ -226,11 +266,16 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
     decoration_thickness: grosor en mm de esas barras (0 = el de la fuente).
     no_wrap: true hace que box_width no parta las líneas en palabras.
     kerning_pairs: kerning a mano entre letras: lista de [posición, mm]; la posición i es el hueco entre la letra i-1 y la i (1 = entre la 1.ª y la 2.ª); mm positivo separa, negativo junta.
+    frame: true dibuja el marco del texto (4 líneas de construcción acotables); no va con path_entity.
+    frame_height: alto del marco en mm; 0 = el del texto. El ancho es box_width (0 = el del texto).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
-    _exigir_finitos({"x": x, "y": y, "height": height, "angle": angle})
+    _exigir_finitos({"x": x, "y": y, "height": height, "angle": angle, "frame_height": frame_height})
     texto = str(text).replace("\\n", "\n")
     _verificar_fuente(font, bold, italic)
+    if frame and path_entity:
+        raise error("INVALID_ARGUMENTS", "frame no va con path_entity: el texto en curva no tiene marco.")
+    altura, altura_expr = _altura(sesion, height)
     if align is None:
         align = "center" if path_entity else "left"
     op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
@@ -240,8 +285,18 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
         op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path)
         if underline != "none" or strikethrough != "none":
             sesion.avisar("El subrayado y el tachado no se dibujan en un texto en curva.")
-    return _dibujar(sesion, sketch, lambda b: b.agregar_texto((x, y), texto, altura=height, angulo=angle,
-                                                              fuente=font, negrita=bold, cursiva=italic, **op))
+    _avisos_texto(sesion, texto, font, bold, italic)
+
+    def crear(b):
+        tid = b.agregar_texto((x, y), texto, altura=altura, angulo=angle, fuente=font, negrita=bold, cursiva=italic,
+                              altura_expr=altura_expr, **op)
+        if frame:
+            pts = [q for p in b.primitivas(tid) for q in ((p[2], p[3]) if p[0] == "linea" else p[2])] or [(0, 0)]
+            ancho = max(q[0] for q in pts) - min(q[0] for q in pts)
+            alto = max(q[1] for q in pts) - min(q[1] for q in pts)
+            b.agregar_marco_texto(tid, box_width if box_width > 0 else ancho or altura,
+                                  frame_height if frame_height > 0 else alto or altura)
+    return _dibujar(sesion, sketch, crear)
 
 
 @herramienta("edit_text", "vectores",
@@ -249,7 +304,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: float = 
              "Los perfiles de las letras se recalculan; lo que dependa de ellos (extrusiones) sigue al texto.",
              modifica=True)
 def edit_text(sesion, entity: int, text: str | None = None, x: float | None = None, y: float | None = None,
-              height: float | None = None, angle: float | None = None, font: str | None = None,
+              height: Expr | None = None, angle: float | None = None, font: str | None = None,
               bold: bool | None = None, italic: bool | None = None, letter_spacing: float | None = None,
               line_spacing: float | None = None, align: Literal["left", "center", "right"] | None = None,
               anchor: Literal["baseline", "top", "middle", "bottom"] | None = None, box_width: float | None = None,
@@ -262,14 +317,15 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
               underline: Literal["none", "single", "double"] | None = None,
               strikethrough: Literal["none", "single", "double"] | None = None,
               decoration_thickness: float | None = None, no_wrap: bool | None = None,
-              kerning_pairs: list[list[float]] | None = None, sketch: str | None = None):
+              kerning_pairs: list[list[float]] | None = None, pivot: list[float] | None = None,
+              sketch: str | None = None):
     """
     entity: id de la curva de texto (get_sketch).
     text: texto nuevo ('\\n' separa líneas; {parámetro} muestra su valor).
     x: x nueva del ancla (mm).
     y: y nueva del ancla (mm).
-    height: tamaño nuevo de la fuente en mm.
-    angle: giro nuevo en grados.
+    height: tamaño nuevo de la fuente en mm, o una expresión con parámetros que queda ligada.
+    angle: giro nuevo en grados (el texto y su marco giran alrededor de pivot).
     font: familia o ruta de la fuente nueva.
     bold: negrita.
     italic: cursiva.
@@ -296,9 +352,14 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     decoration_thickness: grosor en mm de las barras (0 = el de la fuente).
     no_wrap: true hace que box_width no parta las líneas.
     kerning_pairs: kerning a mano entre letras: lista de [posición, mm] (reemplaza la anterior; [] la borra).
+    pivot: [x, y] en mm del punto alrededor del cual gira con angle; vacío = el ancla del texto (Fusion: el punto del marco elegido como pivote).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
-    _exigir_finitos({k: v for k, v in (("x", x), ("y", y), ("height", height), ("angle", angle)) if v is not None})
+    _exigir_finitos({k: v for k, v in (("x", x), ("y", y), ("height", height), ("angle", angle), ("pivot", pivot))
+                     if v is not None})
+    if pivot is not None and len(pivot) != 2:
+        raise error("INVALID_ARGUMENTS", "pivot es [x, y] en mm.")
+    altura, altura_expr = (None, None) if height is None else _altura(sesion, height)
     op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
                          scale_x, scale_y, baseline_shift, case, underline, strikethrough, decoration_thickness,
                          no_wrap, kerning_pairs)
@@ -307,17 +368,20 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     def cambiar(b):
         t = _texto_de(b, entity)
         nuevo_texto = t.texto if text is None else str(text).replace("\\n", "\n")
-        validar_texto_boceto(nuevo_texto, height)
+        validar_texto_boceto(nuevo_texto, altura)
         _f, _b, _i = (t.fuente if font is None else font), (t.negrita if bold is None else bold), \
             (t.cursiva if italic is None else italic)
         _verificar_fuente(_f, _b, _i)
+        _avisos_texto(sesion, nuevo_texto, _f, _b, _i)
         _validar_opciones_texto(op)
         if op.get("camino") is not None:
             b._validar_camino(op["camino"])
         t.texto, t.fuente, t.negrita, t.cursiva = nuevo_texto, _f, _b, _i
-        if height is not None:
-            t.altura = float(height)
-        if angle is not None:
+        if altura is not None:
+            t.altura, t.altura_expr = altura, altura_expr
+        if angle is not None and (pivot is not None or t.marco):
+            b.girar_texto(entity, float(angle), pivot)
+        elif angle is not None:
             t.angulo = float(angle)
         for k, v in op.items():
             if k in ("espaciado", "interlineado", "ancho_caja", "camino_pos", "camino_desfase", "inclinacion",
@@ -328,11 +392,15 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
             elif k == "ajustes_kerning":
                 v = [[int(i), float(x)] for i, x in v]
             setattr(t, k, v)
-        if x is not None or y is not None:
+        if (x is not None or y is not None) and t.marco:     # el marco entero se corre con su esquina
+            px, py = b.coords(t.punto)
+            b.transformar([entity] + b._lineas_auxiliares(t), (px if x is None else x) - px,
+                          (py if y is None else y) - py)
+        elif x is not None or y is not None:
             px, py = b.coords(t.punto)
             b.mover_punto(t.punto, px if x is None else x, py if y is None else y) \
                 if hasattr(b, "mover_punto") else _mover(b, t.punto, px if x is None else x, py if y is None else y)
-    return _dibujar(sesion, sketch, cambiar)
+    return _dibujar(sesion, sketch, cambiar, desde_solver=True)
 
 
 def _mover(b, pid, x, y):

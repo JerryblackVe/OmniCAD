@@ -103,6 +103,9 @@ HERRAMIENTAS = {
                    "del boceto."),
     "incluir_3d": ("Incluir geometría 3D", "Clic en aristas o vértices del modelo para incluirlos en el boceto "
                    "(el boceto es plano: se llevan al plano)."),
+    "perfil_giratorio": ("Perfil giratorio", "Clic en aristas, caras o cuerpos del modelo: se giran alrededor del "
+                         "eje de la paleta y su perfil queda en el boceto. Con eje «Arista», el primer clic elige "
+                         "una arista recta como eje."),
     "cota": ("Cota de boceto", "Clic en una línea, círculo o arco (o en dos entidades) y clic para ubicar; "
              "escribí el valor o una expresión y Enter. Mayús + doble clic en una cota: de referencia ↔ driving."),
     "empalme": ("Empalme", "Clic en dos curvas cerca de la esquina; escribí el radio y Enter."),
@@ -149,7 +152,8 @@ PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme"
          "partir": (1, None), "desglosar_texto": (1, ("texto",))}
 SELECCION = ("simetria", "patron_rectangular", "patron_circular", "escala", "mover")
 SPLINES = ("spline_ajuste", "spline_control")
-PROYECCION = ("proyectar", "intersecar", "incluir_3d")
+PROYECCION = ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio")
+CURVA_TEXTO = ("camino_lado", "camino_desfase", "camino_ajustar")      # opciones del texto sobre una curva
 MODIFICAN = tuple(PICKS) + SELECCION + PROYECCION       # no aplican el tipo de línea a lo que crean
 PORTAPAPELES = {}         # Ctrl+C / Ctrl+V entre bocetos: {"boceto": copia del origen, "ids": [...]}
 VIOLETA = QColor(170, 90, 230)
@@ -459,11 +463,17 @@ class Lienzo(QWidget):
         # Opciones de la paleta (Opciones de función de Fusion) para las herramientas nuevas.
         self.opciones = {"grado_spline": 3, "continuidad": "G1", "patron_distancia": "extension",
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
+                         "direccion_desfase": "un", "vinculo_proyeccion": True, "eje_giro": "Z",
+                         "tolerancia_giro": 0.1, "invertir_giro": False,
                          "negrita": False, "cursiva": False,
                          "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq",
+                         "camino_desfase": 0.0, "camino_ajustar": False,
                          "altura_texto": 5.0, "espaciado": 0.0, "interlineado": 1.0,
                          "voltear_h": False, "voltear_v": False,
                          **{k: Texto._PREDETERMINADOS[k] for k in Texto.TIPOGRAFIA}}
+        self.perdidas = []                         # ids de proyecciones perdidas en el último cálculo (los pone el modo)
+        self._revincular = None                    # proyección perdida que se re-vincula con el próximo clic
+        self._eje_giro = None                      # (eje, referencia) de la arista elegida para el perfil giratorio
         self._sel_texto = []                       # cuadriláteros de lo seleccionado en el texto que se escribe
         self._arrastre_texto = False               # se está seleccionando texto arrastrando el ratón
         self._paleta_texto = False                 # la paleta muestra las opciones del texto que se edita
@@ -844,6 +854,7 @@ class Lienzo(QWidget):
         self.fase = None
         self._previa_recorte = None
         self._esperando_ubicacion = False
+        self._revincular = self._eje_giro = None
         self._cerrar_entrada()
         self._reiniciar_vivo()
         nombre, ayuda = HERRAMIENTAS.get(h, (NOMBRES_RESTRICCION.get(h, h), ""))
@@ -1202,10 +1213,8 @@ class Lienzo(QWidget):
                     return                              # falta la 2.ª esquina del cuadro
             en_curva, caja, altura_ini, rect = {}, {}, self.opciones["altura_texto"], None
             if camino is not None:
-                o = self.opciones
                 pos = fraccion_en_camino(self.b.primitivas(camino)[0], xy)
-                en_curva = {"camino": camino, "camino_lado": o.get("camino_lado", "izq"), "camino_pos": pos,
-                            "alineacion": "centro"}
+                en_curva = {"camino": camino, "camino_pos": pos, "alineacion": "centro"}
             elif len(c) == 2:
                 fin_xy = c[1][1]
                 x0, x1 = sorted((xy[0], fin_xy[0]))
@@ -1222,6 +1231,8 @@ class Lienzo(QWidget):
                 o = self.opciones
                 extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"], "voltear_h": o["voltear_h"],
                          "voltear_v": o["voltear_v"]} | en_curva | caja | {k: o[k] for k in Texto.TIPOGRAFIA}
+                if en_curva:
+                    extra |= {k: o[k] for k in CURVA_TEXTO}
                 ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
                     pid if pid is not None else xy, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
                     o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
@@ -1423,15 +1434,28 @@ class Lienzo(QWidget):
             cadena, _ = self.b.cadena(cid)
             self.seleccion = [k for k, _ in cadena]
 
+            modo = self.opciones["direccion_desfase"]          # un lado, dos lados o simétrico (SKT-OFFSET)
+
             def aceptar(v):
                 d = self.evaluar(v[0])
                 lado = self.cursor if self.cursor is not None else xy
-                ok = self._aplicar_y_limpiar(lambda: self.b.desfase(cid, abs(d), lado if d >= 0 else
-                                                                    self._lado_opuesto(cid, lado), v[0].lstrip("-")))
+                lado = lado if d >= 0 else self._lado_opuesto(cid, lado)
+                pasos = [(abs(d), v[0].lstrip("-"), False)]
+                if modo != "un":                               # el 2.º lado: positivo = al contrario del primero
+                    texto = v[1] if modo == "dos" else v[0]
+                    d2 = self.evaluar(texto)
+                    pasos.append((abs(d2), texto.lstrip("-"), modo == "simetrico" or d2 >= 0))
+
+                def desfasar():
+                    for dist, expresion, invertir in pasos:
+                        self.b.desfase(cid, dist, lado, expresion, invertir=invertir)
+                ok = self._aplicar_y_limpiar(desfasar)
                 if ok:
                     self.seleccion = []
                 return ok
-            self._abrir_entrada(["Desfase"], [formato.numero(self._radio_sugerido(picks))], pos, aceptar)
+            sugerido = formato.numero(self._radio_sugerido(picks))
+            self._abrir_entrada(["Desfase", "Desfase 2"] if modo == "dos" else ["Desfase"],
+                                [sugerido] * (2 if modo == "dos" else 1), pos, aceptar)
         if listo:
             self.picks, self.picks_xy = [], []
         self.update()
@@ -1469,6 +1493,34 @@ class Lienzo(QWidget):
             self.mensaje.emit("Eso no deja nada sobre el plano del boceto.")
             return False
         origen = {"modo": "intersect" if modo == "intersecar" else "project", "refs": [ref]} if ref else None
+        if not self.opciones["vinculo_proyeccion"]:          # Projection Link apagado: queda congelada
+            origen = None
+        return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos, self.construccion, origen))
+
+    def perfil_giratorio_forma(self, forma, ref=None):
+        """Perfil giratorio (Fusion: Proyectar › Spun Profile) de una forma OCC alrededor del eje de la paleta
+        (X, Y o Z del origen, o la arista elegida), con la tolerancia, el lado y el vínculo de la paleta."""
+        from ..nucleo import geometria as geo
+        from ..nucleo.perfiles import proyectar_giro_forma
+        from ..timeline import entidades as ent
+        o = self.opciones
+        if o["eje_giro"] == "arista" and self._eje_giro is not None:
+            eje, ref_eje = self._eje_giro
+        else:
+            ref_eje = {"tipo": "eje", "id": o["eje_giro"]}
+            eje = ent.como_eje(ent.resolver(ref_eje, None))
+        try:
+            prims, puntos = proyectar_giro_forma(forma, self.plano, eje, o["tolerancia_giro"], o["invertir_giro"])
+        except geo.ErrorGeometria as e:
+            self.mensaje.emit(str(e))
+            return False
+        if not prims and not puntos:
+            self.mensaje.emit("Eso no deja ningún perfil sobre el plano del boceto.")
+            return False
+        origen = None
+        if ref and o["vinculo_proyeccion"]:
+            origen = {"modo": "giro", "refs": [ref], "eje": ref_eje, "tolerancia": o["tolerancia_giro"],
+                      "invertir": bool(o["invertir_giro"])}
         return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos, self.construccion, origen))
 
     def _clic_proyectar(self, pos):
@@ -1477,19 +1529,131 @@ class Lienzo(QWidget):
             self.mensaje.emit("La vista 3D todavía no permite elegir aristas, caras o cuerpos.")
             return
         h = self.herramienta
-        if h == "incluir_3d":
-            filtros = {"arista", "vertice"}
-        elif self.opciones["filtro_proyectar"] == "cuerpos":
+        if h == "incluir_3d" or (h == "perfil_giratorio" and self.opciones["eje_giro"] == "arista"
+                                 and self._eje_giro is None):
+            filtros = {"arista", "vertice"} if h == "incluir_3d" else {"arista"}
+        elif self.opciones["filtro_proyectar"] == "cuerpos" and h != "perfil_giratorio":
             filtros = {"cuerpo"}
         else:
-            filtros = {"cara", "arista", "vertice"} | ({"cuerpo"} if h == "intersecar" else set())
+            filtros = {"cara", "arista", "vertice"} | ({"cuerpo"} if h in ("intersecar", "perfil_giratorio") else set())
         q = self.visor.mapFromGlobal(self.mapToGlobal(QPoint(int(pos.x()), int(pos.y()))))
         info = elegir(QPointF(q), filtros)
         if not info or info.get("forma") is None:
             self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
             return
-        if self.proyectar_forma(info["forma"], "intersecar" if h == "intersecar" else "proyectar", info.get("ref")):
+        self._usar_entidad(info)
+
+    def _usar_entidad(self, info):
+        """Lo elegido en el modelo (dict de `elegir_entidad`) según la herramienta: re-vincular una proyección
+        perdida, el eje o el perfil giratorio, o proyectar / intersecar."""
+        h, forma, ref = self.herramienta, info["forma"], info.get("ref")
+        if self._revincular is not None:
+            return self._revincular_con(forma, ref)
+        if h == "perfil_giratorio" and self.opciones["eje_giro"] == "arista" and self._eje_giro is None:
+            from ..nucleo import referencias as refs
+            firma = refs.firma_arista(forma) if info.get("tipo", "arista") == "arista" else {}
+            if firma.get("geom") != "linea":
+                self.mensaje.emit("Perfil giratorio: el eje tiene que ser una arista recta.")
+                return False
+            a, b = (np.array(p, float) for p in firma["extremos"])
+            self._eje_giro = ((a, (b - a) / np.linalg.norm(b - a)), ref)
+            self.mensaje.emit("Perfil giratorio: eje elegido. Ahora clic en lo que se gira.")
+            return True
+        if h == "perfil_giratorio":
+            ok = self.perfil_giratorio_forma(forma, ref)
+        else:
+            ok = self.proyectar_forma(forma, "intersecar" if h == "intersecar" else "proyectar", ref)
+        if ok:
             self.mensaje.emit(f"{HERRAMIENTAS[h][0]}: listo ({info.get('tipo', 'geometría')}). Seguí eligiendo o Esc.")
+        return ok
+
+    # ------------------------------------------------------------ vínculo de proyección (BOC-17)
+    def _proyecciones_de(self, ids):
+        """Ids de las proyecciones asociativas que tienen alguna de las entidades `ids`."""
+        ids = set(ids)
+        return [r["id"] for r in self.b.proyecciones if ids & set(r["ids"])]
+
+    def romper_vinculo(self):
+        """Romper vínculo (Fusion: Break Link) de las proyecciones de lo seleccionado."""
+        pids = self._proyecciones_de(self.seleccion)
+        if not pids:
+            self.mensaje.emit("Romper vínculo: seleccioná geometría proyectada con vínculo.")
+            return False
+        return self.tratar_perdidas("break", pids)
+
+    def tratar_perdidas(self, accion, pids):
+        """Manage Lost Projections: "break" rompe el vínculo y "delete" borra la geometría de las proyecciones
+        `pids` (un solo paso de deshacer)."""
+        funcion = self.b.romper_vinculo if accion == "break" else self.b.eliminar_proyeccion
+        ok = self.aplicar_cambio(lambda: [funcion(i) for i in pids], anclar=False)
+        if ok:
+            self.perdidas = [i for i in self.perdidas if i not in pids]
+            self.seleccion = [i for i in self.seleccion if i in self.b.curvas or i in self.b.puntos]
+        return ok
+
+    def revincular(self, pid):
+        """Re-vincular (Manage Lost Projections › Re-Link): el próximo clic en el modelo da la geometría nueva."""
+        modo = next(r["modo"] for r in self.b.proyecciones if r["id"] == pid)
+        self.set_herramienta("intersecar" if modo == "intersect" else "proyectar")
+        self._revincular = pid
+        self.mensaje.emit("Re-vincular: clic en la geometría del modelo que reemplaza a la perdida (misma forma).")
+
+    def _revincular_con(self, forma, ref):
+        from ..nucleo.perfiles import intersecar_forma, proyectar_forma
+        pid = self._revincular
+        modo = next(r["modo"] for r in self.b.proyecciones if r["id"] == pid)
+        prims, puntos = (intersecar_forma if modo == "intersect" else proyectar_forma)(forma, self.plano)
+        if not self.aplicar_cambio(lambda: self.b.revincular(pid, [ref], prims, puntos), anclar=False):
+            return False
+        self.perdidas = [i for i in self.perdidas if i != pid]
+        self._revincular = None
+        self.mensaje.emit("Re-vincular: la proyección sigue ahora a la geometría elegida.")
+        return True
+
+    def administrar_perdidas(self):
+        """Diálogo Manage Lost Projections (lista, re-vincular, romper vínculo, borrar)."""
+        from .dialogos_boceto import DialogoPerdidas
+        if not self.perdidas:
+            self.mensaje.emit("El boceto no tiene proyecciones perdidas.")
+            return
+        DialogoPerdidas(self).exec()
+
+    # ------------------------------------------------------------ desfase y patrón ya hechos (BOC-14, BOC-16)
+    def soltar_desfase(self):
+        """Suelta la asociación de los desfases de lo seleccionado (Fusion: borrar el glifo de desfase)."""
+        curvas = [i for i in self.seleccion if i in self.b.curvas]
+
+        def soltar():
+            hechos = 0
+            for i in curvas:
+                try:
+                    self.b.soltar_desfase(i)
+                    hechos += 1
+                except ErrorBoceto:          # no es desfase, o ya lo soltó otra curva del mismo desfase
+                    pass
+            if not hechos:
+                raise ErrorBoceto("Soltar desfase: seleccioná una curva de un desfase.")
+        return self.aplicar_cambio(soltar, anclar=False)
+
+    def patron_de(self, ids):
+        """Id del patrón que tiene alguna de las entidades `ids` (original o copia), o None."""
+        ids = set(ids)
+        return next((r["id"] for r in self.b.patrones
+                     if ids & set(r["ids"]) or any(ids & set(c) for c in r["copias"].values())), None)
+
+    def editar_patron(self, pid=None):
+        """Edita un patrón ya hecho con su diálogo (cantidades, distancias, direcciones y copias suprimidas). Sin
+        `pid`, el patrón de lo seleccionado."""
+        from .dialogos_boceto import DialogoPatron
+        pid = self.patron_de(self.seleccion) if pid is None else pid
+        if pid is None:
+            self.mensaje.emit("Editar patrón: seleccioná una curva del patrón (o doble clic en su glifo).")
+            return False
+        dialogo = DialogoPatron(self.b, next(r for r in self.b.patrones if r["id"] == pid), self)
+        if dialogo.exec() != QDialog.Accepted:
+            return False
+        cambios = dialogo.cambios()
+        return self.aplicar_cambio(lambda: self.b.editar_patron(pid, **cambios), anclar=False)
 
     # ------------------------------------------------------------ AutoConstrain, tipo de línea, texto
     def auto_restringir(self, **opciones):
@@ -1555,7 +1719,7 @@ class Lienzo(QWidget):
         t = self.b.curvas[tid]
         # la paleta parte de lo que ya tiene el texto: aceptar sin tocar nada no le cambia la fuente ni la alineación
         self.opciones.update(fuente=t.fuente, negrita=t.negrita, cursiva=t.cursiva, alineacion=t.alineacion,
-                             ancla_v=t.ancla_v, camino_lado=t.camino_lado, altura_texto=t.altura,
+                             ancla_v=t.ancla_v, altura_texto=t.altura, **{k: getattr(t, k) for k in CURVA_TEXTO},
                              voltear_h=t.voltear_h, voltear_v=t.voltear_v,
                              espaciado=t.espaciado, interlineado=t.interlineado,
                              **{k: getattr(t, k) for k in Texto.TIPOGRAFIA})
@@ -1576,7 +1740,8 @@ class Lienzo(QWidget):
                 t.espaciado, t.interlineado = espaciado, interlineado
                 t.alineacion, t.ancla_v = self.opciones["alineacion"], self.opciones["ancla_v"]
                 t.voltear_h, t.voltear_v = bool(self.opciones["voltear_h"]), bool(self.opciones["voltear_v"])
-                t.camino_lado = self.opciones.get("camino_lado", t.camino_lado)
+                for k in CURVA_TEXTO:
+                    setattr(t, k, self.opciones[k])
                 for k, tipo in Texto.TIPOGRAFIA.items():
                     setattr(t, k, tipo(self.opciones[k]))
             return self.aplicar_cambio(cambiar)
@@ -1891,12 +2056,15 @@ class Lienzo(QWidget):
             t.espaciado, t.interlineado = esp, inter
             t.alineacion, t.ancla_v = o["alineacion"], o["ancla_v"]
             t.voltear_h, t.voltear_v = bool(o["voltear_h"]), bool(o["voltear_v"])
-            t.camino_lado = o.get("camino_lado", t.camino_lado)
             for k, v in tipografia.items():
                 setattr(t, k, v)
+            for k in CURVA_TEXTO:
+                setattr(t, k, o[k])
             return t
         extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"], "voltear_h": o["voltear_h"],
                  "voltear_v": o["voltear_v"]} | d["extra"]
+        if "camino" in d["extra"]:
+            extra |= {k: o[k] for k in CURVA_TEXTO}
         return Texto(0, d["pos"], texto, o["fuente"], altura, ang, o["negrita"], o["cursiva"], espaciado=esp,
                      interlineado=inter, **extra, **tipografia)
 
@@ -3558,7 +3726,11 @@ class Lienzo(QWidget):
             return
         if e.button() == Qt.LeftButton:
             zona = self._zona_en(e.position())
-            if zona in self.b.cotas and e.modifiers() & Qt.ShiftModifier:
+            glifo = self.b.restricciones.get(zona) if zona not in self.b.cotas else None
+            pid = self.patron_de(glifo.entidades) if glifo is not None and glifo.tipo == "patron" else None
+            if pid is not None:                      # doble clic en el glifo del patrón: editarlo (BOC-16)
+                self.editar_patron(pid)
+            elif zona in self.b.cotas and e.modifiers() & Qt.ShiftModifier:
                 self.alternar_referencia(zona)
             elif zona in self.b.cotas:
                 self.editar_cota(zona, e.position())

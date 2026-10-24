@@ -171,8 +171,91 @@ def catalogo(forzar=False):
             cache_ruta.write_text(json.dumps(nuevo), encoding="utf-8")
         except OSError:
             pass
-    _CATALOGO = salida
-    return salida
+    _CATALOGO = salida + [dict(_TRAZO)]
+    return _CATALOGO
+
+
+# ---------------------------------------------------------------- fuente de un trazo (SHX de Fusion), propia
+# Trazos en una grilla de 100 unidades de fuente: mayúscula de 7 de alto, ancho 4 salvo los que dicen otro.
+# shortcut: solo mayúsculas, números y signos comunes (las minúsculas salen en mayúscula); sumar minúsculas si
+# hace falta grabar texto mixto.
+_TRAZOS = {
+    "A": "0,0 2,7 4,0;0.7,2.5 3.3,2.5", "B": "0,0 0,7 3,7 4,6 4,4.5 3,3.5 0,3.5;3,3.5 4,2.5 4,1 3,0 0,0",
+    "C": "4,6 3,7 1,7 0,6 0,1 1,0 3,0 4,1", "D": "0,0 0,7 2.5,7 4,5.5 4,1.5 2.5,0 0,0",
+    "E": "4,7 0,7 0,0 4,0;0,3.5 3,3.5", "F": "4,7 0,7 0,0;0,3.5 3,3.5",
+    "G": "4,6 3,7 1,7 0,6 0,1 1,0 3,0 4,1 4,3 2.5,3", "H": "0,0 0,7;4,0 4,7;0,3.5 4,3.5",
+    "I": "0,7 2,7;1,7 1,0;0,0 2,0", "J": "1,7 4,7;3,7 3,1 2,0 1,0 0,1 0,2", "K": "0,0 0,7;4,7 0,2.5;1.3,3.8 4,0",
+    "L": "0,7 0,0 4,0", "M": "0,0 0,7 2,3.5 4,7 4,0", "N": "0,0 0,7 4,0 4,7",
+    "O": "1,0 0,1 0,6 1,7 3,7 4,6 4,1 3,0 1,0", "P": "0,0 0,7 3,7 4,6 4,4.5 3,3.5 0,3.5",
+    "Q": "1,0 0,1 0,6 1,7 3,7 4,6 4,1 3,0 1,0;2.5,1.5 4.3,-0.3",
+    "R": "0,0 0,7 3,7 4,6 4,4.5 3,3.5 0,3.5;2,3.5 4,0",
+    "S": "4,6 3,7 1,7 0,6 0,4.5 1,3.5 3,3.5 4,2.5 4,1 3,0 1,0 0,1", "T": "0,7 4,7;2,7 2,0",
+    "U": "0,7 0,1 1,0 3,0 4,1 4,7", "V": "0,7 2,0 4,7", "W": "0,7 1.25,0 2.5,5 3.75,0 5,7", "X": "0,0 4,7;0,7 4,0",
+    "Y": "0,7 2,3.5 4,7;2,3.5 2,0", "Z": "0,7 4,7 0,0 4,0",
+    "0": "1,0 0,1 0,6 1,7 3,7 4,6 4,1 3,0 1,0;0.3,0.7 3.7,6.3", "1": "0,5.5 1.5,7 1.5,0;0,0 3,0",
+    "2": "0,6 1,7 3,7 4,6 4,4.5 0,0 4,0", "3": "0,6 1,7 3,7 4,6 4,4.5 3,3.5 1.5,3.5;3,3.5 4,2.5 4,1 3,0 1,0 0,1",
+    "4": "3,0 3,7 0,2 4,2", "5": "4,7 0,7 0,4 3,4 4,3 4,1 3,0 1,0 0,1",
+    "6": "4,6 3,7 1,7 0,6 0,1 1,0 3,0 4,1 4,3 3,4 0,4", "7": "0,7 4,7 1.5,0",
+    "8": "1,3.5 0,4.5 0,6 1,7 3,7 4,6 4,4.5 3,3.5 1,3.5 0,2.5 0,1 1,0 3,0 4,1 4,2.5 3,3.5",
+    "9": "4,3 1,3 0,4 0,6 1,7 3,7 4,6 4,1 3,0 1,0 0,1",
+    ".": "0,0 0,0.5", ",": "0.3,0.5 0.3,0 0,-1", "-": "0,3.5 3,3.5", "+": "0,3.5 4,3.5;2,1.5 2,5.5", "/": "0,0 4,7",
+    ":": "0,1.5 0,2;0,5 0,5.5", "(": "1.5,7.5 0.5,6 0,3.5 0.5,1 1.5,-0.5", ")": "0,7.5 1,6 1.5,3.5 1,1 0,-0.5",
+    "=": "0,2.5 4,2.5;0,4.5 4,4.5", "_": "0,-1 4,-1", "!": "0,7 0,2;0,0 0,0.5",
+    "?": "0,6 1,7 3,7 4,6 4,4.5 2,3 2,2;2,0 2,0.5", "'": "0,7 0,5.5", '"': "0,7 0,5.5;1.2,7 1.2,5.5",
+    "#": "1,0 1.5,7;2.5,0 3,7;0,2.5 4,2.5;0,4.5 4,4.5", "*": "2,6 2,2;0.3,5 3.7,3;0.3,3 3.7,5",
+    "<": "4,6 0,3.5 4,1", ">": "0,6 4,3.5 0,1", "%": "0,0 4,7;0.5,6.5 0.5,5.5;3.5,1.5 3.5,0.5",
+    "°": "0.5,7 1,6.5 0.5,6 0,6.5 0.5,7", ".notdef": "0,0 4,0 4,7 0,7 0,0",
+}
+_MARCAS = {"́": "1.5,7.8 2.5,8.8", "̀": "1.5,8.8 2.5,7.8", "̃": "0.8,8 1.5,8.5 2.5,8 3.2,8.5",
+           "̈": "1,8 1,8.4;3,8 3,8.4"}
+_TRAZO = {"familia": "OmniCAD Trazo SHX", "estilo": "Regular", "completo": "OmniCAD Trazo SHX", "ruta": "omnicad:trazo",
+          "indice": 0, "peso": 400, "cursiva": False, "ejes": {}, "una_linea": True}
+
+
+class _GlifoTrazo:
+    def __init__(self, trazos):
+        self.trazos = [[tuple(100 * float(v) for v in q.split(",")) for q in t.split()]
+                       for t in trazos.split(";") if t.strip()]
+
+    def draw(self, lapiz):
+        for t in self.trazos:
+            lapiz.moveTo(t[0])
+            for q in t[1:]:
+                lapiz.lineTo(q)
+            lapiz.endPath()
+
+
+class _OrdenTrazo:
+    @staticmethod
+    def getGlyphOrder():
+        return [".notdef"]
+
+
+@lru_cache(maxsize=1)
+def _datos_trazo():
+    """Los datos de `_datos` para la fuente de un trazo (las letras son líneas abiertas: no forman perfiles,
+    como las SHX de Fusion; sirven para grabar o marcar con una herramienta que sigue la línea)."""
+    import unicodedata
+    gs = {n: _GlifoTrazo(t) for n, t in _TRAZOS.items()}
+    cmap = {ord(n): n for n in _TRAZOS if len(n) == 1}
+    cmap |= {ord(n.lower()): n for n in _TRAZOS if len(n) == 1 and n.lower() != n}
+    for cod in range(0xC0, 0x180):                     # acentos del latín: la letra base más su marca
+        base, *marcas = unicodedata.normalize("NFD", chr(cod))
+        if base.upper() in gs and marcas and all(m in _MARCAS for m in marcas):
+            nombre = chr(cod).upper()
+            gs[nombre] = _GlifoTrazo(";".join([_TRAZOS[base.upper()]] + [_MARCAS[m] for m in marcas]))
+            cmap[cod] = nombre
+    hmtx = {n: (max(q[0] for t in g.trazos for q in t) + 150.0, 0) for n, g in gs.items()}
+    gs[" "], hmtx[" "], cmap[32] = _GlifoTrazo(""), (300.0, 0), " "
+    return {"f": _OrdenTrazo(), "upem": 1000.0, "cmap": cmap, "hmtx": hmtx, "gs": gs, "asc": 800.0, "desc": -200.0,
+            "gap": 0.0, "kern": lambda _a, _b: 0, "sub_gro": 50.0, "sub_pos": -100.0, "tac_gro": 50.0,
+            "tac_pos": 350.0}
+
+
+def glifos_faltantes(texto, fuente="Arial", negrita=False, cursiva=False):
+    """Caracteres del texto que la fuente no tiene (se dibujarían con el cuadrito `.notdef`), sin repetir."""
+    cmap = _fuente_datos(fuente, negrita, cursiva)["cmap"]
+    return list(dict.fromkeys(ch for ch in str(texto) if not ch.isspace() and ord(ch) not in cmap))
 
 
 def agregar_carpeta(ruta):
@@ -409,7 +492,9 @@ def _fuente_datos(fuente, negrita, cursiva):
     reg = buscar_fuente(fuente, negrita, cursiva)
     if reg is None:
         raise ErrorFuente(f"No se encontró la fuente «{fuente}».")
-    peso = (700 if negrita else 400) if "wght" in reg["ejes"] else 0
+    if reg["ruta"] == _TRAZO["ruta"]:
+        return _datos_trazo()
+    peso =(700 if negrita else 400) if "wght" in reg["ejes"] else 0
     return _datos(reg["ruta"], reg["indice"], peso)
 
 

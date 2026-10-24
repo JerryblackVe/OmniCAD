@@ -124,6 +124,9 @@ HERRAMIENTAS = {
     "sk_circulo_2p": "draw_circle", "sk_circulo_3p": "draw_circle", "sk_poligono_arista": "create_polygon",
     "sk_espiral": "draw_spiral", "sk_r_poligono": "add_constraint", "sk_terminar": "sketch_view", "sk_terminar_auto": "sketch_view",
     "sk_intersecar": "project_to_sketch", "sk_incluir_3d": "project_to_sketch", "sk_arco_tangente": "draw_arc",
+    "sk_perfil_giratorio": "project_spun_profile", "sk_romper_vinculo": "break_projection_link",
+    "sk_proyecciones_perdidas": "manage_lost_projections", "sk_editar_patron": "edit_sketch_pattern",
+    "sk_soltar_desfase": "release_offset",
     "sk_alargar": "extend_sketch_curve", "sk_partir": "split_sketch_curve", "capturar": "capture_viewport",
 }
 

@@ -59,6 +59,7 @@ ACCIONES_BOCETO = [
     ("sk_proyectar", "Proyectar", "proyectar", "P", "proyectar"),
     ("sk_intersecar", "Intersecar", "intersecar", None, "proyectar"),
     ("sk_incluir_3d", "Incluir geometría 3D", "incluir_3d", None, "proyectar"),
+    ("sk_perfil_giratorio", "Perfil giratorio", "perfil_giratorio", None, "proyectar"),
     ("sk_cota", "Cota de boceto", "cota", "D", "cota"),
     ("sk_empalme", "Empalme", "empalme", None, "empalme"),
     ("sk_chaflan", "Chaflán de distancias iguales", "chaflan", None, "chaflan_boceto"),
@@ -84,7 +85,8 @@ TIPOS_POR_FAMILIA = {
     "spline": [("spline_ajuste", "Ajuste de puntos"), ("spline_control", "Puntos de control")],
     "chaflan": [("chaflan", "Distancias iguales"), ("chaflan_dist_angulo", "Distancia y ángulo"),
                 ("chaflan_dos_dist", "Dos distancias")],
-    "proyectar": [("proyectar", "Proyectar"), ("intersecar", "Intersecar"), ("incluir_3d", "Incluir geometría 3D")],
+    "proyectar": [("proyectar", "Proyectar"), ("intersecar", "Intersecar"), ("incluir_3d", "Incluir geometría 3D"),
+                  ("perfil_giratorio", "Perfil giratorio")],
 }
 # Opciones de función (Feature Options de Fusion): herramienta → [(clave, etiqueta, [(valor, texto), ...])]
 OPCIONES_HERRAMIENTA = {
@@ -93,7 +95,16 @@ OPCIONES_HERRAMIENTA = {
     "patron_rectangular": [("patron_distancia", "Distancia", [("extension", "Extensión"), ("espaciado", "Espaciado")])],
     "proyectar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
     "intersecar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
+    "desfase": [("direccion_desfase", "Dirección", [("un", "Un lado"), ("dos", "Dos lados"), ("simetrico", "Simétrico")])],
+    "perfil_giratorio": [("eje_giro", "Eje", [("X", "Eje X"), ("Y", "Eje Y"), ("Z", "Eje Z"),
+                                              ("arista", "Arista recta (primer clic)")])],
 }
+# Opciones numéricas: herramienta → [(clave, etiqueta, mínimo, máximo, paso, sufijo)]
+NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.001, 10.0, 0.05, " mm")]}
+# Casillas: herramienta → [(clave, etiqueta)]
+_VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
+CASILLAS_HERRAMIENTA = {"mover": [("copiar", "Copiar")], "proyectar": [_VINCULO], "intersecar": [_VINCULO],
+                        "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO]}
 # Opciones del texto: viven en el panel «Carácter» (PanelCaracter), no en la paleta de boceto
 ALINEACIONES_TEXTO = [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]
 ANCLAJES_TEXTO = [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"), ("abajo", "Abajo")]
@@ -258,11 +269,16 @@ class PaletaBoceto(QFrame):
             combo.setCurrentIndex(max(0, combo.findData(opciones.get(clave))))
             combo.currentIndexChanged.connect(lambda _i, cb=combo, k=clave: self.ajuste.emit(k, cb.currentData()))
             self.form_contexto.addRow(etiqueta, combo)
-        if h == "mover":
+        for clave, etiqueta, minimo, maximo, paso, sufijo in NUMEROS_HERRAMIENTA.get(h, []):
+            sp = QDoubleSpinBox(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
+            sp.setValue(float(opciones.get(clave, minimo)))
+            sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, float(x)))
+            self.form_contexto.addRow(etiqueta, sp)
+        for clave, etiqueta in CASILLAS_HERRAMIENTA.get(h, []):
             ch = QCheckBox()
-            ch.setChecked(bool(opciones.get("copiar")))
-            ch.toggled.connect(lambda valor: self.ajuste.emit("copiar", valor))
-            self.form_contexto.addRow("Copiar", ch)
+            ch.setChecked(bool(opciones.get(clave)))
+            ch.toggled.connect(lambda valor, k=clave: self.ajuste.emit(k, valor))
+            self.form_contexto.addRow(etiqueta, ch)
         self.contexto.setVisible(self.form_contexto.rowCount() > 0)
         self.ajustar()
 
@@ -439,11 +455,19 @@ class PanelCaracter(QFrame):
                                    "de texto cae sobre el punto donde se hizo clic.")
         self.camino_lado = self._combo(LADOS_TEXTO, "camino_lado", "<b>Lado en curva</b><br>De qué lado de la "
                                        "curva van las letras (solo para texto sobre una curva).")
+        self.camino_desfase = self._spin("camino_desfase", -10000.0, 10000.0, 0.5, " mm", "<b>Desfase en curva</b><br>"
+                                         "Separa (+) o acerca (−) las letras de la curva (solo texto sobre una curva).")
+        self.camino_ajustar = QCheckBox("Ajustar a la curva")
+        self.camino_ajustar.setToolTip("<b>Ajustar a la curva</b><br>Reparte el texto en todo el largo de la curva "
+                                       "(solo texto sobre una curva).")
+        self.camino_ajustar.toggled.connect(lambda x: self.cambio.emit("camino_ajustar", bool(x)))
         f = QFormLayout()
         f.setContentsMargins(10, 0, 0, 0)
         f.addRow("Alineación", self.alineacion)
         f.addRow("Anclaje", self.ancla_v)
         f.addRow("Lado en curva", self.camino_lado)
+        f.addRow("Desfase en curva", self.camino_desfase)
+        f.addRow("", self.camino_ajustar)
         self._cuerpo_de["Alineación y curva"].setLayout(f)
         # ---- Decoraciones
         self._seccion(c, "Decoraciones", False)
@@ -629,8 +653,8 @@ class PanelCaracter(QFrame):
     def _widgets(self):
         return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.b_voltear_h, self.b_voltear_v, self.subrayado, self.tachado, self.grosor,
                 self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
-                self.alineacion, self.ancla_v, self.camino_lado, self.altura, self.interletraje, self.interlineado,
-                self.par)
+                self.alineacion, self.ancla_v, self.camino_lado, self.camino_desfase, self.camino_ajustar, self.altura,
+                self.interletraje, self.interlineado, self.par)
 
     def cargar(self, o):
         """Muestra las opciones `o` (las del Lienzo) sin emitir cambios."""
@@ -649,7 +673,9 @@ class PanelCaracter(QFrame):
                                        (self.alineacion, "alineacion", "izq"), (self.ancla_v, "ancla_v", "base"),
                                        (self.camino_lado, "camino_lado", "izq")):
                 cb.setCurrentIndex(max(0, cb.findData(o.get(clave, defecto))))
+            self.camino_ajustar.setChecked(bool(o.get("camino_ajustar")))
             for sp, clave, defecto in ((self.grosor, "grosor_decoracion", 0.0), (self.base, "desfase_base", 0.0),
+                                       (self.camino_desfase, "camino_desfase", 0.0),
                                        (self.inclinacion, "inclinacion", 0.0), (self.escala_h, "escala_h", 100.0),
                                        (self.escala_v, "escala_v", 100.0), (self.altura, "altura_texto", 5.0),
                                        (self.interletraje, "espaciado", 0.0), (self.interlineado, "interlineado", 1.0)):
@@ -707,7 +733,19 @@ class ModoBoceto(QObject):
                  "Restringe el boceto automáticamente y lo termina (Finish with AutoConstrain). Si no se puede "
                  "(vacío o más de 250 entidades), lo termina igual."),
                 ("sk_conflictos", "Qué choca", "F5", "boceto_conflicto", self._conflictos,
-                 "Lista las restricciones y cotas en conflicto (en rojo en el boceto): quitando una se resuelve.")):
+                 "Lista las restricciones y cotas en conflicto (en rojo en el boceto): quitando una se resuelve."),
+                ("sk_soltar_desfase", "Soltar desfase", None, "desfase", lambda: self._en_lienzo("soltar_desfase"),
+                 "Suelta la asociación del desfase de lo seleccionado: la copia deja de seguir a la original."),
+                ("sk_editar_patron", "Editar patrón", None, "patron_rectangular",
+                 lambda: self._en_lienzo("editar_patron"),
+                 "Edita el patrón de lo seleccionado (también: doble clic en su glifo): cantidades, distancias, "
+                 "direcciones y copias suprimidas."),
+                ("sk_romper_vinculo", "Romper vínculo", None, "proyectar", lambda: self._en_lienzo("romper_vinculo"),
+                 "Rompe el vínculo de la geometría proyectada seleccionada: queda como geometría normal, editable, "
+                 "y no sigue más al modelo."),
+                ("sk_proyecciones_perdidas", "Administrar proyecciones perdidas", None, "proyectar",
+                 lambda: self._en_lienzo("administrar_perdidas"),
+                 "Proyecciones que ya no coinciden con el modelo: re-vincular, romper vínculo o borrar.")):
             a = QAction(icono(ico), texto, ventana)
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}")
             if atajo:
@@ -730,6 +768,7 @@ class ModoBoceto(QObject):
         area.set_vistas_multiples(False)
         # evaluar se busca en el documento en cada uso: "Cambiar parámetros" puede reemplazar la tabla
         self.lienzo = Lienzo(self.boceto, lambda *a: v.doc.parametros.evaluar(*a), area, visor=visor, plano=plano)
+        self.lienzo.perdidas = list(getattr((datos or {}).get("op"), "perdidas", []))
         self.lienzo.mensaje.connect(lambda t: v.mensaje(t, 7000))
         self.lienzo.cambio.connect(self._cambio)
         self.lienzo.herramienta_cambiada.connect(self._sincronizar_herramienta)
@@ -767,6 +806,9 @@ class ModoBoceto(QObject):
         self.lienzo.setFocus()
         self.herramienta("seleccionar")
         self._cambio()
+        if self.lienzo.perdidas:
+            v.mensaje(f"El boceto tiene {len(self.lienzo.perdidas)} proyección(es) perdida(s): Administrar "
+                      "proyecciones perdidas (Proyectar/Incluir) las re-vincula, rompe o borra.", 9000)
 
     def terminar(self):
         if not self.activo:
@@ -896,6 +938,10 @@ class ModoBoceto(QObject):
     def _conflictos(self):
         if self.activo:
             self.lienzo.mostrar_conflictos()
+
+    def _en_lienzo(self, metodo):
+        if self.activo:
+            getattr(self.lienzo, metodo)()
 
     def _ajuste(self, clave, valor):
         if self.activo:

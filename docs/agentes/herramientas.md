@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-305 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+307 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 43 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 44 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 46 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 69 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -646,6 +646,8 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`trim_sketch_curve`](#trim_sketch_curve) | sí | Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea o un arco hasta la próxima curva; break la parte en los cruces más cercanos. |
 | [`offset_sketch_curves`](#offset_sketch_curves) | sí | Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). |
 | [`release_offset`](#release_offset) | sí | Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): la copia deja de seguir a la original, pero las curvas quedan. |
+| [`edit_sketch_spline`](#edit_sketch_spline) | sí | Edita una spline ya dibujada (Fusion: manijas, Open/Close Spline, Insert Fit/Control Point y Change Spline Degree). |
+| [`get_spline_curvature`](#get_spline_curvature) | no | Peine de curvatura de una curva del boceto (Fusion: Toggle Curvature Display): curvatura con signo en muestras repartidas por el parámetro, con el punto y la punta de cada púa (salen del lado opuesto al centro de curvatura, con largo curvatura × factor). |
 | [`copy_sketch_entities`](#copy_sketch_entities) | sí | Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las restricciones y cotas que quedan enteras dentro de la selección. |
 | [`mirror_sketch`](#mirror_sketch) | sí | Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respecto de una línea del boceto, con restricciones de simetría (si la geometría original cambia, la copia la sigue). |
 | [`sketch_rectangular_pattern`](#sketch_rectangular_pattern) | sí | Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). |
@@ -1016,6 +1018,36 @@ Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): la cop
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call release_offset --doc pieza.omnicad entity=…`
 
+### `edit_sketch_spline`
+
+Edita una spline ya dibujada (Fusion: manijas, Open/Close Spline, Insert Fit/Control Point y Change Spline Degree). Acciones: activate_handle (manija de tangente en un punto de ajuste: una línea de construcción que se puede acotar; con angle, length y curvature), edit_handle, deactivate_handle, open / close (solo la de ajuste), insert_point (punto de ajuste sobre la curva o punto de control sin cambiar la forma, cerca de x, y) y set_degree (3 o 5, solo la de puntos de control). Las manijas van en splines de ajuste abiertas. El peine de curvatura: get_spline_curvature.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entity` (entero; obligatorio): id de la spline (get_sketch).
+  - `action` ("activate_handle" | "edit_handle" | "deactivate_handle" | "open" | "close" | "insert_point" | "set_degree"; obligatorio): qué hacer (ver la descripción de la herramienta).
+  - `point` (entero; opcional, por defecto `null`): id del punto de ajuste de la manija (vertices / points de get_sketch); para las acciones de manija.
+  - `angle` (número; opcional, por defecto `null`): dirección de la tangente en grados (antihoraria desde +x); vacío = la tangente actual.
+  - `length` (número; opcional, por defecto `null`): largo de la manija en mm (más largo = la curva sigue más esa dirección); vacío = el natural.
+  - `curvature` (número; opcional, por defecto `null`): curvatura en ese punto, en 1/mm (1 / radio; positiva gira a la izquierda); vacío = sin cambio (al activar: libre).
+  - `x` (número; opcional, por defecto `null`): x del punto a insertar (insert_point), en mm; se usa el punto de la curva más cercano.
+  - `y` (número; opcional, por defecto `null`): y del punto a insertar (insert_point), en mm.
+  - `degree` (entero; opcional, por defecto `null`): grado nuevo de la spline de puntos de control (3 o 5) para set_degree.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call edit_sketch_spline --doc pieza.omnicad entity=… action=…`
+
+### `get_spline_curvature`
+
+Peine de curvatura de una curva del boceto (Fusion: Toggle Curvature Display): curvatura con signo en muestras repartidas por el parámetro, con el punto y la punta de cada púa (salen del lado opuesto al centro de curvatura, con largo curvatura × factor). No cambia el documento.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `entity` (entero; obligatorio): id de la curva (spline, cónica, arco, círculo, elipse o línea) en get_sketch.
+  - `density` (entero; opcional, por defecto `30`): cuántas púas (2 a 200).
+  - `scale` (número; opcional, por defecto `1.0`): escala del largo de las púas (1 = la más larga mide el 20 % del tamaño de la curva).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call get_spline_curvature --doc pieza.omnicad entity=…`
+
 ### `copy_sketch_entities`
 
 Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las restricciones y cotas que quedan enteras dentro de la selección. Lo pegado es geometría normal y nueva: no queda asociada al original. Para copiar dentro del mismo boceto con vínculo: transform_sketch con copy.
@@ -1352,7 +1384,7 @@ Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.
 
 ### `list_fonts`
 
-Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf.
+Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf. Las de un trazo (single_line, nombre terminado en SHX, como en Fusion) van primero: sus letras son líneas abiertas para grabar o marcar, no forman perfiles.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1372,14 +1404,14 @@ Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesi
 
 ### `add_text`
 
-Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough (simple o doble, forman perfiles) con decoration_thickness, y no_wrap.
+Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough (simple o doble, forman perfiles) con decoration_thickness, y no_wrap. MARCO (Fusion: el rectángulo de Text): frame=true dibuja 4 líneas de construcción desde (x, y) (esquina de abajo a la izquierda) que se acotan y restringen; el texto se acomoda adentro según align y anchor. height acepta un parámetro («h_texto») y lo sigue. Dentro de {…} vale 'texto' + parámetro, p. ej. {'Rev ' + rev}.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `text` (texto; obligatorio): el texto; '\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo.
+  - `text` (texto; obligatorio): el texto; '\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo; {'Rev ' + rev} junta texto y valores.
   - `x` (número; opcional, por defecto `0.0`): x del ancla (mm).
   - `y` (número; opcional, por defecto `0.0`): y del ancla (mm).
-  - `height` (número; opcional, por defecto `5.0`): tamaño de la fuente en mm (positivo).
+  - `height` (número o expresión; opcional, por defecto `5.0`): tamaño de la fuente en mm (positivo), o una expresión con parámetros que queda ligada.
   - `angle` (número; opcional, por defecto `0.0`): giro del texto en grados alrededor del ancla (antihorario).
   - `font` (texto; opcional, por defecto `"Arial"`): familia (Arial, Segoe UI…) o ruta a un archivo de fuente.
   - `bold` (true/false; opcional, por defecto `false`): negrita (el peso más cercano a 700 de la familia).
@@ -1407,6 +1439,8 @@ Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles 
   - `decoration_thickness` (número; opcional, por defecto `0.0`): grosor en mm de esas barras (0 = el de la fuente).
   - `no_wrap` (true/false; opcional, por defecto `false`): true hace que box_width no parta las líneas en palabras.
   - `kerning_pairs` (lista de lista de número o null; opcional, por defecto `null`): kerning a mano entre letras: lista de [posición, mm]; la posición i es el hueco entre la letra i-1 y la i (1 = entre la 1.ª y la 2.ª); mm positivo separa, negativo junta.
+  - `frame` (true/false; opcional, por defecto `false`): true dibuja el marco del texto (4 líneas de construcción acotables); no va con path_entity.
+  - `frame_height` (número; opcional, por defecto `0.0`): alto del marco en mm; 0 = el del texto. El ancho es box_width (0 = el del texto).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call add_text --doc pieza.omnicad text=…`
 
@@ -1420,8 +1454,8 @@ Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa qu
   - `text` (texto; opcional, por defecto `null`): texto nuevo ('\n' separa líneas; {parámetro} muestra su valor).
   - `x` (número; opcional, por defecto `null`): x nueva del ancla (mm).
   - `y` (número; opcional, por defecto `null`): y nueva del ancla (mm).
-  - `height` (número; opcional, por defecto `null`): tamaño nuevo de la fuente en mm.
-  - `angle` (número; opcional, por defecto `null`): giro nuevo en grados.
+  - `height` (número o expresión; opcional, por defecto `null`): tamaño nuevo de la fuente en mm, o una expresión con parámetros que queda ligada.
+  - `angle` (número; opcional, por defecto `null`): giro nuevo en grados (el texto y su marco giran alrededor de pivot).
   - `font` (texto; opcional, por defecto `null`): familia o ruta de la fuente nueva.
   - `bold` (true/false; opcional, por defecto `null`): negrita.
   - `italic` (true/false; opcional, por defecto `null`): cursiva.
@@ -1448,6 +1482,7 @@ Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa qu
   - `decoration_thickness` (número; opcional, por defecto `null`): grosor en mm de las barras (0 = el de la fuente).
   - `no_wrap` (true/false; opcional, por defecto `null`): true hace que box_width no parta las líneas.
   - `kerning_pairs` (lista de lista de número o null; opcional, por defecto `null`): kerning a mano entre letras: lista de [posición, mm] (reemplaza la anterior; [] la borra).
+  - `pivot` (lista de número o null; opcional, por defecto `null`): [x, y] en mm del punto alrededor del cual gira con angle; vacío = el ancla del texto (Fusion: el punto del marco elegido como pivote).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call edit_text --doc pieza.omnicad entity=…`
 

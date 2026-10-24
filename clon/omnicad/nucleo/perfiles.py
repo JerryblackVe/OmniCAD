@@ -32,14 +32,16 @@ def _iniciar_opencascade():
     global Font_StrictLevel_Any, GeomAbs_BezierCurve, GeomAbs_Circle, GeomAbs_Line, Geom_BSplineCurve
     global List_TopoDS_Shape, NCollection_String, Sequence_TCollection_HAsciiString, StdPrs_BRepFont
     global StdPrs_BRepTextBuilder, TCollection_AsciiString, TopAbs_EDGE, TopAbs_VERTEX, TopExp_Explorer, TopoDS
-    global _ASPECTOS, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln
+    global _ASPECTOS, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln, BRepGProp, GProp_GProps
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepLib import BRepLib
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_NurbsConvert
+    from OCP.BRepGProp import BRepGProp
     from OCP.Font import Font_FA_Bold, Font_FA_BoldItalic, Font_FA_Italic, Font_FA_Regular, Font_FontMgr, Font_StrictLevel_Any
     from OCP.Geom import Geom_BSplineCurve
+    from OCP.GProp import GProp_GProps
     from OCP.GeomAbs import GeomAbs_BezierCurve, GeomAbs_Circle, GeomAbs_Line
     from OCP.NCollection import NCollection_String
     from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, Array1_int, List_TopoDS_Shape,
@@ -298,6 +300,7 @@ def _detectar(geometria, plano, tolerancia=1e-4):
     sp.SetArguments(args)
     sp.SetTools(herramientas)
     sp.SetFuzzyValue(tolerancia)
+    sp.SetRunParallel(True)                # BOC-28: con miles de letras, partir en paralelo tarda ~1/3 menos
     sp.Build()
     if not sp.IsDone():
         raise geo.ErrorGeometria("No se pudieron calcular los perfiles del boceto.")
@@ -324,8 +327,10 @@ def _detectar(geometria, plano, tolerancia=1e-4):
                     cid = mejor[1]
             if cid is not None:
                 firma.add(cid)
-        perfiles.append(Perfil(cara, geo.area(cara), _a_uv(plano, geo.centro_masa(cara, superficie=True)),
-                               frozenset(firma)))
+        props = GProp_GProps()             # cara plana: integración exacta; área y centro en una sola pasada
+        BRepGProp.SurfaceProperties_s(cara, props)
+        c = props.CentreOfMass()
+        perfiles.append(Perfil(cara, props.Mass(), _a_uv(plano, (c.X(), c.Y(), c.Z())), frozenset(firma)))
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     return perfiles
 

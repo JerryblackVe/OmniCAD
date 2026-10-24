@@ -47,13 +47,15 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "redefine_sketch_plane", "create_construction_axis", "create_construction_point", "create_ucs",
                 # Fase 6 del boceto (tests/test_boceto_fase6.py)
                 "release_offset", "edit_sketch_pattern", "break_projection_link", "manage_lost_projections",
-                "copy_sketch_entities", "project_spun_profile"]
+                "copy_sketch_entities", "project_spun_profile",
+                # Fase 7 del boceto (tests/test_boceto_fase7.py)
+                "edit_sketch_spline", "get_spline_curvature"]
 
 
 def test_herramientas_del_grupo_boceto():
     assert sorted(h["nombre"] for h in api.catalogo("boceto")) == sorted(HERRAMIENTAS)     # el orden depende de qué módulo se importó antes
     lecturas = {h["nombre"] for h in api.catalogo("boceto") if not h["modifica"]}
-    assert lecturas == {"get_sketch", "suggest_auto_constraints"}
+    assert lecturas == {"get_sketch", "suggest_auto_constraints", "get_spline_curvature"}
 
 
 # ---------------------------------------------------------------- planos y bocetos vacíos

@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso: 2026-10-24). Total 113: Abierto 58 · Parcial 44 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso: 2026-10-24). Total 113: Abierto 57 · Parcial 45 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
@@ -133,12 +133,12 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 3. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+Abierto 2 · Parcial 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | BOC-27 | Arrastre y soltado del solver con boceto grande | Abierto | Alta | Evento de arrastre: 100 líneas 100 ms, 200 líneas 480 ms, 400 líneas 3,4 s; soltar con 400 líneas 3,9 s. Va con SC4 y el módulo Rust de P-10b-f. | omnicad/restricciones/solver.py (`least_squares lm`) | 2026-10-23 |
-| BOC-28 | Texto largo y glifos faltantes | Abierto | Baja | 200 «W» sobre un círculo dan 11 979 perfiles en 6,2 s; un emoji sin glifo dibuja el cuadrito `.notdef` sin avisar. | omnicad/nucleo/fuentes.py:479 | 2026-10-23 |
+| BOC-28 | Texto largo y glifos faltantes | Parcial | Baja | Hecho: aviso de glifo faltante (un emoji ya no dibuja el cuadrito sin avisar); 200 «W» sobre un círculo de 20 mm: 14 811 perfiles de 8,85 s a 5,93 s (perfiles en paralelo). Queda: la división del boceto en perfiles (~3,4 s) ocurre dentro de OpenCascade. | omnicad/nucleo/fuentes.py:479 | 2026-10-23 |
 | BOC-29 | Verificar los topes de Fusion: 64 lados de polígono y 200 copias de patrón | Abierto | Baja | La ayuda local no dice cuál es el límite de Fusion; decidirlo y documentarlo. | omnicad/api/herramientas_boceto.py:1679 | 2026-10-23 |
 
 ## Menú del boceto (decisión del usuario)

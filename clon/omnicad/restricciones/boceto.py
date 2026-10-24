@@ -312,19 +312,26 @@ class ArcoElipse(_Curva):
 class Spline(_Curva):
     """Spline de Fusion. modo "ajuste": la curva PASA por sus puntos (Fit Point Spline); modo
     "control": los puntos son los polos (Control Point Spline, grado 3 o 5; con `pesos` y `nudos`
-    explícitos cuando sale de recortar, proyectar o desglosar texto)."""
-    tipo, DATOS = "spline", ("modo", "grado", "cerrada", "pesos", "nudos")
+    explícitos cuando sale de recortar, proyectar o desglosar texto).
+
+    `manijas` (solo la de ajuste abierta): [[punto de ajuste, punta, curvatura o None]]. La manija de tangente de
+    Fusion es una línea de construcción del punto de ajuste a la `punta`: su dirección es la tangente de la curva
+    ahí y su largo, la fuerza (largo = cuerda total / tramos deja la tangente natural). `curvatura` (1/mm, con
+    signo: + gira a la izquierda) es la manija de curvatura. La punta es un punto del boceto: se acota y la mueve
+    el solver."""
+    tipo, DATOS = "spline", ("modo", "grado", "cerrada", "pesos", "nudos", "manijas")
 
     def __init__(self, id, puntos, modo="ajuste", grado=3, cerrada=False, pesos=None, nudos=None,
-                 construccion=False, eje=False, proyectada=False):
+                 construccion=False, eje=False, proyectada=False, manijas=None):
         self.id, self.pts, self.modo, self.grado = id, list(puntos), modo, int(grado)
         self.cerrada = bool(cerrada)
         self.pesos = None if pesos is None else [float(w) for w in pesos]
         self.nudos = None if nudos is None else [float(k) for k in nudos]
+        self.manijas = [[int(a), int(b), None if k is None else float(k)] for a, b, k in (manijas or [])]
         self._estilo(construccion, eje, proyectada)
 
     def puntos(self):
-        return list(self.pts)
+        return list(self.pts) + [m[1] for m in self.manijas]
 
     def extremos(self):
         return None if self.cerrada else (self.pts[0], self.pts[-1])
@@ -332,11 +339,14 @@ class Spline(_Curva):
     def a_dict(self):
         d = super().a_dict()
         d["puntos"] = list(self.pts)
+        if not self.manijas:
+            del d["manijas"]
         return d
 
     def remapear(self, mapa, nuevo_id=None):
         c = super().remapear(mapa, nuevo_id)
         c.pts = [mapa.get(p, p) for p in self.pts]
+        c.manijas = [[mapa.get(a, a), mapa.get(b, b), k] for a, b, k in self.manijas]
         return c
 
 
@@ -372,19 +382,25 @@ class Texto(_Curva):
     `punto` y `angulo` no se usan y las letras siguen la curva. `camino_lado` ("izq" / "der": de qué lado del
     sentido de la curva van las letras), `camino_pos` (fracción 0-1 del largo donde cae el ancla, según
     `alineacion`), `camino_desfase` (mm entre la curva y la línea base) y `camino_ajustar` (repartir en todo el
-    largo). Si la curva se borra, el texto vuelve a ser recto. En curva no se dibujan subrayado ni tachado."""
+    largo). Si la curva se borra, el texto vuelve a ser recto. En curva no se dibujan subrayado ni tachado.
+
+    Marco (Fusion: el rectángulo del texto, que se acota y restringe): `marco` = [esquina derecha, esquina de
+    arriba], ids de puntos; con `punto` (esquina de abajo a la izquierda) definen el giro, el ancho de la caja y el
+    alto donde se ubica el texto según `ancla_v`. `altura_expr`: la altura como expresión con parámetros (Fusion
+    crea el parámetro «Text height»); el paso del boceto la evalúa y la deja en `altura`."""
     tipo, PUNTOS = "texto", ("punto",)
     DATOS = ("texto", "fuente", "altura", "angulo", "negrita", "cursiva", "espaciado", "interlineado", "alineacion",
              "ancla_v", "ancho_caja", "voltear_h", "voltear_v", "camino", "camino_lado", "camino_pos",
              "camino_desfase", "camino_ajustar", "kerning", "inclinacion", "escala_h", "escala_v", "desfase_base",
-             "capitalizacion", "subrayado", "tachado", "grosor_decoracion", "sin_division", "ajustes_kerning")
+             "capitalizacion", "subrayado", "tachado", "grosor_decoracion", "sin_division", "ajustes_kerning",
+             "marco", "altura_expr")
     _PREDETERMINADOS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base",
                         "ancho_caja": 0.0, "voltear_h": False, "voltear_v": False, "camino": None,
                         "camino_lado": "izq", "camino_pos": 0.5, "camino_desfase": 0.0, "camino_ajustar": False,
                         "kerning": True, "inclinacion": 0.0, "escala_h": 100.0, "escala_v": 100.0,
                         "desfase_base": 0.0, "capitalizacion": "ninguno", "subrayado": "ninguno",
                         "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False,
-                        "ajustes_kerning": []}
+                        "ajustes_kerning": [], "marco": None, "altura_expr": None}
     # opciones del panel «Carácter» que se guardan tal cual (el tipo de cada una, para convertir lo que llega)
     TIPOGRAFIA = {"kerning": bool, "inclinacion": float, "escala_h": float, "escala_v": float, "desfase_base": float,
                   "capitalizacion": str, "subrayado": str, "tachado": str, "grosor_decoracion": float,
@@ -397,7 +413,7 @@ class Texto(_Curva):
                  camino_lado="izq", camino_pos=0.5, camino_desfase=0.0, camino_ajustar=False, kerning=True,
                  inclinacion=0.0, escala_h=100.0, escala_v=100.0, desfase_base=0.0, capitalizacion="ninguno",
                  subrayado="ninguno", tachado="ninguno", grosor_decoracion=0.0, sin_division=False,
-                 ajustes_kerning=None):
+                 ajustes_kerning=None, marco=None, altura_expr=None):
         self.id, self.punto, self.texto, self.fuente = id, punto, str(texto), str(fuente)
         self.altura, self.angulo = float(altura), float(angulo)
         self.negrita, self.cursiva = bool(negrita), bool(cursiva)
@@ -412,7 +428,18 @@ class Texto(_Curva):
         self.capitalizacion, self.subrayado, self.tachado = str(capitalizacion), str(subrayado), str(tachado)
         self.grosor_decoracion, self.sin_division = float(grosor_decoracion), bool(sin_division)
         self.ajustes_kerning = [[int(i), float(x)] for i, x in (ajustes_kerning or [])]
+        self.marco = None if marco is None else [int(p) for p in marco]
+        self.altura_expr = None if altura_expr is None else str(altura_expr)
         self._estilo(construccion, eje, proyectada)
+
+    def puntos(self):
+        return [self.punto] + (self.marco or [])
+
+    def remapear(self, mapa, nuevo_id=None):
+        c = super().remapear(mapa, nuevo_id)
+        if self.marco:
+            c.marco = [mapa.get(p, p) for p in self.marco]
+        return c
 
     def a_dict(self):
         """Como las demás curvas, pero sin las opciones que tienen su valor por defecto (los archivos viejos
@@ -560,16 +587,23 @@ def _resolver_lineal(A, B):
         return np.linalg.lstsq(A, B, rcond=None)[0]
 
 
-def interpolar_spline(puntos, grado=3, cerrada=False):
-    """(polos, nudos, grado) de la B-spline que PASA por los puntos (parámetros por cuerda, nudos
-    promediados). Cerrada: vuelve al primer punto con la misma tangente (continuidad C1)."""
-    Q = [(float(x), float(y)) for x, y in puntos]
-    cerrar = cerrada and len(Q) >= 3
-    if cerrar:
-        Q = Q + [Q[0]]
+def _base_derivada(nudos, p, t, k, d):
+    """Derivada d-ésima de N_{k-p..k, p} en t (fórmula de la derivada de las funciones base)."""
+    if d == 0:
+        return _funciones_base(nudos, p, t, k)
+    if d > p:
+        return [0.0] * (p + 1)
+    baja = [0.0] + _base_derivada(nudos, p - 1, t, k, d - 1) + [0.0]     # N_{k-p..k+1, p-1}
+    salida = []
+    for j, i in enumerate(range(k - p, k + 1)):
+        d1, d2 = nudos[i + p] - nudos[i], nudos[i + p + 1] - nudos[i + 1]
+        salida.append(p * ((baja[j] / d1 if d1 else 0.0) - (baja[j + 1] / d2 if d2 else 0.0)))
+    return salida
+
+
+def parametros_cuerda(Q):
+    """Parámetro 0-1 de cada punto de ajuste (largo de cuerda acumulado; la cerrada repite el primero al final)."""
     m = len(Q) - 1
-    if m < 1:
-        raise ErrorBoceto("Una spline necesita al menos dos puntos.")
     cuerdas = [math.dist(Q[i], Q[i - 1]) for i in range(1, m + 1)]
     total = sum(cuerdas)
     if total < 1e-12:
@@ -580,6 +614,39 @@ def interpolar_spline(puntos, grado=3, cerrada=False):
     for c in cuerdas:
         ub.append(ub[-1] + c / total)
     ub[-1] = 1.0
+    return ub
+
+
+def peine_curvatura(prim, densidad=30, escala=1.0):
+    """Peine de curvatura de una curva del boceto (Fusion: Toggle Curvature Display), con la escala del de las
+    aristas 3D (`nucleo.analisis.peine_curvatura`): [(punto, curvatura con signo, punta)] y el factor (mm por 1/mm).
+    Curvatura + = gira a la izquierda; la púa sale del lado opuesto al centro de curvatura."""
+    t0, t1, _ = dominio(prim)
+    muestras = []
+    for i in range(densidad):
+        c, d1, d2 = evaluar_primitiva(prim, t0 + (t1 - t0) * i / (densidad - 1), 2)
+        v = math.hypot(*d1)
+        k = (d1[0] * d2[1] - d1[1] * d2[0]) / v ** 3 if v > 1e-12 else 0.0
+        muestras.append((c, k, (-d1[1] / v, d1[0] / v) if v > 1e-12 else (0.0, 0.0)))
+    xs, ys = [m[0][0] for m in muestras], [m[0][1] for m in muestras]
+    kmax = max(abs(m[1]) for m in muestras)
+    factor = escala * 0.2 * (math.hypot(max(xs) - min(xs), max(ys) - min(ys)) or 1.0) / kmax if kmax > 1e-12 else 0.0
+    return [(c, k, (c[0] - n[0] * k * factor, c[1] - n[1] * k * factor)) for c, k, n in muestras], factor
+
+
+def interpolar_spline(puntos, grado=3, cerrada=False, derivadas=None):
+    """(polos, nudos, grado) de la B-spline que PASA por los puntos (parámetros por cuerda, nudos
+    promediados). Cerrada: vuelve al primer punto con la misma tangente (continuidad C1).
+    `derivadas` (solo abierta): {índice del punto: (C' o None, C'' o None)} respecto del parámetro 0-1; cada una
+    suma un polo y un nudo (Piegl y Tiller, 9.2.4): son las manijas de tangente y de curvatura."""
+    Q = [(float(x), float(y)) for x, y in puntos]
+    cerrar = cerrada and len(Q) >= 3
+    if cerrar:
+        Q = Q + [Q[0]]
+    m = len(Q) - 1
+    if m < 1:
+        raise ErrorBoceto("Una spline necesita al menos dos puntos.")
+    ub = parametros_cuerda(Q)
     if cerrar:
         p, n = 3, m + 2
         nudos = [0.0] * 4 + ub[1:m] + [1.0] * 4
@@ -593,12 +660,16 @@ def interpolar_spline(puntos, grado=3, cerrada=False):
         A[m + 1, 0], A[m + 1, 1], B[m + 1] = -f0, f0, D
         A[m + 2, n - 1], A[m + 2, n], B[m + 2] = -f1, f1, D
     else:
-        p, n = min(grado, m), m
-        nudos = [0.0] * (p + 1) + [sum(ub[j:j + p]) / p for j in range(1, m - p + 1)] + [1.0] * (p + 1)
-        A, B = np.zeros((n + 1, n + 1)), np.array(Q)
-        for fila, u in enumerate(ub):
+        extra = [(ub[i], orden, v) for i, par in sorted((derivadas or {}).items()) if 0 <= i <= m
+                 for orden, v in enumerate(par, 1) if v is not None]
+        n = m + len(extra)
+        p = min(grado, n)
+        ua = sorted(ub + [u for u, _o, _v in extra])
+        nudos = [0.0] * (p + 1) + [sum(ua[j:j + p]) / p for j in range(1, n - p + 1)] + [1.0] * (p + 1)
+        A, B = np.zeros((n + 1, n + 1)), np.array(Q + [tuple(v) for _u, _o, v in extra], dtype=float)
+        for fila, (u, orden) in enumerate([(u, 0) for u in ub] + [(u, o) for u, o, _v in extra]):
             k = _tramo(nudos, p, n, u)
-            A[fila, k - p:k + 1] = _funciones_base(nudos, p, u, k)
+            A[fila, k - p:k + 1] = _base_derivada(nudos, p, u, k, orden)
     P = _resolver_lineal(A, B)
     return [(float(x), float(y)) for x, y in P], nudos, p
 
@@ -967,6 +1038,33 @@ def fraccion_en_camino(prim, q):
     return float(acum[i] / acum[-1])
 
 
+def _medidas_marco(a, b, t):
+    """(giro en radianes, ancho, alto) del marco de un texto: `a` esquina de abajo a la izquierda, `b` la de la
+    derecha y `t` la de arriba."""
+    ang = math.atan2(b[1] - a[1], b[0] - a[0])
+    alto = -math.sin(ang) * (t[0] - a[0]) + math.cos(ang) * (t[1] - a[1])
+    return ang, math.dist(a, b), alto
+
+
+def _derivadas_manijas(c, pts, P):
+    """{índice: (C', C'')} de las manijas de una spline de ajuste abierta (ver `Spline`): C' = (punta − punto) ×
+    tramos; con curvatura k, C'' = k·|C'|·(normal izquierda de C') (sin componente tangencial)."""
+    if c.cerrada or not c.manijas:
+        return None
+    tramos, salida = len(pts) - 1, {}
+    for a, b, k in c.manijas:
+        if a not in c.pts:
+            continue
+        i = c.pts.index(a)
+        (fx, fy), (ex, ey) = pts[i], P(b)
+        d1 = ((ex - fx) * tramos, (ey - fy) * tramos)
+        largo = math.hypot(*d1)
+        if largo < 1e-12:
+            continue
+        salida[i] = (d1, None if k is None else (-k * largo * d1[1], k * largo * d1[0]))
+    return salida
+
+
 def primitivas_entidad(c, P, R=None, curvas=None):
     """Primitivas 2D de una curva. `P(pid)` → (u, v); `R(cid)` → radio del círculo o radio menor de la
     elipse (por defecto, el guardado). El solver pasa sus propios accesores. `curvas` (las del boceto) hace
@@ -992,7 +1090,7 @@ def primitivas_entidad(c, P, R=None, curvas=None):
     if isinstance(c, Spline):
         pts = [P(p) for p in c.pts]
         if c.modo == "ajuste":
-            polos, nudos, p = interpolar_spline(pts, c.grado, c.cerrada)
+            polos, nudos, p = interpolar_spline(pts, c.grado, c.cerrada, _derivadas_manijas(c, pts, P))
             return [("spline", c.id, tuple(polos), tuple(nudos), p, None)]
         p = min(c.grado, len(pts) - 1)
         nudos = c.nudos if c.nudos is not None and len(c.nudos) == len(pts) + p + 1 else nudos_uniformes(len(pts), p)
@@ -1012,9 +1110,16 @@ def primitivas_entidad(c, P, R=None, curvas=None):
     if isinstance(c, Texto):
         ox, oy = P(c.punto)
         ang = math.radians(c.angulo)
+        opciones = c.opciones_contorno()
+        if c.marco:
+            ang, ancho, alto = _medidas_marco(P(c.punto), P(c.marco[0]), P(c.marco[1]))
+            sube = {"arriba": alto, "medio": alto / 2}.get(c.ancla_v, 0.0)
+            ox, oy = ox - math.sin(ang) * sube, oy + math.cos(ang) * sube
+            ancla = "abajo" if c.ancla_v == "base" else c.ancla_v
+            opciones = opciones[:3] + (ancla, ancho) + opciones[5:]
         T = lambda q: (lambda r: (r[0] + ox, r[1] + oy))(_rot(q[0], q[1], ang))  # noqa: E731
         salida = []
-        for prim in _contornos_texto(c.texto, c.fuente, c.altura, c.negrita, c.cursiva, c.opciones_contorno()):
+        for prim in _contornos_texto(c.texto, c.fuente, c.altura, c.negrita, c.cursiva, opciones):
             if prim[0] == "linea":
                 salida.append(("linea", c.id, T(prim[2]), T(prim[3])))
             else:
@@ -1027,28 +1132,66 @@ _FX = re.compile(r"\{([^{}]*)\}")
 
 
 def _partes_fx(contenido):
-    expresion, _, formato = contenido.partition(":")
-    return expresion.strip(), formato.strip()
+    corte = contenido.rfind(":")
+    if corte < max(contenido.rfind("'"), contenido.rfind('"')):     # el «:» va entre comillas: no es formato
+        corte = -1
+    if corte < 0:
+        return contenido.strip(), ""
+    return contenido[:corte].strip(), contenido[corte + 1:].strip()
+
+
+def _sumandos(expresion):
+    """Partes de «'abc' + expr + ...» (como los parámetros de texto de Fusion): [(literal?, texto)], cortando en los
+    «+» que no están entre comillas ni paréntesis. Sin comillas, None (es una expresión numérica común)."""
+    if "'" not in expresion and '"' not in expresion:
+        return None
+    partes, actual, comilla, nivel = [], "", None, 0
+    for ch in expresion + "+":
+        if comilla:
+            actual += ch
+            comilla = None if ch == comilla else comilla
+        elif ch in "'\"":
+            actual, comilla = actual + ch, ch
+        elif ch == "+" and nivel == 0:
+            s = actual.strip()
+            literal = len(s) >= 2 and s[0] == s[-1] and s[0] in "'\""
+            partes.append((literal, s[1:-1] if literal else s))
+            actual = ""
+        else:
+            nivel += (ch == "(") - (ch == ")")
+            actual += ch
+    return partes
 
 
 def expresiones_de_texto(texto):
-    """Expresiones que lleva un texto entre llaves: «Ancho {ancho}» → ['ancho']; «{largo / 2:.1f}» → ['largo / 2']."""
-    return [e for e, _f in (_partes_fx(m.group(1)) for m in _FX.finditer(str(texto))) if e]
+    """Expresiones que lleva un texto entre llaves: «Ancho {ancho}» → ['ancho']; «{largo / 2:.1f}» → ['largo / 2'];
+    «{'R-' + rev}» → ['rev']."""
+    salida = []
+    for e, _f in (_partes_fx(m.group(1)) for m in _FX.finditer(str(texto))):
+        partes = _sumandos(e)
+        salida += [e] if partes is None else [s for literal, s in partes if not literal]
+    return [e for e in salida if e]
 
 
 def sustituir_expresiones(texto, valor):
     """Reemplaza cada {expresión} (o {expresión:formato}) por el número que devuelve `valor(expresión)`.
     Sin formato, hasta 4 decimales y sin ceros de más; con formato, el de Python (`.1f`, `05.0f`…).
     Lo que `valor` no pueda calcular lo deja `valor` (lanza); el que llama decide qué hacer con el error."""
-    def reemplazo(m):
-        expresion, formato = _partes_fx(m.group(1))
-        if not expresion:
-            return m.group(0)
+    def numero(expresion, formato):
         v = float(valor(expresion))
         if formato:
             return format(v, formato)
         s = f"{v:.4f}".rstrip("0").rstrip(".")
         return "0" if s in ("", "-0") else s
+
+    def reemplazo(m):
+        expresion, formato = _partes_fx(m.group(1))
+        if not expresion:
+            return m.group(0)
+        partes = _sumandos(expresion)
+        if partes is None:
+            return numero(expresion, formato)
+        return "".join(s if literal else numero(s, formato) for literal, s in partes)
     return _FX.sub(reemplazo, str(texto))
 
 
@@ -1671,22 +1814,43 @@ class Boceto:
             return
         if id in self.curvas:
             curva = self.curvas.pop(id)
-            for p in curva.puntos():
+            pts = curva.puntos()
+            if isinstance(curva, Linea):             # borrar la línea de una manija la desactiva
+                for s in self.curvas.values():
+                    if isinstance(s, Spline):
+                        s.manijas = [m for m in s.manijas if {m[0], m[1]} != {curva.p1, curva.p2}]
+            for lid in self._lineas_auxiliares(curva):   # las manijas y el marco se van con su curva
+                pts += self.curvas.pop(lid).puntos()
+            for p in pts:
                 if not self._punto_en_uso(p):
                     self.puntos.pop(p, None)
         elif id in self.puntos:
-            for cid in [c.id for c in self.curvas.values() if id in c.puntos()]:
+            for cid in [c.id for c in self.curvas.values() if id in c.puntos()
+                        and not (isinstance(c, Spline) and id in [m[1] for m in c.manijas])]:
                 self.curvas.pop(cid)
             del self.puntos[id]
         else:
             raise ErrorBoceto(f"No existe el elemento {id}.")
         self._quitar_huerfanas()
 
+    def _lineas_auxiliares(self, c):
+        """Ids de las líneas de las manijas de una spline o del marco de un texto (las que unen sus puntos)."""
+        if isinstance(c, Spline):
+            pares = [{a, b} for a, b, _k in c.manijas]
+        elif isinstance(c, Texto) and c.marco:
+            esquinas = set(c.puntos())
+            pares = [{l.p1, l.p2} for l in self.curvas.values() if isinstance(l, Linea) and {l.p1, l.p2} <= esquinas]
+        else:
+            return []
+        return [l.id for l in self.curvas.values() if isinstance(l, Linea) and {l.p1, l.p2} in pares]
+
     def _quitar_huerfanas(self):
         vivos = set(self.puntos) | set(self.curvas)
         for c in self.curvas.values():
             if isinstance(c, Texto) and c.camino is not None and c.camino not in self.curvas:
                 c.camino = None                            # se borró su curva: vuelve a ser texto recto
+            if isinstance(c, Spline) and c.manijas:        # se borró la punta de una manija
+                c.manijas = [m for m in c.manijas if m[0] in self.puntos and m[1] in self.puntos]
         for tabla in (self.restricciones, self.cotas):
             for k in [k for k, v in tabla.items() if not set(v.entidades) <= vivos]:
                 del tabla[k]
@@ -2840,6 +3004,9 @@ class Boceto:
                     setattr(c, a, queda)
             if isinstance(c, Spline):
                 c.pts = [queda if p == sale else p for p in c.pts]
+                c.manijas = [[queda if p == sale else p for p in m[:2]] + m[2:] for m in c.manijas]
+            if isinstance(c, Texto) and c.marco:
+                c.marco = [queda if p == sale else p for p in c.marco]
         for t in (self.restricciones, self.cotas):
             for v in t.values():
                 v.entidades = [queda if e == sale else e for e in v.entidades]
@@ -3199,7 +3366,186 @@ class Boceto:
         self.agregar_restriccion(tipo, [c2, sid])
         return sid
 
+    # ------------------------------------------------------------ editar una spline (SKT-CREATE-SPLINES, BOC-11)
+    def _spline(self, sid, modo=None):
+        c = self.curvas.get(sid)
+        if not isinstance(c, Spline):
+            raise ErrorBoceto(f"La entidad {sid} no es una spline.")
+        if modo and c.modo != modo:
+            raise ErrorBoceto("Eso solo se puede en una spline de ajuste." if modo == "ajuste"
+                              else "Eso solo se puede en una spline de puntos de control.")
+        return c
+
+    def _manija(self, c, pid):
+        m = next((m for m in c.manijas if m[0] == pid), None)
+        if m is None:
+            raise ErrorBoceto(f"El punto {pid} no tiene manija activa.")
+        return m
+
+    def activar_manija(self, sid, pid, angulo=None, largo=None, curvatura=None):
+        """Activa la manija de tangente (y, con `curvatura`, la de curvatura) en el punto de ajuste `pid`: una
+        línea de construcción con la tangente actual de la curva (o `angulo`, grados) y largo `largo` (por defecto
+        la cuerda total / tramos, que no cambia la forma). Devuelve el id de la línea."""
+        c = self._spline(sid, "ajuste")
+        if c.cerrada:
+            raise ErrorBoceto("Las manijas se activan en una spline de ajuste abierta: abrila primero.")
+        if pid not in c.pts:
+            raise ErrorBoceto(f"El punto {pid} no es un punto de ajuste de la spline {sid}.")
+        if any(m[0] == pid for m in c.manijas):
+            raise ErrorBoceto(f"El punto {pid} ya tiene manija: editala.")
+        Q = [self.coords(p) for p in c.pts]
+        u = parametros_cuerda(Q)[c.pts.index(pid)]
+        d = evaluar_primitiva(self.primitivas(sid)[0], u, 1)[1]
+        a = math.radians(angulo) if angulo is not None else math.atan2(d[1], d[0])
+        largo = sum(math.dist(Q[i], Q[i - 1]) for i in range(1, len(Q))) / (len(Q) - 1) if largo is None else largo
+        if not 1e-6 < largo < math.inf:
+            raise ErrorBoceto("El largo de la manija tiene que ser positivo.")
+        fx, fy = self.coords(pid)
+        punta = self.agregar_punto(fx + largo * math.cos(a), fy + largo * math.sin(a))
+        c.manijas.append([pid, punta, None if curvatura is None else float(curvatura)])
+        return self.agregar_linea(pid, punta, construccion=True)
+
+    def editar_manija(self, sid, pid, angulo=None, largo=None, curvatura=None):
+        """Cambia la dirección (grados), el largo o la curvatura (1/mm) de una manija activa."""
+        c = self._spline(sid, "ajuste")
+        m = self._manija(c, pid)
+        (fx, fy), (ex, ey) = self.coords(pid), self.coords(m[1])
+        a = math.radians(angulo) if angulo is not None else math.atan2(ey - fy, ex - fx)
+        largo = math.hypot(ex - fx, ey - fy) if largo is None else largo
+        if not 1e-6 < largo < math.inf:
+            raise ErrorBoceto("El largo de la manija tiene que ser positivo.")
+        q = self.puntos[m[1]]
+        q.x, q.y = fx + largo * math.cos(a), fy + largo * math.sin(a)
+        if curvatura is not None:
+            m[2] = float(curvatura)
+
+    def desactivar_manija(self, sid, pid):
+        """Quita la manija del punto `pid` (su línea y su punta): la tangente vuelve a la natural."""
+        c = self._spline(sid, "ajuste")
+        m = self._manija(c, pid)
+        c.manijas.remove(m)
+        for lid in [l.id for l in self.curvas.values() if isinstance(l, Linea) and {l.p1, l.p2} == {m[0], m[1]}]:
+            self.eliminar(lid)
+        if m[1] in self.puntos and not self._punto_en_uso(m[1]):
+            self.eliminar(m[1])
+
+    def cerrar_spline(self, sid, cerrada=True):
+        """Abrir / cerrar una spline de ajuste. Al cerrar, si el último punto cae sobre el primero se une con él; al
+        abrir, se corta en el primer punto (queda un punto final nuevo encima)."""
+        c = self._spline(sid, "ajuste")
+        if c.cerrada == bool(cerrada):
+            raise ErrorBoceto(f"La spline ya está {'cerrada' if cerrada else 'abierta'}.")
+        if cerrada:
+            if c.manijas:
+                raise ErrorBoceto("Desactivá las manijas antes de cerrar la spline.")
+            ultimo = c.pts[-1]
+            if len(c.pts) > 3 and math.dist(self.coords(c.pts[0]), self.coords(ultimo)) < 1e-9:
+                c.pts.pop()
+                self._depurar([ultimo])
+            if len(c.pts) < 3:
+                raise ErrorBoceto("Una spline cerrada necesita al menos tres puntos.")
+            c.cerrada = True
+        else:
+            c.pts.append(self.agregar_punto(*self.coords(c.pts[0])))
+            c.cerrada = False
+        self._depurar()
+
+    def insertar_punto_spline(self, sid, q):
+        """Insertar punto de ajuste (en la de ajuste, sobre la curva, cerca de `q`) o punto de control (inserción de
+        un nudo: la forma no cambia). Devuelve el id del punto nuevo."""
+        c = self._spline(sid)
+        prim = self.primitivas(sid)[0]
+        t, _d, sobre = mas_cercano(prim, q)
+        t0, t1, _ = dominio(prim)
+        if not t0 + 1e-9 < t < t1 - 1e-9:
+            raise ErrorBoceto("El punto nuevo tiene que caer entre los extremos de la spline.")
+        if c.modo == "ajuste":
+            Q = [self.coords(p) for p in c.pts]
+            ub = parametros_cuerda(Q + [Q[0]] if c.cerrada else Q)
+            i = next(j for j in range(len(ub) - 1) if t <= ub[j + 1])
+            if min(t - ub[i], ub[i + 1] - t) < 1e-6:
+                raise ErrorBoceto("Ya hay un punto de ajuste ahí.")
+            nuevo = self.agregar_punto(*sobre)
+            c.pts.insert(i + 1, nuevo)
+            return nuevo
+        polos, nudos, p, pesos = prim[2], list(prim[3]), prim[4], prim[5]
+        w = pesos or [1.0] * len(polos)
+        ctrl = [[x * wi, y * wi, wi] for (x, y), wi in zip(polos, w, strict=True)]
+        k = _tramo(nudos, p, len(polos) - 1, t)
+        ctrl, c.nudos = _insertar_nudo(ctrl, nudos, p, t)
+        for j in range(k - p + 1, k):
+            self.puntos[c.pts[j]].x, self.puntos[c.pts[j]].y = ctrl[j][0] / ctrl[j][2], ctrl[j][1] / ctrl[j][2]
+        nuevo = self.agregar_punto(ctrl[k][0] / ctrl[k][2], ctrl[k][1] / ctrl[k][2])
+        c.pts.insert(k, nuevo)
+        c.pesos = [h[2] for h in ctrl] if pesos else None
+        return nuevo
+
+    def cambiar_grado_spline(self, sid, grado):
+        """Change Spline Degree de Fusion (spline de puntos de control, 3 ↔ 5). Subir no cambia la forma (los nudos
+        interiores ganan multiplicidad y suman polos); bajar la simplifica (menos polos, nudos uniformes) y conserva
+        los extremos. Ajuste por mínimos cuadrados sobre la curva; una spline racional pasa a no racional."""
+        c = self._spline(sid, "control")
+        if grado not in (3, 5):
+            raise ErrorBoceto("El grado de una spline de puntos de control es 3 o 5.")
+        prim = self.primitivas(sid)[0]
+        polos, nudos, p0 = prim[2], prim[3], prim[4]
+        if grado == p0:
+            raise ErrorBoceto(f"La spline ya es de grado {grado}.")
+        t0, t1, _ = dominio(prim)
+        if grado > p0:
+            interiores = list(nudos[p0 + 1:len(nudos) - p0 - 1])
+            nuevos = [t0] * (grado + 1) + sorted(interiores + [u for u in dict.fromkeys(interiores)
+                                                                for _ in range(grado - p0)]) + [t1] * (grado + 1)
+        else:
+            nuevos = [t0 + (t1 - t0) * u for u in nudos_uniformes(max(grado + 1, len(polos) - (p0 - grado)), grado)]
+        n = len(nuevos) - grado - 1
+        ts = [t0 + (t1 - t0) * i / (20 * n) for i in range(20 * n + 1)]
+        A = np.zeros((len(ts), n))
+        for fila, t in enumerate(ts):
+            k = _tramo(nuevos, grado, n - 1, t)
+            A[fila, k - grado:k + 1] = _funciones_base(nuevos, grado, t, k)
+        B = np.array([evaluar_primitiva(prim, t)[0] for t in ts])
+        ini, fin = np.array(B[0]), np.array(B[-1])
+        B = B - np.outer(A[:, 0], ini) - np.outer(A[:, -1], fin)
+        medio = np.linalg.lstsq(A[:, 1:-1], B, rcond=None)[0]
+        coords = [tuple(ini)] + [tuple(r) for r in medio] + [tuple(fin)]
+        viejos = list(c.pts)
+        ids = viejos[:min(n, len(viejos)) - 1]
+        ids += [self.agregar_punto(0.0, 0.0) for _ in range(n - 1 - len(ids))] + [viejos[-1]]
+        for pid, (x, y) in zip(ids, coords, strict=True):
+            self.puntos[pid].x, self.puntos[pid].y = float(x), float(y)
+        c.pts, c.grado, c.nudos, c.pesos = ids, grado, nuevos, None
+        self._depurar([v for v in viejos if v not in ids])
+
     # ------------------------------------------------------------ texto
+    def agregar_marco_texto(self, tid, ancho, alto):
+        """Marco del texto (Fusion: el rectángulo de Text, que se acota): 4 líneas de construcción desde su `punto`
+        (esquina de abajo a la izquierda) con el giro del texto; perpendicular y paralelas, así se puede girar.
+        Devuelve los ids de las 4 líneas."""
+        t = self.curvas[tid]
+        if not (1e-6 < ancho < math.inf and 1e-6 < alto < math.inf):
+            raise ErrorBoceto("El marco del texto necesita ancho y alto positivos.")
+        (ax, ay), a = self.coords(t.punto), math.radians(t.angulo)
+        u, v = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
+        der = self.agregar_punto(ax + ancho * u[0], ay + ancho * u[1])
+        opuesta = self.agregar_punto(ax + ancho * u[0] + alto * v[0], ay + ancho * u[1] + alto * v[1])
+        arriba = self.agregar_punto(ax + alto * v[0], ay + alto * v[1])
+        lados = [self.agregar_linea(i, j, construccion=True)
+                 for i, j in ((t.punto, der), (der, opuesta), (opuesta, arriba), (arriba, t.punto))]
+        self.agregar_restriccion("perpendicular", [lados[0], lados[1]])
+        self.agregar_restriccion("paralela", [lados[0], lados[2]])
+        self.agregar_restriccion("paralela", [lados[1], lados[3]])
+        t.marco, t.ancho_caja = [der, arriba], float(ancho)
+        return lados
+
+    def girar_texto(self, tid, angulo, pivote=None):
+        """Gira el texto (y su marco) hasta `angulo` grados alrededor de `pivote` (por defecto, su ancla)."""
+        t = self.curvas[tid]
+        actual = math.degrees(_medidas_marco(*map(self.coords, t.puntos()))[0]) if t.marco else t.angulo
+        self.transformar([tid] + self._lineas_auxiliares(t), angulo=angulo - actual,
+                         centro=self.coords(t.punto) if pivote is None else pivote)
+        t.angulo = float(angulo)
+
     def desglosar_texto(self, tid):
         """Desglosar texto (SKT-EXPLODE-TEXT): el texto pasa a ser líneas y splines fijas."""
         c = self.curvas.get(tid)

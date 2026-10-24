@@ -483,7 +483,8 @@ def test_la_pestana_boceto_no_tiene_items_grisados(app_qt):
     from omnicad.ui.cinta_boceto import GRUPOS_BOCETO
     from omnicad.ui.modo_boceto import ACCIONES_BOCETO
     claves = {a[0] for a in ACCIONES_BOCETO} | {"sk_terminar", "sk_construccion", "sk_eje", "sk_autorestringir",
-                                                "parametros"}
+                                                "parametros", "sk_soltar_desfase", "sk_editar_patron",
+                                                "sk_romper_vinculo", "sk_proyecciones_perdidas"}
 
     def items(lista):
         for it in lista:

@@ -27,8 +27,8 @@ from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, r
                              sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
-                                    centro_arco_tangente, circunferencia_3_puntos, evaluar_primitiva,
-                                    mas_cercano, validar_valor_cota)
+                                    _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
+                                    evaluar_primitiva, mas_cercano, peine_curvatura, validar_valor_cota)
 from ..restricciones.solver import restricciones_en_conflicto
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
@@ -740,6 +740,16 @@ def _info_curva(b, c):
         if c.camino is not None:
             d.update(path_entity=c.camino, path_side="left" if c.camino_lado == "izq" else "right",
                      path_position=_r(c.camino_pos), path_offset=_r(c.camino_desfase), fit_path=c.camino_ajustar)
+        if c.altura_expr:
+            d["height_expression"] = c.altura_expr
+        if c.marco:
+            ang, ancho, alto = _medidas_marco(*map(b.coords, c.puntos()))
+            d["angle"] = _r(math.degrees(ang))
+            d["frame"] = {"lines": b._lineas_auxiliares(c), "width": _r(ancho), "height": _r(alto)}
+    if c.tipo == "spline" and c.manijas:
+        d["handles"] = [{"point": a, "end": e, "angle": _r(math.degrees(math.atan2(ey - fy, ex - fx))),
+                         "length": _r(math.hypot(ex - fx, ey - fy)), "curvature": None if k is None else _r(k)}
+                        for a, e, k in c.manijas for (fx, fy), (ex, ey) in [(b.coords(a), b.coords(e))]]
     return d
 
 
@@ -2048,6 +2058,84 @@ def release_offset(sesion, entity: int, keep_dimension: bool = False, sketch: st
     return _dibujar(sesion, sketch, soltar, desde_solver=True)
 
 
+@herramienta("edit_sketch_spline", "boceto",
+             "Edita una spline ya dibujada (Fusion: manijas, Open/Close Spline, Insert Fit/Control Point y Change "
+             "Spline Degree). Acciones: activate_handle (manija de tangente en un punto de ajuste: una línea de "
+             "construcción que se puede acotar; con angle, length y curvature), edit_handle, deactivate_handle, "
+             "open / close (solo la de ajuste), insert_point (punto de ajuste sobre la curva o punto de control sin "
+             "cambiar la forma, cerca de x, y) y set_degree (3 o 5, solo la de puntos de control). Las manijas van "
+             "en splines de ajuste abiertas. El peine de curvatura: get_spline_curvature.", modifica=True)
+def edit_sketch_spline(sesion, entity: int,
+                       action: Literal["activate_handle", "edit_handle", "deactivate_handle", "open", "close",
+                                       "insert_point", "set_degree"],
+                       point: int | None = None, angle: float | None = None, length: float | None = None,
+                       curvature: float | None = None, x: float | None = None, y: float | None = None,
+                       degree: int | None = None, sketch: str | None = None):
+    """
+    entity: id de la spline (get_sketch).
+    action: qué hacer (ver la descripción de la herramienta).
+    point: id del punto de ajuste de la manija (vertices / points de get_sketch); para las acciones de manija.
+    angle: dirección de la tangente en grados (antihoraria desde +x); vacío = la tangente actual.
+    length: largo de la manija en mm (más largo = la curva sigue más esa dirección); vacío = el natural.
+    curvature: curvatura en ese punto, en 1/mm (1 / radio; positiva gira a la izquierda); vacío = sin cambio (al activar: libre).
+    x: x del punto a insertar (insert_point), en mm; se usa el punto de la curva más cercano.
+    y: y del punto a insertar (insert_point), en mm.
+    degree: grado nuevo de la spline de puntos de control (3 o 5) para set_degree.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos({k: v for k, v in (("angle", angle), ("length", length), ("curvature", curvature), ("x", x),
+                                       ("y", y)) if v is not None})
+    manija = action in ("activate_handle", "edit_handle", "deactivate_handle")
+    if manija and point is None:
+        raise error("INVALID_ARGUMENTS", f"{action} necesita point (id del punto de ajuste).")
+    if action == "insert_point" and (x is None or y is None):
+        raise error("INVALID_ARGUMENTS", "insert_point necesita x e y.")
+    if action == "set_degree" and degree is None:
+        raise error("INVALID_ARGUMENTS", "set_degree necesita degree (3 o 5).")
+
+    def editar(b):
+        _curva(b, entity, ("spline",))
+        if action == "activate_handle":
+            b.activar_manija(entity, point, angle, length, curvature)
+        elif action == "edit_handle":
+            b.editar_manija(entity, point, angle, length, curvature)
+        elif action == "deactivate_handle":
+            b.desactivar_manija(entity, point)
+        elif action in ("open", "close"):
+            b.cerrar_spline(entity, action == "close")
+        elif action == "insert_point":
+            b.insertar_punto_spline(entity, (x, y))
+        else:
+            b.cambiar_grado_spline(entity, degree)
+    return _dibujar(sesion, sketch, editar, desde_solver=True)
+
+
+@herramienta("get_spline_curvature", "boceto",
+             "Peine de curvatura de una curva del boceto (Fusion: Toggle Curvature Display): curvatura con signo "
+             "en muestras repartidas por el parámetro, con el punto y la punta de cada púa (salen del lado opuesto "
+             "al centro de curvatura, con largo curvatura × factor). No cambia el documento.")
+def get_spline_curvature(sesion, entity: int, density: int = 30, scale: float = 1.0, sketch: str | None = None):
+    """
+    entity: id de la curva (spline, cónica, arco, círculo, elipse o línea) en get_sketch.
+    density: cuántas púas (2 a 200).
+    scale: escala del largo de las púas (1 = la más larga mide el 20 % del tamaño de la curva).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    if not 2 <= int(density) <= 200:
+        raise error("INVALID_ARGUMENTS", "density va de 2 a 200.")
+    _exigir_finitos({"scale": scale})
+    br = boceto_resuelto(sesion, op_boceto(sesion, sketch))
+    if br is None:
+        raise error("OPERATION_FAILED", "El boceto no se pudo calcular.")
+    c = _curva(br.boceto, entity, ("spline", "conica", "arco", "circulo", "elipse", "arco_elipse", "linea"))
+    puas, factor = peine_curvatura(br.boceto.primitivas(c.id)[0], int(density), float(scale))
+    ks = [abs(k) for _p, k, _t in puas]
+    return {"samples": [{"point": [_r(v) for v in p], "curvature": _r(k), "tip": [_r(v) for v in t]}
+                        for p, k, t in puas],
+            "max_curvature": _r(max(ks)), "min_radius": None if max(ks) < 1e-12 else _r(1 / max(ks)),
+            "factor": _r(factor)}
+
+
 @herramienta("copy_sketch_entities", "boceto",
              "Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de "
              "source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las "
@@ -2522,8 +2610,14 @@ def manage_lost_projections(sesion, action: Literal["relink", "break", "delete"]
             raise error("INVALID_ARGUMENTS", "relink necesita projection (el id de la proyección a vincular).")
         _proyecciones_a_tratar(op, projection)
         _op, br = boceto_activo(sesion, sketch, derivados=False)
-        modo = next(r["modo"] for r in op.boceto.proyecciones if r["id"] == projection)
-        prims, puntos, refs = _proyectar_seleccion(sesion, br.plano, modo, edges, faces, bodies, vertices, references, body)
+        reg = next(r for r in op.boceto.proyecciones if r["id"] == projection)
+        modo = reg["modo"]
+        giro = None
+        if modo == "giro":      # el perfil giratorio conserva su eje, tolerancia y sentido
+            giro = {"eje": ent.como_eje(ent.resolver(reg["eje"], sesion.doc.estado_final)),
+                    "tolerancia": reg["tolerancia"], "invertir": reg["invertir"]}
+        prims, puntos, refs = _proyectar_seleccion(sesion, br.plano, modo, edges, faces, bodies, vertices, references,
+                                                   body, giro)
         if not refs:
             raise error("INVALID_ARGUMENTS", "Elegí a qué re-vincular: edges, faces, vertices, bodies o references.")
         return _dibujar(sesion, sketch, lambda b: b.revincular(projection, refs, prims, puntos), desde_solver=True)

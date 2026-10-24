@@ -598,7 +598,7 @@ class OpBoceto(Operacion):
 
     def expresiones(self):
         en_textos = [e for c in self.boceto.curvas.values() if isinstance(c, Texto)
-                     for e in expresiones_de_texto(c.texto)]
+                     for e in expresiones_de_texto(c.texto) + ([c.altura_expr] if c.altura_expr else [])]
         return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
                                        for e in (c.nombre, c.expresion)]
                 + en_textos)
@@ -679,6 +679,11 @@ class OpBoceto(Operacion):
                     c.texto = texto_con_valores(c.texto, ctx.valores)
                 except ErrorExpresion as e:
                     ctx.aviso(f"{self.nombre}: texto «{c.texto}»: {e}")
+            if isinstance(c, Texto) and c.altura_expr:  # «Text height» de Fusion: la altura sigue al parámetro
+                try:
+                    c.altura = ctx.evaluar(c.altura_expr)
+                except ErrorExpresion as e:
+                    ctx.aviso(f"{self.nombre}: altura del texto «{c.altura_expr}»: {e}")
         valores = self.valores_cotas(ctx)
         for c in self.boceto.cotas.values():           # una cota manejada por parámetro puede quedar fuera de rango
             if c.referencia:
