@@ -34,7 +34,8 @@ Pedí un tema con `get_guide(topic="flujo")`.
 - Modificar (sobre lo que muestra `get_sketch`): `sketch_fillet`, `sketch_chamfer`, `trim_sketch_curve`
   (trim / extend / break), `offset_sketch_curves` (desfase con cota), `mirror_sketch`, `sketch_rectangular_pattern`,
   `sketch_circular_pattern`, `project_to_sketch`, `set_line_type` (construcción / línea central).
-- Acotar: `add_constraint`, `add_dimension`, `edit_dimension` (cambiar una cota), `auto_constrain`;
+- Acotar: `add_constraint`, `add_dimension`, `edit_dimension` (cambiar una cota), `auto_constrain` (AutoConstrain: detecta restricciones y agrega cotas;
+  `suggest_auto_constraints` muestra las alternativas sin aplicar);
   `move_sketch_point` y `delete_sketch_entities` (también borra restricciones y cotas).
 
 ## Reglas que valen siempre

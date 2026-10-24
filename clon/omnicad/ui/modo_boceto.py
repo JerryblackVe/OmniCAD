@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QCompleter, QDoubleSpinBox,
 
 from .. import NOMBRE_APP
 from ..nucleo.perfiles import detectar
+from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
 from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo
 from .iconos import icono
@@ -699,8 +700,12 @@ class ModoBoceto(QObject):
                 ("sk_eje", "Normal / línea central", None, "simetria_boceto", self._eje,
                  "Alterna la geometría seleccionada entre normal y línea central (eje)."),
                 ("sk_autorestringir", "Restringir automáticamente", None, "r_fijo", self._autorestringir,
-                 "AutoConstrain: detecta horizontales, verticales, coincidencias e igualdades y agrega las cotas que "
-                 "faltan hasta dejar el boceto totalmente restringido."),
+                 "AutoConstrain: detecta coincidencias, concentricidad, horizontales, verticales, paralelas, "
+                 "perpendiculares, tangencias, igualdades, puntos medios y simetrías, y agrega las cotas que faltan. "
+                 "Muestra varios resultados para elegir."),
+                ("sk_terminar_auto", "Terminar con AutoConstrain", None, "terminar", self.terminar_con_autorestringir,
+                 "Restringe el boceto automáticamente y lo termina (Finish with AutoConstrain). Si no se puede "
+                 "(vacío o más de 250 entidades), lo termina igual."),
                 ("sk_conflictos", "Qué choca", "F5", "boceto_conflicto", self._conflictos,
                  "Lista las restricciones y cotas en conflicto (en rojo en el boceto): quitando una se resuelve.")):
             a = QAction(icono(ico), texto, ventana)
@@ -777,6 +782,23 @@ class ModoBoceto(QObject):
         self._limpiar()
         self.terminado.emit(boceto, datos)
         return True
+
+    def terminar_con_autorestringir(self):
+        """Finish with AutoConstrain: restringe y termina. Si AutoConstrain no corre (boceto vacío o con más de
+        TOPE_TERMINAR_AUTO entidades, o sin nada que agregar) el boceto termina igual. Devuelve (terminó, agregado)."""
+        if not self.activo:
+            return True, []
+        lz = self.lienzo
+        lz.confirmar_texto_pendiente()
+        n = contar_entidades(lz.b)
+        agregado = []
+        if 0 < n <= TOPE_TERMINAR_AUTO:
+            agregado = lz.auto_restringir()
+        else:
+            lz.mensaje.emit("Terminar con AutoConstrain: "
+                            + ("el boceto está vacío" if n == 0 else f"el boceto tiene {n} entidades (el tope es "
+                                                                     f"{TOPE_TERMINAR_AUTO})") + "; se termina sin restringir.")
+        return self.terminar(), agregado
 
     def cancelar(self):
         """Sale del boceto SIN guardar (al cambiar de documento)."""
@@ -869,7 +891,7 @@ class ModoBoceto(QObject):
 
     def _autorestringir(self):
         if self.activo:
-            self.lienzo.auto_restringir()
+            self.lienzo.auto_restringir_dialogo()
 
     def _conflictos(self):
         if self.activo:

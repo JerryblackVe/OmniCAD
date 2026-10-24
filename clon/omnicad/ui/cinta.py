@@ -178,7 +178,7 @@ UTILIDADES = [
 
 # Pestaña contextual del entorno de boceto: sus grupos propios están en cinta_boceto.py.
 BOCETO = GRUPOS_BOCETO + [CONFIGURAR, INSPECCIONAR, INSERTAR, ENSAMBLAR, SELECCIONAR,
-                          ("TERMINAR BOCETO", ["sk_terminar"], [_i("", "sk_terminar")])]
+                          ("TERMINAR BOCETO", ["sk_terminar"], [_i("", "sk_terminar"), _i("", "sk_terminar_auto")])]
 CONTEXTUALES = [("BOCETO", BOCETO)]
 
 LARGO_RENGLON = 10      # un nombre más largo que esto se parte en dos renglones bajo el ícono

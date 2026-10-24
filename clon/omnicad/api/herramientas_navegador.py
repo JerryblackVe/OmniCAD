@@ -201,18 +201,20 @@ def isolate_bodies(sesion, bodies: list[str] | None = None, restore: bool = Fals
 
 
 @herramienta("sketch_view", "documento", "Opera el boceto en la ventana: editar, seleccionar su plano, mirar "
-             "de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda) o "
+             "de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda; "
+             "finish_with_auto_constrain: lo restringe automáticamente antes, y si no puede lo termina igual) o "
              "mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, "
              "forzar a la rejilla, corte, puntos y restricciones). Las opciones y finish solo están disponibles "
              "mientras se edita ese boceto.")
 def sketch_view(sesion, sketch: str,
                 action: Literal["edit", "select_plane", "look_at", "find_in_window", "find_in_timeline", "finish",
+                                "finish_with_auto_constrain",
                                 "profile", "dimensions", "projected", "construction", "grid", "snap", "cut", "points",
                                 "constraints"],
                 visible: bool | None = None):
     """
     sketch: id o nombre del boceto.
-    action: edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
+    action: edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), finish_with_auto_constrain (AutoConstrain y terminar), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
     visible: estado de la opción de la paleta; omitido la alterna (solo las acciones de opción).
     """
     op = sesion.paso(sketch)

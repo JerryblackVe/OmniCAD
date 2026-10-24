@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-24). Total 190: Abierto 141 · Parcial 29 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-24). Total 189: Abierto 139 · Parcial 30 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -80,18 +80,17 @@ Abierto 1 · Parcial 2.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 20. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
+Abierto 18 · Parcial 1. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-4 | Auto-restringir que infiera todos los tipos | Abierto | Alta | Solo detecta coincidente, horizontal/vertical e igual. Faltan tangente, perpendicular, paralela, concéntrica, colineal, punto medio y simetría: dos círculos concéntricos dan 2 diámetros y 2 distancias; una L girada da cotas en vez de «perpendicular». | omnicad/restricciones/solver.py (`auto_restringir`) | 2026-10-23 |
-| BOC-5 | Diálogo de AutoConstrain y «Finish with AutoConstrain» | Abierto | Media | Varios resultados con deslizador de cantidad, tolerancia, Generate more, Start Over, borrar sugerencia, Set datum y estado de candado; terminar el boceto restringiendo. Hoy es un clic que aplica todo y la API no tiene opciones. | omnicad/ui/editor_boceto.py:1367; omnicad/api/herramientas_boceto.py (`auto_constrain`) | 2026-10-23 |
+| BOC-5 | Diálogo de AutoConstrain: datum con un clic | Parcial | Media | Hecho: diálogo con varios resultados, deslizador de cantidad, tolerancias, Generar más, Empezar de nuevo, quitar sugerencia, datum elegido de una lista, vista previa en violeta de restricciones y cotas sobre el lienzo, estado totalmente/parcialmente restringido y «Terminar con AutoConstrain» (UI y `sketch_view finish_with_auto_constrain`). Falta: elegir el datum con un clic sobre un punto del lienzo (el diálogo es modal) y un candado por resultado (hoy es texto). | omnicad/ui/dialogo_autorestringir.py; omnicad/api/herramientas_boceto.py (`suggest_auto_constraints`, `auto_constrain`); tests/test_boceto_fase4.py::test_boc5_el_lienzo_pinta_la_previa_en_violeta_y_la_borra | 2026-10-24 |
 | BOC-8 | Proyectar solo las aristas de la cara al crear un boceto sobre ella | Abierto | Media | `create_sketch` sobre una cara plana y `sketch_from_spec` devuelven 0 entidades y la UI arranca con `Boceto()` vacío; Fusion proyecta el contorno de la cara de forma asociativa. | omnicad/ui/ventana.py:1790,2168,2178 | 2026-10-23 |
 | BOC-9 | Inferencia y ajuste (snaps) completos | Abierto | Alta | Hoy solo engancha a puntos, origen, rejilla y horizontal/vertical. Faltan punto medio, punto sobre curva, tangente y perpendicular inferidas, líneas guía punteadas y Mayús = coincidente en el punto medio. | omnicad/ui/editor_boceto.py:745 (`_ajustar`) | 2026-10-23 |
 | BOC-10 | Copiar y pegar elementos entre bocetos | Abierto | Media | No hay Ctrl+C / Ctrl+V en el `Lienzo` ni herramienta con boceto de origen y de destino; `transform_sketch copy` solo copia dentro del mismo boceto. | omnicad/ui/editor_boceto.py (sin `copiar`/`pegar`) | 2026-10-23 |
 | BOC-11 | Editar una spline ya creada | Abierto | Alta | Manijas de tangente y curvatura, peine de curvatura (hoy solo para aristas 3D), abrir y cerrar la curva, insertar punto de ajuste o de control, cambiar el grado 3↔5. Todo con herramienta de API. Une con F12 y RH9. | omnicad/restricciones/boceto.py:301,587 (`_insertar_nudo` interno); omnicad/nucleo/analisis.py:977 | 2026-10-23 |
 | BOC-12 | Tangente al arrastrar desde un extremo de spline, cónica o arco | Abierto | Media | La UI solo lo hace para un arco desde una línea; `draw_arc tangent_to` rechaza arcos («acá hace falta una línea») y `draw_spline` no tiene `tangent_to`. | omnicad/ui/editor_boceto.py:1000-1008,3009 | 2026-10-23 |
-| BOC-13 | `sketch_from_spec` completo | Abierto | Baja | Admitir cónica, texto, polígono por arista, línea de punto medio, círculos tangentes y arco tangente (hoy `INVALID_SPEC`); avisar si `entities` viene vacío (crea un boceto vacío con OK). | omnicad/api/herramientas_boceto.py:1159-1189 | 2026-10-23 |
+| BOC-13 | `sketch_from_spec` completo | Abierto | Baja | Admitir cónica, texto, polígono por arista, línea de punto medio, círculos tangentes y arco tangente (hoy `INVALID_SPEC`); avisar si `entities` viene vacío (crea un boceto vacío con OK); aceptar cotas de referencia (hoy no las acepta). | omnicad/api/herramientas_boceto.py:1159-1189 | 2026-10-23 |
 | BOC-14 | Desfase con Dos lados, Simétrico y Match Topology | Abierto | Alta | Firma solo con `distance` con signo. Falta desfase de spline y de elipse (hoy «hace falta una línea, arco o círculo») y una acción para soltar la asociación del desfase. Une con PL1. | omnicad/restricciones/boceto.py:2298; omnicad/ui/editor_boceto.py:1293 | 2026-10-23 |
 | BOC-15 | Empalme entre dos líneas paralelas y Extender spline o arco de elipse | Abierto | Baja | Empalme: «Las líneas son paralelas»; Extender: «Alargar funciona con líneas y arcos». | omnicad/restricciones/boceto.py:2088,2030 | 2026-10-23 |
 | BOC-16 | Patrones: suprimir instancias, editar y dirección 2 libre | Abierto | Media | No se pueden suprimir copias ni editar la cantidad o la distancia después (hay que borrar y rehacer); la 2.ª dirección es siempre +90° y no hay dirección por geometría. | omnicad/api/herramientas_boceto.py:1679 | 2026-10-23 |

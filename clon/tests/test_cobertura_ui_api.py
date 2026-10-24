@@ -122,7 +122,7 @@ HERRAMIENTAS = {
     "seleccion_nombre": "select_bodies", "seleccion_tamano": "select_bodies",
     "sk_linea_medio": "draw_line", "sk_rectangulo_3p": "draw_rectangle", "sk_rectangulo_centro": "draw_rectangle",
     "sk_circulo_2p": "draw_circle", "sk_circulo_3p": "draw_circle", "sk_poligono_arista": "create_polygon",
-    "sk_espiral": "draw_spiral", "sk_r_poligono": "add_constraint", "sk_terminar": "sketch_view",
+    "sk_espiral": "draw_spiral", "sk_r_poligono": "add_constraint", "sk_terminar": "sketch_view", "sk_terminar_auto": "sketch_view",
     "sk_intersecar": "project_to_sketch", "sk_incluir_3d": "project_to_sketch", "sk_arco_tangente": "draw_arc",
     "sk_alargar": "extend_sketch_curve", "sk_partir": "split_sketch_curve", "capturar": "capture_viewport",
 }

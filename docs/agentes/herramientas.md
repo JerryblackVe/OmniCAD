@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-298 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+299 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 43 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 37 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 38 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 69 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -70,7 +70,7 @@ Archivo, escena, timeline y deshacer.
 | [`find_in_window`](#find_in_window) | no | Selecciona cuerpos, los encuadra en la ventana y resalta su paso creador en el timeline, como Buscar en la ventana del navegador. |
 | [`set_body_opacity`](#set_body_opacity) | sí | Cambia el Control de opacidad de cuerpos del navegador. |
 | [`isolate_bodies`](#isolate_bodies) | sí | Muestra solo los cuerpos elegidos; restore vuelve a mostrar todos. |
-| [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). |
+| [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda; finish_with_auto_constrain: lo restringe automáticamente antes, y si no puede lo termina igual) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). |
 | [`get_preferences`](#get_preferences) | no | Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas. |
 | [`set_preference`](#set_preference) | sí | Valida y guarda una preferencia autorizada. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
@@ -462,12 +462,12 @@ Muestra solo los cuerpos elegidos; restore vuelve a mostrar todos. Guarda la vis
 
 ### `sketch_view`
 
-Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). Las opciones y finish solo están disponibles mientras se edita ese boceto.
+Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda; finish_with_auto_constrain: lo restringe automáticamente antes, y si no puede lo termina igual) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). Las opciones y finish solo están disponibles mientras se edita ese boceto.
 
 - Modifica el documento: no.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `action` ("edit" | "select_plane" | "look_at" | "find_in_window" | "find_in_timeline" | "finish" | "profile" | "dimensions" | "projected" | "construction" | "grid" | "snap" | "cut" | "points" | "constraints"; obligatorio): edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
+  - `action` ("edit" | "select_plane" | "look_at" | "find_in_window" | "find_in_timeline" | "finish" | "finish_with_auto_constrain" | "profile" | "dimensions" | "projected" | "construction" | "grid" | "snap" | "cut" | "points" | "constraints"; obligatorio): edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), finish_with_auto_constrain (AutoConstrain y terminar), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
   - `visible` (true/false; opcional, por defecto `null`): estado de la opción de la paleta; omitido la alterna (solo las acciones de opción).
 - CLI: `omnicad call sketch_view --doc pieza.omnicad sketch=… action=…`
 
@@ -651,7 +651,8 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`project_to_sketch`](#project_to_sketch) | sí | Proyecta aristas, caras o cuerpos del modelo sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). |
 | [`set_line_type`](#set_line_type) | sí | Cambia el tipo de línea de curvas del boceto (Fusion: Construcción / Línea central de la paleta): normal (forma perfiles), construction (de construcción: guía, no forma perfiles) o centerline (eje: forma perfiles y sirve de eje de revolución). |
 | [`edit_dimension`](#edit_dimension) | sí | Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con parámetros. |
-| [`auto_constrain`](#auto_constrain) | sí | Restringe automáticamente el boceto (Fusion: Restringir automáticamente): agrega coincidencias, horizontales, verticales e igualdades que ya se cumplen y después cotas (largos, radios, ángulos y posiciones desde un punto fijo en el origen) con las medidas actuales, hasta dejarlo totalmente restringido si se puede. |
+| [`auto_constrain`](#auto_constrain) | sí | Restringe automáticamente el boceto (Fusion: AutoConstrain): detecta lo que ya se cumple y lo agrega como restricción (coincidente, concéntrica, horizontal, vertical, colineal, paralela, perpendicular, tangente, igual, punto medio, simetría respecto de una línea central o de construcción) y después cotas con las medidas actuales (largos, radios, ángulos y posiciones desde un punto fijo en el origen o desde el datum) hasta dejarlo totalmente restringido si se puede. |
+| [`suggest_auto_constraints`](#suggest_auto_constraints) | no | Calcula alternativas de AutoConstrain SIN cambiar el boceto (Fusion: el diálogo con varios resultados). |
 | [`create_construction_axis`](#create_construction_axis) | sí | Crea un eje con cualquiera de las cinco variantes de CONSTRUIR. |
 | [`create_construction_point`](#create_construction_point) | sí | Crea un punto con las seis variantes de CONSTRUIR. |
 | [`create_ucs`](#create_ucs) | sí | Crea un sistema de coordenadas de usuario con origen, ejes, giros y desfases. |
@@ -1073,12 +1074,34 @@ Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): núme
 
 ### `auto_constrain`
 
-Restringe automáticamente el boceto (Fusion: Restringir automáticamente): agrega coincidencias, horizontales, verticales e igualdades que ya se cumplen y después cotas (largos, radios, ángulos y posiciones desde un punto fijo en el origen) con las medidas actuales, hasta dejarlo totalmente restringido si se puede. Cada agregado se prueba solo: nada entra en conflicto. Las cotas quedan como números (cambialas con edit_dimension).
+Restringe automáticamente el boceto (Fusion: AutoConstrain): detecta lo que ya se cumple y lo agrega como restricción (coincidente, concéntrica, horizontal, vertical, colineal, paralela, perpendicular, tangente, igual, punto medio, simetría respecto de una línea central o de construcción) y después cotas con las medidas actuales (largos, radios, ángulos y posiciones desde un punto fijo en el origen o desde el datum) hasta dejarlo totalmente restringido si se puede. Cada agregado se prueba solo: nada entra en conflicto ni mueve la geometría fuera de las tolerancias. Con suggest_auto_constraints se ven las alternativas antes de aplicar; acá las cotas quedan como números (cambialas con edit_dimension).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `tolerance_angle` (número; opcional, por defecto `1.0`): grados (0 a 45) dentro de los cuales una línea cuenta como horizontal, vertical, paralela o perpendicular.
+  - `tolerance_distance` (número; opcional, por defecto `0.001`): mm (hasta 10) dentro de los cuales dos cosas cuentan como coincidentes, tangentes, colineales, concéntricas, en el punto medio o simétricas.
+  - `types` (lista de texto o null; opcional, por defecto `null`): familias a inferir: coincident, concentric, horizontal, vertical, collinear, parallel, perpendicular, tangent, equal, midpoint, symmetry y dimensions (dato y cotas); vacío = todas.
+  - `max_items` (entero; opcional, por defecto `null`): tope de restricciones y cotas a agregar (las primeras por prioridad); vacío = sin tope.
+  - `datum` (entero; opcional, por defecto `null`): id de un punto del boceto desde el que se miden las posiciones (como Set datum de Fusion); vacío = el origen.
+  - `exclude` (lista de objeto o null; opcional, por defecto `null`): sugerencias a no agregar, como los items de la respuesta: {kind: constraint o dimension, type, entities}.
 - CLI: `omnicad call auto_constrain --doc pieza.omnicad`
+
+### `suggest_auto_constraints`
+
+Calcula alternativas de AutoConstrain SIN cambiar el boceto (Fusion: el diálogo con varios resultados). Cada resultado trae lo que agregaría (items, en orden de prioridad, con los grados de libertad que quedan tras cada uno) y si deja el boceto totalmente restringido: «Completo», «Solo restricciones», «Estricto» (tolerancias 10 veces menores) y una por cada punto elegido como datum. Para aplicar una, llamá a auto_constrain con las mismas opciones (max_items = cuántos items querés; exclude = los que sacás; datum). Las alternativas que dan lo mismo que otra anterior se saltean.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `results` (entero; opcional, por defecto `1`): cuántas alternativas pedir (1 a 12); pedir más es «Generate more».
+  - `tolerance_angle` (número; opcional, por defecto `1.0`): grados (0 a 45) dentro de los cuales una línea cuenta como horizontal, vertical, paralela o perpendicular.
+  - `tolerance_distance` (número; opcional, por defecto `0.001`): mm (hasta 10) dentro de los cuales dos cosas cuentan como coincidentes, tangentes, colineales, concéntricas, en el punto medio o simétricas.
+  - `types` (lista de texto o null; opcional, por defecto `null`): familias a inferir: coincident, concentric, horizontal, vertical, collinear, parallel, perpendicular, tangent, equal, midpoint, symmetry y dimensions (dato y cotas); vacío = todas.
+  - `max_items` (entero; opcional, por defecto `null`): tope de restricciones y cotas por resultado (las primeras por prioridad); vacío = sin tope.
+  - `datum` (entero; opcional, por defecto `null`): id de un punto del boceto desde el que se miden las posiciones; vacío = el origen.
+  - `exclude` (lista de objeto o null; opcional, por defecto `null`): sugerencias a no incluir, como los items de una respuesta anterior: {kind: constraint o dimension, type, entities}.
+- CLI: `omnicad call suggest_auto_constraints --doc pieza.omnicad`
 
 ### `create_construction_axis`
 

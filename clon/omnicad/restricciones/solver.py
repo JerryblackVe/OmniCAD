@@ -19,9 +19,11 @@ enfoque estándar y propio:
 `auto_restringir` es la versión propia de AutoConstrain (SKT-AUTO-CONSTRAIN).
 """
 import math
+from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import auto_candidatos
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
                      _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
                      puntos_primitiva, signos_cuadrante)
@@ -32,6 +34,8 @@ _PESO_ARRASTRE = 1.0
 _ESCALA_TANGENTE = 10.0      # mm: convierte el seno del ángulo en un residuo comparable a una distancia
 _ESCALA_CURVATURA = 100.0    # mm²
 TOPE_AUTO_RESTRINGIR = 500
+MAX_INTENTOS_EXTRA = 6       # alternativas repetidas que se descartan antes de rendirse (cada una cuesta un cálculo entero)
+TOPE_TERMINAR_AUTO = 250      # «Terminar con AutoConstrain» de Fusion no corre con más de 250 entidades
 
 
 class ResultadoSolver:
@@ -845,7 +849,10 @@ class _GradosAuto:
             self.rango = int(np.count_nonzero(s > 1e-6))
             self.base[:self.rango] = vt[:self.rango]
 
-    def __call__(self, ident=None):
+    def __call__(self, ident=None, tolerancia=None):
+        """Grados de libertad tras sumar la restricción o cota `ident`. Con `tolerancia` = (mm, seno del ángulo), una
+        restricción que la geometría actual NO cumple (su residuo pasa la tolerancia) no suma filas: dejaría el rango
+        contado de más y, al aplicarla, el solver movería la geometría."""
         n = len(self.sis.x0)
         if ident is None:
             return n - self.rango
@@ -877,115 +884,209 @@ class _GradosAuto:
             J = _jacobiano(local, local.x0)
             filas = np.zeros((len(J), n))
             filas[:, columnas] = J
+            if tolerancia is not None:
+                res = local.residuos(local.x0)
+                puntos = [b.coords(eid) for clase, eid in claves if clase == "p"]
+                escala = max([float(np.ptp(puntos, axis=0).max()) if len(puntos) > 1 else 0.0,
+                              *(b.radio(eid) for clase, eid in claves if clase == "r")])
+                if len(res) and np.max(np.abs(res)) > (tolerancia[0] * max(1.0, escala)
+                                                       + tolerancia[1] * max(escala, _ESCALA_TANGENTE)):
+                    return n - self.rango
         for fila in filas:
+            base, previa = self.base[:self.rango], np.linalg.norm(fila)
             for _ in range(2):
-                base = self.base[:self.rango]
-                coeficientes = np.einsum("ij,j->i", base, fila)
-                fila -= np.einsum("i,ij->j", coeficientes, base)
-            norma = np.linalg.norm(fila)
+                fila -= (base @ fila) @ base
+                norma = np.linalg.norm(fila)
+                if norma > 0.5 * previa:      # sin cancelación fuerte, una pasada alcanza; si no, se reortogonaliza
+                    break
+                previa = norma
             if norma > 1e-6:
                 self.base[self.rango] = fila / norma
                 self.rango += 1
         return n - self.rango
 
 
-def auto_restringir(boceto, valores_cotas=None, tol_angulo=1.0, tol_distancia=1e-3):
-    """Restringir automáticamente (SKT-AUTO-CONSTRAIN): detecta coincidencias, horizontales/verticales
-    e igualdades y después propone cotas (largos, radios, ángulos y posiciones respecto del origen)
-    hasta dejar el boceto totalmente restringido. Cada candidato se agrega solo si baja los grados de
-    libertad sin entrar en conflicto. Devuelve la lista de descripciones de lo agregado."""
-    b = boceto
+TIPOS_AUTO = ("coincidente", "concentrica", "horizontal", "vertical", "colineal", "paralela", "perpendicular",
+              "tangente", "igual", "punto_medio", "simetrica", "cota")
+# Familias que AutoConstrain puede inferir, en el orden en que las prueba. «cota» incluye el dato (punto fijo en el
+# origen) y las cotas con las medidas actuales.
+
+
+@dataclass(frozen=True)
+class Sugerencia:
+    """Una restricción o cota que AutoConstrain agregó (o agregaría). `gdl`: grados de libertad que quedan con ella."""
+    clase: str                   # "restriccion" | "cota"
+    tipo: str
+    entidades: tuple
+    valor: float | None
+    descripcion: str
+    gdl: int
+
+    @property
+    def clave(self):
+        """Identifica la sugerencia sin su valor: sirve para excluirla (`excluir=`) al regenerar."""
+        return self.clase, self.tipo, self.entidades
+
+
+@dataclass
+class ResultadoAuto:
+    """Una alternativa de AutoConstrain: lo que agregaría y cómo queda el boceto."""
+    nombre: str
+    sugerencias: list
+    gdl_inicial: int
+    gdl: int
+    opciones: dict = field(default_factory=dict)      # las de `auto_restringir` que reproducen este resultado
+
+    @property
+    def totalmente_restringido(self):
+        return self.gdl == 0
+
+
+def contar_entidades(b):
+    """Curvas más puntos sueltos: lo que cuenta el tope de AutoConstrain."""
     en_curvas = {p for c in b.curvas.values() for p in c.puntos()}
-    cantidad = len(b.curvas) + len(b.puntos.keys() - en_curvas)
+    return len(b.curvas) + len(b.puntos.keys() - en_curvas)
+
+
+def _auto(b, valores_cotas, tol_angulo, tol_distancia, tipos, limite, datum, excluir):
+    """Núcleo de AutoConstrain: agrega a `b` lo que cumple y baja los grados de libertad. Devuelve
+    (sugerencias, gdl inicial, gdl final)."""
+    tipos = set(TIPOS_AUTO if tipos is None else tipos)
+    if tipos - set(TIPOS_AUTO):
+        raise ErrorBoceto(f"Tipo de restricción desconocido: {', '.join(sorted(tipos - set(TIPOS_AUTO)))}. "
+                          f"Los válidos son: {', '.join(TIPOS_AUTO)}.")
+    if datum is not None and datum not in b.puntos:
+        raise ErrorBoceto(f"El datum {datum} no es un punto del boceto.")
+    cantidad = contar_entidades(b)
     if cantidad > TOPE_AUTO_RESTRINGIR:
         raise ErrorBoceto(f"El boceto tiene {cantidad} entidades; el tope para restringir automáticamente es "
                           f"{TOPE_AUTO_RESTRINGIR}. Simplificá o dividí el boceto.")
+    excluir = set(excluir)
     valores = dict(valores_cotas or {})
-    agregado = []
+    salida = []
     calcular_gdl = _GradosAuto(b, valores)
-    gdl = [calcular_gdl()]
+    gdl_inicial = gdl = calcular_gdl()
+    sen = math.sin(math.radians(tol_angulo))
 
-    def probar(funcion, descripcion, valor=None):
-        if gdl[0] == 0:
+    def terminado():
+        return gdl == 0 or (limite is not None and len(salida) >= limite)
+
+    def probar(tipo, entidades, descripcion, valor=None):
+        nonlocal gdl
+        clase = "restriccion" if valor is None else "cota"
+        if terminado() or ("cota" if clase == "cota" or tipo == "fijo" else tipo) not in tipos:
+            return False
+        if (clase, tipo, tuple(entidades)) in excluir:
             return False
         try:
-            ident = funcion()
+            ident = (b.agregar_restriccion(tipo, entidades) if valor is None
+                     else b.agregar_cota(tipo, entidades, _numero(valor)))
         except ErrorBoceto:
             return False
         if valor is not None:
             valores[ident] = valor
-        nuevo = calcular_gdl(ident)
-        if nuevo < gdl[0]:
-            gdl[0] = nuevo
-            agregado.append(descripcion)
+        # Red de seguridad: una restricción que la geometría no cumple dentro de la tolerancia no entra.
+        nuevo = calcular_gdl(ident, (tol_distancia, sen) if valor is None else None)
+        if nuevo < gdl:
+            gdl = nuevo
+            salida.append(Sugerencia(clase, tipo, tuple(entidades), valor, descripcion, gdl))
             return True
         b.eliminar(ident)
         valores.pop(ident, None)
         return False
 
+    for etapa, produce in auto_candidatos.ETAPAS:
+        if terminado():
+            break
+        if tipos.isdisjoint(produce):
+            continue
+        for tipo, entidades, descripcion in etapa(b, tol_angulo, tol_distancia, tipos):
+            probar(tipo, entidades, descripcion)
+            if terminado():
+                break
+    if "cota" in tipos and not terminado():
+        _cotas_auto(b, probar, tol_distancia, datum)
+    return salida, gdl_inicial, gdl
+
+
+def _cotas_auto(b, probar, tol_distancia, datum):
+    """Dato (punto fijo en el origen) y cotas con las medidas actuales: largos, radios, ángulos y posiciones."""
     lineas = [c for c in b.curvas.values() if isinstance(c, Linea) and not c.proyectada]
-    # 1) Coincidencias: puntos casi en el mismo lugar.
-    ids = list(b.puntos)
-    for i, p in enumerate(ids):
-        for q in ids[i + 1:]:
-            if math.dist(b.coords(p), b.coords(q)) < tol_distancia:
-                probar(lambda p=p, q=q: b.agregar_restriccion("coincidente", [p, q]), f"coincidente {p}-{q}")
-    # 2) Horizontales y verticales.
-    for ln in lineas:
-        (x1, y1), (x2, y2) = b._extremos_linea(ln.id)
-        ang = math.degrees(math.atan2(y2 - y1, x2 - x1)) % 180
-        if min(ang, 180 - ang) < tol_angulo:
-            probar(lambda k=ln.id: b.agregar_restriccion("horizontal", [k]), f"horizontal {ln.id}")
-        elif abs(ang - 90) < tol_angulo:
-            probar(lambda k=ln.id: b.agregar_restriccion("vertical", [k]), f"vertical {ln.id}")
-    # 3) Igualdades (largos y radios) con el primero de cada grupo.
-    def grupos(items, medida):
-        vistos = []
-        for k in items:
-            m = medida(k)
-            base = next((g for g in vistos if abs(g[1] - m) < tol_distancia * max(1.0, m)), None)
-            if base is None:
-                vistos.append((k, m))
-            else:
-                probar(lambda a=base[0], c=k: b.agregar_restriccion("igual", [a, c]), f"igual {base[0]}-{k}")
-    grupos([ln.id for ln in lineas if not ln.construccion], lambda k: math.dist(*b._extremos_linea(k)))
-    grupos([c.id for c in b.curvas.values() if c.tipo in CIRCULARES and not c.proyectada], lambda k: b.radio(k))
-    # 4) Origen: dato del boceto (como las cotas al origen de Fusion).
-    fijos = b.puntos_fijos()
-    if not fijos and b.puntos:
-        dato = min(b.puntos, key=lambda p: math.hypot(*b.coords(p)))
+    if not b.puntos_fijos() and b.puntos:
+        dato = datum if datum is not None else min(b.puntos, key=lambda p: math.hypot(*b.coords(p)))
         if math.hypot(*b.coords(dato)) < tol_distancia:
-            probar(lambda: b.agregar_restriccion("fijo", [dato]), f"fijo {dato}")
+            probar("fijo", [dato], f"fijo {dato}")
         else:
             origen = b.agregar_punto(0.0, 0.0)
             b.agregar_restriccion("fijo", [origen])
             for tipo in ("distancia_h", "distancia_v"):
-                v = b.medir_cota(tipo, [origen, dato])
-                probar(lambda t=tipo, v=v: b.agregar_cota(t, [origen, dato], _numero(round(v, 4))),
-                       f"{tipo} origen-{dato}", round(v, 4))
-    # 5) Cotas: largos, radios, ángulos entre líneas unidas y posiciones de lo que siga libre.
+                probar(tipo, [origen, dato], f"{tipo} origen-{dato}", round(b.medir_cota(tipo, [origen, dato]), 4))
     for ln in lineas:
-        v = round(math.dist(*b._extremos_linea(ln.id)), 4)
-        probar(lambda k=ln.id, v=v: b.agregar_cota("distancia", [k], _numero(v)), f"largo {ln.id}", v)
+        probar("distancia", [ln.id], f"largo {ln.id}", round(math.dist(*b._extremos_linea(ln.id)), 4))
     for c in list(b.curvas.values()):
         if c.tipo in CIRCULARES and not c.proyectada:
             tipo = "diametro" if c.tipo == "circulo" else "radio"
-            v = round(b.medir_cota(tipo, [c.id]), 4)
-            probar(lambda k=c.id, t=tipo, v=v: b.agregar_cota(t, [k], _numero(v)), f"{tipo} {c.id}", v)
+            probar(tipo, [c.id], f"{tipo} {c.id}", round(b.medir_cota(tipo, [c.id]), 4))
     for i, l1 in enumerate(lineas):
         for l2 in lineas[i + 1:]:
             if set(l1.puntos()) & set(l2.puntos()):
                 v = round(b.medir_cota("angulo", [l1.id, l2.id]), 4)
                 if 1e-3 < v < 180 - 1e-3:
-                    probar(lambda a=l1.id, c=l2.id, v=v: b.agregar_cota("angulo", [a, c], _numero(v)),
-                           f"ángulo {l1.id}-{l2.id}", v)
+                    probar("angulo", [l1.id, l2.id], f"ángulo {l1.id}-{l2.id}", v)
     fijos = sorted(b.puntos_fijos())
     if fijos:
-        dato = fijos[0]
-        for p in list(b.puntos):
-            if p == dato:
-                continue
+        referencia = fijos[0]
+        if datum is not None and datum != referencia:       # el datum se ubica respecto del dato y ordena el resto
             for tipo in ("distancia_h", "distancia_v"):
-                v = round(b.medir_cota(tipo, [dato, p]), 4)
-                probar(lambda t=tipo, p=p, v=v: b.agregar_cota(t, [dato, p], _numero(v)), f"{tipo} {dato}-{p}", v)
-    return agregado
+                probar(tipo, [referencia, datum], f"{tipo} {referencia}-{datum}",
+                       round(b.medir_cota(tipo, [referencia, datum]), 4))
+            referencia = datum
+        for p in list(b.puntos):
+            if p != referencia:
+                for tipo in ("distancia_h", "distancia_v"):
+                    probar(tipo, [referencia, p], f"{tipo} {referencia}-{p}",
+                           round(b.medir_cota(tipo, [referencia, p]), 4))
+
+
+def auto_restringir(boceto, valores_cotas=None, tol_angulo=1.0, tol_distancia=1e-3, tipos=None, limite=None,
+                    datum=None, excluir=()):
+    """Restringir automáticamente (SKT-AUTO-CONSTRAIN): detecta lo que el boceto ya cumple (coincidencias,
+    concentricidad, horizontales/verticales, colineales, paralelas, perpendiculares, tangencias, igualdades,
+    puntos medios y simetrías) y después propone cotas (largos, radios, ángulos y posiciones desde un dato) hasta
+    dejarlo totalmente restringido. Cada candidato se agrega solo si baja los grados de libertad sin entrar en
+    conflicto. `tipos`: familias a inferir (`TIPOS_AUTO`; todas por defecto); `limite`: tope de agregados;
+    `datum`: punto desde el que se miden las posiciones; `excluir`: claves de `Sugerencia` que no se agregan.
+    Devuelve las `Sugerencia` agregadas, en orden."""
+    return _auto(boceto, valores_cotas, tol_angulo, tol_distancia, tipos, limite, datum, excluir)[0]
+
+
+def _variantes(b, opciones):
+    """(nombre, cambios a las opciones) de las alternativas, en orden: el resultado completo, solo restricciones,
+    tolerancias diez veces más estrictas y después una por cada punto elegido como datum."""
+    tipos = TIPOS_AUTO if opciones["tipos"] is None else opciones["tipos"]
+    yield "Completo", {}
+    yield "Solo restricciones", {"tipos": [t for t in tipos if t != "cota"]}
+    yield "Estricto", {"tol_angulo": opciones["tol_angulo"] / 10, "tol_distancia": opciones["tol_distancia"] / 10}
+    for p in sorted((p for p in b.puntos if not b.puntos[p].proyectado and p != opciones["datum"]),
+                    key=lambda p: (math.hypot(*b.coords(p)), p)):
+        yield f"Datum en el punto {p}", {"datum": p}
+
+
+def sugerir_auto_restricciones(boceto, valores_cotas=None, resultados=1, tol_angulo=1.0, tol_distancia=1e-3,
+                               tipos=None, limite=None, datum=None, excluir=()):
+    """Hasta `resultados` alternativas de AutoConstrain SIN tocar el boceto (se calculan sobre copias): cada una
+    es un `ResultadoAuto` con sus sugerencias en orden de prioridad y los grados de libertad tras cada una, así
+    cualquier prefijo es una alternativa más suave. Las alternativas que dan lo mismo que una anterior se saltean,
+    así que pueden ser menos de las pedidas. Mismas opciones que `auto_restringir`."""
+    opciones = {"tol_angulo": tol_angulo, "tol_distancia": tol_distancia, "tipos": tipos, "limite": limite,
+                "datum": datum, "excluir": excluir}
+    salida, vistos = [], set()
+    for intento, (nombre, cambios) in enumerate(_variantes(boceto, opciones)):
+        if len(salida) >= resultados or intento >= resultados + MAX_INTENTOS_EXTRA:
+            break
+        sugerencias, inicial, final = _auto(boceto.copia(), valores_cotas, **{**opciones, **cambios})
+        huella = tuple((s.clave, s.valor) for s in sugerencias)
+        if huella not in vistos:
+            vistos.add(huella)
+            salida.append(ResultadoAuto(nombre, sugerencias, inicial, final, {**opciones, **cambios}))
+    return salida

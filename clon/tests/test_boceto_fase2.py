@@ -338,7 +338,7 @@ def test_b103_auto_restringir_conserva_candidatos_del_calculo_completo(monkeypat
 
     # Oráculo anterior: recalcular el rango de TODO el boceto después de cada candidato.
     monkeypatch.setattr(solver, "_GradosAuto",
-                        lambda boceto, valores: lambda ident=None: solver.grados_de_libertad(boceto, valores),
+                        lambda boceto, valores: lambda ident=None, _tol=None: solver.grados_de_libertad(boceto, valores),
                         raising=False)
     esperado = solver.auto_restringir(original, valores)
 

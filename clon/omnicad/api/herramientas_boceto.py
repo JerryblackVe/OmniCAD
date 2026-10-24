@@ -23,7 +23,8 @@ from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..nucleo import perfiles as perfiles_mod
-from ..restricciones import Boceto, ErrorBoceto, auto_restringir, resolver
+from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, resolver,
+                             sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
                                     centro_arco_tangente, circunferencia_3_puntos, validar_valor_cota)
@@ -2088,19 +2089,108 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
             "dof": gdl, "status": estado}
 
 
+_AUTO_TIPOS = {nombre: tipo for nombre, tipo in RESTRICCIONES.items() if tipo in TIPOS_AUTO} | {"dimensions": "cota"}
+
+
+def _opciones_auto(tolerance_angle, tolerance_distance, types, max_items, datum, exclude):
+    """Opciones de `auto_restringir` desde los argumentos de la herramienta (INVALID_ARGUMENTS si no valen)."""
+    if not _finito(tolerance_angle) or not 0 < tolerance_angle <= 45:
+        raise error("INVALID_ARGUMENTS", "tolerance_angle tiene que estar entre 0 y 45 grados (mayor a 0).")
+    if not _finito(tolerance_distance) or not 0 < tolerance_distance <= 10:
+        raise error("INVALID_ARGUMENTS", "tolerance_distance tiene que estar entre 0 y 10 mm (mayor a 0).")
+    tipos = None
+    if types is not None:
+        desconocidos = [t for t in types if t not in _AUTO_TIPOS]
+        if desconocidos:
+            raise error("INVALID_ARGUMENTS", f"Tipos desconocidos en types: {desconocidos}.",
+                        f"Los válidos son: {', '.join(_AUTO_TIPOS)}.")
+        tipos = [_AUTO_TIPOS[t] for t in types]
+    if max_items is not None and (isinstance(max_items, bool) or max_items < 0):
+        raise error("INVALID_ARGUMENTS", "max_items tiene que ser un entero de 0 o más.")
+    excluir = []
+    for e in exclude or []:
+        dimension = e.get("kind") == "dimension"
+        tipo = (COTAS if dimension else RESTRICCIONES).get(e.get("type"))
+        entidades = e.get("entities")
+        if tipo is None or not isinstance(entidades, list):
+            raise error("INVALID_ARGUMENTS", f"Cada elemento de exclude necesita type y entities válidos: {e!r}.",
+                        "Es un item de una respuesta anterior: {kind, type, entities}.")
+        excluir.append(("cota" if dimension else "restriccion", tipo, tuple(entidades)))
+    return {"tol_angulo": tolerance_angle, "tol_distancia": tolerance_distance, "tipos": tipos, "limite": max_items,
+            "datum": datum, "excluir": excluir}
+
+
+def _item_auto(s):
+    cota = s.clase == "cota"
+    nombres = _COTA_A_INGLES if cota else _RESTRICCION_A_INGLES
+    return {"kind": "dimension" if cota else "constraint", "type": nombres.get(s.tipo, s.tipo),
+            "entities": list(s.entidades), "value": s.valor, "description": s.descripcion, "dof": s.gdl}
+
+
 @herramienta("auto_constrain", "boceto",
-             "Restringe automáticamente el boceto (Fusion: Restringir automáticamente): agrega coincidencias, "
-             "horizontales, verticales e igualdades que ya se cumplen y después cotas (largos, radios, ángulos y "
-             "posiciones desde un punto fijo en el origen) con las medidas actuales, hasta dejarlo totalmente "
-             "restringido si se puede. Cada agregado se prueba solo: nada entra en conflicto. Las cotas quedan como "
-             "números (cambialas con edit_dimension).", modifica=True)
-def auto_constrain(sesion, sketch: str | None = None):
+             "Restringe automáticamente el boceto (Fusion: AutoConstrain): detecta lo que ya se cumple y lo agrega como "
+             "restricción (coincidente, concéntrica, horizontal, vertical, colineal, paralela, perpendicular, tangente, "
+             "igual, punto medio, simetría respecto de una línea central o de construcción) y después cotas con las "
+             "medidas actuales (largos, radios, ángulos y posiciones desde un punto fijo en el origen o desde el datum) "
+             "hasta dejarlo totalmente restringido si se puede. Cada agregado se prueba solo: nada entra en conflicto ni "
+             "mueve la geometría fuera de las tolerancias. Con suggest_auto_constraints se ven las alternativas antes de "
+             "aplicar; acá las cotas quedan como números (cambialas con edit_dimension).", modifica=True)
+def auto_constrain(sesion, sketch: str | None = None, tolerance_angle: float = 1.0, tolerance_distance: float = 0.001,
+                   types: list[str] | None = None, max_items: int | None = None, datum: int | None = None,
+                   exclude: list[dict] | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    tolerance_angle: grados (0 a 45) dentro de los cuales una línea cuenta como horizontal, vertical, paralela o perpendicular.
+    tolerance_distance: mm (hasta 10) dentro de los cuales dos cosas cuentan como coincidentes, tangentes, colineales, concéntricas, en el punto medio o simétricas.
+    types: familias a inferir: coincident, concentric, horizontal, vertical, collinear, parallel, perpendicular, tangent, equal, midpoint, symmetry y dimensions (dato y cotas); vacío = todas.
+    max_items: tope de restricciones y cotas a agregar (las primeras por prioridad); vacío = sin tope.
+    datum: id de un punto del boceto desde el que se miden las posiciones (como Set datum de Fusion); vacío = el origen.
+    exclude: sugerencias a no agregar, como los items de la respuesta: {kind: constraint o dimension, type, entities}.
     """
+    opciones = _opciones_auto(tolerance_angle, tolerance_distance, types, max_items, datum, exclude)
     op, _br = boceto_activo(sesion, sketch, derivados=False)
     valores = valores_cotas(sesion, op.boceto)
     agregado = []
-    r = _dibujar(sesion, op.id, lambda b: agregado.extend(auto_restringir(b, valores)), desde_solver=True)
-    r["added"] = agregado
+    r = _dibujar(sesion, op.id, lambda b: agregado.extend(auto_restringir(b, valores, **opciones)), desde_solver=True)
+    r["added"] = [s.descripcion for s in agregado]
+    r["items"] = [_item_auto(s) for s in agregado]
     return r
+
+
+@herramienta("suggest_auto_constraints", "boceto",
+             "Calcula alternativas de AutoConstrain SIN cambiar el boceto (Fusion: el diálogo con varios resultados). "
+             "Cada resultado trae lo que agregaría (items, en orden de prioridad, con los grados de libertad que quedan "
+             "tras cada uno) y si deja el boceto totalmente restringido: «Completo», «Solo restricciones», «Estricto» "
+             "(tolerancias 10 veces menores) y una por cada punto elegido como datum. Para aplicar una, llamá a "
+             "auto_constrain con las mismas opciones (max_items = cuántos items querés; exclude = los que sacás; "
+             "datum). Las alternativas que dan lo mismo que otra anterior se saltean.")
+def suggest_auto_constraints(sesion, sketch: str | None = None, results: int = 1, tolerance_angle: float = 1.0,
+                             tolerance_distance: float = 0.001, types: list[str] | None = None,
+                             max_items: int | None = None, datum: int | None = None, exclude: list[dict] | None = None):
+    """
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    results: cuántas alternativas pedir (1 a 12); pedir más es «Generate more».
+    tolerance_angle: grados (0 a 45) dentro de los cuales una línea cuenta como horizontal, vertical, paralela o perpendicular.
+    tolerance_distance: mm (hasta 10) dentro de los cuales dos cosas cuentan como coincidentes, tangentes, colineales, concéntricas, en el punto medio o simétricas.
+    types: familias a inferir: coincident, concentric, horizontal, vertical, collinear, parallel, perpendicular, tangent, equal, midpoint, symmetry y dimensions (dato y cotas); vacío = todas.
+    max_items: tope de restricciones y cotas por resultado (las primeras por prioridad); vacío = sin tope.
+    datum: id de un punto del boceto desde el que se miden las posiciones; vacío = el origen.
+    exclude: sugerencias a no incluir, como los items de una respuesta anterior: {kind: constraint o dimension, type, entities}.
+    """
+    if isinstance(results, bool) or not isinstance(results, int) or not 1 <= results <= 12:
+        raise error("INVALID_ARGUMENTS", "results tiene que ser un entero de 1 a 12.")
+    opciones = _opciones_auto(tolerance_angle, tolerance_distance, types, max_items, datum, exclude)
+    op, br = boceto_activo(sesion, sketch, derivados=False)
+    b = op.boceto.copia()
+    _sincronizar_con_solver(sesion, op, b)
+    try:
+        alternativas = sugerir_auto_restricciones(b, valores_cotas(sesion, b), resultados=results, **opciones)
+    except ErrorBoceto as e:
+        raise error("INVALID_GEOMETRY", str(e)) from e
+    estado, gdl = estado_solver(br)
+    return {"sketch": _paso(op), "dof": gdl, "status": estado,
+            "results": [{"name": a.nombre, "initial_dof": a.gdl_inicial, "dof": a.gdl,
+                         "fully_constrained": a.totalmente_restringido,
+                         "constraints": sum(s.clase == "restriccion" for s in a.sugerencias),
+                         "dimensions": sum(s.clase == "cota" for s in a.sugerencias),
+                         "items": [_item_auto(s) for s in a.sugerencias]} for a in alternativas]}

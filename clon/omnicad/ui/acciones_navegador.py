@@ -223,14 +223,18 @@ def vista_boceto(v, clave, accion, visible=None):
         v.acciones["ver_timeline"].setChecked(True)
         v.timeline.show()
         v.timeline.resaltar(clave)
-    elif accion == "finish":
+    elif accion in ("finish", "finish_with_auto_constrain"):
         mb = v.modo_boceto
         if not mb.activo or getattr(mb.datos.get("op"), "id", None) != clave:
             raise error("INVALID_ARGUMENTS", "Terminar solo se puede mientras se edita el boceto elegido.")
         r = mb.lienzo.resultado
         if r is not None and not r.ok:         # la ventana preguntaría «¿Terminar igual?»: un agente no contesta diálogos
             raise error("OPERATION_FAILED", "El boceto tiene restricciones en conflicto: resolvelas antes de terminarlo.")
-        mb.terminar()
+        if accion == "finish":
+            mb.terminar()
+        else:
+            _terminado, agregado = mb.terminar_con_autorestringir()
+            return {"sketch": clave, "action": accion, "added": [s.descripcion for s in agregado]}
     elif accion in CAPAS_BOCETO:
         mb = v.modo_boceto
         if not mb.activo or getattr(mb.datos.get("op"), "id", None) != clave:

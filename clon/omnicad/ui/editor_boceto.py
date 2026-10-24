@@ -34,7 +34,7 @@ import numpy as np
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPixmap, QPolygonF
-from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
@@ -486,6 +486,7 @@ class Lienzo(QWidget):
         self.pila_rehacer = []
         self.resultado = None
         self._conflictos = []            # BOC-7: ids de restricciones/cotas en choque (se pintan en rojo)
+        self.previa_auto = []
         self.entrada = None
         self._mvp = None
         self._sobre = None               # entidad bajo el ratón en Seleccionar (se resalta y cambia el cursor)
@@ -1421,18 +1422,45 @@ class Lienzo(QWidget):
             self.mensaje.emit(f"{HERRAMIENTAS[h][0]}: listo ({info.get('tipo', 'geometría')}). Seguí eligiendo o Esc.")
 
     # ------------------------------------------------------------ AutoConstrain, tipo de línea, texto
-    def auto_restringir(self):
-        """Restringir automáticamente: agrega restricciones y cotas hasta dejarlo totalmente restringido."""
+    def auto_restringir(self, **opciones):
+        """Restringir automáticamente: agrega restricciones y cotas hasta dejarlo totalmente restringido.
+        `opciones`: las de `auto_restringir` del solver (tipos, tolerancias, límite, datum, excluir)."""
         agregado = {}
 
         def hacer():
-            agregado["lista"] = auto_restringir(self.b, self.valores_cotas())
+            agregado["lista"] = auto_restringir(self.b, self.valores_cotas(), **opciones)
         if self.aplicar_cambio(hacer):
             n = len(agregado.get("lista", []))
             estado = "totalmente restringido" if self.resultado.gdl == 0 else f"quedan {self.resultado.gdl} GDL"
             self.mensaje.emit(f"Restringir automáticamente: {n} restricciones/cotas agregadas ({estado}).")
             return agregado["lista"]
         return []
+
+    def set_previa_auto(self, lista):
+        """Actualiza las restricciones y cotas sugeridas que se dibujan en violeta."""
+        self.previa_auto = lista
+        self.update()
+
+    def auto_restringir_dialogo(self):
+        """AutoConstrain con el diálogo de resultados (BOC-5); el punto seleccionado, si hay uno, es el datum."""
+        from .dialogo_autorestringir import DialogoAutoRestringir
+        if not self.b.curvas and not self.b.puntos:
+            self.mensaje.emit("Restringir automáticamente: el boceto está vacío.")
+            return []
+        puntos = [i for i in self.seleccion if i in self.b.puntos]
+        try:
+            dialogo = DialogoAutoRestringir(self.b, self.valores_cotas(), puntos[0] if len(puntos) == 1 else None, self)
+        except (ErrorBoceto, ErrorExpresion) as e:
+            self.mensaje.emit(str(e))
+            return []
+        dialogo.previa.connect(self.set_previa_auto)
+        try:
+            resultado = dialogo.resultado()
+            self.set_previa_auto(resultado.sugerencias[:dialogo.cantidad.value()] if resultado is not None else [])
+            aceptado = dialogo.exec() == QDialog.Accepted
+        finally:
+            self.set_previa_auto([])
+        return self.auto_restringir(**dialogo.opciones()) if aceptado else []
 
     def alternar_eje(self):
         """Tipo de línea «línea central» (eje): alterna lo seleccionado, o lo que se dibuje."""
@@ -3558,6 +3586,7 @@ class Lienzo(QWidget):
             p.setBrush(Qt.NoBrush)
         self._zonas_glifos = self._dibujar_glifos(p) if self.mostrar["restricciones"] else {}
         self._zonas_cotas = self._dibujar_cotas(p) if self.mostrar["cotas"] else {}
+        self._dibujar_previa_auto(p)
         self._dibujar_marco(p)
         if self._zona_sobre is not None:
             rect = self._zonas_cotas.get(self._zona_sobre) or self._zonas_glifos.get(self._zona_sobre)
@@ -3620,6 +3649,44 @@ class Lienzo(QWidget):
             zonas[r.id] = caja
         p.setBrush(Qt.NoBrush)
         return zonas
+
+    def _dibujar_previa_auto(self, p):
+        if not self.previa_auto:
+            return
+        cuenta = {}
+        lado = 14 if self._oscuro() else 16
+        p.save()
+        p.setPen(QPen(VIOLETA, 2))
+        p.setBrush(Qt.NoBrush)
+        p.setFont(QFont("Segoe UI", 9))
+        for s in self.previa_auto:
+            if not s.entidades or any(e not in self.b.puntos and e not in self.b.curvas for e in s.entidades):
+                continue
+            ent = s.entidades[0]
+            if s.clase == "restriccion":
+                if s.tipo in ("coincidente", "punto_medio"):
+                    ent = s.entidades[-1]
+                elif s.tipo == "simetrica":
+                    ent = s.entidades[2]
+                elif s.tipo == "desfase" and len(s.entidades) == 4:
+                    ent = s.entidades[1]
+                elif s.tipo == "patron":
+                    ent = s.entidades[-1] if len(s.entidades) == 3 else s.entidades[1]
+            k = cuenta.get(ent, 0)
+            cuenta[ent] = k + 1
+            q = self._ancla(ent)
+            if s.clase == "restriccion":
+                q += QPointF(8 + (lado + 2) * k, -18)
+                caja = QRectF(q.x() - lado / 2, q.y() - lado / 2, lado, lado)
+                p.drawRoundedRect(caja, 2, 2)
+                pm = _tenido(icono(ICONO_RESTRICCION.get(s.tipo, "")).pixmap(24, 24), VIOLETA)
+                p.drawPixmap(caja.adjusted(2, 2, -2, -2), pm, QRectF(0, 0, 24, 24))
+            elif s.clase == "cota":
+                prefijo = {"radio": "R", "diametro": "⌀"}.get(s.tipo, "")
+                unidad = "°" if s.tipo == "angulo" else ""
+                texto = f"{prefijo}{formato.numero(s.valor, angular=s.tipo == 'angulo')}{unidad}"
+                p.drawText(q + QPointF(10, 18 + 18 * k), texto)
+        p.restore()
 
     def _flecha(self, p, punta, desde):
         ang = math.atan2(punta.y() - desde.y(), punta.x() - desde.x())
