@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-24). Total 181: Abierto 123 · Parcial 38 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-24). Total 179: Abierto 120 · Parcial 39 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -93,7 +93,6 @@ Abierto 2 · Parcial 9. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cad
 | BOC-19 | Línea central útil | Parcial | Media | Hecho: revolve toma sola la línea central (con dos pide elegir), cota con la línea central = diámetro (API `add_dimension type=diameter` y herramienta Cota de la ventana), `centerline` en las draw_* y en sketch_from_spec. Queda: el interruptor de línea central no está en la paleta de cada herramienta de dibujo de la ventana (se cambia después con el tipo de línea). | omnicad/ui/editor_boceto.py:2455; omnicad/api/herramientas_boceto.py | 2026-10-23 |
 | BOC-20 | Texto: parámetros, marco acotable y ajuste al camino en la UI | Parcial | Media | Hecho: `height` acepta parámetro y queda ligada (`height_expression`), `{'Rev ' + rev}` une texto y valores, marco rectangular acotable (`add_text` › `frame`), giro con pivote (`edit_text` › `pivot`), aviso si un `{parámetro}` no se calcula, y en el editor «Ajustar a la curva» y «Desfase en curva». Queda: el parámetro automático «Text» (OmniCAD no tiene parámetros de tipo texto), el pivote en la esquina del marco desde la interfaz, y que el editor dibuje los textos con marco. | omnicad/ui/modo_boceto.py:99,428-438; omnicad/ui/editor_boceto.py:1079 | 2026-10-23 |
 | BOC-21 | Fuentes de una línea (SHX) | Parcial | Media | Hecho: fuente de un trazo propia «OmniCAD Trazo SHX» en `list_fonts` (`single_line`), con dígitos, símbolos y acentos; sus letras son líneas abiertas, no forman perfiles. Queda: minúsculas (se dibujan como mayúsculas), más familias y leer archivos SHX reales. | omnicad/nucleo/fuentes.py | 2026-10-23 |
-| BOC-22 | Ajustar curvas a secciones de malla | Abierto | Alta | No está ni grisado en el menú; «Crear boceto de sección de malla» está grisado y no hay API. | omnicad/ui/cinta.py:158 | 2026-10-23 |
 | BOC-23 | Seleccionar un perfil con clic dentro del editor | Abierto | Baja | `entidad_en` solo toma puntos y curvas; fuera del editor ya existen `select_entities(kind=profile)` y `get_profile_sketches`. | omnicad/ui/editor_boceto.py (`entidad_en`) | 2026-10-23 |
 
 ## Fusion 360
@@ -103,7 +102,7 @@ Abierto 3 · Bloqueado 1. Especificación: [brechas_fusion.md](../brechas_fusion
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | FU-14 | Engranaje del timeline: «Ocultar pasos inactivos» y «Cambiar a modelado directo» | Abierto | Alta | Hace falta un componente activo (que filtre el timeline) y un modo sin historial; el engranaje ya existe con «Muestra de color por componente» | ui/panel_timeline.py (engranaje con una sola opción); ui/acciones_navegador.py:164 («Cambiar al modelado directo» grisado) | 2026-10-21 |
-| FU-1 | Boceto 3D con tríada para dibujar fuera del plano | Abierto | Muy alta | Curvas con marco 3D propio, solver y perfiles por plano; la opción sigue grisada | ui/modo_boceto.py:139 (opción «Boceto 3D» con False,False); PROJECT_LOG.md:40 | 2026-10-20 |
+| FU-1 | Boceto 3D con tríada para dibujar fuera del plano | Parcial | Alta | Hecho (MVP): línea, spline y punto 3D, bloqueo de eje/plano, restricciones (coincidente, eje, paralela, perpendicular, tangente línea-spline, igual, punto medio, fijo), cota 3D, guardar/abrir, ruta de barrido y 6 herramientas `*_3d`. Queda: tríada arrastrable en la vista, arco/rectángulo/círculo/elipse/texto/cónica 3D, concéntrica, colineal, ángulo 3D, tangente spline-spline, mover/escalar/copiar 2D sobre lo 3D, seleccionar y arrastrar con el ratón; BOC-18 (Intersection Curve, Project To Surface) | omnicad/restricciones/boceto3d.py; api/herramientas_boceto3d.py; tests/test_boceto_fase8_3d.py | 2026-10-24 |
 | FU-8 | Historial de pasos al abrir un .f3d | Abierto | Muy alta | Descifrar el flujo de diseño de Fusion o traducirlo con su API pública | io_archivos/f3d_nativo.py:24 (no trae historial); integraciones/fusion/OmniCADPuente (parámetros con Fusion) | 2026-10-20 |
 | FU-12 | Simulación, Fabricación y Forma (T-Splines) | Bloqueado | Muy alta | Decidir dependencias (CalculiX, Gmsh) y alcance antes de empezar | ui/cinta.py:244 (espacios grisados); sin código FEM, CAM ni T-Splines (grep) | 2026-10-20 |
 
@@ -267,7 +266,6 @@ Abierto 12 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md]
 | SC12 | Plástico: Snap Fit y Reposo; Chapa: Perforar | Abierto | Alta | Tres operaciones nuevas; Encaje a presión figura grisado. | omnicad/ui/cinta.py:150 (Encaje a presión grisado); grep perforar sin resultados | 2026-10-20 |
 | SC17 | Mallado estanco y rápido, con evaluación en GPU | Abierto | Alta | Medir primero; si es cuello de botella, pasar a Rust. | nucleo/malla.py:952 (BRepMesh de OpenCascade) | 2026-10-20 |
 | SC3 | Nombres persistentes por historia del kernel | Abierto | Muy alta | Usar Modified/Generated de OpenCascade para nombrar caras y aristas. | omnicad/timeline/entidades.py (firma geométrica tolerante); sin BRepTools_History | 2026-10-20 |
-| SC4 | Solver de bocetos constructivo antes del numérico | Abierto | Muy alta | Colocación exacta por construcción y grupos rígidos antes de Levenberg-Marquardt. | omnicad/restricciones/solver.py:14,687-690 (solo least_squares lm) | 2026-10-20 |
 | SC1 | Suite de piezas de referencia con valores analíticos | Parcial | Media | Faltan esperado.json con fórmulas cerradas (Pappus, Steiner) y la herramienta run_reference_tests. | tests/test_paridad_motor.py (paridad OpenCascade vs OmniKernel, ~55 casos); caso_paridad_motor.py | 2026-10-20 |
 | SC5 | Configuraciones: tabla de filas con parámetros, supresiones y material | Parcial | Media | Falta material/aspecto por cuerpo en la fila y robustez al renombrar (la herramienta manage_configurations ya existe). | omnicad/timeline/documento.py:168-170,403; tests/test_administrar.py::test_configuraciones_aplican_parametros_y_supresion | 2026-10-20 |
 | SC7 | Análisis del estudio de movimiento: gráficos, rastro, choques | Parcial | Media | Faltan gráficos de valor, velocidad y aceleración y el rastro de un punto. | omnicad/api/herramientas_ensamble.py:703-714 (motion_study con check_interference por valor); tests/test_api_ensamble.py:230 | 2026-10-20 |

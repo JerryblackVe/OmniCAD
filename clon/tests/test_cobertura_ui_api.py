@@ -46,7 +46,7 @@ HERRAMIENTAS = {
     "grupos_caras": "generate_face_groups", "reducir_malla": "reduce_mesh", "remallar": "remesh",
     "cortar_plano": "plane_cut_mesh", "combinar_mallas": "combine_meshes", "suavizar_malla": "smooth_mesh",
     "invertir_normal_malla": "reverse_mesh_normals", "separar_malla": "separate_mesh", "escalar_malla": "scale_mesh",
-    "convertir_malla": "convert_mesh", "vaciado_malla": "shell_mesh",
+    "convertir_malla": "convert_mesh", "vaciado_malla": "shell_mesh", "seccion_malla": "create_mesh_section_sketch",
     # --- cinta DISEÑO › CHAPA
     "pestana": "create_base_flange", "pestana_contorno": "create_contour_flange", "dobladillo": "create_hem",
     "convertir_chapa": "convert_to_sheet_metal", "plegar": "fold", "desplegar": "unfold", "replegar": "refold",

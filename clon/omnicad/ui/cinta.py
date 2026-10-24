@@ -155,7 +155,7 @@ PLASTICO = [
 MALLA = [
     ("CREAR", ["insertar_malla", "malla_teselar"], [
         _i("Insertar malla", "insertar_malla"), _i("Malla de cuerpo B-Rep", "malla_teselar"),
-        _i("Crear boceto de sección de malla")]),
+        _i("Crear boceto de sección de malla", "seccion_malla")]),
     ("PREPARAR", ["reparar_malla", "limpiar_malla", "grupos_caras"], [
         _i("Reparar", "reparar_malla"), _i("Limpiar", "limpiar_malla"), _i("Generar grupos de caras", "grupos_caras"),
         _i("Combinar grupos de caras"), _i("Crear grupo de caras")]),

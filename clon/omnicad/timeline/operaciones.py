@@ -96,6 +96,8 @@ def propiedades_cuerpo(propiedades, cuerpo):
 
 
 class BocetoResuelto:
+    solver3d = None          # Resultado3D de la geometría 3D del boceto (None si no tiene)
+
     def __init__(self, op_id, nombre, boceto, plano, perfiles, solver):
         self.op_id, self.nombre, self.boceto, self.plano = op_id, nombre, boceto, plano
         self.perfiles, self.solver = perfiles, solver
@@ -601,7 +603,7 @@ class OpBoceto(Operacion):
                      for e in expresiones_de_texto(c.texto) + ([c.altura_expr] if c.altura_expr else [])]
         return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
                                        for e in (c.nombre, c.expresion)]
-                + en_textos)
+                + en_textos + [c["expresion"] for c in self.boceto.geo3d.get("cotas", {}).values()])
 
     def dependencias(self):
         deps = super().dependencias()
@@ -696,7 +698,14 @@ class OpBoceto(Operacion):
         if not res.ok:
             ctx.aviso(res.descripcion())
         perfiles = detectar(boceto.geometria(), plano)
-        estado.bocetos[self.id] = BocetoResuelto(self.id, self.nombre, boceto, plano, perfiles, res)
+        br = BocetoResuelto(self.id, self.nombre, boceto, plano, perfiles, res)
+        if any(boceto.geo3d.values()):                 # Boceto 3D: su propio solver, sobre la misma copia
+            from ..restricciones import boceto3d
+            br.solver3d = boceto3d.resolver(boceto, {k: ctx.evaluar(c["expresion"])
+                                                     for k, c in boceto.geo3d.get("cotas", {}).items()})
+            if not br.solver3d.ok:
+                ctx.aviso(f"{self.nombre}: {br.solver3d.mensaje}")
+        estado.bocetos[self.id] = br
 
     def a_dict(self):
         d = super().a_dict()

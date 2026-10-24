@@ -240,6 +240,15 @@ def resolver(ref, estado):
         return Entidad(t, forma=perfil.cara, plano=br.plano, boceto=br, perfil=perfil)
     if t == "curva_boceto":
         br = _boceto(estado, ref["boceto"])
+        curvas3d = br.boceto.geo3d.get("curvas", {})
+        if ref["curva"] in curvas3d:                   # curva del Boceto 3D
+            from ..restricciones import boceto3d
+            ent = Entidad(t, forma=boceto3d.arista(br.boceto, ref["curva"], br.plano), plano=br.plano, boceto=br)
+            if curvas3d[ref["curva"]]["tipo"] == "linea":
+                a, b = (boceto3d.a_mundo(br.plano, br.boceto.geo3d["puntos"][p])
+                        for p in curvas3d[ref["curva"]]["puntos"])
+                ent.eje = (a, geo_dir(b - a))
+            return ent
         geom = [g for g in br.boceto.geometria(incluir_construccion=True) if g[1] == ref["curva"]]
         aristas = aristas_boceto(geom, br.plano)
         if not aristas:

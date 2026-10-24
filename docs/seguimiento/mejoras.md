@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso: 2026-10-24). Total 113: Abierto 57 · Parcial 45 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso: 2026-10-24). Total 112: Abierto 56 · Parcial 45 · Bloqueado 4 · Sin verificar 7.
 
 ## Pendientes generales
 
@@ -26,7 +26,7 @@ Abierto 18 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 | P-26c | Compilar el módulo Rust para arm64 y x86_64 | Abierto | Media | Solo hay .pyd de Windows. | omnicad/_rs.cp312-win_amd64.pyd | 2026-10-20 |
 | P-10b-e | Fase 2: malla en Rust (R7, R2, R8, R10) con BVH R3 | Abierto | Alta | Reducir malla, half-edge, soldado y E/S de texto siguen en Python. | clon/rust/src/lib.rs solo tiene 3 funciones de render | 2026-10-20 |
 | P-10b-g | Fase 4: remallado R6 en Rust y subir los topes | Abierto | Alta | Remallar sigue en Python con topes de 100 000 triángulos. | omnicad/nucleo/malla.py (TRIANGULOS_MAXIMOS_REMALLADO) | 2026-10-20 |
-| P-10b-f | Fase 3: boceto en Rust (R5, solver R4, R9) | Abierto | Muy alta | El solver sigue en scipy; el arrastre ya mejoró con arreglos de Python. | omnicad/restricciones/solver.py (least_squares method=lm); clon/rust sin módulo de boceto | 2026-10-20 |
+| P-10b-f | Fase 3: boceto en Rust (R5, solver R4, R9) | Abierto | Muy alta | El solver sigue en scipy; con la colocación constructiva (SC4) 400 líneas arrastran en 258 ms, medir antes de pasar a Rust. | omnicad/restricciones/solver.py (least_squares method=lm); clon/rust sin módulo de boceto | 2026-10-20 |
 | P-2c | Documentación y README en inglés | Parcial | Media | Traducir docs/ y docs/agentes; solo el README tiene versión inglesa. | README.en.md existe; docs/*.md solo en español | 2026-10-20 |
 | P-9g | Íconos sensibles al tema (claro/oscuro) sin reiniciar | Parcial | Media | Hoy se recolorean solo al arrancar; cambiar de tema con la app abierta pide reinicio. | omnicad/ui/iconos_tema.py (docstring: «se adaptan al tema con el que ARRANCA») | 2026-10-20 |
 | P-9j | Revisión crítica de cada pantalla (estados vacíos y de error, textos) con capturas | Parcial | Media | Solo 13 pantallas auditadas; faltan estados vacíos/errores y el objetivo de identidad visual propia. | scripts/capturas_ui.py; evidencias/capturas/p9b_antes y p9b_despues (13 pantallas cada una) | 2026-10-20 |
@@ -137,7 +137,6 @@ Abierto 2 · Parcial 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-27 | Arrastre y soltado del solver con boceto grande | Abierto | Alta | Evento de arrastre: 100 líneas 100 ms, 200 líneas 480 ms, 400 líneas 3,4 s; soltar con 400 líneas 3,9 s. Va con SC4 y el módulo Rust de P-10b-f. | omnicad/restricciones/solver.py (`least_squares lm`) | 2026-10-23 |
 | BOC-28 | Texto largo y glifos faltantes | Parcial | Baja | Hecho: aviso de glifo faltante (un emoji ya no dibuja el cuadrito sin avisar); 200 «W» sobre un círculo de 20 mm: 14 811 perfiles de 8,85 s a 5,93 s (perfiles en paralelo). Queda: la división del boceto en perfiles (~3,4 s) ocurre dentro de OpenCascade. | omnicad/nucleo/fuentes.py:479 | 2026-10-23 |
 | BOC-29 | Verificar los topes de Fusion: 64 lados de polígono y 200 copias de patrón | Abierto | Baja | La ayuda local no dice cuál es el límite de Fusion; decidirlo y documentarlo. | omnicad/api/herramientas_boceto.py:1679 | 2026-10-23 |
 

@@ -22,6 +22,7 @@ from . import revision  # noqa: E402,F401  (INSPECCIONAR › Revisar geometría 
 from . import derivacion  # noqa: E402,F401  (INSERTAR › Insertar derivación asociativa)
 from . import primitivas  # noqa: E402,F401  (Prisma rectangular, Cilindro, Esfera y Toroide con panel)
 from . import patrones  # noqa: E402,F401  (SÓLIDO › CREAR › Patrón en puntos y Multitransformación)
+from . import malla_seccion  # noqa: E402,F401  (MALLA › CREAR › Crear boceto de sección de malla)
 from . import asas_extra  # noqa: E402,F401  (engancha asas en la vista a comandos ya registrados)
 
 

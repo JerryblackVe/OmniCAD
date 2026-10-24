@@ -15,6 +15,9 @@ enfoque estándar y propio:
     más una regularización muy débil hacia la posición actual: así lo que queda libre
     (sub-restringido) no "salta", se mueve lo mínimo.
   - Grados de libertad restantes = incógnitas − rango del jacobiano de las restricciones.
+  - Antes del numérico (SC4), coincidencias y horizontales/verticales se cumplen por construcción: esas
+    coordenadas comparten incógnita (`_Sistema._fusionar`). Mismo mínimo y mismos grados de libertad, con
+    muchas menos incógnitas (400 líneas encadenadas: arrastre de 23 s a ~0,27 s).
 
 `auto_restringir` es la versión propia de AutoConstrain (SKT-AUTO-CONSTRAIN).
 """
@@ -79,20 +82,32 @@ def _unitario(v):
 class _Sistema:
     """Arma el vector de incógnitas y la función de residuos de un boceto."""
 
-    def __init__(self, boceto, valores_cotas, grupo=None):
+    def __init__(self, boceto, valores_cotas, grupo=None, fusionar=False):
         """`grupo` (de `_grupos`) limita el sistema a una parte independiente del boceto: sus incógnitas y
-        sus términos. Sin grupo, el boceto entero (como siempre)."""
+        sus términos. Sin grupo, el boceto entero (como siempre). `fusionar` (SC4): ver `_fusionar`."""
         self.b = boceto
         self.valores = valores_cotas
         self._curvas = list(boceto.curvas.values()) if grupo is None else grupo["curvas"]
         self._restricciones = list(boceto.restricciones.values()) if grupo is None else grupo["restricciones"]
         self._cotas = [c for c in (boceto.cotas.values() if grupo is None else grupo["cotas"]) if not c.referencia]
         self.fijos_p, self.fijos_r = _fijos(boceto)
-        self.idx_p, self.idx_r, x0 = {}, {}, []
+        raiz, self._cumplidas = self._fusionar() if fusionar else ((lambda k: k), set())
+        # idx_p[pid] = (índice de x, índice de y). Fusionadas, varias coordenadas comparten una incógnita, que
+        # arranca en su promedio; `cuenta` dice cuántas coordenadas representa cada incógnita.
+        self.idx_p, self.idx_r, x0, cuenta, var = {}, {}, [], [], {}
         for pid, p in boceto.puntos.items():
             if pid not in self.fijos_p and (grupo is None or pid in grupo["p"]):
-                self.idx_p[pid] = len(x0)
-                x0 += [p.x, p.y]
+                ij = []
+                for k, v in ((0, p.x), (1, p.y)):
+                    j = var.setdefault(raiz((pid, k)), len(x0))
+                    if j == len(x0):
+                        x0.append(0.0)
+                        cuenta.append(0)
+                    x0[j] += v
+                    cuenta[j] += 1
+                    ij.append(j)
+                self.idx_p[pid] = tuple(ij)
+        x0 = [s / k for s, k in zip(x0, cuenta, strict=True)]
         for cid, c in boceto.curvas.items():
             if isinstance(c, (Circulo, Elipse, ArcoElipse)) and cid not in self.fijos_r and (
                     grupo is None or cid in grupo["r"]):
@@ -105,6 +120,37 @@ class _Sistema:
         self._armar()
         if self._extra:
             self.x0 = np.concatenate([self.x0, np.array(self._extra, dtype=float)])
+        self.cuenta = np.ones(len(self.x0))
+        self.cuenta[:len(cuenta)] = cuenta
+
+    def _fusionar(self):
+        """SC4 (colocación por construcción): las coincidencias punto-punto y las horizontales/verticales se cumplen
+        compartiendo incógnita (la x o la y de los puntos), así no entran al solver: una cadena de líneas queda con
+        ~4 veces menos incógnitas. Las coordenadas fijas no se fusionan: esas restricciones quedan como término.
+        Devuelve (raíz de cada coordenada (pid, eje), ids de las restricciones que ya se cumplen así)."""
+        padre, cumplidas = {}, set()
+
+        def raiz(k):
+            padre.setdefault(k, k)
+            while padre[k] != k:
+                padre[k] = padre[padre[k]]
+                k = padre[k]
+            return k
+        for r in self._restricciones:
+            e, tipos = r.entidades, [self.b.tipo_de(i) for i in r.entidades]
+            if r.tipo == "coincidente" and tipos == ["punto", "punto"]:
+                pares = [(e[0], e[1], 0), (e[0], e[1], 1)]
+            elif r.tipo in ("horizontal", "vertical"):
+                a, c = (self.b.curvas[e[0]].p1, self.b.curvas[e[0]].p2) if tipos == ["linea"] else e
+                pares = [(a, c, 1 if r.tipo == "horizontal" else 0)]
+            else:
+                continue
+            if any(p in self.fijos_p for a, c, _k in pares for p in (a, c)):
+                continue
+            for a, c, k in pares:
+                padre[raiz((a, k))] = raiz((c, k))
+            cumplidas.add(r.id)
+        return raiz, cumplidas
 
     def _parametro(self, valor):
         """Agrega una incógnita auxiliar (parámetro de contacto) y devuelve su índice."""
@@ -117,7 +163,7 @@ class _Sistema:
         if i is None:
             p = self.b.puntos[pid]
             return p.x, p.y
-        return x[i], x[i + 1]
+        return x[i[0]], x[i[1]]
 
     def Rv(self, x, cid):
         """Radio guardado (círculo) o radio menor (elipse)."""
@@ -197,7 +243,7 @@ class _Sistema:
             t = r.tipo
             e = r.entidades
             tipos = [b.tipo_de(i) for i in e]
-            if t == "fijo":
+            if t == "fijo" or r.id in self._cumplidas:
                 continue
             if t == "coincidente":
                 if tipos[1] == "punto":
@@ -497,8 +543,8 @@ class _Sistema:
         return np.array(salida, dtype=float)
 
     def escribir(self, x):
-        for pid, i in self.idx_p.items():
-            self.b.puntos[pid].x, self.b.puntos[pid].y = float(x[i]), float(x[i + 1])
+        for pid, (i, j) in self.idx_p.items():
+            self.b.puntos[pid].x, self.b.puntos[pid].y = float(x[i]), float(x[j])
         for cid, i in self.idx_r.items():
             c = self.b.curvas[cid]
             if isinstance(c, Circulo):
@@ -673,7 +719,7 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     libres_p, libres_r = set(sueltos_p), set(sueltos_r)
     gdl, err_max, inconsistente = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False
     for g in grupos:
-        sis = _Sistema(boceto, valores, g)
+        sis = _Sistema(boceto, valores, g, fusionar=True)
         x, err, J, rango = _resolver_grupo(sis, arrastrado)
         if x is not None:
             sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
@@ -719,7 +765,7 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
     err = 0.0
     for g in grupos:
         if arrastrado in g["p"]:
-            sis = _Sistema(boceto, valores, g)
+            sis = _Sistema(boceto, valores, g, fusionar=True)
             x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
             if x is not None:
                 sis.escribir(x)
@@ -734,15 +780,17 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
     """(x resuelto o None, error máximo, jacobiano, rango) de un grupo. Sin `con_rango`, el jacobiano y el rango
     quedan en None (un evento de arrastre no los usa)."""
     n = len(sis.x0)
+    # Una incógnita fusionada vale por `cuenta` coordenadas: misma regularización que si estuvieran separadas.
+    base = _PESO_REGULARIZACION * np.sqrt(sis.cuenta)
+    pesos, ancla = base.copy(), sis.x0.copy()
+    if arrastrado in sis.idx_p:
+        ij = list(sis.idx_p[arrastrado])
+        pesos[ij] = _PESO_ARRASTRE
+        ancla[ij] = sis.b.coords(arrastrado)     # la incógnita arranca donde está el punto arrastrado
     if n == 0 or not sis.terminos:
         r = sis.residuos(sis.x0) if sis.terminos else np.zeros(0)
         err = float(np.max(np.abs(r))) if len(r) else 0.0
-        return None, err, np.zeros((0, n)), 0
-
-    pesos = np.full(n, _PESO_REGULARIZACION)
-    if arrastrado in sis.idx_p:
-        i = sis.idx_p[arrastrado]
-        pesos[i:i + 2] = _PESO_ARRASTRE
+        return (ancla if n else None), err, np.zeros((0, n)), 0    # ancla ya cumple lo fusionado: se escribe
 
     def corrida(x_inicio, ancla, w):
         fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla)])  # noqa: E731
@@ -753,9 +801,9 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
         return least_squares(fun, x_inicio, jac=jac, method="lm", xtol=1e-14, ftol=1e-14, gtol=1e-14,
                              max_nfev=200 * (n + 1)).x
 
-    x = corrida(sis.x0, sis.x0, pesos)
+    x = corrida(ancla, ancla, pesos)
     # Pulido: re-anclar en la solución elimina el sesgo de la regularización.
-    x = corrida(x, x, np.full(n, _PESO_REGULARIZACION))
+    x = corrida(x, x, base)
     res = sis.residuos(x)
     err = float(np.max(np.abs(res))) if len(res) else 0.0
     if not con_rango:
@@ -778,7 +826,7 @@ def _libres(sis, J, rango, tol=1e-6):
         libres = np.linalg.norm(vt[rango:].T, axis=1) > tol
     else:
         libres = np.ones(n, bool)
-    puntos = {pid for pid, i in sis.idx_p.items() if libres[i] or libres[i + 1]}
+    puntos = {pid for pid, (i, j) in sis.idx_p.items() if libres[i] or libres[j]}
     radios = {cid for cid, i in sis.idx_r.items() if libres[i]}
     return puntos, radios
 
@@ -869,7 +917,7 @@ class _GradosAuto:
             for clase, eid in claves:
                 indice = (self.sis.idx_p if clase == "p" else self.sis.idx_r).get(eid)
                 if indice is not None:
-                    columnas.extend([indice, indice + 1] if clase == "p" else [indice])
+                    columnas.extend(indice if clase == "p" else [indice])
             filas = np.zeros((len(columnas), n))
             for i, j in enumerate(columnas):
                 filas[i, j] = 1
@@ -880,8 +928,7 @@ class _GradosAuto:
             local = _Sistema(b, self.valores, grupo)
             columnas = []
             for pid in local.idx_p:
-                i = self.sis.idx_p[pid]
-                columnas.extend([i, i + 1])
+                columnas.extend(self.sis.idx_p[pid])
             columnas.extend(self.sis.idx_r[cid] for cid in local.idx_r)
             J = _jacobiano(local, local.x0)
             filas = np.zeros((len(J), n))

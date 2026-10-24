@@ -9,10 +9,11 @@ Modo boceto dentro de la vista 3D (como el entorno de boceto de Fusion 360):
   - el sombreado azul de los perfiles cerrados, recalculado al cambiar el boceto.
 Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del timeline.
 """
+import numpy as np
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QCompleter, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
-                               QHBoxLayout, QLabel, QLayout, QMessageBox, QPushButton, QSpinBox, QToolButton,
+                               QHBoxLayout, QLabel, QLayout, QLineEdit, QMessageBox, QPushButton, QSpinBox, QToolButton,
                                QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
@@ -143,12 +144,17 @@ class PaletaBoceto(QFrame):
     construccion = Signal()
     eje = Signal()
     ajuste = Signal(str, object)       # opción de la herramienta activa (clave, valor)
+    dibujar3d = Signal(str, str, str, str)     # Boceto 3D: herramienta, bloqueo de la tríada, puntos, largo
 
     OPCIONES = [("rejilla", "Rejilla del boceto", True, True), ("forzar", "Forzar", False, True),
                 ("corte", "Corte", False, True), ("perfil", "Perfil", True, True), ("puntos", "Puntos", True, True),
                 ("cotas", "Cotas", True, True), ("restricciones", "Restricciones", True, True),
                 ("proyectadas", "Geometrías proyectadas", True, True),
-                ("construccion", "Geometrías de construcción", True, True), ("boceto3d", "Boceto 3D", False, False)]
+                ("construccion", "Geometrías de construcción", True, True), ("boceto3d", "Boceto 3D", False, True)]
+    # Bloqueos de la tríada del Boceto 3D (3D Sketch Manipulator de Fusion: eje o plano temporal)
+    BLOQUEOS_3D = [("libre", "Libre (x, y, z de cada punto)"), ("x", "Eje X: inicio + largo"),
+                   ("y", "Eje Y: inicio + largo"), ("z", "Eje Z: inicio + largo"), ("xy", "Plano XY del inicio"),
+                   ("yz", "Plano YZ del inicio"), ("zx", "Plano ZX del inicio")]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -208,12 +214,33 @@ class PaletaBoceto(QFrame):
             ch = QCheckBox()
             ch.setChecked(inicial)
             ch.setEnabled(activa)
-            if not activa:
-                ch.setToolTip("No disponible en OmniCAD (no hay bocetos 3D).")
             ch.toggled.connect(lambda valor, k=clave: self.opcion.emit(k, valor))
             grilla.addWidget(ch, fila, 1, Qt.AlignRight)
             self.checks[clave] = ch
         c.addLayout(grilla)
+        self.panel3d = QWidget()                       # Boceto 3D: se ve con la casilla «Boceto 3D»
+        f3 = QFormLayout(self.panel3d)
+        f3.setContentsMargins(0, 2, 0, 2)
+        self.h3d, self.bloqueo3d = QComboBox(), QComboBox()
+        for clave, texto in (("linea", "Línea"), ("spline", "Spline"), ("punto", "Punto")):
+            self.h3d.addItem(texto, clave)
+        for clave, texto in self.BLOQUEOS_3D:
+            self.bloqueo3d.addItem(texto, clave)
+        self.puntos3d, self.largo3d = QLineEdit(), QLineEdit()
+        self.puntos3d.setPlaceholderText("0, 0, 0; 0, 0, 20")
+        self.puntos3d.setToolTip("Puntos en coordenadas del boceto (mm): x, y sobre el plano y z sobre la normal, "
+                                 "separados por «;».")
+        self.largo3d.setPlaceholderText("mm, con signo")
+        b3d = QPushButton("Agregar")
+        b3d.clicked.connect(lambda: self.dibujar3d.emit(self.h3d.currentData(), self.bloqueo3d.currentData(),
+                                                        self.puntos3d.text(), self.largo3d.text()))
+        f3.addRow("Herramienta", self.h3d)
+        f3.addRow("Tríada", self.bloqueo3d)
+        f3.addRow("Puntos", self.puntos3d)
+        f3.addRow("Largo", self.largo3d)
+        f3.addRow("", b3d)
+        self.panel3d.setVisible(False)
+        c.addWidget(self.panel3d)
         self.estado = QLabel()
         self.estado.setWordWrap(True)
         c.addWidget(self.estado)
@@ -785,6 +812,8 @@ class ModoBoceto(QObject):
         self.paleta.construccion.connect(self._construccion)
         self.paleta.eje.connect(self._eje)
         self.paleta.ajuste.connect(self._ajuste)
+        self.paleta.dibujar3d.connect(self._dibujar3d)
+        self.paleta.checks["boceto3d"].setChecked(any(self.boceto.geo3d.values()))
         self.caracter = PanelCaracter(area)         # fuente, decoraciones y transformación del texto
         self.caracter.cambio.connect(self._ajuste)
         self.lienzo.texto_valores.connect(self.caracter.mostrar_valores)
@@ -876,6 +905,7 @@ class ModoBoceto(QObject):
             w.hide()
             w.deleteLater()
         self.lienzo = self.paleta = self.caracter = None
+        self.v.visor.set_capa("boceto3d", None)
         self.v.visor.set_plano_boceto(None)
         self.v.cinta.ocultar_contextual("BOCETO")
         self.v.info_seleccion("")
@@ -965,8 +995,64 @@ class ModoBoceto(QObject):
             self.v.cambiar_vista("forzar_rejilla", valor)     # misma opción que "Forzar objetos a rejilla"
         elif clave in ("puntos", "cotas", "restricciones", "construccion", "rejilla", "proyectadas"):
             lz.mostrar[clave] = valor
+        elif clave == "boceto3d":
+            self.paleta.panel3d.setVisible(valor)
+            self.paleta.ajustar()
+            self.v.area.reubicar()
+            self._capa3d()
         self.v.visor.set_plano_boceto(self.plano, self._opciones_visor())
         lz.update()
+
+    def _capa3d(self):
+        """Dibuja en la vista las curvas y puntos del Boceto 3D (el lienzo 2D no los ve)."""
+        from ..restricciones import boceto3d
+        from .visor3d import _segmentos
+        g = self.boceto.geo3d
+        if not any(g.values()):
+            self.v.visor.set_capa("boceto3d", None)
+            return
+        puntos = [boceto3d.a_mundo(self.plano, p) for p in g["puntos"].values()]
+        self.v.visor.set_capa("boceto3d", [("lineas", _segmentos(boceto3d.polilineas(self.boceto, self.plano)),
+                                            (0.2, 0.55, 1.0), 2.5),
+                                           ("puntos", np.array(puntos, np.float32), (0.2, 0.55, 1.0), 6)])
+
+    def _dibujar3d(self, h, bloqueo, texto, largo):
+        """«Agregar» del panel Boceto 3D: puntos x, y, z separados por «;»; con un eje de la tríada, el inicio y el
+        largo; con un plano, los demás puntos quedan en el plano por el inicio."""
+        from ..restricciones import ErrorBoceto
+        from ..restricciones import boceto3d as b3
+        lz = self.lienzo
+        lz._instantanea()                  # Ctrl+Z del boceto también deshace lo agregado en 3D
+        try:
+            pts = [[float(v) for v in t.split(",")] for t in texto.split(";") if t.strip()]
+            if not pts:
+                raise ErrorBoceto("Escribí al menos un punto: x, y, z.")
+            if bloqueo in b3.EJES:
+                if h != "linea" or len(pts) != 1:
+                    raise ErrorBoceto("Con un eje de la tríada: herramienta Línea, solo el punto inicial y el largo.")
+                pts.append([c + float(largo) * e for c, e in zip(pts[0], b3.EJES[bloqueo], strict=True)])
+            elif bloqueo in ("xy", "yz", "zx"):
+                k = {"xy": 2, "yz": 0, "zx": 1}[bloqueo]
+                for p in pts[1:]:
+                    p[k] = pts[0][k]
+            if h == "punto":
+                for p in pts:
+                    b3.agregar_punto(self.boceto, p, unir=False)
+            elif h == "spline":
+                b3.agregar_spline(self.boceto, pts)
+            else:
+                if len(pts) < 2:
+                    raise ErrorBoceto("La línea necesita dos puntos (o un eje de la tríada y el largo).")
+                for p, q in zip(pts, pts[1:], strict=False):
+                    cid = b3.agregar_linea(self.boceto, p, q)
+                    if bloqueo in b3.EJES:
+                        b3.agregar_restriccion(self.boceto, "eje", [cid], eje=bloqueo)
+        except (ValueError, IndexError, ErrorBoceto) as e:
+            lz._restaurar(lz.historial.pop())
+            self.v.mensaje(f"Boceto 3D: {e}", 7000)
+            return
+        lz.pila_rehacer.clear()
+        self._cambio()
 
     def _cambio(self):
         if self.paleta is not None:
@@ -975,6 +1061,7 @@ class ModoBoceto(QObject):
         op = (self.datos or {}).get("op")
         if op is not None:                   # BOC-7: candado o marca roja del boceto en el navegador, en vivo
             self.v.navegador.marcar_boceto(op.id, self.lienzo.resultado if self.boceto.curvas else None)
+        self._capa3d()
         self._t_perfiles.start()
 
     def _actualizar_perfiles(self):

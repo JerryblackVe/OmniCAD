@@ -854,6 +854,9 @@ def info_boceto(sesion, op):
         info["patterns"] = [{"id": r["id"], "type": "rectangular" if r["tipo"] == "rectangular" else "circular",
                              "entities": r["ids"], "suppressed": r["suprimidos"],
                              "instances": {n: ids for n, ids in r["copias"].items()}} for r in b.patrones]
+    if any(b.geo3d.values()):
+        from .herramientas_boceto3d import info_3d
+        info.update(info_3d(sesion, b, br))
     return info
 
 
@@ -1404,7 +1407,9 @@ def _cota_sobre_restringe(sesion, boceto, anterior):
              "origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias "
              "se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), "
              "el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica "
-             "una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof.")
+             "una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. Si el boceto "
+             "tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z), "
+             "constraints_3d, dimensions_3d, status_3d y dof_3d.")
 def get_sketch(sesion, sketch: str | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.

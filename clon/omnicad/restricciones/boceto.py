@@ -1263,6 +1263,7 @@ class Boceto:
         self.proyecciones = []
         self.patrones = []             # patrones de boceto editables (ver `_patron`)
         self.ultimo_patron = None
+        self.geo3d = {}                # geometría fuera del plano (Boceto 3D de Fusion): ver restricciones.boceto3d
         self._siguiente = 1
 
     # ------------------------------------------------------------ ids
@@ -3584,6 +3585,9 @@ class Boceto:
             d["proyecciones"] = copy.deepcopy(self.proyecciones)
         if self.patrones:
             d["patrones"] = copy.deepcopy(self.patrones)
+        if any(self.geo3d.values()):
+            from . import boceto3d
+            d["geo3d"] = boceto3d.a_dict(self.geo3d)
         return d
 
     @classmethod
@@ -3604,7 +3608,11 @@ class Boceto:
         for c in d.get("cotas", []):
             b.cotas[c["id"]] = Cota(c["id"], c["tipo"], c["entidades"], c["expresion"], c.get("datos"), c.get("nombre", ""),
                                    c.get("referencia", False))
+        if d.get("geo3d"):
+            from . import boceto3d
+            b.geo3d = boceto3d.desde_dict(d["geo3d"])
         todos = list(b.puntos) + list(b.curvas) + list(b.restricciones) + list(b.cotas)
+        todos += [i for tabla in b.geo3d.values() for i in tabla]
         b._siguiente = max([b._siguiente] + [i + 1 for i in todos])
         return b
 

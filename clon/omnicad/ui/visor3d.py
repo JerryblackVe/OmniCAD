@@ -315,6 +315,9 @@ def polilineas_boceto(boceto_resuelto):
         uv = muestrear_primitiva(prim)
         if len(uv) >= 2:
             salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
+    if any(boceto_resuelto.boceto.geo3d.values()):          # Boceto 3D
+        from ..restricciones import boceto3d
+        salida.extend(boceto3d.polilineas(boceto_resuelto.boceto, pl))
     return salida
 
 

@@ -2241,7 +2241,7 @@ class VentanaPrincipal(QMainWindow):
         self._indice_boceto = None
         op = datos.get("op")
         if op is None:
-            if not boceto.puntos:
+            if not boceto.puntos and not any(boceto.geo3d.values()):
                 self.mensaje("El boceto quedó vacío: no se agregó al timeline.")
                 self._refrescar_visibilidad()
                 return

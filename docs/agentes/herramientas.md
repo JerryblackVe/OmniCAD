@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-307 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+315 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,11 +14,11 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 43 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 46 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 52 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 69 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
-| [malla](#grupo-malla) | 15 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
+| [malla](#grupo-malla) | 17 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 9 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 20 | Ver y medir el resultado. |
@@ -664,6 +664,12 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`create_construction_axis`](#create_construction_axis) | sí | Crea un eje con cualquiera de las cinco variantes de CONSTRUIR. |
 | [`create_construction_point`](#create_construction_point) | sí | Crea un punto con las seis variantes de CONSTRUIR. |
 | [`create_ucs`](#create_ucs) | sí | Crea un sistema de coordenadas de usuario con origen, ejes, giros y desfases. |
+| [`draw_line_3d`](#draw_line_3d) | sí | Boceto 3D: dibuja una línea en el espacio (Fusion: 3D Sketch › Línea). |
+| [`draw_spline_3d`](#draw_spline_3d) | sí | Boceto 3D: spline de ajuste en el espacio que pasa por points (Fusion: 3D Sketch › Spline), en coordenadas del boceto (x, y sobre el plano, z sobre la normal). |
+| [`draw_point_3d`](#draw_point_3d) | sí | Boceto 3D: punto suelto en el espacio (Fusion: 3D Sketch › Punto), en coordenadas del boceto. |
+| [`add_constraint_3d`](#add_constraint_3d) | sí | Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, perpendicular y equal (dos líneas), tangent (línea + spline que empieza o termina en un extremo de la línea), midpoint (punto + línea) y fix (fija los puntos de las entidades). |
+| [`add_dimension_3d`](#add_dimension_3d) | sí | Boceto 3D: cota de distancia en el espacio: el largo de una línea (un id) o la distancia entre dos puntos 3D. value en mm, número o expresión con parámetros (sigue al parámetro al recalcular). |
+| [`delete_sketch_entities_3d`](#delete_sketch_entities_3d) | sí | Boceto 3D: borra entidades, restricciones o cotas 3D por id. |
 | [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
 | [`set_circle_radius`](#set_circle_radius) | sí | Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. |
 | [`extend_sketch_curve`](#extend_sketch_curve) | sí | Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. |
@@ -840,7 +846,7 @@ Agrega una cota (dimensión) que maneja la geometría. El valor es un número (m
 
 ### `get_sketch`
 
-Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof.
+Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. Si el boceto tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z), constraints_3d, dimensions_3d, status_3d y dof_3d.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1299,6 +1305,77 @@ Crea un sistema de coordenadas de usuario con origen, ejes, giros y desfases.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
   - `name` (texto; opcional, por defecto `null`): nombre del sistema; vacío = automático.
 - CLI: `omnicad call create_ucs --doc pieza.omnicad origin=…`
+
+### `draw_line_3d`
+
+Boceto 3D: dibuja una línea en el espacio (Fusion: 3D Sketch › Línea). Coordenadas del boceto en mm: x, y sobre su plano y z a lo largo de su normal (en un boceto sobre XY son las del mundo). Bloqueos de la tríada: axis + length dibuja desde start a lo largo de x, y o z (largo con signo) y deja la restricción de eje; plane = xy, yz o zx deja el final en el plano por start paralelo a ese (copia la coordenada normal de start). Un extremo que cae sobre un punto 3D existente lo comparte (cadena).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `start` (lista de número; obligatorio): punto inicial [x, y, z] en mm (coordenadas del boceto).
+  - `end` (lista de número o null; opcional, por defecto `null`): punto final [x, y, z]; vacío si se usa axis + length.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `axis` ("x" | "y" | "z" o null; opcional, por defecto `null`): bloqueo de eje de la tríada: la línea va de start a lo largo de x, y o z (necesita length, sin end).
+  - `length` (número; opcional, por defecto `null`): con axis, largo en mm con signo (negativo = sentido contrario del eje).
+  - `plane` ("xy" | "yz" | "zx" o null; opcional, por defecto `null`): bloqueo de plano de la tríada: el final queda en el plano xy, yz o zx que pasa por start.
+  - `construction` (true/false; opcional, por defecto `false`): true para una línea de construcción (no forma rutas por defecto).
+- CLI: `omnicad call draw_line_3d --doc pieza.omnicad start=…`
+
+### `draw_spline_3d`
+
+Boceto 3D: spline de ajuste en el espacio que pasa por points (Fusion: 3D Sketch › Spline), en coordenadas del boceto (x, y sobre el plano, z sobre la normal). Si empieza o termina en el extremo de una línea 3D comparte el punto, y add_constraint_3d type=tangent la deja tangente a esa línea.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `points` (lista de lista de número; obligatorio): puntos de paso [[x, y, z], …] en mm, al menos dos.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true para una spline de construcción.
+- CLI: `omnicad call draw_spline_3d --doc pieza.omnicad points=…`
+
+### `draw_point_3d`
+
+Boceto 3D: punto suelto en el espacio (Fusion: 3D Sketch › Punto), en coordenadas del boceto. Sirve de referencia para restricciones y cotas 3D.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `x` (número; obligatorio): x en mm (sobre el plano del boceto).
+  - `y` (número; obligatorio): y en mm (sobre el plano del boceto).
+  - `z` (número; obligatorio): z en mm (a lo largo de la normal del boceto).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call draw_point_3d --doc pieza.omnicad x=… y=… z=…`
+
+### `add_constraint_3d`
+
+Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, perpendicular y equal (dos líneas), tangent (línea + spline que empieza o termina en un extremo de la línea), midpoint (punto + línea) y fix (fija los puntos de las entidades).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `type` ("coincident" | "axis" | "parallel" | "perpendicular" | "tangent" | "equal" | "midpoint" | "fix"; obligatorio): tipo de restricción (ver la descripción).
+  - `entities` (lista de entero; obligatorio): ids de las entidades 3D, en cualquier orden.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `axis` ("x" | "y" | "z" o null; opcional, por defecto `null`): con type=axis, el eje con el que se alinea la línea: x, y o z.
+- CLI: `omnicad call add_constraint_3d --doc pieza.omnicad type=… entities=…`
+
+### `add_dimension_3d`
+
+Boceto 3D: cota de distancia en el espacio: el largo de una línea (un id) o la distancia entre dos puntos 3D. value en mm, número o expresión con parámetros (sigue al parámetro al recalcular).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entities` (lista de entero; obligatorio): [id de una línea 3D] o [id de punto, id de punto].
+  - `value` (número o expresión; obligatorio): medida en mm (número o expresión con parámetros, p. ej. "largo / 2").
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call add_dimension_3d --doc pieza.omnicad entities=… value=…`
+
+### `delete_sketch_entities_3d`
+
+Boceto 3D: borra entidades, restricciones o cotas 3D por id. Con una curva se borran sus restricciones y cotas y los puntos que ninguna otra curva usa; con un punto, las curvas que pasan por él.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entities` (lista de entero; obligatorio): ids 3D a borrar (de get_sketch: entities_3d, points_3d, constraints_3d o dimensions_3d).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call delete_sketch_entities_3d --doc pieza.omnicad entities=…`
 
 ### `draw_spiral`
 
@@ -3157,6 +3234,8 @@ Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, v
 | [`reverse_mesh_normals`](#reverse_mesh_normals) | sí | Da vuelta la orientación de todos los triángulos de mallas (MALLA › MODIFICAR › Invertir normal de Fusion): el volumen cambia de signo. |
 | [`scale_mesh`](#scale_mesh) | sí | Escala mallas desde el origen (MALLA › MODIFICAR › Escalar malla de Fusion): uniforme con factor_x solo, o distinto en cada eje. |
 | [`convert_mesh`](#convert_mesh) | sí | Convierte mallas en cuerpos B-rep (MALLA › MODIFICAR › Convertir malla de Fusion): sólido si la malla es cerrada, superficie si no. method: faceted (una cara plana por triángulo) o prismatic (une las caras coplanares vecinas del mismo grupo; no reconoce cilindros). |
+| [`create_mesh_section_sketch`](#create_mesh_section_sketch) | sí | Crea un boceto de sección de malla (MALLA › CREAR › Crear boceto de sección de malla de Fusion): un boceto nuevo sobre el plano con la línea donde el plano corta la malla, como spline fija de construcción (una por lazo). offset desplaza el plano de sección sobre su normal. |
+| [`fit_curves_to_mesh_section`](#fit_curves_to_mesh_section) | sí | Ajusta curvas a la sección de malla de un boceto (BOCETO › CREAR › Ajustar curvas a sección de malla de Fusion). curve_type: line, arc o spline (abiertas: de start a end sobre la sección, por el camino short o long), closed_spline, circle o ellipse (siguen toda la sección), o lines_and_arcs (no está en Fusion: líneas y arcos dentro de max_deviation, toda la sección o de start a end). |
 
 ### `get_mesh_info`
 
@@ -3342,6 +3421,35 @@ Convierte mallas en cuerpos B-rep (MALLA › MODIFICAR › Convertir malla de Fu
   - `keep_original` (true/false; opcional, por defecto `false`): true conserva el cuerpo de malla además del B-rep nuevo.
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
 - CLI: `omnicad call convert_mesh --doc pieza.omnicad bodies=…`
+
+### `create_mesh_section_sketch`
+
+Crea un boceto de sección de malla (MALLA › CREAR › Crear boceto de sección de malla de Fusion): un boceto nuevo sobre el plano con la línea donde el plano corta la malla, como spline fija de construcción (una por lazo). offset desplaza el plano de sección sobre su normal. Después, fit_curves_to_mesh_section dibuja curvas que la siguen. Coordenadas del boceto como en create_sketch.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto; obligatorio): id o nombre del cuerpo de malla.
+  - `plane` (texto; opcional, por defecto `"XY"`): "XY", "XZ", "YZ", el id o nombre de un plano de construcción, o una cara plana de un sólido (selector como ">Z" o id de find_faces).
+  - `offset` (número o expresión; opcional, por defecto `0`): distancia en mm del plano de sección al plano elegido, sobre su normal (número o expresión).
+  - `name` (texto; opcional, por defecto `null`): nombre del boceto; vacío = "Boceto1", "Boceto2"…
+  - `plane_body` (texto; opcional, por defecto `null`): cuerpo sólido donde se evalúa el selector de cara de plane; vacío = el único sólido.
+- CLI: `omnicad call create_mesh_section_sketch --doc pieza.omnicad body=…`
+
+### `fit_curves_to_mesh_section`
+
+Ajusta curvas a la sección de malla de un boceto (BOCETO › CREAR › Ajustar curvas a sección de malla de Fusion). curve_type: line, arc o spline (abiertas: de start a end sobre la sección, por el camino short o long), closed_spline, circle o ellipse (siguen toda la sección), o lines_and_arcs (no está en Fusion: líneas y arcos dentro de max_deviation, toda la sección o de start a end). Las curvas son geometría normal del boceto: un extremo que cae en un punto ya dibujado lo comparte (la curva siguiente arranca donde terminó la anterior) y un lazo cerrado da perfil. Sin restricciones (como Fusion, salvo la tangencia). Devuelve la desviación real de cada curva; avisa si pasa de max_deviation.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto de sección de malla (create_mesh_section_sketch).
+  - `curve_type` ("line" | "arc" | "spline" | "closed_spline" | "circle" | "ellipse" | "lines_and_arcs"; obligatorio): "line", "arc", "spline", "closed_spline", "circle", "ellipse" o "lines_and_arcs".
+  - `section` (entero; opcional, por defecto `null`): id de la línea de sección (sections de create_mesh_section_sketch); vacío = la más cercana a start, o todas las cerradas para las curvas cerradas sin start.
+  - `start` (lista de número o null; opcional, por defecto `null`): [x, y] del primer punto sobre la sección (mm, coordenadas del boceto); se toma el punto de la sección más cercano.
+  - `end` (lista de número o null; opcional, por defecto `null`): [x, y] del segundo punto sobre la sección.
+  - `path` ("short" | "long"; opcional, por defecto `"short"`): "short" (camino corto) o "long" (camino largo) entre start y end en una sección cerrada.
+  - `tolerance` (número o expresión; opcional, por defecto `0.1`): tolerancia de ajuste de spline en mm: más chica, más puntos y mejor ajuste.
+  - `max_deviation` (número o expresión; opcional, por defecto `0.1`): desviación máxima en mm entre cada curva y la sección (límite de lines_and_arcs; si una curva lo pasa, avisa).
+- CLI: `omnicad call fit_curves_to_mesh_section --doc pieza.omnicad sketch=… curve_type=…`
 
 ## Grupo ensamble
 

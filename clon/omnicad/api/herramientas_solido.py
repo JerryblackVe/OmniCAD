@@ -407,9 +407,11 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
 def _curvas_de_boceto(sesion, boceto, curvas, que):
     """Referencias a curvas de un boceto: las `curvas` pedidas o, vacío, todas las que no son de construcción."""
     rop, rbr = boceto_activo(sesion, boceto)
-    ids = list(curvas) if curvas else [c.id for c in rbr.boceto.curvas.values() if not c.construccion]
+    curvas3d = rbr.boceto.geo3d.get("curvas", {})        # las del Boceto 3D también sirven de ruta
+    ids = list(curvas) if curvas else ([c.id for c in rbr.boceto.curvas.values() if not c.construccion]
+                                       + [k for k, c in curvas3d.items() if not c["construccion"]])
     for cid in ids:
-        if cid not in rbr.boceto.curvas:
+        if cid not in rbr.boceto.curvas and cid not in curvas3d:
             raise error("ENTITY_NOT_FOUND", f"El boceto «{rop.nombre}» no tiene la curva {cid}.")
     if not ids:
         raise error("ENTITY_NOT_FOUND", f"El boceto de {que} «{rop.nombre}» no tiene curvas.")

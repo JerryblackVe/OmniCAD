@@ -49,7 +49,10 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "release_offset", "edit_sketch_pattern", "break_projection_link", "manage_lost_projections",
                 "copy_sketch_entities", "project_spun_profile",
                 # Fase 7 del boceto (tests/test_boceto_fase7.py)
-                "edit_sketch_spline", "get_spline_curvature"]
+                "edit_sketch_spline", "get_spline_curvature",
+                # Boceto 3D, FU-1 (tests/test_boceto_fase8_3d.py)
+                "draw_line_3d", "draw_spline_3d", "draw_point_3d", "add_constraint_3d", "add_dimension_3d",
+                "delete_sketch_entities_3d"]
 
 
 def test_herramientas_del_grupo_boceto():
