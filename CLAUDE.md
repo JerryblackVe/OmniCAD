@@ -31,6 +31,20 @@
   OpenCascade (C++).
 - Instalar el toolchain de Rust/maturin requiere permiso del usuario.
 
+## Recurso indispensable: documentación oficial de Fusion 360 (con imágenes)
+- Está descargada completa en **`docs/fusion_docs/`** (6967 artículos, 8659 imágenes; 4,4 GB; **no se sube a git**,
+  está en `.gitignore`). Es la fuente de verdad de **cómo funciona Fusion**.
+- **Se consulta SIEMPRE antes de corregir un bug o agregar un faltante** que replique un comando de Fusion: qué
+  opciones tiene, cómo se comporta, qué muestra. No se programa de memoria ni se adivina.
+- Cómo usarla: `docs/fusion_docs/LEEME.txt`. Un artículo = `contenido/<sección>/<nombre>.md` (texto) y `.html`
+  (con imágenes, que están en `recursos/`). El boceto vive en `contenido/fusion-sketch/` (115 artículos); el resto
+  por sección: `fusion-model`, `fusion-sheet-metal`, `fusion-mesh`, `fusion-assemble`, `fusion-drawing`,
+  `fusion-render`, `fusion-animate`, `fusion-patch`, etc. Buscar con `indice.json` / `fuentes.csv` (título, sección,
+  URL original) o con Grep sobre los `.md`. Las capturas se miran con Read sobre el PNG de `recursos/`.
+- Cobertura no garantizada (contenido dinámico o no enlazado puede faltar; hay 335 errores de descarga): si un
+  artículo no está, decirlo y recurrir a `analisis/fusion_doc/paginas/` (copia de solo texto) o a
+  `privado/scripts/ayuda_fusion.py`. Los briefs a sub-sesiones y a OpenCode deben nombrar esta carpeta.
+
 ## Regla obligatoria: ponytail
 - **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
   (también las sub-sesiones y las que orquestan OpenCode) arranca con `ponytail`, termina con `ponytail-review`,

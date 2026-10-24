@@ -41,6 +41,12 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [../.claude/skills/omnicad/SKILL.md](../.claude/skills/omnicad/SKILL.md) | Skill `omnicad` que instala `omnicad setup` |
 | [../.claude/skills/omnicad-test/SKILL.md](../.claude/skills/omnicad-test/SKILL.md) | Skill `omnicad-test`: probar el programa y anotar lo que falla en `seguimiento/` (Claude Code y OpenCode la leen del repo) |
 
+## Documentación externa local
+
+| Ruta | Qué tiene |
+|---|---|
+| [fusion_docs/](fusion_docs/LEEME.txt) | **Recurso indispensable.** Documentación oficial completa de Fusion 360 con imágenes (6967 artículos, 25 secciones; el boceto en `contenido/fusion-sketch/`). Se consulta antes de corregir un bug o agregar un faltante. No se sube a git (4,4 GB). Abrir `fusion_docs/index.html` o buscar en `indice.json` / `fuentes.csv` |
+
 ## Planes
 
 | Documento | Qué tiene |

@@ -35,3 +35,6 @@ CLAUDE.local.md
 /clon/omnicad/_rs*.pyd
 /clon/omnicad/_rs*.so
 /clon/omnicad/_rs.pdb
+
+# Documentación de Fusion 360 descargada (4,4 GB): recurso local, nunca se sube
+/docs/fusion_docs/

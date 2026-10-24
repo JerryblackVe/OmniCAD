@@ -29,7 +29,9 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
   OCC (o dicts). Sin Qt y sin timeline. Docstring: a qué comando de Fusion equivale.
 - OCP: los métodos estáticos llevan sufijo `_s` (p. ej. `BRepGProp.VolumeProperties_s`).
 - Para replicar un comando de otro programa, mirá su documentación pública y el análisis de
-  `analisis auto/`, y replicá sus opciones y su comportamiento.
+  `analisis auto/`, y replicá sus opciones y su comportamiento. **Para Fusion 360, la fuente principal es
+  `docs/fusion_docs/` (documentación oficial completa con imágenes; ver `CLAUDE.md`)**: leé el artículo antes de
+  corregir un bug o agregar un faltante.
 
 ## Seguridad
 - Nunca commitear secretos (tokens, claves, contraseñas): van en variables de entorno; `.env*` ya está
