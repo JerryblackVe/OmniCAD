@@ -1431,6 +1431,7 @@ class Boceto:
             return pid
         ids = []
         lineas = {frozenset(c.puntos()) for c in self.curvas.values() if c.proyectada and isinstance(c, Linea)}
+        circulos = [(c.centro, c.radio) for c in self.curvas.values() if c.proyectada and isinstance(c, Circulo)]
         for prim in primitivas:
             t = prim[0]
             if t == "linea":
@@ -1442,7 +1443,11 @@ class Boceto:
                 lineas.add(extremos)
                 c = Linea(self._nuevo_id(), punto(prim[2]), punto(prim[3]), construccion, proyectada=True)
             elif t == "circulo":
-                c = Circulo(self._nuevo_id(), punto(prim[2]), prim[3], construccion, proyectada=True)
+                centro, radio = punto(prim[2]), prim[3]
+                if any(centro == pc and abs(radio - r) < 1e-6 for pc, r in circulos):
+                    continue
+                circulos.append((centro, radio))
+                c = Circulo(self._nuevo_id(), centro, radio, construccion, proyectada=True)
             elif t == "arco":
                 (cx, cy), r = prim[2], prim[3]
                 c = Arco(self._nuevo_id(), punto((cx, cy)), punto((cx + r * math.cos(prim[4]), cy + r * math.sin(prim[4]))),
@@ -2371,6 +2376,14 @@ class Boceto:
             J = elems[i][4]
             esquinas.append(min(cands, key=lambda q, J=J: math.dist(q, J)) if cands else
                             ((fin_i[0] + ini_j[0]) / 2, (fin_i[1] + ini_j[1]) / 2))
+        for i, (_, _, c, *_r) in enumerate(elems):
+            if isinstance(c, Linea):
+                a2 = esquinas[i - 1] if cerrada or i > 0 else portadoras[0][1]
+                b2 = esquinas[i] if cerrada or i < m - 1 else portadoras[-1][2]
+                direccion = portadoras[i][0][2]  # unitaria, en el sentido de recorrido original
+                largo = (b2[0] - a2[0]) * direccion[0] + (b2[1] - a2[1]) * direccion[1]
+                if largo <= 1e-9:
+                    raise ErrorBoceto("El desfase deja un segmento de largo cero o invierte su dirección.")
         pids = [self.agregar_punto(*q) for q in esquinas]
         if cerrada:
             extremos = [(pids[i - 1], pids[i]) for i in range(m)]
@@ -2754,8 +2767,20 @@ class Boceto:
             raise ErrorBoceto("Los extremos ya se tocan.")
         if continuidad == "G2":
             k = L / 5
-            internos = [(e1[0] + k * t1[0], e1[1] + k * t1[1]), (e1[0] + 2 * k * t1[0], e1[1] + 2 * k * t1[1]),
-                        (e2[0] + 2 * k * t2[0], e2[1] + 2 * k * t2[1]), (e2[0] + k * t2[0], e2[1] + k * t2[1])]
+            polos_extremos = []
+            for cid, pid, e, t in ((c1, extremos[0], e1, t1), (c2, extremos[1], e2, t2)):
+                prim = self.primitivas(cid)[0]
+                inicio = pid == self.curvas[cid].extremos()[0]
+                parametro = dominio(prim)[0 if inicio else 1]
+                _, d1, d2 = evaluar_primitiva(prim, parametro, 2)
+                signo = -1.0 if inicio else 1.0
+                curvatura = signo * (d1[0] * d2[1] - d1[1] * d2[0]) / (math.hypot(*d1) or 1.0) ** 3
+                # Seis polos de grado 5: Bézier con curvatura = (4/5) * desplazamiento normal / k².
+                normal = 5 / 4 * curvatura * k ** 2
+                polos_extremos.append([(e[0] + k * t[0], e[1] + k * t[1]),
+                                       (e[0] + 2 * k * t[0] - normal * t[1],
+                                        e[1] + 2 * k * t[1] + normal * t[0])])
+            internos = polos_extremos[0] + polos_extremos[1][::-1]
             grado, tipo = 5, "curvatura"
         else:
             k = L / 3

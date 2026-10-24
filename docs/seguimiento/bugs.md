@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23. Total 12: Abierto 7 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23. Total 5: Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -20,13 +20,6 @@ Cada fila se reprodujo con una prueba real (scripts de la auditoría, no incluid
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-96 | Curva de fusión G2 con un arco deforma el arco | Abierto | Media | Con arco r=10 y línea, el arco queda con curvatura 0,0930 (r≈10,75): los polos internos salen colineales (curvatura 0 en la unión) y el solver mueve la curva original. | omnicad/restricciones/boceto.py:2745-2749 (`curva_fusion`) | 2026-10-23 |
-| B-98 | Desfase hacia adentro devuelve contornos invertidos o de largo 0 | Abierto | Media | Rectángulo 20×10: `-5` da líneas de largo 0 y `-6` un contorno invertido, con OK. Solo se controla el radio de arcos y círculos. Fallar si un segmento se invierte o llega a 0. | omnicad/restricciones/boceto.py:2331-2343 (`desfase`) | 2026-10-23 |
-| B-99 | Proyectar un cuerpo cilíndrico deja círculos duplicados | Abierto | Baja | Quedan 2 círculos idénticos superpuestos; las líneas coincidentes sí se deduplican. | omnicad/restricciones/boceto.py:1425-1436 | 2026-10-23 |
-| B-100 | Simetría de arcos no refleja los extremos | Abierto | Media | 2 arcos con eje: dof 14 → 11 (debía ser 9); los círculos sí dan 7. El solver solo empareja centros. | omnicad/restricciones/solver.py:430 | 2026-10-23 |
-| B-101 | El solver da falsos conflictos con geometría grande | Abierto | Alta | Dos líneas con cota de ángulo 60° y largo ≥ 2e4 mm dan `SKETCH_OVERCONSTRAINED` (error 1e-5) y dof 8 en vez de 7. Una cadena rígida de 160 o más líneas H/V/igual rechaza un arrastre de 50 mm. Causa: Jacobiano por diferencias finitas con h=1e-7 y tolerancia absoluta 1e-6. | omnicad/restricciones/solver.py:28,466 | 2026-10-23 |
-| B-102 | `auto_constrain` deja grados de libertad sin cerrar | Abierto | Media | Salta las distancias de valor 0: `draw_point(0,5)` más `auto_constrain` queda con dof 1; igual un arco con extremo en x=0 o una cónica con punto en y=0. | omnicad/restricciones/solver.py:838,865 | 2026-10-23 |
-| B-103 | `auto_constrain` tarda minutos con boceto grande y bloquea la ventana | Abierto | Alta | Cada candidato recalcula el Jacobiano de todo el boceto: 120 entidades 4,7 s; 260 28 s; 440 114 s; 600 líneas más de 590 s. Fusion limita a 250. Calcular por bloques y poner un tope. | omnicad/restricciones/solver.py:783 | 2026-10-23 |
 
 ## Detalle de lo abierto
 

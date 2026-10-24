@@ -26,10 +26,11 @@ from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, E
                      _numero, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad, puntos_primitiva)
 
 TOLERANCIA = 1e-6
-_PESO_REGULARIZACION = 1e-4
+_PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas durante el arrastre.
 _PESO_ARRASTRE = 1.0
 _ESCALA_TANGENTE = 10.0      # mm: convierte el seno del ángulo en un residuo comparable a una distancia
 _ESCALA_CURVATURA = 100.0    # mm²
+TOPE_AUTO_RESTRINGIR = 500
 
 
 class ResultadoSolver:
@@ -321,7 +322,9 @@ class _Sistema:
                     (a, bb), (cc, d) = self.L(x, l1), self.L(x, l2)
                     u = (bb[0] - a[0], bb[1] - a[1])
                     w = (d[0] - cc[0], d[1] - cc[1])
-                    return [math.atan2(abs(u[0] * w[1] - u[1] * w[0]), u[0] * w[0] + u[1] * w[1]) - v]
+                    # Como paralela/perpendicular: residuo en mm, sin perder peso ni rango al crecer las líneas.
+                    escala = (math.hypot(*u) + math.hypot(*w)) / 2
+                    return [(math.atan2(abs(u[0] * w[1] - u[1] * w[0]), u[0] * w[0] + u[1] * w[1]) - v) * escala]
                 T.append(f)
             elif t in ("distancia_h", "distancia_v"):
                 k = 0 if t == "distancia_h" else 1
@@ -425,6 +428,8 @@ class _Sistema:
             return list(zip(pa, pb if directo <= inverso else pb[::-1], strict=True))
         if tipos[0] == "elipse":
             return [(ca.centro, cb.centro), (ca.mayor, cb.mayor)]
+        if tipos[:2] == ["arco", "arco"]:       # el reflejo invierte el sentido: inicio ↔ fin
+            return [(ca.centro, cb.centro), (ca.inicio, cb.fin), (ca.fin, cb.inicio)]
         if tipos[0] == "arco_elipse":           # el reflejo invierte el sentido: inicio ↔ fin
             return [(ca.centro, cb.centro), (ca.mayor, cb.mayor), (ca.inicio, cb.fin), (ca.fin, cb.inicio)]
         return [(ca.centro, cb.centro)]
@@ -769,15 +774,84 @@ def grados_de_libertad(boceto, valores_cotas=None):
 
 
 # ---------------------------------------------------------------- AutoConstrain
+class _GradosAuto:
+    """Rango incremental: AutoConstrain agrega términos, pero nunca mueve la geometría.
+
+    Conserva una base ortonormal de las filas del jacobiano. Cada candidato solo necesita su
+    jacobiano local y dos proyecciones (Gram-Schmidt con reortogonalización), no otra SVD global.
+    """
+
+    def __init__(self, boceto, valores):
+        self.b, self.valores = boceto, valores
+        self.sis = _Sistema(boceto, valores)
+        n = len(self.sis.x0)
+        self.base = np.empty((n, n))
+        self.rango = 0
+        J = _jacobiano(self.sis, self.sis.x0)
+        if J.size:
+            _, s, vt = np.linalg.svd(J, full_matrices=False)
+            self.rango = int(np.count_nonzero(s > 1e-6))
+            self.base[:self.rango] = vt[:self.rango]
+
+    def __call__(self, ident=None):
+        n = len(self.sis.x0)
+        if ident is None:
+            return n - self.rango
+        b = self.b
+        r = b.restricciones.get(ident)
+        c = b.cotas.get(ident)
+        obj = r if r is not None else c
+        claves = {k for e in obj.entidades for k in _claves(b, e)}
+        if r is not None and r.tipo == "fijo":
+            # Fijar coordenadas equivale a agregar sus filas unidad, sin renumerar el sistema.
+            columnas = []
+            for clase, eid in claves:
+                indice = (self.sis.idx_p if clase == "p" else self.sis.idx_r).get(eid)
+                if indice is not None:
+                    columnas.extend([indice, indice + 1] if clase == "p" else [indice])
+            filas = np.zeros((len(columnas), n))
+            for i, j in enumerate(columnas):
+                filas[i, j] = 1
+        else:
+            grupo = {"p": {eid for clase, eid in claves if clase == "p"},
+                     "r": {eid for clase, eid in claves if clase == "r"}, "curvas": [],
+                     "restricciones": [r] if r is not None else [], "cotas": [c] if c is not None else []}
+            local = _Sistema(b, self.valores, grupo)
+            columnas = []
+            for pid in local.idx_p:
+                i = self.sis.idx_p[pid]
+                columnas.extend([i, i + 1])
+            columnas.extend(self.sis.idx_r[cid] for cid in local.idx_r)
+            J = _jacobiano(local, local.x0)
+            filas = np.zeros((len(J), n))
+            filas[:, columnas] = J
+        for fila in filas:
+            for _ in range(2):
+                base = self.base[:self.rango]
+                coeficientes = np.einsum("ij,j->i", base, fila)
+                fila -= np.einsum("i,ij->j", coeficientes, base)
+            norma = np.linalg.norm(fila)
+            if norma > 1e-6:
+                self.base[self.rango] = fila / norma
+                self.rango += 1
+        return n - self.rango
+
+
 def auto_restringir(boceto, valores_cotas=None, tol_angulo=1.0, tol_distancia=1e-3):
     """Restringir automáticamente (SKT-AUTO-CONSTRAIN): detecta coincidencias, horizontales/verticales
     e igualdades y después propone cotas (largos, radios, ángulos y posiciones respecto del origen)
     hasta dejar el boceto totalmente restringido. Cada candidato se agrega solo si baja los grados de
     libertad sin entrar en conflicto. Devuelve la lista de descripciones de lo agregado."""
     b = boceto
+    en_curvas = {p for c in b.curvas.values() for p in c.puntos()}
+    cantidad = len(b.curvas) + len(b.puntos.keys() - en_curvas)
+    if cantidad > TOPE_AUTO_RESTRINGIR:
+        raise ErrorBoceto(f"El boceto tiene {cantidad} entidades; el tope para restringir automáticamente es "
+                          f"{TOPE_AUTO_RESTRINGIR}. Simplificá o dividí el boceto.")
     valores = dict(valores_cotas or {})
     agregado = []
-    gdl = [grados_de_libertad(b, valores)]
+    calcular_gdl = _GradosAuto(b, valores)
+    gdl = [calcular_gdl()]
 
     def probar(funcion, descripcion, valor=None):
         if gdl[0] == 0:
@@ -788,7 +862,7 @@ def auto_restringir(boceto, valores_cotas=None, tol_angulo=1.0, tol_distancia=1e
             return False
         if valor is not None:
             valores[ident] = valor
-        nuevo = grados_de_libertad(b, valores)
+        nuevo = calcular_gdl(ident)
         if nuevo < gdl[0]:
             gdl[0] = nuevo
             agregado.append(descripcion)
@@ -835,9 +909,8 @@ def auto_restringir(boceto, valores_cotas=None, tol_angulo=1.0, tol_distancia=1e
             b.agregar_restriccion("fijo", [origen])
             for tipo in ("distancia_h", "distancia_v"):
                 v = b.medir_cota(tipo, [origen, dato])
-                if v > tol_distancia:
-                    probar(lambda t=tipo, v=v: b.agregar_cota(t, [origen, dato], _numero(round(v, 4))),
-                           f"{tipo} origen-{dato}", round(v, 4))
+                probar(lambda t=tipo, v=v: b.agregar_cota(t, [origen, dato], _numero(round(v, 4))),
+                       f"{tipo} origen-{dato}", round(v, 4))
     # 5) Cotas: largos, radios, ángulos entre líneas unidas y posiciones de lo que siga libre.
     for ln in lineas:
         v = round(math.dist(*b._extremos_linea(ln.id)), 4)
@@ -862,6 +935,5 @@ def auto_restringir(boceto, valores_cotas=None, tol_angulo=1.0, tol_distancia=1e
                 continue
             for tipo in ("distancia_h", "distancia_v"):
                 v = round(b.medir_cota(tipo, [dato, p]), 4)
-                if v > tol_distancia:
-                    probar(lambda t=tipo, p=p, v=v: b.agregar_cota(t, [dato, p], _numero(v)), f"{tipo} {dato}-{p}", v)
+                probar(lambda t=tipo, p=p, v=v: b.agregar_cota(t, [dato, p], _numero(v)), f"{tipo} {dato}-{p}", v)
     return agregado
