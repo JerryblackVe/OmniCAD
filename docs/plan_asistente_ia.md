@@ -4,7 +4,7 @@
 > [docs/seguimiento/faltantes.md](seguimiento/faltantes.md) › «Asistente IA». Si algo de acá no coincide con el
 > seguimiento, vale el seguimiento.
 
-Fecha: 2026-10-25. Estado: **propuesto, sin empezar**.
+Fecha: 2026-10-25. Estado: **fases 1 a 9 ejecutadas el 2026-10-25** (commits `f60d51b` a `4e981c0`). Lo que queda vive en `docs/seguimiento/faltantes.md` › «Asistente IA» (IA-2 Parcial: streaming y prueba real por API).
 
 ## Objetivo
 
