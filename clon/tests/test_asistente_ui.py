@@ -1,0 +1,300 @@
+# -*- coding: utf-8 -*-
+"""Panel del Asistente IA (ui/asistente.py) con la ventana real offscreen y el ProveedorFalso: sin red ni gasto."""
+import os
+import threading
+
+import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtCore import QSettings, Qt  # noqa: E402
+from PySide6.QtGui import QKeySequence  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
+
+from omnicad.asistente import config  # noqa: E402
+from omnicad.asistente.proveedores.base import (ErrorProveedor, PedidoHerramienta, ProveedorFalso,  # noqa: E402
+                                                Respuesta)
+
+CAJA = PedidoHerramienta("h1", "create_box", {"length": 40, "width": 30, "height": 20})
+
+
+@pytest.fixture(scope="module")
+def ventana(tmp_path_factory):
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+    QApplication.instance() or QApplication([])
+    carpeta = tmp_path_factory.mktemp("asistente")
+    v = VentanaPrincipal(prefs=Preferencias(QSettings(str(carpeta / "prefs.ini"), QSettings.IniFormat)))
+    v.show()
+    yield v
+    v.doc.modificado = False
+    v.close()
+    v.deleteLater()
+    QTest.qWait(1)
+
+
+@pytest.fixture
+def panel(ventana):
+    """Panel abierto, chat nuevo, documento vacío; el proveedor lo pone cada test en `panel.guion`."""
+    from omnicad.timeline.documento import Documento
+    ventana.set_documento(Documento())
+    ventana.mostrar_asistente(True)
+    p = ventana.asistente
+    p.nuevo_chat()
+    p.guion = []
+    p.crear_proveedor = lambda cfg: ProveedorFalso(p.guion)
+    yield p
+    p.cancelar()
+    esperar(p)
+    ventana.mostrar_asistente(False)
+
+
+def esperar(p, ms=8000):
+    for _ in range(ms // 20):
+        if not p.trabajando:
+            return True
+        QTest.qWait(20)
+    return False
+
+
+def escribir(p, texto):
+    """Como la persona: clic, Ctrl+A, Supr y teclear. Solo ASCII: QTest.keyClicks con «é» cierra el proceso offscreen."""
+    QTest.mouseClick(p.campo.viewport(), Qt.LeftButton)
+    QTest.keyClick(p.campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClick(p.campo, Qt.Key_Delete)
+    QTest.keyClicks(p.campo, texto)
+
+
+def lineas_herramienta(p):
+    from PySide6.QtWidgets import QToolButton
+    return [b.text() for b in p.lista.findChildren(QToolButton, "herramienta_asistente")]
+
+
+def test_pedido_crea_una_caja_y_muestra_la_linea_de_herramienta(panel, ventana):
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[CAJA], uso={"entrada": 100, "salida": 20, "costo_usd": 0.001}),
+                   Respuesta(texto="Listo: caja de 40 x 30 x 20 mm.", uso={"entrada": 150, "salida": 10,
+                                                                           "costo_usd": 0.002})]
+    escribir(panel, "hace una caja")
+    QTest.keyClick(panel.campo, Qt.Key_Return)
+    assert panel.b_enviar.text() == "Cancelar"
+    assert esperar(panel)
+    assert [o.TIPO for o in ventana.doc.operaciones] == ["primitiva"]
+    assert lineas_herramienta(panel) == ["✓ create_box → op1"]
+    assert panel.b_enviar.text() == "Enviar" and panel.campo.toPlainText() == ""
+    assert "250 tokens de entrada" in panel.pie.text() and "0,0030 USD" in panel.pie.text()
+    assert ventana.windowTitle().startswith("*") or ventana.doc.modificado
+
+
+def test_error_de_herramienta_se_ve_como_linea_con_cruz(panel):
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[PedidoHerramienta("h1", "fillet", {"edges": ["nada"], "radius": 2})]),
+                   Respuesta(texto="No pude.")]
+    escribir(panel, "empalme")
+    assert panel.enviar() and esperar(panel)
+    linea, = lineas_herramienta(panel)
+    assert linea.startswith("✗ fillet: ")
+
+
+def test_las_herramientas_corren_en_el_hilo_de_la_interfaz_sin_el_puerto(panel, ventana):
+    assert not ventana.prefs["general/puente_agentes"] and (ventana.puente is None or not ventana.puente.activo)
+    hilos = []
+    original = panel.puente.ejecutar
+    panel.puente.ejecutar = lambda n, a: (hilos.append(threading.current_thread()), original(n, a))[1]
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[CAJA]), Respuesta(texto="ok")]
+    escribir(panel, "caja")
+    try:
+        assert panel.enviar() and esperar(panel)
+    finally:
+        panel.puente.ejecutar = original
+    assert hilos == [threading.main_thread()]
+
+
+def test_mayus_enter_salta_de_linea_y_enter_envia(panel):
+    escribir(panel, "uno")
+    QTest.keyClick(panel.campo, Qt.Key_Return, Qt.ShiftModifier)
+    QTest.keyClicks(panel.campo, "dos")
+    assert panel.campo.toPlainText() == "uno\ndos" and not panel.trabajando
+    panel.guion = [Respuesta(texto="Hola")]
+    QTest.keyClick(panel.campo, Qt.Key_Enter)
+    assert esperar(panel)
+    assert panel.mensajes[0]["contenido"][0]["texto"] == "uno\ndos"
+
+
+def test_campo_vacio_o_solo_espacios_no_manda_nada(panel):
+    for texto in ("", "   "):
+        escribir(panel, texto)
+        QTest.keyClick(panel.campo, Qt.Key_Return)
+        QTest.mouseClick(panel.b_enviar, Qt.LeftButton)
+        assert not panel.trabajando and panel.mensajes == []
+
+
+def test_texto_enorme_no_se_manda(panel):
+    from omnicad.ui.asistente import TOPE_PEDIDO
+    panel.campo.setPlainText("x" * (TOPE_PEDIDO + 1))
+    assert not panel.enviar() and panel.mensajes == [] and not panel.trabajando
+
+
+def test_modo_explicar_no_cambia_el_documento(panel, ventana):
+    panel.modo.setCurrentIndex(panel.modo.findData("explicar"))
+    panel.guion = [Respuesta(herramientas=[CAJA]), Respuesta(texto="Se hace con CREAR › Caja.")]
+    escribir(panel, "como hago una caja")
+    assert panel.enviar() and esperar(panel)
+    assert ventana.doc.operaciones == []
+    assert lineas_herramienta(panel) == ["✗ create_box: TOOL_NOT_AVAILABLE"]
+
+
+@pytest.mark.parametrize("como", ["clic", "esc"])
+def test_cancelar_corta_el_pedido(panel, ventana, como):
+    """El proveedor espera hasta que el usuario cancela (botón o Esc): la caja pedida después no se crea."""
+    pulsado = threading.Event()
+
+    class Lento(ProveedorFalso):
+        def responder(self, *a):
+            pulsado.wait(5)
+            return super().responder(*a)
+
+    panel.crear_proveedor = lambda cfg: Lento([Respuesta(herramientas=[CAJA])])
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    escribir(panel, "caja")
+    assert panel.enviar()
+    if como == "clic":
+        QTest.mouseClick(panel.b_enviar, Qt.LeftButton)   # el mismo botón ahora dice Cancelar
+    else:
+        QTest.keyClick(panel.campo, Qt.Key_Escape)
+    assert panel.b_enviar.text() == "Cancelando…"
+    pulsado.set()
+    assert esperar(panel)
+    assert ventana.doc.operaciones == [] and lineas_herramienta(panel) == ["✗ create_box: CANCELLED"]
+    assert panel.b_enviar.text() == "Enviar" and panel.modo.isEnabled()
+
+
+def test_tope_de_gasto_corta_el_pedido(panel, ventana):
+    ventana.prefs["asistente/tope_usd"] = 0.01
+    try:
+        panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+        panel.guion = [Respuesta(herramientas=[CAJA], uso={"entrada": 1, "salida": 1, "costo_usd": 0.05}),
+                       Respuesta(texto="no tendría que llegar")]
+        escribir(panel, "caja cara")
+        assert panel.enviar() and esperar(panel)
+    finally:
+        ventana.prefs["asistente/tope_usd"] = 0.5
+    assert ventana.doc.operaciones == []
+    textos = [w.text() for w in panel.lista.findChildren(type(panel.pie))]
+    assert any("superó el tope" in t for t in textos)
+
+
+def test_sin_imagenes_del_visor_no_le_llega_ninguna_imagen_al_modelo(panel, ventana, monkeypatch):
+    from omnicad import api
+    monkeypatch.setattr(panel.puente, "ejecutar", lambda n, a: {"ok": True, "result": {
+        "image": api.Imagen(b"png", 4, 3)}, "avisos": []})
+    falso = ProveedorFalso([Respuesta(herramientas=[PedidoHerramienta("h1", "get_viewport_image", {})]),
+                            Respuesta(texto="ok")])
+    panel.crear_proveedor = lambda cfg: falso
+    ventana.prefs["asistente/imagenes"] = False
+    try:
+        escribir(panel, "mira")
+        assert panel.enviar() and esperar(panel)
+    finally:
+        ventana.prefs["asistente/imagenes"] = True
+    resultado = falso.recibidos[1][0][-1]["contenido"][0]
+    assert [b["tipo"] for b in resultado["contenido"]] == ["texto"]
+    assert "imagen no enviada" in resultado["contenido"][0]["texto"]
+
+
+def test_sin_clave_avisa_en_el_chat_sin_excepcion(panel, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    panel.crear_proveedor = config.crear_proveedor
+    escribir(panel, "hola")
+    assert not panel.enviar()
+    textos = [w.text() for w in panel.lista.findChildren(type(panel.pie))]
+    assert any("ANTHROPIC_API_KEY" in t for t in textos) and panel.mensajes == []
+
+
+def test_biblioteca_de_prompts_y_chat_nuevo(panel):
+    menu = panel.b_chat.menu()
+    biblioteca = next(a.menu() for a in menu.actions() if a.text() == "Biblioteca de prompts")
+    historial = next(a for a in menu.actions() if a.text() == "Historial de chats")
+    assert not historial.isEnabled()
+    accion = biblioteca.actions()[0].menu().actions()[0]
+    accion.trigger()
+    assert panel.campo.toPlainText() and not panel.trabajando
+    panel.guion = [Respuesta(texto="ok")]
+    assert panel.enviar() and esperar(panel) and panel.mensajes
+    panel.nuevo_chat()
+    assert panel.mensajes == [] and panel.pie.text() == ""
+
+
+def test_accion_boton_menu_ayuda_y_atajo_unico(ventana):
+    from PySide6.QtWidgets import QMenu, QToolButton
+    a = ventana.acciones["asistente"]
+    assert a.shortcut() == QKeySequence("Ctrl+Shift+A") and not a.icon().isNull()
+    usados = [b.shortcut().toString() for c, b in ventana.acciones.items() if c != "asistente" and not b.shortcut().isEmpty()]
+    assert "Ctrl+Shift+A" not in usados
+    assert any(b.defaultAction() is a for b in ventana.findChildren(QToolButton))
+    assert any(a in m.actions() for m in ventana.findChildren(QMenu))
+    from omnicad.ui.busqueda_comandos import coincidencias, comandos_disponibles
+    assert "asistente" in coincidencias("asist", comandos_disponibles(ventana.acciones))
+    a.trigger()
+    assert ventana.asistente.isVisible() and a.isChecked()
+    ventana.asistente.close()
+    assert not a.isChecked()
+
+
+def test_config_crea_cada_proveedor_y_nunca_guarda_la_clave(monkeypatch):
+    for variable in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(variable, raising=False)
+    with pytest.raises(ErrorProveedor, match="ANTHROPIC_API_KEY"):
+        config.crear_proveedor({"proveedor": "anthropic"})
+    with pytest.raises(ErrorProveedor, match="OPENROUTER_API_KEY"):
+        config.crear_proveedor({"proveedor": "openrouter"})
+    with pytest.raises(ErrorProveedor, match="desconocido"):
+        config.crear_proveedor({"proveedor": "x"})
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secreta")
+    local = config.crear_proveedor({"proveedor": "local", "modelo": "", "base_url": "http://otra:1234/v1"})
+    assert local.clave is None and local.url == "http://otra:1234/v1/chat/completions" and local.modelo == "qwen3"
+    assert config.crear_proveedor({"proveedor": "openai", "modelo": " gpt-x "}).modelo == "gpt-x"
+    assert config.clave_definida("openai") and not config.clave_definida("local")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
+    assert config.crear_proveedor({"proveedor": "openrouter", "base_url": "http://proxy/v1"}).clave == "sk-or"
+
+
+def test_preferencias_asistente_estado_de_clave_y_probar_conexion(ventana, monkeypatch):
+    from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit
+
+    from omnicad.ui.preferencias import DialogoPreferencias
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-secreta")
+    dlg = DialogoPreferencias(ventana.prefs, inicial="asistente")
+    assert dlg.cabecera.text().startswith("Con qué IA habla el Asistente")
+    assert "ANTHROPIC_API_KEY está definida" in dlg.estado_clave.text()
+    assert "sk-ant-secreta" not in dlg.estado_clave.text()
+    tope = dlg.controles["asistente/tope_usd"]
+    assert isinstance(tope, QDoubleSpinBox) and tope.value() == 0.5
+    combo = dlg.controles["asistente/proveedor"]
+    combo.setCurrentIndex(combo.findData("openrouter"))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    dlg._estado_clave()
+    assert "Falta la variable de entorno OPENROUTER_API_KEY" in dlg.estado_clave.text()
+    dlg.probar_conexion()                                      # sin clave: falla en el acto, sin red
+    assert dlg.resultado_conexion.text().startswith("✗") and "OPENROUTER_API_KEY" in dlg.resultado_conexion.text()
+    dlg.crear_proveedor = lambda cfg: ProveedorFalso([Respuesta(texto="OK")])
+    dlg.probar_conexion()
+    for _ in range(100):
+        if dlg.b_probar.isEnabled():
+            break
+        QTest.qWait(20)
+    assert dlg.resultado_conexion.text() == "✓ Conectó: el modelo respondió «OK»."
+    modelo = dlg.controles["asistente/modelo"]
+    assert isinstance(modelo, QLineEdit) and "anthropic/claude" in modelo.placeholderText()
+    modelo.setText(" mi-modelo ")
+    tope.setValue(1.25)
+    dlg._aplicar()
+    assert ventana.prefs["asistente/modelo"] == "mi-modelo" and ventana.prefs["asistente/tope_usd"] == 1.25
+    assert ventana.prefs["asistente/proveedor"] == "openrouter"
+    assert "sk-" not in "".join(str(ventana.prefs.q.value(k)) for k in ventana.prefs.q.allKeys())
+    dlg._restablecer()
+    assert ventana.prefs["asistente/proveedor"] == "anthropic" and ventana.prefs["asistente/tope_usd"] == 0.5
+    dlg.close()

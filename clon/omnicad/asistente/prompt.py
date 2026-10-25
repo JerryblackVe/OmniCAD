@@ -53,8 +53,8 @@ def contexto(sesion, seleccion=None):
                             | ({"message": p["message"][:TOPE_TEXTO]} if p["message"] else {}) for p in pasos]),
         "marcador": escena.get("marker"),
     }
-    if seleccion is not None:
-        datos["seleccion"] = seleccion
+    if seleccion is not None:   # la de la ventana es una lista de referencias: 500 caras elegidas no inflan el prompt
+        datos["seleccion"] = _recortar(seleccion) if isinstance(seleccion, list) else seleccion
     # "<" escapado: un nombre con "</datos_del_documento>" no puede cerrar la marca.
     texto = json.dumps(datos, ensure_ascii=False, default=str).replace("<", "\\u003c")
     return f"<datos_del_documento>\n{texto}\n</datos_del_documento>"

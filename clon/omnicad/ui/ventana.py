@@ -251,6 +251,7 @@ class VentanaPrincipal(QMainWindow):
         self.puente = None                  # puente para agentes IA (MCP en vivo): ui/puente.py
         self._puente_sesion = False         # encendido con --puente solo para esta sesión
         self._pref_puente = None            # valor de la preferencia la última vez que se aplicó
+        self.asistente = None               # panel del Asistente IA (ui/asistente.py), se crea al abrirlo
         self._vista_inicial()
         self.aplicar_preferencias()
         from .comentarios import PanelComentarios
@@ -442,6 +443,9 @@ class VentanaPrincipal(QMainWindow):
             A(f"filtro_{clave}", texto, lambda activo, c=clave: self._filtro_seleccion(c, activo), None, ayuda,
               None, True)
         A("preferencias", "Preferencias…", self.preferencias, None, "Preferencias de OmniCAD", "engranaje")
+        A("asistente", "Asistente", self.mostrar_asistente, "Ctrl+Shift+A",
+          "Panel de chat con IA: explica, muestra, guía o hace el modelo con vos. Proveedor y modelo en "
+          "Preferencias › Asistente IA.", "asistente", True)
         A("acerca", f"Acerca de {NOMBRE_APP}", self.acerca_de, None,
           "Versión, kernel de geometría y licencia de OmniCAD.")
         A("reportar", "Reportar problema…", self.reportar_problema, None,
@@ -510,12 +514,15 @@ class VentanaPrincipal(QMainWindow):
         self.pestana_doc.setMinimumWidth(200)
         h.addWidget(self.pestana_doc, 1)
         h.addSpacing(10)
+        h.addWidget(self._boton(self.acciones["asistente"]))    # como Fusion: Autodesk Assistant junto a la Ayuda
         ayuda = QToolButton()
         ayuda.setIcon(icono("ayuda"))
         ayuda.setIconSize(QSize(18, 18))
         ayuda.setToolTip("<b>Ayuda</b>")
         ayuda.setPopupMode(QToolButton.InstantPopup)
         menu_ayuda = QMenu(self)
+        menu_ayuda.addAction(self.acciones["asistente"])
+        menu_ayuda.addSeparator()
         menu_ayuda.addAction(self.acciones["acerca"])
         menu_ayuda.addSeparator()
         menu_ayuda.addAction(self.acciones["reportar"])
@@ -589,6 +596,8 @@ class VentanaPrincipal(QMainWindow):
         c.luces, c.indicador_giro = p["graficos/luces"], p["graficos/indicador_giro"]
         self.aplicar_teclas()
         self.refrescar_barra_fijados()
+        if self.asistente is not None:
+            self.asistente.actualizar_cabecera()
         teselado, angular = DETALLES.get(p["graficos/detalle"], DETALLES["automatico"])
         if (teselado, angular) != (c.teselado, c.angular):
             c.teselado, c.angular = teselado, angular
@@ -716,6 +725,21 @@ class VentanaPrincipal(QMainWindow):
             w.removeEventFilter(self._filtro_info)
             if not mostrar:
                 w.installEventFilter(self._filtro_info)
+
+    def mostrar_asistente(self, visible=True):
+        """Abre o cierra el panel del Asistente IA, acoplado a la derecha (se crea la primera vez)."""
+        if self.asistente is None:
+            if not visible:
+                return
+            from .asistente import PanelAsistente
+            self.asistente = PanelAsistente(self)
+            self.asistente.cerrado.connect(lambda: self.acciones["asistente"].setChecked(False))
+            self.addDockWidget(Qt.RightDockWidgetArea, self.asistente)
+            self.resizeDocks([self.asistente], [320], Qt.Horizontal)
+        self.acciones["asistente"].setChecked(visible)
+        self.asistente.setVisible(visible)
+        if visible:
+            self.asistente.campo.setFocus()
 
     def preferencias(self, _marcado=False, pagina="general"):
         dlg = DialogoPreferencias(self.prefs, self, pagina)
@@ -2655,6 +2679,8 @@ class VentanaPrincipal(QMainWindow):
             proyecto.esperar_autoguardado()   # no cortar un ZIP a medio escribir (quedaría el temporal)
             if self.puente is not None:
                 self.puente.detener()         # cierra las conexiones y borra puente.json
+            if self.asistente is not None:
+                self.asistente.cancelar()     # el hilo del pedido es daemon: no frena el cierre
             e.accept()
         else:
             e.ignore()

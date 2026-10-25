@@ -1,0 +1,412 @@
+# -*- coding: utf-8 -*-
+"""
+Panel del Asistente IA (IA-4), como el Autodesk Assistant de Fusion: acoplado a la derecha, con chat nuevo (+), menú
+Chat (biblioteca de prompts), estrella con el aviso de IA, modos Explicar · Mostrar · Guiar · Hacer, campo
+«Preguntale al Asistente» (Enter envía, Mayús+Enter salta de línea) y Enviar, que pasa a Cancelar mientras trabaja.
+
+Hilos: el pedido a la IA corre en un hilo aparte (la red no congela la ventana). Las herramientas corren SIEMPRE en
+el hilo de la interfaz, por `PuenteAgentes.ejecutar` (APP_BUSY, sin `dev` ni execute_code, refresco de la ventana),
+y el hilo de trabajo espera el resultado (BlockingQueuedConnection). No usa el servidor TCP del puente: anda con
+Preferencias › General › «agentes IA» apagado.
+"""
+import json
+import threading
+
+from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (QComboBox, QDockWidget, QFrame, QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QPushButton,
+                               QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+
+from .. import api
+from ..api.errores import error
+from ..asistente import bucle, config
+from ..asistente.herramientas import MODOS, Herramientas
+from ..asistente.prompt import armar_sistema, cargar_prompts
+from ..asistente.proveedores.base import ErrorProveedor
+from . import temas
+from .puente import PuenteAgentes
+
+TOPE_PEDIDO = 20000        # caracteres: un pegado gigante por error no se manda (gastaría plata)
+SALUDO = "Hola, soy el Asistente de OmniCAD. Contame qué querés hacer o preguntame cómo se hace algo."
+AVISO_IA = "El Asistente usa modelos de IA generativa: puede equivocarse. Revisá siempre lo que hace."
+NOMBRES_MODO = {"explicar": "Explicar", "mostrar": "Mostrar", "guiar": "Guiar", "hacer": "Hacer"}
+AYUDA_MODO = {"explicar": "Responde y explica; no cambia nada.", "mostrar": "Señala en el modelo: mueve la cámara y "
+              "selecciona, sin cambiar el documento.", "guiar": "Propone un paso por vez y espera tu OK.",
+              "hacer": "Arma un plan y, con tu OK, lo ejecuta."}
+
+
+def config_de(prefs):
+    return {k: prefs[f"asistente/{k}"] for k in ("proveedor", "modelo", "base_url")}
+
+
+def _sin_imagenes(valor):
+    """Respuesta de una herramienta sin las imágenes (Preferencias › «mandar imágenes del visor» apagado)."""
+    if isinstance(valor, api.Imagen):
+        return "(imagen no enviada: Preferencias › Asistente IA)"
+    if isinstance(valor, dict):
+        return {k: _sin_imagenes(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_sin_imagenes(v) for v in valor]
+    return valor
+
+
+def _usd(valor):
+    return f"{valor:.4f}".replace(".", ",") + " USD"
+
+
+def resumen_herramienta(nombre, respuesta):
+    """Línea plegada de una herramienta: «✓ extrude → op5» o «✗ fillet: OPERATION_FAILED»."""
+    if not respuesta.get("ok"):
+        return f"✗ {nombre}: {respuesta.get('error_kind', 'ERROR')}"
+    resultado = respuesta.get("result")
+    paso = resultado.get("feature") if isinstance(resultado, dict) else None
+    return f"✓ {nombre}" + (f" → {paso['id']}" if isinstance(paso, dict) and paso.get("id") else "")
+
+
+class CampoPedido(QPlainTextEdit):
+    """Campo multilínea: Enter envía, Mayús+Enter salta de línea, Esc avisa y Tab pasa al botón."""
+    enviar = Signal()
+    escape = Signal()
+
+    def __init__(self):
+        super().__init__(objectName="campo_asistente")
+        self.setPlaceholderText("Preguntale al Asistente")
+        self.setTabChangesFocus(True)
+        self.setFixedHeight(self.fontMetrics().lineSpacing() * 4 + 12)
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if e.modifiers() & Qt.ShiftModifier:
+                self.insertPlainText("\n")
+            else:
+                self.enviar.emit()
+            return
+        if e.key() == Qt.Key_Escape:
+            self.escape.emit()
+            return
+        super().keyPressEvent(e)
+
+
+class _EjecutorUI(QObject):
+    """Vive en el hilo de la interfaz; el hilo de trabajo le pide una herramienta y espera la respuesta."""
+    pedido = Signal(str, object, object)
+
+    def __init__(self, puente, parent):
+        super().__init__(parent)
+        self.puente = puente
+        self.pedido.connect(self._ejecutar, Qt.BlockingQueuedConnection)
+
+    @Slot(str, object, object)
+    def _ejecutar(self, nombre, args, caja):
+        try:
+            caja["r"] = self.puente.ejecutar(nombre, args)
+        except Exception as e:  # noqa: BLE001 — una falla del puente nunca tira la interfaz
+            caja["r"] = error("INTERNAL_ERROR", f"{type(e).__name__}: {e}").a_dict()
+
+    def ejecutar(self, nombre, args):
+        """Se llama desde el hilo de trabajo."""
+        caja = {}
+        self.pedido.emit(nombre, args, caja)
+        return caja.get("r") or error("INTERNAL_ERROR", "La ventana de OmniCAD ya no está.").a_dict()
+
+
+class _Trabajo(QObject):
+    """Un pedido: corre `bucle.correr` en un hilo y avisa cada evento. El tope de gasto lo corta como un Cancelar."""
+    evento = Signal(str, object)
+    termino = Signal(object)
+
+    def __init__(self, proveedor, mensajes, ejecutar, herramientas, sistema, tope_usd):
+        super().__init__()
+        self.args = (proveedor, mensajes, ejecutar, herramientas, sistema)
+        self.tope_usd = tope_usd
+        self.gasto = 0.0
+        self.cancelar = threading.Event()
+
+    @property
+    def sobre_tope(self):
+        return self.tope_usd > 0 and self.gasto > self.tope_usd
+
+    def cancelado(self):
+        return self.cancelar.is_set() or self.sobre_tope
+
+    def _al_evento(self, tipo, datos):
+        if tipo == "uso":
+            self.gasto += datos.get("costo_usd") or 0
+        self.evento.emit(tipo, datos)
+
+    def correr(self):
+        proveedor, mensajes, ejecutar, herramientas, sistema = self.args
+        try:
+            resultado = bucle.correr(proveedor, mensajes, ejecutar, herramientas, sistema, self._al_evento,
+                                     cancelado=self.cancelado)
+        except Exception as e:  # noqa: BLE001 — el hilo no tiene a quién avisar si no es por la señal
+            self.evento.emit("error", f"{type(e).__name__}: {e}")
+            resultado = {"motivo": "error"}
+        if resultado["motivo"] == "cancelado" and self.sobre_tope and not self.cancelar.is_set():
+            resultado["motivo"] = "tope_gasto"
+        self.termino.emit(resultado)
+
+
+class PanelAsistente(QDockWidget):
+    cerrado = Signal()
+
+    def __init__(self, ventana):
+        super().__init__("Asistente", ventana)
+        self.setObjectName("panel_asistente")
+        self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.ventana = ventana
+        self.puente = PuenteAgentes(ventana)          # sin iniciar(): no abre el puerto TCP
+        self._ejecutor = _EjecutorUI(self.puente, self)
+        self.crear_proveedor = config.crear_proveedor  # los tests ponen el proveedor falso
+        self.mensajes = []
+        self.trabajo = None
+        self._uso = None
+
+        cuerpo = QWidget()
+        lay = QVBoxLayout(cuerpo)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setSpacing(6)
+
+        cab = QHBoxLayout()
+        self.etiqueta_modelo = QLabel(objectName="modelo_asistente")
+        temas.poner_rol(self.etiqueta_modelo, "tenue")
+        self.etiqueta_modelo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.b_nuevo = QToolButton(text="+", toolTip="<b>Chat nuevo</b><br>Empieza una conversación desde cero.")
+        self.b_nuevo.clicked.connect(self.nuevo_chat)
+        self.b_chat = QToolButton(text="Chat", toolTip="<b>Chat</b><br>Biblioteca de prompts e historial.",
+                                  popupMode=QToolButton.InstantPopup)
+        self.b_chat.setMenu(self._menu_chat())
+        self.b_aviso = QToolButton(text="✦", toolTip=AVISO_IA, autoRaise=True)
+        for w in (self.b_nuevo, self.b_chat, self.b_aviso):
+            w.setAutoRaise(True)
+        cab.addWidget(self.etiqueta_modelo, 1)
+        cab.addWidget(self.b_nuevo)
+        cab.addWidget(self.b_chat)
+        cab.addWidget(self.b_aviso)
+        lay.addLayout(cab)
+
+        self.area = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.lista = QWidget()
+        self.lay_mensajes = QVBoxLayout(self.lista)
+        self.lay_mensajes.setContentsMargins(0, 0, 0, 0)
+        self.lay_mensajes.addStretch(1)
+        self.area.setWidget(self.lista)
+        self.area.verticalScrollBar().rangeChanged.connect(
+            lambda _a, b: self.area.verticalScrollBar().setValue(b))   # siempre se ve lo último
+        lay.addWidget(self.area, 1)
+
+        self.pie = QLabel(objectName="uso_asistente", wordWrap=True)
+        temas.poner_rol(self.pie, "tenue")
+        lay.addWidget(self.pie)
+        self.campo = CampoPedido()
+        self.campo.enviar.connect(self.enviar)
+        self.campo.escape.connect(self._escape)
+        lay.addWidget(self.campo)
+        abajo = QHBoxLayout()
+        self.modo = QComboBox(objectName="modo_asistente")
+        for clave in MODOS:
+            self.modo.addItem(NOMBRES_MODO[clave], clave)
+            self.modo.setItemData(self.modo.count() - 1, AYUDA_MODO[clave], Qt.ToolTipRole)
+        self.modo.setToolTip("Modo del Asistente: Explicar y Mostrar no cambian el documento.")
+        self.modo.setCurrentIndex(max(self.modo.findData(ventana.prefs["asistente/modo"]), 0))
+        self.b_enviar = QPushButton("Enviar", objectName="boton_primario")
+        self.b_enviar.clicked.connect(self._enviar_o_cancelar)
+        abajo.addWidget(self.modo)
+        abajo.addStretch(1)
+        abajo.addWidget(self.b_enviar)
+        lay.addLayout(abajo)
+        self.setWidget(cuerpo)
+        self.setMinimumWidth(190)       # con 821 px de visor (lo mínimo de la ventana) entra en 1024 de ancho
+        self.actualizar_cabecera()
+        self._agregar_texto(SALUDO)
+
+    # ------------------------------------------------------------ cabecera y menú Chat
+    def actualizar_cabecera(self):
+        cfg = config_de(self.ventana.prefs)
+        nombre = config.PROVEEDORES.get(cfg["proveedor"], (cfg["proveedor"],))[0]
+        texto = f"{nombre} · {config.modelo_de(cfg)}" if cfg["proveedor"] in config.PROVEEDORES else nombre
+        self.etiqueta_modelo.setText(texto)
+        self.etiqueta_modelo.setToolTip(texto + "<br>Se cambia en Preferencias › Asistente IA.")
+
+    def _menu_chat(self):
+        menu = QMenu(self)
+        biblioteca = menu.addMenu("Biblioteca de prompts")
+        espacios = {}
+        for p in cargar_prompts():
+            if p["espacio"] not in espacios:
+                espacios[p["espacio"]] = biblioteca.addMenu(p["espacio"])
+            a = espacios[p["espacio"]].addAction(f"{p['titulo']} ({NOMBRES_MODO[p['modo']]})")
+            a.setToolTip(p["texto"])
+            a.triggered.connect(lambda _=False, p=p: self.usar_prompt(p))
+        historial = menu.addAction("Historial de chats")
+        historial.setEnabled(False)                    # llega con IA-7 (historial local)
+        historial.setToolTip("Todavía no: el historial de chats llega en una versión próxima.")
+        menu.setToolTipsVisible(True)
+        return menu
+
+    def usar_prompt(self, p):
+        """Biblioteca de prompts: deja el texto en el campo y el modo del ejemplo, sin mandarlo."""
+        if self.trabajo is None:
+            self.modo.setCurrentIndex(self.modo.findData(p["modo"]))
+        self.campo.setPlainText(p["texto"])
+        self.campo.setFocus()
+
+    # ------------------------------------------------------------ mensajes
+    def _agregar(self, widget):
+        self.lay_mensajes.insertWidget(self.lay_mensajes.count() - 1, widget)
+        return widget
+
+    def _agregar_texto(self, texto, rol=None, usuario=False):
+        etiqueta = QLabel(texto, wordWrap=True, textInteractionFlags=Qt.TextSelectableByMouse)
+        etiqueta.setTextFormat(Qt.PlainText if usuario or rol else Qt.MarkdownText)
+        if usuario:
+            etiqueta.setFrameShape(QFrame.StyledPanel)
+            etiqueta.setMargin(4)
+            etiqueta.setObjectName("mensaje_usuario")
+        if rol:
+            temas.poner_rol(etiqueta, rol)
+        return self._agregar(etiqueta)
+
+    def _agregar_herramienta(self, nombre, args, respuesta):
+        caja = QWidget()
+        v = QVBoxLayout(caja)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        linea = QToolButton(text=resumen_herramienta(nombre, respuesta), checkable=True, autoRaise=True,
+                            objectName="herramienta_asistente")
+        linea.setToolTip("Clic para ver los argumentos y la respuesta.")
+        detalle = QLabel(json.dumps({"args": args, "respuesta": respuesta}, ensure_ascii=False, indent=1,
+                                    default=str)[:3000], wordWrap=True, textInteractionFlags=Qt.TextSelectableByMouse)
+        detalle.setTextFormat(Qt.PlainText)
+        temas.poner_rol(detalle, "tenue")
+        detalle.hide()
+        linea.toggled.connect(detalle.setVisible)
+        v.addWidget(linea, 0, Qt.AlignLeft)
+        v.addWidget(detalle)
+        return self._agregar(caja)
+
+    def _agregar_imagen(self, imagen):
+        pm = QPixmap()
+        pm.loadFromData(imagen.png, "PNG")
+        etiqueta = QLabel(objectName="miniatura_asistente")
+        etiqueta.setPixmap(pm.scaledToWidth(min(220, pm.width() or 220), Qt.SmoothTransformation))
+        return self._agregar(etiqueta)
+
+    def _mostrar_uso(self):
+        u = self._uso
+        if u is None:
+            self.pie.clear()
+            return
+        costo = "costo no informado" if u["costo_usd"] is None else _usd(u["costo_usd"])
+        self.pie.setText(f"Último pedido: {u['entrada']} tokens de entrada · {u['salida']} de salida · {costo}")
+
+    # ------------------------------------------------------------ eventos del hilo de trabajo (llegan en cola)
+    @Slot(str, object)
+    def _evento(self, tipo, datos):
+        if tipo == "texto":
+            self._agregar_texto(datos)
+        elif tipo == "herramienta":
+            self._agregar_herramienta(datos["nombre"], datos["args"], datos["respuesta"])
+        elif tipo == "imagen":
+            self._agregar_imagen(datos)
+        elif tipo == "error":
+            self._agregar_texto(f"⚠ {datos}", "error")
+        elif tipo == "uso":
+            u = self._uso
+            for k in ("entrada", "salida"):
+                u[k] += datos.get(k) or 0
+            if datos.get("costo_usd") is not None:
+                u["costo_usd"] = (u["costo_usd"] or 0) + datos["costo_usd"]
+            self._mostrar_uso()
+
+    @Slot(object)
+    def _termino(self, resultado):
+        motivo = resultado["motivo"]
+        if motivo == "cancelado":
+            self._agregar_texto("Pedido cancelado.", "tenue")
+        elif motivo == "tope_gasto":
+            self._agregar_texto(f"⚠ Se cortó el pedido: el gasto superó el tope de {_usd(self.trabajo.tope_usd)} "
+                                "(Preferencias › Asistente IA).", "aviso")
+        self.trabajo = None
+        self._ocupado(False)
+
+    # ------------------------------------------------------------ enviar, cancelar, chat nuevo
+    @property
+    def trabajando(self):
+        return self.trabajo is not None
+
+    def _ocupado(self, si):
+        self.b_enviar.setText("Cancelar" if si else "Enviar")
+        self.b_enviar.setEnabled(True)
+        for w in (self.modo, self.b_nuevo):
+            w.setEnabled(not si)
+
+    def _enviar_o_cancelar(self):
+        self.cancelar() if self.trabajando else self.enviar()
+
+    def _escape(self):
+        if self.trabajando:
+            self.cancelar()
+        else:
+            self.ventana.visor.setFocus()
+
+    def enviar(self):
+        """Manda lo escrito con el modo elegido. Campo vacío o pedido en curso: no hace nada."""
+        texto = self.campo.toPlainText().strip()
+        if self.trabajando or not texto:
+            return False
+        if len(texto) > TOPE_PEDIDO:
+            self._agregar_texto(f"⚠ El pedido es muy largo ({len(texto)} caracteres; el máximo es {TOPE_PEDIDO}). "
+                                "No se mandó.", "error")
+            return False
+        prefs = self.ventana.prefs
+        try:
+            proveedor = self.crear_proveedor(config_de(prefs))
+        except ErrorProveedor as e:
+            self._agregar_texto(f"⚠ {e}", "error")
+            return False
+        modo = self.modo.currentData()
+        self.puente.sesion.doc = self.ventana.doc
+        sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None)
+        bloque = {"tipo": "texto", "texto": texto}
+        if self.mensajes and self.mensajes[-1]["rol"] == "usuario":   # tras un Cancelar o un error: un solo turno
+            self.mensajes[-1]["contenido"].append(bloque)
+        else:
+            self.mensajes.append({"rol": "usuario", "contenido": [bloque]})
+        self._agregar_texto(texto, usuario=True)
+        self.campo.clear()
+        ejecutar = self._ejecutor.ejecutar
+        if not prefs["asistente/imagenes"]:
+            ejecutar = lambda nombre, args: _sin_imagenes(self._ejecutor.ejecutar(nombre, args))  # noqa: E731
+        self._uso = {"entrada": 0, "salida": 0, "costo_usd": None}
+        self._mostrar_uso()
+        self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, Herramientas(modo=modo), sistema,
+                                prefs["asistente/tope_usd"])
+        self.trabajo.evento.connect(self._evento)
+        self.trabajo.termino.connect(self._termino)
+        self._ocupado(True)
+        # Hilo de Python y no QThread: un pedido en vuelo al cerrar la app no aborta el proceso (daemon).
+        threading.Thread(target=self.trabajo.correr, daemon=True, name="asistente").start()
+        return True
+
+    def cancelar(self):
+        """Corta el bucle en la próxima vuelta o herramienta (deshacer lo hecho llega con IA-5)."""
+        if self.trabajando:
+            self.trabajo.cancelar.set()
+            self.b_enviar.setText("Cancelando…")
+            self.b_enviar.setEnabled(False)
+
+    def nuevo_chat(self):
+        if self.trabajando:
+            return
+        self.mensajes = []
+        while self.lay_mensajes.count() > 1:
+            self.lay_mensajes.takeAt(0).widget().deleteLater()
+        self._uso = None
+        self._mostrar_uso()
+        self._agregar_texto(SALUDO)
+        self.campo.setFocus()
+
+    def closeEvent(self, e):
+        super().closeEvent(e)
+        self.cerrado.emit()

@@ -1303,6 +1303,25 @@ def _fijacion(p):
     _poli(p, tapa, METAL[0], BORDE_METAL)
 
 
+
+def _asistente(p):
+    """Asistente IA: globo de diálogo con un destello (trazo gris oscuro: iconos_tema lo aclara en temas oscuros)."""
+    globo = QPainterPath()
+    globo.addRoundedRect(QRectF(3, 8, 22, 15), 4, 4)
+    cola = QPainterPath()
+    cola.addPolygon(QPolygonF([QPointF(8, 22), QPointF(7, 28), QPointF(14, 22)]))
+    p.setPen(QPen(GRIS_OSCURO, 1.4))
+    p.setBrush(AZUL_SEL)
+    p.drawPath(globo.united(cola).simplified())
+    p.setBrush(AZUL_LADO)
+    p.setPen(Qt.NoPen)
+    for x in (9, 14, 19):
+        p.drawEllipse(QPointF(x, 15.5), 1.5, 1.5)
+    destello = [QPointF(25, 1), QPointF(26.6, 5.4), QPointF(31, 7), QPointF(26.6, 8.6), QPointF(25, 13),
+                QPointF(23.4, 8.6), QPointF(19, 7), QPointF(23.4, 5.4)]
+    _poli(p, destello, PUNTO, BORDE_PUNTO)
+
+
 def _contorno_engranaje(cx, cy, ra, rf, dientes, achatado, giro=0.0):
     """Contorno de un engranaje visto en perspectiva (el eje vertical aplastado `achatado` veces)."""
     paso = 2 * math.pi / dientes
@@ -2123,7 +2142,7 @@ DIBUJOS_EXTRA = {
     # espacios de trabajo / varios
     "dibujo": _dibujo, "render": _render, "animacion": _animacion, "configuracion_tabla": _configuracion_tabla,
     "parametros_exportar": _parametros_exportar, "parametros_importar": _parametros_importar,
-    "secuencias": _secuencias,
+    "secuencias": _secuencias, "asistente": _asistente,
 }
 
 # Los ayudantes de iconos.py se importan AL FINAL, a propósito: iconos.py importa este módulo en su última

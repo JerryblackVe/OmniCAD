@@ -45,7 +45,7 @@ SECCIONES = {
     "CHAPA": ["reglas_chapa", "pestana", "pestana_contorno", "pestana_solevada", "dobladillo", "cierre_esquina",
               "desgarro", "unir_plegando", "plegar", "desplegar", "patron_plano", "convertir_chapa"],
     "ESPACIOS / VARIOS": ["dibujo", "render", "animacion", "configuracion_tabla", "parametros_exportar",
-                          "parametros_importar", "secuencias"],
+                          "parametros_importar", "secuencias", "asistente"],
 }
 NOMBRES = [n for lista in SECCIONES.values() for n in lista]
 
@@ -87,7 +87,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 148
+    assert len(NOMBRES) == len(set(NOMBRES)) == 149
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

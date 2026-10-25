@@ -637,6 +637,35 @@ def _fase_interaccion(v, r):
         caja.close()
 
 
+def _fase_asistente(v, r):
+    """Asistente IA (IA-4): el botón abre el panel, un pedido con el proveedor falso (sin red ni gasto) crea una caja
+    por el puente de la ventana, la línea de la herramienta aparece y el panel se cierra."""
+    from .asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
+    from .timeline.documento import Documento
+    v.set_documento(Documento())
+    v.acciones["asistente"].trigger()
+    QTest.qWait(50)
+    p = v.asistente
+    r.check(p is not None and p.isVisible() and p.campo.isVisible(),
+            "Asistente: el botón abre el panel acoplado con el campo «Preguntale al Asistente»")
+    caja = PedidoHerramienta("h1", "create_box", {"length": 30, "width": 20, "height": 10})
+    p.crear_proveedor = lambda _cfg: ProveedorFalso([Respuesta(herramientas=[caja]), Respuesta(texto="Listo.")])
+    p.modo.setCurrentIndex(p.modo.findData("hacer"))
+    p.campo.setPlainText("hace una caja de 30 x 20 x 10")
+    QTest.keyClick(p.campo, Qt.Key_Return)
+    for _ in range(250):
+        if not p.trabajando:
+            break
+        QTest.qWait(20)
+    from PySide6.QtWidgets import QToolButton
+    lineas = [b.text() for b in p.lista.findChildren(QToolButton, "herramienta_asistente")]
+    r.check(not p.trabajando and len(v.doc.operaciones) == 1 and lineas == ["✓ create_box → op1"],
+            f"Asistente: el pedido falso crea la caja en la ventana y muestra la herramienta ({lineas})")
+    v.acciones["asistente"].trigger()
+    r.check(not p.isVisible() and not v.acciones["asistente"].isChecked(), "Asistente: el mismo botón cierra el panel")
+    v.doc.modificado = False
+
+
 def _fase_puente(v, r, carpeta):
     """Puente para agentes IA (MCP en vivo) con la ventana real: conectar, create_box aparece en el navegador,
     deshacer lo saca y un token incorrecto se rechaza. El puente.json va a la carpeta temporal de la prueba."""
@@ -743,6 +772,7 @@ def ejecutar():
     _fase3d(v, r)
     _fase_interaccion(v, r)
     _fase_puente(v, r, carpeta)
+    _fase_asistente(v, r)
     v.set_documento(__import__("omnicad.ejemplo", fromlist=["x"]).crear_documento_ejemplo())
     QTest.qWait(200)
 

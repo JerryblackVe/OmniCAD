@@ -1,0 +1,54 @@
+"""Configuración del asistente: arma el proveedor elegido en Preferencias › Asistente IA.
+
+La clave de API NUNCA está en la configuración ni en las preferencias: sale de la variable de entorno del proveedor.
+"""
+import os
+
+from .proveedores.anthropic import ProveedorAnthropic
+from .proveedores.base import ErrorProveedor
+from .proveedores.openai_compat import OLLAMA, OPENAI, OPENROUTER, ProveedorOpenAI
+
+# clave → (nombre visible, variable de la clave o None, modelo de fábrica, base_url de fábrica)
+PROVEEDORES = {
+    "anthropic": ("Claude por API", "ANTHROPIC_API_KEY", "claude-opus-5-5", ""),
+    "openai": ("OpenAI", "OPENAI_API_KEY", "gpt-6.1-sol", OPENAI),
+    "openrouter": ("OpenRouter", "OPENROUTER_API_KEY", "anthropic/claude-sonnet-5-5", OPENROUTER),
+    "local": ("Local compatible con OpenAI (Ollama, LM Studio)", None, "qwen3", OLLAMA),
+}
+
+
+def variable_clave(proveedor):
+    """Nombre de la variable de entorno con la clave del proveedor (None si no pide clave)."""
+    return PROVEEDORES[proveedor][1] if proveedor in PROVEEDORES else None
+
+
+def clave_definida(proveedor):
+    """True si la variable de la clave tiene algo; nunca devuelve la clave."""
+    variable = variable_clave(proveedor)
+    return bool(variable and os.environ.get(variable))
+
+
+def modelo_de(config):
+    """El modelo elegido o el de fábrica del proveedor."""
+    return (config.get("modelo") or "").strip() or PROVEEDORES[config["proveedor"]][2]
+
+
+def crear_proveedor(config):
+    """Proveedor listo desde {proveedor, modelo, base_url}; ErrorProveedor si el proveedor no existe o falta la clave."""
+    nombre = config.get("proveedor")
+    if nombre not in PROVEEDORES:
+        raise ErrorProveedor(f"Proveedor desconocido: {nombre!r}. Opciones: {', '.join(PROVEEDORES)}.")
+    modelo = modelo_de(config)
+    if nombre == "anthropic":
+        return ProveedorAnthropic(modelo)
+    base_url = (config.get("base_url") or "").strip() or PROVEEDORES[nombre][3]
+    proveedor = ProveedorOpenAI(modelo, base_url=base_url)
+    if nombre == "openai" and not proveedor.clave:
+        raise ErrorProveedor("Falta la clave de API de OpenAI: definí la variable OPENAI_API_KEY.")
+    if nombre == "openrouter" and "openrouter.ai" not in base_url:
+        proveedor.clave = os.environ.get("OPENROUTER_API_KEY")   # con otra base_url el proveedor leería la de OpenAI
+    if nombre == "openrouter" and not proveedor.clave:
+        raise ErrorProveedor("Falta la clave de API de OpenRouter: definí la variable OPENROUTER_API_KEY.")
+    if nombre == "local":
+        proveedor.clave = None    # la clave de OpenAI del entorno no viaja a un servidor que eligió el usuario
+    return proveedor

@@ -7,13 +7,17 @@ filas "etiqueta: control" y los botones Restablecer / Aplicar / Aceptar / Cancel
 Solo se ofrecen opciones que OmniCAD cumple de verdad. Las categorías de Fusion que
 dependen de la nube o de licencias (Tokens, Red, Recopilación de datos…) no se copian.
 """
+import threading
+
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QPushButton, QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
+                               QLineEdit, QPushButton, QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
+from ..asistente import config as config_asistente
+from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
 from . import iconos_tema, temas
 
@@ -32,6 +36,13 @@ DEFECTOS = {
     "general/autoguardado_min": 1,
     "general/puente_agentes": False,         # MCP en vivo: apagado por defecto (ui/puente.py)
     "general/puente_codigo": False,          # execute_code en vivo (corre Python en la interfaz)
+    # Asistente IA (ui/asistente.py). La clave de API NO se guarda acá: sale de una variable de entorno.
+    "asistente/proveedor": "anthropic",      # asistente/config.py › PROVEEDORES
+    "asistente/modelo": "",                  # vacío = el de fábrica del proveedor
+    "asistente/base_url": "",                # vacío = la del proveedor (OpenAI, OpenRouter, Ollama)
+    "asistente/modo": "guiar",
+    "asistente/tope_usd": 0.5,               # gasto máximo por pedido; 0 = sin tope
+    "asistente/imagenes": True,              # mandarle al modelo las imágenes del visor
     "atajos/diseno": "extruir,empalme_3d",   # caja de herramientas (S): los que Fusion trae fijados
     "atajos/boceto": "",
     "atajos/barra": "",                      # comandos fijados en la barra de arriba (menú «Más» ⋮)
@@ -117,9 +128,9 @@ class Preferencias:
         valor = self.q.value(clave, defecto)
         if isinstance(defecto, bool):
             return valor if isinstance(valor, bool) else str(valor).lower() in ("true", "1")
-        if isinstance(defecto, int):
+        if isinstance(defecto, (int, float)):
             try:
-                return int(valor)
+                return type(defecto)(valor)
             except (TypeError, ValueError):
                 return defecto
         return str(valor)
@@ -227,6 +238,18 @@ PAGINAS = [
         (None, "Unidad de longitud por defecto", "combo", [("mm", "Milímetro (mm)")]),
         (None, "Unidad de ángulo", "combo", [("grado", "Grado (°)")]),
     ]),
+    ("asistente", None, "Asistente IA", "Con qué IA habla el Asistente. La clave de API sale de una variable de "
+     "entorno: OmniCAD nunca la guarda ni la muestra", [
+        ("asistente/proveedor", "Proveedor", "combo", [(k, v[0]) for k, v in config_asistente.PROVEEDORES.items()]),
+        ("asistente/modelo", "Modelo", "texto", None),
+        ("asistente/base_url", "Dirección del servidor (base_url)", "texto", None),
+        (None, "Clave de API", "estado_clave", None),
+        ("asistente/modo", "Modo por defecto", "combo",
+         [("explicar", "Explicar"), ("mostrar", "Mostrar"), ("guiar", "Guiar"), ("hacer", "Hacer")]),
+        ("asistente/tope_usd", "Tope de gasto por pedido (0 = sin tope)", "decimal", (0.0, 100.0)),
+        ("asistente/imagenes", "Mandar imágenes del visor al modelo", "check", None),
+        (None, "Conexión", "probar", None),
+    ]),
 ]
 
 
@@ -247,6 +270,7 @@ class DialogoPreferencias(QDialog):
     aplicado = Signal()
     tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
     graficos_cambiados = Signal()      # vista previa: Preferencias › Gráficos ya escritas en prefs (al instante)
+    conexion_probada = Signal(str)     # Asistente IA › Probar conexión: el resultado, desde el hilo de la prueba
 
     def __init__(self, prefs, parent=None, inicial="general"):
         super().__init__(parent)
@@ -254,6 +278,7 @@ class DialogoPreferencias(QDialog):
         self.setWindowTitle("Preferencias")
         self.resize(1060, 680)
         self.prefs = prefs
+        self.crear_proveedor = config_asistente.crear_proveedor   # los tests ponen el proveedor falso
         self.controles = {}            # clave → widget
         self.aviso_tema = None         # QLabel bajo el combo de temas: contraste, avisos y confirmaciones
 
@@ -369,6 +394,25 @@ class DialogoPreferencias(QDialog):
                 c = QCheckBox()
                 c.setChecked(bool(actual))
                 c.toggled.connect(self._cambio)
+            elif tipo == "texto":
+                c = QLineEdit(actual, clearButtonEnabled=True)
+                c.setMinimumWidth(300)
+                c.textChanged.connect(self._cambio)
+            elif tipo == "decimal":
+                c = QDoubleSpinBox(suffix=" USD", decimals=2, singleStep=0.1)
+                c.setRange(*opciones)
+                c.setValue(float(actual))
+                c.setFixedWidth(120)
+                c.valueChanged.connect(self._cambio)
+            elif tipo == "estado_clave":
+                self.estado_clave = QLabel(objectName="estado_clave", wordWrap=True)
+                form.addRow(etiqueta, self.estado_clave)
+                self.controles["asistente/proveedor"].currentIndexChanged.connect(self._estado_clave)
+                self._estado_clave()
+                continue
+            elif tipo == "probar":
+                form.addRow(etiqueta, self._probar_conexion())
+                continue
             else:
                 c = QSpinBox()
                 c.setRange(*opciones)
@@ -395,6 +439,61 @@ class DialogoPreferencias(QDialog):
         fila.addStretch(1)
         self.b_abrir_temas, self.b_exportar_tema = abrir, exportar
         return fila
+
+    # ------------------------------------------------------------ asistente IA
+    def _estado_clave(self, *_):
+        """Si la variable de la clave del proveedor elegido está definida (sin mostrarla) y los valores de fábrica."""
+        proveedor = self.controles["asistente/proveedor"].currentData()
+        _nombre, variable, modelo, base_url = config_asistente.PROVEEDORES[proveedor]
+        self.controles["asistente/modelo"].setPlaceholderText(f"de fábrica: {modelo}")
+        self.controles["asistente/base_url"].setPlaceholderText(f"de fábrica: {base_url or 'la de Anthropic'}")
+        if variable is None:
+            texto, rol = "No hace falta: el servidor local no pide clave.", "tenue"
+        elif config_asistente.clave_definida(proveedor):
+            texto, rol = f"✓ La variable {variable} está definida.", "ok"
+        else:
+            texto, rol = f"✗ Falta la variable de entorno {variable}: definila y reabrí OmniCAD.", "error"
+        self.estado_clave.setText(texto)
+        temas.poner_rol(self.estado_clave, rol)
+
+    def _probar_conexion(self):
+        fila = QHBoxLayout()
+        self.b_probar = QPushButton("Probar conexión")
+        self.b_probar.setToolTip("Manda un pedido mínimo al proveedor con los valores de esta página (gasta unos "
+                                 "pocos tokens).")
+        self.b_probar.clicked.connect(self.probar_conexion)
+        self.resultado_conexion = QLabel(objectName="resultado_conexion", wordWrap=True)
+        self.conexion_probada.connect(self._conexion_probada)
+        fila.addWidget(self.b_probar)
+        fila.addWidget(self.resultado_conexion, 1)
+        return fila
+
+    def probar_conexion(self):
+        """Pide «OK» al modelo en un hilo aparte (la red no congela el diálogo)."""
+        v = self.valores()
+        try:
+            proveedor = self.crear_proveedor({k: v[f"asistente/{k}"] for k in ("proveedor", "modelo", "base_url")})
+        except ErrorProveedor as e:
+            self._conexion_probada(f"✗ {e}")
+            return
+        self.b_probar.setEnabled(False)
+        self.resultado_conexion.setText("Probando…")
+        temas.poner_rol(self.resultado_conexion, "tenue")
+
+        def probar():
+            try:
+                r = proveedor.responder("", [{"rol": "usuario", "contenido": [
+                    {"tipo": "texto", "texto": "Respondé solo OK."}]}], [])
+                self.conexion_probada.emit(f"✓ Conectó: el modelo respondió «{r.texto.strip()[:40]}».")
+            except Exception as e:  # noqa: BLE001 — ErrorProveedor y cualquier falla rara se muestran igual
+                self.conexion_probada.emit(f"✗ {e}")
+
+        threading.Thread(target=probar, daemon=True, name="probar_conexion").start()
+
+    def _conexion_probada(self, texto):
+        self.b_probar.setEnabled(True)
+        self.resultado_conexion.setText(texto)
+        temas.poner_rol(self.resultado_conexion, "ok" if texto.startswith("✓") else "error")
 
     def _tema_cambiado(self, *_):
         clave = self.controles["general/tema"].currentData()
@@ -496,6 +595,8 @@ class DialogoPreferencias(QDialog):
                 salida[clave] = c.currentData()
             elif isinstance(c, QCheckBox):
                 salida[clave] = c.isChecked()
+            elif isinstance(c, QLineEdit):
+                salida[clave] = c.text().strip()
             else:
                 salida[clave] = c.value()
         return salida
@@ -507,6 +608,10 @@ class DialogoPreferencias(QDialog):
                 c.setCurrentIndex(max(c.findData(valor), 0))
             elif isinstance(c, QCheckBox):
                 c.setChecked(bool(valor))
+            elif isinstance(c, QLineEdit):
+                c.setText(valor)
+            elif isinstance(c, QDoubleSpinBox):
+                c.setValue(float(valor))
             else:
                 c.setValue(int(valor))
 
