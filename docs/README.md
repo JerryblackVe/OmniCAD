@@ -45,7 +45,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 
 | Ruta | Qué tiene |
 |---|---|
-| [fusion_docs/](fusion_docs/LEEME.txt) | **Recurso indispensable.** Documentación oficial completa de Fusion 360 con imágenes (6967 artículos, 25 secciones; el boceto en `contenido/fusion-sketch/`). Se consulta antes de corregir un bug o agregar un faltante. No se sube a git (4,4 GB). Abrir `fusion_docs/index.html` o buscar en `indice.json` / `fuentes.csv` |
+| [fusion_docs/](fusion_docs/LEEME.txt) | **Recurso indispensable.** Documentación oficial completa de Fusion 360 con imágenes (3473 artículos distintos en 24 carpetas; SUPERFICIE está en `fusion-patch`, el boceto en `fusion-sketch`). Se consulta antes de corregir un bug o agregar un faltante. No se sube a git (4,4 GB). Buscar con `scripts/fusion_docs.py buscar <palabras>` (índice de texto completo); árbol oficial por libro en `fusion_docs/indice/<carpeta>.md`; tabla pestaña → carpeta en `CLAUDE.md` |
 
 ## Planes
 

@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23. Total 5: Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 25: Abierto 20 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -13,6 +13,8 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | P-11j | Cuerpos «sin ubicar» de XOX (3) que quizá Fusion no tiene | Parcial | Alta | Sherpa resuelto (2026-10-21): comparado con Fusion, no tiene los 2 cuerpos (1593 y 952 mm³) y todos sus componentes con cuerpos están emparejados; ahora se descartan los bloques sin dueño cuando ningún componente de la escena queda sin bloque. Queda XOX: 3 componentes de la escena sin bloque y 3 bloques sin dueño (152,9; 494,8 y 4365,4 mm³): no se pueden descartar sin ver Fusion, y la versión en la nube (v35, 202 componentes) no es la del .f3z local (72 cuerpos): hace falta abrir en Fusion ese mismo archivo. | omnicad/io_archivos/f3d_escena.py (huerfanos); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-21 |
 | B-39 | join con herramienta enterrada deja arista libre y cuerpo no estanco | Parcial | Muy alta | El caso original (cilindro r2,5 en la carcasa, arista libre en (27, 0, 129,5)) sigue sin reproducirse: 4 000 casos de fuzzing (6 herramientas × 4 bases, tangencias de 0 a 1e-3 mm, de 1 a 4 uniones) no dieron ninguna arista libre con la herramienta enterrada. Sí dieron fallos silenciosos del kernel con contacto casi tangente (unión que devolvía solo la herramienta, un toro que «no tocaba» la pared, unión vacía por 1e-6 mm de solape): `geo.booleano` ahora verifica el resultado y reintenta o rechaza con error claro (graves 2,5 % → 0,6 %). Queda ese 0,6 %: esfera o toro casi tangentes que dejan aristas no manifold o un sólido inválido que OCCT no cura, y uniones con superficies libres, cuyo volumen no se puede verificar. Siguiente paso: P-32 (probar el motor omnikernel como segunda opinión). | nucleo/geometria.py (`booleano`, `_problema_booleana`, `_REINTENTOS_BOOLEANA`, `_union_general_creible`); scripts/fuzz_b39.py; tests/test_b39_enterrada.py; tests/test_b39_fuzz.py; timeline/operaciones.py:349 y :1004 (aviso post-unión); `_quitar_cables_colgados` (B-28) | 2026-10-21 |
 | B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | La causa en OCCT sigue sin reproducirse ni curarse. El cambio de parámetros en documentos de 60 pasos o más ya se ensaya antes en un proceso aparte (si el kernel cae, no se aplica y la app sigue); no cubre editar/suprimir pasos ni abrir archivos. | nucleo/aislado.py (`correr_json`, `UMBRAL_PREVUELO_PARAMETROS`); timeline/documento.py `_prevuelo_parametros`; tests/test_b48_prevuelo.py; tests/test_b48_crash.py | 2026-10-20 |
+| B-104 | «Recuperar documentos…» tiene la ayuda en el lugar del atajo | Abierto | Baja | `A("recuperados", "Recuperar documentos…", fn, "Abre «Documentos recuperados»: …")` pasa el texto de ayuda como 4.º argumento, que es el atajo: la acción queda con un «atajo» sin sentido (`, , `) y sin tooltip. La prueba de atajos lo vio: es el único que no dispara nada. Pasar `None` de atajo y la ayuda en su lugar. | omnicad/ui/ventana.py:329-331 | 2026-10-24 |
+| B-105 | En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados | Abierto | Media | Con la ventana en 1024x640 el panel de Extruir mide 357 de alto y el área del visor 448: termina 51 px más abajo y los botones quedan sobre la barra del timeline; en 800x520 (la app no baja de 821 px de ancho) el panel pasa 171 px y se ve cortado en «Tipo de extensión». Además el panel «Atajos de diseño» se encima sobre el del comando. Enter y Esc siguen andando. Fusion y los programas de CAD hacen scroll en el panel. | omnicad/ui/ventana.py:2041-2049 | 2026-10-24 |
 
 ## Boceto (auditoría contra Fusion, 2026-10-23)
 
@@ -20,6 +22,38 @@ Cada fila se reprodujo con una prueba real (scripts de la auditoría, no incluid
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+
+## Superficie (auditoría contra Fusion, 2026-10-24)
+
+Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayuda de Fusion (sección Fusion-Patch de `docs/fusion_docs/`) y de probar las 14 herramientas por MCP/CLI. Los bugs se reprodujeron; los scripts de prueba (`sonda*.py`) están en `evidencias/superficie_2026-10-24/`, fuera de git.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| SUP-1 | Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel | Abierto | Alta | G1 sobre la boca de una caja de superficies da «Geom_RectangularTrimmedSurface::V1==V2». G2 da siempre «BRepFill : The continuity is not G0 G1 or G2», también sobre el borde de un cilindro donde G1 sí anda. El usuario ve «Error inesperado». Hay que cubrir G2 y los vecinos planos, o traducir el error. | omnicad/nucleo/superficies.py:494-509; tests/test_superficies.py::test_parche_plano_relleno_y_g1 (solo cubre G1 curvo con un punto interior) | 2026-10-24 |
+| SUP-2 | Dividir cuerpo no funciona sobre un cuerpo de superficie | Abierto | Media | `split_body` con un plano que corta por la mitad un tubo de superficie (z=10 de 0 a 20, con o sin extend) responde «La herramienta no divide el cuerpo». Fusion parte una superficie en dos cuerpos de superficie. | omnicad/nucleo/solidos_modificar.py:1138 (`geo.solidos` descarta lo que no es sólido) | 2026-10-24 |
+| SUP-3 | Barrido de superficie por una ruta con esquina viva sale deformado y sin aviso | Abierto | Media | Perfil circular r2 por dos líneas en L de 20 mm: área 412,67 en vez de 502,65 (−18 %). El tramo horizontal queda aplastado (el perfil no gira en la esquina: caja z 0 a 20 en vez de 0 a 22). Poner un modo de transición en la esquina o rechazar rutas no tangentes con un error claro; la ayuda de Fusion solo describe el encadenado tangente. El barrido sólido de la misma L sí da 502,65: se puede reusar su método. | omnicad/nucleo/superficies.py:399 (`BRepOffsetAPI_MakePipeShell` sin `SetTransitionMode`) | 2026-10-24 |
+| SUP-4 | Solevación de superficie con 3 o más secciones de distinto tipo falla | Abierto | Media | Rectángulo y círculo andan con 2 secciones; 3 círculos o 3 rectángulos andan; pero RCC, CCR, RRC, CRC y RCR responden «El solevado falló en el kernel» (distinta cantidad de aristas por sección). Fusion lo resuelve y la solevación sólida RCC también anda (8413,96 mm³). | omnicad/nucleo/superficies.py:432-467 (`BRepOffsetAPI_ThruSections`) | 2026-10-24 |
+| SUP-5 | Destrimar después de Recortar no devuelve nada y no avisa | Abierto | Media | Tubo de superficie de 20 mm recortado con un plano a 10 mm: Destrimar (exteriores, interiores o todos) deja el área en 628,32 en vez de recuperar 1256,64 (la ayuda dice que Untrim extiende las superficies recortadas). Sobre superficies infinitas usa los límites de la cara ya recortada, así que no puede recuperar lo recortado, y no avisa. | omnicad/nucleo/superficies.py:740-777 (`_limites_naturales`) | 2026-10-24 |
+| SUP-6 | Superficies degeneradas pasan como correctas | Abierto | Baja | Barrido con el perfil igual a la ruta devuelve OK con un cuerpo inválido (área 0, `es_valida` falso). Revolución de 1e-6° y extrusión de 1e-6 mm devuelven cuerpos de área 0. Falta validar el resultado antes de aceptar el paso. | omnicad/timeline/ops_superficie.py:41-42 (`_nuevo` no valida) | 2026-10-24 |
+| SUP-7 | Conicidad de 89° rechazada aunque el mensaje dice que vale | Abierto | Baja | `create_surface_extrude taper_angle=89 deg` falla con «entre -89° y 89°». Decidir si el tope es inclusivo (`>=` por `>`) o corregir el mensaje. | omnicad/nucleo/superficies.py:251 | 2026-10-24 |
+| SUP-8 | Coser acepta tolerancia 0 o negativa sin avisar | Abierto | Baja | `stitch_surfaces tolerance="0"` y `"-1"` devuelven OK. El validador de la API solo mira números, no expresiones, y el núcleo no la revisa. | omnicad/api/herramientas_superficie.py:246; omnicad/nucleo/superficies.py:849 | 2026-10-24 |
+| SUP-24 | Previsualizar Reglada tangente o dirección en la ventana deja dañada la superficie de origen: después Recortar falla | Abierto | Alta | En la ventana: Reglada → arista de arriba de un tubo de superficie → Tipo tangente (o dirección) → Cancelar. Después Recortar con un plano que SÍ cruza el tubo responde «La herramienta no corta la superficie»; pasa también si se acepta y se deshace, sigue igual tras recalcular y `trim_surface` por la API también falla. Con tipo normal no pasa, y sin la ventana (previsualizar + API) tampoco. Causa sin confirmar; sospecha: `BRepFill.Face_s(ef, otra)` comparte la arista de origen. | omnicad/nucleo/superficies.py:590; omnicad/ui/comando.py:680 | 2026-10-24 |
+
+## Sólido (auditoría contra Fusion, 2026-10-24)
+
+Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| SOL-1 | Rosca modelada a izquierdas sobre un cilindro falla en el kernel tras 6 segundos | Abierto | Media | `create_thread left_hand=true` sobre un cilindro r5 con M10 responde «El kernel no pudo cortar la rosca en el cuerpo» después de 5,9 s; la de derechas tarda 0,9 s. En un agujero (`create_hole hole_tap=modeled left_hand=true`) sí anda. | omnicad/nucleo/solidos_crear.py:2384,2410 | 2026-10-24 |
+| SOL-2 | Vaciado con todas las caras quitadas da un sólido raro sin error | Abierto | Baja | `shell faces="all" thickness=2` sobre una caja 20x20x10 devuelve un sólido válido de 672 mm³ y 30 caras, sin aviso. Fusion no deja vaciar quitando todas las caras: tendría que fallar con un mensaje. | omnicad/nucleo/solidos_modificar.py:731 (`vaciado`) | 2026-10-24 |
+| SOL-3 | Agujero en un punto fuera de la cara se ignora sin aviso | Abierto | Baja | `create_hole face=">Z" points=[[0,0],[5,5],[50,50]]` en una caja de 20x20: hace 2 agujeros, el tercero (50, 50) cae fuera y desaparece sin aviso. | omnicad/api/herramientas_modificar.py:436 (`create_hole`) | 2026-10-24 |
+| SOL-4 | Unir cuerpos que no se tocan deja un cuerpo con dos sólidos sueltos y sin aviso | Abierto | Baja | `boolean_operation join` con una caja a 100 mm de la otra: queda 1 cuerpo de 5000 mm³ con 2 sólidos separados. El `cut` en la misma situación sí avisa «no le cortó nada». Hay que avisar (o fallar, que es lo que se espera de Fusion; no verificado en la ayuda local). | omnicad/api/herramientas_solido.py:610 (`boolean_operation`) | 2026-10-24 |
+| SOL-5 | Escalar acepta factores que superan el tope de 1 km | Abierto | Baja | `scale_body factor=1e6` sobre una caja de 20 mm deja un cuerpo de 20 km (4e21 mm³). Mover, crear y extruir rechazan todo lo que pasa de 1.000.000 mm. | omnicad/nucleo/solidos_modificar.py:826 (`escalar`) | 2026-10-24 |
+| SOL-6 | Patrón circular acepta más de 360° y la última copia cae sobre la original | Abierto | Baja | `circular_pattern count=4 total_angle=720`: las copias quedan en 0°, 240°, 120° y 0°; la cuarta se superpone con la original, sin error ni aviso. Fusion limita el patrón parcial a una vuelta. | omnicad/api/herramientas_solido.py:794 (`circular_pattern`) | 2026-10-24 |
+| SOL-31 | Revolución acepta ángulos de más de 360° y los trata como 360° sin avisar | Abierto | Baja | En la ventana, Revolución con Ángulo 400° o 720° acepta y crea el cuerpo; el volumen es el mismo que con 360° (6283,19 mm³ para un rectángulo 20x10 sobre su arista) y no hay aviso. `revolve angle=400` por la API da lo mismo. | omnicad/ui/comandos/solido.py:165 | 2026-10-24 |
+| SOL-32 | Patrones con distancia 0 (rectangular, en trayectoria) o ángulo 0 (circular) crean copias encimadas sin aviso | Abierto | Baja | `patron_rectangular_3d` con 3 copias y distancia 0 mm crea 2 cuerpos nuevos con la misma caja envolvente que el original; `patron_circular_3d` con 4 copias y ángulo 0 deg crea 3. La vista previa queda en verde y el panel no dice nada. | omnicad/ui/comandos/crear.py:790-802 | 2026-10-24 |
+| SOL-33 | Pulsar/tirar y Cara de desfase con 0 mm, y Desmoldeo con 0°, crean un paso que no hace nada | Abierto | Baja | Los tres se aceptan sin aviso y dejan un paso en el timeline sin efecto. En Superficie, el desfase con 0 sí se rechaza («La distancia de desfase no puede ser cero.»). | omnicad/ui/comandos/modificar.py:193,272 | 2026-10-24 |
 
 ## Detalle de lo abierto
 
@@ -48,3 +82,126 @@ Reproducido (firma de Windows): no se puede curar desde la app; queda la protecc
 
 Crítico
 
+### SUP-1 · Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel
+
+Cómo reproducir: `create_box 20x20x10` → `unstitch_surfaces` → `stitch_surfaces` de 5 caras (queda una boca abierta) → `create_patch boundary={body, edges: ">Z"} continuity=G1`. Obtenido: OPERATION_FAILED «Error inesperado: Geom_RectangularTrimmedSurface::V1==V2». Con `G2`: «BRepFill : The continuity is not G0 G1 or G2». El mismo G2 falla sobre el borde superior de un tubo extruido de un círculo r10, donde G0 y G1 sí funcionan. Esquive: G0 y mezclar a mano. Prueba propuesta: parche G1 y G2 sobre la caja de 5 caras y sobre el tubo, con área y `es_valida`.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-2 · Dividir cuerpo no funciona sobre un cuerpo de superficie
+
+Cómo reproducir: círculo r10 en XY → `create_surface_extrude distance=20` → plano de construcción z=10 → `split_body body=<tubo> tool=<plano>` (también con `extend=true`). Esperado: dos cuerpos de superficie de 628,32. Obtenido: OPERATION_FAILED «La herramienta no divide el cuerpo (probá extenderla)». `split_face` con el mismo plano sí parte la cara (2 caras). Causa probable: `dividir_cuerpo` solo cuenta sólidos. Prueba propuesta: dividir un tubo y una caja abierta; 2 cuerpos y áreas que sumen el original.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-3 · Barrido de superficie por una ruta con esquina viva sale deformado y sin aviso
+
+Cómo reproducir: círculo r2 en XY; boceto en XZ con las líneas (0,0)-(0,20) y (0,20)-(20,20); `create_surface_sweep profiles=<círculo> path=[las dos líneas]`. Esperado: dos tubos de 251,33 (502,65 en total). Obtenido: 412,67; el segundo tramo suma solo 161,35 (una tira plana: el perfil no rota en la esquina) y la caja termina en z=20. Sin error ni aviso. Prueba propuesta: barrido por un camino en L con el área de los dos tubos, o error explícito.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-4 · Solevación de superficie con 3 o más secciones de distinto tipo falla
+
+Cómo reproducir: planos XY a z=0, 20 y 40; secciones rectángulo, círculo, círculo; `create_surface_loft profiles=[S0,S1,S2]`. Obtenido: «El solevado falló en el kernel». De 9 combinaciones, RC, CR, CCC y RRR andan; RCC, CCR, RRC, CRC y RCR fallan. Prueba propuesta: solevar esas combinaciones y chequear área > 0 y `es_valida`.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-5 · Destrimar después de Recortar no devuelve nada y no avisa
+
+Cómo reproducir: círculo r10 → `create_surface_extrude distance=20` → plano z=10 → `trim_surface` quitando la parte de arriba (queda 628,32) → `untrim_surface faces={body, faces: all} boundaries=outer|inner|all`. Obtenido: OK y el área sigue en 628,32 las tres veces, sin aviso. Esperado según la ayuda de Fusion: la superficie recortada se extiende. Prueba propuesta: recortar y destrimar un tubo y comprobar el área; si no se puede recuperar, avisarlo.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-6 · Superficies degeneradas pasan como correctas
+
+Cómo reproducir: `create_surface_sweep profiles=C path=C` (la misma curva): ok=true, área 0, `es_valida` falso. `create_surface_revolve angle="1e-6 deg"`: ok, área 0. `create_surface_extrude distance=1e-6`: ok, área 0. Prueba propuesta: que un cuerpo inválido o de área 0 haga fallar el paso con un mensaje.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-7 · Conicidad de 89° rechazada aunque el mensaje dice que vale
+
+Cómo reproducir: `create_surface_extrude profiles=<línea> distance=10 taper_angle="89 deg"` → OPERATION_FAILED «La conicidad tiene que estar entre -89° y 89°». 88,9° anda. Prueba propuesta: 89° y 89,01°.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-8 · Coser acepta tolerancia 0 o negativa sin avisar
+
+Cómo reproducir: caja descosida con una cara movida 0,5 mm; `stitch_surfaces tolerance="0"` y `"-1"` devuelven OK (queda abierto); con `"1 mm"` queda sólido; con `"1e9"` el error es el del tope de longitud. Prueba propuesta: tolerancia ≤ 0 devuelve INVALID_ARGUMENTS.
+
+Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
+
+### SUP-24 · Previsualizar Reglada tangente o dirección en la ventana deja dañada la superficie de origen: después Recortar falla
+
+Cómo reproducir (ventana real, escena de `evidencias/ui_2026-10-24/escena.py`): círculo r5 → superficie extruida de 20 mm (tubo) → plano de construcción z=10. 1) Recortar con ese plano y clic en el tubo: la vista previa anda (queda la mitad, 314,16). 2) SUPERFICIE › Reglada → elegir la arista circular de arriba → Tipo «Tangente» (o «Dirección») → distancia 5 mm → Cancelar. 3) Repetir el paso 1: «La herramienta no corta la superficie». Con Tipo «Normal» el paso 3 sigue andando.
+
+Qué se comprobó: pasa igual si en el paso 2 se acepta y se deshace; sigue pasando tras `Documento.recalcular(0)`; `trim_surface` por la API (mismos datos) también falla después de la vista previa. En cambio la secuencia solo con API (crear Reglada tangente, deshacer, `trim_surface`) y `Documento.previsualizar` sin ventana NO lo reproducen. El área del tubo (628,32) y su validez no cambian: el daño no se ve a simple vista. Causa sin confirmar; `reglada` arma cada cara con `BRepFill.Face_s(ef, otra)` usando la arista original (superficies.py:590) y es lo primero a mirar (¿deja datos en la arista compartida?). Un intento de pasarle una copia no sirvió de prueba (el segundo documento del mismo proceso ya salió dañado).
+
+Prueba propuesta: tras previsualizar y cancelar una Reglada tangente, Recortar sobre la misma superficie da la misma mitad (314,16) que antes.
+
+Evidencia: `evidencias/ui_2026-10-24/` (`p5_repro.py`, `p6_repro.py`, `p7_repro.py`, `p9_nucleo.py`, `u1_superficie.log`).
+
+### SOL-1 · Rosca modelada a izquierdas sobre un cilindro falla en el kernel tras 6 segundos
+
+Cómo reproducir: `create_cylinder height=20 radius=5` → `create_thread faces="%CYLINDER" thread="M10" left_hand=true`. Obtenido: OPERATION_FAILED «El kernel no pudo cortar la rosca en el cuerpo» a los 5,9 s. Con `left_hand=false` tarda 0,9 s y anda (volumen 1278,25). Con un agujero a izquierdas (`create_hole depth=10 hole_tap=modeled thread=M6 left_hand=true`) anda en 0,84 s. Prueba propuesta: rosca externa a izquierdas con volumen menor que el cilindro.
+
+Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
+
+### SOL-2 · Vaciado con todas las caras quitadas da un sólido raro sin error
+
+Cómo reproducir: `create_box 20x20x10` → `shell body=<caja> faces="all" thickness=2`. Obtenido: ok, sin aviso; cuerpo válido de 672 mm³ con 30 caras (se perdieron 3328 mm³; un hueco cerrado de pared 2 pierde 2464). Prueba propuesta: error claro cuando se quitan todas las caras.
+
+Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
+
+### SOL-3 · Agujero en un punto fuera de la cara se ignora sin aviso
+
+Cómo reproducir: caja de 20x20x10 → `create_hole face=">Z" diameter=5 depth=5 points=[[0,0],[5,5],[50,50]]`. Obtenido: volumen 3803,65 (dos agujeros de 98,17), sin aviso. Esperado: aviso o error por el punto (50, 50). Prueba propuesta: un punto fuera de la cara avisa.
+
+Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
+
+### SOL-4 · Unir cuerpos que no se tocan deja un cuerpo con dos sólidos sueltos y sin aviso
+
+Cómo reproducir: dos cajas, la segunda en x=100 → `boolean_operation join`. Obtenido: 1 cuerpo, 2 sólidos (5000 mm³), sin aviso. `cut` sí avisa «no le cortó nada». Prueba propuesta: `join` sin contacto avisa o falla.
+
+Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
+
+### SOL-5 · Escalar acepta factores que superan el tope de 1 km
+
+Cómo reproducir: caja 20x20x10 → `scale_body factor=1e6`. Obtenido: ok, volumen 4e21 mm³ (el lado mide 20 km). `move_body translate=[1e9,0,0]` y `create_box length=2e6` sí fallan por el tope de 1.000.000 mm. Prueba propuesta: escalar que pase del tope falla con el mismo mensaje.
+
+Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
+
+### SOL-6 · Patrón circular acepta más de 360° y la última copia cae sobre la original
+
+Cómo reproducir: caja en x=30 → `circular_pattern count=4 total_angle=720`. Obtenido: centros (30,0), (-15,-26), (-15,26) y (30,0): la cuarta copia queda sobre la original. Con `total_angle=360` y count 3 las copias quedan a 120°. Prueba propuesta: total_angle > 360 falla.
+
+Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
+
+### SOL-31 · Revolución acepta ángulos de más de 360° y los trata como 360° sin avisar
+
+Cómo reproducir: SÓLIDO › CREAR › Revolución → perfil rectángulo 20x10 → eje X → Extensión «Ángulo» → 400 deg (o 720 deg) → Aceptar. Obtenido: paso creado, volumen 6283,19 mm³ igual que con 360°, sin aviso. Por la API, `revolve angle=400` y `720` dan lo mismo. Prueba propuesta: más de 360° se rechaza con un mensaje, como pasa con 0° («El ángulo de revolución no puede ser cero.»).
+
+Evidencia: `evidencias/ui_2026-10-24/` (`u2a_solido_crear.py`, `p11_rev.py`).
+
+### SOL-32 · Patrones con distancia 0 o ángulo 0 crean copias encimadas sin aviso
+
+Cómo reproducir: caja → SÓLIDO › CREAR › Patrón rectangular → Dirección 1 = eje X, 3 copias, distancia 0 mm → Aceptar: 6 cuerpos pasan a 8 y los 2 nuevos tienen la misma caja envolvente que el original. Patrón circular con 4 copias y 0 deg: pasa de 6 a 9 cuerpos, todos en el mismo lugar. Patrón en trayectoria con distancia 0 mm se acepta igual. Prueba propuesta: avisar (o rechazar) cuando las copias quedan una sobre otra.
+
+Evidencia: `evidencias/ui_2026-10-24/` (`p15_patrones.py`, `u2b_solido_modificar.py`).
+
+### SOL-33 · Pulsar/tirar y Cara de desfase con 0 mm, y Desmoldeo con 0°, crean un paso que no hace nada
+
+Cómo reproducir: SÓLIDO › MODIFICAR › Pulsar/tirar → cara de arriba de una caja → distancia 0 mm → Aceptar (lo mismo con Cara de desfase y con Desmoldeo 0 deg). Obtenido: se agrega un paso al timeline sin cambio de geometría. Contraste: SUPERFICIE › Desfase con 0 mm sí se rechaza. Prueba propuesta: el mismo rechazo con mensaje en estos tres.
+
+Evidencia: `evidencias/ui_2026-10-24/` (`u2b_solido_modificar.py`).
+
+### B-104 · «Recuperar documentos…» tiene la ayuda en el lugar del atajo
+
+Cómo reproducir: `v.acciones["recuperados"].shortcut().toString()` devuelve «, , » (una secuencia de teclas inventada a partir del texto de ayuda) y la propiedad `ayuda` de la acción queda vacía. Se vio en la prueba de atajos de `scripts/prueba_ui/ventana_uso.py`: es el único atajo que no dispara su acción. Prueba propuesta: ninguna acción tiene un atajo de más de 25 caracteres (esa comprobación ya está en la prueba de la ventana).
+
+Evidencia: `evidencias/ui_2026-10-24/ventana_uso.log`.
+
+### B-105 · En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados
+
+Cómo reproducir: abrir la app, achicar la ventana a 1024x640, SÓLIDO › Extruir, elegir un perfil. El panel muestra «Operación» pero «Aceptar» y «Cancelar» quedan debajo del borde del visor, encima del timeline, y el panel «Atajos de diseño» lo tapa por la derecha. A 800x520 se corta ya en «Tipo de extensión». Esperado: el panel entra en el visor (con barra de desplazamiento si no cabe) y los botones se ven siempre. Prueba propuesta: la de `ventana_uso.py` (1024x640 y 800x520: `v.area.rect().contains(panel.geometry())`).
+
+Evidencia: `evidencias/ui_2026-10-24/capturas/chica_1024x640.png`, `chica_800x520.png`.

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from ..timeline.operaciones import OpBoceto
-from ..timeline.parametros import ESCALAR, UNIDADES, TablaParametros, validar_nombre
+from ..timeline.parametros import ESCALAR, TEXTO, UNIDADES, TablaParametros, validar_nombre
 from .errores import error
 from .herramientas_parametros import _UNIDAD, info_parametros
 from .registro import herramienta
@@ -39,7 +39,7 @@ def export_parameters(sesion, path: str, overwrite: bool = False, create_folders
     cotas = {c.nombre for o in sesion.doc.operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()}
     propios = [p for p in sesion.doc.parametros if p.nombre not in cotas]     # los dN se regeneran desde sus cotas
     for p in propios:
-        escritor.writerow([p.nombre, _UNIDAD[p.tipo], p.expresion, repr(valores[p.nombre]), p.comentario])
+        escritor.writerow([p.nombre, "text" if p.tipo == TEXTO else _UNIDAD[p.tipo], p.expresion, repr(valores[p.nombre]), p.comentario])
     nuevas = crear_carpeta(ruta.parent) if create_folders else []
     temporal = None
     try:
@@ -96,10 +96,10 @@ def import_parameters(sesion, path: str, mode: Literal["merge", "replace"] = "me
             unidad = (fila.get("Unit") or fila.get("Unidad") or "").strip().lower()
             comentario = (fila.get("Comments") or fila.get("Comentario") or "").strip()
             validar_nombre(nombre)
-            if nombre in vistos or not expresion or (unidad and unidad not in UNIDADES):
+            if nombre in vistos or not expresion or (unidad and unidad != "text" and unidad not in UNIDADES):
                 raise error("INVALID_ARGUMENTS", f"Fila {i}: nombre duplicado, expresión vacía o unidad desconocida.")
             vistos.add(nombre)
-            tipo = UNIDADES[unidad][0] if unidad else ESCALAR
+            tipo = TEXTO if unidad == "text" else UNIDADES[unidad][0] if unidad else ESCALAR
             # Como la ventana, Unit define la magnitud; las expresiones sin unidad usan mm/grados internos.
             tabla[nombre] = {"nombre": nombre, "expresion": expresion, "tipo": tipo, "comentario": comentario}
     except (UnicodeError, csv.Error, RecursionError) as e:

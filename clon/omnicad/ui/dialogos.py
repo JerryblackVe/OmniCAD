@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
                                QVBoxLayout)
 from ..io_archivos import proyecto
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros, validar_nombre
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, TEXTO, ErrorExpresion, TablaParametros, validar_nombre
 from . import formato, temas
 
 ETIQUETAS_CAMPO = {"ancho": "Ancho (X)", "largo": "Largo (Y)", "alto": "Alto (Z)", "radio": "Radio",
@@ -180,7 +180,7 @@ class DialogoPrimitiva(_DialogoBase):
 class DialogoParametros(QDialog):
     """Tabla de parámetros de usuario (equivalente al diálogo "Change Parameters" de Fusion)."""
     COLUMNAS = ["Nombre", "Expresión", "Tipo", "Valor", "Comentario"]
-    NOMBRES_TIPO = {LONGITUD: "Longitud (mm)", ANGULO: "Ángulo (°)", ESCALAR: "Sin unidad"}
+    NOMBRES_TIPO = {LONGITUD: "Longitud (mm)", ANGULO: "Ángulo (°)", ESCALAR: "Sin unidad", TEXTO: "Texto"}
 
     def __init__(self, tabla, parent=None):
         super().__init__(parent)
@@ -221,14 +221,14 @@ class DialogoParametros(QDialog):
 
     # Formato CSV de Fusion (Import/Export Parameters [SLD-IMPORT-EXPORT-PARAMETERS]): Name, Unit,
     # Expression, Value, Comments; la unidad dice el tipo (mm → longitud, deg → ángulo, vacío → sin unidad).
-    UNIDADES_CSV = {LONGITUD: "mm", ANGULO: "deg", ESCALAR: ""}
+    UNIDADES_CSV = {LONGITUD: "mm", ANGULO: "deg", ESCALAR: "", TEXTO: "text"}
 
     def filas_csv(self):
         self._recalcular()
         if self.resultado is None:
             raise ErrorExpresion(self.error.text() or "Hay parámetros inválidos.")
         valores = self.resultado.valores()
-        return [[p.nombre, self.UNIDADES_CSV.get(p.tipo, ""), p.expresion, f"{valores[p.nombre]:.6g}", p.comentario]
+        return [[p.nombre, self.UNIDADES_CSV.get(p.tipo, ""), p.expresion, (valores[p.nombre] if p.tipo == TEXTO else f"{valores[p.nombre]:.6g}"), p.comentario]
                 for p in self.resultado]
 
     def _exportar(self):
@@ -249,7 +249,7 @@ class DialogoParametros(QDialog):
     def importar_csv(self, ruta):
         """Agrega o reemplaza (por nombre) los parámetros del CSV. Devuelve cuántos importó."""
         import csv
-        tipos = {"mm": LONGITUD, "cm": LONGITUD, "m": LONGITUD, "in": LONGITUD, "deg": ANGULO, "rad": ANGULO, "": ESCALAR}
+        tipos = {"mm": LONGITUD, "cm": LONGITUD, "m": LONGITUD, "in": LONGITUD, "deg": ANGULO, "rad": ANGULO, "text": TEXTO, "": ESCALAR}
         existentes = {self._texto(f, 0): f for f in range(self.tabla_qt.rowCount())}
         n = 0
         with open(ruta, newline="", encoding="utf-8-sig") as f:
@@ -297,15 +297,18 @@ class DialogoParametros(QDialog):
         self.tabla_qt.blockSignals(False)
         self._recalcular()
 
-    def _texto(self, fila, columna):
+    def _texto(self, fila, columna, recortar=True):
         item = self.tabla_qt.item(fila, columna)
-        return item.text().strip() if item else ""
+        if not item:
+            return ""
+        return item.text().strip() if recortar else item.text()
 
     def _leer(self):
         datos = []
         for f in range(self.tabla_qt.rowCount()):
-            datos.append({"nombre": self._texto(f, 0), "expresion": self._texto(f, 1),
-                          "tipo": self.tabla_qt.cellWidget(f, 2).currentData(), "comentario": self._texto(f, 4)})
+            tipo = self.tabla_qt.cellWidget(f, 2).currentData()
+            datos.append({"nombre": self._texto(f, 0), "expresion": self._texto(f, 1, tipo != TEXTO),   # el texto no se recorta
+                          "tipo": tipo, "comentario": self._texto(f, 4)})
         if len({d["nombre"] for d in datos}) != len(datos):
             raise ErrorExpresion("Hay nombres repetidos.")
         for d in datos:
@@ -319,7 +322,8 @@ class DialogoParametros(QDialog):
             t = self._leer()
             valores = t.valores()
             for f in range(self.tabla_qt.rowCount()):
-                self.tabla_qt.item(f, 3).setText(f"{valores[self.tabla_qt.item(f, 0).text().strip()]:.4g}")
+                v = valores[self.tabla_qt.item(f, 0).text().strip()]
+                self.tabla_qt.item(f, 3).setText(v if isinstance(v, str) else f"{v:.4g}")
             self.error.setText("")
             self.resultado = t
         except (ErrorExpresion, KeyError, AttributeError) as e:

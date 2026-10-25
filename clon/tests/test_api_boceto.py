@@ -52,7 +52,10 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "edit_sketch_spline", "get_spline_curvature",
                 # Boceto 3D, FU-1 (tests/test_boceto_fase8_3d.py)
                 "draw_line_3d", "draw_spline_3d", "draw_point_3d", "add_constraint_3d", "add_dimension_3d",
-                "delete_sketch_entities_3d"]
+                "delete_sketch_entities_3d",
+                # Fase 9: boceto 3D completo (tests/test_boceto_fase9_3d.py)
+                "draw_arc_3d", "draw_circle_3d", "draw_ellipse_3d", "draw_rectangle_3d", "draw_conic_3d",
+                "draw_text_3d", "transform_sketch_3d", "intersect_curves", "project_to_surface"]
 
 
 def test_herramientas_del_grupo_boceto():

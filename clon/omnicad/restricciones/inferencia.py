@@ -31,7 +31,7 @@ def _direccion_cercana(base, cursor, punto, angulo_tol):
 
 
 def _tangencias(prim, base):
-    """Contactos desde una base exterior; normalizar la elipse reduce el cálculo al círculo unidad."""
+    """Contactos desde fuera o sobre la curva; normalizar la elipse la reduce al círculo unidad."""
     tipo, _, (cx, cy), a = prim[:4]
     eliptica = tipo in ("elipse", "arco_elipse")
     menor, giro = (prim[4], prim[5]) if eliptica else (a, 0.0)
@@ -41,6 +41,10 @@ def _tangencias(prim, base):
     dx, dy = base[0] - cx, base[1] - cy
     x, y = (dx * c + dy * s) / a, (-dx * s + dy * c) / menor
     distancia = math.hypot(x, y)
+    if abs(distancia - 1.0) * max(a, menor) < 1e-9:
+        if mas_cercano(prim, base)[1] < 1e-9:
+            yield base
+        return
     if distancia <= 1.0:
         return
     direccion = math.atan2(y, x)
@@ -60,8 +64,9 @@ def inferir(b: Boceto, cursor_xy, tol_mm, base=None, excluir=(), coincidente=Fal
     Distancias en mm, ángulos en radianes. Dentro de cada prioridad gana el
     ajuste más cercano al cursor; los empates se resuelven por id de curva.
     Excluir un punto excluye también sus curvas para evitar autoinferencia.
-    Las tangencias y los pies deben estar a `tol_mm` del cursor y próximos a
-    la curva: no se salta a un contacto lejano aunque la dirección coincida.
+    Desde fuera, las tangencias y los pies deben estar a `tol_mm` del cursor
+    y próximos a la curva. Desde la curva, el cursor se proyecta a su tangente
+    en la base, con la misma tolerancia de distancia y ángulo.
     Mayús (`coincidente`) conserva el ajuste al medio pero cambia su restricción.
     """
     cursor = tuple(cursor_xy)
@@ -81,14 +86,21 @@ def inferir(b: Boceto, cursor_xy, tol_mm, base=None, excluir=(), coincidente=Fal
                     candidatos.append((0, distancia, cid, Inferencia("punto_medio", medio, cid, restriccion)))
 
             _, distancia_curva, cercano = mas_cercano(prim, cursor)
-            if base is not None and distancia_curva <= tol_mm:
+            if base is not None:
                 if tipo in ("circulo", "arco", "elipse", "arco_elipse"):
                     for punto in _tangencias(prim, base):
+                        if punto == base:
+                            parametro = mas_cercano(prim, base)[0]
+                            tx, ty = evaluar_primitiva(prim, parametro, 1)[1]
+                            avance = ((cursor[0] - base[0]) * tx + (cursor[1] - base[1]) * ty) / (tx * tx + ty * ty)
+                            punto = (base[0] + avance * tx, base[1] + avance * ty)
+                        elif distancia_curva > tol_mm:
+                            continue
                         distancia = math.dist(cursor, punto)
                         if distancia <= tol_mm and _direccion_cercana(base, cursor, punto, angulo_tol):
                             candidatos.append((1, distancia, cid, Inferencia(
                                 "tangente", punto, cid, ("tangente", cid), [(base, punto)])))
-                elif tipo == "linea":
+                elif tipo == "linea" and distancia_curva <= tol_mm:
                     (x, y), (fx, fy) = prim[2:4]
                     dx, dy = fx - x, fy - y
                     largo2 = dx * dx + dy * dy

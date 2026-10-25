@@ -62,6 +62,17 @@ usá la skill `omnicad`; esta suma el método de prueba y dónde se anota cada c
 - **Ratón**: no lo uses sobre la prueba de humo ni sobre un script QTest que está corriendo.
 - **`BRIDGE_ERROR`**: no se sabe si se aplicó. Mirá `get_timeline` antes de repetir.
 
+## 4b. REGLA FIJA: probar como una persona que usa la app todos los días
+
+En TODA prueba (cualquier vía y modo), la ventana se maneja como lo haría un usuario humano habitual. No alcanza con llamar a la API ni con `set_valor`.
+
+- **Mouse**: elegir con clics reales del visor (`visor.elegir_entidad`), arrastrar las asas (press, varios movimientos, release), pasar el cursor por encima (hover), doble clic en el timeline para editar, clic derecho, rueda y órbita. Eventos simulados al widget (`_mover`, `QMouseEvent`), nunca el cursor real. Modelos: `evidencias/ui_2026-10-24/u3_asas.py`, `arnes.py`.
+- **Botones y teclas**: pulsar cada botón (Aceptar, Cancelar, X, flechas del timeline, deshacer/rehacer), Enter, Esc, Tab y Shift+Tab entre campos, y comprobar qué pasa con cada uno (se cierra, avisa, no hace nada).
+- **Dónde se escriben los valores y textos**: escribir en el campo real (tecleando: `QTest.keyClicks`, borrar, pegar), no solo `setText`. Revisar en cada campo: que acepte lo que acepta Fusion (unidades «15 mm», «45 deg», expresiones, parámetros), qué pasa con texto, vacío, 0, negativo, enormes y coma decimal; que el valor se vea donde se escribió (campo, caja flotante junto al asa, barra de estado); que el rojo y el mensaje aparezcan donde la persona mira; que al reabrir el paso vuelva lo escrito; que Enter confirme y Esc descarte.
+- **Lo que ve la persona**: una captura de la ventana tras cada paso importante (se mira de verdad, no solo se guarda) y comprobar que etiquetas, mensajes y orden de los campos se lean bien.
+- Lo que no se pudo hacer así se anota con ⚠ en el informe final, con la razón.
+- **Ya está automatizado**: `scripts/prueba_ui/` (arnés `arnes.py`, `corredor.py`, `teclado.py`, escena de prueba y un script por pieza: `cinta_completa`, `superficie`, `solido_crear`, `solido_modificar`, `asas`, `teclear`, `ventana_uso`). `todo.py` los corre de a uno. Lista completa de qué cubre una prueba completa: `CLAUDE.md`, «toda prueba se hace como un usuario humano habitual». Para un comando nuevo, sumar su receta a la pieza que corresponda en vez de escribir un script suelto.
+
 ## 5. ¿Es un hallazgo?
 
 Antes de anotar, descartá lo falso:

@@ -146,7 +146,6 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 
 Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
 
-- Boceto 3D: mover los puntos del boceto en altura.
 - Hélice 3D como curva de boceto (hoy hay solo espiral plana).
 - Grupos en la línea de tiempo.
 

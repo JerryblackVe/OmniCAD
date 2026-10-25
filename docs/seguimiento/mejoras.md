@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso: 2026-10-24). Total 112: Abierto 56 · Parcial 45 · Bloqueado 4 · Sin verificar 7.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 120: Abierto 63 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -137,8 +137,35 @@ Abierto 2 · Parcial 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-28 | Texto largo y glifos faltantes | Parcial | Baja | Hecho: aviso de glifo faltante (un emoji ya no dibuja el cuadrito sin avisar); 200 «W» sobre un círculo de 20 mm: 14 811 perfiles de 8,85 s a 5,93 s (perfiles en paralelo). Queda: la división del boceto en perfiles (~3,4 s) ocurre dentro de OpenCascade. | omnicad/nucleo/fuentes.py:479 | 2026-10-23 |
-| BOC-29 | Verificar los topes de Fusion: 64 lados de polígono y 200 copias de patrón | Abierto | Baja | La ayuda local no dice cuál es el límite de Fusion; decidirlo y documentarlo. | omnicad/api/herramientas_boceto.py:1679 | 2026-10-23 |
+| BOC-28 | Texto largo y glifos faltantes | Parcial | Baja | Hecho: aviso de glifo faltante; 200 «W» sobre un círculo de 20 mm (14 768 perfiles): `_detectar` de 4,72 s a 3,95 s con el historial `Modified` en lugar del KD-tree y una sola pasada por cara; con el aporte previo de los perfiles en paralelo, 8,85 s → ~5,9 s. Queda: ~2,8 s son `BRepAlgoAPI_Splitter` (no se toca desde Python), ~0,9 s PaveFiller y ~1,9 s el armado de caras en un solo hilo (hay una sola cara gigante). Para bajarlo de verdad hay que armar el grafo planar y las caras en Rust o C++ (docs/plan_cpp.md): decisión pendiente, no se instala nada sin permiso. Además `motor.py` revisa argumentos y lee `os.environ` en cada `motor_activo()` (~0,3 s en este caso): un caché ayuda a todo el núcleo. | omnicad/nucleo/perfiles.py (`_origen_aristas`, `_detectar`); tests/test_boceto_fase9_fuentes.py (rendimiento) | 2026-10-24 |
+| BOC-31 | Restricciones de curva inferidas (tangente, perpendicular, horizontal/vertical) en todas las herramientas | Abierto | Baja | Con BOC-9 cada herramienta une los puntos inferidos (coincidente, punto medio, punto sobre curva), pero la tangente, la perpendicular y horizontal/vertical como restricción entre curvas solo se agregan sola con la herramienta Línea. | omnicad/ui/editor_boceto.py (`_restringir_clics`, `_guardar_inferencia_clic`) | 2026-10-24 |
+| BOC-32 | Tope de memoria por fuente en el lector de `.shx` | Abierto | Baja | El tope de 200 000 puntos es por letra, no por fuente: un `.shx` de 16 MB con miles de formas que llaman a una forma enorme, y un texto de 100 caracteres distintos, arma unos 2 GB (dos veces: la caché de `shx.py` y la copia escalada de `fuentes.py`). Poner un contador de puntos por fuente en `FuenteSHX` (tope ~2 millones; pasado el tope, las letras nuevas salen vacías) y un test. | omnicad/nucleo/shx.py (`TOPE_PUNTOS`, `_cache`); omnicad/nucleo/fuentes.py:339-352 | 2026-10-24 |
+
+## Superficie (auditoría contra Fusion, 2026-10-24)
+
+Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayuda de Fusion (sección Fusion-Patch de `docs/fusion_docs/`) y de probar las 14 herramientas por MCP/CLI. Los bugs se reprodujeron; los scripts de prueba (`sonda*.py`) están en `evidencias/superficie_2026-10-24/`, fuera de git.
+
+Abierto 4 · Sin verificar 1.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| SUP-20 | Pestaña «Análisis» (Cebra, Mapa de curvatura, Isocurvas) en los diálogos de superficie | Abierto | Media | Fusion la trae en Barrido, Solevación, Parche, Reglada y Extender para juzgar la vista previa. Acá el análisis existe solo como comandos aparte (`analyze_geometry`, INSPECCIONAR). | omnicad/ui/comandos/superficie.py (campos sin análisis); omnicad/api/herramientas_analisis.py | 2026-10-24 |
+| SUP-21 | Coser: informar cuántos bordes quedaron libres y cuáles | Abierto | Media | El núcleo ya devuelve `aristas_libres`, pero el aviso dice solo «Quedaron bordes abiertos». Fusion muestra el número de bordes libres y a coser, una tabla navegable y marca en verde los que están dentro de la tolerancia. | omnicad/nucleo/superficies.py:849-868; omnicad/timeline/ops_superficie.py:222-223 | 2026-10-24 |
+| SUP-22 | Errores de superficie sin una causa que se pueda corregir | Abierto | Baja | «La revolución falló en el kernel» (perfil que cruza el eje), «El solevado falló en el kernel» y, en el parche G1/G2, «necesita el cuerpo vecino (`soporte`)», un parámetro interno que ni la API ni el diálogo tienen. Decir qué corregir. En la ventana también salen textos del kernel tal cual: «PipeShell : uncompatible wires» (Barrido de superficie con torsión 720 deg) y «BRepFill : The continuity is not G0 G1 or G2» (Parche G2); y el empalme de superficie sobre una arista que no comparte dos caras dice «¿radio demasiado grande?» aunque el radio sea de 1 mm: tendría que decir que la arista es libre. | omnicad/nucleo/superficies.py:326,466,482 | 2026-10-24 |
+| SUP-23 | Sentido de la normal de las superficies nuevas | Sin verificar | Baja | Un tubo extruido desde un círculo: el desfase +5 lo achica (la normal mira hacia adentro) y +3 sobre una caja abierta lo agranda. Comprobar con Fusion qué lado debe ser el positivo y mostrar la normal (flecha o dato en `get_scene_info`). | omnicad/nucleo/superficies.py:617 (`desfasar_superficie`) | 2026-10-24 |
+| SUP-26 | Extender: el asa de distancia se arrastra hasta valores negativos que dan error | Abierto | Baja | En la ventana, arrastrar la flecha de «Extender» más allá del cero deja la distancia en -6 mm y la vista previa en rojo («La distancia de extensión debe ser positiva»); Empalme, Chaflán, Vaciado y Agujero frenan el asa en 0. Ponerle el mismo tope. | omnicad/ui/comandos/asas_extra.py:272 | 2026-10-24 |
+
+## Sólido (auditoría contra Fusion, 2026-10-24)
+
+Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
+
+Abierto 3.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| SOL-30 | Dos mensajes de error de Sólido engañan | Abierto | Baja | `split_body` dice «probá extenderla» aun con `extend=true`. Un valor mal tipado de una lista (p. ej. `create_boss positions=[[0,0,20]]`) dice «no es array» cuando la lista sí es un array: lo que no sirve es cada elemento (tiene que ser string u objeto). En la ventana, Empalme con un radio de 100 mm sobre una caja de 30 mm manda «reordená los empalmes del timeline» aunque haya un solo empalme: ahí hay que decir que el radio no entra en las caras vecinas. | omnicad/nucleo/solidos_modificar.py:1140; omnicad/api/registro.py (validación de tipos) | 2026-10-24 |
+| SOL-34 | Pulsar/tirar sobre una cara crea un paso «Desfase de cara» y al editarlo abre otro diálogo | Abierto | Baja | Pulsar/tirar con una cara crea el paso `desfase_cara` («Desfase de cara1») y al hacer doble clic en el timeline se abre «Cara de desfase», no «Pulsar/tirar»: el usuario ve otro comando con otro título. Darle al paso el nombre y el diálogo del comando que lo creó. | omnicad/ui/comandos/modificar.py:272 | 2026-10-24 |
+| SOL-35 | El factor de escala acepta una unidad («2 mm») | Abierto | Baja | En la ventana, Escala con Factor «2 mm» se toma como 2 sin avisar; los campos de longitud rechazan «15 deg» y los de ángulo «45 mm». Un factor no lleva unidad: rechazarlo con el mismo mensaje. | omnicad/ui/comandos/modificar.py (campo `factor` de escala_3d) | 2026-10-24 |
 
 ## Menú del boceto (decisión del usuario)
 

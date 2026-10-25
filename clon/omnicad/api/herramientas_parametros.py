@@ -3,14 +3,14 @@
 import difflib
 from typing import Literal
 
-from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, LONGITUD_MAXIMA, ErrorExpresion, TablaParametros,
+from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, LONGITUD_MAXIMA, TEXTO, ErrorExpresion, TablaParametros,
                                    validar_nombre)
 from ..timeline.operaciones import OpBoceto
-from .registro import Expr, herramienta
+from .registro import _sin_comillas, herramienta
 from .errores import error
 
-_TIPO = {LONGITUD: "length", ANGULO: "angle", ESCALAR: "scalar"}
-_UNIDAD = {LONGITUD: "mm", ANGULO: "deg", ESCALAR: ""}
+_TIPO = {LONGITUD: "length", ANGULO: "angle", ESCALAR: "scalar", TEXTO: "text"}
+_UNIDAD = {LONGITUD: "mm", ANGULO: "deg", ESCALAR: "", TEXTO: ""}
 
 
 def _copia(tabla):
@@ -22,7 +22,8 @@ def info_parametros(doc):
     usos = doc.parametros_usados()
     cotas = {c.nombre: {"source": "sketch", "sketch": o.id, "dimension": c.id}
              for o in doc.operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()}
-    return [{"name": p.nombre, "expression": p.expresion, "value": round(valores[p.nombre], 6),
+    return [{"name": p.nombre, "expression": p.expresion,
+             "value": valores[p.nombre] if p.tipo == TEXTO else round(valores[p.nombre], 6),
              "unit": _UNIDAD[p.tipo], "kind": _TIPO[p.tipo], "comment": p.comentario,
              "used_by": sorted(usos.get(p.nombre, ())), **cotas.get(p.nombre, {})} for p in doc.parametros]
 
@@ -48,8 +49,12 @@ def _avisar_valor_raro(sesion, info):
     return info
 
 
-def _texto(expresion):
-    return expresion if isinstance(expresion, str) else repr(float(expresion))
+def _texto(expresion, tipo):
+    if tipo == TEXTO:
+        if not isinstance(expresion, str):
+            raise error("INVALID_ARGUMENTS", "Un parámetro de texto necesita una cadena en expression.")
+        return expresion
+    return _sin_comillas(expresion) if isinstance(expresion, str) else repr(float(expresion))
 
 
 @herramienta("get_parameters", "parametros", "Lista los parámetros de usuario y de cotas: expresión, valor calculado, "
@@ -61,21 +66,19 @@ def get_parameters(sesion):
 
 @herramienta("create_parameter", "parametros", "Crea un parámetro de usuario. Con kind=auto la magnitud sale de la "
              "expresión: con unidad de ángulo (deg, rad, °) es un ángulo; si no, una longitud en mm. kind=scalar crea un "
-             "parámetro sin unidad (cantidades de un patrón, factores).", modifica=True)
-def create_parameter(sesion, name: str, expression: Expr, comment: str = "",
-                     kind: Literal["auto", "length", "angle", "scalar"] = "auto"):
+             "parámetro sin unidad (cantidades de un patrón, factores); kind=text guarda texto literal.", modifica=True)
+def create_parameter(sesion, name: str, expression: str | int | float, comment: str = "",
+                     kind: Literal["auto", "length", "angle", "scalar", "text"] = "auto"):
     """
     name: nombre del parámetro (letras, números y '_', sin empezar con número), p. ej. "ancho".
-    expression: valor: número (mm) o expresión con unidades y otros parámetros, p. ej. "60 mm", "ancho / 2", "30 deg".
+    expression: valor: número (mm) o expresión con unidades y otros parámetros, p. ej. "60 mm", "ancho / 2", "30 deg"; con kind=text es una cadena literal, incluidas comillas y saltos de línea.
     comment: comentario opcional que se ve en la tabla de parámetros.
-    kind: "auto" (por defecto: longitud o ángulo según la expresión), "length", "angle" o "scalar" (sin unidad: un número puro, p. ej. la cantidad de copias de un patrón).
+    kind: auto (longitud o ángulo según la expresión), length, angle, scalar (número sin unidad) o text (texto literal; no se puede usar en expresiones numéricas).
     """
-    tabla, texto = _copia(sesion.doc.parametros), _texto(expression)
+    tipo = {"angle": ANGULO, "scalar": ESCALAR, "text": TEXTO}.get(kind, LONGITUD)
+    tabla, texto = _copia(sesion.doc.parametros), _texto(expression, tipo)
     try:
-        if kind == "scalar":
-            tabla.agregar(name, texto, ESCALAR, comment)
-        else:
-            tabla.agregar(name, texto, ANGULO if kind == "angle" else LONGITUD, comment)
+        tabla.agregar(name, texto, tipo, comment)
     except ErrorExpresion as e:
         if kind != "auto" or "es de angulo" not in str(e):
             raise
@@ -89,11 +92,11 @@ def create_parameter(sesion, name: str, expression: Expr, comment: str = "",
              "cambio se descarta. Con un parámetro dN de boceto también cambia la cota y mueve su geometría; "
              "los nombres de cota son estables y no se pueden renombrar. El valor de una cota de referencia "
              "(driven) es medido y no se puede editar; se puede citar en otras expresiones.", modifica=True)
-def set_parameter(sesion, name: str, expression: Expr | None = None, comment: str | None = None,
+def set_parameter(sesion, name: str, expression: str | int | float | None = None, comment: str | None = None,
                   new_name: str | None = None):
     """
     name: nombre exacto del parámetro.
-    expression: valor nuevo: número (en la unidad del parámetro) o expresión, p. ej. "80 mm" o "ancho * 2"; vacío = no cambia.
+    expression: valor nuevo: número o expresión, p. ej. "80 mm" o "ancho * 2"; para parámetros text, cadena literal ("" la vacía); null = no cambia.
     comment: comentario nuevo ("" lo borra); vacío = no cambia.
     new_name: nombre nuevo (letras, números y '_'); falla si algún paso u otro parámetro usa el nombre actual, porque quedarían apuntando a un parámetro que ya no existe; vacío = no cambia.
     """
@@ -107,7 +110,7 @@ def set_parameter(sesion, name: str, expression: Expr | None = None, comment: st
                     "Convertí primero la cota a driving con edit_dimension(reference=false).")
     tabla = _copia(sesion.doc.parametros)
     if expression is not None or comment is not None:
-        tabla.modificar(name, None if expression is None else _texto(expression), comment)
+        tabla.modificar(name, None if expression is None else _texto(expression, tabla.obtener(name).tipo), comment)
     if new_name is not None and new_name != name:
         validar_nombre(new_name)
         if new_name in tabla:

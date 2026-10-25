@@ -15,8 +15,8 @@ from ..io_archivos.boceto_archivos import boceto_desde_primitivas, caja_primitiv
 from ..nucleo import fuentes
 from ..restricciones import ErrorBoceto
 from ..restricciones.boceto import MEDIDA_MINIMA, Texto, _validar_opciones_texto, validar_texto_boceto
-from ..timeline.operaciones import OpBoceto, texto_con_valores
-from ..timeline.parametros import ESCALAR, ErrorExpresion
+from ..timeline.operaciones import OpBoceto, _contenido_texto, texto_con_valores
+from ..timeline.parametros import ESCALAR, TEXTO, ErrorExpresion, TablaParametros
 from .errores import error
 from .herramientas_boceto import (_dibujar, _exigir_finitos, _exigir_tamano, _paso, _valor_expr, boceto_activo,
                                   boceto_resuelto, estado_solver, nombre_nuevo, op_boceto, plano_o_cara, valores_cotas)
@@ -47,7 +47,7 @@ def _archivo(path, extensiones, que):
              "carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de "
              "la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf. Las de un trazo "
              "(single_line, nombre terminado en SHX, como en Fusion) van primero: sus letras son líneas abiertas "
-             "para grabar o marcar, no forman perfiles.")
+             "para grabar o marcar, no forman perfiles; hay tres propias (Trazo, Cursiva, Extendida) y las .shx de usuario.")
 def list_fonts(sesion, query: str | None = None, limit: int = 100, include_styles: bool = False):
     """
     query: texto a buscar dentro del nombre de la familia (sin distinguir mayúsculas); vacío = todas.
@@ -77,8 +77,8 @@ def list_fonts(sesion, query: str | None = None, limit: int = 100, include_style
 
 
 @herramienta("add_font_folder", "vectores",
-             "Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesión. Para que "
-             "quede fija, definí la variable de entorno OMNICAD_FUENTES con la carpeta.")
+             "Suma una carpeta de fuentes (.ttf, .otf, .ttc y las de una línea .shx de AutoCAD) a las que ve OmniCAD en "
+             "esta sesión. Para que quede fija, definí la variable de entorno OMNICAD_FUENTES con la carpeta.")
 def add_font_folder(sesion, path: str):
     """
     path: carpeta con las fuentes (se busca también en sus subcarpetas).
@@ -98,6 +98,18 @@ def _texto_de(b, entity):
         raise error("ENTITY_NOT_FOUND", f"La entidad {entity} {existe} en el boceto.",
                     "get_sketch lista las curvas; los textos tienen type 'text'.")
     return c
+
+
+def _pivote_texto(b, tid, pivot):
+    if isinstance(pivot, str):
+        if pivot not in ("corner:bl", "corner:br", "corner:tl", "corner:tr", "corner:center"):
+            raise error("INVALID_ARGUMENTS", "pivot es [x, y] o corner:bl, br, tl, tr o center.")
+        return b.esquina_marco(tid, pivot.removeprefix("corner:"))
+    if pivot is not None:
+        if len(pivot) != 2:
+            raise error("INVALID_ARGUMENTS", "pivot es [x, y] en mm.")
+        _exigir_finitos({"pivot": pivot})
+    return pivot
 
 
 def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path):
@@ -219,7 +231,8 @@ def _verificar_fuente(font, bold, italic):
              "(simple o doble, forman perfiles) con decoration_thickness, y no_wrap. MARCO (Fusion: el rectángulo "
              "de Text): frame=true dibuja 4 líneas de construcción desde (x, y) (esquina de abajo a la izquierda) que "
              "se acotan y restringen; el texto se acomoda adentro según align y anchor. height acepta un parámetro "
-             "(«h_texto») y lo sigue. Dentro de {…} vale 'texto' + parámetro, p. ej. {'Rev ' + rev}.",
+             "(«h_texto») y lo sigue. Crea un parámetro de texto Text, Text_1… ligado al contenido. "
+             "Dentro de {…} vale 'texto' + parámetro, p. ej. {'Rev ' + rev}.",
              modifica=True)
 def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5.0, angle: float = 0.0,
              font: str = "Arial", bold: bool = False, italic: bool = False, letter_spacing: float = 0.0,
@@ -233,13 +246,13 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
              underline: Literal["none", "single", "double"] = "none",
              strikethrough: Literal["none", "single", "double"] = "none", decoration_thickness: float = 0.0,
              no_wrap: bool = False, kerning_pairs: list[list[float]] | None = None, frame: bool = False,
-             frame_height: float = 0.0, sketch: str | None = None):
+             frame_height: float = 0.0, sketch: str | None = None, pivot: list[float] | str | None = None):
     """
-    text: el texto; '\\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo; {'Rev ' + rev} junta texto y valores.
+    text: contenido del parámetro automático Text (Text_1… si ya existe); '\\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor y se actualiza solo; {'Rev ' + rev} junta texto y valores.
     x: x del ancla (mm).
     y: y del ancla (mm).
     height: tamaño de la fuente en mm (positivo), o una expresión con parámetros que queda ligada.
-    angle: giro del texto en grados alrededor del ancla (antihorario).
+    angle: giro del texto en grados alrededor de pivot (antihorario; por defecto, el ancla).
     font: familia (Arial, Segoe UI…) o ruta a un archivo de fuente.
     bold: negrita (el peso más cercano a 700 de la familia).
     italic: cursiva.
@@ -269,6 +282,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
     frame: true dibuja el marco del texto (4 líneas de construcción acotables); no va con path_entity.
     frame_height: alto del marco en mm; 0 = el del texto. El ancho es box_width (0 = el del texto).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    pivot: [x, y] en mm o corner:tl, corner:tr, corner:bl, corner:br, corner:center (requiere frame); vacío = el ancla. El marco se crea sin giro antes de elegir su pivote.
     """
     _exigir_finitos({"x": x, "y": y, "height": height, "angle": angle, "frame_height": frame_height})
     texto = str(text).replace("\\n", "\n")
@@ -288,7 +302,8 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
     _avisos_texto(sesion, texto, font, bold, italic)
 
     def crear(b):
-        tid = b.agregar_texto((x, y), texto, altura=altura, angulo=angle, fuente=font, negrita=bold, cursiva=italic,
+        tid = b.agregar_texto((x, y), texto, altura=altura, angulo=angle if pivot is None else 0,
+                              fuente=font, negrita=bold, cursiva=italic,
                               altura_expr=altura_expr, **op)
         if frame:
             pts = [q for p in b.primitivas(tid) for q in ((p[2], p[3]) if p[0] == "linea" else p[2])] or [(0, 0)]
@@ -296,6 +311,17 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
             alto = max(q[1] for q in pts) - min(q[1] for q in pts)
             b.agregar_marco_texto(tid, box_width if box_width > 0 else ancho or altura,
                                   frame_height if frame_height > 0 else alto or altura)
+        if pivot is not None:
+            b.girar_texto(tid, angle, _pivote_texto(b, tid, pivot))
+        tabla = TablaParametros.desde_lista(sesion.doc.parametros.a_lista())
+        nombre, numero = "Text", 0
+        while nombre in tabla:
+            numero += 1
+            nombre = f"Text_{numero}"
+        tabla.agregar(nombre, texto, tipo=TEXTO)
+        sesion.doc.aplicar_parametros(tabla)
+        b.curvas[tid].parametro_texto = nombre
+        b.curvas[tid].texto = texto if "{" in texto else "{" + nombre + "}"
     return _dibujar(sesion, sketch, crear)
 
 
@@ -317,11 +343,11 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
               underline: Literal["none", "single", "double"] | None = None,
               strikethrough: Literal["none", "single", "double"] | None = None,
               decoration_thickness: float | None = None, no_wrap: bool | None = None,
-              kerning_pairs: list[list[float]] | None = None, pivot: list[float] | None = None,
+              kerning_pairs: list[list[float]] | None = None, pivot: list[float] | str | None = None,
               sketch: str | None = None):
     """
     entity: id de la curva de texto (get_sketch).
-    text: texto nuevo ('\\n' separa líneas; {parámetro} muestra su valor).
+    text: texto nuevo ('\\n' separa líneas; {parámetro} muestra su valor); actualiza su parámetro Text si lo tiene.
     x: x nueva del ancla (mm).
     y: y nueva del ancla (mm).
     height: tamaño nuevo de la fuente en mm, o una expresión con parámetros que queda ligada.
@@ -352,13 +378,11 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     decoration_thickness: grosor en mm de las barras (0 = el de la fuente).
     no_wrap: true hace que box_width no parta las líneas.
     kerning_pairs: kerning a mano entre letras: lista de [posición, mm] (reemplaza la anterior; [] la borra).
-    pivot: [x, y] en mm del punto alrededor del cual gira con angle; vacío = el ancla del texto (Fusion: el punto del marco elegido como pivote).
+    pivot: [x, y] en mm o corner:tl, corner:tr, corner:bl, corner:br, corner:center del marco actual; vacío = el ancla del texto.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
-    _exigir_finitos({k: v for k, v in (("x", x), ("y", y), ("height", height), ("angle", angle), ("pivot", pivot))
+    _exigir_finitos({k: v for k, v in (("x", x), ("y", y), ("height", height), ("angle", angle))
                      if v is not None})
-    if pivot is not None and len(pivot) != 2:
-        raise error("INVALID_ARGUMENTS", "pivot es [x, y] en mm.")
     altura, altura_expr = (None, None) if height is None else _altura(sesion, height)
     op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
                          scale_x, scale_y, baseline_shift, case, underline, strikethrough, decoration_thickness,
@@ -367,7 +391,8 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
 
     def cambiar(b):
         t = _texto_de(b, entity)
-        nuevo_texto = t.texto if text is None else str(text).replace("\\n", "\n")
+        pivote = _pivote_texto(b, entity, pivot)
+        nuevo_texto = _contenido_texto(t, sesion.doc.parametros.valores()) if text is None else str(text).replace("\\n", "\n")
         validar_texto_boceto(nuevo_texto, altura)
         _f, _b, _i = (t.fuente if font is None else font), (t.negrita if bold is None else bold), \
             (t.cursiva if italic is None else italic)
@@ -376,11 +401,19 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
         _validar_opciones_texto(op)
         if op.get("camino") is not None:
             b._validar_camino(op["camino"])
-        t.texto, t.fuente, t.negrita, t.cursiva = nuevo_texto, _f, _b, _i
+        if t.parametro_texto:
+            if text is not None:
+                tabla = TablaParametros.desde_lista(sesion.doc.parametros.a_lista())
+                tabla.modificar(t.parametro_texto, nuevo_texto)
+                sesion.doc.aplicar_parametros(tabla)
+                t.texto = nuevo_texto if "{" in nuevo_texto else "{" + t.parametro_texto + "}"
+        else:
+            t.texto = nuevo_texto
+        t.fuente, t.negrita, t.cursiva = _f, _b, _i
         if altura is not None:
             t.altura, t.altura_expr = altura, altura_expr
         if angle is not None and (pivot is not None or t.marco):
-            b.girar_texto(entity, float(angle), pivot)
+            b.girar_texto(entity, float(angle), pivote)
         elif angle is not None:
             t.angulo = float(angle)
         for k, v in op.items():
@@ -418,6 +451,7 @@ def explode_text(sesion, entity: int, sketch: str | None = None):
     """
     def desglosar(b):
         t = _texto_de(b, entity)
+        t.texto = _contenido_texto(t, sesion.doc.parametros.valores())
         if "{" in t.texto:                      # el desglose congela el texto con los valores de ahora
             try:
                 t.texto = texto_con_valores(t.texto, sesion.doc.parametros.valores())

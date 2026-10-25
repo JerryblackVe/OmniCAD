@@ -61,6 +61,7 @@ ACCIONES_BOCETO = [
     ("sk_intersecar", "Intersecar", "intersecar", None, "proyectar"),
     ("sk_incluir_3d", "Incluir geometría 3D", "incluir_3d", None, "proyectar"),
     ("sk_perfil_giratorio", "Perfil giratorio", "perfil_giratorio", None, "proyectar"),
+    ("sk_proyectar_eje", "Proyectar eje", "proyectar_eje", None, "proyectar"),
     ("sk_cota", "Cota de boceto", "cota", "D", "cota"),
     ("sk_empalme", "Empalme", "empalme", None, "empalme"),
     ("sk_chaflan", "Chaflán de distancias iguales", "chaflan", None, "chaflan_boceto"),
@@ -105,10 +106,16 @@ NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.
 # Casillas: herramienta → [(clave, etiqueta)]
 _VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
 CASILLAS_HERRAMIENTA = {"mover": [("copiar", "Copiar")], "proyectar": [_VINCULO], "intersecar": [_VINCULO],
-                        "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO]}
+                        "desfase": [("match_topology", "Match Topology")],
+                        "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO,
+                                              ("contorno_exterior", "Solo contorno exterior"),
+                                              ("proyectar_eje", "Proyectar eje")]}
 # Opciones del texto: viven en el panel «Carácter» (PanelCaracter), no en la paleta de boceto
 ALINEACIONES_TEXTO = [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]
 ANCLAJES_TEXTO = [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"), ("abajo", "Abajo")]
+PIVOTES_TEXTO = [(None, "Ancla del texto"), ("corner:tl", "Esquina: sup-izq"),
+                 ("corner:tr", "Esquina: sup-der"), ("corner:bl", "Esquina: inf-izq"),
+                 ("corner:br", "Esquina: inf-der"), ("corner:center", "Centro")]
 LADOS_TEXTO = [("izq", "Izquierda de la curva"), ("der", "Derecha (al revés)")]
 _FUENTES = []
 
@@ -222,8 +229,15 @@ class PaletaBoceto(QFrame):
         f3 = QFormLayout(self.panel3d)
         f3.setContentsMargins(0, 2, 0, 2)
         self.h3d, self.bloqueo3d = QComboBox(), QComboBox()
-        for clave, texto in (("linea", "Línea"), ("spline", "Spline"), ("punto", "Punto")):
+        for clave, texto in (("linea", "Línea"), ("spline", "Spline"), ("punto", "Punto"),
+                             ("seleccionar", "Seleccionar y arrastrar (ratón)"), ("arco", "Arco (ratón)"),
+                             ("circulo", "Círculo (ratón)"), ("rectangulo", "Rectángulo (ratón)"),
+                             ("elipse", "Elipse (ratón)"), ("conica", "Cónica (ratón)"), ("texto", "Texto (ratón)")):
             self.h3d.addItem(texto, clave)
+        self.texto3d, self.altura3d = QLineEdit("Texto"), QDoubleSpinBox()
+        self.altura3d.setRange(0.1, 1000.0)
+        self.altura3d.setValue(5.0)
+        self.altura3d.setSuffix(" mm")
         for clave, texto in self.BLOQUEOS_3D:
             self.bloqueo3d.addItem(texto, clave)
         self.puntos3d, self.largo3d = QLineEdit(), QLineEdit()
@@ -238,7 +252,17 @@ class PaletaBoceto(QFrame):
         f3.addRow("Tríada", self.bloqueo3d)
         f3.addRow("Puntos", self.puntos3d)
         f3.addRow("Largo", self.largo3d)
+        f3.addRow("Texto", self.texto3d)
+        f3.addRow("Altura", self.altura3d)
+        ayuda = QLabel("Con la casilla activa, el botón izquierdo dibuja en la vista sobre el plano activo de la "
+                       "tríada: clic en un plano lo activa (Alt los recorre), arrastrar un eje la mueve y un asa "
+                       "redonda la gira. Esc corta, Intro termina la spline.")
+        ayuda.setWordWrap(True)
+        ayuda.setStyleSheet("font-size: 8pt;")
+        f3.addRow(ayuda)
         f3.addRow("", b3d)
+        self.b_triada = QPushButton("Restablecer orientación de la tríada")
+        f3.addRow(self.b_triada)
         self.panel3d.setVisible(False)
         c.addWidget(self.panel3d)
         self.estado = QLabel()
@@ -303,7 +327,7 @@ class PaletaBoceto(QFrame):
             self.form_contexto.addRow(etiqueta, sp)
         for clave, etiqueta in CASILLAS_HERRAMIENTA.get(h, []):
             ch = QCheckBox()
-            ch.setChecked(bool(opciones.get(clave)))
+            ch.setChecked(bool(opciones.get(clave, clave == "contorno_exterior")))
             ch.toggled.connect(lambda valor, k=clave: self.ajuste.emit(k, valor))
             self.form_contexto.addRow(etiqueta, ch)
         self.contexto.setVisible(self.form_contexto.rowCount() > 0)
@@ -414,6 +438,17 @@ class PanelCaracter(QFrame):
         c = QVBoxLayout(self.cuerpo)
         c.setContentsMargins(0, 0, 0, 0)
         c.setSpacing(6)
+        self.parametro_texto = QLabel()
+        self.valor_parametro_texto = QLineEdit()
+        self.valor_parametro_texto.setEnabled(False)
+        self.valor_parametro_texto.setToolTip("Contenido del parámetro automático Text ligado a este texto. "
+                                              "Editar lo cambia con set_parameter.")
+        self.valor_parametro_texto.editingFinished.connect(
+            lambda: self.cambio.emit("valor_parametro_texto", self.valor_parametro_texto.text()))
+        parametro = QFormLayout()
+        parametro.addRow("Parámetro de texto", self.parametro_texto)
+        parametro.addRow("Contenido", self.valor_parametro_texto)
+        c.addLayout(parametro)
         # ---- Fuente: familia (filtro + búsqueda), estilo, tamaño y kerning de la fuente
         fila = QHBoxLayout()
         self.filtro = QComboBox()
@@ -513,6 +548,8 @@ class PanelCaracter(QFrame):
         self._cuerpo_de["Decoraciones"].setLayout(f)
         # ---- Transformaciones
         self._seccion(c, "Transformaciones", False)
+        self.pivote = self._combo(PIVOTES_TEXTO, "pivote_texto", "Punto fijo al cambiar el ángulo del texto. "
+                                  "Las esquinas y el centro requieren un marco acotable.")
         self.base = self._spin("desfase_base", -100000.0, 100000.0, 0.5, " mm", "<b>Línea base</b><br>Sube (+) o "
                                "baja (−) todo el texto respecto de su ancla.")
         self.inclinacion = self._spin("inclinacion", -80.0, 80.0, 1.0, " °", "<b>Inclinación</b><br>Sesga las "
@@ -530,6 +567,7 @@ class PanelCaracter(QFrame):
                                           "MAYÚSCULAS, minúsculas, Título o Versalitas.")
         f = QFormLayout()
         f.setContentsMargins(10, 0, 0, 0)
+        f.addRow("Pivote de giro", self.pivote)
         f.addRow("Línea base", self.base)
         f.addRow("Inclinación", self.inclinacion)
         f.addRow("Ancho", self.escala_h)
@@ -681,7 +719,7 @@ class PanelCaracter(QFrame):
         return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.b_voltear_h, self.b_voltear_v, self.subrayado, self.tachado, self.grosor,
                 self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
                 self.alineacion, self.ancla_v, self.camino_lado, self.camino_desfase, self.camino_ajustar, self.altura,
-                self.interletraje, self.interlineado, self.par)
+                self.interletraje, self.interlineado, self.par, self.pivote, self.valor_parametro_texto)
 
     def cargar(self, o):
         """Muestra las opciones `o` (las del Lienzo) sin emitir cambios."""
@@ -689,6 +727,11 @@ class PanelCaracter(QFrame):
         for w in widgets:
             w.blockSignals(True)
         try:
+            self.pivote.setCurrentIndex(max(0, self.pivote.findData(o.get("pivote_texto"))))
+            self.pivote.setEnabled(bool(o.get("marco_texto")))
+            self.parametro_texto.setText(o.get("parametro_texto") or "Sin parámetro ligado")
+            self.valor_parametro_texto.setText(o.get("valor_parametro_texto", "").replace("\n", "\\n"))
+            self.valor_parametro_texto.setEnabled(bool(o.get("parametro_texto")))
             self._poblar_fuentes(o.get("fuente", "Arial"))
             clave = {v: k for k, v in _ESTILO_BC.items()}[(bool(o.get("negrita")), bool(o.get("cursiva")))]
             self.estilo.setCurrentIndex(max(0, self.estilo.findData(clave)))
@@ -733,7 +776,7 @@ class ModoBoceto(QObject):
         self.acciones = {}
         self.grupo = QActionGroup(self)
         for clave, texto, herramienta, atajo, ico in ACCIONES_BOCETO:
-            a = QAction(icono(ico), texto, ventana, checkable=True)
+            a = QAction(icono(ico), texto, ventana, checkable=herramienta != "proyectar_eje")
             ayuda = HERRAMIENTAS.get(herramienta, ("", f"{texto}: hacé clic en la geometría a restringir."))[1]
             visible = (atajo or "").replace("Shift", "Mayúsculas")
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}" + (f"<br><span style='color:#bbbbbb'>{visible}</span>" if atajo else ""))
@@ -795,6 +838,9 @@ class ModoBoceto(QObject):
         area.set_vistas_multiples(False)
         # evaluar se busca en el documento en cada uso: "Cambiar parámetros" puede reemplazar la tabla
         self.lienzo = Lienzo(self.boceto, lambda *a: v.doc.parametros.evaluar(*a), area, visor=visor, plano=plano)
+        self.lienzo.estado_referencias = lambda: v.doc.estado_final
+        self.lienzo.valores_parametros = lambda: v.doc.parametros.valores()
+        self.lienzo.editar_parametro_texto = self._editar_parametro_texto
         self.lienzo.perdidas = list(getattr((datos or {}).get("op"), "perdidas", []))
         self.lienzo.mensaje.connect(lambda t: v.mensaje(t, 7000))
         self.lienzo.cambio.connect(self._cambio)
@@ -813,6 +859,10 @@ class ModoBoceto(QObject):
         self.paleta.eje.connect(self._eje)
         self.paleta.ajuste.connect(self._ajuste)
         self.paleta.dibujar3d.connect(self._dibujar3d)
+        from .triada3d import Interaccion3D
+        self.interaccion3d = Interaccion3D(self)        # tríada y ratón del Boceto 3D (filtra eventos del lienzo)
+        self.lienzo.installEventFilter(self.interaccion3d)
+        self.paleta.b_triada.clicked.connect(self.interaccion3d.reiniciar)
         self.paleta.checks["boceto3d"].setChecked(any(self.boceto.geo3d.values()))
         self.caracter = PanelCaracter(area)         # fuente, decoraciones y transformación del texto
         self.caracter.cambio.connect(self._ajuste)
@@ -906,6 +956,8 @@ class ModoBoceto(QObject):
             w.deleteLater()
         self.lienzo = self.paleta = self.caracter = None
         self.v.visor.set_capa("boceto3d", None)
+        self.v.visor.set_capa("triada3d", None)
+        self.interaccion3d = None
         self.v.visor.set_plano_boceto(None)
         self.v.cinta.ocultar_contextual("BOCETO")
         self.v.info_seleccion("")
@@ -920,7 +972,11 @@ class ModoBoceto(QObject):
     def herramienta(self, h):
         if not self.activo:
             return
-        self.lienzo.set_herramienta(h)
+        if h == "proyectar_eje":
+            self.lienzo.confirmar_texto_pendiente()
+            self.lienzo.proyectar_eje()
+        else:
+            self.lienzo.set_herramienta(h)
         self.lienzo.setFocus()
 
     def _sincronizar_herramienta(self, h):
@@ -942,10 +998,26 @@ class ModoBoceto(QObject):
 
     def _opciones_de_texto(self):
         """Doble clic sobre un texto: la paleta muestra sus opciones aunque la herramienta activa sea otra."""
+        lz = self.lienzo
+        nombre = lz.opciones.get("parametro_texto")
+        if nombre and nombre in self.v.doc.parametros:
+            valor = self.v.doc.parametros.obtener(nombre).expresion
+            lz.opciones["valor_parametro_texto"] = valor
+            lz.entrada.campos[0].setText(valor.replace("\n", "\\n"))
         if self.paleta is not None:
             self.paleta.set_herramienta("texto", self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
             self._mostrar_caracter(True)
             self.v.area.reubicar()
+
+    def _editar_parametro_texto(self, nombre, valor):
+        from .. import api
+        from ..restricciones import ErrorBoceto
+        if nombre in self.v.doc.parametros and self.v.doc.parametros.obtener(nombre).expresion == valor:
+            return
+        r = api.llamar(api.Sesion(self.v.doc), "set_parameter", {"name": nombre, "expression": valor})
+        if not r["ok"]:
+            raise ErrorBoceto(r["error"])
+        self.lienzo.opciones["valor_parametro_texto"] = valor
 
     def _tipo_de_linea(self):
         self.paleta.b_construccion.setChecked(self.lienzo.construccion)
@@ -975,7 +1047,22 @@ class ModoBoceto(QObject):
 
     def _ajuste(self, clave, valor):
         if self.activo:
-            if clave in ("altura_texto", "espaciado", "interlineado"):
+            if clave == "valor_parametro_texto":
+                from ..restricciones import ErrorBoceto
+                nombre = self.lienzo.opciones.get("parametro_texto")
+                if not nombre:
+                    return
+                try:
+                    self._editar_parametro_texto(nombre, valor.replace("\\n", "\n"))
+                except ErrorBoceto as e:
+                    self.v.mensaje(str(e), 7000)
+                    self.caracter.valor_parametro_texto.setText(
+                        self.lienzo.opciones["valor_parametro_texto"].replace("\n", "\\n"))
+                    return
+                if self.lienzo.entrada is not None and self.lienzo._previa_texto is not None:
+                    self.lienzo.entrada.campos[0].setText(valor)
+                self.lienzo.update()
+            elif clave in ("altura_texto", "espaciado", "interlineado"):
                 self.lienzo.aplicar_opcion_texto(clave, valor)       # van también a la barra del texto abierto
             elif clave == "kerning_par":
                 self.lienzo.ajustar_kerning_par(valor)               # entre las dos letras del cursor
@@ -997,6 +1084,7 @@ class ModoBoceto(QObject):
             lz.mostrar[clave] = valor
         elif clave == "boceto3d":
             self.paleta.panel3d.setVisible(valor)
+            self.interaccion3d.activar(valor)
             self.paleta.ajustar()
             self.v.area.reubicar()
             self._capa3d()

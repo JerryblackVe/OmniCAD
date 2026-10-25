@@ -30,7 +30,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - OCP: los métodos estáticos llevan sufijo `_s` (p. ej. `BRepGProp.VolumeProperties_s`).
 - Para replicar un comando de otro programa, mirá su documentación pública y el análisis de
   `analisis auto/`, y replicá sus opciones y su comportamiento. **Para Fusion 360, la fuente principal es
-  `docs/fusion_docs/` (documentación oficial completa con imágenes; ver `CLAUDE.md`)**: leé el artículo antes de
+  `docs/fusion_docs/` (documentación oficial completa con imágenes; cómo buscar y en qué carpeta está cada pestaña: `CLAUDE.md` y `scripts/fusion_docs.py buscar`)**: leé el artículo antes de
   corregir un bug o agregar un faltante.
 
 ## Seguridad
@@ -65,7 +65,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `docs/` | Índice de todo en `docs/README.md`. Estado (bugs, faltantes, mejoras) en `docs/seguimiento/`; especificación de faltantes en `brechas_*.md`; planes `plan_*.md`; `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`). Al lado, `omnicad-test/`: probar el programa y anotar los hallazgos (no la instala `setup`) |
-| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno) |
+| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno); `fusion_docs.py` (buscar en la ayuda de Fusion); `prueba_ui/` (prueba de la ventana como usuario, ver CLAUDE.md) |
 | `PROJECT_LOG.md` | Bitácora (Registro) y "Lecciones aprendidas" |
 
 **`nucleo/`, `timeline/`, `restricciones/` e `io_archivos/` NO importan Qt** (comprobado: cero

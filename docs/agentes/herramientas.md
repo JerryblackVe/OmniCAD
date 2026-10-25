@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-315 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+324 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 43 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 52 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 61 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 69 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -565,14 +565,14 @@ Lista los parámetros de usuario y de cotas: expresión, valor calculado, unidad
 
 ### `create_parameter`
 
-Crea un parámetro de usuario. Con kind=auto la magnitud sale de la expresión: con unidad de ángulo (deg, rad, °) es un ángulo; si no, una longitud en mm. kind=scalar crea un parámetro sin unidad (cantidades de un patrón, factores).
+Crea un parámetro de usuario. Con kind=auto la magnitud sale de la expresión: con unidad de ángulo (deg, rad, °) es un ángulo; si no, una longitud en mm. kind=scalar crea un parámetro sin unidad (cantidades de un patrón, factores); kind=text guarda texto literal.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `name` (texto; obligatorio): nombre del parámetro (letras, números y '_', sin empezar con número), p. ej. "ancho".
-  - `expression` (número o expresión; obligatorio): valor: número (mm) o expresión con unidades y otros parámetros, p. ej. "60 mm", "ancho / 2", "30 deg".
+  - `expression` (texto o entero o número; obligatorio): valor: número (mm) o expresión con unidades y otros parámetros, p. ej. "60 mm", "ancho / 2", "30 deg"; con kind=text es una cadena literal, incluidas comillas y saltos de línea.
   - `comment` (texto; opcional, por defecto `""`): comentario opcional que se ve en la tabla de parámetros.
-  - `kind` ("auto" | "length" | "angle" | "scalar"; opcional, por defecto `"auto"`): "auto" (por defecto: longitud o ángulo según la expresión), "length", "angle" o "scalar" (sin unidad: un número puro, p. ej. la cantidad de copias de un patrón).
+  - `kind` ("auto" | "length" | "angle" | "scalar" | "text"; opcional, por defecto `"auto"`): auto (longitud o ángulo según la expresión), length, angle, scalar (número sin unidad) o text (texto literal; no se puede usar en expresiones numéricas).
 - CLI: `omnicad call create_parameter --doc pieza.omnicad name=… expression=…`
 
 ### `set_parameter`
@@ -582,7 +582,7 @@ Cambia la expresión, el comentario o el nombre de un parámetro existente y rec
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `name` (texto; obligatorio): nombre exacto del parámetro.
-  - `expression` (número o expresión; opcional, por defecto `null`): valor nuevo: número (en la unidad del parámetro) o expresión, p. ej. "80 mm" o "ancho * 2"; vacío = no cambia.
+  - `expression` (texto o entero o número; opcional, por defecto `null`): valor nuevo: número o expresión, p. ej. "80 mm" o "ancho * 2"; para parámetros text, cadena literal ("" la vacía); null = no cambia.
   - `comment` (texto; opcional, por defecto `null`): comentario nuevo ("" lo borra); vacío = no cambia.
   - `new_name` (texto; opcional, por defecto `null`): nombre nuevo (letras, números y '_'); falla si algún paso u otro parámetro usa el nombre actual, porque quedarían apuntando a un parámetro que ya no existe; vacío = no cambia.
 - CLI: `omnicad call set_parameter --doc pieza.omnicad name=…`
@@ -634,7 +634,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`add_constraint`](#add_constraint) | sí | Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
 | [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. |
-| [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Todas aceptan id (nombre propio para citarla), construction y centerline (mutuamente excluyentes; texto no admite centerline, los puntos sueltos no tienen tipo de línea). |
+| [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Boceto 3D (como draw_*_3d, coordenadas [x, y, z]): line_3d{start,end}, spline_3d{points,closed?}, point_3d{at}, arc_3d{start,through,end}, circle_3d{center,radius,normal?}, ellipse_3d{center,major_end,minor_radius,normal?}, rectangle_3d{corner,opposite,plane?} (citas 'id.l1..l4'), conic_3d{start,shoulder,end,rho?}, text_3d{text,origin,height?,plane?,font?}; normal vacía = [0, 0, 1], plane = xy, yz o zx (por defecto xy). |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
 | [`draw_point`](#draw_point) | sí | Agrega un punto suelto al boceto (Fusion: Punto): sirve de referencia para cotas, restricciones, agujeros o el centro de un patrón circular. |
@@ -667,9 +667,18 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_line_3d`](#draw_line_3d) | sí | Boceto 3D: dibuja una línea en el espacio (Fusion: 3D Sketch › Línea). |
 | [`draw_spline_3d`](#draw_spline_3d) | sí | Boceto 3D: spline de ajuste en el espacio que pasa por points (Fusion: 3D Sketch › Spline), en coordenadas del boceto (x, y sobre el plano, z sobre la normal). |
 | [`draw_point_3d`](#draw_point_3d) | sí | Boceto 3D: punto suelto en el espacio (Fusion: 3D Sketch › Punto), en coordenadas del boceto. |
-| [`add_constraint_3d`](#add_constraint_3d) | sí | Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, perpendicular y equal (dos líneas), tangent (línea + spline que empieza o termina en un extremo de la línea), midpoint (punto + línea) y fix (fija los puntos de las entidades). |
-| [`add_dimension_3d`](#add_dimension_3d) | sí | Boceto 3D: cota de distancia en el espacio: el largo de una línea (un id) o la distancia entre dos puntos 3D. value en mm, número o expresión con parámetros (sigue al parámetro al recalcular). |
+| [`add_constraint_3d`](#add_constraint_3d) | sí | Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, perpendicular, equal y collinear (dos líneas), tangent (línea o spline + spline que empieza o termina en un extremo de la otra; entre dos splines deja continuidad G1), midpoint (punto + línea), concentric (dos arcos, círculos o elipses: mismo centro) y fix (fija los puntos de las entidades). |
+| [`add_dimension_3d`](#add_dimension_3d) | sí | Boceto 3D: cota en el espacio. type=distance: el largo de una línea (un id) o la distancia entre dos puntos 3D, en mm. type=angle: el ángulo entre dos líneas 3D, en grados (0 < ángulo < 180). value: número o expresión con parámetros (sigue al parámetro al recalcular). |
 | [`delete_sketch_entities_3d`](#delete_sketch_entities_3d) | sí | Boceto 3D: borra entidades, restricciones o cotas 3D por id. |
+| [`draw_arc_3d`](#draw_arc_3d) | sí | Boceto 3D: arco de 3 puntos en el espacio (Fusion: 3D Sketch › Arco): va de start a end pasando por through, en coordenadas del boceto. |
+| [`draw_circle_3d`](#draw_circle_3d) | sí | Boceto 3D: círculo de centro y radio en el plano perpendicular a normal (Fusion: 3D Sketch › Círculo; normal = la del plano de la tríada), en coordenadas del boceto. |
+| [`draw_ellipse_3d`](#draw_ellipse_3d) | sí | Boceto 3D: elipse de centro, extremo del eje mayor y radio menor en el plano perpendicular a normal (Fusion: 3D Sketch › Elipse). major_end se proyecta a ese plano. |
+| [`draw_rectangle_3d`](#draw_rectangle_3d) | sí | Boceto 3D: rectángulo de 2 puntos (Fusion: 3D Sketch › Rectángulo) en el plano de la tríada xy, yz o zx que pasa por corner; opposite se proyecta a ese plano. |
+| [`draw_conic_3d`](#draw_conic_3d) | sí | Boceto 3D: curva cónica (Fusion: 3D Sketch › Curva cónica): de start a end, con shoulder como vértice (cruce de las tangentes de los extremos) y rho (0 < rho < 1: menos de 0,5 elipse, 0,5 parábola, más hipérbola). |
+| [`draw_text_3d`](#draw_text_3d) | sí | Boceto 3D: texto de una línea en el plano de la tríada (Fusion: 3D Sketch › Texto): la base empieza en origin; en xy corre por x y sube por y, en yz por y y z, en zx por x y z. |
+| [`transform_sketch_3d`](#transform_sketch_3d) | sí | Boceto 3D: mover, rotar, escalar o copiar entidades 3D (Fusion: Mover/copiar y Escalar sobre el boceto 3D). |
+| [`intersect_curves`](#intersect_curves) | sí | Boceto 3D: Intersection Curve de Fusion. |
+| [`project_to_surface`](#project_to_surface) | sí | Boceto 3D: Project To Surface de Fusion: proyecta curvas de boceto sobre caras. mode=closest (Closest Point): cada punto de la curva va al punto más cercano de las caras (spline por 49 puntos); mode=vector (Along Vector): proyecta a lo largo de direction (vector [x, y, z] del mundo o un eje: 'X', 'Y', 'Z', id de un eje o una arista recta), hacia donde apunta. |
 | [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
 | [`set_circle_radius`](#set_circle_radius) | sí | Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. |
 | [`extend_sketch_curve`](#extend_sketch_curve) | sí | Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. |
@@ -786,7 +795,7 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sides` (entero; obligatorio): cantidad de lados (3 a 64).
+  - `sides` (entero; obligatorio): cantidad de lados (3 a 64; tope propio igual al de la interfaz: la ayuda de Fusion no publica un máximo).
   - `radius` (número o expresión; opcional, por defecto `null`): radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2"). No se usa con kind=edge.
   - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm).
   - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
@@ -855,7 +864,7 @@ Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenad
 
 ### `sketch_from_spec`
 
-Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 | center,width,height | origin,width,height}, circle{center,radius}, arc{center,start,sweep | start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Todas aceptan id (nombre propio para citarla), construction y centerline (mutuamente excluyentes; texto no admite centerline, los puntos sueltos no tienen tipo de línea). Las coordenadas son [x, y] en mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value, reference?}] (value puede ser una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', 'id.center', en un rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas), en un polígono 'id.side1..', 'id.v1..' y 'id.circle', en una elipse 'id.major' y 'id.major_axis/minor_axis', en una ranura 'id.side1/side2/end1/end2/axis/center1/center2'; un entero cita un id de entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano). Sin entities crea un boceto vacío y devuelve un aviso. reference=true mide sin restringir.
+Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 | center,width,height | origin,width,height}, circle{center,radius}, arc{center,start,sweep | start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Boceto 3D (como draw_*_3d, coordenadas [x, y, z]): line_3d{start,end}, spline_3d{points,closed?}, point_3d{at}, arc_3d{start,through,end}, circle_3d{center,radius,normal?}, ellipse_3d{center,major_end,minor_radius,normal?}, rectangle_3d{corner,opposite,plane?} (citas 'id.l1..l4'), conic_3d{start,shoulder,end,rho?}, text_3d{text,origin,height?,plane?,font?}; normal vacía = [0, 0, 1], plane = xy, yz o zx (por defecto xy). Todas aceptan id (nombre propio para citarla), construction y centerline (mutuamente excluyentes; texto no admite centerline, los puntos sueltos no tienen tipo de línea). Las coordenadas son [x, y] en mm del plano. constraints: [{type, entities:[citas]}]; dimensions: [{type, entities:[citas], value, reference?}] (value puede ser una expresión con parámetros). Citas: 'id' (la curva), 'id.start', 'id.end', 'id.center', en un rectángulo 'id.bottom/right/top/left' (líneas) y 'id.c1..c4' (esquinas), en un polígono 'id.side1..', 'id.v1..' y 'id.circle', en una elipse 'id.major' y 'id.major_axis/minor_axis', en una ranura 'id.side1/side2/end1/end2/axis/center1/center2'; un entero cita un id de entidad ya existente. Sin id, la entidad se cita 'e0', 'e1'… según su posición en la lista. plane es un plano o una cara plana (selector '>Z' o id de find_faces), con los mismos ejes que create_sketch sobre esa cara (find_faces da center_uv); con varios cuerpos, body dice en cuál se evalúa el selector. Devuelve handles (cita → id real), perfiles, estado y plane_frame (origen y ejes del plano). Sin entities crea un boceto vacío y devuelve un aviso. reference=true mide sin restringir.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1000,7 +1009,7 @@ Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Pa
 
 ### `offset_sketch_curves`
 
-Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un punto. direction=two desfasa distance a un lado y distance2 al otro; direction=symmetric, distance a los dos lados. Una spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): offset_profiles.
+Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un punto. direction=two desfasa distance a un lado y distance2 al otro; direction=symmetric, distance a los dos lados. match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. Una spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): offset_profiles.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1011,6 +1020,7 @@ Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y ar
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `direction` ("one" | "two" | "symmetric"; opcional, por defecto `"one"`): one (un lado), two (distance a un lado y distance2 al contrario) o symmetric (distance a los dos lados).
   - `distance2` (número o expresión; opcional, por defecto `null`): separación del segundo lado con direction=two (obligatoria en ese caso).
+  - `match_topology` (true/false; opcional, por defecto `false`): true = si la distancia haría desaparecer un segmento (o anular un radio), se usa la mayor que conserva la topología, como número fijo, y se avisa.
 - CLI: `omnicad call offset_sketch_curves --doc pieza.omnicad entity=… distance=…`
 
 ### `release_offset`
@@ -1080,7 +1090,7 @@ Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respe
 
 ### `sketch_rectangular_pattern`
 
-Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › patterns); después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un rectángulo tiene 4), para que el boceto no se vuelva lento.
+Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › patterns); después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un rectángulo tiene 4) y 200 copias, para que el boceto no se vuelva lento: tope propio, la ayuda de Fusion no publica un máximo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1101,7 +1111,7 @@ Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias
 
 ### `sketch_circular_pattern`
 
-Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un círculo tiene 1).
+Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un círculo tiene 1) y 200 copias: tope propio, la ayuda de Fusion no publica un máximo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1118,7 +1128,7 @@ Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de cu
 
 ### `edit_sketch_pattern`
 
-Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón): cantidades, distancias, direcciones, simetría y copias suprimidas. Borra las copias y las regenera, así que las cotas puestas sobre las copias se pierden. pattern es el id que devolvió la herramienta que lo creó (o get_sketch › patterns). Los parámetros count1, distance1, count2, distance2, angle, angle2, spacing, direction1_line y direction2_line son de un patrón rectangular; count y total_angle, de uno circular. suppress reemplaza la lista de copias suprimidas ([] = ninguna).
+Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón): cantidades, distancias, direcciones, simetría y copias suprimidas. Regenera las copias: las restricciones y cotas puestas sobre una copia pasan a la copia nueva del mismo índice; las de copias que ya no existen se borran y se listan en lost_references (con aviso). pattern es el id que devolvió la herramienta que lo creó (o get_sketch › patterns). Los parámetros count1, distance1, count2, distance2, angle, angle2, spacing, direction1_line y direction2_line son de un patrón rectangular; count y total_angle, de uno circular. suppress reemplaza la lista de copias suprimidas ([] = ninguna).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1141,7 +1151,7 @@ Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón)
 
 ### `project_to_sketch`
 
-Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: break_projection_link. Un eje o la traza de un plano se dibujan como línea de ±100 mm. edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).
+Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: break_projection_link. Un eje o la traza de un plano (infinitos) se dibujan como una línea que llega al 110 % de lo más lejano entre el modelo y la geometría del boceto, y crece con el boceto al recalcular (±100 mm si no hay nada alrededor). edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1159,7 +1169,7 @@ Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y p
 
 ### `project_spun_profile`
 
-Proyecta el perfil giratorio de la geometría (Fusion: Proyectar › Spun Profile): gira aristas, caras, cuerpos o vértices alrededor de un eje y deja su perfil sobre el plano del boceto, para referenciarlo en el boceto o en operaciones de revolución y torneado. El eje se proyecta en el plano; cada punto va a su posición a lo largo del eje y su distancia a él (hacia +u del boceto, o al otro lado con flip). Las curvas se aproximan con segmentos a tolerance mm. Con link=true (por defecto) sigue al modelo, igual que project_to_sketch (break_projection_link, manage_lost_projections). Limitación: gira todas las aristas, sin quitar las que quedan dentro del cuerpo.
+Proyecta el perfil giratorio de la geometría (Fusion: Proyectar › Spun Profile): gira aristas, caras, cuerpos o vértices alrededor de un eje y deja su perfil sobre el plano del boceto, para referenciarlo en el boceto o en operaciones de revolución y torneado. El eje se proyecta en el plano; cada punto va a su posición a lo largo del eje y su distancia a él (hacia +u del boceto, o al otro lado con flip). Las curvas se aproximan con segmentos a tolerance mm. Por defecto queda solo el contorno exterior (la silueta de radio máximo y los frentes de sus extremos, sin las aristas que caen dentro); outer_contour=false gira todas las aristas. project_axis=true (Fusion: Project Axis) proyecta también el eje como línea, con vínculo (axis_projection). Con link=true (por defecto) sigue al modelo, igual que project_to_sketch (break_projection_link, manage_lost_projections, incluido relink).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1174,6 +1184,8 @@ Proyecta el perfil giratorio de la geometría (Fusion: Proyectar › Spun Profil
   - `construction` (true/false; opcional, por defecto `false`): true = el perfil queda como líneas de construcción.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `outer_contour` (true/false; opcional, por defecto `true`): true = solo el contorno exterior; false = todas las aristas giradas, también las internas.
+  - `project_axis` (true/false; opcional, por defecto `false`): true = proyecta también el eje de giro al boceto (otra proyección, con el mismo link).
 - CLI: `omnicad call project_spun_profile --doc pieza.omnicad axis=…`
 
 ### `break_projection_link`
@@ -1346,11 +1358,11 @@ Boceto 3D: punto suelto en el espacio (Fusion: 3D Sketch › Punto), en coordena
 
 ### `add_constraint_3d`
 
-Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, perpendicular y equal (dos líneas), tangent (línea + spline que empieza o termina en un extremo de la línea), midpoint (punto + línea) y fix (fija los puntos de las entidades).
+Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, perpendicular, equal y collinear (dos líneas), tangent (línea o spline + spline que empieza o termina en un extremo de la otra; entre dos splines deja continuidad G1), midpoint (punto + línea), concentric (dos arcos, círculos o elipses: mismo centro) y fix (fija los puntos de las entidades). Son las de Fusion en 3D; las demás (simetría, curvatura, horizontal/vertical del plano) Fusion no las ofrece en 3D.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `type` ("coincident" | "axis" | "parallel" | "perpendicular" | "tangent" | "equal" | "midpoint" | "fix"; obligatorio): tipo de restricción (ver la descripción).
+  - `type` ("coincident" | "axis" | "parallel" | "perpendicular" | "tangent" | "equal" | "midpoint" | "fix" | "concentric" | "collinear"; obligatorio): tipo de restricción (ver la descripción).
   - `entities` (lista de entero; obligatorio): ids de las entidades 3D, en cualquier orden.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `axis` ("x" | "y" | "z" o null; opcional, por defecto `null`): con type=axis, el eje con el que se alinea la línea: x, y o z.
@@ -1358,13 +1370,14 @@ Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident
 
 ### `add_dimension_3d`
 
-Boceto 3D: cota de distancia en el espacio: el largo de una línea (un id) o la distancia entre dos puntos 3D. value en mm, número o expresión con parámetros (sigue al parámetro al recalcular).
+Boceto 3D: cota en el espacio. type=distance: el largo de una línea (un id) o la distancia entre dos puntos 3D, en mm. type=angle: el ángulo entre dos líneas 3D, en grados (0 < ángulo < 180). value: número o expresión con parámetros (sigue al parámetro al recalcular).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `entities` (lista de entero; obligatorio): [id de una línea 3D] o [id de punto, id de punto].
-  - `value` (número o expresión; obligatorio): medida en mm (número o expresión con parámetros, p. ej. "largo / 2").
+  - `entities` (lista de entero; obligatorio): [id de una línea 3D] o [id de punto, id de punto]; con type=angle, [id de línea, id de línea].
+  - `value` (número o expresión; obligatorio): medida en mm (o en grados con type=angle): número o expresión con parámetros, p. ej. "largo / 2" o "30 deg".
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `type` ("distance" | "angle"; opcional, por defecto `"distance"`): distance (distancia o largo) o angle (ángulo entre dos líneas).
 - CLI: `omnicad call add_dimension_3d --doc pieza.omnicad entities=… value=…`
 
 ### `delete_sketch_entities_3d`
@@ -1376,6 +1389,133 @@ Boceto 3D: borra entidades, restricciones o cotas 3D por id. Con una curva se bo
   - `entities` (lista de entero; obligatorio): ids 3D a borrar (de get_sketch: entities_3d, points_3d, constraints_3d o dimensions_3d).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call delete_sketch_entities_3d --doc pieza.omnicad entities=…`
+
+### `draw_arc_3d`
+
+Boceto 3D: arco de 3 puntos en el espacio (Fusion: 3D Sketch › Arco): va de start a end pasando por through, en coordenadas del boceto. Sus extremos se encadenan con los puntos 3D que ya estén ahí.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `start` (lista de número; obligatorio): punto inicial [x, y, z] en mm.
+  - `through` (lista de número; obligatorio): un punto del arco entre start y end [x, y, z].
+  - `end` (lista de número; obligatorio): punto final [x, y, z].
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true para un arco de construcción.
+- CLI: `omnicad call draw_arc_3d --doc pieza.omnicad start=… through=… end=…`
+
+### `draw_circle_3d`
+
+Boceto 3D: círculo de centro y radio en el plano perpendicular a normal (Fusion: 3D Sketch › Círculo; normal = la del plano de la tríada), en coordenadas del boceto.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `center` (lista de número; obligatorio): centro [x, y, z] en mm.
+  - `radius` (número; obligatorio): radio en mm (mayor que 0).
+  - `normal` (lista de número o null; opcional, por defecto `null`): normal del plano del círculo [x, y, z]; vacío = [0, 0, 1] (el plano del boceto).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true para un círculo de construcción.
+- CLI: `omnicad call draw_circle_3d --doc pieza.omnicad center=… radius=…`
+
+### `draw_ellipse_3d`
+
+Boceto 3D: elipse de centro, extremo del eje mayor y radio menor en el plano perpendicular a normal (Fusion: 3D Sketch › Elipse). major_end se proyecta a ese plano.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `center` (lista de número; obligatorio): centro [x, y, z] en mm.
+  - `major_end` (lista de número; obligatorio): extremo del eje mayor [x, y, z] (fija su dirección y el semieje mayor).
+  - `minor_radius` (número; obligatorio): semieje menor en mm (mayor que 0).
+  - `normal` (lista de número o null; opcional, por defecto `null`): normal del plano de la elipse [x, y, z]; vacío = [0, 0, 1].
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true para una elipse de construcción.
+- CLI: `omnicad call draw_ellipse_3d --doc pieza.omnicad center=… major_end=… minor_radius=…`
+
+### `draw_rectangle_3d`
+
+Boceto 3D: rectángulo de 2 puntos (Fusion: 3D Sketch › Rectángulo) en el plano de la tríada xy, yz o zx que pasa por corner; opposite se proyecta a ese plano. Deja cuatro líneas encadenadas con perpendicular y paralelas (sigue siendo rectángulo al acotarlo).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `corner` (lista de número; obligatorio): esquina [x, y, z] en mm.
+  - `opposite` (lista de número; obligatorio): esquina opuesta [x, y, z] (se proyecta al plano).
+  - `plane` ("xy" | "yz" | "zx"; opcional, por defecto `"xy"`): plano de la tríada por corner: xy, yz o zx.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true para líneas de construcción.
+- CLI: `omnicad call draw_rectangle_3d --doc pieza.omnicad corner=… opposite=…`
+
+### `draw_conic_3d`
+
+Boceto 3D: curva cónica (Fusion: 3D Sketch › Curva cónica): de start a end, con shoulder como vértice (cruce de las tangentes de los extremos) y rho (0 < rho < 1: menos de 0,5 elipse, 0,5 parábola, más hipérbola).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `start` (lista de número; obligatorio): extremo inicial [x, y, z] en mm.
+  - `shoulder` (lista de número; obligatorio): vértice de control [x, y, z] (donde se cruzan las tangentes de los extremos).
+  - `end` (lista de número; obligatorio): extremo final [x, y, z].
+  - `rho` (número; opcional, por defecto `0.5`): forma de la cónica, entre 0 y 1 sin incluirlos.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true para una cónica de construcción.
+- CLI: `omnicad call draw_conic_3d --doc pieza.omnicad start=… shoulder=… end=…`
+
+### `draw_text_3d`
+
+Boceto 3D: texto de una línea en el plano de la tríada (Fusion: 3D Sketch › Texto): la base empieza en origin; en xy corre por x y sube por y, en yz por y y z, en zx por x y z.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `text` (texto; obligatorio): el texto.
+  - `origin` (lista de número; obligatorio): inicio de la línea base [x, y, z] en mm.
+  - `height` (número; opcional, por defecto `5.0`): altura del texto en mm (mayor que 0).
+  - `plane` ("xy" | "yz" | "zx"; opcional, por defecto `"xy"`): plano de la tríada donde queda el texto: xy, yz o zx.
+  - `font` (texto; opcional, por defecto `"Arial"`): fuente instalada (list_fonts la lista).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call draw_text_3d --doc pieza.omnicad text=… origin=…`
+
+### `transform_sketch_3d`
+
+Boceto 3D: mover, rotar, escalar o copiar entidades 3D (Fusion: Mover/copiar y Escalar sobre el boceto 3D). Cada punto p va a center + scale·R·(p − center) + translation, con R el giro de rotation_angle grados alrededor de rotation_axis. Con copy deja el original y devuelve las copias. Las restricciones siguen: si el movimiento las contradice, el paso queda en conflicto (SKETCH_OVERCONSTRAINED).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `entities` (lista de entero; obligatorio): ids de curvas o puntos 3D.
+  - `translation` (lista de número o null; opcional, por defecto `null`): desplazamiento [x, y, z] en mm; vacío = sin mover.
+  - `rotation_axis` (lista de número o null; opcional, por defecto `null`): eje del giro [x, y, z]; vacío = [0, 0, 1].
+  - `rotation_angle` (número; opcional, por defecto `0.0`): giro en grados alrededor de rotation_axis, por center.
+  - `scale` (número; opcional, por defecto `1.0`): factor de escala uniforme (mayor que 0), desde center.
+  - `center` (lista de número o null; opcional, por defecto `null`): centro del giro y de la escala [x, y, z]; vacío = el origen del boceto.
+  - `copy` (true/false; opcional, por defecto `false`): true copia las entidades (el original queda).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call transform_sketch_3d --doc pieza.omnicad entities=…`
+
+### `intersect_curves`
+
+Boceto 3D: Intersection Curve de Fusion. Con curves: cada curva de boceto se extruye a lo largo de la normal de su boceto y se corta con las caras, cuerpos o planos elegidos; sin curves: las curvas donde se cortan entre sí las caras, cuerpos y planos elegidos (al menos dos). El resultado queda como curvas 3D del boceto (líneas, arcos, círculos y elipses exactos; lo demás, spline por 33 puntos). Si el modelo cambia, se recalculan (source anota de dónde salió); si la referencia se pierde, quedan congeladas con aviso.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (lista de texto o texto o null; opcional, por defecto `null`): caras a cortar: selector ('%CYLINDER') o ids de find_faces.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos enteros.
+  - `references` (lista de texto o objeto o null; opcional, por defecto `null`): planos de construcción o de origen ("XY", id o nombre).
+  - `curves` (lista de entero o objeto o null; opcional, por defecto `null`): curvas de boceto a extruir y cortar: id de una curva del boceto activo o {"sketch": …, "curve": id}.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces; vacío = el único cuerpo.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto 3D donde quedan las curvas; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true deja las curvas como construcción.
+- CLI: `omnicad call intersect_curves --doc pieza.omnicad`
+
+### `project_to_surface`
+
+Boceto 3D: Project To Surface de Fusion: proyecta curvas de boceto sobre caras. mode=closest (Closest Point): cada punto de la curva va al punto más cercano de las caras (spline por 49 puntos); mode=vector (Along Vector): proyecta a lo largo de direction (vector [x, y, z] del mundo o un eje: 'X', 'Y', 'Z', id de un eje o una arista recta), hacia donde apunta. El resultado queda como curvas 3D del boceto; si el modelo cambia, se recalculan (source anota de dónde salió); si la referencia se pierde, quedan congeladas con aviso.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `faces` (lista de texto o texto; obligatorio): caras donde proyectar: selector ('>Z') o ids de find_faces.
+  - `curves` (lista de entero o objeto; obligatorio): curvas a proyectar: id de una curva del boceto activo (2D o 3D) o {"sketch": …, "curve": id}.
+  - `mode` ("closest" | "vector"; opcional, por defecto `"closest"`): closest (punto más cercano) o vector (a lo largo de direction).
+  - `direction` (lista de número o texto o null; opcional, por defecto `null`): con mode=vector, la dirección: [x, y, z] del mundo o un eje ('X', 'Y', 'Z', id de eje o arista recta).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces; vacío = el único cuerpo.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto 3D donde quedan las curvas; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true deja las curvas como construcción.
+- CLI: `omnicad call project_to_surface --doc pieza.omnicad faces=… curves=…`
 
 ### `draw_spiral`
 
@@ -1442,7 +1582,7 @@ Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.
 | Herramienta | Modifica | Resumen |
 |---|---|---|
 | [`list_fonts`](#list_fonts) | no | Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. |
-| [`add_font_folder`](#add_font_folder) | no | Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesión. |
+| [`add_font_folder`](#add_font_folder) | no | Suma una carpeta de fuentes (.ttf, .otf, .ttc y las de una línea .shx de AutoCAD) a las que ve OmniCAD en esta sesión. |
 | [`add_text`](#add_text) | sí | Escribe un texto en el boceto (un paso de deshacer). |
 | [`edit_text`](#edit_text) | sí | Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa queda como estaba. |
 | [`explode_text`](#explode_text) | sí | Desglosa un texto del boceto (Fusion: Explode Text): el texto pasa a ser líneas y splines fijas, que se pueden editar curva por curva. |
@@ -1461,7 +1601,7 @@ Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.
 
 ### `list_fonts`
 
-Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf. Las de un trazo (single_line, nombre terminado en SHX, como en Fusion) van primero: sus letras son líneas abiertas para grabar o marcar, no forman perfiles.
+Lista las fuentes que puede usar el texto de boceto: todas las instaladas (sistema, usuario y carpetas sumadas con add_font_folder), TrueType, OpenType, colecciones y variables. Usá el nombre de la familia en add_text(font=...); font también acepta la ruta a un .ttf/.otf. Las de un trazo (single_line, nombre terminado en SHX, como en Fusion) van primero: sus letras son líneas abiertas para grabar o marcar, no forman perfiles; hay tres propias (Trazo, Cursiva, Extendida) y las .shx de usuario.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1472,7 +1612,7 @@ Lista las fuentes que puede usar el texto de boceto: todas las instaladas (siste
 
 ### `add_font_folder`
 
-Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesión. Para que quede fija, definí la variable de entorno OMNICAD_FUENTES con la carpeta.
+Suma una carpeta de fuentes (.ttf, .otf, .ttc y las de una línea .shx de AutoCAD) a las que ve OmniCAD en esta sesión. Para que quede fija, definí la variable de entorno OMNICAD_FUENTES con la carpeta.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1481,15 +1621,15 @@ Suma una carpeta de fuentes (.ttf, .otf, .ttc) a las que ve OmniCAD en esta sesi
 
 ### `add_text`
 
-Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough (simple o doble, forman perfiles) con decoration_thickness, y no_wrap. MARCO (Fusion: el rectángulo de Text): frame=true dibuja 4 líneas de construcción desde (x, y) (esquina de abajo a la izquierda) que se acotan y restringen; el texto se acomoda adentro según align y anchor. height acepta un parámetro («h_texto») y lo sigue. Dentro de {…} vale 'texto' + parámetro, p. ej. {'Rev ' + rev}.
+Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con '\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada (list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, texto arriba por fuera = path_side right + path_position 0.25, abajo por dentro = left + 0.75. Opciones de carácter como un panel de diseño: kerning, skew (inclinación), scale_x / scale_y (%), baseline_shift, case (mayúsculas, minúsculas, título, versalitas), underline / strikethrough (simple o doble, forman perfiles) con decoration_thickness, y no_wrap. MARCO (Fusion: el rectángulo de Text): frame=true dibuja 4 líneas de construcción desde (x, y) (esquina de abajo a la izquierda) que se acotan y restringen; el texto se acomoda adentro según align y anchor. height acepta un parámetro («h_texto») y lo sigue. Crea un parámetro de texto Text, Text_1… ligado al contenido. Dentro de {…} vale 'texto' + parámetro, p. ej. {'Rev ' + rev}.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `text` (texto; obligatorio): el texto; '\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor del parámetro y se actualiza solo; {'Rev ' + rev} junta texto y valores.
+  - `text` (texto; obligatorio): contenido del parámetro automático Text (Text_1… si ya existe); '\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor y se actualiza solo; {'Rev ' + rev} junta texto y valores.
   - `x` (número; opcional, por defecto `0.0`): x del ancla (mm).
   - `y` (número; opcional, por defecto `0.0`): y del ancla (mm).
   - `height` (número o expresión; opcional, por defecto `5.0`): tamaño de la fuente en mm (positivo), o una expresión con parámetros que queda ligada.
-  - `angle` (número; opcional, por defecto `0.0`): giro del texto en grados alrededor del ancla (antihorario).
+  - `angle` (número; opcional, por defecto `0.0`): giro del texto en grados alrededor de pivot (antihorario; por defecto, el ancla).
   - `font` (texto; opcional, por defecto `"Arial"`): familia (Arial, Segoe UI…) o ruta a un archivo de fuente.
   - `bold` (true/false; opcional, por defecto `false`): negrita (el peso más cercano a 700 de la familia).
   - `italic` (true/false; opcional, por defecto `false`): cursiva.
@@ -1519,6 +1659,7 @@ Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles 
   - `frame` (true/false; opcional, por defecto `false`): true dibuja el marco del texto (4 líneas de construcción acotables); no va con path_entity.
   - `frame_height` (número; opcional, por defecto `0.0`): alto del marco en mm; 0 = el del texto. El ancho es box_width (0 = el del texto).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `pivot` (lista de número o texto o null; opcional, por defecto `null`): [x, y] en mm o corner:tl, corner:tr, corner:bl, corner:br, corner:center (requiere frame); vacío = el ancla. El marco se crea sin giro antes de elegir su pivote.
 - CLI: `omnicad call add_text --doc pieza.omnicad text=…`
 
 ### `edit_text`
@@ -1528,7 +1669,7 @@ Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa qu
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `entity` (entero; obligatorio): id de la curva de texto (get_sketch).
-  - `text` (texto; opcional, por defecto `null`): texto nuevo ('\n' separa líneas; {parámetro} muestra su valor).
+  - `text` (texto; opcional, por defecto `null`): texto nuevo ('\n' separa líneas; {parámetro} muestra su valor); actualiza su parámetro Text si lo tiene.
   - `x` (número; opcional, por defecto `null`): x nueva del ancla (mm).
   - `y` (número; opcional, por defecto `null`): y nueva del ancla (mm).
   - `height` (número o expresión; opcional, por defecto `null`): tamaño nuevo de la fuente en mm, o una expresión con parámetros que queda ligada.
@@ -1559,7 +1700,7 @@ Cambia un texto existente del boceto (un paso de deshacer): lo que no se pasa qu
   - `decoration_thickness` (número; opcional, por defecto `null`): grosor en mm de las barras (0 = el de la fuente).
   - `no_wrap` (true/false; opcional, por defecto `null`): true hace que box_width no parta las líneas.
   - `kerning_pairs` (lista de lista de número o null; opcional, por defecto `null`): kerning a mano entre letras: lista de [posición, mm] (reemplaza la anterior; [] la borra).
-  - `pivot` (lista de número o null; opcional, por defecto `null`): [x, y] en mm del punto alrededor del cual gira con angle; vacío = el ancla del texto (Fusion: el punto del marco elegido como pivote).
+  - `pivot` (lista de número o texto o null; opcional, por defecto `null`): [x, y] en mm o corner:tl, corner:tr, corner:bl, corner:br, corner:center del marco actual; vacío = el ancla del texto.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call edit_text --doc pieza.omnicad entity=…`
 

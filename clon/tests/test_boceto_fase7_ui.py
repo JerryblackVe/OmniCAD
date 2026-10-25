@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import QMouseEvent  # noqa: E402
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox  # noqa: E402
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout  # noqa: E402
 
 from omnicad.nucleo import geometria as geo  # noqa: E402
 from omnicad.restricciones import Boceto  # noqa: E402
@@ -265,7 +265,10 @@ def test_boc18_paleta_y_cinta_del_perfil_giratorio(app):
     paleta.set_herramienta("perfil_giratorio", opciones={"eje_giro": "Z", "tolerancia_giro": 0.1,
                                                          "invertir_giro": False, "vinculo_proyeccion": True})
     assert paleta.contexto.findChild(QDoubleSpinBox).value() == pytest.approx(0.1)
-    assert len(paleta.contexto.findChildren(QCheckBox)) == 2
+    form = paleta.form_contexto
+    etiquetas = {form.itemAt(f, QFormLayout.ItemRole.LabelRole).widget().text()
+                 for f in range(form.rowCount()) if form.itemAt(f, QFormLayout.ItemRole.LabelRole)}
+    assert {"Invertir", "Vínculo de proyección", "Solo contorno exterior", "Proyectar eje"} <= etiquetas
     claves = {a[0] for a in modo_boceto.ACCIONES_BOCETO}
     nuevas = {"sk_perfil_giratorio"}
     assert nuevas <= claves

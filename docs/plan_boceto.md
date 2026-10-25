@@ -68,4 +68,6 @@ de los propios faltantes.
 
 ## Estado
 
-Fases 0 a 8 ejecutadas el 2026-10-24 (commits `33058e8` a la Fase 8). Lo que queda de cada ítem vive en `docs/seguimiento/` (filas `Parcial` con su «Queda»); la Fase 9 los cierra.
+Fases 0 a 8 ejecutadas el 2026-10-24 (commits `33058e8` a la Fase 8). Lo que queda de cada ítem vive en `docs/seguimiento/` (filas `Parcial` con su «Queda»).
+
+Fase 9 (cierre) ejecutada el 2026-10-24: cerró BOC-5, 9, 14, 16, 17, 18, 19, 20, 21, 23, 29 y FU-1; quedan BOC-28 (parcial, hace falta Rust/C++) y BOC-31 en `docs/seguimiento/mejoras.md`.

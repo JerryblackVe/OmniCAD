@@ -254,35 +254,41 @@ def _punto_medio(arista):
     return p.X(), p.Y(), p.Z()
 
 
-def _origen_aristas(aristas, caras, sp):
+def _sin_despacho(funcion):
+    """La función sin la envoltura de `motor.registrar`: esa revisa los argumentos y el motor en cada llamada (~10 µs
+    y, con listas grandes, mucho más), y estas se llaman una vez por cara o por arista (BOC-28)."""
+    return getattr(funcion, "__wrapped__", funcion)
+
+
+def _origen_aristas(aristas, por_cara, sp):
     """{hash de arista de las caras: id de la curva del boceto de la que salió}.
 
-    El Splitter copia TODAS las aristas, y pedirle el historial (Modified) a cada una cuesta ~0,5 ms: con miles
-    de curvas eran segundos. Las que no se partieron se reconocen por su punto medio (la copia es idéntica); el
-    historial se pide solo para las que sí se partieron."""
+    Las aristas que el Splitter partió se siguen por su historial (`Modified`: ~20 µs cada una). Las que no se
+    partieron las copia sin historial: se reconocen por su punto medio (la copia es idéntica)."""
     from scipy.spatial import cKDTree
-    origen = {}
-    unicas = {}
-    for cara in caras:
-        for a in _aristas_de(cara):
-            unicas.setdefault(hash(a), a)
-    if not aristas or not unicas:
+    punto_medio = _sin_despacho(_punto_medio)
+    origen, sin_hijas = {}, []
+    for i, (cid, e) in enumerate(aristas):
+        hijas = geo.lista_occ(sp.Modified(e))
+        for hija in hijas:
+            origen.setdefault(hash(hija), cid)
+        if not hijas:
+            sin_hijas.append(i)
+    if not sin_hijas:
         return origen
-    usadas = np.zeros(len(aristas), bool)
-    fuente = [(i, m) for i, m in ((i, _punto_medio(e)) for i, (_cid, e) in enumerate(aristas)) if m is not None]
-    destino = [(h, m) for h, m in ((h, _punto_medio(a)) for h, a in unicas.items()) if m is not None]
+    fuente = [(i, m) for i, m in ((i, punto_medio(aristas[i][1])) for i in sin_hijas) if m is not None]
+    unicas = {}
+    for ar in por_cara:
+        for a in ar:
+            if hash(a) not in origen:
+                unicas.setdefault(hash(a), a)
+    destino = [(h, m) for h, m in ((h, punto_medio(a)) for h, a in unicas.items()) if m is not None]
     if fuente and destino:
         arbol = cKDTree(np.array([m for _i, m in fuente]))
         dist, idx = arbol.query(np.array([m for _h, m in destino]))
         for (h, _m), d, k in zip(destino, dist, idx, strict=True):
             if d < 1e-7:
-                i = fuente[k][0]
-                origen[h] = aristas[i][0]
-                usadas[i] = True
-    for i, (cid, e) in enumerate(aristas):
-        if not usadas[i]:                  # se partió (o se superpone con otra): sus hijas por el historial
-            for hija in geo.lista_occ(sp.Modified(e)):
-                origen.setdefault(hash(hija), cid)
+                origen[h] = aristas[fuente[k][0]][0]
     return origen
 
 
@@ -300,24 +306,29 @@ def _detectar(geometria, plano, tolerancia=1e-4):
     sp.SetArguments(args)
     sp.SetTools(herramientas)
     sp.SetFuzzyValue(tolerancia)
-    sp.SetRunParallel(True)                # BOC-28: con miles de letras, partir en paralelo tarda ~1/3 menos
+    sp.SetRunParallel(True)                # BOC-28: con miles de letras, partir en paralelo tarda ~1/2
     sp.Build()
     if not sp.IsDone():
         raise geo.ErrorGeometria("No se pudieron calcular los perfiles del boceto.")
+    aristas_de = _sin_despacho(_aristas_de)
     caras = list(geo.caras(sp.Shape()))
-    origen = _origen_aristas(aristas, caras, sp)
-    borde = {hash(a) for a in _aristas_de(grande)}
-    for a in _aristas_de(grande):
+    por_cara = [aristas_de(c) for c in caras]            # una sola pasada por las aristas de cada cara
+    origen = _origen_aristas(aristas, por_cara, sp)
+    borde = {hash(a) for a in aristas_de(grande)}
+    for a in aristas_de(grande):
         borde.update(hash(h) for h in geo.lista_occ(sp.Modified(a)))
 
+    ux, uy, uz = (float(c) for c in plano.u)
+    vx, vy, vz = (float(c) for c in plano.v)
+    ox, oy, oz = (float(c) for c in plano.origen)
     perfiles = []
-    for cara in caras:
-        aristas_cara = _aristas_de(cara)
-        if any(hash(a) in borde for a in aristas_cara):
+    for cara, aristas_cara in zip(caras, por_cara, strict=True):
+        hashes = [hash(a) for a in aristas_cara]
+        if any(h in borde for h in hashes):
             continue  # región exterior (toca el borde de la cara enorme)
         firma = set()
-        for arista in aristas_cara:
-            cid = origen.get(hash(arista))
+        for arista, h in zip(aristas_cara, hashes, strict=True):
+            cid = origen.get(h)
             if cid is None:          # respaldo geométrico: la curva más cercana al punto medio
                 curva = BRepAdaptor_Curve(arista)
                 pm = curva.Value((curva.FirstParameter() + curva.LastParameter()) / 2)
@@ -330,7 +341,9 @@ def _detectar(geometria, plano, tolerancia=1e-4):
         props = GProp_GProps()             # cara plana: integración exacta; área y centro en una sola pasada
         BRepGProp.SurfaceProperties_s(cara, props)
         c = props.CentreOfMass()
-        perfiles.append(Perfil(cara, props.Mass(), _a_uv(plano, (c.X(), c.Y(), c.Z())), frozenset(firma)))
+        dx, dy, dz = c.X() - ox, c.Y() - oy, c.Z() - oz
+        perfiles.append(Perfil(cara, props.Mass(), (dx * ux + dy * uy + dz * uz, dx * vx + dy * vy + dz * vz),
+                               frozenset(firma)))
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     return perfiles
 

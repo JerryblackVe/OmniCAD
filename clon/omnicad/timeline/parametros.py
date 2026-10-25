@@ -17,8 +17,8 @@ import math
 import re
 import unicodedata
 
-LONGITUD, ANGULO, ESCALAR = "longitud", "angulo", "escalar"
-TIPOS = (LONGITUD, ANGULO, ESCALAR)
+LONGITUD, ANGULO, ESCALAR, TEXTO = "longitud", "angulo", "escalar", "texto"
+TIPOS = (LONGITUD, ANGULO, ESCALAR, TEXTO)
 # Topes de lo que puede valer una longitud o un ángulo AL USARSE en un paso (`acotar`, que llama `Contexto.evaluar`;
 # T-07 de la prueba de tortura: 1e300 mm y 1e9° pasaban sin error y rompían el modelo en silencio). Un parámetro suelto
 # sí puede valer más (las cotas de boceto lo avisan por su cuenta). LONGITUD_MAXIMA es la de las primitivas
@@ -71,7 +71,10 @@ def _evaluar_nodo(nodo, nombres):
         if nodo.id in CONSTANTES:
             return CONSTANTES[nodo.id]
         if nodo.id in nombres:
-            return nombres[nodo.id]
+            valor = nombres[nodo.id]
+            if isinstance(valor, str):
+                raise ErrorExpresion(f"El parámetro '{nodo.id}' es de texto: no se puede usar en una expresión numérica.")
+            return valor
         raise ErrorExpresion(f"Nombre desconocido: '{nodo.id}'.")
     if isinstance(nodo, ast.UnaryOp) and isinstance(nodo.op, (ast.UAdd, ast.USub)):
         v = _evaluar_nodo(nodo.operand, nombres)
@@ -126,6 +129,8 @@ def evaluar(expr, tipo=LONGITUD, nombres=None):
     """Evalúa `expr` y devuelve el valor en la unidad interna de `tipo`."""
     if tipo not in TIPOS:
         raise ValueError(f"tipo inválido: {tipo}")
+    if tipo == TEXTO:
+        return str(expr)
     if isinstance(expr, (int, float)):
         return float(expr)
     texto = (expr or "").strip()
@@ -226,7 +231,7 @@ class TablaParametros:
             raise
 
     def eliminar(self, nombre):
-        usuarios = [p.nombre for p in self._params.values() if nombre in nombres_usados(p.expresion)]
+        usuarios = [p.nombre for p in self._params.values() if p.tipo != TEXTO and nombre in nombres_usados(p.expresion)]
         if usuarios:
             raise ErrorExpresion(f"No se puede borrar '{nombre}': lo usan {', '.join(usuarios)}.")
         del self._params[nombre]
@@ -249,7 +254,7 @@ class TablaParametros:
                 raise ErrorExpresion(f"Referencia circular en el parámetro '{nombre}'.")
             en_curso.add(nombre)
             p = self._params[nombre]
-            deps = {n: resolver(n) for n in nombres_usados(p.expresion) if n in self._params}
+            deps = {n: resolver(n) for n in nombres_usados(p.expresion) if n in self._params} if p.tipo != TEXTO else {}
             resueltos[nombre] = evaluar(p.expresion, p.tipo, deps)
             en_curso.discard(nombre)
             return resueltos[nombre]

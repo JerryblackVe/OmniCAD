@@ -5,15 +5,20 @@ restricciones y cotas, tolerancias, datum, «Generar más», «Empezar de nuevo�
 
 El diálogo no toca el boceto: calcula con `sugerir_auto_restricciones` (sobre copias) y devuelve las opciones del
 resultado elegido (`opciones()`), que el lienzo aplica con `auto_restringir`.
-shortcut: el datum se elige de una lista, no con un clic; ver BOC-5 en docs/seguimiento/faltantes.md.
+Cada resultado lleva el candado de Fusion (totalmente / parcialmente restringido) y una casilla que lo FIJA:
+«Generar más» y «Empezar de nuevo» no descartan los fijados. «Elegir en el lienzo» cierra el diálogo con
+`ELEGIR_DATUM`; el lienzo captura el clic en un punto y lo vuelve a abrir con `fijar_datum`.
 """
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
-                               QHBoxLayout, QLabel, QListWidget, QPushButton, QSlider, QVBoxLayout)
+                               QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QSlider,
+                               QVBoxLayout)
 
 from ..restricciones import sugerir_auto_restricciones
+from .iconos import icono
 
 MAX_DATUMS = 200                # puntos que se ofrecen como datum (los más cercanos al origen)
+ELEGIR_DATUM = 2                # código de `exec()`: el usuario quiere elegir el datum con un clic en el lienzo
 
 
 class DialogoAutoRestringir(QDialog):
@@ -25,6 +30,7 @@ class DialogoAutoRestringir(QDialog):
         self.setMinimumWidth(520)
         self.b, self.valores = boceto, valores_cotas
         self.pedidos, self.excluidas, self.resultados = 3, set(), []
+        self.fijados = []               # resultados con la casilla marcada: sobreviven a recalcular
         self.tol_angulo = QDoubleSpinBox(decimals=2, minimum=0.01, maximum=45.0, singleStep=0.5, suffix=" °")
         self.tol_angulo.setValue(1.0)
         self.tol_distancia = QDoubleSpinBox(decimals=4, minimum=0.0001, maximum=10.0, singleStep=0.001, suffix=" mm")
@@ -54,7 +60,13 @@ class DialogoAutoRestringir(QDialog):
         form = QFormLayout()
         form.addRow("Tolerancia de ángulo", self.tol_angulo)
         form.addRow("Tolerancia de distancia", self.tol_distancia)
-        form.addRow("Datum", self.datum)
+        elegir = QPushButton("Elegir en el lienzo")
+        elegir.setToolTip("Cierra el diálogo, hacé clic en un punto del boceto y vuelve con ese punto como datum.")
+        elegir.clicked.connect(lambda: self.done(ELEGIR_DATUM))
+        fila_datum = QHBoxLayout()
+        fila_datum.addWidget(self.datum, 1)
+        fila_datum.addWidget(elegir)
+        form.addRow("Datum", fila_datum)
         acciones = QHBoxLayout()
         for w in (generar, reiniciar, quitar):
             acciones.addWidget(w)
@@ -74,6 +86,7 @@ class DialogoAutoRestringir(QDialog):
         reiniciar.clicked.connect(self._reiniciar)
         quitar.clicked.connect(self._quitar)
         self.lista.currentRowChanged.connect(self._elegir)
+        self.lista.itemChanged.connect(self._fijar)
         self.cantidad.valueChanged.connect(self._mostrar_detalle)
         for w in (self.tol_angulo, self.tol_distancia):
             w.editingFinished.connect(self._calcular)
@@ -88,16 +101,23 @@ class DialogoAutoRestringir(QDialog):
     def _calcular(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            self.resultados = sugerir_auto_restricciones(self.b, self.valores, resultados=self.pedidos,
-                                                         **self._opciones_base())
+            nuevos = sugerir_auto_restricciones(self.b, self.valores, resultados=self.pedidos,
+                                                **self._opciones_base())
         finally:
             QApplication.restoreOverrideCursor()
+        vistos = {_firma(r) for r in self.fijados}
+        self.resultados = self.fijados + [r for r in nuevos if _firma(r) not in vistos]
         self.lista.blockSignals(True)
         self.lista.clear()
         for r in self.resultados:
             nuevas = sum(s.clase == "restriccion" for s in r.sugerencias)
-            self.lista.addItem(f"{r.nombre}: {nuevas} restricciones, {len(r.sugerencias) - nuevas} cotas — "
-                               + ("totalmente restringido" if r.totalmente_restringido else f"quedan {r.gdl} GDL"))
+            item = QListWidgetItem(icono("boceto_bloqueado" if r.totalmente_restringido else "boceto"),
+                                   f"{r.nombre}: {nuevas} restricciones, {len(r.sugerencias) - nuevas} cotas — "
+                                   + ("totalmente restringido" if r.totalmente_restringido else f"quedan {r.gdl} GDL"))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if any(r is f for f in self.fijados) else Qt.Unchecked)
+            item.setToolTip("Marcá la casilla para fijar el resultado: «Generar más» y «Empezar de nuevo» lo conservan.")
+            self.lista.addItem(item)
         self.lista.blockSignals(False)
         self.lista.setCurrentRow(0 if self.resultados else -1)
         self._elegir(0 if self.resultados else -1)
@@ -115,6 +135,20 @@ class DialogoAutoRestringir(QDialog):
         if r is not None and 0 <= fila < len(r.sugerencias):
             self.excluidas.add(r.sugerencias[fila].clave)
             self._calcular()
+
+    def _fijar(self, item):
+        r = self.resultados[self.lista.row(item)]
+        self.fijados = [f for f in self.fijados if f is not r]
+        if item.checkState() == Qt.Checked:
+            self.fijados.append(r)
+
+    def fijar_datum(self, pid):
+        """Datum elegido con un clic en el lienzo: se suma a la lista si no estaba y se recalcula."""
+        if self.datum.findData(pid) < 0:
+            x, y = self.b.coords(pid)
+            self.datum.addItem(f"Punto {pid} ({x:.3g}, {y:.3g})", pid)
+        self.datum.setCurrentIndex(self.datum.findData(pid))
+        self._calcular()
 
     # ---------------------------------------------------------------- selección y resultado
     def resultado(self):
@@ -149,3 +183,8 @@ class DialogoAutoRestringir(QDialog):
         """Opciones de `auto_restringir` que reproducen el resultado elegido con la cantidad del deslizador."""
         r = self.resultado()
         return {**r.opciones, "limite": self.cantidad.value()}
+
+
+def _firma(resultado):
+    """Las sugerencias de un resultado, para no repetir uno fijado al recalcular."""
+    return tuple(s.clave for s in resultado.sugerencias)

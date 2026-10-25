@@ -369,7 +369,10 @@ class _Sistema:
                 k = 1.0 if t == "radio" else 2.0
                 T.append(lambda x, cid=e[0], v=v, k=k: [k * self.R(x, cid) - v])
             elif t == "desfase":
-                T.append(lambda x, o=e[0], d=e[1], v=v: [self.separacion(x, o, d) - v])
+                if tipos[0] in ("spline", *ELIPTICAS):
+                    self._desfase_normal(e[0], e[1], v, c.datos.get("lado"))
+                else:
+                    T.append(lambda x, o=e[0], d=e[1], v=v: [self.separacion(x, o, d) - v])
             elif t == "angulo":
                 def f(x, l1=e[0], l2=e[1], v=math.radians(v), s=signos_cuadrante(c.datos.get("cuadrante"))):
                     (a, bb), (cc, d) = self.L(x, l1), self.L(x, l2)
@@ -432,6 +435,26 @@ class _Sistema:
             w = (a[0] - q[0], a[1] - q[1])
             return [math.hypot(*w) - v, (w[0] * d[0] + w[1] * d[1]) / (math.hypot(*d) or 1e-12)]
         self.terminos.append(f)
+
+    def _desfase_normal(self, madre, copia, distancia, lado):
+        """Offset de Fusion: cada punto de ajuste queda a distancia firmada sobre la normal de la madre."""
+        prim0 = self.prim(self.x0, madre)
+        for pid in self.b.curvas[copia].pts:
+            t, _, q = mas_cercano(prim0, self.P(self.x0, pid))
+            if lado is None:
+                _, d = evaluar_primitiva(prim0, t, 1)
+                lado = _signo(_cruz(d, np.subtract(self.P(self.x0, pid), q)))
+            j = self._parametro(t)
+
+            def f(x, pid=pid, j=j, lado=lado):
+                prim = self.prim(x, madre)
+                t0, t1, cerrada = dominio(prim)
+                t = x[j] if cerrada else min(t1, max(t0, x[j]))
+                q, d = evaluar_primitiva(prim, t, 1)
+                ux, uy = _unitario(d)
+                p = self.P(x, pid)
+                return [p[0] - q[0] + lado * distancia * uy, p[1] - q[1] - lado * distancia * ux]
+            self.terminos.append(f)
 
     def _contacto_punto(self, pid, cid):
         """Punto sobre una curva libre (spline o cónica): un parámetro auxiliar t y P(t) = punto."""

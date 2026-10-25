@@ -173,8 +173,7 @@ class DialogoPerdidas(QDialog):
         pid = self._elegida()
         if pid is None:
             return
-        # shortcut: un perfil giratorio perdido no se re-vincula desde acá (falta el eje); romper o borrar, sí
-        self.b_revincular.setEnabled(self._registro(pid)["modo"] != "giro")
+        self.b_revincular.setEnabled(True)
         self.lz.seleccion = list(self._registro(pid)["ids"])
         self.lz.update()
 

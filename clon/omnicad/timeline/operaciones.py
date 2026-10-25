@@ -12,6 +12,8 @@ Equivalencias con Fusion 360 (informe_analisis.md §3.1, §3.3, §5):
     como BoxFeature… TorusFeature en Fusion.
 """
 import copy
+import json
+import math
 import re
 
 import numpy as np
@@ -591,6 +593,7 @@ class OpBoceto(Operacion):
         super().__init__(id, nombre, suprimida, **params)
         self.boceto = boceto if boceto is not None else Boceto()
         self.perdidas = []              # ids de las proyecciones que no coincidieron en el último cálculo (solo memoria)
+        self._textos_parametricos = {}  # contenido leído al calcular, para declarar sus expresiones actuales
 
     def valores_cotas(self, ctx):
         """Valor de cada cota. Sin el tope de `Contexto.evaluar`: una cota fuera de rango no falla el boceto, la
@@ -600,7 +603,9 @@ class OpBoceto(Operacion):
 
     def expresiones(self):
         en_textos = [e for c in self.boceto.curvas.values() if isinstance(c, Texto)
-                     for e in expresiones_de_texto(c.texto) + ([c.altura_expr] if c.altura_expr else [])]
+                     for e in (expresiones_de_texto(self._textos_parametricos.get(c.id, c.texto))
+                               + ([c.parametro_texto] if c.parametro_texto else [])
+                               + ([c.altura_expr] if c.altura_expr else []))]
         return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
                                        for e in (c.nombre, c.expresion)]
                 + en_textos + [c["expresion"] for c in self.boceto.geo3d.get("cotas", {}).values()])
@@ -613,6 +618,9 @@ class OpBoceto(Operacion):
             deps |= ent.dependencias_de(self.p.get("cara"))
         for registro in self.boceto.proyecciones:
             deps |= ent.dependencias_de(registro["refs"], [registro["eje"]] if registro.get("eje") else [])
+        for c in self.boceto.geo3d.get("curvas", {}).values():     # Intersection Curve / Project To Surface
+            if "origen" in c:
+                deps |= ent.dependencias_de(c["origen"].get("refs"), c["origen"].get("curves")) - {self.id}
         return deps
 
     def plano(self, estado, ctx):
@@ -667,6 +675,40 @@ class OpBoceto(Operacion):
                     boceto.puntos[pid].x -= uy * (antes - despues)
                     boceto.puntos[pid].y += ux * (antes - despues)
 
+    def _seguir_al_modelo(self, boceto, plano, estado, ctx):
+        """Recalcula EN LA COPIA las curvas 3D de Intersection Curve / Project To Surface con el modelo actual,
+        conservando sus ids. Cada curva sigue a la de su «index» en el resultado (las que se borraron no cuentan); si
+        la referencia se perdió o esa curva ya no existe o cambió de tipo, aviso y queda como estaba."""
+        from ..restricciones import boceto3d as b3
+        g = b3.datos(boceto)
+        grupos = {}
+        for cid, c in g["curvas"].items():
+            if "origen" in c and not (c["origen"].get("mode") == "vector" and "direction" not in c["origen"]):
+                clave = {k: v for k, v in c["origen"].items() if k != "index"}
+                grupos.setdefault(json.dumps(clave, sort_keys=True), []).append(cid)
+        for ids in grupos.values():
+            nuevo = Boceto()
+            try:
+                nuevas = [b3.agregar_desde_mundo(nuevo, d, plano) for d in aristas_de_origen(g["curvas"][ids[0]]["origen"],
+                                                                                            estado)]
+            except (ent.ErrorReferencia, ent.ReferenciaMalFormada, geo.ErrorGeometria, ErrorBoceto, KeyError) as e:
+                ctx.aviso(f"{self.nombre}: una curva 3D ya no se puede recalcular ({e}); queda como estaba.")
+                continue
+            h = b3.datos(nuevo)
+            for pos, i in enumerate(ids):
+                k = g["curvas"][i]["origen"].get("index", pos)       # recetas anteriores: la posición en el grupo
+                n = nuevas[k] if isinstance(k, int) and 0 <= k < len(nuevas) else None
+                if n is None or (g["curvas"][i]["tipo"], len(g["curvas"][i]["puntos"])) != (
+                        h["curvas"][n]["tipo"], len(h["curvas"][n]["puntos"])):
+                    ctx.aviso(f"{self.nombre}: la intersección o proyección cambió de forma; la curva 3D queda como "
+                              "estaba.")
+                    continue
+                for viejo, punto in zip(g["curvas"][i]["puntos"], h["curvas"][n]["puntos"], strict=True):
+                    g["puntos"][viejo] = h["puntos"][punto]
+                for clave in ("radio", "normal", "eje_mayor", "radio_menor", "cerrada"):
+                    if clave in h["curvas"][n]:
+                        g["curvas"][i][clave] = h["curvas"][n][clave]
+
     def ejecutar(self, estado, ctx):
         plano = self.plano(estado, ctx)
         # Se resuelve una COPIA: el boceto guardado no se toca. Si un parámetro deja el boceto en
@@ -675,10 +717,14 @@ class OpBoceto(Operacion):
         self._reproyectar(boceto, plano, estado, ctx)
         if boceto.proyecciones:
             self._conservar_lado_cotas(boceto)
+        self._textos_parametricos = {}
         for c in boceto.curvas.values():               # {parámetro} dentro de un texto (el fx de Fusion)
-            if isinstance(c, Texto) and "{" in c.texto:
+            if isinstance(c, Texto):
                 try:
-                    c.texto = texto_con_valores(c.texto, ctx.valores)
+                    contenido = _contenido_texto(c, ctx.valores)
+                    self._textos_parametricos[c.id] = contenido
+                    c.texto = contenido
+                    c.texto = texto_con_valores(contenido, ctx.valores)
                 except ErrorExpresion as e:
                     ctx.aviso(f"{self.nombre}: texto «{c.texto}»: {e}")
             if isinstance(c, Texto) and c.altura_expr:  # «Text height» de Fusion: la altura sigue al parámetro
@@ -701,8 +747,11 @@ class OpBoceto(Operacion):
         br = BocetoResuelto(self.id, self.nombre, boceto, plano, perfiles, res)
         if any(boceto.geo3d.values()):                 # Boceto 3D: su propio solver, sobre la misma copia
             from ..restricciones import boceto3d
-            br.solver3d = boceto3d.resolver(boceto, {k: ctx.evaluar(c["expresion"])
-                                                     for k, c in boceto.geo3d.get("cotas", {}).items()})
+            estado.bocetos[self.id] = br               # una curva fuente puede ser de este mismo boceto
+            self._seguir_al_modelo(boceto, plano, estado, ctx)
+            br.solver3d = boceto3d.resolver(boceto, {
+                k: ctx.evaluar(c["expresion"], ANGULO if c.get("tipo") == "angulo" else LONGITUD)
+                for k, c in boceto.geo3d.get("cotas", {}).items()})
             if not br.solver3d.ok:
                 ctx.aviso(f"{self.nombre}: {br.solver3d.mensaje}")
         estado.bocetos[self.id] = br
@@ -713,10 +762,58 @@ class OpBoceto(Operacion):
         return d
 
 
+def aristas_de_origen(origen, estado):
+    """Curvas (`curvas3d.describir`, coordenadas del mundo) que deja hoy la selección guardada en el «origen» de una
+    curva 3D de Intersection Curve o Project To Surface (lo que calculan intersect_curves y project_to_surface). Un
+    plano, o una cara elegida como plano («infinito»), se corta como plano infinito."""
+    from ..nucleo import curvas3d
+    objetivos = []
+    for ref in origen["refs"]:
+        e = ent.resolver(ref, estado)
+        if ref["tipo"] == "plano" or ref.get("infinito"):
+            pl = ent.como_plano(e)
+            objetivos.append((pl.origen, pl.normal))
+        else:
+            objetivos.append(e.forma)
+    fuente = [(e.forma, e.plano.normal) for e in (ent.resolver(r, estado) for r in origen["curves"])]
+    if origen["tool"] == "project_to_surface":
+        caras = geo.compuesto(objetivos)
+        if origen["mode"] == "vector":
+            return [curvas3d.describir(x) for a, _ in fuente
+                    for x in curvas3d.proyectar_vector(a, caras, origen["direction"])]
+        salida = []
+        for a, _ in fuente:
+            pts = curvas3d.proyectar_cercano(a, caras)
+            cerrada = math.dist(pts[0], pts[-1]) < 1e-7
+            salida.append({"tipo": "spline", "puntos": list(pts[:-1] if cerrada else pts), "cerrada": cerrada})
+        return salida
+    formas = [f for f in objetivos if not isinstance(f, tuple)] + [a for a, _ in fuente]
+    lejos = [np.linalg.norm(p) for f in formas for caja in [geo.caja_envolvente(f)] if caja for p in caja]
+    medio = 2 * max(lejos + [np.linalg.norm(f[0]) for f in objetivos if isinstance(f, tuple)] + [1.0]) + 100
+    destinos = [curvas3d.cara_de_plano(*f, medio) if isinstance(f, tuple) else f for f in objetivos]
+    if fuente:
+        pares = [(curvas3d.extruir_arista(a, n, medio), f) for a, n in fuente for f in destinos]
+    else:
+        pares = [(destinos[i], destinos[j]) for i in range(len(destinos)) for j in range(i + 1, len(destinos))]
+    return [curvas3d.describir(x) for a, f in pares for x in curvas3d.seccion(a, f)]
+
+
+def _contenido_texto(texto, valores):
+    """Contenido editable de un texto: su parámetro automático, o el texto de una receta anterior."""
+    nombre = texto.parametro_texto
+    if nombre is None:
+        return texto.texto
+    if nombre not in valores or not isinstance(valores[nombre], str):
+        raise ErrorExpresion(f"El parámetro '{nombre}' del texto no existe o no es de tipo texto.")
+    return valores[nombre]
+
+
 def texto_con_valores(texto, valores):
     """Texto con sus {expresión} reemplazadas por el valor que tienen con los parámetros `valores` (longitudes
-    en mm, ángulos en grados, números sueltos). Levanta ErrorExpresion si alguna no se puede calcular."""
+    en mm, ángulos en grados, números sueltos o cadenas literales). Levanta ErrorExpresion si alguna no se puede calcular."""
     def valor(expr):
+        if expr in valores and isinstance(valores[expr], str):
+            return valores[expr]
         ultimo = None
         for tipo in (LONGITUD, ANGULO, ESCALAR):
             try:
