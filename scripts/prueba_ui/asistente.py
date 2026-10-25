@@ -395,6 +395,14 @@ def pedido():
     esperar(p)
     A.reg(AR, "modo Explicar no cambia el documento", len(v.doc.operaciones) == n and lineas(p)[-1] ==
           "✗ create_box: TOOL_NOT_AVAILABLE", lineas(p)[-1])
+    # IA-8: la pregunta de cómo se hace va a la ayuda local y la respuesta cita la fuente.
+    p.guion = [Respuesta(herramientas=[PedidoHerramienta("a1", "search_help", {"query": "empalme"})]),
+               Respuesta(texto="Con fillet (fuente: herramienta fillet).")]
+    escribir(p, "como hago un empalme", Qt.Key_Return)
+    esperar(p)
+    A.reg(AR, "IA-8: en Explicar, «cómo hago un empalme» busca en la ayuda local y cita la fuente",
+          lineas(p)[-1] == "✓ search_help" and "Con fillet (fuente: herramienta fillet)." in textos(p)
+          and len(v.doc.operaciones) == n, lineas(p)[-1])
 
     # ---------------------------------------------------------------- Cancelar (botón) y Esc
     for como in ("botón Cancelar", "Esc"):

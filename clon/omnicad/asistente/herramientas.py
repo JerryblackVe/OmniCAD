@@ -8,7 +8,7 @@ NUCLEO = (
     "create_sketch", "draw_line", "draw_rectangle", "draw_circle", "add_dimension", "add_constraint",
     "extrude", "revolve", "create_box", "create_cylinder", "fillet", "chamfer", "shell", "create_hole",
     "find_faces", "find_edges", "edit_feature", "get_viewport_image", "get_physical_properties",
-    "measure_distance", "describe_operation", "run_operation", "undo", "save_document",
+    "measure_distance", "describe_operation", "run_operation", "undo", "save_document", "search_help",
 )
 PROHIBIDAS = {"execute_code"}
 MODOS = ("explicar", "mostrar", "guiar", "hacer")

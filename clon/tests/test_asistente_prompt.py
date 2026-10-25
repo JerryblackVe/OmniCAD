@@ -105,3 +105,30 @@ def test_biblioteca_de_prompts(tmp_path):
                     encoding="utf-8")
     with pytest.raises(ValueError):
         prompt.cargar_prompts(malo)
+
+
+def test_explicar_ofrece_search_help_y_pide_citar(sesion):
+    """IA-8: la ayuda local es lectura (está en todos los modos y en la lista corta de los CLI) y Explicar pide citar."""
+    for modo in MODOS:
+        h = Herramientas(modo=modo)
+        assert "search_help" in [d["nombre"] for d in h.definiciones()] and "search_help" in h.para_cli()
+    sistema = prompt.armar_sistema(sesion, "explicar")
+    assert "search_help" in sistema and "citá la fuente" in sistema and "en vez de inventar" in sistema
+
+
+def test_pregunta_de_punta_a_punta_cita_la_fuente(sesion):
+    """Pregunta → search_help → la respuesta del modelo nombra la fuente que le devolvió la herramienta."""
+    class Citador(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            self.recibidos.append(mensajes[-1])
+            if len(self.recibidos) == 1:
+                return Respuesta(herramientas=[PedidoHerramienta("a1", "search_help", {"query": "empalme"})])
+            salida = json.loads(mensajes[-1]["contenido"][0]["contenido"][0]["texto"])
+            return Respuesta(texto=f"Se hace con fillet. Fuente: {salida['result']['results'][0]['source']}.")
+
+    citador, textos = Citador([]), []
+    resultado = bucle.correr(citador, [{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": "como hago un "
+                                                                                            "empalme?"}]}],
+                             lambda n, a: api.llamar(sesion, n, a), Herramientas(modo="explicar"),
+                             al_evento=lambda tipo, datos: tipo == "texto" and textos.append(datos))
+    assert resultado["motivo"] == "fin" and textos == ["Se hace con fillet. Fuente: herramienta fillet."]
