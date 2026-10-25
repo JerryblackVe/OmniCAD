@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 21: Abierto 16 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 22: Abierto 17 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -15,6 +15,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | La causa en OCCT sigue sin reproducirse ni curarse. El cambio de parámetros en documentos de 60 pasos o más ya se ensaya antes en un proceso aparte (si el kernel cae, no se aplica y la app sigue); no cubre editar/suprimir pasos ni abrir archivos. | nucleo/aislado.py (`correr_json`, `UMBRAL_PREVUELO_PARAMETROS`); timeline/documento.py `_prevuelo_parametros`; tests/test_b48_prevuelo.py; tests/test_b48_crash.py | 2026-10-20 |
 | B-104 | «Recuperar documentos…» tiene la ayuda en el lugar del atajo | Abierto | Baja | `A("recuperados", "Recuperar documentos…", fn, "Abre «Documentos recuperados»: …")` pasa el texto de ayuda como 4.º argumento, que es el atajo: la acción queda con un «atajo» sin sentido (`, , `) y sin tooltip. La prueba de atajos lo vio: es el único que no dispara nada. Pasar `None` de atajo y la ayuda en su lugar. | omnicad/ui/ventana.py:329-331 | 2026-10-24 |
 | B-105 | En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados | Abierto | Media | Con la ventana en 1024x640 el panel de Extruir mide 357 de alto y el área del visor 448: termina 51 px más abajo y los botones quedan sobre la barra del timeline; en 800x520 (la app no baja de 821 px de ancho) el panel pasa 171 px y se ve cortado en «Tipo de extensión». Además el panel «Atajos de diseño» se encima sobre el del comando. Pasa igual con el panel de Unión de ENSAMBLAR (318×386 en un visor de unos 430 px de alto a 1024x640). Enter y Esc siguen andando. Fusion y los programas de CAD hacen scroll en el panel. | omnicad/ui/ventana.py:2041-2049 | 2026-10-24 |
+| B-106 | La doc de herramientas dice «es un paso de deshacer» en las que no lo son | Abierto | Baja | `doc_markdown.py` escribe «sí, es un paso de deshacer» para toda herramienta con `modifica=True`, aunque tenga `transaccion=False` y su propia descripción diga lo contrario (`manage_comments`, `set_project_instructions`, `set_assistant_config`, `undo`, `open_document`…). Mirar `transaccion` y escribir «sí, pero no entra en deshacer» donde corresponda (regenera muchas fichas a la vez). | omnicad/api/doc_markdown.py:92; docs/agentes/herramientas.md (ficha de manage_comments) | 2026-10-25 |
 
 ## Boceto (auditoría contra Fusion, 2026-10-23)
 

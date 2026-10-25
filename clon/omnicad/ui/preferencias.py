@@ -13,8 +13,8 @@ import threading
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QPushButton, QSpinBox, QStackedWidget, QToolButton, QTreeWidget,
-                               QTreeWidgetItem, QVBoxLayout, QWidget)
+                               QLineEdit, QPlainTextEdit, QPushButton, QSpinBox, QStackedWidget, QToolButton,
+                               QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from ..asistente import config as config_asistente
@@ -22,6 +22,7 @@ from ..asistente import modelos
 from ..asistente.proveedores.agente_local import AGENTES, AgenteLocal, ejecutable
 from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
+from ..timeline.documento import TOPE_INSTRUCCIONES
 from . import iconos_tema, temas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
@@ -159,6 +160,35 @@ class Preferencias:
 
 
 # ------------------------------------------------------------------ diálogo
+class CampoInstrucciones(QPlainTextEdit):
+    """Texto multilínea con tope de caracteres y contador debajo (`self.contador`): lo que pasa del tope (un pegado
+    enorme) se corta y el contador lo dice. Instrucciones del Asistente: las propias y las de cada proyecto."""
+
+    def __init__(self, texto="", ayuda=""):
+        super().__init__(placeholderText=ayuda, tabChangesFocus=True)
+        self.tope = TOPE_INSTRUCCIONES
+        self.contador = QLabel(objectName="contador_instrucciones")
+        temas.poner_rol(self.contador, "tenue")
+        self.setMinimumHeight(80)
+        self.textChanged.connect(self._contar)
+        self.setPlainText(texto)
+
+    def _contar(self):
+        texto, cortado = self.toPlainText(), False
+        if len(texto) > self.tope:
+            cursor = self.textCursor()
+            posicion = min(cursor.position(), self.tope)
+            self.setPlainText(texto[:self.tope])       # vuelve a llamar a _contar, ya dentro del tope
+            cursor.setPosition(posicion)
+            self.setTextCursor(cursor)
+            cortado = True
+        self.contador.setText(f"{len(self.toPlainText())} / {self.tope} caracteres"
+                              + (" · se cortó lo que sobraba" if cortado else ""))
+
+    def texto(self):
+        return self.toPlainText().strip()
+
+
 def _combo(opciones, actual):
     c = QComboBox()
     for clave, texto in opciones:
@@ -250,6 +280,7 @@ PAGINAS = [
          [("explicar", "Explicar"), ("mostrar", "Mostrar"), ("guiar", "Guiar"), ("hacer", "Hacer")]),
         ("asistente/tope_usd", "Tope de gasto por pedido (0 = sin tope)", "decimal", (0.0, 100.0)),
         ("asistente/imagenes", "Mandar imágenes del visor al modelo", "check", None),
+        ("asistente/instrucciones", "Instrucciones propias (valen para todos los chats)", "texto_largo", None),
         (None, "Conexión", "probar", None),
     ]),
 ]
@@ -436,6 +467,19 @@ class DialogoPreferencias(QDialog):
                 continue
             elif tipo == "probar":
                 form.addRow(etiqueta, self._probar_conexion())
+                continue
+            elif tipo == "texto_largo":
+                c = CampoInstrucciones(actual, ayuda="Por ejemplo: «Explicame paso a paso», «Todo es para imprimir en "
+                                                     "PLA: paredes de 2 mm como mínimo». No pueden saltear los modos, "
+                                                     "la tarjeta Aplicar ni el tope de gasto.")
+                c.setMinimumWidth(300)
+                c.setMaximumHeight(140)
+                c.textChanged.connect(self._cambio)
+                caja = QVBoxLayout()
+                caja.addWidget(c)
+                caja.addWidget(c.contador)
+                form.addRow(etiqueta, caja)
+                self.controles[clave] = c
                 continue
             else:
                 c = QSpinBox()
@@ -701,6 +745,8 @@ class DialogoPreferencias(QDialog):
                 salida[clave] = c.isChecked()
             elif isinstance(c, QLineEdit):
                 salida[clave] = c.text().strip()
+            elif isinstance(c, CampoInstrucciones):
+                salida[clave] = c.texto()
             else:
                 salida[clave] = c.value()
         return salida
@@ -716,6 +762,8 @@ class DialogoPreferencias(QDialog):
                 c.setChecked(bool(valor))
             elif isinstance(c, QLineEdit):
                 c.setText(valor)
+            elif isinstance(c, CampoInstrucciones):
+                c.setPlainText(valor)
             elif isinstance(c, QDoubleSpinBox):
                 c.setValue(float(valor))
             else:

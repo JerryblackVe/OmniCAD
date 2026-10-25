@@ -40,6 +40,7 @@ from ..asistente.prompt import armar_sistema, cargar_prompts
 from ..asistente.proveedores.agente_local import AgenteLocal, matar
 from ..asistente.proveedores.base import ErrorProveedor, PedidoHerramienta
 from . import iconos, temas
+from .preferencias import CampoInstrucciones
 from .puente import PuenteAgentes
 
 TOPE_PEDIDO = 20000        # caracteres: un pegado gigante por error no se manda (gastaría plata)
@@ -127,6 +128,40 @@ class _Tarjeta(QFrame):
             b.hide()
         self.estado.setText(texto)
         self.estado.show()
+
+
+class DialogoInstrucciones(QDialog):
+    """Chat › Instrucciones de este proyecto: se guardan dentro del .omnicad (con Guardar) y no entran en deshacer."""
+
+    def __init__(self, panel):
+        super().__init__(panel, objectName="instrucciones_proyecto", windowTitle="Instrucciones de este proyecto")
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.panel = panel
+        v = QVBoxLayout(self)
+        ayuda = QLabel("Van dentro del archivo: quien lo abra las verá. Se suman a tus instrucciones propias "
+                       "(Preferencias › Asistente IA) y no pueden saltear los modos, la tarjeta Aplicar ni el tope "
+                       "de gasto.", wordWrap=True)
+        temas.poner_rol(ayuda, "tenue")
+        self.campo = CampoInstrucciones(panel.ventana.doc.instrucciones,
+                                        ayuda="Por ejemplo: «Es una pieza para imprimir en PETG; tolerancias de 0,2 mm».")
+        b_cancelar = QPushButton("Cancelar")
+        self.b_aceptar = QPushButton("Aceptar", objectName="boton_primario", default=True)
+        b_cancelar.clicked.connect(self.reject)
+        self.b_aceptar.clicked.connect(self.accept)
+        botones = QHBoxLayout()
+        botones.addWidget(self.campo.contador, 1)
+        botones.addWidget(b_cancelar)
+        botones.addWidget(self.b_aceptar)
+        v.addWidget(ayuda)
+        v.addWidget(self.campo, 1)
+        v.addLayout(botones)
+        self.resize(420, 300)
+
+    def accept(self):
+        doc = self.panel.ventana.doc
+        doc.fijar_instrucciones(self.campo.texto())   # el campo ya corta al tope: no puede fallar por largo
+        self.panel._avisadas.add(doc.token)            # las escribió la persona: no hace falta avisarle
+        super().accept()
 
 
 class DialogoHistorial(QDialog):
@@ -391,6 +426,7 @@ class PanelAsistente(QDockWidget):
         self._aprobado = False
         self.adjuntos = []              # los del próximo pedido (asistente.adjuntos.Adjunto)
         self._pegados = None            # carpeta temporal de las imágenes pegadas (se borra al cerrar OmniCAD)
+        self._avisadas = set()          # documentos (token) cuyas instrucciones de proyecto ya se avisaron
         self.setAcceptDrops(True)       # soltar archivos en cualquier parte del panel los adjunta
 
         cuerpo = QWidget()
@@ -479,6 +515,7 @@ class PanelAsistente(QDockWidget):
         self.setMinimumWidth(190)       # con 821 px de visor (lo mínimo de la ventana) entra en 1024 de ancho
         self.actualizar_cabecera()
         self._agregar_texto(SALUDO)
+        self.revisar_instrucciones()
 
     # ------------------------------------------------------------ cabecera y menú Chat
     def actualizar_cabecera(self):
@@ -499,11 +536,32 @@ class PanelAsistente(QDockWidget):
             a = espacios[p["espacio"]].addAction(f"{p['titulo']} ({NOMBRES_MODO[p['modo']]})")
             a.setToolTip(p["texto"])
             a.triggered.connect(lambda _=False, p=p: self.usar_prompt(p))
+        accion = menu.addAction("Instrucciones de este proyecto…")
+        accion.setToolTip("Lo que el Asistente tiene que saber de ESTE diseño; se guarda dentro del archivo. Las tuyas, "
+                          "para todos los chats, van en Preferencias › Asistente IA.")
+        accion.triggered.connect(self.editar_instrucciones)
         accion = menu.addAction("Historial de chats")
         accion.setToolTip("Los chats guardados en esta PC: abrir uno para seguirlo, o borrarlo.")
         accion.triggered.connect(self.abrir_historial)
         menu.setToolTipsVisible(True)
         return menu
+
+    def editar_instrucciones(self):
+        dialogo = DialogoInstrucciones(self)
+        dialogo.open()
+        return dialogo
+
+    def revisar_instrucciones(self):
+        """La primera vez que un documento abierto trae instrucciones de proyecto, lo avisa en el chat: son texto de
+        quien hizo el archivo y van al prompt en cada pedido."""
+        doc = self.ventana.doc
+        if doc is None or not doc.instrucciones or doc.token in self._avisadas:
+            return
+        self._avisadas.add(doc.token)
+        texto = doc.instrucciones if len(doc.instrucciones) <= 300 else doc.instrucciones[:300] + "…"
+        self._agregar_texto(f"⚠ Este archivo trae instrucciones para el Asistente (las escribió quien lo hizo): «{texto}». "
+                            "Se usan como preferencias, nunca para saltear la tarjeta Aplicar. Revisalas o borralas en "
+                            "Chat › Instrucciones de este proyecto.", "aviso")
 
     def usar_prompt(self, p):
         """Biblioteca de prompts: deja el texto en el campo y el modo del ejemplo, sin mandarlo."""
@@ -779,7 +837,9 @@ class PanelAsistente(QDockWidget):
             return False
         modo = self.modo.currentData()
         self.puente.sesion.doc = self.ventana.doc
-        sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None)
+        self.revisar_instrucciones()
+        sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None,
+                                prefs["asistente/instrucciones"])
         # El CLI del modo suscripción guarda su propia conversación (--resume / -s): acá se suma solo para el historial.
         bloques = [b for a in self.adjuntos for b in a.bloques]
         for bloque in ([{"tipo": "texto", "texto": texto}] if texto else []) + bloques:

@@ -537,3 +537,18 @@ def test_salida_que_rompe_el_traductor_no_deja_el_cli_corriendo(lanzar, monkeypa
     with pytest.raises(ZeroDivisionError):
         correr(AgenteLocal("claude_code"), lanzar, ProcesoFalso(CLAUDE))
     assert matados == [4242] and not os.path.exists(lanzar[-1]["kw"]["cwd"])
+
+
+@pytest.mark.parametrize("tipo, salida", [("claude_code", CLAUDE), ("codex", CODEX), ("opencode", OPENCODE)])
+def test_los_tres_cli_reciben_las_instrucciones_en_el_prompt_de_sistema(lanzar, tipo, salida):
+    """IA-12: el prompt de sistema que escribe el CLI es el mismo armar_sistema, con la sección de instrucciones."""
+    from omnicad import api
+    from omnicad.asistente.prompt import armar_sistema
+    sesion = api.Sesion()
+    sesion.doc.fijar_instrucciones("Instrucción del proyecto PETG")
+    sistema = armar_sistema(sesion, "hacer", generales="Instrucción propia paso a paso")
+    lanzar.respuestas.append(ProcesoFalso(salida))
+    AgenteLocal(tipo).correr("Creá una caja", sistema, "hacer")
+    escrito = lanzar[-1]["archivos"]["sistema.md"]
+    assert escrito == sistema and "# Instrucciones de la persona" in escrito
+    assert "Instrucción propia paso a paso" in escrito and "Instrucción del proyecto PETG" in escrito

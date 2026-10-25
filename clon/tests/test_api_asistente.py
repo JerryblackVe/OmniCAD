@@ -31,6 +31,7 @@ def test_config_por_defecto_y_la_clave_nunca_sale(monkeypatch):
     r = api.llamar(s, "get_assistant_config")["result"]
     assert r | {"providers": None} == {"provider": "anthropic", "model": "", "effective_model": "claude-opus-5-5",
                                        "base_url": "", "default_mode": "guiar", "max_usd": 0.5, "send_images": True, "effort": "",
+                                       "instructions": "",
                                        "key_env_var": "ANTHROPIC_API_KEY", "key_set": False, "providers": None}
     monkeypatch.setenv("ANTHROPIC_API_KEY", CLAVE_FALSA)
     r = api.llamar(s, "get_assistant_config")
@@ -174,3 +175,48 @@ def test_modelos_y_esfuerzo_desde_el_catalogo(monkeypatch):
     assert api.llamar(s, "list_assistant_models", {"provider": "otro"})["error_kind"] == "INVALID_ARGUMENTS"
     assert api.llamar(s, "set_assistant_config", {"effort": " high "})["result"]["effort"] == "high"
     assert api.llamar(s, "set_assistant_config", {"effort": "a & b"})["error_kind"] == "INVALID_ARGUMENTS"
+
+
+def test_instrucciones_propias_y_del_proyecto_desde_el_catalogo(monkeypatch, tmp_path):
+    """IA-12: las propias van a las preferencias; las del proyecto, dentro del .omnicad (fuera del deshacer)."""
+    s = api.Sesion()
+    r = api.llamar(s, "set_assistant_config", {"instructions": "  Explicame paso a paso.  "})
+    assert r["ok"] and r["result"]["updated"] == ["instrucciones"] and r["result"]["instructions"] == "Explicame paso a paso."
+    assert api.llamar(s, "set_assistant_config", {"instructions": "x" * 4001})["error_kind"] == "INVALID_ARGUMENTS"
+    assert api.llamar(s, "set_assistant_config", {"instructions": "x" * 4000})["ok"]
+    assert api.llamar(s, "set_project_instructions", {"instructions": "x" * 4001})["error_kind"] == "INVALID_ARGUMENTS"
+    assert api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10})["ok"]
+    r = api.llamar(s, "set_project_instructions", {"instructions": "Todo para imprimir en PETG."})
+    assert r["result"] == {"instructions": "Todo para imprimir en PETG.", "max_chars": 4000}
+    assert api.llamar(s, "undo")["ok"] and s.doc.operaciones == []     # el undo saca la caja, no las instrucciones
+    assert api.llamar(s, "get_project_instructions")["result"]["instructions"] == "Todo para imprimir en PETG."
+    ruta = tmp_path / "pieza.omnicad"
+    assert api.llamar(s, "save_document", {"path": str(ruta)})["ok"]
+    otra = api.Sesion()
+    assert api.llamar(otra, "open_document", {"path": str(ruta)})["ok"]
+    assert otra.doc.instrucciones == "Todo para imprimir en PETG."
+    # la propia IA no puede reescribirse las instrucciones: el grupo asistente está fuera de su catálogo
+    from omnicad.asistente.herramientas import Herramientas
+    assert not {"set_project_instructions", "set_assistant_config"} & set(Herramientas(modo="hacer").catalogo)
+    # pedido sin ventana: las dos van al prompt de sistema
+    class ConSistema(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            self.sistemas.append(sistema)
+            return super().responder(sistema, mensajes, herramientas)
+
+    proveedor = ConSistema([Respuesta(texto="ok")])
+    proveedor.sistemas = []
+    monkeypatch.setattr(config, "crear_proveedor", lambda cfg: proveedor)
+    api.llamar(s, "set_assistant_config", {"instructions": "Respondé en una línea."})
+    assert api.llamar(s, "assistant_ask", {"prompt": "hola", "mode": "explicar"})["ok"]
+    assert "Respondé en una línea." in proveedor.sistemas[0] and "PETG" in proveedor.sistemas[0]
+
+
+def test_cli_instrucciones_del_proyecto(capsys, tmp_path):
+    from omnicad.cli import main
+    doc = tmp_path / "pieza.omnicad"
+    assert main(["new", str(doc)]) == 0
+    assert main(["call", "set_project_instructions", "instructions=Pared mínima de 2 mm", "--doc", str(doc), "--json"]) == 0
+    capsys.readouterr()
+    assert main(["call", "get_project_instructions", "--doc", str(doc), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["result"]["instructions"] == "Pared mínima de 2 mm"

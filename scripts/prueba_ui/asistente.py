@@ -7,12 +7,15 @@ Preferencias (teclado y clic en Aceptar), ruta mala tecleada, y un pedido con el
 vivo (encendido solo durante el pedido) con la tarjeta Aplicar. IA-9: clic en el clip, Ctrl+V de una imagen, arrastrar
 archivos al chat, el 11.º rechazado, ✕ y las fichas en la ventana chica. IA-10: Preferencias llena «Modelo» con lo
 que dice cada CLI (elegir con el teclado, escribir otro, Aceptar y reabrir). IA-11: «pinta la caja de rojo» usa
-set_appearance (fuera del núcleo) en modo API con buscar_herramientas y en modo suscripción con call_tool. El proveedor
-es el falso: sin red ni gasto."""
+set_appearance (fuera del núcleo) en modo API con buscar_herramientas y en modo suscripción con call_tool. IA-12:
+teclear las instrucciones propias (Preferencias) y las del proyecto (Chat), vacío, enorme, pegar, Tab, Esc, Aceptar,
+reabrir, guardar y volver a abrir el archivo, el aviso y la ventana chica. El proveedor es el falso: sin red ni gasto."""
 import asyncio
 import json
 import sys
+import tempfile
 import threading
+from pathlib import Path
 
 import arnes as A
 import escena
@@ -500,6 +503,136 @@ def adjuntos_ui(p):
     return rutas
 
 
+def pegar(campo, texto):
+    """Ctrl+V de verdad: el texto va al portapapeles y se pega con el teclado."""
+    QApplication.clipboard().setText(texto)
+    QTest.keyClick(campo, Qt.Key_V, Qt.ControlModifier)
+    A.esperar(30)
+
+
+def borrar_todo(campo):
+    QTest.mouseClick(campo.viewport(), Qt.LeftButton)
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClick(campo, Qt.Key_Delete)
+
+
+def instrucciones_ui(p):
+    """IA-12: las propias en Preferencias › Asistente IA y las del proyecto en Chat › Instrucciones de este proyecto."""
+    from omnicad.asistente import modelos
+    from omnicad.io_archivos import proyecto
+    from omnicad.timeline.documento import TOPE_INSTRUCCIONES, Documento
+    from omnicad.ui.preferencias import DialogoPreferencias
+    real = modelos.modelos_disponibles
+    modelos.modelos_disponibles = lambda proveedor, *a, **k: {"modelos": [], "fabrica": "x", "variantes": {},
+                                                              "motivo": "sin red en la prueba"}
+
+    def abrir_pref():
+        dlg = DialogoPreferencias(v.prefs, v, "asistente")
+        dlg.show()
+        A.esperar(150)
+        return dlg, dlg.controles["asistente/instrucciones"]
+
+    try:
+        dlg, campo = abrir_pref()
+        QTest.mouseClick(campo.viewport(), Qt.LeftButton)
+        QTest.keyClicks(campo, "Explicame paso a paso")
+        A.reg(AR, "Preferencias: teclear las instrucciones propias, el texto queda en el cuadro y el contador cuenta",
+              campo.toPlainText() == "Explicame paso a paso"
+              and campo.contador.text() == f"21 / {TOPE_INSTRUCCIONES} caracteres", campo.contador.text())
+        pegar(campo, "x" * (TOPE_INSTRUCCIONES + 2000))
+        A.reg(AR, "Preferencias: pegar un texto enorme lo corta al tope y el contador lo dice",
+              len(campo.toPlainText()) == TOPE_INSTRUCCIONES and "se cortó" in campo.contador.text(),
+              campo.contador.text())
+        borrar_todo(campo)
+        A.reg(AR, "Preferencias: Ctrl+A y Supr dejan el cuadro vacío (0 caracteres)",
+              campo.toPlainText() == "" and campo.contador.text().startswith("0 /"), campo.contador.text())
+        QTest.keyClicks(campo, "Respondeme corto")
+        QTest.keyClick(campo, Qt.Key_Tab)                  # Tab sale del cuadro, no escribe un tabulador
+        A.reg(AR, "Preferencias: Tab sale del cuadro sin escribir un tabulador",
+              "\t" not in campo.toPlainText() and not campo.hasFocus())
+        dlg.resize(800, 520)
+        A.esperar(200)
+        pantalla = QApplication.primaryScreen().availableGeometry()
+        A.reg(AR, "Preferencias achicada (800x520): el cuadro de instrucciones, su contador y Aceptar se ven",
+              dentro(campo, dlg) and dentro(campo.contador, dlg) and dentro(dlg.b_aceptar, dlg)
+              and pantalla.contains(dlg.frameGeometry()), f"dialogo={dlg.size()}")
+        A.foto(dlg, "asistente_pref_instrucciones_800x520")
+        QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
+        A.esperar(100)
+        A.reg(AR, "Aceptar guarda las instrucciones propias",
+              v.prefs["asistente/instrucciones"] == "Respondeme corto", v.prefs["asistente/instrucciones"])
+        dlg, campo = abrir_pref()
+        A.reg(AR, "reabrir Preferencias: las instrucciones siguen ahí", campo.toPlainText() == "Respondeme corto")
+        QTest.mouseClick(dlg.b_cancelar, Qt.LeftButton)
+    finally:
+        modelos.modelos_disponibles = real
+
+    def abrir_proyecto():
+        QTest.mouseClick(p.b_chat, Qt.LeftButton)
+        A.esperar(50)
+        next(a for a in p.b_chat.menu().actions() if a.text().startswith("Instrucciones de este proyecto")).trigger()
+        A.esperar(150)
+        return next((d for d in p.findChildren(QDialog, "instrucciones_proyecto") if d.isVisible()), None)
+
+    d = abrir_proyecto()
+    A.reg(AR, "Chat › Instrucciones de este proyecto abre su diálogo", d is not None)
+    if d is None:
+        return
+    QTest.mouseClick(d.campo.viewport(), Qt.LeftButton)
+    QTest.keyClicks(d.campo, "Pieza para PETG")
+    pegar(d.campo, "y" * (TOPE_INSTRUCCIONES + 500))
+    A.reg(AR, "proyecto: teclear y pegar algo enorme lo corta al tope", len(d.campo.toPlainText()) == TOPE_INSTRUCCIONES
+          and "se cortó" in d.campo.contador.text(), d.campo.contador.text())
+    QTest.keyClick(d, Qt.Key_Escape)
+    A.esperar(100)
+    A.reg(AR, "proyecto: Esc cancela y no cambia nada", v.doc.instrucciones == ""
+          and not any(x.isVisible() for x in p.findChildren(QDialog, "instrucciones_proyecto")))
+    d = abrir_proyecto()
+    QTest.mouseClick(d.campo.viewport(), Qt.LeftButton)
+    QTest.keyClicks(d.campo, "Pieza para PETG, pared de 2 mm")
+    v.resize(800, 520)
+    A.esperar(250)
+    pantalla = QApplication.primaryScreen().availableGeometry()
+    A.reg(AR, "ventana 800x520: el diálogo de instrucciones del proyecto y Aceptar se ven enteros",
+          pantalla.contains(d.frameGeometry()) and dentro(d.b_aceptar, d) and dentro(d.campo.contador, d),
+          f"dialogo={d.frameGeometry()}")
+    A.foto(d, "asistente_instrucciones_proyecto_800x520")
+    QTest.mouseClick(d.b_aceptar, Qt.LeftButton)
+    A.esperar(100)
+    v.resize(1900, 1000)
+    A.esperar(200)
+    A.reg(AR, "proyecto: Aceptar las guarda en el documento", v.doc.instrucciones == "Pieza para PETG, pared de 2 mm")
+    d = abrir_proyecto()
+    A.reg(AR, "proyecto: reabrir el diálogo las muestra", d.campo.toPlainText() == "Pieza para PETG, pared de 2 mm")
+    QTest.keyClick(d, Qt.Key_Escape)
+    # Guardar, abrir otro documento y volver a abrir el archivo: siguen, y el chat avisa que el archivo trae instrucciones.
+    ruta = str(Path(tempfile.mkdtemp()) / "con_instrucciones.omnicad")
+    proyecto.guardar(v.doc, ruta)
+    v.set_documento(Documento())
+    v.abrir_ruta(ruta, preguntar=False)
+    A.esperar(300)
+    avisos = [t for t in textos(p) if "trae instrucciones" in t]
+    A.reg(AR, "guardar, cerrar y reabrir conserva las instrucciones del proyecto y el chat lo avisa una vez",
+          v.doc.instrucciones == "Pieza para PETG, pared de 2 mm" and len(avisos) == 1, avisos[-1:] if avisos else "")
+    p.modo.setCurrentIndex(p.modo.findData("explicar"))
+    sistemas = []
+
+    class ConSistema(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            sistemas.append(sistema)
+            return super().responder(sistema, mensajes, herramientas)
+
+    p.crear_proveedor = lambda _cfg: ConSistema([Respuesta(texto="ok")])
+    escribir(p, "hola", Qt.Key_Return)
+    esperar(p)
+    p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+    sistema = sistemas[0] if sistemas else ""
+    A.reg(AR, "el pedido lleva las dos instrucciones en el prompt de sistema",
+          "Respondeme corto" in sistema and "Pieza para PETG" in sistema)
+    A.foto(p, "asistente_aviso_instrucciones")
+    v.prefs["asistente/instrucciones"] = ""
+
+
 def primer_cuerpo():
     return api.llamar(api.Sesion(v.doc), "get_scene_info", {})["result"]["bodies"][0]["id"]
 
@@ -781,6 +914,7 @@ def pedido():
 
     modelos_en_preferencias()
     suscripcion(p)
+    instrucciones_ui(p)
 
     # ---------------------------------------------------------------- atajo y cerrar
     QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)

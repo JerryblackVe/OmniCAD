@@ -926,6 +926,8 @@ class VentanaPrincipal(QMainWindow):
         self._seleccionar([])           # lo elegido era del documento anterior (y la tira de sugeridos con ello)
         if hasattr(self, "comentarios"):
             self.comentarios.set_documento(doc)
+        if self.asistente is not None:
+            self.asistente.revisar_instrucciones()
         QTimer.singleShot(0, self.visor, self.visor.encuadrar)
 
     def _actualizar(self):

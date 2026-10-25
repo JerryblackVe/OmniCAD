@@ -39,6 +39,7 @@ log = logging.getLogger(__name__)
 
 VERSION_RECETA = 1
 UNIDADES_DEFECTO = {"longitud": "mm", "masa": "g"}      # con qué se MUESTRAN las medidas; el modelo siempre va en mm y g
+TOPE_INSTRUCCIONES = 4000   # caracteres de las instrucciones del asistente (las generales y las de cada proyecto)
 _LIMITE_DESHACER = 50
 _LIMITE_BYTES_DESHACER = 150_000_000   # un STEP importado viaja en cada instantánea: se acota la memoria
 # Un paso que tarda al menos esto guarda su resultado con el proyecto: al abrirlo no se recalcula. Los más rápidos
@@ -173,6 +174,18 @@ class Documento:
         # Unidades de pantalla del documento (cm, m, in, ft; kg, lb): solo cambian cómo se muestran las medidas. Como los
         # comentarios, se guardan con el proyecto (solo si no son las de siempre) pero no entran en deshacer.
         self.unidades = dict(UNIDADES_DEFECTO)
+        # Instrucciones de este proyecto para el Asistente IA (IA-12). Como los comentarios: se guardan con el proyecto
+        # pero no entran en deshacer (son una nota para la IA, no el diseño). Un archivo ajeno las trae: son texto de otro.
+        self.instrucciones = ""
+
+    def fijar_instrucciones(self, texto):
+        texto = str(texto).strip()
+        if len(texto) > TOPE_INSTRUCCIONES:
+            raise ErrorDocumento(f"Las instrucciones tienen {len(texto)} caracteres; el máximo es {TOPE_INSTRUCCIONES}.")
+        if texto != self.instrucciones:
+            self.instrucciones = texto
+            self.modificado = True
+            self._notificar()
 
     def fijar_unidades(self, longitud=None, masa=None):
         """Cambia las unidades con que se muestran longitudes (mm, cm, m, in, ft) y masas (g, kg, lb). No toca el
@@ -976,7 +989,8 @@ class Documento:
                 "vistas": self.vistas, "propiedades": self.propiedades, "analisis": self.analisis,
                 "configuraciones": self.configuraciones,
                 "espacios": self.espacios, "comentarios": self.comentarios,
-                **({"unidades": self.unidades} if self.unidades != UNIDADES_DEFECTO else {})}
+                **({"unidades": self.unidades} if self.unidades != UNIDADES_DEFECTO else {}),
+                **({"instrucciones": self.instrucciones} if self.instrucciones else {})}
 
     @staticmethod
     def unidades_de(datos):
@@ -991,6 +1005,13 @@ class Documento:
                 unidades[magnitud] = valor
         return unidades
 
+    @staticmethod
+    def instrucciones_de(datos):
+        """Las instrucciones de una receta: texto de un archivo ajeno, así que lo que no es texto se ignora y se corta
+        al tope (un .omnicad con un megabyte ahí no infla el prompt)."""
+        texto = datos.get("instrucciones")
+        return texto.strip()[:TOPE_INSTRUCCIONES] if isinstance(texto, str) else ""
+
     @classmethod
     def desde_dict(cls, datos, cache=None):
         """Documento desde una receta. `cache` ({índice de paso: (datos, formas)}, lo que guardó `pasos_para_cache`
@@ -1004,6 +1025,7 @@ class Documento:
         doc.espacios = dict(datos.get("espacios", {}))
         doc.comentarios = [dict(c) for c in datos.get("comentarios", [])]
         doc.unidades = cls.unidades_de(datos)
+        doc.instrucciones = cls.instrucciones_de(datos)
         doc._cache = cache or {}
         try:
             doc._cargar(datos)

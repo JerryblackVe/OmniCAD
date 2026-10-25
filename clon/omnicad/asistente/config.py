@@ -34,6 +34,7 @@ DEFECTOS = {
     "ruta_claude_code": "",  # modo suscripción: ruta del CLI; vacío = el del PATH
     "ruta_codex": "",
     "ruta_opencode": "",
+    "instrucciones": "",     # instrucciones propias de la persona (IA-12): van al prompt de todos los chats
 }
 # Lo que lee crear_proveedor de las preferencias (prefijo «asistente/»). ruta_<agente> vacía = el del PATH.
 CLAVES = ("proveedor", "modelo", "base_url", "variante") + tuple(f"ruta_{a}" for a in AGENTES_LOCALES)
