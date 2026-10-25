@@ -4,6 +4,7 @@ La clave de API NUNCA está en la configuración ni en las preferencias: sale de
 """
 import os
 
+from .proveedores.agente_local import AgenteLocal
 from .proveedores.anthropic import ProveedorAnthropic
 from .proveedores.base import ErrorProveedor
 from .proveedores.openai_compat import OLLAMA, OPENAI, OPENROUTER, ProveedorOpenAI
@@ -14,7 +15,14 @@ PROVEEDORES = {
     "openai": ("OpenAI", "OPENAI_API_KEY", "gpt-6.1-sol", OPENAI),
     "openrouter": ("OpenRouter", "OPENROUTER_API_KEY", "anthropic/claude-sonnet-5-5", OPENROUTER),
     "local": ("Local compatible con OpenAI (Ollama, LM Studio)", None, "qwen3", OLLAMA),
+    # Modo suscripción (IA-6): el CLI que la persona ya instaló y logueó; modelo vacío = el que use el CLI
+    "claude_code": ("Claude Code (tu suscripción)", None, "", ""),
+    "codex": ("Codex (tu suscripción ChatGPT)", None, "", ""),
+    "opencode": ("OpenCode", None, "openai/gpt-6.1-sol", ""),
 }
+AGENTES_LOCALES = ("claude_code", "codex", "opencode")
+# Lo que lee crear_proveedor de las preferencias (prefijo «asistente/»). ruta_<agente> vacía = el del PATH.
+CLAVES = ("proveedor", "modelo", "base_url", "variante") + tuple(f"ruta_{a}" for a in AGENTES_LOCALES)
 
 
 def variable_clave(proveedor):
@@ -34,11 +42,14 @@ def modelo_de(config):
 
 
 def crear_proveedor(config):
-    """Proveedor listo desde {proveedor, modelo, base_url}; ErrorProveedor si el proveedor no existe o falta la clave."""
+    """Proveedor listo desde CLAVES; ErrorProveedor si el proveedor no existe, falta la clave o no está el CLI."""
     nombre = config.get("proveedor")
     if nombre not in PROVEEDORES:
         raise ErrorProveedor(f"Proveedor desconocido: {nombre!r}. Opciones: {', '.join(PROVEEDORES)}.")
     modelo = modelo_de(config)
+    if nombre in AGENTES_LOCALES:
+        return AgenteLocal(nombre, config.get(f"ruta_{nombre}") or "", modelo,
+                           (config.get("variante") or "").strip() if nombre == "opencode" else "")
     if nombre == "anthropic":
         return ProveedorAnthropic(modelo)
     base_url = (config.get("base_url") or "").strip() or PROVEEDORES[nombre][3]

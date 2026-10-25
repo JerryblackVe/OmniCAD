@@ -17,7 +17,7 @@ a ella, y al terminar «Deshacer este pedido» también (si después no cambiast
 import json
 import threading
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QEventLoop, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QComboBox, QDockWidget, QFrame, QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QPushButton,
                                QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
@@ -27,7 +27,8 @@ from ..api.errores import error
 from ..asistente import bucle, config, marca
 from ..asistente.herramientas import MODOS, Herramientas
 from ..asistente.prompt import armar_sistema, cargar_prompts
-from ..asistente.proveedores.base import ErrorProveedor
+from ..asistente.proveedores.agente_local import AgenteLocal, matar
+from ..asistente.proveedores.base import ErrorProveedor, PedidoHerramienta
 from . import temas
 from .puente import PuenteAgentes
 
@@ -41,7 +42,7 @@ AYUDA_MODO = {"explicar": "Responde y explica; no cambia nada.", "mostrar": "Se�
 
 
 def config_de(prefs):
-    return {k: prefs[f"asistente/{k}"] for k in ("proveedor", "modelo", "base_url")}
+    return {k: prefs[f"asistente/{k}"] for k in config.CLAVES}
 
 
 def _sin_imagenes(valor):
@@ -179,9 +180,11 @@ class _Trabajo(QObject):
     evento = Signal(str, object)
     termino = Signal(object)
 
-    def __init__(self, proveedor, mensajes, ejecutar, herramientas, sistema, tope_usd):
+    def __init__(self, proveedor, mensajes, ejecutar, herramientas, sistema, tope_usd, texto=""):
         super().__init__()
         self.args = (proveedor, mensajes, ejecutar, herramientas, sistema)
+        self.texto = texto              # modo suscripción: el pedido va entero al CLI, que guarda su propio chat
+        self.listo = False
         self.tope_usd = tope_usd
         self.gasto = 0.0
         self.cancelar = threading.Event()
@@ -218,13 +221,20 @@ class _Trabajo(QObject):
     def correr(self):
         proveedor, mensajes, ejecutar, herramientas, sistema = self.args
         try:
-            resultado = bucle.correr(proveedor, mensajes, ejecutar, herramientas, sistema, self._al_evento,
-                                     cancelado=self.cancelado, aprobar=self.aprobar)
+            if isinstance(proveedor, AgenteLocal):
+                resultado = proveedor.correr(self.texto, sistema, herramientas.modo, self._al_evento, self.cancelado)
+            else:
+                resultado = bucle.correr(proveedor, mensajes, ejecutar, herramientas, sistema, self._al_evento,
+                                         cancelado=self.cancelado, aprobar=self.aprobar)
+        except ErrorProveedor as e:
+            self.evento.emit("error", str(e))
+            resultado = {"motivo": "error"}
         except Exception as e:  # noqa: BLE001 — el hilo no tiene a quién avisar si no es por la señal
             self.evento.emit("error", f"{type(e).__name__}: {e}")
             resultado = {"motivo": "error"}
         if resultado["motivo"] == "cancelado" and self.sobre_tope and not self.cancelar.is_set():
             resultado["motivo"] = "tope_gasto"
+        self.listo = True
         self.termino.emit(resultado)
 
 
@@ -246,6 +256,11 @@ class PanelAsistente(QDockWidget):
         self.b_deshacer = None          # «Deshacer este pedido» del último pedido (los anteriores se apagan)
         self._aviso_ocupado = False
         self._uso = None
+        self._sesiones = {}             # modo suscripción: id del chat de cada CLI, para seguir la conversación
+        self._puente_vivo = None        # el puente por donde entra el CLI durante el pedido
+        self._puente_temporal = False   # lo encendió el pedido (Preferencias › General lo tenía apagado)
+        self._espera = None             # bucle de eventos mientras una tarjeta espera Aplicar dentro del puente
+        self._aprobado = False
 
         cuerpo = QWidget()
         lay = QVBoxLayout(cuerpo)
@@ -309,7 +324,8 @@ class PanelAsistente(QDockWidget):
     def actualizar_cabecera(self):
         cfg = config_de(self.ventana.prefs)
         nombre = config.PROVEEDORES.get(cfg["proveedor"], (cfg["proveedor"],))[0]
-        texto = f"{nombre} · {config.modelo_de(cfg)}" if cfg["proveedor"] in config.PROVEEDORES else nombre
+        modelo = config.modelo_de(cfg) if cfg["proveedor"] in config.PROVEEDORES else ""
+        texto = nombre + (f" · {modelo}" if modelo else "")
         self.etiqueta_modelo.setText(texto)
         self.etiqueta_modelo.setToolTip(texto + "<br>Se cambia en Preferencias › Asistente IA.")
 
@@ -419,6 +435,13 @@ class PanelAsistente(QDockWidget):
 
     @Slot(object)
     def _termino(self, resultado):
+        if self._espera is not None:      # llegó con una tarjeta esperando adentro del puente: después de cerrarla
+            QTimer.singleShot(50, lambda: self._termino(resultado))
+            return
+        proveedor = self.trabajo.args[0]
+        if isinstance(proveedor, AgenteLocal):
+            self._sesiones[proveedor.tipo] = proveedor.sesion
+            self._soltar_puente()
         motivo, m = resultado["motivo"], self._marca
         if motivo == "tope_gasto":
             self._agregar_texto(f"⚠ Se cortó el pedido: el gasto superó el tope de {_usd(self.trabajo.tope_usd)} "
@@ -436,6 +459,68 @@ class PanelAsistente(QDockWidget):
             self._boton_deshacer(m, self.ventana.doc._instantanea())
         self.trabajo = None
         self._ocupado(False)
+
+    # ------------------------------------------------------------ modo suscripción: puente en vivo y permisos
+    def _preparar_puente(self, proveedor):
+        """El CLI entra por el puente en vivo: usa el de la ventana si está prendido; si no, enciende el propio solo
+        mientras dure el pedido. Pone el filtro de permisos y la sesión del CLI para seguir el chat."""
+        v = self.ventana
+        vivo = v.puente if v.puente is not None and v.puente.activo else self.puente
+        self._puente_temporal = not vivo.activo
+        if self._puente_temporal and not vivo.iniciar():
+            self._agregar_texto("⚠ No se pudo encender el puente para agentes IA (puertos ocupados o carpeta sin "
+                                "permiso): el agente no tendría cómo llegar a OmniCAD.", "error")
+            return False
+        vivo.filtro = self._filtro_en_vivo
+        self._puente_vivo = vivo
+        proveedor.sesion = self._sesiones.get(proveedor.tipo)
+        return True
+
+    def _soltar_puente(self):
+        if self._puente_vivo is not None:
+            self._puente_vivo.filtro = None
+            if self._puente_temporal:
+                self._puente_vivo.detener()
+            self._puente_vivo = None
+
+    def _filtro_en_vivo(self, nombre, args):
+        """`PuenteAgentes.filtro` durante el pedido: la misma regla de modo que el modo API y la misma tarjeta
+        Aplicar (Hacer aprueba una vez por pedido; Guiar, cada cambio). Corre en el hilo de la interfaz."""
+        t = self.trabajo
+        if t is None:
+            return None
+        herramientas = t.args[3]
+        if nombre not in herramientas.catalogo:
+            return error("TOOL_NOT_AVAILABLE", f"La herramienta '{nombre}' no se puede usar en el modo "
+                         f"{herramientas.modo} del Asistente.",
+                         "Explicale a la persona qué harías y que cambie a modo Guiar o Hacer.").a_dict()
+        if self._aprobado or not herramientas.necesita_aprobacion(nombre):
+            return None
+        if self._aprobar_en_vivo([PedidoHerramienta("", nombre, args if isinstance(args, dict) else {})]):
+            self._aprobado = herramientas.modo == "hacer"
+            return None
+        return error("CANCELLED", "La persona no aprobó este cambio; no se ejecutó nada.",
+                     "Preguntale qué quiere cambiar del plan antes de proponer otro.").a_dict()
+
+    def _aprobar_en_vivo(self, pedidos):
+        """Muestra la tarjeta y espera Aplicar o Cancelar sin congelar la ventana (el puente está adentro de un
+        pedido: los demás quedan en su cola). También corta si se cancela el pedido o el CLI terminó."""
+        t = self.trabajo
+        t._decidido.clear()
+        t._aprobado = False
+        self._evento("aprobar", pedidos)
+        self._espera = espera = QEventLoop(self)
+        reloj = QTimer(self, interval=50)
+        reloj.timeout.connect(lambda: (t._decidido.is_set() or t.cancelado() or t.listo) and espera.quit())
+        reloj.start()
+        espera.exec()
+        reloj.stop()
+        reloj.deleteLater()
+        self._espera = None
+        if self.tarjeta is not None and not t._decidido.is_set():
+            self.tarjeta.cerrar("El agente dejó de esperar: no se hizo nada de la lista.")
+            self.tarjeta = None
+        return t._aprobado and not t.cancelado()
 
     # ------------------------------------------------------------ deshacer el pedido entero
     def _volver(self, m):
@@ -521,11 +606,16 @@ class PanelAsistente(QDockWidget):
         except ErrorProveedor as e:
             self._agregar_texto(f"⚠ {e}", "error")
             return False
+        agente = isinstance(proveedor, AgenteLocal)
+        if agente and not self._preparar_puente(proveedor):
+            return False
         modo = self.modo.currentData()
         self.puente.sesion.doc = self.ventana.doc
         sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None)
         bloque = {"tipo": "texto", "texto": texto}
-        if self.mensajes and self.mensajes[-1]["rol"] == "usuario":   # tras un Cancelar o un error: un solo turno
+        if agente:
+            pass                         # el CLI guarda la conversación (--resume / -s): acá no se acumula
+        elif self.mensajes and self.mensajes[-1]["rol"] == "usuario":   # tras un Cancelar o un error: un solo turno
             self.mensajes[-1]["contenido"].append(bloque)
         else:
             self.mensajes.append({"rol": "usuario", "contenido": [bloque]})
@@ -539,8 +629,9 @@ class PanelAsistente(QDockWidget):
         self._apagar_deshacer()
         self._marca = marca.tomar(self.ventana.doc)
         self._aviso_ocupado = False
+        self._aprobado = False
         self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, Herramientas(modo=modo), sistema,
-                                prefs["asistente/tope_usd"])
+                                prefs["asistente/tope_usd"], texto)
         self.trabajo.evento.connect(self._evento)
         self.trabajo.termino.connect(self._termino)
         self._ocupado(True)
@@ -552,6 +643,9 @@ class PanelAsistente(QDockWidget):
         """Corta el bucle en la próxima vuelta o herramienta; al terminar, el documento vuelve a la marca."""
         if self.trabajando:
             self.trabajo.cancelar.set()
+            proceso = getattr(self.trabajo.args[0], "proceso", None)
+            if proceso is not None:
+                matar(proceso)           # ya, sin esperar al vigía: al cerrar la app no queda el CLI huérfano
             if self.tarjeta is not None:
                 self.tarjeta.cerrar("Pedido cancelado.")
                 self.tarjeta = None
@@ -562,6 +656,7 @@ class PanelAsistente(QDockWidget):
         if self.trabajando:
             return
         self.mensajes = []
+        self._sesiones = {}
         self._apagar_deshacer()
         while self.lay_mensajes.count() > 1:
             self.lay_mensajes.takeAt(0).widget().deleteLater()

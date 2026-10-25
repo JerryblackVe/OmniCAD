@@ -46,7 +46,7 @@ Fuente: `docs/fusion_docs/contenido/fusion-autodesk-assistant/` y `fusion-visor/
 | Ya hay guía para agentes (ciclo de trabajo, selectores, unidades): es la base del prompt de sistema. | `clon/omnicad/api/guia/*.md` (215 líneas) y `get_guide` |
 | Captura del visor para mandarle imágenes al modelo. | `ui/ventana.py:1531` (`capturar_visor`) |
 | No hay dependencias de HTTP ni de llavero: `httpx`, `keyring`, `anthropic` y `openai` NO están en el venv. | `import` falla (2026-10-25); `clon/requirements.txt` |
-| En esta PC están `claude` (Claude Code) y `opencode`. No están `codex`, `gemini` ni Ollama (el PATH nombra `AppData/Local/Programs/Ollama`, pero la carpeta no existe). | `which` y `ls` (2026-10-25) |
+| En esta PC están `claude` (Claude Code; su login de terminal estaba cerrado: `claude auth status` → `loggedIn: false`), `opencode` y Codex: la app de la Microsoft Store (`OpenAI.Codex`) trae la CLI en `<InstallLocation>/app/resources/codex.exe` (`codex-cli 0.164.0`, «Logged in using ChatGPT»), fuera del PATH; la ruta sale de `Get-AppxPackage OpenAI.Codex`. No están `gemini` ni Ollama (el PATH nombra `AppData/Local/Programs/Ollama`, pero la carpeta no existe). | `which`, `Get-AppxPackage`, `codex login status` (2026-10-25) |
 | Claude Code corre sin ventana con `-p --output-format stream-json`, y acepta `--mcp-config`, `--strict-mcp-config`, `--allowedTools`, `--append-system-prompt`, `--resume`. | `claude --help` (2026-10-25) |
 | OpenCode corre sin ventana con `opencode run --format json`, `-m proveedor/modelo`, `--variant`, `-s sesión`. | `opencode run --help` (2026-10-25) |
 | Codex corre sin ventana con `codex exec --json` y se loguea con «Sign in with ChatGPT» (suscripción). | learn.chatgpt.com/docs/non-interactive-mode (2026-10-25) |

@@ -21,6 +21,19 @@ Si no se puede encender (por ejemplo, ningún puerto libre), la app lo avisa en 
 
 Para apagarlo: destildá la preferencia o cerrá la app.
 
+### El Asistente con tu suscripción (Claude Code, Codex, OpenCode)
+
+En Preferencias › Asistente IA, los proveedores «Claude Code (tu suscripción)», «Codex (tu suscripción ChatGPT)» y
+«OpenCode» lanzan el CLI que ya tenés instalado y logueado, y ese CLI entra a la ventana por este puente
+(`omnicad-mcp --modo vivo`, que lee `puente.json`: el token nunca va en la línea de comandos).
+
+- Si el puente está apagado, el pedido lo **enciende solo mientras dura** y lo apaga al terminar. Si ya estaba
+  prendido, no lo toca.
+- Durante el pedido el puente tiene un **filtro** (`PuenteAgentes.filtro`): las herramientas que el modo del Asistente
+  no permite vuelven `TOOL_NOT_AVAILABLE`, y las que cambian algo pasan por la tarjeta Aplicar del panel (rechazar
+  vuelve `CANCELLED`). Vale para cualquier agente conectado al puente mientras dura el pedido.
+- Código: `clon/omnicad/asistente/proveedores/agente_local.py`.
+
 ## Cómo se protege
 
 - Escucha **solo en 127.0.0.1**, nunca en otra interfaz. Puerto 27191; si está ocupado, uno de los 10 siguientes.

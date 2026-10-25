@@ -69,6 +69,9 @@ class PuenteAgentes(QObject):
         self._cola = deque()                # (socket, línea) pendientes: se atienden de a uno, sin reentrar
         self._atendiendo = False
         self._herramientas = {h["nombre"]: h for h in api.catalogo()}
+        # El Asistente en modo suscripción (ui/asistente.py): filtro(herramienta, args) → None si pasa, o el dict de
+        # error con el que se rechaza (modo, o la persona no aprobó la tarjeta Aplicar). None = todas pasan.
+        self.filtro = None
         self.indicador = None
         app = QCoreApplication.instance()
         if app is not None:
@@ -287,6 +290,10 @@ class PuenteAgentes(QObject):
             if motivo:
                 return error("APP_BUSY", f"OmniCAD está ocupado: {motivo}.",
                              "El usuario está usando la app: esperá o pedile que termine lo que está haciendo.").a_dict()
+        if self.filtro is not None:
+            rechazo = self.filtro(herramienta, args)
+            if rechazo is not None:
+                return rechazo
         doc = self.sesion.doc = v.doc
         pasos = len(doc.operaciones)
         copia_anterior = proyecto.ruta_autoguardado(doc)     # por si la herramienta guarda en otra ruta o cambia de documento

@@ -2,7 +2,9 @@
 """Asistente IA como una persona: clic real en el botón de la barra, teclear en el campo (texto, vacío, enorme, pegar),
 Enter, Mayús+Enter, Esc, Tab, Cancelar, cambiar de modo, biblioteca de prompts, chat nuevo y ventana chica (el campo y
 Enviar tienen que entrar). IA-5: tarjeta de plan (Aplicar, Cancelar, Esc), Guiar, Cancelar con vuelta atrás,
-«Deshacer este pedido» y el aviso de APP_BUSY con un comando abierto. El proveedor es el falso: sin red ni gasto."""
+«Deshacer este pedido» y el aviso de APP_BUSY con un comando abierto. IA-6: elegir «Claude Code (tu suscripción)» en
+Preferencias (teclado y clic en Aceptar), ruta mala tecleada, y un pedido con el CLI simulado que entra por el puente en
+vivo (encendido solo durante el pedido) con la tarjeta Aplicar. El proveedor es el falso: sin red ni gasto."""
 import sys
 import threading
 
@@ -12,7 +14,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QToolButton
 
+from omnicad.asistente import config
+from omnicad.asistente.proveedores.agente_local import AgenteLocal
 from omnicad.asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
+from omnicad.servidor_mcp.puente_cliente import ClientePuente
 
 s, ids = escena.construir()
 app, v = A.iniciar(s.doc)
@@ -75,6 +80,98 @@ def dentro(w, ventana):
     """El widget entero se ve dentro de la ventana (no quedó cortado ni afuera)."""
     caja = w.rect().translated(w.mapTo(ventana, w.rect().topLeft()))
     return w.isVisible() and ventana.rect().contains(caja)
+
+
+class CliSimulado(AgenteLocal):
+    """Hace lo que haría Claude Code: llama herramientas por el puente en vivo (TCP + token de puente.json)."""
+
+    def __init__(self, archivo, llamadas):
+        self.tipo, self.nombre, self.sesion, self.proceso = "claude_code", "Claude Code", None, None
+        self.archivo, self.llamadas, self.respuestas, self.puente_visto = archivo, llamadas, [], None
+
+    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None):
+        cliente = ClientePuente(self.archivo)
+        self.puente_visto = cliente.conectar()
+        for nombre, args in self.llamadas:
+            r = cliente.llamar(nombre, args)
+            self.respuestas.append(r)
+            al_evento("herramienta", {"nombre": nombre, "args": args, "respuesta": r})
+        cliente.cerrar()
+        al_evento("texto", "Listo: caja creada.")
+        self.sesion = "sesion-simulada"
+        return {"motivo": "fin", "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
+
+
+def suscripcion(p):
+    """IA-6: Preferencias › Asistente IA con el teclado, ruta mala y un pedido con el CLI simulado por el puente."""
+    from PySide6.QtCore import QTimer
+    from omnicad.ui.preferencias import DialogoPreferencias
+    dlg = DialogoPreferencias(v.prefs, v, "asistente")
+    dlg.aplicado.connect(v.aplicar_preferencias)
+    dlg.show()
+    A.esperar(300)
+    combo = dlg.controles["asistente/proveedor"]
+    QTest.mouseClick(combo, Qt.LeftButton)
+    A.esperar(150)
+    QTest.keyClick(combo.view(), Qt.Key_Escape)
+    for _ in range(combo.count()):
+        if combo.currentData() == "claude_code":
+            break
+        QTest.keyClick(combo, Qt.Key_Down)
+    estado = dlg.estado_clave.text()
+    ruta = dlg.controles["asistente/ruta_claude_code"]
+    A.reg(AR, "Preferencias: elegir «Claude Code (tu suscripción)» con el teclado explica que usa el CLI logueado",
+          combo.currentData() == "claude_code" and "suscripción" in estado and "no ve ni guarda" in estado, estado[:90])
+    A.reg(AR, "Preferencias: la ruta del ejecutable aparece autodetectada (o dice que no está)",
+          bool(ruta.placeholderText()) and ruta.text() == "", ruta.placeholderText())
+    QTest.mouseClick(ruta, Qt.LeftButton)
+    QTest.keyClicks(ruta, "D:/no/existe/claude.exe")
+    A.foto(dlg, "asistente_pref_suscripcion")
+    QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
+    A.esperar(200)
+    A.reg(AR, "Aceptar guarda proveedor y ruta, y la cabecera del panel muestra Claude Code sin modelo",
+          v.prefs["asistente/proveedor"] == "claude_code" and v.prefs["asistente/ruta_claude_code"] ==
+          "D:/no/existe/claude.exe" and p.etiqueta_modelo.text() == "Claude Code (tu suscripción)",
+          p.etiqueta_modelo.text())
+    p.crear_proveedor = config.crear_proveedor
+    escribir(p, "caja", Qt.Key_Return)
+    A.reg(AR, "con una ruta que no existe, el chat dice claro que no está instalado y dónde lo buscó",
+          not p.trabajando and "no está instalado" in textos(p)[-1] and "D:/no/existe" in textos(p)[-1], textos(p)[-1])
+    v.prefs["asistente/ruta_claude_code"] = ""
+
+    import tempfile
+    from pathlib import Path
+    archivo = p.puente.archivo = Path(tempfile.mkdtemp(prefix="omnicad_puente_")) / "puente.json"  # no pisa el real
+    cli = CliSimulado(archivo, [("get_scene_info", {}), ("create_box", {"length": 10, "width": 10, "height": 10})])
+    p.crear_proveedor = lambda _cfg: cli
+    p.modo.setCurrentIndex(p.modo.findData("hacer"))
+    n = len(v.doc.operaciones)
+    clics = []
+
+    def aplicar():                           # adentro del bucle de la tarjeta, como la persona apretando Aplicar
+        if p.tarjeta is not None and p.tarjeta.pendiente:
+            clics.append(1)
+            QTest.mouseClick(p.tarjeta.b_aplicar, Qt.LeftButton)
+
+    reloj = QTimer(interval=150, timeout=aplicar)
+    reloj.start()
+    apagado_antes = not p.puente.activo and (v.puente is None or not v.puente.activo)
+    escribir(p, "crea una caja de 10 mm", Qt.Key_Return)   # QTest.keyClicks con «á» tira el proceso
+    esperar(p, aplicar=False)
+    reloj.stop()
+    A.reg(AR, "suscripción: con el puente apagado, el pedido lo enciende y el CLI llega a OmniCAD",
+          apagado_antes and cli.puente_visto and [r["ok"] for r in cli.respuestas] == [True, True])
+    A.reg(AR, "suscripción: el cambio pasa por la tarjeta Aplicar y la caja aparece con su línea en el chat",
+          clics == [1] and len(v.doc.operaciones) == n + 1 and lineas(p)[-1].startswith("✓ create_box"),
+          f"tarjetas={len(clics)} lineas={lineas(p)[-2:]}")
+    A.reg(AR, "suscripción: al terminar el puente vuelve a apagarse y queda «Deshacer este pedido»",
+          not p.puente.activo and not archivo.exists() and botones_deshacer(p)[-1].isEnabled())
+    A.foto(v, "asistente_suscripcion")
+    QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
+    A.reg(AR, "suscripción: «Deshacer este pedido» saca la caja del CLI", len(v.doc.operaciones) == n)
+    v.prefs["asistente/proveedor"] = "anthropic"
+    p.actualizar_cabecera()
+    p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
 
 
 def pedido():
@@ -311,6 +408,8 @@ def pedido():
     esperar(p, aplicar=False)
     v.resize(1900, 1000)
     A.esperar(200)
+
+    suscripcion(p)
 
     # ---------------------------------------------------------------- atajo y cerrar
     QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)

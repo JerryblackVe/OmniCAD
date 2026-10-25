@@ -7,6 +7,7 @@ filas "etiqueta: control" y los botones Restablecer / Aplicar / Aceptar / Cancel
 Solo se ofrecen opciones que OmniCAD cumple de verdad. Las categorías de Fusion que
 dependen de la nube o de licencias (Tokens, Red, Recopilación de datos…) no se copian.
 """
+import subprocess
 import threading
 
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QF
 
 from .. import NOMBRE_APP
 from ..asistente import config as config_asistente
+from ..asistente.proveedores.agente_local import AGENTES, AgenteLocal, ejecutable
 from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
 from . import iconos_tema, temas
@@ -43,6 +45,10 @@ DEFECTOS = {
     "asistente/modo": "guiar",
     "asistente/tope_usd": 0.5,               # gasto máximo por pedido; 0 = sin tope
     "asistente/imagenes": True,              # mandarle al modelo las imágenes del visor
+    "asistente/variante": "",                # OpenCode: --variant (esfuerzo); vacío = el del modelo
+    "asistente/ruta_claude_code": "",        # modo suscripción: ruta del CLI; vacío = el del PATH
+    "asistente/ruta_codex": "",
+    "asistente/ruta_opencode": "",
     "atajos/diseno": "extruir,empalme_3d",   # caja de herramientas (S): los que Fusion trae fijados
     "atajos/boceto": "",
     "atajos/barra": "",                      # comandos fijados en la barra de arriba (menú «Más» ⋮)
@@ -243,6 +249,10 @@ PAGINAS = [
         ("asistente/proveedor", "Proveedor", "combo", [(k, v[0]) for k, v in config_asistente.PROVEEDORES.items()]),
         ("asistente/modelo", "Modelo", "texto", None),
         ("asistente/base_url", "Dirección del servidor (base_url)", "texto", None),
+        ("asistente/variante", "Variante de OpenCode (esfuerzo: low, medium, high…)", "texto", None),
+        ("asistente/ruta_claude_code", "Ruta de Claude Code", "texto", None),
+        ("asistente/ruta_codex", "Ruta de Codex", "texto", None),
+        ("asistente/ruta_opencode", "Ruta de OpenCode", "texto", None),
         (None, "Clave de API", "estado_clave", None),
         ("asistente/modo", "Modo por defecto", "combo",
          [("explicar", "Explicar"), ("mostrar", "Mostrar"), ("guiar", "Guiar"), ("hacer", "Hacer")]),
@@ -445,9 +455,18 @@ class DialogoPreferencias(QDialog):
         """Si la variable de la clave del proveedor elegido está definida (sin mostrarla) y los valores de fábrica."""
         proveedor = self.controles["asistente/proveedor"].currentData()
         _nombre, variable, modelo, base_url = config_asistente.PROVEEDORES[proveedor]
-        self.controles["asistente/modelo"].setPlaceholderText(f"de fábrica: {modelo}")
-        self.controles["asistente/base_url"].setPlaceholderText(f"de fábrica: {base_url or 'la de Anthropic'}")
-        if variable is None:
+        agente = proveedor in config_asistente.AGENTES_LOCALES
+        self.controles["asistente/modelo"].setPlaceholderText(f"de fábrica: {modelo or 'el que use el CLI'}")
+        self.controles["asistente/base_url"].setPlaceholderText(
+            "no se usa" if agente else f"de fábrica: {base_url or 'la de Anthropic'}")
+        for tipo in config_asistente.AGENTES_LOCALES:     # autodetectada; lo escrito acá manda
+            self.controles[f"asistente/ruta_{tipo}"].setPlaceholderText(
+                ejecutable(tipo) or f"no se encuentra «{AGENTES[tipo][1]}» en el PATH")
+        if agente:
+            texto, rol = (f"No hace falta: usa el {AGENTES[proveedor][0]} instalado y logueado en esta PC, con tu "
+                          "suscripción. OmniCAD no ve ni guarda tu cuenta; si no está logueado, abrí una terminal y "
+                          f"corré «{AGENTES[proveedor][1]}».", "tenue")
+        elif variable is None:
             texto, rol = "No hace falta: el servidor local no pide clave.", "tenue"
         elif config_asistente.clave_definida(proveedor):
             texto, rol = f"✓ La variable {variable} está definida.", "ok"
@@ -472,7 +491,7 @@ class DialogoPreferencias(QDialog):
         """Pide «OK» al modelo en un hilo aparte (la red no congela el diálogo)."""
         v = self.valores()
         try:
-            proveedor = self.crear_proveedor({k: v[f"asistente/{k}"] for k in ("proveedor", "modelo", "base_url")})
+            proveedor = self.crear_proveedor({k: v[f"asistente/{k}"] for k in config_asistente.CLAVES})
         except ErrorProveedor as e:
             self._conexion_probada(f"✗ {e}")
             return
@@ -481,6 +500,16 @@ class DialogoPreferencias(QDialog):
         temas.poner_rol(self.resultado_conexion, "tenue")
 
         def probar():
+            if isinstance(proveedor, AgenteLocal):   # sin gastar cupo: que esté instalado (el login lo dice el pedido)
+                try:
+                    version = proveedor.version()
+                except (OSError, subprocess.SubprocessError) as e:
+                    version, error = None, e
+                else:
+                    error = "no respondió a --version"
+                self.conexion_probada.emit(f"✓ Encontrado: {version} ({proveedor.ruta})." if version else
+                                           f"✗ {proveedor.nombre} ({proveedor.ruta}) {error}.")
+                return
             try:
                 r = proveedor.responder("", [{"rol": "usuario", "contenido": [
                     {"tipo": "texto", "texto": "Respondé solo OK."}]}], [])
