@@ -312,11 +312,10 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 ## Asistente IA (chat dentro de la app)
 
-Abierto 8. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+Abierto 7. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| IA-1 | Núcleo del asistente sin Qt: proveedor, bucle de herramientas, núcleo de ~25 herramientas y buscar_herramientas | Abierto | Alta | Todo (fase 1 del plan). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Abierto | Media | Todo (fase 2); prueba paga solo con OK de Gerardo. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-3 | Prompt de sistema del asistente: contexto del documento, modos Explicar/Mostrar/Guiar/Hacer y biblioteca de prompts | Abierto | Alta | Todo (fase 3). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-4 | Panel del Asistente, ícono, botón en la barra de la aplicación, Ayuda › Asistente y pestaña de Preferencias | Abierto | Media | Todo (fase 4). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
