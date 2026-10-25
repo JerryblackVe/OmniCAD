@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 219: Abierto 169 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 216: Abierto 164 · Parcial 31 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -312,15 +312,14 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 ## Asistente IA (chat dentro de la app)
 
-Abierto 5 · Parcial 1. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+Abierto 3 · Parcial 1. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Parcial | Media | Queda: streaming SSE (hoy la respuesta llega completa); prueba real con Ollama (no está instalado en esta PC); devolver los bloques de pensamiento de Claude entre vueltas; prueba paga solo con OK de Gerardo. | omnicad/asistente/proveedores/anthropic.py; omnicad/asistente/proveedores/openai_compat.py; tests/test_asistente_proveedores.py | 2026-10-25 |
-| IA-5 | Permisos del asistente: plan con Aplicar, «Deshacer este pedido», Cancelar con vuelta atrás y tope de gasto | Abierto | Alta | Todo (fase 5); relacionado con CL1. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
-| IA-6 | Asistente con la suscripción del usuario: Claude Code, Codex y OpenCode por el puente en vivo | Abierto | Alta | Todo (fase 6); Claude Code incluido (decisión de Gerardo, 2026-10-25). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
-| IA-7 | Historial de chats del asistente y herramientas get/set_assistant_config y assistant_ask (MCP y CLI) | Abierto | Media | Todo (fase 7). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
-| IA-8 | Respuestas de ayuda del asistente con la documentación local, citando la fuente | Abierto | Media | Todo (fase 8). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-6 | Asistente con la suscripción del usuario: Claude Code, Codex y OpenCode por el puente en vivo | Abierto | Alta | Todo (fase 6); Claude Code incluido (decisión de Gerardo, 2026-10-25). | grep codex/opencode/suscrip sin resultados en omnicad/asistente/ y ui/asistente.py | 2026-10-25 |
+| IA-7 | Historial de chats del asistente y herramientas get/set_assistant_config y assistant_ask (MCP y CLI) | Abierto | Media | Todo (fase 7). | ui/asistente.py: «Historial de chats» grisado; grep assistant_ask sin resultados en omnicad/api/ | 2026-10-25 |
+| IA-8 | Respuestas de ayuda del asistente con la documentación local, citando la fuente | Abierto | Media | Todo (fase 8). | grep fusion_docs sin resultados en omnicad/asistente/ | 2026-10-25 |
 
 ## SolidCraft
 
@@ -346,11 +345,11 @@ Abierto 12 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md]
 
 ## Otros CAD libres
 
-Abierto 2. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
+Abierto 1 · Parcial 1. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| CL1 | Cambio de agente con vista previa y control de revisión | Abierto | Media | Comparar la revisión del documento antes de aplicar en modo en vivo. | grep revision/expected_revision sin resultados en api/protocolo_puente.py y ui/puente.py | 2026-10-20 |
+| CL1 | Cambio de agente con vista previa y control de revisión | Parcial | Media | Queda: control de revisión del documento (expected_revision) para los agentes externos del puente en vivo. El Asistente de la app ya muestra el plan y pide Aplicar antes de cambiar (IA-5). | omnicad/ui/asistente.py (_Tarjeta); tests/test_asistente_ui.py; grep revision/expected_revision sin resultados en api/protocolo_puente.py y ui/puente.py | 2026-10-25 |
 | CL3 | Tutoriales reproducibles con capítulos y cámara | Abierto | Media | Todo. | grep tutorial sin resultados | 2026-10-20 |
 
 ## C++

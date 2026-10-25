@@ -638,8 +638,9 @@ def _fase_interaccion(v, r):
 
 
 def _fase_asistente(v, r):
-    """Asistente IA (IA-4): el botón abre el panel, un pedido con el proveedor falso (sin red ni gasto) crea una caja
-    por el puente de la ventana, la línea de la herramienta aparece y el panel se cierra."""
+    """Asistente IA (IA-4 y IA-5): el botón abre el panel, un pedido con el proveedor falso (sin red ni gasto) muestra la
+    tarjeta de plan, Aplicar crea la caja por el puente de la ventana, la línea de la herramienta aparece,
+    «Deshacer este pedido» la saca y el panel se cierra."""
     from .asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
     from .timeline.documento import Documento
     v.set_documento(Documento())
@@ -653,14 +654,23 @@ def _fase_asistente(v, r):
     p.modo.setCurrentIndex(p.modo.findData("hacer"))
     p.campo.setPlainText("hace una caja de 30 x 20 x 10")
     QTest.keyClick(p.campo, Qt.Key_Return)
+    tarjeta = None
     for _ in range(250):
         if not p.trabajando:
             break
+        if p.tarjeta is not None:
+            tarjeta = p.tarjeta
+            r.check(not v.doc.operaciones, "Asistente: la tarjeta de plan aparece antes de cambiar el documento")
+            QTest.mouseClick(tarjeta.b_aplicar, Qt.LeftButton)
         QTest.qWait(20)
-    from PySide6.QtWidgets import QToolButton
+    from PySide6.QtWidgets import QPushButton, QToolButton
     lineas = [b.text() for b in p.lista.findChildren(QToolButton, "herramienta_asistente")]
-    r.check(not p.trabajando and len(v.doc.operaciones) == 1 and lineas == ["✓ create_box → op1"],
-            f"Asistente: el pedido falso crea la caja en la ventana y muestra la herramienta ({lineas})")
+    r.check(tarjeta is not None and not p.trabajando and len(v.doc.operaciones) == 1 and lineas == ["✓ create_box → op1"],
+            f"Asistente: Aplicar en la tarjeta crea la caja en la ventana y muestra la herramienta ({lineas})")
+    deshacer = p.lista.findChildren(QPushButton, "deshacer_pedido")
+    if deshacer:
+        QTest.mouseClick(deshacer[-1], Qt.LeftButton)
+    r.check(len(deshacer) == 1 and not v.doc.operaciones, "Asistente: «Deshacer este pedido» saca la caja")
     v.acciones["asistente"].trigger()
     r.check(not p.isVisible() and not v.acciones["asistente"].isChecked(), "Asistente: el mismo botón cierra el panel")
     v.doc.modificado = False

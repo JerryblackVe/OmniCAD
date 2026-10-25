@@ -63,6 +63,11 @@ class Herramientas:
         })
         return definiciones
 
+    def necesita_aprobacion(self, nombre):
+        """En Guiar y Hacer, lo que Mostrar no permitiría (cambia algo) se aprueba antes de correrlo."""
+        return self.modo in ("guiar", "hacer") and nombre in self.catalogo and not en_modo(self.catalogo[nombre],
+                                                                                            "mostrar")
+
     def permitida(self, nombre):
         """Indica si la herramienta del catálogo está ofrecida (buscar_herramientas la atiende el bucle)."""
         return nombre in self.catalogo and (nombre in NUCLEO or self.catalogo[nombre]["grupo"] in self.grupos)

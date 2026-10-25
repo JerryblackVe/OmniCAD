@@ -8,6 +8,11 @@ Hilos: el pedido a la IA corre en un hilo aparte (la red no congela la ventana).
 el hilo de la interfaz, por `PuenteAgentes.ejecutar` (APP_BUSY, sin `dev` ni execute_code, refresco de la ventana),
 y el hilo de trabajo espera el resultado (BlockingQueuedConnection). No usa el servidor TCP del puente: anda con
 Preferencias › General › «agentes IA» apagado.
+
+Permisos (IA-5), como *With me* / *For me* de Fusion: en Hacer y Guiar, antes de cambiar el documento el chat muestra
+la tarjeta de plan con Aplicar y Cancelar (Hacer la pide una vez por pedido; Guiar, en cada tanda) y el hilo de
+trabajo espera la respuesta. Antes de cada pedido se toma una marca del documento: Cancelar o el tope de gasto vuelven
+a ella, y al terminar «Deshacer este pedido» también (si después no cambiaste nada a mano).
 """
 import json
 import threading
@@ -19,7 +24,7 @@ from PySide6.QtWidgets import (QComboBox, QDockWidget, QFrame, QHBoxLayout, QLab
 
 from .. import api
 from ..api.errores import error
-from ..asistente import bucle, config
+from ..asistente import bucle, config, marca
 from ..asistente.herramientas import MODOS, Herramientas
 from ..asistente.prompt import armar_sistema, cargar_prompts
 from ..asistente.proveedores.base import ErrorProveedor
@@ -61,6 +66,65 @@ def resumen_herramienta(nombre, respuesta):
     resultado = respuesta.get("result")
     paso = resultado.get("feature") if isinstance(resultado, dict) else None
     return f"✓ {nombre}" + (f" → {paso['id']}" if isinstance(paso, dict) and paso.get("id") else "")
+
+
+def resumen_pedido(nombre, args):
+    """Línea legible de la tarjeta de plan: «extrude(profile="op2", distance=10)», con valores recortados."""
+    partes = []
+    for k, v in (args or {}).items():
+        texto = json.dumps(v, ensure_ascii=False, default=str)
+        partes.append(f"{k}={texto if len(texto) <= 40 else texto[:39] + '…'}")
+    return f"{nombre}({', '.join(partes)})"
+
+
+class _Tarjeta(QFrame):
+    """Tarjeta de plan en el chat: lo que el Asistente va a cambiar, con Aplicar y Cancelar (Esc = Cancelar)."""
+
+    def __init__(self, titulo, pedidos, decidir):
+        super().__init__(objectName="tarjeta_asistente", frameShape=QFrame.StyledPanel)
+        self.decidir = decidir
+        self.pendiente = True
+        v = QVBoxLayout(self)
+        v.setContentsMargins(6, 6, 6, 6)
+        cab = QLabel(titulo, wordWrap=True)
+        temas.poner_rol(cab, "titulo")
+        lista = QLabel("\n".join("• " + resumen_pedido(p.nombre, p.args) for p in pedidos), wordWrap=True,
+                       textInteractionFlags=Qt.TextSelectableByMouse)
+        for etiqueta in (cab, lista):
+            etiqueta.setTextFormat(Qt.PlainText)
+            etiqueta.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)   # angosto: corta, no ensancha
+        self.estado = QLabel(wordWrap=True)
+        temas.poner_rol(self.estado, "tenue")
+        self.estado.hide()
+        self.b_aplicar = QPushButton("Aplicar", objectName="boton_primario", toolTip="Hace los cambios de la lista.")
+        self.b_cancelar = QPushButton("Cancelar", toolTip="No hace nada de la lista (Esc).")
+        self.b_aplicar.clicked.connect(lambda: self.responder(True))
+        self.b_cancelar.clicked.connect(lambda: self.responder(False))
+        botones = QHBoxLayout()
+        botones.addStretch(1)
+        botones.addWidget(self.b_cancelar)
+        botones.addWidget(self.b_aplicar)
+        for w in (cab, lista, self.estado):
+            v.addWidget(w)
+        v.addLayout(botones)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape and self.pendiente:
+            self.responder(False)
+            return
+        super().keyPressEvent(e)
+
+    def responder(self, si):
+        if self.pendiente:
+            self.cerrar("✓ Aplicado" if si else "✗ No aprobado: no se hizo nada de la lista.")
+            self.decidir(si)
+
+    def cerrar(self, texto):
+        self.pendiente = False
+        for b in (self.b_aplicar, self.b_cancelar):
+            b.hide()
+        self.estado.setText(texto)
+        self.estado.show()
 
 
 class CampoPedido(QPlainTextEdit):
@@ -121,6 +185,8 @@ class _Trabajo(QObject):
         self.tope_usd = tope_usd
         self.gasto = 0.0
         self.cancelar = threading.Event()
+        self._decidido = threading.Event()
+        self._aprobado = False
 
     @property
     def sobre_tope(self):
@@ -128,6 +194,21 @@ class _Trabajo(QObject):
 
     def cancelado(self):
         return self.cancelar.is_set() or self.sobre_tope
+
+    def aprobar(self, pedidos):
+        """Hilo de trabajo: muestra la tarjeta de plan y espera Aplicar o Cancelar (un Cancelar del pedido corta)."""
+        self._decidido.clear()
+        self._aprobado = False
+        self.evento.emit("aprobar", pedidos)
+        while not self._decidido.wait(0.1):
+            if self.cancelado():
+                return False
+        return self._aprobado
+
+    def decidir(self, si):
+        """Hilo de la interfaz: la respuesta de la tarjeta."""
+        self._aprobado = si
+        self._decidido.set()
 
     def _al_evento(self, tipo, datos):
         if tipo == "uso":
@@ -138,7 +219,7 @@ class _Trabajo(QObject):
         proveedor, mensajes, ejecutar, herramientas, sistema = self.args
         try:
             resultado = bucle.correr(proveedor, mensajes, ejecutar, herramientas, sistema, self._al_evento,
-                                     cancelado=self.cancelado)
+                                     cancelado=self.cancelado, aprobar=self.aprobar)
         except Exception as e:  # noqa: BLE001 — el hilo no tiene a quién avisar si no es por la señal
             self.evento.emit("error", f"{type(e).__name__}: {e}")
             resultado = {"motivo": "error"}
@@ -160,6 +241,10 @@ class PanelAsistente(QDockWidget):
         self.crear_proveedor = config.crear_proveedor  # los tests ponen el proveedor falso
         self.mensajes = []
         self.trabajo = None
+        self.tarjeta = None             # tarjeta de plan esperando Aplicar o Cancelar
+        self._marca = None              # el documento antes del pedido en curso
+        self.b_deshacer = None          # «Deshacer este pedido» del último pedido (los anteriores se apagan)
+        self._aviso_ocupado = False
         self._uso = None
 
         cuerpo = QWidget()
@@ -307,6 +392,14 @@ class PanelAsistente(QDockWidget):
             self._agregar_texto(datos)
         elif tipo == "herramienta":
             self._agregar_herramienta(datos["nombre"], datos["args"], datos["respuesta"])
+            if datos["respuesta"].get("error_kind") == "APP_BUSY" and not self._aviso_ocupado:
+                self._aviso_ocupado = True
+                self._agregar_texto(f"⚠ {datos['respuesta'].get('mensaje', 'OmniCAD está ocupado.')} Terminá o "
+                                    "cancelá el comando abierto (o salí del boceto) y reintentá el pedido.", "aviso")
+        elif tipo == "aprobar":
+            titulo = ("Plan del Asistente: con tu OK hace esto y sigue hasta terminar el pedido."
+                      if self.trabajo.args[3].modo == "hacer" else "Próximo paso: con tu OK el Asistente hace esto.")
+            self.tarjeta = self._agregar(_Tarjeta(titulo, datos, self._decidir))
         elif tipo == "imagen":
             self._agregar_imagen(datos)
         elif tipo == "error":
@@ -319,16 +412,77 @@ class PanelAsistente(QDockWidget):
                 u["costo_usd"] = (u["costo_usd"] or 0) + datos["costo_usd"]
             self._mostrar_uso()
 
+    def _decidir(self, si):
+        self.tarjeta = None
+        if self.trabajo is not None:
+            self.trabajo.decidir(si)
+
     @Slot(object)
     def _termino(self, resultado):
-        motivo = resultado["motivo"]
-        if motivo == "cancelado":
-            self._agregar_texto("Pedido cancelado.", "tenue")
-        elif motivo == "tope_gasto":
+        motivo, m = resultado["motivo"], self._marca
+        if motivo == "tope_gasto":
             self._agregar_texto(f"⚠ Se cortó el pedido: el gasto superó el tope de {_usd(self.trabajo.tope_usd)} "
                                 "(Preferencias › Asistente IA).", "aviso")
+        elif motivo == "rechazado":
+            self._agregar_texto("No aprobaste los cambios: no se hicieron.", "tenue")
+        cambio = marca.cambio(m, self.ventana.doc)
+        if motivo in ("cancelado", "tope_gasto"):
+            if not cambio:
+                self._agregar_texto("Pedido cancelado: el documento no cambió.", "tenue")
+            elif self._volver(m):
+                self._agregar_texto("Pedido cancelado: el documento volvió a como estaba antes del pedido.", "tenue")
+                cambio = False
+        if cambio:
+            self._boton_deshacer(m, self.ventana.doc._instantanea())
         self.trabajo = None
         self._ocupado(False)
+
+    # ------------------------------------------------------------ deshacer el pedido entero
+    def _volver(self, m):
+        """Vuelve a la marca refrescando la ventana. Si no se puede ahora, lo dice en el chat y devuelve False."""
+        v = self.ventana
+        if v.doc is not m["doc"]:
+            self._agregar_texto("⚠ No se pudo volver atrás: el pedido abrió o creó otro documento.", "aviso")
+            return False
+        ocupado = self.puente.motivo_ocupado()
+        if ocupado:
+            self._agregar_texto(f"⚠ No se pudo volver atrás: {ocupado}. Terminá o cancelá el comando abierto y usá "
+                                "«Deshacer este pedido».", "aviso")
+            return False
+        marca.volver(m)
+        if v.seleccion:
+            v._seleccionar([])           # lo elegido puede ya no existir
+        v.releer_espacios()
+        return True
+
+    def _boton_deshacer(self, m, fin):
+        boton = QPushButton("Deshacer este pedido", objectName="deshacer_pedido",
+                            toolTip="Deja el documento como estaba antes de este pedido.")
+        boton.clicked.connect(lambda: self._deshacer_pedido(m, fin))
+        self.b_deshacer = self._agregar(boton)
+
+    def _apagar_deshacer(self, motivo="Solo se puede deshacer entero el último pedido; usá Deshacer (Ctrl+Z)."):
+        """Apaga el botón y suelta su marca: guarda el documento y su pila de deshacer (pueden pesar cientos de MB con
+        un STEP importado), por eso solo el último pedido se deshace entero."""
+        if self.b_deshacer is not None:
+            self.b_deshacer.clicked.disconnect()
+            self.b_deshacer.setEnabled(False)
+            self.b_deshacer.setToolTip(motivo)
+            self.b_deshacer = None
+
+    def _deshacer_pedido(self, m, fin):
+        """Solo si el documento sigue como lo dejó el pedido: nunca se deshace trabajo hecho después a mano."""
+        if self.trabajando:
+            self._agregar_texto("Esperá a que termine el pedido en curso.", "tenue")
+            return
+        if self.ventana.doc is not m["doc"] or self.ventana.doc._instantanea() != fin:
+            self._apagar_deshacer("Deshabilitado: el documento cambió después de este pedido.")
+            self._agregar_texto("No se deshizo: el documento cambió después de este pedido (a mano o con otro "
+                                "pedido) y se perdería ese trabajo. Usá Deshacer (Ctrl+Z) paso a paso.", "aviso")
+            return
+        if self._volver(m):
+            self._apagar_deshacer("El pedido ya se deshizo.")
+            self._agregar_texto("Listo: el documento volvió a como estaba antes del pedido.", "tenue")
 
     # ------------------------------------------------------------ enviar, cancelar, chat nuevo
     @property
@@ -345,7 +499,9 @@ class PanelAsistente(QDockWidget):
         self.cancelar() if self.trabajando else self.enviar()
 
     def _escape(self):
-        if self.trabajando:
+        if self.tarjeta is not None:
+            self.tarjeta.responder(False)
+        elif self.trabajando:
             self.cancelar()
         else:
             self.ventana.visor.setFocus()
@@ -380,6 +536,9 @@ class PanelAsistente(QDockWidget):
             ejecutar = lambda nombre, args: _sin_imagenes(self._ejecutor.ejecutar(nombre, args))  # noqa: E731
         self._uso = {"entrada": 0, "salida": 0, "costo_usd": None}
         self._mostrar_uso()
+        self._apagar_deshacer()
+        self._marca = marca.tomar(self.ventana.doc)
+        self._aviso_ocupado = False
         self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, Herramientas(modo=modo), sistema,
                                 prefs["asistente/tope_usd"])
         self.trabajo.evento.connect(self._evento)
@@ -390,9 +549,12 @@ class PanelAsistente(QDockWidget):
         return True
 
     def cancelar(self):
-        """Corta el bucle en la próxima vuelta o herramienta (deshacer lo hecho llega con IA-5)."""
+        """Corta el bucle en la próxima vuelta o herramienta; al terminar, el documento vuelve a la marca."""
         if self.trabajando:
             self.trabajo.cancelar.set()
+            if self.tarjeta is not None:
+                self.tarjeta.cerrar("Pedido cancelado.")
+                self.tarjeta = None
             self.b_enviar.setText("Cancelando…")
             self.b_enviar.setEnabled(False)
 
@@ -400,6 +562,7 @@ class PanelAsistente(QDockWidget):
         if self.trabajando:
             return
         self.mensajes = []
+        self._apagar_deshacer()
         while self.lay_mensajes.count() > 1:
             self.lay_mensajes.takeAt(0).widget().deleteLater()
         self._uso = None

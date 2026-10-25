@@ -8,11 +8,17 @@ from .herramientas import Herramientas
 
 
 def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_evento=None,
-           tope_vueltas=25, cancelado=None):
-    """Agrega respuestas y resultados al chat y devuelve motivo, vueltas y uso acumulado."""
+           tope_vueltas=25, cancelado=None, aprobar=None):
+    """Agrega respuestas y resultados al chat y devuelve motivo, vueltas y uso acumulado.
+
+    `aprobar(pedidos) -> bool` se llama antes de una tanda con herramientas que cambian algo: en Hacer, una vez
+    por pedido (aprobado el plan, sigue solo); en Guiar, en cada tanda. Si no aprueba, la tanda vuelve al modelo
+    como CANCELLED y el motivo es «rechazado» (o «cancelado», si además se canceló el pedido).
+    """
     herramientas = Herramientas() if herramientas is None else herramientas
     resultado = {"motivo": "tope", "vueltas": 0,
                  "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
+    aprobado = False
 
     def emitir(tipo, datos):
         if al_evento is not None:
@@ -62,9 +68,20 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
             return resultado
 
         resultados = []
-        interrumpido = False
+        interrumpido = rechazado = False
+        pendientes = [p for p in respuesta.herramientas if herramientas.necesita_aprobacion(p.nombre)]
+        if aprobar is not None and pendientes and not aprobado and not (cancelado is not None and cancelado()):
+            if aprobar(pendientes):
+                aprobado = herramientas.modo == "hacer"
+            elif cancelado is not None and cancelado():
+                interrumpido = True
+            else:
+                rechazado = True
         for pedido in respuesta.herramientas:
-            if interrumpido or (cancelado is not None and cancelado()):
+            if rechazado:
+                salida = error("CANCELLED", "La persona no aprobó estos cambios; no se ejecutó nada.",
+                               "Preguntale qué quiere cambiar del plan antes de proponer otro.").a_dict()
+            elif interrumpido or (cancelado is not None and cancelado()):
                 interrumpido = True
                 salida = error("CANCELLED", "El usuario canceló el pedido; no se ejecutó.").a_dict()
             elif pedido.nombre == "buscar_herramientas":
@@ -96,8 +113,8 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
             for imagen in imagenes:
                 emitir("imagen", imagen)
         mensajes.append({"rol": "usuario", "contenido": resultados})
-        if interrumpido:
-            resultado["motivo"] = "cancelado"
+        if interrumpido or rechazado:
+            resultado["motivo"] = "cancelado" if interrumpido else "rechazado"
             return resultado
 
     emitir("error", f"Se llegó al tope de {tope_vueltas} vueltas: el pedido se cortó.")

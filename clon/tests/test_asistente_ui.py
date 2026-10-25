@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Panel del Asistente IA (ui/asistente.py) con la ventana real offscreen y el ProveedorFalso: sin red ni gasto."""
+import json
 import os
+import sys
 import threading
 
 import pytest
@@ -36,9 +38,12 @@ def ventana(tmp_path_factory):
 
 
 @pytest.fixture
-def panel(ventana):
-    """Panel abierto, chat nuevo, documento vacío; el proveedor lo pone cada test en `panel.guion`."""
+def panel(ventana, monkeypatch):
+    """Panel abierto, chat nuevo, documento vacío; el proveedor lo pone cada test en `panel.guion`. Ninguna
+    excepción puede escaparse de un slot de Qt (PySide las manda a sys.excepthook)."""
     from omnicad.timeline.documento import Documento
+    escapadas = []
+    monkeypatch.setattr(sys, "excepthook", lambda *e: escapadas.append(e))
     ventana.set_documento(Documento())
     ventana.mostrar_asistente(True)
     p = ventana.asistente
@@ -49,14 +54,35 @@ def panel(ventana):
     p.cancelar()
     esperar(p)
     ventana.mostrar_asistente(False)
+    assert not escapadas
 
 
-def esperar(p, ms=8000):
+def esperar(p, ms=8000, aplicar=True):
+    """Espera a que termine el pedido; con `aplicar`, aprueba cada tarjeta de plan con un clic en Aplicar."""
     for _ in range(ms // 20):
         if not p.trabajando:
             return True
+        if aplicar and p.tarjeta is not None:
+            QTest.mouseClick(p.tarjeta.b_aplicar, Qt.LeftButton)
         QTest.qWait(20)
     return False
+
+
+def esperar_tarjeta(p, ms=5000):
+    for _ in range(ms // 20):
+        if p.tarjeta is not None:
+            return p.tarjeta
+        QTest.qWait(20)
+    return None
+
+
+def textos_chat(p):
+    from PySide6.QtWidgets import QLabel
+    return [w.text() for w in p.lista.findChildren(QLabel)]
+
+
+def receta(doc):
+    return json.dumps(doc.a_dict())
 
 
 def escribir(p, texto):
@@ -298,3 +324,148 @@ def test_preferencias_asistente_estado_de_clave_y_probar_conexion(ventana, monke
     dlg._restablecer()
     assert ventana.prefs["asistente/proveedor"] == "anthropic" and ventana.prefs["asistente/tope_usd"] == 0.5
     dlg.close()
+
+
+# ------------------------------------------------------------ IA-5: permisos, deshacer el pedido y APP_BUSY
+def tarjetas(p):
+    from omnicad.ui.asistente import _Tarjeta
+    return p.lista.findChildren(_Tarjeta)
+
+
+def caja(i, largo=40):
+    return PedidoHerramienta(f"h{i}", "create_box", {"length": largo, "width": 30, "height": 20})
+
+
+def test_hacer_muestra_una_tarjeta_y_corre_todo(panel, ventana):
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2, 10)]), Respuesta(texto="ok")]
+    escribir(panel, "dos cajas")
+    assert panel.enviar()
+    tarjeta = esperar_tarjeta(panel)
+    assert tarjeta is not None and ventana.doc.operaciones == []      # nada corre antes de Aplicar
+    assert any("create_box(length=40" in t for t in textos_chat(panel))
+    QTest.mouseClick(tarjeta.b_aplicar, Qt.LeftButton)
+    assert esperar(panel, aplicar=False)
+    assert len(tarjetas(panel)) == 1 and len(ventana.doc.operaciones) == 2
+
+
+def test_guiar_pide_en_cada_tanda(panel, ventana):
+    panel.modo.setCurrentIndex(panel.modo.findData("guiar"))
+    panel.guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2, 10)]), Respuesta(texto="ok")]
+    escribir(panel, "dos cajas")
+    assert panel.enviar() and esperar(panel)
+    assert len(tarjetas(panel)) == 2 and len(ventana.doc.operaciones) == 2
+
+
+@pytest.mark.parametrize("como", ["boton", "esc_tarjeta", "esc_campo"])
+def test_rechazar_la_tarjeta_no_cambia_el_documento(panel, ventana, como):
+    antes = receta(ventana.doc)
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[caja(1)]), Respuesta(texto="no tendría que llegar")]
+    escribir(panel, "caja")
+    assert panel.enviar()
+    tarjeta = esperar_tarjeta(panel)
+    if como == "boton":
+        QTest.mouseClick(tarjeta.b_cancelar, Qt.LeftButton)
+    elif como == "esc_tarjeta":
+        QTest.keyClick(tarjeta.b_aplicar, Qt.Key_Escape)        # Esc sobre la tarjeta: sube del botón a la tarjeta
+    else:
+        QTest.keyClick(panel.campo, Qt.Key_Escape)
+    assert esperar(panel, aplicar=False)
+    assert receta(ventana.doc) == antes and lineas_herramienta(panel) == ["✗ create_box: CANCELLED"]
+    assert any("No aprobaste" in t for t in textos_chat(panel))
+    assert not panel.lista.findChildren(type(panel.b_enviar), "deshacer_pedido")
+
+
+def test_cancelar_a_mitad_vuelve_a_la_marca(panel, ventana):
+    """Aprobado el plan, la primera caja se crea; el usuario cancela mientras la IA piensa: vuelve todo atrás."""
+    from omnicad.timeline.documento import Documento
+    previo = Documento()
+    ventana.set_documento(previo)
+    from omnicad import api
+    sesion = api.Sesion()
+    sesion.doc = previo
+    api.llamar(sesion, "create_box", {"length": 5, "width": 5, "height": 5})
+    antes, pila = receta(previo), list(previo._deshacer)
+    pulsado = threading.Event()
+
+    class Lento(ProveedorFalso):
+        def responder(self, *a):
+            if len(self.recibidos) == 1:
+                pulsado.wait(5)
+            return super().responder(*a)
+
+    panel.crear_proveedor = lambda cfg: Lento([Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2)])])
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    escribir(panel, "cajas")
+    assert panel.enviar()
+    QTest.mouseClick(esperar_tarjeta(panel).b_aplicar, Qt.LeftButton)
+    for _ in range(250):
+        if len(previo.operaciones) == 2:
+            break
+        QTest.qWait(20)
+    assert len(previo.operaciones) == 2
+    QTest.mouseClick(panel.b_enviar, Qt.LeftButton)            # Cancelar
+    pulsado.set()
+    assert esperar(panel, aplicar=False)
+    assert receta(previo) == antes and previo._deshacer == pila
+    assert any("volvió a como estaba antes del pedido" in t for t in textos_chat(panel))
+
+
+def test_tope_de_gasto_vuelve_a_la_marca(panel, ventana):
+    ventana.prefs["asistente/tope_usd"] = 0.01
+    try:
+        panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+        panel.guion = [Respuesta(herramientas=[caja(1)]),
+                       Respuesta(herramientas=[caja(2)], uso={"entrada": 1, "salida": 1, "costo_usd": 0.05})]
+        escribir(panel, "cajas caras")
+        assert panel.enviar() and esperar(panel)
+    finally:
+        ventana.prefs["asistente/tope_usd"] = 0.5
+    assert ventana.doc.operaciones == []
+    assert any("volvió a como estaba" in t for t in textos_chat(panel))
+
+
+def _pedido_con_caja(panel):
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[caja(1)]), Respuesta(texto="Listo.")]
+    escribir(panel, "caja")
+    assert panel.enviar() and esperar(panel)
+    return panel.lista.findChildren(type(panel.b_enviar), "deshacer_pedido")[-1]
+
+
+def test_deshacer_este_pedido_vuelve_a_la_marca(panel, ventana):
+    antes = receta(ventana.doc)
+    boton = _pedido_con_caja(panel)
+    assert len(ventana.doc.operaciones) == 1
+    QTest.mouseClick(boton, Qt.LeftButton)
+    assert receta(ventana.doc) == antes and not boton.isEnabled()
+    assert ventana.doc.estado_final.cuerpos == {} and not ventana.acciones["deshacer"].isEnabled()
+
+
+def test_deshacer_este_pedido_no_pisa_cambios_manuales(panel, ventana):
+    boton = _pedido_con_caja(panel)
+    ventana.doc.renombrar(ventana.doc.operaciones[0].id, "Mi caja")    # la persona cambia algo a mano
+    despues = receta(ventana.doc)
+    QTest.mouseClick(boton, Qt.LeftButton)
+    assert receta(ventana.doc) == despues and not boton.isEnabled()
+    assert any("se perdería ese trabajo" in t for t in textos_chat(panel))
+
+
+def test_solo_el_ultimo_pedido_se_deshace_entero(panel, ventana):
+    viejo = _pedido_con_caja(panel)
+    nuevo = _pedido_con_caja(panel)
+    assert not viejo.isEnabled() and nuevo.isEnabled() and len(ventana.doc.operaciones) == 2
+    QTest.mouseClick(nuevo, Qt.LeftButton)
+    assert len(ventana.doc.operaciones) == 1 and panel.b_deshacer is None
+
+
+def test_app_busy_se_ve_en_el_chat(panel, ventana, monkeypatch):
+    monkeypatch.setattr(panel.puente, "motivo_ocupado", lambda: "el usuario está usando el comando «Extruir»")
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2)]), Respuesta(texto="ok")]
+    escribir(panel, "caja")
+    assert panel.enviar() and esperar(panel)
+    assert lineas_herramienta(panel) == ["✗ create_box: APP_BUSY"] * 2
+    avisos = [t for t in textos_chat(panel) if "Terminá o cancelá el comando abierto" in t]
+    assert len(avisos) == 1 and "Extruir" in avisos[0]
