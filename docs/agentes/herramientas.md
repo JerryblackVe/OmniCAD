@@ -4905,6 +4905,7 @@ Corre un pedido al Asistente IA SIN ventana, sobre el documento de esta sesión,
 - Parámetros:
   - `prompt` (texto; obligatorio): el pedido, en lenguaje natural (p. ej. "hacé una caja de 40 mm con empalme de 3").
   - `mode` ("explicar" | "mostrar" | "guiar" | "hacer"; opcional, por defecto `"hacer"`): explicar y mostrar no cambian el documento; guiar y hacer sí.
+  - `attachments` (lista de texto o null; opcional, por defecto `null`): rutas de archivos que van con el pedido, como el clip del panel: PDF, PNG, JPG, SVG o DXF, hasta 10.
 - CLI: `omnicad call assistant_ask --doc pieza.omnicad prompt=…`
 
 ### `list_assistant_chats`
