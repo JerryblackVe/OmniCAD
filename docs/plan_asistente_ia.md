@@ -175,6 +175,67 @@ instrucción: defensa contra inyección de prompt.
 | 7 | IA-7 | Historial de chats, herramientas `get/set_assistant_config` y `assistant_ask`, doc regenerada | `asistente/historial.py`, `api/herramientas_asistente.py`, `servidor_mcp/servidor.py`, `docs/agentes/` | Sonnet, medio | Reabrir un chat viejo; `omnicad assistant_ask` anda sin ventana; `test_doc_agentes` y test de que la clave no aparece en ningún archivo |
 | 8 | IA-8 | Respuestas de ayuda («¿cómo se hace…?») con la documentación local de OmniCAD, citando la fuente | `asistente/ayuda.py` | Sonnet, medio | Busca en `docs/guia_comandos.md`, `api/guia/` y `docs/agentes/herramientas.md`; cada respuesta cita archivo |
 | 9 | IA-9 | Adjuntos en el chat: ícono de clip, PDF, imágenes, SVG y DXF, hasta 10 por mensaje, pegar imagen del portapapeles (Ctrl+V) y arrastrar y soltar | `ui/asistente.py`, `asistente/adjuntos.py`, `asistente/proveedores/` | Opus, alto | La IA recibe cada adjunto: imágenes como imagen; PDF como documento nativo (Anthropic `document`, OpenAI `file`) o aviso claro si el proveedor no lo acepta; SVG y DXF con una vista previa en imagen más su ruta, para que pueda usar `insert_svg` / `insert_dxf`; el 11.º adjunto se rechaza con mensaje; tope de tamaño por archivo y solo extensiones permitidas (archivos de otros: validar, nunca ejecutar); en modo suscripción, la ruta en el pedido; prueba de usuario con clic en el clip, Ctrl+V de una imagen y arrastre |
+| 11 | IA-11 | Todas las herramientas desde el chat, de forma eficiente (detalle en «Fase 11») | `asistente/`, `servidor_mcp/` | Opus o Sol, alto | Ver «Fase 11 › Listo cuando» |
+
+## Fase 11 (IA-11): todas las herramientas desde el chat, de forma eficiente
+
+Pedido de Gerardo (2026-10-25), después de ver que el chat con Codex no podía usar `set_appearance` («falta
+habilitar»).
+
+### Problema (medido el 2026-10-25)
+
+| Dato | Evidencia |
+|---|---|
+| El catálogo tiene 340 herramientas útiles para el chat (sin `dev` ni `execute_code`); sus definiciones pesan unos **122 mil tokens** por paso (largo del JSON / 4). | script sobre `api.catalogo()` |
+| El núcleo que reciben los CLI (`Herramientas.para_cli()`) son 36 herramientas, unos **17 mil tokens**. | ídem |
+| `run_operation` llega a los 101 tipos de operación del timeline, pero lo que no es operación (aspecto, material, render, dibujo, animación, chapa, ensamble…) **no está al alcance en modo suscripción**: los CLI no tienen `buscar_herramientas`. | `asistente/herramientas.py` (`para_cli`); captura de Gerardo |
+| En modo API, `buscar_herramientas(tema)` suma un grupo ENTERO (`solido` son 74 herramientas): funciona, pero caro. | `Herramientas.buscar` |
+| Importar `omnicad.asistente.herramientas` antes que `omnicad.api` falla por un import circular (`agente_local` ↔ `herramientas`). | `python -c "import omnicad.asistente.herramientas"` |
+
+### Objetivo
+
+Que **cualquier** herramienta del catálogo (menos `dev`, `execute_code` y el grupo `asistente`) se pueda usar desde el
+chat en **los tres modos de conexión** (API, Claude Code, Codex, OpenCode), en **dos llamadas como mucho**, sin mandar
+las 340 definiciones en cada paso.
+
+### Diseño
+
+1. **Índice compacto en el prompt de sistema.** Una línea por grupo con su descripción y los NOMBRES de sus
+   herramientas, sin esquemas (unos 2-3 mil tokens). El modelo sabe todo lo que existe sin cargarlo.
+2. **`buscar_herramientas` más fino (modo API).** Acepta `consulta` (palabras, reusando el puntaje de `search_help`),
+   `nombres` (lista exacta) o `grupo`. Habilita SOLO lo que devuelve (tope de unas 10 por llamada) y contesta con nombre
+   y descripción corta. Las habilitadas se agregan AL FINAL de la lista de herramientas, para no romper la caché.
+3. **Dos meta-herramientas en el MCP del asistente (modo suscripción).** El `omnicad-mcp` que lanza el panel expone el
+   núcleo más:
+   - `find_tools(query | names | group)`: nombres, descripción y esquema de las que coinciden;
+   - `call_tool(name, args)`: ejecuta cualquier herramienta del catálogo por su nombre REAL.
+
+   Funciona con cualquier cliente MCP (no depende de `tools/list_changed`). `call_tool` pasa por el mismo camino que
+   hoy (`PuenteAgentes.ejecutar`): aplican la regla de modos (`en_modo`), la tarjeta **Aplicar** por el nombre real,
+   `APP_BUSY` y los bloqueos de `dev`, `execute_code` y `asistente`. Van detrás de un flag del servidor (solo para el
+   asistente); se anotan en `docs/brechas_mcp.md` (para un agente externo ya existe todo el catálogo).
+   Opcional, si el CLI lo soporta y se mide que conviene: anunciar herramientas nuevas con `tools/list_changed`.
+4. **Caché del prompt.** Anthropic: `cache_control` en el sistema y en la lista de herramientas (orden estable).
+   OpenAI cachea solo los prefijos largos: mantener el mismo orden. Los CLI manejan su propia caché.
+5. **Resultados recortados.** Un resultado de herramienta de más de unos 8 mil caracteres se recorta con una nota
+   («resultado recortado: pedí menos con …»), para que `get_scene_info` de un documento grande no se coma el contexto.
+6. **Arreglar el import circular** de `asistente/herramientas.py` ↔ `proveedores/agente_local.py`.
+
+### Listo cuando
+
+- Un test recorre las 340 herramientas: cada una es alcanzable en ≤ 2 llamadas en modo API (buscar + usar) y en modo
+  suscripción (`call_tool`), y las prohibidas se rechazan con un error claro.
+- Tokens de entrada por paso, medidos con el `uso` que reporta cada proveedor: **≤ 25 mil** en todos los modos
+  (núcleo + índice + lo habilitado), contra los 122 mil de mandar todo.
+- Prueba real con Codex (suscripción): «pintá la caja de rojo» usa `set_appearance` por `call_tool`, con la tarjeta
+  Aplicar y «Deshacer este pedido».
+- `import omnicad.asistente.herramientas` solo, sin error.
+- Ruff, `tests/test_asistente_*.py`, `test_servidor_mcp.py`, `test_doc_agentes.py`, humo y la pieza `asistente` de
+  prueba_ui en verde.
+
+Modelo y esfuerzo: Opus o GPT-6.1 Sol, alto (toca el bucle, el servidor MCP y la seguridad de los permisos).
+Archivos: `asistente/herramientas.py`, `asistente/prompt.py`, `asistente/bucle.py`, `asistente/proveedores/`
+(`anthropic.py`, `agente_local.py`), `servidor_mcp/`, `ui/puente.py` si hace falta.
 
 ## Orden y dependencias
 
