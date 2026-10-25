@@ -682,8 +682,11 @@ def _info_plano(plano):
             "v_axis": [_r(c) for c in plano.v], "normal": [_r(c) for c in plano.normal]}
 
 
-def _caja_uv(plano, cara):
-    caja = geo.caja_envolvente(cara)
+def _caja_uv(plano, perfil):
+    if perfil.caja_uv is not None:                    # el arreglo planar de Rust ya la trae: no hace falta armar la cara (BOC-28)
+        x0, y0, x1, y1 = perfil.caja_uv
+        return {"min": [_r(x0), _r(y0)], "max": [_r(x1), _r(y1)]}
+    caja = geo.caja_envolvente(perfil.cara)
     if not caja:
         return None
     (x0, y0, z0), (x1, y1, z1) = caja
@@ -694,7 +697,7 @@ def _caja_uv(plano, cara):
 
 def info_perfiles(br):
     return [{"index": i, "area": _r(p.area), "centroid": [_r(p.centroide_uv[0]), _r(p.centroide_uv[1])],
-             "bounding_box": _caja_uv(br.plano, p.cara), "curves": sorted(p.firma)}
+             "bounding_box": _caja_uv(br.plano, p), "curves": sorted(p.firma)}
             for i, p in enumerate(br.perfiles)]
 
 

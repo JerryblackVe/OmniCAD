@@ -80,6 +80,8 @@ def sin_soporte(operacion):
 
 
 def _comprobar_formas(valor, elegido):
+    if elegido == "opencascade" and "omnikernel" not in sys.modules:
+        return        # sin el módulo nativo cargado ninguna forma puede ser suya: no se recorren los argumentos (BOC-28)
     modulo = type(valor).__module__
     nativo = sys.modules.get("omnikernel")
     es_nativo = nativo is not None and isinstance(valor, nativo.Cuerpo)

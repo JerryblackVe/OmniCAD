@@ -3,6 +3,8 @@ use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, PyReadwriteArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+mod perfiles;
+
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 fn rasterizar(
@@ -194,5 +196,6 @@ fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rasterizar, m)?)?;
     m.add_function(wrap_pyfunction!(visibilidad, m)?)?;
     m.add_function(wrap_pyfunction!(oclusion, m)?)?;
+    m.add_function(wrap_pyfunction!(perfiles::arreglo_planar, m)?)?;
     Ok(())
 }

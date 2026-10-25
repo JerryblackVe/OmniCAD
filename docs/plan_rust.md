@@ -16,6 +16,9 @@ maturin y descargar los crates. Medición: rasterizador 17×, API caja 2,129 →
 PNG byte-idénticos. Detalle en `informe_tortura_2026-10-17.md`; comandos en `clon/rust/README.md`.
 El resto de este documento sigue siendo el plan de las próximas migraciones; R1 no se implementó: hoy el crate es un solo `clon/rust/src/lib.rs` (sin `src/zstd.rs`) y el descompresor sigue en Python puro (`io_archivos/zstd_puro.py`).
 
+Estado (2026-10-24): **segundo módulo Rust: R14**, arreglo planar de los perfiles de un boceto (`clon/rust/src/perfiles.rs`, BOC-28),
+con respaldo al `Splitter`. 200 «W» sobre un círculo (14,8 mil perfiles): `_detectar` de 3,9 s a 0,26 s. Detalle: sección 3 (R14) y `clon/rust/README.md`.
+
 Estado (2026-10-19): **fases 0 y 5 hechas en Python** (sección 4): P1–P5, P10–P12, P14, P19, P22 y P6–P9, P13; P16 y
 P24 quedaron cubiertos. Medido con `scripts/bench_rendimiento.py` (modos nuevos `memoria` e `interfaz`): arrastrar un
 punto del polígono de 24 en el editor 56 → 14 ms, hover de 1000 aristas 62 → 1 ms, editar un paso independiente de 4
@@ -97,6 +100,7 @@ por cuadro con datos chicos, la ganancia se la come el cruce y hay que pasarle l
 | R9 | **Hit-testing del boceto** (punto/curva más cercano, selección por ventana) | `ui/editor_boceto.py:631`, `642`, `2612`, `2740` | Doble bucle Python con `QPointF`; 400 curvas = 17,5 ms por movimiento (50–60 ms en 3D, estimado); el resaltado se apaga con más de 400 curvas | 20–50× | Bajo-medio (hay que mantener el índice sincronizado con Qt) | R5 |
 | R10 | **Lectura/escritura de mallas en texto** (STL ASCII, OBJ, PLY ASCII, 3MF) | `malla.py:562-681`, `696-798`, `exportar.py:58-109` | Bucles por línea/triángulo, `struct.pack` por triángulo | 10–30× | Bajo | — |
 | R11 | **Rasterizador CPU y mapa de sombras** (**HECHO 2026-10-17**, sin BVH) | `render_cpu.py:401-529` | numpy por tandas con `lexsort` para el z-buffer; 1280×720 con 327 k triángulos = 2,6 s | 10–30× en esa parte | Medio (centro de píxel, tolerancia −1e-7, desempate estable: `test_render.py:80`) | R3 (previsto; se hizo sin BVH) |
+| R14 | **Arreglo planar de los perfiles de un boceto** (**HECHO 2026-10-24**, BOC-28) | `nucleo/perfiles.py` › `_detectar_rust`, `rust/src/perfiles.rs` | `BRepAlgoAPI_Splitter` (2,8 s) + PaveFiller (0,9 s) + armado de caras (1,9 s) con 3,8 mil curvas; las caras ahora se arman a pedido | `_detectar` 3,9 s → 0,26 s (15×) | Medio (equivalencia con el Splitter; delega ante lo que no certifica) | — |
 | R12 | **Quitar aristas ocultas superpuestas** (vistas de dibujo) | `nucleo/dibujo.py:269-306` | Broadcast denso k×m×2; 1500 ocultas × 1500 visibles = 1,6 s | 10–30× | Bajo | — |
 | R13 | **Menores**: RDP del vectorizador, lectores DXF/SVG, `recortar_a_circulo`, `generar_grupos` con tamaño mínimo (cuadrático: 20 k triángulos = 85 s, pero hoy inalcanzable desde timeline/MCP) | `vectorizar.py:49-84`, `dxf.py:467-804`, `svg.py:104-194`, `dibujo.py:507-540`, `malla.py:1092-1111` | Python puro | 5–30×, ganancia absoluta ≤ 1 s | Bajo | — |
 

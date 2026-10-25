@@ -20,8 +20,10 @@ Además: contornos de un texto (Font de OCC, como el Texto de boceto de Fusion) 
 intersección de aristas, caras y cuerpos sobre el plano del boceto (Proyectar / Intersecar).
 """
 import math
+from functools import partial
 
 import numpy as np
+from .. import nativo
 from . import motor as _motor
 
 
@@ -33,14 +35,16 @@ def _iniciar_opencascade():
     global List_TopoDS_Shape, NCollection_String, Sequence_TCollection_HAsciiString, StdPrs_BRepFont
     global StdPrs_BRepTextBuilder, TCollection_AsciiString, TopAbs_EDGE, TopAbs_VERTEX, TopExp_Explorer, TopoDS
     global _ASPECTOS, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln, BRepGProp, GProp_GProps
+    global BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, Geom_Circle, gp_Pnt
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepLib import BRepLib
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_NurbsConvert
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex,
+                                    BRepBuilderAPI_MakeWire, BRepBuilderAPI_NurbsConvert)
     from OCP.BRepGProp import BRepGProp
     from OCP.Font import Font_FA_Bold, Font_FA_BoldItalic, Font_FA_Italic, Font_FA_Regular, Font_FontMgr, Font_StrictLevel_Any
-    from OCP.Geom import Geom_BSplineCurve
+    from OCP.Geom import Geom_BSplineCurve, Geom_Circle
     from OCP.GProp import GProp_GProps
     from OCP.GeomAbs import GeomAbs_BezierCurve, GeomAbs_Circle, GeomAbs_Line
     from OCP.NCollection import NCollection_String
@@ -51,7 +55,7 @@ def _iniciar_opencascade():
     from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
-    from OCP.gp import gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln
+    from OCP.gp import gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Elips, gp_Pln, gp_Pnt
     _ASPECTOS = {(False, False): Font_FA_Regular, (True, False): Font_FA_Bold, (False, True): Font_FA_Italic,
                  (True, True): Font_FA_BoldItalic}
 
@@ -68,11 +72,19 @@ _TAM_CARA = 2 * MEDIDA_MAXIMA
 
 
 class Perfil:
-    def __init__(self, cara, area, centroide_uv, firma):
-        self.cara = cara                  # TopoDS_Face (en 3D, sobre el plano del boceto)
+    def __init__(self, cara, area, centroide_uv, firma, fabrica=None, caja_uv=None):
+        self._cara = cara                 # TopoDS_Face (en 3D, sobre el plano del boceto)
+        self._fabrica = fabrica           # sin cara: cómo armarla al pedirla (BOC-28: con miles de perfiles, casi nadie la pide)
         self.area = area                  # mm²
         self.centroide_uv = centroide_uv  # (u, v) en coordenadas del boceto
         self.firma = firma                # frozenset de ids de curvas del borde
+        self.caja_uv = caja_uv            # (u0, v0, u1, v1) si ya se conoce sin armar la cara
+
+    @property
+    def cara(self):
+        if self._cara is None and self._fabrica is not None:
+            self._cara, self._fabrica = self._fabrica(), None
+        return self._cara
 
     def descripcion(self):
         return f"área {self.area:.2f} mm², centro ({self.centroide_uv[0]:.1f}; {self.centroide_uv[1]:.1f})"
@@ -122,7 +134,7 @@ def _arista_elipse(plano, c, a, b, ang, t0=None, t1=None):
     return BRepBuilderAPI_MakeEdge(elips, t0, t1)
 
 
-def _arista_bspline(plano, polos, nudos, grado, pesos):
+def _curva_bspline(plano, polos, nudos, grado, pesos):
     unicos, mult = [], []
     for k in nudos:
         if unicos and abs(k - unicos[-1]) < 1e-12:
@@ -144,7 +156,11 @@ def _arista_bspline(plano, polos, nudos, grado, pesos):
         curva = Geom_BSplineCurve(P, W, K, M, grado)
     else:
         curva = Geom_BSplineCurve(P, K, M, grado)
-    return BRepBuilderAPI_MakeEdge(curva)
+    return curva
+
+
+def _arista_bspline(plano, polos, nudos, grado, pesos):
+    return BRepBuilderAPI_MakeEdge(_curva_bspline(plano, polos, nudos, grado, pesos))
 
 
 def _finita(prim):
@@ -292,7 +308,145 @@ def _origen_aristas(aristas, por_cara, sp):
     return origen
 
 
+def _fabrica_caras(plano, prims, r):
+    """`cara(i)`: arma a pedido la cara exacta del perfil `i` del arreglo planar `r` (BOC-28), con tramos de las curvas del
+    boceto recortados en las intersecciones (sin Splitter). Las vecinas comparten vértices y aristas. Son cierres
+    sueltos, no métodos: así la envoltura de `motor.registrar` se paga una vez por boceto y no por arista."""
+    pieza, tramo = r[1].tolist(), r[2].tolist()                    # (curva, vértice inicial, final), (t0, t1)
+    ciclo_ptr, semi_ptr, semi = r[7].tolist(), r[8].tolist(), r[9].tolist()
+    xyz = (plano.origen + np.outer(r[0][:, 0], plano.u) + np.outer(r[0][:, 1], plano.v)).tolist()
+    plano_occ = gp_Pln(plano.pnt(0, 0), gp_Dir(*plano.normal))
+    vertices, aristas, curvas = {}, {}, {}
+
+    def vertice(i):
+        if i not in vertices:
+            vertices[i] = BRepBuilderAPI_MakeVertex(gp_Pnt(*xyz[i])).Vertex()
+        return vertices[i]
+
+    def arista(h):
+        if h not in aristas:
+            e = h >> 1
+            if h & 1:
+                aristas[h] = TopoDS.Edge(arista(h - 1).Reversed())
+                return aristas[h]
+            k, va, vb = pieza[e]
+            prim = prims[k]
+            if prim[0] == "linea":
+                creador = BRepBuilderAPI_MakeEdge(vertice(va), vertice(vb))
+            else:
+                if k not in curvas:
+                    if prim[0] == "spline":
+                        curvas[k] = _curva_bspline(plano, prim[2], prim[3], prim[4], prim[5])
+                    else:
+                        curvas[k] = Geom_Circle(gp_Circ(plano.ax2(*prim[2]), prim[3]))
+                creador = BRepBuilderAPI_MakeEdge(curvas[k], vertice(va), vertice(vb), *tramo[e])
+            if not creador.IsDone():
+                raise geo.ErrorGeometria("No se pudo armar un perfil del boceto.")
+            aristas[h] = creador.Edge()
+        return aristas[h]
+
+    def cara(i):
+        alambres = []
+        for c in range(ciclo_ptr[i], ciclo_ptr[i + 1]):
+            alambre = BRepBuilderAPI_MakeWire()
+            for h in semi[semi_ptr[c]:semi_ptr[c + 1]]:
+                alambre.Add(arista(h))
+            if not alambre.IsDone():
+                raise geo.ErrorGeometria("No se pudo armar un perfil del boceto.")
+            alambres.append(alambre.Wire())
+        creador = BRepBuilderAPI_MakeFace(plano_occ, alambres[0], True)
+        for hueco in alambres[1:]:
+            creador.Add(hueco)
+        return creador.Face()
+    return cara
+
+
+def _datos_rust(geometria):
+    """(primitivas que entran, arreglos para `_rs.arreglo_planar`), o None si hay algo que Rust no hace (elipses…).
+    Descarta las mismas primitivas que `aristas_boceto`."""
+    prims, tipos, params, info, polos, pesos, nudos = [], [], [], [], [], [], []
+    for prim in geometria:
+        tipo = prim[0]
+        if tipo in ("elipse", "arco_elipse"):
+            return None
+        if not _finita(prim):
+            continue
+        fila, inf = [0.0] * 6, [0, 0, 0, 0]
+        if tipo == "linea":
+            (u1, v1), (u2, v2) = prim[2], prim[3]
+            if math.hypot(u2 - u1, v2 - v1) < 1e-9:
+                continue
+            codigo, fila[:4] = 0, [u1, v1, u2, v2]
+        elif tipo in ("circulo", "arco"):
+            (cu, cv), r = prim[2], prim[3]
+            if r <= 1e-9:
+                continue
+            codigo, fila[:3] = (1 if tipo == "circulo" else 2), [cu, cv, r]
+            if tipo == "arco":
+                a0, a1 = prim[4], prim[5]
+                while a1 <= a0 + 1e-12:
+                    a1 += 2 * math.pi
+                fila[3:5] = [a0, a1]
+        elif tipo == "spline":
+            ps, ks, grado, ws = prim[2], prim[3], prim[4], prim[5]
+            if max(abs(q[0] - ps[0][0]) + abs(q[1] - ps[0][1]) for q in ps[1:]) < 1e-9:
+                continue
+            expandidos, ultimo = [], None              # los nudos que ve OpenCascade: únicos con su multiplicidad
+            for k in ks:
+                expandidos.append(k if ultimo is None or abs(k - ultimo) >= 1e-12 else ultimo)
+                ultimo = expandidos[-1]
+            if len(ws or ps) != len(ps) or len(expandidos) != len(ps) + grado + 1:
+                return None
+            codigo, inf = 3, [grado, len(pesos), len(ps), len(nudos)]
+            polos += [list(map(float, q)) for q in ps]
+            pesos += [float(w) for w in ws] if ws else [1.0] * len(ps)
+            nudos += expandidos
+        else:
+            continue
+        prims.append(prim)
+        tipos.append(codigo)
+        params.append(fila)
+        info.append(inf)
+    arreglos = (np.array(tipos, np.int64), np.array(params, float).reshape(-1, 6), np.array(info, np.int64).reshape(-1, 4),
+                np.array(polos, float).reshape(-1, 2), np.array(pesos, float), np.array(nudos, float))
+    if prims and max(np.abs(arreglos[1]).max(), np.abs(arreglos[3]).max(initial=0.0)) > _TAM_CARA / 4:
+        return None                    # fuera del rango de la cara enorme que parte el camino de referencia
+    return prims, arreglos
+
+
+def _detectar_rust(geometria, plano, tolerancia=1e-4):
+    """Los perfiles por el arreglo planar en Rust (BOC-28), o None si el módulo no está o no puede resolver este
+    boceto con certeza (tangentes en un cruce, curvas superpuestas, elipses…): entonces rige la referencia."""
+    rs = nativo.disponible()
+    datos = _datos_rust(geometria) if rs is not None else None
+    if datos is None:
+        return None
+    prims, arreglos = datos
+    if not prims:
+        return []
+    try:
+        r = rs.arreglo_planar(*arreglos, float(tolerancia))
+    except ValueError:
+        return None
+    cara = _fabrica_caras(plano, prims, r)
+    areas, centros, puntero, indices, cajas = r[3].tolist(), r[4].tolist(), r[5].tolist(), r[6].tolist(), r[10].tolist()
+    ids, firmas, salida = [p[1] for p in prims], {}, []
+    for i, area in enumerate(areas):
+        curvas = tuple(indices[puntero[i]:puntero[i + 1]])
+        if curvas not in firmas:
+            firmas[curvas] = frozenset(ids[k] for k in curvas if ids[k] is not None)
+        salida.append(Perfil(None, area, tuple(centros[i]), firmas[curvas], partial(cara, i), tuple(cajas[i])))
+    salida.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
+    return salida
+
+
 def _detectar(geometria, plano, tolerancia=1e-4):
+    perfiles = _detectar_rust(geometria, plano, tolerancia)
+    return perfiles if perfiles is not None else _detectar_occ(geometria, plano, tolerancia)
+
+
+def _detectar_occ(geometria, plano, tolerancia=1e-4):
+    """Camino de referencia: parte una cara enorme con las curvas (BRepAlgoAPI_Splitter)."""
     aristas = aristas_boceto(geometria, plano)
     if not aristas:
         return []
