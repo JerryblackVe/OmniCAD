@@ -57,7 +57,8 @@ def test_herramientas_del_grupo_solido():
         "create_surface_extrude", "create_surface_revolve", "create_surface_sweep", "create_surface_loft",
         "offset_surface", "fillet_surface", "create_patch", "create_ruled_surface", "extend_surface", "trim_surface",
         "untrim_surface", "stitch_surfaces", "unstitch_surfaces", "reverse_surface_normal",
-        "move_faces", "create_geometric_pattern", "assign_plastic_rule", "create_volumetric_lattice"])                   # SOL-15, SOL-20, SOL-21
+        "move_faces", "create_geometric_pattern", "assign_plastic_rule", "create_volumetric_lattice",
+        "rebuild_features"])                   # SOL-15, SOL-20, SOL-21
     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
 
 

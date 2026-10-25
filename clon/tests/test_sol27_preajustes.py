@@ -116,3 +116,9 @@ def test_ultimo_usado_se_guarda_al_aceptar(monkeypatch):
     panel.set_valor(clave, "5 mm")
     recordar_ultimo(panel)
     assert _panel(Nervio()).valores[clave] == "5 mm"
+
+
+def test_manage_command_presets_rechaza_un_comando_que_no_existe():
+    s = api.Sesion()
+    r = api.llamar(s, "manage_command_presets", {"command": "nervvio", "action": "list"})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS" and any("nervio" in p for p in r["pistas"])

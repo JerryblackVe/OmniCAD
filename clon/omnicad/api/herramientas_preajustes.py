@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Preajustes de comandos (la biblioteca vive en `nucleo/preajustes.py`; la fila del diálogo, en `ui/preajustes_ui.py`)."""
+import difflib
 from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..nucleo import preajustes as pre
+from .claves_comandos import CLAVES
 from .errores import error
 from .registro import herramienta
 
@@ -33,6 +35,10 @@ def manage_command_presets(sesion, command: str, action: Literal["list", "get", 
     command = command.strip()
     if not command:
         raise error("INVALID_ARGUMENTS", "Indicá el comando (command).")
+    if command not in CLAVES:
+        parecidas = difflib.get_close_matches(command, sorted(CLAVES), n=3)
+        raise error("INVALID_ARGUMENTS", f"No hay un comando «{command}».",
+                    *([f"Parecidos: {', '.join(parecidas)}."] if parecidas else ["Las claves son las de la cinta."]))
     try:
         if action == "get":
             return {"command": command, "name": name, "values": pre.obtener(command, name)}

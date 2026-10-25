@@ -243,6 +243,9 @@ def _elemento_malo(t, valor):
                 try:
                     _convertir(el, args[0])
                 except _NoCoincide:
+                    anidado = _elemento_malo(args[0], el)         # [[0, "a"]]: lo malo es "a", no la lista
+                    if anidado:
+                        return f"{i} › {anidado[0]}", anidado[1], anidado[2]
                     esperado = _esquema_tipo(args[0])
                     return i, el, esperado.get("enum") or esperado.get("type") or esperado.get("anyOf") or "otro tipo"
     return None

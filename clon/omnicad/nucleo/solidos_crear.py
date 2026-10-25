@@ -902,6 +902,57 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     return _barrer(*datos, guia_plana=False)
 
 
+MUESTRAS_BARRIDO_CUERPO = 200       # tope de copias del barrido de un cuerpo
+
+
+def barrer_cuerpo(forma, ruta, *, orientacion="paralela", distancia=1.0, eje_alineado=None, muestras=None):
+    """Barrido de un cuerpo sólido (Sweep › Solid Sweep de Fusion): el volumen que recorre `forma` al moverse a lo largo
+    de `ruta`. `orientacion`: "paralela" (el cuerpo solo se traslada con el punto de la ruta), "perpendicular" (acompaña
+    el marco de la ruta, de rotación mínima) o "alineada" (acompaña la ruta con `eje_alineado` fijo como binormal).
+    `distancia` = fracción 0..1 de la ruta.
+    shortcut: el kernel no barre sólidos (MakePrism rechaza los sólidos y el de sus caras se pliega en las siluetas):
+    se une una copia del cuerpo cada cuarto de su medida menor (y cada 3° de giro), así que el borde de un barrido curvo
+    queda escalonado; subir `muestras` (tope MUESTRAS_BARRIDO_CUERPO) lo afina."""
+    if orientacion not in ("paralela", "perpendicular", "alineada"):
+        raise geo.ErrorGeometria(f"Orientación del barrido desconocida: {orientacion}")
+    if orientacion == "alineada" and (eje_alineado is None or np.linalg.norm(eje_alineado) < 1e-12):
+        raise geo.ErrorGeometria("La orientación alineada necesita la dirección del eje.")
+    w = _recortar_alambre(_alambre(ruta), float(distancia))
+    largo = _longitud(w)
+    caja = geo.caja_envolvente(forma)
+    if caja is None:
+        raise geo.ErrorGeometria("No hay cuerpo para barrer.")
+    medidas = [m for m in np.subtract(caja[1], caja[0]) if m > 1e-6]
+    if muestras is None:
+        n = math.ceil(largo / (min(medidas) / 4)) + 1
+        if orientacion != "paralela":
+            fino = _marcos(w, 129)
+            giro = sum(math.degrees(math.acos(max(-1.0, min(1.0, float(a[1] @ b[1])))))
+                       for a, b in zip(fino[:-1], fino[1:], strict=True))
+            n = max(n, math.ceil(giro / 3.0) + 1)
+    else:
+        n = int(muestras)
+    n = max(2, min(n, MUESTRAS_BARRIDO_CUERPO))
+    if largo / (n - 1) > min(medidas):
+        raise geo.ErrorGeometria(
+            f"El cuerpo mide {min(medidas):.3g} mm y la ruta {largo:.4g} mm: con el tope de {MUESTRAS_BARRIDO_CUERPO} copias "
+            "quedarían separadas, sin formar un barrido. Acortá la ruta o agrandá el cuerpo.")
+    marcos = _marcos(w, n)
+
+    def base(m):
+        if orientacion == "alineada":
+            t = m[1]
+            b = _unit(np.asarray(eje_alineado, float) - t * float(np.asarray(eje_alineado, float) @ t), "eje alineado")
+            return np.column_stack([t, np.cross(b, t), b])
+        return np.column_stack([m[1], m[2], m[3]])
+    p0, f0 = marcos[0][0], base(marcos[0])
+    copias = [forma]
+    for m in marcos[1:]:
+        t = _traslacion(m[0] - p0) if orientacion == "paralela" else _trsf_de_marcos(p0, f0, m[0], base(m))
+        copias.append(aplicar(forma, t))
+    return _validar(unir_instancias(copias), "Barrido de cuerpo")
+
+
 def _exigir_ruta_para_torsion(ruta, torsion):
     """Antes de calcular: la torsión necesita una ruta sin quiebres (QUIEBRE_MAXIMO_TORSION) y, si es cerrada,
     conserva el tope de seguridad de ±TORSION_MAXIMA_CURVILINEA grados."""
@@ -1056,51 +1107,139 @@ def _loft(alambres, solido, reglada, cerrada):
     return ts.Shape()
 
 
-def _con_condiciones(exteriores, inicio, fin):
-    """Condiciones de borde «Dirección» (End Conditions) de la primera y la última sección: se agrega, a poca distancia, una
-    sección auxiliar copia de la extrema (trasladada hacia la siguiente y ensanchada o angostada según el ángulo) para que
-    la superficie salga con esa dirección. Es una aproximación: la solevación pasa por la sección auxiliar."""
+def _auxiliar_direccion(w, normal, delta, angulo, signo=1.0):
+    """Sección auxiliar de una condición «Dirección»: copia del contorno `w` corrida `delta` según `normal` y escalada
+    para que la superficie salga con `angulo` (grados desde el plano de la sección; `signo` -1 la achica)."""
+    c = _centro_alambre(w)
+    radio = max(1e-6, float(np.linalg.norm(np.subtract(*geo.caja_envolvente(w)[::-1]))) / 2)
+    escala = 1.0 + signo * delta / math.tan(math.radians(angulo)) / radio
+    if escala <= 0.05:
+        raise geo.ErrorGeometria("Con ese ángulo la sección auxiliar de la condición de borde se achica a casi nada.")
+    m = np.identity(4)
+    m[:3, :3] *= escala
+    m[:3, 3] = c + np.asarray(normal, float) * delta - escala * c
+    return ("alambre", TopoDS.Wire(geo.transformar(w, m)))
+
+
+def _hacia_afuera_de_la_cara(cara, punto):
+    """Dirección unitaria, dentro del plano tangente de `cara`, que sale de ella perpendicular a su borde en `punto`
+    (un punto del borde). En una esquina promedia la de las aristas que se juntan ahí."""
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
+    from OCP.ShapeAnalysis import ShapeAnalysis_Surface
+    uv = ShapeAnalysis_Surface(BRep_Tool.Surface_s(cara)).ValueOfUV(_pnt(punto), 1e-6)
+    n = _normal_orientada(cara, uv.X(), uv.Y())[1]
+    suma = np.zeros(3)
+    for e in _aristas_de(cara):
+        curva = BRepAdaptor_Curve(e)
+        proy = GeomAPI_ProjectPointOnCurve(_pnt(punto), curva.Curve().Curve(), curva.FirstParameter(), curva.LastParameter())
+        if proy.NbPoints() == 0 or proy.LowerDistance() > 1e-5 * max(1.0, float(np.linalg.norm(punto))):
+            continue
+        p, t = gp_Pnt(), gp_Vec()
+        curva.D1(proy.LowerDistanceParameter(), p, t)
+        d = np.cross(n, _unit(_xyz(t), "tangente del borde"))
+        d = _unit(d)
+        pr = punto + d * 1e-3
+        if BRepClass_FaceClassifier(cara, _pnt(pr), 1e-7).State() == TopAbs_IN:     # apunta adentro: se invierte
+            d = -d
+        suma += d
+    if float(np.linalg.norm(suma)) < 1e-9:
+        raise geo.ErrorGeometria("La sección no está sobre el borde de la cara de la condición Tangente.")
+    return _unit(suma)
+
+
+def _auxiliar_tangente(w, cara, delta):
+    """Sección auxiliar de una condición «Tangente»: el contorno `w` (sobre el borde de `cara`) corrido `delta` por el plano
+    tangente de la cara hacia afuera, para que la superficie siga a la cara. Cada arista se corre por sus puntos
+    (rectas: los extremos; curvas: 9 puntos interpolados)."""
+    nuevas = []
+    for e in _aristas_de(w):
+        curva = BRepAdaptor_Curve(e)
+        a, z = curva.FirstParameter(), curva.LastParameter()
+        k = 2 if curva.GetType() == GeomAbs_Line else 9
+        pts = []
+        for i in range(k):
+            q = _xyz(curva.Value(a + (z - a) * i / (k - 1)))
+            pts.append(q + delta * _hacia_afuera_de_la_cara(cara, q))
+        if k == 2:
+            nuevas.append(BRepBuilderAPI_MakeEdge(_pnt(pts[0]), _pnt(pts[1])).Edge())
+        else:
+            arreglo = HArray1_gp_Pnt(1, k)
+            for i, q in enumerate(pts):
+                arreglo.SetValue(i + 1, _pnt(q))
+            ip = GeomAPI_Interpolate(arreglo, False, 1e-7)
+            ip.Perform()
+            if not ip.IsDone():
+                raise geo.ErrorGeometria("No se pudo armar la sección auxiliar de la condición Tangente.")
+            nuevas.append(BRepBuilderAPI_MakeEdge(ip.Curve()).Edge())
+    return ("alambre", _alambre(nuevas))
+
+
+def _con_condiciones(exteriores, inicio, fin, medias=None):
+    """Condiciones de borde (End Conditions) de la primera y la última sección, y «Dirección» en las intermedias
+    (`medias`: {posición: condición}). Se agrega, a poca distancia, una sección auxiliar por el lado que corresponda: copia
+    corrida y ensanchada o angostada según el ángulo («Dirección») o corrida por el plano tangente de la cara
+    («Tangente», `cond["cara"]`) para que la superficie salga con esa dirección. Es una aproximación: la solevación
+    pasa por las secciones auxiliares. «Suave» (G2) no existe en OpenCascade."""
     exteriores = list(exteriores)
-    for lado, cond in ((0, inicio), (-1, fin)):
+    pedidos = [(0, inicio), (len(exteriores) - 1, fin)] + sorted((int(k), v) for k, v in (medias or {}).items())
+    delante, detras = {}, {}                   # secciones auxiliares por posición: después y antes de la sección
+    for pos, cond in pedidos:
         if not cond or cond.get("tipo", "libre") == "libre":
             continue
-        if cond["tipo"] != "direccion":
-            raise geo.ErrorGeometria("Las condiciones de borde Tangente y Suave todavía no están: usá Libre o Dirección.")
-        tipo, w = exteriores[lado]
-        otro = exteriores[1 if lado == 0 else -2]
-        if tipo != "alambre" or otro[0] != "alambre":
+        if not 0 <= pos < len(exteriores):
+            raise geo.ErrorGeometria(f"No hay una sección en la posición {pos + 1} para la condición de borde.")
+        if cond["tipo"] == "suave":
+            raise geo.ErrorGeometria("La condición Suave (continuidad de curvatura, G2) no existe en OpenCascade: usá "
+                                     "Tangente o Dirección.")
+        if cond["tipo"] not in ("direccion", "tangente"):
+            raise geo.ErrorGeometria(f"Condición de borde desconocida: {cond['tipo']}")
+        tipo, w = exteriores[pos]
+        if tipo != "alambre":
             raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
         angulo, peso = float(cond.get("angulo", 90.0)), float(cond.get("peso", 1.0))
         if not 0 < angulo < 180 or peso <= 0:
             raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados y el peso es positivo.")
-        c, c2 = _centro_alambre(w), _centro_alambre(otro[1])
-        cara = BRepBuilderAPI_MakeFace(w, True).Face()
-        normal = np.asarray(geo.plano_de_cara(cara).normal, float)
-        if float((c2 - c) @ normal) < 0:
-            normal = -normal
-        delta = peso * 0.15 * float(np.linalg.norm(c2 - c))
-        radio = max(1e-6, float(np.linalg.norm(np.subtract(*geo.caja_envolvente(w)[::-1]))) / 2)
-        escala = 1.0 + delta / math.tan(math.radians(angulo)) / radio
-        if escala <= 0.05:
-            raise geo.ErrorGeometria("Con ese ángulo la sección auxiliar de la condición de borde se achica a casi nada.")
-        m = np.identity(4)
-        m[:3, :3] *= escala
-        m[:3, 3] = c + normal * delta - escala * c
-        extra = ("alambre", TopoDS.Wire(geo.transformar(w, m)))
-        if lado == 0:
-            exteriores.insert(1, extra)
-        else:
-            exteriores.insert(len(exteriores) - 1, extra)
-    return exteriores
+        es_extremo = pos in (0, len(exteriores) - 1)
+        if cond["tipo"] == "tangente" and not es_extremo:
+            raise geo.ErrorGeometria("La condición Tangente solo vale en la primera y la última sección.")
+        c = _centro_alambre(w)
+        lados = ([(pos + 1, delante)] if pos == 0 else [(pos - 1, detras)] if pos == len(exteriores) - 1
+                 else [(pos + 1, delante), (pos - 1, detras)])
+        for vecino, destino in lados:
+            otro = exteriores[vecino]
+            if otro[0] != "alambre":
+                raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
+            c2 = _centro_alambre(otro[1])
+            delta = peso * 0.15 * float(np.linalg.norm(c2 - c))
+            if cond["tipo"] == "tangente":
+                cara = cond.get("cara")
+                if cara is None:
+                    raise geo.ErrorGeometria("La condición Tangente necesita la cara a la que la superficie es tangente.")
+                destino[pos] = _auxiliar_tangente(w, cara, delta)
+                continue
+            normal = np.asarray(geo.plano_de_cara(BRepBuilderAPI_MakeFace(w, True).Face()).normal, float)
+            if float((c2 - c) @ normal) < 0:
+                normal = -normal
+            destino[pos] = _auxiliar_direccion(w, normal, delta, angulo, -1.0 if (not es_extremo and destino is detras) else 1.0)
+    salida = []
+    for i, sec in enumerate(exteriores):
+        if i in detras:
+            salida.append(detras[i])
+        salida.append(sec)
+        if i in delante:
+            salida.append(delante[i])
+    return salida
 
 
 def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido=True, reglada=False,
-            condicion_inicio=None, condicion_fin=None, fusionar_tangentes=False):
+            condicion_inicio=None, condicion_fin=None, fusionar_tangentes=False, condiciones_medias=None):
     """Solevado (Loft) de Fusion [SLD-LOFT-SOLID].
 
-    `condicion_inicio` / `condicion_fin` (End Conditions de la primera y la última sección): {"tipo": "libre"} o
-    {"tipo": "direccion", "angulo": grados desde el plano de la sección (90 = perpendicular), "peso": 1}. Solo en el
-    solevado liso (sin carriles, línea central, cerrada ni reglada). `fusionar_tangentes` (Tangent Edges › Merge) une
+    `condicion_inicio` / `condicion_fin` (End Conditions de la primera y la última sección): {"tipo": "libre"},
+    {"tipo": "direccion", "angulo": grados desde el plano de la sección (90 = perpendicular), "peso": 1} o
+    {"tipo": "tangente", "cara": TopoDS_Face (la que la superficie sigue; la sección está sobre su borde), "peso": 1}.
+    `condiciones_medias`: {posición de una sección intermedia: {"tipo": "direccion", ...}}. Solo en el solevado liso
+    (sin carriles, línea central, cerrada ni reglada). `fusionar_tangentes` (Tangent Edges › Merge) une
     las caras que quedan tangentes entre sí.
 
     secciones: caras (se respetan los agujeros si todas tienen la misma cantidad), alambres/aristas, o un
@@ -1122,12 +1261,13 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         raise geo.ErrorGeometria("OpenCascade no admite solevado con varios carriles: usá uno solo o una "
                                  "línea central.")
     exteriores = [(s[0], s[1]) for s in secs]
-    condiciones = any(c and c.get("tipo", "libre") != "libre" for c in (condicion_inicio, condicion_fin))
+    condiciones = any(c and c.get("tipo", "libre") != "libre"
+                      for c in (condicion_inicio, condicion_fin, *(condiciones_medias or {}).values()))
     if condiciones:
         if carriles or linea_central is not None or cerrada or reglada:
             raise geo.ErrorGeometria("Las condiciones de borde no se combinan con carriles, línea central, solevado "
                                      "cerrado ni reglado.")
-        exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin)
+        exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
     if linea_central is not None or carriles:
         if cerrada:
             raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")

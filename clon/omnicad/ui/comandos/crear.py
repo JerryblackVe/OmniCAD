@@ -37,9 +37,14 @@ class Barrido(Comando):
     def campos(self, ctx):
         carril = lambda v: v.get("tipo") == "ruta_carril"  # noqa: E731
         superficie = lambda v: v.get("tipo") == "ruta_superficie"  # noqa: E731
+        cuerpo = lambda v: v.get("tipo") == "cuerpo"  # noqa: E731
         return [Opciones("tipo", "Tipo", {"ruta": "Ruta única", "ruta_carril": "Ruta + carril guía",
-                                          "ruta_superficie": "Ruta + superficie guía"}),
-                Seleccion("perfiles", "Perfil", PERFIL, maximo=None), Seleccion("ruta", "Ruta", CURVA, maximo=None),
+                                          "ruta_superficie": "Ruta + superficie guía", "cuerpo": "Cuerpo sólido"}),
+                Seleccion("perfiles", "Perfil", PERFIL, maximo=None, visible_si=lambda v: not cuerpo(v)),
+                Seleccion("cuerpos", "Cuerpo", {"cuerpo"}, maximo=None, visible_si=cuerpo,
+                          ayuda="El volumen que recorre el cuerpo a lo largo de la ruta (aproximado con copias)."),
+                Seleccion("ruta", "Ruta", CURVA, maximo=None),
+                Casilla("cadena", "Selección de cadena", ayuda="Suma a cada arista de un cuerpo las que le siguen tangentes (las curvas de boceto se usan tal cual)."),
                 Seleccion("carril", "Carril guía", CURVA, maximo=None, visible_si=carril),
                 Seleccion("superficie_guia", "Superficie guía", {"cara"}, maximo=None, visible_si=superficie),
                 Expresion("distancia", "Distancia", "1", ESCALAR),
@@ -50,40 +55,52 @@ class Barrido(Comando):
                           visible_si=lambda v: v.get("orientacion") == "alineada" and not carril(v) and not superficie(v)),
                 Opciones("escala_carril", "Escala del perfil", {"escalar": "Escalar", "ninguna": "Ninguna"},
                          visible_si=carril),
-                Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO),
-                Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO), campo_operacion(), campo_objetivos()]
+                Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v)),
+                Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v)),
+                campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
-        exigir(v, "perfiles", "Seleccioná el perfil.")
-        exigir(v, "ruta", "Seleccioná la ruta.")
         tipo = v.get("tipo")
+        if tipo == "cuerpo":
+            exigir(v, "cuerpos", "Seleccioná el cuerpo a barrer.")
+        else:
+            exigir(v, "perfiles", "Seleccioná el perfil.")
+        exigir(v, "ruta", "Seleccioná la ruta.")
         if tipo == "ruta_superficie":
             exigir(v, "superficie_guia", "Seleccioná la superficie guía.")
-        alineada = tipo == "ruta" and v.get("orientacion") == "alineada"
+        alineada = tipo in ("ruta", "cuerpo") and v.get("orientacion") == "alineada"
         if alineada:
             exigir(v, "eje_alineado", "Seleccioná el eje de la orientación alineada.")
-        return self.crear_op(OpBarrido, v, ctx, perfiles=refs(v, "perfiles"), ruta=refs(v, "ruta"),
+        return self.crear_op(OpBarrido, v, ctx, perfiles=[] if tipo == "cuerpo" else refs(v, "perfiles"),
+                             ruta=refs(v, "ruta"), cuerpos=_cuerpos(v["cuerpos"]) if tipo == "cuerpo" else [],
+                             cadena=bool(v.get("cadena")),
                              carril=refs(v, "carril") if tipo == "ruta_carril" else [],
                              superficie_guia=refs(v, "superficie_guia") if tipo == "ruta_superficie" else [],
                              eje_alineado=ref1(v, "eje_alineado") if alineada else None,
-                             orientacion=v["orientacion"] if tipo == "ruta" else "perpendicular",
-                             **{k: v[k] for k in ("distancia", "torsion", "conicidad", "escala_carril", "operacion")},
+                             orientacion=v["orientacion"] if tipo in ("ruta", "cuerpo") else "perpendicular",
+                             **{k: v[k] for k in ("distancia", "escala_carril", "operacion")},
+                             **{k: "0 deg" if tipo == "cuerpo" else v[k] for k in ("torsion", "conicidad")},
                              objetivos=objetivos(v))
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, tipo="ruta_carril" if op.p.get("carril") else "ruta_superficie" if op.p.get("superficie_guia")
-                 else "ruta")
+        v = dict(op.p, tipo="cuerpo" if op.p.get("cuerpos") else "ruta_carril" if op.p.get("carril")
+                 else "ruta_superficie" if op.p.get("superficie_guia") else "ruta",
+                 cuerpos=_hits_cuerpos(op.p.get("cuerpos") or [], ctx.estado))
         for k in ("perfiles", "ruta", "carril", "superficie_guia"):
             v[k] = hits(op.p.get(k) or [], ctx.estado)
         v["eje_alineado"] = _h1(op.p.get("eje_alineado"), ctx.estado)
         return _con_objetivos(op, ctx, v)
 
 
-COND_BORDE = {"libre": "Libre", "direccion": "Dirección"}
+COND_BORDE = {"libre": "Libre", "direccion": "Dirección", "tangente": "Tangente"}
 
 
 def _con_direccion(lado):
     return lambda v: v.get(f"condicion_{lado}") == "direccion"
+
+
+def _con_tangente(lado):
+    return lambda v: v.get(f"condicion_{lado}") == "tangente"
 
 
 class Solevacion(Comando):
@@ -101,39 +118,68 @@ class Solevacion(Comando):
                 Casilla("cerrada", "Cerrado"), Casilla("reglada", "Tramos rectos"),
                 Opciones("condicion_inicio", "Condición del primer perfil", COND_BORDE),
                 Expresion("angulo_inicio", "Ángulo del primer perfil", "90 deg", ANGULO, visible_si=_con_direccion("inicio")),
-                Expresion("peso_inicio", "Peso del primer perfil", "1", ESCALAR, visible_si=_con_direccion("inicio")),
+                Seleccion("cara_inicio", "Cara tangente del primer perfil", {"cara"}, minimo=0, visible_si=_con_tangente("inicio"),
+                          ayuda="La cara cuyo borde es el perfil: la superficie sale tangente a ella."),
+                Expresion("peso_inicio", "Peso del primer perfil", "1", ESCALAR,
+                          visible_si=lambda v: _con_direccion("inicio")(v) or _con_tangente("inicio")(v)),
                 Opciones("condicion_fin", "Condición del último perfil", COND_BORDE),
                 Expresion("angulo_fin", "Ángulo del último perfil", "90 deg", ANGULO, visible_si=_con_direccion("fin")),
-                Expresion("peso_fin", "Peso del último perfil", "1", ESCALAR, visible_si=_con_direccion("fin")),
+                Seleccion("cara_fin", "Cara tangente del último perfil", {"cara"}, minimo=0, visible_si=_con_tangente("fin"),
+                          ayuda="La cara cuyo borde es el perfil: la superficie sale tangente a ella."),
+                Expresion("peso_fin", "Peso del último perfil", "1", ESCALAR,
+                          visible_si=lambda v: _con_direccion("fin")(v) or _con_tangente("fin")(v)),
+                Texto("medias", "Dirección en perfiles intermedios (n.º:ángulo:peso, separados por «;»)", "",
+                      ayuda="Por ejemplo «2:60:1; 3:90:1.5»: el n.º cuenta desde 1 (el primer perfil) y solo vale entre el 2.º y el penúltimo."),
                 Casilla("fusionar_tangentes", "Fusionar aristas tangentes"), campo_operacion(), campo_objetivos()]
 
     @staticmethod
     def _condicion(v, lado):
-        if v.get(f"condicion_{lado}") != "direccion":
-            return None
-        return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
+        tipo = v.get(f"condicion_{lado}")
+        if tipo == "direccion":
+            return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
+        if tipo == "tangente":
+            if not v.get(f"cara_{lado}"):
+                raise ErrorComando(f"Seleccioná la cara a la que es tangente el {'primer' if lado == 'inicio' else 'último'} perfil.")
+            return {"tipo": "tangente", "angulo": "90 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}")}
+        return None
+
+    @staticmethod
+    def _medias(v, n):
+        """{posición (desde 0): condición «Dirección»} del campo de texto «n.º:ángulo:peso; …» (n.º desde 1)."""
+        salida = {}
+        for trozo in (t.strip() for t in str(v.get("medias") or "").split(";") if t.strip()):
+            partes = [x.strip() for x in trozo.split(":")]
+            if len(partes) not in (2, 3) or not partes[0].isdigit() or not 1 < int(partes[0]) < n:
+                raise ErrorComando(f"«{trozo}»: escribí n.º:ángulo:peso, con el n.º entre 2 y {n - 1} (hay {n} perfiles).")
+            salida[str(int(partes[0]) - 1)] = {"tipo": "direccion", "angulo": partes[1],
+                                              "peso": partes[2] if len(partes) == 3 else "1"}
+        return salida
 
     def construir(self, v, ctx):
         if len(v.get("secciones") or []) < 2:
             raise ErrorComando("Seleccioná al menos dos perfiles, en orden.")
-        for lado in ("inicio", "fin"):
-            if self._condicion(v, lado):
-                ctx.evaluar(v[f"angulo_{lado}"], ANGULO)
-                ctx.evaluar(v[f"peso_{lado}"], ESCALAR)
+        medias = self._medias(v, len(v["secciones"]))
+        for c in (self._condicion(v, "inicio"), self._condicion(v, "fin"), *medias.values()):
+            if c:
+                ctx.evaluar(c["angulo"], ANGULO)
+                ctx.evaluar(c["peso"], ESCALAR)
         guia = v.get("guia")
         return self.crear_op(OpSolevacion, v, ctx, secciones=refs(v, "secciones"),
                              carriles=refs(v, "carriles") if guia == "carriles" else [],
                              linea_central=refs(v, "linea_central") if guia == "linea_central" else [],
                              cerrada=v["cerrada"], reglada=v["reglada"], operacion=v["operacion"],
                              condicion_inicio=self._condicion(v, "inicio"), condicion_fin=self._condicion(v, "fin"),
-                             fusionar_tangentes=bool(v.get("fusionar_tangentes")), objetivos=objetivos(v))
+                             condiciones_medias=medias, fusionar_tangentes=bool(v.get("fusionar_tangentes")), objetivos=objetivos(v))
 
     def desde_op(self, op, ctx):
         v = dict(op.p, guia="linea_central" if op.p.get("linea_central") else "carriles")
         for lado in ("inicio", "fin"):
             c = op.p.get(f"condicion_{lado}") or {}
-            v[f"condicion_{lado}"] = "direccion" if c.get("tipo") == "direccion" else "libre"
+            v[f"condicion_{lado}"] = c["tipo"] if c.get("tipo") in ("direccion", "tangente") else "libre"
             v[f"angulo_{lado}"], v[f"peso_{lado}"] = c.get("angulo", "90 deg"), c.get("peso", "1")
+            v[f"cara_{lado}"] = _h1(c.get("cara"), ctx.estado)
+        v["medias"] = "; ".join(f"{int(k) + 1}:{c.get('angulo', '90 deg')}:{c.get('peso', '1')}"
+                                for k, c in sorted((op.p.get("condiciones_medias") or {}).items(), key=lambda kv: int(kv[0])))
         for k in ("secciones", "carriles", "linea_central"):
             v[k] = hits(op.p[k], ctx.estado)
         return _con_objetivos(op, ctx, v)
@@ -727,18 +773,35 @@ class Tuberia(Comando):
 
 
 def _de_cuerpos(v):
-    return v.get("objeto", "cuerpos") != "operaciones"
+    return v.get("objeto", "cuerpos") == "cuerpos"
+
+
+def _objeto_es(clase):
+    return lambda v: v.get("objeto", "cuerpos") == clase
 
 
 def campos_objeto():
-    """«Tipo de objeto» de Fusion para Patrón y Multitransformación: cuerpos (se eligen en la vista) u operaciones
-    (pasos anteriores del timeline, por nombre o id: el agujero, la extrusión que corta…)."""
-    return [Opciones("objeto", "Tipo de objeto", {"cuerpos": "Cuerpos", "operaciones": "Operaciones"}),
+    """«Tipo de objeto» de Fusion para Patrón, Multitransformación y Simetría: cuerpos y caras (se eligen en la vista),
+    operaciones (pasos anteriores del timeline, por nombre o id: el agujero, la extrusión que corta…), componentes
+    (por nombre o id) y geometría de construcción (planos, ejes y puntos)."""
+    return [Opciones("objeto", "Tipo de objeto", {"cuerpos": "Cuerpos", "operaciones": "Operaciones", "caras": "Caras",
+                                                  "componentes": "Componentes",
+                                                  "construccion": "Geometría de construcción"}),
             Seleccion("cuerpos", "Objetos (cuerpos)", {"cuerpo"}, maximo=None, visible_si=_de_cuerpos),
             Texto("pasos", "Operaciones (nombres del timeline, separados por coma)", "",
-                  visible_si=lambda v: not _de_cuerpos(v),
+                  visible_si=_objeto_es("operaciones"),
                   ayuda="Pasos anteriores que cortan, unen o crean con una herramienta: "
-                        + ", ".join(TIPOS_REPETIBLES) + ".")]
+                        + ", ".join(TIPOS_REPETIBLES) + "."),
+            Opciones("calculo", "Tipo de cálculo", {"identico": "Idéntico", "optimizado": "Optimizado", "ajustar": "Ajustar"},
+                     visible_si=_objeto_es("operaciones"),
+                     ayuda="Idéntico y Optimizado copian la herramienta del paso tal cual; Ajustar omite las copias que "
+                           "ya no tocan al cuerpo."),
+            Seleccion("caras", "Caras", {"cara"}, maximo=None, visible_si=_objeto_es("caras"),
+                      ayuda="Cada copia queda como un cuerpo de superficie nuevo."),
+            Texto("componentes", "Componentes (nombres o ids, separados por coma)", "", visible_si=_objeto_es("componentes"),
+                  ayuda="Cada copia es un componente nuevo con copias de los cuerpos."),
+            Seleccion("construccion", "Geometría de construcción", {"plano", "eje", "punto"}, maximo=None,
+                      visible_si=_objeto_es("construccion"), ayuda="Cada copia es un plano, eje o punto nuevo.")]
 
 
 def pasos_repetibles(texto, ctx):
@@ -763,19 +826,60 @@ def pasos_repetibles(texto, ctx):
     return ids
 
 
+def componentes_escritos(texto, ctx):
+    """Ids de los componentes escritos en el campo «Componentes» (nombres o ids separados por coma)."""
+    from ...timeline.operaciones import ErrorOperacion
+    from ...timeline.ops_ensamblar import componente_por_ref
+    ids = []
+    for nombre in (x.strip() for x in str(texto or "").replace(";", ",").split(",")):
+        if not nombre:
+            continue
+        try:
+            k = componente_por_ref(ctx.estado, nombre)
+        except ErrorOperacion as e:                      # dos componentes con ese nombre: pide el id
+            raise ErrorComando(str(e)) from None
+        if k is None:
+            raise ErrorComando(f"No hay un componente «{nombre}».")
+        ids.append(k)
+    if not ids:
+        raise ErrorComando("Escribí los componentes a repetir (nombres o ids, separados por coma).")
+    return ids
+
+
 def objeto_params(v, ctx):
-    """objeto, cuerpos y pasos del Patrón o la Multitransformación según el «Tipo de objeto»."""
-    if _de_cuerpos(v):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
-        return {"objeto": "cuerpos", "cuerpos": _cuerpos(v["cuerpos"]), "pasos": []}
-    return {"objeto": "operaciones", "cuerpos": [], "pasos": pasos_repetibles(v.get("pasos"), ctx)}
+    """objeto y lo que repite (cuerpos, pasos, caras, componentes o construcción) según el «Tipo de objeto»."""
+    objeto = v.get("objeto", "cuerpos")
+    if objeto == "operaciones":
+        return {"objeto": "operaciones", "cuerpos": [], "pasos": pasos_repetibles(v.get("pasos"), ctx),
+                "calculo": v.get("calculo", "identico")}
+    if objeto == "caras":
+        exigir(v, "caras", "Seleccioná las caras.")
+        return {"objeto": "caras", "cuerpos": [], "pasos": [], "caras": refs(v, "caras")}
+    if objeto == "componentes":
+        return {"objeto": "componentes", "cuerpos": [], "pasos": [],
+                "componentes": componentes_escritos(v.get("componentes"), ctx)}
+    if objeto == "construccion":
+        exigir(v, "construccion", "Seleccioná los planos, ejes o puntos de construcción.")
+        return {"objeto": "construccion", "cuerpos": [], "pasos": [], "construccion": refs(v, "construccion")}
+    exigir(v, "cuerpos", "Seleccioná los cuerpos.")
+    return {"objeto": "cuerpos", "cuerpos": _cuerpos(v["cuerpos"]), "pasos": []}
+
+
+def _nombre_unico_de_componente(estado, k):
+    """El nombre del componente `k` si nadie más lo tiene; si no, su id (el campo se vuelve a leer por nombre)."""
+    nombre = str(estado.componentes.get(k, {}).get("nombre") or "")
+    repetido = sum(str(c.get("nombre") or "").casefold() == nombre.casefold() for c in estado.componentes.values()) > 1
+    return k if not nombre or repetido else nombre
 
 
 def objeto_valores(op, ctx):
     """Los valores de los campos de `campos_objeto` desde una operación guardada."""
     nombres = {o.id: o.nombre for o in ctx.doc.operaciones}
     return {"objeto": op.p.get("objeto", "cuerpos"), "cuerpos": _hits_cuerpos(op.p.get("cuerpos") or [], ctx.estado),
-            "pasos": ", ".join(nombres.get(i, i) for i in op.p.get("pasos") or [])}
+            "pasos": ", ".join(nombres.get(i, i) for i in op.p.get("pasos") or []),
+            "calculo": op.p.get("calculo", "identico"), "caras": hits(op.p.get("caras") or [], ctx.estado),
+            "componentes": ", ".join(_nombre_unico_de_componente(ctx.estado, k) for k in op.p.get("componentes") or []),
+            "construccion": hits(op.p.get("construccion") or [], ctx.estado)}
 
 
 class _Patron(Comando):
@@ -869,17 +973,17 @@ class Simetria(Comando):
     CLASE_OP = OpSimetria
 
     def campos(self, ctx):
-        return [Seleccion("cuerpos", "Objetos (cuerpos)", {"cuerpo"}, maximo=None),
-                Seleccion("plano", "Plano de simetría", {"plano", "cara_plana"}), Casilla("combinar", "Unir al original")]
+        return campos_objeto() + [Seleccion("plano", "Plano de simetría", {"plano", "cara_plana"}),
+                                  Casilla("combinar", "Unir al original", visible_si=_de_cuerpos)]
 
     def construir(self, v, ctx):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
+        objeto = objeto_params(v, ctx)
         exigir(v, "plano", "Seleccioná el plano de simetría.")
-        return self.crear_op(OpSimetria, v, ctx, cuerpos=_cuerpos(v["cuerpos"]), plano=ref1(v, "plano"),
-                             combinar=v["combinar"])
+        return self.crear_op(OpSimetria, v, ctx, plano=ref1(v, "plano"),
+                             combinar=bool(v.get("combinar")) and objeto["objeto"] == "cuerpos", **objeto)
 
     def desde_op(self, op, ctx):
-        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), plano=_h1(op.p["plano"], ctx.estado))
+        return dict(op.p, plano=_h1(op.p["plano"], ctx.estado), **objeto_valores(op, ctx))
 
 
 class RellenoContorno(Comando):
@@ -935,6 +1039,8 @@ class SolidoEnvolvente(Comando):
                 Seleccion("eje_b", "Segundo eje", {"eje", "arista"}, visible_si=dos_ejes),
                 Casilla("componente", "En un componente nuevo"),
                 Casilla("grupo_rigido", "Grupo rígido", visible_si=lambda v: v.get("componente")),
+                Opciones("origen", "Origen", {"modelo": "Del modelo", "centro": "Centro", "esquina": "Esquina mínima"},
+                         visible_si=lambda v: v.get("componente")),
                 campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
@@ -947,6 +1053,7 @@ class SolidoEnvolvente(Comando):
         return self.crear_op(OpSolidoEnvolvente, v, ctx, cuerpos=_cuerpos(v["cuerpos"]), objetivos=objetivos(v),
                              eje_a=ref1(v, "eje_a"), eje_b=ref1(v, "eje_b"), scu=str(v.get("scu") or "").strip() or None,
                              componente=bool(v.get("componente")), grupo_rigido=bool(v.get("componente") and v.get("grupo_rigido")),
+                             origen=v["origen"] if v.get("componente") or v.get("grupo_rigido") else "modelo",
                              **{k: v[k] for k in ("tipo", "margen", "eje", "operacion", "orientacion", "espesor_tubo")})
 
     def desde_op(self, op, ctx):

@@ -52,3 +52,75 @@ def test_errores():
                  {"orientation": "aligned", "align_axis": "no existe"}):
         r = api.llamar(s, "sweep", {"sketch": "Perfil", "path_edges": "%CIRCLE and >Z", "body": "Cil", **args})
         assert not r["ok"], args
+
+
+def _viga_y_ruta_recta(largo=40):
+    """Una caja de 10 mm y una ruta recta en X de `largo` mm (boceto XY)."""
+    s = api.Sesion()
+    llamar(s, "create_box", length=10, width=10, height=10, name="Caja")
+    llamar(s, "create_sketch", plane="XY", name="Ruta")
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=largo, end_y=0, sketch="Ruta")
+    return s
+
+
+def test_barrido_de_un_cuerpo_por_una_ruta_recta_es_el_prisma_largo():
+    s = _viga_y_ruta_recta()
+    llamar(s, "sweep", sweep_bodies="Caja", path_sketch="Ruta", orientation="parallel", operation="new_body")
+    nuevo = [c for c in s.doc.estado_final.cuerpos.values() if c.nombre != "Caja"][0]
+    assert geo.es_valida(nuevo.forma)
+    assert geo.volumen(nuevo.forma) == pytest.approx(10 * 10 * (10 + 40), rel=1e-3)
+    assert geo.caja_envolvente(nuevo.forma)[1][0] == pytest.approx(5 + 40, abs=1e-3)
+    assert geo.volumen(s.cuerpo("Caja").forma) == pytest.approx(1000)                  # el original no cambia
+
+
+def test_barrido_de_un_cuerpo_perpendicular_en_un_arco_sigue_la_ruta():
+    s = api.Sesion()
+    llamar(s, "create_box", length=4, width=4, height=4, name="Taco")
+    llamar(s, "create_sketch", plane="XY", name="Arco")
+    llamar(s, "draw_arc", start_x=0, start_y=0, center_x=0, center_y=20, sweep_angle=90, sketch="Arco")
+    r = api.llamar(s, "sweep", {"sweep_bodies": "Taco", "path_sketch": "Arco", "orientation": "perpendicular",
+                                "operation": "new_body"})
+    assert r["ok"], r
+    nuevo = [c for c in s.doc.estado_final.cuerpos.values() if c.nombre != "Taco"][0]
+    assert geo.es_valida(nuevo.forma)
+    assert geo.volumen(nuevo.forma) == pytest.approx(4 * 4 * (4 + 10 * math.pi), rel=0.03)
+
+
+def test_barrido_de_un_cuerpo_rechaza_perfil_y_torsion():
+    s = _viga_y_ruta_recta()
+    for extra in ({"sketch": "Ruta"}, {"twist_angle": 30}, {"taper_angle": 5}):
+        r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", **extra})
+        assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", extra
+
+
+def test_ruta_encadenada_suma_las_aristas_tangentes():
+    s = api.Sesion()
+    llamar(s, "create_sketch", plane="XY", name="Pista")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=30, y2=10, sketch="Pista")
+    llamar(s, "extrude", sketch="Pista", distance=5, operation="new_body")
+    llamar(s, "fillet", edges="|Z", radius=3)                                     # esquinas redondeadas: borde tangente
+    llamar(s, "create_sketch", plane="XZ", name="Perfil")
+    llamar(s, "draw_circle", radius=0.5, center_x=15, center_y=5, sketch="Perfil")
+    con = api.llamar(s, "sweep", {"sketch": "Perfil", "path_edges": "edges:%LINE and >Z and <Y", "operation": "new_body",
+                                  "chain": True})
+    assert con["ok"], con
+    nuevo = list(s.doc.estado_final.cuerpos.values())[-1]
+    perimetro = 2 * (24 + 4) + 2 * math.pi * 3                                    # la pista redondeada entera
+    assert geo.volumen(nuevo.forma) == pytest.approx(perimetro * math.pi * 0.25, rel=0.02)
+
+
+def test_cuerpo_chico_en_ruta_larga_falla_en_vez_de_dejar_cuentas_sueltas():
+    s = api.Sesion()
+    llamar(s, "create_box", length=2, width=2, height=2, name="Caja")
+    llamar(s, "create_sketch", plane="XY", name="Ruta")
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=1000, end_y=0, sketch="Ruta")
+    r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", "orientation": "parallel",
+                                "operation": "new_body"})
+    assert not r["ok"] and "separadas" in r["mensaje"]
+
+
+def test_cadena_con_curvas_de_boceto_avisa_que_no_las_encadena():
+    s = _viga_y_ruta_recta()
+    r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", "orientation": "parallel",
+                                "operation": "new_body", "chain": True})
+    assert r["ok"] and any("solo suma aristas de cuerpos" in a for a in r["avisos"]), r

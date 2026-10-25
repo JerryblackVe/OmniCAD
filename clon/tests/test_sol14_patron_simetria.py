@@ -83,3 +83,58 @@ def test_argumentos_incompatibles():
                          ("mirror", {})):
         r = api.llamar(s, nombre, args)
         assert not r["ok"], (nombre, args)
+
+
+def test_patron_de_geometria_de_construccion_copia_planos_ejes_y_puntos():
+    s = _bloque()
+    llamar(s, "create_construction_plane", plane="XY", offset=15, name="Alto")
+    llamar(s, "create_construction_point", type="vertice", references=[[20, -10, 10]], name="Esquina")
+    llamar(s, "rectangular_pattern", construction=["Alto", "Esquina"], x_count=3, x_spacing=50)
+    estado = s.doc.estado_final
+    copias_plano = [p for k, p in estado.planos.items() if "_k" in k]
+    copias_punto = [p for k, p in estado.puntos.items() if "_k" in k]
+    assert len(copias_plano) == 2 and len(copias_punto) == 2
+    assert sorted(float(p.origen[0]) for p in copias_plano) == pytest.approx([50, 100])
+    assert sorted(float(p[0][0]) for p in copias_punto) == pytest.approx([70, 120])
+    assert all(float(p.origen[2]) == pytest.approx(15) for p in copias_plano)
+    assert geo.volumen(s.cuerpo("Bloque").forma) == pytest.approx(4000)           # los cuerpos no cambian
+    llamar(s, "undo")
+    assert not [k for k in s.doc.estado_final.planos if "_k" in k]
+
+
+def test_simetria_de_geometria_de_construccion():
+    s = _bloque()
+    llamar(s, "create_construction_point", type="vertice", references=[[20, -10, 10]], name="Esquina")
+    llamar(s, "mirror", construction=["Esquina"], plane="YZ")
+    (copia,) = [p for k, p in s.doc.estado_final.puntos.items() if "_k" in k]
+    assert list(copia[0]) == pytest.approx([-20, -10, 10])
+    r = api.llamar(s, "mirror", {"construction": ["Esquina"], "bodies": ["Bloque"], "plane": "YZ"})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+
+
+def test_calculo_ajustar_omite_las_copias_que_no_tocan_el_cuerpo():
+    s = _bloque()
+    llamar(s, "create_hole", face=">Z", diameter=4, depth=5, points=[[22, 0]])
+    ids = {"features": [p["id"] for p in llamar(s, "get_timeline")["steps"] if p["type"] == "agujero"]}
+    volumen_con_un_agujero = geo.volumen(list(s.doc.estado_final.cuerpos.values())[0].forma)
+    r = api.llamar(s, "rectangular_pattern", {**ids, "x_count": 3, "x_spacing": 5, "compute": "adjust"})
+    assert r["ok"] and not r["avisos"]                                            # las dos copias caen dentro del bloque
+    llamar(s, "undo")
+    r = api.llamar(s, "rectangular_pattern", {**ids, "x_count": 3, "x_spacing": 15, "compute": "adjust"})
+    assert r["ok"] and any("no tocan al cuerpo" in a for a in r["avisos"])
+    volumen_ajustado = geo.volumen(list(s.doc.estado_final.cuerpos.values())[0].forma)
+    llamar(s, "undo")
+    llamar(s, "rectangular_pattern", **ids, x_count=3, x_spacing=15, compute="identical")
+    assert volumen_ajustado == pytest.approx(geo.volumen(list(s.doc.estado_final.cuerpos.values())[0].forma), rel=1e-9)
+    assert volumen_ajustado < volumen_con_un_agujero                    # la copia que sí toca corta de más
+    r2 = api.llamar(s, "rectangular_pattern", {"bodies": ["Bloque"], "x_count": 2, "compute": "adjust"})
+    assert not r2["ok"] and "compute solo vale con features" in r2["mensaje"]
+
+
+def test_las_copias_de_construccion_y_de_componentes_tienen_nombres_unicos():
+    s = _bloque()
+    llamar(s, "create_construction_plane", plane="XY", offset=15, name="Alto")
+    llamar(s, "rectangular_pattern", construction=["Alto"], x_count=3, x_spacing=50)
+    nombres = [p.nombre for p in s.doc.estado_final.planos.values()]
+    assert len(nombres) == len(set(nombres)), nombres                    # «Alto (copia)» y «Alto (copia 2)»
+    llamar(s, "mirror", construction=["Alto (copia)"], plane="XY")        # el nombre ya no es ambiguo

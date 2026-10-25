@@ -18,6 +18,7 @@ import math
 from typing import Literal
 
 from ..nucleo import geometria as geo
+from ..nucleo.malla import Malla
 from ..timeline.operaciones import OpCombinar, OpExtrusion, OpPrimitiva, OpRevolucion
 from ..timeline.ops_modificar import OpApoyar, OpMover
 from ..timeline.ops_solido import OpBarrido, OpMultitransformar, OpPatron, OpSimetria, OpSolevacion
@@ -31,6 +32,7 @@ Operacion = Literal["new_body", "join", "cut", "intersect"]
 Perfiles = int | list[int] | str
 Cuerpos = str | list[str]
 Pasos = str | list[str]
+Calculo = Literal["identical", "optimized", "adjust"]
 Elementos = str | list[str]
 
 
@@ -73,7 +75,8 @@ def _informe(sesion, op, antes, combina=False):
     for cid, c in cuerpos.items():
         if cid in antes and antes[cid] is not c.forma:
             info = _info_cuerpo(sesion, c)
-            info["previous_volume"] = _r(geo.volumen(antes[cid])) if info["volume"] is not None else None
+            previo_solido = info["volume"] is not None and not isinstance(antes[cid], Malla)   # una malla no tiene volumen B-rep
+            info["previous_volume"] = _r(geo.volumen(antes[cid])) if previo_solido else None
             modificados.append(info)
     creados = [_info_cuerpo(sesion, c) for cid, c in cuerpos.items() if cid not in antes]
     quitados = [cid for cid in antes if cid not in cuerpos]
@@ -360,7 +363,9 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
              "stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1). orientation=aligned mantiene "
              "el perfil con el eje align_axis como binormal (eje, arista recta, plano o cara plana). guide_surface (caras "
              "sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. "
-             "Todavía no están el barrido de un cuerpo sólido ni la selección encadenada de la ruta.",
+             "sweep_bodies barre un cuerpo sólido (Solid Sweep) en lugar de un perfil: lo que recorre el cuerpo al "
+             "moverse a lo largo de la ruta (aproximado con copias del cuerpo: el borde de un barrido curvo queda "
+             "escalonado). chain=true suma a cada arista de path_edges las que le siguen tangentes (Chain Selection).",
              modifica=True)
 def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch: str | None = None,
           path_curves: list[int] | None = None,
@@ -369,7 +374,7 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
           faces: Cuerpos | None = None, path_edges: Cuerpos | None = None, rail_sketch: str | None = None,
           rail_curves: list[int] | None = None, rail_scale: Literal["scale", "stretch", "none"] = "scale",
           path_distance: Expr = 1, body: str | None = None, align_axis: str | dict | None = None,
-          guide_surface: Cuerpos | None = None):
+          guide_surface: Cuerpos | None = None, sweep_bodies: Cuerpos | None = None, chain: bool = False):
     """
     sketch: id o nombre del boceto con el perfil; vacío si el perfil es una cara (faces).
     profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
@@ -389,9 +394,17 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     rail_scale: con carril, cómo sigue el perfil al carril: "scale" (escala), "stretch" (se estira) o "none" (no cambia).
     path_distance: fracción de la ruta que se barre, mayor que 0 y hasta 1 (número o expresión); 1 = toda.
     body: cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
+    sweep_bodies: cuerpo(s) sólidos (id o nombre) que se barren a lo largo de la ruta (Solid Sweep), en lugar de un perfil; no se combina con carril, superficie guía, torsión ni conicidad.
+    chain: true suma a cada arista de path_edges las aristas de cuerpo que le siguen tangentes (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
     """
-    if sketch is None and not faces:
-        raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (una cara plana).")
+    cuerpos_barrido = _ids_cuerpos(sesion, sweep_bodies)
+    if cuerpos_barrido and (sketch is not None or faces or rail_sketch is not None or guide_surface
+                            or any(isinstance(x, (int, float)) and not isinstance(x, bool) and x
+                                   for x in (twist_angle, taper_angle))):
+        raise error("INVALID_ARGUMENTS", "sweep_bodies no se combina con perfil (sketch, faces), carril, superficie guía, "
+                                         "torsión ni conicidad.")
+    if sketch is None and not faces and not cuerpos_barrido:
+        raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile), faces (una cara plana) o sweep_bodies.")
     if path_sketch is None and not path_edges:
         raise error("INVALID_ARGUMENTS", "Falta la ruta: path_sketch (con path_curves) o path_edges (aristas de un cuerpo).")
     if path_sketch is not None and path_edges:
@@ -431,7 +444,8 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
                    distancia=texto_expr(path_distance), **extra,
                    orientacion={"perpendicular": "perpendicular", "parallel": "paralela", "aligned": "alineada"}[orientation],
                    conicidad=texto_expr(taper_angle), torsion=texto_expr(twist_angle),
-                   operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target))
+                   operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target),
+                   cuerpos=cuerpos_barrido, cadena=bool(chain))
     return _agregar(sesion, op, operation != "new_body")
 
 
@@ -449,19 +463,36 @@ def _curvas_de_boceto(sesion, boceto, curvas, que):
     return [{"tipo": "curva_boceto", "boceto": rop.id, "curva": cid} for cid in ids]
 
 
-def _condicion_borde(cond):
-    """{"type", "angle", "weight"} de la API → la condición que guarda OpSolevacion."""
-    if not isinstance(cond, dict) or set(cond) - {"type", "angle", "weight"}:
-        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction", "angle": grados, "weight": número}.')
+def _condicion_borde(cond, sesion=None, body=None):
+    """{"type", "angle", "weight", "face"} de la API → la condición que guarda OpSolevacion."""
+    if not isinstance(cond, dict) or set(cond) - {"type", "angle", "weight", "face"}:
+        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction" | "tangent", "angle": '
+                                         'grados, "weight": número, "face": cara (con tangent)}.')
     tipo = cond.get("type", "free")
-    if tipo not in ("free", "direction"):
-        raise error("INVALID_ARGUMENTS", "type es free o direction (Tangente y Suave todavía no están).")
+    if tipo == "smooth":
+        raise error("INVALID_ARGUMENTS", "La condición Suave (continuidad de curvatura, G2) no existe en OpenCascade: "
+                                         "usá tangent o direction.")
+    if tipo not in ("free", "direction", "tangent"):
+        raise error("INVALID_ARGUMENTS", "type es free, direction o tangent.")
     angulo, peso = cond.get("angle", 90), cond.get("weight", 1)
     if isinstance(angulo, (int, float)) and not 0 < angulo < 180:
         raise error("INVALID_ARGUMENTS", "angle está entre 0 y 180 grados.")
     if isinstance(peso, (int, float)) and peso <= 0:
         raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
-    return {"tipo": "libre" if tipo == "free" else "direccion", "angulo": texto_expr(angulo), "peso": texto_expr(peso)}
+    salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente"}[tipo],
+              "angulo": texto_expr(angulo), "peso": texto_expr(peso)}
+    if tipo == "tangent":
+        if cond.get("face") is None:
+            raise error("INVALID_ARGUMENTS", "tangent necesita face: la cara a la que la superficie es tangente (la sección "
+                                             "está sobre su borde).")
+        from .herramientas_modificar import _refs
+        referencias, _ = _refs(sesion, cond["face"], "cara", body)
+        if len(referencias) != 1:
+            raise error("INVALID_ARGUMENTS", f"tangent necesita UNA cara y face eligió {len(referencias)}: afiná el selector.")
+        salida["cara"] = referencias[0]
+    elif "face" in cond:
+        raise error("INVALID_ARGUMENTS", "face solo vale con type=tangent.")
+    return salida
 
 
 @herramienta("loft", "solido",
@@ -472,15 +503,17 @@ def _condicion_borde(cond):
              "vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: "
              "{\"sketch\", \"curve\"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la "
              "superficie de la primera y la última sección: {\"type\": \"free\"} o {\"type\": \"direction\", \"angle\": "
-             "grados desde el plano de la sección (90 = perpendicular), \"weight\": 1}; es una aproximación con una "
-             "sección auxiliar cercana, solo en la solevación lisa (sin rails, center_line, ruled ni closed). "
-             "merge_tangent_edges une las caras tangentes. Todavía no están las condiciones Tangente y Suave.",
+             "grados desde el plano de la sección (90 = perpendicular), \"weight\": 1} o {\"type\": \"tangent\", "
+             "\"face\": cara, \"weight\": 1} (la superficie sale tangente a esa cara, que tiene la sección en su "
+             "borde); es una aproximación con una sección auxiliar cercana, solo en la solevación lisa (sin rails, "
+             "center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. "
+             "merge_tangent_edges une las caras tangentes. La condición Suave (G2) no existe en OpenCascade.",
              modifica=True)
 def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | None = None,
          operation: Operacion = "new_body", ruled: bool = False, closed: bool = False, target: Cuerpos | None = None,
          sections: list[str | dict | list[float]] | None = None, rails: list[str | dict] | None = None,
          center_line: list[str | dict] | None = None, body: str | None = None, start_condition: dict | None = None,
-         end_condition: dict | None = None, merge_tangent_edges: bool = False):
+         end_condition: dict | None = None, merge_tangent_edges: bool = False, section_conditions: dict | None = None):
     """
     sketches: ids o nombres de los bocetos, en el orden de las secciones; vacío si se da sections.
     profiles: un perfil por boceto (índice o "largest"); vacío = el perfil 0 de cada boceto.
@@ -492,8 +525,9 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
     body: cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-    start_condition: condición de borde de la primera sección: {"type": "free" | "direction", "angle": grados (90 por defecto), "weight": número (1 por defecto)}.
+    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
     end_condition: lo mismo para la última sección.
+    section_conditions: condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
     merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
     """
     if rails and center_line:
@@ -527,7 +561,18 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
              for k, lista in (("carriles", rails), ("linea_central", center_line)) if lista}
     for clave, cond in (("condicion_inicio", start_condition), ("condicion_fin", end_condition)):
         if cond is not None:
-            guias[clave] = _condicion_borde(cond)
+            guias[clave] = _condicion_borde(cond, sesion, body)
+    if section_conditions:
+        n = len(secciones)
+        medias = {}
+        for k, cond in section_conditions.items():
+            if not str(k).isdigit() or not 1 < int(k) < n:
+                raise error("INVALID_ARGUMENTS", f"section_conditions: «{k}» no es una sección intermedia (de 2 a {n - 1}).")
+            c = _condicion_borde(cond, sesion, body)
+            if c["tipo"] == "tangente":
+                raise error("INVALID_ARGUMENTS", "section_conditions solo admite free y direction.")
+            medias[str(int(k) - 1)] = c
+        guias["condiciones_medias"] = medias
     guias["fusionar_tangentes"] = bool(merge_tangent_edges)
     doc = sesion.doc
     op = OpSolevacion(doc.nuevo_id(), nombre_nuevo(doc, "Solevación", OpSolevacion), secciones=secciones,
@@ -699,11 +744,17 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
     herramientas = _ids_cuerpos(sesion, tools)
     doc = sesion.doc
     if operation == "join":         # unir lo separado es válido (cuerpo de varios sólidos), pero casi siempre es un descuido
-        antes = doc.estado_final
-        for h in herramientas:
-            if not geo.se_tocan(antes.cuerpos[objetivo].forma, antes.cuerpos[h].forma):
-                sesion.avisar(f"{antes.cuerpos[h].nombre} no toca a {antes.cuerpos[objetivo].nombre}: la unión deja un "
-                              "cuerpo con piezas sueltas.")
+        cuerpos = doc.estado_final.cuerpos
+        unidos, pendientes = [cuerpos[objetivo].forma], list(herramientas)
+        while pendientes:        # una herramienta que toca a otra ya unida también queda unida (A-B-C en fila)
+            h = next((x for x in pendientes if any(geo.se_tocan(u, cuerpos[x].forma) for u in unidos)), None)
+            if h is None:
+                break
+            unidos.append(cuerpos[h].forma)
+            pendientes.remove(h)
+        for h in pendientes:
+            sesion.avisar(f"{cuerpos[h].nombre} no toca a {cuerpos[objetivo].nombre}: la unión deja un cuerpo con "
+                          "piezas sueltas.")
     op = OpCombinar(doc.nuevo_id(), nombre_nuevo(doc, "Combinar", OpCombinar), objetivo=objetivo,
                     herramientas=herramientas, operacion=OPERACIONES[operation], mantener=keep_tools)
     return _agregar(sesion, op, True)
@@ -717,7 +768,8 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
              "aplica con la misma operación).", modifica=True)
 def mirror(sesion, bodies: Cuerpos | None = None, plane: str = "YZ", combine: bool = False,
            plane_body: str | None = None, features: Pasos | None = None, faces: Elementos | None = None,
-           components: list[str] | None = None):
+           components: list[str] | None = None,
+           construction: list[str] | None = None, compute: Calculo = "identical"):
     """
     bodies: cuerpo(s) a reflejar (id o nombre).
     plane: plano de simetría: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana (selector ">X" o id de find_faces).
@@ -726,8 +778,10 @@ def mirror(sesion, bodies: Cuerpos | None = None, plane: str = "YZ", combine: bo
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se refleja en vez de cuerpos. No se combina con bodies.
     faces: caras a reflejar (selector, ids de find_faces o lista): cada reflejo queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a reflejar (id o nombre): cada reflejo es un componente nuevo con copias reflejadas de sus cuerpos. No se combina con bodies, features ni faces.
+    construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     """
-    objeto = _objeto_patron(sesion, bodies, features, False, combine, faces, components)
+    objeto = _objeto_patron(sesion, bodies, features, False, combine, faces, components, construction, compute)
     ref = referencia_plano_o_cara(sesion, plane, plane_body)     # antes de gastar un id: si falla, el documento no cambia
     doc = sesion.doc
     op = OpSimetria(doc.nuevo_id(), nombre_nuevo(doc, "Simetría", OpSimetria), plano=ref,
@@ -735,13 +789,36 @@ def mirror(sesion, bodies: Cuerpos | None = None, plane: str = "YZ", combine: bo
     return _agregar_patron(sesion, op)
 
 
-def _objeto_patron(sesion, bodies, features, lightweight, combine, faces=None, components=None):
+def _objeto_patron(sesion, bodies, features, lightweight, combine, faces=None, components=None, construction=None,
+                   compute="identical"):
+    """Lo que repite un patrón o una simetría, más el cálculo (Compute Type) cuando son operaciones."""
+    objeto = _objeto_patron_tipos(sesion, bodies, features, lightweight, combine, faces, components, construction)
+    if compute != "identical":
+        if objeto["objeto"] != "operaciones":
+            raise error("INVALID_ARGUMENTS", "compute solo vale con features (operaciones del timeline).")
+        objeto["calculo"] = {"optimized": "optimizado", "adjust": "ajustar"}[compute]
+    return objeto
+
+
+def _objeto_patron_tipos(sesion, bodies, features, lightweight, combine, faces, components, construction):
     """objeto, cuerpos y pasos de un patrón: cuerpos (bodies), operaciones del timeline (features), caras (faces) o
     componentes (components). `ligeras` solo tiene sentido con cuerpos y sin combine (las copias unidas al original
     no quedan como instancias)."""
     from ..timeline.ops_solido import TIPOS_REPETIBLES
     ids = _ids_cuerpos(sesion, bodies)
     pasos = [sesion.paso(f) for f in _lista(features)]
+    if construction is not None:
+        if ids or pasos or faces is not None or components is not None:
+            raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies), operaciones (features), caras (faces), "
+                                             "componentes (components) o geometría de construcción (construction): una sola cosa.")
+        if lightweight or combine:
+            raise error("INVALID_ARGUMENTS", "lightweight y combine son para cuerpos (bodies): la geometría de "
+                                             "construcción deja entidades nuevas.")
+        from .herramientas_construccion import _referencia
+        refs = [_referencia(sesion, c, {"plano", "eje", "punto"}) for c in _lista(construction)]
+        if not refs:
+            raise error("INVALID_ARGUMENTS", "Indicá al menos un plano, eje o punto en 'construction'.")
+        return {"objeto": "construccion", "construccion": refs}
     if faces is not None or components is not None:
         if ids or pasos or (faces is not None and components is not None):
             raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies), operaciones (features), caras (faces) "
@@ -863,6 +940,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                         y_count: int = 1, y_spacing: Expr = "10 mm", axis1: str = "x",
                         axis2: str = "y", combine: bool = False, features: Pasos | None = None,
                         faces: Elementos | None = None, components: list[str] | None = None,
+                        construction: list[str] | None = None, compute: Calculo = "identical",
                         lightweight: bool = False, distribution: Literal["spacing", "extent"] = "spacing",
                         symmetric: bool = False, suppress: list[int] | None = None, body: str | None = None):
     """
@@ -881,9 +959,11 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+    construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
     if x_count < 1 or y_count < 1:
         raise error("INVALID_ARGUMENTS", "x_count e y_count tienen que ser 1 o más.")
     if x_count == 1 and y_count == 1:
@@ -913,6 +993,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
 def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: str = "z",
                      total_angle: Expr = 360, combine: bool = False, features: Pasos | None = None,
                      faces: Elementos | None = None, components: list[str] | None = None,
+                     construction: list[str] | None = None, compute: Calculo = "identical",
                      lightweight: bool = False, distribution: Literal["extent", "spacing"] = "extent",
                      symmetric: bool = False, suppress: list[int] | None = None, body: str | None = None):
     """
@@ -924,13 +1005,15 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+    construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     distribution: "extent" (total_angle es el ángulo TOTAL entre la primera y la última copia) o "spacing" (es el ángulo entre copias consecutivas).
     symmetric: true reparte las copias a los dos lados del original.
     suppress: copias a suprimir por su posición (1 a count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
     body: cuerpo donde se evalúan los selectores de axis; vacío = el único cuerpo.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
     total = 2 * count - 1 if symmetric else count
@@ -1016,6 +1099,7 @@ def _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode
              "referencia no repite la copia.", modifica=True)
 def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None = None,
                   faces: Elementos | None = None, components: list[str] | None = None,
+                  construction: list[str] | None = None, compute: Calculo = "identical",
                   points: list[list[Expr]] | None = None, sketch: str | None = None,
                   reference: list[Expr] | None = None, combine: bool = False, lightweight: bool = False,
                   point_refs: list[str | dict | list[float]] | None = None,
@@ -1026,6 +1110,8 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+    construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     points: puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
     sketch: id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
     reference: punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
@@ -1036,7 +1122,7 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
     params = _params_puntos(sesion, points, sketch, reference, point_refs, reference_point, body)
     cantidad = len(params["coordenadas"]) + len(params["puntos"]) + 1
     _exigir_instancias(cantidad, "points")
@@ -1058,7 +1144,8 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
 def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distance: Expr | None = None,
                  bodies: Cuerpos | None = None,
                  features: Pasos | None = None, faces: Elementos | None = None,
-                 components: list[str] | None = None, path_curves: list[int] | None = None,
+                 components: list[str] | None = None,
+                 construction: list[str] | None = None, compute: Calculo = "identical", path_curves: list[int] | None = None,
                  spacing_mode: Literal["extent", "spacing"] = "extent", start: Expr = 0,
                  orientation: Literal["identical", "path_direction"] = "identical", twist: Expr = 0,
                  symmetric: bool = False, combine: bool = False, lightweight: bool = False,
@@ -1071,6 +1158,8 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+    construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     path_curves: ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
     spacing_mode: "extent" (distance es el largo total) o "spacing" (distance es la separación).
     start: dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
@@ -1083,7 +1172,7 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
     params = _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist,
                           symmetric, path_edges, body)
     doc = sesion.doc
@@ -1165,17 +1254,20 @@ def _transformacion_api(sesion, t, i):
              "(bodies) u operaciones del timeline (features).", modifica=True)
 def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = None, features: Pasos | None = None,
                     combine: bool = False, lightweight: bool = False, faces: Elementos | None = None,
-                    components: list[str] | None = None):
+                    components: list[str] | None = None,
+                    construction: list[str] | None = None, compute: Calculo = "identical"):
     """
     transforms: lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+    construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
     if not transforms:
         raise error("INVALID_ARGUMENTS", "transforms necesita al menos una transformación.")
     lista, total = [], 1

@@ -252,7 +252,9 @@ class EstadoModelo:
         la original («Banco (copia)» → «Banco (copia 2)», no «Banco (copia) (copia)»): nombres repetidos obligaban a
         usar el id (T-16 de la prueba de tortura)."""
         base = re.sub(r" \(copia(?: \d+)?\)$", "", nombre)
-        usados = {c.nombre for c in self.cuerpos.values()}
+        usados = {c.nombre for c in self.cuerpos.values()} | {pl.nombre for pl in self.planos.values()}
+        usados |= {e[2] for e in self.ejes.values()} | {pt[1] for pt in self.puntos.values()}
+        usados |= {c.get("nombre") for c in self.componentes.values()}
         candidato, n = f"{base} (copia)", 2
         while candidato in usados:
             candidato, n = f"{base} (copia {n})", n + 1

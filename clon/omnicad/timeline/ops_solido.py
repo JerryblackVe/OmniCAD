@@ -23,6 +23,11 @@ def _sc():
     return solidos_crear
 
 
+def _sm():
+    from ..nucleo import solidos_modificar
+    return solidos_modificar
+
+
 def _pg():
     from ..nucleo import patron_geometrico
     return patron_geometrico
@@ -78,24 +83,58 @@ class OpBarrido(_OpCrear):
     TIPO, ETIQUETA, ICONO = "barrido", "Barrido", "↝"
     PARAMS = {"perfiles": [], "ruta": [], "carril": [], "orientacion": "perpendicular", "distancia": "1",
               "torsion": "0 deg", "conicidad": "0 deg", "escala_carril": "escalar", "operacion": "nuevo",
-              "objetivos": [], "eje_alineado": None, "superficie_guia": []}
+              "objetivos": [], "eje_alineado": None, "superficie_guia": [], "cuerpos": [], "cadena": False}
     EXPRESIONES = ("distancia", "torsion", "conicidad")
     OPCIONES = {"orientacion": ("perpendicular", "paralela", "alineada"), "escala_carril": ("escalar", "estirar", "ninguna"),
                 "operacion": OPERACIONES_CUERPO}
     REFS = ("perfiles", "ruta", "carril", "eje_alineado", "superficie_guia")
 
+    def _eje_alineado(self, estado):
+        if not self.p.get("eje_alineado"):
+            raise ErrorOperacion("Elegí el eje de la orientación alineada (un eje, una arista, un plano o una cara).")
+        e = _resolver(self.p["eje_alineado"], estado)
+        eje = e.eje[1] if e.eje is not None else e.plano.normal if e.plano is not None else None
+        if eje is None:
+            raise ErrorOperacion("El eje de la orientación alineada tiene que ser un eje, una arista recta, un plano o una cara plana.")
+        return eje
+
+    def _ruta(self, estado, ctx):
+        """Las aristas de la ruta; con `cadena` (Chain Selection), cada arista de un cuerpo suma las que siguen tangentes."""
+        ents, ruta = _aristas(self.p["ruta"], estado, "la ruta")
+        if not self.p.get("cadena"):
+            return ruta
+        sm, salida = _sm(), []
+        if any(not (e.tipo == "arista" and e.cuerpo) for e in ents):
+            ctx.aviso("La selección de cadena solo suma aristas de cuerpos: las curvas de boceto se usan tal cual.")
+        for e in ents:
+            tramo = sm._ampliar_tangentes(estado.cuerpo(e.cuerpo).forma, [e.forma], True) if (
+                e.tipo == "arista" and e.cuerpo) else [e.forma]
+            salida += [a for a in tramo if not any(a.IsSame(x) for x in salida)]
+        return salida
+
+    def _barrer_cuerpos(self, estado, ctx, ruta, eje):
+        """Solid Sweep: el volumen que recorre cada cuerpo elegido a lo largo de la ruta."""
+        orientacion = self.p["orientacion"]
+        if self.p["carril"] or self.p.get("superficie_guia") or abs(ctx.evaluar(self.p["torsion"], ANGULO)) > 1e-9 or abs(
+                ctx.evaluar(self.p["conicidad"], ANGULO)) > 1e-9:
+            raise ErrorOperacion("El barrido de un cuerpo no usa carril, superficie guía, torsión ni conicidad.")
+        distancia = ctx.evaluar(self.p["distancia"], "escalar")
+        for cid in self.p["cuerpos"]:
+            c = estado.cuerpo(cid)
+            if getattr(c, "tipo", "solido") != "solido":
+                raise ErrorOperacion(f"«{c.nombre}» no es un cuerpo sólido: el barrido de un cuerpo lo necesita.")
+            forma = _sc().barrer_cuerpo(c.forma, ruta, orientacion=orientacion, distancia=distancia, eje_alineado=eje)
+            self._aplicar(estado, ctx, forma)
+
     def ejecutar(self, estado, ctx):
+        if self.p.get("cuerpos"):
+            ruta = self._ruta(estado, ctx)
+            eje = self._eje_alineado(estado) if self.p["orientacion"] == "alineada" else None
+            return self._barrer_cuerpos(estado, ctx, ruta, eje)
         _, caras = _caras(self.p["perfiles"], estado)
-        _, ruta = _aristas(self.p["ruta"], estado, "la ruta")
+        ruta = self._ruta(estado, ctx)
         carril = _aristas(self.p["carril"], estado)[1] if self.p["carril"] else None
-        eje = None
-        if self.p["orientacion"] == "alineada":
-            if not self.p.get("eje_alineado"):
-                raise ErrorOperacion("Elegí el eje de la orientación alineada (un eje, una arista, un plano o una cara).")
-            e = _resolver(self.p["eje_alineado"], estado)
-            eje = e.eje[1] if e.eje is not None else e.plano.normal if e.plano is not None else None
-            if eje is None:
-                raise ErrorOperacion("El eje de la orientación alineada tiene que ser un eje, una arista recta, un plano o una cara plana.")
+        eje = self._eje_alineado(estado) if self.p["orientacion"] == "alineada" else None
         superficie = geo.compuesto([e.forma for e in _resolver_todas(self.p["superficie_guia"], estado)])             if self.p.get("superficie_guia") else None
         forma = _sc().barrer(caras, ruta, carril=carril, orientacion=self.p["orientacion"],
                              distancia=ctx.evaluar(self.p["distancia"], "escalar"),
@@ -113,17 +152,30 @@ class OpSolevacion(_OpCrear):
     TIPO, ETIQUETA, ICONO = "solevacion", "Solevación", "⌓"
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
               "operacion": "nuevo", "objetivos": [], "condicion_inicio": None, "condicion_fin": None,
-              "fusionar_tangentes": False}
+              "fusionar_tangentes": False, "condiciones_medias": {}}
     OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("secciones", "carriles", "linea_central")
 
-    def _condicion(self, clave, ctx):
-        """La condición de borde guardada {"tipo", "angulo", "peso"} con el ángulo (expresión) evaluado, o None."""
-        c = self.p.get(clave)
+    def dependencias(self):
+        caras = [c.get("cara") for c in (self.p.get("condicion_inicio"), self.p.get("condicion_fin")) if c]
+        return super().dependencias() | ent.dependencias_de(*caras)
+
+    def _condicion(self, clave, ctx, estado=None, cond=None):
+        """La condición de borde guardada {"tipo", "angulo", "peso", "cara"} con el ángulo (expresión) evaluado y la cara
+        resuelta (Tangente), o None."""
+        c = cond if cond is not None else self.p.get(clave)
         if not c:
             return None
-        return {"tipo": c.get("tipo", "libre"), "angulo": ctx.evaluar(str(c.get("angulo", "90 deg")), ANGULO),
-                "peso": ctx.evaluar(str(c.get("peso", "1")), "escalar")}
+        salida = {"tipo": c.get("tipo", "libre"), "angulo": ctx.evaluar(str(c.get("angulo", "90 deg")), ANGULO),
+                  "peso": ctx.evaluar(str(c.get("peso", "1")), "escalar")}
+        if salida["tipo"] == "tangente":
+            if not c.get("cara"):
+                raise ErrorOperacion("La condición Tangente necesita la cara a la que la superficie es tangente.")
+            cara = _resolver(c["cara"], estado)
+            if cara.tipo != "cara":
+                raise ErrorOperacion("La condición Tangente se apoya en una cara.")
+            salida["cara"] = cara.forma
+        return salida
 
     def ejecutar(self, estado, ctx):
         secciones = []
@@ -135,8 +187,10 @@ class OpSolevacion(_OpCrear):
         central = _aristas(self.p["linea_central"], estado)[1] if self.p["linea_central"] else None
         forma = _sc().solevar(secciones, carriles=[c[0] if len(c) == 1 else c for c in carriles], linea_central=central,
                               cerrada=self.p["cerrada"], reglada=self.p["reglada"],
-                              condicion_inicio=self._condicion("condicion_inicio", ctx),
-                              condicion_fin=self._condicion("condicion_fin", ctx),
+                              condicion_inicio=self._condicion("condicion_inicio", ctx, estado),
+                              condicion_fin=self._condicion("condicion_fin", ctx, estado),
+                              condiciones_medias={int(k): self._condicion(None, ctx, estado, cond)
+                                                  for k, cond in (self.p.get("condiciones_medias") or {}).items()},
                               fusionar_tangentes=bool(self.p.get("fusionar_tangentes")))
         if geo.sin_volumen(forma):
             raise ErrorOperacion("La solevación no encierra volumen: los perfiles no pueden estar todos en el mismo "
@@ -501,7 +555,8 @@ class OpTuberia(_OpCrear):
 # lista que muestran los errores (la API y el diálogo la controlan antes de crear el paso).
 TIPOS_REPETIBLES = ("extrusion", "revolucion", "agujero", "primitiva", "barrido", "solevacion", "bobina", "tuberia",
                     "relleno_contorno", "solido_envolvente", "patron", "multitransformar")
-OBJETOS_PATRON = ("cuerpos", "operaciones", "caras", "componentes")
+OBJETOS_PATRON = ("cuerpos", "operaciones", "caras", "componentes", "construccion")
+CALCULOS_PATRON = ("identico", "optimizado", "ajustar")      # «Compute Type» del patrón de operaciones de Fusion
 
 
 def _ids_pasos(p):
@@ -543,7 +598,8 @@ def repetir_pasos(op, estado, ctx, trsfs):
     de `op.p["pasos"]` (la extrusión que corta, el agujero…) se copia con cada gp_Trsf de `trsfs` (sin el original)
     y se aplica con la MISMA operación (cortar, unir o cuerpo nuevo) a los mismos cuerpos que el paso original.
     Las extensiones no se recalculan por copia: un agujero «Todo» copiado a una zona más gruesa no la atraviesa.
-    Devuelve los ids de los cuerpos afectados."""
+    `calculo`: "identico" y "optimizado" (el mismo resultado) copian la herramienta tal cual; "ajustar" omite las
+    copias que ya no tocan al cuerpo. Devuelve los ids de los cuerpos afectados."""
     pasos = _ids_pasos(op.p)
     if not pasos:
         raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
@@ -563,6 +619,18 @@ def repetir_pasos(op, estado, ctx, trsfs):
                 raise ErrorOperacion(f"El paso «{pid}» interseca: repetirlo dejaría solo lo común a todas las copias. "
                                      "Se repiten los pasos que cortan, unen o crean un cuerpo nuevo.")
             copias = [sc.aplicar(forma, t) for t in trsfs]
+            if op.p.get("calculo") == "ajustar" and operacion in ("cortar", "unir") and tipo == "solido":
+                # Ajustar (Compute Type › Adjust): cada instancia se calcula por su cuenta; la que ya no toca al cuerpo
+                # no hace nada, así que se omite en vez de dejar una herramienta suelta
+                lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
+                cuerpos = [estado.cuerpo(o) for o in lista] or [c for c in estado.cuerpos.values()
+                                                                if getattr(c, "tipo", "solido") == "solido"]
+                tocan = [c for c in copias if any(geo.se_tocan(cu.forma, c) for cu in cuerpos)]
+                if len(tocan) < len(copias):
+                    ctx.aviso(f"Ajustar: {len(copias) - len(tocan)} copia(s) no tocan al cuerpo y se omitieron.")
+                copias = tocan
+                if not copias:
+                    continue
             if operacion == "nuevo":              # cada copia, su propio cuerpo (aunque se toquen)
                 for copia in copias:
                     afectados += aplicar_resultado(estado, ctx, op.id, copia, operacion, objetivo, tipo)
@@ -581,6 +649,32 @@ def copiar_caras(op, estado, trsfs):
     for cara in caras:
         for t in trsfs:
             estado.nuevo_cuerpo(op.id, _sc().aplicar(cara, t), "superficie")
+
+
+def copiar_construccion(op, estado, trsfs):
+    """Patrón o simetría de GEOMETRÍA DE CONSTRUCCIÓN (Object Type › Construction Geometry): cada plano, eje o punto de
+    `op.p["construccion"]`, transformado con cada gp_Trsf de `trsfs`, queda como una entidad de construcción nueva
+    (`<paso>_k<n>`, nombre « (copia)»)."""
+    entidades = _resolver_todas(op.p.get("construccion"), estado, ("plano", "eje", "punto"))
+    if not entidades:
+        raise ErrorOperacion("Elegí los planos, ejes o puntos de construcción.")
+    n = 0
+    for ref, e in zip(op.p["construccion"], entidades, strict=True):
+        for t in trsfs:
+            n += 1
+            m = _sc().a_matriz(t)
+            r, v = m[:3, :3], m[:3, 3]
+            nuevo = f"{op.id}_k{n}"
+            if e.tipo == "plano":
+                estado.planos[nuevo] = geo.Plano.desde_marco(r @ e.plano.origen + v, r @ e.plano.normal, r @ e.plano.u,
+                                                              estado.nombre_de_copia(e.plano.nombre or "Plano"))
+            elif e.tipo == "eje":
+                d = r @ np.asarray(e.eje[1], float)
+                nombre = estado.ejes.get(ref["id"], (None, None, f"Eje {ref['id']}"))[2]
+                estado.ejes[nuevo] = (r @ np.asarray(e.eje[0], float) + v, d / np.linalg.norm(d), estado.nombre_de_copia(nombre))
+            else:
+                nombre = estado.puntos.get(ref["id"], (None, f"Punto {ref['id']}"))[1]
+                estado.puntos[nuevo] = (r @ np.asarray(e.punto, float) + v, estado.nombre_de_copia(nombre))
 
 
 def copiar_componentes(op, estado, trsfs):
@@ -609,7 +703,8 @@ def copiar_componentes(op, estado, trsfs):
             n += 1
             nuevo = f"{op.id}.k{n}"
             estado.componentes[nuevo] = {"nombre": estado.nombre_de_copia(estado.componentes[k].get("nombre") or k),
-                                         "padre": "", "fijo": False, "matriz": np.identity(4).tolist()}
+                                         "padre": "", "fijo": False, "matriz": np.identity(4).tolist(),
+                                         **({"origen": estado.componentes[k]["origen"]} if "origen" in estado.componentes[k] else {})}
             for c in cuerpos:
                 cid = estado.nuevo_cuerpo(op.id, _sc().aplicar(c.forma, t), c.tipo,
                                           nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
@@ -627,6 +722,8 @@ def copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos):
         copiar_caras(op, estado, trsfs)
     elif objeto == "componentes":
         copiar_componentes(op, estado, trsfs)
+    elif objeto == "construccion":
+        copiar_construccion(op, estado, trsfs)
     else:
         if not op.p["cuerpos"]:
             raise ErrorOperacion(sin_cuerpos)
@@ -670,11 +767,11 @@ class OpPatron(_OpCrear):
               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
               "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
               "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False, "caras": [],
-              "componentes": []}
+              "componentes": [], "construccion": [], "calculo": "identico"}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
     OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"), "distribucion": ("extension", "espaciado"),
-                "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON}
-    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras")
+                "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
+    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras", "construccion")
 
     def dependencias(self):
         return (super().dependencias() | _pasos_y_componentes(self.p)) - {self.id}
@@ -773,9 +870,9 @@ class OpMultitransformar(_OpCrear):
     en la simetría, "plano". `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
     TIPO, ETIQUETA, ICONO = "multitransformar", "Multitransformación", "✣"
     PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False,
-              "ligeras": False, "caras": [], "componentes": []}
-    OPCIONES = {"objeto": OBJETOS_PATRON}
-    REFS = ("caras",)
+              "ligeras": False, "caras": [], "componentes": [], "construccion": [], "calculo": "identico"}
+    OPCIONES = {"objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
+    REFS = ("caras", "construccion")
 
     def _lista(self):
         lista = self.p.get("transformaciones") or []
@@ -846,9 +943,9 @@ class OpSimetria(_OpCrear):
     refleja y se aplica con la misma operación). `objeto` elige cuál."""
     TIPO, ETIQUETA, ICONO = "simetria", "Simetría", "⇋"
     PARAMS = {"cuerpos": [], "plano": None, "combinar": False, "objeto": "cuerpos", "caras": [], "componentes": [],
-              "pasos": []}
-    OPCIONES = {"objeto": OBJETOS_PATRON}
-    REFS = ("plano", "caras")
+              "pasos": [], "construccion": [], "calculo": "identico"}
+    OPCIONES = {"objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
+    REFS = ("plano", "caras", "construccion")
 
     def dependencias(self):
         return (super().dependencias() | _pasos_y_componentes(self.p)) - {self.id}
@@ -917,37 +1014,80 @@ class OpPatronGeometrico(_OpCrear):
 
 class OpReticulaVolumetrica(Operacion):
     """Retícula volumétrica de Fusion [Solid > Modify > Volumetric Lattice]: llena el sólido `cuerpo` con una estructura
-    interna por celdas (`nucleo/reticula.py` explica las formas). El cuerpo queda reemplazado por la retícula (sólido
-    para cross y x_cell; cuerpo de malla para las superficies mínimas). `tamano` es la celda; `tamano_y` y `tamano_z`
-    (vacíos = el mismo) la hacen no uniforme. `solidez` es el porcentaje de material (1 a 99)."""
+    interna por celdas (`nucleo/reticula.py` explica las formas); también una malla cerrada. El cuerpo queda reemplazado
+    por la retícula (sólido para las barras; cuerpo de malla para las superficies mínimas). `tamano` es la celda;
+    `tamano_y` y `tamano_z` (vacíos = el mismo) la hacen no uniforme. `barras`: celda a medida, [x1,y1,z1,x2,y2,z2] en
+    fracciones de la celda. `solidez` es el porcentaje de material (1 a 99); con `solidez_final` y `ruta` (una arista o
+    curva, o puntos) va en gradiente por la ruta. `desfase`/`mezcla` > 0 arman la zona de desfase alrededor de `zonas`
+    (vacío = todas las caras del cuerpo), con `solidez_desfase` (0 a 100). `mover_*` y `girar_*` mueven y giran las
+    celdas."""
     TIPO, ETIQUETA, ICONO = "reticula_volumetrica", "Retícula volumétrica", "▦"
     PARAMS = {"cuerpo": "", "forma_celda": "gyroid", "tamano": "5 mm", "tamano_y": "", "tamano_z": "", "solidez": "30",
-              "resolucion": 8}
-    EXPRESIONES = ("tamano", "tamano_y", "tamano_z", "solidez")
-    OPCIONES = {"forma_celda": ("cross", "x_cell", "gyroid", "schwarz_p", "schwarz_d")}
+              "resolucion": 8, "barras": [], "solidez_final": "", "ruta": [], "zonas": [], "desfase": "0 mm",
+              "solidez_desfase": "100", "mezcla": "0 mm", "mover_x": "0 mm", "mover_y": "0 mm", "mover_z": "0 mm",
+              "girar_x": "0 deg", "girar_y": "0 deg", "girar_z": "0 deg"}
+    EXPRESIONES = ("tamano", "tamano_y", "tamano_z", "solidez", "solidez_final", "desfase", "solidez_desfase", "mezcla",
+                   "mover_x", "mover_y", "mover_z", "girar_x", "girar_y", "girar_z")
+    OPCIONES = {"forma_celda": ("cross", "x_cell", "x_cell_25d", "custom", "gyroid", "schwarz_p", "schwarz_d")}
 
     def dependencias(self):
-        return _deps_objetivo(self.p.get("cuerpo")) - {self.id}
+        p = self.p
+        return (_deps_objetivo(p.get("cuerpo")) | ent.dependencias_de(p.get("ruta"), p.get("zonas"))) - {self.id}
+
+    def _puntos(self, refs, estado, paso):
+        """Polilínea/nube de puntos de las referencias: un punto o vértice da su punto; una arista o curva, su
+        polilínea; una cara o cuerpo, puntos sobre su superficie."""
+        from ..nucleo import reticula
+        salida = []
+        for e in _resolver_todas(refs, estado):
+            if e.punto is not None:
+                salida.append(np.reshape(e.punto, (1, 3)))
+            elif e.forma is not None and e.tipo in ("cara", "cuerpo"):
+                salida.append(reticula.muestrear(e.forma, paso))
+            elif e.forma is not None:
+                salida.extend(p for p in geo.polilineas_aristas(e.forma, paso / 4) if len(p))
+            else:
+                raise ErrorOperacion("La ruta y las zonas de la retícula son puntos, aristas, curvas, caras o cuerpos.")
+        return np.concatenate(salida).astype(float) if salida else np.zeros((0, 3))
 
     def ejecutar(self, estado, ctx):
         from ..nucleo import reticula
+        from .parametros import ESCALAR, LONGITUD
         p = self.p
         if not p["cuerpo"]:
-            raise ErrorOperacion("Elegí el sólido que se llena con la retícula.")
+            raise ErrorOperacion("Elegí el sólido o la malla cerrada que se llena con la retícula.")
         c = estado.cuerpo(p["cuerpo"])
-        if getattr(c, "tipo", "solido") != "solido":
-            raise ErrorOperacion("La retícula se aplica a un cuerpo sólido.")
+        if getattr(c, "tipo", "solido") not in ("solido", "malla"):
+            raise ErrorOperacion("La retícula se aplica a un cuerpo sólido o a una malla cerrada.")
+
+        def opcional(clave, tipo=LONGITUD):
+            texto = str(p.get(clave) or "").strip()
+            return ctx.evaluar(texto, tipo) if texto else None
         s = ctx.evaluar(p["tamano"])
-        sx, sy, sz = s, ctx.evaluar(p["tamano_y"]) if str(p.get("tamano_y") or "").strip() else s, \
-            ctx.evaluar(p["tamano_z"]) if str(p.get("tamano_z") or "").strip() else s
-        solidez = ctx.evaluar(p["solidez"], "escalar") / 100.0
-        if min(sx, sy, sz) <= 0 or not 0.01 <= solidez <= 0.99:
+        tam = (s, *(s if (v := opcional(k)) is None else v for k in ("tamano_y", "tamano_z")))
+        solidez = ctx.evaluar(p["solidez"], ESCALAR) / 100.0
+        final = opcional("solidez_final", ESCALAR)
+        desfase, mezcla = opcional("desfase") or 0.0, opcional("mezcla") or 0.0
+        en_zona = (100.0 if opcional("solidez_desfase", ESCALAR) is None else opcional("solidez_desfase", ESCALAR)) / 100
+        if min(tam) <= 0 or not 0.01 <= solidez <= 0.99 or (final is not None and not 1 <= final <= 99):
             raise ErrorOperacion("El tamaño de celda es positivo y la solidez va de 1 a 99 %.")
+        if desfase < 0 or mezcla < 0 or not 0 <= en_zona <= 1:
+            raise ErrorOperacion("El desfase y la mezcla no son negativos y la solidez del desfase va de 0 a 100 %.")
+        paso = min(tam) / 8
+        ruta = self._puntos(p.get("ruta") or [], estado, paso) if final is not None else None
+        zona = None
+        if desfase > 0 or mezcla > 0:
+            zona = self._puntos(p["zonas"], estado, paso) if p.get("zonas") else reticula.muestrear(c.forma, paso)
         try:
+            rejilla = reticula.Rejilla(reticula.caja(c.forma)[0], tam, [opcional(f"mover_{e}") or 0.0 for e in "xyz"],
+                                       [opcional(f"girar_{e}", ANGULO) or 0.0 for e in "xyz"])
+            solidez_en = reticula.campo_solidez(solidez, None if final is None else final / 100, ruta, zona, desfase,
+                                                en_zona, mezcla)
             if p["forma_celda"] in reticula.FORMAS_BARRAS:
-                c.forma, _ = reticula.reticula_barras(c.forma, p["forma_celda"], solidez, sx, sy, sz)
+                c.forma = reticula.reticula_barras(c.forma, p["forma_celda"], solidez_en, rejilla, p.get("barras"))
+                c.tipo = "solido"
             else:
-                c.forma, _ = reticula.reticula_malla(c.forma, p["forma_celda"], solidez, sx, sy, sz, int(p["resolucion"]))
+                c.forma = reticula.reticula_malla(c.forma, p["forma_celda"], solidez_en, rejilla, int(p["resolucion"]))
                 c.tipo = "malla"
         except geo.ErrorGeometria as err:
             raise ErrorOperacion(str(err)) from err
@@ -1048,8 +1188,15 @@ class OpSolidoEnvolvente(_OpCrear):
         envueltos = {estado.cuerpo(c).componente for c in self.p["cuerpos"]} - {"", None}
         _en_componente(estado, self, creados)
         if self.p.get("origen", "modelo") != "modelo":
-            caja = geo.caja_envolvente(geo.compuesto([estado.cuerpo(c).forma for c in creados]))
-            estado.componentes[self.id]["origen"] = [float(x) for x in (
+            marco = self._marco(estado)             # esquina y centro en el marco de la orientación, no el del mundo
+            if isinstance(marco, str):
+                marco = _sc()._marco_automatico(geo.compuesto(formas))
+            r = np.identity(3) if marco is None else np.asarray(marco, float)
+            a_marco = np.identity(4)
+            a_marco[:3, :3] = r.T
+            caja = geo.caja_envolvente(geo.transformar(
+                geo.compuesto([estado.cuerpo(c).forma for c in creados]), a_marco))
+            estado.componentes[self.id]["origen"] = [float(x) for x in r @ (
                 np.mean(caja, axis=0) if self.p["origen"] == "centro" else caja[0])]
         if self.p["grupo_rigido"]:
             if not envueltos:

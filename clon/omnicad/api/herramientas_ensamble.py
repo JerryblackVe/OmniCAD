@@ -231,7 +231,8 @@ def info_componente(sesion, k, estado=None):
     return {"id": k, "name": _nombre_comp(estado, k), "grounded": bool(datos.get("fijo")),
             "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c)} for c in cuerpos],
             "translation": [_r(v) for v in m[:3, 3]], "rotation_matrix": [[_r(v) for v in fila] for fila in m[:3, :3]],
-            "bounding_box": _caja(cuerpos)}
+            "bounding_box": _caja(cuerpos),
+            **({"origin": [_r(v) for v in (m @ [*datos["origen"], 1.0])[:3]]} if datos.get("origen") else {})}
 
 
 def _ref_componente(estado, k):

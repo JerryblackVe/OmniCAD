@@ -278,23 +278,35 @@ class BuscarSimilares(Comando):
 
 class ReconocerFunciones(Comando):
     CLAVE, TITULO, ICONO = "reconocer_funciones", "Reconocer funciones", "reconocer_funciones"
-    AYUDA = ("Encuentra los agujeros, los empalmes y los chaflanes de un cuerpo sin historial (por ejemplo, importado) "
-             "y los lista. Solo lee la geometría.")
-    SIN_OP, TEXTO_ACEPTAR = True, "Cerrar"
-    _TEXTO = {"hole": "Agujeros", "fillet": "Empalmes", "chamfer": "Chaflanes"}
+    AYUDA = ("Encuentra los agujeros, empalmes, chaflanes, extrusiones, revoluciones, simetrías y patrones de un cuerpo "
+             "sin historial (por ejemplo, importado) y los lista. Con «Rehacer en el timeline», Aceptar vuelve los "
+             "agujeros, empalmes y chaflanes pasos paramétricos (el cuerpo queda igual).")
+    SIN_OP, TEXTO_ACEPTAR = True, "Aceptar"
+    _TEXTO = {"hole": "Agujeros", "fillet": "Empalmes", "chamfer": "Chaflanes", "extrude": "Extrusión",
+              "revolve": "Revolución", "mirror": "Simetrías", "circular_pattern": "Patrones circulares",
+              "rectangular_pattern": "Patrones rectangulares"}
+    _CASILLAS = (("hole", "agujeros", "Agujeros"), ("fillet", "empalmes", "Empalmes"),
+                 ("chamfer", "chaflanes", "Chaflanes"), ("extrude", "extrusion", "Extrusión"),
+                 ("revolve", "revolucion", "Revolución"), ("mirror", "simetria", "Simetría"),
+                 ("circular_pattern", "patron_circular", "Patrón circular"),
+                 ("rectangular_pattern", "patron_rectangular", "Patrón rectangular"))
 
     def campos(self, ctx):
         return [Seleccion("cuerpo", "Cuerpo sólido", {"cuerpo"}),
-                Casilla("agujeros", "Agujeros", True), Casilla("empalmes", "Empalmes", True),
-                Casilla("chaflanes", "Chaflanes", True),
+                *(Casilla(c, texto, True) for _t, c, texto in self._CASILLAS),
+                Casilla("rehacer", "Rehacer en el timeline", False,
+                        ayuda="Aceptar crea los pasos Agujero, Empalme y Chaflán que rehacen lo encontrado."),
                 Info("resultado", "Funciones encontradas", self._resultado)]
+
+    def _tipos(self, v):
+        return [t for t, c, _texto in self._CASILLAS if v.get(c)]
 
     def _resultado(self, v, ctx):
         from ...api import llamar
         from ...api.sesion import Sesion
         if not v.get("cuerpo"):
             return "Elegí un cuerpo sólido."
-        tipos = [t for t, c in (("hole", "agujeros"), ("fillet", "empalmes"), ("chamfer", "chaflanes")) if v.get(c)]
+        tipos = self._tipos(v)
         if not tipos:
             return "Marcá qué reconocer."
         r = llamar(Sesion(ctx.doc), "find_features", {"body": v["cuerpo"][0]["ref"]["cuerpo"], "types": tipos})
@@ -311,13 +323,37 @@ class ReconocerFunciones(Comando):
                                     for f in hallados)
             elif tipo == "fillet":
                 detalle = ", ".join(sorted({f"R{f['radius']:g}" for f in hallados}))
-            else:
+            elif tipo == "chamfer":
                 detalle = ", ".join(sorted({f"{f['width']:g} mm a {f['angle']:g}°" for f in hallados}))
+            elif tipo == "extrude":
+                detalle = ", ".join(f"{f['distance']:g} mm" for f in hallados)
+            elif tipo == "revolve":
+                detalle = ", ".join(f"{f['angle']:g}°" for f in hallados)
+            else:
+                detalle = ", ".join(f"{f['count']} × {self._TEXTO[f['feature']].lower()}" for f in hallados)
             lineas.append(f"{texto}: {len(hallados)} ({detalle})")
         return "\n".join(lineas) or "No se encontró ninguna función."
 
     def construir(self, v, ctx):
         return None
+
+    def aplicar(self, v, ctx):
+        from ...api import llamar
+        from ...api.sesion import Sesion
+        if not v.get("rehacer"):
+            return
+        if not v.get("cuerpo"):
+            raise ErrorComando("Elegí un cuerpo sólido.")
+        tipos = [t for t in self._tipos(v) if t in ("hole", "fillet", "chamfer")]
+        if not tipos:
+            raise ErrorComando("Marcá agujeros, empalmes o chaflanes para rehacer.")
+        r = llamar(Sesion(ctx.doc), "rebuild_features", {"body": v["cuerpo"][0]["ref"]["cuerpo"], "types": tipos})
+        if not r["ok"]:
+            raise ErrorComando(r["mensaje"])
+        if hasattr(ctx.ventana, "statusBar") and r["result"]["not_rebuilt"]:
+            ctx.ventana.statusBar().showMessage(
+                f"No se rehicieron {len(r['result']['not_rebuilt'])} funciones: "
+                + "; ".join(f["reason"] for f in r["result"]["not_rebuilt"][:3]), 8000)
 
 
 class CentroMasa(Comando):

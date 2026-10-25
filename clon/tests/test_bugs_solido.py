@@ -173,3 +173,84 @@ def test_sol30_mensajes_que_no_enganan():
     llamar(s, "create_construction_plane", plane="XY", offset=100, name="Alto")
     r = falla(s, "split_body", body="Caja", tool="Alto", extend=True)
     assert "probá extenderla" not in r["mensaje"]
+
+
+def test_sol4_unir_en_cadena_no_avisa_en_falso():
+    s = api.Sesion()
+    llamar(s, "create_box", length=10, width=10, height=10, name="A")
+    llamar(s, "create_box", length=10, width=10, height=10, x=10, name="B")
+    llamar(s, "create_box", length=10, width=10, height=10, x=20, name="C")
+    r = llamar(s, "boolean_operation", target="A", tools=["B", "C"], operation="join")
+    assert "piezas sueltas" not in str(r)                        # C toca a B, que ya está unido a A
+    assert len(_cuerpos(s)) == 1
+    llamar(s, "create_box", length=10, width=10, height=10, x=100, name="D")
+    r = llamar(s, "boolean_operation", target="A", tools=["D"], operation="join")
+    assert "piezas sueltas" in str(r)
+
+
+def test_sol30_lista_anidada_dice_cual_elemento_esta_mal():
+    s = api.Sesion()
+    llamar(s, "create_sketch", plane="XY", name="S")
+    r = falla(s, "draw_spline", points=[[0, "a"], [1, 1]])
+    assert "no es array" not in r["mensaje"] and "'a'" in r["mensaje"]
+
+
+def test_sol32_patron_en_ruta_con_distancia_cero_y_circular_simetrico_fallan():
+    s = api.Sesion()
+    llamar(s, "create_box", length=4, width=4, height=4, name="Caja")
+    llamar(s, "create_sketch", plane="XY", name="Ruta")
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=100, end_y=0)
+    r = falla(s, "path_pattern", bodies="Caja", path_sketch="Ruta", count=3, distance=0)
+    assert "cero" in r["mensaje"]
+    llamar(s, "path_pattern", bodies="Caja", path_sketch="Ruta", count=3, distance=50)
+    s = api.Sesion()
+    llamar(s, "create_box", length=4, width=4, height=4, x=20, name="Caja")
+    r = falla(s, "circular_pattern", bodies="Caja", count=4, total_angle=0, symmetric=True)
+    assert "ángulo del patrón circular" in r["mensaje"]
+    llamar(s, "circular_pattern", bodies="Caja", count=4, total_angle=90, symmetric=True)
+
+
+def _toca_cresta(forma, z):
+    """Qué ángulos (cada 10°) tocan la cresta de la rosca a r = 4,9 en la altura z."""
+    return [geo.punto_toca(forma, (4.9 * math.cos(math.radians(t)), 4.9 * math.sin(math.radians(t)), z), 1e-6)
+            for t in range(0, 360, 10)]
+
+
+def test_sol1_la_cresta_avanza_a_derechas_o_a_izquierdas_segun_el_pedido():
+    giro = {}
+    for izquierda in (False, True):
+        s = api.Sesion()
+        llamar(s, "create_cylinder", height=20, radius=5)
+        llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=izquierda)
+        forma = _cuerpos(s)[0].forma
+        a, b = _toca_cresta(forma, 10.0), _toca_cresta(forma, 10.375)      # un cuarto de paso más arriba
+        assert sum(a) == 5                                                  # una cresta: 50° de arco
+        giro[izquierda] = [n for n in range(36) if a[n - 9] == b[n]].__len__() == 36 and 9 or (
+            -9 if all(a[(n + 9) % 36] == b[n] for n in range(36)) else 0)
+    assert giro == {False: 9, True: -9}
+
+
+@pytest.mark.parametrize("cambio", ["revolucion", "escala", "desmoldeo"])
+def test_recetas_viejas_con_valores_que_hoy_se_rechazan_abren_con_el_paso_en_rojo(cambio):
+    s = api.Sesion()
+    if cambio == "revolucion":
+        llamar(s, "create_sketch", plane="XZ", name="Perfil")
+        llamar(s, "draw_rectangle", x1=10, y1=0, x2=20, y2=5)
+        llamar(s, "revolve", sketch="Perfil", axis="z", angle="90 deg")
+        clave, valor = "angulo", "400 deg"
+    elif cambio == "escala":
+        llamar(s, "create_box", length=10, width=10, height=10, name="Caja")
+        llamar(s, "scale_body", bodies="Caja", factor="2")
+        clave, valor = "factor", "2 mm"
+    else:
+        llamar(s, "create_box", length=20, width=20, height=10, name="Caja")
+        llamar(s, "draft", faces="|X", angle=3, pull_direction="z")
+        clave, valor = "angulo", "0 deg"
+    receta = llamar(s, "get_recipe")["result"]["recipe"]
+    paso = receta["operaciones"][-1]
+    assert clave in paso["params"], paso["params"]
+    paso["params"][clave] = valor
+    from omnicad.timeline.documento import Documento
+    doc = Documento.desde_dict(receta)                                # como abrir un .omnicad viejo: no revienta
+    doc.recalcular()
+    assert doc.resultados[-1].estado == "error", "el paso debió quedar en rojo"

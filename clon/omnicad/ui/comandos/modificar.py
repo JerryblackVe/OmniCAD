@@ -99,6 +99,17 @@ class Empalme(Comando):
             Opciones("redondeos", "Topología", {"ambos": "Redondeos y empalmes", "redondeos": "Solo redondeos",
                                                 "empalmes": "Solo empalmes"}, visible_si=reglas),
             Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme),
+            Seleccion("aristas_2", "Aristas del conjunto 2", {"arista"}, minimo=0, maximo=None, visible_si=empalme,
+                      ayuda="Otro conjunto de aristas con su propio radio, en el mismo paso (el «+» de Fusion)."),
+            Opciones("tipo_radio_2", "Tipo de radio 2", {"constante": "Constante", "cuerda": "Longitud de cuerda",
+                                                         "variable": "Variable"},
+                     visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))),
+            Expresion("radio_2", "Radio 2", "1 mm", visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))
+                      and v.get("tipo_radio_2") != "cuerda"),
+            Expresion("radio_fin_2", "Radio final 2", "2 mm", visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))
+                      and v.get("tipo_radio_2") == "variable"),
+            Expresion("cuerda_2", "Longitud de cuerda 2", "1 mm", visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))
+                      and v.get("tipo_radio_2") == "cuerda"),
         ]
 
     @staticmethod
@@ -131,11 +142,19 @@ class Empalme(Comando):
             exigir(v, "aristas", "Seleccioná las aristas a empalmar.")
         ctx.evaluar(v["radio"])
         puntos = self._puntos_radio(v.get("puntos_radio"), ctx) if v.get("tipo_radio") == "variable" else []
+        previos = list(ctx.op.p.get("conjuntos") or []) if ctx.op else []
+        conjuntos = previos[1:]            # el primero lo edita «conjunto 2» (vaciarlo lo quita); los demás se conservan
+        if v.get("aristas_2") and v.get("tipo") == "empalme":
+            tipo2 = v.get("tipo_radio_2", "constante")
+            for clave in ("cuerda_2" if tipo2 == "cuerda" else "radio_2", *(("radio_fin_2",) if tipo2 == "variable" else ())):
+                ctx.evaluar(v[clave])
+            conjuntos.insert(0, {"aristas": refs(v, "aristas_2"), "tipo_radio": tipo2, "radio": v["radio_2"],
+                                 "radio_fin": v["radio_fin_2"], "cuerda": v["cuerda_2"]})
         return self.crear_op(OpEmpalme, v, ctx, tipo=v["tipo"], aristas=refs(v, "aristas"), tipo_radio=v["tipo_radio"],
                              radio=v["radio"], radio_fin=v["radio_fin"], cuerda=v["cuerda"],
                              cadena_tangente=v["cadena_tangente"], caras_a=refs(v, "caras_a"),
                              caras_b=refs(v, "caras_b"), regla=v["regla"], redondeos=v["redondeos"],
-                             puntos_radio=puntos, conjuntos=list(ctx.op.p.get("conjuntos") or []) if ctx.op else [])
+                             puntos_radio=puntos, conjuntos=conjuntos)
 
     def manipuladores(self, ctx, v):
         if v.get("tipo") == "reglas":
@@ -148,6 +167,9 @@ class Empalme(Comando):
             v[k] = hits(op.p.get(k) or [], ctx.estado)
         v["central"] = _hit1(op.p["central"], ctx.estado) if op.p.get("central") else []
         v["puntos_radio"] = "; ".join(f"{q['posicion']}: {q['radio']}" for q in op.p.get("puntos_radio") or [])
+        for c in (op.p.get("conjuntos") or [])[:1]:     # el primer conjunto adicional va a los campos «2»
+            v.update(aristas_2=hits(c.get("aristas") or [], ctx.estado), tipo_radio_2=c.get("tipo_radio", "constante"),
+                     radio_2=c.get("radio", "1 mm"), radio_fin_2=c.get("radio_fin", "2 mm"), cuerda_2=c.get("cuerda", "1 mm"))
         return v
 
 
@@ -268,37 +290,92 @@ class Desmoldeo(Comando):
 
 class ReticulaVolumetrica(Comando):
     CLAVE, TITULO, ICONO = "reticula_volumetrica", "Retícula volumétrica", "reticula_volumetrica"
-    AYUDA = ("Llena un sólido con una estructura interna por celdas: barras (cross, x_cell) o superficies mínimas "
-             "(gyroid, Schwarz P y D, que quedan como cuerpo de malla). La solidez es el porcentaje de material.")
+    AYUDA = ("Llena un sólido o una malla cerrada con una estructura interna por celdas: barras (cruz, celda X, celda X "
+             "2.5D, a medida) o superficies mínimas (gyroid, Schwarz P y D, que quedan como cuerpo de malla). La solidez "
+             "es el porcentaje de material; puede ir en gradiente por una ruta y cambiar cerca de las paredes (desfase).")
     CLASE_OP = OpReticulaVolumetrica
     verificar = staticmethod(_con_cuerpos)
+    MOVER = ("mover_x", "mover_y", "mover_z", "girar_x", "girar_y", "girar_z")
 
     def campos(self, ctx):
         no_uniforme = lambda v: bool(v.get("no_uniforme"))  # noqa: E731
-        return [Seleccion("cuerpo", "Cuerpo sólido", {"cuerpo"}),
+        gradiente = lambda v: v.get("distribucion") == "gradiente"  # noqa: E731
+        desfase = lambda v: bool(v.get("con_desfase"))  # noqa: E731
+        mover = lambda v: bool(v.get("mover_celdas"))  # noqa: E731
+        return [Seleccion("cuerpo", "Cuerpo sólido o malla cerrada", {"cuerpo"}),
                 Opciones("forma_celda", "Forma de la celda", {"gyroid": "Gyroid", "cross": "Cruz", "x_cell": "Celda X",
-                                                              "schwarz_p": "Schwarz P", "schwarz_d": "Schwarz D"}),
+                                                              "x_cell_25d": "Celda X 2.5D", "schwarz_p": "Schwarz P",
+                                                              "schwarz_d": "Schwarz D", "custom": "A medida"}),
+                Texto("barras", "Barras (x1 y1 z1 x2 y2 z2; …, de 0 a 1)", "0 0 0 1 1 1; 1 0 0 0 1 1",
+                      visible_si=lambda v: v.get("forma_celda") == "custom"),
                 Expresion("tamano", "Tamaño de celda (X)", "5 mm"),
                 Casilla("no_uniforme", "Proporciones no uniformes"),
                 Expresion("tamano_y", "Tamaño en Y", "5 mm", visible_si=no_uniforme),
                 Expresion("tamano_z", "Tamaño en Z", "5 mm", visible_si=no_uniforme),
+                Casilla("mover_celdas", "Mover / girar las celdas"),
+                *(Expresion(k, f"{'Mover' if k[0] == 'm' else 'Girar'} en {k[-1].upper()}",
+                            "0 mm" if k[0] == "m" else "0 deg", visible_si=mover, **({} if k[0] == "m" else {"tipo": ANGULO}))
+                  for k in self.MOVER),
+                Opciones("distribucion", "Distribución", {"uniforme": "Uniforme", "gradiente": "Gradiente por una ruta"}),
                 Expresion("solidez", "Solidez (%)", "30", ESCALAR),
+                Expresion("solidez_final", "Solidez al final (%)", "60", ESCALAR, visible_si=gradiente),
+                Seleccion("ruta", "Ruta", {"arista", "curva_boceto", "vertice", "punto", "punto_boceto"}, maximo=None,
+                          visible_si=gradiente),
+                Casilla("con_desfase", "Zona de desfase"),
+                Seleccion("zonas", "Zona (vacío = todas las caras)", {"cara", "arista", "vertice", "punto"}, minimo=0,
+                          maximo=None, visible_si=desfase),
+                Expresion("desfase", "Desfase", "1 mm", visible_si=desfase),
+                Expresion("solidez_desfase", "Solidez del desfase (%)", "100", ESCALAR, visible_si=desfase),
+                Expresion("mezcla", "Distancia de mezcla", "1 mm", visible_si=desfase),
                 Entero("resolucion", "Muestras por celda", 8, 4, 40,
                        visible_si=lambda v: v.get("forma_celda") in ("gyroid", "schwarz_p", "schwarz_d"))]
 
+    @staticmethod
+    def _barras(texto):
+        try:
+            barras = [[float(x) for x in b.replace(",", ".").split()] for b in texto.split(";") if b.strip()]
+        except ValueError:
+            barras = []
+        if not barras or any(len(b) != 6 or not all(0 <= x <= 1 for x in b) for b in barras):
+            raise ErrorComando("Cada barra son 6 números de 0 a 1 (x1 y1 z1 x2 y2 z2), separadas con «;».")
+        return barras
+
     def construir(self, v, ctx):
-        exigir(v, "cuerpo", "Seleccioná el sólido que se llena.")
+        exigir(v, "cuerpo", "Seleccioná el sólido o la malla que se llena.")
+        gradiente, desfase, mover = v.get("distribucion") == "gradiente", bool(v.get("con_desfase")), bool(v.get("mover_celdas"))
         for k in ("tamano", "tamano_y", "tamano_z") if v.get("no_uniforme") else ("tamano",):
             ctx.evaluar(v[k])
-        ctx.evaluar(v["solidez"], ESCALAR)
+        for k in ("solidez",) + (("solidez_final",) if gradiente else ()) + (("solidez_desfase",) if desfase else ()):
+            ctx.evaluar(v[k], ESCALAR)
+        for k in (("desfase", "mezcla") if desfase else ()) + (self.MOVER[:3] if mover else ()):
+            ctx.evaluar(v[k])
+        for k in self.MOVER[3:] if mover else ():
+            ctx.evaluar(v[k], ANGULO)
+        if gradiente:
+            exigir(v, "ruta", "Elegí la ruta del gradiente: una arista o curva, o dos puntos.")
+        extra = {k: v[k] if mover else ("0 mm" if k[0] == "m" else "0 deg") for k in self.MOVER}
         return self.crear_op(OpReticulaVolumetrica, v, ctx, cuerpo=v["cuerpo"][0]["ref"]["cuerpo"],
                              tamano_y=v["tamano_y"] if v.get("no_uniforme") else "",
                              tamano_z=v["tamano_z"] if v.get("no_uniforme") else "",
+                             barras=self._barras(v["barras"]) if v["forma_celda"] == "custom" else [],
+                             solidez_final=v["solidez_final"] if gradiente else "",
+                             ruta=refs(v, "ruta") if gradiente else [], zonas=refs(v, "zonas") if desfase else [],
+                             desfase=v["desfase"] if desfase else "0 mm", mezcla=v["mezcla"] if desfase else "0 mm",
+                             solidez_desfase=v["solidez_desfase"], **extra,
                              **{k: v[k] for k in ("forma_celda", "tamano", "solidez", "resolucion")})
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, cuerpo=_hits_cuerpos([op.p["cuerpo"]], ctx.estado), no_uniforme=bool(op.p.get("tamano_y") or op.p.get("tamano_z")))
-        v["tamano_y"], v["tamano_z"] = op.p.get("tamano_y") or op.p["tamano"], op.p.get("tamano_z") or op.p["tamano"]
+        p = op.p
+        v = dict(p, cuerpo=_hits_cuerpos([p["cuerpo"]], ctx.estado), no_uniforme=bool(p.get("tamano_y") or p.get("tamano_z")))
+        v["tamano_y"], v["tamano_z"] = p.get("tamano_y") or p["tamano"], p.get("tamano_z") or p["tamano"]
+        v["barras"] = "; ".join(" ".join(f"{x:g}" for x in b) for b in p.get("barras") or []) or "0 0 0 1 1 1"
+        v["distribucion"] = "gradiente" if p.get("solidez_final") else "uniforme"
+        v["solidez_final"] = p.get("solidez_final") or "60"
+        v["ruta"], v["zonas"] = hits(p.get("ruta") or [], ctx.estado), hits(p.get("zonas") or [], ctx.estado)
+        v["con_desfase"] = any(str(p.get(k) or "0").split()[0] not in ("0", "0.0") for k in ("desfase", "mezcla"))
+        v["mover_celdas"] = any(str(p.get(k) or "0").split()[0] not in ("0", "0.0") for k in self.MOVER)
+        for k in self.MOVER:
+            v[k] = p.get(k) or ("0 mm" if k[0] == "m" else "0 deg")
         return v
 
 

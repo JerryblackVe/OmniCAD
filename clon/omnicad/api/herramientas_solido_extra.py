@@ -373,37 +373,79 @@ def create_boundary_fill(sesion, tools: Elementos, cells: list[int] | None = Non
                   operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target))
 
 
-@herramienta("create_volumetric_lattice", "solido", "Llena un sólido con una estructura interna por celdas (SÓLIDO › MODIFICAR › "
-             "Retícula volumétrica). cell_shape: cross (tres barras por celda) y x_cell (las cuatro diagonales) quedan "
-             "como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de malla, con el borde "
-             "del cuerpo escalonado al paso de la grilla (resolution muestras por celda). solidity es el porcentaje de "
-             "material. El cuerpo queda reemplazado por la retícula (deshacer lo devuelve). Todavía no están la forma "
-             "X-Cell 2.5D ni a medida, la solidez en gradiente ni las zonas de desfase.", modifica=True)
+@herramienta("create_volumetric_lattice", "solido", "Llena un sólido o una malla cerrada con una estructura interna por "
+             "celdas (SÓLIDO › MODIFICAR › Retícula volumétrica). cell_shape: cross (tres barras por celda), x_cell (las "
+             "cuatro diagonales), x_cell_25d (las diagonales en XY como paredes extruidas en Z) y custom (barras a medida, "
+             "custom_bars) quedan como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de "
+             "malla (resolution muestras por celda; el borde del cuerpo sale interpolado). solidity es el porcentaje de "
+             "material; con solidity_end y gradient_path varía a lo largo de la ruta. offset_distance/offset_blend arman "
+             "la zona de desfase (otra solidez cerca de caras, aristas o puntos). cell_offset y cell_rotation mueven y "
+             "giran las celdas. El cuerpo queda reemplazado por la retícula (deshacer lo devuelve).", modifica=True)
 def create_volumetric_lattice(sesion, body: str | None = None,
-                              cell_shape: Literal["cross", "x_cell", "gyroid", "schwarz_p", "schwarz_d"] = "gyroid",
+                              cell_shape: Literal["cross", "x_cell", "x_cell_25d", "custom", "gyroid", "schwarz_p",
+                                                  "schwarz_d"] = "gyroid",
                               cell_size: Expr = 5, cell_size_y: Expr | None = None, cell_size_z: Expr | None = None,
-                              solidity: Expr = 30, resolution: int = 8):
+                              solidity: Expr = 30, resolution: int = 8, custom_bars: list[list[float]] | None = None,
+                              solidity_end: Expr | None = None, gradient_path: list[Referencia] | None = None,
+                              offset_distance: Expr = 0, offset_solidity: Expr = 100, offset_blend: Expr = 0,
+                              offset_zones: list[Referencia] | None = None, cell_offset: list[float] | None = None,
+                              cell_rotation: list[float] | None = None):
     """
-    body: id o nombre del cuerpo sólido; vacío = el único cuerpo.
-    cell_shape: cross, x_cell, gyroid, schwarz_p o schwarz_d.
+    body: id o nombre del cuerpo sólido o de la malla cerrada; vacío = el único cuerpo.
+    cell_shape: cross, x_cell, x_cell_25d, custom, gyroid, schwarz_p o schwarz_d.
     cell_size: tamaño de la celda en mm (en X, y en Y y Z si no se dan).
     cell_size_y: tamaño en Y, en mm, para celdas no uniformes; vacío = cell_size.
     cell_size_z: tamaño en Z, en mm, para celdas no uniformes; vacío = cell_size.
-    solidity: porcentaje de material, de 1 a 99.
+    solidity: porcentaje de material, de 1 a 99 (al principio de la ruta si hay gradiente).
     resolution: gyroid, schwarz_p y schwarz_d: muestras por celda (mínimo 4, por defecto 8); más es más fino y más lento.
+    custom_bars: celda custom: barras [x1, y1, z1, x2, y2, z2] en fracciones de la celda (0 a 1).
+    solidity_end: solidez al final de la ruta (1 a 99); vacío = solidez uniforme.
+    gradient_path: ruta del gradiente: una arista o curva de boceto, o dos o más puntos o vértices (en orden).
+    offset_distance: ancho en mm de la zona de desfase alrededor de offset_zones; 0 = sin zona.
+    offset_solidity: solidez de la zona de desfase, de 0 a 100 (100 = macizo con superficies mínimas, 0 = sin retícula).
+    offset_blend: distancia de mezcla en mm entre la zona de desfase y el resto.
+    offset_zones: caras, aristas, puntos o cuerpos de la zona; vacío = todas las caras del cuerpo.
+    cell_offset: [dx, dy, dz] en mm: mueve las celdas.
+    cell_rotation: [rx, ry, rz] en grados: gira las celdas (primero en X, después Y, después Z).
     """
-    cuerpo = sl.cuerpo_objetivo(sesion, body)
-    if isinstance(solidity, (int, float)) and not 1 <= solidity <= 99:
-        raise error("INVALID_ARGUMENTS", f"solidity va de 1 a 99 por ciento (recibió {solidity}).")
+    if body is None or not str(body).strip():                                    # el único sólido o malla
+        cuerpos = [c for c in sesion.doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") in ("solido", "malla")]
+        if len(cuerpos) != 1:
+            raise error("BODY_NOT_FOUND" if not cuerpos else "AMBIGUOUS_REFERENCE",
+                        "Indicá en body el sólido o la malla cerrada que se llena.")
+        body = cuerpos[0].id
+    cuerpo = sesion.cuerpo(body)
+    for v, n in ((solidity, "solidity"), (solidity_end, "solidity_end")):
+        if isinstance(v, (int, float)) and not 1 <= v <= 99:
+            raise error("INVALID_ARGUMENTS", f"{n} va de 1 a 99 por ciento (recibió {v}).")
+    if isinstance(offset_solidity, (int, float)) and not 0 <= offset_solidity <= 100:
+        raise error("INVALID_ARGUMENTS", "offset_solidity va de 0 a 100 por ciento.")
     for v, n in ((cell_size, "cell_size"), (cell_size_y, "cell_size_y"), (cell_size_z, "cell_size_z")):
         if v is not None:
             _numero_positivo(v, n)
     if isinstance(resolution, bool) or not isinstance(resolution, int) or not 4 <= resolution <= 40:
         raise error("INVALID_ARGUMENTS", "resolution es un entero entre 4 y 40.")
+    if cell_shape == "custom" and not custom_bars:
+        raise error("INVALID_ARGUMENTS", "La celda custom necesita custom_bars: [[x1, y1, z1, x2, y2, z2], ...] de 0 a 1.")
+    if custom_bars and any(len(b) != 6 or not all(0 <= x <= 1 for x in b) for b in custom_bars):
+        raise error("INVALID_ARGUMENTS", "Cada barra de custom_bars son 6 números entre 0 y 1.")
+    if solidity_end is not None and not gradient_path:
+        raise error("INVALID_ARGUMENTS", "solidity_end necesita gradient_path (una arista o dos puntos).")
+    for v, n in ((cell_offset, "cell_offset"), (cell_rotation, "cell_rotation")):
+        if v is not None and len(v) != 3:
+            raise error("INVALID_ARGUMENTS", f"{n} son 3 números [x, y, z].")
+    mover = [f"{x} mm" for x in cell_offset or (0, 0, 0)]
+    girar = [f"{x} deg" for x in cell_rotation or (0, 0, 0)]
     return _crear(sesion, OpReticulaVolumetrica, cuerpo=cuerpo.id, forma_celda=cell_shape, tamano=texto_expr(cell_size),
                   tamano_y="" if cell_size_y is None else texto_expr(cell_size_y),
                   tamano_z="" if cell_size_z is None else texto_expr(cell_size_z), solidez=texto_expr(solidity),
-                  resolucion=resolution)
+                  resolucion=resolution, barras=[list(map(float, b)) for b in custom_bars or []],
+                  solidez_final="" if solidity_end is None else texto_expr(solidity_end),
+                  ruta=[_referencia(sesion, r) for r in gradient_path or []] if solidity_end is not None else [],
+                  zonas=[_referencia(sesion, r) for r in offset_zones or []], desfase=texto_expr(offset_distance),
+                  solidez_desfase=texto_expr(offset_solidity), mezcla=texto_expr(offset_blend),
+                  mover_x=mover[0], mover_y=mover[1], mover_z=mover[2], girar_x=girar[0], girar_y=girar[1],
+                  girar_z=girar[2])
 
 
 @herramienta("create_geometric_pattern", "solido", "Reparte esferas, cilindros, cajas u objetos a medida sobre caras "
@@ -483,7 +525,8 @@ def create_bounding_solid(sesion, bodies: Cuerpos, shape: Literal["box", "cylind
                           orientation: Literal["model", "automatic", "z_x", "z_y", "x_y", "ucs"] = "model",
                           axis_a: Referencia | None = None, axis_b: Referencia | None = None,
                           ucs: str | None = None, tube_wall: Expr | None = None, component: bool = False,
-                          rigid_group: bool = False, body: str | None = None):
+                          rigid_group: bool = False, body: str | None = None,
+                          origin: Literal["model", "center", "corner"] = "model"):
     """
     bodies: nombres/ids de los cuerpos a envolver.
     shape: box (caja), cylinder (cilindro) o tube (cilindro hueco).
@@ -499,8 +542,11 @@ def create_bounding_solid(sesion, bodies: Cuerpos, shape: Literal["box", "cylind
     component: true deja el sólido en un componente nuevo.
     rigid_group: true liga el sólido a los componentes de los cuerpos envueltos (solo vale si los cuerpos están en componentes).
     body: cuerpo donde se evalúan los selectores de los ejes.
+    origin: dónde queda el origen del componente (Origin Mode): model (el del documento), center (centro del sólido) o corner (su esquina mínima); solo con component=true o rigid_group=true; get_assembly lo informa.
     """
     extra = {}
+    if origin != "model" and not (component or rigid_group):
+        raise error("INVALID_ARGUMENTS", "origin solo vale con component=true o rigid_group=true.")
     if orientation in ("z_x", "z_y", "x_y"):
         if axis_a is None or axis_b is None:
             raise error("INVALID_ARGUMENTS", f"orientation={orientation} necesita axis_a y axis_b.")
@@ -519,7 +565,8 @@ def create_bounding_solid(sesion, bodies: Cuerpos, shape: Literal["box", "cylind
                   margen=texto_expr(margin), operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target),
                   orientacion={"model": "modelo", "automatic": "automatica", "ucs": "scu"}.get(orientation, orientation),
                   espesor_tubo="" if tube_wall is None else texto_expr(tube_wall), componente=bool(component),
-                  grupo_rigido=bool(rigid_group), **extra)
+                  grupo_rigido=bool(rigid_group), origen={"model": "modelo", "center": "centro", "corner": "esquina"}[origin],
+                  **extra)
 
 
 def _paso_ucs(sesion, ref):
