@@ -133,10 +133,11 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Sin pendientes. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+Abierto 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| BOC-33 | Tangencia círculo-círculo inferida al dibujar con el ratón | Abierto | Baja | `inferir()` solo propone tangente respecto de una línea (contactos desde un punto base); con otro círculo, arco o elipse no propone nada. Al dibujar un círculo o arco con centro, buscar las curvas circulares cercanas y proponer el radio que lo deja tangente (por fuera: distancia entre centros = r1 + r2; por dentro: |r1 − r2|), engancharlo si el cursor está dentro de la tolerancia y agregar la restricción `tangente` entre las dos curvas, como ya se hace con la línea. La API ya tiene `tangente` entre curvas: no falta herramienta MCP/CLI. Test numérico: radio enganchado y grados de libertad que quedan. | omnicad/restricciones/inferencia.py (`inferir`, `_tangencias`); omnicad/ui/editor_boceto.py (herramienta círculo y arco); tests/test_boceto_fase9_inferencia_curvas.py | 2026-10-25 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
