@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-330 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+331 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -27,7 +27,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
 | [avanzado](#grupo-avanzado) | 8 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
-| [asistente](#grupo-asistente) | 5 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
+| [asistente](#grupo-asistente) | 6 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
 
 ## Grupo documento
@@ -4871,6 +4871,7 @@ Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el his
 |---|---|---|
 | [`get_assistant_config`](#get_assistant_config) | no | Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto e imágenes. |
 | [`set_assistant_config`](#set_assistant_config) | sí | Cambia la configuración del Asistente IA (solo los campos pasados). |
+| [`list_assistant_models`](#list_assistant_models) | no | Modelos que se pueden elegir para el Asistente IA, como el combo «Modelo» de Preferencias: los de OpenCode y Codex los pregunta a su CLI; los de Claude Code son sus alias y nombres; por API, GET /models (no gasta). |
 | [`assistant_ask`](#assistant_ask) | sí | Corre un pedido al Asistente IA SIN ventana, sobre el documento de esta sesión, con el proveedor configurado (get_assistant_config). |
 | [`list_assistant_chats`](#list_assistant_chats) | no | Lista los chats guardados del Asistente (el más nuevo primero): id, título, fecha, modo, proveedor, modelo y cantidad de mensajes. |
 | [`get_assistant_chat`](#get_assistant_chat) | no | Lee un chat guardado del Asistente: los textos de la conversación y las herramientas que usó, sin imágenes. |
@@ -4895,7 +4896,18 @@ Cambia la configuración del Asistente IA (solo los campos pasados). No acepta c
   - `default_mode` ("explicar" | "mostrar" | "guiar" | "hacer" o null; opcional, por defecto `null`): modo con que arranca el panel.
   - `max_usd` (número; opcional, por defecto `null`): gasto máximo por pedido en USD, de 0 (sin tope) a 100.
   - `send_images` (true/false; opcional, por defecto `null`): si se le mandan al modelo las imágenes del visor.
+  - `effort` (texto; opcional, por defecto `null`): esfuerzo de OpenCode (--variant) o de Codex (model_reasoning_effort), p. ej. "high"; "" = el de fábrica.
 - CLI: `omnicad call set_assistant_config --doc pieza.omnicad`
+
+### `list_assistant_models`
+
+Modelos que se pueden elegir para el Asistente IA, como el combo «Modelo» de Preferencias: los de OpenCode y Codex los pregunta a su CLI; los de Claude Code son sus alias y nombres; por API, GET /models (no gasta). Con el esfuerzo que admite cada uno cuando el CLI lo informa.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `provider` (texto; opcional, por defecto `null`): proveedor a consultar; vacío = el configurado (get_assistant_config).
+  - `refresh` (true/false; opcional, por defecto `false`): volver a preguntar en vez de usar la lista que ya se pidió en esta sesión.
+- CLI: `omnicad call list_assistant_models --doc pieza.omnicad`
 
 ### `assistant_ask`
 
