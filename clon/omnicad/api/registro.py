@@ -231,6 +231,23 @@ def _convertir(valor, t):
     raise _NoCoincide
 
 
+def _elemento_malo(t, valor):
+    """(posición, elemento, tipo esperado) del primer elemento de la lista `valor` que no cuadra con el tipo de lista
+    de `t` (o de una alternativa de `t`); None si `valor` no es una lista o si todos cuadran."""
+    if not isinstance(valor, (list, tuple)):
+        return None
+    for alternativa in typing.get_args(t) if typing.get_origin(t) in (Union, types.UnionType) else (t,):
+        args = typing.get_args(alternativa)
+        if typing.get_origin(alternativa) is list and args:
+            for i, el in enumerate(valor):
+                try:
+                    _convertir(el, args[0])
+                except _NoCoincide:
+                    esperado = _esquema_tipo(args[0])
+                    return i, el, esperado.get("enum") or esperado.get("type") or esperado.get("anyOf") or "otro tipo"
+    return None
+
+
 def _firma(h):
     partes = []
     for nombre, prop in h.esquema["properties"].items():
@@ -261,6 +278,10 @@ def _argumentos(h, args):
         except _NoCoincide:
             esperado = h.esquema["properties"][k]
             esperado = esperado.get("enum") or esperado.get("type") or esperado.get("anyOf")
+            malo = _elemento_malo(h.tipos[k], v)
+            if malo:        # la lista sí es una lista: lo que no sirve es uno de sus elementos
+                raise error("INVALID_ARGUMENTS", f"Tipo incorrecto en '{k}': el elemento {malo[0]} ({malo[1]!r}) no es "
+                            f"{malo[2]}.", f"Argumentos válidos: {', '.join(validos)}.", f"Firma: {_firma(h)}") from None
             raise error("INVALID_ARGUMENTS", f"Tipo incorrecto en '{k}': {v!r} no es {esperado}.",
                         f"Argumentos válidos: {', '.join(validos)}.", f"Firma: {_firma(h)}") from None
     return kwargs

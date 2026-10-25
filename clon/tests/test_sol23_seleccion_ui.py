@@ -89,3 +89,17 @@ def test_conjuntos_de_seleccion_guardar_y_volver_a_elegir(v, monkeypatch):
     v._seleccionar([])
     v.acciones["conjunto_seleccion"].trigger()                        # sin selección: avisa, no crea nada
     assert list(v.doc.espacios["conjuntos_seleccion"]) == ["Lejano"]
+
+
+def test_sol36_el_navegador_lista_los_conjuntos_y_los_elige_y_actualiza(v, monkeypatch):
+    v._seleccionar(v._hits_cuerpos(["op2.c1"]))
+    monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_k: ("Lejano", True))
+    v.acciones["conjunto_seleccion"].trigger()
+    fila = v.navegador.item("sel:Lejano")
+    assert fila is not None and fila.parent().text(0) == "Conjuntos de selección"
+    v._seleccionar([])
+    v.navegador._clic(fila, 0)                                        # clic = Elegir
+    assert [h["ref"]["cuerpo"] for h in v.seleccion] == ["op2.c1"]
+    v._seleccionar(v._hits_cuerpos(["op1.c1"]))
+    v._accion_navegador("actualizar_conjunto", "sel:Lejano")          # menú › Actualizar con la selección
+    assert [r["cuerpo"] for r in v.doc.espacios["conjuntos_seleccion"]["Lejano"]] == ["op1.c1"]

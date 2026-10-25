@@ -412,6 +412,9 @@ class Navegador(QFrame):
             m.addAction("Desaislar", lambda: self.accion.emit("desaislar", clave))
             m.addAction("Renombrar…", lambda: self.accion.emit("renombrar_paso", clave))
             m.addAction("Buscar en el timeline", lambda: self.accion.emit("buscar_timeline", clave))
+        elif tipo == "conjunto" and clave.startswith("sel:"):         # SELECCIONAR › Crear conjunto de selección
+            m.addAction("Elegir", lambda: self.accion.emit("elegir_conjunto", clave))
+            m.addAction("Actualizar con la selección", lambda: self.accion.emit("actualizar_conjunto", clave))
         elif tipo == "analisis":
             m.addAction("Mostrar u ocultar", lambda: self.accion.emit("analisis_ojo", clave))
             m.addAction("Suprimir", lambda: self.accion.emit("analisis_borrar", clave))

@@ -785,6 +785,12 @@ def caja_envolvente(forma):
     return (p0.X(), p0.Y(), p0.Z()), (p1.X(), p1.Y(), p1.Z())
 
 
+def punto_toca(forma, punto, tolerancia=1e-6):
+    """¿El punto está sobre la forma (o dentro de ella si es un sólido), con esa tolerancia?"""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    return se_tocan(BRepBuilderAPI_MakeVertex(gp_Pnt(*[float(c) for c in punto])).Vertex(), forma, tolerancia)
+
+
 def es_valida(forma):
     return BRepCheck_Analyzer(forma, True, True).IsValid()    # en paralelo: 125 → 68 ms medido (plan_cpp.md P19)
 

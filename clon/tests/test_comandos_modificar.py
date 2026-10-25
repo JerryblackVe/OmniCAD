@@ -90,7 +90,12 @@ def test_pulsar_tirar_decide_por_lo_elegido():
     from omnicad.ui.comandos.modificar import PulsarTirar
     doc = _doc_caja()
     op = _ejecutar(doc, PulsarTirar, objetos=[_hit_sub(doc, "cara", (10, 10, 20))], distancia="3 mm")
-    assert op.TIPO == "desfase_cara" and op.nombre == "Desfase de cara1"
+    assert op.TIPO == "desfase_cara" and op.nombre == "Pulsar/tirar1"          # SOL-34: el nombre es el del comando
+    from omnicad.ui.comandos import comando_para
+    from omnicad.ui.comandos.modificar import CaraDesfase
+    assert comando_para(op) is PulsarTirar                                      # y al editarlo vuelve a abrirse él
+    otro = _doc_caja()
+    assert comando_para(_ejecutar(otro, CaraDesfase, caras=[_hit_sub(otro, "cara", (10, 10, 20))], distancia="1 mm")) is CaraDesfase
     op = _ejecutar(doc, PulsarTirar, objetos=[_hit_sub(doc, "arista", (10, 0, 23))], distancia="1 mm")
     assert op.TIPO == "empalme"
 

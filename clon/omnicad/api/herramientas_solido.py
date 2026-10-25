@@ -698,6 +698,12 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
     objetivo = sesion.cuerpo(target).id
     herramientas = _ids_cuerpos(sesion, tools)
     doc = sesion.doc
+    if operation == "join":         # unir lo separado es válido (cuerpo de varios sólidos), pero casi siempre es un descuido
+        antes = doc.estado_final
+        for h in herramientas:
+            if not geo.se_tocan(antes.cuerpos[objetivo].forma, antes.cuerpos[h].forma):
+                sesion.avisar(f"{antes.cuerpos[h].nombre} no toca a {antes.cuerpos[objetivo].nombre}: la unión deja un "
+                              "cuerpo con piezas sueltas.")
     op = OpCombinar(doc.nuevo_id(), nombre_nuevo(doc, "Combinar", OpCombinar), objetivo=objetivo,
                     herramientas=herramientas, operacion=OPERACIONES[operation], mantener=keep_tools)
     return _agregar(sesion, op, True)

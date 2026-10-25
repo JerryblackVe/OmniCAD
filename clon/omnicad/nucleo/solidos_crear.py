@@ -2461,8 +2461,16 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
 
     def cortar(extra):
         def armar_tramo(za, la):
-            return _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"], mano, radio,
-                                partes=True, extra=extra, **_perfil_surco(datos, flancos))
+            # a izquierdas en un eje el kernel falla (SOL-1): se barre a derechas y el surco se refleja en un plano del eje
+            espejar = mano == "izquierda" and not info["interna"]
+            surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"],
+                                        "derecha" if espejar else mano, radio, partes=True, extra=extra,
+                                        **_perfil_surco(datos, flancos))
+            if espejar:
+                t = gp_Trsf()
+                t.SetMirror(gp_Ax2(_pnt(o), _gdir(_perpendicular(z))))
+                surco = aplicar(surco, t)
+            return surco, torno
 
         def por_mitades():
             mitad = largo / 2
@@ -2747,6 +2755,9 @@ def transformaciones_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, dis
     _exigir_instancias(_cantidad(n1, simetrico1) * (_cantidad(n2, simetrico2) if dir2 is not None else 1))
     u1 = _unit(dir1, "dirección 1")
     u2 = _unit(dir2, "dirección 2") if dir2 is not None else np.zeros(3)
+    for n, d, que in ((n1, d1, "1"), (n2, d2, "2")):
+        if (que == "1" or dir2 is not None) and int(n) > 1 and abs(d) < 1e-9:
+            raise geo.ErrorGeometria(f"La distancia {que} del patrón no puede ser cero: las copias quedarían una sobre otra.")
     s1 = _paso(int(n1), d1, distribucion)
     s2 = _paso(int(n2), d2, distribucion) if dir2 is not None else 0.0
     fuera = {tuple(s) if isinstance(s, (tuple, list)) else (int(s), 0) for s in suprimir} - {(0, 0)}
@@ -2772,6 +2783,9 @@ def transformaciones_circulares(punto, eje, n, *, angulo_total=360.0, distribuci
         paso = angulo_total
     else:
         raise geo.ErrorGeometria(f"Distribución desconocida: {distribucion}")
+    if n > 1 and (abs(paso) < 1e-9 or (n - 1) * abs(paso) * (2 if simetrico else 1) >= 360.0 - 1e-9):
+        raise geo.ErrorGeometria("El ángulo del patrón circular tiene que ser distinto de cero y no dar más de una vuelta: "
+                                 "con ese valor las copias quedarían una sobre otra.")
     u = _unit(eje, "eje del patrón")
     fuera = set(suprimir) - {0}
     return [_rotacion(punto, u, math.radians(k * paso)) for k in _indices(n, simetrico) if k not in fuera]
@@ -2805,6 +2819,8 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
     w = _alambre(ruta)
     largo = _longitud(w)
     cerrada = _es_cerrado(w)
+    if int(n) > 1 and abs(distancia) < 1e-9:
+        raise geo.ErrorGeometria("La distancia del patrón en ruta no puede ser cero: las copias quedarían una sobre otra.")
     paso = _paso(int(n), distancia, distribucion)
     if cerrada and distribucion == "extension" and abs(distancia - largo) < 1e-6 * largo:
         paso = largo / int(n)      # vuelta completa: la última instancia no cae encima del original
@@ -3175,7 +3191,7 @@ def _caja_en_marco(comp, marco, margen):
     return geo.transformar(caja, de_marco)
 
 
-def _cilindro_en_eje(comp, pts, z, margen, limites=None):
+def _cilindro_en_eje(pts, z, margen, limites=None):
     """(radio, base, alto) del cilindro mínimo de eje `z` que contiene los puntos `pts`."""
     u = _perpendicular(z)
     v = np.cross(z, u)
@@ -3214,14 +3230,14 @@ def solido_envolvente(formas, *, tipo="caja", margen=0.0, eje="z", marco=None, e
             raise geo.ErrorGeometria(f"Eje desconocido: {eje}")
         z = _unit(ejes[eje] if isinstance(eje, str) else eje, "eje del cilindro")
         limites = _proyectar_caja(bb, (0.0, 0.0, 0.0), z) if isinstance(eje, str) else None
-        radio, base, alto = _cilindro_en_eje(comp, pts, z, margen, limites)
+        radio, base, alto = _cilindro_en_eje(pts, z, margen, limites)
     elif isinstance(marco, str):
         R0 = _marco_automatico(comp)
-        candidatos = [_cilindro_en_eje(comp, pts, R0[:, i], margen) + (R0[:, i],) for i in range(3)]
+        candidatos = [_cilindro_en_eje(pts, R0[:, i], margen) + (R0[:, i],) for i in range(3)]
         radio, base, alto, z = min(candidatos, key=lambda c: c[0] ** 2 * c[2])
     else:
         z = _unit(np.asarray(marco, float)[:, 2], "eje Z de la orientación")
-        radio, base, alto = _cilindro_en_eje(comp, pts, z, margen)
+        radio, base, alto = _cilindro_en_eje(pts, z, margen)
     exterior = geo.cilindro(radio, alto, base=tuple(base), eje=tuple(z))
     if tipo == "cilindro":
         return exterior

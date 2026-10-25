@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 30: Abierto 25 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 21: Abierto 16 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -45,15 +45,6 @@ Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPEC
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| SOL-1 | Rosca modelada a izquierdas sobre un cilindro falla en el kernel tras 6 segundos | Abierto | Media | `create_thread left_hand=true` sobre un cilindro r5 con M10 responde «El kernel no pudo cortar la rosca en el cuerpo» después de 5,9 s; la de derechas tarda 0,9 s. En un agujero (`create_hole hole_tap=modeled left_hand=true`) sí anda. | omnicad/nucleo/solidos_crear.py:2384,2410 | 2026-10-24 |
-| SOL-2 | Vaciado con todas las caras quitadas da un sólido raro sin error | Abierto | Baja | `shell faces="all" thickness=2` sobre una caja 20x20x10 devuelve un sólido válido de 672 mm³ y 30 caras, sin aviso. Fusion no deja vaciar quitando todas las caras: tendría que fallar con un mensaje. | omnicad/nucleo/solidos_modificar.py:731 (`vaciado`) | 2026-10-24 |
-| SOL-3 | Agujero en un punto fuera de la cara se ignora sin aviso | Abierto | Baja | `create_hole face=">Z" points=[[0,0],[5,5],[50,50]]` en una caja de 20x20: hace 2 agujeros, el tercero (50, 50) cae fuera y desaparece sin aviso. | omnicad/api/herramientas_modificar.py:436 (`create_hole`) | 2026-10-24 |
-| SOL-4 | Unir cuerpos que no se tocan deja un cuerpo con dos sólidos sueltos y sin aviso | Abierto | Baja | `boolean_operation join` con una caja a 100 mm de la otra: queda 1 cuerpo de 5000 mm³ con 2 sólidos separados. El `cut` en la misma situación sí avisa «no le cortó nada». Hay que avisar (o fallar, que es lo que se espera de Fusion; no verificado en la ayuda local). | omnicad/api/herramientas_solido.py:610 (`boolean_operation`) | 2026-10-24 |
-| SOL-5 | Escalar acepta factores que superan el tope de 1 km | Abierto | Baja | `scale_body factor=1e6` sobre una caja de 20 mm deja un cuerpo de 20 km (4e21 mm³). Mover, crear y extruir rechazan todo lo que pasa de 1.000.000 mm. | omnicad/nucleo/solidos_modificar.py:826 (`escalar`) | 2026-10-24 |
-| SOL-6 | Patrón circular acepta más de 360° y la última copia cae sobre la original | Abierto | Baja | `circular_pattern count=4 total_angle=720`: las copias quedan en 0°, 240°, 120° y 0°; la cuarta se superpone con la original, sin error ni aviso. Fusion limita el patrón parcial a una vuelta. | omnicad/api/herramientas_solido.py:794 (`circular_pattern`) | 2026-10-24 |
-| SOL-31 | Revolución acepta ángulos de más de 360° y los trata como 360° sin avisar | Abierto | Baja | En la ventana, Revolución con Ángulo 400° o 720° acepta y crea el cuerpo; el volumen es el mismo que con 360° (6283,19 mm³ para un rectángulo 20x10 sobre su arista) y no hay aviso. `revolve angle=400` por la API da lo mismo. | omnicad/ui/comandos/solido.py:165 | 2026-10-24 |
-| SOL-32 | Patrones con distancia 0 (rectangular, en trayectoria) o ángulo 0 (circular) crean copias encimadas sin aviso | Abierto | Baja | `patron_rectangular_3d` con 3 copias y distancia 0 mm crea 2 cuerpos nuevos con la misma caja envolvente que el original; `patron_circular_3d` con 4 copias y ángulo 0 deg crea 3. La vista previa queda en verde y el panel no dice nada. | omnicad/ui/comandos/crear.py:790-802 | 2026-10-24 |
-| SOL-33 | Pulsar/tirar y Cara de desfase con 0 mm, y Desmoldeo con 0°, crean un paso que no hace nada | Abierto | Baja | Los tres se aceptan sin aviso y dejan un paso en el timeline sin efecto. En Superficie, el desfase con 0 sí se rechaza («La distancia de desfase no puede ser cero.»). | omnicad/ui/comandos/modificar.py:193,272 | 2026-10-24 |
 
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 
@@ -152,60 +143,6 @@ Qué se comprobó: pasa igual si en el paso 2 se acepta y se deshace; sigue pasa
 Prueba propuesta: tras previsualizar y cancelar una Reglada tangente, Recortar sobre la misma superficie da la misma mitad (314,16) que antes.
 
 Evidencia: `evidencias/ui_2026-10-24/` (`p5_repro.py`, `p6_repro.py`, `p7_repro.py`, `p9_nucleo.py`, `u1_superficie.log`).
-
-### SOL-1 · Rosca modelada a izquierdas sobre un cilindro falla en el kernel tras 6 segundos
-
-Cómo reproducir: `create_cylinder height=20 radius=5` → `create_thread faces="%CYLINDER" thread="M10" left_hand=true`. Obtenido: OPERATION_FAILED «El kernel no pudo cortar la rosca en el cuerpo» a los 5,9 s. Con `left_hand=false` tarda 0,9 s y anda (volumen 1278,25). Con un agujero a izquierdas (`create_hole depth=10 hole_tap=modeled thread=M6 left_hand=true`) anda en 0,84 s. Prueba propuesta: rosca externa a izquierdas con volumen menor que el cilindro.
-
-Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
-
-### SOL-2 · Vaciado con todas las caras quitadas da un sólido raro sin error
-
-Cómo reproducir: `create_box 20x20x10` → `shell body=<caja> faces="all" thickness=2`. Obtenido: ok, sin aviso; cuerpo válido de 672 mm³ con 30 caras (se perdieron 3328 mm³; un hueco cerrado de pared 2 pierde 2464). Prueba propuesta: error claro cuando se quitan todas las caras.
-
-Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
-
-### SOL-3 · Agujero en un punto fuera de la cara se ignora sin aviso
-
-Cómo reproducir: caja de 20x20x10 → `create_hole face=">Z" diameter=5 depth=5 points=[[0,0],[5,5],[50,50]]`. Obtenido: volumen 3803,65 (dos agujeros de 98,17), sin aviso. Esperado: aviso o error por el punto (50, 50). Prueba propuesta: un punto fuera de la cara avisa.
-
-Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
-
-### SOL-4 · Unir cuerpos que no se tocan deja un cuerpo con dos sólidos sueltos y sin aviso
-
-Cómo reproducir: dos cajas, la segunda en x=100 → `boolean_operation join`. Obtenido: 1 cuerpo, 2 sólidos (5000 mm³), sin aviso. `cut` sí avisa «no le cortó nada». Prueba propuesta: `join` sin contacto avisa o falla.
-
-Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
-
-### SOL-5 · Escalar acepta factores que superan el tope de 1 km
-
-Cómo reproducir: caja 20x20x10 → `scale_body factor=1e6`. Obtenido: ok, volumen 4e21 mm³ (el lado mide 20 km). `move_body translate=[1e9,0,0]` y `create_box length=2e6` sí fallan por el tope de 1.000.000 mm. Prueba propuesta: escalar que pase del tope falla con el mismo mensaje.
-
-Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
-
-### SOL-6 · Patrón circular acepta más de 360° y la última copia cae sobre la original
-
-Cómo reproducir: caja en x=30 → `circular_pattern count=4 total_angle=720`. Obtenido: centros (30,0), (-15,-26), (-15,26) y (30,0): la cuarta copia queda sobre la original. Con `total_angle=360` y count 3 las copias quedan a 120°. Prueba propuesta: total_angle > 360 falla.
-
-Evidencia: `evidencias/solido_2026-10-24/` (s1 a s10).
-
-### SOL-31 · Revolución acepta ángulos de más de 360° y los trata como 360° sin avisar
-
-Cómo reproducir: SÓLIDO › CREAR › Revolución → perfil rectángulo 20x10 → eje X → Extensión «Ángulo» → 400 deg (o 720 deg) → Aceptar. Obtenido: paso creado, volumen 6283,19 mm³ igual que con 360°, sin aviso. Por la API, `revolve angle=400` y `720` dan lo mismo. Prueba propuesta: más de 360° se rechaza con un mensaje, como pasa con 0° («El ángulo de revolución no puede ser cero.»).
-
-Evidencia: `evidencias/ui_2026-10-24/` (`u2a_solido_crear.py`, `p11_rev.py`).
-
-### SOL-32 · Patrones con distancia 0 o ángulo 0 crean copias encimadas sin aviso
-
-Cómo reproducir: caja → SÓLIDO › CREAR › Patrón rectangular → Dirección 1 = eje X, 3 copias, distancia 0 mm → Aceptar: 6 cuerpos pasan a 8 y los 2 nuevos tienen la misma caja envolvente que el original. Patrón circular con 4 copias y 0 deg: pasa de 6 a 9 cuerpos, todos en el mismo lugar. Patrón en trayectoria con distancia 0 mm se acepta igual. Prueba propuesta: avisar (o rechazar) cuando las copias quedan una sobre otra.
-
-Evidencia: `evidencias/ui_2026-10-24/` (`p15_patrones.py`, `u2b_solido_modificar.py`).
-
-### SOL-33 · Pulsar/tirar y Cara de desfase con 0 mm, y Desmoldeo con 0°, crean un paso que no hace nada
-
-Cómo reproducir: SÓLIDO › MODIFICAR › Pulsar/tirar → cara de arriba de una caja → distancia 0 mm → Aceptar (lo mismo con Cara de desfase y con Desmoldeo 0 deg). Obtenido: se agrega un paso al timeline sin cambio de geometría. Contraste: SUPERFICIE › Desfase con 0 mm sí se rechaza. Prueba propuesta: el mismo rechazo con mensaje en estos tres.
-
-Evidencia: `evidencias/ui_2026-10-24/` (`u2b_solido_modificar.py`).
 
 ### B-104 · «Recuperar documentos…» tiene la ayuda en el lugar del atajo
 

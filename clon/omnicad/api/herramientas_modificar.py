@@ -455,6 +455,11 @@ def _puntos_agujero(plano, centro, points):
     return salida
 
 
+def _punto_en_cara(plano, cara, p):
+    """¿El punto (proyectado sobre el plano de la cara) cae dentro de la cara, agujeros y recortes incluidos?"""
+    return geo.punto_toca(cara, plano.a_3d(*plano.a_uv(p)), 1e-5)
+
+
 def _ref_hasta(sesion, to, body):
     """Referencia del «hasta» de un agujero: plano XY/XZ/YZ o de construcción, un cuerpo o UNA cara."""
     texto = str(to).strip()
@@ -597,6 +602,10 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
         cantidad = 1
     else:
         puntos = _puntos_agujero(plano, elem.centro, points)
+        for p in puntos if points else []:
+            if not _punto_en_cara(plano, elem.sub, p):
+                raise error("INVALID_ARGUMENTS", f"El punto {[round(float(c), 4) for c in p]} cae fuera de la cara "
+                            f"«{face}»: el agujero no tendría dónde ir.", "Ponelo dentro de la cara (find_faces da su caja).")
         ubicacion = {"puntos_cara": [{"cara": sl.referencia(cuerpo, elem), "punto": [float(c) for c in p]}
                                      for p in puntos]}
         cantidad = len(puntos)

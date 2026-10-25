@@ -1089,11 +1089,13 @@ class OpRevolucion(_OpConPerfiles):
             return
         a1 = 360.0 if self.p.get("extension") == "completa" else ctx.evaluar(self.p["angulo"], ANGULO)
         modo = self.p.get("direccion", "un_lado")
+        a2 = ctx.evaluar(self.p.get("angulo2", "0"), ANGULO) if modo == "dos_lados" and self.p.get("extension") != "completa" else 0.0
+        if abs(a1) > 360.0 + 1e-9 or abs(a2) > 360.0 + 1e-9 or (modo == "dos_lados" and abs(a1) + abs(a2) > 360.0 + 1e-9):
+            raise ErrorOperacion("El ángulo de revolución no puede pasar de 360° (en total): una vuelta completa ya cierra el sólido.")
         if modo == "simetrica" and self.p.get("extension") != "completa":
             caras = [geo.rotar(c, punto, direccion, -a1 / 2) for c in caras]
             forma = geo.revolver(caras, punto, direccion, a1)
         elif modo == "dos_lados" and self.p.get("extension") != "completa":
-            a2 = ctx.evaluar(self.p.get("angulo2", "0"), ANGULO)
             forma = geo.unir_todos([geo.revolver(caras, punto, direccion, a1),
                                     geo.revolver(caras, punto, -direccion, a2)])
         else:

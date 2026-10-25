@@ -1029,7 +1029,10 @@ class VentanaPrincipal(QMainWindow):
         self.navegador.calcomanias = [(k, nombres.get(k, d["nombre"])) for k, d in vigentes
                                       if "@" not in k and d.get("calcomania")]
         from ..api.herramientas_navegador import datos_navegador
-        self.navegador.organizacion = datos_navegador(self.doc)
+        organizacion = datos_navegador(self.doc)
+        organizacion["conjuntos"].update({f"sel:{n}": {"nombre": n, "miembros": []}      # los de SELECCIONAR (SOL-36)
+                                          for n in self.doc.espacios.get("conjuntos_seleccion") or {}})
+        self.navegador.organizacion = organizacion
         bocetos_nav = dict(estado.bocetos)
         en_edicion = {}                         # el boceto abierto muestra el estado del editor, no el guardado
         if self.modo_boceto.activo:
@@ -1617,6 +1620,7 @@ class VentanaPrincipal(QMainWindow):
         actuales = conjuntos.get(nombre, [])
         conjuntos[nombre] = actuales + [h["ref"] for h in self.seleccion if h["ref"] not in actuales]
         self.doc.modificado = True
+        self._refrescar_visibilidad()
         self.mensaje(f"Conjunto «{nombre}»: {len(conjuntos[nombre])} objetos.")
 
     def _elegir_conjunto_seleccion(self):
@@ -1958,6 +1962,19 @@ class VentanaPrincipal(QMainWindow):
         from .comandos.modificar import Aspecto, MaterialFisico, MoverCopiar, Quitar, Suprimir
         from .comando import hit_desde_ref
         estado = self.doc.estado_final
+        if accion in ("elegir_conjunto", "actualizar_conjunto") and clave.startswith("sel:"):
+            conjuntos = self.doc.espacios.get("conjuntos_seleccion") or {}
+            if clave[4:] in conjuntos and self._seleccion_libre():
+                if accion == "elegir_conjunto":
+                    self.seleccionar_entidades(conjuntos[clave[4:]])
+                elif self.seleccion:
+                    conjuntos[clave[4:]] = [h["ref"] for h in self.seleccion]
+                    self.doc.modificado = True
+                    self._refrescar_visibilidad()
+                    self.mensaje(f"Conjunto «{clave[4:]}»: {len(conjuntos[clave[4:]])} objetos.")
+                else:
+                    self.mensaje("Elegí algo antes de actualizar el conjunto.")
+            return
         if accion == "elegir_conjunto":
             from ..api.herramientas_navegador import datos_navegador
             ids = datos_navegador(self.doc)["conjuntos"].get(clave, {}).get("miembros", [])

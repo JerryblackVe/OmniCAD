@@ -79,7 +79,7 @@ run("desmoldeo", lambda: (
 run("escala_3d", lambda: (
     C.caso(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, {"factor": "2"}, esperado=V_CAJA * 7, foto="escala_3d"),
     C.caso(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, {"tipo": "no_uniforme", "fx": "2", "fy": "1", "fz": "1"}, esperado=V_CAJA, etiqueta="escala no uniforme X2", rt=False),
-    C.negativos(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, "factor", malos=("abc", "0", "-1", "1e9"))))
+    C.negativos(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, "factor", malos=("abc", "0", "-1", "1e9", "2 mm"))))
 
 # Combinar ---------------------------------------------------------------------------------------------------------------------------
 run("combinar", lambda: (

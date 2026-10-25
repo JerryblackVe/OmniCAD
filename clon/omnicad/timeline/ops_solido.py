@@ -993,14 +993,17 @@ class OpSolidoEnvolvente(_OpCrear):
     `orientacion` (Coordinate System de Fusion): "modelo" (ejes del modelo; `eje` fija el del cilindro),
     "automatica" (la menor), "z_x" / "z_y" / "x_y" (dos ejes en `eje_a` y `eje_b`, el primero manda) o "scu"
     (un sistema de coordenadas de usuario en `scu`). `componente` deja el sólido en un componente nuevo (como
-    Fusion) y `grupo_rigido` lo liga a los componentes de los cuerpos envueltos."""
+    Fusion) y `grupo_rigido` lo liga a los componentes de los cuerpos envueltos. `origen` (Origin Mode) es dónde queda
+    el origen del componente: "modelo" (el del documento), "centro" del sólido o su "esquina" mínima; la geometría no
+    cambia y el origen acompaña al componente cuando se mueve (get_assembly › origin)."""
     TIPO, ETIQUETA, ICONO = "solido_envolvente", "Sólido envolvente", "⬚"
     PARAMS = {"cuerpos": [], "tipo": "caja", "margen": "0 mm", "eje": "z", "operacion": "nuevo", "objetivos": [],
               "orientacion": "modelo", "eje_a": None, "eje_b": None, "scu": None, "espesor_tubo": "",
-              "componente": False, "grupo_rigido": False}
-    EXPRESIONES = ("margen",)
+              "componente": False, "grupo_rigido": False, "origen": "modelo"}
+    EXPRESIONES = ("margen", "espesor_tubo")        # espesor_tubo "" = la décima parte del radio
     OPCIONES = {"tipo": ("caja", "cilindro", "tubo"), "operacion": OPERACIONES_CUERPO,
-                "orientacion": ("modelo", "automatica", "z_x", "z_y", "x_y", "scu")}   # eje: "x", "y", "z" o un vector
+                "orientacion": ("modelo", "automatica", "z_x", "z_y", "x_y", "scu"),    # eje: "x", "y", "z" o un vector
+                "origen": ("modelo", "centro", "esquina")}
     REFS = ("eje_a", "eje_b")
 
     def dependencias(self):
@@ -1039,9 +1042,15 @@ class OpSolidoEnvolvente(_OpCrear):
         creados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self.p.get("objetivos") or "")
         self._registrar_usados(creados)
         if self.p["operacion"] != "nuevo" or not (self.p["componente"] or self.p["grupo_rigido"]):
+            if self.p.get("origen", "modelo") != "modelo":
+                ctx.aviso("El origen solo vale con «En un componente nuevo»: no se cambió.")
             return
         envueltos = {estado.cuerpo(c).componente for c in self.p["cuerpos"]} - {"", None}
         _en_componente(estado, self, creados)
+        if self.p.get("origen", "modelo") != "modelo":
+            caja = geo.caja_envolvente(geo.compuesto([estado.cuerpo(c).forma for c in creados]))
+            estado.componentes[self.id]["origen"] = [float(x) for x in (
+                np.mean(caja, axis=0) if self.p["origen"] == "centro" else caja[0])]
         if self.p["grupo_rigido"]:
             if not envueltos:
                 ctx.aviso("«Grupo rígido» solo vale cuando el sólido envuelve componentes: no se creó el grupo.")

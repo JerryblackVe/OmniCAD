@@ -9,6 +9,7 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
+from .parametros import _NUM_CON_UNIDAD, LONGITUD, acotar
 from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
                           _resolver_todas, atributos_copia, detectar, registrar_operacion, resolver)
 
@@ -386,13 +387,19 @@ class OpEscala(Operacion):
         if not p["cuerpos"]:
             raise ErrorOperacion("Elegí los cuerpos a escalar.")
         punto = ent.como_punto(_resolver(p["punto"], estado)) if p["punto"] else np.zeros(3)
-        E = lambda k: ctx.evaluar(p[k], "escalar")  # noqa: E731
+        def E(k):
+            if _NUM_CON_UNIDAD.search(str(p[k])):
+                raise ErrorOperacion(f"El factor de escala no lleva unidad: «{p[k]}». Escribí un número, p. ej. 2.")
+            return ctx.evaluar(p[k], "escalar")
         for cid in p["cuerpos"]:
             c = estado.cuerpo(cid)
             if p["tipo"] == "uniforme":
                 c.forma = sm.escalar(c.forma, punto, factor=E("factor"))
             else:
                 c.forma = sm.escalar(c.forma, punto, factores=(E("fx"), E("fy"), E("fz")))
+            caja = geo.caja_envolvente(c.forma)
+            if caja is not None:                    # el mismo tope de 1 km que mover, crear y extruir
+                acotar(float(np.abs(caja).max()), LONGITUD)
             if getattr(c, "tipo", "solido") == "solido" and geo.sin_volumen(c.forma):
                 raise ErrorOperacion(f"«{c.nombre}» queda sin volumen con esa escala: el factor es demasiado chico.")
 
@@ -400,7 +407,7 @@ class OpEscala(Operacion):
 class OpDesfaseCara(Operacion):
     """Cara de desfase / Pulsar-tirar de Fusion [SLD-OFFSET-FACES]: mueve caras a lo largo de su normal."""
     TIPO, ETIQUETA, ICONO = "desfase_cara", "Desfase de cara", "⇱"
-    PARAMS = {"caras": [], "distancia": "1 mm", "tangente": True}
+    PARAMS = {"caras": [], "distancia": "1 mm", "tangente": True, "origen": ""}   # origen "pulsar_tirar": lo creó ese comando
     EXPRESIONES = ("distancia",)
 
     def dependencias(self):

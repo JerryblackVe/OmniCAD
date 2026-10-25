@@ -270,11 +270,12 @@ def _dos_cajas(s, x=50):
     return a, b
 
 
-def test_unir_cuerpos_que_no_se_tocan_deja_un_cuerpo_de_dos_piezas(s):
-    """Como Combinar › Unir de Fusion («combina los sólidos en un solo cuerpo»): no es un error ni avisa (el modelo
-    de ejemplo une el aro y el toroide, que no se tocan)."""
+def test_unir_cuerpos_que_no_se_tocan_deja_un_cuerpo_de_dos_piezas_y_avisa(s):
+    """Unir cuerpos separados no es un error (el modelo de ejemplo une el aro y el toroide, que no se tocan), pero la
+    herramienta avisa que quedan piezas sueltas (SOL-4); el paso del timeline queda ok."""
     a, b = _dos_cajas(s)
-    assert llamar(s, "boolean_operation", target=a, tools=[b], operation="join")["bodies_removed"] == [b]
+    r = api.llamar(s, "boolean_operation", {"target": a, "tools": [b], "operation": "join"})
+    assert r["ok"] and r["result"]["bodies_removed"] == [b] and any("piezas sueltas" in x for x in r["avisos"])
     forma = cuerpo(s, a).forma
     assert len(geo.solidos(forma)) == 2 and geo.volumen(forma) == pytest.approx(2000) and geo.es_valida(forma)
 

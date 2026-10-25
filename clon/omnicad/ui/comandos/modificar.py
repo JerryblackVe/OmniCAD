@@ -359,6 +359,8 @@ class PulsarTirar(Comando):
     """Pulsar/tirar (Q): sobre una cara hace un desfase de cara; sobre una arista, un empalme."""
     CLAVE, TITULO, ICONO, ATAJO = "pulsar_tirar", "Pulsar/tirar", "pulsar_tirar", "Q"
     AYUDA = "Clic en una cara para desplazarla, o en una arista para redondearla."
+    CLASE_OP = OpDesfaseCara                 # el paso de cara se vuelve a abrir con este mismo diálogo (ver VARIANTE)
+    VARIANTE = ("origen", "pulsar_tirar")
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
@@ -372,14 +374,18 @@ class PulsarTirar(Comando):
             raise ErrorComando("Elegí solo caras o solo aristas.")
         ctx.evaluar(v["distancia"])
         if tipos == {"cara"}:
-            op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"])
-            base = "Desfase de cara"
+            op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"],
+                               origen="pulsar_tirar")
+            base = "Pulsar/tirar"
         else:
             op = self.crear_op(OpEmpalme, v, ctx, aristas=refs(v, "objetos"), radio=v["distancia"])
             base = "Empalme"
         if ctx.op is None:
             op.nombre = _siguiente(ctx, base)
         return op
+
+    def desde_op(self, op, ctx):
+        return {"objetos": hits(op.p["caras"], ctx.estado), "distancia": op.p["distancia"]}
 
     def manipuladores(self, ctx, v):
         """Sobre una cara: flecha de desfase por su normal (negativo = quita material); sobre una arista:
@@ -863,6 +869,6 @@ class QuitarEmpalmes(Comando):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
 
 
-registrar(ReticulaVolumetrica, PulsarTirar, Desfase, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
+registrar(ReticulaVolumetrica, CaraDesfase, PulsarTirar, Desfase, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, ReemplazarCara,
           DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto,
           MaterialFisico, QuitarEmpalmes)

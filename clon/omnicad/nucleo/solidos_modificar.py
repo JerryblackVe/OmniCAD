@@ -372,9 +372,10 @@ def empalme(forma, grupos, *, cadena_tangente=True):
     if not mf.IsDone():
         # PL4 (tutorial «Fillet Order of Operations» de Plasticity): el orden de los empalmes es de
         # lo GRANDE a lo chico; un empalme chico hecho primero puede comerse el material del grande.
-        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas. "
-                                 "Probá primero el radio MAYOR y después los más chicos (de lo grande a "
-                                 "lo chico) y reordená los empalmes del timeline en ese orden.")
+        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
+                                 "Achicalo. Si el timeline tiene otros empalmes en la misma zona, probá primero el "
+                                 "radio MAYOR y después los más chicos (de lo grande a lo chico) y reordená los "
+                                 "empalmes del timeline en ese orden.")
     return _validar(mf.Shape(), "Empalme")
 
 
@@ -861,6 +862,9 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
         for t in (caras_tangentes(forma, c) if tangente else [c]):
             if not _contiene(caras, t):
                 caras.append(t)
+    if caras and len(caras) >= len(geo.caras(forma)):
+        raise geo.ErrorGeometria("Quitaste todas las caras: no queda pared que dejar. Elegí menos caras (o ninguna, para "
+                                 "un hueco cerrado dentro del cuerpo).")
     if caras:
         partes = []
         if ti:
@@ -952,6 +956,7 @@ def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados
             s = float((np.array(geo.centro_masa(f, True)) - plano_neutro.origen) @ d)
             trabajo.append((f, d, a1) if s >= 0 else (f, -d, a2))
     da = BRepOffsetAPI_DraftAngle(objetivo)
+    hechas = 0
     for cara, direc, ang in trabajo:
         if modo_angulo == "relativo":
             ang += _inclinacion(cara, direc)
@@ -960,9 +965,12 @@ def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados
         if abs(ang) < 1e-12:
             continue
         da.Add(cara, gp_Dir(*direc), math.radians(ang), pln)
+        hechas += 1
         if not da.AddDone():
             raise geo.ErrorGeometria("Una cara no admite desmoldeo (solo planas, cilíndricas o cónicas, "
                                      "y no paralelas al plano neutro).")
+    if not hechas:
+        raise geo.ErrorGeometria("El ángulo de desmoldeo no cambia ninguna cara: no puede ser cero.")
     try:
         da.Build()
     except Exception:  # noqa: BLE001
@@ -1129,7 +1137,7 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         raise geo.ErrorGeometria("Elegí las caras a desfasar.")
     dist = float(distancia)
     if abs(dist) < 1e-9:
-        return forma
+        raise geo.ErrorGeometria("La distancia de desfase no puede ser cero.")
     todas = []
     for c in caras:
         for t in (caras_tangentes(forma, c) if tangente else [c]):
@@ -1327,7 +1335,8 @@ def dividir_cara(forma, caras, herramienta, *, extender=True, tipo="superficie",
     antes = len(geo.caras(forma))
     resultado = _fusionar_costuras(_partir(forma, cortes))
     if len(geo.caras(resultado)) <= antes:
-        raise geo.ErrorGeometria("La herramienta no atraviesa las caras elegidas (probá extenderla).")
+        raise geo.ErrorGeometria("La herramienta no atraviesa las caras elegidas"
+                                 + ("." if extender else " (probá extenderla)."))
     return _validar(resultado, "Dividir cara")
 
 
@@ -1337,7 +1346,7 @@ def dividir_cuerpo(forma, herramienta, *, extender=True):
     herr = _herramienta_corte(herramienta, forma, extender)
     piezas = geo.solidos(_partir(forma, [herr]))
     if len(piezas) < 2:
-        raise geo.ErrorGeometria("La herramienta no divide el cuerpo (probá extenderla).")
+        raise geo.ErrorGeometria("La herramienta no divide el cuerpo" + ("." if extender else " (probá extenderla)."))
 
     def clave(s):
         c = geo.centro_masa(s)

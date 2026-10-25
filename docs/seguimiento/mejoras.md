@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 122: Abierto 65 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 118: Abierto 61 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -162,10 +162,6 @@ Abierto 4.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| SOL-30 | Dos mensajes de error de Sólido engañan | Abierto | Baja | `split_body` dice «probá extenderla» aun con `extend=true`. Un valor mal tipado de una lista (p. ej. `create_boss positions=[[0,0,20]]`) dice «no es array» cuando la lista sí es un array: lo que no sirve es cada elemento (tiene que ser string u objeto). En la ventana, Empalme con un radio de 100 mm sobre una caja de 30 mm manda «reordená los empalmes del timeline» aunque haya un solo empalme: ahí hay que decir que el radio no entra en las caras vecinas. | omnicad/nucleo/solidos_modificar.py:1140; omnicad/api/registro.py (validación de tipos) | 2026-10-24 |
-| SOL-34 | Pulsar/tirar sobre una cara crea un paso «Desfase de cara» y al editarlo abre otro diálogo | Abierto | Baja | Pulsar/tirar con una cara crea el paso `desfase_cara` («Desfase de cara1») y al hacer doble clic en el timeline se abre «Cara de desfase», no «Pulsar/tirar»: el usuario ve otro comando con otro título. Darle al paso el nombre y el diálogo del comando que lo creó. | omnicad/ui/comandos/modificar.py:272 | 2026-10-24 |
-| SOL-35 | El factor de escala acepta una unidad («2 mm») | Abierto | Baja | En la ventana, Escala con Factor «2 mm» se toma como 2 sin avisar; los campos de longitud rechazan «15 deg» y los de ángulo «45 mm». Un factor no lleva unidad: rechazarlo con el mismo mensaje. | omnicad/ui/comandos/modificar.py (campo `factor` de escala_3d) | 2026-10-24 |
-| SOL-36 | Carpeta «Conjuntos de selección» en el navegador | Abierto | Baja | Los conjuntos se crean y se eligen desde SELECCIONAR › Herramientas de selección, pero el navegador no los lista (Fusion: carpeta con botones Elegir y Actualizar). | omnicad/ui/ventana.py › `_elegir_conjunto_seleccion` | 2026-10-25 |
 
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 
