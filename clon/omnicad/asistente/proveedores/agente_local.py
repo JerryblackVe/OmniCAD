@@ -198,6 +198,7 @@ class AgenteLocal:
                 "-c", 'mcp_servers.omnicad.default_tools_approval_mode="approve"',
                 "-c", "mcp_servers.omnicad.required=true"]
         argv += ["-m", self.modelo] if self.modelo else []
+        argv += ["-c", f'model_reasoning_effort="{self.variante}"'] if self.variante else []   # SEGURO ya lo validó
         imagenes = [ruta for ruta, tipo in archivos if tipo == "imagen"]
         # en un solo argumento: «-i a b -» se tragaría el «-» de la entrada estándar como otra imagen
         argv += ["--image=" + ",".join(imagenes)] if imagenes else []

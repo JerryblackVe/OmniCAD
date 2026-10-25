@@ -367,9 +367,12 @@ def test_config_crea_cada_proveedor_y_nunca_guarda_la_clave(monkeypatch):
 
 
 def test_preferencias_asistente_estado_de_clave_y_probar_conexion(ventana, monkeypatch):
-    from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit
+    from PySide6.QtWidgets import QComboBox, QDoubleSpinBox
 
+    from omnicad.asistente import modelos
     from omnicad.ui.preferencias import DialogoPreferencias
+    monkeypatch.setattr(modelos, "modelos_disponibles", lambda p, *a, **k: {
+        "modelos": [], "fabrica": config.PROVEEDORES[p][2], "variantes": {}, "motivo": "sin red en la prueba"})
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-secreta")
     dlg = DialogoPreferencias(ventana.prefs, inicial="asistente")
     assert dlg.cabecera.text().startswith("Con qué IA habla el Asistente")
@@ -392,8 +395,8 @@ def test_preferencias_asistente_estado_de_clave_y_probar_conexion(ventana, monke
         QTest.qWait(20)
     assert dlg.resultado_conexion.text() == "✓ Conectó: el modelo respondió «OK»."
     modelo = dlg.controles["asistente/modelo"]
-    assert isinstance(modelo, QLineEdit) and "anthropic/claude" in modelo.placeholderText()
-    modelo.setText(" mi-modelo ")
+    assert isinstance(modelo, QComboBox) and modelo.isEditable() and "anthropic/claude" in modelo.lineEdit().placeholderText()
+    modelo.setEditText(" mi-modelo ")
     tope.setValue(1.25)
     dlg._aplicar()
     assert ventana.prefs["asistente/modelo"] == "mi-modelo" and ventana.prefs["asistente/tope_usd"] == 1.25
@@ -678,3 +681,59 @@ def test_la_cruz_quita_esa_ficha_aunque_el_archivo_este_dos_veces(panel, tmp_pat
     assert panel.adjuntos == [primero, _foto] and all(a is not segundo for a in panel.adjuntos)
     panel.adjuntos = []
     panel._mostrar_fichas()
+
+
+# ---------------------------------------------------------------- IA-10: modelos de cada CLI en Preferencias
+LISTAS = {
+    "opencode": {"modelos": ["opencode/beam-free", "openai/gpt-6.1-sol"], "fabrica": "openai/gpt-6.1-sol",
+                 "variantes": {"opencode/beam-free": ["low", "high"], "openai/gpt-6.1-sol": ["low", "medium", "xhigh"]},
+                 "motivo": ""},
+    "codex": {"modelos": ["gpt-6.1-sol", "gpt-6-luna"], "fabrica": "gpt-6.1-sol · medium",
+              "variantes": {"gpt-6.1-sol": ["low", "medium", "high"], "gpt-6-luna": ["medium"]}, "motivo": ""},
+    "claude_code": {"modelos": ["fable", "opus"], "fabrica": "", "variantes": {}, "motivo": ""},
+}
+
+
+def _esperar_modelos(dlg):
+    for _ in range(250):
+        if dlg.b_modelos.isEnabled():
+            return True
+        QTest.qWait(20)
+    return False
+
+
+def test_preferencias_llenan_el_modelo_de_cada_cli_y_se_puede_escribir_otro(ventana, monkeypatch):
+    from omnicad.asistente import modelos
+    from omnicad.ui.preferencias import DialogoPreferencias
+    pedidos = []
+    monkeypatch.setattr(modelos, "modelos_disponibles", lambda p, *a, **k: pedidos.append((p, k)) or LISTAS.get(
+        p, {"modelos": [], "fabrica": "x", "variantes": {}, "motivo": "falta la variable X"}))
+    dlg = DialogoPreferencias(ventana.prefs, inicial="general")
+    assert pedidos == []                                            # perezoso: sin la página a la vista no pide nada
+    dlg.arbol.setCurrentItem(dlg._items["asistente"])
+    assert _esperar_modelos(dlg) and "falta la variable X" in dlg.estado_modelos.text()
+    proveedor, modelo, variante = (dlg.controles[f"asistente/{k}"] for k in ("proveedor", "modelo", "variante"))
+    proveedor.setCurrentIndex(proveedor.findData("codex"))
+    assert _esperar_modelos(dlg) and dlg.estado_modelos.text() == "2 modelos"
+    assert [modelo.itemText(i) for i in range(modelo.count())] == ["de fábrica: gpt-6.1-sol · medium", "gpt-6.1-sol",
+                                                                   "gpt-6-luna"]
+    assert [variante.itemText(i) for i in range(variante.count())] == ["de fábrica", "low", "medium", "high"]
+    modelo.setCurrentIndex(2)                                       # elegir gpt-6-luna: sus esfuerzos
+    assert [variante.itemText(i) for i in range(variante.count())] == ["de fábrica", "medium"]
+    variante.setCurrentIndex(1)
+    proveedor.setCurrentIndex(proveedor.findData("opencode"))
+    assert _esperar_modelos(dlg) and modelo.currentText() == "gpt-6-luna"     # lo elegido no se borra al relistar
+    modelo.setEditText("openrouter/mi-modelo-propio")               # uno que no está en la lista
+    QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
+    assert (ventana.prefs["asistente/proveedor"], ventana.prefs["asistente/modelo"], ventana.prefs["asistente/variante"]) \
+        == ("opencode", "openrouter/mi-modelo-propio", "medium")
+    otro = DialogoPreferencias(ventana.prefs, inicial="asistente")
+    assert _esperar_modelos(otro) and otro.controles["asistente/modelo"].currentText() == "openrouter/mi-modelo-propio"
+    otro.controles["asistente/modelo"].setCurrentIndex(0)           # «de fábrica: …» se guarda vacío
+    assert otro.valores()["asistente/modelo"] == ""
+    QTest.mouseClick(otro.b_modelos, Qt.LeftButton)                 # ↻ vuelve a pedir la lista
+    assert _esperar_modelos(otro) and pedidos[-1] == ("opencode", {"refrescar": True})
+    otro.reject()
+    dlg.close()
+    ventana.prefs["asistente/proveedor"], ventana.prefs["asistente/modelo"], ventana.prefs["asistente/variante"] = \
+        "anthropic", "", ""

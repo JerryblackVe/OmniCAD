@@ -5,7 +5,8 @@ Enviar tienen que entrar). IA-5: tarjeta de plan (Aplicar, Cancelar, Esc), Guiar
 «Deshacer este pedido» y el aviso de APP_BUSY con un comando abierto. IA-6: elegir «Claude Code (tu suscripción)» en
 Preferencias (teclado y clic en Aceptar), ruta mala tecleada, y un pedido con el CLI simulado que entra por el puente en
 vivo (encendido solo durante el pedido) con la tarjeta Aplicar. IA-9: clic en el clip, Ctrl+V de una imagen, arrastrar
-archivos al chat, el 11.º rechazado, ✕ y las fichas en la ventana chica. El proveedor es el falso: sin red ni gasto."""
+archivos al chat, el 11.º rechazado, ✕ y las fichas en la ventana chica. IA-10: Preferencias llena «Modelo» con lo
+que dice cada CLI (elegir con el teclado, escribir otro, Aceptar y reabrir). El proveedor es el falso: sin red ni gasto."""
 import sys
 import threading
 
@@ -185,6 +186,107 @@ def historial_chats(p, guardado, n_lineas):
     A.esperar(200)
     QTest.mouseClick(p.b_nuevo, Qt.LeftButton)
     A.esperar(50)
+
+
+def elegir_con_teclado(combo, dato):
+    """Como la persona: foco en el combo y flechas hasta la opción (Arriba hasta la primera, después Abajo)."""
+    combo.setFocus()
+    for _ in range(combo.count()):
+        QTest.keyClick(combo, Qt.Key_Up)
+    for _ in range(combo.count()):
+        if combo.currentData() == dato:
+            break
+        QTest.keyClick(combo, Qt.Key_Down)
+    A.esperar(30)
+    return combo.currentData() == dato
+
+
+def modelos_en_preferencias():
+    """IA-10: el campo Modelo se llena solo con lo que dice cada CLI instalado (OpenCode y Codex se preguntan de
+    verdad, sin gastar: es un listado local); los proveedores por API devuelven una lista fija (sin red)."""
+    from omnicad.asistente import modelos
+    from omnicad.ui.preferencias import DialogoPreferencias
+    real = modelos.modelos_disponibles
+    modelos.modelos_disponibles = lambda proveedor, *a, **k: real(proveedor, *a, **k) if proveedor in \
+        config.AGENTES_LOCALES else {"modelos": [], "fabrica": "x", "variantes": {}, "motivo": "sin red en la prueba"}
+    guardado = {k: v.prefs[f"asistente/{k}"] for k in ("proveedor", "modelo", "variante")}
+
+    def abrir():
+        dlg = DialogoPreferencias(v.prefs, v, "asistente")
+        dlg.aplicado.connect(v.aplicar_preferencias)
+        dlg.show()
+        A.esperar(200)
+        return dlg
+
+    def esperar_lista(dlg, ms=30000):
+        for _ in range(ms // 50):
+            if dlg.b_modelos.isEnabled():
+                return True
+            QTest.qWait(50)
+        return False
+
+    try:
+        dlg = abrir()
+        proveedor, modelo, variante = (dlg.controles[f"asistente/{k}"] for k in ("proveedor", "modelo", "variante"))
+        for tipo, minimo in (("claude_code", 7), ("codex", 2), ("opencode", 2)):
+            elegido = elegir_con_teclado(proveedor, tipo)
+            listo = esperar_lista(dlg)
+            items = [modelo.itemText(i) for i in range(modelo.count())]
+            A.reg(AR, f"Preferencias: al elegir {tipo} con el teclado, «Modelo» se llena solo con lo que dice el CLI",
+                  elegido and listo and len(items) > minimo and items[0].startswith("de fábrica")
+                  and dlg.estado_modelos.text().endswith("modelos"),
+                  f"{dlg.estado_modelos.text()} · {items[:4]}")
+            A.foto(dlg, f"asistente_pref_modelos_{tipo}")
+        # Codex de nuevo, para elegir modelo y esfuerzo con el teclado (la lista ya está en memoria).
+        elegir_con_teclado(proveedor, "codex")
+        esperar_lista(dlg)
+        modelo.setFocus()
+        QTest.keyClick(modelo, Qt.Key_Down)                  # del «de fábrica» al primer modelo de la lista
+        A.esperar(50)
+        esfuerzos = [variante.itemText(i) for i in range(variante.count())]
+        A.reg(AR, "Codex: flecha abajo en Modelo elige el primero y Esfuerzo ofrece sus niveles",
+              modelo.currentIndex() == 1 and "high" in esfuerzos, f"{modelo.currentText()} · {esfuerzos}")
+        variante.setFocus()
+        QTest.keyClick(variante.lineEdit(), Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClicks(variante.lineEdit(), "high")
+        A.reg(AR, "Esfuerzo: escribir «high» a mano", variante.currentText() == "high", variante.currentText())
+        elegido = modelo.currentText()
+        QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
+        A.esperar(150)
+        A.reg(AR, "Aceptar guarda Codex con el modelo elegido y el esfuerzo",
+              (v.prefs["asistente/proveedor"], v.prefs["asistente/modelo"], v.prefs["asistente/variante"])
+              == ("codex", elegido, "high"), (v.prefs["asistente/modelo"], v.prefs["asistente/variante"]))
+        dlg = abrir()
+        modelo = dlg.controles["asistente/modelo"]
+        esperar_lista(dlg)
+        A.reg(AR, "reabrir Preferencias: el modelo y el esfuerzo siguen ahí",
+              modelo.currentText() == elegido and dlg.controles["asistente/variante"].currentText() == "high")
+        QTest.mouseClick(modelo.lineEdit(), Qt.LeftButton)
+        QTest.keyClick(modelo.lineEdit(), Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClicks(modelo.lineEdit(), "gpt-otro-escrito")
+        QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
+        A.esperar(150)
+        A.reg(AR, "escribir un modelo que no está en la lista y Aceptar lo guarda tal cual",
+              v.prefs["asistente/modelo"] == "gpt-otro-escrito", v.prefs["asistente/modelo"])
+        dlg = abrir()
+        dlg.resize(800, 520)
+        A.esperar(200)
+        modelo = dlg.controles["asistente/modelo"]
+        pantalla = QApplication.primaryScreen().availableGeometry()
+        A.reg(AR, "Preferencias achicada (se pide 800x520): Modelo, ↻ y Aceptar se ven enteros y la página del "
+              "Asistente no la ensancha", dentro(modelo, dlg) and dentro(dlg.b_modelos, dlg) and dentro(dlg.b_aceptar, dlg)
+              and pantalla.contains(dlg.frameGeometry())
+              and dlg.pila.currentWidget().minimumSizeHint().width() <= max(
+                  dlg.pila.widget(i).minimumSizeHint().width() for i in range(dlg.pila.count()) if i != dlg.pila.currentIndex()),
+              f"dialogo={dlg.size()} página={dlg.pila.currentWidget().minimumSizeHint()}")
+        A.foto(dlg, "asistente_pref_modelos_800x520")
+        QTest.mouseClick(dlg.b_cancelar, Qt.LeftButton)
+    finally:
+        modelos.modelos_disponibles = real
+        for k, valor in guardado.items():
+            v.prefs[f"asistente/{k}"] = valor
+        if v.asistente is not None:
+            v.asistente.actualizar_cabecera()
 
 
 def suscripcion(p):
@@ -620,6 +722,7 @@ def pedido():
     v.resize(1900, 1000)
     A.esperar(200)
 
+    modelos_en_preferencias()
     suscripcion(p)
 
     # ---------------------------------------------------------------- atajo y cerrar

@@ -30,7 +30,7 @@ def test_config_por_defecto_y_la_clave_nunca_sale(monkeypatch):
     s = api.Sesion()
     r = api.llamar(s, "get_assistant_config")["result"]
     assert r | {"providers": None} == {"provider": "anthropic", "model": "", "effective_model": "claude-opus-5-5",
-                                       "base_url": "", "default_mode": "guiar", "max_usd": 0.5, "send_images": True,
+                                       "base_url": "", "default_mode": "guiar", "max_usd": 0.5, "send_images": True, "effort": "",
                                        "key_env_var": "ANTHROPIC_API_KEY", "key_set": False, "providers": None}
     monkeypatch.setenv("ANTHROPIC_API_KEY", CLAVE_FALSA)
     r = api.llamar(s, "get_assistant_config")
@@ -157,3 +157,20 @@ def test_ask_con_adjuntos_como_el_clip(monkeypatch, tmp_path):
         r = api.llamar(s, "assistant_ask", {"prompt": "mira", "attachments": adjuntos})
         assert r["error_kind"] == "INVALID_ARGUMENTS" and texto in r["mensaje"]
     assert len(proveedor.recibidos) == 1
+
+
+def test_modelos_y_esfuerzo_desde_el_catalogo(monkeypatch):
+    """IA-10: list_assistant_models da lo mismo que el combo de Preferencias; set_assistant_config guarda el esfuerzo."""
+    from omnicad.asistente import modelos
+    s = api.Sesion()
+    pedidos = []
+    monkeypatch.setattr(modelos, "modelos_disponibles", lambda *a, **k: pedidos.append((a, k)) or {
+        "modelos": ["gpt-6.1-sol"], "fabrica": "gpt-6.1-sol · medium", "variantes": {"gpt-6.1-sol": ["low", "high"]},
+        "motivo": ""})
+    r = api.llamar(s, "list_assistant_models", {"provider": "codex", "refresh": True})["result"]
+    assert r == {"provider": "codex", "models": ["gpt-6.1-sol"], "default": "gpt-6.1-sol · medium",
+                 "efforts": {"gpt-6.1-sol": ["low", "high"]}, "reason": ""}
+    assert pedidos[0] == (("codex", "", ""), {"refrescar": True})
+    assert api.llamar(s, "list_assistant_models", {"provider": "otro"})["error_kind"] == "INVALID_ARGUMENTS"
+    assert api.llamar(s, "set_assistant_config", {"effort": " high "})["result"]["effort"] == "high"
+    assert api.llamar(s, "set_assistant_config", {"effort": "a & b"})["error_kind"] == "INVALID_ARGUMENTS"

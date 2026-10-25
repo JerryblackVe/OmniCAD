@@ -30,7 +30,7 @@ DEFECTOS = {
     "modo": "guiar",
     "tope_usd": 0.5,         # gasto máximo por pedido; 0 = sin tope
     "imagenes": True,        # mandarle al modelo las imágenes del visor
-    "variante": "",          # OpenCode: --variant (esfuerzo); vacío = el del modelo
+    "variante": "",          # esfuerzo: --variant de OpenCode o model_reasoning_effort de Codex; vacío = el de fábrica
     "ruta_claude_code": "",  # modo suscripción: ruta del CLI; vacío = el del PATH
     "ruta_codex": "",
     "ruta_opencode": "",
@@ -63,7 +63,7 @@ def crear_proveedor(config):
     modelo = modelo_de(config)
     if nombre in AGENTES_LOCALES:
         return AgenteLocal(nombre, config.get(f"ruta_{nombre}") or "", modelo,
-                           (config.get("variante") or "").strip() if nombre == "opencode" else "")
+                           (config.get("variante") or "").strip() if nombre in ("opencode", "codex") else "")
     if nombre == "anthropic":
         return ProveedorAnthropic(modelo)
     base_url = (config.get("base_url") or "").strip() or PROVEEDORES[nombre][3]

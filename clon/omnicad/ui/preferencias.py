@@ -13,11 +13,12 @@ import threading
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QPushButton, QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
-                               QVBoxLayout, QWidget)
+                               QLineEdit, QPushButton, QSpinBox, QStackedWidget, QToolButton, QTreeWidget,
+                               QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from ..asistente import config as config_asistente
+from ..asistente import modelos
 from ..asistente.proveedores.agente_local import AGENTES, AgenteLocal, ejecutable
 from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
@@ -238,9 +239,9 @@ PAGINAS = [
     ("asistente", None, "Asistente IA", "Con qué IA habla el Asistente. La clave de API sale de una variable de "
      "entorno: OmniCAD nunca la guarda ni la muestra", [
         ("asistente/proveedor", "Proveedor", "combo", [(k, v[0]) for k, v in config_asistente.PROVEEDORES.items()]),
-        ("asistente/modelo", "Modelo", "texto", None),
+        ("asistente/modelo", "Modelo", "modelo", None),
         ("asistente/base_url", "Dirección del servidor (base_url)", "texto", None),
-        ("asistente/variante", "Variante de OpenCode (esfuerzo: low, medium, high…)", "texto", None),
+        ("asistente/variante", "Esfuerzo (variante de OpenCode, esfuerzo de Codex)", "editable", None),
         ("asistente/ruta_claude_code", "Ruta de Claude Code", "texto", None),
         ("asistente/ruta_codex", "Ruta de Codex", "texto", None),
         ("asistente/ruta_opencode", "Ruta de OpenCode", "texto", None),
@@ -272,6 +273,7 @@ class DialogoPreferencias(QDialog):
     tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
     graficos_cambiados = Signal()      # vista previa: Preferencias › Gráficos ya escritas en prefs (al instante)
     conexion_probada = Signal(str)     # Asistente IA › Probar conexión: el resultado, desde el hilo de la prueba
+    modelos_listos = Signal(object, object)   # Asistente IA › Modelo: (pedido, resultado), desde el hilo que los lista
 
     def __init__(self, prefs, parent=None, inicial="general"):
         super().__init__(parent)
@@ -280,6 +282,9 @@ class DialogoPreferencias(QDialog):
         self.resize(1060, 680)
         self.prefs = prefs
         self.crear_proveedor = config_asistente.crear_proveedor   # los tests ponen el proveedor falso
+        self._pedido_modelos = None    # Asistente IA › Modelo: el último pedido de lista (los viejos se descartan)
+        self._modelos = {"modelos": [], "fabrica": "", "variantes": {}, "motivo": ""}   # la última lista que llegó
+        self.modelos_listos.connect(self._modelos_listos)
         self.controles = {}            # clave → widget
         self.aviso_tema = None         # QLabel bajo el combo de temas: contraste, avisos y confirmaciones
 
@@ -399,6 +404,24 @@ class DialogoPreferencias(QDialog):
                 c = QLineEdit(actual, clearButtonEnabled=True)
                 c.setMinimumWidth(300)
                 c.textChanged.connect(self._cambio)
+            elif tipo in ("modelo", "editable"):     # lista de opciones, pero se puede escribir cualquier otra
+                c = QComboBox(editable=True, insertPolicy=QComboBox.NoInsert, minimumWidth=300)
+                c.addItem("de fábrica", "")
+                c.lineEdit().setPlaceholderText("de fábrica")
+                c.setEditText(actual)
+                c.currentTextChanged.connect(self._cambio)
+                if tipo == "modelo":
+                    c.currentTextChanged.connect(self._llenar_variantes)
+                    self.b_modelos = QToolButton(text="↻", toolTip="Volver a pedir la lista de modelos.")
+                    self.b_modelos.clicked.connect(lambda: self._pedir_modelos(refrescar=True))
+                    self.estado_modelos = QLabel(objectName="estado_modelos", wordWrap=True)   # un motivo largo no ensancha
+                    temas.poner_rol(self.estado_modelos, "tenue")
+                    fila = QHBoxLayout()
+                    for control, estirar in ((c, 3), (self.b_modelos, 0), (self.estado_modelos, 1)):
+                        fila.addWidget(control, estirar)
+                    form.addRow(etiqueta, fila)
+                    self.controles[clave] = c
+                    continue
             elif tipo == "decimal":
                 c = QDoubleSpinBox(suffix=" USD", decimals=2, singleStep=0.1)
                 c.setRange(*opciones)
@@ -447,7 +470,9 @@ class DialogoPreferencias(QDialog):
         proveedor = self.controles["asistente/proveedor"].currentData()
         _nombre, variable, modelo, base_url = config_asistente.PROVEEDORES[proveedor]
         agente = proveedor in config_asistente.AGENTES_LOCALES
-        self.controles["asistente/modelo"].setPlaceholderText(f"de fábrica: {modelo or 'el que use el CLI'}")
+        self.controles["asistente/modelo"].lineEdit().setPlaceholderText(f"de fábrica: {modelo or 'el que use el CLI'}")
+        if self.arbol.currentItem() is self._items["asistente"]:     # perezoso: solo con la página a la vista
+            self._pedir_modelos()
         self.controles["asistente/base_url"].setPlaceholderText(
             "no se usa" if agente else f"de fábrica: {base_url or 'la de Anthropic'}")
         for tipo in config_asistente.AGENTES_LOCALES:     # autodetectada; lo escrito acá manda
@@ -465,6 +490,60 @@ class DialogoPreferencias(QDialog):
             texto, rol = f"✗ Falta la variable de entorno {variable}: definila y reabrí OmniCAD.", "error"
         self.estado_clave.setText(texto)
         temas.poner_rol(self.estado_clave, rol)
+
+    def _pedir_modelos(self, refrescar=False):
+        """Pide en un hilo los modelos del proveedor elegido (IA-10): el diálogo no se congela mientras el CLI o la
+        API responden; si ya están en memoria, se ponen en el acto."""
+        v = self.valores()
+        proveedor = v["asistente/proveedor"]
+        pedido = (proveedor, v.get(f"asistente/ruta_{proveedor}", ""), v["asistente/base_url"])
+        self._pedido_modelos = pedido
+        self.estado_modelos.setText("cargando modelos…")
+        temas.poner_rol(self.estado_modelos, "tenue")
+        self.b_modelos.setEnabled(False)
+
+        def listar():
+            resultado = modelos.modelos_disponibles(*pedido, refrescar=refrescar)
+            try:
+                self.modelos_listos.emit(pedido, resultado)
+            except RuntimeError:                 # se cerró Preferencias mientras listaba
+                pass
+
+        threading.Thread(target=listar, daemon=True, name="modelos").start()
+
+    def _modelos_listos(self, pedido, resultado):
+        if pedido != self._pedido_modelos:       # llegó la lista de un proveedor que ya no está elegido
+            return
+        self.b_modelos.setEnabled(True)
+        self._modelos = resultado
+        c = self.controles["asistente/modelo"]
+        texto = c.currentText()
+        c.blockSignals(True)                     # llenar la lista no es un cambio de la persona (Aplicar no se prende)
+        c.clear()
+        c.addItem(f"de fábrica: {resultado['fabrica'] or 'el que use el CLI'}", "")
+        c.lineEdit().setPlaceholderText(c.itemText(0))      # Codex: el de su config, que recién ahora se sabe
+        for m in resultado["modelos"]:
+            c.addItem(m, m)
+        c.setEditText(texto)
+        c.blockSignals(False)
+        n = len(resultado["modelos"])
+        self.estado_modelos.setText(f"✗ {resultado['motivo']}" if not n and resultado["motivo"] else f"{n} modelos")
+        temas.poner_rol(self.estado_modelos, "error" if not n and resultado["motivo"] else "tenue")
+        self._llenar_variantes()
+
+    def _llenar_variantes(self, *_):
+        """Esfuerzos del modelo elegido (o del de fábrica), si el proveedor los informa (OpenCode, Codex)."""
+        resultado = self._modelos
+        modelo = self.valores()["asistente/modelo"] or resultado["fabrica"].split(" · ")[0]
+        c = self.controles["asistente/variante"]
+        texto = c.currentText()
+        c.blockSignals(True)
+        c.clear()
+        c.addItem("de fábrica", "")
+        for variante in resultado["variantes"].get(modelo) or []:
+            c.addItem(variante, variante)
+        c.setEditText(texto)
+        c.blockSignals(False)
 
     def _probar_conexion(self):
         fila = QHBoxLayout()
@@ -567,6 +646,8 @@ class DialogoPreferencias(QDialog):
             indice, descripcion = item.data(0, Qt.UserRole)
         self.pila.setCurrentIndex(indice)
         self.cabecera.setText(descripcion)
+        if item is self._items["asistente"]:
+            self._pedir_modelos()
 
     def _cambio(self, *_):
         self.b_aplicar.setEnabled(True)
@@ -611,7 +692,10 @@ class DialogoPreferencias(QDialog):
     def valores(self):
         salida = {}
         for clave, c in self.controles.items():
-            if isinstance(c, QComboBox):
+            if isinstance(c, QComboBox) and c.isEditable():   # lo escrito; «de fábrica: …» es vacío
+                texto = c.currentText().strip()
+                salida[clave] = c.itemData(c.findText(texto)) if c.findText(texto) >= 0 else texto
+            elif isinstance(c, QComboBox):
                 salida[clave] = c.currentData()
             elif isinstance(c, QCheckBox):
                 salida[clave] = c.isChecked()
@@ -624,7 +708,9 @@ class DialogoPreferencias(QDialog):
     def _cargar(self):
         for clave, c in self.controles.items():
             valor = self.prefs[clave]
-            if isinstance(c, QComboBox):
+            if isinstance(c, QComboBox) and c.isEditable():
+                c.setEditText(valor)
+            elif isinstance(c, QComboBox):
                 c.setCurrentIndex(max(c.findData(valor), 0))
             elif isinstance(c, QCheckBox):
                 c.setChecked(bool(valor))

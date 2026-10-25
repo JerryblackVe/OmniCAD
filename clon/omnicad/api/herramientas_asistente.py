@@ -41,7 +41,7 @@ def _resumen(cfg):
     conocido = proveedor in config.PROVEEDORES
     return {"provider": proveedor, "model": cfg["modelo"], "effective_model": config.modelo_de(cfg) if conocido else "",
             "base_url": cfg["base_url"], "default_mode": cfg["modo"], "max_usd": cfg["tope_usd"],
-            "send_images": cfg["imagenes"], "key_env_var": config.variable_clave(proveedor),
+            "send_images": cfg["imagenes"], "effort": cfg["variante"], "key_env_var": config.variable_clave(proveedor),
             "key_set": config.clave_definida(proveedor), "providers": list(config.PROVEEDORES)}
 
 
@@ -57,7 +57,7 @@ def get_assistant_config(sesion):
              modifica=True, transaccion=False)
 def set_assistant_config(sesion, provider: str | None = None, model: str | None = None, base_url: str | None = None,
                          default_mode: Literal["explicar", "mostrar", "guiar", "hacer"] | None = None,
-                         max_usd: float | None = None, send_images: bool | None = None):
+                         max_usd: float | None = None, send_images: bool | None = None, effort: str | None = None):
     """
     provider: proveedor (lista en get_assistant_config › providers), p. ej. "anthropic", "openai", "local".
     model: modelo del proveedor; "" vuelve al de fábrica.
@@ -65,6 +65,7 @@ def set_assistant_config(sesion, provider: str | None = None, model: str | None 
     default_mode: modo con que arranca el panel.
     max_usd: gasto máximo por pedido en USD, de 0 (sin tope) a 100.
     send_images: si se le mandan al modelo las imágenes del visor.
+    effort: esfuerzo de OpenCode (--variant) o de Codex (model_reasoning_effort), p. ej. "high"; "" = el de fábrica.
     """
     cambios = {}
     if provider is not None:
@@ -94,6 +95,12 @@ def set_assistant_config(sesion, provider: str | None = None, model: str | None 
         cambios["tope_usd"] = float(max_usd)
     if send_images is not None:
         cambios["imagenes"] = send_images
+    if effort is not None:
+        from ..asistente.proveedores.agente_local import SEGURO   # adentro: agente_local importa api (ciclo)
+        effort = effort.strip()
+        if len(effort) > 40 or not SEGURO.match(effort):
+            raise error("INVALID_ARGUMENTS", "effort tiene que ser un nombre corto (letras, números y . : / @ + -).")
+        cambios["variante"] = effort
     ajustes = _ajustes()
     for clave, valor in cambios.items():
         ajustes.setValue(f"asistente/{clave}", valor)
@@ -101,6 +108,27 @@ def set_assistant_config(sesion, provider: str | None = None, model: str | None 
     if ajustes.status() != ajustes.Status.NoError:
         raise error("FILE_ERROR", "No se pudieron guardar las preferencias del Asistente.")
     return {**_resumen(_leer_config(ajustes)), "updated": sorted(cambios)}
+
+
+@herramienta("list_assistant_models", "asistente", "Modelos que se pueden elegir para el Asistente IA, como el combo "
+             "«Modelo» de Preferencias: los de OpenCode y Codex los pregunta a su CLI; los de Claude Code son sus alias "
+             "y nombres; por API, GET /models (no gasta). Con el esfuerzo que admite cada uno cuando el CLI lo informa.")
+def list_assistant_models(sesion, provider: str | None = None, refresh: bool = False):
+    """
+    provider: proveedor a consultar; vacío = el configurado (get_assistant_config).
+    refresh: volver a preguntar en vez de usar la lista que ya se pidió en esta sesión.
+    """
+    from ..asistente import modelos                              # adentro: importa agente_local (ciclo)
+    cfg = _leer_config(_ajustes())
+    provider = provider or cfg["proveedor"]
+    if provider not in config.PROVEEDORES:
+        raise error("INVALID_ARGUMENTS", f"Proveedor desconocido: {provider!r}.",
+                    "Opciones: " + ", ".join(config.PROVEEDORES) + ".")
+    r = modelos.modelos_disponibles(provider, cfg.get(f"ruta_{provider}", ""), cfg["base_url"], refrescar=refresh)
+    if r["motivo"] and not r["modelos"]:
+        sesion.avisar(f"No se pudo listar los modelos de {provider}: {r['motivo']}")
+    return {"provider": provider, "models": r["modelos"], "default": r["fabrica"], "efforts": r["variantes"],
+            "reason": r["motivo"]}
 
 
 @herramienta("assistant_ask", "asistente", "Corre un pedido al Asistente IA SIN ventana, sobre el documento de esta "
