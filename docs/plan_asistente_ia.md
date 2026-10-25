@@ -146,8 +146,8 @@ instrucción: defensa contra inyección de prompt.
 - Claves solo en llavero o entorno; un test verifica que no aparecen en el historial ni en el `.omnicad`.
 - Modo suscripción: el proceso hijo hereda el token del puente por el `mcp-config` temporal (borrado al terminar),
   nunca por la línea de comandos visible.
-- ⚠ **Antes de publicar el modo suscripción con Claude Code**, Gerardo decide si lanzar el `claude` del usuario
-  entra en lo permitido por Anthropic (ver «Datos verificados»). Si no, queda solo Claude por clave de API.
+- Modo suscripción con Claude Code: **decidido por Gerardo el 2026-10-25, se programa** (OmniCAD lanza el `claude`
+  que el usuario ya instaló y logueó; nunca ve sus credenciales). Ver el ⚠ de «Datos verificados».
 
 ## MCP y CLI (regla estricta)
 
@@ -170,7 +170,7 @@ instrucción: defensa contra inyección de prompt.
 | 3 | IA-3 | Prompt de sistema, contexto del documento, modos y biblioteca de prompts | `asistente/prompt.py`, `asistente/prompts.json` | Opus, alto | Modo Explicar y Mostrar nunca llaman herramientas que modifican (test); el contexto entra en < 2000 tokens con un documento de 50 pasos |
 | 4 | IA-4 | Panel, ícono, botón, menú Ayuda, atajo y pestaña de Preferencias; claves por entorno (llavero si se aprueba `keyring`) | `ui/asistente.py`, `ui/iconos_extra.py`, `ui/ventana.py`, `ui/preferencias.py` | Sonnet, medio | Humo OK; pieza nueva `asistente` en `scripts/prueba_ui/` (teclear, Enter, Esc, Cancelar, ventana chica) |
 | 5 | IA-5 | Permisos y deshacer: tarjeta de plan, «Deshacer este pedido», Cancelar con vuelta atrás, tope de gasto, `APP_BUSY` visible en el chat | `asistente/sesion_chat.py`, `ui/asistente.py` | Opus, alto | Cancelar a mitad deja el documento como antes (test); en modo Hacer nada se ejecuta sin Aplicar. Se apoya en CL1 si ya existe |
-| 6 | IA-6 | Suscripción vía agente local: Claude Code, Codex y OpenCode por el puente en vivo, eventos JSON al panel | `asistente/proveedores/agente_local.py` | Opus, alto | Con `claude` y `opencode` de esta PC: un pedido modifica la ventana y el panel muestra cada herramienta; sin el ejecutable, mensaje claro. ⚠ decisión de Gerardo antes |
+| 6 | IA-6 | Suscripción vía agente local: Claude Code, Codex y OpenCode por el puente en vivo, eventos JSON al panel | `asistente/proveedores/agente_local.py` | Opus, alto | Con `claude` y `opencode` de esta PC: un pedido modifica la ventana y el panel muestra cada herramienta; sin el ejecutable, mensaje claro |
 | 7 | IA-7 | Historial de chats, herramientas `get/set_assistant_config` y `assistant_ask`, doc regenerada | `asistente/historial.py`, `api/herramientas_asistente.py`, `servidor_mcp/servidor.py`, `docs/agentes/` | Sonnet, medio | Reabrir un chat viejo; `omnicad assistant_ask` anda sin ventana; `test_doc_agentes` y test de que la clave no aparece en ningún archivo |
 | 8 | IA-8 | Respuestas de ayuda («¿cómo se hace…?») con la documentación local de OmniCAD, citando la fuente | `asistente/ayuda.py` | Sonnet, medio | Busca en `docs/guia_comandos.md`, `api/guia/` y `docs/agentes/herramientas.md`; cada respuesta cita archivo |
 
@@ -185,8 +185,7 @@ instrucción: defensa contra inyección de prompt.
 ## Pendiente de decidir (Gerardo)
 
 1. Instalar `keyring` para guardar claves en el llavero del sistema (o quedarse con variables de entorno).
-2. Modo suscripción con Claude Code: lanzar el `claude` del usuario ¿sí o no? (Codex y OpenCode no tienen esa
-   restricción documentada.)
+2. ~~Modo suscripción con Claude Code~~: decidido el 2026-10-25, se programa como está en el plan.
 3. Cualquier prueba que gaste plata en una API.
 
 ## Fuera de alcance

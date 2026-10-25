@@ -11,12 +11,36 @@ NUCLEO = (
     "measure_distance", "describe_operation", "run_operation", "undo", "save_document",
 )
 PROHIBIDAS = {"execute_code"}
+MODOS = ("explicar", "mostrar", "guiar", "hacer")
+# El catálogo dice que no modifican el documento, pero escriben en disco, tocan la biblioteca del usuario o la ventana.
+CON_EFECTOS = {
+    "save_document", "export", "export_mesh", "export_drawing", "export_flat_pattern_dxf", "export_animation_video",
+    "export_hidden_line_svg", "export_sketch", "export_parameters", "get_bill_of_materials", "render_image",
+    "run_graph", "discard_recoverable_document", "define_material", "delete_material", "create_sheet_metal_rule",
+    "delete_sheet_metal_rule", "add_font_folder", "decal_view", "set_browser_visibility", "sketch_view",
+}
+# Mostrar suma mover la cámara y elegir en la ventana (set_view figura como modifica, pero solo guarda la cámara).
+VISTA = {"set_view", "select_bodies", "select_entities", "find_in_window"}
+
+
+def en_modo(herramienta, modo):
+    """Regla única: Explicar solo lee; Mostrar lee, mueve la cámara y selecciona; Guiar y Hacer, todo."""
+    if modo in ("guiar", "hacer"):
+        return True
+    nombre = herramienta["nombre"]
+    lectura = not herramienta["modifica"] and nombre not in CON_EFECTOS and nombre not in VISTA
+    return lectura or (modo == "mostrar" and nombre in VISTA)
 
 
 class Herramientas:
-    def __init__(self, catalogo=None):
-        self.catalogo = {h["nombre"]: h for h in (api.catalogo() if catalogo is None else catalogo)
-                         if h["grupo"] != "dev" and h["nombre"] not in PROHIBIDAS}
+    def __init__(self, catalogo=None, modo="hacer"):
+        if modo not in MODOS:
+            raise ValueError(f"Modo inválido: {modo!r}. Modos: {', '.join(MODOS)}.")
+        self.modo = modo
+        base = [h for h in (api.catalogo() if catalogo is None else catalogo)
+                if h["grupo"] != "dev" and h["nombre"] not in PROHIBIDAS]
+        self.catalogo = {h["nombre"]: h for h in base if en_modo(h, modo)}
+        self.fuera_de_modo = {h["nombre"] for h in base} - set(self.catalogo)
         self.grupos = set()
         self.temas = sorted({h["grupo"] for h in self.catalogo.values()})
 

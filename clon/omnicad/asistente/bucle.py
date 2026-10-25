@@ -73,6 +73,10 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
                 except TypeError:
                     salida = error("INVALID_ARGUMENTS",
                                    "buscar_herramientas necesita solo el argumento tema (texto).").a_dict()
+            elif pedido.nombre in herramientas.fuera_de_modo:
+                salida = error("TOOL_NOT_AVAILABLE",
+                               f"La herramienta '{pedido.nombre}' no se puede usar en el modo {herramientas.modo}.",
+                               "Explicale a la persona qué harías y que cambie a modo Guiar o Hacer.").a_dict()
             elif not herramientas.permitida(pedido.nombre):
                 salida = error("TOOL_NOT_AVAILABLE", f"La herramienta '{pedido.nombre}' no está habilitada.",
                                "Usá buscar_herramientas(tema) para sumar las de un grupo.").a_dict()

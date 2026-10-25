@@ -26,6 +26,7 @@ include = ["omnicad*"]
 
 [tool.setuptools.package-data]
 "omnicad.api" = ["guia/*.md"]
+"omnicad.asistente" = ["prompts.json"]
 "omnicad" = ["integraciones/fusion/OmniCADPuente/*",   # complemento de Fusion (omnicad setup)
              "recursos/*", "recursos/ayuda/*"]         # ícono, portada e imágenes del globo de ayuda
 

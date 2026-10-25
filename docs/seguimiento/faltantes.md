@@ -312,15 +312,14 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 ## Asistente IA (chat dentro de la app)
 
-Abierto 7. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+Abierto 5 · Parcial 1. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Parcial | Media | Queda: streaming SSE (hoy la respuesta llega completa); prueba real con Ollama (no está instalado en esta PC); devolver los bloques de pensamiento de Claude entre vueltas; prueba paga solo con OK de Gerardo. | omnicad/asistente/proveedores/anthropic.py; omnicad/asistente/proveedores/openai_compat.py; tests/test_asistente_proveedores.py | 2026-10-25 |
-| IA-3 | Prompt de sistema del asistente: contexto del documento, modos Explicar/Mostrar/Guiar/Hacer y biblioteca de prompts | Abierto | Alta | Todo (fase 3). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-4 | Panel del Asistente, ícono, botón en la barra de la aplicación, Ayuda › Asistente y pestaña de Preferencias | Abierto | Media | Todo (fase 4). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-5 | Permisos del asistente: plan con Aplicar, «Deshacer este pedido», Cancelar con vuelta atrás y tope de gasto | Abierto | Alta | Todo (fase 5); relacionado con CL1. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
-| IA-6 | Asistente con la suscripción del usuario: Claude Code, Codex y OpenCode por el puente en vivo | Abierto | Alta | Todo (fase 6); espera decisión de Gerardo sobre Claude Code. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-6 | Asistente con la suscripción del usuario: Claude Code, Codex y OpenCode por el puente en vivo | Abierto | Alta | Todo (fase 6); Claude Code incluido (decisión de Gerardo, 2026-10-25). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-7 | Historial de chats del asistente y herramientas get/set_assistant_config y assistant_ask (MCP y CLI) | Abierto | Media | Todo (fase 7). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-8 | Respuestas de ayuda del asistente con la documentación local, citando la fuente | Abierto | Media | Todo (fase 8). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 
