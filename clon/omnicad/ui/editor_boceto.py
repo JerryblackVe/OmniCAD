@@ -38,7 +38,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
-from ..restricciones.inferencia import inferir
+from ..restricciones.inferencia import Inferencia, inferir
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
@@ -506,6 +506,7 @@ class Lienzo(QWidget):
         self.inferencia = None
         self.inf_actual = None
         self._inf_inicio = None
+        self._inf_lado = None
         self._inf_clics = []             # BOC-9: (xy, tipo, objetivo) de cada clic, para las herramientas que no son Línea
         self._eligiendo_punto = None     # BOC-5: {"lazo", "pid"} mientras se elige el datum en el lienzo
         self.perfiles_sel = []           # BOC-23: índices de los perfiles elegidos con un clic (orden de `detectar`)
@@ -1006,7 +1007,8 @@ class Lienzo(QWidget):
 
     def _guardar_inferencia_clic(self, pid, xy):
         """BOC-9: qué une el clic en `xy` (punto existente, punto medio o punto sobre una curva), para restringir el
-        punto que la herramienta cree ahí. La Línea lo hace por su cuenta (`_crear_linea`)."""
+        punto que la herramienta cree ahí. Línea, línea de punto medio y rectángulo 3p también restringen su lado;
+        círculo convierte el radio perpendicular en tangencia con la línea objetivo."""
         inf = self.inf_actual
         if pid is not None:
             union = ("coincidente", pid)
@@ -2816,6 +2818,27 @@ class Lienzo(QWidget):
         self._guardar_inferencia_clic(pid, xy)
         if bloqueos:
             self._post_crear = lambda nuevas: self._cotas_de_lo_escrito(h, bloqueos, nuevas, previa)
+        if h == "rectangulo_3p" and n == 1:
+            self._inf_lado = self.inf_actual
+            if self._inf_lado is not None and self._inf_lado.tipo in ("horizontal", "vertical") and not self.inferencia:
+                self._inf_lado = None
+        if (h in ("linea_medio", "circulo") and n == 1) or (h == "rectangulo_3p" and n == 2):
+            inf = self._inf_lado if h == "rectangulo_3p" else self.inf_actual
+            if h == "circulo":
+                inf = (Inferencia("tangente", inf.xy, inf.objetivo, ("tangente", inf.objetivo))
+                       if inf is not None and inf.tipo == "perpendicular" else None)
+            elif h == "linea_medio" and inf is not None and inf.tipo in ("horizontal", "vertical") and not self.inferencia:
+                inf = None
+            if inf is not None and inf.tipo in ("horizontal", "vertical", "tangente", "perpendicular"):
+                post_crear = self._post_crear
+
+                def restringir(nuevas):
+                    if post_crear is not None:
+                        post_crear(nuevas)
+                    curva = self.b.curvas[nuevas[0]]
+                    self._restringir_inferencias(curva.id, [(curva.p2 if isinstance(curva, Linea) else None, inf)])
+
+                self._post_crear = restringir
         self.clics.append((pid, xy))
         try:
             self._procesar_clics()

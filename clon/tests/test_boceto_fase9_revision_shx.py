@@ -98,3 +98,27 @@ def test_contorno_giro_muchas_aristas_rapido_y_correcto():
     res = contorno_giro.contorno_exterior(prims, ((0.0, 0.0), (1.0, 0.0)))
     assert time.perf_counter() - t0 < 2
     assert res and math.isclose(max(max(p[2][1], p[3][1]) for p in res), n + 1)
+
+
+def test_boc32_shx_puntos_acumulados_por_fuente(monkeypatch):
+    monkeypatch.setattr(shx, "TOPE_PUNTOS_FUENTE", 500_000, raising=False)
+    glifos = _puntos_explosivos() | {c: bytes([7, 0, 8]) for c in range(100, 160)}
+    f = shx.leer_bytes(_unifont(glifos))
+    t0 = time.perf_counter()
+    primero = f.glifo(100)
+    assert primero[0]
+    acumulados = sum(len(t) for t in primero[0])
+    vacios = 0
+    for codigo in range(101, 160):
+        glifo = f.glifo(codigo)
+        if acumulados > shx.TOPE_PUNTOS_FUENTE:
+            assert glifo == ([], 0.0)
+            assert f.glifo(codigo) is glifo
+            vacios += 1
+        else:
+            assert glifo[0]
+        acumulados += sum(len(t) for t in glifo[0])
+        assert acumulados <= shx.TOPE_PUNTOS_FUENTE + shx.TOPE_PUNTOS
+    assert vacios > 0
+    assert f.glifo(100) is primero
+    assert time.perf_counter() - t0 < 5

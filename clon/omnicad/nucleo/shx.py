@@ -20,6 +20,7 @@ from pathlib import Path
 TOPE_ARCHIVO = 16 * 1024 * 1024
 TOPE_PASOS = 100_000            # comandos por letra (corta ciclos y archivos hechos para colgar)
 TOPE_PUNTOS = 200_000           # puntos por letra (un arco o una subforma repetida multiplica los puntos por comando)
+TOPE_PUNTOS_FUENTE = 2_000_000  # puntos acumulados en los glifos de una fuente
 TOPE_ESCALA = 1e6               # la escala (÷ / ×) no puede irse a infinito
 PROFUNDIDAD = 8                 # subformas anidadas
 _UNI = b"AutoCAD-86 unifont 1.0\r\n\x1a"
@@ -80,6 +81,7 @@ class FuenteSHX:
         self._formas = formas            # {código: bytes de comandos}
         self._ancho_sub = ancho_sub      # bytes del número de subforma (unifont 2, shapes 1)
         self._cache = {}
+        self._puntos = 0
 
     def codigos(self):
         return [c for c in self._formas if c != 0]
@@ -88,10 +90,14 @@ class FuenteSHX:
         if codigo not in self._formas or codigo == 0:
             return None
         if codigo not in self._cache:
+            if self._puntos > TOPE_PUNTOS_FUENTE:
+                self._cache[codigo] = ([], 0.0)
+                return self._cache[codigo]
             est = _Estado()
             try:
                 self._ejecutar(codigo, est, 0)
                 self._cache[codigo] = ([t for t in est.trazos if len(t) > 1], est.x)
+                self._puntos += sum(len(t) for t in self._cache[codigo][0])
             except (IndexError, ValueError, RecursionError):
                 self._cache[codigo] = ([], 0.0)
         return self._cache[codigo]

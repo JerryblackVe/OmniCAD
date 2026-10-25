@@ -70,4 +70,4 @@ de los propios faltantes.
 
 Fases 0 a 8 ejecutadas el 2026-10-24 (commits `33058e8` a la Fase 8). Lo que queda de cada ítem vive en `docs/seguimiento/` (filas `Parcial` con su «Queda»).
 
-Fase 9 (cierre) ejecutada el 2026-10-24: cerró BOC-5, 9, 14, 16, 17, 18, 19, 20, 21, 23, 29 y FU-1; queda BOC-31 en `docs/seguimiento/mejoras.md`; BOC-28 se cerró después (2026-10-24) con el módulo Rust de perfiles.
+Fase 9 (cierre) ejecutada el 2026-10-24: cerró BOC-5, 9, 14, 16, 17, 18, 19, 20, 21, 23, 29 y FU-1; BOC-31 y BOC-32 se cerraron después (2026-10-25); BOC-28 se cerró después (2026-10-24) con el módulo Rust de perfiles.

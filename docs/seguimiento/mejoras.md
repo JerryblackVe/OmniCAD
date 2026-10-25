@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 120: Abierto 63 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 118: Abierto 61 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -133,12 +133,10 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 2 · Parcial 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+Sin pendientes. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-31 | Restricciones de curva inferidas (tangente, perpendicular, horizontal/vertical) en todas las herramientas | Abierto | Baja | Con BOC-9 cada herramienta une los puntos inferidos (coincidente, punto medio, punto sobre curva), pero la tangente, la perpendicular y horizontal/vertical como restricción entre curvas solo se agregan sola con la herramienta Línea. | omnicad/ui/editor_boceto.py (`_restringir_clics`, `_guardar_inferencia_clic`) | 2026-10-24 |
-| BOC-32 | Tope de memoria por fuente en el lector de `.shx` | Abierto | Baja | El tope de 200 000 puntos es por letra, no por fuente: un `.shx` de 16 MB con miles de formas que llaman a una forma enorme, y un texto de 100 caracteres distintos, arma unos 2 GB (dos veces: la caché de `shx.py` y la copia escalada de `fuentes.py`). Poner un contador de puntos por fuente en `FuenteSHX` (tope ~2 millones; pasado el tope, las letras nuevas salen vacías) y un test. | omnicad/nucleo/shx.py (`TOPE_PUNTOS`, `_cache`); omnicad/nucleo/fuentes.py:339-352 | 2026-10-24 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
