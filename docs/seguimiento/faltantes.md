@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 216: Abierto 163 · Parcial 32 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 216: Abierto 164 · Parcial 31 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -312,14 +312,14 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 ## Asistente IA (chat dentro de la app)
 
-Abierto 2 · Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+Abierto 3 · Parcial 1. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Parcial | Media | Queda: streaming SSE (hoy la respuesta llega completa); prueba real con Ollama (no está instalado en esta PC); devolver los bloques de pensamiento de Claude entre vueltas; prueba paga solo con OK de Gerardo. | omnicad/asistente/proveedores/anthropic.py; omnicad/asistente/proveedores/openai_compat.py; tests/test_asistente_proveedores.py | 2026-10-25 |
-| IA-6 | Asistente con la suscripción del usuario: Claude Code, Codex y OpenCode por el puente en vivo | Parcial | Alta | Queda: prueba real con Claude Code (el 2026-10-25 su login OAuth estaba vencido en esta PC: el panel mostró el aviso de login) y con Codex (no está instalado; sus flags y eventos salen de la doc, incluido «exec resume»); OpenCode manda las 319 herramientas al modelo (~89 mil tokens de entrada por paso): limitar por modo. | omnicad/asistente/proveedores/agente_local.py; ui/asistente.py (_filtro_en_vivo); ui/puente.py (filtro); tests/test_asistente_agente_local.py; prueba real OpenCode en evidencias/ia6_2026-10-25/real_opencode.json | 2026-10-25 |
 | IA-7 | Historial de chats del asistente y herramientas get/set_assistant_config y assistant_ask (MCP y CLI) | Abierto | Media | Todo (fase 7). | ui/asistente.py: «Historial de chats» grisado; grep assistant_ask sin resultados en omnicad/api/ | 2026-10-25 |
 | IA-8 | Respuestas de ayuda del asistente con la documentación local, citando la fuente | Abierto | Media | Todo (fase 8). | grep fusion_docs sin resultados en omnicad/asistente/ | 2026-10-25 |
+| IA-9 | Adjuntos en el chat del asistente: clip para PDF, imágenes, SVG y DXF, hasta 10, pegar del portapapeles | Abierto | Alta | Todo (fase 9 del plan; pedido de Gerardo del 2026-10-25). | grep adjunt sin resultados en omnicad/ui/asistente.py | 2026-10-25 |
 
 ## SolidCraft
 

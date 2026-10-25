@@ -69,6 +69,8 @@ def _parser():
     p.add_argument("--doc", metavar="RUTA", help="proyecto .omnicad para abrir al arrancar (implica --modo sin_ventana)")
     p.add_argument("--toolsets", metavar="LISTA", help="grupos de herramientas separados por coma "
                    f"(por defecto: {','.join(GRUPOS_POR_DEFECTO)})")
+    p.add_argument("--tools", metavar="LISTA", help="solo estas herramientas, por nombre y separadas por coma (dentro "
+                   "de los grupos activos); la usa el Asistente para darle al CLI una lista corta")
     p.add_argument("--dev", action="store_true", help="suma el grupo 'dev' (herramientas de desarrollo)")
     p.add_argument("--http", action="store_true", help=f"servir por HTTP en {HOST} en vez de stdio "
                    f"(exige token: se genera uno por arranque y queda en {NOMBRE_INFO_HTTP}, "
@@ -105,6 +107,13 @@ def main(argv=None):
         if desconocidos or not toolsets:
             parser.error(f"toolsets desconocidos: {', '.join(desconocidos) or '(vacío)'}. "
                          f"Válidos: {', '.join(GRUPOS_CONOCIDOS)}")
+    herramientas = None
+    if args.tools is not None:
+        herramientas = [t.strip() for t in args.tools.split(",") if t.strip()]
+        conocidas = {h["nombre"] for h in api.catalogo()}
+        desconocidas = [t for t in herramientas if t not in conocidas]
+        if desconocidas or not herramientas:
+            parser.error(f"herramientas desconocidas en --tools: {', '.join(desconocidas) or '(vacío)'}")
     sesion = api.Sesion()
     if args.doc:
         try:
@@ -112,7 +121,7 @@ def main(argv=None):
         except Exception as e:  # noqa: BLE001 — cualquier falla al abrir corta el arranque con un mensaje claro
             _log(f"omnicad-mcp: no se pudo abrir --doc {args.doc}: {getattr(e, 'mensaje', e)}")
             return 2
-    servidor = crear_servidor(sesion, toolsets, args.dev, args.log_level, modo=modo)
+    servidor = crear_servidor(sesion, toolsets, args.dev, args.log_level, modo=modo, herramientas=herramientas)
     try:
         if args.http:
             puerto = args.port or PUERTO_POR_DEFECTO

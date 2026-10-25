@@ -184,15 +184,18 @@ def _registrar_prompts(servidor):
         return textos.revisar_diseno()
 
 
-def crear_servidor(sesion=None, toolsets=None, dev=False, log_level="WARNING", modo="sin_ventana", cliente=None):
+def crear_servidor(sesion=None, toolsets=None, dev=False, log_level="WARNING", modo="sin_ventana", cliente=None,
+                   herramientas=None):
     """Arma el servidor. `toolsets`: grupos a exponer (por defecto todos menos `dev`); `dev=True` suma `dev`.
     `modo`: "sin_ventana" (por defecto acá: determinista para pruebas y scripts), "vivo" o "auto" (ver arriba);
-    `cliente`: un `ClientePuente` propio (p. ej. con otro puente.json)."""
+    `cliente`: un `ClientePuente` propio (p. ej. con otro puente.json); `herramientas`: nombres (None = todas las
+    de los grupos)."""
     grupos = list(toolsets) if toolsets else list(GRUPOS_POR_DEFECTO)
     if dev and "dev" not in grupos:
         grupos.append("dev")
+    catalogo = [h for h in api.catalogo(grupos) if herramientas is None or h["nombre"] in herramientas]
     servidor = ServidorOmniCAD(
-        sesion if sesion is not None else api.Sesion(), api.catalogo(grupos), modo=modo, cliente=cliente,
+        sesion if sesion is not None else api.Sesion(), catalogo, modo=modo, cliente=cliente,
         name="omnicad", title="OmniCAD", version=VERSION, instructions=textos.instrucciones(),
         log_level=log_level)
     _registrar_recursos(servidor)

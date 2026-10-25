@@ -195,34 +195,47 @@ def test_cli_que_falla_sin_json_muestra_stderr(lanzar):
 
 
 # ---------------------------------------------------------------- argumentos: modo, sin token, pedido por stdin
+def tools_del_mcp(args):
+    """La lista que recibe `omnicad-mcp --tools` (lo único que el CLI ve de OmniCAD)."""
+    return args[args.index("--tools") + 1].split(",")
+
+
+def test_lista_corta_por_modo_reusa_la_regla_de_herramientas():
+    for modo in ("explicar", "mostrar", "guiar", "hacer"):
+        lista = Herramientas(modo=modo).para_cli()
+        assert set(lista) <= set(Herramientas(modo=modo).catalogo) and "get_guide" in lista
+        assert "execute_code" not in lista and "describe_operation" in lista
+    assert "create_box" not in Herramientas(modo="explicar").para_cli()
+    assert "set_view" in Herramientas(modo="mostrar").para_cli()
+    assert {"run_operation", "create_box", "extrude"} <= set(Herramientas(modo="hacer").para_cli())
+
+
 def test_claude_argumentos_segun_modo_y_sin_token_ni_pedido(lanzar):
     a = AgenteLocal("claude_code", modelo="sonnet")
+    a.carpeta_puente = "D:/puente del panel"
     correr(a, lanzar, ProcesoFalso(CLAUDE), modo="explicar", texto="borrá todo & del C:")
     lanzado = lanzar[-1]
     argv = lanzado["argv"]
-    permitidas = argv[argv.index("--allowedTools") + 1].split(",")
-    assert permitidas == ["mcp__omnicad__" + n for n in sorted(Herramientas(modo="explicar").catalogo)]
-    assert "mcp__omnicad__create_box" not in permitidas and "mcp__omnicad__get_scene_info" in permitidas
-    assert argv[argv.index("--disallowedTools") + 1] == "mcp__omnicad__execute_code"
+    assert argv[argv.index("--allowedTools") + 1] == "mcp__omnicad"       # el servidor ya expone solo las del modo
     assert argv[argv.index("--tools") + 1] == "" and "--strict-mcp-config" in argv
     assert argv[argv.index("--model") + 1] == "sonnet" and "--resume" not in argv
     mcp = json.loads(lanzado["archivos"]["mcp.json"])["mcpServers"]["omnicad"]
-    assert mcp["args"][-2:] == ["--modo", "vivo"] and mcp["command"] == sys.executable
+    assert mcp["args"][:4] == ["-m", "omnicad.servidor_mcp", "--modo", "vivo"] and mcp["command"] == sys.executable
+    assert tools_del_mcp(mcp["args"]) == Herramientas(modo="explicar").para_cli()
+    assert mcp["env"] == {"OMNICAD_PUENTE_DIR": "D:/puente del panel"}   # el puente que preparó el panel
     assert lanzado["archivos"]["sistema.md"] == "SISTEMA DE PRUEBA"
     todo = json.dumps([argv, lanzado["archivos"], {k: v for k, v in lanzado["kw"]["env"].items()
                                                    if k != "OMNICAD_PUENTE_DIR"}])
     assert TOKEN not in todo                                  # el token lo lee omnicad-mcp de puente.json
     assert "borrá todo" not in json.dumps(argv)                # el pedido va por stdin, nunca por cmd.exe
     assert lanzado["proceso"].stdin.getvalue().decode() == "borrá todo & del C:"
-    # Hacer: la regla de servidor entero (la lista no entra en los 8191 caracteres de cmd.exe) y sigue el chat
-    correr(a, lanzar, ProcesoFalso(CLAUDE), modo="hacer")
+    correr(a, lanzar, ProcesoFalso(CLAUDE), modo="hacer")      # sigue el chat
     argv = lanzar[-1]["argv"]
-    assert argv[argv.index("--allowedTools") + 1] == "mcp__omnicad"
     assert argv[argv.index("--resume") + 1] == "uuid-1"
-    assert sum(len(x) + 3 for x in argv) < 8191
+    assert sum(len(x) + 3 for x in argv) < 8191                # tope de cmd.exe (claude.cmd)
 
 
-def test_opencode_config_en_linea_con_permisos_del_modo(lanzar):
+def test_opencode_config_en_linea_con_la_lista_del_modo(lanzar):
     a = AgenteLocal("opencode", modelo="openai/gpt-6.1-sol", variante="high")
     correr(a, lanzar, ProcesoFalso(OPENCODE), modo="mostrar")
     lanzado = lanzar[-1]
@@ -230,29 +243,59 @@ def test_opencode_config_en_linea_con_permisos_del_modo(lanzar):
     assert argv[1:4] == ["run", "--format", "json"] and argv[argv.index("--variant") + 1] == "high"
     assert argv[argv.index("-m") + 1] == "openai/gpt-6.1-sol" and argv[argv.index("--agent") + 1] == "omnicad"
     cfg = json.loads(lanzado["kw"]["env"]["OPENCODE_CONFIG_CONTENT"])
-    permisos = cfg["agent"]["omnicad"]["permission"]
-    assert list(permisos)[0] == "*" and permisos["*"] == "deny" and permisos["omnicad_execute_code"] == "deny"
-    assert "omnicad_*" not in permisos and "omnicad_create_box" not in permisos
-    assert permisos["omnicad_set_view"] == "allow"            # Mostrar mueve la cámara
+    assert list(cfg["agent"]["omnicad"]["permission"].items()) == [("*", "deny"), ("omnicad_*", "allow")]
     assert cfg["agent"]["omnicad"]["prompt"] == "SISTEMA DE PRUEBA"
-    assert cfg["mcp"]["omnicad"]["command"][-2:] == ["--modo", "vivo"] and TOKEN not in json.dumps(cfg)
+    comando = cfg["mcp"]["omnicad"]["command"]
+    assert tools_del_mcp(comando) == Herramientas(modo="mostrar").para_cli() and TOKEN not in json.dumps(cfg)
+    assert cfg["mcp"]["omnicad"]["environment"] == {"OMNICAD_PUENTE_DIR": os.environ["OMNICAD_PUENTE_DIR"]}
     correr(a, lanzar, ProcesoFalso(OPENCODE), modo="guiar")
-    argv = lanzar[-1]["argv"]
-    assert argv[argv.index("-s") + 1] == "ses_A1"
-    assert json.loads(lanzar[-1]["kw"]["env"]["OPENCODE_CONFIG_CONTENT"])["agent"]["omnicad"]["permission"][
-        "omnicad_*"] == "allow"
+    assert lanzar[-1]["argv"][lanzar[-1]["argv"].index("-s") + 1] == "ses_A1"
 
 
-def test_codex_argumentos_con_herramientas_del_modo(lanzar):
+def test_codex_argumentos_coinciden_con_su_help(lanzar):
     a = AgenteLocal("codex")
     correr(a, lanzar, ProcesoFalso(CODEX), modo="explicar")
     argv = lanzar[-1]["argv"]
-    assert argv[1:3] == ["exec", "--json"] and argv[-1] == "-"
-    habilitadas = next(x for x in argv if x.startswith("mcp_servers.omnicad.enabled_tools="))
-    assert json.loads(habilitadas.split("=", 1)[1]) == sorted(Herramientas(modo="explicar").catalogo)
+    # `codex exec --help` (codex-cli 0.164.0-alpha.11.1): --json, --skip-git-repo-check, -c; prompt «-» = stdin
+    assert argv[1:4] == ["exec", "--json", "--skip-git-repo-check"] and argv[-1] == "-"
+    assert 'sandbox_mode="read-only"' in argv and "--sandbox" not in argv
+    # Codex no le pasa el entorno al MCP: la carpeta del puente va explícita (si no, iría a otra OmniCAD abierta)
+    assert f"mcp_servers.omnicad.env={{OMNICAD_PUENTE_DIR = {json.dumps(os.environ['OMNICAD_PUENTE_DIR'])}}}" in argv
+    assert 'mcp_servers.omnicad.default_tools_approval_mode="approve"' in argv   # aprueba la tarjeta del panel
+    args = json.loads(next(x for x in argv if x.startswith("mcp_servers.omnicad.args=")).split("=", 1)[1])
+    assert tools_del_mcp(args) == Herramientas(modo="explicar").para_cli()
     correr(a, lanzar, ProcesoFalso(CODEX), modo="hacer")
     argv = lanzar[-1]["argv"]
-    assert 'mcp_servers.omnicad.disabled_tools=["execute_code"]' in argv and argv[-3:] == ["resume", "0199a213-81c0", "-"]
+    # `codex exec resume --help`: [OPTIONS] [SESSION_ID] [PROMPT]; resume no acepta --sandbox
+    assert argv[1:3] == ["exec", "resume"] and argv[-2:] == ["0199a213-81c0", "-"]
+
+
+def test_codex_de_la_store_fuera_del_path(monkeypatch, tmp_path):
+    exe = tmp_path / "OpenAI.Codex_1.2.3_x64__abc" / "app" / "resources" / "codex.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    llamadas = []
+
+    def run(argv, **kw):
+        llamadas.append(argv)
+        return agente_local.subprocess.CompletedProcess(argv, 0, (str(exe.parents[2]) + "\r\n").encode(), b"")
+
+    monkeypatch.setattr(agente_local.shutil, "which", lambda nombre: None)
+    monkeypatch.setattr(agente_local.os, "name", "nt")
+    monkeypatch.setattr(agente_local.subprocess, "run", run)
+    agente_local.codex_de_la_store.cache_clear()
+    try:
+        assert agente_local.ejecutable("codex") == str(exe)
+        assert agente_local.ejecutable("codex") == str(exe) and len(llamadas) == 1   # PowerShell una sola vez
+        assert llamadas[0][0] == "powershell" and "Get-AppxPackage -Name OpenAI.Codex" in llamadas[0][-1]
+        assert agente_local.ejecutable("claude_code") is None and len(llamadas) == 1  # solo para Codex
+        assert agente_local.ejecutable("codex", "D:/otro/codex.exe") is None          # ruta de Preferencias: manda
+        agente_local.codex_de_la_store.cache_clear()
+        monkeypatch.setattr(agente_local.subprocess, "run",
+                            lambda argv, **kw: agente_local.subprocess.CompletedProcess(argv, 0, b"\r\n", b""))
+        assert agente_local.ejecutable("codex") is None                               # sin la app de la Store
+    finally:
+        agente_local.codex_de_la_store.cache_clear()
 
 
 def test_archivos_temporales_se_borran_al_terminar(lanzar):
@@ -396,6 +439,7 @@ def test_puente_temporal_tarjeta_aplicar_y_sesion(ventana):
     assert [r["ok"] for r in agente.respuestas] == [True, True, True] and len(ventana.doc.operaciones) == 2
     assert not p.puente.activo and not archivo.exists() and p.puente.filtro is None   # se apagó al terminar
     assert p._sesiones == {"claude_code": "sesion-claude-1"}
+    assert agente.carpeta_puente == os.path.dirname(archivo)   # el CLI va al puente que encendió el panel
     pedir(ventana, agente, "hacer", "aplicar")
     assert agente.sesiones[-1] == "sesion-claude-1"   # el segundo pedido sigue el chat del CLI
     p.nuevo_chat()

@@ -32,6 +32,10 @@ En Preferencias › Asistente IA, los proveedores «Claude Code (tu suscripción
 - Durante el pedido el puente tiene un **filtro** (`PuenteAgentes.filtro`): las herramientas que el modo del Asistente
   no permite vuelven `TOOL_NOT_AVAILABLE`, y las que cambian algo pasan por la tarjeta Aplicar del panel (rechazar
   vuelve `CANCELLED`). Vale para cualquier agente conectado al puente mientras dura el pedido.
+- El CLI ve una lista corta (`omnicad-mcp --tools`): el núcleo, `get_guide` y las de vista que permita el modo; las
+  demás operaciones siguen al alcance con `describe_operation` y `run_operation`. La carpeta del `puente.json` va
+  explícita en la config del MCP (Codex no le pasa el entorno).
+- Codex de la Microsoft Store queda fuera del PATH: OmniCAD lo encuentra preguntándole a Windows (`Get-AppxPackage`).
 - Código: `clon/omnicad/asistente/proveedores/agente_local.py`.
 
 ## Cómo se protege

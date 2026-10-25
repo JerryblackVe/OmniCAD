@@ -118,6 +118,7 @@ asistente/herramientas.py: núcleo fijo + buscar_herramientas, desde api.catalog
   «✗ fillet: OPERATION_FAILED»); miniaturas del visor; tarjeta de **plan** con Aplicar / Cancelar en modo Hacer;
   pie con tokens y costo.
 - **Ventana chica**: tiene que entrar en 1024×640 y 800×520 (regla de prueba 8).
+- **Adjuntos** (pedido de Gerardo, 2026-10-25): botón con ícono de clip al lado del campo para subir **PDF, imágenes (PNG, JPG), vectores (SVG) y DXF**; **hasta 10 adjuntos** por mensaje; **Ctrl+V pega una imagen del portapapeles** en el campo; también arrastrar y soltar. Cada adjunto se ve como una ficha chica (miniatura o ícono, nombre, ✕ para quitarlo) arriba del campo. Detalle en la fase 9.
 - **Preferencias › Asistente IA**: proveedor, modelo, esfuerzo, clave (campo oculto + «Probar conexión»), modo por
   defecto, tope de gasto, «mandar imágenes del visor» (sí/no), ruta del ejecutable para Claude Code / Codex /
   OpenCode (autodetectada).
@@ -173,6 +174,7 @@ instrucción: defensa contra inyección de prompt.
 | 6 | IA-6 | Suscripción vía agente local: Claude Code, Codex y OpenCode por el puente en vivo, eventos JSON al panel | `asistente/proveedores/agente_local.py` | Opus, alto | Con `claude` y `opencode` de esta PC: un pedido modifica la ventana y el panel muestra cada herramienta; sin el ejecutable, mensaje claro |
 | 7 | IA-7 | Historial de chats, herramientas `get/set_assistant_config` y `assistant_ask`, doc regenerada | `asistente/historial.py`, `api/herramientas_asistente.py`, `servidor_mcp/servidor.py`, `docs/agentes/` | Sonnet, medio | Reabrir un chat viejo; `omnicad assistant_ask` anda sin ventana; `test_doc_agentes` y test de que la clave no aparece en ningún archivo |
 | 8 | IA-8 | Respuestas de ayuda («¿cómo se hace…?») con la documentación local de OmniCAD, citando la fuente | `asistente/ayuda.py` | Sonnet, medio | Busca en `docs/guia_comandos.md`, `api/guia/` y `docs/agentes/herramientas.md`; cada respuesta cita archivo |
+| 9 | IA-9 | Adjuntos en el chat: ícono de clip, PDF, imágenes, SVG y DXF, hasta 10 por mensaje, pegar imagen del portapapeles (Ctrl+V) y arrastrar y soltar | `ui/asistente.py`, `asistente/adjuntos.py`, `asistente/proveedores/` | Opus, alto | La IA recibe cada adjunto: imágenes como imagen; PDF como documento nativo (Anthropic `document`, OpenAI `file`) o aviso claro si el proveedor no lo acepta; SVG y DXF con una vista previa en imagen más su ruta, para que pueda usar `insert_svg` / `insert_dxf`; el 11.º adjunto se rechaza con mensaje; tope de tamaño por archivo y solo extensiones permitidas (archivos de otros: validar, nunca ejecutar); en modo suscripción, la ruta en el pedido; prueba de usuario con clic en el clip, Ctrl+V de una imagen y arrastre |
 
 ## Orden y dependencias
 
@@ -181,6 +183,7 @@ instrucción: defensa contra inyección de prompt.
 - **4** puede empezar junto con 2 (archivos distintos), contra el proveedor falso.
 - **5** después de 4 (usa el panel). **6** después de 4 (dibuja en el panel) y de la decisión de Gerardo.
 - **7 y 8** al final, en cualquier orden.
+- **9** (adjuntos) después de 7: usa el panel y los proveedores ya cerrados.
 
 ## Pendiente de decidir (Gerardo)
 

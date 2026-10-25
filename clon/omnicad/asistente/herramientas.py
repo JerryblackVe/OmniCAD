@@ -68,6 +68,11 @@ class Herramientas:
         return self.modo in ("guiar", "hacer") and nombre in self.catalogo and not en_modo(self.catalogo[nombre],
                                                                                             "mostrar")
 
+    def para_cli(self):
+        """Lo que reciben los CLI del modo suscripción (no tienen buscar_herramientas): el núcleo, get_guide y las de
+        vista que permita el modo. Las demás operaciones siguen al alcance con describe_operation y run_operation."""
+        return sorted(n for n in {*NUCLEO, "get_guide", *VISTA} if n in self.catalogo)
+
     def permitida(self, nombre):
         """Indica si la herramienta del catálogo está ofrecida (buscar_herramientas la atiende el bucle)."""
         return nombre in self.catalogo and (nombre in NUCLEO or self.catalogo[nombre]["grupo"] in self.grupos)

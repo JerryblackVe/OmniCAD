@@ -15,6 +15,7 @@ trabajo espera la respuesta. Antes de cada pedido se toma una marca del document
 a ella, y al terminar «Deshacer este pedido» también (si después no cambiaste nada a mano).
 """
 import json
+import os
 import threading
 
 from PySide6.QtCore import QEventLoop, QObject, Qt, QTimer, Signal, Slot
@@ -473,6 +474,7 @@ class PanelAsistente(QDockWidget):
             return False
         vivo.filtro = self._filtro_en_vivo
         self._puente_vivo = vivo
+        proveedor.carpeta_puente = os.path.dirname(vivo.archivo)   # el CLI va a ESTE puente, no a otra OmniCAD abierta
         proveedor.sesion = self._sesiones.get(proveedor.tipo)
         return True
 

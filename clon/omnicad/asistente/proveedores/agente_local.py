@@ -11,6 +11,7 @@ de herramientas, rutas temporales y modelos/sesiones validados con `SEGURO`.
 """
 import base64
 import binascii
+import functools
 import json
 import os
 import re
@@ -23,6 +24,7 @@ import time
 from collections import deque
 
 from omnicad import api
+from omnicad.api import protocolo_puente
 
 from ..herramientas import Herramientas
 from .base import ErrorProveedor
@@ -46,7 +48,28 @@ else:
 
 def ejecutable(tipo, ruta=""):
     """Ruta completa del CLI (la de Preferencias o la del PATH); None si no está."""
-    return shutil.which((ruta or "").strip() or AGENTES[tipo][1])
+    ruta = (ruta or "").strip()
+    encontrado = shutil.which(ruta or AGENTES[tipo][1])
+    if encontrado is None and not ruta and tipo == "codex" and os.name == "nt":
+        encontrado = codex_de_la_store()
+    return encontrado
+
+
+@functools.cache
+def codex_de_la_store():
+    """Codex de la app de la Microsoft Store: queda fuera del PATH, en la carpeta del paquete (su versión cambia con
+    cada actualización, así que se pregunta a Windows). Una sola vez por sesión: PowerShell tarda ~1 s."""
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            "(Get-AppxPackage -Name OpenAI.Codex).InstallLocation"],
+                           capture_output=True, stdin=subprocess.DEVNULL, timeout=15, **LANZAR)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for carpeta in r.stdout.decode("utf-8", "replace").splitlines():
+        ruta = os.path.join(carpeta.strip(), "app", "resources", "codex.exe")
+        if carpeta.strip() and os.path.isfile(ruta):
+            return ruta
+    return None
 
 
 def matar(proceso):
@@ -107,6 +130,7 @@ class AgenteLocal:
         self.modelo, self.variante = modelo or "", variante or ""
         self.sesion = None
         self.proceso = None     # el CLI del pedido en curso (el panel lo mata al cancelar o cerrar la app)
+        self.carpeta_puente = None   # la del puente.json que preparó el panel (None = la de siempre)
 
     def version(self):
         """`<cli> --version` (Preferencias › Probar conexión): confirma que está instalado; el login lo ve el pedido."""
@@ -118,34 +142,32 @@ class AgenteLocal:
     # ------------------------------------------------------------ cómo se lanza cada CLI
     def argumentos(self, modo, carpeta, sistema):
         """Línea de comandos (lista, sin shell) y variables de entorno extra. `sistema` ya está en `carpeta`."""
-        herramientas = Herramientas(modo=modo)
-        permitidas = sorted(herramientas.catalogo)
-        todas = modo in ("guiar", "hacer")    # en Guiar y Hacer los cambios los frena la tarjeta Aplicar del panel
+        # El servidor MCP expone SOLO las del CLI (--tools): los tres CLI ven la misma lista, sin listas por CLI ni el
+        # tope de 8191 caracteres de cmd.exe; los cambios igual los frena la tarjeta Aplicar del panel.
+        mcp = MCP + ["--tools", ",".join(Herramientas(modo=modo).para_cli())]
+        # Explícita en la config del MCP: Codex no le pasa el entorno, y sin esto omnicad-mcp podría ir al puente.json
+        # de OTRA OmniCAD abierta (pasó el 2026-10-25 en la prueba real de Codex).
+        entorno = {protocolo_puente.VARIABLE_CARPETA: str(self.carpeta_puente or protocolo_puente.carpeta_info())}
         if self.sesion is not None and not SEGURO.match(self.sesion):
             self.sesion = None
         if self.tipo == "claude_code":
             ruta_mcp = os.path.join(carpeta, "mcp.json")
             with open(ruta_mcp, "w", encoding="utf-8") as f:
-                json.dump({"mcpServers": {"omnicad": {"command": MCP[0], "args": MCP[1:]}}}, f)
-            # con todas las herramientas, la lista explícita pasaría el tope de 8191 caracteres de cmd.exe
-            reglas = "mcp__omnicad" if todas else ",".join("mcp__omnicad__" + n for n in permitidas)
+                json.dump({"mcpServers": {"omnicad": {"command": mcp[0], "args": mcp[1:], "env": entorno}}}, f)
             argv = [self.ruta, "-p", "--output-format", "stream-json", "--verbose", "--mcp-config", ruta_mcp,
-                    "--strict-mcp-config", "--tools", "", "--allowedTools", reglas,
-                    "--disallowedTools", "mcp__omnicad__execute_code", "--permission-prompts", "none",
-                    "--append-system-prompt-file", sistema]
+                    "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__omnicad",
+                    "--permission-prompts", "none", "--append-system-prompt-file", sistema]
             argv += ["--model", self.modelo] if self.modelo else []
             argv += ["--resume", self.sesion] if self.sesion else []
             return argv, {"MCP_TOOL_TIMEOUT": str(ESPERA_HERRAMIENTA * 1000)}
         if self.tipo == "opencode":
             with open(sistema, encoding="utf-8") as f:
                 prompt = f.read()
-            # «*» primero y lo permitido después: en OpenCode gana la última regla que coincide
-            permisos = {"*": "deny", **({"omnicad_*": "allow"} if todas else
-                                        {"omnicad_" + n: "allow" for n in permitidas}),
-                        "omnicad_execute_code": "deny"}
-            config = {"mcp": {"omnicad": {"type": "local", "command": MCP, "enabled": True,
+            config = {"mcp": {"omnicad": {"type": "local", "command": mcp, "enabled": True, "environment": entorno,
                                           "timeout": ESPERA_HERRAMIENTA * 1000}},
-                      "agent": {"omnicad": {"mode": "primary", "prompt": prompt, "permission": permisos,
+                      # «*» primero: en OpenCode gana la última regla que coincide
+                      "agent": {"omnicad": {"mode": "primary", "prompt": prompt,
+                                            "permission": {"*": "deny", "omnicad_*": "allow"},
                                             # solo las de OmniCAD en el contexto: los MCP del usuario no gastan tokens
                                             "tools": {"*": False, "omnicad_*": True}}}}
             argv = [self.ruta, "run", "--format", "json", "--agent", "omnicad", "--title", "OmniCAD"]
@@ -154,16 +176,20 @@ class AgenteLocal:
             argv += ["-s", self.sesion] if self.sesion else []
             # config en línea (encima de la del usuario, sin tocar su archivo global)
             return argv, {"OPENCODE_CONFIG_CONTENT": json.dumps(config, ensure_ascii=False)}
-        herramientas_codex = (f"mcp_servers.omnicad.disabled_tools={json.dumps(['execute_code'])}" if todas else
-                              f"mcp_servers.omnicad.enabled_tools={json.dumps(permitidas)}")
-        argv = [self.ruta, "exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only",
+        # `exec resume` no acepta --sandbox: el sandbox va por -c y las opciones después del subcomando
+        argv = [self.ruta, "exec", *(["resume"] if self.sesion else []), "--json", "--skip-git-repo-check",
+                "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"',
                 "-c", f"model_instructions_file={json.dumps(sistema)}",
-                "-c", f"mcp_servers.omnicad.command={json.dumps(MCP[0])}",
-                "-c", f"mcp_servers.omnicad.args={json.dumps(MCP[1:])}",
+                "-c", f"mcp_servers.omnicad.command={json.dumps(mcp[0])}",
+                "-c", f"mcp_servers.omnicad.args={json.dumps(mcp[1:])}",
+                "-c", "mcp_servers.omnicad.env={" + ", ".join(f"{k} = {json.dumps(v)}" for k, v in entorno.items()) + "}",
                 "-c", f"mcp_servers.omnicad.tool_timeout_sec={ESPERA_HERRAMIENTA}",
-                "-c", "mcp_servers.omnicad.required=true", "-c", 'approval_policy="never"', "-c", herramientas_codex]
+                # sin esto Codex pide aprobar cada herramienta y con approval_policy=never la rechaza: el que aprueba
+                # es la tarjeta Aplicar del panel (filtro del puente)
+                "-c", 'mcp_servers.omnicad.default_tools_approval_mode="approve"',
+                "-c", "mcp_servers.omnicad.required=true"]
         argv += ["-m", self.modelo] if self.modelo else []
-        argv += ["resume", self.sesion] if self.sesion else []
+        argv += [self.sesion] if self.sesion else []
         return argv + ["-"], {}
 
     # ------------------------------------------------------------ de su salida JSON a los eventos del panel

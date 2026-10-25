@@ -155,6 +155,14 @@ def test_toolsets_filtran_y_lo_no_expuesto_no_se_ejecuta():
     assert bloqueada.is_error and json_de(bloqueada)["error_kind"] == "UNKNOWN_TOOL"
 
 
+def test_tools_deja_solo_esas_herramientas(capsys):
+    nombres = memoria(herramientas=["create_box", "get_scene_info", "run_checks"]).nombres
+    assert set(nombres) == {"get_scene_info", "create_box"}          # run_checks es del grupo dev: sin --dev no
+    with pytest.raises(SystemExit) as e:
+        main(["--tools", "create_box,no_existe"])
+    assert e.value.code == 2 and "no_existe" in capsys.readouterr().err
+
+
 def test_por_defecto_no_hay_dev_y_con_dev_estan_todas():
     base = {h["nombre"] for h in api.catalogo() if h["grupo"] != "dev"}
     assert set(memoria().nombres) == base
