@@ -131,6 +131,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Engranajes de todo tipo:** una galería con imágenes y explicación corta para crear engranajes cilíndricos, cónicos, sin fin, planetarios, especiales, cremalleras y mecanismos (Ginebra, trinquete, reductores), desde la interfaz, la CLI o un agente de IA.
 - **Idioma:** español e inglés en todo (interfaz, mensajes, herramientas y documentación); primer arranque guiado.
 - **Integración:** Blender en los dos sentidos; conectar más agentes de IA.
+- **Asistente IA dentro de la app:** un chat que explica, muestra y diseña con vos, con clave de API o con tu suscripción de Claude Code o Codex.
 - **Render:** materiales, colores e iluminación; ideas de KeyShot y V-Ray.
 - **Vectores y texto:** curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
 - **Ensamblajes:** subensamblajes (componentes anidados), conjuntos de contacto, más modos de posición y límites de las uniones, animación, simulaciones y movimiento de piezas.

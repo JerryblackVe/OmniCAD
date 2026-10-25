@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 211: Abierto 161 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 219: Abierto 169 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -309,6 +309,21 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PAQ-H5 | Hito 5: carpeta complementos/ con registrar(api) | Abierto | Alta | Opcional; solo si el usuario lo pide. Es la misma tarea que B5/GH12. | no existe complementos/ en el repo | 2026-10-20 |
+
+## Asistente IA (chat dentro de la app)
+
+Abierto 8. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| IA-1 | Núcleo del asistente sin Qt: proveedor, bucle de herramientas, núcleo de ~25 herramientas y buscar_herramientas | Abierto | Alta | Todo (fase 1 del plan). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Abierto | Media | Todo (fase 2); prueba paga solo con OK de Gerardo. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-3 | Prompt de sistema del asistente: contexto del documento, modos Explicar/Mostrar/Guiar/Hacer y biblioteca de prompts | Abierto | Alta | Todo (fase 3). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-4 | Panel del Asistente, ícono, botón en la barra de la aplicación, Ayuda › Asistente y pestaña de Preferencias | Abierto | Media | Todo (fase 4). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-5 | Permisos del asistente: plan con Aplicar, «Deshacer este pedido», Cancelar con vuelta atrás y tope de gasto | Abierto | Alta | Todo (fase 5); relacionado con CL1. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-6 | Asistente con la suscripción del usuario: Claude Code, Codex y OpenCode por el puente en vivo | Abierto | Alta | Todo (fase 6); espera decisión de Gerardo sobre Claude Code. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-7 | Historial de chats del asistente y herramientas get/set_assistant_config y assistant_ask (MCP y CLI) | Abierto | Media | Todo (fase 7). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-8 | Respuestas de ayuda del asistente con la documentación local, citando la fuente | Abierto | Media | Todo (fase 8). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 
 ## SolidCraft
 
