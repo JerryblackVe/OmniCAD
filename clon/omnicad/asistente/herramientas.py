@@ -40,8 +40,8 @@ class Herramientas:
         return definiciones
 
     def permitida(self, nombre):
-        """Indica si la herramienta está ofrecida en este momento."""
-        return any(h["nombre"] == nombre for h in self.definiciones())
+        """Indica si la herramienta del catálogo está ofrecida (buscar_herramientas la atiende el bucle)."""
+        return nombre in self.catalogo and (nombre in NUCLEO or self.catalogo[nombre]["grupo"] in self.grupos)
 
     def buscar(self, tema):
         """Habilita un grupo válido o devuelve un error con los grupos disponibles."""

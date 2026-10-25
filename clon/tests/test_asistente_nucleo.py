@@ -237,6 +237,13 @@ def test_imagenes_anidadas_se_separan_sin_modificar_respuesta():
     json.dumps(next(d for t, d in eventos if t == "herramienta"))
 
 
+def test_respuesta_vacia_termina_sin_mensaje_vacio(sesion):
+    mensajes = [{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": "Hola"}]}]
+    resultado = bucle.correr(ProveedorFalso([Respuesta()]), mensajes, lambda n, a: api.llamar(sesion, n, a))
+    assert resultado["motivo"] == "fin" and resultado["vueltas"] == 1
+    assert mensajes == [{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": "Hola"}]}]
+
+
 def test_error_del_proveedor_emite_evento_y_termina(sesion):
     class ProveedorFallido(Proveedor):
         def responder(self, sistema, mensajes, herramientas):

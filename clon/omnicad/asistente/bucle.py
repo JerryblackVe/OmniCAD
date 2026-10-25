@@ -51,6 +51,9 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
         contenido = [{"tipo": "texto", "texto": respuesta.texto}] if respuesta.texto else []
         contenido += [{"tipo": "pedido_herramienta", "id": p.id, "nombre": p.nombre, "args": p.args}
                       for p in respuesta.herramientas]
+        if not contenido:  # la API de Claude rechaza un mensaje de asistente vacío
+            resultado["motivo"] = "fin"
+            return resultado
         mensajes.append({"rol": "asistente", "contenido": contenido})
         if respuesta.texto:
             emitir("texto", respuesta.texto)

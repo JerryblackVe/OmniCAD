@@ -316,7 +316,7 @@ Abierto 7. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Abierto | Media | Todo (fase 2); prueba paga solo con OK de Gerardo. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
+| IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Parcial | Media | Queda: streaming SSE (hoy la respuesta llega completa); prueba real con Ollama (no está instalado en esta PC); devolver los bloques de pensamiento de Claude entre vueltas; prueba paga solo con OK de Gerardo. | omnicad/asistente/proveedores/anthropic.py; omnicad/asistente/proveedores/openai_compat.py; tests/test_asistente_proveedores.py | 2026-10-25 |
 | IA-3 | Prompt de sistema del asistente: contexto del documento, modos Explicar/Mostrar/Guiar/Hacer y biblioteca de prompts | Abierto | Alta | Todo (fase 3). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-4 | Panel del Asistente, ícono, botón en la barra de la aplicación, Ayuda › Asistente y pestaña de Preferencias | Abierto | Media | Todo (fase 4). | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
 | IA-5 | Permisos del asistente: plan con Aplicar, «Deshacer este pedido», Cancelar con vuelta atrás y tope de gasto | Abierto | Alta | Todo (fase 5); relacionado con CL1. | no existen clon/omnicad/asistente/ ni ui/asistente.py | 2026-10-25 |
