@@ -133,7 +133,7 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Integración:** Blender en los dos sentidos; conectar más agentes de IA.
 - **Render:** materiales, colores e iluminación; ideas de KeyShot y V-Ray.
 - **Vectores y texto:** curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
-- **Ensamblajes:** animación, simulaciones y movimiento de piezas.
+- **Ensamblajes:** subensamblajes (componentes anidados), conjuntos de contacto, más modos de posición y límites de las uniones, animación, simulaciones y movimiento de piezas.
 - **Funciones nuevas:** estilo Rhino, programación visual estilo Grasshopper, ideas de FreeCAD y Plasticity.
 - **Ideas de SolidCraft:** piezas de referencia para verificar el motor, pruebas de robustez automáticas, nombres estables de caras y aristas, bocetos que no saltan, configuraciones, conjuntos de contacto, vistas guardadas y ratón 3D.
 - **Ideas de otros CAD libres:** que cada herramienta para agentes diga qué cambió de verdad, cambios de agente que se revisan antes de aplicarse, colores en el boceto para ver qué se puede mover, elegir caras por descripción y tutoriales que se reproducen paso a paso.

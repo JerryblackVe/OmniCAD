@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 118: Abierto 61 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 121: Abierto 64 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -164,6 +164,19 @@ Abierto 3.
 | SOL-30 | Dos mensajes de error de Sólido engañan | Abierto | Baja | `split_body` dice «probá extenderla» aun con `extend=true`. Un valor mal tipado de una lista (p. ej. `create_boss positions=[[0,0,20]]`) dice «no es array» cuando la lista sí es un array: lo que no sirve es cada elemento (tiene que ser string u objeto). En la ventana, Empalme con un radio de 100 mm sobre una caja de 30 mm manda «reordená los empalmes del timeline» aunque haya un solo empalme: ahí hay que decir que el radio no entra en las caras vecinas. | omnicad/nucleo/solidos_modificar.py:1140; omnicad/api/registro.py (validación de tipos) | 2026-10-24 |
 | SOL-34 | Pulsar/tirar sobre una cara crea un paso «Desfase de cara» y al editarlo abre otro diálogo | Abierto | Baja | Pulsar/tirar con una cara crea el paso `desfase_cara` («Desfase de cara1») y al hacer doble clic en el timeline se abre «Cara de desfase», no «Pulsar/tirar»: el usuario ve otro comando con otro título. Darle al paso el nombre y el diálogo del comando que lo creó. | omnicad/ui/comandos/modificar.py:272 | 2026-10-24 |
 | SOL-35 | El factor de escala acepta una unidad («2 mm») | Abierto | Baja | En la ventana, Escala con Factor «2 mm» se toma como 2 sin avisar; los campos de longitud rechazan «15 deg» y los de ángulo «45 mm». Un factor no lleva unidad: rechazarlo con el mismo mensaje. | omnicad/ui/comandos/modificar.py (campo `factor` de escala_3d) | 2026-10-24 |
+
+## Ensamblar (auditoría contra Fusion, 2026-10-25)
+
+Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, vínculos, estudio de movimiento) con los artículos de la ayuda de Fusion (carpeta `fusion-assemble`), de probar unas 60 llamadas por API (`evidencias/ensamble_2026-10-25/a*.py`) y de usar la ventana real como una persona (`scripts/prueba_ui/ensamblar.py`, 224 comprobaciones). Lo que ya estaba cargado (P-25e, P-25e2, SC6, SC7, SC8, SC15, H-4, H-5, H-19, F8, P-6d) no se repite.
+
+Abierto 3.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| ASM-6 | nan e inf dan «Nombre desconocido» | Abierto | Baja | En Accionar uniones, el vínculo y `drive_joint`, escribir `nan` o `inf` responde «Nombre desconocido: 'nan'.», como si fuera un parámetro. Mejor: «No es un número». | omnicad/ui/comandos/ensamblar.py:202-215; api/herramientas_ensamble.py (drive_joint) | 2026-10-25 |
+| ASM-7 | Mover el único cuerpo de un componente a otro deja el viejo vacío, fijo y con uniones | Abierto | Baja | `create_component` con un cuerpo que ya tiene componente solo avisa «pasa del componente X al nuevo»: la Base fija queda sin cuerpos, el componente nuevo no es fijo y las uniones del viejo siguen «ok» sin mover nada. Avisar que el componente queda vacío (o heredar lo fijo). | omnicad/timeline/ops_ensamblar.py:252-265 (`OpComponente.ejecutar`) | 2026-10-25 |
+| ASM-8 | Suprimir una unión usada por un vínculo culpa al vínculo | Abierto | Baja | `suppress_feature` de la Unión1 que usa un vínculo responde OPERATION_FAILED «El paso Vínculo de movimiento1 falló… Las dos uniones tienen que existir» (borrar da FEATURE_IN_USE claro). Decir qué unión suprimida lo rompe. | omnicad/timeline/ops_ensamblar.py:670-674 | 2026-10-25 |
+
 
 ## Menú del boceto (decisión del usuario)
 

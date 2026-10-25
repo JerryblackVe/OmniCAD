@@ -28,6 +28,7 @@ Comportamiento tomado de la ayuda de Fusion (libro "Design: Sketch", SKT-*):
 """
 import copy
 import math
+import re
 import warnings
 
 import numpy as np
@@ -45,7 +46,7 @@ from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, 
                                     evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
                                     primitivas_entidad, puntos_espiral, puntos_primitiva, validar_valor_cota,
                                     _validar_opciones_texto)
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados
 from . import formato, temas
 from .iconos import icono
 
@@ -451,7 +452,8 @@ class Lienzo(QWidget):
     def __init__(self, boceto, evaluar, parent=None, visor=None, plano=None):
         super().__init__(parent)
         self.b = boceto
-        self.evaluar = evaluar
+        self._evaluar_doc = evaluar
+        self._nombradas = {}             # nombre dN → id de las cotas que se nombraron al citarlas (BOC-35)
         self.visor, self.plano = visor, plano
         self.herramienta = "seleccionar"
         self.ultima_herramienta = None
@@ -548,6 +550,9 @@ class Lienzo(QWidget):
         self._info = None                # último texto de medidas emitido
         self._cota_editada = None
         self._cota_previa = None         # Cota provisional (id -1) mientras se escribe su valor
+        self._cota_abierta = None        # (tipo, entidades, pos) de la cota nueva cuya caja está abierta
+        self._opc_cota = {}              # opciones del menú antes de ubicar: referencia, tipo, modo (BOC-34)
+        self._evaluando = set()          # nombres en evaluación: corta las referencias circulares
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         if visor is None:
@@ -647,6 +652,25 @@ class Lienzo(QWidget):
         self.resolver()
 
     # ------------------------------------------------------------ resolver
+    def evaluar(self, expr, tipo=LONGITUD):
+        """Evalúa contra el documento. Una cota nombrada al citarla todavía no está en su tabla (entra al terminar el
+        boceto): se cita por su valor, y una referencia circular entre ellas es un error de expresión."""
+        usadas = nombres_usados(expr) & self._nombradas.keys() if isinstance(expr, str) else set()
+        for nombre in usadas:
+            cota = self.b.cotas.get(self._nombradas[nombre])
+            if cota is None:
+                continue
+            if nombre in self._evaluando:
+                raise ErrorExpresion(f"Referencia circular: la cota {nombre} depende de sí misma.")
+            self._evaluando.add(nombre)
+            try:
+                valor = self.evaluar(cota.expresion, _tipo_valor(cota.tipo))
+            finally:
+                self._evaluando.discard(nombre)
+            unidad = "deg" if cota.tipo == "angulo" else "mm"
+            expr = re.sub(rf"\b{re.escape(nombre)}\b", f"({valor!r} {unidad})", expr)
+        return self._evaluar_doc(expr, tipo)
+
     def valores_cotas(self):
         return {c.id: self.evaluar(c.expresion, _tipo_valor(c.tipo)) for c in self.b.cotas.values()}
 
@@ -918,6 +942,7 @@ class Lienzo(QWidget):
         self.fase = None
         self._previa_recorte = None
         self._esperando_ubicacion = False
+        self._opc_cota = {}
         self._revincular = self._eje_giro = None
         self._cerrar_entrada()
         self._reiniciar_vivo()
@@ -945,6 +970,7 @@ class Lienzo(QWidget):
         elif self.clics or self.picks or (self.fase not in (None, "seleccion")):
             self.clics, self.picks, self.picks_xy = [], [], []
             self._esperando_ubicacion = False
+            self._opc_cota = {}
             self._ultima_linea = None
             self._reiniciar_vivo()
             if self.fase is not None:
@@ -2403,7 +2429,7 @@ class Lienzo(QWidget):
             self._paleta_texto = False
             self.herramienta_cambiada.emit(self.herramienta)     # la paleta vuelve a las opciones de la herramienta
         self._editando = None
-        self._cota_editada = self._cota_previa = None
+        self._cota_editada = self._cota_previa = self._cota_abierta = None
 
     def _entrada_dinamica(self, primera):
         """Entrada escrita de las herramientas sin cajas de valor (círculo de 2 tangentes, mover/copiar)."""
@@ -3045,9 +3071,14 @@ class Lienzo(QWidget):
         p.setBrush(Qt.NoBrush)
 
     def _abrir_cota(self, tipo, entidades, pos):
+        original = (tipo, list(entidades), pos)
+        if tipo in ("radio", "diametro"):
+            tipo = self._opc_cota.get("tipo", tipo)             # menú previo: Radio / Diámetro
         previa = Cota(-1, tipo, entidades, "", {})
         if tipo == "distancia" and sum(bool(getattr(self.b.curvas.get(i), "eje", False)) for i in entidades) == 1:
             previa.datos["diametral"] = True        # Fusion: una cota con la línea central es un diámetro
+        if self.b.admite_modo(tipo, entidades) and "modo" in self._opc_cota:
+            previa.datos["modo"] = self._opc_cota["modo"]       # menú previo: Centro / Tangente
         try:
             self.b._validar_cota(tipo, entidades)
             self.b.ubicar_cota(previa, self.a_mm(pos))  # el clic ubica la línea de cota y su texto (o el cuadrante)
@@ -3058,22 +3089,87 @@ class Lienzo(QWidget):
             return
 
         def aceptar(v):
+            referencia = self._opc_cota.get("referencia", False)     # una cota de referencia mide: ignora el texto
             texto = v[0] or formato.numero(actual, angular=tipo == "angulo")
-            validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo)))     # −5 o 0: la caja queda en rojo
+            if not referencia:
+                validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo)))     # −5 o 0: la caja queda en rojo
 
             def crear():
-                cota = self.b.cotas[self.b.agregar_cota(tipo, entidades, texto, previa.datos)]
-                if self._sobre_restringe(cota.id):   # Fusion: la cota que sobra entra de referencia (driven)
+                cota = self.b.cotas[self.b.agregar_cota(tipo, entidades, texto, previa.datos, referencia=referencia)]
+                if not referencia and self._sobre_restringe(cota.id):   # Fusion: la que sobra entra de referencia
                     cota.referencia, cota.expresion = True, repr(actual)
                     self.mensaje.emit("La cota sobre-restringiría el boceto: se creó como cota de referencia.")
             self.aplicar_cambio(crear)
-            self.picks = []
+            self.picks, self._opc_cota = [], {}
             self._esperando_ubicacion = False
         unidad = "°" if tipo == "angulo" else ""
         self._abrir_entrada([TIPOS_COTA[tipo] + (f" ({unidad})" if unidad else "")],
                             [f"{actual:.3f}".rstrip("0").rstrip(".")], pos, aceptar)
+        self._cota_abierta = original
         if self.b.ejes_cota(previa) is not None:        # cota lineal: se dibuja con sus líneas mientras se escribe
             self._cota_previa, self._cota_editada = previa, -1
+
+    def _menu_cota_previa(self):
+        """Clic derecho antes de ubicar la cota (Fusion, «Dimension sketch geometry» › Tips): Driven o Driving,
+        Radio o Diámetro, Centro o Tangente. Lo elegido vale para la cota que se está poniendo."""
+        m = QMenu(self)
+        abierta, opc = self._cota_abierta, self._opc_cota
+
+        def elegir(clave, valor):
+            opc[clave] = valor
+            if abierta is not None and clave != "referencia":       # tipo y modo cambian lo que se mide
+                self._abrir_cota(*abierta)
+
+        def grupo(clave, items, actual):
+            for valor, texto in items:
+                a = m.addAction(texto, lambda c=clave, x=valor: elegir(c, x))
+                a.setCheckable(True)
+                a.setChecked(actual == valor)
+        grupo("referencia", ((False, "Cota conductora (driving)"), (True, "Cota de referencia (driven)")),
+              opc.get("referencia", False))
+        if abierta is not None:
+            tipo, ents, _ = abierta
+            if tipo in ("radio", "diametro"):
+                m.addSeparator()
+                grupo("tipo", (("radio", "Radio"), ("diametro", "Diámetro")), opc.get("tipo", tipo))
+            if self.b.admite_modo(tipo, ents):
+                m.addSeparator()
+                grupo("modo", (("centro", "Centro"), ("tangente", "Tangente")), opc.get("modo", "centro"))
+        return m
+
+    def _nombre_libre(self):
+        """Primer dN que ni el documento ni otra cota de este boceto usan (el documento lo respeta al nombrar)."""
+        usados = {k.nombre for k in self.b.cotas.values()}
+        n = 1
+        while f"d{n}" in usados or self._existe_en_documento(f"d{n}"):
+            n += 1
+        return f"d{n}"
+
+    def _existe_en_documento(self, nombre):
+        for tipo in (LONGITUD, ANGULO, ESCALAR):      # el parámetro puede ser de cualquiera de los tres tipos
+            try:
+                self._evaluar_doc(nombre, tipo)
+                return True
+            except ErrorExpresion:
+                pass
+        return False
+
+    def _citar_cota(self, pos):
+        """Fusion: con la caja de valor de una cota abierta, un clic en otra cota pone su nombre (dN) en la
+        expresión, en lugar de lo seleccionado. True si el clic se usó así."""
+        if self._cota_abierta is None and self._cota_editada is None:
+            return False
+        cid = self._zona_en(pos)
+        cota = self.b.cotas.get(cid)
+        if cota is None or cid == self._cota_editada:
+            return False
+        if not cota.nombre:                  # el documento nombra las cotas nuevas al terminar el boceto: se adelanta
+            cota.nombre = self._nombre_libre()
+            self._nombradas[cota.nombre] = cid
+        campo = self.entrada.campos[0]
+        campo.insert(cota.nombre)
+        campo.setFocus()
+        return True
 
     def _sobre_restringe(self, cid):
         """Criterio de la API (BOC-1): la cota driving `cid` debe bajar los GDL sin dejar el boceto en conflicto."""
@@ -3341,6 +3437,8 @@ class Lienzo(QWidget):
     def mousePressEvent(self, e):
         pos = e.position()
         self._modificadores_raton = e.modifiers()
+        if self.entrada is not None and e.button() == Qt.LeftButton and self._citar_cota(pos):
+            return                                   # antes de setFocus: este saca el foco y la selección de la caja
         self._camara()
         self.setFocus()
         if self._eligiendo_punto is not None and not self._para_visor(e):
@@ -3373,6 +3471,9 @@ class Lienzo(QWidget):
                 self._cerrar_entrada()
         if e.button() == Qt.RightButton and not self.clics and self._zona_en(pos) in self.b.cotas:
             self._menu_cota(self._zona_en(pos)).exec(e.globalPosition().toPoint())
+            return
+        if e.button() == Qt.RightButton and self.herramienta == "cota" and self.picks:
+            self._menu_cota_previa().exec(e.globalPosition().toPoint())
             return
         if self._para_visor(e):
             self._reenvio = (e.button(), pos)

@@ -130,6 +130,7 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
   SolidCraft and other open-source CAD.
 - **FORM workspace** (T-spline subdivision surfaces): not started yet.
 - **Fusion `.f3d` files** with their operation history.
+- **Assemblies:** sub-assemblies (nested components), contact sets, more joint position modes and motion limits, a fuller motion study.
 - **Performance:** more hot paths in Rust and C++.
 - **Bug fixing:** open bugs are listed in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md) (Spanish).
 

@@ -5,6 +5,7 @@ import pytest
 
 from omnicad import api
 from omnicad.restricciones import Boceto
+from omnicad.timeline.parametros import ErrorExpresion
 from omnicad.timeline.operaciones import OpBoceto
 
 
@@ -1022,3 +1023,113 @@ def test_boc2_apply_recipe_append_renombra_cotas_que_chocan_y_exportar_omite_dn(
     assert cotas[citada]["sketch"] == "op2"
     csv = tmp_path / "p.csv"
     assert llamar(sesion, "export_parameters", path=str(csv))["count"] == 0
+
+
+# ---------------------------------------------------------------- BOC-34 y BOC-35: gestos de la caja de cota
+def _menu_a_textos(monkeypatch):
+    """El lienzo recibe un QMenu cuyo exec no bloquea: guarda el menú que se abriría."""
+    from PySide6.QtWidgets import QMenu
+    menus = []
+
+    class MenuPrueba(QMenu):
+        def exec(self, *a):
+            menus.append(self)
+    monkeypatch.setattr("omnicad.ui.editor_boceto.QMenu", MenuPrueba)
+    return menus
+
+
+def _tildados(menu):
+    return {a.text(): a.isChecked() for a in menu.actions() if a.text()}
+
+
+def test_boc34_menu_antes_de_ubicar_radio_diametro_y_referencia(monkeypatch):
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    lz, _linea = _lienzo_boc1()
+    c = lz.b.agregar_circulo((60, 0), 3)
+    menus = _menu_a_textos(monkeypatch)
+    lz.set_herramienta("cota")
+    lz.picks = [c]
+    lz._abrir_cota("diametro", [c], QPointF(100, 100))
+    assert lz.entrada.campos[0].text() == "6"
+    QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, QPointF(50, 50).toPoint())     # clic derecho, sin cota creada
+    assert not lz.b.cotas and lz.picks == [c]
+    assert list(_tildados(menus[-1])) == ["Cota conductora (driving)", "Cota de referencia (driven)", "Radio",
+                                          "Diámetro"]
+    next(a for a in menus[-1].actions() if a.text() == "Radio").trigger()
+    assert lz.entrada.campos[0].text() == "3"                       # la caja se rehace con el radio
+    next(a for a in menus[-1].actions() if a.text() == "Cota de referencia (driven)").trigger()
+    assert _tildados(lz._menu_cota_previa())["Cota de referencia (driven)"]
+    lz.entrada.aceptado.emit(["99"])                                 # una referencia ignora lo escrito
+    cota = next(iter(lz.b.cotas.values()))
+    assert (cota.tipo, cota.referencia) == ("radio", True) and float(cota.expresion) == pytest.approx(3)
+    assert lz._opc_cota == {} and lz.picks == []                     # la siguiente cota arranca sin opciones
+
+
+def test_boc34_menu_antes_de_ubicar_tangente_y_sin_cota_elegida(monkeypatch):
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    lz, _linea = _lienzo_boc1()
+    c, p = lz.b.agregar_circulo((60, 0), 3), lz.b.agregar_punto(70, 0)
+    lz.b.agregar_restriccion("fijo", [c])
+    lz.resolver()
+    menus = _menu_a_textos(monkeypatch)
+    lz.set_herramienta("cota")
+    QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, QPointF(50, 50).toPoint())     # sin nada elegido: no hay menú
+    assert not menus
+    lz.picks = [p]
+    lz._abrir_cota("distancia", [p, c], QPointF(100, 100))
+    assert lz.entrada.campos[0].text() == "10"
+    menu = lz._menu_cota_previa()
+    assert list(_tildados(menu))[-2:] == ["Centro", "Tangente"] and _tildados(menu)["Centro"]
+    next(a for a in menu.actions() if a.text() == "Tangente").trigger()
+    assert lz.entrada.campos[0].text() == "7"                       # del punto al borde del círculo
+    lz.entrada.aceptado.emit([""])
+    assert next(iter(lz.b.cotas.values())).datos["modo"] == "tangente"
+
+
+def test_boc35_clic_en_otra_cota_la_cita_por_su_nombre():
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    lz, linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz._abrir_cota("distancia", [linea], QPointF(300, 200))
+    lz.entrada.aceptado.emit(["40"])
+    base = next(iter(lz.b.cotas.values()))
+    c = lz.b.agregar_circulo((60, 20), 3)
+    lz.picks = [c]
+    lz._abrir_cota("diametro", [c], QPointF(500, 400))
+    lz.grab()                                                       # dibuja y arma las zonas de clic
+    zona = lz._zonas_cotas[base.id]
+    assert base.nombre == ""                                        # el documento la nombra recién al terminar
+    QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, zona.center().toPoint())
+    assert base.nombre == "d1" and lz.entrada.campos[0].text() == "d1"   # se nombra al citarla; reemplaza lo elegido
+    campo = lz.entrada.campos[0]
+    QTest.keyClicks(campo, " / 8")
+    assert lz.evaluar(campo.text()) == pytest.approx(5)              # d1 = 40 mm, aunque la tabla no la conozca
+    campo.setText("")
+    QTest.keyClicks(campo, "d1 / 8")
+    QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, zona.center().toPoint())
+    assert campo.text() == "d1 / 8d1"                                # inserta donde está el cursor
+    nueva = lz.b.agregar_cota("diametro", [c], "d1 / 4")
+    lz.b.cotas[nueva].nombre = "d2"
+    lz._nombradas["d2"] = nueva
+    base.expresion = "d2 + 1"                                       # d1 depende de d2 y d2 de d1: no se cuelga
+    with pytest.raises(ErrorExpresion, match="circular"):
+        lz.evaluar("d1")
+
+
+def test_boc35_editar_una_cota_no_se_cita_a_si_misma():
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    lz, linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz._abrir_cota("distancia", [linea], QPointF(300, 200))
+    lz.entrada.aceptado.emit(["40"])
+    cota = next(iter(lz.b.cotas.values()))
+    cota.nombre = "d1"
+    lz.grab()
+    lz.editar_cota(cota.id, QPointF(300, 200))
+    lz.grab()
+    QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz._zonas_cotas[cota.id].center().toPoint())
+    assert lz.entrada is None                                        # clic sobre sí misma: se cierra como siempre

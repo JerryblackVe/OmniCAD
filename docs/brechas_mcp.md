@@ -224,6 +224,8 @@ Se descartan, porque no le sirven a un agente:
 - Galería de renders: la cubre MCP-25.
 - Precisión y ceros de las unidades: solo cambian lo que se ve en pantalla.
 - Reproducir el timeline, Repetir último comando, Buscar en navegador, ventana o timeline, y Acerca de.
+- Menú de la cota antes de ubicarla y clic en otra cota para citarla (BOC-34 y BOC-35): son gestos del ratón sobre la
+  caja de valor. `add_dimension` ya trae `reference`, `type` y `mode`, y una expresión cita `dN` por su nombre.
 
 ## Hallazgos de la auditoría
 

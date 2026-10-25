@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 25: Abierto 20 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 30: Abierto 25 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -14,7 +14,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-39 | join con herramienta enterrada deja arista libre y cuerpo no estanco | Parcial | Muy alta | El caso original (cilindro r2,5 en la carcasa, arista libre en (27, 0, 129,5)) sigue sin reproducirse: 4 000 casos de fuzzing (6 herramientas × 4 bases, tangencias de 0 a 1e-3 mm, de 1 a 4 uniones) no dieron ninguna arista libre con la herramienta enterrada. Sí dieron fallos silenciosos del kernel con contacto casi tangente (unión que devolvía solo la herramienta, un toro que «no tocaba» la pared, unión vacía por 1e-6 mm de solape): `geo.booleano` ahora verifica el resultado y reintenta o rechaza con error claro (graves 2,5 % → 0,6 %). Queda ese 0,6 %: esfera o toro casi tangentes que dejan aristas no manifold o un sólido inválido que OCCT no cura, y uniones con superficies libres, cuyo volumen no se puede verificar. Siguiente paso: P-32 (probar el motor omnikernel como segunda opinión). | nucleo/geometria.py (`booleano`, `_problema_booleana`, `_REINTENTOS_BOOLEANA`, `_union_general_creible`); scripts/fuzz_b39.py; tests/test_b39_enterrada.py; tests/test_b39_fuzz.py; timeline/operaciones.py:349 y :1004 (aviso post-unión); `_quitar_cables_colgados` (B-28) | 2026-10-21 |
 | B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | La causa en OCCT sigue sin reproducirse ni curarse. El cambio de parámetros en documentos de 60 pasos o más ya se ensaya antes en un proceso aparte (si el kernel cae, no se aplica y la app sigue); no cubre editar/suprimir pasos ni abrir archivos. | nucleo/aislado.py (`correr_json`, `UMBRAL_PREVUELO_PARAMETROS`); timeline/documento.py `_prevuelo_parametros`; tests/test_b48_prevuelo.py; tests/test_b48_crash.py | 2026-10-20 |
 | B-104 | «Recuperar documentos…» tiene la ayuda en el lugar del atajo | Abierto | Baja | `A("recuperados", "Recuperar documentos…", fn, "Abre «Documentos recuperados»: …")` pasa el texto de ayuda como 4.º argumento, que es el atajo: la acción queda con un «atajo» sin sentido (`, , `) y sin tooltip. La prueba de atajos lo vio: es el único que no dispara nada. Pasar `None` de atajo y la ayuda en su lugar. | omnicad/ui/ventana.py:329-331 | 2026-10-24 |
-| B-105 | En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados | Abierto | Media | Con la ventana en 1024x640 el panel de Extruir mide 357 de alto y el área del visor 448: termina 51 px más abajo y los botones quedan sobre la barra del timeline; en 800x520 (la app no baja de 821 px de ancho) el panel pasa 171 px y se ve cortado en «Tipo de extensión». Además el panel «Atajos de diseño» se encima sobre el del comando. Enter y Esc siguen andando. Fusion y los programas de CAD hacen scroll en el panel. | omnicad/ui/ventana.py:2041-2049 | 2026-10-24 |
+| B-105 | En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados | Abierto | Media | Con la ventana en 1024x640 el panel de Extruir mide 357 de alto y el área del visor 448: termina 51 px más abajo y los botones quedan sobre la barra del timeline; en 800x520 (la app no baja de 821 px de ancho) el panel pasa 171 px y se ve cortado en «Tipo de extensión». Además el panel «Atajos de diseño» se encima sobre el del comando. Pasa igual con el panel de Unión de ENSAMBLAR (318×386 en un visor de unos 430 px de alto a 1024x640). Enter y Esc siguen andando. Fusion y los programas de CAD hacen scroll en el panel. | omnicad/ui/ventana.py:2041-2049 | 2026-10-24 |
 
 ## Boceto (auditoría contra Fusion, 2026-10-23)
 
@@ -54,6 +54,19 @@ Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPEC
 | SOL-31 | Revolución acepta ángulos de más de 360° y los trata como 360° sin avisar | Abierto | Baja | En la ventana, Revolución con Ángulo 400° o 720° acepta y crea el cuerpo; el volumen es el mismo que con 360° (6283,19 mm³ para un rectángulo 20x10 sobre su arista) y no hay aviso. `revolve angle=400` por la API da lo mismo. | omnicad/ui/comandos/solido.py:165 | 2026-10-24 |
 | SOL-32 | Patrones con distancia 0 (rectangular, en trayectoria) o ángulo 0 (circular) crean copias encimadas sin aviso | Abierto | Baja | `patron_rectangular_3d` con 3 copias y distancia 0 mm crea 2 cuerpos nuevos con la misma caja envolvente que el original; `patron_circular_3d` con 4 copias y ángulo 0 deg crea 3. La vista previa queda en verde y el panel no dice nada. | omnicad/ui/comandos/crear.py:790-802 | 2026-10-24 |
 | SOL-33 | Pulsar/tirar y Cara de desfase con 0 mm, y Desmoldeo con 0°, crean un paso que no hace nada | Abierto | Baja | Los tres se aceptan sin aviso y dejan un paso en el timeline sin efecto. En Superficie, el desfase con 0 sí se rechaza («La distancia de desfase no puede ser cero.»). | omnicad/ui/comandos/modificar.py:193,272 | 2026-10-24 |
+
+## Ensamblar (auditoría contra Fusion, 2026-10-25)
+
+Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, vínculos, estudio de movimiento) con los artículos de la ayuda de Fusion (carpeta `fusion-assemble`), de probar unas 60 llamadas por API (`evidencias/ensamble_2026-10-25/a*.py`) y de usar la ventana real como una persona (`scripts/prueba_ui/ensamblar.py`, 224 comprobaciones). Lo que ya estaba cargado (P-25e, P-25e2, SC6, SC7, SC8, SC15, H-4, H-5, H-19, F8, P-6d) no se repite.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| ASM-1 | El grupo rígido no respeta lo fijo ni se propaga entre grupos | Abierto | Baja | Si un componente fijo está en un grupo rígido, una unión que mueve a otro miembro MUEVE el componente fijo (Base fija + Eje en un grupo: la unión del Eje a la Base lleva la Base a x=-250, z=10 y `drive_joint` la gira). Con dos grupos que comparten un componente (A+B y B+C), la unión de A mueve a B pero C se queda. Fusion trata el grupo como un solo objeto. | omnicad/timeline/ops_ensamblar.py:243-249 (`_grupo`) y :508 (solo mira si el componente 1 está fijo) | 2026-10-25 |
+| ASM-2 | El vínculo de movimiento acepta relaciones imposibles | Abierto | Media | Se aceptan un vínculo 2→1 sobre uno 1→2, un segundo vínculo sobre el mismo par y la relación 0 (o 1e9, -2 en la ventana): las dos uniones quedan seguidoras una de la otra, `drive_joint` devuelve ok con un aviso y no se mueve nada. Rechazarlo al crear: una unión que ya sigue a otra, ciclo o relación 0. | omnicad/timeline/ops_ensamblar.py:670-693 (`OpVinculoMovimiento.ejecutar` no mira los vínculos anteriores ni el factor) | 2026-10-25 |
+| ASM-3 | Borrar un componente con uniones se acepta (o falla sin explicar) | Abierto | Media | Borrar el componente fijo Base (que usa Unión1) responde OK: la unión pasa en silencio a «(raíz)», el cuerpo queda suelto y ya no hay nada fijo. Borrar el componente Eje falla con OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…» sin nombrar qué lo usa. Esperado: FEATURE_IN_USE «la usan Unión1, Unión2», como al borrar el paso del cuerpo. | omnicad/timeline/ops_ensamblar.py:474-475 (`OpUnion.dependencias` mira los cuerpos, no el componente) | 2026-10-25 |
+| ASM-4 | Accionar uniones con un valor enorme deja la unión en rojo en vez de rechazarlo | Abierto | Baja | En la ventana, ENSAMBLAR › Accionar uniones con «1e9 deg»: el panel se cierra, la unión queda en error («El ángulo (1e+09°) pasa de 1.000.000°.») y el aviso sale en un diálogo; los demás valores malos (abc, vacío, 10 mm) sí se rechazan en el panel. La API `drive_joint` rechaza el mismo valor y deshace. Después, Vínculo de movimiento dice «Las dos uniones tienen que existir antes del vínculo» sin nombrar la unión rota. | omnicad/ui/comandos/ensamblar.py:202-215 (`AccionarUniones.aplicar` no valida el rango) | 2026-10-25 |
+| ASM-5 | Accionar la unión que sigue a un vínculo cierra el panel sin cambiar nada y sin avisar | Abierto | Baja | En la ventana, accionar la unión 2 de un vínculo: el panel se cierra, el valor no cambia y la barra solo muestra un aviso ajeno («dado vuelta…»). La API sí avisa «la mueve el vínculo…». Mostrar ese aviso (o dejar el campo deshabilitado) en el panel. | omnicad/ui/comandos/ensamblar.py:202-215 | 2026-10-25 |
+
 
 ## Detalle de lo abierto
 
@@ -205,3 +218,33 @@ Evidencia: `evidencias/ui_2026-10-24/ventana_uso.log`.
 Cómo reproducir: abrir la app, achicar la ventana a 1024x640, SÓLIDO › Extruir, elegir un perfil. El panel muestra «Operación» pero «Aceptar» y «Cancelar» quedan debajo del borde del visor, encima del timeline, y el panel «Atajos de diseño» lo tapa por la derecha. A 800x520 se corta ya en «Tipo de extensión». Esperado: el panel entra en el visor (con barra de desplazamiento si no cabe) y los botones se ven siempre. Prueba propuesta: la de `ventana_uso.py` (1024x640 y 800x520: `v.area.rect().contains(panel.geometry())`).
 
 Evidencia: `evidencias/ui_2026-10-24/capturas/chica_1024x640.png`, `chica_800x520.png`.
+
+### ASM-1 · El grupo rígido no respeta lo fijo ni se propaga entre grupos
+
+Cómo reproducir (API): `create_box` ×3 y `create_component` (Base con `grounded=true`, Eje, Brazo); `create_rigid_group components=["Base","Eje"]`; `create_joint origin1="<Z" body1=<Eje> origin2=">Z" body2=<Base> joint_type="revolute"`. Esperado: error «el componente 1 está en un grupo con uno fijo: no se puede mover» (igual que cuando el componente 1 mismo está fijo). Obtenido: OK; la Base fija pasa a caja [-250, -30, 10] y `drive_joint rotation=45` la gira. Segundo caso: grupos A+B y B+C, unión rígida de A a la Base: A y B se mueven, C queda en x=380. Causa probable: `_grupo` junta solo los grupos que contienen al componente 1 y el chequeo de fijo mira solo al componente 1. Esquive: no meter componentes fijos en un grupo. Prueba propuesta: en `tests/test_api_ensamble.py`, el caso de arriba.
+
+Evidencia: `evidencias/ensamble_2026-10-25/a3_profundo.py`, `a5_grupo_transitivo.py`.
+
+### ASM-2 · El vínculo de movimiento acepta relaciones imposibles
+
+Cómo reproducir (API): Eje y Brazo con dos uniones revolute (Unión1 y Unión2); `create_motion_link joint1=Unión1 joint2=Unión2 ratio=2` y luego `create_motion_link joint1=Unión2 joint2=Unión1 ratio=2` → OK. `drive_joint joint=Unión1 rotation=30` → ok con aviso «La unión Unión1 la mueve el vínculo…», valores [0, 0]. También se aceptan un tercer vínculo sobre el mismo par, `ratio=0` (el seguidor queda en 0) y, en la ventana, 1e9 y -2. Esperado: error al crear. Esquive: no repetir uniones en vínculos. Prueba propuesta: en `tests/test_api_ensamble.py`.
+
+Evidencia: `evidencias/ensamble_2026-10-25/a3_profundo.py`, `evidencias/ui_2026-10-25/ensamblar.log`.
+
+### ASM-3 · Borrar un componente con uniones se acepta (o falla sin explicar)
+
+Cómo reproducir (API): escena con Base fija, Eje y Brazo y dos uniones (Eje→Base, Brazo→Eje); `delete_feature feature=<Base>` → OK, y `get_assembly` muestra Unión1 con componente 2 «(raíz)»; deshacer lo trae de vuelta. `delete_feature feature=<Eje>` → OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…». Esperado: FEATURE_IN_USE nombrando Unión1 y Unión2, como pasa con el paso del cuerpo. Prueba propuesta: en `tests/test_api_ensamble.py`.
+
+Evidencia: `evidencias/ensamble_2026-10-25/a4_borrar.py`.
+
+### ASM-4 · Accionar uniones con un valor enorme deja la unión en rojo en vez de rechazarlo
+
+Cómo reproducir (ventana): con una unión revolute, ENSAMBLAR › Accionar uniones, elegir la unión, teclear «1e9 deg» en Ángulo y Aceptar. El panel se cierra y la unión queda en error («El ángulo (1e+09°) pasa de 1.000.000°.», valor vacío). Con «abc», vacío, «10 mm» o «nan» el panel sigue abierto con el mensaje. Esperado: rechazar en el panel. Un Ctrl+Z la arregla. Prueba propuesta: la de `scripts/prueba_ui/ensamblar.py` (accionar › ángulo malo).
+
+Evidencia: `evidencias/ui_2026-10-25/ensamblar.log`.
+
+### ASM-5 · Accionar la unión que sigue a un vínculo cierra el panel sin cambiar nada y sin avisar
+
+Cómo reproducir (ventana): vínculo Unión1→Unión2 con relación 2; ENSAMBLAR › Accionar uniones, elegir Unión2, teclear «10 deg» y Aceptar. El panel se cierra, Unión2 sigue en 40° y la barra del timeline muestra solo un aviso ajeno. La API devuelve el aviso «La unión Unión2 la mueve el vínculo…». Prueba propuesta: la de `scripts/prueba_ui/ensamblar.py` (vínculo › accionar la unión que sigue).
+
+Evidencia: `evidencias/ui_2026-10-25/ensamblar.log`.

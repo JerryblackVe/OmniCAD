@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 203: Abierto 153 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 210: Abierto 160 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -80,10 +80,11 @@ Abierto 1 · Parcial 2.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 0. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
+Abierto 1. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| BOC-36 | Curva isoparamétrica (Project/Include › Isoparametric Curve): curvas U/V de una cara como geometría de boceto | Abierto | Media | Fusion extrae curvas U, V o ambas de una cara, en un punto elegido; tipo Single o Distributed (distancia o cantidad); con «Projection Link» opcional que avisa si la superficie cambia. OmniCAD no tiene nada (grep `isopar` en omnicad/ sin resultados). Ayuda: Isoparametric curve; reutilizar `project_to_surface` y el vínculo de proyección (`manage_lost_projections`, `break_projection_link`). Lleva herramienta en api/ (receta C). | omnicad/api/herramientas_boceto*.py (no existe `isoparametric_curve`); docs/fusion_docs/contenido/fusion-sketch/isoparametric-curve-4089a59d7f6.md | 2026-10-25 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
@@ -137,6 +138,23 @@ Abierto 22 · Bloqueado 1.
 | SOL-27 | Preajustes de comandos (guardar, renombrar, valor por defecto) | Abierto | Media | Sin código para los diálogos de Fusion (Nervio, Red, Agujero, etc.). Ayuda: Create and use presets. | sin código (grep preajust en omnicad/ui/comandos/) | 2026-10-24 |
 | SOL-28 | Modelado automatizado: generar alternativas de diseño | Bloqueado | Muy alta | Servicio en la nube de Fusion; hay que decidir si entra en el alcance. Ayuda: Generate design alternatives, Automated Modeling reference. | sin código | 2026-10-24 |
 | SOL-29 | Primitivas orientadas a un plano o cara cualquiera | Abierto | Media | Caja, cilindro, esfera y toroide solo se crean con los ejes del mundo (la ventana toma el clic en una cara solo para el centro y el sentido). Fusion las alinea al plano o la cara elegida, incluso inclinada; hoy hay que crear y girar con `move_body`. Falta en la ventana y en `create_box`, `create_cylinder`, `create_sphere`, `create_torus`. Ayuda: Create a solid box. | omnicad/timeline/operaciones.py:996 (`OpPrimitiva`: sin plano ni eje) | 2026-10-24 |
+
+## Ensamblar (auditoría contra Fusion, 2026-10-25)
+
+Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, vínculos, estudio de movimiento) con los artículos de la ayuda de Fusion (carpeta `fusion-assemble`), de probar unas 60 llamadas por API (`evidencias/ensamble_2026-10-25/a*.py`) y de usar la ventana real como una persona (`scripts/prueba_ui/ensamblar.py`, 224 comprobaciones). Lo que ya estaba cargado (P-25e, P-25e2, SC6, SC7, SC8, SC15, H-4, H-5, H-19, F8, P-6d) no se repite.
+
+Abierto 7.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| ASM-9 | Componentes anidados (subensamblajes), «Incluir componentes secundarios» y activar componente | Abierto | Muy alta | Los componentes son siempre de un solo nivel (`padre` queda vacío): Nuevo componente no tiene «Padre», el grupo rígido no tiene «Incluir componentes secundarios» y no existe Activar componente. Ayuda: New Component reference, Activate a component, Create a rigid group of components. | omnicad/timeline/ops_ensamblar.py:262 (`padre` siempre vacío); ui/comandos/ensamblar.py:64-66 | 2026-10-25 |
+| ASM-10 | Unión: modos de posición «Entre dos caras» e «Intersección de dos aristas» | Abierto | Media | La unión solo tiene el modo Simple (una cara, arista o punto con centro, inicio o fin). Faltan centrar entre dos caras y la intersección extendida de dos aristas, en la unión, en la unión como está y en el origen de unión. Ayuda: Joint reference › Mode. | omnicad/ui/comandos/ensamblar.py:85-95 y :13 (`CLAVES`) | 2026-10-25 |
+| ASM-11 | Unión: eje de movimiento propio (arista, eje, cilindro) y un eje por grado de libertad | Abierto | Media | Girar y deslizar solo pueden ir en X, Y o Z del marco de la unión. Fusion deja elegir el eje para Rotate, Slide, Axis, Normal, Pitch y Yaw. Ayuda: Joint reference › Rotation and Translation. | omnicad/ui/comandos/ensamblar.py:14 (`EJES`) y :38-52 | 2026-10-25 |
+| ASM-12 | Límites de unión por grado de libertad, valor de reposo e invertir | Abierto | Media | Una unión tiene un solo par mínimo/máximo, que recorta solo el movimiento principal; en cilíndrica, pasador-ranura, planar y bola los otros grados quedan libres. Faltan Rest e invertir límites. Ayuda: Joint Motion Limits. | omnicad/timeline/ops_ensamblar.py:477-492; ui/comandos/ensamblar.py:49-50 | 2026-10-25 |
+| ASM-13 | Vínculo de movimiento: elegir el grado de libertad de cada unión y animarlo | Abierto | Media | El vínculo toma siempre el giro si la unión gira, si no el desplazamiento: no se pueden relacionar los dos grados de una unión cilíndrica ni de una planar. Falta además el botón Animar del diálogo. Ayuda: Motion Link reference. | omnicad/timeline/ops_ensamblar.py:675-676; ui/comandos/ensamblar.py:224-230 | 2026-10-25 |
+| ASM-14 | Estudio de movimiento como panel: todas las uniones, reproducción, modo y velocidad | Abierto | Media | Hoy es un selector de una unión que la anima completa. Fusion muestra todas las uniones con su valor, botones de reproducir atrás y adelante o paso a paso, modo (una vez, ida y vuelta, bucle) y velocidad. Ayuda: Motion Study reference. SC7 cubre solo los gráficos. | omnicad/ui/ventana.py:1129-1136 | 2026-10-25 |
+| ASM-15 | Anclar (Pin), posición inicial y Capturar o Revertir posición | Abierto | Media | No existen Pin y Unpin (anclar al componente raíz como paso del timeline), Editar posición inicial ni Capturar y Revertir posición al mover componentes. Ayuda: Pin a component, Edit a component's initial position, Capture or revert position of components. | omnicad/ui/cinta.py:57-63 (sin esos botones); grep «Pin» en omnicad/ui: sin resultados | 2026-10-25 |
+
 
 ## Fusion 360
 

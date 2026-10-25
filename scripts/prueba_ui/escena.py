@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Escena de prueba para la ventana: bocetos separados en el espacio (para que el clic no se confunda) y cuerpos."""
-from arnes import api, geo
+from omnicad import api
+from omnicad.nucleo import geometria as geo
 
 
 def construir():
