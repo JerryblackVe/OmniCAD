@@ -123,7 +123,7 @@ Modelo: `InsertarFijacion` en `clon/omnicad/ui/comandos/fijacion.py`; base `Coma
 3. `construir(v, ctx)` valida (`exigir(...)`) y devuelve `self.crear_op(MiOp, v, ctx, **params)`;
    `desde_op` carga los valores al editar (doble clic en el timeline vía `POR_TIPO`).
 4. Registrar: `registrar(MiComando)` al final; módulo nuevo → agregarlo al import de
-   `ui/comandos/__init__.py`. La ventana crea una `QAction` por cada clave de `CATALOGO`.
+   `ui/comandos/__init__.py`. La ventana crea una `QAction` por cada clave de `CATALOGO`. Comando nuevo: regenerar la lista de claves de la API con `clon/.venv/Scripts/python.exe scripts/claves_comandos.py` (`tests/test_claves_comandos.py` lo exige).
 5. Botón en la cinta: `_i("Texto", "clave")` en el grupo/pestaña de `ui/cinta.py` (p. ej. `INSERTAR`).
    Sin clave el ítem queda GRISADO: regla de honestidad, nunca un botón activo que no hace nada.
 6. Ícono: función en `ui/iconos_extra.py` y su entrada en el dict de íconos (ver `_fijacion`).
