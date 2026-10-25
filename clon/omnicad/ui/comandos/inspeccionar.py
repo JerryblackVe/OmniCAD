@@ -245,6 +245,81 @@ class Interferencia(Comando):
             ctx.ventana.visor.set_capa("medida", None)
 
 
+class BuscarSimilares(Comando):
+    CLAVE, TITULO, ICONO = "buscar_similares", "Buscar componentes similares", "buscar_similares"
+    AYUDA = "Lista los componentes del diseño con la misma geometría o muy parecida a la del cuerpo elegido."
+    SIN_OP, TEXTO_ACEPTAR = True, "Cerrar"
+    _ESTADOS = {"duplicate": "duplicado", "highly_similar": "muy similar", "similar": "similar"}
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpo", "Componente (un cuerpo suyo)", {"cuerpo"}),
+                Info("resultado", "Componentes similares", self._resultado)]
+
+    def _resultado(self, v, ctx):
+        from ...api.errores import ErrorAPI
+        from ...api.herramientas_similares import buscar_similares
+        if not v.get("cuerpo"):
+            return "Elegí un cuerpo del componente."
+        componente = ctx.estado.cuerpo(v["cuerpo"][0]["ref"]["cuerpo"]).componente
+        if not componente:
+            return "Ese cuerpo no está en un componente: ENSAMBLAR › Nuevo componente lo crea."
+        try:
+            encontrados, comparados = buscar_similares(ctx.estado, componente)
+        except ErrorAPI as e:
+            return e.mensaje
+        coincidencias = encontrados[0]["matches"] if encontrados else []
+        if not coincidencias:
+            return f"Ningún otro componente se parece (se compararon {comparados})."
+        return "\n".join(f"{c['name']}: {self._ESTADOS[c['status']]}" for c in coincidencias)
+
+    def construir(self, v, ctx):
+        return None
+
+
+class ReconocerFunciones(Comando):
+    CLAVE, TITULO, ICONO = "reconocer_funciones", "Reconocer funciones", "reconocer_funciones"
+    AYUDA = ("Encuentra los agujeros, los empalmes y los chaflanes de un cuerpo sin historial (por ejemplo, importado) "
+             "y los lista. Solo lee la geometría.")
+    SIN_OP, TEXTO_ACEPTAR = True, "Cerrar"
+    _TEXTO = {"hole": "Agujeros", "fillet": "Empalmes", "chamfer": "Chaflanes"}
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpo", "Cuerpo sólido", {"cuerpo"}),
+                Casilla("agujeros", "Agujeros", True), Casilla("empalmes", "Empalmes", True),
+                Casilla("chaflanes", "Chaflanes", True),
+                Info("resultado", "Funciones encontradas", self._resultado)]
+
+    def _resultado(self, v, ctx):
+        from ...api import llamar
+        from ...api.sesion import Sesion
+        if not v.get("cuerpo"):
+            return "Elegí un cuerpo sólido."
+        tipos = [t for t, c in (("hole", "agujeros"), ("fillet", "empalmes"), ("chamfer", "chaflanes")) if v.get(c)]
+        if not tipos:
+            return "Marcá qué reconocer."
+        r = llamar(Sesion(ctx.doc), "find_features", {"body": v["cuerpo"][0]["ref"]["cuerpo"], "types": tipos})
+        if not r["ok"]:
+            return r["mensaje"]
+        r = r["result"]
+        lineas = []
+        for tipo, texto in self._TEXTO.items():
+            hallados = [f for f in r["features"] if f["type"] == tipo]
+            if not hallados:
+                continue
+            if tipo == "hole":
+                detalle = ", ".join(f"Ø{f['diameter']:g}" + (" pasante" if f["through"] else f" prof. {f['depth']:g}")
+                                    for f in hallados)
+            elif tipo == "fillet":
+                detalle = ", ".join(sorted({f"R{f['radius']:g}" for f in hallados}))
+            else:
+                detalle = ", ".join(sorted({f"{f['width']:g} mm a {f['angle']:g}°" for f in hallados}))
+            lineas.append(f"{texto}: {len(hallados)} ({detalle})")
+        return "\n".join(lineas) or "No se encontró ninguna función."
+
+    def construir(self, v, ctx):
+        return None
+
+
 class CentroMasa(Comando):
     CLAVE, TITULO, ICONO = "centro_masa", "Centro de masa", "centro_masa"
     AYUDA = "Muestra el centro de masa de los cuerpos (con su material físico)."
@@ -446,5 +521,5 @@ class RadioMinimo(_Analisis):
         return {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []], "radio": ctx.evaluar(v["radio"])}
 
 
-registrar(Medir, Interferencia, Seccion, Cebra, MapaEntorno, AnguloDesmoldeo, MapaCurvatura, PeineCurvatura, Isocurva,
+registrar(ReconocerFunciones, BuscarSimilares, Medir, Interferencia, Seccion, Cebra, MapaEntorno, AnguloDesmoldeo, MapaCurvatura, PeineCurvatura, Isocurva,
           Accesibilidad, RadioMinimo, CentroMasa)

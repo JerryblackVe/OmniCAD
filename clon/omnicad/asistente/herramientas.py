@@ -18,9 +18,10 @@ CON_EFECTOS = {
     "export_hidden_line_svg", "export_sketch", "export_parameters", "get_bill_of_materials", "render_image",
     "run_graph", "discard_recoverable_document", "define_material", "delete_material", "create_sheet_metal_rule",
     "delete_sheet_metal_rule", "add_font_folder", "decal_view", "set_browser_visibility", "sketch_view",
+    "create_plastic_rule", "delete_plastic_rule", "manage_command_presets",
 }
 # Mostrar suma mover la cámara y elegir en la ventana (set_view figura como modifica, pero solo guarda la cámara).
-VISTA = {"set_view", "select_bodies", "select_entities", "find_in_window"}
+VISTA = {"set_view", "select_bodies", "select_entities", "find_in_window", "select_by_boundary"}
 
 
 def en_modo(herramienta, modo):

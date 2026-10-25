@@ -1032,9 +1032,9 @@ class OpRevolucion(_OpConPerfiles):
     TIPO, ETIQUETA, ICONO = "revolucion", "Revolución", "↻"
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "eje": "v", "eje_ref": None, "extension": "angulo",
               "angulo": "360 deg", "direccion": "un_lado", "angulo2": "90 deg", "invertir": False,
-              "operacion": "nuevo", "objetivo": "", "objetivos": []}
+              "operacion": "nuevo", "objetivo": "", "objetivos": [], "hasta": None, "proyectar_eje": False}
     EXPRESIONES = ("angulo", "angulo2")
-    OPCIONES = {"extension": ("angulo", "completa"), "direccion": DIRECCIONES, "operacion": OPERACIONES_CUERPO}
+    OPCIONES = {"extension": ("angulo", "completa", "objeto"), "direccion": DIRECCIONES, "operacion": OPERACIONES_CUERPO}
 
     def expresiones(self):
         return [self.p[k] for k in self.EXPRESIONES if k in self.p]
@@ -1053,10 +1053,40 @@ class OpRevolucion(_OpConPerfiles):
         punto = plano.a_3d(u1, v1)
         return punto, plano.a_3d(u2, v2) - punto
 
+    def _hasta(self, estado):
+        """El objeto de «A objeto» como lo entiende `solidos_crear.revolver_hasta`."""
+        if not self.p.get("hasta"):
+            raise ErrorOperacion("Elegí el vértice, el plano, la cara plana o el cuerpo hasta donde gira el perfil.")
+        e = _resolver(self.p["hasta"], estado)
+        if e.tipo in ("vertice", "punto", "punto_boceto"):
+            return "punto", ent.como_punto(e)
+        if e.plano is not None:
+            return "plano", e.plano
+        if e.tipo == "cuerpo" and e.forma is not None:
+            return "forma", e.forma
+        raise ErrorOperacion("El objeto de la revolución tiene que ser un vértice, un plano, una cara plana o un cuerpo.")
+
     def ejecutar(self, estado, ctx):
         plano, caras = self._caras(estado, ctx)
         punto, direccion = self._eje(estado, plano)
+        if self.p.get("proyectar_eje"):         # «Project Axis»: el eje se lleva al plano del perfil
+            n = np.asarray(plano.normal, float)
+            punto = np.asarray(punto, float)
+            punto = punto - n * float((punto - plano.origen) @ n)
+            direccion = np.asarray(direccion, float)
+            direccion = direccion - n * float(direccion @ n)
+            if np.linalg.norm(direccion) < 1e-9:
+                raise ErrorOperacion("El eje es perpendicular al plano del perfil: no se puede proyectar.")
         direccion = np.asarray(direccion, float) * (-1 if self.p.get("invertir") else 1)
+        if self.p.get("extension") == "objeto":
+            if self.p.get("direccion", "un_lado") != "un_lado":
+                raise ErrorOperacion("«A objeto» gira hacia un solo lado: usá la dirección «Un lado».")
+            kernel = _kernel_crear()
+            if kernel is None or not hasattr(kernel, "revolver_hasta"):
+                raise ErrorOperacion("«A objeto» todavía no está disponible con este motor geométrico.")
+            forma = kernel.revolver_hasta(caras, punto, direccion, self._hasta(estado))
+            self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo()))
+            return
         a1 = 360.0 if self.p.get("extension") == "completa" else ctx.evaluar(self.p["angulo"], ANGULO)
         modo = self.p.get("direccion", "un_lado")
         if modo == "simetrica" and self.p.get("extension") != "completa":
@@ -1076,7 +1106,11 @@ class OpPrimitiva(Operacion):
     cuerpo nuevo o unida, cortada o intersecada con los cuerpos existentes.
 
     Caja: (x, y, z) es la esquina mínima; con caja_centrada (lo que guarda create_box) (x, y) es el centro de la
-    base y z la base. ancho = tamaño en X, largo = en Y, alto = en Z."""
+    base y z la base. ancho = tamaño en X, largo = en Y, alto = en Z.
+
+    `plano` (referencia a un plano o una cara plana, o None): la primitiva se crea sobre ese plano, como en Fusion:
+    (x, y) son coordenadas en el plano (ejes u y v), z la distancia sobre su normal y el eje de la caja, el cilindro
+    y el toroide es la normal. Sin `plano`, (x, y, z) son coordenadas del mundo y el eje es Z."""
     TIPO, ETIQUETA, ICONO = "primitiva", "Primitiva", "■"
     CAMPOS = {
         "caja": ["ancho", "largo", "alto"],
@@ -1088,7 +1122,7 @@ class OpPrimitiva(Operacion):
     ICONOS = {"caja": "■", "cilindro": "◯", "esfera": "●", "toroide": "◎"}
     PARAMS = {"forma": "caja", "ancho": "20 mm", "largo": "20 mm", "alto": "20 mm", "radio": "10 mm",
               "radio_mayor": "20 mm", "radio_menor": "5 mm", "x": "0", "y": "0", "z": "0",
-              "operacion": "nuevo", "objetivo": "", "caja_centrada": False}
+              "operacion": "nuevo", "objetivo": "", "caja_centrada": False, "plano": None}
     OPCIONES = {"forma": CAMPOS, "operacion": OPERACIONES_CUERPO}
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
@@ -1102,7 +1136,7 @@ class OpPrimitiva(Operacion):
         return self.ICONOS.get(self.p["forma"], "■")
 
     def dependencias(self):
-        return super().dependencias() | _deps_objetivo(self.p.get("objetivo"))
+        return super().dependencias() | _deps_objetivo(self.p.get("objetivo")) | ent.dependencias_de(self.p.get("plano"))
 
     def expresiones(self):
         return [self.p[k] for k in self.CAMPOS.get(self.p["forma"], []) + ["x", "y", "z"]]
@@ -1123,6 +1157,11 @@ class OpPrimitiva(Operacion):
             forma = geo.toroide(v["radio_mayor"], v["radio_menor"], pos)
         else:
             raise ErrorOperacion(f"Primitiva desconocida: {f}")
+        if self.p.get("plano"):                 # sobre un plano o una cara cualquiera: del marco local al del plano
+            pl = ent.como_plano(_resolver(self.p["plano"], estado))
+            m = np.identity(4)
+            m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = pl.u, pl.v, pl.normal, pl.origen
+            forma = geo.transformar(forma, m)
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self.p["objetivo"]))
 
 

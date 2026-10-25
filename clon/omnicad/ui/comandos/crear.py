@@ -4,7 +4,7 @@ import numpy as np
 
 from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpNervio, OpPatron, OpRed,
                                     OpRellenoContorno, OpRepujado, OpRosca, OpSaliente, OpSimetria, OpSolevacion,
-                                    OpSolidoEnvolvente, OpTuberia)
+                                    OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ...timeline.ops_solido import TIPOS_REPETIBLES
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
@@ -36,12 +36,18 @@ class Barrido(Comando):
 
     def campos(self, ctx):
         carril = lambda v: v.get("tipo") == "ruta_carril"  # noqa: E731
-        return [Opciones("tipo", "Tipo", {"ruta": "Ruta única", "ruta_carril": "Ruta + carril guía"}),
+        superficie = lambda v: v.get("tipo") == "ruta_superficie"  # noqa: E731
+        return [Opciones("tipo", "Tipo", {"ruta": "Ruta única", "ruta_carril": "Ruta + carril guía",
+                                          "ruta_superficie": "Ruta + superficie guía"}),
                 Seleccion("perfiles", "Perfil", PERFIL, maximo=None), Seleccion("ruta", "Ruta", CURVA, maximo=None),
                 Seleccion("carril", "Carril guía", CURVA, maximo=None, visible_si=carril),
+                Seleccion("superficie_guia", "Superficie guía", {"cara"}, maximo=None, visible_si=superficie),
                 Expresion("distancia", "Distancia", "1", ESCALAR),
-                Opciones("orientacion", "Orientación", {"perpendicular": "Perpendicular", "paralela": "Paralela"},
-                         visible_si=lambda v: not carril(v)),
+                Opciones("orientacion", "Orientación", {"perpendicular": "Perpendicular", "paralela": "Paralela",
+                                                        "alineada": "Alineada"},
+                         visible_si=lambda v: not carril(v) and not superficie(v)),
+                Seleccion("eje_alineado", "Eje de la orientación alineada", {"eje", "arista_lineal", "plano", "cara_plana"},
+                          visible_si=lambda v: v.get("orientacion") == "alineada" and not carril(v) and not superficie(v)),
                 Opciones("escala_carril", "Escala del perfil", {"escalar": "Escalar", "ninguna": "Ninguna"},
                          visible_si=carril),
                 Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO),
@@ -50,16 +56,34 @@ class Barrido(Comando):
     def construir(self, v, ctx):
         exigir(v, "perfiles", "Seleccioná el perfil.")
         exigir(v, "ruta", "Seleccioná la ruta.")
+        tipo = v.get("tipo")
+        if tipo == "ruta_superficie":
+            exigir(v, "superficie_guia", "Seleccioná la superficie guía.")
+        alineada = tipo == "ruta" and v.get("orientacion") == "alineada"
+        if alineada:
+            exigir(v, "eje_alineado", "Seleccioná el eje de la orientación alineada.")
         return self.crear_op(OpBarrido, v, ctx, perfiles=refs(v, "perfiles"), ruta=refs(v, "ruta"),
-                             carril=refs(v, "carril") if v.get("tipo") == "ruta_carril" else [],
-                             **{k: v[k] for k in ("orientacion", "distancia", "torsion", "conicidad", "escala_carril",
-                                                  "operacion")}, objetivos=objetivos(v))
+                             carril=refs(v, "carril") if tipo == "ruta_carril" else [],
+                             superficie_guia=refs(v, "superficie_guia") if tipo == "ruta_superficie" else [],
+                             eje_alineado=ref1(v, "eje_alineado") if alineada else None,
+                             orientacion=v["orientacion"] if tipo == "ruta" else "perpendicular",
+                             **{k: v[k] for k in ("distancia", "torsion", "conicidad", "escala_carril", "operacion")},
+                             objetivos=objetivos(v))
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, tipo="ruta_carril" if op.p.get("carril") else "ruta")
-        for k in ("perfiles", "ruta", "carril"):
-            v[k] = hits(op.p[k], ctx.estado)
+        v = dict(op.p, tipo="ruta_carril" if op.p.get("carril") else "ruta_superficie" if op.p.get("superficie_guia")
+                 else "ruta")
+        for k in ("perfiles", "ruta", "carril", "superficie_guia"):
+            v[k] = hits(op.p.get(k) or [], ctx.estado)
+        v["eje_alineado"] = _h1(op.p.get("eje_alineado"), ctx.estado)
         return _con_objetivos(op, ctx, v)
+
+
+COND_BORDE = {"libre": "Libre", "direccion": "Dirección"}
+
+
+def _con_direccion(lado):
+    return lambda v: v.get(f"condicion_{lado}") == "direccion"
 
 
 class Solevacion(Comando):
@@ -74,21 +98,42 @@ class Solevacion(Comando):
                           visible_si=lambda v: v.get("guia") == "carriles"),
                 Seleccion("linea_central", "Línea central", CURVA, minimo=0, maximo=None,
                           visible_si=lambda v: v.get("guia") == "linea_central"),
-                Casilla("cerrada", "Cerrado"), Casilla("reglada", "Tramos rectos"), campo_operacion(),
-                campo_objetivos()]
+                Casilla("cerrada", "Cerrado"), Casilla("reglada", "Tramos rectos"),
+                Opciones("condicion_inicio", "Condición del primer perfil", COND_BORDE),
+                Expresion("angulo_inicio", "Ángulo del primer perfil", "90 deg", ANGULO, visible_si=_con_direccion("inicio")),
+                Expresion("peso_inicio", "Peso del primer perfil", "1", ESCALAR, visible_si=_con_direccion("inicio")),
+                Opciones("condicion_fin", "Condición del último perfil", COND_BORDE),
+                Expresion("angulo_fin", "Ángulo del último perfil", "90 deg", ANGULO, visible_si=_con_direccion("fin")),
+                Expresion("peso_fin", "Peso del último perfil", "1", ESCALAR, visible_si=_con_direccion("fin")),
+                Casilla("fusionar_tangentes", "Fusionar aristas tangentes"), campo_operacion(), campo_objetivos()]
+
+    @staticmethod
+    def _condicion(v, lado):
+        if v.get(f"condicion_{lado}") != "direccion":
+            return None
+        return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
 
     def construir(self, v, ctx):
         if len(v.get("secciones") or []) < 2:
             raise ErrorComando("Seleccioná al menos dos perfiles, en orden.")
+        for lado in ("inicio", "fin"):
+            if self._condicion(v, lado):
+                ctx.evaluar(v[f"angulo_{lado}"], ANGULO)
+                ctx.evaluar(v[f"peso_{lado}"], ESCALAR)
         guia = v.get("guia")
         return self.crear_op(OpSolevacion, v, ctx, secciones=refs(v, "secciones"),
                              carriles=refs(v, "carriles") if guia == "carriles" else [],
                              linea_central=refs(v, "linea_central") if guia == "linea_central" else [],
                              cerrada=v["cerrada"], reglada=v["reglada"], operacion=v["operacion"],
-                             objetivos=objetivos(v))
+                             condicion_inicio=self._condicion(v, "inicio"), condicion_fin=self._condicion(v, "fin"),
+                             fusionar_tangentes=bool(v.get("fusionar_tangentes")), objetivos=objetivos(v))
 
     def desde_op(self, op, ctx):
         v = dict(op.p, guia="linea_central" if op.p.get("linea_central") else "carriles")
+        for lado in ("inicio", "fin"):
+            c = op.p.get(f"condicion_{lado}") or {}
+            v[f"condicion_{lado}"] = "direccion" if c.get("tipo") == "direccion" else "libre"
+            v[f"angulo_{lado}"], v[f"peso_{lado}"] = c.get("angulo", "90 deg"), c.get("peso", "1")
         for k in ("secciones", "carriles", "linea_central"):
             v[k] = hits(op.p[k], ctx.estado)
         return _con_objetivos(op, ctx, v)
@@ -96,17 +141,24 @@ class Solevacion(Comando):
 
 class _NervioRed(Comando):
     CLASE_OP = OpNervio
+    ES_RED = False
 
     def campos(self, ctx):
+        red, nervio = self.ES_RED, not self.ES_RED
         return [Seleccion("curvas", "Curvas", {"curva_boceto"}, maximo=None),
                 Expresion("espesor", "Grosor", "2 mm"),
                 Opciones("extension", "Tipo de extensión", {"hasta_siguiente": "Hasta el siguiente",
                                                             "profundidad": "Profundidad"}),
                 Expresion("profundidad", "Profundidad", "10 mm",
                           visible_si=lambda v: v.get("extension") == "profundidad"),
-                Opciones("direccion", "Opciones de grosor", {"simetrica": "Simétrica", "lado1": "Un lado",
-                                                             "lado2": "Otro lado"}),
+                Opciones("direccion", "Dirección e inicio", {"simetrica": "Simétrica", "lado1": "Un lado, desde abajo",
+                                                             "lado2": "Un lado, desde arriba"}),
                 Casilla("invertir", "Invertir dirección"),
+                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", "0 deg", ANGULO),
+                Seleccion("direccion_desmoldeo", "Dirección de extracción", {"plano", "cara_plana", "eje", "arista_lineal"},
+                          minimo=0, visible_si=lambda v: nervio),
+                Expresion("radio_empalme", "Radio del empalme", "0 mm", visible_si=lambda v: red),
+                Casilla("extender", "Extender curvas", True, visible_si=lambda v: red),
                 Seleccion("objetivo", "Cuerpo", {"cuerpo"}, minimo=0, ayuda="Sin selección: el más cercano.")]
 
     def construir(self, v, ctx):
@@ -114,11 +166,16 @@ class _NervioRed(Comando):
         ctx.evaluar(v["espesor"])
         obj = _cuerpos(v.get("objetivo"))
         return self.crear_op(self.CLASE_OP, v, ctx, curvas=refs(v, "curvas"), objetivo=obj[0] if obj else "",
-                             **{k: v[k] for k in ("espesor", "extension", "profundidad", "direccion", "invertir")})
+                             direccion_desmoldeo=None if self.ES_RED else ref1(v, "direccion_desmoldeo"),
+                             radio_empalme=v["radio_empalme"] if self.ES_RED else "0 mm",
+                             extender=bool(v["extender"]) if self.ES_RED else True,
+                             **{k: v[k] for k in ("espesor", "extension", "profundidad", "direccion", "invertir",
+                                                  "angulo_desmoldeo")})
 
     def desde_op(self, op, ctx):
         return dict(op.p, curvas=hits(op.p["curvas"], ctx.estado), objetivo=_hits_cuerpos(op.p.get("objetivo"),
-                                                                                         ctx.estado))
+                                                                                         ctx.estado),
+                    direccion_desmoldeo=_h1(op.p.get("direccion_desmoldeo"), ctx.estado))
 
 
 class Nervio(_NervioRed):
@@ -128,6 +185,7 @@ class Nervio(_NervioRed):
 
 
 class Red(_NervioRed):
+    ES_RED = True
     CLAVE, TITULO, ICONO = "red", "Red", "red"
     AYUDA = "Red de nervios desde varias curvas abiertas, perpendicular al boceto."
     CLASE_OP = OpRed
@@ -858,23 +916,69 @@ class RellenoContorno(Comando):
 
 class SolidoEnvolvente(Comando):
     CLAVE, TITULO, ICONO = "cuerpo_envolvente", "Sólido envolvente", "cuerpo_envolvente"
-    AYUDA = "Caja o cilindro que encierra los cuerpos elegidos."
+    AYUDA = "Caja, cilindro o tubo que encierra los cuerpos elegidos."
     CLASE_OP = OpSolidoEnvolvente
 
     def campos(self, ctx):
+        dos_ejes = lambda v: v.get("orientacion") in ("z_x", "z_y", "x_y")  # noqa: E731
         return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None),
-                Opciones("tipo", "Forma", {"caja": "Caja", "cilindro": "Cilindro"}),
+                Opciones("tipo", "Forma", {"caja": "Caja", "cilindro": "Cilindro", "tubo": "Tubo"}),
                 Opciones("eje", "Eje del cilindro", {"z": "Z", "x": "X", "y": "Y"},
-                         visible_si=lambda v: v.get("tipo") == "cilindro"),
-                Expresion("margen", "Desfase", "0 mm"), campo_operacion(), campo_objetivos()]
+                         visible_si=lambda v: v.get("tipo") != "caja" and v.get("orientacion", "modelo") == "modelo"),
+                Expresion("espesor_tubo", "Pared del tubo", "", visible_si=lambda v: v.get("tipo") == "tubo"),
+                Expresion("margen", "Desfase", "0 mm"),
+                Opciones("orientacion", "Orientación", {"modelo": "Del modelo", "automatica": "Automática",
+                                                        "z_x": "Eje Z / eje X", "z_y": "Eje Z / eje Y",
+                                                        "x_y": "Ejes X e Y", "scu": "SCU"}),
+                Texto("scu", "Paso del SCU (id)", "", visible_si=lambda v: v.get("orientacion") == "scu"),
+                Seleccion("eje_a", "Primer eje", {"eje", "arista"}, visible_si=dos_ejes),
+                Seleccion("eje_b", "Segundo eje", {"eje", "arista"}, visible_si=dos_ejes),
+                Casilla("componente", "En un componente nuevo"),
+                Casilla("grupo_rigido", "Grupo rígido", visible_si=lambda v: v.get("componente")),
+                campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos.")
+        if v.get("orientacion") in ("z_x", "z_y", "x_y"):
+            exigir(v, "eje_a", "Elegí el primer eje de la orientación.")
+            exigir(v, "eje_b", "Elegí el segundo eje de la orientación.")
+        if v.get("orientacion") == "scu" and not str(v.get("scu") or "").strip():
+            raise ErrorComando("Escribí el id del paso del sistema de coordenadas de usuario.")
         return self.crear_op(OpSolidoEnvolvente, v, ctx, cuerpos=_cuerpos(v["cuerpos"]), objetivos=objetivos(v),
-                             **{k: v[k] for k in ("tipo", "margen", "eje", "operacion")})
+                             eje_a=ref1(v, "eje_a"), eje_b=ref1(v, "eje_b"), scu=str(v.get("scu") or "").strip() or None,
+                             componente=bool(v.get("componente")), grupo_rigido=bool(v.get("componente") and v.get("grupo_rigido")),
+                             **{k: v[k] for k in ("tipo", "margen", "eje", "operacion", "orientacion", "espesor_tubo")})
 
     def desde_op(self, op, ctx):
-        return _con_objetivos(op, ctx, dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado)))
+        return _con_objetivos(op, ctx, dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado),
+                                            eje_a=_h1(op.p.get("eje_a"), ctx.estado),
+                                            eje_b=_h1(op.p.get("eje_b"), ctx.estado)))
+
+
+class VolumenFluido(Comando):
+    CLAVE, TITULO, ICONO = "volumen_fluido", "Volumen de fluido", "volumen_fluido"
+    AYUDA = ("Crea el sólido del interior o del exterior de un diseño, para análisis de flujo. Las aberturas se tapan "
+             "con superficies.")
+    CLASE_OP = OpVolumenFluido
+
+    def campos(self, ctx):
+        externo = lambda v: v.get("tipo") == "externo"  # noqa: E731
+        return [Seleccion("cuerpos", "Cuerpos del diseño", {"cuerpo"}, maximo=None),
+                Seleccion("tapas", "Superficies que tapan las aberturas", {"cuerpo"}, minimo=0, maximo=None),
+                Opciones("tipo", "Volumen", {"interno": "Interno", "externo": "Externo"}),
+                Opciones("forma_externa", "Forma exterior", {"caja": "Caja", "cilindro": "Cilindro",
+                                                              "semiesfera": "Semiesfera"}, visible_si=externo),
+                Expresion("margen", "Distancia al modelo", "10 mm", visible_si=externo),
+                Casilla("separar_caras", "Separar caras")]
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos del diseño.")
+        ctx.evaluar(v["margen"])
+        return self.crear_op(OpVolumenFluido, v, ctx, cuerpos=_cuerpos(v["cuerpos"]), tapas=_cuerpos(v.get("tapas")),
+                             **{k: v[k] for k in ("tipo", "forma_externa", "margen", "separar_caras")})
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), tapas=_hits_cuerpos(op.p["tapas"], ctx.estado))
 
 
 class Saliente(Comando):
@@ -924,5 +1028,5 @@ class Labio(Comando):
         return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado), direccion=_h1(op.p["direccion"], ctx.estado))
 
 
-registrar(Barrido, Solevacion, Nervio, Red, Repujado, Agujero, Rosca, Bobina, Tuberia, PatronRectangular,
+registrar(Barrido, Solevacion, Nervio, Red, Repujado, Agujero, Rosca, Bobina, Tuberia, PatronRectangular, VolumenFluido,
           PatronCircular, PatronRuta, Simetria, RellenoContorno, SolidoEnvolvente, Saliente, Labio)

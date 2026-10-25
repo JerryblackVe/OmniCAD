@@ -158,13 +158,14 @@ Abierto 4 · Sin verificar 1.
 
 Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
 
-Abierto 3.
+Abierto 4.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | SOL-30 | Dos mensajes de error de Sólido engañan | Abierto | Baja | `split_body` dice «probá extenderla» aun con `extend=true`. Un valor mal tipado de una lista (p. ej. `create_boss positions=[[0,0,20]]`) dice «no es array» cuando la lista sí es un array: lo que no sirve es cada elemento (tiene que ser string u objeto). En la ventana, Empalme con un radio de 100 mm sobre una caja de 30 mm manda «reordená los empalmes del timeline» aunque haya un solo empalme: ahí hay que decir que el radio no entra en las caras vecinas. | omnicad/nucleo/solidos_modificar.py:1140; omnicad/api/registro.py (validación de tipos) | 2026-10-24 |
 | SOL-34 | Pulsar/tirar sobre una cara crea un paso «Desfase de cara» y al editarlo abre otro diálogo | Abierto | Baja | Pulsar/tirar con una cara crea el paso `desfase_cara` («Desfase de cara1») y al hacer doble clic en el timeline se abre «Cara de desfase», no «Pulsar/tirar»: el usuario ve otro comando con otro título. Darle al paso el nombre y el diálogo del comando que lo creó. | omnicad/ui/comandos/modificar.py:272 | 2026-10-24 |
 | SOL-35 | El factor de escala acepta una unidad («2 mm») | Abierto | Baja | En la ventana, Escala con Factor «2 mm» se toma como 2 sin avisar; los campos de longitud rechazan «15 deg» y los de ángulo «45 mm». Un factor no lleva unidad: rechazarlo con el mismo mensaje. | omnicad/ui/comandos/modificar.py (campo `factor` de escala_3d) | 2026-10-24 |
+| SOL-36 | Carpeta «Conjuntos de selección» en el navegador | Abierto | Baja | Los conjuntos se crean y se eligen desde SELECCIONAR › Herramientas de selección, pero el navegador no los lista (Fusion: carpeta con botones Elegir y Actualizar). | omnicad/ui/ventana.py › `_elegir_conjunto_seleccion` | 2026-10-25 |
 
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 

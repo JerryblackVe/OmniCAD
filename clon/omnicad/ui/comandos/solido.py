@@ -174,11 +174,14 @@ class Revolucion(Comando):
         return [
             Seleccion("perfiles", "Perfil", {"perfil", "cara_plana"}, maximo=None),
             Seleccion("eje", "Eje", {"eje"}),
-            Opciones("extension", "Tipo", {"angulo": "Ángulo", "completa": "Completo"}),
-            Opciones("direccion", "Dirección", DIRECCIONES, visible_si=lambda v: v.get("extension") != "completa"),
-            Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=lambda v: v.get("extension") != "completa"),
+            Casilla("proyectar_eje", "Proyectar eje"),
+            Opciones("extension", "Tipo", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
+            Seleccion("hasta", "Objeto", {"vertice", "cara", "plano", "cuerpo"},
+                      visible_si=lambda v: v.get("extension") == "objeto"),
+            Opciones("direccion", "Dirección", DIRECCIONES, visible_si=lambda v: v.get("extension") == "angulo"),
+            Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=lambda v: v.get("extension") == "angulo"),
             Expresion("angulo2", "Ángulo 2", "90 deg", ANGULO,
-                      visible_si=lambda v: v.get("extension") != "completa" and v.get("direccion") == "dos_lados"),
+                      visible_si=lambda v: v.get("extension") == "angulo" and v.get("direccion") == "dos_lados"),
             Casilla("invertir", "Invertir dirección"),
             campo_operacion(),
             campo_objetivos(),
@@ -197,16 +200,19 @@ class Revolucion(Comando):
         if eje is None:
             raise ErrorComando("Seleccioná el eje de revolución (una línea, arista o eje).")
         ctx.evaluar(v.get("angulo") or "0", ANGULO)
+        if v.get("extension") == "objeto":
+            exigir(v, "hasta", "Seleccioná el objeto hasta donde gira el perfil.")
         params = {k: v.get(k) for k in ("extension", "direccion", "angulo", "angulo2", "invertir", "operacion")}
         params.update(boceto=boceto, perfiles=perfiles, caras=caras, eje_ref=eje, eje="v",
-                      objetivos=objetivos(v), objetivo="")
+                      objetivos=objetivos(v), objetivo="", proyectar_eje=bool(v.get("proyectar_eje")),
+                      hasta=ref1(v, "hasta") if v.get("extension") == "objeto" else None)
         return self.crear_op(OpRevolucion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
         """Arco con asa alrededor del eje, a la distancia del centro del perfil (el segundo lado en «Dos
         lados»; en «Simétrica» el asa va a la mitad del ángulo, como el resultado)."""
         from .. import manipuladores as mp
-        if v.get("extension") == "completa":
+        if v.get("extension") != "angulo":
             return []
         base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
         if base is None:
@@ -234,6 +240,7 @@ class Revolucion(Comando):
         v = dict(op.p)
         v["perfiles"] = perfiles_desde_op(op, ctx.estado)
         v["objetivos"] = objetivos_desde_op(op, ctx.estado)
+        v["hasta"] = [hit_desde_ref(op.p["hasta"], ctx.estado)] if op.p.get("hasta") else []
         if op.p.get("eje_ref"):
             v["eje"] = [hit_desde_ref(op.p["eje_ref"], ctx.estado)]
         elif op.p.get("eje") not in ("u", "v", None):

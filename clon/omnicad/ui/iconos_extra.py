@@ -587,6 +587,100 @@ def _cuerpo_envolvente(p):
           AZUL_BORDE)
 
 
+def _volumen_fluido(p):
+    _guiones(p, AZUL_BORDE, 0.9)
+    p.drawRoundedRect(QRectF(4, 4, 24, 24), 3, 3)
+    p.setPen(QPen(AZUL_BORDE, 1.6, Qt.SolidLine, Qt.RoundCap))
+    for y in (11, 16, 21):
+        ruta = QPainterPath()
+        ruta.moveTo(7, y)
+        ruta.cubicTo(11, y - 3, 14, y + 3, 18, y)
+        ruta.cubicTo(21, y - 3, 23, y + 2, 25, y)
+        p.drawPath(ruta)
+
+
+def _buscar_similares(p):
+    for x in (4, 18):
+        _guiones(p, AZUL_BORDE, 1.0, (9, 0.01))
+        p.setBrush(QBrush(QColor(159, 207, 245, 160)))
+        p.setPen(QPen(AZUL_BORDE, 1.2))
+        p.drawRoundedRect(QRectF(x, 9, 10, 14), 2, 2)
+    p.setPen(QPen(GRIS_OSCURO, 1.8, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(14.5, 14), QPointF(17.5, 14))
+    p.drawLine(QPointF(14.5, 18), QPointF(17.5, 18))
+
+
+def _regla_plastico(p):
+    """Pieza de plástico (gotas de desmoldeo en su pared) con la regla asignada: una marca de verificación."""
+    p.setBrush(QBrush(QColor(159, 207, 245, 160)))
+    p.setPen(QPen(AZUL_BORDE, 1.4))
+    p.drawRoundedRect(QRectF(4, 9, 16, 15), 2, 2)
+    p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    ruta = QPainterPath()
+    ruta.moveTo(17, 9)
+    ruta.lineTo(21, 14)
+    ruta.lineTo(28, 5)
+    p.drawPath(ruta)
+
+
+def _reglas_plastico(p):
+    """Biblioteca de reglas: tres filas con su deslizador."""
+    p.setPen(QPen(GRIS_OSCURO, 1.6, Qt.SolidLine, Qt.RoundCap))
+    for y, x in ((9, 11), (16, 20), (23, 14)):
+        p.drawLine(QPointF(5, y), QPointF(27, y))
+        p.setBrush(QBrush(QColor(159, 207, 245)))
+        p.drawEllipse(QPointF(x, y), 2.6, 2.6)
+
+
+def _consejos_diseno(p):
+    """Pieza con una bombilla de consejo."""
+    p.setBrush(QBrush(QColor(159, 207, 245, 160)))
+    p.setPen(QPen(AZUL_BORDE, 1.4))
+    p.drawRoundedRect(QRectF(3, 14, 18, 14), 2, 2)
+    p.setBrush(QBrush(QColor(255, 214, 102)))
+    p.setPen(QPen(GRIS_OSCURO, 1.3))
+    p.drawEllipse(QPointF(22, 10), 5.5, 5.5)
+    p.drawLine(QPointF(20, 17), QPointF(24, 17))
+
+
+def _patron_geometrico(p):
+    """Placa con un gradiente de círculos de tamaño creciente."""
+    p.setBrush(QBrush(QColor(159, 207, 245, 160)))
+    p.setPen(QPen(AZUL_BORDE, 1.3))
+    p.drawRoundedRect(QRectF(3, 6, 26, 20), 2, 2)
+    p.setBrush(QBrush(QColor(60, 90, 130)))
+    p.setPen(Qt.NoPen)
+    for i, r in enumerate((1.2, 1.9, 2.6)):
+        for j in range(2):
+            p.drawEllipse(QPointF(8 + i * 8, 12 + j * 8), r, r)
+
+
+def _reconocer_funciones(p):
+    """Pieza con un agujero y un empalme marcados por una lupa."""
+    p.setBrush(QBrush(QColor(159, 207, 245, 160)))
+    p.setPen(QPen(AZUL_BORDE, 1.3))
+    p.drawRoundedRect(QRectF(3, 6, 20, 18), 3, 3)
+    p.setBrush(QBrush(QColor(255, 255, 255)))
+    p.drawEllipse(QPointF(11, 15), 3.5, 3.5)
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap))
+    p.drawEllipse(QPointF(21, 20), 5.0, 5.0)
+    p.drawLine(QPointF(24.5, 23.5), QPointF(28.5, 27.5))
+
+
+def _reticula_volumetrica(p):
+    """Cubo con una trama de barras cruzadas adentro."""
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(AZUL_BORDE, 1.5))
+    p.drawRoundedRect(QRectF(4, 4, 24, 24), 2, 2)
+    p.setPen(QPen(GRIS_OSCURO, 1.6, Qt.SolidLine, Qt.RoundCap))
+    for t in (10.5, 16, 21.5):
+        p.drawLine(QPointF(4, t), QPointF(28, t))
+        p.drawLine(QPointF(t, 4), QPointF(t, 28))
+    p.setPen(QPen(AZUL_BORDE, 1.3))
+    p.drawLine(QPointF(4, 4), QPointF(28, 28))
+
+
 def _operacion_base(p):
     _guiones(p, GRIS_OSCURO, 1.2)
     p.drawRoundedRect(QRectF(3, 3, 26, 26), 4, 4)
@@ -1320,6 +1414,24 @@ def _asistente(p):
     destello = [QPointF(25, 1), QPointF(26.6, 5.4), QPointF(31, 7), QPointF(26.6, 8.6), QPointF(25, 13),
                 QPointF(23.4, 8.6), QPointF(19, 7), QPointF(23.4, 5.4)]
     _poli(p, destello, PUNTO, BORDE_PUNTO)
+
+
+def _clip(p):
+    """Adjuntar (IA-9): clip de papel inclinado, solo trazo (iconos_tema lo aclara en temas oscuros)."""
+    c = QPainterPath(QPointF(19, 10))
+    c.lineTo(19, 22)
+    c.arcTo(QRectF(13, 19, 6, 6), 0, -180)
+    c.lineTo(13, 8)
+    c.arcTo(QRectF(13, 3.5, 9, 9), 180, -180)
+    c.lineTo(22, 24)
+    c.arcTo(QRectF(11, 18.5, 11, 11), 0, -180)
+    c.lineTo(11, 13)
+    p.translate(16, 16)
+    p.rotate(40)
+    p.translate(-16, -16)
+    p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(c)
 
 
 def _contorno_engranaje(cx, cy, ra, rf, dientes, achatado, giro=0.0):
@@ -2074,24 +2186,6 @@ def _secuencias(p):
         p.drawLine(QPointF(15, y), QPointF(28 - 4 * (k % 2), y))
 
 
-def _clip(p):
-    """Adjuntar (IA-9): clip de papel inclinado, solo trazo (iconos_tema lo aclara en temas oscuros)."""
-    c = QPainterPath(QPointF(19, 10))
-    c.lineTo(19, 22)
-    c.arcTo(QRectF(13, 19, 6, 6), 0, -180)
-    c.lineTo(13, 8)
-    c.arcTo(QRectF(13, 3.5, 9, 9), 180, -180)
-    c.lineTo(22, 24)
-    c.arcTo(QRectF(11, 18.5, 11, 11), 0, -180)
-    c.lineTo(11, 13)
-    p.translate(16, 16)
-    p.rotate(40)
-    p.translate(-16, -16)
-    p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-    p.setBrush(Qt.NoBrush)
-    p.drawPath(c)
-
-
 DIBUJOS_EXTRA = {
     # sólido / crear
     "barrido": _barrido, "solevacion": _solevacion, "nervio": _nervio, "red": _red, "labio": _labio,
@@ -2100,6 +2194,9 @@ DIBUJOS_EXTRA = {
     "patron_circular_3d": _patron_circular_3d, "patron_ruta": _patron_ruta, "simetria_3d": _simetria_3d,
     "patron_puntos": _patron_puntos, "multitransformar": _multitransformar,
     "engrosar": _engrosar, "relleno_contorno": _relleno_contorno, "cuerpo_envolvente": _cuerpo_envolvente,
+    "volumen_fluido": _volumen_fluido, "buscar_similares": _buscar_similares,
+    "regla_plastico": _regla_plastico, "reglas_plastico": _reglas_plastico, "consejos_diseno": _consejos_diseno,
+    "patron_geometrico": _patron_geometrico, "reconocer_funciones": _reconocer_funciones, "reticula_volumetrica": _reticula_volumetrica,
     "operacion_base": _operacion_base, "derivar": _derivar, "crear_forma": _crear_forma,
     "engranaje_3d": _engranaje_3d, "eje_escalonado": _eje_escalonado,
     # modificar

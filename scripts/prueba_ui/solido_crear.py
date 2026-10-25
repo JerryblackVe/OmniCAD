@@ -41,6 +41,7 @@ run("revolucion", lambda: (
     C.caso(v, AR, "revolucion", {"perfiles": per("Rect"), "eje": eje("X")}, {"extension": "angulo", "angulo": "90 deg"}, esperado=pi * 100 * 20 / 4, etiqueta="revolución 90°"),
     C.caso(v, AR, "revolucion", {"perfiles": per("Rect"), "eje": eje("X")}, {"extension": "angulo", "angulo": "90 deg", "direccion": "simetrica"},
            esperado=pi * 100 * 20 / 4, etiqueta="revolución 90° simétrica", rt=False),
+    C.caso(v, AR, "revolucion", {"perfiles": per("Rect"), "eje": eje("X")}, {"proyectar_eje": True}, esperado=pi * 100 * 20, etiqueta="revolución con eje proyectado", rt=False),
     C.negativos(v, AR, "revolucion", {"perfiles": per("Rect"), "eje": eje("X")}, "angulo", malos=("abc", "0 deg", "-90 deg", "400 deg"),
                 vals={"extension": "angulo"})))
 
@@ -127,8 +128,17 @@ run("simetria_3d", lambda: (
 run("cuerpo_envolvente", lambda: (
     C.caso(v, AR, "cuerpo_envolvente", {"cuerpos": lambda: [A.hit_cuerpo(v, cil)]}, {}, esperado=20 * 20 * 30, foto="cuerpo_envolvente"),
     C.caso(v, AR, "cuerpo_envolvente", {"cuerpos": lambda: [A.hit_cuerpo(v, cil)]}, {"tipo": "cilindro"}, esperado=pi * 100 * 30, etiqueta="envolvente cilindro", rt=False),
+    C.caso(v, AR, "cuerpo_envolvente", {"cuerpos": lambda: [A.hit_cuerpo(v, cil)]}, {"tipo": "tubo", "espesor_tubo": "1 mm"}, esperado=pi * (100 - 81) * 30, etiqueta="envolvente tubo", rt=False),
+    C.caso(v, AR, "cuerpo_envolvente", {"cuerpos": lambda: [A.hit_cuerpo(v, cil)]}, {"orientacion": "automatica"}, esperado=20 * 20 * 30, etiqueta="envolvente automática", rt=False),
     C.negativos(v, AR, "cuerpo_envolvente")))
 run("relleno_contorno", lambda: C.negativos(v, AR, "relleno_contorno"))
+run("patron_geometrico", lambda: (
+    C.caso(v, AR, "patron_geometrico", {"caras": lambda: [A.hit_cara(v, caja, normal=(0, 0, 1))]},
+           {"tamano1": "2 mm", "tamano2": "4 mm", "distancia": "6 mm", "operacion": "cortar"}, etiqueta="patrón geométrico de esferas (cortar)", rt=False, foto="patron_geometrico"),
+    C.caso(v, AR, "patron_geometrico", {"caras": lambda: [A.hit_cara(v, caja, normal=(0, 0, 1))]},
+           {"objeto": "cilindro", "distribucion": "hexagonal", "tamano1": "2 mm", "tamano2": "2 mm", "distancia": "6 mm", "operacion": "unir"},
+           etiqueta="patrón geométrico hexagonal de cilindros (unir)", rt=False),
+    C.negativos(v, AR, "patron_geometrico", {"caras": lambda: [A.hit_cara(v, caja, normal=(0, 0, 1))]}, "distancia", malos=("abc", "0 mm", "-5 mm"))))
 
 A.guardar_registro("u2a_solido_crear")
 fallas = [r for r in A.REGISTRO if not r["ok"]]

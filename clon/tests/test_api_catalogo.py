@@ -25,7 +25,10 @@ ESPERADAS = {"documento": {"get_scene_info", "new_document", "open_document", "s
                             "manage_configurations", "manage_comments", "list_recent_documents", "get_preferences",
                             "set_preference", "isolate_bodies", "set_object_visibility",
                             # MCP-50 (tests/test_api_vivo.py): la selección de la ventana en vivo
-                            "get_selection", "select_entities"},
+                            "get_selection", "select_entities",
+                            # SOL-23 y SOL-27: conjuntos de selección, por límite, semilla y límite, y preajustes
+                            "manage_selection_sets", "select_by_boundary", "select_by_seed_and_boundary",
+                            "manage_command_presets"},
              "parametros": {"get_parameters", "create_parameter", "set_parameter", "delete_parameter", "export_parameters",
                            "import_parameters"}}
 
@@ -46,7 +49,7 @@ def temporales():
 def test_herramientas_registradas_por_grupo():
     for grupo, nombres in ESPERADAS.items():
         assert {h["nombre"] for h in api.catalogo(grupo)} == nombres
-    assert len(api.catalogo(["documento", "parametros"])) == 49
+    assert len(api.catalogo(["documento", "parametros"])) == 53
 
 
 def test_esquemas_validos_y_documentados():

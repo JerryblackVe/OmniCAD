@@ -54,17 +54,66 @@ def _informe(res, elegidos, clave):
 _REDONDEOS = {"both": "ambos", "rounds": "redondeos", "fillets": "empalmes"}
 
 
+def _puntos_radio(puntos, radius_type):
+    if radius_type != "variable":
+        raise error("INVALID_ARGUMENTS", "radius_points solo se usa con radius_type=variable.")
+    salida = []
+    for q in puntos:
+        if not isinstance(q, dict) or set(q) != {"position", "radius"}:
+            raise error("INVALID_ARGUMENTS", 'Cada punto de radio es {"position": 0..1, "radius": mm}.')
+        if isinstance(q["position"], (int, float)) and not 0 < q["position"] < 1:
+            raise error("INVALID_ARGUMENTS", "position tiene que estar entre 0 y 1 sin incluirlos (el inicio y el final son radius y end_radius).")
+        _numero_positivo(q["radius"], "radius", _MEDIDA_MINIMA)
+        salida.append({"posicion": texto_expr(q["position"]), "radio": texto_expr(q["radius"])})
+    return salida
+
+
+def _conjunto_empalme(sesion, d, body):
+    """Un elemento de `sets` de fillet → el dict de OpEmpalme.conjuntos."""
+    if not isinstance(d, dict) or not d.get("edges"):
+        raise error("INVALID_ARGUMENTS", 'Cada conjunto de sets es {"edges": ..., "radius": ...} (y opcional radius_type, '
+                    "end_radius, chord_length, radius_points).")
+    tipo = d.get("radius_type", "constant")
+    if tipo not in ("constant", "chord", "variable"):
+        raise error("INVALID_ARGUMENTS", "radius_type es constant, chord o variable.")
+    faltan = [k for k in ("chord_length" if tipo == "chord" else "radius", *(("end_radius",) if tipo == "variable" else ()))
+              if d.get(k) is None]
+    if faltan:
+        raise error("INVALID_ARGUMENTS", f"Al conjunto le falta {', '.join(faltan)}.")
+    if tipo == "chord":
+        _numero_positivo(d.get("chord_length"), "chord_length", _MEDIDA_MINIMA)
+    else:
+        _numero_positivo(d.get("radius"), "radius", _MEDIDA_MINIMA)
+    if tipo == "variable":
+        _numero_positivo(d.get("end_radius"), "end_radius", _MEDIDA_MINIMA)
+    salida = {"aristas": _refs(sesion, d["edges"], "arista", d.get("body", body))[0],
+              "tipo_radio": {"constant": "constante", "chord": "cuerda", "variable": "variable"}[tipo]}
+    for clave, destino in (("radius", "radio"), ("end_radius", "radio_fin"), ("chord_length", "cuerda")):
+        if d.get(clave) is not None:
+            salida[destino] = texto_expr(d[clave])
+    if d.get("radius_points"):
+        salida["puntos_radio"] = _puntos_radio(d["radius_points"], tipo)
+    return salida
+
+
 @herramienta("fillet", "solido", "Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerda "
              "(radius_type=chord) o de radio variable entre el inicio y el final de la arista (radius_type=variable, "
              "end_radius). Con faces_a hace un EMPALME DE REGLAS: todas las aristas de esas caras, o solo las que están "
              "entre faces_a y faces_b; rounds elige redondeos (aristas convexas), empalmes (cóncavas) o ambos. "
              + _ELEGIR.format(ej="|Z", que="edges", id="Cuerpo1/E7") + _PERSISTENTE + "Con tangent_chain (por defecto) "
              "el empalme sigue las aristas tangentes encadenadas. Si el radio no cabe, falla con OPERATION_FAILED y el "
-             "documento queda igual. radius acepta número (mm) o expresión.", modifica=True)
+             "documento queda igual. radius acepta número (mm) o expresión. radius_points suma puntos intermedios al "
+             "radio variable. sets suma otros conjuntos de selección con sus propios radios en el mismo paso. type="
+             "full_round redondea del todo una cara central entre dos laterales planas, paralelas y perpendiculares "
+             "(media caña de radio la mitad del ancho). Todavía no están el radio asimétrico, la continuidad G2 ni la "
+             "esquina setback.", modifica=True)
 def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, body: str | None = None,
            radius_type: Literal["constant", "chord", "variable"] = "constant", end_radius: Expr | None = None,
            chord_length: Expr | None = None, tangent_chain: bool = True, faces_a: Elementos | None = None,
-           faces_b: Elementos | None = None, rounds: Literal["both", "rounds", "fillets"] = "both"):
+           faces_b: Elementos | None = None, rounds: Literal["both", "rounds", "fillets"] = "both",
+           radius_points: list[dict] | None = None, sets: list[dict] | None = None,
+           type: Literal["fillet", "full_round"] = "fillet", center_face: str | None = None,
+           side_faces: list[str] | None = None):
     """
     edges: aristas a redondear: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores. No se usa con faces_a.
     radius: radio en mm (número o expresión con parámetros, p. ej. "espesor / 2"); con radius_type=variable es el radio inicial; en el empalme de reglas, el radio de las reglas.
@@ -76,7 +125,23 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
     faces_a: empalme de reglas: caras (selector, ids o lista) cuyas aristas se redondean; reemplaza a edges.
     faces_b: empalme de reglas «entre»: segundo grupo de caras; solo se redondean las aristas entre faces_a y faces_b; vacío = todas las aristas de faces_a.
     rounds: empalme de reglas: "both" (por defecto), "rounds" (solo aristas convexas) o "fillets" (solo cóncavas).
+    radius_points: con radius_type=variable, puntos intermedios [{"position": 0..1, "radius": mm}] a lo largo de la arista (0 = inicio, 1 = fin).
+    sets: otros conjuntos de selección del mismo paso: [{"edges": ..., "radius": ..., "radius_type": "constant|chord|variable", "end_radius": ..., "chord_length": ..., "radius_points": [...]}].
+    type: fillet (por defecto) o full_round (redondeo completo con center_face y side_faces).
+    center_face: con full_round, la cara que se vuelve media caña (selector o id).
+    side_faces: con full_round, las dos caras laterales (selectores o ids).
     """
+    if type == "full_round":
+        if not center_face or not side_faces or len(side_faces) != 2:
+            raise error("INVALID_ARGUMENTS", "type=full_round necesita center_face y side_faces (dos caras).")
+        central, el_c = _refs(sesion, center_face, "cara", body)
+        laterales = [_refs(sesion, f, "cara", body)[0] for f in side_faces]
+        if len(central) != 1 or any(len(r) != 1 for r in laterales):
+            raise error("INVALID_ARGUMENTS", "center_face y cada elemento de side_faces eligen UNA cara.")
+        doc = sesion.doc
+        op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), tipo="completo", central=central[0],
+                       laterales=[r[0] for r in laterales])
+        return _informe(_agregar(sesion, op), el_c, "faces_used")
     if radius is None and (faces_a is not None or radius_type != "chord"):
         raise error("INVALID_ARGUMENTS", "Falta radius (solo radius_type=chord lo reemplaza con chord_length).")
     if faces_a is not None:
@@ -109,6 +174,10 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
         extra["cuerda"] = texto_expr(chord_length)
     if end_radius is not None:
         extra["radio_fin"] = texto_expr(end_radius)
+    if radius_points:
+        extra["puntos_radio"] = _puntos_radio(radius_points, radius_type)
+    if sets:
+        extra["conjuntos"] = [_conjunto_empalme(sesion, d, body) for d in sets]
     op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), aristas=refs,
                    tipo_radio={"constant": "constante", "chord": "cuerda", "variable": "variable"}[radius_type],
                    radio=texto_expr(1 if radius is None else radius), cadena_tangente=bool(tangent_chain), **extra)
@@ -119,10 +188,13 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
              "(type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera "
              "distancia a la otra cara. " + _ELEGIR.format(ej="|Z", que="edges", id="Cuerpo1/E7") + _PERSISTENTE +
              "Con tangent_chain (por defecto) sigue las aristas tangentes encadenadas. distance, distance2 y angle "
-             "aceptan número (mm o grados) o expresión.", modifica=True)
+             "aceptan número (mm o grados) o expresión. corner_type: chamfer (donde se juntan tres chaflanes queda una "
+             "cara chica que los une, por defecto) o miter (los chaflanes se cortan en un punto; solo chaflanes planos "
+             "y vértices con tres chaflanes). La mezcla (blend) de Fusion todavía no existe.", modifica=True)
 def chamfer(sesion, edges: Elementos, distance: Expr, body: str | None = None,
             type: Literal["equal", "two_distances", "distance_angle"] = "equal", distance2: Expr | None = None,
-            angle: Expr | None = None, flip: bool = False, tangent_chain: bool = True):
+            angle: Expr | None = None, flip: bool = False, tangent_chain: bool = True,
+            corner_type: Literal["chamfer", "miter"] = "chamfer"):
     """
     edges: aristas a achaflanar: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores.
     distance: distancia del chaflán en mm sobre cada cara (número o expresión con parámetros); con two_distances o distance_angle, la primera distancia.
@@ -132,6 +204,7 @@ def chamfer(sesion, edges: Elementos, distance: Expr, body: str | None = None,
     angle: ángulo en grados (entre 0 y 90, excluidos); obligatorio con type=distance_angle.
     flip: true pasa la primera distancia a la otra cara (no hace nada con type=equal).
     tangent_chain: true (por defecto) suma las aristas tangentes encadenadas; false achaflana solo las elegidas.
+    corner_type: "chamfer" (cara de unión en las esquinas, por defecto) o "miter" (las caras de los chaflanes se cortan en un punto).
     """
     _numero_positivo(distance, "distance", _MEDIDA_MINIMA)
     extra = {}
@@ -151,7 +224,8 @@ def chamfer(sesion, edges: Elementos, distance: Expr, body: str | None = None,
     op = OpChaflan(doc.nuevo_id(), nombre_nuevo(doc, "Chaflán", OpChaflan), aristas=refs,
                    tipo={"equal": "distancia_igual", "two_distances": "dos_distancias",
                          "distance_angle": "distancia_angulo"}[type],
-                   distancia=texto_expr(distance), voltear=bool(flip), cadena_tangente=bool(tangent_chain), **extra)
+                   distancia=texto_expr(distance), voltear=bool(flip), cadena_tangente=bool(tangent_chain),
+                   esquina={"chamfer": "chaflan", "miter": "inglete"}[corner_type], **extra)
     return _informe(_agregar(sesion, op), elegidos, "edges_used")
 
 
@@ -798,10 +872,16 @@ def fit_tolerance(sesion, nominal: float, hole: str = "H7", shaft: str = "g6"):
 # ---------------------------------------------------------------- desmoldeo
 @herramienta("draft", "solido", "Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano "
              "que no se mueve), para poder sacar la pieza del molde. Las caras que se alejan del plano neutro "
-             "se angostan (ángulo positivo). " + _ELEGIR.format(ej="#Z", que="faces", id="Cuerpo1/F2") +
+             "se angostan (ángulo positivo). type=parting_line toma la dirección de extracción de pull_direction y la "
+             "línea de partición de parting_tool (plano, cara plana o curva plana) en lugar de neutral; todavía no está "
+             "«Mover línea de partición». angle_mode: absolute (por defecto, como siempre: desde la dirección de extracción) o "
+             "relative (se suma al desmoldeo que ya tiene la cara; falla en caras cónicas, toros y cilindros inclinados). " + _ELEGIR.format(ej="#Z", que="faces", id="Cuerpo1/F2") +
              _PERSISTENTE + "angle acepta número (grados) o expresión.", modifica=True)
 def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: bool = False, body: str | None = None,
-          sides: Literal["one", "two", "symmetric"] = "one", angle2: Expr | None = None):
+          sides: Literal["one", "two", "symmetric"] = "one", angle2: Expr | None = None,
+          type: Literal["fixed_plane", "parting_line"] = "fixed_plane",
+          angle_mode: Literal["relative", "absolute"] = "absolute", pull_direction: str | dict | None = None,
+          parting_tool: str | dict | None = None):
     """
     faces: caras a inclinar: selector ("#Z" = las laterales de una caja), id de find_faces o lista.
     angle: ángulo de desmoldeo en grados (número o expresión), p. ej. 3.
@@ -810,6 +890,10 @@ def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: b
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
     sides: "one" (un lado, por defecto), "two" (dos lados: angle y angle2) o "symmetric" (simétrico: el mismo ángulo a los dos lados del plano neutro).
     angle2: ángulo del segundo lado en grados; obligatorio con sides=two.
+    type: fixed_plane (plano neutro en neutral) o parting_line (pull_direction y parting_tool).
+    angle_mode: absolute (por defecto: se mide desde la dirección de extracción) o relative (se suma al desmoldeo que la cara ya tiene).
+    pull_direction: con parting_line, la dirección de extracción: plano de construcción, cara plana (id o selector) o eje.
+    parting_tool: con parting_line, la línea de partición: plano, cara plana o curva plana (arista o curva de boceto).
     """
     if sides == "two":
         if angle2 is None:
@@ -819,7 +903,15 @@ def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: b
     if isinstance(angle, (int, float)) and not 0 < abs(angle) < 90:
         raise error("INVALID_ARGUMENTS", f"angle tiene que estar entre 0 y 90 grados (recibió {angle}).")
     refs, elegidos = _refs(sesion, faces, "cara", body)
-    if neutral.strip().upper() in ("XY", "XZ", "YZ"):
+    extra = dict(modo_angulo={"relative": "relativo", "absolute": "absoluto"}[angle_mode])
+    if type == "parting_line":
+        from .herramientas_construccion import _referencia as _ref_construccion
+        if pull_direction is None or parting_tool is None:
+            raise error("INVALID_ARGUMENTS", "type=parting_line necesita pull_direction y parting_tool.")
+        plano = _ref_construccion(sesion, pull_direction, {"plano", "cara", "eje", "arista", "curva_boceto"}, body, "direccion")
+        extra.update(tipo="linea_particion", herramienta_particion=_ref_construccion(
+            sesion, parting_tool, {"plano", "cara", "arista", "curva_boceto"}, body))
+    elif neutral.strip().upper() in ("XY", "XZ", "YZ"):
         plano = {"tipo": "plano", "id": neutral.strip().upper()}
     else:
         try:
@@ -834,5 +926,5 @@ def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: b
     op = OpDesmoldeo(doc.nuevo_id(), nombre_nuevo(doc, "Desmoldeo", OpDesmoldeo), plano=plano, caras=refs,
                      angulo=texto_expr(angle), voltear=reverse,
                      lados={"one": "uno", "two": "dos", "symmetric": "simetrico"}[sides],
-                     **({"angulo2": texto_expr(angle2)} if angle2 is not None else {}))
+                     **({"angulo2": texto_expr(angle2)} if angle2 is not None else {}), **extra)
     return _informe(_agregar(sesion, op), elegidos, "faces_used")

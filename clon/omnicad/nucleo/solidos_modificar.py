@@ -31,7 +31,7 @@ def _iniciar_opencascade():
     global BRepOffset_Analyse, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism, BRepTools
     global BRep_Tool, ChFiDS_Concave, ChFiDS_Convex, ChFiDS_Tangential, Geom2dAPI_PointsToBSpline
     global GeomAPI_ProjectPointOnSurf, GeomAbs_Arc, GeomAbs_C2, GeomAbs_Cone, GeomAbs_Cylinder
-    global GeomAbs_Intersection, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
+    global GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
     global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape, ShapeFix_Face, ShapeFix_Shape
     global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_VERTEX, TopExp, TopExp_Explorer
@@ -57,7 +57,7 @@ def _iniciar_opencascade():
     from OCP.ChFiDS import ChFiDS_Concave, ChFiDS_Convex, ChFiDS_Tangential
     from OCP.Geom2dAPI import Geom2dAPI_PointsToBSpline
     from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C2, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Intersection,
-                             GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus)
+                             GeomAbs_Line, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus)
     from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
     from OCP.OCP.collections import (Array1_gp_Pnt2d, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
                                      IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, List_TopoDS_Shape)
@@ -378,6 +378,47 @@ def empalme(forma, grupos, *, cadena_tangente=True):
     return _validar(mf.Shape(), "Empalme")
 
 
+def empalme_completo(forma, central, lateral1, lateral2):
+    """Redondeo completo (Full Round Fillet): la cara `central` se vuelve un semicírculo tangente a las dos caras laterales.
+    Solo para dos caras laterales planas y paralelas, perpendiculares a la central, cuyas aristas con ella son rectas (el
+    caso de una pared que se remata con media caña): el radio es la mitad de la distancia entre las laterales. El kernel
+    no hace este empalme con un radio exacto (las dos superficies quedan tangentes entre sí), así que se corta la
+    esquina con una caja menos un cilindro."""
+    pc, p1, p2 = (_plano_de_cara(c) for c in (central, lateral1, lateral2))
+    if None in (pc, p1, p2):
+        raise geo.ErrorGeometria("El redondeo completo necesita tres caras planas (una central y dos laterales).")
+    n, n1, n2 = (np.asarray(p.normal, float) for p in (pc, p1, p2))
+    if abs(float(n1 @ n2) + 1) > 1e-6:
+        raise geo.ErrorGeometria("Las dos caras laterales del redondeo completo tienen que ser paralelas y enfrentadas.")
+    if abs(float(n @ n1)) > 1e-6:
+        raise geo.ErrorGeometria("Las caras laterales tienen que ser perpendiculares a la cara central.")
+    ancho = abs(float((np.asarray(p2.origen, float) - np.asarray(p1.origen, float)) @ n1))
+    if ancho < 1e-6:
+        raise geo.ErrorGeometria("Las caras laterales coinciden.")
+    compartidas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    aristas = [e for e in _aristas(central) if any(f.IsSame(lateral1) for f in _padres(compartidas, e))]
+    if len(aristas) != 1:
+        raise geo.ErrorGeometria("La cara central tiene que compartir una arista con la primera lateral.")
+    e1 = aristas[0]
+    a, b = (np.array([q.X(), q.Y(), q.Z()]) for q in (BRep_Tool.Pnt_s(TopExp.FirstVertex_s(e1)),
+                                                     BRep_Tool.Pnt_s(TopExp.LastVertex_s(e1))))
+    largo = float(np.linalg.norm(b - a))
+    if largo < 1e-6:
+        raise geo.ErrorGeometria("La arista del redondeo completo no tiene largo.")
+    eje = (b - a) / largo
+    if abs(float(eje @ n1)) > 1e-6 or abs(float(eje @ n)) > 1e-6 or BRepAdaptor_Curve(e1).GetType() != GeomAbs_Line:
+        raise geo.ErrorGeometria("Las aristas del redondeo completo tienen que ser rectas y paralelas a las caras laterales.")
+    r = ancho / 2
+    m = -n1                                                   # de la primera lateral hacia la segunda
+    centro = a + m * r - n * r                                # eje del cilindro, r por debajo de la cara central
+    esquina = centro - m * r
+    marco = np.identity(4)
+    marco[:3, 0], marco[:3, 1], marco[:3, 2], marco[:3, 3] = m, eje, n, esquina
+    herramienta = geo.booleano(geo.transformar(geo.caja(ancho, largo, r + 1.0), marco),
+                               geo.cilindro(r, largo, tuple(centro), tuple(eje)), "cortar")
+    return _validar(geo.unificar_caras(geo.booleano(forma, herramienta, "cortar")), "Redondeo completo")
+
+
 def empalme_reglas(forma, caras_a, caras_b=None, *, radio, tipo="todas", redondeos="ambos"):
     """Rule Fillet: "todas" = todas las aristas de caras_a; "entre" = aristas compartidas entre
     caras_a y caras_b. redondeos: "ambos" | "redondeos" (solo convexas) | "empalmes" (solo cóncavas)."""
@@ -410,7 +451,69 @@ def empalme_reglas(forma, caras_a, caras_b=None, *, radio, tipo="todas", redonde
 
 
 # ---------------------------------------------------------------- chaflán
-def chaflan(forma, grupos, *, cadena_tangente=True):
+def caras_entre_semilla_y_limite(forma, semilla, caras_limite=(), aristas_limite=()):
+    """Seleccionar › Semilla y límite: las caras de `forma` a las que se llega desde la cara `semilla` pasando de cara
+    en cara por las aristas, sin cruzar las aristas límite ni entrar en las caras límite (la semilla va primero)."""
+    vecinas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    vistas, pendientes = [semilla], [semilla]
+    while pendientes:
+        for a in _aristas(pendientes.pop()):
+            if _contiene(aristas_limite, a):
+                continue
+            for otra in _padres(vecinas, a):
+                if not _contiene(vistas, otra) and not _contiene(caras_limite, otra):
+                    vistas.append(TopoDS.Face(otra))
+                    pendientes.append(vistas[-1])
+    return vistas
+
+
+def _sobre_la_superficie(cara, superficie):
+    """¿El centro de la cara está sobre `superficie` (compuesto de caras)? Distingue las caras que ya existían de las
+    que creó una operación."""
+    p, _ = _punto_normal(cara)
+    return BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(gp_Pnt(*p)).Vertex(), superficie).Value() < 1e-6
+
+
+def _ingletear(original, chaflanado, alcance):
+    """Esquina «Inglete» (Corner Type › Miter): donde se juntan varios chaflanes el kernel deja una cara chica que los
+    une (esquina «Chaflán»); acá las caras de los chaflanes se prolongan hasta cortarse en un punto. En cada una de
+    esas caras de unión, se agrega lo que queda entre ella y el vértice: el cuerpo original recortado por los planos
+    de los chaflanes que llegan, dentro de una caja de lado `alcance` alrededor. Solo chaflanes planos."""
+    superficie = geo.compuesto(geo.caras(original))
+    nuevas = [c for c in geo.caras(chaflanado) if not _sobre_la_superficie(c, superficie)]
+    arista_caras = _ancestros(chaflanado, TopAbs_EDGE, TopAbs_FACE)
+
+    def vecinas_nuevas(cara):
+        salida = []
+        for e in _aristas(cara):
+            salida += [f for f in _padres(arista_caras, e) if not f.IsSame(cara) and _contiene(nuevas, f)
+                       and not _contiene(salida, f)]
+        return salida
+    resultado, hubo = chaflanado, False
+    for union in nuevas:
+        lados = vecinas_nuevas(union)
+        if len(lados) < 3:               # una cara de unión toca a tres chaflanes; con menos no hay esquina que ingletear
+            continue
+        centro = geo.centro_masa(union, True)
+        local = geo.caja(2 * alcance, 2 * alcance, 2 * alcance, tuple(c - alcance for c in centro))
+        local = geo.booleano(original, local, "intersecar")
+        for chaflan_ in lados:
+            plano = geo.plano_de_cara(TopoDS.Face(chaflan_))
+            if plano is None:
+                raise geo.ErrorGeometria("La esquina «Inglete» solo funciona con chaflanes planos (aristas rectas "
+                                         "entre caras planas).")
+            # la losa se centra en el origen del plano (proyección del origen del mundo): se suma lo que se aleja la esquina
+            tam = 4 * alcance + 4 * _diagonal(original) + float(np.linalg.norm(plano.origen - centro))
+            detras = geo.extruir([geo.cara_de_plano(plano, tam)], plano.normal, -tam)
+            local = geo.booleano(local, detras, "intersecar")
+        resultado, hubo = geo.booleano(resultado, local, "unir"), True
+    if not hubo:
+        raise geo.ErrorGeometria("No hay esquinas donde se junten tres chaflanes: la esquina «Inglete» no tiene "
+                                 "nada que hacer.")
+    return _validar(geo.unificar_caras(resultado), "Chaflán")
+
+
+def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     """Chaflán (Chamfer) por conjuntos de selección.
 
     grupos: [{"aristas": [TopoDS_Edge], "tipo": "distancia_igual" | "dos_distancias" | "distancia_angulo",
@@ -418,8 +521,11 @@ def chaflan(forma, grupos, *, cadena_tangente=True):
               "voltear": bool}]
     "cara" es el lado donde se mide la primera distancia; si no viene se toma la primera cara vecina
     de la arista (orden estable del kernel) y "voltear" pasa a la otra (botón Flip de Fusion).
-    Esquina: siempre tipo "Chamfer" (Miter/Blend no existen en OpenCascade).
+    `esquina` (Corner Type): "chaflan" (Chamfer: el kernel une los chaflanes con una cara chica) o "inglete"
+    (Miter: se cortan en un punto, ver `_ingletear`). «Mezcla» (Blend) no existe en OpenCascade.
     """
+    if esquina not in ("chaflan", "inglete"):
+        raise geo.ErrorGeometria(f"Tipo de esquina del chaflán desconocido: {esquina}")
     if not grupos:
         raise geo.ErrorGeometria("Elegí al menos una arista para el chaflán.")
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
@@ -483,7 +589,11 @@ def chaflan(forma, grupos, *, cadena_tangente=True):
             pista = (f" Distancia máxima aproximada: {min(longitudes) / 2:g} mm "
                      "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
         raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas." + pista)
-    return _validar(mc.Shape(), "Chaflán")
+    resultado = _validar(mc.Shape(), "Chaflán")
+    if esquina == "inglete":
+        alcance = 1.5 * max(float(g.get(k, 0) or 0) for g in grupos for k in ("distancia", "distancia2"))
+        resultado = _ingletear(forma, resultado, alcance)
+    return resultado
 
 
 # ---------------------------------------------------------------- vaciado
@@ -766,11 +876,55 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
 
 
 # ---------------------------------------------------------------- desmoldeo
-def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados="uno", angulo2=None):
+def _inclinacion(cara, direc):
+    """Ángulo (grados) que la cara ya tiene respecto de la dirección de extracción: positivo = el cuerpo se angosta hacia
+    ella (el sentido del ángulo del desmoldeo). Solo caras planas o cilíndricas con el eje paralelo a la dirección."""
+    tipo = BRepAdaptor_Surface(cara).GetType()
+    if tipo == GeomAbs_Cylinder:
+        a = BRepAdaptor_Surface(cara).Cylinder().Axis().Direction()
+        if abs(abs(np.dot([a.X(), a.Y(), a.Z()], direc)) - 1) > 1e-6:
+            raise geo.ErrorGeometria("El modo relativo no sabe medir un cilindro inclinado respecto de la dirección de "
+                                     "extracción: usá el modo absoluto.")
+        return 0.0
+    if tipo != GeomAbs_Plane:
+        raise geo.ErrorGeometria("El modo relativo solo sirve con caras planas o cilíndricas: usá el modo absoluto.")
+    _, n = _punto_normal(cara)
+    return math.degrees(math.asin(max(-1.0, min(1.0, float(np.dot(n, direc))))))
+
+
+def plano_de_particion(arista, direccion):
+    """Plano de una línea de partición dada por una curva (Draft › Parting Line): el plano que contiene una curva plana;
+    una recta solo define un plano si es perpendicular a la dirección de extracción (el plano pasa por ella)."""
+    c = BRepAdaptor_Curve(arista)
+    t0, t1 = c.FirstParameter(), c.LastParameter()
+    pts = np.array([[p.X(), p.Y(), p.Z()] for p in (c.Value(t0 + (t1 - t0) * i / 24) for i in range(25))])
+    centro = pts.mean(axis=0)
+    s, vt = np.linalg.svd(pts - centro)[1:]
+    if s[0] < 1e-9:
+        raise geo.ErrorGeometria("La curva de la línea de partición no tiene largo.")
+    if s[2] <= 1e-6 * s[0] and s[1] > 1e-6 * s[0]:
+        normal = vt[2]
+    elif s[1] <= 1e-6 * s[0]:
+        d = np.asarray(direccion, float) / np.linalg.norm(direccion)
+        if abs(float(vt[0] @ d)) > 1e-6:
+            raise geo.ErrorGeometria("Una arista recta solo sirve de línea de partición si es perpendicular a la "
+                                     "dirección de extracción; elegí un plano, una cara o una curva plana.")
+        normal = d
+    else:
+        raise geo.ErrorGeometria("La línea de partición tiene que ser una curva plana: elegí un plano, una cara o una "
+                                 "curva que quede en un plano.")
+    return geo.Plano.desde_marco(centro, normal, (1.0, 0.0, 0.0))
+
+
+def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados="uno", angulo2=None, modo_angulo="absoluto"):
     """Desmoldeo (Draft, tipo Fixed Plane): inclina las caras `angulo` grados alrededor de su
     intersección con `plano_neutro`. Ángulo positivo = el cuerpo se angosta hacia la dirección de
     extracción (se quita material del lado al que apunta). lados: "uno" | "dos" (angulo2 del otro
-    lado) | "simetrico". En "dos"/"simetrico" las caras se parten primero por el plano neutro."""
+    lado) | "simetrico". En "dos"/"simetrico" las caras se parten primero por el plano neutro.
+    modo_angulo (Angle Mode): "absoluto" = el ángulo se mide desde la dirección de extracción, haya o no desmoldeo en la
+    cara; "relativo" = se suma al que la cara ya tiene."""
+    if modo_angulo not in ("absoluto", "relativo"):
+        raise geo.ErrorGeometria(f"Modo de ángulo desconocido: {modo_angulo}")
     if lados not in ("uno", "dos", "simetrico"):
         raise geo.ErrorGeometria(f"Opción de lados desconocida: {lados}")
     if not caras:
@@ -799,6 +953,10 @@ def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados
             trabajo.append((f, d, a1) if s >= 0 else (f, -d, a2))
     da = BRepOffsetAPI_DraftAngle(objetivo)
     for cara, direc, ang in trabajo:
+        if modo_angulo == "relativo":
+            ang += _inclinacion(cara, direc)
+            if abs(ang) >= 90:
+                raise geo.ErrorGeometria("Con el ángulo que ya tiene la cara, el desmoldeo relativo llega a 90 grados o más.")
         if abs(ang) < 1e-12:
             continue
         da.Add(cara, gp_Dir(*direc), math.radians(ang), pln)
@@ -1104,16 +1262,58 @@ def mover_caras(forma, caras, matriz):
 
 
 # ---------------------------------------------------------------- división
-def dividir_cara(forma, caras, herramienta, *, extender=True):
+def _cortes_proyectados(herramienta, caras, tipo, direccion):
+    """Aristas que parten las `caras` cuando la herramienta (aristas o una cara) se PROYECTA sobre ellas:
+    "vector" a lo largo de `direccion` (cortes en los dos sentidos, uno por cada vez que cruza una cara) o
+    "cercano" llevando cada punto de la herramienta al punto más cercano de la cara."""
+    from . import curvas3d
+    if isinstance(herramienta, TopoDS_Edge):
+        origen = [herramienta]
+    elif isinstance(herramienta, (list, tuple)):
+        origen = [h for h in herramienta if isinstance(h, TopoDS_Edge)]
+    elif isinstance(herramienta, TopoDS_Shape) and herramienta.ShapeType() != TopAbs_EDGE:
+        origen = _aristas(herramienta)
+    else:
+        origen = []
+    if not origen:
+        raise geo.ErrorGeometria("Este tipo de división necesita curvas de boceto, aristas o una cara como herramienta "
+                                 "(un plano no se puede proyectar).")
+    if tipo == "vector" and (direccion is None or np.linalg.norm(np.asarray(direccion, float)) < 1e-12):
+        raise geo.ErrorGeometria("Elegí la dirección de proyección (un eje, una arista o una cara).")
+    cortes = []
+    for cara in caras:
+        for arista in origen:
+            if tipo == "vector":
+                cortes.extend(curvas3d.proyectar_vector(arista, cara, direccion, ambos=True))
+                continue
+            pts = curvas3d.proyectar_cercano(arista, cara)
+            for a, b in zip(pts[:-1], pts[1:], strict=True):
+                if np.linalg.norm(b - a) > 1e-7:
+                    cortes.append(BRepBuilderAPI_MakeEdge(gp_Pnt(*a), gp_Pnt(*b)).Edge())
+    return cortes
+
+
+def dividir_cara(forma, caras, herramienta, *, extender=True, tipo="superficie", direccion=None):
     """Split Face: parte solo las `caras` elegidas con un plano, una cara o aristas.
+
+    `tipo` (Split Type de Fusion): "superficie" (Split with Surface: la sección de la herramienta con cada cara),
+    "vector" (Along Vector: la herramienta se proyecta sobre las caras a lo largo de `direccion`) o "cercano"
+    (Closest Point: se proyecta al punto más cercano de cada cara).
 
     Se calcula la sección de la herramienta con cada cara y esas aristas parten la cara
     (BRepAlgoAPI_Splitter con aristas como herramienta: las vecinas no se tocan). Sin `extender`,
     la herramienta tiene que atravesar la cara por completo."""
     if not caras:
         raise geo.ErrorGeometria("Elegí las caras a dividir.")
-    if isinstance(herramienta, TopoDS_Edge) or (isinstance(herramienta, (list, tuple)) and herramienta
-                                                and all(isinstance(h, TopoDS_Edge) for h in herramienta)):
+    if tipo not in ("superficie", "vector", "cercano"):
+        raise geo.ErrorGeometria(f"Tipo de división desconocido: {tipo}")
+    if tipo == "cercano" and any(_plano_de_cara(c) is None for c in caras):
+        raise geo.ErrorGeometria("«Punto más cercano» solo divide caras planas: sobre una cara curva las cuerdas rectas "
+                                 "no caen en la superficie. Usá «Con superficie» o «A lo largo de un vector».")
+    if tipo != "superficie":
+        cortes = _cortes_proyectados(herramienta, caras, tipo, direccion)
+    elif isinstance(herramienta, TopoDS_Edge) or (isinstance(herramienta, (list, tuple)) and herramienta
+                                                  and all(isinstance(h, TopoDS_Edge) for h in herramienta)):
         cortes = [herramienta] if isinstance(herramienta, TopoDS_Edge) else list(herramienta)
     else:
         herr = _herramienta_corte(herramienta, forma, extender)
@@ -1297,6 +1497,47 @@ def division_silueta(forma, direccion):
     if not partida:
         raise geo.ErrorGeometria("El cuerpo no tiene silueta en esa dirección.")
     return _validar(_fusionar_costuras(resultado), "División por silueta")
+
+
+def _es_hueco(forma):
+    """¿El cuerpo está vaciado? (tiene una cavidad cerrada, o es de pared fina: espesor medio 2V/A bajo la cuarta
+    parte de su lado menor). shortcut: heurística, no mide el espesor real; mejorar si hace falta."""
+    if len(_unicos(forma, TopAbs_SHELL)) > 1:
+        return True
+    (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(forma)
+    return 2 * geo.volumen(forma) / geo.area(forma) < 0.25 * min(x1 - x0, y1 - y0, z1 - z0)
+
+
+def division_silueta_cuerpo(forma, direccion, *, modo="solido"):
+    """Silhouette Split con «Split Shelled Body» (modo "vaciado": el cuerpo tiene que estar vaciado) o «Split Solid
+    Body» (modo "solido"): parte las caras por la silueta y, si esa línea de partición es plana, corta el cuerpo
+    por su plano en dos. Devuelve los sólidos ordenados como `dividir_cuerpo`."""
+    from . import curvas3d
+    if modo not in ("vaciado", "solido"):
+        raise geo.ErrorGeometria(f"Operación de silueta desconocida: {modo}")
+    if modo == "vaciado" and not _es_hueco(forma):
+        raise geo.ErrorGeometria("«Cuerpo vaciado» necesita un cuerpo vaciado: aplicale Vaciado antes, o usá «Cuerpo sólido».")
+    d = np.asarray(direccion, float)
+    d = d / np.linalg.norm(d)
+    partida = division_silueta(forma, d)
+    originales = geo.compuesto(_aristas(forma))
+    pts = []
+    for e in _aristas(partida):
+        medio = curvas3d.muestrear(e, 2).astype(float)[1]
+        v = BRepBuilderAPI_MakeVertex(gp_Pnt(*medio)).Vertex()
+        if BRepExtrema_DistShapeShape(v, originales).Value() > 1e-5:       # arista nueva, no un trozo de una vieja
+            pts.extend(curvas3d.muestrear(e, 8).astype(float))
+    if not pts:
+        raise geo.ErrorGeometria("El cuerpo no tiene silueta en esa dirección.")
+    pts = np.array(pts)
+    centro = pts.mean(axis=0)
+    _, valores, vt = np.linalg.svd(pts - centro)
+    if valores[-1] > 1e-6 * max(1.0, valores[0]):
+        raise geo.ErrorGeometria("La línea de partición no es plana: «Cuerpo sólido» y «Cuerpo vaciado» la necesitan "
+                                 "plana. Usá «Solo caras».")
+    normal = vt[-1]
+    u = np.cross(normal, (0.0, 0.0, 1.0) if abs(normal[2]) < 0.9 else (1.0, 0.0, 0.0))
+    return dividir_cuerpo(partida, geo.Plano.desde_marco(centro, normal, u / np.linalg.norm(u)))
 
 
 # ---------------------------------------------------------------- supresión de caras

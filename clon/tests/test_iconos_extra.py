@@ -19,19 +19,20 @@ SECCIONES = {
     "SÓLIDO / CREAR": ["barrido", "solevacion", "nervio", "red", "labio", "repujado", "saliente", "encaje_presion",
                        "agujero", "rosca", "bobina", "tuberia", "patron_rectangular_3d", "patron_circular_3d",
                        "patron_ruta", "patron_puntos", "multitransformar", "simetria_3d", "engrosar",
-                       "relleno_contorno", "cuerpo_envolvente",
-                       "operacion_base", "derivar", "crear_forma", "engranaje_3d", "eje_escalonado"],
+                       "relleno_contorno", "cuerpo_envolvente", "volumen_fluido",
+                       "operacion_base", "derivar", "crear_forma", "engranaje_3d", "eje_escalonado", "reconocer_funciones"],
     "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "quitar_empalmes", "vaciado", "desmoldeo",
                   "escala_3d", "desfase_cara",
                   "reemplazar_cara", "dividir_cara", "dividir_cuerpo", "division_silueta", "mover_copiar", "alinear",
-                  "suprimir", "quitar", "material_fisico", "aspecto", "administrar_materiales", "lista_materiales"],
+                  "suprimir", "quitar", "reticula_volumetrica", "material_fisico", "aspecto", "administrar_materiales", "lista_materiales"],
     "CONSTRUIR": ["scu", "plano_angulo", "plano_tangente", "plano_medio", "plano_perpendicular", "plano_dos_aristas",
                   "plano_tres_puntos", "plano_ruta", "eje_cilindro", "eje_perpendicular", "eje_dos_planos",
                   "eje_dos_puntos", "eje_arista", "punto_vertice", "punto_dos_aristas", "punto_tres_planos",
                   "punto_centro", "punto_arista_plano", "punto_ruta"],
     "INSPECCIONAR": ["interferencia", "curvatura_peine", "cebra", "mapa_entorno", "angulo_desmoldeo",
                      "mapa_curvatura", "isocurva", "accesibilidad", "radio_minimo", "seccion", "centro_masa",
-                     "colores_componente", "revisar_geometria", "reparar_cuerpo"],
+                     "colores_componente", "revisar_geometria", "reparar_cuerpo", "buscar_similares"],
+    "PLÁSTICO": ["regla_plastico", "reglas_plastico", "consejos_diseno", "patron_geometrico"],
     "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "vectorizar_imagen", "insertar_malla", "insertar_componente", "fijacion"],
     "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "origen_union", "grupo_rigido",
                   "accionar_uniones", "vinculo_movimiento", "conjunto_contacto", "estudio_movimiento",
@@ -87,7 +88,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 150
+    assert len(NOMBRES) == len(set(NOMBRES)) == 158
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

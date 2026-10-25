@@ -66,9 +66,12 @@ TIPOS_MOVIMIENTO = {"libre": "Movimiento libre", "traslacion": "Trasladar", "rot
 class OpMover(Operacion):
     """Mover/copiar de Fusion [SLD-USE-MOVE-COPY] para cuerpos: movimiento libre (X/Y/Z y giros alrededor
     del pivote), trasladar (ejes del diseño o una dirección elegida), girar alrededor de un eje, punto a
-    punto y punto a posición. «Crear copia» deja el original y agrega cuerpos nuevos."""
+    punto y punto a posición. «Crear copia» deja el original y agrega cuerpos nuevos.
+
+    Con `caras` (Move Object › Faces) en lugar de `cuerpos` mueve esas caras planas: las vecinas se extienden o se
+    recortan (`mover_caras`); con «copia» deja el cuerpo y crea una superficie con cada cara movida."""
     TIPO, ETIQUETA, ICONO = "mover", "Mover", "✥"
-    PARAMS = {"cuerpos": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
+    PARAMS = {"cuerpos": [], "caras": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
               "ry": "0 deg", "rz": "0 deg", "pivote": None, "direccion": None, "distancia": "10 mm", "eje": None,
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
               "copiar": False, "ligera": False}
@@ -78,7 +81,8 @@ class OpMover(Operacion):
     def dependencias(self):
         p = self.p
         return (_deps_objetivo(p["cuerpos"]) | ent.dependencias_de(p.get("pivote"), p.get("direccion"),
-                                                                   p.get("eje"), p.get("origen"), p.get("destino"))
+                                                                   p.get("eje"), p.get("origen"), p.get("destino"),
+                                                                   p.get("caras"))
                 ) - {self.id}
 
     def matriz(self, estado, ctx, formas):
@@ -118,7 +122,20 @@ class OpMover(Operacion):
             return _matriz_traslacion(ent.como_punto(_resolver(p["destino"], estado)) - a)
         raise ErrorOperacion(f"Tipo de movimiento desconocido: {t}")
 
+    def _mover_caras(self, estado, ctx):
+        grupos = _por_cuerpo(self.p["caras"], estado, "caras")
+        m = self.matriz(estado, ctx, [f for caras in grupos.values() for f in caras])
+        for cid, caras in grupos.items():
+            c = estado.cuerpo(cid)
+            if self.p.get("copiar"):
+                for f in caras:
+                    estado.nuevo_cuerpo(self.id, geo.transformar(f, m), "superficie")
+            else:
+                c.forma = _sm().mover_caras(c.forma, caras, m)
+
     def ejecutar(self, estado, ctx):
+        if self.p.get("caras"):
+            return self._mover_caras(estado, ctx)
         if not self.p["cuerpos"]:
             raise ErrorOperacion("Elegí los cuerpos a mover.")
         cuerpos = [estado.cuerpo(c) for c in self.p["cuerpos"]]
@@ -197,20 +214,42 @@ class OpQuitar(Operacion):
 class OpEmpalme(Operacion):
     """Empalme de Fusion [SLD-FILLET-SOLID]: tipo Empalme (radio constante, de cuerda o variable entre
     inicio y fin) o Empalme de reglas (todas las aristas de unas caras o las que están entre dos grupos de
-    caras, con redondeos, empalmes o ambos). La cadena tangente suma las aristas tangentes."""
+    caras, con redondeos, empalmes o ambos) o Redondeo completo (`central` y dos `laterales`: la cara central pasa a ser
+    una media caña). La cadena tangente suma las aristas tangentes.
+
+    El radio variable acepta `puntos_radio` [{"posicion": 0..1, "radio": expr}] entre el radio inicial y el final.
+    `conjuntos` suma otros conjuntos de selección, cada uno con sus propias `aristas`, `tipo_radio`, `radio`, `radio_fin`,
+    `cuerda` y `puntos_radio`, que se redondean en el mismo paso."""
     TIPO, ETIQUETA, ICONO = "empalme", "Empalme", "◜"
     PARAMS = {"tipo": "empalme", "aristas": [], "tipo_radio": "constante", "radio": "1 mm", "radio_fin": "2 mm",
               "cuerda": "1 mm", "cadena_tangente": True, "caras_a": [], "caras_b": [], "regla": "todas",
-              "redondeos": "ambos"}
+              "redondeos": "ambos", "puntos_radio": [], "conjuntos": [], "central": None, "laterales": []}
     EXPRESIONES = ("radio", "radio_fin", "cuerda")
-    OPCIONES = {"tipo": ("empalme", "reglas"), "tipo_radio": ("constante", "cuerda", "variable"),
+    OPCIONES = {"tipo": ("empalme", "reglas", "completo"), "tipo_radio": ("constante", "cuerda", "variable"),
                 "regla": ("todas", "entre"), "redondeos": ("ambos", "redondeos", "empalmes")}
 
     def dependencias(self):
-        return _deps_refs(self.p["aristas"], self.p["caras_a"], self.p["caras_b"]) - {self.id}
+        extra = [c.get("aristas") for c in self.p.get("conjuntos") or []]
+        return _deps_refs(self.p["aristas"], self.p["caras_a"], self.p["caras_b"], self.p.get("laterales") or [],
+                          [self.p["central"]] if self.p.get("central") else [], *extra) - {self.id}
+
+    def _completo(self, estado):
+        p, sm = self.p, _sm()
+        if not p.get("central") or len(p.get("laterales") or []) != 2:
+            raise ErrorOperacion("Elegí la cara central y las dos caras laterales.")
+        central, l1, l2 = (_resolver(r, estado) for r in [p["central"], *p["laterales"]])
+        if not central.cuerpo == l1.cuerpo == l2.cuerpo:
+            raise ErrorOperacion("Las tres caras tienen que ser del mismo cuerpo.")
+        c = estado.cuerpo(central.cuerpo)
+        try:
+            c.forma = sm.empalme_completo(c.forma, central.forma, l1.forma, l2.forma)
+        except sm.geo.ErrorGeometria as err:
+            raise ErrorOperacion(str(err)) from err
 
     def ejecutar(self, estado, ctx):
         p, sm = self.p, _sm()
+        if p["tipo"] == "completo":
+            return self._completo(estado)
         r = ctx.evaluar(p["radio"])
         if p["tipo"] == "reglas":
             otras = _por_cuerpo(p["caras_b"], estado, "caras") if p["regla"] == "entre" else {}
@@ -219,11 +258,18 @@ class OpEmpalme(Operacion):
                 c.forma = sm.empalme_reglas(c.forma, caras, otras.get(cid) if p["regla"] == "entre" else None,
                                             radio=r, tipo=p["regla"], redondeos=p["redondeos"])
             return
-        grupo = {"tipo": p["tipo_radio"], "radio": r, "cuerda": ctx.evaluar(p["cuerda"]),
-                 "radios": [(0.0, r), (1.0, ctx.evaluar(p["radio_fin"]))]}
-        for cid, aristas in _por_cuerpo(p["aristas"], estado).items():
+        def grupo(d):
+            r0 = ctx.evaluar(d["radio"])
+            medios = [(ctx.evaluar(q["posicion"], "escalar"), ctx.evaluar(q["radio"])) for q in d.get("puntos_radio") or []]
+            return {"tipo": d["tipo_radio"], "radio": r0, "cuerda": ctx.evaluar(d["cuerda"]),
+                    "radios": [(0.0, r0), *medios, (1.0, ctx.evaluar(d["radio_fin"]))]}
+        por_cuerpo = {}
+        for d in [p, *(dict(self.PARAMS, **c) for c in p.get("conjuntos") or [])]:
+            for cid, aristas in _por_cuerpo(d["aristas"], estado).items():
+                por_cuerpo.setdefault(cid, []).append(dict(grupo(d), aristas=aristas))
+        for cid, grupos in por_cuerpo.items():
             c = estado.cuerpo(cid)
-            c.forma = sm.empalme(c.forma, [dict(grupo, aristas=aristas)], cadena_tangente=p["cadena_tangente"])
+            c.forma = sm.empalme(c.forma, grupos, cadena_tangente=p["cadena_tangente"])
 
 
 class OpChaflan(Operacion):
@@ -231,9 +277,9 @@ class OpChaflan(Operacion):
     «Voltear» para pasar la primera distancia a la otra cara."""
     TIPO, ETIQUETA, ICONO = "chaflan", "Chaflán", "◸"
     PARAMS = {"aristas": [], "tipo": "distancia_igual", "distancia": "1 mm", "distancia2": "1 mm",
-              "angulo": "45 deg", "voltear": False, "cadena_tangente": True}
+              "angulo": "45 deg", "voltear": False, "cadena_tangente": True, "esquina": "chaflan"}
     EXPRESIONES = ("distancia", "distancia2", "angulo")
-    OPCIONES = {"tipo": ("distancia_igual", "dos_distancias", "distancia_angulo")}
+    OPCIONES = {"tipo": ("distancia_igual", "dos_distancias", "distancia_angulo"), "esquina": ("chaflan", "inglete")}
 
     def dependencias(self):
         return _deps_refs(self.p["aristas"]) - {self.id}
@@ -245,7 +291,8 @@ class OpChaflan(Operacion):
                  "voltear": p["voltear"]}
         for cid, aristas in _por_cuerpo(p["aristas"], estado).items():
             c = estado.cuerpo(cid)
-            c.forma = sm.chaflan(c.forma, [dict(grupo, aristas=aristas)], cadena_tangente=p["cadena_tangente"])
+            c.forma = sm.chaflan(c.forma, [dict(grupo, aristas=aristas)], cadena_tangente=p["cadena_tangente"],
+                                 esquina=p["esquina"])
 
 
 class OpVaciado(Operacion):
@@ -276,29 +323,52 @@ class OpVaciado(Operacion):
 
 class OpDesmoldeo(Operacion):
     """Desmoldeo de Fusion [GUID-83C650C2]: plano fijo (da la dirección de extracción y el plano neutro),
-    caras a inclinar, ángulo, un lado / dos lados / simétrico y voltear la dirección."""
+    caras a inclinar, ángulo, un lado / dos lados / simétrico y voltear la dirección.
+
+    `modo_angulo`: "absoluto" (desde la dirección de extracción; lo que hacían las recetas anteriores) o "relativo"
+    (se suma al desmoldeo que la cara ya tiene; es el modo por defecto de Fusion y lo que usan la herramienta y el
+    diálogo). `tipo` "linea_particion" (Draft › Parting Line › Fix Parting Line): `plano` pasa a ser la dirección de
+    extracción (plano, cara plana o eje) y `herramienta_particion` la línea (plano, cara plana o curva plana):
+    las caras giran alrededor de su intersección con ella."""
     TIPO, ETIQUETA, ICONO = "desmoldeo", "Desmoldeo", "◿"
-    PARAMS = {"plano": None, "caras": [], "angulo": "3 deg", "lados": "uno", "angulo2": "3 deg", "voltear": False}
+    PARAMS = {"plano": None, "caras": [], "angulo": "3 deg", "lados": "uno", "angulo2": "3 deg", "voltear": False,
+              "tipo": "plano_fijo", "modo_angulo": "absoluto", "herramienta_particion": None}
     EXPRESIONES = ("angulo", "angulo2")
-    OPCIONES = {"lados": ("uno", "dos", "simetrico")}
+    OPCIONES = {"lados": ("uno", "dos", "simetrico"), "tipo": ("plano_fijo", "linea_particion"),
+                "modo_angulo": ("absoluto", "relativo")}
 
     def dependencias(self):
-        return _deps_refs(self.p["plano"], self.p["caras"]) - {self.id}
+        return _deps_refs(self.p["plano"], self.p["caras"], self.p.get("herramienta_particion")) - {self.id}
 
     def ejecutar(self, estado, ctx):
         p, sm = self.p, _sm()
         if not p["plano"]:
             raise ErrorOperacion("Elegí el plano fijo (una cara plana o un plano).")
         e = _resolver(p["plano"], estado)
-        plano = ent.como_plano(e)
+        if p["tipo"] == "linea_particion":
+            if not p.get("herramienta_particion"):
+                raise ErrorOperacion("Elegí la herramienta de partición (un plano, una cara o una curva plana).")
+            if e.tipo not in ("plano", "cara", "eje", "arista", "curva_boceto") or (e.plano is None and e.eje is None):
+                raise ErrorOperacion("La dirección de extracción es un plano, una cara plana o un eje.")
+            pull = e.plano.normal if e.plano is not None else e.eje[1]
+        else:
+            plano = ent.como_plano(e)
+            pull = plano.normal
         # Con una cara, la extracción va hacia afuera del material que esa cara limita (al revés de su
         # normal exterior): el cuerpo se angosta alejándose de la cara fija, como en Fusion.
-        direccion = -plano.normal if e.tipo == "cara" else plano.normal
+        direccion = -pull if e.tipo == "cara" else pull
         direccion = -direccion if p["voltear"] else direccion
+        if p["tipo"] == "linea_particion":
+            h = _resolver(p["herramienta_particion"], estado)
+            try:
+                plano = ent.como_plano(h) if h.plano is not None and h.tipo in ("plano", "cara") else                     sm.plano_de_particion(h.forma, direccion)
+            except sm.geo.ErrorGeometria as err:
+                raise ErrorOperacion(str(err)) from err
         for cid, caras in _por_cuerpo(p["caras"], estado, "caras").items():
             c = estado.cuerpo(cid)
             c.forma = sm.desmoldeo(c.forma, caras, direccion, ctx.evaluar(p["angulo"], ANGULO), plano,
-                                   lados=p["lados"], angulo2=ctx.evaluar(p["angulo2"], ANGULO))
+                                   lados=p["lados"], angulo2=ctx.evaluar(p["angulo2"], ANGULO),
+                                   modo_angulo=p["modo_angulo"])
 
 
 class OpEscala(Operacion):
@@ -405,20 +475,24 @@ def _herramienta(ref, estado):
 
 
 class OpDividirCara(Operacion):
-    """Dividir cara de Fusion [GUID-BA98BF29]: parte caras con una cara, un plano o aristas."""
+    """Dividir cara de Fusion [GUID-BA98BF29]: parte caras con una cara, un plano o aristas.
+    `tipo`: «superficie» (Split with Surface), «vector» (Along Vector, con `direccion`) o «cercano» (Closest Point)."""
     TIPO, ETIQUETA, ICONO = "dividir_cara", "Dividir cara", "⊟"
-    PARAMS = {"caras": [], "herramienta": None, "extender": True}
+    PARAMS = {"caras": [], "herramienta": None, "extender": True, "tipo": "superficie", "direccion": None}
+    OPCIONES = {"tipo": ("superficie", "vector", "cercano")}
 
     def dependencias(self):
-        return _deps_refs(self.p["caras"], self.p["herramienta"]) - {self.id}
+        return _deps_refs(self.p["caras"], self.p["herramienta"], self.p["direccion"]) - {self.id}
 
     def ejecutar(self, estado, ctx):
         if not self.p["herramienta"]:
             raise ErrorOperacion("Elegí la herramienta de división.")
         herramienta = _herramienta(self.p["herramienta"], estado)
+        direccion = ent.direccion(_resolver(self.p["direccion"], estado)) if self.p["direccion"] else None
         for cid, caras in _por_cuerpo(self.p["caras"], estado, "caras").items():
             c = estado.cuerpo(cid)
-            c.forma = _sm().dividir_cara(c.forma, caras, herramienta, extender=self.p["extender"])
+            c.forma = _sm().dividir_cara(c.forma, caras, herramienta, extender=self.p["extender"],
+                                         tipo=self.p["tipo"], direccion=direccion)
 
 
 class OpDividirCuerpo(Operacion):
@@ -443,10 +517,12 @@ class OpDividirCuerpo(Operacion):
 
 
 class OpDivisionSilueta(Operacion):
-    """División de silueta de Fusion [SLD-REF-SILHOUETTE-SPLIT]: parte las caras por su silueta vista
-    desde una dirección (modo «solo caras»)."""
+    """División de silueta de Fusion [SLD-REF-SILHOUETTE-SPLIT]: parte el cuerpo por su silueta vista desde una
+    dirección. `operacion`: «caras» (Split Faces Only: el cuerpo sigue siendo uno), «vaciado» (Split Shelled Body) o
+    «solido» (Split Solid Body): estos dos lo parten en dos cuerpos si la línea de partición es plana."""
     TIPO, ETIQUETA, ICONO = "division_silueta", "División de silueta", "◐"
-    PARAMS = {"cuerpo": "", "direccion": None}
+    PARAMS = {"cuerpo": "", "direccion": None, "operacion": "caras"}
+    OPCIONES = {"operacion": ("caras", "vaciado", "solido")}
 
     def dependencias(self):
         return (_deps_objetivo(self.p["cuerpo"]) | _deps_refs(self.p["direccion"])) - {self.id}
@@ -455,7 +531,14 @@ class OpDivisionSilueta(Operacion):
         if not self.p["cuerpo"] or not self.p["direccion"]:
             raise ErrorOperacion("Elegí el cuerpo y la dirección de vista.")
         c = estado.cuerpo(self.p["cuerpo"])
-        c.forma = _sm().division_silueta(c.forma, ent.direccion(_resolver(self.p["direccion"], estado)))
+        d = ent.direccion(_resolver(self.p["direccion"], estado))
+        if self.p["operacion"] == "caras":
+            c.forma = _sm().division_silueta(c.forma, d)
+            return
+        partes = _sm().division_silueta_cuerpo(c.forma, d, modo=self.p["operacion"])
+        c.forma = partes[0]
+        for parte in partes[1:]:
+            estado.nuevo_cuerpo(self.id, parte, c.tipo, **atributos_copia(c))
 
 
 class OpAlinear(Operacion):

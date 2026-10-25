@@ -158,9 +158,9 @@ def seccion(a, b):
     return aristas_de(corte.Shape())
 
 
-def proyectar_vector(arista, forma, direccion):
+def proyectar_vector(arista, forma, direccion, ambos=False):
     """Proyección de la arista sobre `forma` a lo largo de `direccion` (Project To Surface › Along Vector). Se queda
-    con lo que cae del lado al que apunta la dirección."""
+    con lo que cae del lado al que apunta la dirección; con `ambos`, de los dos lados."""
     from OCP.BRepProj import BRepProj_Projection
     proy = BRepProj_Projection(arista, forma, _dir(direccion))
     if not proy.IsDone():
@@ -169,7 +169,7 @@ def proyectar_vector(arista, forma, direccion):
     origen = muestrear(arista, 4).astype(float)
     salida = []
     for e in aristas_de(proy.Shape()):
-        if np.mean((muestrear(e, 4) - origen) @ d) >= -1e-6:
+        if ambos or np.mean((muestrear(e, 4) - origen) @ d) >= -1e-6:
             salida.append(e)
     return salida
 

@@ -469,6 +469,33 @@ def propiedades_fisicas(forma, densidad_g_cm3=7.85):
             "momentos_principales": momentos, "ejes_principales": ejes}
 
 
+def firma_geometrica(formas):
+    """Firma de una pieza que no cambia al moverla ni girarla: volumen, área, caras y momentos principales de
+    inercia (densidad 1) de los sólidos juntos. Para comparar con `similitud`."""
+    comp = geo.compuesto(list(formas))
+    p = propiedades_fisicas(comp, 1.0)
+    return {"volumen": p["volumen"], "area": p["area"], "caras": len(geo.caras(comp)),
+            "momentos": sorted(p["momentos_principales"])}
+
+
+# Tolerancias relativas de Buscar componentes similares (Find Similar Components de Fusion): «duplicado»
+# (misma geometría), «muy similar» y «similar».
+_SIMILITUD = (("duplicate", 1e-4), ("highly_similar", 0.05), ("similar", 0.20))
+
+
+def similitud(a, b):
+    """«duplicate», «highly_similar», «similar» o None: qué tanto se parecen dos firmas de `firma_geometrica`.
+    Compara volumen, área y los tres momentos principales; «duplicate» además pide la misma cantidad de caras."""
+    def rel(x, y):
+        return abs(x - y) / max(abs(x), abs(y), 1e-12)
+    peor = max(rel(a["volumen"], b["volumen"]), rel(a["area"], b["area"]),
+               *(rel(x, y) for x, y in zip(a["momentos"], b["momentos"], strict=True)))
+    for estado, tope in _SIMILITUD:
+        if peor <= tope and (estado != "duplicate" or a["caras"] == b["caras"]):
+            return estado
+    return None
+
+
 def centro_de_masa(formas, densidades=None):
     """Inspeccionar > Centro de masa de varios cuerpos: promedio ponderado por masa (o volumen si no hay
     densidades en g/cm³). Acepta una forma, una lista o un dict id → forma."""

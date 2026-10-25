@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # El historial del Asistente (asistente/historial.py) nunca se escribe en la carpeta del usuario durante las pruebas.
 os.environ.setdefault("OMNICAD_ASISTENTE_DIR", tempfile.mkdtemp(prefix="omnicad_chats_"))
+os.environ.setdefault("OMNICAD_PREAJUSTES", os.path.join(tempfile.mkdtemp(prefix="omnicad_preajustes_"), "preajustes.json"))
+os.environ.setdefault("OMNICAD_REGLAS_PLASTICO", os.path.join(tempfile.mkdtemp(prefix="omnicad_plastico_"), "reglas.json"))
 
 if os.environ.get("OMNICAD_BLOQUEAR_OCP") == "1":
     from omnicad.bloqueo_ocp import activar

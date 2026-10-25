@@ -427,8 +427,8 @@ def test_diametro_y_radio_se_traducen_en_los_dos_sentidos():
     assert diametro_desde_radio("d_eje + 1 mm", ctx) == "2 * (d_eje + 1 mm)"
 
 
-def test_cilindro_sobre_cara_de_arriba_y_de_abajo_y_cara_lateral_rechazada(app_qt):
-    from omnicad.ui.comando import ContextoComando, ErrorComando
+def test_cilindro_sobre_cara_de_arriba_de_abajo_y_lateral(app_qt):
+    from omnicad.ui.comando import ContextoComando
     from omnicad.ui.comandos.primitivas import Cilindro
     doc = Documento()
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="20", largo="20", alto="10"))
@@ -445,9 +445,11 @@ def test_cilindro_sobre_cara_de_arriba_y_de_abajo_y_cara_lateral_rechazada(app_q
     assert op.p["z"] == "0 mm - (5 mm)"                                   # crece hacia abajo, siguiendo al alto
     (_, _, z0), (_, _, z1) = g.caja_envolvente(doc.previsualizar(op, len(doc.operaciones))[0].cuerpos[f"{op.id}.c1"].forma)
     assert (z0, z1) == pytest.approx((-5, 0))
-    v.update(centro=[_cara(doc, "op1.c1", (20, 10, 5))])                  # cara vertical: OpPrimitiva no la orienta
-    with pytest.raises(ErrorComando, match="eje en Z"):
-        cmd.construir(v, ctx)
+    v.update(centro=[_cara(doc, "op1.c1", (20, 10, 5))])                  # cara vertical (SOL-29): el cilindro se orienta con `plano`
+    op = cmd.construir(v, ctx)
+    assert op.p["plano"]
+    (x0, _, _), (x1, _, _) = g.caja_envolvente(doc.previsualizar(op, len(doc.operaciones))[0].cuerpos[f"{op.id}.c1"].forma)
+    assert (x0, x1) == pytest.approx((20, 25))
 
 
 def test_clic_cerca_del_centro_de_la_cara_se_engancha(app_qt):

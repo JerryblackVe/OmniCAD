@@ -423,6 +423,14 @@ class VentanaPrincipal(QMainWindow):
         A("seleccion_nombre", "Seleccionar por nombre…", self._seleccion_nombre, None, "Elige cuerpos por su nombre.")
         A("seleccion_tamano", "Seleccionar por tamaño…", self._seleccion_tamano, None,
           "Elige cuerpos cuya caja envolvente está entre dos tamaños.")
+        A("seleccion_limite", "Seleccionar por límite…", self._seleccion_limite, None,
+          "Elige lo que queda dentro o fuera de una caja, un cilindro o una esfera centrada en el cuerpo elegido.")
+        A("seleccion_semilla", "Semilla y límite", self._seleccion_semilla, None,
+          "Elegí los objetos límite y, al final, la cara semilla: elige las caras que hay entre ellos.")
+        A("conjunto_seleccion", "Crear conjunto de selección…", self._crear_conjunto_seleccion, None,
+          "Guarda lo elegido con un nombre en el diseño.")
+        A("elegir_conjunto", "Elegir conjunto de selección…", self._elegir_conjunto_seleccion, None,
+          "Vuelve a elegir un conjunto de selección guardado.")
         for clave, texto, ayuda in (("cuerpo", "Prioridad de cuerpo",
                                      "Al hacer clic, elige primero el cuerpo entero."),
                                     ("cara", "Prioridad de cara",
@@ -1511,6 +1519,116 @@ class VentanaPrincipal(QMainWindow):
             if minimo <= diag <= maximo and m["id"] in estado.cuerpos:
                 ids.append(m["id"])
         self._seleccionar(self._hits_cuerpos(ids))
+
+    def _sesion_api(self):
+        from .. import api
+        ses = api.Sesion(self.doc)
+        ses.seleccionar_cuerpos = self.seleccionar_cuerpos
+        return ses
+
+    def _seleccion_libre(self):
+        """¿Se puede cambiar la selección? Con un comando abierto o un boceto activo no (`seleccionar_entidades` lo rechaza)."""
+        if self.panel is not None or self.modo_boceto.activo:
+            self.mensaje("Terminá el comando o el boceto antes de cambiar la selección.")
+            return False
+        return True
+
+    def _cuerpo_elegido(self):
+        for h in self.seleccion:
+            if h["ref"].get("cuerpo"):
+                return h["ref"]["cuerpo"]
+        self.mensaje("Elegí primero un cuerpo: es el centro del límite.")
+        return None
+
+    def _seleccion_limite(self):
+        from .. import api
+        from ..api import selectores as sl
+        cuerpo = self._cuerpo_elegido() if self._seleccion_libre() else None
+        if cuerpo is None:
+            return
+        formas = {"Caja": "box", "Cilindro (eje X)": "cylinder", "Esfera": "sphere"}
+        nombre, ok = QInputDialog.getItem(self, "Seleccionar por límite", "Forma del límite:", list(formas), 0, False)
+        if not ok:
+            return
+        args = {"shape": formas[nombre], "center": cuerpo}
+        medidas = {"box": (("x_size", "Largo en X"), ("y_size", "Largo en Y"), ("z_size", "Largo en Z")),
+                   "cylinder": (("length", "Largo sobre X"), ("radius", "Radio")), "sphere": (("radius", "Radio"),)}
+        for clave, texto in medidas[args["shape"]]:
+            valor, ok = QInputDialog.getDouble(self, "Seleccionar por límite", f"{texto} (mm):", 50, 0.001, 1e6, 3)
+            if not ok:
+                return
+            args[clave] = valor
+        modo, ok = QInputDialog.getItem(self, "Seleccionar por límite", "Seleccionar:",
+                                        ["Dentro del límite", "Dentro y los que lo cruzan", "Fuera del límite"], 0, False)
+        if not ok:
+            return
+        args.update(selection="outside" if modo.startswith("Fuera") else "inside", intersected="cruzan" in modo)
+        tipo, ok = QInputDialog.getItem(self, "Seleccionar por límite", "Objetos:", ["Cuerpos", "Caras", "Aristas"], 0, False)
+        if not ok:
+            return
+        args["kind"] = {"Cuerpos": "body", "Caras": "face", "Aristas": "edge"}[tipo]
+        ses = self._sesion_api()
+        r = api.llamar(ses, "select_by_boundary", args)
+        if not r["ok"]:
+            self.mensaje(r["mensaje"])
+            return
+        r = r["result"]
+        if args["kind"] == "body":
+            self._seleccionar(self._hits_cuerpos(r["bodies"]))
+        else:
+            ids = r["faces"] if args["kind"] == "face" else r["edges"]
+            kind = "cara" if args["kind"] == "face" else "arista"
+            self.seleccionar_entidades([sl.referencia(*sl.resolver_id(ses, i, kind)) for i in ids])
+        self.mensaje(f"{len(r['bodies'] + r['faces'] + r['edges'])} elegidos.")
+
+    def _seleccion_semilla(self):
+        if not self._seleccion_libre():
+            return
+        from ..nucleo import solidos_modificar as sm
+        from ..nucleo import referencias as refs
+        from ..timeline import entidades as ent
+        estado = self._estado_visible()
+        elegidos = [h["ref"] for h in self.seleccion if h["ref"].get("tipo") in ("cara", "arista")]
+        if len(elegidos) < 2 or elegidos[-1]["tipo"] != "cara":
+            self.mensaje("Elegí los objetos límite (caras o aristas) y, al final, la cara semilla.")
+            return
+        resueltos = [ent.resolver(r, estado) for r in elegidos]
+        cuerpo = estado.cuerpo(elegidos[-1]["cuerpo"])
+        semilla = resueltos[-1].forma
+        caras = [e.forma for r, e in zip(elegidos[:-1], resueltos, strict=False) if r["tipo"] == "cara" and r["cuerpo"] == cuerpo.id]
+        aristas = [e.forma for r, e in zip(elegidos[:-1], resueltos, strict=False) if r["tipo"] == "arista" and r["cuerpo"] == cuerpo.id]
+        try:
+            vistas = sm.caras_entre_semilla_y_limite(cuerpo.forma, semilla, caras, aristas)
+        except Exception as e:  # noqa: BLE001  (un error de OCC no tiene que escaparse del slot)
+            self.mensaje(f"No se pudo calcular la selección: {e}")
+            return
+        self.seleccionar_entidades([refs.referencia(cuerpo.id, f, cuerpo.forma) for f in vistas])
+        self.mensaje(f"{len(vistas)} caras elegidas.")
+
+    def _crear_conjunto_seleccion(self):
+        if not self.seleccion:
+            self.mensaje("Elegí algo antes de guardar el conjunto.")
+            return
+        nombre, ok = QInputDialog.getText(self, "Crear conjunto de selección", "Nombre:")
+        nombre = nombre.strip()
+        if not ok or not nombre:
+            return
+        conjuntos = self.doc.espacios.setdefault("conjuntos_seleccion", {})
+        actuales = conjuntos.get(nombre, [])
+        conjuntos[nombre] = actuales + [h["ref"] for h in self.seleccion if h["ref"] not in actuales]
+        self.doc.modificado = True
+        self.mensaje(f"Conjunto «{nombre}»: {len(conjuntos[nombre])} objetos.")
+
+    def _elegir_conjunto_seleccion(self):
+        if not self._seleccion_libre():
+            return
+        conjuntos = self.doc.espacios.get("conjuntos_seleccion") or {}
+        if not conjuntos:
+            self.mensaje("Todavía no hay conjuntos de selección.")
+            return
+        nombre, ok = QInputDialog.getItem(self, "Elegir conjunto de selección", "Conjunto:", list(conjuntos), 0, False)
+        if ok:
+            self.seleccionar_entidades(conjuntos[nombre])
 
     def _seleccionar(self, hits):
         self.seleccion = list(hits)

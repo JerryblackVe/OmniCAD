@@ -53,10 +53,11 @@ def test_herramientas_del_grupo_solido():
         "gear_info", "create_gear", "create_gear_pair", "create_rack", "create_sprocket", "create_shaft",  # engranajes
         "create_clearance_test",                                                              # herramientas_calibracion
         "create_coil", "create_pipe", "create_rib", "create_web", "create_emboss", "create_boss", "create_lip_groove",
-        "create_boundary_fill", "create_bounding_solid", "thicken", "align_bodies", "scale_body",
+        "create_boundary_fill", "create_bounding_solid", "create_fluid_volume", "thicken", "align_bodies", "scale_body",
         "create_surface_extrude", "create_surface_revolve", "create_surface_sweep", "create_surface_loft",
         "offset_surface", "fillet_surface", "create_patch", "create_ruled_surface", "extend_surface", "trim_surface",
-        "untrim_surface", "stitch_surfaces", "unstitch_surfaces", "reverse_surface_normal"])
+        "untrim_surface", "stitch_surfaces", "unstitch_surfaces", "reverse_surface_normal",
+        "move_faces", "create_geometric_pattern", "assign_plastic_rule", "create_volumetric_lattice"])                   # SOL-15, SOL-20, SOL-21
     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
 
 

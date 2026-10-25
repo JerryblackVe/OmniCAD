@@ -9,11 +9,10 @@ centro, las esquinas y los puntos medios de la cara), y se puede arrastrar con e
 sirve un punto o un vértice. Las medidas redondas se piden como DIÁMETRO, con asas en la vista para tirar del
 diámetro y de la altura. Sin selección valen los campos Posición X/Y/Z (expresiones con parámetros).
 
-El paso del timeline sigue siendo `OpPrimitiva` (la receta no cambia): guarda RADIOS (el diámetro se traduce:
-«20 mm» → radio «10 mm»; con parámetros, «d_eje» → «(d_eje) / 2») y la posición X/Y/Z. Limitación honesta:
-`OpPrimitiva` no guarda un plano, así que la caja, el cilindro y el toroide se crean con el eje en Z (sobre un
-plano o una cara horizontal; sobre una cara que mira hacia abajo crecen hacia abajo). Para otra orientación,
-girarlos después con Mover/copiar. La esfera acepta cualquier plano.
+El paso del timeline sigue siendo `OpPrimitiva`: guarda RADIOS (el diámetro se traduce: «20 mm» → radio «10 mm»;
+con parámetros, «d_eje» → «(d_eje) / 2») y la posición X/Y/Z. Sobre un plano o una cara horizontal la posición es del
+mundo (sobre una cara que mira hacia abajo crece hacia abajo); sobre un plano o una cara inclinada el paso guarda esa
+referencia en `plano` y X/Y son coordenadas en ella: la caja, el cilindro y el toroide quedan alineados con ese plano.
 """
 import re
 
@@ -115,12 +114,18 @@ class _Primitiva(Comando):
         normal = None
         if hit["ref"].get("tipo") in ("plano", "cara") and plano is not None:
             normal = np.asarray(plano.normal, float)
-            if not self.CUALQUIER_PLANO and abs(abs(normal[2]) - 1.0) > 1e-6:
-                nombre = {"caja": "la caja", "cilindro": "el cilindro", "toroide": "el toroide"}[self.FORMA]
-                raise ErrorComando(f"Por ahora {nombre} se crea con el eje en Z: "
-                                   "elegí un plano o una cara horizontal (o un punto) y giralo después con "
-                                   "Mover/copiar.")
         return np.asarray(punto, float).reshape(3), normal
+
+    def _plano_inclinado(self, v, ctx):
+        """(referencia, plano) si lo elegido es un plano o una cara que NO es horizontal y la forma tiene orientación
+        (la esfera no); si no, None."""
+        sel = v.get("centro") or []
+        if not sel or self.CUALQUIER_PLANO or sel[0]["ref"].get("tipo") not in ("plano", "cara"):
+            return None
+        _punto, normal = self._centro_elegido(sel[0], ctx)
+        if normal is None or abs(abs(normal[2]) - 1.0) <= 1e-6:
+            return None
+        return sel[0]["ref"], ent.resolver(sel[0]["ref"], ctx.estado).plano
 
     def posicion(self, v, ctx):
         """(x, y, z, caja_centrada) a guardar. Con algo elegido, el centro (o el centro de la base) sale de ahí."""
@@ -132,6 +137,10 @@ class _Primitiva(Comando):
                 ctx.evaluar(v[k])
             return str(v["x"]), str(v["y"]), str(v["z"]), centrada
         punto, normal = self._centro_elegido(sel[0], ctx)
+        inclinado = self._plano_inclinado(v, ctx)
+        if inclinado is not None:             # coordenadas en el plano: el clic es el centro de la base
+            u, w = inclinado[1].a_uv(punto)
+            return _mm(u), _mm(w), "0 mm", caja
         z = _mm(punto[2])
         if self.CRECE_EN_Z and normal is not None and normal[2] < 0:     # cara que mira hacia abajo: crece hacia abajo
             z = f"{z} - ({v['alto']})"
@@ -155,6 +164,8 @@ class _Primitiva(Comando):
             p += (evaluar_o_cero(ctx, v.get("ancho")) / 2, evaluar_o_cero(ctx, v.get("largo")) / 2, 0.0)
         sel = v.get("centro") or []
         sentido = 1.0
+        if self._plano_inclinado(v, ctx) is not None:      # en el mundo: el punto del clic
+            return np.asarray(self._centro_elegido(sel[0], ctx)[0], float), sentido
         if sel and self.CRECE_EN_Z:
             _p, normal = self._centro_elegido(sel[0], ctx)
             if normal is not None and normal[2] < 0:
@@ -174,8 +185,10 @@ class _Primitiva(Comando):
             raise ErrorComando("El diámetro del tubo tiene que ser menor que el diámetro mayor.")
         x, y, z, centrada = self.posicion(v, ctx)
         objetivo = [h["ref"]["cuerpo"] for h in v.get("objetivo") or [] if h["ref"].get("tipo") == "cuerpo"]
+        inclinado = self._plano_inclinado(v, ctx)
         params.update(forma=self.FORMA, x=x, y=y, z=z, caja_centrada=centrada, operacion=v.get("operacion", "nuevo"),
-                      objetivo=objetivo[0] if objetivo and v.get("operacion") != "nuevo" else "")
+                      objetivo=objetivo[0] if objetivo and v.get("operacion") != "nuevo" else "",
+                      plano=inclinado[0] if inclinado is not None else None)
         return self.crear_op(OpPrimitiva, v, ctx, **params)
 
     def desde_op(self, op, ctx):
@@ -185,6 +198,11 @@ class _Primitiva(Comando):
                    else []}
         for campo, _et, _d, clave, diametro in self.MEDIDAS:
             valores[campo] = diametro_desde_radio(p[clave], ctx) if diametro else p[clave]
+        if p.get("plano"):                    # el centro es el punto del plano donde cae (x, y, z) locales
+            hit = hits([p["plano"]], ctx.estado)[0]
+            pl = ent.resolver(p["plano"], ctx.estado).plano
+            x, y, z = (evaluar_o_cero(ctx, p[k]) for k in ("x", "y", "z"))
+            valores["centro"] = [dict(hit, punto=pl.origen + pl.u * x + pl.v * y + pl.normal * z)]
         return valores
 
     def ajustar_hit(self, campo, hit, ctx, visor):

@@ -7,8 +7,9 @@ from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, Op
                                        OpQuitar, OpQuitarEmpalmes,
                                        OpDesmoldeo, OpDivisionSilueta, OpDividirCara, OpDividirCuerpo, OpEmpalme,
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
+from ...timeline.ops_solido import OpReticulaVolumetrica
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Seleccion, exigir, hit_desde_ref,
+from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir, hit_desde_ref,
                        hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .aspecto import Aspecto  # noqa: F401  (el comando vive en aspecto.py; se sigue pudiendo importar desde acá)
@@ -69,17 +70,25 @@ class Empalme(Comando):
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
-        empalme = lambda v: v.get("tipo") != "reglas"  # noqa: E731
+        empalme = lambda v: v.get("tipo") not in ("reglas", "completo")  # noqa: E731
         reglas = lambda v: v.get("tipo") == "reglas"  # noqa: E731
+        completo = lambda v: v.get("tipo") == "completo"  # noqa: E731
         return [
-            Opciones("tipo", "Tipo", {"empalme": "Empalme", "reglas": "Empalme de reglas"}),
+            Opciones("tipo", "Tipo", {"empalme": "Empalme", "reglas": "Empalme de reglas",
+                                      "completo": "Redondeo completo"}),
+            Seleccion("central", "Cara central", {"cara_plana"}, visible_si=completo,
+                      ayuda="La cara que se vuelve una media caña entre las dos laterales."),
+            Seleccion("laterales", "Caras laterales", {"cara_plana"}, minimo=2, maximo=2, visible_si=completo,
+                      ayuda="Dos caras planas, paralelas y perpendiculares a la central."),
             Seleccion("aristas", "Aristas", {"arista"}, maximo=None, visible_si=empalme),
             Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
                                                      "variable": "Variable"}, visible_si=empalme),
-            Expresion("radio", "Radio", "1 mm",
-                      visible_si=lambda v: v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas"),
+            Expresion("radio", "Radio", "1 mm", visible_si=lambda v: not completo(v) and (
+                v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas")),
             Expresion("radio_fin", "Radio final", "2 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
+            Texto("puntos_radio", "Puntos intermedios", "", visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable",
+                  ayuda="Posición (0 a 1) y radio separados por «:», uno por punto y separados por «;», p. ej. 0.5:3 mm; 0.8:2 mm."),
             Expresion("cuerda", "Longitud de cuerda", "1 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "cuerda"),
             Seleccion("caras_a", "Caras/operaciones", {"cara"}, maximo=None, visible_si=reglas),
@@ -92,16 +101,41 @@ class Empalme(Comando):
             Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme),
         ]
 
+    @staticmethod
+    def _puntos_radio(texto, ctx):
+        """«0.5:3 mm; 0.8:2 mm» → [{"posicion": "0.5", "radio": "3 mm"}…] (las expresiones se validan acá, en rojo)."""
+        puntos = []
+        for parte in (texto or "").split(";"):
+            if not parte.strip():
+                continue
+            if parte.count(":") != 1:
+                raise ErrorComando(f"Cada punto es posición:radio (p. ej. 0.5:3 mm), no «{parte.strip()}».")
+            pos, rad = (x.strip() for x in parte.split(":"))
+            if not 0 < ctx.evaluar(pos, ESCALAR) < 1:
+                raise ErrorComando("La posición de un punto intermedio está entre 0 y 1 (sin incluirlos).")
+            ctx.evaluar(rad)
+            puntos.append({"posicion": pos, "radio": rad})
+        return puntos
+
     def construir(self, v, ctx):
+        if v.get("tipo") == "completo":
+            exigir(v, "central", "Seleccioná la cara central.")
+            exigir(v, "laterales", "Seleccioná las dos caras laterales.")
+            if len(v["laterales"]) != 2:
+                raise ErrorComando("Hacen falta exactamente dos caras laterales.")
+            return self.crear_op(OpEmpalme, v, ctx, tipo="completo", central=ref1(v, "central"),
+                                 laterales=refs(v, "laterales"))
         if v.get("tipo") == "reglas":
             exigir(v, "caras_a", "Seleccioná las caras para la regla.")
         else:
             exigir(v, "aristas", "Seleccioná las aristas a empalmar.")
         ctx.evaluar(v["radio"])
+        puntos = self._puntos_radio(v.get("puntos_radio"), ctx) if v.get("tipo_radio") == "variable" else []
         return self.crear_op(OpEmpalme, v, ctx, tipo=v["tipo"], aristas=refs(v, "aristas"), tipo_radio=v["tipo_radio"],
                              radio=v["radio"], radio_fin=v["radio_fin"], cuerda=v["cuerda"],
                              cadena_tangente=v["cadena_tangente"], caras_a=refs(v, "caras_a"),
-                             caras_b=refs(v, "caras_b"), regla=v["regla"], redondeos=v["redondeos"])
+                             caras_b=refs(v, "caras_b"), regla=v["regla"], redondeos=v["redondeos"],
+                             puntos_radio=puntos, conjuntos=list(ctx.op.p.get("conjuntos") or []) if ctx.op else [])
 
     def manipuladores(self, ctx, v):
         if v.get("tipo") == "reglas":
@@ -110,8 +144,10 @@ class Empalme(Comando):
 
     def desde_op(self, op, ctx):
         v = dict(op.p)
-        for k in ("aristas", "caras_a", "caras_b"):
-            v[k] = hits(op.p[k], ctx.estado)
+        for k in ("aristas", "caras_a", "caras_b", "laterales"):
+            v[k] = hits(op.p.get(k) or [], ctx.estado)
+        v["central"] = _hit1(op.p["central"], ctx.estado) if op.p.get("central") else []
+        v["puntos_radio"] = "; ".join(f"{q['posicion']}: {q['radio']}" for q in op.p.get("puntos_radio") or [])
         return v
 
 
@@ -131,6 +167,7 @@ class Chaflan(Comando):
             Expresion("angulo", "Ángulo", "45 deg", ANGULO, visible_si=lambda v: v.get("tipo") == "distancia_angulo"),
             Casilla("voltear", "Voltear", visible_si=lambda v: v.get("tipo") != "distancia_igual"),
             Casilla("cadena_tangente", "Cadena tangente", True),
+            Opciones("esquina", "Tipo de esquina", {"chaflan": "Chaflán", "inglete": "Inglete"}),
         ]
 
     def construir(self, v, ctx):
@@ -138,7 +175,7 @@ class Chaflan(Comando):
         ctx.evaluar(v["distancia"])
         return self.crear_op(OpChaflan, v, ctx, aristas=refs(v, "aristas"),
                              **{k: v[k] for k in ("tipo", "distancia", "distancia2", "angulo", "voltear",
-                                                  "cadena_tangente")})
+                                                  "cadena_tangente", "esquina")})
 
     def manipuladores(self, ctx, v):
         return _flecha_arista(ctx, v.get("aristas"), "distancia", chaflan=True)
@@ -197,9 +234,16 @@ class Desmoldeo(Comando):
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
+        particion = lambda v: v.get("tipo") == "linea_particion"  # noqa: E731
         return [
-            Seleccion("plano", "Plano fijo", {"cara_plana", "plano"}),
+            Opciones("tipo", "Tipo", {"plano_fijo": "Plano fijo", "linea_particion": "Línea de partición"}),
+            Seleccion("plano", "Plano fijo o dirección de extracción", {"cara_plana", "plano", "eje", "arista_lineal"},
+                      ayuda="Con «Línea de partición» define la dirección de extracción."),
+            Seleccion("herramienta_particion", "Herramienta de partición", {"cara_plana", "plano", "arista", "curva_boceto"},
+                      visible_si=particion, ayuda="Plano, cara plana o curva plana por donde pasa la línea de partición."),
             Seleccion("caras", "Caras", {"cara"}, maximo=None),
+            Opciones("modo_angulo", "Modo de ángulo", {"relativo": "Relativo", "absoluto": "Absoluto"}, "relativo",
+                     ayuda="Relativo suma el ángulo al desmoldeo que la cara ya tiene; absoluto lo mide desde la dirección."),
             Casilla("voltear", "Invertir dirección de extracción"),
             Opciones("lados", "Tipo de desmoldeo", {"uno": "Un lado", "dos": "Dos lados", "simetrico": "Simétrico"}),
             Expresion("angulo", "Ángulo", "3 deg", ANGULO),
@@ -207,13 +251,55 @@ class Desmoldeo(Comando):
         ]
 
     def construir(self, v, ctx):
-        exigir(v, "plano", "Seleccioná el plano fijo.")
+        particion = v.get("tipo") == "linea_particion"
+        exigir(v, "plano", "Seleccioná la dirección de extracción." if particion else "Seleccioná el plano fijo.")
+        if particion:
+            exigir(v, "herramienta_particion", "Seleccioná la herramienta de partición.")
         exigir(v, "caras", "Seleccioná las caras a inclinar.")
         return self.crear_op(OpDesmoldeo, v, ctx, plano=ref1(v, "plano"), caras=refs(v, "caras"),
-                             **{k: v[k] for k in ("angulo", "lados", "angulo2", "voltear")})
+                             herramienta_particion=ref1(v, "herramienta_particion") if particion else None,
+                             **{k: v[k] for k in ("angulo", "lados", "angulo2", "voltear", "tipo", "modo_angulo")})
 
     def desde_op(self, op, ctx):
-        return dict(op.p, plano=_hit1(op.p["plano"], ctx.estado), caras=hits(op.p["caras"], ctx.estado))
+        herramienta = op.p.get("herramienta_particion")
+        return dict(op.p, plano=_hit1(op.p["plano"], ctx.estado), caras=hits(op.p["caras"], ctx.estado),
+                    herramienta_particion=_hit1(herramienta, ctx.estado) if herramienta else [])
+
+
+class ReticulaVolumetrica(Comando):
+    CLAVE, TITULO, ICONO = "reticula_volumetrica", "Retícula volumétrica", "reticula_volumetrica"
+    AYUDA = ("Llena un sólido con una estructura interna por celdas: barras (cross, x_cell) o superficies mínimas "
+             "(gyroid, Schwarz P y D, que quedan como cuerpo de malla). La solidez es el porcentaje de material.")
+    CLASE_OP = OpReticulaVolumetrica
+    verificar = staticmethod(_con_cuerpos)
+
+    def campos(self, ctx):
+        no_uniforme = lambda v: bool(v.get("no_uniforme"))  # noqa: E731
+        return [Seleccion("cuerpo", "Cuerpo sólido", {"cuerpo"}),
+                Opciones("forma_celda", "Forma de la celda", {"gyroid": "Gyroid", "cross": "Cruz", "x_cell": "Celda X",
+                                                              "schwarz_p": "Schwarz P", "schwarz_d": "Schwarz D"}),
+                Expresion("tamano", "Tamaño de celda (X)", "5 mm"),
+                Casilla("no_uniforme", "Proporciones no uniformes"),
+                Expresion("tamano_y", "Tamaño en Y", "5 mm", visible_si=no_uniforme),
+                Expresion("tamano_z", "Tamaño en Z", "5 mm", visible_si=no_uniforme),
+                Expresion("solidez", "Solidez (%)", "30", ESCALAR),
+                Entero("resolucion", "Muestras por celda", 8, 4, 40,
+                       visible_si=lambda v: v.get("forma_celda") in ("gyroid", "schwarz_p", "schwarz_d"))]
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpo", "Seleccioná el sólido que se llena.")
+        for k in ("tamano", "tamano_y", "tamano_z") if v.get("no_uniforme") else ("tamano",):
+            ctx.evaluar(v[k])
+        ctx.evaluar(v["solidez"], ESCALAR)
+        return self.crear_op(OpReticulaVolumetrica, v, ctx, cuerpo=v["cuerpo"][0]["ref"]["cuerpo"],
+                             tamano_y=v["tamano_y"] if v.get("no_uniforme") else "",
+                             tamano_z=v["tamano_z"] if v.get("no_uniforme") else "",
+                             **{k: v[k] for k in ("forma_celda", "tamano", "solidez", "resolucion")})
+
+    def desde_op(self, op, ctx):
+        v = dict(op.p, cuerpo=_hits_cuerpos([op.p["cuerpo"]], ctx.estado), no_uniforme=bool(op.p.get("tamano_y") or op.p.get("tamano_z")))
+        v["tamano_y"], v["tamano_z"] = op.p.get("tamano_y") or op.p["tamano"], op.p.get("tamano_z") or op.p["tamano"]
+        return v
 
 
 class Escala(Comando):
@@ -398,23 +484,33 @@ class ReemplazarCara(Comando):
 
 class DividirCara(Comando):
     CLAVE, TITULO, ICONO = "dividir_cara", "Dividir cara", "dividir_cara"
-    AYUDA = "Parte caras con una cara, un plano o curvas."
+    AYUDA = "Parte caras con una cara, un plano o curvas: con la superficie, según un vector o al punto más cercano."
     CLASE_OP = OpDividirCara
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
+        proyecta = lambda v: v.get("tipo") in ("vector", "cercano")  # noqa: E731
         return [Seleccion("caras", "Caras para dividir", {"cara"}, maximo=None),
                 Seleccion("herramienta", "Herramienta de división", {"cara", "plano", "arista", "curva_boceto"}),
-                Casilla("extender", "Extender herramienta de división", True)]
+                Opciones("tipo", "Tipo de división", {"superficie": "Dividir con superficie", "vector": "Según vector",
+                                                      "cercano": "Punto más cercano"}),
+                Seleccion("direccion", "Dirección de proyección", {"plano", "cara_plana", "eje", "arista_lineal"},
+                          visible_si=lambda v: v.get("tipo") == "vector"),
+                Casilla("extender", "Extender herramienta de división", True,
+                        visible_si=lambda v: not proyecta(v))]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras a dividir.")
         exigir(v, "herramienta", "Seleccioná la herramienta.")
+        if v.get("tipo") == "vector":
+            exigir(v, "direccion", "Seleccioná la dirección de proyección.")
         return self.crear_op(OpDividirCara, v, ctx, caras=refs(v, "caras"), herramienta=ref1(v, "herramienta"),
-                             extender=v["extender"])
+                             extender=v["extender"], tipo=v.get("tipo", "superficie"),
+                             direccion=ref1(v, "direccion") if v.get("tipo") == "vector" else None)
 
     def desde_op(self, op, ctx):
-        return dict(op.p, caras=hits(op.p["caras"], ctx.estado), herramienta=_hit1(op.p["herramienta"], ctx.estado))
+        return dict(op.p, caras=hits(op.p["caras"], ctx.estado), herramienta=_hit1(op.p["herramienta"], ctx.estado),
+                    direccion=_hit1(op.p.get("direccion"), ctx.estado))
 
 
 class DividirCuerpo(Comando):
@@ -447,12 +543,15 @@ class DivisionSilueta(Comando):
 
     def campos(self, ctx):
         return [Seleccion("direccion", "Dirección de vista", {"plano", "cara_plana", "eje", "arista_lineal"}),
-                Seleccion("cuerpo", "Cuerpo de destino", {"cuerpo"})]
+                Seleccion("cuerpo", "Cuerpo de destino", {"cuerpo"}),
+                Opciones("operacion", "Operación", {"caras": "Dividir solo las caras", "vaciado": "Dividir cuerpo vaciado",
+                                                    "solido": "Dividir cuerpo sólido"})]
 
     def construir(self, v, ctx):
         exigir(v, "direccion", "Seleccioná la dirección.")
         exigir(v, "cuerpo", "Seleccioná el cuerpo.")
-        return self.crear_op(OpDivisionSilueta, v, ctx, cuerpo=_cuerpos(v, "cuerpo")[0], direccion=ref1(v, "direccion"))
+        return self.crear_op(OpDivisionSilueta, v, ctx, cuerpo=_cuerpos(v, "cuerpo")[0], direccion=ref1(v, "direccion"),
+                             operacion=v.get("operacion", "caras"))
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpo=_hits_cuerpos(op.p["cuerpo"], ctx.estado),
@@ -461,14 +560,19 @@ class DivisionSilueta(Comando):
 
 class MoverCopiar(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "mover_copiar", "Mover/copiar", "mover_copiar", "M"
-    AYUDA = "Mueve, gira o copia cuerpos: libre, trasladar, girar, punto a punto o punto a posición."
+    AYUDA = ("Mueve, gira o copia cuerpos o caras planas: libre, trasladar, girar, punto a punto o punto a "
+             "posición.")
     CLASE_OP = OpMover
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
         t = lambda *tipos: (lambda v: v.get("tipo") in tipos)  # noqa: E731
+        caras = lambda v: v.get("objeto") == "caras"  # noqa: E731
         return [
-            Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None),
+            Opciones("objeto", "Mover objeto", {"cuerpos": "Cuerpos", "caras": "Caras"}),
+            Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None, visible_si=lambda v: not caras(v)),
+            Seleccion("caras", "Caras", {"cara"}, maximo=None, visible_si=caras,
+                      ayuda="Caras planas: las vecinas se extienden o se recortan. «Crear copia» deja superficies."),
             Opciones("tipo", "Tipo de movimiento", TIPOS_MOVIMIENTO),
             Seleccion("pivote", "Pivote", {"vertice", "punto"}, minimo=0, visible_si=t("libre"),
                       ayuda="Centro de giro. Sin selección: el centro de los cuerpos."),
@@ -494,15 +598,19 @@ class MoverCopiar(Comando):
             Expresion("y", "Y", "0 mm", visible_si=t("punto_a_posicion")),
             Expresion("z", "Z", "0 mm", visible_si=t("punto_a_posicion")),
             Casilla("copiar", "Crear copia"),
-            Casilla("ligera", "Copia ligera (comparte la geometría)", visible_si=lambda v: bool(v.get("copiar")),
+            Casilla("ligera", "Copia ligera (comparte la geometría)",
+                    visible_si=lambda v: bool(v.get("copiar")) and not caras(v),
                     ayuda="La copia es la MISMA geometría con otra ubicación: editar el original la cambia también."),
         ]
 
     def construir(self, v, ctx):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos a mover.")
+        por_caras = v.get("objeto") == "caras"
+        exigir(v, "caras" if por_caras else "cuerpos", "Seleccioná las caras a mover." if por_caras
+               else "Seleccioná los cuerpos a mover.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
                                     "copiar", "ligera")}
-        p.update(cuerpos=_cuerpos(v), pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
+        p.update(cuerpos=[] if por_caras else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],
+                 ligera=bool(v.get("ligera")) and not por_caras, pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
                  origen=ref1(v, "origen"), destino=ref1(v, "destino"))
         return self.crear_op(OpMover, v, ctx, **p)
 
@@ -554,7 +662,8 @@ class MoverCopiar(Comando):
         return []
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
+        v = dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), caras=hits(op.p.get("caras") or [], ctx.estado),
+                 objeto="caras" if op.p.get("caras") else "cuerpos")
         for k in ("pivote", "direccion", "eje", "origen", "destino"):
             v[k] = _hit1(op.p.get(k), ctx.estado)
         return v
@@ -754,6 +863,6 @@ class QuitarEmpalmes(Comando):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
 
 
-registrar(PulsarTirar, Desfase, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
+registrar(ReticulaVolumetrica, PulsarTirar, Desfase, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, CaraDesfase, ReemplazarCara,
           DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto,
           MaterialFisico, QuitarEmpalmes)

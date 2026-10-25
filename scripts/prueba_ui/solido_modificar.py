@@ -26,16 +26,33 @@ plano = lambda i: (lambda: [A.hit_plano(v, i)])  # noqa: E731
 V_CAJA = 30 * 30 * 20
 
 # Empalme y chaflán -----------------------------------------------------------------------------------------------------
+def _hit_por_normal(normal):
+    """Hit de la cara con esa normal sin clic en el visor (la cara de atrás del modelo no se puede elegir con el mouse)."""
+    from omnicad.nucleo import referencias as refs
+    from omnicad.ui.comando import hit_desde_ref
+    estado = v.doc.estado_final
+    forma = estado.cuerpos[caja].forma
+    c = next(c for c in refs.subformas(forma, "cara") if sum(x * y for x, y in zip(refs.firma_cara(c)["normal"], normal, strict=True)) > 0.99)
+    return hit_desde_ref(refs.referencia(caja, c, forma), estado)
+
+
 run("empalme_3d", lambda: (
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm"}, foto="empalme_3d"),
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "cuerda", "cuerda": "3 mm"}, etiqueta="empalme cuerda", rt=False),
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "variable", "radio_fin": "4 mm"}, etiqueta="empalme variable 2→4", rt=False),
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "100 mm"}, etiqueta="empalme radio 100 (grande)", rt=False),
+    C.caso(v, AR, "empalme_3d", {"central": cara(caja, normal=(0, 0, 1)),
+                                 "laterales": lambda: [_hit_por_normal((1, 0, 0)), _hit_por_normal((-1, 0, 0))]},
+           {"tipo": "completo"}, etiqueta="redondeo completo (media caña)", rt=False),
+    C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "variable", "radio_fin": "2 mm", "puntos_radio": "0.5: 4 mm"},
+           etiqueta="empalme variable con punto intermedio 0.5:4", rt=False),
     C.negativos(v, AR, "empalme_3d", {"aristas": arista(caja)}, "radio", malos=("abc", "0 mm", "-2 mm"))))
 run("chaflan_3d", lambda: (
     C.caso(v, AR, "chaflan_3d", {"aristas": arista(caja)}, {"distancia": "2 mm"}, foto="chaflan_3d"),
     C.caso(v, AR, "chaflan_3d", {"aristas": arista(caja)}, {"tipo": "dos_distancias", "distancia": "2 mm", "distancia2": "3 mm"}, etiqueta="chaflán dos distancias", rt=False),
     C.caso(v, AR, "chaflan_3d", {"aristas": arista(caja)}, {"tipo": "distancia_angulo", "distancia": "2 mm", "angulo": "30 deg"}, etiqueta="chaflán distancia-ángulo", rt=False),
+    C.caso(v, AR, "chaflan_3d", {"aristas": lambda: [A.hit_arista(v, caja, cerca=p) for p in ((-85, 15, 10), (-85, 0, 20), (-100, 15, 20))]},
+           {"distancia": "2 mm", "esquina": "inglete", "cadena_tangente": False}, etiqueta="chaflán, esquina inglete (tres aristas)", rt=False),
     C.negativos(v, AR, "chaflan_3d", {"aristas": arista(caja)}, "distancia", malos=("abc", "0 mm", "-2 mm", "100 mm"))))
 
 # Pulsar/Tirar ------------------------------------------------------------------------------------------------------------
@@ -54,6 +71,8 @@ run("vaciado", lambda: (
 # Desmoldeo ---------------------------------------------------------------------------------------------------------------------
 run("desmoldeo", lambda: (
     C.caso(v, AR, "desmoldeo", {"plano": cara(caja, normal=(0, 0, 1)), "caras": cara(caja, normal=(1, 0, 0))}, {"angulo": "5 deg"}, foto="desmoldeo"),
+    C.caso(v, AR, "desmoldeo", {"plano": plano("XY"), "herramienta_particion": plano("PM"), "caras": cara(caja, normal=(1, 0, 0))},
+           {"tipo": "linea_particion", "angulo": "5 deg", "lados": "uno"}, etiqueta="desmoldeo con línea de partición (plano medio)", rt=False),
     C.negativos(v, AR, "desmoldeo", {"plano": cara(caja, normal=(0, 0, 1)), "caras": cara(caja, normal=(1, 0, 0))}, "angulo", malos=("abc", "0 deg", "-5 deg", "90 deg"))))
 
 # Escala -----------------------------------------------------------------------------------------------------------------------------
@@ -89,6 +108,7 @@ run("dividir_cuerpo", lambda: (
 run("division_silueta", lambda: (
     C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {}, esperado=0, foto="division_silueta"),
     C.caso(v, AR, "division_silueta", {"direccion": eje("Z"), "cuerpo": cuerpo(cil)}, {}, etiqueta="división de silueta mirando el eje (sin silueta)", rt=False),
+    C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {"operacion": "solido"}, etiqueta="división de silueta, cuerpo sólido (dos cuerpos)", rt=False),
     C.negativos(v, AR, "division_silueta")))
 
 # Mover/copiar, Alinear, Apoyar --------------------------------------------------------------------------------------------------------
@@ -126,6 +146,14 @@ run("patron_ruta", lambda: (
     C.negativos(v, AR, "patron_ruta", {"cuerpos": cuerpo(caja), "ruta": lambda: [A.hit_curva(v, s, "Lin")]}, "d1", malos=("abc", "0 mm", "-40 mm"), vals={"n1": 3})))
 run("patron_puntos", lambda: C.negativos(v, AR, "patron_puntos"))
 run("multitransformar", lambda: C.negativos(v, AR, "multitransformar"))
+
+# Retícula volumétrica (al final: deja un cuerpo de malla en lugar de la caja) --------------------------------------------------------------------------------------------------------
+run("reticula_volumetrica", lambda: (
+    C.caso(v, AR, "reticula_volumetrica", {"cuerpo": cuerpo(caja)}, {"forma_celda": "cross", "tamano": "10 mm", "solidez": "25"},
+           etiqueta="retícula cruz 10 mm al 25 %", rt=False, foto="reticula_volumetrica"),
+    C.caso(v, AR, "reticula_volumetrica", {"cuerpo": cuerpo(caja)}, {"forma_celda": "gyroid", "tamano": "10 mm", "solidez": "30", "resolucion": 6},
+           etiqueta="retícula giroide", rt=False),
+    C.negativos(v, AR, "reticula_volumetrica", {"cuerpo": cuerpo(caja)}, "tamano", malos=("abc", "0 mm", "-5 mm"), vals={"forma_celda": "cross"})))
 
 A.guardar_registro("u2b_solido_modificar")
 fallas = [r for r in A.REGISTRO if not r["ok"]]

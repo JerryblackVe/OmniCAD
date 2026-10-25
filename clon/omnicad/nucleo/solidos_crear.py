@@ -813,6 +813,12 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
         elif abs(torsion) > 1e-9:       # True = curvilíneo, False = plano (ver _guia_plana_posible)
             ps.SetMode(_guia_torsion(tramo, torsion, radio_guia),
                        not (guia_plana or cerrada_con_torsion), BRepFill_NoContact)
+        elif isinstance(orientacion, tuple) and orientacion[0] == "alineada":
+            ps.SetMode(_gdir(orientacion[1]))      # binormal fija: el perfil conserva su ángulo con el eje
+        elif isinstance(orientacion, tuple) and orientacion[0] == "superficie":
+            if not ps.SetMode(orientacion[1]):
+                raise geo.ErrorGeometria("La ruta tiene que estar sobre la superficie guía (cada arista de la ruta, "
+                                         "apoyada en una de sus caras).")
         elif orientacion == "paralela":
             p0, t0 = _punto_en(tramo, 0.0)
             ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(_perpendicular(t0))))
@@ -852,7 +858,7 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
 
 
 def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distancia=1.0, torsion=0.0,
-           conicidad=0.0, escala_carril="escalar", solido=True):
+           conicidad=0.0, escala_carril="escalar", solido=True, eje_alineado=None, superficie_guia=None):
     """Barrido de Fusion [SLD-SWEEP-SOLID, SLD-REF-SWEEP] con BRepOffsetAPI_MakePipeShell.
 
     perfiles: caras planas (con agujeros) o alambres; ruta: aristas encadenadas o alambre. `distancia` =
@@ -860,12 +866,23 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     se aplica como escala lineal de cada lazo: los agujeros se achican). `carril` = Path + Guide Rail:
     `escala_carril` "escalar" (el perfil se agranda con la distancia ruta→carril), "ninguna" (el carril solo
     orienta); "estirar" (escala en una sola dirección) no existe en OCC y se hace como "escalar".
+    `orientacion` "perpendicular" | "paralela" | "alineada" (Aligned: `eje_alineado` = dirección que el perfil mantiene
+    como binormal, para el barrido de un cuerpo que no debe girar sobre su eje). `superficie_guia` (Path + Guide
+    Surface): una cara o compuesto sobre el que va la ruta; el perfil sigue la normal de la superficie.
     `solido=False` devuelve la superficie. La torsión admite como máximo ±TORSION_MAXIMA grados y una ruta
     sin quiebres (QUIEBRE_MAXIMO_TORSION). Las rutas cerradas se barren por mitades abiertas en modo plano,
     continuando desde el perfil final anterior y uniendo los resultados. Si el plano falla en una ruta abierta
     lisa, se prueba el curvilíneo. Se conserva el tope ±TORSION_MAXIMA_CURVILINEA en rutas cerradas y en ese respaldo.
     """
     validar_torsion(torsion)
+    if orientacion == "alineada":
+        if eje_alineado is None or np.linalg.norm(eje_alineado) < 1e-12:
+            raise geo.ErrorGeometria("La orientación alineada necesita la dirección del eje.")
+        orientacion = ("alineada", tuple(float(x) for x in eje_alineado))
+    if superficie_guia is not None:
+        if carril is not None or abs(torsion) > 1e-9:
+            raise geo.ErrorGeometria("La superficie guía no se combina con un carril ni con torsión.")
+        orientacion = ("superficie", superficie_guia)
     ruta = _recortar_alambre(_alambre(ruta), float(distancia))
     carril = _alambre(carril) if carril is not None else None
     datos = (_lista(perfiles), ruta, carril, orientacion, torsion, conicidad, escala_carril, solido)
@@ -1039,8 +1056,52 @@ def _loft(alambres, solido, reglada, cerrada):
     return ts.Shape()
 
 
-def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido=True, reglada=False):
+def _con_condiciones(exteriores, inicio, fin):
+    """Condiciones de borde «Dirección» (End Conditions) de la primera y la última sección: se agrega, a poca distancia, una
+    sección auxiliar copia de la extrema (trasladada hacia la siguiente y ensanchada o angostada según el ángulo) para que
+    la superficie salga con esa dirección. Es una aproximación: la solevación pasa por la sección auxiliar."""
+    exteriores = list(exteriores)
+    for lado, cond in ((0, inicio), (-1, fin)):
+        if not cond or cond.get("tipo", "libre") == "libre":
+            continue
+        if cond["tipo"] != "direccion":
+            raise geo.ErrorGeometria("Las condiciones de borde Tangente y Suave todavía no están: usá Libre o Dirección.")
+        tipo, w = exteriores[lado]
+        otro = exteriores[1 if lado == 0 else -2]
+        if tipo != "alambre" or otro[0] != "alambre":
+            raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
+        angulo, peso = float(cond.get("angulo", 90.0)), float(cond.get("peso", 1.0))
+        if not 0 < angulo < 180 or peso <= 0:
+            raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados y el peso es positivo.")
+        c, c2 = _centro_alambre(w), _centro_alambre(otro[1])
+        cara = BRepBuilderAPI_MakeFace(w, True).Face()
+        normal = np.asarray(geo.plano_de_cara(cara).normal, float)
+        if float((c2 - c) @ normal) < 0:
+            normal = -normal
+        delta = peso * 0.15 * float(np.linalg.norm(c2 - c))
+        radio = max(1e-6, float(np.linalg.norm(np.subtract(*geo.caja_envolvente(w)[::-1]))) / 2)
+        escala = 1.0 + delta / math.tan(math.radians(angulo)) / radio
+        if escala <= 0.05:
+            raise geo.ErrorGeometria("Con ese ángulo la sección auxiliar de la condición de borde se achica a casi nada.")
+        m = np.identity(4)
+        m[:3, :3] *= escala
+        m[:3, 3] = c + normal * delta - escala * c
+        extra = ("alambre", TopoDS.Wire(geo.transformar(w, m)))
+        if lado == 0:
+            exteriores.insert(1, extra)
+        else:
+            exteriores.insert(len(exteriores) - 1, extra)
+    return exteriores
+
+
+def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido=True, reglada=False,
+            condicion_inicio=None, condicion_fin=None, fusionar_tangentes=False):
     """Solevado (Loft) de Fusion [SLD-LOFT-SOLID].
+
+    `condicion_inicio` / `condicion_fin` (End Conditions de la primera y la última sección): {"tipo": "libre"} o
+    {"tipo": "direccion", "angulo": grados desde el plano de la sección (90 = perpendicular), "peso": 1}. Solo en el
+    solevado liso (sin carriles, línea central, cerrada ni reglada). `fusionar_tangentes` (Tangent Edges › Merge) une
+    las caras que quedan tangentes entre sí.
 
     secciones: caras (se respetan los agujeros si todas tienen la misma cantidad), alambres/aristas, o un
     punto/vértice como primera o última sección. `cerrada` une la última sección con la primera. Con
@@ -1061,6 +1122,12 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         raise geo.ErrorGeometria("OpenCascade no admite solevado con varios carriles: usá uno solo o una "
                                  "línea central.")
     exteriores = [(s[0], s[1]) for s in secs]
+    condiciones = any(c and c.get("tipo", "libre") != "libre" for c in (condicion_inicio, condicion_fin))
+    if condiciones:
+        if carriles or linea_central is not None or cerrada or reglada:
+            raise geo.ErrorGeometria("Las condiciones de borde no se combinan con carriles, línea central, solevado "
+                                     "cerrado ni reglado.")
+        exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin)
     if linea_central is not None or carriles:
         if cerrada:
             raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
@@ -1103,7 +1170,10 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
                     cercano = min(siguiente, key=lambda w, c=c: np.linalg.norm(_centro_alambre(w) - c))
                     cadena.append(("alambre", cercano))
                 forma = geo.booleano(forma, _loft(cadena, True, reglada, cerrada), "cortar")
-    return _validar(_canonizar(forma), "Solevado")
+    forma = _canonizar(forma)
+    if fusionar_tangentes:
+        forma = geo.unificar_caras(forma)
+    return _validar(forma, "Solevado")
 
 
 def _centro_alambre(w):
@@ -1160,13 +1230,32 @@ def _hasta_el_cuerpo(bruto, cuerpo, curvas, margen, que, profundidad):
     return _validar(resultado, que)
 
 
+def _desmoldear_pared(bruto, direccion, angulo, origen):
+    """Inclina las caras laterales de un nervio o una red `angulo` grados hacia `direccion` (la de extracción, del
+    cuerpo hacia el borde libre): la pared queda más fina en el borde libre, donde pasa el plano neutro por `origen`,
+    que en la base."""
+    from .solidos_modificar import desmoldeo
+    d = _unit(direccion, "dirección de desmoldeo")
+    laterales = []
+    for cara in _caras_de(bruto):
+        if BRepAdaptor_Surface(cara).GetType() == GeomAbs_Plane:
+            normal = _unit(geo.plano_de_cara(cara).normal)
+            if abs(float(normal @ d)) > 1e-6:           # tapas y fondos: no se inclinan
+                continue
+        laterales.append(cara)
+    plano_neutro = geo.Plano.desde_marco(origen, d, _perpendicular(d))
+    return desmoldeo(bruto, laterales, d, angulo, plano_neutro)
+
+
 def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, direccion="simetrica",
-           invertir=False, extender=True):
+           invertir=False, extender=True, angulo_desmoldeo=0.0, direccion_desmoldeo=None):
     """Nervio (Rib) de Fusion [SLD-RIB]: pared delgada que crece desde una curva abierta, PARALELA al plano
     del boceto y perpendicular a la cuerda de la curva, hasta las caras más cercanas del cuerpo ("To Next")
     o una `profundidad`. El espesor se mide perpendicular al plano: "simetrica" (mitad a cada lado),
     "lado1" (hacia +normal) o "lado2". `invertir` cambia el sentido de crecimiento. Devuelve solo el nervio,
-    ya recortado contra el cuerpo (la unión la hace la capa de operaciones)."""
+    ya recortado contra el cuerpo (la unión la hace la capa de operaciones). `angulo_desmoldeo` (Draft Angle)
+    afina el nervio hacia su borde libre (la curva del boceto, que conserva el espesor); `direccion_desmoldeo`
+    (Draft Pull Direction) es la dirección de extracción (por defecto, del cuerpo hacia la curva)."""
     n = _unit(normal_plano, "normal del plano del boceto")
     w = _alambre(aristas_curva)
     if _es_cerrado(w):
@@ -1185,15 +1274,21 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
         raise geo.ErrorGeometria(f"Dirección de espesor desconocida: {direccion}")
     bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
                    for f in _caras_de(region)])
+    if abs(angulo_desmoldeo) > 1e-9:
+        pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
+        if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
+            pull = -pull
+        bruto = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0])
     return _hasta_el_cuerpo(bruto, cuerpo, [w], 0.0, "Nervio", profundidad)
 
 
 def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, direccion="simetrica",
-        invertir=False, extender=True):
+        invertir=False, extender=True, angulo_desmoldeo=0.0):
     """Red (Web) de Fusion [SLD-WEB]: una o varias curvas abiertas se extruyen PERPENDICULARES al plano del
     boceto hasta las caras más cercanas del cuerpo ("To Next") o una `profundidad`; el espesor va en el plano,
     a los dos lados de la curva ("simetrica") o a uno ("lado1" = izquierda de la curva mirando desde +normal).
-    `extender` prolonga las curvas hasta el cuerpo. Devuelve el sólido de la red ya recortado."""
+    `extender` prolonga las curvas hasta el cuerpo (Extend Curves). `angulo_desmoldeo` (Draft Angle) afina la red
+    hacia su borde libre. Devuelve el sólido de la red ya recortado."""
     n = _unit(normal_plano, "normal del plano del boceto")
     cadenas = _cadenas(aristas_curvas)
     if not cadenas or any(_es_cerrado(w) for w in cadenas):
@@ -1213,7 +1308,23 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
         w_ext = _extender_extremos(w, largo_max) if extender else w
         lamina = BRepPrimAPI_MakePrism(w_ext, _gvec(d * (profundidad or largo_max))).Shape()
         solidos += [_engrosar_lamina(lamina, e) for e in espesores]
-    return _hasta_el_cuerpo(_unir(solidos), cuerpo, cadenas, 0.0, "Red", profundidad)
+    bruto = _unir(solidos)
+    if abs(angulo_desmoldeo) > 1e-9:
+        bruto = _desmoldear_pared(bruto, -d, angulo_desmoldeo, _punto_en(cadenas[0], 0.5)[0])
+    return _hasta_el_cuerpo(bruto, cuerpo, cadenas, 0.0, "Red", profundidad)
+
+
+def unir_con_empalme(cuerpo, pieza, radio):
+    """Une una red al cuerpo y redondea (Fillet Radius de la Red) las aristas CÓNCAVAS donde se encuentran."""
+    from .solidos_modificar import empalme_reglas
+    unido = geo.booleano(cuerpo, pieza, "unir")
+    if radio <= 0:
+        return unido
+    de_la_red = [c for c in geo.caras(unido)
+                 if geo.se_tocan(BRepBuilderAPI_MakeVertex(_pnt(geo.centro_masa(c, True))).Vertex(), pieza, 1e-5)]
+    if not de_la_red:
+        raise geo.ErrorGeometria("No se encontraron las caras de la red para empalmarlas.")
+    return empalme_reglas(unido, de_la_red, radio=radio, tipo="todas", redondeos="empalmes")
 
 
 # ================================================================ 6. repujado
@@ -2888,6 +2999,99 @@ def relleno_contorno(herramientas, indices, **opciones):
     return _validar(_unir(elegidas), "Relleno de contorno")
 
 
+# ================================================================ 13b. revolución hasta un objeto
+def _marco_giro(caras, punto, d):
+    """(e1, e2, puntos): base del giro alrededor del eje (e1 hacia el perfil, e2 = d × e1) y puntos del contorno."""
+    from . import curvas3d
+    puntos = []
+    for c in caras:
+        for a in _aristas_de([c]):
+            puntos.extend(curvas3d.muestrear(a, 16).astype(float))
+    puntos = np.array(puntos)
+    rel = puntos - punto
+    radial = rel - np.outer(rel @ d, d)
+    medio = radial.mean(axis=0)
+    e1 = medio if np.linalg.norm(medio) > 1e-9 else _perpendicular(d)
+    e1 = _unit(e1 - d * (e1 @ d))
+    return e1, np.cross(d, e1), puntos
+
+
+def _angulos_de_cruce(puntos, punto, d, e1, e2, n, q0):
+    """Primer ángulo (rad, en (0, 2π]) en que cada punto girado alrededor del eje cruza el plano (n, q0)."""
+    salida = []
+    for p in puntos:
+        rel = p - punto
+        h = float(rel @ d)
+        w = rel - d * h
+        r = float(np.linalg.norm(w))
+        if r < 1e-9:
+            continue
+        psi0 = math.atan2(float(w @ e2), float(w @ e1))
+        a_, b_ = r * float(n @ e1), r * float(n @ e2)
+        c_ = float(n @ (punto - q0)) + h * float(n @ d)
+        modulo = math.hypot(a_, b_)
+        if modulo < 1e-12 or abs(c_) > modulo + 1e-9:
+            continue
+        base = math.atan2(b_, a_)
+        giro = math.acos(max(-1.0, min(1.0, -c_ / modulo)))
+        posibles = [((base + signo * giro) - psi0) % (2 * math.pi) for signo in (1, -1)]
+        posibles = [t if t > 1e-7 else t + 2 * math.pi for t in posibles]
+        salida.append(min(posibles))
+    return salida
+
+
+def revolver_hasta(caras, punto_eje, dir_eje, objeto):
+    """Revolución «A objeto» (Revolve › Extent Type To Object) [SLD-REVOLVE-SOLID]: gira el perfil hasta un
+    vértice (`("punto", xyz)`), un plano o cara plana (`("plano", geo.Plano)`) o un cuerpo (`("forma", sólido)`).
+    El sentido es el de la regla de la mano derecha sobre `dir_eje`. Con un plano que no contiene al eje (y que
+    todo el perfil alcanza) el cuerpo se recorta contra él; con un cuerpo gira hasta el primer contacto (bisección sobre el volumen común)."""
+    punto, d = np.asarray(punto_eje, float), _unit(dir_eje, "eje de revolución")
+    e1, e2, puntos = _marco_giro(caras, punto, d)
+    tipo, dato = objeto
+    recorte = None
+    if tipo == "punto":
+        rel = np.asarray(dato, float) - punto
+        if np.linalg.norm(rel - d * (rel @ d)) < 1e-9:
+            raise geo.ErrorGeometria("El vértice está sobre el eje de revolución: no define un ángulo.")
+        angulo = math.atan2(float(rel @ e2), float(rel @ e1)) % (2 * math.pi)
+    elif tipo == "plano":
+        n = _unit(dato.normal)
+        cruces = _angulos_de_cruce(puntos, punto, d, e1, e2, n, np.asarray(dato.origen, float))
+        if not cruces:
+            raise geo.ErrorGeometria("El perfil, al girar, no llega a ese plano.")
+        fuera_del_eje = int((np.linalg.norm((puntos - punto) - np.outer((puntos - punto) @ d, d), axis=1) >= 1e-9).sum())
+        if len(cruces) < fuera_del_eje:        # sin esto el ángulo dependería de qué puntos muestreados alcanzan el plano
+            raise geo.ErrorGeometria("Una parte del perfil, al girar, nunca llega a ese plano: el ángulo no queda "
+                                     "definido. Elegí un plano que todo el perfil alcance.")
+        angulo = max(cruces)
+        if max(cruces) - min(cruces) > 1e-6:            # el plano no contiene al eje: se recorta contra él
+            lado = float((puntos.mean(axis=0) - np.asarray(dato.origen, float)) @ n)
+            recorte = (dato, 1.0 if lado >= 0 else -1.0)
+    elif tipo == "forma":
+        def toca(a):
+            sol = geo.revolver(caras, punto, d, math.degrees(a))
+            comun = geo.booleano(sol, dato, "intersecar")
+            return not geo.esta_vacia(comun) and geo.volumen(comun) > 1e-6 * max(1.0, geo.volumen(sol))
+        if not toca(2 * math.pi):
+            raise geo.ErrorGeometria("El perfil, al girar, no llega a ese cuerpo.")
+        bajo, alto = 0.0, 2 * math.pi
+        for _ in range(25):
+            medio = (bajo + alto) / 2
+            bajo, alto = (bajo, medio) if toca(medio) else (medio, alto)
+        angulo = alto
+    else:
+        raise geo.ErrorGeometria(f"Objeto de revolución desconocido: {tipo}")
+    if angulo < 1e-7:
+        raise geo.ErrorGeometria("El objeto está en el mismo plano que el perfil: elegí uno que esté a un ángulo.")
+    forma = geo.revolver(caras, punto, d, math.degrees(min(angulo, 2 * math.pi)))
+    if recorte is not None:
+        plano, lado = recorte
+        tam = 4 * _diagonal(forma) + float(np.linalg.norm(np.asarray(plano.origen, float) - punto))
+        mitad = geo.extruir([geo.cara_de_plano(plano, tam)], plano.normal, lado * tam)
+        forma = _validar(geo.booleano(forma, mitad, "intersecar"), "Revolución hasta el plano")
+    return forma
+
+
 # ================================================================ 14. sólido envolvente
 def _circulo_minimo(puntos):
     """Círculo mínimo que contiene puntos 2D (Welzl iterativo, orden aleatorio con semilla fija)."""
@@ -2920,35 +3124,172 @@ def _circulo_minimo(puntos):
     return c, r
 
 
-def solido_envolvente(formas, *, tipo="caja", margen=0.0, eje="z"):
-    """Sólido envolvente (Bounding Solid) [SLD-CREATE-BOUNDING-SOLID] alineado al modelo: "caja" (caja
-    envolvente exacta) o "cilindro" alrededor de `eje` ("x", "y", "z" o vector) con el radio mínimo que
-    contiene a la forma (círculo mínimo de su teselado fino). `margen` agranda en todas las direcciones."""
+def marco_ortonormal(z=None, x=None, y=None):
+    """Marco derecho 3x3 (columnas X, Y, Z) con dos de sus ejes: Z y X, Z e Y, o X e Y. El segundo se
+    ortogonaliza respecto del primero (el primero manda, como los pares de Fusion)."""
+    dados = [(n, v) for n, v in (("z", z), ("x", x), ("y", y)) if v is not None]
+    if len(dados) != 2:
+        raise geo.ErrorGeometria("La orientación necesita exactamente dos ejes.")
+    (n1, v1), (n2, v2) = dados
+    a = _unit(v1, f"eje {n1.upper()}")
+    b = np.asarray(v2, float)
+    b = b - a * (b @ a)
+    if np.linalg.norm(b) < 1e-9 * max(1.0, np.linalg.norm(v2)):
+        raise geo.ErrorGeometria("Los dos ejes de la orientación son paralelos: elegí dos distintos.")
+    b = b / np.linalg.norm(b)
+    c = np.cross(a, b)
+    ejes = {n1: a, n2: b}
+    # (z, x) → y = z × x ; (z, y) → x = y × z ; (x, y) → z = x × y   (derecha)
+    if "z" in ejes and "x" in ejes:
+        ejes["y"] = c
+    elif "z" in ejes and "y" in ejes:
+        ejes["x"] = -c
+    else:
+        ejes["z"] = c
+    return np.column_stack([ejes["x"], ejes["y"], ejes["z"]])
+
+
+def _marco_automatico(comp):
+    """Marco de la caja orientada que mejor se ajusta (Bnd_OBB del kernel)."""
+    from OCP.Bnd import Bnd_OBB
+    from OCP.BRepBndLib import BRepBndLib
+    obb = Bnd_OBB()
+    BRepBndLib.AddOBB_s(comp, obb, True, True, False)
+    if obb.IsVoid():
+        raise geo.ErrorGeometria("No hay geometría para envolver.")
+    ejes = [obb.XDirection(), obb.YDirection(), obb.ZDirection()]
+    x, y, z = (np.array([d.X(), d.Y(), d.Z()]) for d in ejes)
+    return marco_ortonormal(z=z, x=x)
+
+
+def _caja_en_marco(comp, marco, margen):
+    R = np.asarray(marco, float)
+    de_marco = np.identity(4)
+    de_marco[:3, :3] = R
+    a_marco = np.identity(4)
+    a_marco[:3, :3] = R.T
+    bb = geo.caja_envolvente(geo.transformar(comp, a_marco))
+    (x0, y0, z0), (x1, y1, z1) = bb
+    caja = geo.caja(x1 - x0 + 2 * margen, y1 - y0 + 2 * margen, z1 - z0 + 2 * margen,
+                    (x0 - margen, y0 - margen, z0 - margen))
+    return geo.transformar(caja, de_marco)
+
+
+def _cilindro_en_eje(comp, pts, z, margen, limites=None):
+    """(radio, base, alto) del cilindro mínimo de eje `z` que contiene los puntos `pts`."""
+    u = _perpendicular(z)
+    v = np.cross(z, u)
+    centro2d, radio = _circulo_minimo(np.column_stack([pts @ u, pts @ v]))
+    lo, hi = limites if limites is not None else (float((pts @ z).min()), float((pts @ z).max()))
+    base = centro2d[0] * u + centro2d[1] * v + z * (lo - margen)
+    return radio + margen, base, hi - lo + 2 * margen
+
+
+def solido_envolvente(formas, *, tipo="caja", margen=0.0, eje="z", marco=None, espesor_tubo=None):
+    """Sólido envolvente (Bounding Solid) [SLD-CREATE-BOUNDING-SOLID]: "caja" (exacta), "cilindro" o "tubo"
+    (cilindro hueco: pared `espesor_tubo`, por defecto la décima parte del radio) que contienen a la forma.
+    Orientación: sin `marco`, los ejes del modelo (el cilindro, alrededor de `eje`: "x", "y", "z" o vector);
+    con `marco`, una matriz 3x3 (columnas X, Y, Z, ver `marco_ortonormal`; el cilindro va sobre su Z) o
+    "automatica" (la menor: caja orientada del kernel; el cilindro, sobre el eje de la caja que lo achica más).
+    `margen` agranda en todas las direcciones."""
     comp = geo.compuesto(_lista(formas))
     bb = geo.caja_envolvente(comp)
     if bb is None:
         raise geo.ErrorGeometria("No hay geometría para envolver.")
-    (x0, y0, z0), (x1, y1, z1) = bb
-    if tipo == "caja":
-        return geo.caja(x1 - x0 + 2 * margen, y1 - y0 + 2 * margen, z1 - z0 + 2 * margen,
-                        (x0 - margen, y0 - margen, z0 - margen))
-    if tipo != "cilindro":
+    if tipo not in ("caja", "cilindro", "tubo"):
         raise geo.ErrorGeometria(f"Tipo de sólido envolvente desconocido: {tipo}")
-    ejes = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
-    if isinstance(eje, str) and eje not in ejes:
-        raise geo.ErrorGeometria(f"Eje desconocido: {eje}")
-    z = _unit(ejes[eje] if isinstance(eje, str) else eje, "eje del cilindro")
-    u = _perpendicular(z)
-    v = np.cross(z, u)
+    if isinstance(marco, str) and marco != "automatica":
+        raise geo.ErrorGeometria(f"Orientación desconocida: {marco}")
+    if tipo == "caja":
+        if marco is None:
+            (x0, y0, z0), (x1, y1, z1) = bb
+            return geo.caja(x1 - x0 + 2 * margen, y1 - y0 + 2 * margen, z1 - z0 + 2 * margen,
+                            (x0 - margen, y0 - margen, z0 - margen))
+        return _caja_en_marco(comp, _marco_automatico(comp) if isinstance(marco, str) else marco, margen)
     verts, _ = geo.teselar(comp, deflexion=max(1e-3, 1e-4 * _diagonal(comp)), angular=0.1)
     pts = np.asarray(verts, float)
-    centro2d, radio = _circulo_minimo(np.column_stack([pts @ u, pts @ v]))
-    if isinstance(eje, str):
-        lo, hi = _proyectar_caja(bb, (0.0, 0.0, 0.0), z)
+    if marco is None:
+        ejes = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
+        if isinstance(eje, str) and eje not in ejes:
+            raise geo.ErrorGeometria(f"Eje desconocido: {eje}")
+        z = _unit(ejes[eje] if isinstance(eje, str) else eje, "eje del cilindro")
+        limites = _proyectar_caja(bb, (0.0, 0.0, 0.0), z) if isinstance(eje, str) else None
+        radio, base, alto = _cilindro_en_eje(comp, pts, z, margen, limites)
+    elif isinstance(marco, str):
+        R0 = _marco_automatico(comp)
+        candidatos = [_cilindro_en_eje(comp, pts, R0[:, i], margen) + (R0[:, i],) for i in range(3)]
+        radio, base, alto, z = min(candidatos, key=lambda c: c[0] ** 2 * c[2])
     else:
-        lo, hi = float((pts @ z).min()), float((pts @ z).max())
-    base = centro2d[0] * u + centro2d[1] * v + z * (lo - margen)
-    return geo.cilindro(radio + margen, hi - lo + 2 * margen, base=tuple(base), eje=tuple(z))
+        z = _unit(np.asarray(marco, float)[:, 2], "eje Z de la orientación")
+        radio, base, alto = _cilindro_en_eje(comp, pts, z, margen)
+    exterior = geo.cilindro(radio, alto, base=tuple(base), eje=tuple(z))
+    if tipo == "cilindro":
+        return exterior
+    pared = radio / 10 if espesor_tubo is None else float(espesor_tubo)
+    if not 0 < pared < radio:
+        raise geo.ErrorGeometria(f"La pared del tubo tiene que estar entre 0 y el radio ({radio:g} mm).")
+    hueco = geo.cilindro(radio - pared, alto + 2.0, base=tuple(base - z), eje=tuple(z))
+    return geo.booleano(exterior, hueco, "cortar")
+
+
+def _es_material(celda, material):
+    """¿La celda de `volumen_fluido` está dentro del material? (más de la mitad de su volumen se solapa)"""
+    v = geo.volumen(celda)
+    comun = geo.booleano(celda, material, "intersecar")
+    return not geo.esta_vacia(comun) and geo.volumen(comun) > 0.5 * v
+
+
+def volumen_fluido(solidos, tapas=(), *, tipo="interno", forma_externa="caja", margen=10.0, separar_caras=False):
+    """Volumen de fluido (Fluid Volume) [SLD-FLUID-VOLUME]: el sólido que ocupa el interior ("interno") o el
+    exterior ("externo") de un diseño, para análisis de flujo. `tapas` son superficies que cubren las aberturas
+    (sin ellas el interior no queda cerrado). El interno copia las caras del modelo: cada celda cerrada que no es
+    material. El externo es una caja, un cilindro (eje Z) o una semiesfera (mitad superior) que rodea el modelo
+    `margen` mm, menos el modelo (y su interior tapado). `separar_caras` (Split Result) deja una cara por
+    superficie del modelo; si no, las tangentes o del mismo dominio se funden."""
+    if tipo not in ("interno", "externo"):
+        raise geo.ErrorGeometria(f"Tipo de volumen de fluido desconocido: {tipo}")
+    solidos, tapas = _lista(solidos), _lista(tapas)
+    if not solidos:
+        raise geo.ErrorGeometria("Elegí los cuerpos del diseño.")
+    material = geo.unir_todos(solidos) if len(solidos) > 1 else solidos[0]
+    args = List_TopoDS_Shape()
+    for forma in (*solidos, *tapas):
+        for cara in geo.caras(forma):
+            args.Append(cara)
+    mv = BOPAlgo_MakerVolume()
+    mv.SetArguments(args)
+    mv.SetIntersect(True)
+    mv.Perform()
+    if mv.HasErrors():
+        raise geo.ErrorGeometria("No se pudo calcular el volumen de fluido del diseño.")
+    celdas = geo.solidos(mv.Shape())
+    libres = [c for c in celdas if not _es_material(c, material)]
+    if tipo == "interno":
+        if not libres:
+            raise geo.ErrorGeometria("El diseño no encierra un volumen interior. Tapá las aberturas con superficies "
+                                     "(parche o plano) y elegílas como tapas.")
+        resultado = _unir(libres)
+    else:
+        bb = geo.caja_envolvente(geo.compuesto([*solidos, *tapas]))
+        (x0, y0, z0), (x1, y1, z1) = bb
+        if forma_externa == "caja":
+            fuera = geo.caja(x1 - x0 + 2 * margen, y1 - y0 + 2 * margen, z1 - z0 + 2 * margen,
+                             (x0 - margen, y0 - margen, z0 - margen))
+        elif forma_externa == "cilindro":
+            radio = math.hypot(x1 - x0, y1 - y0) / 2 + margen
+            fuera = geo.cilindro(radio, z1 - z0 + 2 * margen, base=((x0 + x1) / 2, (y0 + y1) / 2, z0 - margen))
+        elif forma_externa == "semiesfera":
+            c = ((x0 + x1) / 2, (y0 + y1) / 2, z0)
+            radio = max(math.dist(c, (x, y, z)) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)) + margen
+            fuera = geo.booleano(geo.esfera(radio, c), geo.caja(4 * radio, 4 * radio, 2 * radio,
+                                                                (c[0] - 2 * radio, c[1] - 2 * radio, z0 - 2 * radio)),
+                                 "cortar")
+        else:
+            raise geo.ErrorGeometria(f"Forma exterior desconocida: {forma_externa}")
+        resultado = geo.booleano(fuera, _unir(celdas) if celdas else material, "cortar")
+    if not separar_caras:
+        resultado = geo.unificar_caras(resultado)
+    return _validar(resultado, "Volumen de fluido")
 
 
 # ================================================================ 15. plástico (simplificado)

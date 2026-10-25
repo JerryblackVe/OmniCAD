@@ -6,6 +6,8 @@ circular, en ruta con giro y en puntos; de cuerpos o de operaciones), multitrans
 contorno, sólido envolvente y las de plástico (saliente, labio).
 El núcleo geométrico está en `nucleo/solidos_crear.py`.
 """
+import re
+
 import numpy as np
 
 from ..nucleo import geometria as geo
@@ -19,6 +21,11 @@ ESPESORES = ("simetrica", "lado1", "lado2")     # dirección del espesor de nerv
 def _sc():
     from ..nucleo import solidos_crear
     return solidos_crear
+
+
+def _pg():
+    from ..nucleo import patron_geometrico
+    return patron_geometrico
 
 
 def _caras(refs, estado, que="perfiles"):
@@ -66,24 +73,35 @@ class _OpCrear(Operacion):
 
 class OpBarrido(_OpCrear):
     """Barrido de Fusion [SLD-SWEEP-SOLID]: tipo ruta única o ruta + carril guía; distancia, orientación,
-    ángulo de torsión y de conicidad."""
+    ángulo de torsión y de conicidad. `orientacion` "alineada" mantiene `eje_alineado` (eje, arista, plano o cara) como
+    binormal; `superficie_guia` (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía."""
     TIPO, ETIQUETA, ICONO = "barrido", "Barrido", "↝"
     PARAMS = {"perfiles": [], "ruta": [], "carril": [], "orientacion": "perpendicular", "distancia": "1",
               "torsion": "0 deg", "conicidad": "0 deg", "escala_carril": "escalar", "operacion": "nuevo",
-              "objetivos": []}
+              "objetivos": [], "eje_alineado": None, "superficie_guia": []}
     EXPRESIONES = ("distancia", "torsion", "conicidad")
-    OPCIONES = {"orientacion": ("perpendicular", "paralela"), "escala_carril": ("escalar", "estirar", "ninguna"),
+    OPCIONES = {"orientacion": ("perpendicular", "paralela", "alineada"), "escala_carril": ("escalar", "estirar", "ninguna"),
                 "operacion": OPERACIONES_CUERPO}
-    REFS = ("perfiles", "ruta", "carril")
+    REFS = ("perfiles", "ruta", "carril", "eje_alineado", "superficie_guia")
 
     def ejecutar(self, estado, ctx):
         _, caras = _caras(self.p["perfiles"], estado)
         _, ruta = _aristas(self.p["ruta"], estado, "la ruta")
         carril = _aristas(self.p["carril"], estado)[1] if self.p["carril"] else None
+        eje = None
+        if self.p["orientacion"] == "alineada":
+            if not self.p.get("eje_alineado"):
+                raise ErrorOperacion("Elegí el eje de la orientación alineada (un eje, una arista, un plano o una cara).")
+            e = _resolver(self.p["eje_alineado"], estado)
+            eje = e.eje[1] if e.eje is not None else e.plano.normal if e.plano is not None else None
+            if eje is None:
+                raise ErrorOperacion("El eje de la orientación alineada tiene que ser un eje, una arista recta, un plano o una cara plana.")
+        superficie = geo.compuesto([e.forma for e in _resolver_todas(self.p["superficie_guia"], estado)])             if self.p.get("superficie_guia") else None
         forma = _sc().barrer(caras, ruta, carril=carril, orientacion=self.p["orientacion"],
                              distancia=ctx.evaluar(self.p["distancia"], "escalar"),
                              torsion=ctx.evaluar(self.p["torsion"], ANGULO),
-                             conicidad=ctx.evaluar(self.p["conicidad"], ANGULO), escala_carril=self.p["escala_carril"])
+                             conicidad=ctx.evaluar(self.p["conicidad"], ANGULO), escala_carril=self.p["escala_carril"],
+                             eje_alineado=eje, superficie_guia=superficie)
         if geo.sin_volumen(forma):
             raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
         self._aplicar(estado, ctx, forma)
@@ -94,9 +112,18 @@ class OpSolevacion(_OpCrear):
     línea central, cerrada y tramos rectos."""
     TIPO, ETIQUETA, ICONO = "solevacion", "Solevación", "⌓"
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
-              "operacion": "nuevo", "objetivos": []}
+              "operacion": "nuevo", "objetivos": [], "condicion_inicio": None, "condicion_fin": None,
+              "fusionar_tangentes": False}
     OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("secciones", "carriles", "linea_central")
+
+    def _condicion(self, clave, ctx):
+        """La condición de borde guardada {"tipo", "angulo", "peso"} con el ángulo (expresión) evaluado, o None."""
+        c = self.p.get(clave)
+        if not c:
+            return None
+        return {"tipo": c.get("tipo", "libre"), "angulo": ctx.evaluar(str(c.get("angulo", "90 deg")), ANGULO),
+                "peso": ctx.evaluar(str(c.get("peso", "1")), "escalar")}
 
     def ejecutar(self, estado, ctx):
         secciones = []
@@ -107,7 +134,10 @@ class OpSolevacion(_OpCrear):
         carriles = [_aristas([r], estado)[1] for r in self.p["carriles"]]
         central = _aristas(self.p["linea_central"], estado)[1] if self.p["linea_central"] else None
         forma = _sc().solevar(secciones, carriles=[c[0] if len(c) == 1 else c for c in carriles], linea_central=central,
-                              cerrada=self.p["cerrada"], reglada=self.p["reglada"])
+                              cerrada=self.p["cerrada"], reglada=self.p["reglada"],
+                              condicion_inicio=self._condicion("condicion_inicio", ctx),
+                              condicion_fin=self._condicion("condicion_fin", ctx),
+                              fusionar_tangentes=bool(self.p.get("fusionar_tangentes")))
         if geo.sin_volumen(forma):
             raise ErrorOperacion("La solevación no encierra volumen: los perfiles no pueden estar todos en el mismo "
                                  "plano y una solevación cerrada no puede volver sobre sí misma.")
@@ -115,13 +145,17 @@ class OpSolevacion(_OpCrear):
 
 
 class OpNervio(_OpCrear):
-    """Nervio de Fusion [SLD-RIB]: pared desde una curva abierta del boceto hasta el cuerpo."""
+    """Nervio de Fusion [SLD-RIB]: pared desde una curva abierta del boceto hasta el cuerpo. `direccion` es la
+    Direction y el Start de Fusion juntos: simétrica, o a un lado empezando abajo («lado1») o arriba («lado2»).
+    `angulo_desmoldeo` y `direccion_desmoldeo` (referencia a un plano, cara o eje) son Draft Angle y Draft Pull
+    Direction; `radio_empalme` y `extender` (Fillet Radius y Extend Curves) solo valen en la Red."""
     TIPO, ETIQUETA, ICONO = "nervio", "Nervio", "⊥"
     PARAMS = {"curvas": [], "espesor": "2 mm", "extension": "hasta_siguiente", "profundidad": "10 mm",
-              "direccion": "simetrica", "invertir": False, "objetivo": ""}
-    EXPRESIONES = ("espesor", "profundidad")
+              "direccion": "simetrica", "invertir": False, "objetivo": "", "angulo_desmoldeo": "0 deg",
+              "direccion_desmoldeo": None, "radio_empalme": "0 mm", "extender": True}
+    EXPRESIONES = ("espesor", "profundidad", "angulo_desmoldeo", "radio_empalme")
     OPCIONES = {"extension": ("hasta_siguiente", "profundidad"), "direccion": ESPESORES}
-    REFS = ("curvas",)
+    REFS = ("curvas", "direccion_desmoldeo")
 
     def ejecutar(self, estado, ctx):
         ents, aristas = _aristas(self.p["curvas"], estado)
@@ -130,8 +164,10 @@ class OpNervio(_OpCrear):
             raise ErrorOperacion("El nervio se dibuja con curvas de un boceto.")
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
+        pull = ent.direccion(_resolver(self.p["direccion_desmoldeo"], estado)) if self.p.get("direccion_desmoldeo") else None
         forma = _sc().nervio(cuerpo.forma, aristas, plano.normal, ctx.evaluar(self.p["espesor"]), profundidad=prof,
-                             direccion=self.p["direccion"], invertir=self.p["invertir"])
+                             direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
+                             angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO), direccion_desmoldeo=pull)
         cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
         self._registrar_usados([cuerpo.id])
 
@@ -148,8 +184,9 @@ class OpRed(OpNervio):
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
         n = -plano.normal if self.p["invertir"] else plano.normal
-        forma = _sc().red(cuerpo.forma, aristas, n, ctx.evaluar(self.p["espesor"]), prof, direccion=self.p["direccion"])
-        cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
+        forma = _sc().red(cuerpo.forma, aristas, n, ctx.evaluar(self.p["espesor"]), prof, direccion=self.p["direccion"],
+                          extender=self.p["extender"], angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
+        cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(self.p["radio_empalme"]))
         self._registrar_usados([cuerpo.id])
 
 
@@ -464,7 +501,7 @@ class OpTuberia(_OpCrear):
 # lista que muestran los errores (la API y el diálogo la controlan antes de crear el paso).
 TIPOS_REPETIBLES = ("extrusion", "revolucion", "agujero", "primitiva", "barrido", "solevacion", "bobina", "tuberia",
                     "relleno_contorno", "solido_envolvente", "patron", "multitransformar")
-OBJETOS_PATRON = ("cuerpos", "operaciones")
+OBJETOS_PATRON = ("cuerpos", "operaciones", "caras", "componentes")
 
 
 def _ids_pasos(p):
@@ -472,6 +509,16 @@ def _ids_pasos(p):
     if not isinstance(pasos, (list, tuple)):
         raise ParametroMalFormado(pasos, "tiene que ser una lista de ids de pasos", "pasos")
     return [str(x) for x in pasos if x]
+
+
+def _pasos_y_componentes(p):
+    """Ids de los pasos que un patrón o una simetría repite y de los pasos que crearon sus componentes."""
+    try:
+        pasos = set(_ids_pasos(p))
+    except ErrorOperacion:
+        pasos = set()
+    comps = {str(c).split(".")[0] for c in p.get("componentes") or [] if isinstance(c, str) and re.fullmatch(r"op\d+(\..*)?", c)}
+    return pasos | comps
 
 
 def _xyz(ctx, valores, que):
@@ -525,6 +572,67 @@ def repetir_pasos(op, estado, ctx, trsfs):
     return afectados
 
 
+def copiar_caras(op, estado, trsfs):
+    """Patrón o simetría de CARAS (Object Type › Faces): cada cara de `op.p["caras"]`, transformada con cada gp_Trsf de
+    `trsfs`, queda como un cuerpo de superficie nuevo (el cuerpo del que salen no cambia)."""
+    caras = [e.forma for e in _resolver_todas(op.p.get("caras"), estado, ("cara",))]
+    if not caras:
+        raise ErrorOperacion("Elegí las caras.")
+    for cara in caras:
+        for t in trsfs:
+            estado.nuevo_cuerpo(op.id, _sc().aplicar(cara, t), "superficie")
+
+
+def copiar_componentes(op, estado, trsfs):
+    """Patrón o simetría de COMPONENTES (Object Type › Components): cada componente de `op.p["componentes"]` (id o
+    nombre) se copia con cada gp_Trsf de `trsfs` como un componente nuevo con copias de todos sus cuerpos. Solo
+    componentes en su lugar de modelado (si una unión los movió, la copia no sabría dónde ir)."""
+    from .ops_ensamblar import componente_por_ref
+    ids = []
+    for ref in op.p.get("componentes") or []:
+        k = componente_por_ref(estado, ref)
+        if k is None:
+            raise ErrorOperacion(f"No encuentro el componente «{ref}».")
+        ids.append(k)
+    if not ids:
+        raise ErrorOperacion("Elegí los componentes.")
+    n = 0
+    for k in ids:
+        if not np.allclose(np.asarray(estado.componentes[k].get("matriz", np.identity(4)), float), np.identity(4)):
+            raise ErrorOperacion(f"El componente «{estado.componentes[k].get('nombre') or k}» ya fue movido por una "
+                                 "unión: copiá sus cuerpos o volvé a su posición.")
+        if any(d.get("padre") == k for d in estado.componentes.values()):
+            raise ErrorOperacion(f"El componente «{estado.componentes[k].get('nombre') or k}» tiene subcomponentes: "
+                                 "copiarlos todavía no está. Repetí cada subcomponente por separado.")
+        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == k]
+        for t in trsfs:
+            n += 1
+            nuevo = f"{op.id}.k{n}"
+            estado.componentes[nuevo] = {"nombre": estado.nombre_de_copia(estado.componentes[k].get("nombre") or k),
+                                         "padre": "", "fijo": False, "matriz": np.identity(4).tolist()}
+            for c in cuerpos:
+                cid = estado.nuevo_cuerpo(op.id, _sc().aplicar(c.forma, t), c.tipo,
+                                          nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
+                estado.cuerpo(cid).componente = nuevo
+
+
+def copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos):
+    """Lo que repiten el Patrón y la Simetría según su «Tipo de objeto»; `trsfs` NO incluye el original."""
+    objeto = op.p.get("objeto", "cuerpos")
+    if objeto == "operaciones":
+        if not _ids_pasos(op.p):
+            raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
+        op._registrar_usados(repetir_pasos(op, estado, ctx, trsfs))
+    elif objeto == "caras":
+        copiar_caras(op, estado, trsfs)
+    elif objeto == "componentes":
+        copiar_componentes(op, estado, trsfs)
+    else:
+        if not op.p["cuerpos"]:
+            raise ErrorOperacion(sin_cuerpos)
+        copiar_cuerpos(op, estado, trsfs)
+
+
 def copiar_cuerpos(op, estado, trsfs):
     """Copias de los cuerpos de `op.p["cuerpos"]` con cada gp_Trsf de `trsfs`: cuerpos nuevos (heredan aspecto,
     material y nombre, con « (copia)») o, con `combinar`, unidas al original. Con `ligeras` las copias son instancias
@@ -561,18 +669,15 @@ class OpPatron(_OpCrear):
               "n2": 1, "d2": "30 mm", "distribucion": "extension", "simetrico": False, "eje": None, "n": 6,
               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
               "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
-              "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False}
+              "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False, "caras": [],
+              "componentes": []}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
     OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"), "distribucion": ("extension", "espaciado"),
                 "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON}
-    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia")
+    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras")
 
     def dependencias(self):
-        try:
-            pasos = set(_ids_pasos(self.p))
-        except ErrorOperacion:
-            pasos = set()
-        return (super().dependencias() | pasos) - {self.id}
+        return (super().dependencias() | _pasos_y_componentes(self.p)) - {self.id}
 
     def pasos_repetidos(self):
         """Pasos cuya herramienta repite (objeto = "operaciones"); [] con cuerpos."""
@@ -650,15 +755,8 @@ class OpPatron(_OpCrear):
 
 
 def _ejecutar_patron(op, estado, ctx, sin_cuerpos):
-    """`ejecutar` común del Patrón y la Multitransformación: repite pasos o copia cuerpos."""
-    if op.p.get("objeto", "cuerpos") == "operaciones":
-        if not _ids_pasos(op.p):
-            raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
-        op._registrar_usados(repetir_pasos(op, estado, ctx, op.transformaciones(estado, ctx)[1:]))
-        return
-    if not op.p["cuerpos"]:
-        raise ErrorOperacion(sin_cuerpos)
-    copiar_cuerpos(op, estado, op.transformaciones(estado, ctx)[1:])          # la primera es el original
+    """`ejecutar` común del Patrón y la Multitransformación: repite pasos, caras o componentes, o copia cuerpos."""
+    copiar_objetos(op, estado, ctx, op.transformaciones(estado, ctx)[1:], sin_cuerpos)    # la primera es el original
 
 
 TIPOS_TRANSFORMACION = ("rectangular", "circular", "ruta", "puntos", "simetria")
@@ -675,8 +773,9 @@ class OpMultitransformar(_OpCrear):
     en la simetría, "plano". `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
     TIPO, ETIQUETA, ICONO = "multitransformar", "Multitransformación", "✣"
     PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False,
-              "ligeras": False}
+              "ligeras": False, "caras": [], "componentes": []}
     OPCIONES = {"objeto": OBJETOS_PATRON}
+    REFS = ("caras",)
 
     def _lista(self):
         lista = self.p.get("transformaciones") or []
@@ -691,7 +790,7 @@ class OpMultitransformar(_OpCrear):
     def dependencias(self):
         deps = super().dependencias()
         try:
-            lista, pasos = self._lista(), set(_ids_pasos(self.p))
+            lista, pasos = self._lista(), _pasos_y_componentes(self.p)
         except ErrorOperacion:
             return deps
         for t in lista:
@@ -742,15 +841,27 @@ class OpMultitransformar(_OpCrear):
 
 
 class OpSimetria(_OpCrear):
-    """Simetría de Fusion [GUID-77CE43FF]: copia cuerpos reflejados en un plano (nuevos o unidos)."""
+    """Simetría de Fusion [GUID-77CE43FF]: copia reflejada en un plano de cuerpos (nuevos o unidos), de caras (queda una
+    superficie por cara), de componentes (copias reflejadas) o de operaciones del timeline (`pasos`: su herramienta se
+    refleja y se aplica con la misma operación). `objeto` elige cuál."""
     TIPO, ETIQUETA, ICONO = "simetria", "Simetría", "⇋"
-    PARAMS = {"cuerpos": [], "plano": None, "combinar": False}
-    REFS = ("plano",)
+    PARAMS = {"cuerpos": [], "plano": None, "combinar": False, "objeto": "cuerpos", "caras": [], "componentes": [],
+              "pasos": []}
+    OPCIONES = {"objeto": OBJETOS_PATRON}
+    REFS = ("plano", "caras")
+
+    def dependencias(self):
+        return (super().dependencias() | _pasos_y_componentes(self.p)) - {self.id}
 
     def ejecutar(self, estado, ctx):
-        if not self.p["cuerpos"] or not self.p["plano"]:
-            raise ErrorOperacion("Elegí los cuerpos y el plano de simetría.")
+        if not self.p["plano"]:
+            raise ErrorOperacion("Elegí el plano de simetría.")
         plano = ent.como_plano(_resolver(self.p["plano"], estado))
+        if self.p.get("objeto", "cuerpos") != "cuerpos":
+            copiar_objetos(self, estado, ctx, [_sc().transformacion_simetria(plano)], "Elegí los cuerpos.")
+            return
+        if not self.p["cuerpos"]:
+            raise ErrorOperacion("Elegí los cuerpos y el plano de simetría.")
         for cid in self.p["cuerpos"]:
             c = estado.cuerpo(cid)
             reflejo = _sc().simetria(c.forma, plano)
@@ -758,6 +869,88 @@ class OpSimetria(_OpCrear):
                 c.forma = geo.booleano(c.forma, reflejo, "unir")
             else:
                 estado.nuevo_cuerpo(self.id, reflejo, c.tipo, nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
+
+
+class OpPatronGeometrico(_OpCrear):
+    """Patrón geométrico de Fusion [Plastic > Create > Geometric Pattern]: esferas, cilindros, cajas u objetos a medida
+    repartidos sobre las caras planas `caras` con un gradiente de tamaño (`nucleo/patron_geometrico.py` explica cada
+    opción). `operacion`: unir, cortar, intersecar o cuerpo nuevo."""
+    TIPO, ETIQUETA, ICONO = "patron_geometrico", "Patrón geométrico", "⁘"
+    PARAMS = {"caras": [], "objeto": "esfera", "personalizado": None, "tamano1": "2 mm", "tamano2": "4 mm",
+              "dispersion": "1", "distribucion": "rectangular", "separacion": "incremento", "distancia": "6 mm",
+              "cantidad_u": 5, "cantidad_v": 5, "distancia_radial": "6 mm", "rayos": 8, "orientacion": "cara",
+              "alineacion_u": "centro", "desfase_u": "0 mm", "alineacion_v": "medio", "desfase_v": "0 mm",
+              "limpiar_perimetro": True, "desfase_perimetro": "0 mm", "operacion": "cortar", "objetivos": []}
+    EXPRESIONES = ("tamano1", "tamano2", "dispersion", "distancia", "distancia_radial", "desfase_u", "desfase_v",
+                   "desfase_perimetro")
+    OPCIONES = {"objeto": ("esfera", "cilindro", "caja", "personalizado"), "operacion": OPERACIONES_CUERPO,
+                "distribucion": ("rectangular", "triangular", "hexagonal", "circular", "radial"),
+                "separacion": ("incremento", "extension"), "orientacion": ("paralela", "cara"),
+                "alineacion_u": ("izquierda", "centro", "derecha"), "alineacion_v": ("abajo", "medio", "arriba")}
+    REFS = ("caras", "personalizado")
+
+    def ejecutar(self, estado, ctx):
+        p = self.p
+        if not p["caras"]:
+            raise ErrorOperacion("Elegí las caras planas donde va el patrón.")
+        L = lambda k: ctx.evaluar(p[k])  # noqa: E731
+        custom = None
+        if p["objeto"] == "personalizado":
+            if not p["personalizado"]:
+                raise ErrorOperacion("Elegí el cuerpo que se repite (objeto personalizado).")
+            custom = _resolver(p["personalizado"], estado).forma
+        formas = []
+        for e in _resolver_todas(p["caras"], estado):
+            try:
+                formas.append(_pg().patron_geometrico(
+                    e.forma, p["objeto"], L("tamano1"), L("tamano2"), dispersion=ctx.evaluar(p["dispersion"], "escalar"),
+                    distribucion=p["distribucion"], sobre_la_cara=p["operacion"] in ("unir", "nuevo"), personalizado=custom,
+                    separacion=p["separacion"], distancia=L("distancia"), cantidad_u=int(p["cantidad_u"]),
+                    cantidad_v=int(p["cantidad_v"]), distancia_radial=L("distancia_radial"), rayos=int(p["rayos"]),
+                    orientacion=p["orientacion"], alineacion_u=p["alineacion_u"], desfase_u=L("desfase_u"),
+                    alineacion_v=p["alineacion_v"], desfase_v=L("desfase_v"),
+                    limpiar_perimetro=bool(p["limpiar_perimetro"]), desfase_perimetro=L("desfase_perimetro")))
+            except geo.ErrorGeometria as err:
+                raise ErrorOperacion(str(err)) from err
+        self._aplicar(estado, ctx, geo.compuesto(formas))
+
+
+class OpReticulaVolumetrica(Operacion):
+    """Retícula volumétrica de Fusion [Solid > Modify > Volumetric Lattice]: llena el sólido `cuerpo` con una estructura
+    interna por celdas (`nucleo/reticula.py` explica las formas). El cuerpo queda reemplazado por la retícula (sólido
+    para cross y x_cell; cuerpo de malla para las superficies mínimas). `tamano` es la celda; `tamano_y` y `tamano_z`
+    (vacíos = el mismo) la hacen no uniforme. `solidez` es el porcentaje de material (1 a 99)."""
+    TIPO, ETIQUETA, ICONO = "reticula_volumetrica", "Retícula volumétrica", "▦"
+    PARAMS = {"cuerpo": "", "forma_celda": "gyroid", "tamano": "5 mm", "tamano_y": "", "tamano_z": "", "solidez": "30",
+              "resolucion": 8}
+    EXPRESIONES = ("tamano", "tamano_y", "tamano_z", "solidez")
+    OPCIONES = {"forma_celda": ("cross", "x_cell", "gyroid", "schwarz_p", "schwarz_d")}
+
+    def dependencias(self):
+        return _deps_objetivo(self.p.get("cuerpo")) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        from ..nucleo import reticula
+        p = self.p
+        if not p["cuerpo"]:
+            raise ErrorOperacion("Elegí el sólido que se llena con la retícula.")
+        c = estado.cuerpo(p["cuerpo"])
+        if getattr(c, "tipo", "solido") != "solido":
+            raise ErrorOperacion("La retícula se aplica a un cuerpo sólido.")
+        s = ctx.evaluar(p["tamano"])
+        sx, sy, sz = s, ctx.evaluar(p["tamano_y"]) if str(p.get("tamano_y") or "").strip() else s, \
+            ctx.evaluar(p["tamano_z"]) if str(p.get("tamano_z") or "").strip() else s
+        solidez = ctx.evaluar(p["solidez"], "escalar") / 100.0
+        if min(sx, sy, sz) <= 0 or not 0.01 <= solidez <= 0.99:
+            raise ErrorOperacion("El tamaño de celda es positivo y la solidez va de 1 a 99 %.")
+        try:
+            if p["forma_celda"] in reticula.FORMAS_BARRAS:
+                c.forma, _ = reticula.reticula_barras(c.forma, p["forma_celda"], solidez, sx, sy, sz)
+            else:
+                c.forma, _ = reticula.reticula_malla(c.forma, p["forma_celda"], solidez, sx, sy, sz, int(p["resolucion"]))
+                c.tipo = "malla"
+        except geo.ErrorGeometria as err:
+            raise ErrorOperacion(str(err)) from err
 
 
 class OpRellenoContorno(_OpCrear):
@@ -787,20 +980,123 @@ class OpRellenoContorno(_OpCrear):
         self._aplicar(estado, ctx, forma)
 
 
+def _en_componente(estado, op, creados):
+    """Deja los cuerpos recién creados en un componente nuevo con el id y el nombre del paso (como Fusion)."""
+    estado.componentes[op.id] = {"nombre": op.nombre, "padre": "", "fijo": False, "matriz": np.identity(4).tolist()}
+    for cid in creados:
+        estado.cuerpo(cid).componente = op.id
+
+
 class OpSolidoEnvolvente(_OpCrear):
-    """Sólido envolvente de Fusion [SLD-CREATE-BOUNDING-SOLID]: caja o cilindro que contiene los cuerpos."""
+    """Sólido envolvente de Fusion [SLD-CREATE-BOUNDING-SOLID]: caja, cilindro o tubo que contiene los cuerpos.
+
+    `orientacion` (Coordinate System de Fusion): "modelo" (ejes del modelo; `eje` fija el del cilindro),
+    "automatica" (la menor), "z_x" / "z_y" / "x_y" (dos ejes en `eje_a` y `eje_b`, el primero manda) o "scu"
+    (un sistema de coordenadas de usuario en `scu`). `componente` deja el sólido en un componente nuevo (como
+    Fusion) y `grupo_rigido` lo liga a los componentes de los cuerpos envueltos."""
     TIPO, ETIQUETA, ICONO = "solido_envolvente", "Sólido envolvente", "⬚"
-    PARAMS = {"cuerpos": [], "tipo": "caja", "margen": "0 mm", "eje": "z", "operacion": "nuevo", "objetivos": []}
+    PARAMS = {"cuerpos": [], "tipo": "caja", "margen": "0 mm", "eje": "z", "operacion": "nuevo", "objetivos": [],
+              "orientacion": "modelo", "eje_a": None, "eje_b": None, "scu": None, "espesor_tubo": "",
+              "componente": False, "grupo_rigido": False}
     EXPRESIONES = ("margen",)
-    OPCIONES = {"tipo": ("caja", "cilindro"), "operacion": OPERACIONES_CUERPO}   # eje: "x", "y", "z" o un vector
+    OPCIONES = {"tipo": ("caja", "cilindro", "tubo"), "operacion": OPERACIONES_CUERPO,
+                "orientacion": ("modelo", "automatica", "z_x", "z_y", "x_y", "scu")}   # eje: "x", "y", "z" o un vector
+    REFS = ("eje_a", "eje_b")
+
+    def dependencias(self):
+        extra = {self.p["scu"]} if self.p.get("scu") else set()
+        return super().dependencias() | extra
+
+    def _marco(self, estado):
+        o = self.p["orientacion"]
+        if o == "modelo":
+            return None
+        if o == "automatica":
+            return "automatica"
+        sc = _sc()
+        if o == "scu":
+            sid = self.p["scu"]
+            if f"{sid}_x" not in estado.ejes:
+                raise ErrorOperacion("Elegí el sistema de coordenadas de usuario de la orientación.")
+            return sc.marco_ortonormal(z=estado.ejes[f"{sid}_z"][1], x=estado.ejes[f"{sid}_x"][1])
+
+        def direccion(clave):
+            if not self.p[clave]:
+                raise ErrorOperacion("La orientación necesita dos ejes: eje_a y eje_b.")
+            return np.asarray(ent.como_eje(_resolver(self.p[clave], estado))[1], float)
+        a, b = direccion("eje_a"), direccion("eje_b")
+        n1, n2 = o.split("_")
+        return sc.marco_ortonormal(**{n1: a, n2: b})
 
     def ejecutar(self, estado, ctx):
         if not self.p["cuerpos"]:
             raise ErrorOperacion("Elegí los cuerpos.")
         formas = [estado.cuerpo(c).forma for c in self.p["cuerpos"]]
+        espesor = self.p["espesor_tubo"]
         forma = _sc().solido_envolvente(formas, tipo=self.p["tipo"], margen=ctx.evaluar(self.p["margen"]),
-                                        eje=self.p["eje"])
-        self._aplicar(estado, ctx, forma)
+                                        eje=self.p["eje"], marco=self._marco(estado),
+                                        espesor_tubo=ctx.evaluar(espesor) if str(espesor).strip() else None)
+        creados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self.p.get("objetivos") or "")
+        self._registrar_usados(creados)
+        if self.p["operacion"] != "nuevo" or not (self.p["componente"] or self.p["grupo_rigido"]):
+            return
+        envueltos = {estado.cuerpo(c).componente for c in self.p["cuerpos"]} - {"", None}
+        _en_componente(estado, self, creados)
+        if self.p["grupo_rigido"]:
+            if not envueltos:
+                ctx.aviso("«Grupo rígido» solo vale cuando el sólido envuelve componentes: no se creó el grupo.")
+            else:
+                estado.grupos_rigidos = estado.grupos_rigidos + [[self.id, *sorted(envueltos)]]
+
+
+class OpVolumenFluido(_OpCrear):
+    """Volumen de fluido de Fusion [SLD-FLUID-VOLUME]: el sólido del interior o del exterior de un diseño, en un
+    componente nuevo. `tapas` son superficies que cubren las aberturas; `separar_caras` es «Split Result»."""
+    TIPO, ETIQUETA, ICONO = "volumen_fluido", "Volumen de fluido", "≋"
+    PARAMS = {"cuerpos": [], "tapas": [], "tipo": "interno", "forma_externa": "caja", "margen": "10 mm",
+              "separar_caras": False}
+    EXPRESIONES = ("margen",)
+    OPCIONES = {"tipo": ("interno", "externo"), "forma_externa": ("caja", "cilindro", "semiesfera")}
+
+    def dependencias(self):
+        return (_deps_objetivo(self.p["cuerpos"]) | _deps_objetivo(self.p["tapas"])) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        if not self.p["cuerpos"]:
+            raise ErrorOperacion("Elegí los cuerpos del diseño.")
+        solidos = [estado.cuerpo(c).forma for c in self.p["cuerpos"]]
+        tapas = [estado.cuerpo(c).forma for c in self.p["tapas"]]
+        forma = _sc().volumen_fluido(solidos, tapas, tipo=self.p["tipo"], forma_externa=self.p["forma_externa"],
+                                     margen=ctx.evaluar(self.p["margen"]), separar_caras=self.p["separar_caras"])
+        creados = aplicar_resultado(estado, ctx, self.id, forma, "nuevo", "")
+        self._registrar_usados(creados)
+        _en_componente(estado, self, creados)
+
+
+class OpReglaPlastico(_OpCrear):
+    """Asignar regla de plástico [Plastic > Setup > Assign Plastic Rule]: la regla (una COPIA en la receta: queda
+    «en este diseño») pasa al componente `componente` y su material físico a todos sus cuerpos. Los valores
+    físicos quedan en `estado.componentes[componente]["regla_plastico"]`. Una regla distinta, asignada después al
+    mismo componente, reemplaza a esta."""
+    TIPO, ETIQUETA, ICONO = "regla_plastico", "Regla de plástico", "◈"
+    PARAMS = {"componente": "", "regla": None}
+
+    def dependencias(self):
+        return {str(self.p["componente"]).split(".")[0]} - {"", self.id}
+
+    def ejecutar(self, estado, ctx):
+        from .ops_ensamblar import componente_por_ref
+        k = componente_por_ref(estado, self.p["componente"])
+        if k is None:
+            raise ErrorOperacion("Elegí el componente: ENSAMBLAR › Nuevo componente lo crea.")
+        regla = self.p["regla"]
+        if not isinstance(regla, dict) or "espesor" not in regla:
+            raise ErrorOperacion("Elegí la regla de plástico.")
+        estado.componentes[k]["regla_plastico"] = dict(regla)
+        if regla.get("material"):
+            for c in estado.cuerpos.values():
+                if (c.componente or "") == k:
+                    c.material = regla["material"]
 
 
 class OpSaliente(_OpCrear):
@@ -894,5 +1190,5 @@ class OpLabio(_OpCrear):
 
 
 registrar_operacion(OpBarrido, OpSolevacion, OpNervio, OpRed, OpRepujado, OpAgujero, OpRosca, OpBobina, OpTuberia,
-                    OpPatron, OpSimetria, OpRellenoContorno, OpSolidoEnvolvente, OpSaliente, OpLabio)
-registrar_operacion(OpMultitransformar)
+                    OpPatron, OpSimetria, OpRellenoContorno, OpSolidoEnvolvente, OpVolumenFluido, OpReglaPlastico, OpSaliente, OpLabio)
+registrar_operacion(OpMultitransformar, OpPatronGeometrico, OpReticulaVolumetrica)

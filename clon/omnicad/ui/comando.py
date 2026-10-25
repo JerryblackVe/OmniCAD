@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxL
                                QPushButton, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
-from . import formato, temas
+from . import formato, preajustes_ui, temas
 from .iconos import icono
 
 
@@ -335,6 +335,7 @@ class PanelComando(QFrame):
         self.valores = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in self.campos}
         if ctx.op is not None:
             self.valores.update(comando.desde_op(ctx.op, ctx))
+        self.valores.update(preajustes_ui.valores_iniciales(self))          # predeterminado del comando (preajustes)
         if valores:
             self.valores.update(valores)
         for c in self.campos:              # los huecos de la «o» de un texto (de antes o preelegidos) no van
@@ -385,6 +386,8 @@ class PanelComando(QFrame):
                 self.grilla.addWidget(et, fila, 0)
                 self.grilla.addWidget(w, fila, 1)
             self.etiquetas[campo.clave], self.widgets[campo.clave] = et, w
+        if preajustes_ui.tiene_preajustes(self):
+            v.addWidget(preajustes_ui.FilaPreajustes(self))
         v.addWidget(cuerpo)
 
         # PL2 (Plasticity: teclas de opción a la vista): el pie del panel muestra qué hace cada
@@ -729,6 +732,10 @@ class PanelComando(QFrame):
         if self.comando.PREVIA and not self._previa_ok:
             return                           # la operación falla: el mensaje rojo ya lo dice
         op = self.ultima_op
+        try:
+            preajustes_ui.recordar_ultimo(self)
+        except OSError:
+            pass                              # no poder recordar los últimos valores no frena el comando
         self._cerrar()
         self.aceptado.emit(op)
 

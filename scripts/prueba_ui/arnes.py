@@ -245,9 +245,15 @@ def deshacer(v):
     esperar(250)
 
 
+def _medida(c):
+    """Volumen del sólido, área de la superficie o cantidad de caras de la malla (no es una forma OCC)."""
+    if c.tipo == "solido":
+        return round(geo.volumen(c.forma), 3)
+    return len(c.forma.caras) if c.tipo == "malla" else round(geo.area(c.forma), 3)
+
+
 def cuerpos_resumen(v):
-    return {c.id: (c.tipo, round(geo.volumen(c.forma), 3) if c.tipo == "solido" else round(geo.area(c.forma), 3))
-            for c in v.doc.estado_final.cuerpos.values()}
+    return {c.id: (c.tipo, _medida(c)) for c in v.doc.estado_final.cuerpos.values()}
 
 
 def correr(nombre, funcion):

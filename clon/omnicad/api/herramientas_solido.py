@@ -30,6 +30,8 @@ OPERACIONES = {"new_body": "nuevo", "join": "unir", "cut": "cortar", "intersect"
 Operacion = Literal["new_body", "join", "cut", "intersect"]
 Perfiles = int | list[int] | str
 Cuerpos = str | list[str]
+Pasos = str | list[str]
+Elementos = str | list[str]
 
 
 def _r(x):
@@ -283,13 +285,16 @@ def _eje_revolucion(sesion, sop, br, axis, body=None):
              "boceto (get_sketch; puede ser de construcción); también un eje de construcción (id o nombre), una "
              "arista recta o una cara cilíndrica (selector o id de find_edges / find_faces) o una línea de OTRO boceto "
              "({\"sketch\": id, \"curve\": n}). El perfil no debe cruzar el eje; puede ser una cara plana (faces). angle "
-             "acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric.",
+             "acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric. to_object "
+             "(Extent Type › To Object) gira el perfil hasta un vértice, un plano, una cara plana o un cuerpo en lugar "
+             "de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil (Project Axis).",
              modifica=True)
 def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int | str | dict | None = None,
             angle: Expr = "360 deg", operation: Operacion = "new_body",
             direction: Literal["one_side", "two_sides", "symmetric"] = "one_side",
             angle2: Expr | None = None, target: Cuerpos | None = None, reverse: bool = False,
-            faces: Cuerpos | None = None, body: str | None = None):
+            faces: Cuerpos | None = None, body: str | None = None, to_object: str | dict | list[float] | None = None,
+            project_axis: bool = False):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
     profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
@@ -302,6 +307,8 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
     reverse: true para girar en el sentido contrario.
     faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch.
     body: cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
+    to_object: vértice ([x, y, z] o selector), plano (XY/XZ/YZ o de construcción), cara plana (selector o id) o cuerpo (id o nombre) hasta donde gira el perfil; reemplaza a angle.
+    project_axis: true proyecta el eje al plano del perfil; false lo deja donde está.
     """
     if sketch is None and not faces:
         raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
@@ -326,6 +333,14 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
         from .herramientas_modificar import _refs
         p["caras"] = _refs(sesion, faces, "cara", body)[0]
     p.update(_eje_revolucion(sesion, sop, br, axis, body))
+    if project_axis:
+        p["proyectar_eje"] = True
+    if to_object is not None:
+        if direction != "one_side":
+            raise error("INVALID_ARGUMENTS", "to_object gira hacia un solo lado: usá direction=one_side.")
+        from .herramientas_construccion import _referencia
+        p.update(extension="objeto", hasta=_referencia(
+            sesion, to_object, {"vertice", "punto", "punto_boceto", "plano", "cara", "cuerpo"}, body))
     if direction == "two_sides":
         p.update(direccion="dos_lados", angulo2=texto_expr(angle if angle2 is None else angle2))
     elif direction == "symmetric":
@@ -342,22 +357,28 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
              "boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta. Opciones: "
              "faces (una cara plana como perfil), path_edges (aristas de un cuerpo como ruta, en lugar de path_sketch), "
              "rail_sketch y rail_curves (ruta + carril guía; rail_scale elige cómo sigue el perfil al carril: scale, "
-             "stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1).",
+             "stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1). orientation=aligned mantiene "
+             "el perfil con el eje align_axis como binormal (eje, arista recta, plano o cara plana). guide_surface (caras "
+             "sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. "
+             "Todavía no están el barrido de un cuerpo sólido ni la selección encadenada de la ruta.",
              modifica=True)
 def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch: str | None = None,
           path_curves: list[int] | None = None,
-          operation: Operacion = "new_body", orientation: Literal["perpendicular", "parallel"] = "perpendicular",
+          operation: Operacion = "new_body", orientation: Literal["perpendicular", "parallel", "aligned"] = "perpendicular",
           taper_angle: Expr = 0, twist_angle: Expr = 0, target: Cuerpos | None = None,
           faces: Cuerpos | None = None, path_edges: Cuerpos | None = None, rail_sketch: str | None = None,
           rail_curves: list[int] | None = None, rail_scale: Literal["scale", "stretch", "none"] = "scale",
-          path_distance: Expr = 1, body: str | None = None):
+          path_distance: Expr = 1, body: str | None = None, align_axis: str | dict | None = None,
+          guide_surface: Cuerpos | None = None):
     """
     sketch: id o nombre del boceto con el perfil; vacío si el perfil es una cara (faces).
     profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
     path_sketch: id o nombre del boceto con la ruta; vacío si la ruta son aristas de un cuerpo (path_edges).
     path_curves: ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
     operation: "new_body", "join", "cut" o "intersect".
-    orientation: "perpendicular" (el perfil sigue la tangente de la ruta) o "parallel" (mantiene su orientación).
+    orientation: "perpendicular" (el perfil sigue la tangente de la ruta), "parallel" (mantiene su orientación) o "aligned" (mantiene align_axis como binormal).
+    align_axis: con orientation=aligned, el eje: eje de construcción, arista recta, plano o cara plana (id o selector).
+    guide_surface: caras (selector o ids de find_faces) sobre las que va la ruta: el perfil sigue su normal; no se combina con carril ni torsión.
     taper_angle: ángulo de conicidad en grados.
     twist_angle: torsión total en grados (máximo ±3600; ±1800 en rutas cerradas; la ruta no puede tener esquinas).
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
@@ -394,11 +415,21 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     else:
         ruta = _curvas_de_boceto(sesion, path_sketch, path_curves, "la ruta")
     carril = _curvas_de_boceto(sesion, rail_sketch, rail_curves, "el carril") if rail_sketch is not None else []
+    extra = {}
+    if orientation == "aligned":
+        if align_axis is None:
+            raise error("INVALID_ARGUMENTS", "orientation=aligned necesita align_axis.")
+        from .herramientas_construccion import _referencia as _ref_construccion
+        extra["eje_alineado"] = _ref_construccion(sesion, align_axis, {"eje", "arista", "plano", "cara"}, body, "direccion")
+    if guide_surface:
+        if carril or (isinstance(twist_angle, (int, float)) and twist_angle):
+            raise error("INVALID_ARGUMENTS", "guide_surface no se combina con carril ni con torsión.")
+        extra["superficie_guia"] = _refs(sesion, guide_surface, "cara", body)[0]
     doc = sesion.doc
     op = OpBarrido(doc.nuevo_id(), nombre_nuevo(doc, "Barrido", OpBarrido), perfiles=perfiles_refs, ruta=ruta,
                    carril=carril, escala_carril={"scale": "escalar", "stretch": "estirar", "none": "ninguna"}[rail_scale],
-                   distancia=texto_expr(path_distance),
-                   orientacion=orientation if orientation == "perpendicular" else "paralela",
+                   distancia=texto_expr(path_distance), **extra,
+                   orientacion={"perpendicular": "perpendicular", "parallel": "paralela", "aligned": "alineada"}[orientation],
                    conicidad=texto_expr(taper_angle), torsion=texto_expr(twist_angle),
                    operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target))
     return _agregar(sesion, op, operation != "new_body")
@@ -418,18 +449,38 @@ def _curvas_de_boceto(sesion, boceto, curvas, que):
     return [{"tipo": "curva_boceto", "boceto": rop.id, "curva": cid} for cid in ids]
 
 
+def _condicion_borde(cond):
+    """{"type", "angle", "weight"} de la API → la condición que guarda OpSolevacion."""
+    if not isinstance(cond, dict) or set(cond) - {"type", "angle", "weight"}:
+        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction", "angle": grados, "weight": número}.')
+    tipo = cond.get("type", "free")
+    if tipo not in ("free", "direction"):
+        raise error("INVALID_ARGUMENTS", "type es free o direction (Tangente y Suave todavía no están).")
+    angulo, peso = cond.get("angle", 90), cond.get("weight", 1)
+    if isinstance(angulo, (int, float)) and not 0 < angulo < 180:
+        raise error("INVALID_ARGUMENTS", "angle está entre 0 y 180 grados.")
+    if isinstance(peso, (int, float)) and peso <= 0:
+        raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
+    return {"tipo": "libre" if tipo == "free" else "direccion", "angulo": texto_expr(angulo), "peso": texto_expr(peso)}
+
+
 @herramienta("loft", "solido",
              "Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). "
              "profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa "
              "tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de "
              "sketches: cada sección es un perfil {\"sketch\", \"profile\"}, una cara o arista (selector o id), un "
              "vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: "
-             "{\"sketch\", \"curve\"} o aristas) o center_line (una línea central), sin combinar las dos.",
+             "{\"sketch\", \"curve\"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la "
+             "superficie de la primera y la última sección: {\"type\": \"free\"} o {\"type\": \"direction\", \"angle\": "
+             "grados desde el plano de la sección (90 = perpendicular), \"weight\": 1}; es una aproximación con una "
+             "sección auxiliar cercana, solo en la solevación lisa (sin rails, center_line, ruled ni closed). "
+             "merge_tangent_edges une las caras tangentes. Todavía no están las condiciones Tangente y Suave.",
              modifica=True)
 def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | None = None,
          operation: Operacion = "new_body", ruled: bool = False, closed: bool = False, target: Cuerpos | None = None,
          sections: list[str | dict | list[float]] | None = None, rails: list[str | dict] | None = None,
-         center_line: list[str | dict] | None = None, body: str | None = None):
+         center_line: list[str | dict] | None = None, body: str | None = None, start_condition: dict | None = None,
+         end_condition: dict | None = None, merge_tangent_edges: bool = False):
     """
     sketches: ids o nombres de los bocetos, en el orden de las secciones; vacío si se da sections.
     profiles: un perfil por boceto (índice o "largest"); vacío = el perfil 0 de cada boceto.
@@ -441,6 +492,9 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
     body: cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
+    start_condition: condición de borde de la primera sección: {"type": "free" | "direction", "angle": grados (90 por defecto), "weight": número (1 por defecto)}.
+    end_condition: lo mismo para la última sección.
+    merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
     """
     if rails and center_line:
         raise error("INVALID_ARGUMENTS", "Pasá rails (carriles) o center_line (línea central), no los dos.")
@@ -471,6 +525,10 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
             secciones.append(_ref_perfil(sop, seleccionar_perfiles(br, sop, 0 if profiles is None else profiles[i])[0]))
     guias = {k: [_referencia(sesion, r, {"arista", "curva_boceto"}, body) for r in lista]
              for k, lista in (("carriles", rails), ("linea_central", center_line)) if lista}
+    for clave, cond in (("condicion_inicio", start_condition), ("condicion_fin", end_condition)):
+        if cond is not None:
+            guias[clave] = _condicion_borde(cond)
+    guias["fusionar_tangentes"] = bool(merge_tangent_edges)
     doc = sesion.doc
     op = OpSolevacion(doc.nuevo_id(), nombre_nuevo(doc, "Solevación", OpSolevacion), secciones=secciones,
                       cerrada=closed, reglada=ruled, operacion=OPERACIONES[operation],
@@ -479,6 +537,14 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
 
 
 # ---------------------------------------------------------------- primitivas
+def _plano_primitiva(sesion, plane, body=None):
+    """Referencia del plano o la cara plana sobre la que se crea una primitiva (o {} si no se pidió)."""
+    if plane is None:
+        return {}
+    from .herramientas_construccion import _referencia
+    return {"plano": _referencia(sesion, plane, {"plano", "cara"}, body, "plano")}
+
+
 def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, name=None, **extra):
     doc = sesion.doc
     objetivos = _objetivos(sesion, operation, target)
@@ -502,10 +568,12 @@ def _primitiva(sesion, forma, base, medidas, x, y, z, operation, target, name=No
              "Crea una caja alineada con los ejes. length es el tamaño en X, width en Y y height en Z (mm). (x, y, z) "
              "es el centro de la cara de abajo con anchor=center (por defecto), o la esquina mínima con anchor=corner. Medidas y posición "
              "aceptan expresiones con parámetros. En el timeline el paso guarda x, y, z con el mismo significado "
-             "(caja_centrada) y edit_feature acepta length, width y height.", modifica=True)
+             "(caja_centrada) y edit_feature acepta length, width y height. Con plane la crea sobre un plano o una cara "
+             "plana cualquiera, también inclinada.", modifica=True)
 def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: Expr = 0, z: Expr = 0,
                operation: Operacion = "new_body", target: Cuerpos | None = None, name: str | None = None,
-               anchor: Literal["center", "corner"] = "center"):
+               anchor: Literal["center", "corner"] = "center", plane: str | dict | None = None,
+               body: str | None = None):
     """
     length: tamaño en X (mm, positivo).
     width: tamaño en Y (mm, positivo).
@@ -517,11 +585,14 @@ def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: 
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     anchor: "center" sitúa (x, y, z) en el centro de la base; "corner", en la esquina mínima (crece hacia +X, +Y, +Z).
+    plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y la altura crece por la normal.
+    body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
     """
     for valor, que in ((length, "length"), (width, "width"), (height, "height")):
         _numero_positivo(valor, que)
     return _primitiva(sesion, "caja", "Caja", {"ancho": length, "largo": width, "alto": height},
-                      x, y, z, operation, target, name, caja_centrada=anchor == "center")
+                      x, y, z, operation, target, name, caja_centrada=anchor == "center",
+                      **_plano_primitiva(sesion, plane, body))
 
 
 def _radio_o_diametro(radio, diametro, nombre_radio, nombre_diametro):
@@ -537,11 +608,12 @@ def _radio_o_diametro(radio, diametro, nombre_radio, nombre_diametro):
 
 
 @herramienta("create_cylinder", "solido",
-             "Crea un cilindro con el eje en Z (para otro eje, girarlo con move_body). (x, y, z) es el centro de la "
-             "base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo).", modifica=True)
+             "Crea un cilindro con el eje en Z (con plane, sobre la normal de un plano o una cara cualquiera). (x, y, z) "
+             "es el centro de la base; la altura crece hacia +Z. La medida va como radius o como diameter (uno solo).",
+             modifica=True)
 def create_cylinder(sesion, height: Expr, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, z: Expr = 0,
                     operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None,
-                    name: str | None = None):
+                    name: str | None = None, plane: str | dict | None = None, body: str | None = None):
     """
     height: altura en mm (positiva).
     radius: radio en mm (positivo). Alternativa: diameter.
@@ -552,18 +624,20 @@ def create_cylinder(sesion, height: Expr, radius: Expr | None = None, x: Expr = 
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     diameter: diámetro en mm, en vez de radius (como el panel Cilindro de la app); el paso guarda la mitad.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
+    plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el eje va por la normal.
+    body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
     """
     radio = _radio_o_diametro(radius, diameter, "radius", "diameter")
     _numero_positivo(height, "height")
     return _primitiva(sesion, "cilindro", "Cilindro", {"radio": radio, "alto": height}, x, y, z, operation, target,
-                      name)
+                      name, **_plano_primitiva(sesion, plane, body))
 
 
 @herramienta("create_sphere", "solido", "Crea una esfera. (x, y, z) es su centro. La medida va como radius o como "
              "diameter (uno solo).", modifica=True)
 def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, z: Expr = 0,
                   operation: Operacion = "new_body", target: Cuerpos | None = None, diameter: Expr | None = None,
-                  name: str | None = None):
+                  name: str | None = None, plane: str | dict | None = None, body: str | None = None):
     """
     radius: radio en mm (positivo). Alternativa: diameter.
     x: x del centro (mm).
@@ -573,17 +647,21 @@ def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, 
     target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     diameter: diámetro en mm, en vez de radius (como el panel Esfera de la app); el paso guarda la mitad.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
+    plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el centro queda a esa altura.
+    body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
     """
     radio = _radio_o_diametro(radius, diameter, "radius", "diameter")
-    return _primitiva(sesion, "esfera", "Esfera", {"radio": radio}, x, y, z, operation, target, name)
+    return _primitiva(sesion, "esfera", "Esfera", {"radio": radio}, x, y, z, operation, target, name,
+                      **_plano_primitiva(sesion, plane, body))
 
 
-@herramienta("create_torus", "solido", "Crea un toroide con el eje en Z (para otro eje, girarlo con move_body). "
+@herramienta("create_torus", "solido", "Crea un toroide con el eje en Z (con plane, sobre la normal de un plano o una cara cualquiera). "
              "(x, y, z) es su centro. Medidas como radios (major_radius, minor_radius) o diámetros (major_diameter, "
              "minor_diameter), uno de cada par.", modifica=True)
 def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | None = None, x: Expr = 0, y: Expr = 0,
                  z: Expr = 0, operation: Operacion = "new_body", target: Cuerpos | None = None,
-                 major_diameter: Expr | None = None, minor_diameter: Expr | None = None, name: str | None = None):
+                 major_diameter: Expr | None = None, minor_diameter: Expr | None = None, name: str | None = None,
+                 plane: str | dict | None = None, body: str | None = None):
     """
     major_radius: radio mayor en mm (del centro al centro del tubo); tiene que ser mayor que minor_radius.
     minor_radius: radio menor en mm (del tubo).
@@ -595,11 +673,13 @@ def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | 
     major_diameter: diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
     minor_diameter: diámetro del tubo, en vez de minor_radius.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
+    plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el eje va por la normal.
+    body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
     """
     mayor = _radio_o_diametro(major_radius, major_diameter, "major_radius", "major_diameter")
     menor = _radio_o_diametro(minor_radius, minor_diameter, "minor_radius", "minor_diameter")
     return _primitiva(sesion, "toroide", "Toroide", {"radio_mayor": mayor, "radio_menor": menor},
-                      x, y, z, operation, target, name)
+                      x, y, z, operation, target, name, **_plano_primitiva(sesion, plane, body))
 
 
 # ---------------------------------------------------------------- booleanas, simetría, patrones, movimiento
@@ -625,34 +705,59 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
 
 @herramienta("mirror", "solido",
              "Refleja cuerpos respecto de un plano (origen, de construcción o una CARA PLANA de un cuerpo: selector o "
-             "id de find_faces). Crea cuerpos nuevos, o con combine=true une cada reflejo a su cuerpo original.",
-             modifica=True)
-def mirror(sesion, bodies: Cuerpos, plane: str = "YZ", combine: bool = False, plane_body: str | None = None):
+             "id de find_faces). Crea cuerpos nuevos, o con combine=true une cada reflejo a su cuerpo original. En vez "
+             "de cuerpos puede reflejar caras (faces: cada reflejo queda como una superficie nueva), componentes "
+             "(components: copias reflejadas) u operaciones del timeline (features: su herramienta se refleja y se "
+             "aplica con la misma operación).", modifica=True)
+def mirror(sesion, bodies: Cuerpos | None = None, plane: str = "YZ", combine: bool = False,
+           plane_body: str | None = None, features: Pasos | None = None, faces: Elementos | None = None,
+           components: list[str] | None = None):
     """
     bodies: cuerpo(s) a reflejar (id o nombre).
     plane: plano de simetría: "XY", "XZ", "YZ", el id/nombre de un plano de construcción, o una cara plana (selector ">X" o id de find_faces).
-    combine: true para unir el reflejo al cuerpo original en vez de crear un cuerpo nuevo.
+    combine: true para unir el reflejo al cuerpo original en vez de crear un cuerpo nuevo (solo con bodies).
     plane_body: cuerpo donde se evalúa el selector de cara de plane; vacío = el único cuerpo.
+    features: pasos anteriores del timeline (id o nombre) cuyo efecto se refleja en vez de cuerpos. No se combina con bodies.
+    faces: caras a reflejar (selector, ids de find_faces o lista): cada reflejo queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
+    components: componentes a reflejar (id o nombre): cada reflejo es un componente nuevo con copias reflejadas de sus cuerpos. No se combina con bodies, features ni faces.
     """
-    ids = _ids_cuerpos(sesion, bodies)
-    if not ids:
-        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies'.")
+    objeto = _objeto_patron(sesion, bodies, features, False, combine, faces, components)
     ref = referencia_plano_o_cara(sesion, plane, plane_body)     # antes de gastar un id: si falla, el documento no cambia
     doc = sesion.doc
-    op = OpSimetria(doc.nuevo_id(), nombre_nuevo(doc, "Simetría", OpSimetria), cuerpos=ids,
-                    plano=ref, combinar=combine)
-    return _agregar(sesion, op)
+    op = OpSimetria(doc.nuevo_id(), nombre_nuevo(doc, "Simetría", OpSimetria), plano=ref,
+                    combinar=combine and objeto["objeto"] == "cuerpos", **objeto)
+    return _agregar_patron(sesion, op)
 
 
-Pasos = str | list[str]
-
-
-def _objeto_patron(sesion, bodies, features, lightweight, combine):
-    """objeto, cuerpos y pasos de un patrón: cuerpos (bodies) u operaciones del timeline (features). `ligeras` solo
-    tiene sentido con cuerpos y sin combine (las copias unidas al original no quedan como instancias)."""
+def _objeto_patron(sesion, bodies, features, lightweight, combine, faces=None, components=None):
+    """objeto, cuerpos y pasos de un patrón: cuerpos (bodies), operaciones del timeline (features), caras (faces) o
+    componentes (components). `ligeras` solo tiene sentido con cuerpos y sin combine (las copias unidas al original
+    no quedan como instancias)."""
     from ..timeline.ops_solido import TIPOS_REPETIBLES
     ids = _ids_cuerpos(sesion, bodies)
     pasos = [sesion.paso(f) for f in _lista(features)]
+    if faces is not None or components is not None:
+        if ids or pasos or (faces is not None and components is not None):
+            raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies), operaciones (features), caras (faces) "
+                                             "o componentes (components): una sola cosa.")
+        if lightweight or combine:
+            raise error("INVALID_ARGUMENTS", "lightweight y combine son para cuerpos (bodies): las caras dejan "
+                                             "superficies nuevas y los componentes, componentes nuevos.")
+        if faces is not None:
+            from .herramientas_modificar import _refs
+            return {"objeto": "caras", "caras": _refs(sesion, faces, "cara", None)[0]}
+        estado = sesion.doc.estado_final
+        from ..timeline.ops_ensamblar import componente_por_ref
+        lista = _lista(components)
+        ids_comp = []
+        for c in lista:
+            k = componente_por_ref(estado, c)
+            if k is None:
+                raise error("ENTITY_NOT_FOUND", f"No hay un componente «{c}».", "get_assembly lista los componentes.")
+            ids_comp.append(k)
+        if not ids_comp:
+            raise error("INVALID_ARGUMENTS", "Indicá al menos un componente en 'components'.")
+        return {"objeto": "componentes", "componentes": ids_comp}
     if lightweight and pasos:
         raise error("INVALID_ARGUMENTS", "lightweight (copias ligeras) es para cuerpos (bodies): las operaciones "
                                          "(features) no se pueden instanciar.")
@@ -661,8 +766,8 @@ def _objeto_patron(sesion, bodies, features, lightweight, combine):
     if ids and pasos:
         raise error("INVALID_ARGUMENTS", "Un patrón repite cuerpos (bodies) u operaciones (features), no las dos cosas.")
     if not ids and not pasos:
-        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies' o una operación del timeline en "
-                                         "'features'.")
+        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'bodies', una operación del timeline en "
+                                         "'features', caras en 'faces' o componentes en 'components'.")
     doc = sesion.doc
     for op in pasos:
         if doc.indice(op.id) >= doc.marcador:
@@ -682,6 +787,12 @@ def _objeto_patron(sesion, bodies, features, lightweight, combine):
 
 def _agregar_patron(sesion, op):
     return _agregar(sesion, op, op.p["objeto"] == "operaciones")
+
+
+_DOC_FACES = ("    faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie "
+              "nuevo. No se combina con bodies, features ni components.\n")
+_DOC_COMPONENTS = ("    components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus "
+                   "cuerpos. No se combina con bodies, features ni faces.\n")
 
 
 def _dir_patron(sesion, valor, que, body=None):
@@ -745,6 +856,7 @@ def realize_copies(sesion, feature: str):
 def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1, x_spacing: Expr = "10 mm",
                         y_count: int = 1, y_spacing: Expr = "10 mm", axis1: str = "x",
                         axis2: str = "y", combine: bool = False, features: Pasos | None = None,
+                        faces: Elementos | None = None, components: list[str] | None = None,
                         lightweight: bool = False, distribution: Literal["spacing", "extent"] = "spacing",
                         symmetric: bool = False, suppress: list[int] | None = None, body: str | None = None):
     """
@@ -761,9 +873,11 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     body: cuerpo donde se evalúan los selectores de axis1 y axis2; vacío = el único cuerpo.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
+    faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
+    components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
     if x_count < 1 or y_count < 1:
         raise error("INVALID_ARGUMENTS", "x_count e y_count tienen que ser 1 o más.")
     if x_count == 1 and y_count == 1:
@@ -792,6 +906,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
              "ángulo total. count incluye el original.", modifica=True)
 def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: str = "z",
                      total_angle: Expr = 360, combine: bool = False, features: Pasos | None = None,
+                     faces: Elementos | None = None, components: list[str] | None = None,
                      lightweight: bool = False, distribution: Literal["extent", "spacing"] = "extent",
                      symmetric: bool = False, suppress: list[int] | None = None, body: str | None = None):
     """
@@ -801,13 +916,15 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
     total_angle: ángulo en grados (número o expresión): con distribution=extent, el total (360 = vuelta completa); con spacing, el ángulo entre copias consecutivas.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+    faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
+    components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     distribution: "extent" (total_angle es el ángulo TOTAL entre la primera y la última copia) o "spacing" (es el ángulo entre copias consecutivas).
     symmetric: true reparte las copias a los dos lados del original.
     suppress: copias a suprimir por su posición (1 a count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
     body: cuerpo donde se evalúan los selectores de axis; vacío = el único cuerpo.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
     total = 2 * count - 1 if symmetric else count
@@ -892,6 +1009,7 @@ def _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode
              "puntos: para repetir un agujero, reference es el punto donde está el agujero. Un punto igual a la "
              "referencia no repite la copia.", modifica=True)
 def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None = None,
+                  faces: Elementos | None = None, components: list[str] | None = None,
                   points: list[list[Expr]] | None = None, sketch: str | None = None,
                   reference: list[Expr] | None = None, combine: bool = False, lightweight: bool = False,
                   point_refs: list[str | dict | list[float]] | None = None,
@@ -900,6 +1018,8 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     """
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+    faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
+    components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     points: puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
     sketch: id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
     reference: punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
@@ -910,7 +1030,7 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
     params = _params_puntos(sesion, points, sketch, reference, point_refs, reference_point, body)
     cantidad = len(params["coordenadas"]) + len(params["puntos"]) + 1
     _exigir_instancias(cantidad, "points")
@@ -931,7 +1051,8 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
              "de a poco, hasta ese ángulo total en la última.", modifica=True)
 def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distance: Expr | None = None,
                  bodies: Cuerpos | None = None,
-                 features: Pasos | None = None, path_curves: list[int] | None = None,
+                 features: Pasos | None = None, faces: Elementos | None = None,
+                 components: list[str] | None = None, path_curves: list[int] | None = None,
                  spacing_mode: Literal["extent", "spacing"] = "extent", start: Expr = 0,
                  orientation: Literal["identical", "path_direction"] = "identical", twist: Expr = 0,
                  symmetric: bool = False, combine: bool = False, lightweight: bool = False,
@@ -942,6 +1063,8 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
     distance: largo total (extent) o separación entre copias (spacing), en mm o expresión.
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+    faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
+    components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     path_curves: ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
     spacing_mode: "extent" (distance es el largo total) o "spacing" (distance es la separación).
     start: dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
@@ -954,7 +1077,7 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
     params = _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist,
                           symmetric, path_edges, body)
     doc = sesion.doc
@@ -1035,15 +1158,18 @@ def _transformacion_api(sesion, t, i):
              "\"count\": 4, \"distance\": 60, \"twist\": 90} (las mismas opciones que path_pattern). Repite cuerpos "
              "(bodies) u operaciones del timeline (features).", modifica=True)
 def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = None, features: Pasos | None = None,
-                    combine: bool = False, lightweight: bool = False):
+                    combine: bool = False, lightweight: bool = False, faces: Elementos | None = None,
+                    components: list[str] | None = None):
     """
     transforms: lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
+    faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
+    components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
-    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine)
+    objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components)
     if not transforms:
         raise error("INVALID_ARGUMENTS", "transforms necesita al menos una transformación.")
     lista, total = [], 1
