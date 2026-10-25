@@ -4,7 +4,8 @@ Enter, Mayús+Enter, Esc, Tab, Cancelar, cambiar de modo, biblioteca de prompts,
 Enviar tienen que entrar). IA-5: tarjeta de plan (Aplicar, Cancelar, Esc), Guiar, Cancelar con vuelta atrás,
 «Deshacer este pedido» y el aviso de APP_BUSY con un comando abierto. IA-6: elegir «Claude Code (tu suscripción)» en
 Preferencias (teclado y clic en Aceptar), ruta mala tecleada, y un pedido con el CLI simulado que entra por el puente en
-vivo (encendido solo durante el pedido) con la tarjeta Aplicar. El proveedor es el falso: sin red ni gasto."""
+vivo (encendido solo durante el pedido) con la tarjeta Aplicar. IA-9: clic en el clip, Ctrl+V de una imagen, arrastrar
+archivos al chat, el 11.º rechazado, ✕ y las fichas en la ventana chica. El proveedor es el falso: sin red ni gasto."""
 import sys
 import threading
 
@@ -89,7 +90,7 @@ class CliSimulado(AgenteLocal):
         self.tipo, self.nombre, self.sesion, self.proceso = "claude_code", "Claude Code", None, None
         self.archivo, self.llamadas, self.respuestas, self.puente_visto = archivo, llamadas, [], None
 
-    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None):
+    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None, adjuntos=()):
         cliente = ClientePuente(self.archivo)
         self.puente_visto = cliente.conectar()
         for nombre, args in self.llamadas:
@@ -256,6 +257,114 @@ def suscripcion(p):
     v.prefs["asistente/proveedor"] = "anthropic"
     p.actualizar_cabecera()
     p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+
+
+def adjuntables():
+    """Un PDF, una imagen, un SVG y un DXF de prueba en una carpeta temporal."""
+    import tempfile
+    from pathlib import Path
+
+    from PIL import Image
+
+    from omnicad.io_archivos.dxf import escribir_dxf
+    d = Path(tempfile.mkdtemp(prefix="omnicad_adjuntos_"))
+    (d / "plano.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    Image.new("RGB", (300, 200), (30, 120, 200)).save(d / "foto.jpg")
+    (d / "logo.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="20mm" viewBox="0 0 40 20">'
+                                '<rect x="2" y="2" width="36" height="16"/><circle cx="20" cy="10" r="6"/></svg>',
+                                encoding="utf-8")
+    escribir_dxf(d / "brida.dxf", [("circulo", (0, 0), 30), ("circulo", (0, 0), 10), ("circulo", (20, 0), 3)])
+    return [str(d / n) for n in ("plano.pdf", "foto.jpg", "logo.svg", "brida.dxf")]
+
+
+def fichas(p):
+    """Las fichas en el orden en que se ven (las quitadas ya salieron de la fila aunque falte borrarlas)."""
+    return [p.lay_fichas.itemAt(i).widget() for i in range(p.lay_fichas.count() - 1)]
+
+
+def soltar(widget, rutas):
+    """Arrastrar archivos del Explorador y soltarlos sobre `widget` (Qt pasa el evento al que acepta soltar)."""
+    from PySide6.QtCore import QMimeData, QPointF, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(r) for r in rutas])
+    centro = widget.rect().center()
+    entrar = QDragEnterEvent(centro, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+    QApplication.sendEvent(widget, entrar)
+    if entrar.isAccepted():
+        QApplication.sendEvent(widget, QDropEvent(QPointF(centro), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    A.esperar(80)
+    return entrar.isAccepted()
+
+
+def adjuntos_ui(p):
+    """IA-9 como una persona: clic en el clip (el diálogo de archivos devuelve los elegidos), ✕, Ctrl+V de una imagen,
+    arrastrar al chat, el 11.º rechazado y mandar el pedido con sus adjuntos."""
+    from omnicad.ui import asistente as modulo
+    rutas = adjuntables()
+    elegidos = []
+    original = modulo.QFileDialog.getOpenFileNames
+    modulo.QFileDialog.getOpenFileNames = lambda *a: (elegidos.pop(0) if elegidos else [], "")
+    try:
+        p.adjuntos = []
+        p._mostrar_fichas()
+        A.reg(AR, "el clip está al lado del campo, con su ícono", p.b_clip.isVisible() and not p.b_clip.icon().isNull())
+        elegidos.append(rutas)
+        QTest.mouseClick(p.b_clip, Qt.LeftButton)
+        A.esperar(150)
+        A.reg(AR, "clic en el clip: PDF, JPG, SVG y DXF quedan como fichas arriba del campo con el contador",
+              [a.clase for a in p.adjuntos] == ["pdf", "imagen", "svg", "dxf"] and len(fichas(p)) == 4
+              and p.contador.text() == "4/10" and p.fila_adjuntos.isVisible(), p.contador.text())
+        A.foto(v, "asistente_adjuntos_fichas")
+        QTest.mouseClick(fichas(p)[0].b_quitar, Qt.LeftButton)
+        A.esperar(80)
+        A.reg(AR, "✕ en la ficha del PDF lo saca", [a.nombre for a in p.adjuntos] == ["foto.jpg", "logo.svg", "brida.dxf"]
+              and p.contador.text() == "3/10", p.contador.text())
+        from PySide6.QtGui import QColor, QImage
+        imagen = QImage(120, 80, QImage.Format_RGB32)
+        imagen.fill(QColor(220, 40, 40))
+        QApplication.clipboard().setImage(imagen)
+        escribir(p, "mira esto")
+        QTest.keyClick(p.campo, Qt.Key_V, Qt.ControlModifier)
+        A.esperar(80)
+        A.reg(AR, "Ctrl+V con una imagen copiada la adjunta (PNG temporal) y no toca el texto",
+              p.adjuntos[-1].nombre.startswith("pegada_") and p.campo.toPlainText() == "mira esto", p.campo.toPlainText())
+        QApplication.clipboard().setText(" y el logo")
+        QTest.keyClick(p.campo, Qt.Key_End)
+        QTest.keyClick(p.campo, Qt.Key_V, Qt.ControlModifier)
+        A.reg(AR, "Ctrl+V con texto sigue pegando texto", p.campo.toPlainText() == "mira esto y el logo"
+              and len(p.adjuntos) == 4, p.campo.toPlainText())
+        A.reg(AR, "arrastrar el PDF del Explorador y soltarlo sobre el chat lo adjunta",
+              soltar(p.area.viewport(), rutas[:1]) and p.adjuntos[-1].nombre == "plano.pdf" and len(fichas(p)) == 5)
+        elegidos.append(rutas * 2)
+        QTest.mouseClick(p.b_clip, Qt.LeftButton)
+        A.esperar(150)
+        avisos = [t for t in textos(p) if "Máximo 10 adjuntos" in t]
+        A.reg(AR, "más de 10: suma hasta el 10.º y del 11.º en adelante avisa claro",
+              len(p.adjuntos) == 10 and p.contador.text() == "10/10" and len(avisos) == 3, avisos[:1])
+        A.foto(v, "asistente_adjuntos_10")
+        for _ in range(5):
+            QTest.mouseClick(fichas(p)[-1].b_quitar, Qt.LeftButton)
+            A.esperar(30)
+        falso = ProveedorFalso([Respuesta(texto="Veo la foto, el logo y la brida.")])
+        p.crear_proveedor = lambda _cfg: falso
+        p.modo.setCurrentIndex(p.modo.findData("explicar"))
+        QTest.keyClick(p.campo, Qt.Key_Return)
+        esperar(p)
+        recibido = falso.recibidos[0][0][-1]["contenido"] if falso.recibidos else []
+        A.reg(AR, "Enter manda el texto con sus 5 adjuntos (imágenes, vistas previas y PDF) y las fichas se van",
+              [b["tipo"] for b in recibido].count("imagen") == 4 and any(b["tipo"] == "documento" for b in recibido)
+              and p.adjuntos == [] and not p.fila_adjuntos.isVisible()
+              and any(t.startswith("Adjuntos: foto.jpg, logo.svg") for t in textos(p)), [b["tipo"] for b in recibido])
+        guardado = historial.cargar(p.id_chat)["mensajes"][-2]["contenido"]
+        A.reg(AR, "el historial guarda nombre, tipo y ruta de cada adjunto, no su contenido",
+              all(b["tipo"] == "texto" for b in guardado) and any("insert_dxf(path=" in b["texto"] for b in guardado),
+              [b["tipo"] for b in guardado])
+        A.foto(v, "asistente_adjuntos_enviado")
+    finally:
+        modulo.QFileDialog.getOpenFileNames = original
+        p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+    return rutas
 
 
 def pedido():
@@ -470,12 +579,14 @@ def pedido():
           and p.id_chat is None)
     A.reg(AR, "la estrella avisa que es IA", "puede equivocarse" in p.b_aviso.toolTip())
     historial_chats(p, guardado, n_lineas)
+    rutas = adjuntos_ui(p)
 
     # ---------------------------------------------------------------- ventana chica (con una tarjeta de plan esperando)
     p.modo.setCurrentIndex(p.modo.findData("hacer"))
     p.guion = [Respuesta(herramientas=[CAJA]), Respuesta(texto="no tendría que llegar")]
     escribir(p, "caja", Qt.Key_Return)
     tarjeta = esperar_tarjeta(p)
+    p.adjuntar(rutas)                          # con fichas a la vista: también tienen que entrar
     for ancho, alto in ((1024, 640), (800, 520)):
         p.hide()
         A.esperar(150)
@@ -488,6 +599,9 @@ def pedido():
         ok = dentro(p.campo, v) and dentro(p.b_enviar, v) and dentro(p.modo, v)
         A.reg(AR, f"ventana {ancho}x{alto}: el campo, el modo y Enviar entran", ok,
               f"ventana={v.width()}x{v.height()} panel={p.width()}x{p.height()}")
+        A.reg(AR, f"ventana {ancho}x{alto}: el clip, las fichas y su contador entran",
+              dentro(p.b_clip, v) and dentro(p.fila_adjuntos, v) and dentro(p.contador, v)
+              and dentro(fichas(p)[0].b_quitar, v), f"fila={p.fila_adjuntos.geometry()}")
         A.reg(AR, f"ventana {ancho}x{alto}: la tarjeta de plan y sus botones se ven enteros",
               tarjeta is not None and en_el_chat(tarjeta.b_aplicar, p) and en_el_chat(tarjeta.b_cancelar, p)
               and dentro(tarjeta.b_aplicar, v), f"tarjeta={tarjeta and tarjeta.size()}")
@@ -501,6 +615,8 @@ def pedido():
     if tarjeta is not None:
         QTest.mouseClick(tarjeta.b_cancelar, Qt.LeftButton)
     esperar(p, aplicar=False)
+    p.adjuntos = []
+    p._mostrar_fichas()
     v.resize(1900, 1000)
     A.esperar(200)
 

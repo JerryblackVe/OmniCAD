@@ -6,6 +6,7 @@ Nada sale de la PC. NUNCA se guarda una clave: no está en los mensajes ni en la
 
 Imágenes: van en base64 si pesan hasta TOPE_IMAGEN; las más grandes se reemplazan por una marca de texto (una captura
 del visor pesa ~100 KB; el tope evita que un chat largo con capturas enormes pese decenas de MB).
+Adjuntos (IA-9): de cada uno queda solo su texto (nombre, tipo y ruta); la imagen o el PDF no se guardan.
 """
 import base64
 import json
@@ -79,7 +80,8 @@ def guardar(mensajes, modo, proveedor, modelo, id_chat=None, sesiones_cli=None):
     ruta = _ruta(id_chat)
     datos = {"id": id_chat, "titulo": titulo_de(mensajes), "fecha": datetime.now().isoformat(timespec="seconds"),
              "modo": modo, "proveedor": proveedor, "modelo": modelo, "sesiones_cli": {k: v for k, v in (sesiones_cli or {}).items() if v},
-             "mensajes": [{"rol": m["rol"], "contenido": [_a_json(b) for b in m["contenido"]]} for m in mensajes]}
+             "mensajes": [{"rol": m["rol"], "contenido": [_a_json(b) for b in m["contenido"] if not b.get("adjunto")]}
+                          for m in mensajes]}
     ruta.parent.mkdir(parents=True, exist_ok=True)
     temporal = ruta.with_suffix(".tmp")
     temporal.write_text(json.dumps(datos, ensure_ascii=False), encoding="utf-8")

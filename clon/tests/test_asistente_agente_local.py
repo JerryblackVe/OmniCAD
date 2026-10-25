@@ -384,7 +384,7 @@ class AgenteFalso(AgenteLocal):
         self.tipo, self.nombre, self.sesion, self.proceso = "claude_code", "Claude Code", None, None
         self.archivo, self.llamadas, self.respuestas, self.sesiones = archivo, llamadas, [], []
 
-    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None):
+    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None, adjuntos=()):
         self.sesiones.append(self.sesion)
         cliente = ClientePuente(self.archivo)
         for nombre, args in self.llamadas:

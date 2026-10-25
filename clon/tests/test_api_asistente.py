@@ -137,3 +137,23 @@ def test_cli_assistant_ask(monkeypatch, capsys, tmp_path):
     assert salida["ok"] and salida["result"]["text"] == "Hecho."
     assert main(["info", str(doc), "--json"]) == 0
     assert len(json.loads(capsys.readouterr().out)["result"]["bodies"]) == 1     # se guardó con la caja
+
+
+def test_ask_con_adjuntos_como_el_clip(monkeypatch, tmp_path):
+    """IA-9 en el catálogo: attachments lleva los archivos al modelo; uno inválido o el 11.º fallan antes de gastar."""
+    s = api.Sesion()
+    pdf, svg = tmp_path / "plano.pdf", tmp_path / "logo.svg"
+    pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="8" height="4"/></svg>',
+                   encoding="utf-8")
+    proveedor = ProveedorFalso([Respuesta(texto="Vi el plano.")])
+    monkeypatch.setattr(config, "crear_proveedor", lambda cfg: proveedor)
+    r = api.llamar(s, "assistant_ask", {"prompt": "mira", "mode": "explicar", "attachments": [str(pdf), str(svg)]})
+    assert r["ok"] and r["result"]["text"] == "Vi el plano."
+    contenido = proveedor.recibidos[0][0][0]["contenido"]
+    assert [b["tipo"] for b in contenido] == ["texto", "texto", "documento", "texto", "imagen"]
+    assert "insert_svg(path=" in contenido[3]["texto"]
+    for adjuntos, texto in (([str(tmp_path / "x.exe")], "solo PDF"), ([str(pdf)] * 11, "Máximo 10")):
+        r = api.llamar(s, "assistant_ask", {"prompt": "mira", "attachments": adjuntos})
+        assert r["error_kind"] == "INVALID_ARGUMENTS" and texto in r["mensaje"]
+    assert len(proveedor.recibidos) == 1

@@ -2074,6 +2074,24 @@ def _secuencias(p):
         p.drawLine(QPointF(15, y), QPointF(28 - 4 * (k % 2), y))
 
 
+def _clip(p):
+    """Adjuntar (IA-9): clip de papel inclinado, solo trazo (iconos_tema lo aclara en temas oscuros)."""
+    c = QPainterPath(QPointF(19, 10))
+    c.lineTo(19, 22)
+    c.arcTo(QRectF(13, 19, 6, 6), 0, -180)
+    c.lineTo(13, 8)
+    c.arcTo(QRectF(13, 3.5, 9, 9), 180, -180)
+    c.lineTo(22, 24)
+    c.arcTo(QRectF(11, 18.5, 11, 11), 0, -180)
+    c.lineTo(11, 13)
+    p.translate(16, 16)
+    p.rotate(40)
+    p.translate(-16, -16)
+    p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(c)
+
+
 DIBUJOS_EXTRA = {
     # sólido / crear
     "barrido": _barrido, "solevacion": _solevacion, "nervio": _nervio, "red": _red, "labio": _labio,
@@ -2142,7 +2160,7 @@ DIBUJOS_EXTRA = {
     # espacios de trabajo / varios
     "dibujo": _dibujo, "render": _render, "animacion": _animacion, "configuracion_tabla": _configuracion_tabla,
     "parametros_exportar": _parametros_exportar, "parametros_importar": _parametros_importar,
-    "secuencias": _secuencias, "asistente": _asistente,
+    "secuencias": _secuencias, "asistente": _asistente, "clip": _clip,
 }
 
 # Los ayudantes de iconos.py se importan AL FINAL, a propósito: iconos.py importa este módulo en su última

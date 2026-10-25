@@ -313,7 +313,7 @@ def test_historial_de_suscripcion_guarda_textos_e_id_de_sesion(panel, monkeypatc
     from omnicad.asistente.proveedores.agente_local import AgenteLocal
 
     class Falso(AgenteLocal):
-        def correr(self, texto, sistema, modo, al_evento=None, cancelado=None):
+        def correr(self, texto, sistema, modo, al_evento=None, cancelado=None, adjuntos=()):
             self.sesion = "ses-123"
             al_evento("texto", "Hecho por el CLI.")
             return {"motivo": "fin", "vueltas": 1, "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
@@ -547,3 +547,134 @@ def test_app_busy_se_ve_en_el_chat(panel, ventana, monkeypatch):
     assert lineas_herramienta(panel) == ["✗ create_box: APP_BUSY"] * 2
     avisos = [t for t in textos_chat(panel) if "Terminá o cancelá el comando abierto" in t]
     assert len(avisos) == 1 and "Extruir" in avisos[0]
+
+
+# ---------------------------------------------------------------- IA-9: adjuntos
+def _adjuntables(tmp_path):
+    from PIL import Image
+    pdf, foto, svg = tmp_path / "plano.pdf", tmp_path / "foto.png", tmp_path / "logo.svg"
+    pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+    Image.new("RGB", (60, 40), (0, 120, 200)).save(foto)
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">'
+                   '<rect x="1" y="1" width="18" height="8"/></svg>', encoding="utf-8")
+    return [str(pdf), str(foto), str(svg)]
+
+
+def fichas(p):
+    """Las fichas en el orden en que se ven (las quitadas ya salieron de la fila aunque falte borrarlas)."""
+    return [p.lay_fichas.itemAt(i).widget() for i in range(p.lay_fichas.count() - 1)]
+
+
+def test_clip_abre_el_dialogo_y_suma_fichas_que_se_quitan_con_la_cruz(panel, tmp_path, monkeypatch):
+    from omnicad.ui import asistente as modulo
+    pedidos = []
+    monkeypatch.setattr(modulo.QFileDialog, "getOpenFileNames",
+                        lambda *a: (pedidos.append(a[3]) or (_adjuntables(tmp_path), "")))
+    panel.adjuntos = []
+    QTest.mouseClick(panel.b_clip, Qt.LeftButton)
+    QTest.qWait(10)
+    assert "*.pdf" in pedidos[0] and "*.dxf" in pedidos[0]
+    assert [a.clase for a in panel.adjuntos] == ["pdf", "imagen", "svg"] and len(fichas(panel)) == 3
+    assert panel.contador.text() == "3/10" and panel.fila_adjuntos.isVisible()
+    QTest.mouseClick(fichas(panel)[0].b_quitar, Qt.LeftButton)
+    QTest.qWait(10)
+    assert [a.nombre for a in panel.adjuntos] == ["foto.png", "logo.svg"] and len(fichas(panel)) == 2
+    assert panel.contador.text() == "2/10"
+    for _ in range(2):
+        QTest.mouseClick(fichas(panel)[0].b_quitar, Qt.LeftButton)
+        QTest.qWait(10)
+    assert panel.adjuntos == [] and not panel.fila_adjuntos.isVisible()
+
+
+def test_el_undecimo_y_un_tipo_prohibido_se_rechazan_con_aviso(panel, tmp_path):
+    panel.adjuntos = []
+    exe = tmp_path / "programa.exe"
+    exe.write_bytes(b"MZ")
+    assert panel.adjuntar([_adjuntables(tmp_path)[0]] * 11 + [str(exe)]) == 10
+    avisos = textos_chat(panel)[-2:]
+    assert "Máximo 10 adjuntos" in avisos[0] and "programa.exe" in avisos[1] and panel.contador.text() == "10/10"
+    panel.adjuntos = []
+    panel._mostrar_fichas()
+
+
+def test_ctrl_v_con_una_imagen_la_adjunta_y_con_texto_pega_texto(panel):
+    from PySide6.QtGui import QColor, QImage
+    from PySide6.QtWidgets import QApplication
+    panel.adjuntos = []
+    imagen = QImage(50, 30, QImage.Format_RGB32)
+    imagen.fill(QColor(255, 0, 0))
+    QApplication.clipboard().setImage(imagen)
+    escribir(panel, "mira")
+    QTest.keyClick(panel.campo, Qt.Key_V, Qt.ControlModifier)
+    assert [a.clase for a in panel.adjuntos] == ["imagen"] and panel.campo.toPlainText() == "mira"
+    assert panel.adjuntos[0].nombre.startswith("pegada_") and os.path.isfile(panel.adjuntos[0].ruta)
+    QApplication.clipboard().setText(" y esto")
+    QTest.keyClick(panel.campo, Qt.Key_End)
+    QTest.keyClick(panel.campo, Qt.Key_V, Qt.ControlModifier)
+    assert panel.campo.toPlainText() == "mira y esto" and len(panel.adjuntos) == 1
+    panel.adjuntos = []
+    panel._mostrar_fichas()
+
+
+def _soltar(widget, rutas):
+    from PySide6.QtCore import QMimeData, QPointF, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+    from PySide6.QtWidgets import QApplication
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(r) for r in rutas])
+    centro = widget.rect().center()
+    entrar = QDragEnterEvent(centro, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+    QApplication.sendEvent(widget, entrar)
+    QApplication.sendEvent(widget, QDropEvent(QPointF(centro), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    return entrar.isAccepted()
+
+
+def test_arrastrar_y_soltar_sobre_el_panel_y_sobre_el_campo(panel, tmp_path):
+    panel.adjuntos = []
+    pdf, foto, svg = _adjuntables(tmp_path)
+    escrito = panel.campo.toPlainText()
+    assert _soltar(panel, [pdf, foto])
+    assert _soltar(panel.campo.viewport(), [svg])
+    assert [a.nombre for a in panel.adjuntos] == ["plano.pdf", "foto.png", "logo.svg"]
+    assert panel.campo.toPlainText() == escrito     # la ruta no se escribe en el campo
+    panel.adjuntos = []
+    panel._mostrar_fichas()
+
+
+def test_enviar_lleva_los_adjuntos_los_limpia_y_el_historial_no_guarda_su_contenido(panel, tmp_path):
+    from omnicad.asistente import historial
+    panel.adjuntos = []
+    panel.adjuntar(_adjuntables(tmp_path))
+    falso = ProveedorFalso([Respuesta(texto="Vi el plano.")])
+    panel.crear_proveedor = lambda cfg: falso
+    escribir(panel, "mira el plano")
+    QTest.keyClick(panel.campo, Qt.Key_Return)
+    assert esperar(panel)
+    contenido = falso.recibidos[0][0][-1]["contenido"]
+    assert [b["tipo"] for b in contenido] == ["texto", "texto", "documento", "texto", "imagen", "texto", "imagen"]
+    assert panel.adjuntos == [] and not panel.fila_adjuntos.isVisible()
+    assert "Adjuntos: plano.pdf, foto.png, logo.svg" in textos_chat(panel)
+    guardado = historial.cargar(panel.id_chat)["mensajes"][0]["contenido"]
+    assert [b["tipo"] for b in guardado] == ["texto"] * 4 and "insert_svg(path=" in guardado[3]["texto"]
+
+
+def test_solo_adjuntos_sin_texto_tambien_se_manda(panel, tmp_path):
+    panel.adjuntos = []
+    panel.adjuntar(_adjuntables(tmp_path)[:1])
+    falso = ProveedorFalso([Respuesta(texto="Es un PDF.")])
+    panel.crear_proveedor = lambda cfg: falso
+    escribir(panel, "")
+    assert panel.enviar() and esperar(panel)
+    assert [b["tipo"] for b in falso.recibidos[0][0][-1]["contenido"]] == ["texto", "documento"]
+
+
+def test_la_cruz_quita_esa_ficha_aunque_el_archivo_este_dos_veces(panel, tmp_path):
+    panel.adjuntos = []
+    pdf, foto, _svg = _adjuntables(tmp_path)
+    panel.adjuntar([pdf, foto, pdf])
+    primero, _foto, segundo = panel.adjuntos
+    QTest.mouseClick(fichas(panel)[2].b_quitar, Qt.LeftButton)
+    QTest.qWait(10)
+    assert panel.adjuntos == [primero, _foto] and all(a is not segundo for a in panel.adjuntos)
+    panel.adjuntos = []
+    panel._mostrar_fichas()

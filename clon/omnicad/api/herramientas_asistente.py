@@ -107,13 +107,15 @@ def set_assistant_config(sesion, provider: str | None = None, model: str | None 
              "sesión, con el proveedor configurado (get_assistant_config). GASTA en la API elegida. Es UN paso de "
              "deshacer. En Guiar y Hacer no hay tarjeta de plan: los cambios se aprueban solos (lo dice un aviso).",
              modifica=True)
-def assistant_ask(sesion, prompt: str, mode: Literal["explicar", "mostrar", "guiar", "hacer"] = "hacer"):
+def assistant_ask(sesion, prompt: str, mode: Literal["explicar", "mostrar", "guiar", "hacer"] = "hacer",
+                  attachments: list[str] | None = None):
     """
     prompt: el pedido, en lenguaje natural (p. ej. "hacé una caja de 40 mm con empalme de 3").
     mode: explicar y mostrar no cambian el documento; guiar y hacer sí.
+    attachments: rutas de archivos que van con el pedido, como el clip del panel: PDF, PNG, JPG, SVG o DXF, hasta 10.
     """
     from .. import api
-    from ..asistente import bucle
+    from ..asistente import adjuntos, bucle
     from ..asistente.herramientas import Herramientas
     from ..asistente.prompt import armar_sistema
     from ..asistente.proveedores.base import ErrorProveedor
@@ -121,6 +123,12 @@ def assistant_ask(sesion, prompt: str, mode: Literal["explicar", "mostrar", "gui
     prompt = prompt.strip()
     if not prompt or len(prompt) > TOPE_PROMPT:
         raise error("INVALID_ARGUMENTS", f"El pedido tiene que tener entre 1 y {TOPE_PROMPT} caracteres.")
+    bloques = []
+    for i, ruta in enumerate(attachments or ()):
+        try:
+            bloques += adjuntos.preparar(ruta, i).bloques
+        except adjuntos.ErrorAdjunto as e:
+            raise error("INVALID_ARGUMENTS", str(e)) from None
     cfg = _leer_config(_ajustes())
     if cfg["proveedor"] in config.AGENTES_LOCALES:
         raise error("PROVIDER_ERROR", f"El proveedor {cfg['proveedor']!r} (modo suscripción) trabaja sobre la ventana "
@@ -150,7 +158,7 @@ def assistant_ask(sesion, prompt: str, mode: Literal["explicar", "mostrar", "gui
         return respuesta if cfg["imagenes"] else bucle.sin_imagenes(respuesta)
 
     tope = cfg["tope_usd"]
-    mensajes = [{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": prompt}]}]
+    mensajes = [{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": prompt}, *bloques]}]
     resultado = bucle.correr(proveedor, mensajes, ejecutar, Herramientas(modo=mode), armar_sistema(sesion, mode),
                              al_evento, cancelado=lambda: tope > 0 and uso["costo_usd"] > tope,
                              aprobar=lambda pedidos: True)

@@ -16,25 +16,30 @@ a ella, y al terminar «Deshacer este pedido» también (si después no cambiast
 
 Historial (IA-7): el chat se guarda solo al terminar cada pedido (`asistente/historial.py`, un JSON por chat, sin
 claves); «Chat › Historial de chats» lista los guardados para abrir uno (la conversación sigue desde ahí) o borrarlo.
+
+Adjuntos (IA-9): el clip (o Ctrl+V con una imagen, o arrastrar archivos al panel) suma PDF, PNG, JPG, SVG y DXF, hasta
+10 por pedido (`asistente/adjuntos.py` los valida y prepara). Se ven como fichas arriba del campo y se van con el
+pedido al enviar.
 """
 import json
 import os
+import tempfile
 import threading
 
 from PySide6.QtCore import QEventLoop, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (QComboBox, QDialog, QDockWidget, QFrame, QHBoxLayout, QLabel, QListWidget,
-                               QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy,
-                               QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QDialog, QDockWidget, QFileDialog, QFrame, QHBoxLayout, QLabel,
+                               QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
+                               QSizePolicy, QStyle, QToolButton, QVBoxLayout, QWidget)
 
 from .. import api
 from ..api.errores import error
-from ..asistente import bucle, config, historial, marca
+from ..asistente import adjuntos, bucle, config, historial, marca
 from ..asistente.herramientas import MODOS, Herramientas
 from ..asistente.prompt import armar_sistema, cargar_prompts
 from ..asistente.proveedores.agente_local import AgenteLocal, matar
 from ..asistente.proveedores.base import ErrorProveedor, PedidoHerramienta
-from . import temas
+from . import iconos, temas
 from .puente import PuenteAgentes
 
 TOPE_PEDIDO = 20000        # caracteres: un pegado gigante por error no se manda (gastaría plata)
@@ -44,6 +49,8 @@ NOMBRES_MODO = {"explicar": "Explicar", "mostrar": "Mostrar", "guiar": "Guiar", 
 AYUDA_MODO = {"explicar": "Responde y explica; no cambia nada.", "mostrar": "Señala en el modelo: mueve la cámara y "
               "selecciona, sin cambiar el documento.", "guiar": "Propone un paso por vez y espera tu OK.",
               "hacer": "Arma un plan y, con tu OK, lo ejecuta."}
+FILTRO_ADJUNTOS = ("Adjuntos (*.pdf *.png *.jpg *.jpeg *.svg *.dxf);;PDF (*.pdf);;Imágenes (*.png *.jpg *.jpeg);;"
+                   "SVG (*.svg);;DXF (*.dxf)")
 
 
 def config_de(prefs):
@@ -203,10 +210,40 @@ class DialogoHistorial(QDialog):
         super().keyPressEvent(e)
 
 
+class _Ficha(QFrame):
+    """Un adjunto arriba del campo: miniatura (o su tipo), nombre y ✕ para quitarlo."""
+
+    def __init__(self, adjunto, quitar):
+        super().__init__(objectName="ficha_adjunto", frameShape=QFrame.StyledPanel, toolTip=adjunto.ruta)
+        h = QHBoxLayout(self)
+        h.setContentsMargins(3, 1, 1, 1)
+        h.setSpacing(3)
+        icono = QLabel(alignment=Qt.AlignCenter)
+        icono.setFixedSize(24, 24)
+        if adjunto.miniatura:
+            pm = QPixmap()
+            pm.loadFromData(adjunto.miniatura, "PNG")
+            icono.setPixmap(pm.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            icono.setText(adjuntos.NOMBRES[adjunto.clase])
+        nombre = QLabel(self.fontMetrics().elidedText(adjunto.nombre, Qt.ElideMiddle, 90))
+        self.b_quitar = QToolButton(text="✕", autoRaise=True, toolTip=f"Quitar «{adjunto.nombre}» del pedido.")
+        self.b_quitar.clicked.connect(lambda: quitar(adjunto))
+        for w in (icono, nombre, self.b_quitar):
+            h.addWidget(w)
+
+
+def _rutas_locales(mime):
+    return [u.toLocalFile() for u in mime.urls() if u.isLocalFile()] if mime.hasUrls() else []
+
+
 class CampoPedido(QPlainTextEdit):
-    """Campo multilínea: Enter envía, Mayús+Enter salta de línea, Esc avisa y Tab pasa al botón."""
+    """Campo multilínea: Enter envía, Mayús+Enter salta de línea, Esc avisa y Tab pasa al botón. Pegar o soltar
+    archivos los adjunta, y pegar una imagen sola (sin texto) también; el texto se pega como siempre."""
     enviar = Signal()
     escape = Signal()
+    archivos = Signal(list)
+    imagen = Signal(object)
 
     def __init__(self):
         super().__init__(objectName="campo_asistente")
@@ -225,6 +262,19 @@ class CampoPedido(QPlainTextEdit):
             self.escape.emit()
             return
         super().keyPressEvent(e)
+
+    def canInsertFromMimeData(self, mime):
+        return bool(_rutas_locales(mime)) or mime.hasImage() or super().canInsertFromMimeData(mime)
+
+    def insertFromMimeData(self, mime):
+        """Ctrl+V y soltar sobre el campo. Con texto e imagen a la vez (copiar de Word) gana el texto."""
+        rutas = _rutas_locales(mime)
+        if rutas:
+            self.archivos.emit(rutas)
+        elif mime.hasImage() and not mime.hasText():
+            self.imagen.emit(mime.imageData())
+        else:
+            super().insertFromMimeData(mime)
 
 
 class _EjecutorUI(QObject):
@@ -255,10 +305,11 @@ class _Trabajo(QObject):
     evento = Signal(str, object)
     termino = Signal(object)
 
-    def __init__(self, proveedor, mensajes, ejecutar, herramientas, sistema, tope_usd, texto=""):
+    def __init__(self, proveedor, mensajes, ejecutar, herramientas, sistema, tope_usd, texto="", adjuntos=()):
         super().__init__()
         self.args = (proveedor, mensajes, ejecutar, herramientas, sistema)
         self.texto = texto              # modo suscripción: el pedido va entero al CLI, que guarda su propio chat
+        self.adjuntos = adjuntos        # modo suscripción: los bloques imagen y documento de los adjuntos
         self.listo = False
         self.tope_usd = tope_usd
         self.gasto = 0.0
@@ -297,7 +348,8 @@ class _Trabajo(QObject):
         proveedor, mensajes, ejecutar, herramientas, sistema = self.args
         try:
             if isinstance(proveedor, AgenteLocal):
-                resultado = proveedor.correr(self.texto, sistema, herramientas.modo, self._al_evento, self.cancelado)
+                resultado = proveedor.correr(self.texto, sistema, herramientas.modo, self._al_evento, self.cancelado,
+                                             self.adjuntos)
             else:
                 resultado = bucle.correr(proveedor, mensajes, ejecutar, herramientas, sistema, self._al_evento,
                                          cancelado=self.cancelado, aprobar=self.aprobar)
@@ -337,6 +389,9 @@ class PanelAsistente(QDockWidget):
         self._puente_temporal = False   # lo encendió el pedido (Preferencias › General lo tenía apagado)
         self._espera = None             # bucle de eventos mientras una tarjeta espera Aplicar dentro del puente
         self._aprobado = False
+        self.adjuntos = []              # los del próximo pedido (asistente.adjuntos.Adjunto)
+        self._pegados = None            # carpeta temporal de las imágenes pegadas (se borra al cerrar OmniCAD)
+        self.setAcceptDrops(True)       # soltar archivos en cualquier parte del panel los adjunta
 
         cuerpo = QWidget()
         lay = QVBoxLayout(cuerpo)
@@ -374,10 +429,39 @@ class PanelAsistente(QDockWidget):
         self.pie = QLabel(objectName="uso_asistente", wordWrap=True)
         temas.poner_rol(self.pie, "tenue")
         lay.addWidget(self.pie)
+        self.fila_adjuntos = QWidget(objectName="adjuntos_asistente")
+        fila = QHBoxLayout(self.fila_adjuntos)
+        fila.setContentsMargins(0, 0, 0, 0)
+        self.fichas = QWidget()
+        self.lay_fichas = QHBoxLayout(self.fichas)
+        self.lay_fichas.setContentsMargins(0, 0, 0, 0)
+        self.lay_fichas.setSpacing(4)
+        self.lay_fichas.addStretch(1)
+        zona = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        zona.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        zona.setWidget(self.fichas)
+        zona.setFixedHeight(32 + self.style().pixelMetric(QStyle.PM_ScrollBarExtent))   # muchas fichas: se desplazan
+        self.contador = QLabel(objectName="contador_adjuntos")
+        temas.poner_rol(self.contador, "tenue")
+        fila.addWidget(zona, 1)
+        fila.addWidget(self.contador)
+        self.fila_adjuntos.hide()
+        lay.addWidget(self.fila_adjuntos)
         self.campo = CampoPedido()
         self.campo.enviar.connect(self.enviar)
         self.campo.escape.connect(self._escape)
-        lay.addWidget(self.campo)
+        self.campo.archivos.connect(self.adjuntar)
+        self.campo.imagen.connect(self.pegar_imagen)
+        self.b_clip = QToolButton(objectName="clip_asistente", icon=iconos.icono("clip"), autoRaise=True,
+                                  toolTip=f"<b>Adjuntar</b><br>PDF, imágenes (PNG, JPG), SVG o DXF; hasta "
+                                          f"{adjuntos.MAXIMO} por pedido. También: Ctrl+V con una imagen copiada, o "
+                                          "arrastrar archivos al panel.")
+        self.b_clip.clicked.connect(self.elegir_archivos)
+        fila_campo = QHBoxLayout()      # el clip al lado del campo (en la fila de Enviar ensanchaba el panel)
+        fila_campo.setSpacing(2)
+        fila_campo.addWidget(self.campo, 1)
+        fila_campo.addWidget(self.b_clip, 0, Qt.AlignTop)
+        lay.addLayout(fila_campo)
         abajo = QHBoxLayout()
         self.modo = QComboBox(objectName="modo_asistente")
         for clave in MODOS:
@@ -498,6 +582,8 @@ class PanelAsistente(QDockWidget):
             self._agregar_imagen(datos)
         elif tipo == "error":
             self._agregar_texto(f"⚠ {datos}", "error")
+        elif tipo == "aviso":
+            self._agregar_texto(f"⚠ {datos}", "aviso")
         elif tipo == "uso":
             u = self._uso
             for k in ("entrada", "salida"):
@@ -673,9 +759,10 @@ class PanelAsistente(QDockWidget):
             self.ventana.visor.setFocus()
 
     def enviar(self):
-        """Manda lo escrito con el modo elegido. Campo vacío o pedido en curso: no hace nada."""
+        """Manda lo escrito y los adjuntos con el modo elegido. Sin texto ni adjuntos, o con un pedido en curso: no
+        hace nada."""
         texto = self.campo.toPlainText().strip()
-        if self.trabajando or not texto:
+        if self.trabajando or not (texto or self.adjuntos):
             return False
         if len(texto) > TOPE_PEDIDO:
             self._agregar_texto(f"⚠ El pedido es muy largo ({len(texto)} caracteres; el máximo es {TOPE_PEDIDO}). "
@@ -694,8 +781,16 @@ class PanelAsistente(QDockWidget):
         self.puente.sesion.doc = self.ventana.doc
         sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None)
         # El CLI del modo suscripción guarda su propia conversación (--resume / -s): acá se suma solo para el historial.
-        self._sumar("usuario", {"tipo": "texto", "texto": texto})
-        self._agregar_texto(texto, usuario=True)
+        bloques = [b for a in self.adjuntos for b in a.bloques]
+        for bloque in ([{"tipo": "texto", "texto": texto}] if texto else []) + bloques:
+            self._sumar("usuario", bloque)
+        if texto:
+            self._agregar_texto(texto, usuario=True)
+        if self.adjuntos:
+            self._agregar_texto("Adjuntos: " + ", ".join(a.nombre for a in self.adjuntos), "tenue")
+        texto_cli = "\n\n".join(([texto] if texto else []) + [b["texto"] for b in bloques if b["tipo"] == "texto"])
+        self.adjuntos = []
+        self._mostrar_fichas()
         self.campo.clear()
         ejecutar = self._ejecutor.ejecutar
         if not prefs["asistente/imagenes"]:
@@ -707,7 +802,8 @@ class PanelAsistente(QDockWidget):
         self._aviso_ocupado = False
         self._aprobado = False
         self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, Herramientas(modo=modo), sistema,
-                                prefs["asistente/tope_usd"], texto)
+                                prefs["asistente/tope_usd"], texto_cli,
+                                [b for b in bloques if b["tipo"] in ("imagen", "documento")])
         self.trabajo.evento.connect(self._evento)
         self.trabajo.termino.connect(self._termino)
         self._ocupado(True)
@@ -727,6 +823,59 @@ class PanelAsistente(QDockWidget):
                 self.tarjeta = None
             self.b_enviar.setText("Cancelando…")
             self.b_enviar.setEnabled(False)
+
+    # ------------------------------------------------------------ adjuntos
+    def elegir_archivos(self):
+        """Clic en el clip: diálogo de archivos con los tipos permitidos."""
+        rutas, _filtro = QFileDialog.getOpenFileNames(self, "Adjuntar al pedido", "", FILTRO_ADJUNTOS)
+        return self.adjuntar(rutas)
+
+    def adjuntar(self, rutas):
+        """Suma los archivos al próximo pedido; los que no se pueden (tipo, tamaño, el 11.º) se avisan en el chat.
+        Devuelve cuántos sumó."""
+        sumados = 0
+        for ruta in rutas:
+            # shortcut: lee y dibuja en el hilo de la interfaz (un DXF de 10 MB la congela ~1 s); pasarlo a un hilo
+            # si molesta.
+            try:
+                self.adjuntos.append(adjuntos.preparar(ruta, len(self.adjuntos)))
+                sumados += 1
+            except adjuntos.ErrorAdjunto as e:
+                self._agregar_texto(f"⚠ {e}", "aviso")
+        self._mostrar_fichas()
+        return sumados
+
+    def pegar_imagen(self, imagen):
+        """Ctrl+V con una imagen en el portapapeles: la guarda como PNG temporal y la adjunta."""
+        if self._pegados is None:
+            self._pegados = tempfile.TemporaryDirectory(prefix="omnicad_pegado_", ignore_cleanup_errors=True)
+        ruta = os.path.join(self._pegados.name, f"pegada_{len(os.listdir(self._pegados.name)) + 1}.png")
+        if imagen is None or imagen.isNull() or not imagen.save(ruta, "PNG"):
+            self._agregar_texto("⚠ No se pudo pegar la imagen del portapapeles.", "aviso")
+            return 0
+        return self.adjuntar([ruta])
+
+    def quitar_adjunto(self, adjunto):
+        self.adjuntos.remove(adjunto)
+        self._mostrar_fichas()
+
+    def _mostrar_fichas(self):
+        while self.lay_fichas.count() > 1:
+            self.lay_fichas.takeAt(0).widget().deleteLater()
+        for a in self.adjuntos:
+            self.lay_fichas.insertWidget(self.lay_fichas.count() - 1, _Ficha(a, self.quitar_adjunto))
+        self.contador.setText(f"{len(self.adjuntos)}/{adjuntos.MAXIMO}")
+        self.fila_adjuntos.setVisible(bool(self.adjuntos))
+
+    def dragEnterEvent(self, e):
+        if _rutas_locales(e.mimeData()):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        rutas = _rutas_locales(e.mimeData())
+        if rutas:
+            e.acceptProposedAction()
+            self.adjuntar(rutas)
 
     def _sumar(self, rol, bloque):
         """Agrega un bloque al chat; dos seguidos del mismo rol van en un solo turno (tras un Cancelar o un error)."""

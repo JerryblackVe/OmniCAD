@@ -8,6 +8,11 @@ OmniCAD nunca ve, pide ni guarda las credenciales de la suscripción: el login l
 Seguridad en Windows: los CLI de npm son `.cmd` y pasan por cmd.exe, que interpreta `&|<>^%`. Por eso el pedido de la
 persona va SIEMPRE por la entrada estándar, nunca en los argumentos; en los argumentos solo hay flags fijos, nombres
 de herramientas, rutas temporales y modelos/sesiones validados con `SEGURO`.
+
+Adjuntos (IA-9): sus rutas van en el texto del pedido (así la IA puede usar insert_svg / insert_dxf). Las imágenes y
+los PDF van además por el mecanismo de cada CLI: Claude Code los recibe como bloques en `--input-format stream-json`;
+OpenCode, con `-f`; Codex, solo las imágenes, con `--image` (los PDF no: se avisa en el chat). Se copian a la carpeta
+temporal del pedido con nombre propio (`adjunto_1.png`…): ninguna ruta de la persona llega a la línea de comandos.
 """
 import base64
 import binascii
@@ -27,6 +32,7 @@ from omnicad import api
 from omnicad.api import protocolo_puente
 
 from ..herramientas import Herramientas
+from .anthropic import _bloque
 from .base import ErrorProveedor
 
 # tipo → (nombre visible, ejecutable por defecto, prefijo de las herramientas MCP en su salida)
@@ -140,8 +146,9 @@ class AgenteLocal:
         return salida.splitlines()[0][:80] if r.returncode == 0 and salida else None
 
     # ------------------------------------------------------------ cómo se lanza cada CLI
-    def argumentos(self, modo, carpeta, sistema):
-        """Línea de comandos (lista, sin shell) y variables de entorno extra. `sistema` ya está en `carpeta`."""
+    def argumentos(self, modo, carpeta, sistema, archivos=()):
+        """Línea de comandos (lista, sin shell) y variables de entorno extra. `sistema` ya está en `carpeta`;
+        `archivos`: (ruta, tipo del bloque) de los adjuntos copiados ahí."""
         # El servidor MCP expone SOLO las del CLI (--tools): los tres CLI ven la misma lista, sin listas por CLI ni el
         # tope de 8191 caracteres de cmd.exe; los cambios igual los frena la tarjeta Aplicar del panel.
         mcp = MCP + ["--tools", ",".join(Herramientas(modo=modo).para_cli())]
@@ -159,6 +166,7 @@ class AgenteLocal:
                     "--permission-prompts", "none", "--append-system-prompt-file", sistema]
             argv += ["--model", self.modelo] if self.modelo else []
             argv += ["--resume", self.sesion] if self.sesion else []
+            argv += ["--input-format", "stream-json"] if archivos else []   # los adjuntos van como bloques por stdin
             return argv, {"MCP_TOOL_TIMEOUT": str(ESPERA_HERRAMIENTA * 1000)}
         if self.tipo == "opencode":
             with open(sistema, encoding="utf-8") as f:
@@ -174,6 +182,7 @@ class AgenteLocal:
             argv += ["-m", self.modelo] if self.modelo else []
             argv += ["--variant", self.variante] if self.variante else []
             argv += ["-s", self.sesion] if self.sesion else []
+            argv += [x for ruta, _tipo in archivos for x in ("-f", ruta)]
             # config en línea (encima de la del usuario, sin tocar su archivo global)
             return argv, {"OPENCODE_CONFIG_CONTENT": json.dumps(config, ensure_ascii=False)}
         # `exec resume` no acepta --sandbox: el sandbox va por -c y las opciones después del subcomando
@@ -189,6 +198,9 @@ class AgenteLocal:
                 "-c", 'mcp_servers.omnicad.default_tools_approval_mode="approve"',
                 "-c", "mcp_servers.omnicad.required=true"]
         argv += ["-m", self.modelo] if self.modelo else []
+        imagenes = [ruta for ruta, tipo in archivos if tipo == "imagen"]
+        # en un solo argumento: «-i a b -» se tragaría el «-» de la entrada estándar como otra imagen
+        argv += ["--image=" + ",".join(imagenes)] if imagenes else []
         argv += [self.sesion] if self.sesion else []
         return argv + ["-"], {}
 
@@ -274,8 +286,9 @@ class AgenteLocal:
                 error("Codex: " + str((evento.get("error") or {}).get("message") or evento.get("message") or evento))
 
     # ------------------------------------------------------------ un pedido
-    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None):
+    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None, adjuntos=()):
         """Lanza el CLI con el pedido por stdin y emite sus eventos. Devuelve {"motivo", "uso"} como `bucle.correr`.
+        `adjuntos`: los bloques imagen y documento de los adjuntos (`asistente/adjuntos.py`).
 
         `cancelado()` se consulta cada 0,1 s: si da True, se mata el árbol de procesos y el motivo es «cancelado».
         Los archivos temporales (config MCP y prompt de sistema) se borran al terminar, pase lo que pase.
@@ -294,7 +307,18 @@ class AgenteLocal:
             ruta_sistema = os.path.join(carpeta, "sistema.md")
             with open(ruta_sistema, "w", encoding="utf-8") as f:
                 f.write(sistema)
-            argv, extra = self.argumentos(modo, carpeta, ruta_sistema)
+            archivos = []
+            for i, b in enumerate(adjuntos, 1):
+                ruta = os.path.join(carpeta, f"adjunto_{i}." + ("pdf" if b["tipo"] == "documento" else "png"))
+                with open(ruta, "wb") as f:
+                    f.write(b["pdf"] if b["tipo"] == "documento" else b["png"])
+                archivos.append((ruta, b["tipo"]))
+            if self.tipo == "codex" and any(t == "documento" for _r, t in archivos):
+                emitir("aviso", "Codex no recibe PDF adjuntos: le llega solo la ruta del archivo, no su contenido.")
+            if self.tipo == "claude_code" and adjuntos:
+                texto = json.dumps({"type": "user", "message": {"role": "user", "content": [
+                    {"type": "text", "text": texto}, *map(_bloque, adjuntos)]}}) + "\n"
+            argv, extra = self.argumentos(modo, carpeta, ruta_sistema, archivos)
             try:
                 # cwd en la carpeta temporal: el agente no lee ni toca archivos de donde se abrió OmniCAD
                 self.proceso = proceso = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,

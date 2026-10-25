@@ -36,6 +36,10 @@ def _mensajes(sistema, mensajes):
                 partes += [_imagen(b) for b in bloque["contenido"] if b["tipo"] == "imagen"]
             elif bloque["tipo"] == "imagen":
                 partes.append(_imagen(bloque))
+            elif bloque["tipo"] == "documento":
+                partes.append({"type": "file", "file": {
+                    "filename": bloque["nombre"],
+                    "file_data": "data:application/pdf;base64," + base64.b64encode(bloque["pdf"]).decode("ascii")}})
             else:
                 partes.append({"type": "text", "text": bloque["texto"]})
         if partes:
@@ -61,8 +65,14 @@ class ProveedorOpenAI(Proveedor):
     def responder(self, sistema, mensajes, herramientas):
         """Manda la conversación y traduce texto, tool_calls y uso (costo solo si lo informa, p. ej. OpenRouter)."""
         encabezados = {"authorization": f"Bearer {self.clave}"} if self.clave else {}
-        datos = pedir_json(self.url, self.cuerpo(sistema, mensajes, herramientas), encabezados, self.timeout,
-                           self.clave)
+        try:
+            datos = pedir_json(self.url, self.cuerpo(sistema, mensajes, herramientas), encabezados, self.timeout,
+                               self.clave)
+        except ErrorProveedor as e:
+            if any(b["tipo"] == "documento" for m in mensajes for b in m["contenido"]):
+                raise ErrorProveedor(f"{e} El chat lleva un PDF adjunto: puede que este proveedor o modelo no acepte "
+                                     "archivos PDF. Probá con otro modelo, o empezá un chat nuevo sin el PDF.") from None
+            raise
         try:
             mensaje = datos["choices"][0]["message"]
         except (KeyError, IndexError, TypeError):

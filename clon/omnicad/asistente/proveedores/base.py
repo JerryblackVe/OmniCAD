@@ -4,6 +4,8 @@ Los mensajes son una lista de {"rol": "usuario" | "asistente", "contenido": [blo
 Los bloques tienen estos formatos:
   - {"tipo": "texto", "texto": str}
   - {"tipo": "imagen", "png": bytes, "ancho": int, "alto": int}
+  - {"tipo": "documento", "pdf": bytes, "nombre": str}   (un PDF adjunto, IA-9)
+Los bloques de un adjunto llevan además "adjunto": nombre del archivo (el historial no guarda su contenido).
   - {"tipo": "pedido_herramienta", "id": str, "nombre": str, "args": dict}
   - {"tipo": "resultado_herramienta", "id": str, "error": bool, "contenido": [bloques texto/imagen]}
 """

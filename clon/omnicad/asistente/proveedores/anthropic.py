@@ -34,6 +34,9 @@ def _bloque(bloque):
     if bloque["tipo"] == "imagen":
         return {"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                             "data": base64.b64encode(bloque["png"]).decode("ascii")}}
+    if bloque["tipo"] == "documento":
+        return {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                               "data": base64.b64encode(bloque["pdf"]).decode("ascii")}}
     if bloque["tipo"] == "pedido_herramienta":
         return {"type": "tool_use", "id": bloque["id"], "name": bloque["nombre"], "input": bloque["args"]}
     return {"type": "tool_result", "tool_use_id": bloque["id"], "is_error": bloque["error"],
