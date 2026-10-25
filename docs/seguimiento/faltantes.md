@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 202: Abierto 139 · Parcial 42 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 205: Abierto 142 · Parcial 42 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -300,12 +300,15 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 ## Asistente IA (chat dentro de la app)
 
-Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+Abierto 3 · Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | IA-2 | Proveedores por API: Anthropic Messages y OpenAI compatible (OpenAI, OpenRouter, Ollama) | Parcial | Media | Queda: streaming SSE (hoy la respuesta llega completa); prueba real con Ollama (no está instalado en esta PC); devolver los bloques de pensamiento de Claude entre vueltas; prueba paga solo con OK de Gerardo. | omnicad/asistente/proveedores/anthropic.py; omnicad/asistente/proveedores/openai_compat.py; tests/test_asistente_proveedores.py | 2026-10-25 |
 | IA-11 | Todas las herramientas desde el chat del asistente, de forma eficiente (índice en el prompt, buscar_herramientas por consulta, find_tools/call_tool en el MCP de los CLI, caché del prompt) | Parcial | Alta | Queda: medir los tokens por paso con el uso que reporta la API (Anthropic u OpenAI: gasta, solo con OK de Gerardo); Codex informa 56,8 mil de entrada en un pedido de una vuelta, que suma su propio prompt de sistema (lo nuestro mide 19,2 mil). | omnicad/asistente/herramientas.py; omnicad/servidor_mcp/servidor.py; tests/test_asistente_alcance.py; prueba real con Codex del 2026-10-25 | 2026-10-25 |
+| IA-12 | Instrucciones propias del asistente: generales (Preferencias) y por proyecto (dentro del .omnicad) | Abierto | Media | Todo (plan › «Fases 12 a 14»). | grep instrucciones sin resultados en omnicad/asistente/prompt.py | 2026-10-25 |
+| IA-13 | El asistente entiende «esto» = la selección, descrita (tipo, cuerpo, medidas) y visible en una ficha del panel | Abierto | Media | Hoy la selección entra al prompt solo como referencias crudas. | omnicad/ui/asistente.py (leer_seleccion → armar_sistema); omnicad/asistente/prompt.py (contexto) | 2026-10-25 |
+| IA-14 | Antes y después: dos miniaturas con la misma cámara al terminar cada pedido que cambió el documento | Abierto | Media | Todo. | omnicad/ui/asistente.py: al terminar un pedido solo agrega «Deshacer este pedido», sin capturas | 2026-10-25 |
 
 ## SolidCraft
 
