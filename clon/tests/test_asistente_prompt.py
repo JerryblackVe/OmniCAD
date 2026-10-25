@@ -38,7 +38,8 @@ def test_modos_de_lectura_rechazan_cambios(sesion, tmp_path, modo, nombre, args)
 
 
 def test_regla_de_modos():
-    todas = {h["nombre"]: h for h in api.catalogo() if h["grupo"] != "dev" and h["nombre"] != "execute_code"}
+    todas = {h["nombre"]: h for h in api.catalogo()
+             if h["grupo"] not in ("dev", "asistente") and h["nombre"] != "execute_code"}
     explicar, mostrar = (set(Herramientas(modo=m).catalogo) for m in ("explicar", "mostrar"))
     assert set(Herramientas(modo="guiar").catalogo) == set(Herramientas(modo="hacer").catalogo) == set(todas)
     assert not any(todas[n]["modifica"] for n in explicar)

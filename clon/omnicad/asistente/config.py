@@ -21,6 +21,20 @@ PROVEEDORES = {
     "opencode": ("OpenCode", None, "openai/gpt-6.1-sol", ""),
 }
 AGENTES_LOCALES = ("claude_code", "codex", "opencode")
+# Preferencias del asistente (prefijo «asistente/»): las usan la ventana (ui/preferencias.py) y el catálogo
+# (api/herramientas_asistente.py). Nunca la clave: sale de la variable de entorno del proveedor.
+DEFECTOS = {
+    "proveedor": "anthropic",
+    "modelo": "",            # vacío = el de fábrica del proveedor
+    "base_url": "",          # vacío = la del proveedor (OpenAI, OpenRouter, Ollama)
+    "modo": "guiar",
+    "tope_usd": 0.5,         # gasto máximo por pedido; 0 = sin tope
+    "imagenes": True,        # mandarle al modelo las imágenes del visor
+    "variante": "",          # OpenCode: --variant (esfuerzo); vacío = el del modelo
+    "ruta_claude_code": "",  # modo suscripción: ruta del CLI; vacío = el del PATH
+    "ruta_codex": "",
+    "ruta_opencode": "",
+}
 # Lo que lee crear_proveedor de las preferencias (prefijo «asistente/»). ruta_<agente> vacía = el del PATH.
 CLAVES = ("proveedor", "modelo", "base_url", "variante") + tuple(f"ruta_{a}" for a in AGENTES_LOCALES)
 

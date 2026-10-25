@@ -11,6 +11,7 @@ mueve el marcador, guarda, exporta STL/OBJ/STEP, vuelve a abrir y comprueba que 
 Las preferencias van a un .ini temporal: la prueba no toca la configuración del usuario.
 Devuelve 0 si todo pasa. Uso:  python OmniCAD.py --prueba-humo
 """
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -641,8 +642,10 @@ def _fase_asistente(v, r):
     """Asistente IA (IA-4 y IA-5): el botón abre el panel, un pedido con el proveedor falso (sin red ni gasto) muestra la
     tarjeta de plan, Aplicar crea la caja por el puente de la ventana, la línea de la herramienta aparece,
     «Deshacer este pedido» la saca y el panel se cierra."""
+    from .asistente import historial
     from .asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
     from .timeline.documento import Documento
+    os.environ.setdefault(historial.VAR_CARPETA, tempfile.mkdtemp(prefix="omnicad_humo_chats_"))  # no al del usuario
     v.set_documento(Documento())
     v.acciones["asistente"].trigger()
     QTest.qWait(50)

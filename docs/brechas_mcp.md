@@ -144,6 +144,14 @@ La operación existe y funciona por `run_operation`. Falta la herramienta con no
 Se descartan porque no le sirven a un agente: tema, paneles, pantalla completa, atajos, caja de herramientas, menú
 radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y del ViewCube, ayuda.
 
+Asistente IA (fase IA-7, 2026-10-25): el panel de chat queda fuera, a propósito. Un agente externo ya ES el asistente:
+no necesita hablar con otro, y las teclas, la tarjeta Aplicar y los botones del panel no le sirven. Lo útil sí está, en
+el grupo `asistente` (fuera de los grupos por defecto del MCP porque gasta plata): `get_assistant_config`,
+`set_assistant_config`, `assistant_ask` (pedido sin ventana; no corre en vivo), `list_assistant_chats` y
+`get_assistant_chat` (el historial; borrar un chat es un gesto de la persona en el panel). `set_assistant_config` no
+toca la clave de API (va en una variable de entorno), ni las rutas de los ejecutables de Claude Code, Codex u OpenCode
+(un agente haría correr otro programa), ni una `base_url` ajena (la clave viajaría a otro servidor).
+
 ## Ola 7: opciones de diálogo que la herramienta no tiene (segunda pasada, 2026-10-18)
 
 La primera pasada miró si cada comando tenía herramienta. Esta mira **opción por opción**: el comando tiene herramienta,

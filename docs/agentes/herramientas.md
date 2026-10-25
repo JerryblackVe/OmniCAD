@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-324 herramientas en 16 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+329 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -27,6 +27,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
 | [avanzado](#grupo-avanzado) | 7 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
+| [asistente](#grupo-asistente) | 5 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
 
 ## Grupo documento
@@ -57,6 +58,8 @@ Archivo, escena, timeline y deshacer.
 | [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
 | [`discard_recoverable_document`](#discard_recoverable_document) | no | Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). |
+| [`get_preferences`](#get_preferences) | no | Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas. |
+| [`set_preference`](#set_preference) | sí | Valida y guarda una preferencia autorizada. |
 | [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
 | [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
 | [`manage_configurations`](#manage_configurations) | sí | Consulta y edita la tabla de variantes de CONFIGURAR. Solo apply aplica parámetros y supresiones; cada edición o aplicación es un deshacer. |
@@ -71,8 +74,6 @@ Archivo, escena, timeline y deshacer.
 | [`set_body_opacity`](#set_body_opacity) | sí | Cambia el Control de opacidad de cuerpos del navegador. |
 | [`isolate_bodies`](#isolate_bodies) | sí | Muestra solo los cuerpos elegidos; restore vuelve a mostrar todos. |
 | [`sketch_view`](#sketch_view) | no | Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, encuadrar, encontrar en el timeline, terminar el boceto (finish: sale del editor y guarda; finish_with_auto_constrain: lo restringe automáticamente antes, y si no puede lo termina igual) o mostrar/ocultar las opciones de la paleta del boceto (perfil, cotas, proyectadas, construcción, rejilla, forzar a la rejilla, corte, puntos y restricciones). |
-| [`get_preferences`](#get_preferences) | no | Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas. |
-| [`set_preference`](#set_preference) | sí | Valida y guarda una preferencia autorizada. |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
@@ -300,6 +301,25 @@ Suprime una copia de autoguardado de la lista de documentos recuperables (el bot
   - `path` (texto; obligatorio): ruta de la copia de autoguardado (de list_recoverable_documents).
 - CLI: `omnicad call discard_recoverable_document --doc pieza.omnicad path=…`
 
+### `get_preferences`
+
+Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `keys` (lista de texto o null; opcional, por defecto `null`): claves a consultar; omitido devuelve toda la lista blanca de preferencias.
+- CLI: `omnicad call get_preferences --doc pieza.omnicad`
+
+### `set_preference`
+
+Valida y guarda una preferencia autorizada. No modifica el documento ni entra en deshacer; los ajustes se usan cuando la aplicación los relee.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
+  - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences.
+- CLI: `omnicad call set_preference --doc pieza.omnicad key=… value=…`
+
 ### `set_decal`
 
 Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. La imagen queda embebida. El factor de escala multiplica uniformemente anchura y altura. En cilindros usa el desarrollo por arco; en otras caras, proyección tangente.
@@ -470,25 +490,6 @@ Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, en
   - `action` ("edit" | "select_plane" | "look_at" | "find_in_window" | "find_in_timeline" | "finish" | "finish_with_auto_constrain" | "profile" | "dimensions" | "projected" | "construction" | "grid" | "snap" | "cut" | "points" | "constraints"; obligatorio): edit, select_plane, look_at, find_in_window, find_in_timeline, finish (terminar el boceto), finish_with_auto_constrain (AutoConstrain y terminar), o una opción de la paleta: profile, dimensions, projected, construction, grid (rejilla del boceto), snap (forzar), cut (corte), points o constraints.
   - `visible` (true/false; opcional, por defecto `null`): estado de la opción de la paleta; omitido la alterna (solo las acciones de opción).
 - CLI: `omnicad call sketch_view --doc pieza.omnicad sketch=… action=…`
-
-### `get_preferences`
-
-Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas.
-
-- Modifica el documento: no.
-- Parámetros:
-  - `keys` (lista de texto o null; opcional, por defecto `null`): claves a consultar; omitido devuelve toda la lista blanca de preferencias.
-- CLI: `omnicad call get_preferences --doc pieza.omnicad`
-
-### `set_preference`
-
-Valida y guarda una preferencia autorizada. No modifica el documento ni entra en deshacer; los ajustes se usan cuando la aplicación los relee.
-
-- Modifica el documento: sí, es un paso de deshacer.
-- Parámetros:
-  - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
-  - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences.
-- CLI: `omnicad call set_preference --doc pieza.omnicad key=… value=…`
 
 ### `move_feature`
 
@@ -4850,6 +4851,67 @@ Hornea un grafo en el documento: agrega UN paso «Grafo» al timeline que guarda
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = el automático.
   - `fixed` (true/false; opcional, por defecto `false`): true para hornear cuerpos fijos (operación base) en vez del grafo paramétrico.
 - CLI: `omnicad call bake_graph --doc pieza.omnicad graph=…`
+
+## Grupo asistente
+
+Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`).
+
+| Herramienta | Modifica | Resumen |
+|---|---|---|
+| [`get_assistant_config`](#get_assistant_config) | no | Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto e imágenes. |
+| [`set_assistant_config`](#set_assistant_config) | sí | Cambia la configuración del Asistente IA (solo los campos pasados). |
+| [`assistant_ask`](#assistant_ask) | sí | Corre un pedido al Asistente IA SIN ventana, sobre el documento de esta sesión, con el proveedor configurado (get_assistant_config). |
+| [`list_assistant_chats`](#list_assistant_chats) | no | Lista los chats guardados del Asistente (el más nuevo primero): id, título, fecha, modo, proveedor, modelo y cantidad de mensajes. |
+| [`get_assistant_chat`](#get_assistant_chat) | no | Lee un chat guardado del Asistente: los textos de la conversación y las herramientas que usó, sin imágenes. |
+
+### `get_assistant_config`
+
+Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto e imágenes. De la clave de API solo dice qué variable de entorno la lleva y si está definida; nunca su valor.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_assistant_config --doc pieza.omnicad`
+
+### `set_assistant_config`
+
+Cambia la configuración del Asistente IA (solo los campos pasados). No acepta claves de API ni rutas de ejecutables. No modifica el documento ni entra en deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `provider` (texto; opcional, por defecto `null`): proveedor (lista en get_assistant_config › providers), p. ej. "anthropic", "openai", "local".
+  - `model` (texto; opcional, por defecto `null`): modelo del proveedor; "" vuelve al de fábrica.
+  - `base_url` (texto; opcional, por defecto `null`): dirección del servidor: "" (la del proveedor), la de un proveedor conocido o una de esta PC (localhost).
+  - `default_mode` ("explicar" | "mostrar" | "guiar" | "hacer" o null; opcional, por defecto `null`): modo con que arranca el panel.
+  - `max_usd` (número; opcional, por defecto `null`): gasto máximo por pedido en USD, de 0 (sin tope) a 100.
+  - `send_images` (true/false; opcional, por defecto `null`): si se le mandan al modelo las imágenes del visor.
+- CLI: `omnicad call set_assistant_config --doc pieza.omnicad`
+
+### `assistant_ask`
+
+Corre un pedido al Asistente IA SIN ventana, sobre el documento de esta sesión, con el proveedor configurado (get_assistant_config). GASTA en la API elegida. Es UN paso de deshacer. En Guiar y Hacer no hay tarjeta de plan: los cambios se aprueban solos (lo dice un aviso).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `prompt` (texto; obligatorio): el pedido, en lenguaje natural (p. ej. "hacé una caja de 40 mm con empalme de 3").
+  - `mode` ("explicar" | "mostrar" | "guiar" | "hacer"; opcional, por defecto `"hacer"`): explicar y mostrar no cambian el documento; guiar y hacer sí.
+- CLI: `omnicad call assistant_ask --doc pieza.omnicad prompt=…`
+
+### `list_assistant_chats`
+
+Lista los chats guardados del Asistente (el más nuevo primero): id, título, fecha, modo, proveedor, modelo y cantidad de mensajes.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call list_assistant_chats --doc pieza.omnicad`
+
+### `get_assistant_chat`
+
+Lee un chat guardado del Asistente: los textos de la conversación y las herramientas que usó, sin imágenes.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `chat_id` (texto; obligatorio): id del chat (list_assistant_chats).
+- CLI: `omnicad call get_assistant_chat --doc pieza.omnicad chat_id=…`
 
 ## Grupo dev
 

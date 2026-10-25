@@ -221,6 +221,16 @@ def test_new_y_open_document_con_cambios_sin_guardar(puente, ventana, tmp_path):
         c.cerrar()
 
 
+def test_assistant_ask_no_corre_en_vivo(puente, ventana):
+    """Congelaría la ventana mientras la IA responde (y gastaría): se rechaza antes de llamar al proveedor."""
+    c = _cliente(puente)
+    try:
+        r = c.pedir("assistant_ask", {"prompt": "hace una caja"})
+        assert r["error_kind"] == "LIVE_NOT_ALLOWED" and r["pistas"] and not ventana.doc.operaciones
+    finally:
+        c.cerrar()
+
+
 def test_execute_code_en_vivo_solo_con_su_preferencia(puente, ventana):
     c = _cliente(puente)
     try:

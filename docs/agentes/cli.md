@@ -64,6 +64,7 @@ Los dos dicts posibles con `--json`:
 | [`render`](#render) | sacar un PNG de una vista |
 | [`run`](#run) | correr un script de Python sobre el proyecto |
 | [`batch`](#batch) | correr muchos pasos en un solo proceso |
+| [`assistant_ask`](#assistant_ask) | pedirle algo al Asistente IA, sin ventana (gasta en la API) |
 | [`dev`](#dev) | verificar el programa (para quien lo desarrolla) |
 
 ### tools
@@ -80,7 +81,7 @@ delete_parameter  parametros  M  Borra un parámetro que no use ningún paso ni 
 4 herramienta(s). M = modifica el documento. Detalle: omnicad describe <herramienta>
 ```
 
-- `--group G` (`-g`): solo un grupo (`documento`, `parametros`, `boceto`, `vectores`, `solido`, `chapa`, `malla`, `ensamble`, `material`, `inspeccion`, `animacion`, `dibujo`, `render`, `avanzado`, `grafo`, `dev`).
+- `--group G` (`-g`): solo un grupo (`documento`, `parametros`, `boceto`, `vectores`, `solido`, `chapa`, `malla`, `ensamble`, `material`, `inspeccion`, `animacion`, `dibujo`, `render`, `avanzado`, `grafo`, `asistente`, `dev`).
 - `--json`: lista de `{nombre, grupo, modifica, descripcion}`.
 - `--markdown`: el catálogo entero como Markdown. Así se genera [herramientas.md](herramientas.md). Se combina con `--output ruta.md` (`-o`), que escribe en UTF-8 con saltos `\n`. No se combina con `--group` ni `--json`.
 
@@ -255,6 +256,37 @@ paso 1 (línea 1) ERROR [AMBIGUOUS_REFERENCE] fillet: Hay 2 cuerpos (Cuerpo1, Cu
 Se detuvo en el paso 1 de 1: NO se guardó nada.
 0 ok, 1 con error, de 1 paso(s).
 ```
+
+### assistant_ask
+
+Un pedido al Asistente IA sin abrir la ventana: la herramienta `assistant_ask` del grupo `asistente`
+([herramientas.md](herramientas.md#grupo-asistente)). **Gasta en la API elegida.** Usa el proveedor y el modelo de
+Preferencias › Asistente IA (`omnicad call get_assistant_config` los muestra; `set_assistant_config` los cambia). La
+clave sale de la variable de entorno del proveedor; OmniCAD nunca la guarda.
+
+```
+$ omnicad assistant_ask --help
+uso: omnicad assistant_ask [--json] [-h]
+                           [--mode {explicar,mostrar,guiar,hacer}]
+                           [--doc archivo.omnicad] [--no-save]
+                           prompt
+…
+```
+
+Sin la clave definida (corrida real del 2026-10-25, sin gasto):
+
+```
+$ omnicad assistant_ask "hacé una caja de 40 mm"
+ERROR [PROVIDER_ERROR] Falta la clave de API de Anthropic: definí la variable ANTHROPIC_API_KEY.
+  pista: Revisá el proveedor y el modelo con get_assistant_config; la clave va en la variable de entorno que dice key_env_var (nunca en OmniCAD).
+```
+
+- Con `--doc` trabaja sobre ese proyecto y lo guarda si salió bien (salvo `--no-save`). Todo el pedido es UN paso de
+  deshacer.
+- `--mode`: `explicar` y `mostrar` no cambian el documento; en `guiar` y `hacer` los cambios se aprueban solos (no hay
+  tarjeta de plan) y la respuesta lo dice en un aviso.
+- El tope de gasto por pedido (`max_usd`) corta el pedido y deja el documento como estaba (`BUDGET_EXCEEDED`).
+- Los proveedores de suscripción (Claude Code, Codex, OpenCode) necesitan la ventana abierta: acá dan `PROVIDER_ERROR`.
 
 ### dev
 

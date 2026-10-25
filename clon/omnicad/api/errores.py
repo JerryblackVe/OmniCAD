@@ -191,6 +191,11 @@ PISTAS = {
     "DEV_ONLY": ["Esta herramienta trabaja sobre el código fuente (tests, prueba de humo, ventana en otro proceso) y la "
                  "app instalada no lo trae.",
                  "Cloná el repo y usala desde ahí: README › Instalación."],
+    # --- Asistente IA (api/herramientas_asistente.py)
+    "PROVIDER_ERROR": ["Revisá el proveedor y el modelo con get_assistant_config; la clave va en la variable de entorno "
+                       "que dice key_env_var (nunca en OmniCAD)."],
+    "BUDGET_EXCEEDED": ["El documento volvió a como estaba antes del pedido.",
+                        "Subí el tope con set_assistant_config(max_usd=…) o pedí algo más corto."],
     # --- CLI (omnicad/cli): uso mal formado antes de llegar a una herramienta
     "CLI_USAGE": ["Revisá la sintaxis del comando: «omnicad <comando> --help» la muestra con ejemplos.",
                   "Los pares extra van como «clave=valor» (p. ej. name=ancho)."],

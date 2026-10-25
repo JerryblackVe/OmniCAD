@@ -164,9 +164,10 @@ def test_tools_deja_solo_esas_herramientas(capsys):
 
 
 def test_por_defecto_no_hay_dev_y_con_dev_estan_todas():
-    base = {h["nombre"] for h in api.catalogo() if h["grupo"] != "dev"}
+    base = {h["nombre"] for h in api.catalogo() if h["grupo"] not in ("dev", "asistente")}   # asistente: gasta plata
     assert set(memoria().nombres) == base
-    assert set(memoria(dev=True).nombres) == {h["nombre"] for h in api.catalogo()}      # con --dev: run_checks y app_screenshot
+    assert set(memoria(dev=True).nombres) == base | {h["nombre"] for h in api.catalogo(["dev"])}
+    assert set(memoria(toolsets=["asistente"]).nombres) == {h["nombre"] for h in api.catalogo(["asistente"])}
 
 
 def test_argumentos_invalidos_de_linea_de_comandos(capsys):

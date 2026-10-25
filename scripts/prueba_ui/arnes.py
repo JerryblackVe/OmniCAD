@@ -14,6 +14,8 @@ from datetime import date
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "windows")
+# Los chats del Asistente que guardan las piezas van a una carpeta temporal, nunca al historial del usuario.
+os.environ.setdefault("OMNICAD_ASISTENTE_DIR", tempfile.mkdtemp(prefix="omnicad_ui_chats_"))
 faulthandler.enable()          # un cierre brusco del programa deja el rastro nativo en el log
 RAIZ = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(RAIZ / "clon"))

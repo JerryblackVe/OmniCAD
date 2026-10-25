@@ -38,7 +38,7 @@ class Herramientas:
             raise ValueError(f"Modo inválido: {modo!r}. Modos: {', '.join(MODOS)}.")
         self.modo = modo
         base = [h for h in (api.catalogo() if catalogo is None else catalogo)
-                if h["grupo"] != "dev" and h["nombre"] not in PROHIBIDAS]
+                if h["grupo"] not in ("dev", "asistente") and h["nombre"] not in PROHIBIDAS]
         self.catalogo = {h["nombre"]: h for h in base if en_modo(h, modo)}
         self.fuera_de_modo = {h["nombre"] for h in base} - set(self.catalogo)
         self.grupos = set()

@@ -13,6 +13,9 @@ Permisos (IA-5), como *With me* / *For me* de Fusion: en Hacer y Guiar, antes de
 la tarjeta de plan con Aplicar y Cancelar (Hacer la pide una vez por pedido; Guiar, en cada tanda) y el hilo de
 trabajo espera la respuesta. Antes de cada pedido se toma una marca del documento: Cancelar o el tope de gasto vuelven
 a ella, y al terminar «Deshacer este pedido» también (si después no cambiaste nada a mano).
+
+Historial (IA-7): el chat se guarda solo al terminar cada pedido (`asistente/historial.py`, un JSON por chat, sin
+claves); «Chat › Historial de chats» lista los guardados para abrir uno (la conversación sigue desde ahí) o borrarlo.
 """
 import json
 import os
@@ -20,12 +23,13 @@ import threading
 
 from PySide6.QtCore import QEventLoop, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (QComboBox, QDockWidget, QFrame, QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QPushButton,
-                               QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QDialog, QDockWidget, QFrame, QHBoxLayout, QLabel, QListWidget,
+                               QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy,
+                               QToolButton, QVBoxLayout, QWidget)
 
 from .. import api
 from ..api.errores import error
-from ..asistente import bucle, config, marca
+from ..asistente import bucle, config, historial, marca
 from ..asistente.herramientas import MODOS, Herramientas
 from ..asistente.prompt import armar_sistema, cargar_prompts
 from ..asistente.proveedores.agente_local import AgenteLocal, matar
@@ -44,17 +48,6 @@ AYUDA_MODO = {"explicar": "Responde y explica; no cambia nada.", "mostrar": "Se�
 
 def config_de(prefs):
     return {k: prefs[f"asistente/{k}"] for k in config.CLAVES}
-
-
-def _sin_imagenes(valor):
-    """Respuesta de una herramienta sin las imágenes (Preferencias › «mandar imágenes del visor» apagado)."""
-    if isinstance(valor, api.Imagen):
-        return "(imagen no enviada: Preferencias › Asistente IA)"
-    if isinstance(valor, dict):
-        return {k: _sin_imagenes(v) for k, v in valor.items()}
-    if isinstance(valor, list):
-        return [_sin_imagenes(v) for v in valor]
-    return valor
 
 
 def _usd(valor):
@@ -127,6 +120,87 @@ class _Tarjeta(QFrame):
             b.hide()
         self.estado.setText(texto)
         self.estado.show()
+
+
+class DialogoHistorial(QDialog):
+    """Chat › Historial de chats: los guardados, el más nuevo primero. Abrir (doble clic o Enter) lo carga en el panel;
+    Borrar… (o Supr) pregunta antes."""
+
+    def __init__(self, panel):
+        super().__init__(panel, objectName="historial_asistente", windowTitle="Historial de chats")
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.panel = panel
+        v = QVBoxLayout(self)
+        self.vacio = QLabel("Todavía no hay chats guardados: se guardan solos al terminar cada pedido.", wordWrap=True)
+        temas.poner_rol(self.vacio, "tenue")
+        self.lista = QListWidget(objectName="lista_historial")
+        self.lista.itemActivated.connect(self.abrir)
+        self.lista.currentRowChanged.connect(self._botones)
+        self.b_abrir = QPushButton("Abrir", default=True, toolTip="Carga el chat en el panel para seguirlo.")
+        self.b_borrar = QPushButton("Borrar…", toolTip="Borra el chat elegido (pregunta antes; no se puede deshacer).")
+        b_cerrar = QPushButton("Cerrar")
+        self.b_abrir.clicked.connect(self.abrir)
+        self.b_borrar.clicked.connect(self.borrar)
+        b_cerrar.clicked.connect(self.reject)
+        botones = QHBoxLayout()
+        botones.addWidget(self.b_borrar)
+        botones.addStretch(1)
+        botones.addWidget(b_cerrar)
+        botones.addWidget(self.b_abrir)
+        v.addWidget(self.vacio)
+        v.addWidget(self.lista, 1)
+        v.addLayout(botones)
+        self.resize(360, 400)
+        self.releer()
+
+    def releer(self):
+        self.lista.clear()
+        for c in historial.listar():
+            fecha = c["fecha"].replace("T", " ")[:16]
+            proveedor = config.PROVEEDORES.get(c["proveedor"], (c["proveedor"] or "",))[0]
+            item = QListWidgetItem(f"{c['titulo']}\n{fecha} · {NOMBRES_MODO.get(c['modo'], c['modo'])} · {proveedor}")
+            item.setData(Qt.UserRole, c["id"])
+            item.setToolTip(f"{c['mensajes']} mensajes · {c['modelo'] or 'modelo de fábrica'}")
+            self.lista.addItem(item)
+        self.vacio.setVisible(self.lista.count() == 0)
+        self.lista.setCurrentRow(0)
+        self._botones()
+
+    def _botones(self, *_):
+        for b in (self.b_abrir, self.b_borrar):
+            b.setEnabled(self.lista.currentItem() is not None)
+
+    def _elegido(self):
+        item = self.lista.currentItem()
+        return item.data(Qt.UserRole) if item is not None else None
+
+    def abrir(self, *_):
+        id_chat = self._elegido()
+        if id_chat and self.panel.cargar_chat(id_chat):
+            self.accept()
+
+    def borrar(self):
+        id_chat = self._elegido()
+        if not id_chat:
+            return
+        titulo = self.lista.currentItem().text().split("\n")[0]
+        if QMessageBox.question(self, "Borrar chat", f"¿Borrar el chat «{titulo}»? No se puede deshacer.",
+                                QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel) != QMessageBox.Ok:
+            return
+        try:
+            historial.borrar(id_chat)
+        except (historial.ErrorHistorial, OSError) as e:
+            QMessageBox.warning(self, "Borrar chat", f"No se pudo borrar: {e}")
+            return
+        if self.panel.id_chat == id_chat:
+            self.panel.id_chat = None          # el chat sigue en pantalla: el próximo pedido lo guarda como nuevo
+        self.releer()
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Delete:
+            self.borrar()
+            return
+        super().keyPressEvent(e)
 
 
 class CampoPedido(QPlainTextEdit):
@@ -251,6 +325,7 @@ class PanelAsistente(QDockWidget):
         self._ejecutor = _EjecutorUI(self.puente, self)
         self.crear_proveedor = config.crear_proveedor  # los tests ponen el proveedor falso
         self.mensajes = []
+        self.id_chat = None             # el JSON del historial donde se guarda este chat (None: todavía no se guardó)
         self.trabajo = None
         self.tarjeta = None             # tarjeta de plan esperando Aplicar o Cancelar
         self._marca = None              # el documento antes del pedido en curso
@@ -340,9 +415,9 @@ class PanelAsistente(QDockWidget):
             a = espacios[p["espacio"]].addAction(f"{p['titulo']} ({NOMBRES_MODO[p['modo']]})")
             a.setToolTip(p["texto"])
             a.triggered.connect(lambda _=False, p=p: self.usar_prompt(p))
-        historial = menu.addAction("Historial de chats")
-        historial.setEnabled(False)                    # llega con IA-7 (historial local)
-        historial.setToolTip("Todavía no: el historial de chats llega en una versión próxima.")
+        accion = menu.addAction("Historial de chats")
+        accion.setToolTip("Los chats guardados en esta PC: abrir uno para seguirlo, o borrarlo.")
+        accion.triggered.connect(self.abrir_historial)
         menu.setToolTipsVisible(True)
         return menu
 
@@ -407,6 +482,8 @@ class PanelAsistente(QDockWidget):
     def _evento(self, tipo, datos):
         if tipo == "texto":
             self._agregar_texto(datos)
+            if isinstance(self.trabajo.args[0], AgenteLocal):     # el modo API ya lo guarda el bucle
+                self._sumar("asistente", {"tipo": "texto", "texto": datos})
         elif tipo == "herramienta":
             self._agregar_herramienta(datos["nombre"], datos["args"], datos["respuesta"])
             if datos["respuesta"].get("error_kind") == "APP_BUSY" and not self._aviso_ocupado:
@@ -458,8 +535,10 @@ class PanelAsistente(QDockWidget):
                 cambio = False
         if cambio:
             self._boton_deshacer(m, self.ventana.doc._instantanea())
+        modo = self.trabajo.args[3].modo
         self.trabajo = None
         self._ocupado(False)
+        self._guardar_chat(modo)
 
     # ------------------------------------------------------------ modo suscripción: puente en vivo y permisos
     def _preparar_puente(self, proveedor):
@@ -614,18 +693,13 @@ class PanelAsistente(QDockWidget):
         modo = self.modo.currentData()
         self.puente.sesion.doc = self.ventana.doc
         sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None)
-        bloque = {"tipo": "texto", "texto": texto}
-        if agente:
-            pass                         # el CLI guarda la conversación (--resume / -s): acá no se acumula
-        elif self.mensajes and self.mensajes[-1]["rol"] == "usuario":   # tras un Cancelar o un error: un solo turno
-            self.mensajes[-1]["contenido"].append(bloque)
-        else:
-            self.mensajes.append({"rol": "usuario", "contenido": [bloque]})
+        # El CLI del modo suscripción guarda su propia conversación (--resume / -s): acá se suma solo para el historial.
+        self._sumar("usuario", {"tipo": "texto", "texto": texto})
         self._agregar_texto(texto, usuario=True)
         self.campo.clear()
         ejecutar = self._ejecutor.ejecutar
         if not prefs["asistente/imagenes"]:
-            ejecutar = lambda nombre, args: _sin_imagenes(self._ejecutor.ejecutar(nombre, args))  # noqa: E731
+            ejecutar = lambda nombre, args: bucle.sin_imagenes(self._ejecutor.ejecutar(nombre, args))  # noqa: E731
         self._uso = {"entrada": 0, "salida": 0, "costo_usd": None}
         self._mostrar_uso()
         self._apagar_deshacer()
@@ -654,18 +728,94 @@ class PanelAsistente(QDockWidget):
             self.b_enviar.setText("Cancelando…")
             self.b_enviar.setEnabled(False)
 
-    def nuevo_chat(self):
-        if self.trabajando:
-            return
-        self.mensajes = []
-        self._sesiones = {}
+    def _sumar(self, rol, bloque):
+        """Agrega un bloque al chat; dos seguidos del mismo rol van en un solo turno (tras un Cancelar o un error)."""
+        if self.mensajes and self.mensajes[-1]["rol"] == rol:
+            self.mensajes[-1]["contenido"].append(bloque)
+        else:
+            self.mensajes.append({"rol": rol, "contenido": [bloque]})
+
+    def _limpiar(self):
         self._apagar_deshacer()
         while self.lay_mensajes.count() > 1:
             self.lay_mensajes.takeAt(0).widget().deleteLater()
         self._uso = None
         self._mostrar_uso()
+
+    def nuevo_chat(self):
+        if self.trabajando:
+            return
+        self.mensajes = []
+        self.id_chat = None
+        self._sesiones = {}
+        self._limpiar()
         self._agregar_texto(SALUDO)
         self.campo.setFocus()
+
+    # ------------------------------------------------------------ historial de chats
+    def _guardar_chat(self, modo):
+        """Al terminar cada pedido. Si el disco falla lo dice en el chat; el chat sigue andando."""
+        if not self.mensajes:
+            return
+        cfg = config_de(self.ventana.prefs)
+        modelo = config.modelo_de(cfg) if cfg["proveedor"] in config.PROVEEDORES else ""
+        try:
+            self.id_chat = historial.guardar(self.mensajes, modo, cfg["proveedor"], modelo, self.id_chat,
+                                             self._sesiones)
+        except OSError as e:
+            self._agregar_texto(f"⚠ No se pudo guardar el chat en el historial: {e}", "aviso")
+
+    def abrir_historial(self):
+        dialogo = DialogoHistorial(self)
+        dialogo.open()
+        return dialogo
+
+    def cargar_chat(self, id_chat):
+        """Carga un chat guardado: lo muestra y la conversación sigue desde ahí. False si no se pudo."""
+        if self.trabajando:
+            self._agregar_texto("Esperá a que termine el pedido en curso para abrir otro chat.", "tenue")
+            return False
+        try:
+            chat = historial.cargar(id_chat)
+        except historial.ErrorHistorial as e:
+            self._agregar_texto(f"⚠ {e}", "error")
+            return False
+        self.mensajes, self.id_chat, self._sesiones = chat["mensajes"], id_chat, chat["sesiones_cli"]
+        self._limpiar()
+        indice = self.modo.findData(chat.get("modo"))
+        if indice >= 0:
+            self.modo.setCurrentIndex(indice)
+        pedidos = {}
+        for m in self.mensajes:
+            for b in m["contenido"]:
+                if b["tipo"] == "texto":
+                    self._agregar_texto(b["texto"], usuario=m["rol"] == "usuario")
+                elif b["tipo"] == "imagen":
+                    self._agregar_imagen(api.Imagen(b["png"], b.get("ancho", 0), b.get("alto", 0)))
+                elif b["tipo"] == "pedido_herramienta":
+                    pedidos[b.get("id")] = b
+                elif b["tipo"] == "resultado_herramienta":
+                    self._mostrar_resultado(pedidos.get(b.get("id"), {}), b)
+        fecha = str(chat.get("fecha", "")).replace("T", " ")[:16]
+        self._agregar_texto(f"Chat del {fecha}: escribí para seguirlo.", "tenue")
+        self.campo.setFocus()
+        return True
+
+    def _mostrar_resultado(self, pedido, bloque):
+        """La línea plegada de una herramienta de un chat guardado (la respuesta va como texto JSON) y sus imágenes."""
+        respuesta = None
+        for b in bloque["contenido"]:
+            if b["tipo"] == "texto" and respuesta is None:
+                try:
+                    respuesta = json.loads(b["texto"])
+                except ValueError:
+                    pass
+        if not isinstance(respuesta, dict):
+            respuesta = {"ok": not bloque.get("error")}
+        self._agregar_herramienta(pedido.get("nombre", "herramienta"), pedido.get("args", {}), respuesta)
+        for b in bloque["contenido"]:
+            if b["tipo"] == "imagen":
+                self._agregar_imagen(api.Imagen(b["png"], b.get("ancho", 0), b.get("alto", 0)))
 
     def closeEvent(self, e):
         super().closeEvent(e)

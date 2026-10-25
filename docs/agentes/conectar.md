@@ -53,7 +53,7 @@ Se agregan a `args` (o al comando). Todas son opcionales.
 | Opción | Qué hace |
 |---|---|
 | `--doc RUTA` | abre ese proyecto `.omnicad` al arrancar (trabaja sin ventana) |
-| `--toolsets LISTA` | solo estos grupos, separados por coma. Por defecto: `documento,parametros,boceto,vectores,solido,chapa,malla,ensamble,material,inspeccion,animacion,dibujo,render,avanzado,grafo` |
+| `--toolsets LISTA` | solo estos grupos, separados por coma. Por defecto: `documento,parametros,boceto,vectores,solido,chapa,malla,ensamble,material,inspeccion,animacion,dibujo,render,avanzado,grafo`. El grupo `asistente` (configuración, historial y `assistant_ask`, que gasta en la API del Asistente IA y no corre en vivo) solo entra si se nombra acá |
 | `--tools LISTA` | solo estas herramientas, por nombre y separadas por coma, dentro de los grupos activos. La usa el Asistente para darle al CLI una lista corta (Preferencias › Asistente IA) |
 | `--modo auto\|vivo\|sin_ventana` | de dónde salen las herramientas; por defecto `auto`. Ver [puente.md](puente.md) |
 | `--dev` | suma el grupo `dev` (`run_checks`, `app_screenshot`, `run_bench`). Ver [puente.md](puente.md) y [cli.md](cli.md) |

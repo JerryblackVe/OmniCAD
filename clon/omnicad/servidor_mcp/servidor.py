@@ -29,8 +29,9 @@ from .conversion import a_resultado_mcp
 from .puente_cliente import ClientePuente
 
 GRUPOS_CONOCIDOS = ("documento", "parametros", "boceto", "vectores", "solido", "chapa", "malla", "ensamble",
-                    "material", "inspeccion", "animacion", "dibujo", "render", "avanzado", "grafo", "dev")
-GRUPOS_POR_DEFECTO = tuple(g for g in GRUPOS_CONOCIDOS if g != "dev")
+                    "material", "inspeccion", "animacion", "dibujo", "render", "avanzado", "grafo", "asistente", "dev")
+# `dev` solo con --dev; `asistente` solo con --toolsets: assistant_ask gasta plata en la API del usuario.
+GRUPOS_POR_DEFECTO = tuple(g for g in GRUPOS_CONOCIDOS if g not in ("dev", "asistente"))
 MODOS = ("auto", "vivo", "sin_ventana")
 AVISO_VIVO = ("MODO EN VIVO: desde ahora trabajás sobre el documento ABIERTO en la ventana de OmniCAD ({doc}), no "
               "sobre el documento sin ventana del servidor. El usuario ve cada cambio.")

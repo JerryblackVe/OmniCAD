@@ -12,9 +12,9 @@ import arnes as A
 import escena
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QToolButton
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QToolButton
 
-from omnicad.asistente import config
+from omnicad.asistente import config, historial
 from omnicad.asistente.proveedores.agente_local import AgenteLocal
 from omnicad.asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
 from omnicad.servidor_mcp.puente_cliente import ClientePuente
@@ -100,6 +100,90 @@ class CliSimulado(AgenteLocal):
         al_evento("texto", "Listo: caja creada.")
         self.sesion = "sesion-simulada"
         return {"motivo": "fin", "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
+
+
+def abrir_historial(p):
+    """Clic en el botón Chat (el menú no bloquea en la prueba) y en «Historial de chats»: el diálogo que aparece."""
+    QTest.mouseClick(p.b_chat, Qt.LeftButton)
+    A.esperar(50)
+    next(a for a in p.b_chat.menu().actions() if a.text() == "Historial de chats").trigger()
+    A.esperar(150)
+    return next((d for d in p.findChildren(QDialog, "historial_asistente") if d.isVisible()), None)
+
+
+def historial_abierto(p):
+    """Hay un historial a la vista (al cerrarse se borra solo: no se le pregunta al widget viejo)."""
+    return any(d.isVisible() for d in p.findChildren(QDialog, "historial_asistente"))
+
+
+def doble_clic(lista, fila):
+    caja = lista.visualItemRect(lista.item(fila)).center()
+    QTest.mouseClick(lista.viewport(), Qt.LeftButton, Qt.NoModifier, caja)
+    QTest.mouseDClick(lista.viewport(), Qt.LeftButton, Qt.NoModifier, caja)
+    A.esperar(100)
+
+
+def historial_chats(p, guardado, n_lineas):
+    """IA-7 como una persona: Chat › Historial, doble clic en el chat guardado, seguirlo tecleando, Borrar… con la
+    confirmación (Supr y botón) y el diálogo en la ventana chica."""
+    d = abrir_historial(p)
+    A.reg(AR, "Chat › Historial de chats abre la lista con el chat guardado arriba",
+          d is not None and d.lista.count() >= 1 and d.lista.item(0).data(Qt.UserRole) == guardado,
+          d and [d.lista.item(i).text() for i in range(d.lista.count())])
+    if d is None:
+        return
+    A.foto(d, "asistente_historial")
+    doble_clic(d.lista, 0)
+    A.reg(AR, "doble clic en el chat lo carga: se ven los mensajes y las herramientas del pedido",
+          p.id_chat == guardado and not historial_abierto(p) and len(lineas(p)) == n_lineas
+          and any("escribí para seguirlo" in t for t in textos(p)), f"lineas={lineas(p)}")
+    falso = ProveedorFalso([Respuesta(texto="Sigo con lo de antes.")])
+    p.crear_proveedor = lambda cfg: falso
+    n = len(p.mensajes)
+    escribir(p, "y ahora segui", Qt.Key_Return)
+    esperar(p)
+    A.reg(AR, "seguir el chat cargado: el modelo recibe lo anterior y se guarda en el mismo archivo",
+          len(falso.recibidos[0][0]) == n + 1 and p.id_chat == guardado
+          and len(historial.cargar(guardado)["mensajes"]) == n + 2, f"recibió {len(falso.recibidos[0][0])} de {n + 1}")
+    p.crear_proveedor = lambda cfg: ProveedorFalso(p.guion)
+    # Borrar: Supr y botón Borrar…, cada uno con la pregunta de confirmación (en la prueba contesta Aceptar).
+    otro = historial.guardar([{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": "chat para borrar"}]}],
+                             "explicar", "anthropic", "")
+    d = abrir_historial(p)
+    previos = len(A.MODALES)
+    d.lista.setCurrentRow(0)
+    QTest.mouseClick(d.lista.viewport(), Qt.LeftButton, Qt.NoModifier, d.lista.visualItemRect(d.lista.item(0)).center())
+    QTest.keyClick(d.lista, Qt.Key_Delete)
+    A.esperar(50)
+    A.reg(AR, "Supr en el historial pregunta y borra el chat elegido",
+          len(A.MODALES) > previos and A.MODALES[previos][0] == "question"
+          and all(c["id"] != otro for c in historial.listar()), A.MODALES[previos:])
+    fila = next(i for i in range(d.lista.count()) if d.lista.item(i).data(Qt.UserRole) == guardado)
+    QTest.mouseClick(d.lista.viewport(), Qt.LeftButton, Qt.NoModifier,
+                     d.lista.visualItemRect(d.lista.item(fila)).center())
+    QTest.mouseClick(d.b_borrar, Qt.LeftButton)
+    A.esperar(50)
+    A.reg(AR, "Borrar… pregunta y saca el chat de la lista; el chat abierto se guardará como nuevo",
+          all(c["id"] != guardado for c in historial.listar()) and p.id_chat is None
+          and all(d.lista.item(i).data(Qt.UserRole) != guardado for i in range(d.lista.count())))
+    QTest.keyClick(d, Qt.Key_Escape)
+    A.esperar(50)
+    A.reg(AR, "Esc cierra el historial", not historial_abierto(p))
+    # Ventana chica: el diálogo y sus botones entran en la pantalla.
+    v.resize(800, 520)
+    A.esperar(300)
+    d = abrir_historial(p)
+    pantalla = QApplication.primaryScreen().availableGeometry()
+    A.reg(AR, "ventana 800x520: el historial y sus botones se ven enteros",
+          d is not None and pantalla.contains(d.frameGeometry()) and dentro(d.b_abrir, d) and dentro(d.b_borrar, d),
+          d and f"dialogo={d.frameGeometry()} pantalla={pantalla}")
+    if d is not None:
+        A.foto(d, "asistente_historial_800x520")
+        d.close()
+    v.resize(1900, 1000)
+    A.esperar(200)
+    QTest.mouseClick(p.b_nuevo, Qt.LeftButton)
+    A.esperar(50)
 
 
 def suscripcion(p):
@@ -369,12 +453,15 @@ def pedido():
     item.trigger()
     A.reg(AR, "Biblioteca de prompts deja el ejemplo en el campo sin mandarlo", bool(p.campo.toPlainText())
           and not p.trabajando, p.campo.toPlainText()[:60])
-    historial = next(a for a in menu.actions() if a.text() == "Historial de chats")
-    A.reg(AR, "Historial de chats grisado (llega con IA-7)", not historial.isEnabled())
+    guardado, n_lineas = p.id_chat, len(lineas(p))
+    A.reg(AR, "IA-7: el chat se guardó solo al terminar el último pedido",
+          bool(guardado) and historial.cargar(guardado)["mensajes"] == p.mensajes, guardado)
     QTest.mouseClick(p.b_nuevo, Qt.LeftButton)
     A.esperar(50)                              # los mensajes viejos se borran con deleteLater
-    A.reg(AR, "+ empieza un chat nuevo", p.mensajes == [] and lineas(p) == [] and p.pie.text() == "")
+    A.reg(AR, "+ empieza un chat nuevo", p.mensajes == [] and lineas(p) == [] and p.pie.text() == ""
+          and p.id_chat is None)
     A.reg(AR, "la estrella avisa que es IA", "puede equivocarse" in p.b_aviso.toolTip())
+    historial_chats(p, guardado, n_lineas)
 
     # ---------------------------------------------------------------- ventana chica (con una tarjeta de plan esperando)
     p.modo.setCurrentIndex(p.modo.findData("hacer"))

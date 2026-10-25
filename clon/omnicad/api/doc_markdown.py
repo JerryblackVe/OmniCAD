@@ -36,6 +36,8 @@ GRUPOS = {
     "render": "Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render.",
     "avanzado": "Cualquier operación, receta, código y guía.",
     "grafo": "Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline.",
+    "asistente": "Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el "
+                 "MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`).",
     "dev": "Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`).",
 }
 

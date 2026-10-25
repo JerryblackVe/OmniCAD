@@ -7,6 +7,17 @@ from omnicad.api.errores import error
 from .herramientas import Herramientas
 
 
+def sin_imagenes(valor):
+    """Respuesta de una herramienta sin las imágenes (Preferencias › «mandar imágenes del visor» apagado)."""
+    if isinstance(valor, api.Imagen):
+        return "(imagen no enviada: Preferencias › Asistente IA)"
+    if isinstance(valor, dict):
+        return {k: sin_imagenes(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [sin_imagenes(v) for v in valor]
+    return valor
+
+
 def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_evento=None,
            tope_vueltas=25, cancelado=None, aprobar=None):
     """Agrega respuestas y resultados al chat y devuelve motivo, vueltas y uso acumulado.

@@ -244,14 +244,92 @@ def test_biblioteca_de_prompts_y_chat_nuevo(panel):
     menu = panel.b_chat.menu()
     biblioteca = next(a.menu() for a in menu.actions() if a.text() == "Biblioteca de prompts")
     historial = next(a for a in menu.actions() if a.text() == "Historial de chats")
-    assert not historial.isEnabled()
+    assert historial.isEnabled()
     accion = biblioteca.actions()[0].menu().actions()[0]
     accion.trigger()
     assert panel.campo.toPlainText() and not panel.trabajando
     panel.guion = [Respuesta(texto="ok")]
     assert panel.enviar() and esperar(panel) and panel.mensajes
     panel.nuevo_chat()
-    assert panel.mensajes == [] and panel.pie.text() == ""
+    assert panel.mensajes == [] and panel.pie.text() == "" and panel.id_chat is None
+
+
+def test_historial_guarda_reabre_sigue_y_borra(panel, ventana, monkeypatch):
+    """IA-7 como la persona: un pedido se guarda solo; Chat › Historial lo lista; doble clic lo abre con sus mensajes y
+    su herramienta; el chat sigue desde ahí (el modelo recibe lo anterior) y Borrar… pregunta antes de borrar."""
+    from PySide6.QtWidgets import QDialog
+
+    from omnicad.asistente import historial
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[CAJA]), Respuesta(texto="Caja lista.")]
+    escribir(panel, "hace una caja de prueba")
+    assert panel.enviar() and esperar(panel)
+    guardado = panel.id_chat
+    assert guardado and historial.cargar(guardado)["titulo"] == "hace una caja de prueba"
+    panel.nuevo_chat()
+    menu = panel.b_chat.menu()
+    next(a for a in menu.actions() if a.text() == "Historial de chats").trigger()
+    dialogo = panel.findChild(QDialog, "historial_asistente")
+    try:
+        _abrir_y_seguir(panel, dialogo, guardado, historial, monkeypatch)
+    finally:
+        for d in panel.findChildren(QDialog, "historial_asistente"):
+            d.close()                       # window-modal: abierto taparía los clics de los tests que siguen
+
+
+def _abrir_y_seguir(panel, dialogo, guardado, historial, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    assert dialogo.isVisible() and dialogo.lista.count() >= 1
+    item = dialogo.lista.item(0)            # el más nuevo primero
+    assert item.data(Qt.UserRole) == guardado
+    caja = dialogo.lista.visualItemRect(item).center()
+    QTest.mouseClick(dialogo.lista.viewport(), Qt.LeftButton, Qt.NoModifier, caja)   # el doble clic de una persona
+    QTest.mouseDClick(dialogo.lista.viewport(), Qt.LeftButton, Qt.NoModifier, caja)
+    QTest.qWait(10)                         # que se borren los mensajes del chat anterior (deleteLater)
+    assert panel.id_chat == guardado and lineas_herramienta(panel) == ["✓ create_box → op1"]
+    assert "hace una caja de prueba" in textos_chat(panel) and "Caja lista." in textos_chat(panel)
+    # Sigue desde ahí: el modelo recibe el chat anterior más el pedido nuevo, y se guarda en el mismo archivo.
+    falso = ProveedorFalso([Respuesta(texto="Sigo.")])
+    panel.crear_proveedor = lambda cfg: falso
+    escribir(panel, "y ahora otra")
+    assert panel.enviar() and esperar(panel)
+    recibidos = falso.recibidos[0][0]
+    assert recibidos[0]["contenido"][0]["texto"] == "hace una caja de prueba" and len(recibidos) == 5
+    assert panel.id_chat == guardado and len(historial.cargar(guardado)["mensajes"]) == 6
+    # Borrar con confirmación: Cancelar no borra, Aceptar sí.
+    dialogo = panel.abrir_historial()
+    respuestas = [QMessageBox.Cancel, QMessageBox.Ok]
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: respuestas.pop(0)))
+    dialogo.lista.setCurrentRow(0)
+    QTest.mouseClick(dialogo.b_borrar, Qt.LeftButton)
+    assert any(c["id"] == guardado for c in historial.listar())
+    QTest.keyClick(dialogo.lista, Qt.Key_Delete)
+    assert not any(c["id"] == guardado for c in historial.listar()) and panel.id_chat is None
+
+
+def test_historial_de_suscripcion_guarda_textos_e_id_de_sesion(panel, monkeypatch):
+    """Modo suscripción: el panel guarda el pedido, la respuesta y el id de sesión del CLI para seguir con --resume."""
+    from omnicad.asistente import historial
+    from omnicad.asistente.proveedores.agente_local import AgenteLocal
+
+    class Falso(AgenteLocal):
+        def correr(self, texto, sistema, modo, al_evento=None, cancelado=None):
+            self.sesion = "ses-123"
+            al_evento("texto", "Hecho por el CLI.")
+            return {"motivo": "fin", "vueltas": 1, "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
+
+    monkeypatch.setattr(panel, "_preparar_puente", lambda prov: True)
+    monkeypatch.setattr(panel, "_soltar_puente", lambda: None)
+    falso = Falso.__new__(Falso)            # sin buscar el ejecutable: el CLI no hace falta
+    falso.tipo, falso.sesion = "claude_code", None
+    panel.crear_proveedor = lambda cfg: falso
+    escribir(panel, "hola cli")
+    assert panel.enviar() and esperar(panel)
+    chat = historial.cargar(panel.id_chat)
+    assert [m["rol"] for m in chat["mensajes"]] == ["usuario", "asistente"]
+    assert chat["sesiones_cli"] == {"claude_code": "ses-123"}
+    panel.nuevo_chat()
+    assert panel.cargar_chat(chat["id"]) and panel._sesiones == {"claude_code": "ses-123"}
 
 
 def test_accion_boton_menu_ayuda_y_atajo_unico(ventana):

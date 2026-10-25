@@ -38,17 +38,8 @@ DEFECTOS = {
     "general/autoguardado_min": 1,
     "general/puente_agentes": False,         # MCP en vivo: apagado por defecto (ui/puente.py)
     "general/puente_codigo": False,          # execute_code en vivo (corre Python en la interfaz)
-    # Asistente IA (ui/asistente.py). La clave de API NO se guarda acá: sale de una variable de entorno.
-    "asistente/proveedor": "anthropic",      # asistente/config.py › PROVEEDORES
-    "asistente/modelo": "",                  # vacío = el de fábrica del proveedor
-    "asistente/base_url": "",                # vacío = la del proveedor (OpenAI, OpenRouter, Ollama)
-    "asistente/modo": "guiar",
-    "asistente/tope_usd": 0.5,               # gasto máximo por pedido; 0 = sin tope
-    "asistente/imagenes": True,              # mandarle al modelo las imágenes del visor
-    "asistente/variante": "",                # OpenCode: --variant (esfuerzo); vacío = el del modelo
-    "asistente/ruta_claude_code": "",        # modo suscripción: ruta del CLI; vacío = el del PATH
-    "asistente/ruta_codex": "",
-    "asistente/ruta_opencode": "",
+    # Asistente IA (ui/asistente.py), definidas en asistente/config.py › DEFECTOS. La clave de API NO se guarda acá.
+    **{f"asistente/{k}": v for k, v in config_asistente.DEFECTOS.items()},
     "atajos/diseno": "extruir,empalme_3d",   # caja de herramientas (S): los que Fusion trae fijados
     "atajos/boceto": "",
     "atajos/barra": "",                      # comandos fijados en la barra de arriba (menú «Más» ⋮)

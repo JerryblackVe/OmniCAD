@@ -142,7 +142,7 @@ def test_nucleo_y_esquemas_originales():
         assert definicion["descripcion"] == original["descripcion"]
     busqueda = definiciones[-1]
     esquema = busqueda["esquema"]
-    temas = sorted({h["grupo"] for h in catalogo.values()} - {"dev"})
+    temas = sorted({h["grupo"] for h in catalogo.values()} - {"dev", "asistente"})   # asistente: no se llama a sí mismo
     assert esquema["type"] == "object" and esquema["required"] == ["tema"]
     assert esquema["additionalProperties"] is False
     assert esquema["properties"]["tema"]["type"] == "string"

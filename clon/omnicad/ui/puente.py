@@ -275,6 +275,10 @@ class PuenteAgentes(QObject):
         if h is not None and h["grupo"] == "dev":
             return error("LIVE_NOT_ALLOWED", f"«{herramienta}» es una herramienta de desarrollo: corre en el servidor "
                          "MCP, no dentro de la ventana.").a_dict()
+        if herramienta == "assistant_ask":
+            return error("LIVE_NOT_ALLOWED", "assistant_ask no corre en vivo: congelaría la ventana mientras la IA "
+                         "responde, y un agente conectado ya ES el asistente.",
+                         "Hacé el pedido vos con las herramientas, o usá el servidor MCP con --modo sin_ventana.").a_dict()
         if herramienta == "execute_code" and not self.permite_codigo():
             return error("LIVE_NOT_ALLOWED", "execute_code está desactivado en vivo: correría Python en el hilo de la "
                          "interfaz y un bucle infinito congelaría OmniCAD.").a_dict()
