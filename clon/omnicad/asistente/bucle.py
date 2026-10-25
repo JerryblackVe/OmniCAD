@@ -4,7 +4,7 @@ import json
 from omnicad import api
 from omnicad.api.errores import error
 
-from .herramientas import Herramientas
+from .herramientas import Herramientas, recortar
 
 
 def sin_imagenes(valor):
@@ -99,15 +99,15 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
                 try:
                     salida = herramientas.buscar(**pedido.args)
                 except TypeError:
-                    salida = error("INVALID_ARGUMENTS",
-                                   "buscar_herramientas necesita solo el argumento tema (texto).").a_dict()
+                    salida = error("INVALID_ARGUMENTS", "buscar_herramientas acepta solo nombres (lista), consulta "
+                                   "(texto) o grupo (texto).").a_dict()
             elif pedido.nombre in herramientas.fuera_de_modo:
                 salida = error("TOOL_NOT_AVAILABLE",
                                f"La herramienta '{pedido.nombre}' no se puede usar en el modo {herramientas.modo}.",
                                "Explicale a la persona qué harías y que cambie a modo Guiar o Hacer.").a_dict()
             elif not herramientas.permitida(pedido.nombre):
                 salida = error("TOOL_NOT_AVAILABLE", f"La herramienta '{pedido.nombre}' no está habilitada.",
-                               "Usá buscar_herramientas(tema) para sumar las de un grupo.").a_dict()
+                               "Habilitala con buscar_herramientas(nombres=[...]) y volvé a llamarla.").a_dict()
             else:
                 try:
                     salida = ejecutar(pedido.nombre, pedido.args)
@@ -116,7 +116,7 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
 
             imagenes = []
             sin_imagenes = separar_imagenes(salida, imagenes)
-            bloques = [{"tipo": "texto", "texto": json.dumps(sin_imagenes, ensure_ascii=False, default=str)}]
+            bloques = [{"tipo": "texto", "texto": recortar(json.dumps(sin_imagenes, ensure_ascii=False, default=str))}]
             bloques += [{"tipo": "imagen", "png": i.png, "ancho": i.ancho, "alto": i.alto} for i in imagenes]
             resultados.append({"tipo": "resultado_herramienta", "id": pedido.id,
                                "error": not salida["ok"], "contenido": bloques})

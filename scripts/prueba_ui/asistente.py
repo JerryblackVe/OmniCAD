@@ -6,7 +6,11 @@ Enviar tienen que entrar). IA-5: tarjeta de plan (Aplicar, Cancelar, Esc), Guiar
 Preferencias (teclado y clic en Aceptar), ruta mala tecleada, y un pedido con el CLI simulado que entra por el puente en
 vivo (encendido solo durante el pedido) con la tarjeta Aplicar. IA-9: clic en el clip, Ctrl+V de una imagen, arrastrar
 archivos al chat, el 11.º rechazado, ✕ y las fichas en la ventana chica. IA-10: Preferencias llena «Modelo» con lo
-que dice cada CLI (elegir con el teclado, escribir otro, Aceptar y reabrir). El proveedor es el falso: sin red ni gasto."""
+que dice cada CLI (elegir con el teclado, escribir otro, Aceptar y reabrir). IA-11: «pinta la caja de rojo» usa
+set_appearance (fuera del núcleo) en modo API con buscar_herramientas y en modo suscripción con call_tool. El proveedor
+es el falso: sin red ni gasto."""
+import asyncio
+import json
 import sys
 import threading
 
@@ -16,10 +20,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QToolButton
 
+from omnicad import api
 from omnicad.asistente import config, historial
 from omnicad.asistente.proveedores.agente_local import AgenteLocal
 from omnicad.asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
 from omnicad.servidor_mcp.puente_cliente import ClientePuente
+from omnicad.servidor_mcp.servidor import crear_servidor
 
 s, ids = escena.construir()
 app, v = A.iniciar(s.doc)
@@ -85,19 +91,28 @@ def dentro(w, ventana):
 
 
 class CliSimulado(AgenteLocal):
-    """Hace lo que haría Claude Code: llama herramientas por el puente en vivo (TCP + token de puente.json)."""
+    """Hace lo que haría Claude Code: llama herramientas por el puente en vivo (TCP + token de puente.json). Con `meta`,
+    como el CLI de verdad desde IA-11: por call_tool del `omnicad-mcp --meta-tools --modo vivo`."""
 
-    def __init__(self, archivo, llamadas):
+    def __init__(self, archivo, llamadas, meta=False):
         self.tipo, self.nombre, self.sesion, self.proceso = "claude_code", "Claude Code", None, None
         self.archivo, self.llamadas, self.respuestas, self.puente_visto = archivo, llamadas, [], None
+        self.meta = meta
 
     def correr(self, texto, sistema, modo, al_evento=None, cancelado=None, adjuntos=()):
         cliente = ClientePuente(self.archivo)
         self.puente_visto = cliente.conectar()
+        servidor = crear_servidor(modo="vivo", cliente=cliente, meta=True, herramientas=[]) if self.meta else None
         for nombre, args in self.llamadas:
-            r = cliente.llamar(nombre, args)
+            if servidor is None:
+                r = cliente.llamar(nombre, args)
+            else:
+                r = json.loads(asyncio.run(servidor.call_tool("call_tool", {"name": nombre, "args": args}))
+                               .content[0].text)
             self.respuestas.append(r)
             al_evento("herramienta", {"nombre": nombre, "args": args, "respuesta": r})
+        if servidor is not None:
+            servidor.cerrar()
         cliente.cerrar()
         al_evento("texto", "Listo: caja creada.")
         self.sesion = "sesion-simulada"
@@ -356,6 +371,22 @@ def suscripcion(p):
     A.foto(v, "asistente_suscripcion")
     QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
     A.reg(AR, "suscripción: «Deshacer este pedido» saca la caja del CLI", len(v.doc.operaciones) == n)
+
+    # IA-11: set_appearance no está en la lista corta del CLI: le llega por call_tool, con su nombre real en la tarjeta
+    cli = CliSimulado(archivo, [("set_appearance", {"bodies": [primer_cuerpo()], "color": "#ff0000"})], meta=True)
+    p.crear_proveedor = lambda _cfg: cli
+    receta = color()
+    clics.clear()
+    reloj.start()
+    escribir(p, "pinta la caja de rojo", Qt.Key_Return)
+    esperar(p, aplicar=False)
+    reloj.stop()
+    A.reg(AR, "IA-11 suscripción: «pinta la caja de rojo» usa set_appearance por call_tool, con la tarjeta Aplicar",
+          clics == [1] and [r["ok"] for r in cli.respuestas] == [True] and lineas(p)[-1].startswith("✓ set_appearance")
+          and color() == [1.0, 0.0, 0.0], f"tarjetas={len(clics)} lineas={lineas(p)[-1:]} {cli.respuestas}")
+    A.foto(v, "asistente_call_tool")
+    QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
+    A.reg(AR, "IA-11 suscripción: «Deshacer este pedido» saca el color", color() == receta)
     v.prefs["asistente/proveedor"] = "anthropic"
     p.actualizar_cabecera()
     p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
@@ -467,6 +498,15 @@ def adjuntos_ui(p):
         modulo.QFileDialog.getOpenFileNames = original
         p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
     return rutas
+
+
+def primer_cuerpo():
+    return api.llamar(api.Sesion(v.doc), "get_scene_info", {})["result"]["bodies"][0]["id"]
+
+
+def color():
+    """El color propio del primer cuerpo (set_appearance lo guarda en las propiedades, no en la receta)."""
+    return v.doc.propiedades.get(primer_cuerpo(), {}).get("apariencia")
 
 
 def pedido():
@@ -585,6 +625,23 @@ def pedido():
     A.reg(AR, "Cancelar a mitad del pedido (ya hizo una caja) vuelve a como estaba y lo dice", hizo_una
           and v.doc.a_dict() == receta and "volvió a como estaba" in " ".join(textos(p)[-2:]), textos(p)[-1])
     p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+
+    # ---------------------------------------------------------------- IA-11 (API): una fuera del núcleo en 2 llamadas
+    p.modo.setCurrentIndex(p.modo.findData("hacer"))
+    receta = color()
+    p.guion = [Respuesta(herramientas=[PedidoHerramienta("b1", "buscar_herramientas", {"nombres": ["set_appearance"]})]),
+               Respuesta(herramientas=[PedidoHerramienta("a1", "set_appearance",
+                                                         {"bodies": [primer_cuerpo()], "color": "#ff0000"})]),
+               Respuesta(texto="Listo: la pinté de rojo.")]
+    escribir(p, "pinta la caja de rojo", Qt.Key_Return)
+    tarjeta = esperar_tarjeta(p)
+    en_tarjeta = tarjeta is not None and "set_appearance(" in " ".join(textos(p))
+    esperar(p)
+    A.reg(AR, "IA-11 API: «pinta la caja de rojo» habilita set_appearance por nombre, pide Aplicar y la usa",
+          en_tarjeta and lineas(p)[-2].startswith("✓ buscar_herramientas") and lineas(p)[-1].startswith("✓ set_appearance")
+          and color() == [1.0, 0.0, 0.0], f"tarjeta={en_tarjeta} lineas={lineas(p)[-2:]}")
+    QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
+    A.reg(AR, "IA-11 API: «Deshacer este pedido» saca el color", color() == receta, textos(p)[-1])
 
     # ---------------------------------------------------------------- APP_BUSY: la persona tiene un comando abierto
     abierto = A.abrir(v, "extruir")

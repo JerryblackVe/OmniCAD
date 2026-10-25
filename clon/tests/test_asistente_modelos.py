@@ -149,7 +149,7 @@ def test_api_lista_con_get_y_la_clave_solo_donde_va(red, monkeypatch):
 
 # ---------------------------------------------------------------- Codex: el esfuerzo llega al CLI
 def test_codex_recibe_el_esfuerzo_y_opencode_la_variante(monkeypatch):
-    monkeypatch.setattr(config, "AgenteLocal", lambda tipo, ruta, modelo, variante: (tipo, modelo, variante))
+    monkeypatch.setattr(config.agente_local, "AgenteLocal", lambda tipo, ruta, modelo, variante: (tipo, modelo, variante))
     assert config.crear_proveedor({"proveedor": "codex", "modelo": "gpt-6-luna", "variante": " high "}) == \
         ("codex", "gpt-6-luna", "high")
     assert config.crear_proveedor({"proveedor": "claude_code", "variante": "high"})[2] == ""

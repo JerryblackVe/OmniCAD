@@ -71,6 +71,8 @@ def _parser():
                    f"(por defecto: {','.join(GRUPOS_POR_DEFECTO)})")
     p.add_argument("--tools", metavar="LISTA", help="solo estas herramientas, por nombre y separadas por coma (dentro "
                    "de los grupos activos); la usa el Asistente para darle al CLI una lista corta")
+    p.add_argument("--meta-tools", action="store_true", help="suma find_tools y call_tool (alcanzan todo el "
+                   "catálogo del chat sin listarlo); la usa el Asistente en modo suscripción")
     p.add_argument("--dev", action="store_true", help="suma el grupo 'dev' (herramientas de desarrollo)")
     p.add_argument("--http", action="store_true", help=f"servir por HTTP en {HOST} en vez de stdio "
                    f"(exige token: se genera uno por arranque y queda en {NOMBRE_INFO_HTTP}, "
@@ -121,7 +123,8 @@ def main(argv=None):
         except Exception as e:  # noqa: BLE001 — cualquier falla al abrir corta el arranque con un mensaje claro
             _log(f"omnicad-mcp: no se pudo abrir --doc {args.doc}: {getattr(e, 'mensaje', e)}")
             return 2
-    servidor = crear_servidor(sesion, toolsets, args.dev, args.log_level, modo=modo, herramientas=herramientas)
+    servidor = crear_servidor(sesion, toolsets, args.dev, args.log_level, modo=modo, herramientas=herramientas,
+                              meta=args.meta_tools)
     try:
         if args.http:
             puerto = args.port or PUERTO_POR_DEFECTO

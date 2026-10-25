@@ -4,8 +4,13 @@ from pathlib import Path
 
 from omnicad import api
 
-from .herramientas import MODOS
+from .herramientas import MODOS, Herramientas
 
+INDICE = """# Herramientas disponibles (índice por grupo)
+Tenés cargadas solo algunas. Para usar otra del índice: si tenés buscar_herramientas, habilitala con
+buscar_herramientas(nombres=[...]) y después llamala; si tenés call_tool, llamala con call_tool(name, args) (find_tools
+te da su esquema). Pedí por nombre exacto: es lo más barato.
+"""
 ULTIMOS = 10
 TOPE_TEXTO = 200  # notas y mensajes son texto libre: se cortan para que el contexto no crezca sin límite
 GUIAS = ("flujo", "selectores")
@@ -78,4 +83,5 @@ def armar_sistema(sesion, modo, seleccion=None):
         raise ValueError(f"Modo inválido: {modo!r}. Modos: {', '.join(MODOS)}.")
     guias = [(_leer(sesion, "get_guide", {"topic": t}) or {}).get("text", "") for t in GUIAS]
     return "\n\n".join([REGLAS, f"# Modo actual: {modo.capitalize()}\n{REGLAS_MODO[modo]}", *guias,
+                        INDICE + Herramientas(modo=modo).indice(),
                         "# Estado actual del documento", contexto(sesion, seleccion)])

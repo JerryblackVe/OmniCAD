@@ -4,7 +4,7 @@ La clave de API NUNCA está en la configuración ni en las preferencias: sale de
 """
 import os
 
-from .proveedores.agente_local import AgenteLocal
+from .proveedores import agente_local  # el módulo: agente_local → api → herramientas_asistente → acá (ciclo)
 from .proveedores.anthropic import ProveedorAnthropic
 from .proveedores.base import ErrorProveedor
 from .proveedores.openai_compat import OLLAMA, OPENAI, OPENROUTER, ProveedorOpenAI
@@ -62,7 +62,7 @@ def crear_proveedor(config):
         raise ErrorProveedor(f"Proveedor desconocido: {nombre!r}. Opciones: {', '.join(PROVEEDORES)}.")
     modelo = modelo_de(config)
     if nombre in AGENTES_LOCALES:
-        return AgenteLocal(nombre, config.get(f"ruta_{nombre}") or "", modelo,
+        return agente_local.AgenteLocal(nombre, config.get(f"ruta_{nombre}") or "", modelo,
                            (config.get("variante") or "").strip() if nombre in ("opencode", "codex") else "")
     if nombre == "anthropic":
         return ProveedorAnthropic(modelo)

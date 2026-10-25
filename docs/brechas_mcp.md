@@ -152,6 +152,11 @@ el grupo `asistente` (fuera de los grupos por defecto del MCP porque gasta plata
 toca la clave de API (va en una variable de entorno), ni las rutas de los ejecutables de Claude Code, Codex u OpenCode
 (un agente haría correr otro programa), ni una `base_url` ajena (la clave viajaría a otro servidor).
 
+`find_tools` y `call_tool` (fase IA-11, 2026-10-25) existen solo con `omnicad-mcp --meta-tools`, que usa el Asistente en
+modo suscripción: al CLI se le da una lista corta y estas dos le alcanzan el resto del catálogo sin mandar 340 esquemas
+en cada paso. No van al catálogo ni a la CLI: un agente externo ya tiene todas las herramientas con su nombre propio.
+`call_tool` despacha por el nombre real (mismos controles del puente: modo, tarjeta Aplicar, APP_BUSY, bloqueos).
+
 ## Ola 7: opciones de diálogo que la herramienta no tiene (segunda pasada, 2026-10-18)
 
 La primera pasada miró si cada comando tenía herramienta. Esta mira **opción por opción**: el comando tiene herramienta,

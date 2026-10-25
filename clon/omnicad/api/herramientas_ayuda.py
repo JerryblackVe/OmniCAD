@@ -63,6 +63,25 @@ def _fragmento(texto, claves):
     return ("…" if desde else "") + trozo + ("…" if desde + LARGO_FRAGMENTO < len(texto) else "")
 
 
+def claves_de(query):
+    """Palabras útiles de una consulta (sin las vacías ni las de 1-2 letras, salvo que no quede otra), con tope."""
+    claves = [p for p in dict.fromkeys(_palabras(query)) if len(p) > 2 and p not in VACIAS]
+    return (claves or [p for p in _palabras(query) if len(p) > 1])[:TOPE_CLAVES]
+
+
+def puntaje(claves, fuente, texto):
+    """Cada palabra buscada que aparece (también como prefijo: «empalm» encuentra «empalmes») suma 10, más sus
+    apariciones (hasta 5); en el título o el nombre de la herramienta, 6 más (3 si es solo un prefijo)."""
+    palabras = _palabras(texto)
+    titulo = set(_palabras(fuente))
+    total = 0
+    for c in claves:
+        veces = sum(1 for p in palabras if p.startswith(c))
+        if veces:
+            total += 10 + min(veces, 5) + (6 if c in titulo else 3 if any(t.startswith(c) for t in titulo) else 0)
+    return total
+
+
 @herramienta("search_help", "avanzado", "Busca en la ayuda LOCAL de OmniCAD (catálogo de herramientas, guía para "
              "agentes y documentación del repo si está) y devuelve fragmentos cortos con su fuente, para responder "
              "«¿cómo se hace…?» citando de dónde sale. Acepta palabras con o sin tildes, en español o inglés.")
@@ -71,26 +90,16 @@ def search_help(sesion, query: str, limit: int = 5):
     query: qué se busca, en pocas palabras (p. ej. "empalme", "agujero roscado", "fillet").
     limit: cuántos resultados como máximo, de 1 a 20.
     """
-    claves = [p for p in dict.fromkeys(_palabras(query)) if len(p) > 2 and p not in VACIAS] or \
-        [p for p in _palabras(query) if len(p) > 1]
-    claves = claves[:TOPE_CLAVES]
+    claves = claves_de(query)
     if not claves:
         raise error("INVALID_ARGUMENTS", "La consulta está vacía: escribí qué buscás (p. ej. «empalme»).")
     if not 1 <= limit <= 20:
         raise error("INVALID_ARGUMENTS", f"limit fuera de rango: {limit} (va de 1 a 20).")
     resultados = []
     for fuente, texto in _documentos():
-        palabras = _palabras(texto)
-        # Cada palabra buscada que aparece (también como prefijo: «empalm» encuentra «empalmes») suma 10, más sus
-        # apariciones (hasta 5); en el título o el nombre de la herramienta, 6 más (3 si es solo un prefijo).
-        titulo = set(_palabras(fuente))
-        puntaje = 0
-        for c in claves:
-            veces = sum(1 for p in palabras if p.startswith(c))
-            if veces:
-                puntaje += 10 + min(veces, 5) + (6 if c in titulo else 3 if any(t.startswith(c) for t in titulo) else 0)
-        if puntaje:
-            resultados.append({"source": fuente, "score": puntaje, "text": _fragmento(texto, claves)})
+        valor = puntaje(claves, fuente, texto)
+        if valor:
+            resultados.append({"source": fuente, "score": valor, "text": _fragmento(texto, claves)})
     resultados.sort(key=lambda r: (-r["score"], len(r["source"])))   # empate: la fuente más específica
     if not resultados:
         sesion.avisar(f"No hay nada sobre «{query}» en la ayuda local: decilo así, sin inventar.")

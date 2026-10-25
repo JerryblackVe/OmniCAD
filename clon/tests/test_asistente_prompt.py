@@ -50,7 +50,9 @@ def test_regla_de_modos():
     assert sospechosas == SOLO_LEEN_ARCHIVO
     # buscar_herramientas tampoco las devuelve en Explicar.
     herramientas = Herramientas(modo="explicar")
-    assert "extrude" not in herramientas.buscar("solido")["result"]["tools"]
+    assert "extrude" not in [h["name"] for h in herramientas.buscar(grupo="solido")["result"]["enabled"]]
+    assert herramientas.buscar(nombres=["extrude"])["error_kind"] == "TOOL_NOT_AVAILABLE"
+    assert "extrude" not in herramientas.indice()   # el índice del prompt tampoco la nombra
     with pytest.raises(ValueError):
         Herramientas(modo="cualquiera")
 

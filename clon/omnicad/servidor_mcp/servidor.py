@@ -15,6 +15,10 @@ Decisiones:
     un modo al otro, la respuesta trae un aviso en `avisos`: el agente pasó a OTRO documento. En vivo y auto se
     suma la herramienta `get_mode` (solo del MCP: la CLI no tiene modo en vivo). Las del grupo `dev` corren
     siempre en el proceso del servidor.
+  - `meta=True` (`--meta-tools`, solo para el Asistente en modo suscripción): suma `find_tools` y `call_tool`, que
+    llegan a TODO el catálogo que puede usar el chat sin listarlo entero. `call_tool` despacha por el nombre REAL,
+    así que en vivo pasa por los mismos controles del puente (modo, tarjeta Aplicar, APP_BUSY, bloqueos); los
+    resultados se recortan como en el modo API (`asistente.herramientas.recortar`).
 """
 import asyncio
 import json
@@ -24,6 +28,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp_types import Tool, ToolAnnotations
 
 from .. import VERSION, api
+from ..asistente.herramientas import TOPE_BUSQUEDA, Herramientas, encontrar, recortar, resumen
 from . import textos
 from .conversion import a_resultado_mcp
 from .puente_cliente import ClientePuente
@@ -41,6 +46,22 @@ HERRAMIENTA_MODO = {"nombre": "get_mode", "grupo": "documento", "modifica": Fals
                     "descripcion": "Dice en qué modo trabaja el servidor: 'vivo' (el documento abierto en la ventana de "
                                    "OmniCAD) o 'sin_ventana' (un documento propio del servidor), y el estado de la app.",
                     "esquema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}}
+FIND_TOOLS = {"nombre": "find_tools", "grupo": "avanzado", "modifica": False,
+              "descripcion": "Busca herramientas de OmniCAD que no están en tu lista (el índice del prompt dice cuáles "
+                             f"hay) y devuelve hasta {TOPE_BUSQUEDA} con su esquema de argumentos, para usarlas con "
+                             "call_tool. Pedilas por names (exactos, lo mejor), por query (palabras) o por group.",
+              "esquema": {"type": "object", "properties": {
+                  "names": {"type": "array", "items": {"type": "string"}, "description": "Nombres exactos."},
+                  "query": {"type": "string", "description": "Qué necesitás, en pocas palabras."},
+                  "group": {"type": "string", "description": "Un grupo del índice (p. ej. material, render)."}},
+                  "additionalProperties": False}}
+CALL_TOOL = {"nombre": "call_tool", "grupo": "avanzado", "modifica": True,
+             "descripcion": "Ejecuta cualquier herramienta de OmniCAD por su nombre real (las del índice que no están "
+                            "en tu lista), con sus argumentos. Si no sabés los argumentos, primero find_tools.",
+             "esquema": {"type": "object", "properties": {
+                 "name": {"type": "string", "description": "Nombre real de la herramienta (p. ej. set_appearance)."},
+                 "args": {"type": "object", "description": "Sus argumentos, como en su esquema."}},
+                 "required": ["name"], "additionalProperties": False}}
 
 
 def _error(kind, mensaje, *pistas):
@@ -50,7 +71,7 @@ def _error(kind, mensaje, *pistas):
 class ServidorOmniCAD(MCPServer):
     """`MCPServer` cuyas herramientas salen del catálogo de la API (ver el docstring del módulo)."""
 
-    def __init__(self, sesion, herramientas, modo="sin_ventana", cliente=None, **kwargs):
+    def __init__(self, sesion, herramientas, modo="sin_ventana", cliente=None, meta=False, **kwargs):
         super().__init__(**kwargs)
         if modo not in MODOS:
             raise ValueError(f"Modo desconocido: {modo} (válidos: {', '.join(MODOS)})")
@@ -61,6 +82,10 @@ class ServidorOmniCAD(MCPServer):
         self._herramientas = {h["nombre"]: h for h in herramientas}     # {nombre: entrada del catálogo}
         if self.cliente is not None:
             self._herramientas[HERRAMIENTA_MODO["nombre"]] = HERRAMIENTA_MODO
+        # lo que el chat puede usar (sin dev, asistente ni execute_code); en vivo, el puente aplica además el modo
+        self._alcance = Herramientas(modo="hacer").catalogo if meta else None
+        if meta:
+            self._herramientas.update({h["nombre"]: h for h in (FIND_TOOLS, CALL_TOOL)})
         self._ejecutor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="omnicad-api")
 
     @property
@@ -137,12 +162,45 @@ class ServidorOmniCAD(MCPServer):
                 for h in self._herramientas.values()]
 
     async def call_tool(self, name, arguments=None, context=None):
+        arguments = arguments or {}
         if name not in self._herramientas:
             respuesta = _error("UNKNOWN_TOOL", f"No hay una herramienta activa llamada '{name}'.",
                                "Las activas dependen de --toolsets; tools/list las muestra.")
+        elif self._alcance is not None and name == "find_tools":
+            respuesta = self._find_tools(arguments)
+        elif self._alcance is not None and name == "call_tool":
+            real, args = arguments.get("name"), arguments.get("args")
+            args = {} if args is None else args
+            if not isinstance(real, str) or real not in self._alcance:
+                respuesta = _error("TOOL_NOT_AVAILABLE", f"'{real}' no es una herramienta que el Asistente pueda usar.",
+                                   "Las de desarrollo (dev), las del grupo asistente y execute_code no se usan desde "
+                                   "el chat. find_tools busca las que sí.")
+            elif not isinstance(args, dict):
+                respuesta = _error("INVALID_ARGUMENTS", "args tiene que ser un objeto con los argumentos de la "
+                                   "herramienta.", "find_tools(names=[...]) da su esquema.")
+            else:
+                respuesta = await self.en_hilo(self.despachar, real, args)
         else:
-            respuesta = await self.en_hilo(self.despachar, name, arguments or {})
-        return a_resultado_mcp(respuesta)
+            respuesta = await self.en_hilo(self.despachar, name, arguments)
+        resultado = a_resultado_mcp(respuesta)
+        if self._alcance is not None and name != "find_tools":     # los esquemas que da find_tools no se cortan
+            resultado.content[0].text = recortar(resultado.content[0].text)
+        return resultado
+
+    def _find_tools(self, args):
+        try:
+            encontradas, sobrantes, desconocidas = encontrar(self._alcance, args.get("query"), args.get("names"),
+                                                             args.get("group"))
+        except api.ErrorAPI as e:
+            return e.a_dict()
+        resultado = {"tools": [{"name": n, "description": resumen(self._alcance[n]["descripcion"]),
+                                "modifies": self._alcance[n]["modifica"], "input_schema": self._alcance[n]["esquema"]}
+                               for n in encontradas]}
+        if sobrantes:
+            resultado["more"] = sobrantes
+        if desconocidas:
+            resultado["unknown"] = desconocidas
+        return {"ok": True, "result": resultado, "avisos": []}
 
 
 def _registrar_recursos(servidor):
@@ -186,17 +244,17 @@ def _registrar_prompts(servidor):
 
 
 def crear_servidor(sesion=None, toolsets=None, dev=False, log_level="WARNING", modo="sin_ventana", cliente=None,
-                   herramientas=None):
+                   herramientas=None, meta=False):
     """Arma el servidor. `toolsets`: grupos a exponer (por defecto todos menos `dev`); `dev=True` suma `dev`.
     `modo`: "sin_ventana" (por defecto acá: determinista para pruebas y scripts), "vivo" o "auto" (ver arriba);
     `cliente`: un `ClientePuente` propio (p. ej. con otro puente.json); `herramientas`: nombres (None = todas las
-    de los grupos)."""
+    de los grupos); `meta`: suma find_tools y call_tool (ver arriba)."""
     grupos = list(toolsets) if toolsets else list(GRUPOS_POR_DEFECTO)
     if dev and "dev" not in grupos:
         grupos.append("dev")
     catalogo = [h for h in api.catalogo(grupos) if herramientas is None or h["nombre"] in herramientas]
     servidor = ServidorOmniCAD(
-        sesion if sesion is not None else api.Sesion(), catalogo, modo=modo, cliente=cliente,
+        sesion if sesion is not None else api.Sesion(), catalogo, modo=modo, cliente=cliente, meta=meta,
         name="omnicad", title="OmniCAD", version=VERSION, instructions=textos.instrucciones(),
         log_level=log_level)
     _registrar_recursos(servidor)

@@ -81,9 +81,12 @@ def test_anthropic_arma_el_pedido(red):
     assert pedido["encabezados"]["x-api-key"] == CLAVE
     assert pedido["encabezados"]["anthropic-version"] == "2023-06-01"
     cuerpo = pedido["cuerpo"]
-    assert cuerpo["model"] == "claude-opus-5-5" and cuerpo["system"] == "Sos el asistente."
+    # caché del prompt (IA-11): marca en el sistema, en la última herramienta y arriba del todo (la conversación)
+    cache = {"type": "ephemeral"}
+    assert cuerpo["model"] == "claude-opus-5-5" and cuerpo["cache_control"] == cache
+    assert cuerpo["system"] == [{"type": "text", "text": "Sos el asistente.", "cache_control": cache}]
     assert cuerpo["tools"] == [{"name": "create_box", "description": "Crea una caja.",
-                                "input_schema": HERRAMIENTAS[0]["esquema"]}]
+                                "input_schema": HERRAMIENTAS[0]["esquema"], "cache_control": cache}]
     assert cuerpo["messages"][1] == {"role": "assistant", "content": [
         {"type": "text", "text": "Voy."}, {"type": "tool_use", "id": "t1", "name": "create_box", "input": {"length": 40}}]}
     assert cuerpo["messages"][2] == {"role": "user", "content": [{
@@ -107,6 +110,13 @@ def test_anthropic_traduce_la_respuesta_y_el_costo(red):
     assert [(p.id, p.nombre, p.args) for p in respuesta.herramientas] == [("toolu_1", "create_box", {"length": 40})]
     assert respuesta.uso == {"entrada": 1000, "salida": 500, "costo_usd": pytest.approx(0.014)}
     assert anthropic.costo_usd("modelo-desconocido", 1000, 500) is None
+    # con caché: la leída cuesta 0,1× y la escrita 1,25× la entrada; «entrada» suma las tres
+    red.respuestas = [{"content": [{"type": "text", "text": "ok"}], "usage": {
+        "input_tokens": 100, "output_tokens": 500, "cache_creation_input_tokens": 1000,
+        "cache_read_input_tokens": 10000}}]
+    respuesta = anthropic.ProveedorAnthropic(clave=CLAVE).responder("", CHAT[:1], HERRAMIENTAS)
+    assert respuesta.uso == {"entrada": 11100, "salida": 500,
+                             "costo_usd": pytest.approx((100 + 1250 + 1000) * 4 / 1e6 + 500 * 20 / 1e6)}
 
 
 def test_anthropic_negativa_es_error_claro(red):

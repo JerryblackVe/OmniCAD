@@ -6,6 +6,7 @@ Las líneas de OpenCode y el `init` de Claude Code son recortes de corridas real
 claude 2.1.296). Los mensajes de herramientas de Claude siguen el formato stream-json del Agent SDK; los de Codex,
 el esquema de `codex exec --json` de su documentación (Codex no está instalado en esta PC).
 """
+import asyncio
 import io
 import json
 import os
@@ -23,6 +24,7 @@ from omnicad.asistente.proveedores.agente_local import AgenteLocal  # noqa: E402
 from omnicad.asistente.proveedores.base import ErrorProveedor  # noqa: E402
 # importado acá: importarlo por primera vez desde el hilo del pedido se colgó (2026-10-25, causa sin investigar)
 from omnicad.servidor_mcp.puente_cliente import ClientePuente  # noqa: E402
+from omnicad.servidor_mcp.servidor import crear_servidor  # noqa: E402
 
 TOKEN = "TOKEN-SECRETO-DEL-PUENTE-1234567890"
 PNG = "iVBORw0KGgo="          # cabecera PNG en base64: alcanza para probar que la imagen llega al panel
@@ -164,6 +166,14 @@ def test_codex_traduce_eventos_del_esquema_documentado(lanzar):
     assert r["uso"] == {"entrada": 2000, "salida": 40, "costo_usd": None} and a.sesion == "0199a213-81c0"
 
 
+def test_call_tool_se_muestra_con_el_nombre_real(lanzar):
+    """IA-11: el CLI llama call_tool(name, args); el panel muestra la herramienta de verdad."""
+    salida = [{**CODEX[2], "item": {**CODEX[2]["item"], "tool": "call_tool",
+                                    "arguments": {"name": "set_appearance", "args": {"color": "#ff0000"}}}}]
+    _r, eventos = correr(AgenteLocal("codex"), lanzar, ProcesoFalso(salida))
+    assert eventos[0][1]["nombre"] == "set_appearance" and eventos[0][1]["args"] == {"color": "#ff0000"}
+
+
 def test_claude_sin_conexion_mcp_y_herramienta_con_error(lanzar):
     salida = [{"type": "system", "subtype": "init", "session_id": "s",
                "mcp_servers": [{"name": "omnicad", "status": "failed"}]},
@@ -222,6 +232,7 @@ def test_claude_argumentos_segun_modo_y_sin_token_ni_pedido(lanzar):
     mcp = json.loads(lanzado["archivos"]["mcp.json"])["mcpServers"]["omnicad"]
     assert mcp["args"][:4] == ["-m", "omnicad.servidor_mcp", "--modo", "vivo"] and mcp["command"] == sys.executable
     assert tools_del_mcp(mcp["args"]) == Herramientas(modo="explicar").para_cli()
+    assert "--meta-tools" in mcp["args"]          # IA-11: find_tools y call_tool alcanzan el resto del catálogo
     assert mcp["env"] == {"OMNICAD_PUENTE_DIR": "D:/puente del panel"}   # el puente que preparó el panel
     assert lanzado["archivos"]["sistema.md"] == "SISTEMA DE PRUEBA"
     todo = json.dumps([argv, lanzado["archivos"], {k: v for k, v in lanzado["kw"]["env"].items()
@@ -427,6 +438,50 @@ def pedir(v, agente, modo, decidir=None, texto="caja"):
 
 
 CAJA = ("create_box", {"length": 10, "width": 10, "height": 10})
+
+
+class AgenteMeta(AgenteFalso):
+    """Como un CLI con `omnicad-mcp --meta-tools --modo vivo`: cada herramienta va por call_tool del servidor MCP."""
+
+    def correr(self, texto, sistema, modo, al_evento=None, cancelado=None, adjuntos=()):
+        servidor = crear_servidor(modo="vivo", cliente=ClientePuente(self.archivo), meta=True, herramientas=[])
+        try:
+            for nombre, args in self.llamadas:
+                r = asyncio.run(servidor.call_tool("call_tool", {"name": nombre, "args": args}))
+                self.respuestas.append(json.loads(r.content[0].text))
+                al_evento("herramienta", {"nombre": nombre, "args": args, "respuesta": self.respuestas[-1]})
+        finally:
+            servidor.cerrar()
+        return {"motivo": "fin", "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
+
+
+def test_call_tool_en_hacer_pide_aplicar_con_el_nombre_real(ventana):
+    p = ventana.asistente
+    vistos, original = [], p._aprobar_en_vivo
+    p._aprobar_en_vivo = lambda pedidos: vistos.extend(x.nombre for x in pedidos) or original(pedidos)
+    try:
+        agente = AgenteMeta(p.puente.archivo, [CAJA, ("set_appearance", {"bodies": ["op1.c1"], "color": "#ff0000"})])
+        assert len(pedir(ventana, agente, "hacer", "aplicar")) == 1
+    finally:
+        p._aprobar_en_vivo = original
+    assert vistos == ["create_box"]                    # la tarjeta muestra la herramienta real, no «call_tool»
+    assert [r["ok"] for r in agente.respuestas] == [True, True], agente.respuestas
+    assert ventana.doc.operaciones and p.b_deshacer is not None and p.b_deshacer.isEnabled()   # «Deshacer este pedido»
+
+
+def test_call_tool_en_explicar_bloquea_lo_que_modifica(ventana):
+    agente = AgenteMeta(ventana.asistente.puente.archivo, [("get_timeline", {}), CAJA,
+                                                           ("set_appearance", {"color": "#ff0000"})])
+    assert pedir(ventana, agente, "explicar", "aplicar") == []
+    assert [r.get("error_kind") for r in agente.respuestas] == [None, "TOOL_NOT_AVAILABLE", "TOOL_NOT_AVAILABLE"]
+    assert ventana.doc.operaciones == []
+
+
+def test_call_tool_no_llega_a_assistant_ask_ni_execute_code(ventana):
+    agente = AgenteMeta(ventana.asistente.puente.archivo, [("assistant_ask", {"prompt": "hola"}),
+                                                           ("execute_code", {"code": "1"})])
+    pedir(ventana, agente, "hacer", "aplicar")
+    assert [r["error_kind"] for r in agente.respuestas] == ["TOOL_NOT_AVAILABLE", "TOOL_NOT_AVAILABLE"]
 
 
 def test_puente_temporal_tarjeta_aplicar_y_sesion(ventana):

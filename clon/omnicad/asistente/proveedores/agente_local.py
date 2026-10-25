@@ -31,7 +31,7 @@ from collections import deque
 from omnicad import api
 from omnicad.api import protocolo_puente
 
-from ..herramientas import Herramientas
+from .. import herramientas  # el módulo y no la clase: herramientas → api → config → acá (ciclo)
 from .anthropic import _bloque
 from .base import ErrorProveedor
 
@@ -151,7 +151,7 @@ class AgenteLocal:
         `archivos`: (ruta, tipo del bloque) de los adjuntos copiados ahí."""
         # El servidor MCP expone SOLO las del CLI (--tools): los tres CLI ven la misma lista, sin listas por CLI ni el
         # tope de 8191 caracteres de cmd.exe; los cambios igual los frena la tarjeta Aplicar del panel.
-        mcp = MCP + ["--tools", ",".join(Herramientas(modo=modo).para_cli())]
+        mcp = MCP + ["--tools", ",".join(herramientas.Herramientas(modo=modo).para_cli()), "--meta-tools"]
         # Explícita en la config del MCP: Codex no le pasa el entorno, y sin esto omnicad-mcp podría ir al puente.json
         # de OTRA OmniCAD abierta (pasó el 2026-10-25 en la prueba real de Codex).
         entorno = {protocolo_puente.VARIABLE_CARPETA: str(self.carpeta_puente or protocolo_puente.carpeta_info())}
@@ -212,7 +212,10 @@ class AgenteLocal:
 
         def herramienta(nombre, args, contenido, es_error):
             respuesta, imagenes = _respuesta(contenido, es_error)
-            emitir("herramienta", {"nombre": nombre.removeprefix(prefijo), "args": args or {}, "respuesta": respuesta})
+            nombre = nombre.removeprefix(prefijo)
+            if nombre == "call_tool" and isinstance(args, dict):     # el panel muestra la herramienta de verdad
+                nombre, args = str(args.get("name") or "?"), args.get("args")
+            emitir("herramienta", {"nombre": nombre, "args": args or {}, "respuesta": respuesta})
             for imagen in imagenes:
                 emitir("imagen", imagen)
 

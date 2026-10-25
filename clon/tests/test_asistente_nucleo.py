@@ -6,7 +6,7 @@ import pytest
 
 from omnicad import api
 from omnicad.asistente import bucle
-from omnicad.asistente.herramientas import NUCLEO, Herramientas
+from omnicad.asistente.herramientas import NUCLEO, TOPE_BUSQUEDA, Herramientas
 from omnicad.asistente.proveedores.base import PedidoHerramienta, Proveedor, ProveedorFalso, Respuesta
 
 
@@ -66,35 +66,45 @@ def test_tope_de_vueltas(sesion):
     assert ("error", "Se llegó al tope de 3 vueltas: el pedido se cortó.") in eventos
 
 
-def test_buscar_herramientas_habilita_chapa(sesion):
+def test_buscar_herramientas_habilita_por_nombre_y_al_final(sesion):
     herramientas = Herramientas()
     chapa = {h["nombre"] for h in api.catalogo("chapa")}
     assert not chapa.intersection(h["nombre"] for h in herramientas.definiciones())
+    antes = [h["nombre"] for h in herramientas.definiciones()]
     proveedor = ProveedorFalso([
-        Respuesta(herramientas=[PedidoHerramienta("buscar", "buscar_herramientas", {"tema": "chapa"})]),
+        Respuesta(herramientas=[PedidoHerramienta("buscar", "buscar_herramientas",
+                                                  {"nombres": ["create_flat_pattern", "create_box", "no_existe"]})]),
         Respuesta(texto="Herramientas disponibles."),
     ])
     resultado = bucle.correr(proveedor, [], lambda n, a: api.llamar(sesion, n, a), herramientas=herramientas)
     assert resultado["motivo"] == "fin"
-    assert "create_flat_pattern" in proveedor.recibidos[1][1]
-    assert herramientas.grupos == {"chapa"}
+    # la habilitada va AL FINAL: el prefijo que ya se mandó no cambia (caché del prompt)
+    assert proveedor.recibidos[1][1] == [*antes, "create_flat_pattern"]
     bloque = proveedor.recibidos[1][0][-1]["contenido"][0]
     salida = json.loads(bloque["contenido"][0]["texto"])
-    assert salida == {"ok": True, "result": {"group": "chapa", "tools": [h["nombre"] for h in api.catalogo("chapa")]},
-                      "avisos": []}
-    assert herramientas.buscar("dev")["error_kind"] == "INVALID_ARGUMENTS"
+    assert [h["name"] for h in salida["result"]["enabled"]] == ["create_flat_pattern", "create_box"]
+    assert salida["result"]["unknown"] == ["no_existe"] and salida["ok"]
 
 
-@pytest.mark.parametrize("tema", ["dev", "inexistente", None, [], 42])
-def test_buscar_rechaza_grupos_invalidos(tema):
+def test_buscar_por_consulta_y_por_grupo_con_tope():
     herramientas = Herramientas()
-    resultado = herramientas.buscar(tema)
+    r = herramientas.buscar(consulta="aspecto color apariencia")
+    assert r["ok"] and "set_appearance" in [h["name"] for h in r["result"]["enabled"]]
+    r = herramientas.buscar(grupo="solido")
+    assert len(r["result"]["enabled"]) == TOPE_BUSQUEDA and r["result"]["more"]
+    assert len(herramientas.habilitadas) == len(set(herramientas.habilitadas))
+
+
+@pytest.mark.parametrize("args", [{}, {"grupo": "dev"}, {"grupo": "inexistente"}, {"nombres": []},
+                                  {"nombres": "create_box"}, {"nombres": [1]}, {"consulta": ""}, {"consulta": 42}])
+def test_buscar_rechaza_pedidos_invalidos(args):
+    herramientas = Herramientas()
+    resultado = herramientas.buscar(**args)
     assert resultado["ok"] is False and resultado["error_kind"] == "INVALID_ARGUMENTS"
-    assert any(p.startswith("Grupos: ") for p in resultado["pistas"])
-    assert herramientas.grupos == set()
+    assert herramientas.habilitadas == []
 
 
-@pytest.mark.parametrize("args", [{}, {"tema": "chapa", "extra": True}, [], {"tema": []}])
+@pytest.mark.parametrize("args", [{"tema": "chapa"}, {"grupo": "chapa", "extra": True}, [], {"grupo": []}])
 def test_argumentos_malos_de_busqueda_vuelven_al_modelo(sesion, args):
     proveedor = ProveedorFalso([Respuesta(herramientas=[PedidoHerramienta("buscar", "buscar_herramientas", args)])])
     resultado = bucle.correr(proveedor, [], lambda n, a: api.llamar(sesion, n, a))
@@ -108,7 +118,7 @@ def test_seguridad_no_ofrece_ni_ejecuta_codigo_o_dev(sesion):
     herramientas = Herramientas()
     catalogo = {h["nombre"]: h for h in api.catalogo()}
     for tema in herramientas.temas:
-        assert herramientas.buscar(tema)["ok"]
+        assert herramientas.buscar(nombres=[n for n, h in herramientas.catalogo.items() if h["grupo"] == tema])["ok"]
     nombres = [h["nombre"] for h in herramientas.definiciones()]
     assert len(nombres) == len(set(nombres))
     assert "execute_code" not in nombres
@@ -143,11 +153,9 @@ def test_nucleo_y_esquemas_originales():
     busqueda = definiciones[-1]
     esquema = busqueda["esquema"]
     temas = sorted({h["grupo"] for h in catalogo.values()} - {"dev", "asistente"})   # asistente: no se llama a sí mismo
-    assert esquema["type"] == "object" and esquema["required"] == ["tema"]
-    assert esquema["additionalProperties"] is False
-    assert esquema["properties"]["tema"]["type"] == "string"
-    assert esquema["properties"]["tema"]["enum"] == temas
-    assert all(tema in busqueda["descripcion"] for tema in temas)
+    assert esquema["type"] == "object" and esquema["additionalProperties"] is False
+    assert set(esquema["properties"]) == {"nombres", "consulta", "grupo"}
+    assert esquema["properties"]["grupo"]["enum"] == temas
 
 
 @pytest.mark.parametrize("ejecutadas", [0, 1])
@@ -274,7 +282,7 @@ def test_proveedor_base_y_falso_respetan_el_contrato():
 def test_catalogo_vacio_no_se_reemplaza_por_el_real():
     herramientas = Herramientas(catalogo=[])
     assert [h["nombre"] for h in herramientas.definiciones()] == ["buscar_herramientas"]
-    assert herramientas.buscar("solido")["error_kind"] == "INVALID_ARGUMENTS"
+    assert herramientas.buscar(grupo="solido")["error_kind"] == "INVALID_ARGUMENTS"
 
 
 def test_sin_dependencias_de_interfaz():
