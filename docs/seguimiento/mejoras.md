@@ -2,14 +2,15 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 121: Abierto 64 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 122: Abierto 65 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
-Abierto 18 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
+Abierto 19 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-33 | CI en GitHub para main: ruff y pytest rápido en cada push (sin la prueba de humo, que pide ventana) | Abierto | Media | Todo. AGENTS.md (Seguridad) ya exige «subir solo con la CI verde» pero no hay workflow: solo `instaladores.yml`, por tag. Puede pedir ajustar tests que necesitan OpenGL en la máquina de GitHub. Pendiente por decisión de Gerardo (2026-10-25). | .github/workflows/ (solo instaladores.yml); AGENTS.md:50 | 2026-10-25 |
 | NOV-b80-1 | Dos `_referencia` casi iguales con dialectos distintos | Abierto | Baja | Unificar: borrar la de solido_extra y aceptar `{"body", "vertex"}` en la de construcción (≈55 líneas menos; hoy un agente aprende dos formatos). | omnicad/api/herramientas_solido_extra.py:49 y omnicad/api/herramientas_construccion.py:31 | 2026-10-20 |
 | NOV-b80-3 | create_hole(positions) usa un solo cuerpo objetivo | Abierto | Baja | Si el vértice es de otro cuerpo, el agujero se hace en el principal y solo avisa que no cambió el volumen: resolver el cuerpo desde la referencia. | omnicad/api/herramientas_modificar.py:492 | 2026-10-20 |
 | NOV-b80-4 | export_parameters no neutraliza celdas que empiezan con = + - @ | Abierto | Baja | Un comentario `=HYPERLINK(...)` sale tal cual y Excel lo ejecuta; decidir si se antepone `'` sin romper la ida y vuelta con la tabla de la ventana. | omnicad/api/herramientas_parametros_csv.py:23 | 2026-10-20 |
