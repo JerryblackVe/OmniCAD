@@ -4,7 +4,7 @@
 > [docs/seguimiento/faltantes.md](seguimiento/faltantes.md) › «Asistente IA». Si algo de acá no coincide con el
 > seguimiento, vale el seguimiento.
 
-Fecha: 2026-10-25. Estado: **fases 1 a 11 ejecutadas el 2026-10-25**; 12 a 14 propuestas. Lo que queda vive en `docs/seguimiento/faltantes.md` › «Asistente IA» (IA-2 Parcial: streaming y prueba real por API).
+Fecha: 2026-10-25. Estado: **fases 1 a 11 ejecutadas el 2026-10-25**; 12 a 15 propuestas. Lo que queda vive en `docs/seguimiento/faltantes.md` › «Asistente IA» (IA-2 Parcial: streaming y prueba real por API).
 
 ## Objetivo
 
@@ -179,6 +179,7 @@ instrucción: defensa contra inyección de prompt.
 | 12 | IA-12 | Instrucciones propias, generales y por proyecto (detalle en «Fases 12 a 14») | `asistente/prompt.py`, `ui/preferencias.py`, `ui/asistente.py`, `io_archivos/proyecto.py`, `api/herramientas_asistente.py` | Sol, alto | Ver la sección |
 | 13 | IA-13 | «Esto» = lo que seleccionaste, descrito y visible en una ficha | `asistente/prompt.py`, `ui/asistente.py`, `api/herramientas_vivo.py` | Sol, medio | Ver la sección |
 | 14 | IA-14 | Antes y después: dos miniaturas al terminar cada pedido que cambió algo | `ui/asistente.py`, `asistente/historial.py` | Sol, medio | Ver la sección |
+| 15 | IA-15 | «Pensando…» con tres puntos animados; herramientas ocultas salvo que se elija verlas | `ui/asistente.py`, `ui/preferencias.py` | Sol, medio | Ver «Fase 15» |
 
 ## Fase 11 (IA-11): todas las herramientas desde el chat, de forma eficiente
 
@@ -285,6 +286,21 @@ Hoy la selección ya entra al prompt, pero como referencias crudas (`ui/asistent
 - Listo cuando: un pedido que crea una caja muestra Antes (vacío) y Después (la caja) con la misma vista; un pedido
   que no cambia nada no muestra nada; prueba de usuario mirando las capturas de verdad.
 
+### Fase 15 (IA-15): «pensando…» con tres puntos y herramientas ocultas
+
+Pedido de Gerardo (2026-10-25, con captura): las líneas «✓ get_scene_info», «✓ find_tools»… ensucian el chat.
+- Mientras la IA trabaja, una burbuja con **tres puntos animados** («•••», que laten de a uno) en lugar de las
+  líneas de herramientas. Si el pedido tarda, debajo un texto chico con lo que está haciendo en palabras
+  («mirando el modelo», «creando el empalme»), sin nombres técnicos.
+- Preferencias › Asistente IA: casilla **«Mostrar las herramientas que usa la IA»**, apagada por defecto. Encendida,
+  el chat se ve como hoy (líneas plegables).
+- Siempre se ven, aunque esté apagada: la tarjeta Aplicar, los errores, el aviso de APP_BUSY, «Deshacer este pedido»
+  y el pie de uso.
+- La animación se detiene al terminar, cancelar o fallar; no consume CPU con el panel cerrado.
+- Listo cuando: con la casilla apagada no aparece ninguna línea de herramienta y sí los puntos mientras trabaja; al
+  encenderla vuelven; prueba de usuario con capturas en movimiento (dos capturas en momentos distintos muestran
+  puntos distintos) y ventana chica.
+
 ## Orden y dependencias
 
 - **1 → 2 → 3** en orden: el bucle define la interfaz que implementan los proveedores, y el prompt se prueba con un
@@ -293,7 +309,7 @@ Hoy la selección ya entra al prompt, pero como referencias crudas (`ui/asistent
 - **5** después de 4 (usa el panel). **6** después de 4 (dibuja en el panel) y de la decisión de Gerardo.
 - **7 y 8** al final, en cualquier orden.
 - **9** (adjuntos) después de 7: usa el panel y los proveedores ya cerrados.
-- **12, 13 y 14** en ese orden (tocan los mismos archivos: `prompt.py` y `ui/asistente.py`).
+- **12, 13, 14 y 15** en ese orden (tocan los mismos archivos: `prompt.py` y `ui/asistente.py`).
 
 ## Pendiente de decidir (Gerardo)
 

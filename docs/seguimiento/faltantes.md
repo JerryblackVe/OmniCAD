@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 205: Abierto 142 · Parcial 42 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 206: Abierto 143 · Parcial 42 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -300,7 +300,7 @@ Abierto 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 
 ## Asistente IA (chat dentro de la app)
 
-Abierto 3 · Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
+Abierto 4 · Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -309,6 +309,7 @@ Abierto 3 · Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistent
 | IA-12 | Instrucciones propias del asistente: generales (Preferencias) y por proyecto (dentro del .omnicad) | Abierto | Media | Todo (plan › «Fases 12 a 14»). | grep instrucciones sin resultados en omnicad/asistente/prompt.py | 2026-10-25 |
 | IA-13 | El asistente entiende «esto» = la selección, descrita (tipo, cuerpo, medidas) y visible en una ficha del panel | Abierto | Media | Hoy la selección entra al prompt solo como referencias crudas. | omnicad/ui/asistente.py (leer_seleccion → armar_sistema); omnicad/asistente/prompt.py (contexto) | 2026-10-25 |
 | IA-14 | Antes y después: dos miniaturas con la misma cámara al terminar cada pedido que cambió el documento | Abierto | Media | Todo. | omnicad/ui/asistente.py: al terminar un pedido solo agrega «Deshacer este pedido», sin capturas | 2026-10-25 |
+| IA-15 | Chat del asistente: tres puntos animados mientras piensa y líneas de herramientas ocultas (casilla en Preferencias para verlas) | Abierto | Baja | Todo (plan › «Fase 15»). | omnicad/ui/asistente.py: cada herramienta usada se agrega como línea al chat; sin indicador de «pensando» | 2026-10-25 |
 
 ## SolidCraft
 
