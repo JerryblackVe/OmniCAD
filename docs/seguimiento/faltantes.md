@@ -309,7 +309,7 @@ Abierto 4 · Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistent
 | IA-12 | Instrucciones propias del asistente: generales (Preferencias) y por proyecto (dentro del .omnicad) | Abierto | Media | Todo (plan › «Fases 12 a 14»). | grep instrucciones sin resultados en omnicad/asistente/prompt.py | 2026-10-25 |
 | IA-13 | El asistente entiende «esto» = la selección, descrita (tipo, cuerpo, medidas) y visible en una ficha del panel | Abierto | Media | Hoy la selección entra al prompt solo como referencias crudas. | omnicad/ui/asistente.py (leer_seleccion → armar_sistema); omnicad/asistente/prompt.py (contexto) | 2026-10-25 |
 | IA-14 | Antes y después: dos miniaturas con la misma cámara al terminar cada pedido que cambió el documento | Abierto | Media | Todo. | omnicad/ui/asistente.py: al terminar un pedido solo agrega «Deshacer este pedido», sin capturas | 2026-10-25 |
-| IA-15 | Chat del asistente: tres puntos animados mientras piensa y líneas de herramientas ocultas (casilla en Preferencias para verlas) | Abierto | Baja | Todo (plan › «Fase 15»). | omnicad/ui/asistente.py: cada herramienta usada se agrega como línea al chat; sin indicador de «pensando» | 2026-10-25 |
+| IA-15 | Chat del asistente: tres puntos animados mientras piensa y líneas de herramientas ocultas (casilla en Preferencias para verlas) y tipo de permisos: preguntar en cada paso, una vez por pedido o no preguntar | Abierto | Media | Todo (plan › «Fase 15»). | omnicad/ui/asistente.py: cada herramienta usada se agrega como línea al chat; sin indicador de «pensando» | 2026-10-25 |
 
 ## SolidCraft
 
