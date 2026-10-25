@@ -33,9 +33,10 @@ import warnings
 
 import numpy as np
 
-from PySide6.QtCore import QEventLoop, QPoint, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QKeySequence, QPainter, QPen, QPixmap, QPolygonF
-from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QWidget
+from PySide6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import (QColor, QFont, QFontMetricsF, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap,
+                           QPolygonF)
+from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QToolTip, QWidget
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
@@ -553,6 +554,12 @@ class Lienzo(QWidget):
         self._cota_abierta = None        # (tipo, entidades, pos) de la cota nueva cuya caja está abierta
         self._opc_cota = {}              # opciones del menú antes de ubicar: referencia, tipo, modo (BOC-34)
         self._evaluando = set()          # nombres en evaluación: corta las referencias circulares
+        self._cita_sobre = None          # cota bajo el ratón con una caja de valor abierta (se resalta para citarla)
+        self._texto_inicial = None       # valor con el que se abrió la caja de valor
+        self._derecho = None             # (pos px, pos global) del clic derecho apretado en una herramienta
+        self._t_derecho = QTimer(self)   # clic derecho mantenido con una cota a medias: menú de opciones (BOC-34)
+        self._t_derecho.setSingleShot(True)
+        self._t_derecho.timeout.connect(self._opciones_cota_mantenido)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         if visor is None:
@@ -959,15 +966,21 @@ class Lienzo(QWidget):
         self.herramienta_cambiada.emit(h)
         self.update()
 
+    def _hay_operacion(self):
+        """Algo a medias en la herramienta: clics puestos, cota o selección a medio elegir, caja de valor o texto
+        abiertos, o una fase de la herramienta."""
+        return bool(self.clics or self.picks or self.entrada is not None or self._tangente is not None
+                    or self.fase not in (None, "seleccion"))
+
     def cancelar(self):
-        """Esc: primero corta lo que se está dibujando; después vuelve a Seleccionar."""
+        """Esc y clic derecho sin arrastrar: si hay algo a medias lo corta y la herramienta sigue; si no, sale de la
+        herramienta y vuelve a Seleccionar; en Seleccionar, borra la selección."""
         if self._eligiendo_punto is not None:
             self._terminar_eleccion()
             return
         self.inf_actual = self.inferencia = self._inf_inicio = None
-        if self.entrada is not None:
+        if self._hay_operacion():
             self._cerrar_entrada()
-        elif self.clics or self.picks or (self.fase not in (None, "seleccion")):
             self.clics, self.picks, self.picks_xy = [], [], []
             self._esperando_ubicacion = False
             self._opc_cota = {}
@@ -2386,6 +2399,7 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ entrada dinámica y cotas en pantalla
     def _abrir_entrada(self, etiquetas, textos, pos, al_aceptar):
         self._cerrar_entrada()
+        self._texto_inicial = textos[0] if textos else None
         self.entrada = EntradaValor(etiquetas, textos, self)
 
         def aceptar(valores):
@@ -2430,6 +2444,7 @@ class Lienzo(QWidget):
             self.herramienta_cambiada.emit(self.herramienta)     # la paleta vuelve a las opciones de la herramienta
         self._editando = None
         self._cota_editada = self._cota_previa = self._cota_abierta = None
+        self._cita_sobre = None
 
     def _entrada_dinamica(self, primera):
         """Entrada escrita de las herramientas sin cajas de valor (círculo de 2 tangentes, mover/copiar)."""
@@ -3109,6 +3124,13 @@ class Lienzo(QWidget):
         if self.b.ejes_cota(previa) is not None:        # cota lineal: se dibuja con sus líneas mientras se escribe
             self._cota_previa, self._cota_editada = previa, -1
 
+    def _opciones_cota_mantenido(self):
+        """Clic derecho mantenido con una cota a medias: abre sus opciones (el clic rápido cancela)."""
+        if self._derecho is not None and self.herramienta == "cota" and self.picks:
+            _pos, global_ = self._derecho
+            self._derecho = None
+            self._menu_cota_previa().exec(global_)
+
     def _menu_cota_previa(self):
         """Clic derecho antes de ubicar la cota (Fusion, «Dimension sketch geometry» › Tips): Driven o Driving,
         Radio o Diámetro, Centro o Tangente. Lo elegido vale para la cota que se está poniendo."""
@@ -3154,6 +3176,29 @@ class Lienzo(QWidget):
                 pass
         return False
 
+    def _actualizar_cita(self, pos):
+        """Con la caja de valor de una cota abierta, la cota bajo el ratón se resalta y un tooltip dice «dN : valor»
+        (Fusion): ahí un clic la cita."""
+        cid = None
+        if self.entrada is not None and (self._cota_abierta is not None or self._cota_editada is not None):
+            zona = self._zona_en(pos)
+            if zona in self.b.cotas and zona != self._cota_editada:
+                cid = zona
+        if cid == self._cita_sobre:
+            return
+        self._cita_sobre = cid
+        if cid is None:
+            QToolTip.hideText()
+            self.unsetCursor()
+        else:
+            cota = self.b.cotas[cid]
+            angular = cota.tipo == "angulo"
+            valor = formato.numero(self.b.medir(cota), angular=angular)
+            QToolTip.showText(self.mapToGlobal(pos.toPoint()),
+                              f"{cota.nombre or self._nombre_libre()} : {valor}{'°' if angular else ' mm'}")
+            self.setCursor(Qt.PointingHandCursor)
+        self.update()
+
     def _citar_cota(self, pos):
         """Fusion: con la caja de valor de una cota abierta, un clic en otra cota pone su nombre (dN) en la
         expresión, en lugar de lo seleccionado. True si el clic se usó así."""
@@ -3167,9 +3212,18 @@ class Lienzo(QWidget):
             cota.nombre = self._nombre_libre()
             self._nombradas[cota.nombre] = cid
         campo = self.entrada.campos[0]
+        if campo.text() == self._texto_inicial:      # el clic en el lienzo le quitó el foco y la selección al valor
+            campo.selectAll()
         campo.insert(cota.nombre)
         campo.setFocus()
         return True
+
+    def _arco_cota(self, c):
+        """(vértice, t0, t1) del arco de una cota de ángulo, o None si las líneas son paralelas."""
+        try:
+            return self.b.arco_angulo(c)
+        except (ErrorBoceto, KeyError, ZeroDivisionError):
+            return None
 
     def _sobre_restringe(self, cid):
         """Criterio de la API (BOC-1): la cota driving `cid` debe bajar los GDL sin dejar el boceto en conflicto."""
@@ -3472,8 +3526,12 @@ class Lienzo(QWidget):
         if e.button() == Qt.RightButton and not self.clics and self._zona_en(pos) in self.b.cotas:
             self._menu_cota(self._zona_en(pos)).exec(e.globalPosition().toPoint())
             return
-        if e.button() == Qt.RightButton and self.herramienta == "cota" and self.picks:
-            self._menu_cota_previa().exec(e.globalPosition().toPoint())
+        if e.button() == Qt.RightButton and (self.herramienta != "seleccionar" or self._hay_operacion()):
+            # en una herramienta, el clic derecho rápido cancela o sale (al soltar); arrastrado, pasa al visor o al
+            # desplazamiento; mantenido con una cota a medias, abre sus opciones
+            self._derecho = (pos, e.globalPosition().toPoint())
+            if self.herramienta == "cota" and self.picks:
+                self._t_derecho.start(400)
             return
         if self._para_visor(e):
             self._reenvio = (e.button(), pos)
@@ -3729,8 +3787,8 @@ class Lienzo(QWidget):
                 return
             self._arrastre = ("curva", ent, self._modo_arrastre(ent))
             self._ultimo = self.a_mm(pos)
-        elif ent in self.b.cotas and self.b.ejes_cota(self.b.cotas[ent]) is not None:
-            self._arrastre = ("cota", ent, None)     # solo mueve la línea de cota y su texto
+        elif ent in self.b.cotas:
+            self._arrastre = ("cota", ent, None)     # solo mueve la cota (línea, arco o texto): el valor no cambia
         else:
             return
         self._movio = False
@@ -3854,6 +3912,17 @@ class Lienzo(QWidget):
         elif self._sobre is not None or self._manija_sobre is not None or self._zona_sobre is not None:
             self._sobre = self._manija_sobre = self._zona_sobre = None
             self.unsetCursor()
+        self._actualizar_cita(pos)
+        if self._derecho is not None and (pos - self._derecho[0]).manhattanLength() > 4:
+            self._t_derecho.stop()
+            inicio, global_ = self._derecho
+            self._derecho = None
+            if self.visor is not None:               # arrastre con el derecho: es del visor (gesto del menú radial)
+                self._reenvio = (Qt.RightButton, inicio)
+                self.visor.mousePressEvent(QMouseEvent(QEvent.MouseButtonPress, inicio, global_, Qt.RightButton,
+                                                       Qt.RightButton, e.modifiers()))
+            else:
+                self._pan = inicio
         if self._reenvio is not None:
             self.visor.mouseMoveEvent(e)
             return
@@ -3895,7 +3964,7 @@ class Lienzo(QWidget):
                 self._mover_curva(cid, modo, self.a_mm(pos))
                 self._movio = True
             elif cid in self.b.cotas:
-                self.b.ubicar_cota(self.b.cotas[cid], self.a_mm(pos))
+                self.b.mover_cota(self.b.cotas[cid], self.a_mm(pos))
                 self._movio = True
         elif self._arrastre is not None:
             self._mover_punto(self._arrastre, self.cursor)
@@ -3914,6 +3983,11 @@ class Lienzo(QWidget):
                 d["ancla"] = None            # un clic sin arrastre no deja selección
                 self._actualizar_cursor()
                 self.update()
+            return
+        if self._derecho is not None and e.button() == Qt.RightButton:
+            self._t_derecho.stop()
+            self._derecho = None
+            self.cancelar()
             return
         if self._reenvio is not None:
             boton, inicio = self._reenvio
@@ -4467,6 +4541,17 @@ class Lienzo(QWidget):
         p.drawPolygon(QPolygonF([punta, punta - QPointF(math.cos(ang - 0.35) * 7, math.sin(ang - 0.35) * 7),
                                  punta - QPointF(math.cos(ang + 0.35) * 7, math.sin(ang + 0.35) * 7)]))
 
+    @staticmethod
+    def _texto_cota(c, valor):
+        """Lo que se lee en la cota: el valor con su prefijo; entre paréntesis si es de referencia (driven) y con
+        «fx:» delante si sale de una expresión (Fusion)."""
+        unidad = "°" if c.tipo == "angulo" else ""
+        prefijo = {"radio": "R", "diametro": "⌀"}.get(c.tipo, "")
+        texto = f"{prefijo}{formato.numero(valor, angular=c.tipo == 'angulo')}{unidad}"
+        if c.referencia:
+            return f"({texto})"
+        return texto if _es_numero(c.expresion) else f"fx: {texto}"
+
     def _dibujar_cotas(self, p):
         """Cotas como las de Fusion: líneas y texto en verde oliva sobre fondo oscuro (gris oscuro sobre
         fondo claro), el valor SIN caja, al costado de la línea de cota. La caja con borde aparece solo al
@@ -4486,14 +4571,9 @@ class Lienzo(QWidget):
                 valor = self.b.medir(c)
             except (ErrorBoceto, KeyError, ZeroDivisionError):
                 continue
-            unidad = "°" if c.tipo == "angulo" else ""
-            prefijo = {"radio": "R", "diametro": "⌀"}.get(c.tipo, "")
-            texto = f"{prefijo}{formato.numero(valor, angular=c.tipo == 'angulo')}{unidad}"
-            if c.referencia:                         # driven: entre paréntesis y en gris, como Fusion
-                texto = f"({texto})"
-            elif not _es_numero(c.expresion):
-                texto = f"{c.expresion} = {texto}"
-            color = (QColor(0, 180, 255) if c.id in self.seleccion else CONFLICTO if c.id in en_conflicto
+            texto = self._texto_cota(c, valor)
+            color = (QColor(0, 180, 255) if c.id in self.seleccion or c.id == self._cita_sobre
+                     else CONFLICTO if c.id in en_conflicto
                      else REFERENCIA if c.referencia else base)
             p.setPen(QPen(color, 1))
             p.setBrush(color)
@@ -4532,17 +4612,40 @@ class Lienzo(QWidget):
             elif c.tipo in ("radio", "diametro"):
                 cent = self.b.coords(self.b.curvas[c.entidades[0]].centro)
                 r = self.b.radio(c.entidades[0])
-                borde = self.a_px(cent[0] + r * 0.7071, cent[1] + r * 0.7071)
-                q = borde + QPointF(26, -18)
-                p.drawLine(self.a_px(*cent) if c.tipo == "radio" else self.a_px(cent[0] - r * 0.7071,
-                                                                                  cent[1] - r * 0.7071), borde)
-                p.drawLine(borde, q)
+                ubic = c.datos.get("ubic")              # arrastrada: la línea sale hacia donde se la dejó
+                ang = math.atan2(ubic[1] - cent[1], ubic[0] - cent[0]) if ubic else math.pi / 4
+                dx, dy = math.cos(ang), math.sin(ang)
+                borde = self.a_px(cent[0] + r * dx, cent[1] + r * dy)
+                q = self.a_px(*ubic) if ubic else borde + QPointF(26, -18)
+                p.drawLine(self.a_px(*cent) if c.tipo == "radio" else self.a_px(cent[0] - r * dx, cent[1] - r * dy),
+                           borde)
+                if q != borde:
+                    p.drawLine(borde, q)
                 self._flecha(p, borde, self.a_px(*cent))
-                afuera = QPointF(1, 0)
+                afuera = QPointF(dx, -dy) if ubic else QPointF(1, 0)
+            elif c.tipo == "angulo" and self._arco_cota(c) is not None:
+                o, t0, t1 = self._arco_cota(c)
+                ubic = c.datos.get("ubic")              # arrastrada: el radio del arco llega hasta donde se la dejó
+                r = max(math.dist(o, ubic), 1e-6) if ubic else 40 / max(self.px_por_mm(), 1e-9)
+                pasos = max(4, int(abs(t1 - t0) / 0.08))
+                arco = [self.a_px(o[0] + r * math.cos(t0 + (t1 - t0) * i / pasos),
+                                  o[1] + r * math.sin(t0 + (t1 - t0) * i / pasos)) for i in range(pasos + 1)]
+                for a, b in zip(arco, arco[1:], strict=False):
+                    p.drawLine(a, b)
+                if abs(t1 - t0) > 0.15:
+                    self._flecha(p, arco[0], arco[1])
+                    self._flecha(p, arco[-1], arco[-2])
+                tm = (t0 + t1) / 2
+                q = self.a_px(o[0] + r * math.cos(tm), o[1] + r * math.sin(tm))
+                d = q - self.a_px(*o)
+                afuera = d / (math.hypot(d.x(), d.y()) or 1.0)
             else:
                 anclas = [self._ancla(e) for e in c.entidades]
                 q = sum(anclas[1:], anclas[0]) / len(anclas) + QPointF(0, 12)
                 afuera = QPointF(0, 1)
+                if "ubic" in c.datos:                   # arrastrada: el texto va donde se la dejó, con una guía fina
+                    p.drawLine(q, self.a_px(*c.datos["ubic"]))
+                    q, afuera = self.a_px(*c.datos["ubic"]), QPointF(0, 0)
             w, h = fm.horizontalAdvance(texto) + 4, fm.height()
             if girar is not None:                    # texto a lo largo de la línea: se aleja medio alto
                 centro = q + afuera * (h / 2 + 1)
@@ -4552,7 +4655,7 @@ class Lienzo(QWidget):
             paso = QPointF(afuera.x() * (w + 4), afuera.y() * (h + 2))
             if math.hypot(paso.x(), paso.y()) < 1:
                 paso = QPointF(0, h + 2)
-            for _ in range(0 if "texto" in c.datos else 20):      # un texto que el usuario ubicó no se corre
+            for _ in range(0 if "texto" in c.datos or "ubic" in c.datos else 20):   # un texto ubicado no se corre
                 if not any(caja.intersects(o) for o in ocupadas):
                     break
                 caja.translate(paso)

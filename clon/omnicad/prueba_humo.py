@@ -613,12 +613,18 @@ def _fase_interaccion(v, r):
     lz = v.modo_boceto.lienzo
     v.modo_boceto.acciones["sk_linea"].trigger()
     centro_lz = lz.rect().center()
+    v._menu_radial = None                    # el de un paso anterior ya está borrado
+    QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, centro_lz)
+    QTest.qWait(200)
+    r.check(lz.herramienta == "seleccionar" and v._menu_radial is None,
+            "En el boceto, clic derecho con una herramienta y nada a medias sale a Seleccionar (como Esc)")
     QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, centro_lz)
     QTest.qWait(200)
     radial = v._menu_radial
-    r.check(radial is not None and radial.isVisible() and radial.items[2].texto == "Aceptar"
-            and radial.items[6].texto == "Cancelar" and lz.herramienta == "linea",
-            "En el boceto, clic derecho abre el menú radial con Aceptar / Cancelar (no corta la herramienta)")
+    r.check(radial is not None and radial.isVisible() and radial.items[2].texto == "Rehacer"
+            and radial.items[6].texto == "Deshacer" and lz.herramienta == "seleccionar",
+            "En el boceto, en Seleccionar, clic derecho abre el menú radial (con una herramienta, Aceptar / Cancelar "
+            "quedan en el gesto del clic derecho arrastrado)")
     if radial is not None:
         radial.close()
     v.modo_boceto.cancelar()

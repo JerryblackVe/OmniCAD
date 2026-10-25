@@ -770,7 +770,8 @@ def _valor_cota(sesion, k):
 def _ubicacion_cota(k):
     """Dónde dibuja el editor la cota (si se la movió): offset de la línea y del texto, en mm; `mode` (center o
     tangent) en una distancia con un círculo o arco; y `quadrant` (0..3) en un ángulo con cuadrante elegido."""
-    return {**{n: k.datos[c] for n, c in (("offset", "desfase"), ("text_offset", "texto"), ("quadrant", "cuadrante"))
+    return {**{n: k.datos[c] for n, c in (("offset", "desfase"), ("text_offset", "texto"), ("quadrant", "cuadrante"),
+                                                   ("position", "ubic"))
                if c in k.datos},
             **({"mode": _MODOS_A_INGLES[k.datos["modo"]]} if "modo" in k.datos else {})}
 
@@ -792,8 +793,14 @@ _MODOS = {"center": "centro", "tangent": "tangente"}
 _MODOS_A_INGLES = {v: k for k, v in _MODOS.items()}
 
 
-def _fijar_ubicacion(b, k, offset, text_offset):
-    """Guarda `offset` y `text_offset` (mm) en la cota k; solo las cotas lineales de una línea o de dos puntos."""
+def _fijar_ubicacion(b, k, offset, text_offset, position=None):
+    """Guarda `offset` y `text_offset` (mm) en la cota k; solo las cotas lineales de una línea o de dos puntos.
+    `position` [x, y] es lo que hace arrastrar la cota con el ratón (`Boceto.mover_cota`): vale en todas."""
+    if position is not None:
+        if offset is not None or text_offset is not None:
+            raise error("INVALID_ARGUMENTS", "position no se combina con offset ni text_offset.")
+        b.mover_cota(k, _xy(position, "position"))
+        return
     if offset is None and text_offset is None:
         return
     for nombre, v in (("offset", offset), ("text_offset", text_offset)):
@@ -1319,7 +1326,9 @@ def _exigir_entidades(b, ids):
              "centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la "
              "distancia a la curva). En una cota "
              "lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan "
-             "dónde se dibuja: no cambian el valor ni la geometría. Referencias fijas reservadas: origen 0, eje X -1 "
+             "dónde se dibuja: no cambian el valor ni la geometría; `position` [x, y] (mm) hace lo mismo que arrastrar la "
+             "cota con el ratón y vale en todas: en las lineales fija offset y text_offset, en un ángulo el radio del "
+             "arco, en un radio o diámetro hacia dónde sale la línea y en las demás dónde va el texto. Referencias fijas reservadas: origen 0, eje X -1 "
              "y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, "
              "visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. "
              "reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving "
@@ -1332,7 +1341,8 @@ def add_dimension(sesion, sketch: str,
                   type: Literal["distance", "horizontal", "vertical", "radius", "diameter", "angle", "offset"],  # noqa: A002
                   entities: list[int], value: Expr | None = None, offset: float | None = None,
                   text_offset: float | None = None, reference: bool = False,
-                  mode: Literal["center", "tangent"] = "center", near: list[float] | None = None):
+                  mode: Literal["center", "tangent"] = "center", near: list[float] | None = None,
+                  position: list[float] | None = None):
     """
     sketch: id o nombre del boceto.
     type: tipo de cota.
@@ -1343,6 +1353,7 @@ def add_dimension(sesion, sketch: str,
     reference: true = cota de referencia (driven): mide la geometría sin restringirla; ignora value.
     mode: en una distancia con un círculo o arco: "center" (al centro) o "tangent" (al borde más cercano).
     near: [x, y] en mm, solo en angle: el ángulo medido es el del cuadrante entre las dos rectas que contiene este punto; vacío = entre las líneas tal como se dibujaron.
+    position: [x, y] en mm: donde queda la cota, como si se la arrastrara con el ratón (no cambia el valor ni la geometría); no se combina con offset ni text_offset; vacío = lo automático.
     """
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
@@ -1379,7 +1390,7 @@ def add_dimension(sesion, sketch: str,
         kid = b.agregar_cota(interno, list(entities), expresion, datos, referencia=reference)
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", str(e)) from e
-    _fijar_ubicacion(b, b.cotas[kid], offset, text_offset)
+    _fijar_ubicacion(b, b.cotas[kid], offset, text_offset, position)
     convertida = not reference and _cota_sobre_restringe(sesion, b, br.solver)
     if convertida:
         b.cotas[kid].referencia = True
@@ -2800,7 +2811,7 @@ def set_line_type(sesion, entities: list[int], line_type: Literal["normal", "con
              "Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): número o expresión con "
              "parámetros. La geometría se mueve para cumplirla. Si choca con las otras restricciones y cotas, falla y "
              "el boceto queda como estaba. Con `offset` y `text_offset` mueve la línea de cota y su texto sin cambiar el "
-             "valor (cotas lineales). Mantiene sincronizado el parámetro dN; rechaza dependencias circulares. "
+             "valor (cotas lineales); `position` [x, y] la mueve como el arrastre con el ratón, en cualquier cota. Mantiene sincronizado el parámetro dN; rechaza dependencias circulares. "
              "reference alterna driving/driven. Al pasar a referencia se pierde la expresión y se mide la geometría; "
              "su valor no es editable. Si volver a driving sobre-restringiría, sigue de referencia con aviso "
              "y el documento queda como estaba. `type` alterna radius ↔ diameter conservando el valor equivalente "
@@ -2812,7 +2823,8 @@ def set_line_type(sesion, entities: list[int], line_type: Literal["normal", "con
 def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: str | None = None,
                    offset: float | None = None, text_offset: float | None = None, reference: bool | None = None,
                    type: Literal["radius", "diameter"] | None = None,  # noqa: A002
-                   mode: Literal["center", "tangent"] | None = None, near: list[float] | None = None):
+                   mode: Literal["center", "tangent"] | None = None, near: list[float] | None = None,
+                   position: list[float] | None = None):
     """
     dimension: id de la cota (get_sketch la lista en dimensions).
     value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor.
@@ -2823,9 +2835,11 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
     type: radius o diameter: pasa una cota de radio a diámetro (o al revés) con el valor equivalente; vacío = no cambia.
     mode: center o tangent en una distancia con un círculo o arco; vacío = no cambia.
     near: [x, y] en mm, solo en una cota de ángulo: pasa a medir el ángulo del cuadrante que contiene este punto; vacío = no cambia.
+    position: [x, y] en mm: mueve la cota ahí, como arrastrarla con el ratón (no cambia el valor ni la geometría); no se combina con offset ni text_offset; vacío = no cambia.
     """
-    if all(v is None for v in (value, offset, text_offset, reference, type, mode, near)):
-        raise error("INVALID_ARGUMENTS", "Falta qué cambiar: value, offset, text_offset, reference, type, mode o near.")
+    if all(v is None for v in (value, offset, text_offset, reference, type, mode, near, position)):
+        raise error("INVALID_ARGUMENTS",
+                    "Falta qué cambiar: value, offset, text_offset, reference, type, mode, near o position.")
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     k = nueva.boceto.cotas.get(dimension) if isinstance(dimension, int) and not isinstance(dimension, bool) else None
@@ -2861,7 +2875,7 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
         _cota_valida(k.tipo, valor, f"La cota {dimension} ({tipo})")
         k.expresion = expresion
     expresion = k.expresion
-    _fijar_ubicacion(nueva.boceto, k, offset, text_offset)
+    _fijar_ubicacion(nueva.boceto, k, offset, text_offset, position)
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota {dimension} ({tipo}) = {expresion}")
     estado, gdl = estado_solver(boceto_resuelto(sesion, nueva))

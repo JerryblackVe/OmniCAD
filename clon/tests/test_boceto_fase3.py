@@ -5,6 +5,7 @@ import pytest
 
 from omnicad import api
 from omnicad.restricciones import Boceto
+from omnicad.restricciones.boceto import Cota
 from omnicad.timeline.parametros import ErrorExpresion
 from omnicad.timeline.operaciones import OpBoceto
 
@@ -1038,13 +1039,21 @@ def _menu_a_textos(monkeypatch):
     return menus
 
 
+def _derecho_mantenido(lz, punto):
+    """Clic derecho apretado un rato: con una cota a medias abre sus opciones (el clic rápido cancela)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    QTest.mousePress(lz, Qt.RightButton, Qt.NoModifier, punto)
+    QTest.qWait(550)
+    QTest.mouseRelease(lz, Qt.RightButton, Qt.NoModifier, punto)
+
+
 def _tildados(menu):
     return {a.text(): a.isChecked() for a in menu.actions() if a.text()}
 
 
 def test_boc34_menu_antes_de_ubicar_radio_diametro_y_referencia(monkeypatch):
-    from PySide6.QtCore import QPointF, Qt
-    from PySide6.QtTest import QTest
+    from PySide6.QtCore import QPointF
     lz, _linea = _lienzo_boc1()
     c = lz.b.agregar_circulo((60, 0), 3)
     menus = _menu_a_textos(monkeypatch)
@@ -1052,7 +1061,7 @@ def test_boc34_menu_antes_de_ubicar_radio_diametro_y_referencia(monkeypatch):
     lz.picks = [c]
     lz._abrir_cota("diametro", [c], QPointF(100, 100))
     assert lz.entrada.campos[0].text() == "6"
-    QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, QPointF(50, 50).toPoint())     # clic derecho, sin cota creada
+    _derecho_mantenido(lz, QPointF(50, 50).toPoint())                # clic derecho mantenido, sin cota creada
     assert not lz.b.cotas and lz.picks == [c]
     assert list(_tildados(menus[-1])) == ["Cota conductora (driving)", "Cota de referencia (driven)", "Radio",
                                           "Diámetro"]
@@ -1067,16 +1076,16 @@ def test_boc34_menu_antes_de_ubicar_radio_diametro_y_referencia(monkeypatch):
 
 
 def test_boc34_menu_antes_de_ubicar_tangente_y_sin_cota_elegida(monkeypatch):
-    from PySide6.QtCore import QPointF, Qt
-    from PySide6.QtTest import QTest
+    from PySide6.QtCore import QPointF
     lz, _linea = _lienzo_boc1()
     c, p = lz.b.agregar_circulo((60, 0), 3), lz.b.agregar_punto(70, 0)
     lz.b.agregar_restriccion("fijo", [c])
     lz.resolver()
     menus = _menu_a_textos(monkeypatch)
     lz.set_herramienta("cota")
-    QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, QPointF(50, 50).toPoint())     # sin nada elegido: no hay menú
-    assert not menus
+    _derecho_mantenido(lz, QPointF(50, 50).toPoint())                # sin nada elegido: no hay menú
+    assert not menus and lz.herramienta == "seleccionar"            # sin nada a medias, el clic derecho sale
+    lz.set_herramienta("cota")
     lz.picks = [p]
     lz._abrir_cota("distancia", [p, c], QPointF(100, 100))
     assert lz.entrada.campos[0].text() == "10"
@@ -1102,6 +1111,7 @@ def test_boc35_clic_en_otra_cota_la_cita_por_su_nombre():
     lz.grab()                                                       # dibuja y arma las zonas de clic
     zona = lz._zonas_cotas[base.id]
     assert base.nombre == ""                                        # el documento la nombra recién al terminar
+    lz.entrada.campos[0].deselect()                                 # el clic en el lienzo le saca la selección a la caja
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, zona.center().toPoint())
     assert base.nombre == "d1" and lz.entrada.campos[0].text() == "d1"   # se nombra al citarla; reemplaza lo elegido
     campo = lz.entrada.campos[0]
@@ -1133,3 +1143,201 @@ def test_boc35_editar_una_cota_no_se_cita_a_si_misma():
     lz.grab()
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz._zonas_cotas[cota.id].center().toPoint())
     assert lz.entrada is None                                        # clic sobre sí misma: se cierra como siempre
+
+
+# ---------------------------------------------------------------- arrastrar toda cota (Fusion): radio, diámetro, ángulo
+def test_mover_cota_modelo_lineal_y_demas():
+    b = Boceto()
+    c = b.agregar_circulo((10, 20), 4)
+    radio = b.agregar_cota("radio", [c], "4")
+    b.mover_cota(b.cotas[radio], (18, 26))
+    assert b.cotas[radio].datos["ubic"] == [18, 26] and b.medir(b.cotas[radio]) == pytest.approx(4)
+    linea = b.agregar_linea((0, 0), (20, 0))
+    lineal = b.agregar_cota("distancia", [linea], "20")
+    b.mover_cota(b.cotas[lineal], (5, 9))                       # las lineales siguen guardando desfase y texto
+    assert b.cotas[lineal].datos["desfase"] == 9 and "ubic" not in b.cotas[lineal].datos
+
+
+@pytest.mark.parametrize("cuadrante", [0, 1, 2, 3])
+def test_arco_angulo_barre_el_angulo_medido(cuadrante):
+    b = Boceto()
+    l1, l2 = b.agregar_linea((0, 0), (10, 0)), b.agregar_linea((0, 0), (6, 6))
+    k = b.cotas[b.agregar_cota("angulo", [l1, l2], "45", {"cuadrante": cuadrante})]
+    o, t0, t1 = b.arco_angulo(k)
+    assert o == pytest.approx((0, 0)) and math.degrees(abs(t1 - t0)) == pytest.approx(b.medir(k))
+    l3 = b.agregar_linea((0, 5), (10, 5))
+    paralela = b.agregar_cota("distancia", [l1, l3], "5")
+    assert paralela in b.cotas
+    with pytest.raises(Exception, match="paralelas"):
+        b.arco_angulo(Cota(-1, "angulo", [l1, l3], "", {}))
+
+
+def test_api_position_mueve_cualquier_cota_sin_cambiar_su_valor(sesion):
+    circulo = llamar(sesion, "draw_circle", center_x=10, center_y=20, radius=4)["entities"][0]["id"]
+    k = llamar(sesion, "add_dimension", sketch="Base", type="radius", entities=[circulo], position=[18, 26])["dimension"]
+    assert k["position"] == [18, 26] and k["value"] == 4
+    llamar(sesion, "edit_dimension", dimension=k["id"], position=[20, 30])
+    assert llamar(sesion, "get_sketch")["dimensions"][0]["position"] == [20, 30]
+    r = api.llamar(sesion, "edit_dimension", {"dimension": k["id"], "position": [1, 1], "offset": 2})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS"
+    r = api.llamar(sesion, "edit_dimension", {"dimension": k["id"], "position": [1]})
+    assert not r["ok"]
+
+
+def test_ui_arrastrar_radio_diametro_y_angulo_con_el_mouse():
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    lz, _linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    b = lz.b
+    b.curvas.clear(), b.puntos.clear(), b.restricciones.clear(), b.cotas.clear()
+    a, d = b.agregar_circulo((10, 20), 4), b.agregar_circulo((30, 20), 4)
+    l1, l2 = b.agregar_linea((0, 0), (20, 0)), b.agregar_linea((0, 0), (0, 20))
+    ids = [b.agregar_cota("radio", [a], "4"), b.agregar_cota("diametro", [d], "8"), b.agregar_cota("angulo", [l1, l2], "90")]
+    lz.resolver()
+    lz.set_herramienta("seleccionar")
+    for cid in ids:
+        lz.grab()
+        zona = lz._zonas_cotas[cid]
+        antes, valor = lz.b.cotas[cid].expresion, b.medir(b.cotas[cid])
+        ini = zona.center().toPoint()
+        QTest.mousePress(lz, Qt.LeftButton, Qt.NoModifier, ini)
+        for k in range(1, 5):
+            QTest.mouseMove(lz, ini + QPoint(10 * k, -10 * k))
+        QTest.mouseRelease(lz, Qt.LeftButton, Qt.NoModifier, ini + QPoint(40, -40))
+        cota = lz.b.cotas[cid]
+        assert "ubic" in cota.datos, cota.tipo                     # se movió
+        assert cota.expresion == antes and b.medir(cota) == pytest.approx(valor)   # el valor no cambió
+        lz.grab()
+        assert lz._zonas_cotas[cid].center() != zona.center()      # y el texto se ve en otro lado
+        lz.deshacer()
+        assert "ubic" not in lz.b.cotas[cid].datos                 # un Ctrl+Z la devuelve
+
+
+def test_ui_cota_con_expresion_lleva_fx_y_la_de_referencia_parentesis():
+    from omnicad.ui.editor_boceto import Lienzo
+    c = Cota(1, "radio", [1], "ag * 2", {})
+    assert Lienzo._texto_cota(c, 8) == "fx: R8"
+    assert Lienzo._texto_cota(Cota(2, "distancia", [1], "25", {}), 25) == "25"
+    assert Lienzo._texto_cota(Cota(3, "angulo", [1, 2], "90", {}, referencia=True), 90) == "(90°)"
+
+
+def test_ui_cota_se_resalta_y_da_tooltip_al_pasar_con_la_caja_abierta(monkeypatch):
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication, QToolTip
+    lz, linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz._abrir_cota("distancia", [linea], QPointF(300, 200))
+    lz.entrada.aceptado.emit(["40"])
+    base = next(iter(lz.b.cotas.values()))
+    base.nombre = "d1"
+    lz.set_herramienta("cota")
+    circulo = lz.b.agregar_circulo((60, 20), 3)
+    lz.picks = [circulo]
+    lz._abrir_cota("diametro", [circulo], QPointF(500, 400))
+    lz.grab()
+    textos = []
+    monkeypatch.setattr(QToolTip, "showText", lambda pos, texto, *a: textos.append(texto))
+    def mover(punto):                                                # el widget no está visible: se le manda el evento
+        QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, punto, lz.mapToGlobal(punto), Qt.NoButton,
+                                               Qt.NoButton, Qt.NoModifier))
+    mover(lz._zonas_cotas[base.id].center())
+    assert lz._cita_sobre == base.id and textos == ["d1 : 40 mm"]
+    mover(QPointF(5, 5))
+    assert lz._cita_sobre is None
+    lz.entrada.cancelado.emit()                                      # sin caja abierta no se resalta
+    mover(lz._zonas_cotas[base.id].center())
+    assert lz._cita_sobre is None
+
+
+# ---------------------------------------------------------------- clic derecho cancela la operación o sale de la herramienta
+HERRAMIENTAS_CON_CLICS = ["linea", "rectangulo", "rectangulo_centro", "rectangulo_3p", "circulo", "circulo_2p", "circulo_3p",
+                          "arco", "arco_centro", "elipse", "poligono_inscrito", "spline_ajuste", "spline_control",
+                          "ranura_centro", "conica"]
+
+
+def _clic_izq(lz, x, y):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz.a_px(x, y).toPoint())
+
+
+def _clic_der(lz):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    QTest.mouseClick(lz, Qt.RightButton, Qt.NoModifier, lz.a_px(50, 50).toPoint())
+
+
+@pytest.mark.parametrize("salida", ["derecho", "esc"])
+@pytest.mark.parametrize("herramienta", HERRAMIENTAS_CON_CLICS)
+def test_clic_derecho_y_esc_cortan_lo_que_esta_a_medias_y_despues_salen(herramienta, salida):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    lz, _linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz.set_herramienta(herramienta)
+    _clic_izq(lz, 10, 10)
+    assert lz.clics, herramienta                                    # hay una operación a medias
+    cancelar = (lambda: _clic_der(lz)) if salida == "derecho" else (lambda: QTest.keyClick(lz, Qt.Key_Escape))
+    cancelar()
+    assert not lz.clics and lz.herramienta == herramienta           # corta lo puesto y se queda en la herramienta
+    cancelar()
+    assert lz.herramienta == "seleccionar"                          # sin nada a medias: sale
+
+
+def test_clic_derecho_en_toda_herramienta_sale_a_seleccionar():
+    from omnicad.ui.editor_boceto import HERRAMIENTAS, RESTRICCIONES_HERRAMIENTA
+    lz, _linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    for h in [*HERRAMIENTAS, *RESTRICCIONES_HERRAMIENTA]:
+        if h == "seleccionar":
+            continue
+        lz.set_herramienta(h)
+        lz._cerrar_entrada()
+        _clic_der(lz)
+        assert lz.herramienta == "seleccionar", h
+
+
+def test_clic_derecho_cancela_cota_a_medias_caja_abierta_y_texto():
+    from PySide6.QtCore import QPointF
+    lz, linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz.set_herramienta("cota")
+    lz.picks = [linea]
+    lz._abrir_cota("distancia", [linea], QPointF(300, 200))
+    _clic_der(lz)                                                   # cierra la caja y suelta lo elegido en un solo paso
+    assert lz.entrada is None and not lz.picks and lz.herramienta == "cota" and not lz.b.cotas
+    lz.set_herramienta("texto")
+    _clic_izq(lz, 10, 10)
+    _clic_izq(lz, 30, 20)
+    assert lz.entrada is not None                                   # cuadro de texto abierto
+    _clic_der(lz)
+    assert lz.entrada is None
+
+
+def test_clic_derecho_en_seleccionar_sigue_siendo_del_visor_o_desplazar():
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    lz, _linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    assert lz.herramienta == "seleccionar" and lz._derecho is None
+    QTest.mousePress(lz, Qt.RightButton, Qt.NoModifier, QPointF(50, 50).toPoint())
+    assert lz._derecho is None and lz._pan is not None              # como antes: desplaza con el derecho apretado
+    QTest.mouseRelease(lz, Qt.RightButton, Qt.NoModifier, QPointF(50, 50).toPoint())
+
+
+def test_clic_derecho_arrastrado_en_una_herramienta_no_cancela_desplaza():
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    lz, _linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz.set_herramienta("linea")
+    _clic_izq(lz, 10, 10)
+    ini = QPoint(50, 50)
+    QTest.mousePress(lz, Qt.RightButton, Qt.NoModifier, ini)
+    assert lz._derecho is not None                                  # todavía puede ser un clic rápido
+    QTest.mouseMove(lz, ini + QPoint(30, 0))
+    assert lz._derecho is None and lz._pan is not None              # se arrastró: desplaza, no cancela
+    QTest.mouseRelease(lz, Qt.RightButton, Qt.NoModifier, ini + QPoint(30, 0))
+    assert lz.clics and lz.herramienta == "linea"

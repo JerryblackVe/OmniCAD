@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 210: Abierto 160 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 211: Abierto 161 · Parcial 29 · Bloqueado 18 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -80,11 +80,12 @@ Abierto 1 · Parcial 2.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 1. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
+Abierto 2. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | BOC-36 | Curva isoparamétrica (Project/Include › Isoparametric Curve): curvas U/V de una cara como geometría de boceto | Abierto | Media | Fusion extrae curvas U, V o ambas de una cara, en un punto elegido; tipo Single o Distributed (distancia o cantidad); con «Projection Link» opcional que avisa si la superficie cambia. OmniCAD no tiene nada (grep `isopar` en omnicad/ sin resultados). Ayuda: Isoparametric curve; reutilizar `project_to_surface` y el vínculo de proyección (`manage_lost_projections`, `break_projection_link`). Lleva herramienta en api/ (receta C). | omnicad/api/herramientas_boceto*.py (no existe `isoparametric_curve`); docs/fusion_docs/contenido/fusion-sketch/isoparametric-curve-4089a59d7f6.md | 2026-10-25 |
+| BOC-37 | Dibujar la línea de cota de las cotas que hoy solo muestran el texto | Abierto | Media | Fusion dibuja líneas y flechas en toda cota (ver «Dimension sketch geometry» y el video de cotas). En OmniCAD tienen línea las lineales de una línea o de dos puntos, el radio, el diámetro y (desde el arrastre de cotas) el arco del ángulo; siguen sin línea la distancia entre líneas paralelas, punto–línea, con círculo o arco, punto–spline y el desfase: solo texto, que se arrastra con una guía fina. El texto del ángulo tampoco se desliza a lo largo del arco. | omnicad/ui/editor_boceto.py `_dibujar_cotas` (rama final) | 2026-10-25 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 

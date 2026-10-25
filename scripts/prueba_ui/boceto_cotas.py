@@ -8,6 +8,7 @@ import arnes as A
 from omnicad import api
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 AR = "BOCETO·COTAS"
 s = api.Sesion()
@@ -55,6 +56,15 @@ def escribir(texto):
     QTest.keyClicks(campo, texto)
     QTest.keyClick(campo, Qt.Key_Return)
     A.esperar(120)
+
+
+def derecho(pos, ms=0):
+    """Clic derecho (rápido, o apretado `ms` milisegundos antes de soltar: con una cota a medias abre sus opciones)."""
+    QTest.mousePress(lz, Qt.RightButton, Qt.NoModifier, pos)
+    if ms:
+        A.esperar(ms)
+    QTest.mouseRelease(lz, Qt.RightButton, Qt.NoModifier, pos)
+    A.esperar(80)
 
 
 def cotas():
@@ -224,7 +234,7 @@ def lo_que_fusion_tiene():
     lz.set_herramienta("cota")
     clic(12.5, 25)
     A.MENUS.clear()
-    A.clic_derecho(lz, px(12.5, 36))
+    derecho(px(12.5, 36), 550)
     items = [a.text() for a in A.MENUS[-1].actions() if a.text()] if A.MENUS else []
     A.reg(AR, "clic derecho ANTES de ubicar la cota abre sus opciones: Driven/Driving, Radio/Diámetro, Centro/Tangente (como Fusion)",
           any("referencia" in x.lower() for x in items) and not lz.b.cotas, f"menú={items}; cotas en el boceto={len(lz.b.cotas)}")
@@ -244,7 +254,7 @@ def menu_previo_y_citar():
     clic(60, 15)                                   # el círculo: la caja de diámetro queda abierta
     abierta = lz.entrada is not None and lz.entrada.isVisible()
     A.MENUS.clear()
-    A.clic_derecho(lz, px(70, 25))
+    derecho(px(70, 25), 550)
     items = [a.text() for a in A.MENUS[-1].actions() if a.text()] if A.MENUS else []
     A.reg(AR, "clic derecho con un círculo elegido ofrece Radio y Diámetro además de driven/driving",
           abierta and {"Radio", "Diámetro"} <= set(items) and not cotas(), f"menú={items}")
@@ -266,6 +276,13 @@ def menu_previo_y_citar():
 
 
 run("menú antes de ubicar la cota (BOC-34)", menu_previo_y_citar)
+def mover(pos):
+    """Movimiento del mouse SIMULADO enviado al lienzo (QTest.mouseMove mueve el cursor real de Windows)."""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QMouseEvent
+    QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, pos, lz.mapToGlobal(pos), Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+
+
 def citar_una_cota():
     """BOC-35 con el mouse: con la caja de valor abierta, un clic en otra cota (que ya tiene nombre dN) la cita."""
     global lz
@@ -289,6 +306,9 @@ def citar_una_cota():
           f"zona={zona}, nombre={base['name']}")
     if zona is None or lz.entrada is None:
         return
+    mover(zona.center())                                   # pasar el mouse con la caja abierta resalta la cota
+    A.esperar(100)
+    A.reg(AR, "con la caja abierta, pasar el mouse sobre otra cota la resalta", lz._cita_sobre == base["id"], f"_cita_sobre={lz._cita_sobre}")
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, zona.center().toPoint())
     A.esperar(100)
     texto = lz.entrada.campos[0].text() if lz.entrada is not None else ""
@@ -302,6 +322,8 @@ def citar_una_cota():
         c = cota_nueva(antes)
         A.reg(AR, "Enter con «dN / 2» crea el diámetro citando a la otra", c is not None and c.expresion == f"{base['name']} / 2",
               str(c and c.expresion))
+        A.reg(AR, "la cota con expresión se lee con «fx:» delante (como Fusion)",
+              c is not None and lz._texto_cota(c, lz.b.medir(c)).startswith("fx: "), str(c and lz._texto_cota(c, lz.b.medir(c))))
         if c is not None:
             lz.deshacer()
             A.esperar(100)
@@ -341,6 +363,134 @@ def citar_una_cota():
 
 
 run("citar una cota con un clic (BOC-35)", citar_una_cota)
+
+def arrastrar_todas():
+    """Fusion deja arrastrar toda cota con el mouse (la línea o el arco y el texto siguen al cursor; el valor no cambia):
+    diámetro, radio y ángulo, además de las lineales que ya se movían."""
+    for k in cotas():
+        lz.b.eliminar(k.id)
+    lz.set_herramienta("seleccionar")
+    A.esperar(60)
+    casos = [("diámetro", [(60, 15)], None, "10", None),
+             ("radio", [(60, 15)], None, "5", "Radio"),
+             ("ángulo", [(112.5, 0), (106, 9)], (118, 10), "40", None)]
+    for nombre, picks, ubicar, texto, menu in casos:
+        antes = {c.id for c in cotas()}
+        lz.set_herramienta("cota")
+        A.esperar(60)
+        for q in picks:
+            clic(*q)
+        if ubicar:
+            clic(*ubicar)
+        if menu is not None and lz.entrada is not None:
+            A.MENUS.clear()
+            derecho(px(70, 25), 550)
+            next(a for a in A.MENUS[-1].actions() if a.text() == menu).trigger()
+            A.esperar(60)
+        if lz.entrada is not None:
+            escribir(texto)
+        c = cota_nueva(antes)
+        A.reg(AR, f"{nombre}: la cota se crea", c is not None, str(c and (c.tipo, c.expresion, c.referencia)))
+        if c is None:
+            continue
+        lz.set_herramienta("seleccionar")
+        A.esperar(80)
+        lz.grab()
+        zona = lz._zonas_cotas.get(c.id)
+        if zona is None:
+            A.reg(AR, f"{nombre}: tiene zona para arrastrar", False, "")
+            continue
+        ini = zona.center().toPoint()
+        valor0, expr0 = lz.b.medir(c), c.expresion
+        mover(zona.center())
+        A.esperar(80)
+        QTest.mousePress(lz, Qt.LeftButton, Qt.NoModifier, ini)
+        for k in range(1, 7):
+            mover(zona.center() + zona.center().__class__(9 * k, -9 * k))
+            A.esperar(30)
+        QTest.mouseRelease(lz, Qt.LeftButton, Qt.NoModifier, ini + type(ini)(54, -54))
+        A.esperar(120)
+        c = lz.b.cotas[c.id]
+        lz.grab()
+        zona2 = lz._zonas_cotas.get(c.id)
+        movio = zona2 is not None and (abs(zona2.center().x() - zona.center().x()) > 15 or abs(zona2.center().y() - zona.center().y()) > 15)
+        A.reg(AR, f"{nombre}: arrastrarla con el mouse la mueve", "ubic" in c.datos and movio,
+              f"datos={sorted(c.datos)}; zona antes={zona.center().toPoint()}, después={zona2.center().toPoint() if zona2 else None}")
+        A.reg(AR, f"{nombre}: arrastrarla no cambia su valor", c.expresion == expr0 and abs(lz.b.medir(c) - valor0) < 1e-6,
+              f"{c.expresion} / {lz.b.medir(c):.4f}")
+        lz.deshacer()
+        A.esperar(80)
+        A.reg(AR, f"{nombre}: un Ctrl+Z deshace el arrastre y la cota sigue", c.id in lz.b.cotas and "ubic" not in lz.b.cotas[c.id].datos,
+              f"cota sigue={c.id in lz.b.cotas}")
+        lz.deshacer()
+        A.esperar(80)
+
+
+run("arrastrar toda cota (radio, diámetro y ángulo)", arrastrar_todas)
+
+
+def clic_derecho_sale():
+    """Clic derecho rápido en una herramienta: corta lo que está a medias y se queda; sin nada a medias, sale a Seleccionar
+    (igual que Esc). Arrastrado sigue siendo del visor (gesto del menú radial) y en Seleccionar, su menú de siempre."""
+    for k in cotas():
+        lz.b.eliminar(k.id)
+    pedidos = []
+    lz.visor.menu_contextual.connect(lambda *a: pedidos.append("menu"))
+    lz.visor.gesto_radial.connect(lambda sector: pedidos.append(("gesto", sector)))
+    for herramienta in ("linea", "rectangulo", "circulo", "arco", "spline_ajuste"):
+        lz.set_herramienta(herramienta)
+        A.esperar(60)
+        clic(200, 60)
+        puesto = bool(lz.clics)
+        derecho(px(250, 30))
+        A.reg(AR, f"{herramienta}: el clic derecho corta lo puesto y sigue en la herramienta",
+              puesto and not lz.clics and lz.herramienta == herramienta, f"clics={lz.clics}, herramienta={lz.herramienta}")
+        derecho(px(250, 30))
+        A.reg(AR, f"{herramienta}: otro clic derecho sale a Seleccionar", lz.herramienta == "seleccionar", lz.herramienta)
+    lz.set_herramienta("linea")
+    clic(200, 60)
+    QTest.keyClick(lz, Qt.Key_Escape)
+    A.esperar(60)
+    quedo = lz.herramienta == "linea" and not lz.clics
+    QTest.keyClick(lz, Qt.Key_Escape)
+    A.esperar(60)
+    A.reg(AR, "Esc hace lo mismo: corta, y otro Esc sale", quedo and lz.herramienta == "seleccionar", lz.herramienta)
+    lz.set_herramienta("cota")
+    clic(12.5, 25)
+    derecho(px(250, 30))
+    A.reg(AR, "cota: el clic derecho rápido suelta la línea elegida y sigue en la herramienta",
+          not lz.picks and lz.herramienta == "cota", f"picks={lz.picks}, herramienta={lz.herramienta}")
+    clic(60, 15)
+    abierta = lz.entrada is not None and lz.entrada.isVisible()
+    derecho(px(250, 30))
+    A.reg(AR, "cota con la caja de valor abierta: el clic derecho la cierra y suelta lo elegido",
+          abierta and lz.entrada is None and not lz.picks and not cotas(), f"abierta={abierta}, picks={lz.picks}")
+    derecho(px(250, 30))
+    A.reg(AR, "cota: otro clic derecho sale de la herramienta", lz.herramienta == "seleccionar", lz.herramienta)
+    lz.set_herramienta("linea")
+    clic(200, 60)
+    ini = px(250, 30)
+    pedidos.clear()
+    QTest.mousePress(lz, Qt.RightButton, Qt.NoModifier, ini)
+    for k in range(1, 9):
+        mover(ini + type(ini)(10 * k, 0))
+        A.esperar(20)
+    QTest.mouseRelease(lz, Qt.RightButton, Qt.NoModifier, ini + type(ini)(80, 0))
+    A.esperar(100)
+    A.reg(AR, "clic derecho arrastrado en una herramienta no es un clic rápido: llega al visor como gesto del menú radial",
+          any(isinstance(x, tuple) for x in pedidos) and "menu" not in pedidos, f"clics={lz.clics}, visor={pedidos}")
+    QTest.keyClick(lz, Qt.Key_Escape)
+    QTest.keyClick(lz, Qt.Key_Escape)
+    A.esperar(60)
+    pedidos.clear()
+    lz.set_herramienta("seleccionar")
+    derecho(px(250, 30))
+    A.reg(AR, "en Seleccionar el clic derecho queda como antes (menú del visor) y no cambia de herramienta",
+          "menu" in pedidos and lz.herramienta == "seleccionar", f"visor={pedidos}")
+
+
+run("clic derecho cancela o sale (herramientas del boceto)", clic_derecho_sale)
+
 
 # Navegador: «Mostrar cotas» del boceto (Fusion: clic derecho en el boceto)
 v._salir_de_boceto()

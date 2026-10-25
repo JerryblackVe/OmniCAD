@@ -2014,6 +2014,29 @@ class Boceto:
             medio = ((a[0] + b[0]) * u[0] + (a[1] + b[1]) * u[1]) / 2
             c.datos["texto"] = round(punto[0] * u[0] + punto[1] * u[1] - medio, 6)
 
+    def mover_cota(self, c, punto):
+        """Arrastrar una cota ya creada (Fusion: todas se pueden mover): no cambia su valor ni la geometría. Las
+        lineales mueven su línea y su texto (`ubicar_cota`); las demás guardan en «ubic» el punto (x, y) en mm donde
+        va el texto (en un ángulo, además, fija el radio del arco; en un radio o diámetro, hacia dónde sale la línea)."""
+        if self.ejes_cota(c) is not None:
+            self.ubicar_cota(c, punto)
+        else:
+            c.datos["ubic"] = [round(punto[0], 6), round(punto[1], 6)]
+
+    def arco_angulo(self, c):
+        """(vértice, t0, t1) del arco de una cota de ángulo: el cruce de las dos rectas y los ángulos (radianes) de
+        las semirrectas del cuadrante elegido, con t1 − t0 entre −π y π."""
+        l1, l2 = c.entidades
+        (a, _), (b, _) = self._extremos_linea(l1), self._extremos_linea(l2)
+        d1, d2 = self._direccion(l1), self._direccion(l2)
+        det = d1[0] * d2[1] - d1[1] * d2[0]
+        if abs(det) < 1e-9:
+            raise ErrorBoceto("Las líneas son paralelas: no forman ángulo.")
+        s = ((b[0] - a[0]) * d2[1] - (b[1] - a[1]) * d2[0]) / det
+        s1, s2 = signos_cuadrante(c.datos.get("cuadrante"))
+        t0, t1 = math.atan2(s1 * d1[1], s1 * d1[0]), math.atan2(s2 * d2[1], s2 * d2[0])
+        return (a[0] + s * d1[0], a[1] + s * d1[1]), t0, t0 + (t1 - t0 + math.pi) % (2 * math.pi) - math.pi
+
     def separacion(self, original, desfasada):
         """Distancia entre una curva y su desfase; en curvas libres mide el primer punto de ajuste."""
         o, d = self.curvas[original], self.curvas[desfasada]
