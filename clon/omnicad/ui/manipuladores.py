@@ -441,6 +441,7 @@ class Angulo(Manipulador):
 
 
 AYUDA_CALCOMANIA = "Modificar el tamaño de la imagen o la colocación"
+CON_ESCALA = ("lienzo", "calcomania")      # comandos con la caja «Factor de escala» del codo
 GRIS_CALCOMANIA = _rgb("#c9c9c9")
 BORDE_CALCOMANIA = _rgb("#444444")
 AZUL_CALCOMANIA = _rgb("#289acb")
@@ -1011,12 +1012,12 @@ class GestorManipuladores(QObject):
             caja = self.cajas.get(clave)
             if caja is None:
                 caja = self.cajas[clave] = CajaValor(self, clave)
-                if clave == "escala" and self.comando.CLAVE == "calcomania":
+                if clave == "escala" and self.comando.CLAVE in CON_ESCALA:
                     caja.setAlignment(Qt.AlignCenter)
             caja.punto = np.asarray(punto, float)
             if not caja.hasFocus():
                 texto = str(self.panel.valores.get(clave, ""))
-                if clave == "escala" and self.comando.CLAVE == "calcomania":
+                if clave == "escala" and self.comando.CLAVE in CON_ESCALA:
                     texto = f"{self.valor(clave):.2f}"
                 if caja.text() != texto:
                     caja.setText(texto)
@@ -1044,7 +1045,7 @@ class GestorManipuladores(QObject):
         texto = caja.text().strip()
         try:
             valor = self.ctx.evaluar(texto, self.tipo(caja.clave))
-            if caja.clave == "escala" and self.comando.CLAVE == "calcomania" and valor <= 0:
+            if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
                 raise ValueError("El factor de escala debe ser positivo.")
         except Exception as e:  # noqa: BLE001 — se marca la caja en rojo, como el panel
             caja.setStyleSheet(QSS_CAJA + "QLineEdit#caja_manipulador { background: #ffd9d9; }")

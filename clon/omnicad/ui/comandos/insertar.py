@@ -163,13 +163,39 @@ class Lienzo(Comando):
     CALCOMANIA = False
 
     def campos(self, ctx):
-        filtros = {"cara_plana"} if self.CALCOMANIA else {"plano", "cara_plana"}
-        return [Seleccion("plano", "Cara" if self.CALCOMANIA else "Plano/cara", filtros),
-                Texto("archivo", "Imagen", ""), Expresion("ancho", "Ancho real", "100 mm"),
+        return [Seleccion("plano", "Plano/cara", {"plano", "cara_plana"}),
+                Texto("archivo", "Imagen", ""), Casilla("mantener_proporcion", "Mantener relación de aspecto", True),
+                Expresion("ancho", "Ancho real", "100 mm"), Expresion("alto", "Altura", "0 mm"),
+                Expresion("escala", "Factor de escala", "1.00", ESCALAR),
                 Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
-                Entero("opacidad", "Opacidad (%)", 100 if self.CALCOMANIA else 50, 0, 100),
-                Casilla("voltear", "Voltear horizontal")]
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO), Entero("opacidad", "Opacidad (%)", 50, 0, 100),
+                Casilla("voltear", "Voltear horizontal"), Casilla("voltear_v", "Voltear vertical")]
+
+    def preparar_panel(self, panel):
+        """Ancho y altura se corrigen entre sí mientras se mantiene la relación de aspecto."""
+        self._panel = panel
+        self._sincronizando = False
+        if panel.ctx.op is not None:
+            panel.widgets["archivo"].setPlaceholderText(panel.ctx.op.p["archivo"])
+            panel.widgets["archivo"].setToolTip("Imagen embebida; escribí una ruta para reemplazarla.")
+        for clave in ("ancho", "alto"):
+            panel.widgets[clave].textChanged.connect(lambda _t, k=clave: self._proporcion(k))
+        panel.widgets["mantener_proporcion"].toggled.connect(lambda activa: self._proporcion("ancho") if activa else None)
+
+    def _proporcion(self, clave):
+        p = self._panel
+        if self._sincronizando or not p.valores.get("mantener_proporcion") or not getattr(self, "_prop", None):
+            return
+        try:
+            valor = p.ctx.evaluar(p.valores[clave])
+        except ValueError:
+            return
+        self._sincronizando = True
+        try:
+            p.set_valor("alto" if clave == "ancho" else "ancho",
+                        f"{valor * self._prop if clave == 'ancho' else valor / self._prop:.12g} mm")
+        finally:
+            self._sincronizando = False
 
     def construir(self, v, ctx):
         import base64
@@ -178,6 +204,7 @@ class Lienzo(Comando):
 
         from ...timeline.ops_insertar import OpLienzo
         hit = exigir(v, "plano", "Elegí el plano o la cara.")[0]
+        proporcion_anterior = getattr(self, "_prop", None)
         ruta = (v.get("archivo") or "").strip()
         if ruta and getattr(self, "_ruta", None) != ruta:
             if not Path(ruta).is_file():
@@ -197,12 +224,39 @@ class Lienzo(Comando):
         ctx.evaluar(v["ancho"])
         params = {"plano": hit["ref"], "archivo": Path(ruta).name if ruta else (ctx.op.p["archivo"] if ctx.op else ""),
                   "imagen": self._b64, "proporcion": self._prop, "calcomania": self.CALCOMANIA,
-                  **{k: v[k] for k in ("ancho", "dx", "dy", "angulo", "opacidad", "voltear")}}
-        return self.crear_op(OpLienzo, v, ctx, **params)
+                  **{k: v[k] for k in ("ancho", "alto", "escala", "dx", "dy", "angulo", "opacidad", "voltear",
+                                       "voltear_v", "mantener_proporcion")}}
+        op = self.crear_op(OpLienzo, v, ctx, **params)
+        if self._prop != proporcion_anterior and getattr(self, "_panel", None) is not None:
+            self._proporcion("ancho")
+        return op
 
     def desde_op(self, op, ctx):
         from ..comando import hit_desde_ref
-        return dict(op.p, plano=[hit_desde_ref(op.p["plano"], ctx.estado)] if op.p.get("plano") else [], archivo="")
+        self._b64, self._prop = op.p["imagen"], op.p["proporcion"]
+        alto = f"{ctx.evaluar(op.p['ancho']) * self._prop:.12g} mm" if op.p["mantener_proporcion"] else op.p["alto"]
+        return dict(op.p, plano=[hit_desde_ref(op.p["plano"], ctx.estado)] if op.p.get("plano") else [], archivo="",
+                    alto=alto)
+
+    def plano_gizmo(self, v, ctx):
+        """Plano de la imagen y centro de su giro: el plano o la cara elegidos."""
+        from ...timeline import entidades
+        return entidades.como_plano(entidades.resolver(v["plano"][0]["ref"], ctx.estado))
+
+    def manipuladores(self, ctx, v):
+        """Gizmo de Fusion «Insert Canvas»: cuadrado central (mover), flechas X/Y, arco (girar), codo (escala) y
+        moños (voltear). Escriben en los campos del panel y los campos mueven las asas."""
+        from .. import manipuladores as mp
+        if not v.get("plano"):
+            return []
+        pl = self.plano_gizmo(v, ctx)
+        o = pl.a_3d(ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"]))
+        return [mp.PosicionCalcomania(o, pl),
+                mp.FlechaCalcomania("dx", o, pl.u, pl.v),
+                mp.FlechaCalcomania("dy", o, pl.u, pl.v),
+                mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja=True),
+                mp.EscalaCalcomania(o, pl.u, pl.v),
+                mp.Volteo("voltear", o, pl.u, pl.v), mp.Volteo("voltear_v", o, pl.u, pl.v)]
 
     def nombre_nuevo(self, ctx):
         base = "Calcomanía" if self.CALCOMANIA else "Lienzo"
@@ -236,42 +290,17 @@ class Calcomania(Lienzo):
                 Casilla("voltear", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
 
     def preparar_panel(self, panel):
-        self._panel = panel
-        self._sincronizando = False
-        if panel.ctx.op is not None:
-            panel.widgets["archivo"].setPlaceholderText(panel.ctx.op.p["archivo"])
-            panel.widgets["archivo"].setToolTip("Imagen embebida; escribí una ruta para reemplazarla.")
+        super().preparar_panel(panel)
         panel.valores["plano"] = [dict(h, dibujo=[]) for h in panel.valores.get("plano", [])]
         panel._refrescar_seleccion()
-        for clave in ("ancho", "alto"):
-            panel.widgets[clave].textChanged.connect(lambda _t, k=clave: self._proporcion(k))
-        panel.widgets["mantener_proporcion"].toggled.connect(lambda activa: self._proporcion("ancho") if activa else None)
 
     def ajustar_hit(self, campo, hit, ctx, visor):
         return dict(hit, dibujo=[])
 
-    def _proporcion(self, clave):
-        p = self._panel
-        if self._sincronizando or not p.valores.get("mantener_proporcion") or not getattr(self, "_prop", None):
-            return
-        try:
-            valor = p.ctx.evaluar(p.valores[clave])
-        except ValueError:
-            return
-        self._sincronizando = True
-        try:
-            p.set_valor("alto" if clave == "ancho" else "ancho",
-                        f"{valor * self._prop if clave == 'ancho' else valor / self._prop:.12g} mm")
-        finally:
-            self._sincronizando = False
-
     def construir(self, v, ctx):
         from ...nucleo.calcomanias import superficie
         from ...timeline import entidades
-        proporcion_anterior = getattr(self, "_prop", None)
         op = super().construir(v, ctx)
-        if self._prop != proporcion_anterior and getattr(self, "_panel", None) is not None:
-            self._proporcion("ancho")
         e = entidades.resolver(op.p["plano"], ctx.estado)
         malla = superficie(e.forma, centrada=ctx.op.p.get("centrada", False) if ctx.op else True)
         ancho = ctx.evaluar(v["ancho"])
@@ -286,29 +315,11 @@ class Calcomania(Lienzo):
                     centrada=ctx.op.p.get("centrada", False) if ctx.op else True)
         return op
 
-    def desde_op(self, op, ctx):
-        self._b64, self._prop = op.p["imagen"], op.p["proporcion"]
-        valores = super().desde_op(op, ctx)
-        valores["alto"] = (f"{ctx.evaluar(op.p['ancho']) * self._prop:.12g} mm"
-                           if op.p["mantener_proporcion"] else op.p["alto"])
-        return valores
-
-    def manipuladores(self, ctx, v):
-        from .. import manipuladores as mp
+    def plano_gizmo(self, v, ctx):
         from ...nucleo.calcomanias import superficie
         from ...timeline import entidades
-        if not v.get("plano"):
-            return []
         e = entidades.resolver(v["plano"][0]["ref"], ctx.estado)
-        pl = superficie(e.forma, centrada=ctx.op.p.get("centrada", False) if ctx.op else True)["plano"]
-        dx, dy = ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])
-        o = pl.a_3d(dx, dy)
-        return [mp.PosicionCalcomania(o, pl),
-                mp.FlechaCalcomania("dx", o, pl.u, pl.v),
-                mp.FlechaCalcomania("dy", o, pl.u, pl.v),
-                mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja=True),
-                mp.EscalaCalcomania(o, pl.u, pl.v),
-                mp.Volteo("voltear", o, pl.u, pl.v), mp.Volteo("voltear_v", o, pl.u, pl.v)]
+        return superficie(e.forma, centrada=ctx.op.p.get("centrada", False) if ctx.op else True)["plano"]
 
 
 registrar(InsertarDXF, InsertarSVG, VectorizarImagen, Lienzo, Calcomania)

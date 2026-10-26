@@ -164,6 +164,86 @@ probar("mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "libre", "dx": "10 mm
 probar("patron_rectangular_3d", {"cuerpos": cuerpo(caja), "dir1": eje("X")}, {"n1": 3, "d1": "50 mm"})
 probar("patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"n": 4})
 
+
+def probar_gizmo_lienzo(clave="lienzo"):
+    """Gizmo del Lienzo / Calcomanía (mover, flechas, giro, escala, volteos) arrastrado con mouse simulado."""
+    import tempfile
+    from pathlib import Path
+
+    from PIL import Image
+    nombre = f"{AR} · gizmo {clave}"
+    ruta = Path(tempfile.mkdtemp()) / "imagen.png"
+    Image.new("RGB", (80, 40), "red").save(ruta)
+    A.MODALES.clear()
+    p = A.abrir(v, clave)
+    if p is None:
+        A.reg(nombre, "abrir", False, f"{A.MODALES[-1:]}")
+        return
+    try:
+        A.elegir(p, "plano", *(cara(caja, normal=(0, 0, 1))() if clave == "calcomania" else pl()))
+        p.set_valor("archivo", str(ruta))
+        p._t_previa.stop()
+        p._calcular_previa()
+        A.esperar(150)
+        g = p.manipuladores
+        asa = lambda cl: next(m for m in g.manips if getattr(m, "clave", None) == cl)  # noqa: E731
+        libre = next(m for m in g.manips if isinstance(m, mp.PosicionCalcomania))
+        A.reg(nombre, "siete asas en la vista", len(g.manips) == 7, str([type(m).__name__ for m in g.manips]))
+        # flechas X e Y
+        for cl in ("dx", "dy"):
+            m = asa(cl)
+            a, b = m.puntos(g)
+            medio = (a + b) / 2
+            ok = arrastrar(p, g, medio, medio + (m.u if cl == "dx" else m.v) * 5)
+            A.reg(nombre, f"flecha {cl} 5 mm", ok and abs(g.valor(cl) - 5) < 0.3, f"{g.valor(cl):g}; «{p.mensaje.text()}»")
+        # cuadrado central: lleva a (-4, 3) pasando por cero
+        ok = arrastrar(p, g, libre.punto, libre.punto - libre.u * 9 - libre.v * 2)
+        A.reg(nombre, "cuadrado central pasa por cero", ok and abs(g.valor("dx") + 4) < 0.3 and abs(g.valor("dy") - 3) < 0.3,
+              f"dx={g.valor('dx'):g} dy={g.valor('dy'):g}")
+        # giro 40°
+        m = asa("angulo")
+        o, d = m._origen_arco(g), m.asa(g) - m._origen_arco(g)
+        a40 = math.radians(40)
+        ok = arrastrar(p, g, m.asa(g), o + d * math.cos(a40) + np.cross(m.eje, d) * math.sin(a40))
+        A.reg(nombre, "giro 40°", ok and abs(g.valor("angulo") - 40) < 1.0, f"{g.valor('angulo'):g}°")
+        # escala x1.5
+        m = asa("ancho")
+        antes = g.valor("escala")
+        ok = arrastrar(p, g, m.puntos(g)[1], m.origen + (m.puntos(g)[1] - m.origen) * 1.5)
+        A.reg(nombre, "escala x1,5 por el codo", ok and abs(g.valor("escala") / antes - 1.5) < 0.05,
+              f"{antes:g} → {g.valor('escala'):g}")
+        # volteos: clic
+        for cl in ("voltear", "voltear_v"):
+            xy = g.pantalla([asa(cl)._geom(g)[0]])[0][0]
+            vis = p.visor
+            q = QPointF(*xy)
+            QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonPress, q, vis.mapToGlobal(q), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+            QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, q, vis.mapToGlobal(q), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+            A.esperar(60)
+            A.reg(nombre, f"clic en {cl}", p.valores.get(cl) is True, str(p.valores.get(cl)))
+        p._calcular_previa()
+        A.reg(nombre, "la vista previa sigue andando", p._previa_ok, p.mensaje.text())
+        # lo tecleado mueve el gizmo
+        antes = libre.punto.copy()
+        p.set_valor("dx", "10 mm")
+        mueve = not np.allclose(next(m for m in g.manips if isinstance(m, mp.PosicionCalcomania)).punto, antes)
+        A.reg(nombre, "teclear en el panel mueve el gizmo", mueve, "")
+        n0 = A.n_ops(v)
+        p.aceptar()
+        A.esperar(300)
+        A.reg(nombre, "aceptar crea el paso", A.n_ops(v) == n0 + 1, "")
+        while A.n_ops(v) > n0:
+            A.deshacer(v)
+    except Exception as e:  # noqa: BLE001
+        A.reg(nombre, "EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
+        if v.panel is not None and v.panel.isVisible():
+            v.panel.cancelar()
+    A.esperar(100)
+
+
+probar_gizmo_lienzo("lienzo")
+probar_gizmo_lienzo("calcomania")
+
 A.guardar_registro("u3_asas")
 fallas = [r for r in A.REGISTRO if not r["ok"]]
 print(f"\n=== {len(A.REGISTRO)} comprobaciones, {len(fallas)} con ✗ ===")

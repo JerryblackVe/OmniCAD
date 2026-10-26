@@ -569,7 +569,7 @@ def test_asas_en_la_vista_de_otros_comandos(app_qt):
     assert "triada" in idents("scu", {})
     assert "flecha:diametro" in idents("bobina", {})
     plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
-    assert "posicion:desplazamiento" in idents("lienzo", {"plano": [plano]})
+    assert "posicion:calcomania" in idents("lienzo", {"plano": [plano]})
     # «Unión construida» no tiene desfases: sin tríada
     assert idents("union_construida", {}) == []
 

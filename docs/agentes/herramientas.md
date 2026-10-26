@@ -2444,12 +2444,16 @@ Embebe una imagen de referencia sobre un plano o cara plana (máximo 32 MB).
 - Parámetros:
   - `path` (texto; obligatorio): ruta de una imagen PNG, JPG o BMP; se copia embebida y no depende del archivo original.
   - `plane` (texto o objeto o lista de número; opcional, por defecto `"XY"`): plano XY/XZ/YZ, construcción por id/nombre o una cara plana (selector o id).
-  - `width` (número o expresión; opcional, por defecto `100`): ancho real en mm, positivo; la altura conserva la proporción de la imagen.
+  - `width` (número o expresión; opcional, por defecto `100`): ancho real en mm, positivo; con keep_aspect la altura conserva la proporción de la imagen.
   - `dx` (número o expresión; opcional, por defecto `0`): desplazamiento X sobre el plano, en mm o expresión.
   - `dy` (número o expresión; opcional, por defecto `0`): desplazamiento Y sobre el plano, en mm o expresión.
   - `angle` (número o expresión; opcional, por defecto `0`): giro sobre el plano en grados o expresión.
   - `opacity` (entero; opcional, por defecto `50`): opacidad de 0 a 100 por ciento.
   - `flip` (true/false; opcional, por defecto `false`): volteo horizontal de la imagen.
+  - `flip_v` (true/false; opcional, por defecto `false`): volteo vertical de la imagen.
+  - `height` (número o expresión; opcional, por defecto `null`): altura en mm, positiva; solo cuenta con keep_aspect=false (vacío = la del ancho y la proporción).
+  - `keep_aspect` (true/false; opcional, por defecto `true`): la altura sale del ancho y la proporción de la imagen (como el candado del gizmo).
+  - `scale` (número o expresión; opcional, por defecto `1`): factor uniforme positivo sobre ancho y altura; 1 conserva el tamaño.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
   - `name` (texto; opcional, por defecto `null`): nombre del lienzo; vacío = automático.
 - CLI: `omnicad call insert_canvas --doc pieza.omnicad path=…`

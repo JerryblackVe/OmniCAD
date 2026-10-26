@@ -50,7 +50,7 @@ class OpLienzo(Operacion):
         alto = (ancho * float(self.p.get("proporcion") or 1.0) if self.p["mantener_proporcion"]
                 else ctx.evaluar(self.p["alto"]))
         if alto <= 0:
-            raise ErrorOperacion("La altura de la calcomanía tiene que ser positiva.")
+            raise ErrorOperacion("La altura de la imagen tiene que ser positiva.")
         escala = ctx.evaluar(self.p["escala"], ESCALAR)
         if escala <= 0:
             raise ErrorOperacion("El factor de escala debe ser positivo.")

@@ -121,23 +121,6 @@ def _asas_patron_circular(self, ctx, v):
     return [mp.Angulo("angulo", pie, d, centro - pie, radio if radio > 1e-6 else None)]
 
 
-# ---------------------------------------------------------------- dibujos sobre un plano
-def _asas_desplazar_en_plano(self, ctx, v):
-    """Aro de posición del dibujo sobre el plano (escribe Desplazamiento X / Y)."""
-    mp = _mp()
-    sel = v.get("plano") or []
-    plano = sel[0].get("plano") if sel else None
-    if plano is None:
-        return []
-    o, u, w = (np.asarray(x, float) for x in (plano.origen, plano.u, plano.v))
-    dx, dy = evaluar_o_cero(ctx, v.get("dx")), evaluar_o_cero(ctx, v.get("dy"))
-
-    def al_mover(q):
-        d = np.asarray(q, float) - o
-        return {"dx": float(d @ u), "dy": float(d @ w)}
-    return [mp.Posicion("desplazamiento", o + u * dx + w * dy, plano.normal, al_mover)]
-
-
 # ---------------------------------------------------------------- sistemas de coordenadas y uniones
 def _asas_scu(self, ctx, v):
     """Tríada en el origen del SCU: flechas = Desfase X/Y/Z, arcos = Ángulo X/Y/Z."""
@@ -365,7 +348,6 @@ def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
-        "lienzo": _asas_desplazar_en_plano,
         "scu": _asas_scu, "union": _asas_union("origen2"), "origen_union": _asas_union("origen"),
         "bobina": _asas_bobina,
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,

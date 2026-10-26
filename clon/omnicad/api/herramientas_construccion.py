@@ -204,21 +204,29 @@ def insert_fastener(sesion, positions: list[Referencia], family: Literal["screw"
 @herramienta("insert_canvas", "solido", "Embebe una imagen de referencia sobre un plano o cara plana (máximo 32 MB).",
              modifica=True)
 def insert_canvas(sesion, path: str, plane: Referencia = "XY", width: Expr = 100, dx: Expr = 0, dy: Expr = 0,
-                  angle: Expr = 0, opacity: int = 50, flip: bool = False,
+                  angle: Expr = 0, opacity: int = 50, flip: bool = False, flip_v: bool = False,
+                  height: Expr | None = None, keep_aspect: bool = True, scale: Expr = 1,
                   body: str | None = None, name: str | None = None):
     """
     path: ruta de una imagen PNG, JPG o BMP; se copia embebida y no depende del archivo original.
     plane: plano XY/XZ/YZ, construcción por id/nombre o una cara plana (selector o id).
-    width: ancho real en mm, positivo; la altura conserva la proporción de la imagen.
+    width: ancho real en mm, positivo; con keep_aspect la altura conserva la proporción de la imagen.
     dx: desplazamiento X sobre el plano, en mm o expresión.
     dy: desplazamiento Y sobre el plano, en mm o expresión.
     angle: giro sobre el plano en grados o expresión.
     opacity: opacidad de 0 a 100 por ciento.
     flip: volteo horizontal de la imagen.
+    flip_v: volteo vertical de la imagen.
+    height: altura en mm, positiva; solo cuenta con keep_aspect=false (vacío = la del ancho y la proporción).
+    keep_aspect: la altura sale del ancho y la proporción de la imagen (como el candado del gizmo).
+    scale: factor uniforme positivo sobre ancho y altura; 1 conserva el tamaño.
     body: cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
     name: nombre del lienzo; vacío = automático.
     """
     _numero_positivo(width, "width")
+    _numero_positivo(scale, "scale")
+    if height is not None:
+        _numero_positivo(height, "height")
     if not 0 <= opacity <= 100:
         raise error("INVALID_ARGUMENTS", "La opacidad debe estar entre 0 y 100.")
     ref = _referencia(sesion, plane, _PLANO, body, "plano")
@@ -242,7 +250,9 @@ def insert_canvas(sesion, path: str, plane: Referencia = "XY", width: Expr = 100
     op = _crear(sesion, OpLienzo, name, plano=ref, archivo=ruta.name,
                 imagen=base64.b64encode(datos).decode("ascii"), proporcion=proporcion,
                 ancho=texto_expr(width), dx=texto_expr(dx), dy=texto_expr(dy), angulo=texto_expr(angle),
-                opacidad=opacity, voltear=flip, calcomania=False)
+                opacidad=opacity, voltear=flip, voltear_v=flip_v, calcomania=False,
+                mantener_proporcion=keep_aspect or height is None, escala=texto_expr(scale),
+                **({} if height is None else {"alto": texto_expr(height)}))
     resultado = _agregar(sesion, op)
     lienzo = sesion.doc.estado_final.lienzos[op.id]
     resultado.update(width=lienzo["ancho"], height=lienzo["alto"])
