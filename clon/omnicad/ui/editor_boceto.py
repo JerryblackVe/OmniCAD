@@ -1333,8 +1333,7 @@ class Lienzo(QWidget):
                 if ok:
                     self.clics = []
                 return ok
-            from .asas_boceto import asas_conica
-            self._abrir_entrada(["Rho"], ["0.5"], self._pos_cursor, aceptar, asas_conica(self))
+            self._abrir_entrada(["Rho"], ["0.5"], self._pos_cursor, aceptar)
             self.entrada.campos[0].textChanged.connect(lambda _t: self.update())
         elif h == "punto" and len(c) == 1:
             if c[0][0] is None:

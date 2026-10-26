@@ -422,20 +422,6 @@ def asas_chaflan(l, herramienta, picks, xys):
     return [asa(i) for i in range(n)], tipos, lambda v: pr(v)[0]
 
 
-def asas_conica(l):
-    """(asas, tipos, previa) de la caja [Rho]: el asa está en el hombro de la cónica, sobre el segmento del punto medio
-    de los extremos al vértice."""
-    a, b, vertice = [xy for _, xy in l.clics[:3]]
-    m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
-    d = (vertice[0] - m[0], vertice[1] - m[1])
-    largo2 = d[0] ** 2 + d[1] ** 2 or 1e-18
-
-    def rho(xy, v, v0=None, xy0=None):
-        return ((xy[0] - m[0]) * d[0] + (xy[1] - m[1]) * d[1]) / largo2
-    return ([Asa2D(0, lambda v: _fuera_de(v[0], m, d), rho, ancla=lambda v: m, tipo="esc", minimo=1e-3,
-                   maximo=1 - 1e-3, ayuda="Rho")], ["esc"], None)
-
-
 def asas_texto(l, ancla, ancho):
     """(asas, tipos, previa) de las cajas [Texto, Altura, ∠, Espaciado, Interlineado]: el asa de giro gira el marco del
     texto alrededor de su esquina `ancla`; `ancho`: el del marco (o 0)."""

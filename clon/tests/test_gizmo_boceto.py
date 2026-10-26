@@ -245,25 +245,6 @@ def test_chaflan_asas_en_los_extremos_del_corte(lienzo, herramienta, n):
     lz._cerrar_entrada()
 
 
-def test_conica_asa_rho_en_el_hombro(lienzo):
-    lz = lienzo
-    lz.set_herramienta("conica")
-    for xy in ((0.0, 0.0), (20.0, 0.0), (10.0, 20.0)):
-        lz.clics.append((None, xy))
-    lz._procesar_clics()
-    lz.encuadrar()
-    assert lz._asas is not None and len(lz._asas.asas) == 1
-    lz.entrada.campos[0].setText("0.5")
-    assert posicion(lz, 0) == pytest.approx((10.0, 10.0), abs=1e-6)      # a mitad de camino entre el medio (10, 0) y el vértice
-    arrastrar(lz, posicion(lz, 0), (10.0, 15.0))
-    assert float(textos(lz)[0]) == pytest.approx(0.75, abs=0.02)
-    arrastrar(lz, posicion(lz, 0), (10.0, 400.0))                         # más allá del vértice: Rho queda dentro de (0, 1)
-    assert 0 < float(textos(lz)[0]) < 1
-    arrastrar(lz, posicion(lz, 0), (10.0, -400.0))
-    assert 0 < float(textos(lz)[0]) < 1
-    lz._cerrar_entrada()
-
-
 def test_texto_asa_de_giro_del_marco(lienzo):
     lz = lienzo
     lz.set_herramienta("texto")
