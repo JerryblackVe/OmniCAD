@@ -121,10 +121,11 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None):
         raise ErrorF3D(f"{nombre} no tiene sólidos ni superficies que se puedan leer."
                        + (f" {avisos[0]}" if avisos else ""))
     _etapa(progreso, "Ubicando los componentes…")
-    marcos, fuera = _ubicar(datos, partes, avisos, resumen)
+    marcos, fuera, ocultos = _ubicar(datos, partes, avisos, resumen)
     if fuera:
         avisos.append(f"{len(fuera)} cuerpos guardados en el archivo no están en el diseño actual (versiones viejas "
                       "del historial de Fusion que la escena del archivo no muestra): no se importan.")
+        ocultos = {k - sum(1 for f in fuera if f < k) for k in ocultos}          # sus índices tras quitar los de `fuera`
         partes = [p for k, p in enumerate(partes) if k not in fuera]
         marcos = [m for k, m in enumerate(marcos) if k not in fuera]
     malos = sum(1 for forma, tipo, firma, _ in partes if firma[1] <= CARAS_MAX_VERIFICAR
@@ -137,8 +138,9 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None):
         resumen.update(descartados=len(fuera), sin_ubicar=sum(1 for m in marcos if m is None) if any(marcos) else 0)
     uno = [np.eye(4)]
     nombres = _nombres_de_componentes(datos, archivos)
-    return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno, "nombre": nombres.get(archivos[bloque])}
-            for (forma, tipo, _, bloque), m in zip(partes, marcos, strict=True)], avisos
+    return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno, "nombre": nombres.get(archivos[bloque]),
+             "oculto": k in ocultos}
+            for k, ((forma, tipo, _, bloque), m) in enumerate(zip(partes, marcos, strict=True))], avisos
 
 
 _TEXTO = re.compile(rb"(?:[\x20-\x7e\xa0-\xff]\x00){1,200}")     # caracteres UTF-16; el largo va en los 4 bytes previos
@@ -171,10 +173,11 @@ def _nombres_de_componentes(datos, archivos):
 
 
 def _ubicar(datos, partes, avisos, resumen=None):
-    """(matrices, fuera) según la escena del archivo (`f3d_escena`): `matrices` = una lista de 4×4 por parte o None
-    si no se la pudo ubicar (queda donde está guardado su B-rep); sin escena, o si ningún componente se mueve, todo
-    None. `fuera` = índices de las partes que no están en el diseño actual (cuerpos viejos del historial)."""
-    ninguna = ([None] * len(partes), set())
+    """(matrices, fuera, ocultos) según la escena del archivo (`f3d_escena`): `matrices` = una lista de 4×4 por parte o
+    None si no se la pudo ubicar (queda donde está guardado su B-rep); sin escena, o si ningún componente se mueve, todo
+    None. `fuera` = índices de las partes que no están en el diseño actual (cuerpos viejos del historial); `ocultos` =
+    índices de las que el diseño tiene con el ojo cerrado (sin malla en la escena)."""
+    ninguna = ([None] * len(partes), set(), set())
     try:
         with zipfile.ZipFile(io.BytesIO(datos)) as z:
             info = {i.filename: i for i in z.infolist()}
@@ -195,6 +198,7 @@ def _ubicar(datos, partes, avisos, resumen=None):
                             "centro": _una_vez(lambda f=forma: geo.centro_masa(f))})
         matrices, visto = f3d_escena.asignar(escena, solidos)
         fuera = set(visto.pop("descartados"))
+        ocultos = set(visto.pop("ocultos"))
         if resumen is not None:
             resumen.update(visto, nodos=len(escena.nodos), copias=sum(1 for n in escena.nodos if n["es_ref"]),
                            cuerpos_escena=len(escena.cuerpos),
@@ -204,12 +208,12 @@ def _ubicar(datos, partes, avisos, resumen=None):
                       "su B-rep.")
         return ninguna
     if not any(m and (len(m) > 1 or not f3d_escena.es_identidad(m[0])) for m in matrices):
-        return [None] * len(partes), fuera
+        return [None] * len(partes), fuera, ocultos
     sin = sum(1 for k, m in enumerate(matrices) if m is None and k not in fuera)
     if sin:
         avisos.append(f"{sin} de {len(partes) - len(fuera)} cuerpos no se pudieron ubicar en el ensamblaje: quedan "
                       "donde está guardado su B-rep.")
-    return matrices, fuera
+    return matrices, fuera, ocultos
 
 
 def _una_vez(funcion):

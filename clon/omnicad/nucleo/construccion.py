@@ -120,18 +120,29 @@ def _alambre(aristas):
     return mw.Wire()
 
 
-def _en_ruta(aristas, distancia, absoluta):
-    """(punto, tangente) a una distancia a lo largo de la ruta; fuera de [0, largo] se prolonga
-    en línea recta por la tangente del extremo (Fusion deja pasarse del final)."""
-    curva = BRepAdaptor_CompCurve(_alambre(aristas))
-    largo = GCPnts_AbscissaPoint.Length_s(curva)
-    s = float(distancia) if absoluta else float(distancia) * largo
+def _en_curva(curva, largo, s):
     s_dentro = min(max(s, 0.0), largo)
     u = GCPnts_AbscissaPoint(curva, s_dentro, curva.FirstParameter()).Parameter()
     p, v = gp_Pnt(), gp_Vec()
     curva.D1(u, p, v)
     t = _unitario(_np(v), "La tangente de la ruta")
     return _np(p) + t * (s - s_dentro), t
+
+
+def _en_ruta(aristas, distancia, absoluta):
+    """(punto, tangente) a una distancia a lo largo de la ruta; fuera de [0, largo] se prolonga
+    en línea recta por la tangente del extremo (Fusion deja pasarse del final)."""
+    curva = BRepAdaptor_CompCurve(_alambre(aristas))
+    largo = GCPnts_AbscissaPoint.Length_s(curva)
+    return _en_curva(curva, largo, float(distancia) if absoluta else float(distancia) * largo)
+
+
+def muestras_ruta(aristas, fracciones):
+    """Puntos (N, 3) de la ruta en cada fracción de su largo (también fuera de 0 a 1: se prolonga recta). Para dibujar
+    y tirar del asa de «Plano en ruta» y «Punto a lo largo de la ruta»."""
+    curva = BRepAdaptor_CompCurve(_alambre(aristas))
+    largo = GCPnts_AbscissaPoint.Length_s(curva)
+    return np.array([_en_curva(curva, largo, float(f) * largo)[0] for f in fracciones])
 
 
 # ---------------------------------------------------------------- conversiones
@@ -199,6 +210,37 @@ def plano_en_angulo(plano_base, eje_punto, eje_dir, angulo, *, desfase=0.0):
     return geo.Plano.desde_marco(origen, n, a, "Plano en ángulo").desplazado(desfase)
 
 
+def _ejes_tangente(cara, plano_ref):
+    """(posición, eje, X, Y, dirección del ángulo 0) de una cara cilíndrica o cónica; el ángulo 0 sale de la normal
+    de `plano_ref` si se da, o del eje X propio de la superficie."""
+    sup = BRepAdaptor_Surface(cara)
+    pos = sup.Cylinder().Position() if sup.GetType() == GeomAbs_Cylinder else sup.Cone().Position()
+    a, x, y = _np(pos.Direction()), _np(pos.XDirection()), _np(pos.YDirection())
+    ref = x
+    if plano_ref is not None:
+        r = plano_de(plano_ref).normal
+        r = r - a * float(r @ a)
+        if np.linalg.norm(r) < 1e-9:
+            raise geo.ErrorGeometria("El plano de referencia es perpendicular al eje de la cara.")
+        ref = r / np.linalg.norm(r)
+    return pos, a, x, y, ref
+
+
+def marco_tangente(cara_curva, plano_ref=None):
+    """(centro, eje, dirección del ángulo 0, radio) del arco por donde se mueve el plano tangente a media altura
+    de la cara: lo que necesita el asa de ángulo."""
+    cara = _cara(cara_curva)
+    if BRepAdaptor_Surface(cara).GetType() not in (GeomAbs_Cylinder, GeomAbs_Cone):
+        raise geo.ErrorGeometria("El plano tangente necesita una cara cilíndrica o cónica.")
+    pos, a, x, y, ref = _ejes_tangente(cara, plano_ref)
+    _, _, v0, v1 = BRepTools.UVBounds_s(cara)
+    u = math.atan2(float(ref @ y), float(ref @ x))
+    p = _evaluar(cara, u, (v0 + v1) / 2)[0]
+    o = _np(pos.Location())
+    centro = o + a * float((p - o) @ a)
+    return centro, a, ref, float(np.linalg.norm(p - centro))
+
+
 def plano_tangente(cara_curva, punto_referencia_o_angulo, plano_ref=None, *, desfase=0.0):
     """Plano tangente [SLD-CONSTRUCT-TANGENT-PLANE] a una cara cilíndrica o cónica.
 
@@ -210,15 +252,7 @@ def plano_tangente(cara_curva, punto_referencia_o_angulo, plano_ref=None, *, des
     if sup.GetType() not in (GeomAbs_Cylinder, GeomAbs_Cone):
         raise geo.ErrorGeometria("El plano tangente necesita una cara cilíndrica o cónica.")
     if isinstance(punto_referencia_o_angulo, (int, float)):
-        pos = sup.Cylinder().Position() if sup.GetType() == GeomAbs_Cylinder else sup.Cone().Position()
-        a, x, y = _np(pos.Direction()), _np(pos.XDirection()), _np(pos.YDirection())
-        ref = x
-        if plano_ref is not None:
-            r = plano_de(plano_ref).normal
-            r = r - a * float(r @ a)
-            if np.linalg.norm(r) < 1e-9:
-                raise geo.ErrorGeometria("El plano de referencia es perpendicular al eje de la cara.")
-            ref = r / np.linalg.norm(r)
+        pos, a, x, y, ref = _ejes_tangente(cara, plano_ref)
         w = _rotar(ref, a, math.radians(punto_referencia_o_angulo))
         _, _, v0, v1 = BRepTools.UVBounds_s(cara)
         u, v = math.atan2(float(w @ y), float(w @ x)), (v0 + v1) / 2

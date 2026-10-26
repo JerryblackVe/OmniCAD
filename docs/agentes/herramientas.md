@@ -763,6 +763,7 @@ Crea un plano de construcción (CONSTRUIR › Plano). type=offset (por defecto):
   - `references` (lista de texto o objeto o lista de número o null; opcional, por defecto `null`): referencias en orden según type (ver la descripción): planos de origen o de construcción, ejes, caras, aristas, selectores, ids de find_faces / find_edges, puntos de construcción, vértices [x, y, z] o {sketch, point | curve}.
   - `angle` (número o expresión; opcional, por defecto `0`): type=angle o tangent: ángulo en grados (número o expresión).
   - `position` (número o expresión; opcional, por defecto `0.5`): type=path: posición sobre la ruta entre 0 (inicio) y 1 (fin).
+  - `distance` (número o expresión; opcional, por defecto `0`): type=perpendicular: corre el plano sobre su normal, en mm (número o expresión).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de references y de plane (cara); vacío = el único cuerpo.
 - CLI: `omnicad call create_construction_plane --doc pieza.omnicad`
 

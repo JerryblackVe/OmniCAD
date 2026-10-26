@@ -661,6 +661,51 @@ class Volteo(AsaRadial):
         return {}
 
 
+class AsaRuta(Manipulador):
+    """Asa que se desliza por una ruta (Plano en ruta, Punto a lo largo de la ruta): el campo `clave` es la fracción
+    del largo; se puede pasar de los extremos, donde la ruta sigue recta. `ts` y `puntos` (N, 3) son una muestra
+    de la ruta; al arrastrar se toma el punto de la muestra más cercano al cursor en pantalla."""
+    ayuda = "Deslizar por la ruta"
+
+    def __init__(self, clave, ts, puntos):
+        self.clave, self.ts, self.puntos_ruta = clave, np.asarray(ts, float), np.asarray(puntos, float)
+        self.ident = f"ruta:{clave}"
+
+    def asa(self, g):
+        t = min(max(g.valor(self.clave), self.ts[0]), self.ts[-1])
+        return np.array([np.interp(t, self.ts, self.puntos_ruta[:, i]) for i in range(3)])
+
+    def dibujar(self, g, activo):
+        color = AZUL_ACTIVO if activo is not None else AZUL
+        asa = self.asa(g)
+        return ([("lineas", _segs(self.puntos_ruta), color, 1.4)]
+                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
+
+    def tocar(self, g, q):
+        s, ok = g.pantalla([self.asa(g)])
+        return (max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0) if ok[0] else math.inf), "asa"
+
+    def empezar(self, g, pos, sub):
+        return {}
+
+    def mover(self, g, estado, pos):
+        s, ok = g.pantalla(self.puntos_ruta)
+        q = np.array([pos.x(), pos.y()], float)
+        mejor = (math.inf, None)
+        for i in range(len(s) - 1):
+            if not (ok[i] and ok[i + 1]):
+                continue
+            ab = s[i + 1] - s[i]
+            u = min(1.0, max(0.0, float((q - s[i]) @ ab) / (float(ab @ ab) or 1.0)))
+            d = float(np.linalg.norm(s[i] + ab * u - q))
+            if d < mejor[0]:
+                mejor = (d, self.ts[i] + u * (self.ts[i + 1] - self.ts[i]))
+        return {} if mejor[1] is None else {self.clave: float(mejor[1])}
+
+    def cajas(self, g, arrastre):
+        return [(self.clave, self.asa(g))]
+
+
 def asas_imagen(pl, dx, dy, escala=True, volteo=("voltear", "voltear_v")):
     """Gizmo de Fusion para una imagen o un dibujo sobre el plano `pl` (Lienzo, Calcomanía, Insertar SVG y DXF):
     cuadrado central (mover), flechas X/Y, arco (girar), codo (escala) y moños (voltear H y V)."""

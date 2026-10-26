@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Comandos de CONSTRUIR (planos, ejes, puntos y SCU) con diálogo al estilo Fusion."""
+import numpy as np
+
 from ...timeline.operaciones import OpPlano
 from ...timeline.ops_construir import TIPOS_EJE, TIPOS_PLANO, TIPOS_PUNTO, OpEje, OpPunto, OpSCU
 from ...timeline.parametros import ANGULO, ESCALAR
@@ -29,7 +31,8 @@ DEFINICIONES = {
                           [("r0", "Punto 1", PUNTO, True), ("r1", "Punto 2", PUNTO, True), ("r2", "Punto 3", PUNTO, True)],
                           []),
     "plano_perpendicular": (OpPlano, "perpendicular", "plano_perpendicular",
-                            [("r0", "Cara o arista", {"cara", "plano"} | ARISTA, True), ("r1", "Punto", PUNTO, True)], []),
+                            [("r0", "Cara o arista", {"cara", "plano"} | ARISTA, True), ("r1", "Punto", PUNTO, True)],
+                            [("desfase", "Distancia", "0 mm", None)]),
     "plano_ruta": (OpPlano, "ruta", "plano_ruta", [("r0", "Ruta", ARISTA, True)],
                    [("posicion", "Distancia (0 a 1)", "0.5", ESCALAR)]),
     "eje_cilindro": (OpEje, "cilindro", "eje_cilindro", [("r0", "Cara", {"cara"}, True)], []),
@@ -108,6 +111,12 @@ def _crear_clase(clave, clase, tipo, ico, selecciones, valores):
     _Construir.__name__ = f"Construir_{clave}"
     if clase is OpPlano and tipo == "desfase":
         _Construir.manipuladores = _manipuladores_plano_desfase
+    elif tipo == "ruta":
+        _Construir.manipuladores = _manipuladores_ruta
+    elif clase is OpPlano and tipo == "tangente":
+        _Construir.manipuladores = _manipuladores_tangente
+    elif clase is OpPlano and tipo == "perpendicular":
+        _Construir.manipuladores = _manipuladores_perpendicular
     return _Construir
 
 
@@ -124,6 +133,52 @@ def _manipuladores_plano_desfase(self, ctx, v):
     except Exception:  # noqa: BLE001
         return []
     return [mp.Flecha("distancia", centro, plano.normal)]
+
+
+def _manipuladores_ruta(self, ctx, v):
+    """Asa que se desliza por la ruta (Plano en ruta y Punto a lo largo de la ruta): escribe la posición de 0 a 1."""
+    from ...nucleo import construccion as cs
+    from .. import manipuladores as mp
+    e = mp.entidad(v["r0"][0], ctx.estado) if v.get("r0") else None
+    if e is None or e.forma is None:
+        return []
+    ts = np.linspace(-0.25, 1.25, 121)
+    try:
+        return [mp.AsaRuta("posicion", ts, cs.muestras_ruta(e.forma, ts))]
+    except Exception:  # noqa: BLE001 — una ruta que no se puede muestrear no rompe el diálogo
+        return []
+
+
+def _manipuladores_tangente(self, ctx, v):
+    """Arco del ángulo alrededor del eje de la cara cilíndrica o cónica, a media altura."""
+    from ...nucleo import construccion as cs
+    from ...timeline import entidades as ent
+    from .. import manipuladores as mp
+    e = mp.entidad(v["r0"][0], ctx.estado) if v.get("r0") else None
+    ref = mp.entidad(v["r1"][0], ctx.estado) if v.get("r1") else None
+    if e is None or e.forma is None:
+        return []
+    try:
+        centro, eje, cero, radio = cs.marco_tangente(e.forma, ent.como_plano(ref) if ref is not None else None)
+    except Exception:  # noqa: BLE001 — una cara que no es cilíndrica ni cónica no tiene arco
+        return []
+    return [mp.Angulo("angulo", centro, eje, cero, radio)]
+
+
+def _manipuladores_perpendicular(self, ctx, v):
+    """Flecha de la distancia sobre la normal del plano (sin correr)."""
+    from ...nucleo import construccion as cs
+    from ...timeline import entidades as ent
+    from ...timeline.ops_construir import _forma_o_plano
+    from .. import manipuladores as mp
+    if not (v.get("r0") and v.get("r1")):
+        return []
+    try:
+        plano = cs.plano_perpendicular(_forma_o_plano(mp.entidad(v["r0"][0], ctx.estado)),
+                                       ent.como_punto(mp.entidad(v["r1"][0], ctx.estado)))
+    except Exception:  # noqa: BLE001
+        return []
+    return [mp.Flecha("desfase", plano.origen, plano.normal)]
 
 
 COMANDOS = [_crear_clase(k, *d) for k, d in DEFINICIONES.items()]

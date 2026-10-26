@@ -889,7 +889,7 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
                               type: Literal["offset", "angle", "tangent", "middle", "two_edges", "three_points",
                                             "perpendicular", "path"] = "offset",
                               references: list[str | dict | list[float]] | None = None, angle: Expr = 0,
-                              position: Expr = 0.5, body: str | None = None):
+                              position: Expr = 0.5, distance: Expr = 0, body: str | None = None):
     """
     plane: type=offset: plano base: "XY", "XZ", "YZ", el id/nombre de otro plano de construcción, o una cara plana (selector ">Z" o id de find_faces).
     offset: type=offset: desfase en mm sobre la normal del plano base (número o expresión con parámetros, p. ej. "alto / 2").
@@ -898,6 +898,7 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
     references: referencias en orden según type (ver la descripción): planos de origen o de construcción, ejes, caras, aristas, selectores, ids de find_faces / find_edges, puntos de construcción, vértices [x, y, z] o {sketch, point | curve}.
     angle: type=angle o tangent: ángulo en grados (número o expresión).
     position: type=path: posición sobre la ruta entre 0 (inicio) y 1 (fin).
+    distance: type=perpendicular: corre el plano sobre su normal, en mm (número o expresión).
     body: cuerpo donde se evalúan los selectores de references y de plane (cara); vacío = el único cuerpo.
     """
     doc = sesion.doc
@@ -925,7 +926,8 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
             filtros = filtros + [(_PLANO, "plano")]
         base = None
         op = OpPlano(doc.nuevo_id(), nombre, tipo=_TIPOS_PLANO[type], refs=_referencias(sesion, refs, filtros, body),
-                     distancia=texto_expr(offset), angulo=texto_expr(angle), posicion=texto_expr(position))
+                     distancia=texto_expr(offset), angulo=texto_expr(angle), posicion=texto_expr(position),
+                     desfase=texto_expr(distance))
     doc.agregar(op)
     plano = doc.estado_final.planos[op.id]
     return {"plane": _paso(op), "base": base, "type": type, "offset": op.p["distancia"], **_info_plano(plano)}

@@ -99,6 +99,16 @@ def probar(clave, sel, vals, foto=None):
                     final = g.valor(cl)
                     A.reg(nombre, f"flecha «{cl}» arrastrada más allá del cero", ok,
                           f"{despues:g} → {final:g} (mínimo {m.minimo}); previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
+                elif isinstance(m, mp.AsaRuta):
+                    antes = g.valor(cl)
+                    i = int(np.searchsorted(m.ts, 0.9))
+                    ok = arrastrar(p, g, m.asa(g), m.puntos_ruta[i])
+                    despues = g.valor(cl)
+                    A.reg(nombre, f"asa de ruta «{cl}» llevada al 90 % del largo", ok and abs(despues - 0.9) < 0.05,
+                          f"{antes:g} → {despues:g}; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
+                    ok = arrastrar(p, g, m.asa(g), m.puntos_ruta[-1])
+                    A.reg(nombre, f"asa de ruta «{cl}» más allá del final", ok and g.valor(cl) > 1.1,
+                          f"{g.valor(cl):g}; previa_ok={p._previa_ok}")
                 elif isinstance(m, mp.Posicion):
                     A.reg(nombre, f"asa de posición ({tn}) presente", True, "no se arrastra en esta prueba")
                 else:
@@ -134,6 +144,25 @@ cuerpo = lambda cid: (lambda: [A.hit_cuerpo(v, cid)])  # noqa: E731
 eje = lambda i: (lambda: [A.hit_eje(v, i)])  # noqa: E731
 pl = lambda: [A.hit_plano(v, "XY")]  # noqa: E731
 top = cara(caja, normal=(0, 0, 1))
+
+# Construir
+def vertice_de(cid):
+    def f():
+        from omnicad.nucleo import referencias as refs
+        from OCP.BRep import BRep_Tool
+        for vt in refs.subformas(v.doc.estado_final.cuerpos[cid].forma, "vertice"):
+            q = BRep_Tool.Pnt_s(vt)
+            h = A._clic_en(v, (q.X(), q.Y(), q.Z()), {"vertice"})
+            if h is not None:
+                return [h]
+        return [None]
+    return f
+
+
+probar("plano_ruta", {"r0": cur("Ruta")}, {"posicion": "0.5"}, "asas_plano_ruta")
+probar("punto_ruta", {"r0": cur("Ruta")}, {"posicion": "0.5"})
+probar("plano_tangente", {"r0": cara(cil)}, {"angulo": "20 deg"})
+probar("plano_perpendicular", {"r0": top, "r1": vertice_de(caja)}, {"desfase": "2 mm"})
 
 # Superficie
 probar("sup_extruir", {"curvas": cur("Circ")}, {"distancia": "15 mm"}, "asas_sup_extruir")

@@ -557,8 +557,8 @@ class OpPlano(Operacion):
     referencias van en `refs`; los proyectos viejos usan `base`/`marco` (plano de desfase)."""
     TIPO, ETIQUETA, ICONO = "plano", "Plano", "▱"
     PARAMS = {"tipo": "desfase", "base": "XY", "marco": None, "distancia": "10 mm", "refs": [], "angulo": "0 deg",
-              "posicion": "0.5"}
-    EXPRESIONES = ("distancia", "angulo", "posicion")
+              "posicion": "0.5", "desfase": "0 mm"}
+    EXPRESIONES = ("distancia", "angulo", "posicion", "desfase")
 
     def dependencias(self):
         deps = super().dependencias()

@@ -235,8 +235,11 @@ def asignar(escena, solidos):
     tienen su sólido, los demás sólidos de ese bloque no están en el diseño actual: van en `info["descartados"]`
     (comprobado abriendo los ejemplos en Fusion: ninguno de esos cuerpos existe en el diseño).
 
+    Un cuerpo actual sin malla en la escena es un cuerpo OCULTO (Fusion no tesela lo que no se ve): si se salva por
+    esa vía va en `info["ocultos"]` y entra con el ojo cerrado, como en el navegador de Fusion.
+
     Devuelve (matrices, info): `matrices[j]` = lista de matrices 4×4 de columnas en mm (una por copia) o None si no se
-    pudo ubicar (o se descarta); `info` = contadores para informar y `descartados` (índices de `solidos`)."""
+    pudo ubicar (o se descarta); `info` = contadores para informar, `descartados` y `ocultos` (índices de `solidos`)."""
     marcos = escena.marcos()
     nodos = escena.nodos
     visibles = [(i, c) for i, c in enumerate(escena.cuerpos) if c["vol_mm3"] is not None and c["nodo"] is not None]
@@ -323,6 +326,7 @@ def asignar(escena, solidos):
     # bloque sin componente no es de ninguno (comprobado en Fusion: Sherpa, 2 bloques sin dueño que el diseño no tiene)
     huerfanos = not [p for p in por_nodo if p not in nodo_de]
     descartados = [j for j, s in enumerate(solidos) if huerfanos and s["bloque"] not in bloque_de]
+    ocultos = []
     for j, s in enumerate(solidos):
         if j in descartados:
             continue
@@ -334,6 +338,7 @@ def asignar(escena, solidos):
             descartados.append(j)
         else:
             sin_malla[salva][s["caras"]] -= 1
+            ocultos.append(j)
     fuera = set(descartados)
     matrices = []
     ubicados = copias = 0
@@ -350,7 +355,7 @@ def asignar(escena, solidos):
             raise ValueError("demasiados cuerpos al colocar las copias")
     return matrices, {"bloques": len(por_bloque), "bloques_ubicados": len(bloque_de), "ubicados": ubicados,
                       "copias": copias, "componentes": len(por_nodo), "componentes_ubicados": len(nodo_de),
-                      "descartados": descartados}
+                      "descartados": descartados, "ocultos": ocultos}
 
 
 def _caras_parecidas(a, b):

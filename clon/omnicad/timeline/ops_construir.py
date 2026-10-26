@@ -76,7 +76,8 @@ def calcular_plano(p, entidades, ctx):
     if t == "tres_puntos":
         return cs.plano_tres_puntos(*(ent.como_punto(e) for e in E[:3]))
     if t == "perpendicular":
-        return cs.plano_perpendicular(_forma_o_plano(E[0]), ent.como_punto(E[1]))
+        return cs.plano_perpendicular(_forma_o_plano(E[0]), ent.como_punto(E[1]),
+                                      distancia=ctx.evaluar(p.get("desfase", "0")))
     if t == "ruta":
         if E[0].forma is None:
             raise ErrorOperacion("La ruta tiene que ser una arista o una curva de boceto.")
