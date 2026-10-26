@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 192: Abierto 137 · Parcial 35 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 197: Abierto 140 · Parcial 37 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -310,10 +310,11 @@ Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 ## SolidCraft
 
-Abierto 12 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
+Abierto 13 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| SC18 | Barrido de parámetros: variar un parámetro en un rango y medir volumen, masa o interferencia en cada valor | Abierto | Media | Todo. En SolidCraft es el comando `inspect.parameter_sweep`: recalcula el diseño con cada valor y devuelve la tabla. Acá sería una herramienta `parameter_sweep` (MCP/CLI) más un diálogo en INSPECCIONAR; reutiliza `set_parameter` sobre una copia y `get_physical_properties`. | grep parameter_sweep y barrido de parámetros sin resultados en clon/omnicad | 2026-10-26 |
 | SC9 | Timeline: carpetas de pasos y copiar/pegar pasos | Abierto | Media | Todo. | grep carpeta/copiar/pegar en ui/panel_timeline.py sin resultados | 2026-10-20 |
 | SC13 | Comparar cuerpos: desviación con mapa de color | Abierto | Media | Todo. | grep comparar/desviación entre cuerpos sin resultados | 2026-10-20 |
 | SC14 | Importar .FCStd de FreeCAD | Abierto | Media | Leer el ZIP y los .brp con BRepTools.Read, con topes de seguridad. | grep FCStd sin resultados | 2026-10-20 |

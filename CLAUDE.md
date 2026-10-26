@@ -23,6 +23,20 @@
 - Antes de informar qué está hecho o qué falta, se verifica contra el código y los tests. Nunca solo con el log.
 - Cada tarea deja el proyecto limpio: sin archivos sueltos ni contradicciones entre documentos.
 
+## Página de seguimiento (Artifact de claude.ai)
+- Gerardo ve los pendientes en una página: <https://claude.ai/artifact/4oDQpqbDYfnnsmBREjDRbp> («Seguimiento
+  OmniCAD», tipo Dashboard, privada hasta que él la comparta). Muestra bugs, faltantes y mejoras con filtros, y
+  lo último resuelto. **No es fuente de verdad**: la fuente sigue siendo `docs/seguimiento/`.
+- **No se actualiza sola.** Quien cierra una tanda (el coordinador, después del push) la refresca:
+  1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json` y `resueltos.json`
+     (pendientes de `docs/seguimiento/` y las últimas 25 entradas del Registro de `PROJECT_LOG.md`).
+  2. Subir cada archivo con la herramienta `Artifact` (`url` de la página, `asset: true`, `file_path`; uno por llamada).
+  3. Con `ArtifactData` `update`, poner la `url` nueva (`/_blob/...`) y `updated` en `datasets/seguimiento` y
+     `datasets/resueltos`. Los números de las tarjetas, la tabla y el gráfico se recalculan solos.
+- La página no se vuelve a escribir salvo que Gerardo pida un cambio de diseño (documento `files/index.html`).
+- Si se pierde el acceso al Artifact, se vuelve a crear desde la herramienta `Artifact` con el tipo Dashboard:
+  datasets `seguimiento` y `resueltos` como archivos JSON y las calcs `resumen`, `total` y `por_tema`.
+
 ## Regla estricta: toda prueba se hace como un usuario humano habitual
 - Al probar la app (a mano, con QTest, MCP en vivo o computer use) se simula a una persona que la usa todos los días:
   movimientos y clics de mouse (elegir en el visor, arrastrar asas, hover, doble clic), botones, Enter, Esc, Tab, y

@@ -46,6 +46,25 @@ Cada ítem lleva su herramienta MCP/CLI (receta C de `AGENTS.md`), test y doc re
 | SC16 | **Pruebas de mutación** (`mutmut`) juzgadas solo por SC1 y SC2: muestran qué cambios de comportamiento nadie notaría. | No existe. `mutmut` es un paquete nuevo: pedir permiso. Va después de SC1 y SC2. |
 | SC17 | **Mallado estanco y rápido:** un plan por cara que comparte los nodos de arista con las vecinas, grillas estructuradas en caras de 4 lados, y evaluación en GPU con respaldo en CPU. Ellos miden 78 cuerpos en ~65 ms, de 50 a 65 veces más rápido que antes. | Hoy `BRepMesh` de OpenCascade. Primero medir (regla de rendimiento). Si es cuello de botella, va a `docs/plan_rust.md`. |
 
+## Releído el 2026-10-26 (README, `docs/capabilities.md`, `docs/features.md` y `ROADMAP.md`)
+
+Cambió desde el 2026-10-19: 10 783 estrellas, 75 de 76 piezas de referencia contra su oráculo (antes 83 casos) y
+ya traen lo de SC3 (nombres persistentes), SC4 (solver constructivo antes del numérico), configuraciones con
+material por fila, conjuntos de contacto, importación de FreeCAD y Rhino, y exportación URDF. Su Render (0.22.0) y
+sus Planos (en una rama, 3 de 21 piezas) todavía son más chicos que nuestros RENDERIZAR y DIBUJO. No se corrió la
+app: es lo que ellos documentan.
+
+| # | Qué | Estado en OmniCAD |
+|---|---|---|
+| SC18 | **Barrido de parámetros** (`inspect.parameter_sweep`): variar un parámetro en un rango y medir volumen, masa o interferencia en cada valor. | No existe (faltantes SC18). |
+| SC19 | **Borrador de reporte desde un error:** un error o la Ayuda abren un issue editable con el contexto y una captura opcional; abrir GitHub no lo envía. | No existe (mejoras SC19). |
+| SC20 | **Imagen provisional al abrir**, desde una caché de mallas, mientras se recalcula; la caché nunca reemplaza el diseño. | No existe: la caché guarda solo pasos (mejoras SC20). |
+
+Lo que tenemos y ellos no figuran: DIBUJO con vistas, cotas y globos (ellos, en una rama), ANIMACIÓN con storyboards,
+cámara y video, el espacio MALLA completo (reparar, reducir, remallar, suavizar; ellos solo convierten e insertan),
+programación visual (grafo), retículas, generadores de engranajes, cremalleras y ruedas dentadas, vectorizado de
+imágenes, apertura de `.f3d` de Fusion con sus bocetos y el Asistente IA dentro de la app (ellos solo MCP).
+
 ## Descartado y ya hecho
 
 - **Versión web (wasm):** descartada. Python + PySide6 + OpenCascade en el navegador cuesta demasiado frente a lo que da.

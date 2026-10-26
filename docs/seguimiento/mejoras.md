@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 119: Abierto 62 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 125: Abierto 69 · Parcial 44 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -192,6 +192,15 @@ Parcial 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PAQ-K | Paquete K: prueba real con agentes (Claude Code, OpenCode, solo CLI, modo en vivo) | Parcial | Media | Según el log solo Claude Code pasó; faltan OpenCode, solo CLI y modo en vivo (no verificable desde el código). | PROJECT_LOG.md:11; tests/test_setup.py | 2026-10-20 |
+
+## SolidCraft
+
+Abierto 2. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| SC19 | Un error de operación abre un borrador de reporte (issue de GitHub) con el contexto y una captura | Abierto | Baja | SolidCraft arma, desde un error o la Ayuda, un borrador editable con versión, paso que falló, parámetros y una captura opcional que la persona revisa; abrir GitHub no lo envía. Acá hay informes de error (herramienta de revisión) pero ningún borrador listo para publicar. Nunca se envía solo (regla de salida hacia afuera). | grep issue/borrador en clon/omnicad/ui sin resultados | 2026-10-26 |
+| SC20 | Abrir un proyecto mostrando enseguida una imagen provisional desde una caché de mallas, mientras se recalcula | Abierto | Media | SolidCraft guarda mallas ya teseladas en una caché del archivo y las muestra al abrir mientras reconstruye; la caché nunca reemplaza el diseño. Acá solo se guarda `cache/pasos.json` (`io_archivos/proyecto.py:85`): al abrir hay que esperar el recálculo (BINCHA.f3d tarda 23 s). Atar al tamaño del archivo y a la versión del núcleo para que no muestre algo viejo. | omnicad/io_archivos/proyecto.py:85 (la caché no guarda mallas) | 2026-10-26 |
 
 ## Otros CAD libres
 

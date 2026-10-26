@@ -11,6 +11,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [seguimiento/bugs.md](seguimiento/bugs.md) | Bugs pendientes, verificados contra el código |
 | [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
 | [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |
+| Página de seguimiento (Artifact) | Vista web de bugs, faltantes, mejoras y lo último resuelto; se refresca con `scripts/seguimiento_json.py` (pasos en `CLAUDE.md`). No es fuente de verdad |
 | [../PROJECT_LOG.md](../PROJECT_LOG.md) | Bitácora: estado en una tabla, registro de cada tarea y lecciones aprendidas |
 | [../CHANGELOG.md](../CHANGELOG.md) | Cambios de cada versión publicada |
 
