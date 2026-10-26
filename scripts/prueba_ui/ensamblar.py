@@ -118,6 +118,50 @@ def uniones():
 
 run("uniones", uniones)
 
+
+def gizmo_union():
+    """Gizmo del origen de la unión: flechas de desfase sobre los ejes de la cara y arco del ángulo, con mouse simulado."""
+    import numpy as np
+    from omnicad.ui import manipuladores as mp
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    p = A.abrir(v, "origen_union")
+    A.elegir(p, "origen", *alguna_cara(tapa)())
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(150)
+    g = p.manipuladores
+    claves = [getattr(m, "clave", None) for m in g.manips]
+    A.reg(AR, "gizmo origen de unión: tres flechas y el arco", claves == ["dx", "dy", "dz", "angulo"], str(claves))
+
+    def arrastrar(desde, hasta):
+        xy, ok = g.pantalla([desde, hasta])
+        a, b = (QPointF(*q) for q in xy)
+        vis = p.visor
+        QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonPress, a, vis.mapToGlobal(a), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+        for i in range(1, 7):
+            q = a + (b - a) * (i / 6)
+            QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseMove, q, vis.mapToGlobal(q), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+            A.esperar(15)
+        QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, b, vis.mapToGlobal(b), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+        A.esperar(100)
+        p._t_previa.stop()
+        p._calcular_previa()
+    dz = next(m for m in g.manips if getattr(m, "clave", None) == "dz")
+    a, b = dz.puntos(g)
+    arrastrar((a + b) / 2, (a + b) / 2 + dz.direccion * 6)
+    A.reg(AR, "gizmo origen de unión: flecha Z 6 mm", abs(g.valor("dz") - 6) < 0.5, f"dz={g.valor('dz'):g}")
+    m = next(m for m in g.manips if isinstance(m, mp.Angulo))
+    objetivo = m.centro + (m.u * np.cos(np.radians(50)) + m.v * np.sin(np.radians(50))) * m._r(g)
+    arrastrar(m.asa(g), objetivo)
+    A.reg(AR, "gizmo origen de unión: arco 50°", abs(g.valor("angulo") - 50) < 1.5, f"angulo={g.valor('angulo'):g}")
+    A.reg(AR, "gizmo origen de unión: la vista previa sigue andando", p._previa_ok, p.mensaje.text())
+    p.cancelar()
+
+
+run("gizmo_union", gizmo_union)
+
 # Accionar uniones: teclear el ángulo -------------------------------------------------------------------------------------
 js = [j["name"] for j in ens()["joints"]]
 IDS = {j["name"]: j["id"] for j in ens()["joints"]}

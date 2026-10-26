@@ -143,7 +143,6 @@ Se recorrieron los 148 comandos del catálogo y las cintas: 44 tienen asas (`Com
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| GZ-3 | Unión: asa del ángulo | Abierto | Baja | La tríada de Unión trae solo las flechas de desfase X/Y/Z (`giros=None`) pero el comando tiene el campo `angulo`; Fusion (Create a joint) tiene el manipulador de giro «Angle». Pasar `giros` o sumar un `Angulo("angulo")` sobre el eje del origen de la unión. | omnicad/ui/comandos/asas_extra.py:152 (`_asas_union`) | 2026-10-26 |
 | GZ-4 | Accionar uniones: asas de ángulo y distancia | Abierto | Media | Sin asas. Fusion (Edit joints › Drive joints): «arrastrá los manipuladores del lienzo». Arco para `giro` (giratoria) y flecha para `desliz` (deslizante) sobre el eje de la unión elegida. | omnicad/ui/comandos/ensamblar.py:184 | 2026-10-26 |
 | GZ-5 | Plano en ruta: asa de posición sobre la ruta | Abierto | Baja | Fusion (Plane along path): «arrastrá el manipulador de distancia; se puede pasar del final de la ruta». Acá el campo es `posicion` de 0 a 1 y no pasa del final. Asa que se desliza por la ruta y escribe `posicion`. | omnicad/ui/comandos/construir.py:33 | 2026-10-26 |
 | GZ-6 | Plano perpendicular: falta la distancia y su asa | Abierto | Baja | Fusion (Perpendicular plane): «tecleá la distancia o arrastrá el manipulador». El comando no tiene el campo (`valores` vacío): agregar `distancia` al plano y a la herramienta MCP, y la flecha sobre la normal. | omnicad/ui/comandos/construir.py:31 | 2026-10-26 |

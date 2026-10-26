@@ -54,6 +54,7 @@ from ..io_archivos.sab import Puntero, Subtipo
 MM_POR_UNIDAD = 10.0          # Fusion guarda el B-rep en centímetros
 TOLERANCIA = 1e-6             # la resabs de ShapeManager (en centímetros); ShapeFix la agranda donde haga falta
 PRECISION_ARREGLO = 1e-4      # cm: con menos, ShapeFix no reconoce los vértices que caen en un polo o en un ápice
+CARAS_SIN_ARREGLO = 2000      # un cuerpo abierto con más caras (malla convertida) no se repara con ShapeFix: tarda minutos
 _EPS = 1e-12
 
 
@@ -172,6 +173,10 @@ class _Convertidor:
             self.B.MakeSolid(solido)
             self.B.Add(solido, shell)
             forma = solido
+        elif len(caras) > CARAS_SIN_ARREGLO:
+            # shortcut: una malla convertida (decenas de miles de triángulos abiertos) ya viene orientada por ACIS y
+            # ShapeFix tarda minutos en ella (cuadrático: 18 716 caras = 247 s); queda como superficie sin repararla.
+            return forma, "superficie"
         arreglo = ShapeFix_Shape(forma)
         arreglo.SetPrecision(PRECISION_ARREGLO)
         arreglo.SetMaxTolerance(PRECISION_ARREGLO * 100)

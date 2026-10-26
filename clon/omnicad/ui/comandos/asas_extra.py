@@ -155,16 +155,26 @@ def _asas_scu(self, ctx, v):
     return [mp.Triada(origen + [L("dx"), L("dy"), L("dz")], claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"))]
 
 
-def _asas_union(clave_origen):
+def _asas_union(clave_origen, clave_punto):
+    """Tres flechas de desfase sobre los ejes del marco del origen (X, Y y Z de la unión, no los del mundo: así los
+    calcula la operación) y el arco del ángulo alrededor de su Z, como los manipuladores de Fusion al crear una unión."""
     def asas(self, ctx, v):
+        from ...timeline.ops_ensamblar import _marco
         mp = _mp()
         if not v.get(clave_origen) or "dx" not in v:      # «Unión construida» no tiene desfases
             return []
-        origen = _punto_de(ctx, v[clave_origen][0])
-        if origen is None:
+        e = mp.entidad(v[clave_origen][0], ctx.estado)
+        if e is None:
             return []
-        L = lambda k: evaluar_o_cero(ctx, v.get(k))  # noqa: E731
-        return [mp.Triada(origen + [L("dx"), L("dy"), L("dz")], claves=("dx", "dy", "dz"), giros=None)]
+        try:
+            F, _eje = _marco(e, v.get(clave_punto) or "centro", ctx.op.p.get("version_marco", 1) if ctx.op else 2)
+        except Exception:  # noqa: BLE001 — una selección sin marco no rompe el diálogo
+            return []
+        ejes, d = F[:3, :3], np.array([evaluar_o_cero(ctx, v.get(k)) for k in ("dx", "dy", "dz")])
+        centro = F[:3, 3] + ejes @ d
+        flechas = [mp.Flecha(k, F[:3, 3] + ejes @ np.where(np.arange(3) == i, 0.0, d), ejes[:, i], caja="arrastre")
+                   for i, k in enumerate(("dx", "dy", "dz"))]
+        return flechas + [mp.Angulo("angulo", centro, ejes[:, 2], ejes[:, 0])]
     return asas
 
 
@@ -372,7 +382,7 @@ def _enganchar():
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
         "escala_3d": _asas_escala,
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
-        "scu": _asas_scu, "union": _asas_union("origen2"), "origen_union": _asas_union("origen"),
+        "scu": _asas_scu, "union": _asas_union("origen2", "clave2"), "origen_union": _asas_union("origen", "clave"),
         "bobina": _asas_bobina,
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,
         "tuberia": _asas_tuberia, "dobladillo": _asas_dobladillo, "extender_sup": _asas_extender,
