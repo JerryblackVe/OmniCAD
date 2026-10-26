@@ -2541,8 +2541,9 @@ class VentanaPrincipal(QMainWindow):
         es_fusion = Path(ruta).suffix.lower() in puente_fusion.EXTENSIONES
         try:
             if es_fusion:
-                doc, avisos = self._esperando("Leyendo el archivo de Fusion…",
-                                              lambda: abrir_externo.documento_desde_archivo(ruta, unidades))
+                doc, avisos = self._esperando(
+                    "Leyendo el archivo de Fusion…",
+                    lambda avance: abrir_externo.documento_desde_archivo(ruta, unidades, avance), con_avance=True)
             else:
                 QApplication.setOverrideCursor(Qt.WaitCursor)
                 try:
@@ -2560,9 +2561,10 @@ class VentanaPrincipal(QMainWindow):
         if avisos:
             QMessageBox.information(self, f"Abierto: {Path(ruta).name}", "\n\n".join(avisos))
 
-    def _esperando(self, texto, funcion):
+    def _esperando(self, texto, funcion, con_avance=False):
         """Corre `funcion` en otro hilo mostrando un aviso de espera (la ventana no se congela). Devuelve su
-        resultado o relanza su excepción."""
+        resultado o relanza su excepción. Con `con_avance`, `funcion(avance)` recibe una función de un texto que
+        cambia el aviso mientras corre (la etapa en que va)."""
         import threading
 
         from PySide6.QtCore import QEventLoop
@@ -2571,7 +2573,7 @@ class VentanaPrincipal(QMainWindow):
 
         def trabajo():
             try:
-                resultado["valor"] = funcion()
+                resultado["valor"] = funcion(lambda t: resultado.__setitem__("texto", t)) if con_avance else funcion()
             except Exception as e:  # noqa: BLE001 — se relanza en el hilo de la interfaz
                 resultado["error"] = e
 
@@ -2582,6 +2584,9 @@ class VentanaPrincipal(QMainWindow):
         hilo = threading.Thread(target=trabajo, daemon=True)
         hilo.start()
         while hilo.is_alive():           # el hilo de Python no tiene bucle de Qt: se espera atendiendo la interfaz
+            if resultado.get("texto") not in (None, texto):
+                texto = resultado["texto"]
+                espera.setLabelText(texto)
             QApplication.processEvents(QEventLoop.AllEvents, 50)
             hilo.join(0.05)
         espera.close()

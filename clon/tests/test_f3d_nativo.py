@@ -489,3 +489,32 @@ def test_un_cuerpo_con_una_arista_de_cuatro_caras_entra_como_solido():
     forma, tipo = acis_occ._Convertidor(SimpleNamespace(entidades=[]))._cerrar(caras, True)
     assert tipo == "solido" and acis_occ.es_valida(forma)
     assert g.volumen(forma) == pytest.approx(2000.0, rel=1e-6)
+
+
+def test_una_malla_abierta_enorme_no_pasa_por_shapefix(monkeypatch):
+    """BINCHA.f3d: una malla convertida de 18 716 caras tardaba 247 s en ShapeFix (cuadrático) y el archivo, 5 minutos
+    en abrir. Un cuerpo abierto de más de CARAS_SIN_ARREGLO caras entra como superficie, sin repararlo, y con aviso."""
+    from types import SimpleNamespace
+
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
+
+    class NoDebeLlamarse:
+        def __init__(self, forma):
+            raise AssertionError("ShapeFix no debe correr en una malla grande")
+    monkeypatch.setattr(acis_occ, "CARAS_SIN_ARREGLO", 4)
+    monkeypatch.setattr(acis_occ, "ShapeFix_Shape", NoDebeLlamarse)
+    caja = g.caras(BRepPrimAPI_MakeBox(gp_Pnt(0, 0, 0), 10, 10, 10).Shape())[:5]       # una caja sin una cara: abierta
+    conv = acis_occ._Convertidor(SimpleNamespace(entidades=[]))
+    forma, tipo = conv._cerrar(caja, True)
+    assert tipo == "superficie" and len(g.caras(forma)) == 5 and conv.mallas_sin_reparar == 1
+    assert g.area(forma) == pytest.approx(500.0, rel=1e-9)
+
+
+def test_f3d_avisa_la_etapa_en_que_va(tmp_path):
+    f3d = _zip_f3d(tmp_path / "pieza.f3d", [(_CARPETA + "BREP.aaaa.smbh", _sab(_sab_cubo().r))])
+    etapas = []
+    f3d_nativo.leer_componentes(f3d, progreso=etapas.append)
+    assert [e.split(" ")[0] for e in etapas] == ["Leyendo", "Descomprimiendo", "Leyendo", "Armando", "Ubicando"]
+    doc, _ = documento_desde_archivo(f3d, progreso=etapas.append)
+    assert etapas[-1] == "Armando el documento…" and len(doc.estado_final.cuerpos) == 1

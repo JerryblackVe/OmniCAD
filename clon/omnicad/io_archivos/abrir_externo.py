@@ -54,9 +54,10 @@ def pide_unidades(ruta):
     return Path(ruta).suffix.lower() in (".stl", ".obj", ".ply")
 
 
-def documento_desde_archivo(ruta, unidades="mm"):
+def documento_desde_archivo(ruta, unidades="mm", progreso=None):
     """Abre `ruta` como documento nuevo. Devuelve (documento, avisos). Lanza ErrorAbrir o
-    puente_fusion.ErrorPuenteFusion (Fusion no disponible: el mensaje trae los pasos para hacerlo a mano)."""
+    puente_fusion.ErrorPuenteFusion (Fusion no disponible: el mensaje trae los pasos para hacerlo a mano).
+    `progreso(texto)`, si se pasa, se llama al empezar cada etapa de un .f3d/.f3z (la lenta)."""
     ruta = Path(ruta)
     ext = ruta.suffix.lower()
     if ext not in FORMATOS:
@@ -77,7 +78,9 @@ def documento_desde_archivo(ruta, unidades="mm"):
         oid = doc.nuevo_id()
         op = OpOperacionBase(oid, nombre, cuerpos=_cuerpos_brep(ruta, oid))
     else:
-        op, fusion = _paso_fusion(ruta, doc, nombre, avisos)
+        op, fusion = _paso_fusion(ruta, doc, nombre, avisos, progreso)
+    if progreso is not None:
+        progreso("Armando el documento…")
     doc.operaciones = [op]
     doc.marcador = 1
     doc.recalcular(0)
@@ -92,13 +95,13 @@ def documento_desde_archivo(ruta, unidades="mm"):
     return doc, avisos
 
 
-def _paso_fusion(ruta, doc, nombre, avisos):
+def _paso_fusion(ruta, doc, nombre, avisos, progreso=None):
     """Paso de un .f3d/.f3z. Primero se lee el B-rep que trae el archivo, SIN Fusion (`f3d_nativo`). Solo si eso
     falla y Fusion está abierto con el complemento, se le pide a Fusion (el puente también trae los parámetros).
     Devuelve (paso, resultado del puente o None) y agrega los avisos a `avisos`."""
     oid = doc.nuevo_id()
     try:
-        return _operacion_f3d(ruta, oid, nombre, avisos), None
+        return _operacion_f3d(ruta, oid, nombre, avisos, progreso), None
     except ErrorAbrir as e:
         error_nativo = e
     if puente_fusion.leer_info() is None:
@@ -112,11 +115,11 @@ def _paso_fusion(ruta, doc, nombre, avisos):
     return op, fusion
 
 
-def _operacion_f3d(ruta, op_id, nombre, avisos):
+def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None):
     """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede."""
     from . import f3d_escena, f3d_nativo        # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
     try:
-        componentes, extra = f3d_nativo.leer_componentes(ruta)
+        componentes, extra = f3d_nativo.leer_componentes(ruta, progreso=progreso)
     except f3d_nativo.ErrorF3D as e:
         raise ErrorAbrir(str(e)) from None
     avisos += extra

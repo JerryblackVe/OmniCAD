@@ -57,19 +57,21 @@ def leer(ruta):
     return expandir(comps), avisos
 
 
-def leer_componentes(ruta, resumen=None):
+def leer_componentes(ruta, resumen=None, progreso=None):
     """Como `leer`, pero sin repetir la geometría de las copias: devuelve (componentes, avisos) con una lista
     `{"forma": B-rep en las coordenadas del componente, "tipo", "bloque", "marcos": [matriz 4×4 de columnas en mm, una
     por copia]}`. Si se pasa un dict en `resumen`, se llena con lo que se vio en la escena (`nodos`, `copias`,
-    `cuerpos_escena`, `cuerpos_con_malla`, `bloques`, `bloques_ubicados`)."""
+    `cuerpos_escena`, `cuerpos_con_malla`, `bloques`, `bloques_ubicados`). `progreso(texto)`, si se pasa, se llama al empezar
+    cada etapa (para mostrarla en la ventana mientras abre)."""
     ruta = Path(ruta)
+    _etapa(progreso, f"Leyendo {ruta.name}…")
     try:
         datos = ruta.read_bytes()
     except OSError as e:
         raise ErrorF3D(f"No se pudo leer {ruta.name}: {e}") from None
     if ruta.suffix.lower() == ".f3z":
         datos = _f3d_principal(datos, ruta.name)
-    return leer_componentes_bytes(datos, ruta.stem, resumen)
+    return leer_componentes_bytes(datos, ruta.stem, resumen, progreso)
 
 
 def expandir(componentes):
@@ -84,7 +86,12 @@ def expandir(componentes):
     return salida
 
 
-def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
+def _etapa(progreso, texto):
+    if progreso is not None:
+        progreso(texto)
+
+
+def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None):
     try:
         z = zipfile.ZipFile(io.BytesIO(datos))
     except zipfile.BadZipFile:
@@ -94,11 +101,16 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
         raise ErrorF3D(f"{nombre} no trae geometría 3D (el diseño está vacío o solo tiene bocetos).")
     leidos, archivos, avisos = [], [], []
     for k, info in enumerate(sorted(bloques, key=lambda i: i.filename), 1):
+        _etapa(progreso, f"Descomprimiendo la geometría ({info.file_size / 1048576:.0f} MB)…")
         try:
-            archivo = sab.leer(miembro(datos, info))
+            datos_sab = miembro(datos, info)
+            _etapa(progreso, "Leyendo el B-rep de Fusion…")
+            archivo = sab.leer(datos_sab)
         except (sab.ErrorSAB, zstd_puro.ErrorZstd) as e:
             avisos.append(f"Un componente de {nombre} no se pudo leer: {e}")
             continue
+        del datos_sab
+        _etapa(progreso, f"Armando sólidos y superficies ({len(archivo.de_tipo('face'))} caras)…")
         p, a = acis_occ.convertir(archivo, f"{nombre} (componente {k})" if len(bloques) > 1 else nombre)
         avisos += a
         if p:
@@ -108,6 +120,7 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
     if not partes:
         raise ErrorF3D(f"{nombre} no tiene sólidos ni superficies que se puedan leer."
                        + (f" {avisos[0]}" if avisos else ""))
+    _etapa(progreso, "Ubicando los componentes…")
     marcos, fuera = _ubicar(datos, partes, avisos, resumen)
     if fuera:
         avisos.append(f"{len(fuera)} cuerpos guardados en el archivo no están en el diseño actual (versiones viejas "
@@ -115,6 +128,7 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None):
         partes = [p for k, p in enumerate(partes) if k not in fuera]
         marcos = [m for k, m in enumerate(marcos) if k not in fuera]
     malos = sum(1 for forma, tipo, firma, _ in partes if firma[1] <= CARAS_MAX_VERIFICAR
+                and not (tipo == "superficie" and firma[1] > acis_occ.CARAS_SIN_ARREGLO)   # mallas sin reparar: a propósito
                 and not acis_occ.es_valida(forma))
     if malos:
         avisos.append(f"{malos} de {len(partes)} cuerpos quedaron con errores de geometría (caras que tocan un polo "

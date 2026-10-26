@@ -87,6 +87,9 @@ def convertir(archivo, nombre="Cuerpo"):
     if conv.sin_reparar:
         avisos.append(f"{nombre}: {conv.sin_reparar} cuerpos no se pudieron reparar (OpenCascade falló al "
                       "arreglarlos): entran como están y una operación con ellos puede fallar.")
+    if conv.mallas_sin_reparar:
+        avisos.append(f"{nombre}: {conv.mallas_sin_reparar} cuerpos de malla convertida (más de {CARAS_SIN_ARREGLO} "
+                      "caras) entraron como superficie sin reparar: se ven y se miden, pero no sirven para operaciones.")
     if conv.sin_convertir:
         avisos.append(f"{nombre}: {conv.sin_convertir} cuerpos quedaron afuera porque OpenCascade no pudo armarlos.")
     return partes, avisos
@@ -99,7 +102,7 @@ class _Convertidor:
         self.d = self._desplazamiento()
         self.vertices, self.aristas, self.curvas, self.superficies = {}, {}, {}, {}
         self.omitidas = Counter()
-        self.sin_reparar = self.sin_convertir = 0
+        self.sin_reparar = self.sin_convertir = self.mallas_sin_reparar = 0
 
     # ------------------------------------------------------------ campos
     def _desplazamiento(self):
@@ -176,6 +179,7 @@ class _Convertidor:
         elif len(caras) > CARAS_SIN_ARREGLO:
             # shortcut: una malla convertida (decenas de miles de triángulos abiertos) ya viene orientada por ACIS y
             # ShapeFix tarda minutos en ella (cuadrático: 18 716 caras = 247 s); queda como superficie sin repararla.
+            self.mallas_sin_reparar += 1
             return forma, "superficie"
         arreglo = ShapeFix_Shape(forma)
         arreglo.SetPrecision(PRECISION_ARREGLO)

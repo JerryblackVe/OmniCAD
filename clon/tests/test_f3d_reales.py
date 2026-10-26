@@ -48,3 +48,18 @@ def test_el_ejemplo_abre_con_los_numeros_medidos(nombre, tmp_path):
     assert d["volume_placed_mm3"] == pytest.approx(volumen, rel=1e-3)
     assert d["components_moved"] == movidos
     assert d["unplaced_bodies"] == sin_ubicar
+
+
+@pytest.mark.skipif(not (EJEMPLOS / "BINCHA.f3d").is_file(), reason="falta BINCHA.f3d")
+@pytest.mark.lento
+def test_bincha_abre_en_menos_de_un_minuto(tmp_path):
+    """Antes tardaba 5 minutos: ShapeFix sobre una malla convertida de 18 716 caras (acis_occ.CARAS_SIN_ARREGLO)."""
+    import time
+
+    from omnicad.io_archivos.abrir_externo import documento_desde_archivo
+    copia = tmp_path / "BINCHA.f3d"
+    shutil.copyfile(EJEMPLOS / "BINCHA.f3d", copia)
+    t = time.perf_counter()
+    doc, _ = documento_desde_archivo(copia)
+    assert time.perf_counter() - t < 90
+    assert len(doc.estado_final.cuerpos) >= 1
