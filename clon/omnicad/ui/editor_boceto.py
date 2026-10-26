@@ -1333,7 +1333,8 @@ class Lienzo(QWidget):
                 if ok:
                     self.clics = []
                 return ok
-            self._abrir_entrada(["Rho"], ["0.5"], self._pos_cursor, aceptar)
+            from .asas_boceto import asas_conica
+            self._abrir_entrada(["Rho"], ["0.5"], self._pos_cursor, aceptar, asas_conica(self))
             self.entrada.campos[0].textChanged.connect(lambda _t: self.update())
         elif h == "punto" and len(c) == 1:
             if c[0][0] is None:
@@ -1386,9 +1387,11 @@ class Lienzo(QWidget):
                 self.mensaje.emit("Texto en curva: las letras siguen la curva elegida (Lado en curva, en el panel "
                                   "Carácter).")
             self.opciones["ajustes_kerning"] = []
+            from .asas_boceto import asas_texto
             self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
                                 ["Texto", formato.numero(altura_ini), "0", formato.numero(self.opciones["espaciado"]),
-                                 formato.numero(self.opciones["interlineado"])], self._pos_cursor, aceptar)
+                                 formato.numero(self.opciones["interlineado"])], self._pos_cursor, aceptar,
+                                None if camino is not None else asas_texto(self, xy, caja.get("ancho_caja", 0.0)))
             self._previa_texto = {"pos": pid if pid is not None else xy, "existente": None,
                                   "extra": en_curva | caja, "caja": rect, "reemplazar": True}
             self._conectar_previa_texto()

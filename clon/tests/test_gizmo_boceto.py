@@ -243,3 +243,41 @@ def test_chaflan_asas_en_los_extremos_del_corte(lienzo, herramienta, n):
             arrastrar(lz, q, (0, 10))                                    # el otro extremo cae sobre la segunda línea: 45° → atan(10/10)
             assert 0 < float(textos(lz)[1]) < 180
     lz._cerrar_entrada()
+
+
+def test_conica_asa_rho_en_el_hombro(lienzo):
+    lz = lienzo
+    lz.set_herramienta("conica")
+    for xy in ((0.0, 0.0), (20.0, 0.0), (10.0, 20.0)):
+        lz.clics.append((None, xy))
+    lz._procesar_clics()
+    lz.encuadrar()
+    assert lz._asas is not None and len(lz._asas.asas) == 1
+    lz.entrada.campos[0].setText("0.5")
+    assert posicion(lz, 0) == pytest.approx((10.0, 10.0), abs=1e-6)      # a mitad de camino entre el medio (10, 0) y el vértice
+    arrastrar(lz, posicion(lz, 0), (10.0, 15.0))
+    assert float(textos(lz)[0]) == pytest.approx(0.75, abs=0.02)
+    arrastrar(lz, posicion(lz, 0), (10.0, 400.0))                         # más allá del vértice: Rho queda dentro de (0, 1)
+    assert 0 < float(textos(lz)[0]) < 1
+    arrastrar(lz, posicion(lz, 0), (10.0, -400.0))
+    assert 0 < float(textos(lz)[0]) < 1
+    lz._cerrar_entrada()
+
+
+def test_texto_asa_de_giro_del_marco(lienzo):
+    lz = lienzo
+    lz.set_herramienta("texto")
+    lz.clics.append((None, (0.0, 0.0)))
+    lz.clics.append((None, (40.0, 10.0)))
+    lz._procesar_clics()
+    lz.encuadrar()
+    assert lz._asas is not None and len(lz._asas.asas) == 1
+    ancla = (0.0, 10.0)                                                  # la esquina de arriba a la izquierda del marco
+    assert posicion(lz, 0) == pytest.approx((ancla[0] + 40.0, ancla[1]), abs=1e-6)
+    arrastrar(lz, posicion(lz, 0), (ancla[0] + 20.0, ancla[1] + 20.0))
+    assert float(textos(lz)[2]) == pytest.approx(45, abs=1.0)
+    arrastrar(lz, posicion(lz, 0), (ancla[0] - 30.0, ancla[1] + 5.0))
+    assert float(textos(lz)[2]) == pytest.approx(math.degrees(math.atan2(5, -30)), abs=1.0)
+    lz.entrada.campos[2].setText("90")
+    assert posicion(lz, 0) == pytest.approx((ancla[0], ancla[1] + 40.0), abs=1e-6)
+    lz._cerrar_entrada()

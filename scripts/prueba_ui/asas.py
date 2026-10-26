@@ -381,6 +381,31 @@ def asas_del_boceto():
         tirar(0, (a[0] - 3.0, a[1] + 3.0))
         A.reg(AB, f"{h}: tirar del asa cambia el valor", float(caja(0)) != 3.0 and float(caja(0)) > 0, f"valor={caja(0)}")
         lz._cerrar_entrada()
+    # cónica: Rho
+    lz.set_herramienta("conica")
+    for xy in ((40.0, -20.0), (70.0, -20.0), (55.0, 5.0)):
+        lz.clics.append((None, xy))
+    lz._procesar_clics()
+    A.esperar(100)
+    A.reg(AB, "cónica: asa de Rho", lz._asas is not None and len(lz._asas.asas) == 1, "")
+    lz.entrada.campos[0].setText("0.5")
+    a = lz._asas.asas[0].posicion(lz._asas.valores())
+    tirar(0, (a[0], a[1] + 4.0))
+    A.reg(AB, "cónica: tirar del asa cambia Rho", float(caja(0)) > 0.5 and float(caja(0)) < 1, f"Rho={caja(0)}")
+    lz._cerrar_entrada()
+    lz.clics = []
+    # texto: giro del marco
+    lz.set_herramienta("texto")
+    lz.clics.append((None, (0.0, -40.0)))
+    lz.clics.append((None, (40.0, -30.0)))
+    lz._procesar_clics()
+    A.esperar(100)
+    A.reg(AB, "texto: asa de giro del marco", lz._asas is not None and len(lz._asas.asas) == 1, "")
+    a = lz._asas.asas[0].posicion(lz._asas.valores())
+    tirar(0, (a[0] - 25.0, a[1] + 25.0))
+    A.reg(AB, "texto: tirar del asa gira el marco", abs(float(caja(2)) - 59.0) < 3.0, f"∠={caja(2)}")
+    lz._cerrar_entrada()
+    lz.clics = []
     v.modo_boceto.cancelar()
     A.esperar(300)
 

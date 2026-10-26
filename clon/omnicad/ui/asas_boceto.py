@@ -420,3 +420,33 @@ def asas_chaflan(l, herramienta, picks, xys):
         return Asa2D(i, lambda v: pr(v)[1][i if n > 1 else 0], valor, tipo=tipos[i], minimo=1e-3 if tipos[i] == "long" else 0.1,
                      maximo=179.0 if tipos[i] == "ang" else None, ayuda="Distancia" if tipos[i] == "long" else "Ángulo")
     return [asa(i) for i in range(n)], tipos, lambda v: pr(v)[0]
+
+
+def asas_conica(l):
+    """(asas, tipos, previa) de la caja [Rho]: el asa está en el hombro de la cónica, sobre el segmento del punto medio
+    de los extremos al vértice."""
+    a, b, vertice = [xy for _, xy in l.clics[:3]]
+    m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    d = (vertice[0] - m[0], vertice[1] - m[1])
+    largo2 = d[0] ** 2 + d[1] ** 2 or 1e-18
+
+    def rho(xy, v, v0=None, xy0=None):
+        return ((xy[0] - m[0]) * d[0] + (xy[1] - m[1]) * d[1]) / largo2
+    return ([Asa2D(0, lambda v: _fuera_de(v[0], m, d), rho, ancla=lambda v: m, tipo="esc", minimo=1e-3,
+                   maximo=1 - 1e-3, ayuda="Rho")], ["esc"], None)
+
+
+def asas_texto(l, ancla, ancho):
+    """(asas, tipos, previa) de las cajas [Texto, Altura, ∠, Espaciado, Interlineado]: el asa de giro gira el marco del
+    texto alrededor de su esquina `ancla`; `ancho`: el del marco (o 0)."""
+    radio = max(ancho, 15.0)
+
+    def posicion(v):
+        a = math.radians(v[2])
+        return (ancla[0] + radio * math.cos(a), ancla[1] + radio * math.sin(a))
+
+    def angulo(xy, v, v0=None, xy0=None):
+        g = math.degrees(math.atan2(xy[1] - ancla[1], xy[0] - ancla[0]))
+        return g + 360.0 * round((v[2] - g) / 360.0) if abs(v[2]) > 180.0 else g
+    return ([Asa2D(2, posicion, angulo, ancla=lambda v: ancla, tipo="ang", ayuda="Girar el texto")],
+            ["long", "long", "ang", "long", "esc"], None)
