@@ -121,12 +121,16 @@ def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None, ocultos=None, boc
     """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede. Si se pasa
     la lista `ocultos`, se le agregan los ids de los cuerpos que Fusion tiene ocultos, y con `bocetos`, los bocetos del
     archivo (`f3d_nativo.leer_componentes`)."""
-    from . import f3d_escena, f3d_nativo        # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
+    from . import f3d_escena, f3d_historial, f3d_nativo        # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
     try:
-        componentes, extra = f3d_nativo.leer_componentes(ruta, progreso=progreso, bocetos=bocetos)
+        visto = {}
+        componentes, extra = f3d_nativo.leer_componentes(ruta, visto, progreso=progreso, bocetos=bocetos)
     except f3d_nativo.ErrorF3D as e:
         raise ErrorAbrir(str(e)) from None
     avisos += extra
+    cobertura = f3d_historial.aviso(visto.get("historial") or [], len(bocetos or []), ruta.name)
+    if cobertura:
+        avisos.append(cobertura)
     varios = sum(len(c["marcos"]) for c in componentes) > 1
     cuerpos_del = {}                                  # nombre de componente → cuerpos que lo llevan (para numerarlos)
     for c in componentes:

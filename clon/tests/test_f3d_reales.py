@@ -92,3 +92,21 @@ def test_bincha_trae_sus_diez_bocetos(tmp_path):
     assert sum(len(o.boceto.curvas) for o in bocetos) == 55 + 96 + 539
     y_min = min(p.y for o in bocetos for p in o.boceto.puntos.values())
     assert y_min == pytest.approx(-81.1, abs=0.3)                       # las patas de la bincha
+
+
+@pytest.mark.skipif(not (EJEMPLOS / "BINCHA.f3d").is_file(), reason="falta BINCHA.f3d")
+@pytest.mark.lento
+def test_bincha_declara_su_historial_de_fusion_sin_traducirlo(tmp_path):
+    """La tabla de tipos del flujo de diseño: 10 bocetos (los 10 que se importan), 44 extrusiones, 14 empalmes, 9
+    chaflanes… El historial no se traduce y el aviso de apertura lo dice con esas cifras."""
+    from omnicad.io_archivos.abrir_externo import documento_desde_archivo
+    copia = tmp_path / "BINCHA.f3d"
+    shutil.copyfile(EJEMPLOS / "BINCHA.f3d", copia)
+    _, avisos = documento_desde_archivo(copia)
+    aviso, = [a for a in avisos if "historial de Fusion" in a]
+    for texto in ("44 × Extruir", "14 × Empalme", "9 × Chaflán", "10 × Eliminar cuerpo", "1 × Convertir malla",
+                  "Fusion cuenta 10 bocetos y se importaron 10", "NO se traduce"):
+        assert texto in aviso, texto
+    d = _inspeccionar("BINCHA.f3d", tmp_path)
+    assert {o["type"]: o["count"] for o in d["history"]["operations"]}["ExtrudeFeature"] == 44
+    assert d["history"]["translated"] is False and d["sketches"]["count"] == 10

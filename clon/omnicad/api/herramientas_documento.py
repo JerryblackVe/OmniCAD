@@ -430,14 +430,16 @@ def insert_derive(sesion, source_path: str, bodies: list[str] | None = None, ske
              "(discarded_bodies). components[].name es el nombre del componente, si el archivo lo dice; "
              "components[].hidden marca los cuerpos que el diseño tiene ocultos (sin malla en la escena: open_document "
              "los abre con el ojo cerrado) y bodies_hidden los cuenta. sketches cuenta los bocetos que se leen de los "
-             "perfiles del archivo (count, y curves por tipo): open_document los abre como pasos Boceto.")
+             "perfiles del archivo (count, y curves por tipo): open_document los abre como pasos Boceto. history.operations "
+             "lista las operaciones del historial de Fusion que trae el archivo (tipo, nombre en español y cantidad): "
+             "NO se traducen, el modelo entra como su forma final.")
 def inspect_f3d(sesion, path: str):
     """
     path: ruta del archivo .f3d o .f3z.
     """
     import numpy as np
 
-    from ..io_archivos import f3d_nativo
+    from ..io_archivos import f3d_historial, f3d_nativo
     ruta = Path(path).expanduser()
     if ruta.suffix.lower() not in (".f3d", ".f3z"):
         raise error("UNSUPPORTED_FILE_TYPE", f"inspect_f3d lee .f3d y .f3z; llegó {ruta.suffix or '(sin extensión)'}.")
@@ -464,6 +466,8 @@ def inspect_f3d(sesion, path: str):
             "components_moved": sum(1 for f in filas if f["moved"]),
             "components_with_copies": sum(1 for f in filas if f["copies"] > 1),
             "bodies_hidden": sum(1 for f in filas if f["hidden"]),
+            "history": {"operations": [{"type": t, "name": f3d_historial.nombre(t), "count": n}
+                                       for t, n in visto.get("historial", [])], "translated": False},
             "sketches": {"count": len(bocetos), "curves": dict(Counter(c.tipo for b in bocetos
                                                                       for c in b["boceto"].curvas.values()))},
             "unplaced_bodies": visto.get("sin_ubicar", 0), "discarded_bodies": visto.get("descartados", 0),

@@ -36,7 +36,7 @@ import numpy as np
 
 from ..nucleo import consultas
 
-from . import acis_occ, f3d_escena, sab, zstd_puro
+from . import acis_occ, f3d_escena, f3d_historial, sab, zstd_puro
 
 CARPETA_BREPS = "Breps.BlobParts/"
 CARAS_MAX_VERIFICAR = 5000        # cuerpos más grandes no se verifican (BRepCheck tarda segundos en ellos)
@@ -143,7 +143,10 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None, 
         smb = [i for i in z.infolist() if CARPETA_BREPS in i.filename and i.filename.lower().endswith(".smb")]
         bocetos += _bocetos_ubicados(datos, smb, partes, marcos, nombre, avisos)
     uno = [np.eye(4)]
-    nombres = _nombres_de_componentes(datos, archivos)
+    flujo, nuevo = _flujo_de_diseno(datos)
+    nombres = _nombres_de_componentes(flujo if nuevo else None, archivos)       # los nombres: solo del formato nuevo
+    if resumen is not None:
+        resumen["historial"] = f3d_historial.operaciones(flujo) if flujo else []
     return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno, "nombre": nombres.get(archivos[bloque]),
              "oculto": k in ocultos}
             for k, ((forma, tipo, _, bloque), m) in enumerate(zip(partes, marcos, strict=True))], avisos
@@ -187,15 +190,23 @@ _NO_ES_NOMBRE = re.compile(r"[0-9A-Fa-f-]{36}.*|BREP\..*|Prism.*|\d+_\d+|\d+")
 _VENTANA_NOMBRE = 2000      # bytes entre el nombre y el texto del bloque (reales: 288 a 1324)
 
 
-def _nombres_de_componentes(datos, archivos):
-    """{archivo BREP.*.smbh: nombre de su componente} según el flujo de diseño. Lo que no se encuentra no está."""
+def _flujo_de_diseno(datos):
+    """(bytes del flujo de diseño propietario, si es del formato nuevo): `FusionDesignSegmentType1/BulkStream.dat`; los
+    archivos viejos lo llaman `Design1/`. (None, False) si no está o no se puede leer."""
     try:
         with zipfile.ZipFile(io.BytesIO(datos)) as z:
-            info = next((i for i in z.infolist() if i.filename.endswith("FusionDesignSegmentType1/BulkStream.dat")), None)
-        if info is None:
-            return {}
-        flujo = miembro(datos, info)
+            info = {i.filename.rsplit("/", 2)[-2]: i for i in z.infolist() if i.filename.endswith("/BulkStream.dat")}
+        for carpeta in ("FusionDesignSegmentType1", "Design1"):
+            if carpeta in info:
+                return miembro(datos, info[carpeta]), carpeta != "Design1"
     except (ErrorF3D, zstd_puro.ErrorZstd, zipfile.BadZipFile):
+        pass
+    return None, False
+
+
+def _nombres_de_componentes(flujo, archivos):
+    """{archivo BREP.*.smbh: nombre de su componente} según el flujo de diseño. Lo que no se encuentra no está."""
+    if flujo is None:
         return {}
     nombres = {}
     for archivo in archivos:
