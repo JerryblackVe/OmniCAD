@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-346 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+349 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 61 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 74 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 75 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 17 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -27,7 +27,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
 | [avanzado](#grupo-avanzado) | 8 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
-| [asistente](#grupo-asistente) | 6 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
+| [asistente](#grupo-asistente) | 8 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
 
 ## Grupo documento
@@ -2015,6 +2015,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_sprocket`](#create_sprocket) | sí | Crea una rueda dentada para cadena de rodillos con la forma de diente de ISO 606 (hueco medio) como un paso del timeline. chain elige la cadena (05B…16B, 08A…16A = ANSI 40…80) o 'custom' con pitch y roller_diameter propios; sin width, el ancho del diente sale de la norma (0,93 o 0,95 × ancho interior de la cadena). |
 | [`create_shaft`](#create_shaft) | sí | Asistente de ejes: crea un eje escalonado de revolución a partir de una tabla de tramos (diámetro, largo y, en cada extremo, chaflán a 45° o empalme) como un paso del timeline (tipo «eje_escalonado»). |
 | [`assign_plastic_rule`](#assign_plastic_rule) | sí | Asigna una regla de plástico a un componente (PLÁSTICO › Asignar regla de plástico): el material físico de la regla pasa a todos sus cuerpos y la regla queda guardada en el componente (list_plastic_rules dice cuáles). |
+| [`rebuild_features`](#rebuild_features) | sí | Find Features que rehace: reconoce los agujeros (también abocardados), empalmes y chaflanes de un cuerpo sin historial y los vuelve pasos paramétricos del timeline, uno por uno: borra las caras de la función (delete_faces, las vecinas cierran el hueco) y la crea de nuevo con create_hole, fillet o chamfer y las medidas reconocidas; después vuelve a reconocer sobre el cuerpo nuevo. |
 | [`create_coil`](#create_coil) | sí | Crea una bobina o espiral con las opciones del comando Bobina. |
 | [`create_pipe`](#create_pipe) | sí | Crea una tubería maciza o hueca sobre curvas de boceto o aristas. |
 | [`create_rib`](#create_rib) | sí | Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). |
@@ -2023,7 +2024,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_boss`](#create_boss) | sí | Crea columnas para tornillo en puntos de boceto o vértices. |
 | [`create_lip_groove`](#create_lip_groove) | sí | Crea un labio o una ranura a lo largo del borde de una pared. |
 | [`create_boundary_fill`](#create_boundary_fill) | sí | Rellena celdas encerradas por cuerpos, caras y planos. |
-| [`create_volumetric_lattice`](#create_volumetric_lattice) | sí | Llena un sólido con una estructura interna por celdas (SÓLIDO › MODIFICAR › Retícula volumétrica). cell_shape: cross (tres barras por celda) y x_cell (las cuatro diagonales) quedan como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de malla, con el borde del cuerpo escalonado al paso de la grilla (resolution muestras por celda). solidity es el porcentaje de material. |
+| [`create_volumetric_lattice`](#create_volumetric_lattice) | sí | Llena un sólido o una malla cerrada con una estructura interna por celdas (SÓLIDO › MODIFICAR › Retícula volumétrica). cell_shape: cross (tres barras por celda), x_cell (las cuatro diagonales), x_cell_25d (las diagonales en XY como paredes extruidas en Z) y custom (barras a medida, custom_bars) quedan como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de malla (resolution muestras por celda; el borde del cuerpo sale interpolado). solidity es el porcentaje de material; con solidity_end y gradient_path varía a lo largo de la ruta. offset_distance/offset_blend arman la zona de desfase (otra solidez cerca de caras, aristas o puntos). cell_offset y cell_rotation mueven y giran las celdas. |
 | [`create_geometric_pattern`](#create_geometric_pattern) | sí | Reparte esferas, cilindros, cajas u objetos a medida sobre caras planas con un gradiente de tamaño (PLÁSTICO › CREAR › Patrón geométrico). |
 | [`create_bounding_solid`](#create_bounding_solid) | sí | Crea una caja, un cilindro o un tubo envolvente de los cuerpos elegidos (SÓLIDO › CREAR › Sólido envolvente). orientation: model (ejes del modelo), automatic (la menor), z_x / z_y / x_y (dos ejes dados en axis_a y axis_b; el primero manda) o ucs (un sistema de coordenadas de usuario). |
 | [`create_fluid_volume`](#create_fluid_volume) | sí | Crea el volumen de fluido de un diseño (SÓLIDO › CREAR › Volumen de fluido): el sólido del interior (internal, que copia las caras del modelo) o del exterior (external, una caja, cilindro o semiesfera que rodea el modelo menos el modelo). |
@@ -2101,7 +2102,7 @@ Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketc
 
 ### `sweep`
 
-Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es una cadena continua de curvas: path_curves da sus ids (get_sketch) o, vacío, se usan todas las curvas no de construcción del boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta. Opciones: faces (una cara plana como perfil), path_edges (aristas de un cuerpo como ruta, en lugar de path_sketch), rail_sketch y rail_curves (ruta + carril guía; rail_scale elige cómo sigue el perfil al carril: scale, stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1). orientation=aligned mantiene el perfil con el eje align_axis como binormal (eje, arista recta, plano o cara plana). guide_surface (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. Todavía no están el barrido de un cuerpo sólido ni la selección encadenada de la ruta.
+Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es una cadena continua de curvas: path_curves da sus ids (get_sketch) o, vacío, se usan todas las curvas no de construcción del boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta. Opciones: faces (una cara plana como perfil), path_edges (aristas de un cuerpo como ruta, en lugar de path_sketch), rail_sketch y rail_curves (ruta + carril guía; rail_scale elige cómo sigue el perfil al carril: scale, stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1). orientation=aligned mantiene el perfil con el eje align_axis como binormal (eje, arista recta, plano o cara plana). guide_surface (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. sweep_bodies barre un cuerpo sólido (Solid Sweep) en lugar de un perfil: lo que recorre el cuerpo al moverse a lo largo de la ruta (aproximado con copias del cuerpo: el borde de un barrido curvo queda escalonado). chain=true suma a cada arista de path_edges las que le siguen tangentes (Chain Selection).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2123,11 +2124,13 @@ Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es 
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
   - `align_axis` (texto o objeto; opcional, por defecto `null`): con orientation=aligned, el eje: eje de construcción, arista recta, plano o cara plana (id o selector).
   - `guide_surface` (texto o lista de texto o null; opcional, por defecto `null`): caras (selector o ids de find_faces) sobre las que va la ruta: el perfil sigue su normal; no se combina con carril ni torsión.
+  - `sweep_bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) sólidos (id o nombre) que se barren a lo largo de la ruta (Solid Sweep), en lugar de un perfil; no se combina con carril, superficie guía, torsión ni conicidad.
+  - `chain` (true/false; opcional, por defecto `false`): true suma a cada arista de path_edges las aristas de cuerpo que le siguen tangentes (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
 - CLI: `omnicad call sweep --doc pieza.omnicad`
 
 ### `loft`
 
-Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde el plano de la sección (90 = perpendicular), "weight": 1}; es una aproximación con una sección auxiliar cercana, solo en la solevación lisa (sin rails, center_line, ruled ni closed). merge_tangent_edges une las caras tangentes. Todavía no están las condiciones Tangente y Suave.
+Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde el plano de la sección (90 = perpendicular), "weight": 1} o {"type": "tangent", "face": cara, "weight": 1} (la superficie sale tangente a esa cara, que tiene la sección en su borde); es una aproximación con una sección auxiliar cercana, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. La condición Suave (G2) no existe en OpenCascade.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2141,9 +2144,10 @@ Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden
   - `rails` (lista de texto o objeto o null; opcional, por defecto `null`): curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
   - `center_line` (lista de texto o objeto o null; opcional, por defecto `null`): la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction", "angle": grados (90 por defecto), "weight": número (1 por defecto)}.
+  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
   - `end_condition` (objeto; opcional, por defecto `null`): lo mismo para la última sección.
   - `merge_tangent_edges` (true/false; opcional, por defecto `false`): true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
+  - `section_conditions` (objeto; opcional, por defecto `null`): condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
 - CLI: `omnicad call loft --doc pieza.omnicad`
 
 ### `create_box`
@@ -2248,6 +2252,8 @@ Refleja cuerpos respecto de un plano (origen, de construcción o una CARA PLANA 
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se refleja en vez de cuerpos. No se combina con bodies.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras a reflejar (selector, ids de find_faces o lista): cada reflejo queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a reflejar (id o nombre): cada reflejo es un componente nuevo con copias reflejadas de sus cuerpos. No se combina con bodies, features ni faces.
+  - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+  - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
 - CLI: `omnicad call mirror --doc pieza.omnicad`
 
 ### `realize_copies`
@@ -2276,6 +2282,8 @@ Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features:
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+  - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+  - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
   - `distribution` ("spacing" | "extent"; opcional, por defecto `"spacing"`): "spacing" (x_spacing e y_spacing son la separación entre copias consecutivas) o "extent" (son la distancia TOTAL de la primera a la última).
   - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original.
@@ -2297,6 +2305,8 @@ Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) al
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+  - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+  - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
   - `distribution` ("extent" | "spacing"; opcional, por defecto `"extent"`): "extent" (total_angle es el ángulo TOTAL entre la primera y la última copia) o "spacing" (es el ángulo entre copias consecutivas).
   - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original.
@@ -2314,6 +2324,8 @@ Patrón en puntos (Point Pattern de FreeCAD; en Fusion, los agujeros en varios p
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+  - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+  - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
   - `points` (lista de lista de número o expresión o null; opcional, por defecto `null`): puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
   - `reference` (lista de número o expresión o null; opcional, por defecto `null`): punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
@@ -2338,6 +2350,8 @@ Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de 
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+  - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+  - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
   - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
   - `spacing_mode` ("extent" | "spacing"; opcional, por defecto `"extent"`): "extent" (distance es el largo total) o "spacing" (distance es la separación).
   - `start` (número o expresión; opcional, por defecto `0`): dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
@@ -2364,6 +2378,8 @@ Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón�
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
+  - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
+  - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
 - CLI: `omnicad call multi_transform --doc pieza.omnicad transforms=…`
 
 ### `drop_to_plane`
@@ -2826,6 +2842,17 @@ Asigna una regla de plástico a un componente (PLÁSTICO › Asignar regla de pl
   - `create_parameters` (true/false; opcional, por defecto `false`): true crea (o actualiza) los parámetros PlasticThickness (mm), PlasticDraftAngle (deg) y PlasticNominalRadius (mm) con los valores de la regla.
 - CLI: `omnicad call assign_plastic_rule --doc pieza.omnicad component=…`
 
+### `rebuild_features`
+
+Find Features que rehace: reconoce los agujeros (también abocardados), empalmes y chaflanes de un cuerpo sin historial y los vuelve pasos paramétricos del timeline, uno por uno: borra las caras de la función (delete_faces, las vecinas cierran el hueco) y la crea de nuevo con create_hole, fillet o chamfer y las medidas reconocidas; después vuelve a reconocer sobre el cuerpo nuevo. Cada función rehecha se verifica: el volumen y la caja del cuerpo tienen que seguir iguales a los del original (1e-3 relativo); si no, ese cambio se deshace y la función queda en not_rebuilt con el motivo. Extrusiones, revoluciones, simetrías y patrones solo se informan (find_features). Todo es UN paso de deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo sólido; vacío = el único cuerpo.
+  - `types` (lista de "hole" | "fillet" | "chamfer" o null; opcional, por defecto `null`): qué rehacer: hole, fillet, chamfer; vacío = los tres.
+  - `max_features` (entero; opcional, por defecto `50`): tope de funciones a intentar (cada una deja dos pasos en el timeline).
+- CLI: `omnicad call rebuild_features --doc pieza.omnicad`
+
 ### `create_coil`
 
 Crea una bobina o espiral con las opciones del comando Bobina.
@@ -2973,17 +3000,26 @@ Rellena celdas encerradas por cuerpos, caras y planos.
 
 ### `create_volumetric_lattice`
 
-Llena un sólido con una estructura interna por celdas (SÓLIDO › MODIFICAR › Retícula volumétrica). cell_shape: cross (tres barras por celda) y x_cell (las cuatro diagonales) quedan como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de malla, con el borde del cuerpo escalonado al paso de la grilla (resolution muestras por celda). solidity es el porcentaje de material. El cuerpo queda reemplazado por la retícula (deshacer lo devuelve). Todavía no están la forma X-Cell 2.5D ni a medida, la solidez en gradiente ni las zonas de desfase.
+Llena un sólido o una malla cerrada con una estructura interna por celdas (SÓLIDO › MODIFICAR › Retícula volumétrica). cell_shape: cross (tres barras por celda), x_cell (las cuatro diagonales), x_cell_25d (las diagonales en XY como paredes extruidas en Z) y custom (barras a medida, custom_bars) quedan como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de malla (resolution muestras por celda; el borde del cuerpo sale interpolado). solidity es el porcentaje de material; con solidity_end y gradient_path varía a lo largo de la ruta. offset_distance/offset_blend arman la zona de desfase (otra solidez cerca de caras, aristas o puntos). cell_offset y cell_rotation mueven y giran las celdas. El cuerpo queda reemplazado por la retícula (deshacer lo devuelve).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo sólido; vacío = el único cuerpo.
-  - `cell_shape` ("cross" | "x_cell" | "gyroid" | "schwarz_p" | "schwarz_d"; opcional, por defecto `"gyroid"`): cross, x_cell, gyroid, schwarz_p o schwarz_d.
+  - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo sólido o de la malla cerrada; vacío = el único cuerpo.
+  - `cell_shape` ("cross" | "x_cell" | "x_cell_25d" | "custom" | "gyroid" | "schwarz_p" | "schwarz_d"; opcional, por defecto `"gyroid"`): cross, x_cell, x_cell_25d, custom, gyroid, schwarz_p o schwarz_d.
   - `cell_size` (número o expresión; opcional, por defecto `5`): tamaño de la celda en mm (en X, y en Y y Z si no se dan).
   - `cell_size_y` (número o expresión; opcional, por defecto `null`): tamaño en Y, en mm, para celdas no uniformes; vacío = cell_size.
   - `cell_size_z` (número o expresión; opcional, por defecto `null`): tamaño en Z, en mm, para celdas no uniformes; vacío = cell_size.
-  - `solidity` (número o expresión; opcional, por defecto `30`): porcentaje de material, de 1 a 99.
+  - `solidity` (número o expresión; opcional, por defecto `30`): porcentaje de material, de 1 a 99 (al principio de la ruta si hay gradiente).
   - `resolution` (entero; opcional, por defecto `8`): gyroid, schwarz_p y schwarz_d: muestras por celda (mínimo 4, por defecto 8); más es más fino y más lento.
+  - `custom_bars` (lista de lista de número o null; opcional, por defecto `null`): celda custom: barras [x1, y1, z1, x2, y2, z2] en fracciones de la celda (0 a 1).
+  - `solidity_end` (número o expresión; opcional, por defecto `null`): solidez al final de la ruta (1 a 99); vacío = solidez uniforme.
+  - `gradient_path` (lista de texto o objeto o null; opcional, por defecto `null`): ruta del gradiente: una arista o curva de boceto, o dos o más puntos o vértices (en orden).
+  - `offset_distance` (número o expresión; opcional, por defecto `0`): ancho en mm de la zona de desfase alrededor de offset_zones; 0 = sin zona.
+  - `offset_solidity` (número o expresión; opcional, por defecto `100`): solidez de la zona de desfase, de 0 a 100 (100 = macizo con superficies mínimas, 0 = sin retícula).
+  - `offset_blend` (número o expresión; opcional, por defecto `0`): distancia de mezcla en mm entre la zona de desfase y el resto.
+  - `offset_zones` (lista de texto o objeto o null; opcional, por defecto `null`): caras, aristas, puntos o cuerpos de la zona; vacío = todas las caras del cuerpo.
+  - `cell_offset` (lista de número o null; opcional, por defecto `null`): [dx, dy, dz] en mm: mueve las celdas.
+  - `cell_rotation` (lista de número o null; opcional, por defecto `null`): [rx, ry, rz] en grados: gira las celdas (primero en X, después Y, después Z).
 - CLI: `omnicad call create_volumetric_lattice --doc pieza.omnicad`
 
 ### `create_geometric_pattern`
@@ -3037,6 +3073,7 @@ Crea una caja, un cilindro o un tubo envolvente de los cuerpos elegidos (SÓLIDO
   - `component` (true/false; opcional, por defecto `false`): true deja el sólido en un componente nuevo.
   - `rigid_group` (true/false; opcional, por defecto `false`): true liga el sólido a los componentes de los cuerpos envueltos (solo vale si los cuerpos están en componentes).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de los ejes.
+  - `origin` ("model" | "center" | "corner"; opcional, por defecto `"model"`): dónde queda el origen del componente (Origin Mode): model (el del documento), center (centro del sólido) o corner (su esquina mínima); solo con component=true o rigid_group=true; get_assembly lo informa.
 - CLI: `omnicad call create_bounding_solid --doc pieza.omnicad bodies=…`
 
 ### `create_fluid_volume`
@@ -4180,7 +4217,7 @@ Ver y medir el resultado.
 | [`find_edges`](#find_edges) | no | Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`measure_angle`](#measure_angle) | no | Ángulo (grados) entre dos caras planas, dos aristas rectas, o una cara y una arista. |
 | [`design_advice`](#design_advice) | no | Consejos de diseño para moldeo por inyección (Plástico › Inspeccionar › Design Advice): revisa un cuerpo contra una regla de plástico y la dirección de extracción del molde. |
-| [`find_features`](#find_features) | no | Reconoce las funciones que forman un cuerpo sin historial, por ejemplo uno importado (SÓLIDO › CREAR › Reconocer funciones): agujeros (diámetro, profundidad, pasante, avellanado), empalmes (radio, convexo o cóncavo) y chaflanes (ancho y ángulo), cada uno con los ids de sus caras (find_faces) para poder elegirlos. |
+| [`find_features`](#find_features) | no | Reconoce las funciones que forman un cuerpo sin historial, por ejemplo uno importado (SÓLIDO › CREAR › Reconocer funciones): agujeros (diámetro, profundidad, pasante, avellanado, punto de entrada), empalmes (radio, convexo o cóncavo), chaflanes (ancho, ángulo y distancia), extrusión (el cuerpo entero es un prisma: dirección, distancia y área del perfil), revolución (todas las caras giran alrededor de un eje: eje y ángulo) y grupos de agujeros, empalmes o chaflanes iguales: patrón rectangular (direcciones, cantidad y paso), circular (eje, cantidad y paso angular) o simetría (plano X, Y o Z por el centro de la caja del cuerpo). |
 | [`check_geometry`](#check_geometry) | no | Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. |
 | [`check_printability`](#check_printability) | no | Revisión de impresión 3D de un cuerpo (o de todos), como la caja de herramientas de impresión 3D de Blender: si es estanco, espesor mínimo de pared (rayos hacia adentro desde la superficie; zonas más finas que min_thickness), zonas en voladizo que necesitan soportes (más de overhang_angle desde la vertical, sin contar la cara apoyada en la cama: el plano Z más bajo del cuerpo) y aristas filosas (ángulo interior menor que sharp_angle). printable = estanco y sin paredes finas. |
 | [`repair_body`](#repair_body) | sí | Repara un cuerpo y deja un paso «Reparar cuerpo» en el timeline (editable; un paso de deshacer): cose las aristas abiertas (si queda estanco pasa a sólido), baja las tolerancias mayores que tolerance, corrige con ShapeFix (orientación de caras, contornos) y refina (une caras coplanares). |
@@ -4385,12 +4422,12 @@ Consejos de diseño para moldeo por inyección (Plástico › Inspeccionar › D
 
 ### `find_features`
 
-Reconoce las funciones que forman un cuerpo sin historial, por ejemplo uno importado (SÓLIDO › CREAR › Reconocer funciones): agujeros (diámetro, profundidad, pasante, avellanado), empalmes (radio, convexo o cóncavo) y chaflanes (ancho y ángulo), cada uno con los ids de sus caras (find_faces) para poder elegirlos. Solo lee: todavía no crea los pasos del timeline que los rehacen ni reconoce extrusiones, revoluciones, simetrías ni patrones. No cambia el documento.
+Reconoce las funciones que forman un cuerpo sin historial, por ejemplo uno importado (SÓLIDO › CREAR › Reconocer funciones): agujeros (diámetro, profundidad, pasante, avellanado, punto de entrada), empalmes (radio, convexo o cóncavo), chaflanes (ancho, ángulo y distancia), extrusión (el cuerpo entero es un prisma: dirección, distancia y área del perfil), revolución (todas las caras giran alrededor de un eje: eje y ángulo) y grupos de agujeros, empalmes o chaflanes iguales: patrón rectangular (direcciones, cantidad y paso), circular (eje, cantidad y paso angular) o simetría (plano X, Y o Z por el centro de la caja del cuerpo). Cada función trae los ids de sus caras (find_faces). Solo lee: rebuild_features rehace en el timeline los agujeros, empalmes y chaflanes. No cambia el documento.
 
 - Modifica el documento: no.
 - Parámetros:
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo sólido; vacío = el único cuerpo.
-  - `types` (lista de "hole" | "fillet" | "chamfer" o null; opcional, por defecto `null`): qué reconocer: hole, fillet, chamfer; vacío = los tres.
+  - `types` (lista de "hole" | "fillet" | "chamfer" | "extrude" | "revolve" | "mirror" | "circular_pattern" | "rectangular_pattern" o null; opcional, por defecto `null`): qué reconocer: hole, fillet, chamfer, extrude, revolve, mirror, circular_pattern, rectangular_pattern; vacío = todo.
 - CLI: `omnicad call find_features --doc pieza.omnicad`
 
 ### `check_geometry`
@@ -5157,8 +5194,10 @@ Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el his
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`get_assistant_config`](#get_assistant_config) | no | Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto e imágenes. |
+| [`get_assistant_config`](#get_assistant_config) | no | Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes e instrucciones propias. |
 | [`set_assistant_config`](#set_assistant_config) | sí | Cambia la configuración del Asistente IA (solo los campos pasados). |
+| [`get_project_instructions`](#get_project_instructions) | no | Instrucciones de este proyecto para el Asistente IA: van dentro del .omnicad y se suman a las propias (get_assistant_config). |
+| [`set_project_instructions`](#set_project_instructions) | sí | Cambia las instrucciones de este proyecto para el Asistente IA. Se guardan con el diseño (save_document) pero no entran en deshacer, como los comentarios. |
 | [`list_assistant_models`](#list_assistant_models) | no | Modelos que se pueden elegir para el Asistente IA, como el combo «Modelo» de Preferencias: los de OpenCode y Codex los pregunta a su CLI; los de Claude Code son sus alias y nombres; por API, GET /models (no gasta). |
 | [`assistant_ask`](#assistant_ask) | sí | Corre un pedido al Asistente IA SIN ventana, sobre el documento de esta sesión, con el proveedor configurado (get_assistant_config). |
 | [`list_assistant_chats`](#list_assistant_chats) | no | Lista los chats guardados del Asistente (el más nuevo primero): id, título, fecha, modo, proveedor, modelo y cantidad de mensajes. |
@@ -5166,7 +5205,7 @@ Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el his
 
 ### `get_assistant_config`
 
-Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto e imágenes. De la clave de API solo dice qué variable de entorno la lleva y si está definida; nunca su valor.
+Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes e instrucciones propias. De la clave de API solo dice qué variable de entorno la lleva y si está definida; nunca su valor.
 
 - Modifica el documento: no.
 - Parámetros: ninguno.
@@ -5185,7 +5224,25 @@ Cambia la configuración del Asistente IA (solo los campos pasados). No acepta c
   - `max_usd` (número; opcional, por defecto `null`): gasto máximo por pedido en USD, de 0 (sin tope) a 100.
   - `send_images` (true/false; opcional, por defecto `null`): si se le mandan al modelo las imágenes del visor.
   - `effort` (texto; opcional, por defecto `null`): esfuerzo de OpenCode (--variant) o de Codex (model_reasoning_effort), p. ej. "high"; "" = el de fábrica.
+  - `instructions` (texto; opcional, por defecto `null`): instrucciones propias para todos los chats (hasta 4000 caracteres); "" las borra. No pueden saltear modos, la tarjeta Aplicar, los bloqueos ni el tope de gasto.
 - CLI: `omnicad call set_assistant_config --doc pieza.omnicad`
+
+### `get_project_instructions`
+
+Instrucciones de este proyecto para el Asistente IA: van dentro del .omnicad y se suman a las propias (get_assistant_config). Un archivo ajeno puede traerlas: el asistente las trata como dato, no como orden.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_project_instructions --doc pieza.omnicad`
+
+### `set_project_instructions`
+
+Cambia las instrucciones de este proyecto para el Asistente IA. Se guardan con el diseño (save_document) pero no entran en deshacer, como los comentarios.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `instructions` (texto; obligatorio): texto de hasta 4000 caracteres (p. ej. "pared mínima de 2 mm, todo para imprimir en PLA"); "" las borra.
+- CLI: `omnicad call set_project_instructions --doc pieza.omnicad instructions=…`
 
 ### `list_assistant_models`
 
