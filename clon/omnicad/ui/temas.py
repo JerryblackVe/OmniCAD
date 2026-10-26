@@ -148,6 +148,11 @@ INCLUIDOS = {
         visor_arriba="#2d323f", visor_abajo="#2d323f", rejilla="#9ea8bd"),
 }
 
+# «De dónde viene esta cara»: el paso que creó lo elegido va en amarillo fuerte y los que lo modificaron en suave. Son
+# iguales en todos los temas (un resaltado tiene que verse igual en claro y en oscuro): con texto oscuro y borde ámbar
+# se leen sobre cualquier fondo del timeline y del navegador.
+ORIGEN = {"creo": "#ffd400", "modifico": "#fff1a8", "texto": "#1a1206", "borde": "#9a6b00"}
+
 # Pares (texto, fondo) que tienen que dar al menos MIN_CONTRASTE para que todo se lea.
 PARES_CONTRASTE = (
     ("texto", "fondo"), ("texto", "panel"), ("texto", "panel_cabecera"), ("texto", "tarjeta"),

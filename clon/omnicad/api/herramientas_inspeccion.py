@@ -537,3 +537,31 @@ def measure_angle(sesion, a: str, b: str, body: str | None = None):
         return {"id": sl.emitir_id(sesion, cuerpo, e), "type": e.geom.lower(), "vector": [_r(x) + 0.0 for x in e.vector]}
     return {"angle": _r(angulo), "acute_angle": _r(min(angulo, 180.0 - angulo)), "kind": kind,
             "a": desc(ca, ea), "b": desc(cb, eb)}
+
+
+# ---------------------------------------------------------------- de dónde viene una cara o arista
+@herramienta("get_entity_origin", "inspeccion", "De dónde viene una cara o arista: qué paso del timeline la creó "
+             "(created_by) y cuáles la modificaron (modified_by, en orden). Es la misma respuesta que la app da al "
+             "elegir algo en la vista (el paso se resalta en amarillo) y sirve para saber qué paso editar si algo "
+             "no salió como se esperaba. Se calcula comparando el modelo antes y después de cada paso, así que una "
+             "cara que un paso deja idéntica a otra no se distingue; known=false si no se puede saber. Una cara que "
+             "entra de otro cuerpo (la herramienta de un Combinar) se atribuye al paso que la trajo.")
+def get_entity_origin(sesion, entity: str, body: str | None = None):
+    """
+    entity: UNA cara o arista: id de find_faces / find_edges ("Cuerpo1/F3", "Cuerpo1/E7"), o un selector que elija una sola ('>Z', 'edges:|X and >Y', 'nearest:[x,y,z]').
+    body: id o nombre del cuerpo donde se evalúa un selector; vacío = el único cuerpo.
+    """
+    from ..timeline.origen import origen_de
+    cuerpo, elem = sl.elegir_uno(sesion, entity, body=body)
+    ref = sl.referencia(cuerpo, elem)
+    o = origen_de(sesion.doc, ref)
+
+    def paso(op_id):
+        op = sesion.doc.operacion(op_id)
+        return {"id": op.id, "name": op.nombre, "type": op.TIPO}
+    base = {"entity": sl.emitir_id(sesion, cuerpo, elem), "type": "face" if elem.tipo == "cara" else "edge",
+            "body": {"id": cuerpo.id, "name": sesion.nombre_cuerpo(cuerpo)}}
+    if o is None:
+        sesion.avisar("No se pudo rastrear de dónde viene: no se encuentra en los pasos anteriores del timeline.")
+        return {**base, "known": False, "created_by": None, "modified_by": []}
+    return {**base, "known": True, "created_by": paso(o["creo"]), "modified_by": [paso(i) for i in o["modificaron"]]}

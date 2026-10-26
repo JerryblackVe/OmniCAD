@@ -16,6 +16,7 @@ from . import formato, temas
 from .iconos import icono
 from .insignias import icono_con_insignia
 
+ROL_ORIGEN = Qt.UserRole + 5          # «creo» | «modifico»: lo resalta en amarillo («De dónde viene esta cara»)
 ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO, ROL_ESTADO = (Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3,
                                                       Qt.UserRole + 4)
 ALTO_FILA = 24
@@ -46,8 +47,14 @@ class _Delegado(QStyledItemDelegate):
         c = temas.activo()
         fila = QColor(c["nav_fila"])
         fila.setAlpha(242)
-        p.setBrush(QColor(c["seleccion"]) if option.state & QStyle.State_Selected else fila)
+        origen = index.data(ROL_ORIGEN)
+        p.setBrush(QColor(temas.ORIGEN[origen]) if origen else
+                   QColor(c["seleccion"]) if option.state & QStyle.State_Selected else fila)
         p.drawRect(caja)
+        if origen:
+            p.setPen(QPen(QColor(temas.ORIGEN["borde"]), 1.5 if origen == "creo" else 1))
+            p.drawRect(caja)
+            p.setPen(Qt.NoPen)
         x = caja.left() + 4
         y = caja.center().y() - 8
         tam, dpr = QSize(16, 16), p.device().devicePixelRatioF()       # el vector se dibuja a 16 px reales, no se achica el de 32
@@ -60,7 +67,8 @@ class _Delegado(QStyledItemDelegate):
         p.drawPixmap(QPointF(x, y), ico.pixmap(tam, dpr))
         x += 22
         p.setFont(f)
-        p.setPen(QColor(c["seleccion_texto"] if option.state & QStyle.State_Selected else c["texto"])
+        p.setPen(QColor(temas.ORIGEN["texto"]) if origen else
+                 QColor(c["seleccion_texto"] if option.state & QStyle.State_Selected else c["texto"])
                  if index.data(ROL_OJO) is not False else QColor(c["texto_inactivo"]))
         p.drawText(QRectF(x, caja.top(), caja.right() - x, caja.height()), Qt.AlignVCenter | Qt.AlignLeft, texto)
         p.restore()
@@ -135,6 +143,7 @@ class Navegador(QFrame):
         self.uniones = []            # [(id de la operación, nombre)]
         self.lienzos = []            # [(id, nombre, visible)] (Lienzos)
         self.calcomanias = []        # [(id, nombre)] (INSERTAR › Calcomanía), cada una con el cuerpo al que está pegada
+        self._origen = {}            # {clave: «creo» | «modifico»} resaltadas en amarillo (`resaltar_origen`)
         self.estados = {}            # {clave de cuerpo o boceto: «aviso» | «error»} del paso que lo creó (insignia del ícono)
         self.organizacion = {"grupos": {}, "conjuntos": {}}
         self.menu_elemento = None
@@ -210,6 +219,7 @@ class Navegador(QFrame):
         it.setData(0, ROL_TIPO, tipo)
         it.setData(0, ROL_OJO, ojo)
         it.setData(0, ROL_ESTADO, self.estados.get(clave))
+        it.setData(0, ROL_ORIGEN, self._origen.get(clave))
         (padre.addChild(it) if padre else self.arbol.addTopLevelItem(it))
         self._items[clave] = it
         return it
@@ -298,6 +308,29 @@ class Navegador(QFrame):
 
     def item(self, clave):
         return self._items.get(clave)
+
+    def revelar(self, clave):
+        """Despliega las carpetas hasta la fila `clave` y la trae a la vista, sin elegirla. False si no está."""
+        it = self.item(clave)
+        if it is None:
+            return False
+        padre = it.parent()
+        while padre is not None:
+            padre.setExpanded(True)
+            padre = padre.parent()
+        self.arbol.scrollToItem(it)
+        return True
+
+    def resaltar_origen(self, creo=(), modifico=()):
+        """Pinta en amarillo las filas de `creo` (fuerte) y de `modifico` (suave); sin nada, saca el resaltado.
+        No cambia la selección ni el plegado del árbol. Lo que no está en el árbol se ignora."""
+        nuevo = {**dict.fromkeys(modifico, "modifico"), **dict.fromkeys(creo, "creo")}
+        if nuevo == self._origen:
+            return
+        self._origen = nuevo
+        for clave, it in self._items.items():
+            it.setData(0, ROL_ORIGEN, nuevo.get(clave))
+        self.arbol.viewport().update()
 
     def marcar_boceto(self, ident, resultado):
         """Actualiza en el lugar el ícono y el tooltip del boceto mientras se lo edita (sin rearmar el árbol)."""

@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-349 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+350 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -21,7 +21,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [malla](#grupo-malla) | 17 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 11 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
-| [inspeccion](#grupo-inspeccion) | 23 | Ver y medir el resultado. |
+| [inspeccion](#grupo-inspeccion) | 24 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
@@ -4234,6 +4234,7 @@ Ver y medir el resultado.
 | [`find_faces`](#find_faces) | no | Lista las caras de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`find_edges`](#find_edges) | no | Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un selector. |
 | [`measure_angle`](#measure_angle) | no | Ángulo (grados) entre dos caras planas, dos aristas rectas, o una cara y una arista. |
+| [`get_entity_origin`](#get_entity_origin) | no | De dónde viene una cara o arista: qué paso del timeline la creó (created_by) y cuáles la modificaron (modified_by, en orden). |
 | [`design_advice`](#design_advice) | no | Consejos de diseño para moldeo por inyección (Plástico › Inspeccionar › Design Advice): revisa un cuerpo contra una regla de plástico y la dirección de extracción del molde. |
 | [`find_features`](#find_features) | no | Reconoce las funciones que forman un cuerpo sin historial, por ejemplo uno importado (SÓLIDO › CREAR › Reconocer funciones): agujeros (diámetro, profundidad, pasante, avellanado, punto de entrada), empalmes (radio, convexo o cóncavo), chaflanes (ancho, ángulo y distancia), extrusión (el cuerpo entero es un prisma: dirección, distancia y área del perfil), revolución (todas las caras giran alrededor de un eje: eje y ángulo) y grupos de agujeros, empalmes o chaflanes iguales: patrón rectangular (direcciones, cantidad y paso), circular (eje, cantidad y paso angular) o simetría (plano X, Y o Z por el centro de la caja del cuerpo). |
 | [`check_geometry`](#check_geometry) | no | Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. |
@@ -4425,6 +4426,16 @@ Lista las aristas de un cuerpo (o de todos), opcionalmente filtradas por un sele
   - `b` (texto; obligatorio): cara o arista: id ("Cuerpo1/F3") o selector (">X", "edges:|X").
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids no lo necesitan.
 - CLI: `omnicad call measure_angle --doc pieza.omnicad a=… b=…`
+
+### `get_entity_origin`
+
+De dónde viene una cara o arista: qué paso del timeline la creó (created_by) y cuáles la modificaron (modified_by, en orden). Es la misma respuesta que la app da al elegir algo en la vista (el paso se resalta en amarillo) y sirve para saber qué paso editar si algo no salió como se esperaba. Se calcula comparando el modelo antes y después de cada paso, así que una cara que un paso deja idéntica a otra no se distingue; known=false si no se puede saber. Una cara que entra de otro cuerpo (la herramienta de un Combinar) se atribuye al paso que la trajo.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `entity` (texto; obligatorio): UNA cara o arista: id de find_faces / find_edges ("Cuerpo1/F3", "Cuerpo1/E7"), o un selector que elija una sola ('>Z', 'edges:|X and >Y', 'nearest:[x,y,z]').
+  - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo donde se evalúa un selector; vacío = el único cuerpo.
+- CLI: `omnicad call get_entity_origin --doc pieza.omnicad entity=…`
 
 ### `design_advice`
 

@@ -13,16 +13,18 @@ paso con el color de su componente. «Ocultar pasos inactivos» y «Cambiar a mo
 tiene componente activo ni modo sin historial.
 """
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QIcon
+from PySide6.QtGui import QBrush, QColor, QIcon, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QLabel, QListView, QListWidget, QListWidgetItem, QMenu,
-                               QToolButton, QWidget)
+                               QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton, QWidget)
 
 from ..timeline.operaciones import OPERACIONES_CUERPO
+from . import temas
 from .iconos import icono
 from .insignias import icono_con_insignia, insignia_de
 
 COLORES = {"aviso": QColor(255, 214, 102), "error": QColor(255, 140, 140)}
 MARCADOR = "__marcador__"
+ROL_ORIGEN = Qt.UserRole + 1     # «creo» | «modifico»: el paso es de donde viene lo elegido en la vista (amarillo)
 # Colores de la muestra por componente (suaves, para que el ícono se siga viendo); se repiten si hay más componentes.
 PALETA_COMPONENTES = [QColor(*c) for c in ((141, 196, 255), (255, 183, 120), (168, 225, 148), (214, 170, 240),
                                            (255, 165, 175), (130, 220, 215), (240, 220, 120), (190, 190, 200))]
@@ -71,6 +73,26 @@ def destino_arrastre(claves, origen, fila_destino):
     return sum(1 for c in claves[:fila_destino] if c not in (MARCADOR, origen))
 
 
+class _Delegado(QStyledItemDelegate):
+    """Pinta los pasos de «De dónde viene esta cara»: fondo amarillo y marco ámbar (el fondo solo se confundiría con el
+    aviso). Lo dibuja acá porque la hoja de estilos de la app pisa el `setBackground` de los ítems."""
+
+    def paint(self, p, option, index):
+        origen = index.data(ROL_ORIGEN)
+        caja = option.rect.adjusted(1, 1, -2, -2)
+        if origen:
+            p.fillRect(caja, QColor(temas.ORIGEN[origen]))
+            option = QStyleOptionViewItem(option)
+            option.state &= ~QStyle.State_Selected      # elegido en el timeline, el amarillo sigue a la vista
+        super().paint(p, option, index)
+        if origen:
+            p.save()
+            p.setPen(QPen(QColor(temas.ORIGEN["borde"]), 2 if origen == "creo" else 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(caja)
+            p.restore()
+
+
 class _Lista(QListWidget):
     soltado = Signal(str, int)          # clave arrastrada, fila antes de la que se soltó
 
@@ -105,7 +127,9 @@ class PanelTimeline(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.doc = None
         self.color_componente = False
+        self._origen = ((), ())            # (pasos que crearon lo elegido, pasos que lo modificaron): `resaltar_origen`
         self.lista = _Lista()
+        self.lista.setItemDelegate(_Delegado(self.lista))
         self.lista.setFlow(QListView.LeftToRight)
         self.lista.setWrapping(False)
         self.lista.setFixedHeight(38)
@@ -205,7 +229,8 @@ class PanelTimeline(QWidget):
         nombres = [icono_operacion(op) for op in doc.operaciones]       # una vez por paso: resolver el comando recorre el catálogo
         firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, nombre, insignia_de(op, res.estado),
                                           res.estado, res.mensaje, colores.get(op.id))
-                                         for op, res, nombre in zip(doc.operaciones, doc.resultados, nombres, strict=True)])
+                                         for op, res, nombre in zip(doc.operaciones, doc.resultados, nombres, strict=True)],
+                 self._origen)
         if doc is self.doc and firma == getattr(self, "_firma", None):
             return
         self._firma = firma
@@ -221,6 +246,10 @@ class PanelTimeline(QWidget):
             it.setSizeHint(QSize(32, 34))
             it.setData(Qt.UserRole, op.id)
             fondo = COLORES.get(res.estado) or colores.get(op.id)       # aviso o error mandan sobre el componente
+            marca = self._marca_origen(op.id)
+            if marca:                                                   # el amarillo de «de dónde viene» manda sobre todo
+                fondo = QColor(temas.ORIGEN[marca])
+                it.setData(ROL_ORIGEN, marca)
             if fondo is not None:
                 it.setBackground(QBrush(fondo))
             estado = {"ok": "OK", "aviso": "Aviso", "error": "Error", "suprimida": "Suprimida",
@@ -228,10 +257,30 @@ class PanelTimeline(QWidget):
             it.setToolTip(f"<b>{op.nombre}</b><br>{op.ETIQUETA} · {op.id}<br>Estado: {estado}"
                           + (f"<br>Operación: {OPERACIONES_CUERPO[op.p['operacion']]}" if op.p.get("operacion") in OPERACIONES_CUERPO else "")
                           + (f"<br>{res.mensaje}" if res.mensaje else "")
+                          + {"creo": "<br><b>Creó lo que está elegido en la vista</b>",
+                             "modifico": "<br><b>Modificó lo que está elegido en la vista</b>"}.get(marca, "")
                           + "<br><i>Doble clic: editar · clic derecho: más opciones</i>")
             self.lista.addItem(it)
         if doc.marcador == len(doc.operaciones):
             self._agregar_marcador()
+
+    def _marca_origen(self, op_id):
+        creo, modificaron = self._origen
+        return "creo" if op_id in creo else "modifico" if op_id in modificaron else None
+
+    def resaltar_origen(self, creo=(), modificaron=()):
+        """«De dónde viene esta cara»: pinta de amarillo fuerte los pasos `creo` (ids; uno solo puede ir como texto) y de
+        suave los `modificaron`, y trae el primero que creó a la vista (sin elegirlo). Sin argumentos saca el resaltado."""
+        nuevo = ((creo,) if isinstance(creo, str) else tuple(creo), tuple(modificaron))
+        if nuevo == self._origen:
+            return
+        self._origen = nuevo
+        if self.doc is not None:
+            self.repintar_iconos()          # arma de nuevo la lista (guarda la posición y el paso elegido)
+            primero = next((it for i in range(self.lista.count()) if (it := self.lista.item(i)).data(ROL_ORIGEN) == "creo"),
+                           None)
+            if primero is not None:
+                self.lista.scrollToItem(primero)
 
     def _agregar_marcador(self):
         it = QListWidgetItem(icono("marcador"), "")

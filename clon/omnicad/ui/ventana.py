@@ -961,6 +961,8 @@ class VentanaPrincipal(QMainWindow):
         if not self._t_mensaje.isActive():
             self._mostrar_estado(self._info_sel or texto)
         self._anunciar_avisos()
+        if self.seleccion:
+            self._resaltar_origen()         # lo elegido puede venir ahora de otro paso (o ya no existir)
 
     def _estado_visible(self):
         """Mientras se edita un boceto, el modelo se ve como estaba en ese paso (como Fusion). Con un
@@ -1660,6 +1662,7 @@ class VentanaPrincipal(QMainWindow):
         from .medidas import texto_medidas
         self.info_seleccion(texto_medidas(self.seleccion, self._estado_visible()))
         self._actualizar_sugerencias()
+        self._resaltar_origen()
         if self.asistente is not None:
             self.asistente.actualizar_seleccion()   # la ficha de lo elegido (IA-13)
 
@@ -1910,7 +1913,7 @@ class VentanaPrincipal(QMainWindow):
 
     def abrir_menu_radial(self, pos_global):
         from .menu_radial import MenuRadial
-        contexto = [] if self.panel is not None else self._contexto_radial()
+        contexto = [] if self.panel is not None else self._filas_origen(pos_global) + self._contexto_radial()
         menu = MenuRadial(self._items_radial(), contexto, self)
         menu.abrir(pos_global)
         self._menu_radial = menu
@@ -2070,6 +2073,64 @@ class VentanaPrincipal(QMainWindow):
             deps = set()
         return [c.id for c in estado.cuerpos.values() if c.op_id in deps]
 
+    # ------------------------------------------------------------ «De dónde viene esta cara»
+    MAX_ORIGENES = 12       # con una selección enorme (Seleccionar todo) no se calcula el origen de cada cosa
+
+    def origenes_de_seleccion(self):
+        """Origen (`timeline.origen.origen_de`) de cada cara, arista, vértice o cuerpo elegidos de los que se pueda saber.
+        Con un comando o un boceto abiertos no hay selección libre: no se resalta nada."""
+        if self.panel is not None or self.modo_boceto.activo:
+            return []
+        from ..timeline.origen import origen_de
+        return [o for h in self.seleccion[:self.MAX_ORIGENES] if (o := origen_de(self.doc, h["ref"])) is not None]
+
+    def _resaltar_origen(self):
+        """Pinta en amarillo, en el timeline y el navegador, los pasos de los que viene lo elegido: el que lo creó fuerte
+        y los que lo modificaron suave; con nada elegido (o sin origen) saca el resaltado."""
+        origenes = self.origenes_de_seleccion()
+        creo = list(dict.fromkeys(o["creo"] for o in origenes if o["creo"]))
+        modificaron = [m for m in dict.fromkeys(m for o in origenes for m in o["modificaron"]) if m not in creo]
+        self.timeline.resaltar_origen(creo, modificaron)
+        claves = lambda ops: [k for op in ops for k in self.claves_navegador_de(op)]  # noqa: E731
+        self.navegador.resaltar_origen(claves(creo), claves(modificaron))
+
+    def _filas_origen(self, pos_global):
+        """Filas del menú de clic derecho sobre una cara, arista, vértice o cuerpo elegido: «Ir a la operación que la
+        creó» y «Editar la operación» (con varias operaciones, esta abre una lista con cada una)."""
+        if len(self.seleccion) != 1:
+            return []
+        origenes = self.origenes_de_seleccion()
+        if not origenes:
+            return []
+        o = origenes[0]
+        esto = {"cara": "esta cara", "arista": "esta arista", "vertice": "este vértice",
+                "cuerpo": "este cuerpo"}[self.seleccion[0]["ref"]["tipo"]]
+        pasos = [o["creo"], *o["modificaron"]]
+        editar = (lambda: self.editar_operacion(o["creo"])) if len(pasos) == 1 else (
+            lambda: self._lista_origen(pasos, o["creo"], pos_global))
+        return [(f"Ir a la operación que creó {esto}", lambda: self.ir_a_operacion(o["creo"])),
+                (f"Editar la operación de {esto}" + ("…" if len(pasos) > 1 else ""), editar), None]
+
+    def _lista_origen(self, pasos, creo, pos_global):
+        """Lista de los pasos de los que viene lo elegido (el que lo creó primero): elegir uno lo edita."""
+        m = QMenu(self)
+        m.addSection("Operaciones de esta selección")
+        for op_id in pasos:
+            op = self.doc.operacion(op_id)
+            m.addAction(f"{op.nombre} — {'la creó' if op_id == creo else 'la modificó'}",
+                        lambda i=op_id: self.editar_operacion(i))
+        m.popup(pos_global)
+        self._menu_origen = m
+        return m
+
+    def ir_a_operacion(self, op_id):
+        """«Ir a la operación»: elige el paso en el timeline (lo trae a la vista) y despliega su elemento en el
+        navegador, sin elegirlo (elegirlo cambiaría la selección de la vista y se perdería el resaltado)."""
+        self.timeline.resaltar(op_id)
+        for k in self.claves_navegador_de(op_id):
+            if self.navegador.revelar(k):
+                break
+
     def buscar_en_navegador(self, op_id):
         """Timeline › «Buscar en navegador» (Fusion: Find in Browser): despliega el navegador hasta el elemento
         del paso y lo deja elegido. Devuelve la clave encontrada (o None)."""
@@ -2083,13 +2144,8 @@ class VentanaPrincipal(QMainWindow):
             self._mostrar_elemento("ver_navegador", True)
         if self.navegador.arbol.isHidden():
             self.navegador.b_plegar.click()          # el navegador estaba plegado: se despliega
-        item = self.navegador.item(clave)
-        padre = item.parent()
-        while padre is not None:
-            padre.setExpanded(True)
-            padre = padre.parent()
-        self.navegador.arbol.setCurrentItem(item)
-        self.navegador.arbol.scrollToItem(item)
+        self.navegador.revelar(clave)
+        self.navegador.arbol.setCurrentItem(self.navegador.item(clave))
         self.navegador.ajustar_alto()
         return clave
 
