@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 22: Abierto 17 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 23: Abierto 18 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -58,7 +58,7 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 | ASM-3 | Borrar un componente con uniones se acepta (o falla sin explicar) | Abierto | Media | Borrar el componente fijo Base (que usa Unión1) responde OK: la unión pasa en silencio a «(raíz)», el cuerpo queda suelto y ya no hay nada fijo. Borrar el componente Eje falla con OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…» sin nombrar qué lo usa. Esperado: FEATURE_IN_USE «la usan Unión1, Unión2», como al borrar el paso del cuerpo. | omnicad/timeline/ops_ensamblar.py:474-475 (`OpUnion.dependencias` mira los cuerpos, no el componente) | 2026-10-25 |
 | ASM-4 | Accionar uniones con un valor enorme deja la unión en rojo en vez de rechazarlo | Abierto | Baja | En la ventana, ENSAMBLAR › Accionar uniones con «1e9 deg»: el panel se cierra, la unión queda en error («El ángulo (1e+09°) pasa de 1.000.000°.») y el aviso sale en un diálogo; los demás valores malos (abc, vacío, 10 mm) sí se rechazan en el panel. La API `drive_joint` rechaza el mismo valor y deshace. Después, Vínculo de movimiento dice «Las dos uniones tienen que existir antes del vínculo» sin nombrar la unión rota. | omnicad/ui/comandos/ensamblar.py:202-215 (`AccionarUniones.aplicar` no valida el rango) | 2026-10-25 |
 | ASM-5 | Accionar la unión que sigue a un vínculo cierra el panel sin cambiar nada y sin avisar | Abierto | Baja | En la ventana, accionar la unión 2 de un vínculo: el panel se cierra, el valor no cambia y la barra solo muestra un aviso ajeno («dado vuelta…»). La API sí avisa «la mueve el vínculo…». Mostrar ese aviso (o dejar el campo deshabilitado) en el panel. | omnicad/ui/comandos/ensamblar.py:202-215 | 2026-10-25 |
-
+| SOL-37 | La revolución de curvas y de superficie recorta a ±360° sin avisar | Abierto | Baja | `geo.revolver` y `revolver_superficie` hacen `max(-360, min(360, ángulo))`: un ángulo de 720° da una vuelta completa sin error ni aviso. La revolución sólida ya rechaza los ángulos de más de 360° (SOL-31). Hacer lo mismo acá: error claro. | omnicad/nucleo/geometria.py:291; omnicad/nucleo/superficies.py:320 | 2026-10-25 |
 
 ## Detalle de lo abierto
 
@@ -186,3 +186,9 @@ Evidencia: `evidencias/ui_2026-10-25/ensamblar.log`.
 Cómo reproducir (ventana): vínculo Unión1→Unión2 con relación 2; ENSAMBLAR › Accionar uniones, elegir Unión2, teclear «10 deg» y Aceptar. El panel se cierra, Unión2 sigue en 40° y la barra del timeline muestra solo un aviso ajeno. La API devuelve el aviso «La unión Unión2 la mueve el vínculo…». Prueba propuesta: la de `scripts/prueba_ui/ensamblar.py` (vínculo › accionar la unión que sigue).
 
 Evidencia: `evidencias/ui_2026-10-25/ensamblar.log`.
+
+### SOL-37 · La revolución de curvas y de superficie recorta a ±360° sin avisar
+
+Cómo reproducir (API): `create_surface_revolve` con `angle=720` sobre un perfil y un eje. Esperado: error «el ángulo no puede pasar de 360°», como la revolución sólida (SOL-31). Obtenido: crea la superficie de una vuelta completa sin aviso. Causa: `geo.revolver` (línea 291) y `revolver_superficie` (línea 320) recortan con `max(-360, min(360, ángulo))`. Prueba propuesta: en `tests/test_bugs_solido.py`, 720° debe dar error en las dos.
+
+Evidencia: revisión ponytail-review de la tanda A+B (2026-10-25).

@@ -213,3 +213,23 @@ def test_mover_gira_una_malla_alrededor_de_su_centro():
     (a1, b1) = doc.estado_final.cuerpos[malla.id].forma.caja()
     assert np.allclose((np.array(a0) + b0) / 2, (np.array(a1) + b1) / 2, atol=1e-6)
     assert np.allclose(np.array(b1) - a1, (np.array(b0) - a0)[[1, 0, 2]], atol=1e-6)   # ancho y largo cambiados
+
+
+def test_empalme_con_dos_conjuntos_en_el_dialogo_se_edita_y_se_quita():
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Empalme
+    doc = _doc_caja()
+    a, b = _hit_sub(doc, "arista", (10, 0, 20)), _hit_sub(doc, "arista", (10, 20, 20))
+    op = _ejecutar(doc, Empalme, aristas=[a], radio="2 mm", aristas_2=[b], radio_2="3 mm")
+    assert len(op.p["conjuntos"]) == 1 and op.p["conjuntos"][0]["radio"] == "3 mm"
+    quitado = (4 - math.pi) * 20 + (9 - 9 * math.pi / 4) * 20
+    assert g.volumen(_cuerpo(doc).forma) == pytest.approx(8000 - quitado)
+    cmd, ctx = Empalme(), ContextoComando(doc, op=op)
+    v = cmd.desde_op(op, ctx)
+    assert v["radio_2"] == "3 mm" and len(v["aristas_2"]) == 1                 # ida y vuelta
+    v["radio_2"] = "1 mm"
+    assert cmd.construir(v, ctx).p["conjuntos"][0]["radio"] == "1 mm"
+    v["aristas_2"] = []                                                        # vaciar el campo quita el conjunto
+    assert cmd.construir(v, ctx).p["conjuntos"] == []
+    with pytest.raises(Exception, match="no es válida|inválid|expresión|Expresión|evaluar"):
+        cmd.construir(dict(cmd.desde_op(op, ctx), radio_2="2 xx"), ctx)        # el radio 2 se valida en la ventana
