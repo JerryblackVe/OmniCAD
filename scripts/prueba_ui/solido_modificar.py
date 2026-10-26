@@ -105,7 +105,8 @@ run("desfase_cara", lambda: (
     C.caso(v, AR, "desfase_cara", {"caras": cara(caja, normal=(0, 0, 1))}, {"distancia": "3 mm"}, esperado=30 * 30 * 3, foto="desfase_cara"),
     C.negativos(v, AR, "desfase_cara", {"caras": cara(caja, normal=(0, 0, 1))}, "distancia", malos=("abc", "0 mm", "-100 mm"))))
 run("desfase (curvas)", lambda: (
-    C.caso(v, AR, "desfase", {"objetos": cara(caja, normal=(0, 0, 1))}, {"distancia": "3 mm"}, foto="desfase"),
+    C.caso(v, AR, "desfase", {"objetos": cara(caja, normal=(0, 0, 1))}, {"distancia": "3 mm"}, foto="desfase",
+           rt=False),   # con una cara el paso es de cara y se reabre con «Cara de desfase» (campo «caras», no «objetos»)
     C.negativos(v, AR, "desfase")))
 run("reemplazar_cara", lambda: (
     C.caso(v, AR, "reemplazar_cara", {"caras": cara(caja, normal=(0, 0, 1)), "destino": plano("PM")}, {}, esperado=-30 * 30 * 10, etiqueta="reemplazar cara de arriba por plano z=10", foto="reemplazar_cara"),

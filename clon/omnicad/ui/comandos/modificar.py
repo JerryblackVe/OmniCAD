@@ -574,7 +574,8 @@ class Desfase(Comando):
         return [mp.Flecha("distancia", base[0], base[1])] if base is not None else []
 
     def desde_op(self, op, ctx):
-        return dict(op.p, objetos=hits(op.p["referencias"], ctx.estado), plano=_hit1(op.p["plano"], ctx.estado))
+        return dict(op.p, objetos=hits(op.p.get("referencias") or op.p.get("caras") or [], ctx.estado),
+                    plano=_hit1(op.p.get("plano"), ctx.estado))
 
 
 class ReemplazarCara(Comando):
