@@ -395,12 +395,21 @@ def _asas_desmoldeo(self, ctx, v):
 
 
 def _asas_patron_ruta(self, ctx, v):
+    """Flecha de distancia y asa de cantidad donde empieza el patrón (`inicio`), y un asa que desliza ese inicio por la ruta."""
+    from ...nucleo.construccion import muestras_ruta
     mp = _mp()
     forma = _forma_de(ctx, v["ruta"][0]) if v.get("ruta") else None
-    pt = _punto_y_tangente(forma, 0.0) if forma is not None else None
+    inicio = min(1.0, max(0.0, evaluar_o_cero(ctx, v.get("inicio"))))
+    pt = _punto_y_tangente(forma, inicio) if forma is not None else None
     if pt is None:
         return []
-    return [mp.Flecha("d1", pt[0], pt[1]), _asa_cantidad("n1", pt[0], pt[1], _paso(v, "n1", "d1", ctx))]
+    salida = [mp.Flecha("d1", pt[0], pt[1]), _asa_cantidad("n1", pt[0], pt[1], _paso(v, "n1", "d1", ctx))]
+    try:
+        ts = np.linspace(0.0, 1.0, 81)
+        salida.append(mp.AsaRuta("inicio", ts, muestras_ruta(forma, ts)))
+    except Exception:  # noqa: BLE001 — una ruta que no se puede muestrear no rompe el diálogo
+        pass
+    return salida
 
 
 def _enganchar():

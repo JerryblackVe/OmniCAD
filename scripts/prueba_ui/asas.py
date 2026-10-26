@@ -119,7 +119,7 @@ def probar(clave, sel, vals, foto=None):
                     A.reg(nombre, f"asa de ruta «{cl}» llevada al 90 % del largo", ok and abs(despues - 0.9) < 0.05,
                           f"{antes:g} → {despues:g}; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
                     ok = arrastrar(p, g, m.asa(g), m.puntos_ruta[-1])
-                    A.reg(nombre, f"asa de ruta «{cl}» más allá del final", ok and g.valor(cl) > 1.1,
+                    A.reg(nombre, f"asa de ruta «{cl}» al final de lo que admite", ok and g.valor(cl) > min(1.1, m.ts[-1] - 0.05),
                           f"{g.valor(cl):g}; previa_ok={p._previa_ok}")
                 elif isinstance(m, mp.Posicion):
                     A.reg(nombre, f"asa de posición ({tn}) presente", True, "no se arrastra en esta prueba")

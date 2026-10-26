@@ -71,3 +71,24 @@ def test_circular_cambia_la_cantidad_tirando_del_disco(app_qt):  # noqa: F811
     p._calcular_previa()
     assert p._previa_ok
     p.cancelar()
+
+
+def test_patron_en_trayectoria_el_inicio_se_desliza_por_la_ruta(app_qt):  # noqa: F811
+    from test_manipuladores import _doc_rectangulo
+    doc = _doc_rectangulo()
+    curva = next(iter(doc.estado_final.bocetos["op1"].boceto.curvas))
+    ruta = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, doc.estado_final)
+    p, visor, _ = _panel(CATALOGO["patron_ruta"](), doc, {"ruta": [ruta], "inicio": "0", "n1": 3, "d1": "4 mm",
+                                                          "distribucion": "espaciado"})
+    visor.vista("iso")
+    p.manipuladores.actualizar()
+    gm = p.manipuladores
+    asa = next(m for m in gm.manips if isinstance(m, mp.AsaRuta))
+    destino = asa.puntos_ruta[int(0.6 * (len(asa.ts) - 1))]
+    xy, ok = gm.pantalla([asa.asa(gm), destino])
+    assert ok.all()
+    _arrastrar(p.visor, *xy)
+    assert gm.valor("inicio") == pytest.approx(0.6, abs=0.03)
+    flecha = next(m for m in gm.manips if isinstance(m, mp.Flecha))
+    assert np.allclose(flecha.origen, asa.asa(gm), atol=0.5)               # la flecha sale de donde empieza el patrón
+    p.cancelar()
