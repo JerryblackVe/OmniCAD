@@ -201,6 +201,8 @@ Abierto 1 · Parcial 4. Especificación: [brechas_cad_libres.md](../brechas_cad_
 | CL4 | Elegir caras por descripción con candidatos y motivo | Parcial | Media | Faltan selectores por intención, propiedades devueltas y aviso de ambigüedad. | omnicad/api/herramientas_inspeccion.py:367-382 (find_faces, find_edges con selectores) | 2026-10-20 |
 | CL5 | Diagnóstico para el agente: registro de operaciones y fallos | Parcial | Media | Registro de operaciones y contexto de restricciones y kernel. | omnicad/api/herramientas_dev.py:201-209 (list_error_reports, read_error_report) | 2026-10-20 |
 | CL8 | Importar declarando qué se reconstruyó y qué quedó fijo | Parcial | Alta | Informe de cobertura al abrir archivos de otros programas. | omnicad/api/herramientas_documento.py (inspect_f3d); sin informe de cobertura | 2026-10-20 |
+| P-11n | .f3d: Zstandard y lector SAB en Rust | Abierto | Alta | De los 23 s de BINCHA, 8,6 s son el descompresor Zstandard en Python puro (30 MB) y 3,6 s el lector SAB: datos puros para un módulo PyO3 (el toolchain ya está en `clon/rust`). Pide una dependencia nueva (`ruzstd`) o escribir el decodificador: necesita permiso. | omnicad/io_archivos/zstd_puro.py; omnicad/io_archivos/sab.py; docs/f3d_formato.md | 2026-10-26 |
+| P-11o | .f3d: mallas convertidas grandes entran sin reparar | Abierto | Media | Un cuerpo abierto de más de 2000 caras no pasa por ShapeFix (con 18 716 caras tardaba 247 s): entra como superficie y una parte queda con caras inválidas (338 de 3 516 en BINCHA). Habría que repararlo por partes o en Rust, solo si el usuario lo muestra. | omnicad/nucleo/acis_occ.py (CARAS_SIN_ARREGLO); tests/test_f3d_nativo.py::test_una_malla_abierta_enorme_no_pasa_por_shapefix | 2026-10-26 |
 
 ## Texto y vectores
 

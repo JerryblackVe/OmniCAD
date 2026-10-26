@@ -5,7 +5,7 @@ Abre archivos de Fusion 360 (.f3d y .f3z) SIN Fusion: lee el B-rep que el archiv
 Un .f3d es un ZIP. Cada componente guarda su geometría actual en `FusionAssetName[Active]/Breps.BlobParts/
 BREP.*.smbh`: un bloque SAB de ShapeManager (el núcleo de Autodesk, derivado de ACIS), comprimido con Zstandard
 (método 93 del ZIP). Este módulo saca esos bloques (`zstd_puro`), los lee (`sab`) y los pasa a OpenCascade
-(`acis_occ`). Los `.smb` (sin «h») son bocetos y geometría auxiliar: no se importan.
+(`acis_occ`). Los `.smb` (sin «h») son los perfiles de los bocetos y geometría auxiliar: de ahí salen los bocetos (`f3d_bocetos`).
 
 Filtros (medidos en archivos reales de Fusion, ver PROJECT_LOG): los cuerpos sin la marca de tiempo de Fusion son
 auxiliares y quedan afuera (`acis_occ.convertir`); si un componente está guardado dos veces (versión vieja y
@@ -57,12 +57,14 @@ def leer(ruta):
     return expandir(comps), avisos
 
 
-def leer_componentes(ruta, resumen=None, progreso=None):
+def leer_componentes(ruta, resumen=None, progreso=None, bocetos=None):
     """Como `leer`, pero sin repetir la geometría de las copias: devuelve (componentes, avisos) con una lista
     `{"forma": B-rep en las coordenadas del componente, "tipo", "bloque", "marcos": [matriz 4×4 de columnas en mm, una
     por copia]}`. Si se pasa un dict en `resumen`, se llena con lo que se vio en la escena (`nodos`, `copias`,
     `cuerpos_escena`, `cuerpos_con_malla`, `bloques`, `bloques_ubicados`). `progreso(texto)`, si se pasa, se llama al empezar
-    cada etapa (para mostrarla en la ventana mientras abre)."""
+    cada etapa (para mostrarla en la ventana mientras abre). Si se pasa la lista `bocetos`, se le agregan los bocetos del
+    archivo (`f3d_bocetos.leer_bocetos`) ya puestos en el diseño: {"marco": {"origen", "normal", "u"} en mm, "boceto":
+    Boceto, "caras", "curvas"}."""
     ruta = Path(ruta)
     _etapa(progreso, f"Leyendo {ruta.name}…")
     try:
@@ -71,7 +73,7 @@ def leer_componentes(ruta, resumen=None, progreso=None):
         raise ErrorF3D(f"No se pudo leer {ruta.name}: {e}") from None
     if ruta.suffix.lower() == ".f3z":
         datos = _f3d_principal(datos, ruta.name)
-    return leer_componentes_bytes(datos, ruta.stem, resumen, progreso)
+    return leer_componentes_bytes(datos, ruta.stem, resumen, progreso, bocetos)
 
 
 def expandir(componentes):
@@ -91,7 +93,7 @@ def _etapa(progreso, texto):
         progreso(texto)
 
 
-def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None):
+def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None, bocetos=None):
     try:
         z = zipfile.ZipFile(io.BytesIO(datos))
     except zipfile.BadZipFile:
@@ -136,11 +138,48 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None):
                       "o un vértice de cono): se ven y se miden, pero una operación booleana con ellos puede fallar.")
     if resumen is not None:
         resumen.update(descartados=len(fuera), sin_ubicar=sum(1 for m in marcos if m is None) if any(marcos) else 0)
+    if bocetos is not None:
+        _etapa(progreso, "Leyendo los bocetos…")
+        smb = [i for i in z.infolist() if CARPETA_BREPS in i.filename and i.filename.lower().endswith(".smb")]
+        bocetos += _bocetos_ubicados(datos, smb, partes, marcos, nombre, avisos)
     uno = [np.eye(4)]
     nombres = _nombres_de_componentes(datos, archivos)
     return [{"forma": forma, "tipo": tipo, "bloque": bloque, "marcos": m or uno, "nombre": nombres.get(archivos[bloque]),
              "oculto": k in ocultos}
             for k, ((forma, tipo, _, bloque), m) in enumerate(zip(partes, marcos, strict=True))], avisos
+
+
+def _bocetos_ubicados(datos, bloques_smb, partes, marcos, nombre, avisos):
+    """Bocetos de los bloques `.smb` puestos en el diseño. Están en las coordenadas de su componente y el archivo no dice
+    (fuera del flujo propietario) de cuál es cada bloque: con un solo componente son de ese y se mueven con su matriz; con
+    varios no se importan —ni por la caja de los cuerpos, que se pisa entre componentes (medido: 415 de 418 perfiles de
+    CARTERA GOTICA caen en más de un componente)— y se declara en un aviso."""
+    from . import f3d_bocetos
+    todos = []
+    for info in sorted(bloques_smb, key=lambda i: i.filename):
+        try:
+            crudo = miembro(datos, info)
+        except (ErrorF3D, zstd_puro.ErrorZstd) as e:
+            avisos.append(f"Un bloque de bocetos de {nombre} no se pudo leer: {e}")
+            continue
+        b, a = f3d_bocetos.leer_bocetos(crudo, nombre)
+        todos += b
+        avisos += a
+    todos = f3d_bocetos.sin_repetidos(todos)
+    componentes = {bloque for _, _, _, bloque in partes}
+    if len(componentes) != 1:
+        if todos:
+            avisos.append(f"{len(todos)} bocetos de {nombre} no se importaron: el archivo tiene {len(componentes)} "
+                          "componentes y no dice a cuál pertenece cada boceto.")
+        return []
+    M = next((m[0] for m in marcos if m), np.eye(4))
+    R, o = M[:3, :3], M[:3, 3]
+    salida = f3d_bocetos.limitar(todos, avisos, nombre)
+    for b in salida:
+        m = {k: np.asarray(v, float) for k, v in b["marco"].items()}
+        b["marco"] = {"origen": [float(x) for x in R @ m["origen"] + o], "normal": [float(x) for x in R @ m["normal"]],
+                      "u": [float(x) for x in R @ m["u"]]}
+    return salida
 
 
 _TEXTO = re.compile(rb"(?:[\x20-\x7e\xa0-\xff]\x00){1,200}")     # caracteres UTF-16; el largo va en los 4 bytes previos

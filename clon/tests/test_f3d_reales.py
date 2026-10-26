@@ -74,3 +74,21 @@ def test_bincha_abre_rapido_y_con_las_mallas_ocultas(tmp_path):
     assert geo.volumen(solido.forma) == pytest.approx(6014.0, rel=1e-3)
     d = _inspeccionar("BINCHA.f3d", tmp_path)
     assert (d["bodies_stored"], d["bodies_placed"], d["bodies_hidden"], d["discarded_bodies"]) == (6, 6, 5, 0)
+
+
+@pytest.mark.skipif(not (EJEMPLOS / "BINCHA.f3d").is_file(), reason="falta BINCHA.f3d")
+@pytest.mark.lento
+def test_bincha_trae_sus_diez_bocetos(tmp_path):
+    """Fusion cuenta 10 bocetos (DcSketch en el flujo de diseño) y los perfiles del .smb dan exactamente 10 sin las
+    tapas repetidas de las extrusiones: el contorno de la bincha (63 mm de radio, patas hasta y = -81), tres bocetos
+    de letras, el recorte pequeño y el triángulo suelto. Dos sobre z = -5 (cara) y el resto sobre XY."""
+    from omnicad.io_archivos.abrir_externo import documento_desde_archivo
+    copia = tmp_path / "BINCHA.f3d"
+    shutil.copyfile(EJEMPLOS / "BINCHA.f3d", copia)
+    doc, _ = documento_desde_archivo(copia)
+    bocetos = [o for o in doc.operaciones if o.TIPO == "boceto"]
+    assert len(bocetos) == 10 and [o.nombre for o in bocetos] == [f"Boceto{k}" for k in range(1, 11)]
+    assert sorted(o.p["plano"] for o in bocetos).count("cara") == 2 and all(r.estado == "ok" for r in doc.resultados)
+    assert sum(len(o.boceto.curvas) for o in bocetos) == 55 + 96 + 539
+    y_min = min(p.y for o in bocetos for p in o.boceto.puntos.values())
+    assert y_min == pytest.approx(-81.1, abs=0.3)                       # las patas de la bincha

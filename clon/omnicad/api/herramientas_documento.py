@@ -5,6 +5,7 @@ import fnmatch
 import math
 import re
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Literal
 
@@ -428,7 +429,8 @@ def insert_derive(sesion, source_path: str, bodies: list[str] | None = None, ske
              "cuerpos viejos del historial que Fusion deja en el archivo y la escena no muestra no se importan "
              "(discarded_bodies). components[].name es el nombre del componente, si el archivo lo dice; "
              "components[].hidden marca los cuerpos que el diseño tiene ocultos (sin malla en la escena: open_document "
-             "los abre con el ojo cerrado) y bodies_hidden los cuenta.")
+             "los abre con el ojo cerrado) y bodies_hidden los cuenta. sketches cuenta los bocetos que se leen de los "
+             "perfiles del archivo (count, y curves por tipo): open_document los abre como pasos Boceto.")
 def inspect_f3d(sesion, path: str):
     """
     path: ruta del archivo .f3d o .f3z.
@@ -441,9 +443,9 @@ def inspect_f3d(sesion, path: str):
         raise error("UNSUPPORTED_FILE_TYPE", f"inspect_f3d lee .f3d y .f3z; llegó {ruta.suffix or '(sin extensión)'}.")
     if not ruta.is_file():
         raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
-    visto = {}
+    visto, bocetos = {}, []
     try:
-        componentes, avisos = f3d_nativo.leer_componentes(ruta, visto)
+        componentes, avisos = f3d_nativo.leer_componentes(ruta, visto, bocetos=bocetos)
     except f3d_nativo.ErrorF3D as e:
         raise error("IMPORT_FAILED", str(e)) from e
     filas, guardado, colocado = [], 0.0, 0.0
@@ -462,6 +464,8 @@ def inspect_f3d(sesion, path: str):
             "components_moved": sum(1 for f in filas if f["moved"]),
             "components_with_copies": sum(1 for f in filas if f["copies"] > 1),
             "bodies_hidden": sum(1 for f in filas if f["hidden"]),
+            "sketches": {"count": len(bocetos), "curves": dict(Counter(c.tipo for b in bocetos
+                                                                      for c in b["boceto"].curvas.values()))},
             "unplaced_bodies": visto.get("sin_ubicar", 0), "discarded_bodies": visto.get("descartados", 0),
             "scene": {"nodes": visto.get("nodos", 0), "copies": visto.get("copias", 0),
                       "bodies": visto.get("cuerpos_escena", 0), "bodies_with_mesh": visto.get("cuerpos_con_malla", 0),

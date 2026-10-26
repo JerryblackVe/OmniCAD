@@ -68,7 +68,7 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
     doc, avisos = Documento(), []
     doc.nombre = ruta.stem
     nombre = f"Importar {ruta.name}"
-    fusion, ocultos = None, []
+    fusion, ocultos, bocetos = None, [], []
     if ext in (".step", ".stp", ".iges", ".igs") + MALLAS:
         op = operacion_para_insertar(ruta, doc.nuevo_id(), unidades)
     elif ext == ".dxf":
@@ -78,11 +78,11 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
         oid = doc.nuevo_id()
         op = OpOperacionBase(oid, nombre, cuerpos=_cuerpos_brep(ruta, oid))
     else:
-        op, fusion = _paso_fusion(ruta, doc, nombre, avisos, progreso, ocultos)
+        op, fusion = _paso_fusion(ruta, doc, nombre, avisos, progreso, ocultos, bocetos)
     if progreso is not None:
         progreso("Armando el documento…")
-    doc.operaciones = [op]
-    doc.marcador = 1
+    doc.operaciones = [op] + [_paso_boceto(doc.nuevo_id(), k, b) for k, b in enumerate(bocetos, 1)]
+    doc.marcador = len(doc.operaciones)
     doc.recalcular(0)
     r = doc.resultados[0]
     if r.estado == "error":
@@ -97,13 +97,13 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
     return doc, avisos
 
 
-def _paso_fusion(ruta, doc, nombre, avisos, progreso=None, ocultos=None):
+def _paso_fusion(ruta, doc, nombre, avisos, progreso=None, ocultos=None, bocetos=None):
     """Paso de un .f3d/.f3z. Primero se lee el B-rep que trae el archivo, SIN Fusion (`f3d_nativo`). Solo si eso
     falla y Fusion está abierto con el complemento, se le pide a Fusion (el puente también trae los parámetros).
     Devuelve (paso, resultado del puente o None) y agrega los avisos a `avisos`."""
     oid = doc.nuevo_id()
     try:
-        return _operacion_f3d(ruta, oid, nombre, avisos, progreso, ocultos), None
+        return _operacion_f3d(ruta, oid, nombre, avisos, progreso, ocultos, bocetos), None
     except ErrorAbrir as e:
         error_nativo = e
     if puente_fusion.leer_info() is None:
@@ -117,12 +117,13 @@ def _paso_fusion(ruta, doc, nombre, avisos, progreso=None, ocultos=None):
     return op, fusion
 
 
-def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None, ocultos=None):
+def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None, ocultos=None, bocetos=None):
     """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede. Si se pasa
-    la lista `ocultos`, se le agregan los ids de los cuerpos que Fusion tiene ocultos."""
+    la lista `ocultos`, se le agregan los ids de los cuerpos que Fusion tiene ocultos, y con `bocetos`, los bocetos del
+    archivo (`f3d_nativo.leer_componentes`)."""
     from . import f3d_escena, f3d_nativo        # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
     try:
-        componentes, extra = f3d_nativo.leer_componentes(ruta, progreso=progreso)
+        componentes, extra = f3d_nativo.leer_componentes(ruta, progreso=progreso, bocetos=bocetos)
     except f3d_nativo.ErrorF3D as e:
         raise ErrorAbrir(str(e)) from None
     avisos += extra
@@ -154,6 +155,19 @@ def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None, ocultos=None):
             if c.get("oculto") and ocultos is not None:
                 ocultos.append(d["id"])
     return OpOperacionBase(op_id, nombre, cuerpos=cuerpos)
+
+
+_PLANOS_ORIGEN = {"XY": ((0, 0, 1), (1, 0, 0)), "XZ": ((0, -1, 0), (1, 0, 0)), "YZ": ((1, 0, 0), (0, 1, 0))}
+
+
+def _paso_boceto(op_id, k, b):
+    """Paso Boceto de un boceto de .f3d (`f3d_bocetos`): sobre el plano de origen si coincide, o sobre su marco."""
+    m = b["marco"]
+    for plano, (n, u) in _PLANOS_ORIGEN.items():
+        if all(math.isclose(x, y, abs_tol=1e-6) for x, y in zip([*m["normal"], *m["u"], *m["origen"]], [*n, *u, 0, 0, 0],
+                                                                   strict=True)):
+            return OpBoceto(op_id, f"Boceto{k}", boceto=b["boceto"], plano=plano)
+    return OpBoceto(op_id, f"Boceto{k}", boceto=b["boceto"], plano="cara", marco=m)
 
 
 def operacion_para_insertar(ruta, op_id, unidades="mm"):
