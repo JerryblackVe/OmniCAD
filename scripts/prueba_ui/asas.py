@@ -4,6 +4,7 @@ al visor (no mueve el cursor real). Por cada asa: arrastrar, ver que el valor de
 previa siga andando; arrastrar hacia el otro lado y ver el tope."""
 import math
 import sys
+import types
 
 import arnes as A
 import escena
@@ -414,6 +415,47 @@ try:
     asas_del_boceto()
 except Exception as e:  # noqa: BLE001
     A.reg(f"{AR} · boceto", "EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
+
+def asas_de_animacion():
+    """Animación › Transformar componentes: la tríada del lienzo se tira con mouse simulado, la escena se mueve en vivo y el
+    diálogo (real, sin bloquear la ventana) escribe la acción al aceptar."""
+    from omnicad.ui import animacion as an
+    from PySide6.QtCore import QTimer
+    AN = f"{AR} · animación"
+    w = an.VentanaAnimacion(v.doc)
+    w.show()
+    A.esperar(600)
+    cid = list(w.lienzo.objetos)[0]
+    w.seleccionar([cid])
+    visto = {}
+
+    def con_el_dialogo_abierto():
+        d = w._dialogo
+        visto["abierto"] = d is not None and d.isVisible() and not d.isModal()
+        g = d.asas
+        tri = next(m for m in g.manips if isinstance(m, mp.Triada))
+        (_, poli), = [(sub, pol) for sub, pol in tri._partes(g)[0] if sub == ("eje", 2)]
+        medio = poli.mean(axis=0)
+        arrastrar(types.SimpleNamespace(visor=w.lienzo, _t_previa=types.SimpleNamespace(stop=lambda: None), _calcular_previa=lambda: None),
+                  g, medio, medio + [0, 0, 8])
+        visto["dZ"] = d.campos["dZ"].value()
+        visto["z"] = float(w.lienzo.transformaciones[cid][2, 3])
+        d.accept()
+    QTimer.singleShot(200, con_el_dialogo_abierto)
+    a = w.comando("transformar")
+    A.reg(AN, "el diálogo de Transformar se abre sin bloquear la ventana", visto.get("abierto") is True, str(visto))
+    A.reg(AN, "tirar de la flecha Z escribe la distancia", abs(visto.get("dZ", 0) - 8) < 0.6, f"dZ={visto.get('dZ')}")
+    A.reg(AN, "la escena se movió en vivo mientras se tiraba", abs(visto.get("z", 0) - visto.get("dZ", 99)) < 0.1, f"z={visto.get('z')}")
+    A.reg(AN, "aceptar guarda la acción con esa distancia", a is not None and abs(a["traslacion"][2] - visto.get("dZ", 99)) < 0.1, str(a and a["traslacion"]))
+    A.reg(AN, "la cinta y la línea de tiempo quedan habilitadas", w.cinta.isEnabled() and w.linea.isEnabled() and w._dialogo is None, "")
+    w.close()
+    A.esperar(200)
+
+
+try:
+    asas_de_animacion()
+except Exception as e:  # noqa: BLE001
+    A.reg(f"{AR} · animación", "EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
 
 A.guardar_registro("u3_asas")
 fallas = [r for r in A.REGISTRO if not r["ok"]]

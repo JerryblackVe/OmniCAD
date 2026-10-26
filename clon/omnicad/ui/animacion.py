@@ -35,9 +35,10 @@ import json
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QEventLoop, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFontMetricsF, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
@@ -51,7 +52,10 @@ from ..nucleo.animacion import (DURACION_DEFECTO, TIPOS, Guion, centros_de, calc
                                 invertir, proyectar_notas, tiempos)
 from ..nucleo.animacion import interpolar_camara, interpolar_matriz, matriz_movimiento, matriz_rotacion, slerp, suavizado, vector_rotacion  # noqa: F401 — se re-exportan (tests/test_animacion.py)
 from ..nucleo.geometria import ErrorGeometria
+from ..timeline.parametros import ANGULO, LONGITUD
+from . import manipuladores as mp
 from . import temas
+from .comando import ContextoComando
 from .render import SEP, CintaEspacio, LienzoRender, _Oyente, _resaltar_cuerpos, icono_render
 from .superposiciones import AreaVisor
 
@@ -458,12 +462,45 @@ class LineaTiempoAnimacion(QWidget):
         self.pistas.update()
 
 
+class _ComandoTransformar:
+    """Lo que el gestor de manipuladores pide de un comando: la tríada de Transformar componentes, que sigue al
+    movimiento escrito (como la de Mover/copiar)."""
+    CLAVE = "animacion_transformar"
+
+    def __init__(self, pivote):
+        self.pivote = np.asarray(pivote, float)
+
+    def manipuladores(self, ctx, v):
+        d = [ctx.evaluar(v[k], LONGITUD) for k in ("dX", "dY", "dZ")]
+        return [mp.Triada(self.pivote + d, claves=("dX", "dY", "dZ"), giros=("aX", "aY", "aZ"))]
+
+
+class _PanelTransformar:
+    """Lo mínimo de un panel de comando que pide `GestorManipuladores`, sobre los seis campos del diálogo de
+    Transformar componentes (distancias X/Y/Z y ángulos X/Y/Z)."""
+    TIPOS = {**{f"d{e}": LONGITUD for e in "XYZ"}, **{f"a{e}": ANGULO for e in "XYZ"}}
+
+    def __init__(self, ventana, dialogo, pivote):
+        self.visor, self.dialogo = ventana.lienzo, dialogo
+        self.ctx = ContextoComando(ventana.doc)
+        self.comando = _ComandoTransformar(pivote)
+        self.campos = [SimpleNamespace(clave=k, tipo=t) for k, t in self.TIPOS.items()]
+
+    @property
+    def valores(self):
+        return {k: f"{self.dialogo.campos[k].value():g} {'deg' if t == ANGULO else 'mm'}" for k, t in self.TIPOS.items()}
+
+    def set_valor(self, clave, texto):
+        self.dialogo.campos[clave].setValue(float(self.ctx.evaluar(str(texto), self.TIPOS[clave])))
+
+
 class DialogoAccion(QDialog):
     """Opciones de una acción (crear o «Editar acción»): las del diálogo de Fusion de cada comando."""
 
     def __init__(self, parent, tipo, valores, ncuerpos=0, nuevo=True):
         super().__init__(parent)
         self.tipo = tipo
+        self.asas = None             # GestorManipuladores del lienzo mientras el diálogo está abierto
         titulos = {"transformar": "Transformar componentes", "restaurar": "Restaurar posición inicial",
                    "explosion": "Explosión automática", "visibilidad": "Mostrar/Ocultar", "vista": "Vista",
                    "anotacion": "Anotación"}
@@ -520,6 +557,17 @@ class DialogoAccion(QDialog):
         b.accepted.connect(self.accept)
         b.rejected.connect(self.reject)
         f.addRow(b)
+
+    def exec(self):
+        """Con asas en el lienzo el diálogo no bloquea la ventana: se tira de la tríada mientras está abierto."""
+        if self.asas is None:
+            return super().exec()
+        self.setWindowModality(Qt.NonModal)
+        bucle = QEventLoop(self)
+        self.finished.connect(bucle.quit)
+        self.show()
+        bucle.exec()
+        return self.result()
 
     @staticmethod
     def _num(valor, minimo, maximo, sufijo):
@@ -672,6 +720,7 @@ class VentanaAnimacion(QMainWindow):
         self.centros = {}
         self._programado = self._pendiente = False
         self._colocando_nota = False
+        self._dialogo = None            # diálogo de acción abierto con asas en el lienzo
         self._cam_referencia = None
         self._reloj = None
         self.lienzo = LienzoRender()
@@ -864,6 +913,8 @@ class VentanaAnimacion(QMainWindow):
         self.seleccionar(sel)
 
     def seleccionar(self, ids):
+        if self._dialogo is not None:         # con el diálogo abierto la selección no cambia
+            return
         self.seleccion = [c for c in ids if c in self.lienzo.objetos]
         self._resaltar()
         self.linea.pistas.update()
@@ -897,6 +948,44 @@ class VentanaAnimacion(QMainWindow):
         p = np.concatenate(pts)
         return round(float(np.linalg.norm(np.ptp(p, axis=0))) * 0.6, 1)
 
+    def _asas_transformar(self, d, cuerpos, t):
+        """Tríada en el lienzo para el diálogo de Transformar: sus campos se tiran con el ratón y la escena muestra el
+        movimiento en vivo (la escena del instante t con el movimiento aplicado a los cuerpos elegidos)."""
+        cuerpos = [c for c in cuerpos if c in self.centros]
+        if not cuerpos:
+            return
+        self.pausar()
+        M = self.cuadro(t)["matrices"]
+        piv = np.mean([M[c][:3, :3] @ self.centros[c] + M[c][:3, 3] for c in cuerpos], axis=0)
+        gestor = mp.GestorManipuladores(_PanelTransformar(self, d, piv))
+
+        def cambio():
+            v = d.valores()
+            D = matriz_movimiento(piv, v["traslacion"], v["giro"])
+            self.lienzo.set_transformaciones({**M, **{c: D @ M[c] for c in cuerpos}})
+            self.lienzo.update()
+            gestor.actualizar()
+        for k in _PanelTransformar.TIPOS:
+            d.campos[k].valueChanged.connect(cambio)
+        d.asas, self._dialogo = gestor, d
+        self.cinta.setEnabled(False)
+        self.linea.setEnabled(False)
+        cambio()
+
+    def _cerrar_asas(self, d):
+        if d.asas is None:
+            return
+        d.asas.cerrar()
+        d.asas, self._dialogo = None, None
+        self.cinta.setEnabled(True)
+        self.linea.setEnabled(True)
+        self.ir_a(self.t)                     # saca la vista previa del movimiento
+
+    def closeEvent(self, e):
+        if self._dialogo is not None:
+            self._dialogo.reject()
+        super().closeEvent(e)
+
     def comando(self, tipo, **extra):
         """Abre el diálogo de la acción (Transformar, Restaurar, Explosión, Mostrar/Ocultar, Vista)."""
         if tipo in ("transformar", "restaurar", "visibilidad") and not self.seleccion:
@@ -913,7 +1002,13 @@ class VentanaAnimacion(QMainWindow):
             valores["duracion"] = 0.0
         # Explosión sin selección = todo el modelo (agregar_accion); el diálogo lo muestra con 0 cuerpos.
         d = DialogoAccion(self, tipo, valores, len(self.seleccion))
-        if d.exec() != QDialog.Accepted:
+        if tipo == "transformar":
+            self._asas_transformar(d, self.seleccion, self.t)
+        try:
+            aceptado = d.exec() == QDialog.Accepted
+        finally:
+            self._cerrar_asas(d)
+        if not aceptado:
             return None
         a = {"tipo": tipo, **valores, **d.valores()}
         if tipo in ("transformar", "restaurar", "visibilidad", "explosion"):
@@ -929,7 +1024,13 @@ class VentanaAnimacion(QMainWindow):
         if a["tipo"] == "transformar":
             valores["giro"] = a.get("giro", (0, 0, 0))
         d = DialogoAccion(self, a["tipo"], valores, len(cuerpos), nuevo=False)
-        if d.exec() != QDialog.Accepted:
+        if a["tipo"] == "transformar":
+            self._asas_transformar(d, cuerpos, max(0.0, float(a["inicio"]) - 1e-6))
+        try:
+            aceptado = d.exec() == QDialog.Accepted
+        finally:
+            self._cerrar_asas(d)
+        if not aceptado:
             return
         nuevos = d.valores()
         a.update(nuevos)

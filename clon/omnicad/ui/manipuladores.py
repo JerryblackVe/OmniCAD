@@ -954,7 +954,7 @@ class GestorManipuladores(QObject):
     """Une los manipuladores de un comando con el visor y el panel (ver el docstring del módulo)."""
 
     def __init__(self, panel):
-        super().__init__(panel)
+        super().__init__(panel if isinstance(panel, QObject) else None)    # el diálogo de Animación no es un QObject
         self.panel, self.visor, self.ctx, self.comando = panel, panel.visor, panel.ctx, panel.comando
         self.manips = []
         self.cajas = {}                 # clave → CajaValor
