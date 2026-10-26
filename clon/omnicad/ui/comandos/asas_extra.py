@@ -52,6 +52,29 @@ def _direccion_de(ctx, hit):
         return None
 
 
+# ---------------------------------------------------------------- escala
+def _asas_escala(self, ctx, v):
+    """Flecha del factor (o una por eje en «No uniforme») que sale del punto base; con factor 1 la punta queda a la
+    mitad de la diagonal de los cuerpos, así que la escala se lee como «cuántas veces el tamaño»."""
+    mp = _mp()
+    base = _punto_de(ctx, v["punto"][0]) if v.get("punto") else np.zeros(3)
+    if base is None:
+        return []
+    radios = []
+    for c in _cuerpos_ids(v):
+        try:
+            caja = geo.caja_envolvente(ctx.estado.cuerpos[c].forma)
+        except Exception:  # noqa: BLE001 — cuerpos de malla o ya borrados: sin caja exacta
+            continue
+        if caja:
+            radios.append(float(np.linalg.norm(np.array(caja[1]) - np.array(caja[0]))) / 2)
+    radio = max(radios, default=20.0)
+    if v.get("tipo") == "no_uniforme":
+        return [mp.Flecha(k, base, eje, factor=radio, minimo=0.001) for k, eje in
+                (("fx", (1, 0, 0)), ("fy", (0, 1, 0)), ("fz", (0, 0, 1)))]
+    return [mp.Flecha("factor", base, (1, 1, 1), factor=radio, minimo=0.001)]
+
+
 # ---------------------------------------------------------------- superficies
 def _asas_desfase_superficie(self, ctx, v):
     from .modificar import _cara_y_normal
@@ -347,6 +370,7 @@ def _asas_patron_ruta(self, ctx, v):
 def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
+        "escala_3d": _asas_escala,
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
         "scu": _asas_scu, "union": _asas_union("origen2"), "origen_union": _asas_union("origen"),
         "bobina": _asas_bobina,
