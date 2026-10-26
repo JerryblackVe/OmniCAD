@@ -173,3 +173,12 @@ def test_el_boceto_sigue_la_matriz_del_unico_componente(tmp_path):
     bocetos = []
     f3d_nativo.leer_componentes(ruta, bocetos=bocetos)
     assert len(bocetos) == 1 and bocetos[0]["marco"]["origen"] == pytest.approx([100.0, 0.0, 0.0])
+
+
+def test_un_bloque_de_bocetos_que_falla_no_tumba_la_apertura(tmp_path, monkeypatch):
+    def roto(*a, **k):
+        raise AttributeError("entidad rara")
+    monkeypatch.setattr(f3d_bocetos, "leer_bocetos", roto)
+    doc, avisos = documento_desde_archivo(_f3d_con_bocetos(tmp_path))
+    assert len(doc.estado_final.cuerpos) == 1 and [o.TIPO for o in doc.operaciones] == ["operacion_base"]
+    assert any("bocetos de pieza no se pudieron leer" in a for a in avisos)

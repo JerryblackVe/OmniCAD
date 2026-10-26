@@ -165,7 +165,11 @@ def _bocetos_ubicados(datos, bloques_smb, partes, marcos, nombre, avisos):
         except (ErrorF3D, zstd_puro.ErrorZstd) as e:
             avisos.append(f"Un bloque de bocetos de {nombre} no se pudo leer: {e}")
             continue
-        b, a = f3d_bocetos.leer_bocetos(crudo, nombre)
+        try:
+            b, a = f3d_bocetos.leer_bocetos(crudo, nombre)
+        except Exception as e:                    # noqa: BLE001 - los bocetos son una mejora: un bloque raro no tumba la apertura
+            avisos.append(f"Los bocetos de {nombre} no se pudieron leer: {e}")
+            continue
         todos += b
         avisos += a
     todos = f3d_bocetos.sin_repetidos(todos)
