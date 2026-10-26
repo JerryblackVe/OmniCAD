@@ -68,7 +68,7 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
     doc, avisos = Documento(), []
     doc.nombre = ruta.stem
     nombre = f"Importar {ruta.name}"
-    fusion = None
+    fusion, ocultos = None, []
     if ext in (".step", ".stp", ".iges", ".igs") + MALLAS:
         op = operacion_para_insertar(ruta, doc.nuevo_id(), unidades)
     elif ext == ".dxf":
@@ -78,7 +78,7 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
         oid = doc.nuevo_id()
         op = OpOperacionBase(oid, nombre, cuerpos=_cuerpos_brep(ruta, oid))
     else:
-        op, fusion = _paso_fusion(ruta, doc, nombre, avisos, progreso)
+        op, fusion = _paso_fusion(ruta, doc, nombre, avisos, progreso, ocultos)
     if progreso is not None:
         progreso("Armando el documento…")
     doc.operaciones = [op]
@@ -89,19 +89,21 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
         raise ErrorAbrir(f"No se pudo leer {ruta.name}: {r.mensaje}")
     if r.estado == "aviso":
         avisos.append(r.mensaje)
+    if ocultos:                                       # los cuerpos con el ojo cerrado en Fusion, cerrados acá también
+        doc.propiedades.setdefault("__navegador__", {})["ocultos"] = sorted(ocultos)
     if fusion is not None:
         avisos += comparar_con_fusion(doc, fusion.get("cuerpos") or [])
     doc.modificado = False
     return doc, avisos
 
 
-def _paso_fusion(ruta, doc, nombre, avisos, progreso=None):
+def _paso_fusion(ruta, doc, nombre, avisos, progreso=None, ocultos=None):
     """Paso de un .f3d/.f3z. Primero se lee el B-rep que trae el archivo, SIN Fusion (`f3d_nativo`). Solo si eso
     falla y Fusion está abierto con el complemento, se le pide a Fusion (el puente también trae los parámetros).
     Devuelve (paso, resultado del puente o None) y agrega los avisos a `avisos`."""
     oid = doc.nuevo_id()
     try:
-        return _operacion_f3d(ruta, oid, nombre, avisos, progreso), None
+        return _operacion_f3d(ruta, oid, nombre, avisos, progreso, ocultos), None
     except ErrorAbrir as e:
         error_nativo = e
     if puente_fusion.leer_info() is None:
@@ -115,8 +117,9 @@ def _paso_fusion(ruta, doc, nombre, avisos, progreso=None):
     return op, fusion
 
 
-def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None):
-    """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede."""
+def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None, ocultos=None):
+    """Operación base con los cuerpos que trae el .f3d, leídos sin Fusion. Lanza ErrorAbrir si no se puede. Si se pasa
+    la lista `ocultos`, se le agregan los ids de los cuerpos que Fusion tiene ocultos."""
     from . import f3d_escena, f3d_nativo        # perezoso: arma OpenCascade y numpy solo al abrir un .f3d
     try:
         componentes, extra = f3d_nativo.leer_componentes(ruta, progreso=progreso)
@@ -148,6 +151,8 @@ def _operacion_f3d(ruta, op_id, nombre, avisos, progreso=None):
             if not f3d_escena.es_identidad(M):
                 d["matriz"] = [round(float(x), 9) for x in M.ravel()]
             cuerpos.append(d)
+            if c.get("oculto") and ocultos is not None:
+                ocultos.append(d["id"])
     return OpOperacionBase(op_id, nombre, cuerpos=cuerpos)
 
 

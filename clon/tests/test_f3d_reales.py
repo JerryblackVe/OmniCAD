@@ -52,14 +52,25 @@ def test_el_ejemplo_abre_con_los_numeros_medidos(nombre, tmp_path):
 
 @pytest.mark.skipif(not (EJEMPLOS / "BINCHA.f3d").is_file(), reason="falta BINCHA.f3d")
 @pytest.mark.lento
-def test_bincha_abre_en_menos_de_un_minuto(tmp_path):
-    """Antes tardaba 5 minutos: ShapeFix sobre una malla convertida de 18 716 caras (acis_occ.CARAS_SIN_ARREGLO)."""
+def test_bincha_abre_rapido_y_con_las_mallas_ocultas(tmp_path):
+    """Antes tardaba 5 minutos (ShapeFix sobre una malla convertida de 18 716 caras: acis_occ.CARAS_SIN_ARREGLO) y
+    mostraba dos mallas que Fusion no muestra. La escena trae 6 cuerpos con las mismas caras que los 6 del B-rep (366
+    del sólido visible, el único con malla; 18 716, 3 708, 3 516, 3 516 y 88 de las mallas convertidas, sin malla =
+    ocultas): entran los seis y cinco quedan con el ojo cerrado."""
     import time
 
     from omnicad.io_archivos.abrir_externo import documento_desde_archivo
+    from omnicad.nucleo import geometria as geo
     copia = tmp_path / "BINCHA.f3d"
     shutil.copyfile(EJEMPLOS / "BINCHA.f3d", copia)
     t = time.perf_counter()
     doc, _ = documento_desde_archivo(copia)
     assert time.perf_counter() - t < 90
-    assert len(doc.estado_final.cuerpos) >= 1
+    cuerpos = list(doc.estado_final.cuerpos.values())
+    ocultos = set(doc.propiedades["__navegador__"]["ocultos"])
+    assert len(cuerpos) == 6 and len(ocultos) == 5
+    solido, = [c for c in cuerpos if c.tipo == "solido"]
+    assert solido.id not in ocultos and geo.es_valida(solido.forma)
+    assert geo.volumen(solido.forma) == pytest.approx(6014.0, rel=1e-3)
+    d = _inspeccionar("BINCHA.f3d", tmp_path)
+    assert (d["bodies_stored"], d["bodies_placed"], d["bodies_hidden"], d["discarded_bodies"]) == (6, 6, 5, 0)

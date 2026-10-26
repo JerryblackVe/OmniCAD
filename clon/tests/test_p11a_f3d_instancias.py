@@ -230,6 +230,24 @@ def test_un_cuerpo_actual_sin_malla_en_la_escena_no_se_descarta(tmp_path):
     visto = {}
     comps, _ = f3d_nativo.leer_componentes(_f3d(tmp_path, world, malla, bloques), visto)
     assert len(comps) == 2 and visto["descartados"] == 1
+    assert [c["oculto"] for c in comps].count(True) == 1            # el sin malla es un cuerpo oculto; el otro, visible
+
+
+def test_el_cuerpo_sin_malla_abre_oculto_en_el_navegador(tmp_path):
+    """Fusion no tesela un cuerpo oculto: sin malla en la escena = ojo cerrado. Entra, pero cerrado (BINCHA.f3d: un
+    sólido visible y cinco mallas convertidas ocultas), y solo ese cuerpo queda en `ocultos` del navegador."""
+    malla = _Malla()
+    m = _sab_cubo()
+    _sab_cubo(m=m, origen=(9.0, 9.0, 9.0), lado=0.5)
+    contenido = _cuerpo(malla) + _cuerpo(malla, con_malla=False)
+    world = _nodo(0x10, 0xC0, _matriz(), _nodo(0x11, 0xC1, _matriz(2, 0, 0), contenido))
+    ruta = _f3d(tmp_path, world, malla, [(_CARPETA + "BREP.aaaa.smbh", _sab(m.r))])
+    doc, _ = documento_desde_archivo(ruta)
+    cuerpos = doc.estado_final.cuerpos
+    oculto, = doc.propiedades["__navegador__"]["ocultos"]
+    visible, = [c for c in cuerpos.values() if c.id != oculto]
+    assert len(cuerpos) == 2 and geo.volumen(visible.forma) == pytest.approx(1000.0, rel=1e-6)
+    assert geo.volumen(cuerpos[oculto].forma) == pytest.approx(125.0, rel=1e-6)          # el cubo de 0,5 cm
 
 
 def test_si_la_escena_tiene_un_cuerpo_sin_su_solido_no_se_descarta_nada(tmp_path):

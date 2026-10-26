@@ -89,7 +89,7 @@ def convertir(archivo, nombre="Cuerpo"):
                       "arreglarlos): entran como están y una operación con ellos puede fallar.")
     if conv.mallas_sin_reparar:
         avisos.append(f"{nombre}: {conv.mallas_sin_reparar} cuerpos de malla convertida (más de {CARAS_SIN_ARREGLO} "
-                      "caras) entraron como superficie sin reparar: se ven y se miden, pero no sirven para operaciones.")
+                      "caras) entraron como superficie sin reparar: sirven para ver y medir; una operación con ellos puede fallar.")
     if conv.sin_convertir:
         avisos.append(f"{nombre}: {conv.sin_convertir} cuerpos quedaron afuera porque OpenCascade no pudo armarlos.")
     return partes, avisos
