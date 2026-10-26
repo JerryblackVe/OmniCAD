@@ -141,6 +141,15 @@ def test_ninguno_repetido(modulos):
         huellas[huella] = nombre
 
 
+def test_asistente_es_un_robot_con_visor_ojos_antena_y_destello(modulos):
+    """El botón grande del Asistente: cabeza azul, visor oscuro con dos ojos verdes, antena con bolita amarilla y destello."""
+    _, extra = modulos
+    img = _pintar(extra.DIBUJOS_EXTRA["asistente"], 3)           # 96 px: las medidas del diseño, 1 unidad = 1 px
+    esperados = {(39, 56): "#5fe38a", (57, 56): "#5fe38a", (48, 56): "#14284d", (48, 72): "#4a9be0", (48, 19): "#ffd166",
+                 (79, 26): "#ffd166"}
+    assert {xy: img.pixelColor(*xy).name() for xy in esperados} == esperados
+
+
 def test_hoja_de_contacto(modulos, tmp_path):
     ruta = generar_hoja(tmp_path / "hoja.png")
     from PySide6.QtGui import QImage

@@ -17,6 +17,8 @@ AR = "CINTA"
 
 
 def cerrar_panel():
+    if v.asistente is not None and v.asistente.isVisible():      # el botón del Asistente abre su dock, no un panel de comando
+        v.mostrar_asistente(False)
     if v.panel is not None:
         try:
             if v.panel.isVisible():
@@ -69,6 +71,8 @@ for i, (nombre, grupos) in enumerate(ci.PESTANAS):
     A.reg(area, "botones visibles", len(botones) > 0, f"{len(botones)} botones")
     for b in botones:
         texto = b.text().replace("&", "").strip()
+        if b.objectName() == "titulo_grupo" and not texto:       # la fila vacía bajo el botón del Asistente
+            continue
         accion = b.defaultAction()
         if not texto and accion is not None:
             texto = accion.text()

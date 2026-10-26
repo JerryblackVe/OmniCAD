@@ -148,7 +148,8 @@ radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y
 íconos quedan fuera, a propósito. Son dibujos para una persona: un agente lee el tipo, el nombre y el estado del paso con `get_timeline`, que ya
 lo dice con palabras; una imagen de 24 px no le agrega nada.
 
-Asistente IA (fase IA-7, 2026-10-25): el panel de chat queda fuera, a propósito. Un agente externo ya ES el asistente:
+Asistente IA (fase IA-7, 2026-10-25): el panel de chat y su botón grande de la cinta (ícono del robot, 2026-10-26) quedan
+fuera, a propósito. Un agente externo ya ES el asistente:
 no necesita hablar con otro, y las teclas, la tarjeta Aplicar y los botones del panel no le sirven. Lo útil sí está, en
 el grupo `asistente` (fuera de los grupos por defecto del MCP porque gasta plata): `get_assistant_config`,
 `set_assistant_config`, `assistant_ask` (pedido sin ventana; no corre en vivo), `list_assistant_chats` y

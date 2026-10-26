@@ -924,7 +924,7 @@ def permisos_ui(p):
 
 def pedido():
     # ---------------------------------------------------------------- botón de la barra de la aplicación
-    boton = next(b for b in v.findChildren(QToolButton) if b.defaultAction() is v.acciones["asistente"])
+    boton = next(b for b in v.findChildren(QToolButton) if b.defaultAction() is v.acciones["asistente"] and b.isVisible())
     QTest.mouseClick(boton, Qt.LeftButton)
     A.esperar(200)
     p = v.asistente

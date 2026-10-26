@@ -451,7 +451,7 @@ class VentanaPrincipal(QMainWindow):
             A(f"filtro_{clave}", texto, lambda activo, c=clave: self._filtro_seleccion(c, activo), None, ayuda,
               None, True)
         A("preferencias", "Preferencias…", self.preferencias, None, "Preferencias de OmniCAD", "engranaje")
-        A("asistente", "Asistente", self.mostrar_asistente, "Ctrl+Shift+A",
+        A("asistente", "Asistente IA", self.mostrar_asistente, "Ctrl+Shift+A",
           "Panel de chat con IA: explica, muestra, guía o hace el modelo con vos. Proveedor y modelo en "
           "Preferencias › Asistente IA.", "asistente", True)
         A("acerca", f"Acerca de {NOMBRE_APP}", self.acerca_de, None,
@@ -522,7 +522,6 @@ class VentanaPrincipal(QMainWindow):
         self.pestana_doc.setMinimumWidth(200)
         h.addWidget(self.pestana_doc, 1)
         h.addSpacing(10)
-        h.addWidget(self._boton(self.acciones["asistente"]))    # como Fusion: Autodesk Assistant junto a la Ayuda
         ayuda = QToolButton()
         ayuda.setIcon(icono("ayuda"))
         ayuda.setIconSize(QSize(18, 18))

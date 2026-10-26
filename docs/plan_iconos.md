@@ -86,6 +86,9 @@ se escriban mirando los íconos ya conectados, no a ciegas.
   reales con insignia de estado (aviso/error del paso que creó el cuerpo o boceto); los menús contextuales del navegador (P-23e3), las líneas de
   herramienta del chat del Asistente y las ventanas de diálogo llevan ícono. Decisiones: la cinta no lleva íconos en sus pestañas ni en los títulos
   de grupo (como Fusion: solo texto); el panel de comando ya tenía el ícono en su cabecera.
+- Asistente IA (2026-10-26): el dibujo `asistente` pasó de globo de diálogo a **robot ayudante** (cabeza azul con visor oscuro y ojos verdes, antena y destello
+  amarillos; los azules son los de la familia sólido, así que combina con el tema claro y el oscuro sin recolorear nada). Es el ícono del botón grande de la cinta
+  (a la derecha de SELECCIONAR, ícono de 28 px con «Asistente IA» debajo), del menú Ayuda y de las líneas del chat; se lee a 16, 24 y 48 px. Prueba: `test_iconos_extra.py::test_asistente_es_un_robot_con_visor_ojos_antena_y_destello`.
 - F5 (2026-10-26, `scripts/prueba_ui/iconos.py`, ventana real con el dron de 73 pasos): capturas de la ventana, el timeline, el navegador y la cinta en 1920×1080,
   1024×640 y 800×520 (la ventana mide 821 px de ancho como mínimo) con tema oscuro y claro, y el cambio de tema en vivo: 22 comprobaciones, 0 con ✗, ninguna excepción.
   Prueba de identificación sin tooltip, 20 pasos al azar (semilla 7): **20 de 20** (tipo y operación). Límites honestos: quien miró fue Claude, no una persona nueva;

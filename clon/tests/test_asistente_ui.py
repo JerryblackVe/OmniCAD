@@ -351,6 +351,38 @@ def test_accion_boton_menu_ayuda_y_atajo_unico(ventana):
     assert not a.isChecked()
 
 
+def test_boton_grande_del_asistente_en_la_cinta(ventana):
+    """UN botón grande por pestaña de la cinta, justo a la derecha del grupo SELECCIONAR (al final si la pestaña no lo
+    tiene), con «Asistente IA» debajo del ícono del robot; un clic real abre y cierra el panel y lo deja marcado. No hay
+    barra a la derecha (el visor conserva el ancho) ni botón chico arriba."""
+    from PySide6.QtWidgets import QToolBar, QToolButton, QWidget
+
+    from omnicad.ui import cinta as ci
+    from omnicad.ui.ventana import texto_atajo
+    a, c = ventana.acciones["asistente"], ventana.cinta
+    assert not ventana.findChildren(QToolBar)
+    assert not [x for x in ventana.findChild(QWidget, "barra_app").findChildren(QToolButton) if x.defaultAction() is a]
+    assert a.property("titulo") == "Asistente IA" and texto_atajo("Ctrl+Shift+A") in a.toolTip()
+    for i, (nombre, _grupos) in enumerate(ci.PESTANAS + ci.CONTEXTUALES):
+        pagina = c.pila.widget(i)
+        botones = [x for x in pagina.findChildren(QToolButton, "boton_cinta") if x.defaultAction() is a]
+        assert len(botones) == 1, nombre
+        lay = pagina.layout()
+        filas = [lay.itemAt(k).widget() for k in range(lay.count()) if lay.itemAt(k).widget() is not None]
+        con_titulo = [k for k, w in enumerate(filas) if any(t.text().startswith("SELECCIONAR")
+                                                              for t in w.findChildren(QToolButton, "titulo_grupo"))]
+        k = con_titulo[0] + 2 if con_titulo else len(filas) - 1               # tras SELECCIONAR y su separador
+        assert botones[0] in filas[k].findChildren(QToolButton), nombre
+    c.pila.setCurrentIndex(0)
+    b = next(x for x in c.pila.currentWidget().findChildren(QToolButton, "boton_cinta") if x.defaultAction() is a)
+    assert " ".join(b.text().split()) == "Asistente IA" and not b.icon().isNull()
+    QTest.mouseClick(b, Qt.LeftButton)
+    QTest.qWait(30)
+    assert ventana.asistente.isVisible() and a.isChecked() and b.isChecked()
+    QTest.mouseClick(b, Qt.LeftButton)
+    assert not ventana.asistente.isVisible() and not a.isChecked() and not b.isChecked()
+
+
 def test_config_crea_cada_proveedor_y_nunca_guarda_la_clave(monkeypatch):
     for variable in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(variable, raising=False)

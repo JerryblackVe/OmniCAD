@@ -339,12 +339,26 @@ class Cinta(QWidget):
         h.setSpacing(8)
         for n, (titulo, rapidos, items) in enumerate(grupos):
             if n:
-                sep = QFrame(objectName="separador_grupo")
-                sep.setFixedWidth(1)
-                h.addWidget(sep)
+                self._separador(h)
             h.addWidget(self._grupo(titulo, rapidos, items))
+            if titulo == "SELECCIONAR":
+                self._asistente(h)
+        if not any(g[0] == "SELECCIONAR" for g in grupos):
+            self._asistente(h)
         h.addStretch(1)
         return w
+
+    @staticmethod
+    def _separador(h):
+        sep = QFrame(objectName="separador_grupo")
+        sep.setFixedWidth(1)
+        h.addWidget(sep)
+
+    def _asistente(self, h):
+        """Botón grande del Asistente IA (abre y cierra su panel), siempre a la derecha del grupo SELECCIONAR; la
+        pestaña que no lo tiene (ADMINISTRAR) lo lleva al final."""
+        self._separador(h)
+        h.addWidget(self._grupo(None, ["asistente"], []))
 
     def _grupo(self, titulo, rapidos, items):
         w = QWidget()
@@ -362,9 +376,12 @@ class Cinta(QWidget):
             b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)     # el ancho lo pone ajustar_textos, ya con la fuente del tema
             botones.addWidget(b)
         v.addLayout(botones)
-        t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾")
-        t.setPopupMode(QToolButton.InstantPopup)
-        t.setMenu(self._menu(items, t))
+        t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾" if titulo else " ")
+        if titulo:
+            t.setPopupMode(QToolButton.InstantPopup)
+            t.setMenu(self._menu(items, t))
+        else:
+            t.setEnabled(False)         # sin título (botón del Asistente): fila vacía para quedar a la altura de sus vecinos
         v.addWidget(t, 0, Qt.AlignHCenter)
         return w
 

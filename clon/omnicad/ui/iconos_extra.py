@@ -1444,21 +1444,40 @@ def _fijacion(p):
 
 
 def _asistente(p):
-    """Asistente IA: globo de diálogo con un destello (trazo gris oscuro: iconos_tema lo aclara en temas oscuros)."""
-    globo = QPainterPath()
-    globo.addRoundedRect(QRectF(3, 8, 22, 15), 4, 4)
-    cola = QPainterPath()
-    cola.addPolygon(QPolygonF([QPointF(8, 22), QPointF(7, 28), QPointF(14, 22)]))
-    p.setPen(QPen(GRIS_OSCURO, 1.4))
-    p.setBrush(AZUL_SEL)
-    p.drawPath(globo.united(cola).simplified())
-    p.setBrush(AZUL_LADO)
+    """Asistente IA: robot ayudante (cabeza azul con visor y ojos verdes, antena y destello amarillos)"""
+    VISOR, OJOS, AMARILLO = QColor("#14284d"), QColor("#5fe38a"), QColor("#ffd166")
+    p.save()
+    p.scale(1 / 3, 1 / 3)
+    p.translate(0, 4)
+    p.setPen(QPen(AZUL_ARRIBA, 3, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(48, 30), QPointF(48, 19))
     p.setPen(Qt.NoPen)
-    for x in (9, 14, 19):
-        p.drawEllipse(QPointF(x, 15.5), 1.5, 1.5)
-    destello = [QPointF(25, 1), QPointF(26.6, 5.4), QPointF(31, 7), QPointF(26.6, 8.6), QPointF(25, 13),
-                QPointF(23.4, 8.6), QPointF(19, 7), QPointF(23.4, 5.4)]
-    _poli(p, destello, PUNTO, BORDE_PUNTO)
+    p.setBrush(AMARILLO)
+    p.drawEllipse(QPointF(48, 15), 4.5, 4.5)
+    p.setBrush(AZUL_LADO)
+    p.drawRoundedRect(QRectF(11, 44, 9, 16), 3, 3)
+    p.drawRoundedRect(QRectF(76, 44, 9, 16), 3, 3)
+    p.setPen(QPen(AZUL_ARRIBA, 2))
+    p.setBrush(AZUL_FRENTE)
+    p.drawRoundedRect(QRectF(20, 30, 56, 46), 13, 13)
+    p.setPen(Qt.NoPen)
+    p.setBrush(VISOR)
+    p.drawRoundedRect(QRectF(28, 41, 40, 22), 9, 9)
+    p.setBrush(OJOS)
+    p.drawEllipse(QPointF(39, 52), 4.5, 4.5)
+    p.drawEllipse(QPointF(57, 52), 4.5, 4.5)
+    p.translate(79, 22)
+    p.scale(0.9, 0.9)
+    destello = QPainterPath()
+    destello.moveTo(0, -10)
+    destello.quadTo(1.5, -1.5, 10, 0)
+    destello.quadTo(1.5, 1.5, 0, 10)
+    destello.quadTo(-1.5, 1.5, -10, 0)
+    destello.quadTo(-1.5, -1.5, 0, -10)
+    destello.closeSubpath()
+    p.setBrush(AMARILLO)
+    p.drawPath(destello)
+    p.restore()
 
 
 def _clip(p):
