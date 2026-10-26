@@ -122,6 +122,14 @@ def probar(clave, sel, vals, foto=None):
                     ok = arrastrar(p, g, m.asa(g), m.puntos_ruta[-1])
                     A.reg(nombre, f"asa de ruta «{cl}» al final de lo que admite", ok and g.valor(cl) > min(1.1, m.ts[-1] - 0.05),
                           f"{g.valor(cl):g}; previa_ok={p._previa_ok}")
+                elif isinstance(m, mp.AsaLista):
+                    m = next(x for x in g.manips if isinstance(x, mp.AsaLista) and x.clave == cl)       # las asas se rehacen en cada cambio
+                    antes = str(p.valores.get(cl))
+                    sig = next((t for t, n in m.opciones if n > m.actual), None)
+                    objetivo = m.origen + m.direccion * next(n for t, n in m.opciones if t == sig) * m.factor if sig else m._asa()
+                    ok = arrastrar(p, g, m._asa(), objetivo)
+                    A.reg(nombre, f"asa de lista «{cl}» salta a la opción siguiente", ok and sig is not None and str(p.valores.get(cl)) == sig,
+                          f"{antes} → {p.valores.get(cl)} (esperado {sig}); previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
                 elif isinstance(m, mp.Posicion):
                     A.reg(nombre, f"asa de posición ({tn}) presente", True, "no se arrastra en esta prueba")
                 else:
@@ -194,6 +202,7 @@ probar("extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm"}, "asas_extru
 probar("extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm", "direccion": "simetrica"})
 probar("extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm", "conicidad": "5 deg"})
 probar("revolucion", {"perfiles": per("Rect"), "eje": eje("X")}, {"extension": "angulo", "angulo": "90 deg"})
+probar("fijacion", {"posiciones": arista(cil, lineal=False)}, {"familia": "tornillo"})
 probar("agujero", {"colocacion": top}, {"diametro": "6 mm", "profundidad": "8 mm"}, "asas_agujero")
 probar("caja", {"centro": pl}, {"ancho": "10 mm", "largo": "20 mm", "alto": "5 mm"}, "asas_caja")
 probar("cilindro", {"centro": pl}, {"diametro": "10 mm", "alto": "20 mm"})

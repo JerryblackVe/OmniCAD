@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """SÓLIDO › INSERTAR › Insertar fijación de Fusion [SLD-INSERT-FASTENER, SLD-REF-INSERT-FASTENER] con diálogo."""
+import numpy as np
+
 from ...nucleo import fijaciones as fj
 from ...nucleo.analisis import TABLA_MATERIALES
 from ...timeline.ops_fijacion import AUTO, OpFijacion, resolver_fijacion
@@ -87,6 +89,22 @@ class InsertarFijacion(Comando):
         exigir(v, "posiciones", "Seleccioná dónde va la fijación: una arista circular, una cara cilíndrica o un "
                                 "punto.")
         return self.crear_op(OpFijacion, v, ctx, **_params(v))
+
+    def manipuladores(self, ctx, v):
+        """Asas de lista sobre la primera fijación: el tamaño en el costado del vástago y el largo en su punta."""
+        from .. import manipuladores as mp
+        if not v.get("posiciones"):
+            return []
+        r = resolver_fijacion(_params(v), ctx.estado)
+        if not r["apoyos"]:
+            return []
+        punto, d = np.asarray(r["apoyos"][0]["punto"], float), mp.unitario(r["apoyos"][0]["direccion"])
+        largo = r["largo"] or 0.0
+        salida = [mp.AsaLista("tamano", [(t, fj.diametro_nominal(t)) for t in fj.tamanos(r["norma"])],
+                              fj.diametro_nominal(r["tamano"]), punto - d * largo / 2, mp.perpendiculares(d)[0], 0.5)]
+        if fj.lleva_largo(r["norma"]):
+            salida.append(mp.AsaLista("largo", [(f"{x:g}", x) for x in fj.largos(r["norma"], r["tamano"])], largo, punto, -d))
+        return salida
 
     def desde_op(self, op, ctx):
         v = dict(op.p)

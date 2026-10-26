@@ -702,6 +702,44 @@ class AsaCantidad(Manipulador):
         return [(self.clave, self._asa(g)[0])]
 
 
+class AsaLista(Manipulador):
+    """Asa de un campo de lista (tamaño o largo de una fijación): un disco que se tira a lo largo de una dirección y salta
+    a la opción más cercana. `opciones`: [(texto, número)]; el disco está en `origen + direccion * número * factor`."""
+    ayuda = "Valor de la lista"
+
+    def __init__(self, clave, opciones, actual, origen, direccion, factor=1.0):
+        self.clave, self.opciones, self.actual, self.factor = clave, list(opciones), float(actual), float(factor)
+        self.origen, self.direccion = np.asarray(origen, float), unitario(direccion)
+        self.ident = f"lista:{clave}"
+
+    def _asa(self):
+        return self.origen + self.direccion * self.actual * self.factor
+
+    def dibujar(self, g, activo):
+        asa = self._asa()
+        color = AZUL_ACTIVO if activo is not None else AZUL
+        return ([("lineas", np.array([self.origen, asa]), color, 1.4)]
+                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
+
+    def tocar(self, g, q):
+        s, ok = g.pantalla([self._asa()])
+        return (max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0) if ok[0] else math.inf), "asa"
+
+    def empezar(self, g, pos, sub):
+        s0 = recta_rayo(*g.rayo(pos), self.origen, self.direccion)
+        return None if s0 is None else {"s0": s0}
+
+    def mover(self, g, estado, pos):
+        s = recta_rayo(*g.rayo(pos), self.origen, self.direccion)
+        if s is None:
+            return {}
+        numero = self.actual + (s - estado["s0"]) / self.factor
+        return {self.clave: min(self.opciones, key=lambda o: abs(o[1] - numero))[0]}
+
+    def cajas(self, g, arrastre):
+        return []
+
+
 class AsaRuta(Manipulador):
     """Asa que se desliza por una ruta (Plano en ruta, Punto a lo largo de la ruta): el campo `clave` es la fracción
     del largo; se puede pasar de los extremos, donde la ruta sigue recta. `ts` y `puntos` (N, 3) son una muestra
