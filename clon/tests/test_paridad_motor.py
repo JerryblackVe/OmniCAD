@@ -17,7 +17,9 @@ import numpy as np
 import pytest
 
 
-pytestmark = pytest.mark.lento
+pytestmark = [pytest.mark.lento]
+
+pytest.importorskip("omnikernel", reason="módulo Rust omnikernel sin compilar")
 
 CONECTADOS = ["caja", "cilindro", "toroide", "trasladar", "rotar", "unir", "cortar", "intersecar", "unir_l",
               "extruir_rectangulo", "extruir_simetrica", "extruir_xz", "extruir_dos", "extruir_sobre_cara", "empalme", "empalme_dos",

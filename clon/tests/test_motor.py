@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Aislamiento de motores, preferencias y caché por documento."""
+import importlib.util
 import zipfile
 
 import pytest
@@ -14,11 +15,16 @@ from omnicad.timeline.operaciones import OpPrimitiva, Operacion
 from omnicad.ui.preferencias import Preferencias
 
 
+requiere_omnikernel = pytest.mark.skipif(importlib.util.find_spec("omnikernel") is None,
+                                       reason="módulo Rust omnikernel sin compilar")
+
+
 @pytest.fixture(autouse=True)
 def preferencias_aisladas(monkeypatch):
     monkeypatch.setattr(motor, "_preferencias", None)
 
 
+@requiere_omnikernel
 def test_motor_se_guarda_en_ini_y_variable_tiene_prioridad(tmp_path, monkeypatch):
     monkeypatch.delenv("OMNICAD_MOTOR", raising=False)
     ruta = str(tmp_path / "ajustes.ini")
@@ -32,6 +38,7 @@ def test_motor_se_guarda_en_ini_y_variable_tiene_prioridad(tmp_path, monkeypatch
     assert motor.motor_activo() == "opencascade"
 
 
+@requiere_omnikernel
 def test_recalculo_fija_un_motor_y_cambiarlo_rehace_desde_cero(monkeypatch):
     observados = []
 
@@ -60,6 +67,7 @@ def test_recalculo_fija_un_motor_y_cambiarlo_rehace_desde_cero(monkeypatch):
     assert all(c.forma is not f for c in d.estado_final.cuerpos.values() for f in anteriores)
 
 
+@requiere_omnikernel
 def test_formas_de_otro_motor_se_rechazan(monkeypatch):
     import omnikernel
     monkeypatch.setenv("OMNICAD_MOTOR", "opencascade")
@@ -72,6 +80,7 @@ def test_formas_de_otro_motor_se_rechazan(monkeypatch):
         assert e.value.error_kind == "MOTOR_INCOMPATIBLE"
 
 
+@requiere_omnikernel
 def test_faltante_es_error_tipado_sin_respaldo(monkeypatch):
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")
     with pytest.raises(geo.ErrorGeometria) as e:
@@ -81,6 +90,7 @@ def test_faltante_es_error_tipado_sin_respaldo(monkeypatch):
                             "Podés elegir OpenCascade en Preferencias.")
 
 
+@requiere_omnikernel
 def test_cache_nativa_reabre_y_opencascade_no_la_reutiliza(tmp_path, monkeypatch):
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")
     monkeypatch.setattr(documento, "_SEGUNDOS_CACHE", 0)
@@ -107,6 +117,7 @@ def test_cache_nativa_reabre_y_opencascade_no_la_reutiliza(tmp_path, monkeypatch
     assert occ.resultados[0].estado == "ok"
 
 
+@requiere_omnikernel
 def test_funciones_sin_occ_son_comunes_a_los_dos_motores(monkeypatch):
     from omnicad.nucleo import perfiles
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")
@@ -116,6 +127,7 @@ def test_funciones_sin_occ_son_comunes_a_los_dos_motores(monkeypatch):
     assert perfiles.buscar_por_firma([], {1}) is None
 
 
+@requiere_omnikernel
 def test_tarea_aislada_con_omnikernel_no_tapa_el_faltante(monkeypatch):
     from omnicad.nucleo import aislado
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")
@@ -124,6 +136,7 @@ def test_tarea_aislada_con_omnikernel_no_tapa_el_faltante(monkeypatch):
     assert e.value.error_kind == "MOTOR_SIN_SOPORTE"
 
 
+@requiere_omnikernel
 def test_herramienta_set_geometry_engine_cambia_y_recalcula(monkeypatch):
     from omnicad import api
     from omnicad.api.sesion import Sesion
@@ -141,6 +154,7 @@ def test_herramienta_set_geometry_engine_cambia_y_recalcula(monkeypatch):
 
 
 @pytest.mark.lento
+@requiere_omnikernel
 def test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado():
     """La app abre con OmniKernel y sin OpenCascade y recorre la prueba de humo hasta el primer paso que el guion da
     por hecho con OpenCascade (hoy, la placa con agujero: MOTOR_SIN_SOPORTE). Lo que no puede pasar es un import de
