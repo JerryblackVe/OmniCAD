@@ -75,6 +75,24 @@ def _asas_escala(self, ctx, v):
     return [mp.Flecha("factor", base, (1, 1, 1), factor=radio, minimo=0.001)]
 
 
+# ---------------------------------------------------------------- planos de corte
+def _asas_corte(clave_valor):
+    """Flecha de la distancia del plano de corte (Análisis de sección y Sección de malla), sobre su normal,
+    desde el centro de la cara o del plano elegidos."""
+    def asas(self, ctx, v):
+        mp = _mp()
+        e = mp.entidad(v["plano"][0], ctx.estado) if v.get("plano") else None
+        if e is None:
+            return []
+        try:
+            plano = ent.como_plano(e)
+            centro = ent.como_punto(e) if e.tipo == "cara" else plano.origen
+        except Exception:  # noqa: BLE001
+            return []
+        return [mp.Flecha(clave_valor, centro, plano.normal)]
+    return asas
+
+
 # ---------------------------------------------------------------- superficies
 def _asas_desfase_superficie(self, ctx, v):
     from .modificar import _cara_y_normal
@@ -415,7 +433,8 @@ def _asas_patron_ruta(self, ctx, v):
 def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
-        "escala_3d": _asas_escala,
+        "escala_3d": _asas_escala, "seccion": _asas_corte("desfase"),
+        "seccion_malla": _asas_corte("distancia"),
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
         "scu": _asas_scu, "union": _asas_union("origen2", "clave2"), "origen_union": _asas_union("origen", "clave"),
         "bobina": _asas_bobina,
