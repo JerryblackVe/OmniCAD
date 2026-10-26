@@ -129,7 +129,7 @@ def _problema(tipo, gravedad, mensaje, punto=None, segmentos=None, valor=None):
 def _exigir_forma(forma):
     if not isinstance(forma, TopoDS_Shape) or forma.IsNull():
         raise geo.ErrorGeometria("No hay forma para revisar: el cuerpo está vacío.")
-    if geo.caja_envolvente(forma) is None:
+    if next(geo._explorar(forma, TopAbs_VERTEX), None) is None:      # sin vértices no hay geometría (la caja exacta costaba 0,4 s)
         raise geo.ErrorGeometria("La forma está vacía: no tiene geometría para revisar.")
 
 

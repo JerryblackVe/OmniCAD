@@ -174,7 +174,7 @@ def rayo_caja(origen, direccion, minimo, maximo):
     return max(entra, 0.0) if sale >= max(entra, 0.0) else np.inf
 
 
-def teselar_cuerpo(forma, deflexion, angular=0.3):
+def teselar_cuerpo(forma, deflexion, angular=0.3, rehacer=True):
     """(vǸrtices, normales) de triǭngulos sueltos para dibujar un cuerpo B-rep o de malla."""
     from ..nucleo import render_cpu as rc
     if rc.es_malla(forma):
@@ -184,7 +184,8 @@ def teselar_cuerpo(forma, deflexion, angular=0.3):
         n = n / np.where(largo == 0, 1.0, largo)
         return v.reshape(-1, 3).astype(np.float32), np.repeat(n, 3, axis=0).astype(np.float32)
     # Normales exactas en cada nodo: las promediadas dejaban franjas en las caras B-spline (B-13)
-    return rc.malla_suave(forma, deflexion, angular, rehacer=True)
+    # rehacer=False reusa la malla de las caras que no cambiaron (las de un cuerpo unido comparten forma con el de antes)
+    return rc.malla_suave(forma, deflexion, angular, rehacer=rehacer)
 
 
 # Detalle «Automático»: la deflexión sigue al tamaño de cada pieza (diagonal de su caja × factor), entre estos topes.
@@ -421,6 +422,7 @@ class Visor3D(QOpenGLWidget):
         self._resalte = np.zeros((0, 3), np.float32)
         self._perfiles = np.zeros((0, 3), np.float32)
         self._hover = None                 # ("plano", ref) | ("cara", triángulos)
+        self._limpiar_malla = False        # True tras cambiar la calidad: la próxima vez se tesela desde cero
         self._cache = {}                   # id(forma) → (forma, v, n, aristas, centro, radio, deflexión)
         self._buffers = {}                 # id(array) → (búfer en la placa de video, weakref al array): se sube 1 vez
         self._lod = {}                     # (id(forma), nivel) → (forma, v, n) o None: mallas gruesas para lejos
@@ -512,7 +514,7 @@ class Visor3D(QOpenGLWidget):
                 datos = self._cache[clave]
             else:
                 defl = self._deflexion(c.forma)
-                v, n = teselar_cuerpo(c.forma, defl, self.config.angular)
+                v, n = teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla)
                 mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
                 datos = (c.forma, v, n, aristas_cuerpo(c.forma), (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
                          defl)
@@ -535,6 +537,7 @@ class Visor3D(QOpenGLWidget):
         self._lod_datos = (np.array([d[0] for d in lod], float).reshape(-1, 3), np.array([d[1] for d in lod], float),
                            np.array([d[2] for d in lod], float))
         self._cache, self._mallas, self._formas = cache, nuevas, formas
+        self._limpiar_malla = False
         self._hover_ent = None
         polis = []
         for br in estado.bocetos.values():
@@ -551,6 +554,7 @@ class Visor3D(QOpenGLWidget):
 
     def invalidar_teselado(self):
         """Tras cambiar la calidad del teselado ("Valor predefinido de gráficos")."""
+        self._limpiar_malla = True
         self._cache, self._pick, self._lod, self._lod_pendientes = {}, {}, {}, {}
 
     # ------------------------------------------------------------ mallas en la placa de video y detalle a la distancia

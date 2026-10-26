@@ -330,21 +330,25 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         v_previa = None                # volumen de lo acumulado hasta acá (se mide una vez)
         for c in objetivos:
             nueva = geo.booleano(resultado, c.forma, "unir")
-            v_nueva = geo.volumen(nueva)
+            # Integración exacta: barata. `geo.volumen` malla el cuerpo entero si tiene caras libres (20 s en 500 B-spline)
+            # y solo se pide para confirmar un aviso de pérdida de material.
+            v_nueva, v_c = geo.volumen_exacto(nueva), geo.volumen_exacto(c.forma)
             if v_previa is None:
-                v_previa = geo.volumen(herramienta)
+                v_previa = geo.volumen_exacto(herramienta)
             if not lista:
                 # Un cuerpo que solo TOCA por cara (tope coplanar) se une sin sumar volumen: avisar, así
                 # no se absorbe un cuerpo ajeno en silencio (el join sobre la cara es lo normal).
-                v_antes = v_previa + geo.volumen(c.forma)
+                v_antes = v_previa + v_c
                 if v_nueva >= v_antes - max(v_antes, 1.0) * 1e-7:
                     ctx.aviso(f"{c.nombre} se unió a la herramienta compartiendo solo una cara (sin solape).")
             # Una unión no puede pesar menos que lo que ya había (B-52: unir una primitiva a un cuerpo
             # compuesto descartaba en silencio un sólido entero — la espiral, −3.194 mm³).
-            v_menor = max(v_previa, geo.volumen(c.forma))
+            v_menor = max(v_previa, v_c)
             if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:
-                ctx.aviso(f"{c.nombre}: la unión perdió {v_menor - v_nueva:.2f} mm³ de material (el kernel "
-                          "descartó geometría en un contacto degenerado); revisalo con check_geometry.")
+                v_nueva, v_menor = geo.volumen(nueva), max(geo.volumen(resultado), geo.volumen(c.forma))
+                if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:
+                    ctx.aviso(f"{c.nombre}: la unión perdió {v_menor - v_nueva:.2f} mm³ de material (el kernel "
+                              "descartó geometría en un contacto degenerado); revisalo con check_geometry.")
             v_previa = v_nueva
             resultado = nueva
         principal = objetivos[0]

@@ -17,7 +17,7 @@ from pathlib import Path
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
 SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f"ui_{date.today().isoformat()}")
-PIEZAS = ["cinta_completa", "superficie", "solido_crear", "solido_modificar", "asas", "teclear", "ventana_uso", "ensamblar", "boceto_cotas", "asistente", "iconos", "boton_asistente", "abrir_f3d"]
+PIEZAS = ["cinta_completa", "superficie", "solido_crear", "solido_modificar", "asas", "teclear", "ventana_uso", "ensamblar", "boceto_cotas", "asistente", "iconos", "boton_asistente", "abrir_f3d", "booleana_unir"]
 
 
 def correr(nombre):

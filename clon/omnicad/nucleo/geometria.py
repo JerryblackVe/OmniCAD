@@ -422,6 +422,27 @@ def _volumenes_entrada(objetivo, herramienta):
     return vols if min(vols) > 1e-9 else None
 
 
+_MAX_CONTORNOS_REVISADOS = 200   # BRepCheck clasifica los contornos de una cara de a pares: 3000 agujeros cuestan 11 s
+
+
+def _es_valida_tras_booleana(resultado, entradas):
+    """Como `es_valida`, pero solo de las caras que la booleana creó o cambió: el resto son las de las entradas (la
+    booleana comparte su topología) y ya las revisó quien las hizo; revisar todo cuesta lo de la cara con más contornos
+    al cuadrado (B-39 pagaba 12 de 15 s en una placa de 3000 agujeros). El cierre del sólido lo cubren
+    `_aristas_defectuosas` y el volumen de `_problema_booleana`.
+    shortcut: una cara cambiada con más de _MAX_CONTORNOS_REVISADOS contornos no se revisa, subir si aparece un caso."""
+    conocidas = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    for e in entradas:
+        for c in caras(e):
+            conocidas.Add(c)
+    builder, nuevas = BRep_Builder(), TopoDS_Compound()
+    builder.MakeCompound(nuevas)
+    for c in caras(resultado):
+        if not conocidas.Contains(c) and sum(1 for _ in _explorar(c, TopAbs_WIRE)) <= _MAX_CONTORNOS_REVISADOS:
+            builder.Add(nuevas, c)
+    return BRepCheck_Analyzer(nuevas, True, True).IsValid()
+
+
 def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes):
     """None si el resultado de la booleana es creíble; si no, (gravedad, texto, exceso, escala). Gravedad 2: volumen
     imposible (el kernel perdió material o inventó; `exceso` es cuánto se pasa del rango, `escala` el volumen total de
@@ -458,7 +479,7 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes):
         if libres > l1 + l2 or no_manifold > n1 + n2:
             problemas.append(f"{libres} aristas libres y {no_manifold} no manifold")
             peso += libres + no_manifold
-    if not es_valida(resultado) and es_valida(objetivo) and es_valida(herramienta):
+    if not _es_valida_tras_booleana(resultado, (objetivo, herramienta)) and es_valida(objetivo) and es_valida(herramienta):
         problemas.append("sólido inválido")
         peso += 10.0                        # un sólido inválido rompe las operaciones que siguen: peor que un par de aristas
     return (1, " y ".join(problemas), peso, 0.0) if problemas else None
@@ -828,17 +849,24 @@ def se_tocan(a, b, tolerancia=1e-6):
     booleana) mide entre los bordes, y una cavidad interna daba «no se tocan» (el corte automático la salteaba).
     La distancia exacta entre formas enteras cuesta 2–7 s por par en piezas de 20–230 caras, así que se mide cara con
     cara, solo entre las que se solapan por caja envolvente, y se corta al primer contacto."""
-    ba, bb = _caja_occ(a, tolerancia), _caja_occ(b, tolerancia)
+    caras_a, caras_b = caras(a), caras(b)
+    if len(caras_a) < len(caras_b):
+        a, b, caras_a, caras_b = b, a, caras_b, caras_a      # `b` es la de menos caras: su caja exacta cuesta poco
+    ba, bb = _caja_occ(a, tolerancia, holgada=bool(caras_a)), _caja_occ(b, tolerancia)
     if ba is not None and bb is not None and ba.IsOut(bb):
         return False
     if _adentro(a, b, tolerancia) or _adentro(b, a, tolerancia):     # ~4 ms; resuelve superposición y contención
         return True
-    caras_a, caras_b = caras(a), caras(b)
     if ba is None or bb is None or not caras_a or not caras_b:       # un vértice o aristas sueltas: forma entera
         d = BRepExtrema_DistShapeShape(a, b)
         return d.IsDone() and d.Value() <= tolerancia
-    cercanas_b = [(f, x) for f in caras_b if (x := _caja_occ(f, tolerancia)) is not None and not x.IsOut(ba)]
+    cercanas_b = [(f, x) for f in caras_b
+                  if (g := _caja_occ(f, tolerancia, holgada=True)) is not None and not g.IsOut(ba)
+                  and (x := _caja_occ(f, tolerancia)) is not None and not x.IsOut(ba)]
     for fa in caras_a:
+        grosera = _caja_occ(fa, tolerancia, holgada=True)
+        if grosera is None or grosera.IsOut(bb):
+            continue
         xa = _caja_occ(fa, tolerancia)
         if xa is None or xa.IsOut(bb):
             continue
@@ -850,10 +878,15 @@ def se_tocan(a, b, tolerancia=1e-6):
     return False
 
 
-def _caja_occ(forma, holgura):
-    """Bnd_Box de OCC de `forma` agrandada en `holgura` (con la tolerancia de la forma), o None si no tiene geometría."""
+def _caja_occ(forma, holgura, holgada=False):
+    """Bnd_Box de OCC de `forma` agrandada en `holgura` (con la tolerancia de la forma), o None si no tiene geometría.
+    `holgada`: la caja barata (Add_s, 0,006 ms por cara en vez de 4 ms) es más grande que la exacta: sirve para descartar
+    caras, no para decidir que dos formas están lejos (una pieza B-spline a 60 mm no se descartaba)."""
     b = Bnd_Box()
-    BRepBndLib.AddOptimal_s(forma, b, False, True)
+    if holgada:
+        BRepBndLib.Add_s(forma, b, False)
+    else:
+        BRepBndLib.AddOptimal_s(forma, b, False, True)
     if b.IsVoid():
         return None
     b.Enlarge(holgura)

@@ -910,12 +910,19 @@ class VentanaPrincipal(QMainWindow):
         etiqueta.setText(etiqueta.fontMetrics().elidedText(texto, Qt.ElideMiddle, 560))
 
     # ------------------------------------------------------------ documento
+    def _calculando(self, op):
+        """Aviso en la barra del timeline antes de ejecutar un paso: una booleana grande tarda segundos y la ventana
+        no atiende eventos mientras tanto, así que se pinta ya (sin bucle de eventos)."""
+        self.mensaje(f"Calculando {op.nombre}…", 30000)
+        self.timeline.estado.repaint()
+
     def set_documento(self, doc):
         if self.modo_boceto.activo:
             self._cerrar_panel_de_boceto()
             self.modo_boceto.cancelar()
         self._cancelar_eleccion()
         self.doc = doc
+        doc.al_calcular = self._calculando
         self._avisos_vistos = None
         ocultos = doc.propiedad("__navegador__", "ocultos", [])
         self.ocultos = set(ocultos) if isinstance(ocultos, list) and all(isinstance(i, str) for i in ocultos) else set()

@@ -2,14 +2,17 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 116: Abierto 60 · Parcial 44 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 119: Abierto 62 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
-Abierto 18 · Parcial 9 · Bloqueado 3 · Sin verificar 2.
+Abierto 20 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-34 | El visor vuelve a leer la malla de TODAS las caras al cambiar un cuerpo (Unir, Cortar…) | Abierto | Media | `teselar_por_cara` copia cada triángulo a numpy en Python y `_props_nodos` calcula la normal exacta de cada nodo, aunque la cara no haya cambiado: 0,45 s en una placa de 500 caras (era 1 s antes de reusar la malla de OCC). Cachear por cara (clave: la cara con su ubicación y orientación, más la deflexión) o llevarlo a Rust/C++ (`docs/plan_rust.md`); así editar «Cuerpo nuevo» → «Unir» cuesta lo que cambió. | omnicad/nucleo/geometria.py (`teselar_por_cara`), omnicad/nucleo/render_cpu.py (`_mallas_por_cara`), omnicad/ui/visor3d.py (`set_modelo`); medido con scripts/prueba_ui/booleana_unir.py | 2026-10-26 |
+| P-35 | `volumen_exacto` de un cuerpo con 500 caras B-spline cuesta 0,5 s por llamada | Abierto | Baja | `aplicar_resultado` lo llama tres veces en una unión (resultado, cuerpo y herramienta): 1,4 s de los 3 s de Unir en `bspline500`. Guardar el volumen por forma en el cuerpo (se invalida al cambiar `forma`) o no medirlo cuando no hay aviso posible. | omnicad/timeline/operaciones.py (`aplicar_resultado`), omnicad/nucleo/geometria.py (`_integral`); scripts/bench_booleana.py bspline500 | 2026-10-26 |
+| P-36 | B-39 no revisa con BRepCheck las caras cambiadas con más de 200 contornos | Parcial | Baja | `_es_valida_tras_booleana` las salta porque BRepCheck clasifica los contornos de a pares (3000 agujeros: 11 s); el volumen y las aristas libres siguen vigentes. Revisar solo los contornos nuevos de esa cara (hoy la booleana rearma todos los contornos y no se distinguen por forma). | omnicad/nucleo/geometria.py (`_es_valida_tras_booleana`, `_MAX_CONTORNOS_REVISADOS`) | 2026-10-26 |
 | P-33 | CI en GitHub para main: ruff y pytest rápido en cada push (sin la prueba de humo, que pide ventana) | Abierto | Media | Todo. AGENTS.md (Seguridad) ya exige «subir solo con la CI verde» pero no hay workflow: solo `instaladores.yml`, por tag. Puede pedir ajustar tests que necesitan OpenGL en la máquina de GitHub. Pendiente por decisión de Gerardo (2026-10-25). | .github/workflows/ (solo instaladores.yml); AGENTS.md:50 | 2026-10-25 |
 | NOV-b80-1 | Dos `_referencia` casi iguales con dialectos distintos | Abierto | Baja | Unificar: borrar la de solido_extra y aceptar `{"body", "vertex"}` en la de construcción (≈55 líneas menos; hoy un agente aprende dos formatos). | omnicad/api/herramientas_solido_extra.py:49 y omnicad/api/herramientas_construccion.py:31 | 2026-10-20 |
 | NOV-b80-3 | create_hole(positions) usa un solo cuerpo objetivo | Abierto | Baja | Si el vértice es de otro cuerpo, el agujero se hace en el principal y solo avisa que no cambió el volumen: resolver el cuerpo desde la referencia. | omnicad/api/herramientas_modificar.py:492 | 2026-10-20 |

@@ -144,6 +144,7 @@ class Documento:
         self._usados = []         # por paso: nombres de parámetros que leyó en el último cálculo
         self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
         self._duraciones = []     # por paso: segundos que tardó su último cálculo (0 si no se ejecutó)
+        self.al_calcular = None   # función(op) que la ventana pone para avisar «Calculando…» antes de un paso que se ejecuta
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
         self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
@@ -740,6 +741,8 @@ class Documento:
         estado = entrada.copia()
         estado.anotar_lecturas()
         ctx = Contexto(valores)
+        if self.al_calcular is not None:
+            self.al_calcular(op)
         inicio = time.perf_counter()
         try:
             op.calcular(estado, ctx)
@@ -805,6 +808,8 @@ class Documento:
                 nuevo.anotar_lecturas()
                 ctx = Contexto(valores)
                 usados = ctx.usados
+                if self.al_calcular is not None:
+                    self.al_calcular(op)
                 inicio = time.perf_counter()
                 try:
                     op.calcular(nuevo, ctx)
