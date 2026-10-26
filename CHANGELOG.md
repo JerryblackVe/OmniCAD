@@ -5,7 +5,49 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 
 ## [No publicada]
 
+## [0.1.4] — 2026-10-26
+
+### Agregado
+- **Asistente IA** dentro de OmniCAD (panel a la derecha, ícono, atajo y Ayuda › Asistente): chat que diseña y modifica
+  la pieza con las herramientas de la app. Funciona con API (Anthropic y compatibles con OpenAI) o con tu suscripción
+  (Claude Code, Codex y OpenCode). Modos Guiar, Hacer y más, biblioteca de prompts, historial de chats, adjuntos
+  (PDF, PNG, JPG, SVG, DXF; clip, Ctrl+V o arrastrar), permisos con «Aplicar», «Deshacer este pedido» y cancelar con
+  vuelta atrás, «esto» = lo que tenés seleccionado, vistas «Antes» y «Después», instrucciones propias (generales y por
+  proyecto), acceso a todas las herramientas sin gastar contexto, modelos y esfuerzo automáticos en Preferencias,
+  tres puntos animados mientras piensa y respuestas a «¿cómo se hace…?» con la ayuda local (`search_help`).
+- **Boceto** (fases 0 a 9 del plan, como Fusion): rehacer propio, Suprimir y Voltear; AutoConstrain completo con su
+  diálogo (conflictos visibles en rojo, F5 «Qué choca»); cotas como Fusion (driven, nombres, entre curvas, modo
+  centro/tangente, cuadrante del ángulo, menú previo con clic derecho, todas arrastrables); dibujar con precisión,
+  modificar, patrones y proyección asociativa; splines con manijas y peine de curvatura; sección de malla y Boceto 3D;
+  inferencia de tangentes, perpendiculares y horizontales en más herramientas; clic derecho para salir de la herramienta.
+- **Sólido** (tandas A a D): Revolución «A objeto», Nervio y Red con desmoldeo, Barrido con superficie guía, Solevación
+  y Empalme con condición suave G2, chaflán con esquina «Inglete», Patrón y Simetría de caras, componentes y operaciones,
+  mover caras, Dividir cara por vector o punto más cercano, Sólido envolvente, Volumen de fluido, reglas de plástico,
+  retícula volumétrica (gyroid, Schwarz P/D), reconocer funciones, buscar componentes similares, conjuntos de selección,
+  preajustes de comandos, Consejos de diseño y primitivas sobre cualquier plano o cara.
+- **OmniKernel** como segundo motor geométrico, elegible en Preferencias.
+- Insertar derivación asociativa (`insert_derive`), Guardar como malla como Fusion (`export_mesh`), menús del
+  navegador como Fusion (componente raíz y opciones del cuerpo), opacidad, aislar, Aspecto y material desde el menú
+  del cuerpo; ola ANIMACIÓN del MCP/CLI.
+- Tubería, Bobina (tipo Espiral) y Repujado como Fusion (cadena tangente, alineación, invertir normal).
+- Rendimiento: detección de perfiles en Rust (un boceto con 200 «W»: 3,9 s → 0,3 s), render CPU que tesela según los
+  píxeles (80 álabes: 17,9 s → 2,7 s), unión de cuerpos que mide por cajas y caras (booleanas de 3-8 s → ~10 ms),
+  solver de bocetos más rápido, memoria por paso y autoguardado en hilo.
+- MCP/CLI: 349 herramientas en 17 grupos (eran 190 en 13), con `list_assistant_models`, `search_help`,
+  `find_features`, `move_faces`, `manage_command_presets`, `manage_selection_sets` y más.
+
 ### Corregido
+- Sólido: rosca externa a izquierdas, vaciado sin caras que dejar, agujero con punto fuera de la cara, unión sin
+  contacto, revolución de más de 360°, inglete lejos del origen, Desfase que reabre pasos de cara (SOL-1 a SOL-6,
+  SOL-31 a SOL-33, SOL-37 y los de la revisión de las tandas).
+- Boceto: validación de entradas y de la API (B-88 a B-93), solver y geometría (B-96 a B-103), perfiles de un boceto con
+  mucho texto, tope de memoria por fuente SHX.
+- Bobina: flecha de altura y asa de diámetro alineadas con el plano elegido; calcomanía centrada en el rango real de
+  una cara cilíndrica (B-75); ocultos que se guardan y encuadre por caja proyectada (B-82, B-73).
+- `execute_code` en vivo ya no congela la ventana y se puede cancelar; el autoguardado no guarda mientras corre (B-16);
+  una caída nativa del kernel en una tarea aislada vuelve como error claro (B-48); la cadena de uniones sigue al
+  componente movido (B-71); extruir cara, cota de boceto movible y asas de Extruir superficie (B-83).
+- Chaflán: el error informa la distancia máxima posible.
 - Roscas modeladas: un tornillo (Rosca) y su tuerca (Agujero roscado) sobre el mismo eje encajan sin girar ninguno,
   aunque una cara tenga el eje al revés. ⚠ Las roscas interiores de documentos viejos quedan medio paso corridas al
   recalcularse: si se había girado una pieza para compensar, hay que sacar ese giro.
