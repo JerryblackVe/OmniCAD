@@ -191,6 +191,24 @@ def test_cortar_con_plano(s):
     fallo(s, "plane_cut_mesh", "PLANE_NOT_FOUND", bodies=m, plane="ZZ")
 
 
+def test_cortar_con_plano_desplazado_y_girado(s):
+    m = malla_de_caja(s, z=-5)
+    r = llamar(s, "plane_cut_mesh", bodies=m, plane="XY", offset=2)
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(300) and r["plane"]["origin"] == [0, 0, 2]
+    llamar(s, "undo")
+    r = llamar(s, "plane_cut_mesh", bodies=m, plane="XZ", angle=90)               # XZ (normal −Y) girado 90° sobre X: normal −Z
+    assert r["plane"]["normal"] == [0, 0, -1] and r["kept_side_normal"] == [0, 0, -1]
+    assert r["bodies_modified"][0]["volume"] == pytest.approx(500)
+    llamar(s, "undo")
+    # una receta anterior, sin desfase ni ángulo, corta por el plano tal cual
+    llamar(s, "plane_cut_mesh", bodies=m, plane="XY")
+    op = s.doc.operaciones[-1]
+    viejo = {k: v for k, v in op.p.items() if k not in ("desfase", "angulo")}
+    s.doc.reemplazar(op.id, type(op)(op.id, op.nombre, False, **viejo))
+    assert s.doc.resultados[s.doc.indice(op.id)].estado != "error"
+    assert s.doc.estado_final.cuerpos[m].forma is not None
+
+
 def test_combinar_separar_escalar_y_convertir(s):
     a = malla_de_caja(s)
     b = malla_de_caja(s, x=5)                                            # se superpone a la mitad

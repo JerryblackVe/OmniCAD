@@ -133,13 +133,15 @@ class CortarPlano(Comando):
                 Seleccion("plano", "Plano de corte", {"plano", "cara_plana"}),
                 Opciones("tipo", "Tipo de corte", {"recortar": "Recortar", "partir": "Dividir cuerpo",
                                                    "partir_caras": "Dividir caras"}),
+                Expresion("desfase", "Distancia", "0 mm"), Expresion("angulo", "Ángulo", "0 deg", ANGULO),
                 Casilla("rellenar", "Rellenar", True), Casilla("invertir", "Invertir")]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná las mallas.")
         exigir(v, "plano", "Seleccioná el plano.")
         return self.crear_op(OpCortarPlanoMalla, v, ctx, cuerpos=_ids(v["cuerpos"]), plano=v["plano"][0]["ref"],
-                             tipo=v["tipo"], rellenar=v["rellenar"], invertir=v["invertir"])
+                             tipo=v["tipo"], rellenar=v["rellenar"], invertir=v["invertir"], desfase=v["desfase"],
+                             angulo=v["angulo"])
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits(op.p["cuerpos"], ctx.estado),

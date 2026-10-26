@@ -11,6 +11,7 @@ import warnings
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
+from .parametros import ANGULO
 from .operaciones import (ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _resolver,
                           registrar_operacion)
 
@@ -219,13 +220,21 @@ class OpRemallar(_OpMallaSimple):
 class OpCortarPlanoMalla(_OpMalla):
     """MODIFICAR › Cortar con plano [MESH-PLANE-CUT]: recortar (con o sin relleno) o partir en dos."""
     TIPO, ETIQUETA, ICONO = "cortar_plano", "Corte de plano", "⊖"
-    PARAMS = {"cuerpos": [], "plano": None, "tipo": "recortar", "rellenar": True, "invertir": False}
+    PARAMS = {"cuerpos": [], "plano": None, "tipo": "recortar", "rellenar": True, "invertir": False,
+              "desfase": "0 mm", "angulo": "0 deg"}
+    EXPRESIONES = ("desfase", "angulo")
     OPCIONES = {"tipo": ("recortar", "partir", "partir_caras")}
+
+    def plano_de_corte(self, estado, ctx):
+        """El plano elegido, desplazado `desfase` sobre su normal y girado `angulo` alrededor de su eje u."""
+        plano = ent.como_plano(_resolver(self.p["plano"], estado))
+        return plano.desplazado(ctx.evaluar(self.p.get("desfase", "0 mm"))).girado(
+            ctx.evaluar(self.p.get("angulo", "0 deg"), ANGULO))
 
     def ejecutar(self, estado, ctx):
         if not self.p["plano"]:
             raise ErrorOperacion("Elegí el plano de corte.")
-        plano = ent.como_plano(_resolver(self.p["plano"], estado))
+        plano = self.plano_de_corte(estado, ctx)
         for c in _mallas(estado, self.p["cuerpos"]):
             r = _ml().cortar_plano(c.forma, plano.origen, plano.normal, tipo=self.p["tipo"],
                                    rellenar=self.p["rellenar"], invertir=self.p["invertir"])

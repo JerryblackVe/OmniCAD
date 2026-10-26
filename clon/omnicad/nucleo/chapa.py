@@ -928,6 +928,22 @@ def _bordes(modelo, aristas):
     return salida
 
 
+def marco_pestana_arista(modelo, arista, invertir=False):
+    """(medio del borde libre, dirección hacia afuera, dirección «arriba») en 3D, para dibujar los manipuladores de una
+    pestaña de arista. «Arriba» es hacia el lado de la cara de la arista elegida (al revés con `invertir`): la pestaña
+    sale de `afuera` girando hacia `arriba`."""
+    t = modelo["regla"]["espesor"]
+    pid, p, q, w, libres = ubicar_arista(modelo, arista)
+    d = (q - p) / np.linalg.norm(q - p)
+    s0, s1 = max(libres, key=lambda x: x[1] - x[0])
+    n = _normal_exterior(region_a_caras(modelo["placas"][pid]), p, d, (s0 + s1) / 2)
+    M = _m(modelo) @ transformaciones(modelo)[pid]
+    medio = _aplicar(M, [*(p + d * (s0 + s1) / 2), w])
+    afuera = M[:3, :2] @ n
+    arriba = M[:3, 2] * (1.0 if w > t / 2 else -1.0) * (-1.0 if invertir else 1.0)
+    return medio, afuera / np.linalg.norm(afuera), arriba / np.linalg.norm(arriba)
+
+
 def _libres_actuales(modelo, pid, p, q):
     # El borde pudo cambiar por una pestaña anterior de la misma operación: se vuelve a medir.
     libres = _intervalos_libres(modelo, pid, p, q)

@@ -131,6 +131,12 @@ class Plano:
         return Plano.desde_marco(self.origen + self.normal * float(distancia), self.normal, self.u,
                                  nombre or self.nombre)
 
+    def girado(self, grados, nombre=None):
+        """El plano girado `grados` (regla de la mano derecha) alrededor de su eje u, que pasa por su origen."""
+        t = math.radians(float(grados))
+        normal = self.normal * math.cos(t) + np.cross(self.u, self.normal) * math.sin(t)
+        return Plano.desde_marco(self.origen, normal, self.u, nombre or self.nombre)
+
     def a_uv(self, punto):
         d = np.asarray(punto, float) - self.origen
         return float(d @ self.u), float(d @ self.v)

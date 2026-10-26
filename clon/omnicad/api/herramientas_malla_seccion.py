@@ -45,19 +45,21 @@ def _r(x):
              "fit_curves_to_mesh_section dibuja curvas que la siguen. Coordenadas del boceto como en create_sketch.",
              modifica=True)
 def create_mesh_section_sketch(sesion, body: str, plane: str = "XY", offset: Expr = 0, name: str | None = None,
-                               plane_body: str | None = None):
+                               plane_body: str | None = None, angle: Expr = 0):
     """
     body: id o nombre del cuerpo de malla.
     plane: "XY", "XZ", "YZ", el id o nombre de un plano de construcción, o una cara plana de un sólido (selector como ">Z" o id de find_faces).
     offset: distancia en mm del plano de sección al plano elegido, sobre su normal (número o expresión).
     name: nombre del boceto; vacío = "Boceto1", "Boceto2"…
     plane_body: cuerpo sólido donde se evalúa el selector de cara de plane; vacío = el único sólido.
+    angle: giro en grados (número o expresión) del plano de sección alrededor de su eje u, después del offset.
     """
     (cuerpo,) = _cuerpos(sesion, body, que="body")
     doc = sesion.doc
     ref, marco, _cara, ref_cara = plano_o_cara(sesion, plane, plane_body)
     nombre = name.strip() if name and name.strip() else nombre_nuevo(doc, "Boceto", OpBoceto)
-    op = OpBoceto(doc.nuevo_id(), nombre, plano=ref, marco=marco, cara=ref_cara, desplazamiento=texto_expr(offset))
+    op = OpBoceto(doc.nuevo_id(), nombre, plano=ref, marco=marco, cara=ref_cara, desplazamiento=texto_expr(offset),
+                  angulo_plano=texto_expr(angle))
     doc.agregar(op)
     br = boceto_resuelto(sesion, op)
     if br is None:

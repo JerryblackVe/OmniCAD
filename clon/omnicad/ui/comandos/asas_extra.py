@@ -99,8 +99,8 @@ def _asas_barrido(self, ctx, v):
 
 # ---------------------------------------------------------------- planos de corte
 def _asas_corte(clave_valor):
-    """Flecha de la distancia del plano de corte (Análisis de sección y Sección de malla), sobre su normal,
-    desde el centro de la cara o del plano elegidos."""
+    """Flecha de la distancia del plano de corte (Análisis de sección, Sección de malla y Corte de plano), sobre su
+    normal, y arco del ángulo: el plano gira alrededor de su eje u por su origen, después del desfase."""
     def asas(self, ctx, v):
         mp = _mp()
         e = mp.entidad(v["plano"][0], ctx.estado) if v.get("plano") else None
@@ -111,7 +111,11 @@ def _asas_corte(clave_valor):
             centro = ent.como_punto(e) if e.tipo == "cara" else plano.origen
         except Exception:  # noqa: BLE001
             return []
-        return [mp.Flecha(clave_valor, centro, plano.normal)]
+        salida = [mp.Flecha(clave_valor, centro, plano.normal)]
+        if "angulo" in v:
+            pivote = plano.origen + plano.normal * evaluar_o_cero(ctx, v.get(clave_valor))
+            salida.append(mp.Angulo("angulo", pivote, plano.u, plano.normal))
+        return salida
     return asas
 
 
@@ -456,7 +460,7 @@ def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
         "barrido": _asas_barrido, "sup_barrido": _asas_barrido, "escala_3d": _asas_escala, "seccion": _asas_corte("desfase"),
-        "seccion_malla": _asas_corte("distancia"),
+        "seccion_malla": _asas_corte("distancia"), "cortar_plano": _asas_corte("desfase"),
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
         "scu": _asas_scu, "union": _asas_union("origen2", "clave2"), "origen_union": _asas_union("origen", "clave"),
         "bobina": _asas_bobina,

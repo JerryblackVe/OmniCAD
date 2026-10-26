@@ -38,7 +38,15 @@ def test_barrido_asa_del_largo_por_la_ruta_y_arco_de_torsion(app_qt):  # noqa: F
     p.cancelar()
 
 
-def test_barrido_de_superficie_solo_tiene_el_arco_de_torsion(app_qt):  # noqa: F811
+def test_barrido_de_superficie_tiene_el_asa_del_largo_y_el_arco_de_torsion(app_qt):  # noqa: F811
     p = _abrir("sup_barrido")
-    assert [type(m).__name__ for m in p.manipuladores.manips] == ["Angulo"]
+    gm = p.manipuladores
+    assert sorted(type(m).__name__ for m in gm.manips) == ["Angulo", "AsaRuta"]
+    asa = next(m for m in gm.manips if isinstance(m, mp.AsaRuta))
+    xy, ok = gm.pantalla([asa.asa(gm), asa.puntos_ruta[40]])
+    assert ok.all()
+    _arrastrar(p.visor, *xy)
+    assert gm.valor("distancia") == pytest.approx(0.5, abs=0.03)
+    p._calcular_previa()
+    assert p._previa_ok or "perfil" in p.mensaje.text().lower()                       # sin perfil elegido no hay previa
     p.cancelar()

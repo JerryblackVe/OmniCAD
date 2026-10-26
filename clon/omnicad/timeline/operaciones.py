@@ -588,8 +588,9 @@ class OpBoceto(Operacion):
     # cara: referencia persistente a la cara (nucleo.referencias); `marco` queda de respaldo y es lo único que
     # tienen los proyectos viejos (boceto con marco congelado).
     # desplazamiento: se conserva por compatibilidad con los proyectos anteriores (bocetos desfasados).
-    PARAMS = {"plano": "XY", "desplazamiento": "0", "marco": None, "cara": None}
-    EXPRESIONES = ("desplazamiento",)
+    # angulo_plano: giro del plano alrededor de su eje u, después del desplazamiento (boceto de sección de malla).
+    PARAMS = {"plano": "XY", "desplazamiento": "0", "marco": None, "cara": None, "angulo_plano": "0 deg"}
+    EXPRESIONES = ("desplazamiento", "angulo_plano")
 
     def __init__(self, id, nombre=None, suprimida=False, boceto=None, **params):
         super().__init__(id, nombre, suprimida, **params)
@@ -628,7 +629,9 @@ class OpBoceto(Operacion):
     def plano(self, estado, ctx):
         base = resolver_plano(self.p["plano"], self.p.get("marco"), estado, self.p.get("cara"))
         d = ctx.evaluar(self.p["desplazamiento"])
-        return base.desplazado(d) if d else base
+        plano = base.desplazado(d) if d else base
+        angulo = ctx.evaluar(self.p.get("angulo_plano", "0 deg"), ANGULO)
+        return plano.girado(angulo) if angulo else plano
 
     def _reproyectar(self, boceto, plano, estado, ctx):
         """Recalcula las proyecciones asociativas antes del solver, sin alterar el boceto guardado. Las que ya no

@@ -380,13 +380,14 @@ def _trsf_marco(p0, t0, r0, p1, t1, r1):
 TORSION_MAXIMA_SUPERFICIE = 18000.0
 
 
-def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", torsion=0.0):
+def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", torsion=0.0, distancia=1.0):
     """Barrido de curvas a lo largo de una ruta [SFC-SWEEP] (Single Path).
 
     `orientacion`: "perpendicular" (el perfil acompaña a la ruta) o "paralela" (el perfil no rota).
     `torsion` (grados, Twist Angle): giro total del perfil alrededor de la ruta; solo con perpendicular.
     La torsión se construye con secciones intermedias cada ≤10° (aproximación muy fina, no exacta) y admite como
-    máximo ±TORSION_MAXIMA_SUPERFICIE grados."""
+    máximo ±TORSION_MAXIMA_SUPERFICIE grados.
+    `distancia` (Distance): hasta dónde llega el barrido sobre la ruta, de 0 (excluido) a 1 (toda la ruta)."""
     if orientacion not in ("perpendicular", "paralela"):
         raise geo.ErrorGeometria(f"Orientación de barrido desconocida: {orientacion}")
     if not math.isfinite(torsion) or abs(torsion) > TORSION_MAXIMA_SUPERFICIE:
@@ -395,7 +396,12 @@ def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", tors
                                  f"recibió {torsion:g}°.")
     if abs(torsion) > 1e-9 and orientacion != "perpendicular":
         raise geo.ErrorGeometria("La torsión solo existe con orientación perpendicular.")
+    if not math.isfinite(distancia) or not 0 < distancia <= 1:
+        raise geo.ErrorGeometria(f"La distancia del barrido sobre la ruta va de 0 (sin incluir) a 1; recibió {distancia:g}.")
     espina = _alambre_unico(ruta, "La ruta")
+    if distancia < 1:
+        from .solidos_crear import _recortar_alambre      # diferido: solidos_crear importa este módulo
+        espina = _recortar_alambre(espina, distancia)
     piezas = []
     for perfil in alambres(aristas_perfil):
         ps = BRepOffsetAPI_MakePipeShell(espina)

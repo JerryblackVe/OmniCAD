@@ -230,8 +230,28 @@ class Pestana(Comando):
 
     def manipuladores(self, ctx, v):
         """Pestaña de contorno: flecha de la distancia de extrusión sobre la normal del boceto (y la de la distancia 2
-        hacia el otro lado en «Dos lados»)."""
+        hacia el otro lado en «Dos lados»). Pestaña de arista: flecha de la altura a lo largo de la pestaña y arco del
+        ángulo de pliegue, desde el medio del borde elegido."""
+        from ...timeline.ops_chapa import modelo_actual
         from .. import manipuladores as mp
+        from .comunes import evaluar_o_cero
+        if v.get("tipo") == "arista":
+            e = mp.entidad(v["aristas"][0], ctx.estado) if v.get("aristas") else None
+            if e is None or e.forma is None or e.cuerpo is None:
+                return []
+            modelo = modelo_actual(ctx.estado.cuerpo(e.cuerpo))
+            medio, afuera, arriba = ch.marco_pestana_arista(modelo, e.forma, bool(v.get("invertir")))
+            grados = min(max(evaluar_o_cero(ctx, v.get("angulo"), ANGULO), 0.1), 179.9)
+            th = np.radians(grados)
+            try:        # la altura mínima es lo que ocupa el pliegue: por debajo la operación se rechaza
+                regla = modelo["regla"]
+                grande = 1e6
+                minimo = grande - ch.recorte_y_largo(grande, grados, regla["radio"], regla["espesor"],
+                                                     v.get("posicion") or "interior", v.get("referencia") or "exterior")[1] + 0.01
+            except Exception:  # noqa: BLE001
+                minimo = 0.01
+            return [mp.Flecha("altura", medio, afuera * np.cos(th) + arriba * np.sin(th), minimo=minimo),
+                    mp.Angulo("angulo", medio, np.cross(afuera, arriba), afuera, minimo=0.1, maximo=179.9)]
         if v.get("tipo") != "contorno":
             return []
         base = mp.base_perfiles(v.get("curvas"), ctx.estado)

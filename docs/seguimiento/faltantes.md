@@ -145,9 +145,6 @@ Se recorrieron los 148 comandos del catálogo y las cintas: 44 tienen asas (`Com
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| GZ-10 | Barrido de superficie: campo y asa de la distancia sobre la ruta | Parcial | Media | La torsión ya tiene su arco. Falta el campo `distancia` (0 a 1: hasta dónde llega el barrido sobre la ruta, como el del sólido) en el comando, la operación y `create_surface_sweep`, y su `AsaRuta` (Fusion: Sweep a surface). | omnicad/ui/comandos/superficie.py:66 (`SupBarrido`) | 2026-10-26 |
-| GZ-11 | Planos de corte: asa del ángulo y del movimiento sobre el plano | Parcial | Media | Análisis de sección y Boceto de sección de malla ya tienen la flecha de distancia. Fusion (3D section view, Trim or split a mesh body, Create a mesh section sketch) tiene además el manipulador de **ángulo** y el planar; OmniCAD no tiene el campo: agregar `angulo` (giro del plano sobre su eje) a los dos y a la herramienta MCP, y el arco. **Corte de plano de malla** (`cortar_plano`) no tiene ni el campo de distancia (solo elige el plano): agregar `desfase` y `angulo`, y las asas de distancia y giro. | omnicad/ui/comandos/inspeccionar.py:436; omnicad/ui/comandos/malla_seccion.py:19; omnicad/ui/comandos/malla.py:126 | 2026-10-26 |
-| GZ-12 | Pestaña de chapa: asas de la pestaña de arista y de la base | Parcial | Media | La pestaña de contorno ya tiene las flechas de distancia (y distancia 2). Faltan: la de arista (flecha de «Altura» y arco del «Ángulo»: el sentido sale de `chapa.pestana_arista`, que mira de qué lado de la chapa está la arista elegida, así que hay que calcular el mismo lado) y la base (sin asa en Fusion para el espesor, que viene de la regla: probablemente nada). | omnicad/ui/comandos/chapa.py (`Pestana.campos`) | 2026-10-26 |
 
 ## Fusion 360
 

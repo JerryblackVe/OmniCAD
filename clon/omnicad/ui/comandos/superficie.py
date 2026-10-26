@@ -5,7 +5,7 @@ import numpy as np
 from ...timeline.ops_superficie import (OpCoser, OpDescoser, OpDestrimar, OpEngrosar, OpExtenderSup,
                                         OpInvertirNormal, OpParche, OpRecortar, OpReglada, OpSupBarrido,
                                         OpSupDesfase, OpSupEmpalme, OpSupExtruir, OpSupRevolucion, OpSupSolevacion)
-from ...timeline.parametros import ANGULO
+from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits,
                        hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
@@ -70,6 +70,7 @@ class SupBarrido(Comando):
     def campos(self, ctx):
         return [Seleccion("perfil", "Perfil", CURVAS, maximo=None), Seleccion("ruta", "Ruta", CURVAS, maximo=None),
                 Opciones("orientacion", "Orientación", {"perpendicular": "Perpendicular", "paralela": "Paralela"}),
+                Expresion("distancia", "Distancia", "1", ESCALAR, ayuda="Fin del barrido sobre la ruta: fracción entre 0 y 1."),
                 Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO,
                           visible_si=lambda v: v.get("orientacion") == "perpendicular")]
 
@@ -77,7 +78,7 @@ class SupBarrido(Comando):
         exigir(v, "perfil", "Seleccioná el perfil.")
         exigir(v, "ruta", "Seleccioná la ruta.")
         return self.crear_op(OpSupBarrido, v, ctx, perfil=refs(v, "perfil"), ruta=refs(v, "ruta"),
-                             orientacion=v["orientacion"], torsion=v["torsion"])
+                             orientacion=v["orientacion"], torsion=v["torsion"], distancia=v["distancia"])
 
     def desde_op(self, op, ctx):
         return dict(op.p, perfil=hits(op.p["perfil"], ctx.estado), ruta=hits(op.p["ruta"], ctx.estado))

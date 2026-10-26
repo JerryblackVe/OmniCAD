@@ -6,6 +6,7 @@ lo edita en el entorno de boceto."""
 from ...nucleo import geometria as geo
 from ...nucleo import malla_seccion as ms
 from ...timeline.operaciones import OpBoceto
+from ...timeline.parametros import ANGULO
 from ..comando import Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir
 from . import registrar
 from .insertar import _InsertarArchivo2D, _plano_de_hit
@@ -25,6 +26,7 @@ class SeccionMalla(Comando):
         return [Seleccion("cuerpo", "Cuerpo de malla", {"cuerpo"}),
                 Seleccion("plano", "Plano de sección", {"plano", "cara_plana"}),
                 Expresion("distancia", "Distancia", "0 mm"),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
                 Opciones("ajuste", "Ajustar curvas", _AJUSTES, "ninguno"),
                 Expresion("tolerancia", "Desviación máxima", "0.1 mm",
                           visible_si=lambda v: v.get("ajuste") != "ninguno")]
@@ -34,7 +36,8 @@ class SeccionMalla(Comando):
         if cuerpo is None or getattr(cuerpo, "tipo", "") != "malla":
             raise ErrorComando("El cuerpo elegido no es una malla.")
         plano = _plano_de_hit(exigir(v, "plano", "Seleccioná el plano de sección.")[0])
-        op = OpBoceto(ctx.doc.nuevo_id(), self.nombre_nuevo(ctx), desplazamiento=v["distancia"], **plano)
+        op = OpBoceto(ctx.doc.nuevo_id(), self.nombre_nuevo(ctx), desplazamiento=v["distancia"],
+                      angulo_plano=v["angulo"], **plano)
         tol = ctx.evaluar(v["tolerancia"]) if v["ajuste"] != "ninguno" else 0.1
         try:
             polilineas = ms.seccion(cuerpo.forma, op.plano(ctx.estado, ctx))

@@ -27,7 +27,7 @@ TIPOS = {"section": "seccion", "zebra": "cebra", "environment_map": "mapa_entorn
          "min_radius": "radio_minimo"}
 CURVATURAS = {"gaussian": "gaussiana", "mean": "media", "max": "maxima", "min": "minima"}
 # Opciones que acepta cada tipo (el resto es un error: no se ignora en silencio).
-OPCIONES = {"section": {"plane", "offset", "flip", "bodies", "body"}, "zebra": {"frequency", "orientation"},
+OPCIONES = {"section": {"plane", "offset", "angle", "flip", "bodies", "body"}, "zebra": {"frequency", "orientation"},
             "environment_map": set(), "draft": {"direction", "min_angle", "max_angle", "flip", "bodies", "body"},
             "curvature": {"curvature_type", "bodies"}, "comb": {"edges", "density", "scale", "body"},
             "isocurve": {"density", "bodies"}, "accessibility": {"direction", "flip", "bodies", "body"},
@@ -65,6 +65,8 @@ def _parametros(sesion, tipo, dado):
             raise error("INVALID_ARGUMENTS", "La sección necesita plane: XY, XZ, YZ, un plano de construcción o una cara plana.")
         p.update(plano=_referencia(sesion, dado["plane"], {"plano", "cara"}, body, "plano"),
                  desfase_mm=float(_numero(dado.get("offset", 0), "offset")), invertir=bool(dado.get("flip", False)))
+        if dado.get("angle"):
+            p["angulo"] = float(_numero(dado["angle"], "angle", -360, 360))
     elif tipo == "zebra":
         orientacion = dado.get("orientation", "horizontal")
         if orientacion not in ("horizontal", "vertical"):
@@ -195,7 +197,7 @@ def _medida(sesion, tipo, p, cuerpo):
     forma = cuerpo.forma
     estado = sesion.doc.estado_final
     if tipo == "section":
-        plano = ent.como_plano(ent.resolver(p["plano"], estado)).desplazado(p["desfase_mm"])
+        plano = ent.como_plano(ent.resolver(p["plano"], estado)).desplazado(p["desfase_mm"]).girado(p.get("angulo", 0.0))
         datos = an.seccion(forma, plano)
         puntos = [q for linea in datos["polilineas"] for q in linea]
         caja = ({"min": np.min(puntos, 0).round(6).tolist(), "max": np.max(puntos, 0).round(6).tolist()}
@@ -276,10 +278,11 @@ def analyze_geometry(sesion, type: Literal["section", "curvature", "draft", "acc
              "get_viewport_image dibuja la parte de atrás del plano con su tapa. show=false lo deja oculto; "
              "manage_analysis (hide o remove) lo apaga.", modifica=True)
 def section_view(sesion, plane: str | dict, offset: float = 0, flip: bool = False, bodies: list[str] | None = None,
-                 name: str | None = None, show: bool = True, body: str | None = None):
+                 name: str | None = None, show: bool = True, body: str | None = None, angle: float = 0):
     """
     plane: XY, XZ, YZ, un plano de construcción (id o nombre) o una cara plana (selector).
     offset: desfase del plano en mm sobre su normal.
+    angle: giro del plano en grados (entre −360 y 360) alrededor de su eje u, después del desfase.
     flip: true conserva el lado de la normal en vez del lado de atrás.
     bodies: cuerpos a cortar (id o nombre); vacío = todos los sólidos.
     name: nombre del análisis; vacío = automático (Sección1…).
@@ -287,8 +290,8 @@ def section_view(sesion, plane: str | dict, offset: float = 0, flip: bool = Fals
     body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
     """
     cuerpos = _cuerpos_de(sesion, bodies)
-    p = _parametros(sesion, "section", {k: v for k, v in dict(plane=plane, offset=offset, flip=flip, bodies=bodies,
-                                                              body=body).items() if v is not None})
+    p = _parametros(sesion, "section", {k: v for k, v in dict(plane=plane, offset=offset, angle=angle, flip=flip,
+                                                              bodies=bodies, body=body).items() if v is not None})
     medidas = [{"body": c.id, "name": sesion.nombre_cuerpo(c), **_medida(sesion, "section", p, c)} for c in cuerpos]
     doc = sesion.doc
     if name and name.strip() in doc.analisis:

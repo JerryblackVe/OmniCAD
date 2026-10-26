@@ -96,6 +96,16 @@ def test_caja_da_cuatro_lineas_y_un_perfil_de_100(s):
     assert perfil["area"] == pytest.approx(100, abs=1e-6)
 
 
+def test_el_boceto_de_seccion_puede_ir_en_un_plano_girado(s):
+    m = malla(s, "create_box", length=10, width=10, height=10)
+    r = ok(s, "create_mesh_section_sketch", body=m, plane="XY", offset=medio_z(s, m), angle=30)
+    frame = r["plane_frame"]
+    assert frame["normal"] == pytest.approx([0, -0.5, 3 ** 0.5 / 2], abs=1e-3)       # la normal de XY girada 30° sobre X
+    assert frame["u_axis"] == pytest.approx([1, 0, 0]) and r["sections"]
+    op = s.doc.operacion(r["sketch"]["id"])
+    assert op.p["angulo_plano"] == "30.0"
+
+
 def test_cilindro_da_un_circulo_de_radio_correcto(s):
     m = malla(s, "create_cylinder", radius=10, height=20)
     boceto = ok(s, "create_mesh_section_sketch", body=m, plane="XY", offset=medio_z(s, m))["sketch"]["id"]

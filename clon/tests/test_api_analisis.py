@@ -149,6 +149,14 @@ def test_section_view_guarda_el_analisis_y_devuelve_el_corte():
     assert len(s.doc.analisis) == 1
 
 
+def test_section_view_con_angulo_gira_el_plano_sobre_su_eje():
+    s = caja()                                                                  # cubo de 20 de z=0 a z=20, centrado en x e y
+    r = ok(s, "section_view", plane="XY", angle=45)
+    assert r["bodies"][0]["area_mm2"] == pytest.approx(20 * 10 * 2 ** 0.5)       # corte a 45° por el origen: 20 × 10√2
+    assert s.doc.analisis[r["analysis"]["name"]]["params"]["angulo"] == 45
+    falla(s, "section_view", plane="XY", angle=400)
+
+
 # ---------------------------------------------------------------- set_visual_style
 def test_set_visual_style_guarda_estilo_entorno_y_efectos():
     s = caja()

@@ -75,8 +75,8 @@ class OpSupRevolucion(_OpSuperficie):
 class OpSupBarrido(_OpSuperficie):
     """SUPERFICIE › Barrido [SFC-SWEEP]."""
     TIPO, ETIQUETA, ICONO = "sup_barrido", "Barrido de superficie", "↝"
-    PARAMS = {"perfil": [], "ruta": [], "orientacion": "perpendicular", "torsion": "0 deg"}
-    EXPRESIONES = ("torsion",)
+    PARAMS = {"perfil": [], "ruta": [], "orientacion": "perpendicular", "torsion": "0 deg", "distancia": "1"}
+    EXPRESIONES = ("torsion", "distancia")
     OPCIONES = {"orientacion": ("perpendicular", "paralela")}
     REFS = ("perfil", "ruta")
 
@@ -84,7 +84,8 @@ class OpSupBarrido(_OpSuperficie):
         _, perfil = _curvas(self.p["perfil"], estado, "el perfil")
         _, ruta = _curvas(self.p["ruta"], estado, "la ruta")
         self._nuevo(estado, ctx, _sf().barrer_superficie(perfil, ruta, orientacion=self.p["orientacion"],
-                                                         torsion=ctx.evaluar(self.p["torsion"], ANGULO)))
+                                                         torsion=ctx.evaluar(self.p["torsion"], ANGULO),
+                                                         distancia=ctx.evaluar(self.p.get("distancia", "1"), "escalar")))
 
 
 class OpSupSolevacion(_OpSuperficie):

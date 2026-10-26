@@ -98,22 +98,24 @@ def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle:
                   eje=_una(sesion, clase, "eje", axis, body), angulo=texto_expr(angle))
 
 
-@herramienta("create_surface_sweep", "solido", "Barre curvas por una ruta con orientación y torsión.", modifica=True)
+@herramienta("create_surface_sweep", "solido", "Barre curvas por una ruta con orientación, torsión y distancia sobre la ruta.",
+             modifica=True)
 def create_surface_sweep(sesion, profiles: Seleccion, path: Seleccion,
                          orientation: Literal["perpendicular", "parallel"] = "perpendicular",
-                         twist_angle: Expr = 0, body: str | None = None):
+                         twist_angle: Expr = 0, body: str | None = None, path_distance: Expr = 1):
     """
     profiles: curvas o perfiles {"sketch": "Boceto1", "curve": 1} o {"sketch": "Boceto1", "profile": 0}; también caras, aristas o cuerpos.
     path: cadena de curvas de boceto, aristas (ids o selectores), caras o cuerpos.
     orientation: perpendicular sigue la ruta; parallel mantiene la orientación.
     twist_angle: torsión total en grados o expresión; solo con orientación perpendicular.
     body: cuerpo sobre el que evaluar selectores.
+    path_distance: hasta dónde llega el barrido sobre la ruta, fracción de 0 (sin incluir) a 1 (toda la ruta).
     """
     clase = ops.OpSupBarrido
     return _crear(sesion, clase, perfil=_seleccion(sesion, clase, "perfil", profiles, body, curvas=True),
                   ruta=_seleccion(sesion, clase, "ruta", path, body, curvas=True),
                   orientacion="paralela" if orientation == "parallel" else "perpendicular",
-                  torsion=texto_expr(twist_angle))
+                  torsion=texto_expr(twist_angle), distancia=texto_expr(path_distance))
 
 
 @herramienta("create_surface_loft", "solido", "Crea una superficie entre secciones ordenadas, abiertas o cerradas.", modifica=True)

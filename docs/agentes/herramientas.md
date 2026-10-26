@@ -2035,7 +2035,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`scale_body`](#scale_body) | sí | Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. sketches escala bocetos enteros (solo uniforme). |
 | [`create_surface_extrude`](#create_surface_extrude) | sí | Extruye curvas abiertas o cerradas en una superficie. |
 | [`create_surface_revolve`](#create_surface_revolve) | sí | Gira curvas alrededor de un eje para crear una superficie. |
-| [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta con orientación y torsión. |
+| [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta con orientación, torsión y distancia sobre la ruta. |
 | [`create_surface_loft`](#create_surface_loft) | sí | Crea una superficie entre secciones ordenadas, abiertas o cerradas. |
 | [`offset_surface`](#offset_surface) | sí | Crea una superficie paralela a caras o cuerpos. |
 | [`fillet_surface`](#fillet_surface) | sí | Redondea o bisela aristas entre superficies. |
@@ -3194,7 +3194,7 @@ Gira curvas alrededor de un eje para crear una superficie.
 
 ### `create_surface_sweep`
 
-Barre curvas por una ruta con orientación y torsión.
+Barre curvas por una ruta con orientación, torsión y distancia sobre la ruta.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -3203,6 +3203,7 @@ Barre curvas por una ruta con orientación y torsión.
   - `orientation` ("perpendicular" | "parallel"; opcional, por defecto `"perpendicular"`): perpendicular sigue la ruta; parallel mantiene la orientación.
   - `twist_angle` (número o expresión; opcional, por defecto `0`): torsión total en grados o expresión; solo con orientación perpendicular.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+  - `path_distance` (número o expresión; opcional, por defecto `1`): hasta dónde llega el barrido sobre la ruta, fracción de 0 (sin incluir) a 1 (toda la ruta).
 - CLI: `omnicad call create_surface_sweep --doc pieza.omnicad profiles=… path=…`
 
 ### `create_surface_loft`
@@ -3768,6 +3769,8 @@ Corta mallas con un plano (MALLA › MODIFICAR › Corte de plano de Fusion). ki
   - `flip` (true/false; opcional, por defecto `false`): true invierte el lado que se conserva (en trim) o el orden de las partes (en split_body).
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
   - `plane_body` (texto; opcional, por defecto `null`): cuerpo sólido donde se evalúa el selector de cara de plane; vacío = el único sólido del documento.
+  - `offset` (número o expresión; opcional, por defecto `0`): desfase del plano en mm sobre su normal (número o expresión).
+  - `angle` (número o expresión; opcional, por defecto `0`): giro del plano en grados (número o expresión) alrededor de su eje u, después del offset.
 - CLI: `omnicad call plane_cut_mesh --doc pieza.omnicad bodies=… plane=…`
 
 ### `combine_meshes`
@@ -3840,6 +3843,7 @@ Crea un boceto de sección de malla (MALLA › CREAR › Crear boceto de secció
   - `offset` (número o expresión; opcional, por defecto `0`): distancia en mm del plano de sección al plano elegido, sobre su normal (número o expresión).
   - `name` (texto; opcional, por defecto `null`): nombre del boceto; vacío = "Boceto1", "Boceto2"…
   - `plane_body` (texto; opcional, por defecto `null`): cuerpo sólido donde se evalúa el selector de cara de plane; vacío = el único sólido.
+  - `angle` (número o expresión; opcional, por defecto `0`): giro en grados (número o expresión) del plano de sección alrededor de su eje u, después del offset.
 - CLI: `omnicad call create_mesh_section_sketch --doc pieza.omnicad body=…`
 
 ### `fit_curves_to_mesh_section`
@@ -4322,6 +4326,7 @@ Análisis de sección: corta con un plano (XY, XZ, YZ, un plano de construcción
   - `name` (texto; opcional, por defecto `null`): nombre del análisis; vacío = automático (Sección1…).
   - `show` (true/false; opcional, por defecto `true`): false deja el análisis creado pero oculto.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
+  - `angle` (número; opcional, por defecto `0`): giro del plano en grados (entre −360 y 360) alrededor de su eje u, después del desfase.
 - CLI: `omnicad call section_view --doc pieza.omnicad plane=…`
 
 ### `set_visual_style`

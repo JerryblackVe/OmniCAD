@@ -9,6 +9,7 @@ import types
 import arnes as A
 import escena
 import numpy as np
+from omnicad import api
 from omnicad.ui import manipuladores as mp
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
@@ -73,6 +74,7 @@ def probar(clave, sel, vals, foto=None):
             tn, cl = type(m).__name__, getattr(m, "clave", None)
             try:
                 if isinstance(m, mp.Angulo) and not isinstance(m, mp.GiroCalcomania):
+                    m = next(x for x in g.manips if isinstance(x, mp.Angulo) and x.clave == cl)       # las asas se rehacen en cada cambio
                     antes = g.valor(cl)
                     centro = np.asarray(m.centro, float)
                     d = m.asa(g) - centro
@@ -460,6 +462,23 @@ def asas_de_animacion():
     w.close()
     A.esperar(200)
 
+
+def asas_de_pestana_arista():
+    """Pestaña de arista: flecha de la altura y arco del ángulo sobre una placa de chapa creada por la API."""
+    for nombre, args in (("create_sketch", {"name": "Placa", "plane": "XY"}),
+                         ("draw_rectangle", {"sketch": "Placa", "x1": 200, "y1": 200, "x2": 260, "y2": 240})):
+        assert api.llamar(s, nombre, args)["ok"]
+    r = api.llamar(s, "create_base_flange", {"sketch": "Placa"})
+    assert r["ok"], r
+    cid = r["result"]["bodies_created"][0]["id"]
+    probar("pestana", {"aristas": lambda: [A.hit_arista(v, cid, lineal=True, cerca=(230, 240, 1))]},
+           {"tipo": "arista", "altura": "15 mm"})
+
+
+try:
+    asas_de_pestana_arista()
+except Exception as e:  # noqa: BLE001
+    A.reg(f"{AR} · pestaña de arista", "EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
 
 try:
     asas_de_animacion()

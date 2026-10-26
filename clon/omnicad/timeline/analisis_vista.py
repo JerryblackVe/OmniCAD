@@ -63,7 +63,7 @@ def calcular(tipo, params, estado):
         e = ent.resolver(params["plano"], estado)
         plano = ent.como_plano(e)
         d = float(params.get("desfase_mm", 0.0))
-        plano = plano.desplazado(d)
+        plano = plano.desplazado(d).girado(float(params.get("angulo", 0.0)))
         if params.get("invertir"):
             plano = geo.Plano.desde_marco(plano.origen, -plano.normal, plano.u)
         salida["cortes"].append((plano.normal, plano.origen))

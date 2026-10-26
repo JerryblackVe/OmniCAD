@@ -438,12 +438,13 @@ class Seccion(_Analisis):
 
     def campos(self, ctx):
         return [Seleccion("plano", "Caras/plano", {"cara_plana", "plano"}), Expresion("desfase", "Distancia", "0 mm"),
-                Casilla("invertir", "Invertir"), _cuerpos_campo()]
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO), Casilla("invertir", "Invertir"), _cuerpos_campo()]
 
     def params(self, v, ctx):
         if not v.get("plano"):
             raise ErrorComando("Seleccioná el plano de corte.")
-        return {"plano": ref1(v, "plano"), "desfase_mm": ctx.evaluar(v["desfase"]), "invertir": bool(v["invertir"]),
+        return {"plano": ref1(v, "plano"), "desfase_mm": ctx.evaluar(v["desfase"]),
+                "angulo": ctx.evaluar(v["angulo"], ANGULO), "invertir": bool(v["invertir"]),
                 "cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []]}
 
     def mostrar(self, v, ctx):

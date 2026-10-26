@@ -108,6 +108,23 @@ def test_barrido_orientacion_y_torsion(orientacion, giro):
     area(s, cid, esperada, tolerancia=1e-4)
 
 
+def test_barrido_hasta_una_fraccion_de_la_ruta():
+    s = api.Sesion()
+    perfil = linea(s, inicio=(-5, 0), fin=(5, 0))
+    ruta = linea(s, nombre="Ruta", inicio=(0, 0), fin=(0, 100), plano="XZ")
+    cid = creado(s, "create_surface_sweep", profiles=perfil, path=ruta, path_distance=0.4)
+    area(s, cid, 400)
+    paso = s.doc.operacion(s.doc.operaciones[-1].id)
+    assert paso.p["distancia"] == "0.4"
+    malo = api.llamar(s, "create_surface_sweep", {"profiles": perfil, "path": ruta, "path_distance": 2})
+    assert not malo["ok"]
+    # una receta anterior, sin el parámetro, barre toda la ruta
+    from omnicad.timeline.ops_superficie import OpSupBarrido
+    viejo = {k: v for k, v in paso.p.items() if k != "distancia"}
+    s.doc.reemplazar(paso.id, OpSupBarrido(paso.id, paso.nombre, False, **viejo))
+    area(s, cid, 1000)
+
+
 def test_solevacion_abierta_reglada():
     s = api.Sesion()
     perfiles = [linea(s, nombre=f"Sección{i}", inicio=(x, y), fin=(x, y + 10))

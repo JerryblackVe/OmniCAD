@@ -103,6 +103,18 @@ def test_barrer_recto_paralelo_y_con_torsion():
         sf.barrer_superficie(seg((-5, 0, 0), (5, 0, 0)), ruta, orientacion="paralela", torsion=30)
 
 
+def test_barrer_hasta_una_fraccion_de_la_ruta():
+    ruta = seg((0, 0, 0), (0, 0, 100))
+    perfil = seg((-5, 0, 0), (5, 0, 0))
+    assert g.area(sf.barrer_superficie(perfil, ruta, distancia=0.25)) == pytest.approx(250)
+    hel = sf.barrer_superficie(perfil, ruta, torsion=90, distancia=0.5)           # la mitad de la ruta y de la torsión
+    (_, _, z0), (_, _, z1) = g.caja_envolvente(hel)
+    assert (z0, z1) == pytest.approx((0, 50), abs=1e-6) and g.es_valida(hel)
+    for malo in (0, -0.5, 1.5, float("nan")):
+        with pytest.raises(g.ErrorGeometria):
+            sf.barrer_superficie(perfil, ruta, distancia=malo)
+
+
 def test_barrer_ruta_curva():
     ruta = BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), 50), 0, math.pi / 2).Edge()
     perfil = circulo(2, centro=(50, 0, 0), normal=(0, 1, 0))

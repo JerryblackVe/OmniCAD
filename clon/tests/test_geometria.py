@@ -148,3 +148,11 @@ def test_teselado_y_aristas():
     v, n = g.teselar(g.caja(1, 2, 3))
     assert v.shape == n.shape and v.shape[0] == 36      # 6 caras × 2 triángulos × 3 vértices
     assert len(g.polilineas_aristas(g.caja(1, 2, 3))) == 12
+
+
+def test_plano_girado_sobre_su_eje_u():
+    p = g.Plano("XY", 5).girado(90)                                      # normal +Z → −Y, por el mismo origen
+    assert p.normal == pytest.approx([0, -1, 0]) and p.u == pytest.approx([1, 0, 0]) and p.origen == pytest.approx([0, 0, 5])
+    assert p.v == pytest.approx([p.normal[1]*p.u[2]-p.normal[2]*p.u[1], p.normal[2]*p.u[0]-p.normal[0]*p.u[2], p.normal[0]*p.u[1]-p.normal[1]*p.u[0]])
+    assert g.Plano("XZ").girado(0).normal == pytest.approx(g.Plano("XZ").normal)
+    assert g.Plano("YZ").girado(360).normal == pytest.approx(g.Plano("YZ").normal, abs=1e-12)
