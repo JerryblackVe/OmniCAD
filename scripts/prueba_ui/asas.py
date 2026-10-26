@@ -172,8 +172,13 @@ def probar_gizmo_lienzo(clave="lienzo"):
 
     from PIL import Image
     nombre = f"{AR} · gizmo {clave}"
-    ruta = Path(tempfile.mkdtemp()) / "imagen.png"
-    Image.new("RGB", (80, 40), "red").save(ruta)
+    es_svg = clave == "insertar_svg"
+    ruta = Path(tempfile.mkdtemp()) / ("dibujo.svg" if es_svg else "imagen.png")
+    if es_svg:
+        ruta.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20"/></svg>')
+    else:
+        Image.new("RGB", (80, 40), "red").save(ruta)
+    h, vv = ("voltear_h", "voltear_v") if es_svg else ("voltear", "voltear_v")
     A.MODALES.clear()
     p = A.abrir(v, clave)
     if p is None:
@@ -213,7 +218,7 @@ def probar_gizmo_lienzo(clave="lienzo"):
         A.reg(nombre, "escala x1,5 por el codo", ok and abs(g.valor("escala") / antes - 1.5) < 0.05,
               f"{antes:g} → {g.valor('escala'):g}")
         # volteos: clic
-        for cl in ("voltear", "voltear_v"):
+        for cl in (h, vv):
             xy = g.pantalla([asa(cl)._geom(g)[0]])[0][0]
             vis = p.visor
             q = QPointF(*xy)
@@ -243,6 +248,7 @@ def probar_gizmo_lienzo(clave="lienzo"):
 
 probar_gizmo_lienzo("lienzo")
 probar_gizmo_lienzo("calcomania")
+probar_gizmo_lienzo("insertar_svg")
 
 A.guardar_registro("u3_asas")
 fallas = [r for r in A.REGISTRO if not r["ok"]]

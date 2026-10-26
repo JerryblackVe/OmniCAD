@@ -404,7 +404,7 @@ def test_dibujo_insertado_se_corre_arrastrando_su_aro(app_qt):
     doc = _doc_rectangulo()
     plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
     panel, visor, _estados = _panel(InsertarSVG(), doc, {"plano": [plano], "dx": "0 mm", "dy": "0 mm"})
-    manips = [m for m in panel.manipuladores.manips if m.ident == "posicion:desplazamiento"]
+    manips = [m for m in panel.manipuladores.manips if m.ident == "posicion:calcomania"]
     if not manips:                                  # el hit de un plano de origen no trae su marco: sin aro
         pytest.skip("el hit del plano no trae geometría")
     gestor = panel.manipuladores

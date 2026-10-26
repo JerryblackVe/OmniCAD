@@ -2,7 +2,6 @@
 """INSERTAR: archivos DXF y SVG como bocetos sobre un plano o una cara (Fusion: SLD-INS-DXF, SLD-INS-SVG)."""
 from pathlib import Path
 
-import numpy as np
 
 from ...timeline.operaciones import OpBoceto
 from ...timeline.ops_insertar import OpLienzo
@@ -32,20 +31,16 @@ class _InsertarArchivo2D(Comando):
                 Casilla("voltear_h", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
 
     def manipuladores(self, ctx, v):
-        """Aro en la vista para arrastrar el dibujo por el plano (escribe Desplazamiento X / Y)."""
+        """Gizmo del dibujo sobre el plano: mover, girar, escalar (si tiene «escala») y voltear."""
         from .. import manipuladores as mp
+        from ...timeline import entidades
         from .comunes import evaluar_o_cero
         sel = v.get("plano") or []
-        plano = sel[0].get("plano") if sel else None
-        if plano is None:
+        if not sel or sel[0].get("plano") is None:
             return []
-        o, u, w = (np.asarray(x, float) for x in (plano.origen, plano.u, plano.v))
-        dx, dy = evaluar_o_cero(ctx, v.get("dx")), evaluar_o_cero(ctx, v.get("dy"))
-
-        def al_mover(q):
-            d = np.asarray(q, float) - o
-            return {"dx": float(d @ u), "dy": float(d @ w)}
-        return [mp.Posicion("desplazamiento", o + u * dx + w * dy, plano.normal, al_mover)]
+        return mp.asas_imagen(entidades.como_plano(entidades.resolver(sel[0]["ref"], ctx.estado)),
+                              evaluar_o_cero(ctx, v.get("dx")), evaluar_o_cero(ctx, v.get("dy")),
+                              escala="escala" in v, volteo=("voltear_h", "voltear_v"))
 
     def leer(self, ruta, v=None):
         raise NotImplementedError
@@ -249,14 +244,7 @@ class Lienzo(Comando):
         from .. import manipuladores as mp
         if not v.get("plano"):
             return []
-        pl = self.plano_gizmo(v, ctx)
-        o = pl.a_3d(ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"]))
-        return [mp.PosicionCalcomania(o, pl),
-                mp.FlechaCalcomania("dx", o, pl.u, pl.v),
-                mp.FlechaCalcomania("dy", o, pl.u, pl.v),
-                mp.GiroCalcomania("angulo", o, pl.normal, pl.v, caja=True),
-                mp.EscalaCalcomania(o, pl.u, pl.v),
-                mp.Volteo("voltear", o, pl.u, pl.v), mp.Volteo("voltear_v", o, pl.u, pl.v)]
+        return mp.asas_imagen(self.plano_gizmo(v, ctx), ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"]))
 
     def nombre_nuevo(self, ctx):
         base = "Calcomanía" if self.CALCOMANIA else "Lienzo"

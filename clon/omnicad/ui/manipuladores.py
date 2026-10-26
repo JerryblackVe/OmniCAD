@@ -441,7 +441,7 @@ class Angulo(Manipulador):
 
 
 AYUDA_CALCOMANIA = "Modificar el tamaño de la imagen o la colocación"
-CON_ESCALA = ("lienzo", "calcomania")      # comandos con la caja «Factor de escala» del codo
+CON_ESCALA = ("lienzo", "calcomania", "insertar_svg", "insertar_dxf")      # comandos con la caja «Factor de escala» del codo
 GRIS_CALCOMANIA = _rgb("#c9c9c9")
 BORDE_CALCOMANIA = _rgb("#444444")
 AZUL_CALCOMANIA = _rgb("#289acb")
@@ -629,15 +629,16 @@ class Volteo(AsaRadial):
     def __init__(self, clave, centro, u, v):
         super().__init__(clave, centro, u, caja=False)
         self.u, self.v = np.asarray(u), np.asarray(v)
+        self.horizontal = clave in ("voltear", "voltear_h")
 
     def _geom(self, g):
         k = g.escala(self.origen)
-        x, y = (-58, -28) if self.clave == "voltear" else (-28, -58)
+        x, y = (-58, -28) if self.horizontal else (-28, -58)
         return self.origen + (self.u * x + self.v * y) * k, self.direccion, k
 
     def dibujar(self, g, activo):
         centro, _, k = self._geom(g)
-        u, v = (self.u, self.v) if self.clave == "voltear" else (self.v, -self.u)
+        u, v = (self.u, self.v) if self.horizontal else (self.v, -self.u)
         invertida = bool(g.panel.valores.get(self.clave))
         prims = []
         for i, triangulo in enumerate(self._triangulos):
@@ -658,6 +659,17 @@ class Volteo(AsaRadial):
 
     def mover(self, g, estado, pos):
         return {}
+
+
+def asas_imagen(pl, dx, dy, escala=True, volteo=("voltear", "voltear_v")):
+    """Gizmo de Fusion para una imagen o un dibujo sobre el plano `pl` (Lienzo, Calcomanía, Insertar SVG y DXF):
+    cuadrado central (mover), flechas X/Y, arco (girar), codo (escala) y moños (voltear H y V)."""
+    o = pl.a_3d(dx, dy)
+    asas = [PosicionCalcomania(o, pl), FlechaCalcomania("dx", o, pl.u, pl.v), FlechaCalcomania("dy", o, pl.u, pl.v),
+            GiroCalcomania("angulo", o, pl.normal, pl.v, caja=True)]
+    if escala:
+        asas.append(EscalaCalcomania(o, pl.u, pl.v))
+    return asas + [Volteo(volteo[0], o, pl.u, pl.v), Volteo(volteo[1], o, pl.u, pl.v)]
 
 
 class Triada(Manipulador):
