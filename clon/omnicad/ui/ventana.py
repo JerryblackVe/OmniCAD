@@ -1649,6 +1649,8 @@ class VentanaPrincipal(QMainWindow):
         from .medidas import texto_medidas
         self.info_seleccion(texto_medidas(self.seleccion, self._estado_visible()))
         self._actualizar_sugerencias()
+        if self.asistente is not None:
+            self.asistente.actualizar_seleccion()   # la ficha de lo elegido (IA-13)
 
     def seleccionar_cuerpos(self, ids):
         """Selección en vivo por API, por el mismo camino que el clic del visor."""

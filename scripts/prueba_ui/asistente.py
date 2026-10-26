@@ -9,7 +9,9 @@ archivos al chat, el 11.º rechazado, ✕ y las fichas en la ventana chica. IA-1
 que dice cada CLI (elegir con el teclado, escribir otro, Aceptar y reabrir). IA-11: «pinta la caja de rojo» usa
 set_appearance (fuera del núcleo) en modo API con buscar_herramientas y en modo suscripción con call_tool. IA-12:
 teclear las instrucciones propias (Preferencias) y las del proyecto (Chat), vacío, enorme, pegar, Tab, Esc, Aceptar,
-reabrir, guardar y volver a abrir el archivo, el aviso y la ventana chica. El proveedor es el falso: sin red ni gasto."""
+reabrir, guardar y volver a abrir el archivo, el aviso y la ventana chica. IA-13: clic real en el visor sobre una cara,
+la ficha 🎯 con su medida, «empalme de 2 mm en esto» con la ref del prompt, ✕, elegir otra cosa y la ventana chica. El
+proveedor es el falso: sin red ni gasto."""
 import asyncio
 import json
 import sys
@@ -633,6 +635,96 @@ def instrucciones_ui(p):
     v.prefs["asistente/instrucciones"] = ""
 
 
+def clic_en_cara(cx, cy, z, r):
+    """Clic izquierdo REAL en el visor sobre la cara horizontal de altura z alrededor de (cx, cy): se hace en el primer
+    punto de la grilla donde lo de abajo es una cara (una arista o un boceto cercanos ganan, como en Fusion)."""
+    for dx in (0, r / 2, -r / 2):
+        for dy in (0, r / 2, -r / 2):
+            q = v.visor.proyectar((cx + dx, cy + dy, z))
+            hit = v.visor.elegir_entidad(q) if q is not None else None
+            if hit and hit["tipo"] == "cara":
+                QTest.mouseClick(v.visor, Qt.LeftButton, Qt.NoModifier, q.toPoint())
+                A.esperar(250)
+                return
+    A.reg(AR, f"selección: hay un punto de la cara en ({cx}, {cy}, {z}) para hacer clic", False)
+
+
+def seleccion_ui(p):
+    """IA-13: clic real en una cara, la ficha 🎯, «empalme de 2 mm en esto», ✕, elegir otra cosa y ventana chica."""
+    import re
+    v._seleccionar([])
+    A.esperar(100)
+    A.reg(AR, "selección: sin nada elegido no hay ficha", not p.ficha_sel.isVisible())
+    clic_en_cara(-100, 0, 20, 20)    # la tapa de la caja de 30 × 30 × 20
+    elegida = v.leer_seleccion()
+    A.reg(AR, "selección: clic en la tapa de la caja muestra la ficha con su medida",
+          p.ficha_sel.isVisible() and p.texto_sel.text().startswith("🎯 1 cara de ")
+          and p.texto_sel.text().endswith("(30 × 30 mm)") and len(elegida) == 1 and elegida[0]["tipo"] == "cara",
+          p.texto_sel.text())
+    A.foto(p, "asistente_ficha_seleccion")
+    if not (len(elegida) == 1 and elegida[0]["tipo"] == "cara"):
+        return                                     # sin la cara elegida no tiene sentido seguir
+    sistemas, usadas = [], []
+
+    class Lector(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            sistemas.append(sistema)
+            if len(sistemas) > 1:
+                return Respuesta(texto="Listo.")
+            m = re.search(r"cara plana de \S+ · 30 × 30 mm · [^\"]* · ref (\S+?)\"", sistema)
+            if m is None:
+                return Respuesta(texto="no veo la selección")
+            usadas.append(m.group(1))
+            return Respuesta(herramientas=[PedidoHerramienta("e1", "fillet", {"faces_a": [m.group(1)], "radius": 2})])
+
+    p.crear_proveedor = lambda _cfg: Lector([])
+    p.modo.setCurrentIndex(p.modo.findData("hacer"))
+    n = len(v.doc.operaciones)
+    escribir(p, "empalme de 2 mm en esto", Qt.Key_Return)
+    esperar(p)
+    caja = next(c for c in v.doc.estado_final.cuerpos.values() if c.id == elegida[0]["cuerpo"])
+    volumen = api.llamar(api.Sesion(v.doc), "get_physical_properties", {"bodies": [caja.id]})["result"]["total"]["volume"]
+    por_mm = 4 - 3.14159265
+    A.reg(AR, "selección: «empalme de 2 mm en esto» empalma la tapa elegida (ref del prompt → fillet)",
+          len(v.doc.operaciones) == n + 1 and v.doc.operaciones[-1].TIPO == "empalme" and len(usadas) == 1
+          and 18000 - 120 * por_mm < volumen < 18000 - 104 * por_mm, f"ref={usadas} volumen={volumen:.2f}")
+    A.foto(v, "asistente_empalme_en_esto")
+    A.deshacer(v)
+    clic_en_cara(-100, 0, 20, 20)
+    QTest.mouseClick(p.b_sin_sel, Qt.LeftButton)
+    A.esperar(100)
+    A.reg(AR, "selección: ✕ saca la ficha", not p.ficha_sel.isVisible() and bool(v.leer_seleccion()))
+    class Guarda(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            sistemas.append(sistema)
+            return Respuesta(texto="ok")
+
+    p.crear_proveedor = lambda _cfg: Guarda([])
+    sistemas.clear()
+    p.modo.setCurrentIndex(p.modo.findData("explicar"))
+    escribir(p, "que es esto", Qt.Key_Return)
+    esperar(p)
+    A.reg(AR, "selección: con ✕ el prompt ya no la trae", len(sistemas) == 1 and '"seleccion"' not in sistemas[0])
+    clic_en_cara(-160, 0, 30, 12)    # la tapa del cilindro de radio 10
+    A.reg(AR, "selección: elegir otra cosa cambia la ficha y vuelve a aparecer",
+          p.ficha_sel.isVisible() and p.texto_sel.text().endswith("(20 × 20 mm)"), p.texto_sel.text())
+    p.adjuntar(adjuntables()[:2])
+    for ancho, alto in ((1024, 640), (800, 520)):
+        v.resize(ancho, alto)
+        A.esperar(300)
+        A.reg(AR, f"selección: ventana {ancho}x{alto}: la ficha, su ✕, las fichas de adjuntos, el campo y Enviar entran",
+              dentro(p.ficha_sel, v) and dentro(p.b_sin_sel, v) and dentro(p.fila_adjuntos, v)
+              and dentro(p.campo, v) and dentro(p.b_enviar, v) and p.campo.height() >= 20,
+              f"ficha={p.ficha_sel.geometry()} campo={p.campo.height()} panel={p.width()}x{p.height()}")
+        A.foto(v, f"asistente_seleccion_{ancho}x{alto}")
+    p.adjuntos = []
+    p._mostrar_fichas()
+    v._seleccionar([])
+    v.resize(1900, 1000)
+    A.esperar(200)
+    p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+
+
 def primer_cuerpo():
     return api.llamar(api.Sesion(v.doc), "get_scene_info", {})["result"]["bodies"][0]["id"]
 
@@ -915,6 +1007,7 @@ def pedido():
     modelos_en_preferencias()
     suscripcion(p)
     instrucciones_ui(p)
+    seleccion_ui(p)
 
     # ---------------------------------------------------------------- atajo y cerrar
     QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)

@@ -223,8 +223,9 @@ def assistant_ask(sesion, prompt: str, mode: Literal["explicar", "mostrar", "gui
 
     tope = cfg["tope_usd"]
     mensajes = [{"rol": "usuario", "contenido": [{"tipo": "texto", "texto": prompt}, *bloques]}]
+    leer = getattr(sesion, "leer_seleccion", None)     # en vivo, «esto» es lo elegido en la ventana (IA-13)
     resultado = bucle.correr(proveedor, mensajes, ejecutar, Herramientas(modo=mode),
-                             armar_sistema(sesion, mode, generales=cfg["instrucciones"]),
+                             armar_sistema(sesion, mode, (leer() or None) if leer else None, cfg["instrucciones"]),
                              al_evento, cancelado=lambda: tope > 0 and uso["costo_usd"] > tope,
                              aprobar=lambda pedidos: True)
     if resultado["motivo"] == "cancelado":     # el único que cancela sin ventana es el tope de gasto

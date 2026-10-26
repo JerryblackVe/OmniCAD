@@ -220,3 +220,22 @@ def test_cli_instrucciones_del_proyecto(capsys, tmp_path):
     capsys.readouterr()
     assert main(["call", "get_project_instructions", "--doc", str(doc), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["result"]["instructions"] == "Pared mínima de 2 mm"
+
+
+def test_ask_en_vivo_lleva_la_seleccion_de_la_ventana(monkeypatch):
+    """IA-13: con la ventana en vivo (la sesión del puente tiene leer_seleccion), el prompt describe lo elegido."""
+    from omnicad.api import selectores as sl
+    s = api.Sesion()
+    api.llamar(s, "create_box", {"length": 40, "width": 20, "height": 10})
+    c = s.cuerpo("op1.c1")
+    s.leer_seleccion = lambda: [sl.referencia(c, e) for e in sl.listar(c.forma, "cara")][-1:]
+    recibidos = []
+
+    class Lector(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            recibidos.append(sistema)
+            return Respuesta(texto="ok")
+
+    monkeypatch.setattr(config, "crear_proveedor", lambda cfg: Lector([]))
+    assert api.llamar(s, "assistant_ask", {"prompt": "que es esto?", "mode": "explicar"})["ok"]
+    assert "cara plana de Cuerpo1 · 40 × 20 mm · área 800 mm² · ref Cuerpo1/F" in recibidos[0]

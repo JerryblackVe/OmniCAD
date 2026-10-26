@@ -20,6 +20,9 @@ claves); «Chat › Historial de chats» lista los guardados para abrir uno (la 
 Adjuntos (IA-9): el clip (o Ctrl+V con una imagen, o arrastrar archivos al panel) suma PDF, PNG, JPG, SVG y DXF, hasta
 10 por pedido (`asistente/adjuntos.py` los valida y prepara). Se ven como fichas arriba del campo y se van con el
 pedido al enviar.
+
+Selección (IA-13): lo elegido en el visor se ve en una ficha «🎯 …» arriba del campo y va descripto en el prompt («esto»
+= la selección); su ✕ la saca de ese pedido.
 """
 import json
 import os
@@ -36,7 +39,7 @@ from .. import api
 from ..api.errores import error
 from ..asistente import adjuntos, bucle, config, historial, marca
 from ..asistente.herramientas import MODOS, Herramientas
-from ..asistente.prompt import armar_sistema, cargar_prompts
+from ..asistente.prompt import armar_sistema, cargar_prompts, resumen_seleccion
 from ..asistente.proveedores.agente_local import AgenteLocal, matar
 from ..asistente.proveedores.base import ErrorProveedor, PedidoHerramienta
 from . import iconos, temas
@@ -483,6 +486,20 @@ class PanelAsistente(QDockWidget):
         fila.addWidget(self.contador)
         self.fila_adjuntos.hide()
         lay.addWidget(self.fila_adjuntos)
+        self.ficha_sel = QFrame(objectName="ficha_seleccion", frameShape=QFrame.StyledPanel)
+        h = QHBoxLayout(self.ficha_sel)
+        h.setContentsMargins(4, 1, 1, 1)
+        h.setSpacing(3)
+        self.texto_sel = QLabel(wordWrap=True)       # en 190 px la medida baja a otra línea en vez de cortarse
+        self.texto_sel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)   # un texto largo no ensancha el panel
+        self.b_sin_sel = QToolButton(text="✕", autoRaise=True, toolTip="No mandar la selección en este pedido. "
+                                                                       "Vuelve si elegís otra cosa.")
+        self.b_sin_sel.clicked.connect(self.quitar_seleccion)
+        h.addWidget(self.texto_sel, 1)
+        h.addWidget(self.b_sin_sel)
+        self.ficha_sel.hide()
+        lay.addWidget(self.ficha_sel)
+        self._sin_seleccion = None      # la selección que ✕ sacó del pedido (otra selección la vuelve a mostrar)
         self.campo = CampoPedido()
         self.campo.enviar.connect(self.enviar)
         self.campo.escape.connect(self._escape)
@@ -516,6 +533,7 @@ class PanelAsistente(QDockWidget):
         self.actualizar_cabecera()
         self._agregar_texto(SALUDO)
         self.revisar_instrucciones()
+        self.actualizar_seleccion()
 
     # ------------------------------------------------------------ cabecera y menú Chat
     def actualizar_cabecera(self):
@@ -838,8 +856,11 @@ class PanelAsistente(QDockWidget):
         modo = self.modo.currentData()
         self.puente.sesion.doc = self.ventana.doc
         self.revisar_instrucciones()
-        sistema = armar_sistema(self.puente.sesion, modo, self.ventana.leer_seleccion() or None,
+        refs = self.ventana.leer_seleccion()
+        sistema = armar_sistema(self.puente.sesion, modo, refs if refs and refs != self._sin_seleccion else None,
                                 prefs["asistente/instrucciones"])
+        self._sin_seleccion = None      # el ✕ vale para este pedido
+        self.actualizar_seleccion()
         # El CLI del modo suscripción guarda su propia conversación (--resume / -s): acá se suma solo para el historial.
         bloques = [b for a in self.adjuntos for b in a.bloques]
         for bloque in ([{"tipo": "texto", "texto": texto}] if texto else []) + bloques:
@@ -883,6 +904,23 @@ class PanelAsistente(QDockWidget):
                 self.tarjeta = None
             self.b_enviar.setText("Cancelando…")
             self.b_enviar.setEnabled(False)
+
+    # ------------------------------------------------------------ selección del visor (IA-13)
+    def actualizar_seleccion(self):
+        """La ficha «🎯 1 cara de Caja (40 × 20 mm)» arriba del campo; la ventana la llama en cada cambio de selección.
+        Sin selección, o con la que se sacó con ✕, no hay ficha."""
+        refs = self.ventana.leer_seleccion()
+        if refs != self._sin_seleccion:
+            self._sin_seleccion = None
+        self.puente.sesion.doc = self.ventana.doc
+        texto = resumen_seleccion(self.puente.sesion, refs) if refs and self._sin_seleccion is None else ""
+        self.texto_sel.setText(f"🎯 {texto}")
+        self.ficha_sel.setToolTip(f"Selección: {texto}. El Asistente la entiende como «esto».")
+        self.ficha_sel.setVisible(bool(texto))
+
+    def quitar_seleccion(self):
+        self._sin_seleccion = self.ventana.leer_seleccion()
+        self.actualizar_seleccion()
 
     # ------------------------------------------------------------ adjuntos
     def elegir_archivos(self):

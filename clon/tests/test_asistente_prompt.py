@@ -1,9 +1,12 @@
 """Prompt de sistema, contexto del documento, modos y biblioteca de prompts del asistente, sin red."""
 import json
+import math
+import re
 
 import pytest
 
 from omnicad import api
+from omnicad.api import selectores as sl
 from omnicad.asistente import bucle, prompt
 from omnicad.asistente.herramientas import CON_EFECTOS, MODOS, VISTA, Herramientas
 from omnicad.asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
@@ -71,10 +74,69 @@ def test_contexto_de_50_pasos_entra_en_8000_caracteres(sesion):
 
 
 
-def test_la_seleccion_de_la_ventana_se_recorta(sesion):
-    refs = [{"tipo": "cara", "cuerpo": "op1.c1", "indice": i} for i in range(30)]
+def _refs(sesion, cuerpo, tipo):
+    c = sesion.cuerpo(cuerpo)
+    return [sl.referencia(c, e) for e in sl.listar(c.forma, tipo)]
+
+
+def test_30_caras_elegidas_dan_20_lineas_y_10_mas(sesion):
+    for i in range(5):
+        api.llamar(sesion, "create_box", {"length": 10, "width": 10, "height": 10, "x": i * 20})
+    refs = [r for i in range(5) for r in _refs(sesion, f"op{i + 1}.c1", "cara")]
     datos = json.loads(prompt.contexto(sesion, refs).split("\n")[1])
-    assert datos["seleccion"]["total"] == 30 and datos["seleccion"]["ultimos"] == refs[-prompt.ULTIMOS:]
+    assert len(refs) == 30 and len(datos["seleccion"]) == prompt.TOPE_SELECCION + 1
+    assert datos["seleccion"][-1] == "y 10 más"
+    assert datos["seleccion"][0] == "cara plana de Cuerpo1 · 10 × 10 mm · área 100 mm² · ref Cuerpo1/F1"
+
+
+def test_cada_elemento_dice_que_es_de_que_cuerpo_y_cuanto_mide(sesion):
+    api.llamar(sesion, "create_box", {"length": 40, "width": 20, "height": 10})
+    api.llamar(sesion, "rename", {"target": "op1.c1", "new_name": "Caja", "kind": "body"})
+    api.llamar(sesion, "create_cylinder", {"radius": 5, "height": 8, "x": 60})
+    caras, aristas = _refs(sesion, "Caja", "cara"), _refs(sesion, "Caja", "arista")
+    tapa = next(r for r in caras if r["firma"].get("normal") == [0.0, 0.0, 1.0])
+    lado = next(r for r in _refs(sesion, "op2.c1", "cara") if r["firma"]["geom"] == "cilindro")
+    borde = next(r for r in _refs(sesion, "op2.c1", "arista") if r["firma"]["geom"] == "circulo")
+    lineas = prompt.describir_seleccion(sesion, [tapa, aristas[0], lado, borde, {"tipo": "cuerpo", "cuerpo": "op1.c1"},
+                                                 {"tipo": "plano", "id": "XY"}, {"tipo": "cara", "cuerpo": "op9.c1"}])
+    assert lineas[0].startswith("cara plana de Caja · 40 × 20 mm · área 800 mm² · ref Caja/F")
+    assert lineas[1].startswith("arista recta de Caja · largo ") and " · ref Caja/E" in lineas[1]
+    assert lineas[2].startswith("cara cilíndrica de Cuerpo2 · Ø 10 mm · área ")
+    assert lineas[3].startswith("arista circular de Cuerpo2 · Ø 10 mm · ref Cuerpo2/E")
+    assert lineas[4] == "cuerpo Caja · 40 × 20 × 10 mm · ref Caja" and lineas[5] == "plano XY · ref XY"
+    assert lineas[6].startswith("cara · ref {")                      # ya no existe: va sin medidas, no rompe
+    assert prompt.resumen_seleccion(sesion, [tapa]) == "1 cara de Caja (40 × 20 mm)"
+    assert prompt.resumen_seleccion(sesion, aristas[:3]) == "3 aristas de Caja"
+    assert prompt.resumen_seleccion(sesion, [tapa, lado]) == "2 caras"
+    assert prompt.resumen_seleccion(sesion, [tapa, aristas[0]]) == "2 elementos"
+    assert prompt.resumen_seleccion(sesion, []) == ""
+
+
+def test_empalme_en_esto_usa_la_ref_de_la_seleccion(sesion):
+    """«empalme de 2 mm en esto» con la tapa elegida: el modelo recibe su ref en el prompt y empalma ESA cara."""
+    api.llamar(sesion, "create_box", {"length": 40, "width": 20, "height": 10})
+    tapa = next(r for r in _refs(sesion, "op1.c1", "cara") if r["firma"].get("normal") == [0.0, 0.0, 1.0])
+    sistema = prompt.armar_sistema(sesion, "hacer", [tapa])
+    assert "«Esto»" in sistema
+
+    class Lector(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            self.recibidos.append(sistema)
+            if len(self.recibidos) > 1:
+                return Respuesta(texto="Listo.")
+            ref = re.search(r"cara plana de \S+ · [^\"]* · ref (\S+?)\"", sistema).group(1)
+            return Respuesta(herramientas=[PedidoHerramienta("a1", "fillet", {"faces_a": [ref], "radius": 2})])
+
+    usadas = []
+    resultado = bucle.correr(Lector([]), [{"rol": "usuario", "contenido": [{"tipo": "texto",
+                                                                            "texto": "empalme de 2 mm en esto"}]}],
+                             lambda n, a: usadas.append(a) or api.llamar(sesion, n, a), Herramientas(modo="hacer"),
+                             sistema, aprobar=lambda pedidos: True)
+    assert resultado["motivo"] == "fin" and usadas[0]["faces_a"][0].startswith("Cuerpo1/F")
+    total = api.llamar(sesion, "get_physical_properties", {})["result"]["total"]
+    por_mm = 2 * 2 - math.pi * 2 * 2 / 4                             # lo que saca un empalme de r 2 por mm de arista
+    assert 8000 - 120 * por_mm < total["volume"] < 8000 - 104 * por_mm  # el perímetro de la tapa, menos las esquinas
+    assert total["bounding_box"]["size"] == pytest.approx([40, 20, 10])
 
 
 def test_nombre_malicioso_queda_dentro_de_la_marca_de_datos(sesion):

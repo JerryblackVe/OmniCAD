@@ -246,6 +246,23 @@ def test_claude_argumentos_segun_modo_y_sin_token_ni_pedido(lanzar):
     assert sum(len(x) + 3 for x in argv) < 8191                # tope de cmd.exe (claude.cmd)
 
 
+def test_la_seleccion_llega_al_cli_en_el_mismo_prompt_de_sistema(lanzar):
+    """IA-13: el modo suscripción recibe el mismo prompt que la API, con lo elegido descripto (sistema.md, no argv)."""
+    from omnicad import api
+    from omnicad.api import selectores as sl
+    from omnicad.asistente.prompt import armar_sistema
+    s = api.Sesion()
+    api.llamar(s, "create_box", {"length": 40, "width": 20, "height": 10})
+    c = s.cuerpo("op1.c1")
+    sistema = armar_sistema(s, "hacer", [sl.referencia(c, sl.listar(c.forma, "cara")[-1])])
+    lanzar.respuestas.append(ProcesoFalso(CLAUDE))
+    AgenteLocal("claude_code", modelo="sonnet").correr("empalme de 2 mm en esto", sistema, "hacer",
+                                                       lambda t, d: None)
+    lanzado = lanzar[-1]
+    assert lanzado["archivos"]["sistema.md"] == sistema and "ref Cuerpo1/F6" in sistema
+    assert "Cuerpo1/F6" not in json.dumps(lanzado["argv"])      # va en el archivo, no por la línea de comandos
+
+
 def test_opencode_config_en_linea_con_la_lista_del_modo(lanzar):
     a = AgenteLocal("opencode", modelo="openai/gpt-6.1-sol", variante="high")
     correr(a, lanzar, ProcesoFalso(OPENCODE), modo="mostrar")

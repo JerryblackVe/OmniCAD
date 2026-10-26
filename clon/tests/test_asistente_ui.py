@@ -812,3 +812,54 @@ def test_instrucciones_propias_desde_preferencias_llegan_al_prompt(panel, ventan
     assert "Respondeme en una sola linea" in panel.trabajo.args[4]
     assert esperar(panel)
     ventana.prefs["asistente/instrucciones"] = ""
+
+
+# ---------------------------------------------------------------- IA-13: «esto» = lo elegido en el visor
+def _caja_y_tapa(panel):
+    assert panel.puente.ejecutar("create_box", {"length": 40, "width": 30, "height": 20})["ok"]
+    assert panel.puente.ejecutar("select_entities", {"kind": "face", "selector": ">Z"})["ok"]
+
+
+def test_empalme_en_esto_empalma_la_cara_elegida(panel, ventana):
+    import re
+    _caja_y_tapa(panel)
+    assert panel.ficha_sel.isVisible() and panel.texto_sel.text() == "🎯 1 cara de Cuerpo1 (40 × 30 mm)"
+
+    class Lector(ProveedorFalso):
+        def responder(self, sistema, mensajes, herramientas):
+            self.recibidos.append(sistema)
+            if len(self.recibidos) > 1:
+                return Respuesta(texto="Listo.")
+            ref = re.search(r"cara plana de Cuerpo1 · 40 × 30 mm · [^\"]* · ref (\S+?)\"", sistema).group(1)
+            return Respuesta(herramientas=[PedidoHerramienta("e1", "fillet", {"faces_a": [ref], "radius": 2})])
+
+    lector = Lector([])
+    panel.crear_proveedor = lambda cfg: lector
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    escribir(panel, "empalme de 2 mm en esto")
+    QTest.keyClick(panel.campo, Qt.Key_Return)
+    assert esperar(panel)
+    assert [o.TIPO for o in ventana.doc.operaciones][-1] == "empalme"
+    total = panel.puente.ejecutar("get_physical_properties", {})["result"]["total"]
+    assert 24000 - 140 * 0.86 < total["volume"] < 24000 - 124 * 0.85    # las 4 aristas de la tapa, r 2
+
+
+def test_la_ficha_sigue_a_la_seleccion_y_la_cruz_la_saca_del_pedido(panel, ventana):
+    assert not panel.ficha_sel.isVisible()                               # sin selección no hay ficha
+    _caja_y_tapa(panel)
+    assert panel.puente.ejecutar("select_entities", {"kind": "edge", "selector": "|Z"})["ok"]
+    assert panel.texto_sel.text() == "🎯 4 aristas de Cuerpo1"           # cambió al elegir otra cosa
+    QTest.mouseClick(panel.b_sin_sel, Qt.LeftButton)
+    assert not panel.ficha_sel.isVisible()
+    panel.guion = [Respuesta(texto="ok")]
+    escribir(panel, "que es esto")
+    assert panel.enviar()
+    assert '"seleccion"' not in panel.trabajo.args[4]                    # ✕: el prompt ya no la trae
+    assert esperar(panel)
+    assert panel.ficha_sel.isVisible()                                   # el ✕ valía para ese pedido
+    panel.guion = [Respuesta(texto="ok")]
+    escribir(panel, "y ahora")
+    assert panel.enviar() and "arista recta de Cuerpo1" in panel.trabajo.args[4]
+    assert esperar(panel)
+    ventana._seleccionar([])
+    assert not panel.ficha_sel.isVisible()
