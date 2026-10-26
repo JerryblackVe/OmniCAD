@@ -491,6 +491,7 @@ def test_cancelar_a_mitad_vuelve_a_la_marca(panel, ventana):
     assert esperar(panel, aplicar=False)
     assert receta(previo) == antes and previo._deshacer == pila
     assert any("volvió a como estaba antes del pedido" in t for t in textos_chat(panel))
+    assert not comparaciones(panel)                             # volvió a la marca: sin antes y después (IA-14)
 
 
 def test_tope_de_gasto_vuelve_a_la_marca(panel, ventana):
@@ -863,3 +864,106 @@ def test_la_ficha_sigue_a_la_seleccion_y_la_cruz_la_saca_del_pedido(panel, venta
     assert esperar(panel)
     ventana._seleccionar([])
     assert not panel.ficha_sel.isVisible()
+
+
+# ------------------------------------------------------------ antes y después (IA-14)
+def comparaciones(p):
+    from PySide6.QtWidgets import QWidget
+    return p.lista.findChildren(QWidget, "antes_despues")
+
+
+def test_antes_y_despues_con_la_misma_camara_aunque_la_ia_mueva_la_vista(panel, ventana, monkeypatch):
+    """Hacer: la IA gira la vista y crea una caja. «Después» se captura con la cámara de «Antes» (las capturas son
+    distintas, la cámara la misma) y la vista queda como la dejó la IA. Clic abre la grande; Esc la cierra. Las
+    capturas no le llegan al modelo."""
+    import numpy as np
+    from PySide6.QtWidgets import QDialog, QWidget
+    from PySide6.QtCore import QBuffer, QIODevice
+    from PySide6.QtGui import QColor, QImage
+    camaras, capturas, pasos = [], [], []
+
+    def capturar(*a):
+        """Offscreen el visor sale vacío: cada captura es un PNG de otro color (las reales las mira prueba_ui)."""
+        camaras.append(panel._camara())
+        pasos.append(len(ventana.doc.operaciones))
+        imagen = QImage(640, 400, QImage.Format_RGB32)
+        imagen.fill(QColor(("red", "green")[len(capturas) % 2]))
+        buf = QBuffer()
+        buf.open(QIODevice.WriteOnly)
+        imagen.save(buf, "PNG")
+        capturas.append(bytes(buf.data()))
+        return capturas[-1], 640, 400
+    monkeypatch.setattr(ventana, "capturar_visor", capturar)
+    falso = ProveedorFalso([Respuesta(herramientas=[PedidoHerramienta("h0", "buscar_herramientas",
+                                                                      {"nombres": ["set_view"]})]),
+                            Respuesta(herramientas=[CAJA, PedidoHerramienta("h2", "set_view", {"view": "top"})]),
+                            Respuesta(texto="Listo.")])
+    panel.crear_proveedor = lambda cfg: falso
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    escribir(panel, "gira y hace una caja")
+    QTest.keyClick(panel.campo, Qt.Key_Return)
+    assert esperar(panel)
+    assert pasos == [0, 1] and capturas[0] != capturas[1]       # antes de la caja y con la caja
+    (o1, d1, r1, *resto1), (o2, d2, r2, *resto2) = camaras
+    assert np.allclose(o1, o2) and d1 == d2 and np.allclose(r1, r2) and resto1 == resto2
+    assert not np.allclose(ventana.visor.R, r1)                 # la vista quedó como la dejó la IA (superior)
+    caja, = comparaciones(panel)
+    mini = caja.findChildren(QWidget, "miniatura_comparacion")
+    assert [m.titulo for m in mini] == ["Antes", "Después"] and [m.png for m in mini] == capturas
+    assert all(m.width() > 40 and m.height() > 20 for m in mini)
+    QTest.mouseClick(mini[1], Qt.LeftButton)
+    grande = panel.findChild(QDialog, "imagen_grande")
+    assert grande is not None and grande.isVisible() and grande.windowTitle() == "Después"
+    QTest.keyClick(grande, Qt.Key_Escape)
+    QTest.qWait(10)
+    assert not panel.findChildren(QDialog, "imagen_grande")
+    enviados = [b.get("png") for r in falso.recibidos for m in r[0] for b in m["contenido"]
+                for b in ([b] + b.get("contenido", []) if b["tipo"] == "resultado_herramienta" else [b])]
+    assert not set(capturas) & set(enviados)
+    # «Deshacer este pedido» deja las miniaturas como registro.
+    QTest.mouseClick(panel.lista.findChildren(type(panel.b_enviar), "deshacer_pedido")[-1], Qt.LeftButton)
+    assert ventana.doc.operaciones == [] and len(comparaciones(panel)) == 1
+
+
+def test_pedido_que_solo_lee_no_muestra_antes_y_despues(panel):
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.guion = [Respuesta(herramientas=[PedidoHerramienta("h1", "get_scene_info", {})]), Respuesta(texto="Vacío.")]
+    escribir(panel, "que hay")
+    assert panel.enviar() and esperar(panel)
+    assert lineas_herramienta(panel) == ["✓ get_scene_info"] and not comparaciones(panel)
+
+
+def test_explicar_no_captura_antes(panel, ventana, monkeypatch):
+    monkeypatch.setattr(ventana, "capturar_visor", lambda *a: pytest.fail("Explicar no puede cambiar nada"))
+    panel.modo.setCurrentIndex(panel.modo.findData("explicar"))
+    panel.guion = [Respuesta(texto="Se hace con Extruir.")]
+    escribir(panel, "como extruyo")
+    assert panel.enviar() and esperar(panel)
+    assert not comparaciones(panel)
+
+
+def test_historial_guarda_antes_y_despues_achicados_y_los_muestra_al_reabrir(panel, ventana):
+    from PySide6.QtGui import QImage
+    from PySide6.QtWidgets import QWidget
+
+    from omnicad.asistente import historial
+    from omnicad.ui.asistente import ANCHO_HISTORIAL
+    tamaño = ventana.size()
+    ventana.resize(1400, 800)                                   # visor más ancho que 320 px: se achica
+    QTest.qWait(10)
+    try:
+        _pedido_con_caja(panel)
+    finally:
+        ventana.resize(tamaño)
+    assert len(comparaciones(panel)) == 1
+    par, = historial.cargar(panel.id_chat)["comparaciones"]
+    for png in (par["antes"], par["despues"]):
+        assert QImage.fromData(png, "PNG").width() == ANCHO_HISTORIAL and len(png) <= historial.TOPE_MINIATURA
+    guardado = panel.id_chat
+    panel.nuevo_chat()
+    QTest.qWait(10)                                             # deleteLater de los mensajes
+    assert not comparaciones(panel)
+    assert panel.cargar_chat(guardado)
+    caja, = comparaciones(panel)
+    mini = caja.findChildren(QWidget, "miniatura_comparacion")
+    assert [m.png for m in mini] == [par["antes"], par["despues"]]

@@ -7,6 +7,8 @@ Nada sale de la PC. NUNCA se guarda una clave: no está en los mensajes ni en la
 Imágenes: van en base64 si pesan hasta TOPE_IMAGEN; las más grandes se reemplazan por una marca de texto (una captura
 del visor pesa ~100 KB; el tope evita que un chat largo con capturas enormes pese decenas de MB).
 Adjuntos (IA-9): de cada uno queda solo su texto (nombre, tipo y ruta); la imagen o el PDF no se guardan.
+Antes y después (IA-14): aparte de los mensajes (no van al modelo), en `comparaciones`: el par de miniaturas ya achicadas
+por el panel y `pos`, cuántos mensajes tenía el chat al mostrarlas; un par que pasa TOPE_MINIATURA no se guarda.
 """
 import base64
 import json
@@ -18,6 +20,7 @@ from pathlib import Path
 
 VAR_CARPETA = "OMNICAD_ASISTENTE_DIR"     # reemplaza la carpeta del historial (pruebas)
 TOPE_IMAGEN = 1_000_000                   # bytes de PNG por imagen
+TOPE_MINIATURA = 200_000                  # bytes de PNG por miniatura de antes y después (320 px pesan ~30 KB)
 PALABRAS_TITULO = 8
 _ID = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$")   # el id es el nombre del archivo: nunca una ruta
 
@@ -74,14 +77,31 @@ def _de_json(bloque):
     return bloque
 
 
-def guardar(mensajes, modo, proveedor, modelo, id_chat=None, sesiones_cli=None):
+def _comparacion_a_json(c):
+    if max(len(c["antes"]), len(c["despues"])) > TOPE_MINIATURA:
+        return None
+    return {"pos": c["pos"], **{k: base64.b64encode(c[k]).decode("ascii") for k in ("antes", "despues")}}
+
+
+def _comparacion_de_json(c):
+    """None si está mal formada: un par roto no impide abrir el chat."""
+    try:
+        if not isinstance(c["pos"], int) or not all(isinstance(c[k], str) for k in ("antes", "despues")):
+            return None
+        return {"pos": c["pos"], **{k: base64.b64decode(c[k], validate=True) for k in ("antes", "despues")}}
+    except (TypeError, KeyError, ValueError):
+        return None
+
+
+def guardar(mensajes, modo, proveedor, modelo, id_chat=None, sesiones_cli=None, comparaciones=()):
     """Escribe el chat (nuevo si `id_chat` es None) y devuelve su id. Escritura atómica: un corte no lo rompe."""
     id_chat = id_chat or f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
     ruta = _ruta(id_chat)
     datos = {"id": id_chat, "titulo": titulo_de(mensajes), "fecha": datetime.now().isoformat(timespec="seconds"),
              "modo": modo, "proveedor": proveedor, "modelo": modelo, "sesiones_cli": {k: v for k, v in (sesiones_cli or {}).items() if v},
              "mensajes": [{"rol": m["rol"], "contenido": [_a_json(b) for b in m["contenido"] if not b.get("adjunto")]}
-                          for m in mensajes]}
+                          for m in mensajes],
+             "comparaciones": [j for j in map(_comparacion_a_json, comparaciones) if j]}
     ruta.parent.mkdir(parents=True, exist_ok=True)
     temporal = ruta.with_suffix(".tmp")
     temporal.write_text(json.dumps(datos, ensure_ascii=False), encoding="utf-8")
@@ -122,6 +142,7 @@ def cargar(id_chat):
         d["mensajes"] = [{"rol": m["rol"], "contenido": [_de_json(b) for b in m["contenido"]]}
                          for m in d["mensajes"] if m["rol"] in ("usuario", "asistente")]
         d["sesiones_cli"] = {str(k): str(v) for k, v in (d.get("sesiones_cli") or {}).items() if v}
+        d["comparaciones"] = [c for c in map(_comparacion_de_json, d.get("comparaciones") or []) if c]
     except FileNotFoundError:
         raise ErrorHistorial(f"No existe el chat {id_chat}.") from None
     except (OSError, ValueError, KeyError, TypeError, AttributeError):

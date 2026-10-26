@@ -88,3 +88,18 @@ def test_id_que_no_es_un_nombre_de_chat_se_rechaza(malo):
 def test_titulo_sin_texto():
     assert historial.titulo_de([]) == "Chat sin título"
     assert historial.titulo_de(chat("  corto  ")) == "corto"
+
+
+def test_antes_y_despues_se_guardan_aparte_con_tope_y_uno_roto_no_impide_abrir(carpeta):
+    """IA-14: las miniaturas van en `comparaciones`, no en los mensajes (no llegan al modelo al seguir el chat)."""
+    pares = [{"pos": 4, "antes": b"A" * 10, "despues": b"D" * 10},
+             {"pos": 4, "antes": b"x", "despues": b"y" * (historial.TOPE_MINIATURA + 1)}]
+    id_chat = historial.guardar(chat(), "hacer", "anthropic", "m", comparaciones=pares)
+    cargado = historial.cargar(id_chat)
+    assert cargado["comparaciones"] == pares[:1] and cargado["mensajes"] == chat()
+    ruta = carpeta / f"{id_chat}.json"
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    datos["comparaciones"].append({"pos": "4", "antes": "no-es-base64!", "despues": 3})
+    ruta.write_text(json.dumps(datos), encoding="utf-8")
+    assert historial.cargar(id_chat)["comparaciones"] == pares[:1]
+    assert historial.guardar(chat(), "hacer", "anthropic", "m")      # sin pares, como antes de IA-14

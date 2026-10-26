@@ -10,8 +10,10 @@ que dice cada CLI (elegir con el teclado, escribir otro, Aceptar y reabrir). IA-
 set_appearance (fuera del núcleo) en modo API con buscar_herramientas y en modo suscripción con call_tool. IA-12:
 teclear las instrucciones propias (Preferencias) y las del proyecto (Chat), vacío, enorme, pegar, Tab, Esc, Aceptar,
 reabrir, guardar y volver a abrir el archivo, el aviso y la ventana chica. IA-13: clic real en el visor sobre una cara,
-la ficha 🎯 con su medida, «empalme de 2 mm en esto» con la ref del prompt, ✕, elegir otra cosa y la ventana chica. El
-proveedor es el falso: sin red ni gasto."""
+la ficha 🎯 con su medida, «empalme de 2 mm en esto» con la ref del prompt, ✕, elegir otra cosa y la ventana chica.
+IA-14: un pedido que crea una torre y gira la vista muestra Antes y Después con la misma cámara; clic y Enter la abren
+grande, Esc la cierra, ventana chica, «Deshacer este pedido» y reabrir el chat. El proveedor es el falso: sin red ni
+gasto."""
 import asyncio
 import json
 import sys
@@ -23,7 +25,7 @@ import arnes as A
 import escena
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QToolButton
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QToolButton, QWidget
 
 from omnicad import api
 from omnicad.asistente import config, historial
@@ -725,6 +727,85 @@ def seleccion_ui(p):
     p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
 
 
+def antes_despues_ui(p):
+    """IA-14: Antes y Después con la misma cámara aunque la IA gire la vista; clic, Enter, Esc, ventana chica,
+    «Deshacer este pedido» y el historial."""
+    import numpy as np
+    p.nuevo_chat()
+    A.esperar(50)
+    p.crear_proveedor = lambda _cfg: ProveedorFalso([
+        Respuesta(herramientas=[PedidoHerramienta("b1", "buscar_herramientas", {"nombres": ["set_view"]})]),
+        Respuesta(herramientas=[CAJA2, PedidoHerramienta("v1", "set_view", {"view": "top"})]),
+        Respuesta(texto="Listo: torre de 10 x 10 x 40 mm.")])
+    p.modo.setCurrentIndex(p.modo.findData("hacer"))
+    camara = p._camara()
+    n = len(v.doc.operaciones)
+    escribir(p, "hace una torre y mirala desde arriba", Qt.Key_Return)
+    esperar(p)
+    A.esperar(200)
+    pares = p.lista.findChildren(QWidget, "antes_despues")
+    mini = pares[0].findChildren(QWidget, "miniatura_comparacion") if len(pares) == 1 else []
+    A.reg(AR, "antes y después: el pedido que crea la torre muestra dos miniaturas rotuladas, lado a lado",
+          len(v.doc.operaciones) == n + 1 and [m.titulo for m in mini] == ["Antes", "Después"]
+          and mini[0].y() == mini[1].y() and mini[0].x() < mini[1].x() and min(m.width() for m in mini) > 40,
+          f"pares={len(pares)} tamaños={[m.size() for m in mini]}")
+    if len(mini) != 2:
+        return
+    for m, nombre in zip(mini, ("antes", "despues"), strict=True):
+        (A.CAPTURAS / f"asistente_ia14_{nombre}.png").write_bytes(m.png)
+    A.reg(AR, "antes y después: las capturas son distintas (la torre está solo en Después)", mini[0].png != mini[1].png)
+    A.reg(AR, "antes y después: la vista quedó como la dejó la IA (desde arriba), no la de la captura",
+          not np.allclose(v.visor.R, camara[2]) and np.allclose(v.visor.R[2], (0, 0, 1), atol=1e-6),
+          f"atrás={v.visor.R[2]}")
+    p.area.ensureWidgetVisible(pares[0])
+    A.esperar(100)
+    A.foto(p, "asistente_antes_despues")
+    QTest.mouseClick(mini[1], Qt.LeftButton)
+    A.esperar(200)
+    grande = p.findChild(QDialog, "imagen_grande")
+    A.reg(AR, "antes y después: clic en Después la abre grande", grande is not None and grande.isVisible()
+          and grande.windowTitle() == "Después")
+    if grande is not None:
+        A.foto(grande, "asistente_despues_grande")
+        QTest.keyClick(grande, Qt.Key_Escape)
+        A.esperar(100)
+    A.reg(AR, "antes y después: Esc cierra la grande", not p.findChildren(QDialog, "imagen_grande"))
+    mini[0].setFocus()
+    QTest.keyClick(mini[0], Qt.Key_Return)
+    A.esperar(200)
+    grande = p.findChild(QDialog, "imagen_grande")
+    A.reg(AR, "antes y después: Enter sobre Antes la abre grande", grande is not None and grande.isVisible()
+          and grande.windowTitle() == "Antes")
+    if grande is not None:
+        QTest.keyClick(grande, Qt.Key_Escape)
+        A.esperar(100)
+    for ancho, alto in ((1024, 640), (800, 520)):
+        v.resize(ancho, alto)
+        A.esperar(300)
+        p.area.ensureWidgetVisible(pares[0])
+        A.esperar(100)
+        A.reg(AR, f"antes y después: ventana {ancho}x{alto}: las dos miniaturas entran en el chat",
+              all(en_el_chat(m, p) and m.width() > 30 for m in mini) and dentro(p.b_enviar, v),
+              f"tamaños={[m.size() for m in mini]} panel={p.width()}")
+        A.foto(v, f"asistente_antes_despues_{ancho}x{alto}")
+    v.resize(1900, 1000)
+    A.esperar(200)
+    QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
+    A.esperar(100)
+    A.reg(AR, "antes y después: «Deshacer este pedido» saca la torre y las miniaturas quedan como registro",
+          len(v.doc.operaciones) == n and len(p.lista.findChildren(QWidget, "antes_despues")) == 1)
+    guardado = p.id_chat
+    p.nuevo_chat()
+    A.esperar(50)
+    p.cargar_chat(guardado)
+    A.esperar(100)
+    pares = p.lista.findChildren(QWidget, "antes_despues")
+    mini = pares[0].findChildren(QWidget, "miniatura_comparacion") if len(pares) == 1 else []
+    A.reg(AR, "antes y después: reabrir el chat las muestra achicadas (320 px de ancho)",
+          len(mini) == 2 and all(m.pm.width() == 320 for m in mini), f"anchos={[m.pm.width() for m in mini]}")
+    p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+
+
 def primer_cuerpo():
     return api.llamar(api.Sesion(v.doc), "get_scene_info", {})["result"]["bodies"][0]["id"]
 
@@ -1008,6 +1089,7 @@ def pedido():
     suscripcion(p)
     instrucciones_ui(p)
     seleccion_ui(p)
+    antes_despues_ui(p)
 
     # ---------------------------------------------------------------- atajo y cerrar
     QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)

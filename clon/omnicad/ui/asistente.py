@@ -23,20 +23,24 @@ pedido al enviar.
 
 Selección (IA-13): lo elegido en el visor se ve en una ficha «🎯 …» arriba del campo y va descripto en el prompt («esto»
 = la selección); su ✕ la saca de ese pedido.
+
+Antes y después (IA-14): en Guiar y Hacer, al enviar se captura el visor y su cámara; si el pedido cambió el documento,
+al terminar se captura otra vez con ESA cámara (y se devuelve la que dejó la IA) y el chat muestra las dos miniaturas;
+clic (o Enter) en una la abre grande. No van al modelo; el historial las guarda achicadas.
 """
 import json
 import os
 import tempfile
 import threading
 
-from PySide6.QtCore import QEventLoop, QObject, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QBuffer, QEventLoop, QIODevice, QObject, QSize, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (QComboBox, QDialog, QDockWidget, QFileDialog, QFrame, QHBoxLayout, QLabel,
                                QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
                                QSizePolicy, QStyle, QToolButton, QVBoxLayout, QWidget)
 
 from .. import api
-from ..api.errores import error
+from ..api.errores import ErrorAPI, error
 from ..asistente import adjuntos, bucle, config, historial, marca
 from ..asistente.herramientas import MODOS, Herramientas
 from ..asistente.prompt import armar_sistema, cargar_prompts, resumen_seleccion
@@ -53,6 +57,7 @@ NOMBRES_MODO = {"explicar": "Explicar", "mostrar": "Mostrar", "guiar": "Guiar", 
 AYUDA_MODO = {"explicar": "Responde y explica; no cambia nada.", "mostrar": "Señala en el modelo: mueve la cámara y "
               "selecciona, sin cambiar el documento.", "guiar": "Propone un paso por vez y espera tu OK.",
               "hacer": "Arma un plan y, con tu OK, lo ejecuta."}
+ANCHO_HISTORIAL = 320      # px de las miniaturas de antes y después que se guardan en el historial
 FILTRO_ADJUNTOS = ("Adjuntos (*.pdf *.png *.jpg *.jpeg *.svg *.dxf);;PDF (*.pdf);;Imágenes (*.png *.jpg *.jpeg);;"
                    "SVG (*.svg);;DXF (*.dxf)")
 
@@ -81,6 +86,61 @@ def resumen_pedido(nombre, args):
         texto = json.dumps(v, ensure_ascii=False, default=str)
         partes.append(f"{k}={texto if len(texto) <= 40 else texto[:39] + '…'}")
     return f"{nombre}({', '.join(partes)})"
+
+
+def achicar(png, ancho=ANCHO_HISTORIAL):
+    """El PNG reescalado a `ancho` px (si es más ancho), para el historial."""
+    imagen = QImage.fromData(png, "PNG")
+    if imagen.width() <= ancho:
+        return png
+    buf = QBuffer()
+    buf.open(QIODevice.WriteOnly)
+    imagen.scaledToWidth(ancho, Qt.SmoothTransformation).save(buf, "PNG")
+    return bytes(buf.data())
+
+
+class _Miniatura(QWidget):
+    """Una captura que se dibuja al ancho que le toca (dos entran lado a lado en el panel angosto); clic, Enter o
+    espacio la abren grande."""
+
+    def __init__(self, png, titulo, abrir):
+        super().__init__(objectName="miniatura_comparacion", cursor=Qt.PointingHandCursor, focusPolicy=Qt.StrongFocus,
+                         toolTip=f"{titulo}: clic para verla grande.")
+        self.png, self.titulo, self.abrir = png, titulo, abrir
+        self.pm = QPixmap()
+        self.pm.loadFromData(png, "PNG")
+        if self.pm.width() > ANCHO_HISTORIAL:     # la de tamaño completo pesa ~5 MB: un chat largo no la acumula
+            self.pm = self.pm.scaledToWidth(ANCHO_HISTORIAL, Qt.SmoothTransformation)
+        politica = QSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        politica.setHeightForWidth(True)
+        self.setSizePolicy(politica)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, ancho):
+        return max(1, round(ancho * self.pm.height() / max(self.pm.width(), 1)))
+
+    def sizeHint(self):
+        return QSize(120, self.heightForWidth(120))
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.drawPixmap(self.rect(), self.pm)
+        if self.hasFocus():
+            p.setPen(self.palette().highlight().color())
+            p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self.abrir(self.png, self.titulo)
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.abrir(self.png, self.titulo)
+            return
+        super().keyPressEvent(e)
 
 
 class _Tarjeta(QFrame):
@@ -420,6 +480,8 @@ class PanelAsistente(QDockWidget):
         self.tarjeta = None             # tarjeta de plan esperando Aplicar o Cancelar
         self._marca = None              # el documento antes del pedido en curso
         self.b_deshacer = None          # «Deshacer este pedido» del último pedido (los anteriores se apagan)
+        self._antes = None              # (PNG, cámara) del visor al enviar en Guiar o Hacer
+        self.comparaciones = []         # antes y después de este chat, achicados, para el historial
         self._aviso_ocupado = False
         self._uso = None
         self._sesiones = {}             # modo suscripción: id del chat de cada CLI, para seguir la conversación
@@ -695,12 +757,69 @@ class PanelAsistente(QDockWidget):
             elif self._volver(m):
                 self._agregar_texto("Pedido cancelado: el documento volvió a como estaba antes del pedido.", "tenue")
                 cambio = False
+        if cambio and self._antes is not None:
+            self._antes_despues(*self._antes)
+        self._antes = None
         if cambio:
             self._boton_deshacer(m, self.ventana.doc._instantanea())
         modo = self.trabajo.args[3].modo
         self.trabajo = None
         self._ocupado(False)
         self._guardar_chat(modo)
+
+    # ------------------------------------------------------------ antes y después (IA-14)
+    def _camara(self):
+        v = self.ventana.visor
+        return v.objetivo.copy(), v.distancia, v.R.copy(), v._orto_cara, v.config.camara, v.fov
+
+    def _poner_camara(self, c):
+        v = self.ventana.visor
+        v.objetivo, v.distancia, v.R = c[0].copy(), c[1], c[2].copy()
+        v._orto_cara, v.config.camara, v.fov = c[3:]
+
+    def _capturar(self):
+        try:
+            return self.ventana.capturar_visor()[0]
+        except ErrorAPI:                 # el visor todavía no dibujó: el pedido sigue, sin antes y después
+            return None
+
+    def _antes_despues(self, antes, camara):
+        """Captura «Después» con la cámara de «Antes» y deja la que puso la IA; muestra el par y lo suma al historial."""
+        de_la_ia = self._camara()
+        self._poner_camara(camara)
+        despues = self._capturar()
+        self._poner_camara(de_la_ia)
+        self.ventana.visor.update()
+        if despues is not None:
+            self._mostrar_comparacion(antes, despues)
+            self.comparaciones.append({"pos": len(self.mensajes), "antes": achicar(antes),
+                                       "despues": achicar(despues)})
+
+    def _mostrar_comparacion(self, antes, despues):
+        caja = QWidget(objectName="antes_despues")
+        h = QHBoxLayout(caja)
+        h.setContentsMargins(0, 0, 0, 0)
+        for titulo, png in (("Antes", antes), ("Después", despues)):
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            rotulo = QLabel(titulo)
+            temas.poner_rol(rotulo, "tenue")
+            col.addWidget(rotulo)
+            col.addWidget(_Miniatura(png, titulo, self.ver_grande))
+            h.addLayout(col, 1)
+        return self._agregar(caja)
+
+    def ver_grande(self, png, titulo):
+        """La captura en un diálogo, achicada si no entra en la pantalla; Esc lo cierra."""
+        dialogo = QDialog(self, objectName="imagen_grande", windowTitle=titulo)
+        dialogo.setAttribute(Qt.WA_DeleteOnClose)
+        pm = QPixmap()
+        pm.loadFromData(png, "PNG")
+        lugar = (self.screen().availableSize() * 0.85).boundedTo(pm.size())
+        etiqueta = QLabel(pixmap=pm.scaled(lugar, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        QVBoxLayout(dialogo).addWidget(etiqueta)
+        dialogo.open()
+        return dialogo
 
     # ------------------------------------------------------------ modo suscripción: puente en vivo y permisos
     def _preparar_puente(self, proveedor):
@@ -880,6 +999,8 @@ class PanelAsistente(QDockWidget):
         self._mostrar_uso()
         self._apagar_deshacer()
         self._marca = marca.tomar(self.ventana.doc)
+        png = self._capturar() if modo in ("guiar", "hacer") else None
+        self._antes = (png, self._camara()) if png is not None else None
         self._aviso_ocupado = False
         self._aprobado = False
         self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, Herramientas(modo=modo), sistema,
@@ -993,6 +1114,7 @@ class PanelAsistente(QDockWidget):
         if self.trabajando:
             return
         self.mensajes = []
+        self.comparaciones = []
         self.id_chat = None
         self._sesiones = {}
         self._limpiar()
@@ -1008,7 +1130,7 @@ class PanelAsistente(QDockWidget):
         modelo = config.modelo_de(cfg) if cfg["proveedor"] in config.PROVEEDORES else ""
         try:
             self.id_chat = historial.guardar(self.mensajes, modo, cfg["proveedor"], modelo, self.id_chat,
-                                             self._sesiones)
+                                             self._sesiones, self.comparaciones)
         except OSError as e:
             self._agregar_texto(f"⚠ No se pudo guardar el chat en el historial: {e}", "aviso")
 
@@ -1028,12 +1150,13 @@ class PanelAsistente(QDockWidget):
             self._agregar_texto(f"⚠ {e}", "error")
             return False
         self.mensajes, self.id_chat, self._sesiones = chat["mensajes"], id_chat, chat["sesiones_cli"]
+        self.comparaciones = chat["comparaciones"]
         self._limpiar()
         indice = self.modo.findData(chat.get("modo"))
         if indice >= 0:
             self.modo.setCurrentIndex(indice)
         pedidos = {}
-        for m in self.mensajes:
+        for i, m in enumerate(self.mensajes, 1):
             for b in m["contenido"]:
                 if b["tipo"] == "texto":
                     self._agregar_texto(b["texto"], usuario=m["rol"] == "usuario")
@@ -1043,6 +1166,9 @@ class PanelAsistente(QDockWidget):
                     pedidos[b.get("id")] = b
                 elif b["tipo"] == "resultado_herramienta":
                     self._mostrar_resultado(pedidos.get(b.get("id"), {}), b)
+            for c in self.comparaciones:
+                if c["pos"] == i:
+                    self._mostrar_comparacion(c["antes"], c["despues"])
         fecha = str(chat.get("fecha", "")).replace("T", " ")[:16]
         self._agregar_texto(f"Chat del {fecha}: escribí para seguirlo.", "tenue")
         self.campo.setFocus()
