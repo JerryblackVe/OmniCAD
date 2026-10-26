@@ -263,6 +263,9 @@ class VentanaPrincipal(QMainWindow):
             menu.installEventFilter(self._filtro_ayuda)
             menu.installEventFilter(self._filtro_mas)
         self.set_documento(doc or Documento())
+        from .registro_uso import RegistroVentana
+        self.registro_uso = RegistroVentana(self)
+        self.registro_uso.configurar(self.prefs["general/registro_uso"])
         if self._avisos_tema:
             self.mensaje(self._avisos_tema[0], 10000)
         # Los informes de error (P20) anotan los últimos pasos del timeline al fallar.
@@ -578,6 +581,8 @@ class VentanaPrincipal(QMainWindow):
 
     def aplicar_preferencias(self):
         p, c = self.prefs, self.visor.config
+        if hasattr(self, "registro_uso"):
+            self.registro_uso.configurar(p["general/registro_uso"])
         from ..nucleo import motor
         if self.doc is not None and self.doc.motor != motor.motor_activo():
             self.doc.recalcular(0)
@@ -2892,6 +2897,7 @@ class VentanaPrincipal(QMainWindow):
                 self.puente.detener()         # cierra las conexiones y borra puente.json
             if self.asistente is not None:
                 self.asistente.cancelar()     # el hilo del pedido es daemon: no frena el cierre
+            self.registro_uso.configurar(False)
             e.accept()
         else:
             e.ignore()

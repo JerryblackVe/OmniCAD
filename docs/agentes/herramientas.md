@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-350 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+351 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -25,7 +25,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
-| [avanzado](#grupo-avanzado) | 8 | Cualquier operación, receta, código y guía. |
+| [avanzado](#grupo-avanzado) | 9 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
 | [asistente](#grupo-asistente) | 8 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
@@ -5092,6 +5092,7 @@ Cualquier operación, receta, código y guía.
 | [`execute_code`](#execute_code) | sí | Ejecuta código Python con api, sesion, doc y llamar(nombre, args) ya definidos. |
 | [`get_guide`](#get_guide) | no | Guía corta para agentes (ciclo de trabajo, unidades, cómo leer errores). |
 | [`search_help`](#search_help) | no | Busca en la ayuda LOCAL de OmniCAD (catálogo de herramientas, guía para agentes y documentación del repo si está) y devuelve fragmentos cortos con su fuente, para responder «¿cómo se hace…?» citando de dónde sale. |
+| [`set_usage_logging`](#set_usage_logging) | no | Prende o apaga el registro LOCAL de uso. |
 
 ### `list_operation_types`
 
@@ -5167,6 +5168,15 @@ Busca en la ayuda LOCAL de OmniCAD (catálogo de herramientas, guía para agente
   - `query` (texto; obligatorio): qué se busca, en pocas palabras (p. ej. "empalme", "agujero roscado", "fillet").
   - `limit` (entero; opcional, por defecto `5`): cuántos resultados como máximo, de 1 a 20.
 - CLI: `omnicad call search_help --doc pieza.omnicad query=…`
+
+### `set_usage_logging`
+
+Prende o apaga el registro LOCAL de uso. No envía datos; solo números, claves y longitudes. Apagado de fábrica. No entra en deshacer.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `enabled` (true/false; obligatorio): true activa la sesión local; false la drena y apaga.
+- CLI: `omnicad call set_usage_logging --doc pieza.omnicad enabled=…`
 
 ## Grupo grafo
 

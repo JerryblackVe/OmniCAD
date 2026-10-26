@@ -92,6 +92,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="OmniCAD — CAD 3D paramétrico minimalista")
     ap.add_argument("proyecto", nargs="?", help="archivo .omnicad a abrir")
     ap.add_argument("--ejemplo", action="store_true", help="cargar el modelo de ejemplo")
+    ap.add_argument("--registro", action="store_true", help="activar el registro local de uso en esta sesión")
     ap.add_argument("--prueba-humo", action="store_true", help="prueba automática de la interfaz completa")
     ap.add_argument("--puente", action="store_true",
                     help="permitir que agentes IA controlen esta sesión (MCP en vivo, solo 127.0.0.1)")
@@ -130,6 +131,8 @@ def main(argv=None):
     from omnicad.ui.ventana import VentanaPrincipal
     ventana = VentanaPrincipal()
     ventana.showMaximized()
+    if args.registro:
+        ventana.registro_uso.configurar(True)
     if portada:
         portada.finish(ventana)
     if args.puente and not ventana.encender_puente():

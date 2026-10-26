@@ -24,6 +24,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [arquitectura.md](arquitectura.md) | Capas de la app, flujo de datos y motores de geometría |
 | [guia_comandos.md](guia_comandos.md) | Cómo se agrega un comando de diseño |
 | [grafo.md](grafo.md) | Grafo de nodos (programación visual sin ventana) |
+| [registro_uso.md](registro_uso.md) | Registro local optativo de uso: privacidad, activación, archivos y límites |
 | [f3d_formato.md](f3d_formato.md) | Archivos `.f3d` de Fusion: qué se lee (cuerpos, ocultos, bocetos, tabla del historial), qué no y la evidencia de por qué; rendimiento medido de BINCHA |
 | [../clon/rust/README.md](../clon/rust/README.md) | Módulo Rust del render: compilar y probar |
 | [../instalador/README.md](../instalador/README.md) | Cómo se arman el instalador de Windows y el AppImage |
