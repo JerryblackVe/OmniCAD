@@ -6,6 +6,7 @@ circular, en ruta con giro y en puntos; de cuerpos o de operaciones), multitrans
 contorno, sólido envolvente y las de plástico (saliente, labio).
 El núcleo geométrico está en `nucleo/solidos_crear.py`.
 """
+import math
 import re
 
 import numpy as np
@@ -168,9 +169,9 @@ class OpSolevacion(_OpCrear):
             return None
         salida = {"tipo": c.get("tipo", "libre"), "angulo": ctx.evaluar(str(c.get("angulo", "90 deg")), ANGULO),
                   "peso": ctx.evaluar(str(c.get("peso", "1")), "escalar")}
-        if salida["tipo"] == "tangente":
+        if salida["tipo"] in ("tangente", "suave"):
             if not c.get("cara"):
-                raise ErrorOperacion("La condición Tangente necesita la cara a la que la superficie es tangente.")
+                raise ErrorOperacion("La condición Tangente o Suave necesita la cara a la que la superficie es tangente.")
             cara = _resolver(c["cara"], estado)
             if cara.tipo != "cara":
                 raise ErrorOperacion("La condición Tangente se apoya en una cara.")
@@ -593,13 +594,67 @@ def _puntos_de(entidad):
     return [ent.como_punto(entidad)]
 
 
+def _eje_pasante(herramienta, cuerpos):
+    """Eje de coordenadas (0, 1 o 2) sobre el que la herramienta es un prisma recto que atraviesa el cuerpo de lado a
+    lado (agujero «Todo», corte pasante: sus dos extremos quedan fuera del material, sobre su eje central), o None. Un
+    escalón, un avellanado o una herramienta que termina dentro del cuerpo no son pasantes: se copian tal cual."""
+    if not any(geo.se_tocan(c.forma, herramienta) for c in cuerpos):
+        return None
+    h = geo.caja_envolvente(herramienta)
+    centro = [(h[0][i] + h[1][i]) / 2 for i in range(3)]
+    for eje in range(3):
+        extremos = []
+        for valor, signo in ((h[0][eje], -1), (h[1][eje], 1)):
+            p = list(centro)
+            p[eje] = valor + signo * 1e-3
+            extremos.append(tuple(p))
+        if any(geo.punto_toca(c.forma, p, 1e-9) for c in cuerpos for p in extremos):
+            continue
+        otros = [i for i in range(3) if i != eje]          # una caja corrida un 10 % sobre cualquier eje deja el 90 %: la herramienta
+        if any(h[0][i] < min(geo.caja_envolvente(c.forma)[0][i] for c in cuerpos) - 1e-6   # tiene que caber en el cuerpo a lo ancho
+               or h[1][i] > max(geo.caja_envolvente(c.forma)[1][i] for c in cuerpos) + 1e-6 for i in otros):
+            continue
+        largo, v = h[1][eje] - h[0][eje], np.zeros(3)
+        v[eje] = 0.1 * largo
+        comun = geo.booleano(herramienta, _sc().aplicar(herramienta, _sc()._traslacion(v)), "intersecar")
+        if geo.volumen(comun) > 0.9 * geo.volumen(herramienta) - 1e-6 * max(1.0, geo.volumen(herramienta)):
+            return eje
+    return None
+
+
+def _prolongar_pasante(copia, eje, cuerpos, t):
+    """La copia (con el gp_Trsf `t`) de un prisma pasante sobre el eje de coordenadas `eje`, prolongada a lo largo de ese eje
+    ya girado por `t` hasta cubrir `cuerpos` (su copia pudo caer sobre una zona más gruesa: «Ajustar» recalcula el alcance
+    de cada instancia). Une corrimientos de la misma copia que se pisan."""
+    v = _sc().a_matriz(t)[:3, :3] @ np.eye(3)[eje]
+    v = v / np.linalg.norm(v)
+
+    def rango(caja):                      # intervalo de la proyección de una caja sobre v
+        puntos = [(x, y, z) for x in (caja[0][0], caja[1][0]) for y in (caja[0][1], caja[1][1]) for z in (caja[0][2], caja[1][2])]
+        k = [float(np.dot(p, v)) for p in puntos]
+        return min(k), max(k)
+    lo = min(rango(geo.caja_envolvente(c.forma))[0] for c in cuerpos)
+    hi = max(rango(geo.caja_envolvente(c.forma))[1] for c in cuerpos)
+    h0, h1 = rango(geo.caja_envolvente(copia))
+    largo = h1 - h0
+    faltan_abajo, faltan_arriba = max(0.0, h0 - lo), max(0.0, hi - h1)
+    if faltan_abajo <= 1e-6 and faltan_arriba <= 1e-6:
+        return copia
+    piezas = [copia]
+    for sentido, falta in ((-1, faltan_abajo), (1, faltan_arriba)):
+        for k in range(1, int(math.ceil(falta / (0.9 * largo))) + 1):
+            piezas.append(_sc().aplicar(copia, _sc()._traslacion(sentido * k * 0.9 * largo * v)))
+    return _sc().unir_instancias(piezas)
+
+
 def repetir_pasos(op, estado, ctx, trsfs):
     """Patrón de operaciones (el de features de Fusion, con cálculo «Idéntico»): la herramienta que dejó cada paso
     de `op.p["pasos"]` (la extrusión que corta, el agujero…) se copia con cada gp_Trsf de `trsfs` (sin el original)
     y se aplica con la MISMA operación (cortar, unir o cuerpo nuevo) a los mismos cuerpos que el paso original.
-    Las extensiones no se recalculan por copia: un agujero «Todo» copiado a una zona más gruesa no la atraviesa.
-    `calculo`: "identico" y "optimizado" (el mismo resultado) copian la herramienta tal cual; "ajustar" omite las
-    copias que ya no tocan al cuerpo. Devuelve los ids de los cuerpos afectados."""
+    Con «identico» las extensiones no se recalculan por copia: un agujero «Todo» copiado a una zona más gruesa no la atraviesa.
+    `calculo`: "identico" y "optimizado" (el mismo resultado) copian la herramienta tal cual; "ajustar" recalcula cada
+    copia: un corte pasante (prisma que cruza el cuerpo de lado a lado) se prolonga hasta cubrir el cuerpo en su
+    nueva zona, y las copias que ya no tocan al cuerpo se omiten. Devuelve los ids de los cuerpos afectados."""
     pasos = _ids_pasos(op.p)
     if not pasos:
         raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
@@ -625,6 +680,8 @@ def repetir_pasos(op, estado, ctx, trsfs):
                 lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
                 cuerpos = [estado.cuerpo(o) for o in lista] or [c for c in estado.cuerpos.values()
                                                                 if getattr(c, "tipo", "solido") == "solido"]
+                if operacion == "cortar" and cuerpos and (eje := _eje_pasante(forma, cuerpos)) is not None:
+                    copias = [_prolongar_pasante(c, eje, cuerpos, t) for c, t in zip(copias, trsfs, strict=True)]   # el «Todo» llega al fondo
                 tocan = [c for c in copias if any(geo.se_tocan(cu.forma, c) for cu in cuerpos)]
                 if len(tocan) < len(copias):
                     ctx.aviso(f"Ajustar: {len(copias) - len(tocan)} copia(s) no tocan al cuerpo y se omitieron.")

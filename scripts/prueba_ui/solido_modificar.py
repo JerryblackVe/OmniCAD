@@ -46,6 +46,14 @@ run("empalme_3d", lambda: (
            {"tipo": "completo"}, etiqueta="redondeo completo (media caña)", rt=False),
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "variable", "radio_fin": "2 mm", "puntos_radio": "0.5: 4 mm"},
            etiqueta="empalme variable con punto intermedio 0.5:4", rt=False),
+    C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "asimetrico", "radio2": "3 mm"}, etiqueta="empalme asimétrico 2/3", rt=False),
+    C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "continuidad": "g2"}, etiqueta="empalme G2", rt=False),
+    C.caso(v, AR, "empalme_3d", {"aristas": lambda: [A.hit_arista(v, caja, cerca=(-85, 15, 10))],
+                                 "aristas_2": lambda: [A.hit_arista(v, caja, cerca=(-100, 15, 20))]},
+           {"radio": "2 mm", "radio_2": "3 mm"}, etiqueta="empalme con un segundo conjunto de aristas", rt=False),
+    C.caso(v, AR, "empalme_3d", {"aristas": lambda: [A.hit_arista(v, caja, cerca=p) for p in ((-85, 15, 10), (-85, 0, 20), (-100, 15, 20))]},
+           {"radio": "2 mm", "esquina": "setback", "setback": "3 mm", "cadena_tangente": False}, etiqueta="empalme esquina setback", rt=False),
+    C.negativos(v, AR, "empalme_3d", {"aristas": arista(caja)}, "radio2", malos=("abc", "0 mm", "-2 mm"), vals={"tipo_radio": "asimetrico"}),
     C.negativos(v, AR, "empalme_3d", {"aristas": arista(caja)}, "radio", malos=("abc", "0 mm", "-2 mm"))))
 run("chaflan_3d", lambda: (
     C.caso(v, AR, "chaflan_3d", {"aristas": arista(caja)}, {"distancia": "2 mm"}, foto="chaflan_3d"),
@@ -53,6 +61,8 @@ run("chaflan_3d", lambda: (
     C.caso(v, AR, "chaflan_3d", {"aristas": arista(caja)}, {"tipo": "distancia_angulo", "distancia": "2 mm", "angulo": "30 deg"}, etiqueta="chaflán distancia-ángulo", rt=False),
     C.caso(v, AR, "chaflan_3d", {"aristas": lambda: [A.hit_arista(v, caja, cerca=p) for p in ((-85, 15, 10), (-85, 0, 20), (-100, 15, 20))]},
            {"distancia": "2 mm", "esquina": "inglete", "cadena_tangente": False}, etiqueta="chaflán, esquina inglete (tres aristas)", rt=False),
+    C.caso(v, AR, "chaflan_3d", {"aristas": lambda: [A.hit_arista(v, caja, cerca=p) for p in ((-85, 15, 10), (-85, 0, 20), (-100, 15, 20))]},
+           {"distancia": "2 mm", "esquina": "mezcla", "cadena_tangente": False}, etiqueta="chaflán, esquina mezcla (tres aristas)", rt=False),
     C.negativos(v, AR, "chaflan_3d", {"aristas": arista(caja)}, "distancia", malos=("abc", "0 mm", "-2 mm", "100 mm"))))
 
 # Pulsar/Tirar ------------------------------------------------------------------------------------------------------------
@@ -73,12 +83,15 @@ run("desmoldeo", lambda: (
     C.caso(v, AR, "desmoldeo", {"plano": cara(caja, normal=(0, 0, 1)), "caras": cara(caja, normal=(1, 0, 0))}, {"angulo": "5 deg"}, foto="desmoldeo"),
     C.caso(v, AR, "desmoldeo", {"plano": plano("XY"), "herramienta_particion": plano("PM"), "caras": cara(caja, normal=(1, 0, 0))},
            {"tipo": "linea_particion", "angulo": "5 deg", "lados": "uno"}, etiqueta="desmoldeo con línea de partición (plano medio)", rt=False),
+    C.caso(v, AR, "desmoldeo", {"plano": plano("XY"), "herramienta_particion": plano("PM"), "caras": cara(caja, normal=(1, 0, 0))},
+           {"tipo": "linea_particion", "linea": "mover", "lado_mover": "arriba", "angulo": "5 deg"}, etiqueta="desmoldeo moviendo la línea de partición (arriba)", rt=False),
     C.negativos(v, AR, "desmoldeo", {"plano": cara(caja, normal=(0, 0, 1)), "caras": cara(caja, normal=(1, 0, 0))}, "angulo", malos=("abc", "0 deg", "-5 deg", "90 deg"))))
 
 # Escala -----------------------------------------------------------------------------------------------------------------------------
 run("escala_3d", lambda: (
     C.caso(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, {"factor": "2"}, esperado=V_CAJA * 7, foto="escala_3d"),
     C.caso(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, {"tipo": "no_uniforme", "fx": "2", "fy": "1", "fz": "1"}, esperado=V_CAJA, etiqueta="escala no uniforme X2", rt=False),
+    C.caso(v, AR, "escala_3d", {"bocetos": lambda: [A.hit_curva(v, s, "Rect")]}, {"factor": "2"}, etiqueta="escalar un boceto entero", rt=False),
     C.negativos(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, "factor", malos=("abc", "0", "-1", "1e9", "2 mm"))))
 
 # Combinar ---------------------------------------------------------------------------------------------------------------------------
@@ -117,6 +130,10 @@ run("mover_copiar", lambda: (
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "direccion": eje("X")}, {"tipo": "traslacion", "distancia": "10 mm"}, foto="mover_copiar"),
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "libre", "dx": "10 mm", "dy": "5 mm", "dz": "0 mm", "copiar": True}, esperado=V_CAJA, etiqueta="mover libre + copiar", rt=False),
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"tipo": "rotacion", "angulo": "45 deg"}, etiqueta="mover rotación 45° Z", rt=False),
+    C.caso(v, AR, "mover_copiar", {"bocetos": lambda: [A.hit_curva(v, s, "Rect")]}, {"objeto": "bocetos", "tipo": "traslacion", "dx": "10 mm"},
+           etiqueta="mover un boceto entero", rt=False),
+    C.caso(v, AR, "mover_copiar", {"bocetos": lambda: [A.hit_curva(v, s, "Rect")]}, {"objeto": "bocetos", "tipo": "traslacion", "dx": "10 mm", "copiar": True},
+           etiqueta="copiar un boceto entero", rt=False),
     C.negativos(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "direccion": eje("X")}, "distancia", malos=("abc", "1e9 mm"), vals={"tipo": "traslacion"})))
 run("alinear", lambda: (
     C.caso(v, AR, "alinear", {"cuerpos": cuerpo(caja), "origen": cara(caja, normal=(0, 0, 1)), "destino": plano("PL")}, {}, foto="alinear"),

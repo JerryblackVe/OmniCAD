@@ -317,6 +317,8 @@ def revolver_superficie(aristas, punto_eje, dir_eje, angulo):
     """Revolución de curvas en superficie [SFC-REVOLVE] (Partial; ±360 = Full)."""
     if abs(angulo) < 1e-9:
         raise geo.ErrorGeometria("El ángulo de revolución no puede ser cero.")
+    if abs(angulo) > 360.0 + 1e-6:
+        raise geo.ErrorGeometria("El ángulo de revolución no puede pasar de 360°: más de una vuelta se pisa a sí misma.")
     ang = math.radians(max(-360.0, min(360.0, angulo)))
     eje = gp_Ax1(_pnt(punto_eje), gp_Dir(*map(float, _unitario(dir_eje, "La dirección del eje"))))
     piezas = []

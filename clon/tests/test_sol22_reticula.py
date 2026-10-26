@@ -252,3 +252,15 @@ def test_malla_con_celda_de_barras_por_la_api():
     r = api.llamar(s, "create_volumetric_lattice", {"cell_shape": "cross", "cell_size": 5, "solidity": 30})
     assert r["ok"], r
     assert r["result"]["bodies_modified"][0]["previous_volume"] is None
+
+
+def test_celda_x_llega_a_solidez_muy_alta_y_la_cruz_avisa_donde_no_llega():
+    s = api.Sesion()
+    api.llamar(s, "create_box", {"length": 20, "width": 20, "height": 20, "name": "Caja"})
+    r = api.llamar(s, "create_volumetric_lattice", {"cell_shape": "x_cell", "cell_size": 5, "solidity": 95})
+    assert r["ok"], r
+    assert geo.volumen(s.cuerpo("Caja").forma) / 8000 == pytest.approx(0.95, abs=0.01)
+    t = api.Sesion()
+    api.llamar(t, "create_box", {"length": 20, "width": 20, "height": 20, "name": "Caja"})
+    r = api.llamar(t, "create_volumetric_lattice", {"cell_shape": "cross", "cell_size": 5, "solidity": 98})
+    assert not r["ok"] and "no llegan" in r["mensaje"]

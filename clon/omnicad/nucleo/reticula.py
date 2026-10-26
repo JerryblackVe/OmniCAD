@@ -222,7 +222,7 @@ def diametro_para(tipo, solidez, sx, sy, sz, segmentos=None):
         return 0.0
     pared = tipo == "x_cell_25d"
     objetivo = solidez * sx * sy * sz
-    lo, hi = 1e-4 * min(sx, sy, sz), 0.9 * min(sx, sy, sz)        # barras sobre las aristas de la celda: 1/4 adentro
+    lo, hi = 1e-4 * min(sx, sy, sz), 0.999 * min(sx, sy, sz)        # barras sobre las aristas de la celda: 1/4 adentro
     seg, vecinas = _segmentos_unidad(tipo, segmentos), tipo == "custom"
     if geo.volumen(_celda(seg, pared, hi, sx, sy, sz, vecinas)) < objetivo:
         raise geo.ErrorGeometria(f"Con ese tamaño de celda las barras no llegan a {solidez:.0%} de solidez: bajá la "

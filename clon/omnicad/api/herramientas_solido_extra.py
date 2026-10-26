@@ -699,11 +699,13 @@ def _con_componentes(sesion, bodies):
 
 
 @herramienta("scale_body", "solido", "Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme "
-             "o con un factor por eje. Los bocetos se escalan con transform_sketch.", modifica=True)
-def scale_body(sesion, bodies: Cuerpos, factor: Expr = 1, scale_type: Literal["uniform", "non_uniform"] = "uniform",
-                factor_x: Expr = 1, factor_y: Expr = 1, factor_z: Expr = 1, point: Referencia | None = None):
+             "o con un factor por eje. sketches escala bocetos enteros (solo uniforme).", modifica=True)
+def scale_body(sesion, bodies: Cuerpos | None = None, factor: Expr = 1, scale_type: Literal["uniform", "non_uniform"] = "uniform",
+                factor_x: Expr = 1, factor_y: Expr = 1, factor_z: Expr = 1, point: Referencia | None = None,
+                sketches: list[str] | None = None):
     """
-    bodies: nombres/ids de los sólidos a escalar; un componente (id o nombre) escala todos sus cuerpos.
+    bodies: nombres/ids de los sólidos a escalar; un componente (id o nombre) escala todos sus cuerpos. Vacío si solo se escalan bocetos.
+    sketches: bocetos enteros a escalar (id o nombre), solo uniform.
     factor: factor escalar uniforme, número o expresión.
     scale_type: uniform o non_uniform.
     factor_x: factor del eje X para non_uniform.
@@ -711,9 +713,10 @@ def scale_body(sesion, bodies: Cuerpos, factor: Expr = 1, scale_type: Literal["u
     factor_z: factor del eje Z para non_uniform.
     point: punto base O o de construcción, {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}; vacío = origen.
     """
-    ids = _cuerpos(sesion, _con_componentes(sesion, bodies))
+    ids = _cuerpos(sesion, _con_componentes(sesion, bodies)) if bodies or not sketches else []
+    bocetos = [sesion.paso(b).id for b in sketches or []]
     if any(getattr(sesion.cuerpo(cid), "tipo", "solido") != "solido" for cid in ids):
         raise error("INVALID_ARGUMENTS", "scale_body requiere cuerpos sólidos.")
-    return _crear(sesion, OpEscala, cuerpos=ids, tipo="uniforme" if scale_type == "uniform" else "no_uniforme",
+    return _crear(sesion, OpEscala, cuerpos=ids, bocetos=bocetos, tipo="uniforme" if scale_type == "uniform" else "no_uniforme",
                   factor=texto_expr(factor), fx=texto_expr(factor_x), fy=texto_expr(factor_y), fz=texto_expr(factor_z),
                   punto=_referencia(sesion, point, tipos=("punto", "punto_boceto", "vertice")) if point is not None else None)

@@ -74,3 +74,30 @@ def test_linea_de_particion_pide_sus_datos():
     for args in ({"pull_direction": "XY"}, {"parting_tool": "XY"}):
         r = api.llamar(s, "draft", {"faces": "%CYLINDER", "angle": 3, "type": "parting_line", **args})
         assert not r["ok"]
+
+
+def test_mover_linea_de_particion_gira_la_cara_entera_alrededor_de_su_borde():
+    """above: bisagra en el borde más atrás de la extracción (z = 0) = plano fijo en z = 0; below: z = 10; both: la línea."""
+    def volumen(**extra):
+        s = _bloque()
+        plano = llamar(s, "create_construction_plane", plane="XY", offset=5)["plane"]["id"]
+        if "neutral" in extra and extra["neutral"] == "arriba":
+            extra["neutral"] = llamar(s, "create_construction_plane", plane="XY", offset=10)["plane"]["id"]
+        if extra.get("type") == "parting_line":
+            extra.update(pull_direction="XY", parting_tool=plano)
+        llamar(s, "draft", faces=">X", angle=5, **extra)
+        forma = s.cuerpo("Bloque").forma
+        assert geo.es_valida(forma)
+        return geo.volumen(forma)
+    mover = dict(type="parting_line", parting_line_type="move")
+    assert volumen(**mover, move_direction="above") == pytest.approx(volumen(neutral="XY"), rel=1e-9)
+    assert volumen(**mover, move_direction="below") == pytest.approx(volumen(neutral="arriba"), rel=1e-9)
+    assert volumen(**mover, move_direction="both") == pytest.approx(volumen(type="parting_line"), rel=1e-9)
+    assert volumen(**mover, move_direction="above") != pytest.approx(volumen(**mover, move_direction="below"), rel=1e-6)
+    r = api.llamar(_bloque(), "draft", {"faces": ">X", "angle": 5, "parting_line_type": "move"})
+    assert not r["ok"] and "parting_line" in r["mensaje"]
+    s = _bloque()
+    plano = llamar(s, "create_construction_plane", plane="XY", offset=5)["plane"]["id"]
+    llamar(s, "draft", faces=">X", angle=5, type="parting_line", pull_direction="XY", parting_tool=plano,
+           parting_line_type="move", fixed_edges="nearest:[10,0,10]")                  # bisagra en la arista de arriba
+    assert geo.es_valida(s.cuerpo("Bloque").forma)

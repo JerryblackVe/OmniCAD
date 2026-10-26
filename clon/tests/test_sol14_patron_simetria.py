@@ -138,3 +138,42 @@ def test_las_copias_de_construccion_y_de_componentes_tienen_nombres_unicos():
     nombres = [p.nombre for p in s.doc.estado_final.planos.values()]
     assert len(nombres) == len(set(nombres)), nombres                    # «Alto (copia)» y «Alto (copia 2)»
     llamar(s, "mirror", construction=["Alto (copia)"], plane="XY")        # el nombre ya no es ambiguo
+
+
+def test_calculo_ajustar_prolonga_un_corte_pasante_en_la_zona_mas_gruesa():
+    """Un escalón: zona fina (z de 0 a 10) y zona gruesa (z de 0 a 25). El agujero «Todo» de la fina, copiado con Idéntico,
+    queda corto en la gruesa; con Ajustar cada copia se recalcula y la atraviesa."""
+    def montar(calculo):
+        s = api.Sesion()
+        llamar(s, "create_box", length=40, width=20, height=10, name="Base")
+        llamar(s, "create_box", length=20, width=20, height=15, x=20, z=10, name="Cima")
+        llamar(s, "boolean_operation", target="Base", tools=["Cima"], operation="join")
+        llamar(s, "create_hole", face="nearest:[-10,0,10]", diameter=4, through_all=True, points=[[-10, 0]])
+        pasos = [p["id"] for p in llamar(s, "get_timeline")["steps"] if p["type"] == "agujero"]
+        llamar(s, "rectangular_pattern", features=pasos, x_count=2, x_spacing=25, compute=calculo)
+        return list(s.doc.estado_final.cuerpos.values())[0].forma
+    ident, ajust = montar("identical"), montar("adjust")
+    hueco = math.pi * 2 ** 2
+    assert geo.es_valida(ajust)
+    assert geo.volumen(ident) - geo.volumen(ajust) == pytest.approx(hueco * 15, rel=1e-3)   # lo que falta de los 15 mm de la zona gruesa
+
+
+def test_ajustar_no_alarga_copias_giradas_ni_herramientas_que_no_tocan():
+    """Corte a lo largo de Y en un tubo, patrón circular de 4: las copias que quedan a lo largo de X no se estiran en Y."""
+    def volumen(calculo):
+        s = api.Sesion()
+        llamar(s, "create_cylinder", radius=10, height=40, name="Tubo")
+        llamar(s, "create_sketch", plane="XY", name="Corte")
+        llamar(s, "draw_rectangle", x1=-2, y1=-15, x2=2, y2=15, sketch="Corte")
+        llamar(s, "extrude", sketch="Corte", distance=4, operation="cut", target="Tubo")
+        pasos = [p["id"] for p in llamar(s, "get_timeline")["steps"] if p["type"] == "extrusion"]
+        llamar(s, "circular_pattern", features=pasos, count=4, axis="z", compute=calculo)
+        return geo.volumen(s.cuerpo("Tubo").forma)
+    assert volumen("adjust") == pytest.approx(volumen("identical"), rel=1e-9)
+    from omnicad.timeline.ops_solido import _eje_pasante
+    placa = geo.caja(40, 20, 10, (-20, -10, 0))
+
+    class C:
+        forma = placa
+    assert _eje_pasante(geo.caja(4, 4, 10, (-2, -2, 20)), [C]) is None        # una herramienta lejos del cuerpo no es pasante
+    assert _eje_pasante(geo.caja(4, 4, 30, (-2, -2, -10)), [C]) == 2

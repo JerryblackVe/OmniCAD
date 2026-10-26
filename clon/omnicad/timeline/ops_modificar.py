@@ -10,7 +10,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from . import entidades as ent
 from .parametros import _NUM_CON_UNIDAD, LONGITUD, acotar
-from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
+from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorBoceto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
                           _resolver_todas, atributos_copia, detectar, registrar_operacion, resolver)
 
 
@@ -64,6 +64,48 @@ TIPOS_MOVIMIENTO = {"libre": "Movimiento libre", "traslacion": "Trasladar", "rot
                     "punto_a_punto": "Punto a punto", "punto_a_posicion": "Punto a posición"}
 
 
+def _formas_de_bocetos(ids, estado):
+    """Las curvas 3D (sin las de construcción) de cada boceto de `ids`; error claro si un id no es un boceto."""
+    salida = []
+    for bid in ids:
+        br = estado.bocetos.get(bid)
+        if br is None:
+            raise ErrorOperacion(f"«{bid}» no es un boceto de este punto del timeline.")
+        formas = [_resolver({"tipo": "curva_boceto", "boceto": bid, "curva": cid}, estado).forma
+                  for cid in br.boceto.curvas if not br.boceto.curvas[cid].construccion]
+        if not formas:
+            raise ErrorOperacion(f"El boceto «{br.nombre}» no tiene curvas que mover.")
+        salida += formas
+    return salida
+
+
+def _bocetos_transformados(op, estado, ids, matriz, copiar, factor=None):
+    """Mover o escalar BOCETOS enteros (Move/Copy y Scale › objetos de boceto): el plano del boceto se lleva con `matriz`
+    (4x4, giro y traslación, o escala uniforme con `factor`) y su geometría 2D queda igual (o crece `factor`): conserva los
+    ids de las curvas, los puntos, las restricciones y las cotas, así lo que lo usa después (extruir, barrer…) lo sigue
+    viendo igual. Con `copiar` el resultado es un boceto nuevo `<paso>.b<n>` y el original no cambia."""
+    for n, bid in enumerate(ids, 1):
+        br = estado.bocetos.get(bid)
+        if br is None:
+            raise ErrorOperacion(f"«{bid}» no es un boceto de este punto del timeline.")
+        if br.boceto.geo3d.get("curvas") or br.boceto.geo3d.get("puntos"):
+            raise ErrorOperacion(f"«{br.nombre}» es un boceto 3D: moverlo o escalarlo todavía no está.")
+        r = matriz[:3, :3]
+        giro = r / (float(np.cbrt(abs(np.linalg.det(r)))) or 1.0)
+        plano = geo.Plano.desde_marco(r @ br.plano.origen + matriz[:3, 3], giro @ br.plano.normal, giro @ br.plano.u,
+                                      br.plano.nombre)
+        boceto = br.boceto
+        if factor is not None:
+            boceto = br.boceto.copia()
+            try:
+                boceto.escalar(list(boceto.curvas), (0.0, 0.0), factor)
+            except ErrorBoceto as e:
+                raise ErrorOperacion(f"«{br.nombre}»: {e}") from e
+        nuevo = f"{op.id}.b{n}" if copiar else bid
+        estado.bocetos[nuevo] = BocetoResuelto(nuevo, f"{br.nombre} (copia)" if copiar else br.nombre, boceto, plano,
+                                               detectar(boceto.geometria(), plano), br.solver)
+
+
 class OpMover(Operacion):
     """Mover/copiar de Fusion [SLD-USE-MOVE-COPY] para cuerpos: movimiento libre (X/Y/Z y giros alrededor
     del pivote), trasladar (ejes del diseño o una dirección elegida), girar alrededor de un eje, punto a
@@ -72,7 +114,7 @@ class OpMover(Operacion):
     Con `caras` (Move Object › Faces) en lugar de `cuerpos` mueve esas caras planas: las vecinas se extienden o se
     recortan (`mover_caras`); con «copia» deja el cuerpo y crea una superficie con cada cara movida."""
     TIPO, ETIQUETA, ICONO = "mover", "Mover", "✥"
-    PARAMS = {"cuerpos": [], "caras": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
+    PARAMS = {"cuerpos": [], "caras": [], "bocetos": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
               "ry": "0 deg", "rz": "0 deg", "pivote": None, "direccion": None, "distancia": "10 mm", "eje": None,
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
               "copiar": False, "ligera": False}
@@ -81,7 +123,7 @@ class OpMover(Operacion):
 
     def dependencias(self):
         p = self.p
-        return (_deps_objetivo(p["cuerpos"]) | ent.dependencias_de(p.get("pivote"), p.get("direccion"),
+        return (_deps_objetivo(p["cuerpos"]) | set(p.get("bocetos") or []) | ent.dependencias_de(p.get("pivote"), p.get("direccion"),
                                                                    p.get("eje"), p.get("origen"), p.get("destino"),
                                                                    p.get("caras"))
                 ) - {self.id}
@@ -137,10 +179,13 @@ class OpMover(Operacion):
     def ejecutar(self, estado, ctx):
         if self.p.get("caras"):
             return self._mover_caras(estado, ctx)
-        if not self.p["cuerpos"]:
-            raise ErrorOperacion("Elegí los cuerpos a mover.")
+        if not self.p["cuerpos"] and not self.p.get("bocetos"):
+            raise ErrorOperacion("Elegí los cuerpos o los bocetos a mover.")
         cuerpos = [estado.cuerpo(c) for c in self.p["cuerpos"]]
-        m = self.matriz(estado, ctx, [c.forma for c in cuerpos])
+        cajas = [c.forma for c in cuerpos] or [geo.compuesto(_formas_de_bocetos(self.p["bocetos"], estado))]
+        m = self.matriz(estado, ctx, cajas)
+        if self.p.get("bocetos"):
+            _bocetos_transformados(self, estado, self.p["bocetos"], m, bool(self.p.get("copiar")))
         for c in cuerpos:
             if getattr(c, "tipo", "solido") == "malla":
                 nueva = c.forma.copia()
@@ -223,10 +268,11 @@ class OpEmpalme(Operacion):
     `cuerda` y `puntos_radio`, que se redondean en el mismo paso."""
     TIPO, ETIQUETA, ICONO = "empalme", "Empalme", "◜"
     PARAMS = {"tipo": "empalme", "aristas": [], "tipo_radio": "constante", "radio": "1 mm", "radio_fin": "2 mm",
-              "cuerda": "1 mm", "cadena_tangente": True, "caras_a": [], "caras_b": [], "regla": "todas",
+              "cuerda": "1 mm", "radio2": "1 mm", "continuidad": "g1", "esquina": "bola", "setback": "2 mm", "cadena_tangente": True, "caras_a": [], "caras_b": [], "regla": "todas",
               "redondeos": "ambos", "puntos_radio": [], "conjuntos": [], "central": None, "laterales": []}
-    EXPRESIONES = ("radio", "radio_fin", "cuerda")
-    OPCIONES = {"tipo": ("empalme", "reglas", "completo"), "tipo_radio": ("constante", "cuerda", "variable"),
+    EXPRESIONES = ("radio", "radio_fin", "cuerda", "radio2", "setback")
+    OPCIONES = {"tipo": ("empalme", "reglas", "completo"), "tipo_radio": ("constante", "cuerda", "variable", "asimetrico"),
+                "continuidad": ("g1", "g2"), "esquina": ("bola", "setback"),
                 "regla": ("todas", "entre"), "redondeos": ("ambos", "redondeos", "empalmes")}
 
     def dependencias(self):
@@ -263,6 +309,8 @@ class OpEmpalme(Operacion):
             r0 = ctx.evaluar(d["radio"])
             medios = [(ctx.evaluar(q["posicion"], "escalar"), ctx.evaluar(q["radio"])) for q in d.get("puntos_radio") or []]
             return {"tipo": d["tipo_radio"], "radio": r0, "cuerda": ctx.evaluar(d["cuerda"]),
+                    "radio2": ctx.evaluar(d["radio2"]), "continuidad": d["continuidad"], "esquina": d["esquina"],
+                    "setback": ctx.evaluar(d["setback"]),
                     "radios": [(0.0, r0), *medios, (1.0, ctx.evaluar(d["radio_fin"]))]}
         por_cuerpo = {}
         for d in [p, *(dict(self.PARAMS, **c) for c in p.get("conjuntos") or [])]:
@@ -280,7 +328,7 @@ class OpChaflan(Operacion):
     PARAMS = {"aristas": [], "tipo": "distancia_igual", "distancia": "1 mm", "distancia2": "1 mm",
               "angulo": "45 deg", "voltear": False, "cadena_tangente": True, "esquina": "chaflan"}
     EXPRESIONES = ("distancia", "distancia2", "angulo")
-    OPCIONES = {"tipo": ("distancia_igual", "dos_distancias", "distancia_angulo"), "esquina": ("chaflan", "inglete")}
+    OPCIONES = {"tipo": ("distancia_igual", "dos_distancias", "distancia_angulo"), "esquina": ("chaflan", "inglete", "mezcla")}
 
     def dependencias(self):
         return _deps_refs(self.p["aristas"]) - {self.id}
@@ -330,16 +378,22 @@ class OpDesmoldeo(Operacion):
     (se suma al desmoldeo que la cara ya tiene; es el modo por defecto de Fusion y lo que usan la herramienta y el
     diálogo). `tipo` "linea_particion" (Draft › Parting Line › Fix Parting Line): `plano` pasa a ser la dirección de
     extracción (plano, cara plana o eje) y `herramienta_particion` la línea (plano, cara plana o curva plana):
-    las caras giran alrededor de su intersección con ella."""
+    las caras giran alrededor de su intersección con ella. Con `linea` "mover" (Move Parting Line) la línea de partición
+    se corre: `lado_mover` "arriba" (hacia donde apunta la extracción) hace girar cada cara entera alrededor de su borde más
+    atrás, "abajo" alrededor del más adelante y "ambos" deja la línea donde está; `aristas_fijas` (Fixed Edges) pone la
+    bisagra en esa arista. La ayuda de Fusion no define la geometría exacta: es una interpretación."""
     TIPO, ETIQUETA, ICONO = "desmoldeo", "Desmoldeo", "◿"
     PARAMS = {"plano": None, "caras": [], "angulo": "3 deg", "lados": "uno", "angulo2": "3 deg", "voltear": False,
-              "tipo": "plano_fijo", "modo_angulo": "absoluto", "herramienta_particion": None}
+              "tipo": "plano_fijo", "modo_angulo": "absoluto", "herramienta_particion": None, "linea": "fija",
+              "lado_mover": "ambos", "aristas_fijas": []}
     EXPRESIONES = ("angulo", "angulo2")
     OPCIONES = {"lados": ("uno", "dos", "simetrico"), "tipo": ("plano_fijo", "linea_particion"),
-                "modo_angulo": ("absoluto", "relativo")}
+                "modo_angulo": ("absoluto", "relativo"), "linea": ("fija", "mover"),
+                "lado_mover": ("arriba", "ambos", "abajo")}
 
     def dependencias(self):
-        return _deps_refs(self.p["plano"], self.p["caras"], self.p.get("herramienta_particion")) - {self.id}
+        return _deps_refs(self.p["plano"], self.p["caras"], self.p.get("herramienta_particion"),
+                          self.p.get("aristas_fijas")) - {self.id}
 
     def ejecutar(self, estado, ctx):
         p, sm = self.p, _sm()
@@ -365,8 +419,14 @@ class OpDesmoldeo(Operacion):
                 plano = ent.como_plano(h) if h.plano is not None and h.tipo in ("plano", "cara") else                     sm.plano_de_particion(h.forma, direccion)
             except sm.geo.ErrorGeometria as err:
                 raise ErrorOperacion(str(err)) from err
+        mover = p["tipo"] == "linea_particion" and p.get("linea") == "mover"
         for cid, caras in _por_cuerpo(p["caras"], estado, "caras").items():
             c = estado.cuerpo(cid)
+            if mover and p.get("aristas_fijas"):      # las aristas fijas son la bisagra: el plano neutro pasa por la primera
+                fija = _resolver_todas(p["aristas_fijas"], estado, ("arista",))[0]
+                plano = sm.plano_de_extremo([fija.forma], direccion, "min")
+            elif mover and p.get("lado_mover", "ambos") != "ambos":   # la cara entera gira alrededor de su borde del lado contrario
+                plano = sm.plano_de_extremo(caras, direccion, "min" if p["lado_mover"] == "arriba" else "max")
             c.forma = sm.desmoldeo(c.forma, caras, direccion, ctx.evaluar(p["angulo"], ANGULO), plano,
                                    lados=p["lados"], angulo2=ctx.evaluar(p["angulo2"], ANGULO),
                                    modo_angulo=p["modo_angulo"])
@@ -375,22 +435,29 @@ class OpDesmoldeo(Operacion):
 class OpEscala(Operacion):
     """Escala de Fusion [GUID-D3F6F79B]: cuerpos, punto base, uniforme o no uniforme (X, Y, Z)."""
     TIPO, ETIQUETA, ICONO = "escala", "Escala", "⤢"
-    PARAMS = {"cuerpos": [], "punto": None, "tipo": "uniforme", "factor": "1", "fx": "1", "fy": "1", "fz": "1"}
+    PARAMS = {"cuerpos": [], "bocetos": [], "punto": None, "tipo": "uniforme", "factor": "1", "fx": "1", "fy": "1", "fz": "1"}
     EXPRESIONES = ("factor", "fx", "fy", "fz")
     OPCIONES = {"tipo": ("uniforme", "no_uniforme")}
 
     def dependencias(self):
-        return (_deps_objetivo(self.p["cuerpos"]) | _deps_refs(self.p["punto"])) - {self.id}
+        return (_deps_objetivo(self.p["cuerpos"]) | set(self.p.get("bocetos") or []) | _deps_refs(self.p["punto"])) - {self.id}
 
     def ejecutar(self, estado, ctx):
         p, sm = self.p, _sm()
-        if not p["cuerpos"]:
-            raise ErrorOperacion("Elegí los cuerpos a escalar.")
+        if not p["cuerpos"] and not p.get("bocetos"):
+            raise ErrorOperacion("Elegí los cuerpos o los bocetos a escalar.")
         punto = ent.como_punto(_resolver(p["punto"], estado)) if p["punto"] else np.zeros(3)
         def E(k):
             if _NUM_CON_UNIDAD.search(str(p[k])):
                 raise ErrorOperacion(f"El factor de escala no lleva unidad: «{p[k]}». Escribí un número, p. ej. 2.")
             return ctx.evaluar(p[k], "escalar")
+        if p.get("bocetos"):
+            if p["tipo"] != "uniforme":
+                raise ErrorOperacion("Un boceto solo se escala de forma uniforme.")
+            f = E("factor")
+            m = np.diag([f, f, f, 1.0])
+            m[:3, 3] = (1 - f) * punto
+            _bocetos_transformados(self, estado, p["bocetos"], m, False, f)
         for cid in p["cuerpos"]:
             c = estado.cuerpo(cid)
             if p["tipo"] == "uniforme":

@@ -288,6 +288,8 @@ def revolver(caras, punto_eje, dir_eje, angulo_grados):
     """Revolución de caras alrededor de un eje (equivalente a RevolveFeature con AngleExtentDefinition)."""
     if abs(angulo_grados) < 1e-9:
         raise ErrorGeometria("El ángulo de revolución no puede ser cero.")
+    if abs(angulo_grados) > 360.0 + 1e-6:
+        raise ErrorGeometria("El ángulo de revolución no puede pasar de 360°: más de una vuelta se pisa a sí misma.")
     ang = math.radians(max(-360.0, min(360.0, angulo_grados)))
     eje = gp_Ax1(gp_Pnt(*map(float, punto_eje)), _dir(dir_eje))
     solidos = []

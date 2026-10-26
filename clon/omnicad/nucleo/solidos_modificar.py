@@ -11,7 +11,8 @@ Límites del kernel (no los tiene OpenCascade, no se emulan):
 - Empalme: sin esquina "Setback", sin continuidad G2, sin radio asimétrico ni "Full Round".
   OpenCascade SIEMPRE propaga el empalme/chaflán por la cadena tangente de la arista
   (`cadena_tangente=False` no puede cortarla).
-- Chaflán: la esquina es siempre tipo "Chamfer" (cara triangular); "Miter" y "Blend" no existen.
+- Chaflán: el kernel solo hace la esquina "Chamfer" (cara triangular); "Miter" se arma con `_ingletear` y "Blend"
+  con `_mezclar` (el inglete con las aristas entre chaflanes redondeadas).
 - Desmoldeo: solo caras planas, cilíndricas o cónicas (BRepOffsetAPI_DraftAngle); sin "Parting Line".
 """
 import math
@@ -323,6 +324,135 @@ def _angulo_entre_caras(forma, arista):
     return math.acos(max(-1.0, min(1.0, float(n1 @ n2))))
 
 
+def _perfil_de_empalme(c, p1, p2, continuidad):
+    """Arista de la sección de un empalme por perfil: de `p1` a `p2` con la esquina `c` como punto de control.
+    G1 (tangente): arco cónico (racional de grado 2), un círculo si las dos distancias a la esquina son iguales. G2 (curvatura):
+    Bézier de grado 5 con los tres primeros y los tres últimos puntos de control en línea con las caras, así la curvatura
+    es cero donde empalma con ellas."""
+    from OCP.Geom import Geom_BezierCurve
+    from OCP.OCP.collections import Array1_double, Array1_gp_Pnt
+    c, p1, p2 = (np.asarray(x, float) for x in (c, p1, p2))
+    if continuidad == "g2":
+        puntos = [p1, p1 + 0.3 * (c - p1), p1 + 0.55 * (c - p1), p2 + 0.55 * (c - p2), p2 + 0.3 * (c - p2), p2]
+        pesos = [1.0] * 6
+    else:
+        u1, u2 = (p1 - c) / np.linalg.norm(p1 - c), (p2 - c) / np.linalg.norm(p2 - c)
+        alfa = math.acos(max(-1.0, min(1.0, float(u1 @ u2))))
+        puntos, pesos = [p1, c, p2], [1.0, math.sin(alfa / 2), 1.0]
+    arr, w = Array1_gp_Pnt(1, len(puntos)), Array1_double(1, len(puntos))
+    for i, (q, k) in enumerate(zip(puntos, pesos, strict=True), 1):
+        arr.SetValue(i, gp_Pnt(*map(float, q)))
+        w.SetValue(i, k)
+    return BRepBuilderAPI_MakeEdge(Geom_BezierCurve(arr, w)).Edge()
+
+
+def plano_de_extremo(formas, direccion, extremo, nombre="Plano neutro"):
+    """Plano de normal `direccion` que pasa por el vértice de `formas` más atrás (extremo "min") o más adelante ("max")
+    en esa dirección: la bisagra de un desmoldeo con «Mover línea de partición» (el borde de la cara del lado contrario)."""
+    d = np.asarray(direccion, float)
+    d = d / np.linalg.norm(d)
+    puntos = [np.array([q.X(), q.Y(), q.Z()]) for f in formas for q in (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in _unicos(f, TopAbs_VERTEX))]
+    if not puntos:
+        raise geo.ErrorGeometria("Las caras no tienen vértices de donde sacar el borde que no se mueve.")
+    k = [float(p @ d) for p in puntos]
+    p = puntos[k.index(min(k) if extremo == "min" else max(k))]
+    return geo.Plano.desde_marco(p, d, (1.0, 0.0, 0.0), nombre)
+
+
+def _reubicar_arista(forma, ref):
+    """La arista de `forma` que ocupa el lugar de `ref` (una arista de la forma original, antes de un corte o relleno)."""
+    c = BRepAdaptor_Curve(ref)
+    q = c.Value((c.FirstParameter() + c.LastParameter()) / 2)
+    medio, largo = np.array([q.X(), q.Y(), q.Z()]), geo.longitud(ref)
+    for e in _aristas(forma):
+        k = BRepAdaptor_Curve(e)
+        r = k.Value((k.FirstParameter() + k.LastParameter()) / 2)
+        if abs(r.X() - medio[0]) + abs(r.Y() - medio[1]) + abs(r.Z() - medio[2]) < 1e-6 and abs(geo.longitud(e) - largo) < 1e-6:
+            return e
+    raise geo.ErrorGeometria("Una arista del empalme ya no existe: los empalmes de radio asimétrico o G2 no pueden compartir "
+                             "vértice con otro empalme del mismo paso (hacelos en pasos separados).")
+
+
+def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad):
+    """Empalme de una arista recta entre dos caras planas con la sección que se pide (`_perfil_de_empalme`): radio
+    asimétrico (`radio1` sobre la primera cara, `radio2` sobre la segunda) y/o continuidad G2. OpenCascade no los tiene:
+    se corta (arista convexa) o se rellena (cóncava) con el prisma de la esquina, de la sección a lo largo de la arista.
+    El «radio» de cada lado es el del círculo con esa distancia a la esquina (tangente = r / tan(α/2)); con radios iguales
+    y G1 sale el empalme circular de siempre."""
+    caras = [TopoDS.Face(f) for f in _padres(_ancestros(forma, TopAbs_EDGE, TopAbs_FACE), arista)]
+    curva = BRepAdaptor_Curve(arista)
+    if len(caras) != 2 or curva.GetType() != GeomAbs_Line or any(_plano_de_cara(f) is None for f in caras):
+        raise geo.ErrorGeometria("El radio asimétrico y la continuidad G2 solo se hacen en aristas rectas entre dos caras "
+                                 "planas.")
+    a, b = (np.array([q.X(), q.Y(), q.Z()]) for q in (curva.Value(curva.FirstParameter()), curva.Value(curva.LastParameter())))
+    largo = float(np.linalg.norm(b - a))
+    t = (b - a) / largo
+    direcciones = []
+    for f in caras:
+        n = np.asarray(_plano_de_cara(f).normal, float)
+        u = np.cross(n, t)
+        u /= np.linalg.norm(u)
+        if float((geo.centro_masa(f, True) - a) @ u) < 0:
+            u = -u
+        direcciones.append(u)
+    u1, u2 = direcciones
+    alfa = math.acos(max(-1.0, min(1.0, float(u1 @ u2))))
+    if alfa < 1e-3 or alfa > math.pi - 1e-3:
+        raise geo.ErrorGeometria("La arista no tiene esquina que empalmar (las caras son tangentes).")
+    d1, d2 = radio1 / math.tan(alfa / 2), radio2 / math.tan(alfa / 2)
+    centro = (a + b) / 2
+    convexa = geo.punto_toca(forma, tuple(centro + 1e-3 * (u1 + u2) / np.linalg.norm(u1 + u2)), 1e-9)
+    p1, p2 = a + d1 * u1, a + d2 * u2
+    for cara, u, d in ((caras[0], u1, d1), (caras[1], u2, d2)):      # el radio no puede pasar del ancho de la cara
+        ancho = max(float((np.array([q.X(), q.Y(), q.Z()]) - a) @ u)
+                    for q in (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in _unicos(cara, TopAbs_VERTEX)))
+        if d > ancho * (1 - 1e-9):
+            raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
+                                     "Achicalo.")
+    # el prisma recto de la esquina sobraría (o dejaría una astilla) si las caras de los extremos no fueran perpendiculares
+    por_vertice = _ancestros(forma, TopAbs_VERTEX, TopAbs_FACE)
+    for v in _unicos(arista, TopAbs_VERTEX):
+        for f in _padres(por_vertice, v):
+            plano = _plano_de_cara(TopoDS.Face(f))
+            if not any(f.IsSame(c) for c in caras) and (plano is None or abs(abs(float(np.asarray(plano.normal) @ t)) - 1) > 1e-6):
+                raise geo.ErrorGeometria("El radio asimétrico y la continuidad G2 necesitan caras planas perpendiculares "
+                                         "a la arista en sus extremos.")
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
+    perfil = BRepBuilderAPI_MakeWire()
+    for e in (BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, a)), gp_Pnt(*map(float, p1))).Edge(),
+              _perfil_de_empalme(a, p1, p2, continuidad),
+              BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, p2)), gp_Pnt(*map(float, a))).Edge()):
+        perfil.Add(e)
+    prisma = geo.extruir([BRepBuilderAPI_MakeFace(perfil.Wire()).Face()], tuple(t), largo)
+    return _validar(geo.booleano(forma, prisma, "cortar" if convexa else "unir"), "Empalme")
+
+
+FACTOR_SETBACK = 1.6        # cuánto crece el radio justo en la esquina (en la distancia de setback vuelve al radio pedido)
+
+
+def _radios_con_setback(arista, radio, setback, esquinas):
+    """Puntos (posición 0..1, radio) de una arista con esquina «Setback»: constante salvo en los extremos que tocan una
+    esquina (`esquinas`: vértices donde se juntan tres o más aristas empalmadas), donde el radio crece hasta
+    `FACTOR_SETBACK` veces en el vértice y baja al radio pedido a `setback` mm de él."""
+    largo = geo.longitud(arista)
+    vertices = _unicos(arista, TopAbs_VERTEX)
+    c = BRepAdaptor_Curve(arista)
+    punto = lambda p: (p.X(), p.Y(), p.Z())  # noqa: E731
+    en_inicio = any(_contiene(esquinas, v) and np.allclose(punto(BRep_Tool.Pnt_s(TopoDS.Vertex(v))), punto(c.Value(c.FirstParameter())), atol=1e-6)
+                    for v in vertices)
+    en_final = any(_contiene(esquinas, v) and np.allclose(punto(BRep_Tool.Pnt_s(TopoDS.Vertex(v))), punto(c.Value(c.LastParameter())), atol=1e-6)
+                   for v in vertices)
+    u = min(0.45, setback / largo)
+    n = 8                           # con menos puntos OpenCascade interpola una ley que se hunde bajo el radio pedido
+
+    def rampa(t):                   # radio a la fracción t (0 = en el vértice, 1 = a `setback` mm de él)
+        return radio + radio * (FACTOR_SETBACK - 1) * (1 + math.cos(math.pi * t)) / 2
+    inicio = [(u * i / n, rampa(i / n)) for i in range(n + 1)] if en_inicio else [(0.0, radio)]
+    final = [(1 - u * i / n, rampa(i / n)) for i in range(n, -1, -1)] if en_final else [(1.0, radio)]
+    medio = [(0.5, radio)] if inicio[-1][0] < 0.5 < final[0][0] else []
+    return inicio + medio + final
+
+
 def empalme(forma, grupos, *, cadena_tangente=True):
     """Empalme (Fillet, tipo Fillet) por conjuntos de selección, cada uno con su tipo de radio.
 
@@ -330,19 +460,58 @@ def empalme(forma, grupos, *, cadena_tangente=True):
               "radio": r, "radios": [(posición 0..1, r), ...], "cuerda": c}]
     "cuerda" (Chord Length): radio = c / (2·sen(φ/2)), φ = ángulo entre normales en el medio de la arista.
     "variable": la posición se mide sobre cada arista (0 = inicio, 1 = fin), como los Radius Points.
+    "esquina": "bola" (Rolling Ball, por defecto) o "setback" (con "setback" mm): donde se juntan tres o más aristas
+    del conjunto, el radio crece hacia el vértice y vuelve al pedido a esa distancia (aproximado con radio variable).
+    "asimetrico": `radio` sobre una cara y `radio2` sobre la otra. "continuidad": "g1" (por defecto) o "g2". Estos dos
+    se hacen con `_empalme_por_perfil` (aristas rectas entre caras planas, una por una, sin cadena tangente) y van antes
+    que el resto de los conjuntos, que se hacen con el kernel.
     """
     if not grupos:
         raise geo.ErrorGeometria("Elegí al menos una arista para empalmar.")
+    por_perfil = [g for g in grupos if g.get("tipo") == "asimetrico" or g.get("continuidad") == "g2"]
+    if por_perfil:
+        for g in por_perfil:
+            if g.get("tipo", "constante") not in ("constante", "asimetrico") or float(g.get("radio", 0)) <= 0 or (
+                    g.get("tipo") == "asimetrico" and float(g.get("radio2", 0)) <= 0):
+                raise geo.ErrorGeometria("La continuidad G2 va con radio constante o asimétrico, y los radios deben ser positivos.")
+            for e in g.get("aristas") or []:
+                e = _reubicar_arista(forma, e)
+                forma = _empalme_por_perfil(forma, e, float(g["radio"]),
+                                            float(g["radio2"]) if g.get("tipo") == "asimetrico" else float(g["radio"]),
+                                            g.get("continuidad", "g1"))
+        grupos = [dict(g, aristas=[_reubicar_arista(forma, e) for e in g.get("aristas") or []])
+                  for g in grupos if all(g is not x for x in por_perfil)]
+        if not grupos:
+            return forma
     mf = BRepFilletAPI_MakeFillet(forma)
     for grupo in grupos:
         tipo = grupo.get("tipo", "constante")
         aristas = _ampliar_tangentes(forma, grupo.get("aristas") or [], cadena_tangente)
         if not aristas:
             raise geo.ErrorGeometria("Un conjunto de empalme no tiene aristas.")
+        esquinas = []
+        if grupo.get("esquina") == "setback":
+            if tipo != "constante" or float(grupo.get("setback", 0)) <= 0:
+                raise geo.ErrorGeometria("La esquina Setback va con radio constante y una distancia de setback positiva.")
+            incidencia = {}
+            for e in aristas:
+                for v in _unicos(e, TopAbs_VERTEX):
+                    k = next((w for w in incidencia if w.IsSame(v)), v)
+                    incidencia[k] = incidencia.get(k, 0) + 1
+            esquinas = [v for v, n in incidencia.items() if n >= 3]
         for e in aristas:
             if mf.Contour(e):           # ya está en un contorno (OpenCascade propaga por tangencia)
                 continue
-            if tipo == "constante":
+            if tipo == "constante" and esquinas:
+                r = float(grupo.get("radio", 0))
+                if r <= 0:
+                    raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
+                puntos = _radios_con_setback(e, r, float(grupo["setback"]), esquinas)
+                arr = Array1_gp_Pnt2d(1, len(puntos))
+                for i, (u, rr) in enumerate(puntos, 1):
+                    arr.SetValue(i, gp_Pnt2d(u, rr))
+                mf.Add(arr, e)
+            elif tipo == "constante":
                 r = float(grupo.get("radio", 0))
                 if r <= 0:
                     raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
@@ -514,6 +683,30 @@ def _ingletear(original, chaflanado, alcance):
     return _validar(geo.unificar_caras(resultado), "Chaflán")
 
 
+def _mezclar(original, chaflanado, alcance, distancia):
+    """Esquina «Mezcla» (Corner Type › Blend): el inglete de `_ingletear` con las aristas que unen los chaflanes
+    entre sí redondeadas, así los chaflanes se funden en el vértice sin arista viva. Radio: 0,4 de la distancia menor;
+    si el kernel no puede, se prueba con la mitad (hasta tres veces)."""
+    inglete = _ingletear(original, chaflanado, alcance)
+    superficie = geo.compuesto(geo.caras(original))
+    nuevas = [c for c in geo.caras(inglete) if not _sobre_la_superficie(c, superficie)]
+    arista_caras = _ancestros(inglete, TopAbs_EDGE, TopAbs_FACE)
+    entre = []
+    for cara in nuevas:
+        for e in _aristas(cara):
+            padres = _padres(arista_caras, e)
+            if len(padres) == 2 and all(_contiene(nuevas, p) for p in padres) and not _contiene(entre, e):
+                entre.append(e)
+    radio = 0.4 * distancia
+    for _ in range(3):
+        try:
+            return _validar(empalme(inglete, [{"aristas": entre, "tipo": "constante", "radio": radio}]), "Chaflán")
+        except geo.ErrorGeometria:
+            radio /= 2
+    raise geo.ErrorGeometria("La esquina «Mezcla» no pudo redondear la unión de los chaflanes: probá «Inglete» o "
+                             "una distancia menor.")
+
+
 def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     """Chaflán (Chamfer) por conjuntos de selección.
 
@@ -522,10 +715,10 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
               "voltear": bool}]
     "cara" es el lado donde se mide la primera distancia; si no viene se toma la primera cara vecina
     de la arista (orden estable del kernel) y "voltear" pasa a la otra (botón Flip de Fusion).
-    `esquina` (Corner Type): "chaflan" (Chamfer: el kernel une los chaflanes con una cara chica) o "inglete"
-    (Miter: se cortan en un punto, ver `_ingletear`). «Mezcla» (Blend) no existe en OpenCascade.
+    `esquina` (Corner Type): "chaflan" (Chamfer: el kernel une los chaflanes con una cara chica), "inglete"
+    (Miter: se cortan en un punto, ver `_ingletear`) o "mezcla" (Blend: inglete con la unión redondeada, `_mezclar`).
     """
-    if esquina not in ("chaflan", "inglete"):
+    if esquina not in ("chaflan", "inglete", "mezcla"):
         raise geo.ErrorGeometria(f"Tipo de esquina del chaflán desconocido: {esquina}")
     if not grupos:
         raise geo.ErrorGeometria("Elegí al menos una arista para el chaflán.")
@@ -591,9 +784,13 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
                      "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
         raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas." + pista)
     resultado = _validar(mc.Shape(), "Chaflán")
-    if esquina == "inglete":
+    if esquina != "chaflan":
         alcance = 1.5 * max(float(g.get(k, 0) or 0) for g in grupos for k in ("distancia", "distancia2"))
-        resultado = _ingletear(forma, resultado, alcance)
+        if esquina == "inglete":
+            resultado = _ingletear(forma, resultado, alcance)
+        else:
+            resultado = _mezclar(forma, resultado, alcance, min(float(g.get(k) or 0) for g in grupos
+                                                                for k in ("distancia", "distancia2") if g.get(k)))
     return resultado
 
 

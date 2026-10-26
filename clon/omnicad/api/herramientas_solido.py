@@ -381,21 +381,21 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     path_sketch: id o nombre del boceto con la ruta; vacío si la ruta son aristas de un cuerpo (path_edges).
     path_curves: ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
     operation: "new_body", "join", "cut" o "intersect".
-    orientation: "perpendicular" (el perfil sigue la tangente de la ruta), "parallel" (mantiene su orientación) o "aligned" (mantiene align_axis como binormal).
+    orientation: "perpendicular" (sigue la tangente), "parallel" (mantiene su orientación) o "aligned" (align_axis como binormal).
     align_axis: con orientation=aligned, el eje: eje de construcción, arista recta, plano o cara plana (id o selector).
-    guide_surface: caras (selector o ids de find_faces) sobre las que va la ruta: el perfil sigue su normal; no se combina con carril ni torsión.
+    guide_surface: caras (selector o ids) sobre las que va la ruta; el perfil sigue su normal; sin carril ni torsión.
     taper_angle: ángulo de conicidad en grados.
     twist_angle: torsión total en grados (máximo ±3600; ±1800 en rutas cerradas; la ruta no puede tener esquinas).
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
     faces: cara plana (selector o id de find_faces) usada como perfil, sola o junto con los perfiles de sketch.
     path_edges: aristas de un cuerpo (selector "edges:…" o ids de find_edges, o lista) como ruta continua, en lugar de path_sketch.
     rail_sketch: id o nombre del boceto del carril guía (tipo «ruta + carril»); vacío = sin carril.
-    rail_curves: ids de las curvas del carril; vacío = todas las curvas no de construcción de rail_sketch.
-    rail_scale: con carril, cómo sigue el perfil al carril: "scale" (escala), "stretch" (se estira) o "none" (no cambia).
-    path_distance: fracción de la ruta que se barre, mayor que 0 y hasta 1 (número o expresión); 1 = toda.
+    rail_curves: ids de las curvas del carril; vacío = todas las no de construcción.
+    rail_scale: cómo sigue el perfil al carril: "scale", "stretch" o "none".
+    path_distance: fracción de la ruta que se barre (>0 hasta 1); 1 = toda.
     body: cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
-    sweep_bodies: cuerpo(s) sólidos (id o nombre) que se barren a lo largo de la ruta (Solid Sweep), en lugar de un perfil; no se combina con carril, superficie guía, torsión ni conicidad.
-    chain: true suma a cada arista de path_edges las aristas de cuerpo que le siguen tangentes (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
+    sweep_bodies: cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
+    chain: true suma a path_edges las aristas tangentes que le siguen (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
     """
     cuerpos_barrido = _ids_cuerpos(sesion, sweep_bodies)
     if cuerpos_barrido and (sketch is not None or faces or rail_sketch is not None or guide_surface
@@ -466,32 +466,29 @@ def _curvas_de_boceto(sesion, boceto, curvas, que):
 def _condicion_borde(cond, sesion=None, body=None):
     """{"type", "angle", "weight", "face"} de la API → la condición que guarda OpSolevacion."""
     if not isinstance(cond, dict) or set(cond) - {"type", "angle", "weight", "face"}:
-        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction" | "tangent", "angle": '
-                                         'grados, "weight": número, "face": cara (con tangent)}.')
+        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction" | "tangent" | "smooth", "angle": '
+                                         'grados, "weight": número, "face": cara (con tangent y smooth)}.')
     tipo = cond.get("type", "free")
-    if tipo == "smooth":
-        raise error("INVALID_ARGUMENTS", "La condición Suave (continuidad de curvatura, G2) no existe en OpenCascade: "
-                                         "usá tangent o direction.")
-    if tipo not in ("free", "direction", "tangent"):
-        raise error("INVALID_ARGUMENTS", "type es free, direction o tangent.")
+    if tipo not in ("free", "direction", "tangent", "smooth"):
+        raise error("INVALID_ARGUMENTS", "type es free, direction, tangent o smooth.")
     angulo, peso = cond.get("angle", 90), cond.get("weight", 1)
     if isinstance(angulo, (int, float)) and not 0 < angulo < 180:
         raise error("INVALID_ARGUMENTS", "angle está entre 0 y 180 grados.")
     if isinstance(peso, (int, float)) and peso <= 0:
         raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
-    salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente"}[tipo],
+    salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente", "smooth": "suave"}[tipo],
               "angulo": texto_expr(angulo), "peso": texto_expr(peso)}
-    if tipo == "tangent":
+    if tipo in ("tangent", "smooth"):
         if cond.get("face") is None:
-            raise error("INVALID_ARGUMENTS", "tangent necesita face: la cara a la que la superficie es tangente (la sección "
+            raise error("INVALID_ARGUMENTS", f"{tipo} necesita face: la cara a la que la superficie es tangente (la sección "
                                              "está sobre su borde).")
         from .herramientas_modificar import _refs
         referencias, _ = _refs(sesion, cond["face"], "cara", body)
         if len(referencias) != 1:
-            raise error("INVALID_ARGUMENTS", f"tangent necesita UNA cara y face eligió {len(referencias)}: afiná el selector.")
+            raise error("INVALID_ARGUMENTS", f"{tipo} necesita UNA cara y face eligió {len(referencias)}: afiná el selector.")
         salida["cara"] = referencias[0]
     elif "face" in cond:
-        raise error("INVALID_ARGUMENTS", "face solo vale con type=tangent.")
+        raise error("INVALID_ARGUMENTS", "face solo vale con type=tangent o smooth.")
     return salida
 
 
@@ -503,11 +500,10 @@ def _condicion_borde(cond, sesion=None, body=None):
              "vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: "
              "{\"sketch\", \"curve\"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la "
              "superficie de la primera y la última sección: {\"type\": \"free\"} o {\"type\": \"direction\", \"angle\": "
-             "grados desde el plano de la sección (90 = perpendicular), \"weight\": 1} o {\"type\": \"tangent\", "
-             "\"face\": cara, \"weight\": 1} (la superficie sale tangente a esa cara, que tiene la sección en su "
-             "borde); es una aproximación con una sección auxiliar cercana, solo en la solevación lisa (sin rails, "
-             "center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. "
-             "merge_tangent_edges une las caras tangentes. La condición Suave (G2) no existe en OpenCascade.",
+             "grados desde el plano de la sección (90 = perpendicular), \"weight\": 1} o {\"type\": \"tangent\" | \"smooth\", "
+             "\"face\": cara, \"weight\": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una "
+             "sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. "
+             "merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara.",
              modifica=True)
 def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | None = None,
          operation: Operacion = "new_body", ruled: bool = False, closed: bool = False, target: Cuerpos | None = None,
@@ -525,7 +521,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
     body: cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
+    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
     end_condition: lo mismo para la última sección.
     section_conditions: condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
     merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
@@ -569,7 +565,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
             if not str(k).isdigit() or not 1 < int(k) < n:
                 raise error("INVALID_ARGUMENTS", f"section_conditions: «{k}» no es una sección intermedia (de 2 a {n - 1}).")
             c = _condicion_borde(cond, sesion, body)
-            if c["tipo"] == "tangente":
+            if c["tipo"] in ("tangente", "suave"):
                 raise error("INVALID_ARGUMENTS", "section_conditions solo admite free y direction.")
             medias[str(int(k) - 1)] = c
         guias["condiciones_medias"] = medias
@@ -1347,35 +1343,34 @@ def drop_to_plane(sesion, body: Cuerpos | None = None, keep_relative: bool = Tru
              "la caja de los cuerpos (después del giro) queda ahí. pivot='center' es el promedio de los centros de las "
              "cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro "
              "cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae "
-             "center.before y center.after. Otros tipos de movimiento (type): translate con direction (un eje, arista "
-             "recta, cara plana o plano) y distance; rotate alrededor de axis (eje de construcción o arista recta) un "
-             "angle; point_to_point lleva origin_point (vértice [x, y, z] o punto de construcción) a "
-             "destination_point. pivot_point fija el pivote del giro libre en un vértice o punto.", modifica=True)
-def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate: list[Expr] | None = None,
+             "center.before y center.after. type: translate (direction + distance), rotate (axis + angle), "
+             "point_to_point (origin_point a destination_point); pivot_point fija el pivote del giro libre.", modifica=True)
+def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None = None, rotate: list[Expr] | None = None,
               pivot: Literal["center", "origin"] = "center", copy: bool = False, position: list[Expr] | None = None,
               lightweight: bool = False, type: Literal["free", "translate", "rotate", "point_to_point"] = "free",
               direction: str | dict | None = None, distance: Expr = 10, axis: str | dict | None = None,
               angle: Expr = 90, origin_point: str | dict | list[float] | None = None,
               destination_point: str | dict | list[float] | None = None,
-              pivot_point: str | dict | list[float] | None = None, ref_body: str | None = None):
+              pivot_point: str | dict | list[float] | None = None, ref_body: str | None = None,
+              sketches: list[str] | None = None):
     """
-    body: cuerpo(s) a mover (id o nombre).
+    body: cuerpo(s) a mover (id o nombre); vacío si solo se mueven bocetos.
+    sketches: bocetos enteros a mover o copiar (id o nombre); quedan derivados (sin edición a mano); no con position.
     translate: DESPLAZAMIENTO [dx, dy, dz] en mm que se suma a la posición actual (números o expresiones); vacío = sin desplazamiento.
     rotate: giro [rx, ry, rz] en grados (números o expresiones); vacío = sin giro.
     pivot: centro del giro: "center" (centro de las cajas de los cuerpos, se recalcula) u "origin" (origen, estable).
     copy: true para dejar el original y crear cuerpos nuevos con el movimiento.
-    position: posición ABSOLUTA [x, y, z] en mm (números o expresiones) del centro de la caja de los cuerpos; no se
-        combina con translate. El paso guarda el desplazamiento que hace falta ahora (position − centro, con los
-        parámetros de position): si después cambia la forma de la pieza, el centro se corre con ella.
-    lightweight: true (con copy=true) deja una copia ligera: comparte la geometría del original y editar el original la cambia; realize_copies la vuelve copia de verdad.
-    type: "free" (translate/rotate/position, por defecto), "translate" (con direction y distance, o con translate si no hay direction), "rotate" (alrededor de axis un angle) o "point_to_point".
-    direction: type=translate: eje de construcción, arista recta, cara plana o plano (selector, id o nombre); se mueve distance a lo largo de él.
+    position: posición ABSOLUTA [x, y, z] en mm del centro de la caja de los cuerpos; sin translate.
+        Guarda el desplazamiento de ahora (position − centro): si la pieza cambia, el centro se corre con ella.
+    lightweight: true (con copy=true): copia ligera que comparte la geometría del original; realize_copies la vuelve real.
+    type: "free" (por defecto), "translate" (direction + distance, o translate), "rotate" (axis + angle) o "point_to_point".
+    direction: type=translate: eje, arista recta, cara plana o plano (selector, id o nombre); se mueve distance por él.
     distance: type=translate con direction: desplazamiento en mm (número o expresión).
     axis: type=rotate: eje de construcción (id o nombre), arista recta o línea de boceto {"sketch", "curve"}.
     angle: type=rotate: ángulo en grados (número o expresión).
-    origin_point: type=point_to_point: punto de partida: vértice [x, y, z], punto de construcción (id o nombre) o {"sketch", "point"}.
+    origin_point: type=point_to_point: punto de partida (vértice [x, y, z], punto de construcción o {"sketch", "point"}).
     destination_point: type=point_to_point: punto de llegada (mismas formas que origin_point).
-    pivot_point: type=free: pivote del giro en un vértice [x, y, z], punto de construcción o {"sketch", "point"}; reemplaza a pivot.
+    pivot_point: type=free: pivote del giro (vértice [x, y, z], punto de construcción o {"sketch", "point"}); reemplaza a pivot.
     ref_body: cuerpo donde se evalúan los selectores de direction, axis y los puntos; vacío = el único cuerpo.
     """
     if type != "free" and (rotate is not None or position is not None):
@@ -1383,9 +1378,12 @@ def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate
     if lightweight and not copy:
         raise error("INVALID_ARGUMENTS", "lightweight (copia ligera) necesita copy=true: sin copia no hay "
                                          "qué compartir.")
-    ids = _ids_cuerpos(sesion, body)
-    if not ids:
-        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'body'.")
+    ids = _ids_cuerpos(sesion, body) if body else []
+    bocetos = [sesion.paso(b).id for b in sketches or []]
+    if not ids and not bocetos:
+        raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'body' o un boceto en 'sketches'.")
+    if bocetos and position is not None:
+        raise error("INVALID_ARGUMENTS", "position no vale para bocetos: usá translate o type=translate/rotate.")
     for valor, que in ((translate, "translate"), (rotate, "rotate"), (position, "position")):
         if valor is not None and len(valor) != 3:
             raise error("INVALID_ARGUMENTS", f"{que} tiene que ser [x, y, z] (3 valores).")
@@ -1414,12 +1412,14 @@ def move_body(sesion, body: Cuerpos, translate: list[Expr] | None = None, rotate
     pivote = {"tipo": "punto", "id": "O"} if pivot == "origin" else None
     if pivot_point is not None and type == "free":
         pivote = _referencia(sesion, pivot_point, _PUNTO, ref_body)
-    op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, tipo="libre",
+    op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, bocetos=bocetos, tipo="libre",
                  dx=texto_expr(t[0]), dy=texto_expr(t[1]), dz=texto_expr(t[2]),
                  rx=texto_expr(g[0]), ry=texto_expr(g[1]), rz=texto_expr(g[2]),
                  pivote=pivote, copiar=copy, ligera=lightweight)
     for k, v in nuevos.items():
         op.p[k] = v
+    if not ids:                                   # solo bocetos: no hay centro de cuerpos que informar
+        return _agregar(sesion, op)
     cuerpos = sesion.doc.estado_final.cuerpos
     antes = _centro([cuerpos[i] for i in ids])
     foto = _foto(sesion)

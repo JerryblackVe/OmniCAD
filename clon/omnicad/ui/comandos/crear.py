@@ -92,7 +92,7 @@ class Barrido(Comando):
         return _con_objetivos(op, ctx, v)
 
 
-COND_BORDE = {"libre": "Libre", "direccion": "Dirección", "tangente": "Tangente"}
+COND_BORDE = {"libre": "Libre", "direccion": "Dirección", "tangente": "Tangente", "suave": "Suave (G2)"}
 
 
 def _con_direccion(lado):
@@ -100,7 +100,7 @@ def _con_direccion(lado):
 
 
 def _con_tangente(lado):
-    return lambda v: v.get(f"condicion_{lado}") == "tangente"
+    return lambda v: v.get(f"condicion_{lado}") in ("tangente", "suave")
 
 
 class Solevacion(Comando):
@@ -137,10 +137,10 @@ class Solevacion(Comando):
         tipo = v.get(f"condicion_{lado}")
         if tipo == "direccion":
             return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
-        if tipo == "tangente":
+        if tipo in ("tangente", "suave"):
             if not v.get(f"cara_{lado}"):
                 raise ErrorComando(f"Seleccioná la cara a la que es tangente el {'primer' if lado == 'inicio' else 'último'} perfil.")
-            return {"tipo": "tangente", "angulo": "90 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}")}
+            return {"tipo": tipo, "angulo": "90 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}")}
         return None
 
     @staticmethod
@@ -175,7 +175,7 @@ class Solevacion(Comando):
         v = dict(op.p, guia="linea_central" if op.p.get("linea_central") else "carriles")
         for lado in ("inicio", "fin"):
             c = op.p.get(f"condicion_{lado}") or {}
-            v[f"condicion_{lado}"] = c["tipo"] if c.get("tipo") in ("direccion", "tangente") else "libre"
+            v[f"condicion_{lado}"] = c["tipo"] if c.get("tipo") in ("direccion", "tangente", "suave") else "libre"
             v[f"angulo_{lado}"], v[f"peso_{lado}"] = c.get("angulo", "90 deg"), c.get("peso", "1")
             v[f"cara_{lado}"] = _h1(c.get("cara"), ctx.estado)
         v["medias"] = "; ".join(f"{int(k) + 1}:{c.get('angulo', '90 deg')}:{c.get('peso', '1')}"

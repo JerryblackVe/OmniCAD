@@ -296,6 +296,9 @@ class ReconocerFunciones(Comando):
                 *(Casilla(c, texto, True) for _t, c, texto in self._CASILLAS),
                 Casilla("rehacer", "Rehacer en el timeline", False,
                         ayuda="Aceptar crea los pasos Agujero, Empalme y Chaflán que rehacen lo encontrado."),
+                Casilla("rehacer_extrusion", "Rehacer la extrusión (reemplaza el cuerpo)", False,
+                        visible_si=lambda v: bool(v.get("rehacer")),
+                        ayuda="Si el cuerpo es un prisma, lo vuelve boceto + extrusión (los agujeros pasantes quedan en el boceto)."),
                 Info("resultado", "Funciones encontradas", self._resultado)]
 
     def _tipos(self, v):
@@ -345,6 +348,8 @@ class ReconocerFunciones(Comando):
         if not v.get("cuerpo"):
             raise ErrorComando("Elegí un cuerpo sólido.")
         tipos = [t for t in self._tipos(v) if t in ("hole", "fillet", "chamfer")]
+        if v.get("rehacer_extrusion"):
+            tipos = ["extrude", *tipos]
         if not tipos:
             raise ErrorComando("Marcá agujeros, empalmes o chaflanes para rehacer.")
         r = llamar(Sesion(ctx.doc), "rebuild_features", {"body": v["cuerpo"][0]["ref"]["cuerpo"], "types": tipos})

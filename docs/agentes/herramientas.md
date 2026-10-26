@@ -2031,7 +2031,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`thicken`](#thicken) | sí | Da espesor a caras o cuerpos de superficie y crea un sólido. |
 | [`align_bodies`](#align_bodies) | sí | Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional. |
 | [`move_faces`](#move_faces) | sí | Mueve o copia caras planas de un cuerpo (SÓLIDO › MODIFICAR › Mover/copiar › Caras): las caras vecinas se extienden o se recortan para seguirlas. type=translate con direction (eje, arista recta, cara plana o plano) y distance, o con translate [dx, dy, dz]; type=rotate alrededor de axis un angle. |
-| [`scale_body`](#scale_body) | sí | Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. |
+| [`scale_body`](#scale_body) | sí | Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. sketches escala bocetos enteros (solo uniforme). |
 | [`create_surface_extrude`](#create_surface_extrude) | sí | Extruye curvas abiertas o cerradas en una superficie. |
 | [`create_surface_revolve`](#create_surface_revolve) | sí | Gira curvas alrededor de un eje para crear una superficie. |
 | [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta con orientación y torsión. |
@@ -2111,26 +2111,26 @@ Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es 
   - `path_sketch` (texto; opcional, por defecto `null`): id o nombre del boceto con la ruta; vacío si la ruta son aristas de un cuerpo (path_edges).
   - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
-  - `orientation` ("perpendicular" | "parallel" | "aligned"; opcional, por defecto `"perpendicular"`): "perpendicular" (el perfil sigue la tangente de la ruta), "parallel" (mantiene su orientación) o "aligned" (mantiene align_axis como binormal).
+  - `orientation` ("perpendicular" | "parallel" | "aligned"; opcional, por defecto `"perpendicular"`): "perpendicular" (sigue la tangente), "parallel" (mantiene su orientación) o "aligned" (align_axis como binormal).
   - `taper_angle` (número o expresión; opcional, por defecto `0`): ángulo de conicidad en grados.
   - `twist_angle` (número o expresión; opcional, por defecto `0`): torsión total en grados (máximo ±3600; ±1800 en rutas cerradas; la ruta no puede tener esquinas).
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): cara plana (selector o id de find_faces) usada como perfil, sola o junto con los perfiles de sketch.
   - `path_edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas de un cuerpo (selector "edges:…" o ids de find_edges, o lista) como ruta continua, en lugar de path_sketch.
   - `rail_sketch` (texto; opcional, por defecto `null`): id o nombre del boceto del carril guía (tipo «ruta + carril»); vacío = sin carril.
-  - `rail_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas del carril; vacío = todas las curvas no de construcción de rail_sketch.
-  - `rail_scale` ("scale" | "stretch" | "none"; opcional, por defecto `"scale"`): con carril, cómo sigue el perfil al carril: "scale" (escala), "stretch" (se estira) o "none" (no cambia).
-  - `path_distance` (número o expresión; opcional, por defecto `1`): fracción de la ruta que se barre, mayor que 0 y hasta 1 (número o expresión); 1 = toda.
+  - `rail_curves` (lista de entero o null; opcional, por defecto `null`): ids de las curvas del carril; vacío = todas las no de construcción.
+  - `rail_scale` ("scale" | "stretch" | "none"; opcional, por defecto `"scale"`): cómo sigue el perfil al carril: "scale", "stretch" o "none".
+  - `path_distance` (número o expresión; opcional, por defecto `1`): fracción de la ruta que se barre (>0 hasta 1); 1 = toda.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
   - `align_axis` (texto o objeto; opcional, por defecto `null`): con orientation=aligned, el eje: eje de construcción, arista recta, plano o cara plana (id o selector).
-  - `guide_surface` (texto o lista de texto o null; opcional, por defecto `null`): caras (selector o ids de find_faces) sobre las que va la ruta: el perfil sigue su normal; no se combina con carril ni torsión.
-  - `sweep_bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) sólidos (id o nombre) que se barren a lo largo de la ruta (Solid Sweep), en lugar de un perfil; no se combina con carril, superficie guía, torsión ni conicidad.
-  - `chain` (true/false; opcional, por defecto `false`): true suma a cada arista de path_edges las aristas de cuerpo que le siguen tangentes (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
+  - `guide_surface` (texto o lista de texto o null; opcional, por defecto `null`): caras (selector o ids) sobre las que va la ruta; el perfil sigue su normal; sin carril ni torsión.
+  - `sweep_bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
+  - `chain` (true/false; opcional, por defecto `false`): true suma a path_edges las aristas tangentes que le siguen (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
 - CLI: `omnicad call sweep --doc pieza.omnicad`
 
 ### `loft`
 
-Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde el plano de la sección (90 = perpendicular), "weight": 1} o {"type": "tangent", "face": cara, "weight": 1} (la superficie sale tangente a esa cara, que tiene la sección en su borde); es una aproximación con una sección auxiliar cercana, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. La condición Suave (G2) no existe en OpenCascade.
+Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde el plano de la sección (90 = perpendicular), "weight": 1} o {"type": "tangent" | "smooth", "face": cara, "weight": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2144,7 +2144,7 @@ Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden
   - `rails` (lista de texto o objeto o null; opcional, por defecto `null`): curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
   - `center_line` (lista de texto o objeto o null; opcional, por defecto `null`): la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
+  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
   - `end_condition` (objeto; opcional, por defecto `null`): lo mismo para la última sección.
   - `merge_tangent_edges` (true/false; opcional, por defecto `false`): true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
   - `section_conditions` (objeto; opcional, por defecto `null`): condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
@@ -2394,27 +2394,28 @@ Apoya cuerpos en el plano del piso (Z = 0): los baja o sube en Z hasta que lo m�
 
 ### `move_body`
 
-Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). Para llevarlo a una posición absoluta usá position = [x, y, z]: el centro de la caja de los cuerpos (después del giro) queda ahí. pivot='center' es el promedio de los centros de las cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae center.before y center.after. Otros tipos de movimiento (type): translate con direction (un eje, arista recta, cara plana o plano) y distance; rotate alrededor de axis (eje de construcción o arista recta) un angle; point_to_point lleva origin_point (vértice [x, y, z] o punto de construcción) a destination_point. pivot_point fija el pivote del giro libre en un vértice o punto.
+Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira rotate = [rx, ry, rz] grados alrededor del pivote (en ese orden) y después DESPLAZA translate = [dx, dy, dz] mm, que se SUMA a la posición actual (no es una posición absoluta: un cuerpo con el centro en z = 2 y translate [0, 0, 15] queda en z = 17). Para llevarlo a una posición absoluta usá position = [x, y, z]: el centro de la caja de los cuerpos (después del giro) queda ahí. pivot='center' es el promedio de los centros de las cajas de los cuerpos y se RECALCULA con la geometría (si la pieza es asimétrica o se edita, el giro cambia de lugar); pivot='origin' gira alrededor del origen y da un giro estable. El resultado trae center.before y center.after. type: translate (direction + distance), rotate (axis + angle), point_to_point (origin_point a destination_point); pivot_point fija el pivote del giro libre.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `body` (texto o lista de texto; obligatorio): cuerpo(s) a mover (id o nombre).
+  - `body` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a mover (id o nombre); vacío si solo se mueven bocetos.
   - `translate` (lista de número o expresión o null; opcional, por defecto `null`): DESPLAZAMIENTO [dx, dy, dz] en mm que se suma a la posición actual (números o expresiones); vacío = sin desplazamiento.
   - `rotate` (lista de número o expresión o null; opcional, por defecto `null`): giro [rx, ry, rz] en grados (números o expresiones); vacío = sin giro.
   - `pivot` ("center" | "origin"; opcional, por defecto `"center"`): centro del giro: "center" (centro de las cajas de los cuerpos, se recalcula) u "origin" (origen, estable).
   - `copy` (true/false; opcional, por defecto `false`): true para dejar el original y crear cuerpos nuevos con el movimiento.
-  - `position` (lista de número o expresión o null; opcional, por defecto `null`): posición ABSOLUTA [x, y, z] en mm (números o expresiones) del centro de la caja de los cuerpos; no se combina con translate. El paso guarda el desplazamiento que hace falta ahora (position − centro, con los parámetros de position): si después cambia la forma de la pieza, el centro se corre con ella.
-  - `lightweight` (true/false; opcional, por defecto `false`): true (con copy=true) deja una copia ligera: comparte la geometría del original y editar el original la cambia; realize_copies la vuelve copia de verdad.
-  - `type` ("free" | "translate" | "rotate" | "point_to_point"; opcional, por defecto `"free"`): "free" (translate/rotate/position, por defecto), "translate" (con direction y distance, o con translate si no hay direction), "rotate" (alrededor de axis un angle) o "point_to_point".
-  - `direction` (texto o objeto; opcional, por defecto `null`): type=translate: eje de construcción, arista recta, cara plana o plano (selector, id o nombre); se mueve distance a lo largo de él.
+  - `position` (lista de número o expresión o null; opcional, por defecto `null`): posición ABSOLUTA [x, y, z] en mm del centro de la caja de los cuerpos; sin translate. Guarda el desplazamiento de ahora (position − centro): si la pieza cambia, el centro se corre con ella.
+  - `lightweight` (true/false; opcional, por defecto `false`): true (con copy=true): copia ligera que comparte la geometría del original; realize_copies la vuelve real.
+  - `type` ("free" | "translate" | "rotate" | "point_to_point"; opcional, por defecto `"free"`): "free" (por defecto), "translate" (direction + distance, o translate), "rotate" (axis + angle) o "point_to_point".
+  - `direction` (texto o objeto; opcional, por defecto `null`): type=translate: eje, arista recta, cara plana o plano (selector, id o nombre); se mueve distance por él.
   - `distance` (número o expresión; opcional, por defecto `10`): type=translate con direction: desplazamiento en mm (número o expresión).
   - `axis` (texto o objeto; opcional, por defecto `null`): type=rotate: eje de construcción (id o nombre), arista recta o línea de boceto {"sketch", "curve"}.
   - `angle` (número o expresión; opcional, por defecto `90`): type=rotate: ángulo en grados (número o expresión).
-  - `origin_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de partida: vértice [x, y, z], punto de construcción (id o nombre) o {"sketch", "point"}.
+  - `origin_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de partida (vértice [x, y, z], punto de construcción o {"sketch", "point"}).
   - `destination_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de llegada (mismas formas que origin_point).
-  - `pivot_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=free: pivote del giro en un vértice [x, y, z], punto de construcción o {"sketch", "point"}; reemplaza a pivot.
+  - `pivot_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=free: pivote del giro (vértice [x, y, z], punto de construcción o {"sketch", "point"}); reemplaza a pivot.
   - `ref_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de direction, axis y los puntos; vacío = el único cuerpo.
-- CLI: `omnicad call move_body --doc pieza.omnicad body=…`
+  - `sketches` (lista de texto o null; opcional, por defecto `null`): bocetos enteros a mover o copiar (id o nombre); quedan derivados (sin edición a mano); no con position.
+- CLI: `omnicad call move_body --doc pieza.omnicad`
 
 ### `insert_fastener`
 
@@ -2465,30 +2466,34 @@ Congela cuerpos sólidos o superficies como B-rep en un paso del timeline.
 
 ### `fillet`
 
-Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerda (radius_type=chord) o de radio variable entre el inicio y el final de la arista (radius_type=variable, end_radius). Con faces_a hace un EMPALME DE REGLAS: todas las aristas de esas caras, o solo las que están entre faces_a y faces_b; rounds elige redondeos (aristas convexas), empalmes (cóncavas) o ambos. Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Con tangent_chain (por defecto) el empalme sigue las aristas tangentes encadenadas. Si el radio no cabe, falla con OPERATION_FAILED y el documento queda igual. radius acepta número (mm) o expresión. radius_points suma puntos intermedios al radio variable. sets suma otros conjuntos de selección con sus propios radios en el mismo paso. type=full_round redondea del todo una cara central entre dos laterales planas, paralelas y perpendiculares (media caña de radio la mitad del ancho). Todavía no están el radio asimétrico, la continuidad G2 ni la esquina setback.
+Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerda (radius_type=chord) o de radio variable entre el inicio y el final de la arista (radius_type=variable, end_radius). Con faces_a hace un EMPALME DE REGLAS: todas las aristas de esas caras, o solo las que están entre faces_a y faces_b; rounds elige redondeos (aristas convexas), empalmes (cóncavas) o ambos. Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Con tangent_chain (por defecto) el empalme sigue las aristas tangentes encadenadas. Si el radio no cabe, falla con OPERATION_FAILED y el documento queda igual. radius acepta número (mm) o expresión. radius_points suma puntos intermedios al radio variable. sets suma otros conjuntos de selección con sus propios radios en el mismo paso. type=full_round redondea del todo una cara central entre dos laterales planas, paralelas y perpendiculares (media caña de radio la mitad del ancho). asymmetric (radius y radius2, uno por cara) y continuity=g2 solo en aristas rectas entre caras planas, sin cadena tangente; corner_type=setback + setback (mm): el radio crece hacia las esquinas de tres aristas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas a redondear: selector ("|Z", ">Z"), id de find_edges ("Cuerpo1/E7") o lista de ids y selectores. No se usa con faces_a.
-  - `radius` (número o expresión; opcional, por defecto `null`): radio en mm (número o expresión con parámetros, p. ej. "espesor / 2"); con radius_type=variable es el radio inicial; en el empalme de reglas, el radio de las reglas.
+  - `edges` (texto o lista de texto o null; opcional, por defecto `null`): aristas a redondear: selector ("|Z"), id de find_edges ("Cuerpo1/E7") o lista. No con faces_a.
+  - `radius` (número o expresión; opcional, por defecto `null`): radio en mm (número o expresión, p. ej. "espesor / 2"); con radius_type=variable es el inicial.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
-  - `radius_type` ("constant" | "chord" | "variable"; opcional, por defecto `"constant"`): "constant", "chord" (se da chord_length en lugar del radio) o "variable" (de radius a end_radius a lo largo de la arista).
+  - `radius_type` ("constant" | "chord" | "variable" | "asymmetric"; opcional, por defecto `"constant"`): "constant", "chord" (chord_length), "variable" (de radius a end_radius) o "asymmetric" (radius y radius2).
   - `end_radius` (número o expresión; opcional, por defecto `null`): radio final en mm (número o expresión); obligatorio con radius_type=variable.
   - `chord_length` (número o expresión; opcional, por defecto `null`): longitud de cuerda en mm (número o expresión); obligatoria con radius_type=chord.
   - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) suma las aristas tangentes encadenadas; false empalma solo las elegidas.
   - `faces_a` (texto o lista de texto o null; opcional, por defecto `null`): empalme de reglas: caras (selector, ids o lista) cuyas aristas se redondean; reemplaza a edges.
-  - `faces_b` (texto o lista de texto o null; opcional, por defecto `null`): empalme de reglas «entre»: segundo grupo de caras; solo se redondean las aristas entre faces_a y faces_b; vacío = todas las aristas de faces_a.
+  - `faces_b` (texto o lista de texto o null; opcional, por defecto `null`): empalme de reglas «entre»: segundo grupo; solo las aristas entre faces_a y faces_b; vacío = todas las de faces_a.
   - `rounds` ("both" | "rounds" | "fillets"; opcional, por defecto `"both"`): empalme de reglas: "both" (por defecto), "rounds" (solo aristas convexas) o "fillets" (solo cóncavas).
-  - `radius_points` (lista de objeto o null; opcional, por defecto `null`): con radius_type=variable, puntos intermedios [{"position": 0..1, "radius": mm}] a lo largo de la arista (0 = inicio, 1 = fin).
-  - `sets` (lista de objeto o null; opcional, por defecto `null`): otros conjuntos de selección del mismo paso: [{"edges": ..., "radius": ..., "radius_type": "constant|chord|variable", "end_radius": ..., "chord_length": ..., "radius_points": [...]}].
+  - `radius_points` (lista de objeto o null; opcional, por defecto `null`): con radius_type=variable, puntos intermedios [{"position": 0..1, "radius": mm}].
+  - `sets` (lista de objeto o null; opcional, por defecto `null`): otros conjuntos del mismo paso: [{"edges", "radius", "radius_type", "end_radius", "chord_length", "radius_points", "radius2", "continuity", "corner_type", "setback"}].
   - `type` ("fillet" | "full_round"; opcional, por defecto `"fillet"`): fillet (por defecto) o full_round (redondeo completo con center_face y side_faces).
   - `center_face` (texto; opcional, por defecto `null`): con full_round, la cara que se vuelve media caña (selector o id).
   - `side_faces` (lista de texto o null; opcional, por defecto `null`): con full_round, las dos caras laterales (selectores o ids).
+  - `radius2` (número o expresión; opcional, por defecto `null`): radio sobre la segunda cara con radius_type=asymmetric.
+  - `continuity` ("g1" | "g2"; opcional, por defecto `"g1"`): "g1" (por defecto) o "g2"; con radio constante o asimétrico.
+  - `corner_type` ("rolling_ball" | "setback"; opcional, por defecto `"rolling_ball"`): "rolling_ball" (por defecto) o "setback" (pide setback).
+  - `setback` (número o expresión; opcional, por defecto `null`): distancia en mm desde la esquina a la que el radio vuelve al pedido.
 - CLI: `omnicad call fillet --doc pieza.omnicad`
 
 ### `chamfer`
 
-Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancias (type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera distancia a la otra cara. Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Con tangent_chain (por defecto) sigue las aristas tangentes encadenadas. distance, distance2 y angle aceptan número (mm o grados) o expresión. corner_type: chamfer (donde se juntan tres chaflanes queda una cara chica que los une, por defecto) o miter (los chaflanes se cortan en un punto; solo chaflanes planos y vértices con tres chaflanes). La mezcla (blend) de Fusion todavía no existe.
+Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancias (type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera distancia a la otra cara. Se elige con un selector estilo CadQuery (p. ej. '|Z'; get_guide topic=selectores), con ids de find_edges (p. ej. 'Cuerpo1/E7', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Con tangent_chain (por defecto) sigue las aristas tangentes encadenadas. distance, distance2 y angle aceptan número (mm o grados) o expresión. corner_type: chamfer (donde se juntan tres chaflanes queda una cara chica que los une, por defecto) o miter (los chaflanes se cortan en un punto; solo chaflanes planos y vértices con tres chaflanes) o blend (como miter, con la unión de los chaflanes redondeada).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2500,7 +2505,7 @@ Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancia
   - `angle` (número o expresión; opcional, por defecto `null`): ángulo en grados (entre 0 y 90, excluidos); obligatorio con type=distance_angle.
   - `flip` (true/false; opcional, por defecto `false`): true pasa la primera distancia a la otra cara (no hace nada con type=equal).
   - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) suma las aristas tangentes encadenadas; false achaflana solo las elegidas.
-  - `corner_type` ("chamfer" | "miter"; opcional, por defecto `"chamfer"`): "chamfer" (cara de unión en las esquinas, por defecto) o "miter" (las caras de los chaflanes se cortan en un punto).
+  - `corner_type` ("chamfer" | "miter" | "blend"; opcional, por defecto `"chamfer"`): "chamfer" (cara de unión en las esquinas, por defecto) o "miter" (las caras de los chaflanes se cortan en un punto) o "blend" (miter con la unión redondeada).
 - CLI: `omnicad call chamfer --doc pieza.omnicad edges=… distance=…`
 
 ### `shell`
@@ -2613,7 +2618,7 @@ Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el coman
 
 ### `draft`
 
-Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. Las caras que se alejan del plano neutro se angostan (ángulo positivo). type=parting_line toma la dirección de extracción de pull_direction y la línea de partición de parting_tool (plano, cara plana o curva plana) en lugar de neutral; todavía no está «Mover línea de partición». angle_mode: absolute (por defecto, como siempre: desde la dirección de extracción) o relative (se suma al desmoldeo que ya tiene la cara; falla en caras cónicas, toros y cilindros inclinados). Se elige con un selector estilo CadQuery (p. ej. '#Z'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F2', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. angle acepta número (grados) o expresión.
+Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el plano que no se mueve), para poder sacar la pieza del molde. Las caras que se alejan del plano neutro se angostan (ángulo positivo). type=parting_line toma la dirección de extracción de pull_direction y la línea de partición de parting_tool (plano, cara plana o curva plana) en lugar de neutral; con parting_line_type=move: cada cara gira entera alrededor de su borde del lado contrario (move_direction above/below) o de fixed_edges; both deja la línea. angle_mode: absolute (por defecto, desde la dirección de extracción) o relative (se suma al desmoldeo de la cara; falla en conos, toros y cilindros inclinados). Se elige con un selector estilo CadQuery (p. ej. '#Z'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F2', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. angle acepta número (grados) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2628,6 +2633,9 @@ Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el pl
   - `angle_mode` ("relative" | "absolute"; opcional, por defecto `"absolute"`): absolute (por defecto: se mide desde la dirección de extracción) o relative (se suma al desmoldeo que la cara ya tiene).
   - `pull_direction` (texto o objeto; opcional, por defecto `null`): con parting_line, la dirección de extracción: plano de construcción, cara plana (id o selector) o eje.
   - `parting_tool` (texto o objeto; opcional, por defecto `null`): con parting_line, la línea de partición: plano, cara plana o curva plana (arista o curva de boceto).
+  - `parting_line_type` ("fixed" | "move"; opcional, por defecto `"fixed"`): con parting_line, "fixed" (por defecto) o "move" (la línea se mueve).
+  - `move_direction` ("above" | "both" | "below"; opcional, por defecto `"both"`): con move: "above" (bisagra en el borde más atrás de la extracción), "below" (el más adelante) o "both".
+  - `fixed_edges` (texto o lista de texto o null; opcional, por defecto `null`): con move, la arista bisagra (selector o ids).
 - CLI: `omnicad call draft --doc pieza.omnicad faces=… angle=…`
 
 ### `create_clearance_test`
@@ -2849,7 +2857,7 @@ Find Features que rehace: reconoce los agujeros (también abocardados), empalmes
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `body` (texto; opcional, por defecto `null`): id o nombre del cuerpo sólido; vacío = el único cuerpo.
-  - `types` (lista de "hole" | "fillet" | "chamfer" o null; opcional, por defecto `null`): qué rehacer: hole, fillet, chamfer; vacío = los tres.
+  - `types` (lista de "hole" | "fillet" | "chamfer" | "extrude" o null; opcional, por defecto `null`): qué rehacer: hole, fillet, chamfer o extrude; vacío = hole, fillet y chamfer. extrude solo para un cuerpo prisma (agujeros pasantes en su perfil): lo rehace como boceto + extrusión y reemplaza al cuerpo; va primero.
   - `max_features` (entero; opcional, por defecto `50`): tope de funciones a intentar (cada una deja dos pasos en el timeline).
 - CLI: `omnicad call rebuild_features --doc pieza.omnicad`
 
@@ -3139,18 +3147,19 @@ Mueve o copia caras planas de un cuerpo (SÓLIDO › MODIFICAR › Mover/copiar 
 
 ### `scale_body`
 
-Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. Los bocetos se escalan con transform_sketch.
+Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. sketches escala bocetos enteros (solo uniforme).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (texto o lista de texto; obligatorio): nombres/ids de los sólidos a escalar; un componente (id o nombre) escala todos sus cuerpos.
+  - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): nombres/ids de los sólidos a escalar; un componente (id o nombre) escala todos sus cuerpos. Vacío si solo se escalan bocetos.
   - `factor` (número o expresión; opcional, por defecto `1`): factor escalar uniforme, número o expresión.
   - `scale_type` ("uniform" | "non_uniform"; opcional, por defecto `"uniform"`): uniform o non_uniform.
   - `factor_x` (número o expresión; opcional, por defecto `1`): factor del eje X para non_uniform.
   - `factor_y` (número o expresión; opcional, por defecto `1`): factor del eje Y para non_uniform.
   - `factor_z` (número o expresión; opcional, por defecto `1`): factor del eje Z para non_uniform.
   - `point` (texto o objeto; opcional, por defecto `null`): punto base O o de construcción, {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}; vacío = origen.
-- CLI: `omnicad call scale_body --doc pieza.omnicad bodies=…`
+  - `sketches` (lista de texto o null; opcional, por defecto `null`): bocetos enteros a escalar (id o nombre), solo uniform.
+- CLI: `omnicad call scale_body --doc pieza.omnicad`
 
 ### `create_surface_extrude`
 

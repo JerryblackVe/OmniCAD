@@ -124,3 +124,31 @@ def test_cadena_con_curvas_de_boceto_avisa_que_no_las_encadena():
     r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", "orientation": "parallel",
                                 "operation": "new_body", "chain": True})
     assert r["ok"] and any("solo suma aristas de cuerpos" in a for a in r["avisos"]), r
+
+
+def test_barrido_de_cuerpo_en_arco_se_acerca_al_volumen_exacto_y_la_via_por_caras_se_queda_corta():
+    """Caja de 4 en un cuarto de arco de radio 20 (perpendicular): el volumen exacto es el sector (π/4·(22²−18²)·4 = 502,65)
+    más las dos medias cajas de los extremos (2·32) = 566,65. Las copias unidas dan un 2 % de más (borde escalonado).
+    La vía alternativa (MakePipe de cada cara + la caja inicial) da 535,6: `BRepOffsetAPI_MakePipe` devuelve un sólido
+    nulo e inválido para las caras que contienen la tangente de la ruta, así que se pierde un tercio del barrido."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
+    from OCP.GC import GC_MakeArcOfCircle
+    from OCP.gp import gp_Pnt
+
+    from omnicad.nucleo import solidos_crear as sc
+    caja = geo.caja(4, 4, 4, (-2, -2, -2))
+    arco = GC_MakeArcOfCircle(gp_Pnt(0, 0, 0), gp_Pnt(20 * math.sin(math.pi / 4), 20 - 20 * math.cos(math.pi / 4), 0),
+                              gp_Pnt(20, 20, 0)).Value()
+    arista = BRepBuilderAPI_MakeEdge(arco).Edge()
+    exacto = math.pi / 4 * (22 ** 2 - 18 ** 2) * 4 + 2 * 32
+    copias = sc.barrer_cuerpo(caja, [arista], orientacion="perpendicular")
+    assert geo.es_valida(copias) and geo.volumen(copias) == pytest.approx(exacto, rel=0.03)
+    hilo = BRepBuilderAPI_MakeWire(arista).Wire()
+    piezas = [caja]
+    for cara in geo.caras(caja):
+        pipe = BRepOffsetAPI_MakePipe(hilo, cara)
+        pipe.Build()
+        if geo.es_valida(pipe.Shape()) and geo.volumen(pipe.Shape()) > 1e-3:
+            piezas.append(pipe.Shape())
+    assert geo.volumen(geo.unir_todos(piezas)) < 0.96 * exacto               # la vía por caras no completa el barrido

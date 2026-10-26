@@ -1130,6 +1130,8 @@ def _hacia_afuera_de_la_cara(cara, punto):
     n = _normal_orientada(cara, uv.X(), uv.Y())[1]
     suma = np.zeros(3)
     for e in _aristas_de(cara):
+        if BRep_Tool.Degenerated_s(e):                  # el polo de una esfera: una arista sin curva
+            continue
         curva = BRepAdaptor_Curve(e)
         proy = GeomAPI_ProjectPointOnCurve(_pnt(punto), curva.Curve().Curve(), curva.FirstParameter(), curva.LastParameter())
         if proy.NbPoints() == 0 or proy.LowerDistance() > 1e-5 * max(1.0, float(np.linalg.norm(punto))):
@@ -1147,19 +1149,29 @@ def _hacia_afuera_de_la_cara(cara, punto):
     return _unit(suma)
 
 
-def _auxiliar_tangente(w, cara, delta):
+def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
     """Sección auxiliar de una condición «Tangente»: el contorno `w` (sobre el borde de `cara`) corrido `delta` por el plano
     tangente de la cara hacia afuera, para que la superficie siga a la cara. Cada arista se corre por sus puntos
-    (rectas: los extremos; curvas: 9 puntos interpolados)."""
+    (rectas: los extremos; curvas: 9 puntos interpolados). Con `sobre_la_superficie` (condición «Suave», G2) cada punto
+    se proyecta además sobre la superficie que sostiene a la cara, prolongada: dos secciones así (a `delta` y a
+    `2 delta`) hacen que la solevación siga la curvatura de la cara, no solo su plano tangente."""
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    superficie = BRep_Tool.Surface_s(cara) if sobre_la_superficie else None
     nuevas = []
     for e in _aristas_de(w):
         curva = BRepAdaptor_Curve(e)
         a, z = curva.FirstParameter(), curva.LastParameter()
-        k = 2 if curva.GetType() == GeomAbs_Line else 9
+        k = 9 if sobre_la_superficie or curva.GetType() != GeomAbs_Line else 2
         pts = []
         for i in range(k):
             q = _xyz(curva.Value(a + (z - a) * i / (k - 1)))
-            pts.append(q + delta * _hacia_afuera_de_la_cara(cara, q))
+            p = q + delta * _hacia_afuera_de_la_cara(cara, q)
+            if superficie is not None:
+                proy = GeomAPI_ProjectPointOnSurf(_pnt(p), superficie)
+                if proy.NbPoints() == 0:
+                    raise geo.ErrorGeometria("La superficie de la cara no se prolonga hasta donde pide la condición Suave.")
+                p = _xyz(proy.NearestPoint())
+            pts.append(p)
         if k == 2:
             nuevas.append(BRepBuilderAPI_MakeEdge(_pnt(pts[0]), _pnt(pts[1])).Edge())
         else:
@@ -1178,8 +1190,10 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
     """Condiciones de borde (End Conditions) de la primera y la última sección, y «Dirección» en las intermedias
     (`medias`: {posición: condición}). Se agrega, a poca distancia, una sección auxiliar por el lado que corresponda: copia
     corrida y ensanchada o angostada según el ángulo («Dirección») o corrida por el plano tangente de la cara
-    («Tangente», `cond["cara"]`) para que la superficie salga con esa dirección. Es una aproximación: la solevación
-    pasa por las secciones auxiliares. «Suave» (G2) no existe en OpenCascade."""
+    («Tangente», `cond["cara"]`) para que la superficie salga con esa dirección. «Suave» (G2) pone dos auxiliares sobre la
+    superficie prolongada de la cara (a 0,5 y 1,5 veces la distancia de la tangente), así sigue también su curvatura; con
+    otras proporciones la solevación ondula entre las secciones. Es una aproximación: la solevación pasa por las
+    secciones auxiliares."""
     exteriores = list(exteriores)
     pedidos = [(0, inicio), (len(exteriores) - 1, fin)] + sorted((int(k), v) for k, v in (medias or {}).items())
     delante, detras = {}, {}                   # secciones auxiliares por posición: después y antes de la sección
@@ -1188,10 +1202,7 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
             continue
         if not 0 <= pos < len(exteriores):
             raise geo.ErrorGeometria(f"No hay una sección en la posición {pos + 1} para la condición de borde.")
-        if cond["tipo"] == "suave":
-            raise geo.ErrorGeometria("La condición Suave (continuidad de curvatura, G2) no existe en OpenCascade: usá "
-                                     "Tangente o Dirección.")
-        if cond["tipo"] not in ("direccion", "tangente"):
+        if cond["tipo"] not in ("direccion", "tangente", "suave"):
             raise geo.ErrorGeometria(f"Condición de borde desconocida: {cond['tipo']}")
         tipo, w = exteriores[pos]
         if tipo != "alambre":
@@ -1200,8 +1211,9 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
         if not 0 < angulo < 180 or peso <= 0:
             raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados y el peso es positivo.")
         es_extremo = pos in (0, len(exteriores) - 1)
-        if cond["tipo"] == "tangente" and not es_extremo:
-            raise geo.ErrorGeometria("La condición Tangente solo vale en la primera y la última sección.")
+        if cond["tipo"] in ("tangente", "suave") and not es_extremo:
+            raise geo.ErrorGeometria(f"La condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'} solo vale en "
+                                     "la primera y la última sección.")
         c = _centro_alambre(w)
         lados = ([(pos + 1, delante)] if pos == 0 else [(pos - 1, detras)] if pos == len(exteriores) - 1
                  else [(pos + 1, delante), (pos - 1, detras)])
@@ -1211,23 +1223,27 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
                 raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
             c2 = _centro_alambre(otro[1])
             delta = peso * 0.15 * float(np.linalg.norm(c2 - c))
-            if cond["tipo"] == "tangente":
+            if cond["tipo"] in ("tangente", "suave"):
                 cara = cond.get("cara")
                 if cara is None:
-                    raise geo.ErrorGeometria("La condición Tangente necesita la cara a la que la superficie es tangente.")
-                destino[pos] = _auxiliar_tangente(w, cara, delta)
+                    raise geo.ErrorGeometria(f"La condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'} necesita "
+                                             "la cara a la que la superficie es tangente.")
+                if cond["tipo"] == "tangente":
+                    destino[pos] = [_auxiliar_tangente(w, cara, delta)]
+                else:               # G2: dos secciones (a 0,5 y 1,5 pasos) sobre la superficie prolongada de la cara
+                    cerca, lejos = (_auxiliar_tangente(w, cara, k * delta, True) for k in (0.5, 1.5))
+                    destino[pos] = [cerca, lejos]
                 continue
             normal = np.asarray(geo.plano_de_cara(BRepBuilderAPI_MakeFace(w, True).Face()).normal, float)
             if float((c2 - c) @ normal) < 0:
                 normal = -normal
-            destino[pos] = _auxiliar_direccion(w, normal, delta, angulo, -1.0 if (not es_extremo and destino is detras) else 1.0)
+            destino[pos] = [_auxiliar_direccion(w, normal, delta, angulo,
+                                                -1.0 if (not es_extremo and destino is detras) else 1.0)]
     salida = []
     for i, sec in enumerate(exteriores):
-        if i in detras:
-            salida.append(detras[i])
+        salida += reversed(detras.get(i, []))        # las auxiliares se guardan de la más cercana a la más lejana
         salida.append(sec)
-        if i in delante:
-            salida.append(delante[i])
+        salida += delante.get(i, [])
     return salida
 
 

@@ -96,7 +96,7 @@ def test_tangente_sin_cara_o_suave_fallan_con_mensaje():
     r = api.llamar(s, "loft", {"sketches": ["Base", "Tapa"], "start_condition": {"type": "tangent"}})
     assert not r["ok"] and "face" in r["mensaje"]
     r = api.llamar(s, "loft", {"sketches": ["Base", "Tapa"], "start_condition": {"type": "smooth"}})
-    assert not r["ok"] and "G2" in r["mensaje"]
+    assert not r["ok"] and "face" in r["mensaje"]
 
 
 def test_direccion_en_una_seccion_intermedia():
@@ -120,3 +120,30 @@ def test_tangente_con_un_selector_de_varias_caras_falla():
     r = api.llamar(s, "loft", {"sections": ["edges:%CIRCLE and >Z", {"sketch": "Tapa", "profile": 0}], "body": "Cil",
                                "operation": "new_body", "start_condition": {"type": "tangent", "face": "all"}})
     assert not r["ok"] and "UNA cara" in r["mensaje"], r
+
+
+def test_condicion_suave_sigue_la_curvatura_de_la_cara_mejor_que_la_tangente():
+    """Esfera de radio 10 cortada en z = -5 y un círculo de radio 3 en z = -9,5: la superficie ideal sigue la esfera
+    (radio √(100 − z²) a cada altura). Tangente sale del plano tangente; Suave (G2) se acerca bastante más."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt
+
+    from omnicad.nucleo import referencias as refs
+    from omnicad.nucleo import solidos_crear as sc
+    cuerpo = geo.booleano(geo.esfera(10.0), geo.caja(40, 40, 20, (-20, -20, -25)), "cortar")
+    borde = [e for e in refs.subformas(cuerpo, "arista")
+             if all(abs(geo.caja_envolvente(e)[i][2] + 5) < 1e-6 for i in (0, 1))]
+    cara = next(c for c in geo.caras(cuerpo) if abs(geo.caja_envolvente(c)[1][2] - 10) < 1e-3)
+    tapa = BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0, 0, -9.5), gp_Dir(0, 0, 1)), 3.0)).Edge()
+
+    def errores(tipo):
+        f = sc.solevar([sc._alambre(borde), sc._alambre([tapa])],
+                       condicion_inicio={"tipo": tipo, "cara": cara, "peso": 1.0, "angulo": 90.0})
+        assert geo.es_valida(f)
+        salida = []
+        for z in (-6.0, -8.0):
+            caja = geo.caja_envolvente(geo.booleano(f, geo.caja(60, 60, 0.02, (-30, -30, z - 0.01)), "intersecar"))
+            salida.append(abs((caja[1][0] - caja[0][0]) / 2 - math.sqrt(100 - z * z)))
+        return salida
+    tangente, suave = errores("tangente"), errores("suave")
+    assert max(suave) < 0.12 and max(suave) < 0.6 * max(tangente), (tangente, suave)

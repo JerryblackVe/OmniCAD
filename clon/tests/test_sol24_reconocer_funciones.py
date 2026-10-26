@@ -220,3 +220,26 @@ def test_dialogo_lista_lo_encontrado_y_rehace():
     v.update(agujeros=False, empalmes=False, chaflanes=False, simetria=False, patron_circular=False,
              patron_rectangular=False)
     assert "Marcá" in cmd._resultado(v, ctx)
+
+
+def test_rehacer_un_prisma_como_boceto_y_extrusion():
+    s = api.Sesion()
+    api.llamar(s, "create_box", {"length": 40, "width": 20, "height": 5, "name": "Placa"})
+    api.llamar(s, "create_hole", {"face": ">Z", "diameter": 4, "through_all": True, "points": [[0, 0]]})
+    api.llamar(s, "create_hole", {"face": ">Z", "diameter": 3, "through_all": True, "points": [[10, 0]]})
+    antes = geo.volumen(s.cuerpo("Placa").forma)
+    r = api.llamar(s, "rebuild_features", {"types": ["extrude"]})
+    assert r["ok"], r
+    assert [f["type"] for f in r["result"]["rebuilt"]] == ["extrude"] and not r["result"]["not_rebuilt"]
+    cuerpos = list(s.doc.estado_final.cuerpos.values())
+    assert [c.nombre for c in cuerpos] == ["Placa"]
+    assert geo.es_valida(cuerpos[0].forma) and geo.volumen(cuerpos[0].forma) == pytest.approx(antes, rel=1e-6)
+    pasos = [p["type"] for p in api.llamar(s, "get_timeline")["result"]["steps"]]
+    assert pasos[-2:] == ["boceto", "extrusion"] or "extrusion" in pasos
+    api.llamar(s, "undo")                                                       # un solo paso de deshacer
+    assert geo.volumen(s.cuerpo("Placa").forma) == pytest.approx(antes, rel=1e-6)
+    sin_prisma = api.Sesion()
+    api.llamar(sin_prisma, "create_box", {"length": 40, "width": 20, "height": 5, "name": "Caja"})
+    api.llamar(sin_prisma, "fillet", {"edges": ">Z", "radius": 1})
+    r = api.llamar(sin_prisma, "rebuild_features", {"types": ["extrude"]})
+    assert r["ok"] and not r["result"]["rebuilt"]                               # un cuerpo con empalmes no es un prisma

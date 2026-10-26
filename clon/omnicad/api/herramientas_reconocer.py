@@ -12,7 +12,8 @@ from .errores import ErrorAPI, error
 from .registro import herramienta, llamar
 
 Tipo = Literal["hole", "fillet", "chamfer", "extrude", "revolve", "mirror", "circular_pattern", "rectangular_pattern"]
-_REHACIBLES = ("hole", "fillet", "chamfer")
+_REHACIBLES = ("hole", "fillet", "chamfer", "extrude")
+_POR_DEFECTO = ("hole", "fillet", "chamfer")        # extrude solo si se pide: reemplaza al cuerpo entero
 TOL_MEDIDAS = 1e-3                     # volumen y caja del cuerpo rehecho contra el original, relativo
 
 
@@ -122,6 +123,26 @@ class _NoCoincide(Exception):
     pass
 
 
+def _rehacer_extrusion(sesion, cuerpo, r, f):
+    """Un cuerpo que es un prisma (con todos sus agujeros pasantes dentro del perfil) se rehace como boceto + extrusión: el
+    boceto se apoya en la primera tapa y proyecta su contorno (con los agujeros), la extrusión entra por el cuerpo. El
+    cuerpo nuevo reemplaza al importado, con su mismo nombre."""
+    tapa = r["face_shapes"][f["faces"][0] - 1]
+    seleccion = f"nearest:{_punto(geo.centro_masa(tapa, True))}"
+    d = np.asarray(f["direction"], float)                      # de la primera tapa hacia la segunda
+    nombre, previos = cuerpo.nombre, set(sesion.doc.estado_final.cuerpos)
+    sk = _llamar(sesion, "create_sketch", {"plane": _ids(sesion, cuerpo, r, f["faces"][:1])[0],
+                                           "name": f"Perfil de {nombre}"})["sketch"]["id"]
+    _llamar(sesion, "project_to_sketch", {"faces": [seleccion], "body": cuerpo.id, "sketch": sk})
+    normal = np.asarray(sesion.doc.estado_final.bocetos[sk].plano.normal, float)
+    nuevo = _llamar(sesion, "extrude", {"sketch": sk, "profile": "largest", "operation": "new_body",
+                                        "distance": f["distance"] * (1 if float(d @ normal) > 0 else -1)})
+    creado = nuevo["bodies_created"][0]["id"]
+    _llamar(sesion, "remove_bodies", {"bodies": [cuerpo.id]})
+    _llamar(sesion, "rename", {"target": creado, "new_name": nombre, "kind": "body"})
+    return creado, previos
+
+
 @herramienta("rebuild_features", "solido", "Find Features que rehace: reconoce los agujeros (también abocardados), "
              "empalmes y chaflanes de un cuerpo sin historial y los vuelve pasos paramétricos del timeline, uno por uno: "
              "borra las caras de la función (delete_faces, las vecinas cierran el hueco) y la crea de nuevo con "
@@ -131,10 +152,10 @@ class _NoCoincide(Exception):
              "motivo. Extrusiones, revoluciones, simetrías y patrones solo se informan (find_features). Todo es UN paso "
              "de deshacer.", modifica=True)
 def rebuild_features(sesion, body: str | None = None,
-                     types: list[Literal["hole", "fillet", "chamfer"]] | None = None, max_features: int = 50):
+                     types: list[Literal["hole", "fillet", "chamfer", "extrude"]] | None = None, max_features: int = 50):
     """
     body: id o nombre del cuerpo sólido; vacío = el único cuerpo.
-    types: qué rehacer: hole, fillet, chamfer; vacío = los tres.
+    types: qué rehacer: hole, fillet, chamfer o extrude; vacío = hole, fillet y chamfer. extrude solo para un cuerpo prisma (agujeros pasantes en su perfil): lo rehace como boceto + extrusión y reemplaza al cuerpo; va primero.
     max_features: tope de funciones a intentar (cada una deja dos pasos en el timeline).
     """
     if max_features < 1:
@@ -142,9 +163,33 @@ def rebuild_features(sesion, body: str | None = None,
     cuerpo = _solido(sesion, body)
     original = _medidas(cuerpo.forma)
     vistas, rehechas, no_rehechas = set(), [], []
+    if types and "extrude" in types:
+        r = _reconocer(cuerpo, ["extrude"], _REHACIBLES)
+        if r["features"]:
+            f = r["features"][0]
+            info = {k: v for k, v in f.items() if k != "faces"}
+            antes = len(sesion.doc.operaciones)
+            try:
+                with sesion.transaccion():
+                    creado, _ = _rehacer_extrusion(sesion, cuerpo, r, f)
+                    if not _coinciden(original, _medidas(sesion.cuerpo(creado).forma)):
+                        raise _NoCoincide
+            except _NoCoincide:
+                no_rehechas.append(dict(info, reason="El cuerpo rehecho no coincide con el original (volumen o caja)."))
+            except ErrorAPI as e:
+                no_rehechas.append(dict(info, reason=e.mensaje))
+            else:
+                rehechas.append(dict(info, steps=[o.id for o in sesion.doc.operaciones[antes:]]))
+                return {"body": creado, "rebuilt": rehechas, "not_rebuilt": no_rehechas,
+                        "summary": {t: sum(g["type"] == t for g in rehechas) for t in _REHACIBLES}}
+        types = [t for t in types if t != "extrude"]
+        if not types:
+            sesion.avisar("El cuerpo no es un prisma: no hay una extrusión que rehacer.")
+            return {"body": cuerpo.id, "rebuilt": rehechas, "not_rebuilt": no_rehechas,
+                    "summary": {t: sum(g["type"] == t for g in rehechas) for t in _REHACIBLES}}
     while len(vistas) < max_features:
         cuerpo = sesion.cuerpo(cuerpo.id)
-        r = _reconocer(cuerpo, types, _REHACIBLES)
+        r = _reconocer(cuerpo, types, _POR_DEFECTO)
         pendientes = [f for f in r["features"] if _clave(f) not in vistas]
         if not pendientes:
             break
@@ -172,4 +217,4 @@ def rebuild_features(sesion, body: str | None = None,
     if not rehechas and not no_rehechas:
         sesion.avisar("No se encontró ningún agujero, empalme ni chaflán para rehacer.")
     return {"body": cuerpo.id, "rebuilt": rehechas, "not_rebuilt": no_rehechas,
-            "summary": {t: sum(f["type"] == t for f in rehechas) for t in _REHACIBLES}}
+            "summary": {t: sum(f["type"] == t for f in rehechas) for t in _POR_DEFECTO}}

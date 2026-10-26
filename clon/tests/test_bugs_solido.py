@@ -254,3 +254,15 @@ def test_recetas_viejas_con_valores_que_hoy_se_rechazan_abren_con_el_paso_en_roj
     doc = Documento.desde_dict(receta)                                # como abrir un .omnicad viejo: no revienta
     doc.recalcular()
     assert doc.resultados[-1].estado == "error", "el paso debió quedar en rojo"
+
+
+def test_sol37_revolucion_de_curvas_y_de_geometria_pura_rechaza_mas_de_360():
+    s = api.Sesion()
+    llamar(s, "create_sketch", plane="XZ", name="Perfil")
+    llamar(s, "draw_line", start_x=10, start_y=0, end_x=20, end_y=5, sketch="Perfil")
+    curva = llamar(s, "get_sketch", sketch="Perfil")["result"]["entities"][0]["id"]
+    r = falla(s, "create_surface_revolve", profiles={"sketch": "Perfil", "curve": curva}, axis="z", angle="720 deg")
+    assert "360" in r["mensaje"]
+    llamar(s, "create_surface_revolve", profiles={"sketch": "Perfil", "curve": curva}, axis="z", angle="360 deg")
+    with pytest.raises(geo.ErrorGeometria, match="360"):
+        geo.revolver([geo.caja(1, 1, 1)], (0, 0, 0), (0, 0, 1), 400.0)

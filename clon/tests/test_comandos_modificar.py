@@ -233,3 +233,19 @@ def test_empalme_con_dos_conjuntos_en_el_dialogo_se_edita_y_se_quita():
     assert cmd.construir(v, ctx).p["conjuntos"] == []
     with pytest.raises(Exception, match="no es válida|inválid|expresión|Expresión|evaluar"):
         cmd.construir(dict(cmd.desde_op(op, ctx), radio_2="2 xx"), ctx)        # el radio 2 se valida en la ventana
+
+
+def test_empalme_del_dialogo_conserva_lo_que_la_api_puso_en_el_conjunto_2():
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Empalme
+    from omnicad import api
+    doc = _doc_caja()
+    s = api.Sesion(doc)
+    r = api.llamar(s, "fillet", dict(edges="nearest:[10,0,20]", radius=2, tangent_chain=False,
+                                     sets=[dict(edges="nearest:[10,20,20]", radius=3, radius_type="asymmetric", radius2=2)]))
+    assert r["ok"], r
+    op = doc.operaciones[-1]
+    cmd, ctx = Empalme(), ContextoComando(doc, op=op)
+    nueva = cmd.construir(cmd.desde_op(op, ctx), ctx)
+    assert nueva.p["conjuntos"][0]["tipo_radio"] == "asimetrico"
+    assert nueva.p["conjuntos"][0]["radio2"] == "2.0"                         # no vuelve a 1 mm

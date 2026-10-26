@@ -99,3 +99,68 @@ def test_dialogo_redondeo_completo_y_puntos_de_radio():
     for malo in ("0.5", "1.5: 3 mm", "0.5: mucho"):
         with pytest.raises(Exception):
             Empalme._puntos_radio(malo, ctx)
+
+
+def test_radio_asimetrico_y_g2_en_una_arista_recta():
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=20, height=20, name="Caja")
+    base = geo.volumen(s.cuerpo("Caja").forma)
+    llamar(s, "fillet", edges="nearest:[10,10,10]", radius=2, tangent_chain=False, radius_type="asymmetric", radius2=2)
+    assert base - geo.volumen(s.cuerpo("Caja").forma) == pytest.approx((4 - math.pi) * 20, rel=1e-6)   # r1 = r2: el círculo
+    llamar(s, "undo")
+    llamar(s, "fillet", edges="nearest:[10,10,10]", radius=2, tangent_chain=False, radius_type="asymmetric", radius2=4)
+    forma = s.cuerpo("Caja").forma
+    assert geo.es_valida(forma)
+    assert base - geo.volumen(forma) == pytest.approx((1 - math.pi / 4) * 2 * 4 * 20, rel=1e-6)           # cónica de 2 × 4
+    llamar(s, "undo")
+    llamar(s, "fillet", edges="nearest:[10,10,10]", radius=2, tangent_chain=False, continuity="g2")
+    g2 = s.cuerpo("Caja").forma
+    assert geo.es_valida(g2) and 0.85 * (4 - math.pi) * 20 < base - geo.volumen(g2) < 4 * 20 / 2        # entre el círculo y el chaflán
+    r = api.llamar(s, "fillet", dict(edges="|Z", radius=1, radius_type="chord", chord_length=1, continuity="g2"))
+    assert not r["ok"] and "g2" in r["mensaje"]
+    r = api.llamar(s, "fillet", dict(edges="nearest:[10,10,10]", radius=2, radius_type="asymmetric"))
+    assert not r["ok"] and "radius2" in r["mensaje"]
+
+
+def test_radio_asimetrico_en_arista_concava_se_rellena():
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=20, height=10, name="Base")
+    llamar(s, "create_box", length=10, width=20, height=10, z=10, name="Pared")
+    llamar(s, "boolean_operation", target="Base", tools=["Pared"], operation="join")
+    antes = geo.volumen(s.cuerpo("Base").forma)
+    llamar(s, "fillet", edges="nearest:[5,0,10]", radius=1, radius2=2, radius_type="asymmetric", tangent_chain=False)
+    forma = s.cuerpo("Base").forma
+    assert geo.es_valida(forma)
+    assert geo.volumen(forma) - antes == pytest.approx((1 - math.pi / 4) * 1 * 2 * 20, rel=1e-6)        # rellena la esquina
+
+
+def test_esquina_setback_crece_el_radio_hacia_la_esquina():
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=20, height=20, name="Caja")
+    base = geo.volumen(s.cuerpo("Caja").forma)
+    aristas = ["nearest:[10,10,10]", "nearest:[10,0,20]", "nearest:[0,10,20]"]       # las tres aristas del vértice (10, 10, 20)
+    llamar(s, "fillet", edges=aristas, radius=2, tangent_chain=False)
+    bola = base - geo.volumen(s.cuerpo("Caja").forma)
+    llamar(s, "undo")
+    llamar(s, "fillet", edges=aristas, radius=2, tangent_chain=False, corner_type="setback", setback=3)
+    forma = s.cuerpo("Caja").forma
+    assert geo.es_valida(forma)
+    corto = base - geo.volumen(forma)
+    llamar(s, "undo")
+    llamar(s, "fillet", edges=aristas, radius=2, tangent_chain=False, corner_type="setback", setback=6)
+    largo = base - geo.volumen(s.cuerpo("Caja").forma)
+    assert bola < corto < largo                                       # más setback, más material quitado en la esquina
+    r = api.llamar(s, "fillet", dict(edges=aristas, radius=2, corner_type="setback"))
+    assert not r["ok"] and "setback" in r["mensaje"]
+
+
+def test_g2_y_asimetrico_rechazan_radio_que_no_entra_y_extremos_oblicuos():
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=20, height=2, name="Placa")
+    r = api.llamar(s, "fillet", dict(edges="nearest:[0,-10,2]", radius=3, tangent_chain=False, continuity="g2"))
+    assert not r["ok"] and "no entra" in r["mensaje"]
+    t = api.Sesion()
+    llamar(t, "create_box", length=20, width=20, height=20, name="Caja")
+    llamar(t, "chamfer", edges="|Z", distance=3, tangent_chain=False)
+    r = api.llamar(t, "fillet", dict(edges="nearest:[0,-10,20]", radius=2, radius_type="asymmetric", radius2=3, tangent_chain=False))
+    assert not r["ok"] and "perpendiculares" in r["mensaje"]

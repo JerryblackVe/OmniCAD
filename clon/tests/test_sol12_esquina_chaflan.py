@@ -1,4 +1,4 @@
-"""SOL-12: tipo de esquina del chaflán (Chaflán o Inglete)."""
+"""SOL-12: tipo de esquina del chaflán (Chaflán, Inglete o Mezcla)."""
 import pytest
 
 from omnicad import api
@@ -56,3 +56,15 @@ def test_inglete_lejos_del_origen_sigue_ingleteando():
     assert geo.es_valida(forma)
     assert geo.volumen(forma) == pytest.approx(946.0, abs=1e-6)
     assert len(geo.caras(forma)) == 9
+
+
+def test_mezcla_redondea_la_union_de_los_chaflanes_y_sigue_valida():
+    s = api.Sesion()
+    llamar(s, "create_box", length=10, width=10, height=10, name="Cubo")
+    llamar(s, "chamfer", edges=_aristas_de_la_esquina(s), distance=2, tangent_chain=False, corner_type="blend")
+    forma = s.cuerpo("Cubo").forma
+    assert geo.es_valida(forma)
+    assert len(geo.caras(forma)) == 13                                # inglete (9 caras) + 3 redondeos de la unión + el vértice
+    assert 945.0 < geo.volumen(forma) < 946.0                         # el inglete deja 946: el redondeo saca un poco más
+    r = api.llamar(s, "chamfer", dict(edges="|Z and <X and <Y", distance=2, tangent_chain=False, corner_type="blend"))
+    assert not r["ok"] and "esquina" in r["mensaje"]                  # sin tres chaflanes que se junten no hay mezcla

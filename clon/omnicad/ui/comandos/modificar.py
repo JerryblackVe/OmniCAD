@@ -82,7 +82,12 @@ class Empalme(Comando):
                       ayuda="Dos caras planas, paralelas y perpendiculares a la central."),
             Seleccion("aristas", "Aristas", {"arista"}, maximo=None, visible_si=empalme),
             Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
-                                                     "variable": "Variable"}, visible_si=empalme),
+                                                     "variable": "Variable", "asimetrico": "Asimétrico"}, visible_si=empalme),
+            Expresion("radio2", "Radio sobre la segunda cara", "1 mm",
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "asimetrico"),
+            Opciones("continuidad", "Continuidad", {"g1": "Tangente (G1)", "g2": "Curvatura (G2)"},
+                     visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico"),
+                     ayuda="G2 y el radio asimétrico solo se hacen en aristas rectas entre dos caras planas."),
             Expresion("radio", "Radio", "1 mm", visible_si=lambda v: not completo(v) and (
                 v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas")),
             Expresion("radio_fin", "Radio final", "2 mm",
@@ -99,6 +104,11 @@ class Empalme(Comando):
             Opciones("redondeos", "Topología", {"ambos": "Redondeos y empalmes", "redondeos": "Solo redondeos",
                                                 "empalmes": "Solo empalmes"}, visible_si=reglas),
             Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme),
+            Opciones("esquina", "Tipo de esquina", {"bola": "Bola rodante", "setback": "Setback"},
+                     visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante",
+                     ayuda="Setback: el radio crece hacia las esquinas donde se juntan tres aristas (aproximado)."),
+            Expresion("setback", "Distancia de setback", "2 mm",
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante" and v.get("esquina") == "setback"),
             Seleccion("aristas_2", "Aristas del conjunto 2", {"arista"}, minimo=0, maximo=None, visible_si=empalme,
                       ayuda="Otro conjunto de aristas con su propio radio, en el mismo paso (el «+» de Fusion)."),
             Opciones("tipo_radio_2", "Tipo de radio 2", {"constante": "Constante", "cuerda": "Longitud de cuerda",
@@ -141,6 +151,11 @@ class Empalme(Comando):
         else:
             exigir(v, "aristas", "Seleccioná las aristas a empalmar.")
         ctx.evaluar(v["radio"])
+        if v.get("tipo_radio") == "asimetrico":
+            ctx.evaluar(v["radio2"])
+        setback = v.get("esquina") == "setback" and v.get("tipo_radio") == "constante"
+        if setback:
+            ctx.evaluar(v["setback"])
         puntos = self._puntos_radio(v.get("puntos_radio"), ctx) if v.get("tipo_radio") == "variable" else []
         previos = list(ctx.op.p.get("conjuntos") or []) if ctx.op else []
         conjuntos = previos[1:]            # el primero lo edita «conjunto 2» (vaciarlo lo quita); los demás se conservan
@@ -148,10 +163,12 @@ class Empalme(Comando):
             tipo2 = v.get("tipo_radio_2", "constante")
             for clave in ("cuerda_2" if tipo2 == "cuerda" else "radio_2", *(("radio_fin_2",) if tipo2 == "variable" else ())):
                 ctx.evaluar(v[clave])
-            conjuntos.insert(0, {"aristas": refs(v, "aristas_2"), "tipo_radio": tipo2, "radio": v["radio_2"],
-                                 "radio_fin": v["radio_fin_2"], "cuerda": v["cuerda_2"]})
+            conjuntos.insert(0, {**(previos[0] if previos else {}), "aristas": refs(v, "aristas_2"), "tipo_radio": tipo2,
+                                 "radio": v["radio_2"], "radio_fin": v["radio_fin_2"], "cuerda": v["cuerda_2"]})
         return self.crear_op(OpEmpalme, v, ctx, tipo=v["tipo"], aristas=refs(v, "aristas"), tipo_radio=v["tipo_radio"],
-                             radio=v["radio"], radio_fin=v["radio_fin"], cuerda=v["cuerda"],
+                             radio=v["radio"], radio_fin=v["radio_fin"], cuerda=v["cuerda"], radio2=v["radio2"],
+                             esquina="setback" if setback else "bola", setback=v["setback"],
+                             continuidad=v["continuidad"] if v.get("tipo_radio") in ("constante", "asimetrico") else "g1",
                              cadena_tangente=v["cadena_tangente"], caras_a=refs(v, "caras_a"),
                              caras_b=refs(v, "caras_b"), regla=v["regla"], redondeos=v["redondeos"],
                              puntos_radio=puntos, conjuntos=conjuntos)
@@ -189,7 +206,7 @@ class Chaflan(Comando):
             Expresion("angulo", "Ángulo", "45 deg", ANGULO, visible_si=lambda v: v.get("tipo") == "distancia_angulo"),
             Casilla("voltear", "Voltear", visible_si=lambda v: v.get("tipo") != "distancia_igual"),
             Casilla("cadena_tangente", "Cadena tangente", True),
-            Opciones("esquina", "Tipo de esquina", {"chaflan": "Chaflán", "inglete": "Inglete"}),
+            Opciones("esquina", "Tipo de esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}),
         ]
 
     def construir(self, v, ctx):
@@ -263,6 +280,13 @@ class Desmoldeo(Comando):
                       ayuda="Con «Línea de partición» define la dirección de extracción."),
             Seleccion("herramienta_particion", "Herramienta de partición", {"cara_plana", "plano", "arista", "curva_boceto"},
                       visible_si=particion, ayuda="Plano, cara plana o curva plana por donde pasa la línea de partición."),
+            Opciones("linea", "Tipo de línea de partición", {"fija": "Fijar línea de partición", "mover": "Mover línea de partición"},
+                     visible_si=particion, ayuda="Mover: cada cara gira entera alrededor de su borde del lado contrario."),
+            Opciones("lado_mover", "Dirección", {"arriba": "Ángulo arriba", "ambos": "Ambos", "abajo": "Ángulo abajo"},
+                     visible_si=lambda v: particion(v) and v.get("linea") == "mover"),
+            Seleccion("aristas_fijas", "Aristas fijas", {"arista"}, minimo=0, maximo=None,
+                      visible_si=lambda v: particion(v) and v.get("linea") == "mover",
+                      ayuda="Arista que no se deforma: la bisagra del desmoldeo."),
             Seleccion("caras", "Caras", {"cara"}, maximo=None),
             Opciones("modo_angulo", "Modo de ángulo", {"relativo": "Relativo", "absoluto": "Absoluto"}, "relativo",
                      ayuda="Relativo suma el ángulo al desmoldeo que la cara ya tiene; absoluto lo mide desde la dirección."),
@@ -280,11 +304,14 @@ class Desmoldeo(Comando):
         exigir(v, "caras", "Seleccioná las caras a inclinar.")
         return self.crear_op(OpDesmoldeo, v, ctx, plano=ref1(v, "plano"), caras=refs(v, "caras"),
                              herramienta_particion=ref1(v, "herramienta_particion") if particion else None,
+                             linea=v["linea"] if particion else "fija", lado_mover=v["lado_mover"],
+                             aristas_fijas=refs(v, "aristas_fijas") if particion and v["linea"] == "mover" else [],
                              **{k: v[k] for k in ("angulo", "lados", "angulo2", "voltear", "tipo", "modo_angulo")})
 
     def desde_op(self, op, ctx):
         herramienta = op.p.get("herramienta_particion")
         return dict(op.p, plano=_hit1(op.p["plano"], ctx.estado), caras=hits(op.p["caras"], ctx.estado),
+                    aristas_fijas=hits(op.p.get("aristas_fijas") or [], ctx.estado),
                     herramienta_particion=_hit1(herramienta, ctx.estado) if herramienta else [])
 
 
@@ -388,7 +415,9 @@ class Escala(Comando):
     def campos(self, ctx):
         no_uniforme = lambda v: v.get("tipo") == "no_uniforme"  # noqa: E731
         return [
-            Seleccion("cuerpos", "Entidades", {"cuerpo"}, maximo=None),
+            Seleccion("cuerpos", "Entidades", {"cuerpo"}, minimo=0, maximo=None),
+            Seleccion("bocetos", "Bocetos (una curva elige el boceto)", {"curva_boceto"}, minimo=0, maximo=None,
+                      ayuda="Solo con escala uniforme; el boceto queda como derivado (sin edición a mano)."),
             Seleccion("punto", "Punto", {"vertice", "punto"}, minimo=0,
                       ayuda="Punto base. Sin selección: el origen."),
             Opciones("tipo", "Tipo de escala", {"uniforme": "Uniforme", "no_uniforme": "No uniforme"}),
@@ -399,12 +428,14 @@ class Escala(Comando):
         ]
 
     def construir(self, v, ctx):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
-        return self.crear_op(OpEscala, v, ctx, cuerpos=_cuerpos(v), punto=ref1(v, "punto"),
+        if not v.get("cuerpos") and not v.get("bocetos"):
+            raise ErrorComando("Seleccioná los cuerpos o las curvas de los bocetos a escalar.")
+        return self.crear_op(OpEscala, v, ctx, cuerpos=_cuerpos(v), bocetos=_bocetos(v), punto=ref1(v, "punto"),
                              **{k: v[k] for k in ("tipo", "factor", "fx", "fy", "fz")})
 
     def desde_op(self, op, ctx):
-        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), punto=_hit1(op.p["punto"], ctx.estado))
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), punto=_hit1(op.p["punto"], ctx.estado),
+                    bocetos=_hits_bocetos(op.p.get("bocetos"), ctx.estado))
 
 
 class CaraDesfase(Comando):
@@ -641,6 +672,21 @@ class DivisionSilueta(Comando):
                     direccion=_hit1(op.p["direccion"], ctx.estado))
 
 
+def _bocetos(v):
+    """Ids de los bocetos de las curvas elegidas (una curva elige el boceto entero), sin repetir."""
+    salida = []
+    for h in v.get("bocetos") or []:
+        if h["ref"].get("tipo") == "curva_boceto" and h["ref"]["boceto"] not in salida:
+            salida.append(h["ref"]["boceto"])
+    return salida
+
+
+def _hits_bocetos(ids, estado):
+    """La selección (una curva por boceto) que representa a esos bocetos al editar el paso."""
+    return [hit_desde_ref({"tipo": "curva_boceto", "boceto": b, "curva": next(iter(estado.bocetos[b].boceto.curvas), 0)}, estado)
+            for b in ids or [] if b in estado.bocetos]
+
+
 class MoverCopiar(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "mover_copiar", "Mover/copiar", "mover_copiar", "M"
     AYUDA = ("Mueve, gira o copia cuerpos o caras planas: libre, trasladar, girar, punto a punto o punto a "
@@ -651,9 +697,12 @@ class MoverCopiar(Comando):
     def campos(self, ctx):
         t = lambda *tipos: (lambda v: v.get("tipo") in tipos)  # noqa: E731
         caras = lambda v: v.get("objeto") == "caras"  # noqa: E731
+        bocetos = lambda v: v.get("objeto") == "bocetos"  # noqa: E731
         return [
-            Opciones("objeto", "Mover objeto", {"cuerpos": "Cuerpos", "caras": "Caras"}),
-            Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None, visible_si=lambda v: not caras(v)),
+            Opciones("objeto", "Mover objeto", {"cuerpos": "Cuerpos", "caras": "Caras", "bocetos": "Bocetos"}),
+            Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None, visible_si=lambda v: not caras(v) and not bocetos(v)),
+            Seleccion("bocetos", "Bocetos (una curva elige el boceto)", {"curva_boceto"}, maximo=None, visible_si=bocetos,
+                      ayuda="El boceto entero se mueve; queda como boceto derivado (sin edición a mano). Con «Crear copia» sale uno nuevo."),
             Seleccion("caras", "Caras", {"cara"}, maximo=None, visible_si=caras,
                       ayuda="Caras planas: las vecinas se extienden o se recortan. «Crear copia» deja superficies."),
             Opciones("tipo", "Tipo de movimiento", TIPOS_MOVIMIENTO),
@@ -687,12 +736,14 @@ class MoverCopiar(Comando):
         ]
 
     def construir(self, v, ctx):
-        por_caras = v.get("objeto") == "caras"
-        exigir(v, "caras" if por_caras else "cuerpos", "Seleccioná las caras a mover." if por_caras
-               else "Seleccioná los cuerpos a mover.")
+        por_caras, por_bocetos = v.get("objeto") == "caras", v.get("objeto") == "bocetos"
+        exigir(v, "caras" if por_caras else "bocetos" if por_bocetos else "cuerpos",
+               "Seleccioná las caras a mover." if por_caras else "Seleccioná las curvas de los bocetos a mover."
+               if por_bocetos else "Seleccioná los cuerpos a mover.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
                                     "copiar", "ligera")}
-        p.update(cuerpos=[] if por_caras else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],
+        p.update(cuerpos=[] if por_caras or por_bocetos else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],
+                 bocetos=_bocetos(v) if por_bocetos else [],
                  ligera=bool(v.get("ligera")) and not por_caras, pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
                  origen=ref1(v, "origen"), destino=ref1(v, "destino"))
         return self.crear_op(OpMover, v, ctx, **p)
@@ -746,7 +797,8 @@ class MoverCopiar(Comando):
 
     def desde_op(self, op, ctx):
         v = dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), caras=hits(op.p.get("caras") or [], ctx.estado),
-                 objeto="caras" if op.p.get("caras") else "cuerpos")
+                 objeto="caras" if op.p.get("caras") else "bocetos" if op.p.get("bocetos") else "cuerpos",
+                 bocetos=_hits_bocetos(op.p.get("bocetos"), ctx.estado))
         for k in ("pivote", "direccion", "eje", "origen", "destino"):
             v[k] = _hit1(op.p.get(k), ctx.estado)
         return v
