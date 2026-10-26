@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Íconos adicionales (≈140) para los comandos de las pestañas de Fusion que no tenían dibujo propio:
+Íconos adicionales (171) para los comandos y pasos del timeline que no tenían dibujo propio:
 sólido, modificar, construir, inspeccionar, insertar, ensamblar, seleccionar, superficie, malla,
 chapa y espacios de trabajo.
 
@@ -285,6 +285,16 @@ def _lamina(p, a, b, c, d, amp=3.0, colores=None, borde=None):
 
 
 # ================================================================ SÓLIDO / CREAR
+def _extruir_cara(p):
+    """Cara superior seleccionada que crece hacia un prisma fantasma."""
+    q = _q(9, 18)
+    _caja_en(p, q, 0, 0, 6, 6, 6, 7, FANTASMA, BORDE_FANTASMA)
+    _guiones(p, BORDE_FANTASMA, 1.1)
+    p.drawPolygon(QPolygonF(_hexagono(q, 6, 6, 13)))
+    _caja_en(p, q, 0, 0, 0, 6, 6, 6, (AZUL_SEL, AZUL_FRENTE, AZUL_LADO))
+    _flecha(p, 9, 13, 9, 4, GRIS_OSCURO, 1.3, 3.5)
+
+
 def _barrido(p):
     c = QPainterPath(QPointF(5, 27))
     c.cubicTo(5, 13, 13, 8, 27.5, 8)
@@ -745,6 +755,20 @@ def _arista_viva(p, curva):
         _poli(p, banda, QColor("#c6e2fa"))
 
 
+def _chaflan_3d(p):
+    """Bisel plano claro en la arista superior derecha, con dos marcas de distancia."""
+    a = b = h = 12
+    d = 6
+    q = _q(*_centro(a, b, h))
+    _poli(p, [q(0, b, 0), q(a, b, 0), q(a, b, h - d), q(a - d, b, h), q(0, b, h)], AZUL_FRENTE)
+    _poli(p, [q(a, 0, 0), q(a, b, 0), q(a, b, h - d), q(a, 0, h - d)], AZUL_LADO)
+    _poli(p, _cuadro(q, 0, 0, a - d, b, h), AZUL_ARRIBA)
+    _poli(p, [q(a - d, 0, h), q(a, 0, h - d), q(a, b, h - d), q(a - d, b, h)], AZUL_SEL)
+    p.setPen(QPen(NARANJA, 2.0, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(q(a - d - 2, b / 2, h), q(a - d + 2, b / 2, h))
+    p.drawLine(q(a, b / 2, h - d - 2), q(a, b / 2, h - d + 2))
+
+
 def _vaciado(p):
     a = b = 18
     h, e = 11, 2.5
@@ -793,6 +817,18 @@ def _desfase_cara(p):
         _flecha(p, *_xy(q(a, y, z)), *_xy(q(16.5, y, z)), GRIS_OSCURO, 1.5, 3.6)
 
 
+def _desfase_aristas(p):
+    """Dos contornos abiertos en L separados por una distancia constante."""
+    for x, radio, color in ((4, 6, GRIS_OSCURO), (9, 1, AZUL_LADO)):
+        curva = QPainterPath(QPointF(x, 4))
+        curva.lineTo(x, 21)
+        curva.arcTo(QRectF(x, 21 - radio, 2 * radio, 2 * radio), 180, 90)
+        curva.lineTo(14, 21 + radio)
+        _trazo(p, color, 1.3)
+        p.drawPath(curva)
+    _flecha(p, 4.5, 9, 8, 9, NARANJA, 1.1, 2.8)
+
+
 def _reemplazar_cara(p):
     q = _q(16, 16)
     _caja_en(p, q, 0, 0, 0, 12, 12, 5, (AZUL_SEL, AZUL_FRENTE, AZUL_LADO))
@@ -802,11 +838,12 @@ def _reemplazar_cara(p):
 
 
 def _dividir_cara(p):
-    a, b, h = 14, 14, 12
+    """La tapa del cubo queda partida en dos caras por un corte naranja."""
+    a, b, h = 14, 14, 10
     q = _caja_c(p, a, b, h)
-    _poli(p, [q(0, b, 0), q(a / 2, b, 0), q(a / 2, b, h), q(0, b, h)], AZUL_SEL)
-    p.setPen(QPen(NARANJA, 2.0, Qt.SolidLine, Qt.RoundCap))
-    p.drawLine(q(a / 2, b, -1.5), q(a / 2, b, h))
+    _poli(p, _cuadro(q, 0, 0, a / 2, b, h), AZUL_SEL)
+    p.setPen(QPen(NARANJA, 2.6, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(q(a / 2, 0, h), q(a / 2, b, h))
 
 
 def _dividir_cuerpo(p):
@@ -859,6 +896,14 @@ def _alinear(p):
     _guiones(p, NARANJA, 1.4, (3, 2))
     p.drawLine(QPointF(2, 7), QPointF(30, 7))
     _flecha(p, 8.5, 16, 8.5, 9.5, GRIS_OSCURO, 1.6, 4)
+
+
+def _apoyar(p):
+    """Cuerpo azul que desciende hasta tocar un plano naranja."""
+    q = _q(9, 21)
+    _plano_q(p, [QPointF(3, 24), QPointF(9, 21), QPointF(15, 24), QPointF(9, 29)])
+    _caja_en(p, q, 0, 0, 0, 5, 5, 7)
+    _flecha(p, 9, 4, 9, 12, GRIS_OSCURO, 1.3, 3.5)
 
 
 def _suprimir(p):
@@ -977,12 +1022,12 @@ def _plano_medio(p):
 
 
 def _plano_perpendicular(p):
-    q = _q(16, 16)
-    _arista(p, q(-9, 0, 0), q(0, 0, 0))
-    _plano_q(p, [q(0, -7, -7), q(0, 7, -7), q(0, 7, 7), q(0, -7, 7)])
-    _arista(p, q(0, 0, 0), q(10, 0, 0))
-    _trazo(p, GRIS_OSCURO, 1.1)
-    p.drawPolyline(QPolygonF([q(3, 0, 0), q(3, 0, 3), q(0, 0, 3)]))
+    """Plano vertical naranja a escuadra sobre una cara horizontal azul clara."""
+    q = _q(16, 19)
+    _poli(p, _cuadro(q, -7, -7, 7, 7, 0), AZUL_SEL)
+    _plano_q(p, [q(0, -6, 0), q(0, 6, 0), q(0, 6, 13), q(0, -6, 13)])
+    _trazo(p, GRIS_OSCURO, 1.6)
+    p.drawPolyline(QPolygonF([q(4, 0, 0), q(4, 0, 4), q(0, 0, 4)]))
 
 
 def _plano_dos_aristas(p):
@@ -1759,6 +1804,24 @@ def _descoser(p):
         _poli(p, [c + desp for c in caras], color, BORDE_SUP, 1.0)
 
 
+def _sup_empalme(p):
+    """Dos láminas ámbar unidas por una banda de empalme redondeada."""
+    _lamina(p, QPointF(3, 17), QPointF(9, 17), QPointF(9, 28), QPointF(3, 28), 0)
+    _lamina(p, QPointF(15, 4), QPointF(28, 4), QPointF(28, 10), QPointF(15, 10), 0)
+    banda = QPainterPath(QPointF(3, 17))
+    banda.cubicTo(3, 8, 7, 4, 15, 4)
+    banda.lineTo(15, 10)
+    banda.cubicTo(11, 10, 9, 12, 9, 17)
+    banda.closeSubpath()
+    p.setPen(QPen(BORDE_SUP, 1.0))
+    p.setBrush(SUP[2])
+    p.drawPath(banda)
+    centro = QPainterPath(QPointF(6, 17))
+    centro.cubicTo(6, 10, 9, 7, 15, 7)
+    _trazo(p, BORDE_SUP, 1.3)
+    p.drawPath(centro)
+
+
 def _invertir_normal(p):
     _lamina(p, QPointF(3, 17), QPointF(16, 10), QPointF(29, 17), QPointF(16, 24), 0.1)
     _guion(p, GRIS_OSCURO, 1.2)
@@ -1855,6 +1918,24 @@ def _cortar_plano(p):
     _plano_q(p, _cuadro(q, -2.5, -2.5, 14.5, 14.5, 7))
 
 
+def _seccion_malla(p):
+    """Malla triangulada atravesada por un plano con su contorno de sección destacado."""
+    q = _q(9, 17)
+    _caja_malla(p, q, 6, 6, 10, n=1)
+    _plano_q(p, [QPointF(3, 12), QPointF(16, 7), QPointF(28, 10), QPointF(15, 15)])
+    for color, ancho in ((BORDE_MALLA, 2.6), (NARANJA, 1.3)):
+        _poli(p, _cuadro(q, 0, 0, 6, 6, 7), None, color, ancho)
+
+
+def _invertir_normal_malla(p):
+    """Triángulos de malla con una normal invertida y una flecha curva de giro."""
+    _cara_malla(p, QPointF(3, 16), QPointF(14, 11), QPointF(14, 23), QPointF(3, 28), MALLA[1], 2)
+    _guiones(p, BORDE_MALLA, 1.1)
+    p.drawLine(QPointF(9, 18), QPointF(24, 8))
+    _flecha(p, 19, 12, 9, 19, BORDE_MALLA, 1.3, 3.5)
+    _arco_con_punta(p, 22, 9, 5, -50, 150, GRIS_OSCURO, 1.3, 3.5)
+
+
 def _vaciado_malla(p):
     a = b = 18
     h, e = 11, 2.5
@@ -1888,15 +1969,18 @@ def _separar_malla(p):
 
 
 def _escalar_malla(p):
-    s, c = 12, 6
-    q = _q(16, 16)
-    _guion(p, BORDE_MALLA, 1.1)
-    p.drawPolygon(QPolygonF(_hexagono(q, s, s, s)))
-    for fin in (q(0, s, s), q(s, 0, s), q(s, s, 0)):
-        p.drawLine(q(s, s, s), fin)
-    o = q(0, s - c, 0)
-    _caja_malla(p, _q(o.x(), o.y()), c, c, c, None, 1)
-    _flecha(p, *_xy(q(c, s - c, c)), *_xy(q(s - 0.8, 0.8, s - 0.8)), GRIS_OSCURO, 1.8, 4.5)
+    """Malla facetada que crece hacia su fantasma punteado en dos diagonales opuestas."""
+    centro = QPointF(16, 16)
+    fantasma = _regular(16, 16, 12, 6, -90)
+    _guiones(p, BORDE_MALLA, 1.1)
+    p.drawPolygon(QPolygonF(fantasma))
+    for vertice in fantasma:
+        p.drawLine(centro, vertice)
+    vertices = _regular(16, 16, 7.5, 6, -90)
+    for i in range(6):
+        _poli(p, [centro, vertices[i], vertices[(i + 1) % 6]], MALLA[i % 3], BORDE_MALLA, 1.1)
+    _flecha(p, 11, 11, 5.5, 5.5, BORDE_MALLA, 1.8, 3.8)
+    _flecha(p, 21, 21, 26.5, 26.5, BORDE_MALLA, 1.8, 3.8)
 
 
 def _convertir_malla(p):
@@ -2074,6 +2158,32 @@ def _patron_plano(p):
     p.drawRect(QRectF(11, 11, 10, 10))
 
 
+def _replegar(p):
+    """Chapa plegada con el estado plano a trazos y una flecha curva de regreso."""
+    _guiones(p, BORDE_METAL, 1.1)
+    p.drawPolyline(QPolygonF([QPointF(3, 23), QPointF(3, 28), QPointF(9, 29), QPointF(9, 27)]))
+    _poli(p, [QPointF(3, 23), QPointF(9, 20), QPointF(15, 23), QPointF(9, 27)], METAL[0], BORDE_METAL)
+    _poli(p, [QPointF(3, 23), QPointF(9, 20), QPointF(9, 7), QPointF(3, 10)], METAL[1], BORDE_METAL)
+    regreso = QPainterPath(QPointF(27, 14))
+    regreso.cubicTo(29, 3, 13, 2, 12, 11)
+    _trazo(p, GRIS_OSCURO, 1.3)
+    p.drawPath(regreso)
+    _flecha(p, 12, 10, 12, 12.5, GRIS_OSCURO, 1.3, 3.5)
+
+
+def _exportar_dxf_chapa(p):
+    """Patrón plano metálico que sale hacia una hoja de documento DXF."""
+    cruz = [(7, 13), (11, 13), (11, 17), (15, 17), (15, 23), (11, 23),
+            (11, 28), (7, 28), (7, 23), (3, 23), (3, 17), (7, 17)]
+    _poli(p, [QPointF(x, y) for x, y in cruz], METAL[0], BORDE_METAL)
+    _guiones(p, BORDE_METAL, 1.1)
+    p.drawRect(QRectF(7, 17, 4, 6))
+    _hoja(p, 18, 3, 28, 15, 3)
+    _trazo(p, AZUL_LADO, 1.1)
+    p.drawRect(QRectF(20, 8, 5, 4))
+    _flecha(p, 11, 11, 16, 7, GRIS_OSCURO, 1.3, 3.5)
+
+
 def _convertir_chapa(p):
     _caja(p, 7, 7, 7, 8, 9, 1.0, GRISES, BORDE_GRIS)
     _flecha(p, 7, 19, 13, 25, GRIS_OSCURO, 1.8, 4.2)
@@ -2186,6 +2296,68 @@ def _secuencias(p):
         p.drawLine(QPointF(15, y), QPointF(28 - 4 * (k % 2), y))
 
 
+# ================================================================ PASOS SIN COMANDO PROPIO
+def _grafo(p):
+    """Programación visual: dos nodos de entrada conectados a una salida naranja."""
+    conexiones = QPainterPath(QPointF(11, 7.5))
+    conexiones.cubicTo(15, 7.5, 16, 8, 20, 8)
+    conexiones.moveTo(11, 23.5)
+    conexiones.cubicTo(14.5, 23.5, 14.5, 21, 14.5, 16)
+    conexiones.cubicTo(14.5, 12, 16, 12, 20, 12)
+    _trazo(p, BORDE_GRIS, 1.5)
+    p.drawPath(conexiones)
+    for y in (4, 20):
+        p.setPen(QPen(BORDE_GRIS, 1.2))
+        p.setBrush(GRISES[0])
+        p.drawRoundedRect(QRectF(3, y, 8, 7), 1.5, 1.5)
+        _punto_dato(p, 9, y + 3.5, 1.3)
+    p.setPen(QPen(BORDE_GRIS, 1.2))
+    p.setBrush(NARANJA)
+    p.drawRoundedRect(QRectF(20, 4, 9, 11), 2, 2)
+    for y in (8, 12):
+        _punto_dato(p, 22, y, 1.3)
+
+
+def _insertar_diseno(p):
+    """Insertar diseño: documento con esquina doblada, una caja azul y flecha de entrada."""
+    _hoja(p, 3, 8, 15, 29, 3.5)
+    _caja(p, 5.5, 5.5, 5.5, 9, 20)
+    _flecha(p, 9, 3.5, 9, 12.5, AZUL_LADO, 2.4)
+
+
+def _importar_iges(p):
+    """Importar IGES: lámina ondulada naranja con una flecha que entra desde la izquierda."""
+    _lamina(p, QPointF(16, 3.5), QPointF(28, 9.5), QPointF(20, 14.5), QPointF(8, 8.5), 3)
+    _flecha(p, 3.5, 11, 14, 11, AZUL_LADO, 2.4)
+
+
+def _borrar_caras(p):
+    """Borrar caras: cubo azul sin tapa, contorno superior punteado y cruz roja arriba."""
+    q = _q(9.5, 20)
+    a = b = 6.5
+    h = 7
+    _poli(p, [q(0, b, h), q(a, b, h), q(a, b, 0), q(0, b, 0)], AZUL_FRENTE, None)
+    _poli(p, [q(a, b, h), q(a, 0, h), q(a, 0, 0), q(a, b, 0)], AZUL_LADO, None)
+    _trazo(p, AZUL_BORDE, 1.1)
+    p.drawPolyline(QPolygonF([q(0, b, h), q(0, b, 0), q(a, b, 0), q(a, 0, 0), q(a, 0, h)]))
+    p.drawLine(q(a, b, h), q(a, b, 0))
+    _guiones(p, AZUL_BORDE, 1.2, (1.8, 1.5))
+    p.drawPolygon(QPolygonF(_cuadro(q, 0, 0, a, b, h)))
+    p.setPen(QPen(ROJO, 2.6, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(21, 4), QPointF(28, 11))
+    p.drawLine(QPointF(28, 4), QPointF(21, 11))
+
+
+def _calibracion_holguras(p):
+    """Calibración de holguras: placa azul con tres agujeros de diámetro creciente."""
+    q = _q(10.5, 4.25)
+    _caja_en(p, q, 0, 0, 0, 14, 8, 1.5)
+    p.setPen(QPen(AZUL_BORDE, 1.0))
+    p.setBrush(OSCUROS[2])
+    for x, radio in ((2.5, 1.2), (6.5, 1.8), (11.5, 2.5)):
+        p.drawEllipse(q(x, 4, 1.5), radio, radio * 0.58)
+
+
 DIBUJOS_EXTRA = {
     # sólido / crear
     "barrido": _barrido, "solevacion": _solevacion, "nervio": _nervio, "red": _red, "labio": _labio,
@@ -2199,15 +2371,19 @@ DIBUJOS_EXTRA = {
     "patron_geometrico": _patron_geometrico, "reconocer_funciones": _reconocer_funciones, "reticula_volumetrica": _reticula_volumetrica,
     "operacion_base": _operacion_base, "derivar": _derivar, "crear_forma": _crear_forma,
     "engranaje_3d": _engranaje_3d, "eje_escalonado": _eje_escalonado,
+    # variantes de comandos hermanos (ICO-4)
+    "extruir_cara": _extruir_cara,
     # modificar
     "pulsar_tirar": _pulsar_tirar, "empalme_3d": lambda p: _arista_viva(p, True),
-    "chaflan_3d": lambda p: _arista_viva(p, False), "vaciado": _vaciado, "desmoldeo": _desmoldeo,
+    "chaflan_3d": _chaflan_3d, "vaciado": _vaciado, "desmoldeo": _desmoldeo,
     "escala_3d": _escala_3d, "desfase_cara": _desfase_cara, "reemplazar_cara": _reemplazar_cara,
     "dividir_cara": _dividir_cara, "dividir_cuerpo": _dividir_cuerpo, "division_silueta": _division_silueta,
     "mover_copiar": _mover_copiar, "alinear": _alinear, "suprimir": _suprimir, "quitar": _quitar,
     "quitar_empalmes": _quitar_empalmes,
     "material_fisico": _material_fisico, "aspecto": _aspecto, "administrar_materiales": _administrar_materiales,
     "lista_materiales": _lista_materiales,
+    # variantes de comandos hermanos (ICO-4)
+    "apoyar": _apoyar, "desfase_aristas": _desfase_aristas,
     # construir
     "scu": _scu, "plano_angulo": _plano_angulo, "plano_tangente": _plano_tangente, "plano_medio": _plano_medio,
     "plano_perpendicular": _plano_perpendicular, "plano_dos_aristas": _plano_dos_aristas,
@@ -2241,6 +2417,8 @@ DIBUJOS_EXTRA = {
     "sup_solevacion": _sup_solevacion, "parche": _parche, "reglada": _reglada, "sup_desfase": _sup_desfase,
     "recortar_sup": _recortar_sup, "destrimar": _destrimar, "extender_sup": _extender_sup, "coser": _coser,
     "descoser": _descoser, "invertir_normal": _invertir_normal,
+    # variantes de comandos hermanos (ICO-4)
+    "sup_empalme": _sup_empalme,
     # malla
     "malla_teselar": _malla_teselar, "reparar_malla": _reparar_malla, "limpiar_malla": _limpiar_malla,
     "grupos_caras": _grupos_caras,
@@ -2248,16 +2426,23 @@ DIBUJOS_EXTRA = {
     "vaciado_malla": _vaciado_malla, "combinar_mallas": _combinar_mallas, "suavizar_malla": _suavizar_malla,
     "separar_malla": _separar_malla, "escalar_malla": _escalar_malla, "convertir_malla": _convertir_malla,
     "borrar_rellenar": _borrar_rellenar, "alinear_malla": _alinear_malla, "exportar_malla": _exportar_malla,
+    # variantes de comandos hermanos (ICO-4)
+    "seccion_malla": _seccion_malla, "invertir_normal_malla": _invertir_normal_malla,
     # chapa
     "reglas_chapa": _reglas_chapa, "pestana": _pestana, "pestana_contorno": _pestana_contorno,
     "pestana_solevada": _pestana_solevada, "dobladillo": _dobladillo, "cierre_esquina": _cierre_esquina,
     "desgarro": _desgarro, "unir_plegando": _unir_plegando, "plegar": lambda p: _plegar_o_desplegar(p, True),
     "desplegar": lambda p: _plegar_o_desplegar(p, False), "patron_plano": _patron_plano,
     "convertir_chapa": _convertir_chapa,
+    # variantes de comandos hermanos (ICO-4)
+    "replegar": _replegar, "exportar_dxf_chapa": _exportar_dxf_chapa,
     # espacios de trabajo / varios
     "dibujo": _dibujo, "render": _render, "animacion": _animacion, "configuracion_tabla": _configuracion_tabla,
     "parametros_exportar": _parametros_exportar, "parametros_importar": _parametros_importar,
     "secuencias": _secuencias, "asistente": _asistente, "clip": _clip,
+    # pasos sin comando propio
+    "grafo": _grafo, "insertar_diseno": _insertar_diseno, "importar_iges": _importar_iges,
+    "borrar_caras": _borrar_caras, "calibracion_holguras": _calibracion_holguras,
 }
 
 # Los ayudantes de iconos.py se importan AL FINAL, a propósito: iconos.py importa este módulo en su última

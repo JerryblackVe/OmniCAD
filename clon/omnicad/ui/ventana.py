@@ -574,6 +574,7 @@ class VentanaPrincipal(QMainWindow):
                     v.update()
                 for arbol in self.findChildren(QTreeWidget):
                     arbol.viewport().update()
+                self.timeline.repintar_iconos()
         return avisos
 
     def aplicar_preferencias(self):
@@ -1035,6 +1036,10 @@ class VentanaPrincipal(QMainWindow):
         organizacion["conjuntos"].update({f"sel:{n}": {"nombre": n, "miembros": []}      # los de SELECCIONAR (SOL-36)
                                           for n in self.doc.espacios.get("conjuntos_seleccion") or {}})
         self.navegador.organizacion = organizacion
+        por_paso = {o.id: r.estado for o, r in zip(self.doc.operaciones, self.doc.resultados, strict=True)
+                    if r.estado in ("aviso", "error")}
+        self.navegador.estados = {**{k.id: por_paso[k.op_id] for k in estado.cuerpos.values() if k.op_id in por_paso},
+                                  **{b.op_id: por_paso[b.op_id] for b in estado.bocetos.values() if b.op_id in por_paso}}
         bocetos_nav = dict(estado.bocetos)
         en_edicion = {}                         # el boceto abierto muestra el estado del editor, no el guardado
         if self.modo_boceto.activo:

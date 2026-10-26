@@ -9,7 +9,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QToolButton, QVBoxLayout,
                                QWidget)
@@ -65,8 +65,8 @@ class PanelDatos(QWidget):
         self.prefs = prefs
         cab = QHBoxLayout()
         cab.setContentsMargins(10, 8, 6, 4)
-        casa = QLabel()
-        casa.setPixmap(icono("casa").pixmap(16, 16))
+        casa = QToolButton(icon=icono("casa"), iconSize=QSize(16, 16), autoRaise=True, focusPolicy=Qt.NoFocus)   # ícono vivo: sigue al tema
+        casa.setAttribute(Qt.WA_TransparentForMouseEvents)
         cab.addWidget(casa)
         cab.addWidget(QLabel("›"))
         cab.addWidget(QLabel("<b>Mis datos recientes</b>"))

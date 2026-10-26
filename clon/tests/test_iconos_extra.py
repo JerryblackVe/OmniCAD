@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Íconos extra (omnicad/ui/iconos_extra.py): están todos, cada uno pinta, no se repiten ni se salen
+"""171 íconos extra (omnicad/ui/iconos_extra.py): están todos, cada uno pinta, no se repiten ni se salen
 de la grilla, y no pisan a los de iconos.py.
 
 `python tests/test_iconos_extra.py` regenera la hoja de contacto en evidencias/capturas/iconos_extra.png.
@@ -14,15 +14,15 @@ import pytest
 RAIZ = Path(__file__).resolve().parent.parent
 HOJA = RAIZ.parent / "evidencias" / "capturas" / "iconos_extra.png"
 
-# El contrato: un ícono por comando, agrupados como en la cinta.
+# El contrato: un ícono por comando o paso, agrupados como en la cinta y el timeline.
 SECCIONES = {
-    "SÓLIDO / CREAR": ["barrido", "solevacion", "nervio", "red", "labio", "repujado", "saliente", "encaje_presion",
+    "SÓLIDO / CREAR": ["extruir_cara", "barrido", "solevacion", "nervio", "red", "labio", "repujado", "saliente", "encaje_presion",
                        "agujero", "rosca", "bobina", "tuberia", "patron_rectangular_3d", "patron_circular_3d",
                        "patron_ruta", "patron_puntos", "multitransformar", "simetria_3d", "engrosar",
                        "relleno_contorno", "cuerpo_envolvente", "volumen_fluido",
                        "operacion_base", "derivar", "crear_forma", "engranaje_3d", "eje_escalonado", "reconocer_funciones"],
     "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "quitar_empalmes", "vaciado", "desmoldeo",
-                  "escala_3d", "desfase_cara",
+                  "escala_3d", "desfase_cara", "desfase_aristas", "apoyar",
                   "reemplazar_cara", "dividir_cara", "dividir_cuerpo", "division_silueta", "mover_copiar", "alinear",
                   "suprimir", "quitar", "reticula_volumetrica", "material_fisico", "aspecto", "administrar_materiales", "lista_materiales"],
     "CONSTRUIR": ["scu", "plano_angulo", "plano_tangente", "plano_medio", "plano_perpendicular", "plano_dos_aristas",
@@ -39,16 +39,19 @@ SECCIONES = {
                   "fijar_componente"],
     "SELECCIONAR": ["seleccion_ventana", "seleccion_libre", "seleccion_pintura", "filtro_seleccion"],
     "SUPERFICIE": ["sup_extruir", "sup_revolucion", "sup_barrido", "sup_solevacion", "parche", "reglada",
-                   "sup_desfase", "recortar_sup", "destrimar", "extender_sup", "coser", "descoser", "invertir_normal"],
+                   "sup_desfase", "recortar_sup", "destrimar", "extender_sup", "coser", "descoser", "invertir_normal", "sup_empalme"],
     "MALLA": ["malla_teselar", "reparar_malla", "limpiar_malla", "grupos_caras", "reducir_malla", "remallar", "cortar_plano",
               "vaciado_malla", "combinar_mallas", "suavizar_malla", "separar_malla", "escalar_malla",
-              "convertir_malla", "borrar_rellenar", "alinear_malla", "exportar_malla"],
+              "convertir_malla", "borrar_rellenar", "alinear_malla", "exportar_malla", "seccion_malla", "invertir_normal_malla"],
     "CHAPA": ["reglas_chapa", "pestana", "pestana_contorno", "pestana_solevada", "dobladillo", "cierre_esquina",
-              "desgarro", "unir_plegando", "plegar", "desplegar", "patron_plano", "convertir_chapa"],
+              "desgarro", "unir_plegando", "plegar", "desplegar", "patron_plano", "convertir_chapa", "replegar", "exportar_dxf_chapa"],
     "ESPACIOS / VARIOS": ["dibujo", "render", "animacion", "configuracion_tabla", "parametros_exportar",
                           "parametros_importar", "secuencias", "asistente", "clip"],
+    "PASOS SIN COMANDO": ["grafo", "insertar_diseno", "importar_iges", "borrar_caras", "calibracion_holguras"],
 }
 NOMBRES = [n for lista in SECCIONES.values() for n in lista]
+VARIANTES_HERMANOS = ["replegar", "exportar_dxf_chapa", "seccion_malla", "invertir_normal_malla",
+                     "sup_empalme", "apoyar", "extruir_cara", "desfase_aristas"]
 
 
 def _app():
@@ -88,7 +91,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 158
+    assert len(NOMBRES) == len(set(NOMBRES)) == 171
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 
@@ -111,6 +114,20 @@ def test_pinta_dentro_de_la_grilla(modulos, nombre):
     fuera = sum(1 for i, a in enumerate(alfa) if a > 60 and not (
         margen - tol <= i % lado < lado - margen + tol and margen - tol <= i // lado < lado - margen + tol))
     assert fuera == 0, f"{nombre}: {fuera} píxeles fuera de la grilla 32×32"
+
+
+@pytest.mark.parametrize("nombre", SECCIONES["PASOS SIN COMANDO"] + VARIANTES_HERMANOS)
+def test_pasos_reservan_margen_y_esquina(modulos, nombre):
+    """Los pasos nuevos respetan el margen de dos unidades y el espacio de la insignia."""
+    _, extra = modulos
+    escala = 4
+    img = _pintar(extra.DIBUJOS_EXTRA[nombre], escala)
+    for i, alfa in enumerate(_alfas(img)):
+        if alfa <= 60:
+            continue
+        x, y = (i % img.width() + 0.5) / escala, (i // img.width() + 0.5) / escala
+        assert 2 <= x <= 30 and 2 <= y <= 30, f"{nombre}: pinta fuera del margen en ({x}, {y})"
+        assert x <= 16 or y <= 16, f"{nombre}: ocupa la esquina de la insignia en ({x}, {y})"
 
 
 def test_ninguno_repetido(modulos):

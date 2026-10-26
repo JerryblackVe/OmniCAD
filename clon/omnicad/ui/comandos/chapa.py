@@ -330,7 +330,7 @@ class Desplegar(Comando):
 
 
 class Replegar(Comando):
-    CLAVE, TITULO, ICONO, ATAJO = "replegar", "Volver a plegar", "plegar", None
+    CLAVE, TITULO, ICONO, ATAJO = "replegar", "Volver a plegar", "replegar", None
     AYUDA = "Vuelve a plegar los pliegues desplegados."
     CLASE_OP = OpDesplegar
     VARIANTE = ("modo", "replegar")
@@ -392,7 +392,7 @@ class PatronPlano(Comando):
 class ExportarDXFPatron(Comando):
     """Exportar el patrón plano como DXF [GUID-9C211F95]: contorno exterior, contornos interiores y líneas de
     pliegue (centro y extensión) en capas separadas, en mm."""
-    CLAVE, TITULO, ICONO, ATAJO = "exportar_dxf_chapa", "Exportar DXF del patrón plano", "patron_plano", None
+    CLAVE, TITULO, ICONO, ATAJO = "exportar_dxf_chapa", "Exportar DXF del patrón plano", "exportar_dxf_chapa", None
     AYUDA = "Guarda el patrón plano de un cuerpo de chapa como DXF para corte láser o plegadora."
     SIN_OP, PREVIA, TEXTO_ACEPTAR = True, False, "Exportar"
     verificar = staticmethod(_con_chapa)

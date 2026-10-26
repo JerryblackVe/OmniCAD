@@ -144,6 +144,10 @@ La operación existe y funciona por `run_operation`. Falta la herramienta con no
 Se descartan porque no le sirven a un agente: tema, paneles, pantalla completa, atajos, caja de herramientas, menú
 radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y del ViewCube, ayuda.
 
+Íconos (plan_iconos.md, 2026-10-26): los íconos del timeline, las insignias de operación y de estado, la gramática visual y el tema de los
+íconos quedan fuera, a propósito. Son dibujos para una persona: un agente lee el tipo, el nombre y el estado del paso con `get_timeline`, que ya
+lo dice con palabras; una imagen de 24 px no le agrega nada.
+
 Asistente IA (fase IA-7, 2026-10-25): el panel de chat queda fuera, a propósito. Un agente externo ya ES el asistente:
 no necesita hablar con otro, y las teclas, la tarjeta Aplicar y los botones del panel no le sirven. Lo útil sí está, en
 el grupo `asistente` (fuera de los grupos por defecto del MCP porque gasta plata): `get_assistant_config`,

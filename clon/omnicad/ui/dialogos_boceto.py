@@ -12,6 +12,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
                                QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QSpinBox, QVBoxLayout)
 
+from .iconos import icono
+
 MODOS_PROYECCION = {"project": "proyectar", "intersect": "intersecar", "giro": "perfil giratorio"}
 
 
@@ -21,6 +23,7 @@ class DialogoPatron(QDialog):
         self.setWindowTitle("Editar patrón")
         p = registro["params"]
         self.rectangular = registro["tipo"] == "rectangular"
+        self.setWindowIcon(icono("patron_rectangular" if self.rectangular else "patron_circular"))
         self._suprimidos = set(registro["suprimidos"])
         form = QFormLayout(self)
         if self.rectangular:
@@ -122,6 +125,7 @@ class DialogoPerdidas(QDialog):
     def __init__(self, lienzo):
         super().__init__(lienzo)
         self.setWindowTitle("Administrar proyecciones perdidas")
+        self.setWindowIcon(icono("proyectar"))
         self.lz = lienzo
         v = QVBoxLayout(self)
         aviso = QLabel("Estas proyecciones ya no coinciden con el modelo: quedaron como estaban. Re-vinculalas a "

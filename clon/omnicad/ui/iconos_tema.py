@@ -7,10 +7,8 @@ cinta clara: sobre un tema oscuro casi no se ven. En vez de tocar el dibujo de c
 `iconos.pixmap`: cuando el tema activo es oscuro, los píxeles gris oscuro sin color (ojo, flechas, reproducción,
 marcador) pasan al color de texto del tema; los azules, naranjas y verdes quedan como están.
 
-Limitación: los íconos se cachean y los widgets guardan su QIcon, así que se adaptan al tema con el que ARRANCA la
-aplicación y se quedan así hasta reiniciar (todos igual, para que no se mezclen): al pasar de un tema claro a uno oscuro
-(o al revés) con la aplicación abierta, el diálogo de Preferencias avisa que los íconos cambian al reiniciar.
-Cuando los íconos pasen a ser sensibles al tema, este módulo sobra.
+Los íconos son `iconos.IconoVivo`: se dibujan al pedirlos, con el tema de ese momento. Al cambiar de tema solo hay que
+vaciar su caché (`instalar` se engancha a `temas.observar`) y repintar: no hace falta reiniciar.
 """
 import numpy as np
 from PySide6.QtGui import QImage, QPixmap
@@ -20,7 +18,6 @@ from . import iconos, temas
 SATURACION_MAX = 28     # un píxel «gris» tiene sus tres canales casi iguales
 VALOR_MAX = 150         # y «oscuro» es menos que esto (los grises medios del dibujo se ven bien sobre el oscuro)
 _original = None
-_colores = None         # los colores del tema con el que se instaló (los íconos no cambian hasta reiniciar)
 
 
 def tema_oscuro(colores=None):
@@ -45,17 +42,14 @@ def adaptar(pm, colores=None):
 
 def _pixmap(nombre, tam=32, escala=2):
     pm = _original(nombre, tam, escala)
-    return adaptar(pm, _colores) if tema_oscuro(_colores) else pm
+    colores = temas.activo()
+    return adaptar(pm, colores) if tema_oscuro(colores) else pm
 
 
 def instalar():
-    """Envuelve `iconos.pixmap` (una sola vez, con el tema activo en ese momento)."""
-    global _original, _colores
+    """Envuelve `iconos.pixmap` (una sola vez) y vacía la caché de íconos cada vez que cambia el tema."""
+    global _original
     if _original is None:
-        _original, _colores = iconos.pixmap, dict(temas.activo())
+        _original = iconos.pixmap
         iconos.pixmap = _pixmap
-
-
-def necesita_reiniciar(colores):
-    """True si los íconos ya creados no combinan con el tema `colores` (uno claro frente a uno oscuro)."""
-    return _colores is not None and tema_oscuro(_colores) != tema_oscuro(colores)
+        temas.observar(iconos.vaciar_cache)

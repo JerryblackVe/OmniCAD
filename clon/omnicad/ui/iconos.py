@@ -10,8 +10,9 @@ y sin recursos propietarios). El estado deshabilitado lo genera Qt (versión gri
 import math
 from functools import lru_cache
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRadialGradient
+import numpy as np
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QIconEngine, QImage, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRadialGradient
 
 AZUL_ARRIBA, AZUL_FRENTE, AZUL_LADO, AZUL_BORDE = (QColor("#9fcff5"), QColor("#4a9be0"), QColor("#2b78c2"),
                                                   QColor("#1d5a94"))
@@ -19,13 +20,71 @@ GRIS_OSCURO, GRIS, VERDE, NARANJA, ROJO = (QColor("#4d4d4d"), QColor("#9a9a9a"),
                                            QColor("#ef9a2a"), QColor("#d64545"))
 
 
+_PIXMAPS = {}       # (clave del ícono, lado en px) → QPixmap ya dibujado con el tema de ahora
+
+
+def vaciar_cache():
+    """Los íconos se vuelven a dibujar la próxima vez que se pintan (cambió el tema: iconos_tema lo llama)."""
+    _PIXMAPS.clear()
+
+
+class IconoVivo(QIconEngine):
+    """Ícono que se dibuja al pedirlo, al tamaño exacto y con el tema de ese momento: al cambiar de tema alcanza con
+    `vaciar_cache()` y repintar, sin reiniciar (P-9g). `dibujar(lado)` devuelve el QPixmap de `lado` px."""
+
+    def __init__(self, clave, dibujar):
+        super().__init__()
+        self.clave, self.dibujar = clave, dibujar
+
+    def clone(self):
+        return IconoVivo(self.clave, self.dibujar)
+
+    def pixmap(self, size, mode, state):
+        lado = max(1, min(size.width(), size.height()))
+        base = _PIXMAPS.get((self.clave, lado))
+        if base is None:
+            base = _PIXMAPS[(self.clave, lado)] = self.dibujar(lado)
+        # El gris del deshabilitado y el tinte de seleccionado los genera el estilo de Qt a partir del normal.
+        return base if mode == QIcon.Normal else QIcon(base).pixmap(QSize(lado, lado), mode, state)
+
+    def paint(self, painter, rect, mode, state):
+        dpr = painter.device().devicePixelRatioF()
+        lado = max(1, round(min(rect.width(), rect.height()) * dpr))
+        centro = rect.center()
+        destino = QRectF(0, 0, lado / dpr, lado / dpr)
+        destino.moveCenter(QPointF(centro.x(), centro.y()))
+        painter.drawPixmap(destino, self.pixmap(QSize(lado, lado), mode, state), QRectF(0, 0, lado, lado))
+
+
 @lru_cache(maxsize=None)
-def icono(nombre, tam=32):
-    """QIcon del nombre pedido (cacheado). Nombre desconocido → ícono vacío (no rompe la UI)."""
-    ico = QIcon()
-    for escala in (1, 2):
-        ico.addPixmap(pixmap(nombre, tam, escala))
-    return ico
+def icono(nombre):
+    """QIcon del nombre pedido (cacheado; su dibujo sigue al tema). Nombre desconocido → ícono vacío (no rompe la UI)."""
+    return QIcon(IconoVivo(("icono", nombre), lambda lado: pixmap(nombre, lado, 1)))
+
+
+MARGEN = 2.0                # unidades de la grilla 32×32 libres en cada borde (docs/plan_iconos.md › Gramática)
+SIN_AJUSTE = {"marcador"}   # la barra del timeline llena el alto de su fila
+
+
+@lru_cache(maxsize=None)
+def _escala_de_margen(nombre):
+    """Cuánto achicar un dibujo (alrededor del centro) para que deje MARGEN unidades libres en cada borde; 1 si ya las deja."""
+    funcion = DIBUJOS.get(nombre)
+    if funcion is None or nombre in SIN_AJUSTE:
+        return 1.0
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.scale(2, 2)
+    funcion(p)
+    p.end()
+    alfa = np.frombuffer(pm.toImage().convertToFormat(QImage.Format_ARGB32).constBits(), np.uint8).reshape(64, 64, 4)[..., 3]
+    ys, xs = np.where(alfa > 60)
+    if not len(xs):
+        return 1.0
+    libre = min(xs.min(), ys.min(), 63 - xs.max(), 63 - ys.max()) / 2
+    return (16 - MARGEN) / (16 - libre) if libre < MARGEN else 1.0
 
 
 def pixmap(nombre, tam=32, escala=2):
@@ -37,6 +96,11 @@ def pixmap(nombre, tam=32, escala=2):
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
         p.scale(tam / 32, tam / 32)
+        k = _escala_de_margen(nombre)
+        if k < 1:
+            p.translate(16, 16)
+            p.scale(k, k)
+            p.translate(-16, -16)
         funcion(p)
         p.end()
     return pm

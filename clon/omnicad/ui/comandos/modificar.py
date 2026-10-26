@@ -523,7 +523,7 @@ def _con_aristas(v):
 class Desfase(Comando):
     """Desfase (PL1, «un comando según lo elegido» de Plasticity): con caras las mueve a lo largo de su normal (el
     desfase de cara de siempre); con aristas o curvas de boceto crea curvas nuevas a esa distancia (PL7)."""
-    CLAVE, TITULO, ICONO = "desfase", "Desfase", "desfase_cara"
+    CLAVE, TITULO, ICONO = "desfase", "Desfase", "desfase_aristas"
     AYUDA = ("Un solo comando para desfasar. Con caras: las mueve a lo largo de su normal (agrega o quita material). "
              "Con aristas o curvas de un boceto: crea un boceto nuevo con curvas a esa distancia, sin cortar el cuerpo.")
     CLASE_OP = OpDesfaseAristas          # al editar un paso «Desfase de aristas»; el de cara lo edita «Cara de desfase»
@@ -806,7 +806,7 @@ class MoverCopiar(Comando):
 
 
 class ApoyarEnPlano(Comando):
-    CLAVE, TITULO, ICONO = "apoyar", "Apoyar en el plano", "alinear"
+    CLAVE, TITULO, ICONO = "apoyar", "Apoyar en el plano", "apoyar"
     AYUDA = "Baja o sube los cuerpos hasta que lo más bajo toque el plano Z = 0. Sin selección: todos."
     CLASE_OP = OpApoyar
     verificar = staticmethod(_con_cuerpos)

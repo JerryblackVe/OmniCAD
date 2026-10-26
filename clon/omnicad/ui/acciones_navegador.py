@@ -3,10 +3,75 @@ from PySide6.QtWidgets import QInputDialog, QMenu
 
 from .. import api
 from ..api.herramientas_navegador import datos_navegador
+from .iconos import icono
 from .navegador import ROL_CLAVE, ROL_TIPO
 
 CAPAS_BOCETO = {"profile": "perfil", "dimensions": "cotas", "projected": "proyectadas", "construction": "construccion",
                 "grid": "rejilla", "snap": "forzar", "cut": "corte", "points": "puntos", "constraints": "restricciones"}
+ICONOS_MENU = {
+    "Desplazar al grupo": "carpeta",
+    "Carpeta original": "carpeta",
+    "Nuevo grupo": "carpeta",
+    "Crear conjunto de selección": "seleccionar",
+    "Mover/copiar": "mover_copiar",
+    "Crear componentes a partir de cuerpos": "nuevo_componente",
+    "Configurar": "configurar",
+    "Activar conjuntos de contactos": "conjunto_contacto",
+    "Material físico…": "material_fisico",
+    "Material físico": "material_fisico",
+    "Aspecto…": "aspecto",
+    "Aspecto": "aspecto",
+    "Controles de mapa de textura": "aspecto",
+    "Eliminar anulación de aspecto": "aspecto",
+    "Propiedades": "medir",
+    "Guardar como malla": "exportar_malla",
+    "Suprimir": "suprimir",
+    "Quitar": "quitar",
+    "Cambiar nombre": "texto",
+    "Control de detalles de visualización": "visualizacion",
+    "Mostrar/ocultar": "ojo",
+    "Mostrar todo": "ojo",
+    "Control de opacidad": "aspecto",
+    "Seleccionable/no seleccionable": "seleccionar",
+    "Aislar": "encuadre",
+    "Desaislar": "ojo",
+    "Buscar en la ventana": "buscar",
+    "Buscar en la secuencia temporal": "buscar",
+    "Añadir a ensamblaje": "insertar_componente",
+    "Crear dibujo": "dibujo",
+    "Grupo rígido": "grupo_rigido",
+    "Exportar…": "exportar",
+    "Guardar copia como": "guardar",
+    "Mostrar en ubicación": "carpeta",
+    "Historial": "secuencias",
+    "Mostrar todos los componentes": "ojo",
+    "Mostrar todos los cuerpos": "ojo",
+    "Cambiar al modelado directo": "operacion_base",
+    "Extruir": "extruir",
+    "Plano de desfase": "plano_desfase",
+    "Editar boceto": "boceto",
+    "Redefinir el plano de boceto": "plano",
+    "Seleccionar el plano de boceto": "plano",
+    "Exportar DXF": "exportar",
+    "Mirar a": "mirar_a",
+    "Ocultar perfil": "ojo_no",
+    "Mostrar cota": "cota",
+    "Ocultar las geometrías proyectadas": "ojo_no",
+    "Ocultar geometrías de construcción": "ojo_no",
+    "Editar calcomanía": "calcomania",
+    "Reemplazar archivo de imagen": "importar",
+}
+
+
+def con_iconos(menu):
+    """Asigna los dibujos existentes por texto, también a los submenús, sin cambiar las acciones."""
+    for accion in menu.actions():
+        nombre = ICONOS_MENU.get(accion.text().split("\t")[0])
+        if nombre:
+            accion.setIcon(icono(nombre))
+        if accion.menu() is not None:
+            con_iconos(accion.menu())
+    return menu
 
 
 def elementos(v, clave):
@@ -53,11 +118,11 @@ def mostrar(v, ids, visible):
 def menu(v, item):
     clave, tipo = item.data(0, ROL_CLAVE), item.data(0, ROL_TIPO)
     if tipo == "raiz":
-        return menu_raiz(v)
+        return con_iconos(menu_raiz(v))
     if tipo == "boceto":
-        return menu_boceto(v, item)
+        return con_iconos(menu_boceto(v, item))
     if tipo == "calcomania":
-        return menu_calcomania(v, item)
+        return con_iconos(menu_calcomania(v, item))
     ids = elementos(v, clave)
     m = QMenu(v.navegador)
     m.setToolTipsVisible(True)
@@ -112,7 +177,7 @@ def menu(v, item):
         m.addSeparator()
         m.addAction("Buscar en la ventana", lambda: v._accion_navegador("buscar_ventana", clave))
         m.addAction("Buscar en la secuencia temporal", lambda: v._accion_navegador("buscar_timeline", clave.split(".c")[0]))
-    return m
+    return con_iconos(m)
 
 
 def no_disponible(m, texto, ayuda=""):

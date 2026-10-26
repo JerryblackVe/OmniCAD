@@ -59,7 +59,7 @@ ENSAMBLAR = ("ENSAMBLAR", ["union"], [
     _i("Origen de la unión", "origen_union"), _i("Grupo rígido", "grupo_rigido"), SEP,
     _i("Accionar uniones", "accionar_uniones"), _i("Vínculo de movimiento", "vinculo_movimiento"),
     _i("Fijar / liberar componente", "fijar_componente"), SEP,
-    _i("Habilitar todos los conjuntos de contacto"), _i("Estudio de movimiento", "estudio_movimiento"), SEP,
+    _i("Habilitar todos los conjuntos de contacto", ico="conjunto_contacto"), _i("Estudio de movimiento", "estudio_movimiento"), SEP,
     _i("Insertar componente…", "insertar_diseno")])
 SELECCIONAR = ("SELECCIONAR", ["seleccionar"], [
     _i("Seleccionar", "seleccionar"), _i("Selección en ventana", "sel_ventana"),
@@ -78,13 +78,13 @@ SELECCIONAR = ("SELECCIONAR", ["seleccionar"], [
     _sub("Filtros de selección", [_i("Caras", "filtro_caras"), _i("Aristas", "filtro_aristas"),
                                   _i("Vértices", "filtro_vertices"), _i("Cuerpos", "filtro_cuerpos"),
                                   _i("Perfiles y curvas de boceto", "filtro_bocetos"),
-                                  _i("Planos, ejes y puntos", "filtro_construccion")])])
+                                  _i("Planos, ejes y puntos", "filtro_construccion")], ico="filtro_seleccion")])
 COMPARTIDOS = [CONFIGURAR, CONSTRUIR, INSPECCIONAR, INSERTAR, ENSAMBLAR, SELECCIONAR]
 
 # ------------------------------------------------------------------ pestañas
 SOLIDO = [
     ("CREAR", ["extruir", "revolucion", "agujero", "patron_rectangular_3d", "boceto"], [
-        _i("Crear boceto", "boceto"), _i("Crear forma"), _i("Derivar"), _i("Reconocer funciones", "reconocer_funciones"), SEP,
+        _i("Crear boceto", "boceto"), _i("Crear forma", ico="crear_forma"), _i("Derivar"), _i("Reconocer funciones", "reconocer_funciones"), SEP,
         _i("Extruir", "extruir"), _i("Revolución", "revolucion"), _i("Barrido", "barrido"),
         _i("Solevación", "solevacion"), _i("Nervio", "nervio"), _i("Red", "red"), _i("Repujado", "repujado"), SEP,
         _i("Agujero", "agujero"), _i("Rosca", "rosca"), SEP,
@@ -108,7 +108,7 @@ SOLIDO = [
         _i("Retícula volumétrica", "reticula_volumetrica"), SEP,
         _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
         SEP, _sub("Simplificar", []), SEP,
-        _i("Material físico", "material_fisico"), _i("Aspecto", "aspecto"), _i("Administrar materiales"), SEP,
+        _i("Material físico", "material_fisico"), _i("Aspecto", "aspecto"), _i("Administrar materiales", ico="administrar_materiales"), SEP,
         _i("Cambiar parámetros", "parametros"), _i("Calcular todo", "calcular"), SEP,
         _i("Lista de materiales", "lista_materiales")]),
 ] + COMPARTIDOS
@@ -140,10 +140,10 @@ SUPERFICIE = [
 CHAPA = [
     ("CREAR", ["boceto", "pestana", "pestana_contorno", "dobladillo"], [
         _i("Crear boceto", "boceto"), SEP, _i("Pestaña", "pestana"), _i("Pestaña de contorno", "pestana_contorno"),
-        _i("Pestaña solevada"), _i("Dobladillo", "dobladillo"), SEP, _i("Convertir a chapa", "convertir_chapa")]),
+        _i("Pestaña solevada", ico="pestana_solevada"), _i("Dobladillo", "dobladillo"), SEP, _i("Convertir a chapa", "convertir_chapa")]),
     ("MODIFICAR", ["plegar", "desplegar", "patron_plano"], [
         _i("Plegar", "plegar"), _i("Desplegar", "desplegar"), _i("Volver a plegar caras", "replegar"),
-        _i("Desgarro", "desgarro"), _i("Unir plegando", "unir_plegando"), _i("Cierre de esquina"), SEP,
+        _i("Desgarro", "desgarro"), _i("Unir plegando", "unir_plegando"), _i("Cierre de esquina", ico="cierre_esquina"), SEP,
         _i("Patrón plano", "patron_plano"), _i("Activar patrón plano", "activar_patron_plano"),
         _i("Exportar patrón plano a DXF", "exportar_dxf_chapa"), SEP,
         _i("Reglas de chapa", "reglas_chapa")]),
@@ -152,7 +152,7 @@ PLASTICO = [
     ("CREAR", ["boceto", "extruir", "nervio", "saliente", "labio"], [
         _i("Crear boceto", "boceto"), SEP, _i("Extruir", "extruir"), _i("Revolución", "revolucion"),
         _i("Nervio", "nervio"), _i("Red", "red"), _i("Saliente", "saliente"), _i("Labio y ranura", "labio"),
-        _i("Encaje a presión"), _i("Apoyo"), _i("Patrón geométrico", "patron_geometrico")]),
+        _i("Encaje a presión", ico="encaje_presion"), _i("Apoyo"), _i("Patrón geométrico", "patron_geometrico")]),
     ("MODIFICAR", ["vaciado", "desmoldeo", "empalme_3d"], [
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Empalme", "empalme_3d"),
         _i("Chaflán", "chaflan_3d"), SEP, _i("Asignar regla de plástico", "asignar_regla_plastico"),
@@ -169,8 +169,8 @@ MALLA = [
     ("MODIFICAR", ["reducir_malla", "remallar", "cortar_plano", "combinar_mallas", "convertir_malla"], [
         _i("Edición directa"), _i("Remallar", "remallar"), _i("Reducir", "reducir_malla"),
         _i("Corte de plano", "cortar_plano"), _i("Vaciado", "vaciado_malla"), _i("Combinar", "combinar_mallas"),
-        _i("Suavizar", "suavizar_malla"), _i("Invertir normal", "invertir_normal_malla"), _i("Borrar y rellenar"),
-        _i("Alinear"), _i("Extruir textura"), _i("Separar", "separar_malla"), _i("Escalar malla", "escalar_malla"),
+        _i("Suavizar", "suavizar_malla"), _i("Invertir normal", "invertir_normal_malla"), _i("Borrar y rellenar", ico="borrar_rellenar"),
+        _i("Alinear", ico="alinear_malla"), _i("Extruir textura"), _i("Separar", "separar_malla"), _i("Escalar malla", "escalar_malla"),
         SEP, _i("Convertir malla", "convertir_malla")]),
 ] + COMPARTIDOS + [
     ("EXPORTAR", ["exportar_malla"], [_i("Guardar como malla…", "exportar_malla"),
@@ -179,7 +179,7 @@ ADMINISTRAR = [("LISTA DE MATERIALES", ["lista_materiales"], [_i("Lista de mater
 UTILIDADES = [
     ("CREAR", ["impresion3d"], [_i("Impresión en 3D…", "impresion3d")]),
     ("COMPLEMENTOS", ["secuencias"], [_i("Secuencias de comandos y complementos…", "secuencias")]),
-    ("UTILIDAD", ["calcular"], [_i("Administrar materiales"), _i("Administrar biblioteca de roscas", "biblioteca_roscas"),
+    ("UTILIDAD", ["calcular"], [_i("Administrar materiales", ico="administrar_materiales"), _i("Administrar biblioteca de roscas", "biblioteca_roscas"),
                                 _i("Calcular todo", "calcular")]),
     INSPECCIONAR, SELECCIONAR]
 
@@ -375,7 +375,7 @@ class Cinta(QWidget):
             if it == SEP:
                 m.addSeparator()
             elif it[0] == "sub":
-                sub = m.addMenu(it[1])
+                sub = m.addMenu(icono(it[3]), it[1]) if it[3] else m.addMenu(it[1])
                 sub.setToolTipsVisible(True)
                 for s in it[2]:
                     sub.addAction(self._item(s))

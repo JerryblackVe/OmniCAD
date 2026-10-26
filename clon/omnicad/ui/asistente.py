@@ -85,6 +85,20 @@ FRASES_GRUPO = {"documento": "revisando el documento", "parametros": "ajustando 
                 "malla": "trabajando la malla", "ensamble": "armando el ensamble", "material": "eligiendo el material",
                 "inspeccion": "revisando la pieza", "animacion": "animando", "dibujo": "armando el plano",
                 "render": "preparando el render", "avanzado": "trabajando en el modelo", "grafo": "corriendo el grafo"}
+ICONO_HERRAMIENTA = {
+    "get_scene_info": "cuerpo", "get_timeline": "secuencias", "get_viewport_image": "captura",
+    "get_physical_properties": "medir", "measure_distance": "medir", "measure_angle": "medir",
+    "fillet": "empalme_3d", "chamfer": "chaflan_3d", "extrude": "extruir", "revolve": "revolucion",
+    "shell": "vaciado", "create_hole": "agujero", "create_sketch": "boceto", "save_document": "guardar",
+    "undo": "deshacer", "search_help": "ayuda",
+}
+ICONO_GRUPO = {
+    "animacion": "animacion", "asistente": "asistente", "avanzado": "operacion_base", "boceto": "boceto",
+    "chapa": "pestana", "dev": "configurar", "dibujo": "dibujo", "documento": "archivo",
+    "ensamble": "ensamblar", "grafo": "grafo", "inspeccion": "medir", "malla": "insertar_malla",
+    "material": "material_fisico", "parametros": "parametros", "render": "render", "solido": "cuerpo",
+    "vectores": "texto",
+}
 GRUPO = {h["nombre"]: h["grupo"] for h in api.catalogo()}
 FILTRO_ADJUNTOS = ("Adjuntos (*.pdf *.png *.jpg *.jpeg *.svg *.dxf);;PDF (*.pdf);;Imágenes (*.png *.jpg *.jpeg);;"
                    "SVG (*.svg);;DXF (*.dxf)")
@@ -174,6 +188,11 @@ class _Miniatura(QWidget):
 def frase(nombre):
     """Qué está haciendo la IA, en palabras, según la herramienta que va a usar."""
     return FRASES.get(nombre) or FRASES_GRUPO.get(GRUPO.get(nombre), "trabajando en el modelo")
+
+
+def icono_herramienta(nombre):
+    """Dibujo de la herramienta, de su grupo o del Asistente si no está en el catálogo."""
+    return ICONO_HERRAMIENTA.get(nombre) or ICONO_GRUPO.get(GRUPO.get(nombre), "asistente")
 
 
 class _Pensando(QFrame):
@@ -790,6 +809,8 @@ class PanelAsistente(QDockWidget):
         v.setSpacing(0)
         linea = QToolButton(text=resumen_herramienta(nombre, respuesta), checkable=True, autoRaise=True,
                             objectName="herramienta_asistente")
+        linea.setIcon(iconos.icono(icono_herramienta(nombre)))
+        linea.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         linea.setToolTip("Clic para ver los argumentos y la respuesta.")
         detalle = QLabel(json.dumps({"args": args, "respuesta": respuesta}, ensure_ascii=False, indent=1,
                                     default=str)[:3000], wordWrap=True, textInteractionFlags=Qt.TextSelectableByMouse)

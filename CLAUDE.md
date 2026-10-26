@@ -46,7 +46,7 @@
 - **Está automatizado** en `scripts/prueba_ui/` (arnés, escena, un script por pieza): desde `clon/`,
   `.venv/Scripts/python.exe ../scripts/prueba_ui/todo.py [pieza ...]` corre todo de a uno con `turno.py` y deja
   registros y capturas en `evidencias/ui_<hoy>/`. Cubre 1 a 8 y 10; falta automatizar el 9 (pieza completa).
-  Piezas: `cinta_completa`, `superficie`, `solido_crear`, `solido_modificar`, `asas`, `teclear`, `ventana_uso`, `ensamblar`, `boceto_cotas`, `asistente`.
+  Piezas: `cinta_completa`, `superficie`, `solido_crear`, `solido_modificar`, `asas`, `teclear`, `ventana_uso`, `ensamblar`, `boceto_cotas`, `asistente`, `iconos`.
   Mientras corre no se usa el mouse ni el teclado (los atajos necesitan que la ventana tenga el foco).
 
 ## Regla: rendimiento con Rust

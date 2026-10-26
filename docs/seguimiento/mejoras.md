@@ -2,11 +2,11 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 118: Abierto 61 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24). Total 116: Abierto 60 · Parcial 44 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
-Abierto 19 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
+Abierto 18 · Parcial 9 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -15,7 +15,6 @@ Abierto 19 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 | NOV-b80-3 | create_hole(positions) usa un solo cuerpo objetivo | Abierto | Baja | Si el vértice es de otro cuerpo, el agujero se hace en el principal y solo avisa que no cambió el volumen: resolver el cuerpo desde la referencia. | omnicad/api/herramientas_modificar.py:492 | 2026-10-20 |
 | NOV-b80-4 | export_parameters no neutraliza celdas que empiezan con = + - @ | Abierto | Baja | Un comentario `=HYPERLINK(...)` sale tal cual y Excel lo ejecuta; decidir si se antepone `'` sin romper la ida y vuelta con la tabla de la ventana. | omnicad/api/herramientas_parametros_csv.py:23 | 2026-10-20 |
 | P-12b | Registrar la tarea programada de Windows para el informe mensual | Abierto | Baja | La tarea no se registra sola; el comando está en el docstring del script. | scripts/novedades.py | 2026-10-20 |
-| P-23e3 | Íconos en los menús contextuales del navegador | Abierto | Baja | Ningún menú contextual los lleva. | omnicad/ui/acciones_navegador.py | 2026-10-20 |
 | P-26a | CI en macOS (ruff + pytest + humo) para ver qué falla | Abierto | Baja | El workflow solo tiene jobs de Windows y Ubuntu. | .github/workflows/instaladores.yml | 2026-10-20 |
 | P-8d | Paquetes .deb o Flatpak para Linux (dicho como «quizás») | Abierto | Media | Sin empezar; hoy solo AppImage. | instalador/linux/ solo tiene armar_appimage.sh | 2026-10-20 |
 | P-10b-d | Fase 1: andamiaje Rust + R1 (Zstandard) de punta a punta con el instalador | Abierto | Media | Mover el descompresor zstd_puro a Rust y probar empaquetado .pyd en PyInstaller e instalador. | omnicad/io_archivos/zstd_puro.py sigue en Python puro; clon/rust/src/lib.rs sin zstd | 2026-10-20 |
@@ -29,7 +28,6 @@ Abierto 19 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 | P-10b-g | Fase 4: remallado R6 en Rust y subir los topes | Abierto | Alta | Remallar sigue en Python con topes de 100 000 triángulos. | omnicad/nucleo/malla.py (TRIANGULOS_MAXIMOS_REMALLADO) | 2026-10-20 |
 | P-10b-f | Fase 3: boceto en Rust (R5, solver R4, R9) | Abierto | Muy alta | El solver sigue en scipy; con la colocación constructiva (SC4) 400 líneas arrastran en 258 ms, medir antes de pasar a Rust. | omnicad/restricciones/solver.py (least_squares method=lm); clon/rust sin módulo de boceto | 2026-10-20 |
 | P-2c | Documentación y README en inglés | Parcial | Media | Traducir docs/ y docs/agentes; solo el README tiene versión inglesa. | README.en.md existe; docs/*.md solo en español | 2026-10-20 |
-| P-9g | Íconos sensibles al tema (claro/oscuro) sin reiniciar | Parcial | Media | Hoy se recolorean solo al arrancar; cambiar de tema con la app abierta pide reinicio. | omnicad/ui/iconos_tema.py (docstring: «se adaptan al tema con el que ARRANCA») | 2026-10-20 |
 | P-9j | Revisión crítica de cada pantalla (estados vacíos y de error, textos) con capturas | Parcial | Media | Solo 13 pantallas auditadas; faltan estados vacíos/errores y el objetivo de identidad visual propia. | scripts/capturas_ui.py; evidencias/capturas/p9b_antes y p9b_despues (13 pantallas cada una) | 2026-10-20 |
 | P-22d | Verificar tablas ISO 965/273 y reglas de chapa contra la norma | Parcial | Media | ISO 965-1 solo verificada para M3-M39; falta ISO 273 y K-factor de chapa. | omnicad/nucleo/tolerancias.py:10,163-200; commit 992b93c | 2026-10-20 |
 | P-5b | Resto de mejoras de vectores, SVG, edición y texto según el manual de Blender | Parcial | Alta | Sigue la lista priorizada de docs/brechas_blender.md (vista previa de trazos, esquinas, texto avanzado). | tests/test_texto_vectores.py (64 pruebas); B4 queda con vista previa y esquinas pendientes | 2026-10-20 |

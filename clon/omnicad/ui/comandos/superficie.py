@@ -291,7 +291,7 @@ class Engrosar(Comando):
 
 
 class SupEmpalme(Comando):
-    CLAVE, TITULO, ICONO = "sup_empalme", "Empalme de superficie", "empalme_3d"
+    CLAVE, TITULO, ICONO = "sup_empalme", "Empalme de superficie", "sup_empalme"
     AYUDA = "Redondea o bisela aristas entre superficies."
     CLASE_OP = OpSupEmpalme
 

@@ -9,5 +9,5 @@ def _i(texto, clave=None, atajo="", ico=None):
     return ("item", texto, clave, atajo, ico)
 
 
-def _sub(texto, items):
-    return ("sub", texto, items)
+def _sub(texto, items, ico=None):
+    return ("sub", texto, items, ico)

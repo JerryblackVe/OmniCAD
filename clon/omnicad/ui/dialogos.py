@@ -16,6 +16,7 @@ from ..io_archivos import proyecto
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, TEXTO, ErrorExpresion, TablaParametros, validar_nombre
 from . import formato, temas
+from .iconos import icono
 
 ETIQUETAS_CAMPO = {"ancho": "Ancho (X)", "largo": "Largo (Y)", "alto": "Alto (Z)", "radio": "Radio",
                    "radio_mayor": "Radio mayor", "radio_menor": "Radio menor", "x": "Posición X",
@@ -82,6 +83,7 @@ class _DialogoBase(QDialog):
     def __init__(self, titulo, parent=None):
         super().__init__(parent)
         self.setWindowTitle(titulo)
+        self.setWindowIcon(icono({etiqueta: forma for forma, etiqueta in OpPrimitiva.ETIQUETAS.items()}.get(titulo, "cuerpo")))
         self.setMinimumWidth(420)
         self.form = QFormLayout()
         self.botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -118,6 +120,7 @@ class DialogoRejilla(QDialog):
     def __init__(self, fija=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Parámetros de rejilla")
+        self.setWindowIcon(icono("rejilla"))
         self.adaptativa = QRadioButton("Adaptativa (cambia con el zoom)")
         self.fija = QRadioButton("Fija")
         self.espaciado = QDoubleSpinBox(decimals=3, minimum=0.001, maximum=100000.0, suffix=" mm")
@@ -185,6 +188,7 @@ class DialogoParametros(QDialog):
     def __init__(self, tabla, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Parámetros")
+        self.setWindowIcon(icono("parametros"))
         self.resize(760, 420)
         self.tabla_qt = QTableWidget(0, len(self.COLUMNAS))
         self.tabla_qt.setHorizontalHeaderLabels(self.COLUMNAS)
@@ -204,7 +208,8 @@ class DialogoParametros(QDialog):
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel("Usá los nombres en cualquier cota o medida, p. ej. «ancho / 2» o «alto + 5 mm»."))
         lay.addWidget(self.tabla_qt)
-        exportar, importar = QPushButton("Exportar parámetros…"), QPushButton("Importar parámetros…")
+        exportar = QPushButton(icono("parametros_exportar"), "Exportar parámetros…")
+        importar = QPushButton(icono("parametros_importar"), "Importar parámetros…")
         exportar.clicked.connect(self._exportar)
         importar.clicked.connect(self._importar)
         fila = QHBoxLayout()
@@ -350,6 +355,7 @@ class DialogoRecuperados(QDialog):
     def __init__(self, filas, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Documentos recuperados")
+        self.setWindowIcon(icono("archivo"))
         self.setModal(True)
         self.resultado = None
         self._filas = list(filas)

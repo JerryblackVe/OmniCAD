@@ -56,6 +56,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |
 | [plan_boceto.md](plan_boceto.md) | Plan por fases para llevar el boceto al nivel de Fusion (auditoría 2026-10-23) |
+| [plan_iconos.md](plan_iconos.md) | Plan de íconos, hecho el 2026-10-26: timeline con ícono propio por paso, insignias, gramática visual medida y tema en vivo; con el resultado de la prueba como usuario |
 | [plan_asistente_ia.md](plan_asistente_ia.md) | Plan del Asistente IA: chat dentro de la app que diseña con el usuario, por API o con su suscripción (IA-1–IA-8) |
 
 ## Especificación de faltantes (brechas)

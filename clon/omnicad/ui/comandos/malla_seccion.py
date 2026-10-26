@@ -16,7 +16,7 @@ _AJUSTES = {"ninguno": "No ajustar (solo la sección)", "lineas_arcos": "Líneas
 
 
 class SeccionMalla(Comando):
-    CLAVE, TITULO, ICONO = "seccion_malla", "Crear boceto de sección de malla", "cortar_plano"
+    CLAVE, TITULO, ICONO = "seccion_malla", "Crear boceto de sección de malla", "seccion_malla"
     AYUDA = ("Boceto con la línea donde el plano corta la malla, para rehacerla como sólido. «Ajustar curvas» dibuja "
              "curvas cerradas que la siguen dentro de la desviación máxima.")
     verificar = staticmethod(_mallas)

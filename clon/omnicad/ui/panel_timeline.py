@@ -17,21 +17,31 @@ from PySide6.QtGui import QBrush, QColor, QIcon
 from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QLabel, QListView, QListWidget, QListWidgetItem, QMenu,
                                QToolButton, QWidget)
 
+from ..timeline.operaciones import OPERACIONES_CUERPO
 from .iconos import icono
+from .insignias import icono_con_insignia, insignia_de
 
 COLORES = {"aviso": QColor(255, 214, 102), "error": QColor(255, 140, 140)}
 MARCADOR = "__marcador__"
 # Colores de la muestra por componente (suaves, para que el ícono se siga viendo); se repiten si hay más componentes.
 PALETA_COMPONENTES = [QColor(*c) for c in ((141, 196, 255), (255, 183, 120), (168, 225, 148), (214, 170, 240),
                                            (255, 165, 175), (130, 220, 215), (240, 220, 120), (190, 190, 200))]
-ICONO_TIPO = {"boceto": "boceto", "extrusion": "extruir", "revolucion": "revolucion", "combinar": "combinar",
-              "importar_step": "importar", "plano": "plano_desfase",
-              "engranaje": "engranaje_3d", "eje_escalonado": "eje_escalonado", "reparar_cuerpo": "reparar_cuerpo",
-              "limpiar_malla": "limpiar_malla"}
+# Pasos que ningún comando de la cinta crea: su ícono. Todos los demás usan el del comando que los crea (`comando_para`).
+ICONO_TIPO = {"boceto": "boceto", "importar_step": "importar", "importar_iges": "importar_iges",
+              "operacion_base": "operacion_base", "insertar_malla": "insertar_malla",
+              "insertar_diseno": "insertar_diseno", "grafo": "grafo", "borrar_caras": "borrar_caras",
+              "calibracion_holguras": "calibracion_holguras"}
 
 
 def icono_operacion(op):
-    return op.p["forma"] if op.TIPO == "primitiva" else ICONO_TIPO.get(op.TIPO, "caja")
+    """Nombre del dibujo del paso: el del comando que lo crea (una sola fuente de verdad)."""
+    if op.TIPO == "primitiva":
+        return op.p["forma"]
+    if op.TIPO in ICONO_TIPO:
+        return ICONO_TIPO[op.TIPO]
+    from .comandos import comando_para      # acá y no arriba: los comandos importan media interfaz
+    comando = comando_para(op)
+    return comando.ICONO if comando else "caja"
 
 
 def colores_por_componente(doc):
@@ -178,11 +188,24 @@ class PanelTimeline(QWidget):
                 self.actualizar(self.doc)
 
     # ------------------------------------------------------------ contenido
+    def repintar_iconos(self):
+        """Cambió el tema: los pasos apagados llevan un ícono gris ya dibujado, así que se rearma la lista."""
+        self._firma = None
+        if self.doc is not None:
+            barra, actual = self.lista.horizontalScrollBar(), self.lista.currentItem()
+            posicion, clave = barra.value(), actual.data(Qt.UserRole) if actual else None
+            self.actualizar(self.doc)
+            if clave is not None:
+                self.resaltar(clave)
+            barra.setValue(posicion)
+
     def actualizar(self, doc):
         # Sin cambios en lo que se muestra no se reconstruye (llega en cada aviso del documento).
         colores = colores_por_componente(doc) if self.color_componente else {}
-        firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, icono_operacion(op), res.estado, res.mensaje,
-                                          colores.get(op.id)) for op, res in zip(doc.operaciones, doc.resultados, strict=True)])
+        nombres = [icono_operacion(op) for op in doc.operaciones]       # una vez por paso: resolver el comando recorre el catálogo
+        firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, nombre, insignia_de(op, res.estado),
+                                          res.estado, res.mensaje, colores.get(op.id))
+                                         for op, res, nombre in zip(doc.operaciones, doc.resultados, nombres, strict=True)])
         if doc is self.doc and firma == getattr(self, "_firma", None):
             return
         self._firma = firma
@@ -191,7 +214,8 @@ class PanelTimeline(QWidget):
         for i, (op, res) in enumerate(zip(doc.operaciones, doc.resultados, strict=True)):
             if i == doc.marcador:
                 self._agregar_marcador()
-            ico = icono(icono_operacion(op))
+            insignia = insignia_de(op, res.estado)
+            ico = icono_con_insignia(nombres[i], insignia) if insignia else icono(nombres[i])
             apagado = res.estado in ("suprimida", "retrocedida")
             it = QListWidgetItem(QIcon(ico.pixmap(48, 48, QIcon.Disabled)) if apagado else ico, "")
             it.setSizeHint(QSize(32, 34))
@@ -202,6 +226,7 @@ class PanelTimeline(QWidget):
             estado = {"ok": "OK", "aviso": "Aviso", "error": "Error", "suprimida": "Suprimida",
                       "retrocedida": "Retrocedida (después del marcador)"}[res.estado]
             it.setToolTip(f"<b>{op.nombre}</b><br>{op.ETIQUETA} · {op.id}<br>Estado: {estado}"
+                          + (f"<br>Operación: {OPERACIONES_CUERPO[op.p['operacion']]}" if op.p.get("operacion") in OPERACIONES_CUERPO else "")
                           + (f"<br>{res.mensaje}" if res.mensaje else "")
                           + "<br><i>Doble clic: editar · clic derecho: más opciones</i>")
             self.lista.addItem(it)

@@ -14,8 +14,10 @@ from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QLabel, Q
 
 from . import formato, temas
 from .iconos import icono
+from .insignias import icono_con_insignia
 
-ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO = Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3
+ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO, ROL_ESTADO = (Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3,
+                                                      Qt.UserRole + 4)
 ALTO_FILA = 24
 EXPANDIDOS_INICIALES = {"__raiz__", "__config__", "__cuerpos__", "__bocetos__", "__planos__", "__analisis__",
                         "__uniones__", "__calcomanias__"}
@@ -48,11 +50,14 @@ class _Delegado(QStyledItemDelegate):
         p.drawRect(caja)
         x = caja.left() + 4
         y = caja.center().y() - 8
+        tam, dpr = QSize(16, 16), p.device().devicePixelRatioF()       # el vector se dibuja a 16 px reales, no se achica el de 32
         if con_ojo:
             visible = bool(index.data(ROL_OJO))
-            p.drawPixmap(QRectF(x, y, 16, 16), icono("ojo" if visible else "ojo_no").pixmap(32, 32), QRectF(0, 0, 32, 32))
+            p.drawPixmap(QPointF(x, y), icono("ojo" if visible else "ojo_no").pixmap(tam, dpr))
             x += 20
-        p.drawPixmap(QRectF(x, y, 16, 16), icono(index.data(ROL_ICONO) or "").pixmap(32, 32), QRectF(0, 0, 32, 32))
+        nombre, estado = index.data(ROL_ICONO) or "", index.data(ROL_ESTADO)
+        ico = icono_con_insignia(nombre, estado) if estado else icono(nombre)
+        p.drawPixmap(QPointF(x, y), ico.pixmap(tam, dpr))
         x += 22
         p.setFont(f)
         p.setPen(QColor(c["seleccion_texto"] if option.state & QStyle.State_Selected else c["texto"])
@@ -130,6 +135,7 @@ class Navegador(QFrame):
         self.uniones = []            # [(id de la operación, nombre)]
         self.lienzos = []            # [(id, nombre, visible)] (Lienzos)
         self.calcomanias = []        # [(id, nombre)] (INSERTAR › Calcomanía), cada una con el cuerpo al que está pegada
+        self.estados = {}            # {clave de cuerpo o boceto: «aviso» | «error»} del paso que lo creó (insignia del ícono)
         self.organizacion = {"grupos": {}, "conjuntos": {}}
         self.menu_elemento = None
         self.setFixedWidth(300)
@@ -203,6 +209,7 @@ class Navegador(QFrame):
         it.setData(0, ROL_ICONO, ico)
         it.setData(0, ROL_TIPO, tipo)
         it.setData(0, ROL_OJO, ojo)
+        it.setData(0, ROL_ESTADO, self.estados.get(clave))
         (padre.addChild(it) if padre else self.arbol.addTopLevelItem(it))
         self._items[clave] = it
         return it
@@ -212,7 +219,7 @@ class Navegador(QFrame):
         vis: dict con 'todo', 'origen', 'planos', 'cuerpos', 'bocetos'.
         Si no cambió nada de lo que se muestra, no se reconstruye (la ventana lo llama en cada aviso del documento)."""
         firma = repr((titulo, cuerpos, bocetos, sorted(ocultos), vis, planos, vistas, self.calcomanias,
-                      self.componentes, self.lienzos, self.uniones, self.analisis, self.organizacion,
+                      self.componentes, self.lienzos, self.uniones, self.analisis, self.organizacion, self.estados,
                       formato.unidad_longitud(), formato.unidad_masa()))
         if self._items and firma == getattr(self, "_firma", None):
             return

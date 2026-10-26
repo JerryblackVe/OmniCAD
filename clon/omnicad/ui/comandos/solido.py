@@ -126,7 +126,7 @@ class Extruir(Comando):
 class ExtruirCara(Comando):
     """Extruye SOLO la cara elegida: hacia afuera agrega material (unir) y hacia adentro lo corta."""
 
-    CLAVE, TITULO, ICONO = "extruir_cara", "Extruir cara", "extruir"
+    CLAVE, TITULO, ICONO = "extruir_cara", "Extruir cara", "extruir_cara"
     AYUDA = "Extruye la cara plana elegida hacia afuera (agrega material) o hacia adentro (corta)."
     CLASE_OP = None          # el paso creado se edita con el comando «Extruir» de siempre
 

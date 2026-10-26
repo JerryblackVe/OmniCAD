@@ -23,7 +23,7 @@ from ..asistente.proveedores.agente_local import AGENTES, AgenteLocal, ejecutabl
 from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
 from ..timeline.documento import TOPE_INSTRUCCIONES
-from . import iconos_tema, temas
+from . import temas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
 
@@ -651,8 +651,6 @@ class DialogoPreferencias(QDialog):
         """Texto bajo el combo: lo que no cierra del tema elegido (contraste, archivos ignorados) y `extra`."""
         tema, avisos = temas.resolver(clave)
         partes = [extra] if extra else ["Se aplica al instante, sin reiniciar."]
-        if iconos_tema.necesita_reiniciar(tema["colores"]):
-            partes.append("⚠ Los íconos de las barras se adaptan a este tema al reiniciar OmniCAD.")
         bajos = temas.contraste_bajo(tema["colores"])
         if bajos:
             lista = ", ".join(f"{t}/{f} {r:.1f}" for t, f, r in bajos[:4])

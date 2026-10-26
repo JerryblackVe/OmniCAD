@@ -86,7 +86,7 @@ Suavizar = _clase("suavizar_malla", "Suavizar", "suavizar_malla", OpSuavizarMall
                   [lambda: Expresion("intensidad", "Intensidad", "0.5", ESCALAR),
                    lambda: Entero("iteraciones", "Iteraciones", 10, 1, 500)],
                   lambda v, ctx: {"intensidad": v["intensidad"], "iteraciones": v["iteraciones"]})
-InvertirNormal = _clase("invertir_normal_malla", "Invertir normal", "invertir_normal", OpInvertirNormalMalla,
+InvertirNormal = _clase("invertir_normal_malla", "Invertir normal", "invertir_normal_malla", OpInvertirNormalMalla,
                         "Da vuelta la orientación de los triángulos.")
 Separar = _clase("separar_malla", "Separar", "separar_malla", OpSepararMalla,
                  "Separa la malla en un cuerpo por cáscara (o por grupo de caras).",
