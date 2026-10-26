@@ -56,8 +56,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 | ASM-1 | El grupo rígido no respeta lo fijo ni se propaga entre grupos | Abierto | Baja | Si un componente fijo está en un grupo rígido, una unión que mueve a otro miembro MUEVE el componente fijo (Base fija + Eje en un grupo: la unión del Eje a la Base lleva la Base a x=-250, z=10 y `drive_joint` la gira). Con dos grupos que comparten un componente (A+B y B+C), la unión de A mueve a B pero C se queda. Fusion trata el grupo como un solo objeto. | omnicad/timeline/ops_ensamblar.py:243-249 (`_grupo`) y :508 (solo mira si el componente 1 está fijo) | 2026-10-25 |
 | ASM-2 | El vínculo de movimiento acepta relaciones imposibles | Abierto | Media | Se aceptan un vínculo 2→1 sobre uno 1→2, un segundo vínculo sobre el mismo par y la relación 0 (o 1e9, -2 en la ventana): las dos uniones quedan seguidoras una de la otra, `drive_joint` devuelve ok con un aviso y no se mueve nada. Rechazarlo al crear: una unión que ya sigue a otra, ciclo o relación 0. | omnicad/timeline/ops_ensamblar.py:670-693 (`OpVinculoMovimiento.ejecutar` no mira los vínculos anteriores ni el factor) | 2026-10-25 |
 | ASM-3 | Borrar un componente con uniones se acepta (o falla sin explicar) | Abierto | Media | Borrar el componente fijo Base (que usa Unión1) responde OK: la unión pasa en silencio a «(raíz)», el cuerpo queda suelto y ya no hay nada fijo. Borrar el componente Eje falla con OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…» sin nombrar qué lo usa. Esperado: FEATURE_IN_USE «la usan Unión1, Unión2», como al borrar el paso del cuerpo. | omnicad/timeline/ops_ensamblar.py:474-475 (`OpUnion.dependencias` mira los cuerpos, no el componente) | 2026-10-25 |
-| ASM-4 | Accionar uniones con un valor enorme deja la unión en rojo en vez de rechazarlo | Abierto | Baja | En la ventana, ENSAMBLAR › Accionar uniones con «1e9 deg»: el panel se cierra, la unión queda en error («El ángulo (1e+09°) pasa de 1.000.000°.») y el aviso sale en un diálogo; los demás valores malos (abc, vacío, 10 mm) sí se rechazan en el panel. La API `drive_joint` rechaza el mismo valor y deshace. Después, Vínculo de movimiento dice «Las dos uniones tienen que existir antes del vínculo» sin nombrar la unión rota. | omnicad/ui/comandos/ensamblar.py:202-215 (`AccionarUniones.aplicar` no valida el rango) | 2026-10-25 |
-| ASM-5 | Accionar la unión que sigue a un vínculo cierra el panel sin cambiar nada y sin avisar | Abierto | Baja | En la ventana, accionar la unión 2 de un vínculo: el panel se cierra, el valor no cambia y la barra solo muestra un aviso ajeno («dado vuelta…»). La API sí avisa «la mueve el vínculo…». Mostrar ese aviso (o dejar el campo deshabilitado) en el panel. | omnicad/ui/comandos/ensamblar.py:202-215 | 2026-10-25 |
 
 ## Detalle de lo abierto
 
@@ -173,16 +171,4 @@ Evidencia: `evidencias/ensamble_2026-10-25/a3_profundo.py`, `evidencias/ui_2026-
 Cómo reproducir (API): escena con Base fija, Eje y Brazo y dos uniones (Eje→Base, Brazo→Eje); `delete_feature feature=<Base>` → OK, y `get_assembly` muestra Unión1 con componente 2 «(raíz)»; deshacer lo trae de vuelta. `delete_feature feature=<Eje>` → OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…». Esperado: FEATURE_IN_USE nombrando Unión1 y Unión2, como pasa con el paso del cuerpo. Prueba propuesta: en `tests/test_api_ensamble.py`.
 
 Evidencia: `evidencias/ensamble_2026-10-25/a4_borrar.py`.
-
-### ASM-4 · Accionar uniones con un valor enorme deja la unión en rojo en vez de rechazarlo
-
-Cómo reproducir (ventana): con una unión revolute, ENSAMBLAR › Accionar uniones, elegir la unión, teclear «1e9 deg» en Ángulo y Aceptar. El panel se cierra y la unión queda en error («El ángulo (1e+09°) pasa de 1.000.000°.», valor vacío). Con «abc», vacío, «10 mm» o «nan» el panel sigue abierto con el mensaje. Esperado: rechazar en el panel. Un Ctrl+Z la arregla. Prueba propuesta: la de `scripts/prueba_ui/ensamblar.py` (accionar › ángulo malo).
-
-Evidencia: `evidencias/ui_2026-10-25/ensamblar.log`.
-
-### ASM-5 · Accionar la unión que sigue a un vínculo cierra el panel sin cambiar nada y sin avisar
-
-Cómo reproducir (ventana): vínculo Unión1→Unión2 con relación 2; ENSAMBLAR › Accionar uniones, elegir Unión2, teclear «10 deg» y Aceptar. El panel se cierra, Unión2 sigue en 40° y la barra del timeline muestra solo un aviso ajeno. La API devuelve el aviso «La unión Unión2 la mueve el vínculo…». Prueba propuesta: la de `scripts/prueba_ui/ensamblar.py` (vínculo › accionar la unión que sigue).
-
-Evidencia: `evidencias/ui_2026-10-25/ensamblar.log`.
 

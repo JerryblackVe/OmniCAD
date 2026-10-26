@@ -119,13 +119,30 @@ def uniones():
 run("uniones", uniones)
 
 
+def arrastrar(p, desde, hasta):
+    """Arrastra con ratón simulado (eventos al visor, no el cursor real) de un punto 3D a otro y recalcula la vista previa."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    g = p.manipuladores
+    xy, ok = g.pantalla([desde, hasta])
+    a, b = (QPointF(*q) for q in xy)
+    vis = p.visor
+    QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonPress, a, vis.mapToGlobal(a), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+    for i in range(1, 7):
+        q = a + (b - a) * (i / 6)
+        QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseMove, q, vis.mapToGlobal(q), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+        A.esperar(15)
+    QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, b, vis.mapToGlobal(b), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+    A.esperar(100)
+    p._t_previa.stop()
+    p._calcular_previa()
+
+
 def gizmo_union():
     """Gizmo del origen de la unión: flechas de desfase sobre los ejes de la cara y arco del ángulo, con mouse simulado."""
     import numpy as np
     from omnicad.ui import manipuladores as mp
-    from PySide6.QtCore import QEvent, QPointF
-    from PySide6.QtGui import QMouseEvent
-    from PySide6.QtWidgets import QApplication
     p = A.abrir(v, "origen_union")
     A.elegir(p, "origen", *alguna_cara(tapa)())
     p._t_previa.stop()
@@ -135,26 +152,13 @@ def gizmo_union():
     claves = [getattr(m, "clave", None) for m in g.manips]
     A.reg(AR, "gizmo origen de unión: tres flechas y el arco", claves == ["dx", "dy", "dz", "angulo"], str(claves))
 
-    def arrastrar(desde, hasta):
-        xy, ok = g.pantalla([desde, hasta])
-        a, b = (QPointF(*q) for q in xy)
-        vis = p.visor
-        QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonPress, a, vis.mapToGlobal(a), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
-        for i in range(1, 7):
-            q = a + (b - a) * (i / 6)
-            QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseMove, q, vis.mapToGlobal(q), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
-            A.esperar(15)
-        QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, b, vis.mapToGlobal(b), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
-        A.esperar(100)
-        p._t_previa.stop()
-        p._calcular_previa()
     dz = next(m for m in g.manips if getattr(m, "clave", None) == "dz")
     a, b = dz.puntos(g)
-    arrastrar((a + b) / 2, (a + b) / 2 + dz.direccion * 6)
+    arrastrar(p, (a + b) / 2, (a + b) / 2 + dz.direccion * 6)
     A.reg(AR, "gizmo origen de unión: flecha Z 6 mm", abs(g.valor("dz") - 6) < 0.5, f"dz={g.valor('dz'):g}")
     m = next(m for m in g.manips if isinstance(m, mp.Angulo))
     objetivo = m.centro + (m.u * np.cos(np.radians(50)) + m.v * np.sin(np.radians(50))) * m._r(g)
-    arrastrar(m.asa(g), objetivo)
+    arrastrar(p, m.asa(g), objetivo)
     A.reg(AR, "gizmo origen de unión: arco 50°", abs(g.valor("angulo") - 50) < 1.5, f"angulo={g.valor('angulo'):g}")
     A.reg(AR, "gizmo origen de unión: la vista previa sigue andando", p._previa_ok, p.mensaje.text())
     p.cancelar()
@@ -221,6 +225,31 @@ def accionar():
 run("accionar", accionar)
 
 
+def gizmo_accionar():
+    """Accionar uniones con asas: el arco gira la unión revolute y la vista previa muestra el mecanismo movido."""
+    import numpy as np
+    from omnicad.ui import manipuladores as mp
+    p = A.abrir(v, "accionar_uniones")
+    p.set_valor("union", IDS[js[0]])
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(150)
+    g = p.manipuladores
+    arco = next((m for m in g.manips if isinstance(m, mp.Angulo)), None)
+    A.reg(AR, "gizmo accionar: la unión de revolución tiene su arco", arco is not None, str([getattr(m, "clave", None) for m in g.manips]))
+    if arco is not None:
+        objetivo = arco.centro + (arco.u * np.cos(np.radians(25)) + arco.v * np.sin(np.radians(25))) * arco._r(g)
+        arrastrar(p, arco.asa(g), objetivo)
+        A.reg(AR, "gizmo accionar: arco 25° escribe el ángulo", abs(g.valor("giro") - 25) < 1.5, f"giro={g.valor('giro'):g}")
+        A.reg(AR, "gizmo accionar: la vista previa sigue andando", p._previa_ok, p.mensaje.text())
+    antes = union(js[0])["values"]["rotation"]
+    p.cancelar()
+    A.reg(AR, "gizmo accionar: cancelar no mueve la unión", union(js[0])["values"]["rotation"] == antes, f"{antes} → {union(js[0])['values']}")
+
+
+run("gizmo_accionar", gizmo_accionar)
+
+
 # Vínculo de movimiento -----------------------------------------------------------------------------------------------------
 def vinculo():
     C.negativos(v, AR, "vinculo_movimiento")
@@ -266,9 +295,9 @@ def vinculo():
     p.aceptar()
     A.esperar(300)
     vivo = C._vivo(p)
-    barra = v.timeline.estado.toolTip()
-    A.reg(AR, "vínculo: accionar la unión que sigue no la cambia y la barra de estado lo avisa", union(js[1])["values"]["rotation"] == 40.0 and "vínculo" in barra.lower(),
-          f"valor={union(js[1])['values']} panel visible={vivo} barra de estado=«{barra}»")
+    msg = p.mensaje.text() if vivo else ""
+    A.reg(AR, "vínculo: accionar la unión que sigue se rechaza en el panel, que queda abierto con el motivo", union(js[1])["values"]["rotation"] == 40.0 and vivo and "vínculo" in msg.lower(),
+          f"valor={union(js[1])['values']} panel visible={vivo} mensaje=«{msg}»")
     if vivo:
         p.cancelar()
 

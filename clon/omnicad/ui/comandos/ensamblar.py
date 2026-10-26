@@ -180,6 +180,12 @@ def _uniones(ctx):
     return {o.id: o.nombre for o in ctx.doc.operaciones if isinstance(o, OpUnion)}
 
 
+def _vinculo_que_la_mueve(ctx, id_union):
+    """El vínculo de movimiento activo que impone el valor de esta unión (la «sigue»), o None."""
+    return next((o for o in ctx.doc.operaciones if isinstance(o, OpVinculoMovimiento) and not o.suprimida
+                 and o.p.get("union2") == id_union), None)
+
+
 class AccionarUniones(Comando):
     CLAVE, TITULO, ICONO = "accionar_uniones", "Accionar uniones", "accionar_uniones"
     AYUDA = "Cambia el ángulo o la distancia de una unión (mueve el mecanismo)."
@@ -193,14 +199,19 @@ class AccionarUniones(Comando):
         return [Opciones("union", "Unión", uniones), Expresion("giro", "Ángulo", "0 deg", ANGULO),
                 Expresion("desliz", "Distancia", "0 mm")]
 
+    def preparar_panel(self, panel):
+        self._panel = panel
+
     def construir(self, v, ctx):
         return None
 
-    def mostrar(self, v, ctx):
-        pass
-
-    def aplicar(self, v, ctx):
+    def _nueva(self, v, ctx):
+        """La unión con el ángulo y la distancia pedidos, como queda al aceptar."""
         op = ctx.doc.operacion(v["union"])
+        vinculo = _vinculo_que_la_mueve(ctx, op.id)
+        if vinculo:
+            raise ErrorComando(f"La unión «{op.nombre}» la mueve el vínculo «{vinculo.nombre}»: su valor sale de la otra "
+                               "unión. Accioná esa.")
         params = dict(op.p)
         if MOVIMIENTOS[op.p["tipo"]][0]:
             ctx.evaluar(v["giro"], ANGULO)
@@ -209,8 +220,45 @@ class AccionarUniones(Comando):
             ctx.evaluar(v["desliz"])
             params["desliz"] = v["desliz"]
         params["accionada"] = siguiente_accion(ctx.doc.operaciones)
-        nueva = OpUnion(op.id, op.nombre, op.suprimida, **params)
+        return OpUnion(op.id, op.nombre, op.suprimida, **params)
+
+    def _previsualizar(self, v, ctx):
+        nueva = self._nueva(v, ctx)
+        try:
+            return nueva, ctx.doc.previsualizar(nueva, ctx.doc.indice(nueva.id))[0]
+        except ErrorOperacion as e:
+            raise ErrorComando(str(e)) from e
+
+    def mostrar(self, v, ctx):
+        """Vista previa en vivo: el mecanismo con el valor escrito (o tirado con las asas), sin tocar el documento."""
+        estado = self._previsualizar(v, ctx)[1]
+        panel = getattr(self, "_panel", None)
+        if panel is not None:
+            panel.previa.emit(estado)
+
+    def aplicar(self, v, ctx):
+        nueva = self._previsualizar(v, ctx)[0]       # un valor imposible se rechaza acá, con el panel abierto
         (ctx.ventana._reemplazar if ctx.ventana else lambda o: ctx.doc.reemplazar(o.id, o))(nueva)
+
+    def manipuladores(self, ctx, v):
+        """Arco del ángulo y flecha de la distancia sobre el eje de la unión elegida (marco del componente 2)."""
+        import numpy as np
+
+        from .. import manipuladores as mp
+        datos = ctx.doc.estado_final.uniones.get(v.get("union"))
+        if datos is None or _vinculo_que_la_mueve(ctx, v["union"]):
+            return []                                  # la mueve un vínculo: las asas no harían nada
+        F = np.asarray(datos["marco"], float)
+        gira, desliza = MOVIMIENTOS[datos["tipo"]][0], MOVIMIENTOS[datos["tipo"]][1]
+        salida = []
+        if desliza:
+            eje = F[:3, {"X": 0, "Y": 1, "Z": 2}[datos["eje_desliz"]]]
+            salida.append(mp.Flecha("desliz", F[:3, 3], eje))
+        if gira:
+            i = {"X": 0, "Y": 1, "Z": 2}[datos["eje_giro"] if datos["tipo"] != "bola" else "Z"]
+            eje = F[:3, i]
+            salida.append(mp.Angulo("giro", F[:3, 3], eje, F[:3, (i + 1) % 3], caja=True))
+        return salida
 
 
 class VinculoMovimiento(Comando):
