@@ -296,6 +296,100 @@ probar_gizmo_lienzo("lienzo")
 probar_gizmo_lienzo("calcomania")
 probar_gizmo_lienzo("insertar_svg")
 
+
+def asas_del_boceto():
+    """Asas del editor de boceto (patrones, Escala, Empalme, Chaflán) arrastradas con mouse simulado sobre el lienzo."""
+    AB = f"{AR} · boceto"
+    v.editar_operacion(s.paso("Rect").id)
+    A.esperar(500)
+    lz = v.modo_boceto.lienzo
+    v.visor.encuadrar()
+    A.esperar(300)
+
+    def sim(tipo, xy, botones):
+        q = lz.a_px(*xy)
+        boton = Qt.LeftButton if tipo != QEvent.MouseMove else Qt.NoButton
+        QApplication.sendEvent(lz, QMouseEvent(tipo, q, lz.mapToGlobal(q), boton, botones, Qt.NoModifier))
+
+    def tirar(i, destino):
+        a = lz._asas.asas[i].posicion(lz._asas.valores())
+        sim(QEvent.MouseButtonPress, a, Qt.LeftButton)
+        for k in range(1, 7):
+            sim(QEvent.MouseMove, (a[0] + (destino[0] - a[0]) * k / 6, a[1] + (destino[1] - a[1]) * k / 6), Qt.LeftButton)
+            A.esperar(15)
+        sim(QEvent.MouseButtonRelease, destino, Qt.NoButton)
+        A.esperar(60)
+
+    def caja(i):
+        return lz.entrada.campos[i].text()
+
+    ids = list(lz.b.curvas)
+    # patrón rectangular
+    lz.set_herramienta("patron_rectangular")
+    lz.seleccion = ids
+    lz._avanzar_seleccion()
+    A.esperar(100)
+    A.reg(AB, "patrón rectangular: cuatro asas", lz._asas is not None and len(lz._asas.asas) == 4, "")
+    lz.entrada.campos[0].setText("3")
+    lz.entrada.campos[1].setText("30")
+    tirar(0, (45.0, 5.0))
+    A.reg(AB, "patrón rectangular: asa de distancia X", abs(float(caja(1)) - 35.0) < 0.5, f"dist X={caja(1)}")
+    p = lz._asas.asas[1].posicion(lz._asas.valores())
+    paso = float(caja(1)) / (int(caja(0)) - 1)
+    tirar(1, (p[0] + 2 * paso, p[1]))
+    A.reg(AB, "patrón rectangular: asa de cantidad +2", int(caja(0)) == 5, f"cantidad X={caja(0)}")
+    tirar(1, (-400.0, p[1]))
+    A.reg(AB, "patrón rectangular: la cantidad no baja de 1", int(caja(0)) == 1, f"cantidad X={caja(0)}")
+    lz._cerrar_entrada()
+    # escala
+    lz.set_herramienta("escala")
+    lz.seleccion = ids
+    lz._avanzar_seleccion()
+    lz._clic_fase((None, (0.0, 0.0)))
+    A.esperar(100)
+    lz.entrada.campos[0].setText("1")
+    q = lz._asas.asas[0].posicion(lz._asas.valores())
+    tirar(0, (q[0] * 2, q[1] * 2))
+    A.reg(AB, "escala: asa del factor x2", abs(float(caja(0)) - 2.0) < 0.2, f"factor={caja(0)}")
+    lz._cerrar_entrada()
+    # patrón circular
+    lz.set_herramienta("patron_circular")
+    lz.seleccion = ids
+    lz._avanzar_seleccion()
+    lz._clic_fase((None, (-20.0, 5.0)))
+    A.esperar(100)
+    lz.entrada.campos[0].setText("4")
+    lz.entrada.campos[1].setText("90")
+    a = lz._asas.asas[0].posicion(lz._asas.valores())
+    tirar(0, (-20.0 + 25.0, 5.0 + 25.0))
+    A.reg(AB, "patrón circular: asa del ángulo total", abs(float(caja(1)) - 45.0) < 1.0 and len(lz._asas.previa(lz._asas.valores())) == (int(caja(0)) - 1) * len(ids),
+          f"cantidad={caja(0)} ∠={caja(1)}")
+    lz._cerrar_entrada()
+    # empalme y chaflán en la esquina (20, 0) del rectángulo
+    inf = next(c for c in lz.b.curvas.values() if all(abs(lz.b.coords(p)[1]) < 1e-6 for p in (c.p1, c.p2)))
+    der = next(c for c in lz.b.curvas.values() if all(abs(lz.b.coords(p)[0] - 20) < 1e-6 for p in (c.p1, c.p2)))
+    for h, esperado in (("empalme", 1), ("chaflan", 1), ("chaflan_dos_dist", 2), ("chaflan_dist_angulo", 2)):
+        lz.set_herramienta(h)
+        lz.agregar_pick(inf.id, (15.0, 0.0))
+        lz.agregar_pick(der.id, (20.0, 5.0))
+        A.esperar(100)
+        A.reg(AB, f"{h}: {esperado} asa(s) en la vista", lz._asas is not None and len(lz._asas.asas) == esperado, "")
+        lz.entrada.campos[0].setText("3")
+        if esperado == 2:
+            lz.entrada.campos[1].setText("3" if h == "chaflan_dos_dist" else "45")
+        a = lz._asas.asas[0].posicion(lz._asas.valores())
+        tirar(0, (a[0] - 3.0, a[1] + 3.0))
+        A.reg(AB, f"{h}: tirar del asa cambia el valor", float(caja(0)) != 3.0 and float(caja(0)) > 0, f"valor={caja(0)}")
+        lz._cerrar_entrada()
+    v.modo_boceto.cancelar()
+    A.esperar(300)
+
+
+try:
+    asas_del_boceto()
+except Exception as e:  # noqa: BLE001
+    A.reg(f"{AR} · boceto", "EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
+
 A.guardar_registro("u3_asas")
 fallas = [r for r in A.REGISTRO if not r["ok"]]
 print(f"\n=== {len(A.REGISTRO)} comprobaciones, {len(fallas)} con ✗ ===")

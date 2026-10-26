@@ -520,6 +520,7 @@ class Lienzo(QWidget):
         self._conflictos = []            # BOC-7: ids de restricciones/cotas en choque (se pintan en rojo)
         self.previa_auto = []
         self.entrada = None
+        self._asas = None                          # asas de arrastre de la herramienta (ui/asas_boceto.py)
         self._mvp = None
         self._sobre = None               # entidad bajo el ratón en Seleccionar (se resalta y cambia el cursor)
         self._manija_sobre = None        # manija del marco bajo el ratón
@@ -1449,8 +1450,9 @@ class Lienzo(QWidget):
                 if ok:
                     self.seleccion, self.fase = [], "seleccion"
                 return ok
+            from .asas_boceto import asas_patron_rectangular
             self._abrir_entrada(["Cant. X", "Dist. X", "Cant. Y", "Dist. Y"], ["3", "30", "1", "20"],
-                                self._pos_cursor, aceptar)
+                                self._pos_cursor, aceptar, asas_patron_rectangular(self, ids))
         elif h == "patron_circular":
             self.fase = "centro"
             self.mensaje.emit("Patrón circular: clic en el punto central.")
@@ -1472,7 +1474,9 @@ class Lienzo(QWidget):
                 if ok:
                     self.seleccion, self.fase = [], "seleccion"
                 return ok
-            self._abrir_entrada(["Cantidad", "∠ total"], ["6", "360"], self._pos_cursor, aceptar)
+            from .asas_boceto import asas_patron_circular
+            self._abrir_entrada(["Cantidad", "∠ total"], ["6", "360"], self._pos_cursor, aceptar,
+                                asas_patron_circular(self, ids, centro))
         elif self.fase == "base" and h == "escala":
             def aceptar(v):
                 f = self.evaluar(v[0] or "1", ESCALAR)
@@ -1480,7 +1484,8 @@ class Lienzo(QWidget):
                 if ok:
                     self.seleccion, self.fase = [], "seleccion"
                 return ok
-            self._abrir_entrada(["Factor"], ["2"], self._pos_cursor, aceptar)
+            from .asas_boceto import asas_escala
+            self._abrir_entrada(["Factor"], ["2"], self._pos_cursor, aceptar, asas_escala(self, ids, xy))
         elif self.fase == "base" and h == "mover":
             self._base = xy
             self.fase = "destino"
@@ -1551,9 +1556,11 @@ class Lienzo(QWidget):
                                                             self.opciones["continuidad"]), operacion=True)
         elif h == "empalme":
             listo = False
+            from .asas_boceto import asas_empalme
             self._abrir_entrada(["Radio"], [formato.numero(self._radio_sugerido(picks))], pos,
                                 lambda v: self._aplicar_y_limpiar(
-                                    lambda: self.b.empalme(picks[0], picks[1], self.evaluar(v[0]), xys[0], xys[1], v[0])))
+                                    lambda: self.b.empalme(picks[0], picks[1], self.evaluar(v[0]), xys[0], xys[1], v[0])),
+                                asas_empalme(self, picks, xys))
         elif h in ("chaflan", "chaflan_dist_angulo", "chaflan_dos_dist"):
             listo = False
             d = formato.numero(self._radio_sugerido(picks))
@@ -1570,7 +1577,8 @@ class Lienzo(QWidget):
                 ang = self.evaluar(v[1], ANGULO) if h == "chaflan_dist_angulo" else None
                 return self._aplicar_y_limpiar(lambda: self.b.chaflan(picks[0], picks[1], d1, d2, ang, xys[0], xys[1],
                                                                       v[0]))
-            self._abrir_entrada(etiquetas, textos, pos, aceptar)
+            from .asas_boceto import asas_chaflan
+            self._abrir_entrada(etiquetas, textos, pos, aceptar, asas_chaflan(self, h, picks, xys))
         elif h == "desfase":
             listo = False
             cadena, _ = self.b.cadena(cid)
@@ -2397,7 +2405,9 @@ class Lienzo(QWidget):
         self.update()
 
     # ------------------------------------------------------------ entrada dinámica y cotas en pantalla
-    def _abrir_entrada(self, etiquetas, textos, pos, al_aceptar):
+    def _abrir_entrada(self, etiquetas, textos, pos, al_aceptar, asas=None):
+        """Barra de valores de la herramienta. `asas`: (asas, tipos, previa) de `ui/asas_boceto.py`: se pueden tirar con
+        el ratón y escriben en las cajas."""
         self._cerrar_entrada()
         self._texto_inicial = textos[0] if textos else None
         self.entrada = EntradaValor(etiquetas, textos, self)
@@ -2413,9 +2423,15 @@ class Lienzo(QWidget):
                 self._cerrar_entrada()
         self.entrada.aceptado.connect(aceptar)
         self.entrada.cancelado.connect(self._cerrar_entrada)
+        if asas is not None:
+            from .asas_boceto import GestorAsas2D
+            self._asas = GestorAsas2D(self, self.entrada, *asas)
         self.entrada.abrir(pos)
 
     def _cerrar_entrada(self):
+        if self._asas is not None:
+            self._asas.cerrar()
+            self._asas = None
         if self.entrada is not None:
             entrada, self.entrada = self.entrada, None
             # Se sueltan antes las funciones conectadas (cierres que apuntan al Lienzo): con la caja
@@ -3491,6 +3507,8 @@ class Lienzo(QWidget):
     def mousePressEvent(self, e):
         pos = e.position()
         self._modificadores_raton = e.modifiers()
+        if self._asas is not None and e.button() == Qt.LeftButton and self._asas.empezar(pos):
+            return                                   # se tira de un asa de la herramienta
         if self.entrada is not None and e.button() == Qt.LeftButton and self._citar_cota(pos):
             return                                   # antes de setFocus: este saca el foco y la selección de la caja
         self._camara()
@@ -3896,6 +3914,12 @@ class Lienzo(QWidget):
         self._modificadores_raton = e.modifiers()
         self._pos_cursor = pos
         self._camara()
+        if self._asas is not None:
+            if self._asas.arrastrando:
+                self._asas.mover(pos)
+                return
+            if not (e.buttons() & Qt.LeftButton):
+                self._asas.pasar(pos)
         if self._previa_texto is not None and self.entrada is not None:
             if self._arrastre_texto and e.buttons() & Qt.LeftButton:       # arrastrando: selecciona texto
                 i = self._indice_en_texto(pos)
@@ -3976,6 +4000,9 @@ class Lienzo(QWidget):
     def mouseReleaseEvent(self, e):
         pos = e.position()
         self._modificadores_raton = e.modifiers()
+        if self._asas is not None and self._asas.arrastrando:
+            self._asas.soltar()
+            return
         if self._arrastre_texto:
             self._arrastre_texto = False
             d = self._previa_texto
@@ -4748,6 +4775,8 @@ class Lienzo(QWidget):
         if h == "recortar" and self._previa_recorte:
             p.setPen(QPen(QColor(230, 60, 60), 3, Qt.DashLine))
             self._dibujar_polilinea(p, self._previa_recorte)
+        if self._asas is not None:
+            self._asas.dibujar(p)
         if h == "desfase" and self.picks and self.entrada is not None and cur is not None:
             try:                       # el desfase sigue al ratón: el lado es donde está el cursor
                 d = self.evaluar(self.entrada.campos[0].text())
