@@ -199,6 +199,23 @@ def test_no_logueado_avisa_como_loguearse(lanzar):
     assert "corré «claude»" in errores[-1]
 
 
+def test_codex_sin_cupo_un_solo_error_y_que_hacer(lanzar):
+    """Captura del 2026-10-26: Codex manda el mismo error en «error» y en «turn.failed»; salía dos veces."""
+    msg = "Selected model is at capacity. Please try a different model."
+    salida = [CODEX[0], CODEX[1], {"type": "error", "message": msg}, {"type": "turn.failed", "error": {"message": msg}}]
+    r, eventos = correr(AgenteLocal("codex"), lanzar, ProcesoFalso(salida, returncode=1))
+    assert [d for t, d in eventos if t == "error"] == ["Codex: " + msg]
+    avisos = [d for t, d in eventos if t == "aviso"]
+    assert len(avisos) == 1 and "Preferencias › Asistente IA › Modelo" in avisos[0]
+    assert r["motivo"] == "error"
+
+
+def test_error_comun_sin_linea_de_cupo(lanzar):
+    salida = [{"type": "error", "message": "stream disconnected"}]
+    r, eventos = correr(AgenteLocal("codex"), lanzar, ProcesoFalso(salida, returncode=1))
+    assert [t for t, _ in eventos] == ["error"] and r["motivo"] == "error"
+
+
 def test_cli_que_falla_sin_json_muestra_stderr(lanzar):
     r, eventos = correr(AgenteLocal("opencode"), lanzar, ProcesoFalso([], returncode=2, stderr=b"Error: modelo inexistente\n"))
     assert r["motivo"] == "error" and "modelo inexistente" in eventos[0][1]

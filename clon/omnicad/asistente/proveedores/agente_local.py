@@ -45,6 +45,7 @@ SEGURO = re.compile(r"^[\w.:/@+-]*$")      # modelos, variantes e ids de sesión
 MCP = [sys.executable, "-m", "omnicad.servidor_mcp", "--modo", "vivo"]
 ESPERA_HERRAMIENTA = 300   # s: la persona puede tardar en apretar Aplicar en la tarjeta de plan
 NO_LOGUEADO = re.compile(r"log ?in|logged|authenticat|unauthori[sz]ed|\b401\b|api key|credential", re.I)
+SIN_CUPO = re.compile(r"capacity|rate.?limit|usage.?limit|quota|too many requests|\b429\b|overloaded", re.I)
 if os.name == "nt":
     # sin ventana de consola (OmniCAD es una app de ventanas) y en su propio grupo, para matar el árbol entero
     LANZAR = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -298,14 +299,22 @@ class AgenteLocal:
         Los archivos temporales (config MCP y prompt de sistema) se borran al terminar, pase lo que pase.
         """
         resultado = {"motivo": "fin", "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
-        estado = {"pendientes": {}, "error": ""}
+        estado = {"pendientes": {}, "error": "", "errores": set(), "ayuda_cupo": False}
 
         def emitir(tipo, datos):
+            if tipo == "error":
+                if datos in estado["errores"]:   # Codex manda el mismo error en «error» y en «turn.failed»
+                    return
+                estado["errores"].add(datos)
             if tipo == "uso":
                 for k in ("entrada", "salida"):
                     resultado["uso"][k] += datos[k]
             if al_evento is not None:
                 al_evento(tipo, datos)
+            if tipo == "error" and SIN_CUPO.search(datos) and not estado["ayuda_cupo"]:
+                estado["ayuda_cupo"] = True
+                emitir("aviso", "El modelo está saturado o sin cupo: probá otro modelo en Preferencias › Asistente IA "
+                                "› Modelo, o esperá unos minutos.")
 
         with tempfile.TemporaryDirectory(prefix="omnicad_agente_", ignore_cleanup_errors=True) as carpeta:
             ruta_sistema = os.path.join(carpeta, "sistema.md")
