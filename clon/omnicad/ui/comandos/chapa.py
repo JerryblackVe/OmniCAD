@@ -228,6 +228,22 @@ class Pestana(Comando):
                 p["ajustes"] = {k: v[k].strip() for k in ("espesor", "radio", "k") if (v.get(k) or "").strip()}
         return self.crear_op(OpPestana, v, ctx, **p)
 
+    def manipuladores(self, ctx, v):
+        """Pestaña de contorno: flecha de la distancia de extrusión sobre la normal del boceto (y la de la distancia 2
+        hacia el otro lado en «Dos lados»)."""
+        from .. import manipuladores as mp
+        if v.get("tipo") != "contorno":
+            return []
+        base = mp.base_perfiles(v.get("curvas"), ctx.estado)
+        if base is None:
+            return []
+        centro, plano, _formas = base
+        n = mp.unitario(plano.normal)
+        salida = [mp.Flecha("distancia", centro, n, factor=0.5 if v.get("direccion") == "simetrica" else 1.0, minimo=0.01)]
+        if v.get("direccion") == "dos_lados":
+            salida.append(mp.Flecha("distancia2", centro, -n, minimo=0.01))
+        return salida
+
     def desde_op(self, op, ctx):
         v = dict(op.p, perfiles=hits(op.p.get("perfiles"), ctx.estado), curvas=hits(op.p.get("curvas"), ctx.estado),
                  aristas=hits(op.p.get("aristas"), ctx.estado))
