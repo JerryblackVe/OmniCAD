@@ -173,6 +173,8 @@ def vertice_de(cid):
 
 probar("pestana", {"curvas": cur("Lin")}, {"tipo": "contorno", "distancia": "10 mm", "direccion": "dos_lados", "distancia2": "6 mm"})
 probar("seccion", {"plano": pl}, {"desfase": "5 mm"})
+probar("barrido", {"perfiles": per("Circ"), "ruta": cur("Ruta")}, {"distancia": "0.8"})
+probar("sup_barrido", {"perfil": cur("Circ"), "ruta": cur("Ruta")}, {})
 probar("plano_ruta", {"r0": cur("Ruta")}, {"posicion": "0.5"}, "asas_plano_ruta")
 probar("punto_ruta", {"r0": cur("Ruta")}, {"posicion": "0.5"})
 probar("plano_tangente", {"r0": cara(cil)}, {"angulo": "20 deg"})

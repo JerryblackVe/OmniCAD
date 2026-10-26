@@ -75,6 +75,28 @@ def _asas_escala(self, ctx, v):
     return [mp.Flecha("factor", base, (1, 1, 1), factor=radio, minimo=0.001)]
 
 
+# ---------------------------------------------------------------- barrido
+def _asas_barrido(self, ctx, v):
+    """Asa que desliza por la ruta el largo del barrido (`distancia`, de 0 a 1, solo en Barrido de sólido) y arco de la
+    torsión alrededor de la tangente al inicio de la ruta (Fusion: manipuladores de «Distance» y «Twist Angle»)."""
+    from ...nucleo.construccion import muestras_ruta
+    mp = _mp()
+    formas = [f for f in (_forma_de(ctx, h) for h in v.get("ruta") or []) if f is not None]
+    pt = _punto_y_tangente(formas[0], 0.0) if formas else None
+    if pt is None:
+        return []
+    salida = []
+    if "distancia" in v:
+        try:
+            ts = np.linspace(0.0, 1.0, 81)
+            salida.append(mp.AsaRuta("distancia", ts, muestras_ruta(formas, ts)))
+        except Exception:  # noqa: BLE001 — una ruta partida o que no se puede muestrear no rompe el diálogo
+            pass
+    if v.get("tipo") != "cuerpo":
+        salida.append(mp.Angulo("torsion", pt[0], pt[1], mp.perpendiculares(pt[1])[0]))
+    return salida
+
+
 # ---------------------------------------------------------------- planos de corte
 def _asas_corte(clave_valor):
     """Flecha de la distancia del plano de corte (Análisis de sección y Sección de malla), sobre su normal,
@@ -433,7 +455,7 @@ def _asas_patron_ruta(self, ctx, v):
 def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
-        "escala_3d": _asas_escala, "seccion": _asas_corte("desfase"),
+        "barrido": _asas_barrido, "sup_barrido": _asas_barrido, "escala_3d": _asas_escala, "seccion": _asas_corte("desfase"),
         "seccion_malla": _asas_corte("distancia"),
         "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
         "scu": _asas_scu, "union": _asas_union("origen2", "clave2"), "origen_union": _asas_union("origen", "clave"),
