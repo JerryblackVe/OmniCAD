@@ -115,17 +115,30 @@ def _asas_extruir_superficie(self, ctx, v):
 
 
 # ---------------------------------------------------------------- patrones
+def _paso(v, n_clave, dist_clave, ctx):
+    """Distancia (con signo) entre copias vecinas: la distancia dada (Espaciado) o repartida entre las copias (Extensión)."""
+    d, n = evaluar_o_cero(ctx, v.get(dist_clave)), max(1, int(evaluar_o_cero(ctx, v.get(n_clave)) or 1))
+    return d / (n - 1) if v.get("distribucion") == "extension" and n > 1 else d
+
+
+def _asa_cantidad(clave, origen, direccion, paso):
+    """Asa de cantidad de las copias alineadas: la última queda en `origen + direccion·paso·(n-1)` (paso con signo)."""
+    signo = -1.0 if paso < 0 else 1.0
+    return _mp().AsaCantidad(clave, lambda n: (origen + direccion * paso * (n - 1), direccion * signo), abs(paso) or 10.0)
+
+
 def _asas_patron_rectangular(self, ctx, v):
     mp = _mp()
     centro = _centro_cuerpos(ctx, v)
     if centro is None:
         return []
     salida = []
-    for dir_clave, dist_clave in (("dir1", "d1"), ("dir2", "d2")):
+    for dir_clave, dist_clave, n_clave in (("dir1", "d1", "n1"), ("dir2", "d2", "n2")):
         if v.get(dir_clave):
             d = _direccion_de(ctx, v[dir_clave][0])
             if d is not None and np.linalg.norm(d) > 1e-9:
                 salida.append(mp.Flecha(dist_clave, centro, d))
+                salida.append(_asa_cantidad(n_clave, centro, d, _paso(v, n_clave, dist_clave, ctx)))
     return salida
 
 
@@ -141,7 +154,18 @@ def _asas_patron_circular(self, ctx, v):
     d = mp.unitario(d)
     pie = np.asarray(punto, float) + d * float((centro - punto) @ d)
     radio = float(np.linalg.norm(centro - pie))
-    return [mp.Angulo("angulo", pie, d, centro - pie, radio if radio > 1e-6 else None)]
+    salida = [mp.Angulo("angulo", pie, d, centro - pie, radio if radio > 1e-6 else None)]
+    if radio > 1e-6:
+        total, n0 = evaluar_o_cero(ctx, v.get("angulo")), max(1, int(evaluar_o_cero(ctx, v.get("n")) or 1))
+        paso_grados = total / n0 if v.get("distribucion") == "extension" else total
+        u, signo = (centro - pie) / radio, (-1.0 if paso_grados < 0 else 1.0)
+
+        def posicion(n):
+            a = np.radians(paso_grados * (n - 1))
+            p = pie + radio * (u * np.cos(a) + np.cross(d, u) * np.sin(a))
+            return p, np.cross(d, (p - pie) / radio) * signo
+        salida.append(mp.AsaCantidad("n", posicion, radio * abs(np.radians(paso_grados)) or 10.0))
+    return salida
 
 
 # ---------------------------------------------------------------- sistemas de coordenadas y uniones
@@ -374,7 +398,9 @@ def _asas_patron_ruta(self, ctx, v):
     mp = _mp()
     forma = _forma_de(ctx, v["ruta"][0]) if v.get("ruta") else None
     pt = _punto_y_tangente(forma, 0.0) if forma is not None else None
-    return [mp.Flecha("d1", pt[0], pt[1])] if pt is not None else []
+    if pt is None:
+        return []
+    return [mp.Flecha("d1", pt[0], pt[1]), _asa_cantidad("n1", pt[0], pt[1], _paso(v, "n1", "d1", ctx))]
 
 
 def _enganchar():

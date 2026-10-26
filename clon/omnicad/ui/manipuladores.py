@@ -661,6 +661,47 @@ class Volteo(AsaRadial):
         return {}
 
 
+class AsaCantidad(Manipulador):
+    """Asa de cantidad de copias de un patrón: un disco junto a la última copia que se tira a lo largo del patrón y
+    suma o quita copias de a una cada `paso` mm. `posicion(n)` da (punto, tangente) de la última copia si hay `n`."""
+    ayuda = "Cantidad de copias"
+
+    def __init__(self, clave, posicion, paso, minimo=1, maximo=500):
+        self.clave, self.posicion, self.paso, self.minimo, self.maximo = clave, posicion, max(float(paso), 1e-3), minimo, maximo
+        self.ident = f"cantidad:{clave}"
+
+    def _n(self, g):
+        return max(self.minimo, int(round(g.valor(self.clave))))
+
+    def _asa(self, g):
+        p, t = self.posicion(self._n(g))
+        return p + perpendiculares(t)[0] * 16 * g.escala(p), p, t
+
+    def dibujar(self, g, activo):
+        asa, p, _t = self._asa(g)
+        color = AZUL_ACTIVO if activo is not None else AZUL
+        return ([("lineas", np.array([p, asa]), color, 1.4)]
+                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
+
+    def tocar(self, g, q):
+        s, ok = g.pantalla([self._asa(g)[0]])
+        return (max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0) if ok[0] else math.inf), "asa"
+
+    def empezar(self, g, pos, sub):
+        asa, _p, t = self._asa(g)
+        s0 = recta_rayo(*g.rayo(pos), asa, t)
+        return None if s0 is None else {"s0": s0, "n0": self._n(g), "asa": asa, "t": t}
+
+    def mover(self, g, estado, pos):
+        s = recta_rayo(*g.rayo(pos), estado["asa"], estado["t"])
+        if s is None:
+            return {}
+        return {self.clave: int(min(self.maximo, max(self.minimo, estado["n0"] + round((s - estado["s0"]) / self.paso))))}
+
+    def cajas(self, g, arrastre):
+        return [(self.clave, self._asa(g)[0])]
+
+
 class AsaRuta(Manipulador):
     """Asa que se desliza por una ruta (Plano en ruta, Punto a lo largo de la ruta): el campo `clave` es la fracción
     del largo; se puede pasar de los extremos, donde la ruta sigue recta. `ts` y `puntos` (N, 3) son una muestra
@@ -1181,9 +1222,11 @@ class GestorManipuladores(QObject):
         self._escribiendo = True
         try:
             for clave, v in nuevos.items():
-                if isinstance(v, bool) or not isinstance(v, (int, float)):  # selección o casilla
-                    self.panel.set_valor(clave, v)
-                    cambio = True
+                from .comando import Entero
+                if isinstance(v, bool) or not isinstance(v, (int, float)) or isinstance(self.campo(clave), Entero):
+                    if str(self.panel.valores.get(clave)) != str(v):      # selección, casilla o cantidad entera
+                        self.panel.set_valor(clave, v)
+                        cambio = True
                     continue
                 texto = self.texto(clave, v)
                 if texto != str(self.panel.valores.get(clave)):

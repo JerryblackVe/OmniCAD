@@ -99,6 +99,18 @@ def probar(clave, sel, vals, foto=None):
                     final = g.valor(cl)
                     A.reg(nombre, f"flecha «{cl}» arrastrada más allá del cero", ok,
                           f"{despues:g} → {final:g} (mínimo {m.minimo}); previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
+                elif isinstance(m, mp.AsaCantidad):
+                    antes = int(g.valor(cl))
+                    m = next(x for x in g.manips if isinstance(x, mp.AsaCantidad))      # las asas se rehacen en cada cambio
+                    asa, _pt, t = m._asa(g)
+                    ok = arrastrar(p, g, asa, asa + t * m.paso * 2)
+                    despues = int(g.valor(cl))
+                    A.reg(nombre, f"asa de cantidad «{cl}» +2 copias", ok and despues == antes + 2,
+                          f"{antes} → {despues}; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
+                    m = next(x for x in g.manips if isinstance(x, mp.AsaCantidad))
+                    asa, _pt, t = m._asa(g)
+                    ok = arrastrar(p, g, asa, asa - t * m.paso * (despues + 5))
+                    A.reg(nombre, f"asa de cantidad «{cl}» no baja de una copia", ok and int(g.valor(cl)) == 1, str(g.valor(cl)))
                 elif isinstance(m, mp.AsaRuta):
                     antes = g.valor(cl)
                     i = int(np.searchsorted(m.ts, 0.9))
@@ -190,8 +202,9 @@ probar("vaciado", {"caras": top}, {"espesor_interior": "2 mm"})
 probar("desmoldeo", {"plano": top, "caras": cara(caja, normal=(1, 0, 0))}, {"angulo": "5 deg"})
 probar("escala_3d", {"cuerpos": cuerpo(caja)}, {"factor": "2"})
 probar("mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "libre", "dx": "10 mm", "dy": "5 mm", "dz": "0 mm"}, "asas_mover")
-probar("patron_rectangular_3d", {"cuerpos": cuerpo(caja), "dir1": eje("X")}, {"n1": 3, "d1": "50 mm"})
-probar("patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"n": 4})
+probar("patron_rectangular_3d", {"cuerpos": cuerpo(caja), "dir1": eje("X")}, {"n1": 3, "d1": "12 mm", "distribucion": "espaciado"})
+probar("patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"n": 4, "angulo": "40 deg", "distribucion": "espaciado"})
+probar("patron_ruta", {"cuerpos": cuerpo(caja), "ruta": cur("Ruta")}, {"n1": 3, "d1": "8 mm", "distribucion": "espaciado"})
 
 
 def probar_gizmo_lienzo(clave="lienzo"):
