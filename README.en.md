@@ -48,6 +48,15 @@ nacelle, core and nozzle; a 22-blade twisted fan (loft and circular pattern); a 
 ![1:1 turbofan engine, front view](docs/img/motor_reaccion_frente.png)
 ![1:1 turbofan engine, rear view](docs/img/motor_reaccion_atras.png)
 
+A **76 mm ducted-prop drone** (prototype A1) ready for 3D printing: 31 bodies, 73 parametric steps and a clearance
+parameter (`holgura` = 0.12 mm) that tunes every fit. PETG monocoque chassis (132 × 132 mm), four prop guards and a
+removable shell with vent slots, TPU legs and a non-slip battery pad, plus a cassette for the ELRS receiver. Every part
+is named after its material, and the reference parts (`REF_NO_IMPRIMIR_…`: 1404 motors, three-blade props, Tattu 850 4S
+battery, ESC, flight controller and receiver) sit in place to check that everything fits before printing. It also
+includes a calibration plate and comb to find the clearance your printer needs.
+
+![A1 76 mm drone, isometric view](docs/img/dron_a1_iso.png)
+
 ## For AI agents
 
 OmniCAD ships an **MCP server** and a **CLI** (`omnicad`) generated from a single tool catalog, so both always match.

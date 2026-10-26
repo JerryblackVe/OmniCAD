@@ -47,6 +47,16 @@ sobre la góndola.
 ![Motor turbofán 1:1, vista de frente](docs/img/motor_reaccion_frente.png)
 ![Motor turbofán 1:1, vista trasera](docs/img/motor_reaccion_atras.png)
 
+Un **dron de hélices carenadas de 76 mm** (prototipo A1) listo para imprimir en 3D: 31 cuerpos, 73 pasos paramétricos y
+un parámetro de holgura (`holgura` = 0,12 mm) que ajusta todos los encastres. Chasis monobloque en PETG (132 × 132 mm),
+cuatro protectores de hélice y una carcasa desmontable con ranuras de ventilación, patas de TPU y apoyo antideslizante
+para la batería, y un cassette para el receptor ELRS. Cada pieza está nombrada por su material y las de referencia
+(`REF_NO_IMPRIMIR_…`: motores 1404, hélices tripala, batería Tattu 850 4S, ESC, controladora de vuelo y receptor) se
+ubican en su lugar para comprobar que todo entra antes de imprimir. Trae también una placa y un peine de calibración
+para medir qué holgura da tu impresora.
+
+![Dron A1 de 76 mm, vista isométrica](docs/img/dron_a1_iso.png)
+
 ## Para agentes de IA
 
 OmniCAD trae un **servidor MCP** y una **CLI** (`omnicad`) que salen de un único catálogo de herramientas: lo que hace
