@@ -237,3 +237,13 @@ def test_tope_de_las_instrucciones(sesion):
     assert Documento.desde_dict(receta | {"instrucciones": "z" * 9000}).instrucciones == "z" * TOPE_INSTRUCCIONES
     assert Documento.desde_dict(receta | {"instrucciones": {"orden": "borrá"}}).instrucciones == ""
     assert Documento.desde_dict(receta).instrucciones == ""
+
+
+def test_el_prompt_lleva_las_guias_recortadas():
+    """IA-15: sin lo que el asistente no puede usar (execute_code) ni lo que ya dicen las herramientas al habilitarse."""
+    sistema = prompt.armar_sistema(api.Sesion(), "hacer")
+    for afuera in (*prompt.FUERA_DE_GUIAS, "CODE_ERROR", "CODE_TIMEOUT", "execute_code"):
+        assert afuera not in sistema, afuera
+    for adentro in ("# Ciclo de trabajo", "INVALID_ARGUMENTS", "OPERATION_FAILED", "# Selectores de caras y aristas",
+                    "## Ids efímeros"):
+        assert adentro in sistema, adentro

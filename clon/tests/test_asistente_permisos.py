@@ -18,7 +18,7 @@ def sesion():
     return api.Sesion()
 
 
-def correr(sesion, guion, modo, respuestas_aprobar=(), cancelado=None):
+def correr(sesion, guion, modo, respuestas_aprobar=(), cancelado=None, permisos="una_vez"):
     """Corre el bucle anotando cada tanda que se pide aprobar; responde con `respuestas_aprobar` (True por defecto)."""
     pedidas, respuestas = [], list(respuestas_aprobar)
 
@@ -27,7 +27,8 @@ def correr(sesion, guion, modo, respuestas_aprobar=(), cancelado=None):
         return respuestas.pop(0) if respuestas else True
 
     proveedor = ProveedorFalso(guion)
-    resultado = bucle.correr(proveedor, [], lambda n, a: api.llamar(sesion, n, a), Herramientas(modo=modo),
+    herramientas = Herramientas(modo=modo, permisos=permisos, ruta_doc=lambda: sesion.doc.ruta)
+    resultado = bucle.correr(proveedor, [], lambda n, a: api.llamar(sesion, n, a), herramientas,
                              aprobar=aprobar, cancelado=cancelado)
     return resultado, pedidas, proveedor
 
@@ -41,13 +42,75 @@ def test_hacer_aprueba_una_vez_y_corre_todo(sesion):
     assert len(sesion.doc.estado_final.cuerpos) == 3
 
 
-def test_guiar_pide_en_cada_tanda_que_cambia(sesion):
+@pytest.mark.parametrize("modo", ["guiar", "hacer"])
+def test_cada_paso_pide_en_cada_tanda_que_cambia(sesion, modo):
     guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[PedidoHerramienta("t", "get_timeline", {})]),
              Respuesta(herramientas=[caja(2), PedidoHerramienta("s", "get_scene_info", {})]), Respuesta(texto="ok")]
-    resultado, pedidas, _ = correr(sesion, guion, "guiar")
+    resultado, pedidas, _ = correr(sesion, guion, modo, permisos="cada_paso")
     assert resultado["motivo"] == "fin"
     assert pedidas == [["create_box"], ["create_box"]]   # la tanda de solo lectura no pregunta; se muestran solo los cambios
     assert len(sesion.doc.estado_final.cuerpos) == 2
+
+
+def test_una_vez_tambien_en_guiar(sesion):
+    """Los permisos dicen CUÁNDO pregunta; el modo, QUÉ puede hacer (IA-15)."""
+    guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2)]), Respuesta(texto="ok")]
+    _, pedidas, _ = correr(sesion, guion, "guiar", permisos="una_vez")
+    assert pedidas == [["create_box"]] and len(sesion.doc.estado_final.cuerpos) == 2
+
+
+def test_nunca_no_pide_y_cambia_el_documento(sesion):
+    guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2)]), Respuesta(texto="ok")]
+    resultado, pedidas, _ = correr(sesion, guion, "hacer", permisos="nunca")
+    assert resultado["motivo"] == "fin" and pedidas == []
+    assert len(sesion.doc.estado_final.cuerpos) == 2
+
+
+@pytest.mark.parametrize("permisos", ["nunca", "una_vez"])
+def test_pisar_un_archivo_existente_pregunta_siempre(sesion, tmp_path, permisos):
+    ruta = tmp_path / "pieza.omnicad"
+    assert api.llamar(sesion, "create_box", {"length": 5, "width": 5, "height": 5})["ok"]
+    assert api.llamar(sesion, "save_document", {"path": str(ruta)})["ok"]
+    stl = tmp_path / "pieza.stl"
+    stl.write_bytes(b"solid x\nendsolid x\n")
+    guion = [Respuesta(herramientas=[caja(1)]),
+             Respuesta(herramientas=[PedidoHerramienta("g", "save_document", {})]),        # encima del actual
+             Respuesta(herramientas=[PedidoHerramienta("n", "save_document", {"path": str(tmp_path / "otra")})]),
+             Respuesta(herramientas=[PedidoHerramienta("e", "export", {"path": str(stl), "overwrite": True})]),
+             Respuesta(texto="ok")]
+    resultado, pedidas, _ = correr(sesion, guion, "hacer", permisos=permisos)
+    assert resultado["motivo"] == "fin"
+    # nunca: solo los que pisan; una_vez: el plan (la caja) y después igual los que pisan. Un archivo nuevo no pregunta.
+    assert pedidas == ([] if permisos == "nunca" else [["create_box"]]) + [["save_document"], ["export"]]
+    assert (tmp_path / "otra.omnicad").exists()
+
+
+def test_rechazar_pisar_el_archivo_en_nunca_no_lo_toca(sesion, tmp_path):
+    ruta = tmp_path / "pieza.omnicad"
+    assert api.llamar(sesion, "save_document", {"path": str(ruta)})["ok"]
+    antes = ruta.read_bytes()
+    guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[PedidoHerramienta("g", "save_document", {})]),
+             Respuesta(texto="no")]
+    resultado, pedidas, _ = correr(sesion, guion, "hacer", [False], permisos="nunca")
+    assert resultado["motivo"] == "rechazado" and pedidas == [["save_document"]]
+    assert ruta.read_bytes() == antes and len(sesion.doc.estado_final.cuerpos) == 1   # la caja sí, sin preguntar
+
+
+@pytest.mark.parametrize("nombre", ["execute_code", "assistant_ask"])
+def test_nunca_sigue_bloqueando_execute_code_y_el_grupo_asistente(sesion, nombre):
+    guion = [Respuesta(herramientas=[PedidoHerramienta("x", nombre, {"code": "1", "prompt": "hola"})]),
+             Respuesta(texto="ok")]
+    mensajes = []
+    proveedor = ProveedorFalso(guion)
+    bucle.correr(proveedor, mensajes, lambda n, a: api.llamar(sesion, n, a),
+                 Herramientas(modo="hacer", permisos="nunca"), aprobar=lambda pedidos: pytest.fail("no pregunta"))
+    texto = json.loads(mensajes[1]["contenido"][0]["contenido"][0]["texto"])
+    assert texto["error_kind"] == "TOOL_NOT_AVAILABLE" and not sesion.doc.operaciones
+
+
+def test_permisos_invalidos():
+    with pytest.raises(ValueError):
+        Herramientas(permisos="a_veces")
 
 
 @pytest.mark.parametrize("modo", ["explicar", "mostrar"])
@@ -82,7 +145,7 @@ def test_rechazar_deja_resultados_cancelled(sesion):
 
 def test_guiar_rechazar_la_segunda_tanda_conserva_la_primera(sesion):
     guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2)]), Respuesta(texto="x")]
-    resultado, pedidas, _ = correr(sesion, guion, "guiar", [True, False])
+    resultado, pedidas, _ = correr(sesion, guion, "guiar", [True, False], permisos="cada_paso")
     assert resultado["motivo"] == "rechazado" and len(pedidas) == 2
     assert len(sesion.doc.estado_final.cuerpos) == 1
 

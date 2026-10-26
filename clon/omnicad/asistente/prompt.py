@@ -1,5 +1,6 @@
 """Prompt de sistema del asistente: reglas, guía, estado del documento y modo."""
 import json
+import re
 from pathlib import Path
 
 from omnicad import api
@@ -19,6 +20,10 @@ te da su esquema). Pedí por nombre exacto: es lo más barato.
 ULTIMOS = 10
 TOPE_TEXTO = 200  # notas y mensajes son texto libre: se cortan para que el contexto no crezca sin límite
 GUIAS = ("flujo", "selectores")
+# Secciones de las guías que no van al prompt (IA-15, el costo fijo de cada paso): execute_code está prohibido en el
+# asistente, los agujeros los explica create_hole al habilitarse y las referencias de run_operation, describe_operation
+# (las guías enteras siguen en get_guide).
+FUERA_DE_GUIAS = ("## Agujeros, roscas y ajustes", "## Atajos", "## Referencias en run_operation")
 REGLAS = """Sos el asistente de OmniCAD, un CAD 3D paramétrico. Reglas fijas:
 - Respondé en español, corto y claro. Longitudes en mm y ángulos en grados.
 - Un cambio por vez. Después de cada cambio mirá la imagen (get_viewport_image) y comparala con lo pedido.
@@ -199,12 +204,18 @@ def instrucciones(generales="", proyecto=""):
     return "\n\n".join(partes)
 
 
+def recortar_guia(texto):
+    """La guía sin las secciones de FUERA_DE_GUIAS ni las viñetas de errores de execute_code (`CODE_…`)."""
+    texto = "".join(s for s in re.split(r"(?m)^(?=## )", texto) if not s.startswith(FUERA_DE_GUIAS))
+    return re.sub(r"(?m)^- `CODE_\w+`.*\n(?:  .*\n)*", "", texto)
+
+
 def armar_sistema(sesion, modo, seleccion=None, generales=""):
     """Prompt de sistema completo para un pedido en el modo dado. `generales`: las instrucciones propias de la
     persona (Preferencias › Asistente IA); las del proyecto se leen del documento de la sesión."""
     if modo not in MODOS:
         raise ValueError(f"Modo inválido: {modo!r}. Modos: {', '.join(MODOS)}.")
-    guias = [(_leer(sesion, "get_guide", {"topic": t}) or {}).get("text", "") for t in GUIAS]
+    guias = [recortar_guia((_leer(sesion, "get_guide", {"topic": t}) or {}).get("text", "")) for t in GUIAS]
     propias = instrucciones(generales, sesion.doc.instrucciones)
     return "\n\n".join([REGLAS, f"# Modo actual: {modo.capitalize()}\n{REGLAS_MODO[modo]}", *guias,
                         INDICE + Herramientas(modo=modo).indice(), *([propias] if propias else []),

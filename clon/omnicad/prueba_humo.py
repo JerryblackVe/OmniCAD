@@ -640,8 +640,9 @@ def _fase_interaccion(v, r):
 
 def _fase_asistente(v, r):
     """Asistente IA (IA-4 y IA-5): el botón abre el panel, un pedido con el proveedor falso (sin red ni gasto) muestra la
-    tarjeta de plan, Aplicar crea la caja por el puente de la ventana, la línea de la herramienta aparece,
-    «Deshacer este pedido» la saca y el panel se cierra."""
+    tarjeta de plan, Aplicar crea la caja por el puente de la ventana, los puntos «•••» se ven mientras trabaja (IA-15),
+    la línea de la herramienta aparece solo si la casilla de Preferencias lo pide, «Deshacer este pedido» la saca y el
+    panel se cierra."""
     from .asistente import historial
     from .asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
     from .timeline.documento import Documento
@@ -657,7 +658,7 @@ def _fase_asistente(v, r):
     p.modo.setCurrentIndex(p.modo.findData("hacer"))
     p.campo.setPlainText("hace una caja de 30 x 20 x 10")
     QTest.keyClick(p.campo, Qt.Key_Return)
-    tarjeta = None
+    tarjeta, puntos = None, p.pensando.isVisible()
     for _ in range(250):
         if not p.trabajando:
             break
@@ -668,8 +669,12 @@ def _fase_asistente(v, r):
         QTest.qWait(20)
     from PySide6.QtWidgets import QPushButton, QToolButton
     lineas = [b.text() for b in p.lista.findChildren(QToolButton, "herramienta_asistente")]
-    r.check(tarjeta is not None and not p.trabajando and len(v.doc.operaciones) == 1 and lineas == ["✓ create_box → op1"],
-            f"Asistente: Aplicar en la tarjeta crea la caja en la ventana y muestra la herramienta ({lineas})")
+    esperadas = ["✓ create_box → op1"] if v.prefs["asistente/ver_herramientas"] else []
+    r.check(tarjeta is not None and not p.trabajando and len(v.doc.operaciones) == 1 and lineas == esperadas,
+            f"Asistente: Aplicar en la tarjeta crea la caja en la ventana; línea de herramienta según Preferencias "
+            f"({lineas})")
+    r.check(puntos and not p.pensando.isVisible(), "Asistente: los puntos «•••» se ven mientras trabaja y se van al "
+            "terminar")
     deshacer = p.lista.findChildren(QPushButton, "deshacer_pedido")
     if deshacer:
         QTest.mouseClick(deshacer[-1], Qt.LeftButton)

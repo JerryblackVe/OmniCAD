@@ -22,14 +22,13 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
            tope_vueltas=25, cancelado=None, aprobar=None):
     """Agrega respuestas y resultados al chat y devuelve motivo, vueltas y uso acumulado.
 
-    `aprobar(pedidos) -> bool` se llama antes de una tanda con herramientas que cambian algo: en Hacer, una vez
-    por pedido (aprobado el plan, sigue solo); en Guiar, en cada tanda. Si no aprueba, la tanda vuelve al modelo
-    como CANCELLED y el motivo es «rechazado» (o «cancelado», si además se canceló el pedido).
+    `aprobar(pedidos) -> bool` se llama antes de una tanda con pedidos que hay que aprobar según los permisos
+    (`Herramientas.a_aprobar`). Si no aprueba, la tanda vuelve al modelo como CANCELLED y el motivo es «rechazado»
+    (o «cancelado», si además se canceló el pedido). Antes de cada herramienta emite «usando» con su nombre.
     """
     herramientas = Herramientas() if herramientas is None else herramientas
     resultado = {"motivo": "tope", "vueltas": 0,
                  "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
-    aprobado = False
 
     def emitir(tipo, datos):
         if al_evento is not None:
@@ -80,10 +79,10 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
 
         resultados = []
         interrumpido = rechazado = False
-        pendientes = [p for p in respuesta.herramientas if herramientas.necesita_aprobacion(p.nombre)]
-        if aprobar is not None and pendientes and not aprobado and not (cancelado is not None and cancelado()):
+        pendientes = herramientas.a_aprobar(respuesta.herramientas)
+        if aprobar is not None and pendientes and not (cancelado is not None and cancelado()):
             if aprobar(pendientes):
-                aprobado = herramientas.modo == "hacer"
+                herramientas.aprobaron()
             elif cancelado is not None and cancelado():
                 interrumpido = True
             else:
@@ -109,6 +108,7 @@ def correr(proveedor, mensajes, ejecutar, herramientas=None, sistema="", al_even
                 salida = error("TOOL_NOT_AVAILABLE", f"La herramienta '{pedido.nombre}' no está habilitada.",
                                "Habilitala con buscar_herramientas(nombres=[...]) y volvé a llamarla.").a_dict()
             else:
+                emitir("usando", pedido.nombre)
                 try:
                     salida = ejecutar(pedido.nombre, pedido.args)
                 except Exception as e:

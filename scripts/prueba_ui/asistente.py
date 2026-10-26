@@ -12,8 +12,10 @@ teclear las instrucciones propias (Preferencias) y las del proyecto (Chat), vac�
 reabrir, guardar y volver a abrir el archivo, el aviso y la ventana chica. IA-13: clic real en el visor sobre una cara,
 la ficha 🎯 con su medida, «empalme de 2 mm en esto» con la ref del prompt, ✕, elegir otra cosa y la ventana chica.
 IA-14: un pedido que crea una torre y gira la vista muestra Antes y Después con la misma cámara; clic y Enter la abren
-grande, Esc la cierra, ventana chica, «Deshacer este pedido» y reabrir el chat. El proveedor es el falso: sin red ni
-gasto."""
+grande, Esc la cierra, ventana chica, «Deshacer este pedido» y reabrir el chat. IA-15: los puntos «•••» se mueven
+(dos capturas en momentos distintos), la casilla «Mostrar las herramientas que usa la IA» con clic real en
+Preferencias, el selector de permisos (Preferencias y panel, con el teclado), «No preguntar» con su aviso, guardar
+encima que pregunta igual y la ventana chica. El proveedor es el falso: sin red ni gasto."""
 import asyncio
 import json
 import sys
@@ -25,7 +27,8 @@ import arnes as A
 import escena
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QToolButton, QWidget
+from PySide6.QtWidgets import (QApplication, QDialog, QLabel, QPushButton, QStyle, QStyleOptionButton,
+                               QToolButton, QWidget)
 
 from omnicad import api
 from omnicad.asistente import config, historial
@@ -815,6 +818,110 @@ def color():
     return v.doc.propiedades.get(primer_cuerpo(), {}).get("apariencia")
 
 
+def permisos_ui(p):
+    """IA-15: casilla de herramientas y permisos en Preferencias (clic y teclado), puntos en movimiento, «No preguntar»
+    con su aviso, guardar encima que pregunta igual, selector rápido del panel y ventana chica."""
+    from omnicad.ui.asistente import _Pensando
+    from omnicad.ui.preferencias import DialogoPreferencias
+    p.nuevo_chat()
+    A.esperar(50)
+    dlg = DialogoPreferencias(v.prefs, v, "asistente")
+    dlg.aplicado.connect(v.aplicar_preferencias)
+    dlg.show()
+    A.esperar(200)
+    casilla, permisos = dlg.controles["asistente/ver_herramientas"], dlg.controles["asistente/permisos"]
+    opcion = QStyleOptionButton()
+    opcion.initFrom(casilla)
+    cuadradito = casilla.style().subElementRect(QStyle.SE_CheckBoxIndicator, opcion, casilla).center()
+    antes = casilla.isChecked()
+    QTest.mouseClick(casilla, Qt.LeftButton, pos=cuadradito)    # donde hace clic la persona: en el cuadradito
+    marcada = casilla.isChecked() != antes
+    if casilla.isChecked():                          # que quede APAGADA (como de fábrica) para probar los puntos
+        A.esperar(QApplication.doubleClickInterval() + 100)   # dos clics seguidos serían un doble clic
+        QTest.mouseClick(casilla, Qt.LeftButton, pos=cuadradito)
+    elegido = elegir_con_teclado(permisos, "nunca")
+    A.foto(dlg, "asistente_pref_permisos")
+    QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
+    A.esperar(150)
+    A.reg(AR, "IA-15 Preferencias: clic en «Mostrar las herramientas que usa la IA» la cambia; apagada y «No "
+          "preguntar» con el teclado se guardan con Aceptar", marcada and elegido
+          and not v.prefs["asistente/ver_herramientas"] and v.prefs["asistente/permisos"] == "nunca",
+          f"casilla={v.prefs['asistente/ver_herramientas']} permisos={v.prefs['asistente/permisos']}")
+    A.reg(AR, "IA-15: el panel sigue a Preferencias: «No preguntar» en el selector y el aviso a la vista",
+          p.permisos.currentData() == "nunca" and p.aviso_permisos.isVisible()
+          and p.aviso_permisos.text().startswith("⚠ Sin preguntar"), p.aviso_permisos.text())
+
+    suelta = threading.Event()
+
+    class Lento(ProveedorFalso):
+        def responder(self, *a):
+            suelta.wait(10)
+            return super().responder(*a)
+
+    p.crear_proveedor = lambda _cfg: Lento([Respuesta(herramientas=[PedidoHerramienta("s", "get_scene_info", {}),
+                                                                     CAJA]), Respuesta(texto="Listo: caja.")])
+    p.modo.setCurrentIndex(p.modo.findData("hacer"))
+    n = len(v.doc.operaciones)
+    escribir(p, "caja", Qt.Key_Return)
+    b = p.pensando
+    A.esperar(100)
+    uno, cuadro = b.puntos.text(), b.cuadro
+    A.foto(v, "asistente_puntos_1")
+    A.esperar(_Pensando.PASO_MS + 150)
+    dos = b.puntos.text()
+    A.foto(v, "asistente_puntos_2")
+    A.reg(AR, "IA-15: mientras trabaja, la burbuja de puntos late (dos capturas en momentos distintos, puntos distintos)",
+          b.isVisible() and b.cuadro > cuadro and uno != dos, f"{uno} -> {dos}")
+    A.esperar(_Pensando.ESPERA_MS)
+    A.reg(AR, "IA-15: si tarda más de 2 s, debajo dice qué hace en palabras", b.texto.isVisible()
+          and b.texto.text() == "pensando…", b.texto.text())
+    A.foto(v, "asistente_puntos_frase")
+    for ancho, alto in ((1024, 640), (800, 520)):
+        v.resize(ancho, alto)
+        A.esperar(300)
+        A.reg(AR, f"IA-15 ventana {ancho}x{alto}: puntos, aviso, permisos, modo y Enviar entran",
+              dentro(b, v) and dentro(p.aviso_permisos, v) and dentro(p.permisos, v) and dentro(p.modo, v)
+              and dentro(p.b_enviar, v), f"panel={p.width()}x{p.height()} permisos={p.permisos.width()}")
+        A.foto(v, f"asistente_permisos_{ancho}x{alto}")
+    v.resize(1900, 1000)
+    A.esperar(200)
+    suelta.set()
+    esperar(p, aplicar=False)
+    A.reg(AR, "IA-15 «No preguntar»: hace la caja sin tarjeta, sin líneas de herramienta, y deja «Deshacer este pedido»",
+          len(v.doc.operaciones) == n + 1 and lineas(p) == [] and bool(botones_deshacer(p)) and not b.isVisible()
+          and not b.reloj.isActive(), f"lineas={lineas(p)} pasos={len(v.doc.operaciones) - n}")
+    A.foto(v, "asistente_sin_preguntar")
+    QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
+    A.reg(AR, "IA-15: «Deshacer este pedido» sigue andando con «No preguntar»", len(v.doc.operaciones) == n,
+          textos(p)[-1])
+
+    # «No preguntar» igual pregunta antes de pisar un archivo existente.
+    ruta = Path(tempfile.mkdtemp(prefix="omnicad_ia15_")) / "pieza.omnicad"
+    p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
+    p.guion = [Respuesta(herramientas=[PedidoHerramienta("g1", "save_document", {"path": str(ruta)})]),
+               Respuesta(herramientas=[PedidoHerramienta("g2", "save_document", {})]), Respuesta(texto="ok")]
+    escribir(p, "guardalo dos veces", Qt.Key_Return)
+    tarjeta = esperar_tarjeta(p)
+    A.reg(AR, "IA-15 «No preguntar»: guardar encima del archivo existente muestra la tarjeta igual, y dice por qué",
+          tarjeta is not None and ruta.exists() and any("encima de un archivo que ya existe" in x for x in textos(p)),
+          f"tarjeta={tarjeta is not None}")
+    A.foto(v, "asistente_pisar_archivo")
+    if tarjeta is not None:
+        QTest.mouseClick(tarjeta.b_cancelar, Qt.LeftButton)
+    esperar(p, aplicar=False)
+
+    # Selector rápido del panel (teclado) y la casilla encendida: vuelven las líneas.
+    rapido = elegir_con_teclado(p.permisos, "una_vez")
+    A.reg(AR, "IA-15: el selector del panel con el teclado cambia la preferencia y saca el aviso", rapido
+          and v.prefs["asistente/permisos"] == "una_vez" and not p.aviso_permisos.isVisible())
+    v.prefs["asistente/ver_herramientas"] = True
+    p.guion = [Respuesta(herramientas=[PedidoHerramienta("s", "get_scene_info", {})]), Respuesta(texto="Hay piezas.")]
+    escribir(p, "que hay", Qt.Key_Return)
+    esperar(p)
+    A.reg(AR, "IA-15: con la casilla encendida vuelven las líneas de herramienta", lineas(p)[-1:] == ["✓ get_scene_info"],
+          lineas(p))
+
+
 def pedido():
     # ---------------------------------------------------------------- botón de la barra de la aplicación
     boton = next(b for b in v.findChildren(QToolButton) if b.defaultAction() is v.acciones["asistente"])
@@ -825,6 +932,10 @@ def pedido():
     A.reg(AR, "el foco queda en el campo", QApplication.focusWidget() is p.campo, f"foco={QApplication.focusWidget()}")
     A.reg(AR, "cabecera con proveedor y modelo", "·" in p.etiqueta_modelo.text(), p.etiqueta_modelo.text())
     A.foto(v, "asistente_abierto")
+    A.reg(AR, "IA-15: de fábrica las herramientas no se muestran y los permisos son «una vez por pedido»",
+          not v.prefs["asistente/ver_herramientas"] and p.permisos.currentData() == "una_vez"
+          and not p.aviso_permisos.isVisible())
+    v.prefs["asistente/ver_herramientas"] = True     # lo de abajo mira las líneas; la casilla se prueba en permisos_ui
     p.guion = []
     p.crear_proveedor = lambda _cfg: ProveedorFalso(p.guion)
 
@@ -891,6 +1002,7 @@ def pedido():
               f"{lineas(p)[-1]} | {textos(p)[-1]}")
 
     p.modo.setCurrentIndex(p.modo.findData("guiar"))
+    elegir_con_teclado(p.permisos, "cada_paso")
     p.guion = [Respuesta(herramientas=[CAJA]), Respuesta(herramientas=[CAJA2]), Respuesta(texto="Listo.")]
     escribir(p, "dos cajas", Qt.Key_Return)
     vistas = 0
@@ -900,8 +1012,9 @@ def pedido():
         if tarjeta is not None:
             QTest.mouseClick(tarjeta.b_aplicar, Qt.LeftButton)
     esperar(p)
-    A.reg(AR, "modo Guiar: una tarjeta por tanda; con Aplicar en cada una crea las dos cajas",
+    A.reg(AR, "Guiar con «Cada paso»: una tarjeta por tanda; con Aplicar en cada una crea las dos cajas",
           vistas == 2 and len(v.doc.operaciones) == n + 2, f"tarjetas={vistas} pasos={len(v.doc.operaciones) - n}")
+    elegir_con_teclado(p.permisos, "una_vez")
     A.foto(v, "asistente_guiar")
     QTest.mouseClick(botones_deshacer(p)[-1], Qt.LeftButton)
     A.reg(AR, "clic en «Deshacer este pedido» vuelve a como estaba antes del pedido (las dos cajas)",
@@ -1090,6 +1203,7 @@ def pedido():
     instrucciones_ui(p)
     seleccion_ui(p)
     antes_despues_ui(p)
+    permisos_ui(p)
 
     # ---------------------------------------------------------------- atajo y cerrar
     QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)

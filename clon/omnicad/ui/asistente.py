@@ -9,9 +9,11 @@ el hilo de la interfaz, por `PuenteAgentes.ejecutar` (APP_BUSY, sin `dev` ni exe
 y el hilo de trabajo espera el resultado (BlockingQueuedConnection). No usa el servidor TCP del puente: anda con
 Preferencias › General › «agentes IA» apagado.
 
-Permisos (IA-5), como *With me* / *For me* de Fusion: en Hacer y Guiar, antes de cambiar el documento el chat muestra
-la tarjeta de plan con Aplicar y Cancelar (Hacer la pide una vez por pedido; Guiar, en cada tanda) y el hilo de
-trabajo espera la respuesta. Antes de cada pedido se toma una marca del documento: Cancelar o el tope de gasto vuelven
+Permisos (IA-5, IA-15), como *With me* / *For me* de Fusion: en Hacer y Guiar, antes de cambiar el documento el chat
+muestra la tarjeta de plan con Aplicar y Cancelar y el hilo de trabajo espera la respuesta. Cuándo la muestra lo dice el
+selector de permisos (Preferencias › Asistente IA y al lado del modo): en cada tanda, una vez por pedido o nunca (con un
+aviso en el panel); pisar un archivo existente pregunta siempre (`Herramientas.a_aprobar`, la misma regla para la API
+y para los CLI). Antes de cada pedido se toma una marca del documento: Cancelar o el tope de gasto vuelven
 a ella, y al terminar «Deshacer este pedido» también (si después no cambiaste nada a mano).
 
 Historial (IA-7): el chat se guarda solo al terminar cada pedido (`asistente/historial.py`, un JSON por chat, sin
@@ -27,6 +29,9 @@ Selección (IA-13): lo elegido en el visor se ve en una ficha «🎯 …» arrib
 Antes y después (IA-14): en Guiar y Hacer, al enviar se captura el visor y su cámara; si el pedido cambió el documento,
 al terminar se captura otra vez con ESA cámara (y se devuelve la que dejó la IA) y el chat muestra las dos miniaturas;
 clic (o Enter) en una la abre grande. No van al modelo; el historial las guarda achicadas.
+
+Mientras trabaja (IA-15): una burbuja «•••» que late y, si tarda, qué está haciendo en palabras. Las líneas de cada
+herramienta solo se ven con Preferencias › Asistente IA › «Mostrar las herramientas que usa la IA».
 """
 import json
 import os
@@ -58,6 +63,29 @@ AYUDA_MODO = {"explicar": "Responde y explica; no cambia nada.", "mostrar": "Se�
               "selecciona, sin cambiar el documento.", "guiar": "Propone un paso por vez y espera tu OK.",
               "hacer": "Arma un plan y, con tu OK, lo ejecuta."}
 ANCHO_HISTORIAL = 320      # px de las miniaturas de antes y después que se guardan en el historial
+NOMBRES_PERMISOS = {"cada_paso": "Preguntar en cada paso", "una_vez": "Preguntar una vez por pedido",
+                    "nunca": "No preguntar"}
+AYUDA_PERMISOS = {"cada_paso": "Pregunta antes de cada tanda que cambia algo.",
+                  "una_vez": "Aprobás el plan una vez por pedido y sigue solo.",
+                  "nunca": "Hace los cambios sin preguntar. «Deshacer este pedido» y Cancelar siguen andando; pisar "
+                           "un archivo existente pregunta igual."}
+AVISO_SIN_PREGUNTAR = ("⚠ Sin preguntar: el Asistente cambia el documento sin tarjeta. «Deshacer este pedido» y "
+                       "Cancelar siguen andando.")
+# Lo que dice la burbuja «•••» si el pedido tarda (IA-15): primero por herramienta, después por grupo; sin nombres
+# técnicos.
+FRASES = {"get_scene_info": "mirando el modelo", "get_timeline": "mirando el historial", "get_viewport_image":
+          "mirando la vista", "get_physical_properties": "midiendo", "measure_distance": "midiendo", "measure_angle":
+          "midiendo", "fillet": "creando el empalme", "chamfer": "creando el chaflán", "extrude": "extruyendo",
+          "revolve": "haciendo la revolución", "shell": "vaciando la pieza", "create_hole": "haciendo el agujero",
+          "create_sketch": "armando el boceto", "save_document": "guardando", "undo": "deshaciendo",
+          "buscar_herramientas": "buscando cómo hacerlo", "find_tools": "buscando cómo hacerlo",
+          "search_help": "leyendo la ayuda"}
+FRASES_GRUPO = {"documento": "revisando el documento", "parametros": "ajustando las medidas", "boceto": "dibujando",
+                "vectores": "trabajando con el texto", "solido": "modelando la pieza", "chapa": "trabajando la chapa",
+                "malla": "trabajando la malla", "ensamble": "armando el ensamble", "material": "eligiendo el material",
+                "inspeccion": "revisando la pieza", "animacion": "animando", "dibujo": "armando el plano",
+                "render": "preparando el render", "avanzado": "trabajando en el modelo", "grafo": "corriendo el grafo"}
+GRUPO = {h["nombre"]: h["grupo"] for h in api.catalogo()}
 FILTRO_ADJUNTOS = ("Adjuntos (*.pdf *.png *.jpg *.jpeg *.svg *.dxf);;PDF (*.pdf);;Imágenes (*.png *.jpg *.jpeg);;"
                    "SVG (*.svg);;DXF (*.dxf)")
 
@@ -141,6 +169,68 @@ class _Miniatura(QWidget):
             self.abrir(self.png, self.titulo)
             return
         super().keyPressEvent(e)
+
+
+def frase(nombre):
+    """Qué está haciendo la IA, en palabras, según la herramienta que va a usar."""
+    return FRASES.get(nombre) or FRASES_GRUPO.get(GRUPO.get(nombre), "trabajando en el modelo")
+
+
+class _Pensando(QFrame):
+    """La burbuja «•••» mientras el pedido corre: los puntos laten de a uno y, pasados ESPERA_MS, debajo va qué está
+    haciendo. El reloj solo corre con la burbuja a la vista (panel cerrado: sin CPU)."""
+    PASO_MS = 300
+    ESPERA_MS = 2000
+
+    def __init__(self):
+        super().__init__(objectName="pensando_asistente", frameShape=QFrame.StyledPanel)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(6, 2, 6, 2)
+        v.setSpacing(0)
+        self.puntos = QLabel(objectName="puntos_asistente", textFormat=Qt.RichText)
+        self.puntos.setStyleSheet("font-size: 15pt;")   # el tema fija la letra: setFont no la agrandaba
+        self.texto = QLabel(objectName="frase_asistente", wordWrap=True)
+        temas.poner_rol(self.texto, "tenue")
+        v.addWidget(self.puntos)
+        v.addWidget(self.texto)
+        self.reloj = QTimer(self, interval=self.PASO_MS)
+        self.reloj.timeout.connect(self.latir)
+        self.cuadro, self.frase = 0, "pensando"
+        self.hide()
+
+    def empezar(self):
+        self.cuadro, self.frase = 0, "pensando"
+        self.texto.hide()
+        self._pintar()
+        self.show()
+        self.reloj.start()
+
+    def seguir(self):
+        """Vuelve a la vista sin perder la cuenta (tras una tarjeta Aplicar)."""
+        self.show()
+        self.reloj.start()
+
+    def parar(self):
+        self.reloj.stop()
+        self.hide()
+
+    def pausar(self, si):
+        """El panel se ocultó o volvió: el reloj se para o sigue, solo si la burbuja está en uso."""
+        if self.isHidden():
+            return
+        self.reloj.stop() if si else self.reloj.start()
+
+    def latir(self):
+        self.cuadro += 1
+        self._pintar()
+
+    def _pintar(self):
+        apagado = temas.color("texto_inactivo")
+        self.puntos.setText(" ".join("●" if i == self.cuadro % 3 else f"<span style='color:{apagado}'>●</span>"
+                                     for i in range(3)))
+        if self.cuadro * self.PASO_MS >= self.ESPERA_MS:
+            self.texto.setText(self.frase + "…")
+            self.texto.show()
 
 
 class _Tarjeta(QFrame):
@@ -488,7 +578,6 @@ class PanelAsistente(QDockWidget):
         self._puente_vivo = None        # el puente por donde entra el CLI durante el pedido
         self._puente_temporal = False   # lo encendió el pedido (Preferencias › General lo tenía apagado)
         self._espera = None             # bucle de eventos mientras una tarjeta espera Aplicar dentro del puente
-        self._aprobado = False
         self.adjuntos = []              # los del próximo pedido (asistente.adjuntos.Adjunto)
         self._pegados = None            # carpeta temporal de las imágenes pegadas (se borra al cerrar OmniCAD)
         self._avisadas = set()          # documentos (token) cuyas instrucciones de proyecto ya se avisaron
@@ -526,6 +615,9 @@ class PanelAsistente(QDockWidget):
         self.area.verticalScrollBar().rangeChanged.connect(
             lambda _a, b: self.area.verticalScrollBar().setValue(b))   # siempre se ve lo último
         lay.addWidget(self.area, 1)
+        self.pensando = _Pensando()
+        lay.addWidget(self.pensando, 0, Qt.AlignLeft)
+        self.visibilityChanged.connect(lambda visible: self.pensando.pausar(not visible))
 
         self.pie = QLabel(objectName="uso_asistente", wordWrap=True)
         temas.poner_rol(self.pie, "tenue")
@@ -577,6 +669,20 @@ class PanelAsistente(QDockWidget):
         fila_campo.addWidget(self.campo, 1)
         fila_campo.addWidget(self.b_clip, 0, Qt.AlignTop)
         lay.addLayout(fila_campo)
+        self.permisos = QComboBox(objectName="permisos_asistente")    # fila propia: al lado de Enviar no entraba
+        for clave, nombre in NOMBRES_PERMISOS.items():
+            self.permisos.addItem(nombre, clave)
+            self.permisos.setItemData(self.permisos.count() - 1, AYUDA_PERMISOS[clave], Qt.ToolTipRole)
+        self.permisos.setToolTip("Permisos: cuándo pregunta antes de cambiar el documento (también en Preferencias › "
+                                 "Asistente IA).")
+        self.permisos.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.permisos.setMinimumContentsLength(8)   # un texto largo no ensancha el panel de 190 px
+        self.permisos.currentIndexChanged.connect(self._elegir_permisos)
+        lay.addWidget(self.permisos)
+        self.aviso_permisos = QLabel(AVISO_SIN_PREGUNTAR, objectName="aviso_permisos", wordWrap=True)
+        temas.poner_rol(self.aviso_permisos, "aviso")
+        self.aviso_permisos.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        lay.addWidget(self.aviso_permisos)
         abajo = QHBoxLayout()
         self.modo = QComboBox(objectName="modo_asistente")
         for clave in MODOS:
@@ -599,12 +705,20 @@ class PanelAsistente(QDockWidget):
 
     # ------------------------------------------------------------ cabecera y menú Chat
     def actualizar_cabecera(self):
+        """Nombre del modelo y permisos, como están en Preferencias."""
+        self.permisos.setCurrentIndex(max(self.permisos.findData(self.ventana.prefs["asistente/permisos"]), 0))
+        self.aviso_permisos.setVisible(self.permisos.currentData() == "nunca")
         cfg = config_de(self.ventana.prefs)
         nombre = config.PROVEEDORES.get(cfg["proveedor"], (cfg["proveedor"],))[0]
         modelo = config.modelo_de(cfg) if cfg["proveedor"] in config.PROVEEDORES else ""
         texto = nombre + (f" · {modelo}" if modelo else "")
         self.etiqueta_modelo.setText(texto)
         self.etiqueta_modelo.setToolTip(texto + "<br>Se cambia en Preferencias › Asistente IA.")
+
+    def _elegir_permisos(self, _i):
+        """El selector rápido es la misma preferencia que Preferencias › Asistente IA › Permisos."""
+        self.ventana.prefs["asistente/permisos"] = self.permisos.currentData()
+        self.aviso_permisos.setVisible(self.permisos.currentData() == "nunca")
 
     def _menu_chat(self):
         menu = QMenu(self)
@@ -667,6 +781,9 @@ class PanelAsistente(QDockWidget):
         return self._agregar(etiqueta)
 
     def _agregar_herramienta(self, nombre, args, respuesta):
+        """La línea plegable de una herramienta, solo con «Mostrar las herramientas que usa la IA» (IA-15)."""
+        if not self.ventana.prefs["asistente/ver_herramientas"]:
+            return None
         caja = QWidget()
         v = QVBoxLayout(caja)
         v.setContentsMargins(0, 0, 0, 0)
@@ -712,9 +829,17 @@ class PanelAsistente(QDockWidget):
                 self._aviso_ocupado = True
                 self._agregar_texto(f"⚠ {datos['respuesta'].get('mensaje', 'OmniCAD está ocupado.')} Terminá o "
                                     "cancelá el comando abierto (o salí del boceto) y reintentá el pedido.", "aviso")
+        elif tipo == "usando":
+            self.pensando.frase = frase(datos)
         elif tipo == "aprobar":
-            titulo = ("Plan del Asistente: con tu OK hace esto y sigue hasta terminar el pedido."
-                      if self.trabajo.args[3].modo == "hacer" else "Próximo paso: con tu OK el Asistente hace esto.")
+            self.pensando.parar()
+            h = self.trabajo.args[3]
+            if h.permisos == "nunca" or h.aprobado:      # con esos permisos solo pregunta lo que pisa un archivo
+                titulo = "Esto escribe encima de un archivo que ya existe y no se deshace: con tu OK lo hace."
+            elif h.permisos == "una_vez":
+                titulo = "Plan del Asistente: con tu OK hace esto y sigue hasta terminar el pedido."
+            else:
+                titulo = "Próximo paso: con tu OK el Asistente hace esto."
             self.tarjeta = self._agregar(_Tarjeta(titulo, datos, self._decidir))
         elif tipo == "imagen":
             self._agregar_imagen(datos)
@@ -734,6 +859,7 @@ class PanelAsistente(QDockWidget):
         self.tarjeta = None
         if self.trabajo is not None:
             self.trabajo.decidir(si)
+            self.pensando.seguir()
 
     @Slot(object)
     def _termino(self, resultado):
@@ -764,6 +890,7 @@ class PanelAsistente(QDockWidget):
             self._boton_deshacer(m, self.ventana.doc._instantanea())
         modo = self.trabajo.args[3].modo
         self.trabajo = None
+        self.pensando.parar()
         self._ocupado(False)
         self._guardar_chat(modo)
 
@@ -846,8 +973,8 @@ class PanelAsistente(QDockWidget):
             self._puente_vivo = None
 
     def _filtro_en_vivo(self, nombre, args):
-        """`PuenteAgentes.filtro` durante el pedido: la misma regla de modo que el modo API y la misma tarjeta
-        Aplicar (Hacer aprueba una vez por pedido; Guiar, cada cambio). Corre en el hilo de la interfaz."""
+        """`PuenteAgentes.filtro` durante el pedido: la misma regla de modo y de permisos que el modo API
+        (`Herramientas.a_aprobar`) y la misma tarjeta Aplicar. Corre en el hilo de la interfaz."""
         t = self.trabajo
         if t is None:
             return None
@@ -856,10 +983,12 @@ class PanelAsistente(QDockWidget):
             return error("TOOL_NOT_AVAILABLE", f"La herramienta '{nombre}' no se puede usar en el modo "
                          f"{herramientas.modo} del Asistente.",
                          "Explicale a la persona qué harías y que cambie a modo Guiar o Hacer.").a_dict()
-        if self._aprobado or not herramientas.necesita_aprobacion(nombre):
+        self.pensando.frase = frase(nombre)
+        pendientes = herramientas.a_aprobar([PedidoHerramienta("", nombre, args if isinstance(args, dict) else {})])
+        if not pendientes:
             return None
-        if self._aprobar_en_vivo([PedidoHerramienta("", nombre, args if isinstance(args, dict) else {})]):
-            self._aprobado = herramientas.modo == "hacer"
+        if self._aprobar_en_vivo(pendientes):
+            herramientas.aprobaron()
             return None
         return error("CANCELLED", "La persona no aprobó este cambio; no se ejecutó nada.",
                      "Preguntale qué quiere cambiar del plan antes de proponer otro.").a_dict()
@@ -939,7 +1068,7 @@ class PanelAsistente(QDockWidget):
     def _ocupado(self, si):
         self.b_enviar.setText("Cancelar" if si else "Enviar")
         self.b_enviar.setEnabled(True)
-        for w in (self.modo, self.b_nuevo):
+        for w in (self.modo, self.permisos, self.b_nuevo):
             w.setEnabled(not si)
 
     def _enviar_o_cancelar(self):
@@ -1002,13 +1131,15 @@ class PanelAsistente(QDockWidget):
         png = self._capturar() if modo in ("guiar", "hacer") else None
         self._antes = (png, self._camara()) if png is not None else None
         self._aviso_ocupado = False
-        self._aprobado = False
-        self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, Herramientas(modo=modo), sistema,
+        herramientas = Herramientas(modo=modo, permisos=self.permisos.currentData(),
+                                    ruta_doc=lambda: self.ventana.doc.ruta)
+        self.trabajo = _Trabajo(proveedor, self.mensajes, ejecutar, herramientas, sistema,
                                 prefs["asistente/tope_usd"], texto_cli,
                                 [b for b in bloques if b["tipo"] in ("imagen", "documento")])
         self.trabajo.evento.connect(self._evento)
         self.trabajo.termino.connect(self._termino)
         self._ocupado(True)
+        self.pensando.empezar()
         # Hilo de Python y no QThread: un pedido en vuelo al cerrar la app no aborta el proceso (daemon).
         threading.Thread(target=self.trabajo.correr, daemon=True, name="asistente").start()
         return True
@@ -1023,6 +1154,7 @@ class PanelAsistente(QDockWidget):
             if self.tarjeta is not None:
                 self.tarjeta.cerrar("Pedido cancelado.")
                 self.tarjeta = None
+            self.pensando.parar()
             self.b_enviar.setText("Cancelando…")
             self.b_enviar.setEnabled(False)
 

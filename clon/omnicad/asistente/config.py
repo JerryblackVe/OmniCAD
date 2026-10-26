@@ -35,6 +35,8 @@ DEFECTOS = {
     "ruta_codex": "",
     "ruta_opencode": "",
     "instrucciones": "",     # instrucciones propias de la persona (IA-12): van al prompt de todos los chats
+    "permisos": "una_vez",   # cuándo pregunta (IA-15): cada_paso, una_vez o nunca (asistente/herramientas.PERMISOS)
+    "ver_herramientas": False,   # el chat muestra una línea por herramienta que usa la IA (IA-15)
 }
 # Lo que lee crear_proveedor de las preferencias (prefijo «asistente/»). ruta_<agente> vacía = el del PATH.
 CLAVES = ("proveedor", "modelo", "base_url", "variante") + tuple(f"ruta_{a}" for a in AGENTES_LOCALES)

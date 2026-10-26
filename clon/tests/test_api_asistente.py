@@ -12,7 +12,7 @@ from omnicad.servidor_mcp.servidor import GRUPOS_CONOCIDOS, GRUPOS_POR_DEFECTO
 
 CLAVE_FALSA = "sk-FALSA-api-asistente-0123456789"
 CAJA = PedidoHerramienta("h1", "create_box", {"length": 40, "width": 30, "height": 20})
-CILINDRO = PedidoHerramienta("h2", "create_cylinder", {"radius": 5, "height": 10})
+CAJA2 = PedidoHerramienta("h2", "create_box", {"length": 5, "width": 5, "height": 10})
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +31,7 @@ def test_config_por_defecto_y_la_clave_nunca_sale(monkeypatch):
     r = api.llamar(s, "get_assistant_config")["result"]
     assert r | {"providers": None} == {"provider": "anthropic", "model": "", "effective_model": "claude-opus-5-5",
                                        "base_url": "", "default_mode": "guiar", "max_usd": 0.5, "send_images": True, "effort": "",
-                                       "instructions": "",
+                                       "instructions": "", "permissions": "una_vez", "show_tools": False,
                                        "key_env_var": "ANTHROPIC_API_KEY", "key_set": False, "providers": None}
     monkeypatch.setenv("ANTHROPIC_API_KEY", CLAVE_FALSA)
     r = api.llamar(s, "get_assistant_config")
@@ -52,23 +52,26 @@ def test_set_cambia_solo_lo_pasado_y_valida(tmp_path, monkeypatch):
                         ({"base_url": "https://malo.example.com/v1"}, "base_url"),
                         ({"base_url": "ftp://localhost/"}, "base_url"),
                         ({"max_usd": 101}, "max_usd"), ({"max_usd": -1}, "max_usd"),
-                        ({"model": "a\nb"}, "modelo"), ({"default_mode": "todo"}, ""),
+                        ({"model": "a\nb"}, "modelo"), ({"default_mode": "todo"}, ""), ({"permissions": "a_veces"}, ""),
                         ({"api_key": CLAVE_FALSA}, ""), ({"ruta_claude_code": "C:/x.exe"}, "")]:
         r = api.llamar(s, "set_assistant_config", args)
         assert r["error_kind"] == "INVALID_ARGUMENTS" and texto in r["mensaje"], args
     assert api.llamar(s, "set_assistant_config", {"base_url": "https://openrouter.ai/api/v1"})["ok"]
     assert api.llamar(s, "get_assistant_config")["result"]["provider"] == "local"   # lo rechazado no cambió nada
+    r = api.llamar(s, "set_assistant_config", {"permissions": "nunca", "show_tools": True})
+    assert r["ok"] and r["result"]["updated"] == ["permisos", "ver_herramientas"]
+    assert (r["result"]["permissions"], r["result"]["show_tools"]) == ("nunca", True)
 
 
 def test_ask_crea_una_caja_y_un_undo_la_saca_entera(monkeypatch):
     s = api.Sesion()
     falso(monkeypatch, Respuesta(herramientas=[CAJA], uso={"entrada": 10, "salida": 5, "costo_usd": 0.001}),
-          Respuesta(herramientas=[CILINDRO]), Respuesta(texto="Listo: caja y cilindro."))
-    r = api.llamar(s, "assistant_ask", {"prompt": "hace una caja y un cilindro"})
+          Respuesta(herramientas=[CAJA2]), Respuesta(texto="Listo: dos cajas."))
+    r = api.llamar(s, "assistant_ask", {"prompt": "hace dos cajas"})
     assert r["ok"], r
-    assert r["result"] | {"usage": None} == {"text": "Listo: caja y cilindro.", "stop_reason": "fin", "turns": 3,
+    assert r["result"] | {"usage": None} == {"text": "Listo: dos cajas.", "stop_reason": "fin", "turns": 3,
                                              "tools": [{"name": "create_box", "ok": True},
-                                                       {"name": "create_cylinder", "ok": True}], "usage": None}
+                                                       {"name": "create_box", "ok": True}], "usage": None}
     assert r["result"]["usage"] == {"input_tokens": 10, "output_tokens": 5, "cost_usd": 0.001}
     assert any("aprobaron solos" in a for a in r["avisos"])
     assert len(s.doc.operaciones) == 2
@@ -85,7 +88,7 @@ def test_ask_explicar_no_cambia_nada(monkeypatch):
 
 def test_ask_tope_de_gasto_vuelve_atras(monkeypatch):
     s = api.Sesion()
-    falso(monkeypatch, Respuesta(herramientas=[CAJA], uso={"costo_usd": 0.9}), Respuesta(herramientas=[CILINDRO]))
+    falso(monkeypatch, Respuesta(herramientas=[CAJA], uso={"costo_usd": 0.9}), Respuesta(herramientas=[CAJA2]))
     r = api.llamar(s, "assistant_ask", {"prompt": "caja"})
     assert r["error_kind"] == "BUDGET_EXCEEDED" and s.doc.operaciones == []
 

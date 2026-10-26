@@ -424,7 +424,7 @@ class AgenteFalso(AgenteLocal):
         return {"motivo": "fin", "uso": {"entrada": 0, "salida": 0, "costo_usd": None}}
 
 
-def pedir(v, agente, modo, decidir=None, texto="caja"):
+def pedir(v, agente, modo, decidir=None, texto="caja", permisos="una_vez"):
     """Manda un pedido con el CLI simulado; `decidir` = "aplicar" o "cancelar" en cada tarjeta (clic real)."""
     from PySide6.QtCore import Qt, QTimer
     from PySide6.QtTest import QTest
@@ -433,6 +433,7 @@ def pedir(v, agente, modo, decidir=None, texto="caja"):
     v.set_documento(Documento())
     p.crear_proveedor = lambda cfg: agente
     p.modo.setCurrentIndex(p.modo.findData(modo))
+    p.permisos.setCurrentIndex(p.permisos.findData(permisos))
     clics = []
 
     def clic():                                  # corre adentro del bucle de la tarjeta, como la persona
@@ -494,10 +495,11 @@ def test_call_tool_en_explicar_bloquea_lo_que_modifica(ventana):
     assert ventana.doc.operaciones == []
 
 
-def test_call_tool_no_llega_a_assistant_ask_ni_execute_code(ventana):
+@pytest.mark.parametrize("permisos", ["una_vez", "nunca"])
+def test_call_tool_no_llega_a_assistant_ask_ni_execute_code(ventana, permisos):
     agente = AgenteMeta(ventana.asistente.puente.archivo, [("assistant_ask", {"prompt": "hola"}),
                                                            ("execute_code", {"code": "1"})])
-    pedir(ventana, agente, "hacer", "aplicar")
+    pedir(ventana, agente, "hacer", "aplicar", permisos=permisos)
     assert [r["error_kind"] for r in agente.respuestas] == ["TOOL_NOT_AVAILABLE", "TOOL_NOT_AVAILABLE"]
 
 
@@ -518,12 +520,30 @@ def test_puente_temporal_tarjeta_aplicar_y_sesion(ventana):
     assert p._sesiones == {}
 
 
-def test_guiar_tarjeta_por_cambio_y_cancelar_devuelve_cancelled(ventana):
+def test_cada_paso_tarjeta_por_cambio_y_cancelar_devuelve_cancelled(ventana):
     agente = AgenteFalso(ventana.asistente.puente.archivo, [CAJA, CAJA])
-    assert len(pedir(ventana, agente, "guiar", "aplicar")) == 2
+    assert len(pedir(ventana, agente, "guiar", "aplicar", permisos="cada_paso")) == 2
     agente = AgenteFalso(ventana.asistente.puente.archivo, [CAJA])
     pedir(ventana, agente, "hacer", "cancelar")
     assert agente.respuestas[0]["error_kind"] == "CANCELLED" and ventana.doc.operaciones == []
+
+
+@pytest.mark.parametrize("permisos, tarjetas", [("cada_paso", 2), ("una_vez", 1), ("nunca", 0)])
+def test_permisos_en_los_cli(ventana, permisos, tarjetas):
+    """La misma regla que el modo API (Herramientas.a_aprobar), aplicada en PuenteAgentes.ejecutar."""
+    agente = AgenteFalso(ventana.asistente.puente.archivo, [CAJA, ("get_scene_info", {}), CAJA])
+    assert len(pedir(ventana, agente, "hacer", "aplicar", permisos=permisos)) == tarjetas
+    assert all(r["ok"] for r in agente.respuestas) and len(ventana.doc.operaciones) == 2
+
+
+def test_cli_en_nunca_guardar_encima_pregunta(ventana, tmp_path):
+    ruta = str(tmp_path / "pieza.omnicad")
+    agente = AgenteFalso(ventana.asistente.puente.archivo, [CAJA, ("save_document", {"path": ruta}),
+                                                            ("save_document", {})])
+    assert len(pedir(ventana, agente, "hacer", "cancelar", permisos="nunca")) == 1   # solo el que pisa el archivo
+    assert [r.get("error_kind") for r in agente.respuestas] == [None, None, "CANCELLED"]
+    from PySide6.QtWidgets import QLabel
+    assert any("encima de un archivo que ya existe" in w.text() for w in ventana.asistente.lista.findChildren(QLabel))
 
 
 def test_explicar_rechaza_lo_que_cambia_sin_tarjeta(ventana):

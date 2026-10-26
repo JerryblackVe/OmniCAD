@@ -5203,7 +5203,7 @@ Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el his
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`get_assistant_config`](#get_assistant_config) | no | Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes e instrucciones propias. |
+| [`get_assistant_config`](#get_assistant_config) | no | Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes, instrucciones propias, permisos y si el chat muestra las herramientas. |
 | [`set_assistant_config`](#set_assistant_config) | sí | Cambia la configuración del Asistente IA (solo los campos pasados). |
 | [`get_project_instructions`](#get_project_instructions) | no | Instrucciones de este proyecto para el Asistente IA: van dentro del .omnicad y se suman a las propias (get_assistant_config). |
 | [`set_project_instructions`](#set_project_instructions) | sí | Cambia las instrucciones de este proyecto para el Asistente IA. Se guardan con el diseño (save_document) pero no entran en deshacer, como los comentarios. |
@@ -5214,7 +5214,7 @@ Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el his
 
 ### `get_assistant_config`
 
-Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes e instrucciones propias. De la clave de API solo dice qué variable de entorno la lleva y si está definida; nunca su valor.
+Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes, instrucciones propias, permisos y si el chat muestra las herramientas. De la clave de API solo dice qué variable de entorno la lleva y si está definida; nunca su valor.
 
 - Modifica el documento: no.
 - Parámetros: ninguno.
@@ -5234,6 +5234,8 @@ Cambia la configuración del Asistente IA (solo los campos pasados). No acepta c
   - `send_images` (true/false; opcional, por defecto `null`): si se le mandan al modelo las imágenes del visor.
   - `effort` (texto; opcional, por defecto `null`): esfuerzo de OpenCode (--variant) o de Codex (model_reasoning_effort), p. ej. "high"; "" = el de fábrica.
   - `instructions` (texto; opcional, por defecto `null`): instrucciones propias para todos los chats (hasta 4000 caracteres); "" las borra. No pueden saltear modos, la tarjeta Aplicar, los bloqueos ni el tope de gasto.
+  - `permissions` ("cada_paso" | "una_vez" | "nunca" o null; opcional, por defecto `null`): cuándo pregunta el panel: "cada_paso" (cada tanda que cambia algo), "una_vez" (el plan, una vez por pedido) o "nunca" (sin tarjeta). Pisar un archivo existente pregunta siempre; los bloqueos y el tope siguen.
+  - `show_tools` (true/false; opcional, por defecto `null`): si el chat del panel muestra una línea por herramienta que usa la IA.
 - CLI: `omnicad call set_assistant_config --doc pieza.omnicad`
 
 ### `get_project_instructions`

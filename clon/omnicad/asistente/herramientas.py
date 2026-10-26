@@ -1,23 +1,28 @@
 """Selección progresiva de herramientas del catálogo para el asistente."""
+from pathlib import Path
+
 from omnicad import api
 from omnicad.api.doc_markdown import GRUPOS
 from omnicad.api.errores import error
 from omnicad.api.herramientas_ayuda import claves_de, puntaje
 
 
-# Lo que va en cada paso. create_hole y chamfer quedaron afuera (IA-11): son esquemas pesados y el índice del prompt
-# los deja a una búsqueda; con ellos el peor paso pasaba los 25 mil tokens.
+# Lo que va en cada paso. create_hole y chamfer (IA-11) y revolve, create_cylinder y measure_distance (IA-15) quedaron
+# afuera: son esquemas pesados y el índice del prompt los deja a una búsqueda; con ellos el peor paso rozaba los 25 mil
+# tokens.
 NUCLEO = (
     "get_scene_info", "get_timeline", "get_parameters", "create_parameter", "set_parameter",
     "create_sketch", "draw_line", "draw_rectangle", "draw_circle", "add_dimension", "add_constraint",
-    "extrude", "revolve", "create_box", "create_cylinder", "fillet", "shell",
+    "extrude", "create_box", "fillet", "shell",
     "find_faces", "find_edges", "edit_feature", "get_viewport_image", "get_physical_properties",
-    "measure_distance", "describe_operation", "run_operation", "undo", "save_document", "search_help",
+    "describe_operation", "run_operation", "undo", "save_document", "search_help",
 )
 PROHIBIDAS = {"execute_code"}
 TOPE_BUSQUEDA = 5        # herramientas por llamada a buscar_herramientas / find_tools
 TOPE_RESULTADO = 8000    # caracteres del resultado de una herramienta que llegan al modelo
 MODOS = ("explicar", "mostrar", "guiar", "hacer")
+# Cuándo pregunta (IA-15); los modos dicen QUÉ puede hacer. Pisar un archivo que ya existe pregunta en los tres.
+PERMISOS = ("cada_paso", "una_vez", "nunca")
 # El catálogo dice que no modifican el documento, pero escriben en disco, tocan la biblioteca del usuario o la ventana.
 CON_EFECTOS = {
     "save_document", "export", "export_mesh", "export_drawing", "export_flat_pattern_dxf", "export_animation_video",
@@ -78,18 +83,23 @@ def resumen(descripcion):
 
 
 def indice(catalogo):
-    """Una línea por grupo con su descripción y los NOMBRES de sus herramientas, sin esquemas."""
+    """Una línea por grupo con los NOMBRES de sus herramientas, sin esquemas (sin la descripción del grupo: IA-15)."""
     orden = list(GRUPOS)
     grupos = sorted({h["grupo"] for h in catalogo.values()}, key=lambda g: orden.index(g) if g in orden else 99)
-    return "\n".join(f"- {g} ({GRUPOS.get(g, '').rstrip('.')}): "
-                     + ", ".join(n for n, h in catalogo.items() if h["grupo"] == g) for g in grupos)
+    return "\n".join(f"- {g}: " + ", ".join(n for n, h in catalogo.items() if h["grupo"] == g) for g in grupos)
 
 
 class Herramientas:
-    def __init__(self, catalogo=None, modo="hacer"):
+    """Lo que el asistente puede usar en un pedido (`modo`) y cuándo pregunta (`permisos`). `ruta_doc()` da la ruta
+    del documento actual: guardar sin ruta la pisa. Es de UN pedido: guarda si el plan ya se aprobó."""
+
+    def __init__(self, catalogo=None, modo="hacer", permisos="una_vez", ruta_doc=None):
         if modo not in MODOS:
             raise ValueError(f"Modo inválido: {modo!r}. Modos: {', '.join(MODOS)}.")
-        self.modo = modo
+        if permisos not in PERMISOS:
+            raise ValueError(f"Permisos inválidos: {permisos!r}. Opciones: {', '.join(PERMISOS)}.")
+        self.modo, self.permisos, self.ruta_doc = modo, permisos, ruta_doc
+        self.aprobado = False
         base = [h for h in (api.catalogo() if catalogo is None else catalogo)
                 if h["grupo"] not in ("dev", "asistente") and h["nombre"] not in PROHIBIDAS]
         self.catalogo = {h["nombre"]: h for h in base if en_modo(h, modo)}
@@ -127,6 +137,31 @@ class Herramientas:
         """En Guiar y Hacer, lo que Mostrar no permitiría (cambia algo) se aprueba antes de correrlo."""
         return self.modo in ("guiar", "hacer") and nombre in self.catalogo and not en_modo(self.catalogo[nombre],
                                                                                             "mostrar")
+
+    def pisa_archivo(self, nombre, args):
+        """Guardar o exportar encima de un archivo que ya existe: escribe fuera del documento y no se deshace."""
+        if nombre not in CON_EFECTOS or not isinstance(args, dict):
+            return False
+        ruta = args.get("path") or args.get("csv_path")
+        if nombre == "save_document" and not ruta and self.ruta_doc is not None:
+            ruta = self.ruta_doc()
+        if not isinstance(ruta, str) or not ruta.strip():
+            return False
+        ruta = Path(ruta)
+        return ruta.exists() or (nombre == "save_document" and ruta.with_suffix(".omnicad").exists())
+
+    def a_aprobar(self, pedidos):
+        """Regla única de permisos (bucle del modo API y filtro del puente de los CLI): de `pedidos` (con .nombre y
+        .args), los que hay que aprobar ahora. Lo que cambia algo pregunta en cada tanda (cada_paso) o hasta que se
+        apruebe el plan (una_vez); pisar un archivo existente pregunta siempre, también con «nunca»."""
+        cambian = [p for p in pedidos if self.necesita_aprobacion(p.nombre)]
+        if self.permisos == "nunca" or self.aprobado:
+            return [p for p in cambian if self.pisa_archivo(p.nombre, p.args)]
+        return cambian
+
+    def aprobaron(self):
+        """La persona aprobó una tanda: con «una_vez» el resto del pedido ya no pregunta."""
+        self.aprobado = self.permisos == "una_vez"
 
     def para_cli(self):
         """Lo que reciben los CLI del modo suscripción: el núcleo, get_guide y las de vista que permita el modo. Las

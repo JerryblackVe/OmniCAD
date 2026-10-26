@@ -43,12 +43,14 @@ def _resumen(cfg):
     return {"provider": proveedor, "model": cfg["modelo"], "effective_model": config.modelo_de(cfg) if conocido else "",
             "base_url": cfg["base_url"], "default_mode": cfg["modo"], "max_usd": cfg["tope_usd"],
             "send_images": cfg["imagenes"], "effort": cfg["variante"], "instructions": cfg["instrucciones"],
+            "permissions": cfg["permisos"], "show_tools": cfg["ver_herramientas"],
             "key_env_var": config.variable_clave(proveedor),
             "key_set": config.clave_definida(proveedor), "providers": list(config.PROVEEDORES)}
 
 
 @herramienta("get_assistant_config", "asistente", "Configuración del Asistente IA (Preferencias › Asistente IA): "
-             "proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes e instrucciones propias. De la "
+             "proveedor, modelo, base_url, modo por defecto, tope de gasto, imágenes, instrucciones propias, permisos "
+             "y si el chat muestra las herramientas. De la "
              "clave de API solo dice qué variable de entorno la lleva y si está definida; nunca su valor.")
 def get_assistant_config(sesion):
     return _resumen(_leer_config(_ajustes()))
@@ -60,7 +62,9 @@ def get_assistant_config(sesion):
 def set_assistant_config(sesion, provider: str | None = None, model: str | None = None, base_url: str | None = None,
                          default_mode: Literal["explicar", "mostrar", "guiar", "hacer"] | None = None,
                          max_usd: float | None = None, send_images: bool | None = None, effort: str | None = None,
-                         instructions: str | None = None):
+                         instructions: str | None = None,
+                         permissions: Literal["cada_paso", "una_vez", "nunca"] | None = None,
+                         show_tools: bool | None = None):
     """
     provider: proveedor (lista en get_assistant_config › providers), p. ej. "anthropic", "openai", "local".
     model: modelo del proveedor; "" vuelve al de fábrica.
@@ -71,6 +75,9 @@ def set_assistant_config(sesion, provider: str | None = None, model: str | None 
     effort: esfuerzo de OpenCode (--variant) o de Codex (model_reasoning_effort), p. ej. "high"; "" = el de fábrica.
     instructions: instrucciones propias para todos los chats (hasta 4000 caracteres); "" las borra. No pueden saltear
         modos, la tarjeta Aplicar, los bloqueos ni el tope de gasto.
+    permissions: cuándo pregunta el panel: "cada_paso" (cada tanda que cambia algo), "una_vez" (el plan, una vez por
+        pedido) o "nunca" (sin tarjeta). Pisar un archivo existente pregunta siempre; los bloqueos y el tope siguen.
+    show_tools: si el chat del panel muestra una línea por herramienta que usa la IA.
     """
     cambios = {}
     if provider is not None:
@@ -108,6 +115,10 @@ def set_assistant_config(sesion, provider: str | None = None, model: str | None 
         cambios["variante"] = effort
     if instructions is not None:
         cambios["instrucciones"] = _instrucciones(instructions)
+    if permissions is not None:
+        cambios["permisos"] = permissions
+    if show_tools is not None:
+        cambios["ver_herramientas"] = show_tools
     ajustes = _ajustes()
     for clave, valor in cambios.items():
         ajustes.setValue(f"asistente/{clave}", valor)

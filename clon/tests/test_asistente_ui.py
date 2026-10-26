@@ -45,8 +45,11 @@ def panel(ventana, monkeypatch):
     escapadas = []
     monkeypatch.setattr(sys, "excepthook", lambda *e: escapadas.append(e))
     ventana.set_documento(Documento())
+    ventana.prefs["asistente/ver_herramientas"] = True     # los tests de abajo miran las líneas de herramienta
+    ventana.prefs["asistente/permisos"] = "una_vez"
     ventana.mostrar_asistente(True)
     p = ventana.asistente
+    p.actualizar_cabecera()
     p.nuevo_chat()
     p.guion = []
     p.crear_proveedor = lambda cfg: ProveedorFalso(p.guion)
@@ -430,8 +433,9 @@ def test_hacer_muestra_una_tarjeta_y_corre_todo(panel, ventana):
     assert len(tarjetas(panel)) == 1 and len(ventana.doc.operaciones) == 2
 
 
-def test_guiar_pide_en_cada_tanda(panel, ventana):
+def test_cada_paso_pide_en_cada_tanda(panel, ventana):
     panel.modo.setCurrentIndex(panel.modo.findData("guiar"))
+    panel.permisos.setCurrentIndex(panel.permisos.findData("cada_paso"))
     panel.guion = [Respuesta(herramientas=[caja(1)]), Respuesta(herramientas=[caja(2, 10)]), Respuesta(texto="ok")]
     escribir(panel, "dos cajas")
     assert panel.enviar() and esperar(panel)
@@ -967,3 +971,109 @@ def test_historial_guarda_antes_y_despues_achicados_y_los_muestra_al_reabrir(pan
     caja, = comparaciones(panel)
     mini = caja.findChildren(QWidget, "miniatura_comparacion")
     assert [m.png for m in mini] == [par["antes"], par["despues"]]
+
+
+class ProveedorLento(ProveedorFalso):
+    """Como un modelo que tarda en contestar: espera a `seguir` antes de cada respuesta."""
+
+    def __init__(self, guion):
+        super().__init__(guion)
+        self.seguir = threading.Event()
+
+    def responder(self, *args):
+        self.seguir.wait(5)
+        return super().responder(*args)
+
+
+def _pedido_lento(panel, ventana, permisos="nunca"):
+    panel.modo.setCurrentIndex(panel.modo.findData("hacer"))
+    panel.permisos.setCurrentIndex(panel.permisos.findData(permisos))
+    lento = ProveedorLento([Respuesta(herramientas=[PedidoHerramienta("s", "get_scene_info", {}), CAJA]),
+                            Respuesta(texto="Listo.")])
+    panel.crear_proveedor = lambda cfg: lento
+    escribir(panel, "caja")
+    assert panel.enviar()
+    return lento
+
+
+def test_sin_la_casilla_no_hay_lineas_y_los_puntos_laten_mientras_corre(panel, ventana):
+    from omnicad.ui.asistente import _Pensando
+    ventana.prefs["asistente/ver_herramientas"] = False
+    lento = _pedido_lento(panel, ventana)
+    b = panel.pensando
+    assert b.isVisible() and b.reloj.isActive() and not b.texto.isVisible()
+    cuadro, puntos = b.cuadro, b.puntos.text()
+    QTest.qWait(_Pensando.PASO_MS * 3)                       # el reloj de verdad avanza los puntos
+    assert b.cuadro > cuadro and b.puntos.text() != puntos
+    while b.cuadro * _Pensando.PASO_MS < _Pensando.ESPERA_MS:
+        b.latir()
+    assert b.texto.isVisible() and b.texto.text() == "pensando…"   # tarda: dice qué hace, en palabras
+    lento.seguir.set()
+    assert esperar(panel, aplicar=False)
+    assert not b.isVisible() and not b.reloj.isActive()      # terminó: se detiene
+    assert lineas_herramienta(panel) == [] and len(ventana.doc.operaciones) == 1
+    assert panel.tarjeta is None and panel.b_deshacer is not None   # «nunca»: sin tarjeta, con «Deshacer este pedido»
+    assert "Último pedido" in panel.pie.text()
+    ventana.prefs["asistente/ver_herramientas"] = True       # encendida, vuelven las líneas
+    panel.nuevo_chat()
+    lento = _pedido_lento(panel, ventana)
+    lento.seguir.set()
+    assert esperar(panel, aplicar=False)
+    assert lineas_herramienta(panel) == ["✓ get_scene_info", "✓ create_box → op2"]
+
+
+def test_la_frase_sale_de_la_herramienta_o_del_grupo():
+    from omnicad.ui.asistente import frase
+    assert frase("fillet") == "creando el empalme" and frase("get_scene_info") == "mirando el modelo"
+    assert frase("draw_arc") == "dibujando" and frase("no_existe") == "trabajando en el modelo"
+
+
+def test_cancelar_y_fallar_detienen_los_puntos(panel, ventana):
+    lento = _pedido_lento(panel, ventana)
+    assert panel.pensando.reloj.isActive()
+    QTest.mouseClick(panel.b_enviar, Qt.LeftButton)          # Cancelar
+    assert not panel.pensando.reloj.isActive() and not panel.pensando.isVisible()
+    lento.seguir.set()
+    assert esperar(panel, aplicar=False)
+    class Falla(ProveedorFalso):
+        def responder(self, *args):
+            raise ErrorProveedor("sin red")
+
+    panel.crear_proveedor = lambda cfg: Falla([])            # el pedido falla
+    escribir(panel, "otra")
+    assert panel.enviar() and esperar(panel, aplicar=False)
+    assert not panel.pensando.reloj.isActive() and any(t.startswith("⚠") for t in textos_chat(panel))
+
+
+def test_panel_cerrado_para_el_reloj(panel, ventana):
+    lento = _pedido_lento(panel, ventana)
+    try:
+        ventana.mostrar_asistente(False)
+        assert not panel.pensando.reloj.isActive()
+        ventana.mostrar_asistente(True)
+        assert panel.pensando.reloj.isActive()
+    finally:
+        lento.seguir.set()
+    assert esperar(panel, aplicar=False)
+
+
+def test_tarjeta_esconde_los_puntos_y_aplicar_los_vuelve(panel, ventana):
+    lento = _pedido_lento(panel, ventana, permisos="una_vez")
+    lento.seguir.set()
+    tarjeta = esperar_tarjeta(panel)
+    assert tarjeta is not None and not panel.pensando.isVisible()
+    QTest.mouseClick(tarjeta.b_aplicar, Qt.LeftButton)
+    assert panel.pensando.isVisible() or not panel.trabajando
+    assert esperar(panel, aplicar=False) and not panel.pensando.isVisible()
+
+
+def test_selector_de_permisos_es_la_preferencia_y_avisa_en_nunca(panel, ventana):
+    from PySide6.QtWidgets import QLabel
+    panel.permisos.setCurrentIndex(panel.permisos.findData("nunca"))
+    assert ventana.prefs["asistente/permisos"] == "nunca" and panel.aviso_permisos.isVisible()
+    assert panel.findChild(QLabel, "aviso_permisos").text().startswith("⚠ Sin preguntar")
+    panel.permisos.setCurrentIndex(panel.permisos.findData("cada_paso"))
+    assert ventana.prefs["asistente/permisos"] == "cada_paso" and not panel.aviso_permisos.isVisible()
+    ventana.prefs["asistente/permisos"] = "nunca"            # cambiado en Preferencias: el panel lo sigue
+    ventana.aplicar_preferencias()
+    assert panel.permisos.currentData() == "nunca" and panel.aviso_permisos.isVisible()
