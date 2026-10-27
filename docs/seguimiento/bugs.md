@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; B-39 cerrado el 2026-10-27). Total 6: Abierto 2 · Parcial 3 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y B-107: 2026-10-27). Total 7: Abierto 3 · Parcial 3 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -12,6 +12,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Necesita PC con Linux nativo (ver P-1b): el fallo solo aparece con Wayland y esta PC es Windows, así que no se pudo reproducir ni probar un arreglo; hoy se fuerza xcb y no molesta. | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
 | P-11j | Cuerpos «sin ubicar» de XOX (3) que quizá Fusion no tiene | Parcial | Alta | Sherpa resuelto (2026-10-21): comparado con Fusion, no tiene los 2 cuerpos (1593 y 952 mm³) y todos sus componentes con cuerpos están emparejados; ahora se descartan los bloques sin dueño cuando ningún componente de la escena queda sin bloque. Queda XOX: 3 componentes de la escena sin bloque y 3 bloques sin dueño (152,9; 494,8 y 4365,4 mm³): no se pueden descartar sin ver Fusion, y la versión en la nube (v35, 202 componentes) no es la del .f3z local (72 cuerpos): hace falta abrir en Fusion ese mismo archivo. | omnicad/io_archivos/f3d_escena.py (huerfanos); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-21 |
 | B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | La causa en OCCT sigue sin reproducirse ni curarse. El cambio de parámetros en documentos de 60 pasos o más ya se ensaya antes en un proceso aparte (si el kernel cae, no se aplica y la app sigue); no cubre editar/suprimir pasos ni abrir archivos. | nucleo/aislado.py (`correr_json`, `UMBRAL_PREVUELO_PARAMETROS`); timeline/documento.py `_prevuelo_parametros`; tests/test_b48_prevuelo.py; tests/test_b48_crash.py | 2026-10-20 |
+| B-107 | Una extrusión de corte desde un boceto flotante no quita el círculo tangente a la cara lateral | Abierto | Alta | Caja 20×20×20, corte rectangular pasante 10×10 desde z=30 y luego círculo r2 centrado en (8, 0), en plano z=-20, extruido 60 mm para cortar: el volumen queda en 6000 en vez de 5748,6726 mm³. Reproducido también en una copia limpia de 48cd5e5: es anterior a la reparación de los hallazgos de B-39. Causa por localizar. | tests/test_api_solido.py::test_extrude_cut_flotante_va_hacia_el_material | 2026-10-27 |
 
 ## Boceto (auditoría contra Fusion, 2026-10-23)
 

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from OCP.BRepCheck import BRepCheck_Analyzer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import fuzz_b39 as fuzz  # noqa: E402
@@ -33,3 +34,21 @@ def test_b39_fuzzer_caso_fijado_sin_resultado_imposible(indice):
 def test_b39_fuzzer_caso_grave_de_la_linea_base_sin_geometria_silenciosa_mala(semilla, indice):
     nombre, herramientas, fallos = fuzz.correr_caso(semilla, indice, ligero=True)
     assert not fuzz.graves(fallos), fuzz.descripcion(nombre, herramientas)
+
+
+@pytest.mark.parametrize("indice", [791, 1342, 1488])
+def test_b39_reintentos_y_unificacion_no_modifican_las_entradas(indice):
+    _, base, herramientas = fuzz.generar("b39", indice)
+    for *_, herramienta in herramientas:
+        entradas = (base, herramienta)
+        volumenes = tuple(fuzz.geo.volumen_exacto(f) for f in entradas)
+        validas = tuple(BRepCheck_Analyzer(f, GeomControls=True, theIsParallel=False).IsValid() for f in entradas)
+        try:
+            resultado = fuzz.geo.booleano(base, herramienta, "unir")
+        except fuzz.geo.ErrorGeometria:
+            resultado = None  # el rechazo puede ser legítimo, pero tampoco debe alterar las entradas
+        assert tuple(fuzz.geo.volumen_exacto(f) for f in entradas) == pytest.approx(volumenes, rel=1e-9, abs=1e-7)
+        assert tuple(BRepCheck_Analyzer(f, GeomControls=True, theIsParallel=False).IsValid() for f in entradas) == validas
+        if resultado is None:
+            break
+        base = resultado

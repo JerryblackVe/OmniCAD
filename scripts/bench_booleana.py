@@ -41,7 +41,7 @@ CASOS = {
 }
 ESPANOL = {"join": "unir", "cut": "cortar", "intersect": "intersecar"}
 ETAPAS = (("booleano", "geo", "booleano"), ("_booleana", "geo", "_booleana"),
-          ("_problema", "geo", "_problema_booleana"), ("unificar_caras", "geo", "unificar_caras"),
+          ("_problema", "geo", "_problema_booleana"), ("unificar_caras", "geo", "_unificar_caras"),
           ("_quitar_cables", "geo", "_quitar_cables_colgados"), ("volumen", "geo", "volumen"), ("vol_exacto", "geo", "volumen_exacto"),
           ("_caja_occ", "geo", "_caja_occ"), ("_adentro", "geo", "_adentro"),
           ("se_tocan", "geo", "se_tocan"), ("es_estanca", "rv", "es_estanca"),

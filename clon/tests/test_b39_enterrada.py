@@ -46,13 +46,13 @@ def _carcasa():
 
 
 def test_b39_herramienta_enterrada_en_la_pared_no_fusiona_en_el_kernel(monkeypatch):
-    """El atajo (B-39): la única pasada del kernel es la intersección que CONFIRMA la contención; nunca la fusión."""
+    """El atajo (B-39) comprueba que no queda material fuera del cuerpo; nunca fusiona la herramienta enterrada."""
     pared = _pared()
     herramienta = geo.cilindro(2.5, 1.8, (0, 0, 70), eje=(1, 0, 0))          # al medio del espesor de la pared
     herramienta = geo.trasladar(herramienta, (27.4, 0, 0))
     llamadas = _espiar_booleana(monkeypatch)
     unida = geo.booleano(pared, herramienta, "unir")
-    assert llamadas == ["intersecar"], llamadas
+    assert llamadas == ["cortar"], llamadas
     assert unida is pared                                                      # el cuerpo original, sin reconstruir
     assert geo.volumen(unida) == geo.volumen(pared) and len(geo.caras(unida)) == len(geo.caras(pared))
     assert geo.es_valida(unida) and rv.es_estanca(unida)
@@ -64,19 +64,19 @@ def test_b39_herramienta_enterrada_en_la_carcasa_hueca_no_fusiona_en_el_kernel(m
     cilindro = geo.cilindro(2.5, 2, (20, 15, 0.5))                            # enterrado en el piso (0–3 mm)
     llamadas = _espiar_booleana(monkeypatch)
     unida = geo.booleano(carcasa, cilindro, "unir")
-    assert llamadas == ["intersecar"], llamadas
+    assert llamadas == ["cortar"], llamadas
     assert unida is carcasa
     assert geo.volumen(unida) == geo.volumen(carcasa) and len(geo.caras(unida)) == len(geo.caras(carcasa))
     assert geo.es_valida(unida) and rv.es_estanca(unida)
 
 
 def test_b39_herramienta_que_roza_la_cara_desde_adentro_usa_el_atajo(monkeypatch):
-    """Tangente a la cara interior: los vértices caen en ON, la intersección mide lo mismo que la herramienta."""
+    """Tangente a la cara interior: los vértices caen en ON y no queda material fuera del cuerpo."""
     carcasa = _carcasa()
     cilindro = geo.cilindro(2.5, 2.6, (27.0, 10, 20), eje=(1, 0, 0))          # toca la cara x=27 desde el material
     llamadas = _espiar_booleana(monkeypatch)
     unida = geo.booleano(carcasa, cilindro, "unir")
-    assert llamadas == ["intersecar"], llamadas
+    assert llamadas == ["cortar"], llamadas
     assert unida is carcasa
     assert geo.volumen(unida) == geo.volumen(carcasa) and len(geo.caras(unida)) == len(geo.caras(carcasa))
     assert geo.es_valida(unida) and rv.es_estanca(unida)
@@ -87,7 +87,7 @@ def test_b39_cuando_el_objetivo_queda_enterrado_en_la_herramienta_tambien_acorta
     llamadas = _espiar_booleana(monkeypatch)
     chica, grande = geo.caja(2, 2, 2, (4, 4, 4)), geo.caja(10, 10, 10)
     unida = geo.booleano(chica, grande, "unir")
-    assert llamadas == ["intersecar"], llamadas
+    assert llamadas == ["cortar"], llamadas
     assert unida is grande
     assert geo.volumen_exacto(unida) == pytest.approx(1000)
 
@@ -139,9 +139,11 @@ def test_b39_booleano_reintenta_si_el_primer_resultado_es_imposible(monkeypatch)
     base, esfera = _pared(), geo.esfera(3, (28, 0, 70))
     original, llamadas = geo._booleana, []
 
-    def primero_malo(objetivo, herramienta, operacion, **kw):
+    def primero_malo(objetivo, herramienta, operacion, *, con_historial=False, **kw):
         llamadas.append(kw)
-        return herramienta if not kw else original(objetivo, herramienta, operacion, **kw)
+        if not kw:
+            return (herramienta, ()) if con_historial else herramienta
+        return original(objetivo, herramienta, operacion, con_historial=con_historial, **kw)
 
     monkeypatch.setattr(geo, "_booleana", primero_malo)
     unida = geo.booleano(base, esfera, "unir")
@@ -149,7 +151,8 @@ def test_b39_booleano_reintenta_si_el_primer_resultado_es_imposible(monkeypatch)
 
 
 def test_b39_booleano_prefiere_el_error_claro_a_la_geometria_equivocada(monkeypatch):
-    monkeypatch.setattr(geo, "_booleana", lambda objetivo, herramienta, operacion, **kw: herramienta)
+    monkeypatch.setattr(geo, "_booleana", lambda objetivo, herramienta, operacion, **kw:
+                        (herramienta, ()) if kw.get("con_historial") else herramienta)
     with pytest.raises(geo.ErrorGeometria, match="imposible"):
         geo.booleano(_pared(), geo.esfera(3, (28, 0, 70)), "unir")
 
@@ -203,7 +206,7 @@ def test_b39_ruta_completa_carcasa_con_cilindro_enterrado(tmp_path, monkeypatch)
     monkeypatch.setattr(geo, "_booleana", espia)
     r = api.llamar(s, "boolean_operation", {"target": carcasa, "tools": [cilindro], "operation": "join"})
     assert r["ok"], r
-    assert "unir" not in pasadas, pasadas                    # el atajo confirmó con una intersección, sin fusión
+    assert "unir" not in pasadas, pasadas                    # el atajo confirmó una resta exterior vacía, sin fusión
     v_despues = volumen_limpio(s, "carcasa con el cilindro enterrado unido")
     assert v_despues == pytest.approx(v_antes, rel=1e-9)     # la unión no suma volumen
 
