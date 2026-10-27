@@ -332,7 +332,7 @@ class VentanaPrincipal(QMainWindow):
         A = self._accion
         A("nuevo", "Nuevo diseño", self.nuevo, "Ctrl+N")
         A("abrir", "Abrir…", self.abrir, "Ctrl+O", "Abrir un proyecto .omnicad")
-        A("recuperados", "Recuperar documentos…", self.verificar_autoguardado_huerfano,
+        A("recuperados", "Recuperar documentos…", self.verificar_autoguardado_huerfano, None,
           "Abre «Documentos recuperados»: las copias de autoguardado con cambios sin guardar, con su "
           "fecha y carpeta; se pueden abrir o suprimir (la copia, nunca el proyecto).")
         A("guardar", "Guardar", self.guardar, "Ctrl+S", "Guardar el proyecto", "guardar")
