@@ -233,6 +233,20 @@ def test_coser_rechaza_una_expresion_que_da_cero():
     assert not r["ok"] and "tolerancia de costura" in r["mensaje"], r
 
 
+def test_dividir_un_cuerpo_de_superficie():
+    """SUP-2: dividir un tubo de superficie da dos cuerpos de superficie, no un error."""
+    s = api.Sesion()
+    llamar(s, "create_sketch", name="Circulo")
+    llamar(s, "draw_circle", sketch="Circulo", radius=10)
+    tubo = creado(s, "create_surface_extrude", profiles={"sketch": "Circulo", "profile": 0}, distance=20)
+    llamar(s, "create_construction_plane", plane="XY", offset=10, name="Mitad")
+    r = llamar(s, "split_body", body=tubo, tool="Mitad")
+    assert len(r["bodies_created"]) == 1
+    for cid in [tubo] + [b["id"] for b in r["bodies_created"]]:
+        assert s.cuerpo(cid).tipo == "superficie"
+        area(s, cid, 200 * math.pi)
+
+
 @pytest.mark.parametrize("tipo,esperada", [("fillet", 160 + 10 * math.pi), ("chamfer", 160 + 20 * math.sqrt(2))])
 def test_empalme_y_chaflan_superficie(tipo, esperada):
     s = api.Sesion()

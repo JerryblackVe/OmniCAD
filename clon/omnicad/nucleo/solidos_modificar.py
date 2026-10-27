@@ -1539,15 +1539,22 @@ def dividir_cara(forma, caras, herramienta, *, extender=True, tipo="superficie",
 
 def dividir_cuerpo(forma, herramienta, *, extender=True):
     """Split Body: parte el cuerpo con un plano, una cara (extendida si se pide) o un cuerpo.
-    Devuelve los sólidos ordenados por centro de masa (x, y, z) y volumen."""
+    Devuelve los sólidos —o, si el cuerpo es de superficie, sus caras o cascarones (SUP-2)— ordenados por centro."""
     herr = _herramienta_corte(herramienta, forma, extender)
-    piezas = geo.solidos(_partir(forma, [herr]))
+    resultado = _partir(forma, [herr])
+    piezas = geo.solidos(resultado)
+    if not piezas:                                    # cuerpo de superficie
+        piezas = [TopoDS.Shell(s) for s in _unicos(resultado, TopAbs_SHELL)]
+        if len(piezas) < 2:
+            piezas = geo.caras(resultado)
     if len(piezas) < 2:
         raise geo.ErrorGeometria("La herramienta no divide el cuerpo" + ("." if extender else " (probá extenderla)."))
 
     def clave(s):
-        c = geo.centro_masa(s)
-        return (round(c[0], 6), round(c[1], 6), round(c[2], 6), round(geo.volumen(s), 6))
+        superficie = not geo.solidos(s)
+        c = geo.centro_masa(s, superficie)
+        medida = geo.area(s) if superficie else geo.volumen(s)
+        return (round(c[0], 6), round(c[1], 6), round(c[2], 6), round(medida, 6))
     return [_validar(s, "Dividir cuerpo") for s in sorted(piezas, key=clave)]
 
 
