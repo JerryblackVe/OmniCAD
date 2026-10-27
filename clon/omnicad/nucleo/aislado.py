@@ -24,6 +24,7 @@ _RAIZ = Path(__file__).resolve().parents[2]      # la carpeta que contiene el pa
 _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
+TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
 EN_HIJO = False
 
 
@@ -60,7 +61,43 @@ def _prevuelo_parametros(receta, parametros, desde):
     return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones)}
 
 
-_TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros}
+def _prevuelo_cambio(receta, cambio, desde):
+    """Ensaya editar, suprimir o eliminar un paso (B-48): un cambio del historial también recalcula y podía
+    tumbar el proceso con una caída nativa del kernel."""
+    from ..timeline.documento import Documento
+    from ..timeline.operaciones import operacion_desde_dict
+
+    with _motor.fijar_motor("opencascade"):
+        doc = Documento.desde_dict(receta)
+        i = int(cambio["indice"])
+        if cambio["tipo"] == "reemplazar":
+            nueva = operacion_desde_dict(cambio["operacion"])
+            nueva.id = doc.operaciones[i].id
+            doc.operaciones[i] = nueva
+        elif cambio["tipo"] == "suprimir":
+            doc.operaciones[i].suprimida = bool(cambio["suprimida"])
+        elif cambio["tipo"] == "eliminar":
+            del doc.operaciones[i]
+            if i < doc.marcador:
+                doc.marcador -= 1
+        else:
+            raise ValueError(f"Cambio desconocido: {cambio['tipo']}")
+        doc.recalcular(int(desde))
+    return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones)}
+
+
+def _prevuelo_abrir(ruta):
+    """Ensaya abrir un proyecto grande (B-48): si el kernel cae al reconstruirlo, la app no lo abre y sigue viva."""
+    from ..io_archivos import proyecto
+
+    with _motor.fijar_motor("opencascade"):
+        doc = proyecto.abrir(ruta)
+    return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones),
+            "cuerpos": len(doc.estado_final.cuerpos)}
+
+
+_TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
+                "prevuelo_abrir": _prevuelo_abrir}
 
 
 def _a_json(o):

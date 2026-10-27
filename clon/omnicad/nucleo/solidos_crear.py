@@ -1638,7 +1638,7 @@ def _booleana_caras(piezas, herramientas, clase):
         op = clase()
         op.SetArguments(_lista_de_formas(piezas))
         op.SetTools(_lista_de_formas(herramientas))
-        op.SetRunParallel(True)
+        op.SetRunParallel(geo.PARALELO)
         op.Build()
         if op.IsDone() and not op.Shape().IsNull():
             return op.Shape()
@@ -1655,7 +1655,7 @@ def _comun_rapido(piezas, limite):
         op = BRepAlgoAPI_Common()
         op.SetArguments(_lista_de_formas(piezas))
         op.SetTools(_lista_de_formas([limite]))
-        op.SetRunParallel(True)                       # OpenCascade reparte el trabajo en varios núcleos
+        op.SetRunParallel(geo.PARALELO)                       # OpenCascade reparte el trabajo en varios núcleos
         op.Build()
         if op.IsDone() and not op.Shape().IsNull():
             return op.Shape()
@@ -1672,7 +1672,7 @@ def _aplicar_a_cuerpo(cuerpo, herramientas, operacion):
             op = BRepAlgoAPI_Fuse() if operacion == "unir" else BRepAlgoAPI_Cut()
             op.SetArguments(_lista_de_formas([cuerpo]))
             op.SetTools(_lista_de_formas(solidos))
-            op.SetRunParallel(True)
+            op.SetRunParallel(geo.PARALELO)
             op.Build()
             if op.IsDone() and not op.Shape().IsNull():
                 return geo.unificar_caras(op.Shape())
@@ -2675,7 +2675,7 @@ def _cortar_helicoidal(cuerpo, herramienta):
         herr.Append(herramienta)
         op.SetArguments(args)
         op.SetTools(herr)
-        op.SetRunParallel(True)
+        op.SetRunParallel(geo.PARALELO)
         if difuso:
             op.SetFuzzyValue(difuso)
         op.Build()

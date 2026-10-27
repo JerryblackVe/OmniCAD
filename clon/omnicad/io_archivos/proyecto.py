@@ -255,6 +255,14 @@ def abrir(ruta):
         raise ErrorProyecto("Formato desconocido.")
     if manifiesto.get("version_formato", 1) > VERSION_FORMATO:
         raise ErrorProyecto("El proyecto fue guardado con una versión más nueva de OmniCAD.")
+    from ..nucleo import aislado, motor
+    if (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
+            and len(receta.get("operaciones", [])) >= aislado.UMBRAL_PREVUELO_PARAMETROS):
+        try:
+            aislado.correr_json("prevuelo_abrir", {"ruta": str(ruta)}, aislado.TOPE_PREVUELO_ABRIR)
+        except aislado.TareaAislada as e:
+            raise ErrorProyecto(f"El proyecto es grande y el ensayo de apertura falló: {e}. No se abrió y OmniCAD "
+                                "sigue andando; guardá una copia y probá de nuevo.") from e
     try:
         doc = Documento.desde_dict(receta, cache)
     except ErrorOperacion as e:

@@ -12,10 +12,15 @@ por `perfiles.py`, así la capa de kernel queda aislada.
 """
 import itertools
 import math
+import os
 import random
 
 import numpy as np
 from . import motor as _motor
+
+# B-48: el paralelismo de OpenCascade se apaga con OMNICAD_SIN_PARALELO=1 para medir/aislar caídas nativas
+# (reusa formas entre hilos). Queda como interruptor de diagnóstico; el valor por defecto no cambia.
+PARALELO = os.environ.get("OMNICAD_SIN_PARALELO", "").strip().lower() not in ("1", "si", "sí", "true", "on")
 
 
 def lista_occ(lista):
@@ -368,7 +373,7 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
     op = clases[operacion]()
     op.SetArguments(args)
     op.SetTools(herr)
-    op.SetRunParallel(paralelo)      # OpenCascade reparte el trabajo en varios núcleos (1,9–2× medido)
+    op.SetRunParallel(paralelo and PARALELO)   # OpenCascade reparte el trabajo en varios núcleos (1,9–2× medido)
     if fuzzy:
         op.SetFuzzyValue(fuzzy)
     if pegar:
@@ -811,7 +816,7 @@ def unir_todos(formas):
             op = BRepAlgoAPI_Fuse()
             op.SetArguments(args)
             op.SetTools(herr)
-            op.SetRunParallel(True)
+            op.SetRunParallel(PARALELO)
             op.Build()
             if op.IsDone() and not op.Shape().IsNull():
                 unida = _quitar_cables_colgados(unificar_caras(op.Shape()))
@@ -945,7 +950,7 @@ def punto_toca(forma, punto, tolerancia=1e-6):
 
 def _brepcheck_estable(forma):
     """Confirma en serie los fallos del análisis paralelo, sin desactivar los controles geométricos."""
-    if BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=True).IsValid():
+    if BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=PARALELO).IsValid():
         return True
     return BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=False).IsValid()
 

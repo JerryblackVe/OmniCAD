@@ -144,3 +144,81 @@ def test_costo_prevuelo_60_pasos(capsys):
     assert all(geo.es_valida(c.forma) for c in doc.estado_final.cuerpos.values())
     with capsys.disabled():
         print(f"\nB-48: 60 pasos; prevuelo={prevuelo:.6f} s; recálculo real={recalculo:.6f} s", flush=True)
+
+
+# ---------------------------------------------------------------- B-48: editar, suprimir, eliminar y abrir
+def _crash(monkeypatch):
+    monkeypatch.setattr(aislado, "_comando", lambda tarea, carpeta: [sys.executable, "-c",
+                                                                 "import os; os._exit(-1073741819)"])
+
+
+def _caja_ancha(op):
+    return OpPrimitiva(op.id, forma="caja", ancho="4", largo="5", alto="altura", x=op.p.get("x"))
+
+
+def test_crash_nativo_al_editar_no_toca_documento(monkeypatch):
+    doc = _documento(3)
+    antes = _instantanea(doc)
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    _crash(monkeypatch)
+    op = doc.operaciones[1]
+    with pytest.raises(ErrorDocumento, match="error nativo"):
+        doc.reemplazar(op.id, _caja_ancha(op))
+    assert _instantanea(doc) == antes
+
+
+def test_crash_nativo_al_suprimir_no_toca_documento(monkeypatch):
+    doc = _documento(3)
+    antes = _instantanea(doc)
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    _crash(monkeypatch)
+    with pytest.raises(ErrorDocumento, match="error nativo"):
+        doc.suprimir(doc.operaciones[1].id)
+    assert _instantanea(doc) == antes
+
+
+def test_crash_nativo_al_eliminar_no_toca_documento(monkeypatch):
+    doc = _documento(3)
+    antes = _instantanea(doc)
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    _crash(monkeypatch)
+    with pytest.raises(ErrorDocumento, match="error nativo"):
+        doc.eliminar(doc.operaciones[-1].id)
+    assert _instantanea(doc) == antes
+
+
+def test_hijo_real_permite_editar_suprimir_y_eliminar(monkeypatch):
+    doc = _documento(3)
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    op = doc.operaciones[1]
+    doc.reemplazar(op.id, _caja_ancha(op))
+    assert _volumenes(doc) == pytest.approx([30, 60, 30])
+    doc.suprimir(doc.operaciones[0].id)
+    assert _volumenes(doc) == pytest.approx([60, 30])
+    doc.eliminar(doc.operaciones[-1].id)
+    assert _volumenes(doc) == pytest.approx([60])
+    assert all(geo.es_valida(c.forma) for c in doc.estado_final.cuerpos.values())
+
+
+def test_crash_nativo_al_abrir_un_archivo_grande_no_lo_abre(monkeypatch, tmp_path):
+    from omnicad.io_archivos import proyecto
+
+    doc = _documento(3)
+    ruta = tmp_path / "grande.omnicad"
+    proyecto.guardar(doc, ruta)
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    _crash(monkeypatch)
+    with pytest.raises(proyecto.ErrorProyecto, match="error nativo"):
+        proyecto.abrir(ruta)
+
+
+def test_hijo_real_abre_un_archivo_grande(monkeypatch, tmp_path):
+    from omnicad.io_archivos import proyecto
+
+    doc = _documento(3)
+    ruta = tmp_path / "grande.omnicad"
+    proyecto.guardar(doc, ruta)
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    abierto = proyecto.abrir(ruta)
+    assert len(abierto.operaciones) == 3
+    assert _volumenes(abierto) == pytest.approx([30, 30, 30])

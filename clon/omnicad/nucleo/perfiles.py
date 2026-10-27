@@ -460,7 +460,7 @@ def _detectar_occ(geometria, plano, tolerancia=1e-4):
     sp.SetArguments(args)
     sp.SetTools(herramientas)
     sp.SetFuzzyValue(tolerancia)
-    sp.SetRunParallel(True)                # BOC-28: con miles de letras, partir en paralelo tarda ~1/2
+    sp.SetRunParallel(geo.PARALELO)        # BOC-28: con miles de letras, partir en paralelo tarda ~1/2
     sp.Build()
     if not sp.IsDone():
         raise geo.ErrorGeometria("No se pudieron calcular los perfiles del boceto.")

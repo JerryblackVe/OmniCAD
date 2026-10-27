@@ -339,6 +339,7 @@ class Documento:
         nueva.id = op_id
         tabla, contador = self._tabla_cotas(self.operaciones[:i] + [nueva] + self.operaciones[i + 1:])
         desde = min(i, self._primer_afectado(tabla))
+        self._prevuelo_cambio({"tipo": "reemplazar", "indice": i, "operacion": nueva.a_dict()}, desde)
         self._guardar_para_deshacer()
         self.operaciones[i] = nueva
         self.parametros, self._contador_cotas = tabla, contador
@@ -479,8 +480,9 @@ class Documento:
         self._notificar()
 
     def suprimir(self, op_id, suprimida=True):
-        self._guardar_para_deshacer()
         i = self.indice(op_id)
+        self._prevuelo_cambio({"tipo": "suprimir", "indice": i, "suprimida": suprimida}, i)
+        self._guardar_para_deshacer()
         self.operaciones[i].suprimida = suprimida
         self.modificado = True
         self.recalcular(i)
@@ -492,6 +494,7 @@ class Documento:
         deps = self.dependientes(op_id)
         if deps:
             raise ErrorDocumento("No se puede eliminar: la usan " + ", ".join(d.nombre for d in deps) + ".")
+        self._prevuelo_cambio({"tipo": "eliminar", "indice": i}, desde)
         self._guardar_para_deshacer()
         del self.operaciones[i]
         self.parametros, self._contador_cotas = tabla, contador
@@ -690,13 +693,19 @@ class Documento:
         self.modificado = True
         self.recalcular(desde)
 
+    def _prevuelo_corresponde(self):
+        """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48)."""
+        from ..nucleo import aislado
+
+        return (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
+                and sum(not op.suprimida for op in self.operaciones[:self.marcador])
+                >= aislado.UMBRAL_PREVUELO_PARAMETROS)
+
     def _prevuelo_parametros(self, tabla, desde):
         """Ensaya sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
         from ..nucleo import aislado
 
-        if (aislado.EN_HIJO or motor.motor_activo() != "opencascade"
-                or sum(not op.suprimida for op in self.operaciones[:self.marcador])
-                < aislado.UMBRAL_PREVUELO_PARAMETROS):
+        if not self._prevuelo_corresponde():
             return
         try:
             aislado.correr_json("prevuelo_parametros", {"receta": self.a_dict(), "parametros": tabla.a_lista(),
@@ -704,6 +713,20 @@ class Documento:
         except aislado.TareaAislada as e:
             raise ErrorDocumento(f"El prevuelo de parámetros falló: {e}. No se aplicó el cambio y el documento quedó "
                                  "como estaba. Guardá una copia y probá valores distintos.") from e
+
+    def _prevuelo_cambio(self, cambio, desde):
+        """Ensaya editar, suprimir o eliminar un paso en un hijo (B-48): el recálculo del historial también puede
+        caer en una excepción nativa del kernel. Si el hijo cae, el documento no se toca."""
+        from ..nucleo import aislado
+
+        if not self._prevuelo_corresponde():
+            return
+        try:
+            aislado.correr_json("prevuelo_cambio", {"receta": self.a_dict(), "cambio": cambio, "desde": desde},
+                                aislado.TOPE_PREVUELO_PARAMETROS)
+        except aislado.TareaAislada as e:
+            raise ErrorDocumento(f"El ensayo del cambio falló: {e}. No se aplicó y el documento quedó como estaba. "
+                                 "Guardá una copia y probá otro cambio.") from e
 
     def _primer_afectado(self, tabla):
         """Índice del primer paso que leyó un parámetro cuyo valor cambia con `tabla` (Fusion también
