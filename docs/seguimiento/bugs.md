@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39: 2026-10-27). Total 6: Abierto 2 · Parcial 3 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39: 2026-10-27). Total 5: Abierto 1 · Parcial 3 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -27,7 +27,6 @@ Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayu
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | SUP-1 | Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel | Abierto | Alta | G1 sobre la boca de una caja de superficies da «Geom_RectangularTrimmedSurface::V1==V2». G2 da siempre «BRepFill : The continuity is not G0 G1 or G2», también sobre el borde de un cilindro donde G1 sí anda. El usuario ve «Error inesperado». Hay que cubrir G2 y los vecinos planos, o traducir el error. | omnicad/nucleo/superficies.py:494-509; tests/test_superficies.py::test_parche_plano_relleno_y_g1 (solo cubre G1 curvo con un punto interior) | 2026-10-24 |
-| SUP-24 | Previsualizar Reglada tangente o dirección en la ventana deja dañada la superficie de origen: después Recortar falla | Abierto | Alta | En la ventana: Reglada → arista de arriba de un tubo de superficie → Tipo tangente (o dirección) → Cancelar. Después Recortar con un plano que SÍ cruza el tubo responde «La herramienta no corta la superficie»; pasa también si se acepta y se deshace, sigue igual tras recalcular y `trim_surface` por la API también falla. Con tipo normal no pasa, y sin la ventana (previsualizar + API) tampoco. Causa sin confirmar; sospecha: `BRepFill.Face_s(ef, otra)` comparte la arista de origen. | omnicad/nucleo/superficies.py:590; omnicad/ui/comando.py:680 | 2026-10-24 |
 
 ## Sólido (auditoría contra Fusion, 2026-10-24)
 
@@ -62,14 +61,3 @@ Crítico
 Cómo reproducir: `create_box 20x20x10` → `unstitch_surfaces` → `stitch_surfaces` de 5 caras (queda una boca abierta) → `create_patch boundary={body, edges: ">Z"} continuity=G1`. Obtenido: OPERATION_FAILED «Error inesperado: Geom_RectangularTrimmedSurface::V1==V2». Con `G2`: «BRepFill : The continuity is not G0 G1 or G2». El mismo G2 falla sobre el borde superior de un tubo extruido de un círculo r10, donde G0 y G1 sí funcionan. Esquive: G0 y mezclar a mano. Prueba propuesta: parche G1 y G2 sobre la caja de 5 caras y sobre el tubo, con área y `es_valida`.
 
 Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
-
-### SUP-24 · Previsualizar Reglada tangente o dirección en la ventana deja dañada la superficie de origen: después Recortar falla
-
-Cómo reproducir (ventana real, escena de `evidencias/ui_2026-10-24/escena.py`): círculo r5 → superficie extruida de 20 mm (tubo) → plano de construcción z=10. 1) Recortar con ese plano y clic en el tubo: la vista previa anda (queda la mitad, 314,16). 2) SUPERFICIE › Reglada → elegir la arista circular de arriba → Tipo «Tangente» (o «Dirección») → distancia 5 mm → Cancelar. 3) Repetir el paso 1: «La herramienta no corta la superficie». Con Tipo «Normal» el paso 3 sigue andando.
-
-Qué se comprobó: pasa igual si en el paso 2 se acepta y se deshace; sigue pasando tras `Documento.recalcular(0)`; `trim_surface` por la API (mismos datos) también falla después de la vista previa. En cambio la secuencia solo con API (crear Reglada tangente, deshacer, `trim_surface`) y `Documento.previsualizar` sin ventana NO lo reproducen. El área del tubo (628,32) y su validez no cambian: el daño no se ve a simple vista. Causa sin confirmar; `reglada` arma cada cara con `BRepFill.Face_s(ef, otra)` usando la arista original (superficies.py:590) y es lo primero a mirar (¿deja datos en la arista compartida?). Un intento de pasarle una copia no sirvió de prueba (el segundo documento del mismo proceso ya salió dañado).
-
-Prueba propuesta: tras previsualizar y cancelar una Reglada tangente, Recortar sobre la misma superficie da la misma mitad (314,16) que antes.
-
-Evidencia: `evidencias/ui_2026-10-24/` (`p5_repro.py`, `p6_repro.py`, `p7_repro.py`, `p9_nucleo.py`, `u1_superficie.log`).
-

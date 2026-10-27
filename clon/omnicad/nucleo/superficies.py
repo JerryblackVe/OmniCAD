@@ -602,7 +602,9 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
                     par.SetValue(i + 1, params[i])
                 aprox = GeomAPI_PointsToBSpline(arr, par, 3, 8, GeomAbs_C2, 1e-6)
                 otra = BRepBuilderAPI_MakeEdge(aprox.Curve()).Edge()
-            caras.append(BRepFill.Face_s(ef, otra))
+            # SUP-24: BRepFill sube la tolerancia de la arista de entrada (de 1e-7 a 21 mm en un tubo r5).
+            # La arista es la del cuerpo de origen y la comparte el documento: se le da una copia.
+            caras.append(BRepFill.Face_s(TopoDS.Edge(BRepBuilderAPI_Copy(ef).Shape()), otra))
     return _coser_caras(caras)
 
 

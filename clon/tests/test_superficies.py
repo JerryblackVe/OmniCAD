@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 import pytest
+from OCP.BRep import BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Surface
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire
@@ -195,6 +196,22 @@ def test_reglada_sobre_borde_curvo():
     corona = sf.reglada(arista_en(lat, (0, 0, 10)), 2, referencia=lat)   # normal radial: anillo plano
     assert g.area(corona) == pytest.approx(math.pi * (49 - 25), rel=1e-4) and g.es_valida(corona)
     assert g.caja_envolvente(corona)[1][0] == pytest.approx(7, abs=1e-3)
+
+
+def test_reglada_no_dana_la_arista_del_cuerpo_de_origen():
+    """SUP-24: BRepFill subía la tolerancia de la arista de entrada (de 1e-7 a 21 mm) sobre el cuerpo vivo
+    del documento, y después Recortar no encontraba las dos regiones («La herramienta no corta la superficie»).
+    La reglada trabaja sobre una copia de la arista: el cuerpo queda intacto y el recorte da la mitad."""
+    tubo = sf.extruir_superficie([circulo(5)], (0, 0, 1), 20)
+    borde = arista_en(tubo, (0, 0, 20))
+    antes = BRep_Tool.Tolerance_s(borde)
+    corona = sf.reglada(borde, 5, tipo="tangente", referencia=tubo)
+    assert g.area(corona) == pytest.approx(2 * math.pi * 5 * 5) and g.es_valida(corona)
+    assert BRep_Tool.Tolerance_s(borde) == pytest.approx(antes, abs=1e-12)
+    assert [round(g.area(r), 6) for r in sf.regiones_recorte(tubo, g.Plano("XY", 10))] == \
+        pytest.approx([2 * math.pi * 5 * 10] * 2)
+    mitad = sf.recortar(tubo, g.Plano("XY", 10), (0, 0, 5))
+    assert g.area(mitad) == pytest.approx(2 * math.pi * 5 * 10) and g.es_valida(mitad)
 
 
 def test_desfasar_superficie():

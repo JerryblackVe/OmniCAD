@@ -118,6 +118,39 @@ run("sup_empalme negativos", lambda: C.negativos(v, AR, "sup_empalme", {"aristas
 res = {}
 
 
+def sup24():
+    """SUP-24: previsualizar y CANCELAR una Reglada tangente no daña la superficie de origen: Recortar sigue
+    encontrando las dos regiones y quita la mitad (área 314,16)."""
+    p = A.abrir(v, "reglada")
+    A.elegir(p, "aristas", *arc())
+    p.set_valor("tipo", "tangente")
+    p.set_valor("distancia", "5 mm")
+    p._t_previa.stop()
+    p._calcular_previa()
+    st = A.estado_panel(p)
+    A.reg(AR, "SUP-24 · reglada tangente: vista previa", st["op"] and st["previa_ok"], st["mensaje"])
+    p.cancelar()
+    A.esperar(120)
+    capturado = {}
+    panel = A.abrir(v, "recortar_sup")
+    A.elegir(panel, "herramienta", A.hit_plano(v, "PM"))
+    A.elegir(panel, "region", *cara_tubo())
+    panel.previa.connect(lambda estado: capturado.__setitem__("estado", estado))
+    panel._t_previa.stop()
+    panel._calcular_previa()
+    st = A.estado_panel(panel)
+    estado = capturado.get("estado")
+    area = None if estado is None else A.geo.area(estado.cuerpos[tubo].forma)
+    A.reg(AR, "SUP-24 · recortar tras la previa tangente",
+          st["previa_ok"] and area is not None and abs(area - 2 * pi * 5 * 10) <= 0.01,
+          f"previa_ok={st['previa_ok']} area={area} mensaje=«{st['mensaje']}»")
+    panel.cancelar()
+    A.esperar(100)
+
+
+run("SUP-24 reglada tangente + recortar", sup24)
+
+
 def recortar():
     r = C.caso(v, AR, "recortar_sup", {"herramienta": lambda: [A.hit_plano(v, "PM")], "region": cara_tubo}, {}, deshacer=False, foto="recortar_sup")
     res["rec"] = r
