@@ -12,6 +12,7 @@ por `perfiles.py`, así la capa de kernel queda aislada.
 """
 import itertools
 import math
+import random
 
 import numpy as np
 from . import motor as _motor
@@ -34,7 +35,7 @@ def _iniciar_opencascade():
     global GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion, GeomAbs_SurfaceOfRevolution, GeomAbs_Torus
     global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, ShapeUpgrade_UnifySameDomain, TopAbs_COMPOUND
-    global TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID
+    global TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID
     global TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopExp_Explorer, TopLoc_Location, TopoDS, TopoDS_Compound
     global TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid, _ANALITICAS, gp_Ax1, gp_Ax2, gp_Dir
     global gp_Pnt, gp_Trsf, gp_Vec
@@ -58,8 +59,8 @@ def _iniciar_opencascade():
     from OCP.GProp import GProp_GProps
     from OCP.ShapeFix import ShapeFix_Shape
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_REVERSED,
-                            TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
+    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON,
+                            TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
     from OCP.OCP.collections import (IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
                                      IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher)
     from OCP.TopExp import TopExp, TopExp_Explorer
@@ -345,11 +346,15 @@ def _segmentar_tubo_cerrado(forma):
     return forma
 
 
-def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, invertir=False, nurbs=False, sanar=False):
+def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, invertir=False, nurbs=False, sanar=False,
+              pegar=False, obb=False):
     """Una pasada del kernel (BOP). `invertir` cambia objetivo y herramienta (solo 'unir' e 'intersecar', que son
     simétricas); `fuzzy` es la tolerancia difusa en mm; `paralelo=False` corre en un solo hilo; `nurbs` pasa la
     herramienta a B-spline (misma forma, otro algoritmo de intersección: el de toro contra cilindro falla); `sanar`
-    repara el resultado con ShapeFix (sólidos inválidos que el kernel devuelve sin quejarse)."""
+    repara el resultado con ShapeFix (sólidos inválidos que el kernel devuelve sin quejarse); `pegar` activa el modo
+    pegado (GlueShift: las caras que solo se tocan no se recomputan); `obb` usa la caja envolvente orientada para
+    descartar intersecciones. (La mutación de las entradas no la hacía el BOP: la hacían `unificar_caras` y ShapeFix,
+    que ahora copian antes de tocar — B-39; SetNonDestructive medido no hizo falta y encarecía el camino normal.)"""
     clases = {"unir": BRepAlgoAPI_Fuse, "cortar": BRepAlgoAPI_Cut, "intersecar": BRepAlgoAPI_Common}
     from OCP.collections import List_TopoDS_Shape
     if nurbs:
@@ -365,12 +370,19 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
     op.SetRunParallel(paralelo)      # OpenCascade reparte el trabajo en varios núcleos (1,9–2× medido)
     if fuzzy:
         op.SetFuzzyValue(fuzzy)
+    if pegar:
+        from OCP.BOPAlgo import BOPAlgo_GlueShift
+        op.SetGlue(BOPAlgo_GlueShift)
+    if obb:
+        op.SetUseOBB(True)
     op.Build()
     if not op.IsDone():
         raise ErrorGeometria(f"La operación '{operacion}' falló en el kernel.")
     resultado = op.Shape()
     if sanar:
-        reparador = ShapeFix_Shape(resultado)
+        # Copia ANTES de ShapeFix: el resultado comparte topología con las entradas y ShapeFix repara «in place»,
+        # dejando inválida la forma viva que llamó (B-39: después el guard de entradas tapaba el problema).
+        reparador = ShapeFix_Shape(BRepBuilderAPI_Copy(resultado).Shape())
         reparador.Perform()
         resultado = reparador.Shape()
     return _quitar_cables_colgados(unificar_caras(resultado))
@@ -386,8 +398,8 @@ _REINTENTOS_BOOLEANA = (
     {"fuzzy": 1e-5}, {"fuzzy": 1e-4},
     {"nurbs": True, "invertir": True},
     {"fuzzy": 1e-6, "sanar": True}, {"nurbs": True, "sanar": True},     # lo que salvó el volumen pero salió inválido
+    {"pegar": True}, {"obb": True},                  # GlueShift y caja orientada: dos caminos de intersección distintos
 )
-_TOPE_VOLUMEN_BOOLEANA_ERROR = 1e-4   # exceso (parte del volumen total) a partir del cual ya no se devuelve el resultado
 _TOPE_VOLUMEN_BOOLEANA = 1e-3     # parte del volumen de la pieza más chica que se tolera de más o de menos (más 1e-6 del total)
 
 
@@ -423,14 +435,23 @@ def _volumenes_entrada(objetivo, herramienta):
 
 
 _MAX_CONTORNOS_REVISADOS = 200   # BRepCheck clasifica los contornos de una cara de a pares: 3000 agujeros cuestan 11 s
+_MAX_CARAS_REVISADAS = 200       # hasta acá conviene BRepCheck del resultado ENTERO: hay defectos de cáscara o
+                                 # sólido (orientación, cierre) que ninguna cara individual muestra (B-39: 1057 del
+                                 # fuzz salía «sólido inválido» con las caras todas bien)
 
 
 def _es_valida_tras_booleana(resultado, entradas):
     """Como `es_valida`, pero solo de las caras que la booleana creó o cambió: el resto son las de las entradas (la
     booleana comparte su topología) y ya las revisó quien las hizo; revisar todo cuesta lo de la cara con más contornos
-    al cuadrado (B-39 pagaba 12 de 15 s en una placa de 3000 agujeros). El cierre del sólido lo cubren
-    `_aristas_defectuosas` y el volumen de `_problema_booleana`.
-    shortcut: una cara cambiada con más de _MAX_CONTORNOS_REVISADOS contornos no se revisa, subir si aparece un caso."""
+    al cuadrado (B-39 pagaba 12 de 15 s en una placa de 3000 agujeros). Si el resultado es un sólido chico (hasta
+    _MAX_CARAS_REVISADAS caras) se revisa ENTERO: los defectos de cáscara/sólido no los ve ninguna revisión por cara.
+    El cierre del sólido lo cubren `_aristas_defectuosas` y el volumen de `_problema_booleana`. Las caras de las
+    entradas siguen siendo válidas porque `unificar_caras` y `sanar` copian antes de tocar topología compartida (B-39).
+    shortcut: una cara cambiada con más de _MAX_CONTORNOS_REVISADOS contornos no se revisa, subir si aparece un caso.
+    Chicos (hasta _MAX_CARAS_REVISADAS caras) se chequean DIRECTO EN SERIE: el paralelo sobre un compound chico
+    suele dar False (carrera de OCCT) y terminar pagando paralelo + serie; en serie es un solo pase y determinístico."""
+    if solidos(resultado) and len(caras(resultado)) <= _MAX_CARAS_REVISADAS:
+        return BRepCheck_Analyzer(resultado, False, True).IsValid()
     conocidas = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
     for e in entradas:
         for c in caras(e):
@@ -440,7 +461,9 @@ def _es_valida_tras_booleana(resultado, entradas):
     for c in caras(resultado):
         if not conocidas.Contains(c) and sum(1 for _ in _explorar(c, TopAbs_WIRE)) <= _MAX_CONTORNOS_REVISADOS:
             builder.Add(nuevas, c)
-    return BRepCheck_Analyzer(nuevas, True, True).IsValid()
+    if len(caras(nuevas)) <= _MAX_CARAS_REVISADAS:
+        return BRepCheck_Analyzer(nuevas, False, True).IsValid()
+    return _brepcheck_estable(nuevas)
 
 
 def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes):
@@ -463,8 +486,8 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes):
         if volumenes is not None:
             vb, vh = volumenes
             vr = abs(_integral(resultado, BRepGProp.VolumeProperties_s))
-            # Un resultado con caras B-spline (el reintento con nurbs) integra menos exacto: tolerancia 30 veces mayor
-            tol = 1e-6 * (vb + vh) + _TOPE_VOLUMEN_BOOLEANA * (30 if es_forma_libre(resultado) else 1) * min(vb, vh)
+            # Misma tolerancia que el oráculo del fuzz: una integración B-spline que se pasa no es «casi correcta»
+            tol = 1e-6 * (vb + vh) + _TOPE_VOLUMEN_BOOLEANA * min(vb, vh)
             limites = {"unir": (max(vb, vh), vb + vh), "cortar": (vb - vh, vb), "intersecar": (0.0, min(vb, vh))}
             minimo, maximo = limites[operacion]
             if vr < minimo - tol or vr > maximo + tol:
@@ -494,16 +517,76 @@ def _cambia_el_volumen(a, b, volumenes):
     return abs(va - vb) > 0.05 * min(volumenes)
 
 
+def _queda_enterrada(forma, base):
+    """True si TODO el material de `forma` queda dentro de `base` (B-39: «herramienta enterrada»). Unir no cambiaría
+    nada y lo correcto es devolver `base` tal cual, sin pasar por la fusión del kernel, cuyo contacto casi tangente
+    era el que dejaba aristas libres. Filtros del más barato al más caro: superficies libres (ahí no se acorta),
+    caja envolvente de `forma` contenida en la de `base` (baratas, Add_s), todos los vértices adentro de (o sobre)
+    un sólido, muestras al azar de `forma` adentro de `base` (el kernel no es confiable acá: el común de un toro
+    cruzando la pared devolvía el toro entero) y, encima, la intersección con el mismo volumen que `forma` (cubre
+    huecos internos y varios sólidos)."""
+    if not (solidos(forma) and solidos(base)):
+        return False
+    if es_forma_libre(forma) or es_forma_libre(base):
+        return False       # con superficies libres la integración exacta puede errar: no se acorta, camino normal
+    # Cajas BARATAS (Add_s) con 1e-5 de margen: la exacta (AddOptimal) sobre una pieza de cientos de caras B-spline
+    # cuesta ~0,4 s (BINCHA); el margen tapa la holgura de las dos cajas. La caja solo descarta: la muestra y la
+    # intersección confirman.
+    ba, bb = _caja_occ(base, 1e-5, holgada=True), _caja_occ(forma, 1e-5, holgada=True)
+    if ba is None or bb is None:
+        return False
+    a0, a1, c0, c1 = ba.CornerMin(), ba.CornerMax(), bb.CornerMin(), bb.CornerMax()
+    if (c0.X() < a0.X() or c0.Y() < a0.Y() or c0.Z() < a0.Z()
+            or c1.X() > a1.X() or c1.Y() > a1.Y() or c1.Z() > a1.Z()):
+        return False
+    sols_b, sols_f = solidos(base), solidos(forma)
+    for v in _explorar(forma, TopAbs_VERTEX):
+        p = BRep_Tool.Pnt_s(TopoDS.Vertex(v))
+        if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() in (TopAbs_IN, TopAbs_ON) for s in sols_b):
+            return False
+    rng = random.Random("b39-enterrada")           # semilla fija: el veredicto no cambia de corrida a corrida
+    dentro, intentos = 0, 0
+    while dentro < 200 and intentos < 2000:
+        intentos += 1
+        p = gp_Pnt(rng.uniform(c0.X(), c1.X()), rng.uniform(c0.Y(), c1.Y()), rng.uniform(c0.Z(), c1.Z()))
+        if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() == TopAbs_IN for s in sols_f):
+            continue
+        dentro += 1
+        if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() in (TopAbs_IN, TopAbs_ON) for s in sols_b):
+            return False                           # una muestra adentro de la forma y afuera del material
+    if dentro < 50:
+        return False
+    try:
+        comun = _booleana(forma, base, "intersecar")
+    except ErrorGeometria:
+        return False                           # el kernel no pudo confirmar: que decida la fusión normal
+    if esta_vacia(comun):
+        return False
+    try:
+        vc = abs(_integral(comun, BRepGProp.VolumeProperties_s))
+        vf = abs(_integral(forma, BRepGProp.VolumeProperties_s))
+    except Exception:  # noqa: BLE001 — una integración que falla no acorta el camino
+        return False
+    return vc >= vf * (1 - 1e-5) - 1e-9
+
+
 def booleano(objetivo, herramienta, operacion):
     """'unir' | 'cortar' | 'intersecar' (FeatureOperations Join/Cut/Intersect de Fusion).
 
-    B-39: el kernel a veces devuelve un resultado imposible con un contacto casi tangente (una esfera centrada a
-    1e-6 mm de la cara de una pared devolvía SOLO la esfera, 806 mm³ en vez de 75 722) o distinto de una corrida a
-    otra. Se verifica el resultado (volumen dentro de lo posible, sin aristas libres ni no manifold nuevas, sólido
-    válido) y, si no es creíble, se reintenta (un hilo, roles invertidos, tolerancia difusa 1e-6…1e-4 mm). Si
-    ninguno lo arregla, gana el menos malo; un volumen imposible nunca se devuelve: es un error claro."""
+    B-39: si una forma queda entera dentro de la otra, unir devuelve la que la contiene sin tocar el kernel (el
+    contacto casi tangente de una herramienta enterrada era el que dejaba aristas libres). El kernel a veces devuelve
+    además un resultado imposible con un contacto casi tangente (una esfera centrada a 1e-6 mm de la cara de una
+    pared devolvía SOLO la esfera, 806 mm³ en vez de 75 722) o distinto de una corrida a otra: se verifica el
+    resultado (volumen dentro de lo posible, sin aristas libres ni no manifold nuevas, sólido válido) y, si no es
+    creíble, se reintenta (un hilo, roles invertidos, tolerancia difusa, GlueShift, caja orientada). Si ninguno
+    lo arregla, NUNCA se devuelve geometría sospechosa: es un error claro."""
     if operacion not in ("unir", "cortar", "intersecar"):
         raise ErrorGeometria(f"Operación booleana desconocida: {operacion}")
+    if operacion == "unir":
+        if _queda_enterrada(herramienta, objetivo):
+            return objetivo
+        if _queda_enterrada(objetivo, herramienta):
+            return herramienta
     volumenes = _volumenes_entrada(objetivo, herramienta)
     resultado = _booleana(objetivo, herramienta, operacion)
     problema = _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes)
@@ -529,18 +612,28 @@ def booleano(objetivo, herramienta, operacion):
             return candidato
         if (p[0], p[2]) < (peor_problema[0], peor_problema[2]):
             mejor, peor_problema = candidato, p
-    if peor_problema[0] >= 2 and peor_problema[2] > _TOPE_VOLUMEN_BOOLEANA_ERROR * peor_problema[3]:
+    if peor_problema[0] >= 2:
         raise ErrorGeometria(f"La operación '{operacion}' dio un resultado imposible ({peor_problema[1]}) y el kernel "
                              "no logró corregirlo: probá mover la pieza una milésima de milímetro.")
+    libres = _aristas_defectuosas(mejor)[0]
+    (la, _), (lb, _) = _aristas_defectuosas(objetivo), _aristas_defectuosas(herramienta)
+    if libres > la + lb or "sólido inválido" in peor_problema[1]:
+        # No estanco o inválido: nunca sale en silencio (B-39). Solo-no-manifold SÍ se devuelve: el cuerpo sigue
+        # estanco y el timeline avisa con «aristas compartidas de más» (unión de dos cajas por una arista).
+        raise ErrorGeometria(f"La operación '{operacion}' quedó sin un resultado estanco o válido ({peor_problema[1]}) "
+                             "y el kernel no logró corregirlo: probá mover la pieza una milésima de milímetro.")
     return mejor
 
 
 def unificar_caras(forma):
     """Fusiona las caras coplanares (o sobre la misma superficie) que deja una booleana, como el resultado limpio
-    de Fusion. Sin esto, unir dos prismas en L deja la cara de atrás partida en dos y un empalme más grande que el
-    tramo partido falla. Si no se puede simplificar, devuelve la forma tal cual."""
+    de Fusion. Sin esto, unir dos prismas en L deja la cara de atrás partida en dos y un empalme más grande que
+    el tramo partido falla. Si no se puede simplificar, devuelve la forma tal cual."""
     try:
-        u = ShapeUpgrade_UnifySameDomain(forma, True, True, False)
+        # Copia de topología ANTES: el resultado comparte subformas con las entradas y UnifySameDomain las
+        # modifica «in place» (SetSafeInputMode solo no alcanzó: caso 1488 del fuzz de B-39) y deja inválida
+        # la forma viva que llamó.
+        u = ShapeUpgrade_UnifySameDomain(BRepBuilderAPI_Copy(forma, False, False).Shape(), True, True, False)
         u.Build()
         resultado = u.Shape()
     except Exception:  # noqa: BLE001
@@ -820,8 +913,19 @@ def punto_toca(forma, punto, tolerancia=1e-6):
     return se_tocan(BRepBuilderAPI_MakeVertex(gp_Pnt(*[float(c) for c in punto])).Vertex(), forma, tolerancia)
 
 
+def _brepcheck_estable(forma):
+    """BRepCheck con veredicto estable. El analizador EN PARALELO de OCCT 8.0.1 miente en direcciones alternadas:
+    sobre una unión de 5 caras y 2 sólidos válida daba False ~75 % de las corridas y True el resto, mientras que en
+    serie decidía True siempre (B-39: casos del fuzz que salían «sólido inválido» de vez en cuando). Si el paralelo
+    dice válido, se acepta (acelera 125 → 68 ms, plan_cpp P19); si dice inválido, manda la serie (determinística).
+    El costo extra es solo cuando el paralelo se queja."""
+    if BRepCheck_Analyzer(forma, True, True).IsValid():
+        return True
+    return BRepCheck_Analyzer(forma, False, True).IsValid()
+
+
 def es_valida(forma):
-    return BRepCheck_Analyzer(forma, True, True).IsValid()    # en paralelo: 125 → 68 ms medido (plan_cpp.md P19)
+    return _brepcheck_estable(forma)
 
 
 def _explorar(forma, tipo):
