@@ -254,6 +254,22 @@ def test_vinculo_de_movimiento_rechaza_relaciones_imposibles():
     falla(s, "create_motion_link", "INVALID_ARGUMENTS", joint1="J2", joint2="J1", ratio=2)
 
 
+def test_borrar_un_componente_con_uniones_nombra_las_que_lo_usan():
+    """ASM-3: un componente que usan uniones no se puede borrar; el error dice cuáles."""
+    s, base, bloque = dos_cajas()
+    brazo = llamar(s, "create_box", length=10, width=10, height=10, x=200)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[brazo], name="Brazo")
+    llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2="Base", name="Unión A")
+    llamar(s, "create_joint", origin1="<Z", body1=brazo, origin2=">Z", body2=bloque, name="Unión B")
+    for componente, nombres in (("Base", ["Unión A"]), ("Bloque", ["Unión A", "Unión B"]), ("Brazo", ["Unión B"])):
+        r = falla(s, "delete_feature", "FEATURE_IN_USE", feature=componente)
+        assert all(n in r["mensaje"] for n in nombres), r["mensaje"]
+    # un componente sin uniones se sigue borrando
+    suelto = llamar(s, "create_box", length=5, width=5, height=5, x=-200)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[suelto], name="Suelto")
+    llamar(s, "delete_feature", feature="Suelto")
+
+
 def test_vinculo_de_una_receta_con_relacion_cero_falla_en_el_paso():
     """ASM-2: el paso también rechaza una relación que da 0 (expresión o receta vieja)."""
     from omnicad.timeline.ops_ensamblar import OpVinculoMovimiento

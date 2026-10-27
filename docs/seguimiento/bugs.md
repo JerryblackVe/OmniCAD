@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 8: Abierto 3 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 7: Abierto 2 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -43,8 +43,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| ASM-3 | Borrar un componente con uniones se acepta (o falla sin explicar) | Abierto | Media | Borrar el componente fijo Base (que usa Unión1) responde OK: la unión pasa en silencio a «(raíz)», el cuerpo queda suelto y ya no hay nada fijo. Borrar el componente Eje falla con OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…» sin nombrar qué lo usa. Esperado: FEATURE_IN_USE «la usan Unión1, Unión2», como al borrar el paso del cuerpo. | omnicad/timeline/ops_ensamblar.py:474-475 (`OpUnion.dependencias` mira los cuerpos, no el componente) | 2026-10-25 |
-
 ## Detalle de lo abierto
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
@@ -87,10 +85,4 @@ Qué se comprobó: pasa igual si en el paso 2 se acepta y se deshace; sigue pasa
 Prueba propuesta: tras previsualizar y cancelar una Reglada tangente, Recortar sobre la misma superficie da la misma mitad (314,16) que antes.
 
 Evidencia: `evidencias/ui_2026-10-24/` (`p5_repro.py`, `p6_repro.py`, `p7_repro.py`, `p9_nucleo.py`, `u1_superficie.log`).
-
-### ASM-3 · Borrar un componente con uniones se acepta (o falla sin explicar)
-
-Cómo reproducir (API): escena con Base fija, Eje y Brazo y dos uniones (Eje→Base, Brazo→Eje); `delete_feature feature=<Base>` → OK, y `get_assembly` muestra Unión1 con componente 2 «(raíz)»; deshacer lo trae de vuelta. `delete_feature feature=<Eje>` → OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…». Esperado: FEATURE_IN_USE nombrando Unión1 y Unión2, como pasa con el paso del cuerpo. Prueba propuesta: en `tests/test_api_ensamble.py`.
-
-Evidencia: `evidencias/ensamble_2026-10-25/a4_borrar.py`.
 
