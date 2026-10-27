@@ -477,7 +477,7 @@ class OpUnion(Operacion):
     migrar_receta = _migrador("version_marco")
 
     def dependencias(self):
-        return ent.dependencias_de(self.p["origen1"], self.p["origen2"]) - {self.id}
+        return (super().dependencias() | ent.dependencias_de(self.p["origen1"], self.p["origen2"])) - {self.id}
 
     def valores(self, ctx, aviso=None):
         """Valores del movimiento. Los límites (Joint Motion Limits) recortan el movimiento principal; con
@@ -501,6 +501,7 @@ class OpUnion(Operacion):
 
     def ejecutar(self, estado, ctx):
         p = self.p
+        self._usados = set()
         version = _version_de(p, "version_marco")
         accionada = self.entero("accionada", minimo=0)
         if not p["origen1"]:
@@ -569,6 +570,8 @@ class OpUnion(Operacion):
             reaplicar = {"marco1": _marco_local(estado, comp1, F1, version >= 2 and eje1 and e1.tipo != "plano"),
                          "marco2": _marco_local(estado, comp2, F2, version >= 2 and eje2 and e2.tipo != "plano"),
                          "alinear": alinear.tolist()}
+        # ASM-3: cuenta el componente resuelto aquí, también en cuerpos divididos, copiados o reasignados.
+        self._usados = (comps | {comp2}) - {"", self.id}
         if reaplicar is not None:
             reaplicar.update(bases={c: _matriz_de(estado, c).tolist() for c in comps},
                              origen1=p["origen1"], origen2=p["origen2"], clave1=p["clave1"], clave2=p["clave2"],

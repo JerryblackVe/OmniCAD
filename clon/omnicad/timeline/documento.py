@@ -241,14 +241,7 @@ class Documento:
         return self.resultados[self.indice(op_id)]
 
     def dependientes(self, op_id):
-        deps = [o for o in self.operaciones if op_id in o.dependencias()]
-        op = self.operacion(op_id)
-        if op.TIPO == "componente":
-            # ASM-3: las uniones usan los cuerpos del componente aunque en la receta solo nombren el cuerpo.
-            cuerpos = set(op.p.get("cuerpos") or ())
-            deps += [o for o in self.operaciones if o.TIPO == "union" and {
-                r.get("cuerpo") for r in (o.p.get("origen1"), o.p.get("origen2")) if isinstance(r, dict)} & cuerpos]
-        return deps
+        return [o for o in self.operaciones if op_id in o.dependencias()]
 
     # ------------------------------------------------------------ deshacer / rehacer
     def _instantanea(self):

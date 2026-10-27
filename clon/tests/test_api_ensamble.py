@@ -270,6 +270,69 @@ def test_borrar_un_componente_con_uniones_nombra_las_que_lo_usan():
     llamar(s, "delete_feature", feature="Suelto")
 
 
+@pytest.mark.parametrize("como_esta", [False, True])
+def test_borrar_componente_con_union_sobre_un_cuerpo_dividido(como_esta):
+    """ASM-3: las partes nuevas heredan el componente y la unión sigue necesitándolo."""
+    from omnicad.timeline.documento import Documento
+    s, base, bloque = dos_cajas()
+    comp = s.cuerpo(base).componente
+    parte = llamar(s, "split_body", body=base, tool="YZ")["bodies_created"][0]["id"]
+    assert g.es_valida(s.cuerpo(parte).forma)
+    assert g.volumen(s.cuerpo(parte).forma) == pytest.approx(8000)
+    if como_esta:
+        r = llamar(s, "create_as_built_joint", origin="<Z", body=bloque, component2="Base", name="Unión partida")
+        # Elegir la parte nueva también al ligar sin mover: el selector automático toma el primer cuerpo.
+        op = s.paso(r["feature"]["id"])
+        nueva = op.copia()
+        nueva.p["origen2"] = {"tipo": "cuerpo", "cuerpo": parte}
+        s.doc.reemplazar(op.id, nueva)
+    else:
+        r = llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2=parte, name="Unión partida")
+    # Al abrir se reconstruyen las dependencias del paso, no solo las de la sesión que lo creó.
+    s = api.Sesion(Documento.desde_dict(s.doc.a_dict()))
+    assert r["feature"]["id"] in {o.id for o in s.doc.dependientes(comp)}
+    r = falla(s, "delete_feature", "FEATURE_IN_USE", feature=comp)
+    assert "Unión partida" in r["mensaje"]
+    falla(s, "move_feature", "OPERATION_FAILED", feature=comp, index=len(s.doc.operaciones) - 1)
+    assert llamar(s, "get_assembly")["joints"][0]["component2"]["id"] == comp
+
+
+@pytest.mark.parametrize("referencia_valida", [True, False])
+def test_borrar_componente_con_referencia_de_cuerpo_en_la_receta(referencia_valida):
+    """ASM-3: aceptar referencias dict y poder quitar un paso mal formado sin un error interno."""
+    from omnicad.timeline.documento import Documento
+    s = api.Sesion()
+    cuerpo = llamar(s, "create_box", length=10, width=10, height=10)["bodies_created"][0]["id"]
+    comp = llamar(s, "create_component", bodies=[cuerpo], name="Componente de receta")["feature"]["id"]
+    receta = s.doc.a_dict()
+    receta["operaciones"][-1]["params"]["cuerpos"] = [{"tipo": "cuerpo", "cuerpo": cuerpo} if referencia_valida else {}]
+    s = api.Sesion(Documento.desde_dict(receta))
+    assert s.doc.resultado(comp).estado == ("ok" if referencia_valida else "error")
+    llamar(s, "delete_feature", feature=comp)
+    assert comp not in s.doc.estado_final.componentes
+    assert not s.cuerpo(cuerpo).componente
+
+
+@pytest.mark.parametrize("antes_de_la_union", [True, False])
+def test_borrado_respeta_el_componente_resuelto_al_crear_la_union(antes_de_la_union):
+    """ASM-3: cuenta el dueño al ejecutar la unión, no la primera asignación ni el dueño final."""
+    s, base, bloque = dos_cajas()
+    anterior = s.cuerpo(base).componente
+    if antes_de_la_union:
+        llamar(s, "create_component", bodies=[base], name="Nuevo", grounded=True)
+    r = llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2=base, name="Unión vigente")
+    if not antes_de_la_union:
+        llamar(s, "create_component", bodies=[base], name="Nuevo", grounded=True)
+    nuevo = s.cuerpo(base).componente
+    if antes_de_la_union:
+        llamar(s, "delete_feature", feature=anterior)
+        assert s.doc.resultado(r["feature"]["id"]).estado == "ok"
+    else:
+        falla(s, "delete_feature", "FEATURE_IN_USE", feature=anterior)
+    esperado = nuevo if antes_de_la_union else anterior
+    assert llamar(s, "get_assembly")["joints"][0]["component2"]["id"] == esperado
+
+
 def test_vinculo_de_una_receta_con_relacion_cero_falla_en_el_paso():
     """ASM-2: el paso también rechaza una relación que da 0 (expresión o receta vieja)."""
     from omnicad.timeline.ops_ensamblar import OpVinculoMovimiento
