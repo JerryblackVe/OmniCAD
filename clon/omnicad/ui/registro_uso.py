@@ -22,15 +22,16 @@ class RegistroVentana(QObject):
         self._ultima_accion = ""
         self._anterior_excepcion = None
         self._anterior_qt = None
+        self._barra = None
         self.reloj = QTimer(self, interval=50)
         self.reloj.timeout.connect(self._latido)
         self.indicador = QLabel("● REG", objectName="indicador_registro_uso")
         self.indicador.setToolTip("Registro local de uso activo. No se envía nada.")
-        ventana.statusBar().addPermanentWidget(self.indicador)
+        self.indicador.setParent(ventana)
         self.indicador.hide()
         self.boton = QPushButton("Marcar problema", objectName="marcar_problema")
         self.boton.clicked.connect(self._dialogo_marca)
-        ventana.statusBar().addPermanentWidget(self.boton)
+        self.boton.setParent(ventana)
         self.boton.hide()
         self.accion = QAction("Marcar problema", ventana)
         self.accion.setShortcut(QKeySequence("Ctrl+Shift+M"))
@@ -50,8 +51,6 @@ class RegistroVentana(QObject):
         except OSError as e:
             estado = {"enabled": False, "session": None, "error": type(e).__name__, "dropped": 0}
             self.ventana.mensaje(f"No se pudo activar el registro local: {e}", 10000)
-        self.indicador.setVisible(estado["enabled"])
-        self.boton.setVisible(estado["enabled"])
         self.accion.setEnabled(estado["enabled"])
         if estado["enabled"] != self._encendido:
             self._encendido = estado["enabled"]
@@ -63,6 +62,12 @@ class RegistroVentana(QObject):
 
     def _iniciar(self):
         v = self.ventana
+        self._barra = v.statusBar()
+        self._barra.addPermanentWidget(self.indicador)
+        self._barra.addPermanentWidget(self.boton)
+        self._barra.show()
+        self.indicador.show()
+        self.boton.show()
         self._anterior_excepcion = sys.excepthook
         sys.excepthook = self._excepcion
         self._anterior_qt = qInstallMessageHandler(self._mensaje_qt)
@@ -74,6 +79,13 @@ class RegistroVentana(QObject):
 
     def _detener(self):
         self.reloj.stop()
+        if self._barra is not None:
+            self._barra.removeWidget(self.indicador)
+            self._barra.removeWidget(self.boton)
+            self._barra.hide()
+            self._barra = None
+        self.indicador.hide()
+        self.boton.hide()
         self.ventana.visor._cuadros_uso = None
         if sys.excepthook == self._excepcion and self._anterior_excepcion is not None:
             sys.excepthook = self._anterior_excepcion
