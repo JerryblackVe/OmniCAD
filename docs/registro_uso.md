@@ -38,3 +38,19 @@ cuadros dibujados. No se toma la inactividad de una vista quieta como FPS bajo.
 Ctrl+Mayús+M o **Marcar problema** abre el marcador con nota opcional (se guarda
 su longitud) y captura del visor únicamente con la casilla explícita. Los ganchos
 de excepciones y mensajes Qt encadenan los anteriores y se retiran al apagar.
+
+## Detector y resumen
+
+`registro_uso/detector.py` no importa Qt. `analizar(eventos, umbrales=None)` devuelve
+hallazgos con regla, severidad (alta/media/baja), momento (`t` y `ts`), qué pasaba y un
+borrador de fila para `docs/seguimiento/` con ID `B-?` o `P-?`; nunca escribe el archivo.
+`resumir(eventos)` devuelve tiempo y cambios por comando, top 10 de operaciones lentas,
+cantidad de errores, recálculos, picking promedio y hallazgos por severidad.
+
+Reglas y umbrales (`UMBRALES`, todos ajustables): operación > 2 s; apertura > 10 s;
+bloqueo de interfaz > 250 ms; visor con p95 < 15 FPS; mismo comando con 2 fallas
+seguidas; 3 cancelaciones seguidas del mismo comando; Deshacer a menos de 3 s de una
+operación; diálogo sin actividad > 20 s; más de 4 clics al mismo control en 2 s;
+memoria +30 % en 5 minutos sin abrir un proyecto; excepciones de Qt, de la API y errores
+de operación (los avisos se informan como severidad baja). Los hallazgos repetidos se
+agrupan con una ventana corta para que el informe no se llene de copias.
