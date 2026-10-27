@@ -186,6 +186,10 @@ def _leer_cache_omnikernel(z, receta):
         return None
 
 
+from ..registro_uso.ganchos import archivo as _registrar_archivo
+
+
+@_registrar_archivo("archivo_guardar")
 def guardar(doc, ruta, miniatura_png=None, incluir_cache=True):
     return _escribir(*_preparar(doc, ruta), miniatura_png, doc if incluir_cache else None)
 
@@ -233,6 +237,7 @@ def _json(texto):
         raise ErrorProyecto(f"El archivo está dañado: no se pudo leer su JSON ({e}).") from None
 
 
+@_registrar_archivo("archivo_abrir")
 def abrir(ruta):
     ruta = Path(ruta)
     try:

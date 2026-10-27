@@ -30,6 +30,7 @@ from ..timeline.ops_malla import OpInsertarMalla
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, TablaParametros
 from . import puente_fusion
 from .dxf import leer_dxf
+from ..registro_uso.ganchos import archivo as _registrar_archivo
 
 FORMATOS = {".step": "STEP", ".stp": "STEP", ".iges": "IGES", ".igs": "IGES", ".stl": "STL", ".obj": "OBJ",
             ".3mf": "3MF", ".ply": "PLY", ".dxf": "DXF", ".brep": "BREP", ".brp": "BREP",
@@ -54,6 +55,7 @@ def pide_unidades(ruta):
     return Path(ruta).suffix.lower() in (".stl", ".obj", ".ply")
 
 
+@_registrar_archivo("archivo_abrir")
 def documento_desde_archivo(ruta, unidades="mm", progreso=None):
     """Abre `ruta` como documento nuevo. Devuelve (documento, avisos). Lanza ErrorAbrir o
     puente_fusion.ErrorPuenteFusion (Fusion no disponible: el mensaje trae los pasos para hacerlo a mano).
@@ -174,6 +176,7 @@ def _paso_boceto(op_id, k, b):
     return OpBoceto(op_id, f"Boceto{k}", boceto=b["boceto"], plano="cara", marco=m)
 
 
+@_registrar_archivo("archivo_importar")
 def operacion_para_insertar(ruta, op_id, unidades="mm"):
     """Insertar en el diseño actual de Fusion (Insertar desde mi PC / Insertar malla / Insertar componente): lee
     `ruta` y devuelve el paso con el contenido COPIADO adentro, listo para `doc.agregar`. STEP (con nombres,

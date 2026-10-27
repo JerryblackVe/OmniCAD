@@ -274,6 +274,10 @@ def exportar_gltf(cuerpos, ruta, propiedades=None):
     return escribir_gltf(_cuerpos(cuerpos), ruta, propiedades=propiedades)
 
 
+from ..registro_uso.ganchos import archivo as _registrar_archivo
+
+
+@_registrar_archivo("exportar")
 def exportar(cuerpos, ruta, propiedades=None):
     """Elige el formato por la extensión del archivo. `propiedades` (las del documento: aspecto, acabado, opacidad y
     nombre de cada cuerpo) solo las usa glTF, el único formato que guarda materiales."""

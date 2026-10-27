@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Literal, Union
 
 from .errores import error, traducir
+from ..registro_uso.ganchos import error as registrar_error
 
 Expr = float | str   # número (mm o grados) o expresión de texto con parámetros y unidades
 
@@ -333,4 +334,6 @@ def llamar(sesion, nombre, args=None):
             sesion._llamadas = anidadas
         return {"ok": True, "result": _a_json(resultado), "avisos": list(dict.fromkeys(sesion.avisos[desde:]))}
     except Exception as e:  # noqa: BLE001 — contrato: llamar nunca lanza
+        # No se pasan args ni resultados: pueden ser chat, código o contenido de un archivo.
+        registrar_error(e, origen="api", comando=nombre if isinstance(nombre, str) and nombre in _CATALOGO else "desconocido")
         return traducir(e).a_dict()

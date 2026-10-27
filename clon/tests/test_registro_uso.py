@@ -31,7 +31,8 @@ def test_lineas_privadas_ordenadas_y_visibles_en_vivo(tmp_path):
     r = ru.Registro({"proyecto": "C:/privado/pieza.omnicad"}, destino=tmp_path)
     with ThreadPoolExecutor(4) as hilos:
         list(hilos.map(lambda n: r.emitir("comando_aceptado", {"comando": "extruir", "valores": {
-            "alto": n, "texto": "SECRETO", "ruta": "C:/privado/oculto", "chat": "CHAT_SECRETO"}}), range(100)))
+            "alto": n, "texto": "SECRETO", "comando": "SECRETO", "categoria": "SECRETO",
+            "ruta": "C:/privado/oculto", "chat": "CHAT_SECRETO"}}), range(100)))
     r.cola.join()
     assert len(eventos(tmp_path)) == 101  # flush sin cerrar
     r.cerrar()

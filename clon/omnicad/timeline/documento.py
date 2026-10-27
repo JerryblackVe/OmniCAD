@@ -24,6 +24,8 @@ import logging
 import time
 import traceback
 import uuid
+from .. import registro_uso
+from ..registro_uso.ganchos import calculo as registrar_calculo
 
 from ..nucleo import consultas
 from ..nucleo import motor
@@ -261,12 +263,16 @@ class Documento:
     def deshacer(self):
         if not self._deshacer:
             return
+        if registro_uso.activo is not None:
+            registro_uso.activo.emitir("deshacer")
         self._rehacer.append(self._instantanea())
         self._cargar(json.loads(self._deshacer.pop()))
 
     def rehacer(self):
         if not self._rehacer:
             return
+        if registro_uso.activo is not None:
+            registro_uso.activo.emitir("rehacer")
         self._deshacer.append(self._instantanea())
         self._cargar(json.loads(self._rehacer.pop()))
 
@@ -770,7 +776,11 @@ class Documento:
         return m["salida"], resultado, m["usados"], m["duracion"]
 
     @motor.recalculo
+    @registrar_calculo
     def recalcular(self, desde=0):
+        registro = registro_uso.activo
+        if registro is not None:
+            inicio_registro, tiempos_registro = time.perf_counter(), []
         desde = max(0, min(desde, len(self._estados), len(self.resultados)))
         desde = min(desde, len(self._usados), len(self._duraciones))
         del self._estados[desde:]
@@ -788,6 +798,9 @@ class Documento:
         repetidos = self._pasos_repetidos() if self._cache else set()
         for i in range(desde, len(self.operaciones)):
             op = self.operaciones[i]
+            if registro is not None:
+                antes_registro = [(c.tipo, c.forma) for c in estado.cuerpos.values()]
+                inicio_paso = time.perf_counter()
             usados = frozenset()
             duracion = 0.0
             guardado = self._de_cache(i, op, estado) if (i < self.marcador and not op.suprimida
@@ -842,10 +855,26 @@ class Documento:
             self._estados.append(estado)
             self._usados.append(usados)
             self._duraciones.append(duracion)
+            if registro is not None and i < self.marcador and not op.suprimida:
+                ms = (time.perf_counter() - inicio_paso) * 1000
+                datos_uso = {"paso": op.id, "tipo_op": op.TIPO, "duracion_ms": ms,
+                             "exito": self.resultados[-1].estado != "error",
+                             "mensaje": self.resultados[-1].mensaje}
+                registro.emitir("op_ejecutada", datos_uso, medidas=(antes_registro,
+                    [(c.tipo, c.forma) for c in estado.cuerpos.values()]))
+                tiempos_registro.append({"paso": op.id, "duracion_ms": ms})
+                if self.resultados[-1].estado in ("error", "aviso"):
+                    registro.emitir("error", {"origen": "operacion", "paso": op.id,
+                        "tipo_op": op.TIPO, "categoria": self.resultados[-1].estado,
+                        "mensaje": self.resultados[-1].mensaje})
         vigentes = {id(op) for op in self.operaciones}
         self._memo = {k: m for k, m in self._memo.items() if id(m["op"]) in vigentes}
         self._previa = None
         self._notificar()
+
+        if registro is not None:
+            registro.emitir("recalculo", {"duracion_ms": (time.perf_counter() - inicio_registro) * 1000,
+                "lentos": sorted(tiempos_registro, key=lambda d: d["duracion_ms"], reverse=True)[:5]})
 
     # ------------------------------------------------------------ memoria por paso (P7 de docs/plan_rust.md)
     def olvidar_memoria(self):

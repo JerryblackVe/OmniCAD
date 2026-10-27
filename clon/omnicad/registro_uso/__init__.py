@@ -28,7 +28,7 @@ def carpeta():
     return Path(os.environ.get("OMNICAD_REGISTRO_DIR") or carpeta_datos() / "registro")
 
 
-def _privado(valor, clave="", nivel=0):
+def _privado(valor, clave="", nivel=0, identificadores=True):
     if nivel > 4:
         return None
     if valor is None or isinstance(valor, bool):
@@ -36,14 +36,14 @@ def _privado(valor, clave="", nivel=0):
     if isinstance(valor, (float, int)):
         return valor if math.isfinite(valor) else None
     if isinstance(valor, str):
-        if clave in _IDENTIFICADORES and _CLAVE.fullmatch(valor):
+        if identificadores and clave in _IDENTIFICADORES and _CLAVE.fullmatch(valor):
             return valor
         return {"longitud": len(valor)}
     if isinstance(valor, dict):
-        return {k: _privado(v, k, nivel + 1) for k, v in list(valor.items())[:64]
+        return {k: _privado(v, k, nivel + 1, identificadores and k != "valores") for k, v in list(valor.items())[:64]
                 if isinstance(k, str) and _CLAVE.fullmatch(k)}
     if isinstance(valor, (tuple, list)):
-        return [_privado(v, clave, nivel + 1) for v in valor[:64]]
+        return [_privado(v, clave, nivel + 1, identificadores) for v in valor[:64]]
     return None
 
 
@@ -58,6 +58,9 @@ class Registro:
         self.inicio = time.perf_counter()
         self.cola = Queue(maxsize=8192)
         self._cerrojo = threading.Lock()
+        self._calculos = 0
+        self._calculo_libre = threading.Event()
+        self._calculo_libre.set()
         self._cerrado = False
         self.seq = self.descartados = 0
         self.fallo = None
@@ -67,7 +70,7 @@ class Registro:
         self.emitir("sesion_inicio", {"version": VERSION, "so": platform.system(), **(datos or {})}, cabecera=True)
         self.hilo.start()
 
-    def emitir(self, tipo, datos=None, *, cabecera=False):
+    def emitir(self, tipo, datos=None, *, cabecera=False, medidas=None):
         """Encola sin E/S. Devuelve seq o None si la cola está llena o el escritor falló."""
         if self._cerrado or self.fallo or not _CLAVE.fullmatch(tipo):
             return None
@@ -85,7 +88,7 @@ class Registro:
                       "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
                       "tipo": tipo, "datos": seguros, "seq": self.seq}
             try:
-                self.cola.put_nowait(evento)
+                self.cola.put_nowait((evento, medidas))
             except Full:
                 self.descartados += 1
                 return None
@@ -114,10 +117,15 @@ class Registro:
         tamano = parte = 0
         try:
             while True:
-                evento = self.cola.get()
+                pendiente = self.cola.get()
                 try:
-                    if evento is None:
+                    if pendiente is None:
                         break
+                    evento, medidas = pendiente
+                    if medidas is not None:
+                        self._calculo_libre.wait()
+                        from .ganchos import medidas as medir
+                        evento["datos"]["antes"], evento["datos"]["despues"] = (medir(cs) for cs in medidas)
                     linea = (json.dumps(evento, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
                     if len(linea) > self.tope_archivo:
                         self.descartados += 1

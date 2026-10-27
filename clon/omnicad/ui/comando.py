@@ -13,11 +13,15 @@ timeline. Acá:
 Las selecciones se guardan como referencias serializables (`timeline.entidades`), así la
 operación sigue apuntando a "su" cara o arista al recalcular.
 """
+import time
+
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit,
                                QPushButton, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
+from .. import registro_uso
+from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
 from .iconos import icono
 
@@ -331,6 +335,9 @@ class PanelComando(QFrame):
         self.setObjectName("panel_comando")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.comando, self.ctx, self.visor = comando, ctx, visor
+        self._uso_inicio = self._uso_cambio = time.perf_counter() if registro_uso.activo is not None else None
+        self._uso_cambios = 0
+        self._uso_error = ""
         self.campos = comando.campos(ctx)
         self.valores = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in self.campos}
         if ctx.op is not None:
@@ -429,8 +436,27 @@ class PanelComando(QFrame):
         self._activar(primera)
         comando.preparar_panel(self)
         self._programar()
+        self._registrar_uso("comando_abierto")
 
     # ------------------------------------------------------------ armado
+
+    def _registrar_uso(self, tipo):
+        if registro_uso.activo is None:
+            return
+        ahora = time.perf_counter()
+        valores = {}
+        for c in self.campos:
+            valor = self.valores.get(c.clave)
+            if isinstance(c, Expresion):
+                try:
+                    valor = self.ctx.evaluar(valor, c.tipo)
+                except (ErrorExpresion, TypeError, ValueError):
+                    pass
+            valores[c.clave] = valor if isinstance(valor, (int, float, bool, str)) else len(valor) if isinstance(valor, list) else None
+        registro_uso.activo.emitir(tipo, {"comando": self.comando.CLAVE, "valores": valores,
+            "duracion_s": ahora - self._uso_inicio if self._uso_inicio is not None else 0,
+            "cambios": self._uso_cambios, "editando": self.ctx.op is not None})
+
     def _widget(self, campo):
         val = self.valores.get(campo.clave)
         if isinstance(campo, Seleccion):
@@ -520,7 +546,11 @@ class PanelComando(QFrame):
                     w.setStyleSheet(f"background: {temas.color('campo_error')};")
 
     def _cambiar(self, clave, valor):
+        if registro_uso.activo is not None:
+            self._uso_cambios += 1
+            self._uso_cambio = time.perf_counter()
         self.valores[clave] = valor
+        self._registrar_uso("comando_editado")
         self._actualizar_visibles()
         self._programar()
 
@@ -705,6 +735,10 @@ class PanelComando(QFrame):
         self.manipuladores.mostrar_previa(prims)
 
     def _mostrar(self, texto, aviso=False):
+        if registro_uso.activo is not None and texto and texto != self._uso_error:
+            registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
+            registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
+        self._uso_error = texto
         self.mensaje.setObjectName("aviso_comando" if aviso else "mensaje_comando")
         self.mensaje.setStyleSheet(f"color: {temas.color('aviso' if aviso else 'error')};")
         self.mensaje.setText(texto)
@@ -722,6 +756,7 @@ class PanelComando(QFrame):
             except (ErrorComando, ErrorExpresion) as e:
                 self._mostrar(str(e), aviso=True)
                 return
+            self._registrar_uso("comando_aceptado")
             self._cerrar()
             self.aceptado.emit(None)
             return
@@ -736,10 +771,14 @@ class PanelComando(QFrame):
             preajustes_ui.recordar_ultimo(self)
         except OSError:
             pass                              # no poder recordar los últimos valores no frena el comando
+        self._registrar_uso("comando_aceptado")
+        if registro_uso.activo is not None:
+            registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": True})
         self._cerrar()
         self.aceptado.emit(op)
 
     def cancelar(self):
+        self._registrar_uso("comando_cancelado")
         self._cerrar()
         self.cancelado.emit()
 

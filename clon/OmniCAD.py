@@ -130,8 +130,9 @@ def main(argv=None):
     portada = arranque.mostrar_portada(app)      # mientras se importa lo pesado (OCP, OpenGL…), como Fusion
     from omnicad.ui.ventana import VentanaPrincipal
     ventana = VentanaPrincipal()
+    ventana._proyecto_registro = args.proyecto
     ventana.showMaximized()
-    if args.registro:
+    if args.registro or ventana.prefs["general/registro_uso"]:
         ventana.registro_uso.configurar(True)
     if portada:
         portada.finish(ventana)

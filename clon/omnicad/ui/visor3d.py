@@ -450,6 +450,7 @@ class Visor3D(QOpenGLWidget):
         self._navegando = False            # orbitando, desplazando o haciendo zoom (para «Dinámico»)
         self._degradado = 0                # cuántos escalones de DEGRADACION están apagados ahora
         self._ms_cuadro = 0.0              # lo que tardó el último paintGL (CPU)
+        self._cuadros_uso = None            # deque solo mientras el registro local está activo
         self._t_cuadro = 0.0               # cuándo empezó el último paintGL (para el límite de cuadros)
         self._t_fin_nav = QTimer(self, singleShot=True, interval=250)
         self._t_fin_nav.timeout.connect(self._fin_navegacion)
@@ -1849,6 +1850,8 @@ class Visor3D(QOpenGLWidget):
         finally:
             cfg.efectos = efectos_cfg
             self._ms_cuadro = (time.perf_counter() - inicio) * 1000
+            if self._cuadros_uso is not None:
+                self._cuadros_uso.append(self._ms_cuadro)
 
     def _pintar_vista(self, cfg):
         # No se llama `_pintar`: LienzoRender (render.py) tiene su propio `_pintar` con otra firma, y sin GLSL cae acá.
@@ -2061,7 +2064,12 @@ class Visor3D(QOpenGLWidget):
         if movido or self.modo not in (None,):
             return
         if e.button() == Qt.LeftButton and self.filtro:
+            from .. import registro_uso
+            inicio_pick = time.perf_counter() if registro_uso.activo is not None else None
             hit = self.elegir_entidad(e.position())
+            if inicio_pick is not None:
+                registro_uso.activo.emitir("seleccion", {"categoria": hit["tipo"] if hit else "vacia",
+                    "cantidad": int(hit is not None), "duracion_ms": (time.perf_counter() - inicio_pick) * 1000})
             if hit is None:
                 self.clic_vacio.emit()
             else:

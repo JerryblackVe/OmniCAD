@@ -19,3 +19,22 @@ una cola acotada: ante saturación se descartan eventos y el estado informa `dro
 Ante fallo de disco se detiene la escritura y el estado informa `error`.
 Rotación en segmentos de hasta 5 MB, límite total de 50 MB y retención de 14 días;
 la poda se hace al escribir. Solo se podan archivos propios del registro.
+
+## Eventos de la aplicación
+
+Los paneles comunes registran apertura, cambios, aceptación y cancelación con valores
+numéricos evaluados, duración y cantidad de cambios. El timeline registra cada paso,
+incluidos los reutilizados (duración real de la consulta, no la duración histórica),
+el recálculo y sus cinco pasos más lentos, deshacer y rehacer. Los volúmenes se miden
+por integración exacta en el escritor, fuera del recálculo. No se agrega teselado.
+
+Los puntos comunes de archivos registran formato, tamaño, duración y éxito. La UI
+registra atajos de acciones, botones, menús y selección con costo de picking. El
+vigilante de 50 ms informa demoras superiores a 250 ms e inactividad del panel.
+Cada cinco segundos informa RSS, formas únicas retenidas por el historial (no todos
+los objetos internos del kernel), tiempos de dibujo promedio/p95 y FPS mínimo de los
+cuadros dibujados. No se toma la inactividad de una vista quieta como FPS bajo.
+
+Ctrl+Mayús+M o **Marcar problema** abre el marcador con nota opcional (se guarda
+su longitud) y captura del visor únicamente con la casilla explícita. Los ganchos
+de excepciones y mensajes Qt encadenan los anteriores y se retiran al apagar.

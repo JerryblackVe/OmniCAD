@@ -265,7 +265,9 @@ class VentanaPrincipal(QMainWindow):
         self.set_documento(doc or Documento())
         from .registro_uso import RegistroVentana
         self.registro_uso = RegistroVentana(self)
-        self.registro_uso.configurar(self.prefs["general/registro_uso"])
+        if self.prefs["general/registro_uso"]:
+            # Esperar al primer show: recién entonces hay tamaño final y contexto de OpenGL.
+            QTimer.singleShot(0, self, lambda: self.registro_uso.configurar(True))
         if self._avisos_tema:
             self.mensaje(self._avisos_tema[0], 10000)
         # Los informes de error (P20) anotan los últimos pasos del timeline al fallar.
@@ -581,7 +583,8 @@ class VentanaPrincipal(QMainWindow):
 
     def aplicar_preferencias(self):
         p, c = self.prefs, self.visor.config
-        if hasattr(self, "registro_uso"):
+        if hasattr(self, "registro_uso") and p["general/registro_uso"] != self.registro_uso.preferencia:
+            self.registro_uso.preferencia = p["general/registro_uso"]
             self.registro_uso.configurar(p["general/registro_uso"])
         from ..nucleo import motor
         if self.doc is not None and self.doc.motor != motor.motor_activo():
@@ -2195,6 +2198,8 @@ class VentanaPrincipal(QMainWindow):
         try:
             funcion()
         except (ErrorDocumento, ValueError) as e:
+            from ..registro_uso.ganchos import error
+            error(e, origen="ui")
             QMessageBox.warning(self, NOMBRE_APP, str(e))
 
     def _agregar(self, op):
