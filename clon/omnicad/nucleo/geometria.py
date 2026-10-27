@@ -497,6 +497,17 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
             if vr < minimo - tol or vr > maximo + tol:
                 exceso = max(minimo - vr, vr - maximo)
                 return 2, f"volumen {vr:.6g} mm³ fuera de lo posible ({minimo:.6g} a {maximo:.6g})", exceso, vb + vh
+            if operacion == "cortar" and vr > maximo - tol:
+                # B-107: un corte que no quita nada cuando la herramienta sí atraviesa el material (el reintento
+                # GlueShift devolvía el objetivo intacto con una cara tangente). El rango «hasta vb» no lo ve.
+                try:
+                    comun = abs(_integral(_booleana(objetivo, herramienta, "intersecar", paralelo=False),
+                                          BRepGProp.VolumeProperties_s))
+                except Exception:  # noqa: BLE001 — sin medir el común no se puede afirmar nada
+                    comun = 0.0
+                if comun > tol:
+                    return 2, (f"el corte no quitó material aunque la herramienta lo atraviesa "
+                               f"({comun:.6g} mm³)"), comun, vb + vh
     except Exception:  # noqa: BLE001 — una integración que falla no es motivo para rechazar el resultado
         pass
     problemas, peso = [], 0.0

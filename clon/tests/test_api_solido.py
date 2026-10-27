@@ -323,6 +323,30 @@ def test_extrude_cut_flotante_va_hacia_el_material(s):
     assert not r["bodies_modified"] and r["bodies_created"]
 
 
+def test_corte_flotante_tangente_por_cada_lado(s):
+    """B-107: un corte desde un boceto flotante cuyo círculo es TANGENTE a una cara lateral no quitaba nada:
+    la primera booleana correcta quedaba marcada por su arista de tangencia (no manifold) y el reintento
+    GlueShift devolvía el cuerpo intacto, que el control de volumen aceptaba. Cuatro cortes seguidos,
+    alternando bocetos por arriba y por abajo, con volumen exacto y el cuerpo válido."""
+    from omnicad.nucleo import geometria as geo
+    llamar(s, "create_box", length=20, width=20, height=20)
+    llamar(s, "create_construction_plane", plane="XY", offset=30, name="Arriba")
+    llamar(s, "create_construction_plane", plane="XY", offset=-20, name="Abajo")
+    llamar(s, "sketch_from_spec", plane="Arriba", entities=[{"type": "rectangle", "center": [0, 0], "width": 10,
+                                                             "height": 10}])
+    llamar(s, "extrude", sketch="Boceto1", distance=60, operation="cut")
+    esperado = 8000 - 100 * 20
+    for i, (cx, cy) in enumerate(((8, 0), (-8, 0), (0, 8), (0, -8))):    # tangente por los cuatro lados
+        llamar(s, "sketch_from_spec", plane="Arriba" if i % 2 == 0 else "Abajo",
+               entities=[{"type": "circle", "center": [cx, cy], "radius": 2}])
+        r = llamar(s, "extrude", sketch=f"Boceto{i + 2}", distance=60, operation="cut")
+        esperado -= math.pi * 4 * 20
+        assert r["bodies_modified"][0]["volume"] == pytest.approx(esperado, rel=1e-3), (cx, cy)
+    informe = llamar(s, "check_geometry", self_intersection=False)
+    assert informe["bodies"][0]["valid"] and not informe["bodies"][0]["free_edges"], informe
+    assert geo.es_valida(s.cuerpo(r["bodies_modified"][0]["id"]).forma)
+
+
 # ---------------------------------------------------------------- revolución, barrido y solevación
 def test_revolucion(s):
     llamar(s, "create_sketch", plane="XZ")
