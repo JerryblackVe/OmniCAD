@@ -15,6 +15,7 @@ _OPCIONES = {
     "general/auto_mirar_boceto": (True, [False, True]),
     "general/tamano_viewcube": ("automatico", ["pequeno", "automatico", "grande"]),
     "general/info_herramientas": (True, [False, True]),
+    "navegador/no_desplegar_al_seleccionar": (False, [False, True]),
     "general/autoguardado_min": (1, list(range(1, 61))),
     "material/aspecto": ("acero", ["acero", "paleta"]),
     "graficos/preset": ("personalizar", ["rendimiento", "equilibrado", "calidad", "personalizar"]),

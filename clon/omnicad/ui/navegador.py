@@ -309,6 +309,17 @@ class Navegador(QFrame):
     def item(self, clave):
         return self._items.get(clave)
 
+    def _fila_visible(self, it):
+        """¿La fila se ve? Lo está si no la oculta el filtro y todas sus ramas de arriba están abiertas."""
+        while it is not None:
+            if it.isHidden():
+                return False
+            padre = it.parent()
+            if padre is not None and not padre.isExpanded():
+                return False
+            it = padre
+        return True
+
     def revelar(self, clave):
         """Despliega las carpetas hasta la fila `clave` y la trae a la vista, sin elegirla. False si no está."""
         it = self.item(clave)
@@ -321,10 +332,22 @@ class Navegador(QFrame):
         self.arbol.scrollToItem(it)
         return True
 
-    def resaltar_origen(self, creo=(), modifico=()):
-        """Pinta en amarillo las filas de `creo` (fuerte) y de `modifico` (suave); sin nada, saca el resaltado.
-        No cambia la selección ni el plegado del árbol. Lo que no está en el árbol se ignora."""
+    def resaltar_origen(self, creo=(), modifico=(), ubicacion=()):
+        """Pinta en amarillo las filas de `creo` (fuerte) y de `modifico` (suave); `ubicacion` agrega el cuerpo
+        elegido y, si está dentro de una rama cerrada, la fila visible más cercana de arriba. Sin nada, saca el
+        resaltado. No cambia la selección ni el plegado del árbol. Lo que no está en el árbol se ignora."""
         nuevo = {**dict.fromkeys(modifico, "modifico"), **dict.fromkeys(creo, "creo")}
+        for clave in ubicacion:
+            it = self.item(clave)
+            if it is None:
+                continue
+            nuevo[clave] = "creo"
+            if not self._fila_visible(it):
+                padre = it.parent()
+                while padre is not None and not self._fila_visible(padre):
+                    padre = padre.parent()
+                if padre is not None:
+                    nuevo[padre.data(0, ROL_CLAVE)] = "creo"
         if nuevo == self._origen:
             return
         self._origen = nuevo
@@ -340,8 +363,9 @@ class Navegador(QFrame):
             it.setData(0, ROL_ICONO, ico)
             it.setToolTip(0, tip)
 
-    def seleccionar(self, claves):
-        """Refleja la selección de la vista y revela sus filas, sin emitir otro clic."""
+    def seleccionar(self, claves, revelar=True):
+        """Refleja la selección de la vista. Con `revelar` despliega hasta las filas y las trae a la vista, sin
+        emitir otro clic; sin él no toca el plegado, el filtro ni la posición del árbol."""
         claves = list(dict.fromkeys(k for k in claves if k in self._items))
         cambia = set(claves) != {it.data(0, ROL_CLAVE) for it in self.arbol.selectedItems()}
         with QSignalBlocker(self.arbol):
@@ -352,15 +376,18 @@ class Navegador(QFrame):
                 it = self.item(clave)
                 if it is None:
                     continue
-                if self.filtro.text():
-                    self.filtro.clear()
-                padre = it.parent()
-                while padre is not None:
-                    padre.setExpanded(True)
-                    padre = padre.parent()
+                if not revelar and not self._fila_visible(it):
+                    continue
+                if revelar:
+                    if self.filtro.text():
+                        self.filtro.clear()
+                    padre = it.parent()
+                    while padre is not None:
+                        padre.setExpanded(True)
+                        padre = padre.parent()
                 it.setSelected(True)
                 ultimo = it
-            if ultimo is not None:
+            if ultimo is not None and revelar:
                 self.arbol.show()
                 self.b_plegar.setText("–")
                 if cambia:

@@ -41,6 +41,7 @@ DEFECTOS = {
     "general/puente_agentes": False,         # MCP en vivo: apagado por defecto (ui/puente.py)
     "general/puente_codigo": False,          # execute_code en vivo (corre Python en la interfaz)
     "general/registro_uso": False,           # telemetría exclusivamente local y optativa
+    "navegador/no_desplegar_al_seleccionar": False,   # al elegir en el visor, no abrir ni desplazar el navegador
     # Asistente IA (ui/asistente.py), definidas en asistente/config.py › DEFECTOS. La clave de API NO se guarda acá.
     **{f"asistente/{k}": v for k, v in config_asistente.DEFECTOS.items()},
     "atajos/diseno": "extruir,empalme_3d",   # caja de herramientas (S): los que Fusion trae fijados
@@ -214,6 +215,8 @@ PAGINAS = [
         (None, "Temas propios", "acciones_tema", None),
         ("general/autoguardado_min", "Intervalo de copia de seguridad de recuperación automática (minutos)", "entero", (1, 60)),
         ("general/info_herramientas", "Mostrar información de herramientas", "check", None),
+        ("navegador/no_desplegar_al_seleccionar", "Al seleccionar en el visor, no desplegar el navegador "
+         "(solo resaltar en amarillo dónde está)", "check", None),
         ("general/registro_uso", "Registro de uso local (14 días, hasta 50 MB; no se envía nada)", "check", None),
         ("general/raton", "Configuración del ratón (encuadre, zoom, órbita)", "combo",
          [("omnicad", "OmniCAD (izquierdo: órbita)"), ("fusion", "Fusion (Mayús + medio: órbita)"),

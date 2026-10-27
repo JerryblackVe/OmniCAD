@@ -1661,8 +1661,9 @@ class VentanaPrincipal(QMainWindow):
         self.seleccion = list(hits)
         claves = [h["ref"].get("cuerpo") or h["ref"].get("boceto") or h["ref"].get("id")
                   for h in self.seleccion]
-        self.navegador.seleccionar(claves)
-        if claves:
+        revelar = not self.prefs["navegador/no_desplegar_al_seleccionar"]
+        self.navegador.seleccionar(claves, revelar=revelar)
+        if claves and revelar:
             self.acciones["ver_navegador"].setChecked(True)
             self.navegador.show()
         prims = [p for h in self.seleccion for p in (h.get("dibujo") or [])]
@@ -2094,13 +2095,18 @@ class VentanaPrincipal(QMainWindow):
 
     def _resaltar_origen(self):
         """Pinta en amarillo, en el timeline y el navegador, los pasos de los que viene lo elegido: el que lo creó fuerte
-        y los que lo modificaron suave; con nada elegido (o sin origen) saca el resaltado."""
+        y los que lo modificaron suave. Con «no desplegar» activo, además marca el cuerpo elegido y, si está dentro de
+        una rama cerrada, la fila visible más cercana. Con nada elegido (o sin origen) saca el resaltado."""
         origenes = self.origenes_de_seleccion()
         creo = list(dict.fromkeys(o["creo"] for o in origenes if o["creo"]))
         modificaron = [m for m in dict.fromkeys(m for o in origenes for m in o["modificaron"]) if m not in creo]
         self.timeline.resaltar_origen(creo, modificaron)
         claves = lambda ops: [k for op in ops for k in self.claves_navegador_de(op)]  # noqa: E731
-        self.navegador.resaltar_origen(claves(creo), claves(modificaron))
+        ubicacion = ()
+        if self.prefs["navegador/no_desplegar_al_seleccionar"] and self.panel is None and not self.modo_boceto.activo:
+            ubicacion = [h["ref"].get("cuerpo") or h["ref"].get("boceto") or h["ref"].get("id")
+                         for h in self.seleccion]
+        self.navegador.resaltar_origen(claves(creo), claves(modificaron), ubicacion)
 
     def _filas_origen(self, pos_global):
         """Filas del menú de clic derecho sobre una cara, arista, vértice o cuerpo elegido: «Ir a la operación que la
