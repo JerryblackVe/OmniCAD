@@ -75,6 +75,14 @@ def test_extruir_con_conicidad():
     assert g.es_valida(afuera) and g.es_valida(adentro)
 
 
+def test_conicidad_de_89_grados_es_valida_y_89_01_no():
+    """SUP-7: el mensaje dice «entre -89° y 89°»: el tope es inclusivo."""
+    s = sf.extruir_superficie(cuadrado(), (0, 0, 1), 10, conicidad=89)
+    assert g.area(s) > 0 and g.es_valida(s)
+    with pytest.raises(g.ErrorGeometria, match="-89"):
+        sf.extruir_superficie(cuadrado(), (0, 0, 1), 10, conicidad=89.01)
+
+
 def test_revolver_linea_paralela_da_cilindro():
     s = sf.revolver_superficie(seg((5, 0, 0), (5, 0, 10)), (0, 0, 0), (0, 0, 1), 360)
     assert g.area(s) == pytest.approx(2 * math.pi * 5 * 10) and g.es_valida(s)

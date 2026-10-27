@@ -248,7 +248,7 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
     negativo la cierra; en una curva abierta, positivo inclina hacia la derecha del recorrido mirando
     desde `direccion`. La altura medida sobre `direccion` es siempre `distancia`."""
     geo.exigir_longitud(distancia, "La distancia de extrusión")
-    if abs(conicidad) >= 89.0:
+    if abs(conicidad) > 89.0:
         raise geo.ErrorGeometria("La conicidad tiene que estar entre -89° y 89°.")
     n = _unitario(direccion)
     piezas = []
