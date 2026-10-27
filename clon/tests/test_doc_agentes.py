@@ -80,6 +80,21 @@ def test_todas_las_herramientas_estan_documentadas():
             assert f"`{parametro}`" in texto
 
 
+def test_cada_ficha_dice_si_entra_en_deshacer():
+    """B-106: «modifica» no siempre es «paso de deshacer» (`transaccion=False`: undo, guardar, comentarios…)."""
+    texto = leer(HERRAMIENTAS)
+    for h in api.catalogo():
+        resto = texto.split(f"### `{h['nombre']}`\n", 1)[1]
+        ficha = resto.split("\n### `", 1)[0]
+        if not h["modifica"]:
+            esperado = "- Modifica el documento: no."
+        elif h["transaccion"]:
+            esperado = "- Modifica el documento: sí, es un paso de deshacer."
+        else:
+            esperado = "- Modifica el documento: sí, pero no entra en deshacer."
+        assert esperado in ficha, h["nombre"]
+
+
 # ---------------------------------------------------------------- enlaces y bloques de código
 def test_los_documentos_existen():
     for nombre in ("README", "conectar", "guia_diseno", "cli", "puente", "herramientas"):

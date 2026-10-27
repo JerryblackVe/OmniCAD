@@ -89,7 +89,13 @@ def _celda(texto):
 def _herramienta(h):
     props, req = h["esquema"]["properties"], h["esquema"]["required"]
     lineas = [f"### `{h['nombre']}`", "", h["descripcion"].strip(), ""]
-    lineas.append("- Modifica el documento: " + ("sí, es un paso de deshacer." if h["modifica"] else "no."))
+    if not h["modifica"]:
+        deshacer = "no."
+    elif h["transaccion"]:
+        deshacer = "sí, es un paso de deshacer."
+    else:
+        deshacer = "sí, pero no entra en deshacer."
+    lineas.append("- Modifica el documento: " + deshacer)
     if props:
         lineas.append("- Parámetros:")
         for nombre, prop in props.items():

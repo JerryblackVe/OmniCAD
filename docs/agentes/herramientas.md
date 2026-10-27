@@ -109,7 +109,7 @@ Selecciona cuerpos en la ventana y los revela en el navegador. Solo en vivo; una
 
 Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. Se guardan con el proyecto. No cambia el modelo ni los números de la API, que siguen en mm y g; get_scene_info las informa en display_units. Sin parámetros solo las consulta.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `length` ("mm" | "cm" | "m" | "in" | "ft" o null; opcional, por defecto `null`): unidad de longitud para mostrar (omitido o null = no cambia).
   - `mass` ("g" | "kg" | "lb" o null; opcional, por defecto `null`): unidad de masa para mostrar (omitido o null = no cambia).
@@ -119,7 +119,7 @@ Elige las unidades con que la app MUESTRA las medidas del documento (el menú «
 
 Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. Sirve si algo se ve mal o para medir cuánto tarda el modelo entero. No cambia la receta.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros: ninguno.
 - CLI: `omnicad call recompute_all --doc pieza.omnicad`
 
@@ -127,7 +127,7 @@ Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS los pasos
 
 Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de siempre) u «omnikernel» (nativo, en Rust). Al cambiarlo el documento se recalcula entero con el motor nuevo; lo que OmniKernel no hace todavía queda con error MOTOR_SIN_SOPORTE en su paso. Sin parámetros solo informa el motor activo y la versión de OmniKernel.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `engine` ("opencascade" | "omnikernel" o null; opcional, por defecto `null`): motor a usar desde ahora (omitido o null = no cambia).
 - CLI: `omnicad call set_geometry_engine --doc pieza.omnicad`
@@ -136,7 +136,7 @@ Elige el motor geométrico (Preferencias › Geometría): «opencascade» (el de
 
 Empieza un documento vacío (o el modelo de ejemplo con example=true) en lugar del actual. Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta).
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `name` (texto; opcional, por defecto `"Sin título"`): nombre del documento nuevo (con example, vacío = «Ejemplo»).
   - `discard` (true/false; opcional, por defecto `false`): true para descartar los cambios sin guardar del documento actual.
@@ -147,7 +147,7 @@ Empieza un documento vacío (o el modelo de ejemplo con example=true) en lugar d
 
 Abre un archivo y lo deja como documento activo: proyecto .omnicad (o .fclone), o como documento nuevo con un paso de importación STEP (.step/.stp, con nombres, colores y componentes), IGES (.iges/.igs), malla (.stl, .obj, .3mf, .ply), DXF (boceto en XY), BREP (.brep/.brp, como operación base) o Fusion 360 (.f3d, .f3z: se leen sus cuerpos SIN Fusion, como operación base, cada componente en su lugar del ensamblaje y con una copia ligera por cada repetición; el historial, los parámetros y los nombres de los cuerpos no se leen; inspect_f3d cuenta qué trae). Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true (los descarta). Para meter el archivo en el documento actual: insert_file.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `path` (texto; obligatorio): ruta del archivo.
   - `mesh_units` ("mm" | "cm" | "m" | "in" | "ft"; opcional, por defecto `"mm"`): unidades de un .stl, .obj o .ply (no las guardan); el .3mf trae las suyas.
@@ -215,7 +215,7 @@ Exporta cuerpos a un archivo; el formato sale de la extensión: .stl, .obj, .3mf
 
 Deshace el último cambio del documento (cada herramienta que modifica es un paso).
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros: ninguno.
 - CLI: `omnicad call undo --doc pieza.omnicad`
 
@@ -223,7 +223,7 @@ Deshace el último cambio del documento (cada herramienta que modifica es un pas
 
 Rehace el último cambio deshecho.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros: ninguno.
 - CLI: `omnicad call redo --doc pieza.omnicad`
 
@@ -289,7 +289,7 @@ Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a gu
 
 Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. Si el actual tiene cambios sin guardar falla con UNSAVED_CHANGES, salvo discard=true.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `path` (texto; obligatorio): ruta de la copia de autoguardado (de list_recoverable_documents).
   - `project` (texto; opcional, por defecto `null`): ruta del proyecto original si la copia era de un proyecto con ruta; vacío = huérfano.
@@ -318,7 +318,7 @@ Consulta las preferencias autorizadas, sus valores por defecto y opciones válid
 
 Valida y guarda una preferencia autorizada. No modifica el documento ni entra en deshacer; los ajustes se usan cuando la aplicación los relee.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
   - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences.
@@ -378,7 +378,7 @@ Consulta y edita la tabla de variantes de CONFIGURAR. Solo apply aplica parámet
 
 Lista, agrega o borra comentarios del proyecto. Se guardan con el diseño, pero no entran en deshacer.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `action` ("list" | "add" | "delete"; opcional, por defecto `"list"`): list consulta, add agrega texto y delete borra por índice.
   - `text` (texto; opcional, por defecto `null`): texto no vacío del comentario para add.
@@ -559,7 +559,7 @@ Elige las caras de un cuerpo que hay entre unos objetos límite y una cara semil
 
 Mueve un paso del timeline a otro índice (como arrastrarlo en la app). Si no se puede (un paso que depende de otro quedaría antes), falla con OPERATION_FAILED y el motivo. Es lo que usa la pista del error de empalme: reordenar los empalmes de mayor a menor radio.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `feature` (texto; obligatorio): id o nombre del paso a mover.
   - `index` (entero; obligatorio): índice nuevo (0 = primero, se recorta al final del timeline).
@@ -569,7 +569,7 @@ Mueve un paso del timeline a otro índice (como arrastrarlo en la app). Si no se
 
 Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). Lo que queda a la derecha del marcador no se calcula (estado rolled_back) hasta volver a moverlo. Indicá UNO: position, after (el marcador queda justo después de ese paso, que sí se calcula) o before (justo antes). undo lo vuelve a donde estaba. Si al avanzar un paso queda con error, se avisa (errors) pero el marcador se mueve igual (como en la app).
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `position` (entero; opcional, por defecto `null`): índice del marcador: 0 = antes del primer paso; la cantidad de pasos = al final (todo calculado).
   - `after` (texto; opcional, por defecto `null`): id o nombre de un paso: el marcador queda justo después (como «Rodar marcador aquí» sobre ese paso).
@@ -5299,7 +5299,7 @@ Configuración del Asistente IA (Preferencias › Asistente IA): proveedor, mode
 
 Cambia la configuración del Asistente IA (solo los campos pasados). No acepta claves de API ni rutas de ejecutables. No modifica el documento ni entra en deshacer.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `provider` (texto; opcional, por defecto `null`): proveedor (lista en get_assistant_config › providers), p. ej. "anthropic", "openai", "local".
   - `model` (texto; opcional, por defecto `null`): modelo del proveedor; "" vuelve al de fábrica.
@@ -5325,7 +5325,7 @@ Instrucciones de este proyecto para el Asistente IA: van dentro del .omnicad y s
 
 Cambia las instrucciones de este proyecto para el Asistente IA. Se guardan con el diseño (save_document) pero no entran en deshacer, como los comentarios.
 
-- Modifica el documento: sí, es un paso de deshacer.
+- Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `instructions` (texto; obligatorio): texto de hasta 4000 caracteres (p. ej. "pared mínima de 2 mm, todo para imprimir en PLA"); "" las borra.
 - CLI: `omnicad call set_project_instructions --doc pieza.omnicad instructions=…`

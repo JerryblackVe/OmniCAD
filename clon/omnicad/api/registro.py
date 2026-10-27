@@ -140,10 +140,11 @@ def herramienta(nombre, grupo, descripcion, modifica=False, transaccion=None):
 
 
 def catalogo(grupos=None):
-    """[{nombre, grupo, descripcion, modifica, esquema}] en orden de registro. `grupos`: str o lista."""
+    """[{nombre, grupo, descripcion, modifica, transaccion, esquema}] en orden de registro. `grupos`: str o lista."""
     if isinstance(grupos, str):
         grupos = [grupos]
     return [{"nombre": h.nombre, "grupo": h.grupo, "descripcion": h.descripcion, "modifica": h.modifica,
+             "transaccion": h.transaccion,
              "esquema": h.esquema} for h in _CATALOGO.values() if grupos is None or h.grupo in grupos]
 
 
