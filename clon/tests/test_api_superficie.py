@@ -301,6 +301,20 @@ def test_destrimar_cilindro_recupera_limites_naturales():
     area(s, cid, 100 * math.pi)
 
 
+@pytest.mark.parametrize("contornos", ["outer", "inner", "all"])
+def test_destrimar_despues_de_recortar_recupera_el_tubo(contornos):
+    """SUP-5: Destrimar deshace el recorte con los límites de la cara sin recortar."""
+    s = api.Sesion()
+    llamar(s, "create_sketch", name="Circulo")
+    llamar(s, "draw_circle", sketch="Circulo", radius=10)
+    tubo = creado(s, "create_surface_extrude", profiles={"sketch": "Circulo", "profile": 0}, distance=20)
+    llamar(s, "create_construction_plane", plane="XY", offset=10, name="Mitad")
+    llamar(s, "trim_surface", surface=tubo, tool="Mitad", remove_point=[0, 10, 15])
+    area(s, tubo, 200 * math.pi)
+    llamar(s, "untrim_surface", faces="all", body=tubo, boundaries=contornos)
+    area(s, tubo, 400 * math.pi)
+
+
 def test_invertir_normal_conserva_area_y_cambia_orientacion():
     s = api.Sesion()
     base = parche(s)

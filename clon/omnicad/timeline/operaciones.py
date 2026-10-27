@@ -201,6 +201,8 @@ class EstadoModelo:
         # id de paso → ((herramienta, operación, objetivo, tipo), …) que aplicó con `aplicar_resultado`: el patrón de
         # operaciones (OpPatron con objeto="operaciones") repite esa herramienta transformada.
         self.herramientas = {}
+        # id de cuerpo → forma que tenía antes del último Recortar (Destrimar recupera sus límites; SUP-5)
+        self.recortes = {}
         self.contador_cuerpos = 0
 
     def copia(self):
@@ -215,6 +217,7 @@ class EstadoModelo:
         e.grupos_rigidos = [list(g) for g in self.grupos_rigidos]
         e.lienzos = dict(self.lienzos)
         e.herramientas = dict(self.herramientas)
+        e.recortes = dict(self.recortes)
         e.contador_cuerpos = self.contador_cuerpos
         return e
 

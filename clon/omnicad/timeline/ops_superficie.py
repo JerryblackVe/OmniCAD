@@ -173,7 +173,9 @@ class OpRecortar(_OpSuperficie):
         c = estado.cuerpo(self.p["cuerpo"])
         e = _resolver(self.p["herramienta"], estado)
         herramienta = ent.como_plano(e) if e.tipo == "plano" else e.forma
+        antes = c.forma
         c.forma = _sf().recortar(c.forma, herramienta, np.asarray(self.p["punto"], float))
+        estado.recortes[c.id] = antes       # SUP-5: Destrimar recupera los límites de la cara sin recortar
 
 
 class OpDestrimar(_OpSuperficie):
@@ -188,7 +190,8 @@ class OpDestrimar(_OpSuperficie):
             raise ErrorOperacion("Elegí las caras a destrimar.")
         for e in _resolver_todas(self.p["caras"], estado, ("cara",)):
             c = estado.cuerpo(e.cuerpo)
-            nueva = _sf().destrimar(e.forma, contornos=self.p["contornos"])
+            original = _sf().cara_original(e.forma, estado.recortes.get(c.id))
+            nueva = _sf().destrimar(original or e.forma, contornos=self.p["contornos"])
             resto = [f for f in geo.caras(c.forma) if not f.IsSame(e.forma)]
             c.forma = _sf().coser(resto + [nueva])["forma"] if resto else nueva
 

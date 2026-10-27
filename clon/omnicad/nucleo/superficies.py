@@ -22,14 +22,16 @@ def _iniciar_opencascade():
     global BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex
     global BRepBuilderAPI_MakeWire, BRepBuilderAPI_RightCorner, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform
     global BRepExtrema_DistShapeShape
-    global BRepFill, BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet, BRepLib, BRepOffsetAPI_MakeDraft
+    global BRepClass_FaceClassifier, BRepFill, BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
+    global BRepLib, BRepOffsetAPI_MakeDraft
     global BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakePipeShell
     global BRepOffsetAPI_ThruSections, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism
     global BRepPrimAPI_MakeRevol, BRepTools, BRep_Tool, GCPnts_AbscissaPoint, GeomAPI_PointsToBSpline
     global GeomAbs_Arc, GeomAbs_C0, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_G2, GeomAbs_Intersection
     global GeomAbs_Line, GeomAbs_Plane, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global List_TopoDS_Shape, ShapeFix_Face, TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD
-    global TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopoDS, TopoDS_Face
+    global TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp
+    global TopoDS, TopoDS_Face
     global TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex, _CAST, _CONTINUIDAD, gp_Ax1, gp_Ax2, gp_Dir, gp_Pln
     global gp_Pnt, gp_Trsf, gp_Vec
     from OCP.BRep import BRep_Tool
@@ -39,6 +41,7 @@ def _iniciar_opencascade():
                                     BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire,
                                     BRepBuilderAPI_RightCorner, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepClass import BRepClass_FaceClassifier
     from OCP.BRepFill import BRepFill
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
     from OCP.BRepLib import BRepLib
@@ -54,8 +57,8 @@ def _iniciar_opencascade():
     from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
                                      List_TopoDS_Shape)
     from OCP.ShapeFix import ShapeFix_Face
-    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_REVERSED, TopAbs_SHELL,
-                            TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
+    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON,
+                            TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
     from OCP.TopExp import TopExp
     from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex
     from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
@@ -757,6 +760,21 @@ def _limites_naturales(cara):
     infinito = 1e50
     return (cu0 if nu0 < -infinito else nu0, cu1 if nu1 > infinito else nu1,
             cv0 if nv0 < -infinito else nv0, cv1 if nv1 > infinito else nv1), sup
+
+
+def cara_original(cara, antes):
+    """La cara del cuerpo `antes` (previo a un recorte) que contiene a `cara`; None si no está.
+
+    Destrimar necesita los límites de la cara SIN recortar: en una superficie infinita la cara recortada
+    ya no los guarda (SUP-5). Se busca con un punto del medio UV de la cara recortada."""
+    if antes is None:
+        return None
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    p = BRep_Tool.Surface_s(cara).Value((u0 + u1) / 2, (v0 + v1) / 2)
+    for otra in geo.caras(antes):
+        if BRepClass_FaceClassifier(otra, p, 1e-6).State() in (TopAbs_IN, TopAbs_ON):
+            return otra
+    return None
 
 
 def destrimar(cara, *, contornos="exteriores"):
