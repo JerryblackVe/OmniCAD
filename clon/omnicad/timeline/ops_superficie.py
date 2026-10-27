@@ -3,6 +3,8 @@
 Operaciones de la pestaña SUPERFICIE de Fusion [Fusion-Patch]: crean o modifican cuerpos de superficie
 (`tipo="superficie"`), que se ven en tono arena y pueden coserse o engrosarse para volver a ser sólidos.
 """
+import math
+
 import numpy as np
 
 from ..nucleo import geometria as geo
@@ -39,6 +41,13 @@ class _OpSuperficie(Operacion):
                 _deps_objetivo(self.p.get("cuerpos")) | _deps_objetivo(self.p.get("cuerpo"))) - {self.id}
 
     def _nuevo(self, estado, ctx, forma):
+        caja = geo.caja_envolvente(forma)
+        diagonal = math.dist(*caja) if caja else 0.0
+        # SUP-6: un resultado inválido o sin extensión (área despreciable frente a su tamaño: aspecto > 1e6) no
+        # puede quedar como cuerpo. `aplicar_resultado` solo mira que no esté vacío.
+        if not geo.es_valida(forma) or diagonal <= 0 or geo.area(forma) <= 1e-6 * diagonal * diagonal:
+            raise ErrorOperacion("La operación generó una superficie degenerada (sin área o inválida): revisá las "
+                                 "curvas, la distancia y el ángulo.")
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, "nuevo", tipo="superficie"))
 
 

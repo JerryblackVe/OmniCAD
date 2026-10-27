@@ -297,3 +297,29 @@ def test_error_del_kernel_revierte_transaccion():
     assert "no es cerrado" in r["mensaje"]
     assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
     assert len(s.doc._deshacer) == pila
+
+
+def _curva_de(sesion, nombre):
+    curvas = sesion.doc.estado_final.bocetos[sesion.paso(nombre).id].boceto.curvas
+    return {"sketch": nombre, "curve": next(iter(curvas))}
+
+
+def test_superficies_degeneradas_avisan_y_no_crean_el_paso():
+    """SUP-6: un resultado sin área o inválido no puede pasar como correcto."""
+    s = api.Sesion()
+    llamar(s, "create_sketch", name="Circulo")
+    llamar(s, "draw_circle", sketch="Circulo", radius=5)
+    circulo = _curva_de(s, "Circulo")
+    recta = linea(s, nombre="Recta", inicio=(5, 0), fin=(5, 10), plano="XZ")
+    casos = [
+        ("create_surface_sweep", {"profiles": circulo, "path": circulo}),
+        ("create_surface_revolve", {"profiles": recta, "axis": "Z", "angle": "1e-6 deg"}),
+        ("create_surface_extrude", {"profiles": recta, "distance": "1e-6 mm"}),
+    ]
+    for nombre, args in casos:
+        antes = json.dumps(s.doc.a_dict(), sort_keys=True)
+        r = api.llamar(s, nombre, args)
+        assert not r["ok"], (nombre, r)
+        assert r["error_kind"] == "OPERATION_FAILED", (nombre, r)
+        assert "degenerada" in r["mensaje"], (nombre, r)
+        assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
