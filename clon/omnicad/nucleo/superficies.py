@@ -470,7 +470,9 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False):
         if len(secciones) < 3:
             raise geo.ErrorGeometria("Un solevado cerrado necesita al menos tres secciones.")
         ts.AddWire(primera)
-    ts.CheckCompatibility(False)
+    # SUP-4: con secciones de distinto tipo (rectángulo + círculos) hay que dejar que OCC las haga
+    # compatibles; desactivarlo hacía fallar RCC, CCR, RRC, CRC y RCR.
+    ts.CheckCompatibility(True)
     ts.Build()
     if not ts.IsDone():
         raise geo.ErrorGeometria("El solevado falló en el kernel.")

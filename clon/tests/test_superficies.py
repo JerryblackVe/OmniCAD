@@ -83,6 +83,15 @@ def test_conicidad_de_89_grados_es_valida_y_89_01_no():
         sf.extruir_superficie(cuadrado(), (0, 0, 1), 10, conicidad=89.01)
 
 
+@pytest.mark.parametrize("tipos", ["RCC", "CCR", "RRC", "CRC", "RCR"])
+def test_solevado_con_secciones_de_distinto_tipo(tipos):
+    """SUP-4: rectángulo y círculos mezclados solevan, como en el solevado sólido."""
+    zs = (0.0, 20.0, 40.0)
+    s = sf.solevar_superficie([cuadrado(20, z) if t == "R" else [circulo(10, (0, 0, z))]
+                               for t, z in zip(tipos, zs, strict=True)])
+    assert g.area(s) > 0 and g.es_valida(s)
+
+
 def test_revolver_linea_paralela_da_cilindro():
     s = sf.revolver_superficie(seg((5, 0, 0), (5, 0, 10)), (0, 0, 0), (0, 0, 1), 360)
     assert g.area(s) == pytest.approx(2 * math.pi * 5 * 10) and g.es_valida(s)
