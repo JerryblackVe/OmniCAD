@@ -64,6 +64,7 @@ Los dos dicts posibles con `--json`:
 | [`render`](#render) | sacar un PNG de una vista |
 | [`run`](#run) | correr un script de Python sobre el proyecto |
 | [`batch`](#batch) | correr muchos pasos en un solo proceso |
+| [`registro`](#registro) | ver el registro local de uso o seguirlo en vivo (`--seguir`) |
 | [`assistant_ask`](#assistant_ask) | pedirle algo al Asistente IA, sin ventana (gasta en la API) |
 | [`dev`](#dev) | verificar el programa (para quien lo desarrolla) |
 
@@ -256,6 +257,21 @@ paso 1 (línea 1) ERROR [AMBIGUOUS_REFERENCE] fillet: Hay 2 cuerpos (Cuerpo1, Cu
 Se detuvo en el paso 1 de 1: NO se guardó nada.
 0 ok, 1 con error, de 1 paso(s).
 ```
+
+### registro
+
+Lee el registro local de uso (apagado de fábrica; ver [registro_uso.md](../registro_uso.md)). Sin `--seguir` muestra el resumen de la última sesión: comandos, operaciones lentas, errores y hallazgos del detector. Con `--json` sale `{"ok": true, "session": "...", ...resumen}`.
+
+```
+$ omnicad registro --seguir --json
+{"t": 0.123, "ts": "2026-10-26T18:03:21.123Z", "tipo": "op_ejecutada", "datos": {...}, "seq": 42}
+```
+
+- `--seguir`: imprime los eventos nuevos línea a línea; no termina hasta Ctrl+C (código 130). Con `--since N` primero reproduce los eventos con `seq > N`. Sin `--since` empieza en el final (solo lo nuevo).
+- Con `--json`, cada línea es **un evento** (no el sobre `{"ok": ...}`) para que se pueda seguir con `tail` o parsear en vivo. Los encabezados y los cambios de sesión van por stderr.
+- `--sesion ID`: sigue una sesión concreta en vez de la última. Si no se indica, al reiniciarse la app pasa solo a la sesión nueva.
+- El lector es incremental: no vuelve a leer todo el archivo en cada vuelta y entiende las líneas a medio escribir.
+- Estas herramientas también funcionan en vivo por el puente (`get_usage_log`, `get_usage_summary`, `build_usage_report`, `mark_usage_event`): leen los JSONL de la app abierta.
 
 ### assistant_ask
 

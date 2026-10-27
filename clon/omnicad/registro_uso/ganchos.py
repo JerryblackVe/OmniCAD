@@ -74,15 +74,24 @@ def archivo(tipo):
     return decorar
 
 
-def medidas(cuerpos):
+def medidas(cuerpos, cache=None):
     """Mide las formas en el escritor, sin volver a recorrer el documento de la UI."""
     from ..nucleo import geometria as geo
     volumen = 0.0
     for tipo, forma in cuerpos:
         if tipo != "solido":
             continue
-        try:
-            volumen += geo.volumen_exacto(forma)
-        except Exception:
+        clave = id(forma)
+        if cache is not None and clave in cache:
+            valor = cache[clave]
+        else:
+            try:
+                valor = geo.volumen_exacto(forma)
+            except Exception:
+                valor = None
+            if cache is not None:
+                cache[clave] = valor
+        if valor is None:
             return {"cuerpos": len(cuerpos), "volumen": None}
+        volumen += valor
     return {"cuerpos": len(cuerpos), "volumen": volumen}

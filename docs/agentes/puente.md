@@ -38,6 +38,14 @@ En Preferencias › Asistente IA, los proveedores «Claude Code (tu suscripción
 - Codex de la Microsoft Store queda fuera del PATH: OmniCAD lo encuentra preguntándole a Windows (`Get-AppxPackage`).
 - Código: `clon/omnicad/asistente/proveedores/agente_local.py`.
 
+### Registro de uso local
+
+Si el registro local está encendido en la ventana, el puente expone `set_usage_logging` y
+`mark_usage_event` sobre la sesión VIVA, y `get_usage_log`, `get_usage_summary` y
+`build_usage_report` leen sus JSONL (con flush por línea) desde el mismo proceso o desde la CLI.
+Apagado sigue siendo el valor de fábrica y nada sale de la PC. Detalle:
+[registro_uso.md](../registro_uso.md).
+
 ## Cómo se protege
 
 - Escucha **solo en 127.0.0.1**, nunca en otra interfaz. Puerto 27191; si está ocupado, uno de los 10 siguientes.

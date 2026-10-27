@@ -5,6 +5,13 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 
 ## [No publicada]
 
+### Agregado
+- **Registro de uso local**, apagado de fábrica y sin envío a la red: escribe un JSONL con tiempos de comandos y
+  operaciones, errores, bloqueos de la interfaz, cuadros del visor y memoria; lo resume en un detector de problemas
+  y permite seguirlo en vivo con `omnicad registro --seguir --json`. Se prende en Preferencias › General, con
+  `--registro` o con `set_usage_logging`; el informe queda en la carpeta del registro y nunca escribe solo en
+  `docs/seguimiento/`. No guarda chat, contenido de archivos, rutas fuera del proyecto ni texto libre.
+
 ## [0.1.4] — 2026-10-26
 
 ### Agregado

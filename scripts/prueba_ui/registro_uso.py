@@ -81,12 +81,31 @@ A.esperar(200)
 QDialog.exec = anterior
 
 ru.activo.cola.join()
+vivo = api.llamar(s, "get_usage_log", {"limit": 5000})
+A.reg("REG", "get_usage_log lee la sesión viva mientras la app está abierta",
+      vivo["ok"] and vivo["result"]["active"] and vivo["result"]["count"] >= 20)
 es = [json.loads(l) for p in sorted(ru.carpeta().glob("sesion_*.jsonl")) for l in p.read_text(encoding="utf-8").splitlines()]
 for tipo in ("comando_abierto", "comando_editado", "comando_aceptado", "comando_cancelado", "op_ejecutada",
              "recalculo", "archivo_guardar", "archivo_abrir", "deshacer", "error", "marca", "atajo", "boton_cinta"):
     A.reg("REG", f"archivo crece en vivo: {tipo}", any(e["tipo"] == tipo for e in es))
 v.registro_uso.configurar(False)
 A.reg("REG", "indicador desaparece y reloj se detiene", not v.registro_uso.indicador.isVisible() and not v.registro_uso.reloj.isActive())
+crudo = api.llamar(s, "get_usage_log", {"limit": 5000})
+A.reg("REG", "la herramienta lee el archivo de la ventana en vivo",
+      crudo["ok"] and crudo["result"]["count"] >= 20)
+resumen = api.llamar(s, "get_usage_summary", {})
+A.reg("REG", "el resumen ve el comando cilindro y los hallazgos",
+      resumen["ok"] and resumen["result"]["comandos"].get("cilindro", {}).get("aceptados", 0) >= 1
+      and resumen["result"]["hallazgos_por_severidad"]["alta"] >= 0)
+informe = api.llamar(s, "build_usage_report", {})
+ruta_informe = Path(informe["result"]["path"]) if informe["ok"] else None
+texto = ruta_informe.read_text(encoding="utf-8") if ruta_informe and ruta_informe.is_file() else ""
+if texto:
+    (A.SALIDA / "informe_sesion.md").write_text(texto, encoding="utf-8", newline="\n")
+A.reg("REG", "el informe de la sesión real queda escrito",
+      bool(texto) and "Informe de sesión" in texto and "Línea de tiempo" in texto)
+A.reg("REG", "el informe trae la operación, la apertura del archivo y el comando",
+      "op_ejecutada" in texto and "archivo_abrir" in texto and "comando=cilindro" in texto)
 A.reg("REG", "ninguna excepción de Qt", not A.ERRORES, str(A.ERRORES[:1]))
 A.guardar_registro("registro_uso")
 print(f"\n=== {len(A.REGISTRO)} comprobaciones, {sum(not r['ok'] for r in A.REGISTRO)} con ✗ ===")

@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-351 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+355 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -25,7 +25,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
-| [avanzado](#grupo-avanzado) | 9 | Cualquier operación, receta, código y guía. |
+| [avanzado](#grupo-avanzado) | 13 | Cualquier operación, receta, código y guía. |
 | [grafo](#grupo-grafo) | 3 | Programación visual sin ventana (tipo Grasshopper): correr grafos de nodos y hornearlos en el timeline. |
 | [asistente](#grupo-asistente) | 8 | Asistente IA: su configuración, pedidos sin ventana (gastan en la API) y el historial de chats (en el MCP, solo con --toolsets; en la CLI, `omnicad assistant_ask`). |
 | [dev](#grupo-dev) | 5 | Desarrollo del programa (en el MCP, solo con --dev; en la CLI, `omnicad dev`). |
@@ -5093,6 +5093,10 @@ Cualquier operación, receta, código y guía.
 | [`get_guide`](#get_guide) | no | Guía corta para agentes (ciclo de trabajo, unidades, cómo leer errores). |
 | [`search_help`](#search_help) | no | Busca en la ayuda LOCAL de OmniCAD (catálogo de herramientas, guía para agentes y documentación del repo si está) y devuelve fragmentos cortos con su fuente, para responder «¿cómo se hace…?» citando de dónde sale. |
 | [`set_usage_logging`](#set_usage_logging) | no | Prende o apaga el registro LOCAL de uso. |
+| [`get_usage_log`](#get_usage_log) | no | Lee eventos recientes del registro LOCAL de uso. |
+| [`get_usage_summary`](#get_usage_summary) | no | Resume la sesión local: tiempo por comando, top 10 de operaciones lentas, cantidad de errores y hallazgos del detector. |
+| [`mark_usage_event`](#mark_usage_event) | no | Agrega un marcador al registro local desde la IA. La etiqueta se guarda solo como slug corto (letras, números, punto, guion y guion bajo). |
+| [`build_usage_report`](#build_usage_report) | no | Arma un informe Markdown de una sesión del registro local en su carpeta: resumen, hallazgos, línea de tiempo y filas sugeridas. |
 
 ### `list_operation_types`
 
@@ -5177,6 +5181,46 @@ Prende o apaga el registro LOCAL de uso. No envía datos; solo números, claves 
 - Parámetros:
   - `enabled` (true/false; obligatorio): true activa la sesión local; false la drena y apaga.
 - CLI: `omnicad call set_usage_logging --doc pieza.omnicad enabled=…`
+
+### `get_usage_log`
+
+Lee eventos recientes del registro LOCAL de uso. En vivo lee la sesión abierta (los JSONL se escriben con flush). Usá since para traer solo lo nuevo.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `since` (entero; opcional, por defecto `0`): último seq ya visto; devuelve los eventos posteriores (0 = toda la sesión, acotada por limit).
+  - `kinds` (lista de texto o null; opcional, por defecto `null`): tipos a incluir (p. ej. ["op_ejecutada", "error"]); vacío = todos.
+  - `limit` (entero; opcional, por defecto `200`): máximo de eventos devueltos (1 a 5000).
+  - `session` (texto; opcional, por defecto `null`): id de sesión; vacío = la última.
+- CLI: `omnicad call get_usage_log --doc pieza.omnicad`
+
+### `get_usage_summary`
+
+Resume la sesión local: tiempo por comando, top 10 de operaciones lentas, cantidad de errores y hallazgos del detector. No envía nada.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `session` (texto; opcional, por defecto `null`): id de sesión; vacío = la última.
+  - `thresholds` (objeto de número o null; opcional, por defecto `null`): umbrales del detector que se quieran pisar (claves de detector.UMBRALES).
+- CLI: `omnicad call get_usage_summary --doc pieza.omnicad`
+
+### `mark_usage_event`
+
+Agrega un marcador al registro local desde la IA. La etiqueta se guarda solo como slug corto (letras, números, punto, guion y guion bajo). No envía nada.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `label` (texto; obligatorio): etiqueta corta (se sanea a un slug de hasta 80 caracteres).
+- CLI: `omnicad call mark_usage_event --doc pieza.omnicad label=…`
+
+### `build_usage_report`
+
+Arma un informe Markdown de una sesión del registro local en su carpeta: resumen, hallazgos, línea de tiempo y filas sugeridas. No modifica docs/seguimiento/.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `session` (texto; opcional, por defecto `null`): id de sesión; vacío = la última.
+- CLI: `omnicad call build_usage_report --doc pieza.omnicad`
 
 ## Grupo grafo
 

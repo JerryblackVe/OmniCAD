@@ -20,7 +20,7 @@ RETENCION = 14 * 86400
 activo = None
 ultimo = None
 _CLAVE = re.compile(r"[A-Za-z_][A-Za-z_0-9.-]{0,95}\Z")
-_IDENTIFICADORES = {"comando", "tipo_op", "accion", "origen", "formato", "excepcion", "categoria", "paso"}
+_IDENTIFICADORES = {"comando", "tipo_op", "accion", "origen", "formato", "excepcion", "categoria", "paso", "label"}
 
 
 def carpeta():
@@ -65,6 +65,7 @@ class Registro:
         self.seq = self.descartados = 0
         self.fallo = None
         self.archivos = []
+        self._volumenes = {}
         self.carpeta.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.hilo = threading.Thread(target=self._escribir, name="registro_uso", daemon=True)
         self.emitir("sesion_inicio", {"version": VERSION, "so": platform.system(), **(datos or {})}, cabecera=True)
@@ -125,7 +126,8 @@ class Registro:
                     if medidas is not None:
                         self._calculo_libre.wait()
                         from .ganchos import medidas as medir
-                        evento["datos"]["antes"], evento["datos"]["despues"] = (medir(cs) for cs in medidas)
+                        evento["datos"]["antes"], evento["datos"]["despues"] = (
+                            medir(cs, self._volumenes) for cs in medidas)
                     linea = (json.dumps(evento, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
                     if len(linea) > self.tope_archivo:
                         self.descartados += 1

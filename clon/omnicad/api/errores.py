@@ -170,6 +170,8 @@ PISTAS = {
                  "segundos o pedile que lo termine, y volvé a llamar.",
                  "Las herramientas que solo leen (get_scene_info, get_viewport_image…) funcionan igual.",
                  "No se aplicó nada: no hace falta deshacer."],
+    "LOGGING_DISABLED": ["Prendé el registro local con set_usage_logging(enabled=true), la preferencia "
+                         "«Registro de uso local» o el arranque con --registro."],
     "APP_NOT_RUNNING": ["Abrí OmniCAD y activá Preferencias › General › «Permitir que agentes IA controlen OmniCAD "
                         "(MCP en vivo)», o arrancalo con «OmniCAD.py --puente».",
                         "Para trabajar sin la ventana, arrancá el servidor MCP con --modo sin_ventana (o auto)."],

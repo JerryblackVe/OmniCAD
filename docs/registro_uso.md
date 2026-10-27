@@ -54,3 +54,20 @@ operación; diálogo sin actividad > 20 s; más de 4 clics al mismo control en 2
 memoria +30 % en 5 minutos sin abrir un proyecto; excepciones de Qt, de la API y errores
 de operación (los avisos se informan como severidad baja). Los hallazgos repetidos se
 agrupan con una ventana corta para que el informe no se llene de copias.
+
+## Herramientas y modo en vivo
+
+Grupo `avanzado` del catálogo (MCP y CLI): `set_usage_logging(enabled)`,
+`get_usage_log(since, kinds, limit, session)`, `get_usage_summary(session, thresholds)`,
+`mark_usage_event(label)` y `build_usage_report(session)`. `get_usage_log` devuelve
+`last_seq` para seguir en vivo con `since`; `mark_usage_event` guarda la etiqueta como slug
+seguro y, en la ventana abierta, entra por el puente a la sesión viva.
+
+`omnicad registro` resume la última sesión; `omnicad registro --seguir --json` imprime un
+evento JSON por línea (encabezados y cambios de sesión por stderr) y con `--since N`
+reproduce primero lo anterior. El lector (`registro_uso/almacen.py`) recuerda el byte de
+cada parte: no relee el archivo entero y espera las líneas a medio escribir.
+
+`build_usage_report` escribe `informe_sesion_<id>.md` en la carpeta del registro con el
+resumen, los hallazgos, la línea de tiempo y las filas sugeridas en un bloque de borrador.
+**Nunca** escribe en `docs/seguimiento/`: la carga de una fila la decide una persona.

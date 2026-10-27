@@ -175,13 +175,19 @@ class RegistroVentana(QObject):
         botones.rejected.connect(d.reject)
         l.addWidget(botones)
         if d.exec() == QDialog.Accepted:
-            self.marcar(nota.text(), captura.isChecked())
+            try:
+                self.marcar(nota.text(), captura.isChecked())
+            except OSError as e:
+                self.ventana.mensaje(f"No se pudo guardar la captura del marcador: {e}", 8000)
 
-    def marcar(self, nota="", captura=False):
+    def marcar(self, nota="", captura=False, label=None):
         r = registro.activo
         if r is None:
             return None
-        seq = r.emitir("marca", {"nota": nota, "captura": captura})
+        datos = {"nota": nota, "captura": captura}
+        if label:
+            datos["label"] = label
+        seq = r.emitir("marca", datos)
         if captura and seq is not None:
             png = self.ventana.visor.captura_png()
             if not png:

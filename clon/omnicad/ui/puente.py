@@ -66,6 +66,7 @@ class PuenteAgentes(QObject):
         self.sesion.seleccionar_entidades = getattr(ventana, "seleccionar_entidades", None)
         self.sesion.al_cambiar_espacios = getattr(ventana, "releer_espacios", None)
         self.sesion.configurar_registro = lambda activo: ventana.registro_uso.configurar(activo)
+        self.sesion.registrar_marca = lambda label: ventana.registro_uso.marcar(label=label)
         self._conexiones = {}               # socket → {"buffer": bytearray, "autenticado": bool, "cerrando": bool}
         self._cola = deque()                # (socket, línea) pendientes: se atienden de a uno, sin reentrar
         self._atendiendo = False
