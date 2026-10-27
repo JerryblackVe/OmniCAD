@@ -301,6 +301,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #seleccion_cmd[activa="true"] { border: 1px solid $acento; background: $activo; color: $enlace; }
 #seleccion_cmd[lleno="true"] { color: $texto; }
 #panel_comando QLineEdit, #panel_comando QComboBox, #panel_comando QSpinBox { padding: 2px 4px; }
+#panel_comando QScrollArea, #panel_comando QScrollArea > QWidget > QWidget { background: transparent; }
 #mensaje_comando { color: $error; }
 #aviso_comando { color: $aviso; }
 

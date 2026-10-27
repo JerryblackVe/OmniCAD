@@ -516,7 +516,7 @@ class AreaVisor(QWidget):
         self.viewcube.raise_()
         y = self.viewcube.y() + self.viewcube.height() + 10
         if self.panel is not None and self.panel.isVisible():
-            self.panel.adjustSize()
+            self.panel.ajustar_alto(g.bottom() - y - 8)      # B-105: si no entra, el cuerpo tiene barra
             self.panel.move(g.right() - self.panel.width() - 10, y)
             self.panel.raise_()
             y += self.panel.height() + 8

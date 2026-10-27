@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 14: Abierto 9 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 13: Abierto 8 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -13,7 +13,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | P-11j | Cuerpos «sin ubicar» de XOX (3) que quizá Fusion no tiene | Parcial | Alta | Sherpa resuelto (2026-10-21): comparado con Fusion, no tiene los 2 cuerpos (1593 y 952 mm³) y todos sus componentes con cuerpos están emparejados; ahora se descartan los bloques sin dueño cuando ningún componente de la escena queda sin bloque. Queda XOX: 3 componentes de la escena sin bloque y 3 bloques sin dueño (152,9; 494,8 y 4365,4 mm³): no se pueden descartar sin ver Fusion, y la versión en la nube (v35, 202 componentes) no es la del .f3z local (72 cuerpos): hace falta abrir en Fusion ese mismo archivo. | omnicad/io_archivos/f3d_escena.py (huerfanos); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-21 |
 | B-39 | join con herramienta enterrada deja arista libre y cuerpo no estanco | Parcial | Muy alta | El caso original (cilindro r2,5 en la carcasa, arista libre en (27, 0, 129,5)) sigue sin reproducirse: 4 000 casos de fuzzing (6 herramientas × 4 bases, tangencias de 0 a 1e-3 mm, de 1 a 4 uniones) no dieron ninguna arista libre con la herramienta enterrada. Sí dieron fallos silenciosos del kernel con contacto casi tangente (unión que devolvía solo la herramienta, un toro que «no tocaba» la pared, unión vacía por 1e-6 mm de solape): `geo.booleano` ahora verifica el resultado y reintenta o rechaza con error claro (graves 2,5 % → 0,6 %). Queda ese 0,6 %: esfera o toro casi tangentes que dejan aristas no manifold o un sólido inválido que OCCT no cura, y uniones con superficies libres, cuyo volumen no se puede verificar. Siguiente paso: P-32 (probar el motor omnikernel como segunda opinión). | nucleo/geometria.py (`booleano`, `_problema_booleana`, `_REINTENTOS_BOOLEANA`, `_union_general_creible`); scripts/fuzz_b39.py; tests/test_b39_enterrada.py; tests/test_b39_fuzz.py; timeline/operaciones.py:349 y :1004 (aviso post-unión); `_quitar_cables_colgados` (B-28) | 2026-10-21 |
 | B-48 | Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos | Parcial | Muy alta | La causa en OCCT sigue sin reproducirse ni curarse. El cambio de parámetros en documentos de 60 pasos o más ya se ensaya antes en un proceso aparte (si el kernel cae, no se aplica y la app sigue); no cubre editar/suprimir pasos ni abrir archivos. | nucleo/aislado.py (`correr_json`, `UMBRAL_PREVUELO_PARAMETROS`); timeline/documento.py `_prevuelo_parametros`; tests/test_b48_prevuelo.py; tests/test_b48_crash.py | 2026-10-20 |
-| B-105 | En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados | Abierto | Media | Con la ventana en 1024x640 el panel de Extruir mide 357 de alto y el área del visor 448: termina 51 px más abajo y los botones quedan sobre la barra del timeline; en 800x520 (la app no baja de 821 px de ancho) el panel pasa 171 px y se ve cortado en «Tipo de extensión». Además el panel «Atajos de diseño» se encima sobre el del comando. Pasa igual con el panel de Unión de ENSAMBLAR (318×386 en un visor de unos 430 px de alto a 1024x640). Enter y Esc siguen andando. Fusion y los programas de CAD hacen scroll en el panel. | omnicad/ui/ventana.py:2041-2049 | 2026-10-24 |
+
 ## Boceto (auditoría contra Fusion, 2026-10-23)
 
 Cada fila se reprodujo con una prueba real (scripts de la auditoría, no incluidos en el repo). Plan: [plan_boceto.md](../plan_boceto.md).
@@ -116,12 +116,6 @@ Qué se comprobó: pasa igual si en el paso 2 se acepta y se deshace; sigue pasa
 Prueba propuesta: tras previsualizar y cancelar una Reglada tangente, Recortar sobre la misma superficie da la misma mitad (314,16) que antes.
 
 Evidencia: `evidencias/ui_2026-10-24/` (`p5_repro.py`, `p6_repro.py`, `p7_repro.py`, `p9_nucleo.py`, `u1_superficie.log`).
-
-### B-105 · En una ventana chica el panel de un comando se sale del visor y Aceptar/Cancelar quedan tapados
-
-Cómo reproducir: abrir la app, achicar la ventana a 1024x640, SÓLIDO › Extruir, elegir un perfil. El panel muestra «Operación» pero «Aceptar» y «Cancelar» quedan debajo del borde del visor, encima del timeline, y el panel «Atajos de diseño» lo tapa por la derecha. A 800x520 se corta ya en «Tipo de extensión». Esperado: el panel entra en el visor (con barra de desplazamiento si no cabe) y los botones se ven siempre. Prueba propuesta: la de `ventana_uso.py` (1024x640 y 800x520: `v.area.rect().contains(panel.geometry())`).
-
-Evidencia: `evidencias/ui_2026-10-24/capturas/chica_1024x640.png`, `chica_800x520.png`.
 
 ### ASM-2 · El vínculo de movimiento acepta relaciones imposibles
 

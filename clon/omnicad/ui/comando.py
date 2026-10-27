@@ -17,7 +17,7 @@ import time
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit,
-                               QPushButton, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
+                               QPushButton, QScrollArea, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
 from .. import registro_uso
@@ -395,7 +395,11 @@ class PanelComando(QFrame):
             self.etiquetas[campo.clave], self.widgets[campo.clave] = et, w
         if preajustes_ui.tiene_preajustes(self):
             v.addWidget(preajustes_ui.FilaPreajustes(self))
-        v.addWidget(cuerpo)
+        # B-105: en una ventana chica el cuerpo se desplaza con una barra y Aceptar/Cancelar quedan siempre visibles.
+        self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.desplazador.setWidget(cuerpo)
+        v.addWidget(self.desplazador)
 
         # PL2 (Plasticity: teclas de opción a la vista): el pie del panel muestra qué hace cada
         # tecla MIENTRAS el comando está abierto; cada comando puede sumar las suyas en MODIFICADORES.
@@ -522,6 +526,15 @@ class PanelComando(QFrame):
         raise TypeError(campo)
 
     # ------------------------------------------------------------ valores
+    def ajustar_alto(self, disponible):
+        """B-105: si el panel no entra en el visor, achica el cuerpo con barra; el pie nunca se tapa."""
+        self.desplazador.setMaximumHeight(2 ** 24)          # el alto natural del cuerpo
+        self.adjustSize()
+        cuerpo = self.desplazador.height()
+        otros = self.height() - cuerpo
+        self.desplazador.setMaximumHeight(max(40, min(cuerpo, disponible - otros)))
+        self.adjustSize()
+
     def _visible(self, campo):
         return campo.visible_si is None or bool(campo.visible_si(self.valores))
 
@@ -744,6 +757,8 @@ class PanelComando(QFrame):
         self.mensaje.setText(texto)
         self.mensaje.setVisible(bool(texto))
         self.adjustSize()
+        if hasattr(self.parent(), "reubicar"):
+            self.parent().reubicar()        # el mensaje agranda el panel: que siga entrando en el visor
 
     # ------------------------------------------------------------ cierre
     def aceptar(self):
