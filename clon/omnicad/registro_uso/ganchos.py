@@ -76,21 +76,28 @@ def archivo(tipo):
 
 def medidas(cuerpos, cache=None):
     """Mide las formas en el escritor, sin volver a recorrer el documento de la UI."""
+    import math
+
     from ..nucleo import geometria as geo
     volumen = 0.0
     for tipo, forma in cuerpos:
         if tipo != "solido":
             continue
         clave = id(forma)
-        if cache is not None and clave in cache:
-            valor = cache[clave]
+        entrada = cache.get(clave) if cache is not None else None
+        if entrada is not None and entrada[0] is forma:
+            valor = entrada[1]
         else:
             try:
                 valor = geo.volumen_exacto(forma)
             except Exception:
                 valor = None
+            if valor is not None and not math.isfinite(valor):
+                valor = None
             if cache is not None:
-                cache[clave] = valor
+                if len(cache) > 2048:
+                    cache.clear()
+                cache[clave] = (forma, valor)       # retiene la forma: un id reciclado no hereda el volumen
         if valor is None:
             return {"cuerpos": len(cuerpos), "volumen": None}
         volumen += valor

@@ -88,6 +88,8 @@ def mark_usage_event(sesion, label: str):
     if not isinstance(label, str) or not label.strip():
         raise error("INVALID_ARGUMENTS", "label no puede estar vacío.")
     etiqueta = _LABEL.sub("_", label.strip())[:80].strip("._-") or "marca"
+    if not (etiqueta[0].isalpha() or etiqueta[0] == "_"):
+        etiqueta = "m_" + etiqueta
     registrar = getattr(sesion, "registrar_marca", None)
     if registrar:
         seq = registrar(etiqueta)
@@ -111,7 +113,7 @@ def _detalle(evento):
     d = evento.get("datos") if isinstance(evento.get("datos"), dict) else {}
     partes = []
     for clave in ("comando", "paso", "tipo_op", "accion", "formato", "categoria", "label", "origen"):
-        if d.get(clave):
+        if d.get(clave) and not isinstance(d[clave], (dict, list)):
             partes.append(f"{clave}={d[clave]}")
     for clave in ("duracion_ms", "duracion_s", "exito", "tamano", "cuerpos", "volumen", "fps_p95", "rss"):
         if d.get(clave) is not None:

@@ -28,7 +28,7 @@ def _mostrar_humano(sesion, resumen):
     if resumen["operaciones_lentas"]:
         util.decir("\nOperaciones más lentas:")
         for op in resumen["operaciones_lentas"][:5]:
-            util.decir(f"  {op['paso']:>8}  {op['tipo_op']:<16} {op['duracion_ms']:>10.1f} ms  "
+            util.decir(f"  {str(op['paso']):>8}  {str(op['tipo_op']):<16} {op['duracion_ms']:>10.1f} ms  "
                        f"{'ok' if op['exito'] else 'error'}")
     if resumen["comandos"]:
         util.decir("\nPor comando:")
@@ -49,16 +49,18 @@ def _linea(evento, como_json):
     else:
         d = evento.get("datos") if isinstance(evento.get("datos"), dict) else {}
         detalle = " ".join(f"{k}={d[k]}" for k in ("comando", "paso", "tipo_op", "accion", "categoria", "label")
-                           if d.get(k))
+                           if d.get(k) and not isinstance(d[k], (dict, list)))
         util.decir(f"[{evento.get('t', 0):8.3f}] {evento.get('tipo', '?'):<20} {detalle}")
 
 
 def _seguir(ns):
     from ..registro_uso import almacen
     sesion = ns.sesion or almacen.ultima_sesion()
-    if not sesion:
-        raise util.UsoError("No hay sesiones del registro local.",
-                            ["Prendé el registro con set_usage_logging(enabled=true)."])
+    if not sesion or not almacen.rutas(sesion):
+        raise util.UsoError(f"No existe la sesión de registro «{sesion}».",
+                            ["Mirá las sesiones con `omnicad registro --json`."])
+    if ns.since is not None and ns.since < 0:
+        raise util.UsoError("--since tiene que ser un entero no negativo.")
     lector = almacen.Lector(sesion, desde=ns.since or 0)
     if ns.since is None:
         lector.al_final()

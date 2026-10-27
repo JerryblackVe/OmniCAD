@@ -18,7 +18,11 @@ def sesiones():
     for ruta in carpeta().glob("sesion_*.jsonl"):
         m = _PATRON.fullmatch(ruta.name)
         if m:
-            vistas[m.group("id")] = max(vistas.get(m.group("id"), 0), ruta.stat().st_mtime)
+            try:
+                fecha = ruta.stat().st_mtime
+            except OSError:
+                continue
+            vistas[m.group("id")] = max(vistas.get(m.group("id"), 0), fecha)
     return [s for s, _ in sorted(vistas.items(), key=lambda x: x[1], reverse=True)]
 
 
@@ -73,7 +77,11 @@ def activa(sesion=None):
     if not sesion:
         return False
     archivos = rutas(sesion)
-    return bool(archivos) and time.time() - max(p.stat().st_mtime for p in archivos) < 10
+    try:
+        fecha = max(p.stat().st_mtime for p in archivos)
+    except (OSError, ValueError):
+        return False
+    return bool(archivos) and time.time() - fecha < 10
 
 
 class Lector:
@@ -89,7 +97,10 @@ class Lector:
         if not self.sesion:
             return self
         for ruta in rutas(self.sesion):
-            self.offsets[str(ruta)] = ruta.stat().st_size
+            try:
+                self.offsets[str(ruta)] = ruta.stat().st_size
+            except OSError:
+                continue
         return self
 
     def nuevos(self):

@@ -20,6 +20,8 @@ class RegistroVentana(QObject):
         self.preferencia = ventana.prefs["general/registro_uso"]
         self._encendido = False
         self._ultima_accion = ""
+        self._anterior_excepcion = None
+        self._anterior_qt = None
         self.reloj = QTimer(self, interval=50)
         self.reloj.timeout.connect(self._latido)
         self.indicador = QLabel("● REG", objectName="indicador_registro_uso")
@@ -43,7 +45,11 @@ class RegistroVentana(QObject):
                  "ram_total": ram_total() if encendido and registro.activo is None else None,
                  "gpu": getattr(v.visor, "info_gl", "no disponible"),
                  "opengl": getattr(v.visor, "info_gl", "no disponible")}
-        estado = registro.configurar(encendido, datos)
+        try:
+            estado = registro.configurar(encendido, datos)
+        except OSError as e:
+            estado = {"enabled": False, "session": None, "error": type(e).__name__, "dropped": 0}
+            self.ventana.mensaje(f"No se pudo activar el registro local: {e}", 10000)
         self.indicador.setVisible(estado["enabled"])
         self.boton.setVisible(estado["enabled"])
         self.accion.setEnabled(estado["enabled"])
@@ -69,17 +75,18 @@ class RegistroVentana(QObject):
     def _detener(self):
         self.reloj.stop()
         self.ventana.visor._cuadros_uso = None
-        if hasattr(self, "_anterior_excepcion"):
-            if sys.excepthook == self._excepcion:
-                sys.excepthook = self._anterior_excepcion
-            qInstallMessageHandler(self._anterior_qt)
+        if sys.excepthook == self._excepcion and self._anterior_excepcion is not None:
+            sys.excepthook = self._anterior_excepcion
+        qInstallMessageHandler(self._anterior_qt)      # None vuelve al manejador de Qt
+        self._anterior_qt = None
         app = QApplication.instance()
         if app is not None:
             app.removeEventFilter(self)
 
     def _excepcion(self, tipo, valor, tb):
         error(valor, origen="qt_slot", comando=self._comando())
-        self._anterior_excepcion(tipo, valor, tb)
+        if self._anterior_excepcion is not None:
+            self._anterior_excepcion(tipo, valor, tb)
 
     def _mensaje_qt(self, tipo, contexto, mensaje):
         if registro.activo is not None and tipo.value >= 1:

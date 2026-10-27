@@ -152,7 +152,8 @@ def analizar(eventos, umbrales=None):
                 base = next((m for m in memoria if t - m[0] >= limite * 0.8), None)
                 if base is not None and base[1] > 0 and rss / base[1] - 1 > u["memoria_crecimiento"]:
                     abiertos = [e for e in eventos
-                                if e.get("tipo") == "archivo_abrir" and base[0] < float(e.get("t", 0)) <= t]
+                                if e.get("tipo") in ("archivo_abrir", "archivo_importar")
+                                and base[0] < float(e.get("t", 0)) <= t]
                     if not abiertos:
                         que = f"Memoria crece {((rss / base[1]) - 1) * 100:.0f} % en {t - base[0]:.0f} s sin abrir un proyecto"
                         _agregar(salida, vistos, ("memoria", int(t // limite)),

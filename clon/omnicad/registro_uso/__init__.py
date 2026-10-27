@@ -34,7 +34,10 @@ def _privado(valor, clave="", nivel=0, identificadores=True):
     if valor is None or isinstance(valor, bool):
         return valor
     if isinstance(valor, (float, int)):
-        return valor if math.isfinite(valor) else None
+        try:
+            return valor if math.isfinite(valor) else None
+        except (OverflowError, TypeError):
+            return None
     if isinstance(valor, str):
         if identificadores and clave in _IDENTIFICADORES and _CLAVE.fullmatch(valor):
             return valor
@@ -99,16 +102,22 @@ class Registro:
         archivos = []
         for patron in ("sesion_*.jsonl", "informe_sesion_*.md", "marca_*.png"):
             for p in self.carpeta.glob(patron):
-                if p.is_symlink():
+                try:
+                    if p.is_symlink():
+                        continue
+                    s = p.stat()
+                except OSError:
                     continue
-                s = p.stat()
                 archivos.append((s.st_mtime, p, s.st_size))
         total = sum(s for _, _, s in archivos)
         for fecha, p, tamano in sorted(archivos):
             if p == actual:
                 continue
             if time.time() - fecha > self.retencion or total + reserva > self.tope_total:
-                p.unlink()
+                try:
+                    p.unlink()
+                except OSError:
+                    continue
                 total -= tamano
         if total + reserva > self.tope_total:
             raise OSError("El registro alcanzó su tope de tamaño.")
@@ -148,7 +157,7 @@ class Registro:
                     tamano += len(linea)
                 finally:
                     self.cola.task_done()
-        except OSError as e:
+        except Exception as e:  # noqa: BLE001 — un escritor caído se informa y no frena el productor
             self.fallo = type(e).__name__
         finally:
             if archivo:
