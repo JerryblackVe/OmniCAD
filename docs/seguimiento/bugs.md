@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 12: Abierto 7 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 11: Abierto 6 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -28,7 +28,6 @@ Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayu
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | SUP-1 | Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel | Abierto | Alta | G1 sobre la boca de una caja de superficies da «Geom_RectangularTrimmedSurface::V1==V2». G2 da siempre «BRepFill : The continuity is not G0 G1 or G2», también sobre el borde de un cilindro donde G1 sí anda. El usuario ve «Error inesperado». Hay que cubrir G2 y los vecinos planos, o traducir el error. | omnicad/nucleo/superficies.py:494-509; tests/test_superficies.py::test_parche_plano_relleno_y_g1 (solo cubre G1 curvo con un punto interior) | 2026-10-24 |
-| SUP-3 | Barrido de superficie por una ruta con esquina viva sale deformado y sin aviso | Abierto | Media | Perfil circular r2 por dos líneas en L de 20 mm: área 412,67 en vez de 502,65 (−18 %). El tramo horizontal queda aplastado (el perfil no gira en la esquina: caja z 0 a 20 en vez de 0 a 22). Poner un modo de transición en la esquina o rechazar rutas no tangentes con un error claro; la ayuda de Fusion solo describe el encadenado tangente. El barrido sólido de la misma L sí da 502,65: se puede reusar su método. | omnicad/nucleo/superficies.py:399 (`BRepOffsetAPI_MakePipeShell` sin `SetTransitionMode`) | 2026-10-24 |
 | SUP-4 | Solevación de superficie con 3 o más secciones de distinto tipo falla | Abierto | Media | Rectángulo y círculo andan con 2 secciones; 3 círculos o 3 rectángulos andan; pero RCC, CCR, RRC, CRC y RCR responden «El solevado falló en el kernel» (distinta cantidad de aristas por sección). Fusion lo resuelve y la solevación sólida RCC también anda (8413,96 mm³). | omnicad/nucleo/superficies.py:432-467 (`BRepOffsetAPI_ThruSections`) | 2026-10-24 |
 | SUP-5 | Destrimar después de Recortar no devuelve nada y no avisa | Abierto | Media | Tubo de superficie de 20 mm recortado con un plano a 10 mm: Destrimar (exteriores, interiores o todos) deja el área en 628,32 en vez de recuperar 1256,64 (la ayuda dice que Untrim extiende las superficies recortadas). Sobre superficies infinitas usa los límites de la cara ya recortada, así que no puede recuperar lo recortado, y no avisa. | omnicad/nucleo/superficies.py:740-777 (`_limites_naturales`) | 2026-10-24 |
 | SUP-24 | Previsualizar Reglada tangente o dirección en la ventana deja dañada la superficie de origen: después Recortar falla | Abierto | Alta | En la ventana: Reglada → arista de arriba de un tubo de superficie → Tipo tangente (o dirección) → Cancelar. Después Recortar con un plano que SÍ cruza el tubo responde «La herramienta no corta la superficie»; pasa también si se acepta y se deshace, sigue igual tras recalcular y `trim_surface` por la API también falla. Con tipo normal no pasa, y sin la ventana (previsualizar + API) tampoco. Causa sin confirmar; sospecha: `BRepFill.Face_s(ef, otra)` comparte la arista de origen. | omnicad/nucleo/superficies.py:590; omnicad/ui/comando.py:680 | 2026-10-24 |
@@ -79,12 +78,6 @@ Crítico
 ### SUP-1 · Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel
 
 Cómo reproducir: `create_box 20x20x10` → `unstitch_surfaces` → `stitch_surfaces` de 5 caras (queda una boca abierta) → `create_patch boundary={body, edges: ">Z"} continuity=G1`. Obtenido: OPERATION_FAILED «Error inesperado: Geom_RectangularTrimmedSurface::V1==V2». Con `G2`: «BRepFill : The continuity is not G0 G1 or G2». El mismo G2 falla sobre el borde superior de un tubo extruido de un círculo r10, donde G0 y G1 sí funcionan. Esquive: G0 y mezclar a mano. Prueba propuesta: parche G1 y G2 sobre la caja de 5 caras y sobre el tubo, con área y `es_valida`.
-
-Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
-
-### SUP-3 · Barrido de superficie por una ruta con esquina viva sale deformado y sin aviso
-
-Cómo reproducir: círculo r2 en XY; boceto en XZ con las líneas (0,0)-(0,20) y (0,20)-(20,20); `create_surface_sweep profiles=<círculo> path=[las dos líneas]`. Esperado: dos tubos de 251,33 (502,65 en total). Obtenido: 412,67; el segundo tramo suma solo 161,35 (una tira plana: el perfil no rota en la esquina) y la caja termina en z=20. Sin error ni aviso. Prueba propuesta: barrido por un camino en L con el área de los dos tubos, o error explícito.
 
 Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).
 

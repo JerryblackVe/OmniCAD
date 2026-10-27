@@ -247,6 +247,21 @@ def test_dividir_un_cuerpo_de_superficie():
         area(s, cid, 200 * math.pi)
 
 
+def test_barrido_por_una_esquina_viva_no_aplasta_el_perfil():
+    """SUP-3: con una ruta en L el perfil también gira en la esquina (dos tubos, no una tira plana)."""
+    s = api.Sesion()
+    llamar(s, "create_sketch", name="Perfil")
+    llamar(s, "draw_circle", sketch="Perfil", radius=2)
+    llamar(s, "create_sketch", name="Ruta", plane="XZ")
+    llamar(s, "draw_line", sketch="Ruta", start_x=0, start_y=0, end_x=0, end_y=20)
+    llamar(s, "draw_line", sketch="Ruta", start_x=0, start_y=20, end_x=20, end_y=20)
+    curvas = s.doc.estado_final.bocetos[s.paso("Ruta").id].boceto.curvas
+    ruta = [{"sketch": "Ruta", "curve": c} for c in curvas]
+    cid = creado(s, "create_surface_sweep", profiles=_curva_de(s, "Perfil"), path=ruta)
+    forma = area(s, cid, 2 * 2 * math.pi * 2 * 20)
+    assert geo.caja_envolvente(forma)[1][2] == pytest.approx(22)      # el codo ocupa el radio, no queda aplastado
+
+
 @pytest.mark.parametrize("tipo,esperada", [("fillet", 160 + 10 * math.pi), ("chamfer", 160 + 20 * math.sqrt(2))])
 def test_empalme_y_chaflan_superficie(tipo, esperada):
     s = api.Sesion()

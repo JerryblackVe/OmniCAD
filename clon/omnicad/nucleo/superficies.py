@@ -20,7 +20,8 @@ def _iniciar_opencascade():
     global Array1_double, Array1_gp_Pnt, BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Curve2d
     global BRepAdaptor_Surface, BRepAlgoAPI_Splitter, BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge
     global BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex
-    global BRepBuilderAPI_MakeWire, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform, BRepExtrema_DistShapeShape
+    global BRepBuilderAPI_MakeWire, BRepBuilderAPI_RightCorner, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform
+    global BRepExtrema_DistShapeShape
     global BRepFill, BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet, BRepLib, BRepOffsetAPI_MakeDraft
     global BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakePipeShell
     global BRepOffsetAPI_ThruSections, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism
@@ -36,7 +37,7 @@ def _iniciar_opencascade():
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
     from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
                                     BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire,
-                                    BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
+                                    BRepBuilderAPI_RightCorner, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.BRepFill import BRepFill
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
@@ -407,6 +408,7 @@ def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", tors
         ps = BRepOffsetAPI_MakePipeShell(espina)
         if orientacion == "paralela":
             ps.SetMode(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0)))
+        ps.SetTransitionMode(BRepBuilderAPI_RightCorner)     # SUP-3: la esquina viva no aplasta el perfil
         if abs(torsion) < 1e-9:
             ps.Add(perfil, False, False)
         else:
