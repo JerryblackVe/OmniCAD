@@ -214,6 +214,25 @@ def test_coser_y_descoser_conservan_area_y_un_solo_cuerpo():
     area(s, base, 200)
 
 
+@pytest.mark.parametrize("tolerancia", ["0", "-1"])
+def test_coser_rechaza_tolerancia_cero_o_negativa(tolerancia):
+    """SUP-8: una tolerancia ≤ 0 no cose nada y antes pasaba en silencio."""
+    s = api.Sesion()
+    base, pared = dos_superficies(s)
+    antes = json.dumps(s.doc.a_dict(), sort_keys=True)
+    r = api.llamar(s, "stitch_surfaces", {"bodies": [base, pared], "tolerance": tolerancia})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
+    assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
+
+
+def test_coser_rechaza_una_expresion_que_da_cero():
+    """El núcleo también valida la tolerancia ya evaluada (expresión o panel)."""
+    s = api.Sesion()
+    base, pared = dos_superficies(s)
+    r = api.llamar(s, "stitch_surfaces", {"bodies": [base, pared], "tolerance": "0 mm"})
+    assert not r["ok"] and "tolerancia de costura" in r["mensaje"], r
+
+
 @pytest.mark.parametrize("tipo,esperada", [("fillet", 160 + 10 * math.pi), ("chamfer", 160 + 20 * math.sqrt(2))])
 def test_empalme_y_chaflan_superficie(tipo, esperada):
     s = api.Sesion()

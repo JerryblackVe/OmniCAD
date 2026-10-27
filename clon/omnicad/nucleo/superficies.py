@@ -857,6 +857,8 @@ def extender(forma, aristas, distancia, *, tipo="natural"):
 def coser(formas, tolerancia=0.01):
     """Coser superficies [SFC-STITCH] (BRepBuilderAPI_Sewing). Si el resultado queda cerrado
     (estanco) se convierte en sólido, como Fusion. Devuelve {"forma", "es_solido", "aristas_libres"}."""
+    if not math.isfinite(tolerancia) or tolerancia <= 0:
+        raise geo.ErrorGeometria(f"La tolerancia de costura tiene que ser mayor que 0 mm; recibió {tolerancia:g} mm.")
     cos = BRepBuilderAPI_Sewing(float(tolerancia))
     for f in _formas(formas):
         cos.Add(f)

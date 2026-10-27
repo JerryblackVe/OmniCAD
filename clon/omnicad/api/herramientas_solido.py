@@ -99,9 +99,15 @@ def _ref_perfil(sop, perfil):
 
 
 def _numero_positivo(valor, que, minimo=0.0):
-    """Medida en mm: mayor que `minimo` (0 por defecto) y de hasta 1.000.000 (1 km), como las cotas (B-53). Solo
-    números: las expresiones las valida el núcleo al calcular el paso (y también les pone el tope de 1 km)."""
+    """Medida en mm: mayor que `minimo` (0 por defecto) y de hasta 1.000.000 (1 km), como las cotas (B-53). Un texto
+    que es un número limpio se valida acá (SUP-8: «tolerance: "0"» se colaba); una expresión de verdad la valida el
+    núcleo al calcular el paso (y también le pone el tope de 1 km)."""
     from ..restricciones.boceto import MEDIDA_MAXIMA
+    if isinstance(valor, str):
+        try:
+            valor = float(valor.strip())
+        except ValueError:
+            return                                       # expresión («espesor / 2»): la valida el núcleo
     if isinstance(valor, (int, float)) and not minimo < valor <= MEDIDA_MAXIMA:
         if minimo:
             raise error("INVALID_ARGUMENTS", f"{que} tiene que ser de más de {minimo:g} mm y de hasta 1.000.000 mm "
