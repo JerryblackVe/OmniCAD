@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39: 2026-10-27). Total 5: Abierto 1 · Parcial 3 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39: 2026-10-27). Total 4: Abierto 0 · Parcial 3 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -26,7 +26,6 @@ Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayu
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| SUP-1 | Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel | Abierto | Alta | G1 sobre la boca de una caja de superficies da «Geom_RectangularTrimmedSurface::V1==V2». G2 da siempre «BRepFill : The continuity is not G0 G1 or G2», también sobre el borde de un cilindro donde G1 sí anda. El usuario ve «Error inesperado». Hay que cubrir G2 y los vecinos planos, o traducir el error. | omnicad/nucleo/superficies.py:494-509; tests/test_superficies.py::test_parche_plano_relleno_y_g1 (solo cubre G1 curvo con un punto interior) | 2026-10-24 |
 
 ## Sólido (auditoría contra Fusion, 2026-10-24)
 
@@ -55,9 +54,3 @@ kernel OCCT vía cadquery_ocp; recálculo
 Reproducido (firma de Windows): no se puede curar desde la app; queda la protección por autoguardado
 
 Crítico
-
-### SUP-1 · Parche G1 y G2 sobre un contorno de cuerpo falla con error crudo del kernel
-
-Cómo reproducir: `create_box 20x20x10` → `unstitch_surfaces` → `stitch_surfaces` de 5 caras (queda una boca abierta) → `create_patch boundary={body, edges: ">Z"} continuity=G1`. Obtenido: OPERATION_FAILED «Error inesperado: Geom_RectangularTrimmedSurface::V1==V2». Con `G2`: «BRepFill : The continuity is not G0 G1 or G2». El mismo G2 falla sobre el borde superior de un tubo extruido de un círculo r10, donde G0 y G1 sí funcionan. Esquive: G0 y mezclar a mano. Prueba propuesta: parche G1 y G2 sobre la caja de 5 caras y sobre el tubo, con área y `es_valida`.
-
-Evidencia: `evidencias/superficie_2026-10-24/` (sonda1 a sonda14).

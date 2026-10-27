@@ -27,7 +27,7 @@ def _iniciar_opencascade():
     global BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakePipeShell
     global BRepOffsetAPI_ThruSections, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism
     global BRepPrimAPI_MakeRevol, BRepTools, BRep_Tool, GCPnts_AbscissaPoint, GeomAPI_PointsToBSpline
-    global GeomAbs_Arc, GeomAbs_C0, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_G2, GeomAbs_Intersection
+    global GeomAbs_Arc, GeomAbs_C0, GeomAbs_C1, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_Intersection
     global GeomAbs_Line, GeomAbs_Plane, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global List_TopoDS_Shape, ShapeFix_Face, TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD
     global TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp
@@ -51,7 +51,7 @@ def _iniciar_opencascade():
     from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
     from OCP.BRepTools import BRepTools
     from OCP.GCPnts import GCPnts_AbscissaPoint
-    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C0, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_G2,
+    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C0, GeomAbs_C1, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1,
                              GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane)
     from OCP.GeomAPI import GeomAPI_PointsToBSpline
     from OCP.OCP.collections import (Array1_double, Array1_gp_Pnt, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
@@ -64,7 +64,9 @@ def _iniciar_opencascade():
     from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
     _CAST = {TopAbs_COMPOUND: TopoDS.Compound, TopAbs_SOLID: TopoDS.Solid, TopAbs_SHELL: TopoDS.Shell,
              TopAbs_FACE: TopoDS.Face, TopAbs_WIRE: TopoDS.Wire, TopAbs_EDGE: TopoDS.Edge, TopAbs_VERTEX: TopoDS.Vertex}
-    _CONTINUIDAD = {"G0": GeomAbs_C0, "G1": GeomAbs_G1, "G2": GeomAbs_G2}
+    # BRepFill recibe la continuidad como entero 0..2 (G0, G1, G2): el valor 2 es GeomAbs_C1, no GeomAbs_G2 (3),
+    # que el kernel rechaza con «The continuity is not G0 G1 or G2» (SUP-1).
+    _CONTINUIDAD = {"G0": GeomAbs_C0, "G1": GeomAbs_G1, "G2": GeomAbs_C1}
 
 
 if _motor.motor_activo() == "opencascade":
@@ -484,6 +486,17 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False):
 
 
 
+def _parche_imposible(continuidad):
+    """Error claro cuando el kernel no puede cumplir la continuidad pedida (SUP-1: antes salía el texto crudo
+    «Geom_RectangularTrimmedSurface::V1==V2» o «BRepFill : The continuity is not G0 G1 or G2»)."""
+    que = {"G1": "tangente (G1)", "G2": "de curvatura (G2)"}.get(continuidad, "de conexión (G0)")
+    return geo.ErrorGeometria(
+        f"No se pudo construir el parche con continuidad {que}: el kernel no encuentra una superficie que cumpla "
+        "esa continuidad con las caras vecinas en todo el contorno (en una esquina, dos caras que se tocan pueden "
+        "pedir planos tangentes distintos). Probá con Conexión (G0), con menos aristas, o agregá una arista o un "
+        "punto interior que guíe el parche.")
+
+
 def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None):
     """Parche que cierra un contorno [SFC-PATCH].
 
@@ -511,7 +524,11 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None):
         for e in geo._explorar(w, TopAbs_EDGE):
             e = TopoDS.Edge(e)
             vecinas = _caras_de(mapa, e) if mapa is not None else []
-            if continuidad != "G0" and vecinas:
+            if continuidad != "G0":
+                if not vecinas:
+                    raise geo.ErrorGeometria(
+                        f"La continuidad {continuidad} necesita que las aristas del parche pertenezcan a las caras "
+                        "del cuerpo de soporte (no se encontró la cara vecina de una arista).")
                 rel.Add(e, vecinas[0], _CONTINUIDAD[continuidad], True)
             else:
                 rel.Add(e, GeomAbs_C0, True)
@@ -521,9 +538,12 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None):
                 rel.Add(TopoDS.Edge(e), GeomAbs_C0, False)
         else:
             rel.Add(_pnt(g))
-    rel.Build()
+    try:
+        rel.Build()
+    except Exception as exc:  # noqa: BLE001 — OCC crudo («V1==V2», «continuity is not…»): SUP-1
+        raise _parche_imposible(continuidad) from exc
     if not rel.IsDone():
-        raise geo.ErrorGeometria("No se pudo construir el parche (¿el contorno está cerrado?).")
+        raise _parche_imposible(continuidad)
     return _simplificar(rel.Shape())
 
 

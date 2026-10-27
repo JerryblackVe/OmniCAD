@@ -173,6 +173,45 @@ def test_parche_plano_relleno_y_g1():
         sf.parche(borde, continuidad="G1")
 
 
+def test_parche_g1_y_g2_sobre_el_borde_de_un_tubo():
+    """SUP-1: G2 fallaba SIEMPRE con «BRepFill : The continuity is not G0 G1 or G2»: el kernel espera el entero
+    2 para curvatura y el enum lo llama GeomAbs_C1 (GeomAbs_G2 vale 3). G1 y G2 dan un casquete válido."""
+    tubo = sf.extruir_superficie([circulo(10)], (0, 0, 1), 20)
+    borde = arista_en(tubo, (0, 0, 20))
+    for continuidad in ("G1", "G2"):
+        tapa = sf.parche([borde], continuidad=continuidad, soporte=tubo)
+        assert g.area(tapa) == pytest.approx(math.pi * 100, rel=2e-3), continuidad
+        assert g.es_valida(tapa)
+
+
+def test_parche_g1_y_g2_entre_vecinos_planos_coplanares():
+    """SUP-1: sobre el agujero de una placa plana (vecinos coplanares) G1 y G2 dan el disco exacto."""
+    mk = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), -50, 50, -50, 50)
+    mk.Add(BRepBuilderAPI_MakeWire(circulo(10)).Wire())
+    placa = mk.Face()
+    borde = arista_en(placa, (0, 0, 0))
+    for continuidad in ("G1", "G2"):
+        tapa = sf.parche([borde], continuidad=continuidad, soporte=placa)
+        assert g.area(tapa) == pytest.approx(math.pi * 100, rel=1e-4), continuidad
+        assert g.es_valida(tapa)
+
+
+def test_parche_g1_y_g2_sobre_la_boca_de_la_caja_avisan_claro():
+    """SUP-1: en la boca de una caja de 5 caras no hay parche G1/G2 posible (en cada esquina las dos caras
+    vecinas piden planos tangentes distintos). Sale un mensaje claro, nunca el texto crudo del kernel."""
+    caja = g.caja(20, 20, 10)
+    caras = [c for c in g.caras(caja) if not np.allclose(g.plano_de_cara(c).normal, (0, 0, 1))]
+    soporte = g.compuesto(caras)
+    aristas = [e for e in g._explorar(soporte, TopAbs_EDGE)
+               if all(abs(z - 10) < 1e-6 for z in (g.caja_envolvente(e)[0][2], g.caja_envolvente(e)[1][2]))]
+    for continuidad, que in (("G1", "tangente (G1)"), ("G2", "de curvatura (G2)")):
+        with pytest.raises(g.ErrorGeometria) as error:
+            sf.parche(aristas, continuidad=continuidad, soporte=soporte)
+        assert que in str(error.value) and "Probá con Conexión (G0)" in str(error.value)
+        assert "V1==V2" not in str(error.value) and "BRepFill" not in str(error.value)
+    assert g.area(sf.parche(aristas, continuidad="G0", soporte=soporte)) == pytest.approx(400)
+
+
 def test_reglada_tipos_y_angulo():
     cara = cara_cuadrada()
     borde = arista_en(cara, (5, 0, 0))
