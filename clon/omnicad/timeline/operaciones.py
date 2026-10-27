@@ -203,6 +203,8 @@ class EstadoModelo:
         self.herramientas = {}
         # id de cuerpo → forma que tenía antes del último Recortar (Destrimar recupera sus límites; SUP-5)
         self.recortes = {}
+        # unión 2 → unión 1 de cada vínculo de movimiento vigente (ASM-2: una sola por unión y sin ciclos)
+        self.vinculos = {}
         self.contador_cuerpos = 0
 
     def copia(self):
@@ -218,6 +220,7 @@ class EstadoModelo:
         e.lienzos = dict(self.lienzos)
         e.herramientas = dict(self.herramientas)
         e.recortes = dict(self.recortes)
+        e.vinculos = dict(self.vinculos)
         e.contador_cuerpos = self.contador_cuerpos
         return e
 

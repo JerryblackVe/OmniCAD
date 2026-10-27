@@ -245,6 +245,24 @@ def test_vinculo_de_movimiento_y_grupo_rigido():
     assert llamar(s, "get_assembly")["rigid_groups"][0]["components"] == ["op5", "op6"]
 
 
+def test_vinculo_de_movimiento_rechaza_relaciones_imposibles():
+    """ASM-2: una unión no puede seguir a dos vínculos, ni armar un círculo, ni tener relación 0."""
+    s, base, manivela, piston = _mecanismo()
+    falla(s, "create_motion_link", "INVALID_ARGUMENTS", joint1="J1", joint2="J2", ratio=0)
+    llamar(s, "create_motion_link", joint1="J1", joint2="J2", ratio=2)
+    falla(s, "create_motion_link", "INVALID_ARGUMENTS", joint1="J1", joint2="J2", ratio=2)
+    falla(s, "create_motion_link", "INVALID_ARGUMENTS", joint1="J2", joint2="J1", ratio=2)
+
+
+def test_vinculo_de_una_receta_con_relacion_cero_falla_en_el_paso():
+    """ASM-2: el paso también rechaza una relación que da 0 (expresión o receta vieja)."""
+    from omnicad.timeline.ops_ensamblar import OpVinculoMovimiento
+    s, base, manivela, piston = _mecanismo()
+    op = OpVinculoMovimiento(s.doc.nuevo_id(), "Vínculo malo", union1="op7", union2="op8", factor="1 - 1")
+    resultado = s.doc.agregar(op)
+    assert resultado.estado == "error" and "cero" in resultado.mensaje
+
+
 # ---------------------------------------------------------------- estudio de movimiento
 def test_estudio_de_movimiento_encuentra_el_choque_y_no_cambia_el_documento():
     s, base, bloque = dos_cajas()

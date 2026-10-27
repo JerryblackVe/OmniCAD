@@ -684,7 +684,21 @@ class OpVinculoMovimiento(Operacion):
             raise ErrorOperacion("Las dos uniones tienen que existir antes del vínculo.")
         clave1 = "giro" if MOVIMIENTOS[u1["tipo"]][0] else "desliz"
         clave2 = "giro" if MOVIMIENTOS[u2["tipo"]][0] else "desliz"
+        if self.p["union2"] in estado.vinculos:
+            otro = estado.uniones.get(estado.vinculos[self.p["union2"]], {})
+            raise ErrorOperacion(f"La unión «{u2['nombre']}» ya la mueve el vínculo «{otro.get('nombre', 'otro')}»: "
+                                 "una unión solo puede seguir a un vínculo.")
+        actual, vistos = self.p["union1"], set()
+        while actual in estado.vinculos and actual not in vistos:
+            vistos.add(actual)
+            actual = estado.vinculos[actual]
+            if actual == self.p["union2"]:
+                raise ErrorOperacion(f"El vínculo «{u1['nombre']}» → «{u2['nombre']}» armaría un círculo: "
+                                     f"«{u2['nombre']}» ya mueve a «{u1['nombre']}».")
         factor = ctx.evaluar(self.p["factor"], "escalar") * (-1 if self.p["invertir"] else 1)
+        if not math.isfinite(factor) or factor == 0:
+            raise ErrorOperacion("La relación del vínculo no puede ser cero: la unión 2 no se movería.")
+        estado.vinculos[self.p["union2"]] = self.p["union1"]
         F2 = np.asarray(u2["marco"], float)
         if version < 2:
             extra = dict.fromkeys(MOVIMIENTOS[u2["tipo"]][0] + MOVIMIENTOS[u2["tipo"]][1], 0.0)

@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 9: Abierto 4 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24). Total 8: Abierto 3 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
@@ -43,7 +43,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| ASM-2 | El vínculo de movimiento acepta relaciones imposibles | Abierto | Media | Se aceptan un vínculo 2→1 sobre uno 1→2, un segundo vínculo sobre el mismo par y la relación 0 (o 1e9, -2 en la ventana): las dos uniones quedan seguidoras una de la otra, `drive_joint` devuelve ok con un aviso y no se mueve nada. Rechazarlo al crear: una unión que ya sigue a otra, ciclo o relación 0. | omnicad/timeline/ops_ensamblar.py:670-693 (`OpVinculoMovimiento.ejecutar` no mira los vínculos anteriores ni el factor) | 2026-10-25 |
 | ASM-3 | Borrar un componente con uniones se acepta (o falla sin explicar) | Abierto | Media | Borrar el componente fijo Base (que usa Unión1) responde OK: la unión pasa en silencio a «(raíz)», el cuerpo queda suelto y ya no hay nada fijo. Borrar el componente Eje falla con OPERATION_FAILED «El componente 1 tiene que ser un componente (no la raíz)…» sin nombrar qué lo usa. Esperado: FEATURE_IN_USE «la usan Unión1, Unión2», como al borrar el paso del cuerpo. | omnicad/timeline/ops_ensamblar.py:474-475 (`OpUnion.dependencias` mira los cuerpos, no el componente) | 2026-10-25 |
 
 ## Detalle de lo abierto
@@ -88,12 +87,6 @@ Qué se comprobó: pasa igual si en el paso 2 se acepta y se deshace; sigue pasa
 Prueba propuesta: tras previsualizar y cancelar una Reglada tangente, Recortar sobre la misma superficie da la misma mitad (314,16) que antes.
 
 Evidencia: `evidencias/ui_2026-10-24/` (`p5_repro.py`, `p6_repro.py`, `p7_repro.py`, `p9_nucleo.py`, `u1_superficie.log`).
-
-### ASM-2 · El vínculo de movimiento acepta relaciones imposibles
-
-Cómo reproducir (API): Eje y Brazo con dos uniones revolute (Unión1 y Unión2); `create_motion_link joint1=Unión1 joint2=Unión2 ratio=2` y luego `create_motion_link joint1=Unión2 joint2=Unión1 ratio=2` → OK. `drive_joint joint=Unión1 rotation=30` → ok con aviso «La unión Unión1 la mueve el vínculo…», valores [0, 0]. También se aceptan un tercer vínculo sobre el mismo par, `ratio=0` (el seguidor queda en 0) y, en la ventana, 1e9 y -2. Esperado: error al crear. Esquive: no repetir uniones en vínculos. Prueba propuesta: en `tests/test_api_ensamble.py`.
-
-Evidencia: `evidencias/ensamble_2026-10-25/a3_profundo.py`, `evidencias/ui_2026-10-25/ensamblar.log`.
 
 ### ASM-3 · Borrar un componente con uniones se acepta (o falla sin explicar)
 

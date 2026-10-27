@@ -683,6 +683,29 @@ def create_motion_link(sesion, joint1: str, joint2: str, ratio: Expr = 1, revers
         if not any(MOVIMIENTOS[u.p.get("tipo")]):
             raise error("INVALID_ARGUMENTS", f"La unión «{u.nombre}» es rígida: no tiene movimiento para vincular.")
     doc = sesion.doc
+    # ASM-2: una unión no puede seguir a dos vínculos y la cadena no puede volver al que manda.
+    enlaces = {o.p.get("union2"): o for o in doc.operaciones
+               if isinstance(o, OpVinculoMovimiento) and not o.suprimida}
+    if u2.id in enlaces:
+        raise error("INVALID_ARGUMENTS", f"La unión «{u2.nombre}» ya la mueve el vínculo «{enlaces[u2.id].nombre}»: "
+                    "una unión solo puede seguir a un vínculo.",
+                    "Elegí otra unión para joint2 o borrá el vínculo que ya la mueve.")
+    actual, vistos = u1.id, set()
+    while actual in enlaces and actual not in vistos:
+        vistos.add(actual)
+        actual = enlaces[actual].p.get("union1")
+        if actual == u2.id:
+            raise error("INVALID_ARGUMENTS", f"El vínculo «{u1.nombre}» → «{u2.nombre}» armaría un círculo: "
+                        f"«{u2.nombre}» ya mueve a «{u1.nombre}».", "Elegí las uniones en el otro sentido.")
+    cero = ratio == 0 if not isinstance(ratio, str) else False
+    if isinstance(ratio, str):
+        try:
+            cero = float(ratio.strip()) == 0
+        except ValueError:
+            pass                                              # expresión: la valida el paso al calcular
+    if cero:
+        raise error("INVALID_ARGUMENTS", "La relación del vínculo no puede ser cero: la unión 2 no se movería.",
+                    "Usá reverse=true para invertir el sentido.")
     op = OpVinculoMovimiento(doc.nuevo_id(), nombre_paso(sesion, name, "Vínculo de movimiento", OpVinculoMovimiento),
                              union1=u1.id, union2=u2.id, factor=texto_expr(ratio), invertir=bool(reverse))
     antes = _matrices(sesion)
