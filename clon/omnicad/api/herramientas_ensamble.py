@@ -32,7 +32,7 @@ from ..nucleo import geometria as geo
 from ..timeline.operaciones import Contexto
 from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpComponente, OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion,
-                                      OpUnion, OpVinculoMovimiento, siguiente_accion)
+                                      OpUnion, OpVinculoMovimiento, grupo_rigido, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -204,6 +204,13 @@ def _componente_del_origen(sesion, cuerpo, que):
         raise error("INVALID_ARGUMENTS", f"El componente «{_nombre_comp(estado, cuerpo.componente)}» está fijo: una "
                     "unión no puede moverlo.", "Elegí como origin1 la pieza que se mueve, o liberala con "
                     "ground_component(grounded=false).")
+    grupo = grupo_rigido(estado, cuerpo.componente)
+    fijos = [c for c in grupo if estado.componentes.get(c, {}).get("fijo")]
+    if fijos:
+        raise error("INVALID_ARGUMENTS", f"El componente «{_nombre_comp(estado, cuerpo.componente)}» está en un grupo "
+                    f"rígido con «{_nombre_comp(estado, fijos[0])}», que está fijo: una unión no puede moverlo (el "
+                    "grupo se mueve entero).",
+                    "Sacá el componente fijo del grupo rígido, o liberalo con ground_component(grounded=false).")
     return cuerpo.componente
 
 

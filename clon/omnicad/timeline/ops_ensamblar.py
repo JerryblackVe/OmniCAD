@@ -240,12 +240,17 @@ def _mover_componentes(estado, comps, m):
             estado.componentes[k]["matriz"] = (m @ actual).tolist()
 
 
-def _grupo(estado, comp):
-    """El componente más los que están en un grupo rígido con él."""
+def grupo_rigido(estado, comp):
+    """El componente más todos los que caen en su grupo rígido, encadenando grupos que comparten componentes
+    (A+B y B+C mueven A, B y C juntos)."""
     salida = {comp}
-    for g in estado.grupos_rigidos:
-        if comp in g:
-            salida |= set(g)
+    creció = True
+    while creció:
+        creció = False
+        for g in estado.grupos_rigidos:
+            if salida & set(g) and not set(g) <= salida:
+                salida |= set(g)
+                creció = True
     return salida
 
 
@@ -511,7 +516,12 @@ class OpUnion(Operacion):
         valores = self.valores(ctx, ctx.aviso)
         mov = movimiento(p["tipo"], valores, p["eje_giro"], p["eje_desliz"])
         reaplicar = None
-        comps = _grupo(estado, comp1)
+        comps = grupo_rigido(estado, comp1)
+        fijos = [c for c in comps if estado.componentes.get(c, {}).get("fijo")]
+        if fijos:
+            nombre = estado.componentes[fijos[0]].get("nombre") or fijos[0]
+            raise ErrorOperacion(f"El componente 1 está en un grupo rígido con «{nombre}», que está fijo: no se "
+                                 "puede mover con una unión.")
         tipo_limite = ANGULO if MOVIMIENTOS[p["tipo"]][0] else "longitud"
         if p["como_esta"]:
             comp2, seguir = "", np.identity(4)

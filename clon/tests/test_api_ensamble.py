@@ -201,6 +201,32 @@ def _mecanismo():
     return s, base, manivela, piston
 
 
+def test_grupo_rigido_respeta_lo_fijo_y_se_propaga_entre_grupos():
+    """ASM-1: el grupo es UN objeto: no mueve a un fijo y alcanza a los grupos encadenados."""
+    s, base, bloque = dos_cajas()
+    llamar(s, "create_rigid_group", components=["Base", "Bloque"])
+    antes = caja(s, base)
+    r = falla(s, "create_joint", "INVALID_ARGUMENTS", origin1="<Z", body1=bloque, origin2=">Z", body2=base)
+    assert "fijo" in r["mensaje"] and "grupo" in r["mensaje"]
+    assert caja(s, base) == antes
+
+    s = api.Sesion()
+    a = llamar(s, "create_box", length=10, width=10, height=10, x=100)["bodies_created"][0]["id"]
+    b = llamar(s, "create_box", length=10, width=10, height=10, x=200)["bodies_created"][0]["id"]
+    c = llamar(s, "create_box", length=10, width=10, height=10, x=300)["bodies_created"][0]["id"]
+    base = llamar(s, "create_box", length=40, width=40, height=10)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[base], name="Base", grounded=True)
+    llamar(s, "create_component", bodies=[a], name="A")
+    llamar(s, "create_component", bodies=[b], name="B")
+    llamar(s, "create_component", bodies=[c], name="C")
+    llamar(s, "create_rigid_group", components=["A", "B"])
+    llamar(s, "create_rigid_group", components=["B", "C"])
+    llamar(s, "create_joint", origin1="<Z", body1=a, origin2=">Z", body2=base, joint_type="rigid")
+    assert caja(s, a) == pytest.approx([-5, -5, 10, 5, 5, 20])
+    assert caja(s, b) == pytest.approx([95, -5, 10, 105, 5, 20])
+    assert caja(s, c) == pytest.approx([195, -5, 10, 205, 5, 20])
+
+
 def test_vinculo_de_movimiento_y_grupo_rigido():
     s, base, manivela, piston = _mecanismo()
     assert caja(s, piston)[0] == pytest.approx(45)                    # −5 + 50
