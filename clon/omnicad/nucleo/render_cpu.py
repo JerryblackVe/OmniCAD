@@ -18,8 +18,10 @@ biblioteca de Fusion (Metal, Plástico, Vidrio, Goma, Madera, Pintura). Cada asp
 0..1 más un «acabado»: metálico, rugosidad, transparencia, barniz y patrón ("madera" = vetas 3D).
 """
 import base64
+from collections import OrderedDict
 import io
 import math
+from threading import RLock
 
 import numpy as np
 
@@ -391,21 +393,94 @@ def _juntar(partes):
             _unit(np.concatenate([n for _v, n in partes])).astype(np.float32))
 
 
+_CACHE_CARAS = OrderedDict()
+_CACHE_CARAS_BYTES = 0
+_TOPE_CACHE_CARAS = 2048
+_TOPE_BYTES_CARAS = 32 * 1024 * 1024
+_CERROJO_CARAS = RLock()
+
+
+def _clave_malla_cara(cara, tri, deflexion, angular):
+    # Retener los handles evita reciclar identidades; otra triangulación invalida una malla rehecha o afinada.
+    trsf = cara.Location().Transformation()
+    ubicacion = tuple(trsf.Value(i, j) for i in range(1, 4) for j in range(1, 5))
+    return cara.TShape(), ubicacion, cara.Orientation(), deflexion, angular, tri
+
+
+def _leer_malla_cara(clave):
+    with _CERROJO_CARAS:
+        datos = _CACHE_CARAS.get(clave) if _TOPE_CACHE_CARAS and _TOPE_BYTES_CARAS else None
+        if datos is not None:
+            _CACHE_CARAS.move_to_end(clave)
+        return datos
+
+
+def _guardar_malla_cara(clave, v, n):
+    global _CACHE_CARAS_BYTES
+    peso = v.nbytes + n.nbytes
+    with _CERROJO_CARAS:
+        anterior = _CACHE_CARAS.pop(clave, None)
+        if anterior is not None:
+            _CACHE_CARAS_BYTES -= sum(a.nbytes for a in anterior)
+        if _TOPE_CACHE_CARAS and peso <= _TOPE_BYTES_CARAS:
+            v.setflags(write=False)
+            n.setflags(write=False)
+            _CACHE_CARAS[clave] = (v, n)
+            _CACHE_CARAS_BYTES += peso
+        while _CACHE_CARAS and (len(_CACHE_CARAS) > _TOPE_CACHE_CARAS or _CACHE_CARAS_BYTES > _TOPE_BYTES_CARAS):
+            _, viejos = _CACHE_CARAS.popitem(last=False)
+            _CACHE_CARAS_BYTES -= sum(a.nbytes for a in viejos)
+
+
+def _vaciar_cache_caras():
+    global _CACHE_CARAS_BYTES
+    with _CERROJO_CARAS:
+        _CACHE_CARAS.clear()
+        _CACHE_CARAS_BYTES = 0
+
+
+ANGULAR_ARRASTRE = 1.0     # rad: ~13 lados por agujero de r=3 mientras se arrastra (la malla fina tiene 42)
+
+
+def _malla_arrastre(forma, deflexion, angular):
+    """Malla visual transitoria; tesela otra topología para conservar intacta la triangulación fina del cuerpo."""
+    if _motor.motor_activo() != "opencascade":
+        return malla_suave(forma, deflexion, angular)
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+    copia = BRepBuilderAPI_Copy(forma, False, False).Shape()
+    return malla_suave(copia, deflexion * 4, max(angular, ANGULAR_ARRASTRE), rehacer=True)
+
+
 def _mallas_por_cara(forma, deflexion, angular, rehacer=False):
     """[(cara OCC, vértices, normales)] de un cuerpo B-rep con la normal exacta de la superficie en cada vértice."""
     from OCP.BRep import BRep_Tool
-    from OCP.TopLoc import TopLoc_Location
-
     from .analisis import _indices, _props_nodos
     salida = []
-    for cara, tris in geo.teselar_por_cara(forma, deflexion, angular, rehacer=rehacer):
-        if BRep_Tool.Surface_s(cara) is None:
-            n = normales_suaves(tris, None, 60.0)[1]
-        else:
-            tri = BRep_Tool.Triangulation_s(cara, TopLoc_Location())
-            idx = _indices(tri, cara)
-            n = _props_nodos(cara, tri, idx, tris, False)[0][idx].reshape(-1, 3)
-        salida.append((cara, tris.reshape(-1, 3), n))
+    for cara, tri, loc in geo._triangulaciones(forma, deflexion, angular, rehacer):
+        ubicacion = cara.Location()
+        local = cara
+        if not ubicacion.IsIdentity():
+            local = geo.TopoDS.Face(cara.Located(geo.TopLoc_Location()))
+            loc = geo.TopLoc_Location()
+            tri = BRep_Tool.Triangulation_s(local, loc)
+        clave = _clave_malla_cara(local, tri, deflexion, angular)
+        datos = None if rehacer else _leer_malla_cara(clave)
+        if datos is None:
+            tris = geo._triangulos_cara(local, tri, loc)
+            if BRep_Tool.Surface_s(local) is None:
+                n = normales_suaves(tris, None, 60.0)[1]
+            else:
+                idx = _indices(tri, local)
+                n = _props_nodos(local, tri, idx, tris, False)[0][idx].reshape(-1, 3)
+            datos = tris.reshape(-1, 3), n
+            _guardar_malla_cara(clave, *datos)
+        v, n = datos
+        if not ubicacion.IsIdentity():
+            trsf = ubicacion.Transformation()
+            matriz = np.array([[trsf.Value(i, j) for j in range(1, 5)] for i in range(1, 4)])
+            v = v @ matriz[:, :3].T + matriz[:, 3]
+            n = n @ (matriz[:, :3] / trsf.ScaleFactor()).T
+        salida.append((cara, v, n))
     return salida
 
 

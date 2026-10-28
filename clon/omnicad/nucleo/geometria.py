@@ -1049,23 +1049,31 @@ def teselar_por_cara(forma, deflexion=0.05, angular=0.3, rehacer=False):
     """[(cara, triángulos Kx3x3)]: sirve para elegir caras con el ratón (picking). OpenCascade guarda la malla en la
     forma y, si ya tiene una MÁS FINA, la reusa aunque se pida una más gruesa (cilindro: 88 triángulos pedidos, 396
     devueltos); `rehacer=True` la borra antes para que el detalle pedido se respete."""
+    return [(cara, _triangulos_cara(cara, tri, loc))
+            for cara, tri, loc in _triangulaciones(forma, deflexion, angular, rehacer)]
+
+
+def _triangulaciones(forma, deflexion, angular, rehacer=False):
+    """Caras y triangulaciones OCC antes de convertirlas: permite reusar los arrays de las caras intactas."""
     if rehacer:
         BRepTools.Clean_s(forma)
     BRepMesh_IncrementalMesh(forma, deflexion, False, angular, True)
-    salida = []
     for cara in caras(forma):
         loc = TopLoc_Location()
         tri = BRep_Tool.Triangulation_s(cara, loc)
-        if tri is None:
-            continue
-        trsf = loc.Transformation()
-        nodos = np.array([[p.X(), p.Y(), p.Z()] for p in
-                          (tri.Node(i).Transformed(trsf) for i in range(1, tri.NbNodes() + 1))], float)
-        idx = np.array([tri.Triangle(i).Get() for i in range(1, tri.NbTriangles() + 1)], int) - 1
-        if cara.Orientation() == TopAbs_REVERSED:
-            idx = idx[:, [0, 2, 1]]
-        salida.append((cara, np.stack([nodos[idx[:, 0]], nodos[idx[:, 1]], nodos[idx[:, 2]]], axis=1)))
-    return salida
+        if tri is not None:
+            yield cara, tri, loc
+
+
+def _triangulos_cara(cara, tri, loc):
+    """Triángulos Kx3x3 en coordenadas del mundo, con el mismo orden y precisión de OCC."""
+    trsf = loc.Transformation()
+    nodos = np.array([[p.X(), p.Y(), p.Z()] for p in
+                      (tri.Node(i).Transformed(trsf) for i in range(1, tri.NbNodes() + 1))], float)
+    idx = np.array([tri.Triangle(i).Get() for i in range(1, tri.NbTriangles() + 1)], int) - 1
+    if cara.Orientation() == TopAbs_REVERSED:
+        idx = idx[:, [0, 2, 1]]
+    return nodos[idx]
 
 
 def teselar(forma, deflexion=0.05, angular=0.3, rehacer=False):

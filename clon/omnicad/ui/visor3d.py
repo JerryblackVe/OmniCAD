@@ -174,7 +174,7 @@ def rayo_caja(origen, direccion, minimo, maximo):
     return max(entra, 0.0) if sale >= max(entra, 0.0) else np.inf
 
 
-def teselar_cuerpo(forma, deflexion, angular=0.3, rehacer=True):
+def teselar_cuerpo(forma, deflexion, angular=0.3, rehacer=True, *, _previa=False):
     """(vǸrtices, normales) de triǭngulos sueltos para dibujar un cuerpo B-rep o de malla."""
     from ..nucleo import render_cpu as rc
     if rc.es_malla(forma):
@@ -183,6 +183,8 @@ def teselar_cuerpo(forma, deflexion, angular=0.3, rehacer=True):
         largo = np.linalg.norm(n, axis=1, keepdims=True)
         n = n / np.where(largo == 0, 1.0, largo)
         return v.reshape(-1, 3).astype(np.float32), np.repeat(n, 3, axis=0).astype(np.float32)
+    if _previa:
+        return rc._malla_arrastre(forma, deflexion, angular)
     # Normales exactas en cada nodo: las promediadas dejaban franjas en las caras B-spline (B-13)
     # rehacer=False reusa la malla de las caras que no cambiaron (las de un cuerpo unido comparten forma con el de antes)
     return rc.malla_suave(forma, deflexion, angular, rehacer=rehacer)
@@ -459,6 +461,10 @@ class Visor3D(QOpenGLWidget):
         self._hover = None                 # ("plano", ref) | ("cara", triángulos)
         self._limpiar_malla = False        # True tras cambiar la calidad: la próxima vez se tesela desde cero
         self._cache = {}                   # id(forma) → (forma, v, n, aristas, centro, radio, deflexión)
+        self._previa_gruesa = set()        # claves que tienen que recuperar la malla fina al terminar el arrastre
+        self._modelo_por_refinar = None
+        self._t_refinar_previa = QTimer(self, singleShot=True, interval=120)
+        self._t_refinar_previa.timeout.connect(self._refinar_previa)
         self._buffers = {}                 # id(array) → (búfer en la placa de video, weakref al array): se sube 1 vez
         self._lod = {}                     # (id(forma), nivel) → (forma, v, n) o None: mallas gruesas para lejos
         self._lod_pendientes = {}          # (id(forma), nivel) → (forma, deflexión fina, nivel), a calcular
@@ -543,6 +549,13 @@ class Visor3D(QOpenGLWidget):
         (Aspecto y Material físico del documento)."""
         nuevas, cache, formas, lod = [], {}, {}, []
         apariencias = apariencias or {}
+        arrastrando = self._arrastrando_previa()
+        if not arrastrando:
+            for clave in self._previa_gruesa:
+                self._cache.pop(clave, None)
+            self._previa_gruesa.clear()
+            self._modelo_por_refinar = None
+            self._t_refinar_previa.stop()
         self._estado, self._ocultos, self._excluir_bocetos = estado, frozenset(ocultos), tuple(excluir_bocetos)
         for i, c in enumerate(estado.cuerpos.values()):
             clave = id(c.forma)
@@ -550,7 +563,10 @@ class Visor3D(QOpenGLWidget):
                 datos = self._cache[clave]
             else:
                 defl = self._deflexion(c.forma)
-                v, n = teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla)
+                gruesa = arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
+                v, n = teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa)
+                if gruesa:
+                    self._previa_gruesa.add(clave)
                 mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
                 datos = (c.forma, v, n, aristas_cuerpo(c.forma), (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
                          defl)
@@ -573,6 +589,10 @@ class Visor3D(QOpenGLWidget):
         self._lod_datos = (np.array([d[0] for d in lod], float).reshape(-1, 3), np.array([d[1] for d in lod], float),
                            np.array([d[2] for d in lod], float))
         self._cache, self._mallas, self._formas = cache, nuevas, formas
+        self._previa_gruesa.intersection_update(cache)
+        if self._previa_gruesa:
+            self._modelo_por_refinar = estado, ocultos, excluir_bocetos, apariencias
+            self._t_refinar_previa.start()
         self._limpiar_malla = False
         self._hover_ent = None
         polis, rellenos, constr = [], [], []
@@ -587,6 +607,17 @@ class Visor3D(QOpenGLWidget):
         self._perfiles_hechos = (np.concatenate(rellenos).astype(np.float32) if rellenos
                                  else np.zeros((0, 3), np.float32))
         self.update()
+
+    def _arrastrando_previa(self):
+        panel = getattr(self.window(), "panel", None)
+        gestor = getattr(panel, "manipuladores", None)
+        return bool(gestor is not None and gestor.arrastrando)
+
+    def _refinar_previa(self):
+        if self._arrastrando_previa():
+            self._t_refinar_previa.start()
+        elif self._modelo_por_refinar is not None:
+            self.set_modelo(*self._modelo_por_refinar)
 
     def _deflexion(self, forma):
         """Deflexión del detalle elegido (Preferencias › Gráficos); con «Automático», según el tamaño de la pieza."""
