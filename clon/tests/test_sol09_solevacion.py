@@ -147,3 +147,20 @@ def test_condicion_suave_sigue_la_curvatura_de_la_cara_mejor_que_la_tangente():
         return salida
     tangente, suave = errores("tangente"), errores("suave")
     assert max(suave) < 0.12 and max(suave) < 0.6 * max(tangente), (tangente, suave)
+
+
+@pytest.mark.parametrize("suave", [False, True])
+def test_el_contorno_auxiliar_no_se_tuerce_en_la_costura_de_la_esfera(suave):
+    from omnicad.nucleo import referencias as refs
+    from omnicad.nucleo import solidos_crear as sc
+
+    cuerpo = geo.booleano(geo.esfera(10), geo.caja(40, 40, 20, (-20, -20, -25)), "cortar")
+    borde = [e for e in refs.subformas(cuerpo, "arista")
+             if all(abs(geo.caja_envolvente(e)[i][2] + 5) < 1e-6 for i in (0, 1))]
+    cara = next(c for c in geo.caras(cuerpo) if abs(geo.caja_envolvente(c)[1][2] - 10) < 1e-3)
+    _tipo, contorno = sc._auxiliar_tangente(sc._alambre(borde), cara, 0.5, suave)
+    assert geo.es_valida(contorno)
+    minimo, maximo = geo.caja_envolvente(contorno)
+    assert maximo[2] == pytest.approx(minimo[2], abs=1e-5)
+    assert maximo[0] == pytest.approx(-minimo[0], abs=0.01)
+    assert maximo[2] < -5

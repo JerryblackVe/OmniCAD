@@ -1126,11 +1126,13 @@ def _hacia_afuera_de_la_cara(cara, punto):
     (un punto del borde). En una esquina promedia la de las aristas que se juntan ahí."""
     from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
     from OCP.ShapeAnalysis import ShapeAnalysis_Surface
-    uv = ShapeAnalysis_Surface(BRep_Tool.Surface_s(cara)).ValueOfUV(_pnt(punto), 1e-6)
+    superficie = ShapeAnalysis_Surface(BRep_Tool.Surface_s(cara))
+    uv = superficie.ValueOfUV(_pnt(punto), 1e-6)
     n = _normal_orientada(cara, uv.X(), uv.Y())[1]
     suma = np.zeros(3)
     for e in _aristas_de(cara):
-        if BRep_Tool.Degenerated_s(e):                  # el polo de una esfera: una arista sin curva
+        if BRep_Tool.Degenerated_s(e) or BRep_Tool.IsClosed_s(e, cara):
+            # El polo y la costura de una cara periódica no delimitan su borde real.
             continue
         curva = BRepAdaptor_Curve(e)
         proy = GeomAPI_ProjectPointOnCurve(_pnt(punto), curva.Curve().Curve(), curva.FirstParameter(), curva.LastParameter())
@@ -1141,7 +1143,9 @@ def _hacia_afuera_de_la_cara(cara, punto):
         d = np.cross(n, _unit(_xyz(t), "tangente del borde"))
         d = _unit(d)
         pr = punto + d * 1e-3
-        if BRepClass_FaceClassifier(cara, _pnt(pr), 1e-7).State() == TopAbs_IN:     # apunta adentro: se invierte
+        uv_pr = superficie.ValueOfUV(_pnt(pr), 1e-7)
+        if BRepClass_FaceClassifier(cara, uv_pr, 1e-7).State() in (TopAbs_IN, TopAbs_ON):
+            # Clasificar en UV: la proyección 3D puede caer en el borde recortado y confundir el lado.
             d = -d
         suma += d
     if float(np.linalg.norm(suma)) < 1e-9:
@@ -1152,9 +1156,10 @@ def _hacia_afuera_de_la_cara(cara, punto):
 def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
     """Sección auxiliar de una condición «Tangente»: el contorno `w` (sobre el borde de `cara`) corrido `delta` por el plano
     tangente de la cara hacia afuera, para que la superficie siga a la cara. Cada arista se corre por sus puntos
-    (rectas: los extremos; curvas: 9 puntos interpolados). Con `sobre_la_superficie` (condición «Suave», G2) cada punto
+    (rectas: los extremos; curvas: puntos interpolados o su círculo exacto). Con `sobre_la_superficie` (condición «Suave», G2) cada punto
     se proyecta además sobre la superficie que sostiene a la cara, prolongada: dos secciones así (a `delta` y a
     `2 delta`) hacen que la solevación siga la curvatura de la cara, no solo su plano tangente."""
+    from OCP.GC import GC_MakeCircle
     from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
     superficie = BRep_Tool.Surface_s(cara) if sobre_la_superficie else None
     nuevas = []
@@ -1162,9 +1167,12 @@ def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
         curva = BRepAdaptor_Curve(e)
         a, z = curva.FirstParameter(), curva.LastParameter()
         k = 9 if sobre_la_superficie or curva.GetType() != GeomAbs_Line else 2
+        cerrada = BRep_Tool.IsClosed_s(e)
+        if cerrada:
+            k -= 1                         # la interpolación periódica no repite el primer punto
         pts = []
         for i in range(k):
-            q = _xyz(curva.Value(a + (z - a) * i / (k - 1)))
+            q = _xyz(curva.Value(a + (z - a) * i / (k if cerrada else k - 1)))
             p = q + delta * _hacia_afuera_de_la_cara(cara, q)
             if superficie is not None:
                 proy = GeomAPI_ProjectPointOnSurf(_pnt(p), superficie)
@@ -1172,13 +1180,19 @@ def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
                     raise geo.ErrorGeometria("La superficie de la cara no se prolonga hasta donde pide la condición Suave.")
                 p = _xyz(proy.NearestPoint())
             pts.append(p)
+        if cerrada and isinstance(curva.Curve().Curve(), Geom_Circle):
+            circulo = GC_MakeCircle(_pnt(pts[0]), _pnt(pts[k // 4]), _pnt(pts[k // 2]))
+            if circulo.IsDone() and all(circulo.Value().Circ().Distance(_pnt(p)) <= _TOL_CANONICA for p in pts):
+                # Una sección circular exacta conserva la costura y no ondula como una spline interpolada.
+                nuevas.append(BRepBuilderAPI_MakeEdge(circulo.Value()).Edge())
+                continue
         if k == 2:
             nuevas.append(BRepBuilderAPI_MakeEdge(_pnt(pts[0]), _pnt(pts[1])).Edge())
         else:
             arreglo = HArray1_gp_Pnt(1, k)
             for i, q in enumerate(pts):
                 arreglo.SetValue(i + 1, _pnt(q))
-            ip = GeomAPI_Interpolate(arreglo, False, 1e-7)
+            ip = GeomAPI_Interpolate(arreglo, cerrada, 1e-7)
             ip.Perform()
             if not ip.IsDone():
                 raise geo.ErrorGeometria("No se pudo armar la sección auxiliar de la condición Tangente.")
