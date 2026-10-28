@@ -93,7 +93,7 @@ LUCES_VISOR = {
 }
 COLOR_EJE = ((0.86, 0.26, 0.26), (0.32, 0.72, 0.32), (0.30, 0.45, 0.95))
 NARANJA_PLANO = (0.95, 0.66, 0.30)
-AZUL_PERFIL = (0.30, 0.55, 0.95)
+AZUL_PERFIL = (0.55, 0.80, 1.0)       # celeste suave del perfil, como el de Fusion
 AZUL_HOVER = (0.45, 0.70, 1.0)
 AZUL_SELECCION = (0.15, 0.50, 1.0)
 # Etiqueta del valor de una cota guía (Medir): va sobre la vista 3D, así que lleva fondo y texto propios (se lee
@@ -312,7 +312,10 @@ def muestrear_primitiva(prim):
 def polilineas_boceto(boceto_resuelto):
     """Curvas de un boceto resuelto en 3D (para dibujarlas sobre el modelo)."""
     pl, salida = boceto_resuelto.plano, []
+    auto = boceto_resuelto.boceto.ocultos_por_proyeccion_auto()[0]     # la proyección de la cara no se dibuja
     for prim in boceto_resuelto.boceto.geometria(incluir_construccion=False):
+        if prim[1] in auto:
+            continue
         uv = muestrear_primitiva(prim)
         if len(uv) >= 2:
             salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
@@ -1609,6 +1612,7 @@ class Visor3D(QOpenGLWidget):
         if self._rejilla_cache[0] != clave:     # cambia al desplazar o al cambiar el paso, no en cada cuadro
             self._rejilla_cache = (clave, lineas_rejilla(plano, paso, (cu, cv), (rojo, verde, azul), oscuro, n))
         vertices, colores = self._rejilla_cache[1]
+        GL.glDepthMask(GL.GL_FALSE)        # sin escribir profundidad: una cara pegada al plano del boceto tapa la rejilla
         GL.glLineWidth(1.0)
         GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
         GL.glEnableClientState(GL.GL_COLOR_ARRAY)
@@ -1624,6 +1628,7 @@ class Visor3D(QOpenGLWidget):
                 GL.glVertex3f(*plano.a_3d(*a))
                 GL.glVertex3f(*plano.a_3d(*b))
             GL.glEnd()
+        GL.glDepthMask(GL.GL_TRUE)
 
     def _cuadro_plano(self, plano, rect, color, alfa, resaltado=False):
         u0, v0, u1, v1 = rect
@@ -1917,7 +1922,7 @@ class Visor3D(QOpenGLWidget):
             self._apuntar(self._bocetos)
             GL.glDrawArrays(GL.GL_LINES, 0, len(self._bocetos))
         if self.plano_boceto is not None and self.opciones_boceto.get("perfil", True):
-            self._triangulos_planos(self._perfiles, AZUL_PERFIL, 0.22)
+            self._triangulos_planos(self._perfiles, AZUL_PERFIL, 0.30)
         self._triangulos_planos(self._resalte, (1.0, 0.55, 0.1), 0.55)
         if self._hover and self._hover[0] == "cara":
             self._triangulos_planos(self._hover[1], (0.45, 0.70, 1.0), 0.45)

@@ -4399,8 +4399,9 @@ class Lienzo(QWidget):
         en_conflicto = self.geometria_en_conflicto() if res is not None and not res.ok else set()
         self._dibujar_perfiles(p)
         ocultos = set()
+        solo_auto, puntos_auto = self.b.ocultos_por_proyeccion_auto()    # no se dibujan (como Fusion)
         for c in self.b.curvas.values():
-            if c.id == self._texto_oculto:
+            if c.id == self._texto_oculto or c.id in solo_auto:
                 continue                     # se está editando: se ve la vista previa en vivo
             if not self._visible(c):
                 ocultos.update(c.puntos())
@@ -4423,7 +4424,8 @@ class Lienzo(QWidget):
             visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
             ancho, alto = self.width() + 8, self.height() + 8
             for pt in self.b.puntos.values():
-                if pt.id in ocultos and pt.id not in visibles or (pt.proyectado and not self.mostrar["proyectadas"]):
+                if pt.id in ocultos and pt.id not in visibles or (pt.proyectado and not self.mostrar["proyectadas"]) \
+                        or pt.id in puntos_auto:
                     continue
                 q = self.a_px(pt.x, pt.y)
                 if not (-8 <= q.x() <= ancho and -8 <= q.y() <= alto):

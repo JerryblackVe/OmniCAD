@@ -2449,7 +2449,8 @@ class VentanaPrincipal(QMainWindow):
                 prims, puntos = ent.proyectar_entidad(ent.resolver(cara, self.doc.estado_final), plano)
             except ent.ErrorReferencia:
                 return b
-            b.agregar_proyeccion(prims, puntos, origen={"modo": "project", "refs": [cara]})
+            # "auto": Fusion no dibuja el contorno de la cara (solo el celeste del perfil); sigue siendo geometría real
+            b.agregar_proyeccion(prims, puntos, origen={"modo": "project", "refs": [cara], "auto": True})
         return b
 
     def boceto_sobre_cara_elegida(self):

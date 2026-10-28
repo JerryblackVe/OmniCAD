@@ -2,12 +2,13 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Total 4: Abierto 0 · Parcial 3 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Total 5: Abierto 0 · Parcial 3 · Bloqueado 1 · Sin verificar 1.
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-110 | Un boceto sobre una cara acumula proyecciones «perdidas» repetidas y muestra ⚠ en el navegador | Sin verificar | Media | En el abanico de Gerardo, Boceto3 (op47) tiene 5 proyecciones, 4 «perdidas» con arcos repetidos, y Boceto2 y Boceto3 muestran ⚠ en el navegador (video 2026-10-28 10-18-28). No se reprodujo desde cero: revisar si crear o editar un boceto sobre una cara apila proyecciones cuando la cara cambia, y si la marca ⚠ es correcta. | get_sketch op47 en vivo (2026-10-28); omnicad/restricciones/boceto.py (`agregar_proyeccion`, `proyecciones`) | 2026-10-28 |
 | P-12c | Fuente de novedades de Fusion (la ayuda es un shell JS sin titulares) | Parcial | Baja | Autodesk le responde 403 a los scripts: ahora se lee la última copia de archive.org del blog «What's New» (hoy del 2026-05-16, 5 meses atrás) y el informe lo avisa; falta una fuente al día que no bloquee (feed o API) o seguir revisando a mano. | scripts/novedades.py (`bajar`, `COPIAS`); tests/test_novedades.py::test_fusion_apunta_al_blog_y_cae_a_archive_org_si_autodesk_bloquea | 2026-10-20 |
 | P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Necesita PC con Linux nativo (ver P-1b): el fallo solo aparece con Wayland y esta PC es Windows, así que no se pudo reproducir ni probar un arreglo; hoy se fuerza xcb y no molesta. | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
 | P-11j | Cuerpos «sin ubicar» de XOX (3) que quizá Fusion no tiene | Parcial | Alta | Sherpa resuelto (2026-10-21): comparado con Fusion, no tiene los 2 cuerpos (1593 y 952 mm³) y todos sus componentes con cuerpos están emparejados; ahora se descartan los bloques sin dueño cuando ningún componente de la escena queda sin bloque. Queda XOX: 3 componentes de la escena sin bloque y 3 bloques sin dueño (152,9; 494,8 y 4365,4 mm³): no se pueden descartar sin ver Fusion, y la versión en la nube (v35, 202 componentes) no es la del .f3z local (72 cuerpos): hace falta abrir en Fusion ese mismo archivo. | omnicad/io_archivos/f3d_escena.py (huerfanos); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-21 |

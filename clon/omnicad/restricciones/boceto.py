@@ -1661,6 +1661,17 @@ class Boceto:
                                       **copy.deepcopy(origen)})
         return ids
 
+    def ocultos_por_proyeccion_auto(self):
+        """(curvas, puntos) que solo vienen de la proyección automática de la cara elegida al crear el boceto
+        (`auto`): Fusion no las dibuja (se ve solo el celeste del perfil), pero siguen siendo geometría real."""
+        auto = {i for r in self.proyecciones if r.get("auto") for i in r["ids"]}
+        auto -= {i for r in self.proyecciones if not r.get("auto") for i in r["ids"]}
+        if not auto:
+            return frozenset(), frozenset()
+        puntos = {q for c in self.curvas.values() if c.id in auto for q in c.puntos()} | auto
+        puntos -= {q for c in self.curvas.values() if c.id not in auto for q in c.puntos()}
+        return frozenset(auto), frozenset(puntos)
+
     def derivar_proyeccion(self, datos, primitivas):
         """Ajustes de una proyección según sus `datos` (los del registro de proyección):
         - "contorno" = (punto, dirección) del eje proyectado de un perfil giratorio: deja solo su contorno exterior
