@@ -172,3 +172,18 @@ def test_un_timer_no_lanza_un_segundo_calculo_mientras_se_espera_al_hijo(ventana
         v.doc.suprimir("op2")
     assert len(anidados) == 1 and "Ya hay un cálculo" in anidados[0]
     assert not v.doc.operacion("op1").suprimida and not v.doc.operacion("op2").suprimida
+
+
+def test_calculando_repinta_una_vez_por_aviso_y_no_en_cada_vista_previa_seguida(ventana, monkeypatch):
+    """P-37: el aviso se pinta ya (un paso largo bloquea la ventana), pero no otra vez si el texto es el mismo."""
+    from types import SimpleNamespace
+
+    v, pintadas = ventana, []
+    etiqueta = v.timeline.estado
+    original = etiqueta.repaint
+    monkeypatch.setattr(etiqueta, "repaint", lambda: (pintadas.append(1), original()))
+    v._calculando(SimpleNamespace(nombre="A"))
+    v._calculando(SimpleNamespace(nombre="A"))
+    assert len(pintadas) == 1
+    v._calculando(SimpleNamespace(nombre="B"))
+    assert len(pintadas) == 2

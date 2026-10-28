@@ -921,8 +921,11 @@ class VentanaPrincipal(QMainWindow):
     def _calculando(self, op):
         """Aviso en la barra del timeline antes de ejecutar un paso: una booleana grande tarda segundos y la ventana
         no atiende eventos mientras tanto, así que se pinta ya (sin bucle de eventos)."""
-        self.mensaje(f"Calculando {op.nombre}…", 30000)
-        self.timeline.estado.repaint()
+        texto = f"Calculando {op.nombre}…"
+        ya_pintado = self.timeline.estado.toolTip() == texto       # repintar cuesta ~15 ms: no en cada vista previa seguida
+        self.mensaje(texto, 30000)
+        if not ya_pintado:
+            self.timeline.estado.repaint()
 
     def _esperando_calculo(self, segundos):
         """Un hijo calcula por la ventana (B-48): pasado 1 s lo dice con los segundos y la deja repintar y atender
