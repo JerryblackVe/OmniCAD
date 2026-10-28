@@ -19,6 +19,7 @@ Abrir un proyecto no recalcula los pasos lentos (como Fusion, que abre con la ge
 guarda el resultado de los pasos que tardaron al menos `_SEGUNDOS_CACHE` (`pasos_para_cache`) y `desde_dict(datos,
 cache)` los toma de ahí en vez de ejecutarlos. Los demás pasos se calculan como siempre, y editar recalcula normal.
 """
+import hashlib
 import json
 import logging
 import time
@@ -147,9 +148,11 @@ class Documento:
         self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
         self._duraciones = []     # por paso: segundos que tardó su último cálculo (0 si no se ejecutó)
         self.al_calcular = None   # función(op) que la ventana pone para avisar «Calculando…» antes de un paso que se ejecuta
+        self.al_esperar = None    # función(segundos) que la ventana pone para avisar y repintar mientras trabaja el hijo (B-48)
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
         self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
+        self._ultimo_prevuelo = None    # (huella, cálculo) de la última previa; se comparte con Aceptar
         self.motor = motor.motor_activo()
         self._contador = 0
         self._contador_cotas = 0
@@ -265,20 +268,28 @@ class Documento:
             return
         if registro_uso.activo is not None:
             registro_uso.activo.emitir("deshacer")
+        datos = json.loads(self._deshacer[-1])
+        calculo = self._prevuelo_receta(datos)
         self._rehacer.append(self._instantanea())
-        self._cargar(json.loads(self._deshacer.pop()))
+        self._deshacer.pop()
+        self._cargar(datos, calculo)
 
     def rehacer(self):
         if not self._rehacer:
             return
         if registro_uso.activo is not None:
             registro_uso.activo.emitir("rehacer")
+        datos = json.loads(self._rehacer[-1])
+        calculo = self._prevuelo_receta(datos)
         self._deshacer.append(self._instantanea())
-        self._cargar(json.loads(self._rehacer.pop()))
+        self._rehacer.pop()
+        self._cargar(datos, calculo)
 
-    def _cargar(self, datos):
+    def _cargar(self, datos, calculo=None):
         """Deshacer/rehacer: vuelve a la receta `datos` recalculando solo desde el primer paso que cambia (antes
         recalculaba desde el paso 0: con una rosca modelada de 30 s, cada deshacer tardaba ~35 s)."""
+        if calculo is None:
+            calculo = self._prevuelo_receta(datos)
         antes_ops, antes_marcador, antes_props = self.operaciones, self.marcador, self.propiedades
         antes_valores = self._valores_o_nada()
         self.parametros = TablaParametros.desde_lista(datos.get("parametros"))
@@ -311,7 +322,7 @@ class Documento:
             if o is not None and type(o) is type(nuevas[k]) and o.a_dict() == nuevas[k].a_dict():
                 nuevas[k] = o
         self.operaciones = nuevas
-        self.recalcular(desde)
+        self._terminar_recalculo(desde, calculo)
 
     def _valores_o_nada(self):
         try:
@@ -324,13 +335,14 @@ class Documento:
         """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta."""
         tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
         desde = min(self.marcador, self._primer_afectado(tabla))
+        calculo = self._prevuelo_cambio({"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()})
         self._guardar_para_deshacer()
         i = self.marcador
         self.operaciones.insert(i, op)
         self.parametros, self._contador_cotas = tabla, contador
         self.marcador += 1
         self.modificado = True
-        self.recalcular(desde)
+        self._terminar_recalculo(desde, calculo)
         return self.resultados[i]
 
     def reemplazar(self, op_id, nueva):
@@ -339,12 +351,12 @@ class Documento:
         nueva.id = op_id
         tabla, contador = self._tabla_cotas(self.operaciones[:i] + [nueva] + self.operaciones[i + 1:])
         desde = min(i, self._primer_afectado(tabla))
-        self._prevuelo_cambio({"tipo": "reemplazar", "indice": i, "operacion": nueva.a_dict()}, desde)
+        calculo = self._prevuelo_cambio({"tipo": "reemplazar", "indice": i, "operacion": nueva.a_dict()})
         self._guardar_para_deshacer()
         self.operaciones[i] = nueva
         self.parametros, self._contador_cotas = tabla, contador
         self.modificado = True
-        self.recalcular(desde)
+        self._terminar_recalculo(desde, calculo)
         return self.resultados[i]
 
     def set_propiedad(self, ids_cuerpos, clave, valor):
@@ -448,6 +460,14 @@ class Documento:
                     supresiones[col["op"]] = str(valor).strip().lower() in ("sí", "si", "1", "true", "x", "s")
         tabla.valores()                                # valida antes de tocar el documento
         operaciones = self._cotas_desde_parametros(tabla)
+        receta = self.a_dict()
+        receta["configuraciones"] = dict(datos, activa=activa)
+        receta["parametros"] = tabla.a_lista()
+        receta["operaciones"] = [o.a_dict() for o in operaciones]
+        for op in receta["operaciones"]:
+            if op["id"] in supresiones:
+                op["suprimida"] = supresiones[op["id"]]
+        calculo = self._prevuelo_receta(receta)
         self._guardar_para_deshacer()
         self.configuraciones = dict(datos, activa=activa)
         desde = self._primer_afectado(tabla)
@@ -458,7 +478,7 @@ class Documento:
                 op.suprimida = supresiones[op.id]
                 desde = min(desde, i)
         self.modificado = True
-        self.recalcular(desde)
+        self._terminar_recalculo(desde, calculo)
 
     def quitar_analisis(self, nombre):
         if nombre in self.analisis:
@@ -481,11 +501,11 @@ class Documento:
 
     def suprimir(self, op_id, suprimida=True):
         i = self.indice(op_id)
-        self._prevuelo_cambio({"tipo": "suprimir", "indice": i, "suprimida": suprimida}, i)
+        calculo = self._prevuelo_cambio({"tipo": "suprimir", "indice": i, "suprimida": suprimida})
         self._guardar_para_deshacer()
         self.operaciones[i].suprimida = suprimida
         self.modificado = True
-        self.recalcular(i)
+        self._terminar_recalculo(i, calculo)
 
     def eliminar(self, op_id):
         i = self.indice(op_id)
@@ -494,14 +514,14 @@ class Documento:
         deps = self.dependientes(op_id)
         if deps:
             raise ErrorDocumento("No se puede eliminar: la usan " + ", ".join(d.nombre for d in deps) + ".")
-        self._prevuelo_cambio({"tipo": "eliminar", "indice": i}, desde)
+        calculo = self._prevuelo_cambio({"tipo": "eliminar", "indice": i})
         self._guardar_para_deshacer()
         del self.operaciones[i]
         self.parametros, self._contador_cotas = tabla, contador
         if i < self.marcador:
             self.marcador -= 1
         self.modificado = True
-        self.recalcular(desde)
+        self._terminar_recalculo(desde, calculo)
 
     def puede_mover(self, op_id, nuevo_indice):
         """Como TimelineObject.canReorder: un paso no puede quedar antes de lo que usa ni después de quien lo usa."""
@@ -520,24 +540,30 @@ class Documento:
         ok, motivo = self.puede_mover(op_id, nuevo_indice)
         if not ok:
             raise ErrorDocumento(motivo)
-        self._guardar_para_deshacer()
         i = self.indice(op_id)
         nuevo_indice = max(0, min(nuevo_indice, len(self.operaciones) - 1))
+        receta = self.a_dict()
+        paso = receta["operaciones"].pop(i)
+        receta["operaciones"].insert(nuevo_indice, paso)
+        calculo = self._prevuelo_receta(receta)
+        self._guardar_para_deshacer()
         en_fin = self.marcador == len(self.operaciones)
         op = self.operaciones.pop(i)
         self.operaciones.insert(nuevo_indice, op)
         if en_fin:
             self.marcador = len(self.operaciones)
         self.modificado = True
-        self.recalcular(min(i, nuevo_indice))
+        self._terminar_recalculo(min(i, nuevo_indice), calculo)
 
     def mover_marcador(self, posicion):
         posicion = max(0, min(posicion, len(self.operaciones)))
         if posicion == self.marcador:
             return
+        receta = dict(self.a_dict(), marcador=posicion)
+        calculo = self._prevuelo_receta(receta)
         anterior = self.marcador
         self.marcador = posicion
-        self.recalcular(min(anterior, posicion))
+        self._terminar_recalculo(min(anterior, posicion), calculo)
 
     # ------------------------------------------------------------ parámetros
     def _tabla_cotas(self, operaciones, conocidos=None, parametros=None):
@@ -674,9 +700,8 @@ class Documento:
         return usos
 
     def aplicar_parametros(self, tabla):
-        """Aplica la tabla (UserParameters de Fusion). En documentos grandes con OpenCascade ensaya primero en un
-        hijo: cuesta reconstruir la receta y recalcular allí, además del recálculo real. Es una defensa frente a
-        caídas nativas, no su curación: que el hijo termine no garantiza que el kernel no caiga luego en el padre.
+        """Aplica la tabla (UserParameters de Fusion). En documentos grandes con OpenCascade calcula en un hijo
+        y recibe su resultado completo: una caída nativa allí no cierra la aplicación ni se repite en el padre.
         """
         tabla.valores()  # valida antes de tocar el documento
         operaciones = self._cotas_desde_parametros(tabla)
@@ -686,47 +711,91 @@ class Documento:
             detalle = "; ".join(f"«{n}» (lo usa {', '.join(sorted(p))})" for n, p in sorted(faltan.items()))
             raise ErrorDocumento(f"No se puede quitar ni renombrar un parámetro en uso: {detalle}.")
         desde = self._primer_afectado(tabla)
-        self._prevuelo_parametros(tabla, desde)
+        calculo = self._prevuelo_parametros(tabla)
         self._guardar_para_deshacer()
         self.operaciones = operaciones
         self.parametros = tabla
         self.modificado = True
-        self.recalcular(desde)
+        self._terminar_recalculo(desde, calculo)
 
-    def _prevuelo_corresponde(self):
+    def _prevuelo_corresponde(self, reactivados=0):
         """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48)."""
         from ..nucleo import aislado
 
         return (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
-                and sum(not op.suprimida for op in self.operaciones[:self.marcador])
+                and sum(not op.suprimida for op in self.operaciones[:self.marcador]) + reactivados
                 >= aislado.UMBRAL_PREVUELO_PARAMETROS)
 
-    def _prevuelo_parametros(self, tabla, desde):
-        """Ensaya sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
-        from ..nucleo import aislado
-
+    def _prevuelo_parametros(self, tabla):
+        """Calcula sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
         if not self._prevuelo_corresponde():
             return
-        try:
-            aislado.correr_json("prevuelo_parametros", {"receta": self.a_dict(), "parametros": tabla.a_lista(),
-                                                      "desde": desde}, aislado.TOPE_PREVUELO_PARAMETROS)
-        except aislado.TareaAislada as e:
-            raise ErrorDocumento(f"El prevuelo de parámetros falló: {e}. No se aplicó el cambio y el documento quedó "
-                                 "como estaba. Guardá una copia y probá valores distintos.") from e
+        return self._solicitar_calculo("prevuelo_parametros", {"receta": self.a_dict(), "parametros": tabla.a_lista()})
 
-    def _prevuelo_cambio(self, cambio, desde):
-        """Ensaya editar, suprimir o eliminar un paso en un hijo (B-48): el recálculo del historial también puede
-        caer en una excepción nativa del kernel. Si el hijo cae, el documento no se toca."""
-        from ..nucleo import aislado
+    def _prevuelo_receta(self, datos):
+        """Calcula una receta propuesta antes de mover el historial o consumir una entrada de deshacer."""
+        operaciones = datos.get("operaciones", [])
+        if not isinstance(operaciones, list) or not all(isinstance(o, dict) for o in operaciones):
+            return None                 # la validación habitual informa el dato mal formado
+        marcador = datos.get("marcador", len(operaciones))
+        if not isinstance(marcador, int):
+            return None
+        activos = sum(not o.get("suprimida", False) for o in operaciones[:max(0, marcador)])
+        anteriores = sum(not o.suprimida for o in self.operaciones[:self.marcador])
+        if self._prevuelo_corresponde(max(0, activos - anteriores)):
+            return self._solicitar_calculo("recalcular_documento", {"receta": datos})
 
-        if not self._prevuelo_corresponde():
+    def _prevuelo_cambio(self, cambio, previa=False):
+        """Calcula el cambio y, si se pide, su previa en un hijo. Si cae, el documento no se toca."""
+        i = cambio["indice"]
+        suprimida = (cambio["operacion"].get("suprimida", False) if cambio["tipo"] in ("reemplazar", "agregar")
+                     else cambio.get("suprimida", True))
+        # Se protege también el documento que alcanza el umbral al agregar o reactivar un paso.
+        reactivada = (not suprimida if cambio["tipo"] == "agregar" else
+                      i < self.marcador and self.operaciones[i].suprimida and not suprimida)
+        if not self._prevuelo_corresponde(int(reactivada)):
             return
+        datos = {"receta": self.a_dict(), "cambio": cambio}
+        firma = hashlib.sha256(json.dumps(datos, sort_keys=True).encode("utf-8")).digest()
+        clase = TIPOS_OPERACION.get(cambio.get("operacion", {}).get("tipo"))
+        memorizable = clase is not None and clase.MEMORIZABLE and all(op.MEMORIZABLE for op in self.operaciones)
+        if memorizable and self._ultimo_prevuelo is not None and firma == self._ultimo_prevuelo[0]:
+            return self._ultimo_prevuelo[1]
+        calculo = self._solicitar_calculo("prevuelo_cambio", dict(datos, previa=previa))
+        self._ultimo_prevuelo = (firma, calculo) if memorizable and previa else None
+        return calculo
+
+    def _solicitar_calculo(self, tarea, datos):
+        from ..nucleo import aislado
+        from .calculo_aislado import _leer_calculo
+
         try:
-            aislado.correr_json("prevuelo_cambio", {"receta": self.a_dict(), "cambio": cambio, "desde": desde},
-                                aislado.TOPE_PREVUELO_PARAMETROS)
-        except aislado.TareaAislada as e:
-            raise ErrorDocumento(f"El ensayo del cambio falló: {e}. No se aplicó y el documento quedó como estaba. "
-                                 "Guardá una copia y probá otro cambio.") from e
+            salida = aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, self.al_esperar)
+            return _leer_calculo(salida)
+        except (aislado.TareaAislada, ValueError, ErrorGeometria, OSError) as e:
+            raise ErrorDocumento(f"El cálculo aislado falló: {e}. No se aplicó el resultado y OmniCAD sigue andando.") from e
+
+    def _terminar_recalculo(self, desde, calculo):
+        if calculo is None:
+            self.recalcular(desde)
+        else:
+            self._aplicar_calculo(calculo)
+
+    def _aplicar_calculo(self, calculo):
+        """Adopta el resultado ya calculado; no ejecuta operaciones del kernel en este proceso."""
+        receta = calculo["receta"]
+        self.parametros = TablaParametros.desde_lista(receta["parametros"])
+        self._contador_cotas = receta.get("contador_cotas", 0)
+        self._contador = receta["contador"]
+        self.marcador = receta["marcador"]
+        self._estados = calculo["estados"]
+        self.resultados = [ResultadoPaso(estado, mensaje) for estado, mensaje in calculo["resultados"]]
+        self._usados, self._valores, self._duraciones = calculo["usados"], calculo["valores"], calculo["duraciones"]
+        for op, usados in zip(self.operaciones, calculo["dependencias"], strict=True):
+            op._usados = set(usados)
+        self._memo.clear()
+        self._previa = self._ultimo_prevuelo = None
+        self._notificar()
 
     def _primer_afectado(self, tabla):
         """Índice del primer paso que leyó un parámetro cuyo valor cambia con `tabla` (Fusion también
@@ -757,6 +826,18 @@ class Documento:
             if not any(o.id == op.id for o in self.operaciones):
                 operaciones.insert(indice, op)
             tabla, _ = self._tabla_cotas(operaciones)
+        posicion = next((i for i, o in enumerate(self.operaciones) if o.id == op.id), None)
+        cambio = {"tipo": "agregar" if posicion is None else "reemplazar",
+                  "indice": indice if posicion is None else posicion, "operacion": op.a_dict()}
+        if posicion is not None and posicion != indice:
+            cambio["indice_previa"] = indice
+        calculo = self._prevuelo_cambio(cambio, previa=True)
+        if calculo is not None:
+            previa = calculo["previa"]
+            if previa is None:
+                raise ErrorDocumento("El cálculo aislado no entregó la vista previa.")
+            op._usados = set(previa["usados"])
+            return previa["estado"], list(previa["avisos"])
         try:
             valores = tabla.valores()
         except ErrorExpresion:
@@ -801,6 +882,9 @@ class Documento:
     @motor.recalculo
     @registrar_calculo
     def recalcular(self, desde=0):
+        if self._prevuelo_corresponde():
+            self._aplicar_calculo(self._solicitar_calculo("recalcular_documento", {"receta": self.a_dict()}))
+            return
         registro = registro_uso.activo
         if registro is not None:
             inicio_registro, tiempos_registro = time.perf_counter(), []
@@ -1070,7 +1154,7 @@ class Documento:
         return texto.strip()[:TOPE_INSTRUCCIONES] if isinstance(texto, str) else ""
 
     @classmethod
-    def desde_dict(cls, datos, cache=None):
+    def desde_dict(cls, datos, cache=None, *, _calculo=None):
         """Documento desde una receta. `cache` ({índice de paso: (datos, formas)}, lo que guardó `pasos_para_cache`
         con ESTA misma receta) evita recalcular esos pasos; se usa solo para esta carga: después, editar recalcula."""
         version = datos.get("version_receta", 1)
@@ -1085,7 +1169,7 @@ class Documento:
         doc.instrucciones = cls.instrucciones_de(datos)
         doc._cache = cache or {}
         try:
-            doc._cargar(datos)
+            doc._cargar(datos, _calculo)
         finally:
             doc._cache = {}
         doc.modificado = False

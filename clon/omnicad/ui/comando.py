@@ -19,6 +19,7 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit,
                                QPushButton, QScrollArea, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
+from ..timeline.documento import ErrorDocumento
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
 from .. import registro_uso
 from ..registro_uso.ganchos import error as registrar_error
@@ -356,6 +357,7 @@ class PanelComando(QFrame):
         self.activa = None
         self.ultima_op = None
         self._previa_ok = False
+        self.confirmar = None       # función(op) de la ventana: aplica y devuelve False si el editor debe seguir abierto
 
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
@@ -768,7 +770,7 @@ class PanelComando(QFrame):
         if self.comando.SIN_OP:
             try:
                 self.comando.aplicar(self.valores, self.ctx)
-            except (ErrorComando, ErrorExpresion) as e:
+            except (ErrorComando, ErrorExpresion, ErrorDocumento) as e:
                 self._mostrar(str(e), aviso=True)
                 return
             self._registrar_uso("comando_aceptado")
@@ -782,6 +784,8 @@ class PanelComando(QFrame):
         if self.comando.PREVIA and not self._previa_ok:
             return                           # la operación falla: el mensaje rojo ya lo dice
         op = self.ultima_op
+        if self.confirmar is not None and not self.confirmar(op):
+            return
         try:
             preajustes_ui.recordar_ultimo(self)
         except OSError:

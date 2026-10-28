@@ -238,8 +238,10 @@ def _json(texto):
 
 
 @_registrar_archivo("archivo_abrir")
-def abrir(ruta):
+def abrir(ruta, esperar=None):
+    """`esperar(segundos)`: la ventana avisa y repinta mientras el hijo ensaya un proyecto grande (B-48)."""
     ruta = Path(ruta)
+    calculo, cache = None, None
     try:
         with zipfile.ZipFile(ruta) as z:
             nombres = set(z.namelist())
@@ -248,23 +250,29 @@ def abrir(ruta):
             manifiesto = _json(_leer_miembro(z, "manifiesto.json"))
             texto_receta = _leer_miembro(z, "receta.json")
             receta = _json(texto_receta)
-            cache = _leer_cache(z, texto_receta)
+            if not isinstance(manifiesto, dict) or manifiesto.get("formato") not in FORMATOS_LEGIBLES:
+                raise ErrorProyecto("Formato desconocido.")
+            if manifiesto.get("version_formato", 1) > VERSION_FORMATO:
+                raise ErrorProyecto("El proyecto fue guardado con una versión más nueva de OmniCAD.")
+            if not isinstance(receta, dict) or not isinstance(receta.get("operaciones", []), list):
+                raise ErrorProyecto("La receta del proyecto está dañada: las operaciones deben ser una lista.")
+            from ..nucleo import aislado
+            if (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
+                    and len(receta.get("operaciones", [])) >= aislado.UMBRAL_PREVUELO_PARAMETROS):
+                try:
+                    from ..timeline.calculo_aislado import _leer_calculo
+                    salida = aislado.correr_json("prevuelo_abrir", {"ruta": str(ruta.resolve())}, aislado.TOPE_PREVUELO_ABRIR,
+                                        esperar)
+                    calculo = _leer_calculo(salida)
+                except (aislado.TareaAislada, ValueError, geo.ErrorGeometria) as e:
+                    raise ErrorProyecto(f"El proyecto es grande y el ensayo de apertura falló: {e}. No se abrió y OmniCAD "
+                                        "sigue andando; guardá una copia y probá de nuevo.") from e
+            else:
+                cache = _leer_cache(z, texto_receta)
     except zipfile.BadZipFile:
         raise ErrorProyecto("El archivo está dañado o no es un ZIP.") from None
-    if manifiesto.get("formato") not in FORMATOS_LEGIBLES:
-        raise ErrorProyecto("Formato desconocido.")
-    if manifiesto.get("version_formato", 1) > VERSION_FORMATO:
-        raise ErrorProyecto("El proyecto fue guardado con una versión más nueva de OmniCAD.")
-    from ..nucleo import aislado, motor
-    if (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
-            and len(receta.get("operaciones", [])) >= aislado.UMBRAL_PREVUELO_PARAMETROS):
-        try:
-            aislado.correr_json("prevuelo_abrir", {"ruta": str(ruta)}, aislado.TOPE_PREVUELO_ABRIR)
-        except aislado.TareaAislada as e:
-            raise ErrorProyecto(f"El proyecto es grande y el ensayo de apertura falló: {e}. No se abrió y OmniCAD "
-                                "sigue andando; guardá una copia y probá de nuevo.") from e
     try:
-        doc = Documento.desde_dict(receta, cache)
+        doc = Documento.desde_dict(receta, cache, _calculo=calculo)
     except ErrorOperacion as e:
         if "Tipo de operación desconocido" in str(e):
             raise ErrorProyecto(f"El proyecto tiene una operación que esta OmniCAD ({VERSION}) no conoce "

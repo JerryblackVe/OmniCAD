@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QEventLoop, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
@@ -924,6 +924,13 @@ class VentanaPrincipal(QMainWindow):
         self.mensaje(f"Calculando {op.nombre}…", 30000)
         self.timeline.estado.repaint()
 
+    def _esperando_calculo(self, segundos):
+        """Un hijo calcula por la ventana (B-48): pasado 1 s lo dice con los segundos y la deja repintar y atender
+        al sistema (sin teclado ni mouse, para no tocar el documento a mitad de un cambio)."""
+        if segundos >= 1:
+            self.mensaje(f"Calculando en un proceso aparte… {int(segundos)} s", 1500)
+        QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
+
     def set_documento(self, doc):
         if self.modo_boceto.activo:
             self._cerrar_panel_de_boceto()
@@ -931,6 +938,7 @@ class VentanaPrincipal(QMainWindow):
         self._cancelar_eleccion()
         self.doc = doc
         doc.al_calcular = self._calculando
+        doc.al_esperar = self._esperando_calculo
         self._avisos_vistos = None
         ocultos = doc.propiedad("__navegador__", "ocultos", [])
         self.ocultos = set(ocultos) if isinstance(ocultos, list) and all(isinstance(i, str) for i in ocultos) else set()
@@ -2203,10 +2211,12 @@ class VentanaPrincipal(QMainWindow):
     def _intentar(self, funcion):
         try:
             funcion()
+            return True
         except (ErrorDocumento, ValueError) as e:
             from ..registro_uso.ganchos import error
             error(e, origen="ui")
             QMessageBox.warning(self, NOMBRE_APP, str(e))
+            return False
 
     def _agregar(self, op):
         res = self.doc.agregar(op)
@@ -2285,8 +2295,9 @@ class VentanaPrincipal(QMainWindow):
             self._estado_previa = ctx.estado
             self._refrescar_visibilidad()
         panel = PanelComando(comando, ctx, self.visor, valores, self.area)
+        panel.confirmar = lambda nueva: self._comando_aceptado(nueva, op is not None)
         panel.previa.connect(self._previa_comando)
-        panel.aceptado.connect(lambda nueva: self._comando_aceptado(nueva, op is not None))
+        panel.aceptado.connect(self._comando_cerrado)
         panel.cancelado.connect(self._comando_cerrado)
         self.panel = panel
         self.visor.ventana_libre = False
@@ -2336,18 +2347,17 @@ class VentanaPrincipal(QMainWindow):
         self._refrescar_visibilidad()
 
     def _comando_aceptado(self, op, edicion):
-        self._comando_cerrado()
+        """Aplica el cambio; el panel se cierra solo cuando devuelve True."""
         if op is None:
-            return
-        if edicion:
-            self._reemplazar(op)
-        else:
-            self._agregar(op)
-            if op.TIPO == "patron_plano":   # como Fusion: al crearlo, el patrón plano queda a la vista
-                nuevo = [c.id for c in self.doc.estado_final.cuerpos.values()
-                         if c.op_id == op.id and es_patron_plano(c)]
-                if nuevo:
-                    self._poner_patron_activo(nuevo[0])
+            return True
+        if not self._intentar(lambda: (self._reemplazar if edicion else self._agregar)(op)):
+            return False
+        if not edicion and op.TIPO == "patron_plano":   # al crearlo, el patrón plano queda a la vista
+            nuevo = [c.id for c in self.doc.estado_final.cuerpos.values()
+                     if c.op_id == op.id and es_patron_plano(c)]
+            if nuevo:
+                self._poner_patron_activo(nuevo[0])
+        return True
 
     def alternar_patron_plano(self, _=False):
         """Activar patrón plano / Terminar patrón plano de Fusion: muestra solo el patrón plano (el de la chapa
@@ -2599,7 +2609,7 @@ class VentanaPrincipal(QMainWindow):
                 if r == 2:
                     return
                 origen, descartar = (pendiente, False) if r == 0 else (ruta, True)
-            doc = proyecto.abrir(origen)
+            doc = proyecto.abrir(origen, self._esperando_calculo)
             if descartar:                              # eligió el guardado: recién ahora, con el guardado ya abierto,
                 proyecto.suprimir_copia(pendiente)     # se descarta la copia (si no abría, la copia era lo único que quedaba)
             doc.ruta, doc.nombre = str(ruta), Path(ruta).stem

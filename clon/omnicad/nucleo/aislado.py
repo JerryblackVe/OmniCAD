@@ -12,9 +12,12 @@ como BREP a un hijo que hace la cuenta; si pasa el tope se lo mata y la app sigu
 En la app instalada el hijo es la misma `OmniCAD.exe --tarea-aislada`.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 from . import intercambio
@@ -50,54 +53,67 @@ def _proyeccion_exacta(forma, e, x, deflexion):
 _TAREAS = {"autointersecciones": _autointersecciones, "proyeccion_exacta": _proyeccion_exacta}
 
 
-def _prevuelo_parametros(receta, parametros, desde):
+def _prevuelo_parametros(receta, parametros):
+    from ..timeline.calculo_aislado import _empaquetar
     from ..timeline.documento import Documento
     from ..timeline.parametros import TablaParametros
 
     with _motor.fijar_motor("opencascade"):
         doc = Documento.desde_dict(receta)
-        doc.parametros = TablaParametros.desde_lista(parametros)
-        doc.recalcular(desde)
-    return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones)}
+        doc.aplicar_parametros(TablaParametros.desde_lista(parametros))
+        return _empaquetar(doc)
 
 
-def _prevuelo_cambio(receta, cambio, desde):
+def _prevuelo_cambio(receta, cambio, previa=False):
     """Ensaya editar, suprimir o eliminar un paso (B-48): un cambio del historial también recalcula y podía
     tumbar el proceso con una caída nativa del kernel."""
+    from ..timeline.calculo_aislado import _empaquetar
     from ..timeline.documento import Documento
     from ..timeline.operaciones import operacion_desde_dict
 
     with _motor.fijar_motor("opencascade"):
         doc = Documento.desde_dict(receta)
         i = int(cambio["indice"])
-        if cambio["tipo"] == "reemplazar":
+        estado_previo = None
+        if cambio["tipo"] in ("reemplazar", "agregar"):
             nueva = operacion_desde_dict(cambio["operacion"])
-            nueva.id = doc.operaciones[i].id
-            doc.operaciones[i] = nueva
+            if previa:
+                estado, avisos = doc.previsualizar(nueva, cambio.get("indice_previa", i))
+                estado_previo = {"estado": estado, "avisos": avisos, "usados": set(nueva._usados)}
+            if cambio["tipo"] == "agregar":
+                doc.mover_marcador(i)
+                doc.agregar(nueva)
+            else:
+                doc.reemplazar(doc.operaciones[i].id, nueva)
         elif cambio["tipo"] == "suprimir":
-            doc.operaciones[i].suprimida = bool(cambio["suprimida"])
+            doc.suprimir(doc.operaciones[i].id, bool(cambio["suprimida"]))
         elif cambio["tipo"] == "eliminar":
-            del doc.operaciones[i]
-            if i < doc.marcador:
-                doc.marcador -= 1
+            doc.eliminar(doc.operaciones[i].id)
         else:
             raise ValueError(f"Cambio desconocido: {cambio['tipo']}")
-        doc.recalcular(int(desde))
-    return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones)}
+        return _empaquetar(doc, estado_previo)
 
 
 def _prevuelo_abrir(ruta):
     """Ensaya abrir un proyecto grande (B-48): si el kernel cae al reconstruirlo, la app no lo abre y sigue viva."""
     from ..io_archivos import proyecto
+    from ..timeline.calculo_aislado import _empaquetar
 
     with _motor.fijar_motor("opencascade"):
         doc = proyecto.abrir(ruta)
-    return {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones),
-            "cuerpos": len(doc.estado_final.cuerpos)}
+        return _empaquetar(doc)
+
+
+def _recalcular_documento(receta):
+    from ..timeline.calculo_aislado import _empaquetar
+    from ..timeline.documento import Documento
+
+    with _motor.fijar_motor("opencascade"):
+        return _empaquetar(Documento.desde_dict(receta))
 
 
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
-                "prevuelo_abrir": _prevuelo_abrir}
+                "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento}
 
 
 def _a_json(o):
@@ -114,6 +130,7 @@ def principal(argv):
     tarea, carpeta = argv[0], Path(argv[1])
     args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
     if tarea in _TAREAS_JSON:
+        os.chdir(args.pop("_cwd"))     # las rutas relativas del documento (derivaciones) valen desde el padre
         salida = _TAREAS_JSON[tarea](**args)
     else:
         forma = intercambio.leer_brep(carpeta / "forma.brep")
@@ -138,14 +155,41 @@ def correr(tarea, forma, tope, **args):
     return _correr(tarea, tope, args, forma)
 
 
-def correr_json(tarea, datos, tope):
-    """Hace `tarea` en un hijo con argumentos JSON (`datos`), sin BREP. `tope`: segundos como máximo."""
+def correr_json(tarea, datos, tope, esperar=None):
+    """Hace `tarea` en un hijo con argumentos JSON (`datos`), sin BREP. `tope`: segundos como máximo.
+    `esperar(segundos)`: la ventana la usa para avisar y repintar mientras el hijo trabaja (B-48)."""
     if tarea not in _TAREAS_JSON:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
-    return _correr(tarea, tope, datos)
+    return _correr(tarea, tope, dict(datos, _cwd=os.getcwd()), esperar=esperar)
 
 
-def _correr(tarea, tope, args, forma=None):
+def _ejecutar(comando, tope, esperar):
+    """`subprocess.run`; con `esperar` corre en un hilo y el que llama la invoca cada 50 ms (sin Qt acá)."""
+    def correr():
+        return subprocess.run(comando, cwd=_RAIZ, capture_output=True, timeout=tope,
+                              creationflags=_SIN_VENTANA, check=False)
+
+    if esperar is None:
+        return correr()
+    salida = []
+
+    def trabajo():
+        try:
+            salida.append(correr())
+        except BaseException as e:      # se relanza en el hilo que espera
+            salida.append(e)
+
+    hilo, inicio = threading.Thread(target=trabajo, daemon=True), time.monotonic()
+    hilo.start()
+    while hilo.is_alive():
+        hilo.join(0.05)
+        esperar(time.monotonic() - inicio)
+    if isinstance(salida[0], BaseException):
+        raise salida[0]
+    return salida[0]
+
+
+def _correr(tarea, tope, args, forma=None, esperar=None):
     if tope <= 0:
         raise TiempoAgotado("no quedó tiempo para correrla")
     if forma is not None and _motor.motor_activo() == "omnikernel":
@@ -159,8 +203,7 @@ def _correr(tarea, tope, args, forma=None):
             if forma is not None:
                 intercambio.escribir_brep(forma, carpeta / "forma.brep")
             (carpeta / "args.json").write_text(json.dumps(args, default=_a_json), encoding="utf-8", newline="\n")
-            hijo = subprocess.run(_comando(tarea, carpeta), cwd=_RAIZ, capture_output=True, timeout=tope,
-                                  creationflags=_SIN_VENTANA, check=False)
+            hijo = _ejecutar(_comando(tarea, carpeta), tope, esperar)
         except subprocess.TimeoutExpired:         # run() ya mató al hijo
             raise TiempoAgotado(f"pasó de {tope:.3g} s y se cortó".replace(".", ",")) from None
         except (OSError, TypeError, ValueError, intercambio.ErrorGeometria) as e:
