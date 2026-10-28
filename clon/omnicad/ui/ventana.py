@@ -65,6 +65,7 @@ FILTRO_ABRIR = ";;".join([
     "IGES (*.iges *.igs)", "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)", "BREP de OpenCascade (*.brep *.brp)"])
 VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True,
                        "calcomanias": True}
+COLOR_PREVIA_NUEVO = (0.62, 0.80, 1.00)     # azul acerado: así pinta Fusion el cuerpo nuevo de una vista previa
 CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos")
 NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"), ("Space", "Espacio"))
 
@@ -1039,9 +1040,16 @@ class VentanaPrincipal(QMainWindow):
         if self.prefs_colores_componente:
             from .visor3d import PALETA
             apariencias = {cid: PALETA[i % len(PALETA)] for i, cid in enumerate(estado.cuerpos)}
+        if self._estado_previa is not None and self.panel is not None:       # P-39: el cuerpo nuevo de la previa va azul
+            apariencias = {**apariencias, **{cid: COLOR_PREVIA_NUEVO for cid in estado.cuerpos
+                                             if cid not in self.panel.ctx.estado.cuerpos}}
         caras = self._caras_pintadas(estado, ocultos)
+        # P-38: un boceto terminado que ningún paso usa muestra su perfil celeste y su construcción punteada
+        usados = set().union(*(o.dependencias() for o in self.doc.operaciones))
+        libres = frozenset(k for k in estado.bocetos if k not in usados)
         for v in self.area.visores:
             v.opacidad = {cid: props["opacidad"] for cid, props in self.doc.propiedades.items() if "opacidad" in props}
+            v.bocetos_libres = libres
             v.set_modelo(estado, ocultos, excluir, apariencias)
             v.set_caras_pintadas(caras)
         if self.panel is None or not self.panel.comando.SIN_OP:

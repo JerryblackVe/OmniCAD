@@ -325,6 +325,35 @@ def polilineas_boceto(boceto_resuelto):
     return salida
 
 
+def polilineas_construccion(boceto_resuelto):
+    """Curvas de construcción de un boceto resuelto en 3D (Fusion las deja punteadas al terminar el boceto)."""
+    b, pl, salida = boceto_resuelto.boceto, boceto_resuelto.plano, []
+    auto = b.ocultos_por_proyeccion_auto()[0]
+    for c in b.curvas.values():
+        if c.construccion and c.id not in auto:
+            for prim in b.primitivas(c.id):
+                uv = muestrear_primitiva(prim)
+                if len(uv) >= 2:
+                    salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
+    return salida
+
+
+def tris_perfil_terminado(boceto_resuelto, tope=300):
+    """Triángulos de los perfiles de un boceto terminado (relleno celeste). Se guardan en cada perfil: la vista previa
+    de un comando refresca el modelo en cada cambio. shortcut: más de `tope` perfiles no se rellenan (miles de letras
+    de un texto); subir el tope si hace falta."""
+    b = boceto_resuelto.boceto
+    propios = set(b.curvas) - b.ocultos_por_proyeccion_auto()[0]
+    if not propios or len(boceto_resuelto.perfiles) > tope:
+        return []                      # solo la proyección de una cara: la pieza no se marca (B-109)
+    salida = []
+    for p in boceto_resuelto.perfiles:
+        if getattr(p, "_tris_visor", None) is None:
+            p._tris_visor = geo.teselar(p.cara)[0]
+        salida.append(p._tris_visor)
+    return salida
+
+
 class ConfigVista:
     """Opciones de visualización compartidas por todas las ventanas gráficas (vistas múltiples)."""
 
@@ -424,6 +453,9 @@ class Visor3D(QOpenGLWidget):
         self._bocetos = np.zeros((0, 3), np.float32)
         self._resalte = np.zeros((0, 3), np.float32)
         self._perfiles = np.zeros((0, 3), np.float32)
+        self.bocetos_libres = frozenset()          # bocetos que ningún paso usa: la ventana los pone
+        self._perfiles_hechos = np.zeros((0, 3), np.float32)      # relleno de esos bocetos ya terminados
+        self._construccion = np.zeros((0, 3), np.float32)         # su construcción, punteada
         self._hover = None                 # ("plano", ref) | ("cara", triángulos)
         self._limpiar_malla = False        # True tras cambiar la calidad: la próxima vez se tesela desde cero
         self._cache = {}                   # id(forma) → (forma, v, n, aristas, centro, radio, deflexión)
@@ -543,11 +575,17 @@ class Visor3D(QOpenGLWidget):
         self._cache, self._mallas, self._formas = cache, nuevas, formas
         self._limpiar_malla = False
         self._hover_ent = None
-        polis = []
+        polis, rellenos, constr = [], [], []
         for br in estado.bocetos.values():
             if br.op_id not in ocultos and br.op_id not in excluir_bocetos:
                 polis.extend(polilineas_boceto(br))
+                if br.op_id in self.bocetos_libres:
+                    rellenos.extend(tris_perfil_terminado(br))
+                    constr.extend(polilineas_construccion(br))
         self._bocetos = _segmentos(polis)
+        self._construccion = _segmentos(constr)
+        self._perfiles_hechos = (np.concatenate(rellenos).astype(np.float32) if rellenos
+                                 else np.zeros((0, 3), np.float32))
         self.update()
 
     def _deflexion(self, forma):
@@ -1921,6 +1959,16 @@ class Visor3D(QOpenGLWidget):
             GL.glColor3f(*((0.35, 0.62, 1.0) if cfg.oscuro() else (0.10, 0.35, 0.85)))
             self._apuntar(self._bocetos)
             GL.glDrawArrays(GL.GL_LINES, 0, len(self._bocetos))
+        if cfg.visibilidad.get("bocetos", True):
+            if len(self._construccion):
+                GL.glEnable(GL.GL_LINE_STIPPLE)
+                GL.glLineStipple(3, 0x5555)
+                GL.glLineWidth(1.4)
+                GL.glColor3f(*((0.78, 0.78, 0.82) if cfg.oscuro() else (0.38, 0.38, 0.42)))
+                self._apuntar(self._construccion)
+                GL.glDrawArrays(GL.GL_LINES, 0, len(self._construccion))
+                GL.glDisable(GL.GL_LINE_STIPPLE)
+            self._triangulos_planos(self._perfiles_hechos, AZUL_PERFIL, 0.30)
         if self.plano_boceto is not None and self.opciones_boceto.get("perfil", True):
             self._triangulos_planos(self._perfiles, AZUL_PERFIL, 0.30)
         self._triangulos_planos(self._resalte, (1.0, 0.55, 0.1), 0.55)
