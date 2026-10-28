@@ -241,7 +241,8 @@ def test_stdio_real_initialize_list_tools_y_llamadas():
     print(f"\nstdio real: {len(tools)} herramientas, arranque + initialize {arranque:.2f} s, "
           f"primeras: {[t.name for t in tools[:5]]}")
     assert (info.name, info.version) == ("omnicad", VERSION)
-    assert [t.name for t in tools] == [h["nombre"] for h in api.catalogo(GRUPOS_POR_DEFECTO)]
+    # Cada proceso registra al importar: se compara el catálogo completo sin exigir el orden de importación.
+    assert sorted(t.name for t in tools) == sorted(h["nombre"] for h in api.catalogo(GRUPOS_POR_DEFECTO))
     assert json_de(nuevo)["result"]["name"] == "Prueba MCP"
     assert json_de(escena)["result"]["name"] == "Prueba MCP" and json_de(escena)["result"]["bodies"] == []
 

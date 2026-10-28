@@ -3,6 +3,7 @@
 `timeline/aspectos_doc.py` (un paso de deshacer, entra en «En este diseño»), «Aplicar a: Caras» y la vista previa de lo
 que se edita sin escribirlo."""
 import os
+import sys
 
 import numpy as np
 import pytest
@@ -16,7 +17,9 @@ from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import render_cpu as rc
 from omnicad.timeline import aspectos_doc as ad
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QToolButton
 
 ROJO = "Pintura - Brillante (Rojo)"
 
@@ -49,6 +52,24 @@ def vr(app_qt):
 def _cara_superior(s, cid):
     (c, e), = sl.elegir(s, ">Z", "cara", cid)
     return sl.referencia(c, e)
+
+
+@pytest.mark.parametrize("clave", ["aspecto", "escena"])
+def test_paneles_de_render_abren_con_clic_y_se_reubican_sin_error(vr, monkeypatch, clave):
+    v, _s, _cid = vr
+    errores = []
+    monkeypatch.setattr(sys, "excepthook", lambda *args: errores.append(args))
+    v.show()
+    QTest.qWait(10)
+    boton = next(b for b in v.cinta.findChildren(QToolButton) if b.defaultAction() is v.acciones[clave])
+    QTest.mouseClick(boton, Qt.LeftButton)
+    assert errores == []
+    panel = v.panel_aspecto if clave == "aspecto" else v.panel_escena
+    assert v.area.panel is panel and panel.isVisible()
+    v.resize(1024, 640)
+    QTest.qWait(10)
+    assert errores == [] and panel.isVisible()
+    assert panel.parent() is v.area and panel.x() < v.area.width()
 
 
 def test_aplicar_en_render_pasa_por_aspectos_del_diseno(vr):
