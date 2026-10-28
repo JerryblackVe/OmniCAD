@@ -187,3 +187,39 @@ def test_calculando_repinta_una_vez_por_aviso_y_no_en_cada_vista_previa_seguida(
     assert len(pintadas) == 1
     v._calculando(SimpleNamespace(nombre="B"))
     assert len(pintadas) == 2
+
+
+def test_previa_en_vivo_corre_en_este_proceso_y_aceptar_sigue_aislado(ventana, monkeypatch):
+    """P-42: arrastrar una asa no lanza un proceso aparte por movimiento; solo la primera previa y el aceptar."""
+    v, llamadas = ventana, []
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    ensayar = _aprobar(monkeypatch)
+    monkeypatch.setattr(aislado, "correr_json", lambda *a, **k: (llamadas.append(a[0]), ensayar(*a, **k))[1])
+    panel = v.ejecutar_comando(Caja(), v.doc.operacion("op2"))
+    _escribir(panel, "4 mm")
+    assert panel._previa_ok and len(llamadas) == 1          # la primera previa pasa por el ensayo aislado
+    for valor in ("5 mm", "6 mm", "7 mm", "6 mm"):
+        _escribir(panel, valor)
+        assert panel._previa_ok
+    assert len(llamadas) == 1                               # las siguientes, en vivo
+    panel._refrescar_seleccion()                            # otra selección: otra geometría, otra vez el ensayo
+    _escribir(panel, "6 mm")
+    assert len(llamadas) == 2
+    _escribir(panel, "8 mm")                                 # un valor que ninguna previa aislada ensayó
+    assert len(llamadas) == 2
+    QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+    assert v.panel is None and len(llamadas) == 3           # aceptar ensaya el cambio real, aislado
+    assert geo.volumen(v.doc.estado_final.cuerpos["op2.c1"].forma) == pytest.approx(120)
+
+
+def test_la_espera_de_la_previa_sigue_a_lo_que_costo_la_ultima(ventana, monkeypatch):
+    """P-41: «lo último gana»; barata = un cálculo por vuelta del bucle, cara = deja respirar a la ventana."""
+    import time
+
+    from omnicad.ui import comando as modulo
+
+    panel = ventana.ejecutar_comando(Caja(), ventana.doc.operacion("op2"))
+    for demora, esperado in ((0.0, 0), (0.06, 60), (0.9, modulo.PREVIA_ESPERA_MAX_MS), (0.0, 0)):
+        monkeypatch.setattr(panel, "_calcular_previa_ahora", lambda d=demora: time.sleep(d))
+        panel._calcular_previa()
+        assert panel._t_previa.interval() == pytest.approx(esperado, abs=15)

@@ -820,10 +820,11 @@ class Documento:
         return len(self._usados)
 
     # ------------------------------------------------------------ cálculo
-    def previsualizar(self, op, indice=None):
+    def previsualizar(self, op, indice=None, en_vivo=False):
         """Ejecuta `op` sobre una COPIA del estado en `indice` (por defecto, el marcador) sin tocar el
         documento: es la vista previa de los diálogos de comando. Devuelve (estado, avisos); los errores
-        de la operación se propagan para que el diálogo los muestre."""
+        de la operación se propagan para que el diálogo los muestre. `en_vivo`: una previa que se repite (arrastrar
+        una asa) corre en este proceso aunque el documento pase el umbral del proceso aparte (P-42); aceptar se ensaya aislado."""
         indice = self.marcador if indice is None else indice
         entrada = self.estado_en(indice)
         tabla = self.parametros
@@ -837,7 +838,7 @@ class Documento:
                   "indice": indice if posicion is None else posicion, "operacion": op.a_dict()}
         if posicion is not None and posicion != indice:
             cambio["indice_previa"] = indice
-        calculo = self._prevuelo_cambio(cambio, previa=True)
+        calculo = None if en_vivo else self._prevuelo_cambio(cambio, previa=True)
         if calculo is not None:
             previa = calculo["previa"]
             if previa is None:

@@ -27,6 +27,10 @@ from . import formato, preajustes_ui, temas
 from .iconos import icono
 
 
+# Vista previa «lo último gana» (P-41): cuánto se espera antes del próximo cálculo sigue a lo que costó el último.
+PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
+
+
 class ErrorComando(ValueError):
     """Faltan datos para armar la operación (se muestra en el panel, no es un error del modelo)."""
 
@@ -357,6 +361,7 @@ class PanelComando(QFrame):
         self.activa = None
         self.ultima_op = None
         self._previa_ok = False
+        self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self.confirmar = None       # función(op) de la ventana: aplica y devuelve False si el editor debe seguir abierto
 
         v = QVBoxLayout(self)
@@ -427,7 +432,7 @@ class PanelComando(QFrame):
         pie.addWidget(cancelar)
         v.addLayout(pie)
 
-        self._t_previa = QTimer(self, singleShot=True, interval=220)
+        self._t_previa = QTimer(self, singleShot=True, interval=0)
         self._t_previa.timeout.connect(self._calcular_previa)
         self.manipuladores = None            # GestorManipuladores si el comando tiene asas en la vista
         if (type(comando).manipuladores is not Comando.manipuladores
@@ -656,6 +661,7 @@ class PanelComando(QFrame):
         return None
 
     def _refrescar_seleccion(self):
+        self._previa_aislada = False     # otra selección es otra geometría: la próxima previa vuelve a ensayarse aislada
         prims = []
         for c in self.campos:
             if isinstance(c, Seleccion):
@@ -684,7 +690,7 @@ class PanelComando(QFrame):
     def _programar(self):
         gestor = self.manipuladores
         if gestor is not None and gestor.arrastrando and self._t_previa.isActive():
-            pass                             # arrastrando un asa: la vista previa se recalcula cada 220 ms
+            pass                             # arrastrando un asa: el cálculo ya pedido toma el último valor
         else:
             self._t_previa.start()
         if gestor is not None:
@@ -695,6 +701,14 @@ class PanelComando(QFrame):
             k: v for k, v in self.valores.items() if k not in {c.clave for c in self.campos}}
 
     def _calcular_previa(self):
+        inicio = time.perf_counter()
+        try:
+            self._calcular_previa_ahora()
+        finally:
+            ms = (time.perf_counter() - inicio) * 1000
+            self._t_previa.setInterval(0 if ms < PREVIA_CUADRO_MS else min(int(ms), PREVIA_ESPERA_MAX_MS))
+
+    def _calcular_previa_ahora(self):
         for c in self.campos:
             if isinstance(c, Info):
                 try:
@@ -726,7 +740,8 @@ class PanelComando(QFrame):
             self._previa_ok = True
             return
         try:
-            estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice)
+            estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
+            self._previa_aislada = True
         except Exception as e:  # noqa: BLE001 — se muestra el error del kernel como en Fusion
             self._mostrar(f"⚠ {e}")
             self._previa_vista(None)

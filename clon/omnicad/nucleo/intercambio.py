@@ -325,4 +325,16 @@ def forma_de_texto(texto):
         os.remove(ruta)
 
 
+def convertir_forma(forma):
+    """La forma con su clase concreta de OpenCascade (Solid, Face…): un hijo de un compuesto llega como TopoDS_Shape."""
+    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_COMPSOLID, TopAbs_EDGE, TopAbs_FACE,
+                            TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
+    from OCP.TopoDS import TopoDS
+
+    convertir = {TopAbs_COMPOUND: TopoDS.Compound, TopAbs_COMPSOLID: TopoDS.CompSolid,
+                 TopAbs_SOLID: TopoDS.Solid, TopAbs_SHELL: TopoDS.Shell, TopAbs_FACE: TopoDS.Face,
+                 TopAbs_WIRE: TopoDS.Wire, TopAbs_EDGE: TopoDS.Edge, TopAbs_VERTEX: TopoDS.Vertex}
+    return convertir[forma.ShapeType()](forma)
+
+
 _motor.registrar(globals(), _iniciar_opencascade)

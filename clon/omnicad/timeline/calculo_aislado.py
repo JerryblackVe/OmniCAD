@@ -71,24 +71,13 @@ def _codificar(raiz):
             "brep": intercambio.brep_a_texto(geo.compuesto(formas)) if formas else None}
 
 
-def _convertir_forma(forma):
-    from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_COMPSOLID, TopAbs_EDGE, TopAbs_FACE,
-                           TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
-    from OCP.TopoDS import TopoDS
-
-    convertir = {TopAbs_COMPOUND: TopoDS.Compound, TopAbs_COMPSOLID: TopoDS.CompSolid,
-                 TopAbs_SOLID: TopoDS.Solid, TopAbs_SHELL: TopoDS.Shell, TopAbs_FACE: TopoDS.Face,
-                 TopAbs_WIRE: TopoDS.Wire, TopAbs_EDGE: TopoDS.Edge, TopAbs_VERTEX: TopoDS.Vertex}
-    return convertir[forma.ShapeType()](forma)
-
-
 def _decodificar(grafo):
     if not isinstance(grafo, dict) or grafo.get("version") != 1 or not isinstance(grafo.get("nodos"), list):
         raise ValueError("El hijo no entregó un resultado de cálculo válido.")
     clases, nodos, hechos, pendientes = _clases(), grafo["nodos"], {}, set()
     if len(nodos) > 1_000_000:
         raise ValueError("El resultado del cálculo tiene demasiados objetos.")
-    formas = ([_convertir_forma(f) for f in consultas.hijos_compuesto(intercambio.forma_de_texto(grafo["brep"]))]
+    formas = ([intercambio.convertir_forma(f) for f in consultas.hijos_compuesto(intercambio.forma_de_texto(grafo["brep"]))]
               if grafo.get("brep") else [])
 
     def leer(v):
