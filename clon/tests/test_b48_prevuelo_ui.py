@@ -149,3 +149,26 @@ def test_ventana_avisa_calculando_pasado_un_segundo_y_sigue_atendiendo(ventana, 
     assert any(m.startswith("Calculando en un proceso aparte") for m in mensajes)
     assert len(latidos) >= 8                       # la ventana siguió atendiendo mientras esperaba
     assert v.doc.a_dict() == antes
+
+
+def test_un_timer_no_lanza_un_segundo_calculo_mientras_se_espera_al_hijo(ventana, monkeypatch):
+    from PySide6.QtCore import QTimer
+
+    from omnicad.timeline.documento import ErrorDocumento
+
+    v = ventana
+    monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    monkeypatch.setattr(aislado, "_comando", lambda tarea, carpeta: [sys.executable, "-c", "import time; time.sleep(1.2)"])
+    anidados = []
+
+    def anidado():
+        try:
+            v.doc.suprimir("op1")
+        except ErrorDocumento as e:
+            anidados.append(str(e))
+
+    QTimer.singleShot(300, anidado)
+    with pytest.raises(ErrorDocumento, match="cálculo aislado"):
+        v.doc.suprimir("op2")
+    assert len(anidados) == 1 and "Ya hay un cálculo" in anidados[0]
+    assert not v.doc.operacion("op1").suprimida and not v.doc.operacion("op2").suprimida

@@ -148,6 +148,7 @@ class Documento:
         self._valores = None      # valores de los parámetros con los que se hizo el último cálculo
         self._duraciones = []     # por paso: segundos que tardó su último cálculo (0 si no se ejecutó)
         self.al_calcular = None   # función(op) que la ventana pone para avisar «Calculando…» antes de un paso que se ejecuta
+        self._esperando_hijo = False
         self.al_esperar = None    # función(segundos) que la ventana pone para avisar y repintar mientras trabaja el hijo (B-48)
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
         self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
@@ -769,11 +770,16 @@ class Documento:
         from ..nucleo import aislado
         from .calculo_aislado import _leer_calculo
 
+        if self._esperando_hijo:        # un timer de la ventana, mientras esperamos al hijo, no lanza un segundo cálculo
+            raise ErrorDocumento("Ya hay un cálculo en un proceso aparte: esperá a que termine.")
+        self._esperando_hijo = True
         try:
             salida = aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, self.al_esperar)
             return _leer_calculo(salida)
         except (aislado.TareaAislada, ValueError, ErrorGeometria, OSError) as e:
             raise ErrorDocumento(f"El cálculo aislado falló: {e}. No se aplicó el resultado y OmniCAD sigue andando.") from e
+        finally:
+            self._esperando_hijo = False
 
     def _terminar_recalculo(self, desde, calculo):
         if calculo is None:
