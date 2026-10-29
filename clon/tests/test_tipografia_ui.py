@@ -328,3 +328,26 @@ def test_sin_fuentes_de_lectura_facil_el_grupo_no_aparece(app_qt):
     assert "Lectura fácil" not in textos and textos == ["Arial", "Segoe UI"]
     c = _combo_fuentes("", "La de la interfaz", familias=["Arial"])
     assert c.itemData(0) == "" and c.itemText(0) == "La de la interfaz"
+
+
+def test_las_etiquetas_de_apariencia_no_se_cortan_con_ningun_tamano_de_letra(app_qt, prefs):
+    from omnicad.ui import temas
+    from omnicad.ui.preferencias import DialogoPreferencias
+    from PySide6.QtWidgets import QLabel
+    temas.activar("oscuro_moderno")
+    temas.activar_tipografia({"tamano_pct": 100})
+    temas.aplicar_a_app(app_qt)
+    dlg = DialogoPreferencias(prefs, None, "apariencia")
+    dlg.show()
+    try:
+        for pct in (100, 118, 143, 150, 80, 100):             # con el diálogo abierto, como mover el deslizador
+            temas.activar_tipografia({"tamano_pct": pct})
+            temas.aplicar_a_app(app_qt)
+            app_qt.processEvents()
+            cortadas = [(e.text(), e.height(), e.heightForWidth(e.width())) for e in dlg.findChildren(QLabel)
+                        if e.wordWrap() and e.isVisible() and e.text() and e.height() < e.heightForWidth(e.width()) - 1]
+            assert cortadas == [], (pct, cortadas)
+    finally:
+        dlg.close()
+        temas.activar_tipografia()
+        temas.aplicar_a_app(app_qt)

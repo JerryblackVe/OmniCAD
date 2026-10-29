@@ -10,10 +10,10 @@ dependen de la nube o de licencias (Tokens, Red, Recopilación de datos…) no s
 import subprocess
 import threading
 
-from PySide6.QtCore import QSettings, Qt, QUrl, Signal
+from PySide6.QtCore import QSettings, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QFontDatabase
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QFrame, QHBoxLayout,
-                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSlider,
+                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
@@ -180,6 +180,24 @@ class Preferencias:
 
 # ------------------------------------------------------------------ diálogo
 class CampoInstrucciones(QPlainTextEdit):
+class _EtiquetaFila(QLabel):
+    """Etiqueta de una fila del formulario: pide el ancho de su texto (hasta un tope) y solo parte la línea si no
+    entra. Así la fila nunca queda más baja que su texto, con la letra del tamaño que sea (un QLabel con ajuste de
+    línea normal da un ancho mínimo chico y una altura de una sola línea, y el texto sale cortado)."""
+    TOPE = 300
+
+    def __init__(self, texto):
+        super().__init__(texto)
+        self.setWordWrap(True)
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+    def minimumSizeHint(self):
+        ancho = min(self.fontMetrics().horizontalAdvance(self.text()) + 6, self.TOPE)
+        return QSize(ancho, self.heightForWidth(ancho))
+
+    sizeHint = minimumSizeHint
+
+
     """Texto multilínea con tope de caracteres y contador debajo (`self.contador`): lo que pasa del tope (un pegado
     enorme) se corta y el contador lo dice. Instrucciones del Asistente: las propias y las de cada proyecto."""
 
@@ -548,10 +566,7 @@ class DialogoPreferencias(QDialog):
             form.addRow(QLabel("Elegí una subcategoría en el árbol de la izquierda.", wordWrap=True))
         for clave, etiqueta, tipo, opciones in filas:
             actual = self.prefs[clave] if clave else None
-            texto = QLabel(etiqueta)
-            texto.setWordWrap(True)                  # F3: con letra grande la etiqueta no ensancha el diálogo
-            texto.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            texto.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)   # ocupa la columna: no se parte de más
+            texto = _EtiquetaFila(etiqueta)           # F3: con letra grande la etiqueta crece sin cortarse
             if tipo == "version_motor":
                 form.addRow(texto, QLabel(motor.version_omnikernel() or "No instalado"))
                 continue
