@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Lectura/escritura STEP, IGES y BREP a nivel kernel (la capa io_archivos los usa para archivos de usuario)."""
+import hashlib
+import io
 import os
 import re
 import tempfile
@@ -279,6 +281,19 @@ def escribir_brep(forma, ruta):
     tienen superficie (las que son solo malla), así que no se pierde geometría."""
     if not BRepTools.Write_s(forma, str(ruta), False, False, TopTools_FormatVersion.TopTools_FormatVersion_VERSION_1):
         raise ErrorGeometria(f"No se pudo escribir el BREP: {ruta}")
+
+
+def huella_visual(forma):
+    """Contenido exacto para la caché del visor de Fusion: incluye ubicación y orientación, sin la malla."""
+    memoria = io.BytesIO()
+    BRepTools.Write_s(forma, memoria, False, False, TopTools_FormatVersion.TopTools_FormatVersion_VERSION_1)
+    bruto = memoria.getvalue()
+    geometria, formas = bruto.split(b"\nTShapes ", 1)
+    # TopTools_ShapeSet::Write: Free/Modified/Checked son flags de edición; el transporte los cambia.
+    # No cambian la malla. Se conservan los otros flags y toda la geometría/topología del BREP.
+    formas = re.sub(rb"(?m)^[01]{3}([01]{4})\n(?=(?:[+ie-]\d+ \d+ ){0,10}(?:\*|\n))",
+                    rb"000\1\n", formas)
+    return hashlib.sha256(geometria + b"\nTShapes " + formas).digest()
 
 
 def leer_brep(ruta):

@@ -843,6 +843,15 @@ class Documento:
             previa = calculo["previa"]
             if previa is None:
                 raise ErrorDocumento("El cálculo aislado no entregó la vista previa.")
+            from ..nucleo import consultas, intercambio
+            # La revisión de una forma intacta es la del padre: el transporte BREP no obliga
+            # a remallarla ni pierde sus referencias de selección (P-43). Solo se comparte tras
+            # cotejar todo el contenido, nunca por caja/volumen ni por el id del cuerpo.
+            for cid, c in previa["estado"].cuerpos.items():
+                original = entrada.cuerpos.get(cid)
+                if (original is not None and consultas.es_forma(c.forma) and consultas.es_forma(original.forma)
+                        and intercambio.huella_visual(c.forma) == intercambio.huella_visual(original.forma)):
+                    c.forma = original.forma
             op._usados = set(previa["usados"])
             return previa["estado"], list(previa["avisos"])
         try:
