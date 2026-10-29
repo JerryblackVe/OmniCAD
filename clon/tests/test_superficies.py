@@ -277,6 +277,16 @@ def test_empalme_y_chaflan_en_cascaron():
     assert g.area(c) == pytest.approx(160 + 20 * math.sqrt(2)) and g.es_valida(c)
 
 
+def test_empalme_y_chaflan_de_una_arista_libre_lo_dicen():
+    f1 = cara_cuadrada()
+    f2 = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, -1, 0)), 0, 10, 0, 10).Face()
+    cas = sf.coser([f1, f2], 1e-6)["forma"]
+    libre = arista_en(cas, (5, 10, 0))                       # el borde de arriba de la primera cara: la toca una sola
+    for funcion in (sf.empalme_superficie, sf.chaflan_superficie):
+        with pytest.raises(g.ErrorGeometria, match="arista es libre"):
+            funcion(cas, [libre], 2)
+
+
 # ---------------------------------------------------------------- modificar
 def test_recortar_por_plano_superficie_y_aristas():
     cara = cara_cuadrada()

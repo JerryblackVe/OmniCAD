@@ -716,7 +716,11 @@ def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
     if valor <= 0:
         raise geo.ErrorGeometria(f"El {parametro} del {sustantivo} debe ser positivo.")
     op = clase_api(forma)
+    mapa = _mapa_aristas(forma)
     for e in _formas(aristas):
+        if len(_caras_de(mapa, TopoDS.Edge(e))) < 2:
+            raise geo.ErrorGeometria(f"La arista es libre (la toca una sola cara): el {sustantivo} necesita una arista "
+                                     "compartida por dos caras.")
         op.Add(float(valor), TopoDS.Edge(e))
     # OCC lanza Standard_Failure con mensajes poco útiles
     try:

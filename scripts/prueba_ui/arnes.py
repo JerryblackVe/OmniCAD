@@ -20,6 +20,7 @@ import os
 import sys
 import tempfile
 import traceback
+import warnings
 from datetime import date
 from pathlib import Path
 
@@ -114,7 +115,9 @@ def mostrar(widget):
 def activar(widget):
     """Deja la ventana como la activa para los atajos. Visible: foco real de Windows; minimizada: solo dentro de Qt."""
     if modo_ventana() == "minimizada":
-        QApplication.setActiveWindow(widget)        # obsoleto pero es la única vía sin foco real (probado: los atajos andan)
+        with warnings.catch_warnings():             # obsoleto pero es la única vía sin foco real (probado: los atajos andan)
+            warnings.simplefilter("ignore", DeprecationWarning)
+            QApplication.setActiveWindow(widget)
     else:
         widget.activateWindow()
         widget.raise_()

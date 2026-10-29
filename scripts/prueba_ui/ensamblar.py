@@ -257,6 +257,7 @@ def vinculo():
     p.set_valor("union1", IDS[js[0]])
     p.set_valor("union2", IDS[js[0]])
     p._t_previa.stop()
+    p._calcular_previa()                  # sin esto aceptaría la operación vieja: el temporizador ya no está
     p.aceptar()
     A.esperar(200)
     A.reg(AR, "vínculo: la misma unión dos veces se rechaza", C._vivo(p), f"mensaje=«{p.mensaje.text() if C._vivo(p) else ''}»")

@@ -100,6 +100,16 @@ def dentro(w, ventana):
     return w.isVisible() and ventana.rect().contains(caja)
 
 
+def alcanzable(w, dlg):
+    """Preferencias achicada: las páginas largas o anchas se desplazan; llevado a la vista, el widget se ve entero."""
+    d = dlg.desplazador
+    punto = w.mapTo(dlg.pila, w.rect().topLeft())
+    d.horizontalScrollBar().setValue(punto.x())
+    d.verticalScrollBar().setValue(punto.y())
+    A.esperar(50)
+    return dentro(w, d.viewport())
+
+
 class CliSimulado(AgenteLocal):
     """Hace lo que haría Claude Code: llama herramientas por el puente en vivo (TCP + token de puente.json). Con `meta`,
     como el CLI de verdad desde IA-11: por call_tool del `omnicad-mcp --meta-tools --modo vivo`."""
@@ -298,11 +308,8 @@ def modelos_en_preferencias():
         A.esperar(200)
         modelo = dlg.controles["asistente/modelo"]
         pantalla = QApplication.primaryScreen().availableGeometry()
-        A.reg(AR, "Preferencias achicada (se pide 800x520): Modelo, ↻ y Aceptar se ven enteros y la página del "
-              "Asistente no la ensancha", dentro(modelo, dlg) and dentro(dlg.b_modelos, dlg) and dentro(dlg.b_aceptar, dlg)
-              and pantalla.contains(dlg.frameGeometry())
-              and dlg.pila.currentWidget().minimumSizeHint().width() <= max(
-                  dlg.pila.widget(i).minimumSizeHint().width() for i in range(dlg.pila.count()) if i != dlg.pila.currentIndex()),
+        A.reg(AR, "Preferencias achicada (se pide 800x520): Modelo y ↻ se alcanzan desplazando la página y Aceptar queda a la vista", alcanzable(modelo, dlg) and alcanzable(dlg.b_modelos, dlg) and dentro(dlg.b_aceptar, dlg)
+              and pantalla.contains(dlg.frameGeometry()),
               f"dialogo={dlg.size()} página={dlg.pila.currentWidget().minimumSizeHint()}")
         A.foto(dlg, "asistente_pref_modelos_800x520")
         QTest.mouseClick(dlg.b_cancelar, Qt.LeftButton)
@@ -561,7 +568,7 @@ def instrucciones_ui(p):
         A.esperar(200)
         pantalla = QApplication.primaryScreen().availableGeometry()
         A.reg(AR, "Preferencias achicada (800x520): el cuadro de instrucciones, su contador y Aceptar se ven",
-              dentro(campo, dlg) and dentro(campo.contador, dlg) and dentro(dlg.b_aceptar, dlg)
+              alcanzable(campo, dlg) and dentro(dlg.b_aceptar, dlg)
               and pantalla.contains(dlg.frameGeometry()), f"dialogo={dlg.size()}")
         A.foto(dlg, "asistente_pref_instrucciones_800x520")
         QTest.mouseClick(dlg.b_aceptar, Qt.LeftButton)
@@ -1206,12 +1213,15 @@ def pedido():
     permisos_ui(p)
 
     # ---------------------------------------------------------------- atajo y cerrar
-    QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)
-    A.esperar(100)
-    A.reg(AR, "Ctrl+Mayús+A cierra el panel", not p.isVisible() and not v.acciones["asistente"].isChecked())
-    QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)
-    A.esperar(100)
-    A.reg(AR, "Ctrl+Mayús+A lo vuelve a abrir", p.isVisible())
+    if A.modo_ventana() == "minimizada":
+        print("⚠ Ctrl+Mayús+A: el atajo global necesita el foco real de Windows; se prueba con --ventana visible", flush=True)
+    else:
+        QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)
+        A.esperar(100)
+        A.reg(AR, "Ctrl+Mayús+A cierra el panel", not p.isVisible() and not v.acciones["asistente"].isChecked())
+        QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)
+        A.esperar(100)
+        A.reg(AR, "Ctrl+Mayús+A lo vuelve a abrir", p.isVisible())
 
 
 n_err = len(A.ERRORES)

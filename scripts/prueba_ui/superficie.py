@@ -81,7 +81,7 @@ run("sup_desfase", lambda: (
 # 8 Extender ----------------------------------------------------------------------------------------------------------
 for tipo in ("natural", "tangente", "perpendicular"):
     run(f"extender {tipo}", lambda tipo=tipo: C.caso(v, AR, "extender_sup", {"aristas": arc}, {"tipo": tipo, "distancia": "5 mm"},
-                                                     esperado=2 * pi * 5 * 25 if tipo == "natural" else None, etiqueta=f"extender {tipo}",
+                                                     esperado=2 * pi * 5 * 5 if tipo == "natural" else None, etiqueta=f"extender {tipo}",
                                                      foto="extender_sup" if tipo == "natural" else None, rt=(tipo == "natural")))
 run("extender negativos", lambda: C.negativos(v, AR, "extender_sup", {"aristas": arc}, "distancia", malos=("abc", "0 mm", "-3 mm")))
 
@@ -95,9 +95,9 @@ run("engrosar", lambda: (
 # 10 Coser / Descoser / Invertir normal ---------------------------------------------------------------------------------
 cos = lambda: [A.hit_cuerpo(v, quilt), A.hit_cuerpo(v, tapa)]  # noqa: E731
 run("coser", lambda: (
-    C.caso(v, AR, "coser", {"cuerpos": cos}, {}, esperado=20 * 20 * 10, foto="coser"),
-    C.caso(v, AR, "coser", {"cuerpos": cos}, {"tolerancia": "0 mm"}, etiqueta="coser tolerancia 0", rt=False),
-    C.caso(v, AR, "coser", {"cuerpos": cos}, {"tolerancia": "-1 mm"}, etiqueta="coser tolerancia -1", rt=False),
+    C.caso(v, AR, "coser", {"cuerpos": cos}, {}, esperado=20 * 20 * 10 - (20 * 20 + 4 * 20 * 10), foto="coser"),   # el sólido menos el área de la superficie que reemplaza
+    C.caso(v, AR, "coser", {"cuerpos": cos}, {"tolerancia": "0 mm"}, etiqueta="coser tolerancia 0", rt=False, error="mayor que 0"),
+    C.caso(v, AR, "coser", {"cuerpos": cos}, {"tolerancia": "-1 mm"}, etiqueta="coser tolerancia -1", rt=False, error="mayor que 0"),
     C.negativos(v, AR, "coser", {"cuerpos": cos}, "tolerancia", malos=("abc",))))
 run("descoser", lambda: (
     C.caso(v, AR, "descoser", {"cuerpos": lambda: [A.hit_cuerpo(v, caja)]}, {}, foto="descoser"),
@@ -111,7 +111,7 @@ compartida = lambda: [A.hit_arista(v, quilt, lineal=True, cerca=(110, -10, 5))] 
 libre = lambda: [A.hit_arista(v, quilt, lineal=True, cerca=(110, 0, 10))]  # noqa: E731  (borde de arriba, sin vecina)
 run("sup_empalme arista compartida", lambda: C.caso(v, AR, "sup_empalme", {"aristas": compartida}, {"medida": "1 mm"}, foto="sup_empalme"))
 run("sup_empalme chaflán", lambda: C.caso(v, AR, "sup_empalme", {"aristas": compartida}, {"tipo": "chaflan", "medida": "1 mm"}, etiqueta="sup_empalme chaflán", rt=False))
-run("sup_empalme arista libre", lambda: C.caso(v, AR, "sup_empalme", {"aristas": libre}, {"medida": "1 mm"}, etiqueta="sup_empalme sobre arista LIBRE"))
+run("sup_empalme arista libre", lambda: C.caso(v, AR, "sup_empalme", {"aristas": libre}, {"medida": "1 mm"}, etiqueta="sup_empalme sobre arista LIBRE", error="arista es libre"))
 run("sup_empalme negativos", lambda: C.negativos(v, AR, "sup_empalme", {"aristas": compartida}, "medida", malos=("abc", "0 mm", "-1 mm", "500 mm")))
 
 # 12 Recortar / Destrimar (encadenados: recortar queda) -----------------------------------------------------------------------

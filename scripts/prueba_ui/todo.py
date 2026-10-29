@@ -26,7 +26,7 @@ RAIZ = AQUI.parents[1]
 SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f"ui_{date.today().isoformat()}")
 PIEZAS = ["cinta_completa", "superficie", "solido_crear", "solido_modificar", "asas", "teclear", "ventana_uso", "ensamblar", "boceto_cotas", "asistente", "iconos", "boton_asistente", "abrir_f3d", "booleana_unir", "origen_cara", "registro_uso"]
 # Piezas que necesitan el foco REAL de Windows (no solo el activo de Qt). Vacía hasta que la A/B demuestre alguna.
-PIEZAS_CON_FOCO_REAL = set()
+PIEZAS_CON_FOCO_REAL = {"registro_uso"}      # el indicador y la sesión real no arrancan con la ventana transparente
 
 
 def correr(nombre):
