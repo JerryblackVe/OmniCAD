@@ -363,6 +363,7 @@ class PanelComando(QFrame):
         self._previa_ok = False
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
+        self._previa_aparte = False     # la última previa pedida se calcula en el hijo: aceptar no espera su malla
         self._t_hijo = QTimer(self, interval=16)
         self._t_hijo.timeout.connect(self._recibir_previa)
         self._prisma_previa = None
@@ -720,6 +721,7 @@ class PanelComando(QFrame):
                 except Exception as e:  # noqa: BLE001 — un análisis que falla se informa en el panel
                     self.widgets[c.clave].setText(f"⚠ {e}")
         self._previa_ok = False
+        self._previa_aparte = False
         if self.comando.SIN_OP:
             try:
                 self.comando.mostrar(self.valores, self.ctx)
@@ -746,8 +748,10 @@ class PanelComando(QFrame):
             return
         if self._hijo_previa is not None:
             self._pendiente_hijo = op     # un solo cálculo activo; nunca se encolan los movimientos intermedios
+            self._previa_aparte = True
             return
         if self._previa_pesada(op):
+            self._previa_aparte = True
             self._iniciar_previa(op)
             return
         try:
@@ -930,8 +934,9 @@ class PanelComando(QFrame):
             if not self.mensaje.text():
                 self._mostrar("Faltan datos.", aviso=True)
             return
-        if self.comando.PREVIA and not self._previa_ok:
+        if self.comando.PREVIA and not self._previa_ok and not self._previa_aparte:
             return                           # la operación falla: el mensaje rojo ya lo dice
+        # Con la previa aparte en vuelo, caída o vencida, aceptar no espera: la operación se calcula exacta al aplicarla.
         op = self.ultima_op
         if self.confirmar is not None and not self.confirmar(op):
             return

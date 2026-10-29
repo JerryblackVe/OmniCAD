@@ -244,3 +244,24 @@ def test_un_cuerpo_que_ya_no_existe_no_rompe_la_decision_de_la_previa(ventana, m
     p = panel(ventana, monkeypatch)
     monkeypatch.undo()    # sin forzar: la caja tiene 6 caras, no es pesada
     assert not p._previa_pesada(OpVaciado("opX", cuerpos=["op9.c9"]))
+
+
+def test_aceptar_con_la_previa_aparte_en_vuelo_aplica_el_vaciado_exacto(ventana, monkeypatch):
+    p = panel(ventana, monkeypatch)
+    p._calcular_previa()
+    assert p._hijo_previa is not None and not p._previa_ok       # la malla aún no llegó
+    p.aceptar()                                                   # no espera al hijo
+    assert ventana.panel is None
+    assert any(o.TIPO == "vaciado" for o in ventana.doc.operaciones)
+    forma = ventana.doc.estado_final.cuerpo("op1.c1").forma
+    assert not es_malla(forma) and geo.es_valida(forma)
+
+
+def test_aceptar_tras_caer_el_hijo_sigue_funcionando(ventana, monkeypatch):
+    p = panel(ventana, monkeypatch)
+    p._calcular_previa()
+    p._hijo_previa.proceso.kill()
+    esperar(p)
+    assert not p._previa_ok
+    p.aceptar()
+    assert ventana.panel is None and any(o.TIPO == "vaciado" for o in ventana.doc.operaciones)

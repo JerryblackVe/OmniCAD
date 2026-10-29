@@ -131,3 +131,17 @@ def test_la_preferencia_existe_y_esta_activa_por_defecto(tmp_path):
     from omnicad.ui.preferencias import Preferencias
     p = Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat))
     assert p["general/animar_vistas"] is True
+
+
+@pytest.mark.parametrize("directa", ["vista", "encuadrar"])
+def test_una_llamada_directa_a_la_camara_gana_a_la_transicion_en_curso(visor, directa):
+    visor.animar_vista(lambda: visor.vista("frente"))
+    assert visor._animacion is not None
+    if directa == "vista":
+        visor.vista("arriba")
+    else:
+        visor.encuadrar()
+    asentada = visor._camara()
+    assert visor._animacion is None
+    QTest.qWait(300)
+    assert visor._camara() == asentada            # la transición vieja no la pisa después

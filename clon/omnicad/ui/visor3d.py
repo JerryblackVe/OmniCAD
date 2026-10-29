@@ -855,6 +855,7 @@ class Visor3D(QOpenGLWidget):
         self.update()
 
     def vista(self, nombre):
+        self._cancelar_animacion()
         self._fijar_direccion(*VISTAS[nombre])
         self._orto_cara = nombre in VISTAS_CARAS
         self.encuadrar()
@@ -920,6 +921,7 @@ class Visor3D(QOpenGLWidget):
 
     def mirar_a_plano(self, plano):
         """Cámara perpendicular al plano, con su eje u a la derecha y v hacia arriba ("Mirar a")."""
+        self._cancelar_animacion()
         self.R = np.array([plano.u, plano.v, plano.normal], float)
         self.objetivo = self.objetivo - plano.normal * float((self.objetivo - plano.origen) @ plano.normal)
         self._orto_cara = True
@@ -937,6 +939,7 @@ class Visor3D(QOpenGLWidget):
             self.update()
 
     def encuadrar(self, puntos=None):
+        self._cancelar_animacion()
         caja = self._caja_escena() if puntos is None else (np.min(puntos, axis=0), np.max(puntos, axis=0))
         if caja is None:
             self.objetivo, self.distancia = np.zeros(3), 250.0
