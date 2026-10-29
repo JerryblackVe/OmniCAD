@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 129: Abierto 73 · Parcial 44 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 130: Abierto 73 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -227,7 +227,7 @@ Parcial 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
 
 ## Rust
 
-Abierto 12 · Parcial 2. Especificación: [plan_rust.md](../plan_rust.md).
+Abierto 12 · Parcial 3. Especificación: [plan_rust.md](../plan_rust.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -239,9 +239,10 @@ Abierto 12 · Parcial 2. Especificación: [plan_rust.md](../plan_rust.md).
 | RS-R12 | R12 quitar aristas ocultas superpuestas (dibujo) | Abierto | Media | Sin empezar. | omnicad/nucleo/dibujo.py:269 | 2026-10-20 |
 | RS-R2 | R2 reducir malla (QEM) en Rust | Abierto | Alta | Depende de R7. | omnicad/nucleo/malla.py _Editor; clon/rust/src/lib.rs sin malla | 2026-10-20 |
 | RS-R3 | R3 BVH de triángulos (choque, más cercano, espesores) | Abierto | Alta | Sin BVH; rayos con numpy y descarte por caja. | omnicad/nucleo/revision.py; omnicad/ui/visor3d.py:165 rayo_caja | 2026-10-20 |
-| RS-R5 | R5 geometría de boceto (de Boor, intersecciones) en Rust | Abierto | Alta | Sin módulo Rust de boceto. | omnicad/restricciones/boceto.py | 2026-10-20 |
+| RS-R5 | R5 geometría de boceto (de Boor, intersecciones) en Rust | Parcial | Alta | Hecho (B-111): `spline_extremos` (tangente y curvatura en los extremos de una spline de ajuste abierta; el solver la usa con respaldo Python). Falta: splines cerradas o con manijas, `mas_cercano`, intersecciones y cajas. | clon/rust/src/spline.rs; omnicad/restricciones/solver.py (`_extremo_spline`) | 2026-10-29 |
 | RS-R6 | R6 remallar isótropo en Rust | Abierto | Alta | Sin empezar. | omnicad/nucleo/malla.py | 2026-10-20 |
 | RS-R7 | R7 núcleo half-edge / topología de malla | Abierto | Alta | Base de R2 y R6. | omnicad/nucleo/malla.py _Topo | 2026-10-20 |
+| RS-S1 | Solver completo de bocetos a 120 splines: probar `trf` con `jac_sparsity` | Abierto | Media | `resolver()` de un contorno de 120 splines con tangentes tarda ~2 s y 60 splines ~0,3 s (t120/t60 = 6: crece casi al cubo); casi todo es el QR denso de MINPACK `lmder` (1,6 s de 3 s con 120). Probar `least_squares(method="trf", jac_sparsity=...)` con el patrón que ya calcula `_patron`; exige paridad de resultados con `lm` (en las direcciones libres de un boceto subdeterminado la solución cambia con el camino). | clon/omnicad/restricciones/solver.py (`_resolver_grupo`); `scripts/medir_solver_boceto.py` | 2026-10-29 |
 | RS-R4 | R4 kernel del solver (jacobiano analítico) en Rust | Abierto | Muy alta | Solver sigue en scipy. | omnicad/restricciones/solver.py | 2026-10-20 |
 | RS-P3 | P3 repintado del boceto proyectando en bloque | Parcial | Media | Proyección 64,6 a 13,9 ms con 10 000 puntos; la meta < 5 ms del repintado completo no se cumple (Qt suma 11,5 ms). | omnicad/ui/editor_boceto.py _poli_px; PROJECT_LOG.md:341 | 2026-10-20 |
 | RS-P6 | P6 vista previa de comandos fuera del hilo de la interfaz | Parcial | Alta | La previa se reusa al aceptar; sigue en el hilo de la ventana (haría falta un proceso). | tests/test_rendimiento_arreglos.py:147; omnicad/ui/comando.py | 2026-10-20 |
