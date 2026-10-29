@@ -179,7 +179,6 @@ class Preferencias:
 
 
 # ------------------------------------------------------------------ diálogo
-class CampoInstrucciones(QPlainTextEdit):
 class _EtiquetaFila(QLabel):
     """Etiqueta de una fila del formulario: pide el ancho de su texto (hasta un tope) y solo parte la línea si no
     entra. Así la fila nunca queda más baja que su texto, con la letra del tamaño que sea (un QLabel con ajuste de
@@ -198,6 +197,7 @@ class _EtiquetaFila(QLabel):
     sizeHint = minimumSizeHint
 
 
+class CampoInstrucciones(QPlainTextEdit):
     """Texto multilínea con tope de caracteres y contador debajo (`self.contador`): lo que pasa del tope (un pegado
     enorme) se corta y el contador lo dice. Instrucciones del Asistente: las propias y las de cada proyecto."""
 
