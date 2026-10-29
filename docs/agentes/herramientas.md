@@ -311,7 +311,7 @@ Consulta las preferencias autorizadas, sus valores por defecto y opciones válid
 
 - Modifica el documento: no.
 - Parámetros:
-  - `keys` (lista de texto o null; opcional, por defecto `null`): claves a consultar; omitido devuelve toda la lista blanca de preferencias.
+  - `keys` (lista de texto o null; opcional, por defecto `null`): claves a consultar; omitido devuelve toda la lista blanca de preferencias. Las de fuente devuelven una lista de opciones vacía: aceptan el nombre de cualquier fuente instalada (en «boceto/fuente_cotas», vacío = la de la interfaz). Las de color aceptan «#rrggbb» o vacío (el color del tema).
 - CLI: `omnicad call get_preferences --doc pieza.omnicad`
 
 ### `set_preference`
@@ -321,7 +321,7 @@ Valida y guarda una preferencia autorizada. No modifica el documento ni entra en
 - Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
-  - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences.
+  - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences. Las fuentes son texto libre («Segoe UI»; en «boceto/fuente_cotas» vacío = la de la interfaz) y los colores «#rrggbb» o vacío (el del tema).
 - CLI: `omnicad call set_preference --doc pieza.omnicad key=… value=…`
 
 ### `set_decal`

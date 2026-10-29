@@ -52,7 +52,7 @@ from .modo_boceto import ModoBoceto
 from .navegador import ORIGEN, Navegador
 from .panel_datos import PanelDatos
 from .panel_timeline import PanelTimeline
-from .preferencias import DETALLES, EFECTOS, PRESETS, DialogoPreferencias, Preferencias
+from .preferencias import DETALLES, EFECTOS, PERFILES, PRESETS, DialogoPreferencias, Preferencias
 from .superposiciones import AreaVisor, BarraNavegacion
 from .visor3d import ENTORNOS, ESTILOS, Visor3D
 
@@ -151,6 +151,7 @@ class VentanaPrincipal(QMainWindow):
         self.vis = dict(VISIBILIDAD_INICIAL)
         self._camara_aplicada = None
         self._preset_aplicado = None
+        self._perfil_aplicado = None        # «interfaz/perfil» que ya está en las preferencias
         self._eleccion = None               # "boceto" | "plano": qué se está eligiendo en la vista
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
@@ -571,8 +572,16 @@ class VentanaPrincipal(QMainWindow):
         avisos = temas.activar(clave or self.prefs["general/tema"])
         for a in avisos:
             log.warning("tema: %s", a)
-        if dict(temas.activo()) != self._tema_aplicado:
-            self._tema_aplicado = dict(temas.activo())
+        temas.activar_tipografia({"fuente": self.prefs["interfaz/fuente"],
+                                  "tamano_pct": self.prefs["interfaz/tamano_pct"],
+                                  "fuente_cotas": self.prefs["boceto/fuente_cotas"],
+                                  "tamano_cotas_pct": self.prefs["boceto/tamano_cotas_pct"]})
+        temas.aplicar_colores_texto({"texto": self.prefs["interfaz/color_texto"],
+                                     "texto_tenue": self.prefs["interfaz/color_texto_tenue"],
+                                     "acento": self.prefs["interfaz/color_acento"]})
+        aplicado = (dict(temas.activo()), temas.tipografia())
+        if aplicado != self._tema_aplicado:
+            self._tema_aplicado = aplicado
             temas.aplicar_a_app(QApplication.instance())
             if hasattr(self, "area"):                      # ya hay ventana armada: repintar lo que pinta a mano
                 for v in self.area.visores:
@@ -580,10 +589,29 @@ class VentanaPrincipal(QMainWindow):
                 for arbol in self.findChildren(QTreeWidget):
                     arbol.viewport().update()
                 self.timeline.repintar_iconos()
+                cinta = getattr(self, "cinta", None)
+                if cinta is not None:                      # la tipografía nueva cambia el ancho de los botones
+                    for i in range(cinta.pila.count()):
+                        cinta.pila.widget(i).setProperty("ancho_con_texto", None)
+                    cinta.ajustar_textos()
+                modo = getattr(self, "modo_boceto", None)
+                if modo is not None and modo.lienzo is not None:
+                    modo.lienzo.update()                   # cotas y etiquetas dibujadas a mano con la fuente nueva
+                self.area.viewcube.update()
         return avisos
 
     def aplicar_preferencias(self):
         p, c = self.prefs, self.visor.config
+        # Perfil de apariencia: elegir uno fija su tipografía y sus colores juntos; tocar una de esas claves pasa a
+        # «Personalizado» (mismo patrón que los valores predefinidos de Gráficos).
+        perfil = p["interfaz/perfil"]
+        if perfil != self._perfil_aplicado:
+            if perfil in PERFILES and self._perfil_aplicado is not None:
+                for clave, valor in PERFILES[perfil].items():
+                    p[clave] = valor
+            self._perfil_aplicado = perfil
+        elif perfil in PERFILES and any(p[clave] != valor for clave, valor in PERFILES[perfil].items()):
+            p["interfaz/perfil"] = self._perfil_aplicado = "personalizado"
         if hasattr(self, "registro_uso") and p["general/registro_uso"] != self.registro_uso.preferencia:
             self.registro_uso.preferencia = p["general/registro_uso"]
             self.registro_uso.configurar(p["general/registro_uso"])
@@ -762,6 +790,7 @@ class VentanaPrincipal(QMainWindow):
         dlg = DialogoPreferencias(self.prefs, self, pagina)
         dlg.aplicado.connect(self.aplicar_preferencias)
         dlg.tema_elegido.connect(self.aplicar_tema)         # vista previa al instante, antes de Aplicar
+        dlg.apariencia_cambiada.connect(self.aplicar_tema)  # Apariencia: fuente y tamaño al instante
         dlg.graficos_cambiados.connect(self.aplicar_preferencias)   # Gráficos: al instante
         dlg.rejected.connect(lambda: self.aplicar_tema())   # Cancelar: vuelve al tema guardado
         dlg.exec()

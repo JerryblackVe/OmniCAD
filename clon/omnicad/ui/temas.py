@@ -208,9 +208,57 @@ def contraste_bajo(colores, minimo=MIN_CONTRASTE):
             if razon_contraste(colores[t], colores[f]) < minimo]
 
 
+# Colores de texto que el usuario puede pisar sobre el tema activo (Preferencias › Apariencia).
+COLORES_TEXTO = ("texto", "texto_tenue", "acento")
+# Fondos contra los que cada uno tiene que conservar el contraste (el acento se mide como el enlace).
+FONDOS_TEXTO = {token: tuple(f for t, f in PARES_CONTRASTE if t == token) for token in ("texto", "texto_tenue")}
+FONDOS_TEXTO["acento"] = tuple(f for t, f in PARES_CONTRASTE if t == "enlace")
+
+
+def colores_texto(colores, valores):
+    """(aplicables, rechazos) de los colores de texto elegidos sobre `colores`.
+    `valores` es {token: '#rrggbb' o ''} (vacío = el del tema). Un color se rechaza si no es '#rrggbb' o si baja de
+    MIN_CONTRASTE contra los fondos de su rol; el del propio tema siempre vale (es el que ya se usa).
+    rechazos: [(token, valor, [(fondo, razón)] o texto)]."""
+    aplicables, rechazos = {}, []
+    for token, valor in valores.items():
+        if token not in COLORES_TEXTO or not valor:
+            continue
+        color = normalizar_color(valor)
+        if color is None:
+            rechazos.append((token, valor, "no es un color #rrggbb"))
+            continue
+        if color == colores[token]:
+            continue
+        bajos = [(f, razon_contraste(color, colores[f])) for f in FONDOS_TEXTO[token]
+                 if razon_contraste(color, colores[f]) < MIN_CONTRASTE]
+        if bajos:
+            rechazos.append((token, valor, bajos))
+        else:
+            aplicables[token] = color
+    return aplicables, rechazos
+
+
+def aplicar_colores_texto(valores):
+    """Pisa los tokens de texto del tema ACTIVO con los colores válidos de `valores` (sin tocar el archivo del tema).
+    Devuelve los rechazos: lo que no se aplicó sigue con el color del tema."""
+    global _activo
+    aplicables, rechazos = colores_texto(_activo["colores"], valores)
+    if aplicables:
+        _activo = {**_activo, "colores": {**_activo["colores"], **aplicables}}
+    return rechazos
+
+
 # ---------------------------------------------------------------- hoja de estilo
+# Tipografía base: la fuente y el porcentaje de la interfaz (Preferencias › Apariencia). El 9pt de siempre es el 100 %.
+TIPOGRAFIA_DEFECTO = {"fuente": "Segoe UI", "tamano_pct": 100, "fuente_cotas": "", "tamano_cotas_pct": 100}
+# Cada tamaño de letra de la plantilla con su valor al 100 %; el porcentaje lo escala.
+_TAMANOS_QSS = {"fs9": (9, "pt"), "fs8": (8, "pt"), "px10": (10, "px"), "px11": (11, "px"),
+                "px13": (13, "px"), "px14": (14, "px")}
+_tipografia = dict(TIPOGRAFIA_DEFECTO)
+
 PLANTILLA_QSS = Template("""
-* { font-family: "Segoe UI"; font-size: 9pt; color: $texto; }
+* { font-family: "$fuente"; font-size: $fs9; color: $texto; }
 *:disabled { color: $texto_inactivo; }
 QMainWindow, #barra_app, #cinta, #barra_timeline { background: $fondo; }
 QToolTip { background: $tooltip_fondo; color: $tooltip_texto; border: 0; padding: 6px 8px; }
@@ -237,19 +285,19 @@ QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: 0; bac
 QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 #pestana { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 2px 14px 1px 14px;
-           font-size: 9pt; letter-spacing: 0.3px; }
+           font-size: $fs9; letter-spacing: 0.3px; }
 #pestana:hover { background: transparent; border-bottom-color: $borde; }
 #pestana:checked { background: transparent; border-bottom-color: $acento; }
-#titulo_grupo { font-size: 8pt; padding: 0 6px; border-radius: 0; }
-#boton_cinta { font-size: 8pt; padding: 3px 4px 1px 4px; border-radius: 4px; }
+#titulo_grupo { font-size: $fs8; padding: 0 6px; border-radius: 0; }
+#boton_cinta { font-size: $fs8; padding: 3px 4px 1px 4px; border-radius: 4px; }
 #espacio_trabajo { border: 1px solid $boton_primario; border-radius: 4px; background: $boton_primario;
-                   color: $boton_primario_texto; font-size: 9pt; font-weight: 600; padding: 0 14px; }
+                   color: $boton_primario_texto; font-size: $fs9; font-weight: 600; padding: 0 14px; }
 #espacio_trabajo:hover { background: $boton_primario_hover; }  /* relleno con el acento, como en docs/diseno/ */
 #separador_grupo { background: $borde_suave; }
 #caja_herramientas { background: $flotante; border: 1px solid $borde; border-radius: 6px; }
 #tira_sugerencias { background: $flotante; border: 1px solid $borde; border-radius: 6px; }
 #tira_sugerencias QToolButton { padding: 3px 8px; }
-#titulo_caja { font-size: 8pt; letter-spacing: 0.4px; color: $texto_tenue; }
+#titulo_caja { font-size: $fs8; letter-spacing: 0.4px; color: $texto_tenue; }
 #atajos_caja, #resultados_caja { background: transparent; border: 0; }
 #atajos_caja::item { border-radius: 4px; padding: 2px; }
 #atajos_caja::item:hover { background: $hover; }
@@ -269,7 +317,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #panel_datos #miniatura { background: $entrada; }
 
 #cabecera_navegador { background: $panel_cabecera; border: 1px solid $borde; }
-#cabecera_navegador QLabel { font-size: 8pt; letter-spacing: 0.3px; }
+#cabecera_navegador QLabel { font-size: $fs8; letter-spacing: 0.3px; }
 #arbol_navegador { background: transparent; border: 0; }
 
 #barra_navegacion { background: $fondo; border: 1px solid $borde; }
@@ -306,12 +354,12 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #aviso_comando { color: $aviso; }
 
 #panel_comentarios { background: $flotante; border: 1px solid $borde; }
-#panel_comentarios QLabel { color: $texto_tenue; font-size: 10px; letter-spacing: 0.5px; }
-#panel_comentarios QToolButton { border: none; color: $texto_tenue; font-size: 13px; padding: 0 4px; }
-#panel_comentarios QListWidget { border: none; border-top: 1px solid $borde_suave; font-size: 11px; }
+#panel_comentarios QLabel { color: $texto_tenue; font-size: $px10; letter-spacing: 0.5px; }
+#panel_comentarios QToolButton { border: none; color: $texto_tenue; font-size: $px13; padding: 0 4px; }
+#panel_comentarios QListWidget { border: none; border-top: 1px solid $borde_suave; font-size: $px11; }
 
 #paleta_boceto { background: $fondo; border: 1px solid $borde; }
-#paleta_boceto QLabel { font-size: 9pt; }
+#paleta_boceto QLabel { font-size: $fs9; }
 #entrada_valor { background: $entrada; border: 1px solid $acento; border-radius: 2px; }
 #entrada_valor QLineEdit { border: 0; padding: 1px 3px; min-width: 70px; }
 
@@ -324,13 +372,13 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 #AvisoFlotante { background: $flotante; border: 1px solid $borde; border-radius: 2px; }
 #AvisoFlotante QLabel { background: transparent; }
-#AvisoFlotante QToolButton { border: none; color: $texto_tenue; font-size: 14px; }
+#AvisoFlotante QToolButton { border: none; color: $texto_tenue; font-size: $px14; }
 #lista_radial { background: $menu_fondo; border: 1px solid $menu_borde; }
 #lista_radial #linea_radial { border: none; border-top: 1px solid $borde_suave; margin: 3px 6px 0 6px; }
 
 QLabel[rol="tenue"] { color: $texto_tenue; }
 QLabel[rol="titulo"] { font-weight: bold; }
-QLabel[rol="encabezado"] { font-size: 8pt; letter-spacing: 0.4px; color: $texto_tenue; }
+QLabel[rol="encabezado"] { font-size: $fs8; letter-spacing: 0.4px; color: $texto_tenue; }
 QLabel[rol="seccion"] { font-weight: 600; padding-top: 4px; border-bottom: 1px solid $borde_suave; }
 QLabel[rol="error"] { color: $error; }
 QLabel[rol="aviso"] { color: $aviso; }
@@ -340,9 +388,47 @@ QLabel[rol="ok"] { color: $ok; }
 """)
 
 
-def generar_qss(colores):
-    """Hoja de estilo de la aplicación para un dict de tokens COMPLETO. Falta un token → KeyError."""
-    return PLANTILLA_QSS.substitute(colores)
+def _tamano(base, unidad, pct):
+    """Valor de un tamaño de letra escalado por el porcentaje, sin decimales de más (9pt al 100 %)."""
+    return f"{round(base * pct / 100, 2):g}{unidad}"
+
+
+def generar_qss(colores, tipografia=None):
+    """Hoja de estilo de la aplicación para un dict de tokens COMPLETO. Falta un token → KeyError.
+    `tipografia` (opcional) lleva «fuente» y «tamano_pct»: los tamaños de letra de la plantilla salen de ahí."""
+    tip = {**TIPOGRAFIA_DEFECTO, **(tipografia or {})}
+    valores = dict(colores)
+    # el nombre va entre comillas en la hoja de estilo: se sacan las comillas y el control (una fuente del API no
+    # puede inyectar reglas en el QSS)
+    valores["fuente"] = re.sub(r'["\\\x00-\x1f]', "", str(tip["fuente"] or TIPOGRAFIA_DEFECTO["fuente"])).strip()
+    pct = float(tip["tamano_pct"] or 100)
+    for token, (base, unidad) in _TAMANOS_QSS.items():
+        valores[token] = _tamano(base, unidad, pct)
+    return PLANTILLA_QSS.substitute(valores)
+
+
+def tipografia():
+    """La tipografía ACTIVA: fuente y porcentaje de la interfaz, y los del texto del boceto."""
+    return dict(_tipografia)
+
+
+def activar_tipografia(valores=None):
+    """Fija la tipografía ACTIVA (la usan qss_activo y qfont_cotas). Sin argumento vuelve a la de fábrica."""
+    global _tipografia
+    _tipografia = {**TIPOGRAFIA_DEFECTO, **(valores or {})}
+
+
+def qfont_cotas(tamano=9):
+    """QFont de las cotas y etiquetas dibujadas a mano: la fuente elegida (o la de la interfaz) con el tamaño de
+    siempre escalado por el porcentaje del boceto. Al 100 % es el mismo QFont("Segoe UI", tamano) de siempre."""
+    from PySide6.QtGui import QFont
+    f = QFont(_tipografia["fuente_cotas"] or _tipografia["fuente"] or TIPOGRAFIA_DEFECTO["fuente"])
+    puntos = tamano * _tipografia["tamano_cotas_pct"] / 100
+    if float(puntos).is_integer():
+        f.setPointSize(int(puntos))
+    else:
+        f.setPointSizeF(puntos)
+    return f
 
 
 def paleta(colores):
@@ -526,7 +612,7 @@ def poner_rol(widget, rol):
 
 
 def qss_activo():
-    return generar_qss(activo())
+    return generar_qss(activo(), _tipografia)
 
 
 def aplicar_a_app(app):

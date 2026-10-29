@@ -1,5 +1,6 @@
 """Preferencias autorizadas, con QSettings cargado solo al usarse."""
 import os
+import re
 
 from .. import NOMBRE_APP
 from .errores import error
@@ -17,6 +18,14 @@ _OPCIONES = {
     "general/info_herramientas": (True, [False, True]),
     "navegador/no_desplegar_al_seleccionar": (False, [False, True]),
     "general/autoguardado_min": (1, list(range(1, 61))),
+    "interfaz/fuente": ("Segoe UI", []),
+    "interfaz/tamano_pct": (100, list(range(80, 151, 5))),
+    "interfaz/perfil": ("personalizado", ["personalizado", "normal", "lectura_comoda"]),
+    "interfaz/color_texto": ("", []),
+    "interfaz/color_texto_tenue": ("", []),
+    "interfaz/color_acento": ("", []),
+    "boceto/fuente_cotas": ("", []),
+    "boceto/tamano_cotas_pct": (100, list(range(70, 201, 5))),
     "material/aspecto": ("acero", ["acero", "paleta"]),
     "graficos/preset": ("personalizar", ["rendimiento", "equilibrado", "calidad", "personalizar"]),
     "graficos/detalle": ("automatico", ["automatico", "bajo", "medio", "alto"]),
@@ -34,6 +43,16 @@ _OPCIONES = {
     "vista/efecto_reflejo": (False, [False, True]),
     "vista/efecto_aa": (True, [False, True]),
     "timeline/color_componente": (False, [False, True]),
+}
+_FUENTES = {"interfaz/fuente", "boceto/fuente_cotas"}          # texto libre: un nombre de fuente (o "" en cotas)
+_COLORES = {"interfaz/color_texto", "interfaz/color_texto_tenue", "interfaz/color_acento"}
+_HEX = re.compile(r"#[0-9a-fA-F]{6}")
+# Perfiles de apariencia (los mismos de ui/preferencias.py › PERFILES): fijan tipografía y colores juntos.
+_APARIENCIA_BASE = {"interfaz/fuente": "Segoe UI", "interfaz/color_texto": "", "interfaz/color_texto_tenue": "",
+                    "interfaz/color_acento": "", "boceto/fuente_cotas": "", "boceto/tamano_cotas_pct": 100}
+_PERFILES = {
+    "normal": {**_APARIENCIA_BASE, "interfaz/tamano_pct": 100},
+    "lectura_comoda": {**_APARIENCIA_BASE, "interfaz/tamano_pct": 120, "boceto/tamano_cotas_pct": 120},
 }
 _EFECTOS_BASE = {"vista/efecto_cupula": True, "vista/efecto_suelo": False,
                  "vista/efecto_sombra_suelo": False, "vista/efecto_reflejo": False}
@@ -72,10 +91,37 @@ def _valor(ajustes, clave):
     return str(valor)
 
 
+def _validar(key, value):
+    """Tipo y valor de una preferencia; las de fuente y color tienen su propio mensaje en español."""
+    defecto, opciones = _OPCIONES[key]
+    if key in _FUENTES:
+        if not isinstance(value, str):
+            raise error("INVALID_ARGUMENTS", f"«{key}» espera el nombre de una fuente (texto), no {value!r}.")
+        nombre = value.strip()
+        if any(c in nombre for c in '"\\;') or any(ord(c) < 32 for c in nombre):
+            raise error("INVALID_ARGUMENTS", "El nombre de la fuente no puede tener comillas, punto y coma ni saltos "
+                        "de línea.")
+        if not nombre and key == "interfaz/fuente":
+            raise error("INVALID_ARGUMENTS", "La fuente de la interfaz no puede quedar vacía: poné una fuente "
+                        "instalada, por ejemplo «Segoe UI».")
+        return nombre
+    if key in _COLORES:
+        if not isinstance(value, str):
+            raise error("INVALID_ARGUMENTS", f"«{key}» espera un color «#rrggbb» o vacío (el del tema), no {value!r}.")
+        color = value.strip()
+        if color and not _HEX.fullmatch(color):
+            raise error("INVALID_ARGUMENTS", f"«{color}» no es un color #rrggbb: usá «#rrggbb» o vacío para "
+                        "dejar el color del tema.")
+        return color.lower()
+    if type(value) is not type(defecto) or value not in opciones:
+        raise error("INVALID_ARGUMENTS", f"Valor inválido para «{key}»: opciones válidas {opciones}.")
+    return value
+
+
 @herramienta("get_preferences", "documento", "Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas.")
 def get_preferences(sesion, keys: list[str] | None = None):
     """
-    keys: claves a consultar; omitido devuelve toda la lista blanca de preferencias.
+    keys: claves a consultar; omitido devuelve toda la lista blanca de preferencias. Las de fuente devuelven una lista de opciones vacía: aceptan el nombre de cualquier fuente instalada (en «boceto/fuente_cotas», vacío = la de la interfaz). Las de color aceptan «#rrggbb» o vacío (el color del tema).
     """
     claves = list(_OPCIONES) if keys is None else keys
     for clave in claves:
@@ -90,17 +136,20 @@ def get_preferences(sesion, keys: list[str] | None = None):
 def set_preference(sesion, key: str, value: str | int | bool):
     """
     key: clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
-    value: valor del tipo y de las opciones indicados por get_preferences.
+    value: valor del tipo y de las opciones indicados por get_preferences. Las fuentes son texto libre («Segoe UI»; en «boceto/fuente_cotas» vacío = la de la interfaz) y los colores «#rrggbb» o vacío (el del tema).
     """
     _exigir_clave(key)
-    defecto, opciones = _OPCIONES[key]
-    if type(value) is not type(defecto) or value not in opciones:
-        raise error("INVALID_ARGUMENTS", f"Valor inválido para «{key}»: opciones válidas {opciones}.")
+    value = _validar(key, value)
     ajustes = _ajustes()
     cambios = {key: value}
+    perfil_actual = _valor(ajustes, "interfaz/perfil")
+    if key == "interfaz/perfil" and value in _PERFILES:
+        cambios.update(_PERFILES[value])
+    elif key in _PERFILES.get(perfil_actual, {}) and value != _PERFILES[perfil_actual][key]:
+        cambios["interfaz/perfil"] = "personalizado"
     if key == "graficos/preset" and value in _PRESETS:
         cambios.update(_PRESETS[value])
-    else:
+    elif key != "graficos/preset":
         preset = _valor(ajustes, "graficos/preset")
         if preset in _PRESETS and key in _PRESETS[preset] and value != _PRESETS[preset][key]:
             cambios["graficos/preset"] = "personalizar"

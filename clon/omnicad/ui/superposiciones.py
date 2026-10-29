@@ -9,10 +9,11 @@ Todo está dibujado con QPainter; QOpenGLWidget admite widgets hijos transparent
 """
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF,
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF,
                            QTransform)
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QWidget
 
+from . import temas
 from .iconos import icono
 
 # cara: (normal, derecha del texto, arriba del texto, etiqueta, vista del visor)
@@ -71,7 +72,7 @@ class ViewCube(QWidget):
             self._etiqueta(p, poli, texto)
             self._poligonos.append((poli, vista))
         origen = np.array([-1.0, -1.0, -1.0])
-        f = QFont("Segoe UI", max(7, int(self.width() / 13)))
+        f = temas.qfont_cotas(max(7, int(self.width() / 13)))
         f.setBold(True)
         p.setFont(f)
         for eje, color, letra, caras_vecinas in EJES:
@@ -91,10 +92,10 @@ class ViewCube(QWidget):
 
     def _etiqueta(self, p, poli, texto):
         ancho, alto = 100.0, 100.0
-        f = QFont("Segoe UI", 15)
+        f = temas.qfont_cotas(15)
         f.setBold(True)
-        while QFontMetricsF(f).horizontalAdvance(texto) > ancho * 0.9 and f.pointSize() > 6:
-            f.setPointSize(f.pointSize() - 1)
+        while QFontMetricsF(f).horizontalAdvance(texto) > ancho * 0.9 and f.pointSizeF() > 6:
+            f.setPointSizeF(f.pointSizeF() - 1)
         t = QTransform()
         if not QTransform.quadToQuad(QPolygonF([QPointF(0, 0), QPointF(ancho, 0), QPointF(ancho, alto), QPointF(0, alto)]),
                                      poli, t):
@@ -518,6 +519,8 @@ class AreaVisor(QWidget):
         if self.panel is not None and self.panel.isVisible():
             if hasattr(self.panel, "ajustar_alto"):
                 self.panel.ajustar_alto(g.bottom() - y - 8)      # B-105: los paneles de comando tienen barra
+            if y + self.panel.height() > g.bottom() - 8:         # F3: en una ventana baja, sube para que el pie se vea
+                y = max(g.top() + 4, g.bottom() - self.panel.height() - 8)
             self.panel.move(g.right() - self.panel.width() - 10, y)
             self.panel.raise_()
             y += self.panel.height() + 8

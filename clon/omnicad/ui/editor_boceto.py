@@ -35,8 +35,7 @@ import warnings
 import numpy as np
 
 from PySide6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import (QColor, QFont, QFontMetricsF, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap,
-                           QPolygonF)
+from PySide6.QtGui import (QColor, QFontMetricsF, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap, QPolygonF)
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
                                QMessageBox, QToolTip, QWidget)
 
@@ -3060,7 +3059,7 @@ class Lienzo(QWidget):
 
     def _disponer_campos(self, campos):
         """[(campo, texto, caja QRectF, trazo)]: dónde va cada caja (sin pisarse)."""
-        fm = QFontMetricsF(QFont("Segoe UI", 9))
+        fm = QFontMetricsF(temas.qfont_cotas(9))
         cur = self._cursor_efectivo() or (0.0, 0.0)
         salida, ocupadas = [], []
         for campo in campos:
@@ -3073,7 +3072,8 @@ class Lienzo(QWidget):
                 centro = self.a_px(*cur) + QPointF(50, 30)
             texto = texto_valor(campo.valor, campo.angular, campo.entero)
             ancho = fm.horizontalAdvance(texto) + 16 + (14 if campo.clave in self._bloqueos else 0)
-            caja = QRectF(centro.x() - ancho / 2, centro.y() - 10, ancho, 20)
+            alto = fm.height() + 4              # el recuadro de agarre sigue al tamaño real del texto
+            caja = QRectF(centro.x() - ancho / 2, centro.y() - alto / 2, ancho, alto)
             for _ in range(12):
                 if not any(caja.intersects(o) for o in ocupadas):
                     break
@@ -3099,7 +3099,7 @@ class Lienzo(QWidget):
             return
         color = self._color_cota()
         activo = self._activo % len(campos)
-        p.setFont(QFont("Segoe UI", 9))
+        p.setFont(temas.qfont_cotas(9))
         fm = p.fontMetrics()
         for i, (campo, texto, caja, trazo) in enumerate(self._disponer_campos(campos)):
             self._cajas_vivas.append((campo.clave, caja))
@@ -4458,7 +4458,7 @@ class Lienzo(QWidget):
         """Números de referencia sobre los ejes del boceto (como la rejilla del boceto de Fusion)."""
         mayor = self.paso_grilla() * 5
         cu, cv = self.plano.a_uv(self.visor.objetivo)
-        p.setFont(QFont("Segoe UI", 8))
+        p.setFont(temas.qfont_cotas(8))
         p.setPen(QColor(140, 146, 158) if self._oscuro() else QColor(80, 85, 95))     # números tenues, como Fusion
         for i in range(-8, 9):
             for u, v in ((round(cu / mayor) * mayor + i * mayor, 0.0), (0.0, round(cv / mayor) * mayor + i * mayor)):
@@ -4626,7 +4626,7 @@ class Lienzo(QWidget):
         p.save()
         p.setPen(QPen(VIOLETA, 2))
         p.setBrush(Qt.NoBrush)
-        p.setFont(QFont("Segoe UI", 9))
+        p.setFont(temas.qfont_cotas(9))
         for s in self.previa_auto:
             if not s.entidades or any(e not in self.b.puntos and e not in self.b.curvas for e in s.entidades):
                 continue
@@ -4700,7 +4700,7 @@ class Lienzo(QWidget):
         base = self._color_cota()
         en_conflicto = set(self.conflictos) if self.resultado is not None and not self.resultado.ok else set()
         desfase = 22 / max(self.px_por_mm(), 1e-9)       # 22 px expresados en mm del boceto
-        p.setFont(QFont("Segoe UI", 9))
+        p.setFont(temas.qfont_cotas(9))
         fm = p.fontMetrics()
         pts = [self.b.coords(k) for k in self.b.puntos]
         centroide = (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)) if pts else (0.0, 0.0)

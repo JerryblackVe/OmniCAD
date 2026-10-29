@@ -296,3 +296,11 @@ Parcial 1. Especificación: [informe_tortura_2026-10-17.md](../informe_tortura_2
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | T-18 | Render y respuestas grandes lentas en la API | Parcial | Media | HLR en un proceso persistente: medido y diferido | tests/test_hallazgos_tortura.py::test_t18_get_scene_info_y_open_document_tienen_modo_resumido | 2026-10-20 |
+
+## Tipografía de la interfaz (2026-10-28)
+
+Abierto 1.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| NOV-tip-1 | Con letra grande (120–150 %) los títulos de grupo de la cinta se eliden y la ventana no baja de ~1038 px | Abierto | Media | `ajustar_textos` compacta los botones pero no los títulos `#titulo_grupo` ni el botón de espacio de trabajo (108 px fijo); con 150 % el mínimo de la ventana es 1038 px. Medido en 1024×640 y 800×520. | omnicad/ui/cinta.py (`_fila_grupos`, `_estilo_boton`, `espacio.setFixedSize(108, 62)`); evidencias/tipografia_ui/f3_ventana_150.py | 2026-10-28 |

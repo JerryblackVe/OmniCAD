@@ -11,10 +11,10 @@ import subprocess
 import threading
 
 from PySide6.QtCore import QSettings, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QPlainTextEdit, QPushButton, QSpinBox, QStackedWidget, QToolButton,
-                               QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtGui import QDesktopServices, QFontDatabase
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QFrame, QHBoxLayout,
+                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSlider,
+                               QSpinBox, QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from ..asistente import config as config_asistente
@@ -30,6 +30,15 @@ NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: 
 DEFECTOS = {
     "geometria/motor": "opencascade",
     "general/tema": temas.DEFECTO,            # ui/temas.py: oscuro_moderno, claro_moderno, … o usuario:<archivo>
+    # Apariencia (Preferencias › Apariencia): tipografía y colores de texto por encima del tema elegido
+    "interfaz/fuente": "Segoe UI",            # vacío no vale: siempre hay una fuente para la interfaz
+    "interfaz/tamano_pct": 100,               # 80 a 150, de a 5: 100 es el 9pt de siempre
+    "interfaz/perfil": "personalizado",       # normal, lectura_comoda o personalizado (ver PERFILES)
+    "interfaz/color_texto": "",               # vacío = el del tema; '#rrggbb' lo pisa (si conserva el contraste)
+    "interfaz/color_texto_tenue": "",
+    "interfaz/color_acento": "",
+    "boceto/fuente_cotas": "",                # vacío = la fuente de la interfaz
+    "boceto/tamano_cotas_pct": 100,           # 70 a 200, de a 5: el texto de las cotas y etiquetas del boceto
     "general/raton": "fusion",               # como Fusion: medio desplaza, Mayús+medio orbita
     "general/invertir_zoom": False,
     "general/camara": "perspectiva",
@@ -94,6 +103,14 @@ PRESETS = {
     "calidad": {**_EFECTOS_BASE, "vista/efecto_suelo": True, "vista/efecto_sombra_suelo": True, "vista/efecto_aa": True,
                 "graficos/detalle": "alto", "graficos/dinamico": False},
 }
+# Valores predefinidos de Apariencia (como PRESETS de Gráficos): elegir uno fija la tipografía y los colores juntos.
+# «Lectura cómoda» deja los colores en el tema (su texto es el de mayor contraste que el tema garantiza) y sube la letra.
+_APARIENCIA_BASE = {"interfaz/fuente": "Segoe UI", "interfaz/color_texto": "", "interfaz/color_texto_tenue": "",
+                    "interfaz/color_acento": "", "boceto/fuente_cotas": "", "boceto/tamano_cotas_pct": 100}
+PERFILES = {
+    "normal": {**_APARIENCIA_BASE, "interfaz/tamano_pct": 100},
+    "lectura_comoda": {**_APARIENCIA_BASE, "interfaz/tamano_pct": 120, "boceto/tamano_cotas_pct": 120},
+}  # «personalizado» no fija nada: es el estado al tocar una de esas claves
 # Teselado por nivel de detalle: (deflexión en mm, ángulo en radianes). Deflexión None = automática según el tamaño
 # de cada pieza (ui/visor3d.deflexion_automatica). El ángulo manda en las piezas redondas: con 0.3 rad, «bajo» y
 # «automático» daban los mismos 17244 triángulos en el modelo del bench (2026-10-09).
@@ -197,8 +214,96 @@ def _combo(opciones, actual):
         c.addItem(texto, clave)
     i = c.findData(actual)
     c.setCurrentIndex(max(i, 0))
-    c.setMinimumWidth(300)
+    c.setMinimumWidth(220)
+    # el ancho no lo fija el ítem más largo: con letra grande el diálogo tiene que entrar en una ventana chica
+    c.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    c.setMinimumContentsLength(18)
     return c
+
+
+# Fuentes de lectura fácil: si están instaladas, van primero en su grupo (no se instala ni se copia ninguna).
+FACILES = ("atkinsonhyperlegible", "opendyslexic")
+
+
+def _es_lectura_facil(familia):
+    clave = familia.lower().replace(" ", "").replace("-", "")
+    return any(nombre in clave for nombre in FACILES)
+
+
+def _combo_fuentes(actual, vacio=None, familias=None):
+    """Fuentes instaladas. Una guardada que ya no está se muestra igual (y queda elegida).
+    Con `vacio`, el primer ítem es esa etiqueta con valor '' (p. ej. «La de la interfaz»).
+    Las de lectura fácil (Atkinson Hyperlegible, OpenDyslexic) van primero, en su grupo."""
+    familias = list(QFontDatabase.families()) if familias is None else list(familias)
+    faciles = [f for f in familias if _es_lectura_facil(f)]
+    resto = [f for f in familias if not _es_lectura_facil(f)]
+    c = QComboBox()
+    if vacio is not None:
+        c.addItem(vacio, "")
+    if actual and actual not in familias:
+        c.addItem(f"{actual} (no instalada)", actual)
+    if faciles:
+        c.addItem("Lectura fácil", None)
+        c.model().item(c.count() - 1).setEnabled(False)
+        for familia in faciles:
+            c.addItem(familia, familia)
+        c.insertSeparator(c.count())
+    for familia in resto:
+        c.addItem(familia, familia)
+    c.setCurrentIndex(max(c.findData(actual), 0))
+    c.setMinimumWidth(220)
+    c.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    c.setMinimumContentsLength(18)
+    return c
+
+
+class CampoColor(QWidget):
+    """Color de texto de la interfaz: el del tema (vacío) o uno propio con el selector; «Quitar» vuelve al tema."""
+    cambiado = Signal()
+
+    def __init__(self, token, valor):
+        super().__init__()
+        self.token = token
+        self._valor = temas.normalizar_color(valor) or ""
+        self.boton = QPushButton(objectName="campo_color")
+        self.quitar = QPushButton("Quitar", objectName="quitar_color")
+        self.quitar.setToolTip("Vuelve al color del tema.")
+        self.boton.clicked.connect(self._elegir)
+        self.quitar.clicked.connect(lambda: self.setValue(""))
+        fila = QHBoxLayout(self)
+        fila.setContentsMargins(0, 0, 0, 0)
+        fila.addWidget(self.boton, 1)
+        fila.addWidget(self.quitar)
+        self._pintar()
+
+    def _pintar(self):
+        del_tema = temas.color(self.token)
+        color = self._valor or del_tema
+        self.boton.setText(self._valor or f"Del tema ({del_tema})")
+        self.boton.setStyleSheet(f"text-align: left; padding-left: 18px; border-left: 12px solid {color};")
+        self.quitar.setEnabled(bool(self._valor))
+
+    def refrescar(self):
+        self._pintar()
+
+    def _elegir(self):
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QColorDialog
+        color = QColorDialog.getColor(QColor(self._valor or temas.color(self.token)), self, "Color del texto")
+        if color.isValid():
+            self.setValue(color.name())
+
+    def value(self):
+        return self._valor
+
+    def setValue(self, valor):
+        color = temas.normalizar_color(valor) if valor else None
+        color = color or ""
+        if color == self._valor:
+            return
+        self._valor = color
+        self._pintar()
+        self.cambiado.emit()
 
 
 # (página, padre, título en el árbol, descripción, [(clave, etiqueta, tipo, opciones)])
@@ -233,6 +338,20 @@ PAGINAS = [
         ("general/puente_agentes", "Permitir que agentes IA controlen OmniCAD (MCP en vivo)", "check", None),
         ("general/puente_codigo", "Permitir también execute_code en vivo (congela la app mientras corre: como mucho 100 s)",
          "check", None),
+    ]),
+    ("apariencia", None, "Apariencia", "Perfil, fuente, tamaño y color del texto de la interfaz y de las cotas del "
+     "boceto. Se aplica al instante, sin reiniciar; un color solo se aplica si se lee bien sobre el tema", [
+        ("interfaz/perfil", "Perfil de apariencia", "combo",
+         [("personalizado", "Personalizado"), ("normal", "Normal"), ("lectura_comoda", "Lectura cómoda")]),
+        ("interfaz/fuente", "Fuente de la interfaz", "fuente", None),
+        ("interfaz/tamano_pct", "Tamaño del texto", "porcentaje", (80, 150)),
+        ("interfaz/color_texto", "Color del texto", "color", None),
+        ("interfaz/color_texto_tenue", "Color del texto secundario", "color", None),
+        ("interfaz/color_acento", "Color de acento", "color", None),
+        ("boceto/fuente_cotas", "Fuente de las cotas y etiquetas del boceto", "fuente_cotas", None),
+        ("boceto/tamano_cotas_pct", "Tamaño de las cotas y etiquetas del boceto", "porcentaje", (70, 200)),
+        (None, "", "aviso_apariencia", None),
+        (None, "Apariencia", "acciones_apariencia", None),
     ]),
     ("material", None, "Material", "Preferencias que controlan el material y el aspecto por defecto", [
         ("material/aspecto", "Aspecto por defecto de los cuerpos", "combo",
@@ -296,6 +415,10 @@ PAGINAS = [
 
 
 CLAVES_GRAFICOS = tuple(clave for pagina, *_r, filas in PAGINAS if pagina == "graficos" for clave, *_x in filas if clave)
+# Apariencia al instante (como Gráficos): cada cambio se escribe y se ve; Cancelar vuelve a lo que había.
+CLAVES_APARIENCIA = ("interfaz/perfil", "interfaz/fuente", "interfaz/tamano_pct", "interfaz/color_texto",
+                     "interfaz/color_texto_tenue", "interfaz/color_acento", "boceto/fuente_cotas",
+                     "boceto/tamano_cotas_pct")
 
 
 def _combo_temas(actual):
@@ -311,6 +434,7 @@ def _combo_temas(actual):
 class DialogoPreferencias(QDialog):
     aplicado = Signal()
     tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
+    apariencia_cambiada = Signal()     # vista previa: fuente o tamaño de la interfaz ya escritos en prefs
     graficos_cambiados = Signal()      # vista previa: Preferencias › Gráficos ya escritas en prefs (al instante)
     conexion_probada = Signal(str)     # Asistente IA › Probar conexión: el resultado, desde el hilo de la prueba
     modelos_listos = Signal(object, object)   # Asistente IA › Modelo: (pedido, resultado), desde el hilo que los lista
@@ -327,12 +451,15 @@ class DialogoPreferencias(QDialog):
         self.modelos_listos.connect(self._modelos_listos)
         self.controles = {}            # clave → widget
         self.aviso_tema = None         # QLabel bajo el combo de temas: contraste, avisos y confirmaciones
+        self.aviso_apariencia = None   # QLabel de Apariencia: colores de texto rechazados por contraste
 
         self.arbol = QTreeWidget()
         self.arbol.setHeaderHidden(True)
-        self.arbol.setFixedWidth(270)
-        self.cabecera = QLabel(objectName="cabecera_pref", alignment=Qt.AlignCenter)
+        self.arbol.setFixedWidth(min(320, round(270 * prefs["interfaz/tamano_pct"] / 100)))
+        self.cabecera = QLabel(objectName="cabecera_pref", alignment=Qt.AlignCenter, wordWrap=True)
         self.pila = QStackedWidget(objectName="pagina_pref")
+        self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.Shape.NoFrame)
+        self.desplazador.setWidget(self.pila)
         items = {}
         self._items = items
         for pagina, padre, titulo, descripcion, filas in PAGINAS:
@@ -351,6 +478,16 @@ class DialogoPreferencias(QDialog):
             c = self.controles[k]
             (c.currentIndexChanged if isinstance(c, QComboBox) else c.toggled).connect(
                 lambda *_a, k=k: self._grafico_cambiado(k))
+        self._apariencia_originales = {k: prefs[k] for k in CLAVES_APARIENCIA}
+        for k in CLAVES_APARIENCIA:
+            c = self.controles[k]
+            if isinstance(c, QComboBox):
+                if k == "interfaz/perfil":
+                    c.currentIndexChanged.connect(self._perfil_cambiado)
+                else:
+                    c.currentIndexChanged.connect(lambda *_a, k=k: self._apariencia_cambiada(k))
+            elif isinstance(c, QSlider):
+                c.valueChanged.connect(lambda *_a, k=k: self._apariencia_cambiada(k))
         self.arbol.currentItemChanged.connect(self._ir)
         self.arbol.setCurrentItem(items.get(inicial, items["general"]))    # p. ej. "valores" desde la barra de unidades
 
@@ -361,7 +498,7 @@ class DialogoPreferencias(QDialog):
         cuerpo.addLayout(izq)
         derecha = QVBoxLayout()
         derecha.addWidget(self.cabecera)
-        derecha.addWidget(self.pila, 1)
+        derecha.addWidget(self.desplazador, 1)
         cuerpo.addLayout(derecha, 1)
 
         self.b_restablecer = QPushButton("Restablecer valores por defecto")
@@ -408,14 +545,62 @@ class DialogoPreferencias(QDialog):
         form.setVerticalSpacing(10)
         form.setContentsMargins(20, 20, 20, 20)
         if not filas:
-            form.addRow(QLabel("Elegí una subcategoría en el árbol de la izquierda."))
+            form.addRow(QLabel("Elegí una subcategoría en el árbol de la izquierda.", wordWrap=True))
         for clave, etiqueta, tipo, opciones in filas:
             actual = self.prefs[clave] if clave else None
+            texto = QLabel(etiqueta)
+            texto.setWordWrap(True)                  # F3: con letra grande la etiqueta no ensancha el diálogo
+            texto.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            texto.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)   # ocupa la columna: no se parte de más
             if tipo == "version_motor":
-                form.addRow(etiqueta, QLabel(motor.version_omnikernel() or "No instalado"))
+                form.addRow(texto, QLabel(motor.version_omnikernel() or "No instalado"))
                 continue
             if tipo == "acciones_tema":
-                form.addRow(etiqueta, self._acciones_tema())
+                form.addRow(texto, self._acciones_tema())
+                continue
+            if tipo == "acciones_apariencia":
+                form.addRow(texto, self._acciones_apariencia())
+                continue
+            if tipo == "fuente":
+                c = _combo_fuentes(actual)
+                c.currentIndexChanged.connect(self._cambio)
+                form.addRow(texto, c)
+                self.controles[clave] = c
+                continue
+            if tipo == "fuente_cotas":
+                c = _combo_fuentes(actual, "La de la interfaz")
+                c.currentIndexChanged.connect(self._cambio)
+                form.addRow(texto, c)
+                self.controles[clave] = c
+                continue
+            if tipo == "porcentaje":
+                minimo, maximo = opciones
+                c = QSlider(Qt.Horizontal, minimum=minimo, maximum=maximo, singleStep=5, pageStep=10,
+                            tickPosition=QSlider.TickPosition.TicksBelow, tickInterval=max(1, (maximo - minimo) // 5))
+                c.setValue(int(actual))
+                c.setMinimumWidth(180)
+                valor = QLabel(f"{c.value()} %", objectName="valor_porcentaje", alignment=Qt.AlignRight | Qt.AlignVCenter)
+                valor.setMinimumWidth(48)
+                temas.poner_rol(valor, "tenue")
+                c.valueChanged.connect(lambda v, l=valor: l.setText(f"{v} %"))
+                c.valueChanged.connect(self._cambio)
+                fila = QHBoxLayout()
+                fila.addWidget(c, 1)
+                fila.addWidget(valor)
+                form.addRow(texto, fila)
+                self.controles[clave] = c
+                continue
+            if tipo == "color":
+                c = CampoColor(clave.split("interfaz/color_")[-1], actual)
+                c.cambiado.connect(self._cambio)
+                c.cambiado.connect(lambda *_a, k=clave: self._apariencia_cambiada(k))
+                form.addRow(texto, c)
+                self.controles[clave] = c
+                continue
+            if tipo == "aviso_apariencia":
+                self.aviso_apariencia = QLabel(objectName="aviso_apariencia", wordWrap=True)
+                temas.poner_rol(self.aviso_apariencia, "tenue")
+                form.addRow(self.aviso_apariencia)
                 continue
             if tipo == "tema":
                 c = _combo_temas(actual)
@@ -426,7 +611,7 @@ class DialogoPreferencias(QDialog):
                 caja = QVBoxLayout()
                 caja.addWidget(c)
                 caja.addWidget(self.aviso_tema)
-                form.addRow(etiqueta, caja)
+                form.addRow(texto, caja)
                 self.controles[clave] = c
                 self._mostrar_aviso_tema(c.currentData())
                 continue
@@ -442,10 +627,12 @@ class DialogoPreferencias(QDialog):
                 c.toggled.connect(self._cambio)
             elif tipo == "texto":
                 c = QLineEdit(actual, clearButtonEnabled=True)
-                c.setMinimumWidth(300)
+                c.setMinimumWidth(220)
                 c.textChanged.connect(self._cambio)
             elif tipo in ("modelo", "editable"):     # lista de opciones, pero se puede escribir cualquier otra
-                c = QComboBox(editable=True, insertPolicy=QComboBox.NoInsert, minimumWidth=300)
+                c = QComboBox(editable=True, insertPolicy=QComboBox.NoInsert, minimumWidth=220,
+                              sizeAdjustPolicy=QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+                c.setMinimumContentsLength(18)
                 c.addItem("de fábrica", "")
                 c.lineEdit().setPlaceholderText("de fábrica")
                 c.setEditText(actual)
@@ -459,7 +646,7 @@ class DialogoPreferencias(QDialog):
                     fila = QHBoxLayout()
                     for control, estirar in ((c, 3), (self.b_modelos, 0), (self.estado_modelos, 1)):
                         fila.addWidget(control, estirar)
-                    form.addRow(etiqueta, fila)
+                    form.addRow(texto, fila)
                     self.controles[clave] = c
                     continue
             elif tipo == "decimal":
@@ -470,24 +657,24 @@ class DialogoPreferencias(QDialog):
                 c.valueChanged.connect(self._cambio)
             elif tipo == "estado_clave":
                 self.estado_clave = QLabel(objectName="estado_clave", wordWrap=True)
-                form.addRow(etiqueta, self.estado_clave)
+                form.addRow(texto, self.estado_clave)
                 self.controles["asistente/proveedor"].currentIndexChanged.connect(self._estado_clave)
                 self._estado_clave()
                 continue
             elif tipo == "probar":
-                form.addRow(etiqueta, self._probar_conexion())
+                form.addRow(texto, self._probar_conexion())
                 continue
             elif tipo == "texto_largo":
                 c = CampoInstrucciones(actual, ayuda="Por ejemplo: «Explicame paso a paso», «Todo es para imprimir en "
                                                      "PLA: paredes de 2 mm como mínimo». No pueden saltear los modos, "
                                                      "la tarjeta Aplicar ni el tope de gasto.")
-                c.setMinimumWidth(300)
+                c.setMinimumWidth(220)
                 c.setMaximumHeight(140)
                 c.textChanged.connect(self._cambio)
                 caja = QVBoxLayout()
                 caja.addWidget(c)
                 caja.addWidget(c.contador)
-                form.addRow(etiqueta, caja)
+                form.addRow(texto, caja)
                 self.controles[clave] = c
                 continue
             else:
@@ -496,26 +683,98 @@ class DialogoPreferencias(QDialog):
                 c.setValue(int(actual))
                 c.setFixedWidth(90)
                 c.valueChanged.connect(self._cambio)
-            form.addRow(etiqueta, c)
+            form.addRow(texto, c)
             if clave:
                 self.controles[clave] = c
         return w
 
+    # ------------------------------------------------------------ apariencia
+    def _acciones_apariencia(self):
+        fila = QHBoxLayout()
+        restablecer = QPushButton("Restablecer apariencia")
+        restablecer.setToolTip("Vuelve la fuente y el tamaño a los valores de fábrica. El tema elegido no cambia.")
+        restablecer.clicked.connect(self._restablecer_apariencia)
+        fila.addWidget(restablecer)
+        fila.addStretch(1)
+        self.b_restablecer_apariencia = restablecer
+        return fila
+
+    def _perfil_cambiado(self, *_):
+        """Elegir un perfil pone sus valores en los controles; después se escriben y se ve en el acto."""
+        if self._sincronizando:
+            return
+        perfil = self.controles["interfaz/perfil"].currentData()
+        if perfil in PERFILES:
+            self._sincronizando = True
+            try:
+                for clave, valor in PERFILES[perfil].items():
+                    self._poner(clave, valor)
+            finally:
+                self._sincronizando = False
+        self._apariencia_cambiada()
+
+    def _apariencia_cambiada(self, clave=None):
+        """Vista previa como el tema: escribe las claves de Apariencia y la ventana reaplica el estilo en el acto."""
+        if self._sincronizando:
+            return
+        if clave not in (None, "interfaz/perfil"):
+            perfil = self.prefs["interfaz/perfil"]
+            if perfil in PERFILES and any(self.valores()[k] != v for k, v in PERFILES[perfil].items()):
+                self._sincronizando = True           # tocar una clave del perfil lo pasa a «Personalizado»
+                try:
+                    self._poner("interfaz/perfil", "personalizado")
+                finally:
+                    self._sincronizando = False
+        valores = self.valores()
+        for clave in CLAVES_APARIENCIA:
+            self.prefs[clave] = valores[clave]
+        self._mostrar_aviso_apariencia()
+        self.apariencia_cambiada.emit()
+
+    def _mostrar_aviso_apariencia(self, *_):
+        """Lo que no se aplicó por contraste (o por formato), como el aviso del tema, pero en su página."""
+        if self.aviso_apariencia is None:
+            return
+        valores = {clave.split("interfaz/color_")[-1]: self.prefs[clave]
+                   for clave in CLAVES_APARIENCIA if clave.startswith("interfaz/color_")}
+        base, _avisos = temas.resolver(temas.clave_activa())      # el tema sin los colores pisados
+        _aplicables, rechazos = temas.colores_texto(base["colores"], valores)
+        nombres = {"texto": "el texto", "texto_tenue": "el texto secundario", "acento": "el acento"}
+        partes = []
+        for token, valor, detalle in rechazos:
+            if isinstance(detalle, str):
+                partes.append(f"⚠ «{valor}» no se aplicó a {nombres[token]}: {detalle}.")
+            else:
+                lista = ", ".join(f"{fondo} {razon:.1f}:1" for fondo, razon in detalle[:4])
+                partes.append(f"⚠ «{valor}» no se aplicó a {nombres[token]}: contraste menor a "
+                              f"{temas.MIN_CONTRASTE}:1 en {lista}.")
+        self.aviso_apariencia.setText("\n".join(partes) or "Los colores vacíos usan los del tema elegido.")
+        temas.poner_rol(self.aviso_apariencia, "error" if rechazos else "tenue")
+
+    def _restablecer_apariencia(self):
+        self._sincronizando = True
+        try:
+            for clave in CLAVES_APARIENCIA:
+                self._poner(clave, DEFECTOS[clave])
+        finally:
+            self._sincronizando = False
+        self._apariencia_cambiada()
+        self.b_aplicar.setEnabled(True)
+
     # ------------------------------------------------------------ temas
     def _acciones_tema(self):
-        fila = QHBoxLayout()
+        caja = QVBoxLayout()
         abrir = QPushButton("Abrir carpeta de temas")
         abrir.setToolTip("Los temas propios son archivos .json en esa carpeta; aparecen en la lista al reabrir "
                          "Preferencias.")
         abrir.clicked.connect(self._abrir_carpeta_temas)
-        exportar = QPushButton("Exportar tema actual como plantilla")
+        exportar = QPushButton("Exportar plantilla")
         exportar.setToolTip("Guarda el tema elegido como un .json con todos sus colores, para editarlo y hacer el tuyo.")
         exportar.clicked.connect(self._exportar_plantilla)
-        fila.addWidget(abrir)
-        fila.addWidget(exportar)
-        fila.addStretch(1)
+        for b in (abrir, exportar):          # uno debajo del otro: con letra grande entran en una ventana chica
+            caja.addWidget(b, 0, Qt.AlignLeft)
         self.b_abrir_temas, self.b_exportar_tema = abrir, exportar
-        return fila
+        return caja
 
     # ------------------------------------------------------------ asistente IA
     def _estado_clave(self, *_):
@@ -650,6 +909,10 @@ class DialogoPreferencias(QDialog):
     def _tema_cambiado(self, *_):
         clave = self.controles["general/tema"].currentData()
         self._mostrar_aviso_tema(clave)
+        for control in self.controles.values():
+            if isinstance(control, CampoColor):
+                control.refrescar()                # «Del tema (…)» con los colores del tema elegido
+        self._mostrar_aviso_apariencia()
         self.tema_elegido.emit(clave)
 
     def _mostrar_aviso_tema(self, clave, extra=""):
@@ -707,7 +970,15 @@ class DialogoPreferencias(QDialog):
     def _poner(self, clave, valor):
         c = self.controles[clave]
         if isinstance(c, QComboBox):
-            c.setCurrentIndex(max(c.findData(valor), 0))
+            i = c.findData(valor)
+            if i < 0:                               # un valor que la lista no tiene (p. ej. fuente no instalada)
+                c.addItem(str(valor), valor)
+                i = c.count() - 1
+            c.setCurrentIndex(i)
+        elif isinstance(c, (QSlider, QSpinBox, QDoubleSpinBox)):
+            c.setValue(valor)
+        elif isinstance(c, CampoColor):
+            c.setValue(valor)
         else:
             c.setChecked(bool(valor))
 
@@ -738,6 +1009,10 @@ class DialogoPreferencias(QDialog):
             for k, v in self._graficos_originales.items():
                 self.prefs[k] = v
             self.graficos_cambiados.emit()
+        if {k: self.prefs[k] for k in CLAVES_APARIENCIA} != self._apariencia_originales:
+            for k, v in self._apariencia_originales.items():
+                self.prefs[k] = v
+            self.apariencia_cambiada.emit()
         super().reject()
 
     def valores(self):
@@ -771,6 +1046,8 @@ class DialogoPreferencias(QDialog):
                 c.setText(valor)
             elif isinstance(c, CampoInstrucciones):
                 c.setPlainText(valor)
+            elif isinstance(c, CampoColor):
+                c.setValue(valor)
             elif isinstance(c, QDoubleSpinBox):
                 c.setValue(float(valor))
             else:

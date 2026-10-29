@@ -4,6 +4,7 @@ del usuario (base + colores parciales, archivos inválidos) y su elección en Pr
 import json
 import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -17,8 +18,10 @@ def tema_de_fabrica(tmp_path, monkeypatch):
     """Cada prueba arranca con el tema de fábrica y una carpeta de temas propia (nunca la real del usuario)."""
     monkeypatch.setenv(temas.VAR_CARPETA, str(tmp_path / "temas"))
     temas.activar(temas.DEFECTO)
+    temas.activar_tipografia()
     yield
     temas.activar(temas.DEFECTO)
+    temas.activar_tipografia()
 
 
 def escribir(carpeta, nombre, contenido):
@@ -67,8 +70,50 @@ def test_falta_un_token_el_qss_falla_en_voz_alta():
 
 
 def test_la_plantilla_solo_usa_tokens_que_existen():
-    usados = set(re.findall(r"\$([a-z_]+)", temas.PLANTILLA_QSS.template))
-    assert usados <= set(temas.CLAVES_COLOR), usados - set(temas.CLAVES_COLOR)
+    usados = set(re.findall(r"\$([a-z_0-9]+)", temas.PLANTILLA_QSS.template))
+    assert usados <= set(temas.CLAVES_COLOR) | {"fuente", *temas._TAMANOS_QSS}, usados - set(temas.CLAVES_COLOR)
+
+
+# ---------------------------------------------------------------- tipografía
+def test_el_qss_por_defecto_es_identico_al_de_antes_de_la_tipografia():
+    """Copia del QSS de fábrica guardada antes de tocar la plantilla (tests/datos/qss_base.qss)."""
+    base = (Path(__file__).parent / "datos" / "qss_base.qss").read_text(encoding="utf-8")
+    colores = temas.INCLUIDOS[temas.DEFECTO]["colores"]
+    assert temas.generar_qss(colores) == base
+    assert temas.generar_qss(colores, temas.TIPOGRAFIA_DEFECTO) == base
+
+
+def test_el_tamano_base_escala_todos_los_tamanos_de_letra():
+    colores = temas.INCLUIDOS[temas.DEFECTO]["colores"]
+    qss = temas.generar_qss(colores, {"fuente": "Atkinson Hyperlegible", "tamano_pct": 150})
+    assert 'font-family: "Atkinson Hyperlegible"' in qss
+    for esperado in ("13.5pt", "12pt", "15px", "16.5px", "19.5px", "21px"):
+        assert f"font-size: {esperado}" in qss, esperado
+    assert "font-size: 9pt" not in qss and "font-size: 8pt" not in qss
+
+
+def test_la_fuente_no_puede_inyectar_reglas_en_el_qss():
+    colores = temas.INCLUIDOS[temas.DEFECTO]["colores"]
+    qss = temas.generar_qss(colores, {"fuente": 'Arial"; color: red; "'})
+    assert 'font-family: "Arial; color: red;"' in qss           # las comillas se sacan: queda un nombre, no una regla
+    assert qss.count("font-family:") == 1
+
+
+def test_qss_activo_usa_la_tipografia_activa_y_vuelve_a_la_de_fabrica():
+    temas.activar_tipografia({"tamano_pct": 120})
+    assert "font-size: 10.8pt" in temas.qss_activo()
+    temas.activar_tipografia()
+    assert temas.tipografia() == temas.TIPOGRAFIA_DEFECTO and "font-size: 9pt" in temas.qss_activo()
+
+
+def test_la_fuente_de_las_cotas_sigue_a_la_tipografia_activa():
+    from PySide6.QtGui import QFont
+    assert temas.qfont_cotas(9) == QFont("Segoe UI", 9)          # al 100 % es el de siempre
+    temas.activar_tipografia({"fuente_cotas": "OpenDyslexic", "tamano_cotas_pct": 150})
+    f = temas.qfont_cotas(8)
+    assert f.family() == "OpenDyslexic" and f.pointSizeF() == pytest.approx(12.0)
+    temas.activar_tipografia({"tamano_cotas_pct": 120})
+    assert temas.qfont_cotas(9).family() == "Segoe UI"           # vacío = la fuente de la interfaz
 
 
 # ---------------------------------------------------------------- contraste

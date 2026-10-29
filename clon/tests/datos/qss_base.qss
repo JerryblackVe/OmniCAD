@@ -1,0 +1,128 @@
+
+* { font-family: "Segoe UI"; font-size: 9pt; color: #e8ecf1; }
+*:disabled { color: #5d6877; }
+QMainWindow, #barra_app, #cinta, #barra_timeline { background: #1c232c; }
+QToolTip { background: #0f1419; color: #e8ecf1; border: 0; padding: 6px 8px; }
+
+QMenu { background: #1a212a; border: 1px solid #36424f; padding: 2px 0; }
+QMenu::item { padding: 4px 28px 4px 26px; }
+QMenu::item:selected { background: #2b3541; }
+QMenu::item:disabled { color: #5d6877; }
+QMenu::separator { height: 1px; background: #3a4654; margin: 2px 4px; }
+QMenu::icon { padding-left: 4px; }
+QMenu::right-arrow { width: 8px; height: 8px; }
+
+QToolButton { border: 1px solid transparent; border-radius: 2px; background: transparent; padding: 1px; }
+QToolButton:hover { background: #28323e; border-color: #3b4756; }
+QToolButton:checked { background: #3b2c20; border-color: #ff7d0a; }
+QToolButton::menu-indicator { image: none; width: 0; }
+
+QScrollBar:vertical { background: transparent; width: 12px; margin: 0; }
+QScrollBar:horizontal { background: transparent; height: 12px; margin: 0; }
+QScrollBar::handle:vertical { background: #5d6877; min-height: 24px; border-radius: 4px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #5d6877; min-width: 24px; border-radius: 4px; margin: 2px; }
+QScrollBar::handle:hover { background: #9aa5b4; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: 0; background: transparent; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+
+#pestana { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 2px 14px 1px 14px;
+           font-size: 9pt; letter-spacing: 0.3px; }
+#pestana:hover { background: transparent; border-bottom-color: #36424f; }
+#pestana:checked { background: transparent; border-bottom-color: #ff7d0a; }
+#titulo_grupo { font-size: 8pt; padding: 0 6px; border-radius: 0; }
+#boton_cinta { font-size: 8pt; padding: 3px 4px 1px 4px; border-radius: 4px; }
+#espacio_trabajo { border: 1px solid #ff7d0a; border-radius: 4px; background: #ff7d0a;
+                   color: #1a1206; font-size: 9pt; font-weight: 600; padding: 0 14px; }
+#espacio_trabajo:hover { background: #ff9233; }  /* relleno con el acento, como en docs/diseno/ */
+#separador_grupo { background: #28323d; }
+#caja_herramientas { background: #151c24; border: 1px solid #36424f; border-radius: 6px; }
+#tira_sugerencias { background: #151c24; border: 1px solid #36424f; border-radius: 6px; }
+#tira_sugerencias QToolButton { padding: 3px 8px; }
+#titulo_caja { font-size: 8pt; letter-spacing: 0.4px; color: #9aa5b4; }
+#atajos_caja, #resultados_caja { background: transparent; border: 0; }
+#atajos_caja::item { border-radius: 4px; padding: 2px; }
+#atajos_caja::item:hover { background: #28323e; }
+#atajos_caja::item:selected { background: transparent; color: #e8ecf1; }
+#resultados_caja::item { border-radius: 3px; }
+#resultados_caja::item:selected { background: #2b3541; }
+#vacio_caja, #atajo_teclado { color: #9aa5b4; }
+#chinche:checked { background: #3b2c20; border-color: #ff7d0a; }
+
+#pestana_doc { background: #202934; border: 1px solid #36424f; border-bottom: 0;
+               border-top-left-radius: 3px; border-top-right-radius: 3px; padding: 3px 16px; }
+
+#panel_datos { background: #161d26; }
+#panel_datos QListWidget { background: #161d26; border: 0; }
+#panel_datos QListWidget::item { background: #212a35; border: 1px solid #28323d; margin: 4px 8px; }
+#panel_datos QListWidget::item:selected { background: #40301f; border-color: #ff7d0a; }
+#panel_datos #miniatura { background: #202934; }
+
+#cabecera_navegador { background: #232c37; border: 1px solid #36424f; }
+#cabecera_navegador QLabel { font-size: 8pt; letter-spacing: 0.3px; }
+#arbol_navegador { background: transparent; border: 0; }
+
+#barra_navegacion { background: #1c232c; border: 1px solid #36424f; }
+#barra_navegacion QToolButton { padding: 2px; }
+#separador_barra { background: #36424f; }
+
+#barra_timeline QListWidget { background: transparent; border: 0; }
+#barra_timeline QListWidget::item { border-radius: 2px; }
+#barra_timeline QListWidget::item:selected { background: #40301f; }
+#estado_timeline { color: #9aa5b4; padding-right: 8px; }
+#selector_unidades { color: #9aa5b4; padding: 2px 8px; border-radius: 4px; }
+#selector_unidades:hover { color: #e8ecf1; }
+
+#dlg_preferencias QTreeWidget { border: 1px solid #36424f; background: #202934; }
+#dlg_preferencias QTreeWidget::item { padding: 4px 2px; }
+#dlg_preferencias QTreeWidget::item:selected { background: #40301f; color: #ffffff; }
+#cabecera_pref { border: 1px solid #36424f; background: #151c24; padding: 3px; }
+#pagina_pref { border: 1px solid #36424f; background: #151c24; }
+#boton_primario { background: #ff7d0a; color: #1a1206; border: 1px solid #ff7d0a;
+                  padding: 4px 14px; }
+#boton_primario:hover { background: #ff9233; }
+
+#panel_comando { background: #151c24; border: 1px solid #36424f; }
+#cabecera_comando { background: #1d2631; border-bottom: 1px solid #28323d; }
+#titulo_comando { font-weight: 600; letter-spacing: 0.3px; }
+#pie_comando { color: #9aa5b4; padding: 3px 8px 5px 8px; }
+#panel_comando QLabel#etiqueta_cmd { color: #e8ecf1; }
+#seleccion_cmd { text-align: left; padding: 3px 8px; border: 1px solid #36424f; background: #202934; }
+#seleccion_cmd[activa="true"] { border: 1px solid #ff7d0a; background: #3b2c20; color: #5aa9ff; }
+#seleccion_cmd[lleno="true"] { color: #e8ecf1; }
+#panel_comando QLineEdit, #panel_comando QComboBox, #panel_comando QSpinBox { padding: 2px 4px; }
+#panel_comando QScrollArea, #panel_comando QScrollArea > QWidget > QWidget { background: transparent; }
+#mensaje_comando { color: #ff8a80; }
+#aviso_comando { color: #ffc857; }
+
+#panel_comentarios { background: #151c24; border: 1px solid #36424f; }
+#panel_comentarios QLabel { color: #9aa5b4; font-size: 10px; letter-spacing: 0.5px; }
+#panel_comentarios QToolButton { border: none; color: #9aa5b4; font-size: 13px; padding: 0 4px; }
+#panel_comentarios QListWidget { border: none; border-top: 1px solid #28323d; font-size: 11px; }
+
+#paleta_boceto { background: #1c232c; border: 1px solid #36424f; }
+#paleta_boceto QLabel { font-size: 9pt; }
+#entrada_valor { background: #202934; border: 1px solid #ff7d0a; border-radius: 2px; }
+#entrada_valor QLineEdit { border: 0; padding: 1px 3px; min-width: 70px; }
+
+#panel_flotante { background: #151c24; border: 1px solid #36424f; }
+#titulo_panel { background: #1d2631; border-bottom: 1px solid #28323d; }
+#titulo_panel QLabel { font-weight: 600; letter-spacing: 0.4px; }
+#panel_flotante QGroupBox { font-weight: 600; }
+#galeria_render { background: #1c232c; border-top: 1px solid #36424f; }
+#galeria_render QListWidget { background: transparent; border: 0; }
+
+#AvisoFlotante { background: #151c24; border: 1px solid #36424f; border-radius: 2px; }
+#AvisoFlotante QLabel { background: transparent; }
+#AvisoFlotante QToolButton { border: none; color: #9aa5b4; font-size: 14px; }
+#lista_radial { background: #1a212a; border: 1px solid #36424f; }
+#lista_radial #linea_radial { border: none; border-top: 1px solid #28323d; margin: 3px 6px 0 6px; }
+
+QLabel[rol="tenue"] { color: #9aa5b4; }
+QLabel[rol="titulo"] { font-weight: bold; }
+QLabel[rol="encabezado"] { font-size: 8pt; letter-spacing: 0.4px; color: #9aa5b4; }
+QLabel[rol="seccion"] { font-weight: 600; padding-top: 4px; border-bottom: 1px solid #28323d; }
+QLabel[rol="error"] { color: #ff8a80; }
+QLabel[rol="aviso"] { color: #ffc857; }
+QLabel[rol="ok"] { color: #6fdc8c; }
+#indicador_agente[rol="esperando"] { color: #9aa5b4; padding: 0 10px; }
+#indicador_agente[rol="conectado"] { color: #6fdc8c; padding: 0 8px; font-weight: bold; }
