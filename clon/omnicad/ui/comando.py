@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxL
                                QPushButton, QScrollArea, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from ..timeline.documento import ErrorDocumento
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, con_unidad
 from .. import registro_uso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
@@ -135,6 +135,8 @@ class ContextoComando:
         self.parametros = doc.parametros
 
     def evaluar(self, expr, tipo=LONGITUD):
+        if tipo == ESCALAR and con_unidad(expr):         # lo teclea la persona: un factor o una relación no llevan unidad
+            raise ErrorExpresion("Este valor no lleva unidad: escribí solo el número.")
         return self.parametros.evaluar(expr, tipo)
 
     def nuevo_id(self):

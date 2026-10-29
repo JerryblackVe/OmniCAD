@@ -628,6 +628,37 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
     return _coser_caras(caras)
 
 
+def direccion_reglada(arista, referencia, tipo, angulo=0.0):
+    """Dirección unitaria con la que `reglada` sale de `arista` en su punto medio (la flecha de distancia del comando).
+    None si `tipo` es «direccion» (la fija el usuario) o la arista no tiene cara vecina ni plano."""
+    if tipo not in ("normal", "tangente"):
+        return None
+    plano = referencia if isinstance(referencia, geo.Plano) else None
+    arista = TopoDS.Edge(arista)
+    cara, invertida = None, False
+    if plano is None:
+        vecinas = _caras_de(_mapa_aristas(referencia), arista) if isinstance(referencia, TopoDS_Shape) else []
+        if not vecinas:
+            return None
+        cara = vecinas[0]
+        invertida = _orientacion_en(cara, arista) == TopAbs_REVERSED
+    curva = BRepAdaptor_Curve(arista)
+    u = (curva.FirstParameter() + curva.LastParameter()) / 2
+    p, v = gp_Pnt(), gp_Vec()
+    curva.D1(u, p, v)
+    t = _unitario(_np(v), "La tangente de la arista") * (-1 if invertida else 1)
+    if cara is not None:
+        uv = BRepAdaptor_Curve2d(arista, cara).Value(u)
+        ps, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
+        BRepAdaptor_Surface(cara).D1(uv.X(), uv.Y(), ps, du, dv)
+        n_sup = _unitario(np.cross(_np(du), _np(dv)), "La normal de la cara")
+        n_cara, afuera = (-n_sup if cara.Orientation() == TopAbs_REVERSED else n_sup), np.cross(t, n_sup)
+    else:
+        n_cara = plano.normal
+        afuera = np.cross(t, n_cara)
+    return _rotar(_unitario(n_cara if tipo == "normal" else afuera), t, math.radians(angulo))
+
+
 def _desfase_imposible(original, resultado, distancia, *, engrosado=False):
     """True si el kernel no dejó cada cara desfasada a `distancia` de `original`. Pasa cuando la distancia supera el
     radio de curvatura del lado del desfase: la superficie se da vuelta por el centro (un cilindro de radio 10

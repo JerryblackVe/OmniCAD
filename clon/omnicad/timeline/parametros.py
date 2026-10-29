@@ -150,6 +150,11 @@ def _compilar(texto, tipo):
     return ast.parse(_preprocesar(texto, tipo), mode="eval")
 
 
+def con_unidad(expr):
+    """True si `expr` escribe un número con unidad («2 mm», «30°»)."""
+    return _NUM_CON_UNIDAD.search(str(expr)) is not None
+
+
 def nombres_usados(expr):
     """Nombres de parámetros que aparecen en una expresión (sin unidades ni funciones)."""
     try:

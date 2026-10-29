@@ -23,8 +23,9 @@ def _nuevos(antes, despues):
     return {k: v for k, v in despues.items() if k not in antes or antes[k] != v}
 
 
-def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None, rt=True, etiqueta=None):
-    """sel: {campo: lambda -> [hits]}; vals: {campo: valor}; esperado: medida total de lo nuevo (área o volumen)."""
+def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None, rt=True, etiqueta=None, error=None):
+    """sel: {campo: lambda -> [hits]}; vals: {campo: valor}; esperado: medida total de lo nuevo (área o volumen).
+    `error`: texto que tiene que traer el aviso cuando el caso es uno que el programa debe rechazar."""
     vals = vals or {}
     nombre = etiqueta or clave
     antes, n0 = A.cuerpos_resumen(v), A.n_ops(v)
@@ -49,6 +50,13 @@ def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None
         st = A.estado_panel(p)
         if foto:
             A.foto(v, foto)
+        if error is not None:
+            rechazado = not st["previa_ok"]
+            A.reg(area, f"{nombre}: se rechaza con un aviso claro", rechazado and error.lower() in (st["mensaje"] or "").lower(),
+                  f"mensaje=«{st['mensaje']}» (esperaba «{error}»)" if rechazado else "la vista previa lo aceptó")
+            p.cancelar()
+            A.esperar(100)
+            return {"previa_ok": False, "mensaje": st["mensaje"]}
         if not st["op"] or not st["previa_ok"]:
             A.reg(area, f"{nombre}: vista previa", False, f"mensaje=«{st['mensaje']}» op={st['op']} previa_ok={st['previa_ok']} params={getattr(p.ultima_op, 'p', None)}")
             p.cancelar()

@@ -1394,8 +1394,11 @@ def _reemplazar(forma, pares, operacion="Reemplazar cara"):
     los mensajes de error (también lo usa el desfase de caras)."""
     diag = _diagonal(forma)
     sumar, restar = [], []
+    coincide = True        # todas las caras ya están sobre su plano destino
     for cara, destino in pares:
         c, d = _punto_normal(cara)
+        coincide &= (isinstance(destino, geo.Plano) and abs(float((destino.origen - c) @ destino.normal)) < 1e-7
+                     and abs(abs(float(d @ destino.normal)) - 1.0) < 1e-9)
         largo = _largo_extension(cara, destino, d, diag)
         lados = ((1.0, sumar), (-1.0, restar))
         if isinstance(destino, geo.Plano):
@@ -1415,6 +1418,8 @@ def _reemplazar(forma, pares, operacion="Reemplazar cara"):
             if len(piezas) > 1:
                 lista.extend(p for p in piezas if not geo.se_tocan(p, tapa, 1e-7))
     if not sumar and not restar:
+        if coincide:
+            raise geo.ErrorGeometria(f"{operacion}: la cara ya está sobre el plano destino, no hay nada que reemplazar.")
         raise geo.ErrorGeometria("El destino no corta por completo la extensión de las caras elegidas.")
     resultado = geo.unir_todos([forma] + sumar)
     for pieza in restar:

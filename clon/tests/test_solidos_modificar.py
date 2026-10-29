@@ -245,6 +245,12 @@ def test_desfasar_caras_alternativa_por_extrusion(monkeypatch):
     chequear(sm.desfasar_caras(b, [tapa(b), cara_en(b, (5, 0, 5))], -1), 9 * 9 * 10)
 
 
+def test_reemplazar_cara_por_el_plano_donde_ya_esta_lo_dice():
+    b = caja10()
+    with pytest.raises(g.ErrorGeometria, match="ya está sobre el plano destino"):
+        sm.reemplazar_cara(b, [tapa(b)], g.Plano("XY", 10))
+
+
 def test_reemplazar_cara_planos_y_curva():
     b = caja10()
     r = sm.reemplazar_cara(b, [tapa(b)], g.Plano("XY", 15))

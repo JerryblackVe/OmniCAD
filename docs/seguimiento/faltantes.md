@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 197: Abierto 140 · Parcial 37 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 196: Abierto 139 · Parcial 37 · Bloqueado 17 · Sin verificar 3.
 
 ## Pendientes generales
 
@@ -93,7 +93,7 @@ Abierto 2. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye 
 
 Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayuda de Fusion (sección Fusion-Patch de `docs/fusion_docs/`) y de probar las 14 herramientas por MCP/CLI. Los bugs se reprodujeron; los scripts de prueba (`sonda*.py`) están en `evidencias/superficie_2026-10-24/`, fuera de git.
 
-Abierto 12.
+Abierto 11.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -108,7 +108,6 @@ Abierto 12.
 | SUP-17 | Extender: alineación de bordes Libre o Alinear en el tipo Natural | Abierto | Baja | Fusion ofrece Free Edges (G0) y Align Edges (G1) al extender de forma natural. Hoy `extension_type` no tiene esa opción. Ayuda: Extend a surface body. | omnicad/timeline/ops_superficie.py:186-204; omnicad/api/herramientas_superficie.py:198-209 | 2026-10-24 |
 | SUP-18 | Descoser por caras sueltas | Abierto | Baja | Fusion deja elegir caras (o cuerpos sólidos) y separa solo esas. OmniCAD descose cuerpos completos. Ayuda: Unstitch faces. | omnicad/timeline/ops_superficie.py:226-239; omnicad/api/herramientas_superficie.py:250 | 2026-10-24 |
 | SUP-19 | Escalar cuerpos de superficie | Abierto | Baja | `scale_body` responde «requiere cuerpos sólidos». Fusion lo tiene en SUPERFICIE › Modificar, que acá tampoco tiene el botón. Ayuda: Modify tools for surface bodies. | omnicad/api/herramientas_solido_extra.py:418; omnicad/ui/cinta.py:125-133 | 2026-10-24 |
-| SUP-25 | Asas de arrastre en Revolución de superficie y en Reglada | Abierto | Baja | La ayuda de Fusion dice «arrastrá el asa o escribí el valor» para el ángulo de la revolución de superficie y «las asas de distancia y ángulo» en la superficie reglada. En la ventana ninguno de los dos comandos muestra asas (probado: `sup_revolucion` y `reglada` abren el panel sin ninguna), mientras Extruir, Desfase, Engrosar y la revolución sólida sí las tienen. | omnicad/ui/comandos/superficie.py:47,123 | 2026-10-24 |
 
 ## Sólido (auditoría contra Fusion, 2026-10-24)
 
@@ -141,7 +140,7 @@ Abierto 7.
 
 ## Asas de arrastre (gizmos) contra la ayuda de Fusion (auditoría 2026-10-26)
 
-Se recorrieron los 148 comandos del catálogo y las cintas: 44 tienen asas (`Comando.manipuladores`) y 104 no. Acá solo están los que **la ayuda de Fusion dice que tienen manipulador** y OmniCAD no (o los tiene incompletos). Los comandos sin asa en Fusion (Alinear, Simetría, Combinar, Dividir, ejes, planos por puntos, análisis de color, etc.) quedan fuera a propósito. Las asas se arman con `ui/manipuladores.py` (Flecha, Angulo, AsaRadial, Posicion, Triada y las de calcomanía: giro, codo de escala y volteos). Cada gizmo lleva su prueba en `tests/` y en la pieza `asas` de `scripts/prueba_ui/`. Ya resueltos (están en el Registro): Lienzo y Calcomanía. Los que ya tienen fila propia: SUP-25 (Revolución de superficie y Reglada), SUP-26 (tope de Extender) y FU-4 (asas de Extruir).
+Se recorrieron los 148 comandos del catálogo y las cintas: 44 tienen asas (`Comando.manipuladores`) y 104 no. Acá solo están los que **la ayuda de Fusion dice que tienen manipulador** y OmniCAD no (o los tiene incompletos). Los comandos sin asa en Fusion (Alinear, Simetría, Combinar, Dividir, ejes, planos por puntos, análisis de color, etc.) quedan fuera a propósito. Las asas se arman con `ui/manipuladores.py` (Flecha, Angulo, AsaRadial, Posicion, Triada y las de calcomanía: giro, codo de escala y volteos). Cada gizmo lleva su prueba en `tests/` y en la pieza `asas` de `scripts/prueba_ui/`. Ya resueltos (están en el Registro): Lienzo, Calcomanía, y las asas de Revolución de superficie y Reglada (SUP-25). Los que ya tienen fila propia: SUP-26 (tope de Extender) y FU-4 (asas de Extruir).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|

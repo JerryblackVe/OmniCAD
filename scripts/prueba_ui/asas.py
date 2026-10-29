@@ -86,6 +86,7 @@ def probar(clave, sel, vals, foto=None):
                     A.reg(nombre, f"arrastrar asa de ángulo «{cl}» 30°", ok and abs(despues - antes) > 5,
                           f"{antes:g}° → {despues:g}°; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
                 elif isinstance(m, mp.Flecha) and not isinstance(m, (mp.FlechaCalcomania,)):
+                    texto_antes = p.valores.get(cl)
                     antes = g.valor(cl)
                     a, b = m.puntos(g)
                     medio = (a + b) / 2
@@ -102,6 +103,13 @@ def probar(clave, sel, vals, foto=None):
                     final = g.valor(cl)
                     A.reg(nombre, f"flecha «{cl}» arrastrada más allá del cero", ok,
                           f"{despues:g} → {final:g} (mínimo {m.minimo}); previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
+                    # el tope puede dejar un valor sin sentido (cero); se escribe de nuevo el de antes y la previa se recupera
+                    p.set_valor(cl, texto_antes)
+                    p._t_previa.stop()
+                    p._calcular_previa()
+                    A.esperar(150)
+                    A.reg(nombre, f"flecha «{cl}»: al escribir de nuevo {texto_antes!r} la previa se recupera", p._previa_ok,
+                          f"{final:g} → {g.valor(cl):g}; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
                 elif isinstance(m, mp.AsaCantidad):
                     antes = int(g.valor(cl))
                     m = next(x for x in g.manips if isinstance(x, mp.AsaCantidad))      # las asas se rehacen en cada cambio

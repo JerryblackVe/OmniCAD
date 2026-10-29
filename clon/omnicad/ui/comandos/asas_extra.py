@@ -8,6 +8,7 @@ import numpy as np
 
 from ...nucleo import geometria as geo
 from ...timeline import entidades as ent
+from ...timeline.parametros import ANGULO
 from . import CATALOGO
 from .comunes import evaluar_o_cero
 
@@ -357,14 +358,49 @@ def _asas_extender(self, ctx, v):
 
 
 def _asas_reglada(self, ctx, v):
-    if not v.get("aristas") or not v.get("direccion"):
+    """Flecha de distancia y arco de ángulo en el punto medio de la primera arista: la dirección sale de la cara de la
+    arista («normal», «tangente») o de lo elegido («dirección»)."""
+    from ...nucleo import superficies as sf
+    mp = _mp()
+    if not v.get("aristas"):
         return []
-    forma = _forma_de(ctx, v["aristas"][0])
+    e = mp.entidad(v["aristas"][0], ctx.estado)
+    pt = _punto_y_tangente(e.forma) if e is not None and e.forma is not None else None
+    if pt is None:
+        return []
+    angulo = evaluar_o_cero(ctx, v.get("angulo"), ANGULO)
+    if v.get("tipo") == "direccion":
+        base = _direccion_de(ctx, v["direccion"][0]) if v.get("direccion") else None
+        d = None if base is None else sf._rotar(mp.unitario(base), pt[1], np.radians(angulo))
+    else:
+        cuerpo = ctx.estado.cuerpos.get(getattr(e, "cuerpo", None))
+        try:
+            d = sf.direccion_reglada(e.forma, cuerpo.forma if cuerpo is not None else e.plano, v.get("tipo"), angulo)
+            base = sf.direccion_reglada(e.forma, cuerpo.forma if cuerpo is not None else e.plano, v.get("tipo"))
+        except Exception:  # noqa: BLE001 — una arista sin cara vecina no tiene dirección: sin asas
+            return []
+    if d is None or base is None:
+        return []
+    return [mp.Flecha("distancia", pt[0], d), mp.Angulo("angulo", pt[0], pt[1], base, 25.0)]
+
+
+def _asas_sup_revolucion(self, ctx, v):
+    """Arco de ángulo alrededor del eje, a la distancia del primer punto del perfil."""
+    mp = _mp()
+    if not v.get("curvas") or not v.get("eje"):
+        return []
+    forma = _forma_de(ctx, v["curvas"][0])
     pt = _punto_y_tangente(forma) if forma is not None else None
-    d = _direccion_de(ctx, v["direccion"][0])
-    if pt is None or d is None:
+    try:
+        punto, d = ent.como_eje(mp.entidad(v["eje"][0], ctx.estado))
+    except Exception:  # noqa: BLE001 — sin eje válido todavía no hay asa
         return []
-    return [_mp().Flecha("distancia", pt[0], d)]
+    if pt is None:
+        return []
+    d, punto = mp.unitario(d), np.asarray(punto, float)
+    pie = punto + d * float((pt[0] - punto) @ d)
+    radio = float(np.linalg.norm(pt[0] - pie))
+    return [mp.Angulo("angulo", pie, d, pt[0] - pie, radio)] if radio > 1e-6 else []
 
 
 def _asas_empalme_superficie(self, ctx, v):
@@ -466,7 +502,7 @@ def _enganchar():
         "bobina": _asas_bobina,
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,
         "tuberia": _asas_tuberia, "dobladillo": _asas_dobladillo, "extender_sup": _asas_extender,
-        "reglada": _asas_reglada, "sup_empalme": _asas_empalme_superficie, "plegar": _asas_plegar,
+        "reglada": _asas_reglada, "sup_revolucion": _asas_sup_revolucion, "sup_empalme": _asas_empalme_superficie, "plegar": _asas_plegar,
         "plano_angulo": _asas_plano_angulo, "desmoldeo": _asas_desmoldeo, "patron_ruta": _asas_patron_ruta,
     }
     for clave, funcion in tabla.items():

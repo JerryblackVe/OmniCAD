@@ -40,7 +40,7 @@ run("empalme_3d", lambda: (
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm"}, foto="empalme_3d"),
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "cuerda", "cuerda": "3 mm"}, etiqueta="empalme cuerda", rt=False),
     C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "2 mm", "tipo_radio": "variable", "radio_fin": "4 mm"}, etiqueta="empalme variable 2→4", rt=False),
-    C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "100 mm"}, etiqueta="empalme radio 100 (grande)", rt=False),
+    C.caso(v, AR, "empalme_3d", {"aristas": arista(caja)}, {"radio": "100 mm"}, etiqueta="empalme radio 100 (grande)", rt=False, error="demasiado grande"),
     C.caso(v, AR, "empalme_3d", {"central": cara(caja, normal=(0, 0, 1)),
                                  "laterales": lambda: [_hit_por_normal((1, 0, 0)), _hit_por_normal((-1, 0, 0))]},
            {"tipo": "completo"}, etiqueta="redondeo completo (media caña)", rt=False),
@@ -110,18 +110,18 @@ run("desfase (curvas)", lambda: (
     C.negativos(v, AR, "desfase")))
 run("reemplazar_cara", lambda: (
     C.caso(v, AR, "reemplazar_cara", {"caras": cara(caja, normal=(0, 0, 1)), "destino": plano("PM")}, {}, esperado=-30 * 30 * 10, etiqueta="reemplazar cara de arriba por plano z=10", foto="reemplazar_cara"),
-    C.caso(v, AR, "reemplazar_cara", {"caras": cara(caja, normal=(0, 0, 1)), "destino": plano("PL")}, {}, etiqueta="reemplazar cara por plano que ya coincide", rt=False),
+    C.caso(v, AR, "reemplazar_cara", {"caras": cara(caja, normal=(0, 0, 1)), "destino": plano("PL")}, {}, etiqueta="reemplazar cara por plano que ya coincide", rt=False, error="ya está sobre el plano"),
     C.negativos(v, AR, "reemplazar_cara")))
 run("dividir_cara", lambda: (
     C.caso(v, AR, "dividir_cara", {"caras": cara(caja, normal=(1, 0, 0)), "herramienta": plano("PM")}, {}, esperado=0, foto="dividir_cara"),
-    C.caso(v, AR, "dividir_cara", {"caras": cara(caja, normal=(0, 0, 1)), "herramienta": plano("YZ")}, {}, etiqueta="dividir cara con plano que NO la corta", rt=False),
+    C.caso(v, AR, "dividir_cara", {"caras": cara(caja, normal=(0, 0, 1)), "herramienta": plano("YZ")}, {}, etiqueta="dividir cara con plano que NO la corta", rt=False, error="no corta"),
     C.negativos(v, AR, "dividir_cara")))
 run("dividir_cuerpo", lambda: (
     C.caso(v, AR, "dividir_cuerpo", {"cuerpo": cuerpo(caja), "herramienta": plano("PM")}, {}, esperado=0, foto="dividir_cuerpo"),
     C.negativos(v, AR, "dividir_cuerpo")))
 run("division_silueta", lambda: (
     C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {}, esperado=0, foto="division_silueta"),
-    C.caso(v, AR, "division_silueta", {"direccion": eje("Z"), "cuerpo": cuerpo(cil)}, {}, etiqueta="división de silueta mirando el eje (sin silueta)", rt=False),
+    C.caso(v, AR, "division_silueta", {"direccion": eje("Z"), "cuerpo": cuerpo(cil)}, {}, etiqueta="división de silueta mirando el eje (sin silueta)", rt=False, error="no tiene silueta"),
     C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {"operacion": "solido"}, etiqueta="división de silueta, cuerpo sólido (dos cuerpos)", rt=False),
     C.negativos(v, AR, "division_silueta")))
 

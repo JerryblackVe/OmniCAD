@@ -50,7 +50,7 @@ run("barrido", lambda: (
     C.caso(v, AR, "barrido", {"perfiles": per("Perf"), "ruta": cur("Ruta")}, {}, esperado=pi * 4 * 30, foto="barrido"),
     C.caso(v, AR, "barrido", {"perfiles": per("Perf"), "ruta": cur("Ruta")}, {"orientacion": "paralela"}, etiqueta="barrido paralelo", rt=False),
     C.caso(v, AR, "barrido", {"perfiles": per("Perf"), "ruta": cur("Ruta")}, {"torsion": "90 deg"}, etiqueta="barrido torsión 90°", rt=False),
-    C.caso(v, AR, "barrido", {"perfiles": per("Perf"), "ruta": cur("Ruta")}, {"conicidad": "-5 deg"}, etiqueta="barrido conicidad -5°", rt=False),
+    C.caso(v, AR, "barrido", {"perfiles": per("Perf"), "ruta": cur("Ruta")}, {"conicidad": "-2 deg"}, etiqueta="barrido conicidad -2°", rt=False),
     C.negativos(v, AR, "barrido")))
 
 # Solevación ----------------------------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ run("repujado", lambda: (
 # Agujero ---------------------------------------------------------------------------------------------------------------
 sup_caja = lambda: [A.hit_cara(v, caja, normal=(0, 0, 1))]  # noqa: E731
 run("agujero", lambda: (
-    C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"diametro": "6 mm", "profundidad": "8 mm"}, esperado=-pi * 9 * 8, foto="agujero"),
+    C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"diametro": "6 mm", "profundidad": "8 mm"}, esperado=-(pi * 9 * 8 + pi * 9 * (3 / math.tan(math.radians(59))) / 3), foto="agujero"),
     C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"diametro": "6 mm", "extension": "todo"}, esperado=-pi * 9 * 20, etiqueta="agujero a todo", rt=False),
     C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"diametro": "6 mm", "profundidad": "8 mm", "tipo": "abocardado"}, etiqueta="agujero abocardado", rt=False),
     C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"diametro": "6 mm", "profundidad": "8 mm", "tipo": "avellanado"}, etiqueta="agujero avellanado", rt=False),
@@ -98,17 +98,21 @@ run("rosca", lambda: (
 # Primitivas -----------------------------------------------------------------------------------------------------------------
 pl = lambda: [A.hit_plano(v, "XY")]  # noqa: E731
 run("caja", lambda: (
-    C.caso(v, AR, "caja", {"centro": pl}, {"ancho": "10 mm", "largo": "20 mm", "alto": "5 mm", "x": "300 mm"}, esperado=1000, foto="caja"),
-    C.negativos(v, AR, "caja", {"centro": pl}, "alto", malos=("abc", "0 mm", "-5 mm"), vals={"ancho": "10 mm", "largo": "20 mm", "x": "300 mm"})))
+    C.caso(v, AR, "caja", {}, {"ancho": "10 mm", "largo": "20 mm", "alto": "5 mm", "x": "300 mm"}, esperado=1000, foto="caja"),
+    C.caso(v, AR, "caja", {"centro": pl}, {"ancho": "10 mm", "largo": "20 mm", "alto": "5 mm"}, esperado=1000, etiqueta="caja con clic en el plano", rt=False),
+    C.negativos(v, AR, "caja", {"centro": pl}, "alto", malos=("abc", "0 mm", "-5 mm"), vals={"ancho": "10 mm", "largo": "20 mm"})))
 run("cilindro", lambda: (
-    C.caso(v, AR, "cilindro", {"centro": pl}, {"diametro": "10 mm", "alto": "20 mm", "x": "300 mm"}, esperado=pi * 25 * 20, foto="cilindro"),
-    C.negativos(v, AR, "cilindro", {"centro": pl}, "diametro", malos=("abc", "0 mm", "-5 mm"), vals={"alto": "20 mm", "x": "300 mm"})))
+    C.caso(v, AR, "cilindro", {}, {"diametro": "10 mm", "alto": "20 mm", "x": "300 mm"}, esperado=pi * 25 * 20, foto="cilindro"),
+    C.caso(v, AR, "cilindro", {"centro": pl}, {"diametro": "10 mm", "alto": "20 mm"}, esperado=pi * 25 * 20, etiqueta="cilindro con clic en el plano", rt=False),
+    C.negativos(v, AR, "cilindro", {"centro": pl}, "diametro", malos=("abc", "0 mm", "-5 mm"), vals={"alto": "20 mm"})))
 run("esfera", lambda: (
-    C.caso(v, AR, "esfera", {"centro": pl}, {"diametro": "10 mm", "x": "300 mm"}, esperado=4 / 3 * pi * 125, foto="esfera"),
-    C.negativos(v, AR, "esfera", {"centro": pl}, "diametro", malos=("abc", "0 mm", "-5 mm"), vals={"x": "300 mm"})))
+    C.caso(v, AR, "esfera", {}, {"diametro": "10 mm", "x": "300 mm"}, esperado=4 / 3 * pi * 125, foto="esfera"),
+    C.caso(v, AR, "esfera", {"centro": pl}, {"diametro": "10 mm"}, esperado=4 / 3 * pi * 125, etiqueta="esfera con clic en el plano", rt=False),
+    C.negativos(v, AR, "esfera", {"centro": pl}, "diametro", malos=("abc", "0 mm", "-5 mm"), vals={})))
 run("toroide", lambda: (
-    C.caso(v, AR, "toroide", {"centro": pl}, {"diametro": "20 mm", "diametro_tubo": "4 mm", "x": "300 mm"}, esperado=2 * pi ** 2 * 10 * 4, foto="toroide"),
-    C.caso(v, AR, "toroide", {"centro": pl}, {"diametro": "4 mm", "diametro_tubo": "10 mm", "x": "300 mm"}, etiqueta="toroide tubo mayor que el aro", rt=False)))
+    C.caso(v, AR, "toroide", {}, {"diametro": "20 mm", "diametro_tubo": "4 mm", "x": "300 mm"}, esperado=2 * pi ** 2 * 10 * 4, foto="toroide"),
+    C.caso(v, AR, "toroide", {"centro": pl}, {"diametro": "20 mm", "diametro_tubo": "4 mm"}, esperado=2 * pi ** 2 * 10 * 4, etiqueta="toroide con clic en el plano", rt=False),
+    C.negativos(v, AR, "toroide", {"centro": pl}, "diametro_tubo", malos=("30 mm",), vals={"diametro": "20 mm"})))
 
 # Bobina y tubería ----------------------------------------------------------------------------------------------------------
 run("bobina", lambda: (
