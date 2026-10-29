@@ -29,6 +29,27 @@ from .iconos import icono
 
 # Vista previa «lo último gana» (P-41): cuánto se espera antes del próximo cálculo sigue a lo que costó el último.
 PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
+# Operaciones cuya previa pasa de ~40 ms sobre un cuerpo de muchas caras (docs/auditorias/previa-comandos-*.md): se
+# calculan en un proceso aparte para que la ventana no se congele. Sobre cuerpos chicos siguen en el proceso (< 33 ms).
+TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron"), 64
+
+
+def _ids_cuerpo(p):
+    """Ids de los cuerpos que nombra una operación: claves `cuerpo` (referencias a aristas y caras), `cuerpos` y `objetivo`."""
+    ids, pila = set(), [p]
+    while pila:
+        x = pila.pop()
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k in ("cuerpo", "cuerpos", "objetivo") and isinstance(v, str):
+                    ids.add(v)
+                elif k in ("cuerpos", "objetivo") and isinstance(v, list):
+                    ids.update(e for e in v if isinstance(e, str))
+                if isinstance(v, (dict, list)):
+                    pila.append(v)
+        elif isinstance(x, list):
+            pila.extend(e for e in x if isinstance(e, (dict, list)))
+    return ids
 
 
 class ErrorComando(ValueError):
@@ -844,12 +865,11 @@ class PanelComando(QFrame):
         return True
 
     def _previa_pesada(self, op):
-        if op.TIPO != "vaciado" or self.ctx.doc.motor != "opencascade":
+        if op.TIPO not in TIPOS_PESADOS or self.ctx.doc.motor != "opencascade":
             return False
         from ..nucleo import geometria as geo
-        ids = set(op.p["cuerpos"]) | {r["cuerpo"] for r in op.p["caras"]}
-        cuerpos = [self.ctx.estado.cuerpos.get(cid) for cid in ids]   # un id que ya no existe lo informa el camino normal
-        return any(c is not None and len(geo.caras(c.forma)) >= 64 for c in cuerpos)
+        cuerpos = [self.ctx.estado.cuerpos.get(cid) for cid in _ids_cuerpo(op.p)]   # un id que ya no existe lo informa el camino normal
+        return any(c is not None and len(geo.caras(c.forma)) >= CARAS_PESADAS for c in cuerpos)
 
     def _iniciar_previa(self, op):
         from ..nucleo.aislado import CalculoPendiente, TareaAislada
@@ -872,6 +892,8 @@ class PanelComando(QFrame):
             estado, avisos = leer_previa_visual(salida, self.ctx.estado)
             self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
             self._mostrar(" ".join(avisos), aviso=True)
+            if self._previa_ok:
+                self._previa_vista(self._op_hijo)
             self.previa.emit(estado)
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
             self._previa_ok = False

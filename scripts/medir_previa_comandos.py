@@ -53,7 +53,7 @@ CASOS = {
     "cortar": ("caja", "alto", 12.0, 3.0),
     "unir": ("caja", "alto", 12.0, 3.0),
     "intersecar": ("caja", "alto", 12.0, 3.0),
-    "vaciar": ("vaciado", "espesor_interior", 0.5, 0.12),
+    "vaciar": ("vaciado", "espesor_interior", 2.0, 1.0),
     "patron_rectangular": ("patron_rectangular_3d", "d1", 120.0, 12.0),
     "patron_circular": ("patron_circular_3d", "angulo", 240.0, 25.0),
 }
@@ -176,6 +176,8 @@ class _Relojes:
             (com.PanelComando, "_iniciar_previa", "hijo_visual"),
             (com.PanelComando, "_recibir_previa", "entrega"),
             (mp.GestorManipuladores, "actualizar", "manipuladores"),
+            (mp.GestorManipuladores, "redibujar", "manip_redibujar"),
+            (mp.GestorManipuladores, "sincronizar_cajas", "manip_cajas"),
             (Documento, "previsualizar", "kernel"), (aislado, "correr_json", "hijo"),
             (vis.Visor3D, "set_modelo", "modelo"), (vis.Visor3D, "paintGL", "dibujo"),
             (vis, "teselar_cuerpo", "teselado"), (vis, "aristas_cuerpo", "aristas"),
@@ -334,7 +336,8 @@ def _corrida(app, receta, caso, modelo, temporal, reloj, duracion=3.0):
              "cuadros_100": int(sum(intervalos > 100)),
              "hijo_arrastre": len(reloj.datos["hijo"]) + len(reloj.datos["hijo_visual"]),
              "hijo_primera": primera.get("hijo", {}).get("n", 0),
-             "valida": bool(activos), "previa_ok": panel._previa_ok, "mensaje": panel.mensaje.text(),
+             "valida": len(activos) / duracion >= 0.5 * (len(reloj.datos["previa"]) / (fin_gesto - inicio)),
+             "previa_ok": panel._previa_ok, "mensaje": panel.mensaje.text(),
              "gl": visor.info_gl}
         r.update(_latencias(movimientos, observados))
         assert not reloj.fallos, reloj.fallos
@@ -382,7 +385,8 @@ def _informe(datos):
         f"Arrastre rápido de {gestos} s con QMouseEvent, sin mover el cursor real; tres corridas válidas por caso. "
         "Primer cálculo con documento/panel nuevo separado del arrastre. Espera adaptativa y protección aislada originales.",
         f"Ventana 1900 × 1000, con la bandera siempre encima. FPS cuenta frameSwapped dentro de los {gestos} s; "
-        "una corrida con FPS 0 se descarta. Previas/s usa la duración real del gesto: un cálculo nativo puede "
+        "una corrida se descarta si presenta menos de la mitad de los cuadros que valores cambiaron (ventana tapada por "
+        "otra); los intentos descartados se cuentan en la columna Reps. Previas/s usa la duración real del gesto: un cálculo nativo puede "
         "sobrepasar los 3 s pedidos y se registra gesto_s.",
         "Los intervalos incluyen hasta 100 ms de presentación posterior al gesto para no esconder un bloqueo al final. "
         "paintGL mide CPU/envío de GL, no GPU aislada.", "", "## Catálogo con PREVIA=True", "",
@@ -404,7 +408,7 @@ def _informe(datos):
         "M incluye T y aristas: no sumarlos. p95 y máximos de cada etapa y repetición quedan en el JSON.", "",
         "Con previa aparte, Previa mide el envío no bloqueante; el kernel del hijo no está instrumentado (—). "
         "respuesta_completa y entrega se guardan por separado: no se presenta el envío como el cálculo terminado.", "",
-        "| Comando | Modelo (pasos/cuerpos/caras) | Reps | Previa p50/p95/máx | K / M / T / D | Previas/s | FPS | Retraso p50/p95 | Cuadros >33/>100 | Hijo primera/arrastre |",
+        "| Comando | Modelo (pasos/cuerpos/caras) | Reps válidas/intentos | Previa p50/p95/máx | K / M / T / D | Previas/s | FPS | Retraso p50/p95 | Cuadros >33/>100 | Hijo primera/arrastre |",
         "|---|---|---|---|---|---|---|---|---|---|"]
     for caso, modelos in datos["casos"].items():
         for modelo, corridas in modelos.items():
@@ -419,7 +423,7 @@ def _informe(datos):
             retrasos = [r["retraso_ms"] for r in validas if r["retraso_ms"]["n"]]
             retraso = (f"{min(r['p50'] for r in retrasos):.1f}–{max(r['p50'] for r in retrasos):.1f} / "
                        f"{min(r['p95'] for r in retrasos):.1f}–{max(r['p95'] for r in retrasos):.1f}" if retrasos else "—")
-            lineas.append(f"| {caso} | {modelo} ({m['pasos']}/{m['cuerpos']}/{m['caras']}) | {len(validas)} | "
+            lineas.append(f"| {caso} | {modelo} ({m['pasos']}/{m['cuerpos']}/{m['caras']}) | {len(validas)}/{len(corridas)} | "
                 + "/".join(_numero(previa[k]) for k in ("p50", "p95", "max")) + " | "
                 + " / ".join(_numero(etapas[k]["p50"]) for k in ("kernel", "modelo", "teselado_por_modelo", "dibujo"))
                 + f" | {rango('previas_s')} | {rango('fps')} | {retraso} | "
@@ -609,7 +613,7 @@ def main():
                 for caso in args.comandos:
                     corridas = datos["casos"].setdefault(caso, {}).setdefault(args.modelo, [])
                     intentos = 0
-                    while sum(r["valida"] for r in corridas) < 3 and intentos < 6:
+                    while sum(r["valida"] for r in corridas) < 3 and intentos < 10:
                         r = _corrida(app, receta, caso, args.modelo, temporal, reloj, args.duracion)
                         assert not errores, errores
                         assert r["previa_ok"], r["mensaje"]

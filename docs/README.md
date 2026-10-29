@@ -87,6 +87,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 |---|---|
 | [auditorias/](auditorias/) | Auditoría total del 2026-10-14 (cuatro informes) y [fluidez del 2026-10-28](auditorias/fluidez-2026-10-28.md) (por qué la extrusión interactiva se ve a saltos; mediciones y plan) |
 | [auditorias/previa-comandos-2026-10-28.md](auditorias/previa-comandos-2026-10-28.md) | Costo de las previas de Empalme, Chaflán, Cortar, Unir, Intersecar, Vaciado y patrones: 32 casos, 96 corridas, kernel/teselado/dibujo y límites; banco reproducible sin arreglos de producción |
+| [auditorias/previa-asincrona-2026-10-29.md](auditorias/previa-asincrona-2026-10-29.md) | Previa en proceso aparte para Empalme, Chaflán, booleanas, patrones y Vaciado: cuadros, asas y latencia hasta el sólido exacto por comando, y la causa del «piso» del Vaciado (P-55). |
 | [informe_tortura_2026-10-17.md](informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |
 | [comparacion_motores.md](comparacion_motores.md) | OpenCascade contra OmniKernel. **Generado**: `scripts/comparar_motores.py` |
 | [inventario_motor.md](inventario_motor.md) | Funciones del núcleo por motor. **Generado**: `scripts/estado_motor.py` |

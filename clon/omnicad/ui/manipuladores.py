@@ -137,33 +137,28 @@ def _cono(base, eje, largo, radio, color, n=20):
     u, v = perpendiculares(eje)
     punta = base + eje * largo
     angs = np.linspace(0, 2 * math.pi, n + 1)
-    anillo = np.array([base + (u * math.cos(a) + v * math.sin(a)) * radio for a in angs])
-    tris = []
-    for i in range(n):
-        tris += [punta, anillo[i], anillo[i + 1], base, anillo[i + 1], anillo[i]]
-    lineas = []
-    for i in range(n):
-        lineas += [punta, anillo[i]]
-        for k in (0.33, 0.66):           # rellena la silueta vista de costado
-            lineas += [punta, anillo[i] + (anillo[i + 1] - anillo[i]) * k]
-    return [("tris", np.array(tris), color, 1.0), ("lineas", np.array(lineas), color, 1.6),
-            ("lineas", _segs(anillo), color, 1.6)]
+    anillo = base + (np.cos(angs)[:, None] * u + np.sin(angs)[:, None] * v) * radio
+    a, b = anillo[:-1], anillo[1:]
+    P, B = np.broadcast_to(punta, a.shape), np.broadcast_to(base, a.shape)
+    tris = np.stack([P, a, b, B, b, a], axis=1).reshape(-1, 3)
+    # por generatriz: la arista y dos intermedias que rellenan la silueta vista de costado
+    lineas = np.stack([P, a, P, a + (b - a) * 0.33, P, a + (b - a) * 0.66], axis=1).reshape(-1, 3)
+    return [("tris", tris, color, 1.0), ("lineas", lineas, color, 1.6), ("lineas", _segs(anillo), color, 1.6)]
 
 
 def _disco(visor, centro, radio, color, borde=None):
     """Disco de cara a la cámara relleno con líneas (siempre visible)."""
     R = getattr(visor, "R", np.identity(3))
     u, v = np.asarray(R[0], float), np.asarray(R[1], float)
-    lineas = []
     n = 9
-    for i in range(-n, n + 1):
-        y = radio * i / n
-        x = math.sqrt(max(radio * radio - y * y, 0.0))
-        lineas += [centro - u * x + v * y, centro + u * x + v * y]
-    prims = [("lineas", np.array(lineas), color, 2.0)]
+    y = radio * np.arange(-n, n + 1) / n
+    x = np.sqrt(np.maximum(radio * radio - y * y, 0.0))
+    fila = centro + v * y[:, None]
+    lineas = np.stack([fila - u * x[:, None], fila + u * x[:, None]], axis=1).reshape(-1, 3)
+    prims = [("lineas", lineas, color, 2.0)]
     if borde is not None:
         angs = np.linspace(0, 2 * math.pi, 25)
-        prims.append(("lineas", _segs([centro + (u * math.cos(a) + v * math.sin(a)) * radio for a in angs]), borde,
+        prims.append(("lineas", _segs(centro + (np.cos(angs)[:, None] * u + np.sin(angs)[:, None] * v) * radio), borde,
                       1.5))
     return prims
 
@@ -1050,6 +1045,9 @@ class GestorManipuladores(QObject):
         elif self.comando.CLAVE == "vaciado":
             v = self.panel.valores
             base = (self.ctx.estado, repr([h["ref"] for h in v.get("caras") or []]), v.get("direccion"))
+        elif self.comando.CLAVE in ("empalme_3d", "chaflan_3d"):     # el asa nace de la arista; el valor solo mueve su punta
+            v = self.panel.valores
+            base = (self.ctx.estado, repr([h["ref"] for h in v.get("aristas") or []]), v.get("tipo"), v.get("tipo_radio"))
         if base is not None and base == self._base_apoyo:
             self.redibujar()  # el valor solo mueve la flecha; no cambia su cara de apoyo ni su normal
             return
@@ -1171,7 +1169,8 @@ class GestorManipuladores(QObject):
                 if caja.text() != texto:
                     caja.setText(texto)
                     caja.setCursorPosition(0)
-                caja.setStyleSheet(QSS_CAJA)
+                if caja.styleSheet() != QSS_CAJA:      # setStyleSheet repule el widget: caro en cada movimiento
+                    caja.setStyleSheet(QSS_CAJA)
         self._ubicar_cajas()
 
     def _ubicar_cajas(self):

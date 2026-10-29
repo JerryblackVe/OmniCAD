@@ -45,7 +45,7 @@ def test_guardar_y_resumir_reproducen_tablas_sin_json_embebido(banco, monkeypatc
     assert "evidencias/previa_comandos_2026-10-28.json" in original.decode("utf-8")
     ejecutar(banco, monkeypatch, "--resumir")
     assert capsys.readouterr().out.rstrip() == original.decode("utf-8").rstrip()
-    assert "| empalme | chico (1/1/6) | 2 | 2.0/3.0/3.0 |" in original.decode("utf-8")
+    assert "| empalme | chico (1/1/6) | 2/2 | 2.0/3.0/3.0 |" in original.decode("utf-8")
     assert ruta.read_bytes() == original and ruta_datos.read_bytes() == crudo
     ejecutar(banco, monkeypatch, "--comprobar")
     assert "JSON separado y tablas del informe OK" in capsys.readouterr().out

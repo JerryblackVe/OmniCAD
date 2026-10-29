@@ -150,16 +150,18 @@ def previa_visual(receta, operacion, indice, deflexion, angular):
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     op = operacion_desde_dict(operacion)
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
-    mallas = {}
+    mallas, nuevos = {}, {}
     for cid, c in estado.cuerpos.items():
         anterior = entrada.cuerpos.get(cid)
         if anterior is not None and c.forma is anterior.forma:
             continue
+        if anterior is None:       # un patrón o una copia: el padre arma el cuerpo con sus datos y esta malla
+            nuevos[cid] = [c.nombre, c.op_id, c.tipo, c.apariencia, c.material, c.componente, list(c.origen)]
         v, n = render_cpu.malla_suave(c.forma, deflexion, angular)
         pares = [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(c.forma) if len(p) >= 2]
         seg = np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
         mallas[cid] = v, n, seg
-    return _codificar({"mallas": mallas, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)})
+    return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)})
 
 
 def leer_previa_visual(salida, entrada):
@@ -167,7 +169,9 @@ def leer_previa_visual(salida, entrada):
     from ..nucleo.malla import Malla
     datos = _decodificar(salida)
     estado = entrada.copia()
-    estado.cuerpos = {cid: c for cid, c in estado.cuerpos.items() if cid in datos["cuerpos"]}
+    for cid, (nombre, op_id, tipo, apariencia, material, componente, origen) in datos["nuevos"].items():
+        estado.cuerpos[cid] = Cuerpo(cid, nombre, None, op_id, tipo, apariencia, material, componente, origen)
+    estado.cuerpos = {cid: estado.cuerpos[cid] for cid in datos["cuerpos"]}
     preparadas = {}
     for cid, (v, n, seg) in datos["mallas"].items():
         c = estado.cuerpos[cid]
