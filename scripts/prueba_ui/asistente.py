@@ -239,7 +239,7 @@ def modelos_en_preferencias():
     def abrir():
         dlg = DialogoPreferencias(v.prefs, v, "asistente")
         dlg.aplicado.connect(v.aplicar_preferencias)
-        dlg.show()
+        A.mostrar(dlg)
         A.esperar(200)
         return dlg
 
@@ -320,7 +320,7 @@ def suscripcion(p):
     from omnicad.ui.preferencias import DialogoPreferencias
     dlg = DialogoPreferencias(v.prefs, v, "asistente")
     dlg.aplicado.connect(v.aplicar_preferencias)
-    dlg.show()
+    A.mostrar(dlg)
     A.esperar(300)
     combo = dlg.controles["asistente/proveedor"]
     QTest.mouseClick(combo, Qt.LeftButton)
@@ -535,7 +535,7 @@ def instrucciones_ui(p):
 
     def abrir_pref():
         dlg = DialogoPreferencias(v.prefs, v, "asistente")
-        dlg.show()
+        A.mostrar(dlg)
         A.esperar(150)
         return dlg, dlg.controles["asistente/instrucciones"]
 
@@ -827,7 +827,7 @@ def permisos_ui(p):
     A.esperar(50)
     dlg = DialogoPreferencias(v.prefs, v, "asistente")
     dlg.aplicado.connect(v.aplicar_preferencias)
-    dlg.show()
+    A.mostrar(dlg)
     A.esperar(200)
     casilla, permisos = dlg.controles["asistente/ver_herramientas"], dlg.controles["asistente/permisos"]
     opcion = QStyleOptionButton()

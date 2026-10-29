@@ -26,8 +26,7 @@ accion = v.acciones["asistente"]
 
 def atajo():
     """Ctrl+Mayús+A como lo teclea una persona; el atajo necesita que la ventana tenga el foco."""
-    v.activateWindow()
-    v.raise_()
+    A.activar(v)
     A.esperar(100)
     QTest.keyClick(v, Qt.Key_A, Qt.ControlModifier | Qt.ShiftModifier)
 

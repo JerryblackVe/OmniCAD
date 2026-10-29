@@ -421,7 +421,7 @@ def asas_de_animacion():
     from PySide6.QtCore import QTimer
     AN = f"{AR} · animación"
     w = an.VentanaAnimacion(v.doc)
-    w.show()
+    A.mostrar(w)
     A.esperar(600)
     cid = list(w.lienzo.objetos)[0]
     w.seleccionar([cid])

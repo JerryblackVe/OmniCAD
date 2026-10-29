@@ -3,7 +3,17 @@
 
 Abre VentanaPrincipal con un documento armado por la API, y deja ejecutar comandos como los ejecuta una persona:
 v.ejecutar_comando(...) → PanelComando → elegir con el visor → cambiar valores → aceptar / cancelar / editar / deshacer.
-Corre con QT_QPA_PLATFORM=windows (fuentes reales). No usar el ratón mientras corre."""
+Corre con QT_QPA_PLATFORM=windows (fuentes reales).
+
+Modo de ventana, variable de entorno OMNICAD_PRUEBA_VENTANA (la lee `modo_ventana()` en cada llamada):
+  visible    (por defecto) la ventana se ve y toma el foco: no usar el ratón ni el teclado mientras corre.
+  minimizada sin ventana a la vista (queda transparente, no minimizada de verdad: el GL no pinta minimizado) y sin
+             robar el foco ni los clics: se puede usar la PC. El GL sigue pintando y los atajos andan
+             (`activar` marca la ventana como activa dentro de Qt, sin tocar el foco de Windows). Lo que dependa del foco REAL de Windows
+             (PIEZAS_CON_FOCO_REAL en todo.py) se corre en `visible`.
+Mediciones de tiempo: la A/B de medir_ui_boceto (20 splines, 3 corridas por modo) dio p95 0,046 s visible vs 0,049 s
+minimizada (+6 %, dentro del ruido), así que los `medir_*` que usan `iniciar` también valen minimizados.
+Un script con su propia ventana (medir_previa_comandos) no usa el arnés y sigue visible."""
 import faulthandler
 import json
 import os
@@ -26,7 +36,7 @@ CAPTURAS = SALIDA / "capturas"
 CAPTURAS.mkdir(parents=True, exist_ok=True)
 
 import numpy as np  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
+from PySide6.QtCore import QSettings, Qt  # noqa: E402
 from PySide6.QtGui import QSurfaceFormat  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMenu, QMessageBox  # noqa: E402
@@ -82,6 +92,34 @@ def parchar_modales():
         setattr(QFileDialog, nombre, staticmethod(lambda *a, **k: ("", "")))
 
 
+def modo_ventana():
+    """«visible» (por defecto) o «minimizada», según OMNICAD_PRUEBA_VENTANA."""
+    modo = os.environ.get("OMNICAD_PRUEBA_VENTANA", "visible").strip().lower() or "visible"
+    if modo not in ("visible", "minimizada"):
+        raise ValueError(f"OMNICAD_PRUEBA_VENTANA debe ser «visible» o «minimizada», no «{modo}»")
+    return modo
+
+
+def mostrar(widget):
+    """Muestra una ventana de prueba. Minimizada (en realidad transparente): no se ve ni roba el foco."""
+    if modo_ventana() == "minimizada":
+        widget.setAttribute(Qt.WA_ShowWithoutActivating)
+        # Minimizar de verdad (showMinimized) frena el GL (1 cuadro en 1,5 s): en su lugar, ventana transparente que no
+        # toma el foco ni los clics y no sale en la barra de tareas. El GL sigue pintando (~60 cuadros/s) y los atajos andan.
+        widget.setWindowFlags(widget.windowFlags() | Qt.Tool | Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus)
+        widget.setWindowOpacity(0.0)
+    widget.show()
+
+
+def activar(widget):
+    """Deja la ventana como la activa para los atajos. Visible: foco real de Windows; minimizada: solo dentro de Qt."""
+    if modo_ventana() == "minimizada":
+        QApplication.setActiveWindow(widget)        # obsoleto pero es la única vía sin foco real (probado: los atajos andan)
+    else:
+        widget.activateWindow()
+        widget.raise_()
+
+
 def iniciar(doc, ancho=1900, alto=1000):
     fmt = QSurfaceFormat()
     fmt.setDepthBufferSize(24)
@@ -95,7 +133,10 @@ def iniciar(doc, ancho=1900, alto=1000):
     prefs = Preferencias(QSettings(str(Path(tempfile.mkdtemp(prefix="omnicad_ui_")) / "prefs.ini"), QSettings.IniFormat))
     v = VentanaPrincipal(doc, prefs=prefs)
     v.resize(ancho, alto)
-    v.show()
+    print(f"[arnés] ventana: {modo_ventana()}", flush=True)
+    mostrar(v)
+    if modo_ventana() == "minimizada":
+        activar(v)
     QTest.qWait(700)
     v.visor.encuadrar()
     QTest.qWait(250)

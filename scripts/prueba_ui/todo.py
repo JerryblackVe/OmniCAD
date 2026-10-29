@@ -5,7 +5,10 @@ Desde `clon/`:
     .venv/Scripts/python.exe ../scripts/prueba_ui/todo.py [nombre ...]
 
 Sin nombres corre todas. Deja los registros (`*.json`), los logs y las capturas en `evidencias/ui_<hoy>/` (fuera de git)
-y al final imprime un resumen: comprobaciones y fallas por pieza. No usar el mouse ni el teclado mientras corre.
+y al final imprime un resumen: comprobaciones y fallas por pieza.
+    --ventana minimizada|visible   (por defecto minimizada: la ventana no aparece ni roba el foco, se puede usar la PC;
+                                    visible: se ve y toma el foco, no usar el mouse ni el teclado mientras corre).
+Las piezas de PIEZAS_CON_FOCO_REAL se saltean en minimizada con un aviso ⚠ (no cuentan como ✗): correrlas con `--ventana visible`.
 """
 import os
 import re
@@ -22,6 +25,8 @@ AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
 SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f"ui_{date.today().isoformat()}")
 PIEZAS = ["cinta_completa", "superficie", "solido_crear", "solido_modificar", "asas", "teclear", "ventana_uso", "ensamblar", "boceto_cotas", "asistente", "iconos", "boton_asistente", "abrir_f3d", "booleana_unir", "origen_cara", "registro_uso"]
+# Piezas que necesitan el foco REAL de Windows (no solo el activo de Qt). Vacía hasta que la A/B demuestre alguna.
+PIEZAS_CON_FOCO_REAL = set()
 
 
 def correr(nombre):
@@ -38,13 +43,25 @@ def correr(nombre):
 
 
 if __name__ == "__main__":
-    elegidas = sys.argv[1:] or PIEZAS
+    args = sys.argv[1:]
+    modo = os.environ.get("OMNICAD_PRUEBA_VENTANA", "minimizada")
+    if "--ventana" in args:
+        i = args.index("--ventana")
+        modo = args[i + 1] if i + 1 < len(args) else ""
+        del args[i:i + 2]
+    if modo not in ("minimizada", "visible"):
+        sys.exit("--ventana debe ser «minimizada» o «visible»")
+    os.environ["OMNICAD_PRUEBA_VENTANA"] = modo          # los hijos la heredan
+    elegidas = args or PIEZAS
     for nombre in elegidas:
         if nombre not in PIEZAS:
             sys.exit(f"Pieza desconocida: {nombre}. Opciones: {', '.join(PIEZAS)}")
     print(f"Evidencia en {SALIDA}\n")
     mal = 0
     for nombre in elegidas:
+        if modo == "minimizada" and nombre in PIEZAS_CON_FOCO_REAL:
+            print(f"{nombre:18s} ⚠ saltada: necesita ventana visible (--ventana visible)")
+            continue
         codigo, cuentas, log = correr(nombre)
         if cuentas is None:
             print(f"{nombre:18s} ✗ no terminó (salida {codigo}); mirar {log.name}")

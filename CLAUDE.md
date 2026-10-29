@@ -61,7 +61,10 @@
   `.venv/Scripts/python.exe ../scripts/prueba_ui/todo.py [pieza ...]` corre todo de a uno con `turno.py` y deja
   registros y capturas en `evidencias/ui_<hoy>/`. Cubre 1 a 8 y 10; falta automatizar el 9 (pieza completa).
   Piezas: `cinta_completa`, `superficie`, `solido_crear`, `solido_modificar`, `asas`, `teclear`, `ventana_uso`, `ensamblar`, `boceto_cotas`, `asistente`, `iconos`, `boton_asistente`, `abrir_f3d`.
-  Mientras corre no se usa el mouse ni el teclado (los atajos necesitan que la ventana tenga el foco).
+  `todo.py` corre por defecto con la ventana **transparente y sin foco** (`--ventana minimizada`, variable
+  `OMNICAD_PRUEBA_VENTANA`): no aparece nada ni se roba el foco, así que Gerardo puede usar la PC. Con
+  `--ventana visible` la ventana se ve y toma el foco: ahí no se usa el mouse ni el teclado. Sin la variable, el arnés
+  sigue en `visible`.
 
 ## Regla: rendimiento con Rust
 - La app a veces se siente lenta: la meta es optimizar lo más posible.

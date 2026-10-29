@@ -357,8 +357,7 @@ repetidos = {k: x for k, x in conocidos.items() if len(x) > 1}
 A.reg(AR, "ningún atajo repetido en el mismo entorno (3D / boceto)", not repetidos, str(repetidos) if repetidos else f"{len(conocidos)} atajos distintos")
 raros = {c: a.shortcut().toString() for c, a in v.acciones.items() if len(a.shortcut().toString()) > 25}
 A.reg(AR, "ningún atajo es un texto largo (la ayuda quedó en el lugar del atajo)", not raros, str(raros)[:300])
-v.activateWindow()
-v.raise_()
+A.activar(v)
 vis.setFocus()
 A.esperar(400)
 sin_foco = QApplication.activeWindow() is None
