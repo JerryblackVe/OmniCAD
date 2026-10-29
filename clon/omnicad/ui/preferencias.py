@@ -44,6 +44,7 @@ DEFECTOS = {
     "general/camara": "perspectiva",
     "general/tipo_orbita": "libre",
     "general/auto_mirar_boceto": True,
+    "general/animar_vistas": True,           # transición de ~250 ms al cambiar de vista (ViewCube, Ajustar, boceto)
     "general/tamano_viewcube": "automatico",
     "general/info_herramientas": True,
     "general/autoguardado_min": 1,
@@ -350,6 +351,7 @@ PAGINAS = [
         ("general/tipo_orbita", "Tipo de órbita por defecto", "combo",
          [("libre", "Órbita libre"), ("restringida", "Órbita restringida")]),
         ("general/auto_mirar_boceto", "Mirar automáticamente el boceto al crearlo o editarlo", "check", None),
+        ("general/animar_vistas", "Animar las transiciones de vista (ViewCube, Ajustar, mirar al boceto)", "check", None),
         ("general/invertir_zoom", "Invertir dirección de zoom", "check", None),
         ("general/tamano_viewcube", "Tamaño de ViewCube", "combo",
          [("pequeno", "Pequeño"), ("automatico", "Automático"), ("grande", "Grande")]),

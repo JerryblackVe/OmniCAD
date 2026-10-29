@@ -21,6 +21,7 @@ Eje Z hacia arriba (como la opción "Z hacia arriba" de Fusion; práctico para i
 """
 import ctypes
 import math
+import os
 import time
 import weakref
 
@@ -376,6 +377,7 @@ class ConfigVista:
         self.lienzos = []                   # [(id, datos)] imágenes de INSERTAR › Lienzo / Calcomanía visibles
         self.esquema_raton = "fusion"
         self.invertir_zoom = False
+        self.animar_vistas = False          # la ventana lo enciende según la preferencia; solo las órdenes del usuario animan
         self.tipo_orbita = "libre"
         self.camara = "perspectiva"         # perspectiva | ortografica | persp_orto_caras
         self.teselado = None                # deflexión en mm (más chica = más fina); None = automática por pieza
@@ -424,6 +426,9 @@ class Visor3D(QOpenGLWidget):
         self.distancia = 250.0
         self.R = np.identity(3)            # filas: derecha, arriba, atrás (hacia el ojo)
         self._orto_cara = False
+        self._animacion = None             # (cámara inicial, cámara final, _orto_cara final, instante) mientras una vista se anima
+        self._t_animacion = QTimer(self, interval=8)
+        self._t_animacion.timeout.connect(self._paso_animacion)
         self.forzar_orto = False           # vistas fijas de "Vistas múltiples" (superior, frontal, derecha)
         self.fov = 40.0
         self.modo = None   # None | orbita | encuadre | zoom | ventana | mirar | elegir_plano
@@ -515,6 +520,7 @@ class Visor3D(QOpenGLWidget):
             self._t_limite.start(int(espera * 1000) + 1)
 
     def _navegar(self):
+        self._cancelar_animacion()
         self._navegando = True
         self._t_fin_nav.start()
 
@@ -853,6 +859,65 @@ class Visor3D(QOpenGLWidget):
         self._orto_cara = nombre in VISTAS_CARAS
         self.encuadrar()
 
+    # ------------------------------------------------------------ vistas animadas
+    DURACION_VISTA_S = 0.25
+
+    def _camara(self):
+        return {"R": self.R.tolist(), "objetivo": self.objetivo.tolist(), "distancia": float(self.distancia),
+                "fov": float(self.fov), "ortografica": False}
+
+    def _poner_camara(self, c):
+        self.R, self.objetivo, self.distancia = np.array(c["R"], float), np.array(c["objetivo"], float), c["distancia"]
+
+    def animar_vista(self, cambio):
+        """Hace `cambio()` (una vista, «mirar a» o «ajustar», que mueve la cámara de golpe) como una transición de
+        ~250 ms, como «Animate view transitions» de Fusion. Sin la preferencia, o en pruebas, es instantáneo; cualquier
+        orbitar, desplazar, zoom o clic la corta donde está. Solo órdenes del usuario: las herramientas de la API no pasan por acá."""
+        self._cancelar_animacion()
+        if not (self.config.animar_vistas and self.isVisible()) or os.environ.get("OMNICAD_SIN_ANIMACION"):
+            cambio()
+            return
+        c0, orto0 = self._camara(), self._orto_cara
+        cambio()
+        c1, orto1 = self._camara(), self._orto_cara
+        if c0 == c1:
+            return
+        self._poner_camara(c0)
+        self._orto_cara = orto0             # shortcut: el cambio de caras ortográficas ocurre al final, no a mitad del giro
+        self._animacion = (c0, c1, orto1, time.perf_counter())
+        self._t_animacion.start()
+        self.update()
+
+    def _paso_animacion(self):
+        from ..nucleo.animacion import interpolar_camara, suavizado
+        c0, c1, orto1, inicio = self._animacion
+        f = (time.perf_counter() - inicio) / self.DURACION_VISTA_S
+        if f >= 1.0:
+            self._poner_camara(c1)
+            self._orto_cara = orto1
+            self._cancelar_animacion(final=True)
+        else:
+            self._poner_camara(interpolar_camara(c0, c1, suavizado(f)))
+        self.update()
+
+    def _cancelar_animacion(self, final=False):
+        """Corta la transición donde está (sin saltos). Con `final` ya llegó al destino."""
+        if self._animacion is None:
+            return
+        self._t_animacion.stop()
+        self._animacion = None
+        if not final:
+            self._orto_cara = False         # a mitad de camino no se mira de frente a ninguna cara
+
+    def terminar_animacion(self):
+        """Llega al destino de inmediato (capturas de pantalla)."""
+        if self._animacion is not None:
+            c1, orto1 = self._animacion[1], self._animacion[2]
+            self._poner_camara(c1)
+            self._orto_cara = orto1
+            self._cancelar_animacion(final=True)
+            self.update()
+
     def mirar_a_plano(self, plano):
         """Cámara perpendicular al plano, con su eje u a la derecha y v hacia arriba ("Mirar a")."""
         self.R = np.array([plano.u, plano.v, plano.normal], float)
@@ -889,6 +954,7 @@ class Visor3D(QOpenGLWidget):
         self.update()
 
     def orbitar(self, dx, dy):
+        self._cancelar_animacion()
         k = math.radians(0.4)
         self._orto_cara = False
         if self.config.tipo_orbita == "restringida":
@@ -906,11 +972,13 @@ class Visor3D(QOpenGLWidget):
         return max(self.height(), 1) / (2 * self.distancia * math.tan(math.radians(self.fov) / 2))
 
     def desplazar(self, dx, dy):
+        self._cancelar_animacion()
         escala = 1.0 / self.px_por_mm()
         self.objetivo = self.objetivo - self.R[0] * dx * escala + self.R[1] * dy * escala
         self.update()
 
     def acercar(self, pasos, pos=None):
+        self._cancelar_animacion()
         if self.config.invertir_zoom:
             pasos = -pasos
         factor = 0.88 ** pasos
@@ -2101,6 +2169,7 @@ class Visor3D(QOpenGLWidget):
         return "encuadre" if boton in (Qt.MiddleButton, Qt.RightButton) else None
 
     def mousePressEvent(self, e):
+        self._cancelar_animacion()
         pos = e.position()
         self._presion = (pos, e.button())
         if e.button() == Qt.LeftButton and self.modo in ("elegir_plano", "mirar"):

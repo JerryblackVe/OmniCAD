@@ -123,6 +123,7 @@ def main(argv=None):
     arranque.poner_icono(app)
 
     if args.prueba_humo:
+        os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")      # la humo espera cada vista al instante
         from omnicad.prueba_humo import ejecutar
         return ejecutar()
     informes_error.instalar(avisar=_avisar_error)   # el cartel con «Abrir carpeta de errores», solo en la app

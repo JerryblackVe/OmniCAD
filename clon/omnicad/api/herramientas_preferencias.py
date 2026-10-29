@@ -14,6 +14,7 @@ _OPCIONES = {
     "general/camara": ("perspectiva", ["perspectiva", "ortografica", "persp_orto_caras"]),
     "general/tipo_orbita": ("libre", ["libre", "restringida"]),
     "general/auto_mirar_boceto": (True, [False, True]),
+    "general/animar_vistas": (True, [False, True]),
     "general/tamano_viewcube": ("automatico", ["pequeno", "automatico", "grande"]),
     "general/info_herramientas": (True, [False, True]),
     "navegador/no_desplegar_al_seleccionar": (False, [False, True]),

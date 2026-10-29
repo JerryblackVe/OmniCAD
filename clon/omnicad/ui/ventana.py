@@ -15,6 +15,7 @@ se muestra el modelo como estaba en ese punto del timeline.
 Esta capa no hace geometría: arma operaciones con los diálogos y se las pasa al Documento.
 """
 import logging
+import os
 import tempfile
 import time
 from collections import Counter
@@ -411,12 +412,12 @@ class VentanaPrincipal(QMainWindow):
            "Renombra en el navegador el elemento elegido.")
         A("alternar_visibilidad", "Mostrar/ocultar", self._alternar_visibilidad_elegida, "V",
           "Muestra u oculta los cuerpos y bocetos elegidos.")
-        A("ajustar", "Ajustar", lambda: self.visor.encuadrar(), "F6", "Encuadra todo el modelo en la vista.", "ajustar")
+        A("ajustar", "Ajustar", lambda: self.visor.animar_vista(self.visor.encuadrar), "F6", "Encuadra todo el modelo en la vista.", "ajustar")
         for clave, texto, ayuda in (("iso", "Vista inicial (isométrica)", "Vuelve la cámara a la vista inicial."),
                                     ("frente", "Frente", "Mira el modelo de frente."),
                                     ("arriba", "Superior", "Mira el modelo desde arriba."),
                                     ("derecha", "Derecha", "Mira el modelo desde la derecha.")):
-            A(f"vista_{clave}", texto, lambda _=False, c=clave: self.visor.vista(c), None, ayuda)
+            A(f"vista_{clave}", texto, lambda _=False, c=clave: self.visor.animar_vista(lambda: self.visor.vista(c)), None, ayuda)
         # SELECCIONAR (en Fusion 1, 2 y 3 son los modos de selección por región)
         A("sel_ventana", "Selección en ventana", lambda: self._modo_seleccion("sel_ventana"), "1",
           "Arrastrá un rectángulo: de izquierda a derecha elige lo que queda adentro; al revés, lo que toca.",
@@ -623,6 +624,10 @@ class VentanaPrincipal(QMainWindow):
             self.mensaje(avisos[0], 10000)
         self.temporizador.start(p["general/autoguardado_min"] * 60_000)
         c.esquema_raton, c.invertir_zoom = p["general/raton"], p["general/invertir_zoom"]
+        c.animar_vistas = p["general/animar_vistas"]
+        if c.animar_vistas and not os.environ.get("OMNICAD_SIN_ANIMACION"):
+            from ..nucleo import animacion
+            QTimer.singleShot(2000, animacion.precalentar)      # idempotente: scipy se carga una sola vez
         c.aspecto, c.tipo_orbita = p["material/aspecto"], p["general/tipo_orbita"]
         if p["general/camara"] != self._camara_aplicada:     # solo si cambió: no pisa la cámara elegida a mano
             self._camara_aplicada = p["general/camara"]
@@ -759,7 +764,7 @@ class VentanaPrincipal(QMainWindow):
     def mirar_a(self):
         """Barra de navegación › Mirar a: en un boceto mira su plano; si no, la barra pide elegir."""
         if self.modo_boceto.activo:
-            self.visor.mirar_a_plano(self.modo_boceto.plano)
+            self.visor.animar_vista(lambda: self.visor.mirar_a_plano(self.modo_boceto.plano))
             return True
         return False
 
@@ -1752,6 +1757,7 @@ class VentanaPrincipal(QMainWindow):
     def capturar_visor(self, ancho=None, alto=None):
         """(PNG, ancho, alto) de la vista 3D tal como se ve ahora (capture_viewport); con ancho y alto la reescala."""
         from PySide6.QtCore import QBuffer, QIODevice
+        self.visor.terminar_animacion()
         imagen = self.visor.grabFramebuffer()
         if imagen.isNull():                       # el contexto GL todavía no dibujó (ventana recién abierta u oculta)
             imagen = self.visor.grab().toImage()
@@ -2898,6 +2904,7 @@ class VentanaPrincipal(QMainWindow):
     def capturar_imagen(self):
         ruta, _ = QFileDialog.getSaveFileName(self, "Capturar imagen", f"{self.doc.nombre}.png", "Imagen PNG (*.png)")
         if ruta:
+            self.visor.terminar_animacion()
             ok = self.visor.grabFramebuffer().save(ruta, "PNG")
             self.mensaje(f"Imagen guardada en {ruta}" if ok else "No se pudo guardar la imagen", 5000)
 

@@ -850,7 +850,7 @@ class ModoBoceto(QObject):
         self.lienzo.aviso.connect(lambda t: v.aviso_flotante(t))
         self.paleta = PaletaBoceto(area)
         self.paleta.terminar.connect(self.terminar)
-        self.paleta.mirar_a.connect(lambda: visor.mirar_a_plano(self.plano))
+        self.paleta.mirar_a.connect(lambda: visor.animar_vista(lambda: visor.mirar_a_plano(self.plano)))
         self.paleta.opcion.connect(self._opcion)
         self.paleta.herramienta.connect(self.herramienta)
         self.paleta.lados.connect(lambda n: setattr(self.lienzo, "lados", n))
@@ -872,7 +872,7 @@ class ModoBoceto(QObject):
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
-            visor.mirar_a_plano(plano)
+            visor.animar_vista(lambda: visor.mirar_a_plano(plano))
             if self.boceto.curvas:
                 self.lienzo.encuadrar()
         for a in self.acciones.values():

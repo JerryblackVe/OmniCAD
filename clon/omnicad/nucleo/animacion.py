@@ -85,6 +85,11 @@ def slerp(R0, R1, f):
     return Slerp([0.0, 1.0], par)([f]).as_matrix()[0]
 
 
+def precalentar():
+    """Carga scipy.spatial.transform (~0,8 s) con la interfaz ociosa, para que la primera vista animada no se trabe."""
+    slerp(np.identity(3), np.identity(3), 0.5)
+
+
 def interpolar_matriz(A, B, f, centro=(0.0, 0.0, 0.0)):
     """Entre dos posiciones rígidas (4x4): el centro del cuerpo va en línea recta y el giro por el camino corto."""
     A, B, c = np.asarray(A, float), np.asarray(B, float), np.asarray(centro, float)

@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Todas las pruebas corren sin ventanas. Va acá, ANTES de importar cualquier módulo: en Linux `omnicad.ui` elige con
 # esto la API de contexto de PyOpenGL (GLX para offscreen) y algunos archivos de prueba importan la interfaz sin fijarlo.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Las vistas animadas (P-45) no corren en pruebas: cada prueba espera la cámara al instante.
+os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")
 # El historial del Asistente (asistente/historial.py) nunca se escribe en la carpeta del usuario durante las pruebas.
 os.environ.setdefault("OMNICAD_ASISTENTE_DIR", tempfile.mkdtemp(prefix="omnicad_chats_"))
 os.environ.setdefault("OMNICAD_PREAJUSTES", os.path.join(tempfile.mkdtemp(prefix="omnicad_preajustes_"), "preajustes.json"))

@@ -137,11 +137,11 @@ class ViewCube(QWidget):
         if arrastrado:
             return
         if self._rect_casa().contains(e.position()):
-            self.visor.vista("iso")
+            self.visor.animar_vista(lambda: self.visor.vista("iso"))
             return
         cara = self._cara_en(e.position())
         if cara:
-            self.visor.vista(cara)
+            self.visor.animar_vista(lambda: self.visor.vista(cara))
 
     def leaveEvent(self, _e):
         self._hover = None
