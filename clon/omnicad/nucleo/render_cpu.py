@@ -373,6 +373,55 @@ def es_malla(forma):
     return hasattr(forma, "vertices") and hasattr(forma, "caras") and not callable(getattr(forma, "caras"))
 
 
+class PrismaVisual:
+    """Previa de Extruir de Fusion: transforma una malla unitaria; jamás crea el sólido aceptado."""
+
+    def __init__(self, vertices, normales, segmentos, origen, normal):
+        self.normal = np.asarray(normal, float)
+        largo = np.linalg.norm(self.normal)
+        if self.normal.shape != (3,) or not np.isfinite(largo) or largo <= 1e-12:
+            raise geo.ErrorGeometria("La previa necesita una normal válida.")
+        self.normal = self.normal / largo
+        self.eje = int(np.argmax(abs(self.normal))) if np.count_nonzero(self.normal) == 1 else None
+        v, n, seg = (np.asarray(a, float).reshape(-1, 3) for a in (vertices, normales, segmentos))
+        if not len(v) or len(v) % 3 or n.shape != v.shape or not all(np.isfinite(a).all() for a in (v, n, seg)):
+            raise geo.ErrorGeometria("La malla de la previa no contiene triángulos y normales válidos.")
+        origen = np.asarray(origen, float)
+        if origen.shape != (3,) or not np.isfinite(origen).all():
+            raise geo.ErrorGeometria("El origen de la previa debe ser un punto finito.")
+        self.alturas = (v - origen) @ self.normal
+        if abs(self.alturas.min()) > 1e-6 or abs(self.alturas.max() - 1) > 1e-6:
+            raise geo.ErrorGeometria("La previa solo admite un perfil plano extruido 1 mm desde su plano.")
+        self.perfil = v - self.alturas[:, None] * self.normal
+        self.minimo, self.maximo = self.perfil.min(0), self.perfil.max(0)
+        self.alturas_seg = (seg - origen) @ self.normal
+        self.perfil_seg = seg - self.alturas_seg[:, None] * self.normal
+        self.normales = n.copy()
+        self.invertidas = (n - 2 * (n @ self.normal)[:, None] * self.normal).reshape(-1, 3, 3)[:, [0, 2, 1]].reshape(-1, 3)
+        self.normales.setflags(write=False)
+        self.invertidas.setflags(write=False)
+
+    def transformar(self, inicio, fin):
+        """(vértices, normales, segmentos) del prisma entre dos distancias firmadas al plano, en mm."""
+        if not np.isfinite([inicio, fin]).all() or abs(fin - inicio) <= 1e-12:
+            raise geo.ErrorGeometria("La distancia de la previa debe ser finita y distinta de cero.")
+        if self.eje is not None:
+            v, seg = self.perfil.copy(), self.perfil_seg.copy()
+            v[:, self.eje] += (inicio + self.alturas * (fin - inicio)) * self.normal[self.eje]
+            seg[:, self.eje] += (inicio + self.alturas_seg * (fin - inicio)) * self.normal[self.eje]
+        else:
+            v = self.perfil + (inicio + self.alturas * (fin - inicio))[:, None] * self.normal
+            seg = self.perfil_seg + (inicio + self.alturas_seg * (fin - inicio))[:, None] * self.normal
+        if fin < inicio:
+            v = v.reshape(-1, 3, 3)[:, [0, 2, 1]].reshape(-1, 3)
+        return v, self.normales if fin > inicio else self.invertidas, seg
+
+    def caja(self, inicio, fin):
+        """Caja conservadora del dibujo sin recorrer otra vez los vértices en cada cuadro."""
+        a, b = inicio * self.normal, fin * self.normal
+        return self.minimo + np.minimum(a, b), self.maximo + np.maximum(a, b)
+
+
 def malla_suave(forma, deflexion=0.05, angular=0.25, rehacer=False):
     """(vǸrtices, normales) float32 de triǭngulos sueltos. B-rep: en cada vǸrtice, la normal EXACTA de la
     superficie (hacia afuera del material), como la del anǭlisis de cebra; promediar los triǭngulos torcǭa

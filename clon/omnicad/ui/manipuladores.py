@@ -1042,11 +1042,20 @@ class GestorManipuladores(QObject):
         """Recalcula los manipuladores con los valores del panel (la selección cambia su origen)."""
         if self._cerrado or self._escribiendo:
             return
+        base = None
+        if self.comando.CLAVE == "extruir" and getattr(self.panel, "_prisma_previa", None) is not None:
+            datos = {k: v for k, v in self.panel.valores.items() if k not in ("distancia", "distancia2")}
+            base = self.ctx.estado, repr(datos), self.valor("distancia") < 0
+            if base == getattr(self, "_base_prisma", None):
+                self.redibujar()
+                return
         try:
             self.manips = [m for m in (self.comando.manipuladores(self.ctx, self.panel.valores) or []) if m is not None]
+            self._base_prisma = base
         except Exception:  # noqa: BLE001 — un manipulador que no se puede calcular no rompe el comando
             log.debug("manipuladores de %s", self.comando.CLAVE, exc_info=True)
             self.manips = []
+            self._base_prisma = None
         if self._hover is not None and not any(m.ident == self._hover[0] for m in self.manips):
             self._hover = None
         self.redibujar()
@@ -1253,6 +1262,8 @@ class GestorManipuladores(QObject):
             return
         self._arrastre = None
         self.redibujar()
+        if getattr(self.panel, "_prisma_previa", None) is not None:
+            self.panel._t_previa.start(0)  # el B-rep exacto reemplaza al estimado incluso sin otro movimiento
 
     def escribir(self, nuevos):
         """Escribe valores numéricos redondeados en los campos del panel (dispara la vista previa)."""

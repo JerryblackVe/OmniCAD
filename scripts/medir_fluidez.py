@@ -6,7 +6,7 @@ simulados al visor (nunca mueve el cursor real; no usar el mouse mientras corre,
 vista: ocluida, Windows no entrega `frameSwapped` y los FPS salen falsos).
 
 Uso, desde `clon/`:
-    .venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe ../scripts/medir_fluidez.py chico|grande|orbita|hover|todo
+    .venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe ../scripts/medir_fluidez.py chico|grande|placa200|orbita|hover|todo
 Contrafactuales (en memoria, sin cambiar el programa):
     OMNI_INTERVALO=0  → la vista previa se recalcula sin la espera de 220 ms (`PanelComando._t_previa`)
     OMNI_SIN_HIJO=1   → la vista previa nunca va a un proceso aparte (`aislado.EN_HIJO = True`)
@@ -93,12 +93,14 @@ def L(s, nombre, **a):
     return r["result"]
 
 
-def escena(n_cajas=0):
+def escena(n_cajas=0, n_agujeros=0):
     s = api.Sesion()
     for i in range(n_cajas):
         L(s, "create_box", length=10, width=10, height=10, x=(i % 10) * 15, y=-40 - (i // 10) * 15)
     L(s, "create_sketch", name="Rect", plane="XY")
-    L(s, "draw_rectangle", sketch="Rect", x1=0, y1=0, x2=100, y2=60)
+    L(s, "draw_rectangle", sketch="Rect", x1=0, y1=0, x2=400 if n_agujeros else 100, y2=400 if n_agujeros else 60)
+    for i in range(n_agujeros):
+        L(s, "draw_circle", sketch="Rect", center_x=10 + i % 25 * 15.5, center_y=10 + i // 25 * 15.5, radius=3)
     return s
 
 
@@ -106,7 +108,7 @@ def _ev(w, tipo, q, boton, botones):
     QApplication.sendEvent(w, QMouseEvent(tipo, q, w.mapToGlobal(q), boton, botones, Qt.NoModifier))
 
 
-def arrastre_extruir(v, s, dur):
+def arrastre_extruir(v, s, dur, perfil=0):
     """Arrastra la flecha de Extruir `dur` s con cambios de sentido rápidos (movimiento por tiempo, ~125 Hz pedidos)."""
     for k in LOG.values():
         k.clear()
@@ -115,12 +117,15 @@ def arrastre_extruir(v, s, dur):
     vi = v.visor
     vi.frameSwapped.connect(gancho)
     p = A.abrir(v, "extruir")
-    A.elegir(p, "perfiles", A.hit_perfil(v, s, "Rect"))
+    A.elegir(p, "perfiles", A.hit_perfil(v, s, "Rect", perfil))
     if os.environ.get("OMNI_INTERVALO"):
         p._t_previa.setInterval(int(os.environ["OMNI_INTERVALO"]))
     p.set_valor("distancia", "45 mm")
     p._t_previa.stop()
     p._calcular_previa()
+    assert p._previa_ok, p.mensaje.text()
+    if perfil == "largest":
+        assert np.allclose(np.ptp(vi._mallas[-1]["v"], axis=0)[:2], [400, 400]), "No se eligió la placa completa"
     A.esperar(400)
     g = p.manipuladores
     m = next(x for x in g.manips if isinstance(x, mp.Flecha))
@@ -142,10 +147,13 @@ def arrastre_extruir(v, s, dur):
         _ev(vi, QEvent.MouseMove, QPointF(*xy[0]), Qt.NoButton, Qt.LeftButton)
         movs.append((time.perf_counter(), g.valor("distancia")))
         QTest.qWait(8)
+    fin_movimiento = time.perf_counter()
     _ev(vi, QEvent.MouseButtonRelease, QPointF(*xy[0]), Qt.LeftButton, Qt.NoButton)
     A.esperar(300)
     vi.frameSwapped.disconnect(gancho)
     r = analizar(movs, swaps, t0, dur)
+    r["previa_arrastre_ms"] = resumen([(b - a) * 1000 for a, b, _ in LOG["previa"] if t0 <= a <= fin_movimiento])
+    r["previa_al_soltar_ms"] = resumen([(b - a) * 1000 for a, b, _ in LOG["previa"] if a > fin_movimiento])
     p.cancelar()
     A.esperar(200)
     return r
@@ -172,6 +180,8 @@ def analizar(movs, swaps, t0, dur):
     r["intervalo_cuadros_ms"] = resumen(list(iv))
     r["cuadros_lentos_>33ms"] = int((iv > 33.4).sum())
     r["cuadros_lentos_>100ms"] = int((iv > 100).sum())
+    r["cuadros_lentos_>50ms"] = int((iv > 50).sum())
+    r["pct_cuadros_<=33.4ms"] = round(float((iv <= 33.4).mean() * 100), 2) if len(iv) else None
     # retraso del sólido respecto de la asa en cada cuadro presentado (ms y mm de valor)
     tiempos_mov = np.array([m[0] for m in movs])
     vals_mov = np.array([m[1] for m in movs])
@@ -300,6 +310,14 @@ def main():
         app, v = A.iniciar(s.doc)
         out["grande_pasos"] = len(s.doc.operaciones)
         out["extruir_grande"] = arrastre_extruir(v, s, 6.0)
+        v.doc.modificado = False
+        v.close()
+    if que == "placa200":
+        s = escena(n_agujeros=200)
+        app, v = A.iniciar(s.doc)
+        out["gl"] = v.visor.info_gl
+        for i in range(3):
+            out[f"extruir_placa200_rep{i+1}"] = arrastre_extruir(v, s, 3.0, "largest")
         v.doc.modificado = False
         v.close()
     if que in ("orbita", "todo", "hover"):

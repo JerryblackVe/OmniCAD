@@ -453,6 +453,7 @@ class Visor3D(QOpenGLWidget):
         self._presion = None               # posición del botón izquierdo al presionar (para detectar clic)
         self._lazo = None                  # puntos de la selección de forma libre mientras se arrastra
         self._bocetos = np.zeros((0, 3), np.float32)
+        self._bocetos_de, self._ver_bocetos = (), None   # de qué bocetos y visibilidad salen los segmentos de arriba
         self._resalte = np.zeros((0, 3), np.float32)
         self._perfiles = np.zeros((0, 3), np.float32)
         self.bocetos_libres = frozenset()          # bocetos que ningún paso usa: la ventana los pone
@@ -548,6 +549,7 @@ class Visor3D(QOpenGLWidget):
         """Muestra un estado del modelo. `apariencias`: id de cuerpo → color que pisa el del cuerpo
         (Aspecto y Material físico del documento)."""
         nuevas, cache, formas, lod = [], {}, {}, []
+        self._caja_base_prisma = None
         apariencias = apariencias or {}
         arrastrando = self._arrastrando_previa()
         if not arrastrando:
@@ -556,6 +558,11 @@ class Visor3D(QOpenGLWidget):
             self._previa_gruesa.clear()
             self._modelo_por_refinar = None
             self._t_refinar_previa.stop()
+        bocetos = tuple(estado.bocetos.values())
+        ver = (frozenset(ocultos), tuple(excluir_bocetos), frozenset(self.bocetos_libres))
+        # Mientras se arrastra un asa los bocetos no cambian: el primer cuadro no vuelve a muestrearlos (200 círculos ≈ 55 ms).
+        reusar_bocetos = (arrastrando and ver == self._ver_bocetos and len(bocetos) == len(self._bocetos_de)
+                          and all(a is b for a, b in zip(bocetos, self._bocetos_de, strict=True)))
         self._estado, self._ocultos, self._excluir_bocetos = estado, frozenset(ocultos), tuple(excluir_bocetos)
         for i, c in enumerate(estado.cuerpos.values()):
             clave = id(c.forma)
@@ -563,12 +570,15 @@ class Visor3D(QOpenGLWidget):
                 datos = self._cache[clave]
             else:
                 defl = self._deflexion(c.forma)
-                gruesa = arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
-                v, n = teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa)
+                preparada = getattr(estado, "_mallas_previa", {}).get(c.id)
+                gruesa = preparada is None and arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
+                v, n = (preparada[:2] if preparada is not None else
+                        teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa))
                 if gruesa:
                     self._previa_gruesa.add(clave)
                 mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
-                datos = (c.forma, v, n, aristas_cuerpo(c.forma), (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
+                datos = (c.forma, v, n, preparada[2] if preparada is not None else aristas_cuerpo(c.forma),
+                         (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
                          defl)
             cache[clave] = datos
             if c.id not in ocultos:
@@ -595,17 +605,53 @@ class Visor3D(QOpenGLWidget):
             self._t_refinar_previa.start()
         self._limpiar_malla = False
         self._hover_ent = None
-        polis, rellenos, constr = [], [], []
-        for br in estado.bocetos.values():
-            if br.op_id not in ocultos and br.op_id not in excluir_bocetos:
-                polis.extend(polilineas_boceto(br))
-                if br.op_id in self.bocetos_libres:
-                    rellenos.extend(tris_perfil_terminado(br))
-                    constr.extend(polilineas_construccion(br))
-        self._bocetos = _segmentos(polis)
-        self._construccion = _segmentos(constr)
-        self._perfiles_hechos = (np.concatenate(rellenos).astype(np.float32) if rellenos
-                                 else np.zeros((0, 3), np.float32))
+        if not reusar_bocetos:
+            polis, rellenos, constr = [], [], []
+            for br in bocetos:
+                if br.op_id not in ocultos and br.op_id not in excluir_bocetos:
+                    polis.extend(polilineas_boceto(br))
+                    if br.op_id in self.bocetos_libres:
+                        rellenos.extend(tris_perfil_terminado(br))
+                        constr.extend(polilineas_construccion(br))
+            self._bocetos = _segmentos(polis)
+            self._construccion = _segmentos(constr)
+            self._perfiles_hechos = (np.concatenate(rellenos).astype(np.float32) if rellenos
+                                     else np.zeros((0, 3), np.float32))
+            self._bocetos_de, self._ver_bocetos = bocetos, ver
+        self.update()
+
+    def actualizar_prismas(self, estado, mallas):
+        """Actualiza únicamente los arrays de la previa lineal; no reconstruye cuerpos ni bocetos."""
+        estado._mallas_previa = mallas
+        if self._caja_base_prisma is None:
+            partes = [m["v"] for m in self._mallas if m["id"] not in mallas and len(m["v"])]
+            if len(self._bocetos):
+                partes.append(self._bocetos)
+            if partes:
+                puntos = np.concatenate(partes)
+                self._caja_base_prisma = puntos.min(0), puntos.max(0)
+            else:
+                self._caja_base_prisma = ()
+        cajas = [self._caja_base_prisma] if self._caja_base_prisma else []
+        for i, m in enumerate(self._mallas):
+            if m["id"] not in mallas:
+                continue
+            v, n, seg = mallas[m["id"]]
+            c = estado.cuerpos[m["id"]]
+            c.forma.vertices = v
+            m.update(v=v, n=n, seg=seg)
+            mn, mx = estado._cajas_previa[m["id"]]
+            cajas.append((mn, mx))
+            self._lod_datos[0][i] = (mn + mx) / 2
+            self._lod_datos[1][i] = np.linalg.norm(mx - mn) / 2
+            self._cache[id(c.forma)] = (c.forma, v, n, seg, (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2, 0.05)
+            self._pick.pop(id(c.forma), None)
+            self._pick.pop(("caja", id(c.forma)), None)
+            self._pick_aristas.pop(id(c.forma), None)
+            self._pick_paquete.pop(id(c.forma), None)
+        self._mallas = list(self._mallas)  # invalida la caja de escena y la rejilla sin volver a teselar
+        caja = (np.minimum.reduce([c[0] for c in cajas]), np.maximum.reduce([c[1] for c in cajas])) if cajas else None
+        self._caja_cache = self._mallas, self._bocetos, caja
         self.update()
 
     def _arrastrando_previa(self):

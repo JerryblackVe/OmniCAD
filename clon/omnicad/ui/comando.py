@@ -362,6 +362,7 @@ class PanelComando(QFrame):
         self.ultima_op = None
         self._previa_ok = False
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
+        self._prisma_previa = None
         self.confirmar = None       # función(op) de la ventana: aplica y devuelve False si el editor debe seguir abierto
 
         v = QVBoxLayout(self)
@@ -740,6 +741,8 @@ class PanelComando(QFrame):
             self._previa_ok = True
             return
         try:
+            if self._previsualizar_prisma(op):
+                return
             estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
             self._previa_aislada = True
         except Exception as e:  # noqa: BLE001 — se muestra el error del kernel como en Fusion
@@ -751,6 +754,80 @@ class PanelComando(QFrame):
         self._mostrar(" ".join(avisos), aviso=True)
         self._previa_vista(op)
         self.previa.emit(estado)
+
+    def _previsualizar_prisma(self, op):
+        p = op.p
+        if (op.TIPO != "extrusion" or self.ctx.doc.motor != "opencascade"
+                or p.get("operacion") != "nuevo" or p.get("tipo") != "solida"
+                or p.get("inicio") != "plano" or p.get("extension") != "distancia"
+                or p.get("extension2") != "distancia"
+                or abs(self.ctx.evaluar(p["conicidad"], ANGULO)) > 1e-9
+                or abs(self.ctx.evaluar(p["conicidad2"], ANGULO)) > 1e-9):
+            self._prisma_previa = None
+            return False
+        from ..nucleo import geometria as geo, render_cpu as rc
+        from ..nucleo.malla import Malla
+        from ..timeline.operaciones import Contexto
+        from .visor3d import aristas_cuerpo
+        import numpy as np
+
+        arrastrando = self.manipuladores is not None and self.manipuladores.arrastrando
+        variables = {"distancia", "distancia2", "direccion", "medida", "simetrica", "invertir"}
+        firma = (self.ctx.estado, repr({k: v for k, v in p.items() if k not in variables}),
+                 self.visor.config.teselado, self.visor.config.angular)
+        if self._prisma_previa is None or self._prisma_previa[0] != firma:
+            plano, _ = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
+            unidad = type(op)(op.id, op.nombre, **dict(p, distancia="1 mm", direccion="un_lado", simetrica=False,
+                                                      invertir=False))
+            exacto, _ = self.ctx.doc.previsualizar(unidad, self.ctx.indice, en_vivo=self._previa_aislada)
+            self._previa_aislada = True
+            estado, prismas = exacto.copia(), {}
+            for cid, c in estado.cuerpos.items():
+                if cid in self.ctx.estado.cuerpos:
+                    continue
+                partes = rc._mallas_por_cara(c.forma, self.visor._deflexion(c.forma), self.visor.config.angular)
+                v = np.concatenate([dato[1] for dato in partes])
+                n = np.concatenate([dato[2] for dato in partes])
+                seg = aristas_cuerpo(c.forma)
+                try:
+                    prismas[cid] = rc.PrismaVisual(v, n, seg, plano.origen, plano.normal)
+                except geo.ErrorGeometria:   # no es un prisma recto desde su plano: lo muestra el camino exacto
+                    self._prisma_previa = None
+                    return False
+                c.forma = Malla(v, np.arange(len(v)).reshape(-1, 3))
+            self._prisma_previa = firma, estado, prismas
+            if self.manipuladores is not None:
+                self.manipuladores.actualizar()  # prepara también el apoyo del asa antes del primer movimiento
+        if not arrastrando:
+            return False    # el valor tecleado, y el asa al soltarse, siempre salen del kernel exacto
+        d1 = self.ctx.evaluar(p["distancia"])
+        modo = "simetrica" if p.get("simetrica") else p["direccion"]
+        medida = "total" if p.get("simetrica") else p["medida"]
+        d2 = self.ctx.evaluar(p["distancia2"]) if modo == "dos_lados" else None
+        geo.exigir_distancias_extrusion(modo, d1, d2, medida)
+        if modo == "simetrica":
+            b = abs(d1) * (1 if medida == "mitad" else 0.5)
+            a = -b
+        elif modo == "dos_lados":
+            a, b = min(0, d1, -d2), max(0, d1, -d2)
+        else:
+            a, b = 0, d1
+        if p.get("invertir"):
+            a, b = -a, -b
+        _, estado, prismas = self._prisma_previa
+        mallas = {cid: prisma.transformar(a, b) for cid, prisma in prismas.items()}
+        estado._mallas_previa = mallas
+        estado._cajas_previa = {cid: prisma.caja(a, b) for cid, prisma in prismas.items()}
+        for cid, (v, _, _) in mallas.items():
+            estado.cuerpos[cid].forma.vertices = v
+        if self.visor._estado is not estado:
+            self.previa.emit(estado)
+        else:
+            self.visor.actualizar_prismas(estado, mallas)
+        self._previa_ok = True
+        if self.mensaje.text():
+            self._mostrar("")
+        return True
 
     def _previa_vista(self, op):
         """Dibujo extra del comando para la vista previa (el agujero en rojo…)."""
@@ -818,6 +895,7 @@ class PanelComando(QFrame):
 
     def _cerrar(self):
         self._t_previa.stop()
+        self._prisma_previa = None
         try:
             self.visor.entidad_elegida.disconnect(self._elegida)
         except (RuntimeError, TypeError):
