@@ -29,6 +29,7 @@ from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QToolButton  # noqa: E402
 
 from omnicad import api  # noqa: E402
+from omnicad.restricciones import solver  # noqa: E402
 
 etiqueta = sys.argv[1] if len(sys.argv) > 1 else "medida"
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 60
@@ -79,6 +80,54 @@ A.esperar(600)
 faulthandler.cancel_dump_traceback_later()
 A.reg(AR, f"{N} splines con tangentes resueltas", True, f"{armado_s:.2f} s; ok={lz.resultado.ok}")
 
+if CONFLICTO:
+    # El diagnóstico de «qué choca» corre en otro hilo: la ventana (eventos + pintado del lienzo) no debe pasar de 100 ms.
+    faulthandler.dump_traceback_later(PLAZO_ACCION, exit=True)
+    del latidos[:]
+    base_pintura = []
+    for _ in range(8):                              # lo que cuesta pintar SIN diagnóstico corriendo (lo mínimo posible)
+        t = time.perf_counter()
+        lz._conflictos = []
+        lz.grab()
+        base_pintura.append(time.perf_counter() - t)
+    lz._conflictos = None
+    del latidos[:]
+    pinturas, inicio = [], time.perf_counter()
+    lz.conflictos_sin_esperar()
+    while lz._conflictos is None and time.perf_counter() - inicio < 30:
+        t = time.perf_counter()
+        lz.grab()                                   # pinta el lienzo (minimizado no recibe paintEvent solo)
+        pinturas.append(time.perf_counter() - t)
+        QTest.qWait(10)
+    llego = time.perf_counter() - inicio
+    faulthandler.cancel_dump_traceback_later()
+    huecos = sorted(b - a for a, b in zip(latidos, latidos[1:], strict=False))
+    p95 = lambda xs: xs[int(0.95 * (len(xs) - 1))] if xs else None  # noqa: E731
+    resumen = {"splines": N, "conflicto": True, "llego_s": round(llego, 2), "conflictos": len(lz._conflictos),
+               "agotado": lz._diagnostico_agotado, "texto": lz.texto_conflictos(),
+               "hueco_latidos_p95_s": p95(huecos), "hueco_latidos_max_s": max(huecos, default=None),
+               "pintura_sin_diagnostico_mediana_s": statistics.median(base_pintura), "pintura_p95_s": p95(sorted(pinturas)), "pintura_max_s": max(pinturas, default=None), "excepciones": A.ERRORES}
+    (RAIZ / "evidencias").mkdir(exist_ok=True)
+    (RAIZ / "evidencias" / f"ui_boceto_{etiqueta}.json").write_text(json.dumps(resumen, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps(resumen, ensure_ascii=False))
+    sys.exit(0)
+
+INTENTOS = []       # cada sistema que resolvió el solver durante un evento: (incógnitas, error, ms)
+_original = solver._resolver_grupo
+
+
+def _anotar(sis, *args, **kw):
+    antes = sis.b.a_dict() if not INTENTOS else None            # el estado al empezar el movimiento
+    t = time.perf_counter()
+    r = _original(sis, *args, **kw)
+    INTENTOS.append((len(sis.x0), float(f"{r[1]:.2g}"), round(1000 * (time.perf_counter() - t))))
+    if antes is not None and r[1] >= 1e-3 and args and not (RAIZ / "evidencias" / "b111_meseta.json").exists():
+        # un movimiento que no cumple: se guarda tal cual para reproducirlo fuera de la ventana
+        (RAIZ / "evidencias" / "b111_meseta.json").write_text(json.dumps({"boceto": antes, "punto": args[0]}), encoding="utf-8")
+    return r
+
+
+solver._resolver_grupo = _anotar
 MEDIDAS = []
 EVENTOS = []        # un arrastre: segundos que tarda cada evento del ratón en volver
 
@@ -117,7 +166,8 @@ def arrastrar(k):
         for nombre, ev in eventos:
             t = time.perf_counter()
             ev()
-            EVENTOS.append({"arrastre": k + 1, "evento": nombre, "s": round(time.perf_counter() - t, 3)})
+            EVENTOS.append({"arrastre": k + 1, "evento": nombre, "s": round(time.perf_counter() - t, 3), "intentos": INTENTOS[:]})
+            INTENTOS.clear()
             QTest.qWait(30)
     return f
 

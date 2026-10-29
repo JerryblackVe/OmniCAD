@@ -33,6 +33,7 @@ from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, E
                      puntos_primitiva, signos_cuadrante)
 
 TOLERANCIA = 1e-6
+TOLERANCIA_ACEPTA_ARRASTRE = 1e-3  # mm: un movimiento del ratón se da por bueno con este residuo (soltar vuelve a exigir TOLERANCIA)
 TOLERANCIA_ARRASTRE = 1e-10  # de Levenberg-Marquardt en un evento de arrastre: soltar vuelve a resolver todo a 1e-14
 _PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas durante el arrastre.
 _PESO_ARRASTRE = 1.0
@@ -41,6 +42,9 @@ _ESCALA_CURVATURA = 100.0    # mm²
 TOPE_AUTO_RESTRINGIR = 500
 MAX_INTENTOS_EXTRA = 6       # alternativas repetidas que se descartan antes de rendirse (cada una cuesta un cálculo entero)
 TOPE_TERMINAR_AUTO = 250      # «Terminar con AutoConstrain» de Fusion no corre con más de 250 entidades
+TROZO_EVALUACIONES = 60     # evaluaciones por tramo de Levenberg-Marquardt (ver `_resolver_grupo`)
+UMBRAL_VENTANA = 40         # puntos de la parte arrastrada desde los que un movimiento resuelve solo una ventana (B-111)
+RADIO_VENTANA = 1           # pasos de vínculos alrededor del punto arrastrado que entran a la ventana; el resto se congela
 CACHE_SPLINES = True          # guardar la primitiva de cada spline por sus coordenadas (B-111); los tests lo apagan para comparar
 
 
@@ -52,6 +56,7 @@ class ResultadoSolver:
         self.mensaje = mensaje
         # Entidades que ya no se pueden mover (Fusion las dibuja en negro/blanco; las libres, en azul).
         self.determinadas = frozenset(determinadas)
+        self.sin_ventana = False        # un arrastre dejó de usar la ventana local (ver `_resolver_arrastre`)
 
     @property
     def ok(self):
@@ -97,6 +102,9 @@ class _Sistema:
         self._restricciones = list(boceto.restricciones.values()) if grupo is None else grupo["restricciones"]
         self._cotas = [c for c in (boceto.cotas.values() if grupo is None else grupo["cotas"]) if not c.referencia]
         self.fijos_p, self.fijos_r = _fijos(boceto)
+        if grupo is not None and "congelados" in grupo:      # ventana de un arrastre: lo que queda afuera es constante
+            self.fijos_p = self.fijos_p | grupo["congelados"][0]
+            self.fijos_r = self.fijos_r | grupo["congelados"][1]
         raiz, self._cumplidas = self._fusionar() if fusionar else ((lambda k: k), set())
         # idx_p[pid] = (índice de x, índice de y). Fusionadas, varias coordenadas comparten una incógnita, que
         # arranca en su promedio; `cuenta` dice cuántas coordenadas representa cada incógnita.
@@ -854,21 +862,76 @@ def restricciones_en_conflicto(boceto, valores_cotas=None, cancelar=None):
     return conflictos
 
 
+def _ventana(boceto, g, arrastrado, radio):
+    """Parte de `g` a `radio` pasos de vínculos del punto arrastrado: sus incógnitas y los vínculos que las tocan. Lo
+    demás de `g` queda congelado (constante). Un vínculo que solo toca lo congelado no cambia al arrastrar, así que el
+    error de la ventana cubre todo lo que puede romperse."""
+    vinculos = [("curvas", c, _claves(boceto, c.id)) for c in g["curvas"]]
+    vinculos += [(t, o, [k for e in o.entidades for k in _claves(boceto, e)]) for t in ("restricciones", "cotas")
+                 for o in g[t]]
+    dentro = {("p", arrastrado)}
+    for _ in range(radio):
+        dentro |= {k for _t, _o, claves in vinculos if dentro.intersection(claves) for k in claves}
+    w = {"p": {i for c, i in dentro if c == "p"} & g["p"], "r": {i for c, i in dentro if c == "r"} & g["r"],
+         "curvas": [], "restricciones": [], "cotas": []}
+    for tipo, obj, claves in vinculos:
+        if dentro.intersection(claves):
+            w[tipo].append(obj)
+    w["congelados"] = (g["p"] - w["p"], g["r"] - w["r"])
+    return w
+
+
+def _foto(boceto, g):
+    """Coordenadas y radios de las incógnitas de `g`, para volver atrás con `_volver`."""
+    return ({pid: (boceto.puntos[pid].x, boceto.puntos[pid].y) for pid in g["p"]},
+            {cid: (getattr(boceto.curvas[cid], "radio", None), getattr(boceto.curvas[cid], "radio_menor", None))
+             for cid in g["r"]})
+
+
+def _volver(boceto, foto):
+    for pid, (x, y) in foto[0].items():
+        boceto.puntos[pid].x, boceto.puntos[pid].y = x, y
+    for cid, (radio, menor) in foto[1].items():
+        c = boceto.curvas[cid]
+        if radio is not None:
+            c.radio = radio
+        if menor is not None:
+            c.radio_menor = menor
+
+
 def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
     """`resolver` para un evento de arrastre: solo la parte del punto arrastrado y sin el rango ni el núcleo del
-    jacobiano (se conservan los de `previo`)."""
-    err = 0.0
+    jacobiano (se conservan los de `previo`). Si esa parte es grande (`UMBRAL_VENTANA`), primero se resuelve solo una
+    ventana alrededor del punto y el resto se congela. La ventana vale si cumple todo Y el punto queda donde lo puso el
+    ratón: si no (una cadena rígida que tiene que moverse entera, un punto que solo puede deslizar), se vuelve atrás y
+    se resuelve la parte entera, y los demás movimientos de ese arrastre ya van directo a la parte entera
+    (`sin_ventana`, que pasa de un resultado al siguiente). Soltar resuelve todo (sin `previo`)."""
+    err, sin_ventana, usada_parte_entera = 0.0, getattr(previo, "sin_ventana", False), False
     for g in grupos:
         if arrastrado in g["p"]:
-            sis = _Sistema(boceto, valores, g, fusionar=True)
-            x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
-            if x is not None:
-                sis.escribir(x)
+            objetivo = boceto.coords(arrastrado)
+            intentos = [g]
+            if len(g["p"]) > UMBRAL_VENTANA and not sin_ventana:
+                intentos.insert(0, _ventana(boceto, g, arrastrado, RADIO_VENTANA))
+            for sub in intentos:
+                antes = _foto(boceto, sub)
+                usada_parte_entera = sub is g and len(intentos) > 1
+                sis = _Sistema(boceto, valores, sub, fusionar=True)
+                x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
+                if x is not None:
+                    sis.escribir(x)
+                if sub is g or (err < TOLERANCIA_ACEPTA_ARRASTRE
+                                and math.dist(boceto.coords(arrastrado), objetivo) < TOLERANCIA_ACEPTA_ARRASTRE):
+                    break
+                _volver(boceto, antes)
             break
-    if err >= TOLERANCIA:
-        return ResultadoSolver("inconsistente", previo.gdl, err, "Revisá las últimas restricciones o cotas.",
-                               previo.determinadas)
-    return ResultadoSolver("ok", previo.gdl, err, determinadas=previo.determinadas)
+    if err >= TOLERANCIA_ACEPTA_ARRASTRE:
+        r = ResultadoSolver("inconsistente", previo.gdl, err, "Revisá las últimas restricciones o cotas.",
+                            previo.determinadas)
+    else:
+        r = ResultadoSolver("ok", previo.gdl, err, determinadas=previo.determinadas)
+    r.sin_ventana = sin_ventana or (usada_parte_entera and err < TOLERANCIA_ACEPTA_ARRASTRE)   # solo si la parte entera cumplió
+    return r
 
 
 def _resolver_grupo(sis, arrastrado, con_rango=True):
@@ -887,19 +950,32 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
         err = float(np.max(np.abs(r))) if len(r) else 0.0
         return (ancla if n else None), err, np.zeros((0, n)), 0    # ancla ya cumple lo fusionado: se escribe
 
+    cumple = TOLERANCIA if con_rango else TOLERANCIA_ACEPTA_ARRASTRE
+
     def corrida(x_inicio, ancla, w, tol=1e-14):
         fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla)])  # noqa: E731
         jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)])  # noqa: E731
         from scipy.optimize import least_squares   # perezoso: importarlo cuesta ~0,8 s al arrancar la CLI y el MCP
         # Levenberg-Marquardt (MINPACK, QR): "trf" hacía una SVD por iteración y con los hilos de OpenBLAS cada
         # una costaba ~2,4 ms en matrices de 100×100; con "lm" el arrastre del polígono de 24 lados baja a ~15 ms.
-        return least_squares(fun, x_inicio, jac=jac, method="lm", xtol=tol, ftol=tol, gtol=tol,
-                             max_nfev=200 * (n + 1)).x
+        # En trozos de TROZO_EVALUACIONES: con tolerancias de 1e-14 el ruido de las diferencias finitas a veces impide
+        # «converger» una solución que ya cumple todo, y daba vueltas hasta max_nfev (14 200 evaluaciones: 73 s con 12
+        # splines). Si un trozo se agota y los residuos ya cumplen, se termina.
+        # Un movimiento gasta un solo trozo, y menos cuanto más grande es el sistema (un punto arrastrado sobre otro deja una
+        # spline degenerada que ninguna solución cumple: no se la persigue durante segundos).
+        tope = 200 * (n + 1) if con_rango else max(10, TROZO_EVALUACIONES * 100 // max(n, 100))
+        hechas, x = 0, x_inicio
+        while True:
+            r = least_squares(fun, x, jac=jac, method="lm", xtol=tol, ftol=tol, gtol=tol,
+                              max_nfev=min(TROZO_EVALUACIONES, tope - hechas))
+            x, hechas = r.x, hechas + r.nfev
+            if r.status != 0 or hechas >= tope or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) < cumple:
+                return x
 
     x = corrida(ancla, ancla, pesos, 1e-14 if con_rango else TOLERANCIA_ARRASTRE)
-    # Pulido: re-anclar en la solución elimina el sesgo de la regularización. Un evento de arrastre (`con_rango=False`)
-    # lo saltea si ya cumple todo: al soltar se resuelve entero con pulido, y cada movimiento cuesta la mitad.
-    if con_rango or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) >= TOLERANCIA:
+    # Pulido: re-anclar en la solución elimina el sesgo de la regularización y rescata una primera corrida que se quedó
+    # en una meseta. Un evento de arrastre (`con_rango=False`) lo hace solo si no cumple, y en un solo trozo.
+    if con_rango or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) >= cumple:
         x = corrida(x, x, base)
     res = sis.residuos(x)
     err = float(np.max(np.abs(res))) if len(res) else 0.0

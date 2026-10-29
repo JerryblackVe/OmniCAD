@@ -181,7 +181,7 @@ COTA_OSCURO, COTA_CLARO = QColor(0xa9, 0xc4, 0x6c), QColor(70, 72, 78)
 REFERENCIA = QColor(140, 140, 146)        # cota de referencia (driven): gris medio, legible en los dos temas
 AZUL_CAJA = QColor(0, 120, 215)
 FONDO_LIENZO = QColor(250, 250, 252)      # lienzo 2D (sin visor)
-TOPE_DIAGNOSTICO_S = 30.0                # B-111: el diagnóstico de qué choca (un resolver por vínculo) se abandona a los 30 s
+TOPE_DIAGNOSTICO_S = 3.0                 # B-111: el diagnóstico de qué choca (un resolver por vínculo) se abandona a los 3 s
 CONFLICTO = QColor(225, 45, 45)           # BOC-7: restricciones, cotas y geometría en choque, en rojo como Fusion
 # Ventana de selección: de izquierda a derecha (adentro) y de derecha a izquierda (lo que toca).
 VENTANA_RELLENO, VENTANA_BORDE = QColor(237, 120, 0, 70), QColor(140, 150, 180)
@@ -1059,6 +1059,13 @@ class Lienzo(QWidget):
         herramienta y vuelve a Seleccionar; en Seleccionar, borra la selección."""
         if self._eligiendo_punto is not None:
             self._terminar_eleccion()
+            return
+        if self._arrastre is not None:             # B-111: Esc en pleno arrastre lo cancela y deja el boceto como estaba
+            self._arrastre = None
+            self._restaurar(self.historial.pop())
+            self._cache_cortes = {}
+            self.cambio.emit()
+            self.update()
             return
         self.inf_actual = self.inferencia = self._inf_inicio = None
         if self._hay_operacion():
