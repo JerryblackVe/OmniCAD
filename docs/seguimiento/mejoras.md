@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 132: Abierto 73 · Parcial 47 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 134: Abierto 74 · Parcial 48 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -298,8 +298,11 @@ Parcial 1. Especificación: [informe_tortura_2026-10-17.md](../informe_tortura_2
 
 ## Tipografía de la interfaz (2026-10-28)
 
-Abierto 1.
+Abierto 4.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | NOV-tip-1 | Con letra grande (120–150 %) los títulos de grupo de la cinta se eliden y la ventana no baja de ~1038 px | Abierto | Media | `ajustar_textos` compacta los botones pero no los títulos `#titulo_grupo` ni el botón de espacio de trabajo (108 px fijo); con 150 % el mínimo de la ventana es 1038 px. Medido en 1024×640 y 800×520. | omnicad/ui/cinta.py (`_fila_grupos`, `_estilo_boton`, `espacio.setFixedSize(108, 62)`); evidencias/tipografia_ui/f3_ventana_150.py | 2026-10-28 |
+| NOV-tip-2 | Fuente de la interfaz: la lista no tiene buscador ni grupo de recomendadas, y el combo cerrado no muestra la forma de la letra elegida | Abierto | Media | Hecho el 2026-10-29: cada familia de la lista se escribe con su propia letra y la lista abre acotada (14 filas con barra). Falta: caja de búsqueda dentro de la lista, grupo «Recomendadas» arriba (hoy solo van primero las de lectura fácil) y la fuente elegida mostrada con su letra en el combo cerrado. Pedido de Gerardo del 2026-10-29 (captura de Preferencias a 109 % y video 09-38-04), para una sesión nocturna. | omnicad/ui/preferencias.py (`_combo_fuentes`, `_agregar_familia`) | 2026-10-29 |
+| NOV-tip-3 | Colores de texto: el selector es el de Qt, sin el tema de la app, y un color rechazado solo avisa «probá uno más claro» | Abierto | Media | Hecho el 2026-10-29: cada fila muestra el color real (nunca el código), marca en rojo el rechazado y el aviso va en criollo. Falta: selector de color con el tema de la app, proponer con un clic un color parecido que sí se lea, y mostrar «elegido» frente a «aplicado» cuando se rechaza. | omnicad/ui/preferencias.py (`CampoColor`, `_Muestra`, `_mostrar_aviso_apariencia`) | 2026-10-29 |
+| NOV-tip-4 | Preferencias › Apariencia no tiene vista previa propia, y los espacios y tamaños de la interfaz no están en un solo lugar | Abierto | Alta | Un panel de muestras (botón, campo, texto normal y secundario, acento y una cota del boceto) que cambie al instante con fuente, tamaño y colores; y valores comunes (espacios, radios, alturas) en un solo lugar para que todo escale parejo con letra grande. Validar a 100, 125 y 150 % y en 1024×640 y 800×520, con capturas antes y después. Pedido de Gerardo del 2026-10-29, para una sesión nocturna. | omnicad/ui/preferencias.py, omnicad/ui/temas.py, omnicad/ui/cinta.py | 2026-10-29 |

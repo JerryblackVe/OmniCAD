@@ -332,9 +332,9 @@ def test_dialogo_avisa_si_un_tema_propio_tiene_poco_contraste(qapp, prefs, tmp_p
     dlg = DialogoPreferencias(prefs)
     combo = dlg.controles["general/tema"]
     combo.setCurrentIndex(combo.findData("usuario:gris"))
-    assert "Contraste" in dlg.aviso_tema.text()
+    assert "se leen mal" in dlg.aviso_tema.text() and "texto sobre" in dlg.aviso_tema.toolTip()   # detalle: en el tooltip
     combo.setCurrentIndex(combo.findData("minimalista"))
-    assert "Contraste" not in dlg.aviso_tema.text()
+    assert "se leen mal" not in dlg.aviso_tema.text() and not dlg.aviso_tema.toolTip()
 
 
 # ---------------------------------------------------------------- captura con --tema

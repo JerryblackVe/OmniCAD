@@ -10,8 +10,8 @@ dependen de la nube o de licencias (Tokens, Red, Recopilación de datos…) no s
 import subprocess
 import threading
 
-from PySide6.QtCore import QSettings, QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QFontDatabase
+from PySide6.QtCore import QRectF, QSettings, QSize, Qt, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QPainter, QPen
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSlider,
                                QSpinBox, QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
@@ -249,6 +249,15 @@ def _es_lectura_facil(familia):
     return any(nombre in clave for nombre in FACILES)
 
 
+def _agregar_familia(c, familia):
+    """Agrega la familia a la lista con su nombre escrito en su propia tipografía, para ver la forma de la letra.
+    Las que no tienen letras latinas (símbolos) quedan con la fuente de la interfaz: con la suya no se leería el nombre."""
+    c.addItem(familia, familia)
+    sistemas = QFontDatabase.writingSystems(familia)
+    if not sistemas or QFontDatabase.WritingSystem.Latin in sistemas:
+        c.setItemData(c.count() - 1, QFont(familia), Qt.ItemDataRole.FontRole)
+
+
 def _combo_fuentes(actual, vacio=None, familias=None):
     """Fuentes instaladas. Una guardada que ya no está se muestra igual (y queda elegida).
     Con `vacio`, el primer ítem es esa etiqueta con valor '' (p. ej. «La de la interfaz»).
@@ -265,26 +274,70 @@ def _combo_fuentes(actual, vacio=None, familias=None):
         c.addItem("Lectura fácil", None)
         c.model().item(c.count() - 1).setEnabled(False)
         for familia in faciles:
-            c.addItem(familia, familia)
+            _agregar_familia(c, familia)
         c.insertSeparator(c.count())
     for familia in resto:
-        c.addItem(familia, familia)
+        _agregar_familia(c, familia)
     c.setCurrentIndex(max(c.findData(actual), 0))
     c.setMinimumWidth(220)
     c.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
     c.setMinimumContentsLength(18)
+    # una lista tan alta como la pantalla no sirve: lista con barra de desplazamiento y 14 filas a la vez
+    c.setMaxVisibleItems(14)
+    c.setStyleSheet("QComboBox { combobox-popup: 0; }")
     return c
 
 
+class _Muestra(QPushButton):
+    """La muestra de un color: el color mismo, pintado (nunca su código). Dice «Del tema» o «Personalizado»; si el
+    color elegido no se pudo aplicar porque se lee mal, lleva el borde rojo."""
+
+    def __init__(self):
+        super().__init__(objectName="campo_color")
+        self._color = QColor("#808080")
+        self._texto = ""
+        self._rechazado = False
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAttribute(Qt.WA_Hover, True)
+
+    def sizeHint(self):                       # sigue el tamaño de letra vigente (Preferencias › Apariencia)
+        m = self.fontMetrics()
+        return QSize(m.horizontalAdvance("Personalizado") + 40, m.height() + 14)
+
+    def poner(self, color, texto, rechazado=False):
+        self._color, self._texto, self._rechazado = QColor(color), texto, rechazado
+        self.update()
+
+    def paintEvent(self, _evento):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        marco = QRectF(self.rect()).adjusted(1.5, 1.5, -1.5, -1.5)
+        if self._rechazado:
+            p.setPen(QPen(QColor(temas.color("error")), 2))
+        elif self.hasFocus() or self.underMouse():
+            p.setPen(QPen(QColor(temas.color("acento")), 2))
+        else:
+            p.setPen(QPen(QColor(temas.color("borde")), 1))
+        p.setBrush(self._color)
+        p.drawRoundedRect(marco, 4, 4)
+        fondo = self._color.name()            # letra oscura o clara, la que más contraste tenga con el color
+        oscura = temas.razon_contraste("#101418", fondo) > temas.razon_contraste("#ffffff", fondo)
+        p.setPen(QColor("#101418" if oscura else "#ffffff"))
+        p.drawText(marco.adjusted(10, 0, -10, 0), Qt.AlignVCenter | Qt.AlignLeft, self._texto)
+
+
 class CampoColor(QWidget):
-    """Color de texto de la interfaz: el del tema (vacío) o uno propio con el selector; «Quitar» vuelve al tema."""
+    """Color de texto de la interfaz: una muestra del color (el del tema o el elegido) que abre el selector;
+    «Quitar» vuelve al del tema. Nunca muestra el código del color."""
     cambiado = Signal()
 
-    def __init__(self, token, valor):
+    def __init__(self, token, valor, titulo="Color"):
         super().__init__()
         self.token = token
+        self.titulo = titulo
         self._valor = temas.normalizar_color(valor) or ""
-        self.boton = QPushButton(objectName="campo_color")
+        self._rechazado = False              # el color elegido no se pudo aplicar: se lee mal sobre el tema
+        self.boton = _Muestra()
         self.quitar = QPushButton("Quitar", objectName="quitar_color")
         self.quitar.setToolTip("Vuelve al color del tema.")
         self.boton.clicked.connect(self._elegir)
@@ -296,19 +349,26 @@ class CampoColor(QWidget):
         self._pintar()
 
     def _pintar(self):
-        del_tema = temas.color(self.token)
-        color = self._valor or del_tema
-        self.boton.setText(self._valor or f"Del tema ({del_tema})")
-        self.boton.setStyleSheet(f"text-align: left; padding-left: 18px; border-left: 12px solid {color};")
-        self.quitar.setEnabled(bool(self._valor))
+        propio = bool(self._valor)
+        self.boton.poner(self._valor or temas.color(self.token), "Personalizado" if propio else "Del tema",
+                         self._rechazado)
+        self.boton.setToolTip("Este color no se aplicó: se lee mal sobre el fondo del tema." if self._rechazado
+                              else "Clic para elegir otro color.")
+        self.boton.setAccessibleName(f"{self.titulo}: {'personalizado' if propio else 'del tema'}")
+        self.quitar.setEnabled(propio)
+
+    def marcar_rechazado(self, rechazado):
+        """El color elegido no se aplicó (se lee mal sobre el tema): la muestra lo dice con el borde rojo."""
+        if rechazado != self._rechazado:
+            self._rechazado = rechazado
+            self._pintar()
 
     def refrescar(self):
         self._pintar()
 
     def _elegir(self):
-        from PySide6.QtGui import QColor
         from PySide6.QtWidgets import QColorDialog
-        color = QColorDialog.getColor(QColor(self._valor or temas.color(self.token)), self, "Color del texto")
+        color = QColorDialog.getColor(QColor(self._valor or temas.color(self.token)), self, self.titulo)
         if color.isValid():
             self.setValue(color.name())
 
@@ -321,6 +381,7 @@ class CampoColor(QWidget):
         if color == self._valor:
             return
         self._valor = color
+        self._rechazado = False              # el color nuevo todavía no se evaluó
         self._pintar()
         self.cambiado.emit()
 
@@ -508,6 +569,7 @@ class DialogoPreferencias(QDialog):
                     c.currentIndexChanged.connect(lambda *_a, k=k: self._apariencia_cambiada(k))
             elif isinstance(c, QSlider):
                 c.valueChanged.connect(lambda *_a, k=k: self._apariencia_cambiada(k))
+        self._mostrar_aviso_apariencia()          # un color guardado que se lee mal se marca desde que se abre
         self.arbol.currentItemChanged.connect(self._ir)
         self.arbol.setCurrentItem(items.get(inicial, items["general"]))    # p. ej. "valores" desde la barra de unidades
 
@@ -608,7 +670,7 @@ class DialogoPreferencias(QDialog):
                 self.controles[clave] = c
                 continue
             if tipo == "color":
-                c = CampoColor(clave.split("interfaz/color_")[-1], actual)
+                c = CampoColor(clave.split("interfaz/color_")[-1], actual, etiqueta)
                 c.cambiado.connect(self._cambio)
                 c.cambiado.connect(lambda *_a, k=clave: self._apariencia_cambiada(k))
                 form.addRow(texto, c)
@@ -749,22 +811,28 @@ class DialogoPreferencias(QDialog):
         self.apariencia_cambiada.emit()
 
     def _mostrar_aviso_apariencia(self, *_):
-        """Lo que no se aplicó por contraste (o por formato), como el aviso del tema, pero en su página."""
+        """Lo que no se aplicó por contraste (o por formato), en criollo y sin códigos. La muestra de cada color
+        rechazado se marca en rojo."""
         if self.aviso_apariencia is None:
             return
         valores = {clave.split("interfaz/color_")[-1]: self.prefs[clave]
                    for clave in CLAVES_APARIENCIA if clave.startswith("interfaz/color_")}
         base, _avisos = temas.resolver(temas.clave_activa())      # el tema sin los colores pisados
         _aplicables, rechazos = temas.colores_texto(base["colores"], valores)
-        nombres = {"texto": "el texto", "texto_tenue": "el texto secundario", "acento": "el acento"}
+        rechazados = {token for token, _valor, _detalle in rechazos}
+        for token in valores:
+            campo = self.controles.get(f"interfaz/color_{token}")
+            if isinstance(campo, CampoColor):
+                campo.marcar_rechazado(token in rechazados)
+        nombres = {"texto": "del texto", "texto_tenue": "del texto secundario", "acento": "del acento"}
+        mas = "claro" if temas.luminancia(base["colores"]["panel"]) < 0.18 else "oscuro"
         partes = []
-        for token, valor, detalle in rechazos:
-            if isinstance(detalle, str):
-                partes.append(f"⚠ «{valor}» no se aplicó a {nombres[token]}: {detalle}.")
+        for token, _valor, detalle in rechazos:
+            if isinstance(detalle, str):          # no es un color válido (llegó por la API, no por el selector)
+                partes.append(f"⚠ El color {nombres[token]} no es válido y no se aplicó.")
             else:
-                lista = ", ".join(f"{fondo} {razon:.1f}:1" for fondo, razon in detalle[:4])
-                partes.append(f"⚠ «{valor}» no se aplicó a {nombres[token]}: contraste menor a "
-                              f"{temas.MIN_CONTRASTE}:1 en {lista}.")
+                partes.append(f"⚠ El color {nombres[token]} se lee mal sobre el fondo del tema y no se aplicó. "
+                              f"Probá uno más {mas}.")
         self.aviso_apariencia.setText("\n".join(partes) or "Los colores vacíos usan los del tema elegido.")
         temas.poner_rol(self.aviso_apariencia, "error" if rechazos else "tenue")
 
@@ -926,11 +994,11 @@ class DialogoPreferencias(QDialog):
     def _tema_cambiado(self, *_):
         clave = self.controles["general/tema"].currentData()
         self._mostrar_aviso_tema(clave)
+        self.tema_elegido.emit(clave)              # la ventana aplica el tema en el acto: lo que sigue ya lo ve
         for control in self.controles.values():
             if isinstance(control, CampoColor):
-                control.refrescar()                # «Del tema (…)» con los colores del tema elegido
+                control.refrescar()                # la muestra «Del tema» toma los colores del tema elegido
         self._mostrar_aviso_apariencia()
-        self.tema_elegido.emit(clave)
 
     def _mostrar_aviso_tema(self, clave, extra=""):
         """Texto bajo el combo: lo que no cierra del tema elegido (contraste, archivos ignorados) y `extra`."""
@@ -938,11 +1006,11 @@ class DialogoPreferencias(QDialog):
         partes = [extra] if extra else ["Se aplica al instante, sin reiniciar."]
         bajos = temas.contraste_bajo(tema["colores"])
         if bajos:
-            lista = ", ".join(f"{t}/{f} {r:.1f}" for t, f, r in bajos[:4])
-            partes.append(f"⚠ Contraste menor a {temas.MIN_CONTRASTE}:1 en {lista}"
-                          + ("…" if len(bajos) > 4 else "") + ".")
+            partes.append("⚠ Algunos textos de este tema se leen mal sobre su fondo.")
         partes += [f"⚠ {a}" for a in avisos]
         self.aviso_tema.setText("\n".join(partes))
+        self.aviso_tema.setToolTip("\n".join(f"{t} sobre {f}: {r:.1f}:1 (mínimo {temas.MIN_CONTRASTE}:1)"
+                                             for t, f, r in bajos))
 
     def _abrir_carpeta_temas(self):
         carpeta = temas.carpeta_temas(crear=True)

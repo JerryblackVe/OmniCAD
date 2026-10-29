@@ -36,13 +36,14 @@ def ventana(app_qt, tmp_path_factory):
 
 
 @pytest.fixture
-def prefs(tmp_path):
+def prefs(app_qt, tmp_path):             # sin QApplication, crear el diálogo aborta el proceso (se vio al correr un test suelto)
     from PySide6.QtCore import QSettings
     from omnicad.ui.preferencias import Preferencias
     from omnicad.ui import temas
     temas.activar_tipografia()
     yield Preferencias(QSettings(str(tmp_path / "prefs.ini"), QSettings.IniFormat))
     temas.activar_tipografia()
+    temas.activar(temas.DEFECTO)             # los tests de diálogo cambian el tema activo; que no pase al siguiente
 
 
 # ---------------------------------------------------------------- F1: fuente y tamaño base
@@ -167,11 +168,100 @@ def test_dialogo_avisa_el_color_de_texto_rechazado_y_quitar_vuelve_al_tema(prefs
     campo = dlg.controles["interfaz/color_texto"]
     assert isinstance(campo, CampoColor) and campo.value() == "" and not campo.quitar.isEnabled()
     campo.setValue("#000000")                                # negro sobre oscuro: no se puede leer
-    assert prefs["interfaz/color_texto"] == "#000000" and "contraste" in dlg.aviso_apariencia.text()
+    assert prefs["interfaz/color_texto"] == "#000000" and "se lee mal" in dlg.aviso_apariencia.text()
     campo.setValue("#ffffff")
-    assert prefs["interfaz/color_texto"] == "#ffffff" and "contraste" not in dlg.aviso_apariencia.text()
+    assert prefs["interfaz/color_texto"] == "#ffffff" and "se lee mal" not in dlg.aviso_apariencia.text()
     campo.quitar.click()
     assert campo.value() == "" and prefs["interfaz/color_texto"] == "" and not campo.quitar.isEnabled()
+
+
+def _relleno(campo):
+    """Color con que está pintada la muestra: un píxel de su borde izquierdo, antes de donde empieza la letra."""
+    campo.boton.resize(200, 30)
+    imagen = campo.boton.grab().toImage()
+    return imagen.pixelColor(5, imagen.height() // 2).name()
+
+
+def test_los_colores_se_ven_como_muestras_y_nunca_como_codigos(prefs):
+    import re
+    from omnicad.ui import temas
+    from omnicad.ui.preferencias import DialogoPreferencias
+    temas.activar("oscuro_moderno")
+    dlg = DialogoPreferencias(prefs, inicial="apariencia")
+    for token in temas.COLORES_TEXTO:
+        campo = dlg.controles[f"interfaz/color_{token}"]
+        assert _relleno(campo) == temas.color(token)         # el color del tema, pintado
+        campo.setValue("#12ab34")
+        assert _relleno(campo) == "#12ab34"                  # y el elegido, pintado
+        textos = [campo.boton.text(), campo.boton.toolTip(), campo.boton.accessibleName(), campo.quitar.text()]
+        assert not any(re.search(r"#[0-9a-fA-F]{3}", t) for t in textos), textos
+        campo.setValue("")
+
+
+def test_clic_en_la_muestra_abre_el_selector_con_el_nombre_de_la_fila(prefs, monkeypatch):
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QColorDialog
+    from omnicad.ui import temas
+    from omnicad.ui.preferencias import DialogoPreferencias
+    temas.activar("oscuro_moderno")
+    dlg = DialogoPreferencias(prefs, inicial="apariencia")
+    campo = dlg.controles["interfaz/color_texto_tenue"]
+    pedidos = []
+    monkeypatch.setattr(QColorDialog, "getColor", staticmethod(
+        lambda inicial, padre, titulo: pedidos.append(titulo) or QColor("#336699")))
+    assert campo.boton.accessibleName() == "Color del texto secundario: del tema"
+    campo.boton.click()
+    assert pedidos == ["Color del texto secundario"] and campo.value() == "#336699"
+    assert campo.boton.accessibleName() == "Color del texto secundario: personalizado"
+
+
+def test_la_muestra_y_el_aviso_siguen_al_tema_que_se_elige(prefs):
+    """La ventana aplica el tema al recibir `tema_elegido`: la muestra «Del tema» y el aviso tienen que mirar el
+    tema ya activo, no el anterior."""
+    from omnicad.ui import temas
+    from omnicad.ui.preferencias import DialogoPreferencias
+    temas.activar("oscuro_moderno")
+    prefs["interfaz/color_texto"] = "#ffffff"                # se lee bien sobre el oscuro y mal sobre el claro
+    dlg = DialogoPreferencias(prefs, inicial="apariencia")
+    dlg.tema_elegido.connect(temas.activar)
+    assert "se lee mal" not in dlg.aviso_apariencia.text()
+    combo = dlg.controles["general/tema"]
+    combo.setCurrentIndex(combo.findData("claro_moderno"))
+    assert "se lee mal" in dlg.aviso_apariencia.text() and "más oscuro" in dlg.aviso_apariencia.text()
+    for token in ("texto_tenue", "acento"):
+        assert _relleno(dlg.controles[f"interfaz/color_{token}"]) == temas.INCLUIDOS["claro_moderno"]["colores"][token]
+
+
+def test_el_color_rechazado_se_marca_y_el_mensaje_va_en_criollo_sin_codigos(prefs):
+    import re
+    from omnicad.ui import temas
+    from omnicad.ui.preferencias import DialogoPreferencias
+    for tema, color, sugerencia in (("oscuro_moderno", "#000000", "más claro"), ("claro_moderno", "#ffffff", "más oscuro")):
+        temas.activar(tema)
+        dlg = DialogoPreferencias(prefs, inicial="apariencia")
+        campo = dlg.controles["interfaz/color_texto"]
+        campo.setValue(color)                                # el color del fondo: no se lee
+        aviso = dlg.aviso_apariencia.text()
+        assert aviso.startswith("⚠ El color del texto se lee mal") and sugerencia in aviso
+        assert campo.boton.toolTip().startswith("Este color no se aplicó")
+        assert not re.search(r"#[0-9a-fA-F]{3}|\d:1|\d\.\d", aviso), aviso
+        campo.setValue("")
+        assert campo.boton.toolTip() == "Clic para elegir otro color."
+
+
+def test_combo_de_fuentes_muestra_cada_nombre_con_su_propia_letra_y_una_lista_acotada(app_qt, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFontDatabase
+    from omnicad.ui.preferencias import _combo_fuentes
+    c = _combo_fuentes("Arial", vacio="La de la interfaz", familias=["Arial", "Bebas Neue", "Segoe UI"])
+    letras = {c.itemText(i): c.itemData(i, Qt.ItemDataRole.FontRole) for i in range(c.count())}
+    assert letras["Bebas Neue"].family() == "Bebas Neue" and letras["Arial"].family() == "Arial"
+    assert letras["La de la interfaz"] is None               # la etiqueta sigue con la fuente de la interfaz
+    assert c.maxVisibleItems() == 14 and "combobox-popup: 0" in c.styleSheet()
+    # una fuente de símbolos no se escribe con su propia letra: no se leería el nombre
+    monkeypatch.setattr(QFontDatabase, "writingSystems",
+                        staticmethod(lambda _familia: [QFontDatabase.WritingSystem.Symbol]))
+    assert _combo_fuentes("", familias=["Wingdings"]).itemData(0, Qt.ItemDataRole.FontRole) is None
 
 
 # ---------------------------------------------------------------- F5: texto del boceto
