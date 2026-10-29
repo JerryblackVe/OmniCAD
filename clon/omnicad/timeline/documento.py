@@ -794,6 +794,7 @@ class Documento:
         self._contador_cotas = receta.get("contador_cotas", 0)
         self._contador = receta["contador"]
         self.marcador = receta["marcador"]
+        self._conservar_formas(self._estados, calculo["estados"])
         self._estados = calculo["estados"]
         self.resultados = [ResultadoPaso(estado, mensaje) for estado, mensaje in calculo["resultados"]]
         self._usados, self._valores, self._duraciones = calculo["usados"], calculo["valores"], calculo["duraciones"]
@@ -802,6 +803,28 @@ class Documento:
         self._memo.clear()
         self._previa = self._ultimo_prevuelo = None
         self._notificar()
+
+    @staticmethod
+    def _conservar_formas(viejos, nuevos):
+        """P-43: un cuerpo que vuelve del cálculo aislado idéntico al que ya estaba en ese paso conserva la forma
+        anterior; así el visor (que cachea por forma) no vuelve a mallar los cuerpos que no cambiaron. Solo se
+        comparte tras cotejar todo el contenido BREP, nunca por caja, volumen ni id del cuerpo."""
+        from ..nucleo import consultas, intercambio
+        huellas = {}     # id(forma) → (forma, huella): la forma viva evita que se reutilice su id
+
+        def huella(forma):
+            guardada = huellas.get(id(forma))
+            if guardada is None:
+                guardada = huellas[id(forma)] = (forma, intercambio.huella_visual(forma))
+            return guardada[1]
+
+        for viejo, nuevo in zip(viejos, nuevos, strict=False):
+            for cid, c in nuevo.cuerpos.items():
+                original = viejo.cuerpos.get(cid)
+                if (original is not None and c.forma is not original.forma
+                        and consultas.es_forma(c.forma) and consultas.es_forma(original.forma)
+                        and huella(c.forma) == huella(original.forma)):
+                    c.forma = original.forma
 
     def _primer_afectado(self, tabla):
         """Índice del primer paso que leyó un parámetro cuyo valor cambia con `tabla` (Fusion también

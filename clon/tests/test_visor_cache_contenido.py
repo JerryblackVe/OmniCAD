@@ -86,3 +86,53 @@ def test_editar_forma_o_detalle_no_reusa_malla_vieja(visor, monkeypatch):
     visor.invalidar_teselado()
     visor.set_modelo(e)
     assert np.allclose(visor._mallas[0]["v"], esperada[0])
+
+
+def documento_con_altura():
+    d = Documento()
+    d.parametros.agregar("altura", "3 mm")
+    for x in (0, 50):
+        d.agregar(OpPrimitiva(d.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10", x=str(x)))
+    d.agregar(OpPrimitiva(d.nuevo_id(), forma="caja", ancho="10", largo="10", alto="altura", x="100"))
+    return d
+
+
+def test_conservar_formas_solo_comparte_las_que_tienen_el_mismo_contenido():
+    d = documento_con_altura()
+    viejos = list(d._estados)
+    nuevos = [_decodificar(_codificar(e)) for e in viejos]
+    nuevos[-1].cuerpos["op3.c1"].forma = geo.caja(10, 10, 7)       # lo que cambió con el parámetro
+    Documento._conservar_formas(viejos, nuevos)
+    for e_viejo, e_nuevo in zip(viejos, nuevos, strict=True):
+        for cid, c in e_nuevo.cuerpos.items():
+            if cid == "op3.c1":
+                assert c.forma is not e_viejo.cuerpos[cid].forma
+                assert geo.volumen_exacto(c.forma) == pytest.approx(700)
+            else:
+                assert c.forma is e_viejo.cuerpos[cid].forma
+
+
+def test_adoptar_un_calculo_aislado_no_vuelve_a_mallar_los_cuerpos_intactos(visor, monkeypatch):
+    from omnicad.nucleo import aislado, motor
+    from omnicad.timeline.parametros import TablaParametros
+    with motor.fijar_motor("opencascade"):
+        d = documento_con_altura()
+        visor.set_modelo(d.estado_final)
+        viejas = {cid: c.forma for cid, c in d.estado_final.cuerpos.items()}
+        monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)     # el cambio vuelve de un proceso aparte
+        tabla = TablaParametros.desde_lista(d.parametros.a_lista())
+        tabla.modificar("altura", "7 mm")
+        d.aplicar_parametros(tabla)
+        nuevas = {cid: c.forma for cid, c in d.estado_final.cuerpos.items()}
+        assert nuevas["op1.c1"] is viejas["op1.c1"] and nuevas["op2.c1"] is viejas["op2.c1"]
+        assert nuevas["op3.c1"] is not viejas["op3.c1"]
+        assert geo.volumen_exacto(nuevas["op3.c1"]) == pytest.approx(700) and geo.es_valida(nuevas["op3.c1"])
+        original, llamadas = vis.teselar_cuerpo, []
+
+        def contar(forma, *a, **k):
+            llamadas.append(forma)
+            return original(forma, *a, **k)
+
+        monkeypatch.setattr(vis, "teselar_cuerpo", contar)
+        visor.set_modelo(d.estado_final)
+        assert llamadas == [nuevas["op3.c1"]]        # solo el cuerpo que cambió
