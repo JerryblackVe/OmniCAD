@@ -4,6 +4,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 mod perfiles;
+mod spline;
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -197,5 +198,6 @@ fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(visibilidad, m)?)?;
     m.add_function(wrap_pyfunction!(oclusion, m)?)?;
     m.add_function(wrap_pyfunction!(perfiles::arreglo_planar, m)?)?;
+    m.add_function(wrap_pyfunction!(spline::spline_extremos, m)?)?;
     Ok(())
 }

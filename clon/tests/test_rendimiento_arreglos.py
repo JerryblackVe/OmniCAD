@@ -51,7 +51,7 @@ def test_jacobiano_por_colores_es_igual_al_de_a_una_columna():
         xp[j] += 1e-7
         denso[:, j] = (sis.residuos(xp) - sis.residuos(x)) / 1e-7
     assert np.array_equal(S._jacobiano(sis, x), denso)
-    assert len(S._colorear(S._patron(sis, x))) < len(x) / 3      # muchas menos evaluaciones
+    assert len(S._colorear(S._patron(sis, x)[0])) < len(x) / 3      # muchas menos evaluaciones
 
 
 def test_arrastre_con_previo_mueve_solo_su_parte_y_conserva_los_grados_de_libertad():

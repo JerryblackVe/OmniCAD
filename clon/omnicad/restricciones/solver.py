@@ -26,12 +26,14 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .. import nativo
 from . import auto_candidatos
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
                      _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
                      puntos_primitiva, signos_cuadrante)
 
 TOLERANCIA = 1e-6
+TOLERANCIA_ARRASTRE = 1e-10  # de Levenberg-Marquardt en un evento de arrastre: soltar vuelve a resolver todo a 1e-14
 _PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas durante el arrastre.
 _PESO_ARRASTRE = 1.0
 _ESCALA_TANGENTE = 10.0      # mm: convierte el seno del ángulo en un residuo comparable a una distancia
@@ -39,6 +41,7 @@ _ESCALA_CURVATURA = 100.0    # mm²
 TOPE_AUTO_RESTRINGIR = 500
 MAX_INTENTOS_EXTRA = 6       # alternativas repetidas que se descartan antes de rendirse (cada una cuesta un cálculo entero)
 TOPE_TERMINAR_AUTO = 250      # «Terminar con AutoConstrain» de Fusion no corre con más de 250 entidades
+CACHE_SPLINES = True          # guardar la primitiva de cada spline por sus coordenadas (B-111); los tests lo apagan para comparar
 
 
 class ResultadoSolver:
@@ -87,6 +90,9 @@ class _Sistema:
         sus términos. Sin grupo, el boceto entero (como siempre). `fusionar` (SC4): ver `_fusionar`."""
         self.b = boceto
         self.valores = valores_cotas
+        self._cache = {}
+        rs = nativo.disponible()
+        self._rs = rs if hasattr(rs, "spline_extremos") else None      # un .pyd viejo no la trae: rige Python
         self._curvas = list(boceto.curvas.values()) if grupo is None else grupo["curvas"]
         self._restricciones = list(boceto.restricciones.values()) if grupo is None else grupo["restricciones"]
         self._cotas = [c for c in (boceto.cotas.values() if grupo is None else grupo["cotas"]) if not c.referencia]
@@ -187,8 +193,31 @@ class _Sistema:
         ln = self.b.curvas[lid]
         return self.P(x, ln.p1), self.P(x, ln.p2)
 
+    def _clave_spline(self, x, c):
+        """Clave de caché de una spline: sus coordenadas, leídas todas con `P` (el patrón del jacobiano necesita ver qué
+        lee cada término)."""
+        return c.id, tuple(v for p in c.puntos() for v in self.P(x, p))
+
+    def _guardar(self, clave, valor):
+        if len(self._cache) > 16 * len(self._curvas) + 128:
+            self._cache.clear()
+        self._cache[clave] = valor
+        return valor
+
+    def _spline_cacheada(self, x, c):
+        """Primitiva de una spline. Armarla (interpolar, nudos) es lo caro: el jacobiano mueve unas pocas
+        incógnitas por vez, así que casi todas las splines se repiten con las mismas coordenadas."""
+        clave = self._clave_spline(x, c)
+        prim = self._cache.get(clave)
+        if prim is None:
+            prim = self._guardar(clave, primitivas_entidad(c, lambda p: self.P(x, p))[0])
+        return prim
+
     def prim(self, x, cid):
-        return primitivas_entidad(self.b.curvas[cid], lambda p: self.P(x, p), lambda k: self.Rv(x, k))[0]
+        c = self.b.curvas[cid]
+        if CACHE_SPLINES and isinstance(c, Spline):
+            return self._spline_cacheada(x, c)
+        return primitivas_entidad(c, lambda p: self.P(x, p), lambda k: self.Rv(x, k))[0]
 
     def elipse(self, x, cid):
         """(centro, a, b, ángulo del eje mayor)."""
@@ -221,13 +250,40 @@ class _Sistema:
 
     def extremo(self, x, cid, pid):
         """(tangente unitaria, curvatura con signo) al recorrer la curva ALEJÁNDOSE de su extremo pid."""
-        prim = self.prim(x, cid)
-        t0, t1, _ = dominio(prim)
-        ini = self.b.curvas[cid].extremos()[0]
-        _C, D1, D2 = evaluar_primitiva(prim, t0 if pid == ini else t1, 2)
-        s = 1.0 if pid == ini else -1.0
+        c = self.b.curvas[cid]
+        if CACHE_SPLINES and isinstance(c, Spline):
+            clave = self._clave_spline(x, c), pid
+            r = self._cache.get(clave)
+            if r is None:
+                r = self._guardar(clave, self._extremo_spline(x, c, clave[0], pid))
+            return r
+        return self._extremo(self.prim(x, cid), c, pid)
+
+    def _extremo_spline(self, x, c, clave, pid):
+        """`extremo` de una spline de ajuste abierta y sin manijas con el módulo Rust (R5: tangente y curvatura en los
+        extremos sin armar la primitiva); el resto de las splines, por la primitiva de Python."""
+        if self._rs is not None and c.modo == "ajuste" and not c.cerrada and not c.manijas:
+            try:
+                d = self._rs.spline_extremos(np.array(clave[1], dtype=float).reshape(-1, 2), c.grado)
+            except ValueError:               # sistema singular: Python lo resuelve por mínimos cuadrados
+                d = None
+            if d is not None:
+                inicio = pid == c.pts[0]
+                d1, d2 = (d[0:2], d[2:4]) if inicio else (d[4:6], d[6:8])
+                return self._normalizar(d1, d2, 1.0 if inicio else -1.0)
+        return self._extremo(self._spline_cacheada(x, c), c, pid)
+
+    @staticmethod
+    def _normalizar(D1, D2, s):
         n = math.hypot(*D1) or 1e-12
         return (s * D1[0] / n, s * D1[1] / n), s * _cruz(D1, D2) / n ** 3
+
+    @staticmethod
+    def _extremo(prim, c, pid):
+        t0, t1, _ = dominio(prim)
+        ini = c.extremos()[0]
+        _C, D1, D2 = evaluar_primitiva(prim, t0 if pid == ini else t1, 2)
+        return _Sistema._normalizar(D1, D2, 1.0 if pid == ini else -1.0)
 
     # ---- residuos
     def _armar(self):
@@ -579,20 +635,27 @@ class _Sistema:
 def _jacobiano(sis, x, h=1e-7):
     """Jacobiano de los residuos por diferencias finitas, perturbando a la vez las incógnitas que ningún término
     comparte (columnas de un mismo «color»). Da lo mismo, bit a bit, que perturbar de a una, con muchas menos
-    evaluaciones: el polígono de 24 lados pasaba de 95 evaluaciones por jacobiano a unas 5."""
-    patron = _patron(sis, x)
+    evaluaciones: el polígono de 24 lados pasaba de 95 evaluaciones por jacobiano a unas 5. En cada una solo se
+    reevalúan los términos que leen alguna columna perturbada (el resto vale lo mismo que en x): con 100 splines
+    encadenadas, cada término es una fracción mínima de las evaluaciones."""
+    patron, inicio, lee = _patron(sis, x)
     f0 = sis.residuos(x)
     J = np.zeros(patron.shape)
     for cols in _colorear(patron):
         xp = x.copy()
         xp[cols] += h
-        J[:, cols] = ((sis.residuos(xp) - f0) / h)[:, None] * patron[:, cols]
+        f = f0.copy()
+        for t in np.flatnonzero(lee[:, cols].any(axis=1)):
+            r = sis.terminos[t](xp)
+            f[inicio[t]:inicio[t] + len(r)] = r
+        J[:, cols] = ((f - f0) / h)[:, None] * patron[:, cols]
     return J
 
 
 def _patron(sis, x):
-    """Matriz booleana (filas de residuos × incógnitas): qué incógnitas lee cada término al evaluarlo en x. Todo
-    término lee x solo con `x[i]`, así que basta una evaluación con un lector que anota los índices."""
+    """(matriz booleana filas de residuos × incógnitas: qué incógnitas lee cada término al evaluarlo en x; primera fila
+    de cada término; matriz término × incógnitas). Todo término lee x solo con `x[i]`, así que basta una evaluación
+    con un lector que anota los índices."""
     leidos = set()
 
     class _Lector:
@@ -603,15 +666,20 @@ def _patron(sis, x):
         def __len__(self):
             return len(x)
 
-    lector, filas = _Lector(), []
+    lector, filas, inicio, lee = _Lector(), [], [], []
     for f in sis.terminos:
         leidos.clear()
         k = len(f(lector))
+        inicio.append(len(filas))
+        lee.append(tuple(leidos))
         filas += [tuple(leidos)] * k
     patron = np.zeros((len(filas), len(x)), dtype=bool)
     for r, cols in enumerate(filas):
         patron[r, list(cols)] = True
-    return patron
+    por_termino = np.zeros((len(lee), len(x)), dtype=bool)
+    for t, cols in enumerate(lee):
+        por_termino[t, list(cols)] = True
+    return patron, inicio, por_termino
 
 
 def _colorear(patron):
@@ -764,10 +832,12 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     return ResultadoSolver("ok", gdl, err_max, determinadas=determinadas)
 
 
-def restricciones_en_conflicto(boceto, valores_cotas=None):
+def restricciones_en_conflicto(boceto, valores_cotas=None, cancelar=None):
     """Ids de restricciones/cotas cuya retirada individual deja el boceto consistente.
 
     Trabaja sobre copias: consultar el diagnóstico no mueve ni modifica el boceto.
+    `cancelar` (opcional): función sin argumentos; si devuelve True entre un vínculo y el siguiente, se abandona y
+    devuelve None (el editor la usa para descartar un diagnóstico que ya quedó viejo).
     shortcut: prueba una retirada por vínculo, no busca conjuntos mínimos de varios
     conflictos independientes; ampliar si se necesita ese diagnóstico completo.
     """
@@ -775,6 +845,8 @@ def restricciones_en_conflicto(boceto, valores_cotas=None):
         return []
     conflictos = []
     for ident in sorted(set(boceto.restricciones) | {i for i, k in boceto.cotas.items() if not k.referencia}):
+        if cancelar is not None and cancelar():
+            return None
         prueba = boceto.copia()
         prueba.eliminar(ident)
         if resolver(prueba, valores_cotas).ok:
@@ -815,18 +887,20 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
         err = float(np.max(np.abs(r))) if len(r) else 0.0
         return (ancla if n else None), err, np.zeros((0, n)), 0    # ancla ya cumple lo fusionado: se escribe
 
-    def corrida(x_inicio, ancla, w):
+    def corrida(x_inicio, ancla, w, tol=1e-14):
         fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla)])  # noqa: E731
         jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)])  # noqa: E731
         from scipy.optimize import least_squares   # perezoso: importarlo cuesta ~0,8 s al arrancar la CLI y el MCP
         # Levenberg-Marquardt (MINPACK, QR): "trf" hacía una SVD por iteración y con los hilos de OpenBLAS cada
         # una costaba ~2,4 ms en matrices de 100×100; con "lm" el arrastre del polígono de 24 lados baja a ~15 ms.
-        return least_squares(fun, x_inicio, jac=jac, method="lm", xtol=1e-14, ftol=1e-14, gtol=1e-14,
+        return least_squares(fun, x_inicio, jac=jac, method="lm", xtol=tol, ftol=tol, gtol=tol,
                              max_nfev=200 * (n + 1)).x
 
-    x = corrida(ancla, ancla, pesos)
-    # Pulido: re-anclar en la solución elimina el sesgo de la regularización.
-    x = corrida(x, x, base)
+    x = corrida(ancla, ancla, pesos, 1e-14 if con_rango else TOLERANCIA_ARRASTRE)
+    # Pulido: re-anclar en la solución elimina el sesgo de la regularización. Un evento de arrastre (`con_rango=False`)
+    # lo saltea si ya cumple todo: al soltar se resuelve entero con pulido, y cada movimiento cuesta la mitad.
+    if con_rango or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) >= TOLERANCIA:
+        x = corrida(x, x, base)
     res = sis.residuos(x)
     err = float(np.max(np.abs(res))) if len(res) else 0.0
     if not con_rango:

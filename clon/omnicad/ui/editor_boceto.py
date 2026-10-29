@@ -30,6 +30,8 @@ Comportamiento tomado de la ayuda de Fusion (libro "Design: Sketch", SKT-*):
 import copy
 import math
 import re
+import threading
+import time
 import warnings
 
 import numpy as np
@@ -179,6 +181,7 @@ COTA_OSCURO, COTA_CLARO = QColor(0xa9, 0xc4, 0x6c), QColor(70, 72, 78)
 REFERENCIA = QColor(140, 140, 146)        # cota de referencia (driven): gris medio, legible en los dos temas
 AZUL_CAJA = QColor(0, 120, 215)
 FONDO_LIENZO = QColor(250, 250, 252)      # lienzo 2D (sin visor)
+TOPE_DIAGNOSTICO_S = 30.0                # B-111: el diagnóstico de qué choca (un resolver por vínculo) se abandona a los 30 s
 CONFLICTO = QColor(225, 45, 45)           # BOC-7: restricciones, cotas y geometría en choque, en rojo como Fusion
 # Ventana de selección: de izquierda a derecha (adentro) y de derecha a izquierda (lo que toca).
 VENTANA_RELLENO, VENTANA_BORDE = QColor(237, 120, 0, 70), QColor(140, 150, 180)
@@ -529,6 +532,13 @@ class Lienzo(QWidget):
         self.pila_rehacer = []
         self.resultado = None
         self._conflictos = []            # BOC-7: ids de restricciones/cotas en choque (se pintan en rojo)
+        self._generacion = 0             # B-111: cuenta los cambios del boceto; un diagnóstico de otra generación se descarta
+        self._diagnostico_agotado = False   # el diagnóstico pasó TOPE_DIAGNOSTICO_S sin terminar
+        self._diagnostico = None         # (generación, caja) del diagnóstico de conflictos que corre en otro hilo
+        self._mostrar_conflictos_al_llegar = False
+        self._t_diagnostico = QTimer(self)
+        self._t_diagnostico.setSingleShot(True)
+        self._t_diagnostico.timeout.connect(self._sondear_conflictos)
         self.previa_auto = []
         self.entrada = None
         self._asas = None                          # asas de arrastre de la herramienta (ui/asas_boceto.py)
@@ -706,35 +716,89 @@ class Lienzo(QWidget):
         self.resultado = resolver(self.b, valores, arrastrado, previo)
         self._cache_cortes = {}
         if arrastrado is None:
-            self._conflictos = [] if self.resultado.ok else None      # None: se diagnostica al pedirlo (al pintar)
+            self._generacion += 1
+            self._diagnostico_agotado = False
+            self._conflictos = [] if self.resultado.ok else None      # None: se diagnostica en otro hilo al pintar
             self.cambio.emit()
             self._notificar_seleccion()
         self.update()
         return self.resultado
 
+    def _valores_para_diagnostico(self):
+        try:
+            return self.valores_cotas()
+        except ErrorExpresion:
+            return {}
+
     @property
     def conflictos(self):
         """BOC-7: ids de restricciones/cotas cuya retirada sola resuelve el conflicto (vacía si no hay conflicto).
+        Espera el cálculo (lo usan los tests y la API); el pintado y los textos usan `conflictos_sin_esperar`.
         shortcut: una resolución por vínculo; se calcula una vez por estado y solo si hay conflicto."""
         if self._conflictos is None:
-            try:
-                valores = self.valores_cotas()
-            except ErrorExpresion:
-                valores = {}
-            self._conflictos = restricciones_en_conflicto(self.b, valores)
+            self._conflictos = restricciones_en_conflicto(self.b, self._valores_para_diagnostico())
         return self._conflictos
 
-    def geometria_en_conflicto(self):
+    def conflictos_sin_esperar(self):
+        """B-111: lo que ya se sabe del diagnóstico ([] mientras se calcula, que corre en otro hilo con «lo último
+        gana»). Al llegar se emite `cambio` y se repinta, así que el rojo y el texto aparecen un poco después."""
+        if self._conflictos is None:
+            if self._diagnostico is None:
+                caja, generacion = {}, self._generacion
+                copia, valores = self.b.copia(), self._valores_para_diagnostico()
+
+                def correr():
+                    try:
+                        limite = time.monotonic() + TOPE_DIAGNOSTICO_S
+                        caja["res"] = restricciones_en_conflicto(
+                            copia, valores, lambda: generacion != self._generacion or time.monotonic() > limite)
+                    except Exception as e:  # noqa: BLE001 — se vuelve a lanzar en el hilo de la ventana
+                        caja["error"] = e
+                    caja["listo"] = True
+                self._diagnostico = (generacion, caja)
+                threading.Thread(target=correr, daemon=True).start()
+                self._t_diagnostico.start(40)
+            return []
+        return self._conflictos
+
+    def _sondear_conflictos(self):
+        generacion, caja = self._diagnostico
+        if not caja.get("listo"):
+            self._t_diagnostico.start(40)
+            return
+        self._diagnostico = None
+        if "error" in caja:
+            raise caja["error"]
+        if generacion != self._generacion:
+            if self._conflictos is None:
+                self.conflictos_sin_esperar()           # el boceto cambió mientras tanto: diagnosticar el nuevo estado
+            return
+        self._diagnostico_agotado = caja["res"] is None     # pasó el tope de tiempo: no se sabe cuál vínculo sobra
+        self._conflictos = caja["res"] or []
+        self.cambio.emit()
+        self.update()
+        if self._mostrar_conflictos_al_llegar:
+            self._mostrar_conflictos_al_llegar = False
+            self.mensaje.emit(self.texto_conflictos() or "No hay restricciones ni cotas en conflicto.")
+
+    def geometria_en_conflicto(self, esperar=True):
         """Puntos y curvas que tocan las restricciones/cotas en conflicto (se dibujan en rojo)."""
         vinculos = {**self.b.restricciones, **self.b.cotas}
-        return {e for i in self.conflictos if i in vinculos for e in vinculos[i].entidades}
+        ids = self.conflictos if esperar else self.conflictos_sin_esperar()
+        return {e for i in ids if i in vinculos for e in vinculos[i].entidades}
 
-    def texto_conflictos(self):
-        """Qué choca, en palabras: «cota d3 = 30, horizontal (5)»; vacío si el boceto está bien."""
+    def texto_conflictos(self, esperar=False):
+        """Qué choca, en palabras: «cota d3 = 30, horizontal (5)»; vacío si el boceto está bien. Mientras el diagnóstico
+        se calcula (otro hilo) todavía no nombra nada; `esperar=True` lo espera."""
         if self.resultado is None or self.resultado.ok:
             return ""
+        ids = self.conflictos if esperar else self.conflictos_sin_esperar()
+        if self._conflictos is None:
+            return ""
+        if self._diagnostico_agotado:
+            return "Hay restricciones en conflicto; el boceto es grande y no se pudo ver cuál sobra."
         nombres = []
-        for i in self.conflictos:
+        for i in ids:
             if i in self.b.cotas:
                 k = self.b.cotas[i]
                 nombres.append(f"cota {k.nombre or TIPOS_COTA[k.tipo].lower()} = {k.expresion}")
@@ -746,6 +810,11 @@ class Lienzo(QWidget):
 
     def mostrar_conflictos(self):
         """F5 «Qué choca»: lista las restricciones y cotas en conflicto (ya pintadas en rojo)."""
+        if self.resultado is not None and not self.resultado.ok and not self.conflictos_sin_esperar()                 and self._conflictos is None:
+            self._mostrar_conflictos_al_llegar = True       # el diagnóstico corre en otro hilo: el mensaje sale al llegar
+            texto = "Calculando qué choca…"
+            self.mensaje.emit(texto)
+            return texto
         texto = self.texto_conflictos() or "No hay restricciones ni cotas en conflicto."
         self.mensaje.emit(texto)
         self.update()
@@ -4484,7 +4553,7 @@ class Lienzo(QWidget):
         en_origen = {e for r in self.b.restricciones.values() if r.tipo == "fijo" and r.datos.get("origen")
                      for e in r.entidades}
         fijos_verdes = fijos - en_origen
-        en_conflicto = self.geometria_en_conflicto() if res is not None and not res.ok else set()
+        en_conflicto = self.geometria_en_conflicto(esperar=False) if res is not None and not res.ok else set()
         self._dibujar_perfiles(p)
         ocultos = set()
         solo_auto, puntos_auto = self.b.ocultos_por_proyeccion_auto()    # no se dibujan (como Fusion)
@@ -4575,7 +4644,7 @@ class Lienzo(QWidget):
 
     def _dibujar_glifos(self, p):
         zonas, cuenta, grupos = {}, {}, set()
-        en_conflicto = set(self.conflictos) if self.resultado is not None and not self.resultado.ok else set()
+        en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         p.setPen(QPen(QColor(150, 150, 150), 1))
         for r in self.b.restricciones.values():
             if r.datos.get("origen"):                 # pegado al origen: Fusion no le dibuja ícono aparte
@@ -4698,7 +4767,7 @@ class Lienzo(QWidget):
             p.drawLine(a, b)
             actual.append((a, b))
         base = self._color_cota()
-        en_conflicto = set(self.conflictos) if self.resultado is not None and not self.resultado.ok else set()
+        en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         desfase = 22 / max(self.px_por_mm(), 1e-9)       # 22 px expresados en mm del boceto
         p.setFont(temas.qfont_cotas(9))
         fm = p.fontMetrics()

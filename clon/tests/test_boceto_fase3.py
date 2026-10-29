@@ -968,7 +968,7 @@ def test_boc7_ui_conflicto_en_rojo_y_f5_lista_lo_que_choca():
     lz.resize(400, 300)
     assert not lz.grab().isNull()                              # el dibujo en rojo no rompe el pintado
     lz.aplicar_cambio(lambda: lz.b.eliminar(cota))
-    assert lz.resultado.ok and lz.conflictos == [] and lz.texto_conflictos() == ""
+    assert lz.resultado.ok and lz.conflictos == [] and lz.texto_conflictos(esperar=True) == ""
     assert lz.mostrar_conflictos() == "No hay restricciones ni cotas en conflicto."
 
 
@@ -976,7 +976,7 @@ def test_boc7_paleta_nombra_lo_que_choca():
     from omnicad.ui.modo_boceto import PaletaBoceto
     lz, _linea = _lienzo_en_conflicto()
     paleta = PaletaBoceto()
-    paleta.set_estado(lz.resultado, lz.texto_conflictos())
+    paleta.set_estado(lz.resultado, lz.texto_conflictos(esperar=True))
     assert paleta.estado.text().startswith("⚠") and "Chocan:" in paleta.estado.text()
 
 
