@@ -140,6 +140,44 @@ def _empaquetar(doc, previa=None):
             "cuerpos": len(doc.estado_final.cuerpos), "calculo": _codificar(datos)}
 
 
+def previa_visual(receta, operacion, indice, deflexion, angular):
+    """Previa exacta y su malla dentro del hijo; al padre viajan solo arrays de los cuerpos cambiados."""
+    from ..nucleo import render_cpu
+    from .documento import Documento
+    from .operaciones import operacion_desde_dict
+
+    doc = Documento.desde_dict(receta)
+    entrada = doc.estado_en(doc.marcador if indice is None else indice)
+    op = operacion_desde_dict(operacion)
+    estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
+    mallas = {}
+    for cid, c in estado.cuerpos.items():
+        anterior = entrada.cuerpos.get(cid)
+        if anterior is not None and c.forma is anterior.forma:
+            continue
+        v, n = render_cpu.malla_suave(c.forma, deflexion, angular)
+        pares = [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(c.forma) if len(p) >= 2]
+        seg = np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
+        mallas[cid] = v, n, seg
+    return _codificar({"mallas": mallas, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)})
+
+
+def leer_previa_visual(salida, entrada):
+    """Estado efímero de dibujo: ninguna malla entra en el timeline ni en la memoria de aceptación."""
+    from ..nucleo.malla import Malla
+    datos = _decodificar(salida)
+    estado = entrada.copia()
+    estado.cuerpos = {cid: c for cid, c in estado.cuerpos.items() if cid in datos["cuerpos"]}
+    preparadas = {}
+    for cid, (v, n, seg) in datos["mallas"].items():
+        c = estado.cuerpos[cid]
+        c.forma = Malla(v, np.arange(len(v)).reshape(-1, 3))
+        preparadas[cid] = v, n, seg
+    estado._mallas_previa = preparadas
+    estado._origen_previa = entrada
+    return estado, datos["avisos"]
+
+
 def _leer_calculo(salida):
     try:
         datos = _decodificar(salida["calculo"])

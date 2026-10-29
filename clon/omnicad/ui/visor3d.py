@@ -560,8 +560,9 @@ class Visor3D(QOpenGLWidget):
             self._t_refinar_previa.stop()
         bocetos = tuple(estado.bocetos.values())
         ver = (frozenset(ocultos), tuple(excluir_bocetos), frozenset(self.bocetos_libres))
-        # Mientras se arrastra un asa los bocetos no cambian: el primer cuadro no vuelve a muestrearlos (200 círculos ≈ 55 ms).
-        reusar_bocetos = (arrastrando and ver == self._ver_bocetos and len(bocetos) == len(self._bocetos_de)
+        # Mientras se arrastra un asa (o llega la previa de un proceso aparte) los bocetos no cambian: no se vuelven a
+        # muestrear (200 círculos ≈ 55 ms por cuadro).
+        reusar_bocetos = ((arrastrando or hasattr(estado, "_origen_previa")) and ver == self._ver_bocetos and len(bocetos) == len(self._bocetos_de)
                           and all(a is b for a, b in zip(bocetos, self._bocetos_de, strict=True)))
         self._estado, self._ocultos, self._excluir_bocetos = estado, frozenset(ocultos), tuple(excluir_bocetos)
         for i, c in enumerate(estado.cuerpos.values()):

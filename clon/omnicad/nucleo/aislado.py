@@ -112,8 +112,14 @@ def _recalcular_documento(receta):
         return _empaquetar(Documento.desde_dict(receta))
 
 
+def _previa_visual(receta, operacion, indice, deflexion, angular):
+    from ..timeline.calculo_aislado import previa_visual
+    return previa_visual(receta, operacion, indice, deflexion, angular)
+
+
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
-                "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento}
+                "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento,
+                "previa_visual": _previa_visual}
 
 
 def _a_json(o):
@@ -161,6 +167,53 @@ def correr_json(tarea, datos, tope, esperar=None):
     if tarea not in _TAREAS_JSON:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
     return _correr(tarea, tope, dict(datos, _cwd=os.getcwd()), esperar=esperar)
+
+
+class CalculoPendiente:
+    """Una previa en proceso aparte: sondear no espera al kernel y cancelar mata solo a su hijo."""
+
+    def __init__(self, tarea, datos, tope=TOPE_PREVUELO_PARAMETROS):
+        if tarea not in _TAREAS_JSON:
+            raise ValueError(f"Tarea aislada desconocida: {tarea}")
+        self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_previa_", ignore_cleanup_errors=True)
+        self.carpeta = Path(self.temporal.name)
+        self.inicio, self.tope = time.monotonic(), tope
+        self.proceso = None
+        try:
+            (self.carpeta / "args.json").write_text(json.dumps(dict(datos, _cwd=os.getcwd()), default=_a_json),
+                                                    encoding="utf-8", newline="\n")
+            self.errores = (self.carpeta / "errores.txt").open("wb")
+            self.proceso = subprocess.Popen(_comando(tarea, self.carpeta), cwd=_RAIZ, stdout=subprocess.DEVNULL,
+                                            stderr=self.errores, creationflags=_SIN_VENTANA |
+                                            getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+        except (OSError, TypeError, ValueError) as e:
+            self.cancelar()
+            raise TareaAislada(f"No pude iniciar la vista previa aparte ({e}).") from e
+
+    def sondear(self):
+        """None mientras calcula; devuelve el JSON terminado o informa el fallo sin tocar el documento."""
+        if self.proceso.poll() is None:
+            if time.monotonic() - self.inicio > self.tope:
+                self.cancelar()
+                raise TiempoAgotado("La vista previa pasó su plazo y se cortó.")
+            return None
+        try:
+            self.errores.close()
+            if self.proceso.returncode:
+                raise TareaAislada(f"El proceso de la vista previa falló (código {self.proceso.returncode:#x}).")
+            return json.loads((self.carpeta / "salida.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise TareaAislada(f"La vista previa dejó un resultado ilegible ({e}).") from e
+        finally:
+            self.cancelar()
+
+    def cancelar(self):
+        if self.proceso is not None and self.proceso.poll() is None:
+            self.proceso.kill()
+            self.proceso.wait()
+        if hasattr(self, "errores"):
+            self.errores.close()
+        self.temporal.cleanup()
 
 
 def _ejecutar(comando, tope, esperar):

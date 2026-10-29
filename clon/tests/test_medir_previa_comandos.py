@@ -61,6 +61,17 @@ def test_comprobar_rechaza_una_tabla_que_no_sale_del_json(banco, monkeypatch):
         ejecutar(banco, monkeypatch, "--comprobar")
 
 
+def test_informe_asincrono_no_inventa_un_kernel_de_cero(banco):
+    espacio, datos, *_ = banco
+    for corrida in datos["casos"]["empalme"]["chico"]:
+        corrida["primera"].pop("kernel")
+        corrida["etapas"].pop("teselado")
+        corrida["muestras_ms"]["kernel"] = []
+    texto = espacio["_informe"](datos)
+    assert "kernel del hijo no está instrumentado (—)" in texto
+    assert "| empalme | chico | 4.0–4.0 | — | 4.0–4.0 |" in texto
+
+
 @pytest.mark.parametrize("opciones", [("--resumir",), ("--comprobar",), ()])
 def test_json_faltante_avisa_sin_pisar_el_informe(banco, monkeypatch, capsys, opciones):
     ruta, ruta_datos = banco[2:]

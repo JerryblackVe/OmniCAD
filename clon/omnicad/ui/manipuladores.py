@@ -998,6 +998,7 @@ class GestorManipuladores(QObject):
         self.cajas = {}                 # clave → CajaValor
         self._hover = None              # (ident, sub)
         self._arrastre = None           # {"m", "sub", "estado"}
+        self._base_apoyo = None         # (estado, selección) de la que salen las asas: el valor solo las mueve
         self._escribiendo = False
         self._sincronizando = False
         self._cerrado = False
@@ -1046,16 +1047,19 @@ class GestorManipuladores(QObject):
         if self.comando.CLAVE == "extruir" and getattr(self.panel, "_prisma_previa", None) is not None:
             datos = {k: v for k, v in self.panel.valores.items() if k not in ("distancia", "distancia2")}
             base = self.ctx.estado, repr(datos), self.valor("distancia") < 0
-            if base == getattr(self, "_base_prisma", None):
-                self.redibujar()
-                return
+        elif self.comando.CLAVE == "vaciado":
+            v = self.panel.valores
+            base = (self.ctx.estado, repr([h["ref"] for h in v.get("caras") or []]), v.get("direccion"))
+        if base is not None and base == self._base_apoyo:
+            self.redibujar()  # el valor solo mueve la flecha; no cambia su cara de apoyo ni su normal
+            return
         try:
             self.manips = [m for m in (self.comando.manipuladores(self.ctx, self.panel.valores) or []) if m is not None]
-            self._base_prisma = base
+            self._base_apoyo = base
         except Exception:  # noqa: BLE001 — un manipulador que no se puede calcular no rompe el comando
             log.debug("manipuladores de %s", self.comando.CLAVE, exc_info=True)
             self.manips = []
-            self._base_prisma = None
+            self._base_apoyo = None
         if self._hover is not None and not any(m.ident == self._hover[0] for m in self.manips):
             self._hover = None
         self.redibujar()

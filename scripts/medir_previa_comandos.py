@@ -137,6 +137,7 @@ class _Relojes:
         self.calculando = -1
         self.mostrada = -1
         self.fallos = []
+        self.generaciones_hijo = {}
 
     def envolver(self, pila, objeto, nombre, etiqueta):
         original = getattr(objeto, nombre)
@@ -147,6 +148,11 @@ class _Relojes:
             generacion = self.generacion
             if etiqueta == "previa":
                 self.calculando = generacion
+            elif etiqueta == "hijo_visual":
+                self.generaciones_hijo[id(args[1])] = generacion
+            elif etiqueta == "entrega":
+                self.calculando = self.generaciones_hijo.get(id(args[0]._op_hijo), -1)
+            modelos_antes = len(self.datos["modelo"])
             cortes = {k: len(self.datos[k]) for k in ("teselado", "aristas")} if etiqueta == "modelo" else {}
             inicio = time.perf_counter()
             try:
@@ -155,8 +161,9 @@ class _Relojes:
                     self.mostrada = self.calculando
                 return resultado
             finally:
-                self.datos[etiqueta].append((inicio, time.perf_counter(), generacion))
-                if etiqueta == "previa" and not args[0]._previa_ok:
+                if etiqueta != "entrega" or len(self.datos["modelo"]) > modelos_antes:
+                    self.datos[etiqueta].append((inicio, time.perf_counter(), generacion))
+                if etiqueta == "previa" and not args[0]._previa_ok and args[0]._hijo_previa is None:
                     self.fallos.append(args[0].mensaje.text())
                 for k, corte in cortes.items():
                     duracion = sum(b - a for a, b, _ in self.datos[k][corte:])
@@ -166,6 +173,9 @@ class _Relojes:
     def instalar(self, pila):
         for objeto, nombre, etiqueta in (
             (com.PanelComando, "_calcular_previa", "previa"),
+            (com.PanelComando, "_iniciar_previa", "hijo_visual"),
+            (com.PanelComando, "_recibir_previa", "entrega"),
+            (mp.GestorManipuladores, "actualizar", "manipuladores"),
             (Documento, "previsualizar", "kernel"), (aislado, "correr_json", "hijo"),
             (vis.Visor3D, "set_modelo", "modelo"), (vis.Visor3D, "paintGL", "dibujo"),
             (vis, "teselar_cuerpo", "teselado"), (vis, "aristas_cuerpo", "aristas"),
@@ -227,10 +237,11 @@ def _preparar(ventana, caso, modelo):
     return panel, campo, inicial, amplitud
 
 
-def _corrida(app, receta, caso, modelo, temporal, reloj):
+def _corrida(app, receta, caso, modelo, temporal, reloj, duracion=3.0):
     reloj.activo = False
     reloj.datos.clear()
     reloj.fallos.clear()
+    reloj.generaciones_hijo.clear()
     reloj.generacion = reloj.calculando = reloj.mostrada = -1
     doc = Documento.desde_dict(receta)
     doc.recalcular(0)
@@ -255,9 +266,14 @@ def _corrida(app, receta, caso, modelo, temporal, reloj):
     try:
         panel, campo, inicial, amplitud = _preparar(ventana, caso, modelo)
         reloj.activo = True
+        inicio_primera = time.perf_counter()
         panel._calcular_previa()
+        _esperar_previa(panel)
         reloj.activo = False
         primera = reloj.resumir()
+        primera["respuesta_completa"] = _resumen([(time.perf_counter() - inicio_primera) * 1000])
+        primera["hijo"] = _resumen([(b - a) * 1000 for k in ("hijo", "hijo_visual")
+                                    for a, b, _ in reloj.datos[k]])
         assert panel._previa_ok, panel.mensaje.text()
         QTest.qWait(100)
         gestor = panel.manipuladores
@@ -285,7 +301,7 @@ def _corrida(app, receta, caso, modelo, temporal, reloj):
         movimientos = [(inicio, gestor.valor(campo))]
         reloj.generacion = 0
         cuadros.clear()
-        while (transcurrido := time.perf_counter() - inicio) < 3.0:
+        while (transcurrido := time.perf_counter() - inicio) < duracion:
             valor = inicial + amplitud * (0.7 * math.sin(2 * math.pi * transcurrido / 0.7)
                                          + 0.3 * math.sin(2 * math.pi * transcurrido / 0.23))
             xy, visible = gestor.pantalla([punto(valor)])
@@ -303,17 +319,21 @@ def _corrida(app, receta, caso, modelo, temporal, reloj):
         _evento(visor, QEvent.MouseButtonRelease, posicion, Qt.LeftButton, Qt.NoButton)
         panel._t_previa.stop()
         QTest.qWait(100)
-        activos = [(t, g) for t, g in cuadros if inicio <= t <= inicio + 3.0]
+        _esperar_previa(panel)  # fuera del gesto; pendiente no es un error del comando
+        activos = [(t, g) for t, g in cuadros if inicio <= t <= inicio + duracion]
         # La cola de presentación expone un bloqueo que cruza el borde de los 3 s.
         observados = [(t, g) for t, g in cuadros if inicio <= t <= fin_gesto + 0.1]
         intervalos = np.diff([inicio, *(t for t, _ in observados)]) * 1000
         assert max(v for _, v in movimientos) - min(v for _, v in movimientos) > amplitud / 4, movimientos
         r = {"primera": primera, "etapas": reloj.resumir(), "movimientos": len(movimientos) - 1,
-             "gesto_s": round(fin_gesto - inicio, 3), "fps": round(len(activos) / 3, 3),
+             "gesto_s": round(fin_gesto - inicio, 3), "gesto_pedido_s": duracion,
+             "fps": round(len(activos) / duracion, 3),
              "previas_s": round(len(reloj.datos["previa"]) / (fin_gesto - inicio), 3),
-             "intervalos_ms": _resumen(list(intervalos)), "cuadros_33": int(sum(intervalos > 33)),
+             "intervalos_ms": _resumen(list(intervalos)), "intervalos_crudos_ms": [round(float(x), 1) for x in intervalos],
+             "cuadros_33": int(sum(intervalos > 33)),
              "cuadros_100": int(sum(intervalos > 100)),
-             "hijo_arrastre": len(reloj.datos["hijo"]), "hijo_primera": primera.get("hijo", {}).get("n", 0),
+             "hijo_arrastre": len(reloj.datos["hijo"]) + len(reloj.datos["hijo_visual"]),
+             "hijo_primera": primera.get("hijo", {}).get("n", 0),
              "valida": bool(activos), "previa_ok": panel._previa_ok, "mensaje": panel.mensaje.text(),
              "gl": visor.info_gl}
         r.update(_latencias(movimientos, observados))
@@ -332,6 +352,13 @@ def _corrida(app, receta, caso, modelo, temporal, reloj):
         app.processEvents()
 
 
+def _esperar_previa(panel):
+    limite = time.perf_counter() + 60
+    while panel._hijo_previa is not None and time.perf_counter() < limite:
+        QTest.qWait(8)
+    assert panel._hijo_previa is None, "La vista previa aparte no terminó en 60 s"
+
+
 def _inventario():
     grupos = defaultdict(list)
     for clave, clase in sorted(CATALOGO.items()):
@@ -345,13 +372,16 @@ def _numero(n):
 
 
 def _informe(datos):
+    duraciones = sorted({r.get("gesto_pedido_s", 3) for modelos in datos["casos"].values()
+                         for corridas in modelos.values() for r in corridas})
+    gestos = "/".join(f"{n:g}" for n in duraciones) or "3"
     lineas = [f"# Vista previa de comandos · {datos['fecha']}", "", "## Alcance y reproducción", "",
         "Medición de la ventana real en el commit " + datos["commit"] + ". No modifica producción ni tests.",
         "Desde `clon/`: `.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe "
         "../scripts/medir_previa_comandos.py --modelo chico` (repetir con mediano, grande y placa200).", "",
-        "Arrastre rápido de 3 s con QMouseEvent, sin mover el cursor real; tres corridas válidas por caso. "
+        f"Arrastre rápido de {gestos} s con QMouseEvent, sin mover el cursor real; tres corridas válidas por caso. "
         "Primer cálculo con documento/panel nuevo separado del arrastre. Espera adaptativa y protección aislada originales.",
-        "Ventana 1900 × 1000, con la bandera siempre encima. FPS cuenta frameSwapped dentro de los 3 s; "
+        f"Ventana 1900 × 1000, con la bandera siempre encima. FPS cuenta frameSwapped dentro de los {gestos} s; "
         "una corrida con FPS 0 se descarta. Previas/s usa la duración real del gesto: un cálculo nativo puede "
         "sobrepasar los 3 s pedidos y se registra gesto_s.",
         "Los intervalos incluyen hasta 100 ms de presentación posterior al gesto para no esconder un bloqueo al final. "
@@ -372,6 +402,8 @@ def _informe(datos):
         "Milisegundos. Previa = p50 / p95 / máximo de las llamadas de las tres corridas reunidas. "
         "K/M/T/D = p50 de previsualizar / set_modelo / teselado acumulado por set_modelo / paintGL. "
         "M incluye T y aristas: no sumarlos. p95 y máximos de cada etapa y repetición quedan en el JSON.", "",
+        "Con previa aparte, Previa mide el envío no bloqueante; el kernel del hijo no está instrumentado (—). "
+        "respuesta_completa y entrega se guardan por separado: no se presenta el envío como el cálculo terminado.", "",
         "| Comando | Modelo (pasos/cuerpos/caras) | Reps | Previa p50/p95/máx | K / M / T / D | Previas/s | FPS | Retraso p50/p95 | Cuadros >33/>100 | Hijo primera/arrastre |",
         "|---|---|---|---|---|---|---|---|---|---|"]
     for caso, modelos in datos["casos"].items():
@@ -430,12 +462,32 @@ def _informe(datos):
                 continue
             valores = []
             for k in ("previa", "kernel", "modelo"):
-                ts = [r["primera"][k]["p50"] for r in rs]
-                valores.append(f"{min(ts):.1f}–{max(ts):.1f}")
+                ts = [r["primera"][k]["p50"] for r in rs if r["primera"].get(k, {}).get("p50") is not None]
+                valores.append(f"{min(ts):.1f}–{max(ts):.1f}" if ts else "—")
             lineas.append(f"| {caso} | {modelo} | " + " | ".join(valores)
                           + f" | {sum(r['hijo_primera'] for r in rs)} | "
-                          + f"{sum(r['etapas']['teselado']['n'] for r in rs)}/"
+                          + f"{sum(r['etapas'].get('teselado', {}).get('n', 0) for r in rs)}/"
                           + f"{sum(r['etapas']['previa']['n'] for r in rs)} |")
+    if any("respuesta_completa" in r["primera"] for modelos in datos["casos"].values()
+           for corridas in modelos.values() for r in corridas):
+        lineas += ["", "## Entregas y fluidez (cada corrida)", "",
+               "El máximo de cuadros incluye el gesto y su cola; entrega incluye leer la respuesta y set_modelo. "
+               "Son tiempos del padre; el kernel del hijo sigue separado.", "",
+               "| Comando/modelo | Corrida | Cuadro p95/máximo | Manipuladores p50/p95 | Entrega p50/máximo | Primera completa |",
+               "|---|---|---|---|---|---|"]
+    for caso, modelos in datos["casos"].items():
+        for modelo, corridas in modelos.items():
+            for i, r in enumerate(corridas):
+                if not r["valida"] or "respuesta_completa" not in r["primera"]:
+                    continue
+                manos = _resumen(r["muestras_ms"].get("manipuladores", []))
+                entrega = _resumen(r["muestras_ms"].get("entrega", []))
+                cuadros = r.get("intervalos_ms", {})
+                primera = r["primera"].get("respuesta_completa", {})
+                lineas.append(f"| {caso}/{modelo} | {i+1} | " + "/".join(_numero(cuadros.get(k)) for k in ("p95", "max"))
+                    + " | " + "/".join(_numero(manos[k]) for k in ("p50", "p95"))
+                    + " | " + "/".join(_numero(entrega[k]) for k in ("p50", "max"))
+                    + f" | {_numero(primera.get('p50'))} |")
     lineas += ["", "## Datos por corrida", "",
         "Incluyen descartes, tiempos de la primera previa, muestras por etapa, latencia entrada→cuadro y desfase "
         "en unidades del campo. El retraso es cuadro presentado menos instante del evento que generó el sólido. "
@@ -488,7 +540,10 @@ def main():
     parser.add_argument("--comprobar", action="store_true")
     parser.add_argument("--resumir", action="store_true", help="Consulta los datos guardados sin modificar el informe")
     parser.add_argument("--fecha", type=date.fromisoformat, default=date.today(), help="Fecha de las mediciones (AAAA-MM-DD)")
+    parser.add_argument("--duracion", type=float, default=3, help="Segundos del gesto, 3 por defecto (máximo 30)")
     args = parser.parse_args()
+    if not 0 < args.duracion <= 30:
+        parser.error("La duración debe ser positiva y no superar 30 segundos")
     fecha = args.fecha.isoformat()
     ruta = RAIZ / "docs" / "auditorias" / f"previa-comandos-{fecha}.md"
     ruta_datos = RAIZ / "evidencias" / f"previa_comandos_{fecha}.json"
@@ -555,7 +610,7 @@ def main():
                     corridas = datos["casos"].setdefault(caso, {}).setdefault(args.modelo, [])
                     intentos = 0
                     while sum(r["valida"] for r in corridas) < 3 and intentos < 6:
-                        r = _corrida(app, receta, caso, args.modelo, temporal, reloj)
+                        r = _corrida(app, receta, caso, args.modelo, temporal, reloj, args.duracion)
                         assert not errores, errores
                         assert r["previa_ok"], r["mensaje"]
                         corridas.append(r)

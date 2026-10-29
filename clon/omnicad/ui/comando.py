@@ -362,6 +362,9 @@ class PanelComando(QFrame):
         self.ultima_op = None
         self._previa_ok = False
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
+        self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
+        self._t_hijo = QTimer(self, interval=16)
+        self._t_hijo.timeout.connect(self._recibir_previa)
         self._prisma_previa = None
         self.confirmar = None       # función(op) de la ventana: aplica y devuelve False si el editor debe seguir abierto
 
@@ -730,6 +733,7 @@ class PanelComando(QFrame):
         try:
             op = self.comando.construir(self.valores, self.ctx)
         except (ErrorComando, ErrorExpresion) as e:
+            self._cancelar_previa_hijo()
             self.ultima_op = None
             self._mostrar(str(e), aviso=True)
             self._previa_vista(None)
@@ -739,6 +743,12 @@ class PanelComando(QFrame):
         if op is None or not self.comando.PREVIA:
             self._mostrar("")
             self._previa_ok = True
+            return
+        if self._hijo_previa is not None:
+            self._pendiente_hijo = op     # un solo cálculo activo; nunca se encolan los movimientos intermedios
+            return
+        if self._previa_pesada(op):
+            self._iniciar_previa(op)
             return
         try:
             if self._previsualizar_prisma(op):
@@ -829,6 +839,53 @@ class PanelComando(QFrame):
             self._mostrar("")
         return True
 
+    def _previa_pesada(self, op):
+        if op.TIPO != "vaciado" or self.ctx.doc.motor != "opencascade":
+            return False
+        from ..nucleo import geometria as geo
+        ids = set(op.p["cuerpos"]) | {r["cuerpo"] for r in op.p["caras"]}
+        cuerpos = [self.ctx.estado.cuerpos.get(cid) for cid in ids]   # un id que ya no existe lo informa el camino normal
+        return any(c is not None and len(geo.caras(c.forma)) >= 64 for c in cuerpos)
+
+    def _iniciar_previa(self, op):
+        from ..nucleo.aislado import CalculoPendiente, TareaAislada
+        try:
+            self._hijo_previa = CalculoPendiente("previa_visual", {
+                "receta": self.ctx.doc.a_dict(), "operacion": op.a_dict(), "indice": self.ctx.indice,
+                "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular})
+            self._op_hijo = op
+            self._t_hijo.start()
+            self._mostrar("Calculando vista previa en un proceso aparte…", aviso=True)
+        except TareaAislada as e:
+            self._mostrar(str(e), aviso=True)
+
+    def _recibir_previa(self):
+        from ..timeline.calculo_aislado import leer_previa_visual
+        try:
+            salida = self._hijo_previa.sondear()
+            if salida is None:
+                return
+            estado, avisos = leer_previa_visual(salida, self.ctx.estado)
+            self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
+            self._mostrar(" ".join(avisos), aviso=True)
+            self.previa.emit(estado)
+        except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
+            self._previa_ok = False
+            self._mostrar(f"⚠ {e}", aviso=True)
+            self.previa.emit(None)
+        self._t_hijo.stop()
+        self._hijo_previa = None
+        pendiente, self._pendiente_hijo = self._pendiente_hijo, None
+        if pendiente is not None and pendiente.a_dict() != self._op_hijo.a_dict():
+            self._iniciar_previa(pendiente)
+
+    def _cancelar_previa_hijo(self):
+        self._t_hijo.stop()
+        if self._hijo_previa is not None:
+            self._hijo_previa.cancelar()
+            self._hijo_previa = None
+        self._pendiente_hijo = None
+
     def _previa_vista(self, op):
         """Dibujo extra del comando para la vista previa (el agujero en rojo…)."""
         if self.manipuladores is None:
@@ -895,6 +952,7 @@ class PanelComando(QFrame):
 
     def _cerrar(self):
         self._t_previa.stop()
+        self._cancelar_previa_hijo()
         self._prisma_previa = None
         try:
             self.visor.entidad_elegida.disconnect(self._elegida)
