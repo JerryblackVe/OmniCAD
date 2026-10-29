@@ -265,7 +265,7 @@ def test_selector_rapido_espectro_rgb_y_deslizadores_emiten_cambios(v):
     assert vistos[-1]["color"] == [1.0, 1.0, 1.0] and [c.value() for c in sel.rgb] == [255, 255, 255]
     sel.show()
     sel.resize(sel.sizeHint())
-    evento = QMouseEvent(QMouseEvent.MouseButtonPress, QPointF(40, 30), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    evento = QMouseEvent(QMouseEvent.MouseButtonPress, QPointF(40, 30), QPointF(40, 30), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     sel.espectro.mousePressEvent(evento)                                    # un clic en el cuadrado del espectro
     sel.espectro.mouseReleaseEvent(evento)
     assert vistos[-1]["color"] != [1.0, 1.0, 1.0] and len(vistos[-1]["color"]) == 3

@@ -235,7 +235,7 @@ def test_abrir_toma_los_pasos_lentos_de_la_cache_sin_recalcularlos(tmp_path, mon
     assert g.volumen(abierto.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(_VOLUMEN_LENTO + 250, rel=1e-9)
 
 
-def test_la_cache_de_otra_receta_o_danada_se_ignora(tmp_path, monkeypatch):
+def test_la_cache_de_otra_receta_o_danada_se_ignora(tmp_path, monkeypatch, capfd):
     """Receta editada a mano (la huella no coincide) o BREP roto: se recalcula todo y vale la receta."""
     monkeypatch.setattr(documento, "_SEGUNDOS_CACHE", 0)
     ruta = proyecto.guardar(_doc_lento(), tmp_path / "lento")
@@ -254,6 +254,12 @@ def test_la_cache_de_otra_receta_o_danada_se_ignora(tmp_path, monkeypatch):
         abierto = proyecto.abrir(otra)
         assert [r.estado for r in abierto.resultados] == ["ok"] * 5, caso
         assert g.volumen(abierto.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(volumenes[caso], rel=1e-9), caso
+    import ctypes
+    import os
+    ctypes.CDLL("ucrtbase" if os.name == "nt" else None).fflush(None)  # OCC escribe con búfer de C
+    salida = capfd.readouterr()
+    assert "File was not written with this version of the topology" in salida.out
+    assert not salida.err
 
 
 def test_la_cache_brep_no_guarda_la_malla_del_visor(tmp_path, monkeypatch):

@@ -663,7 +663,7 @@ def _soltar(widget, rutas):
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(r) for r in rutas])
     centro = widget.rect().center()
-    entrar = QDragEnterEvent(centro, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+    entrar = QDragEnterEvent(QPointF(centro), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
     QApplication.sendEvent(widget, entrar)
     QApplication.sendEvent(widget, QDropEvent(QPointF(centro), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
     return entrar.isAccepted()

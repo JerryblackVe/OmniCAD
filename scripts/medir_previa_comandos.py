@@ -7,8 +7,9 @@ Desde clon/, con la ventana destapada:
 
 Patrón: medir_fluidez.py (cronómetros y QMouseEvent). No importa ese script porque ejecuta main al importarse.
 Cada caso abre un documento y panel nuevos; registra la primera previa por separado y arrastra 3 s, tres veces.
-Guarda resultados reanudables EN el informe Markdown: no necesita JSON ni capturas auxiliares.
---comprobar prueba el análisis con trazas conocidas; esas trazas nunca se guardan como mediciones.
+Guarda resultados reanudables en evidencias/previa_comandos_<fecha>.json y las tablas en el informe Markdown.
+--resumir reproduce el informe por stdout; --fecha permite consultar mediciones anteriores.
+--comprobar prueba el análisis y coteja las tablas con el JSON; las trazas de prueba nunca se guardan.
 """
 import argparse
 from bisect import bisect_right
@@ -57,7 +58,6 @@ CASOS = {
     "patron_circular": ("patron_circular_3d", "angulo", 240.0, 25.0),
 }
 MODELOS = ("chico", "mediano", "grande", "placa200")
-MARCA = "<!-- DATOS_PREVIA -->"
 
 
 def _llamar(sesion, nombre, **datos):
@@ -344,7 +344,7 @@ def _numero(n):
     return "—" if n is None else f"{n:.1f}"
 
 
-def _guardar(ruta, datos):
+def _informe(datos):
     lineas = [f"# Vista previa de comandos · {datos['fecha']}", "", "## Alcance y reproducción", "",
         "Medición de la ventana real en el commit " + datos["commit"] + ". No modifica producción ni tests.",
         "Desde `clon/`: `.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe "
@@ -442,12 +442,20 @@ def _guardar(ruta, datos):
         "edad_eventos_ms informa por separado la distancia temporal entre los eventos de asa y sólido; "
         "no se usa como latencia porque da cero cuando el kernel bloquea los dos. "
         "Los porcentajes de etapas anidadas no se suman.", "",
-        "<details><summary>Datos reproducibles (JSON)</summary>", "", MARCA, "```json",
-        json.dumps(datos, ensure_ascii=False, separators=(",", ":"), allow_nan=False), "```", "</details>", "",
+        f"Datos: `evidencias/previa_comandos_{datos['fecha']}.json` (fuera de git). "
+        "Para regenerar las tablas desde `clon/`: `.venv/Scripts/python.exe ../scripts/medir_previa_comandos.py "
+        f"--resumir --fecha {datos['fecha']}`.", "",
         "## Límites: qué no se pudo medir", "",
         "GPU por separado, mouse físico y cada variante de los comandos. El inventario no implica que todos "
         "los comandos hayan sido medidos. El modelo de 70 pasos usa cajas simples.", ""]
-    ruta.write_bytes("\n".join(lineas).encode("utf-8"))
+    return "\n".join(lineas)
+
+
+def _guardar(ruta, datos):
+    ruta_datos = RAIZ / "evidencias" / f"previa_comandos_{datos['fecha']}.json"
+    ruta_datos.parent.mkdir(parents=True, exist_ok=True)
+    ruta_datos.write_bytes((json.dumps(datos, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8"))
+    ruta.write_bytes(_informe(datos).encode("utf-8"))
 
 
 def _comprobar():
@@ -471,7 +479,7 @@ def _comprobar():
 
 
 def main():
-    """Corre los casos pedidos o consulta sus resultados; guarda exclusivamente el informe."""
+    """Corre los casos pedidos o reproduce sus tablas desde el JSON separado."""
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -479,43 +487,52 @@ def main():
     parser.add_argument("--comandos", nargs="+", choices=CASOS, default=list(CASOS))
     parser.add_argument("--comprobar", action="store_true")
     parser.add_argument("--resumir", action="store_true", help="Consulta los datos guardados sin modificar el informe")
+    parser.add_argument("--fecha", type=date.fromisoformat, default=date.today(), help="Fecha de las mediciones (AAAA-MM-DD)")
     args = parser.parse_args()
-    if args.comprobar:
-        _comprobar()
-        return
-    ruta = RAIZ / "docs" / "auditorias" / f"previa-comandos-{date.today().isoformat()}.md"
+    fecha = args.fecha.isoformat()
+    ruta = RAIZ / "docs" / "auditorias" / f"previa-comandos-{fecha}.md"
+    ruta_datos = RAIZ / "evidencias" / f"previa_comandos_{fecha}.json"
     assert ruta.parent.is_dir()
-    if ruta.exists():
-        texto = ruta.read_text(encoding="utf-8")
-        datos = json.loads(texto.split(MARCA + "\n```json\n", 1)[1].split("\n```", 1)[0])
-        if datos.get("version") != 2:
-            anteriores = [r for modelos in datos["casos"].values() for rs in modelos.values() for r in rs]
-            datos["preliminares_descartadas"] = {
-                "motivo": "paintGL se envolvía después de crear la ventana; edad de eventos no medía el bloqueo",
-                "corridas": len(anteriores), "fps_cero": sum(not r["valida"] for r in anteriores)}
-            datos["casos"] = {}
+    if ruta_datos.exists():
+        try:
+            datos = json.loads(ruta_datos.read_bytes())
+        except (OSError, ValueError) as e:
+            parser.error(f"No pude leer los datos de {ruta_datos}: {e}")
+    elif args.resumir or args.comprobar or ruta.exists():
+        parser.error(f"Faltan los datos: {ruta_datos}. Recuperá ese JSON para conservar las mediciones; "
+                     "para medir de cero, elegí una fecha nueva con --fecha.")
     else:
-        datos = {"fecha": date.today().isoformat(), "commit": subprocess.check_output(
+        datos = {"fecha": fecha, "commit": subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], cwd=RAIZ, text=True).strip(),
             "plataforma": platform.platform(), "python": sys.version, "catalogo": _inventario(),
-            "modelos": {}, "casos": {}}
-    datos["version"] = 2
+            "modelos": {}, "casos": {}, "version": 2}
+    assert datos["fecha"] == fecha, "La fecha del JSON no coincide con la pedida"
+    if args.comprobar:
+        _comprobar()
+        assert datos["version"] == 2, "Las mediciones usan un formato anterior"
+        if not ruta.exists():
+            parser.error(f"Falta el informe: {ruta}. Regeneralo con --resumir --fecha {fecha}.")
+        texto = ruta.read_text(encoding="utf-8")
+        for bloque in _informe(datos).split("\n\n"):
+            if bloque.startswith("|"):
+                assert bloque in texto, "Una tabla del informe no coincide con el JSON"
+        print("Autocomprobación: JSON separado y tablas del informe OK.")
+        return
     if args.resumir:
         if not datos["casos"]:
             parser.error("Todavía no hay corridas guardadas para resumir")
-        print("Casos: " + str(sum(len(modelos) for modelos in datos["casos"].values())))
-        print("Corridas válidas: " + str(sum(r["valida"] for modelos in datos["casos"].values()
-                                          for rs in modelos.values() for r in rs)))
-        print("GL: " + str(next(iter(next(iter(datos["casos"].values())).values()))[0]["gl"]))
-        print("Preliminares: " + str(datos.get("preliminares_descartadas", {})))
-        for caso, modelos in datos["casos"].items():
-            for modelo, rs in modelos.items():
-                print(f"{caso}/{modelo}: gestos {[r['gesto_s'] for r in rs]}; "
-                      + f"previas {[r['etapas']['previa']['n'] for r in rs]}; "
-                      + f"teselados {[r['etapas']['teselado']['n'] for r in rs]}")
+        print(_informe(datos))
         return
+    if datos.get("version") != 2:
+        anteriores = [r for modelos in datos["casos"].values() for rs in modelos.values() for r in rs]
+        datos["preliminares_descartadas"] = {
+            "motivo": "paintGL se envolvía después de crear la ventana; edad de eventos no medía el bloqueo",
+            "corridas": len(anteriores), "fps_cero": sum(not r["valida"] for r in anteriores)}
+        datos["casos"] = {}
+    datos["version"] = 2
     actual = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=RAIZ, text=True).strip()
     assert datos["commit"] == actual, "El informe pertenece a otro commit: no se mezclan las corridas"
+    ruta_datos.parent.mkdir(parents=True, exist_ok=True)
     receta, medidas = _modelo(args.modelo)
     datos["modelos"][args.modelo] = medidas
     print(f"Modelo {args.modelo}: {medidas}", flush=True)

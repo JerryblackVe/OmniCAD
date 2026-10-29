@@ -281,7 +281,7 @@ def test_guardar_y_reabrir_con_cuerpo_de_malla(tmp_path):
     assert [(b["type"], b["volume"]) for b in abierta["bodies"]] == [("mesh", pytest.approx(1000))]
 
 
-def test_abrir_brep_como_operacion_base(tmp_path):
+def test_abrir_brep_como_operacion_base(tmp_path, capfd):
     """El .brep que escribe export se abre como los demás formatos: documento nuevo con UN paso (operación base)."""
     from omnicad.nucleo import geometria as geo
     from omnicad.nucleo import intercambio
@@ -310,6 +310,12 @@ def test_abrir_brep_como_operacion_base(tmp_path):
     roto.write_text("no es un BREP", encoding="utf-8")
     r = api.llamar(api.Sesion(), "open_document", {"path": str(roto)})
     assert r["error_kind"] == "IMPORT_FAILED" and "roto.brep" in r["mensaje"]
+    import ctypes
+    import os
+    ctypes.CDLL("ucrtbase" if os.name == "nt" else None).fflush(None)  # OCC escribe con búfer de C
+    salida = capfd.readouterr()
+    assert "File was not written with this version of the topology" in salida.out
+    assert not salida.err
 
 
 def test_guardar_con_ruta_vacia_o_sin_nombre(tmp_path):

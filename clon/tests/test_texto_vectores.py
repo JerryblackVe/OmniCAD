@@ -581,8 +581,8 @@ def test_un_texto_se_agarra_desde_cualquier_parte_de_su_caja(app_qt):
     lz._presionar_seleccion(hueco, Qt.NoModifier)
     assert lz._arrastre == ("curva", tid, "mover")
     destino = lz.a_px(centro[0] + 15, centro[1] + 10)
-    lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
-    lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), Qt.LeftButton, Qt.NoButton,
+    lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+    lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), QPointF(destino), Qt.LeftButton, Qt.NoButton,
                                      Qt.NoModifier))
     x1, y1 = b.coords(b.curvas[tid].punto)
     assert (x1 - x0, y1 - y0) == pytest.approx((15.0, 10.0), abs=0.5)
@@ -646,8 +646,8 @@ def test_arrastrar_un_texto_en_curva_lo_desliza_por_la_curva(app_qt):
     assert lz._arrastre == ("curva", tid, "deslizar")
     # arrastrar un cuarto de vuelta por el círculo: del tope (0°) hacia un costado
     destino = lz.a_px(x + 30, y - 30)
-    lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
-    lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), Qt.LeftButton, Qt.NoButton,
+    lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+    lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), QPointF(destino), Qt.LeftButton, Qt.NoButton,
                                      Qt.NoModifier))
     assert t.camino_pos != pytest.approx(0.25, abs=0.02)      # se deslizó
     nuevo = t.camino_pos
@@ -723,10 +723,10 @@ def test_el_texto_se_escribe_directo_en_el_cuadro(app_qt):
     lz.resize(3000, 900)                                       # la barra no sale del lienzo
     barra = lz.entrada
     p0 = barra.pos()
-    barra.mousePressEvent(QMouseEvent(QEvent.Type.MouseButtonPress, QPointF(0, 0), Qt.LeftButton, Qt.LeftButton,
+    barra.mousePressEvent(QMouseEvent(QEvent.Type.MouseButtonPress, QPointF(0, 0), QPointF(0, 0), Qt.LeftButton, Qt.LeftButton,
                                       Qt.NoModifier))
-    barra.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(5, 7), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
-    barra.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(5, 7), Qt.LeftButton, Qt.NoButton,
+    barra.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(5, 7), QPointF(5, 7), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+    barra.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(5, 7), QPointF(5, 7), Qt.LeftButton, Qt.NoButton,
                                         Qt.NoModifier))
     assert barra.pos() == p0 + QPoint(5, 7) and barra._arrastre is None
     for ch in "AB":

@@ -266,9 +266,13 @@ def _comparar():
     raiz = Path(__file__).resolve().parents[2] / "evidencias" / "teselado_cache_2026-10-28"
     datos = {}
     for etapa in ("antes", "despues_final"):
-        ruta = raiz / etapa / "docs" / "auditorias" / f"previa-comandos-{date.today().isoformat()}.md"
-        texto = ruta.read_text(encoding="utf-8")
-        datos[etapa] = json.loads(texto.split("<!-- DATOS_PREVIA -->\n```json\n", 1)[1].split("\n```", 1)[0])
+        ruta = raiz / etapa / "evidencias" / f"previa_comandos_{date.today().isoformat()}.json"
+        if ruta.exists():
+            datos[etapa] = json.loads(ruta.read_bytes())
+        else:  # Las mediciones históricas anteriores al JSON separado conservan el formato original.
+            ruta = raiz / etapa / "docs" / "auditorias" / f"previa-comandos-{date.today().isoformat()}.md"
+            texto = ruta.read_text(encoding="utf-8")
+            datos[etapa] = json.loads(texto.split("<!-- DATOS_PREVIA -->\n```json\n", 1)[1].split("\n```", 1)[0])
         assert len(datos[etapa]["casos"]) == 6
         for modelos in datos[etapa]["casos"].values():
             assert set(modelos) == {"chico", "mediano", "grande", "placa200"}

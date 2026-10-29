@@ -129,7 +129,7 @@ def test_hijo_informa_errores_de_pasos_sin_rechazar_tabla(monkeypatch):
     assert [r.estado for r in doc.resultados] == ["error", "error"]
 
 
-def test_costo_calculo_aislado_60_pasos(capsys):
+def test_costo_calculo_aislado_60_pasos():
     """Medición reproducible de todo el cambio: cálculo en el hijo y adopción de su resultado."""
     doc = _documento(60)
     assert aislado.UMBRAL_PREVUELO_PARAMETROS == 60
@@ -139,8 +139,7 @@ def test_costo_calculo_aislado_60_pasos(capsys):
     recalculo = time.perf_counter() - inicio
     assert _volumenes(doc) == pytest.approx([70] * 60)
     assert all(geo.es_valida(c.forma) for c in doc.estado_final.cuerpos.values())
-    with capsys.disabled():
-        print(f"\nB-48: 60 pasos; cálculo aislado y adopción={recalculo:.6f} s", flush=True)
+    print(f"B-48: 60 pasos; cálculo aislado y adopción={recalculo:.6f} s", flush=True)
 
 
 # ---------------------------------------------------------------- B-48: editar, suprimir, eliminar y abrir

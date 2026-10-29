@@ -62,6 +62,7 @@ def test_el_gancho_principal_avisa_con_la_ruta_del_informe(sesion_limpia):
     assert "TypeError: plop" in avisados[0].read_text(encoding="utf-8")
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")   # el test dispara el gancho de hilos a propósito
 def test_el_gancho_de_hilos_registra_el_error_del_hilo(sesion_limpia):
     from types import SimpleNamespace
     try:
