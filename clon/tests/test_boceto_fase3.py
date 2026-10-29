@@ -821,7 +821,8 @@ def test_boc3_ui_menu_de_cota_y_herramienta_con_curvas():
     cota = next(k for k in lz.b.cotas.values() if c in k.entidades)
     assert (cota.tipo, cota.datos["modo"], lz.b.medir(cota)) == ("distancia", "centro", pytest.approx(10))
     menu = lz._menu_cota(cota.id)
-    assert [a.text() for a in menu.actions() if a.text()] == ["Cota de referencia", "Centro", "Tangente", "Borrar"]
+    assert [a.text() for a in menu.actions() if a.text()] == ["Editar valor…", "Renombrar parámetro…",
+                                                             "Cota de referencia", "Centro", "Tangente", "Borrar"]
     next(a for a in menu.actions() if a.text() == "Tangente").trigger()
     cota = lz.b.cotas[cota.id]
     assert cota.datos["modo"] == "tangente" and lz.b.medir(cota) == pytest.approx(10)
@@ -830,7 +831,8 @@ def test_boc3_ui_menu_de_cota_y_herramienta_con_curvas():
     assert lz.b.cotas[cota.id].referencia
     radio = lz.b.agregar_cota("radio", [c], "3", referencia=True)
     menu = lz._menu_cota(radio)
-    assert [a.text() for a in menu.actions() if a.text()] == ["Cota de referencia", "Radio", "Diámetro", "Borrar"]
+    assert [a.text() for a in menu.actions() if a.text()] == ["Editar valor…", "Renombrar parámetro…",
+                                                             "Cota de referencia", "Radio", "Diámetro", "Borrar"]
     next(a for a in menu.actions() if a.text() == "Diámetro").trigger()
     assert lz.b.cotas[radio].tipo == "diametro" and float(lz.b.cotas[radio].expresion) == pytest.approx(6)
     next(a for a in lz._menu_cota(radio).actions() if a.text() == "Borrar").trigger()
@@ -1129,6 +1131,31 @@ def test_boc35_clic_en_otra_cota_la_cita_por_su_nombre():
         lz.evaluar("d1")
 
 
+def test_cota_se_nombra_tipeando_nombre_igual_valor():
+    from PySide6.QtCore import QPointF
+
+    from omnicad.timeline.parametros import separar_nombre
+    assert separar_nombre("ANCHO=20MM") == ("ANCHO", "20MM") and separar_nombre("ñu = 2*3") == ("ñu", "2*3")
+    assert separar_nombre("20 mm") == (None, "20 mm") and separar_nombre("a==2")[0] is None
+    lz, linea = _lienzo_boc1()
+    lz.resize(800, 600)
+    lz._abrir_cota("distancia", [linea], QPointF(300, 200))
+    lz.entrada.aceptado.emit(["2d=40"])                              # nombre inválido: la caja sigue abierta
+    assert lz.entrada is not None and not lz.b.cotas
+    lz.entrada.aceptado.emit(["ANCHO=40"])
+    cota = next(iter(lz.b.cotas.values()))
+    assert cota.nombre == "ANCHO" and cota.expresion == "40" and lz.entrada is None
+    c = lz.b.agregar_circulo((60, 20), 3)
+    lz._abrir_cota("diametro", [c], QPointF(500, 400))
+    lz.entrada.aceptado.emit(["ANCHO=8"])                            # ya lo usa otra cota
+    assert lz.entrada is not None and len(lz.b.cotas) == 1
+    lz.entrada.aceptado.emit(["ANCHO / 5"])                          # el nombre vale al citarlo, antes de cerrar el boceto
+    assert any(k.expresion == "ANCHO / 5" for k in lz.b.cotas.values())
+    lz.editar_cota(cota.id, QPointF(300, 200))
+    lz.entrada.aceptado.emit(["LARGO=50"])                           # editar una cota existente también la renombra
+    assert cota.nombre == "LARGO" and cota.expresion == "50"
+
+
 def test_boc35_editar_una_cota_no_se_cita_a_si_misma():
     from PySide6.QtCore import QPointF, Qt
     from PySide6.QtTest import QTest
@@ -1217,9 +1244,15 @@ def test_ui_arrastrar_radio_diametro_y_angulo_con_el_mouse():
 def test_ui_cota_con_expresion_lleva_fx_y_la_de_referencia_parentesis():
     from omnicad.ui.editor_boceto import Lienzo
     c = Cota(1, "radio", [1], "ag * 2", {})
-    assert Lienzo._texto_cota(c, 8) == "fx: R8"
-    assert Lienzo._texto_cota(Cota(2, "distancia", [1], "25", {}), 25) == "25"
+    assert Lienzo._texto_cota(c, 8) == "fx: R8 mm"
+    assert Lienzo._texto_cota(Cota(2, "distancia", [1], "25", {}), 25) == "25 mm"
     assert Lienzo._texto_cota(Cota(3, "angulo", [1, 2], "90", {}, referencia=True), 90) == "(90°)"
+    from omnicad.ui import formato
+    formato.configurar_unidades("cm")
+    try:
+        assert Lienzo._texto_cota(Cota(4, "diametro", [1], "25", {}), 25) == "⌀2.5 cm"    # el documento manda
+    finally:
+        formato.configurar_unidades("mm")
 
 
 def test_ui_cota_se_resalta_y_da_tooltip_al_pasar_con_la_caja_abierta(monkeypatch):

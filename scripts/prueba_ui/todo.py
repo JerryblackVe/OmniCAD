@@ -14,6 +14,10 @@ import sys
 from datetime import date
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):          # el resumen usa ✗: que no dependa de la consola (cp1252)
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
 SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f"ui_{date.today().isoformat()}")

@@ -371,6 +371,22 @@ def test_editar_cota(s):
     assert areas(s) == [pytest.approx(55 * 20, abs=1e-3)]
 
 
+def test_cota_con_nombre_propio_es_parametro_y_se_renombra(s):
+    abajo, derecha, _arriba, _izq = rectangulo(s)
+    d = llamar(s, "add_dimension", sketch="B", type="distance", entities=[abajo], value=40, name="ANCHO")["dimension"]
+    assert d["name"] == "ANCHO"
+    assert "ANCHO" in [p["name"] for p in llamar(s, "get_parameters")["parameters"]]
+    llamar(s, "add_dimension", sketch="B", type="distance", entities=[derecha], value="ANCHO / 2")
+    llamar(s, "set_parameter", name="ANCHO", expression="60 mm")
+    assert areas(s) == [pytest.approx(60 * 30, abs=1e-3)]
+    assert falla(s, "edit_dimension", dimension=d["id"], name="2mal")["error_kind"] == "INVALID_PARAMETER_NAME"
+    assert falla(s, "edit_dimension", dimension=d["id"], name="mm")["error_kind"] == "INVALID_PARAMETER_NAME"
+    llamar(s, "create_parameter", name="largo", expression="70 mm")
+    antes = foto(s)
+    assert not falla(s, "edit_dimension", dimension=d["id"], name="largo").get("ok", False)   # el nombre ya existe
+    assert foto(s) == antes
+
+
 def test_editar_cota_invalida_no_cambia_nada(s):
     abajo, derecha, arriba, izquierda = rectangulo(s)
     d = llamar(s, "add_dimension", sketch="B", type="distance", entities=[abajo], value=40)["dimension"]["id"]

@@ -159,6 +159,12 @@ def nombres_usados(expr):
     return {n.id for n in ast.walk(arbol) if isinstance(n, ast.Name) and n.id not in RESERVADOS}
 
 
+def separar_nombre(texto):
+    """«ANCHO=20mm» → ("ANCHO", "20mm"); sin «nombre=» → (None, texto). El «==» no cuenta como asignación."""
+    m = re.match(r"\s*([^\W\d]\w*)\s*=(?!=)\s*(.*)$", str(texto), re.S)
+    return (m.group(1), m.group(2)) if m else (None, texto)
+
+
 def validar_nombre(nombre):
     """Como en Fusion, un nombre de parámetro es un identificador: letras (también ñ y acentos), dígitos y «_», sin
     empezar con dígito. Se exige la forma normalizada NFKC porque así lo lee el evaluador (si no, «ñ» escrita como

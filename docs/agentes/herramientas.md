@@ -917,7 +917,8 @@ Agrega una cota (dimensión) que maneja la geometría. El valor es un número (m
   - `reference` (true/false; opcional, por defecto `false`): true = cota de referencia (driven): mide la geometría sin restringirla; ignora value.
   - `mode` ("center" | "tangent"; opcional, por defecto `"center"`): en una distancia con un círculo o arco: "center" (al centro) o "tangent" (al borde más cercano).
   - `near` (lista de número o null; opcional, por defecto `null`): [x, y] en mm, solo en angle: el ángulo medido es el del cuadrante entre las dos rectas que contiene este punto; vacío = entre las líneas tal como se dibujaron.
-  - `position` (lista de número o null; opcional, por defecto `null`): [x, y] en mm: donde queda la cota, como si se la arrastrara con el ratón (no cambia el valor ni la geometría); no se combina con offset ni text_offset; vacío = lo automático.
+  - `position` (lista de número o null; opcional, por defecto `null`): [x, y] en mm: donde queda la cota, como si se la arrastrara con el ratón (no cambia el valor; en una cota de ángulo también elige qué ángulo mide, como near); no se combina con offset ni text_offset; vacío = lo automático.
+  - `name` (texto; opcional, por defecto `null`): nombre del parámetro de la cota (como tipear «ANCHO=20» en la caja de la cota de la ventana); vacío = el dN automático. Tiene que estar libre.
 - CLI: `omnicad call add_dimension --doc pieza.omnicad sketch=… type=… entities=…`
 
 ### `get_sketch`
@@ -1308,7 +1309,8 @@ Cambia el valor de una cota que ya existe (Fusion: doble clic en la cota): núme
   - `type` ("radius" | "diameter" o null; opcional, por defecto `null`): radius o diameter: pasa una cota de radio a diámetro (o al revés) con el valor equivalente; vacío = no cambia.
   - `mode` ("center" | "tangent" o null; opcional, por defecto `null`): center o tangent en una distancia con un círculo o arco; vacío = no cambia.
   - `near` (lista de número o null; opcional, por defecto `null`): [x, y] en mm, solo en una cota de ángulo: pasa a medir el ángulo del cuadrante que contiene este punto; vacío = no cambia.
-  - `position` (lista de número o null; opcional, por defecto `null`): [x, y] en mm: mueve la cota ahí, como arrastrarla con el ratón (no cambia el valor ni la geometría); no se combina con offset ni text_offset; vacío = no cambia.
+  - `position` (lista de número o null; opcional, por defecto `null`): [x, y] en mm: mueve la cota ahí, como arrastrarla con el ratón (no cambia el valor; en una cota de ángulo también elige qué ángulo mide, como near); no se combina con offset ni text_offset; vacío = no cambia.
+  - `name` (texto; opcional, por defecto `null`): renombra el parámetro de la cota (como tipear «ANCHO=20» en su caja de la ventana); tiene que estar libre y las expresiones que citaban el nombre viejo dejan de valer; vacío = no cambia.
 - CLI: `omnicad call edit_dimension --doc pieza.omnicad dimension=…`
 
 ### `auto_constrain`

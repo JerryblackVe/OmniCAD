@@ -34,7 +34,7 @@ from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Ci
 from ..restricciones.solver import restricciones_en_conflicto
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
-from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
+from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar, validar_nombre
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .registro import Expr, herramienta
@@ -1344,9 +1344,10 @@ def add_dimension(sesion, sketch: str,
                   entities: list[int], value: Expr | None = None, offset: float | None = None,
                   text_offset: float | None = None, reference: bool = False,
                   mode: Literal["center", "tangent"] = "center", near: list[float] | None = None,
-                  position: list[float] | None = None):
+                  position: list[float] | None = None, name: str | None = None):
     """
     sketch: id o nombre del boceto.
+    name: nombre del parámetro de la cota (como tipear «ANCHO=20» en la caja de la cota de la ventana); vacío = el dN automático. Tiene que estar libre.
     type: tipo de cota.
     entities: ids de las entidades acotadas (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
     value: valor: número (mm; grados en angle) o expresión con parámetros, p. ej. "radio_agujero * 2". Vacío = medida actual.
@@ -1355,7 +1356,7 @@ def add_dimension(sesion, sketch: str,
     reference: true = cota de referencia (driven): mide la geometría sin restringirla; ignora value.
     mode: en una distancia con un círculo o arco: "center" (al centro) o "tangent" (al borde más cercano).
     near: [x, y] en mm, solo en angle: el ángulo medido es el del cuadrante entre las dos rectas que contiene este punto; vacío = entre las líneas tal como se dibujaron.
-    position: [x, y] en mm: donde queda la cota, como si se la arrastrara con el ratón (no cambia el valor ni la geometría); no se combina con offset ni text_offset; vacío = lo automático.
+    position: [x, y] en mm: donde queda la cota, como si se la arrastrara con el ratón (no cambia el valor; en una cota de ángulo también elige qué ángulo mide, como near); no se combina con offset ni text_offset; vacío = lo automático.
     """
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
@@ -1393,6 +1394,9 @@ def add_dimension(sesion, sketch: str,
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", str(e)) from e
     _fijar_ubicacion(b, b.cotas[kid], offset, text_offset, position)
+    if name:
+        validar_nombre(name)
+        b.cotas[kid].nombre = name              # el documento rechaza el duplicado al reemplazar el paso
     convertida = not reference and _cota_sobre_restringe(sesion, b, br.solver)
     if convertida:
         b.cotas[kid].referencia = True
@@ -2826,9 +2830,10 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
                    offset: float | None = None, text_offset: float | None = None, reference: bool | None = None,
                    type: Literal["radius", "diameter"] | None = None,  # noqa: A002
                    mode: Literal["center", "tangent"] | None = None, near: list[float] | None = None,
-                   position: list[float] | None = None):
+                   position: list[float] | None = None, name: str | None = None):
     """
     dimension: id de la cota (get_sketch la lista en dimensions).
+    name: renombra el parámetro de la cota (como tipear «ANCHO=20» en su caja de la ventana); tiene que estar libre y las expresiones que citaban el nombre viejo dejan de valer; vacío = no cambia.
     value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     offset: mm que se separa la línea de cota de la medida (con signo); vacío = no cambia.
@@ -2837,11 +2842,11 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
     type: radius o diameter: pasa una cota de radio a diámetro (o al revés) con el valor equivalente; vacío = no cambia.
     mode: center o tangent en una distancia con un círculo o arco; vacío = no cambia.
     near: [x, y] en mm, solo en una cota de ángulo: pasa a medir el ángulo del cuadrante que contiene este punto; vacío = no cambia.
-    position: [x, y] en mm: mueve la cota ahí, como arrastrarla con el ratón (no cambia el valor ni la geometría); no se combina con offset ni text_offset; vacío = no cambia.
+    position: [x, y] en mm: mueve la cota ahí, como arrastrarla con el ratón (no cambia el valor; en una cota de ángulo también elige qué ángulo mide, como near); no se combina con offset ni text_offset; vacío = no cambia.
     """
-    if all(v is None for v in (value, offset, text_offset, reference, type, mode, near, position)):
+    if all(v is None for v in (value, offset, text_offset, reference, type, mode, near, position, name)):
         raise error("INVALID_ARGUMENTS",
-                    "Falta qué cambiar: value, offset, text_offset, reference, type, mode, near o position.")
+                    "Falta qué cambiar: value, name, offset, text_offset, reference, type, mode, near o position.")
     op, br = boceto_activo(sesion, sketch, derivados=False)
     nueva = op.copia()
     k = nueva.boceto.cotas.get(dimension) if isinstance(dimension, int) and not isinstance(dimension, bool) else None
@@ -2878,6 +2883,9 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
         k.expresion = expresion
     expresion = k.expresion
     _fijar_ubicacion(nueva.boceto, k, offset, text_offset, position)
+    if name:
+        validar_nombre(name)
+        k.nombre = name
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, br.solver.ok, f"La cota {dimension} ({tipo}) = {expresion}")
     estado, gdl = estado_solver(boceto_resuelto(sesion, nueva))

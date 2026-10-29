@@ -2012,9 +2012,10 @@ class Boceto:
             n = (-u[1], u[0])
         return a, b, u, n, max(a[0] * n[0] + a[1] * n[1], b[0] * n[0] + b[1] * n[1])
 
-    def ubicar_cota(self, c, punto):
+    def ubicar_cota(self, c, punto, con_texto=True):
         """Guarda dónde van la línea de cota y su texto (datos «desfase» y «texto», en mm): la línea pasa por
-        `punto` (x, y) y el texto queda a su altura. No cambia el valor ni la geometría."""
+        `punto` (x, y) y el texto queda a su altura (con `con_texto` falso, el texto no se corre). No cambia el
+        valor ni la geometría."""
         if c.tipo == "angulo":                # BOC-25: el cuadrante bajo el cursor elige qué ángulo se mide
             c.datos["cuadrante"] = self.cuadrante_angulo(*c.entidades, punto)
             return
@@ -2022,16 +2023,21 @@ class Boceto:
         if marco is not None:
             a, b, u, n, s0 = marco
             c.datos["desfase"] = round(punto[0] * n[0] + punto[1] * n[1] - s0, 6)
-            medio = ((a[0] + b[0]) * u[0] + (a[1] + b[1]) * u[1]) / 2
-            c.datos["texto"] = round(punto[0] * u[0] + punto[1] * u[1] - medio, 6)
+            if con_texto:
+                medio = ((a[0] + b[0]) * u[0] + (a[1] + b[1]) * u[1]) / 2
+                c.datos["texto"] = round(punto[0] * u[0] + punto[1] * u[1] - medio, 6)
 
-    def mover_cota(self, c, punto):
+    def mover_cota(self, c, punto, con_texto=True):
         """Arrastrar una cota ya creada (Fusion: todas se pueden mover): no cambia su valor ni la geometría. Las
-        lineales mueven su línea y su texto (`ubicar_cota`); las demás guardan en «ubic» el punto (x, y) en mm donde
-        va el texto (en un ángulo, además, fija el radio del arco; en un radio o diámetro, hacia dónde sale la línea)."""
+        lineales mueven su línea y su texto (`ubicar_cota`; agarrada de la línea, `con_texto` falso, solo la línea);
+        las demás guardan en «ubic» el punto (x, y) en mm donde va el texto (en un ángulo, además, fija el radio del
+        arco y elige el cuadrante que se mide, como `near`: la expresión queda y la geometría la cumple al resolver;
+        en un radio o diámetro, hacia dónde sale la línea)."""
         if self.ejes_cota(c) is not None:
-            self.ubicar_cota(c, punto)
+            self.ubicar_cota(c, punto, con_texto)
         else:
+            if c.tipo == "angulo":              # arrastrarla a otro cuadrante cambia el ángulo que mide (Fusion)
+                self.cambiar_cota(c.id, cuadrante=self.cuadrante_angulo(*c.entidades, punto))
             c.datos["ubic"] = [round(punto[0], 6), round(punto[1], 6)]
 
     def arco_angulo(self, c):
