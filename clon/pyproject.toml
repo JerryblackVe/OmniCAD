@@ -32,6 +32,8 @@ include = ["omnicad*"]
 
 [tool.pytest.ini_options]
 markers = ["lento: tarda más de 10 s (p. ej. los .f3d reales de tests/test_f3d_reales.py); `-m \"not lento\"` los deja afuera"]
+# Un archivo o socket sin cerrar (Windows no deja borrarlo ni reemplazarlo) rompe la prueba en vez de esconderse.
+filterwarnings = ["error::ResourceWarning", "error::pytest.PytestUnraisableExceptionWarning"]
 
 [tool.ruff.lint]
 select = ["F", "B023", "B905"]   # el criterio de AGENTS.md › Cómo verificar; `ruff check .` lo toma de acá
