@@ -172,6 +172,7 @@ def test_200_W_sobre_un_circulo_equivale_a_la_referencia_y_es_rapido(monkeypatch
         return r
 
     monkeypatch.setattr(perfiles, "_detectar", medir)
+    monkeypatch.setattr(perfiles, "_CACHE_PERFILES", {})    # otro test con las mismas 200 «W» la dejó llena: no mediríamos nada
     s, c = _texto_largo_sobre_circulo()
     r = api.llamar(s, "add_text", {"text": "W" * 200, "height": 5, "path_entity": c, "fit_path": True})["result"]
     assert 14000 < r["profiles"] < 15500
