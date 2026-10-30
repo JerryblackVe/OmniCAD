@@ -44,15 +44,38 @@ def _sesion(cantidad):
     return SimpleNamespace(doc=doc)
 
 
+def _mejor_tiempo(sesion, tope, repeticiones=3):
+    """Menor tiempo de hasta `repeticiones` corridas (corta apenas una cumple el tope): la carga ajena de la PC suma
+    tiempo a una corrida, nunca se lo resta; una regresión real las hace fallar a todas."""
+    mejor = None
+    for _ in range(repeticiones):
+        inicio = time.perf_counter()
+        resultado = hi.get_viewport_image(sesion, width=800, height=600)
+        segundos = time.perf_counter() - inicio
+        assert resultado["image"].ancho == 800 and resultado["image"].alto == 600
+        mejor = segundos if mejor is None else min(mejor, segundos)
+        if mejor < tope:
+            break
+    return mejor
+
+
 def test_escena_de_80_alabes():
-    sesion = _sesion(80)
-    inicio = time.perf_counter()
-    resultado = hi.get_viewport_image(sesion, width=800, height=600)
-    segundos = time.perf_counter() - inicio
-    print(f"80 álabes a 800×600: {segundos:.3f} s")
-    assert resultado["image"].ancho == 800 and resultado["image"].alto == 600
     # Antes de B-74: 17,867 s; 5,95 s exige 3× y deja margen sobre los 2,735 s medidos.
+    segundos = _mejor_tiempo(_sesion(80), 5.95)
+    print(f"80 álabes a 800×600: {segundos:.3f} s")
     assert segundos < 5.95
+
+
+def test_el_tope_de_tiempo_sigue_detectando_una_regresion(monkeypatch):
+    """Mutación: un render que tarda de más en TODAS las corridas no pasa por tomar el mejor tiempo."""
+    original = hi._objetos_render
+
+    def lento(*a, **k):
+        time.sleep(0.4)
+        return original(*a, **k)
+
+    monkeypatch.setattr(hi, "_objetos_render", lento)
+    assert _mejor_tiempo(_sesion(2), 0.3) >= 0.4
 
 
 def test_pieza_cerca_cambia_menos_del_uno_por_ciento(monkeypatch):

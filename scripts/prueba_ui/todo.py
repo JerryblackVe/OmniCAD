@@ -8,7 +8,9 @@ Sin nombres corre todas. Deja los registros (`*.json`), los logs y las capturas 
 y al final imprime un resumen: comprobaciones y fallas por pieza.
     --ventana minimizada|visible   (por defecto minimizada: la ventana no aparece ni roba el foco, se puede usar la PC;
                                     visible: se ve y toma el foco, no usar el mouse ni el teclado mientras corre).
-Las piezas de PIEZAS_CON_FOCO_REAL se saltean en minimizada con un aviso ⚠ (no cuentan como ✗): correrlas con `--ventana visible`.
+Las piezas de PIEZAS_CON_FOCO_REAL (única lista; hoy `registro_uso`) se saltean en minimizada con un aviso ⚠ (no cuentan como ✗):
+correrlas con `--ventana visible`. Lo mismo vale para el chequeo de Ctrl+Mayús+A de `asistente` (se saltea dentro de la pieza con ⚠).
+Con la PC en uso, esas corridas con foco real se dejan para el final.
 """
 import os
 import re

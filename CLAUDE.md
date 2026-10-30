@@ -64,7 +64,9 @@
   `todo.py` corre por defecto con la ventana **transparente y sin foco** (`--ventana minimizada`, variable
   `OMNICAD_PRUEBA_VENTANA`): no aparece nada ni se roba el foco, así que Gerardo puede usar la PC. Con
   `--ventana visible` la ventana se ve y toma el foco: ahí no se usa el mouse ni el teclado. Sin la variable, el arnés
-  sigue en `visible`.
+  sigue en `visible`. Lo que necesita el foco real de Windows (la pieza `registro_uso` y el chequeo de Ctrl+Mayús+A
+  de `asistente`) se saltea con ⚠ en minimizada y exige `--ventana visible`: con la PC en uso se corre al final.
+  La lista de esas piezas vive solo en `PIEZAS_CON_FOCO_REAL` de `scripts/prueba_ui/todo.py`.
 
 ## Regla: rendimiento con Rust
 - La app a veces se siente lenta: la meta es optimizar lo más posible.
