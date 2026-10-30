@@ -1,5 +1,6 @@
 """Lectura entre procesos, herramientas MCP/CLI, marcador y informe de sesión."""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -65,7 +66,7 @@ def test_herramientas_lectura_resumen_marca_e_informe(tmp_path):
     assert r["result"]["hallazgos_por_severidad"]["alta"] >= 1
     r = api.llamar(s, "build_usage_report", {"session": sesion})
     assert r["ok"], r
-    texto = open(r["result"]["path"], encoding="utf-8").read()
+    texto = Path(r["result"]["path"]).read_text(encoding="utf-8")
     assert "Informe de sesión" in texto and "Línea de tiempo" in texto and "| B-? |" in texto
     assert "SECRETO" not in texto and "C:/privado" not in texto
     assert "prueba_ia" in texto

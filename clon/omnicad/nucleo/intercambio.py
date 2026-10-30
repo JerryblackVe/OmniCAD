@@ -226,7 +226,8 @@ def leer_step_estructura(ruta):
         raise ErrorGeometria(f"No se pudo leer el archivo STEP: {ruta}")
     herramienta = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
     try:
-        nombres_cuerpos = nombres_solidos_step(open(ruta, encoding="utf-8", errors="replace").read())
+        with open(ruta, encoding="utf-8", errors="replace") as f:
+            nombres_cuerpos = nombres_solidos_step(f.read())
     except OSError:
         nombres_cuerpos = {}
     componentes, cuerpos = [], []

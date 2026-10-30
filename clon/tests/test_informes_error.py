@@ -12,17 +12,24 @@ from omnicad import VERSION, informes_error
 from omnicad import api
 
 
+def _cerrar_sesion():
+    """Deja ninguna sesión abierta: apaga el faulthandler y cierra el archivo del informe (si no, queda abierto)."""
+    informes_error.faulthandler.disable()
+    if informes_error._E.manejador is not None:
+        informes_error._E.manejador.close()
+    informes_error._E = informes_error._Estado()
+
+
 @pytest.fixture()
 def sesion_limpia(tmp_path, monkeypatch):
     """Instala el capturador con una carpeta temporal y lo DESINSTALA al salir (el excepthook de pytest
     y el faulthandler global vuelven a como estaban)."""
     antes_principal, antes_hilos = sys.excepthook, threading.excepthook
-    informes_error._E = informes_error._Estado()          # ninguna sesión abierta
+    _cerrar_sesion()                                      # ninguna sesión abierta
     informes_error.instalar(carpeta=tmp_path)
     yield tmp_path
     sys.excepthook, threading.excepthook = antes_principal, antes_hilos
-    informes_error._E = informes_error._Estado()
-    informes_error.faulthandler.disable()
+    _cerrar_sesion()
 
 
 def _disparar(excepthook, tipo=ValueError, mensaje="algo se rompió"):

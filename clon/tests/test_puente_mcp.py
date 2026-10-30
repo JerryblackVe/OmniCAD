@@ -160,6 +160,7 @@ def test_cliente_reconecta_si_la_app_se_reinicio(archivo):
     try:
         assert c.llamar("ping")["ok"] and c.info["port"] == falso.puerto
     finally:
+        c.cerrar()
         falso.apagar()
 
 
@@ -169,7 +170,8 @@ def _json(r):
 
 
 def test_modo_vivo_sin_app_y_con_app(archivo):
-    servidor = crear_servidor(api.Sesion(), modo="vivo", cliente=ClientePuente(archivo))
+    cliente = ClientePuente(archivo)
+    servidor = crear_servidor(api.Sesion(), modo="vivo", cliente=cliente)
 
     async def caso(falso=None):
         async with Client(servidor) as c:
@@ -182,13 +184,15 @@ def test_modo_vivo_sin_app_y_con_app(archivo):
         _, r = correr(caso())
         assert not r.is_error and _json(r)["result"]["vivo"] is True and _json(r)["avisos"] == []
     finally:
+        cliente.cerrar()
         falso.apagar()
 
 
 def test_modo_auto_cambia_de_documento_y_lo_avisa(archivo):
     sesion = api.Sesion()
     sesion.doc.nombre = "Doc del servidor"
-    servidor = crear_servidor(sesion, modo="auto", cliente=ClientePuente(archivo))
+    cliente = ClientePuente(archivo)
+    servidor = crear_servidor(sesion, modo="auto", cliente=cliente)
 
     async def llamar(nombre, args=None):
         async with Client(servidor) as c:
@@ -207,6 +211,7 @@ def test_modo_auto_cambia_de_documento_y_lo_avisa(archivo):
         modo = correr(llamar("get_mode"))["result"]
         assert modo["active"] == "vivo" and modo["app"]["document"] == "Doc de la ventana"
     finally:
+        cliente.cerrar()
         falso.apagar()
     de_vuelta = correr(llamar("get_scene_info"))
     assert de_vuelta["result"]["name"] == "Doc del servidor" and de_vuelta["avisos"] == [

@@ -253,17 +253,18 @@ def test_publicar_gif_y_secuencia_png(ventana, tmp_path):
     ruta = tmp_path / "anim.gif"
     archivos = v.publicar(str(ruta), "gif", 48, 36, 4, "actual", "cpu", "lienzo")
     assert archivos == [str(ruta)]
-    gif = Image.open(ruta)
-    assert gif.n_frames == len(an.tiempos(1.0, 4)) == 5 and gif.size == (48, 36)
-    gif.seek(0)
-    primero = np.asarray(gif.convert("RGB"))
-    gif.seek(4)
-    ultimo = np.asarray(gif.convert("RGB"))
-    assert np.abs(primero.astype(int) - ultimo.astype(int)).sum() > 0      # algo se movió
+    with Image.open(ruta) as gif:
+        assert gif.n_frames == len(an.tiempos(1.0, 4)) == 5 and gif.size == (48, 36)
+        gif.seek(0)
+        primero = np.asarray(gif.convert("RGB"))
+        gif.seek(4)
+        ultimo = np.asarray(gif.convert("RGB"))
+        assert np.abs(primero.astype(int) - ultimo.astype(int)).sum() > 0      # algo se movió
     carpeta = tmp_path / "cuadros"
     pngs = v.publicar(str(carpeta), "png", 32, 24, 2, "documento", "cpu", "render")
     assert len(pngs) == 3 and all(os.path.exists(p) for p in pngs)
-    assert Image.open(pngs[0]).size == (32, 24)
+    with Image.open(pngs[0]) as png:
+        assert png.size == (32, 24)
     assert math.isclose(v.t, 0.0)
 
 

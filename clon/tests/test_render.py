@@ -252,7 +252,8 @@ def test_guardar_png(tmp_path, cubo):
     img = rc.renderizar(cubo, _arriba((5, 5, 5), 40.0), None, 32, 24, 1, res_sombras=256)
     ruta = tmp_path / "r.png"
     rc.guardar_png(img, ruta)
-    assert Image.open(ruta).size == (32, 24)
+    with Image.open(ruta) as png:
+        assert png.size == (32, 24)
 
 
 # ---------------------------------------------------------------- ventana y lienzo
@@ -299,7 +300,8 @@ def test_ventana_renderiza_png_y_galeria(qapp, tmp_path):
     ruta = tmp_path / "render.png"
     r = v.renderizar(64, 48, "gl", 1, False, str(ruta))       # sin OpenGL (offscreen) cae al motor de CPU
     assert r is not None and "CPU" in r["motor"] and r["ruta"] == str(ruta)
-    assert Image.open(ruta).size == (64, 48)
+    with Image.open(ruta) as png:
+        assert png.size == (64, 48)
     assert r["imagen"].shape == (48, 64, 4) and r["imagen"][..., :3].std() > 5
     assert len(v.renders) == 1 and v.galeria.lista.count() == 1
     r2 = v.volver_a_renderizar(0)

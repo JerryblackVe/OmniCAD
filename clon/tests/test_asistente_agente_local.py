@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -117,7 +118,7 @@ def lanzar(monkeypatch, tmp_path):
     respuestas = []
 
     def popen(argv, **kw):
-        archivos = {n: open(os.path.join(kw["cwd"], n), encoding="utf-8").read() for n in os.listdir(kw["cwd"])}
+        archivos = {n: Path(kw["cwd"], n).read_text(encoding="utf-8") for n in os.listdir(kw["cwd"])}
         proceso = respuestas.pop(0)
         lanzados.append({"argv": argv, "kw": kw, "proceso": proceso, "archivos": archivos})
         return proceso

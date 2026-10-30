@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import os
+from pathlib import Path
 import urllib.error
 import urllib.request
 
@@ -204,7 +205,7 @@ def lanzar(monkeypatch, tmp_path):
     def popen(argv, **kw):
         proceso = _Proceso()
         lanzados.append({"argv": argv, "cwd": kw["cwd"], "proceso": proceso, "archivos": {
-            n: open(os.path.join(kw["cwd"], n), "rb").read() for n in os.listdir(kw["cwd"])}})
+            n: Path(kw["cwd"], n).read_bytes() for n in os.listdir(kw["cwd"])}})
         return proceso
 
     monkeypatch.setattr(agente_local.subprocess, "Popen", popen)

@@ -108,8 +108,9 @@ def vectorizar_imagen(ruta, *, umbral=None, invertir=False, suavizado=1.0, toler
     if not tolerancia >= 0 or not suavizado >= 0 or not area_minima >= 0:
         raise ErrorVectorizar("tolerancia, suavizado y area_minima no pueden ser negativos.")
     try:
-        img = Image.open(p)
-        img.load()
+        with Image.open(p) as original:
+            original.load()
+            img = original.copy()
     except Exception as e:  # noqa: BLE001 — Pillow lanza de todo según el formato
         raise ErrorVectorizar(f"No se pudo leer la imagen: {e}") from e
     ancho0, alto0 = img.size
