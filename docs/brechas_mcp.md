@@ -244,6 +244,8 @@ Se descartan, porque no le sirven a un agente:
 - Reproducir el timeline, Repetir último comando, Buscar en navegador, ventana o timeline, y Acerca de.
 - Menú de la cota antes de ubicarla y clic en otra cota para citarla (BOC-34 y BOC-35): son gestos del ratón sobre la
   caja de valor. `add_dimension` ya trae `reference`, `type` y `mode`, y una expresión cita `dN` por su nombre.
+- «Atenuar el resto» de Administrar proyecciones perdidas (BOC-39): apaga en el lienzo lo que no es una proyección perdida. Es solo
+  ayuda visual y `manage_lost_projections` ya lista, vuelve a vincular, rompe y borra sin mirar el dibujo.
 
 ## Hallazgos de la auditoría
 

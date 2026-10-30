@@ -495,6 +495,7 @@ class Lienzo(QWidget):
                          **{k: Texto._PREDETERMINADOS[k] for k in Texto.TIPOGRAFIA}}
         self.perdidas = []                         # ids de proyecciones perdidas en el último cálculo (los pone el modo)
         self._revincular = None                    # proyección perdida que se re-vincula con el próximo clic
+        self._brillantes = None                    # ids que se ven normales con «Atenuar el resto» (None: todo normal)
         self._eje_giro = None                      # (eje, referencia) de la arista elegida para el perfil giratorio
         self.estado_referencias = lambda: None     # el modo consulta el estado actual del documento
         self._sel_texto = []                       # cuadriláteros de lo seleccionado en el texto que se escribe
@@ -1907,6 +1908,18 @@ class Lienzo(QWidget):
         self._revincular = None
         self.mensaje.emit("Re-vincular: la proyección sigue ahora a la geometría elegida.")
         return True
+
+    def atenuar_resto(self, activo):
+        """«Atenuar el resto» de Administrar proyecciones perdidas: lo que no es una proyección perdida se dibuja
+        apagado para ver mejor las perdidas (Fusion: Fade Other Geometry)."""
+        self._brillantes = None
+        if activo:
+            self._brillantes = set(self.seleccion)
+            for r in self.b.proyecciones:
+                if r["id"] in self.perdidas:
+                    self._brillantes.update(r["ids"])
+            self._brillantes = self._brillantes or None          # sin perdidas que resaltar no se apaga nada
+        self.update()
 
     def administrar_perdidas(self):
         """Diálogo Manage Lost Projections (lista, re-vincular, romper vínculo, borrar)."""
@@ -4574,6 +4587,9 @@ class Lienzo(QWidget):
                 ocultos.update(c.puntos())
                 continue
             color, ancho = self._color_curva(c, determinadas | en_origen, fijos_verdes, en_conflicto)
+            if self._brillantes is not None and c.id not in self._brillantes:
+                color = QColor(color)
+                color.setAlphaF(0.2)
             pluma = QPen(color, ancho)
             if c.construccion:
                 pluma.setStyle(Qt.DashLine)
@@ -4589,6 +4605,8 @@ class Lienzo(QWidget):
                 self._dibujar_guias_conica(p, self.b.coords(c.inicio), self.b.coords(c.vertice), self.b.coords(c.fin))
         if self.mostrar["puntos"]:
             visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
+            vivos = None if self._brillantes is None else self._brillantes | {
+                q for c in self.b.curvas.values() if c.id in self._brillantes for q in c.puntos()}
             ancho, alto = self.width() + 8, self.height() + 8
             for pt in self.b.puntos.values():
                 if pt.id in ocultos and pt.id not in visibles or (pt.proyectado and not self.mostrar["proyectadas"]) \
@@ -4611,6 +4629,10 @@ class Lienzo(QWidget):
                 else:
                     color = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
                     relleno = QColor(255, 255, 255)
+                if vivos is not None and pt.id not in vivos:
+                    color, relleno = QColor(color), QColor(relleno)
+                    color.setAlphaF(0.2)
+                    relleno.setAlphaF(0.2)
                 p.setPen(QPen(color, 1))
                 p.setBrush(relleno)
                 p.drawRect(QRectF(q.x() - 3, q.y() - 3, 6, 6))

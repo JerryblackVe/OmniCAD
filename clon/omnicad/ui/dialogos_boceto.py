@@ -135,6 +135,11 @@ class DialogoPerdidas(QDialog):
         self.lista = QListWidget()
         self.lista.currentRowChanged.connect(self._mostrar)
         v.addWidget(self.lista)
+        self.atenuar = QCheckBox("Atenuar el resto")
+        self.atenuar.setToolTip("Apaga lo que no es una proyección perdida para verlas mejor.")
+        self.atenuar.toggled.connect(self.lz.atenuar_resto)
+        self.finished.connect(lambda _r: self.lz.atenuar_resto(False))
+        v.addWidget(self.atenuar)
         fila = QHBoxLayout()
         self.b_revincular = QPushButton("Re-vincular")
         self.b_romper = QPushButton("Romper vínculo")
@@ -165,6 +170,7 @@ class DialogoPerdidas(QDialog):
                                    f"{len(r['ids'])} entidades)")
             item.setData(Qt.UserRole, pid)
             self.lista.addItem(item)
+        self.lz.atenuar_resto(self.atenuar.isChecked())       # las que quedan perdidas, cambiaron
         hay = self.lista.count() > 0
         for b in (self.b_revincular, self.b_romper, self.b_borrar, self.b_romper_todos, self.b_borrar_todos):
             b.setEnabled(hay)

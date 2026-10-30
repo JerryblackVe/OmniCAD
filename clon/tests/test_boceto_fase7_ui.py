@@ -207,6 +207,27 @@ def test_boc17_dialogo_de_proyecciones_perdidas(lienzo_xy, accion):
     d.deleteLater()
 
 
+def test_boc39_atenuar_el_resto_deja_brillar_solo_las_perdidas(lienzo_xy):
+    lz = lienzo_xy
+    suelta = lz.b.agregar_rectangulo((100, 100), (110, 110))[0]
+    lz.proyectar_forma(geo.caja(20, 10, 10), "proyectar", REF)
+    registro = lz.b.proyecciones[0]
+    lz.perdidas = [registro["id"]]
+    d = dialogos_boceto.DialogoPerdidas(lz)
+    assert not d.atenuar.isChecked() and lz._brillantes is None            # como Fusion: la casilla arranca apagada
+    d.atenuar.setChecked(True)
+    assert lz._brillantes == set(registro["ids"]) and suelta not in lz._brillantes
+    lz.grab()                                                              # dibujar atenuado no falla
+    d.b_romper_todos.click()                                               # ya no hay perdidas: no se apaga nada
+    assert lz._brillantes is None
+    d.atenuar.setChecked(False)
+    assert lz._brillantes is None
+    d.atenuar.setChecked(True)
+    d.reject()                                                             # al cerrar el diálogo el lienzo vuelve a lo normal
+    assert lz._brillantes is None
+    d.deleteLater()
+
+
 def test_boc17_revincular_con_el_siguiente_clic(lienzo_xy):
     lz = lienzo_xy
     lz.proyectar_forma(geo.caja(20, 10, 10), "proyectar", REF)
