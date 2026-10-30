@@ -249,3 +249,28 @@ def test_empalme_del_dialogo_conserva_lo_que_la_api_puso_en_el_conjunto_2():
     nueva = cmd.construir(cmd.desde_op(op, ctx), ctx)
     assert nueva.p["conjuntos"][0]["tipo_radio"] == "asimetrico"
     assert nueva.p["conjuntos"][0]["radio2"] == "2.0"                         # no vuelve a 1 mm
+
+
+@pytest.mark.parametrize("angulo", [0, 90, 45, 22.5, -30])
+def test_alinear_reabierto_y_aceptado_sin_tocar_conserva_el_angulo(angulo):
+    """Un Alinear hecho por la API con cualquier ángulo no se pisa al reabrirlo (Girar solo ofrecía 0/90/180/270)."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Alinear
+    from omnicad.timeline.operaciones import OpPlano
+    doc = _doc_caja()
+    doc.agregar(OpPlano(doc.nuevo_id(), "Plano1", base="XY", distancia="50 mm"))
+    op = _ejecutar(doc, Alinear, cuerpos=[_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})],
+                   origen=[_hit_sub(doc, "cara", (10, 10, 20))], destino=[_hit(doc, {"tipo": "plano", "id": "op2"})])
+    op.p["angulo"] = angulo                                   # como lo deja align_bodies angle=...
+    ctx, cmd = ContextoComando(doc, op=op), Alinear()
+    campo = next(c for c in cmd.campos(ctx) if c.clave == "angulo")
+    v = cmd.desde_op(op, ctx)
+    assert v["angulo"] in campo.opciones                       # el combo puede mostrar el valor del paso
+    assert cmd.construir({c.clave: c.defecto for c in cmd.campos(ctx)} | v, ctx).p["angulo"] == angulo
+    from omnicad.ui.comando import PanelComando
+    from omnicad.ui.visor3d import Visor3D
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_en(ctx.indice))
+    panel = PanelComando(cmd, ctx, visor, v)                    # el panel real: lo que se ve en el combo al hacer doble clic
+    assert panel.widgets["angulo"].currentData() == v["angulo"] and panel.valores["angulo"] == v["angulo"]
+    assert cmd.construir(panel.valores_visibles(), ctx).p["angulo"] == angulo

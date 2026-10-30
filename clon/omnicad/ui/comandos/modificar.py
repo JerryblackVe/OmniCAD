@@ -830,10 +830,13 @@ class Alinear(Comando):
 
     def campos(self, ctx):
         geom = {"vertice", "punto", "cara", "plano", "eje", "arista_lineal"}
+        giros = {"0": "0°", "90": "90°", "180": "180°", "270": "270°"}
+        if ctx.op is not None:                  # un paso hecho por la API puede girar cualquier ángulo: no se pierde al reabrir
+            actual = f"{float(ctx.op.p.get('angulo') or 0):g}"
+            giros.setdefault(actual, f"{actual}°")
         return [Seleccion("cuerpos", "Objetos", {"cuerpo"}, maximo=None), Seleccion("origen", "Desde", geom),
                 Seleccion("destino", "Hasta", geom), Casilla("voltear", "Voltear"),
-                Opciones("angulo", "Girar", {"0": "0°", "90": "90°", "180": "180°", "270": "270°"}),
-                Casilla("copiar", "Crear copia")]
+                Opciones("angulo", "Girar", giros), Casilla("copiar", "Crear copia")]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos.")
@@ -841,12 +844,12 @@ class Alinear(Comando):
         exigir(v, "destino", "Seleccioná la geometría de destino.")
         return self.crear_op(OpAlinear, v, ctx, cuerpos=_cuerpos(v), origen=ref1(v, "origen"),
                              destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"],
-                             angulo=int(v["angulo"]))
+                             angulo=a if (a := float(v["angulo"])) % 1 else int(a))
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado),
                     origen=_hit1(op.p["origen"], ctx.estado), destino=_hit1(op.p["destino"], ctx.estado),
-                    angulo=str(int(op.p.get("angulo") or 0)))
+                    angulo=f"{float(op.p.get('angulo') or 0):g}")
 
 
 class Combinar(Comando):
