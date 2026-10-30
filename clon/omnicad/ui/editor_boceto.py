@@ -810,7 +810,8 @@ class Lienzo(QWidget):
 
     def mostrar_conflictos(self):
         """F5 «Qué choca»: lista las restricciones y cotas en conflicto (ya pintadas en rojo)."""
-        if self.resultado is not None and not self.resultado.ok and not self.conflictos_sin_esperar()                 and self._conflictos is None:
+        if self.resultado is not None and not self.resultado.ok and not self.conflictos_sin_esperar() \
+                and self._conflictos is None:
             self._mostrar_conflictos_al_llegar = True       # el diagnóstico corre en otro hilo: el mensaje sale al llegar
             texto = "Calculando qué choca…"
             self.mensaje.emit(texto)

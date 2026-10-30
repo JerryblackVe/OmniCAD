@@ -124,24 +124,28 @@ def _registros_de(ruta):
     except Exception:  # noqa: BLE001 — un archivo roto no tiene que frenar el escaneo
         return []
     salida = []
-    for i, f in enumerate(fuentes):
-        try:
-            nombres = f["name"]
-            familia = nombres.getDebugName(16) or nombres.getDebugName(1)
-            if not familia:
+    try:
+        for i, f in enumerate(fuentes):
+            try:
+                nombres = f["name"]
+                familia = nombres.getDebugName(16) or nombres.getDebugName(1)
+                if not familia:
+                    continue
+                os2 = f["OS/2"] if "OS/2" in f else None
+                peso = int(getattr(os2, "usWeightClass", 400) or 400)
+                mac = f["head"].macStyle if "head" in f else 0
+                cursiva = bool(mac & 2) or bool(os2 is not None and os2.fsSelection & 1)
+                ejes = {}
+                if "fvar" in f:
+                    ejes = {a.axisTag: [a.minValue, a.defaultValue, a.maxValue] for a in f["fvar"].axes}
+                salida.append({"familia": familia, "estilo": nombres.getDebugName(17) or nombres.getDebugName(2) or "",
+                               "completo": nombres.getDebugName(4) or familia, "ruta": str(ruta), "indice": i,
+                               "peso": peso, "cursiva": cursiva, "ejes": ejes})
+            except Exception:  # noqa: BLE001
                 continue
-            os2 = f["OS/2"] if "OS/2" in f else None
-            peso = int(getattr(os2, "usWeightClass", 400) or 400)
-            mac = f["head"].macStyle if "head" in f else 0
-            cursiva = bool(mac & 2) or bool(os2 is not None and os2.fsSelection & 1)
-            ejes = {}
-            if "fvar" in f:
-                ejes = {a.axisTag: [a.minValue, a.defaultValue, a.maxValue] for a in f["fvar"].axes}
-            salida.append({"familia": familia, "estilo": nombres.getDebugName(17) or nombres.getDebugName(2) or "",
-                           "completo": nombres.getDebugName(4) or familia, "ruta": str(ruta), "indice": i,
-                           "peso": peso, "cursiva": cursiva, "ejes": ejes})
-        except Exception:  # noqa: BLE001
-            continue
+    finally:
+        for f in fuentes:      # lazy=True deja el archivo abierto: en Windows lo bloquea y pytest avisa (ResourceWarning)
+            f.close()
     return salida
 
 

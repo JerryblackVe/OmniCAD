@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 130: Abierto 73 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 131: Abierto 74 · Parcial 45 · Bloqueado 4 · Sin verificar 8.
 
 ## Pendientes generales
 
@@ -136,11 +136,12 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+Abierto 2. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | BOC-33 | Tangencia círculo-círculo inferida al dibujar con el ratón | Abierto | Baja | `inferir()` solo propone tangente respecto de una línea (contactos desde un punto base); con otro círculo, arco o elipse no propone nada. Al dibujar un círculo o arco con centro, buscar las curvas circulares cercanas y proponer el radio que lo deja tangente (por fuera: distancia entre centros = r1 + r2; por dentro: |r1 − r2|), engancharlo si el cursor está dentro de la tolerancia y agregar la restricción `tangente` entre las dos curvas, como ya se hace con la línea. La API ya tiene `tangente` entre curvas: no falta herramienta MCP/CLI. Test numérico: radio enganchado y grados de libertad que quedan. | omnicad/restricciones/inferencia.py (`inferir`, `_tangencias`); omnicad/ui/editor_boceto.py (herramienta círculo y arco); tests/test_boceto_fase9_inferencia_curvas.py | 2026-10-25 |
+| BOC-38 | El arrastre con ventana local cae al grupo entero cuando el punto solo puede deslizar | Abierto | Media | B-111 (2026-10-29): `solver._resolver_arrastre` acepta la ventana (radio 1) solo si cumple y el punto queda donde lo puso el ratón; un punto que solo puede deslizar (cursor fuera de su lugar) o una cadena rígida nunca queda en el cursor, así que cada movimiento resuelve el grupo entero: con 60 splines unos 0,3 s de mediana y 0,6 s de p95 por movimiento (arrastre completo: mediana 298 ms, p95 611 ms, máx 1078 ms), contra 15/25/47 ms de la ventana. Además, un movimiento que pone un punto SOBRE otro (spline degenerada que nadie cumple) tarda 0,785 s una vez (ventana 83 ms + parte entera 0,7 s). Idea (no implementada): ampliar la ventana de a UN paso (radio 1, 2, 3…) mientras la distancia del punto al cursor siga mejorando, y quedarse con la ventana cuando deja de mejorar; así el punto que desliza se queda en una ventana chica y la cadena rígida sigue ampliando hasta la parte entera. Cuidado: `tests/test_boceto_fase2.py::test_b101_arrastre_de_cadena_rigida_converge` y `test_arrastre_mueve_lo_minimo`. | clon/omnicad/restricciones/solver.py (`_resolver_arrastre`, `_ventana`); `scripts/medir_ui_boceto.py`; `scripts/medir_ventana_arrastre.py` | 2026-10-29 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
