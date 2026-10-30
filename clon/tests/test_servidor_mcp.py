@@ -304,6 +304,7 @@ def test_http_real_exige_token_y_solo_escucha_en_127_0_0_1(tmp_path):
                           headers={"Content-Type": "application/json"})
         respuesta = sin_token.getresponse()
         cuerpo = respuesta.read()
+        sin_token.close()
         assert respuesta.status == 401 and b"UNAUTHORIZED" in cuerpo
 
         async def caso():

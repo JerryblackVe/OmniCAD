@@ -35,8 +35,10 @@ herramienta solo se ven con Preferencias › Asistente IA › «Mostrar las herr
 """
 import json
 import os
+import shutil
 import tempfile
 import threading
+import weakref
 
 from PySide6.QtCore import QBuffer, QEventLoop, QIODevice, QObject, QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QImage, QPainter, QPixmap
@@ -1220,8 +1222,9 @@ class PanelAsistente(QDockWidget):
     def pegar_imagen(self, imagen):
         """Ctrl+V con una imagen en el portapapeles: la guarda como PNG temporal y la adjunta."""
         if self._pegados is None:
-            self._pegados = tempfile.TemporaryDirectory(prefix="omnicad_pegado_", ignore_cleanup_errors=True)
-        ruta = os.path.join(self._pegados.name, f"pegada_{len(os.listdir(self._pegados.name)) + 1}.png")
+            self._pegados = tempfile.mkdtemp(prefix="omnicad_pegado_")
+            weakref.finalize(self, shutil.rmtree, self._pegados, True)       # se borra al destruir el panel o salir
+        ruta = os.path.join(self._pegados, f"pegada_{len(os.listdir(self._pegados)) + 1}.png")
         if imagen is None or imagen.isNull() or not imagen.save(ruta, "PNG"):
             self._agregar_texto("⚠ No se pudo pegar la imagen del portapapeles.", "aviso")
             return 0
