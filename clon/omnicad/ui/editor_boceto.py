@@ -915,10 +915,21 @@ class Lienzo(QWidget):
         return not ((c.construccion and not self.mostrar["construccion"])
                     or (c.proyectada and not self.mostrar["proyectadas"]))
 
+    def _ocultos(self):
+        """(curvas, puntos) que no se ven —construcción o proyectadas apagadas—: tampoco se pueden capturar."""
+        if self.mostrar["construccion"] and self.mostrar["proyectadas"]:
+            return frozenset(), frozenset()
+        curvas = {c.id: c for c in self.b.curvas.values() if not self._visible(c)}
+        vistos = {p for c in self.b.curvas.values() if c.id not in curvas for p in c.puntos()}
+        ocultos = {p for c in curvas.values() for p in c.puntos()}
+        ocultos |= {p.id for p in self.b.puntos.values() if p.proyectado and not self.mostrar["proyectadas"]}
+        return frozenset(curvas), frozenset(ocultos - vistos)
+
     def _punto_cercano(self, pos, excluir=None, radio_px=TOL_PUNTO):
         mejor, dmin = None, radio_px
+        ocultos = self._ocultos()[1]
         for p in self.b.puntos.values():
-            if p.id == excluir:
+            if p.id == excluir or p.id in ocultos:
                 continue
             q = self.a_px(p.x, p.y)
             d = math.hypot(q.x() - pos.x(), q.y() - pos.y())
@@ -1005,6 +1016,7 @@ class Lienzo(QWidget):
             return None, (0.0, 0.0)                     # el origen del boceto también engancha
         x, y = self.a_mm(pos)
         excluidos = [excluir] if excluir is not None else []
+        excluidos += self._ocultos()[0]
         if self.herramienta == "linea" and self.clics and self._ultima_linea is not None:
             excluidos.append(self._ultima_linea)
         self.inf_actual = inferir(self.b, (x, y), TOL_PX / self.px_por_mm(), base=base,
