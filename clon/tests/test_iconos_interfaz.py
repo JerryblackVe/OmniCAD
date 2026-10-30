@@ -124,6 +124,7 @@ def test_el_dialogo_del_patron_usa_su_tipo_de_patron(app_qt, tipo):
 def test_el_dialogo_de_proyecciones_perdidas_tiene_icono(app_qt):
     lienzo = QWidget()
     lienzo.perdidas = []
+    lienzo.atenuar_resto = lambda *args: None            # lo llama el diálogo (BOC-39); el real es del Lienzo del editor
     dialogo = dialogos_boceto.DialogoPerdidas(lienzo)
     assert "proyectar" in iconos.DIBUJOS
     assert not dialogo.windowIcon().isNull()
