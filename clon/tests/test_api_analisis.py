@@ -270,3 +270,52 @@ def test_los_cuerpos_pedidos_se_dibujan_aunque_esten_ocultos_y_deshacer_vuelve_e
     assert s.doc.analisis["Z"]["visible"] is False
     ok(s, "undo")                                                                # ocultar admite deshacer
     assert s.doc.analisis["Z"]["visible"] is True
+
+
+# ---------------------------------------------------------------- SOL-38: color de la sección y rayado
+def _capas_corte(s, nombre):
+    from omnicad.timeline import analisis_vista
+    a = s.doc.analisis[nombre]
+    return analisis_vista.calcular(a["tipo"], a["params"], s.doc.estado_final, s.doc.propiedades)["capas"]
+
+
+def test_seccion_sin_opciones_nuevas_se_dibuja_como_siempre():
+    s = caja()
+    nombre = ok(s, "section_view", plane="XY", offset=10)["analysis"]["name"]
+    assert s.doc.analisis[nombre]["params"].get("rayado") is None and "color" not in s.doc.analisis[nombre]["params"]
+    capas = _capas_corte(s, nombre)
+    assert [c[0] for c in capas] == ["tris", "lineas"] and capas[0][2] == (0.85, 0.30, 0.25)
+
+
+def test_seccion_color_personalizado_y_del_componente_y_rayado_sobreviven_a_guardar(tmp_path):
+    s = caja()
+    nombre = ok(s, "section_view", plane="XY", offset=10, section_color="custom", custom_color="#00FF80",
+                hatch=True)["analysis"]["name"]
+    capas = _capas_corte(s, nombre)
+    assert capas[0][2] == (0.0, 1.0, pytest.approx(0.502, abs=1e-3)) and [c[0] for c in capas] == ["tris", "lineas", "lineas"]
+    otro = ok(s, "section_view", plane="XY", offset=5, section_color="component")["analysis"]["name"]
+    assert _capas_corte(s, otro)[0][2] == pytest.approx((0.72, 0.72, 0.73))          # acero: el aspecto de la caja sin pintar
+    ruta = str(tmp_path / "s.omnicad")
+    ok(s, "save_document", path=ruta)
+    s2 = api.Sesion()
+    ok(s2, "open_document", path=ruta)
+    assert s2.doc.analisis[nombre]["params"]["rayado"] is True and s2.doc.analisis[otro]["params"]["color_modo"] == "componente"
+
+
+def test_rayado_diagonal_son_rayas_a_45_grados_dentro_de_la_cara():
+    from omnicad.nucleo import geometria as geo
+    from omnicad.timeline.analisis_vista import rayado_diagonal
+    tris = np.array([[[0, 0, 0], [10, 0, 0], [10, 10, 0]], [[0, 0, 0], [10, 10, 0], [0, 10, 0]]], float)   # cuadrado 10x10
+    seg = rayado_diagonal(tris, geo.Plano("XY")).reshape(-1, 2, 3)
+    assert len(seg) > 20
+    d = seg[:, 1] - seg[:, 0]
+    assert np.allclose(np.abs(d[:, 0]), np.abs(d[:, 1]), atol=1e-6) and np.all(d[:, 0] * d[:, 1] < 0)   # todas a 135° (u − v)
+    assert seg.min() >= -1e-6 and seg.max() <= 10 + 1e-6 and np.allclose(seg[..., 2], 0)
+    assert np.linalg.norm(d, axis=1).sum() == pytest.approx(100 / (10 * 2 ** 0.5 / 40), rel=0.05)    # largo total = área / separación
+
+
+def test_section_view_rechaza_color_invalido():
+    s = caja()
+    falla(s, "section_view", plane="XY", custom_color="rojo")
+    falla(s, "section_view", plane="XY", section_color="component", custom_color="#FF0000")
+    falla(s, "manage_analysis", action="add", type="zebra", hatch=True)

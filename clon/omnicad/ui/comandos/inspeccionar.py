@@ -3,13 +3,17 @@
 en el navegador (sección, cebra, mapa de entorno, desmoldeo, curvatura, peine, isocurva, accesibilidad,
 radio mínimo)."""
 import numpy as np
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QColorDialog, QPushButton
 
 from ...nucleo import analisis as an
 from ...timeline import entidades as ent
 from ...timeline.ops_chapa import cuerpos_del_modelo, es_patron_plano
+from ...timeline.analisis_vista import COLOR_SECCION
 from ...timeline.parametros import ANGULO
 from .. import analisis_vista, formato
-from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, ref1
+from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion,
+                       ref1)
 from . import registrar
 
 GEOMETRIA = {"cara", "arista", "vertice", "cuerpo", "punto", "curva_boceto"}
@@ -417,7 +421,7 @@ class _Analisis(Comando):
     def mostrar(self, v, ctx):
         if ctx.ventana is None:
             return
-        datos = analisis_vista.calcular(self.TIPO_ANALISIS, self.params(v, ctx), ctx.estado)
+        datos = analisis_vista.calcular(self.TIPO_ANALISIS, self.params(v, ctx), ctx.estado, ctx.doc.propiedades)
         analisis_vista.aplicar(ctx.ventana.visor, datos)
 
     def aplicar(self, v, ctx):
@@ -438,14 +442,41 @@ class Seccion(_Analisis):
 
     def campos(self, ctx):
         return [Seleccion("plano", "Caras/plano", {"cara_plana", "plano"}), Expresion("desfase", "Distancia", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO), Casilla("invertir", "Invertir"), _cuerpos_campo()]
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO), Casilla("invertir", "Invertir"), _cuerpos_campo(),
+                Opciones("color_modo", "Color de la sección", {"personalizado": "Personalizado",
+                                                               "componente": "Del componente"}),
+                Personalizado("color", "Color", self._boton_color, list(COLOR_SECCION),
+                              visible_si=lambda v: v.get("color_modo") != "componente"),
+                Casilla("rayado", "Mostrar rayado")]
+
+    @staticmethod
+    def _boton_color(panel):
+        """Muestra el color elegido como muestra (sin números); un clic abre el selector de colores."""
+        boton = QPushButton("Cambiar color…")
+
+        def pintar():
+            c = QColor.fromRgbF(*panel.valores["color"])
+            boton.setStyleSheet(f"background: {c.name()}; color: {'#101010' if c.lightnessF() > 0.55 else '#f4f4f4'};"
+                                " padding: 3px 8px;")
+
+        def elegir():
+            c = QColorDialog.getColor(QColor.fromRgbF(*panel.valores["color"]), boton, "Color de la sección",
+                                      QColorDialog.DontUseNativeDialog)
+            if c.isValid():
+                panel._cambiar("color", [c.redF(), c.greenF(), c.blueF()])
+                pintar()
+        boton.clicked.connect(elegir)
+        pintar()
+        return boton
 
     def params(self, v, ctx):
         if not v.get("plano"):
             raise ErrorComando("Seleccioná el plano de corte.")
         return {"plano": ref1(v, "plano"), "desfase_mm": ctx.evaluar(v["desfase"]),
                 "angulo": ctx.evaluar(v["angulo"], ANGULO), "invertir": bool(v["invertir"]),
-                "cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []]}
+                "cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []],
+                "color_modo": v["color_modo"], "color": [float(x) for x in v.get("color") or COLOR_SECCION],
+                "rayado": bool(v["rayado"])}
 
     def mostrar(self, v, ctx):
         if v.get("plano"):

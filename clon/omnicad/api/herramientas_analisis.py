@@ -27,7 +27,7 @@ TIPOS = {"section": "seccion", "zebra": "cebra", "environment_map": "mapa_entorn
          "min_radius": "radio_minimo"}
 CURVATURAS = {"gaussian": "gaussiana", "mean": "media", "max": "maxima", "min": "minima"}
 # Opciones que acepta cada tipo (el resto es un error: no se ignora en silencio).
-OPCIONES = {"section": {"plane", "offset", "angle", "flip", "bodies", "body"}, "zebra": {"frequency", "orientation"},
+OPCIONES = {"section": {"plane", "offset", "angle", "flip", "bodies", "body", "section_color", "custom_color", "hatch"}, "zebra": {"frequency", "orientation"},
             "environment_map": set(), "draft": {"direction", "min_angle", "max_angle", "flip", "bodies", "body"},
             "curvature": {"curvature_type", "bodies"}, "comb": {"edges", "density", "scale", "body"},
             "isocurve": {"density", "bodies"}, "accessibility": {"direction", "flip", "bodies", "body"},
@@ -51,6 +51,14 @@ def _direccion(sesion, valor, body):
     return _referencia(sesion, valor, {"eje", "arista", "curva_boceto", "cara", "plano"}, body, "direccion")
 
 
+def _rgb_hex(valor):
+    """«#RRGGBB» → [r, g, b] de 0 a 1."""
+    t = valor.strip().lstrip("#") if isinstance(valor, str) else ""
+    if len(t) != 6 or any(c not in "0123456789abcdefABCDEF" for c in t):
+        raise error("INVALID_ARGUMENTS", f"custom_color: se espera un color «#RRGGBB», llegó {valor!r}.")
+    return [round(int(t[i:i + 2], 16) / 255, 4) for i in (0, 2, 4)]
+
+
 def _parametros(sesion, tipo, dado):
     """Parámetros internos del análisis (los que guarda `doc.analisis`) a partir de las opciones de la API."""
     sobran = set(dado) - OPCIONES[tipo]
@@ -67,6 +75,17 @@ def _parametros(sesion, tipo, dado):
                  desfase_mm=float(_numero(dado.get("offset", 0), "offset")), invertir=bool(dado.get("flip", False)))
         if dado.get("angle"):
             p["angulo"] = float(_numero(dado["angle"], "angle", -360, 360))
+        modo = dado.get("section_color", "custom")
+        if modo not in ("component", "custom"):
+            raise error("INVALID_ARGUMENTS", "section_color es component (el color de cada cuerpo) o custom (uno elegido).")
+        if modo == "component":
+            if dado.get("custom_color") is not None:
+                raise error("INVALID_ARGUMENTS", "custom_color solo se usa con section_color=custom.")
+            p["color_modo"] = "componente"
+        elif dado.get("custom_color") is not None:
+            p["color"] = _rgb_hex(dado["custom_color"])
+        if dado.get("hatch"):
+            p["rayado"] = True
     elif tipo == "zebra":
         orientacion = dado.get("orientation", "horizontal")
         if orientacion not in ("horizontal", "vertical"):
@@ -124,7 +143,9 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
                     direction: str | dict | None = None, min_angle: float | None = None,
                     max_angle: float | None = None, curvature_type: Literal["gaussian", "mean", "max", "min"] | None = None,
                     edges: str | list[str] | None = None, density: int | None = None, scale: float | None = None,
-                    radius: float | None = None, body: str | None = None):
+                    radius: float | None = None, body: str | None = None,
+                    section_color: Literal["component", "custom"] | None = None, custom_color: str | None = None,
+                    hatch: bool | None = None):
     """
     action: list (los del documento), add (crea uno), remove, show o hide (por name).
     type: con add: section (corte con plano), zebra, environment_map, draft (desmoldeo), curvature, comb (peine de curvatura de aristas), isocurve, accessibility o min_radius (fresa).
@@ -144,6 +165,9 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
     scale: comb: largo de las púas (1 por defecto).
     radius: min_radius: radio de la fresa en mm (3 por defecto).
     body: cuerpo donde se evalúan los selectores de plane, direction y edges; vacío = el único cuerpo.
+    section_color: section: component (la tapa toma el color de cada cuerpo) o custom (un solo color para todo el corte); custom por defecto.
+    custom_color: section con section_color=custom: color de la tapa como «#RRGGBB»; vacío = el rojo de siempre.
+    hatch: section: true dibuja el rayado diagonal sobre las caras del corte; false por defecto.
     """
     doc = sesion.doc
     if action == "list":
@@ -163,7 +187,8 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
     dado = {k: v for k, v in dict(bodies=bodies, plane=plane, offset=offset, flip=flip, frequency=frequency,
                                   orientation=orientation, direction=direction, min_angle=min_angle,
                                   max_angle=max_angle, curvature_type=curvature_type, edges=edges, density=density,
-                                  scale=scale, radius=radius, body=body).items() if v is not None}
+                                  scale=scale, radius=radius, body=body, section_color=section_color,
+                                  custom_color=custom_color, hatch=hatch).items() if v is not None}
     if name and name.strip() in doc.analisis:
         raise error("INVALID_ARGUMENTS", f"Ya existe un análisis llamado «{name.strip()}».")
     creado = doc.agregar_analisis(TIPOS[type], _parametros(sesion, type, dado), name.strip() if name else None)
@@ -278,7 +303,9 @@ def analyze_geometry(sesion, type: Literal["section", "curvature", "draft", "acc
              "get_viewport_image dibuja la parte de atrás del plano con su tapa. show=false lo deja oculto; "
              "manage_analysis (hide o remove) lo apaga.", modifica=True)
 def section_view(sesion, plane: str | dict, offset: float = 0, flip: bool = False, bodies: list[str] | None = None,
-                 name: str | None = None, show: bool = True, body: str | None = None, angle: float = 0):
+                 name: str | None = None, show: bool = True, body: str | None = None, angle: float = 0,
+                 section_color: Literal["component", "custom"] = "custom", custom_color: str | None = None,
+                 hatch: bool = False):
     """
     plane: XY, XZ, YZ, un plano de construcción (id o nombre) o una cara plana (selector).
     offset: desfase del plano en mm sobre su normal.
@@ -288,10 +315,14 @@ def section_view(sesion, plane: str | dict, offset: float = 0, flip: bool = Fals
     name: nombre del análisis; vacío = automático (Sección1…).
     show: false deja el análisis creado pero oculto.
     body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
+    section_color: component (la tapa toma el color de cada cuerpo) o custom (un solo color para todo el corte).
+    custom_color: con section_color=custom, el color de la tapa como «#RRGGBB»; vacío = el rojo de siempre.
+    hatch: true dibuja el rayado diagonal sobre las caras del corte.
     """
     cuerpos = _cuerpos_de(sesion, bodies)
     p = _parametros(sesion, "section", {k: v for k, v in dict(plane=plane, offset=offset, angle=angle, flip=flip,
-                                                              bodies=bodies, body=body).items() if v is not None})
+                                                              bodies=bodies, body=body, section_color=section_color,
+                                                              custom_color=custom_color, hatch=hatch).items() if v is not None})
     medidas = [{"body": c.id, "name": sesion.nombre_cuerpo(c), **_medida(sesion, "section", p, c)} for c in cuerpos]
     doc = sesion.doc
     if name and name.strip() in doc.analisis:

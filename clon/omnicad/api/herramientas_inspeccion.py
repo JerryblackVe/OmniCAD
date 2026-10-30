@@ -111,7 +111,7 @@ def _con_analisis(sesion, objetos, cam, alto, analisis):
     for n in nombres:
         a = doc.analisis[n]
         try:
-            resultados.append(av.calcular(a["tipo"], a["params"], doc.estado_final))
+            resultados.append(av.calcular(a["tipo"], a["params"], doc.estado_final, doc.propiedades))
             aplicados.append(n)
         except Exception as e:  # noqa: BLE001 — como la ventana: un análisis cuya referencia se perdió no rompe la imagen
             if explicitos:

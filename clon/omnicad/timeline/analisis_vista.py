@@ -49,7 +49,49 @@ def _con_cache(clave, funcion, forma):
     return _cache[clave][1]
 
 
-def calcular(tipo, params, estado):
+COLOR_SECCION = (0.85, 0.30, 0.25)     # la tapa del corte hasta ahora: el color por defecto de «Personalizado»
+LINEAS_RAYADO = 40                      # rayas a lo largo del corte; el paso se adapta a su tamaño
+
+
+def rayado_diagonal(tris, plano):
+    """Rayado a 45° de las caras del corte (Mostrar rayado de Fusion): segmentos 3D (2N x 3) de las rayas paralelas
+    recortadas contra los triángulos `tris` (Tx3x3, sobre `plano`)."""
+    tris = np.asarray(tris, float).reshape(-1, 3, 3)
+    uv = np.stack([(tris - plano.origen) @ plano.u, (tris - plano.origen) @ plano.v], axis=-1)
+    s = (uv[..., 0] + uv[..., 1]) / np.sqrt(2)          # a lo largo de la diagonal (las rayas son s = constante)
+    t = (uv[..., 1] - uv[..., 0]) / np.sqrt(2)
+    paso = max(float(s.max() - s.min()), float(t.max() - t.min()), 1e-6) / LINEAS_RAYADO
+    niveles = np.arange(np.ceil(s.min() / paso), np.floor(s.max() / paso) + 1) * paso
+    if not len(niveles):
+        return np.zeros((0, 3))
+    pts, hay = [], []
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        sa, sb = s[:, a, None], s[:, b, None]
+        cruza = (sa <= niveles) != (sb <= niveles)               # medio abierto: 0 o 2 cruces por triángulo y raya
+        with np.errstate(divide="ignore", invalid="ignore"):
+            f = (niveles - sa) / (sb - sa)
+        pts.append(t[:, a, None] + f * (t[:, b, None] - t[:, a, None]))
+        hay.append(cruza)
+    pts, hay = np.stack(pts, 1), np.stack(hay, 1)                  # (N, 3 aristas, K)
+    n, k = np.nonzero(hay.sum(1) == 2)
+    primeras = np.argsort(~hay[n, :, k], axis=1, kind="stable")[:, :2]
+    tt = pts[n[:, None], primeras, k[:, None]]
+    ss = niveles[k][:, None] * np.ones((1, 2))
+    u, v = (ss - tt) / np.sqrt(2), (ss + tt) / np.sqrt(2)
+    seg = plano.origen + u[..., None] * plano.u + v[..., None] * plano.v           # (rayas, 2 puntos, 3)
+    return seg[np.linalg.norm(seg[:, 1] - seg[:, 0], axis=1) > 1e-9].reshape(-1, 3)   # sin las que apenas tocan un vértice
+
+
+def _color_seccion(params, cuerpo, propiedades):
+    if params.get("color_modo") == "componente":
+        from ..nucleo.render_cpu import color_y_acabado
+        from .operaciones import propiedades_cuerpo
+        return tuple(color_y_acabado(cuerpo, propiedades_cuerpo(propiedades or {}, cuerpo))[0])
+    return tuple(params.get("color") or COLOR_SECCION)
+
+
+def calcular(tipo, params, estado, propiedades=None):
+    """`propiedades`: `Documento.propiedades`, para el color por componente de la sección."""
     salida = {"mallas": {}, "colores": None, "capas": [], "cortes": []}
     if tipo == "cebra":
         frecuencia, vertical = int(params.get("frecuencia", 8)), params.get("orientacion") == "vertical"
@@ -72,7 +114,9 @@ def calcular(tipo, params, estado):
                                lambda f=forma: an.seccion(f, plano), forma)
             tris = np.asarray(datos["triangulos"], np.float32).reshape(-1, 3)
             if len(tris):
-                salida["capas"].append(("tris", tris, (0.85, 0.30, 0.25), 0.85))
+                salida["capas"].append(("tris", tris, _color_seccion(params, estado.cuerpos[cid], propiedades), 0.85))
+                if params.get("rayado"):
+                    salida["capas"].append(("lineas", rayado_diagonal(tris, plano), (0.15, 0.15, 0.15), 1.0))
             salida["capas"].append(("lineas", _segmentos(datos["polilineas"]), (0.15, 0.15, 0.15), 2.0))
         return salida
     for cid, forma in cuerpos.items():

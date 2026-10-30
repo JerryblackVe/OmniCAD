@@ -1143,7 +1143,7 @@ class VentanaPrincipal(QMainWindow):
             if not a.get("visible", True):
                 continue
             try:
-                resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado))
+                resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado, self.doc.propiedades))
             except Exception as e:  # noqa: BLE001 — un análisis cuya referencia se perdió no rompe la vista
                 log.warning("Análisis %s: %s", nombre, e)
         analisis_vista.aplicar(self.visor, analisis_vista.combinar(resultados))

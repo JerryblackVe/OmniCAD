@@ -4295,6 +4295,9 @@ Carpeta «Análisis» del documento: agrega, lista, muestra, oculta y quita aná
   - `scale` (número; opcional, por defecto `null`): comb: largo de las púas (1 por defecto).
   - `radius` (número; opcional, por defecto `null`): min_radius: radio de la fresa en mm (3 por defecto).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de plane, direction y edges; vacío = el único cuerpo.
+  - `section_color` ("component" | "custom" o null; opcional, por defecto `null`): section: component (la tapa toma el color de cada cuerpo) o custom (un solo color para todo el corte); custom por defecto.
+  - `custom_color` (texto; opcional, por defecto `null`): section con section_color=custom: color de la tapa como «#RRGGBB»; vacío = el rojo de siempre.
+  - `hatch` (true/false; opcional, por defecto `null`): section: true dibuja el rayado diagonal sobre las caras del corte; false por defecto.
 - CLI: `omnicad call manage_analysis --doc pieza.omnicad`
 
 ### `analyze_geometry`
@@ -4331,6 +4334,9 @@ Análisis de sección: corta con un plano (XY, XZ, YZ, un plano de construcción
   - `show` (true/false; opcional, por defecto `true`): false deja el análisis creado pero oculto.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
   - `angle` (número; opcional, por defecto `0`): giro del plano en grados (entre −360 y 360) alrededor de su eje u, después del desfase.
+  - `section_color` ("component" | "custom"; opcional, por defecto `"custom"`): component (la tapa toma el color de cada cuerpo) o custom (un solo color para todo el corte).
+  - `custom_color` (texto; opcional, por defecto `null`): con section_color=custom, el color de la tapa como «#RRGGBB»; vacío = el rojo de siempre.
+  - `hatch` (true/false; opcional, por defecto `false`): true dibuja el rayado diagonal sobre las caras del corte.
 - CLI: `omnicad call section_view --doc pieza.omnicad plane=…`
 
 ### `set_visual_style`
