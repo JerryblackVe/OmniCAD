@@ -1287,13 +1287,14 @@ def _datos_alineacion(ref):
     raise geo.ErrorGeometria(f"Referencia de alineación desconocida: {tipo}")
 
 
-def alinear(forma, origen, destino, *, voltear=False):
+def alinear(forma, origen, destino, *, voltear=False, angulo=0.0):
     """Align: devuelve (forma alineada o None si forma es None, matriz 4x4) que lleva origen sobre destino.
 
     origen/destino: {"tipo": "punto", "punto"} | {"tipo": "plano", "origen", "normal"} (o "plano": geo.Plano)
     | {"tipo": "eje", "punto", "direccion"}. Plano sobre plano queda ENFRENTADO (normales opuestas, como
     al apoyar una cara contra otra en Fusion); eje sobre eje queda con la misma dirección. `voltear`
-    invierte el resultado 180° (Flip). Un punto puede ir a cualquier destino (se usa su punto/origen).
+    invierte el resultado 180° (Flip). `angulo` (grados; Fusion: botón Angle, de a 90°) gira el resultado
+    alrededor de la normal o del eje del destino. Un punto puede ir a cualquier destino (se usa su punto/origen).
     """
     t_o, p_o, d_o = _datos_alineacion(origen)
     t_d, p_d, d_d = _datos_alineacion(destino)
@@ -1306,6 +1307,10 @@ def alinear(forma, origen, destino, *, voltear=False):
     m = np.eye(4)
     m[:3, :3] = r
     m[:3, 3] = p_d - r @ p_o
+    if angulo % 360.0:
+        if d_d is None:
+            raise geo.ErrorGeometria("El giro necesita un destino plano o eje: un punto no tiene alrededor de qué girar.")
+        m = matriz_rotacion(p_d, d_d, angulo) @ m
     return (transformar(forma, m) if forma is not None else None), m
 
 

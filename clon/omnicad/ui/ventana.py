@@ -991,6 +991,13 @@ class VentanaPrincipal(QMainWindow):
             self.asistente.revisar_instrucciones()
         QTimer.singleShot(0, self.visor, self.visor.encuadrar)
 
+    def _actualizar_deshacer(self):
+        """Dentro del boceto valen el Deshacer y el Rehacer del editor (historial propio): quedan activos siempre, no
+        según el documento (que en un boceto nuevo todavía no tiene nada que deshacer ni rehacer)."""
+        en_boceto = getattr(self, "modo_boceto", None) is not None and self.modo_boceto.activo
+        self.acciones["deshacer"].setEnabled(en_boceto or self.doc.puede_deshacer())
+        self.acciones["rehacer"].setEnabled(en_boceto or self.doc.puede_rehacer())
+
     def _actualizar(self):
         self._actualizar_unidades()
         estado = self.doc.estado_final
@@ -999,8 +1006,7 @@ class VentanaPrincipal(QMainWindow):
         modificado = " *" if self.doc.modificado else ""
         self.setWindowTitle(f"{self.doc.nombre}{modificado} — {NOMBRE_APP} {VERSION}")
         self.pestana_doc.setText(f"{self.doc.nombre}{modificado}")
-        self.acciones["deshacer"].setEnabled(self.doc.puede_deshacer())
-        self.acciones["rehacer"].setEnabled(self.doc.puede_rehacer())
+        self._actualizar_deshacer()
         errores = sum(1 for r in self.doc.resultados if r.estado == "error")
         avisos = sum(1 for r in self.doc.resultados if r.estado == "aviso")
         texto = f"{len(estado.cuerpos)} cuerpo(s) · {len(self.doc.operaciones)} paso(s)"
@@ -2534,6 +2540,7 @@ class VentanaPrincipal(QMainWindow):
         self.modo_boceto.iniciar(boceto, plano, datos, mirar=self.prefs["general/auto_mirar_boceto"])
         self.modo_boceto.set_forzar(self.prefs["vista/forzar_rejilla"])
         self._refrescar_visibilidad()
+        self._actualizar_deshacer()
         self._actualizar_sugerencias()              # dentro del boceto no hay tira de sugerencias
         pendiente, self._herramienta_pendiente = self._herramienta_pendiente, None
         if pendiente in self.modo_boceto.acciones:
@@ -2542,6 +2549,7 @@ class VentanaPrincipal(QMainWindow):
     def _boceto_terminado(self, boceto, datos):
         self._cerrar_panel_de_boceto()
         self._indice_boceto = None
+        self._actualizar_deshacer()
         op = datos.get("op")
         if op is None:
             if not boceto.puntos and not any(boceto.geo3d.values()):

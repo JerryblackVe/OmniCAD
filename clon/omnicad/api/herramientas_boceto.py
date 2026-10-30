@@ -2321,6 +2321,13 @@ def _exigir_rectangular(count1, count2):
                     f"{count1 * count2 - 1}): para más, usá un patrón de cuerpos (rectangular_pattern).")
 
 
+def _exigir_pasos(count, distance, que):
+    """Con más de una copia en la dirección, la distancia no puede ser cero: las copias quedarían una sobre otra."""
+    if count > 1 and distance == 0:
+        raise error("INVALID_ARGUMENTS", f"{que} es 0: las copias quedarían una encima de otra.",
+                    "Poné una distancia distinta de cero (negativa = sentido contrario) o bajá la cantidad a 1.")
+
+
 def _exigir_circular(count, total_angle):
     _exigir_cantidad(count, "count")
     if count < 2:
@@ -2373,6 +2380,8 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
     """
     _exigir_finitos(locals())
     _exigir_rectangular(count1, count2)
+    _exigir_pasos(count1, distance1, "distance1")
+    _exigir_pasos(count2, distance2, "distance2")
     _exigir_supresion(suppress)
     a = math.radians(angle)
     a2 = a + math.pi / 2 if angle2 is None else math.radians(angle2)
@@ -2477,8 +2486,10 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
         if registro["tipo"] == "rectangular":
             if any(v is not None for v in (count, total_angle)):
                 raise error("INVALID_ARGUMENTS", "count y total_angle son de un patrón circular: usá count1 y count2.")
-            n1, n2 = count1 or p["cantidad1"], count2 or p["cantidad2"]
+            n1, n2 = p["cantidad1"] if count1 is None else count1, p["cantidad2"] if count2 is None else count2
             _exigir_rectangular(n1, n2)
+            _exigir_pasos(n1, p["distancia1"] if distance1 is None else distance1, "distance1")
+            _exigir_pasos(n2, p["distancia2"] if distance2 is None else distance2, "distance2")
             for linea in (direction1_line, direction2_line):
                 if linea is not None:
                     _curva(b, linea, ("linea",), "la dirección")
@@ -2508,7 +2519,7 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
             if any(v is not None for v in (count1, distance1, count2, distance2, angle, angle2, spacing,
                                            direction1_line, direction2_line)):
                 raise error("INVALID_ARGUMENTS", "Ese parámetro es de un patrón rectangular: acá van count y total_angle.")
-            n, total = count or p["cantidad"], p["angulo_total"] if total_angle is None else total_angle
+            n, total = p["cantidad"] if count is None else count, p["angulo_total"] if total_angle is None else total_angle
             _exigir_circular(n, total)
             cambios = {"cantidad": n, "angulo_total": total}
             if symmetric is not None:

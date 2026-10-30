@@ -653,7 +653,7 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ deshacer
     def _instantanea(self):
         self.historial.append(self.b.a_dict())
-        del self.historial[:-100]
+        del self.historial[:-(200 if len(self.b.puntos) < 3000 else 100)]    # un boceto enorme pesa MB por instantánea
 
     def _restaurar(self, datos):
         nuevo = Boceto.desde_dict(datos)
@@ -3670,6 +3670,8 @@ class Lienzo(QWidget):
         self._modificadores_raton = e.modifiers()
         if self._asas is not None and e.button() == Qt.LeftButton and self._asas.empezar(pos):
             return                                   # se tira de un asa de la herramienta
+        if e.button() == Qt.LeftButton and self.herramienta == "seleccionar" and self._clic_casilla_patron(pos):
+            return                                   # casilla de supresión de una copia del patrón
         if self.entrada is not None and e.button() == Qt.LeftButton and self._citar_cota(pos):
             return                                   # antes de setFocus: este saca el foco y la selección de la caja
         self._camara()
@@ -4614,6 +4616,8 @@ class Lienzo(QWidget):
                 p.drawRect(QRectF(q.x() - 3, q.y() - 3, 6, 6))
             p.setBrush(Qt.NoBrush)
         self._zonas_glifos = self._dibujar_glifos(p) if self.mostrar["restricciones"] else {}
+        if self.herramienta == "seleccionar":
+            self._dibujar_casillas_patron(p)
         self._trazos_cotas, self._fondos_cotas = {}, {}   # con las cotas ocultas no se agarra nada
         self._zonas_cotas = self._dibujar_cotas(p) if self.mostrar["cotas"] else {}
         self._dibujar_previa_auto(p)
@@ -4649,6 +4653,56 @@ class Lienzo(QWidget):
             for tri in uv:
                 p.drawPolygon(QPolygonF(self._poli_px([tuple(q) for q in tri])))
         p.setBrush(Qt.NoBrush)
+
+    def _casillas_patron(self):
+        """[(id del patrón, índice de copia, rectángulo en px, suprimida)] de los patrones que tienen algo elegido: una
+        casilla junto a cada copia, marcada si existe (Fusion: se desmarca para suprimir esa instancia). Las suprimidas
+        no tienen geometría: su lugar sale de la transformación del patrón aplicada al centro de lo original."""
+        from .asas_boceto import centro_de
+        elegidas, casillas = set(self.seleccion), []
+        for r in self.b.patrones:
+            copias = {i for lista in r["copias"].values() for i in lista}
+            if not elegidas & (set(r["ids"]) | copias):
+                continue
+            try:
+                trans = self.b._trans_rectangular(r["params"]) if r["tipo"] == "rectangular" \
+                    else self.b._trans_circular(r["params"])[0]
+            except (ErrorBoceto, KeyError):         # una línea de dirección o un centro que ya no existe: sin casillas
+                continue
+            centro = centro_de(self, r["ids"])
+            for i, (fn, *_) in enumerate(trans):
+                q = self.a_px(*fn(centro))
+                casillas.append((r["id"], i, QRectF(q.x() + 6, q.y() - 18, 12, 12), i in r["suprimidos"]))
+        return casillas
+
+    def _dibujar_casillas_patron(self, p):
+        p.save()
+        oscuro = self._oscuro()
+        for _pid, _i, caja, suprimida in self._casillas_patron():
+            p.setPen(QPen(QColor(150, 155, 165) if oscuro else QColor(110, 110, 110), 1))
+            p.setBrush(QColor(58, 63, 75, 230) if oscuro else QColor(250, 250, 250, 235))
+            p.drawRect(caja)
+            if not suprimida:                        # la tilde: la copia existe
+                p.setPen(QPen(QColor(0, 180, 255), 2))
+                p.drawLine(QPointF(caja.left() + 2.5, caja.center().y()), QPointF(caja.center().x() - 0.5, caja.bottom() - 3))
+                p.drawLine(QPointF(caja.center().x() - 0.5, caja.bottom() - 3), QPointF(caja.right() - 2.5, caja.top() + 3))
+        p.restore()
+
+    def _clic_casilla_patron(self, pos):
+        """Clic en la casilla de una copia: la suprime o la vuelve a crear (un paso de deshacer). True si la tocó."""
+        for pid, i, caja, _suprimida in self._casillas_patron():
+            if not caja.adjusted(-3, -3, 3, 3).contains(pos):
+                continue
+            self._alternar_copia_patron(pid, i)
+            return True
+        return False
+
+    def _alternar_copia_patron(self, pid, i):
+        registro = next(r for r in self.b.patrones if r["id"] == pid)
+        nuevos, perdidas = set(registro["suprimidos"]) ^ {i}, []
+        ok = self.aplicar_cambio(lambda: perdidas.extend(self.b.editar_patron(pid, suprimidos=nuevos)), anclar=False)
+        if ok and perdidas:
+            self.mensaje.emit("Se borraron porque su copia ya no existe: " + ", ".join(perdidas))
 
     def _dibujar_glifos(self, p):
         zonas, cuenta, grupos = {}, {}, set()

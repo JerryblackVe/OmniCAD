@@ -3384,7 +3384,15 @@ class Boceto:
         params = {"cantidad1": cantidad1, "distancia1": distancia1, "cantidad2": cantidad2, "distancia2": distancia2,
                   "dir1": list(dir1), "dir2": list(dir2), "modo": modo, "simetrico": simetrico,
                   "linea1": linea1, "linea2": linea2}
+        self._exigir_pasos(params)
         return self._patron(ids, self._trans_rectangular(params), "rectangular", params, set(suprimir))
+
+    @staticmethod
+    def _exigir_pasos(p):
+        """Con más de una copia en una dirección, su distancia no puede ser 0 (quedarían una encima de otra)."""
+        for n, d, eje in ((p["cantidad1"], p["distancia1"], "X"), (p["cantidad2"], p["distancia2"], "Y")):
+            if n > 1 and d == 0:
+                raise ErrorBoceto(f"La distancia en {eje} es 0: las copias quedarían una encima de otra.")
 
     def _trans_circular(self, p):
         if p["cantidad"] < 2:
@@ -3431,6 +3439,7 @@ class Boceto:
         if not ids:
             raise ErrorBoceto("El patrón ya no tiene geometría original.")
         if registro["tipo"] == "rectangular":
+            self._exigir_pasos(params)
             trans, cp = self._trans_rectangular(params), None
         else:
             trans, cp = self._trans_circular(params)

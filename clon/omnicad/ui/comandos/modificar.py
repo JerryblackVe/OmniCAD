@@ -831,18 +831,22 @@ class Alinear(Comando):
     def campos(self, ctx):
         geom = {"vertice", "punto", "cara", "plano", "eje", "arista_lineal"}
         return [Seleccion("cuerpos", "Objetos", {"cuerpo"}, maximo=None), Seleccion("origen", "Desde", geom),
-                Seleccion("destino", "Hasta", geom), Casilla("voltear", "Voltear"), Casilla("copiar", "Crear copia")]
+                Seleccion("destino", "Hasta", geom), Casilla("voltear", "Voltear"),
+                Opciones("angulo", "Girar", {"0": "0°", "90": "90°", "180": "180°", "270": "270°"}),
+                Casilla("copiar", "Crear copia")]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos.")
         exigir(v, "origen", "Seleccioná la geometría de origen.")
         exigir(v, "destino", "Seleccioná la geometría de destino.")
         return self.crear_op(OpAlinear, v, ctx, cuerpos=_cuerpos(v), origen=ref1(v, "origen"),
-                             destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"])
+                             destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"],
+                             angulo=int(v["angulo"]))
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado),
-                    origen=_hit1(op.p["origen"], ctx.estado), destino=_hit1(op.p["destino"], ctx.estado))
+                    origen=_hit1(op.p["origen"], ctx.estado), destino=_hit1(op.p["destino"], ctx.estado),
+                    angulo=str(int(op.p.get("angulo") or 0)))
 
 
 class Combinar(Comando):

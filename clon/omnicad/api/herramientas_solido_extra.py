@@ -620,21 +620,27 @@ def thicken(sesion, faces: Elementos, thickness: Expr = 2, direction: Literal["o
                   operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target))
 
 
-@herramienta("align_bodies", "solido", "Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional.", modifica=True)
+@herramienta("align_bodies", "solido", "Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional "
+             "(Fusion: Alinear, con Flip y Angle). angle gira el resultado alrededor de la normal o del eje del destino "
+             "(Fusion lo hace de a 90°; acá vale cualquier ángulo); con un punto de destino no hay eje y angle falla.",
+             modifica=True)
 def align_bodies(sesion, bodies: Cuerpos, source: Referencia, destination: Referencia,
                  flip: bool = False, copy: bool = False, source_body: str | None = None,
-                 destination_body: str | None = None):
+                 destination_body: str | None = None, angle: float = 0.0):
     """
-    bodies: nombres/ids de los cuerpos a mover o copiar.
+    bodies: nombres/ids de los cuerpos a mover o copiar; un componente (id o nombre) mueve todos sus cuerpos.
     source: plano/eje/punto de origen, nombre/id de construcción, selector/id de cara o arista; {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}.
     destination: geometría de destino, con el mismo formato que source.
     flip: true voltea 180 grados la alineación.
     copy: true crea copias; false mueve los originales.
     source_body: cuerpo donde se evalúa el selector de source.
     destination_body: cuerpo donde se evalúa el selector de destination.
+    angle: giro extra en grados alrededor de la normal o del eje del destino, después de alinear (0 = sin giro).
     """
-    return _crear(sesion, OpAlinear, cuerpos=_cuerpos(sesion, bodies), origen=_referencia(sesion, source, source_body),
-                  destino=_referencia(sesion, destination, destination_body), voltear=flip, copiar=copy)
+    if not -360.0 <= angle <= 360.0:
+        raise error("INVALID_ARGUMENTS", f"angle va de -360 a 360 grados (llegó {angle!r}).")
+    return _crear(sesion, OpAlinear, cuerpos=_cuerpos(sesion, _con_componentes(sesion, bodies)), origen=_referencia(sesion, source, source_body),
+                  destino=_referencia(sesion, destination, destination_body), voltear=flip, copiar=copy, angulo=angle)
 
 
 @herramienta("move_faces", "solido", "Mueve o copia caras planas de un cuerpo (SÓLIDO › MODIFICAR › Mover/copiar › Caras): "

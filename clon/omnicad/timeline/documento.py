@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 VERSION_RECETA = 1
 UNIDADES_DEFECTO = {"longitud": "mm", "masa": "g"}      # con qué se MUESTRAN las medidas; el modelo siempre va en mm y g
 TOPE_INSTRUCCIONES = 4000   # caracteres de las instrucciones del asistente (las generales y las de cada proyecto)
-_LIMITE_DESHACER = 50
+_LIMITE_DESHACER = 200   # con 50 se perdía el deshacer de lo primero en una sesión larga; la memoria la acota el tope de bytes
 _LIMITE_BYTES_DESHACER = 150_000_000   # un STEP importado viaja en cada instantánea: se acota la memoria
 # Un paso que tarda al menos esto guarda su resultado con el proyecto: al abrirlo no se recalcula. Los más rápidos
 # se recalculan (guardarlos agrandaría el archivo sin ganar casi nada de tiempo).

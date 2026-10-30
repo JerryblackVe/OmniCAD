@@ -2032,7 +2032,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_bounding_solid`](#create_bounding_solid) | sí | Crea una caja, un cilindro o un tubo envolvente de los cuerpos elegidos (SÓLIDO › CREAR › Sólido envolvente). orientation: model (ejes del modelo), automatic (la menor), z_x / z_y / x_y (dos ejes dados en axis_a y axis_b; el primero manda) o ucs (un sistema de coordenadas de usuario). |
 | [`create_fluid_volume`](#create_fluid_volume) | sí | Crea el volumen de fluido de un diseño (SÓLIDO › CREAR › Volumen de fluido): el sólido del interior (internal, que copia las caras del modelo) o del exterior (external, una caja, cilindro o semiesfera que rodea el modelo menos el modelo). |
 | [`thicken`](#thicken) | sí | Da espesor a caras o cuerpos de superficie y crea un sólido. |
-| [`align_bodies`](#align_bodies) | sí | Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional. |
+| [`align_bodies`](#align_bodies) | sí | Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional (Fusion: Alinear, con Flip y Angle). angle gira el resultado alrededor de la normal o del eje del destino (Fusion lo hace de a 90°; acá vale cualquier ángulo); con un punto de destino no hay eje y angle falla. |
 | [`move_faces`](#move_faces) | sí | Mueve o copia caras planas de un cuerpo (SÓLIDO › MODIFICAR › Mover/copiar › Caras): las caras vecinas se extienden o se recortan para seguirlas. type=translate con direction (eje, arista recta, cara plana o plano) y distance, o con translate [dx, dy, dz]; type=rotate alrededor de axis un angle. |
 | [`scale_body`](#scale_body) | sí | Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. sketches escala bocetos enteros (solo uniforme). |
 | [`create_surface_extrude`](#create_surface_extrude) | sí | Extruye curvas abiertas o cerradas en una superficie. |
@@ -3122,17 +3122,18 @@ Da espesor a caras o cuerpos de superficie y crea un sólido.
 
 ### `align_bodies`
 
-Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional.
+Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional (Fusion: Alinear, con Flip y Angle). angle gira el resultado alrededor de la normal o del eje del destino (Fusion lo hace de a 90°; acá vale cualquier ángulo); con un punto de destino no hay eje y angle falla.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (texto o lista de texto; obligatorio): nombres/ids de los cuerpos a mover o copiar.
+  - `bodies` (texto o lista de texto; obligatorio): nombres/ids de los cuerpos a mover o copiar; un componente (id o nombre) mueve todos sus cuerpos.
   - `source` (texto o objeto; obligatorio): plano/eje/punto de origen, nombre/id de construcción, selector/id de cara o arista; {"sketch": nombre, "point": id} o {"body": nombre, "vertex": índice}.
   - `destination` (texto o objeto; obligatorio): geometría de destino, con el mismo formato que source.
   - `flip` (true/false; opcional, por defecto `false`): true voltea 180 grados la alineación.
   - `copy` (true/false; opcional, por defecto `false`): true crea copias; false mueve los originales.
   - `source_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de source.
   - `destination_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de destination.
+  - `angle` (número; opcional, por defecto `0.0`): giro extra en grados alrededor de la normal o del eje del destino, después de alinear (0 = sin giro).
 - CLI: `omnicad call align_bodies --doc pieza.omnicad bodies=… source=… destination=…`
 
 ### `move_faces`
