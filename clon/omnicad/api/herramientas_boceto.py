@@ -31,7 +31,7 @@ from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Ci
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
                                     expresion_sin_signo, _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
                                     evaluar_primitiva, mas_cercano, peine_curvatura, validar_valor_cota)
-from ..restricciones.solver import restricciones_en_conflicto
+from ..restricciones.solver import restricciones_en_conflicto, restricciones_redundantes
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, evaluar, validar_nombre
@@ -1318,8 +1318,48 @@ def add_constraint(sesion, sketch: str,
     if rid not in antes["restricciones"]:
         sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, previo is None or previo.solver.ok, f"La restricción «{type}»")
+    despues = boceto_resuelto(sesion, nueva)
+    if (type != "fix" and rid not in antes["restricciones"] and previo is not None and despues is not None
+            and previo.solver.ok and despues.solver.ok and despues.solver.gdl >= previo.solver.gdl):
+        raise error("SKETCH_OVERCONSTRAINED", f"La restricción «{type}» no quita ningún grado de libertad: el boceto "
+                    f"«{op.nombre}» ya la cumple por otras restricciones o cotas (sobre-definiría). No se agregó.")
     informe = _informe_edicion(sesion, nueva, b, antes)
     return {"sketch": informe["sketch"], "constraint": {"id": rid, "type": type, "entities": b.restricciones[rid].entidades},
+            "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"]}
+
+
+@herramienta("replace_constraint", "boceto",
+             "Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la "
+             "ventana: clic derecho en su símbolo › Cambiar por). Una restricción no tiene valores que editar: lo "
+             "que se cambia es qué relación pide. Valen horizontal, vertical, coincident, parallel, perpendicular, "
+             "equal, tangent, concentric, midpoint y collinear, siempre que la nueva aplique a esas entidades "
+             "(horizontal ↔ vertical en una línea o dos puntos, parallel ↔ perpendicular ↔ equal ↔ collinear en dos "
+             "líneas…). Si no aplica o choca con las demás, falla y queda la anterior. Para otras (fix, symmetry, "
+             "curvature, polygon): delete_sketch_entities y add_constraint.", modifica=True)
+def replace_constraint(sesion, sketch: str, constraint: int,
+                       type: Literal["horizontal", "vertical", "coincident", "parallel", "perpendicular",  # noqa: A002
+                                     "equal", "tangent", "concentric", "midpoint", "collinear"]):
+    """
+    sketch: id o nombre del boceto.
+    constraint: id de la restricción a cambiar (constraints de get_sketch).
+    type: tipo nuevo.
+    """
+    op = op_boceto(sesion, sketch)
+    previo = boceto_resuelto(sesion, op)
+    nueva = op.copia()
+    b = nueva.boceto
+    if constraint not in b.restricciones:
+        raise error("ENTITY_NOT_FOUND", f"El boceto no tiene la restricción {constraint}.")
+    antes = _claves(b)
+    try:
+        b.reemplazar_restriccion(constraint, RESTRICCIONES[type])
+    except ErrorBoceto as e:
+        raise error("INVALID_CONSTRAINT", str(e)) from e
+    sesion.doc.reemplazar(op.id, nueva)
+    _exigir_sin_conflicto(sesion, nueva, previo is None or previo.solver.ok, f"La restricción «{type}»")
+    informe = _informe_edicion(sesion, nueva, b, antes)
+    return {"sketch": informe["sketch"], "constraint": {"id": constraint, "type": type,
+                                                         "entities": b.restricciones[constraint].entidades},
             "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"]}
 
 
@@ -1451,6 +1491,32 @@ def get_sketch(sesion, sketch: str | None = None):
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     return info_boceto(sesion, op_boceto(sesion, sketch, derivados=True))
+
+
+@herramienta("find_redundant_constraints", "boceto",
+             "Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún grado de libertad porque "
+             "otras ya fijan lo mismo (el boceto está sobre-definido pero se puede cumplir; no es un conflicto, para "
+             "eso mirá `conflicts` de get_sketch). Se suman de a una en orden de id y se marca la que no baja el rango: "
+             "de tres paralelas que se implican entre sí sale solo la última. No cambia el boceto: para sacar una, "
+             "delete_sketch_entities con su id. Con más de 150 restricciones y cotas no se calcula (checked=false).")
+def find_redundant_constraints(sesion, sketch: str | None = None):
+    """
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op, br = boceto_activo(sesion, sketch, derivados=False)
+    b = op.boceto.copia()
+    _sincronizar_con_solver(sesion, op, b)
+    sobran = restricciones_redundantes(b, valores_cotas(sesion, b))
+    estado, gdl = estado_solver(br)
+
+    def item(i):
+        if i in b.restricciones:
+            r = b.restricciones[i]
+            return {"kind": "constraint", "id": i, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo), "entities": r.entidades}
+        k = b.cotas[i]
+        return {"kind": "dimension", "id": i, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "entities": k.entidades}
+    return {"sketch": _paso(op), "status": estado, "dof": gdl, "checked": sobran is not None,
+            "redundant": [item(i) for i in sobran or []]}
 
 
 # ---------------------------------------------------------------- sketch_from_spec

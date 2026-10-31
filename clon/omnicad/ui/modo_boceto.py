@@ -20,7 +20,8 @@ from .. import NOMBRE_APP
 from ..nucleo.perfiles import detectar
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
-from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia
+from .editor_boceto import (AYUDA_RESTRICCION, HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo,
+                            ajustes_inferencia)
 from .iconos import icono
 from .panel_patron import PanelPatron
 from .panel_simetria import PanelSimetria
@@ -780,7 +781,7 @@ class ModoBoceto(QObject):
         self.grupo = QActionGroup(self)
         for clave, texto, herramienta, atajo, ico in ACCIONES_BOCETO:
             a = QAction(icono(ico), texto, ventana, checkable=herramienta != "proyectar_eje")
-            ayuda = HERRAMIENTAS.get(herramienta, ("", f"{texto}: hacé clic en la geometría a restringir."))[1]
+            ayuda = HERRAMIENTAS.get(herramienta, ("", AYUDA_RESTRICCION.get(herramienta, "")))[1]
             visible = (atajo or "").replace("Shift", "Mayúsculas")
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}" + (f"<br><span style='color:#bbbbbb'>{visible}</span>" if atajo else ""))
             if atajo:
@@ -798,7 +799,7 @@ class ModoBoceto(QObject):
                  "Alterna la geometría seleccionada entre normal y construcción."),
                 ("sk_eje", "Normal / línea central", None, "simetria_boceto", self._eje,
                  "Alterna la geometría seleccionada entre normal y línea central (eje)."),
-                ("sk_autorestringir", "Restringir automáticamente", None, "r_fijo", self._autorestringir,
+                ("sk_autorestringir", "Restringir automáticamente", None, "r_autorestringir", self._autorestringir,
                  "AutoConstrain: detecta coincidencias, concentricidad, horizontales, verticales, paralelas, "
                  "perpendiculares, tangencias, igualdades, puntos medios y simetrías, y agrega las cotas que faltan. "
                  "Muestra varios resultados para elegir."),
@@ -806,7 +807,8 @@ class ModoBoceto(QObject):
                  "Restringe el boceto automáticamente y lo termina (Finish with AutoConstrain). Si no se puede "
                  "(vacío o más de 250 entidades), lo termina igual."),
                 ("sk_conflictos", "Qué choca", "F5", "boceto_conflicto", self._conflictos,
-                 "Lista las restricciones y cotas en conflicto (en rojo en el boceto): quitando una se resuelve."),
+                 "Lista las restricciones y cotas en conflicto (en rojo en el boceto): quitando una se resuelve. Sin conflicto, "
+                 "dice cuáles sobran (no quitan ningún grado de libertad) y las deja elegidas."),
                 ("sk_soltar_desfase", "Soltar desfase", None, "desfase", lambda: self._en_lienzo("soltar_desfase"),
                  "Suelta la asociación del desfase de lo seleccionado: la copia deja de seguir a la original."),
                 ("sk_editar_patron", "Editar patrón", None, "patron_rectangular",

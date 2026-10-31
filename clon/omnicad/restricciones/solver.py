@@ -378,17 +378,7 @@ class _Sistema:
                 elif tipos[0] in ELIPTICAS:
                     T.append(lambda x, c1=e[0], c2=e[1]: [self.Rv(x, c1) - self.Rv(x, c2)])
             elif t == "poligono":
-                vertices = b.vertices_cadena(e)
-
-                def f(x, vs=tuple(vertices)):
-                    P = [self.P(x, v) for v in vs]
-                    m = len(P)
-                    cx, cy = sum(p[0] for p in P) / m, sum(p[1] for p in P) / m
-                    r0 = math.hypot(P[0][0] - cx, P[0][1] - cy)
-                    l0 = math.dist(P[0], P[1])
-                    return ([math.hypot(p[0] - cx, p[1] - cy) - r0 for p in P[1:]]
-                            + [math.dist(P[i], P[(i + 1) % m]) - l0 for i in range(1, m)])
-                T.append(f)
+                self._poligono(b.vertices_cadena(e))
             elif t == "desfase":
                 if len(e) == 4:
                     T.append(lambda x, e=tuple(e): [self.separacion(x, e[2], e[3]) - self.separacion(x, e[0], e[1])])
@@ -585,6 +575,28 @@ class _Sistema:
             Cb, Db = evaluar_primitiva(self.prim(x, c), x[jb], 1)
             return [Ca[0] - Cb[0], Ca[1] - Cb[1], _cruz(_unitario(Da), _unitario(Db)) * _ESCALA_TANGENTE]
         T.append(f)
+
+    def _poligono(self, vertices):
+        """Polígono regular por vértices = centro + radio·(cos, sin)(giro + k·2π/m), con el centro, el radio y el giro
+        como incógnitas auxiliares. Antes se pedían «radios iguales al centroide y lados iguales»: esa forma deja una
+        familia plana (el tamaño) por la que el solver se escapaba al arrastrar un vértice, de a poco hasta achicar el
+        polígono a un punto."""
+        m = len(vertices)
+        P0 = [self.P(self.x0, v) for v in vertices]
+        cx, cy = sum(p[0] for p in P0) / m, sum(p[1] for p in P0) / m
+        radio = sum(math.hypot(p[0] - cx, p[1] - cy) for p in P0) / m
+        area = sum(P0[i][0] * P0[(i + 1) % m][1] - P0[(i + 1) % m][0] * P0[i][1] for i in range(m))
+        paso = (2 * math.pi / m) * (1.0 if area >= 0 else -1.0)         # el sentido en que se recorre la cadena
+        jc, jd, jr, jf = (self._parametro(v) for v in (cx, cy, radio, math.atan2(P0[0][1] - cy, P0[0][0] - cx)))
+
+        def f(x, vs=tuple(vertices)):
+            salida = []
+            for k, v in enumerate(vs):
+                px, py = self.P(x, v)
+                a = x[jf] + k * paso
+                salida += [px - (x[jc] + x[jr] * math.cos(a)), py - (x[jd] + x[jr] * math.sin(a))]
+            return salida
+        self.terminos.append(f)
 
     def _pares_simetricos(self, e, tipos):
         """Pares de puntos que deben quedar espejados. En dos líneas se emparejan los extremos
@@ -795,6 +807,28 @@ def _fijos(b):
     return fijos_p, fijos_r
 
 
+def _salir_del_paralelismo(b, fijos_p):
+    """Perpendicular entre dos líneas exactamente paralelas (p. ej. una restricción recién cambiada de Paralela): el
+    residuo cos(ángulo) no tiene pendiente respecto al giro en 0°, y el solver la «cumplía» achicando una línea hasta
+    dejarla casi en un punto. Se gira 90° un extremo libre de la segunda línea (conserva el largo) y el solver afina."""
+    for r in b.restricciones.values():
+        if r.tipo != "perpendicular" or len(r.entidades) != 2:
+            continue
+        l1, l2 = (b.curvas.get(i) for i in r.entidades)
+        if getattr(l1, "tipo", "") != "linea" or getattr(l2, "tipo", "") != "linea":
+            continue
+        (ax, ay), (bx, by) = b.coords(l1.p1), b.coords(l1.p2)
+        (cx, cy), (dx, dy) = b.coords(l2.p1), b.coords(l2.p2)
+        nu, nv = math.hypot(bx - ax, by - ay), math.hypot(dx - cx, dy - cy)
+        if nu < 1e-9 or nv < 1e-9 or abs((bx - ax) * (dy - cy) - (by - ay) * (dx - cx)) / (nu * nv) > 1e-9:
+            continue
+        mover, ancla = (l2.p2, l2.p1) if l2.p2 not in fijos_p else (l2.p1, l2.p2)
+        if mover in fijos_p:
+            continue
+        (mx, my), (qx, qy) = b.coords(mover), b.coords(ancla)
+        b.puntos[mover].x, b.puntos[mover].y = qx - (my - qy), qy + (mx - qx)
+
+
 def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     """Resuelve el boceto en el lugar (modifica coordenadas y radios). Devuelve ResultadoSolver.
 
@@ -814,6 +848,7 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     if previo is not None and arrastrado is not None:
         return _resolver_arrastre(boceto, valores, grupos, arrastrado, previo)
     fijos = _fijos(boceto)
+    _salir_del_paralelismo(boceto, fijos[0])
     sueltos_p, sueltos_r = _sueltas(boceto, grupos, fijos)
     libres_p, libres_r = set(sueltos_p), set(sueltos_r)
     gdl, err_max, inconsistente = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False
@@ -860,6 +895,41 @@ def restricciones_en_conflicto(boceto, valores_cotas=None, cancelar=None):
         if resolver(prueba, valores_cotas).ok:
             conflictos.append(ident)
     return conflictos
+
+
+TOPE_REDUNDANTES = 150     # vínculos: el diagnóstico cuenta rangos una vez por vínculo, y más allá deja de ser instantáneo
+
+
+def restricciones_redundantes(boceto, valores_cotas=None, cancelar=None):
+    """Ids de las restricciones y cotas (no de referencia) que NO quitan ningún grado de libertad: el boceto está
+    sobre-definido pero sin contradicción (a diferencia de `restricciones_en_conflicto`, donde no hay solución).
+
+    Se suman los vínculos de a uno en orden de id y se reporta el que no baja el rango: de una terna que se implica
+    entre sí (A∥B, B∥C, A∥C) sale solo la última, la que sobra. Trabaja sobre copias y no mueve el boceto.
+    Devuelve None si hay más de `TOPE_REDUNDANTES` vínculos o si `cancelar()` dijo que sí. Si el boceto ya está en
+    conflicto devuelve [] (ahí manda `restricciones_en_conflicto`)."""
+    ids = sorted(set(boceto.restricciones) | {i for i, k in boceto.cotas.items() if not k.referencia})
+    if len(ids) > TOPE_REDUNDANTES:
+        return None
+    valores = valores_cotas or {}
+    if not resolver(boceto.copia(), valores).ok:
+        return []
+    prueba = boceto.copia()
+    todas, todas_cotas = prueba.restricciones, prueba.cotas
+    prueba.restricciones, prueba.cotas = {}, {i: k for i, k in todas_cotas.items() if k.referencia}
+    gdl, salida = grados_de_libertad(prueba, valores), []
+    for i in ids:
+        if cancelar is not None and cancelar():
+            return None
+        tabla, destino = (todas, prueba.restricciones) if i in todas else (todas_cotas, prueba.cotas)
+        destino[i] = tabla[i]
+        nuevo = grados_de_libertad(prueba, valores)
+        if nuevo >= gdl:
+            salida.append(i)
+            del destino[i]
+        else:
+            gdl = nuevo
+    return salida
 
 
 def _ventana(boceto, g, arrastrado, radio):

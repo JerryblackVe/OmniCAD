@@ -32,9 +32,13 @@ TIPOS_RESTRICCION = {
     "coincidente": "Coincidente", "horizontal": "Horizontal", "vertical": "Vertical",
     "paralela": "Paralela", "perpendicular": "Perpendicular", "igual": "Igual",
     "tangente": "Tangente", "concentrica": "Concéntrica", "punto_medio": "Punto medio", "fijo": "Fijo",
-    "colineal": "Colineal", "simetrica": "Simetría", "curvatura": "Curvatura", "poligono": "Polígono",
+    "colineal": "Colineal", "simetrica": "Simetría", "curvatura": "Curvatura", "poligono": "Polígono regular",
     "desfase": "Desfase", "patron": "Patrón",
 }
+# Restricciones que se pueden cambiar una por otra sobre las mismas entidades (paralela → perpendicular, horizontal →
+# vertical…). Las demás (fijo, simetría, curvatura, polígono…) piden otras entidades o tienen datos propios.
+CAMBIABLES = ("horizontal", "vertical", "coincidente", "paralela", "perpendicular", "igual", "tangente", "concentrica",
+              "punto_medio", "colineal")
 TIPOS_COTA = {
     "distancia": "Distancia", "distancia_h": "Distancia horizontal", "distancia_v": "Distancia vertical",
     "radio": "Radio", "diametro": "Diámetro", "angulo": "Ángulo", "desfase": "Desfase",
@@ -1807,6 +1811,31 @@ class Boceto:
         r = Restriccion(self._nuevo_id(), tipo, entidades, datos)
         self.restricciones[r.id] = r
         return r.id
+
+    def tipos_compatibles(self, rid):
+        """Tipos por los que se puede cambiar la restricción `rid` sin cambiar sus entidades (`CAMBIABLES`)."""
+        r = self.restricciones[rid]
+        if r.tipo not in CAMBIABLES:
+            return []
+        salida = []
+        for tipo in CAMBIABLES:
+            try:
+                if tipo != r.tipo:
+                    self._validar_restriccion(tipo, r.entidades)
+                    salida.append(tipo)
+            except ErrorBoceto:
+                pass
+        return salida
+
+    def reemplazar_restriccion(self, rid, tipo):
+        """Cambia la restricción `rid` por otra de tipo `tipo` sobre las mismas entidades y con el mismo id (así el
+        símbolo y la selección siguen siendo los mismos). No resuelve: si choca con las demás lo ve el solver."""
+        if tipo not in self.tipos_compatibles(rid):
+            r = self.restricciones[rid]
+            raise ErrorBoceto(f"La restricción «{TIPOS_RESTRICCION[r.tipo]}» no se puede cambiar por «"
+                              f"{TIPOS_RESTRICCION.get(tipo, tipo)}» sobre esas entidades.")
+        self.restricciones[rid] = Restriccion(rid, tipo, self.restricciones[rid].entidades)
+        return rid
 
     def anclar_al_origen(self, puntos_nuevos):
         """Fija el primer punto nuevo dibujado sobre (0, 0), como el editor de Fusion."""
@@ -3961,6 +3990,7 @@ class Boceto:
         todos = list(b.puntos) + list(b.curvas) + list(b.restricciones) + list(b.cotas)
         todos += [i for tabla in b.geo3d.values() for i in tabla]
         b._siguiente = max([b._siguiente] + [i + 1 for i in todos])
+        b._depurar()          # un .omnicad es un archivo de otro: lo que cita algo inexistente o ya no aplica, se descarta
         return b
 
 

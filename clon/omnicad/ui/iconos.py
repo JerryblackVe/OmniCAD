@@ -964,10 +964,23 @@ def _b_mover(p):
 
 
 # ---- restricciones (glifos rojos)
+# Rojo = Fijar, Punto medio, Polígono y Autorrestringir (ver ROJO_REST); gris = relaciones entre curvas.
+# «Polígono regular» no existe en Fusion: es una extensión propia de OmniCAD.
 def _r_horizontal_vertical(p):
     _trazo(p, GRIS_REST, 3.0)
     _linea(p, 6, 7, 26, 7)
     _linea(p, 16, 13, 16, 25)
+
+
+def _r_horizontal(p):
+    """El símbolo sobre la geometría de una horizontal: solo la raya horizontal (el del botón lleva las dos)."""
+    _trazo(p, GRIS_REST, 3.0)
+    _linea(p, 5, 16, 27, 16)
+
+
+def _r_vertical(p):
+    _trazo(p, GRIS_REST, 3.0)
+    _linea(p, 16, 5, 16, 27)
 
 
 def _r_coincidente(p):
@@ -1061,6 +1074,19 @@ def _r_poligono(p):
 
 
 # ---- otros
+def _r_autorestringir(p):
+    """Restringir automáticamente: una varita que pone la restricción sola (no confundir con el candado de Fijar)."""
+    _trazo(p, GRIS_REST, 2.6)
+    _linea(p, 5, 27, 17, 15)
+    p.setPen(Qt.NoPen)
+    p.setBrush(ROJO_REST)
+    p.drawPolygon(QPolygonF([QPointF(22, 3), QPointF(24.2, 9), QPointF(30, 11), QPointF(24.2, 13), QPointF(22, 19),
+                             QPointF(19.8, 13), QPointF(14, 11), QPointF(19.8, 9)]))
+    _trazo(p, GRIS_REST, 2.0)
+    _linea(p, 20, 24, 28, 24)
+    _linea(p, 20, 28, 28, 28)
+
+
 def _terminar(p):
     p.setPen(Qt.NoPen)
     p.setBrush(VERDE)
@@ -1163,10 +1189,12 @@ DIBUJOS = {
     "recortar": _b_recortar, "alargar": _b_alargar, "partir": _b_partir, "escala_boceto": _b_escala,
     "mover": _b_mover,
     # restricciones
-    "r_horizontal_vertical": _r_horizontal_vertical, "r_coincidente": _r_coincidente, "r_tangente": _r_tangente,
+    "r_horizontal_vertical": _r_horizontal_vertical, "r_horizontal": _r_horizontal, "r_vertical": _r_vertical,
+    "r_coincidente": _r_coincidente, "r_tangente": _r_tangente,
     "r_igual": _r_igual, "r_paralela": _r_paralela, "r_perpendicular": _r_perpendicular, "r_fijo": _r_fijo,
     "r_punto_medio": _r_punto_medio, "r_concentrica": _r_concentrica, "r_colineal": _r_colineal,
     "r_simetria": _r_simetria, "r_curvatura": _r_curvatura, "r_poligono": _r_poligono,
+    "r_autorestringir": _r_autorestringir,
     # otros
     "terminar": _terminar, "mirar_a": _mirar_a, "orbita_libre": _orbita_libre,
     "orbita_restringida": _orbita_restringida, "ventana_zoom": _ventana_zoom,
