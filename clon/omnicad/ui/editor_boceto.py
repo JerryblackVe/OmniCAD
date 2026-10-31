@@ -4509,7 +4509,10 @@ class Lienzo(QWidget):
             return True
         if e.type() == e.Type.ShortcutOverride and (
                 self._admite_entrada(e) or e.key() in (Qt.Key_Delete, Qt.Key_Backspace, Qt.Key_Escape,
-                                                       Qt.Key_Return, Qt.Key_Enter)):
+                                                       Qt.Key_Return, Qt.Key_Enter)
+                # Espacio (alternar ayudas) y Flecha arriba (bloquear) son del boceto mientras hay una ayuda activa:
+                # Espacio es también el atajo de «Boceto sobre la cara» de la ventana
+                or (e.key() in (Qt.Key_Space, Qt.Key_Up) and (self.inf_lista or self._inf_bloqueo is not None))):
             e.accept()
             return True
         # Tab / Mayús+Tab pasan de una caja de valor a la otra (no mueven el foco a otro control).

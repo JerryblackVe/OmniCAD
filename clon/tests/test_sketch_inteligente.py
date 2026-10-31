@@ -372,3 +372,25 @@ def test_rectangulo_no_usa_la_direccion_paralela(lienzo):
     _clic(lz, 60, 65)
     _mover(lz, 83, 82.9)
     assert lz.inf_actual is None or lz.inf_actual.tipo != "paralela"
+
+
+def test_espacio_y_flecha_arriba_son_del_boceto_cuando_hay_una_ayuda(lienzo):
+    """Espacio es también un atajo de la ventana («Boceto sobre la cara»): con ayuda activa lo reclama el boceto."""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QApplication
+
+    lz = lienzo
+    _lienzo_con_triangulo(lz)
+    _clic(lz, 40, 10)
+
+    def reclama(k):
+        e = QKeyEvent(QEvent.ShortcutOverride, k, Qt.NoModifier)
+        e.ignore()
+        QApplication.sendEvent(lz, e)
+        return e.isAccepted()
+
+    _mover(lz, 70, 20)                                    # sin ayuda: no lo reclama
+    assert lz.inf_lista == [] and not reclama(Qt.Key_Space)
+    _mover(lz, 60.1, 75.2)
+    assert lz.inf_lista and reclama(Qt.Key_Space) and reclama(Qt.Key_Up)
