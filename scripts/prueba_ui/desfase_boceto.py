@@ -197,12 +197,50 @@ A.esperar(60)
 QTest.keyClick(campo(), Qt.Key_Escape)
 A.esperar(100)
 A.reg(AR + " · Esc", "Esc descarta la barra y no queda ninguna entidad nueva ni cota", tecla_ok and lz.entrada is None and radios() == [30] and not lz.b.cotas, f"{radios()}")
-empezar(lado=(10, 0))                     # el ratón adentro: el positivo va adentro, el negativo afuera
+empezar(lado=(10, 0))                     # el ratón adentro: ya no decide el lado (Fusion: el signo, el asa y «Cambiar»)
 teclear("5")
 r1 = previa()[0]
-teclear("-5")
+for xy in ((10, 0), (-50, 20), (0, 0)):
+    mover(*xy)
 r2 = previa()[0]
-A.reg(AR + " · lado", "con el ratón adentro, 5 va adentro (25) y -5 va afuera (35)", r1 == [25.0] and r2 == [35.0], f"{r1} {r2}")
+teclear("-5")
+r3 = previa()[0]
+A.reg(AR + " · lado", "pasar el ratón no cambia lo escrito ni el lado: 5 va afuera (35) y -5 adentro (25)",
+      r1 == r2 == [35.0] and r3 == [25.0] and campo().text() == "-5", f"{r1} {r2} {r3}")
+cerrar()
+
+
+# 5b. El asa (Fusion: la flecha de la vista): arrastrar escribe el valor con signo; pasar el ratón no hace nada
+def arrastrar_asa(i, destino, pasos=6):
+    q = QPointF(lz._asas.posiciones_px()[i][1])
+    for tipo, botones, pos in ((QEvent.MouseMove, Qt.NoButton, q), (QEvent.MouseButtonPress, Qt.LeftButton, q)):
+        QApplication.sendEvent(lz, QMouseEvent(tipo, pos, lz.mapToGlobal(pos), Qt.LeftButton if botones else Qt.NoButton,
+                                               botones, Qt.NoModifier))
+    meta = QPointF(px(*destino))
+    for k in range(1, pasos + 1):
+        pos = q + (meta - q) * (k / pasos)
+        QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, pos, lz.mapToGlobal(pos), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+        A.esperar(30)
+    QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseButtonRelease, meta, lz.mapToGlobal(meta), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+    A.esperar(80)
+
+
+empezar()
+inicial = campo().text()
+for xy in ((10, 10), (0, 60), (-60, 0)):
+    mover(*xy)
+A.reg(AR + " · asa", f"el valor inicial ({inicial}) entra hacia los dos lados y pasar el ratón no lo cambia",
+      0 < float(inicial) < 15 and campo().text() == inicial, f"inicial={inicial}")
+A.foto(v, "desfase_asa")
+arrastrar_asa(0, (50, 0))
+mas = float(campo().text())
+arrastrar_asa(0, (12, 0))
+menos = float(campo().text())
+A.reg(AR + " · asa", "tirar del asa hacia afuera da +20 y hacia adentro -18, y la vista previa lo sigue",
+      abs(mas - 20) < 1.5 and abs(menos + 18) < 1.5 and previa()[0] == [round(30 + menos, 1)], f"{mas} {menos} {previa()}")
+teclear("7")
+mover(-60, 0)
+A.reg(AR + " · asa", "lo escrito manda: mover el ratón después no lo pisa", campo().text() == "7", campo().text())
 cerrar()
 
 # 6. Deshacer / rehacer en cadena con Ctrl+Z / Ctrl+Y
@@ -255,6 +293,46 @@ for ancho, alto in ((1024, 640), (800, 520)):
     cerrar()
 v.resize(1900, 1000)
 A.esperar(300)
+
+# 8b. Los tres modos con la barra abierta, desde el combo REAL de la paleta, y confirmar lo que se ve
+from PySide6.QtWidgets import QComboBox  # noqa: E402
+
+
+def elegir_direccion(clave):
+    combo = next(c for c in v.modo_boceto.paleta.contexto.findChildren(QComboBox) if c.findData("dos") >= 0)
+    combo.setCurrentIndex(combo.findData(clave))
+    A.esperar(150)
+
+
+borrar_nuevos()
+empezar()
+teclear("20")
+elegir_direccion("dos")
+dos_ok = len(lz.entrada.campos) == 2 and [c.text() for c in lz.entrada.campos] == ["20", "0"] and lz.picks
+QTest.keyClicks(lz.entrada.campos[1], "")        # el foco queda en la barra
+lz.entrada.campos[1].selectAll()
+QTest.keyClicks(lz.entrada.campos[1], "-10")
+A.esperar(80)
+A.foto(v, "desfase_dos_lados")
+r_dos = previa()
+elegir_direccion("simetrico")
+sim = (len(lz.entrada.campos) == 1, campo().text(), previa())
+A.foto(v, "desfase_simetrico")
+elegir_direccion("un")
+un = (len(lz.entrada.campos) == 1, campo().text(), previa()[0])
+A.reg(AR + " · modos", "Un lado → Dos lados → Simétrico → Un lado con la barra abierta: campos, valores y vista previa se rearman",
+      dos_ok and r_dos[0] == [20.0, 50.0] and sim[0] and sim[1] == "20" and sim[2][0] == [10.0, 50.0] and un[0] and un[1] == "20"
+      and un[2] == [50.0] and radios() == [30], f"{r_dos} {sim} {un}")
+elegir_direccion("dos")
+teclear("20")
+lz.entrada.campos[1].setText("-10")
+QTest.keyClick(lz.entrada.campos[1], Qt.Key_Return)
+A.esperar(150)
+A.reg(AR + " · modos", "Enter en Dos lados confirma lo que se ve: radios 20, 30 y 50 y un solo paso de deshacer",
+      radios() == [20.0, 30.0, 50.0], f"{radios()}")
+borrar_nuevos()
+elegir_direccion("un")
+cerrar()
 
 # 9. Terminar el boceto, extruir el desfase y guardar / reabrir
 borrar_nuevos()

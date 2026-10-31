@@ -55,7 +55,7 @@ def test_boc14_simetrico_da_un_cuadrado_afuera_y_otro_adentro(s):
 
 def test_boc14_dos_lados_con_distancias_distintas(s):
     abajo = rectangulo(s)[0]
-    llamar(s, "offset_sketch_curves", entity=abajo, distance=1, distance2=3, direction="two")
+    llamar(s, "offset_sketch_curves", entity=abajo, distance=1, distance2=-3, direction="two")   # misma normal, con signo
     assert areas(s) == pytest.approx(sorted([16, 100 - 16, 144 - 100]), abs=1e-3)
     assert falla(s, "offset_sketch_curves", entity=abajo, distance=1, direction="two")["error_kind"] == "INVALID_ARGUMENTS"
 

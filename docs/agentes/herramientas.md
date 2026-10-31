@@ -1100,7 +1100,7 @@ Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Pa
 
 ### `offset_sketch_curves`
 
-Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la izquierda de su recorrido; distance negativa va al lado contrario (la cota queda positiva) y side_x/side_y eligen el lado con un punto (la positiva va hacia él). Si el desfase deja un radio o un segmento en cero o al revés (p. ej. -30 en un círculo de radio 30), falla con INVALID_GEOMETRY y dice cuál. direction=two desfasa distance a un lado y distance2 al otro; direction=symmetric, distance a los dos lados. match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. Una spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): offset_profiles.
+Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la izquierda de su recorrido; distance negativa va al lado contrario (la cota queda positiva) y side_x/side_y eligen el lado con un punto (la positiva va hacia él). Si el desfase deja un radio o un segmento en cero o al revés (p. ej. -30 en un círculo de radio 30), falla con INVALID_GEOMETRY y dice cuál. direction=two: distance y distance2 llevan signo sobre la MISMA normal, como Fusion (20 y -10 en un círculo: una copia a 20 afuera y otra a 10 adentro); una de las dos puede ser 0 y entonces no se crea esa copia. direction=symmetric, distance a los dos lados con las dos cotas ligadas (editar una mueve la otra). chain=false desfasa solo la curva entity (Fusion sin Selección de cadena). match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. Una spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): offset_profiles.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1109,9 +1109,10 @@ Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y ar
   - `side_x` (número; opcional, por defecto `null`): x de un punto del lado donde va el desfase; vacío = el lado por defecto.
   - `side_y` (número; opcional, por defecto `null`): y de ese punto.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
-  - `direction` ("one" | "two" | "symmetric"; opcional, por defecto `"one"`): one (un lado), two (distance a un lado y distance2 al contrario) o symmetric (distance a los dos lados).
-  - `distance2` (número o expresión; opcional, por defecto `null`): separación del segundo lado con direction=two (obligatoria en ese caso).
+  - `direction` ("one" | "two" | "symmetric"; opcional, por defecto `"one"`): one (un lado), two (distance y distance2, cada una con su signo sobre la misma normal) o symmetric (distance a los dos lados).
+  - `distance2` (número o expresión; opcional, por defecto `null`): segunda distancia con direction=two (obligatoria en ese caso): positiva = el mismo lado que distance positiva, negativa = el otro; 0 = sin segunda copia.
   - `match_topology` (true/false; opcional, por defecto `false`): true = si la distancia haría desaparecer un segmento (o anular un radio), se usa la mayor que conserva la topología, como número fijo, y se avisa.
+  - `chain` (true/false; opcional, por defecto `true`): true = se desfasa toda la cadena conectada a entity (como Selección de cadena de Fusion); false = solo esa curva.
 - CLI: `omnicad call offset_sketch_curves --doc pieza.omnicad entity=… distance=…`
 
 ### `release_offset`

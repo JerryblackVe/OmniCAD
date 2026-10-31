@@ -225,6 +225,48 @@ def _desfase_px(l, px=16.0):
     return px / max(l.px_por_mm(), 1e-9)
 
 
+def punto_mas_cercano(polis, q):
+    """(punto, tangente unitaria) de las polilíneas `polis` (mm) más cercano a `q`."""
+    mejor = None
+    for poli in polis:
+        for a, b in zip(poli, poli[1:], strict=False):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            n2 = dx * dx + dy * dy
+            t = 0.0 if n2 < 1e-18 else max(0.0, min(1.0, ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / n2))
+            p = (a[0] + t * dx, a[1] + t * dy)
+            d = math.dist(p, q)
+            if n2 > 1e-18 and (mejor is None or d < mejor[0]):
+                mejor = (d, p, (dx / math.sqrt(n2), dy / math.sqrt(n2)))
+    return (mejor[1], mejor[2]) if mejor else (tuple(q), (1.0, 0.0))
+
+
+def asas_desfase(l, base):
+    """(asas, tipos, previa) de las cajas del Desfase: un asa por distancia, sobre la normal de la curva por el punto
+    elegido (Fusion: la flecha de la vista); `base` = ((x, y), normal). Positiva = hacia donde va el desfase sin
+    «Invertir»; en el Simétrico, la distancia es siempre positiva. None si no se pudo calcular la normal (se
+    escribe el valor y listo)."""
+    if base is None:
+        return None
+    (px, py), n = base
+    simetrico = l._desfase_modo == "simetrico"
+    cantidad = 2 if l._desfase_modo == "dos" else 1
+
+    def normal():
+        return (-n[0], -n[1]) if l._desfase_invertido else n
+
+    def asa(i):
+        def posicion(v):
+            u, d = normal(), abs(v[i]) if simetrico else v[i]
+            return (px + u[0] * d, py + u[1] * d)
+
+        def valor(xy, v, v0=None, xy0=None):
+            u = normal()
+            d = (xy[0] - px) * u[0] + (xy[1] - py) * u[1]
+            return abs(d) if simetrico else d
+        return Asa2D(i, posicion, valor, ancla=lambda v: (px, py), tipo="long", ayuda="Distancia del desfase")
+    return [asa(i) for i in range(cantidad)], ["long"] * cantidad, None
+
+
 def asas_escala(l, ids, base):
     """(asas, tipos, previa) de la caja [Factor]: el asa sale del punto base hacia lo más lejano de la selección."""
     polis = polilineas_de(l, ids)

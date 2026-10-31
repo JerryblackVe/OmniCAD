@@ -117,7 +117,7 @@ def test_desfasar_dos_lados_y_simetrico_con_signos():
     assert _radios(b) == pytest.approx([25, 30, 35]) and len(nuevos) == 2
     b = Boceto()
     c = b.agregar_circulo((0, 0), 30)
-    b.desfasar(c, 5, direccion="dos", distancia2=2)      # 2.º positivo = al contrario del primero
+    b.desfasar(c, 5, direccion="dos", distancia2=-2)     # las dos con signo sobre la misma normal (Fusion)
     assert _radios(b) == pytest.approx([28, 30, 35])
     b = Boceto()
     c = b.agregar_circulo((0, 0), 30)
@@ -415,10 +415,10 @@ def test_dos_lados_con_el_segundo_invalido_no_deja_el_primero(lienzo, s):
     lz.opciones["direccion_desfase"] = "dos"
     _abrir(lz)
     lz.entrada.campos[0].setText("5")
-    lz.entrada.campos[1].setText("40")                   # el 2.º va hacia adentro: 40 > radio 30
+    lz.entrada.campos[1].setText("-40")                  # el 2.º va hacia adentro: 40 > radio 30
     assert "negativo" in lz._previa_desfase()[1]
     QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
     assert lz.entrada is not None and _radios(lz.b) == [30]
     c = _llamar(s, "draw_circle", radius=30)["entities"][0]["id"]
-    r = _falla(s, "offset_sketch_curves", entity=c, distance=5, direction="two", distance2=40)
+    r = _falla(s, "offset_sketch_curves", entity=c, distance=5, direction="two", distance2=-40)
     assert r["error_kind"] == "INVALID_GEOMETRY" and _circulos(s) == [30]

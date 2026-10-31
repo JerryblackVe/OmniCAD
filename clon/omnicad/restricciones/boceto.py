@@ -2879,39 +2879,49 @@ class Boceto:
 
     # ------------------------------------------------------------ MODIFICAR: desfase
     def desfasar(self, cid, distancia, punto_lado=None, expresion=None, direccion="un", distancia2=None,
-                 expresion2=None, invertir=False, topologia=False):
-        """Comando Desfase de Fusion entero (Direction + Match Topology): lo llaman igual la ventana (y su vista
-        previa) y la API, así lo que se ve es lo que se crea. `distancia` lleva signo: negativa = al lado contrario
-        del que da la positiva (el del cursor o `punto_lado`; sin ellos, afuera en una cadena cerrada). `invertir`
-        da vuelta todo. `direccion`: "un" lado, "dos" lados (`distancia2`, positiva = al contrario del primero) o
-        "simetrico" (`distancia` a los dos lados). `expresion`/`expresion2`: texto de cada distancia SIN signo, para
-        la cota. `topologia` limita la distancia a la mayor que conserva la curva madre. Devuelve (ids nuevos, avisos)."""
+                 expresion2=None, invertir=False, topologia=False, cadena=True):
+        """Comando Desfase de Fusion entero (Direction + Chain Selection + Match Topology): lo llaman igual la ventana
+        (y su vista previa) y la API, así lo que se ve es lo que se crea. `distancia` lleva signo: negativa = al lado
+        contrario del que da la positiva (el de `punto_lado`; sin él, afuera en una cadena cerrada y a la izquierda
+        del recorrido en una abierta). `invertir` da vuelta todo. `direccion`: "un" lado, "dos" lados o "simetrico"
+        (`distancia` a los dos lados, con las dos cotas ligadas: editar una mueve la otra). En "dos" las dos
+        distancias llevan signo sobre la MISMA normal, como Fusion (video 2026-10-31: Distancia 1 = 21,35 afuera y
+        Distancia 2 = -20,556 adentro): 20 y -10 dan una copia a 20 afuera y otra a 10 adentro; una de las dos
+        puede ser 0 (no crea esa copia). `expresion`/`expresion2`: texto de cada distancia SIN signo, para la cota.
+        `cadena`=False desfasa solo la curva `cid` (Fusion: sin Chain Selection). `topologia` limita la distancia
+        a la mayor que conserva la curva madre. Devuelve (ids nuevos, avisos)."""
         if direccion == "dos" and distancia2 is None:
             raise ErrorBoceto("Falta la segunda distancia del desfase.")
         contrario = (distancia < 0) != bool(invertir)
         pasos = [(abs(distancia), contrario, expresion)]
         if direccion == "dos":
-            pasos.append((abs(distancia2), (not contrario) != (distancia2 < 0), expresion2))
+            pasos.append((abs(distancia2), (distancia2 < 0) != bool(invertir), expresion2))
+            if any(math.isfinite(v) and v == 0 for v, *_r in pasos) and not all(v == 0 for v, *_r in pasos):
+                pasos = [p for p in pasos if p[0] != 0]          # una distancia en 0: solo la otra copia
         elif direccion == "simetrico":
             pasos.append((abs(distancia), not contrario, expresion))
-        nuevos, avisos = [], []
+        nuevos, avisos, primera = [], [], None
         for valor, inv, texto in pasos:
             if not math.isfinite(valor):
                 raise ErrorBoceto("La distancia de desfase no es un número válido.")
             if topologia:
-                tope = self.desfase_con_topologia(cid, valor, punto_lado, inv)
+                tope = self.desfase_con_topologia(cid, valor, punto_lado, inv, cadena)
                 if tope < valor:
                     avisos.append(f"Match Topology: la distancia se limitó de {valor:g} a {tope:.4g} mm para "
                                   "conservar todos los segmentos.")
                     valor, texto = round(tope, 6), None
-            nuevos += self.desfase(cid, valor, punto_lado, texto, invertir=inv)
+            ligada = primera if direccion == "simetrico" and texto is not None and not avisos else None   # Match Topology
+            nuevos += self.desfase(cid, valor, punto_lado, texto, invertir=inv, cadena=cadena, igual_a=ligada)   # la limitó: no
+            if primera is None:
+                primera = max(self.cotas)               # la cota que acaba de crear el primer lado
         return nuevos, avisos
 
-    def desfase(self, cid, distancia, punto_lado=None, expresion=None, invertir=False):
-        """Desfase (SKT-OFFSET) de la cadena conectada a `cid`: curvas paralelas a `distancia`, con las
-        esquinas resueltas por intersección, la restricción de desfase y su cota. Por defecto, una cadena
-        cerrada se desfasa hacia afuera (y una abierta, a la izquierda de su recorrido); `punto_lado` elige el
-        lado e `invertir` pasa al lado contrario del que tocaba, igual que una `distancia` negativa. Rechaza,
+    def desfase(self, cid, distancia, punto_lado=None, expresion=None, invertir=False, cadena=True, igual_a=None):
+        """Desfase (SKT-OFFSET) de la cadena conectada a `cid` (o solo de `cid` con `cadena`=False): curvas
+        paralelas a `distancia`, con las esquinas resueltas por intersección, la restricción de desfase y su cota.
+        Por defecto, una cadena cerrada se desfasa hacia afuera (y una abierta, a la izquierda de su recorrido);
+        `punto_lado` elige el lado e `invertir` pasa al lado contrario del que tocaba, igual que una `distancia`
+        negativa. `igual_a`: id de otra cota de desfase a la que queda ligada la nueva (el Simétrico). Rechaza,
         diciendo por qué, lo que deja un radio o un segmento en cero o al revés. Devuelve los ids nuevos."""
         if not math.isfinite(distancia):
             raise ErrorBoceto("La distancia de desfase no es un número válido.")
@@ -2921,16 +2931,17 @@ class Boceto:
         if distancia < 0:
             distancia, invertir = -distancia, not invertir
         c0 = self.curvas[cid]
+        datos = {} if igual_a is None else {"igual_a": igual_a}
         if isinstance(c0, (Spline, Elipse, ArcoElipse)):
-            return [self._desfase_libre(cid, distancia, punto_lado, invertir, expresion=expresion)]
-        cadena, cerrada = self.cadena(cid)
+            return [self._desfase_libre(cid, distancia, punto_lado, invertir, expresion=expresion, datos=datos)]
+        cadena, cerrada = self.cadena(cid) if cadena else ([(cid, False)], False)
         if len(cadena) == 1 and isinstance(c0, Circulo):
             r = c0.radio
             fuera = (punto_lado is None or math.dist(punto_lado, self.coords(c0.centro)) > r) != bool(invertir)
             if not fuera:
                 _exigir_radio_positivo(r, distancia, "del círculo")
             nuevo = self.agregar_circulo(c0.centro, r + distancia if fuera else r - distancia, c0.construccion)
-            self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(distancia))
+            self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(distancia), datos)
             return [nuevo]
         if any(not isinstance(self.curvas[k], (Linea, Arco)) for k, _ in cadena):
             raise ErrorBoceto("El desfase funciona con cadenas de líneas y arcos, círculos, elipses y splines.")
@@ -3030,17 +3041,17 @@ class Boceto:
         if not cerrada:
             self.agregar_restriccion("desfase", [elems[0][0], elems[0][5], extremos[0][0]], {"grupo": grupo})
             self.agregar_restriccion("desfase", [elems[-1][0], elems[-1][6], extremos[-1][1]], {"grupo": grupo})
-        self.agregar_cota("desfase", [k0, n0], expresion or _numero(distancia))
+        self.agregar_cota("desfase", [k0, n0], expresion or _numero(distancia), datos)
         return nuevos
 
-    def desfase_con_topologia(self, cid, distancia, punto_lado=None, invertir=False):
+    def desfase_con_topologia(self, cid, distancia, punto_lado=None, invertir=False, cadena=True):
         """Match Topology de Fusion: la mayor distancia ≤ `distancia` con la que el desfase conserva la topología de la
         curva madre (ningún segmento se anula o se invierte, ningún arco ni círculo llega a radio cero, la spline no
         se pliega). Busca el tope por bisección sobre copias y se queda un 0,1 % antes para no dejar un segmento
         de largo cero. Devuelve la distancia que hay que usar."""
         def sirve(d):
             try:
-                self.copia().desfase(cid, d, punto_lado, invertir=invertir)
+                self.copia().desfase(cid, d, punto_lado, invertir=invertir, cadena=cadena)
             except ErrorBoceto:
                 return False
             return True
@@ -3054,7 +3065,7 @@ class Boceto:
             raise ErrorBoceto("Ninguna distancia de desfase conserva la topología de esa curva.")
         return bajo * 0.999
 
-    def _desfase_libre(self, cid, d, punto_lado, invertir, muestras=48, expresion=None):
+    def _desfase_libre(self, cid, d, punto_lado, invertir, muestras=48, expresion=None, datos=None):
         """Offset de Fusion para spline/elipse: spline de ajuste con cota asociativa sobre la normal de la madre.
         La cota restringe sus puntos de ajuste; entre ellos la spline interpola el desfase."""
         c = self.curvas[cid]
@@ -3085,7 +3096,7 @@ class Boceto:
         if any(min(math.dist(q, C) for C in densos) < 0.9 * d for q in nuevos):
             raise ErrorBoceto("El desfase es mayor que el radio de curvatura de la curva: se pliega sobre sí mismo.")
         nuevo = self.agregar_spline(nuevos, "ajuste", 3, cerrada, construccion=c.construccion)
-        self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(d), {"lado": s})
+        self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(d), {"lado": s, **(datos or {})})
         return nuevo
 
     def soltar_desfase(self, cid, conservar_cota=False):
