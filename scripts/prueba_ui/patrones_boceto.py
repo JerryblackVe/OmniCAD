@@ -629,7 +629,6 @@ def chica(ancho, alto, herr):
         casilla("dos", True)
     A.esperar(250)
     area = v.area.rect()
-    cuerpo = panel.scroll
     entra = panel.isVisible() and all(area.contains(b.mapTo(v.area, b.rect().topLeft())) and area.contains(b.mapTo(v.area, b.rect().bottomRight()))
                                       for b in (panel.boton_ok, boton("Cancelar")))
     barra = v.area.barra

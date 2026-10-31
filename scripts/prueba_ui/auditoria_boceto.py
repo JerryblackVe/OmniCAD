@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""BOCETO · auditoría de la sesión nocturna 2026-10-29: Desfase, Simetría (espejo), Texto en curva, Patrones,
-Restricciones y Deshacer dentro del editor, con eventos de mouse y teclado simulados al Lienzo (nunca el cursor real).
+"""BOCETO · auditoría de la sesión nocturna 2026-10-29: Desfase, Simetría (espejo), Texto en curva,
+Restricciones (los patrones: `patrones_boceto.py`) y Deshacer dentro del editor, con eventos de mouse y teclado simulados al Lienzo (nunca el cursor real).
 Cada paso se compara con la ayuda de Fusion (carpeta fusion-sketch): ver evidencias/auditoria_boceto_2026-10-29/COMPARACION.md."""
 import math
 import os
@@ -215,52 +215,6 @@ def texto_curva():
     limpiar()
 
 
-# ---------------------------------------------------------------- PATRONES
-def patrones():
-    limpiar()
-    ids = [i for i, c in lz.b.curvas.items() if c.__class__.__name__ == "Circulo"]
-    lz.set_herramienta("patron_circular")
-    lz.seleccion = ids
-    lz._avanzar_seleccion()
-    lz._clic_fase((None, (80.0, -30.0)))
-    A.esperar(100)
-    A.reg(AR + " · Patrón circular", "barra con cantidad y ángulo", lz.entrada is not None, "")
-    if lz.entrada is not None:
-        lz.entrada.campos[0].setText("5")
-        lz.entrada.campos[1].setText("360")
-        A.esperar(100)
-        A.foto(v, "patron_circular_previa")
-        QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
-        A.esperar(250)
-        A.reg(AR + " · Patrón circular", "Enter crea 4 copias", len(lz.b.patrones) == 1, f"patrones={len(lz.b.patrones)}")
-    # Fusion dibuja una casilla por copia para suprimirla: ¿OmniCAD?
-    if lz.b.patrones:
-        r = lz.b.patrones[0]
-        limpiar()                               # Esc / herramienta Seleccionar: las casillas aparecen con el patrón elegido
-        lz.seleccion = list(r["ids"])
-        lz.update()
-        A.esperar(200)
-        casillas = lz._casillas_patron()
-        A.reg(AR + " · Patrón circular", "una casilla por copia en el lienzo (Fusion)", len(casillas) == 4, f"{len(casillas)} casillas")
-        A.foto(v, "patron_circular_casillas")
-        if casillas:
-            copias0 = sum(len(x) for x in r["copias"].values())
-            _pid, _i, caja, _s = casillas[1]
-            QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, caja.center().toPoint())
-            A.esperar(200)
-            r = lz.b.patrones[0]
-            A.reg(AR + " · Patrón circular", "clic en la casilla suprime esa copia", r["suprimidos"] == [1] or set(r["suprimidos"]) == {1}, f"suprimidos={r['suprimidos']}")
-            A.reg(AR + " · Patrón circular", "la copia suprimida desaparece", sum(len(x) for x in r["copias"].values()) < copias0, f"{copias0}->{sum(len(x) for x in r['copias'].values())}")
-            A.foto(v, "patron_circular_suprimida")
-            lz.seleccion = list(r["ids"])
-            casillas = lz._casillas_patron()
-            A.reg(AR + " · Patrón circular", "la casilla de la suprimida sigue ahí (desmarcada)", len(casillas) == 4 and casillas[1][3], f"{len(casillas)}")
-            tecla(Qt.Key_Z, Qt.ControlModifier)
-            A.reg(AR + " · Patrón circular", "Ctrl+Z la vuelve a crear", not lz.b.patrones[0]["suprimidos"], f"{lz.b.patrones[0]['suprimidos']}")
-    A.foto(v, "patron_circular_hecho")
-    limpiar()
-
-
 # ---------------------------------------------------------------- RESTRICCIONES (herramientas de la cinta)
 def restricciones():
     """Las restricciones con la herramienta de la cinta: clic en la geometría, aparece, tiene glifo, Ctrl+Z/Ctrl+Y."""
@@ -436,7 +390,7 @@ def deshacer():
 
 
 SOLO = os.environ.get("AUD_SOLO", "").split(",")
-for nombre, f in (("proyeccion", proyeccion), ("desfase", desfase), ("simetria", simetria), ("texto_curva", texto_curva), ("patrones", patrones),
+for nombre, f in (("proyeccion", proyeccion), ("desfase", desfase), ("simetria", simetria), ("texto_curva", texto_curva),
                   ("restricciones", restricciones), ("deshacer", deshacer)):
     if SOLO == [""] or nombre in SOLO:
         probar(nombre, f)
