@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import QMouseEvent  # noqa: E402
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout  # noqa: E402
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout  # noqa: E402
 
 from omnicad.nucleo import geometria as geo  # noqa: E402
 from omnicad.restricciones import Boceto  # noqa: E402
@@ -104,49 +104,61 @@ def _circulos(lz):
     return sum(1 for c in lz.b.curvas.values() if c.tipo == "circulo")
 
 
-def test_boc16_dialogo_edita_cantidad_suprime_y_toma_una_linea(lienzo):
+def _editar(lz, pid, **textos):
+    """Abre el panel de edición del patrón y cambia campos como lo haría la persona (sin ventana: el controlador)."""
+    assert lz.editar_patron(pid)
+    c = lz.patron
+    c.recibir({**c.textos, **textos})
+    return c
+
+
+def test_boc16_editar_cambia_cantidad_suprime_y_toma_una_linea(lienzo):
     lz = lienzo
     pid = _patron(lz)
     linea = lz.b.agregar_linea((0, 0), (0, 10))
-    d = dialogos_boceto.DialogoPatron(lz.b, next(r for r in lz.b.patrones if r["id"] == pid), lz)
-    assert d.lista.count() == 2                            # 3 instancias = 2 copias
-    d.n1.setValue(4)
-    assert d.lista.count() == 3
-    d.lista.item(0).setCheckState(Qt.Unchecked)            # destildada = suprimida
-    d.linea1.setCurrentIndex(d.linea1.findData(linea))
-    cambios = d.cambios()
-    assert cambios["cantidad1"] == 4 and cambios["suprimidos"] == [0] and cambios["linea1"] == linea
-    d.deleteLater()
+    c = _editar(lz, pid, cantidad1="4")
+    assert lz.herramienta == "patron_rectangular" and c.editando == pid and len(lz.b.patrones) == 1
+    assert len(c.calcular()["polis"]) == 3                 # 4 ejemplares = 3 copias, todavía sin tocar el boceto
+    assert _circulos(lz) == 3
+    c.suprimidos.add(0)                                    # destildada = excluida
+    c.lineas["dir1"] = linea
+    assert c.aceptar()
+    registro = next(r for r in lz.b.patrones if r["id"] == pid)
+    assert registro["params"]["cantidad1"] == 4 and registro["suprimidos"] == [0] and registro["params"]["linea1"] == linea
+    assert _circulos(lz) == 3 and lz.herramienta == "seleccionar" and c.tipo is None
 
 
-def test_boc16_doble_clic_en_el_glifo_edita_el_patron(lienzo, monkeypatch):
+def test_boc16_doble_clic_en_el_glifo_edita_el_patron(lienzo):
     lz = lienzo
     pid = _patron(lz)
-
-    def exec_(self):
-        self.n1.setValue(4)
-        self.lista.item(0).setCheckState(Qt.Unchecked)
-        return QDialog.Accepted
-    monkeypatch.setattr(dialogos_boceto.DialogoPatron, "exec", exec_)
     lz.grab()                                              # dibuja: quedan las zonas de los glifos
     rid = next(r.id for r in lz.b.restricciones.values() if r.tipo == "patron")
     centro = lz._zonas_glifos[rid].center()
     QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseButtonDblClick, centro, centro, Qt.LeftButton,
                                            Qt.LeftButton, Qt.NoModifier))
+    assert lz.herramienta == "patron_rectangular" and lz.patron.editando == pid
+    assert lz.patron.textos["cantidad1"] == "3" and lz.patron.textos["distancia1"] == "20"
+    lz.patron.recibir({**lz.patron.textos, "cantidad1": "4"})
+    lz.patron.suprimidos.add(0)
+    assert lz.patron.aceptar()
     registro = next(r for r in lz.b.patrones if r["id"] == pid)
     assert registro["params"]["cantidad1"] == 4 and registro["suprimidos"] == [0]
     assert _circulos(lz) == 3 and len(lz.historial) == 1
 
 
-def test_boc16_editar_patron_desde_la_seleccion(lienzo, monkeypatch):
+def test_boc16_editar_patron_desde_la_seleccion_y_cancelar_no_cambia_nada(lienzo):
     lz = lienzo
-    _patron(lz)
-    monkeypatch.setattr(dialogos_boceto.DialogoPatron, "exec", lambda self: QDialog.Rejected)
+    pid = _patron(lz)
+    antes = (_circulos(lz), dict(lz.b.patrones[0]["params"]), len(lz.historial))
     lz.seleccion = []
     assert not lz.editar_patron()                          # sin selección: avisa
+    assert lz.herramienta == "seleccionar"
     lz.seleccion = [next(iter(lz.b.curvas))]
-    assert not lz.editar_patron()                          # cancelar no cambia nada
-    assert _circulos(lz) == 3 and not lz.historial
+    assert lz.editar_patron()
+    lz.patron.recibir({**lz.patron.textos, "cantidad1": "9"})
+    lz.patron.cancelar()                                   # cancelar no cambia nada
+    assert (_circulos(lz), lz.b.patrones[0]["params"], len(lz.historial)) == antes
+    assert lz.herramienta == "seleccionar" and lz.patron.editando is None and lz.b.patrones[0]["id"] == pid
 
 
 # ---------------------------------------------------------------- BOC-17: vínculo de proyección

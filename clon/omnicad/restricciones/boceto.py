@@ -44,6 +44,10 @@ COTAS_POSITIVAS = ("distancia", "distancia_h", "distancia_v", "radio", "diametro
 # volumen exacto; por una de 10 km falla); nucleo/perfiles.py busca regiones cerradas en ±MEDIDA_MAXIMA
 MEDIDA_MAXIMA = 1e6
 MEDIDA_MINIMA = 1e-6      # mm (1 nm): por debajo el solver ya no distingue una medida de cero
+# Cada copia de un patrón queda atada al original y el solver resuelve todo junto: medido, 200 círculos copiados (200
+# puntos) tardan 3,6 s y 99 rectángulos (396 puntos) 7,5 s, y eso se repite en cada edición del boceto.
+MAX_COPIAS_PATRON = 200
+MAX_PUNTOS_PATRON = 200      # copias × puntos de la selección
 MAX_CARACTERES_TEXTO = 1000      # crear los perfiles de las letras cuesta ~10 ms por letra: 100.000 colgaban la ventana
 ALTURA_MAXIMA_TEXTO = 10_000.0   # mm (10 m)
 LARGO_EJE_VACIO = 100.0          # mm a cada lado de un eje o traza proyectados cuando no hay boceto ni modelo alrededor
@@ -3445,9 +3449,13 @@ class Boceto:
         return b[0] - a[0], b[1] - a[1]
 
     def _trans_rectangular(self, p):
+        """Una traslación por copia: P(i, j) = P0 + i·paso1·u + j·paso2·w, siempre desde el original (nada se acumula).
+        u y w son las direcciones unitarias (de un vector o de una línea del boceto); con `modo` extensión el paso es
+        distancia / (n - 1) y con espaciado la distancia misma; con n = 1 la distancia no se usa. Simétrico: el original
+        queda en el medio (con cantidad par, una copia más de un lado). El índice de copia sigue el orden i, j sin el
+        original."""
+        self.validar_patron("rectangular", p)
         n1, n2 = p["cantidad1"], p["cantidad2"]
-        if n1 < 1 or n2 < 1 or n1 * n2 < 2:
-            raise ErrorBoceto("El patrón necesita al menos dos copias.")
         dir1 = self._dir_patron(p["dir1"], p.get("linea1"))
         dir2 = self._dir_patron(p["dir2"], p.get("linea2"))
         largo1, largo2 = math.hypot(*dir1), math.hypot(*dir2)
@@ -3461,7 +3469,7 @@ class Boceto:
         u, w = (dir1[0] / largo1, dir1[1] / largo1), (dir2[0] / largo2, dir2[1] / largo2)
         s1, s2 = paso(n1, p["distancia1"]), paso(n2, p["distancia2"])
         o1 = -(n1 - 1) // 2 if p["simetrico"] else 0
-        o2 = -(n2 - 1) // 2 if p["simetrico"] else 0
+        o2 = -(n2 - 1) // 2 if p.get("simetrico2", p["simetrico"]) else 0
         trans = []
         for i in range(n1):
             for j in range(n2):
@@ -3474,26 +3482,103 @@ class Boceto:
 
     def patron_rectangular(self, ids, cantidad1, distancia1, cantidad2=1, distancia2=0.0, dir1=(1.0, 0.0),
                            dir2=(0.0, 1.0), modo="extension", simetrico=False, linea1=None, linea2=None,
-                           suprimir=()):
-        """Patrón rectangular (SKT-CREATE-RECTANGULAR-PATTERN). modo "extension": la distancia es la total;
-        "espaciado": la de cada paso. `linea1` / `linea2` toman la dirección de una línea del boceto. Las copias
-        quedan atadas al original (restricción de patrón); `suprimir` son índices de copia que no se crean."""
+                           suprimir=(), simetrico2=None):
+        """Patrón rectangular (SKT-CREATE-RECTANGULAR-PATTERN). La cantidad cuenta el original. modo "extension": la
+        distancia es la total (de la primera a la última copia); "espaciado": la de cada paso. `linea1` / `linea2`
+        toman la dirección de una línea del boceto; las direcciones pueden ser cualquiera, no solo X e Y.
+        `simetrico2` (por defecto igual a `simetrico`) es el de la dirección 2. Las copias quedan atadas al original
+        (restricción de patrón); `suprimir` son índices de copia que no se crean."""
         params = {"cantidad1": cantidad1, "distancia1": distancia1, "cantidad2": cantidad2, "distancia2": distancia2,
                   "dir1": list(dir1), "dir2": list(dir2), "modo": modo, "simetrico": simetrico,
                   "linea1": linea1, "linea2": linea2}
-        self._exigir_pasos(params)
-        return self._patron(ids, self._trans_rectangular(params), "rectangular", params, set(suprimir))
+        if simetrico2 is not None:
+            params["simetrico2"] = simetrico2
+        trans, _cp, ids = self.comprobar_patron("rectangular", params, ids)
+        return self._patron(ids, trans, "rectangular", params, set(suprimir))
 
     @staticmethod
-    def _exigir_pasos(p):
-        """Con más de una copia en una dirección, su distancia no puede ser 0 (quedarían una encima de otra)."""
-        for n, d, eje in ((p["cantidad1"], p["distancia1"], "X"), (p["cantidad2"], p["distancia2"], "Y")):
-            if n > 1 and d == 0:
-                raise ErrorBoceto(f"La distancia en {eje} es 0: las copias quedarían una encima de otra.")
+    def validar_patron(tipo, p):
+        """Reglas de un patrón (ventana, MCP y CLI usan estas): cantidades enteras, números finitos, distancias y ángulo
+        distintos de cero y las dos direcciones del rectangular no paralelas. Con una sola copia en una dirección su
+        distancia no se usa (0 vale). Lo que tendría que ser otro valor lo dice el mensaje."""
+        def entero(n, que, minimo):
+            if isinstance(n, bool) or not isinstance(n, (int, np.integer)) or n < minimo:
+                raise ErrorBoceto(f"{que} tiene que ser un entero de {minimo} en adelante (llegó {n!r}).")
+
+        def finito(x, que):
+            if isinstance(x, bool) or not isinstance(x, (int, float, np.integer, np.floating)) or not math.isfinite(x):
+                raise ErrorBoceto(f"{que} tiene que ser un número finito (llegó {x!r}).")
+        if tipo == "rectangular":
+            n1, n2 = p["cantidad1"], p["cantidad2"]
+            entero(n1, "La cantidad en la dirección 1", 1)
+            entero(n2, "La cantidad en la dirección 2", 1)
+            if n1 * n2 < 2:
+                raise ErrorBoceto("El patrón necesita al menos dos ejemplares (cantidad 1 × cantidad 2 ≥ 2).")
+            if n1 * n2 - 1 > MAX_COPIAS_PATRON:
+                raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n1 * n2 - 1}): "
+                                  "para más, usá un patrón de cuerpos (rectangular_pattern).")
+            if p["modo"] not in ("extension", "espaciado"):
+                raise ErrorBoceto("La distancia es la total (extensión) o la de cada paso (espaciado).")
+            for n, d, eje in ((n1, p["distancia1"], 1), (n2, p["distancia2"], 2)):
+                finito(d, f"La distancia en la dirección {eje}")
+                if n > 1 and d == 0:
+                    raise ErrorBoceto(f"La distancia en la dirección {eje} es 0: las copias quedarían una encima de otra.")
+            vectores = [p["dir1"], p["dir2"]]
+            for k, (v, linea) in enumerate(zip(vectores, (p.get("linea1"), p.get("linea2")), strict=True), 1):
+                if linea is None:
+                    finito(v[0], f"La dirección {k}")
+                    finito(v[1], f"La dirección {k}")
+                    if math.hypot(*v) < 1e-9:
+                        raise ErrorBoceto(f"La dirección {k} del patrón no puede tener largo cero.")
+            if n1 > 1 and n2 > 1 and p.get("linea1") is None and p.get("linea2") is None:
+                (a, b), (c, d) = p["dir1"], p["dir2"]
+                if abs(a * d - b * c) < 1e-9 * math.hypot(a, b) * math.hypot(c, d):
+                    raise ErrorBoceto("Las dos direcciones son paralelas: las copias de una fila caerían sobre las de la "
+                                      "otra. Cambiá el ángulo de la dirección 2 o poné cantidad 1.")
+        else:
+            n, total = p["cantidad"], p["angulo_total"]
+            entero(n, "La cantidad", 2)
+            if n - 1 > MAX_COPIAS_PATRON:
+                raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n - 1}): para "
+                                  "más, usá un patrón de cuerpos (circular_pattern).")
+            finito(total, "El ángulo total")
+            if not 0 < abs(total) <= 360:
+                raise ErrorBoceto("El ángulo total va de -360 a 360 grados, distinto de cero.")
+
+    def exigir_tamano_patron(self, ids, copias, sin=()):
+        """Cada copia queda atada al original y el solver resuelve todo junto: tope de puntos copiados (copias × puntos
+        de la selección)."""
+        puntos = len([q for q in self.puntos_de(ids) if q not in sin])
+        if copias * puntos > MAX_PUNTOS_PATRON:
+            raise ErrorBoceto(f"El patrón copiaría {copias * puntos} puntos ({copias} copias × {puntos}): un patrón de "
+                              f"boceto admite hasta {MAX_PUNTOS_PATRON}, porque cada copia queda atada al original y el "
+                              "boceto se vuelve lento. Para más copias, patroná el cuerpo o la operación.")
+
+    def comprobar_patron(self, tipo, params, ids):
+        """Todo lo que puede rechazar un patrón antes de crearlo, sin tocar el boceto: reglas de `validar_patron`,
+        tope de puntos y centro apartado de la geometría. Devuelve (transformaciones, punto del centro o None, ids
+        sin ese punto): lo que usan la creación, la edición y la vista previa."""
+        trans, cp = (self._trans_rectangular(params), None) if tipo == "rectangular" else self._trans_circular(params)
+        ids = [i for i in ids if i != cp]
+        if tipo == "circular":
+            self._exigir_centro_aparte(ids, params["centro"], cp)
+        self.exigir_tamano_patron(ids, len(trans), sin=(cp,))
+        return trans, cp, ids
+
+    def previa_patron(self, tipo, params, polilineas, suprimidos=(), ids=()):
+        """Polilíneas de TODAS las copias del patrón (sin crear nada): cada polilínea elegida pasa por la misma
+        transformación que usa la creación, salvo las copias `suprimidos`. Es la vista previa de la ventana: no toca
+        el boceto ni el solver. Con `ids` también aplica las comprobaciones de la creación."""
+        trans = self.comprobar_patron(tipo, params, ids)[0] if ids else (
+            self._trans_rectangular(params) if tipo == "rectangular" else self._trans_circular(params)[0])
+        return [[[f(q) for q in poli] for poli in polilineas] for n, (f, *_r) in enumerate(trans) if n not in suprimidos]
 
     def _trans_circular(self, p):
-        if p["cantidad"] < 2:
-            raise ErrorBoceto("El patrón necesita al menos dos copias.")
+        """Una rotación por copia, siempre desde el original: Q_k = C + R(k·paso)(Q − C). Con 360° el paso es
+        total / cantidad (la última copia no repite al original); con otro ángulo, total / (cantidad − 1) (el original y
+        la última copia quedan en los extremos). Negativo = sentido horario. Simétrico (solo si no es la vuelta
+        entera): el original queda en el medio. El índice de copia es k − 1."""
+        self.validar_patron("circular", p)
         centro = p["centro"]
         es_punto = isinstance(centro, (int, np.integer)) and not isinstance(centro, bool)
         cp = self._punto(centro) if es_punto else None
@@ -3519,8 +3604,16 @@ class Boceto:
         es_punto = isinstance(centro, (int, np.integer)) and not isinstance(centro, bool)
         params = {"centro": int(centro) if es_punto else list(centro), "cantidad": cantidad,
                   "angulo_total": angulo_total, "simetrico": simetrico}
-        trans, cp = self._trans_circular(params)
-        return self._patron([i for i in ids if i != cp], trans, "circular", params, set(suprimir))
+        trans, _cp, ids = self.comprobar_patron("circular", params, ids)
+        return self._patron(ids, trans, "circular", params, set(suprimir))
+
+    def _exigir_centro_aparte(self, ids, centro, cp):
+        """Si todo lo elegido está sobre el centro, girarlo lo deja donde está: las copias quedarían encimadas."""
+        c = self.coords(cp) if cp is not None else (float(centro[0]), float(centro[1]))
+        puntos = self.puntos_de(ids)
+        if puntos and all(math.dist(self.coords(q), c) < MEDIDA_MINIMA for q in puntos):
+            raise ErrorBoceto("El centro del patrón coincide con la geometría elegida: al girarla quedaría en el mismo "
+                              "lugar y las copias saldrían encimadas. Elegí otro centro.")
 
     def editar_patron(self, pid, **cambios):
         """Edita un patrón ya hecho (cantidades, distancias, direcciones, `suprimidos`): borra sus copias y las
@@ -3535,11 +3628,7 @@ class Boceto:
         ids = [i for i in registro["ids"] if i in self.curvas or i in self.puntos]
         if not ids:
             raise ErrorBoceto("El patrón ya no tiene geometría original.")
-        if registro["tipo"] == "rectangular":
-            self._exigir_pasos(params)
-            trans, cp = self._trans_rectangular(params), None
-        else:
-            trans, cp = self._trans_circular(params)
+        trans, cp, _ids = self.comprobar_patron(registro["tipo"], params, ids)
         lugar = {i: (n, k) for n, lista in registro["copias"].items() for k, i in enumerate(lista)}
         originales = set(registro["ids"])
         sobre_copias = [copy.deepcopy(v) for tabla in (self.restricciones, self.cotas) for v in tabla.values()

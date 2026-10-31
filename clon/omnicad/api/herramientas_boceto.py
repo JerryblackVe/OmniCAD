@@ -864,12 +864,26 @@ def info_boceto(sesion, op):
                                for r in b.proyecciones]
     if b.patrones:
         info["patterns"] = [{"id": r["id"], "type": "rectangular" if r["tipo"] == "rectangular" else "circular",
-                             "entities": r["ids"], "suppressed": r["suprimidos"],
+                             "entities": r["ids"], "suppressed": r["suprimidos"], "parameters": _parametros_patron(r),
                              "instances": {n: ids for n, ids in r["copias"].items()}} for r in b.patrones]
     if any(b.geo3d.values()):
         from .herramientas_boceto3d import info_3d
         info.update(info_3d(sesion, b, br))
     return info
+
+
+def _parametros_patron(r):
+    """Los parámetros de un patrón con los nombres de las herramientas (los mismos que acepta edit_sketch_pattern)."""
+    p = r["params"]
+    if r["tipo"] == "circular":
+        return {"count": p["cantidad"], "total_angle": _r(p["angulo_total"]), "symmetric": p["simetrico"],
+                "center": p["centro"] if isinstance(p["centro"], int) else [_r(c) for c in p["centro"]]}
+    angulo = lambda v: _r(math.degrees(math.atan2(v[1], v[0])))  # noqa: E731
+    return {"count1": p["cantidad1"], "distance1": _r(p["distancia1"]), "count2": p["cantidad2"],
+            "distance2": _r(p["distancia2"]), "spacing": "extent" if p["modo"] == "extension" else "spacing",
+            "angle": angulo(p["dir1"]), "angle2": angulo(p["dir2"]), "direction1_line": p.get("linea1"),
+            "direction2_line": p.get("linea2"), "symmetric": p["simetrico"],
+            "symmetric2": p.get("simetrico2", p["simetrico"])}
 
 
 # ================================================================ herramientas
@@ -2278,57 +2292,25 @@ def mirror_sketch(sesion, entities: list[int], axis: int, sketch: str | None = N
     return r
 
 
-# Cada copia queda atada al original (restricción de patrón) y el solver resuelve todo junto: medido, 200 círculos
-# copiados (200 puntos) tardan 3,6 s y 99 rectángulos (396 puntos) 7,5 s, y eso se repite en cada edición del boceto.
-MAX_COPIAS_PATRON = 200
-MAX_PUNTOS_PATRON = 200      # copias × puntos de la selección
-
-
-def _exigir_cantidad(n, que):
-    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
-        raise error("INVALID_ARGUMENTS", f"{que} tiene que ser un entero de 1 en adelante (llegó {n!r}).")
+def _exigir_patron(tipo, params):
+    """Las reglas de la ventana (`Boceto.validar_patron`), con el tipo de error de las herramientas."""
+    try:
+        Boceto.validar_patron(tipo, params)
+    except ErrorBoceto as e:
+        raise error("INVALID_ARGUMENTS", str(e), "La cantidad cuenta el original; la distancia negativa invierte el "
+                    "sentido; el ángulo total va de -360 a 360 (negativo = horario).") from e
 
 
 def _exigir_tamano_patron(b, entities, copias, sin=()):
-    puntos = len([p for p in b.puntos_de(entities) if p not in sin])
-    if copias * puntos > MAX_PUNTOS_PATRON:
-        raise error("INVALID_ARGUMENTS", f"El patrón copiaría {copias * puntos} puntos ({copias} copias × {puntos}): un "
-                    f"patrón de boceto admite hasta {MAX_PUNTOS_PATRON}, porque cada copia queda atada al original y "
-                    "el boceto se vuelve lento.", "Para más copias, patroná el cuerpo (rectangular_pattern o "
-                    "circular_pattern) o la operación.")
+    try:
+        b.exigir_tamano_patron(entities, copias, sin)
+    except ErrorBoceto as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from e
 
 
 def _exigir_supresion(suppress):
     if suppress is not None and any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in suppress):
         raise error("INVALID_ARGUMENTS", "suppress lleva índices de copia enteros desde 0 (get_sketch › patterns).")
-
-
-def _exigir_rectangular(count1, count2):
-    _exigir_cantidad(count1, "count1")
-    _exigir_cantidad(count2, "count2")
-    if count1 * count2 < 2:
-        raise error("INVALID_ARGUMENTS", "El patrón necesita al menos dos ejemplares (count1 × count2 ≥ 2).")
-    if count1 * count2 - 1 > MAX_COPIAS_PATRON:
-        raise error("INVALID_ARGUMENTS", f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió "
-                    f"{count1 * count2 - 1}): para más, usá un patrón de cuerpos (rectangular_pattern).")
-
-
-def _exigir_pasos(count, distance, que):
-    """Con más de una copia en la dirección, la distancia no puede ser cero: las copias quedarían una sobre otra."""
-    if count > 1 and distance == 0:
-        raise error("INVALID_ARGUMENTS", f"{que} es 0: las copias quedarían una encima de otra.",
-                    "Poné una distancia distinta de cero (negativa = sentido contrario) o bajá la cantidad a 1.")
-
-
-def _exigir_circular(count, total_angle):
-    _exigir_cantidad(count, "count")
-    if count < 2:
-        raise error("INVALID_ARGUMENTS", "El patrón circular necesita al menos 2 ejemplares (count ≥ 2).")
-    if count - 1 > MAX_COPIAS_PATRON:
-        raise error("INVALID_ARGUMENTS", f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió "
-                    f"{count - 1}): para más, usá un patrón de cuerpos (circular_pattern).")
-    if not 0 < abs(total_angle) <= 360:
-        raise error("INVALID_ARGUMENTS", "total_angle va de -360 a 360 grados, distinto de cero.")
 
 
 def _informar_patron(r, b):
@@ -2354,7 +2336,7 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
                                spacing: Literal["extent", "spacing"] = "extent", symmetric: bool = False,
                                sketch: str | None = None, angle2: float | None = None,
                                direction1_line: int | None = None, direction2_line: int | None = None,
-                               suppress: list[int] | None = None):
+                               suppress: list[int] | None = None, symmetric2: bool | None = None):
     """
     entities: ids de las curvas o puntos a repetir (get_sketch).
     count1: cantidad en la dirección 1, contando el original.
@@ -2363,22 +2345,23 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
     distance2: distancia en la dirección 2 (mm).
     angle: dirección 1 en grados respecto del eje x del boceto.
     spacing: extent (distancia total) o spacing (distancia entre copias).
-    symmetric: true para repartir las copias a los dos lados del original.
+    symmetric: true para repartir las copias a los dos lados del original (el original queda en el medio; con cantidad par, una copia más de un lado).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    symmetric2: lo mismo para la dirección 2; vacío = igual que symmetric.
     angle2: dirección 2 en grados respecto del eje x; vacío = angle + 90°.
     direction1_line: id de una línea del boceto que da la dirección 1 (de su inicio a su fin); pisa a angle.
     direction2_line: id de una línea del boceto que da la dirección 2; pisa a angle2.
     suppress: índices de las copias que no se crean (get_sketch › patterns las lista).
     """
     _exigir_finitos(locals())
-    _exigir_rectangular(count1, count2)
-    _exigir_pasos(count1, distance1, "distance1")
-    _exigir_pasos(count2, distance2, "distance2")
     _exigir_supresion(suppress)
     a = math.radians(angle)
     a2 = a + math.pi / 2 if angle2 is None else math.radians(angle2)
     d1, d2 = (math.cos(a), math.sin(a)), (math.cos(a2), math.sin(a2))
     modo = "extension" if spacing == "extent" else "espaciado"
+    _exigir_patron("rectangular", {"cantidad1": count1, "distancia1": distance1, "cantidad2": count2,
+                                   "distancia2": distance2, "dir1": d1, "dir2": d2, "modo": modo,
+                                   "linea1": direction1_line, "linea2": direction2_line})
     hecho = {}
 
     def repetir(b):
@@ -2388,7 +2371,7 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
                 _curva(b, linea, ("linea",), "la dirección")
         _exigir_tamano_patron(b, entities, count1 * count2 - 1)
         b.patron_rectangular(list(entities), count1, distance1, count2, distance2, d1, d2, modo, symmetric,
-                             direction1_line, direction2_line, suppress or ())
+                             direction1_line, direction2_line, suppress or (), symmetric2)
         hecho["b"] = b
     r = _dibujar(sesion, sketch, repetir, desde_solver=True)
     return _informar_patron(r, hecho["b"])
@@ -2416,7 +2399,7 @@ def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: f
     suppress: índices de las copias que no se crean (get_sketch › patterns las lista).
     """
     _exigir_finitos(locals())
-    _exigir_circular(count, total_angle)
+    _exigir_patron("circular", {"cantidad": count, "angulo_total": total_angle})
     _exigir_supresion(suppress)
     hecho = {}
 
@@ -2446,7 +2429,8 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
                         symmetric: bool | None = None, direction1_line: int | None = None,
                         direction2_line: int | None = None, count: int | None = None,
                         total_angle: float | None = None, suppress: list[int] | None = None,
-                        sketch: str | None = None):
+                        sketch: str | None = None, symmetric2: bool | None = None, center_x: float | None = None,
+                        center_y: float | None = None, center_point: int | None = None):
     """
     pattern: id del patrón (lo devuelve la herramienta que lo creó; get_sketch › patterns lo lista).
     count1: cantidad en la dirección 1 (rectangular).
@@ -2457,6 +2441,10 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
     angle2: dirección 2 en grados (rectangular).
     spacing: extent o spacing (rectangular).
     symmetric: repartir las copias a los dos lados del original.
+    symmetric2: lo mismo para la dirección 2 (rectangular); vacío = no cambia.
+    center_x: x del nuevo centro (mm, circular); hay que dar también center_y.
+    center_y: y del nuevo centro (mm, circular).
+    center_point: id de un punto del boceto que pasa a ser el centro (circular); pisa a center_x/center_y.
     direction1_line: id de una línea que da la dirección 1 (rectangular).
     direction2_line: id de una línea que da la dirección 2 (rectangular).
     count: cantidad total, contando el original (circular).
@@ -2479,9 +2467,8 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
             if any(v is not None for v in (count, total_angle)):
                 raise error("INVALID_ARGUMENTS", "count y total_angle son de un patrón circular: usá count1 y count2.")
             n1, n2 = p["cantidad1"] if count1 is None else count1, p["cantidad2"] if count2 is None else count2
-            _exigir_rectangular(n1, n2)
-            _exigir_pasos(n1, p["distancia1"] if distance1 is None else distance1, "distance1")
-            _exigir_pasos(n2, p["distancia2"] if distance2 is None else distance2, "distance2")
+            if any(v is not None for v in (center_x, center_y, center_point)):
+                raise error("INVALID_ARGUMENTS", "El centro es de un patrón circular.")
             for linea in (direction1_line, direction2_line):
                 if linea is not None:
                     _curva(b, linea, ("linea",), "la dirección")
@@ -2494,6 +2481,8 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
                 cambios["modo"] = "extension" if spacing == "extent" else "espaciado"
             if symmetric is not None:
                 cambios["simetrico"] = symmetric
+            if symmetric2 is not None:
+                cambios["simetrico2"] = symmetric2
             if angle is not None:
                 a = math.radians(angle)
                 cambios.update(dir1=[math.cos(a), math.sin(a)], linea1=None)
@@ -2506,17 +2495,27 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
                 cambios["linea1"] = direction1_line
             if direction2_line is not None:
                 cambios["linea2"] = direction2_line
+            _exigir_patron("rectangular", {**p, **cambios})
             _exigir_tamano_patron(b, registro["ids"], n1 * n2 - 1)
         else:
             if any(v is not None for v in (count1, distance1, count2, distance2, angle, angle2, spacing,
-                                           direction1_line, direction2_line)):
+                                           direction1_line, direction2_line, symmetric2)):
                 raise error("INVALID_ARGUMENTS", "Ese parámetro es de un patrón rectangular: acá van count y total_angle.")
             n, total = p["cantidad"] if count is None else count, p["angulo_total"] if total_angle is None else total_angle
-            _exigir_circular(n, total)
             cambios = {"cantidad": n, "angulo_total": total}
             if symmetric is not None:
                 cambios["simetrico"] = symmetric
-            _exigir_tamano_patron(b, registro["ids"], n - 1, sin=(p["centro"],) if isinstance(p["centro"], int) else ())
+            if center_point is not None:
+                if center_point not in b.puntos:
+                    raise error("ENTITY_NOT_FOUND", f"center_point {center_point} no es un punto del boceto.")
+                cambios["centro"] = int(center_point)
+            elif center_x is not None or center_y is not None:
+                if center_x is None or center_y is None:
+                    raise error("INVALID_ARGUMENTS", "Para mover el centro dá center_x y center_y juntos.")
+                cambios["centro"] = [float(center_x), float(center_y)]
+            _exigir_patron("circular", {**p, **cambios})
+            centro = cambios.get("centro", p["centro"])
+            _exigir_tamano_patron(b, registro["ids"], n - 1, sin=(centro,) if isinstance(centro, int) else ())
         if suppress is not None:
             cambios["suprimidos"] = suppress
         hecho["perdidas"] = b.editar_patron(pattern, **cambios)

@@ -189,7 +189,9 @@ def test_simetria_patrones_y_espiral(app_qt):
     c = lz.b.agregar_circulo((0, 0), 2)
     lz.seleccion = [c]
     lz.set_herramienta("patron_rectangular")
-    _aceptar(lz, "3", "20", "2", "10")
+    lz.patron.recibir({**lz.patron.textos, "cantidad1": "3", "distancia1": "20", "dos": True, "cantidad2": "2",
+                       "distancia2": "10"})
+    assert lz.patron.aceptar()
     centros = sorted(lz.b.coords(k.centro) for k in lz.b.curvas.values() if k.tipo == "circulo")
     assert centros == [pytest.approx(q) for q in [(0, 0), (0, 10), (10, 0), (10, 10), (20, 0), (20, 10)]]
     assert lz.resultado.ok and lz.resultado.gdl == 3                    # se mueve solo el original (x, y, radio)
@@ -197,9 +199,9 @@ def test_simetria_patrones_y_espiral(app_qt):
     ln = lz.b.agregar_linea((5, 0), (8, 0))
     lz.seleccion = [ln]
     lz.set_herramienta("patron_circular")
-    lz.clics.append((None, (0, 0)))
-    lz._procesar_clics()
-    _aceptar(lz, "4", "360")
+    lz.patron.clic(lz.a_px(0, 0))                       # el clic en el origen elige el centro
+    lz.patron.recibir({**lz.patron.textos, "cantidad": "4", "angulo_total": "360"})
+    assert lz.patron.aceptar()
     assert _tipos(lz.b).count("linea") == 4 and lz.resultado.ok
     assert any(lz.b._extremos_linea(k) == (pytest.approx((0, 5)), pytest.approx((0, 8))) for k in lz.b.curvas)
     lz = _lienzo(app_qt)

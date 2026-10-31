@@ -108,17 +108,13 @@ def test_los_dialogos_generales_tienen_el_icono_correspondiente(app_qt):
 
 
 @pytest.mark.parametrize("tipo", ["rectangular", "circular"])
-def test_el_dialogo_del_patron_usa_su_tipo_de_patron(app_qt, tipo):
-    registro = {"tipo": tipo, "suprimidos": [], "params": {
-        "cantidad1": 2, "cantidad2": 2, "distancia1": 10, "distancia2": 10, "modo": "espaciado",
-        "dir1": [1, 0], "dir2": [0, 1], "cantidad": 3, "angulo_total": 360, "simetrico": False,
-    }}
-    dialogo = dialogos_boceto.DialogoPatron(SimpleNamespace(curvas={}), registro)
-    nombre = f"patron_{tipo}"
-    assert nombre in iconos.DIBUJOS
-    assert not dialogo.windowIcon().isNull()
-    assert dialogo.windowIcon().cacheKey() == iconos.icono(nombre).cacheKey()
-    dialogo.close()
+def test_el_panel_del_patron_usa_su_tipo_de_patron(app_qt, tipo):
+    from omnicad.ui.panel_patron import PanelPatron
+    panel = PanelPatron()
+    panel.configurar(tipo)
+    assert f"patron_{tipo}" in iconos.DIBUJOS
+    assert not panel.icono.pixmap().isNull()
+    panel.deleteLater()
 
 
 def test_el_dialogo_de_proyecciones_perdidas_tiene_icono(app_qt):

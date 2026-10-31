@@ -55,15 +55,23 @@ def posicion(lz, i):
 
 
 def abrir(lz, herramienta, centro=None):
-    c = lz.b.agregar_circulo((0, 0), 3)
-    lz.set_herramienta(herramienta)
+    """Abre la herramienta de patrón con su panel (sin mostrarlo), con un círculo elegido; con `centro`, el circular ya lo tiene."""
+    from omnicad.ui.panel_patron import PanelPatron
+    c = lz.b.agregar_circulo((20, 0) if herramienta == "patron_circular" else (0, 0), 3)
+    panel = lz._panel_prueba = PanelPatron()
+    ctl = lz.patron
+    ctl.panel = panel
+    panel.cambio.connect(ctl.recibir)
+    panel.aceptado.connect(ctl.aceptar)
+    panel.cancelado.connect(ctl.cancelar)
     lz.seleccion = [c]
-    lz._avanzar_seleccion()
+    lz.set_herramienta(herramienta)
     if centro is not None:
-        lz._clic_fase((None, centro))
+        ctl.centro = centro
+        ctl._emitir()
     lz.encuadrar()
     QApplication.processEvents()
-    return c
+    return panel
 
 
 def textos(lz):
@@ -72,87 +80,87 @@ def textos(lz):
 
 def test_patron_rectangular_asas_de_distancia_y_cantidad(lienzo):
     lz = lienzo
-    abrir(lz, "patron_rectangular")
-    assert lz._asas is not None and len(lz._asas.asas) == 4
-    lz.entrada.campos[0].setText("3")
-    lz.entrada.campos[1].setText("20")                       # Extensión: la última copia queda a 20 mm
+    panel = abrir(lz, "patron_rectangular")
+    assert lz._asas is not None and len(lz._asas.asas) == 2           # distancia y cantidad de la dirección 1
+    panel.campos["cantidad1"].setText("3")
+    panel.campos["distancia1"].setText("20")                           # Extensión: la última copia queda a 20 mm
     assert posicion(lz, 0) == pytest.approx((20, 0), abs=1e-6)
     arrastrar(lz, posicion(lz, 0), (30, 0))
-    assert float(textos(lz)[1]) == pytest.approx(30, abs=0.3)
+    assert float(panel.campos["distancia1"].text()) == pytest.approx(30, abs=0.3)      # escribe en el campo del panel
     # cantidad: tirar hacia afuera suma copias, de a una por paso
-    paso = float(textos(lz)[1]) / (int(textos(lz)[0]) - 1)
+    paso = float(panel.campos["distancia1"].text()) / (int(panel.campos["cantidad1"].text()) - 1)
     arrastrar(lz, posicion(lz, 1), (posicion(lz, 1)[0] + 2 * paso, posicion(lz, 1)[1]))
-    assert int(textos(lz)[0]) == 5
+    assert int(panel.campos["cantidad1"].text()) == 5
     arrastrar(lz, posicion(lz, 1), (-500, posicion(lz, 1)[1]))                 # pasa por cero y por debajo: mínimo 1
-    assert int(textos(lz)[0]) == 1
-    lz._cerrar_entrada()
+    assert int(panel.campos["cantidad1"].text()) == 1
+    lz.patron.cancelar()
     assert lz._asas is None
 
 
 def test_patron_rectangular_eje_y_vista_previa(lienzo):
     lz = lienzo
-    abrir(lz, "patron_rectangular")
-    lz.entrada.campos[2].setText("2")
-    lz.entrada.campos[3].setText("15")
+    panel = abrir(lz, "patron_rectangular")
+    panel.casillas["dos"].setChecked(True)
+    panel.campos["cantidad2"].setText("2")
+    panel.campos["distancia2"].setText("15")
+    assert len(lz._asas.asas) == 4                                     # distancia y cantidad de cada dirección
     arrastrar(lz, posicion(lz, 2), (0, 25))
-    assert float(textos(lz)[3]) == pytest.approx(25, abs=0.3)
-    previa = lz._asas.previa(lz._asas.valores())
-    assert len(previa) == 3 * 2 - 1                           # 3 x 2 copias menos el original
-    lz._cerrar_entrada()
+    assert float(panel.campos["distancia2"].text()) == pytest.approx(25, abs=0.3)
+    assert len(lz.patron.calcular()["polis"]) == 3 * 2 - 1                  # 3 x 2 copias menos el original
+    lz.patron.cancelar()
 
 
 def test_teclear_mueve_el_asa_y_un_valor_invalido_no_la_rompe(lienzo):
     lz = lienzo
-    abrir(lz, "patron_rectangular")
+    panel = abrir(lz, "patron_rectangular")
     antes = posicion(lz, 0)
-    lz.entrada.campos[1].setText("45")
+    panel.campos["distancia1"].setText("45")
     assert posicion(lz, 0) != antes
-    lz.entrada.campos[1].setText("4+")                         # a medio escribir: queda el último valor válido
-    assert posicion(lz, 0) == pytest.approx((45, 0), abs=1e-6)
+    panel.campos["distancia1"].setText("4+")                   # a medio escribir: sin valores no hay asas, y nada se rompe
+    assert lz._asas is None
     QApplication.processEvents()
     lz.repaint()
-    lz._cerrar_entrada()
+    panel.campos["distancia1"].setText("45")
+    assert posicion(lz, 0) == pytest.approx((45, 0), abs=1e-6)
+    lz.patron.cancelar()
 
 
 def test_enter_aplica_lo_arrastrado_y_esc_cancela(lienzo):
     lz = lienzo
-    abrir(lz, "patron_rectangular")
-    lz.entrada.campos[0].setText("2")
-    lz.entrada.campos[1].setText("10")
+    panel = abrir(lz, "patron_rectangular")
+    panel.campos["cantidad1"].setText("2")
+    panel.campos["distancia1"].setText("10")
     arrastrar(lz, posicion(lz, 0), (18, 0))
     n0 = len(lz.b.curvas)
-    QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
-    assert len(lz.b.curvas) == n0 + 1
-    abrir(lz, "patron_rectangular")
-    QTest.keyClick(lz.entrada.campos[0], Qt.Key_Escape)
-    assert lz.entrada is None and lz._asas is None
+    QTest.keyClick(panel.campos["cantidad1"], Qt.Key_Return)
+    assert len(lz.b.curvas) == n0 + 1 and lz.b.patrones[0]["params"]["distancia1"] == pytest.approx(18, abs=0.3)
+    panel = abrir(lz, "patron_rectangular")
+    QTest.keyClick(panel.campos["cantidad1"], Qt.Key_Escape)
+    assert lz.patron.tipo is None and lz._asas is None and lz.herramienta == "seleccionar"
 
 
 def test_patron_circular_angulo_y_cantidad(lienzo):
     lz = lienzo
-    c = lz.b.agregar_circulo((20, 0), 3)
-    lz.set_herramienta("patron_circular")
-    lz.seleccion = [c]
-    lz._avanzar_seleccion()
-    lz._clic_fase((None, (0.0, 0.0)))
-    lz.encuadrar()
+    panel = abrir(lz, "patron_circular", centro=(0.0, 0.0))
     assert len(lz._asas.asas) == 2
-    lz.entrada.campos[0].setText("4")
-    lz.entrada.campos[1].setText("90")
+    panel.campos["cantidad"].setText("4")
+    panel.combos["distribucion"].setCurrentIndex(panel.combos["distribucion"].findData("parcial"))
+    panel.campos["angulo_total"].setText("90")
     assert posicion(lz, 0) == pytest.approx((0.0, 20.0), abs=1e-6)          # el final del arco, a 90°
     arrastrar(lz, posicion(lz, 0), (-20 * math.cos(math.radians(30)), 20 * math.sin(math.radians(30))))
-    assert float(textos(lz)[1]) == pytest.approx(150, abs=1.5)
+    assert float(panel.campos["angulo_total"].text().replace(",", ".")) == pytest.approx(150, abs=1.5)
     arrastrar(lz, posicion(lz, 0), (20, 0))
-    assert float(textos(lz)[1]) == pytest.approx(0, abs=1.5) or float(textos(lz)[1]) == pytest.approx(360, abs=1.5)
-    lz.entrada.campos[1].setText("90")
+    t = float(panel.campos["angulo_total"].text().replace(",", "."))
+    assert t == pytest.approx(0, abs=1.5) or t == pytest.approx(360, abs=1.5)
+    panel.campos["angulo_total"].setText("90")
     p = posicion(lz, 1)
-    assert int(textos(lz)[0]) == 4
+    assert int(panel.campos["cantidad"].text()) == 4
     a = math.atan2(p[1], p[0]) + math.radians(60)                # dos pasos de 30° más allá de la última copia
     r = math.hypot(*p)
     arrastrar(lz, p, (r * math.cos(a), r * math.sin(a)))
-    assert int(textos(lz)[0]) == 6
-    assert len(lz._asas.previa(lz._asas.valores())) == 5          # seis copias menos el original
-    lz._cerrar_entrada()
+    assert int(panel.campos["cantidad"].text()) == 6
+    assert len(lz.patron.calcular()["polis"]) == 5          # seis copias menos el original
+    lz.patron.cancelar()
 
 
 def test_escala_factor_nunca_baja_de_cero(lienzo):

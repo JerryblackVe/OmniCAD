@@ -249,6 +249,12 @@ Se descartan, porque no le sirven a un agente:
 - Panel SIMETRÍA del boceto (Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar): es el formulario con el que la persona
   elige con el ratón y ve el reflejo antes de aceptar. `mirror_sketch` recibe `entities` y `axis`, crea la copia con sus
   restricciones de simetría y avisa por `error_kind` si falta algo, sin mirar el dibujo.
+- Paneles PATRÓN RECTANGULAR y PATRÓN CIRCULAR del boceto (2026-10-31): los campos, los combos, el ⇄ de invertir, las asas de la
+  vista y la casilla de cada copia son la forma de la persona de escribir lo mismo que `sketch_rectangular_pattern`,
+  `sketch_circular_pattern` y `edit_sketch_pattern` reciben como parámetros (`count1/count2`, `distance1/distance2` con signo,
+  `spacing`, `angle/angle2` o `direction1_line/direction2_line`, `symmetric/symmetric2`, `count`, `total_angle` con signo,
+  `center_x/center_y/center_point`, `suppress`). Las reglas (`Boceto.validar_patron`, `comprobar_patron`, `previa_patron`) son las
+  mismas de la ventana y de la API; `get_sketch › patterns › parameters` devuelve los valores con esos nombres.
 
 ## Hallazgos de la auditoría
 

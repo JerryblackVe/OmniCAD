@@ -40,7 +40,7 @@ import numpy as np
 from PySide6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFontMetricsF, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap, QPolygonF)
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
-                               QMessageBox, QToolButton, QToolTip, QWidget)
+                               QToolButton, QToolTip, QWidget)
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
@@ -55,6 +55,7 @@ from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, no
                                    validar_nombre)
 from . import formato, temas
 from .iconos import icono
+from .patron_boceto import ControlPatron, dibujar_casilla
 
 HERRAMIENTAS = {
     "seleccionar": ("Seleccionar", "Clic: seleccionar (Ctrl o Mayús suman); doble clic: toda la cadena unida. "
@@ -160,6 +161,7 @@ PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme"
          "curva_fusion": (2, None), "desfase": (1, None), "recortar": (1, None), "alargar": (1, None),
          "partir": (1, None), "desglosar_texto": (1, ("texto",))}
 SELECCION = ("simetria", "patron_rectangular", "patron_circular", "escala", "mover")
+PATRON = ("patron_rectangular", "patron_circular")     # los maneja `ControlPatron` (ui/patron_boceto.py)
 SPLINES = ("spline_ajuste", "spline_control")
 PROYECCION = ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio")
 CURVA_TEXTO = ("camino_lado", "camino_desfase", "camino_ajustar")      # opciones del texto sobre una curva
@@ -501,7 +503,7 @@ class Lienzo(QWidget):
         self.opcion_cota = "auto"
         self.lados = 6
         # Opciones de la paleta (Opciones de función de Fusion) para las herramientas nuevas.
-        self.opciones = {"grado_spline": 3, "continuidad": "G1", "patron_distancia": "extension",
+        self.opciones = {"grado_spline": 3, "continuidad": "G1",
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
                          "direccion_desfase": "un", "match_topology": False,
                          "vinculo_proyeccion": True, "eje_giro": "Z", "contorno_exterior": True, "proyectar_eje": False,
@@ -578,6 +580,7 @@ class Lienzo(QWidget):
         self.previa_auto = []
         self.entrada = None
         self._asas = None                          # asas de arrastre de la herramienta (ui/asas_boceto.py)
+        self.patron = ControlPatron(self)          # Patrón rectangular y circular: estado, vista previa y panel
         self._desfase_invertido = False            # botón «Invertir» de la barra del Desfase
         self._desfase_modo = "un"                   # dirección con la que se abrió esa barra
         self._mvp = None
@@ -1134,6 +1137,7 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ herramientas
     def set_herramienta(self, h):
         self.confirmar_texto_pendiente()          # cambiar de herramienta no pierde el texto escrito
+        self.patron.cerrar()
         if h == "texto":
             self.opciones.update(pivote_texto=None, marco_texto=False, parametro_texto=None, valor_parametro_texto="")
         self.herramienta = h
@@ -1156,7 +1160,9 @@ class Lienzo(QWidget):
             ayuda = f"{NOMBRES_RESTRICCION[h]}: hacé clic en la geometría a restringir."
             if self._restriccion_con_seleccion():
                 return
-        if h in SELECCION:
+        if h in PATRON:
+            self.patron.iniciar(h)
+        elif h in SELECCION:
             self.fase = "seleccion"
             if self._seleccion_util():
                 self._avanzar_seleccion(avisar=False)
@@ -1186,6 +1192,9 @@ class Lienzo(QWidget):
             return
         if self.herramienta == "simetria":         # el panel SIMETRÍA se cierra entero, sin tocar el boceto
             self.cancelar_simetria()
+            return
+        if self.herramienta in PATRON:             # lo mismo con el panel del patrón
+            self.patron.cancelar()
             return
         self.inf_actual = self.inferencia = self._inf_inicio = self._inf_bloqueo = None
         self.inf_lista, self._inf_alt = [], 0
@@ -1652,23 +1661,6 @@ class Lienzo(QWidget):
         if h == "simetria":
             self.elegir_campo_simetria("eje")
             self.mensaje.emit("Simetría: elegí la línea de simetría.")
-        elif h == "patron_rectangular":
-            self.fase = "valores"
-
-            def aceptar(v):
-                n1, d1 = int(_numero(v[0] or "1")), self.evaluar(v[1] or "0")
-                n2, d2 = int(_numero(v[2] or "1")), self.evaluar(v[3] or "0")
-                ok = self.aplicar_cambio(lambda: self.b.patron_rectangular(ids, n1, d1, n2, d2,
-                                                                           modo=self.opciones["patron_distancia"]))
-                if ok:
-                    self.seleccion, self.fase = [], "seleccion"
-                return ok
-            from .asas_boceto import asas_patron_rectangular
-            self._abrir_entrada(["Cant. X", "Dist. X", "Cant. Y", "Dist. Y"], ["3", "30", "1", "20"],
-                                self._pos_cursor, aceptar, asas_patron_rectangular(self, ids))
-        elif h == "patron_circular":
-            self.fase = "centro"
-            self.mensaje.emit("Patrón circular: clic en el punto central.")
         elif h in ("escala", "mover"):
             self.fase = "base"
             self.mensaje.emit("Clic en el punto base.")
@@ -1676,21 +1668,9 @@ class Lienzo(QWidget):
 
     def _clic_fase(self, clic):
         """Clics de posición en las herramientas de selección (punto base, destino, centro)."""
-        h, (pid, xy) = self.herramienta, clic
+        h, (_pid, xy) = self.herramienta, clic
         ids = self._seleccion_util()
-        if self.fase == "centro" and h == "patron_circular":
-            centro = pid if pid is not None else xy
-
-            def aceptar(v):
-                n, ang = int(_numero(v[0] or "6")), self.evaluar(v[1] or "360", ANGULO)
-                ok = self.aplicar_cambio(lambda: self.b.patron_circular(ids, centro, n, ang))
-                if ok:
-                    self.seleccion, self.fase = [], "seleccion"
-                return ok
-            from .asas_boceto import asas_patron_circular
-            self._abrir_entrada(["Cantidad", "∠ total"], ["6", "360"], self._pos_cursor, aceptar,
-                                asas_patron_circular(self, ids, centro))
-        elif self.fase == "base" and h == "escala":
+        if self.fase == "base" and h == "escala":
             def aceptar(v):
                 f = self.evaluar(v[0] or "1", ESCALAR)
                 ok = self.aplicar_cambio(lambda: self.b.escalar(ids, xy, f))
@@ -2264,22 +2244,17 @@ class Lienzo(QWidget):
                      if ids & set(r["ids"]) or any(ids & set(c) for c in r["copias"].values())), None)
 
     def editar_patron(self, pid=None):
-        """Edita un patrón ya hecho con su diálogo (cantidades, distancias, direcciones y copias suprimidas). Sin
-        `pid`, el patrón de lo seleccionado."""
-        from .dialogos_boceto import DialogoPatron
+        """Edita un patrón ya hecho en su panel (cantidades, distancias, direcciones, centro y copias excluidas); Cancelar
+        lo deja como estaba. Sin `pid`, el patrón de lo seleccionado."""
         pid = self.patron_de(self.seleccion) if pid is None else pid
         if pid is None:
             self.mensaje.emit("Editar patrón: seleccioná una curva del patrón (o doble clic en su glifo).")
             return False
-        dialogo = DialogoPatron(self.b, next(r for r in self.b.patrones if r["id"] == pid), self)
-        if dialogo.exec() != QDialog.Accepted:
-            return False
-        cambios = dialogo.cambios()
-        perdidas = []
-        ok = self.aplicar_cambio(lambda: perdidas.extend(self.b.editar_patron(pid, **cambios)), anclar=False)
-        if ok and perdidas:
-            QMessageBox.warning(self, "Editar patrón", "Se borraron porque su copia ya no existe:\n" + "\n".join(perdidas))
-        return ok
+        registro = next(r for r in self.b.patrones if r["id"] == pid)
+        self.set_herramienta("patron_" + registro["tipo"])
+        self.patron.cargar(registro)
+        self.update()
+        return True
 
     # ------------------------------------------------------------ AutoConstrain, tipo de línea, texto
     def auto_restringir(self, **opciones):
@@ -3996,6 +3971,8 @@ class Lienzo(QWidget):
             return                                   # se tira de un asa de la herramienta
         if e.button() == Qt.LeftButton and self.herramienta == "seleccionar" and self._clic_casilla_patron(pos):
             return                                   # casilla de supresión de una copia del patrón
+        if e.button() == Qt.LeftButton and self.herramienta in PATRON and self.patron.clic_casilla(pos):
+            return                                   # casilla de una copia del patrón que se está armando
         if self.entrada is not None and e.button() == Qt.LeftButton and self._citar_cota(pos):
             return                                   # antes de setFocus: este saca el foco y la selección de la caja
         self._camara()
@@ -4062,6 +4039,8 @@ class Lienzo(QWidget):
             self._clic_restriccion(pos)
         elif h in PROYECCION:
             self._clic_proyectar(pos)
+        elif h in PATRON and self.fase in ("centro", "dir1", "dir2") and self.patron.clic(pos):
+            pass
         elif h in SELECCION and self.fase == "seleccion":
             self._presionar_seleccion(pos, Qt.ControlModifier, arrastrar=False)
         elif (h in PICKS or (h in SELECCION and self.fase == "eje")) and self._clic_pick(pos):
@@ -4675,6 +4654,7 @@ class Lienzo(QWidget):
             self._info = texto
             self.info.emit(texto)
         self._emitir_simetria()
+        self.patron.notificar()
 
     def mouseDoubleClickEvent(self, e):
         if self.visor is not None and e.button() == Qt.MiddleButton:
@@ -4792,6 +4772,8 @@ class Lienzo(QWidget):
             self._terminar_spline()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h == "simetria":
             self._enter_simetria()
+        elif k in (Qt.Key_Return, Qt.Key_Enter) and h in PATRON:
+            self.patron.enter()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in SELECCION and self.fase == "seleccion":
             self._avanzar_seleccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and any(c in self._bloqueos for c in self._claves_vivas()):
@@ -5040,15 +5022,8 @@ class Lienzo(QWidget):
 
     def _dibujar_casillas_patron(self, p):
         p.save()
-        oscuro = self._oscuro()
         for _pid, _i, caja, suprimida in self._casillas_patron():
-            p.setPen(QPen(QColor(150, 155, 165) if oscuro else QColor(110, 110, 110), 1))
-            p.setBrush(QColor(58, 63, 75, 230) if oscuro else QColor(250, 250, 250, 235))
-            p.drawRect(caja)
-            if not suprimida:                        # la tilde: la copia existe
-                p.setPen(QPen(QColor(0, 180, 255), 2))
-                p.drawLine(QPointF(caja.left() + 2.5, caja.center().y()), QPointF(caja.center().x() - 0.5, caja.bottom() - 3))
-                p.drawLine(QPointF(caja.center().x() - 0.5, caja.bottom() - 3), QPointF(caja.right() - 2.5, caja.top() + 3))
+            dibujar_casilla(p, caja, suprimida, self._oscuro())
         p.restore()
 
     def _clic_casilla_patron(self, pos):
@@ -5386,6 +5361,8 @@ class Lienzo(QWidget):
         acento = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
         if h == "simetria":
             self._dibujar_previa_simetria(p, acento)
+        elif h in PATRON and self.patron.activo:
+            self.patron.dibujar(p, acento)
         if self._previa_polis or self._caret is not None or (self._previa_texto and self._previa_texto.get("caja")):
             if self._sel_texto:                    # lo seleccionado del texto que se escribe
                 p.setPen(Qt.NoPen)

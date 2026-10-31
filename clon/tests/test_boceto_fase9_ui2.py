@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import QMouseEvent  # noqa: E402
-from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QFormLayout, QMessageBox, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QFormLayout, QWidget  # noqa: E402
 
 from omnicad import api  # noqa: E402
 from omnicad.api.herramientas_boceto import op_boceto  # noqa: E402
@@ -101,18 +101,15 @@ def test_patron_avisa_cotas_y_restricciones_perdidas(lienzo, monkeypatch):
     fijo = lz.b.agregar_restriccion("fijo", [copia])
     lz.resolver()
 
-    def ejecutar(d):
-        d.n1.setValue(2)
-        assert d.lista.count() == 1
-        return QDialog.Accepted
-
-    monkeypatch.setattr(dialogos_boceto.DialogoPatron, "exec", ejecutar)
     avisos = []
-    monkeypatch.setattr(QMessageBox, "warning", lambda *a: avisos.append(a[2]))
+    lz.mensaje.connect(avisos.append)
     assert lz.editar_patron(registro["id"])
+    lz.patron.recibir({**lz.patron.textos, "cantidad1": "2"})
+    assert len(lz.patron.calcular()["polis"]) == 1 and lz.patron.aceptar()
     assert sum(c.tipo == "circulo" for c in lz.b.curvas.values()) == 2
     assert cota not in lz.b.cotas and fijo not in lz.b.restricciones
-    assert len(avisos) == 1 and f"cota {cota}" in avisos[0] and f"restricción {fijo}" in avisos[0]
+    perdidas = [a for a in avisos if a.startswith("Se borraron")]
+    assert len(perdidas) == 1 and f"cota {cota}" in perdidas[0] and f"restricción {fijo}" in perdidas[0]
 
 
 REF = {"tipo": "cuerpo", "cuerpo": "op1.c1"}

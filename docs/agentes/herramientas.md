@@ -1170,12 +1170,13 @@ Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias
   - `distance2` (número; opcional, por defecto `0.0`): distancia en la dirección 2 (mm).
   - `angle` (número; opcional, por defecto `0.0`): dirección 1 en grados respecto del eje x del boceto.
   - `spacing` ("extent" | "spacing"; opcional, por defecto `"extent"`): extent (distancia total) o spacing (distancia entre copias).
-  - `symmetric` (true/false; opcional, por defecto `false`): true para repartir las copias a los dos lados del original.
+  - `symmetric` (true/false; opcional, por defecto `false`): true para repartir las copias a los dos lados del original (el original queda en el medio; con cantidad par, una copia más de un lado).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `angle2` (número; opcional, por defecto `null`): dirección 2 en grados respecto del eje x; vacío = angle + 90°.
   - `direction1_line` (entero; opcional, por defecto `null`): id de una línea del boceto que da la dirección 1 (de su inicio a su fin); pisa a angle.
   - `direction2_line` (entero; opcional, por defecto `null`): id de una línea del boceto que da la dirección 2; pisa a angle2.
   - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de las copias que no se crean (get_sketch › patterns las lista).
+  - `symmetric2` (true/false; opcional, por defecto `null`): lo mismo para la dirección 2; vacío = igual que symmetric.
 - CLI: `omnicad call sketch_rectangular_pattern --doc pieza.omnicad entities=… count1=… distance1=…`
 
 ### `sketch_circular_pattern`
@@ -1216,6 +1217,10 @@ Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón)
   - `total_angle` (número; opcional, por defecto `null`): ángulo total en grados (circular).
   - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de copias suprimidas; reemplaza la lista actual ([] = ninguna).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `symmetric2` (true/false; opcional, por defecto `null`): lo mismo para la dirección 2 (rectangular); vacío = no cambia.
+  - `center_x` (número; opcional, por defecto `null`): x del nuevo centro (mm, circular); hay que dar también center_y.
+  - `center_y` (número; opcional, por defecto `null`): y del nuevo centro (mm, circular).
+  - `center_point` (entero; opcional, por defecto `null`): id de un punto del boceto que pasa a ser el centro (circular); pisa a center_x/center_y.
 - CLI: `omnicad call edit_sketch_pattern --doc pieza.omnicad pattern=…`
 
 ### `project_to_sketch`

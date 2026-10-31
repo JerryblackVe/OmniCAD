@@ -22,6 +22,7 @@ from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
 from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia
 from .iconos import icono
+from .panel_patron import PanelPatron
 from .panel_simetria import PanelSimetria
 
 # acción → (texto del menú, herramienta, atajo, ícono). Atajos de Fusion: L, R, C, D, T, O, P, M, Mayús+V.
@@ -95,7 +96,6 @@ TIPOS_POR_FAMILIA = {
 OPCIONES_HERRAMIENTA = {
     "spline_control": [("grado_spline", "Grado", [(3, "3"), (5, "5")])],
     "curva_fusion": [("continuidad", "Continuidad", [("G1", "Tangente (G1)"), ("G2", "Curvatura (G2)")])],
-    "patron_rectangular": [("patron_distancia", "Distancia", [("extension", "Extensión"), ("espaciado", "Espaciado")])],
     "proyectar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
     "intersecar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
     "desfase": [("direccion_desfase", "Dirección", [("un", "Un lado"), ("dos", "Dos lados"), ("simetrico", "Simétrico")])],
@@ -769,6 +769,7 @@ class ModoBoceto(QObject):
         self.paleta = None
         self.caracter = None
         self.simetria = None
+        self.patron = None
         self.datos = None
         self.plano = None
         self.boceto = None
@@ -880,7 +881,18 @@ class ModoBoceto(QObject):
         self.simetria.aceptado.connect(lz.aceptar_simetria)
         self.simetria.cancelado.connect(lz.cancelar_simetria)
         self.simetria.hide()
-        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria)
+        self.patron = PanelPatron(area)             # Objetos, dirección o centro, cantidades, Vista previa, Aceptar y Cancelar
+        control = lz.patron
+        control.panel = self.patron
+        self.patron.campo.connect(control.elegir_campo)
+        self.patron.limpiar.connect(control.limpiar_campo)
+        self.patron.cambio.connect(control.recibir)
+        self.patron.invertir.connect(control.invertir)
+        self.patron.previa.connect(control.set_previa)
+        self.patron.aceptado.connect(control.aceptar)
+        self.patron.cancelado.connect(control.cancelar)
+        self.patron.hide()
+        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria, self.patron)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -963,10 +975,10 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
-        for w in (self.lienzo, self.paleta, self.caracter, self.simetria):
+        for w in (self.lienzo, self.paleta, self.caracter, self.simetria, self.patron):
             w.hide()
             w.deleteLater()
-        self.lienzo = self.paleta = self.caracter = self.simetria = None
+        self.lienzo = self.paleta = self.caracter = self.simetria = self.patron = None
         self.v.visor.set_capa("boceto3d", None)
         self.v.visor.set_capa("triada3d", None)
         self.interaccion3d = None
@@ -1001,6 +1013,8 @@ class ModoBoceto(QObject):
             self._mostrar_caracter(h == "texto")
             if self.simetria is not None:
                 self.simetria.setVisible(h == "simetria")
+            if self.patron is not None:
+                self.patron.setVisible(h in ("patron_rectangular", "patron_circular"))
             self.v.area.reubicar()
 
     def _mostrar_caracter(self, visible):
