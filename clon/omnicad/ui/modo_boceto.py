@@ -108,7 +108,7 @@ NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.
 # Casillas: herramienta → [(clave, etiqueta)]
 _VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
 CASILLAS_HERRAMIENTA = {"mover": [("copiar", "Copiar")], "proyectar": [_VINCULO], "intersecar": [_VINCULO],
-                        "desfase": [("match_topology", "Match Topology")],
+                        "desfase": [("seleccion_cadena", "Selección de cadena"), ("match_topology", "Match Topology")],
                         "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO,
                                               ("contorno_exterior", "Solo contorno exterior"),
                                               ("proyectar_eje", "Proyectar eje")]}
@@ -1096,6 +1096,10 @@ class ModoBoceto(QObject):
                 self.lienzo.aplicar_opcion_texto(clave, valor)       # van también a la barra del texto abierto
             elif clave == "kerning_par":
                 self.lienzo.ajustar_kerning_par(valor)               # entre las dos letras del cursor
+                return
+            elif clave in ("direccion_desfase", "seleccion_cadena", "match_topology"):
+                self.lienzo.cambiar_opcion_desfase(clave, valor)     # con el Desfase abierto se rearma al instante
+                self.v.area.reubicar()
                 return
             else:
                 self.lienzo.opciones[clave] = valor

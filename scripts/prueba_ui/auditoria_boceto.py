@@ -114,11 +114,11 @@ def desfase():
     antes, r0 = n_curvas(), n_restr("desfase")
     clic(20, 0)                              # arista inferior del rectángulo
     A.esperar(100)
-    mover(20, -9)                            # el lado se elige llevando el ratón
+    mover(20, -9)                            # llevar el ratón no cambia el lado: lo da el signo y el asa
     A.reg(AR + " · Desfase", "tras el clic hay barra de valores", lz.entrada is not None, "")
     if lz.entrada is None:
         return
-    A.reg(AR + " · Desfase", "la vista previa sigue al ratón (sin asa propia)", lz._asas is None, f"asas={lz._asas}")
+    A.reg(AR + " · Desfase", "la barra tiene el asa de la distancia (se tira de ella)", lz._asas is not None, f"asas={lz._asas}")
     A.foto(v, "desfase_previa")
     escribir("5")
     A.reg(AR + " · Desfase", "Enter crea la cadena (4 curvas) con restricción y cota",

@@ -81,7 +81,7 @@ def test_match_topology_casilla_limita_y_avisa(lienzo, direccion):
     lz.mensaje.connect(mensajes.append)
     _clic(lz, 15, 20)
     _mover(lz, 15, 22)
-    _aceptar(lz, "3", "1")
+    _aceptar(lz, "-3", "-1")                               # hacia adentro (el lado lo da el signo, no el cursor)
     assert lz.resultado.ok and len(lz.historial) == 1
     cotas = sorted(lz.evaluar(c.expresion) for c in lz.b.cotas.values() if c.tipo == "desfase")
     assert len(cotas) == (1 if direccion == "un" else 2)

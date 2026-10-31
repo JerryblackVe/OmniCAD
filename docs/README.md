@@ -89,6 +89,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [auditorias/previa-comandos-2026-10-28.md](auditorias/previa-comandos-2026-10-28.md) | Costo de las previas de Empalme, Chaflán, Cortar, Unir, Intersecar, Vaciado y patrones: 32 casos, 96 corridas, kernel/teselado/dibujo y límites; banco reproducible sin arreglos de producción |
 | [auditorias/previa-asincrona-2026-10-29.md](auditorias/previa-asincrona-2026-10-29.md) | Previa en proceso aparte para Empalme, Chaflán, booleanas, patrones y Vaciado: cuadros, asas y latencia hasta el sólido exacto por comando, y la causa del «piso» del Vaciado (P-55). |
 | [auditorias/patrones-solidos-2026-10-31.md](auditorias/patrones-solidos-2026-10-31.md) | Patrón rectangular, circular, en trayectoria, en puntos y Multitransformación: qué dice la ayuda de Fusion, matriz por herramienta (problema, evidencia, causa, corrección, prueba, pendiente) y las filas PAT-1 a PAT-6 del seguimiento |
+| [auditorias/desfase_boceto_2026-10-31.md](auditorias/desfase_boceto_2026-10-31.md) | Matriz de equivalencia del Desfase del boceto contra Fusion (31 filas, con su evidencia: video, ayuda, código, pruebas) y lo que no se pudo verificar |
 | [informe_tortura_2026-10-17.md](informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |
 | [comparacion_motores.md](comparacion_motores.md) | OpenCascade contra OmniKernel. **Generado**: `scripts/comparar_motores.py` |
 | [inventario_motor.md](inventario_motor.md) | Funciones del núcleo por motor. **Generado**: `scripts/estado_motor.py` |

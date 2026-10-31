@@ -2155,8 +2155,11 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
              "cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la "
              "izquierda de su recorrido; distance negativa va al lado contrario (la cota queda positiva) y side_x/side_y "
              "eligen el lado con un punto (la positiva va hacia él). Si el desfase deja un radio o un segmento en cero "
-             "o al revés (p. ej. -30 en un círculo de radio 30), falla con INVALID_GEOMETRY y dice cuál. direction=two desfasa distance a un lado y "
-             "distance2 al otro; direction=symmetric, distance a los dos lados. match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase "
+             "o al revés (p. ej. -30 en un círculo de radio 30), falla con INVALID_GEOMETRY y dice cuál. direction=two: "
+             "distance y distance2 llevan signo sobre la MISMA normal, como Fusion (20 y -10 en un círculo: una copia a "
+             "20 afuera y otra a 10 adentro); una de las dos puede ser 0 y entonces no se crea esa copia. "
+             "direction=symmetric, distance a los dos lados con las dos cotas ligadas (editar una mueve la otra). "
+             "chain=false desfasa solo la curva entity (Fusion sin Selección de cadena). match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase "
              "conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. Una "
              "spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para "
              "soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): "
@@ -2164,16 +2167,17 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
 def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | None = None,
                          side_y: float | None = None, sketch: str | None = None,
                          direction: Literal["one", "two", "symmetric"] = "one", distance2: Expr | None = None,
-                         match_topology: bool = False):
+                         match_topology: bool = False, chain: bool = True):
     """
     entity: id de una curva de la cadena (línea o arco), de un círculo, elipse o spline.
     distance: separación en mm, número o expresión con parámetros; negativa = al lado contrario.
     side_x: x de un punto del lado donde va el desfase; vacío = el lado por defecto.
     side_y: y de ese punto.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
-    direction: one (un lado), two (distance a un lado y distance2 al contrario) o symmetric (distance a los dos lados).
-    distance2: separación del segundo lado con direction=two (obligatoria en ese caso).
+    direction: one (un lado), two (distance y distance2, cada una con su signo sobre la misma normal) o symmetric (distance a los dos lados).
+    distance2: segunda distancia con direction=two (obligatoria en ese caso): positiva = el mismo lado que distance positiva, negativa = el otro; 0 = sin segunda copia.
     match_topology: true = si la distancia haría desaparecer un segmento (o anular un radio), se usa la mayor que conserva la topología, como número fijo, y se avisa.
+    chain: true = se desfasa toda la cadena conectada a entity (como Selección de cadena de Fusion); false = solo esa curva.
     """
     _exigir_finitos(locals())
     if (side_x is None) != (side_y is None):
@@ -2183,9 +2187,10 @@ def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | No
     lado = None if side_x is None else (float(side_x), float(side_y))
 
     def firmada(d):
-        """(texto sin signo para la cota, valor con signo) de una distancia."""
+        """(texto sin signo para la cota, valor con signo) de una distancia (con direction=two, 0 = sin esa copia)."""
         expresion, valor = _valor_expr(sesion, d)
-        _cota_valida("desfase", abs(valor), "distance")
+        if valor != 0 or direction != "two":
+            _cota_valida("desfase", abs(valor), "distance")
         if not isinstance(d, str):
             expresion = repr(abs(valor))
         else:
@@ -2198,7 +2203,7 @@ def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | No
         _curva(b, entity, ("linea", "arco", "circulo", "elipse", "arco_elipse", "spline"))
         _nuevos, avisos = b.desfasar(entity, valor, lado, expresion, "dos" if direction == "two" else
                                      "simetrico" if direction == "symmetric" else "un", valor2, expresion2,
-                                     topologia=match_topology)
+                                     topologia=match_topology, cadena=chain)
         for aviso in avisos:
             sesion.avisar(aviso)
     return _dibujar(sesion, sketch, desfasar, desde_solver=True)
