@@ -172,47 +172,6 @@ def _asa_cantidad(clave, origen, direccion, paso):
     return _mp().AsaCantidad(clave, lambda n: (origen + direccion * paso * (n - 1), direccion * signo), abs(paso) or 10.0)
 
 
-def _asas_patron_rectangular(self, ctx, v):
-    mp = _mp()
-    centro = _centro_cuerpos(ctx, v)
-    if centro is None:
-        return []
-    salida = []
-    for dir_clave, dist_clave, n_clave in (("dir1", "d1", "n1"), ("dir2", "d2", "n2")):
-        if v.get(dir_clave):
-            d = _direccion_de(ctx, v[dir_clave][0])
-            if d is not None and np.linalg.norm(d) > 1e-9:
-                salida.append(mp.Flecha(dist_clave, centro, d))
-                salida.append(_asa_cantidad(n_clave, centro, d, _paso(v, n_clave, dist_clave, ctx)))
-    return salida
-
-
-def _asas_patron_circular(self, ctx, v):
-    mp = _mp()
-    centro = _centro_cuerpos(ctx, v)
-    if centro is None or not v.get("eje"):
-        return []
-    try:
-        punto, d = ent.como_eje(mp.entidad(v["eje"][0], ctx.estado))
-    except Exception:  # noqa: BLE001
-        return []
-    d = mp.unitario(d)
-    pie = np.asarray(punto, float) + d * float((centro - punto) @ d)
-    radio = float(np.linalg.norm(centro - pie))
-    salida = [mp.Angulo("angulo", pie, d, centro - pie, radio if radio > 1e-6 else None)]
-    if radio > 1e-6:
-        total, n0 = evaluar_o_cero(ctx, v.get("angulo")), max(1, int(evaluar_o_cero(ctx, v.get("n")) or 1))
-        paso_grados = total / n0 if v.get("distribucion") == "extension" else total
-        u, signo = (centro - pie) / radio, (-1.0 if paso_grados < 0 else 1.0)
-
-        def posicion(n):
-            a = np.radians(paso_grados * (n - 1))
-            p = pie + radio * (u * np.cos(a) + np.cross(d, u) * np.sin(a))
-            return p, np.cross(d, (p - pie) / radio) * signo
-        salida.append(mp.AsaCantidad("n", posicion, radio * abs(np.radians(paso_grados)) or 10.0))
-    return salida
-
-
 # ---------------------------------------------------------------- sistemas de coordenadas y uniones
 def _asas_scu(self, ctx, v):
     """Tríada en el origen del SCU: flechas = Desfase X/Y/Z, arcos = Ángulo X/Y/Z."""
@@ -474,36 +433,17 @@ def _asas_desmoldeo(self, ctx, v):
     return salida
 
 
-def _asas_patron_ruta(self, ctx, v):
-    """Flecha de distancia y asa de cantidad donde empieza el patrón (`inicio`), y un asa que desliza ese inicio por la ruta."""
-    from ...nucleo.construccion import muestras_ruta
-    mp = _mp()
-    forma = _forma_de(ctx, v["ruta"][0]) if v.get("ruta") else None
-    inicio = min(1.0, max(0.0, evaluar_o_cero(ctx, v.get("inicio"))))
-    pt = _punto_y_tangente(forma, inicio) if forma is not None else None
-    if pt is None:
-        return []
-    salida = [mp.Flecha("d1", pt[0], pt[1]), _asa_cantidad("n1", pt[0], pt[1], _paso(v, "n1", "d1", ctx))]
-    try:
-        ts = np.linspace(0.0, 1.0, 81)
-        salida.append(mp.AsaRuta("inicio", ts, muestras_ruta(forma, ts)))
-    except Exception:  # noqa: BLE001 — una ruta que no se puede muestrear no rompe el diálogo
-        pass
-    return salida
-
-
 def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
         "barrido": _asas_barrido, "sup_barrido": _asas_barrido, "escala_3d": _asas_escala, "seccion": _asas_corte("desfase"),
         "seccion_malla": _asas_corte("distancia"), "cortar_plano": _asas_corte("desfase"),
-        "patron_rectangular_3d": _asas_patron_rectangular, "patron_circular_3d": _asas_patron_circular,
         "scu": _asas_scu, "union": _asas_union("origen2", "clave2"), "origen_union": _asas_union("origen", "clave"),
         "bobina": _asas_bobina,
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,
         "tuberia": _asas_tuberia, "dobladillo": _asas_dobladillo, "extender_sup": _asas_extender,
         "reglada": _asas_reglada, "sup_revolucion": _asas_sup_revolucion, "sup_empalme": _asas_empalme_superficie, "plegar": _asas_plegar,
-        "plano_angulo": _asas_plano_angulo, "desmoldeo": _asas_desmoldeo, "patron_ruta": _asas_patron_ruta,
+        "plano_angulo": _asas_plano_angulo, "desmoldeo": _asas_desmoldeo,
     }
     for clave, funcion in tabla.items():
         cls = CATALOGO.get(clave)

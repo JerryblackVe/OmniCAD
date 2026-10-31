@@ -815,6 +815,16 @@ class OpPatron(_OpCrear):
     entre la primera y la última instancia y, en el circular, `angulo` es el ángulo total; con "espaciado" son la
     separación (o el ángulo) entre instancias consecutivas.
     En ruta, `giro` hace girar cada copia alrededor de la ruta, progresivo hasta ese ángulo total en la última.
+    `simetrico` es la simetría de la dirección 1 (y de la 2 si `simetrico2` es None, como en las recetas viejas); con
+    `simetrico2` (True o False) la dirección 2 se elige aparte. `dir2_derivada` (True en lo que crea el diálogo): sin
+    `dir2` y con n2 > 1 la dirección 2 es la perpendicular a la 1 (`entidades.direccion_perpendicular`); sin esa marca
+    una n2 > 1 sin `dir2` se ignora, con un aviso. `suprimir`: identificadores estables de instancia: un par [i, j]
+    en el rectangular (los pasos desde el original en cada dirección; un entero i es (i, 0)), el paso k en el circular
+    y en ruta (k negativo = el otro lado con simetría) y el n.º de punto (1 = el primero) en puntos. Los que ya no
+    caen en el patrón (menos cantidad, sin simetría…) se conservan y se avisa; nunca se reasignan a otra copia.
+    En el circular, `distribucion` es "completo" (360° sin repetir el cierre), "parcial" (`angulo` es el total desde el
+    original), "simetrico" (n a cada lado hasta ±`angulo`) o, como en las recetas viejas, "extension" (usa `simetrico`)
+    y "espaciado" (`angulo` es el ángulo entre copias).
     En puntos: `puntos` (puntos de boceto, vértices, puntos de construcción o un boceto entero = sus puntos sueltos)
     y `coordenadas` ([x, y, z], números o expresiones); cada copia lleva el punto de referencia (`referencia`, o
     `referencia_xyz` [x, y, z]; por defecto el origen) a uno de los puntos."""
@@ -824,9 +834,10 @@ class OpPatron(_OpCrear):
               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
               "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
               "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False, "caras": [],
-              "componentes": [], "construccion": [], "calculo": "identico"}
+              "componentes": [], "construccion": [], "calculo": "identico", "simetrico2": None, "dir2_derivada": False}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
-    OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"), "distribucion": ("extension", "espaciado"),
+    OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"),
+                "distribucion": ("extension", "espaciado", "completo", "parcial", "simetrico"),
                 "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
     REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras", "construccion")
 
@@ -872,37 +883,105 @@ class OpPatron(_OpCrear):
         return (f"{campo} es la distancia TOTAL entre la primera y la última instancia (distribucion = \"extension\", "
                 "como «Extensión» de Fusion); para dar la separación entre instancias usá distribucion = \"espaciado\".")
 
-    def transformaciones(self, estado, ctx):
-        p, sc = self.p, _sc()
+    def _suprimidos(self):
+        """Identificadores de instancia que pide suprimir `suprimir` (pares (i, j) en el rectangular, enteros en el resto)."""
+        crudo = self.p.get("suprimir") or []
+        if not isinstance(crudo, (list, tuple)):
+            raise ErrorOperacion(f"«suprimir» tiene que ser una lista de instancias: llegó {ent.describir_valor(crudo)}.")
         try:
-            sup = tuple(int(i) for i in p.get("suprimir") or [])
-        except (TypeError, ValueError):
-            raise ErrorOperacion(f"«suprimir» tiene que ser una lista de números enteros (índices de copia): llegó "
-                                 f"{ent.describir_valor(p.get('suprimir'))}.") from None
-        if p["forma_patron"] == "rectangular":
+            if self.p["forma_patron"] == "rectangular":
+                return [_sc()._id_rectangular(i) for i in crudo]
+            if any(isinstance(i, bool) or int(i) != i for i in crudo):
+                raise ValueError
+            return [int(i) for i in crudo]
+        except (TypeError, ValueError, geo.ErrorGeometria):
+            raise ErrorOperacion(f"«suprimir» tiene que ser una lista de números enteros (o pares [i, j] en el "
+                                 f"rectangular): llegó {ent.describir_valor(crudo)}.") from None
+
+    def _direcciones(self, estado, ctx):
+        """(dirección 1, dirección 2 o None) del rectangular: la 2 elegida, la derivada perpendicular o ninguna."""
+        p = self.p
+        d1 = ent.direccion(_resolver(p["dir1"], estado))
+        if p["dir2"]:
+            return d1, ent.direccion(_resolver(p["dir2"], estado))
+        n2 = self.entero("n2", minimo=0)                  # sin dirección 2, un 0 no cuenta (como siempre)
+        if n2 > 1:
+            if p.get("dir2_derivada"):
+                return d1, ent.direccion_perpendicular(_resolver(p["dir1"], estado))
+            ctx.aviso(f"{self._prefijo}Cantidad 2 = {n2} no hace nada: falta la dirección 2.")
+        return d1, None
+
+    def instancias(self, estado, ctx):
+        """Todas las instancias del patrón con su identificador estable: [(id, gp_Trsf o None, estado)] con estado "ok",
+        "suprimida", "fuera" (más allá del extremo de una ruta abierta) o "repetida" (cae sobre otra); la primera, el
+        original, siempre es "ok". Es la única fuente de las posiciones: el cálculo, la vista previa y las casillas de
+        supresión la usan."""
+        p, sc = self.p, _sc()
+        sup = self._suprimidos()
+        forma = p["forma_patron"]
+        if forma != "circular" and p["distribucion"] not in ("extension", "espaciado"):
+            raise ErrorOperacion(f"La distribución «{p['distribucion']}» solo existe en el patrón circular: usá "
+                                 "«extension» o «espaciado».")
+        if forma == "rectangular":
             if not p["dir1"]:
                 raise ErrorOperacion("Elegí la dirección 1.")
-            d1 = ent.direccion(_resolver(p["dir1"], estado))
-            d2 = ent.direccion(_resolver(p["dir2"], estado)) if p["dir2"] else None
-            return sc.transformaciones_rectangulares(d1, self.entero("n1"), ctx.evaluar(p["d1"]), d2, self.entero("n2") if d2 is not None else 1,
-                                                     ctx.evaluar(p["d2"]), distribucion=p["distribucion"],
-                                                     simetrico1=p["simetrico"], simetrico2=p["simetrico"], suprimir=sup)
-        if p["forma_patron"] == "circular":
+            d1, d2 = self._direcciones(estado, ctx)
+            sim1 = bool(p["simetrico"])
+            sim2 = sim1 if p.get("simetrico2") is None else bool(p["simetrico2"])
+            return [(i, t, "suprimida" if s_ else "ok") for i, t, s_ in sc.instancias_rectangulares(
+                d1, self.entero("n1"), ctx.evaluar(p["d1"]), d2, self.entero("n2") if d2 is not None else 1,
+                ctx.evaluar(p["d2"]), distribucion=p["distribucion"], simetrico1=sim1, simetrico2=sim2, suprimir=sup)]
+        if forma == "circular":
             if not p["eje"]:
                 raise ErrorOperacion("Elegí el eje.")
             punto, eje = ent.como_eje(_resolver(p["eje"], estado))
-            return sc.transformaciones_circulares(punto, eje, self.entero("n"),
-                                                  angulo_total=ctx.evaluar(p["angulo"], ANGULO),
-                                                  distribucion="completa" if p["distribucion"] == "extension"
-                                                  else "espaciado", simetrico=p["simetrico"], suprimir=sup)
-        if p["forma_patron"] == "puntos":
+            modo, simetrico, angulo = p["distribucion"], bool(p["simetrico"]), None
+            if modo == "completo":
+                angulo, simetrico, modo = 360.0, False, "completa"
+            elif modo in ("parcial", "simetrico"):
+                simetrico, modo = modo == "simetrico", "completa"
+            else:
+                modo = "completa" if modo == "extension" else "espaciado"
+            if angulo is None:
+                angulo = ctx.evaluar(p["angulo"], ANGULO)
+            return [(k, t, "suprimida" if s_ else "ok") for k, t, s_ in sc.instancias_circulares(
+                punto, eje, self.entero("n"), angulo_total=angulo, distribucion=modo, simetrico=simetrico, suprimir=sup)]
+        if forma == "puntos":
             puntos, ref = self.puntos_patron(estado, ctx)
-            return sc.transformaciones_en_puntos(puntos, ref, suprimir=sup)
+            return sc.instancias_en_puntos(puntos, ref, suprimir=sup)
         _, ruta = _aristas(p["ruta"], estado, "la ruta")
-        return sc.transformaciones_en_ruta(ruta, self.entero("n1"), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
-                                           inicio=ctx.evaluar(p["inicio"], "escalar"), distribucion=p["distribucion"],
-                                           simetrico=p["simetrico"], suprimir=sup,
-                                           giro=ctx.evaluar(p.get("giro") or "0", ANGULO))
+        return sc.instancias_en_ruta(ruta, self.entero("n1"), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
+                                     inicio=ctx.evaluar(p["inicio"], "escalar"), distribucion=p["distribucion"],
+                                     simetrico=p["simetrico"], suprimir=sup, giro=ctx.evaluar(p.get("giro") or "0", ANGULO))
+
+    _prefijo = ""
+
+    def avisos_instancias(self, instancias):
+        """Textos sobre lo que el patrón NO hace como se pidió: exclusiones que ya no caen en el patrón, instancias más allá
+        del extremo de la ruta o repetidas. Los pedidos se conservan; nada se reasigna a otra copia."""
+        conocidos = {i for i, _, _ in instancias}
+        avisos = []
+        perdidas = [i for i in self._suprimidos() if i not in conocidos]
+        if perdidas:
+            lista = ", ".join(str(list(i)) if isinstance(i, tuple) else str(i) for i in perdidas)
+            avisos.append(f"{len(perdidas)} copia(s) a suprimir ({lista}) ya no existen en el patrón: se conservan pero no "
+                          "se aplican; si volvés a la cantidad o la simetría de antes, vuelven a valer.")
+        fuera = sum(e == "fuera" for _, _, e in instancias)
+        if fuera:
+            creadas = sum(e == "ok" for _, _, e in instancias)
+            avisos.append(f"La ruta no alcanza: {fuera} instancia(s) caerían pasado su extremo y no se crean ({creadas} en "
+                          f"total, el original incluido). Bajá la distancia o la cantidad, o corré el punto de inicio.")
+        repetidas = sum(e == "repetida" for _, _, e in instancias)
+        if repetidas:
+            avisos.append(f"{repetidas} instancia(s) caerían sobre otra y no se repiten.")
+        return [self._prefijo + a for a in avisos]
+
+    def transformaciones(self, estado, ctx):
+        """gp_Trsf de las instancias que se crean (la primera, la identidad = el original); avisa lo que no se aplica."""
+        instancias = self.instancias(estado, ctx)
+        for a in self.avisos_instancias(instancias):
+            ctx.aviso(a)
+        return [t for _, t, e in instancias if e == "ok"]
 
     def ejecutar(self, estado, ctx):
         _ejecutar_patron(self, estado, ctx, "Elegí los cuerpos del patrón.")
@@ -910,7 +989,10 @@ class OpPatron(_OpCrear):
 
 def _ejecutar_patron(op, estado, ctx, sin_cuerpos):
     """`ejecutar` común del Patrón y la Multitransformación: repite pasos, caras o componentes, o copia cuerpos."""
-    copiar_objetos(op, estado, ctx, op.transformaciones(estado, ctx)[1:], sin_cuerpos)    # la primera es el original
+    trsfs = op.transformaciones(estado, ctx)[1:]                        # la primera es el original
+    if not trsfs and op.p.get("objeto", "cuerpos") != "operaciones":
+        ctx.aviso("El patrón no crea copias (solo queda el original): revisá las cantidades y las copias suprimidas.")
+    copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos)
 
 
 TIPOS_TRANSFORMACION = ("rectangular", "circular", "ruta", "puntos", "simetria")
@@ -938,8 +1020,10 @@ class OpMultitransformar(_OpCrear):
                                       "transformaciones")
         return list(lista)
 
-    def _patron(self, t):
-        return OpPatron(self.id, forma_patron=t.get("tipo"), **{k: v for k, v in t.items() if k != "tipo"})
+    def _patron(self, t, i=0):
+        op = OpPatron(self.id, forma_patron=t.get("tipo"), **{k: v for k, v in t.items() if k != "tipo"})
+        op._prefijo = f"Transformación {i}: " if i else ""
+        return op
 
     def dependencias(self):
         deps = super().dependencias()
@@ -980,7 +1064,7 @@ class OpMultitransformar(_OpCrear):
                     plano = ent.como_plano(_resolver(t["plano"], estado))
                     listas.append([transformacion_identidad(), sc.transformacion_simetria(plano)])
                     continue
-                patron = self._patron(t)
+                patron = self._patron(t, i)
                 patron.revisar_parametros()
                 patron.validar_opciones()
                 listas.append(patron.transformaciones(estado, ctx))

@@ -416,38 +416,44 @@ def test_patron_en_ruta_con_giro_y_multitransformar_por_el_dialogo():
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="2", largo="2", alto="20", x="-1", y="-1"))
     br, ids = _boceto(doc, plano="XY", lineas=[((0, 0), (100, 0))])
     c = _h(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})
-    op = _ejecutar(doc, PatronRuta, cuerpos=[c], ruta=_curvas(doc, br, ids), n1=3, d1="100 mm", giro="90 deg")
+    op = _ejecutar(doc, PatronRuta, cuerpos=[c], ruta=_curvas(doc, br, ids), rn=3, rd="100 mm", giro="90 deg")
     assert op.p["giro"] == "90 deg"
     (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(doc.estado_final.cuerpos[f"{op.id}.c2"].forma)
     assert (x1 - x0, y1 - y0, z1 - z0) == pytest.approx((2, 20, 2))            # acostada: giró 90° sobre la ruta
     # multitransformación: patrón de 3 en Y + simetría en YZ = 6 instancias (5 cuerpos nuevos)
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="10"))
     caja = _h(doc, {"tipo": "cuerpo", "cuerpo": doc.operaciones[-1].id + ".c1"})
-    op = _ejecutar(doc, Multitransformar, cuerpos=[caja], t1_tipo="rectangular",
-                   t1_dir=[_h(doc, {"tipo": "eje", "id": "Y"})], t1_n=3, t1_d="20 mm", t1_distribucion="espaciado",
-                   t2_tipo="simetria", t2_plano=[_h(doc, {"tipo": "plano", "id": "YZ"})])
+    eje_y, yz = {"tipo": "eje", "id": "Y"}, {"tipo": "plano", "id": "YZ"}
+    lista = [{"tipo": "rectangular", "dir1": eje_y, "n1": 3, "d1": "20 mm", "distribucion": "espaciado"},
+             {"tipo": "simetria"}]
+    op = _ejecutar(doc, Multitransformar, cuerpos=[caja], _lista=lista, _sel=1, t_tipo="simetria",
+                   t_plano=[_h(doc, yz)])
     assert [t["tipo"] for t in op.p["transformaciones"]] == ["rectangular", "simetria"]
     nuevos = [k for k in doc.estado_final.cuerpos if k.startswith(op.id)]
     assert len(nuevos) == 5 and all(g.volumen(doc.estado_final.cuerpos[k].forma) == pytest.approx(125) for k in nuevos)
     assert comando_para(op) is Multitransformar
     editar = ContextoComando(doc, op=op)
     v = Multitransformar().desde_op(op, editar)
-    assert (v["t1_tipo"], v["t2_tipo"], v["t3_tipo"]) == ("rectangular", "simetria", "ninguna")
-    assert Multitransformar().construir(v, editar).p == op.p
-    with pytest.raises(ErrorComando, match="seleccioná el eje"):
-        Multitransformar().construir(dict(v, t1_tipo="circular", t1_eje=[]), editar)
-    # una multitransformación de la API con una transformación que el diálogo no edita: Aceptar la conserva
+    assert [t["tipo"] for t in v["_lista"]] == ["rectangular", "simetria"] and v["t_tipo"] == "rectangular"
+    igual = Multitransformar().construir(v, editar)                   # abrir y aceptar sin tocar nada
+    for antes, despues in zip(op.p["transformaciones"], igual.p["transformaciones"], strict=True):
+        assert {k: x for k, x in despues.items() if k in antes} == antes            # nada de lo que había se pierde
+    with pytest.raises(ErrorComando, match="Seleccioná el eje"):
+        Multitransformar().construir(dict(v, t_tipo="circular", t_eje=[]), editar)
+    # una multitransformación de la API con una transformación que el diálogo no muestra entera: Aceptar la conserva
     api_op = OpMultitransformar(doc.nuevo_id(), cuerpos=[caja["ref"]["cuerpo"]], transformaciones=[
         {"tipo": "puntos", "coordenadas": [[0, 0, 50]]}])
     assert doc.agregar(api_op).estado == "ok"
     editar = ContextoComando(doc, op=api_op)
     v = Multitransformar().desde_op(api_op, editar)
-    assert v["_fijas"] and Multitransformar().construir(v, editar).p == api_op.p
+    conservada = Multitransformar().construir(v, editar).p["transformaciones"][0]
+    original = api_op.p["transformaciones"][0]
+    assert {k: conservada[k] for k in original} == original                      # nada de lo que traía se pierde
 
 
 def test_panel_de_multitransformar_y_patron_de_operaciones():
-    """El panel real (un visor sin ventana): las ranuras de transformación aparecen de a una, «Tipo de objeto» cambia
-    cuerpos por operaciones y la vista previa arma el paso."""
+    """El panel real (un visor sin ventana): la lista de transformaciones y el editor de la elegida, «Tipo de objeto»
+    cambia cuerpos por operaciones y la vista previa arma el paso."""
     from omnicad.ui.comando import ContextoComando, PanelComando
     from omnicad.ui.comandos.crear import PatronCircular
     from omnicad.ui.comandos.patrones import Multitransformar
@@ -467,11 +473,11 @@ def test_panel_de_multitransformar_y_patron_de_operaciones():
     panel = PanelComando(Multitransformar(), ctx, visor)
     campos = {c.clave: c for c in panel.campos}
     visibles = lambda: {k for k, c in campos.items() if panel._visible(c)}  # noqa: E731
-    assert {"cuerpos", "t1_tipo", "t1_dir", "t1_n", "t1_d", "t2_tipo"} <= visibles()
-    assert not {"pasos", "t2_plano", "t3_tipo", "fijas"} & visibles()
-    panel.set_valor("t2_tipo", "simetria")
+    assert {"cuerpos", "lista", "t_tipo", "t_dir1", "t_n1", "t_d1"} <= visibles()
+    assert not {"pasos", "t_plano", "t_eje"} & visibles()
+    panel.set_valor("t_tipo", "simetria")
     panel.set_valor("objeto", "operaciones")
-    assert {"t2_plano", "t3_tipo", "pasos"} <= visibles() and not {"cuerpos", "combinar"} & visibles()
+    assert {"t_plano", "pasos"} <= visibles() and not {"cuerpos", "combinar", "t_dir1"} & visibles()
     panel.cancelar()
     panel = PanelComando(PatronCircular(), ctx, visor, {"objeto": "operaciones", "pasos": "Agujero1",
                                                         "eje": [_h(doc, {"tipo": "eje", "id": "Z"})], "n": 4})

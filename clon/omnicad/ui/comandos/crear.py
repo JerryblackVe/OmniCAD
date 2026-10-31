@@ -5,6 +5,7 @@ import numpy as np
 from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpNervio, OpPatron, OpRed,
                                     OpRellenoContorno, OpRepujado, OpRosca, OpSaliente, OpSimetria, OpSolevacion,
                                     OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
+from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
@@ -776,6 +777,10 @@ def _de_cuerpos(v):
     return v.get("objeto", "cuerpos") == "cuerpos"
 
 
+def _de_cuerpos_u_pasos(v):
+    return v.get("objeto", "cuerpos") in ("cuerpos", "operaciones")
+
+
 def _objeto_es(clase):
     return lambda v: v.get("objeto", "cuerpos") == clase
 
@@ -882,71 +887,279 @@ def objeto_valores(op, ctx):
             "construccion": hits(op.p.get("construccion") or [], ctx.estado)}
 
 
+DIRECCION = {"eje", "arista_lineal", "plano", "cara_plana"}
+EJE_GIRO = {"eje", "arista_circular", "curva_boceto"}          # línea, arista recta o circular, eje, cara cilíndrica, círculo de boceto
+FORMAS_PATRON = {"rectangular": "Rectangular", "circular": "Circular", "ruta": "En trayectoria", "puntos": "En puntos"}
+MODOS_CIRCULAR = {"completo": "Completo (360°)", "parcial": "Parcial", "simetrico": "Simétrico",
+                  "espaciado": "Ángulo entre copias"}
+COLOR_DIRECCION_DERIVADA = (0.1, 0.62, 0.55)
+
+
+# ---------------------------------------------------------------- copias suprimidas: texto ⇄ identificadores
+def suprimir_a_texto(forma, suprimir):
+    """Lo que se ve en el campo «Copias suprimidas»: pares «i:j» en el rectangular, números en el resto."""
+    if forma == "rectangular":
+        pares = [(int(s[0]), int(s[1])) if isinstance(s, (list, tuple)) else (int(s), 0) for s in suprimir or []]
+        return ", ".join(f"{i}:{j}" for i, j in pares)
+    return ", ".join(str(int(s)) for s in suprimir or [])
+
+
+def texto_a_suprimir(forma, texto):
+    """Identificadores de instancia del campo «Copias suprimidas»: [i, j] en el rectangular («2:1»; un «2» solo es el
+    (2, 0)) y enteros en el resto. Sin repetir; el original (0) no se puede suprimir."""
+    salida = []
+    for tok in str(texto or "").replace(";", ",").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            if forma == "rectangular":
+                i, _, j = tok.partition(":")
+                ident = [int(i), int(j or 0)]
+            else:
+                ident = int(tok)
+        except ValueError:
+            ejemplo = "«2:1» (paso i en la dirección 1 : paso j en la 2)" if forma == "rectangular" else "números enteros"
+            raise ErrorComando(f"En «Copias suprimidas» van {ejemplo} separados por coma; «{tok}» no sirve.") from None
+        if ident in (0, [0, 0]):
+            raise ErrorComando("El original no se puede suprimir (es el cuerpo fuente).")
+        if ident not in salida:
+            salida.append(ident)
+    return salida
+
+
+def _cantidad(v, clave):
+    try:
+        return int(v.get(clave) or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def _info_dir2(pre):
+    def texto(v, ctx):
+        if v.get(pre + "dir2"):
+            return "Dirección 2: la elegida."
+        try:
+            e = ent.resolver(v[pre + "dir1"][0]["ref"], ctx.estado)
+            d = ent.direccion_perpendicular(e)
+        except Exception:  # noqa: BLE001 — sin dirección 1 todavía
+            return "Dirección 2 derivada: perpendicular a la 1 (elegí la 1)."
+        return (f"Dirección 2 derivada: perpendicular a la 1, hacia ({d[0]:.2f}, {d[1]:.2f}, {d[2]:.2f}) "
+                "(flecha verde). Elegí otra referencia para cambiarla.")
+    return texto
+
+
+def _info_circular(pre):
+    def texto(v, ctx):
+        from ...nucleo import solidos_crear as sc
+        try:
+            n, modo = _cantidad(v, pre + "n"), v.get(pre + "modo", "completo")
+            if modo == "completo":
+                total, extra = 360.0, ""
+            else:
+                total = ctx.evaluar(v.get(pre + ("angulo_paso" if modo == "espaciado" else "angulo")), ANGULO)
+                extra = ""
+            simetrico = modo == "simetrico" or (modo == "espaciado" and bool(v.get(pre + "simetrico_paso")))
+            paso = sc.paso_angular(n, total, "espaciado" if modo == "espaciado" else "completa", simetrico)
+            if modo == "parcial" and abs(abs(total) - 360.0) < 1e-9:
+                extra = " 360° es una vuelta completa: igual que «Completo»."
+            ks = sc._indices(n, simetrico)
+            return f"Copias a {', '.join(f'{k * paso:g}°' for k in ks[:8])}{'…' if len(ks) > 8 else ''}.{extra}"
+        except Exception:  # noqa: BLE001 — valores a medio escribir: lo dice la vista previa
+            return ""
+    return texto
+
+
+def _info_puntos(v, ctx):
+    ref = "el punto de referencia elegido" if v.get("referencia") else "el origen (0, 0, 0)"
+    return (f"Cada copia lleva {ref} a uno de los puntos (cruz verde = referencia, cruces azules = destinos). "
+            "Un boceto entero aporta solo sus puntos sueltos, no los extremos de sus curvas.")
+
+
+def campos_patron(pre="", forma=None):
+    """Campos de cada tipo de patrón (rectangular, circular, en trayectoria y en puntos) con las claves prefijadas con
+    `pre`; `forma(v)` dice qué tipo está activo. Los usan el diálogo del Patrón y cada transformación de la
+    Multitransformación (pre = «t_»)."""
+    forma = forma or (lambda v: v.get("forma"))
+    k = lambda c: pre + c                                                      # noqa: E731
+    en = lambda *fs: (lambda v: forma(v) in fs)                                # noqa: E731
+    cuando = lambda f, test: (lambda v: forma(v) == f and test(v))             # noqa: E731
+    n1_mayor = lambda v: _cantidad(v, k("n1")) > 1                             # noqa: E731
+    n2_mayor = lambda v: _cantidad(v, k("n2")) > 1                             # noqa: E731
+    rn_mayor = lambda v: _cantidad(v, k("rn")) > 1                             # noqa: E731
+    modo = lambda *ms: (lambda v: v.get(k("modo"), "completo") in ms)          # noqa: E731
+    return [
+        Seleccion(k("dir1"), "Dirección 1", DIRECCION, visible_si=en("rectangular")),
+        Opciones(k("distribucion"), "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"},
+                 visible_si=en("rectangular", "ruta"),
+                 ayuda="Extensión: la distancia es el largo total de la primera a la última copia. Espaciado: es la "
+                       "separación entre copias consecutivas."),
+        Entero(k("n1"), "Cantidad 1", 3, 1, visible_si=en("rectangular")),
+        Expresion(k("d1"), "Distancia 1", "30 mm", visible_si=cuando("rectangular", n1_mayor)),
+        Casilla(k("simetrico"), "Simétrico (dirección 1)", visible_si=cuando("rectangular", n1_mayor),
+                ayuda="La misma cantidad de copias hacia los dos lados del original (2n − 1 en total)."),
+        Seleccion(k("dir2"), "Dirección 2", DIRECCION, minimo=0, visible_si=en("rectangular"),
+                  ayuda="Vacía = la perpendicular a la dirección 1 (derivada). Elegí un eje o una arista para cambiarla."),
+        Entero(k("n2"), "Cantidad 2", 1, 1, visible_si=en("rectangular"),
+               ayuda="1 = solo la dirección 1. Con más de 1 se muestra la dirección 2."),
+        Info(k("info_dir2"), "", _info_dir2(pre), visible_si=cuando("rectangular", n2_mayor)),
+        Expresion(k("d2"), "Distancia 2", "30 mm", visible_si=cuando("rectangular", n2_mayor)),
+        Casilla(k("simetrico2"), "Simétrico (dirección 2)", visible_si=cuando("rectangular", n2_mayor)),
+        Seleccion(k("eje"), "Eje", EJE_GIRO, visible_si=en("circular"),
+                  ayuda="Una línea, una arista recta o circular, un eje de construcción, una cara cilíndrica o un "
+                        "círculo de boceto: gira alrededor de su eje."),
+        Opciones(k("modo"), "Tipo", MODOS_CIRCULAR, "completo", visible_si=en("circular"),
+                 ayuda="Completo: 360° sin repetir el cierre. Parcial: hasta el ángulo total, a un lado. Simétrico: n "
+                       "copias a cada lado, hasta ± el ángulo. Ángulo entre copias: el paso, no el total."),
+        Entero(k("n"), "Cantidad", 6, 1, visible_si=en("circular")),
+        Expresion(k("angulo"), "Ángulo total", "180 deg", ANGULO, visible_si=cuando("circular", modo("parcial", "simetrico"))),
+        Expresion(k("angulo_paso"), "Ángulo entre copias", "30 deg", ANGULO,
+                  visible_si=cuando("circular", modo("espaciado"))),
+        Casilla(k("simetrico_paso"), "A los dos lados del original", visible_si=cuando("circular", modo("espaciado"))),
+        Info(k("info_circular"), "", _info_circular(pre), visible_si=en("circular")),
+        Seleccion(k("ruta"), "Ruta", CURVA, maximo=None, visible_si=en("ruta"),
+                  ayuda="Una o varias aristas o curvas de boceto seguidas: el patrón recorre toda la cadena."),
+        Entero(k("rn"), "Cantidad", 3, 1, visible_si=en("ruta")),
+        Expresion(k("rd"), "Distancia", "30 mm", visible_si=cuando("ruta", rn_mayor)),
+        Expresion(k("inicio"), "Punto de inicio (0 = principio, 1 = final)", "0", ESCALAR, visible_si=en("ruta"),
+                  ayuda="Dónde está el original sobre la ruta, de 0 (su principio) a 1 (su final). Se ve como el disco "
+                        "que se desliza por la ruta."),
+        Opciones(k("orientacion"), "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"},
+                 visible_si=en("ruta")),
+        Expresion(k("giro"), "Giro alrededor de la ruta (total)", "0 deg", ANGULO, visible_si=en("ruta"),
+                  ayuda="Cada copia gira alrededor de la ruta, de a poco, hasta este ángulo en la última."),
+        Casilla(k("r_simetrico"), "Simétrico", visible_si=cuando("ruta", rn_mayor)),
+        Seleccion(k("puntos"), "Puntos", {"punto_boceto", "vertice", "punto", "boceto"}, maximo=None,
+                  visible_si=en("puntos"),
+                  ayuda="Destinos: puntos de boceto, vértices, puntos de construcción o un boceto entero (sus puntos "
+                        "sueltos)."),
+        Seleccion(k("referencia"), "Punto de referencia", {"punto_boceto", "vertice", "punto"}, minimo=0,
+                  visible_si=en("puntos"),
+                  ayuda="El punto que se lleva a cada destino (vacío = el origen). Para repetir un agujero, el punto "
+                        "donde está el agujero."),
+        Info(k("info_puntos"), "", _info_puntos, visible_si=en("puntos")),
+        Texto(k("suprimir"), "Copias suprimidas", "", visible_si=lambda v: forma(v) in FORMAS_PATRON,
+              ayuda="Rectangular: «i:j» (pasos desde el original en cada dirección; 2 solo = 2:0). Circular y en "
+                    "trayectoria: el paso (negativo = el otro lado). En puntos: el n.º del punto (1 = el primero). "
+                    "Cada número sigue a SU copia aunque cambies las cantidades."),
+    ]
+
+
+def params_patron(v, forma, pre="", estricto=True):
+    """Parámetros de OpPatron (sin el objeto) desde los valores de `campos_patron`. Con `estricto` falla si falta lo
+    imprescindible (la dirección, el eje, la ruta); sin él deja esos campos vacíos."""
+    k = lambda c: pre + c                                                      # noqa: E731
+    exigir_ = exigir if estricto else (lambda *_a: None)
+    if forma == "rectangular":
+        exigir_(v, k("dir1"), "Seleccioná la dirección 1.")
+        p = dict(dir1=ref1(v, k("dir1")), dir2=ref1(v, k("dir2")), n1=_cantidad(v, k("n1")), d1=v.get(k("d1")),
+                 n2=_cantidad(v, k("n2")), d2=v.get(k("d2")), distribucion=v.get(k("distribucion"), "extension"),
+                 simetrico=bool(v.get(k("simetrico"))), simetrico2=bool(v.get(k("simetrico2"))), dir2_derivada=True)
+    elif forma == "circular":
+        exigir_(v, k("eje"), "Seleccioná el eje.")
+        modo = v.get(k("modo"), "completo")
+        p = dict(eje=ref1(v, k("eje")), n=_cantidad(v, k("n")), distribucion=modo,
+                 angulo="360 deg" if modo == "completo" else v.get(k("angulo_paso" if modo == "espaciado" else "angulo")),
+                 simetrico=modo == "espaciado" and bool(v.get(k("simetrico_paso"))))
+    elif forma == "ruta":
+        exigir_(v, k("ruta"), "Seleccioná la ruta.")
+        p = dict(ruta=refs(v, k("ruta")), n1=_cantidad(v, k("rn")), d1=v.get(k("rd")),
+                 distribucion=v.get(k("distribucion"), "extension"), inicio=v.get(k("inicio")),
+                 orientacion=v.get(k("orientacion"), "identica"), giro=v.get(k("giro")),
+                 simetrico=bool(v.get(k("r_simetrico"))))
+    else:
+        p = dict(puntos=refs(v, k("puntos")), referencia=ref1(v, k("referencia")))
+    p.update(forma_patron=forma, suprimir=texto_a_suprimir(forma, v.get(k("suprimir"))))
+    return p
+
+
+def valores_patron(p, estado, pre=""):
+    """Valores de los campos de `campos_patron` desde los parámetros de un OpPatron (o de una transformación). Lo que
+    el diálogo no puede mostrar se conserva aparte (ver `crear_patron`)."""
+    k = lambda c: pre + c                                                      # noqa: E731
+    forma = p.get("forma_patron") or p.get("tipo")
+    v = {k("suprimir"): suprimir_a_texto(forma, p.get("suprimir"))}
+    if forma == "rectangular":
+        n2_ignorada = not p.get("dir2") and not p.get("dir2_derivada", False)   # receta vieja: esa cantidad nunca se aplicó
+        sim1 = bool(p.get("simetrico"))
+        v.update({k("dir1"): _h1(p.get("dir1"), estado), k("dir2"): _h1(p.get("dir2"), estado),
+                  k("n1"): p.get("n1", 3), k("d1"): p.get("d1", "30 mm"), k("simetrico"): sim1,
+                  k("n2"): 1 if n2_ignorada else p.get("n2", 1), k("d2"): p.get("d2", "30 mm"),
+                  k("simetrico2"): sim1 if p.get("simetrico2") is None else bool(p["simetrico2"]),
+                  k("distribucion"): p.get("distribucion", "extension")})
+    elif forma == "circular":
+        dist, sim = p.get("distribucion", "extension"), bool(p.get("simetrico"))
+        modo = {"extension": "simetrico" if sim else "parcial"}.get(dist, dist)
+        v.update({k("eje"): _h1(p.get("eje"), estado), k("modo"): modo, k("n"): p.get("n", 6),
+                  k("simetrico_paso"): dist == "espaciado" and sim})
+        v[k("angulo_paso" if modo == "espaciado" else "angulo")] = p.get("angulo", "360 deg")
+    elif forma == "ruta":
+        v.update({k("ruta"): hits(p.get("ruta"), estado), k("rn"): p.get("n1", 3), k("rd"): p.get("d1", "30 mm"),
+                  k("distribucion"): p.get("distribucion", "extension"), k("inicio"): p.get("inicio", "0"),
+                  k("orientacion"): p.get("orientacion", "identica"), k("giro"): p.get("giro", "0 deg"),
+                  k("r_simetrico"): bool(p.get("simetrico"))})
+    else:
+        v.update({k("puntos"): hits(p.get("puntos"), estado), k("referencia"): _h1(p.get("referencia"), estado)})
+    return v
+
+
 class _Patron(Comando):
+    """Diálogo único de los cuatro patrones de sólido (rectangular, circular, en trayectoria y en puntos): el «Tipo de
+    patrón» se cambia al vuelo (como en Fusion) y las selecciones compatibles se conservan."""
     CLASE_OP = OpPatron
     FORMA = "rectangular"
+    MODIFICADORES = {}
 
     def campos(self, ctx):
-        base = campos_objeto()
-        if self.FORMA == "rectangular":
-            base += [Seleccion("dir1", "Dirección 1", {"eje", "arista_lineal", "plano", "cara_plana"}),
-                     Opciones("distribucion", "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"}),
-                     Entero("n1", "Cantidad 1", 3, 1), Expresion("d1", "Distancia 1", "30 mm"),
-                     Seleccion("dir2", "Dirección 2", {"eje", "arista_lineal", "plano", "cara_plana"}, minimo=0),
-                     Entero("n2", "Cantidad 2", 1, 1), Expresion("d2", "Distancia 2", "30 mm")]
-        elif self.FORMA == "circular":
-            base += [Seleccion("eje", "Eje", {"eje"}),
-                     Opciones("distribucion", "Tipo", {"extension": "Completo", "espaciado": "Ángulo entre copias"}),
-                     Entero("n", "Cantidad", 6, 1), Expresion("angulo", "Ángulo total / entre copias", "360 deg", ANGULO)]
-        elif self.FORMA == "puntos":
-            base += [Seleccion("puntos", "Puntos", {"punto_boceto", "vertice", "punto", "boceto"}, maximo=None,
-                               ayuda="Puntos de boceto, vértices, puntos de construcción o un boceto entero (todos sus "
-                                     "puntos sueltos)."),
-                     Seleccion("referencia", "Punto de referencia", {"punto_boceto", "vertice", "punto"}, minimo=0,
-                               ayuda="El punto que se lleva a cada punto elegido (vacío = el origen). Para repetir un "
-                                     "agujero, el punto donde está el agujero.")]
-        else:
-            base += [Seleccion("ruta", "Ruta", CURVA, maximo=None),
-                     Opciones("distribucion", "Distribución", {"extension": "Extensión", "espaciado": "Espaciado"}),
-                     Entero("n1", "Cantidad", 3, 1), Expresion("d1", "Distancia", "30 mm"),
-                     Expresion("inicio", "Punto de inicio (0 a 1)", "0", ESCALAR),
-                     Opciones("orientacion", "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"}),
-                     Expresion("giro", "Giro alrededor de la ruta (total)", "0 deg", ANGULO,
-                               ayuda="Cada copia gira alrededor de la ruta, de a poco, hasta este ángulo en la última.")]
-        if self.FORMA != "puntos":
-            base.append(Casilla("simetrico", "Simétrico"))
-        return base + [Texto("suprimir", "Suprimir copias (n.º, separados por coma)", ""),
-                       Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
-                       Casilla("ligeras", "Copias ligeras (comparten la geometría)",
-                               visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
-                               ayuda="Cada copia es la MISMA geometría con otra ubicación: pesa casi nada en memoria "
-                                     "y en el visor. Para volverlas copias de verdad, destildá la casilla.")]
+        return (campos_objeto()
+                + [Opciones("forma", "Tipo de patrón", FORMAS_PATRON, self.FORMA)]
+                + campos_patron("")
+                + [Casilla("ver_casillas", "Elegir copias a suprimir en la vista", visible_si=_de_cuerpos_u_pasos,
+                           ayuda="Dibuja una casilla sobre cada copia: tocala para suprimirla o restaurarla."),
+                   Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
+                   Casilla("ligeras", "Copias ligeras (comparten la geometría)",
+                           visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
+                           ayuda="Cada copia es la MISMA geometría con otra ubicación: pesa casi nada en memoria "
+                                 "y en el visor. Para volverlas copias de verdad, destildá la casilla.")])
 
     def construir(self, v, ctx):
         objeto = objeto_params(v, ctx)
-        if self.FORMA == "puntos" and not v.get("puntos") and not (ctx.op is not None and ctx.op.p.get("coordenadas")):
+        forma = v.get("forma", self.FORMA)
+        if forma == "puntos" and not v.get("puntos") and not (ctx.op is not None and ctx.op.p.get("coordenadas")):
             raise ErrorComando("Seleccioná los puntos.")
-        try:
-            suprimir = [int(x) for x in str(v.get("suprimir") or "").replace(";", ",").split(",") if x.strip()]
-        except ValueError as e:
-            raise ErrorComando("En «Suprimir copias» van números separados por coma.") from e
-        params = {k: v.get(k) for k in ("n1", "d1", "n2", "d2", "distribucion", "simetrico", "n", "angulo", "orientacion",
-                                         "inicio", "giro", "combinar", "ligeras") if k in v}
-        params.update(objeto, forma_patron=self.FORMA, dir1=ref1(v, "dir1"), dir2=ref1(v, "dir2"), eje=ref1(v, "eje"),
-                      ruta=refs(v, "ruta"), puntos=refs(v, "puntos"), referencia=ref1(v, "referencia"),
-                      suprimir=suprimir)
+        params = params_patron(v, forma)
+        params.update(objeto)
+        params["combinar"] = bool(v.get("combinar")) and _de_cuerpos(v)
         params["ligeras"] = bool(v.get("ligeras")) and _de_cuerpos(v) and not v.get("combinar")   # la casilla oculta no cuenta
-        if self.FORMA == "puntos" and ctx.op is not None:            # lo que el diálogo no muestra (de la API)
+        if forma == "puntos" and ctx.op is not None:                 # lo que el diálogo no muestra (de la API)
             params.update(coordenadas=ctx.op.p.get("coordenadas") or [],
                           referencia_xyz=[] if params["referencia"] else ctx.op.p.get("referencia_xyz") or [])
         return self.crear_op(OpPatron, v, ctx, **params)
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, ruta=hits(op.p.get("ruta"), ctx.estado), puntos=hits(op.p.get("puntos"), ctx.estado),
-                 suprimir=", ".join(str(i) for i in op.p.get("suprimir") or []), **objeto_valores(op, ctx))
-        for k in ("dir1", "dir2", "eje", "referencia"):
-            v[k] = _h1(op.p.get(k), ctx.estado)
+        forma = op.p.get("forma_patron", "rectangular")
+        v = dict(valores_patron(op.p, ctx.estado), forma=forma, combinar=op.p.get("combinar", False),
+                 ligeras=op.p.get("ligeras", False), **objeto_valores(op, ctx))
         return v
+
+    def al_cambiar(self, panel, clave):
+        """Al pasar el tipo circular a Parcial o Simétrico con los 360° de «Completo», el ángulo se baja (360° sería lo
+        mismo que Completo y el panel lo explica en vez de dejar un valor incompatible)."""
+        if clave == "modo" and panel.valores.get("modo") in ("parcial", "simetrico"):
+            try:
+                completo = abs(abs(panel.ctx.evaluar(str(panel.valores.get("angulo")), ANGULO)) - 360.0) < 1e-9
+            except Exception:  # noqa: BLE001 — una expresión a medio escribir no se toca
+                return
+            if completo:
+                panel.set_valor("angulo", "180 deg" if panel.valores["modo"] == "parcial" else "90 deg")
+
+    def manipuladores(self, ctx, v):
+        from . import asas_patron
+        return asas_patron.manipuladores(self, ctx, v)
+
+    def previa_vista(self, ctx, v, op):
+        from . import asas_patron
+        return asas_patron.previa_vista(self, ctx, v, op)
 
 
 class PatronRectangular(_Patron):

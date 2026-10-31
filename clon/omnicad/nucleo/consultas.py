@@ -123,6 +123,17 @@ def eje_cara(cara, tipo):
     return np.array([p.X(), p.Y(), p.Z()]), np.array([d.X(), d.Y(), d.Z()])
 
 
+def eje_de_curva_circular(arista):
+    """(centro, dirección del eje) de una arista circular o de un arco (el eje de un patrón circular); None si la
+    arista no es un círculo."""
+    c = BRepAdaptor_Curve(arista)
+    if c.GetType() != GeomAbs_Circle:
+        return None
+    ax = c.Circle().Axis()
+    p, d = ax.Location(), ax.Direction()
+    return np.array([p.X(), p.Y(), p.Z()]), np.array([d.X(), d.Y(), d.Z()])
+
+
 def eje_circulo(arista):
     d = BRepAdaptor_Curve(arista).Circle().Axis().Direction()
     return d.X(), d.Y(), d.Z()

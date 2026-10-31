@@ -2916,49 +2916,97 @@ def _componer(t, previa):
     return t.Multiplied(previa)
 
 
-def transformaciones_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribucion="extension",
-                                   simetrico1=False, simetrico2=False, suprimir=()):
-    """Patrón rectangular [SLD-REF-PATTERN]: lista de gp_Trsf en orden (i, j) — i por dir1, j por dir2 —
-    que incluye la identidad (0, 0) = el original. "extension": d = largo total por dirección; "espaciado":
-    d = paso. Simétrico: la misma cantidad hacia los dos lados (2n − 1). `suprimir` = pares (i, j) o índices
-    i a omitir (el original no se suprime). Como máximo INSTANCIAS_MAXIMAS en total."""
+def _id_rectangular(s):
+    """Identificador (i, j) de una instancia del patrón rectangular desde lo que guarda `suprimir`: un entero i (las
+    recetas viejas: la copia i de la primera fila, (i, 0)) o un par [i, j]."""
+    if isinstance(s, (tuple, list)):
+        if len(s) != 2 or any(isinstance(x, bool) or int(x) != x for x in s):
+            raise geo.ErrorGeometria(f"Una copia a suprimir del patrón rectangular es un entero i o un par [i, j]: llegó {s!r}.")
+        return int(s[0]), int(s[1])
+    if isinstance(s, bool) or int(s) != s:
+        raise geo.ErrorGeometria(f"Una copia a suprimir del patrón rectangular es un entero i o un par [i, j]: llegó {s!r}.")
+    return int(s), 0
+
+
+def exigir_no_paralelas(dir1, dir2):
+    """Falla si las direcciones 1 y 2 de un patrón rectangular son paralelas (las copias de la segunda caerían sobre
+    las de la primera)."""
+    if np.linalg.norm(np.cross(_unit(dir1, "dirección 1"), _unit(dir2, "dirección 2"))) < 1e-6:
+        raise geo.ErrorGeometria("Las direcciones 1 y 2 son paralelas: elegí una segunda dirección que no sea la misma "
+                                 "recta (o dejá la cantidad 2 en 1).")
+
+
+def instancias_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribucion="extension",
+                             simetrico1=False, simetrico2=False, suprimir=()):
+    """Todas las instancias del patrón rectangular [SLD-REF-PATTERN] con su identificador estable: lista de
+    ((i, j), gp_Trsf, suprimida) en orden i por dir1, j por dir2; (0, 0) es el original y nunca se suprime.
+    i y j son los pasos desde el original (con simetría hay negativos: i = −1 es la copia del otro lado). "extension":
+    d = largo total por dirección; "espaciado": d = paso. Cada dirección es simétrica o no por su cuenta:
+    simétrica da 2n − 1 instancias (la misma cantidad hacia los dos lados). Con `dir2` vacía la segunda dirección no
+    existe (j = 0). `suprimir`: enteros i (= (i, 0), recetas viejas) o pares [i, j]. Como máximo INSTANCIAS_MAXIMAS."""
     _exigir_instancias(_cantidad(n1, simetrico1) * (_cantidad(n2, simetrico2) if dir2 is not None else 1))
     u1 = _unit(dir1, "dirección 1")
     u2 = _unit(dir2, "dirección 2") if dir2 is not None else np.zeros(3)
+    if dir2 is not None and int(n2) > 1:
+        exigir_no_paralelas(u1, u2)
     for n, d, que in ((n1, d1, "1"), (n2, d2, "2")):
         if (que == "1" or dir2 is not None) and int(n) > 1 and abs(d) < 1e-9:
             raise geo.ErrorGeometria(f"La distancia {que} del patrón no puede ser cero: las copias quedarían una sobre otra.")
     s1 = _paso(int(n1), d1, distribucion)
     s2 = _paso(int(n2), d2, distribucion) if dir2 is not None else 0.0
-    fuera = {tuple(s) if isinstance(s, (tuple, list)) else (int(s), 0) for s in suprimir} - {(0, 0)}
+    fuera = {_id_rectangular(s) for s in suprimir} - {(0, 0)}
     js = _indices(n2, simetrico2) if dir2 is not None else [0]
-    return [_traslacion(i * s1 * u1 + j * s2 * u2) for i in _indices(n1, simetrico1) for j in js
-            if (i, j) not in fuera]
+    return [((i, j), _traslacion(i * s1 * u1 + j * s2 * u2), (i, j) in fuera)
+            for i in _indices(n1, simetrico1) for j in js]
 
 
-def transformaciones_circulares(punto, eje, n, *, angulo_total=360.0, distribucion="completa", simetrico=False,
-                                suprimir=()):
-    """Patrón circular [SLD-REF-PATTERN]: lista de gp_Trsf (índice 0 = identidad). "completa": las instancias
-    reparten `angulo_total` (con 360° la última no se superpone con el original); "espaciado":
-    `angulo_total` es el ángulo entre instancias. Simétrico: n hacia cada lado del original. Como máximo
-    INSTANCIAS_MAXIMAS."""
+def transformaciones_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribucion="extension",
+                                   simetrico1=False, simetrico2=False, suprimir=()):
+    """gp_Trsf del patrón rectangular sin las instancias suprimidas (ver `instancias_rectangulares`); la primera es
+    la identidad (el original)."""
+    return [t for _, t, sup in instancias_rectangulares(dir1, n1, d1, dir2, n2, d2, distribucion=distribucion,
+                                                        simetrico1=simetrico1, simetrico2=simetrico2,
+                                                        suprimir=suprimir) if not sup]
+
+
+def paso_angular(n, angulo_total, distribucion="completa", simetrico=False):
+    """Grados entre instancias consecutivas del patrón circular: lo usan el cálculo, la vista previa y el manipulador
+    (así las tres posiciones coinciden). "completa" (y "extension", el nombre de las recetas viejas): las instancias
+    reparten `angulo_total`; con una vuelta de 360° sin simetría la última no cae sobre el original (360 / n), si no
+    la última queda justo en el ángulo (total / (n − 1)); "espaciado": `angulo_total` es el paso."""
+    n = int(n)
+    if distribucion in ("completa", "extension"):
+        if abs(abs(angulo_total) - 360.0) < 1e-9 and not simetrico:
+            return angulo_total / n
+        return angulo_total / (n - 1) if n > 1 else 0.0
+    if distribucion == "espaciado":
+        return angulo_total
+    raise geo.ErrorGeometria(f"Distribución desconocida: {distribucion}")
+
+
+def instancias_circulares(punto, eje, n, *, angulo_total=360.0, distribucion="completa", simetrico=False, suprimir=()):
+    """Todas las instancias del patrón circular [SLD-REF-PATTERN] con su identificador: lista de (k, gp_Trsf,
+    suprimida); k = 0 es el original (nunca se suprime) y, con simetría, hay k negativos (el otro lado). "completa":
+    las instancias reparten `angulo_total` (con 360° la última no se superpone con el original); "espaciado":
+    `angulo_total` es el ángulo entre instancias. Simétrico: n hacia cada lado del original (2n − 1 en total).
+    Como máximo INSTANCIAS_MAXIMAS."""
     n = int(n)
     _exigir_instancias(_cantidad(n, simetrico))
-    if distribucion == "completa":
-        if abs(abs(angulo_total) - 360.0) < 1e-9 and not simetrico:
-            paso = angulo_total / n
-        else:
-            paso = angulo_total / (n - 1) if n > 1 else 0.0
-    elif distribucion == "espaciado":
-        paso = angulo_total
-    else:
-        raise geo.ErrorGeometria(f"Distribución desconocida: {distribucion}")
+    paso = paso_angular(n, angulo_total, distribucion, simetrico)
     if n > 1 and (abs(paso) < 1e-9 or (n - 1) * abs(paso) * (2 if simetrico else 1) >= 360.0 - 1e-9):
         raise geo.ErrorGeometria("El ángulo del patrón circular tiene que ser distinto de cero y no dar más de una vuelta: "
                                  "con ese valor las copias quedarían una sobre otra.")
     u = _unit(eje, "eje del patrón")
-    fuera = set(suprimir) - {0}
-    return [_rotacion(punto, u, math.radians(k * paso)) for k in _indices(n, simetrico) if k not in fuera]
+    fuera = {int(s) for s in suprimir} - {0}
+    return [(k, _rotacion(punto, u, math.radians(k * paso)), k in fuera) for k in _indices(n, simetrico)]
+
+
+def transformaciones_circulares(punto, eje, n, *, angulo_total=360.0, distribucion="completa", simetrico=False,
+                                suprimir=()):
+    """gp_Trsf del patrón circular sin las instancias suprimidas (ver `instancias_circulares`); la primera es la
+    identidad."""
+    return [t for _, t, sup in instancias_circulares(punto, eje, n, angulo_total=angulo_total, distribucion=distribucion,
+                                                     simetrico=simetrico, suprimir=suprimir) if not sup]
 
 
 def _trsf_de_marcos(p0, f0, p1, f1):
@@ -2970,12 +3018,39 @@ def _trsf_de_marcos(p0, f0, p1, f1):
     return t
 
 
-def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",
-                             simetrico=False, suprimir=(), giro=0.0):
-    """Patrón sobre ruta [SLD-REF-PATTERN]: el original está en la fracción `inicio` (0..1) de la ruta y las
-    instancias avanzan `distancia` mm (largo total o paso, según `distribucion`). "identica" solo traslada;
-    "direccion_ruta" además gira cada instancia con la ruta (marco de rotación mínima). En rutas abiertas se
-    omiten las instancias que caen fuera; en las cerradas se da la vuelta. Como máximo INSTANCIAS_MAXIMAS.
+def recorrido_ruta(ruta, n, distancia, *, inicio=0.0, distribucion="extension"):
+    """(largo, cerrada, s0, paso): el largo de la cadena de aristas `ruta`, si es cerrada, la longitud de arco donde
+    está el original (la fracción `inicio` de 0 a 1, limitada a ese intervalo) y el avance con signo entre instancias
+    consecutivas (mm). Es el recorrido real que usan el patrón, su vista previa y el manipulador. Una vuelta completa de
+    una ruta cerrada (distancia = ± el largo, en "extension") reparte el largo entre n instancias: la última no cae
+    encima del original."""
+    w = _alambre(ruta)
+    largo = _longitud(w)
+    cerrada = _es_cerrado(w)
+    paso = _paso(int(n), distancia, distribucion)
+    if cerrada and distribucion == "extension" and int(n) > 1 and abs(abs(distancia) - largo) < 1e-6 * largo:
+        paso = math.copysign(largo / int(n), distancia)      # vuelta completa, positiva o negativa
+    return largo, cerrada, min(max(float(inicio), 0.0), 1.0) * largo, paso
+
+
+def perfil_ruta(ruta, muestras=161):
+    """(puntos (N, 3), longitudes de arco (N,), cerrada) de la cadena de aristas `ruta`, la misma que recorre el patrón
+    sobre ruta: sirve para dibujar el recorrido y ubicar los manipuladores sobre él."""
+    w = _alambre(ruta)
+    largo = _longitud(w)
+    s = np.linspace(0.0, largo, int(muestras))
+    return np.array([np.asarray(_punto_en(w, x / largo)[0], float) for x in s]), s, _es_cerrado(w)
+
+
+def instancias_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",
+                       simetrico=False, suprimir=(), giro=0.0):
+    """Todas las instancias del patrón sobre ruta [SLD-REF-PATTERN] con su estado: lista de (k, gp_Trsf o None, estado).
+    k = 0 es el original (en la fracción `inicio` de 0 a 1 de la ruta); con simetría hay k negativos. Estado: "ok",
+    "suprimida", "fuera" (en una ruta abierta la instancia caería pasado el extremo: no se crea ni se extrapola) o
+    "repetida" (en una ruta cerrada caería sobre otra instancia: no se duplica). Las instancias avanzan `distancia` mm
+    (largo total o paso, según `distribucion`). "identica" solo traslada, de modo que el cuerpo conserva su posición
+    respecto del punto de la ruta donde está el original; "direccion_ruta" además gira cada instancia con la ruta
+    (marco de rotación mínima). Como máximo INSTANCIAS_MAXIMAS.
 
     `giro` (grados, como el Twisted Path Array de FreeCAD Draft): además, cada instancia gira alrededor de la
     tangente de la ruta en su lugar, en forma progresiva: la instancia k gira giro · k / (n − 1), así la última
@@ -2986,14 +3061,10 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
     if not math.isfinite(giro):
         raise geo.ErrorGeometria("El giro del patrón en ruta tiene que ser un ángulo finito.")
     _exigir_instancias(_cantidad(n, simetrico))
-    w = _alambre(ruta)
-    largo = _longitud(w)
-    cerrada = _es_cerrado(w)
     if int(n) > 1 and abs(distancia) < 1e-9:
         raise geo.ErrorGeometria("La distancia del patrón en ruta no puede ser cero: las copias quedarían una sobre otra.")
-    paso = _paso(int(n), distancia, distribucion)
-    if cerrada and distribucion == "extension" and abs(distancia - largo) < 1e-6 * largo:
-        paso = largo / int(n)      # vuelta completa: la última instancia no cae encima del original
+    w = _alambre(ruta)
+    largo, cerrada, s0, paso = recorrido_ruta(ruta, n, distancia, inicio=inicio, distribucion=distribucion)
     marcos = _marcos(w, 257)
 
     def marco(s):
@@ -3002,17 +3073,23 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
         r = _unit(r - t * float(r @ t))
         return p, np.column_stack([t, r, np.cross(t, r)])
 
-    s0 = min(max(float(inicio), 0.0), 1.0) * largo
     p0, f0 = marco(s0)
-    fuera = set(suprimir) - {0}
+    fuera = {int(s) for s in suprimir} - {0}
     salida = []
+    celdas = max(int(round(largo / (1e-6 * largo))), 1)          # la ruta cerrada en celdas de 1e-6 de su largo
+    celda = lambda x: int(round(x / largo * celdas)) % celdas   # noqa: E731
+    ocupadas = {celda(s0)}
     for k in _indices(n, simetrico):
         s = s0 + k * paso
-        if k in fuera:
-            continue
         if cerrada:
             s %= largo
+            c = celda(s)
+            if k != 0 and any((c + d) % celdas in ocupadas for d in (-1, 0, 1)):     # misma celda o vecina: es la misma
+                salida.append((k, None, "repetida"))
+                continue
+            ocupadas.add(c)
         elif s < -1e-9 or s > largo + 1e-9:
+            salida.append((k, None, "fuera"))
             continue
         p1, f1 = marco(min(max(s, 0.0), largo))
         t = _traslacion(p1 - p0) if orientacion == "identica" else _trsf_de_marcos(p0, f0, p1, f1)
@@ -3021,16 +3098,24 @@ def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inic
             r = gp_Trsf()
             r.SetRotation(gp_Ax1(_pnt(p1), _gdir(f1[:, 0])), math.radians(angulo))
             t = r.Multiplied(t)             # primero lleva la copia a su lugar y después la gira sobre la tangente
-        salida.append(t)
+        salida.append((k, t, "suprimida" if k in fuera else "ok"))
     return salida
 
 
-def transformaciones_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=()):
-    """Patrón en puntos (PartDesign › Point Pattern y Draft › Point Array de FreeCAD; en Fusion, los agujeros en
-    varios puntos de boceto): lista de gp_Trsf con la identidad (el original) y una traslación por punto, la que
-    lleva `referencia` a ese punto. Un punto que coincide con la referencia (o con otro punto) no repite la copia.
-    `suprimir`: índices de las copias a omitir (1 = la del primer punto; el original no se suprime). Como máximo
-    INSTANCIAS_MAXIMAS."""
+def transformaciones_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",
+                             simetrico=False, suprimir=(), giro=0.0):
+    """gp_Trsf del patrón sobre ruta sin las instancias suprimidas, fuera de una ruta abierta o repetidas (ver
+    `instancias_en_ruta`); la primera es la identidad."""
+    return [t for _, t, estado in instancias_en_ruta(ruta, n, distancia, orientacion=orientacion, inicio=inicio,
+                                                     distribucion=distribucion, simetrico=simetrico,
+                                                     suprimir=suprimir, giro=giro) if estado == "ok"]
+
+
+def instancias_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=()):
+    """Todas las instancias del patrón en puntos con su identificador: lista de (k, gp_Trsf o None, estado). k = 0 es el
+    original y k = 1, 2… el primer punto, el segundo…: cada copia lleva `referencia` a su punto (la traslación es
+    exactamente punto − referencia). Estado: "ok", "suprimida" o "repetida" (un punto igual a la referencia o a otro
+    ya usado no repite la copia). Como máximo INSTANCIAS_MAXIMAS."""
     ref = np.asarray(referencia, float).reshape(-1)
     pts = [np.asarray(p, float).reshape(-1) for p in puntos]
     if ref.size != 3 or not np.all(np.isfinite(ref)):
@@ -3042,14 +3127,20 @@ def transformaciones_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=(
     _exigir_instancias(len(pts) + 1)
     fuera = {int(i) for i in suprimir} - {0}
     usados = [ref]
-    salida = [_identidad()]
+    salida = [(0, _identidad(), "ok")]
     for k, p in enumerate(pts, start=1):
         if any(np.linalg.norm(p - q) < 1e-6 for q in usados):
+            salida.append((k, None, "repetida"))
             continue
         usados.append(p)
-        if k not in fuera:
-            salida.append(_traslacion(p - ref))
+        salida.append((k, _traslacion(p - ref), "suprimida" if k in fuera else "ok"))
     return salida
+
+
+def transformaciones_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=()):
+    """gp_Trsf del patrón en puntos sin las copias suprimidas ni repetidas (ver `instancias_en_puntos`); la primera es
+    la identidad (el original)."""
+    return [t for _, t, estado in instancias_en_puntos(puntos, referencia, suprimir=suprimir) if estado == "ok"]
 
 
 def transformacion_simetria(plano):

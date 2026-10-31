@@ -2335,9 +2335,10 @@ Patrón rectangular de cuerpos (bodies) o de operaciones del timeline (features:
   - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
   - `distribution` ("spacing" | "extent"; opcional, por defecto `"spacing"`): "spacing" (x_spacing e y_spacing son la separación entre copias consecutivas) o "extent" (son la distancia TOTAL de la primera a la última).
-  - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original.
-  - `suppress` (lista de entero o null; opcional, por defecto `null`): copias a suprimir de la primera fila, por su posición en la dirección 1 (1 a x_count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
+  - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias de la dirección 1 a los dos lados del original (2·x_count − 1 instancias); si symmetric2 no se indica, vale también para la dirección 2.
+  - `suppress` (lista de entero o lista de entero o null; opcional, por defecto `null`): copias a suprimir: pares [i, j] con los pasos desde el original en la dirección 1 y la 2 (con simetría hay negativos, hacia el otro lado) o un entero i (= [i, 0], la primera fila). Cada identificador sigue a SU copia aunque cambien las cantidades o distancias; el original, [0, 0], no se puede suprimir.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de axis1 y axis2; vacío = el único cuerpo.
+  - `symmetric2` (true/false; opcional, por defecto `null`): simetría de la dirección 2 por separado (true o false); None = la misma que symmetric.
 - CLI: `omnicad call rectangular_pattern --doc pieza.omnicad`
 
 ### `circular_pattern`
@@ -2357,8 +2358,8 @@ Patrón circular de cuerpos (bodies) o de operaciones del timeline (features) al
   - `construction` (lista de texto o null; opcional, por defecto `null`): planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
   - `compute` ("identical" | "optimized" | "adjust"; opcional, por defecto `"identical"`): cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
   - `lightweight` (true/false; opcional, por defecto `false`): true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
-  - `distribution` ("extent" | "spacing"; opcional, por defecto `"extent"`): "extent" (total_angle es el ángulo TOTAL entre la primera y la última copia) o "spacing" (es el ángulo entre copias consecutivas).
-  - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original.
+  - `distribution` ("extent" | "spacing" | "full" | "partial" | "symmetric"; opcional, por defecto `"extent"`): "full" (360° sin repetir el cierre; total_angle no se usa), "partial" (total_angle es el ángulo TOTAL entre el original y la última copia, a un lado), "symmetric" (count copias a cada lado hasta ± total_angle) o, como antes, "extent" (como partial, o symmetric con symmetric=true) y "spacing" (total_angle es el ángulo entre copias consecutivas).
+  - `symmetric` (true/false; opcional, por defecto `false`): true reparte las copias a los dos lados del original (con extent o spacing).
   - `suppress` (lista de entero o null; opcional, por defecto `null`): copias a suprimir por su posición (1 a count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de axis; vacío = el único cuerpo.
 - CLI: `omnicad call circular_pattern --doc pieza.omnicad count=…`

@@ -427,7 +427,9 @@ _ESPERA_CUERPOS = 'ids o nombres de cuerpos (get_scene_info): "op1.c1", "Cuerpo1
 _NOTAS = {
     ("patron", "distribucion"): '"extension" (por defecto): d1, d2 y angulo son TOTALES, de la primera a la última '
                                 'instancia; "espaciado": la separación (o el ángulo) entre instancias consecutivas. '
-                                'rectangular_pattern guarda "espaciado"; circular_pattern, "extension".',
+                                'rectangular_pattern guarda "espaciado"; circular_pattern, "extension". Solo en el patrón circular: "completo" '
+                                '(360° sin repetir el cierre), "parcial" (angulo es el total, a un lado) y "simetrico" (n copias '
+                                'a cada lado, hasta ± angulo).',
     ("patron", "d1"): 'con distribucion="extension" (por defecto) es la distancia TOTAL entre la primera y la última '
                       'instancia; con "espaciado", la separación entre instancias (el x_spacing de rectangular_pattern).',
     ("patron", "d2"): 'como d1, en la dirección 2.',

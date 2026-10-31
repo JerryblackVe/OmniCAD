@@ -229,7 +229,7 @@ def test_describe_operation_explica_referencias_y_notas(s):
     assert "ids o nombres de cuerpos" in mover["cuerpos"]["format"] and mover["tipo"]["choices"][0] == "libre"
     patron = params("patron")
     assert "TOTAL" in patron["d1"]["notes"] and "espaciado" in patron["distribucion"]["notes"]
-    assert patron["distribucion"]["choices"] == ["extension", "espaciado"]
+    assert patron["distribucion"]["choices"] == ["extension", "espaciado", "completo", "parcial", "simetrico"]
     prim = params("primitiva")
     assert "X" in prim["ancho"]["notes"] and "length" in prim["ancho"]["notes"] and "centro" in prim["x"]["notes"]
     assert "[x, y, z]" in params("plegar")["punto"]["format"] and params("plegar")["punto"]["type"] == "any"

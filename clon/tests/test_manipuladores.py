@@ -565,7 +565,8 @@ def test_asas_en_la_vista_de_otros_comandos(app_qt):
     assert "flecha:espesor" in idents("engrosar", {"caras": [cara]})
     assert "flecha:distancia" in idents("sup_desfase", {"caras": [cara]})
     assert "flecha:d1" in idents("patron_rectangular_3d", {"cuerpos": [cuerpo], "dir1": [eje_x]})
-    assert "angulo:angulo" in idents("patron_circular_3d", {"cuerpos": [cuerpo], "eje": [eje_z]})
+    assert "angulo:angulo" in idents("patron_circular_3d", {"cuerpos": [cuerpo], "eje": [eje_z], "modo": "parcial"})
+    assert "angulo:angulo" not in idents("patron_circular_3d", {"cuerpos": [cuerpo], "eje": [eje_z]})   # completo: 360°
     assert "triada" in idents("scu", {})
     assert "flecha:diametro" in idents("bobina", {})
     plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
@@ -642,7 +643,7 @@ def test_asas_en_la_vista_lote_2(app_qt):
     assert "angulo:angulo" in idents("plegar", {"cara": [cara_sup], "lineas": [h_curva]})
     assert "angulo:angulo" in idents("plano_angulo", {"r0": [eje_x]})
     assert "angulo:angulo" in idents("desmoldeo", {"plano": [plano_xy], "caras": [h_lateral]})
-    assert "flecha:d1" in idents("patron_ruta", {"cuerpos": [cuerpo], "ruta": [h_curva]})
+    assert "recorrido:rd" in idents("patron_ruta", {"cuerpos": [cuerpo], "ruta": [h_curva]})
 
     # rosca: cilindro, sin «longitud completa»
     dc = Documento()

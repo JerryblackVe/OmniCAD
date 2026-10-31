@@ -64,7 +64,7 @@ def test_teclear_la_cantidad_mueve_el_asa(app_qt):  # noqa: F811
 
 
 def test_circular_cambia_la_cantidad_tirando_del_disco(app_qt):  # noqa: F811
-    p = _abrir("patron_circular_3d", lambda eje: {"eje": [eje], "n": 4, "angulo": "40 deg", "distribucion": "espaciado"})
+    p = _abrir("patron_circular_3d", lambda eje: {"eje": [eje], "n": 4, "angulo_paso": "40 deg", "modo": "espaciado"})
     m = _asa(p, "n")
     _arrastrar_n(p, m, 2)
     assert p.widgets["n"].value() == 6
@@ -78,7 +78,7 @@ def test_patron_en_trayectoria_el_inicio_se_desliza_por_la_ruta(app_qt):  # noqa
     doc = _doc_rectangulo()
     curva = next(iter(doc.estado_final.bocetos["op1"].boceto.curvas))
     ruta = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, doc.estado_final)
-    p, visor, _ = _panel(CATALOGO["patron_ruta"](), doc, {"ruta": [ruta], "inicio": "0", "n1": 3, "d1": "4 mm",
+    p, visor, _ = _panel(CATALOGO["patron_ruta"](), doc, {"ruta": [ruta], "inicio": "0", "rn": 3, "rd": "4 mm",
                                                           "distribucion": "espaciado"})
     visor.vista("iso")
     p.manipuladores.actualizar()
@@ -89,6 +89,6 @@ def test_patron_en_trayectoria_el_inicio_se_desliza_por_la_ruta(app_qt):  # noqa
     assert ok.all()
     _arrastrar(p.visor, *xy)
     assert gm.valor("inicio") == pytest.approx(0.6, abs=0.03)
-    flecha = next(m for m in gm.manips if isinstance(m, mp.Flecha))
-    assert np.allclose(flecha.origen, asa.asa(gm), atol=0.5)               # la flecha sale de donde empieza el patrón
+    tramo = next(m for m in gm.manips if isinstance(m, mp.AsaRecorrido))
+    assert np.allclose(tramo.recorrido.punto(tramo.s0), asa.asa(gm), atol=0.5)    # el tramo sale de donde empieza el patrón
     p.cancelar()

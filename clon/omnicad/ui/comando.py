@@ -31,7 +31,7 @@ from .iconos import icono
 PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
 # Operaciones cuya previa pasa de ~40 ms sobre un cuerpo de muchas caras (docs/auditorias/previa-comandos-*.md): se
 # calculan en un proceso aparte para que la ventana no se congele. Sobre cuerpos chicos siguen en el proceso (< 33 ms).
-TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron"), 64
+TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar"), 64
 
 
 def _ids_cuerpo(p):
@@ -188,6 +188,10 @@ class Comando:
 
     def preparar_panel(self, panel):
         """Conecta controles dependientes después de crear todos los campos."""
+
+    def al_cambiar(self, panel, clave):
+        """Gancho después de cambiar el valor de `clave` (a mano, con un asa o por código): permite ajustar otros
+        campos o refrescar un widget propio. No debe cambiar `clave` otra vez sin cuidar la recursión."""
 
     def aplicar(self, v, ctx):
         """Para los comandos SIN_OP: lo que hace Aceptar."""
@@ -600,6 +604,7 @@ class PanelComando(QFrame):
         self.valores[clave] = valor
         self._registrar_uso("comando_editado")
         self._actualizar_visibles()
+        self.comando.al_cambiar(self, clave)
         self._programar()
 
     def set_valor(self, clave, valor):
@@ -621,6 +626,32 @@ class PanelComando(QFrame):
             w.numero.setValue(int(valor))
         self.valores[clave] = valor if not isinstance(campo, Seleccion) else list(valor)
         self._actualizar_visibles()
+        self.comando.al_cambiar(self, clave)
+        self._programar()
+
+    def set_valores(self, nuevos):
+        """Cambia varios valores de una vez sin una vista previa por cada uno (al pasar de una fila de una lista a otra):
+        los widgets se actualizan sin avisar y al final se recalcula todo una sola vez."""
+        for clave, valor in nuevos.items():
+            campo = next((c for c in self.campos if c.clave == clave), None)
+            w = self.widgets.get(clave)
+            self.valores[clave] = list(valor) if isinstance(campo, Seleccion) else valor
+            if w is None or isinstance(campo, (Seleccion, Personalizado, Info)):
+                continue
+            w.blockSignals(True)
+            try:
+                if isinstance(w, QLineEdit):
+                    w.setText(str(valor))
+                elif isinstance(w, QComboBox):
+                    w.setCurrentIndex(max(w.findData(valor), 0))
+                elif isinstance(w, QCheckBox):
+                    w.setChecked(bool(valor))
+                elif isinstance(w, QSpinBox):
+                    w.setValue(int(valor))
+            finally:
+                w.blockSignals(False)
+        self._refrescar_seleccion()
+        self._actualizar_visibles()
         self._programar()
 
     # ------------------------------------------------------------ selección en la vista
@@ -636,6 +667,7 @@ class PanelComando(QFrame):
         self.valores[campo.clave] = []
         self._refrescar_seleccion()
         self._activar(campo)
+        self.comando.al_cambiar(self, campo.clave)
         self._programar()
 
     def _elegida(self, hit):
@@ -677,6 +709,7 @@ class PanelComando(QFrame):
         else:
             self._activar(campo)
         self._actualizar_visibles()
+        self.comando.al_cambiar(self, campo.clave)
         self._programar()
 
     def _siguiente_seleccion(self, campo):

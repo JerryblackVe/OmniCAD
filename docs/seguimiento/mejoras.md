@@ -177,6 +177,21 @@ Abierto 4.
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 
+## Patrones de sólido (auditoría 2026-10-31)
+
+Cada fila salió de la auditoría de Patrón rectangular, circular, en trayectoria, en puntos y Multitransformación contra
+la ayuda de Fusion y el video de uso. Abierto 4 · Parcial 1 · Sin verificar 1. Informe y matriz por herramienta:
+[patrones-solidos-2026-10-31.md](../auditorias/patrones-solidos-2026-10-31.md).
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| PAT-1 | La simetría de los patrones no está verificada contra Fusion | Sin verificar | Media | La ayuda local de Fusion no dice si la «Cantidad» simétrica es el total de instancias o las de cada lado, ni si el ángulo simétrico del circular es el total o el de cada lado. OmniCAD usa n copias a cada lado (2n − 1) y, en el circular, hasta ± el ángulo. Comprobarlo en Fusion real; si difiere, agregar una receta nueva (los documentos viejos no cambian) | tests/test_patrones_solidos_semantica.py::test_circular_simetrico_reparte_a_los_dos_lados; ::test_receta_vieja_la_simetria_global_vale_para_las_dos_direcciones | 2026-10-31 |
+| PAT-2 | El punto de inicio del patrón en trayectoria se escribe de 0 a 1 y Fusion usa un porcentaje | Abierto | Baja | El campo y el disco que se desliza por la ruta muestran 0 a 1. Pasar a porcentaje convirtiendo al guardar, sin perder las expresiones de las recetas viejas | tests/test_patrones_solidos_ui.py::test_ruta_insuficiente_avisa_y_el_inicio_se_ve_en_la_ruta | 2026-10-31 |
+| PAT-3 | Las copias suprimidas no se dibujan como fantasma y las casillas solo existen con cuerpos y operaciones | Abierto | Media | La casilla roja marca la copia suprimida pero no se ve su silueta; con caras, componentes o geometría de construcción se suprime escribiendo el identificador | tests/test_patrones_solidos_ui.py::test_rectangular_supresion_con_clic_en_la_casilla_y_estabilidad | 2026-10-31 |
+| PAT-4 | Multitransformación sin vista previa parcial por etapa ni asas en la vista | Abierto | Media | Con una transformación incompleta no hay vista previa: el panel dice cuál falta y Aceptar espera. Falta ver «hasta la etapa k» y las asas de la transformación elegida | tests/test_patrones_solidos_ui.py::test_multitransformar_lista_agregar_reordenar_quitar_y_aceptar_sin_cambios | 2026-10-31 |
+| PAT-5 | La dirección 2 derivada no deja elegir su plano de referencia | Abierto | Baja | Es la perpendicular dentro del plano del boceto (línea de boceto), el eje u de la cara o del plano, o el giro de +90° sobre Z (ejes y aristas rectas). Fusion no documenta cuál usa; elegir otra dirección la reemplaza | tests/test_patrones_solidos_semantica.py::test_la_direccion_derivada_es_perpendicular_y_estable | 2026-10-31 |
+| PAT-6 | «Optimizado» de los patrones de operaciones copia la herramienta igual que «Idéntico» | Parcial | Media | En Fusion «Optimizado» patronea las caras de la operación (más rápido) y falla con operaciones divididas; acá es el mismo cálculo y da el mismo resultado. Solo «Ajustar» recalcula cada copia | tests/test_patrones_solidos_semantica.py::test_identico_y_optimizado_dan_lo_mismo_y_ajustar_omite_las_copias_que_no_tocan | 2026-10-31 |
+
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 
 Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, vínculos, estudio de movimiento) con los artículos de la ayuda de Fusion (carpeta `fusion-assemble`), de probar unas 60 llamadas por API (`evidencias/ensamble_2026-10-25/a*.py`) y de usar la ventana real como una persona (`scripts/prueba_ui/ensamblar.py`, 224 comprobaciones). Lo que ya estaba cargado (P-25e, P-25e2, SC6, SC7, SC8, SC15, H-4, H-5, H-19, F8, P-6d) no se repite.

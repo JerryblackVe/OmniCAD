@@ -906,6 +906,29 @@ def _suprimir(suppress, limite, simetrico=False, que="suppress"):
     return sorted(set(suppress))
 
 
+def _suprimir_rect(suppress, n1, n2, sim1, sim2, hay_dir2):
+    """Copias a suprimir del patrón rectangular: pares [i, j] (pasos desde el original en cada dirección; con
+    simetría hay negativos) o un entero i (= [i, 0], la primera fila, como en las recetas viejas)."""
+    if not suppress:
+        return []
+    salida = []
+    for s in suppress:
+        par = [s, 0] if isinstance(s, int) and not isinstance(s, bool) else s
+        if (not isinstance(par, (list, tuple)) or len(par) != 2
+                or any(isinstance(x, bool) or not isinstance(x, int) for x in par)):
+            raise error("INVALID_ARGUMENTS", f"suppress: cada copia es un entero i o un par [i, j]: llegó {s!r}.")
+        i, j = par
+        if (i, j) == (0, 0):
+            raise error("INVALID_ARGUMENTS", "suppress: el original, [0, 0], no se puede suprimir.")
+        if abs(i) >= n1 or (i < 0 and not sim1) or abs(j) >= (n2 if hay_dir2 else 1) or (j < 0 and not sim2):
+            raise error("INVALID_ARGUMENTS", f"suppress: la copia {list(par)} no existe en el patrón (i va de "
+                                             f"{-(n1 - 1) if sim1 else 0} a {n1 - 1}; j, de "
+                                             f"{-(n2 - 1) if sim2 and hay_dir2 else 0} a {(n2 - 1) if hay_dir2 else 0}).")
+        if list(par) not in salida:
+            salida.append(list(par))
+    return salida
+
+
 @herramienta("realize_copies", "solido",
              "Vuelve copias de verdad las copias ligeras (instancias) de un patrón o de Mover/copiar («Realizar "
              "instancias» de Plasticity): cada copia pasa a tener su propia geometría y deja de seguir a la original. "
@@ -944,7 +967,8 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                         faces: Elementos | None = None, components: list[str] | None = None,
                         construction: list[str] | None = None, compute: Calculo = "identical",
                         lightweight: bool = False, distribution: Literal["spacing", "extent"] = "spacing",
-                        symmetric: bool = False, suppress: list[int] | None = None, body: str | None = None):
+                        symmetric: bool = False, suppress: list[int | list[int]] | None = None,
+                        body: str | None = None, symmetric2: bool | None = None):
     """
     bodies: cuerpo(s) a repetir (id o nombre).
     x_count: cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
@@ -954,8 +978,9 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     axis1: dirección 1: "x", "y", "z", o un eje de construcción (id o nombre), una arista recta, una cara plana (su normal) o un plano (selector o id).
     axis2: dirección 2 (mismas formas que axis1).
     distribution: "spacing" (x_spacing e y_spacing son la separación entre copias consecutivas) o "extent" (son la distancia TOTAL de la primera a la última).
-    symmetric: true reparte las copias a los dos lados del original.
-    suppress: copias a suprimir de la primera fila, por su posición en la dirección 1 (1 a x_count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
+    symmetric: true reparte las copias de la dirección 1 a los dos lados del original (2·x_count − 1 instancias); si symmetric2 no se indica, vale también para la dirección 2.
+    symmetric2: simetría de la dirección 2 por separado (true o false); None = la misma que symmetric.
+    suppress: copias a suprimir: pares [i, j] con los pasos desde el original en la dirección 1 y la 2 (con simetría hay negativos, hacia el otro lado) o un entero i (= [i, 0], la primera fila). Cada identificador sigue a SU copia aunque cambien las cantidades o distancias; el original, [0, 0], no se puede suprimir.
     body: cuerpo donde se evalúan los selectores de axis1 y axis2; vacío = el único cuerpo.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos: su herramienta (el agujero, la extrusión que corta o une…) se copia y se aplica con la misma operación a los mismos cuerpos, como el patrón de features de Fusion. No se combina con bodies.
@@ -972,8 +997,9 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
         raise error("INVALID_ARGUMENTS", "Con x_count = 1 e y_count = 1 el patrón no crea copias.")
     if y_count > 1 and str(axis1).strip().lower() == str(axis2).strip().lower():
         raise error("INVALID_ARGUMENTS", "axis1 y axis2 tienen que ser direcciones distintas.")
-    k = 2 if symmetric else 1
-    total = (k * x_count - k + 1) * (k * y_count - k + 1)
+    sim2 = symmetric if symmetric2 is None else bool(symmetric2)
+    k1, k2 = (2 if symmetric else 1), (2 if sim2 else 1)
+    total = (k1 * x_count - k1 + 1) * ((k2 * y_count - k2 + 1) if y_count > 1 else 1)
     _exigir_instancias(total, "x_count × y_count")
     dir1 = _dir_patron(sesion, axis1, "axis1", body)
     dir2 = _dir_patron(sesion, axis2, "axis2", body) if y_count > 1 else None
@@ -983,8 +1009,9 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                   forma_patron="rectangular", dir1=dir1, n1=x_count, d1=texto_expr(x_spacing), dir2=dir2,
                   n2=y_count, d2=texto_expr(y_spacing),
                   distribucion="espaciado" if distribution == "spacing" else "extension", simetrico=bool(symmetric),
-                  suprimir=_suprimir(suppress, x_count, symmetric), combinar=combine, ligeras=lightweight and not combine,
-                  **objeto)
+                  simetrico2=None if symmetric2 is None else bool(symmetric2),
+                  suprimir=_suprimir_rect(suppress, x_count, y_count, bool(symmetric), sim2, y_count > 1),
+                  combinar=combine, ligeras=lightweight and not combine, **objeto)
     return _agregar_patron(sesion, op)
 
 
@@ -996,7 +1023,7 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
                      total_angle: Expr = 360, combine: bool = False, features: Pasos | None = None,
                      faces: Elementos | None = None, components: list[str] | None = None,
                      construction: list[str] | None = None, compute: Calculo = "identical",
-                     lightweight: bool = False, distribution: Literal["extent", "spacing"] = "extent",
+                     lightweight: bool = False, distribution: Literal["extent", "spacing", "full", "partial", "symmetric"] = "extent",
                      symmetric: bool = False, suppress: list[int] | None = None, body: str | None = None):
     """
     count: cantidad de instancias, original incluido (2 a 10.000).
@@ -1010,23 +1037,26 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
     compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
-    distribution: "extent" (total_angle es el ángulo TOTAL entre la primera y la última copia) o "spacing" (es el ángulo entre copias consecutivas).
-    symmetric: true reparte las copias a los dos lados del original.
+    distribution: "full" (360° sin repetir el cierre; total_angle no se usa), "partial" (total_angle es el ángulo TOTAL entre el original y la última copia, a un lado), "symmetric" (count copias a cada lado hasta ± total_angle) o, como antes, "extent" (como partial, o symmetric con symmetric=true) y "spacing" (total_angle es el ángulo entre copias consecutivas).
+    symmetric: true reparte las copias a los dos lados del original (con extent o spacing).
     suppress: copias a suprimir por su posición (1 a count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
     body: cuerpo donde se evalúan los selectores de axis; vacío = el único cuerpo.
     """
     objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
-    total = 2 * count - 1 if symmetric else count
+    simetrico = bool(symmetric) or distribution == "symmetric"
+    total = 2 * count - 1 if simetrico else count
     _exigir_instancias(total, "count")
     eje = _dir_patron(sesion, axis, "axis", body)
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón circular", OpPatron,
                                                lambda o: o.p["forma_patron"] == "circular"),
-                  forma_patron="circular", eje=eje, n=count, angulo=texto_expr(total_angle),
-                  distribucion="extension" if distribution == "extent" else "espaciado", simetrico=bool(symmetric),
-                  suprimir=_suprimir(suppress, count, symmetric), combinar=combine, ligeras=lightweight and not combine,
+                  forma_patron="circular", eje=eje, n=count, angulo=texto_expr(360 if distribution == "full" else total_angle),
+                  distribucion={"extent": "extension", "spacing": "espaciado", "full": "completo", "partial": "parcial",
+                                "symmetric": "simetrico"}[distribution],
+                  simetrico=bool(symmetric) and distribution in ("extent", "spacing"),
+                  suprimir=_suprimir(suppress, count, simetrico), combinar=combine, ligeras=lightweight and not combine,
                   **objeto)
     return _agregar_patron(sesion, op)
 
@@ -1185,12 +1215,13 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
 
 
 _CLAVES_TRANSFORMACION = {
-    "rectangular": {"type", "axis", "count", "spacing", "axis2", "count2", "spacing2", "symmetric", "body"},
-    "circular": {"type", "axis", "count", "total_angle", "symmetric", "body"},
+    "rectangular": {"type", "axis", "count", "spacing", "axis2", "count2", "spacing2", "symmetric", "symmetric2",
+                    "distribution", "suppress", "body"},
+    "circular": {"type", "axis", "count", "total_angle", "symmetric", "distribution", "suppress", "body"},
     "mirror": {"type", "plane", "body"},
-    "points": {"type", "points", "sketch", "reference", "point_refs", "reference_point", "body"},
+    "points": {"type", "points", "sketch", "reference", "point_refs", "reference_point", "suppress", "body"},
     "path": {"type", "path_sketch", "path_curves", "count", "distance", "spacing_mode", "start", "orientation",
-             "twist", "symmetric", "path_edges", "body"},
+             "twist", "symmetric", "path_edges", "suppress", "body"},
 }
 
 
@@ -1216,32 +1247,48 @@ def _transformacion_api(sesion, t, i):
         n1 = _entero_api(t.get("count", 2), f"{que}.count")
         n2 = _entero_api(t.get("count2", 1), f"{que}.count2")
         dir2 = _dir_patron(sesion, t["axis2"], f"{que}.axis2", t.get("body")) if n2 > 1 and "axis2" in t else None
+        if t.get("distribution", "spacing") not in ESPACIADOS:
+            raise error("INVALID_ARGUMENTS", f"{que}.distribution: {', '.join(ESPACIADOS)}.")
+        sim1 = bool(t.get("symmetric", False))
+        sim2 = sim1 if t.get("symmetric2") is None else bool(t["symmetric2"])
         d = {"tipo": "rectangular", "dir1": _dir_patron(sesion, t.get("axis", "x"), f"{que}.axis", t.get("body")),
              "n1": n1,
              "d1": texto_expr(t.get("spacing", 10)), "dir2": dir2, "n2": n2, "d2": texto_expr(t.get("spacing2", 10)),
-             "distribucion": "espaciado", "simetrico": bool(t.get("symmetric", False))}
+             "distribucion": ESPACIADOS[t.get("distribution", "spacing")], "simetrico": sim1,
+             "simetrico2": None if t.get("symmetric2") is None else sim2,
+             "suprimir": _suprimir_rect(t.get("suppress"), n1, n2, sim1, sim2, n2 > 1)}
         if n2 > 1 and "axis2" not in t:
             raise error("INVALID_ARGUMENTS", f"{que}: con count2 > 1 falta axis2.")
-        k = 2 if d["simetrico"] else 1
-        return d, (k * n1 - k + 1) * (k * n2 - k + 1)
+        k1, k2 = (2 if sim1 else 1), (2 if sim2 else 1)
+        return d, (k1 * n1 - k1 + 1) * ((k2 * n2 - k2 + 1) if n2 > 1 else 1)
     if tipo == "circular":
         n = _entero_api(t.get("count", 2), f"{que}.count", 2)
+        modos = {"extent": "extension", "spacing": "espaciado", "full": "completo", "partial": "parcial",
+                 "symmetric": "simetrico"}
+        modo = t.get("distribution", "extent")
+        if modo not in modos:
+            raise error("INVALID_ARGUMENTS", f"{que}.distribution: {', '.join(modos)}.")
+        simetrico = bool(t.get("symmetric", False)) or modo == "symmetric"
         d = {"tipo": "circular", "eje": _dir_patron(sesion, t.get("axis", "z"), f"{que}.axis", t.get("body")), "n": n,
-             "angulo": texto_expr(t.get("total_angle", 360)), "distribucion": "extension",
-             "simetrico": bool(t.get("symmetric", False))}
-        return d, 2 * n - 1 if d["simetrico"] else n
+             "angulo": texto_expr(360 if modo == "full" else t.get("total_angle", 360)), "distribucion": modos[modo],
+             "simetrico": bool(t.get("symmetric", False)) and modo in ("extent", "spacing"),
+             "suprimir": _suprimir(t.get("suppress"), n, simetrico, f"{que}.suppress")}
+        return d, 2 * n - 1 if simetrico else n
     if tipo == "mirror":
         return {"tipo": "simetria", "plano": referencia_plano_o_cara(sesion, t.get("plane", "YZ"), t.get("body"))}, 2
     if tipo == "points":
         d = _params_puntos(sesion, t.get("points"), t.get("sketch"), t.get("reference"), t.get("point_refs"),
                            t.get("reference_point"), t.get("body"))
         d["tipo"] = d.pop("forma_patron")
+        d["suprimir"] = _suprimir(t.get("suppress"), 10 ** 6 if t.get("sketch") is not None else
+                                  len(d["coordenadas"]) + len(d["puntos"]) + 1, False, f"{que}.suppress")
         return d, len(d["coordenadas"]) + len(d["puntos"]) + 1
     d = _params_ruta(sesion, t.get("path_sketch"), t.get("path_curves"), _entero_api(t.get("count"), f"{que}.count", 2),
                      t.get("distance", 10), t.get("spacing_mode", "extent"), t.get("start", 0),
                      t.get("orientation", "identical"), t.get("twist", 0), bool(t.get("symmetric", False)),
                      t.get("path_edges"), t.get("body"))
     d["tipo"] = d.pop("forma_patron")
+    d["suprimir"] = _suprimir(t.get("suppress"), d["n1"], bool(t.get("symmetric", False)), f"{que}.suppress")
     return d, d["n1"]
 
 

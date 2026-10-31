@@ -345,7 +345,12 @@ def como_eje(ent):
             return ent.plano.origen, ent.plano.normal
     if ent.tipo == "plano" and ent.plano is not None:
         return ent.plano.origen, ent.plano.normal
-    raise ErrorReferencia("Se esperaba un eje, una arista recta, una línea o una cara cilíndrica.")
+    if ent.tipo in ("arista", "curva_boceto") and ent.forma is not None:      # un círculo o un arco: su eje
+        from ..nucleo.consultas import eje_de_curva_circular
+        circular = eje_de_curva_circular(ent.forma)
+        if circular is not None:
+            return circular
+    raise ErrorReferencia("Se esperaba un eje, una arista recta o circular, una línea, un círculo o una cara cilíndrica.")
 
 
 def como_punto(ent):
@@ -366,6 +371,22 @@ def direccion(ent):
     if ent.plano is not None:
         return ent.plano.normal
     return como_eje(ent)[1]
+
+
+def direccion_perpendicular(ent):
+    """Segunda dirección DERIVADA de un patrón rectangular (la que Fusion muestra perpendicular a la primera cuando no
+    se elige otra): siempre ⟂ a la dirección de `ent`, y estable porque sale de la propia referencia.
+    Línea de boceto: la perpendicular dentro del plano del boceto. Cara plana o plano (su dirección es la normal): el eje
+    u de ese plano. Eje o arista recta: el giro de +90° alrededor de Z (X → Y, Y → −X) o, si la dirección es Z, el eje X."""
+    d = geo_dir(direccion(ent))
+    if ent.eje is not None and ent.plano is not None:
+        v = np.cross(ent.plano.normal, d)
+    elif ent.eje is None and ent.plano is not None:
+        u = np.asarray(ent.plano.u, float)
+        v = u - d * float(u @ d)
+    else:
+        v = np.cross([0.0, 0.0, 1.0] if abs(float(d[2])) < 0.99 else [0.0, 1.0, 0.0], d)
+    return geo_dir(v)
 
 
 EXTENSION_EJE = 100.0       # mm a cada lado: un eje o la traza de un plano son infinitos y el boceto no

@@ -780,6 +780,161 @@ class AsaRuta(Manipulador):
         return [(self.clave, self.asa(g))]
 
 
+class RecorridoRuta:
+    """Muestra de una ruta (la cadena de aristas que recorre un patrón en trayectoria): puntos y longitudes de arco.
+    `punto(s)` y `tangente(s)` dan la posición sobre la ruta a esa longitud de arco: las rutas cerradas dan la vuelta y
+    las abiertas se detienen en sus extremos (nada se extrapola)."""
+
+    def __init__(self, puntos, arco, cerrada):
+        self.puntos, self.arco, self.cerrada = np.asarray(puntos, float), np.asarray(arco, float), bool(cerrada)
+        self.largo = float(self.arco[-1])
+
+    def _s(self, s):
+        return s % self.largo if self.cerrada else min(max(float(s), 0.0), self.largo)
+
+    def punto(self, s):
+        s = self._s(s)
+        return np.array([np.interp(s, self.arco, self.puntos[:, i]) for i in range(3)])
+
+    def tangente(self, s):
+        s = self._s(s)
+        i = int(min(max(np.searchsorted(self.arco, s) - 1, 0), len(self.arco) - 2))
+        return unitario(self.puntos[i + 1] - self.puntos[i])
+
+    def arco_mas_cercano(self, g, pos, previo=None):
+        """Longitud de arco del punto de la ruta más cercano al cursor `pos` en pantalla; en rutas cerradas, la
+        equivalente (± una vuelta) más cercana a `previo`, para que arrastrar más de una vuelta no salte."""
+        s, ok = g.pantalla(self.puntos)
+        q = np.array([pos.x(), pos.y()], float)
+        mejor = (math.inf, None)
+        for i in range(len(s) - 1):
+            if not (ok[i] and ok[i + 1]):
+                continue
+            ab = s[i + 1] - s[i]
+            u = min(1.0, max(0.0, float((q - s[i]) @ ab) / (float(ab @ ab) or 1.0)))
+            d = float(np.linalg.norm(s[i] + ab * u - q))
+            if d < mejor[0]:
+                mejor = (d, self.arco[i] + u * (self.arco[i + 1] - self.arco[i]))
+        if mejor[1] is None:
+            return None
+        a = float(mejor[1])
+        if self.cerrada and previo is not None:
+            a += self.largo * round((previo - a) / self.largo)
+        return a
+
+
+class AsaRecorrido(Manipulador):
+    """Asa de la distancia de un patrón en trayectoria SOBRE el recorrido real: un disco donde termina el tramo repartido
+    (de `s0` a `s0 + valor · factor` de longitud de arco, con signo) que se desliza por la ruta; arrastrarlo cambia la
+    distancia por la longitud realmente recorrida. `factor` es n − 1 si el campo es la separación entre copias y 1 si
+    es la extensión total. En una ruta abierta no pasa de sus extremos."""
+    ayuda = "Distancia sobre la trayectoria"
+
+    def __init__(self, clave, recorrido, s0, factor=1.0):
+        self.clave, self.recorrido, self.s0, self.factor = clave, recorrido, float(s0), max(float(factor), 1e-9)
+        self.ident = f"recorrido:{clave}"
+
+    def _fin(self, g):
+        return self.s0 + g.valor(self.clave) * self.factor
+
+    def asa(self, g):
+        return self.recorrido.punto(self._fin(g))
+
+    def dibujar(self, g, activo):
+        color = AZUL_ACTIVO if activo is not None else AZUL
+        fin = self._fin(g)
+        tramo = np.array([self.recorrido.punto(s) for s in np.linspace(self.s0, fin, 48)])
+        asa = self.asa(g)
+        return ([("lineas", _segs(tramo), color, 3.0)]
+                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0),
+                         borde=BORDE_ESFERA))
+
+    def tocar(self, g, q):
+        s, ok = g.pantalla([self.asa(g)])
+        return (max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0) if ok[0] else math.inf), "asa"
+
+    def empezar(self, g, pos, sub):
+        return {"previo": self._fin(g)}
+
+    def mover(self, g, estado, pos):
+        a = self.recorrido.arco_mas_cercano(g, pos, estado["previo"])
+        if a is None:
+            return {}
+        estado["previo"] = a
+        valor = (a - self.s0) / self.factor
+        if abs(valor) < 0.01:
+            valor = math.copysign(0.01, g.valor(self.clave) or 1.0)
+        return {self.clave: valor}
+
+    def cajas(self, g, arrastre):
+        return [(self.clave, self.asa(g))]
+
+
+class CasillasCopias(Manipulador):
+    """Una casilla sobre cada instancia de un patrón (la «Suppression» de Fusion): tocarla suprime esa copia o la
+    restaura. `items`: [(identificador, punto 3D, estado)] con estado "ok" (casilla marcada), "suprimida" (vacía, en
+    rojo) o cualquier otro ("fuera", "repetida": la copia no se crea y no se puede cambiar). Los `originales` (el
+    identificador del original) se dibujan pero no se pueden tocar. `alternar(identificador)` devuelve los valores
+    que escribir en el diálogo."""
+    ayuda = "Tocá una copia para suprimirla o restaurarla"
+    LADO_PX = 7.0
+
+    def __init__(self, items, alternar, originales=()):
+        self.items, self.alternar, self.originales = list(items), alternar, set(originales)
+        self.ident = "casillas"
+
+    def _tocable(self, i):
+        ident, _p, estado = self.items[i]
+        return estado in ("ok", "suprimida") and ident not in self.originales
+
+    def dibujar(self, g, activo):
+        R = getattr(g.visor, "R", np.identity(3))
+        u, v = np.asarray(R[0], float), np.asarray(R[1], float)
+        prims = []
+        for i, (ident, p, estado) in enumerate(self.items):
+            h = self.LADO_PX * g.escala(p)
+            if estado == "ok":
+                color = AZUL_ACTIVO if activo == i else (AZUL if ident not in self.originales else (0.55, 0.55, 0.6))
+            elif estado == "suprimida":
+                color = (0.95, 0.4, 0.35) if activo == i else (0.88, 0.18, 0.15)
+            else:
+                color = (0.6, 0.6, 0.6)
+            esq = np.array([p + h * (-u - v), p + h * (u - v), p + h * (u + v), p + h * (-u + v), p + h * (-u - v)])
+            prims.append(("lineas", _segs(esq), color, 2.0))
+            if estado == "ok":
+                filas = np.linspace(-1.0, 1.0, 7)
+                izq = np.array([p + h * (-u + f * v) for f in filas])
+                der = np.array([p + h * (u + f * v) for f in filas])
+                prims.append(("lineas", np.stack([izq, der], axis=1).reshape(-1, 3), color, 2.0))
+                marca = np.array([p + h * (-0.55 * u - 0.05 * v), p + h * (-0.15 * u - 0.5 * v),
+                                  p + h * (0.6 * u + 0.55 * v)])
+                prims.append(("lineas", _segs(marca), (1.0, 1.0, 1.0), 2.2))
+            else:
+                cruz = np.array([p + h * (-0.6 * u - 0.6 * v), p + h * (0.6 * u + 0.6 * v),
+                                 p + h * (-0.6 * u + 0.6 * v), p + h * (0.6 * u - 0.6 * v)])
+                prims.append(("lineas", cruz, color, 2.2))
+        return prims
+
+    def tocar(self, g, q):
+        mejor = (math.inf, None)
+        for i, (_ident, p, _estado) in enumerate(self.items):
+            if not self._tocable(i):
+                continue
+            s, ok = g.pantalla([p])
+            if ok[0]:
+                d = max(0.0, float(np.linalg.norm(s[0] - q)) - self.LADO_PX * 1.3)
+                if d < mejor[0]:
+                    mejor = (d, i)
+        return mejor
+
+    def empezar(self, g, pos, sub):
+        g.escribir(self.alternar(self.items[sub][0]))
+        return {}
+
+    def cajas(self, g, arrastre):
+        return []
+
+
 def asas_imagen(pl, dx, dy, escala=True, volteo=("voltear", "voltear_v")):
     """Gizmo de Fusion para una imagen o un dibujo sobre el plano `pl` (Lienzo, Calcomanía, Insertar SVG y DXF):
     cuadrado central (mover), flechas X/Y, arco (girar), codo (escala) y moños (voltear H y V)."""
