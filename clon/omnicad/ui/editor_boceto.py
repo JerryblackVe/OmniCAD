@@ -33,6 +33,7 @@ import re
 import threading
 import time
 import warnings
+from dataclasses import replace
 
 import numpy as np
 
@@ -43,7 +44,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInpu
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
-from ..restricciones.inferencia import Inferencia, inferir
+from ..restricciones.inferencia import Indice, Inferencia, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
@@ -170,6 +171,22 @@ TOL_PUNTO = 11.0          # radio (px) para agarrar un punto: más grande que lo
 TOL_MANIJA = 12.0         # radio (px) de las manijas del marco de control
 RADIO_INTERIOR_PX = 80.0  # círculos de hasta este radio en pantalla se agarran también desde adentro
 TOL_INFERENCIA = math.radians(3.0)
+# Ayudas de dibujo (Preferencias › Boceto): `inferencias` y `restricciones_auto` apagan las ayudas y las restricciones
+# que dejan al confirmar; `tipos` elige las familias de TIPOS_INFERENCIA; `sensibilidad_px` es el radio de captura.
+AJUSTES_INFERENCIA = {"inferencias": True, "restricciones_auto": True, "tipos": TIPOS_INFERENCIA,
+                      "sensibilidad_px": TOL_PX, "guias": True, "indicadores": True, "etiquetas": True}
+
+
+def ajustes_inferencia(prefs):
+    """Los ajustes de ayudas de dibujo a partir de las preferencias de la aplicación (claves «boceto/…»)."""
+    familias = ("medio", "interseccion", "tangente", "perpendicular", "curva", "alineacion", "paralela")
+    tipos = [t for t in familias if prefs[f"boceto/inf_{t}"]]
+    if prefs["boceto/inf_horizontal_vertical"]:
+        tipos += ["horizontal", "vertical"]
+    return {"inferencias": prefs["boceto/inferencias"], "restricciones_auto": prefs["boceto/restricciones_auto"],
+            "tipos": tuple(tipos), "sensibilidad_px": float(prefs["boceto/sensibilidad_px"]),
+            "guias": prefs["boceto/guias_inferencia"], "indicadores": prefs["boceto/indicadores_inferencia"],
+            "etiquetas": prefs["boceto/etiquetas_inferencia"]}
 # Cotas en vivo mientras se dibuja (las cajas de valor de Fusion): herramientas que las muestran.
 RANURAS_RECTAS = ("ranura_centro", "ranura_total", "ranura_punto")
 VIVAS = ("linea", "rectangulo", "rectangulo_3p", "rectangulo_centro", "circulo", "arco", "arco_centro",
@@ -523,6 +540,13 @@ class Lienzo(QWidget):
         self.cursor = None
         self.inferencia = None
         self.inf_actual = None
+        self.inf_lista = []              # todas las ayudas bajo el cursor, la activa primero (Espacio alterna)
+        self.ajustes_inf = dict(AJUSTES_INFERENCIA)
+        self._indice_inf = None          # geometría derivada para consultar rápido; se descarta al cambiar el boceto
+        self._inf_alt = 0
+        self._inf_claves = []            # qué ayudas había en el movimiento anterior: si cambian, Espacio vuelve a la primera
+        self._inf_bloqueo = None         # ayuda bloqueada con Flecha arriba: el cursor sigue su guía
+        self._inf_bloqueo_clics = 0      # pulsaciones que había al bloquear: otra pulsación la suelta
         self._inf_inicio = None
         self._inf_lado = None
         self._inf_clics = []             # BOC-9: (xy, tipo, objetivo) de cada clic, para las herramientas que no son Línea
@@ -659,6 +683,7 @@ class Lienzo(QWidget):
     def _restaurar(self, datos):
         nuevo = Boceto.desde_dict(datos)
         self.b.__dict__.update(nuevo.__dict__)   # se conserva el mismo objeto (lo referencian otros)
+        self._indice_inf = None
 
     def deshacer(self):
         if not self.historial:
@@ -716,6 +741,7 @@ class Lienzo(QWidget):
         previo = self.resultado if rapido and arrastrado is not None else None
         self.resultado = resolver(self.b, valores, arrastrado, previo)
         self._cache_cortes = {}
+        self._indice_inf = None
         if arrastrado is None:
             self._generacion += 1
             self._diagnostico_agotado = False
@@ -1005,9 +1031,38 @@ class Lienzo(QWidget):
         self._notificar_seleccion()
         self.update()
 
+    def _base_inferencia(self):
+        """Desde dónde se mide el segmento en curso (la última pulsación), o None si la herramienta no tiene base."""
+        return self.clics[-1][1] if self.clics and self.herramienta not in ("circulo_3p",) else None
+
+    def _inferir(self, xy, base, excluidos, previa):
+        """Ayudas bajo el cursor según los ajustes. Con una bloqueada (Flecha arriba), el cursor sigue su guía."""
+        a = self.ajustes_inf
+        if self._inf_bloqueo is not None and len(self.clics) != self._inf_bloqueo_clics:
+            self._inf_bloqueo = None
+        if self._inf_bloqueo is not None:
+            self.inf_lista = [proyectar_bloqueo(self._inf_bloqueo, xy)]
+            return self.inf_lista[0]
+        if self._indice_inf is None or self._indice_inf.b is not self.b:
+            self._indice_inf = Indice(self.b)
+        # Paralela/perpendicular/colineal mueven el punto sobre un rayo: solo tienen sentido para el segmento de una Línea.
+        tipos = a["tipos"] if self.herramienta == "linea" else tuple(t for t in a["tipos"] if t != "paralela")
+        # Alternar con Espacio elige una de las ambiguas: sin histéresis, o la activa volvería siempre al primer lugar.
+        lista = inferencias(self.b, xy, a["sensibilidad_px"] / self.px_por_mm(), base=base, excluir=excluidos,
+                            coincidente=bool(self._modificadores_raton & Qt.ShiftModifier),
+                            angulo_tol=TOL_INFERENCIA, previa=None if self._inf_alt else previa, tipos=tipos,
+                            indice=self._indice_inf, extra=[c[1] for c in self.clics[:-1]])
+        claves = [i.clave() for i in lista]
+        if claves != self._inf_claves:
+            self._inf_alt, self._inf_claves = 0, claves
+        self.inf_lista = lista
+        return lista[self._inf_alt % len(lista)] if lista else None
+
     def _ajustar(self, pos, excluir=None, base=None):
-        """Punto existente y origen primero; después ajustes a objetos, H/V y rejilla."""
+        """Punto existente y origen primero; después ajustes a objetos, alineaciones, H/V y rejilla."""
+        previa = self.inf_actual
         self.inf_actual = self.inferencia = None
+        self.inf_lista = []
         pid = self._punto_cercano(pos, excluir)
         if pid is not None:
             return pid, self.b.coords(pid)
@@ -1019,12 +1074,15 @@ class Lienzo(QWidget):
         excluidos += self._ocultos()[0]
         if self.herramienta == "linea" and self.clics and self._ultima_linea is not None:
             excluidos.append(self._ultima_linea)
-        self.inf_actual = inferir(self.b, (x, y), TOL_PX / self.px_por_mm(), base=base,
-                                  excluir=excluidos,
-                                  coincidente=bool(self._modificadores_raton & Qt.ShiftModifier),
-                                  angulo_tol=TOL_INFERENCIA)
+        # Ctrl mantenido apaga las ayudas un momento (como Fusion); en Seleccionar solo ayudan al arrastrar.
+        ayuda = (self.ajustes_inf["inferencias"] and not self._modificadores_raton & Qt.ControlModifier
+                 and (self.herramienta != "seleccionar" or self._arrastre is not None))
+        if ayuda:
+            self.inf_actual = self._inferir((x, y), base, excluidos, previa)
         if self.inf_actual is not None:
-            if self.inf_actual.tipo in ("horizontal", "vertical"):
+            if not self.ajustes_inf["restricciones_auto"]:
+                self.inf_actual = replace(self.inf_actual, restriccion=None)
+            elif self.inf_actual.restriccion in (("horizontal",), ("vertical",)):
                 self.inferencia = self.inf_actual.tipo
             return None, self.inf_actual.xy
         if self.ajustar_grilla:
@@ -1041,7 +1099,8 @@ class Lienzo(QWidget):
         if h != "seleccionar":
             self.ultima_herramienta = h           # para «Repetir» del menú radial
         self.clics, self.picks, self.picks_xy = [], [], []
-        self.inf_actual = self.inferencia = self._inf_inicio = None
+        self.inf_actual = self.inferencia = self._inf_inicio = self._inf_bloqueo = None
+        self.inf_lista, self._inf_alt = [], 0
         self.fase = None
         self._previa_recorte = None
         self._esperando_ubicacion = False
@@ -1081,7 +1140,8 @@ class Lienzo(QWidget):
             self.cambio.emit()
             self.update()
             return
-        self.inf_actual = self.inferencia = self._inf_inicio = None
+        self.inf_actual = self.inferencia = self._inf_inicio = self._inf_bloqueo = None
+        self.inf_lista, self._inf_alt = [], 0
         if self._hay_operacion():
             self._cerrar_entrada()
             self.clics, self.picks, self.picks_xy = [], [], []
@@ -1163,6 +1223,8 @@ class Lienzo(QWidget):
         else:
             return
         self._inf_clics.append((xy, *union))
+        if inf is not None and inf.tipo == "interseccion":
+            self._inf_clics.append((xy, *inf.restriccion[2]))      # el punto queda sobre las dos curvas
 
     def _restringir_clics(self, puntos_nuevos, curvas_nuevas):
         """Agrega las uniones guardadas por `_guardar_inferencia_clic` a los puntos nuevos que quedaron en el lugar
@@ -4165,9 +4227,8 @@ class Lienzo(QWidget):
             self._actualizar_rho_conica(pos)
             self.update()
             return
-        base = self.clics[-1][1] if self.clics and self.herramienta not in ("circulo_3p",) else None
         excluir = self._arrastre if isinstance(self._arrastre, int) else None
-        self.cursor = self._ajustar(pos, excluir=excluir, base=base)[1]
+        self.cursor = self._ajustar(pos, excluir=excluir, base=self._base_inferencia())[1]
         if (self._presion is not None and self.herramienta == "linea" and e.buttons() & Qt.LeftButton
                 and self.clics and self._presion[1] is not None and self._presion[1] == self.clics[-1][0]
                 and math.hypot(pos.x() - self._presion[0].x(), pos.y() - self._presion[0].y()) > 8):
@@ -4465,6 +4526,9 @@ class Lienzo(QWidget):
             return
         k = e.key()
         h = self.herramienta
+        if k == Qt.Key_Control:
+            self._modificadores_raton = e.modifiers()       # Ctrl apaga las ayudas mientras se mantiene
+            self._refrescar_cursor()
         if k == Qt.Key_Escape:
             if self.visor is not None and self.visor.modo:
                 self.visor.set_modo(None)
@@ -4474,6 +4538,13 @@ class Lienzo(QWidget):
             self.copiar_seleccion()
         elif e.matches(QKeySequence.Paste) and PORTAPAPELES:
             self.pegar()
+        elif k == Qt.Key_Space and self.inf_lista:
+            self._inf_alt += 1                       # alterna entre las ayudas ambiguas bajo el cursor
+            self._refrescar_cursor()
+        elif k == Qt.Key_Up and (self.inf_actual is not None or self._inf_bloqueo is not None):
+            self._inf_bloqueo, self._inf_bloqueo_clics = (
+                (None, 0) if self._inf_bloqueo is not None else (self.inf_actual, len(self.clics)))
+            self._refrescar_cursor()
         elif k in (Qt.Key_Delete, Qt.Key_Backspace):
             self.borrar_seleccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in SPLINES and self.clics:
@@ -4491,6 +4562,18 @@ class Lienzo(QWidget):
                 self._entrada_dinamica(e.text())
         else:
             super().keyPressEvent(e)
+
+    def keyReleaseEvent(self, e):
+        if e.key() == Qt.Key_Control and self.ajustes_inf["inferencias"]:
+            self._modificadores_raton = e.modifiers()       # soltar Ctrl vuelve a encender las ayudas sin mover el ratón
+            self._refrescar_cursor()
+        super().keyReleaseEvent(e)
+
+    def _refrescar_cursor(self):
+        """Recalcula el ajuste del cursor sin que se mueva el ratón (alternar, bloquear, Ctrl)."""
+        if self.cursor is not None:
+            self.cursor = self._ajustar(self._pos_cursor, base=self._base_inferencia())[1]
+            self.update()
 
     # ------------------------------------------------------------ colores (como Fusion)
     def _oscuro(self):
@@ -5212,14 +5295,53 @@ class Lienzo(QWidget):
                 p.setPen(QPen(QColor(80, 80, 90), 1))
                 p.drawText(q + QPointF(10, -8), f"({cur[0]:.2f}; {cur[1]:.2f})")
         if cur is not None and self.inf_actual is not None and h != "seleccionar" and self.entrada is None:
-            p.setPen(QPen(acento, 1, Qt.DashLine))
-            for guia in self.inf_actual.guias:
-                self._dibujar_polilinea(p, guia)
-            q = self.a_px(*cur)
-            tipo = self.inf_actual.restriccion[0] if self.inf_actual.restriccion else "coincidente"
-            nombre = ICONO_RESTRICCION.get(tipo, "r_coincidente")
-            p.drawPixmap(QRectF(q.x() + 10, q.y() + 6, 14, 14), icono(nombre).pixmap(28, 28),
-                         QRectF(0, 0, 28, 28))
+            self._dibujar_inferencia(p, acento, cur)
+
+    def _dibujar_inferencia(self, p, acento, cur):
+        """Guías temporales, marcador del ajuste, ícono de la restricción y etiqueta (cada cosa se apaga en los ajustes)."""
+        inf, a, q = self.inf_actual, self.ajustes_inf, self.a_px(*cur)
+        guia = QColor(acento)
+        guia.setAlpha(210)
+        if a["guias"]:
+            p.setPen(QPen(guia, 1.2, Qt.DashLine))
+            for tramo in inf.guias:
+                self._dibujar_polilinea(p, tramo)
+            p.setPen(QPen(guia, 1.4))
+            for tramo in inf.guias:                       # el punto de referencia de cada guía (la base no)
+                if tramo[0] != self._base_inferencia():
+                    p.drawEllipse(self.a_px(*tramo[0]), 3.5, 3.5)
+        if a["indicadores"]:
+            p.setPen(QPen(guia, 1.8))
+            x, y = q.x(), q.y()
+            if inf.tipo == "punto_medio":
+                p.drawPolygon(QPolygonF([QPointF(x, y - 6), QPointF(x - 6, y + 5), QPointF(x + 6, y + 5)]))
+            elif inf.tipo == "interseccion":
+                p.drawLine(QPointF(x - 5, y - 5), QPointF(x + 5, y + 5))
+                p.drawLine(QPointF(x - 5, y + 5), QPointF(x + 5, y - 5))
+            elif inf.tipo.startswith("alineado"):
+                p.drawPolygon(QPolygonF([QPointF(x, y - 6), QPointF(x + 6, y), QPointF(x, y + 6), QPointF(x - 6, y)]))
+            elif inf.tipo == "sobre_curva":
+                p.drawEllipse(q, 5, 5)
+            if inf.restriccion:
+                nombre = ICONO_RESTRICCION.get(inf.restriccion[0], "r_coincidente")
+                p.drawPixmap(QRectF(x + 10, y + 6, 14, 14), icono(nombre).pixmap(28, 28), QRectF(0, 0, 28, 28))
+        if a["etiquetas"] and inf.etiqueta:
+            texto = inf.etiqueta + (" · bloqueada" if self._inf_bloqueo is not None else "")
+            if len(self.inf_lista) > 1 and self._inf_bloqueo is None:
+                texto += f" · Espacio: otra ({self._inf_alt % len(self.inf_lista) + 1}/{len(self.inf_lista)})"
+            fm = QFontMetricsF(p.font())
+            caja = QRectF(q.x() + 12, q.y() + 24, fm.horizontalAdvance(texto) + 10, fm.height() + 4)
+            if caja.right() > self.width():
+                caja.moveRight(q.x() - 8)
+            if caja.bottom() > self.height():
+                caja.moveBottom(q.y() - 10)
+            fondo = QColor(30, 30, 36, 215) if self._oscuro() else QColor(255, 255, 255, 225)
+            p.setPen(QPen(guia, 1))
+            p.setBrush(fondo)
+            p.drawRoundedRect(caja, 3, 3)
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QColor(235, 235, 240) if self._oscuro() else QColor(30, 30, 40))
+            p.drawText(caja.adjusted(5, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, texto)
 
     def describir(self, ids):
         return ", ".join(f"{NOMBRES_ENTIDAD[self.b.tipo_de(i)]} {i}" for i in ids if i in self.b.puntos or i in self.b.curvas)

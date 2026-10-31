@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-355 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+356 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 47 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 61 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 62 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 75 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -749,6 +749,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`extend_sketch_curve`](#extend_sketch_curve) | sí | Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. |
 | [`split_sketch_curve`](#split_sketch_curve) | sí | Parte una curva en las intersecciones más cercanas al punto, como el editor; el punto debe caer sobre la curva. |
 | [`redefine_sketch_plane`](#redefine_sketch_plane) | sí | Redefine el plano o la cara de un boceto existente conservando curvas, restricciones y cotas. |
+| [`infer_sketch_snap`](#infer_sketch_snap) | no | Dice qué ayuda de dibujo (inferencia) propone la interfaz con el cursor en (x, y): punto medio, intersección, tangente, perpendicular, sobre la curva, paralela/perpendicular/colineal a una línea cercana, alineación con otros puntos (misma X o misma Y, solo guía y sin restricción) y horizontal/vertical desde un punto base. |
 
 ### `create_construction_plane`
 
@@ -1644,6 +1645,24 @@ Redefine el plano o la cara de un boceto existente conservando curvas, restricci
   - `plane` (texto; obligatorio): plano XY, XZ, YZ, id/nombre de plano de construcción, selector de cara plana o id de find_faces.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde evaluar el selector de cara; omitido usa el único cuerpo, como create_sketch.
 - CLI: `omnicad call redefine_sketch_plane --doc pieza.omnicad sketch=… plane=…`
+
+### `infer_sketch_snap`
+
+Dice qué ayuda de dibujo (inferencia) propone la interfaz con el cursor en (x, y): punto medio, intersección, tangente, perpendicular, sobre la curva, paralela/perpendicular/colineal a una línea cercana, alineación con otros puntos (misma X o misma Y, solo guía y sin restricción) y horizontal/vertical desde un punto base. Devuelve las candidatas ordenadas (la primera es la que se activa; alternative elige otra, como la tecla Espacio) y, para cada una, el punto ajustado, las guías y la restricción que dejaría al confirmar. No modifica el boceto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `x` (número; obligatorio): coordenada X del cursor en mm, sobre el plano del boceto.
+  - `y` (número; obligatorio): coordenada Y del cursor en mm, sobre el plano del boceto.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `base_x` (número; opcional, por defecto `null`): X del punto anterior de la línea en curso (para tangente, perpendicular y horizontal/vertical); va con base_y.
+  - `base_y` (número; opcional, por defecto `null`): Y del punto anterior de la línea en curso.
+  - `tolerance` (número; opcional, por defecto `0.5`): radio de captura en mm (en pantalla son px / escala: con zoom 10 px/mm, 8 px son 0.8 mm).
+  - `types` (lista de texto o null; opcional, por defecto `null`): familias a considerar: midpoint, intersection, tangent, perpendicular, on_curve, alignment, horizontal, vertical, parallel; vacío = todas.
+  - `exclude` (lista de entero o null; opcional, por defecto `null`): ids de puntos o curvas que no cuentan (la geometría que se está dibujando).
+  - `shift` (true/false; opcional, por defecto `false`): true imita Mayús: el punto medio queda como coincidente en vez de punto medio.
+  - `alternative` (entero; opcional, por defecto `0`): 0 = la mejor; 1, 2… recorren las otras en vueltas.
+- CLI: `omnicad call infer_sketch_snap --doc pieza.omnicad x=… y=…`
 
 ## Grupo vectores
 

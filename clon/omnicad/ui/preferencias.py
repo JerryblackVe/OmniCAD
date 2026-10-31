@@ -39,6 +39,12 @@ DEFECTOS = {
     "interfaz/color_acento": "",
     "boceto/fuente_cotas": "",                # vacío = la fuente de la interfaz
     "boceto/tamano_cotas_pct": 100,           # 70 a 200, de a 5: el texto de las cotas y etiquetas del boceto
+    # Ayudas de dibujo del boceto (ui/editor_boceto.py › AJUSTES_INFERENCIA); lo mismo en api/herramientas_preferencias.py
+    "boceto/inferencias": True, "boceto/restricciones_auto": True, "boceto/sensibilidad_px": 8,
+    "boceto/guias_inferencia": True, "boceto/indicadores_inferencia": True, "boceto/etiquetas_inferencia": True,
+    "boceto/inf_medio": True, "boceto/inf_interseccion": True, "boceto/inf_tangente": True,
+    "boceto/inf_perpendicular": True, "boceto/inf_curva": True, "boceto/inf_alineacion": True,
+    "boceto/inf_horizontal_vertical": True, "boceto/inf_paralela": True,
     "general/raton": "fusion",               # como Fusion: medio desplaza, Mayús+medio orbita
     "general/invertir_zoom": False,
     "general/camara": "perspectiva",
@@ -433,6 +439,24 @@ PAGINAS = [
         ("boceto/tamano_cotas_pct", "Tamaño de las cotas y etiquetas del boceto", "porcentaje", (70, 200)),
         (None, "", "aviso_apariencia", None),
         (None, "Apariencia", "acciones_apariencia", None),
+    ]),
+    ("boceto", None, "Boceto", "Ayudas al dibujar: guías de alineación, capturas y restricciones automáticas. "
+     "Ctrl mantenido las apaga un momento; Espacio alterna entre ayudas; Flecha arriba bloquea la guía activa", [
+        ("boceto/inferencias", "Ayudas de dibujo (inferencias)", "check", None),
+        ("boceto/restricciones_auto", "Dejar restricciones al confirmar (coincidente, horizontal, tangente…)",
+         "check", None),
+        ("boceto/sensibilidad_px", "Sensibilidad de captura (píxeles)", "entero", (3, 20)),
+        ("boceto/guias_inferencia", "Mostrar guías punteadas", "check", None),
+        ("boceto/indicadores_inferencia", "Mostrar indicadores (punto medio, intersección…)", "check", None),
+        ("boceto/etiquetas_inferencia", "Mostrar una etiqueta que explica la ayuda activa", "check", None),
+        ("boceto/inf_medio", "Capturar el punto medio", "check", None),
+        ("boceto/inf_interseccion", "Capturar intersecciones", "check", None),
+        ("boceto/inf_tangente", "Capturar tangencias", "check", None),
+        ("boceto/inf_perpendicular", "Capturar perpendiculares", "check", None),
+        ("boceto/inf_curva", "Capturar sobre las curvas", "check", None),
+        ("boceto/inf_alineacion", "Alinear con puntos existentes", "check", None),
+        ("boceto/inf_horizontal_vertical", "Horizontal y vertical desde el punto anterior", "check", None),
+        ("boceto/inf_paralela", "Paralela, perpendicular y colineal a una línea cercana", "check", None),
     ]),
     ("material", None, "Material", "Preferencias que controlan el material y el aspecto por defecto", [
         ("material/aspecto", "Aspecto por defecto de los cuerpos", "combo",

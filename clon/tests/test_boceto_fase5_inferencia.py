@@ -155,9 +155,9 @@ def test_sobre_curvas_reutiliza_proyeccion_del_modelo(curva):
 @pytest.mark.parametrize("por_punto", [False, True])
 def test_excluir_curva_o_sus_puntos_evita_autoinferencia(por_punto):
     b = Boceto()
-    cid = b.agregar_linea((0, 0), (10, 0))
+    cid = b.agregar_linea((3, 4), (13, 4))          # lejos de los ejes: el origen no alinea con ella
     excluir = (b.curvas[cid].p1,) if por_punto else (cid,)
-    assert inferir(b, (5, 0), 0.2, excluir=excluir) is None
+    assert inferir(b, (8, 4), 0.2, excluir=excluir) is None
 
 
 def test_no_hay_inferencia_ni_saltos_a_geometria_lejana():

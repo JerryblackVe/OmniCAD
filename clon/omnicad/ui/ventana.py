@@ -625,6 +625,11 @@ class VentanaPrincipal(QMainWindow):
         self.temporizador.start(p["general/autoguardado_min"] * 60_000)
         c.esquema_raton, c.invertir_zoom = p["general/raton"], p["general/invertir_zoom"]
         c.animar_vistas = p["general/animar_vistas"]
+        modo = getattr(self, "modo_boceto", None)
+        if modo is not None and modo.lienzo is not None:      # ayudas de dibujo: valen al instante en el boceto abierto
+            from .editor_boceto import ajustes_inferencia
+            modo.lienzo.ajustes_inf = ajustes_inferencia(p)
+            modo.lienzo.update()
         if c.animar_vistas and not os.environ.get("OMNICAD_SIN_ANIMACION"):
             from ..nucleo import animacion
             QTimer.singleShot(2000, animacion.precalentar)      # idempotente: scipy se carga una sola vez

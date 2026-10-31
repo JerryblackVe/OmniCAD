@@ -20,7 +20,7 @@ from .. import NOMBRE_APP
 from ..nucleo.perfiles import detectar
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
-from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo
+from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia
 from .iconos import icono
 
 # acción → (texto del menú, herramienta, atajo, ícono). Atajos de Fusion: L, R, C, D, T, O, P, M, Mayús+V.
@@ -838,6 +838,7 @@ class ModoBoceto(QObject):
         area.set_vistas_multiples(False)
         # evaluar se busca en el documento en cada uso: "Cambiar parámetros" puede reemplazar la tabla
         self.lienzo = Lienzo(self.boceto, lambda *a: v.doc.parametros.evaluar(*a), area, visor=visor, plano=plano)
+        self.lienzo.ajustes_inf = ajustes_inferencia(v.prefs)
         self.lienzo.estado_referencias = lambda: v.doc.estado_final
         self.lienzo.valores_parametros = lambda: v.doc.parametros.valores()
         self.lienzo.editar_parametro_texto = self._editar_parametro_texto
