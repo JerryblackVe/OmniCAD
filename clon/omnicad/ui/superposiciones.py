@@ -424,7 +424,7 @@ class AreaVisor(QWidget):
         self.tira = None                  # comandos sugeridos según lo elegido (ui/sugerencias.py), sobre la barra
         self.capa = None
         self.paleta = None
-        self.caracter = None              # panel «Carácter» del texto del boceto (a la izquierda de la paleta)
+        self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
         self.extras = []                  # visores de las vistas múltiples
         self.multiples = False
@@ -460,8 +460,9 @@ class AreaVisor(QWidget):
             panel.setParent(self)
         self.reubicar()
 
-    def set_capa_boceto(self, capa, paleta, caracter=None):
-        self.capa, self.paleta, self.caracter = capa, paleta, caracter
+    def set_capa_boceto(self, capa, paleta, *laterales):
+        self.capa, self.paleta = capa, paleta
+        self.laterales = [w for w in laterales if w is not None]
         self.reubicar()
 
     def mostrar_aviso(self, texto):
@@ -528,10 +529,14 @@ class AreaVisor(QWidget):
             self.paleta.ajustar()
             self.paleta.move(g.right() - self.paleta.width() - 10, y)
             self.paleta.raise_()
-            if self.caracter is not None and self.caracter.isVisible():
-                self.caracter.ajustar()
-                self.caracter.move(max(g.left() + 4, self.paleta.x() - self.caracter.width() - 8), y)
-                self.caracter.raise_()
+            abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8
+            for lateral in self.laterales:
+                if lateral.isVisible():
+                    lateral.ajustar()
+                    sube = y + lateral.height() > abajo and lateral.height() <= abajo - g.top() - 4
+                    lateral.move(max(g.left() + 4, self.paleta.x() - lateral.width() - 8),
+                                 abajo - lateral.height() if sube else y)     # en una ventana baja sube: la barra de vista no lo tapa
+                    lateral.raise_()
         if self.barra is not None:
             self.barra.adjustSize()
             self.barra.move((w - self.barra.width()) // 2, h - self.barra.height() - 8)

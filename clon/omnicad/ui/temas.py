@@ -339,6 +339,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #boton_primario { background: $boton_primario; color: $boton_primario_texto; border: 1px solid $boton_primario;
                   padding: 4px 14px; }
 #boton_primario:hover { background: $boton_primario_hover; }
+#boton_primario:disabled { background: $flotante_cabecera; color: $texto_tenue; border: 1px solid $borde_suave; }
 
 #panel_comando { background: $flotante; border: 1px solid $borde; }
 #cabecera_comando { background: $flotante_cabecera; border-bottom: 1px solid $borde_suave; }

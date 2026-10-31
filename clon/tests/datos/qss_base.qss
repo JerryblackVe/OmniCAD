@@ -80,6 +80,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #boton_primario { background: #ff7d0a; color: #1a1206; border: 1px solid #ff7d0a;
                   padding: 4px 14px; }
 #boton_primario:hover { background: #ff9233; }
+#boton_primario:disabled { background: #1d2631; color: #9aa5b4; border: 1px solid #28323d; }
 
 #panel_comando { background: #151c24; border: 1px solid #36424f; }
 #cabecera_comando { background: #1d2631; border-bottom: 1px solid #28323d; }

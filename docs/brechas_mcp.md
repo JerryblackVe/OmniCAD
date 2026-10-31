@@ -246,6 +246,9 @@ Se descartan, porque no le sirven a un agente:
   caja de valor. `add_dimension` ya trae `reference`, `type` y `mode`, y una expresión cita `dN` por su nombre.
 - «Atenuar el resto» de Administrar proyecciones perdidas (BOC-39): apaga en el lienzo lo que no es una proyección perdida. Es solo
   ayuda visual y `manage_lost_projections` ya lista, vuelve a vincular, rompe y borra sin mirar el dibujo.
+- Panel SIMETRÍA del boceto (Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar): es el formulario con el que la persona
+  elige con el ratón y ve el reflejo antes de aceptar. `mirror_sketch` recibe `entities` y `axis`, crea la copia con sus
+  restricciones de simetría y avisa por `error_kind` si falta algo, sin mirar el dibujo.
 
 ## Hallazgos de la auditoría
 
