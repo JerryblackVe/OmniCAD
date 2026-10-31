@@ -3236,6 +3236,8 @@ class Boceto:
             c = self.curvas.get(i)
             if isinstance(c, (Arco, ArcoElipse)):
                 c.inicio, c.fin = c.fin, c.inicio
+            elif isinstance(c, Spline):
+                _invertir_curvatura(c)
             elif isinstance(c, Texto):                   # texto en curva: sigue a su curva, del otro lado
                 c.camino_lado = "der" if c.camino_lado == "izq" else "izq"
                 c.camino_pos = 1.0 - c.camino_pos
@@ -3258,6 +3260,8 @@ class Boceto:
                 c.radio *= factor
             elif isinstance(c, (Elipse, ArcoElipse)):
                 c.radio_menor *= factor
+            elif isinstance(c, Spline):          # la curvatura es 1/mm: crece el tamaño, baja la curvatura
+                c.manijas = [[a, b, None if k is None else k / factor] for a, b, k in c.manijas]
             elif isinstance(c, Texto):
                 c.altura *= factor
                 c.espaciado *= factor
@@ -3280,23 +3284,51 @@ class Boceto:
     # ------------------------------------------------------------ CREAR: simetría y patrones
     def simetria(self, ids, eje):
         """Simetría (SKT-CREATE-MIRROR): copia espejada respecto de la línea `eje`, con restricciones
-        de simetría entre los puntos (los que están sobre el eje se comparten). Devuelve las curvas nuevas."""
+        de simetría entre los puntos (los que están sobre el eje se comparten). Devuelve las curvas nuevas.
+        Lo que ya es su propio reflejo (una línea sobre el eje, un círculo centrado en él) no se copia: la copia
+        quedaría encimada. El eje puede estar entre los `ids`: se ignora."""
         if self.tipo_de(eje) != "linea":
             raise ErrorBoceto("La línea de simetría tiene que ser una línea.")
         ids = [i for i in ids if i != eje and not isinstance(self.curvas.get(i), Texto)]
         if not ids:
             raise ErrorBoceto("Seleccioná la geometría a reflejar.")
         a, b = self._extremos_linea(eje)
+        if math.dist(a, b) < MEDIDA_MINIMA:
+            raise ErrorBoceto("La línea de simetría no puede tener largo cero.")
 
         def reflejo(q):
             dx, dy = b[0] - a[0], b[1] - a[1]
             t = ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / (dx * dx + dy * dy)
             fx, fy = a[0] + t * dx, a[1] + t * dy
             return 2 * fx - q[0], 2 * fy - q[1]
+
+        def sobre(q):
+            return abs(distancia_punto_recta(q, a, b)) < MEDIDA_MINIMA
+
+        def encimada(i):
+            """Su copia quedaría exactamente sobre ella."""
+            c, P = self.curvas.get(i), self.coords
+            if isinstance(c, Linea):
+                return sobre(P(c.p1)) and sobre(P(c.p2))
+            if isinstance(c, Circulo):
+                return sobre(P(c.centro))
+            if isinstance(c, Arco):          # centrado en el eje y con los extremos espejados entre sí
+                return sobre(P(c.centro)) and math.dist(reflejo(P(c.inicio)), P(c.fin)) < MEDIDA_MINIMA
+            if isinstance(c, (Elipse, ArcoElipse)):     # centrada en el eje y con su eje mayor paralelo o perpendicular a él
+                (cx, cy), (mx, my) = P(c.centro), P(c.mayor)
+                m, d = (mx - cx, my - cy), (b[0] - a[0], b[1] - a[1])
+                alineada = min(abs(m[0] * d[1] - m[1] * d[0]), abs(m[0] * d[0] + m[1] * d[1]))
+                return (sobre((cx, cy)) and alineada < 1e-9 * math.hypot(*m) * math.hypot(*d)
+                        and (isinstance(c, Elipse) or math.dist(reflejo(P(c.inicio)), P(c.fin)) < MEDIDA_MINIMA))
+            return False         # shortcut: una spline o una cónica que ya es simétrica se copia encima; si molesta, comparar la curva con su reflejo
+        ids = [i for i in ids if not encimada(i)]
+        if not ids:
+            raise ErrorBoceto("Lo elegido ya está sobre la línea de simetría (o es simétrico respecto de ella): "
+                              "no hay nada que reflejar.")
         mapa = {}
         for p in self.puntos_de(ids):
             q = self.coords(p)
-            if abs(distancia_punto_recta(q, a, b)) < 1e-9:
+            if sobre(q):
                 mapa[p] = p
             else:
                 mapa[p] = self.agregar_punto(*reflejo(q))
@@ -3309,6 +3341,8 @@ class Boceto:
             c.proyectada = False
             if isinstance(c, (Arco, ArcoElipse)):
                 c.inicio, c.fin = c.fin, c.inicio
+            elif isinstance(c, Spline):
+                _invertir_curvatura(c)
             self.curvas[c.id] = c
             nuevos.append(c.id)
             if isinstance(c, (Circulo, Elipse, ArcoElipse)):
@@ -3822,6 +3856,11 @@ def distancia_con_circulo(tipos, entidades, modo, P, C, R, L, anidados=None):
     if anidados is None:
         anidados = d < abs(r1 - r2)
     return abs(r1 - r2) - d if anidados else d - r1 - r2
+
+
+def _invertir_curvatura(spline):
+    """Al reflejar una spline de ajuste, la curvatura (con signo) de sus manijas cambia de signo."""
+    spline.manijas = [[a, b, None if k is None else -k] for a, b, k in spline.manijas]
 
 
 def distancia_punto_recta(p, a, b):

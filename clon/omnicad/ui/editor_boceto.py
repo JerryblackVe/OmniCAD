@@ -99,7 +99,7 @@ HERRAMIENTAS = {
     "texto": ("Texto", "Clic en una esquina y clic en la opuesta: el cuadro fija la altura y el ancho del texto; "
                        "escribí y mirá los cambios en vivo, Enter acepta (fuente y estilo en la paleta)."),
     "espiral": ("Espiral", "Clic en el centro y clic en el inicio; escribí las vueltas y el paso y Enter."),
-    "simetria": ("Simetría", "Seleccioná la geometría, Enter y clic en la línea de simetría."),
+    "simetria": ("Simetría", "Elegí la geometría y la línea de simetría en el panel. Aceptar o Enter crea la copia."),
     "patron_rectangular": ("Patrón rectangular", "Seleccioná la geometría y Enter; escribí cantidad y distancia "
                            "en cada dirección (X e Y del boceto)."),
     "patron_circular": ("Patrón circular", "Seleccioná la geometría, Enter y clic en el centro; escribí la "
@@ -480,6 +480,7 @@ class Lienzo(QWidget):
     texto_valores = Signal(float, float, float, float)   # altura, interletraje, interlineado y kerning en el cursor
     info = Signal(str)          # medidas de lo elegido, como Fusion ("1 línea de boceto | Longitud: …")
     aviso = Signal(str)         # aviso flotante (p. ej. una operación borró restricciones o cotas)
+    simetria_estado = Signal(object)    # lo que muestra el panel SIMETRÍA (ver `estado_simetria`)
 
     def __init__(self, boceto, evaluar, parent=None, visor=None, plano=None):
         super().__init__(parent)
@@ -537,6 +538,11 @@ class Lienzo(QWidget):
         self.picks = []
         self.picks_xy = []
         self.fase = None             # en herramientas de varios pasos: seleccion | eje | base | destino | centro
+        self._eje_simetria = None        # SIMETRÍA: la línea de simetría elegida (el panel Eje de simetría)
+        self.previa_simetria = True      # SIMETRÍA: la casilla «Vista previa» del panel
+        self._error_simetria = ""        # SIMETRÍA: último reparo del panel (se borra al cambiar lo elegido)
+        self._previa_sim = None          # SIMETRÍA: (clave, polilíneas, error) de la copia reflejada, con caché
+        self._firma_sim = self._estado_sim = None   # SIMETRÍA: lo elegido y lo último que se le mandó al panel
         self.cursor = None
         self.inferencia = None
         self.inf_actual = None
@@ -1102,8 +1108,10 @@ class Lienzo(QWidget):
         excluidos += self._ocultos()[0]
         if self.herramienta == "linea" and self.clics and self._ultima_linea is not None:
             excluidos.append(self._ultima_linea)
-        # Ctrl mantenido apaga las ayudas un momento (como Fusion); en Seleccionar solo ayudan al arrastrar.
+        # Ctrl mantenido apaga las ayudas un momento (como Fusion); en Seleccionar solo ayudan al arrastrar; al elegir
+        # geometría o el eje (Simetría, Empalme…) no hay punto que ajustar, solo qué tocar.
         ayuda = (self.ajustes_inf["inferencias"] and not self._modificadores_raton & Qt.ControlModifier
+                 and self.fase not in ("seleccion", "eje") and self.herramienta not in PICKS
                  and (self.herramienta != "seleccionar" or self._arrastre is not None))
         if ayuda:
             self.inf_actual = self._inferir((x, y), base, excluidos, previa)
@@ -1130,6 +1138,8 @@ class Lienzo(QWidget):
         self.inf_actual = self.inferencia = self._inf_inicio = self._inf_bloqueo = None
         self.inf_lista, self._inf_alt = [], 0
         self.fase = None
+        self._eje_simetria = self._previa_sim = self._firma_sim = self._estado_sim = None
+        self._error_simetria = ""
         self._previa_recorte = None
         self._esperando_ubicacion = False
         self._opc_cota = {}
@@ -1146,6 +1156,7 @@ class Lienzo(QWidget):
             if self._seleccion_util():
                 self._avanzar_seleccion(avisar=False)
         self.mensaje.emit(f"{nombre}: {ayuda}" if ayuda else nombre)
+        self._emitir_simetria()
         self.herramienta_cambiada.emit(h)
         self.update()
 
@@ -1167,6 +1178,9 @@ class Lienzo(QWidget):
             self._cache_cortes = {}
             self.cambio.emit()
             self.update()
+            return
+        if self.herramienta == "simetria":         # el panel SIMETRÍA se cierra entero, sin tocar el boceto
+            self.cancelar_simetria()
             return
         self.inf_actual = self.inferencia = self._inf_inicio = self._inf_bloqueo = None
         self.inf_lista, self._inf_alt = [], 0
@@ -1631,8 +1645,8 @@ class Lienzo(QWidget):
                 self.mensaje.emit("Seleccioná primero la geometría (clic en las curvas).")
             return
         if h == "simetria":
-            self.fase = "eje"
-            self.mensaje.emit("Simetría: clic en la línea de simetría.")
+            self.elegir_campo_simetria("eje")
+            self.mensaje.emit("Simetría: elegí la línea de simetría.")
         elif h == "patron_rectangular":
             self.fase = "valores"
 
@@ -1698,6 +1712,127 @@ class Lienzo(QWidget):
             self.seleccion, self.fase = [], "seleccion"
         return ok
 
+    # ------------------------------------------------------------ Simetría: el panel SIMETRÍA
+    def _calcular_simetria(self):
+        """(polilíneas de la copia, error) de reflejar lo elegido respecto de la línea elegida. Se arma en un boceto
+        aparte y queda en caché mientras no cambie lo elegido ni el boceto."""
+        ids = [i for i in self._seleccion_util() if i != self._eje_simetria]
+        clave = (tuple(ids), self._eje_simetria, self._generacion)
+        if self._previa_sim is None or self._previa_sim[0] != clave:
+            polis, error = [], ""
+            copia = self.b.copia()
+            try:
+                if not ids:
+                    raise ErrorBoceto("Además de la línea de simetría, elegí la geometría a reflejar.")
+                if all(isinstance(copia.curvas.get(i), Texto) for i in ids):
+                    raise ErrorBoceto("Los textos no se reflejan con Simetría: usá Voltear en el panel Carácter.")
+                polis = [puntos_primitiva(prim) for k in copia.simetria(ids, self._eje_simetria)
+                         for prim in copia.primitivas(k)]
+            except ErrorBoceto as e:
+                error = str(e)
+            self._previa_sim = (clave, polis, error)
+        return self._previa_sim[1], self._previa_sim[2]
+
+    def estado_simetria(self):
+        """Lo que muestra el panel SIMETRÍA: cuántos objetos hay, si hay línea de simetría, el campo activo, si se puede
+        aceptar y qué decirle a la persona (una guía o un reparo)."""
+        objetos = self._seleccion_util()
+        eje = self._eje_simetria if self._eje_simetria in self.b.curvas else None
+        e = {"objetos": len(objetos), "eje": eje is not None, "campo": self.fase, "valido": False,
+             "previa": self.previa_simetria, "guia": "", "error": self._error_simetria}
+        if not objetos:
+            e["guia"] = "Elegí la geometría a reflejar: clic en cada curva o arrastrá una ventana."
+        elif eje is None:
+            e["guia"] = ("Elegí la línea de simetría (puede ser de construcción)." if self.fase == "eje" else
+                         "Con la geometría lista, Enter pasa a elegir la línea de simetría.")
+        else:
+            error = self._calcular_simetria()[1]
+            e["valido"], e["error"] = not error, error or e["error"]
+            if not error:
+                e["guia"] = "Enter acepta y Esc cancela." + (
+                    " Los textos no se reflejan." if any(isinstance(self.b.curvas.get(i), Texto) for i in objetos) else "")
+        return e
+
+    def _emitir_simetria(self):
+        """Le manda el estado al panel (solo si cambió). Elegir otra cosa borra el último reparo."""
+        if self.herramienta != "simetria":
+            return
+        firma = (tuple(self._seleccion_util()), self._eje_simetria, self.fase)
+        if firma != self._firma_sim:
+            self._firma_sim, self._error_simetria = firma, ""
+        estado = self.estado_simetria()
+        if estado != self._estado_sim:
+            self._estado_sim = estado
+            self.simetria_estado.emit(estado)
+
+    def elegir_campo_simetria(self, campo):
+        """Panel: lo que llena el próximo clic, la geometría (`seleccion`) o la línea de simetría (`eje`)."""
+        if campo == "eje" and not self._seleccion_util():
+            self._error_simetria = "Primero elegí la geometría a reflejar."
+        else:
+            self.fase = campo
+        self._emitir_simetria()
+        self.update()
+
+    def limpiar_campo_simetria(self, campo):
+        """Panel: la ✕ de un campo lo vacía y lo deja listo para elegir de nuevo."""
+        if campo == "eje":
+            self._eje_simetria = None
+        else:
+            self.seleccion = []
+        self.fase = campo
+        self._emitir_simetria()
+        self.update()
+
+    def set_previa_simetria(self, activa):
+        self.previa_simetria = bool(activa)
+        self._emitir_simetria()
+        self.update()
+
+    def aceptar_simetria(self):
+        """Aceptar (botón o Enter): crea la copia reflejada en un solo paso de deshacer y sale de la herramienta."""
+        e = self.estado_simetria()
+        if not e["valido"]:
+            self.mensaje.emit(e["error"] or e["guia"])
+            return False
+        ids, eje = [i for i in self._seleccion_util() if i != self._eje_simetria], self._eje_simetria
+        if not self.aplicar_cambio(lambda: self.b.simetria(ids, eje)):
+            return False
+        self.seleccion = []
+        self.set_herramienta("seleccionar")
+        return True
+
+    def cancelar_simetria(self):
+        """Cancelar (botón, ✕ o Esc): sale de la herramienta sin tocar el boceto."""
+        self.set_herramienta("seleccionar")
+
+    def _enter_simetria(self):
+        """Enter: con todo elegido acepta; con la geometría lista pasa a la línea de simetría; si no, dice qué falta."""
+        e = self.estado_simetria()
+        if e["valido"]:
+            self.aceptar_simetria()
+        elif self.fase == "seleccion" and self._seleccion_util():
+            self.elegir_campo_simetria("eje")
+        else:
+            self.mensaje.emit(e["error"] or e["guia"])
+
+    def _dibujar_previa_simetria(self, p, acento):
+        """La recta de simetría entera (trazo y raya, hasta el borde de la vista) y, con la casilla activa, la copia."""
+        eje = self._eje_simetria
+        if eje not in self.b.curvas:
+            return
+        a, b = (self.a_px(*q) for q in self.b._extremos_linea(eje))
+        n = math.hypot(b.x() - a.x(), b.y() - a.y())
+        if n > 1e-6:
+            k = (self.width() + self.height()) / n
+            d = QPointF(b.x() - a.x(), b.y() - a.y()) * k
+            p.setPen(QPen(QColor(255, 140, 0), 1, Qt.DashDotLine))
+            p.drawLine(a - d, b + d)
+        if self.previa_simetria:
+            p.setPen(QPen(acento, 2.0))
+            for poli in self._calcular_simetria()[0]:
+                self._dibujar_polilinea(p, poli)
+
     # ------------------------------------------------------------ herramientas que eligen curvas
     def _clic_pick(self, pos):
         tipos = ("linea",) if self.fase == "eje" else PICKS[self.herramienta][1]
@@ -1705,8 +1840,15 @@ class Lienzo(QWidget):
         if cid is None:
             if self.herramienta == "circulo_2t" and len(self.picks) == 2:
                 return False          # el clic ubica el círculo (lo procesa la herramienta de puntos)
-            self.mensaje.emit("Hacé clic sobre " + ("una línea." if tipos == ("linea",) else
-                                                     "un texto." if tipos == ("texto",) else "una curva."))
+            texto = "Hacé clic sobre " + ("una línea." if tipos == ("linea",) else
+                                          "un texto." if tipos == ("texto",) else "una curva.")
+            if self.herramienta == "simetria":
+                texto = ("La línea de simetría tiene que ser recta: elegí una línea del boceto."
+                         if self._curva_cercana(pos) is not None else
+                         "Ahí no hay ninguna línea: hacé clic sobre la línea de simetría.")
+                self._error_simetria = texto
+                self._emitir_simetria()
+            self.mensaje.emit(texto)
             return True
         self.agregar_pick(cid, self.a_mm(pos), pos)
         return True
@@ -1716,9 +1858,9 @@ class Lienzo(QWidget):
         h = self.herramienta
         pos = pos if pos is not None else self._pos_cursor
         if h == "simetria" and self.fase == "eje":
-            ids = self._seleccion_util()
-            if self.aplicar_cambio(lambda: self.b.simetria(ids, cid)):
-                self.seleccion, self.fase = [], "seleccion"
+            self._eje_simetria = cid                # no crea nada: lo hace Aceptar, después de la vista previa
+            self._emitir_simetria()
+            self.update()
             return
         n, _ = PICKS[h]
         if len(self.picks) >= n:
@@ -4465,6 +4607,7 @@ class Lienzo(QWidget):
         if texto != self._info:
             self._info = texto
             self.info.emit(texto)
+        self._emitir_simetria()
 
     def mouseDoubleClickEvent(self, e):
         if self.visor is not None and e.button() == Qt.MiddleButton:
@@ -4580,6 +4723,8 @@ class Lienzo(QWidget):
             self.borrar_seleccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in SPLINES and self.clics:
             self._terminar_spline()
+        elif k in (Qt.Key_Return, Qt.Key_Enter) and h == "simetria":
+            self._enter_simetria()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in SELECCION and self.fase == "seleccion":
             self._avanzar_seleccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and any(c in self._bloqueos for c in self._claves_vivas()):
@@ -4612,6 +4757,8 @@ class Lienzo(QWidget):
         return self.visor is not None and self.visor.config.oscuro()
 
     def _color_curva(self, c, determinadas, fijos, en_conflicto=frozenset()):
+        if c.id == self._eje_simetria and self.herramienta == "simetria":
+            return QColor(255, 140, 0), 3.5          # la línea de simetría se distingue de lo elegido (celeste)
         if c.id in self.seleccion or c.id in self.picks:
             return QColor(0, 180, 255), 3.0
         if c.id == self._sobre:
@@ -5170,6 +5317,8 @@ class Lienzo(QWidget):
         h, cur = self.herramienta, self._cursor_efectivo()      # con los valores escritos ya aplicados
         # Fusion dibuja la vista previa como geometría sin restringir: azul y continua
         acento = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
+        if h == "simetria":
+            self._dibujar_previa_simetria(p, acento)
         if self._previa_polis or self._caret is not None or (self._previa_texto and self._previa_texto.get("caja")):
             if self._sel_texto:                    # lo seleccionado del texto que se escribe
                 p.setPen(Qt.NoPen)

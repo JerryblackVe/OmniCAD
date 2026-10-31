@@ -168,8 +168,9 @@ def simetria():
     tecla(Qt.Key_Return)
     A.esperar(80)
     clic(-30, 20)                            # línea de simetría (construcción)
+    tecla(Qt.Key_Return)                     # Enter acepta (o el botón Aceptar del panel SIMETRÍA)
     A.esperar(150)
-    A.reg(AR + " · Simetría", "clics + Enter + línea de eje crean las copias",
+    A.reg(AR + " · Simetría", "clics + Enter + línea de eje + Enter crean las copias",
           n_curvas() == antes + 2, f"curvas {antes}->{n_curvas()}")
     A.reg(AR + " · Simetría", "queda la restricción de simetría", n_restr("simetrica") > r0, f"restr {r0}->{n_restr('simetrica')}")
     A.foto(v, "simetria")

@@ -714,7 +714,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`edit_sketch_spline`](#edit_sketch_spline) | sí | Edita una spline ya dibujada (Fusion: manijas, Open/Close Spline, Insert Fit/Control Point y Change Spline Degree). |
 | [`get_spline_curvature`](#get_spline_curvature) | no | Peine de curvatura de una curva del boceto (Fusion: Toggle Curvature Display): curvatura con signo en muestras repartidas por el parámetro, con el punto y la punta de cada púa (salen del lado opuesto al centro de curvatura, con largo curvatura × factor). |
 | [`copy_sketch_entities`](#copy_sketch_entities) | sí | Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copia las curvas y puntos de source_sketch en sketch (el último boceto por defecto; puede ser el mismo), corridos (dx, dy), con las restricciones y cotas que quedan enteras dentro de la selección. |
-| [`mirror_sketch`](#mirror_sketch) | sí | Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respecto de una línea del boceto, con restricciones de simetría (si la geometría original cambia, la copia la sigue). |
+| [`mirror_sketch`](#mirror_sketch) | sí | Simetría de boceto (Fusion: Simetría / Mirror): CREA la copia espejada de curvas y puntos respecto de una línea del boceto (recta, también de construcción; no vale un eje del origen) y la deja con restricciones de simetría: si la geometría original cambia, la copia la sigue. |
 | [`sketch_rectangular_pattern`](#sketch_rectangular_pattern) | sí | Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). |
 | [`sketch_circular_pattern`](#sketch_circular_pattern) | sí | Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. |
 | [`edit_sketch_pattern`](#edit_sketch_pattern) | sí | Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón): cantidades, distancias, direcciones, simetría y copias suprimidas. |
@@ -1148,12 +1148,12 @@ Copia y pega elementos entre bocetos (Fusion: Copiar y Pegar en el boceto): copi
 
 ### `mirror_sketch`
 
-Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respecto de una línea del boceto, con restricciones de simetría (si la geometría original cambia, la copia la sigue). Lo que está sobre el eje se comparte. Los textos no se espejan (para eso: transform_sketch o edit_text).
+Simetría de boceto (Fusion: Simetría / Mirror): CREA la copia espejada de curvas y puntos respecto de una línea del boceto (recta, también de construcción; no vale un eje del origen) y la deja con restricciones de simetría: si la geometría original cambia, la copia la sigue. No es la restricción de simetría (add_constraint type=symmetry), que solo acomoda geometría que ya existe. Lo que está sobre el eje se comparte; lo que ya es su propio reflejo (una línea sobre el eje, un círculo centrado en él) no se copia, y el eje puede estar entre entities. Los textos no se espejan (para eso: transform_sketch o edit_text).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `entities` (lista de entero; obligatorio): ids de las curvas o puntos a reflejar (get_sketch).
-  - `axis` (entero; obligatorio): id de la línea de simetría (puede ser de construcción).
+  - `axis` (entero; obligatorio): id de la línea de simetría (recta, puede ser de construcción o una de entities).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call mirror_sketch --doc pieza.omnicad entities=… axis=…`
 

@@ -22,6 +22,7 @@ from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
 from .editor_boceto import HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia
 from .iconos import icono
+from .panel_simetria import PanelSimetria
 
 # acción → (texto del menú, herramienta, atajo, ícono). Atajos de Fusion: L, R, C, D, T, O, P, M, Mayús+V.
 ACCIONES_BOCETO = [
@@ -767,6 +768,7 @@ class ModoBoceto(QObject):
         self.lienzo = None
         self.paleta = None
         self.caracter = None
+        self.simetria = None
         self.datos = None
         self.plano = None
         self.boceto = None
@@ -869,7 +871,16 @@ class ModoBoceto(QObject):
         self.caracter.cambio.connect(self._ajuste)
         self.lienzo.texto_valores.connect(self.caracter.mostrar_valores)
         self.caracter.hide()
-        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter)
+        self.simetria = PanelSimetria(area)         # Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar
+        lz = self.lienzo
+        lz.simetria_estado.connect(self.simetria.mostrar)
+        self.simetria.campo.connect(lz.elegir_campo_simetria)
+        self.simetria.limpiar.connect(lz.limpiar_campo_simetria)
+        self.simetria.previa.connect(lz.set_previa_simetria)
+        self.simetria.aceptado.connect(lz.aceptar_simetria)
+        self.simetria.cancelado.connect(lz.cancelar_simetria)
+        self.simetria.hide()
+        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -952,10 +963,10 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
-        for w in (self.lienzo, self.paleta, self.caracter):
+        for w in (self.lienzo, self.paleta, self.caracter, self.simetria):
             w.hide()
             w.deleteLater()
-        self.lienzo = self.paleta = self.caracter = None
+        self.lienzo = self.paleta = self.caracter = self.simetria = None
         self.v.visor.set_capa("boceto3d", None)
         self.v.visor.set_capa("triada3d", None)
         self.interaccion3d = None
@@ -988,6 +999,8 @@ class ModoBoceto(QObject):
         if self.paleta is not None:
             self.paleta.set_herramienta(h, self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
             self._mostrar_caracter(h == "texto")
+            if self.simetria is not None:
+                self.simetria.setVisible(h == "simetria")
             self.v.area.reubicar()
 
     def _mostrar_caracter(self, visible):

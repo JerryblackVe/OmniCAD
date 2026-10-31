@@ -2263,14 +2263,17 @@ def _exigir_seleccion(b, entities):
 
 
 @herramienta("mirror_sketch", "boceto",
-             "Simetría de boceto (Fusion: Simetría): copia espejada de curvas y puntos respecto de una línea del "
-             "boceto, con restricciones de simetría (si la geometría original cambia, la copia la sigue). Lo que está "
-             "sobre el eje se comparte. Los textos no se espejan (para eso: transform_sketch o edit_text).",
+             "Simetría de boceto (Fusion: Simetría / Mirror): CREA la copia espejada de curvas y puntos respecto de una "
+             "línea del boceto (recta, también de construcción; no vale un eje del origen) y la deja con restricciones "
+             "de simetría: si la geometría original cambia, la copia la sigue. No es la restricción de simetría "
+             "(add_constraint type=symmetry), que solo acomoda geometría que ya existe. Lo que está sobre el eje se "
+             "comparte; lo que ya es su propio reflejo (una línea sobre el eje, un círculo centrado en él) no se copia, "
+             "y el eje puede estar entre entities. Los textos no se espejan (para eso: transform_sketch o edit_text).",
              modifica=True)
 def mirror_sketch(sesion, entities: list[int], axis: int, sketch: str | None = None):
     """
     entities: ids de las curvas o puntos a reflejar (get_sketch).
-    axis: id de la línea de simetría (puede ser de construcción).
+    axis: id de la línea de simetría (recta, puede ser de construcción o una de entities).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     textos = []

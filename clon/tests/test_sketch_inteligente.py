@@ -427,3 +427,15 @@ def test_boceto_grande_la_alineacion_se_encuentra_y_el_indice_es_estable():
     sel = inferir(b, (2500, 123.0), 0.5, indice=indice)
     assert sel.tipo == "alineado_h" and sel.xy == pytest.approx((2500, 123.0), abs=1e-9)
     assert sel == inferir(b, (2500, 123.0), 0.5)
+
+
+def test_al_elegir_geometria_no_hay_ayudas_de_dibujo(lienzo):
+    """Simetría, Empalme… piden qué tocar, no un punto: nada de guías ni etiquetas flotando sobre el panel."""
+    lz = lienzo
+    _lienzo_con_triangulo(lz)
+    lz.set_herramienta("simetria")
+    _mover(lz, 60.1, 75.2)
+    assert lz.inf_actual is None and lz.inf_lista == []
+    lz.set_herramienta("empalme")
+    _mover(lz, 60.1, 75.2)
+    assert lz.inf_actual is None

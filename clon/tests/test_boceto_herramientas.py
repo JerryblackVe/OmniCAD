@@ -180,6 +180,8 @@ def test_simetria_patrones_y_espiral(app_qt):
     lz.set_herramienta("simetria")
     assert lz.fase == "eje"
     lz.agregar_pick(eje, (0, 0))
+    assert lz._eje_simetria == eje and len(lz.b.curvas) == 2          # elegir el eje no crea nada: lo hace Aceptar
+    assert lz.aceptar_simetria() and lz.herramienta == "seleccionar"
     otra = max(k for k, c in lz.b.curvas.items() if c.tipo == "linea")
     assert sorted(lz.b._extremos_linea(otra)) == [pytest.approx((-8, 3)), pytest.approx((-2, 0))]
     assert lz.resultado.ok
