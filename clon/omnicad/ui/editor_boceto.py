@@ -42,8 +42,9 @@ from PySide6.QtGui import (QColor, QFontMetricsF, QKeySequence, QMouseEvent, QPa
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
                                QMessageBox, QToolButton, QToolTip, QWidget)
 
-from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
-from ..restricciones.solver import restricciones_en_conflicto
+from ..restricciones import (Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, grados_de_libertad,
+                             resolver)
+from ..restricciones.solver import restricciones_en_conflicto, restricciones_redundantes
 from ..restricciones.inferencia import Indice, Inferencia, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
@@ -145,13 +146,32 @@ NOMBRES_RESTRICCION = {"r_horizontal_vertical": "Horizontal/Vertical", "r_coinci
                        "r_tangente": "Tangente", "r_igual": "Igual", "r_paralela": "Paralelo",
                        "r_perpendicular": "Perpendicular", "r_fijo": "Fijar/anular fijación",
                        "r_punto_medio": "Punto medio", "r_concentrica": "Concéntrica", "r_colineal": "Colineal",
-                       "r_simetria": "Simetría", "r_curvatura": "Curvatura", "r_poligono": "Polígono"}
-ICONO_RESTRICCION = {"horizontal": "r_horizontal_vertical", "vertical": "r_horizontal_vertical",
+                       "r_simetria": "Simetría", "r_curvatura": "Curvatura", "r_poligono": "Polígono regular"}
+# Qué pedir en cada herramienta: sale en el cartel del botón y en el mensaje de la barra al activarla
+AYUDA_RESTRICCION = {
+    "r_horizontal_vertical": "elegí una o más líneas, o dos puntos: quedan horizontales o verticales, según lo que tengan más cerca.",
+    "r_coincidente": "elegí un punto y otro punto, o un punto y una curva: quedan unidos.",
+    "r_tangente": "elegí dos curvas (línea, círculo, arco, elipse, spline): se tocan en un solo punto sin cruzarse.",
+    "r_igual": "elegí dos líneas, dos círculos o arcos, o dos elipses: miden lo mismo.",
+    "r_paralela": "elegí dos líneas: quedan en la misma dirección.",
+    "r_perpendicular": "elegí dos líneas: forman 90°.",
+    "r_fijo": "elegí geometría para dejarla fija en su lugar; sobre algo ya fijo se anula la fijación.",
+    "r_punto_medio": "elegí un punto y una línea (o un arco): el punto queda justo en el medio.",
+    "r_concentrica": "elegí dos círculos, arcos o elipses: comparten el centro.",
+    "r_colineal": "elegí dos líneas: quedan sobre la misma recta.",
+    "r_simetria": "elegí dos puntos (o dos curvas del mismo tipo) y al final la línea de simetría.",
+    "r_curvatura": "elegí una spline y la curva que se une a ella por un extremo: la unión queda suave (G2).",
+    "r_poligono": "elegí un lado de una cadena cerrada de líneas: queda un polígono regular (lados y vértices iguales).",
+}
+ICONO_RESTRICCION = {"horizontal": "r_horizontal", "vertical": "r_vertical",
                      "coincidente": "r_coincidente", "paralela": "r_paralela", "perpendicular": "r_perpendicular",
                      "igual": "r_igual", "tangente": "r_tangente", "concentrica": "r_concentrica",
                      "punto_medio": "r_punto_medio", "fijo": "r_fijo", "colineal": "r_colineal",
                      "simetrica": "r_simetria", "curvatura": "r_curvatura", "poligono": "r_poligono",
                      "desfase": "desfase", "patron": "patron_rectangular"}
+LADO_SIMBOLO = 18      # px: el cuadrito de cada restricción. A 14 px el dibujo quedaba en 10 px y una de las dos rayas de «=» se veía a medio tono
+# Relaciones entre dos curvas: el símbolo aparece junto a cada una (Fusion), no solo junto a la primera
+RELACION_ENTRE_DOS = ("paralela", "perpendicular", "igual", "colineal", "tangente", "concentrica", "curvatura")
 NOMBRES_ENTIDAD = {"punto": "punto", "linea": "línea", "circulo": "círculo", "arco": "arco", "elipse": "elipse",
                    "arco_elipse": "arco de elipse", "spline": "spline", "conica": "cónica", "texto": "texto"}
 # Herramientas que piden curvas (clic sobre la geometría): cuántas y de qué tipos.
@@ -593,6 +613,7 @@ class Lienzo(QWidget):
         self._reenvio = None
         self._ultima_linea = None
         self._zonas_cotas, self._zonas_glifos, self._trazos_cotas = {}, {}, {}
+        self._zonas_glifos_extra = []     # [(id, caja)]: el símbolo de la 2.ª entidad de una relación (el 1.º va en _zonas_glifos)
         self._fondos_cotas = {}          # cota → caja del fondo de su texto (para las pruebas y el repintado)
         self._esperando_ubicacion = False
         self._pos_cursor = QPointF(0, 0)
@@ -856,10 +877,28 @@ class Lienzo(QWidget):
             texto = "Calculando qué choca…"
             self.mensaje.emit(texto)
             return texto
-        texto = self.texto_conflictos() or "No hay restricciones ni cotas en conflicto."
+        texto = self.texto_conflictos() or self.texto_redundantes() or "No hay restricciones ni cotas en conflicto."
         self.mensaje.emit(texto)
         self.update()
         return texto
+
+    def texto_redundantes(self):
+        """Boceto bien resuelto pero sobre-definido (no hay contradicción): cuáles restricciones y cotas no quitan ningún
+        grado de libertad. Las deja elegidas: Supr las borra. Vacío si no sobra ninguna. Se calcula al pedirlo (F5): son
+        varios cálculos de rango, demasiados para correrlos en cada cambio."""
+        if self.resultado is None or not self.resultado.ok:
+            return ""
+        sobran = restricciones_redundantes(self.b, self._valores_para_diagnostico())
+        if sobran is None:
+            return "El boceto tiene demasiadas restricciones y cotas para ver cuáles sobran."
+        if not sobran:
+            return ""
+        nombres = [f"cota {self.b.cotas[i].nombre or TIPOS_COTA[self.b.cotas[i].tipo].lower()}" if i in self.b.cotas
+                   else f"{TIPOS_RESTRICCION[self.b.restricciones[i].tipo].lower()} ({i})" for i in sobran]
+        self.seleccion = list(sobran)
+        self._notificar_seleccion()
+        return (f"Sobra (no quita ningún grado de libertad): {', '.join(nombres)}. Quedó elegida: Supr la borra, "
+                "y el boceto se mantiene igual.")
 
     def aplicar_cambio(self, funcion, operacion=False, anclar=True):
         """Aplica una modificación. Si deja en conflicto un boceto que estaba bien, se deshace sola.
@@ -1153,7 +1192,7 @@ class Lienzo(QWidget):
         self._reiniciar_vivo()
         nombre, ayuda = HERRAMIENTAS.get(h, (NOMBRES_RESTRICCION.get(h, h), ""))
         if h in RESTRICCIONES_HERRAMIENTA:
-            ayuda = f"{NOMBRES_RESTRICCION[h]}: hacé clic en la geometría a restringir."
+            ayuda = AYUDA_RESTRICCION[h]
             if self._restriccion_con_seleccion():
                 return
         if h in SELECCION:
@@ -3735,6 +3774,48 @@ class Lienzo(QWidget):
         m.addAction("Borrar", lambda: self.aplicar_cambio(lambda: self.b.eliminar(cid)))
         return m
 
+    def _menu_restriccion(self, rid):
+        """Clic derecho en el símbolo de una restricción (Fusion): elegir la geometría que restringe o borrarla."""
+        r = self.b.restricciones[rid]
+        m = QMenu(self)
+        m.addAction("Seleccionar la geometría restringida", lambda: self._elegir_entidades(r.entidades))
+        otros = self.b.tipos_compatibles(rid)
+        if otros:                     # una restricción no tiene valores que editar: se cambia por otra sobre lo mismo
+            sub = m.addMenu("Cambiar por")
+            for tipo in otros:
+                sub.addAction(TIPOS_RESTRICCION[tipo], lambda t=tipo: self.reemplazar_restriccion(rid, t))
+        m.addSeparator()
+        m.addAction(f"Borrar restricción {TIPOS_RESTRICCION[r.tipo].lower()}", lambda: self.borrar_restriccion(rid))
+        return m
+
+    def _elegir_entidades(self, ids):
+        self.seleccion = [i for i in ids if i in self.b.puntos or i in self.b.curvas]
+        self._notificar_seleccion()
+        self.update()
+
+    def reemplazar_restriccion(self, rid, tipo):
+        """Cambia una restricción por otra sobre las mismas entidades, en un solo paso; si choca con las demás, no cambia."""
+        r = self.b.restricciones.get(rid)
+        if r is None:
+            return False
+        antes = TIPOS_RESTRICCION[r.tipo].lower()
+        if not self.aplicar_cambio(lambda: self.b.reemplazar_restriccion(rid, tipo)):
+            return False
+        self.mensaje.emit(f"Restricción cambiada: {antes} → {TIPOS_RESTRICCION[tipo].lower()}.")
+        return True
+
+    def borrar_restriccion(self, rid):
+        """Quita una restricción sola: la geometría y las demás restricciones quedan como estaban."""
+        r = self.b.restricciones.get(rid)
+        if r is None:
+            return False
+        self.seleccion = [i for i in self.seleccion if i != rid]
+        if not self.aplicar_cambio(lambda: self.b.eliminar(rid)):
+            return False
+        self.mensaje.emit(f"Restricción borrada: {TIPOS_RESTRICCION[r.tipo].lower()}.")
+        self._notificar_seleccion()
+        return True
+
     def editar_cota(self, cid, pos):
         cota = self.b.cotas[cid]
         if cota.referencia:
@@ -3865,13 +3946,23 @@ class Lienzo(QWidget):
 
     def aplicar_restriccion(self, tipo, ents):
         """Aplica una restricción a las entidades (en el orden que pide el modelo). Devuelve True si quedó."""
+        grupos = None
         if tipo == "horizontal_vertical":
-            if self.b.tipo_de(ents[0]) == "linea":
-                (x1, y1), (x2, y2) = self.b._extremos_linea(ents[0])
-                ents = ents[:1]
+            lineas = [i for i in ents if self.b.tipo_de(i) == "linea"]
+            if lineas:                    # cada línea elegida queda horizontal o vertical, la que le queda más cerca
+                grupos = [[i] for i in lineas]
+            elif len(ents) == 2 and all(self.b.tipo_de(i) == "punto" for i in ents):
+                grupos = [list(ents)]
             else:
-                (x1, y1), (x2, y2) = self.b.coords(ents[0]), self.b.coords(ents[1])
-            tipo = "horizontal" if abs(x2 - x1) >= abs(y2 - y1) else "vertical"
+                self.mensaje.emit("Horizontal/Vertical: elegí una o más líneas, o dos puntos.")
+                return False
+            tipos = []
+            for g in grupos:
+                (x1, y1), (x2, y2) = (self.b._extremos_linea(g[0]) if len(g) == 1
+                                      else (self.b.coords(g[0]), self.b.coords(g[1])))
+                tipos.append("horizontal" if abs(x2 - x1) >= abs(y2 - y1) else "vertical")
+            tipo = tipos[0]
+            ents = grupos[0]
         elif tipo == "fijo":
             existente = [r.id for r in self.b.restricciones.values() if r.tipo == "fijo" and r.entidades == ents]
             if existente:
@@ -3887,7 +3978,21 @@ class Lienzo(QWidget):
             ents = self._ordenar(ents, "punto")
         elif tipo == "tangente":
             ents = self._ordenar(ents, "linea")
-        ok = self.aplicar_cambio(lambda: self.b.agregar_restriccion(tipo, ents))
+        pedidos = [(tipo, ents)] if grupos is None else list(zip(tipos, grupos, strict=True))
+        # los GDL de ANTES se cuentan ahora (no con `self.resultado`, que puede estar viejo si el boceto se tocó directo)
+        gdl = (grados_de_libertad(self.b, self._valores_para_diagnostico())
+               if self.resultado is not None and self.resultado.ok else None)
+
+        def agregar():
+            for t, e in pedidos:
+                self.b.agregar_restriccion(t, e)
+        ok = self.aplicar_cambio(agregar)
+        if ok and tipo != "fijo" and gdl is not None and self.resultado.gdl >= gdl:    # no quitó ningún GDL: sobra
+            self._restaurar(self.historial.pop())
+            self.resolver()
+            self.mensaje.emit(f"{TIPOS_RESTRICCION.get(tipo, tipo)} no se agregó: el boceto ya la cumple por otras "
+                              "restricciones o cotas (sobre-definiría).")
+            return False
         if ok:
             self.mensaje.emit(f"Restricción agregada: {TIPOS_RESTRICCION.get(tipo, tipo)}.")
         return ok
@@ -3895,7 +4000,8 @@ class Lienzo(QWidget):
     def _restriccion_con_seleccion(self):
         tipo, n = RESTRICCIONES_HERRAMIENTA[self.herramienta]
         ents = [i for i in self.seleccion if i in self.b.puntos or i in self.b.curvas]
-        listo = (len(ents) == n or (tipo == "horizontal_vertical" and len(ents) == 2)
+        listo = (len(ents) == n
+                 or (tipo == "horizontal_vertical" and (len(ents) == 2 or all(self.b.tipo_de(i) == "linea" for i in ents)))
                  or (tipo == "fijo" and len(ents) >= 1) or (tipo == "poligono" and len(ents) >= 3))
         if ents and listo:
             self.aplicar_restriccion(tipo, ents)
@@ -3976,6 +4082,9 @@ class Lienzo(QWidget):
             for ident, rect in tabla.items():
                 if rect.adjusted(-4, -4, 4, 4).contains(pos):
                     return ident
+        for ident, rect in self._zonas_glifos_extra:
+            if rect.adjusted(-4, -4, 4, 4).contains(pos):
+                return ident
         for cid, rayas in self._trazos_cotas.items():
             if any(_distancia_a_raya(pos, a, b) <= 5 for a, b in rayas) and self.entidad_en(pos) is None:
                 return cid
@@ -4031,6 +4140,9 @@ class Lienzo(QWidget):
         zona = self._zona_en(pos) if e.button() == Qt.RightButton and not self.clics else None
         if zona in self.b.cotas:
             self._menu_cota(zona, pos).exec(e.globalPosition().toPoint())
+            return
+        if zona in self.b.restricciones:
+            self._menu_restriccion(zona).exec(e.globalPosition().toPoint())
             return
         if e.button() == Qt.RightButton and (self.herramienta != "seleccionar" or self._hay_operacion()):
             # en una herramienta, el clic derecho rápido cancela o sale (al soltar); arrastrado, pasa al visor o al
@@ -4979,6 +5091,8 @@ class Lienzo(QWidget):
                 p.drawRect(QRectF(q.x() - 3, q.y() - 3, 6, 6))
             p.setBrush(Qt.NoBrush)
         self._zonas_glifos = self._dibujar_glifos(p) if self.mostrar["restricciones"] else {}
+        if not self.mostrar["restricciones"]:
+            self._zonas_glifos_extra = []
         if self.herramienta == "seleccionar":
             self._dibujar_casillas_patron(p)
         self._trazos_cotas, self._fondos_cotas = {}, {}   # con las cotas ocultas no se agarra nada
@@ -4986,10 +5100,11 @@ class Lienzo(QWidget):
         self._dibujar_previa_auto(p)
         self._dibujar_marco(p)
         if self._zona_sobre is not None:                # la cota ya se resalta al dibujarse; el glifo, acá
-            rect = self._zonas_glifos.get(self._zona_sobre)
-            if rect is not None:
-                p.setBrush(Qt.NoBrush)
-                p.setPen(QPen(QColor(255, 170, 40), 2))
+            cajas = [self._zonas_glifos[self._zona_sobre]] if self._zona_sobre in self._zonas_glifos else []
+            cajas += [c for i, c in self._zonas_glifos_extra if i == self._zona_sobre]
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(QColor(255, 170, 40), 2))
+            for rect in cajas:
                 p.drawRect(rect.adjusted(-3, -3, 3, 3))
         self._dibujar_previa(p)
         self._dibujar_campos_vivos(p)
@@ -5068,7 +5183,10 @@ class Lienzo(QWidget):
             self.mensaje.emit("Se borraron porque su copia ya no existe: " + ", ".join(perdidas))
 
     def _dibujar_glifos(self, p):
+        """Un símbolo por restricción junto a su geometría (Fusion: uno en cada curva de una relación entre dos).
+        Devuelve {id: caja} con el principal; los de la segunda curva quedan en `_zonas_glifos_extra`."""
         zonas, cuenta, grupos = {}, {}, set()
+        self._zonas_glifos_extra = extras = []
         en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         p.setPen(QPen(QColor(150, 150, 150), 1))
         for r in self.b.restricciones.values():
@@ -5086,29 +5204,34 @@ class Lienzo(QWidget):
                 ent = r.entidades[1]
             elif r.tipo == "patron":
                 ent = r.entidades[-1] if len(r.entidades) == 3 else r.entidades[1]
-            if ent not in self.b.puntos and ent not in self.b.curvas:
-                continue
-            k = cuenta.get(ent, 0)
-            cuenta[ent] = k + 1
-            oscuro = self._oscuro()
-            lado = 14 if oscuro else 16                # tema oscuro: glifos chicos y discretos, como Fusion
-            q = self._ancla(ent) + QPointF(8 + (lado + 2) * k, -18)
-            caja = QRectF(q.x() - lado / 2, q.y() - lado / 2, lado, lado)
-            seleccionada = r.id in self.seleccion
-            if oscuro:
-                p.setPen(QPen(QColor(110, 116, 128), 1))
-                p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(58, 63, 75, 210))
-            else:
-                p.setPen(QPen(QColor(150, 150, 150), 1))
-                p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(250, 250, 250, 230))
-            if r.id in en_conflicto:                    # BOC-7: el glifo que choca, con borde rojo
-                p.setPen(QPen(CONFLICTO, 2))
-            p.drawRoundedRect(caja, 2, 2)
-            pm = icono(ICONO_RESTRICCION.get(r.tipo, "")).pixmap(24, 24)
-            if oscuro and r.tipo not in ("fijo", "punto_medio"):
-                pm = _tenido(pm, QColor(225, 228, 235))     # sobre el fondo oscuro, glifo claro como Fusion
-            p.drawPixmap(caja.adjusted(2, 2, -2, -2), pm, QRectF(0, 0, 24, 24))
-            zonas[r.id] = caja
+            destinos = [ent] + ([r.entidades[1]] if r.tipo in RELACION_ENTRE_DOS else [])
+            for j, ent in enumerate(destinos):
+                if ent not in self.b.puntos and ent not in self.b.curvas:
+                    continue
+                k = cuenta.get(ent, 0)
+                cuenta[ent] = k + 1
+                oscuro = self._oscuro()
+                lado = LADO_SIMBOLO
+                q = self._ancla(ent) + QPointF(8 + (lado + 2) * k, -18)
+                caja = QRectF(round(q.x() - lado / 2), round(q.y() - lado / 2), lado, lado)    # en píxeles enteros: nítido
+                seleccionada = r.id in self.seleccion
+                if oscuro:
+                    p.setPen(QPen(QColor(110, 116, 128), 1))
+                    p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(58, 63, 75, 210))
+                else:
+                    p.setPen(QPen(QColor(150, 150, 150), 1))
+                    p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(250, 250, 250, 230))
+                if r.id in en_conflicto:                    # BOC-7: el glifo que choca, con borde rojo
+                    p.setPen(QPen(CONFLICTO, 2))
+                p.drawRoundedRect(caja, 2, 2)
+                pm = icono(ICONO_RESTRICCION.get(r.tipo, "")).pixmap(lado - 4, lado - 4)    # al tamaño justo, sin achicar
+                if oscuro and r.tipo not in ("fijo", "punto_medio"):
+                    pm = _tenido(pm, QColor(225, 228, 235))     # sobre el fondo oscuro, glifo claro como Fusion
+                p.drawPixmap(int(caja.x()) + 2, int(caja.y()) + 2, pm)
+                if j == 0:
+                    zonas[r.id] = caja
+                else:
+                    extras.append((r.id, caja))
         p.setBrush(Qt.NoBrush)
         return zonas
 
@@ -5116,7 +5239,7 @@ class Lienzo(QWidget):
         if not self.previa_auto:
             return
         cuenta = {}
-        lado = 14 if self._oscuro() else 16
+        lado = LADO_SIMBOLO
         p.save()
         p.setPen(QPen(VIOLETA, 2))
         p.setBrush(Qt.NoBrush)
@@ -5141,8 +5264,8 @@ class Lienzo(QWidget):
                 q += QPointF(8 + (lado + 2) * k, -18)
                 caja = QRectF(q.x() - lado / 2, q.y() - lado / 2, lado, lado)
                 p.drawRoundedRect(caja, 2, 2)
-                pm = _tenido(icono(ICONO_RESTRICCION.get(s.tipo, "")).pixmap(24, 24), VIOLETA)
-                p.drawPixmap(caja.adjusted(2, 2, -2, -2), pm, QRectF(0, 0, 24, 24))
+                pm = _tenido(icono(ICONO_RESTRICCION.get(s.tipo, "")).pixmap(lado - 4, lado - 4), VIOLETA)
+                p.drawPixmap(int(caja.x()) + 2, int(caja.y()) + 2, pm)
             elif s.clase == "cota":
                 prefijo = {"radio": "R", "diametro": "⌀"}.get(s.tipo, "")
                 unidad = "°" if s.tipo == "angulo" else ""
@@ -5183,7 +5306,7 @@ class Lienzo(QWidget):
         fondo claro), el valor SIN caja, al costado de la línea de cota, con un fondo redondeado del color
         del lienzo para que se lea sobre cualquier línea. La caja con borde aparece solo al editarla
         (doble clic). Los textos no se pisan (ni entre ellos ni con los íconos de restricción)."""
-        zonas, ocupadas = {}, list(self._zonas_glifos.values())
+        zonas, ocupadas = {}, list(self._zonas_glifos.values()) + [c for _i, c in self._zonas_glifos_extra]
         trazos = self._trazos_cotas = {}              # por cota, las rayas donde se puede agarrar (no el texto)
         fondos = self._fondos_cotas = {}              # por cota, la caja del fondo de su texto
         actual = []

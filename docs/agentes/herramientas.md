@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-356 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+358 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 47 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 6 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 62 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 64 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 75 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -697,8 +697,10 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`create_polygon`](#create_polygon) | sí | Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía de construcción, como la interfaz). |
 | [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). |
 | [`add_constraint`](#add_constraint) | sí | Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). |
+| [`replace_constraint`](#replace_constraint) | sí | Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la ventana: clic derecho en su símbolo › Cambiar por). |
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
 | [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. |
+| [`find_redundant_constraints`](#find_redundant_constraints) | no | Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún grado de libertad porque otras ya fijan lo mismo (el boceto está sobre-definido pero se puede cumplir; no es un conflicto, para eso mirá `conflicts` de get_sketch). |
 | [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Boceto 3D (como draw_*_3d, coordenadas [x, y, z]): line_3d{start,end}, spline_3d{points,closed?}, point_3d{at}, arc_3d{start,through,end}, circle_3d{center,radius,normal?}, ellipse_3d{center,major_end,minor_radius,normal?}, rectangle_3d{corner,opposite,plane?} (citas 'id.l1..l4'), conic_3d{start,shoulder,end,rho?}, text_3d{text,origin,height?,plane?,font?}; normal vacía = [0, 0, 1], plane = xy, yz o zx (por defecto xy). |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
@@ -903,6 +905,17 @@ Agrega una restricción geométrica entre entidades del boceto (ids de get_sketc
   - `entities` (lista de entero; obligatorio): ids de las entidades (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
 - CLI: `omnicad call add_constraint --doc pieza.omnicad sketch=… type=… entities=…`
 
+### `replace_constraint`
+
+Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la ventana: clic derecho en su símbolo › Cambiar por). Una restricción no tiene valores que editar: lo que se cambia es qué relación pide. Valen horizontal, vertical, coincident, parallel, perpendicular, equal, tangent, concentric, midpoint y collinear, siempre que la nueva aplique a esas entidades (horizontal ↔ vertical en una línea o dos puntos, parallel ↔ perpendicular ↔ equal ↔ collinear en dos líneas…). Si no aplica o choca con las demás, falla y queda la anterior. Para otras (fix, symmetry, curvature, polygon): delete_sketch_entities y add_constraint.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto.
+  - `constraint` (entero; obligatorio): id de la restricción a cambiar (constraints de get_sketch).
+  - `type` ("horizontal" | "vertical" | "coincident" | "parallel" | "perpendicular" | "equal" | "tangent" | "concentric" | "midpoint" | "collinear"; obligatorio): tipo nuevo.
+- CLI: `omnicad call replace_constraint --doc pieza.omnicad sketch=… constraint=… type=…`
+
 ### `add_dimension`
 
 Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; radius y diameter: un círculo o arco (diameter también acepta un punto o una línea con una línea central: mide el doble de la distancia al eje, como Fusion); angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la distancia a la curva). En una cota lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan dónde se dibuja: no cambian el valor ni la geometría; `position` [x, y] (mm) hace lo mismo que arrastrar la cota con el ratón y vale en todas: en las lineales fija offset y text_offset, en un ángulo el radio del arco, en un radio o diámetro hacia dónde sale la línea y en las demás dónde va el texto. Referencias fijas reservadas: origen 0, eje X -1 y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving redundante o en conflicto se crea como referencia con aviso y converted_to_reference=true. En angle, `near` [x, y] elige qué ángulo se mide, como el cursor en Fusion: el del cuadrante entre las dos rectas que contiene ese punto (45° o 135° en la misma figura); sin near mide entre las líneas tal como se dibujaron. El cuadrante (0..3) se guarda y get_sketch lo muestra como quadrant.
@@ -930,6 +943,15 @@ Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenad
 - Parámetros:
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call get_sketch --doc pieza.omnicad`
+
+### `find_redundant_constraints`
+
+Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún grado de libertad porque otras ya fijan lo mismo (el boceto está sobre-definido pero se puede cumplir; no es un conflicto, para eso mirá `conflicts` de get_sketch). Se suman de a una en orden de id y se marca la que no baja el rango: de tres paralelas que se implican entre sí sale solo la última. No cambia el boceto: para sacar una, delete_sketch_entities con su id. Con más de 150 restricciones y cotas no se calcula (checked=false).
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call find_redundant_constraints --doc pieza.omnicad`
 
 ### `sketch_from_spec`
 

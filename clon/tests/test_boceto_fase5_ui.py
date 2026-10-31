@@ -185,7 +185,7 @@ def test_boc9_guia_punteada_y_glifo_en_el_lienzo(lienzo, monkeypatch):
     monkeypatch.setattr(editor_boceto, "icono", registrar_icono)
     assert not lz.grab().isNull()
     assert [(10, 20), (40, 20)] in guias
-    assert "r_horizontal_vertical" in iconos
+    assert "r_horizontal" in iconos
     lz.cancelar()
     assert lz.inf_actual is None
 
