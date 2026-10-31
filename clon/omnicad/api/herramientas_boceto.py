@@ -29,12 +29,12 @@ from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, r
                              sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
-                                    _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
+                                    expresion_sin_signo, _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
                                     evaluar_primitiva, mas_cercano, peine_curvatura, validar_valor_cota)
 from ..restricciones.solver import restricciones_en_conflicto
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
-from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar, validar_nombre
+from ..timeline.parametros import ANGULO, LONGITUD, evaluar, validar_nombre
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .registro import Expr, herramienta
@@ -2073,9 +2073,10 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
              "Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de "
              "un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena "
              "cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la "
-             "izquierda de su recorrido; distance negativa va al otro lado, y side_x/side_y eligen el lado con un "
-             "punto. direction=two desfasa distance a un lado y distance2 al otro; direction=symmetric, distance a "
-             "los dos lados. match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase "
+             "izquierda de su recorrido; distance negativa va al lado contrario (la cota queda positiva) y side_x/side_y "
+             "eligen el lado con un punto (la positiva va hacia él). Si el desfase deja un radio o un segmento en cero "
+             "o al revés (p. ej. -30 en un círculo de radio 30), falla con INVALID_GEOMETRY y dice cuál. direction=two desfasa distance a un lado y "
+             "distance2 al otro; direction=symmetric, distance a los dos lados. match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase "
              "conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. Una "
              "spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para "
              "soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): "
@@ -2101,37 +2102,25 @@ def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | No
         raise error("INVALID_ARGUMENTS", "direction=two necesita distance2 (la separación del segundo lado).")
     lado = None if side_x is None else (float(side_x), float(side_y))
 
-    def par(d):
-        """(expresión positiva, valor positivo, ¿al lado contrario?) de una distancia con signo."""
+    def firmada(d):
+        """(texto sin signo para la cota, valor con signo) de una distancia."""
         expresion, valor = _valor_expr(sesion, d)
-        if valor < 0:
-            if not isinstance(d, str):
-                expresion = repr(abs(valor))
-            else:                   # «-4 mm» → «4 mm» si lo que sigue al menos vale lo mismo; si no, «-(…)»
-                resto = expresion.lstrip()[1:].strip() if expresion.lstrip().startswith("-") else None
-                try:
-                    simple = resto is not None and abs(_valor_expr(sesion, resto)[1] - abs(valor)) < 1e-9
-                except ErrorExpresion:
-                    simple = False
-                expresion = resto if simple else f"-({expresion})"
         _cota_valida("desfase", abs(valor), "distance")
-        return expresion, abs(valor), valor < 0
-    primero = par(distance)
-    segundo = None
-    if direction != "one":
-        e2, v2, inv2 = par(distance2 if direction == "two" else distance)
-        segundo = (e2, v2, (not primero[2]) != inv2 if direction == "two" else not primero[2])
+        if not isinstance(d, str):
+            expresion = repr(abs(valor))
+        else:
+            expresion = expresion_sin_signo(expresion, valor, lambda t: _valor_expr(sesion, t)[1])
+        return expresion, valor
+    expresion, valor = firmada(distance)
+    expresion2, valor2 = firmada(distance2) if direction == "two" else (None, None)
 
     def desfasar(b):
         _curva(b, entity, ("linea", "arco", "circulo", "elipse", "arco_elipse", "spline"))
-        for expresion, valor, invertir in filter(None, (primero, segundo)):
-            if match_topology:
-                tope = b.desfase_con_topologia(entity, valor, lado, invertir)
-                if tope < valor:
-                    sesion.avisar(f"Match Topology: la distancia se limitó a {tope:.4g} mm (con {valor:g} mm "
-                                  "desaparecía un segmento de la curva).")
-                    expresion, valor = repr(round(tope, 6)), round(tope, 6)
-            b.desfase(entity, valor, lado, expresion, invertir=invertir)
+        _nuevos, avisos = b.desfasar(entity, valor, lado, expresion, "dos" if direction == "two" else
+                                     "simetrico" if direction == "symmetric" else "un", valor2, expresion2,
+                                     topologia=match_topology)
+        for aviso in avisos:
+            sesion.avisar(aviso)
     return _dibujar(sesion, sketch, desfasar, desde_solver=True)
 
 

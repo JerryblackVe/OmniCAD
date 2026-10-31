@@ -182,12 +182,39 @@ def validar_valor_cota(tipo, valor):
     if tipo not in COTAS_POSITIVAS:
         return
     nombre = TIPOS_COTA[tipo].lower()
+    if tipo == "desfase" and valor < 0:                 # el signo lo elige el comando Desfase, no la cota
+        raise ErrorBoceto(f"La cota de desfase es una distancia sin signo (vale {valor:g}): para pasar al otro lado, "
+                          "volvé a usar Desfase con la distancia en negativo o con «Invertir».")
     if not valor > 0:                                   # también NaN
         raise ErrorBoceto(f"La cota de {nombre} tiene que ser mayor que cero (vale {valor:g}).")
     if not valor <= MEDIDA_MAXIMA:                      # también infinito
         miles = f"{MEDIDA_MAXIMA:,.0f}".replace(",", ".")
         raise ErrorBoceto(f"La cota de {nombre} no puede pasar de {miles} mm (1 km; vale {valor:g} mm): más grande, "
                           "el núcleo geométrico ya no calcula bien.")
+
+
+def _exigir_radio_positivo(radio, achica, que):
+    """Desfase hacia adentro: `achica` mm sobre `que` (de `radio` mm); si deja el radio en cero o negativo, dice cuál."""
+    if achica < radio - MEDIDA_MINIMA:
+        return
+    if achica <= radio + MEDIDA_MINIMA:
+        raise ErrorBoceto(f"El desfase de {achica:g} mm hacia adentro deja el radio {que} en cero ({radio:g} mm de "
+                          f"radio): usá una distancia menor que {radio:g} mm.")
+    raise ErrorBoceto(f"El desfase de {achica:g} mm hacia adentro deja el radio {que} negativo ({radio:g} mm de "
+                      f"radio): hacia adentro el máximo es menos de {radio:g} mm.")
+
+
+def expresion_sin_signo(expresion, valor, evaluar):
+    """Texto de una distancia con signo sin el signo, para la cota: «-4 mm» → «4 mm» si lo que sigue vale lo mismo
+    en positivo; si no (p. ej. «-a+b»), «-(…)». `evaluar` pasa un texto a número."""
+    if valor >= 0:
+        return expresion
+    resto = expresion.lstrip()[1:].strip() if expresion.lstrip().startswith("-") else None
+    try:
+        simple = resto is not None and abs(evaluar(resto) - abs(valor)) < 1e-9
+    except (ValueError, ZeroDivisionError):     # lo que sigue al «-» no se evalúa solo: se deja entre paréntesis
+        simple = False
+    return resto if simple else f"-({expresion})"
 
 
 def validar_texto_boceto(texto=None, altura=None):
@@ -2818,13 +2845,48 @@ class Boceto:
         return ln
 
     # ------------------------------------------------------------ MODIFICAR: desfase
+    def desfasar(self, cid, distancia, punto_lado=None, expresion=None, direccion="un", distancia2=None,
+                 expresion2=None, invertir=False, topologia=False):
+        """Comando Desfase de Fusion entero (Direction + Match Topology): lo llaman igual la ventana (y su vista
+        previa) y la API, así lo que se ve es lo que se crea. `distancia` lleva signo: negativa = al lado contrario
+        del que da la positiva (el del cursor o `punto_lado`; sin ellos, afuera en una cadena cerrada). `invertir`
+        da vuelta todo. `direccion`: "un" lado, "dos" lados (`distancia2`, positiva = al contrario del primero) o
+        "simetrico" (`distancia` a los dos lados). `expresion`/`expresion2`: texto de cada distancia SIN signo, para
+        la cota. `topologia` limita la distancia a la mayor que conserva la curva madre. Devuelve (ids nuevos, avisos)."""
+        if direccion == "dos" and distancia2 is None:
+            raise ErrorBoceto("Falta la segunda distancia del desfase.")
+        contrario = (distancia < 0) != bool(invertir)
+        pasos = [(abs(distancia), contrario, expresion)]
+        if direccion == "dos":
+            pasos.append((abs(distancia2), (not contrario) != (distancia2 < 0), expresion2))
+        elif direccion == "simetrico":
+            pasos.append((abs(distancia), not contrario, expresion))
+        nuevos, avisos = [], []
+        for valor, inv, texto in pasos:
+            if not math.isfinite(valor):
+                raise ErrorBoceto("La distancia de desfase no es un número válido.")
+            if topologia:
+                tope = self.desfase_con_topologia(cid, valor, punto_lado, inv)
+                if tope < valor:
+                    avisos.append(f"Match Topology: la distancia se limitó de {valor:g} a {tope:.4g} mm para "
+                                  "conservar todos los segmentos.")
+                    valor, texto = round(tope, 6), None
+            nuevos += self.desfase(cid, valor, punto_lado, texto, invertir=inv)
+        return nuevos, avisos
+
     def desfase(self, cid, distancia, punto_lado=None, expresion=None, invertir=False):
         """Desfase (SKT-OFFSET) de la cadena conectada a `cid`: curvas paralelas a `distancia`, con las
         esquinas resueltas por intersección, la restricción de desfase y su cota. Por defecto, una cadena
         cerrada se desfasa hacia afuera (y una abierta, a la izquierda de su recorrido); `punto_lado` elige el
-        lado e `invertir` pasa al lado contrario del que tocaba. Devuelve los ids nuevos."""
-        if distancia <= 0:
-            raise ErrorBoceto("La distancia de desfase debe ser positiva.")
+        lado e `invertir` pasa al lado contrario del que tocaba, igual que una `distancia` negativa. Rechaza,
+        diciendo por qué, lo que deja un radio o un segmento en cero o al revés. Devuelve los ids nuevos."""
+        if not math.isfinite(distancia):
+            raise ErrorBoceto("La distancia de desfase no es un número válido.")
+        if distancia == 0:
+            raise ErrorBoceto("La distancia de desfase es cero: no hay nada que desfasar.")
+        validar_valor_cota("desfase", abs(distancia))
+        if distancia < 0:
+            distancia, invertir = -distancia, not invertir
         c0 = self.curvas[cid]
         if isinstance(c0, (Spline, Elipse, ArcoElipse)):
             return [self._desfase_libre(cid, distancia, punto_lado, invertir, expresion=expresion)]
@@ -2832,8 +2894,8 @@ class Boceto:
         if len(cadena) == 1 and isinstance(c0, Circulo):
             r = c0.radio
             fuera = (punto_lado is None or math.dist(punto_lado, self.coords(c0.centro)) > r) != bool(invertir)
-            if not fuera and distancia >= r:
-                raise ErrorBoceto("El desfase es mayor que el radio.")
+            if not fuera:
+                _exigir_radio_positivo(r, distancia, "del círculo")
             nuevo = self.agregar_circulo(c0.centro, r + distancia if fuera else r - distancia, c0.construccion)
             self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(distancia))
             return [nuevo]
@@ -2879,8 +2941,8 @@ class Boceto:
             else:
                 C, R = self.coords(c.centro), self.radio(k)
                 r2 = R + dd if inv else R - dd
-                if r2 <= 1e-9:
-                    raise ErrorBoceto("El desfase es mayor que el radio de un arco de la cadena.")
+                if r2 <= MEDIDA_MINIMA:
+                    _exigir_radio_positivo(R, R - r2, "de un arco de la cadena")
                 rad = lambda q, C=C, R=R, r2=r2: (C[0] + (q[0] - C[0]) * r2 / R, C[1] + (q[1] - C[1]) * r2 / R)  # noqa: E731
                 portadoras.append((("circ", C, r2), rad(a), rad(b)))
         m = len(elems)
@@ -2910,7 +2972,8 @@ class Boceto:
                 direccion = portadoras[i][0][2]  # unitaria, en el sentido de recorrido original
                 largo = (b2[0] - a2[0]) * direccion[0] + (b2[1] - a2[1]) * direccion[1]
                 if largo <= 1e-9:
-                    raise ErrorBoceto("El desfase deja un segmento de largo cero o invierte su dirección.")
+                    raise ErrorBoceto(f"Con {distancia:g} mm hacia ese lado, un segmento de la cadena queda con largo "
+                                      "cero o al revés: usá una distancia menor.")
         pids = [self.agregar_punto(*q) for q in esquinas]
         if cerrada:
             extremos = [(pids[i - 1], pids[i]) for i in range(m)]

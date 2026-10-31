@@ -40,7 +40,7 @@ import numpy as np
 from PySide6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFontMetricsF, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap, QPolygonF)
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
-                               QMessageBox, QToolTip, QWidget)
+                               QMessageBox, QToolButton, QToolTip, QWidget)
 
 from ..restricciones import Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, resolver
 from ..restricciones.solver import restricciones_en_conflicto
@@ -48,7 +48,7 @@ from ..restricciones.inferencia import Indice, Inferencia, TIPOS_INFERENCIA, inf
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
-                                    evaluar_primitiva, fraccion_en_camino, mas_cercano, paradas_cursor,
+                                    evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, mas_cercano, paradas_cursor,
                                     primitivas_entidad, puntos_espiral, puntos_primitiva, validar_valor_cota,
                                     _validar_opciones_texto)
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados, separar_nombre,
@@ -371,6 +371,9 @@ def _palabra_en(texto, i):
     return a, b
 
 
+PEDIR_DISTANCIA = "Escribí la distancia: positiva (hacia el cursor) o negativa (al otro lado)."
+
+
 class EntradaValor(QFrame):
     """Entrada en pantalla (1 o más campos) para cotas y valores dinámicos; Tab cambia de campo."""
     aceptado = Signal(list)
@@ -468,8 +471,8 @@ class EntradaValor(QFrame):
                 return True
         return super().eventFilter(obj, e)
 
-    def marcar_error(self, i=0):
-        self.campos[i].setStyleSheet(f"background: {temas.color('campo_error')};")
+    def marcar_error(self, i=0, malo=True):
+        self.campos[i].setStyleSheet(f"background: {temas.color('campo_error')};" if malo else "")
 
 
 class Lienzo(QWidget):
@@ -575,6 +578,8 @@ class Lienzo(QWidget):
         self.previa_auto = []
         self.entrada = None
         self._asas = None                          # asas de arrastre de la herramienta (ui/asas_boceto.py)
+        self._desfase_invertido = False            # botón «Invertir» de la barra del Desfase
+        self._desfase_modo = "un"                   # dirección con la que se abrió esa barra
         self._mvp = None
         self._sobre = None               # entidad bajo el ratón en Seleccionar (se resalta y cambia el cursor)
         self._manija_sobre = None        # manija del marco bajo el ratón
@@ -1919,32 +1924,14 @@ class Lienzo(QWidget):
             listo = False
             cadena, _ = self.b.cadena(cid)
             self.seleccion = [k for k, _ in cadena]
-
-            modo = self.opciones["direccion_desfase"]          # un lado, dos lados o simétrico (SKT-OFFSET)
+            self._desfase_invertido = False
+            self._desfase_modo = modo = self.opciones["direccion_desfase"]     # un lado, dos lados o simétrico (SKT-OFFSET)
 
             def aceptar(v):
-                d = self.evaluar(v[0])
-                lado = self.cursor if self.cursor is not None else xy
-                lado = lado if d >= 0 else self._lado_opuesto(cid, lado)
-                pasos = [(abs(d), v[0].lstrip("-"), False)]
-                if modo != "un":                               # el 2.º lado: positivo = al contrario del primero
-                    texto = v[1] if modo == "dos" else v[0]
-                    d2 = self.evaluar(texto)
-                    pasos.append((abs(d2), texto.lstrip("-"), modo == "simetrico" or d2 >= 0))
-
+                if not all(v):
+                    raise ErrorBoceto(PEDIR_DISTANCIA)
                 avisos = []
-
-                def desfasar():
-                    for dist, expresion, invertir in pasos:
-                        if self.opciones["match_topology"]:
-                            tope = self.b.desfase_con_topologia(cid, dist, lado, invertir)
-                            if tope < dist:
-                                avisos.append(f"Match Topology: la distancia se limitó de {dist:g} a {tope:.4g} mm "
-                                               "para conservar todos los segmentos.")
-                                dist = round(tope, 6)
-                                expresion = repr(dist)
-                        self.b.desfase(cid, dist, lado, expresion, invertir=invertir)
-                ok = self._aplicar_y_limpiar(desfasar)
+                ok = self._aplicar_y_limpiar(lambda: avisos.extend(self.b.desfasar(cid, **self._args_desfase(v))[1]))
                 if ok:
                     self.seleccion = []
                     if avisos:
@@ -1953,9 +1940,25 @@ class Lienzo(QWidget):
             sugerido = formato.numero(self._radio_sugerido(picks))
             self._abrir_entrada(["Desfase", "Desfase 2"] if modo == "dos" else ["Desfase"],
                                 [sugerido] * (2 if modo == "dos" else 1), pos, aceptar)
+            self._armar_barra_desfase()
         if listo:
             self.picks, self.picks_xy = [], []
         self.update()
+
+    def _dibujar_nota_desfase(self, p, nota, error):
+        """La nota del Desfase (qué lado y, si no se puede, por qué) bajo la barra de la distancia."""
+        caja = self.entrada.geometry()
+        letra = p.font()
+        letra.setPointSizeF(max(letra.pointSizeF() - 1, 7.0))
+        p.setFont(letra)
+        ancho = QFontMetricsF(letra).horizontalAdvance(nota) + 12
+        marco = QRectF(caja.left(), caja.bottom() + 4, ancho, 20)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(92, 42, 45, 235) if error else QColor(20, 30, 45, 220))
+        p.drawRoundedRect(marco, 4, 4)
+        p.setPen(QColor(255, 190, 190) if error else QColor(200, 225, 255))
+        p.drawText(marco.adjusted(6, 0, -6, 0), Qt.AlignVCenter | Qt.AlignLeft, nota)
+        p.setBrush(Qt.NoBrush)
 
     def _aplicar_y_limpiar(self, funcion):
         ok = self.aplicar_cambio(funcion, operacion=True)
@@ -1963,10 +1966,74 @@ class Lienzo(QWidget):
             self.picks, self.picks_xy = [], []
         return ok
 
-    def _lado_opuesto(self, cid, q):
-        prim = self.b.primitivas(cid)[0]
-        _t, _d, p = mas_cercano(prim, q)
-        return (2 * p[0] - q[0], 2 * p[1] - q[1])
+    def _args_desfase(self, textos):
+        """Argumentos de `Boceto.desfasar` para lo escrito en la barra: los mismos en la vista previa y en Aceptar.
+        Una distancia negativa (o «Invertir») pasa al lado contrario del que marca el cursor."""
+        dos = self._desfase_modo == "dos"
+        d = [self.evaluar(t) for t in textos[:2 if dos else 1]]
+        lado = self.cursor if self.cursor is not None else self.picks_xy[0]
+        return {"distancia": d[0], "punto_lado": lado, "expresion": expresion_sin_signo(textos[0], d[0], self.evaluar),
+                "direccion": self._desfase_modo, "distancia2": d[1] if dos else None,
+                "expresion2": expresion_sin_signo(textos[1], d[1], self.evaluar) if dos else None,
+                "invertir": self._desfase_invertido, "topologia": self.opciones["match_topology"]}
+
+    def _previa_desfase(self):
+        """(curvas de la vista previa, nota, ¿es error?) de lo escrito ahora en la barra del Desfase. Arma el desfase
+        sobre una copia con el mismo `desfasar` de Aceptar; si no se puede, no devuelve curvas (nunca queda una
+        vista previa vieja) y la nota dice por qué."""
+        textos = [c.text().strip() for c in self.entrada.campos]
+        if not all(textos):
+            return [], PEDIR_DISTANCIA, True
+        try:
+            copia = self.b.copia()
+            nuevos, avisos = copia.desfasar(self.picks[0], **self._args_desfase(textos))
+        except (ErrorBoceto, ErrorExpresion, ValueError, ZeroDivisionError) as e:
+            return [], str(e), True
+        polis = [puntos_primitiva(prim) for k in nuevos for prim in copia.primitivas(k)]
+        nota = {"dos": "Dos lados", "simetrico": "Simétrico"}.get(self._desfase_modo) or self._lado_desfase(polis)
+        return polis, " · ".join([nota, *avisos]), False
+
+    def _lado_desfase(self, polis):
+        """«Hacia afuera» o «Hacia adentro» si la cadena es cerrada (el resultado crece o se achica); si no, el cursor."""
+        cadena, cerrada = self.b.cadena(self.picks[0])
+        if not cerrada:
+            return "Hacia el lado del cursor"
+
+        def caja(lista):
+            xs, ys = [q[0] for poli in lista for q in poli], [q[1] for poli in lista for q in poli]
+            return (max(xs) - min(xs)) * (max(ys) - min(ys))
+        antes = caja([puntos_primitiva(prim) for k, _ in cadena for prim in self.b.primitivas(k)])
+        despues = caja(polis)
+        return "Hacia afuera" if despues > antes else "Hacia adentro" if despues < antes else "Hacia el lado del cursor"
+
+    def _armar_barra_desfase(self):
+        """«Invertir» junto al campo y la vista previa viva: cada tecla repinta y marca en rojo lo que no se puede."""
+        barra = self.entrada
+        boton = QToolButton(barra)
+        boton.setText("⇄")
+        boton.setCheckable(True)
+        boton.setFocusPolicy(Qt.NoFocus)
+        boton.setToolTip("Invertir dirección: pasa el desfase al otro lado, sin cambiar la distancia")
+        boton.toggled.connect(self._invertir_desfase)
+        barra.layout().addWidget(boton)
+        barra.adjustSize()
+        for campo in barra.campos:
+            campo.textChanged.connect(self._al_cambiar_desfase)
+        self._al_cambiar_desfase()
+
+    def _invertir_desfase(self, marcado):
+        self._desfase_invertido = marcado
+        self._al_cambiar_desfase()
+        self.entrada.campos[0].setFocus()
+
+    def _al_cambiar_desfase(self, *_):
+        if self.entrada is None or not self.picks:
+            return
+        _polis, nota, error = self._previa_desfase()
+        for i in range(len(self.entrada.campos)):
+            self.entrada.marcar_error(i, error)
+        self.mensaje.emit(nota)
+        self.update()
 
     def _radio_sugerido(self, ids):
         """Valor inicial (como Fusion: proporcional a la más chica de las curvas elegidas)."""
@@ -5346,17 +5413,12 @@ class Lienzo(QWidget):
             self._dibujar_polilinea(p, self._previa_recorte)
         if self._asas is not None:
             self._asas.dibujar(p)
-        if h == "desfase" and self.picks and self.entrada is not None and cur is not None:
-            try:                       # el desfase sigue al ratón: el lado es donde está el cursor
-                d = self.evaluar(self.entrada.campos[0].text())
-                copia = self.b.copia()
-                nuevos = copia.desfase(self.picks[0], abs(d), cur if d >= 0 else self._lado_opuesto(self.picks[0], cur))
-                p.setPen(QPen(acento, 2.0))
-                for k in nuevos:
-                    for prim in copia.primitivas(k):
-                        self._dibujar_polilinea(p, puntos_primitiva(prim))
-            except (ErrorBoceto, ErrorExpresion, ValueError, ZeroDivisionError):
-                pass
+        if h == "desfase" and self.picks and self.entrada is not None:
+            polis, nota, error = self._previa_desfase()
+            p.setPen(QPen(acento, 2.0))
+            for poli in polis:
+                self._dibujar_polilinea(p, poli)
+            self._dibujar_nota_desfase(p, nota, error)
         if cur is not None and self._tangente is not None:
             inicio, linea = self._tangente
             p.setPen(QPen(acento, 2.0))
