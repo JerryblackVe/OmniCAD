@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 196: Abierto 139 · Parcial 37 · Bloqueado 17 · Sin verificar 3.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 199: Abierto 141 · Parcial 37 · Bloqueado 17 · Sin verificar 4.
 
 ## Pendientes generales
 
@@ -82,12 +82,15 @@ Abierto 1 · Parcial 2.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 2. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
+Abierto 4 · Sin verificar 1. Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada. Páginas de Fusion: `analisis/fusion_doc/paginas/SKT-*`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | BOC-36 | Curva isoparamétrica (Project/Include › Isoparametric Curve): curvas U/V de una cara como geometría de boceto | Abierto | Media | Fusion extrae curvas U, V o ambas de una cara, en un punto elegido; tipo Single o Distributed (distancia o cantidad); con «Projection Link» opcional que avisa si la superficie cambia. OmniCAD no tiene nada (grep `isopar` en omnicad/ sin resultados). Ayuda: Isoparametric curve; reutilizar `project_to_surface` y el vínculo de proyección (`manage_lost_projections`, `break_projection_link`). Lleva herramienta en api/ (receta C). | omnicad/api/herramientas_boceto*.py (no existe `isoparametric_curve`); docs/fusion_docs/contenido/fusion-sketch/isoparametric-curve-4089a59d7f6.md | 2026-10-25 |
 | BOC-37 | Dibujar la línea de cota de las cotas que hoy solo muestran el texto | Abierto | Media | Fusion dibuja líneas y flechas en toda cota (ver «Dimension sketch geometry» y el video de cotas). En OmniCAD tienen línea las lineales de una línea o de dos puntos, el radio, el diámetro y (desde el arrastre de cotas) el arco del ángulo; siguen sin línea la distancia entre líneas paralelas, punto–línea, con círculo o arco, punto–spline y el desfase: solo texto, que se arrastra con una guía fina. El texto del ángulo tampoco se desliza a lo largo del arco. | omnicad/ui/editor_boceto.py `_dibujar_cotas` (rama final) | 2026-10-25 |
+| BOC-40 | Inferencia «Igual»: al dibujar una línea o un círculo con la misma longitud o radio que otro cercano, proponerlo y dejar la restricción igual | Abierto | Media | Las ayudas de dibujo (`restricciones/inferencia.py`) cubren punto medio, intersección, tangente, perpendicular (pie y dirección), sobre la curva, alineación con puntos, horizontal/vertical, paralela y colineal; no proponen «igual». Comparar el largo del segmento en curso con las líneas cercanas (misma tolerancia en píxeles), enganchar y agregar `igual`; en la API, un tipo `equal` en `infer_sketch_snap` y la preferencia `boceto/inf_igual`. | `clon/omnicad/restricciones/inferencia.py` (`TIPOS_INFERENCIA` no lo tiene) | 2026-10-30 |
+| BOC-41 | Intersección aparente: capturar el cruce de las prolongaciones de dos líneas que no se tocan | Abierto | Media | `inferencias()` solo cruza los tramos reales (`boceto.intersecciones`). Falta el cruce de las rectas prolongadas, con una guía punteada hacia cada tramo y sin restricción (un punto no puede quedar «sobre» una prolongación). Hasta entonces se llega a ese punto con dos alineaciones o con una construcción. | `clon/omnicad/restricciones/inferencia.py` (`_objetos`, bloque «interseccion») | 2026-10-30 |
+| BOC-42 | Ayudas de dibujo en el boceto 3D (`boceto3d`) | Sin verificar | Media | Las alineaciones, intersecciones y etiquetas se hicieron para el editor 2D (`Lienzo`); no se comprobó qué capturas tiene el editor del boceto 3D ni si puede reutilizar `Indice` y `inferencias`. | `clon/omnicad/restricciones/boceto3d.py` | 2026-10-30 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 

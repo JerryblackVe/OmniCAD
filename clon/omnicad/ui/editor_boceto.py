@@ -543,6 +543,8 @@ class Lienzo(QWidget):
         self.inf_lista = []              # todas las ayudas bajo el cursor, la activa primero (Espacio alterna)
         self.ajustes_inf = dict(AJUSTES_INFERENCIA)
         self._indice_inf = None          # geometría derivada para consultar rápido; se descarta al cambiar el boceto
+        self._indice_clave = None
+        self._puntos_np = None           # (clave, ids, coordenadas) de todos los puntos, para capturarlos en bloque
         self._inf_alt = 0
         self._inf_claves = []            # qué ayudas había en el movimiento anterior: si cambian, Espacio vuelve a la primera
         self._inf_bloqueo = None         # ayuda bloqueada con Flecha arriba: el cursor sigue su guía
@@ -951,17 +953,43 @@ class Lienzo(QWidget):
         ocultos |= {p.id for p in self.b.puntos.values() if p.proyectado and not self.mostrar["proyectadas"]}
         return frozenset(curvas), frozenset(ocultos - vistos)
 
+    def _clave_geometria(self):
+        """Cambia cada vez que se resuelve el boceto o crece: las cachés de ayudas de dibujo se rearman solas."""
+        return id(self.resultado), len(self.b.puntos), len(self.b.curvas)
+
+    def _puntos_en_px(self):
+        """(ids, x, y): todos los puntos del boceto en píxeles con un solo producto de matrices (un `a_px` por punto
+        costaba 20 ms por movimiento del ratón con 3000 líneas)."""
+        clave = self._clave_geometria()
+        if self._puntos_np is None or self._puntos_np[0] != clave:
+            xy = np.array([(p.x, p.y) for p in self.b.puntos.values()], dtype=float).reshape(-1, 2)
+            self._puntos_np = (clave, np.array(list(self.b.puntos), dtype=int), xy)
+        _, ids, uv = self._puntos_np
+        if self.visor is None:
+            return (ids, (uv[:, 0] - self.centro[0]) * self.escala + self.width() / 2,
+                    self.height() / 2 - (uv[:, 1] - self.centro[1]) * self.escala)
+        if self._mvp is None:
+            self._camara()
+        pl = self.plano
+        c = np.hstack([pl.origen + uv[:, :1] * pl.u + uv[:, 1:] * pl.v, np.ones((len(uv), 1))]) @ self._mvp.T
+        w = c[:, 3]
+        delante = w > 1e-9
+        w = np.where(delante, w, 1.0)
+        return (ids, np.where(delante, (c[:, 0] / w + 1) / 2 * self.visor.width(), -1e5),
+                np.where(delante, (1 - c[:, 1] / w) / 2 * self.visor.height(), -1e5))
+
     def _punto_cercano(self, pos, excluir=None, radio_px=TOL_PUNTO):
-        mejor, dmin = None, radio_px
+        ids, x, y = self._puntos_en_px()
+        if not len(ids):
+            return None
+        d = np.hypot(x - pos.x(), y - pos.y())
+        if excluir is not None:
+            d[ids == excluir] = np.inf
         ocultos = self._ocultos()[1]
-        for p in self.b.puntos.values():
-            if p.id == excluir or p.id in ocultos:
-                continue
-            q = self.a_px(p.x, p.y)
-            d = math.hypot(q.x() - pos.x(), q.y() - pos.y())
-            if d < dmin:
-                mejor, dmin = p.id, d
-        return mejor
+        if ocultos:
+            d[np.isin(ids, list(ocultos))] = np.inf
+        i = int(np.argmin(d))
+        return int(ids[i]) if d[i] < radio_px else None
 
     def _curva_cercana(self, pos, radio_px=6.0, tipos=None, interior=False):
         mejor, dmin = None, radio_px
@@ -1043,8 +1071,8 @@ class Lienzo(QWidget):
         if self._inf_bloqueo is not None:
             self.inf_lista = [proyectar_bloqueo(self._inf_bloqueo, xy)]
             return self.inf_lista[0]
-        if self._indice_inf is None or self._indice_inf.b is not self.b:
-            self._indice_inf = Indice(self.b)
+        if self._indice_inf is None or self._indice_inf.b is not self.b or self._indice_clave != self._clave_geometria():
+            self._indice_inf, self._indice_clave = Indice(self.b), self._clave_geometria()
         # Paralela/perpendicular/colineal mueven el punto sobre un rayo: solo tienen sentido para el segmento de una Línea.
         tipos = a["tipos"] if self.herramienta == "linea" else tuple(t for t in a["tipos"] if t != "paralela")
         # Alternar con Espacio elige una de las ambiguas: sin histéresis, o la activa volvería siempre al primer lugar.
@@ -4575,7 +4603,8 @@ class Lienzo(QWidget):
     def _refrescar_cursor(self):
         """Recalcula el ajuste del cursor sin que se mueva el ratón (alternar, bloquear, Ctrl)."""
         if self.cursor is not None:
-            self.cursor = self._ajustar(self._pos_cursor, base=self._base_inferencia())[1]
+            excluir = self._arrastre if isinstance(self._arrastre, int) else None
+            self.cursor = self._ajustar(self._pos_cursor, excluir=excluir, base=self._base_inferencia())[1]
             self.update()
 
     # ------------------------------------------------------------ colores (como Fusion)
@@ -5315,6 +5344,7 @@ class Lienzo(QWidget):
                     p.drawEllipse(self.a_px(*tramo[0]), 3.5, 3.5)
         if a["indicadores"]:
             p.setPen(QPen(guia, 1.8))
+            p.setBrush(Qt.NoBrush)                       # solo contorno, sea cual sea el pincel que quedó puesto
             x, y = q.x(), q.y()
             if inf.tipo == "punto_medio":
                 p.drawPolygon(QPolygonF([QPointF(x, y - 6), QPointF(x - 6, y + 5), QPointF(x + 6, y + 5)]))

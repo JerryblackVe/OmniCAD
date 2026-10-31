@@ -394,3 +394,36 @@ def test_espacio_y_flecha_arriba_son_del_boceto_cuando_hay_una_ayuda(lienzo):
     assert lz.inf_lista == [] and not reclama(Qt.Key_Space)
     _mover(lz, 60.1, 75.2)
     assert lz.inf_lista and reclama(Qt.Key_Space) and reclama(Qt.Key_Up)
+
+
+# ---------------------------------------------------------------- conflictos y bocetos grandes
+def test_una_restriccion_inferida_que_choca_se_descarta_sin_danar_el_boceto(lienzo):
+    """Prueba 11: dos puntos fijos no pueden quedar horizontales si no lo son; la inferencia se rechaza sola."""
+    from omnicad.restricciones.inferencia import Inferencia
+
+    lz = lienzo
+    p1, p2 = lz.b.agregar_punto(0, 0), lz.b.agregar_punto(10, 5)
+    linea = lz.b.agregar_linea(p1, p2)
+    lz.b.agregar_restriccion("fijo", [p1])
+    lz.b.agregar_restriccion("fijo", [p2])
+    lz.resolver()
+    antes = lz.b.a_dict()
+    horizontal = Inferencia("horizontal", (10, 5), None, ("horizontal",))
+    lz._restringir_inferencias(linea, [(p2, horizontal)])         # no lanza ni cambia nada
+    assert lz.b.a_dict() == antes
+    assert lz.resultado.ok
+
+
+def test_boceto_grande_la_alineacion_se_encuentra_y_el_indice_es_estable():
+    """Prueba 9: con 2 000 líneas dispersas la guía correcta sigue apareciendo y el resultado no depende del índice."""
+    import random
+    r = random.Random(3)
+    b = Boceto()
+    for _ in range(2000):
+        x, y = r.uniform(-900, 900), r.uniform(-900, 900)
+        b.agregar_linea((x, y), (x + r.uniform(-20, 20), y + r.uniform(-20, 20)))
+    b.agregar_punto(2000, 123.0)                                  # fuera de todo lo anterior
+    indice = Indice(b)
+    sel = inferir(b, (2500, 123.0), 0.5, indice=indice)
+    assert sel.tipo == "alineado_h" and sel.xy == pytest.approx((2500, 123.0), abs=1e-9)
+    assert sel == inferir(b, (2500, 123.0), 0.5)
