@@ -22,6 +22,7 @@ paso es la referencia persistente: la unión sigue a su cara cuando cambia un pa
 Componentes, uniones y grupos se nombran por id (el del paso que los creó, p. ej. 'op5') o por nombre; un
 componente también por el id o el nombre de uno de sus cuerpos.
 """
+import copy
 import difflib
 from typing import Literal
 
@@ -29,10 +30,14 @@ import numpy as np
 
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
+from ..timeline import entidades as ent
 from ..timeline.operaciones import Contexto
 from ..timeline.ops_chapa import cuerpos_del_modelo
-from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpComponente, OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion,
-                                      OpUnion, OpVinculoMovimiento, grupo_rigido, siguiente_accion)
+from ..timeline.operaciones import ErrorOperacion
+from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion, OpComponente, OpCopiarComponente,
+                                      OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion, OpPosicionInicial, OpRevertirPosicion,
+                                      OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
+                                      limites_expr, poses_de_estudio, principal_de, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -51,6 +56,9 @@ Eje = Literal["X", "Y", "Z"]
 MOVIMIENTO = {en: es for es, en in _VALORES_UNION.items()}
 A_MOVIMIENTO = {v: k for k, v in MOVIMIENTO.items()}
 Movimiento = Literal["rotation", "rotation2", "rotation3", "slide", "slide2"]
+ModoPosicion = Literal["simple", "between_faces", "edge_intersection"]
+MODO = {"simple": "simple", "between_faces": "entre_caras", "edge_intersection": "interseccion"}
+PUBLICO_MODO = {v: k for k, v in MODO.items()}
 _PASOS_CONSTRUCCION = {"origen_union": "plano", "plano": "plano", "eje": "eje", "punto": "punto"}
 MAX_PASOS_ESTUDIO = 360
 
@@ -170,6 +178,12 @@ def _origen(sesion, spec, body=None):
     if sl.es_punto3(spec):                       # un vértice, por sus coordenadas
         c, ref, _v = sl.vertice_cercano(sesion, spec, body)
         return ref, c
+    if isinstance(spec, dict) and "tipo" in spec:        # una referencia persistente ya armada (la que guarda el paso)
+        try:
+            ent.validar(spec)
+        except ent.ErrorReferencia as e:
+            raise error("INVALID_ARGUMENTS", str(e)) from e
+        return spec, sesion.doc.estado_final.cuerpos.get(spec.get("cuerpo"))
     if isinstance(spec, dict) and "sketch" in spec:     # punto o curva de un boceto: {"sketch", "point"|"curve"}
         from .herramientas_avanzado import _de_boceto
         return _de_boceto(sesion, "origen", spec)[0], None
@@ -200,12 +214,12 @@ def _componente_del_origen(sesion, cuerpo, que):
         raise error("INVALID_ARGUMENTS", f"«{sesion.nombre_cuerpo(cuerpo)}» está en la raíz: una unión mueve "
                     "componentes.", "create_component crea uno con ese cuerpo.")
     estado = sesion.doc.estado_final
-    if estado.componentes.get(cuerpo.componente, {}).get("fijo"):
+    if es_fijo(estado, cuerpo.componente):
         raise error("INVALID_ARGUMENTS", f"El componente «{_nombre_comp(estado, cuerpo.componente)}» está fijo: una "
                     "unión no puede moverlo.", "Elegí como origin1 la pieza que se mueve, o liberala con "
                     "ground_component(grounded=false).")
     grupo = grupo_rigido(estado, cuerpo.componente)
-    fijos = [c for c in grupo if estado.componentes.get(c, {}).get("fijo")]
+    fijos = [c for c in grupo if es_fijo(estado, c)]
     if fijos:
         raise error("INVALID_ARGUMENTS", f"El componente «{_nombre_comp(estado, cuerpo.componente)}» está en un grupo "
                     f"rígido con «{_nombre_comp(estado, fijos[0])}», que está fijo: una unión no puede moverlo (el "
@@ -236,7 +250,7 @@ def info_componente(sesion, k, estado=None):
     cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == k]
     m = _matriz(estado, k)
     return {"id": k, "name": _nombre_comp(estado, k), "grounded": bool(datos.get("fijo")),
-            "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c)} for c in cuerpos],
+            "pinned": bool(datos.get("anclado")), "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c)} for c in cuerpos],
             "translation": [_r(v) for v in m[:3, 3]], "rotation_matrix": [[_r(v) for v in fila] for fila in m[:3, :3]],
             "bounding_box": _caja(cuerpos),
             **({"origin": [_r(v) for v in (m @ [*datos["origen"], 1.0])[:3]]} if datos.get("origen") else {})}
@@ -264,7 +278,7 @@ def info_union(sesion, op):
     giros, desliz = MOVIMIENTOS.get(tipo, ([], []))
     status, mensaje = _estado_paso(doc, op)
     vinculos = [o.id for o in doc.operaciones if isinstance(o, OpVinculoMovimiento) and o.p.get("union2") == op.id
-                and not o.suprimida]
+                and o.p.get("union1") != op.id and not o.suprimida]
     info = {"id": op.id, "name": op.nombre, "type": A_INGLES.get(tipo, tipo), "as_built": bool(op.p.get("como_esta")),
             "status": status, "message": mensaje,
             "component1": _ref_componente(estado, u["comp1"]) if u else None,
@@ -279,11 +293,25 @@ def info_union(sesion, op):
         info["limits"] = {"motion": "rotation" if giros else "slide",
                           "minimum": str(op.p.get("minimo") or "").strip() or None,
                           "maximum": str(op.p.get("maximo") or "").strip() or None}
+        info["limits_by_motion"] = {}
+        for k in giros + desliz:
+            mn, mx, rs, inv = limites_expr(op.p, k)
+            info["limits_by_motion"][A_MOVIMIENTO[k]] = {
+                "minimum": str(mn or "").strip() or None, "maximum": str(mx or "").strip() or None,
+                "rest": str(rs or "").strip() or None, "flip": inv}
+    info["mode1"] = PUBLICO_MODO.get(op.p.get("modo1") or "simple")
+    info["mode2"] = None if op.p.get("como_esta") else PUBLICO_MODO.get(op.p.get("modo2") or "simple")
+    info["custom_rotation_axis"] = bool(op.p.get("ref_eje_giro"))
+    info["custom_slide_axis"] = bool(op.p.get("ref_eje_desliz"))
+    if tipo == "bola":
+        info["pitch_axis"] = op.p.get("ref_eje_cabeceo") and "custom" or op.p.get("eje_cabeceo") or None
+        info["yaw_axis"] = op.p.get("ref_eje_guinada") and "custom" or op.p.get("eje_guinada") or None
     return info
 
 
 def _info_vinculo(op):
     return {"id": op.id, "name": op.nombre, "joint1": op.p.get("union1"), "joint2": op.p.get("union2"),
+            "motion1": A_MOVIMIENTO.get(op.p.get("mov1")), "motion2": A_MOVIMIENTO.get(op.p.get("mov2")),
             "ratio": op.p.get("factor"), "reverse": bool(op.p.get("invertir")), "suppressed": op.suprimida}
 
 
@@ -398,31 +426,91 @@ def _valores(tipo, valores):
             validos = ", ".join(A_MOVIMIENTO[x] for x in giros + desliz) or "ninguno (es rígida)"
             raise error("INVALID_ARGUMENTS", f"Una unión {A_INGLES[tipo]} no tiene «{clave}». Movimientos de este "
                         f"tipo: {validos}.")
-        salida[k] = texto_expr(valor)
+        salida[k] = _expr(valor)
     return salida
 
 
-def _limites(sesion, tipo, minimum, maximum):
-    giros, desliz = MOVIMIENTOS[tipo]
-    if (minimum is not None or maximum is not None) and not (giros or desliz):
-        raise error("INVALID_ARGUMENTS", "Una unión rígida no tiene movimiento que limitar.")
+def _expr(valor):
+    """Texto de expresión de un número (mm o grados) o una expresión; «nan» e «inf» se rechazan con su mensaje."""
+    texto = texto_expr(valor)
+    try:
+        exigir_numero(texto)
+    except ErrorOperacion as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from e
+    return texto
+
+
+def _comprobar_limites(sesion, clave, minimum, maximum):
     # Se comparan los VALORES (expresiones también): solo con números, "100 deg" > "20 deg" pasaba (B-64)
-    unidad = ANGULO if giros else LONGITUD
+    unidad = ANGULO if clave.startswith("giro") else LONGITUD
     valores = sesion.doc.parametros.valores()
 
     def _numero(v):
         if v is None:
             return None
         try:
-            return evaluar(texto_expr(v), unidad, valores)
+            return evaluar(_expr(v), unidad, valores)
         except (ErrorExpresion, ValueError, ZeroDivisionError):
             return None                    # ilegible ahora: que lo valide quien lo use al calcular
 
     mn, mx = _numero(minimum), _numero(maximum)
     if mn is not None and mx is not None and mn > mx:
         raise error("INVALID_ARGUMENTS", f"El mínimo ({mn:g}) es mayor que el máximo ({mx:g}).")
-    return {"minimo": "" if minimum is None else texto_expr(minimum),
-            "maximo": "" if maximum is None else texto_expr(maximum)}
+
+
+def _movimiento_de(tipo, nombre):
+    """Clave interna del movimiento «rotation», «slide»… de ese tipo de unión (error si no lo tiene)."""
+    giros, desliz = MOVIMIENTOS[tipo]
+    clave = MOVIMIENTO.get(nombre)
+    if clave is None or clave not in giros + desliz:
+        validos = ", ".join(A_MOVIMIENTO[x] for x in giros + desliz) or "ninguno (es rígida)"
+        raise error("INVALID_ARGUMENTS", f"Una unión {A_INGLES[tipo]} no tiene «{nombre}». Movimientos de este "
+                    f"tipo: {validos}.")
+    return clave
+
+
+def _limites(sesion, tipo, minimum, maximum, motion_limits=None, rest=None, flip=False):
+    """Params de los límites: `minimo` y `maximo` del movimiento principal más `limites_dof` con los de los otros
+    movimientos, el reposo y «invertir» (ASM-12). `motion_limits` = {"rotation2": {"minimum", "maximum", "rest",
+    "flip"}}; `rest` y `flip` son los del movimiento principal."""
+    giros, desliz = MOVIMIENTOS[tipo]
+    pedidos = {k: dict(v or {}) for k, v in (motion_limits or {}).items()}
+    if not (giros or desliz) and (minimum is not None or maximum is not None or pedidos or rest is not None or flip):
+        raise error("INVALID_ARGUMENTS", "Una unión rígida no tiene movimiento que limitar.")
+    principal = principal_de(tipo)
+    if rest is not None or flip:
+        pedidos.setdefault(A_MOVIMIENTO[principal], {}).update({k: v for k, v in (("rest", rest), ("flip", flip))
+                                                                if v is not None and v is not False})
+    dof = {}
+    for nombre, datos in pedidos.items():
+        clave = _movimiento_de(tipo, nombre)
+        if set(datos) - {"minimum", "maximum", "rest", "flip"}:
+            raise error("INVALID_ARGUMENTS", f"Los límites de «{nombre}» aceptan minimum, maximum, rest y flip "
+                        f"(recibió {', '.join(sorted(datos))}).")
+        mn, mx = datos.get("minimum"), datos.get("maximum")
+        entrada = {}
+        if clave == principal:
+            minimum, maximum = (minimum if mn is None else mn), (maximum if mx is None else mx)
+        else:
+            _comprobar_limites(sesion, clave, mn, mx)
+            entrada = {"minimo": "" if mn is None else _expr(mn), "maximo": "" if mx is None else _expr(mx)}
+        if datos.get("rest") is not None and str(datos["rest"]).strip():
+            entrada["reposo"] = _expr(datos["rest"])
+        if datos.get("flip"):
+            entrada["invertir"] = True
+        if entrada:
+            dof[clave] = entrada
+    if giros or desliz:
+        _comprobar_limites(sesion, principal, minimum, maximum)
+    return {"minimo": "" if minimum is None else _expr(minimum), "maximo": "" if maximum is None else _expr(maximum),
+            "limites_dof": dof}
+
+
+def _aplicar_reposo(params, tipo):
+    """El reposo de un movimiento es su valor inicial si no se pidió otro (el resto no se toca)."""
+    for clave, entrada in (params.get("limites_dof") or {}).items():
+        if entrada.get("reposo") and clave not in params and clave in sum(MOVIMIENTOS[tipo], []):
+            params[clave] = entrada["reposo"]
 
 
 def _desfase(offset):
@@ -430,7 +518,58 @@ def _desfase(offset):
         return {}
     if len(offset) != 3:
         raise error("INVALID_ARGUMENTS", f"offset va como [dx, dy, dz] en mm (recibió {len(offset)} valores).")
-    return {k: texto_expr(v) for k, v in zip(("dx", "dy", "dz"), offset, strict=True)}
+    return {k: _expr(v) for k, v in zip(("dx", "dy", "dz"), offset, strict=True)}
+
+
+def _origen_b(sesion, modo, spec_b, body, que):
+    """Segunda selección del modo «entre dos caras» o «intersección de dos aristas» (None en el modo simple)."""
+    if modo == "simple":
+        if spec_b is not None:
+            raise error("INVALID_ARGUMENTS", f"{que} solo se usa con el modo between_faces o edge_intersection.")
+        return None
+    if spec_b is None:
+        raise error("INVALID_ARGUMENTS", f"El modo {PUBLICO_MODO[modo]} necesita la segunda selección ({que}): "
+                    f"{'otra cara' if modo == 'entre_caras' else 'otra arista (con selector, prefijo edges:)'}.")
+    ref, _c = _origen(sesion, spec_b, body)
+    return ref
+
+
+def _ejes_propios(sesion, tipo, rotation_axis_from, slide_axis_from, axis_body):
+    """Referencias de los ejes de movimiento propios (una arista, un eje o un cilindro): {"ref_eje_giro": …}."""
+    salida = {}
+    if rotation_axis_from is not None:
+        if tipo not in ("revolucion", "cilindrica", "pasador_ranura", "planar", "bola"):
+            raise error("INVALID_ARGUMENTS", f"Una unión {A_INGLES[tipo]} no gira: rotation_axis_from no se usa.")
+        salida["ref_eje_giro"] = _origen(sesion, rotation_axis_from, axis_body)[0]
+    if slide_axis_from is not None:
+        if tipo not in ("deslizante", "pasador_ranura"):
+            raise error("INVALID_ARGUMENTS", f"En una unión {A_INGLES[tipo]} se desliza sobre el eje de giro: "
+                        "slide_axis_from es de slider y pin_slot.")
+        salida["ref_eje_desliz"] = _origen(sesion, slide_axis_from, axis_body)[0]
+    return salida
+
+
+def _ejes_bola(sesion, tipo, pitch_axis, yaw_axis, pitch_axis_from, yaw_axis_from, axis_body):
+    """Cabeceo (Pitch) y guiñada (Yaw) de la bola (ASM-11): {"eje_cabeceo": "Y", "ref_eje_guinada": …}."""
+    pedidos = {"pitch_axis": pitch_axis, "yaw_axis": yaw_axis, "pitch_axis_from": pitch_axis_from,
+               "yaw_axis_from": yaw_axis_from}
+    if tipo != "bola":
+        dados = ", ".join(k for k, v in pedidos.items() if v is not None)
+        if dados:
+            raise error("INVALID_ARGUMENTS", f"Una unión {A_INGLES[tipo]} no tiene cabeceo ni guiñada: {dados} es solo "
+                        "de ball.")
+        return {}
+    for eje, ref, nombre in ((pitch_axis, pitch_axis_from, "el cabeceo"), (yaw_axis, yaw_axis_from, "la guiñada")):
+        if eje is not None and ref is not None:
+            raise error("INVALID_ARGUMENTS", f"Para {nombre} pasá el eje del marco o el propio, no los dos.")
+    salida = {}
+    for clave, eje in (("eje_cabeceo", pitch_axis), ("eje_guinada", yaw_axis)):
+        if eje is not None:
+            salida[clave] = eje
+    for clave, ref in (("ref_eje_cabeceo", pitch_axis_from), ("ref_eje_guinada", yaw_axis_from)):
+        if ref is not None:
+            salida[clave] = _origen(sesion, ref, axis_body)[0]
+    return salida
 
 
 def _avisar_uniones_previas(sesion, params):
@@ -467,19 +606,37 @@ def _crear_union(sesion, nombre, params):
     return resultado
 
 
+_DESC_MODOS = ("mode1 / mode2: simple (una cara, arista o punto), between_faces (centrado entre dos caras paralelas: la "
+               "segunda va en origin1b / origin2b) o edge_intersection (en el cruce prolongado de dos aristas rectas: la "
+               "segunda va en origin1b / origin2b). ")
+_DESC_EJES = ("rotation_axis_from / slide_axis_from: en vez de X, Y o Z del marco, una arista recta o circular, un eje "
+              "de construcción o una cara cilíndrica (selector o id; axis_body es el cuerpo donde se evalúa el selector). "
+              "motion_limits da los límites de cada movimiento: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, "
+              "'flip': false}}; rest y flip_limits son los del movimiento principal. ")
+
+
+def _modo(sesion, modo, spec_b, body, que):
+    return MODO[modo], _origen_b(sesion, MODO[modo], spec_b, body, que)
+
+
 @herramienta("create_joint", "ensamble", "Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 "
              "hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en "
-             "el mismo sentido) y define cómo se mueve después. " + _DESC_ORIGEN + _DESC_TIPOS +
+             "el mismo sentido) y define cómo se mueve después. " + _DESC_ORIGEN + _DESC_MODOS + _DESC_TIPOS +
              "angle gira el componente 1 alrededor del Z del marco, offset lo corre [dx, dy, dz] y flip lo da vuelta. "
-             "Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. Devuelve la unión "
-             "y los componentes que se movieron con su traslación y caja envolvente. En uniones con deslizamiento "
-             "avisa si el componente se movió (snap al centro de cada cara).", modifica=True)
+             "Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. " + _DESC_EJES +
+             "Devuelve la unión y los componentes que se movieron con su traslación y caja envolvente. En uniones con "
+             "deslizamiento avisa si el componente se movió (snap al centro de cada cara).", modifica=True)
 def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] | dict, joint_type: TipoUnion = "rigid", body1: str | None = None,
                  body2: str | None = None, snap1: Snap = "center", snap2: Snap = "center", angle: Expr = 0,
                  offset: list[Expr] | None = None, flip: bool = False, rotation_axis: Eje = "Z", slide_axis: Eje = "X",
                  rotation: Expr | None = None, rotation2: Expr | None = None, rotation3: Expr | None = None,
                  slide: Expr | None = None, slide2: Expr | None = None, minimum: Expr | None = None,
-                 maximum: Expr | None = None, name: str | None = None):
+                 maximum: Expr | None = None, name: str | None = None, mode1: ModoPosicion = "simple",
+                 origin1b: str | list[float] | None = None, mode2: ModoPosicion = "simple",
+                 origin2b: str | list[float] | None = None, rotation_axis_from: str | None = None,
+                 slide_axis_from: str | None = None, axis_body: str | None = None, rest: Expr | None = None,
+                 flip_limits: bool = False, motion_limits: dict | None = None, pitch_axis: Eje | None = None,
+                 yaw_axis: Eje | None = None, pitch_axis_from: str | None = None, yaw_axis_from: str | None = None):
     """
     origin1: dónde se toma el componente que SE MUEVE: cara o arista (selector o id), o un vértice por sus coordenadas [x, y, z], del cuerpo body1.
     origin2: dónde va: cara o arista de otro componente (o de la raíz), un vértice [x, y, z], un punto o una curva de boceto {"sketch", "point" | "curve"}, origen de unión, plano, eje o punto de construcción.
@@ -502,8 +659,24 @@ def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] 
     minimum: límite mínimo del movimiento principal (grados si gira, mm si solo desliza); vacío = sin límite.
     maximum: límite máximo del movimiento principal; vacío = sin límite.
     name: nombre del paso; vacío = «Unión<n>».
+    mode1: modo del origen 1: "simple", "between_faces" o "edge_intersection".
+    origin1b: segunda cara (between_faces) o segunda arista (edge_intersection) del origen 1, del cuerpo body1.
+    mode2: modo del origen 2: "simple", "between_faces" o "edge_intersection".
+    origin2b: segunda cara o arista del origen 2, del cuerpo body2.
+    rotation_axis_from: eje de giro propio (arista, eje de construcción o cilindro) en lugar de rotation_axis.
+    slide_axis_from: eje de deslizamiento propio en lugar de slide_axis (slider, pin_slot).
+    axis_body: cuerpo donde se evalúan los selectores de los ejes propios.
+    rest: reposo del movimiento principal: su valor inicial si no se pide otro (grados o mm).
+    flip_limits: true invierte los límites del movimiento principal (el mínimo pasa a ser −máximo y al revés).
+    motion_limits: límites por movimiento ("rotation", "rotation2", "rotation3", "slide", "slide2"), cada uno con minimum, maximum, rest y flip.
+    pitch_axis: eje de cabeceo (Pitch, el lateral) de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
+    yaw_axis: eje de guiñada (Yaw, el perpendicular) de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él. El de balanceo (Roll, rotation) sale solo de los dos (guiñada × cabeceo; con Y y X, el Z del marco). Solo ball; si no se elige ninguno de los dos, el balanceo es rotation_axis_from o Z.
+    pitch_axis_from: eje de cabeceo propio (arista, eje de construcción o cilindro) en lugar de pitch_axis. Solo ball.
+    yaw_axis_from: eje de guiñada propio en lugar de yaw_axis. Solo ball.
     """
     tipo = TIPOS[joint_type]
+    modo1, ref1b = _modo(sesion, mode1, origin1b, body1, "origin1b")
+    modo2, ref2b = _modo(sesion, mode2, origin2b, body2, "origin2b")
     ref1, c1 = _origen(sesion, origin1, body1)
     _componente_del_origen(sesion, c1, "origin1")
     ref2, c2 = _origen(sesion, origin2, body2)
@@ -511,24 +684,34 @@ def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] 
         raise error("INVALID_ARGUMENTS", "Los dos orígenes están en el mismo componente: origin2 tiene que ser de otro "
                     "componente (o de la raíz).")
     params = {"tipo": tipo, "origen1": ref1, "origen2": ref2, "clave1": SNAP[snap1], "clave2": SNAP[snap2],
-              "angulo": texto_expr(angle), "voltear": bool(flip), "como_esta": False, "eje_giro": rotation_axis,
-              "eje_desliz": slide_axis}
+              "angulo": _expr(angle), "voltear": bool(flip), "como_esta": False, "eje_giro": rotation_axis,
+              "eje_desliz": slide_axis, "modo1": modo1, "modo2": modo2, "origen1b": ref1b, "origen2b": ref2b}
     params.update(_desfase(offset))
     params.update(_valores(tipo, {"rotation": rotation, "rotation2": rotation2, "rotation3": rotation3,
                                   "slide": slide, "slide2": slide2}))
-    params.update(_limites(sesion, tipo, minimum, maximum))
+    params.update(_ejes_propios(sesion, tipo, rotation_axis_from, slide_axis_from, axis_body))
+    params.update(_ejes_bola(sesion, tipo, pitch_axis, yaw_axis, pitch_axis_from, yaw_axis_from, axis_body))
+    params.update(_limites(sesion, tipo, minimum, maximum, motion_limits, rest, flip_limits))
+    _aplicar_reposo(params, tipo)
     return _crear_union(sesion, name, params)
 
 
 @herramienta("create_as_built_joint", "ensamble", "Unión como está (ENSAMBLAR › Unión como está): liga el componente "
              "de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del "
              "marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 "
-             "lo sigue. Sin component2, la unión es contra la raíz. " + _DESC_TIPOS, modifica=True)
+             "lo sigue. Sin component2, la unión es contra la raíz. " + _DESC_TIPOS + _DESC_MODOS + _DESC_EJES,
+             modifica=True)
 def create_as_built_joint(sesion, origin: str | list[float], component2: str | None = None, joint_type: TipoUnion = "revolute",
                           body: str | None = None, snap: Snap = "center", rotation_axis: Eje = "Z",
                           slide_axis: Eje = "X", rotation: Expr | None = None, rotation2: Expr | None = None,
                           rotation3: Expr | None = None, slide: Expr | None = None, slide2: Expr | None = None,
-                          minimum: Expr | None = None, maximum: Expr | None = None, name: str | None = None):
+                          minimum: Expr | None = None, maximum: Expr | None = None, name: str | None = None,
+                          mode: ModoPosicion = "simple", origin_b: str | list[float] | None = None,
+                          rotation_axis_from: str | None = None, slide_axis_from: str | None = None,
+                          axis_body: str | None = None, rest: Expr | None = None, flip_limits: bool = False,
+                          motion_limits: dict | None = None, pitch_axis: Eje | None = None,
+                          yaw_axis: Eje | None = None, pitch_axis_from: str | None = None,
+                          yaw_axis_from: str | None = None):
     """
     origin: cara o arista del componente que se mueve (selector evaluado sobre body, o id), o un vértice por sus coordenadas [x, y, z]; define el marco del movimiento.
     component2: componente al que queda ligado (id, nombre o uno de sus cuerpos); vacío = la raíz.
@@ -546,8 +729,21 @@ def create_as_built_joint(sesion, origin: str | list[float], component2: str | N
     minimum: límite mínimo del movimiento principal; vacío = sin límite.
     maximum: límite máximo del movimiento principal; vacío = sin límite.
     name: nombre del paso; vacío = «Unión<n>».
+    mode: modo del origen: "simple", "between_faces" o "edge_intersection".
+    origin_b: segunda cara (between_faces) o segunda arista (edge_intersection) del origen, del cuerpo body.
+    rotation_axis_from: eje de giro propio (arista, eje de construcción o cilindro) en lugar de rotation_axis.
+    slide_axis_from: eje de deslizamiento propio en lugar de slide_axis (slider, pin_slot).
+    axis_body: cuerpo donde se evalúan los selectores de los ejes propios.
+    rest: reposo del movimiento principal: su valor inicial si no se pide otro (grados o mm).
+    flip_limits: true invierte los límites del movimiento principal.
+    motion_limits: límites por movimiento ("rotation", "rotation2", "rotation3", "slide", "slide2"), cada uno con minimum, maximum, rest y flip.
+    pitch_axis: eje de cabeceo (Pitch) de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
+    yaw_axis: eje de guiñada (Yaw) de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él; el balanceo (Roll, rotation) sale de los dos. Solo ball.
+    pitch_axis_from: eje de cabeceo propio (arista, eje de construcción o cilindro) en lugar de pitch_axis. Solo ball.
+    yaw_axis_from: eje de guiñada propio en lugar de yaw_axis. Solo ball.
     """
     tipo = TIPOS[joint_type]
+    modo, refb = _modo(sesion, mode, origin_b, body, "origin_b")
     ref1, c1 = _origen(sesion, origin, body)
     comp1 = _componente_del_origen(sesion, c1, "origin")
     ref2 = None
@@ -561,18 +757,79 @@ def create_as_built_joint(sesion, origin: str | list[float], component2: str | N
             raise error("COMPONENT_NOT_FOUND", f"El componente «{_nombre_comp(estado, k2)}» no tiene cuerpos.")
         ref2 = {"tipo": "cuerpo", "cuerpo": cuerpo2.id}
     params = {"tipo": tipo, "origen1": ref1, "origen2": ref2, "clave1": SNAP[snap], "como_esta": True,
-              "eje_giro": rotation_axis, "eje_desliz": slide_axis}
+              "eje_giro": rotation_axis, "eje_desliz": slide_axis, "modo1": modo, "origen1b": refb}
     params.update(_valores(tipo, {"rotation": rotation, "rotation2": rotation2, "rotation3": rotation3,
                                   "slide": slide, "slide2": slide2}))
-    params.update(_limites(sesion, tipo, minimum, maximum))
+    params.update(_ejes_propios(sesion, tipo, rotation_axis_from, slide_axis_from, axis_body))
+    params.update(_ejes_bola(sesion, tipo, pitch_axis, yaw_axis, pitch_axis_from, yaw_axis_from, axis_body))
+    params.update(_limites(sesion, tipo, minimum, maximum, motion_limits, rest, flip_limits))
+    _aplicar_reposo(params, tipo)
     return _crear_union(sesion, name, params)
+
+
+def _a_la_copia(ref, mapa):
+    """La referencia a un cuerpo del componente original, puesta en su copia (`mapa`: cuerpo original → copia)."""
+    return dict(ref, cuerpo=mapa[ref["cuerpo"]]) if isinstance(ref, dict) and ref.get("cuerpo") in mapa else ref
+
+
+@herramienta("duplicate_with_joints", "ensamble", "Duplicar con uniones (ENSAMBLAR › Duplicar con uniones): repite el "
+             "componente que mueve una unión en cada destino. Por cada uno agrega un paso «Copiar componente» (un "
+             "componente nuevo con copias de todos sus cuerpos) y una unión como la original —mismo tipo, ejes, "
+             "límites y valores— que lleva la copia al destino. Las copias son independientes: no hay instancias "
+             "asociativas de componentes, y se copia un componente por vez. Todo o nada, en un solo deshacer.",
+             modifica=True)
+def duplicate_with_joints(sesion, joint: str, destinations: list[str | list[float] | dict],
+                          flip: list[bool] | bool = False, snap: Snap | None = None, body: str | None = None):
+    """
+    joint: unión (id o nombre) cuyo componente 1 se copia y cuya configuración se repite; no puede ser una unión «como está».
+    destinations: dónde va cada copia, una por destino: lo mismo que origin2 de create_joint (cara o arista —selector o id de find_faces / find_edges—, vértice [x, y, z], punto o curva de boceto, origen de unión, plano, eje o punto de construcción) o una referencia persistente ya armada ({"tipo": "cara", "cuerpo", "firma"}, la que usa la ventana).
+    flip: true da vuelta todas las copias respecto de la unión original; con una lista, una por destino.
+    snap: punto del destino en una arista o cilindro: "center", "start" o "end"; vacío = el de la unión original.
+    body: cuerpo (o componente de un solo cuerpo) donde se evalúan los selectores de los destinos.
+    """
+    doc = sesion.doc
+    j = union(sesion, joint)
+    if j.p.get("como_esta"):
+        raise error("INVALID_ARGUMENTS", f"«{j.nombre}» es una unión «como está»: no tiene un destino que repetir.",
+                    "Elegí una unión hecha con create_joint.")
+    cuerpo = doc.estado_final.cuerpos.get((j.p.get("origen1") or {}).get("cuerpo"))
+    if cuerpo is None or not cuerpo.componente:
+        raise error("INVALID_ARGUMENTS", f"El origen 1 de la unión «{j.nombre}» ya no está en un componente en este "
+                    "punto del timeline (¿cuerpo borrado o fuera del componente?).")
+    if not destinations:
+        raise error("INVALID_ARGUMENTS", "Indicá al menos un destino.")
+    vueltas = list(flip) if isinstance(flip, list) else [bool(flip)] * len(destinations)
+    if len(vueltas) != len(destinations):
+        raise error("INVALID_ARGUMENTS", "flip tiene que ser true / false o una lista con un valor por destino.")
+    destinos = [_origen(sesion, d, body)[0] for d in destinations]       # se validan todos antes de tocar el documento
+    origen, copias = cuerpo.componente, []
+    for dest, voltear in zip(destinos, vueltas, strict=True):
+        paso = OpCopiarComponente(doc.nuevo_id(), nombre_paso(sesion, None, "Copiar componente", OpCopiarComponente),
+                                  componente=origen)
+        _agregar(sesion, paso)
+        cuerpos = list(doc.estado_final.cuerpos.values())
+        mapa = dict(zip([c.id for c in cuerpos if c.componente == origen],
+                        [c.id for c in cuerpos if c.componente == paso.id], strict=True))
+        params = copy.deepcopy(j.p)
+        for clave in ("origen1", "origen1b", "ref_eje_giro", "ref_eje_desliz", "ref_eje_cabeceo", "ref_eje_guinada"):
+            params[clave] = _a_la_copia(params.get(clave), mapa)
+        params.update(origen2=dest, origen2b=None, modo2="simple", voltear=bool(j.p.get("voltear")) != voltear,
+                      clave2=SNAP[snap] if snap else j.p.get("clave2", "centro"),
+                      accionada=siguiente_accion(doc.operaciones))
+        union_nueva = _crear_union(sesion, None, params)
+        copias.append({"component": info_componente(sesion, paso.id), "copy_step": paso.id,
+                       "joint": union_nueva["joint"]})
+    return {"source_joint": j.id, "source_component": _ref_componente(doc.estado_final, origen), "copies": copias,
+            "count": len(copias)}
 
 
 @herramienta("create_joint_origin", "ensamble", "Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco "
              "(punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de "
-             "create_joint. Sobre un cilindro o una arista circular sigue siendo un marco de eje.", modifica=True)
+             "create_joint. Sobre un cilindro o una arista circular sigue siendo un marco de eje. " + _DESC_MODOS,
+             modifica=True)
 def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | None = None, snap: Snap = "center", angle: Expr = 0,
-                        offset: list[Expr] | None = None, name: str | None = None):
+                        offset: list[Expr] | None = None, name: str | None = None, mode: ModoPosicion = "simple",
+                        geometry_b: str | list[float] | None = None):
     """
     geometry: cara o arista donde va el origen (selector evaluado sobre body, o id de find_faces / find_edges), un vértice [x, y, z] o un punto o una curva de boceto {"sketch", "point" | "curve"}.
     body: cuerpo (o componente de un solo cuerpo) donde se evalúa el selector.
@@ -580,11 +837,14 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
     angle: giro del marco alrededor de su Z, en grados.
     offset: desfase [dx, dy, dz] en mm en el marco.
     name: nombre del paso; vacío = «Origen de unión<n>».
+    mode: modo del origen: "simple", "between_faces" (centrado entre dos caras paralelas) o "edge_intersection" (en el cruce de dos aristas rectas).
+    geometry_b: la segunda cara o arista de los modos between_faces y edge_intersection.
     """
+    modo, refb = _modo(sesion, mode, geometry_b, body, "geometry_b")
     ref, _c = _origen(sesion, geometry, body)
     doc = sesion.doc
     op = OpOrigenUnion(doc.nuevo_id(), nombre_paso(sesion, name, "Origen de unión", OpOrigenUnion), origen=ref,
-                       clave=SNAP[snap], angulo=texto_expr(angle), **_desfase(offset))
+                       clave=SNAP[snap], angulo=_expr(angle), modo=modo, origen_b=refb, **_desfase(offset))
     resultado = _agregar(sesion, op)
     plano = sesion.doc.estado_final.planos.get(op.id)
     if plano is not None:
@@ -597,7 +857,8 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
              "deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los "
              "límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.", modifica=True)
 def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | None = None,
-                rotation2: Expr | None = None, rotation3: Expr | None = None, slide2: Expr | None = None):
+                rotation2: Expr | None = None, rotation3: Expr | None = None, slide2: Expr | None = None,
+                to_rest: bool = False):
     """
     joint: id o nombre de la unión.
     rotation: giro en grados (revolute, cylindrical, pin_slot, planar, ball).
@@ -605,15 +866,22 @@ def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | 
     rotation2: segundo giro en grados (ball).
     rotation3: tercer giro en grados (ball).
     slide2: segundo deslizamiento en mm (planar).
+    to_rest: true lleva cada movimiento que tenga un reposo (set_joint_limits) a ese valor.
     """
     op = union(sesion, joint)
     pedidos = {"rotation": rotation, "slide": slide, "rotation2": rotation2, "rotation3": rotation3, "slide2": slide2}
-    if all(v is None for v in pedidos.values()):
-        raise error("INVALID_ARGUMENTS", "Falta el valor a accionar: rotation (grados) o slide (mm).")
     tipo = op.p.get("tipo")
+    if to_rest:
+        for clave in sum(MOVIMIENTOS[tipo], []):
+            reposo = limites_expr(op.p, clave)[2]
+            if reposo and str(reposo).strip() and pedidos[A_MOVIMIENTO[clave]] is None:
+                pedidos[A_MOVIMIENTO[clave]] = str(reposo).strip()
+    if all(v is None for v in pedidos.values()):
+        raise error("INVALID_ARGUMENTS", "Falta el valor a accionar: rotation (grados) o slide (mm)."
+                    + (" Ningún movimiento de la unión tiene un reposo." if to_rest else ""))
     nuevos = _valores(tipo, pedidos)
     vinculos = [o for o in sesion.doc.operaciones if isinstance(o, OpVinculoMovimiento) and not o.suprimida
-                and o.p.get("union2") == op.id]
+                and o.p.get("union2") == op.id and o.p.get("union1") != op.id]
     if vinculos:        # no se guarda el valor pedido: el vínculo lo ignora y, si se lo suprimiera, la unión lo usaría
         sesion.avisar(f"La unión «{op.nombre}» la mueve el vínculo «{vinculos[0].nombre}»: su valor sale de la otra "
                       "unión y no se cambió nada. Accioná esa.")
@@ -624,19 +892,51 @@ def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | 
     return {"joint": info_union(sesion, sesion.doc.operacion(op.id)), "moved_components": _movidos(sesion, antes)}
 
 
-@herramienta("set_joint_limits", "ensamble", "Límites de movimiento de una unión (Joint Limits de Fusion) sobre su "
-             "movimiento principal: el giro (grados) si gira, si no el deslizamiento (mm). Un valor vacío quita ese "
-             "límite. Si el valor actual queda afuera, la unión se recorta al límite y avisa.", modifica=True)
-def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: Expr | None = None):
+@herramienta("set_joint_limits", "ensamble", "Límites de movimiento de una unión (Joint Limits de Fusion): los de un "
+             "movimiento a elección (por defecto el principal: el giro en grados si gira, si no el deslizamiento en mm), "
+             "su valor de reposo (rest) y si se invierten (flip). Un valor vacío quita ese límite. Si el valor actual "
+             "queda afuera, la unión se recorta al límite y avisa.", modifica=True)
+def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: Expr | None = None,
+                     motion: Movimiento | None = None, rest: Expr | None = None, flip: bool | None = None):
     """
     joint: id o nombre de la unión.
     minimum: límite mínimo (número o expresión); vacío = sin límite mínimo.
     maximum: límite máximo (número o expresión); vacío = sin límite máximo.
+    motion: movimiento al que se ponen los límites ("rotation", "rotation2", "rotation3", "slide" o "slide2"); vacío = el principal.
+    rest: valor de reposo de ese movimiento (número o expresión); vacío o "" lo quita; sin pasarlo queda el que había.
+    flip: true invierte los límites (el mínimo pasa a ser −máximo y al revés); sin pasarlo queda como estaba.
+    Con rest o flip y sin minimum ni maximum, los límites que había quedan como estaban.
     """
     op = union(sesion, joint)
-    limites = _limites(sesion, op.p.get("tipo"), minimum, maximum)
+    tipo = op.p.get("tipo")
+    if not any(MOVIMIENTOS[tipo]):
+        raise error("INVALID_ARGUMENTS", "Una unión rígida no tiene movimiento que limitar.")
+    clave = _movimiento_de(tipo, motion) if motion else principal_de(tipo)
+    todos = dict(op.p.get("limites_dof") or {})
+    if minimum is None and maximum is None and (rest is not None or flip is not None):     # solo ajusta reposo o invertir
+        previo = todos.get(clave) or {}
+        minimum, maximum = ((op.p.get("minimo"), op.p.get("maximo")) if clave == principal_de(tipo)
+                            else (previo.get("minimo"), previo.get("maximo")))
+    _comprobar_limites(sesion, clave, minimum, maximum)
+    entrada = {k: v for k, v in (todos.get(clave) or {}).items() if k in ("reposo", "invertir")}
+    if rest is not None:
+        entrada.pop("reposo", None)
+        if str(rest).strip():
+            entrada["reposo"] = _expr(rest)
+    if flip is not None:
+        entrada.pop("invertir", None)
+        if flip:
+            entrada["invertir"] = True
+    nuevos = {}
+    if clave == principal_de(tipo):
+        nuevos.update(minimo="" if minimum is None else _expr(minimum), maximo="" if maximum is None else _expr(maximum))
+    else:
+        entrada.update(minimo="" if minimum is None else _expr(minimum), maximo="" if maximum is None else _expr(maximum))
+    todos.pop(clave, None)
+    if entrada:
+        todos[clave] = entrada
     antes = _matrices(sesion)
-    sesion.doc.reemplazar(op.id, OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **limites)))
+    sesion.doc.reemplazar(op.id, OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, limites_dof=todos, **nuevos)))
     return {"joint": info_union(sesion, sesion.doc.operacion(op.id)), "moved_components": _movidos(sesion, antes)}
 
 
@@ -668,17 +968,21 @@ def create_rigid_group(sesion, components: list[str], name: str | None = None):
              "se mueve en proporción a la 1 (engranajes, cremallera y piñón). El valor de la unión 2 pasa a ser "
              "ratio × el de la unión 1 (con reverse, el opuesto); se acciona la unión 1 con drive_joint.", modifica=True)
 def create_motion_link(sesion, joint1: str, joint2: str, ratio: Expr = 1, reverse: bool = False,
-                       name: str | None = None):
+                       name: str | None = None, motion1: Movimiento | None = None, motion2: Movimiento | None = None):
     """
     joint1: unión que manda (id o nombre).
     joint2: unión que la sigue (id o nombre).
     ratio: relación unión 2 / unión 1 (número o expresión): grados por grado, mm por grado, etc.
     reverse: true invierte el sentido de la unión 2.
     name: nombre del paso; vacío = «Vínculo de movimiento<n>».
+    motion1: movimiento de la unión 1 que se relaciona ("rotation", "rotation2", "rotation3", "slide" o "slide2"); vacío = el giro si gira, si no el deslizamiento.
+    motion2: movimiento de la unión 2 que sigue; vacío = el giro si gira, si no el deslizamiento. Con joint1 = joint2 (dos movimientos de la misma unión, p. ej. el giro y el deslizamiento de una cilíndrica: un tornillo) motion1 y motion2 son obligatorios y distintos.
     """
     u1, u2 = union(sesion, joint1), union(sesion, joint2)
-    if u1.id == u2.id:
-        raise error("INVALID_ARGUMENTS", "Elegí dos uniones distintas.")
+    if u1.id == u2.id and (not motion1 or not motion2 or motion1 == motion2):
+        raise error("INVALID_ARGUMENTS", "Con la misma unión en joint1 y joint2 hay que elegir dos movimientos distintos "
+                    "de ella (motion1 y motion2: por ejemplo rotation y slide de una cilíndrica).",
+                    "Para dos uniones distintas, joint1 y joint2 son los ids o nombres de cada una.")
     for u in (u1, u2):
         if not any(MOVIMIENTOS[u.p.get("tipo")]):
             raise error("INVALID_ARGUMENTS", f"La unión «{u.nombre}» es rígida: no tiene movimiento para vincular.")
@@ -697,6 +1001,9 @@ def create_motion_link(sesion, joint1: str, joint2: str, ratio: Expr = 1, revers
         if actual == u2.id:
             raise error("INVALID_ARGUMENTS", f"El vínculo «{u1.nombre}» → «{u2.nombre}» armaría un círculo: "
                         f"«{u2.nombre}» ya mueve a «{u1.nombre}».", "Elegí las uniones en el otro sentido.")
+    for u, m in ((u1, motion1), (u2, motion2)):
+        if m:
+            _movimiento_de(u.p.get("tipo"), m)
     cero = ratio == 0 if not isinstance(ratio, str) else False
     if isinstance(ratio, str):
         try:
@@ -707,7 +1014,8 @@ def create_motion_link(sesion, joint1: str, joint2: str, ratio: Expr = 1, revers
         raise error("INVALID_ARGUMENTS", "La relación del vínculo no puede ser cero: la unión 2 no se movería.",
                     "Usá reverse=true para invertir el sentido.")
     op = OpVinculoMovimiento(doc.nuevo_id(), nombre_paso(sesion, name, "Vínculo de movimiento", OpVinculoMovimiento),
-                             union1=u1.id, union2=u2.id, factor=texto_expr(ratio), invertir=bool(reverse))
+                             union1=u1.id, union2=u2.id, factor=_expr(ratio), invertir=bool(reverse),
+                             mov1=MOVIMIENTO[motion1] if motion1 else "", mov2=MOVIMIENTO[motion2] if motion2 else "")
     antes = _matrices(sesion)
     resultado = _agregar(sesion, op)
     resultado["motion_link"] = _info_vinculo(op)
@@ -732,7 +1040,7 @@ def _simular(doc, op, params):
         o = OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **params)) if j == i else doc.operaciones[j].copia()
         if o.suprimida:
             continue
-        nuevo, ctx = estado.copia(), Contexto(valores)
+        nuevo, ctx = estado.copia(), Contexto(valores, o.id not in doc._sin_partir)
         try:
             o.calcular(nuevo, ctx)
         except Exception as e:  # noqa: BLE001 — un paso que falla queda como en el recálculo (sin cambiar el estado)
@@ -818,3 +1126,121 @@ def motion_study(sesion, joint: str, values: list[float] | None = None, start: f
     if check_interference:
         resultado["collision_values"] = choques
     return resultado
+
+
+# ---------------------------------------------------------------- anclar, posición inicial, capturar y revertir
+def _paso_componentes(sesion, clase, base, components, name):
+    ids = [componente(sesion, c) for c in components] if components else []
+    doc = sesion.doc
+    op = clase(doc.nuevo_id(), nombre_paso(sesion, name, base, clase), componentes=ids)
+    resultado = _agregar(sesion, op)
+    estado = doc.estado_final
+    resultado["components"] = [info_componente(sesion, k, estado) for k in (ids or estado.componentes)]
+    return resultado
+
+
+@herramienta("pin_component", "ensamble", "Ancla o desancla un componente a la raíz (ENSAMBLAR › Anclar / Desanclar, "
+             "Pin / Unpin): queda como un paso del timeline, que se puede suprimir o borrar. Una unión no puede mover un "
+             "componente anclado (como uno fijo con ground_component).", modifica=True)
+def pin_component(sesion, component: str, pinned: bool = True, name: str | None = None):
+    """
+    component: id, nombre o un cuerpo del componente.
+    pinned: true lo ancla; false lo desancla.
+    name: nombre del paso; vacío = «Anclar<n>» o «Desanclar<n>».
+    """
+    k = componente(sesion, component)
+    doc = sesion.doc
+    op = OpAnclar(doc.nuevo_id(), nombre_paso(sesion, name, "Anclar" if pinned else "Desanclar", OpAnclar),
+                  componente=k, anclado=bool(pinned))
+    resultado = _agregar(sesion, op)
+    resultado["component"] = info_componente(sesion, k)
+    return resultado
+
+
+@herramienta("set_component_initial_position", "ensamble", "Posición inicial de un componente (ENSAMBLAR › Editar "
+             "posición inicial): lo gira alrededor del centro de su caja envolvente (X, luego Y, luego Z) y lo "
+             "desplaza. Devuelve el componente con su traslación y su caja.", modifica=True)
+def set_component_initial_position(sesion, component: str, offset: list[Expr] | None = None,
+                                   rotation: list[Expr] | None = None, name: str | None = None):
+    """
+    component: id, nombre o un cuerpo del componente.
+    offset: desplazamiento [x, y, z] en mm (número o expresión); vacío = ninguno.
+    rotation: giro [rx, ry, rz] en grados alrededor del centro de la caja del componente; vacío = ninguno.
+    name: nombre del paso; vacío = «Posición inicial<n>».
+    """
+    k = componente(sesion, component)
+    for valor, que in ((offset, "offset"), (rotation, "rotation")):
+        if valor is not None and len(valor) != 3:
+            raise error("INVALID_ARGUMENTS", f"{que} va como [x, y, z] (recibió {len(valor)} valores).")
+    p = {}
+    for claves, valor in ((("x", "y", "z"), offset), (("rx", "ry", "rz"), rotation)):
+        if valor is not None:
+            p.update({c: _expr(v) for c, v in zip(claves, valor, strict=True)})
+    doc = sesion.doc
+    op = OpPosicionInicial(doc.nuevo_id(), nombre_paso(sesion, name, "Posición inicial", OpPosicionInicial),
+                           componente=k, **p)
+    resultado = _agregar(sesion, op)
+    resultado["component"] = info_componente(sesion, k)
+    return resultado
+
+
+@herramienta("capture_position", "ensamble", "Captura la posición actual de los componentes (ENSAMBLAR › Posición › "
+             "Capturar posición): queda como la de referencia a la que vuelve revert_position. No mueve nada.",
+             modifica=True)
+def capture_position(sesion, components: list[str] | None = None, name: str | None = None):
+    """
+    components: componentes a capturar (id, nombre o un cuerpo); vacío = todos.
+    name: nombre del paso; vacío = «Capturar posición<n>».
+    """
+    return _paso_componentes(sesion, OpCapturarPosicion, "Capturar posición", components, name)
+
+
+@herramienta("revert_position", "ensamble", "Revierte los componentes a su última posición capturada con "
+             "capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron.",
+             modifica=True)
+def revert_position(sesion, components: list[str] | None = None, name: str | None = None):
+    """
+    components: componentes a revertir (id, nombre o un cuerpo); vacío = todos.
+    name: nombre del paso; vacío = «Revertir posición<n>».
+    """
+    return _paso_componentes(sesion, OpRevertirPosicion, "Revertir posición", components, name)
+
+
+@herramienta("motion_study_pose", "ensamble", "Estudio de movimiento con varias uniones a la vez (ENSAMBLAR › Estudio de "
+             "movimiento): dónde quedan los componentes si cada unión de values tiene ese valor. Una unión que sigue a "
+             "un vínculo toma el valor de la otra. NO cambia el documento. (Reproducir, modo y velocidad son de la "
+             "ventana: ver docs/brechas_mcp.md.)")
+def motion_study_pose(sesion, values: dict):
+    """
+    values: valor de cada unión: {"Unión1": 90, "Unión2:slide": 12.5}; la clave es la unión (id o nombre) y, tras ":", el movimiento ("rotation", "rotation2", "rotation3", "slide" o "slide2"; vacío = el principal). Grados o mm.
+    """
+    estado = sesion.doc.estado_final
+    if not values:
+        raise error("INVALID_ARGUMENTS", "Falta values: el valor de al menos una unión.")
+    pedidos = {}
+    for ref, v in values.items():
+        nombre, _, mov = str(ref).partition(":")
+        op = union(sesion, nombre.strip())
+        if op.id not in estado.uniones:
+            raise error("INVALID_ARGUMENTS", f"La unión «{op.nombre}» no está calculada (¿suprimida o después del "
+                        "marcador?).")
+        tipo = op.p.get("tipo")
+        if not any(MOVIMIENTOS[tipo]):
+            raise error("INVALID_ARGUMENTS", f"La unión «{op.nombre}» es rígida: no tiene movimiento.")
+        clave = _movimiento_de(tipo, mov.strip()) if mov.strip() else principal_de(tipo)
+        try:
+            valor = float(v)
+        except (TypeError, ValueError):
+            raise error("INVALID_ARGUMENTS", f"El valor de «{ref}» tiene que ser un número (recibió {v!r}).") from None
+        if not np.isfinite(valor):
+            raise error("INVALID_ARGUMENTS", f"El valor de «{ref}» tiene que ser finito.")
+        pedidos.setdefault(op.id, {})[clave] = valor
+    poses = poses_de_estudio(estado, pedidos)
+    movido = estado.copia()
+    for k in estado.componentes:
+        m = next((poses[c.id] for c in estado.cuerpos.values() if c.componente == k and c.id in poses), None)
+        if m is not None:
+            _mover_componentes(movido, {k}, m)
+    return {"components": [dict(info_componente(sesion, k, movido),
+                                previous_translation=info_componente(sesion, k)["translation"])
+                           for k in estado.componentes], "document_changed": False}

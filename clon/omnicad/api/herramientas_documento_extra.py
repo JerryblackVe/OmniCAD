@@ -16,6 +16,15 @@ def _tabla_publica(datos):
             "active": datos.get("activa", "")}
 
 
+def _valor_actual(sesion, c):
+    """Lo que el documento tiene hoy para la columna `c` (parámetro: su expresión; supresión: sí/no)."""
+    if isinstance(c, dict) and c.get("type") == "suppress" and isinstance(c.get("feature"), str):
+        return "sí" if sesion.paso(c["feature"]).suprimida else "no"
+    if isinstance(c, dict) and c.get("type") == "parameter" and c.get("name") in sesion.doc.parametros:
+        return next(p["expresion"] for p in sesion.doc.parametros.a_lista() if p["nombre"] == c["name"])
+    return ""        # una columna inválida la rechaza _validar_tabla
+
+
 def _validar_tabla(sesion, columns, rows, active):
     columnas, claves = [], set()
     for c in columns:
@@ -66,16 +75,18 @@ def _validar_tabla(sesion, columns, rows, active):
 
 @herramienta("manage_configurations", "documento", "Consulta y edita la tabla de variantes de CONFIGURAR. "
              "Solo apply aplica parámetros y supresiones; cada edición o aplicación es un deshacer.", modifica=True)
-def manage_configurations(sesion, action: Literal["get", "set", "add_row", "delete_row", "apply", "clear"] = "get",
+def manage_configurations(sesion, action: Literal["get", "set", "add_row", "delete_row", "apply", "clear", "add_column"] = "get",
                           columns: list[dict] | None = None, rows: list[dict] | None = None,
-                          row: str | None = None, values: list | None = None, active: str | None = None):
+                          row: str | None = None, values: list | None = None, active: str | None = None,
+                          column: dict | None = None):
     """
-    action: get consulta; set reemplaza; add_row agrega; delete_row borra; apply activa; clear vacía la tabla.
+    action: get consulta; set reemplaza; add_row agrega; delete_row borra; apply activa; clear vacía la tabla; add_column suma una columna a todas las filas (Configurar del menú del timeline).
     columns: columnas para set: {"type": "parameter", "name": parámetro} o {"type": "suppress", "feature": id o nombre de paso}.
     rows: filas para set: [{"name": nombre, "values": [expresión o sí/no por columna]}].
     row: nombre de la fila a agregar, borrar o aplicar.
     values: valores por columna para add_row.
     active: nombre activo al guardar set; omitido = sin fila activa. set solo guarda la tabla, no aplica la fila.
+    column: columna para add_column, como las de set; cada fila la recibe con el valor que el documento tiene hoy.
     """
     doc = sesion.doc
     actual = _tabla_publica(doc.configuraciones)
@@ -91,6 +102,12 @@ def manage_configurations(sesion, action: Literal["get", "set", "add_row", "dele
         if row is None or values is None:
             raise error("INVALID_ARGUMENTS", "add_row requiere row y values.")
         actual["rows"].append({"name": row, "values": values})
+    elif action == "add_column":
+        if column is None:
+            raise error("INVALID_ARGUMENTS", "add_column requiere column.")
+        hoy = _valor_actual(sesion, column)
+        actual["columns"].append(column)
+        actual["rows"] = [dict(f, values=f["values"] + [hoy]) for f in actual["rows"]]
     else:
         if row is None or not any(f["name"] == row for f in actual["rows"]):
             raise error("INVALID_ARGUMENTS", f"No existe la configuración «{row}».")

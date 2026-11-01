@@ -24,6 +24,7 @@ import math
 import time
 
 import numpy as np
+from .. import nativo
 from . import motor as _motor
 
 
@@ -568,6 +569,10 @@ def primer_choque(origenes, direcciones, triangulos, eps):
     distancia, indice = np.full(len(O), np.inf), np.full(len(O), -1, np.int64)
     if not len(O) or not len(T):
         return distancia, indice
+    rs = nativo.disponible()
+    if hasattr(rs, "Bvh"):                            # un .pyd viejo no la trae: rige numpy
+        return rs.Bvh(np.ascontiguousarray(T)).primer_choque(np.ascontiguousarray(O), np.ascontiguousarray(D),
+                                                              eps, 0.0, 1e-9)
     e1, e2 = T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]
     sanos = np.flatnonzero(np.linalg.norm(np.cross(e1, e2), axis=1) > 1e-300)
     T, e1, e2 = T[sanos], e1[sanos], e2[sanos]

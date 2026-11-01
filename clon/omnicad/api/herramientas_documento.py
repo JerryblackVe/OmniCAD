@@ -44,6 +44,13 @@ def _info_cuerpo(sesion, c):
         p0, p1 = caja
         info["bounding_box"] = {"min": [_r(v) for v in p0], "max": [_r(v) for v in p1],
                                 "size": [_r(b - a) for a, b in zip(p0, p1, strict=True)]}
+    if tipo == "superficie":                    # SUP-23: de qué lado está el «positivo» de Desfase y Engrosar
+        from ..nucleo import superficies
+        try:
+            punto, normal = superficies.normal_muestra(forma)
+            info["normal"] = {"point": [_r(v) for v in punto], "direction": [_r(v) for v in normal]}
+        except geo.ErrorGeometria:
+            info["normal"] = None
     return info
 
 
@@ -160,7 +167,8 @@ def _paso_info(op):
 
 
 @herramienta("get_scene_info", "documento", "Resumen del documento: nombre, archivo, cambios sin guardar, unidades, "
-             "cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente), bocetos (plano y perfiles), "
+             "cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente y, en las superficies, normal: un punto y "
+             "la dirección del lado positivo), bocetos (plano y perfiles), "
              "componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve "
              "y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y "
              "parámetros. Con summary=true devuelve solo nombres y cantidades (corto, para modelos grandes).")
@@ -628,6 +636,7 @@ _ALIAS = {
                   "major_radius": "radio_mayor", "minor_radius": "radio_menor"},
     "mover": {"pivot": "pivote"},
 }
+_ALIAS["sup_primitiva"] = _ALIAS["primitiva"]
 _PIVOTE_ORIGEN = {"tipo": "punto", "id": "O"}
 
 
@@ -635,7 +644,7 @@ def _alias_del_paso(op):
     """{argumento de la herramienta: campo guardado} que valen para ESTE paso (en una caja, length → ancho, que es
     el tamaño en X). Así get_timeline dice qué campo es qué sin tener que conocer la receta."""
     alias = _ALIAS.get(op.TIPO, {})
-    if op.TIPO == "primitiva":
+    if op.TIPO in ("primitiva", "sup_primitiva"):
         campos = getattr(op, "CAMPOS", {}).get(op.p.get("forma"), [])
         alias = {a: c for a, c in alias.items() if c in campos}
     return dict(alias)
@@ -729,13 +738,26 @@ def edit_feature(sesion, feature: str, params: dict):
                 values=_valores_json(nueva, _nombres_parametros(sesion.doc)))
 
 
-@herramienta("suppress_feature", "documento", "Suprime o reactiva un paso del timeline (suprimido = no se calcula).",
-             modifica=True)
-def suppress_feature(sesion, feature: str, suppressed: bool = True):
+@herramienta("suppress_feature", "documento", "Suprime o reactiva uno o varios pasos del timeline (suprimido = no se "
+             "calcula). Con dos o más pasos, un solo paso de deshacer y lo que dependa de ellos queda con error, avisado, "
+             "sin rechazar todo; con uno solo (texto o lista de uno) se rechaza si algo se rompe.", modifica=True)
+def suppress_feature(sesion, feature: str | list[str], suppressed: bool = True):
     """
-    feature: id o nombre del paso.
+    feature: id o nombre del paso, o una lista de ellos (de dos o más: lo que dependa queda con error en vez de rechazar).
     suppressed: true para suprimir, false para reactivar.
     """
+    if isinstance(feature, list):
+        if not feature:
+            raise error("INVALID_ARGUMENTS", "Indicá al menos un paso.")
+        ops = list(dict.fromkeys(sesion.paso(f).id for f in feature))
+        cambiados = [i for i in ops if sesion.paso(i).suprimida != suppressed]
+        sesion.tolerar_errores = len(cambiados) > 1    # dos o más cambios: lo que dependa queda en rojo, con aviso; uno solo, estricto (ASM-8)
+        for i in cambiados:
+            sesion.doc.suprimir(i, suppressed)
+        if len(cambiados) < len(ops):
+            sesion.avisar(f"{len(ops) - len(cambiados)} paso(s) ya estaban "
+                          f"{'suprimidos' if suppressed else 'activos'}: no cambiaron.")
+        return {"features": [_paso_info(sesion.paso(i)) for i in ops], "suppressed": suppressed}
     op = sesion.paso(feature)
     if op.suprimida == suppressed:
         sesion.avisar(f"«{op.nombre}» ya estaba {'suprimido' if suppressed else 'activo'}: no cambió nada.")

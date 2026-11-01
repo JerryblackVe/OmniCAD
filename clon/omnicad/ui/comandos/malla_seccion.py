@@ -25,8 +25,8 @@ class SeccionMalla(Comando):
     def campos(self, ctx):
         return [Seleccion("cuerpo", "Cuerpo de malla", {"cuerpo"}),
                 Seleccion("plano", "Plano de sección", {"plano", "cara_plana"}),
-                Expresion("distancia", "Distancia", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
+                Expresion("distancia", "Distancia al plano", "0 mm"),
+                Expresion("angulo", "Ángulo del plano", "0 deg", ANGULO),
                 Opciones("ajuste", "Ajustar curvas", _AJUSTES, "ninguno"),
                 Expresion("tolerancia", "Desviación máxima", "0.1 mm",
                           visible_si=lambda v: v.get("ajuste") != "ninguno")]

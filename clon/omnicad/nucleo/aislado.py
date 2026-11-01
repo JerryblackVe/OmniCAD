@@ -117,9 +117,14 @@ def _previa_visual(receta, operacion, indice, deflexion, angular):
     return previa_visual(receta, operacion, indice, deflexion, angular)
 
 
+def _solape_herramienta(receta, operacion, indice, cuerpos):
+    from ..timeline.calculo_aislado import solape_herramienta
+    return solape_herramienta(receta, operacion, indice, cuerpos)
+
+
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
                 "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento,
-                "previa_visual": _previa_visual}
+                "previa_visual": _previa_visual, "solape_herramienta": _solape_herramienta}
 
 
 def _a_json(o):

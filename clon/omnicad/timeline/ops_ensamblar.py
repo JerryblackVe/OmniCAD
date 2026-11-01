@@ -28,6 +28,35 @@ MOVIMIENTOS = {"rigida": ([], []), "revolucion": (["giro"], []), "deslizante": (
                "planar": (["giro"], ["desliz", "desliz2"]), "bola": (["giro", "giro2", "giro3"], [])}
 EJES = {"X": 0, "Y": 1, "Z": 2}
 PUNTOS_CLAVE = ("centro", "inicio", "fin")      # punto de ajuste («Snap») del origen de unión, ver `_marco`
+# Modo del origen de unión (Joint reference › Mode): una cara/arista/punto, el medio de dos caras o el cruce de dos aristas.
+MODOS_POSICION = {"simple": "Simple", "entre_caras": "Entre dos caras", "interseccion": "Intersección de dos aristas"}
+CLAVES_MOVIMIENTO = ("giro", "giro2", "giro3", "desliz", "desliz2")
+
+
+def exigir_numero(texto):
+    """«nan» e «inf» (con signo o en mayúsculas) no son números: el mensaje lo dice, en vez de «Nombre desconocido»."""
+    if re.fullmatch(r"\s*[+-]?(nan|inf|infinity)\s*", str(texto or ""), re.IGNORECASE):
+        raise ErrorOperacion(f"No es un número: «{str(texto).strip()}». Escribí un valor finito (por ejemplo 30 o 45 deg).")
+
+
+def es_fijo(estado, comp):
+    """El componente no se mueve con una unión: fijo (Ground) o anclado (Pin)."""
+    datos = estado.componentes.get(comp, {})
+    return bool(datos.get("fijo") or datos.get("anclado"))
+
+
+def principal_de(tipo):
+    """El movimiento que recortan los límites de siempre (`minimo`, `maximo`): el giro si la unión gira."""
+    return "giro" if MOVIMIENTOS[tipo][0] else "desliz"
+
+
+def limites_expr(p, clave):
+    """(mínimo, máximo, reposo, invertir) en texto de un movimiento de la unión `p`. Los del movimiento principal
+    siguen en `minimo` y `maximo` (las recetas viejas); el resto y el reposo y «invertir» van en `limites_dof`."""
+    extra = (p.get("limites_dof") or {}).get(clave) or {}
+    if clave == principal_de(p["tipo"]):
+        return p.get("minimo"), p.get("maximo"), extra.get("reposo"), bool(extra.get("invertir"))
+    return extra.get("minimo"), extra.get("maximo"), extra.get("reposo"), bool(extra.get("invertir"))
 
 
 # ---------------------------------------------------------------- marcos (orígenes de unión)
@@ -184,6 +213,70 @@ def _centro_contorno_exterior(cara):
     return np.array(refs.firma_cara(cara_del_contorno(exterior, cara))["centro"])
 
 
+def _marco_entre_caras(a, b, version):
+    """Origen centrado entre dos caras planas paralelas: sobre el centro de la primera, a medio camino de la
+    segunda, con la normal de la primera (Between Two Faces)."""
+    if a.plano is None or b.plano is None:
+        raise ErrorOperacion("«Entre dos caras» necesita dos caras planas (o planos).")
+    n = _unit(a.plano.normal)
+    if abs(float(np.dot(n, _unit(b.plano.normal)))) < 1 - 1e-6:
+        raise ErrorOperacion("Las dos caras tienen que ser paralelas para centrar el origen entre ellas.")
+    ca, cb = _marco(a, "centro", version)[0][:3, 3], _marco(b, "centro", version)[0][:3, 3]
+    return marco_desde(ca + n * float((cb - ca) @ n) / 2, n, a.plano.u)
+
+
+def _marco_interseccion(a, b):
+    """Origen en el cruce, prolongado, de dos aristas rectas no paralelas (Two Edge Intersection): X siguiendo la
+    primera arista y Z perpendicular al plano de las dos."""
+    p1, d1 = _recta_de(a)
+    p2, d2 = _recta_de(b)
+    n = np.cross(d1, d2)
+    if np.linalg.norm(n) < 1e-9 * np.linalg.norm(d1) * np.linalg.norm(d2):
+        raise ErrorOperacion("Las dos aristas son paralelas: no se cruzan.")
+    s, t = np.linalg.solve(np.c_[d1, -d2, n], p2 - p1)[:2]
+    q1, q2 = p1 + d1 * s, p2 + d2 * t
+    if np.linalg.norm(q1 - q2) > 1e-6 * max(1.0, np.linalg.norm(q1)):
+        raise ErrorOperacion("Las dos aristas no se cruzan (no están en el mismo plano): no hay intersección.")
+    return marco_desde((q1 + q2) / 2, n, d1)
+
+
+def _marco_modo(estado, origen, origen_b, modo, clave, version):
+    """(marco, es_eje, entidad) del origen de unión en el modo pedido: «simple» es `_marco`; «entre_caras» e
+    «interseccion» usan además la segunda selección `origen_b`."""
+    e = _resolver(origen, estado)
+    if modo in (None, "", "simple"):
+        marco, eje = _marco(e, clave, version)
+        return marco, eje, e
+    if modo not in MODOS_POSICION:
+        raise ErrorOperacion(f"Modo de posición desconocido: «{modo}». Modos: {', '.join(MODOS_POSICION)}.")
+    if not origen_b:
+        raise ErrorOperacion(f"El modo «{MODOS_POSICION[modo]}» necesita la segunda selección: "
+                             f"{'otra cara' if modo == 'entre_caras' else 'otra arista'}.")
+    e2 = _resolver(origen_b, estado)
+    return (_marco_entre_caras(e, e2, version) if modo == "entre_caras" else _marco_interseccion(e, e2)), False, e
+
+
+def _eje_propio(estado, ref, F2, m0, comps):
+    """Eje elegido por la persona (arista, eje, cilindro) como ([punto], [dirección]) en el marco `F2` de la unión.
+    Si pertenece a un componente que la unión mueve, se toma ya movido por la alineación `m0`."""
+    e = _resolver(ref, estado)
+    try:
+        punto, dire = ent.como_eje(e)
+    except ent.ErrorReferencia as x:
+        raise ErrorOperacion(f"El eje de movimiento no sirve: {x}") from x
+    punto, dire = np.asarray(punto, float), np.asarray(dire, float)
+    if e.tipo == "cara" and e.plano is not None:           # una cara plana: su normal por el centro de la cara
+        punto = _centro_contorno_exterior(e.forma)
+    elif e.tipo in ("arista", "curva_boceto") and e.forma is not None:
+        f = refs.firma_arista(e.forma)
+        if f["geom"] == "circulo":                         # el eje de un círculo pasa por su centro, no por un punto suyo
+            punto = np.array(f["centro"], float)
+    if _componente_de(estado, e) in comps:
+        punto, dire = (m0 @ np.r_[punto, 1.0])[:3], m0[:3, :3] @ dire
+    inv = np.linalg.inv(F2)
+    return [float(x) for x in (inv @ np.r_[punto, 1.0])[:3]], [float(x) for x in inv[:3, :3] @ dire]
+
+
 def _rot(eje, grados):
     a = math.radians(grados)
     c, s = math.cos(a), math.sin(a)
@@ -199,23 +292,90 @@ def _tras(v):
     return m
 
 
+def eje_local(eje):
+    """(punto, dirección unitaria) de un eje de la unión en su marco: «X», «Y», «Z» o un eje propio
+    ([punto], [dirección]) que sale de una arista, un eje o un cilindro (`_eje_propio`)."""
+    if isinstance(eje, str):
+        return np.zeros(3), np.identity(3)[EJES[eje]]
+    return np.asarray(eje[0], float), _unit(eje[1])
+
+
+def _giro_en(eje, grados):
+    """Giro de `grados` alrededor de un eje de la unión (el origen del marco o un eje propio que no lo cruza)."""
+    if isinstance(eje, str):
+        return _rot(EJES[eje], grados)
+    p, d = eje_local(eje)
+    a = math.radians(grados)
+    k = np.array([[0, -d[2], d[1]], [d[2], 0, -d[0]], [-d[1], d[0], 0]])
+    m = np.identity(4)
+    m[:3, :3] = np.identity(3) + math.sin(a) * k + (1 - math.cos(a)) * (k @ k)
+    return _tras(p) @ m @ _tras(-p)
+
+
+def ejes_bola(ejes):
+    """(centro, balanceo, cabeceo, guiñada) de una bola con Pitch y Yaw elegidos (ASM-11): `ejes` es
+    {"cabeceo": eje, "guinada": eje} con ejes «X», «Y», «Z» o propios ([punto], [dirección]); lo que falta vale Y para
+    el cabeceo y X para la guiñada. La guiñada se vuelve perpendicular al cabeceo y el balanceo (Roll) sale solo, como
+    en Fusion: guiñada × cabeceo (con Y y X, el Z del marco). Las tres giran alrededor del punto del eje de cabeceo
+    (el origen del marco si es X, Y o Z)."""
+    centro, cabeceo = eje_local(ejes.get("cabeceo") or "Y")
+    guinada = eje_local(ejes.get("guinada") or "X")[1]
+    guinada = guinada - float(guinada @ cabeceo) * cabeceo
+    largo = float(np.linalg.norm(guinada))
+    if largo < 1e-6:
+        raise ErrorOperacion("El eje de cabeceo (Pitch) y el de guiñada (Yaw) son paralelos: elegí dos ejes distintos.")
+    guinada = guinada / largo
+    return centro, np.cross(guinada, cabeceo), cabeceo, guinada
+
+
 def movimiento(tipo, valores, eje_giro="Z", eje_desliz="X"):
-    """Transformación (en el marco de la unión) que produce el movimiento con esos valores."""
+    """Transformación (en el marco de la unión) que produce el movimiento con esos valores. Cada eje es «X», «Y»,
+    «Z» o un eje propio ([punto], [dirección]) en ese marco. En la bola con Pitch y Yaw elegidos (`ejes_bola`) el
+    segundo eje es el dict {"cabeceo", "guinada"} y el balanceo sale de los dos."""
     g, d = MOVIMIENTOS[tipo]
     m = np.identity(4)
+    if tipo == "bola" and isinstance(eje_desliz, dict):
+        centro, balanceo, cabeceo, guinada = ejes_bola(eje_desliz)
+        return (_giro_en((centro, balanceo), valores.get("giro", 0.0))
+                @ _giro_en((centro, cabeceo), valores.get("giro2", 0.0))
+                @ _giro_en((centro, guinada), valores.get("giro3", 0.0)))
     if tipo in ("deslizante", "cilindrica"):
-        m = _tras(np.identity(3)[EJES[eje_giro if tipo == "cilindrica" else eje_desliz]] * valores.get("desliz", 0.0))
+        m = _tras(eje_local(eje_giro if tipo == "cilindrica" else eje_desliz)[1] * valores.get("desliz", 0.0))
     elif tipo == "pasador_ranura":
-        m = _tras(np.identity(3)[EJES[eje_desliz]] * valores.get("desliz", 0.0))
+        m = _tras(eje_local(eje_desliz)[1] * valores.get("desliz", 0.0))
     elif tipo == "planar":
-        normal = EJES[eje_giro]
-        a, b = [i for i in range(3) if i != normal]
-        m = _tras(np.identity(3)[a] * valores.get("desliz", 0.0) + np.identity(3)[b] * valores.get("desliz2", 0.0))
+        if isinstance(eje_giro, str):
+            a, b = (np.identity(3)[i] for i in range(3) if i != EJES[eje_giro])
+        else:
+            a, b = marco_desde((0, 0, 0), eje_local(eje_giro)[1])[:3, :2].T
+        m = _tras(a * valores.get("desliz", 0.0) + b * valores.get("desliz2", 0.0))
+    if tipo == "bola" and not isinstance(eje_giro, str):     # eje propio = el de balanceo; los otros dos salen de él
+        p, z = eje_local(eje_giro)
+        G = marco_desde(p, z)
+        return G @ _rot(2, valores.get("giro", 0.0)) @ _rot(1, valores.get("giro2", 0.0)) \
+            @ _rot(0, valores.get("giro3", 0.0)) @ np.linalg.inv(G)
     if "giro" in g:
-        m = m @ _rot(EJES[eje_giro] if tipo != "bola" else 2, valores.get("giro", 0.0))
+        m = m @ (_giro_en(eje_giro, valores.get("giro", 0.0)) if tipo != "bola" else _rot(2, valores.get("giro", 0.0)))
     if tipo == "bola":
         m = m @ _rot(1, valores.get("giro2", 0.0)) @ _rot(0, valores.get("giro3", 0.0))
     return m
+
+
+def direccion_eje(F, eje):
+    """Dirección en el mundo de un eje de la unión de marco F (para dibujar el asa del Accionar)."""
+    return F[:3, :3] @ eje_local(eje)[1]
+
+
+def _recta_de(e):
+    """(punto, dirección) de una arista recta, una línea de boceto o un eje de construcción."""
+    if e.eje is not None:
+        return np.asarray(e.eje[0], float), np.asarray(e.eje[1], float)
+    if e.tipo in ("arista", "curva_boceto") and e.forma is not None:
+        f = refs.firma_arista(e.forma)
+        if f["geom"] == "linea":
+            a, b = (np.array(p, float) for p in f["extremos"])
+            return a, b - a
+    raise ErrorOperacion("La intersección de dos aristas necesita dos aristas rectas (o ejes).")
 
 
 # ---------------------------------------------------------------- operaciones
@@ -266,8 +426,14 @@ class OpComponente(Operacion):
     def ejecutar(self, estado, ctx):
         estado.componentes[self.id] = {"nombre": self.nombre, "padre": "", "fijo": bool(self.p["fijo"]),
                                        "matriz": np.identity(4).tolist()}
+        viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
         for cid in self.p["cuerpos"]:
             estado.cuerpo(cid).componente = self.id
+        for k in sorted(viejos):       # ASM-7: el componente de donde salió su único cuerpo queda vacío
+            if k in estado.componentes and not any(c.componente == k for c in estado.cuerpos.values()):
+                nombre = estado.componentes[k].get("nombre") or k
+                ctx.aviso(f"El componente «{nombre}» quedó sin cuerpos{' (estaba fijo)' if es_fijo(estado, k) else ''}: "
+                          "sus uniones ya no mueven ni sujetan nada. Borralo o pasale otro cuerpo.")
 
 
 def _migrador(clave):
@@ -302,7 +468,7 @@ def _camino_lazo(estado, comp1, comp2):
         return []
 
     def nodo(comp):
-        return "" if not comp or estado.componentes.get(comp, {}).get("fijo") else comp
+        return "" if not comp or es_fijo(estado, comp) else comp
 
     grafo = {}
     for uid, u in estado.uniones.items():
@@ -420,7 +586,7 @@ def _resolver_lazo(estado, ctx, cierre, camino):
         for uid, u in estado.uniones.items():
             if uid not in camino and u["comp2"] == padre:
                 for comp in u["componentes"]:
-                    if comp not in movidos and comp and not estado.componentes[comp].get("fijo"):
+                    if comp not in movidos and comp and not es_fijo(estado, comp):
                         nuevas[comp] = delta @ poses[comp]
                         movidos.add(comp)
                         pendientes.add(comp)
@@ -432,8 +598,10 @@ def _resolver_lazo(estado, ctx, cierre, camino):
         f1 = _marco_en_pose(datos["marco1"], _matriz_de(estado, cierre["comp1"]))
         f2 = _marco_en_pose(datos["marco2"], _matriz_de(estado, cierre["comp2"]))
     else:
-        f1 = _marco(_resolver(datos["origen1"], estado), datos["clave1"], datos["version"])[0]
-        f2 = _marco(_resolver(datos["origen2"], estado), datos["clave2"], datos["version"])[0]
+        f1 = _marco_modo(estado, datos["origen1"], datos.get("origen1b"), datos.get("modo1"), datos["clave1"],
+                         datos["version"])[0]
+        f2 = _marco_modo(estado, datos["origen2"], datos.get("origen2b"), datos.get("modo2"), datos["clave2"],
+                         datos["version"])[0]
     objetivo = (f2 @ movimiento(cierre["tipo"], valores[-1], cierre["eje_giro"], cierre["eje_desliz"])
                 @ np.asarray(datos["alinear"]))
     if (np.linalg.norm(f1[:3, 3] - objetivo[:3, 3]) >= 1e-6 or
@@ -465,65 +633,99 @@ class OpUnion(Operacion):
     liga el componente 1 al 2: conserva la posición modelada respecto de él y lo sigue cuando se mueve.
     Al cerrar un lazo, la última unión accionada conserva su movimiento (por defecto, la primera del timeline);
     se resuelven numéricamente los giros y deslizamientos de las demás. Los lazos superpuestos y las uniones
-    como está sobre piezas ya movidas conservan el comportamiento secuencial con un aviso."""
+    como está sobre piezas ya movidas conservan el comportamiento secuencial con un aviso.
+
+    Modo de cada origen (`modo1`, `modo2`; ASM-10): «simple», «entre_caras» o «interseccion» (usan `origen1b` /
+    `origen2b`, la segunda cara o arista). Ejes propios (`ref_eje_giro`, `ref_eje_desliz`; ASM-11): una arista,
+    un eje o un cilindro en vez de X, Y o Z del marco. Límites por movimiento, reposo e invertir
+    (`limites_dof`; ASM-12): {"giro2": {"minimo", "maximo", "reposo", "invertir"}}; los del movimiento
+    principal siguen en `minimo` y `maximo`."""
     TIPO, ETIQUETA, ICONO = "union", "Unión", "⚙"
     PARAMS = {"tipo": "rigida", "origen1": None, "origen2": None, "clave1": "centro", "clave2": "centro",
               "angulo": "0 deg", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "voltear": False, "como_esta": False,
               "eje_giro": "Z", "eje_desliz": "X", "giro": "0 deg", "giro2": "0 deg", "giro3": "0 deg",
-              "desliz": "0 mm", "desliz2": "0 mm", "minimo": "", "maximo": "", "version_marco": 2, "accionada": 0}
+              "desliz": "0 mm", "desliz2": "0 mm", "minimo": "", "maximo": "", "version_marco": 2, "accionada": 0,
+              "modo1": "simple", "modo2": "simple", "origen1b": None, "origen2b": None,
+              "ref_eje_giro": None, "ref_eje_desliz": None, "limites_dof": {}, "eje_cabeceo": "", "eje_guinada": "",
+              "ref_eje_cabeceo": None, "ref_eje_guinada": None}
     EXPRESIONES = ("angulo", "dx", "dy", "dz", "giro", "giro2", "giro3", "desliz", "desliz2")
     OPCIONES = {"tipo": TIPOS_UNION, "clave1": PUNTOS_CLAVE, "clave2": PUNTOS_CLAVE, "eje_giro": EJES,
-                "eje_desliz": EJES}
+                "eje_desliz": EJES, "modo1": MODOS_POSICION, "modo2": MODOS_POSICION,
+                "eje_cabeceo": ("", *EJES), "eje_guinada": ("", *EJES)}
     migrar_receta = _migrador("version_marco")
 
     def dependencias(self):
-        return (super().dependencias() | ent.dependencias_de(self.p["origen1"], self.p["origen2"])) - {self.id}
+        p = self.p
+        return (super().dependencias() | ent.dependencias_de(
+            p["origen1"], p["origen2"], p.get("origen1b"), p.get("origen2b"), p.get("ref_eje_giro"),
+            p.get("ref_eje_desliz"), p.get("ref_eje_cabeceo"), p.get("ref_eje_guinada"))) - {self.id}
+
+    def limites(self, ctx, clave):
+        """(mínimo, máximo) de un movimiento en grados o mm, con «invertir» ya aplicado; None = sin límite."""
+        mn, mx, _reposo, invertir = limites_expr(self.p, clave)
+        tipo = ANGULO if clave.startswith("giro") else "longitud"
+        lim = [ctx.evaluar(x, tipo) if str(x or "").strip() else None for x in (mn, mx)]
+        if invertir:
+            lim = [None if lim[1] is None else -lim[1], None if lim[0] is None else -lim[0]]
+        return lim
 
     def valores(self, ctx, aviso=None):
-        """Valores del movimiento. Los límites (Joint Motion Limits) recortan el movimiento principal; con
-        `aviso` se avisa cuando lo hacen."""
+        """Valores del movimiento. Los límites (Joint Motion Limits) de cada movimiento lo recortan; con `aviso`
+        se avisa cuando lo hacen."""
         g = {k: ctx.evaluar(self.p[k], ANGULO) for k in ("giro", "giro2", "giro3")}
         g.update({k: ctx.evaluar(self.p[k]) for k in ("desliz", "desliz2")})
-        gira = bool(MOVIMIENTOS[self.p["tipo"]][0])
-        clave, tipo = ("giro", ANGULO) if gira else ("desliz", "longitud")
-        que, unidad = ("El giro pedido", "°") if gira else ("La distancia pedida", " mm")
-        for lim, cual, recorta in (("minimo", "es menor que el límite mínimo", max),
-                                   ("maximo", "supera el límite máximo", min)):
-            if not str(self.p.get(lim) or "").strip():
-                continue
-            valor = ctx.evaluar(self.p[lim], tipo)
-            if recorta(g[clave], valor) != g[clave]:
-                if aviso is not None:
-                    aviso(f"{que} ({g[clave]:g}{unidad}) {cual} ({valor:g}{unidad}): la unión quedó en "
-                          f"{valor:g}{unidad}.")
-                g[clave] = valor
+        etiqueta = {"giro": "El giro pedido", "giro2": "El cabeceo pedido", "giro3": "La guiñada pedida",
+                    "desliz": "La distancia pedida", "desliz2": "La distancia 2 pedida"}
+        for clave in sum(MOVIMIENTOS[self.p["tipo"]], []):
+            unidad = "°" if clave.startswith("giro") else " mm"
+            mn, mx = self.limites(ctx, clave)
+            for valor, cual, recorta in ((mn, "es menor que el límite mínimo", max),
+                                         (mx, "supera el límite máximo", min)):
+                if valor is not None and recorta(g[clave], valor) != g[clave]:
+                    if aviso is not None:
+                        aviso(f"{etiqueta[clave]} ({g[clave]:g}{unidad}) {cual} ({valor:g}{unidad}): la unión quedó "
+                              f"en {valor:g}{unidad}.")
+                    g[clave] = valor
         return g
+
+    def _ejes(self, estado, F2, m0, comps):
+        """(eje de giro, eje de deslizamiento) efectivos: X, Y, Z del marco o el eje propio elegido. En la bola con
+        Pitch o Yaw elegidos (ASM-11), el segundo es {"cabeceo": eje, "guinada": eje} (`ejes_bola`)."""
+        p = self.p
+        giro, desliz = tuple(_eje_propio(estado, p[ref], F2, m0, comps) if p.get(ref) else p[eje]
+                             for eje, ref in (("eje_giro", "ref_eje_giro"), ("eje_desliz", "ref_eje_desliz")))
+        if p["tipo"] == "bola" and any(p.get(k) for k in ("eje_cabeceo", "eje_guinada", "ref_eje_cabeceo",
+                                                           "ref_eje_guinada")):
+            elegir = lambda eje, ref: (_eje_propio(estado, p[ref], F2, m0, comps) if p.get(ref)       # noqa: E731
+                                       else p.get(eje) or None)
+            desliz = {"cabeceo": elegir("eje_cabeceo", "ref_eje_cabeceo"),
+                      "guinada": elegir("eje_guinada", "ref_eje_guinada")}
+        return giro, desliz
 
     def ejecutar(self, estado, ctx):
         p = self.p
         self._usados = set()
+        for k in (*self.EXPRESIONES, "minimo", "maximo"):
+            exigir_numero(p.get(k))
         version = _version_de(p, "version_marco")
         accionada = self.entero("accionada", minimo=0)
         if not p["origen1"]:
             raise ErrorOperacion("Elegí el origen de la unión en el componente 1.")
-        e1 = _resolver(p["origen1"], estado)
+        F1, eje1, e1 = _marco_modo(estado, p["origen1"], p.get("origen1b"), p.get("modo1"), p["clave1"], version)
         comp1 = _componente_de(estado, e1)
         if not comp1:
             raise ErrorOperacion("El componente 1 tiene que ser un componente (no la raíz): creá uno con "
                                  "ENSAMBLAR › Nuevo componente.")
-        if estado.componentes.get(comp1, {}).get("fijo"):
+        if es_fijo(estado, comp1):
             raise ErrorOperacion("El componente 1 está fijo: no se puede mover con una unión.")
-        F1, eje1 = _marco(e1, p["clave1"], version)
         valores = self.valores(ctx, ctx.aviso)
-        mov = movimiento(p["tipo"], valores, p["eje_giro"], p["eje_desliz"])
         reaplicar = None
         comps = grupo_rigido(estado, comp1)
-        fijos = [c for c in comps if estado.componentes.get(c, {}).get("fijo")]
+        fijos = [c for c in comps if es_fijo(estado, c)]
         if fijos:
             nombre = estado.componentes[fijos[0]].get("nombre") or fijos[0]
             raise ErrorOperacion(f"El componente 1 está en un grupo rígido con «{nombre}», que está fijo: no se "
                                  "puede mover con una unión.")
-        tipo_limite = ANGULO if MOVIMIENTOS[p["tipo"]][0] else "longitud"
         if p["como_esta"]:
             comp2, seguir = "", np.identity(4)
             if p["origen2"]:
@@ -540,6 +742,8 @@ class OpUnion(Operacion):
                 # Posición modelada respecto del componente 2: lo que él se movió, el 1 también.
                 seguir = _matriz_de(estado, comp2) @ np.linalg.inv(_matriz_de(estado, comp1))
             F2 = seguir @ F1
+            ejes = self._ejes(estado, F2, seguir, comps)
+            mov = movimiento(p["tipo"], valores, *ejes)
             m = F2 @ mov @ np.linalg.inv(F2) @ seguir
             if not (comp2 and ya_movida) or camino:
                 marco = _marco_local(estado, comp1, F1, False)
@@ -552,11 +756,10 @@ class OpUnion(Operacion):
         else:
             if not p["origen2"]:
                 raise ErrorOperacion("Elegí el origen de la unión en el componente 2.")
-            e2 = _resolver(p["origen2"], estado)
+            F2, eje2, e2 = _marco_modo(estado, p["origen2"], p.get("origen2b"), p.get("modo2"), p["clave2"], version)
             comp2 = _componente_de(estado, e2) or ""
             if comp2 == comp1:
                 raise ErrorOperacion("Los dos orígenes están en el mismo componente.")
-            F2, eje2 = _marco(e2, p["clave2"], version)
             opuestos = not (version >= 2 and eje1 and eje2)       # caras enfrentadas; dos ejes: mismo sentido
             enfrentar = _rot(0, 180.0) if opuestos != bool(p["voltear"]) else np.identity(4)
             desfase = _tras([ctx.evaluar(p[k]) for k in ("dx", "dy", "dz")])
@@ -566,7 +769,8 @@ class OpUnion(Operacion):
             if version >= 2 and not p["voltear"] and float((m0[:3, :3] @ z1) @ z1) < -0.99:
                 ctx.aviso("La unión dejó el componente 1 dado vuelta respecto de cómo está modelado; si no es lo "
                           "que querías, marcá «Voltear».")
-            m = F2 @ mov @ alinear @ np.linalg.inv(F1)
+            ejes = self._ejes(estado, F2, m0, comps)
+            m = F2 @ movimiento(p["tipo"], valores, *ejes) @ alinear @ np.linalg.inv(F1)
             reaplicar = {"marco1": _marco_local(estado, comp1, F1, version >= 2 and eje1 and e1.tipo != "plano"),
                          "marco2": _marco_local(estado, comp2, F2, version >= 2 and eje2 and e2.tipo != "plano"),
                          "alinear": alinear.tolist()}
@@ -575,12 +779,12 @@ class OpUnion(Operacion):
         if reaplicar is not None:
             reaplicar.update(bases={c: _matriz_de(estado, c).tolist() for c in comps},
                              origen1=p["origen1"], origen2=p["origen2"], clave1=p["clave1"], clave2=p["clave2"],
-                             version=version,
-                             limites=[ctx.evaluar(p[k], tipo_limite) if str(p.get(k) or "").strip() else None
-                                      for k in ("minimo", "maximo")])
+                             modo1=p.get("modo1"), modo2=p.get("modo2"), origen1b=p.get("origen1b"),
+                             origen2b=p.get("origen2b"), version=version,
+                             limites=self.limites(ctx, principal_de(p["tipo"])))
         union = {"nombre": self.nombre, "tipo": p["tipo"], "comp1": comp1, "comp2": comp2,
-                 "componentes": sorted(comps), "marco": F2.tolist(), "eje_giro": p["eje_giro"],
-                 "eje_desliz": p["eje_desliz"], "valores": valores, "reaplicar": reaplicar, "accionada": accionada}
+                 "componentes": sorted(comps), "marco": F2.tolist(), "eje_giro": ejes[0],
+                 "eje_desliz": ejes[1], "valores": valores, "reaplicar": reaplicar, "accionada": accionada}
         camino = _camino_lazo(estado, comp1, comp2)
         if camino:
             if _resolver_lazo(estado, ctx, union, camino):
@@ -601,19 +805,20 @@ class OpOrigenUnion(Operacion):
     `OpUnion`."""
     TIPO, ETIQUETA, ICONO = "origen_union", "Origen de unión", "⌖"
     PARAMS = {"origen": None, "clave": "centro", "angulo": "0 deg", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm",
-              "version_marco": 2}
+              "version_marco": 2, "modo": "simple", "origen_b": None}
     EXPRESIONES = ("angulo", "dx", "dy", "dz")
-    OPCIONES = {"clave": PUNTOS_CLAVE}
+    OPCIONES = {"clave": PUNTOS_CLAVE, "modo": MODOS_POSICION}
     migrar_receta = _migrador("version_marco")
 
     def dependencias(self):
-        return ent.dependencias_de(self.p["origen"]) - {self.id}
+        return ent.dependencias_de(self.p["origen"], self.p.get("origen_b")) - {self.id}
 
     def ejecutar(self, estado, ctx):
         version = _version_de(self.p, "version_marco")
         if not self.p["origen"]:
             raise ErrorOperacion("Elegí dónde va el origen.")
-        F, eje = _marco(_resolver(self.p["origen"], estado), self.p["clave"], version)
+        F, eje, _e = _marco_modo(estado, self.p["origen"], self.p.get("origen_b"), self.p.get("modo"),
+                                 self.p["clave"], version)
         F = F @ _tras([ctx.evaluar(self.p[k]) for k in ("dx", "dy", "dz")]) @ _rot(2, ctx.evaluar(self.p["angulo"], ANGULO))
         plano = geo.Plano.desde_marco(F[:3, 3], F[:3, 2], F[:3, 0], self.nombre)
         plano.eje_de_union = eje        # una unión lo trata como el cilindro o la arista de donde salió
@@ -667,13 +872,28 @@ class OpGrupoRigido(Operacion):
         estado.grupos_rigidos = estado.grupos_rigidos + [ids]
 
 
+def _clave_movimiento(u, elegido):
+    """El movimiento de la unión `u` que entra en un vínculo: el elegido o, sin elegir, el giro si gira y si no el
+    deslizamiento."""
+    giros, desliz = MOVIMIENTOS[u["tipo"]]
+    if not elegido:
+        return "giro" if giros else "desliz"
+    if elegido not in giros + desliz:
+        raise ErrorOperacion(f"La unión «{u['nombre']}» no tiene el movimiento «{elegido}»: tiene "
+                             f"{', '.join(giros + desliz) or 'ninguno (es rígida)'}.")
+    return elegido
+
+
 class OpVinculoMovimiento(Operacion):
     """ENSAMBLAR › Vínculo de movimiento [GUID-074622A9]: la unión 2 se mueve en proporción a la 1.
 
     El valor vinculado REEMPLAZA al de la unión 2 (`version_vinculo` 2). Las recetas viejas (1) lo sumaban
-    sobre la posición ya calculada de la unión 2 y abren igual que antes."""
+    sobre la posición ya calculada de la unión 2 y abren igual que antes. Las dos uniones pueden ser la misma
+    (ASM-13): `mov1` y `mov2` son entonces dos movimientos distintos de ella (un tornillo: el giro manda sobre el
+    deslizamiento)."""
     TIPO, ETIQUETA, ICONO = "vinculo_movimiento", "Vínculo de movimiento", "⇄"
-    PARAMS = {"union1": "", "union2": "", "factor": "1", "invertir": False, "version_vinculo": 2}
+    PARAMS = {"union1": "", "union2": "", "factor": "1", "invertir": False, "version_vinculo": 2,
+              "mov1": "", "mov2": ""}
     EXPRESIONES = ("factor",)
     migrar_receta = _migrador("version_vinculo")
 
@@ -683,10 +903,17 @@ class OpVinculoMovimiento(Operacion):
     def ejecutar(self, estado, ctx):
         version = _version_de(self.p, "version_vinculo")
         u1, u2 = estado.uniones.get(self.p["union1"]), estado.uniones.get(self.p["union2"])
-        if not u1 or not u2:
-            raise ErrorOperacion("Las dos uniones tienen que existir antes del vínculo.")
-        clave1 = "giro" if MOVIMIENTOS[u1["tipo"]][0] else "desliz"
-        clave2 = "giro" if MOVIMIENTOS[u2["tipo"]][0] else "desliz"
+        faltan = [f"«{i}»" for i, u in ((self.p["union1"], u1), (self.p["union2"], u2)) if not u]
+        if faltan:
+            raise ErrorOperacion(f"El vínculo necesita la unión {' y la unión '.join(faltan)}, que no está calculada: "
+                                 "está suprimida, borrada o después de este paso.")
+        clave1 = _clave_movimiento(u1, self.p.get("mov1"))
+        clave2 = _clave_movimiento(u2, self.p.get("mov2"))
+        misma = self.p["union1"] == self.p["union2"]
+        if misma and clave1 == clave2:
+            raise ErrorOperacion(f"Para relacionar dos movimientos de la misma unión («{u1['nombre']}») hay que elegir dos "
+                                 f"distintos (los dos son «{clave1}»): elegí el de la unión 1 y el de la unión 2 (por "
+                                 "ejemplo, giro y deslizamiento de una cilíndrica).")
         if self.p["union2"] in estado.vinculos:
             otro = estado.uniones.get(estado.vinculos[self.p["union2"]], {})
             raise ErrorOperacion(f"La unión «{u2['nombre']}» ya la mueve el vínculo «{otro.get('nombre', 'otro')}»: "
@@ -716,7 +943,178 @@ class OpVinculoMovimiento(Operacion):
         m = (F2 @ movimiento(u2["tipo"], nuevos, u2["eje_giro"], u2["eje_desliz"])
              @ np.linalg.inv(movimiento(u2["tipo"], viejos, u2["eje_giro"], u2["eje_desliz"])) @ np.linalg.inv(F2))
         _mover_componentes(estado, set(u2["componentes"]), m)
-        estado.uniones[self.p["union2"]] = dict(u2, valores=nuevos)   # dict nuevo: la copia del estado es superficial
+        enlace = {"union1": self.p["union1"], "clave1": clave1, "clave2": clave2, "factor": factor}
+        # dict nuevo: la copia del estado es superficial; `vinculo` lo usa el estudio de movimiento (`poses_de_estudio`)
+        estado.uniones[self.p["union2"]] = dict(u2, valores=nuevos, vinculo=enlace)
+
+
+def _comp_o_error(estado, ref):
+    comp = componente_por_ref(estado, ref)
+    if comp is None:
+        hay = ", ".join(f"{c.get('nombre') or k} ({k})" for k, c in estado.componentes.items()) or "ninguno"
+        raise ErrorOperacion(f"No encontré el componente «{ref}». Componentes: {hay}.")
+    return comp
+
+
+def _dep_componente(ref):
+    return {ref.split(".")[0]} if isinstance(ref, str) and re.fullmatch(r"op\d+(\..*)?", ref) else set()
+
+
+class OpAnclar(Operacion):
+    """ENSAMBLAR › Anclar / Desanclar [Pin / Unpin]: fija el componente a la raíz como un paso del timeline. Una
+    unión no puede moverlo mientras esté anclado (como uno fijo), pero se puede desanclar más adelante."""
+    TIPO, ETIQUETA, ICONO = "anclar", "Anclar", "📌"
+    PARAMS = {"componente": "", "anclado": True}
+
+    def dependencias(self):
+        return (super().dependencias() | _dep_componente(self.p["componente"])) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        comp = _comp_o_error(estado, self.p["componente"])
+        self._usados = {comp}
+        estado.componentes[comp] = dict(estado.componentes[comp], anclado=bool(self.p["anclado"]))
+
+
+class OpCopiarComponente(Operacion):
+    """ENSAMBLAR › Duplicar con uniones [Duplicate With Joints] — el paso «Copy Component» que deja cada instancia: un
+    componente nuevo con copias de todos los cuerpos de `componente`, en la misma pose y con la misma matriz (una unión
+    posterior lo lleva a su destino). Las copias son independientes: OmniCAD no tiene instancias asociativas de
+    componentes. Un componente con subcomponentes no se copia."""
+    TIPO, ETIQUETA, ICONO = "copiar_componente", "Copiar componente", "▣"
+    PARAMS = {"componente": ""}
+
+    def dependencias(self):
+        return (super().dependencias() | _dep_componente(self.p["componente"])) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        from .operaciones import atributos_copia
+        origen = _comp_o_error(estado, self.p["componente"])
+        if any(d.get("padre") == origen for d in estado.componentes.values()):
+            raise ErrorOperacion(f"El componente «{estado.componentes[origen].get('nombre') or origen}» tiene "
+                                 "subcomponentes: copiarlos todavía no está. Copiá cada subcomponente por separado.")
+        self._usados = {origen}
+        datos = estado.componentes[origen]
+        estado.componentes[self.id] = {"nombre": estado.nombre_de_copia(datos.get("nombre") or origen), "padre": "",
+                                       "fijo": False, "matriz": list(datos.get("matriz", np.identity(4).tolist())),
+                                       **({"origen": datos["origen"]} if "origen" in datos else {})}
+        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == origen]
+        if not cuerpos:
+            raise ErrorOperacion("El componente no tiene cuerpos que copiar.")
+        for c in cuerpos:
+            forma = c.forma.copia() if getattr(c, "tipo", "solido") == "malla" else geo.transformar(c.forma, np.identity(4))
+            cid = estado.nuevo_cuerpo(self.id, forma, c.tipo, nombre=estado.nombre_de_copia(c.nombre),
+                                      **atributos_copia(c))
+            estado.cuerpo(cid).componente = self.id
+
+
+class OpPosicionInicial(Operacion):
+    """ENSAMBLAR › Editar posición inicial [Edit Initial Position]: mueve y gira un componente respecto de donde se
+    creó. Primero se gira (X, luego Y, luego Z) alrededor del centro de su caja envolvente y después se desplaza."""
+    TIPO, ETIQUETA, ICONO = "posicion_inicial", "Posición inicial", "✥"
+    PARAMS = {"componente": "", "x": "0 mm", "y": "0 mm", "z": "0 mm", "rx": "0 deg", "ry": "0 deg", "rz": "0 deg"}
+    EXPRESIONES = ("x", "y", "z", "rx", "ry", "rz")
+
+    def dependencias(self):
+        return (super().dependencias() | _dep_componente(self.p["componente"])) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        for k in self.EXPRESIONES:
+            exigir_numero(self.p[k])
+        comp = _comp_o_error(estado, self.p["componente"])
+        self._usados = {comp}
+        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == comp]
+        if not cuerpos:
+            raise ErrorOperacion("El componente no tiene cuerpos que mover.")
+        cajas = [geo.caja_envolvente(c.forma) if getattr(c, "tipo", "solido") != "malla" else c.forma.caja()
+                 for c in cuerpos]
+        centro = (np.min([c[0] for c in cajas], axis=0) + np.max([c[1] for c in cajas], axis=0)) / 2
+        giro = (_rot(2, ctx.evaluar(self.p["rz"], ANGULO)) @ _rot(1, ctx.evaluar(self.p["ry"], ANGULO))
+                @ _rot(0, ctx.evaluar(self.p["rx"], ANGULO)))
+        m = _tras([ctx.evaluar(self.p[k]) for k in ("x", "y", "z")]) @ _tras(centro) @ giro @ _tras(-centro)
+        _mover_componentes(estado, {comp}, m)
+
+
+class OpCapturarPosicion(Operacion):
+    """ENSAMBLAR › Posición › Capturar posición [Capture Position]: deja como posición de referencia la que tienen
+    ahora los componentes (todos, o los elegidos). No mueve nada: es el punto al que vuelve «Revertir posición»."""
+    TIPO, ETIQUETA, ICONO = "capturar_posicion", "Capturar posición", "◎"
+    PARAMS = {"componentes": []}
+
+    def dependencias(self):
+        ids = set().union(*(_dep_componente(c) for c in self.p["componentes"])) if self.p["componentes"] else set()
+        return (super().dependencias() | ids) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        comps = ([_comp_o_error(estado, c) for c in self.p["componentes"]] if self.p["componentes"]
+                 else list(estado.componentes))
+        if not comps:
+            raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
+                                 "ENSAMBLAR › Nuevo componente.")
+        self._usados = set(comps)
+        for k in comps:
+            estado.componentes[k] = dict(estado.componentes[k], captura=_matriz_de(estado, k).tolist())
+
+
+class OpRevertirPosicion(Operacion):
+    """ENSAMBLAR › Posición › Revertir [Revert]: devuelve los componentes (todos, o los elegidos) a su última posición
+    capturada o, si nunca se capturó, a donde se modelaron."""
+    TIPO, ETIQUETA, ICONO = "revertir_posicion", "Revertir posición", "↶"
+    PARAMS = {"componentes": []}
+
+    def dependencias(self):
+        ids = set().union(*(_dep_componente(c) for c in self.p["componentes"])) if self.p["componentes"] else set()
+        return (super().dependencias() | ids) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        comps = ([_comp_o_error(estado, c) for c in self.p["componentes"]] if self.p["componentes"]
+                 else list(estado.componentes))
+        if not comps:
+            raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
+                                 "ENSAMBLAR › Nuevo componente.")
+        self._usados = set(comps)
+        for k in comps:
+            meta = np.asarray(estado.componentes[k].get("captura", np.identity(4).tolist()), float)
+            _mover_componentes(estado, {k}, meta @ np.linalg.inv(_matriz_de(estado, k)))
+
+
+def valores_de_estudio(estado, valores):
+    """{id de unión: {movimiento: valor}} con TODOS los valores de cada unión: los pedidos en `valores` y, en las que
+    siguen a un vínculo, el que sale de la otra unión."""
+    uniones = estado.uniones
+    efectivos = {k: dict(u["valores"], **valores.get(k, {})) for k, u in uniones.items()}
+    for _ in range(len(uniones)):                       # los vínculos encadenados se resuelven en orden
+        for k, u in uniones.items():
+            v = u.get("vinculo")
+            if v and (k not in valores or v["union1"] == k) and v["union1"] in efectivos:
+                efectivos[k][v["clave2"]] = efectivos[v["union1"]].get(v["clave1"], 0.0) * v["factor"]
+    return efectivos
+
+
+def poses_de_estudio(estado, valores):
+    """Estudio de movimiento: {id de cuerpo: matriz 4x4} para ver las uniones con otros valores SIN recalcular.
+    `valores` = {id de unión: {movimiento: valor}} (grados o mm; lo que falte se queda como está). Una unión que
+    sigue a un vínculo toma su valor de la otra. Cada unión mueve los cuerpos de sus componentes y también los de las
+    uniones que cuelgan de ellos (su componente 2 es uno de los que mueve)."""
+    uniones = estado.uniones
+    efectivos = valores_de_estudio(estado, valores)
+    delta = {}
+    for k, u in uniones.items():
+        F = np.asarray(u["marco"], float)
+        eje = (u["eje_giro"], u["eje_desliz"])
+        delta[k] = F @ movimiento(u["tipo"], efectivos[k], *eje) @ np.linalg.inv(
+            movimiento(u["tipo"], u["valores"], *eje)) @ np.linalg.inv(F)
+    quien_mueve = {}                                           # componente -> la última unión que lo mueve
+    for k, u in uniones.items():
+        for comp in u["componentes"]:
+            quien_mueve[comp] = k
+
+    def total(k, vistos=()):
+        padre = quien_mueve.get(uniones[k]["comp2"])
+        if padre is None or padre == k or padre in vistos:
+            return delta[k]
+        return total(padre, (*vistos, k)) @ delta[k]
+
+    return {cid: total(quien_mueve[c.componente]) for cid, c in estado.cuerpos.items() if c.componente in quien_mueve}
 
 
 class OpInsertarDiseno(Operacion):
@@ -738,4 +1136,5 @@ class OpInsertarDiseno(Operacion):
                                 material=c.material, componente=self.id)
 
 
-registrar_operacion(OpComponente, OpUnion, OpOrigenUnion, OpGrupoRigido, OpVinculoMovimiento, OpInsertarDiseno)
+registrar_operacion(OpComponente, OpUnion, OpOrigenUnion, OpGrupoRigido, OpVinculoMovimiento, OpAnclar,
+                    OpPosicionInicial, OpCapturarPosicion, OpRevertirPosicion, OpInsertarDiseno, OpCopiarComponente)

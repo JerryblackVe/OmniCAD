@@ -38,11 +38,13 @@ class AdministrarReglasPlastico(Comando):
     AYUDA = ("Crea una regla de plástico propia (queda guardada en tu biblioteca) o borra una propia. "
              "Las de fábrica no se pisan ni se borran.")
     SIN_OP, TEXTO_ACEPTAR = True, "Aplicar"
+    TITULOS_MODO = ("accion", {"crear": ("Crear regla de plástico", "reglas_plastico"),
+                               "borrar": ("Borrar regla de plástico", "reglas_plastico")})
 
     def campos(self, ctx):
         crear = lambda v: v.get("accion") == "crear"  # noqa: E731
         return [Opciones("accion", "Acción", {"crear": "Crear regla", "borrar": "Borrar regla propia"}),
-                Texto("nombre", "Nombre"),
+                Texto("nombre", "Nombre", etiqueta_si=lambda v: "Nombre" if crear(v) else "Regla a borrar"),
                 Expresion("espesor", "Espesor de pared", "2 mm", visible_si=crear),
                 Expresion("angulo", "Ángulo de desmoldeo", "1 deg", tipo=ANGULO, visible_si=crear),
                 Texto("material", "Material físico (opcional)", visible_si=crear)]
@@ -79,31 +81,35 @@ class PatronGeometrico(Comando):
                                                       "personalizado": "A medida"}),
                 Seleccion("personalizado", "Cuerpo a repetir", {"cuerpo"}, minimo=0,
                           visible_si=lambda v: v.get("objeto") == "personalizado"),
-                Expresion("tamano1", "Límite de tamaño 1 (centro)", "2 mm"),
-                Expresion("tamano2", "Límite de tamaño 2 (esquina)", "4 mm"),
-                Expresion("dispersion", "Dispersión", "1", ESCALAR),
+                Expresion("tamano1", "Tamaño en el centro", "2 mm", grupo="Tamaño"),
+                Expresion("tamano2", "Tamaño en la esquina", "4 mm", grupo="Tamaño"),
+                Expresion("dispersion", "Dispersión", "1", ESCALAR, grupo="Tamaño"),
                 Opciones("distribucion", "Distribución", {"rectangular": "Rectangular", "triangular": "Triangular",
                                                           "hexagonal": "Hexagonal", "circular": "Circular",
-                                                          "radial": "Radial"}),
+                                                          "radial": "Radial"}, grupo="Distribución"),
                 Opciones("separacion", "Tipo de separación", {"incremento": "Incremento", "extension": "Extensión"},
-                         visible_si=es("rectangular")),
-                Expresion("distancia", "Distancia", "6 mm", visible_si=lambda v: rejilla(v) and v.get("separacion") != "extension"),
+                         visible_si=es("rectangular"), grupo="Distribución"),
+                Expresion("distancia", "Distancia entre objetos", "6 mm",
+                          visible_si=lambda v: rejilla(v) and v.get("separacion") != "extension", grupo="Distribución"),
                 Entero("cantidad_u", "Cantidad en U", 5, 1, 1000,
-                       visible_si=lambda v: rejilla(v) and v.get("separacion") == "extension"),
+                       visible_si=lambda v: rejilla(v) and v.get("separacion") == "extension", grupo="Distribución"),
                 Entero("cantidad_v", "Cantidad en V", 5, 1, 1000,
-                       visible_si=lambda v: es("rectangular")(v) and v.get("separacion") == "extension"),
-                Expresion("distancia_radial", "Distancia radial", "6 mm", visible_si=es("circular", "radial")),
-                Entero("rayos", "Rayos", 8, 1, 1000, visible_si=es("radial")),
-                Opciones("orientacion", "Orientación", {"cara": "Dirección de la cara", "paralela": "Dirección paralela"}),
+                       visible_si=lambda v: es("rectangular")(v) and v.get("separacion") == "extension",
+                       grupo="Distribución"),
+                Expresion("distancia_radial", "Distancia radial", "6 mm", visible_si=es("circular", "radial"),
+                          grupo="Distribución"),
+                Entero("rayos", "Rayos", 8, 1, 1000, visible_si=es("radial"), grupo="Distribución"),
+                campo_operacion("cortar"), campo_objetivos(),
+                Opciones("orientacion", "Orientación", {"cara": "Dirección de la cara", "paralela": "Dirección paralela"},
+                         avanzado=True),
                 Opciones("alineacion_u", "Alineación en U", {"izquierda": "Izquierda", "centro": "Centro", "derecha": "Derecha"},
-                         "centro", visible_si=rejilla),
-                Expresion("desfase_u", "Desfase en U", "0 mm"),
+                         "centro", visible_si=rejilla, grupo="Dirección U", avanzado=True),
+                Expresion("desfase_u", "Desfase en U", "0 mm", grupo="Dirección U", avanzado=True),
                 Opciones("alineacion_v", "Alineación en V", {"abajo": "Abajo", "medio": "Medio", "arriba": "Arriba"},
-                         "medio", visible_si=rejilla),
-                Expresion("desfase_v", "Desfase en V", "0 mm"),
-                Casilla("limpiar_perimetro", "Limpiar perímetro", True),
-                Expresion("desfase_perimetro", "Desfase del perímetro", "0 mm"),
-                campo_operacion("cortar"), campo_objetivos()]
+                         "medio", visible_si=rejilla, grupo="Dirección V", avanzado=True),
+                Expresion("desfase_v", "Desfase en V", "0 mm", grupo="Dirección V", avanzado=True),
+                Casilla("limpiar_perimetro", "Limpiar perímetro", True, grupo="Perímetro", avanzado=True),
+                Expresion("desfase_perimetro", "Desfase del perímetro", "0 mm", grupo="Perímetro", avanzado=True)]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras planas donde va el patrón.")

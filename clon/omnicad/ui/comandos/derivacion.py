@@ -15,6 +15,7 @@ from . import registrar
 class InsertarDerivacion(Comando):
     CLAVE, TITULO, ICONO = "insertar_derivacion", "Insertar derivación", "derivar"
     CLASE_OP = OpDerivacion
+    ANCHO_PANEL = "ancho"          # tres listas con casillas y nombres de cuerpos, bocetos y parámetros
     AYUDA = ("Vincula cuerpos, bocetos y parámetros de otro proyecto. Al recalcular vuelve a leer el origen; "
              "el archivo debe seguir disponible.")
 

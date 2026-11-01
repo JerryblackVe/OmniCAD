@@ -164,6 +164,19 @@ def previa_visual(receta, operacion, indice, deflexion, angular):
     return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)})
 
 
+def solape_herramienta(receta, operacion, indice, cuerpos):
+    """¿El cuerpo nuevo de `operacion` comparte volumen con alguno de `cuerpos`? Para cuerpos pesados (B-117)."""
+    from ..nucleo import geometria as geo
+    from .documento import Documento
+    from .operaciones import operacion_desde_dict
+
+    doc = Documento.desde_dict(receta)
+    entrada = doc.estado_en(doc.marcador if indice is None else indice)
+    estado, _ = doc.previsualizar(operacion_desde_dict(operacion), indice, en_vivo=True)
+    formas = [c.forma for k, c in estado.cuerpos.items() if k not in entrada.cuerpos]
+    return {"solapa": any(geo.solapan(f, entrada.cuerpos[c].forma) for f in formas for c in cuerpos)}
+
+
 def leer_previa_visual(salida, entrada):
     """Estado efímero de dibujo: ninguna malla entra en el timeline ni en la memoria de aceptación."""
     from ..nucleo.malla import Malla

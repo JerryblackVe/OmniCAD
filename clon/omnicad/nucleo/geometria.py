@@ -978,6 +978,19 @@ def esta_vacia(forma):
     return forma is None or not any(True for _ in _explorar(forma, TopAbs_FACE))
 
 
+def cajas_solapan(a, b):
+    """¿Dos cajas envolventes (mínimo, máximo) comparten volumen? Apoyarse en una cara no cuenta."""
+    return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) > 1e-6 for i in range(3))
+
+
+def solapan(a, b):
+    """¿Dos sólidos comparten volumen? Apoyarse en una cara no cuenta. La caja envolvente descarta casi todo sin booleana."""
+    if not cajas_solapan(caja_envolvente(a), caja_envolvente(b)):
+        return False
+    comun = booleano(a, b, "intersecar")
+    return not esta_vacia(comun) and abs(volumen_exacto(comun)) > 1e-6
+
+
 def se_tocan(a, b, tolerancia=1e-6):
     """True si las formas se tocan o se superponen, también cuando una queda entera dentro de un sólido de la otra.
     BRepExtrema_DistShapeShape solo mira «adentro» cuando la forma es un SOLID: con un COMPOUND (lo que devuelve toda

@@ -17,7 +17,7 @@ def registrar(*clases):
     return clases
 
 
-from . import chapa, construir, crear, engranaje, ensamblar, fijacion, insertar, inspeccionar, malla, modificar, solido, superficie  # noqa: E402,F401  (cada módulo se registra al importarse)
+from . import chapa, construir, crear, editar_cara, engranaje, ensamblar, fijacion, insertar, inspeccionar, malla, modificar, solido, superficie  # noqa: E402,F401  (cada módulo se registra al importarse)
 from . import revision  # noqa: E402,F401  (INSPECCIONAR › Revisar geometría y Reparar cuerpo)
 from . import derivacion  # noqa: E402,F401  (INSERTAR › Insertar derivación asociativa)
 from . import primitivas  # noqa: E402,F401  (Prisma rectangular, Cilindro, Esfera y Toroide con panel)

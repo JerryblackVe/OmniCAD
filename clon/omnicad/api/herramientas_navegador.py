@@ -153,14 +153,16 @@ def set_object_visibility(sesion, types: list[Literal["planos_origen", "ejes_ori
 
 @herramienta("find_in_window", "documento", "Selecciona cuerpos, los encuadra en la ventana y resalta su paso "
              "creador en el timeline, como Buscar en la ventana del navegador. Necesita la app en vivo.")
-def find_in_window(sesion, bodies: list[str] | None = None):
+def find_in_window(sesion, bodies: list[str] | None = None, steps: list[str] | None = None):
     """
-    bodies: ids o nombres de cuerpos; omitido o vacío busca todos los cuerpos del componente raíz.
+    bodies: ids o nombres de cuerpos; omitido o vacío (y sin steps) busca todos los cuerpos del componente raíz.
+    steps: pasos del timeline (ids o nombres): busca los cuerpos que crearon (Buscar en la ventana del menú del timeline).
     """
     buscar = getattr(sesion, "buscar_en_ventana", None)
     if buscar is None:
         raise error("APP_NOT_RUNNING", "Buscar en la ventana necesita la ventana de OmniCAD en vivo.")
-    ids = list(dict.fromkeys(sesion.cuerpo(b).id for b in bodies)) if bodies else list(sesion.doc.estado_final.cuerpos)
+    pedidos = list(bodies or []) + (sesion.cuerpos_de_pasos(steps) if steps else [])
+    ids = list(dict.fromkeys(sesion.cuerpo(b).id for b in pedidos)) if pedidos else list(sesion.doc.estado_final.cuerpos)
     return buscar(ids)
 
 

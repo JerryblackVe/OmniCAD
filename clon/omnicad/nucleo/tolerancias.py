@@ -10,6 +10,9 @@ Rosca y Agujero, más el cálculo de ajustes agujero/eje de las tablas de taller
     cuyos valores están verificados (ver `_ISO965_TD2`).
   - ASME B1.1: clases 2A y 3A (exterior) y 2B y 3B (interior) de la rosca unificada, con las fórmulas de la
     norma (largo de enganche = diámetro nominal).
+  - Los demás tipos (ACME, BSP y las tuberías, trapezoidal, autorroscantes, AFBMA…): las clases de las tablas de Fusion
+    (`tablas_rosca.CLASES`): cada clase trae los diámetros mayor, de flancos y menor de cada tamaño, sin intervalo de
+    tolerancia. Se modelan en ese valor los flancos y el menor del agujero; el Ø mayor y el menor del eje, no (B-122).
 
 Unidades: los resultados en mm; las tablas internas en micrómetros (µm), como en las normas.
 Errores: `geo.ErrorGeometria` con el motivo en español.
@@ -19,6 +22,7 @@ import re
 from decimal import ROUND_HALF_UP, Decimal
 
 from . import geometria as geo
+from . import tablas_rosca
 
 # ================================================================ ISO 286 (ajustes)
 # ISO 286-1 tabla 1: límites superiores de los escalones de medida nominal (mm). Cada escalón es
@@ -177,8 +181,12 @@ CLASES_UN = {"2B": True, "3B": True, "2A": False, "3A": False}
 # Tolerancia de flancos de cada clase respecto de la 2A y holgura (allowance) de la exterior: ASME B1.1.
 _UN_FACTOR = {"2A": 1.0, "3A": 0.75, "2B": 1.30, "3B": 0.975}
 
-CLASES_POR_FAMILIA = {"iso_metrica": CLASES_ISO965, "unificada": CLASES_UN}
-CLASE_AUTOMATICA = {"iso_metrica": ("6H", "6g"), "unificada": ("2B", "2A")}   # (interior, exterior), como Fusion
+_METRICAS = ("iso_metrica", "ansi_metrica", "gb_metrica")       # el mismo perfil M y las mismas clases
+# Las de las tablas de Fusion: clase → True (solo interior), False (solo exterior) o None (vale para los dos lados).
+CLASES_POR_FAMILIA = {**dict.fromkeys(_METRICAS, CLASES_ISO965), "unificada": CLASES_UN, **tablas_rosca.CLASES_FAMILIA}
+# (interior, exterior), como Fusion; None = ese lado no tiene clase en ese tipo (los solo exterior)
+CLASE_AUTOMATICA = {**dict.fromkeys(_METRICAS, ("6H", "6g")), "unificada": ("2B", "2A"), **tablas_rosca.CLASE_FUSION}
+_INDICE_TABLA = {}                  # (familia, Ø mayor, paso) → designaciones de la tabla (se arma al usarlo)
 
 
 def _r4(x):
@@ -234,22 +242,61 @@ def _limites_un(diametro, paso, clase):
             "desviacion_fundamental": -es * mm}
 
 
-def limites_rosca(familia, diametro, paso, clase):
-    """Diámetros límite (mm) de una rosca con su clase: ISO 965-1 (6H, 6G, 6g, 6h) para la métrica y ASME B1.1
-    (2A, 3A, 2B, 3B) para la unificada. Devuelve {"clase", "interna", "norma", "diametro_mayor": [mín, máx],
+def _hilo_de_tabla(familia, diametro, paso, clase):
+    """(hilo interior, hilo exterior) de la clase para ese tamaño en las tablas de Fusion; cada hilo es
+    (Ø mayor, Ø flancos, Ø menor) o None."""
+    if not _INDICE_TABLA:
+        from . import solidos_crear                 # tarde: solidos_crear importa este módulo
+        for nombre, f in solidos_crear.TABLA_ROSCAS.items():
+            if f["familia"] in tablas_rosca.CLASES:
+                _INDICE_TABLA.setdefault((f["familia"], round(f["diametro"], 4), round(f["paso"], 4)), []).append(nombre)
+    for nombre in _INDICE_TABLA.get((familia, round(float(diametro), 4), round(float(paso), 4)), ()):
+        por_clase = tablas_rosca.CLASES[familia].get(nombre)
+        if por_clase and clase in por_clase:
+            return por_clase[clase]
+    raise geo.ErrorGeometria(f"Las tablas de Fusion no traen la clase {clase} para este tamaño: usá la rosca sin clase "
+                             "o la «auto».")
+
+
+def _limites_tabla(familia, diametro, paso, clase, interna):
+    """Límites de una clase de las tablas de Fusion: un solo valor por diámetro (el hilo se modela ahí)."""
+    hilo = _hilo_de_tabla(familia, diametro, paso, clase)[0 if interna else 1]
+    if hilo is None:
+        raise geo.ErrorGeometria(f"La clase {clase} no tiene datos de rosca {'interior' if interna else 'exterior'} para "
+                                 "este tamaño.")
+    mayor, flancos, menor = hilo
+    par = lambda v: [None, None] if v is None else [v, v]      # noqa: E731
+    if interna:
+        return {"diametro_mayor": [mayor, None], "diametro_flancos": par(flancos), "diametro_menor": par(menor),
+                "desviacion_fundamental": 0.0}
+    return {"diametro_mayor": par(mayor), "diametro_flancos": par(flancos), "diametro_menor": [None, None],
+            "desviacion_fundamental": 0.0}
+
+
+def limites_rosca(familia, diametro, paso, clase, interna=None):
+    """Diámetros límite (mm) de una rosca con su clase: ISO 965-1 (6H, 6G, 6g, 6h) para la métrica, ASME B1.1
+    (2A, 3A, 2B, 3B) para la unificada y las clases de las tablas de Fusion para los demás tipos (un solo valor por
+    diámetro). `interna` solo importa en las clases que valen para los dos lados (A de las tuberías, 2G de la ACME):
+    sin decirlo se da el hilo exterior. Devuelve {"clase", "interna", "norma", "diametro_mayor": [mín, máx],
     "diametro_flancos": [...], "diametro_menor": [...], "desviacion_fundamental"}; None = la norma no lo
     limita (o no se cargó). Ej.: M10×1,5 6g → diámetro mayor [9.732, 9.968]."""
     clases = CLASES_POR_FAMILIA.get(familia)
     if not clases:
-        raise geo.ErrorGeometria("Esta familia de rosca no tiene clases cargadas (solo la métrica ISO y la unificada).")
+        raise geo.ErrorGeometria("Esta familia de rosca no tiene clases cargadas.")
     if clase not in clases:
         raise geo.ErrorGeometria(f"Clase «{clase}» desconocida para esta rosca: hay {', '.join(clases)}.")
-    lim = _limites_iso965(diametro, paso, clase) if familia == "iso_metrica" else _limites_un(diametro, paso, clase)
+    lado = clases[clase] if clases[clase] is not None else bool(interna)
+    if familia in tablas_rosca.CLASES:
+        from .solidos_crear import FAMILIAS_ROSCA
+        lim, norma = _limites_tabla(familia, diametro, paso, clase, lado), FAMILIAS_ROSCA[familia]["norma"]
+    elif familia in _METRICAS:
+        lim, norma = _limites_iso965(diametro, paso, clase), "ISO 965-1"
+    else:
+        lim, norma = _limites_un(diametro, paso, clase), "ASME B1.1"
     for k in ("diametro_mayor", "diametro_flancos", "diametro_menor"):
         lim[k] = [None if v is None else round(v, 4) for v in lim[k]]
     lim["desviacion_fundamental"] = round(lim["desviacion_fundamental"], 4)
-    return dict(lim, clase=clase, interna=clases[clase],
-                norma="ISO 965-1" if familia == "iso_metrica" else "ASME B1.1")
+    return dict(lim, clase=clase, interna=lado, norma=norma)
 
 
 def resolver_clase(familia, diametro, paso, clase, interna):
@@ -264,8 +311,10 @@ def resolver_clase(familia, diametro, paso, clase, interna):
         if familia not in CLASE_AUTOMATICA:
             return "", None
         clase = CLASE_AUTOMATICA[familia][0 if interna else 1]
+        if clase is None:                                    # un tipo solo exterior no tiene clase en el agujero
+            return "", None
         try:
-            limites_rosca(familia, diametro, paso, clase)
+            limites_rosca(familia, diametro, paso, clase, interna)
         except geo.ErrorGeometria:
             return "", (f"Sin datos verificados de tolerancia para este tamaño: se modela el perfil básico, sin la "
                         f"clase {clase}.")
@@ -273,11 +322,11 @@ def resolver_clase(familia, diametro, paso, clase, interna):
     if clase not in clases:
         disponibles = ", ".join(clases) or "ninguna"
         raise geo.ErrorGeometria(f"Clase «{clase}» desconocida para esta rosca (hay: {disponibles}).")
-    if clases[clase] != bool(interna):
+    if clases[clase] is not None and clases[clase] != bool(interna):
         lado = "interior (agujero)" if interna else "exterior (eje)"
-        otras = ", ".join(k for k, v in clases.items() if v == bool(interna))
+        otras = ", ".join(k for k, v in clases.items() if v in (None, bool(interna))) or "ninguna"
         raise geo.ErrorGeometria(f"La clase {clase} no es de rosca {lado}: usá {otras}.")
-    limites_rosca(familia, diametro, paso, clase)              # sin datos para el tamaño: error claro
+    limites_rosca(familia, diametro, paso, clase, interna)     # sin datos para el tamaño: error claro
     return clase, None
 
 
@@ -287,11 +336,12 @@ def desfases_rosca(familia, diametro, paso, clase, interna, diametro_flancos_bas
     radio del agujero (solo interior), "limites": limites_rosca o None}. Clase "" → todo 0."""
     if not clase:
         return {"flancos": 0.0, "menor": 0.0, "limites": None}
-    lim = limites_rosca(familia, diametro, paso, clase)
+    lim = limites_rosca(familia, diametro, paso, clase, interna)
     f0, f1 = lim["diametro_flancos"]
     medio = (f0 + f1) / 2
     if interna:
         m0, m1 = lim["diametro_menor"]
-        menor = ((m0 + m1) / 2 - diametro_menor_basico) / 2 if m1 is not None else (m0 - diametro_menor_basico) / 2
+        menor = (0.0 if m0 is None else ((m0 + m1) / 2 - diametro_menor_basico) / 2 if m1 is not None
+                 else (m0 - diametro_menor_basico) / 2)
         return {"flancos": (medio - diametro_flancos_basico) / 2, "menor": menor, "limites": lim}
     return {"flancos": (diametro_flancos_basico - medio) / 2, "menor": 0.0, "limites": lim}

@@ -24,7 +24,7 @@ from ..timeline.documento import VERSION_RECETA
 from ..timeline.operaciones import TIPOS_OPERACION, OpExtrusion, OpOperacionBase, operacion_desde_dict
 from . import selectores as sl
 from .errores import ErrorAPI, desde_mensaje, error
-from .registro import _a_json, herramienta, llamar
+from .registro import Imagen, _a_json, herramienta, llamar
 
 _GUIA = Path(__file__).resolve().parent / "guia"
 # Operaciones que guardan el archivo copiado en la receta (clave del contenido): por run_operation no leen rutas.
@@ -504,7 +504,7 @@ def describe_operation(sesion, type: str):
             p["format"] = formato
             if p["type"] == "any" and tipo_de_campo(clase, p["name"]) == "una" and "[x, y, z]" not in formato:
                 p["type"] = "reference"
-        nota = _NOTAS.get((clase.TIPO, p["name"]))
+        nota = _NOTAS.get(("primitiva" if clase.TIPO == "sup_primitiva" else clase.TIPO, p["name"]))
         if nota:
             p["notes"] = nota
     return {"type": clase.TIPO, "label": clase.ETIQUETA, "summary": _resumen_clase(clase),
@@ -638,7 +638,7 @@ def _renombrar_cotas(doc, ops_nuevas, parametros):
 def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "replace"):
     """
     recipe: la receta de get_recipe: su resultado {"recipe": …} tal cual o el objeto de adentro (con 'operaciones',
-        'parametros', etc.).
+        'parametros', etc.). Sin la clave 'sin_partir' se calcula como un archivo viejo: un corte no divide el cuerpo.
     mode: "replace" reemplaza el contenido del documento (conserva su archivo); "append" suma al final del
         timeline los pasos y parámetros de la receta (renumera los ids que chocan; un parámetro con el mismo
         nombre y otra expresión es un error) y deja el marcador al final.
@@ -674,6 +674,8 @@ def apply_recipe(sesion, recipe: dict, mode: Literal["replace", "append"] = "rep
                                 "Renombralo en la receta o usá mode='replace'.")
             ops, props = _renumerar(doc, ops_receta, recipe.get("propiedades") or {})
             combinada["operaciones"] += ops
+            viejos = recipe.get("sin_partir", [d["id"] for d in ops_receta])
+            combinada["sin_partir"] += [n["id"] for d, n in zip(ops_receta, ops, strict=True) if d["id"] in viejos]
             combinada["marcador"] = len(combinada["operaciones"])
             combinada["contador"] = max(doc._contador, len(combinada["operaciones"]))
             for k, v in props.items():
@@ -710,10 +712,16 @@ def _traza(e, codigo):
     return "\n".join(partes)
 
 
+def _imagen_o_error(x):
+    if isinstance(x, Imagen):
+        return None
+    raise TypeError(type(x).__name__)
+
+
 def _serializable(valor, sesion):
     valor = _a_json(valor)
     try:
-        json.dumps(valor)
+        json.dumps(valor, default=_imagen_o_error)         # H-53: una Imagen (get_viewport_image) pasa tal cual a las caras
         return valor
     except (TypeError, ValueError):
         sesion.avisar("`result` no es JSON: se devuelve su texto (repr).")
@@ -829,7 +837,8 @@ def _plazo(compilado, segundos, sesion):
              "deshacer; si el código lanza una excepción, el documento queda intacto. Corre como mucho `timeout` "
              f"segundos ({PLAZO_CODIGO:g} por defecto): al vencer se corta con CODE_TIMEOUT y el documento vuelve "
              "a como estaba. En vivo se puede cancelar mientras corre (botón Cancelar del diálogo): responde "
-             "CODE_CANCELLED y el documento también vuelve a como estaba.", modifica=True)
+             "CODE_CANCELLED y el documento también vuelve a como estaba. Si `result` es la imagen de una llamada "
+             "(get_viewport_image) o la lleva dentro, se entrega como imagen.", modifica=True)
 def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     """
     code: código Python. Definidos: api (el paquete omnicad.api), sesion, doc (el documento activo) y llamar

@@ -69,6 +69,7 @@ class Multitransformar(Comando):
     AYUDA = ("Patrones y simetrías encadenados en un solo paso: cada transformación se aplica a todas las copias de "
              "las anteriores (patrón de 3 + simetría = 6).")
     CLASE_OP = OpMultitransformar
+    ANCHO_PANEL = "ancho"          # lista de transformaciones + el editor de la elegida
 
     # ------------------------------------------------------------ campos
     def campos(self, ctx):
@@ -76,12 +77,12 @@ class Multitransformar(Comando):
         return (campos_objeto()
                 + [Personalizado("lista", "Transformaciones", self._crear_lista, ancho_completo=True),
                    Info("etapa", "", self._info_etapa),
-                   Opciones("t_tipo", "Tipo de la elegida", TIPOS_TRANSFORMACION, "rectangular")]
+                   Opciones("t_tipo", "Tipo de transformación", TIPOS_TRANSFORMACION, "rectangular")]
                 + campos_patron("t_", forma=tipo)
                 + [Seleccion("t_plano", "Plano de simetría", {"plano", "cara_plana"},
                              visible_si=lambda v: tipo(v) == "simetria"),
                    Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
-                   Casilla("ligeras", "Copias ligeras (comparten la geometría)",
+                   Casilla("ligeras", "Copias ligeras (comparten la geometría)", avanzado=True,
                            visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
                            ayuda="Las copias rígidas comparten la geometría del original (las simetrías, no).")])
 
@@ -247,9 +248,24 @@ class Multitransformar(Comando):
         if not lista:
             return ""
         sel = self._sel(v)
-        return (f"Editando la transformación {sel + 1} de {len(lista)} "
-                f"({TIPOS_TRANSFORMACION.get(v.get('t_tipo', 'rectangular'), '')}). Cada una se aplica a todas las copias "
-                "de las anteriores, en el orden de la lista.")
+        texto = (f"Editando la transformación {sel + 1} de {len(lista)} "
+                 f"({TIPOS_TRANSFORMACION.get(v.get('t_tipo', 'rectangular'), '')}). Se aplica a las copias de las anteriores.")
+        if sel < len(lista) - 1:
+            try:
+                from . import asas_patron
+                n = len(asas_patron.instancias_hasta_etapa(ctx, self.construir(v, ctx), sel)) + 1
+                texto += f" Hasta esta etapa quedan {n} instancias (en azul en la vista)."
+            except Exception:  # noqa: BLE001 — una etapa incompleta ya la explica el mensaje del panel
+                pass
+        return texto
+
+    def manipuladores(self, ctx, v):
+        from . import asas_patron
+        return asas_patron.manipuladores_etapa(ctx, v)
+
+    def previa_vista(self, ctx, v, op):
+        from . import asas_patron
+        return asas_patron.previa_etapa(ctx, v, op, self._sel(v)) or None
 
     # ------------------------------------------------------------ operación
     def construir(self, v, ctx):

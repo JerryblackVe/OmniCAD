@@ -112,9 +112,11 @@ class OpMover(Operacion):
     punto y punto a posición. «Crear copia» deja el original y agrega cuerpos nuevos.
 
     Con `caras` (Move Object › Faces) en lugar de `cuerpos` mueve esas caras planas: las vecinas se extienden o se
-    recortan (`mover_caras`); con «copia» deja el cuerpo y crea una superficie con cada cara movida."""
+    recortan (`mover_caras`); con «copia» deja el cuerpo y crea una superficie con cada cara movida. Con `curvas_boceto`
+    (Move Object › Sketch Objects: referencias a curvas sueltas) mueve solo esas curvas dentro de su boceto, sin salir
+    de su plano."""
     TIPO, ETIQUETA, ICONO = "mover", "Mover", "✥"
-    PARAMS = {"cuerpos": [], "caras": [], "bocetos": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
+    PARAMS = {"cuerpos": [], "caras": [], "bocetos": [], "curvas_boceto": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
               "ry": "0 deg", "rz": "0 deg", "pivote": None, "direccion": None, "distancia": "10 mm", "eje": None,
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
               "copiar": False, "ligera": False}
@@ -125,7 +127,7 @@ class OpMover(Operacion):
         p = self.p
         return (_deps_objetivo(p["cuerpos"]) | set(p.get("bocetos") or []) | ent.dependencias_de(p.get("pivote"), p.get("direccion"),
                                                                    p.get("eje"), p.get("origen"), p.get("destino"),
-                                                                   p.get("caras"))
+                                                                   p.get("caras"), p.get("curvas_boceto"))
                 ) - {self.id}
 
     def matriz(self, estado, ctx, formas):
@@ -176,9 +178,35 @@ class OpMover(Operacion):
             else:
                 c.forma = _sm().mover_caras(c.forma, caras, m)
 
+    def _mover_curvas(self, estado, ctx):
+        """Las curvas sueltas se mueven dentro de su boceto: la matriz tiene que dejarlas en el plano."""
+        grupos = {}
+        for r in self.p["curvas_boceto"]:
+            grupos.setdefault(r["boceto"], []).append(r["curva"])
+        for bid, ids in grupos.items():
+            br = estado.bocetos.get(bid)
+            if br is None:
+                raise ErrorOperacion(f"«{bid}» no es un boceto de este punto del timeline.")
+            formas = [e.forma for e in _resolver_todas(self.p["curvas_boceto"], estado) if e.forma is not None]
+            m, pl = self.matriz(estado, ctx, [geo.compuesto(formas)]), br.plano
+            origen, u = m[:3, :3] @ pl.origen + m[:3, 3], m[:3, :3] @ pl.u
+            if abs(float((origen - pl.origen) @ pl.normal)) > 1e-6 or abs(abs(float((m[:3, :3] @ pl.normal) @ pl.normal)) - 1) > 1e-9:
+                raise ErrorOperacion(f"Las curvas de «{br.nombre}» se mueven dentro del plano del boceto: elegí un "
+                                     "movimiento en ese plano (o movés el boceto entero).")
+            dx, dy = pl.a_uv(origen)
+            angulo = float(np.degrees(np.arctan2(u @ pl.v, u @ pl.u)))
+            boceto = br.boceto.copia()
+            try:
+                boceto.transformar(ids, dx, dy, angulo, (0.0, 0.0), copiar=bool(self.p.get("copiar")))
+            except ErrorBoceto as e:
+                raise ErrorOperacion(f"«{br.nombre}»: {e}") from e
+            estado.bocetos[bid] = BocetoResuelto(bid, br.nombre, boceto, pl, detectar(boceto.geometria(), pl), br.solver)
+
     def ejecutar(self, estado, ctx):
         if self.p.get("caras"):
             return self._mover_caras(estado, ctx)
+        if self.p.get("curvas_boceto"):
+            return self._mover_curvas(estado, ctx)
         if not self.p["cuerpos"] and not self.p.get("bocetos"):
             raise ErrorOperacion("Elegí los cuerpos o los bocetos a mover.")
         cuerpos = [estado.cuerpo(c) for c in self.p["cuerpos"]]
@@ -385,7 +413,7 @@ class OpDesmoldeo(Operacion):
     TIPO, ETIQUETA, ICONO = "desmoldeo", "Desmoldeo", "◿"
     PARAMS = {"plano": None, "caras": [], "angulo": "3 deg", "lados": "uno", "angulo2": "3 deg", "voltear": False,
               "tipo": "plano_fijo", "modo_angulo": "absoluto", "herramienta_particion": None, "linea": "fija",
-              "lado_mover": "ambos", "aristas_fijas": []}
+              "lado_mover": "ambos", "aristas_fijas": [], "cadena_tangente": True}
     EXPRESIONES = ("angulo", "angulo2")
     OPCIONES = {"lados": ("uno", "dos", "simetrico"), "tipo": ("plano_fijo", "linea_particion"),
                 "modo_angulo": ("absoluto", "relativo"), "linea": ("fija", "mover"),
@@ -429,7 +457,7 @@ class OpDesmoldeo(Operacion):
                 plano = sm.plano_de_extremo(caras, direccion, "min" if p["lado_mover"] == "arriba" else "max")
             c.forma = sm.desmoldeo(c.forma, caras, direccion, ctx.evaluar(p["angulo"], ANGULO), plano,
                                    lados=p["lados"], angulo2=ctx.evaluar(p["angulo2"], ANGULO),
-                                   modo_angulo=p["modo_angulo"])
+                                   modo_angulo=p["modo_angulo"], cadena_tangente=p.get("cadena_tangente", True))
 
 
 class OpEscala(Operacion):
@@ -523,9 +551,10 @@ class OpDesfaseAristas(Operacion):
 
 
 class OpReemplazarCara(Operacion):
-    """Reemplazar cara de Fusion [GUID-CA081251]: lleva caras del cuerpo hasta una cara o plano destino."""
+    """Reemplazar cara de Fusion [GUID-CA081251]: lleva caras del cuerpo hasta una cara o plano destino. `cadena_tangente`
+    (Tangent Chain) suma a las caras de origen las que les siguen tangentes."""
     TIPO, ETIQUETA, ICONO = "reemplazar_cara", "Reemplazar cara", "⇥"
-    PARAMS = {"caras": [], "destino": None}
+    PARAMS = {"caras": [], "destino": None, "cadena_tangente": False}
 
     def dependencias(self):
         return _deps_refs(self.p["caras"], self.p["destino"]) - {self.id}
@@ -537,7 +566,32 @@ class OpReemplazarCara(Operacion):
         destino = e.forma if e.tipo == "cara" else ent.como_plano(e)
         for cid, caras in _por_cuerpo(self.p["caras"], estado, "caras").items():
             c = estado.cuerpo(cid)
+            if self.p.get("cadena_tangente"):
+                caras = _sm().caras_en_cadena(c.forma, caras)
             c.forma = _sm().reemplazar_cara(c.forma, caras, destino)
+
+
+class OpEditarCara(Operacion):
+    """Editar cara de Fusion (Edit Face), con grilla B-spline en lugar de T-Spline (`nucleo/editar_cara.py`): `n_u` y `n_v` son
+    los factores de Dividir caras y `desplazamientos` {"i,j": [dx, dy, dz]}, los puntos movidos de la grilla."""
+    TIPO, ETIQUETA, ICONO = "editar_cara", "Editar cara", "✥"
+    PARAMS = {"cara": None, "n_u": 1, "n_v": 1, "desplazamientos": {}}
+    REFS = ("cara",)
+
+    def dependencias(self):
+        return _deps_refs([self.p["cara"]]) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        from ..nucleo import editar_cara
+        if not self.p["cara"]:
+            raise ErrorOperacion("Elegí la cara.")
+        try:
+            despl = {tuple(map(int, k.split(","))): d for k, d in self.p["desplazamientos"].items()}
+        except ValueError as e:
+            raise ErrorOperacion("Los puntos de la grilla se escriben «i,j».") from e
+        for cid, caras in _por_cuerpo([self.p["cara"]], estado, "caras").items():
+            c = estado.cuerpo(cid)
+            c.forma = editar_cara.editar_cara(c.forma, caras[0], int(self.p["n_u"]), int(self.p["n_v"]), despl)
 
 
 def _herramienta(ref, estado):
@@ -550,9 +604,10 @@ def _herramienta(ref, estado):
 
 class OpDividirCara(Operacion):
     """Dividir cara de Fusion [GUID-BA98BF29]: parte caras con una cara, un plano o aristas.
-    `tipo`: «superficie» (Split with Surface), «vector» (Along Vector, con `direccion`) o «cercano» (Closest Point)."""
+    `tipo`: «superficie» (Split with Surface), «vector» (Along Vector, con `direccion`) o «cercano» (Closest Point).
+    `cadena` (Chain Selection) suma a las caras las que les siguen tangentes."""
     TIPO, ETIQUETA, ICONO = "dividir_cara", "Dividir cara", "⊟"
-    PARAMS = {"caras": [], "herramienta": None, "extender": True, "tipo": "superficie", "direccion": None}
+    PARAMS = {"caras": [], "herramienta": None, "extender": True, "tipo": "superficie", "direccion": None, "cadena": False}
     OPCIONES = {"tipo": ("superficie", "vector", "cercano")}
 
     def dependencias(self):
@@ -565,6 +620,8 @@ class OpDividirCara(Operacion):
         direccion = ent.direccion(_resolver(self.p["direccion"], estado)) if self.p["direccion"] else None
         for cid, caras in _por_cuerpo(self.p["caras"], estado, "caras").items():
             c = estado.cuerpo(cid)
+            if self.p.get("cadena"):
+                caras = _sm().caras_en_cadena(c.forma, caras)
             c.forma = _sm().dividir_cara(c.forma, caras, herramienta, extender=self.p["extender"],
                                          tipo=self.p["tipo"], direccion=direccion)
 
@@ -692,5 +749,5 @@ class OpBorrarCaras(Operacion):
 
 
 registrar_operacion(OpMover, OpQuitar, OpEmpalme, OpChaflan, OpVaciado, OpDesmoldeo, OpEscala, OpDesfaseCara,
-                    OpDesfaseAristas, OpReemplazarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
+                    OpDesfaseAristas, OpReemplazarCara, OpEditarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
                     OpApoyar, OpQuitarEmpalmes)

@@ -25,7 +25,7 @@ def run(nombre, f):
 # 1 Extruir superficie ------------------------------------------------------------------------------------------
 run("sup_extruir", lambda: (
     C.caso(v, AR, "sup_extruir", {"curvas": cur("Circ")}, {"distancia": "15 mm"}, esperado=2 * pi * 5 * 15, foto="sup_extruir"),
-    C.caso(v, AR, "sup_extruir", {"curvas": cur("Circ")}, {"distancia": "15 mm", "simetrica": True}, esperado=2 * pi * 5 * 15,
+    C.caso(v, AR, "sup_extruir", {"curvas": cur("Circ")}, {"distancia": "15 mm", "lados": "simetrica", "medida": "total"}, esperado=2 * pi * 5 * 15,
            etiqueta="sup_extruir simétrica"),
     C.caso(v, AR, "sup_extruir", {"curvas": lambda: [A.hit_curva(v, s, "Rect", i) for i in range(4)]}, {"distancia": "10 mm"}, esperado=2 * (20 + 10) * 10,
            etiqueta="sup_extruir rectángulo (4 lados)"),

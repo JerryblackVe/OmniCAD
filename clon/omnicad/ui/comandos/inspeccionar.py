@@ -12,6 +12,7 @@ from ...timeline.ops_chapa import cuerpos_del_modelo, es_patron_plano
 from ...timeline.analisis_vista import COLOR_SECCION
 from ...timeline.parametros import ANGULO
 from .. import analisis_vista, formato
+from .comunes import campos_cebra, campos_iso, campos_mapa, params_cebra, params_iso, params_mapa
 from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion,
                        ref1)
 from . import registrar
@@ -297,13 +298,13 @@ class ReconocerFunciones(Comando):
 
     def campos(self, ctx):
         return [Seleccion("cuerpo", "Cuerpo sólido", {"cuerpo"}),
-                *(Casilla(c, texto, True) for _t, c, texto in self._CASILLAS),
-                Casilla("rehacer", "Rehacer en el timeline", False,
+                *(Casilla(c, texto, True, grupo="Qué reconocer") for _t, c, texto in self._CASILLAS),
+                Casilla("rehacer", "Rehacer en el timeline", False, grupo="Rehacer",
                         ayuda="Aceptar crea los pasos Agujero, Empalme y Chaflán que rehacen lo encontrado."),
-                Casilla("rehacer_extrusion", "Rehacer la extrusión (reemplaza el cuerpo)", False,
+                Casilla("rehacer_extrusion", "Rehacer la extrusión (reemplaza el cuerpo)", False, grupo="Rehacer",
                         visible_si=lambda v: bool(v.get("rehacer")),
                         ayuda="Si el cuerpo es un prisma, lo vuelve boceto + extrusión (los agujeros pasantes quedan en el boceto)."),
-                Info("resultado", "Funciones encontradas", self._resultado)]
+                Info("resultado", "Funciones encontradas", self._resultado, grupo="Resultado")]
 
     def _tipos(self, v):
         return [t for t, c, _texto in self._CASILLAS if v.get(c)]
@@ -441,13 +442,14 @@ class Seccion(_Analisis):
     AYUDA = "Corta la vista del modelo con un plano para ver su interior (no cambia el modelo)."
 
     def campos(self, ctx):
-        return [Seleccion("plano", "Caras/plano", {"cara_plana", "plano"}), Expresion("desfase", "Distancia", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO), Casilla("invertir", "Invertir"), _cuerpos_campo(),
+        return [Seleccion("plano", "Plano de corte", {"cara_plana", "plano"}), _cuerpos_campo(),
+                Expresion("desfase", "Distancia", "0 mm"), Expresion("angulo", "Ángulo", "0 deg", ANGULO),
+                Casilla("invertir", "Invertir"),
                 Opciones("color_modo", "Color de la sección", {"personalizado": "Personalizado",
-                                                               "componente": "Del componente"}),
-                Personalizado("color", "Color", self._boton_color, list(COLOR_SECCION),
-                              visible_si=lambda v: v.get("color_modo") != "componente"),
-                Casilla("rayado", "Mostrar rayado")]
+                                                               "componente": "Del componente"}, avanzado=True),
+                Personalizado("color", "Color propio", self._boton_color, list(COLOR_SECCION),
+                              visible_si=lambda v: v.get("color_modo") != "componente", avanzado=True),
+                Casilla("rayado", "Mostrar rayado", avanzado=True)]
 
     @staticmethod
     def _boton_color(panel):
@@ -488,11 +490,10 @@ class Cebra(_Analisis):
     AYUDA = "Franjas reflejadas para ver la continuidad entre caras (sigue a la cámara)."
 
     def campos(self, ctx):
-        return [Opciones("orientacion", "Dirección de las franjas", {"horizontal": "Horizontal", "vertical": "Vertical"}),
-                Entero("frecuencia", "Cantidad de franjas", 8, 2, 40)]
+        return [_cuerpos_campo(), *campos_cebra()]
 
     def params(self, v, ctx):
-        return {"orientacion": v["orientacion"], "frecuencia": int(v["frecuencia"])}
+        return {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []], **params_cebra(v, ctx)}
 
 
 class MapaEntorno(_Analisis):
@@ -527,15 +528,13 @@ class AnguloDesmoldeo(_Analisis):
 class MapaCurvatura(_Analisis):
     CLAVE, TITULO, ICONO, TIPO_ANALISIS = "mapa_curvatura", "Análisis del mapa de curvatura", "mapa_curvatura", \
         "curvatura"
-    AYUDA = "Colorea las caras según su curvatura (gaussiana, media, máxima o mínima)."
+    AYUDA = "Colorea las caras según su curvatura (gaussiana, principal mínima o principal máxima)."
 
     def campos(self, ctx):
-        return [_cuerpos_campo(), Opciones("tipo_curvatura", "Tipo de visualización",
-                                           {"gaussiana": "Gaussiana", "media": "Media", "maxima": "Máxima",
-                                            "minima": "Mínima"})]
+        return [_cuerpos_campo(), *campos_mapa()]
 
     def params(self, v, ctx):
-        return {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []], "tipo_curvatura": v["tipo_curvatura"]}
+        return {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []], **params_mapa(v, ctx)}
 
 
 class PeineCurvatura(_Analisis):
@@ -562,10 +561,10 @@ class Isocurva(_Analisis):
     AYUDA = "Dibuja las curvas U y V de las caras para ver su calidad."
 
     def campos(self, ctx):
-        return [_cuerpos_campo(), Entero("densidad", "Densidad", 10, 2, 50)]
+        return [_cuerpos_campo(), *campos_iso()]
 
     def params(self, v, ctx):
-        return {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []], "densidad": int(v["densidad"])}
+        return {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []], **params_iso(v, ctx)}
 
 
 class Accesibilidad(_Analisis):

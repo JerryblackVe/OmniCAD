@@ -51,16 +51,19 @@ Limpiar = _clase("limpiar_malla", "Limpiar", "limpiar_malla", OpLimpiarMalla,
                  "Fusiona vértices cercanos, disuelve triángulos degenerados, borra lo suelto, recalcula las normales "
                  "hacia afuera y rellena huecos (cada paso con su casilla).",
                  [lambda: Casilla("fusionar", "Fusionar por distancia", True),
-                  lambda: Expresion("distancia", "Distancia", "0.001 mm",
-                                    visible_si=lambda v: v.get("fusionar") or v.get("degenerados")),
+                  lambda: Expresion("distancia", "Distancia de fusión", "0.001 mm",
+                                    visible_si=lambda v: v.get("fusionar") or v.get("degenerados"), avanzado=True),
                   lambda: Casilla("degenerados", "Disolver degenerados", True),
                   lambda: Casilla("sueltos", "Borrar sueltos", True),
-                  lambda: Expresion("area_minima", "Partes chicas (fracción del área)", "0", ESCALAR,
-                                    visible_si=lambda v: v.get("sueltos")),
-                  lambda: Casilla("normales", "Recalcular normales (hacia afuera)", True),
+                  lambda: Expresion("area_minima", "Partes chicas (fracción)", "0", ESCALAR,
+                                    visible_si=lambda v: v.get("sueltos"), avanzado=True,
+                                    ayuda="Fracción del área total de la malla; 0 = no se borran partes por tamaño."),
+                  lambda: Casilla("normales", "Normales hacia afuera", True,
+                                  ayuda="Recalcula la orientación de las normales hacia afuera."),
                   lambda: Casilla("rellenar", "Rellenar huecos"),
-                  lambda: Entero("lados", "Lados máximos del hueco (0 = todos)", 0, 0, 100_000,
-                                 visible_si=lambda v: v.get("rellenar"))],
+                  lambda: Entero("lados", "Lados del hueco (0 = todos)", 0, 0, 100_000,
+                                 visible_si=lambda v: v.get("rellenar"), avanzado=True,
+                                 ayuda="Cantidad máxima de lados de los huecos que se rellenan.")],
                  lambda v, ctx: {k: v[k] for k in _PASOS_LIMPIAR})
 Grupos = _clase("grupos_caras", "Generar grupos de caras", "grupos_caras", OpGruposCaras,
                 "Agrupa caras de la malla según el ángulo entre ellas.",
@@ -129,12 +132,14 @@ class CortarPlano(Comando):
     verificar = staticmethod(_mallas)
 
     def campos(self, ctx):
-        return [Seleccion("cuerpos", "Cuerpos de malla", {"cuerpo"}, maximo=None),
-                Seleccion("plano", "Plano de corte", {"plano", "cara_plana"}),
-                Opciones("tipo", "Tipo de corte", {"recortar": "Recortar", "partir": "Dividir cuerpo",
+        return [Opciones("tipo", "Tipo de corte", {"recortar": "Recortar", "partir": "Dividir cuerpo",
                                                    "partir_caras": "Dividir caras"}),
-                Expresion("desfase", "Distancia", "0 mm"), Expresion("angulo", "Ángulo", "0 deg", ANGULO),
-                Casilla("rellenar", "Rellenar", True), Casilla("invertir", "Invertir")]
+                Seleccion("cuerpos", "Cuerpos de malla", {"cuerpo"}, maximo=None),
+                Seleccion("plano", "Plano de corte", {"plano", "cara_plana"}),
+                Expresion("desfase", "Distancia al plano", "0 mm"),
+                Casilla("rellenar", "Rellenar", True, ayuda="Tapa el corte con una cara nueva."),
+                Casilla("invertir", "Invertir"),
+                Expresion("angulo", "Ángulo del plano", "0 deg", ANGULO, avanzado=True)]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná las mallas.")
@@ -152,13 +157,16 @@ class CombinarMallas(Comando):
     CLAVE, TITULO, ICONO = "combinar_mallas", "Combinar mallas", "combinar_mallas"
     AYUDA = "Une, corta, interseca o fusiona cuerpos de malla."
     CLASE_OP = OpCombinarMallas
+    TITULOS_MODO = ("operacion", {"unir": ("Unir mallas", "combinar_mallas"), "cortar": ("Cortar mallas", "combinar_mallas"),
+                                  "intersecar": ("Intersecar mallas", "combinar_mallas"),
+                                  "fusionar": ("Fusionar mallas", "combinar_mallas")})
     verificar = staticmethod(_mallas)
 
     def campos(self, ctx):
-        return [Seleccion("objetivo", "Cuerpo de destino", {"cuerpo"}),
-                Seleccion("herramientas", "Cuerpos de herramienta", {"cuerpo"}, maximo=None),
-                Opciones("operacion", "Operación", {"unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar",
+        return [Opciones("operacion", "Operación", {"unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar",
                                                      "fusionar": "Fusionar"}),
+                Seleccion("objetivo", "Cuerpo de destino", {"cuerpo"}),
+                Seleccion("herramientas", "Cuerpos de herramienta", {"cuerpo"}, maximo=None),
                 Casilla("mantener", "Mantener herramientas")]
 
     def construir(self, v, ctx):

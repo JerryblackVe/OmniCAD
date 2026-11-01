@@ -20,6 +20,7 @@ from typing import Literal
 from ..nucleo import geometria as geo
 from ..nucleo.malla import Malla
 from ..timeline.operaciones import OpCombinar, OpExtrusion, OpPrimitiva, OpRevolucion
+from ..timeline.ops_chapa import es_patron_plano
 from ..timeline.ops_modificar import OpApoyar, OpMover
 from ..timeline.ops_solido import OpBarrido, OpMultitransformar, OpPatron, OpSimetria, OpSolevacion
 from .errores import ErrorAPI, error
@@ -55,6 +56,23 @@ def _objetivos(sesion, operation, target):
         sesion.avisar("«target» se ignora con operation=new_body: el cuerpo es nuevo.")
         return []
     return ids
+
+
+def _se_mete(sesion, op):
+    """operation="auto": ¿la extrusión (cuerpo nuevo) comparte volumen con `target` o con un sólido visible? La misma
+    regla que el panel Extruir. Lo que no se puede calcular da False: si el paso falla, el error lo informa `_agregar`."""
+    doc = sesion.doc
+    entrada = doc.estado_en(doc.marcador)
+    ocultos = set(doc.propiedad("__navegador__", "ocultos", []))
+    solidos = ([entrada.cuerpo(c) for c in op.p["objetivos"]] or
+               [c for c in entrada.cuerpos.values() if c.tipo == "solido" and not es_patron_plano(c)
+                and c.id not in ocultos and c.componente not in ocultos])
+    try:
+        estado, _ = doc.previsualizar(op)
+        formas = [c.forma for k, c in estado.cuerpos.items() if k not in entrada.cuerpos]
+        return any(geo.solapan(f, c.forma) for f in formas for c in solidos)
+    except Exception:  # noqa: BLE001 — ver el docstring
+        return False
 
 
 def _foto(sesion):
@@ -139,6 +157,15 @@ def _forma_del_objetivo(sesion, target):
 
 
 # ---------------------------------------------------------------- extrusión y revolución
+def _avisar_curvas_sin_perfil(sesion, br, sop):
+    """H-52: con profile="all" las curvas que no forman ninguna región cerrada quedan afuera; que no sea en silencio."""
+    usadas = set().union(*(p.firma for p in br.perfiles))
+    sueltas = sorted(i for i, c in br.boceto.curvas.items() if not c.construccion and i not in usadas)
+    if sueltas:
+        sesion.avisar(f"{len(sueltas)} curva(s) del boceto «{sop.nombre}» no cierran ninguna región y se ignoraron: "
+                      f"{sueltas} (ids de get_sketch).")
+
+
 @herramienta("extrude", "solido",
              "Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor "
              "área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; "
@@ -148,7 +175,8 @@ def _forma_del_objetivo(sesion, target):
               "en un boceto flotante va hacia el lado que tiene material). direction: "
              "one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada "
              "lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo "
-             "lo estrecha). operation: new_body, join, cut o intersect. Opciones de Extruir de Fusion: faces (caras "
+             "lo estrecha). operation: new_body, join, cut, intersect o auto (cut si la extrusión se mete en un sólido "
+             "visible o en target, si no new_body, como el panel Extruir). Opciones de Extruir de Fusion: faces (caras "
              "planas como perfil, con o sin sketch), thin (extrusión delgada: wall_thickness, wall_location; con "
              "open_curves se extruyen curvas abiertas), start (profile_plane, offset u object: el inicio no es el "
              "plano del perfil), symmetric_measure (media longitud o largo total), extent (distance, to_object: hasta "
@@ -156,7 +184,7 @@ def _forma_del_objetivo(sesion, target):
              "propia del lado 2).",
              modifica=True)
 def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: Expr = "10 mm",
-            operation: Operacion = "new_body",
+            operation: Literal["new_body", "join", "cut", "intersect", "auto"] = "new_body",
             direction: Literal["one_side", "two_sides", "symmetric"] = "one_side", taper_angle: Expr = 0,
             target: Cuerpos | None = None, distance2: Expr | None = None, reverse: bool | None = None,
             faces: Cuerpos | None = None, thin: bool = False, wall_thickness: Expr = 1,
@@ -170,10 +198,10 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
     profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos) o "text:<id>". Se ignora con open_curves.
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
-    operation: "new_body", "join", "cut" o "intersect".
+    operation: "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; si no, "new_body"; apoyarse en una cara no cuenta).
     direction: "one_side", "two_sides" o "symmetric".
     taper_angle: conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
-    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos que toca.
     distance2: distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
     reverse: true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al
         material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante
@@ -196,6 +224,9 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     """
     if sketch is None and not faces:
         raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
+    auto = operation == "auto"
+    if auto:
+        operation = "new_body"
     if open_curves and not thin:
         raise error("INVALID_ARGUMENTS", "open_curves (curvas abiertas) necesita thin=true: una curva abierta solo se extruye con pared.")
     if open_curves and sketch is None:
@@ -208,6 +239,8 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         sop, br = boceto_activo(sesion, sketch)
         if not open_curves:
             perfiles = seleccionar_perfiles(br, sop, profile)
+            if isinstance(profile, str) and profile.strip().casefold() == "all":
+                _avisar_curvas_sin_perfil(sesion, br, sop)
     if reverse is None and br is not None:
         if operation == "cut" and sop.p.get("plano") == "cara":
             reverse = True                        # sobre una cara: entra al material (la normal mira afuera)
@@ -224,7 +257,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     doc = sesion.doc
     p = {"boceto": sop.id if sop is not None else "", "perfiles": [OpExtrusion.referencia_perfil(x) for x in perfiles],
          "distancia": texto_expr(distance), "operacion": OPERACIONES[operation],
-         "objetivos": _objetivos(sesion, operation, target), "invertir": reverse,
+         "objetivos": _objetivos(sesion, "cut" if auto else operation, target), "invertir": reverse,
          "conicidad": texto_expr(taper_angle),
          "conicidad2": texto_expr(taper_angle if taper_angle2 is None else taper_angle2)}
     if faces:
@@ -260,8 +293,13 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         else:
             p.update(direccion="simetrica", simetrica=True, medida="total")
     op = OpExtrusion(doc.nuevo_id(), nombre_nuevo(doc, "Extrusión", OpExtrusion), **p)
+    if auto and _se_mete(sesion, op):
+        op.p["operacion"] = "cortar"
+        operation = "cut"
     resultado = _agregar(sesion, op, operation != "new_body")
     resultado["profiles_used"] = [br.perfiles.index(x) for x in perfiles] if br is not None else []
+    if auto:
+        resultado["operation"] = operation
     return resultado
 
 
@@ -515,7 +553,8 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
          operation: Operacion = "new_body", ruled: bool = False, closed: bool = False, target: Cuerpos | None = None,
          sections: list[str | dict | list[float]] | None = None, rails: list[str | dict] | None = None,
          center_line: list[str | dict] | None = None, body: str | None = None, start_condition: dict | None = None,
-         end_condition: dict | None = None, merge_tangent_edges: bool = False, section_conditions: dict | None = None):
+         end_condition: dict | None = None, merge_tangent_edges: bool = False, section_conditions: dict | None = None,
+         chain: bool = False):
     """
     sketches: ids o nombres de los bocetos, en el orden de las secciones; vacío si se da sections.
     profiles: un perfil por boceto (índice o "largest"); vacío = el perfil 0 de cada boceto.
@@ -531,6 +570,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     end_condition: lo mismo para la última sección.
     section_conditions: condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
     merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
+    chain: true suma a cada arista de sections las que le siguen tangentes (Chain Selection).
     """
     if rails and center_line:
         raise error("INVALID_ARGUMENTS", "Pasá rails (carriles) o center_line (línea central), no los dos.")
@@ -576,6 +616,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
             medias[str(int(k) - 1)] = c
         guias["condiciones_medias"] = medias
     guias["fusionar_tangentes"] = bool(merge_tangent_edges)
+    guias["cadena"] = bool(chain)
     doc = sesion.doc
     op = OpSolevacion(doc.nuevo_id(), nombre_nuevo(doc, "Solevación", OpSolevacion), secciones=secciones,
                       cerrada=closed, reglada=ruled, operacion=OPERACIONES[operation],
@@ -704,13 +745,15 @@ def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, 
 
 @herramienta("create_torus", "solido", "Crea un toroide con el eje en Z (con plane, sobre la normal de un plano o una cara cualquiera). "
              "(x, y, z) es su centro. Medidas como radios (major_radius, minor_radius) o diámetros (major_diameter, "
-             "minor_diameter), uno de cada par.", modifica=True)
+             "minor_diameter), uno de cada par. position pone el tubo adentro, centrado o afuera de ese círculo.",
+             modifica=True)
 def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | None = None, x: Expr = 0, y: Expr = 0,
                  z: Expr = 0, operation: Operacion = "new_body", target: Cuerpos | None = None,
                  major_diameter: Expr | None = None, minor_diameter: Expr | None = None, name: str | None = None,
-                 plane: str | dict | None = None, body: str | None = None):
+                 plane: str | dict | None = None, body: str | None = None,
+                 position: Literal["inside", "center", "outside"] = "center"):
     """
-    major_radius: radio mayor en mm (del centro al centro del tubo); tiene que ser mayor que minor_radius.
+    major_radius: radio del círculo de referencia en mm (con position=center, del centro al centro del tubo); tiene que ser mayor que minor_radius.
     minor_radius: radio menor en mm (del tubo).
     x: x del centro (mm).
     y: y del centro (mm).
@@ -722,11 +765,13 @@ def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | 
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el eje va por la normal.
     body: cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.
+    position: inside (el tubo adentro del círculo), center (centrado, por defecto) u outside (afuera); Position de Fusion.
     """
     mayor = _radio_o_diametro(major_radius, major_diameter, "major_radius", "major_diameter")
     menor = _radio_o_diametro(minor_radius, minor_diameter, "minor_radius", "minor_diameter")
     return _primitiva(sesion, "toroide", "Toroide", {"radio_mayor": mayor, "radio_menor": menor},
-                      x, y, z, operation, target, name, **_plano_primitiva(sesion, plane, body))
+                      x, y, z, operation, target, name, **_plano_primitiva(sesion, plane, body),
+                      posicion_toroide={"inside": "interior", "center": "centro", "outside": "exterior"}[position])
 
 
 # ---------------------------------------------------------------- booleanas, simetría, patrones, movimiento
@@ -781,7 +826,7 @@ def mirror(sesion, bodies: Cuerpos | None = None, plane: str = "YZ", combine: bo
     faces: caras a reflejar (selector, ids de find_faces o lista): cada reflejo queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a reflejar (id o nombre): cada reflejo es un componente nuevo con copias reflejadas de sus cuerpos. No se combina con bodies, features ni faces.
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
-    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
+    compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     """
     objeto = _objeto_patron(sesion, bodies, features, False, combine, faces, components, construction, compute)
     ref = referencia_plano_o_cara(sesion, plane, plane_body)     # antes de gastar un id: si falla, el documento no cambia
@@ -968,9 +1013,10 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                         construction: list[str] | None = None, compute: Calculo = "identical",
                         lightweight: bool = False, distribution: Literal["spacing", "extent"] = "spacing",
                         symmetric: bool = False, suppress: list[int | list[int]] | None = None,
-                        body: str | None = None, symmetric2: bool | None = None):
+                        body: str | None = None, symmetric2: bool | None = None, plane2: str | None = None):
     """
     bodies: cuerpo(s) a repetir (id o nombre).
+    plane2: plano de referencia de la dirección 2 derivada (plano, cara plana; id, nombre o selector): con él axis2 se ignora y la dirección 2 es la perpendicular a la 1 dentro de ese plano (como el diálogo con la dirección 2 vacía). None = la dirección 2 es axis2.
     x_count: cantidad de instancias en la dirección 1, original incluido (1 = sin copias; x_count × y_count ≤ 10.000).
     x_spacing: separación entre instancias consecutivas en la dirección 1 (mm o expresión). Se guarda como d1 con distribucion="espaciado": edit_feature d1 sigue siendo la separación.
     y_count: cantidad de instancias en la dirección 2, original incluido (x_count × y_count ≤ 10.000).
@@ -987,7 +1033,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
-    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
+    compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
     objeto = _objeto_patron(sesion, bodies, features, lightweight, combine, faces, components, construction, compute)
@@ -995,14 +1041,15 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
         raise error("INVALID_ARGUMENTS", "x_count e y_count tienen que ser 1 o más.")
     if x_count == 1 and y_count == 1:
         raise error("INVALID_ARGUMENTS", "Con x_count = 1 e y_count = 1 el patrón no crea copias.")
-    if y_count > 1 and str(axis1).strip().lower() == str(axis2).strip().lower():
+    if y_count > 1 and plane2 is None and str(axis1).strip().lower() == str(axis2).strip().lower():
         raise error("INVALID_ARGUMENTS", "axis1 y axis2 tienen que ser direcciones distintas.")
     sim2 = symmetric if symmetric2 is None else bool(symmetric2)
     k1, k2 = (2 if symmetric else 1), (2 if sim2 else 1)
     total = (k1 * x_count - k1 + 1) * ((k2 * y_count - k2 + 1) if y_count > 1 else 1)
     _exigir_instancias(total, "x_count × y_count")
     dir1 = _dir_patron(sesion, axis1, "axis1", body)
-    dir2 = _dir_patron(sesion, axis2, "axis2", body) if y_count > 1 else None
+    dir2 = _dir_patron(sesion, axis2, "axis2", body) if y_count > 1 and plane2 is None else None
+    plano2 = _dir_patron(sesion, plane2, "plane2", body) if plane2 is not None and y_count > 1 else None
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón rectangular", OpPatron,
                                                lambda o: o.p["forma_patron"] == "rectangular"),
@@ -1010,6 +1057,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
                   n2=y_count, d2=texto_expr(y_spacing),
                   distribucion="espaciado" if distribution == "spacing" else "extension", simetrico=bool(symmetric),
                   simetrico2=None if symmetric2 is None else bool(symmetric2),
+                  dir2_derivada=plano2 is not None, plano_dir2=plano2,
                   suprimir=_suprimir_rect(suppress, x_count, y_count, bool(symmetric), sim2, y_count > 1),
                   combinar=combine, ligeras=lightweight and not combine, **objeto)
     return _agregar_patron(sesion, op)
@@ -1035,7 +1083,7 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
-    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
+    compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     distribution: "full" (360° sin repetir el cierre; total_angle no se usa), "partial" (total_angle es el ángulo TOTAL entre el original y la última copia, a un lado), "symmetric" (count copias a cada lado hasta ± total_angle) o, como antes, "extent" (como partial, o symmetric con symmetric=true) y "spacing" (total_angle es el ángulo entre copias consecutivas).
     symmetric: true reparte las copias a los dos lados del original (con extent o spacing).
@@ -1143,7 +1191,7 @@ def point_pattern(sesion, bodies: Cuerpos | None = None, features: Pasos | None 
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
-    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
+    compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     points: puntos [[x, y, z], …] en mm (números o expresiones) donde va cada copia.
     sketch: id o nombre de un boceto: se usan todos sus puntos sueltos (los que no son de ninguna curva) y siguen al boceto si se edita.
     reference: punto [x, y, z] que se lleva a cada punto; vacío = el origen [0, 0, 0].
@@ -1191,7 +1239,7 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
-    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
+    compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     path_curves: ids de las curvas de la ruta (get_sketch); vacío = todas las curvas no de construcción del boceto.
     spacing_mode: "extent" (distance es el largo total) o "spacing" (distance es la separación).
     start: dónde está el original sobre la ruta, de 0 (inicio) a 1 (fin).
@@ -1215,8 +1263,8 @@ def path_pattern(sesion, path_sketch: str | None = None, count: int = 0, distanc
 
 
 _CLAVES_TRANSFORMACION = {
-    "rectangular": {"type", "axis", "count", "spacing", "axis2", "count2", "spacing2", "symmetric", "symmetric2",
-                    "distribution", "suppress", "body"},
+    "rectangular": {"type", "axis", "count", "spacing", "axis2", "plane2", "count2", "spacing2", "symmetric",
+                    "symmetric2", "distribution", "suppress", "body"},
     "circular": {"type", "axis", "count", "total_angle", "symmetric", "distribution", "suppress", "body"},
     "mirror": {"type", "plane", "body"},
     "points": {"type", "points", "sketch", "reference", "point_refs", "reference_point", "suppress", "body"},
@@ -1246,7 +1294,9 @@ def _transformacion_api(sesion, t, i):
     if tipo == "rectangular":
         n1 = _entero_api(t.get("count", 2), f"{que}.count")
         n2 = _entero_api(t.get("count2", 1), f"{que}.count2")
-        dir2 = _dir_patron(sesion, t["axis2"], f"{que}.axis2", t.get("body")) if n2 > 1 and "axis2" in t else None
+        plano2 = _dir_patron(sesion, t["plane2"], f"{que}.plane2", t.get("body")) if n2 > 1 and "plane2" in t else None
+        dir2 = (_dir_patron(sesion, t["axis2"], f"{que}.axis2", t.get("body"))
+                if n2 > 1 and "axis2" in t and plano2 is None else None)
         if t.get("distribution", "spacing") not in ESPACIADOS:
             raise error("INVALID_ARGUMENTS", f"{que}.distribution: {', '.join(ESPACIADOS)}.")
         sim1 = bool(t.get("symmetric", False))
@@ -1256,9 +1306,10 @@ def _transformacion_api(sesion, t, i):
              "d1": texto_expr(t.get("spacing", 10)), "dir2": dir2, "n2": n2, "d2": texto_expr(t.get("spacing2", 10)),
              "distribucion": ESPACIADOS[t.get("distribution", "spacing")], "simetrico": sim1,
              "simetrico2": None if t.get("symmetric2") is None else sim2,
+             "dir2_derivada": plano2 is not None, "plano_dir2": plano2,
              "suprimir": _suprimir_rect(t.get("suppress"), n1, n2, sim1, sim2, n2 > 1)}
-        if n2 > 1 and "axis2" not in t:
-            raise error("INVALID_ARGUMENTS", f"{que}: con count2 > 1 falta axis2.")
+        if n2 > 1 and "axis2" not in t and plano2 is None:
+            raise error("INVALID_ARGUMENTS", f"{que}: con count2 > 1 falta axis2 (o plane2).")
         k1, k2 = (2 if sim1 else 1), (2 if sim2 else 1)
         return d, (k1 * n1 - k1 + 1) * ((k2 * n2 - k2 + 1) if n2 > 1 else 1)
     if tipo == "circular":
@@ -1296,7 +1347,7 @@ def _transformacion_api(sesion, t, i):
              "Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es "
              "una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular "
              "de 3 + mirror = 6). Tipos: {\"type\": \"rectangular\", \"axis\": \"x\", \"count\": 3, \"spacing\": 20} "
-             "(y axis2, count2, spacing2, symmetric), {\"type\": \"circular\", \"axis\": \"z\", \"count\": 6, "
+             "(y axis2 o plane2, count2, spacing2, symmetric), {\"type\": \"circular\", \"axis\": \"z\", \"count\": 6, "
              "\"total_angle\": 360}, {\"type\": \"mirror\", \"plane\": \"YZ\"}, {\"type\": \"points\", \"points\": "
              "[[x, y, z]], \"sketch\": …, \"reference\": [x, y, z]} y {\"type\": \"path\", \"path_sketch\": …, "
              "\"count\": 4, \"distance\": 60, \"twist\": 90} (las mismas opciones que path_pattern). Repite cuerpos "
@@ -1312,7 +1363,7 @@ def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = Non
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
     components: componentes a repetir (id o nombre): cada copia es un componente nuevo con copias de sus cuerpos. No se combina con bodies, features ni faces.
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
-    compute: cálculo de las copias de features (Compute Type): optimized e identical repiten la herramienta del paso tal cual (mismo resultado); adjust omite las copias cuya herramienta no toca al cuerpo.
+    compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     combine: true para unir las copias al cuerpo original (solo con bodies).
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
     """
@@ -1405,10 +1456,11 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
               angle: Expr = 90, origin_point: str | dict | list[float] | None = None,
               destination_point: str | dict | list[float] | None = None,
               pivot_point: str | dict | list[float] | None = None, ref_body: str | None = None,
-              sketches: list[str] | None = None):
+              sketches: list[str] | None = None, sketch_curves: list[dict] | None = None):
     """
     body: cuerpo(s) a mover (id o nombre); vacío si solo se mueven bocetos.
     sketches: bocetos enteros a mover o copiar (id o nombre); quedan derivados (sin edición a mano); no con position.
+    sketch_curves: curvas sueltas a mover dentro de su boceto: lista de {"sketch": id o nombre, "curve": n}; el movimiento tiene que quedar en el plano del boceto.
     translate: DESPLAZAMIENTO [dx, dy, dz] en mm que se suma a la posición actual (números o expresiones); vacío = sin desplazamiento.
     rotate: giro [rx, ry, rz] en grados (números o expresiones); vacío = sin giro.
     pivot: centro del giro: "center" (centro de las cajas de los cuerpos, se recalcula) u "origin" (origen, estable).
@@ -1433,9 +1485,12 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
                                          "qué compartir.")
     ids = _ids_cuerpos(sesion, body) if body else []
     bocetos = [sesion.paso(b).id for b in sketches or []]
-    if not ids and not bocetos:
+    curvas = [{"tipo": "curva_boceto", "boceto": sesion.paso(c["sketch"]).id, "curva": int(c["curve"])} for c in sketch_curves or []]
+    if curvas and (ids or bocetos):
+        raise error("INVALID_ARGUMENTS", "sketch_curves va solo: mueve curvas dentro de su boceto, no se combina con body ni sketches.")
+    if not ids and not bocetos and not curvas:
         raise error("INVALID_ARGUMENTS", "Indicá al menos un cuerpo en 'body' o un boceto en 'sketches'.")
-    if bocetos and position is not None:
+    if (bocetos or curvas) and position is not None:
         raise error("INVALID_ARGUMENTS", "position no vale para bocetos: usá translate o type=translate/rotate.")
     for valor, que in ((translate, "translate"), (rotate, "rotate"), (position, "position")):
         if valor is not None and len(valor) != 3:
@@ -1465,7 +1520,7 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
     pivote = {"tipo": "punto", "id": "O"} if pivot == "origin" else None
     if pivot_point is not None and type == "free":
         pivote = _referencia(sesion, pivot_point, _PUNTO, ref_body)
-    op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, bocetos=bocetos, tipo="libre",
+    op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, bocetos=bocetos, curvas_boceto=curvas, tipo="libre",
                  dx=texto_expr(t[0]), dy=texto_expr(t[1]), dz=texto_expr(t[2]),
                  rx=texto_expr(g[0]), ry=texto_expr(g[1]), rz=texto_expr(g[2]),
                  pivote=pivote, copiar=copy, ligera=lightweight)

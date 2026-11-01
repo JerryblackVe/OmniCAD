@@ -291,10 +291,11 @@ class _Lecturas(dict):
 
 
 class Contexto:
-    def __init__(self, valores_parametros):
+    def __init__(self, valores_parametros, partir=True):
         self.usados = set()       # nombres de parámetros que leyó la operación al ejecutarse
         self.valores = _Lecturas(valores_parametros, self.usados)
         self.avisos = []
+        self.partir = partir      # False en un paso de receta vieja: el corte no divide el cuerpo (`Documento._sin_partir`)
 
     def evaluar(self, expr, tipo=LONGITUD):
         """Valor de `expr` para un paso: una longitud de más de 1 km o un ángulo de más de 1e6° es un error."""
@@ -302,6 +303,25 @@ class Contexto:
 
     def aviso(self, texto):
         self.avisos.append(texto)
+
+
+def _orden_parte(solido):
+    """Clave para ordenar las partes de un corte: la más grande primero y, entre iguales, por su centro (X, Y, Z), así
+    recalcular siempre deja cada parte con el mismo id."""
+    return -round(abs(geo.volumen_exacto(solido)), 3), *(round(x, 6) for x in geo.centro_masa(solido))
+
+
+def poner_resultado(estado, ctx, op_id, c, nueva):
+    """`nueva` (lo que dejó Cortar o Intersecar) queda en el cuerpo `c`. Si tiene más sólidos que `c`, cada parte es un
+    cuerpo, como en Fusion: la más grande sigue siendo `c` y las demás heredan su aspecto, material y componente. Unir
+    no pasa por acá: un cuerpo con sólidos separados por Unir es legítimo. Devuelve los ids de los cuerpos."""
+    partes = geo.solidos(nueva)
+    if not ctx.partir or len(partes) <= len(geo.solidos(c.forma)):
+        c.forma = nueva
+        return [c.id]
+    partes.sort(key=_orden_parte)
+    c.forma = partes[0]
+    return [c.id] + [estado.nuevo_cuerpo(op_id, s, c.tipo, **atributos_copia(c)) for s in partes[1:]]
 
 
 def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido"):
@@ -376,9 +396,9 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         if geo.esta_vacia(nueva):
             del estado.cuerpos[c.id]
             ctx.aviso(f"{c.nombre} quedó vacío y se eliminó.")
+            afectados.append(c.id)
         else:
-            c.forma = nueva
-        afectados.append(c.id)
+            afectados += poner_resultado(estado, ctx, op_id, c, nueva)
     if not afectados:
         ctx.aviso("La herramienta no toca ningún cuerpo: no cambió nada.")
     return afectados
@@ -790,6 +810,9 @@ def aristas_de_origen(origen, estado):
             objetivos.append((pl.origen, pl.normal))
         else:
             objetivos.append(e.forma)
+    if origen["tool"] == "isoparametric_curve":
+        return curvas3d.isoparametricas(objetivos[0], origen["point"], origen["direction"], origen["type"],
+                                        origen.get("distance"), origen.get("quantity"))
     fuente = [(e.forma, e.plano.normal) for e in (ent.resolver(r, estado) for r in origen["curves"])]
     if origen["tool"] == "project_to_surface":
         caras = geo.compuesto(objetivos)
@@ -1138,9 +1161,9 @@ class OpPrimitiva(Operacion):
     ETIQUETAS = {"caja": "Caja", "cilindro": "Cilindro", "esfera": "Esfera", "toroide": "Toroide"}
     ICONOS = {"caja": "■", "cilindro": "◯", "esfera": "●", "toroide": "◎"}
     PARAMS = {"forma": "caja", "ancho": "20 mm", "largo": "20 mm", "alto": "20 mm", "radio": "10 mm",
-              "radio_mayor": "20 mm", "radio_menor": "5 mm", "x": "0", "y": "0", "z": "0",
+              "radio_mayor": "20 mm", "radio_menor": "5 mm", "posicion_toroide": "centro", "x": "0", "y": "0", "z": "0",
               "operacion": "nuevo", "objetivo": "", "caja_centrada": False, "plano": None}
-    OPCIONES = {"forma": CAMPOS, "operacion": OPERACIONES_CUERPO}
+    OPCIONES = {"forma": CAMPOS, "operacion": OPERACIONES_CUERPO, "posicion_toroide": ("interior", "centro", "exterior")}
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
         forma = params.get("forma", "caja")
@@ -1171,7 +1194,9 @@ class OpPrimitiva(Operacion):
         elif f == "esfera":
             forma = geo.esfera(v["radio"], pos)
         elif f == "toroide":
-            forma = geo.toroide(v["radio_mayor"], v["radio_menor"], pos)
+            # Position de Fusion: el tubo va adentro, centrado o afuera del círculo de radio_mayor.
+            lado = {"interior": -1, "centro": 0, "exterior": 1}[self.p.get("posicion_toroide", "centro")]
+            forma = geo.toroide(v["radio_mayor"] + lado * v["radio_menor"], v["radio_menor"], pos)
         else:
             raise ErrorOperacion(f"Primitiva desconocida: {f}")
         if self.p.get("plano"):                 # sobre un plano o una cara cualquiera: del marco local al del plano
@@ -1230,7 +1255,10 @@ class OpCombinar(Operacion):
                               "revisalo con check_geometry.")
         if geo.esta_vacia(resultado):
             raise ErrorOperacion("El resultado quedó vacío (¿los cuerpos no se intersecan?).")
-        objetivo.forma = resultado
+        if self.p["operacion"] == "unir":
+            objetivo.forma = resultado
+        else:
+            poner_resultado(estado, ctx, self.id, objetivo, resultado)
         if not self.p["mantener"]:
             for h in herramientas:
                 del estado.cuerpos[h.id]

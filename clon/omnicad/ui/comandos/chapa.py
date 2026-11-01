@@ -19,6 +19,8 @@ def _reglas_biblioteca():
     crearse con la API o la CLI durante la sesión)."""
     return {n: n for n in list(ch.REGLAS) + [r for r in ch.REGLAS_USUARIO if r not in ch.REGLAS]}
 CARA_PLANA = {"cara_plana"}
+SIN_CAMBIO = "Vacío = sin cambio."
+DE_LA_REGLA = "Vacío = el valor de la regla."
 
 
 def _con_chapa(ctx):
@@ -85,14 +87,20 @@ class ReglasChapa(Comando):
         return [Seleccion("cuerpo", "Cuerpo de chapa", {"cuerpo"}),
                 Info("actual", "Regla actual", self._actual),
                 Opciones("regla", "Regla de la biblioteca", {"": "La actual", **_reglas_biblioteca()}),
-                Texto("espesor", "Espesor (vacío = sin cambio)"), Texto("radio", "Radio de plegado"),
-                Texto("k", "Factor K"),
-                Opciones("alivio_forma", "Forma del alivio de plegado", {"": "Sin cambio", **ch.FORMAS_ALIVIO}),
-                Texto("alivio_ancho", "Ancho del alivio"), Texto("alivio_profundidad", "Profundidad del alivio"),
-                Opciones("esquina_forma", "Alivio de esquina (2 pliegues)", {"": "Sin cambio", **ch.FORMAS_ESQUINA}),
-                Texto("esquina_tam", "Tamaño del alivio de esquina", visible_si=esquina),
-                Texto("separacion", "Separación (desgarros)"),
-                Casilla("restablecer", "Volver a los valores de la regla")]
+                Texto("espesor", "Espesor", ayuda=SIN_CAMBIO, grupo="Nuevos valores"),
+                Texto("radio", "Radio de plegado", ayuda=SIN_CAMBIO, grupo="Nuevos valores"),
+                Texto("k", "Factor K", ayuda=SIN_CAMBIO, grupo="Nuevos valores"),
+                Texto("separacion", "Separación de desgarro", ayuda=SIN_CAMBIO, grupo="Nuevos valores"),
+                Casilla("restablecer", "Volver a la regla", ayuda="Descarta los ajustes anteriores y usa los valores de la regla."),
+                Opciones("alivio_forma", "Forma del alivio", {"": "Sin cambio", **ch.FORMAS_ALIVIO},
+                         grupo="Alivio de plegado", avanzado=True),
+                Texto("alivio_ancho", "Ancho del alivio", ayuda=SIN_CAMBIO, grupo="Alivio de plegado", avanzado=True),
+                Texto("alivio_profundidad", "Profundidad del alivio", ayuda=SIN_CAMBIO, grupo="Alivio de plegado",
+                      avanzado=True),
+                Opciones("esquina_forma", "Alivio de esquina", {"": "Sin cambio", **ch.FORMAS_ESQUINA},
+                         ayuda="Para chapas con dos pliegues que se encuentran.", grupo="Alivio de esquina", avanzado=True),
+                Texto("esquina_tam", "Tamaño de esquina", visible_si=esquina, ayuda=SIN_CAMBIO,
+                      grupo="Alivio de esquina", avanzado=True)]
 
     def _origen(self, v, ctx):
         cid = _cuerpo_de(v)
@@ -155,6 +163,8 @@ class Pestana(Comando):
     AYUDA = "Crea chapa desde un perfil cerrado (base) o abierto (contorno), o agrega pestañas en aristas de chapa."
     CLASE_OP = OpPestana
     TIPO_DEFECTO = None
+    TITULOS_MODO = ("tipo", {"base": ("Pestaña base", "pestana"), "arista": ("Pestaña de arista", "pestana"),
+                             "contorno": ("Pestaña de contorno", "pestana_contorno")})
 
     def campos(self, ctx):
         def es(*tipos):
@@ -176,28 +186,32 @@ class Pestana(Comando):
                       ayuda="Aristas rectas del borde de la cara de arriba o de abajo de la chapa."),
             Expresion("distancia", "Distancia", "20 mm", visible_si=es("contorno")),
             Opciones("direccion", "Dirección", DIRECCIONES_CONTORNO, visible_si=es("contorno")),
-            Expresion("distancia2", "Distancia 2", "10 mm",
+            Expresion("distancia2", "Distancia del lado 2", "10 mm",
                       visible_si=lambda v: v.get("tipo") == "contorno" and v.get("direccion") == "dos_lados"),
             Opciones("orientacion", "Orientación", ch.ORIENTACIONES, visible_si=es("base", "contorno")),
-            Expresion("altura", "Altura", "20 mm", visible_si=es("arista")),
-            Expresion("angulo", "Ángulo", "90 deg", ANGULO, visible_si=es("arista")),
-            Opciones("referencia", "Referencia de altura", ch.REFERENCIAS_ALTURA, visible_si=es("arista")),
-            Opciones("posicion", "Posición del pliegue", ch.POSICIONES, visible_si=es("arista")),
-            Opciones("ancho", "Tipo de ancho", ch.TIPOS_ANCHO, visible_si=es("arista")),
-            Expresion("ancho_distancia", "Ancho", "20 mm", visible_si=arista_y("ancho", "simetrico")),
-            Expresion("ancho1", "Distancia 1", "10 mm", visible_si=arista_y("ancho", "dos_lados")),
-            Expresion("ancho2", "Distancia 2", "10 mm", visible_si=arista_y("ancho", "dos_lados")),
+            Expresion("altura", "Altura", "20 mm", visible_si=es("arista"), grupo="Pestaña"),
+            Expresion("angulo", "Ángulo", "90 deg", ANGULO, visible_si=es("arista"), grupo="Pestaña"),
+            Opciones("referencia", "Referencia de altura", ch.REFERENCIAS_ALTURA, visible_si=es("arista"),
+                     grupo="Pestaña"),
+            Opciones("posicion", "Posición del pliegue", ch.POSICIONES, visible_si=es("arista"), grupo="Pestaña"),
+            Opciones("ancho", "Tipo de ancho", ch.TIPOS_ANCHO, visible_si=es("arista"), grupo="Ancho"),
+            Expresion("ancho_distancia", "Ancho", "20 mm", visible_si=arista_y("ancho", "simetrico"), grupo="Ancho"),
+            Expresion("ancho1", "Ancho del lado 1", "10 mm", visible_si=arista_y("ancho", "dos_lados"), grupo="Ancho"),
+            Expresion("ancho2", "Ancho del lado 2", "10 mm", visible_si=arista_y("ancho", "dos_lados"), grupo="Ancho"),
             Casilla("invertir", "Invertir", visible_si=es("arista")),
             Opciones("regla", "Regla de chapa", _reglas_biblioteca(), ch.REGLA_DEFECTO,
                      visible_si=es("base", "contorno")),
-            Casilla("anular", "Anular reglas"),
-            Texto("espesor", "Espesor (vacío = regla)", visible_si=anula("base", "contorno")),
-            Texto("k", "Factor K (vacío = regla)", visible_si=anula("base", "contorno")),
-            Texto("radio", "Radio de plegado (vacío = regla)", visible_si=anula("base", "contorno", "arista")),
+            Casilla("anular", "Anular reglas", avanzado=True,
+                    ayuda="Permite poner espesor, radio, factor K o alivios propios; lo que quede vacío sigue la regla."),
+            Texto("espesor", "Espesor", visible_si=anula("base", "contorno"), ayuda=DE_LA_REGLA, avanzado=True),
+            Texto("k", "Factor K", visible_si=anula("base", "contorno"), ayuda=DE_LA_REGLA, avanzado=True),
+            Texto("radio", "Radio de plegado", visible_si=anula("base", "contorno", "arista"), ayuda=DE_LA_REGLA,
+                  avanzado=True),
             Opciones("alivio_forma", "Forma del alivio", {"": "Según la regla", **ch.FORMAS_ALIVIO},
-                     visible_si=anula("arista")),
-            Texto("alivio_ancho", "Ancho del alivio (vacío = regla)", visible_si=anula("arista")),
-            Texto("alivio_profundidad", "Profundidad del alivio (vacío = regla)", visible_si=anula("arista")),
+                     visible_si=anula("arista"), avanzado=True),
+            Texto("alivio_ancho", "Ancho del alivio", visible_si=anula("arista"), ayuda=DE_LA_REGLA, avanzado=True),
+            Texto("alivio_profundidad", "Profundidad del alivio", visible_si=anula("arista"), ayuda=DE_LA_REGLA,
+                  avanzado=True),
         ]
 
     def construir(self, v, ctx):
@@ -290,8 +304,8 @@ class Dobladillo(Comando):
     verificar = staticmethod(_con_chapa)
 
     def campos(self, ctx):
-        return [Seleccion("aristas", "Aristas", {"arista_lineal"}, maximo=None),
-                Opciones("tipo", "Tipo", ch.TIPOS_DOBLADILLO),
+        return [Opciones("tipo", "Tipo", ch.TIPOS_DOBLADILLO),
+                Seleccion("aristas", "Aristas", {"arista_lineal"}, maximo=None),
                 Expresion("longitud", "Longitud", "10 mm"),
                 Texto("separacion", "Separación (vacío = regla)",
                       visible_si=lambda v: v.get("tipo") in ("abierto", "lagrima")),
@@ -324,7 +338,7 @@ class Plegar(Comando):
                 Expresion("angulo", "Ángulo de plegado", "90 deg", ANGULO),
                 Opciones("posicion", "Posición de la línea", ch.POSICIONES_LINEA, "centro"),
                 Casilla("invertir", "Invertir"), Casilla("anular", "Anular reglas"),
-                Texto("radio", "Radio de plegado (vacío = regla)", visible_si=lambda v: bool(v.get("anular")))]
+                Texto("radio", "Radio de plegado", visible_si=lambda v: bool(v.get("anular")), ayuda=DE_LA_REGLA)]
 
     def construir(self, v, ctx):
         cara, punto = _cara_con_punto(v, "cara", "Seleccioná la cara estacionaria.")
@@ -507,7 +521,7 @@ class Desgarro(Comando):
 
     def campos(self, ctx):
         puntos = lambda v: v.get("modo") == "puntos"  # noqa: E731
-        return [Opciones("modo", "Selección", MODOS_DESGARRO),
+        return [Opciones("modo", "Desgarro por", MODOS_DESGARRO),
                 Seleccion("cara", "Cara", {"cara"}, ayuda="En «Puntos», la cara cuyo borde tiene los dos puntos."),
                 Seleccion("puntos", "Puntos", {"vertice", "punto", "punto_boceto"}, minimo=2, maximo=2,
                           visible_si=puntos),
@@ -538,7 +552,7 @@ class UnirPlegando(Comando):
         return [Seleccion("aristas", "Aristas", {"arista_lineal"}, minimo=2, maximo=2,
                           ayuda="Una arista de cada cuerpo, del borde de la cara de arriba o de abajo."),
                 Casilla("anular", "Anular reglas"),
-                Texto("radio", "Radio de plegado (vacío = regla)", visible_si=lambda v: bool(v.get("anular")))]
+                Texto("radio", "Radio de plegado", visible_si=lambda v: bool(v.get("anular")), ayuda=DE_LA_REGLA)]
 
     def construir(self, v, ctx):
         if len(v.get("aristas") or []) != 2:

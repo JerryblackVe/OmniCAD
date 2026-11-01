@@ -433,9 +433,16 @@ _ROSCA_AGUJERO = {"simple": "simple", "clearance": "holgura", "cosmetic": "cosme
 _AJUSTE = {"close": "fino", "normal": "normal", "loose": "grueso"}
 # familias de rosca: nombre en la API (inglés) → clave del núcleo (nucleo.solidos_crear.FAMILIAS_ROSCA)
 _FAMILIA = {"iso_metric": "iso_metrica", "unified": "unificada", "trapezoidal": "trapezoidal", "acme": "acme",
-            "bsp_parallel": "bsp_paralela", "bsp_taper": "bsp_conica", "npt": "npt"}
+            "bsp_parallel": "bsp_paralela", "bsp_taper": "bsp_conica", "npt": "npt", "ansi_metric": "ansi_metrica",
+            "gb_metric": "gb_metrica", "gost_self_tapping": "gost_autorroscante", "din_wood": "din_madera",
+            "inch_tapping": "pulgadas_autorroscante", "inch_tapping_plastics": "pulgadas_plasticos",
+            "metric_tapping_plastics": "metrica_plasticos", "din_pipe": "din_tuberia", "gb_pipe": "gb_tuberia",
+            "iso_pipe": "iso_tuberia", "jis_pipe": "jis_tuberia", "metric_forming": "metrica_formado", "afbma": "afbma",
+            "din_taper": "din_conica", "iso_taper": "iso_conica", "jis_taper": "jis_conica", "npt_pvc": "npt_pvc"}
 _FAMILIA_API = {v: k for k, v in _FAMILIA.items()}
-Familia = Literal["iso_metric", "unified", "trapezoidal", "acme", "bsp_parallel", "bsp_taper", "npt"]
+Familia = Literal["iso_metric", "unified", "trapezoidal", "acme", "bsp_parallel", "bsp_taper", "npt", "ansi_metric", "gb_metric",
+                  "gost_self_tapping", "din_wood", "inch_tapping", "inch_tapping_plastics", "metric_tapping_plastics", "din_pipe",
+                  "gb_pipe", "iso_pipe", "jis_pipe", "metric_forming", "afbma", "din_taper", "iso_taper", "jis_taper", "npt_pvc"]
 _VER_ROSCAS = "thread_info lista los tipos de rosca; thread_info(family=...) sus tamaños y designaciones."
 
 
@@ -585,7 +592,7 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     flip: true invierte el sentido del agujero: con sketch_points el automático (hacia el material); con las demás formas, el normal (hacia adentro de la cara, o −Z con positions).
     hole_tap: "simple", "clearance" (paso libre ISO 273), "cosmetic", "modeled" (rosca real) o "taper" (tubería cónica).
     thread: rosca: "M8", "M8x1", "1/4-20 UNC", "Tr20x4", "G1/2" (taper: "R1/2" o "1/2 NPT"); con clearance, el tornillo ("M8").
-    thread_class: clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), "auto" (6H o 2B si hay datos) o "" (perfil básico).
+    thread_class: clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), la de las tablas de Fusion en los demás tipos (A en las tuberías, 2G/3G/4G en ACME, 7H en trapezoidal…), "auto" (la de Fusion si hay datos) o "" (perfil básico).
     fit: ajuste del agujero de paso (clearance): "close" (serie fina), "normal" (media) o "loose" (gruesa).
     print_clearance: holgura radial extra en mm de la rosca modelada (flancos y agujero), para imprimir en 3D.
     left_hand: true = rosca a izquierdas (solo modeled).
@@ -693,6 +700,8 @@ def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbo
             if (hole_tap == "taper") != datos["conica"]:
                 raise error("INVALID_ARGUMENTS", f"{designacion} es una rosca {'cónica' if datos['conica'] else 'paralela'}: "
                             f"{'usá hole_tap=taper' if datos['conica'] else 'taper es para R/Rc y NPT'}.", _VER_ROSCAS)
+            if datos["solo_exterior"]:
+                raise error("INVALID_ARGUMENTS", f"{designacion} es una rosca solo exterior: no va en un agujero.", _VER_ROSCAS)
             if hole_tap == "modeled":
                 _validar_clase(datos, thread_class, interna=True)
                 clase = thread_class or ""
@@ -781,8 +790,8 @@ def create_thread(sesion, faces: Elementos, thread: str | None = None, family: F
     """
     faces: caras cilíndricas a roscar: selector ("%CYLINDER"), id de find_faces ("Cuerpo1/F3") o lista.
     thread: designación de la rosca ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "G1/2"…); vacío = automática según la cara.
-    family: tipo de rosca para el tamaño automático: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
-    thread_class: clase de tolerancia: "6g", "6H", "2A", "2B"…, "auto" (la de Fusion) o "" (perfil básico).
+    family: tipo de rosca para el tamaño automático; thread_info lista los 24 tipos.
+    thread_class: clase de tolerancia: "6g", "6H", "2A", "2B"…, "auto" (la de Fusion) o "" (perfil básico). Los demás tipos traen las clases de las tablas de Fusion (A y B en las tuberías, 2G/3G/4G en ACME, 7e/7H en trapezoidal, h14 en las autorroscantes…): thread_info lista las de cada tamaño.
     modeled: true corta el filete real; false = rosca cosmética (la geometría no cambia).
     length: largo roscado en mm (número o expresión); vacío = toda la cara.
     offset: distancia en mm desde el extremo de la cara hasta donde empieza la rosca (con length).
@@ -834,7 +843,7 @@ def _limites_api(lim):
 def thread_info(sesion, thread: str | None = None, family: Familia | None = None, thread_class: str | None = None):
     """
     thread: designación ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "1/2-10 ACME", "G1/2", "R1/2", "1/2 NPT").
-    family: tipo de rosca cuyos tamaños listar: iso_metric, unified, trapezoidal, acme, bsp_parallel, bsp_taper o npt.
+    family: tipo de rosca cuyos tamaños listar; sin thread ni family, thread_info lista los 24 tipos.
     thread_class: clase para los diámetros límite: "6g", "6H", "2A", "2B"…, o "auto" (las dos por defecto).
     """
     sc, tol = _sc(), _tol()
@@ -842,7 +851,8 @@ def thread_info(sesion, thread: str | None = None, family: Familia | None = None
         d = _datos_rosca(thread)
         res = {"designation": d["designacion"], "family": _FAMILIA_API[d["familia"]],
                "standard": sc.FAMILIAS_ROSCA[d["familia"]]["norma"], "profile_angle": d["angulo"],
-               "taper": d["conica"], "major_diameter": round(d["diametro"], 4), "pitch": round(d["paso"], 4),
+               "taper": d["conica"], "external_only": d["solo_exterior"], "major_diameter": round(d["diametro"], 4),
+               "pitch": round(d["paso"], 4),
                "pitch_diameter": round(d["diametro_flancos"], 4), "minor_diameter": round(d["diametro_menor"], 4),
                "tap_drill": d["broca"]}
         # B-31: classes = las que tienen límites verificados para ESTE tamaño (si no, el modo «auto»
@@ -867,7 +877,7 @@ def thread_info(sesion, thread: str | None = None, family: Familia | None = None
                 pass
         if thread_class:
             if thread_class == "auto":
-                clases = tol.CLASE_AUTOMATICA.get(d["familia"], ())
+                clases = [c for c in tol.CLASE_AUTOMATICA.get(d["familia"], ()) if c]
             else:
                 _validar_clase(d, thread_class)
                 clases = (thread_class,)
@@ -883,7 +893,7 @@ def thread_info(sesion, thread: str | None = None, family: Familia | None = None
         return {"family": family, "standard": sc.FAMILIAS_ROSCA[fam]["norma"],
                 "sizes": [{"size": t, "designations": sc.designaciones_rosca(fam, t)} for t in sc.tamanos_rosca(fam)]}
     return {"families": [{"family": _FAMILIA_API[k], "name": f["nombre"], "standard": f["norma"],
-                          "profile_angle": f["angulo"], "taper": f["conica"],
+                          "profile_angle": f["angulo"], "taper": f["conica"], "external_only": bool(f.get("solo_exterior")),
                           "classes": list(tol.CLASES_POR_FAMILIA.get(k, {})),
                           "sizes": len(sc.tamanos_rosca(k))} for k, f in sc.FAMILIAS_ROSCA.items()]}
 
@@ -928,7 +938,8 @@ def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: b
           type: Literal["fixed_plane", "parting_line"] = "fixed_plane",
           angle_mode: Literal["relative", "absolute"] = "absolute", pull_direction: str | dict | None = None,
           parting_tool: str | dict | None = None, parting_line_type: Literal["fixed", "move"] = "fixed",
-          move_direction: Literal["above", "both", "below"] = "both", fixed_edges: Elementos | None = None):
+          move_direction: Literal["above", "both", "below"] = "both", fixed_edges: Elementos | None = None,
+          tangent_chain: bool = True):
     """
     faces: caras a inclinar: selector ("#Z" = las laterales de una caja), id de find_faces o lista.
     angle: ángulo de desmoldeo en grados (número o expresión), p. ej. 3.
@@ -944,6 +955,7 @@ def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: b
     parting_line_type: con parting_line, "fixed" (por defecto) o "move" (la línea se mueve).
     move_direction: con move: "above" (bisagra en el borde más atrás de la extracción), "below" (el más adelante) o "both".
     fixed_edges: con move, la arista bisagra (selector o ids).
+    tangent_chain: true (por defecto) inclina también las caras tangentes a las elegidas (Tangent Chain); false solo las elegidas.
     """
     if parting_line_type == "move" and type != "parting_line":
         raise error("INVALID_ARGUMENTS", "parting_line_type=move solo vale con type=parting_line.")
@@ -980,7 +992,7 @@ def draft(sesion, faces: Elementos, angle: Expr, neutral: str = "XY", reverse: b
             plano = sl.referencia(c, e)
     doc = sesion.doc
     op = OpDesmoldeo(doc.nuevo_id(), nombre_nuevo(doc, "Desmoldeo", OpDesmoldeo), plano=plano, caras=refs,
-                     angulo=texto_expr(angle), voltear=reverse,
+                     angulo=texto_expr(angle), voltear=reverse, cadena_tangente=bool(tangent_chain),
                      lados={"one": "uno", "two": "dos", "symmetric": "simetrico"}[sides],
                      **({"angulo2": texto_expr(angle2)} if angle2 is not None else {}), **extra)
     return _informe(_agregar(sesion, op), elegidos, "faces_used")

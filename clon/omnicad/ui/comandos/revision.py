@@ -73,18 +73,19 @@ class RevisarGeometria(Comando):
     def campos(self, ctx):
         def impresion(v):
             return bool(v.get("impresion"))
-        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, minimo=0, maximo=None, ayuda="Sin selección: todos."),
-                Casilla("autointersecciones", "Buscar autointersecciones"),   # bajo demanda: tardaba 15 s al abrir
-                Casilla("impresion", "Revisión de impresión 3D"),
-                Expresion("espesor", "Espesor mínimo", "0.8 mm", visible_si=impresion,
+        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, minimo=0, maximo=None, ayuda="Sin selección: todos.",
+                          grupo="Revisar"),
+                Casilla("autointersecciones", "Buscar autointersecciones", grupo="Revisar"),  # bajo demanda: tardaba 15 s
+                Casilla("impresion", "Revisión de impresión 3D", grupo="Revisar"),
+                Expresion("espesor", "Espesor mínimo", "0.8 mm", visible_si=impresion, avanzado=True,
                           ayuda="Pared más fina que esto: error (p. ej. 2 veces la boquilla)."),
-                Expresion("voladizo", "Ángulo de voladizo", "45 deg", ANGULO, visible_si=impresion,
+                Expresion("voladizo", "Ángulo de voladizo", "45 deg", ANGULO, visible_si=impresion, avanzado=True,
                           ayuda="Desde la vertical: más inclinado necesita soportes."),
-                Expresion("filo", "Ángulo de arista filosa", "20 deg", ANGULO, visible_si=impresion,
+                Expresion("filo", "Ángulo de arista filosa", "20 deg", ANGULO, visible_si=impresion, avanzado=True,
                           ayuda="Aristas convexas con ángulo interior menor que esto."),
-                Info("resultado", "Informe", self._resultado),
-                Casilla("reparar", "Reparar al aceptar (agrega un paso)"),
-                Expresion("tolerancia", "Tolerancia de reparación", "0.01 mm",
+                Info("resultado", "Informe", self._resultado, grupo="Informe"),
+                Casilla("reparar", "Reparar al aceptar (agrega un paso)", grupo="Reparar"),
+                Expresion("tolerancia", "Tolerancia de reparación", "0.01 mm", grupo="Reparar",
                           visible_si=lambda v: bool(v.get("reparar")))]
 
     def _cuerpos(self, v, ctx):

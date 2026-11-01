@@ -683,13 +683,29 @@ def valores_curvatura(forma, *, tipo="gaussiana", alta_calidad=False, deflexion=
     return v, n, k[:, _TIPOS_CURVATURA[tipo]].astype(np.float32)
 
 
+_GRIS_CUERPO = 0.72                                   # lo que se ve debajo de un análisis semitransparente
+
+
+def _con_opacidad(colores, opacidad):
+    """`opacidad` % (Opacidad de los análisis) del color del análisis sobre el gris del cuerpo."""
+    o = float(np.clip(opacidad, 0, 100)) / 100
+    return np.asarray(colores, np.float32) * o + _GRIS_CUERPO * (1 - o)
+
+
+def malla_fina(forma, deflexion=0.05, angular=0.3):
+    """(vertices, normales) con la malla de «Calidad alta»."""
+    v, n, _k, _ = _malla(forma, deflexion, angular, False, True)
+    return v, n
+
+
 def colores_curvatura(forma, *, tipo="gaussiana", rango=None, bandas=False, alta_calidad=False, deflexion=0.05,
-                      angular=0.3):
+                      angular=0.3, escala=1.0, opacidad=100):
     """Inspeccionar > Análisis de mapa de curvatura → (vertices, normales, colores).
 
     `rango`: escala del degradé. Un número r pinta [−r, r] (rojo = +r, verde = 0, violeta = −r); una
     tupla (min, max) estira ese intervalo; None = automático (percentil 95 de |valor|).
-    `bandas=True` = visualización "Bandas" (7 colores sin transición) en vez de "Suave".
+    `bandas=True` = visualización "Bandas" (7 colores sin transición) en vez de "Suave". `escala` (Scale) multiplica el
+    degradé; `opacidad`: ver `_con_opacidad`.
     """
     v, n, val = valores_curvatura(forma, tipo=tipo, alta_calidad=alta_calidad, deflexion=deflexion,
                                   angular=angular)
@@ -708,10 +724,10 @@ def colores_curvatura(forma, *, tipo="gaussiana", rango=None, bandas=False, alta
         if hi <= lo:
             raise geo.ErrorGeometria("El rango de curvatura necesita mínimo < máximo.")
         t = 2.0 * (val - lo) / (hi - lo) - 1.0
-    t = np.clip(t, -1.0, 1.0)
+    t = np.clip(t * float(escala), -1.0, 1.0)
     if bandas:
         t = np.round(t * 3.0) / 3.0
-    return v, n, _rampa(t)
+    return v, n, _con_opacidad(_rampa(t), opacidad)
 
 
 # ---------------------------------------------------------------- desmoldeo
@@ -942,7 +958,7 @@ def _base_vista(v, arriba):
     return up, np.cross(v, up)
 
 
-def colores_cebra(normales, direccion_vista, *, frecuencia=8, vertical=False, arriba=(0.0, 0.0, 1.0)):
+def colores_cebra(normales, direccion_vista, *, frecuencia=8, vertical=False, arriba=(0.0, 0.0, 1.0), opacidad=100):
     """Inspeccionar > Análisis de cebra: franjas blancas/negras de reflexión (sin "Bloquear franjas":
     dependen de la cámara). `frecuencia` = repeticiones (1..100), `vertical` = dirección de las franjas.
     Recibe las normales por vértice (p. ej. de otro mapa) y devuelve colores Nx3; vectorizado, barato."""
@@ -954,7 +970,7 @@ def colores_cebra(normales, direccion_vista, *, frecuencia=8, vertical=False, ar
     negra = (np.floor(fase * 2 * frecuencia).astype(int) % 2) == 1
     col = np.full((len(s), 3), 0.97, np.float32)
     col[negra] = 0.06
-    return col
+    return _con_opacidad(col, opacidad)
 
 
 def _suave(x0, x1, x):
@@ -1099,6 +1115,31 @@ def isocurvas(forma, *, n_u=10, n_v=10, puntos=48):
         for j in range(1, n_v + 1):
             salida["v"] += _isocurva(sup, clasif, u0 + (u1 - u0) * j / (n_v + 1), v0, v1, puntos, False)
     return salida
+
+
+def peines_isocurva(curvas, *, densidad=50, escala=10.0):
+    """Curvatura en peines de las isocurvas (polilíneas Kx3): {"puas": Mx2x3 (base, punta)}, `densidad` púas por curva.
+    Curvatura discreta por tres puntos, largo κ·factor; factor = escala·2 % de la diagonal / κ máxima (como `peine_curvatura`,
+    donde 10 es el «Escala» por defecto de Fusion)."""
+    bases, normales, kappas = [], [], []
+    for c in curvas:
+        c = np.asarray(c, float)
+        s = np.r_[0, np.cumsum(np.linalg.norm(np.diff(c, axis=0), axis=1))]
+        if len(c) < 3 or s[-1] < 1e-9:
+            continue
+        t = np.linspace(0, s[-1], max(int(densidad), 3))
+        p = np.stack([np.interp(t, s, c[:, i]) for i in range(3)], axis=1)
+        a, b, m = p[:-2], p[2:], p[1:-1]
+        lados = np.linalg.norm(m - a, axis=1) * np.linalg.norm(b - m, axis=1) * np.linalg.norm(b - a, axis=1)
+        k = 2 * np.linalg.norm(np.cross(m - a, b - a), axis=1) / np.maximum(lados, 1e-12)
+        fuera = 2 * m - a - b                                  # del lado opuesto al centro de curvatura
+        largo = np.linalg.norm(fuera, axis=1, keepdims=True)
+        bases.append(m), normales.append(fuera / np.maximum(largo, 1e-12)), kappas.append(k)
+    if not bases:
+        return {"puas": np.zeros((0, 2, 3))}
+    base, normal, k = np.concatenate(bases), np.concatenate(normales), np.concatenate(kappas)
+    factor = float(escala) * 0.02 * float(np.linalg.norm(base.max(0) - base.min(0))) / max(float(k.max()), 1e-12)
+    return {"puas": np.stack([base, base + normal * (k * factor)[:, None]], axis=1)}
 
 
 # ---------------------------------------------------------------- sección

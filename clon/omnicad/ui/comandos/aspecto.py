@@ -34,6 +34,7 @@ class Aspecto(Comando):
              "Elegí uno de la biblioteca o de «En este diseño» y se ve al instante; Aceptar lo aplica, Cancelar lo descarta.")
     SIN_OP, PREVIA = True, False
     MODIFICADORES = {}
+    ANCHO_PANEL = "ancho"          # la biblioteca con buscador, pestañas y miniaturas necesita el panel ancho
 
     @staticmethod
     def verificar(ctx):

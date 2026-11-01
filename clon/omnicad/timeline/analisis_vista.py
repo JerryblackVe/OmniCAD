@@ -92,15 +92,23 @@ def _color_seccion(params, cuerpo, propiedades):
 
 def calcular(tipo, params, estado, propiedades=None):
     """`propiedades`: `Documento.propiedades`, para el color por componente de la sección."""
-    salida = {"mallas": {}, "colores": None, "capas": [], "cortes": []}
-    if tipo == "cebra":
-        frecuencia, vertical = int(params.get("frecuencia", 8)), params.get("orientacion") == "vertical"
-        salida["colores"] = lambda n, d: an.colores_cebra(n, d, frecuencia=frecuencia, vertical=vertical)
-        return salida
+    salida = {"mallas": {}, "colores": None, "capas": [], "cortes": [], "solo": None}
     if tipo == "mapa_entorno":
         salida["colores"] = lambda n, d: an.colores_mapa_entorno(n, d)
         return salida
     cuerpos = _cuerpos(params, estado)
+    if tipo == "cebra":
+        frecuencia, vertical = int(params.get("frecuencia", 8)), params.get("orientacion") == "vertical"
+        opacidad, fija = int(params.get("opacidad", 100)), params.get("vista_fija")      # «Bloquear rayas»: no sigue a la cámara
+        salida["colores"] = lambda n, d: an.colores_cebra(n, d if fija is None else fija, frecuencia=frecuencia,
+                                                          vertical=vertical, opacidad=opacidad)
+        if params.get("cuerpos"):
+            salida["solo"] = list(cuerpos)
+        if params.get("alta_calidad"):
+            for cid, forma in cuerpos.items():
+                v, n = _con_cache(("malla_fina", id(forma)), lambda f=forma: an.malla_fina(f), forma)
+                salida["mallas"][cid] = (np.asarray(v, np.float32).reshape(-1, 3), np.asarray(n, np.float32).reshape(-1, 3), None)
+        return salida
     if tipo == "seccion":
         e = ent.resolver(params["plano"], estado)
         plano = ent.como_plano(e)
@@ -127,7 +135,10 @@ def calcular(tipo, params, estado, propiedades=None):
                                  lambda f=forma, d=d, a0=a0, a1=a1: an.colores_desmoldeo(f, d, a0, a1), forma)
         elif tipo == "curvatura":
             t = params.get("tipo_curvatura", "gaussiana")
-            v, n, c = _con_cache(("curvatura", id(forma), t), lambda f=forma, t=t: an.colores_curvatura(f, tipo=t), forma)
+            op = {k: params[k] for k in ("bandas", "alta_calidad", "escala", "opacidad") if k in params}
+            limite = params.get("limite") or None
+            v, n, c = _con_cache(("curvatura", id(forma), t, tuple(sorted(op.items())), limite),
+                                 lambda f=forma, t=t, op=op, r=limite: an.colores_curvatura(f, tipo=t, rango=r, **op), forma)
         elif tipo == "accesibilidad":
             d = _direccion(params, estado)
             v, n, c = _con_cache(("accesibilidad", id(forma), tuple(d)),
@@ -136,11 +147,15 @@ def calcular(tipo, params, estado, propiedades=None):
             r = float(params.get("radio", 3.0))
             v, n, c = _con_cache(("radio_minimo", id(forma), r), lambda f=forma, r=r: an.colores_radio_minimo(f, r), forma)
         elif tipo == "isocurva":
-            datos = _con_cache(("isocurva", id(forma), int(params.get("densidad", 10))),
-                               lambda f=forma: an.isocurvas(f, n_u=int(params.get("densidad", 10)),
-                                                            n_v=int(params.get("densidad", 10))), forma)
+            cuantas, sentidos = int(params.get("densidad", 10)), params.get("tipo_iso", "uv")
+            n_u, n_v = cuantas if "u" in sentidos else 0, cuantas if "v" in sentidos else 0
+            datos = _con_cache(("isocurva", id(forma), n_u, n_v), lambda f=forma, a=n_u, b=n_v: an.isocurvas(f, n_u=a, n_v=b), forma)
             salida["capas"].append(("lineas", _segmentos(datos["u"]), (0.85, 0.25, 0.25), 1.2))
             salida["capas"].append(("lineas", _segmentos(datos["v"]), (0.25, 0.45, 0.90), 1.2))
+            if params.get("peines"):
+                puas = an.peines_isocurva(datos["u"] + datos["v"], densidad=int(params.get("densidad_peine", 50)),
+                                          escala=float(params.get("escala_peine", 10.0)))["puas"]
+                salida["capas"].append(("lineas", np.asarray(puas, np.float32).reshape(-1, 3), (0.55, 0.30, 0.85), 1.0))
             continue
         elif tipo == "peine":
             continue
@@ -161,10 +176,11 @@ def calcular(tipo, params, estado, propiedades=None):
 
 def combinar(resultados):
     """Junta varios análisis visibles en una sola descripción para el visor."""
-    total = {"mallas": {}, "colores": None, "capas": [], "cortes": []}
+    total = {"mallas": {}, "colores": None, "capas": [], "cortes": [], "solo": None}
     for r in resultados:
         total["mallas"].update(r["mallas"])
         total["capas"].extend(r["capas"])
         total["cortes"].extend(r["cortes"])
         total["colores"] = r["colores"] or total["colores"]
+        total["solo"] = r["solo"] or total["solo"]
     return total

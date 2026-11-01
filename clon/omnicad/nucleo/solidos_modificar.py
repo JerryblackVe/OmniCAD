@@ -300,6 +300,16 @@ def caras_tangentes(forma, cara, tol_ang=1.0):
     return cadena
 
 
+def caras_en_cadena(forma, caras):
+    """Las `caras` y las tangentes a ellas, sin repetir (Tangent Chain / Chain Selection de una lista de caras)."""
+    salida = []
+    for c in caras:
+        for t in caras_tangentes(forma, c):
+            if not _contiene(salida, t):
+                salida.append(t)
+    return salida
+
+
 def _ampliar_tangentes(forma, aristas, activo):
     if not activo:
         return list(aristas)
@@ -780,7 +790,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
         pista = ""
         if longitudes:
             # shortcut: estimación local, usar búsqueda geométrica si se necesita un límite exacto.
-            pista = (f" Distancia máxima aproximada: {min(longitudes) / 2:g} mm "
+            pista = (f" Probá una distancia menor que {min(longitudes) / 2:g} mm "
                      "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
         raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas." + pista)
     resultado = _validar(mc.Shape(), "Chaflán")
@@ -1117,13 +1127,15 @@ def plano_de_particion(arista, direccion):
     return geo.Plano.desde_marco(centro, normal, (1.0, 0.0, 0.0))
 
 
-def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados="uno", angulo2=None, modo_angulo="absoluto"):
+def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados="uno", angulo2=None, modo_angulo="absoluto",
+              cadena_tangente=True):
     """Desmoldeo (Draft, tipo Fixed Plane): inclina las caras `angulo` grados alrededor de su
     intersección con `plano_neutro`. Ángulo positivo = el cuerpo se angosta hacia la dirección de
     extracción (se quita material del lado al que apunta). lados: "uno" | "dos" (angulo2 del otro
     lado) | "simetrico". En "dos"/"simetrico" las caras se parten primero por el plano neutro.
     modo_angulo (Angle Mode): "absoluto" = el ángulo se mide desde la dirección de extracción, haya o no desmoldeo en la
-    cara; "relativo" = se suma al que la cara ya tiene."""
+    cara; "relativo" = se suma al que la cara ya tiene. `cadena_tangente` (Tangent Chain): OpenCascade inclina también las
+    caras tangentes a las elegidas; sin ella inclina solo las elegidas (falla si una tangente no puede quedar como está)."""
     if modo_angulo not in ("absoluto", "relativo"):
         raise geo.ErrorGeometria(f"Modo de ángulo desconocido: {modo_angulo}")
     if lados not in ("uno", "dos", "simetrico"):
@@ -1161,7 +1173,7 @@ def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados
                 raise geo.ErrorGeometria("Con el ángulo que ya tiene la cara, el desmoldeo relativo llega a 90 grados o más.")
         if abs(ang) < 1e-12:
             continue
-        da.Add(cara, gp_Dir(*direc), math.radians(ang), pln)
+        da.Add(cara, gp_Dir(*direc), math.radians(ang), pln, cadena_tangente)
         hechas += 1
         if not da.AddDone():
             raise geo.ErrorGeometria("Una cara no admite desmoldeo (solo planas, cilíndricas o cónicas, "

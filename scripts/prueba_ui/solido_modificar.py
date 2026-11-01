@@ -89,10 +89,10 @@ run("desmoldeo", lambda: (
 
 # Escala -----------------------------------------------------------------------------------------------------------------------------
 run("escala_3d", lambda: (
-    C.caso(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, {"factor": "2"}, esperado=V_CAJA * 7, foto="escala_3d"),
-    C.caso(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, {"tipo": "no_uniforme", "fx": "2", "fy": "1", "fz": "1"}, esperado=V_CAJA, etiqueta="escala no uniforme X2", rt=False),
-    C.caso(v, AR, "escala_3d", {"bocetos": lambda: [A.hit_curva(v, s, "Rect")]}, {"factor": "2"}, etiqueta="escalar un boceto entero", rt=False),
-    C.negativos(v, AR, "escala_3d", {"cuerpos": cuerpo(caja)}, "factor", malos=("abc", "0", "-1", "1e9", "2 mm"))))
+    C.caso(v, AR, "escala_3d", {"entidades": cuerpo(caja)}, {"factor": "2"}, esperado=V_CAJA * 7, foto="escala_3d"),
+    C.caso(v, AR, "escala_3d", {"entidades": cuerpo(caja)}, {"tipo": "no_uniforme", "fx": "2", "fy": "1", "fz": "1"}, esperado=V_CAJA, etiqueta="escala no uniforme X2", rt=False),
+    C.caso(v, AR, "escala_3d", {"entidades": lambda: [A.hit_curva(v, s, "Rect")]}, {"factor": "2"}, etiqueta="escalar un boceto entero", rt=False),
+    C.negativos(v, AR, "escala_3d", {"entidades": cuerpo(caja)}, "factor", malos=("abc", "0", "-1", "1e9", "2 mm"))))
 
 # Combinar ---------------------------------------------------------------------------------------------------------------------------
 run("combinar", lambda: (
@@ -120,8 +120,9 @@ run("dividir_cuerpo", lambda: (
     C.caso(v, AR, "dividir_cuerpo", {"cuerpo": cuerpo(caja), "herramienta": plano("PM")}, {}, esperado=0, foto="dividir_cuerpo"),
     C.negativos(v, AR, "dividir_cuerpo")))
 run("division_silueta", lambda: (
-    C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {}, esperado=0, foto="division_silueta"),
-    C.caso(v, AR, "division_silueta", {"direccion": eje("Z"), "cuerpo": cuerpo(cil)}, {}, etiqueta="división de silueta mirando el eje (sin silueta)", rt=False, error="no tiene silueta"),
+    C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {"operacion": "caras"}, esperado=0, foto="division_silueta"),
+    C.caso(v, AR, "division_silueta", {"direccion": eje("Z"), "cuerpo": cuerpo(cil)}, {"operacion": "caras"}, etiqueta="división de silueta mirando el eje (sin silueta)", rt=False, error="no tiene silueta"),
+    C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {}, etiqueta="división de silueta por defecto (cuerpo vaciado) sobre un sólido", rt=False, error="necesita un cuerpo vaciado"),
     C.caso(v, AR, "division_silueta", {"direccion": eje("X"), "cuerpo": cuerpo(cil)}, {"operacion": "solido"}, etiqueta="división de silueta, cuerpo sólido (dos cuerpos)", rt=False),
     C.negativos(v, AR, "division_silueta")))
 
@@ -131,10 +132,12 @@ run("mover_copiar", lambda: (
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "direccion": eje("X")}, {"tipo": "traslacion", "distancia": "10 mm"}, foto="mover_copiar"),
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "libre", "dx": "10 mm", "dy": "5 mm", "dz": "0 mm", "copiar": True}, esperado=V_CAJA, etiqueta="mover libre + copiar", rt=False),
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"tipo": "rotacion", "angulo": "45 deg"}, etiqueta="mover rotación 45° Z", rt=False),
+    C.caso(v, AR, "mover_copiar", {"bocetos": lambda: [A.hit_curva(v, s, "Circ")]}, {"objeto": "bocetos", "tipo": "traslacion", "dx": "10 mm"},
+           etiqueta="mover una curva del boceto", rt=False),
     C.caso(v, AR, "mover_copiar", {"bocetos": lambda: [A.hit_curva(v, s, "Rect")]}, {"objeto": "bocetos", "tipo": "traslacion", "dx": "10 mm"},
-           etiqueta="mover un boceto entero", rt=False),
+           etiqueta="mover una curva anclada al origen", rt=False, error="geometría fija"),
     C.caso(v, AR, "mover_copiar", {"bocetos": lambda: [A.hit_curva(v, s, "Rect")]}, {"objeto": "bocetos", "tipo": "traslacion", "dx": "10 mm", "copiar": True},
-           etiqueta="copiar un boceto entero", rt=False),
+           etiqueta="copiar una curva del boceto", rt=False),
     C.negativos(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "direccion": eje("X")}, "distancia", malos=("abc", "1e9 mm"), vals={"tipo": "traslacion"})))
 run("alinear", lambda: (
     C.caso(v, AR, "alinear", {"cuerpos": cuerpo(caja), "origen": cara(caja, normal=(0, 0, 1)), "destino": plano("PL")}, {}, foto="alinear"),
@@ -158,10 +161,10 @@ run("patron_rectangular_3d", lambda: (
     C.negativos(v, AR, "patron_rectangular_3d", {"cuerpos": cuerpo(caja), "dir1": eje("X")}, "d1", malos=("abc", "0 mm", "-50 mm"), vals={"n1": 3})))
 run("patron_circular_3d", lambda: (
     C.caso(v, AR, "patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"n": 4}, esperado=V_CAJA * 3, foto="patron_circular_3d"),
-    C.negativos(v, AR, "patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, "angulo", malos=("abc", "0 deg", "-90 deg", "720 deg"), vals={"n": 4})))
+    C.negativos(v, AR, "patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, "angulo", malos=("abc", "0 deg", "-90 deg", "720 deg"), vals={"n": 4, "modo": "parcial"})))   # el ángulo solo existe en Parcial/Simétrico
 run("patron_ruta", lambda: (
-    C.caso(v, AR, "patron_ruta", {"cuerpos": cuerpo(caja), "ruta": lambda: [A.hit_curva(v, s, "Lin")]}, {"n1": 3, "d1": "40 mm"}, foto="patron_ruta"),
-    C.negativos(v, AR, "patron_ruta", {"cuerpos": cuerpo(caja), "ruta": lambda: [A.hit_curva(v, s, "Lin")]}, "d1", malos=("abc", "0 mm", "-40 mm"), vals={"n1": 3})))
+    C.caso(v, AR, "patron_ruta", {"cuerpos": cuerpo(caja), "ruta": lambda: [A.hit_curva(v, s, "Lin")]}, {"rn": 3, "rd": "40 mm"}, foto="patron_ruta"),
+    C.negativos(v, AR, "patron_ruta", {"cuerpos": cuerpo(caja), "ruta": lambda: [A.hit_curva(v, s, "Lin")]}, "rd", malos=("abc", "0 mm", "-40 mm"), vals={"rn": 3})))
 run("patron_puntos", lambda: C.negativos(v, AR, "patron_puntos"))
 run("multitransformar", lambda: C.negativos(v, AR, "multitransformar"))
 

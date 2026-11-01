@@ -2,13 +2,14 @@
 """Comandos de SÓLIDO › CREAR con diálogo al estilo Fusion: Extruir y Revolución."""
 import numpy as np
 
-from ...timeline.operaciones import DIRECCIONES, OpExtrusion, OpRevolucion
+from ...nucleo import geometria as geo
+from ...timeline.operaciones import OpExtrusion, OpRevolucion
 from ...timeline.parametros import ANGULO, LONGITUD
-from ..comando import (Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir, hit_desde_ref, hits,
-                      ref1)
+from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir,
+                       hit_desde_ref, hits, ref1)
 from . import registrar
-from .comunes import (campo_objetivos, campo_operacion, evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op,
-                      perfiles_a_params, perfiles_desde_op)
+from .comunes import (DIRECCIONES_UI, campo_objetivos, campo_operacion, evaluar_o_cero as _evaluar, objetivos,
+                      objetivos_desde_op, perfiles_a_params, perfiles_desde_op)
 
 
 EXTENSIONES = {"distancia": ("Distancia", "ext_distancia"), "objeto": ("Al objeto", "ext_objeto"),
@@ -19,6 +20,7 @@ class Extruir(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "extruir", "Extruir", "extruir", "E"
     AYUDA = "Agrega profundidad a perfiles de boceto o caras planas: cuerpo nuevo, unir, cortar o intersecar."
     CLASE_OP = OpExtrusion
+    TITULOS_MODO = ("tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "extruir")})
 
     def verificar(self, ctx):
         if not ctx.estado.bocetos and not ctx.estado.cuerpos:
@@ -28,26 +30,28 @@ class Extruir(Comando):
     def campos(self, ctx):
         dos = lambda v: v.get("direccion") == "dos_lados"  # noqa: E731
         return [
-            Opciones("tipo", "Tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "extruir")}),
+            Botones("tipo", "Tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "ext_delgada")}),
             Seleccion("perfiles", "Perfiles", {"perfil", "cara_plana", "curva_boceto"}, maximo=None,
                       ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas."),
-            Opciones("inicio", "Inicio", {"plano": "Plano del perfil", "desfase": "Desfase", "objeto": "Objeto"}),
-            Expresion("desfase_inicio", "Desfase", "0 mm", visible_si=lambda v: v.get("inicio") == "desfase"),
-            Seleccion("inicio_objeto", "Objeto", {"cara_plana", "plano"}, visible_si=lambda v: v.get("inicio") == "objeto"),
-            Opciones("direccion", "Dirección", DIRECCIONES),
+            Opciones("inicio", "Inicio", {"plano": ("Plano de perfil", "ini_plano"), "desfase": ("Desfase", "ini_desfase"),
+                                          "objeto": ("Objeto", "ini_objeto")}),
+            Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") == "desfase"),
+            Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
+                      visible_si=lambda v: v.get("inicio") == "objeto"),
+            Opciones("direccion", "Dirección", DIRECCIONES_UI),
             Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"},
                      visible_si=lambda v: v.get("direccion") == "simetrica"),
             Opciones("extension", "Tipo de extensión", EXTENSIONES),
             Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia"),
-            Seleccion("hasta", "Objeto", {"cara", "plano", "cuerpo"}, visible_si=lambda v: v.get("extension") == "objeto"),
+            Seleccion("hasta", "Objeto límite", {"cara", "plano", "cuerpo"}, visible_si=lambda v: v.get("extension") == "objeto"),
             Opciones("hasta_modo", "Extender", {"cara": "Hasta la cara seleccionada", "cuerpo": "Hasta el cuerpo",
                                                 "a_traves": "A través del cuerpo"},
                      visible_si=lambda v: v.get("extension") == "objeto"),
-            Expresion("desfase_hasta", "Desfase", "0 mm", visible_si=lambda v: v.get("extension") == "objeto"),
+            Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=lambda v: v.get("extension") == "objeto"),
             Casilla("invertir", "Invertir dirección"),
-            Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO),
-            Expresion("distancia2", "Lado 2: distancia", "10 mm", visible_si=dos),
-            Expresion("conicidad2", "Lado 2: conicidad", "0 deg", ANGULO, visible_si=dos),
+            Expresion("distancia2", "Distancia del lado 2", "10 mm", visible_si=dos),
+            Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, avanzado=True),
+            Expresion("conicidad2", "Conicidad del lado 2", "0 deg", ANGULO, visible_si=dos, avanzado=True),
             Expresion("espesor", "Grosor de pared", "1 mm", visible_si=lambda v: v.get("tipo") == "delgada"),
             Opciones("ubicacion", "Ubicación de pared", {"lado1": "Lado 1", "lado2": "Lado 2", "centro": "Centro"},
                      visible_si=lambda v: v.get("tipo") == "delgada"),
@@ -100,17 +104,128 @@ class Extruir(Comando):
                                 caja="arrastre"))
         return salida
 
+    @staticmethod
+    def _herramienta(op):
+        """La misma extrusión como cuerpo nuevo: el volumen que corta."""
+        import copy
+        herramienta = copy.copy(op)
+        herramienta.p = dict(op.p, operacion="nuevo", objetivos=[])
+        return herramienta
+
+    def _formas_herramienta(self, ctx, op, en_vivo=False):
+        estado, _avisos = ctx.doc.previsualizar(self._herramienta(op), ctx.indice, en_vivo=en_vivo)
+        return [c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos]
+
     def previa_vista(self, ctx, v, op):
         """Con «Cortar», Fusion muestra en ROJO el volumen de la extrusión mientras el diálogo está abierto."""
         if op.p.get("operacion") != "cortar":
             return None
-        import copy
-
         from .. import manipuladores as mp
-        herramienta = copy.copy(op)
-        herramienta.p = dict(op.p, operacion="nuevo", objetivos=[])
-        estado, _avisos = ctx.doc.previsualizar(herramienta, ctx.indice)
-        return mp.herramientas_rojas([c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos])
+        return mp.herramientas_rojas(self._formas_herramienta(ctx, op))
+
+    def preparar_panel(self, panel):
+        self._fija = panel.ctx.op is not None    # un paso reabierto no cambia solo de operación
+        self._antes_de_cortar = None             # la operación que había antes de pasar sola a Cortar
+        self._ajustando = False
+        self._cajas = {}                         # id de cuerpo → caja envolvente: el estado no cambia con el panel abierto
+        self._hijo, self._op_hijo = None, None
+        self._t_hijo = None
+
+    def al_cambiar(self, panel, clave):
+        if clave == "operacion" and not self._ajustando:
+            self._fija = True                    # la eligió la persona: queda hasta cerrar el panel
+            self._cancelar_hijo()
+
+    def al_cerrar(self, ctx):
+        self._cancelar_hijo()
+
+    def previa_lista(self, panel, estado):
+        """Como Fusion: si la persona no tocó Operación, la extrusión que se mete con volumen en un sólido visible pasa
+        a Cortar y, si deja de meterse, vuelve a lo que estaba. Primero las cajas envolventes (con la flecha agarrada,
+        sin tocar el kernel); con un cuerpo pesado, el común se calcula en un proceso aparte."""
+        op = panel.ultima_op
+        if self._fija or op is None:
+            return
+        ctx = panel.ctx
+        cajas = getattr(estado, "_cajas_previa", None)
+        cajas = list(cajas.values()) if cajas else [geo.caja_envolvente(f) for f in self._formas_herramienta(ctx, op, True)]
+        solidos = [c for c in self._visibles(ctx) if any(geo.cajas_solapan(self._caja(c), k) for k in cajas)]
+        if any(len(geo.caras(c.forma)) >= CARAS_PESADAS for c in solidos):
+            self._pedir_al_hijo(panel, op, solidos)
+            return
+        self._cancelar_hijo()
+        formas = self._formas_herramienta(ctx, op, True) if solidos else []
+        self._ajustar(panel, any(geo.solapan(f, c.forma) for f in formas for c in solidos))
+
+    @staticmethod
+    def _visibles(ctx):
+        ocultos = getattr(ctx.ventana, "_ocultos_efectivos", lambda _estado: ())(ctx.estado)
+        return [c for c in ctx.estado.cuerpos.values() if c.tipo == "solido" and c.id not in ocultos]
+
+    def _caja(self, cuerpo):
+        if cuerpo.id not in self._cajas:
+            self._cajas[cuerpo.id] = geo.caja_envolvente(cuerpo.forma)
+        return self._cajas[cuerpo.id]
+
+    def _ajustar(self, panel, cortar):
+        actual = panel.valores.get("operacion")
+        if cortar and self._antes_de_cortar is None and actual != "cortar":
+            self._antes_de_cortar, nueva = actual, "cortar"
+        elif not cortar and self._antes_de_cortar is not None:
+            nueva, self._antes_de_cortar = self._antes_de_cortar, None
+        else:
+            return
+        self._ajustando = True
+        try:
+            panel.set_valor("operacion", nueva)
+        finally:
+            self._ajustando = False
+
+    def _pedir_al_hijo(self, panel, op, solidos):
+        """Un solo cálculo a la vez: el que termina con una extrusión vieja pide otra vuelta de la previa."""
+        # shortcut: aceptar antes de que vuelva el hijo deja la operación que estaba; esperarlo si alguien lo nota en piezas pesadas.
+        from PySide6.QtCore import QTimer
+
+        from ...nucleo.aislado import CalculoPendiente, TareaAislada
+        if self._hijo is not None:
+            return
+        ctx = panel.ctx
+        self._op_hijo = self._herramienta(op).a_dict()
+        try:
+            self._hijo = CalculoPendiente("solape_herramienta", {
+                "receta": ctx.doc.a_dict(), "operacion": self._op_hijo, "indice": ctx.indice,
+                "cuerpos": [c.id for c in solidos]})
+        except TareaAislada as e:
+            panel._mostrar(str(e), tipo="aviso")
+            return
+        self._t_hijo = QTimer(panel, interval=50)
+        self._t_hijo.timeout.connect(lambda: self._leer_hijo(panel))
+        self._t_hijo.start()
+
+    def _leer_hijo(self, panel):
+        try:
+            salida = self._hijo.sondear()
+            if salida is None:
+                return
+        except Exception as e:  # noqa: BLE001 — un hijo caído o vencido deja la operación que estaba
+            self._cancelar_hijo()
+            panel._mostrar(f"⚠ {e}", tipo="aviso")
+            return
+        vigente = panel.ultima_op is not None and self._herramienta(panel.ultima_op).a_dict() == self._op_hijo
+        self._cancelar_hijo()
+        if vigente:
+            self._ajustar(panel, salida["solapa"])
+        else:
+            panel._programar()
+
+    def _cancelar_hijo(self):
+        if self._t_hijo is not None:
+            self._t_hijo.stop()
+            self._t_hijo.deleteLater()
+            self._t_hijo = None
+        if self._hijo is not None:
+            self._hijo.cancelar()
+            self._hijo = None
 
     def desde_op(self, op, ctx):
         v = dict(op.p)
@@ -174,14 +289,15 @@ class Revolucion(Comando):
         return [
             Seleccion("perfiles", "Perfil", {"perfil", "cara_plana"}, maximo=None),
             Seleccion("eje", "Eje", {"eje"}),
-            Casilla("proyectar_eje", "Proyectar eje"),
-            Opciones("extension", "Tipo", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
-            Seleccion("hasta", "Objeto", {"vertice", "cara", "plano", "cuerpo"},
+            Opciones("extension", "Tipo de extensión", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
+            Seleccion("hasta", "Objeto límite", {"vertice", "cara", "plano", "cuerpo"},
                       visible_si=lambda v: v.get("extension") == "objeto"),
-            Opciones("direccion", "Dirección", DIRECCIONES, visible_si=lambda v: v.get("extension") == "angulo"),
-            Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=lambda v: v.get("extension") == "angulo"),
-            Expresion("angulo2", "Ángulo 2", "90 deg", ANGULO,
+            Opciones("direccion", "Dirección", DIRECCIONES_UI, visible_si=lambda v: v.get("extension") == "angulo"),
+            Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=lambda v: v.get("extension") == "angulo",
+                      etiqueta_si=lambda v: "Ángulo del lado 1" if v.get("direccion") == "dos_lados" else "Ángulo"),
+            Expresion("angulo2", "Ángulo del lado 2", "90 deg", ANGULO,
                       visible_si=lambda v: v.get("extension") == "angulo" and v.get("direccion") == "dos_lados"),
+            Casilla("proyectar_eje", "Eje de proyecto", True, ayuda="Proyecta el eje sobre el plano del perfil antes de girar."),
             Casilla("invertir", "Invertir dirección"),
             campo_operacion(),
             campo_objetivos(),

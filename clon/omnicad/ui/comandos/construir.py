@@ -191,11 +191,15 @@ class SCU(Comando):
     CLASE_OP = OpSCU
 
     def campos(self, ctx):
-        return [Seleccion("origen", "Origen", PUNTO), Seleccion("eje_x", "Eje X", EJE | {"curva_boceto"}),
-                Seleccion("eje_y", "Eje Y", EJE | {"curva_boceto"}, minimo=0),
-                Expresion("dx", "Desfase X", "0 mm"), Expresion("dy", "Desfase Y", "0 mm"),
-                Expresion("dz", "Desfase Z", "0 mm"), Expresion("rx", "Ángulo X", "0 deg", ANGULO),
-                Expresion("ry", "Ángulo Y", "0 deg", ANGULO), Expresion("rz", "Ángulo Z", "0 deg", ANGULO)]
+        return [Seleccion("origen", "Origen", PUNTO, grupo="Origen y ejes"),
+                Seleccion("eje_x", "Eje X", EJE | {"curva_boceto"}, grupo="Origen y ejes"),
+                Seleccion("eje_y", "Eje Y", EJE | {"curva_boceto"}, minimo=0, grupo="Origen y ejes"),
+                Expresion("dx", "Desfase en X", "0 mm", grupo="Desfase"),
+                Expresion("dy", "Desfase en Y", "0 mm", grupo="Desfase"),
+                Expresion("dz", "Desfase en Z", "0 mm", grupo="Desfase"),
+                Expresion("rx", "Giro en X", "0 deg", ANGULO, grupo="Giro", avanzado=True),
+                Expresion("ry", "Giro en Y", "0 deg", ANGULO, grupo="Giro", avanzado=True),
+                Expresion("rz", "Giro en Z", "0 deg", ANGULO, grupo="Giro", avanzado=True)]
 
     def construir(self, v, ctx):
         if not v.get("origen"):

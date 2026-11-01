@@ -50,6 +50,11 @@ def unir_instancias(formas):
     return geo.unir_todos(formas)
 
 
+def patronear_caras(cuerpo, copias, trsfs, operacion):
+    """Sin historial de caras en el kernel: None, y el patrón usa la herramienta unida (mismo resultado)."""
+    return None
+
+
 def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profundidad=10.0, punta="angulo",
                         angulo_punta=118.0, diam_abocardado=None, prof_abocardado=None, diam_avellanado=None,
                         angulo_avellanado=90.0, roscado=None, mano="derecha", clase="", holgura=0.0,

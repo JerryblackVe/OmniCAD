@@ -29,6 +29,7 @@ class Sesion:
         self.avisos = []
         self._llamadas = 0       # llamadas en curso de registro.llamar (más de una: anidadas, p. ej. execute_code)
         self.al_cambiar_espacios = None   # lo arma el puente en vivo: la ventana vuelve a leer doc.espacios
+        self.tolerar_errores = False      # ver `transaccion`
 
     @property
     def ruta(self):
@@ -110,6 +111,15 @@ class Sesion:
         cuerpos = list(self.doc.estado_final.cuerpos.values())
         return _buscar(ref, cuerpos, lambda c: c.id, self.nombre_cuerpo, "cuerpo", "BODY_NOT_FOUND")
 
+    def cuerpos_de_pasos(self, pasos):
+        """Ids de los cuerpos (al final del timeline) que crearon esos pasos (ids o nombres)."""
+        ids = {self.paso(p).id for p in pasos}
+        cuerpos = [c.id for c in self.doc.estado_final.cuerpos.values() if c.op_id in ids]
+        if not cuerpos:
+            raise error("BODY_NOT_FOUND", "Esos pasos no crearon ningún cuerpo que siga vivo.",
+                        "get_timeline muestra qué crea cada paso.")
+        return cuerpos
+
     # ------------------------------------------------------------ transacción
     def _estados_pasos(self):
         return {o.id: (r.estado, r.mensaje) for o, r in zip(self.doc.operaciones, self.doc.resultados, strict=False)}
@@ -117,6 +127,7 @@ class Sesion:
     @contextmanager
     def transaccion(self):
         doc = self.doc
+        self.tolerar_errores = False       # una herramienta lo prende dentro de su llamada para dejar pasos en rojo
         antes = json.dumps(doc.a_dict())
         pila, pila_rehacer, modificado = list(doc._deshacer), list(doc._rehacer), doc.modificado
         unidades = dict(doc.unidades)    # no entran en deshacer (set_document_units): se restauran a mano
@@ -130,6 +141,10 @@ class Sesion:
             nuevos = [(o, r) for o, r in zip(doc.operaciones, doc.resultados, strict=False)
                       if previos.get(o.id) != (r.estado, r.mensaje)]
             rotos = [(o, r) for o, r in nuevos if r.estado == "error" and previos.get(o.id, ("",))[0] != "error"]
+            if rotos and self.tolerar_errores:       # la herramienta lo pidió (suprimir varios): quedan en rojo y se avisan
+                for o, r in rotos:
+                    self.avisar(f"{o.nombre} ({o.id}) quedó con error: {r.mensaje}")
+                rotos = []
             if rotos:
                 o, r = rotos[0]
                 otros = f" También fallaron: {', '.join(x.nombre for x, _r in rotos[1:])}." if rotos[1:] else ""

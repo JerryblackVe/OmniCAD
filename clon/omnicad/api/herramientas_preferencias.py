@@ -41,6 +41,7 @@ _OPCIONES = {
     "boceto/inf_alineacion": (True, [False, True]),
     "boceto/inf_horizontal_vertical": (True, [False, True]),
     "boceto/inf_paralela": (True, [False, True]),
+    "boceto/inf_igual": (True, [False, True]),
     "material/aspecto": ("acero", ["acero", "paleta"]),
     "graficos/preset": ("personalizar", ["rendimiento", "equilibrado", "calidad", "personalizar"]),
     "graficos/detalle": ("automatico", ["automatico", "bajo", "medio", "alto"]),

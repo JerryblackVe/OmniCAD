@@ -141,8 +141,9 @@ def create_coil(sesion, diameter: Expr = 20, coil_type: Literal["revolutions_hei
                 section_size: Expr = 3, position: Literal["on", "inside", "outside"] = "on",
                 clockwise: bool = False, rotate: bool = False, plane: Referencia = "XY",
                 center: Referencia | None = None, operation: Operacion = "new_body",
-                target: Cuerpos | None = None, body: str | None = None):
+                target: Cuerpos | None = None, body: str | None = None, center_point: list[float] | None = None):
     """
+    center_point: [x, y, z] del centro en mm, cuando no es un punto del modelo (el clic sobre el plano); gana sobre el origen del plano.
     diameter: diámetro de la bobina en mm o expresión.
     coil_type: revolutions_height, revolutions_pitch, height_pitch o spiral.
     revolutions: cantidad de vueltas (número o expresión escalar).
@@ -165,7 +166,7 @@ def create_coil(sesion, diameter: Expr = 20, coil_type: Literal["revolutions_hei
     plano = _referencia(sesion, plane, body, ("plano", "cara"))
     if plano["tipo"] == "cara":
         ent.como_plano(ent.resolver(plano, sesion.doc.estado_final))
-    return _crear(sesion, OpBobina, plano=plano,
+    return _crear(sesion, OpBobina, plano=plano, centro_xyz=[float(x) for x in center_point] if center_point else None,
                   centro=_referencia(sesion, center, body, ("punto", "punto_boceto", "vertice")) if center is not None else None,
                   diametro=texto_expr(diameter), tipo={"revolutions_height": "rev_altura", "revolutions_pitch": "rev_paso",
                                                       "height_pitch": "altura_paso", "spiral": "espiral"}[coil_type],
@@ -358,18 +359,20 @@ def create_lip_groove(sesion, edges: Elementos, lip_type: Literal["lip", "groove
 
 @herramienta("create_boundary_fill", "solido", "Rellena celdas encerradas por cuerpos, caras y planos.", modifica=True)
 def create_boundary_fill(sesion, tools: Elementos, cells: list[int] | None = None,
-                         operation: Operacion = "new_body", target: Cuerpos | None = None, body: str | None = None):
+                         operation: Operacion = "new_body", target: Cuerpos | None = None, body: str | None = None,
+                         remove_tools: bool = False):
     """
     tools: nombres/ids de cuerpos o planos, XY/XZ/YZ y selectores/ids de caras, solos o en lista.
     cells: números de celda desde 1, ordenadas por centroide XYZ como el diálogo; vacío = celda 1.
     operation: new_body, join, cut o intersect.
     target: cuerpos afectados por la booleana; vacío = automático.
     body: cuerpo donde se evalúan selectores de caras.
+    remove_tools: true quita los cuerpos usados como herramienta (Remove Tools).
     """
     if cells is not None and (not cells or any(i < 1 for i in cells)):
         raise error("INVALID_ARGUMENTS", "cells debe contener números de celda desde 1.")
     return _crear(sesion, OpRellenoContorno, herramientas=_caras_o_cuerpos(sesion, tools, body, planos=True),
-                  celdas=[i - 1 for i in cells] if cells is not None else [0],
+                  celdas=[i - 1 for i in cells] if cells is not None else [0], eliminar_herramientas=bool(remove_tools),
                   operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target))
 
 
@@ -604,7 +607,7 @@ def create_fluid_volume(sesion, bodies: Cuerpos, volume_type: Literal["internal"
 @herramienta("thicken", "solido", "Da espesor a caras o cuerpos de superficie y crea un sólido.", modifica=True)
 def thicken(sesion, faces: Elementos, thickness: Expr = 2, direction: Literal["one_side", "symmetric"] = "one_side",
             thicken_type: Literal["sharp", "rounded"] = "sharp", operation: Operacion = "new_body",
-            target: Cuerpos | None = None, body: str | None = None):
+            target: Cuerpos | None = None, body: str | None = None, chain: bool = False):
     """
     faces: selector/ids de caras o nombres/ids de cuerpos de superficie, solos o en lista.
     thickness: grosor firmado en mm; negativo invierte el lado.
@@ -613,10 +616,11 @@ def thicken(sesion, faces: Elementos, thickness: Expr = 2, direction: Literal["o
     operation: new_body, join, cut o intersect.
     target: cuerpos afectados por la booleana; vacío = automático.
     body: cuerpo donde se evalúan selectores de caras.
+    chain: true suma a cada cara las que le siguen tangentes (Chain Selection).
     """
     return _crear(sesion, OpEngrosar, caras=_caras_o_cuerpos(sesion, faces, body), espesor=texto_expr(thickness),
                   direccion="un_lado" if direction == "one_side" else "simetrica",
-                  tipo="agudo" if thicken_type == "sharp" else "redondeado",
+                  tipo="agudo" if thicken_type == "sharp" else "redondeado", cadena=bool(chain),
                   operacion=OPERACIONES[operation], objetivos=_objetivos(sesion, operation, target))
 
 
@@ -704,13 +708,13 @@ def _con_componentes(sesion, bodies):
     return salida
 
 
-@herramienta("scale_body", "solido", "Escala sólidos o componentes (con todos sus cuerpos) respecto de un punto, uniforme "
+@herramienta("scale_body", "solido", "Escala sólidos, superficies o componentes (con todos sus cuerpos) respecto de un punto, uniforme "
              "o con un factor por eje. sketches escala bocetos enteros (solo uniforme).", modifica=True)
 def scale_body(sesion, bodies: Cuerpos | None = None, factor: Expr = 1, scale_type: Literal["uniform", "non_uniform"] = "uniform",
                 factor_x: Expr = 1, factor_y: Expr = 1, factor_z: Expr = 1, point: Referencia | None = None,
                 sketches: list[str] | None = None):
     """
-    bodies: nombres/ids de los sólidos a escalar; un componente (id o nombre) escala todos sus cuerpos. Vacío si solo se escalan bocetos.
+    bodies: nombres/ids de los sólidos o superficies a escalar; un componente (id o nombre) escala todos sus cuerpos. Vacío si solo se escalan bocetos.
     sketches: bocetos enteros a escalar (id o nombre), solo uniform.
     factor: factor escalar uniforme, número o expresión.
     scale_type: uniform o non_uniform.
@@ -721,8 +725,8 @@ def scale_body(sesion, bodies: Cuerpos | None = None, factor: Expr = 1, scale_ty
     """
     ids = _cuerpos(sesion, _con_componentes(sesion, bodies)) if bodies or not sketches else []
     bocetos = [sesion.paso(b).id for b in sketches or []]
-    if any(getattr(sesion.cuerpo(cid), "tipo", "solido") != "solido" for cid in ids):
-        raise error("INVALID_ARGUMENTS", "scale_body requiere cuerpos sólidos.")
+    if any(getattr(sesion.cuerpo(cid), "tipo", "solido") == "malla" for cid in ids):
+        raise error("INVALID_ARGUMENTS", "scale_body escala sólidos y superficies; para una malla usá scale_mesh.")
     return _crear(sesion, OpEscala, cuerpos=ids, bocetos=bocetos, tipo="uniforme" if scale_type == "uniform" else "no_uniforme",
                   factor=texto_expr(factor), fx=texto_expr(factor_x), fy=texto_expr(factor_y), fz=texto_expr(factor_z),
                   punto=_referencia(sesion, point, tipos=("punto", "punto_boceto", "vertice")) if point is not None else None)

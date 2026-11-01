@@ -21,9 +21,9 @@ import numpy as np
 from ...timeline import entidades as ent
 from ...timeline.operaciones import OpPrimitiva
 from ...timeline.parametros import nombres_usados
-from ..comando import Comando, ErrorComando, Expresion, Info, Seleccion, hits
+from ..comando import Comando, ErrorComando, Expresion, Info, Opciones, Seleccion, hits
 from . import registrar
-from .comunes import campo_operacion, evaluar_o_cero
+from .comunes import POSICIONES_SECCION, campo_operacion, evaluar_o_cero
 
 FILTROS_CENTRO = {"plano", "cara_plana", "punto", "vertice"}
 _MITAD = re.compile(r"^\((.*)\)\s*/\s*2$")
@@ -71,23 +71,29 @@ class _Primitiva(Comando):
     CLASE_OP = OpPrimitiva
     FORMA = ""
     MEDIDAS = []
+    ETIQUETA_CENTRO = "Plano"       # la fila de selección se llama como en Fusion: Colocación, Punto, Perfil…
     CRECE_EN_Z = True               # caja y cilindro: la altura crece desde la base (hacia abajo en una cara de abajo)
     CUALQUIER_PLANO = False         # la esfera no tiene orientación
 
     # ------------------------------------------------------------ campos
     def campos(self, ctx):
-        medidas = [Expresion(c, et, d, ayuda=("Se guarda como radio (la mitad)." if diam else ""))
+        medidas_g, ubicacion_g = ("Medidas", "Ubicación") if self.FORMA != "esfera" else (None, None)    # esfera: 7 campos, sin rótulos
+        medidas = [Expresion(c, et, d, ayuda=("Se guarda como radio (la mitad)." if diam else ""), grupo=medidas_g)
                    for c, et, d, _k, diam in self.MEDIDAS]
-        return [Seleccion("centro", "Plano / punto", FILTROS_CENTRO, minimo=0,
+        return [Seleccion("centro", self.ETIQUETA_CENTRO, FILTROS_CENTRO, minimo=0,
                           ayuda="Clic en un plano o una cara plana (el centro queda donde hacés clic; se arrastra con el "
-                                "aro) o en un punto o vértice. Sin selección: Posición X/Y/Z.")] + medidas + [
-            Expresion("x", "Posición X", "0 mm", visible_si=_sin_seleccion),
-            Expresion("y", "Posición Y", "0 mm", visible_si=_sin_seleccion),
-            Expresion("z", "Posición Z", "0 mm", visible_si=_sin_seleccion),
-            Info("posicion", "Posición", self._texto_posicion),
+                                "aro) o en un punto o vértice. Sin selección: Posición X/Y/Z.")] + medidas + self.campos_forma() + [
+            Expresion("x", "Posición X", "0 mm", visible_si=_sin_seleccion, grupo=ubicacion_g),
+            Expresion("y", "Posición Y", "0 mm", visible_si=_sin_seleccion, grupo=ubicacion_g),
+            Expresion("z", "Posición Z", "0 mm", visible_si=_sin_seleccion, grupo=ubicacion_g),
+            Info("posicion", "Centro", self._texto_posicion, grupo=ubicacion_g),
             campo_operacion("nuevo"),
             Seleccion("objetivo", "Cuerpo", {"cuerpo"}, minimo=0, maximo=1, visible_si=_con_operacion,
                       ayuda="Cuerpo que se une, corta o interseca. Sin selección: los que toca.")]
+
+    def campos_forma(self):
+        """Opciones propias de la forma, entre las medidas y la ubicación."""
+        return []
 
     def nombre_nuevo(self, ctx):
         base = OpPrimitiva.ETIQUETAS[self.FORMA]
@@ -181,8 +187,12 @@ class _Primitiva(Comando):
             if not valor > 0:
                 raise ErrorComando(f"{etiqueta}: tiene que ser mayor que cero.")
             params[clave] = radio_desde_diametro(v[campo], ctx) if diametro else str(v[campo])
-        if self.FORMA == "toroide" and not ctx.evaluar(params["radio_menor"]) < ctx.evaluar(params["radio_mayor"]):
-            raise ErrorComando("El diámetro del tubo tiene que ser menor que el diámetro mayor.")
+        if self.FORMA == "toroide":
+            params["posicion_toroide"] = v.get("posicion_toroide") or "centro"
+            lado = {"interior": -1, "centro": 0, "exterior": 1}[params["posicion_toroide"]]
+            menor = ctx.evaluar(params["radio_menor"])
+            if not menor < ctx.evaluar(params["radio_mayor"]) + lado * menor:
+                raise ErrorComando("El diámetro del toroide tiene que ser menor que el diámetro interior.")
         x, y, z, centrada = self.posicion(v, ctx)
         objetivo = [h["ref"]["cuerpo"] for h in v.get("objetivo") or [] if h["ref"].get("tipo") == "cuerpo"]
         inclinado = self._plano_inclinado(v, ctx)
@@ -198,6 +208,8 @@ class _Primitiva(Comando):
                    else []}
         for campo, _et, _d, clave, diametro in self.MEDIDAS:
             valores[campo] = diametro_desde_radio(p[clave], ctx) if diametro else p[clave]
+        if self.FORMA == "toroide":
+            valores["posicion_toroide"] = p.get("posicion_toroide", "centro")
         if p.get("plano"):                    # el centro es el punto del plano donde cae (x, y, z) locales
             hit = hits([p["plano"]], ctx.estado)[0]
             pl = ent.resolver(p["plano"], ctx.estado).plano
@@ -226,6 +238,21 @@ class _Primitiva(Comando):
         d[~ok[:-1]] = np.inf
         i = int(np.argmin(d))
         return dict(hit, punto=np.asarray(cands[i][0], float)) if d[i] <= mp.ENGANCHE_PX else None
+
+    # ------------------------------------------------------------ dibujar con el mouse
+    def al_elegir(self, panel, clave):
+        """Create a solid cylinder: el clic en un plano ubica el centro y mover hasta el próximo clic da el tamaño."""
+        from .. import manipuladores as mp
+        hit = (panel.valores.get("centro") or [None])[0]
+        if clave != "centro" or hit is None or panel.ctx.op is not None or panel.manipuladores is None:
+            return
+        punto, normal = self._centro_elegido(hit, panel.ctx)
+        if normal is not None:
+            panel.manipuladores.trazo = mp.Trazo(punto, normal, lambda q: self.trazar(panel, hit, punto, q))
+
+    def trazar(self, panel, hit, punto, q):
+        """Lo que se escribe en el panel con el mouse en q: el diámetro, salvo en el prisma."""
+        return {"diametro": max(2 * float(np.linalg.norm(q - punto)), 0.01)}
 
     # ------------------------------------------------------------ manipuladores
     def manipuladores(self, ctx, v):
@@ -277,6 +304,14 @@ class Caja(_Primitiva):
     MEDIDAS = [("ancho", "Ancho (X)", "20 mm", "ancho", False), ("largo", "Largo (Y)", "20 mm", "largo", False),
                ("alto", "Alto (Z)", "20 mm", "alto", False)]
 
+    def trazar(self, panel, hit, punto, q):
+        """Create a solid box: el primer clic es una esquina y q la opuesta; el paso guarda el centro de la base."""
+        inclinado = self._plano_inclinado(panel.valores, panel.ctx)
+        u, w = (inclinado[1].u, inclinado[1].v) if inclinado else (np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0)))
+        a, b = float((q - punto) @ u), float((q - punto) @ w)
+        return {"ancho": max(abs(a), 0.01), "largo": max(abs(b), 0.01),
+                "centro": [dict(hit, punto=punto + (a * np.asarray(u) + b * np.asarray(w)) / 2)]}
+
     def asas_medidas(self, base, sentido):
         from .. import manipuladores as mp
         return [mp.AsaRadial("ancho", base, (1.0, 0.0, 0.0), factor=0.5, minimo=0.01),
@@ -286,10 +321,11 @@ class Caja(_Primitiva):
 
 class Cilindro(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "cilindro", "Cilindro", "cilindro", "cilindro"
-    AYUDA = ("Cilindro (Fusion: Cylinder): clic en un plano o una cara para el centro de la base, Diámetro y Alto, "
+    AYUDA = ("Cilindro (Fusion: Cylinder): clic en un plano o una cara para el centro de la base, Diámetro y Altura, "
              "con asas en la vista.")
     VARIANTE = ("forma", "cilindro")
-    MEDIDAS = [("diametro", "Diámetro", "20 mm", "radio", True), ("alto", "Alto", "20 mm", "alto", False)]
+    ETIQUETA_CENTRO = "Colocación"
+    MEDIDAS = [("diametro", "Diámetro", "20 mm", "radio", True), ("alto", "Altura", "20 mm", "alto", False)]
 
     def asas_medidas(self, base, sentido):
         from .. import manipuladores as mp
@@ -301,6 +337,7 @@ class Esfera(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "esfera", "Esfera", "esfera", "esfera"
     AYUDA = "Esfera (Fusion: Sphere): clic en un plano, una cara o un punto para el centro y Diámetro, con asa en la vista."
     VARIANTE = ("forma", "esfera")
+    ETIQUETA_CENTRO = "Punto"
     MEDIDAS = [("diametro", "Diámetro", "20 mm", "radio", True)]
     CRECE_EN_Z, CUALQUIER_PLANO = False, True
 
@@ -311,12 +348,16 @@ class Esfera(_Primitiva):
 
 class Toroide(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "toroide", "Toroide", "toroide", "toroide"
-    AYUDA = ("Toroide (Fusion: Torus): clic en un plano o una cara horizontal para el centro, diámetro mayor (del "
-             "círculo que recorre el centro del tubo) y diámetro del tubo.")
+    AYUDA = ("Toroide (Fusion: Torus): clic en un plano o una cara horizontal para el centro, diámetro interior (del "
+             "círculo de referencia), diámetro del toroide (del tubo) y posición del tubo respecto de ese círculo.")
     VARIANTE = ("forma", "toroide")
-    MEDIDAS = [("diametro", "Diámetro mayor", "40 mm", "radio_mayor", True),
-               ("diametro_tubo", "Diámetro del tubo", "10 mm", "radio_menor", True)]
+    ETIQUETA_CENTRO = "Perfil"
+    MEDIDAS = [("diametro", "Diámetro interior", "40 mm", "radio_mayor", True),
+               ("diametro_tubo", "Diámetro del toroide", "10 mm", "radio_menor", True)]
     CRECE_EN_Z = False
+
+    def campos_forma(self):
+        return [Opciones("posicion_toroide", "Posición", POSICIONES_SECCION, "centro", grupo="Medidas")]
 
     def asas_medidas(self, base, sentido):
         from .. import manipuladores as mp

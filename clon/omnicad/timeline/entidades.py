@@ -373,12 +373,18 @@ def direccion(ent):
     return como_eje(ent)[1]
 
 
-def direccion_perpendicular(ent):
+def direccion_perpendicular(ent, plano=None):
     """Segunda dirección DERIVADA de un patrón rectangular (la que Fusion muestra perpendicular a la primera cuando no
     se elige otra): siempre ⟂ a la dirección de `ent`, y estable porque sale de la propia referencia.
     Línea de boceto: la perpendicular dentro del plano del boceto. Cara plana o plano (su dirección es la normal): el eje
-    u de ese plano. Eje o arista recta: el giro de +90° alrededor de Z (X → Y, Y → −X) o, si la dirección es Z, el eje X."""
+    u de ese plano. Eje o arista recta: el giro de +90° alrededor de Z (X → Y, Y → −X) o, si la dirección es Z, el eje X.
+    Con `plano` (un `geo.Plano` elegido como referencia de la dirección 2) la perpendicular queda dentro de ese plano."""
     d = geo_dir(direccion(ent))
+    if plano is not None:
+        v = np.cross(plano.normal, d)
+        if float(np.linalg.norm(v)) < 1e-6:
+            raise ErrorReferencia("La dirección 1 es perpendicular al plano elegido: no define una dirección 2 dentro de él.")
+        return geo_dir(v)
     if ent.eje is not None and ent.plano is not None:
         v = np.cross(ent.plano.normal, d)
     elif ent.eje is None and ent.plano is not None:

@@ -124,13 +124,15 @@ def _con_analisis(sesion, objetos, cam, alto, analisis):
     for o in objetos:
         if o.get("cuerpo") in datos["mallas"]:
             continue
-        if datos["colores"] is not None:
+        if datos["colores"] is not None and (datos["solo"] is None or o.get("cuerpo") in datos["solo"]):
             o = dict(o, colores=np.asarray(datos["colores"](np.asarray(o["n"], float), np.asarray(cam["R"], float)[2]),
                                            float))
         salida.append(o)
     for cid, (v, n, c) in datos["mallas"].items():
         base = next((o for o in objetos if o.get("cuerpo") == cid), None)
         if base is not None and len(v):
+            if c is None:                                       # cebra en «Calidad alta»: malla fina con los mismos colores
+                c = np.asarray(datos["colores"](np.asarray(n, float), np.asarray(cam["R"], float)[2]), float)
             salida.append(dict(base, v=v, n=n, colores=c, acabado={}))
     cortes = datos["cortes"]
     if cortes:

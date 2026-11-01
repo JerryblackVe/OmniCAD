@@ -85,7 +85,7 @@ def _cambios_de_cuerpos(antes, despues):
         if previo is not None and type(c) is type(previo) and _igual(vars(c), vars(previo)):
             lista.append([cid, None])
             continue
-        datos = {k: getattr(c, k) for k in _CAMPOS_CUERPO}
+        datos = {k: getattr(c, k) for k in _CAMPOS_CUERPO} | {"origen": list(c.origen)}
         try:
             se_guarda = json.loads(json.dumps(datos)) == datos
         except (TypeError, ValueError):
@@ -152,6 +152,7 @@ class Documento:
         self.al_esperar = None    # función(segundos) que la ventana pone para avisar y repintar mientras trabaja el hijo (B-48)
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
         self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
+        self._sin_partir = set()  # pasos de recetas viejas: su corte no divide el cuerpo (ver `_pasos_sin_partir`)
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
         self._ultimo_prevuelo = None    # (huella, cálculo) de la última previa; se comparte con Aceptar
         self.motor = motor.motor_activo()
@@ -299,6 +300,9 @@ class Documento:
         self.configuraciones = dict(datos.get("configuraciones") or {})
         self.espacios = dict(datos.get("espacios", {}))    # deshacer/rehacer también revierten los espacios
         nuevas = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
+        antes_sin_partir, self._sin_partir = self._sin_partir, self._pasos_sin_partir(datos, nuevas)
+        if self._sin_partir != antes_sin_partir:
+            self._memo.clear()
         self._contador_cotas = datos.get("contador_cotas", 0)
         conocidos = {c.nombre for o in nuevas if isinstance(o, OpBoceto) for c in o.boceto.cotas.values() if c.nombre}
         self.parametros, self._contador_cotas = self._tabla_cotas(nuevas, conocidos)
@@ -310,7 +314,8 @@ class Documento:
         cambiados = {k for k in set(a) | set(d)
                      if a.get(k) != d.get(k)}
         desde = 0
-        if self.propiedades == antes_props and antes_valores is not None and despues_valores is not None:
+        if (self.propiedades == antes_props and antes_valores is not None and despues_valores is not None
+                and self._sin_partir == antes_sin_partir):
             tope = min(len(antes_ops), len(nuevas), antes_marcador, self.marcador, len(self._estados),
                        len(self._usados))
             while (desde < tope and nuevas[desde].a_dict() == antes_ops[desde].a_dict()
@@ -324,6 +329,13 @@ class Documento:
                 nuevas[k] = o
         self.operaciones = nuevas
         self._terminar_recalculo(desde, calculo)
+
+    @staticmethod
+    def _pasos_sin_partir(datos, operaciones):
+        """Pasos cuyo corte no divide el cuerpo: los que la receta nombra o, en una receta de antes de B-116 (sin la
+        clave), todos. Así un archivo viejo abre igual: sus pasos siguientes nombran un solo cuerpo."""
+        lista = datos.get("sin_partir")
+        return {i for i in lista if isinstance(i, str)} if isinstance(lista, list) else {o.id for o in operaciones}
 
     def _valores_o_nada(self):
         try:
@@ -889,7 +901,7 @@ class Documento:
             return m["salida"], list(m["resultado"])
         estado = entrada.copia()
         estado.anotar_lecturas()
-        ctx = Contexto(valores)
+        ctx = Contexto(valores, op.id not in self._sin_partir)
         if self.al_calcular is not None:
             self.al_calcular(op)
         inicio = time.perf_counter()
@@ -965,7 +977,7 @@ class Documento:
                 entrada, receta = estado, _receta(op)
                 nuevo = estado.copia()
                 nuevo.anotar_lecturas()
-                ctx = Contexto(valores)
+                ctx = Contexto(valores, op.id not in self._sin_partir)
                 usados = ctx.usados
                 if self.al_calcular is not None:
                     self.al_calcular(op)
@@ -1135,7 +1147,7 @@ class Documento:
                     cuerpos[cid] = nuevo.cuerpos[cid]
                 else:
                     cuerpos[cid] = Cuerpo(cid, m["nombre"], next(propias), m["op_id"], m["tipo"], m["apariencia"],
-                                          m["material"], m["componente"])
+                                          m["material"], m["componente"], m.get("origen", ()))
             if next(propias, None) is not None:
                 return None
             nuevo.cuerpos = cuerpos
@@ -1165,6 +1177,7 @@ class Documento:
         return {"version_receta": VERSION_RECETA, "nombre": self.nombre,
                 "parametros": self.parametros.a_lista(), "marcador": self.marcador,
                 "contador": self._contador, "operaciones": [o.a_dict() for o in self.operaciones],
+                "sin_partir": sorted(self._sin_partir),
                 **({"contador_cotas": self._contador_cotas} if self._contador_cotas else {}),
                 "vistas": self.vistas, "propiedades": self.propiedades, "analisis": self.analisis,
                 "configuraciones": self.configuraciones,

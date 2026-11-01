@@ -14,7 +14,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _resolver,
-                          _resolver_todas, aplicar_resultado, atributos_copia, registrar_operacion)
+                          _resolver_todas, aplicar_resultado, atributos_copia, poner_resultado, registrar_operacion)
 
 ESPESORES = ("simetrica", "lado1", "lado2")     # dirección del espesor de nervio y red (nucleo.solidos_crear)
 
@@ -50,6 +50,32 @@ def _aristas(refs, estado, que="curvas"):
     if not aristas:
         raise ErrorOperacion(f"Elegí {que}.")
     return ents, aristas
+
+
+def _en_cadena(ents, aristas, estado, formas_boceto=None):
+    """Chain Selection: a cada arista de un cuerpo y a cada curva de boceto se le suman las que le siguen tangentes.
+    `formas_boceto` (id del boceto → sus curvas unidas): el mismo dict entre llamadas deja las mismas aristas, y así
+    `IsSame` reconoce los tramos ya elegidos."""
+    from ..nucleo import referencias
+    from ..nucleo.perfiles import aristas_boceto
+    from ..nucleo.solidos_modificar import aristas_cadena_tangente
+    formas_boceto = {} if formas_boceto is None else formas_boceto
+    salida = []
+    for e in ents:
+        if e.tipo == "arista" and e.cuerpo:
+            tramo = aristas_cadena_tangente(estado.cuerpo(e.cuerpo).forma, e.forma)
+        elif e.tipo == "curva_boceto" and e.boceto:
+            br = e.boceto
+            if br.op_id not in formas_boceto:
+                # MakeWire comparte los vértices coincidentes de las curvas independientes del boceto.
+                formas_boceto[br.op_id] = geo.compuesto(_sc()._cadenas([a for _, a in aristas_boceto(br.boceto.geometria(), br.plano)]))
+            forma = formas_boceto[br.op_id]
+            arista = referencias.resolver(forma, {"tipo": "arista", "firma": referencias.firma_arista(e.forma)})
+            tramo = [e.forma] if arista is None else aristas_cadena_tangente(forma, arista)    # None: curva de construcción
+        else:
+            tramo = [e.forma]
+        salida += [a for a in tramo if not any(a.IsSame(x) for x in salida)]
+    return salida or aristas
 
 
 def _cuerpo_objetivo(estado, ents, p):
@@ -149,11 +175,12 @@ class OpBarrido(_OpCrear):
 
 class OpSolevacion(_OpCrear):
     """Solevación de Fusion [SLD-LOFT-SOLID]: perfiles en orden (o un punto en los extremos), carril o
-    línea central, cerrada y tramos rectos."""
+    línea central, cerrada y tramos rectos. `cadena` (Chain Selection): una arista de un cuerpo elegida como sección
+    suma las que le siguen tangentes."""
     TIPO, ETIQUETA, ICONO = "solevacion", "Solevación", "⌓"
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
               "operacion": "nuevo", "objetivos": [], "condicion_inicio": None, "condicion_fin": None,
-              "fusionar_tangentes": False, "condiciones_medias": {}}
+              "fusionar_tangentes": False, "condiciones_medias": {}, "cadena": False}
     OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("secciones", "carriles", "linea_central")
 
@@ -181,6 +208,10 @@ class OpSolevacion(_OpCrear):
     def ejecutar(self, estado, ctx):
         secciones = []
         for e in _resolver_todas(self.p["secciones"], estado):
+            if self.p.get("cadena") and e.tipo == "arista" and e.cuerpo is not None:
+                from ..nucleo.solidos_modificar import aristas_cadena_tangente
+                secciones.append(geo.compuesto(aristas_cadena_tangente(estado.cuerpo(e.cuerpo).forma, e.forma)))
+                continue
             secciones.append(e.forma if e.forma is not None and e.tipo != "vertice" else ent.como_punto(e))
         if len(secciones) < 2:
             raise ErrorOperacion("Elegí al menos dos perfiles, en orden.")
@@ -283,7 +314,10 @@ class OpRepujado(_OpCrear):
 
 
 # Tipos de rosca: las claves de nucleo.solidos_crear.FAMILIAS_ROSCA (acá sin cargar el núcleo; un test las compara)
-FAMILIAS_ROSCA = ("iso_metrica", "unificada", "trapezoidal", "acme", "bsp_paralela", "bsp_conica", "npt")
+FAMILIAS_ROSCA = ("ansi_metrica", "gb_metrica", "iso_metrica", "gost_autorroscante", "din_madera", "pulgadas_autorroscante",
+                  "pulgadas_plasticos", "metrica_plasticos", "acme", "unificada", "bsp_paralela", "din_tuberia", "gb_tuberia",
+                  "iso_tuberia", "jis_tuberia", "metrica_formado", "trapezoidal", "afbma", "bsp_conica", "din_conica", "iso_conica",
+                  "jis_conica", "npt", "npt_pvc")
 
 
 def _tol():
@@ -485,7 +519,7 @@ class OpBobina(_OpCrear):
     TIPO, ETIQUETA, ICONO = "bobina", "Bobina", "➰"
     PARAMS = {"plano": None, "centro": None, "diametro": "20 mm", "tipo": "rev_altura", "revoluciones": "5",
               "altura": "30 mm", "paso": "6 mm", "angulo": "0 deg", "seccion": "circular", "tamano": "3 mm",
-              "posicion": "sobre", "horario": False, "girar": False, "operacion": "nuevo", "objetivos": []}
+              "posicion": "sobre", "horario": False, "girar": False, "operacion": "nuevo", "objetivos": [], "centro_xyz": None}
     EXPRESIONES = ("diametro", "revoluciones", "altura", "paso", "angulo", "tamano")
     DATOS = {"rev_altura": ("revoluciones", "altura"), "rev_paso": ("revoluciones", "paso"),
              "altura_paso": ("altura", "paso"), "espiral": ("revoluciones", "paso")}  # tipo → los dos datos
@@ -496,7 +530,8 @@ class OpBobina(_OpCrear):
     def ejecutar(self, estado, ctx):
         p = self.p
         plano = ent.como_plano(_resolver(p["plano"], estado)) if p["plano"] else geo.Plano("XY")
-        centro = ent.como_punto(_resolver(p["centro"], estado)) if p["centro"] else plano.origen
+        centro = (ent.como_punto(_resolver(p["centro"], estado)) if p["centro"]
+                  else p["centro_xyz"] if p.get("centro_xyz") else plano.origen)   # centro_xyz: el clic sobre el plano
         datos = {"revoluciones": None, "altura": None, "paso": None}
         for k in self.DATOS[p["tipo"]]:
             datos[k] = ctx.evaluar(p[k], "escalar" if k == "revoluciones" else "longitud")
@@ -520,30 +555,7 @@ class OpTuberia(_OpCrear):
     def ejecutar(self, estado, ctx):
         ents, ruta = _aristas(self.p["ruta"], estado, "la ruta")
         if self.p["cadena"]:
-            from ..nucleo import referencias
-            from ..nucleo.perfiles import aristas_boceto
-            from ..nucleo.solidos_modificar import aristas_cadena_tangente
-            ruta = []
-            formas_boceto = {}
-            for e in ents:
-                arista = e.forma
-                if e.cuerpo:
-                    forma = estado.cuerpo(e.cuerpo).forma
-                elif e.boceto:
-                    br = e.boceto
-                    if br.op_id not in formas_boceto:
-                        aristas = [a for _, a in aristas_boceto(br.boceto.geometria(), br.plano)]
-                        # MakeWire comparte los vértices coincidentes de las curvas independientes del boceto.
-                        formas_boceto[br.op_id] = geo.compuesto(_sc()._cadenas(aristas))
-                    forma = formas_boceto[br.op_id]
-                    arista = referencias.resolver(forma, {"tipo": "arista", "firma": referencias.firma_arista(arista)})
-                    if arista is None:
-                        raise ErrorOperacion("No se encontró la curva en la cadena del boceto.")
-                else:
-                    forma = arista
-                for a in aristas_cadena_tangente(forma, arista):
-                    if not any(a.IsSame(otra) for otra in ruta):
-                        ruta.append(a)
+            ruta = _en_cadena(ents, ruta, estado)
         forma = _sc().tuberia(ruta, seccion=self.p["seccion"], tamano=ctx.evaluar(self.p["tamano"]),
                               hueca=self.p["hueca"], espesor=ctx.evaluar(self.p["espesor"]),
                               distancia=ctx.evaluar(self.p["distancia"], "escalar"),
@@ -647,12 +659,47 @@ def _prolongar_pasante(copia, eje, cuerpos, t):
     return _sc().unir_instancias(piezas)
 
 
+def _cuerpos_objetivo(estado, objetivo):
+    """Los cuerpos a los que se aplica una herramienta: los de `objetivo` o, si está vacío, los sólidos del documento."""
+    lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
+    return [estado.cuerpo(o) for o in lista] or [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
+
+
+def _con_partes(estado, pid, objetivo):
+    """El `objetivo` elegido en el paso `pid` más las partes en que ese corte lo dividió: una copia del patrón puede caer
+    en cualquiera de ellas."""
+    lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
+    if not lista:
+        return objetivo
+    return lista + [c.id for c in estado.cuerpos.values() if c.op_id == pid and c.origen and c.origen[0] in lista]
+
+
+def _patronear_caras(op, estado, ctx, copias, trsfs, operacion, objetivo):
+    """Ids de los cuerpos a los que se les patronearon las caras («Optimizado»), o None si queda para la herramienta unida: el
+    mismo resultado, más lento. Solo con un cuerpo tocado: varios piden una booleana por cuerpo igual, y un objetivo
+    elegido que no se toca lleva su aviso."""
+    herramienta = geo.compuesto(copias)
+    cuerpos = _cuerpos_objetivo(estado, objetivo)
+    tocados = [c for c in cuerpos if geo.se_tocan(c.forma, herramienta)]
+    if len(tocados) != 1 or (objetivo and len(cuerpos) > 1):
+        return None
+    forma = _sc().patronear_caras(tocados[0].forma, copias, trsfs, operacion)
+    if forma is None:
+        return None
+    estado.herramientas[op.id] = estado.herramientas.get(op.id, ()) + ((herramienta, operacion, objetivo, "solido"),)
+    if operacion == "cortar":
+        return poner_resultado(estado, ctx, op.id, tocados[0], forma)
+    tocados[0].forma = forma
+    return [tocados[0].id]
+
+
 def repetir_pasos(op, estado, ctx, trsfs):
     """Patrón de operaciones (el de features de Fusion, con cálculo «Idéntico»): la herramienta que dejó cada paso
     de `op.p["pasos"]` (la extrusión que corta, el agujero…) se copia con cada gp_Trsf de `trsfs` (sin el original)
     y se aplica con la MISMA operación (cortar, unir o cuerpo nuevo) a los mismos cuerpos que el paso original.
     Con «identico» las extensiones no se recalculan por copia: un agujero «Todo» copiado a una zona más gruesa no la atraviesa.
-    `calculo`: "identico" y "optimizado" (el mismo resultado) copian la herramienta tal cual; "ajustar" recalcula cada
+    `calculo`: "identico" copia la herramienta tal cual; "optimizado" da el mismo resultado patroneando las caras de una
+    copia (`solidos_crear.patronear_caras`, más rápido) y, donde no se puede, como "identico"; "ajustar" recalcula cada
     copia: un corte pasante (prisma que cruza el cuerpo de lado a lado) se prolonga hasta cubrir el cuerpo en su
     nueva zona, y las copias que ya no tocan al cuerpo se omiten. Devuelve los ids de los cuerpos afectados."""
     pasos = _ids_pasos(op.p)
@@ -673,13 +720,16 @@ def repetir_pasos(op, estado, ctx, trsfs):
             if operacion == "intersecar":
                 raise ErrorOperacion(f"El paso «{pid}» interseca: repetirlo dejaría solo lo común a todas las copias. "
                                      "Se repiten los pasos que cortan, unen o crean un cuerpo nuevo.")
+            objetivo = _con_partes(estado, pid, objetivo)
             copias = [sc.aplicar(forma, t) for t in trsfs]
+            if op.p.get("calculo") == "optimizado" and operacion in ("cortar", "unir") and tipo == "solido":
+                if (ids := _patronear_caras(op, estado, ctx, copias, trsfs, operacion, objetivo)) is not None:
+                    afectados += ids
+                    continue
             if op.p.get("calculo") == "ajustar" and operacion in ("cortar", "unir") and tipo == "solido":
                 # Ajustar (Compute Type › Adjust): cada instancia se calcula por su cuenta; la que ya no toca al cuerpo
                 # no hace nada, así que se omite en vez de dejar una herramienta suelta
-                lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
-                cuerpos = [estado.cuerpo(o) for o in lista] or [c for c in estado.cuerpos.values()
-                                                                if getattr(c, "tipo", "solido") == "solido"]
+                cuerpos = _cuerpos_objetivo(estado, objetivo)
                 if operacion == "cortar" and cuerpos and (eje := _eje_pasante(forma, cuerpos)) is not None:
                     copias = [_prolongar_pasante(c, eje, cuerpos, t) for c, t in zip(copias, trsfs, strict=True)]   # el «Todo» llega al fondo
                 tocan = [c for c in copias if any(geo.se_tocan(cu.forma, c) for cu in cuerpos)]
@@ -817,7 +867,8 @@ class OpPatron(_OpCrear):
     En ruta, `giro` hace girar cada copia alrededor de la ruta, progresivo hasta ese ángulo total en la última.
     `simetrico` es la simetría de la dirección 1 (y de la 2 si `simetrico2` es None, como en las recetas viejas); con
     `simetrico2` (True o False) la dirección 2 se elige aparte. `dir2_derivada` (True en lo que crea el diálogo): sin
-    `dir2` y con n2 > 1 la dirección 2 es la perpendicular a la 1 (`entidades.direccion_perpendicular`); sin esa marca
+    `dir2` y con n2 > 1 la dirección 2 es la perpendicular a la 1 (`entidades.direccion_perpendicular`), dentro del plano
+    `plano_dir2` si se eligió uno (un plano o una cara plana); sin esa marca
     una n2 > 1 sin `dir2` se ignora, con un aviso. `suprimir`: identificadores estables de instancia: un par [i, j]
     en el rectangular (los pasos desde el original en cada dirección; un entero i es (i, 0)), el paso k en el circular
     y en ruta (k negativo = el otro lado con simetría) y el n.º de punto (1 = el primero) en puntos. Los que ya no
@@ -834,12 +885,13 @@ class OpPatron(_OpCrear):
               "angulo": "360 deg", "ruta": [], "orientacion": "identica", "inicio": "0", "suprimir": [],
               "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
               "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False, "caras": [],
-              "componentes": [], "construccion": [], "calculo": "identico", "simetrico2": None, "dir2_derivada": False}
+              "componentes": [], "construccion": [], "calculo": "identico", "simetrico2": None, "dir2_derivada": False,
+              "plano_dir2": None}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
     OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"),
                 "distribucion": ("extension", "espaciado", "completo", "parcial", "simetrico"),
                 "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
-    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras", "construccion")
+    REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras", "construccion", "plano_dir2")
 
     def dependencias(self):
         return (super().dependencias() | _pasos_y_componentes(self.p)) - {self.id}
@@ -907,7 +959,8 @@ class OpPatron(_OpCrear):
         n2 = self.entero("n2", minimo=0)                  # sin dirección 2, un 0 no cuenta (como siempre)
         if n2 > 1:
             if p.get("dir2_derivada"):
-                return d1, ent.direccion_perpendicular(_resolver(p["dir1"], estado))
+                plano = ent.como_plano(_resolver(p["plano_dir2"], estado)) if p.get("plano_dir2") else None
+                return d1, ent.direccion_perpendicular(_resolver(p["dir1"], estado), plano)
             ctx.aviso(f"{self._prefijo}Cantidad 2 = {n2} no hace nada: falta la dirección 2.")
         return d1, None
 
@@ -1241,9 +1294,10 @@ class OpRellenoContorno(_OpCrear):
     `herramientas`: lista de referencias: cuerpo {"tipo": "cuerpo", "cuerpo": "op1.c1"}, plano {"tipo": "plano",
     "id": "XY"} (o el id de un plano de construcción) o cara {"tipo": "cara", "cuerpo": …, "firma": …} (copiada de
     find_faces). `celdas`: índices de las regiones cerradas, ordenadas por centroide (x, y, z); [] = la celda 0.
-    `operacion`: nuevo/unir/cortar/intersecar; `objetivos`: ids de los cuerpos a unir, cortar o intersecar."""
+    `operacion`: nuevo/unir/cortar/intersecar; `objetivos`: ids de los cuerpos a unir, cortar o intersecar.
+    `eliminar_herramientas` (Remove Tools) quita los cuerpos usados como herramienta."""
     TIPO, ETIQUETA, ICONO = "relleno_contorno", "Relleno de contorno", "▩"
-    PARAMS = {"herramientas": [], "celdas": [], "operacion": "nuevo", "objetivos": []}
+    PARAMS = {"herramientas": [], "celdas": [], "operacion": "nuevo", "objetivos": [], "eliminar_herramientas": False}
     OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("herramientas",)
 
@@ -1259,6 +1313,10 @@ class OpRellenoContorno(_OpCrear):
         celdas = self.p["celdas"] or [0]
         forma = _sc().relleno_contorno(self.formas_herramienta(estado), [int(i) for i in celdas])
         self._aplicar(estado, ctx, forma)
+        if self.p.get("eliminar_herramientas"):
+            for r in self.p["herramientas"]:
+                if r.get("tipo") == "cuerpo":
+                    estado.cuerpos.pop(r["cuerpo"], None)
 
 
 def _en_componente(estado, op, creados):

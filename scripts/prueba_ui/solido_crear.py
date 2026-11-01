@@ -84,7 +84,7 @@ run("agujero", lambda: (
     C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"diametro": "6 mm", "profundidad": "8 mm", "tipo": "avellanado"}, etiqueta="agujero avellanado", rt=False),
     C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"profundidad": "8 mm", "rosca": "holgura", "tam_holgura": "M6"}, etiqueta="agujero holgura M6", rt=False),
     C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"profundidad": "8 mm", "rosca": "cosmetica", "tam_iso_metrica": "M6"}, etiqueta="agujero rosca cosmética M6", rt=False),
-    C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"profundidad": "8 mm", "rosca": "modelada", "tam_iso_metrica": "M6"}, etiqueta="agujero rosca modelada M6", rt=False),
+    C.caso(v, AR, "agujero", {"colocacion": sup_caja}, {"profundidad": "8 mm", "rosca": "cosmetica", "rosca_modelada": True, "tam_iso_metrica": "M6"}, etiqueta="agujero rosca modelada M6", rt=False),
     C.negativos(v, AR, "agujero", {"colocacion": sup_caja}, "diametro", malos=("abc", "0 mm", "-3 mm", "500 mm"))))
 
 # Rosca ---------------------------------------------------------------------------------------------------------------------

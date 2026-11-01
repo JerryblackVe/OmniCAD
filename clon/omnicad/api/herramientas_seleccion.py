@@ -41,13 +41,15 @@ def _resolver_ref(sesion, ref):
              "objetos (update) o los borra. Se guardan con el proyecto y cada cambio es un paso de deshacer. Una cara o arista cuya geometría cambió demasiado se cuenta en missing.", modifica=True)
 def manage_selection_sets(sesion, action: Literal["list", "create", "update", "select", "rename", "delete"],
                           name: str = "", faces: list[str] | str | None = None, edges: list[str] | str | None = None,
-                          bodies: list[str] | None = None, body: str | None = None, new_name: str = ""):
+                          bodies: list[str] | None = None, body: str | None = None, new_name: str = "",
+                          steps: list[str] | None = None):
     """
     action: list, create (nuevo), update (suma objetos al conjunto), select (devuelve lo guardado y marca en la ventana solo los cuerpos), rename o delete.
     name: nombre del conjunto (en list se ignora).
     faces: caras a guardar: selector, ids de find_faces o lista de ambos.
     edges: aristas a guardar: selector, ids de find_edges o lista de ambos.
     bodies: cuerpos a guardar (ids o nombres).
+    steps: pasos del timeline (ids o nombres): guarda los cuerpos que crearon (Crear conjunto de selección del menú del timeline).
     body: cuerpo donde se evalúan los selectores de caras y aristas; vacío = el único cuerpo.
     new_name: con rename, el nombre nuevo.
     """
@@ -61,12 +63,13 @@ def manage_selection_sets(sesion, action: Literal["list", "create", "update", "s
     if action in ("create", "update"):
         if action == "create" and name in conjuntos:
             raise error("NAME_EXISTS", f"Ya existe el conjunto «{name}».", "action=update le suma objetos.")
-        nuevos = [{"tipo": "cuerpo", "cuerpo": sesion.cuerpo(b).id} for b in bodies or []]
+        cuerpos = list(bodies or []) + (sesion.cuerpos_de_pasos(steps) if steps else [])
+        nuevos = [{"tipo": "cuerpo", "cuerpo": sesion.cuerpo(b).id} for b in dict.fromkeys(cuerpos)]
         for spec, tipo in ((faces, "cara"), (edges, "arista")):
             if spec:
                 nuevos += [sl.referencia(c, e) for c, e in sl.elegir(sesion, spec, tipo, body)]
         if not nuevos:
-            raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo, cara o arista (bodies, faces, edges).")
+            raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo, cara o arista (bodies, faces, edges, steps).")
         actuales = conjuntos.get(name, [])
         conjuntos[name] = actuales + [r for r in nuevos if r not in actuales]
     elif action == "rename":

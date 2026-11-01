@@ -24,11 +24,12 @@ class _InsertarArchivo2D(Comando):
     EXTENSIONES = ()
 
     def campos(self, ctx):
-        return [Seleccion("plano", "Plano/cara", {"plano", "cara_plana"}),
+        return [Seleccion("plano", "Plano o cara", {"plano", "cara_plana"}),
                 Texto("archivo", "Archivo", ""), Expresion("escala", "Escala", "1", ESCALAR),
                 Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
                 Expresion("angulo", "Ángulo", "0 deg", ANGULO),
-                Casilla("voltear_h", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
+                Casilla("voltear_h", "Volteo horizontal", avanzado=True),
+                Casilla("voltear_v", "Volteo vertical", avanzado=True)]
 
     def manipuladores(self, ctx, v):
         """Gizmo del dibujo sobre el plano: mover, girar, escalar (si tiene «escala») y voltear."""
@@ -106,7 +107,10 @@ class InsertarSVG(_InsertarArchivo2D):
     EXTENSIONES = ("svg",)
 
     def campos(self, ctx):
-        return super().campos(ctx) + [Texto("capas", "Capas (coma)", ""), Texto("colores", "Colores #rrggbb (coma)", "")]
+        return super().campos(ctx) + [
+            Texto("capas", "Capas", "", avanzado=True, ayuda="Nombres separados por coma. Vacío: todas las capas."),
+            Texto("colores", "Colores", "", avanzado=True,
+                  ayuda="Colores #rrggbb separados por coma. Vacío: todos los colores.")]
 
     def clave_filtro(self, v):
         return (tuple(_lista(v.get("capas"))), tuple(_lista(v.get("colores"))))
@@ -125,13 +129,20 @@ class VectorizarImagen(_InsertarArchivo2D):
     EXTENSIONES = ("png", "jpg", "jpeg", "bmp", "gif", "webp")
 
     def campos(self, ctx):
-        return [Seleccion("plano", "Plano/cara", {"plano", "cara_plana"}), Texto("archivo", "Imagen", ""),
-                Expresion("ancho", "Ancho final", "100 mm"),
-                Entero("umbral", "Umbral (0 = auto)", 0, 0, 254), Casilla("invertir", "Tinta clara (invertir)"),
-                Entero("suavizado", "Suavizado (px)", 1, 0, 10), Casilla("curvas", "Curvas suaves (splines)"),
-                Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO),
-                Casilla("voltear_h", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
+        return [Seleccion("plano", "Plano o cara", {"plano", "cara_plana"}, grupo="Imagen"),
+                Texto("archivo", "Imagen", "", grupo="Imagen"),
+                Expresion("ancho", "Ancho final", "100 mm", grupo="Imagen"),
+                Casilla("invertir", "Tinta clara", grupo="Trazado", ayuda="Invierte el trazado: la tinta es más clara "
+                                                                          "que el fondo."),
+                Casilla("curvas", "Curvas suaves", grupo="Trazado", ayuda="Ajusta splines en vez de segmentos."),
+                Expresion("dx", "Desplazamiento X", "0 mm", grupo="Posición"),
+                Expresion("dy", "Desplazamiento Y", "0 mm", grupo="Posición"),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO, grupo="Posición"),
+                # Más opciones (sin grupo: ver el comentario de Engranaje.campos)
+                Entero("umbral", "Umbral (0 = auto)", 0, 0, 254, avanzado=True),
+                Entero("suavizado", "Suavizado (px)", 1, 0, 10, avanzado=True),
+                Casilla("voltear_h", "Volteo horizontal", avanzado=True),
+                Casilla("voltear_v", "Volteo vertical", avanzado=True)]
 
     def clave_filtro(self, v):
         return (v.get("umbral"), bool(v.get("invertir")), v.get("suavizado"), bool(v.get("curvas")))
@@ -158,13 +169,19 @@ class Lienzo(Comando):
     CALCOMANIA = False
 
     def campos(self, ctx):
-        return [Seleccion("plano", "Plano/cara", {"plano", "cara_plana"}),
-                Texto("archivo", "Imagen", ""), Casilla("mantener_proporcion", "Mantener relación de aspecto", True),
-                Expresion("ancho", "Ancho real", "100 mm"), Expresion("alto", "Altura", "0 mm"),
-                Expresion("escala", "Factor de escala", "1.00", ESCALAR),
-                Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO), Entero("opacidad", "Opacidad (%)", 50, 0, 100),
-                Casilla("voltear", "Voltear horizontal"), Casilla("voltear_v", "Voltear vertical")]
+        return [Seleccion("plano", "Plano o cara", {"plano", "cara_plana"}, grupo="Imagen"),
+                Texto("archivo", "Imagen", "", grupo="Imagen"),
+                Entero("opacidad", "Opacidad (%)", 50, 0, 100, grupo="Imagen"),
+                Expresion("ancho", "Ancho real", "100 mm", grupo="Tamaño"),
+                Expresion("alto", "Altura", "0 mm", grupo="Tamaño"),
+                Casilla("mantener_proporcion", "Mantener proporción", True, grupo="Tamaño"),
+                Expresion("dx", "Desplazamiento X", "0 mm", grupo="Posición"),
+                Expresion("dy", "Desplazamiento Y", "0 mm", grupo="Posición"),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO, grupo="Posición"),
+                # Más opciones (sin grupo: ver el comentario de Engranaje.campos)
+                Expresion("escala", "Factor de escala", "1.00", ESCALAR, avanzado=True),
+                Casilla("voltear", "Voltear horizontal", avanzado=True),
+                Casilla("voltear_v", "Voltear vertical", avanzado=True)]
 
     def preparar_panel(self, panel):
         """Ancho y altura se corrigen entre sí mientras se mantiene la relación de aspecto."""
@@ -268,14 +285,19 @@ class Calcomania(Lienzo):
     VARIANTE = ("calcomania", True)
 
     def campos(self, ctx):
-        return [Texto("archivo", "Imagen"), Seleccion("plano", "Cara", {"cara"}),
-                Casilla("encadenar", "Encadenar caras", True), Porcentaje("opacidad", "Opacidad"),
-                Casilla("mantener_proporcion", "Mantener relación de aspecto", True),
-                Expresion("ancho", "Anchura", "0 mm"), Expresion("alto", "Altura", "0 mm"),
-                Expresion("escala", "Factor de escala", "1.00", ESCALAR),
-                Expresion("dx", "Distancia X", "0 mm"), Expresion("dy", "Distancia Y", "0 mm"),
-                Expresion("angulo", "Ángulo Z", "0 deg", ANGULO),
-                Casilla("voltear", "Volteo horizontal"), Casilla("voltear_v", "Volteo vertical")]
+        return [Texto("archivo", "Imagen", grupo="Imagen"), Seleccion("plano", "Cara", {"cara"}, grupo="Imagen"),
+                Casilla("encadenar", "Encadenar caras", True, grupo="Imagen"),
+                Porcentaje("opacidad", "Opacidad", grupo="Imagen"),
+                Expresion("ancho", "Anchura", "0 mm", grupo="Tamaño"),
+                Expresion("alto", "Altura", "0 mm", grupo="Tamaño"),
+                Casilla("mantener_proporcion", "Mantener proporción", True, grupo="Tamaño"),
+                Expresion("dx", "Distancia X", "0 mm", grupo="Posición"),
+                Expresion("dy", "Distancia Y", "0 mm", grupo="Posición"),
+                Expresion("angulo", "Ángulo Z", "0 deg", ANGULO, grupo="Posición"),
+                # Más opciones (sin grupo: ver el comentario de Engranaje.campos)
+                Expresion("escala", "Factor de escala", "1.00", ESCALAR, avanzado=True),
+                Casilla("voltear", "Volteo horizontal", avanzado=True),
+                Casilla("voltear_v", "Volteo vertical", avanzado=True)]
 
     def preparar_panel(self, panel):
         super().preparar_panel(panel)

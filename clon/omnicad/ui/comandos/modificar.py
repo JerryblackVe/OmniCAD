@@ -9,11 +9,16 @@ from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, Op
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.ops_solido import OpReticulaVolumetrica
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir, hit_desde_ref,
-                       hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
+from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
+                       hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .aspecto import Aspecto  # noqa: F401  (el comando vive en aspecto.py; se sigue pudiendo importar desde acá)
-from .comunes import evaluar_o_cero
+from .comunes import OPCIONES_OPERACION, evaluar_o_cero
+
+TIPOS_DESPLAZAMIENTO = {"libre": ("Desplazamiento libre", "mov_libre"), "traslacion": ("Trasladar", "mov_trasladar"),
+                        "rotacion": ("Rotar", "mov_rotar"), "punto_a_punto": ("De punto a punto", "mov_punto_punto"),
+                        "punto_a_posicion": ("De punto a posición", "mov_punto_posicion")}
+assert set(TIPOS_DESPLAZAMIENTO) == set(TIPOS_MOVIMIENTO)
 
 
 def _cuerpos(v, clave="cuerpos"):
@@ -67,6 +72,8 @@ class Empalme(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "empalme_3d", "Empalme", "empalme_3d", "F"
     AYUDA = "Redondea aristas (quita material en las exteriores y agrega en las interiores)."
     CLASE_OP = OpEmpalme
+    TITULOS_MODO = ("tipo", {"empalme": ("Empalme", "empalme_3d"), "reglas": ("Empalme de reglas", "empalme_3d"),
+                             "completo": ("Redondeo completo", "empalme_3d")})
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
@@ -74,28 +81,13 @@ class Empalme(Comando):
         reglas = lambda v: v.get("tipo") == "reglas"  # noqa: E731
         completo = lambda v: v.get("tipo") == "completo"  # noqa: E731
         return [
-            Opciones("tipo", "Tipo", {"empalme": "Empalme", "reglas": "Empalme de reglas",
+            Opciones("tipo", "Modo", {"empalme": "Empalme", "reglas": "Empalme de reglas",
                                       "completo": "Redondeo completo"}),
             Seleccion("central", "Cara central", {"cara_plana"}, visible_si=completo,
                       ayuda="La cara que se vuelve una media caña entre las dos laterales."),
             Seleccion("laterales", "Caras laterales", {"cara_plana"}, minimo=2, maximo=2, visible_si=completo,
                       ayuda="Dos caras planas, paralelas y perpendiculares a la central."),
             Seleccion("aristas", "Aristas", {"arista"}, maximo=None, visible_si=empalme),
-            Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
-                                                     "variable": "Variable", "asimetrico": "Asimétrico"}, visible_si=empalme),
-            Expresion("radio2", "Radio sobre la segunda cara", "1 mm",
-                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "asimetrico"),
-            Opciones("continuidad", "Continuidad", {"g1": "Tangente (G1)", "g2": "Curvatura (G2)"},
-                     visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico"),
-                     ayuda="G2 y el radio asimétrico solo se hacen en aristas rectas entre dos caras planas."),
-            Expresion("radio", "Radio", "1 mm", visible_si=lambda v: not completo(v) and (
-                v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas")),
-            Expresion("radio_fin", "Radio final", "2 mm",
-                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
-            Texto("puntos_radio", "Puntos intermedios", "", visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable",
-                  ayuda="Posición (0 a 1) y radio separados por «:», uno por punto y separados por «;», p. ej. 0.5:3 mm; 0.8:2 mm."),
-            Expresion("cuerda", "Longitud de cuerda", "1 mm",
-                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "cuerda"),
             Seleccion("caras_a", "Caras/operaciones", {"cara"}, maximo=None, visible_si=reglas),
             Opciones("regla", "Regla", {"todas": "Todas las aristas", "entre": "Entre caras/operaciones"},
                      visible_si=reglas),
@@ -103,23 +95,39 @@ class Empalme(Comando):
                       visible_si=lambda v: reglas(v) and v.get("regla") == "entre"),
             Opciones("redondeos", "Topología", {"ambos": "Redondeos y empalmes", "redondeos": "Solo redondeos",
                                                 "empalmes": "Solo empalmes"}, visible_si=reglas),
-            Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme),
-            Opciones("esquina", "Tipo de esquina", {"bola": "Bola rodante", "setback": "Setback"},
-                     visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante",
-                     ayuda="Setback: el radio crece hacia las esquinas donde se juntan tres aristas (aproximado)."),
-            Expresion("setback", "Distancia de setback", "2 mm",
-                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante" and v.get("esquina") == "setback"),
-            Seleccion("aristas_2", "Aristas del conjunto 2", {"arista"}, minimo=0, maximo=None, visible_si=empalme,
+            Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
+                                                     "variable": "Variable", "asimetrico": "Asimétrico"}, visible_si=empalme),
+            Expresion("radio", "Radio", "1 mm", visible_si=lambda v: not completo(v) and (
+                v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas")),
+            Expresion("radio2", "Radio en la 2.ª cara", "1 mm",
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "asimetrico"),
+            Expresion("radio_fin", "Radio final", "2 mm",
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
+            Expresion("cuerda", "Longitud de cuerda", "1 mm",
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "cuerda"),
+            Seleccion("aristas_2", "Aristas 2", {"arista"}, minimo=0, maximo=None, visible_si=empalme, grupo="Conjunto 2",
                       ayuda="Otro conjunto de aristas con su propio radio, en el mismo paso (el «+» de Fusion)."),
             Opciones("tipo_radio_2", "Tipo de radio 2", {"constante": "Constante", "cuerda": "Longitud de cuerda",
-                                                         "variable": "Variable"},
+                                                         "variable": "Variable"}, grupo="Conjunto 2",
                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))),
-            Expresion("radio_2", "Radio 2", "1 mm", visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))
-                      and v.get("tipo_radio_2") != "cuerda"),
-            Expresion("radio_fin_2", "Radio final 2", "2 mm", visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))
-                      and v.get("tipo_radio_2") == "variable"),
-            Expresion("cuerda_2", "Longitud de cuerda 2", "1 mm", visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))
-                      and v.get("tipo_radio_2") == "cuerda"),
+            Expresion("radio_2", "Radio 2", "1 mm", grupo="Conjunto 2",
+                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2")) and v.get("tipo_radio_2") != "cuerda"),
+            Expresion("radio_fin_2", "Radio final 2", "2 mm", grupo="Conjunto 2",
+                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2")) and v.get("tipo_radio_2") == "variable"),
+            Expresion("cuerda_2", "Longitud de cuerda 2", "1 mm", grupo="Conjunto 2",
+                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2")) and v.get("tipo_radio_2") == "cuerda"),
+            Texto("puntos_radio", "Puntos intermedios", "", avanzado=True,
+                  visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable",
+                  ayuda="Posición (0 a 1) y radio separados por «:», uno por punto y separados por «;», p. ej. 0.5:3 mm; 0.8:2 mm."),
+            Opciones("continuidad", "Continuidad", {"g1": "Tangente (G1)", "g2": "Curvatura (G2)"}, avanzado=True,
+                     visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico"),
+                     ayuda="G2 y el radio asimétrico solo se hacen en aristas rectas entre dos caras planas."),
+            Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme, avanzado=True),
+            Opciones("esquina", "Esquina", {"bola": "Bola rodante", "setback": "Setback"}, avanzado=True,
+                     visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante",
+                     ayuda="Setback: el radio crece hacia las esquinas donde se juntan tres aristas (aproximado)."),
+            Expresion("setback", "Distancia de setback", "2 mm", avanzado=True,
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante" and v.get("esquina") == "setback"),
         ]
 
     @staticmethod
@@ -205,8 +213,8 @@ class Chaflan(Comando):
             Expresion("distancia2", "Distancia 2", "1 mm", visible_si=lambda v: v.get("tipo") == "dos_distancias"),
             Expresion("angulo", "Ángulo", "45 deg", ANGULO, visible_si=lambda v: v.get("tipo") == "distancia_angulo"),
             Casilla("voltear", "Voltear", visible_si=lambda v: v.get("tipo") != "distancia_igual"),
-            Casilla("cadena_tangente", "Cadena tangente", True),
-            Opciones("esquina", "Tipo de esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}),
+            Casilla("cadena_tangente", "Cadena tangente", True, avanzado=True),
+            Opciones("esquina", "Esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}, avanzado=True),
         ]
 
     def construir(self, v, ctx):
@@ -233,12 +241,14 @@ class Vaciado(Comando):
         return [
             Seleccion("caras", "Caras/cuerpo", {"cara", "cuerpo"}, maximo=None),
             Casilla("tangente", "Cadena tangente", True),
-            Opciones("direccion", "Dirección", {"interior": "Interior", "exterior": "Exterior", "ambos": "Ambos"}),
+            Botones("tipo", "Tipo de vaciado", {"afilado": ("Vaciado agudo", "esq_viva"),
+                                                "redondeado": ("Vaciado redondeado", "esq_redonda")}),
+            Opciones("direccion", "Dirección", {"interior": ("Interior", "pos_interior"), "exterior": ("Exterior", "pos_exterior"),
+                                                "ambos": ("Ambos", "pos_centro")}),
             Expresion("espesor_interior", "Espesor interior", "1 mm",
                       visible_si=lambda v: v.get("direccion") != "exterior"),
             Expresion("espesor_exterior", "Espesor exterior", "1 mm",
                       visible_si=lambda v: v.get("direccion") != "interior"),
-            Opciones("tipo", "Tipo de vaciado", {"afilado": "Desfase afilado", "redondeado": "Desfase redondeado"}),
         ]
 
     def construir(self, v, ctx):
@@ -275,25 +285,29 @@ class Desmoldeo(Comando):
     def campos(self, ctx):
         particion = lambda v: v.get("tipo") == "linea_particion"  # noqa: E731
         return [
-            Opciones("tipo", "Tipo", {"plano_fijo": "Plano fijo", "linea_particion": "Línea de partición"}),
-            Seleccion("plano", "Plano fijo o dirección de extracción", {"cara_plana", "plano", "eje", "arista_lineal"},
-                      ayuda="Con «Línea de partición» define la dirección de extracción."),
+            Botones("tipo", "Tipo", {"plano_fijo": ("Plano fijo", "des_plano"), "linea_particion": ("Línea de partición", "des_particion")}),
+            Seleccion("plano", "Dirección de desmoldeo", {"cara_plana", "plano", "eje", "arista_lineal"},
+                      ayuda="Plano fijo o dirección de extracción. Con «Línea de partición» define la dirección de extracción."),
             Seleccion("herramienta_particion", "Herramienta de partición", {"cara_plana", "plano", "arista", "curva_boceto"},
                       visible_si=particion, ayuda="Plano, cara plana o curva plana por donde pasa la línea de partición."),
+            Seleccion("caras", "Caras", {"cara"}, maximo=None),
+            Casilla("cadena_tangente", "Cadena tangente", True),
             Opciones("linea", "Tipo de línea de partición", {"fija": "Fijar línea de partición", "mover": "Mover línea de partición"},
-                     visible_si=particion, ayuda="Mover: cada cara gira entera alrededor de su borde del lado contrario."),
-            Opciones("lado_mover", "Dirección", {"arriba": "Ángulo arriba", "ambos": "Ambos", "abajo": "Ángulo abajo"},
-                     visible_si=lambda v: particion(v) and v.get("linea") == "mover"),
-            Seleccion("aristas_fijas", "Aristas fijas", {"arista"}, minimo=0, maximo=None,
+                     visible_si=particion, grupo="Línea de partición",
+                     ayuda="Mover: cada cara gira entera alrededor de su borde del lado contrario."),
+            Opciones("lado_mover", "Sentido del ángulo", {"arriba": "Ángulo arriba", "ambos": "Ambos", "abajo": "Ángulo abajo"},
+                     visible_si=lambda v: particion(v) and v.get("linea") == "mover", grupo="Línea de partición"),
+            Seleccion("aristas_fijas", "Aristas fijas", {"arista"}, minimo=0, maximo=None, grupo="Línea de partición",
                       visible_si=lambda v: particion(v) and v.get("linea") == "mover",
                       ayuda="Arista que no se deforma: la bisagra del desmoldeo."),
-            Seleccion("caras", "Caras", {"cara"}, maximo=None),
+            Opciones("lados", "Lados del dibujo", {"uno": ("Un lado", "lado_uno"), "dos": ("Dos lados", "lado_dos"),
+                                                   "simetrico": ("Simétrico", "lado_simetrico")}, grupo="Ángulo"),
+            Expresion("angulo", "Ángulo", "3 deg", ANGULO, grupo="Ángulo"),
+            Expresion("angulo2", "Ángulo 2", "3 deg", ANGULO, visible_si=lambda v: v.get("lados") == "dos", grupo="Ángulo"),
             Opciones("modo_angulo", "Modo de ángulo", {"relativo": "Relativo", "absoluto": "Absoluto"}, "relativo",
+                     avanzado=True,
                      ayuda="Relativo suma el ángulo al desmoldeo que la cara ya tiene; absoluto lo mide desde la dirección."),
-            Casilla("voltear", "Invertir dirección de extracción"),
-            Opciones("lados", "Tipo de desmoldeo", {"uno": "Un lado", "dos": "Dos lados", "simetrico": "Simétrico"}),
-            Expresion("angulo", "Ángulo", "3 deg", ANGULO),
-            Expresion("angulo2", "Ángulo 2", "3 deg", ANGULO, visible_si=lambda v: v.get("lados") == "dos"),
+            Casilla("voltear", "Invertir dirección de extracción", avanzado=True),
         ]
 
     def construir(self, v, ctx):
@@ -306,6 +320,7 @@ class Desmoldeo(Comando):
                              herramienta_particion=ref1(v, "herramienta_particion") if particion else None,
                              linea=v["linea"] if particion else "fija", lado_mover=v["lado_mover"],
                              aristas_fijas=refs(v, "aristas_fijas") if particion and v["linea"] == "mover" else [],
+                             cadena_tangente=bool(v.get("cadena_tangente")),
                              **{k: v[k] for k in ("angulo", "lados", "angulo2", "voltear", "tipo", "modo_angulo")})
 
     def desde_op(self, op, ctx):
@@ -329,32 +344,37 @@ class ReticulaVolumetrica(Comando):
         gradiente = lambda v: v.get("distribucion") == "gradiente"  # noqa: E731
         desfase = lambda v: bool(v.get("con_desfase"))  # noqa: E731
         mover = lambda v: bool(v.get("mover_celdas"))  # noqa: E731
-        return [Seleccion("cuerpo", "Cuerpo sólido o malla cerrada", {"cuerpo"}),
+        return [Seleccion("cuerpo", "Cuerpo a rellenar", {"cuerpo"}, ayuda="Un sólido o una malla cerrada."),
                 Opciones("forma_celda", "Forma de la celda", {"gyroid": "Gyroid", "cross": "Cruz", "x_cell": "Celda X",
                                                               "x_cell_25d": "Celda X 2.5D", "schwarz_p": "Schwarz P",
-                                                              "schwarz_d": "Schwarz D", "custom": "A medida"}),
-                Texto("barras", "Barras (x1 y1 z1 x2 y2 z2; …, de 0 a 1)", "0 0 0 1 1 1; 1 0 0 0 1 1",
-                      visible_si=lambda v: v.get("forma_celda") == "custom"),
-                Expresion("tamano", "Tamaño de celda (X)", "5 mm"),
-                Casilla("no_uniforme", "Proporciones no uniformes"),
-                Expresion("tamano_y", "Tamaño en Y", "5 mm", visible_si=no_uniforme),
-                Expresion("tamano_z", "Tamaño en Z", "5 mm", visible_si=no_uniforme),
-                Casilla("mover_celdas", "Mover / girar las celdas"),
-                *(Expresion(k, f"{'Mover' if k[0] == 'm' else 'Girar'} en {k[-1].upper()}",
-                            "0 mm" if k[0] == "m" else "0 deg", visible_si=mover, **({} if k[0] == "m" else {"tipo": ANGULO}))
-                  for k in self.MOVER),
-                Opciones("distribucion", "Distribución", {"uniforme": "Uniforme", "gradiente": "Gradiente por una ruta"}),
-                Expresion("solidez", "Solidez (%)", "30", ESCALAR),
-                Expresion("solidez_final", "Solidez al final (%)", "60", ESCALAR, visible_si=gradiente),
+                                                              "schwarz_d": "Schwarz D", "custom": "A medida"}, grupo="Celda"),
+                Texto("barras", "Barras", "0 0 0 1 1 1; 1 0 0 0 1 1", grupo="Celda",
+                      visible_si=lambda v: v.get("forma_celda") == "custom",
+                      ayuda="Cada barra: x1 y1 z1 x2 y2 z2 (de 0 a 1), separadas con «;»."),
+                Expresion("tamano", "Tamaño de celda", "5 mm", grupo="Celda",
+                          etiqueta_si=lambda v: "Tamaño en X" if no_uniforme(v) else "Tamaño de celda"),
+                Casilla("no_uniforme", "Proporciones no uniformes", grupo="Celda"),
+                Expresion("tamano_y", "Tamaño en Y", "5 mm", visible_si=no_uniforme, grupo="Celda"),
+                Expresion("tamano_z", "Tamaño en Z", "5 mm", visible_si=no_uniforme, grupo="Celda"),
+                Opciones("distribucion", "Distribución", {"uniforme": "Uniforme", "gradiente": "Gradiente por una ruta"},
+                         grupo="Solidez"),
+                Expresion("solidez", "Solidez (%)", "30", ESCALAR, grupo="Solidez"),
+                Expresion("solidez_final", "Solidez al final (%)", "60", ESCALAR, visible_si=gradiente, grupo="Solidez"),
                 Seleccion("ruta", "Ruta", {"arista", "curva_boceto", "vertice", "punto", "punto_boceto"}, maximo=None,
-                          visible_si=gradiente),
-                Casilla("con_desfase", "Zona de desfase"),
-                Seleccion("zonas", "Zona (vacío = todas las caras)", {"cara", "arista", "vertice", "punto"}, minimo=0,
-                          maximo=None, visible_si=desfase),
-                Expresion("desfase", "Desfase", "1 mm", visible_si=desfase),
-                Expresion("solidez_desfase", "Solidez del desfase (%)", "100", ESCALAR, visible_si=desfase),
-                Expresion("mezcla", "Distancia de mezcla", "1 mm", visible_si=desfase),
-                Entero("resolucion", "Muestras por celda", 8, 4, 40,
+                          visible_si=gradiente, grupo="Solidez"),
+                Casilla("con_desfase", "Zona de desfase", grupo="Desfase"),
+                Seleccion("zonas", "Zona", {"cara", "arista", "vertice", "punto"}, minimo=0, maximo=None,
+                          visible_si=desfase, grupo="Desfase", ayuda="Vacío = todas las caras."),
+                Expresion("desfase", "Desfase", "1 mm", visible_si=desfase, grupo="Desfase"),
+                Expresion("solidez_desfase", "Solidez del desfase (%)", "100", ESCALAR, visible_si=desfase,
+                          grupo="Desfase"),
+                Expresion("mezcla", "Distancia de mezcla", "1 mm", visible_si=desfase, grupo="Desfase"),
+                Casilla("mover_celdas", "Mover / girar las celdas", avanzado=True),
+                *(Expresion(k, f"{'Mover' if k[0] == 'm' else 'Girar'} en {k[-1].upper()}",
+                            "0 mm" if k[0] == "m" else "0 deg", visible_si=mover, avanzado=True,
+                            **({} if k[0] == "m" else {"tipo": ANGULO}))
+                  for k in self.MOVER),
+                Entero("resolucion", "Muestras por celda", 8, 4, 40, avanzado=True,
                        visible_si=lambda v: v.get("forma_celda") in ("gyroid", "schwarz_p", "schwarz_d"))]
 
     @staticmethod
@@ -415,9 +435,9 @@ class Escala(Comando):
     def campos(self, ctx):
         no_uniforme = lambda v: v.get("tipo") == "no_uniforme"  # noqa: E731
         return [
-            Seleccion("cuerpos", "Entidades", {"cuerpo"}, minimo=0, maximo=None),
-            Seleccion("bocetos", "Bocetos (una curva elige el boceto)", {"curva_boceto"}, minimo=0, maximo=None,
-                      ayuda="Solo con escala uniforme; el boceto queda como derivado (sin edición a mano)."),
+            Seleccion("entidades", "Entidades", {"cuerpo", "curva_boceto"}, maximo=None,
+                      ayuda="Cuerpos o curvas de boceto. Una curva elige el boceto entero: solo con escala uniforme, y el "
+                            "boceto queda como derivado (sin edición a mano)."),
             Seleccion("punto", "Punto", {"vertice", "punto"}, minimo=0,
                       ayuda="Punto base. Sin selección: el origen."),
             Opciones("tipo", "Tipo de escala", {"uniforme": "Uniforme", "no_uniforme": "No uniforme"}),
@@ -428,14 +448,13 @@ class Escala(Comando):
         ]
 
     def construir(self, v, ctx):
-        if not v.get("cuerpos") and not v.get("bocetos"):
-            raise ErrorComando("Seleccioná los cuerpos o las curvas de los bocetos a escalar.")
-        return self.crear_op(OpEscala, v, ctx, cuerpos=_cuerpos(v), bocetos=_bocetos(v), punto=ref1(v, "punto"),
+        exigir(v, "entidades", "Seleccioná los cuerpos o las curvas de los bocetos a escalar.")
+        return self.crear_op(OpEscala, v, ctx, cuerpos=_cuerpos(v, "entidades"), bocetos=_bocetos(v, "entidades"), punto=ref1(v, "punto"),
                              **{k: v[k] for k in ("tipo", "factor", "fx", "fy", "fz")})
 
     def desde_op(self, op, ctx):
-        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), punto=_hit1(op.p["punto"], ctx.estado),
-                    bocetos=_hits_bocetos(op.p.get("bocetos"), ctx.estado))
+        return dict(op.p, punto=_hit1(op.p["punto"], ctx.estado),
+                    entidades=_hits_cuerpos(op.p["cuerpos"], ctx.estado) + _hits_bocetos(op.p.get("bocetos"), ctx.estado))
 
 
 class CaraDesfase(Comando):
@@ -472,8 +491,10 @@ class PulsarTirar(Comando):
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
+        etiqueta = lambda v: {frozenset({"cara"}): "Distancia", frozenset({"arista"}): "Radio"}.get(  # noqa: E731
+            frozenset(_tipos_elegidos(v)), "Distancia / radio")
         return [Seleccion("objetos", "Cara o arista", {"cara", "arista"}, maximo=None),
-                Expresion("distancia", "Distancia / radio", "1 mm")]
+                Expresion("distancia", "Distancia / radio", "1 mm", etiqueta_si=etiqueta)]
 
     def construir(self, v, ctx):
         sel = exigir(v, "objetos", "Seleccioná una cara o una arista.")
@@ -585,13 +606,14 @@ class ReemplazarCara(Comando):
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
-        return [Seleccion("caras", "Caras de origen", {"cara"}, maximo=None),
+        return [Seleccion("caras", "Caras de origen", {"cara"}, maximo=None), Casilla("cadena_tangente", "Cadena tangente"),
                 Seleccion("destino", "Caras de destino", {"cara", "plano"})]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras de origen.")
         exigir(v, "destino", "Seleccioná la cara o el plano de destino.")
-        return self.crear_op(OpReemplazarCara, v, ctx, caras=refs(v, "caras"), destino=ref1(v, "destino"))
+        return self.crear_op(OpReemplazarCara, v, ctx, caras=refs(v, "caras"), destino=ref1(v, "destino"),
+                             cadena_tangente=bool(v.get("cadena_tangente")))
 
     def desde_op(self, op, ctx):
         return dict(op.p, caras=hits(op.p["caras"], ctx.estado), destino=_hit1(op.p["destino"], ctx.estado))
@@ -607,12 +629,13 @@ class DividirCara(Comando):
         proyecta = lambda v: v.get("tipo") in ("vector", "cercano")  # noqa: E731
         return [Seleccion("caras", "Caras para dividir", {"cara"}, maximo=None),
                 Seleccion("herramienta", "Herramienta de división", {"cara", "plano", "arista", "curva_boceto"}),
-                Opciones("tipo", "Tipo de división", {"superficie": "Dividir con superficie", "vector": "Según vector",
+                Casilla("cadena", "Selección de cadena", True),
+                Opciones("tipo", "Tipo de división", {"superficie": "Dividir con la superficie", "vector": "Según vector",
                                                       "cercano": "Punto más cercano"}),
                 Seleccion("direccion", "Dirección de proyección", {"plano", "cara_plana", "eje", "arista_lineal"},
                           visible_si=lambda v: v.get("tipo") == "vector"),
-                Casilla("extender", "Extender herramienta de división", True,
-                        visible_si=lambda v: not proyecta(v))]
+                Casilla("extender", "Alargar herramienta de división", True, visible_si=lambda v: not proyecta(v),
+                        ayuda="Si la herramienta no llega hasta el borde, la prolonga para que corte de lado a lado.")]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras a dividir.")
@@ -620,7 +643,7 @@ class DividirCara(Comando):
         if v.get("tipo") == "vector":
             exigir(v, "direccion", "Seleccioná la dirección de proyección.")
         return self.crear_op(OpDividirCara, v, ctx, caras=refs(v, "caras"), herramienta=ref1(v, "herramienta"),
-                             extender=v["extender"], tipo=v.get("tipo", "superficie"),
+                             extender=v["extender"], tipo=v.get("tipo", "superficie"), cadena=bool(v.get("cadena")),
                              direccion=ref1(v, "direccion") if v.get("tipo") == "vector" else None)
 
     def desde_op(self, op, ctx):
@@ -637,7 +660,8 @@ class DividirCuerpo(Comando):
     def campos(self, ctx):
         return [Seleccion("cuerpo", "Cuerpo para dividir", {"cuerpo"}),
                 Seleccion("herramienta", "Herramientas de división", {"cara", "plano", "cuerpo"}),
-                Casilla("extender", "Extender herramienta de división", True)]
+                Casilla("extender", "Extender las herramientas de división", True,
+                        ayuda="Si la herramienta no llega hasta el borde, la prolonga para que corte de lado a lado.")]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpo", "Seleccioná el cuerpo.")
@@ -659,8 +683,9 @@ class DivisionSilueta(Comando):
     def campos(self, ctx):
         return [Seleccion("direccion", "Dirección de vista", {"plano", "cara_plana", "eje", "arista_lineal"}),
                 Seleccion("cuerpo", "Cuerpo de destino", {"cuerpo"}),
-                Opciones("operacion", "Operación", {"caras": "Dividir solo las caras", "vaciado": "Dividir cuerpo vaciado",
-                                                    "solido": "Dividir cuerpo sólido"})]
+                Opciones("operacion", "Operación", {"caras": ("Dividir solo caras", "dividir_cara"),
+                                                    "vaciado": ("Dividir cuerpo vaciado", "vaciado"),
+                                                    "solido": ("Dividir cuerpo sólido", "caja")}, defecto="vaciado")]
 
     def construir(self, v, ctx):
         exigir(v, "direccion", "Seleccioná la dirección.")
@@ -673,10 +698,10 @@ class DivisionSilueta(Comando):
                     direccion=_hit1(op.p["direccion"], ctx.estado))
 
 
-def _bocetos(v):
+def _bocetos(v, clave="bocetos"):
     """Ids de los bocetos de las curvas elegidas (una curva elige el boceto entero), sin repetir."""
     salida = []
-    for h in v.get("bocetos") or []:
+    for h in v.get(clave) or []:
         if h["ref"].get("tipo") == "curva_boceto" and h["ref"]["boceto"] not in salida:
             salida.append(h["ref"]["boceto"])
     return salida
@@ -700,51 +725,57 @@ class MoverCopiar(Comando):
         caras = lambda v: v.get("objeto") == "caras"  # noqa: E731
         bocetos = lambda v: v.get("objeto") == "bocetos"  # noqa: E731
         return [
-            Opciones("objeto", "Mover objeto", {"cuerpos": "Cuerpos", "caras": "Caras", "bocetos": "Bocetos"}),
-            Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None, visible_si=lambda v: not caras(v) and not bocetos(v)),
-            Seleccion("bocetos", "Bocetos (una curva elige el boceto)", {"curva_boceto"}, maximo=None, visible_si=bocetos,
-                      ayuda="El boceto entero se mueve; queda como boceto derivado (sin edición a mano). Con «Crear copia» sale uno nuevo."),
-            Seleccion("caras", "Caras", {"cara"}, maximo=None, visible_si=caras,
+            Opciones("objeto", "Mover objeto", {"cuerpos": ("Cuerpos", "cuerpo"), "caras": ("Caras", "dividir_cara"),
+                                                "bocetos": ("Objetos del boceto", "boceto")}),
+            Seleccion("cuerpos", "Selección", {"cuerpo"}, maximo=None, visible_si=lambda v: not caras(v) and not bocetos(v)),
+            Seleccion("bocetos", "Selección", {"curva_boceto"}, maximo=None, visible_si=bocetos,
+                      ayuda="Las curvas elegidas se mueven dentro del plano de su boceto. Para mover un boceto entero, usá la "
+                            "herramienta move_body con sketches."),
+            Seleccion("caras", "Selección", {"cara"}, maximo=None, visible_si=caras,
                       ayuda="Caras planas: las vecinas se extienden o se recortan. «Crear copia» deja superficies."),
-            Opciones("tipo", "Tipo de movimiento", TIPOS_MOVIMIENTO),
-            Seleccion("pivote", "Pivote", {"vertice", "punto"}, minimo=0, visible_si=t("libre"),
+            Botones("tipo", "Tipo de desplazamiento", TIPOS_DESPLAZAMIENTO),
+            Alternar("definir_pivote", "Definir punto de giro", "mov_pivote", icono_marcado="terminar", visible_si=t("libre"),
+                     ayuda="Entrá al modo, elegí el punto y cerralo con Terminado."),
+            Seleccion("pivote", "Punto de giro", {"vertice", "punto"}, minimo=0,
+                      visible_si=lambda v: v.get("tipo") == "libre" and bool(v.get("definir_pivote")),
                       ayuda="Centro de giro. Sin selección: el centro de los cuerpos."),
             Seleccion("direccion", "Dirección", {"eje", "arista_lineal", "cara_plana", "plano"}, minimo=0,
                       visible_si=t("traslacion"), ayuda="Sin selección: ejes X, Y, Z del diseño."),
             Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("tipo") == "traslacion"
                       and bool(v.get("direccion"))),
-            Expresion("dx", "Distancia X", "0 mm", visible_si=lambda v: v.get("tipo") == "libre" or (
+            Expresion("dx", "Distancia X", "0 mm", grupo="Traslación", visible_si=lambda v: v.get("tipo") == "libre" or (
                 v.get("tipo") == "traslacion" and not v.get("direccion"))),
-            Expresion("dy", "Distancia Y", "0 mm", visible_si=lambda v: v.get("tipo") == "libre" or (
+            Expresion("dy", "Distancia Y", "0 mm", grupo="Traslación", visible_si=lambda v: v.get("tipo") == "libre" or (
                 v.get("tipo") == "traslacion" and not v.get("direccion"))),
-            Expresion("dz", "Distancia Z", "0 mm", visible_si=lambda v: v.get("tipo") == "libre" or (
+            Expresion("dz", "Distancia Z", "0 mm", grupo="Traslación", visible_si=lambda v: v.get("tipo") == "libre" or (
                 v.get("tipo") == "traslacion" and not v.get("direccion"))),
-            Expresion("rx", "Ángulo X", "0 deg", ANGULO, visible_si=t("libre")),
-            Expresion("ry", "Ángulo Y", "0 deg", ANGULO, visible_si=t("libre")),
-            Expresion("rz", "Ángulo Z", "0 deg", ANGULO, visible_si=t("libre")),
+            Expresion("rx", "Ángulo X", "0 deg", ANGULO, visible_si=t("libre"), grupo="Rotación"),
+            Expresion("ry", "Ángulo Y", "0 deg", ANGULO, visible_si=t("libre"), grupo="Rotación"),
+            Expresion("rz", "Ángulo Z", "0 deg", ANGULO, visible_si=t("libre"), grupo="Rotación"),
             Seleccion("eje", "Eje", {"eje"}, visible_si=t("rotacion")),
             Expresion("angulo", "Ángulo", "90 deg", ANGULO, visible_si=t("rotacion")),
             Seleccion("origen", "Punto de origen", {"vertice", "punto"},
                       visible_si=t("punto_a_punto", "punto_a_posicion")),
             Seleccion("destino", "Punto de destino", {"vertice", "punto"}, visible_si=t("punto_a_punto")),
-            Expresion("x", "X", "0 mm", visible_si=t("punto_a_posicion")),
-            Expresion("y", "Y", "0 mm", visible_si=t("punto_a_posicion")),
-            Expresion("z", "Z", "0 mm", visible_si=t("punto_a_posicion")),
+            Expresion("x", "Posición X", "0 mm", visible_si=t("punto_a_posicion"), grupo="Posición"),
+            Expresion("y", "Posición Y", "0 mm", visible_si=t("punto_a_posicion"), grupo="Posición"),
+            Expresion("z", "Posición Z", "0 mm", visible_si=t("punto_a_posicion"), grupo="Posición"),
             Casilla("copiar", "Crear copia"),
-            Casilla("ligera", "Copia ligera (comparte la geometría)",
+            Casilla("ligera", "Copia ligera", avanzado=True,
                     visible_si=lambda v: bool(v.get("copiar")) and not caras(v),
                     ayuda="La copia es la MISMA geometría con otra ubicación: editar el original la cambia también."),
         ]
 
     def construir(self, v, ctx):
         por_caras, por_bocetos = v.get("objeto") == "caras", v.get("objeto") == "bocetos"
-        exigir(v, "caras" if por_caras else "bocetos" if por_bocetos else "cuerpos",
+        enteros = list(ctx.op.p.get("bocetos") or []) if ctx.op is not None and por_bocetos else []    # receta de antes: boceto entero
+        exigir({"bocetos": enteros} if enteros else v, "caras" if por_caras else "bocetos" if por_bocetos else "cuerpos",
                "Seleccioná las caras a mover." if por_caras else "Seleccioná las curvas de los bocetos a mover."
                if por_bocetos else "Seleccioná los cuerpos a mover.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
                                     "copiar", "ligera")}
         p.update(cuerpos=[] if por_caras or por_bocetos else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],
-                 bocetos=_bocetos(v) if por_bocetos else [],
+                 bocetos=enteros, curvas_boceto=refs(v, "bocetos") if por_bocetos and not enteros else [],
                  ligera=bool(v.get("ligera")) and not por_caras, pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
                  origen=ref1(v, "origen"), destino=ref1(v, "destino"))
         return self.crear_op(OpMover, v, ctx, **p)
@@ -798,8 +829,9 @@ class MoverCopiar(Comando):
 
     def desde_op(self, op, ctx):
         v = dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), caras=hits(op.p.get("caras") or [], ctx.estado),
-                 objeto="caras" if op.p.get("caras") else "bocetos" if op.p.get("bocetos") else "cuerpos",
-                 bocetos=_hits_bocetos(op.p.get("bocetos"), ctx.estado))
+                 objeto="caras" if op.p.get("caras") else "bocetos" if op.p.get("bocetos") or op.p.get("curvas_boceto") else "cuerpos",
+                 bocetos=_hits_bocetos(op.p.get("bocetos"), ctx.estado) + hits(op.p.get("curvas_boceto") or [], ctx.estado),
+                 definir_pivote=bool(op.p.get("pivote")))
         for k in ("pivote", "direccion", "eje", "origen", "destino"):
             v[k] = _hit1(op.p.get(k), ctx.estado)
         return v
@@ -834,15 +866,20 @@ class Alinear(Comando):
         if ctx.op is not None:                  # un paso hecho por la API puede girar cualquier ángulo: no se pierde al reabrir
             actual = f"{float(ctx.op.p.get('angulo') or 0):g}"
             giros.setdefault(actual, f"{actual}°")
-        return [Seleccion("cuerpos", "Objetos", {"cuerpo"}, maximo=None), Seleccion("origen", "Desde", geom),
-                Seleccion("destino", "Hasta", geom), Casilla("voltear", "Voltear"),
-                Opciones("angulo", "Girar", giros), Casilla("copiar", "Crear copia")]
+        return [Opciones("objeto", "Objeto", {"cuerpos": ("Cuerpos…", "cuerpo")}), Seleccion("origen", "Desde", geom),
+                Seleccion("destino", "A", geom), Casilla("voltear", "Voltear"),
+                Opciones("angulo", "Girar", giros), Casilla("copiar", "Crear copia"),
+                Seleccion("cuerpos", "Otros cuerpos", {"cuerpo"}, minimo=0, maximo=None,
+                          ayuda="Se alinean junto con el cuerpo de «Desde». Sin selección: solo ese.")]
 
     def construir(self, v, ctx):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos.")
         exigir(v, "origen", "Seleccioná la geometría de origen.")
         exigir(v, "destino", "Seleccioná la geometría de destino.")
-        return self.crear_op(OpAlinear, v, ctx, cuerpos=_cuerpos(v), origen=ref1(v, "origen"),
+        duena = ref1(v, "origen").get("cuerpo")              # Fusion toma el objeto de lo elegido en «Desde»
+        cuerpos = list(dict.fromkeys(([duena] if duena else []) + _cuerpos(v)))
+        if not cuerpos:
+            raise ErrorComando("«Desde» no es de un cuerpo: elegí los cuerpos a alinear en «Otros cuerpos».")
+        return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, origen=ref1(v, "origen"),
                              destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"],
                              angulo=a if (a := float(v["angulo"])) % 1 else int(a))
 
@@ -863,7 +900,8 @@ class Combinar(Comando):
     def campos(self, ctx):
         return [Seleccion("objetivo", "Cuerpo de destino", {"cuerpo"}),
                 Seleccion("herramientas", "Cuerpos de herramienta", {"cuerpo"}, maximo=None),
-                Opciones("operacion", "Operación", OPERACIONES_COMBINAR), Casilla("mantener", "Mantener herramientas")]
+                Botones("operacion", "Operación", {k: OPCIONES_OPERACION[k] for k in OPERACIONES_COMBINAR}),
+                Casilla("mantener", "Conservar herramientas")]
 
     def construir(self, v, ctx):
         exigir(v, "objetivo", "Seleccioná el cuerpo de destino.")

@@ -55,33 +55,35 @@ class InsertarFijacion(Comando):
     def campos(self, ctx):
         campos = [
             Seleccion("posiciones", "Posición", {"arista_circular", "eje", "punto", "vertice"}, maximo=None,
+                      grupo="Ubicación",
                       ayuda="Aristas circulares de agujeros, caras cilíndricas o cónicas, o puntos: una fijación por "
                             "cada una."),
-            Casilla("similares", "Seleccionar similares", True,
+            Casilla("similares", "Seleccionar similares", True, grupo="Ubicación",
                     ayuda="Agrega los agujeros iguales de la misma cara (aristas del mismo radio en el mismo plano)."),
             Seleccion("direccion", "Dirección", {"eje", "arista_lineal", "cara_plana", "plano"}, minimo=0,
-                      visible_si=_hay_punto, ayuda="Eje de la fijación en los puntos. Sin selección: la normal del "
-                                                   "boceto o +Z."),
-            Opciones("familia", "Familia", fj.FAMILIAS),
+                      visible_si=_hay_punto, grupo="Ubicación",
+                      ayuda="Eje de la fijación en los puntos. Sin selección: la normal del boceto o +Z."),
+            Opciones("familia", "Familia", fj.FAMILIAS, grupo="Fijación"),
         ]
         for familia in fj.FAMILIAS:
             campos.append(Opciones(f"norma_{familia}", "Norma",
                                    {n: f"{n} — {fj.NORMAS[n]['descripcion']}" for n in fj.normas(familia)},
-                                   visible_si=_de_familia(familia)))
+                                   visible_si=_de_familia(familia), grupo="Fijación"))
         campos += [
-            Opciones("tamano", "Tamaño nominal", {AUTO: "Automático", **{t: t for t in fj.TAMANOS}},
+            Opciones("tamano", "Tamaño nominal", {AUTO: "Automático", **{t: t for t in fj.TAMANOS}}, grupo="Fijación",
                      ayuda="Automático: según el diámetro del agujero (paso libre, broca de roscar o rosca). Un "
                            "tamaño que la norma no tiene se corrige al más cercano."),
             Opciones("largo", "Largo nominal", {AUTO: "Automático", **{f"{x:g}": f"{x:g} mm" for x in _LARGOS}},
-                     visible_si=_con_largo,
+                     visible_si=_con_largo, grupo="Fijación",
                      ayuda="Automático: el menor largo de la norma que atraviesa el material. Un largo fuera de la "
                            "norma se corrige al más cercano."),
-            Opciones("rosca", "Rosca", fj.TIPOS_ROSCA, visible_si=lambda v: v.get("familia") != "arandela",
-                     ayuda="Modelada: corta el filete helicoidal real (más lento)."),
-            Casilla("voltear", "Voltear", ayuda="Invierte el sentido de la fijación (en una cara, usa el otro "
-                                                "extremo)."),
-            Opciones("material", "Material", {m: m for m in _MATERIALES}),
             Info("propiedades", "Propiedades", _propiedades),
+            # Más opciones: valores por defecto sensatos (sin grupo: ver el comentario de Engranaje.campos)
+            Opciones("rosca", "Rosca", fj.TIPOS_ROSCA, visible_si=lambda v: v.get("familia") != "arandela",
+                     avanzado=True, ayuda="Modelada: corta el filete helicoidal real (más lento)."),
+            Casilla("voltear", "Voltear", avanzado=True,
+                    ayuda="Invierte el sentido de la fijación (en una cara, usa el otro extremo)."),
+            Opciones("material", "Material", {m: m for m in _MATERIALES}, avanzado=True),
         ]
         return campos
 

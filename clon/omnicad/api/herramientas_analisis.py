@@ -27,10 +27,13 @@ TIPOS = {"section": "seccion", "zebra": "cebra", "environment_map": "mapa_entorn
          "min_radius": "radio_minimo"}
 CURVATURAS = {"gaussian": "gaussiana", "mean": "media", "max": "maxima", "min": "minima"}
 # Opciones que acepta cada tipo (el resto es un error: no se ignora en silencio).
-OPCIONES = {"section": {"plane", "offset", "angle", "flip", "bodies", "body", "section_color", "custom_color", "hatch"}, "zebra": {"frequency", "orientation"},
+OPCIONES = {"section": {"plane", "offset", "angle", "flip", "bodies", "body", "section_color", "custom_color", "hatch"},
+            "zebra": {"frequency", "orientation", "bodies", "opacity", "lock_stripes", "high_quality"},
             "environment_map": set(), "draft": {"direction", "min_angle", "max_angle", "flip", "bodies", "body"},
-            "curvature": {"curvature_type", "bodies"}, "comb": {"edges", "density", "scale", "body"},
-            "isocurve": {"density", "bodies"}, "accessibility": {"direction", "flip", "bodies", "body"},
+            "curvature": {"curvature_type", "bodies", "display", "scale", "limit", "opacity", "high_quality"},
+            "comb": {"edges", "density", "scale", "body"},
+            "isocurve": {"density", "bodies", "isocurve_type", "combs", "comb_density", "comb_scale"},
+            "accessibility": {"direction", "flip", "bodies", "body"},
             "min_radius": {"radius", "bodies"}}
 
 
@@ -57,6 +60,14 @@ def _rgb_hex(valor):
     if len(t) != 6 or any(c not in "0123456789abcdefABCDEF" for c in t):
         raise error("INVALID_ARGUMENTS", f"custom_color: se espera un color «#RRGGBB», llegó {valor!r}.")
     return [round(int(t[i:i + 2], 16) / 255, 4) for i in (0, 2, 4)]
+
+
+def _comunes_vista(p, dado):
+    """Opacidad y Calidad alta de cebra y mapa: solo si se piden (un análisis sin ellas guarda lo mismo que antes)."""
+    if dado.get("opacity") is not None:
+        p["opacidad"] = int(_numero(dado["opacity"], "opacity", 0, 100))
+    if dado.get("high_quality"):
+        p["alta_calidad"] = True
 
 
 def _parametros(sesion, tipo, dado):
@@ -91,6 +102,9 @@ def _parametros(sesion, tipo, dado):
         if orientacion not in ("horizontal", "vertical"):
             raise error("INVALID_ARGUMENTS", "orientation es horizontal o vertical.")
         p.update(frecuencia=int(_numero(dado.get("frequency", 8), "frequency", 1, 100)), orientacion=orientacion)
+        _comunes_vista(p, dado)
+        if dado.get("lock_stripes"):
+            p["vista_fija"] = [0.0, -1.0, 0.0]                   # rayas fijas al cuerpo, las de la vista de frente
     elif tipo in ("draft", "accessibility"):
         p["direccion"] = _direccion(sesion, dado.get("direction"), body)
         p["invertir"] = bool(dado.get("flip", False))
@@ -106,6 +120,15 @@ def _parametros(sesion, tipo, dado):
         if t not in CURVATURAS:
             raise error("INVALID_ARGUMENTS", f"curvature_type: {', '.join(CURVATURAS)}.")
         p["tipo_curvatura"] = CURVATURAS[t]
+        _comunes_vista(p, dado)
+        if dado.get("display", "smooth") not in ("smooth", "bands"):
+            raise error("INVALID_ARGUMENTS", "display es smooth o bands.")
+        if dado.get("display") == "bands":
+            p["bandas"] = True
+        if dado.get("scale") is not None:
+            p["escala"] = float(_numero(dado["scale"], "scale", 1e-6, 1e6))
+        if dado.get("limit") is not None:
+            p["limite"] = float(_numero(dado["limit"], "limit", 1e-9))
     elif tipo == "comb":
         if not dado.get("edges"):
             raise error("INVALID_ARGUMENTS", "El peine de curvatura necesita edges (selector o ids de find_edges).")
@@ -113,7 +136,15 @@ def _parametros(sesion, tipo, dado):
                  densidad=int(_numero(dado.get("density", 30), "density", 2, 500)),
                  escala=float(_numero(dado.get("scale", 1.0), "scale", 1e-6, 1e6)))
     elif tipo == "isocurve":
+        sentidos = dado.get("isocurve_type", "both")
+        if sentidos not in ("both", "u", "v"):
+            raise error("INVALID_ARGUMENTS", "isocurve_type es both, u o v.")
         p["densidad"] = int(_numero(dado.get("density", 10), "density", 1, 100))
+        if sentidos != "both":
+            p["tipo_iso"] = sentidos
+        if dado.get("combs"):
+            p.update(peines=True, densidad_peine=int(_numero(dado.get("comb_density", 50), "comb_density", 3, 500)),
+                     escala_peine=float(_numero(dado.get("comb_scale", 10.0), "comb_scale", 1e-6, 1e6)))
     elif tipo == "min_radius":
         p["radio"] = float(_numero(dado.get("radius", 3.0), "radius", 1e-9))
     return p
@@ -145,12 +176,15 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
                     edges: str | list[str] | None = None, density: int | None = None, scale: float | None = None,
                     radius: float | None = None, body: str | None = None,
                     section_color: Literal["component", "custom"] | None = None, custom_color: str | None = None,
-                    hatch: bool | None = None):
+                    hatch: bool | None = None, opacity: int | None = None, lock_stripes: bool | None = None,
+                    high_quality: bool | None = None, display: Literal["smooth", "bands"] | None = None,
+                    limit: float | None = None, isocurve_type: Literal["both", "u", "v"] | None = None,
+                    combs: bool | None = None, comb_density: int | None = None, comb_scale: float | None = None):
     """
     action: list (los del documento), add (crea uno), remove, show o hide (por name).
     type: con add: section (corte con plano), zebra, environment_map, draft (desmoldeo), curvature, comb (peine de curvatura de aristas), isocurve, accessibility o min_radius (fresa).
     name: nombre del análisis (con add, vacío = automático, p. ej. «Sección1»).
-    bodies: cuerpos que se analizan (id o nombre); vacío = todos los sólidos. Para section, draft, curvature, isocurve, accessibility y min_radius.
+    bodies: cuerpos que se analizan (id o nombre); vacío = todos los sólidos. Para section, zebra, draft, curvature, isocurve, accessibility y min_radius.
     plane: section: XY, XZ, YZ, un plano de construcción (id o nombre) o una cara plana (selector).
     offset: section: desfase del plano en mm sobre su normal; 0 por defecto.
     flip: section: conserva el otro lado; draft y accessibility: invierte la dirección.
@@ -162,12 +196,21 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
     curvature_type: curvature: gaussian (por defecto), mean, max o min.
     edges: comb: aristas (selector o ids de find_edges, o lista).
     density: comb: púas por arista (30 por defecto); isocurve: curvas por dirección (10 por defecto).
-    scale: comb: largo de las púas (1 por defecto).
+    scale: comb: largo de las púas (1 por defecto); curvature: multiplica el degradé (1 por defecto).
     radius: min_radius: radio de la fresa en mm (3 por defecto).
     body: cuerpo donde se evalúan los selectores de plane, direction y edges; vacío = el único cuerpo.
     section_color: section: component (la tapa toma el color de cada cuerpo) o custom (un solo color para todo el corte); custom por defecto.
     custom_color: section con section_color=custom: color de la tapa como «#RRGGBB»; vacío = el rojo de siempre.
     hatch: section: true dibuja el rayado diagonal sobre las caras del corte; false por defecto.
+    opacity: zebra y curvature: opacidad del análisis sobre el cuerpo, 0 a 100 (100 por defecto).
+    lock_stripes: zebra: true deja las rayas fijas al cuerpo; false (por defecto) siguen a la cámara.
+    high_quality: zebra y curvature: true calcula sobre una malla más fina.
+    display: curvature: smooth (por defecto) o bands.
+    limit: curvature: curvatura en 1/mm que llega al rojo (Límite de Principal mínima y máxima); vacío = automático.
+    isocurve_type: isocurve: both (por defecto), u o v.
+    combs: isocurve: true dibuja la curvatura en peines sobre cada isocurva.
+    comb_density: isocurve: púas por isocurva (50 por defecto).
+    comb_scale: isocurve: largo relativo de las púas (10 por defecto).
     """
     doc = sesion.doc
     if action == "list":
@@ -188,7 +231,9 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
                                   orientation=orientation, direction=direction, min_angle=min_angle,
                                   max_angle=max_angle, curvature_type=curvature_type, edges=edges, density=density,
                                   scale=scale, radius=radius, body=body, section_color=section_color,
-                                  custom_color=custom_color, hatch=hatch).items() if v is not None}
+                                  custom_color=custom_color, hatch=hatch, opacity=opacity, lock_stripes=lock_stripes,
+                                  high_quality=high_quality, display=display, limit=limit, isocurve_type=isocurve_type,
+                                  combs=combs, comb_density=comb_density, comb_scale=comb_scale).items() if v is not None}
     if name and name.strip() in doc.analisis:
         raise error("INVALID_ARGUMENTS", f"Ya existe un análisis llamado «{name.strip()}».")
     creado = doc.agregar_analisis(TIPOS[type], _parametros(sesion, type, dado), name.strip() if name else None)

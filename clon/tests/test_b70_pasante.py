@@ -1,4 +1,6 @@
 """B-70: un agujero pasante solo abarca sus cuerpos objetivo."""
+import math
+
 import pytest
 
 from omnicad import api
@@ -33,5 +35,10 @@ def test_pasante_roscado_no_se_alarga_por_un_cuerpo_ajeno(monkeypatch):
     assert largos
     forma = sesion.doc.estado_final.cuerpos[cuerpo].forma
     assert geo.es_valida(forma)
-    assert geo.volumen(forma) == pytest.approx(3260.9599, abs=0.01)
+    # thread_class="auto" da la 7H de Fusion: Ø flancos 10,65 y Ø menor 9,1575 (básica: 10,5 y 9). Con la holgura de 0,15,
+    # agujero r = 4,72875 y flancos corridos 0,225: el hueco mide 95,6635 mm² en cualquier corte, por 10 mm de tuerca.
+    # La losa da esa cuenta; el total, un poco menos: GProp integra 0,001 % corto sobre la hélice entera.
+    losa = geo.booleano(forma, geo.caja(1, 60, 60, origen=(-4.5, -30, 30)), "intersecar")
+    assert geo.volumen(losa) == pytest.approx(2 * math.sqrt(3) * 11 ** 2 - 95.6635, abs=0.001)
+    assert geo.volumen(forma) == pytest.approx(3234.8859, abs=0.01)
     assert geo.volumen(sesion.doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(34560)

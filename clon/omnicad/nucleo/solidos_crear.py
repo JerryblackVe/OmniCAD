@@ -15,6 +15,7 @@ import re
 
 import numpy as np
 from . import motor as _motor
+from . import tablas_rosca
 
 
 def _iniciar_opencascade():
@@ -34,9 +35,10 @@ def _iniciar_opencascade():
     global GeomLib_IsPlanarSurface, Geom_Circle, Geom_ConicalSurface, Geom_CylindricalSurface, Geom_Line
     global Geom_Plane, HArray1_gp_Pnt, HArray1_gp_Pnt2d, IntCurvesFace_ShapeIntersector, Law_Interpol
     global Law_Linear, List_TopoDS_Shape, ShapeAnalysis_CanonicalRecognition, ShapeFix_Face
-    global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED
+    global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED
     global TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopExp_Explorer, TopLoc_Location
-    global TopoDS, _CONVERTIR, _CURVAS_LIBRES, _SUPERFICIES_LIBRES, gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir
+    global TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
+    global _CONVERTIR, _CURVAS_LIBRES, _SUPERFICIES_LIBRES, gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir
     global gp_Dir2d, gp_Lin, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
     from OCP.BOPAlgo import BOPAlgo_MakerVolume
     from OCP.BRep import BRep_Builder, BRep_Tool
@@ -72,11 +74,11 @@ def _iniciar_opencascade():
     from OCP.ShapeAnalysis import ShapeAnalysis_CanonicalRecognition
     from OCP.ShapeFix import ShapeFix_Face
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-    from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID,
-                            TopAbs_VERTEX, TopAbs_WIRE)
+    from OCP.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL,
+                            TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE)
     from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopLoc import TopLoc_Location
-    from OCP.TopoDS import TopoDS
+    from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
     from OCP.gp import gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Dir2d, gp_Lin, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
     _CONVERTIR = {TopAbs_FACE: TopoDS.Face, TopAbs_WIRE: TopoDS.Wire, TopAbs_EDGE: TopoDS.Edge,
                   TopAbs_SOLID: TopoDS.Solid, TopAbs_SHELL: TopoDS.Shell, TopAbs_VERTEX: TopoDS.Vertex}
@@ -1135,7 +1137,7 @@ def _hacia_afuera_de_la_cara(cara, punto):
             # El polo y la costura de una cara periódica no delimitan su borde real.
             continue
         curva = BRepAdaptor_Curve(e)
-        proy = GeomAPI_ProjectPointOnCurve(_pnt(punto), curva.Curve().Curve(), curva.FirstParameter(), curva.LastParameter())
+        proy = GeomAPI_ProjectPointOnCurve(_pnt(punto), BRep_Tool.Curve_s(e, 0.0, 0.0), curva.FirstParameter(), curva.LastParameter())
         if proy.NbPoints() == 0 or proy.LowerDistance() > 1e-5 * max(1.0, float(np.linalg.norm(punto))):
             continue
         p, t = gp_Pnt(), gp_Vec()
@@ -2054,6 +2056,8 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
         datos = datos_rosca(roscado)
         if datos["conica"]:
             raise geo.ErrorGeometria("Las roscas cónicas (R, NPT) no se modelan: usá Roscado cónico (cosmético).")
+        if datos["solo_exterior"]:
+            raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[datos['familia']]['nombre']}» es una rosca solo exterior: no va en un agujero.")
         if conicidad:
             raise geo.ErrorGeometria("Un agujero cónico no lleva rosca modelada paralela.")
         flancos = _desfases_clase(datos, clase, True)["flancos"] + float(holgura)
@@ -2114,19 +2118,34 @@ def agujero(cuerpo, punto, direccion, *, profundidad=None, **opciones):
 
 
 # ================================================================ 8. roscas
-# Familias de rosca (el «Tipo» del diálogo de Fusion): nombre, norma de la que salen los datos, ángulo entre
-# flancos del perfil (grados) y si es cónica (las de tubería cónicas no se modelan: Roscado cónico cosmético).
+# Familias de rosca (el «Tipo» del diálogo de Fusion, en su orden): nombre, norma de la que salen los datos, ángulo entre
+# flancos del perfil (grados), si es cónica (las de tubería cónicas no se modelan: Roscado cónico cosmético) y si es solo
+# exterior (no se ofrece en una cara interior). Las que vienen de `tablas_rosca` se suman en `_ordenar_familias`.
 FAMILIAS_ROSCA = {
-    "iso_metrica": {"nombre": "ISO métrica (M)", "norma": "ISO 261 / ISO 262 / ISO 724 (perfil ISO 68-1)",
+    "iso_metrica": {"nombre": "Perfil métrico ISO", "norma": "ISO 261 / ISO 262 / ISO 724 (perfil ISO 68-1)",
                     "angulo": 60.0, "conica": False},
-    "unificada": {"nombre": "Unificada ASME (UNC / UNF)", "norma": "ASME B1.1", "angulo": 60.0, "conica": False},
-    "trapezoidal": {"nombre": "Trapezoidal métrica ISO (Tr)", "norma": "ISO 2904 / ISO 2902", "angulo": 30.0,
+    "unificada": {"nombre": "Roscas de tornillo unificadas ANSI", "norma": "ASME B1.1", "angulo": 60.0, "conica": False},
+    "trapezoidal": {"nombre": "Roscas trapezoidales métricas ISO", "norma": "ISO 2904 / ISO 2902", "angulo": 30.0,
                     "conica": False},
-    "acme": {"nombre": "ACME de uso general", "norma": "ASME B1.5", "angulo": 29.0, "conica": False},
-    "bsp_paralela": {"nombre": "Tubería BSP paralela (G)", "norma": "ISO 228-1", "angulo": 55.0, "conica": False},
-    "bsp_conica": {"nombre": "Tubería BSPT cónica (R / Rc)", "norma": "ISO 7-1", "angulo": 55.0, "conica": True},
-    "npt": {"nombre": "Tubería NPT cónica", "norma": "ASME B1.20.1", "angulo": 60.0, "conica": True},
+    "acme": {"nombre": "Roscas de tornillo ACME", "norma": "ASME B1.5", "angulo": 29.0, "conica": False},
+    "bsp_paralela": {"nombre": "Roscas de tubería BSP", "norma": "ISO 228-1", "angulo": 55.0, "conica": False},
+    "bsp_conica": {"nombre": "BSP", "norma": "ISO 7-1", "angulo": 55.0, "conica": True},
+    "npt": {"nombre": "NPT", "norma": "ASME B1.20.1", "angulo": 60.0, "conica": True},
 }
+_ORDEN_FAMILIAS = ("ansi_metrica", "gb_metrica", "iso_metrica", "gost_autorroscante", "din_madera", "pulgadas_autorroscante",
+                   "pulgadas_plasticos", "metrica_plasticos", "acme", "unificada", "bsp_paralela", "din_tuberia", "gb_tuberia",
+                   "iso_tuberia", "jis_tuberia", "metrica_formado", "trapezoidal", "afbma",
+                   "bsp_conica", "din_conica", "iso_conica", "jis_conica", "npt", "npt_pvc")
+
+
+def _ordenar_familias():
+    """Suma las familias de `tablas_rosca` y deja el orden del desplegable de Fusion."""
+    todas = FAMILIAS_ROSCA | tablas_rosca.FAMILIAS
+    FAMILIAS_ROSCA.clear()
+    FAMILIAS_ROSCA.update({k: todas[k] for k in _ORDEN_FAMILIAS})
+
+
+_ordenar_familias()
 
 # Métrica ISO (ISO 261 / ISO 724, perfil básico de 60°) y unificada UNC/UNF (ASME B1.1). Broca para roscar:
 # en métrica D − P redondeado como en las tablas de taller; en UN, la broca de número/letra/fracción usual.
@@ -2187,7 +2206,11 @@ _WHITWORTH_H = 0.960491     # altura del triángulo fundamental de 55° por mm d
 def _fila(familia, norma, tamano, d, p, broca, d2, d1, conicidad=0.0):
     return {"norma": norma, "familia": familia, "tamano": tamano, "diametro": d, "paso": p, "broca": broca,
             "diametro_flancos": d2, "diametro_menor": d1, "angulo": FAMILIAS_ROSCA[familia]["angulo"],
-            "conica": FAMILIAS_ROSCA[familia]["conica"], "conicidad": conicidad}
+            "conica": FAMILIAS_ROSCA[familia]["conica"], "conicidad": conicidad,
+            "solo_exterior": bool(FAMILIAS_ROSCA[familia].get("solo_exterior"))}
+
+
+_SUMADAS = set()                                        # designaciones que vienen de `tablas_rosca`
 
 
 def _armar_tabla():
@@ -2223,12 +2246,24 @@ def _armar_tabla():
         P = 25.4 / tpi
         tabla[f"{t}-{tpi:g} NPT"] = _fila("npt", "NPT ASME B1.20.1", t, round(e1 + 0.8 * P, 4), P, None, round(e1, 4),
                                          round(e1 - 0.8 * P, 4), 1 / 16)
+    for familia, filas in tablas_rosca.FILAS.items():     # lo que ya estaba arriba no se toca: se suma lo que falta
+        for t, nombre, p, d, d2, d1, broca in filas:
+            if nombre not in tabla:
+                _SUMADAS.add(nombre)
+                tabla[nombre] = _fila(familia, FAMILIAS_ROSCA[familia]["norma"], t, d, p, broca, d2, d1,
+                                      1 / 16 if FAMILIAS_ROSCA[familia]["conica"] else 0.0)
     return tabla
 
 
 TABLA_ROSCAS = _armar_tabla()
 _GRUESA_POR_D = {f"M{d:g}": f"M{d:g}x{p:g}" for d, p, _b in _ISO_GRUESA}
+for _clave, _f in TABLA_ROSCAS.items():               # los tamaños sin serie gruesa (M0.25…): el primer paso de la tabla
+    if _f["familia"] == "iso_metrica":
+        _GRUESA_POR_D.setdefault(_f["tamano"], _clave)
 _POR_TEXTO = {k.lower().replace(" ", ""): k for k in TABLA_ROSCAS}
+_POR_FAMILIA = {}                                     # familia → {tamaño: [designaciones]} en el orden de la tabla
+for _clave, _f in TABLA_ROSCAS.items():
+    _POR_FAMILIA.setdefault(_f["familia"], {}).setdefault(_f["tamano"], []).append(_clave)
 _FRACCION = r"(\d+(?:-\d+/\d+|/\d+)?)"           # tamaño en pulgadas: 1, 1/2, 1-1/4
 
 
@@ -2283,18 +2318,12 @@ def tamanos_rosca(familia):
     """Tamaños nominales de una familia en orden (los del desplegable «Tamaño»)."""
     if familia not in FAMILIAS_ROSCA:
         raise geo.ErrorGeometria(f"Familia de rosca desconocida: {familia}")
-    vistos = []
-    for fila in TABLA_ROSCAS.values():
-        if fila["familia"] == familia and fila["tamano"] not in vistos:
-            vistos.append(fila["tamano"])
-    if familia in ("iso_metrica", "trapezoidal"):
-        vistos.sort(key=lambda t: float(re.sub(r"[^\d.]", "", t)))
-    return vistos
+    return sorted(_POR_FAMILIA.get(familia, ()), key=lambda t: TABLA_ROSCAS[_POR_FAMILIA[familia][t][0]]["diametro"])
 
 
 def designaciones_rosca(familia, tamano):
     """Designaciones de un tamaño (las del desplegable «Designación»): la de paso grueso o preferido primero."""
-    return [k for k, f in TABLA_ROSCAS.items() if f["familia"] == familia and f["tamano"] == tamano]
+    return list(_POR_FAMILIA.get(familia, {}).get(tamano, ()))
 
 
 def familia_de(designacion):
@@ -2557,7 +2586,9 @@ def _candidatas_auto(familia):
         raise geo.ErrorGeometria(f"Familia de rosca desconocida: {familia}")
     if FAMILIAS_ROSCA[familia]["conica"]:
         raise geo.ErrorGeometria("Las roscas cónicas no tienen tamaño automático sobre una cara cilíndrica.")
-    return [datos_rosca(k) for k, f in TABLA_ROSCAS.items() if f["familia"] == familia]
+    todas = [k for t in _POR_FAMILIA[familia].values() for k in t]
+    # las filas sumadas de Fusion no compiten en el tamaño automático: una receta vieja elige lo mismo que antes
+    return [datos_rosca(k) for k in ([k for k in todas if k not in _SUMADAS] or todas)]
 
 
 def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna=None):
@@ -2585,8 +2616,12 @@ def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna
     p, nrm = _normal_orientada(cara, (sup.FirstUParameter() + sup.LastUParameter()) / 2,
                                (sup.FirstVParameter() + sup.LastVParameter()) / 2)
     es_interna = (float(nrm @ (p - o - z * float((p - o) @ z))) < 0) if interna is None else bool(interna)
+    if familia and FAMILIAS_ROSCA.get(familia, {}).get("solo_exterior") and es_interna:
+        raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[familia]['nombre']}» es una rosca solo exterior: no va en un agujero.")
     if designacion:
         datos = datos_rosca(designacion)
+        if datos["solo_exterior"] and es_interna:
+            raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[datos['familia']]['nombre']}» es una rosca solo exterior: no va en un agujero.")
     else:
         clave_diam = "diametro_menor" if es_interna else "diametro"
         preferida = {"iso_metrica": "ISO métrica gruesa", "unificada": "Unificada UNC"}.get(familia or "iso_metrica")
@@ -2626,8 +2661,6 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
                                  "cosmética (o con Agujero › Roscado cónico).")
     flancos = _desfases_clase(datos, clase, info["interna"])["flancos"] + float(holgura)
     z0 = zmax - desfase - largo if invertir else zmin + desfase
-    # el perfil básico de 60° sin desfase es el de siempre (sin controles extra: misma geometría y mismo tiempo)
-    verificar = not (datos["familia"] in ("iso_metrica", "unificada") and flancos == 0)
 
     def cortar(extra):
         def armar_tramo(za, la):
@@ -2660,42 +2693,45 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             surco, torno = por_mitades()
             partido = True
         base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")   # cresta sin espesor: se tornea
-        resultado = _cortar_helicoidal(base, surco)   # sale validado y con el surco cortado
+        resultado = _cortar_helicoidal(base, surco, o, z)   # sale validado y con el surco cortado
         if not partido and rv._topologia(resultado)["no_manifold"]:
             # Un barrido chico y corrido puede dejar la arista de contacto entre la cresta torneada y el surco
             # compartida por 3 caras (M5×0,8 con holgura): el corte por mitades reubica esa arista.
             surco, torno = por_mitades()
             base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")
-            resultado = _cortar_helicoidal(base, surco)
-        if verificar:                                 # el corte no puede sacar más que el surco entero
-            quitado = geo.volumen_exacto(base) - geo.volumen_exacto(resultado)
-            if not 0 < quitado <= 1.01 * geo.volumen_exacto(surco):
-                raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
+            resultado = _cortar_helicoidal(base, surco, o, z)
         return resultado
 
     return _armar_surco(cortar)
 
 
-def _cortar_helicoidal(cuerpo, herramienta):
+def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
     """Corte con una herramienta helicoidal. El corte exacto a veces no hace nada sin avisar (las caras del
     surco rozan el cilindro del agujero: pasó con M10 y M20 interiores); con tolerancia difusa sale bien.
-    Éxito = forma válida y alguna cara del surco quedó en el resultado (antes se comparaban volúmenes del
-    cuerpo entero, la mitad del tiempo de la rosca: hallazgo L138)."""
-    caras_herr = geo.caras(herramienta)
-    for difuso in (0.0, 1e-5, 1e-4):
-        op = BRepAlgoAPI_Cut()
-        args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
-        args.Append(cuerpo)
-        herr.Append(herramienta)
-        op.SetArguments(args)
-        op.SetTools(herr)
-        op.SetRunParallel(geo.PARALELO)
-        if difuso:
-            op.SetFuzzyValue(difuso)
-        op.Build()
-        if (op.IsDone() and any(not op.IsDeleted(f) for f in caras_herr)
-                and geo.es_valida(op.Shape())):
-            return op.Shape()
+    Según el largo, las puntas del surco caen sobre la costura del cilindro y el corte falla, no saca nada o saca de
+    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): girar el surco sobre su eje solo corre la entrada de la rosca.
+    Éxito = forma válida que sacó material sin pasarse del volumen del surco (hay que medirlo: sin esto el corte salía vacío)."""
+    base, surco = geo.volumen_exacto(cuerpo), geo.volumen_exacto(herramienta)
+    eje_giro = gp_Ax1(_pnt(origen), _gdir(eje))
+    for giro in (0.0, 61.0, 137.0, 229.0):
+        t = gp_Trsf()
+        t.SetRotation(eje_giro, math.radians(giro))
+        tool = aplicar(herramienta, t) if giro else herramienta
+        caras_herr = geo.caras(tool)
+        for difuso in (0.0, 1e-5, 1e-4):
+            op = BRepAlgoAPI_Cut()
+            args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
+            args.Append(cuerpo)
+            herr.Append(tool)
+            op.SetArguments(args)
+            op.SetTools(herr)
+            op.SetRunParallel(geo.PARALELO)
+            if difuso:
+                op.SetFuzzyValue(difuso)
+            op.Build()
+            if (op.IsDone() and any(not op.IsDeleted(f) for f in caras_herr) and geo.es_valida(op.Shape())
+                    and 0.2 * surco < base - geo.volumen_exacto(op.Shape()) <= 1.01 * surco):
+                return op.Shape()
     raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
 
 
@@ -2878,6 +2914,151 @@ def unir_instancias(formas):
     if not hecho:
         raise geo.ErrorGeometria("La unión de las instancias del patrón falló en el kernel.")
     return geo.unificar_caras(op.Shape())
+
+
+def _mapa(formas):
+    mapa = geo.IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    for f in formas:
+        mapa.Add(f)
+    return mapa
+
+
+def _cajas(formas):
+    """Cajas holgadas de `formas`, una fila [x0, y0, z0, x1, y1, z1] por forma (las que tienen geometría)."""
+    cajas = [c for c in (geo._caja_occ(f, 1e-6, True) for f in formas) if c is not None]
+    esquinas = [(c.CornerMin(), c.CornerMax()) for c in cajas]
+    return np.array([(p.X(), p.Y(), p.Z(), q.X(), q.Y(), q.Z()) for p, q in esquinas]).reshape(-1, 6)
+
+
+def _solapa(caja, cajas):
+    return bool(np.any(np.all(caja[:3] <= cajas[:, 3:], axis=1) & np.all(cajas[:, :3] <= caja[3:], axis=1)))
+
+
+def _huecos_de(cara, imagen, aristas_nuevas):
+    """Contornos que la booleana le agregó a `cara` (su `imagen`), o None si le cambió otra cosa que agregar huecos."""
+    contornos = list(geo._explorar(imagen.Oriented(TopAbs_FORWARD), TopAbs_WIRE))
+    huecos = [w for w in contornos if all(aristas_nuevas.Contains(a) for a in geo._explorar(w, TopAbs_EDGE))]
+    return huecos if huecos and len(contornos) - len(huecos) == sum(1 for _ in geo._explorar(cara, TopAbs_WIRE)) else None
+
+
+def _copias_intercambiables(cara, relativas):
+    """¿Cada movimiento de `relativas` deja el plano de `cara` en su lugar, sin darlo vuelta?"""
+    sup = BRepAdaptor_Surface(cara)
+    if sup.GetType() != GeomAbs_Plane:
+        return False
+    plano = sup.Plane()
+    o, n = plano.Location(), plano.Axis().Direction()
+    return all(n.Transformed(t).Angle(n) < 1e-9 and abs(gp_Vec(o, o.Transformed(t)).Dot(gp_Vec(n))) < 1e-7 for t in relativas)
+
+
+def _cara_con_huecos(cara, contornos):
+    """`cara` con `contornos` agregados como huecos, en la orientación de `cara`."""
+    b, nueva, ubicacion = BRep_Builder(), TopoDS_Face(), TopLoc_Location()
+    b.MakeFace(nueva, BRep_Tool.Surface_s(cara, ubicacion), ubicacion, BRep_Tool.Tolerance_s(cara))
+    for w in geo._explorar(cara.Oriented(TopAbs_FORWARD), TopAbs_WIRE):
+        b.Add(nueva, w)
+    for w in contornos:
+        b.Add(nueva, w)
+        for a in geo._explorar(w, TopAbs_EDGE):
+            BRepLib.BuildPCurveForEdgeOnPlane_s(TopoDS.Edge(a), nueva)
+    return nueva.Oriented(cara.Orientation())
+
+
+def patronear_caras(cuerpo, copias, trsfs, operacion):
+    """«Optimizado» del patrón de operaciones (Compute Type › Optimized, «patterning feature faces»): el kernel corta o
+    une solo la primera copia y sus caras se repiten en las demás, sin booleana por copia ni una contra todas. Una
+    booleana con n herramientas crece más rápido que n (aristas nuevas sobre una misma cara): 100 prismas de 64 lados,
+    19,5 s con la herramienta unida y 5 s así; 100 agujeros, 0,124 s y 0,064 s.
+    `copias`: la herramienta ya movida con cada gp_Trsf de `trsfs`. Devuelve el cuerpo nuevo o None si las copias no son
+    intercambiables (lo que en Fusion da error con «operaciones divididas»; ahí la herramienta da el mismo resultado):
+    un movimiento con simetría o escala, un cuerpo de varios sólidos, una copia que hace más que abrir huecos en caras
+    planas o que no cae entera adentro de esas caras, sin que su caja toque otra cara, una arista u otra copia.
+    shortcut: solo caras planas, un agujero radial en un tubo va por la herramienta; sumar cilindros si un patrón lo pide."""
+    solidos = geo.solidos(cuerpo)
+    if (len(solidos) != 1 or len(geo.caras(solidos[0])) != len(geo.caras(cuerpo))
+            or any(t.IsNegative() or abs(t.ScaleFactor() - 1) > 1e-12 for t in trsfs)):
+        return None
+    args, herramientas = List_TopoDS_Shape(), List_TopoDS_Shape()
+    args.Append(cuerpo)
+    herramientas.Append(copias[0])
+    op = {"cortar": BRepAlgoAPI_Cut, "unir": BRepAlgoAPI_Fuse}[operacion]()
+    op.SetArguments(args)
+    op.SetTools(herramientas)
+    try:
+        op.Build()
+        primera = op.Shape() if op.IsDone() else None
+    except Exception:  # noqa: BLE001 — OCC lanza excepciones sin texto en los casos que no resuelve
+        primera = None
+    cascaras = list(geo._explorar(cuerpo, TopAbs_SHELL))
+    if primera is None or len(geo.solidos(primera)) != 1 or len(list(geo._explorar(primera, TopAbs_SHELL))) != len(cascaras):
+        return None
+
+    tocadas, imagenes = [], []
+    for cara in geo.caras(cuerpo):
+        imagen = geo.lista_occ(op.Modified(cara))
+        if op.IsDeleted(cara) or len(imagen) > 1:
+            return None
+        if imagen:
+            tocadas.append(TopoDS.Face(cara))
+            imagenes.append(TopoDS.Face(imagen[0]))
+    conocidas = _mapa(geo.caras(cuerpo) + imagenes)
+    nuevas = [c for c in geo.caras(primera) if not conocidas.Contains(c)]
+    aristas_nuevas = _mapa(a for c in nuevas for a in geo._explorar(c, TopAbs_EDGE))
+    huecos = [_huecos_de(c, i, aristas_nuevas) for c, i in zip(tocadas, imagenes, strict=True)]
+    inversa = trsfs[0].Inverted()
+    relativas = [t.Multiplied(inversa) for t in trsfs]
+    if not tocadas or None in huecos or not all(_copias_intercambiables(c, relativas) for c in tocadas):
+        return None
+
+    indice = _mapa(tocadas)
+    fijas = _cajas([c for c in geo.caras(cuerpo) if not indice.Contains(c)]
+                   + [a for c in tocadas for a in geo._explorar(c, TopAbs_EDGE)])
+    cajas = _cajas(copias)
+    if any(_solapa(c, fijas) or _solapa(c, cajas[i + 1:]) for i, c in enumerate(cajas)):
+        return None
+    for cara, lista in zip(tocadas, huecos, strict=True):
+        p = BRep_Tool.Pnt_s(TopoDS.Vertex(next(iter(geo._explorar(lista[0], TopAbs_VERTEX)))))
+        if any(BRepClass_FaceClassifier(cara, p.Transformed(t), 1e-6).State() != TopAbs_IN for t in relativas):
+            return None
+
+    contornos = [w for lista in huecos for w in lista]
+    paquete = geo.compuesto(contornos + nuevas)      # juntos: cada contorno sigue compartiendo aristas con sus caras
+    por_copia = []
+    for t in relativas:
+        movido = BRepBuilderAPI_Transform(paquete, t, True).Shape()
+        it, hijos = TopoDS_Iterator(movido, True, True), []
+        while it.More():
+            hijos.append(it.Value())
+            it.Next()
+        por_copia.append(hijos)
+    reemplazo, desde = {}, 0
+    for i, (cara, lista) in enumerate(zip(tocadas, huecos, strict=True), 1):
+        reemplazo[i] = _cara_con_huecos(cara, [w for hijos in por_copia for w in hijos[desde:desde + len(lista)]])
+        desde += len(lista)
+    b, resultado = BRep_Builder(), TopoDS_Solid()
+    b.MakeSolid(resultado)
+    for cascara in cascaras:
+        nueva, cambio = TopoDS_Shell(), False
+        b.MakeShell(nueva)
+        for cara in geo.caras(cascara):
+            i = indice.FindIndex(cara)
+            b.Add(nueva, reemplazo.get(i, cara))
+            cambio = cambio or i > 0
+        if cambio:
+            for hijos in por_copia:
+                for cara in hijos[len(contornos):]:
+                    b.Add(nueva, cara)
+        nueva.Closed(True)
+        b.Add(resultado, nueva)
+
+    v0 = geo.volumen_exacto(cuerpo)
+    esperado = v0 + len(trsfs) * (geo.volumen_exacto(primera) - v0)
+    herramienta = geo.compuesto(copias)
+    if (abs(geo.volumen_exacto(resultado) - esperado) > 1e-6 * max(1.0, v0)
+            or geo._problema_booleana(cuerpo, herramienta, operacion, resultado,
+                                      geo._volumenes_entrada(cuerpo, herramienta)) is not None):
+        return None
+    return resultado
 
 
 def _indices(n, simetrico):

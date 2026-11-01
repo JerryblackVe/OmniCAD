@@ -78,41 +78,54 @@ class Engranaje(Comando):
     AYUDA = ("Engranaje de evolvente recto o helicoidal (o un par que engrana, con su unión y vínculo de "
              "movimiento), cremallera o rueda de cadena ISO 606, sobre un plano y un punto.")
     CLASE_OP = OpEngranaje
+    TITULOS_MODO = ("tipo", {"engranaje": ("Engranaje", "engranaje_3d"), "cremallera": ("Cremallera", "engranaje_3d"),
+                             "rueda_cadena": ("Rueda de cadena", "engranaje_3d")})
 
     def __init__(self):
         self._ultima, self._ensamblar = None, False
 
     def campos(self, ctx):
+        # Los avanzados no llevan `grupo` (el rótulo de un grupo se asocia al último rótulo creado, de cualquier sección).
         campos = [
             Opciones("tipo", "Tipo", TIPOS),
-            Seleccion("plano", "Plano", {"plano", "cara_plana"}, minimo=0, ayuda="Sin selección: el plano XY."),
-            Seleccion("centro", "Centro", {"punto", "vertice"}, minimo=0, ayuda="Sin selección: el origen del plano."),
-            Opciones("cadena", "Cadena (ISO 606)", _CADENAS, "08B", visible_si=_es("rueda_cadena")),
-            Expresion("paso", "Paso de la cadena", "12.7 mm", visible_si=_cadena_propia),
-            Expresion("rodillo", "Diámetro del rodillo", "8.51 mm", visible_si=_cadena_propia),
-            Expresion("modulo", "Módulo", "2 mm", visible_si=_es("engranaje", "cremallera")),
-            Expresion("dientes", "Dientes", "20", ESCALAR),
-            Expresion("angulo_presion", "Ángulo de presión", "20 deg", ANGULO, visible_si=_es("engranaje", "cremallera")),
-            Expresion("ancho", "Ancho", "10 mm"),
-            Expresion("helice", "Ángulo de hélice", "0 deg", ANGULO, visible_si=_es("engranaje"),
+            Seleccion("plano", "Plano", {"plano", "cara_plana"}, minimo=0, ayuda="Sin selección: el plano XY.",
+                      grupo="Ubicación"),
+            Seleccion("centro", "Centro", {"punto", "vertice"}, minimo=0, ayuda="Sin selección: el origen del plano.",
+                      grupo="Ubicación"),
+            Opciones("cadena", "Cadena (ISO 606)", _CADENAS, "08B", visible_si=_es("rueda_cadena"),
+                     grupo="Dimensiones"),
+            Expresion("paso", "Paso de la cadena", "12.7 mm", visible_si=_cadena_propia, grupo="Dimensiones"),
+            Expresion("rodillo", "Diámetro del rodillo", "8.51 mm", visible_si=_cadena_propia, grupo="Dimensiones"),
+            Expresion("modulo", "Módulo", "2 mm", visible_si=_es("engranaje", "cremallera"), grupo="Dimensiones"),
+            Expresion("dientes", "Dientes", "20", ESCALAR, grupo="Dimensiones"),
+            Expresion("ancho", "Ancho", "10 mm", grupo="Dimensiones"),
+            Expresion("helice", "Ángulo de hélice", "0 deg", ANGULO, visible_si=_es("engranaje"), grupo="Dimensiones",
                       ayuda="0 = recto; positivo = hélice a derechas (en el par, el segundo va al revés)."),
-            Expresion("desplazamiento", "Desplazamiento de perfil (x)", "0", ESCALAR, visible_si=_es("engranaje")),
-            Expresion("holgura", "Holgura de fondo (× módulo)", "0.25", ESCALAR,
-                      visible_si=_es("engranaje", "cremallera")),
-            Expresion("juego", "Juego", "0 mm", visible_si=_es("engranaje", "cremallera"),
-                      ayuda="Juego entre dientes del par en el primitivo: cada diente adelgaza la mitad."),
-            Expresion("alto", "Alto hasta la línea primitiva", "10 mm", visible_si=_es("cremallera")),
-            Expresion("agujero", "Agujero central (Ø; 0 = sin)", "0 mm", visible_si=_es("engranaje", "rueda_cadena")),
-            Expresion("giro", "Giro", "0 deg", ANGULO),
-            Casilla("par", "Par de engranajes", visible_si=_es("engranaje"),
+            Expresion("alto", "Alto hasta primitivo", "10 mm", visible_si=_es("cremallera"), grupo="Dimensiones",
+                      ayuda="Alto de la cremallera hasta la línea primitiva."),
+            Expresion("agujero", "Agujero central", "0 mm", visible_si=_es("engranaje", "rueda_cadena"),
+                      grupo="Dimensiones", ayuda="Diámetro del agujero; 0 = sin agujero."),
+            Casilla("par", "Par de engranajes", visible_si=_es("engranaje"), grupo="Par",
                     ayuda="Crea también el segundo engranaje a la distancia entre centros, girado para que engranen."),
-            Expresion("dientes2", "Dientes del segundo", "40", ESCALAR, visible_si=_par),
-            Expresion("desplazamiento2", "Desplazamiento del segundo (x)", "0", ESCALAR, visible_si=_par),
-            Expresion("agujero2", "Agujero del segundo (Ø)", "0 mm", visible_si=_par),
-            Expresion("direccion", "Dirección del segundo", "0 deg", ANGULO, visible_si=_par),
+            Expresion("dientes2", "Dientes del 2.º", "40", ESCALAR, visible_si=_par, grupo="Par"),
+            Expresion("agujero2", "Agujero del 2.º", "0 mm", visible_si=_par, grupo="Par",
+                      ayuda="Diámetro del agujero del segundo; 0 = sin agujero."),
+            # --- Más opciones: valores por defecto sensatos que casi no se tocan
+            Expresion("angulo_presion", "Ángulo de presión", "20 deg", ANGULO, visible_si=_es("engranaje", "cremallera"),
+                      avanzado=True),
+            Expresion("desplazamiento", "Desplazamiento (x)", "0", ESCALAR, visible_si=_es("engranaje"), avanzado=True,
+                      ayuda="Desplazamiento de perfil: corrige el socavado y ajusta la distancia entre centros."),
+            Expresion("holgura", "Holgura de fondo", "0.25", ESCALAR, visible_si=_es("engranaje", "cremallera"),
+                      avanzado=True, ayuda="En múltiplos del módulo."),
+            Expresion("juego", "Juego", "0 mm", visible_si=_es("engranaje", "cremallera"), avanzado=True,
+                      ayuda="Juego entre dientes del par en el primitivo: cada diente adelgaza la mitad."),
+            Expresion("giro", "Giro", "0 deg", ANGULO, avanzado=True),
+            Expresion("desplazamiento2", "Desplazamiento del 2.º (x)", "0", ESCALAR, visible_si=_par, avanzado=True),
+            Expresion("direccion", "Dirección del 2.º", "0 deg", ANGULO, visible_si=_par, avanzado=True,
+                      ayuda="Ángulo, en el plano, de la recta que une los centros respecto del primer engranaje."),
         ]
         if ctx.op is None:              # al editar, el ensamblaje ya está (o no se quiso): no se vuelve a crear
-            campos.append(Casilla("ensamblar", "Crear unión y vínculo de movimiento", True, visible_si=_par,
+            campos.append(Casilla("ensamblar", "Crear unión y vínculo", True, visible_si=_par, grupo="Par",
                                   ayuda="Un componente por engranaje, una unión de revolución en cada eje y el "
                                         "vínculo de movimiento con la relación de dientes."))
         campos.append(Info("medidas", "Medidas", _medidas))
@@ -178,20 +191,24 @@ class Eje(Comando):
     CLASE_OP = OpEje
 
     def campos(self, ctx):
-        campos = [Seleccion("plano", "Plano", {"plano", "cara_plana"}, minimo=0, ayuda="Sin selección: el plano XY."),
+        campos = [Seleccion("plano", "Plano", {"plano", "cara_plana"}, minimo=0, ayuda="Sin selección: el plano XY.",
+                            grupo="Ubicación"),
                   Seleccion("centro", "Comienzo", {"punto", "vertice"}, minimo=0,
-                            ayuda="Sin selección: el origen del plano."),
+                            ayuda="Sin selección: el origen del plano.", grupo="Ubicación"),
                   Entero("n", "Cantidad de tramos", 3, 1, MAX_TRAMOS)]
         for i, (d, largo, ini, fin) in enumerate(_DEFECTOS, 1):
+            g = f"Tramo {i}"            # cada tramo es una unidad: diámetro, largo y los remates de sus dos extremos
             campos += [
-                Expresion(f"d{i}", f"Tramo {i}: diámetro", d, visible_si=_hasta(i)),
-                Expresion(f"l{i}", f"Tramo {i}: largo", largo, visible_si=_hasta(i)),
-                Opciones(f"ini{i}", f"Tramo {i}: remate al inicio", en.REMATES, ini, visible_si=_hasta(i)),
-                Expresion(f"mi{i}", f"Tramo {i}: medida al inicio", "1 mm", visible_si=_con_remate(i, "ini")),
-                Opciones(f"fin{i}", f"Tramo {i}: remate al final", en.REMATES, fin, visible_si=_hasta(i)),
-                Expresion(f"mf{i}", f"Tramo {i}: medida al final", "1 mm", visible_si=_con_remate(i, "fin")),
+                Expresion(f"d{i}", "Diámetro", d, visible_si=_hasta(i), grupo=g),
+                Expresion(f"l{i}", "Largo", largo, visible_si=_hasta(i), grupo=g),
+                Opciones(f"ini{i}", "Remate inicial", en.REMATES, ini, visible_si=_hasta(i), grupo=g),
+                Expresion(f"mi{i}", "Medida inicial", "1 mm", visible_si=_con_remate(i, "ini"), grupo=g),
+                Opciones(f"fin{i}", "Remate final", en.REMATES, fin, visible_si=_hasta(i), grupo=g),
+                Expresion(f"mf{i}", "Medida final", "1 mm", visible_si=_con_remate(i, "fin"), grupo=g),
             ]
-        return campos + [campo_operacion(), campo_objetivos()]
+        operacion, objetivos_ = campo_operacion(), campo_objetivos()
+        operacion.grupo = objetivos_.grupo = "Resultado"       # sin rótulo, quedarían bajo el último tramo
+        return campos + [operacion, objetivos_]
 
     def construir(self, v, ctx):
         n = max(1, min(MAX_TRAMOS, int(v.get("n") or 1)))

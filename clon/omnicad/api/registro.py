@@ -270,8 +270,10 @@ def _argumentos(h, args):
     validos = list(h.tipos)
     desconocidos = [k for k in args if k not in h.tipos]
     if desconocidos:
+        parecidos = [f"«{k}» → «{c[0]}»" for k in desconocidos if (c := difflib.get_close_matches(str(k), validos, 1, 0.5))]
+        pistas = [f"¿Quisiste decir {', '.join(parecidos)}?"] if parecidos else []     # H-49: body frente a bodies
         raise error("INVALID_ARGUMENTS", f"Argumentos desconocidos para {h.nombre}: {', '.join(map(str, desconocidos))}.",
-                    f"Argumentos válidos: {', '.join(validos) or '(ninguno)'}.", f"Firma: {_firma(h)}")
+                    *pistas, f"Argumentos válidos: {', '.join(validos) or '(ninguno)'}.", f"Firma: {_firma(h)}")
     faltan = [k for k in h.esquema["required"] if k not in args]
     if faltan:
         raise error("INVALID_ARGUMENTS", f"Faltan argumentos obligatorios de {h.nombre}: {', '.join(faltan)}.",
