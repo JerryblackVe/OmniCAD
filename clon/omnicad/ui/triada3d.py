@@ -6,7 +6,7 @@ ratón en la vista 3D. La tríada tiene tres ejes (rojo X, verde Y, azul Z), tre
   - arrastrar un eje mueve la tríada a lo largo de él; arrastrar un asa de giro la rota alrededor de ese eje
     («Restablecer orientación» la vuelve a los ejes del boceto);
   - cada clic de una herramienta pone un punto en el plano activo (o sobre un punto 3D cercano) y la tríada se muda
-    al último punto, como en Fusion.
+    al último punto, como en Fusion; también sobre un eje o un asa de giro: esos solo se activan al arrastrar.
 Herramientas: seleccionar (arrastra puntos y curvas 3D en el plano activo, con el solver 3D detrás), línea (encadena),
 spline (Intro o doble clic la termina), punto, arco de 3 puntos (inicio, fin, paso), círculo (centro y radio),
 rectángulo (2 esquinas), elipse (centro, eje mayor, punto del menor), cónica (inicio, fin, vértice) y texto (un clic).
@@ -20,12 +20,16 @@ from PySide6.QtCore import QEvent, QObject, Qt
 
 from ..restricciones import ErrorBoceto
 from ..restricciones import boceto3d as b3
+from ..restricciones import inferencia3d as inf3
 
 PLANOS = {"xy": (0, 1, 2), "yz": (1, 2, 0), "zx": (2, 0, 1)}       # (eje u, eje v, normal) como filas de R
 COLORES = ((0.9, 0.2, 0.2), (0.2, 0.75, 0.25), (0.2, 0.4, 1.0))
 PUNTOS_HERRAMIENTA = {"linea": 2, "punto": 1, "arco": 3, "circulo": 2, "rectangulo": 2, "elipse": 3, "conica": 3,
                       "texto": 1}
 _ASA_PX, _LARGO_PX = 10, 90
+_CLIC_PX = 4                   # hasta cuántos px de temblor un clic sobre un asa sigue siendo un clic
+_AYUDA_PX = 10                 # a cuántos px del cursor se engancha una ayuda de dibujo (BOC-47)
+_COLOR_AYUDA = (0.2, 0.85, 0.95)
 
 
 def _giro(eje, angulo):
@@ -113,7 +117,12 @@ class Interaccion3D(QObject):
         super().__init__()
         self.modo, self.triada = modo, Triada()
         self.picks, self.seleccion, self.arrastre, self.cursor = [], [], None, None
+        self._clic_asa = None              # dónde se presionó un asa con una herramienta de dibujo, hasta que haya arrastre
         self.activo = False
+        self.ayuda = None                  # `Ayuda3D` bajo el cursor: alineación, punto medio, intersección, tangente…
+        self._proy = None                  # (clave, `Proyeccion`): el boceto 3D visto desde el plano activo
+        self.uniones = {}                  # punto del clic (redondeado) → restricciones 3D que deja su ayuda (BOC-74)
+        self._ayuda_clic = None
 
     # ------------------------------------------------------------ atajos al modo boceto
     @property
@@ -126,7 +135,8 @@ class Interaccion3D(QObject):
 
     def activar(self, valor):
         self.activo = bool(valor)
-        self.picks, self.arrastre = [], None
+        self.picks, self.arrastre, self.uniones = [], None, {}
+        self._sin_ayuda()
         self.dibujar()
 
     def reiniciar(self):
@@ -203,11 +213,63 @@ class Interaccion3D(QObject):
         return None
 
     def _punto_cursor(self, pos):
-        """Punto del boceto bajo el cursor: un punto 3D existente si está cerca, si no el plano activo."""
+        """Punto del boceto bajo el cursor: un punto 3D existente si está cerca; si no, el del plano activo, ajustado a la
+        ayuda de dibujo que haya (medio, intersección, tangente, alineación)."""
+        self._ayuda_clic = None
         pid = self.punto_en(pos)
         if pid is not None:
             return np.array(b3.datos(self.modo.boceto)["puntos"][pid], float)
-        return self.triada.punto_en_plano(*self._rayo(pos))
+        p = self.triada.punto_en_plano(*self._rayo(pos))
+        self._ayuda_clic = ayuda = self._ayuda_en(p, pos)
+        return ayuda.punto if ayuda is not None else p
+
+    # ------------------------------------------------------------ ayudas de dibujo (BOC-47)
+    def _proyeccion(self):
+        """El boceto 3D visto desde el plano activo (ver `restricciones/inferencia3d.py`): se rehace solo si cambió la
+        tríada o la geometría."""
+        u, v, _n = self.triada.base()
+        g = b3.datos(self.modo.boceto)
+        clave = (tuple(np.round(self.triada.origen, 9)), tuple(np.round(u, 9)), tuple(np.round(v, 9)),
+                 tuple((k, tuple(p)) for k, p in g["puntos"].items()),
+                 tuple((k, c["tipo"], tuple(c["puntos"]), c.get("radio"), tuple(c.get("normal", ())),
+                        tuple(c.get("eje_mayor", ())), c.get("radio_menor")) for k, c in g["curvas"].items()))
+        if self._proy is None or self._proy[0] != clave:
+            self._proy = (clave, inf3.proyectar(self.modo.boceto, self.modo.plano, self.triada.origen, u, v))
+        return self._proy[1]
+
+    def _ayuda_en(self, p, pos):
+        """La mejor ayuda de dibujo del cursor en `pos` (`p`: su punto en el plano activo), solo con una herramienta de
+        dibujo. shortcut: la tolerancia en mm es la del objetivo de la vista; en perspectiva varía con la profundidad."""
+        if self.herramienta in (None, "seleccionar"):
+            return None
+        tol = _AYUDA_PX / max(self.visor.px_por_mm(), 1e-9)
+        lista = inf3.ayudas(self._proyeccion(), p, tol, self.picks[-1] if self.picks else None, previa=self.ayuda,
+                            rayo=self._rayo(pos))
+        return lista[0] if lista else None
+
+    def _sin_ayuda(self):
+        self.ayuda = None
+        lz = self.modo.lienzo
+        if lz is not None and lz.ayuda_3d is not None:
+            lz.ayuda_3d = None
+            lz.update()
+
+    def _actualizar_ayuda(self, pos):
+        """Con el ratón quieto sobre el plano activo: busca la ayuda y le avisa al lienzo (marcador y etiqueta)."""
+        nueva = None
+        if self.punto_en(pos) is None and self.asa_en(pos) is None:
+            nueva = self._ayuda_en(self.triada.punto_en_plano(*self._rayo(pos)), pos)
+        q = None if nueva is None else self.a_pantalla(nueva.punto)
+        if q is None:
+            nueva = None
+        cambio = (nueva is None) != (self.ayuda is None) or (nueva is not None and (
+            nueva.tipo != self.ayuda.tipo or not np.allclose(nueva.punto, self.ayuda.punto)))
+        self.ayuda = nueva
+        lz = self.modo.lienzo
+        lz.ayuda_3d = None if nueva is None else (q, nueva.tipo, nueva.etiqueta)
+        if cambio:
+            lz.update()
+        return cambio
 
     # ------------------------------------------------------------ eventos
     def eventFilter(self, obj, ev):
@@ -227,25 +289,35 @@ class Interaccion3D(QObject):
     def presionar(self, pos, doble=False):
         if doble:
             return self._terminar_spline() or True
-        asa = self.asa_en(pos)
+        asa, inicio = self.asa_en(pos), None
         tri = self.triada
-        if asa is not None and asa[0] == "plano":
-            tri.plano = asa[1]
-        elif asa is not None:
+        if asa is not None and asa[0] != "plano":
             o, d = self._rayo(pos)
             inicio = tri.parametro_en_eje(asa[1], o, d) if asa[0] == "eje" else tri.angulo_en_giro(asa[1], o, d)
-            if inicio is not None:
-                self.arrastre = (asa, inicio, tri.origen.copy(), tri.R.copy())
+        if asa is not None and asa[0] == "plano":
+            tri.plano = asa[1]
+        elif inicio is not None:
+            self.arrastre = (asa, inicio, tri.origen.copy(), tri.R.copy())
+            self._clic_asa = pos if self.herramienta not in (None, "seleccionar") else None
         elif self.herramienta == "seleccionar":
             self._elegir(pos)
         elif self.herramienta:
-            p = self._punto_cursor(pos)
-            if p is not None:
-                self.picks.append(p)
-                tri.origen = np.array(p, float)
-                self._crear()
+            self._poner_punto(pos)
         self.dibujar()
         return True
+
+    def _poner_punto(self, pos):
+        p = self._punto_cursor(pos)
+        if p is None:
+            return
+        u = inf3.uniones(self._proyeccion(), self._ayuda_clic)
+        if u["punto"] or u["curva"]:
+            self.uniones[self._clave(p)] = u
+        else:
+            self.uniones.pop(self._clave(p), None)         # un clic sin ayuda no hereda la de uno anterior en ese lugar
+        self.picks.append(p)
+        self.triada.origen = np.array(p, float)
+        self._crear()
 
     def _elegir(self, pos):
         pid = self.punto_en(pos)
@@ -264,9 +336,13 @@ class Interaccion3D(QObject):
     def mover(self, pos):
         self.cursor = pos
         if self.arrastre is None:
-            if self.picks:
+            if self._actualizar_ayuda(pos) or self.picks:
                 self.dibujar()
             return False                     # sin arrastre, el lienzo sigue viendo el ratón (navegación, hover)
+        if self._clic_asa is not None:
+            if (pos - self._clic_asa).manhattanLength() <= _CLIC_PX:
+                return True
+            self._clic_asa = None
         o, d = self._rayo(pos)
         tri = self.triada
         if self.arrastre[0] == "geometria":
@@ -297,8 +373,11 @@ class Interaccion3D(QObject):
         if self.arrastre is None:
             return False
         geometria = self.arrastre[0] == "geometria"
+        clic, self._clic_asa = self._clic_asa, None
         self.arrastre = None
-        if geometria:
+        if clic is not None:
+            self._poner_punto(clic)
+        elif geometria:
             lz = self.modo.lienzo
             if lz.historial and lz.historial[-1] == lz.b.a_dict():
                 lz.historial.pop()              # un clic sin mover no deja un paso vacío de deshacer
@@ -309,8 +388,8 @@ class Interaccion3D(QObject):
         return True
 
     def tecla(self, k):
-        if k == Qt.Key_Escape and (self.picks or self.seleccion):
-            self.picks, self.seleccion = [], []
+        if k == Qt.Key_Escape and (self.picks or self.seleccion or self._clic_asa is not None):
+            self.picks, self.seleccion, self._clic_asa = [], [], None      # Esc con el botón sobre un asa: al soltar no se pone el punto
         elif k in (Qt.Key_Return, Qt.Key_Enter) and self.herramienta == "spline":
             self._terminar_spline()
         elif k == Qt.Key_Alt:
@@ -321,20 +400,45 @@ class Interaccion3D(QObject):
         return True
 
     # ------------------------------------------------------------ crear geometría
-    def _resolver(self):
-        """Solver 3D con las cotas actuales (lo mismo que hará el paso del boceto)."""
+    def _valores_cotas(self):
+        """{id: medida} de las cotas 3D con los parámetros de ahora, o None si una expresión no se puede evaluar."""
         b = self.modo.boceto
         try:
-            valores = {k: float(self.modo.lienzo.evaluar(c["expresion"])) for k, c in b3.datos(b)["cotas"].items()}
+            return {k: float(self.modo.lienzo.evaluar(c["expresion"])) for k, c in b3.datos(b)["cotas"].items()}
         except Exception:  # noqa: BLE001 — una expresión rota no frena el arrastre; el paso la avisará
-            return
-        b3.resolver(b, valores)
+            return None
 
-    def _aplicar(self, funcion):
+    def _resolver(self):
+        """Solver 3D con las cotas actuales (lo mismo que hará el paso del boceto)."""
+        valores = self._valores_cotas()
+        if valores is not None:
+            b3.resolver(self.modo.boceto, valores)
+
+    @staticmethod
+    def _clave(p):
+        return tuple(np.round(np.asarray(p, float), 6) + 0.0)
+
+    def _dejar_uniones(self, picks, nuevo):
+        """Las restricciones que dejaron las ayudas en los clics de lo recién creado (`nuevo`: id de la línea o del punto):
+        al punto de cada clic y, con la línea, las de su último clic (perpendicular, eje). Solo las que ya se cumplen."""
+        b = self.modo.boceto
+        g, valores = b3.datos(b), self._valores_cotas()
+        if valores is None:
+            return
+        nuevo = None if isinstance(nuevo, list) else nuevo        # un rectángulo: sus clics se unen por posición
+        for i, p in enumerate(picks):
+            u = self.uniones.get(self._clave(p))
+            if not u:
+                continue
+            pid = nuevo if nuevo in g["puntos"] else next((k for k, q in g["puntos"].items() if math.dist(q, p) < 1e-6), None)
+            linea = nuevo if i == len(picks) - 1 and g["curvas"].get(nuevo, {}).get("tipo") == "linea" else None
+            b3.aplicar_uniones(b, u, pid, linea, valores)
+
+    def _aplicar(self, funcion, picks=()):
         lz = self.modo.lienzo
         lz._instantanea()                   # Ctrl+Z del boceto también deshace lo 3D
         try:
-            funcion(self.modo.boceto)
+            self._dejar_uniones(picks, funcion(self.modo.boceto))
         except ErrorBoceto as e:
             lz._restaurar(lz.historial.pop())
             self.modo.v.mensaje(f"Boceto 3D: {e}", 7000)
@@ -349,7 +453,7 @@ class Interaccion3D(QObject):
             return
         u, v, n = self.triada.base()
         if h == "linea":
-            self._aplicar(lambda b: b3.agregar_linea(b, p[0], p[1]))
+            self._aplicar(lambda b: b3.agregar_linea(b, p[0], p[1]), p)
             self.picks = [p[1]]               # la línea sigue desde el último punto (Esc corta)
             return
         if h == "punto":
@@ -370,7 +474,7 @@ class Interaccion3D(QObject):
         else:
             pal = self.modo.paleta
             accion = lambda b: b3.agregar_texto(b, p[0], pal.texto3d.text(), pal.altura3d.value(), u, v)  # noqa: E731
-        self._aplicar(accion)
+        self._aplicar(accion, p)
         self.picks = []
 
     def _terminar_spline(self):
@@ -378,7 +482,7 @@ class Interaccion3D(QObject):
             return False
         pts = list(self.picks)
         self.picks = []
-        self._aplicar(lambda b: b3.agregar_spline(b, pts))
+        self._aplicar(lambda b: b3.agregar_spline(b, pts), pts)
         self.dibujar()
         return True
 
@@ -407,9 +511,13 @@ class Interaccion3D(QObject):
         prims.append(("puntos", np.array([w(tri.origen)], np.float32), (0.9, 0.9, 0.9), 8))
         guia = list(self.picks)
         if self.picks and self.cursor is not None:
-            c = self.triada.punto_en_plano(*self._rayo(self.cursor))
+            c = self.ayuda.punto if self.ayuda is not None else self.triada.punto_en_plano(*self._rayo(self.cursor))
             if c is not None:
                 guia.append(c)
+        if self.ayuda is not None:                    # las guías de la ayuda (alineación, tangente…) y el punto al que engancha
+            for a, c in self.ayuda.guias:
+                prims.append(("lineas", np.array([w(a), w(c)], np.float32), _COLOR_AYUDA, 1.5))
+            prims.append(("puntos", np.array([w(self.ayuda.punto)], np.float32), _COLOR_AYUDA, 9))
         if len(guia) >= 2:
             pts = np.array([w(p) for p in guia], np.float32)
             prims.append(("lineas", np.repeat(pts, 2, axis=0)[1:-1], (1.0, 0.6, 0.1), 1.5))

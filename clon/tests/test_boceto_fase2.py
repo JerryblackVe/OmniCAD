@@ -31,8 +31,7 @@ def test_b99_proyeccion_conserva_circulos_distintos_y_no_repite_existentes(centr
     assert len(ids) == len(b.curvas) == 2
     assert b.geometria() == [("circulo", ids[0], pytest.approx((3, 5)), pytest.approx(4)),
                             ("circulo", ids[1], pytest.approx(centro), pytest.approx(radio))]
-    assert b.agregar_proyeccion(primeras + otras) == []
-    assert len(b.curvas) == 2
+    assert b.agregar_proyeccion(primeras + otras) == ids and len(b.curvas) == 2      # se reutilizan, sin duplicar
 
 
 def test_b99_proyectar_caja_sigue_deduplicando_lineas():
@@ -43,7 +42,7 @@ def test_b99_proyectar_caja_sigue_deduplicando_lineas():
     assert len(ids) == len(b.curvas) == 4
     assert all(c.tipo == "linea" and c.proyectada for c in b.curvas.values())
     assert sorted(b.medir_cota("distancia", [i]) for i in ids) == pytest.approx([10, 10, 20, 20])
-    assert b.agregar_proyeccion(primitivas, puntos) == []
+    assert b.agregar_proyeccion(primitivas, puntos) == ids and len(b.curvas) == 4      # se reutilizan, sin duplicar
     assert grados_de_libertad(b) == 0
 
 

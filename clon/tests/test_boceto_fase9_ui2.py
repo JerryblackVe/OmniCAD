@@ -54,8 +54,8 @@ def _aceptar(lz, *valores):
     lz.entrada.aceptado.emit([c.text() for c in lz.entrada.campos])
 
 
-def _casilla(paleta, etiqueta):
-    form = paleta.form_contexto
+def _casilla(tarjeta, etiqueta):
+    form = tarjeta.form_contexto
     for fila in range(form.rowCount()):
         nombre = form.itemAt(fila, QFormLayout.ItemRole.LabelRole)
         if nombre and nombre.widget().text() == etiqueta:
@@ -71,10 +71,10 @@ def test_match_topology_casilla_limita_y_avisa(lienzo, direccion):
     lz.resolver()
     lz.set_herramienta("desfase")
     lz.opciones["direccion_desfase"] = direccion
-    paleta = modo_boceto.PaletaBoceto(lz)
-    paleta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
-    paleta.set_herramienta("desfase", opciones=lz.opciones)
-    casilla = _casilla(paleta, "Match Topology")
+    tarjeta = modo_boceto.TarjetaHerramienta(lz)
+    tarjeta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
+    tarjeta.set_herramienta("desfase", opciones=lz.opciones)
+    casilla = _casilla(tarjeta, "Match Topology")
     assert isinstance(casilla, QCheckBox) and not casilla.isChecked()
     casilla.setChecked(True)
     mensajes = []
@@ -155,12 +155,12 @@ def test_revincular_desde_dialogo_con_clic_en_cuerpo(lienzo, giro):
 @pytest.mark.parametrize("vinculo", [True, False])
 def test_contorno_exterior_casilla_cambia_el_perfil(lienzo, vinculo):
     lz = lienzo
-    paleta = modo_boceto.PaletaBoceto(lz)
+    tarjeta = modo_boceto.TarjetaHerramienta(lz)
     lz.opciones["vinculo_proyeccion"] = vinculo
-    paleta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
+    tarjeta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
     lz.set_herramienta("perfil_giratorio")
-    paleta.set_herramienta("perfil_giratorio", opciones=lz.opciones)
-    casilla = _casilla(paleta, "Solo contorno exterior")
+    tarjeta.set_herramienta("perfil_giratorio", opciones=lz.opciones)
+    casilla = _casilla(tarjeta, "Solo contorno exterior")
     assert casilla.isChecked()
     forma = geo.booleano(geo.caja(20, 20, 10, (-10, -10, 0)), geo.cilindro(3, 10), "cortar")
     assert lz.perfil_giratorio_forma(forma, REF)
@@ -187,10 +187,10 @@ def test_proyectar_eje_cinta_y_casilla(lienzo):
     assert lz.b.proyecciones[0]["refs"] == [{"tipo": "eje", "id": "Z"}]
     lz.deshacer()
     lz.set_herramienta("perfil_giratorio")
-    paleta = modo_boceto.PaletaBoceto(lz)
-    paleta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
-    paleta.set_herramienta("perfil_giratorio", opciones=lz.opciones)
-    casilla = _casilla(paleta, "Proyectar eje")
+    tarjeta = modo_boceto.TarjetaHerramienta(lz)
+    tarjeta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
+    tarjeta.set_herramienta("perfil_giratorio", opciones=lz.opciones)
+    casilla = _casilla(tarjeta, "Proyectar eje")
     assert not casilla.isChecked()
     casilla.setChecked(True)
     assert lz.perfil_giratorio_forma(geo.cilindro(5, 30), REF)
@@ -261,11 +261,11 @@ def modo_texto(app):
     lz.editar_parametro_texto = modo._editar_parametro_texto
     lz.valores_parametros = lambda: ventana.doc.parametros.valores()
     modo.lienzo, modo.boceto = lz, b
-    modo.paleta, modo.caracter = modo_boceto.PaletaBoceto(), modo_boceto.PanelCaracter()
+    modo.paleta, modo.caracter, modo.tarjeta = modo_boceto.PaletaBoceto(), modo_boceto.PanelCaracter(), modo_boceto.TarjetaHerramienta()
     modo.caracter.cambio.connect(modo._ajuste)
     lz.texto_en_edicion.connect(modo._opciones_de_texto)
     yield modo, s, tid
-    for w in (lz, modo.paleta, modo.caracter, ventana):
+    for w in (lz, modo.paleta, modo.caracter, modo.tarjeta, ventana):
         w.close()
         w.deleteLater()
     app.processEvents()

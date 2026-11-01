@@ -31,10 +31,10 @@ def modo_texto():
     lz.editar_parametro_texto = modo._editar_parametro_texto
     lz.valores_parametros = lambda: ventana.doc.parametros.valores()
     modo.lienzo, modo.boceto = lz, b
-    modo.paleta, modo.caracter = modo_boceto.PaletaBoceto(), modo_boceto.PanelCaracter()
+    modo.paleta, modo.caracter, modo.tarjeta = modo_boceto.PaletaBoceto(), modo_boceto.PanelCaracter(), modo_boceto.TarjetaHerramienta()
     lz.texto_en_edicion.connect(modo._opciones_de_texto)
     yield s, lz, tid
-    for w in (lz, modo.paleta, modo.caracter, ventana):
+    for w in (lz, modo.paleta, modo.caracter, modo.tarjeta, ventana):
         w.close()
         w.deleteLater()
     app.processEvents()

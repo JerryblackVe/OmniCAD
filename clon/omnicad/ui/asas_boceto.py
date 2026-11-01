@@ -27,7 +27,8 @@ _TIPOS = {"long": LONGITUD, "ang": ANGULO, "esc": ESCALAR, "int": ESCALAR}
 
 class Asa2D:
     """Un asa de la vista: `campo` es el índice de la caja que escribe; `tipo`: "long", "ang", "esc" o "int" (entero).
-    `ancla(v)` (opcional) es de dónde sale la línea guía hacia el asa."""
+    `ancla(v)` (opcional) es de dónde sale la línea guía hacia el asa. Un asa de dos cajas (p. ej. ΔX y ΔY de Mover) lleva
+    `campo=(i, j)` y su `valor` devuelve `(a, b)`; las dos cajas son del mismo `tipo`."""
 
     def __init__(self, campo, posicion, valor, ancla=None, tipo="long", minimo=None, maximo=None, ayuda=""):
         self.campo, self.posicion, self.valor, self.ancla = campo, posicion, valor, ancla
@@ -162,19 +163,23 @@ class GestorAsas2D:
             nuevo = asa.valor(self.l.a_mm(pos), v, *self._inicio)
         except Exception:  # noqa: BLE001
             return
-        if nuevo is None or not math.isfinite(nuevo):
+        if nuevo is None or not all(math.isfinite(x) for x in (nuevo if isinstance(nuevo, tuple) else (nuevo,))):
             return
         if asa.minimo is not None:
             nuevo = max(asa.minimo, nuevo)
         if asa.maximo is not None:
             nuevo = min(asa.maximo, nuevo)
-        caja = self.entrada.campos[asa.campo]
-        caja.setText(str(int(round(nuevo))) if asa.tipo == "int" else formato.numero(nuevo, angular=asa.tipo == "ang"))
+        for caja, x in zip(self._cajas(asa), nuevo if isinstance(nuevo, tuple) else (nuevo,), strict=True):
+            caja.setText(str(int(round(x))) if asa.tipo == "int" else formato.numero(x, angular=asa.tipo == "ang"))
+
+    def _cajas(self, asa):
+        indices = asa.campo if isinstance(asa.campo, tuple) else (asa.campo,)
+        return [self.entrada.campos[i] for i in indices]
 
     def soltar(self):
         if self._arrastre is None:
             return
-        caja = self.entrada.campos[self.asas[self._arrastre].campo]
+        caja = self._cajas(self.asas[self._arrastre])[0]
         self._arrastre = None
         caja.setFocus()
         caja.selectAll()
@@ -284,6 +289,26 @@ def asas_escala(l, ids, base):
         return _aplicar(polis, lambda q: (base[0] + f * (q[0] - base[0]), base[1] + f * (q[1] - base[1])))
     return ([Asa2D(0, lambda v: _fuera_de(v[0], base, r), factor, ancla=lambda v: base, tipo="esc", minimo=1e-3,
                    ayuda="Factor de escala")], ["esc"], previa)
+
+
+def asas_mover(l, ids, base):
+    """(asas, tipos, previa) de las cajas [ΔX, ΔY, Ángulo] de Mover/copiar (Fusion: el manipulador de la vista). El primer
+    asa está donde cae el punto base (arrastrarla escribe ΔX y ΔY a la vez); el segundo gira alrededor de ese punto, a un
+    radio que cubre la geometría elegida. La geometría gira alrededor de `base` y después se corre (dx, dy)."""
+    radio = max(max((math.dist(q, base) for poli in polilineas_de(l, ids) for q in poli), default=0.0), 15.0)
+
+    def destino(xy, v, v0=None, xy0=None):
+        return (xy[0] - base[0], xy[1] - base[1])
+
+    def angulo(xy, v, v0=None, xy0=None):
+        g = math.degrees(math.atan2(xy[1] - base[1] - v[1], xy[0] - base[0] - v[0]))
+        return g + 360.0 * round((v[2] - g) / 360.0) if abs(v[2]) > 180.0 else g
+    return ([Asa2D((0, 1), lambda v: (base[0] + v[0], base[1] + v[1]), destino, ancla=lambda v: base, tipo="long",
+                   ayuda="Mover (ΔX y ΔY)"),
+             Asa2D(2, lambda v: (base[0] + v[0] + radio * math.cos(math.radians(v[2])),
+                                 base[1] + v[1] + radio * math.sin(math.radians(v[2]))), angulo,
+                   ancla=lambda v: (base[0] + v[0], base[1] + v[1]), tipo="ang", ayuda="Girar")],
+            ["long", "long", "ang"], None)
 
 
 class _Probador:

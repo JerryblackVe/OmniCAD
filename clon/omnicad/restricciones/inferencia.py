@@ -13,7 +13,7 @@ from .boceto import (CON_CENTRO, Boceto, caja_primitiva, dominio, evaluar_primit
 
 # Familias que se pueden encender o apagar (parámetro `tipos`).
 TIPOS_INFERENCIA = ("medio", "interseccion", "tangente", "perpendicular", "curva", "alineacion", "horizontal",
-                    "vertical", "paralela")
+                    "vertical", "paralela", "igual")
 FACTOR_HISTERESIS = 1.4        # un candidato que ya estaba activo sigue hasta esta fracción más lejos de la tolerancia
 RADIO_DIRECCION = 25           # shortcut: paralela/perpendicular/colineal solo con líneas a menos de 25 tolerancias del cursor
 TOPE_CRUCES = 8                # shortcut: solo se cruzan las 8 curvas más cercanas al cursor; subir si falta alguna
@@ -142,10 +142,94 @@ def _tangencias(prim, base):
             yield evaluar_primitiva(prim, min(parametro, fin))[0]
 
 
+def _tangente_circulo(prim, cid, base, cursor, tol):
+    """Radio que deja tangente (por fuera, por dentro o envolviéndolo) un círculo de centro `base` a la
+    circunferencia `prim` (círculo o arco), si el cursor está a `tol` de él; 0 o 1 candidata."""
+    centro, radio = prim[2], prim[3]
+    d, rc = math.dist(base, centro), math.dist(base, cursor)
+    if d <= 1e-9 or rc <= 1e-9:
+        return []
+    mejor = min(((abs(rc - r), caso, r, signo) for caso, r, signo in
+                 (("fuera", d - radio, 1), ("dentro", radio - d, 1), ("envuelve", d + radio, -1)) if r > 1e-9),
+                default=None)
+    if mejor is None or mejor[0] > tol:
+        return []
+    distancia, caso, r, signo = mejor
+    contacto = (centro[0] + signo * radio * (base[0] - centro[0]) / d, centro[1] + signo * radio * (base[1] - centro[1]) / d)
+    if prim[0] == "arco" and mas_cercano(prim, contacto)[1] > 1e-6:
+        return []                                   # el contacto cae fuera del tramo dibujado del arco
+    xy = (base[0] + r * (cursor[0] - base[0]) / rc, base[1] + r * (cursor[1] - base[1]) / rc)
+    return [Inferencia("tangente_circulo", xy, cid, ("tangente", cid), [(base, xy), (centro, contacto)],
+                       "Tangente al círculo", distancia, 2, (cid, caso))]
+
+
+def _iguales(b, indice, cursor, tol, base, excluidos, centro):
+    """Largo igual al de una línea cercana (o radio igual al de un círculo o arco cercano si `centro`): ajusta el
+    cursor a esa medida sobre el rayo desde la base y deja `igual`."""
+    medida_cursor = math.dist(base, cursor)
+    if medida_cursor <= 1e-9:
+        return []
+    L = indice.lineas
+    if centro:
+        cercanas = set(indice.curvas_cerca(cursor, tol * RADIO_DIRECCION)) | set(indice.curvas_cerca(base, tol * RADIO_DIRECCION))
+        medidas = [(indice.prims[cid][0][3], cid) for cid in sorted(cercanas) if b.curvas[cid].tipo in ("circulo", "arco")]
+    elif len(L):
+        largo = np.hypot(L[:, 3] - L[:, 1], L[:, 4] - L[:, 2])
+        cerca = (np.hypot(cursor[0] - (L[:, 1] + L[:, 3]) / 2, cursor[1] - (L[:, 2] + L[:, 4]) / 2)
+                 - largo / 2 <= tol * RADIO_DIRECCION) & (largo > 1e-9)
+        medidas = [(float(largo[i]), int(L[i, 0])) for i in np.nonzero(cerca)[0]]
+    else:
+        return []
+    medidas = [(abs(m - medida_cursor), m, cid) for m, cid in medidas
+               if cid not in excluidos and not excluidos.intersection(b.curvas[cid].puntos())]
+    if not medidas or (mejor := min(medidas))[0] > tol:
+        return []
+    distancia, medida, cid = mejor
+    xy = (base[0] + medida * (cursor[0] - base[0]) / medida_cursor, base[1] + medida * (cursor[1] - base[1]) / medida_cursor)
+    etiqueta = "Radio igual al del círculo" if centro else "Igual de largo que la línea"
+    return [Inferencia("igual", xy, cid, ("igual", cid), [], etiqueta, distancia, 8, (cid,))]
+
+
+def _intersecciones_aparentes(indice, cursor, tol, excluidos):
+    """Cruce de las prolongaciones de dos líneas que no se tocan: solo guía (un punto no puede quedar «sobre» una
+    prolongación), con un tramo punteado desde el extremo más cercano de cada línea."""
+    L = indice.lineas
+    if len(L) < 2:
+        return []
+    dx, dy = L[:, 3] - L[:, 1], L[:, 4] - L[:, 2]
+    largo = np.hypot(dx, dy)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        distancia = np.abs((cursor[0] - L[:, 1]) * dy - (cursor[1] - L[:, 2]) * dx) / largo
+    filas = [i for i in np.argsort(distancia)[:TOPE_CRUCES]
+             if largo[i] > 1e-9 and distancia[i] <= tol and int(L[i, 0]) not in excluidos]
+    salida = []
+    for n, i in enumerate(filas):
+        for j in filas[n + 1:]:
+            det = dx[i] * dy[j] - dy[i] * dx[j]
+            if abs(det) <= 1e-9 * largo[i] * largo[j]:
+                continue                            # paralelas: no se cruzan
+            ti = ((L[j, 1] - L[i, 1]) * dy[j] - (L[j, 2] - L[i, 2]) * dx[j]) / det
+            tj = ((L[j, 1] - L[i, 1]) * dy[i] - (L[j, 2] - L[i, 2]) * dx[i]) / det
+            if 0 <= ti <= 1 and 0 <= tj <= 1:
+                continue                            # cruce real: lo da `interseccion`
+            xy = (float(L[i, 1] + ti * dx[i]), float(L[i, 2] + ti * dy[i]))
+            separacion = math.dist(cursor, xy)
+            if separacion > tol:
+                continue
+            guias = []
+            for k in (i, j):
+                extremos = ((float(L[k, 1]), float(L[k, 2])), (float(L[k, 3]), float(L[k, 4])))
+                guias.append((min(extremos, key=lambda e: math.dist(e, xy)), xy))
+            ids = sorted((int(L[i, 0]), int(L[j, 0])))
+            salida.append(Inferencia("interseccion_aparente", xy, ids[0], None, guias, "Intersección aparente",
+                                     separacion, 4, tuple(ids)))
+    return salida
+
+
 _NOMBRE_REFERENCIA = {"punto": "un punto", "centro": "un centro", "medio": "un punto medio", "origen": "el origen"}
 
 
-def _objetos(b, indice, cursor, tol, base, excluidos, coincidente, angulo_tol, tipos):
+def _objetos(b, indice, cursor, tol, base, excluidos, coincidente, angulo_tol, tipos, centro=False):
     """Ajustes a curvas: punto medio, intersección, tangente, perpendicular y sobre la curva."""
     candidatos, cerca = [], []
     vistas = set(indice.curvas_cerca(cursor, tol))
@@ -169,7 +253,10 @@ def _objetos(b, indice, cursor, tol, base, excluidos, coincidente, angulo_tol, t
             if distancia_curva <= tol:
                 cerca.append((distancia_curva, cid, prim))
             if base is not None:
-                if tipo in ("circulo", "arco", "elipse", "arco_elipse") and "tangente" in tipos:
+                if centro and tipo in ("circulo", "arco", "elipse", "arco_elipse"):
+                    if tipo in ("circulo", "arco") and "tangente" in tipos:
+                        candidatos += _tangente_circulo(prim, cid, base, cursor, tol)
+                elif tipo in ("circulo", "arco", "elipse", "arco_elipse") and "tangente" in tipos:
                     for punto in _tangencias(prim, base):
                         if punto == base:
                             parametro = mas_cercano(prim, base)[0]
@@ -311,7 +398,8 @@ def _direcciones(indice, cursor, tol, base, excluidos, angulo_tol):
 
 
 def inferencias(b: Boceto, cursor_xy, tol_mm, base=None, excluir=(), coincidente=False,
-                angulo_tol=math.radians(3), *, previa=None, tipos=None, indice=None, extra=()) -> list[Inferencia]:
+                angulo_tol=math.radians(3), *, previa=None, tipos=None, indice=None, extra=(),
+                centro=False) -> list[Inferencia]:
     """Todas las ayudas posibles del cursor, la mejor primero (la lista deja alternar entre ambiguas).
 
     Distancias en mm, ángulos en radianes. Orden: intersección y punto medio, tangente, perpendicular, sobre la
@@ -325,6 +413,8 @@ def inferencias(b: Boceto, cursor_xy, tol_mm, base=None, excluir=(), coincidente
     `FACTOR_HISTERESIS` veces la tolerancia y, si empata en prioridad con la mejor, se queda en el primer lugar.
     `tipos` limita las familias de `TIPOS_INFERENCIA` (None = todas). `indice` evita rearmar la geometría derivada.
     `extra` son puntos de la operación en curso que aún no están en el boceto.
+    `centro`: la base es el centro de un círculo o arco que se dibuja y el cursor fija su radio; en vez de la
+    tangente desde un punto, propone el radio que lo deja tangente a otra circunferencia, e `igual` compara radios.
     """
     cursor = tuple(cursor_xy)
     base = tuple(base) if base is not None else None
@@ -334,10 +424,14 @@ def inferencias(b: Boceto, cursor_xy, tol_mm, base=None, excluir=(), coincidente
         excluidos |= indice.duenos.get(pid, set())          # excluir un punto excluye sus curvas
     tipos = set(TIPOS_INFERENCIA if tipos is None else tipos)
     tol = tol_mm * FACTOR_HISTERESIS if previa is not None else tol_mm
-    candidatos = _objetos(b, indice, cursor, tol, base, excluidos, coincidente, angulo_tol, tipos)
+    candidatos = _objetos(b, indice, cursor, tol, base, excluidos, coincidente, angulo_tol, tipos, centro)
     candidatos += _alineaciones(indice, cursor, tol, base, excluidos, angulo_tol, tipos, extra, previa)
+    if "interseccion" in tipos:
+        candidatos += _intersecciones_aparentes(indice, cursor, tol, excluidos)
     if "paralela" in tipos:
         candidatos += _direcciones(indice, cursor, tol, base, excluidos, angulo_tol)
+    if "igual" in tipos and base is not None:
+        candidatos += _iguales(b, indice, cursor, tol, base, excluidos, centro)
     if previa is not None:
         candidatos = [c for c in candidatos if c.distancia <= tol_mm or c.clave() == previa.clave()]
     # A igual lugar (la distancia se redondea: el mismo punto calculado de dos maneras difiere en el último bit)

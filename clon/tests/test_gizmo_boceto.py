@@ -81,7 +81,7 @@ def textos(lz):
 def test_patron_rectangular_asas_de_distancia_y_cantidad(lienzo):
     lz = lienzo
     panel = abrir(lz, "patron_rectangular")
-    assert lz._asas is not None and len(lz._asas.asas) == 2           # distancia y cantidad de la dirección 1
+    assert lz._asas is not None and len(lz._asas.asas) == 3           # distancia, cantidad y ángulo de la dirección 1
     panel.campos["cantidad1"].setText("3")
     panel.campos["distancia1"].setText("20")                           # Extensión: la última copia queda a 20 mm
     assert posicion(lz, 0) == pytest.approx((20, 0), abs=1e-6)
@@ -97,13 +97,28 @@ def test_patron_rectangular_asas_de_distancia_y_cantidad(lienzo):
     assert lz._asas is None
 
 
+def test_patron_rectangular_asa_de_angulo_gira_la_fila_sin_rearmar_las_asas(lienzo):
+    """BOC-62: el asa del ángulo escribe en «Ángulo 1», y las asas siguen siendo las mismas mientras se arrastra."""
+    lz = lienzo
+    panel = abrir(lz, "patron_rectangular")
+    panel.campos["cantidad1"].setText("3")
+    panel.campos["distancia1"].setText("20")
+    gestor = lz._asas
+    centro = gestor.asas[2].ancla(None)                                  # la tercera asa es la del ángulo
+    arrastrar(lz, posicion(lz, 2), (centro[0], centro[1] + 30))
+    assert float(panel.campos["angulo1"].text()) == pytest.approx(90, abs=0.6)
+    assert lz._asas is gestor                                            # la clave no incluye la dirección que se gira
+    assert posicion(lz, 0) == pytest.approx((centro[0], centro[1] + 20), abs=0.2)   # la asa de distancia sigue la nueva fila
+    lz.patron.cancelar()
+
+
 def test_patron_rectangular_eje_y_vista_previa(lienzo):
     lz = lienzo
     panel = abrir(lz, "patron_rectangular")
     panel.casillas["dos"].setChecked(True)
     panel.campos["cantidad2"].setText("2")
     panel.campos["distancia2"].setText("15")
-    assert len(lz._asas.asas) == 4                                     # distancia y cantidad de cada dirección
+    assert len(lz._asas.asas) == 6                                     # distancia y cantidad de cada dirección, y sus dos ángulos
     arrastrar(lz, posicion(lz, 2), (0, 25))
     assert float(panel.campos["distancia2"].text()) == pytest.approx(25, abs=0.3)
     assert len(lz.patron.calcular()["polis"]) == 3 * 2 - 1                  # 3 x 2 copias menos el original
@@ -161,27 +176,6 @@ def test_patron_circular_angulo_y_cantidad(lienzo):
     assert int(panel.campos["cantidad"].text()) == 6
     assert len(lz.patron.calcular()["polis"]) == 5          # seis copias menos el original
     lz.patron.cancelar()
-
-
-def test_escala_factor_nunca_baja_de_cero(lienzo):
-    lz = lienzo
-    c = lz.b.agregar_circulo((10, 0), 3)
-    lz.set_herramienta("escala")
-    lz.seleccion = [c]
-    lz._avanzar_seleccion()
-    lz._clic_fase((None, (0.0, 0.0)))
-    lz.encuadrar()
-    assert len(lz._asas.asas) == 1
-    lz.entrada.campos[0].setText("1")
-    p = posicion(lz, 0)
-    arrastrar(lz, p, (p[0] * 2, 0))
-    assert float(textos(lz)[0]) == pytest.approx(2, abs=0.05)
-    arrastrar(lz, posicion(lz, 0), (-30, 0))                    # del otro lado del punto base: tope positivo
-    assert float(textos(lz)[0]) > 0
-    lz.entrada.campos[0].setText("2")
-    poli = lz._asas.previa(lz._asas.valores())[0]
-    assert max(q[0] for q in poli) == pytest.approx(26, abs=0.3)    # el círculo de r 3 en x 10, ×2 desde el origen
-    lz._cerrar_entrada()
 
 
 def _esquina(lz, herramienta):

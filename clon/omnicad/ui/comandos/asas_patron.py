@@ -10,12 +10,15 @@ from ...timeline import entidades as ent
 from ...timeline.operaciones import Contexto
 from ...timeline.parametros import ANGULO
 from ..comando import ErrorComando
-from .asas_extra import _asa_cantidad, _centro_cuerpos, _direccion_de, _paso
+from .asas_extra import _asa_cantidad, _centro_cuerpos, _cuerpos_ids, _direccion_de, _paso
 from .comunes import evaluar_o_cero
 
 MAX_CASILLAS = 400
 VERDE_REFERENCIA = (0.1, 0.7, 0.3)
 AZUL_DESTINO = (0.17, 0.49, 0.91)
+ROJO_FANTASMA = (0.88, 0.18, 0.15)
+MAX_SILUETAS = 80                   # idem para las copias «hasta la etapa k» de la Multitransformación
+MAX_FANTASMAS = 40                  # copias suprimidas que se dibujan como silueta (con miles pesaría más que ayudar)
 
 
 def _mp():
@@ -30,26 +33,62 @@ def _n(v, clave):
         return 1
 
 
+def _formas_del_objeto(ctx, v):
+    """Las formas que repite el patrón (cuerpos, herramientas de las operaciones, caras o cuerpos de los componentes);
+    [] con geometría de construcción o con referencias a medio escribir."""
+    objeto = v.get("objeto", "cuerpos")
+    try:
+        if objeto == "cuerpos":
+            return [ctx.estado.cuerpos[c].forma for c in _cuerpos_ids(v, "cuerpos") if c in ctx.estado.cuerpos]
+        if objeto == "operaciones":
+            from .crear import pasos_repetibles
+            return [r[0] for pid in pasos_repetibles(v.get("pasos"), ctx) for r in ctx.estado.herramientas.get(pid) or []]
+        if objeto == "caras":
+            return [ent.resolver(h["ref"], ctx.estado).forma for h in v.get("caras") or []]
+        if objeto == "componentes":
+            from .crear import componentes_escritos
+            ids = set(componentes_escritos(v.get("componentes"), ctx))
+            return [c.forma for c in ctx.estado.cuerpos.values() if (c.componente or "") in ids]
+    except (ErrorComando, ent.ErrorReferencia, KeyError, AttributeError, geo.ErrorGeometria):
+        pass                                           # pasos o referencias a medio escribir
+    return []
+
+
+def _puntos_de_construccion(ctx, v):
+    """Un punto por cada plano, eje o punto de construcción elegido (donde va su casilla)."""
+    puntos = []
+    for h in v.get("construccion") or []:
+        try:
+            e = ent.resolver(h["ref"], ctx.estado)
+        except (ent.ErrorReferencia, KeyError):
+            continue
+        puntos.append(e.punto if e.tipo == "punto" else e.plano.origen if e.tipo == "plano" else e.eje[0])
+    return puntos
+
+
 def centro_del_objeto(ctx, v):
-    """Punto que se copia: el centro de la caja de los cuerpos elegidos o de las herramientas de las operaciones; None
-    con caras, componentes o geometría de construcción (ahí las copias se suprimen escribiendo su número)."""
+    """Punto que se copia (donde se ponen las asas y las casillas): el centro de la caja de lo elegido (cuerpos,
+    herramientas de las operaciones, caras, componentes) o el promedio de los puntos de construcción; None si todavía no
+    hay nada elegido."""
     objeto = v.get("objeto", "cuerpos")
     if objeto == "cuerpos":
         return _centro_cuerpos(ctx, v)
-    if objeto != "operaciones":
-        return None
-    from .crear import pasos_repetibles
-    try:
-        cajas = [geo.caja_envolvente(r[0]) for pid in pasos_repetibles(v.get("pasos"), ctx)
-                 for r in ctx.estado.herramientas.get(pid) or []]
-    except (ErrorComando, Exception):  # noqa: BLE001 — pasos a medio escribir o sin herramienta
-        return None
+    if objeto == "construccion":
+        puntos = _puntos_de_construccion(ctx, v)
+        return np.mean(np.asarray(puntos, float), axis=0) if puntos else None
+    cajas = []
+    for forma in _formas_del_objeto(ctx, v):
+        try:
+            cajas.append(geo.caja_envolvente(forma))
+        except Exception:  # noqa: BLE001 — una malla no tiene caja exacta
+            continue
     if not cajas:
         return None
     return (np.min([c[0] for c in cajas], axis=0) + np.max([c[1] for c in cajas], axis=0)) / 2
 
 
 def _rectangular(ctx, v, centro):
+    from .crear import direccion_derivada
     mp = _mp()
     if not v.get("dir1"):
         return []
@@ -60,7 +99,7 @@ def _rectangular(ctx, v, centro):
         salida.append(mp.Flecha("d1", centro, d1))
     salida.append(_asa_cantidad("n1", centro, d1, _paso(v, "n1", "d1", ctx)))
     derivada = not v.get("dir2")
-    d2 = mp.unitario(ent.direccion_perpendicular(e1)) if derivada else _direccion_de(ctx, v["dir2"][0])
+    d2 = mp.unitario(direccion_derivada(ctx, v)) if derivada else _direccion_de(ctx, v["dir2"][0])
     if d2 is None or np.linalg.norm(d2) < 1e-9:
         return salida
     if _n(v, "n2") > 1:
@@ -122,11 +161,11 @@ def _ruta(ctx, v):
     ruta, rec = _recorrido(ctx, v)
     puntos, arco = rec.puntos, rec.arco
     n = _n(v, "rn")
-    inicio = min(1.0, max(0.0, evaluar_o_cero(ctx, v.get("inicio"), "escalar")))
+    inicio = min(1.0, max(0.0, evaluar_o_cero(ctx, v.get("inicio"), "escalar") / 100.0))   # el campo va en %
     distancia = evaluar_o_cero(ctx, v.get("rd"))
     distribucion = v.get("distribucion", "extension")
     _largo, _cerrada, s0, paso = sc.recorrido_ruta(ruta, n, distancia, inicio=inicio, distribucion=distribucion)
-    salida = [mp.AsaRuta("inicio", arco / rec.largo, puntos)]
+    salida = [mp.AsaRuta("inicio", arco / rec.largo, puntos, factor=100.0)]
     if n > 1:
         salida.append(mp.AsaRecorrido("rd", rec, s0, (n - 1) if distribucion == "espaciado" else 1.0))
     signo = -1.0 if paso < 0 else 1.0
@@ -183,14 +222,77 @@ def manipuladores(comando, ctx, v):
     return salida
 
 
+def _segmentos_origen(ctx, v):
+    """Las aristas de lo que se copia como segmentos (pares de puntos) para dibujar su silueta; None si no hay nada."""
+    aristas = [np.asarray(pl, float) for forma in _formas_del_objeto(ctx, v)[:20] for pl in geo.polilineas_aristas(forma, 0.3)]
+    segmentos = [np.stack([pl[:-1], pl[1:]], axis=1).reshape(-1, 3) for pl in aristas]
+    return np.concatenate(segmentos) if segmentos else None
+
+
+def _siluetas(base, trsfs, color):
+    """Una silueta (las aristas `base` movidas con cada gp_Trsf) por copia."""
+    salida = []
+    for t in trsfs:
+        m = sc.a_matriz(t)
+        salida.append(("lineas", base @ m[:3, :3].T + m[:3, 3], color, 1.2))
+    return salida
+
+
+def _fantasmas(ctx, v, op):
+    """La silueta (aristas) de cada copia suprimida, en rojo: se ve qué se está sacando del patrón."""
+    try:
+        instancias = op.instancias(ctx.estado, Contexto(ctx.doc.parametros.valores()))
+    except Exception:  # noqa: BLE001 — la vista previa del propio panel ya explica el error
+        return []
+    suprimidas = [t for _, t, estado in instancias if estado == "suprimida" and t is not None][:MAX_FANTASMAS]
+    base = _segmentos_origen(ctx, v) if suprimidas else None
+    return [] if base is None else _siluetas(base, suprimidas, ROJO_FANTASMA)
+
+
+def instancias_hasta_etapa(ctx, op, k):
+    """gp_Trsf (sin el original) que dejan las transformaciones 1 a k+1 de una Multitransformación."""
+    from ...timeline.ops_solido import OpMultitransformar
+    parcial = OpMultitransformar(op.id, transformaciones=list(op.p["transformaciones"])[:k + 1])
+    return parcial.transformaciones(ctx.estado, Contexto(ctx.doc.parametros.valores()))[1:]
+
+
+def previa_etapa(ctx, v, op, k):
+    """Multitransformación: las copias que quedan «hasta la etapa k» (la elegida), en azul sobre el resultado completo.
+    Con la última etapa elegida no hay nada que agregar: es todo el resultado."""
+    if k >= len(op.p["transformaciones"]) - 1:
+        return []
+    try:
+        trsfs = instancias_hasta_etapa(ctx, op, k)
+    except Exception:  # noqa: BLE001 — la vista previa del propio panel ya explica el error
+        return []
+    base = _segmentos_origen(ctx, v) if trsfs else None
+    return [] if base is None else _siluetas(base, trsfs[:MAX_SILUETAS], AZUL_DESTINO)
+
+
+def manipuladores_etapa(ctx, v):
+    """Asas de la transformación elegida de una Multitransformación: las del patrón de ese tipo (sobre el original), con
+    las claves del editor («t_…»)."""
+    tipo = v.get("t_tipo", "rectangular")
+    if tipo == "simetria":
+        return []
+    w = {c[2:]: x for c, x in v.items() if c.startswith("t_")}
+    w.update({c: v.get(c) for c in ("objeto", "cuerpos", "pasos", "caras", "componentes", "construccion")}, forma=tipo)
+    asas = manipuladores(None, ctx, w)
+    for a in asas:
+        if hasattr(a, "clave"):
+            a.clave = "t_" + a.clave
+            a.ident = f"etapa:{a.ident}"
+    return asas
+
+
 def previa_vista(comando, ctx, v, op):
     """Patrón en puntos: la referencia (cruz verde), los destinos (cruces azules) y una línea de la referencia a cada
-    destino: así se ve qué punto se lleva a dónde."""
-    if op.p.get("forma_patron") != "puntos":
-        return None
-    puntos, ref = op.puntos_patron(ctx.estado, Contexto(ctx.doc.parametros.valores()))
-    destinos = np.array(puntos, float)
-    lineas = np.stack([np.tile(ref, (len(destinos), 1)), destinos], axis=1).reshape(-1, 3)
-    return [("lineas", lineas, AZUL_DESTINO, 1.4), ("puntos", destinos, AZUL_DESTINO, 10),
-            ("puntos", np.array([ref], float), VERDE_REFERENCIA, 13)]
-
+    destino (así se ve qué punto se lleva a dónde). En todos: la silueta roja de las copias suprimidas."""
+    salida = []
+    if op.p.get("forma_patron") == "puntos":
+        puntos, ref = op.puntos_patron(ctx.estado, Contexto(ctx.doc.parametros.valores()))
+        destinos = np.array(puntos, float)
+        lineas = np.stack([np.tile(ref, (len(destinos), 1)), destinos], axis=1).reshape(-1, 3)
+        salida = [("lineas", lineas, AZUL_DESTINO, 1.4), ("puntos", destinos, AZUL_DESTINO, 10),
+                  ("puntos", np.array([ref], float), VERDE_REFERENCIA, 13)]
+    return salida + _fantasmas(ctx, v, op) or None

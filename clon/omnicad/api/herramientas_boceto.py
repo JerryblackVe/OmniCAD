@@ -29,9 +29,10 @@ from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, r
                              sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
-                                    expresion_sin_signo, _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
+                                    aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
                                     evaluar_primitiva, mas_cercano, peine_curvatura, validar_valor_cota)
-from ..restricciones.solver import restricciones_en_conflicto, restricciones_redundantes
+from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
+                                     restriccion_quita_grados)
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
 from ..timeline.parametros import ANGULO, LONGITUD, evaluar, validar_nombre
@@ -767,13 +768,17 @@ def _valor_cota(sesion, k):
         return None
 
 
-def _ubicacion_cota(k):
+def _ubicacion_cota(k, b=None):
     """Dónde dibuja el editor la cota (si se la movió): offset de la línea y del texto, en mm; `mode` (center o
-    tangent) en una distancia con un círculo o arco; y `quadrant` (0..3) en un ángulo con cuadrante elegido."""
+    tangent) en una distancia con un círculo o arco; `quadrant` (0..3) en un ángulo con cuadrante elegido; y, con el
+    boceto `b`, `measured_segment` [x1, y1, x2, y2]: la línea de cota que dibuja la ventana en una distancia o un
+    desfase que no es la lineal de una línea o dos puntos (BOC-37)."""
+    segmento = None if b is None else b.segmento_cota(k)
     return {**{n: k.datos[c] for n, c in (("offset", "desfase"), ("text_offset", "texto"), ("quadrant", "cuadrante"),
                                                    ("position", "ubic"))
                if c in k.datos},
-            **({"mode": _MODOS_A_INGLES[k.datos["modo"]]} if "modo" in k.datos else {})}
+            **({"mode": _MODOS_A_INGLES[k.datos["modo"]]} if "modo" in k.datos else {}),
+            **({"measured_segment": [_r(v) for q in segmento for v in q]} if segmento else {})}
 
 
 def _cuadrante(b, tipo, entities, near):
@@ -853,15 +858,16 @@ def info_boceto(sesion, op):
                         "state": estado_entidad(p.id)} for p in b.puntos.values()],
             "constraints": [{"id": r.id, "type": _RESTRICCION_A_INGLES.get(r.tipo, r.tipo), "entities": r.entidades}
                             for r in b.restricciones.values()],
+            "tangents_off_arc": b.tangencias_fuera_del_arco(),
             "dimensions": [{"id": k.id, "name": k.nombre, "type": _COTA_A_INGLES.get(k.tipo, k.tipo), "entities": k.entidades,
                             "expression": k.expresion, "reference": k.referencia,
                             "value": _r(b.medir(k)) if k.referencia else _valor_cota(sesion, k),
-                            **_ubicacion_cota(k)}
+                            **_ubicacion_cota(k, b)}
                            for k in b.cotas.values()],
             "profiles": info_perfiles(br) if br is not None else []}
     if b.proyecciones:
-        info["projections"] = [{"id": r["id"], "mode": r["modo"], "lost": r["id"] in op.perdidas, "entities": r["ids"]}
-                               for r in b.proyecciones]
+        info["projections"] = [{"id": r["id"], "mode": r["modo"], "lost": r["id"] in op.perdidas, "entities": r["ids"],
+                                "automatic": bool(r.get("auto"))} for r in b.proyecciones]
     if b.patrones:
         info["patterns"] = [{"id": r["id"], "type": "rectangular" if r["tipo"] == "rectangular" else "circular",
                              "entities": r["ids"], "suppressed": r["suprimidos"], "parameters": _parametros_patron(r),
@@ -1285,7 +1291,9 @@ def _avisar_cerrada_ignorada(sesion, spline_type, closed):
              "arco; tangent y concentric: dos curvas; fix: una o más entidades; symmetry: dos entidades y la línea eje; "
              "polygon: al menos tres líneas que comparten vértices y forman una cadena cerrada, o un solo lado "
              "para tomar automáticamente su cadena cerrada de líneas. Referencias reservadas: origen 0, eje X -1, "
-             "eje Y -2 (origin/axes de get_sketch). Repetir fix sobre las mismas entidades devuelve el fix existente.",
+             "eje Y -2 (origin/axes de get_sketch). Repetir fix sobre las mismas entidades devuelve el fix existente. "
+             "Al agregar una tangente, el primer arco o círculo no se mueve y ningún radio de arco ni el largo de la "
+             "línea cambian; si la otra curva no puede moverse, se mueve el arco entero.",
              modifica=True)
 def add_constraint(sesion, sketch: str,
                    type: Literal["coincident", "horizontal", "vertical", "parallel", "perpendicular", "equal",  # noqa: A002
@@ -1300,12 +1308,14 @@ def add_constraint(sesion, sketch: str,
     previo = boceto_resuelto(sesion, op)
     nueva = op.copia()
     b = nueva.boceto
-    if type == "fix":
+    if type in ("fix", "tangent"):
         _sincronizar_con_solver(sesion, op, b)
     b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
     antes = _claves(b)
     try:
+        if type == "tangent" and len(entities) == 2:
+            b.deslizar_a_tangente(*entities)
         if type == "polygon" and len(entities) == 1:
             _curva(b, entities[0], ("linea",))
             cadena, cerrada = b.cadena(entities[0])
@@ -1313,6 +1323,8 @@ def add_constraint(sesion, sketch: str,
                 raise ErrorBoceto("Polígono necesita una cadena cerrada de líneas.")
             entities = [k for k, _ in cadena]
         rid = b.agregar_restriccion(RESTRICCIONES[type], list(entities))
+        if type == "tangent" and len(entities) == 2:
+            acomodar_tangente(b, entities, valores_cotas(sesion, b))
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
     if rid not in antes["restricciones"]:
@@ -1323,6 +1335,9 @@ def add_constraint(sesion, sketch: str,
             and previo.solver.ok and despues.solver.ok and despues.solver.gdl >= previo.solver.gdl):
         raise error("SKETCH_OVERCONSTRAINED", f"La restricción «{type}» no quita ningún grado de libertad: el boceto "
                     f"«{op.nombre}» ya la cumple por otras restricciones o cotas (sobre-definiría). No se agregó.")
+    fuera = despues.boceto.tangencias_fuera_del_arco() if type == "tangent" and despues is not None else []
+    if fuera:
+        sesion.avisar(aviso_tangencias_fuera(fuera))
     informe = _informe_edicion(sesion, nueva, b, antes)
     return {"sketch": informe["sketch"], "constraint": {"id": rid, "type": type, "entities": b.restricciones[rid].entidades},
             "profiles": informe["profiles"], "dof": informe["dof"], "status": informe["status"]}
@@ -1330,7 +1345,9 @@ def add_constraint(sesion, sketch: str,
 
 @herramienta("replace_constraint", "boceto",
              "Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la "
-             "ventana: clic derecho en su símbolo › Cambiar por). Una restricción no tiene valores que editar: lo "
+             "ventana: clic derecho en su símbolo › Cambiar por; si la nueva no quita ningún grado de libertad —el boceto "
+             "ya la cumple por otras—, falla con SKETCH_OVERCONSTRAINED y queda la anterior, igual que add_constraint). "
+             "Una restricción no tiene valores que editar: lo "
              "que se cambia es qué relación pide. Valen horizontal, vertical, coincident, parallel, perpendicular, "
              "equal, tangent, concentric, midpoint y collinear, siempre que la nueva aplique a esas entidades "
              "(horizontal ↔ vertical en una línea o dos puntos, parallel ↔ perpendicular ↔ equal ↔ collinear en dos "
@@ -1352,11 +1369,20 @@ def replace_constraint(sesion, sketch: str, constraint: int,
         raise error("ENTITY_NOT_FOUND", f"El boceto no tiene la restricción {constraint}.")
     antes = _claves(b)
     try:
+        if type == "tangent":
+            _sincronizar_con_solver(sesion, op, b)
         b.reemplazar_restriccion(constraint, RESTRICCIONES[type])
+        if type == "tangent":
+            acomodar_tangente(b, b.restricciones[constraint].entidades, valores_cotas(sesion, b))
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
     sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, previo is None or previo.solver.ok, f"La restricción «{type}»")
+    despues = boceto_resuelto(sesion, nueva)
+    if (previo is not None and previo.solver.ok and despues is not None and despues.solver.ok
+            and not restriccion_quita_grados(b, constraint, valores_cotas(sesion, b))):
+        raise error("SKETCH_OVERCONSTRAINED", f"La restricción «{type}» no quita ningún grado de libertad: el boceto "
+                    f"«{op.nombre}» ya la cumple por otras restricciones o cotas (sobre-definiría). No se cambió.")
     informe = _informe_edicion(sesion, nueva, b, antes)
     return {"sketch": informe["sketch"], "constraint": {"id": constraint, "type": type,
                                                          "entities": b.restricciones[constraint].entidades},
@@ -1485,7 +1511,8 @@ def _cota_sobre_restringe(sesion, boceto, anterior):
              "el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica "
              "una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. Si el boceto "
              "tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z), "
-             "constraints_3d, dimensions_3d, status_3d y dof_3d.")
+             "constraints_3d, dimensions_3d, status_3d y dof_3d. tangents_off_arc lista los pares [a, b] tangentes cuyo "
+             "contacto cae fuera del tramo dibujado de un arco: la tangencia se resuelve contra su círculo entero.")
 def get_sketch(sesion, sketch: str | None = None):
     """
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
@@ -2152,7 +2179,8 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
 @herramienta("offset_sketch_curves", "boceto",
              "Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de "
              "un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena "
-             "cambia, el desfase la sigue). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la "
+             "cambia, el desfase la sigue; si se borra la cota, la relación queda y la distancia se libera, también en "
+             "splines y elipses). Por defecto una cadena cerrada crece hacia afuera y una abierta va a la "
              "izquierda de su recorrido; distance negativa va al lado contrario (la cota queda positiva) y side_x/side_y "
              "eligen el lado con un punto (la positiva va hacia él). Si el desfase deja un radio o un segmento en cero "
              "o al revés (p. ej. -30 en un círculo de radio 30), falla con INVALID_GEOMETRY y dice cuál. direction=two: "
@@ -2160,16 +2188,23 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
              "20 afuera y otra a 10 adentro); una de las dos puede ser 0 y entonces no se crea esa copia. "
              "direction=symmetric, distance a los dos lados con las dos cotas ligadas (editar una mueve la otra). "
              "chain=false desfasa solo la curva entity (Fusion sin Selección de cadena). match_topology=true (Fusion: Match Topology) limita la distancia para que el desfase "
-             "conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. Una "
+             "conserve la topología de la curva madre (ningún segmento desaparece) y avisa la distancia usada. "
+             "ellipse_result=ellipse (solo con una elipse entera): da otra elipse concéntrica de semiejes a±d y b±d "
+             "(Fusion, al elegirla cerca de un eje; la distancia varía alrededor) y la deja atada con la restricción y "
+             "la cota de desfase; con oval (por defecto) es la curva a distancia constante. Con "
+             "profile (índice del perfil, el de get_sketch/extrusiones) en vez de entity se desfasa el perfil entero "
+             "(Fusion acepta una curva, una cadena o un perfil): su contorno exterior y los de sus huecos, de modo que "
+             "la región crezca con una distancia positiva. Una "
              "spline, una elipse o un arco de elipse dan una spline libre (sin asociación). Para "
              "soltar la asociación: release_offset. Para letras o cualquier contorno (sin parámetros): "
              "offset_profiles.", modifica=True)
-def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | None = None,
+def offset_sketch_curves(sesion, distance: Expr, entity: int | None = None, side_x: float | None = None,
                          side_y: float | None = None, sketch: str | None = None,
                          direction: Literal["one", "two", "symmetric"] = "one", distance2: Expr | None = None,
-                         match_topology: bool = False, chain: bool = True):
+                         match_topology: bool = False, chain: bool = True, profile: int | None = None,
+                         ellipse_result: Literal["oval", "ellipse"] = "oval"):
     """
-    entity: id de una curva de la cadena (línea o arco), de un círculo, elipse o spline.
+    entity: id de una curva de la cadena (línea o arco), de un círculo, elipse o spline; vacío si se pasa profile.
     distance: separación en mm, número o expresión con parámetros; negativa = al lado contrario.
     side_x: x de un punto del lado donde va el desfase; vacío = el lado por defecto.
     side_y: y de ese punto.
@@ -2178,8 +2213,18 @@ def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | No
     distance2: segunda distancia con direction=two (obligatoria en ese caso): positiva = el mismo lado que distance positiva, negativa = el otro; 0 = sin segunda copia.
     match_topology: true = si la distancia haría desaparecer un segmento (o anular un radio), se usa la mayor que conserva la topología, como número fijo, y se avisa.
     chain: true = se desfasa toda la cadena conectada a entity (como Selección de cadena de Fusion); false = solo esa curva.
+    profile: índice de un perfil (región cerrada) del boceto: se desfasan todos sus contornos; se pasa en vez de entity y side_x/side_y no valen.
+    ellipse_result: oval = curva a distancia constante (por defecto); ellipse = otra elipse de semiejes a±d y b±d (solo si entity es una elipse entera).
     """
     _exigir_finitos(locals())
+    if (entity is None) == (profile is None):
+        raise error("INVALID_ARGUMENTS", "Pasá entity (una curva) o profile (un perfil), uno de los dos.")
+    if profile is not None and side_x is not None:
+        raise error("INVALID_ARGUMENTS", "Con profile el lado lo da el signo de distance: no pases side_x ni side_y.")
+    firma = None
+    if profile is not None:
+        op = op_boceto(sesion, sketch)
+        firma = seleccionar_perfiles(boceto_resuelto(sesion, op), op, profile)[0].firma
     if (side_x is None) != (side_y is None):
         raise error("INVALID_ARGUMENTS", "Pasá side_x y side_y juntos, o ninguno de los dos.")
     if direction == "two" and distance2 is None:
@@ -2200,10 +2245,17 @@ def offset_sketch_curves(sesion, entity: int, distance: Expr, side_x: float | No
     expresion2, valor2 = firmada(distance2) if direction == "two" else (None, None)
 
     def desfasar(b):
-        _curva(b, entity, ("linea", "arco", "circulo", "elipse", "arco_elipse", "spline"))
-        _nuevos, avisos = b.desfasar(entity, valor, lado, expresion, "dos" if direction == "two" else
-                                     "simetrico" if direction == "symmetric" else "un", valor2, expresion2,
-                                     topologia=match_topology, cadena=chain)
+        modo = "dos" if direction == "two" else "simetrico" if direction == "symmetric" else "un"
+        elipse = ellipse_result == "ellipse"
+        if firma is not None:
+            _nuevos, avisos = b.desfasar_perfil(firma, valor, expresion=expresion, direccion=modo, distancia2=valor2,
+                                                expresion2=expresion2, topologia=match_topology)
+        else:
+            _curva(b, entity, ("linea", "arco", "circulo", "elipse", "arco_elipse", "spline"))
+            if elipse and b.curvas[entity].tipo != "elipse":
+                raise error("INVALID_ARGUMENTS", "ellipse_result=ellipse solo vale con una elipse entera.")
+            _nuevos, avisos = b.desfasar(entity, valor, lado, expresion, modo, valor2, expresion2,
+                                         topologia=match_topology, cadena=chain, elipse=elipse)
         for aviso in avisos:
             sesion.avisar(aviso)
     return _dibujar(sesion, sketch, desfasar, desde_solver=True)
@@ -2338,7 +2390,8 @@ def _exigir_seleccion(b, entities):
 
 @herramienta("mirror_sketch", "boceto",
              "Simetría de boceto (Fusion: Simetría / Mirror): CREA la copia espejada de curvas y puntos respecto de una "
-             "línea del boceto (recta, también de construcción; no vale un eje del origen) y la deja con restricciones "
+             "línea del boceto (recta, también de construcción) o un eje del origen (axis=-1 el X, -2 el Y, como Fusion) "
+             "y la deja con restricciones "
              "de simetría: si la geometría original cambia, la copia la sigue. No es la restricción de simetría "
              "(add_constraint type=symmetry), que solo acomoda geometría que ya existe. Lo que está sobre el eje se "
              "comparte; lo que ya es su propio reflejo (una línea sobre el eje, un círculo centrado en él) no se copia, "
@@ -2347,14 +2400,15 @@ def _exigir_seleccion(b, entities):
 def mirror_sketch(sesion, entities: list[int], axis: int, sketch: str | None = None):
     """
     entities: ids de las curvas o puntos a reflejar (get_sketch).
-    axis: id de la línea de simetría (recta, puede ser de construcción o una de entities).
+    axis: id de la línea de simetría (recta, puede ser de construcción o una de entities), o -1 / -2 para el eje X / Y del origen.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     textos = []
 
     def reflejar(b):
         _exigir_seleccion(b, entities)
-        _curva(b, axis, ("linea",), "el eje")
+        if axis not in (b.EJE_X, b.EJE_Y):
+            _curva(b, axis, ("linea",), "el eje")
         textos.extend(i for i in entities if isinstance(b.curvas.get(i), Texto))
         b.simetria(list(entities), axis)
     r = _dibujar(sesion, sketch, reflejar, desde_solver=True)
@@ -2664,7 +2718,10 @@ def _alcance_modelo(sesion, plano, linea):
              "al 110 % de lo más lejano entre el modelo y la geometría del boceto, y crece con el boceto al "
              "recalcular (±100 mm si no hay nada alrededor). "
              "edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; "
-             "vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos).",
+             "vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos). "
+             "Lo que coincide con geometría ya proyectada no se duplica: se reutiliza, y si era el contorno automático de "
+             "la cara queda visible con la referencia elegida. result dice qué pasó: created (hay geometría nueva), reused "
+             "(solo se reutilizó; reused lista sus ids) o unchanged (ya estaba: no hay paso de deshacer).",
              modifica=True)
 def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[str] | str | None = None,
                       bodies: list[str] | None = None, mode: Literal["project", "intersect"] = "project",
@@ -2691,15 +2748,28 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     if not prims and not puntos:
         raise error("INVALID_GEOMETRY", "Eso no deja nada sobre el plano del boceto"
                     + (": no corta su plano." if mode == "intersect" else "."))
-    hecho = {}
-
-    def proyectar(b):
-        hecho["id"] = _sumar_proyeccion(b, prims, puntos, construction, link,
-                                        {"modo": mode, "refs": refs, "infinitas": infinitas})
-    r = _dibujar(sesion, op.id, proyectar, desde_solver=True)
+    datos = {"modo": mode, "refs": refs, "infinitas": infinitas}
+    r, ids = _sumar_proyecciones(sesion, op, [(prims, puntos, construction, link, datos)])
     r["mode"] = mode
-    r["projection"] = hecho["id"]
+    r["projection"] = ids[0]
     return r
+
+
+def _sumar_proyecciones(sesion, op, tandas):
+    """Agrega `tandas` = [(primitivas, puntos, construcción, vínculo, datos)] en un paso. Devuelve el informe, con `result`
+    (created, reused o unchanged: todo ya estaba, sin paso de deshacer ni recálculo) y `reused`, y el id de cada proyección."""
+    b = op.boceto
+    plan = b.simular_proyecciones([(p if link else b.derivar_proyeccion(datos, p), q, c, datos if link else None)
+                                   for p, q, c, link, datos in tandas])
+    if not plan["cambia"]:
+        sesion.avisar("Eso ya estaba proyectado: el boceto no cambió.")
+        return {"sketch": _paso(op), "result": "unchanged", "entities": [], "points": [], "reused": plan["reusadas"]}, \
+            [None] * len(tandas)
+    ids = []
+    r = _dibujar(sesion, op.id, lambda copia: ids.extend(_sumar_proyeccion(copia, *t) for t in tandas), desde_solver=True)
+    r["result"] = "created" if plan["curvas"] or plan["puntos"] else "reused"
+    r["reused"] = plan["reusadas"]
+    return r, ids
 
 
 def _sumar_proyeccion(b, prims, puntos, construccion, link, datos):
@@ -2722,7 +2792,8 @@ def _sumar_proyeccion(b, prims, puntos, construccion, link, datos):
              "los frentes de sus extremos, sin las aristas que caen dentro); outer_contour=false gira todas las "
              "aristas. project_axis=true (Fusion: Project Axis) proyecta también el eje como línea, con vínculo "
              "(axis_projection). Con link=true (por defecto) sigue al modelo, igual que project_to_sketch "
-             "(break_projection_link, manage_lost_projections, incluido relink).", modifica=True)
+             "(break_projection_link, manage_lost_projections, incluido relink). result dice qué pasó, como en "
+             "project_to_sketch: lo repetido da unchanged y no deja paso de deshacer.", modifica=True)
 def project_spun_profile(sesion, axis: str | dict, edges: list[str] | str | None = None,
                          faces: list[str] | str | None = None, bodies: list[str] | None = None,
                          vertices: list[list[float]] | None = None, tolerance: float = 0.1, flip: bool = False,
@@ -2763,22 +2834,16 @@ def project_spun_profile(sesion, axis: str | dict, edges: list[str] | str | None
     origen = {"modo": "giro", "refs": refs, "eje": ref_eje, "tolerancia": tolerance, "invertir": flip}
     if outer_contour and prims:
         origen["contorno"] = _eje_en_plano(br.plano, giro["eje"])
-    eje = None
+    tandas = [(prims, puntos, construction, link, origen)]
     if project_axis:
         p_eje, q_eje = ent.proyectar_entidad(entidad_eje, br.plano)
         infinitas = ({str(k): _alcance_modelo(sesion, br.plano, prim) for k, prim in enumerate(p_eje)}
                      if entidad_eje.forma is None else {})
-        eje = (p_eje, q_eje, {"modo": "project", "refs": [ref_eje], "infinitas": infinitas})
-    hecho = {}
-
-    def proyectar(b):
-        hecho["id"] = _sumar_proyeccion(b, prims, puntos, construction, link, origen)
-        if eje is not None:
-            hecho["eje"] = _sumar_proyeccion(b, eje[0], eje[1], construction, link, eje[2])
-    r = _dibujar(sesion, op.id, proyectar, desde_solver=True)
-    r["projection"] = hecho["id"]
+        tandas.append((p_eje, q_eje, construction, link, {"modo": "project", "refs": [ref_eje], "infinitas": infinitas}))
+    r, ids = _sumar_proyecciones(sesion, op, tandas)
+    r["projection"] = ids[0]
     if project_axis:
-        r["axis_projection"] = hecho["eje"]
+        r["axis_projection"] = ids[1]
     return r
 
 

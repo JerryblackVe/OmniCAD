@@ -83,7 +83,7 @@ def test_dialogos_de_mover_y_escalar_aceptan_bocetos():
     QApplication.instance() or QApplication([])
     s = _boceto()
     doc = s.doc
-    curva = llamar(s, "get_sketch", sketch="Contorno")["entities"][0]["id"]
+    curva = llamar(s, "get_sketch", sketch="Contorno")["entities"][1]["id"]    # la primera toca el origen, que es fijo
     hit = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, doc.estado_final)
     mover, ctx = MoverCopiar(), ContextoComando(doc)
     v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in mover.campos(ctx)}
@@ -91,7 +91,7 @@ def test_dialogos_de_mover_y_escalar_aceptan_bocetos():
     with pytest.raises(ErrorComando, match="bocetos"):
         mover.construir(v, ctx)
     op = mover.construir(dict(v, bocetos=[hit]), ctx)
-    assert op.p["bocetos"] == ["op1"] and op.p["cuerpos"] == []
+    assert op.p["bocetos"] == [] and op.p["cuerpos"] == [] and len(op.p["curvas_boceto"]) == 1
     doc.agregar(op)
     assert doc.resultados[-1].estado in ("ok", "aviso")
     assert mover.desde_op(op, ContextoComando(doc, op=op))["objeto"] == "bocetos"
@@ -99,7 +99,7 @@ def test_dialogos_de_mover_y_escalar_aceptan_bocetos():
     v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in escala.campos(ctx)}
     with pytest.raises(ErrorComando, match="boceto"):
         escala.construir(v, ctx)
-    op2 = escala.construir(dict(v, bocetos=[hit], factor="2"), ctx)
+    op2 = escala.construir(dict(v, entidades=[hit], factor="2"), ctx)
     doc.agregar(op2)
     assert doc.resultados[-1].estado in ("ok", "aviso") and escala.desde_op(op2, ContextoComando(doc, op=op2))["bocetos"]
 

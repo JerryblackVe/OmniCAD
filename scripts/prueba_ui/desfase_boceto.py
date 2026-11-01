@@ -299,7 +299,7 @@ from PySide6.QtWidgets import QComboBox  # noqa: E402
 
 
 def elegir_direccion(clave):
-    combo = next(c for c in v.modo_boceto.paleta.contexto.findChildren(QComboBox) if c.findData("dos") >= 0)
+    combo = next(c for c in v.modo_boceto.tarjeta.contexto.findChildren(QComboBox) if c.findData("dos") >= 0)
     combo.setCurrentIndex(combo.findData(clave))
     A.esperar(150)
 

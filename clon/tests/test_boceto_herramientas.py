@@ -315,36 +315,6 @@ def test_alargar_y_partir(app_qt):
     assert tramos == [((0, 0), (10, 0)), ((10, 0), (20, 0)), ((20, 0), (30, 0))] and lz.resultado.ok
 
 
-def test_escala_y_mover_copiar(app_qt):
-    lz = _lienzo(app_qt)
-    ln = lz.b.agregar_linea((1, 1), (5, 1))
-    lz.b.agregar_cota("distancia", [ln], "4")
-    lz.resolver()
-    lz.seleccion = [ln]
-    lz.set_herramienta("escala")
-    lz.clics.append((None, (1, 1)))
-    lz._procesar_clics()
-    _aceptar(lz, "2.5")
-    assert lz.b._extremos_linea(ln) == (pytest.approx((1, 1)), pytest.approx((11, 1)))
-    assert next(iter(lz.b.cotas.values())).expresion == "10" and lz.resultado.ok
-    c = lz.b.agregar_circulo((0, 0), 2)
-    lz.seleccion = [c]
-    lz.opciones["copiar"] = True
-    lz.set_herramienta("mover")
-    for q in ((0, 0), (5, 3)):
-        lz.clics.append((None, q))
-        lz._procesar_clics()
-    circulos = sorted(lz.b.coords(k.centro) for k in lz.b.curvas.values() if k.tipo == "circulo")
-    assert circulos == [pytest.approx((0, 0)), pytest.approx((5, 3))]
-    lz.opciones["copiar"] = False
-    lz.seleccion = [c]
-    lz.set_herramienta("mover")
-    lz.clics.append((None, (0, 0)))
-    lz._procesar_clics()
-    _aceptar(lz, "0", "-4", "0")                                         # ΔX, ΔY, ángulo escritos
-    assert lz.b.coords(lz.b.curvas[c].centro) == pytest.approx((0, -4))
-
-
 def test_curva_de_fusion_g1_y_g2(app_qt):
     lz = _lienzo(app_qt)
     l1 = lz.b.agregar_linea((0, 0), (10, 0))

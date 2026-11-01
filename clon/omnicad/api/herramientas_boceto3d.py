@@ -15,12 +15,15 @@ import numpy as np
 from ..nucleo import curvas3d
 from ..nucleo import geometria as geo
 from ..restricciones import boceto3d as b3
-from ..restricciones.boceto import MEDIDA_MAXIMA, ErrorBoceto
+from ..restricciones import inferencia3d as inf3
+from ..restricciones.boceto import MEDIDA_MAXIMA, ErrorBoceto, aviso_tangencias_fuera
 from ..timeline import entidades as ent
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from . import selectores as sl
 from .errores import error
-from .herramientas_boceto import _paso, _r, boceto_resuelto, op_boceto, texto_expr
+from .herramientas_boceto import _paso, _r, boceto_activo, boceto_resuelto, op_boceto, texto_expr
+from .herramientas_inferencia import _NOMBRE as _NOMBRE_AYUDA
+from .herramientas_inferencia import _TIPOS as _TIPOS_AYUDA
 from .registro import Expr, herramienta
 
 RESTRICCIONES_3D = {"coincident": "coincidente", "axis": "eje", "parallel": "paralela", "perpendicular": "perpendicular",
@@ -92,6 +95,13 @@ def _existen(b, ids):
 
 def _nuevas(b, antes, tabla):
     return [k for k in b.geo3d.get(tabla, {}) if k not in antes]
+
+
+def _cotas(sesion, b):
+    """{id: medida} de las cotas 3D con los parámetros de ahora."""
+    parametros = sesion.doc.parametros.valores()
+    return {k: evaluar(c["expresion"], ANGULO if c.get("tipo") == "angulo" else LONGITUD, parametros)
+            for k, c in b3.datos(b)["cotas"].items()}
 
 
 # ================================================================ herramientas
@@ -176,10 +186,17 @@ def draw_point_3d(sesion, x: float, y: float, z: float, sketch: str | None = Non
 
 @herramienta("add_constraint_3d", "boceto",
              "Boceto 3D: restricción entre entidades 3D (ids de get_sketch). type: coincident (punto–punto o punto "
-             "sobre línea), axis (la Horizontal/Vertical de Fusion en 3D: alinea una línea con el eje axis), parallel, "
-             "perpendicular, equal y collinear (dos líneas), tangent (línea o spline + spline que empieza o termina en "
-             "un extremo de la otra; entre dos splines deja continuidad G1), midpoint (punto + línea), concentric "
-             "(dos arcos, círculos o elipses: mismo centro) y fix (fija los puntos de las entidades). Son las de Fusion "
+             "sobre una curva: línea, arco, círculo, elipse, cónica o spline), axis (la Horizontal/Vertical de Fusion en "
+             "3D: alinea una línea con el eje axis), parallel, perpendicular, equal y collinear (dos líneas), tangent (dos "
+             "curvas, menos dos líneas: se tocan y comparten dirección, así que una línea queda en el plano del arco, "
+             "círculo o elipse; los extremos no hace falta que coincidan, salvo línea-spline y spline-spline, que tienen "
+             "que compartir uno; entre dos splines deja continuidad G1), midpoint (punto + línea), concentric "
+             "(dos arcos, círculos o elipses: mismo centro) y fix (fija los puntos de las entidades). La tangencia con un "
+             "arco vale para su círculo entero: si el contacto cae fuera del tramo dibujado, avisa. Al agregar una tangente "
+             "con un arco o círculo, ese arco o círculo queda quieto y se acomoda la otra curva (una línea conserva su largo; "
+             "entre dos, queda quieto el primero de entities); si la otra no puede moverse, se mueve el arco entero. Ningún "
+             "arco cambia de radio, salvo que las demás restricciones lo obliguen. Radios y normales de círculos y elipses no "
+             "cambian: se mueven sus centros. Son las de Fusion "
              "en 3D; las demás (simetría, curvatura, horizontal/vertical del plano) Fusion no las ofrece en 3D.",
              modifica=True)
 def add_constraint_3d(sesion, type: Literal["coincident", "axis", "parallel", "perpendicular", "tangent", "equal",
@@ -193,8 +210,14 @@ def add_constraint_3d(sesion, type: Literal["coincident", "axis", "parallel", "p
     """
     def crear(b):
         _existen(b, entities)
-        return b3.agregar_restriccion(b, RESTRICCIONES_3D[type], entities, eje=axis)
+        rid = b3.agregar_restriccion(b, RESTRICCIONES_3D[type], entities, eje=axis)
+        if type == "tangent":
+            b3.acomodar_tangente(b, entities, _cotas(sesion, b))
+        return rid
     rid, op, br = _editar(sesion, sketch, crear, "INVALID_CONSTRAINT")
+    fuera = b3.tangencias_fuera_del_arco(br.boceto) if type == "tangent" and br is not None else []
+    if fuera:
+        sesion.avisar(aviso_tangencias_fuera(fuera))
     return _informe(sesion, op, br, constraint=rid)
 
 
@@ -427,9 +450,9 @@ def _curvas(sesion, op, curves):
     return salida
 
 
-def _agregar_curvas(sesion, sketch, origen, construction):
-    """Calcula las curvas del «origen» (`aristas_de_origen`, lo mismo que el recálculo) y las agrega al boceto; cada
-    una guarda su índice en el resultado para seguir al modelo."""
+def _agregar_curvas(sesion, sketch, origen, construction, vinculo=True):
+    """Calcula las curvas del «origen» (`aristas_de_origen`, lo mismo que el recálculo) y las agrega al boceto; con
+    `vinculo`, cada una guarda su índice en el resultado para seguir al modelo (sin él quedan congeladas)."""
     from ..timeline.operaciones import aristas_de_origen
     try:
         aristas = aristas_de_origen(origen, sesion.doc.estado_final)
@@ -440,10 +463,10 @@ def _agregar_curvas(sesion, sketch, origen, construction):
 
     def crear(b):
         plano = boceto_resuelto(sesion, op_boceto(sesion, sketch)).plano
-        return [b3.agregar_desde_mundo(b, d, plano, construction, {**origen, "index": i})
+        return [b3.agregar_desde_mundo(b, d, plano, construction, {**origen, "index": i} if vinculo else None)
                 for i, d in enumerate(aristas)]
     ids, op, br = _editar(sesion, sketch, crear)
-    return _informe(sesion, op, br, entities=ids)
+    return _informe(sesion, op, br, entities=ids, linked=vinculo)
 
 
 @herramienta("intersect_curves", "boceto",
@@ -516,6 +539,50 @@ def project_to_surface(sesion, faces: list[str] | str, curves: list[int | dict],
     return _agregar_curvas(sesion, sketch, origen, construction)
 
 
+@herramienta("isoparametric_curve", "boceto",
+             "Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara las curvas de parámetro "
+             "constante, recortadas a su contorno, y las deja como curvas 3D del boceto. direction=u: las que siguen el "
+             "parámetro U (V constante), v: las que siguen V, both: las dos. type=single: la que pasa por point (un "
+             "punto de la cara, se proyecta a ella); type=distributed: las de toda la cara, a lo ancho, una cada "
+             "distance mm (medidos sobre la curva perpendicular por point; una pasa por el punto) o quantity curvas "
+             "parejas de borde a borde. Con link=true (por defecto) las curvas siguen a la cara si el modelo cambia "
+             "(source anota de dónde salieron; si la cara se pierde quedan congeladas con aviso, como "
+             "intersect_curves y project_to_surface: manage_lost_projections y break_projection_link son de las proyecciones 2D); link=false las deja libres.",
+             modifica=True)
+def isoparametric_curve(sesion, face: str, point: list[float], direction: Literal["u", "v", "both"] = "u",
+                        type: Literal["single", "distributed"] = "single", distance: float | None = None,
+                        quantity: int | None = None, body: str | None = None, sketch: str | None = None,
+                        construction: bool = False, link: bool = True):
+    """
+    face: la cara: selector ('>Z') o id de find_faces ('Cuerpo1/F6'); tiene que ser una sola.
+    point: punto [x, y, z] del mundo sobre la cara (o cerca: se proyecta); da dónde va la curva single y la referencia de las distribuidas.
+    direction: u (sigue el parámetro U, V constante), v (sigue V, U constante) o both (las dos).
+    type: single (una curva por point) o distributed (varias a lo ancho de la cara).
+    distance: con distributed, separación entre curvas en mm (excluye a quantity).
+    quantity: con distributed, cantidad de curvas parejas de borde a borde (excluye a distance); hasta 200.
+    body: cuerpo donde se evalúa el selector de face; vacío = el único cuerpo.
+    sketch: id o nombre del boceto 3D donde quedan las curvas; vacío = el último boceto del timeline.
+    construction: true deja las curvas como construcción.
+    link: true = las curvas siguen a la cara si el modelo cambia (Projection Link); false = congeladas.
+    """
+    elegidas = sl.elegir(sesion, face, "cara", body)
+    if len(elegidas) != 1:
+        raise error("INVALID_ARGUMENTS", f"face tiene que ser UNA cara (el selector dio {len(elegidas)}).")
+    p = _punto(point, "point")
+    if type == "single" and (distance is not None or quantity is not None):
+        raise error("INVALID_ARGUMENTS", "distance y quantity son de type=distributed.")
+    if type == "distributed" and (distance is None) == (quantity is None):
+        raise error("INVALID_ARGUMENTS", "type=distributed pide distance o quantity (una sola de las dos).")
+    if distance is not None and not (isinstance(distance, (int, float)) and not isinstance(distance, bool)
+                                     and math.isfinite(distance) and distance > 0):
+        raise error("INVALID_ARGUMENTS", f"distance tiene que ser un número mayor que 0 (llegó {distance!r}).")
+    if quantity is not None and (isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1):
+        raise error("INVALID_ARGUMENTS", f"quantity es un entero de 1 o más (llegó {quantity!r}).")
+    origen = {"tool": "isoparametric_curve", "refs": [sl.referencia(*elegidas[0])], "point": p, "direction": direction,
+              "type": type, "distance": None if distance is None else float(distance), "quantity": quantity}
+    return _agregar_curvas(sesion, sketch, origen, construction, link)
+
+
 # ---------------------------------------------------------------- informe (get_sketch)
 def info_3d(sesion, b, br):
     """Claves 3D de get_sketch: geometría resuelta (coordenadas del boceto), restricciones, cotas y estado."""
@@ -569,7 +636,75 @@ def info_3d(sesion, b, br):
                                "type": "angle" if d.get("tipo") == "angulo" else "distance",
                                "value": valor(d["expresion"], ANGULO if d.get("tipo") == "angulo" else LONGITUD)}
                               for k, d in g["cotas"].items()],
-            "status_3d": estado, "dof_3d": gdl}
+            "tangents_off_arc_3d": b3.tangencias_fuera_del_arco(b), "status_3d": estado, "dof_3d": gdl}
     if br is not None and br.solver3d is not None and not br.solver3d.ok:
         info["message_3d"] = br.solver3d.mensaje
     return info
+
+
+_AYUDAS_3D = {k: v for k, v in _TIPOS_AYUDA.items() if v in inf3.TIPOS_3D}
+
+
+@herramienta("infer_sketch_snap_3d", "boceto",
+             "Boceto 3D: dice qué ayuda de dibujo propone la interfaz con el cursor en [x, y, z] (Fusion: 3D Sketch › "
+             "ayudas de dibujo): punto medio, intersección, sobre la curva, tangente y perpendicular desde un punto base, "
+             "alineación con otros puntos (misma coordenada en el plano) y horizontal/vertical (los ejes de la tríada). "
+             "El cursor se proyecta al plano de la tríada (plane por origin) y mira a lo largo de view_direction. Lo que "
+             "es de la geometría engancha EN EL ESPACIO: el medio de una línea fuera del plano es ese punto 3D, no su "
+             "proyección. Lo que es del plano (alineaciones, horizontal/vertical, intersección de lo que solo se cruza "
+             "visto desde él) vuelve como un punto de él. Devuelve las candidatas ordenadas (la primera es la que se "
+             "activa; alternative elige otra). Cada una trae en constraints las restricciones 3D que dejaría un clic ahí "
+             "(la interfaz las agrega sola si la geometría ya las cumple): del punto del clic con una curva (midpoint, "
+             "coincident, también con arcos, círculos, elipses, cónicas y splines) o de la línea que sale de base "
+             "(perpendicular, tangent, axis, con el eje x, y o z en axis). No modifica el boceto.")
+def infer_sketch_snap_3d(sesion, cursor: list[float], sketch: str | None = None,
+                         plane: Literal["xy", "yz", "zx"] = "xy", origin: list[float] | None = None,
+                         base: list[float] | None = None, tolerance: float = 0.5, types: list[str] | None = None,
+                         alternative: int = 0, view_direction: list[float] | None = None):
+    """
+    cursor: posición del cursor [x, y, z] en mm (coordenadas del boceto); se proyecta al plano elegido.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    plane: plano de la tríada sin girar: xy (u = x, v = y), yz (u = y, v = z) o zx (u = z, v = x).
+    origin: punto [x, y, z] por el que pasa el plano (el origen de la tríada); vacío = el origen del boceto.
+    base: punto anterior de la herramienta [x, y, z], donde esté en el espacio (para tangente, perpendicular y horizontal/vertical).
+    tolerance: radio de captura en mm alrededor del rayo del cursor.
+    types: familias a considerar: midpoint, intersection, tangent, perpendicular, on_curve, alignment, horizontal, vertical; vacío = todas.
+    alternative: 0 = la mejor; 1, 2… recorren las otras en vueltas.
+    view_direction: dirección [x, y, z] en la que mira la cámara (el rayo del cursor); vacío = perpendicular al plano.
+    """
+    c = np.array(_punto(cursor, "cursor"))
+    o = np.array(_punto(origin, "origin") if origin is not None else [0.0, 0.0, 0.0])
+    b = None if base is None else np.array(_punto(base, "base"))
+    if not (isinstance(tolerance, (int, float)) and math.isfinite(tolerance) and 0 < tolerance <= 1000):
+        raise error("INVALID_ARGUMENTS", "tolerance es un radio en mm: mayor que 0 y hasta 1000.")
+    if isinstance(alternative, bool) or not isinstance(alternative, int) or alternative < 0:
+        raise error("INVALID_ARGUMENTS", "alternative es un entero desde 0.")
+    vista = None if view_direction is None else np.array(_punto(view_direction, "view_direction"))
+    if vista is not None and not float(np.linalg.norm(vista)) > 1e-9:
+        raise error("INVALID_ARGUMENTS", "view_direction no puede ser el vector nulo.")
+    tipos = inf3.TIPOS_3D
+    if types:
+        malos = [t for t in types if t not in _AYUDAS_3D]
+        if malos:
+            raise error("INVALID_ARGUMENTS", f"Familias desconocidas {malos}: usá {sorted(_AYUDAS_3D)}.")
+        tipos = tuple(_AYUDAS_3D[t] for t in types)
+    op, br = boceto_activo(sesion, sketch, derivados=False)
+    u, v = (np.array(e, float) for e in inf3.PLANOS[plane])
+    n = np.cross(u, v)
+    al_plano = lambda p: p - n * float((p - o) @ n)  # noqa: E731
+    proy = inf3.proyectar(br.boceto, br.plano, o, u, v)
+    lista = inf3.ayudas(proy, al_plano(c), tolerance, b, tipos, rayo=None if vista is None else (al_plano(c), vista))
+    triple = lambda p: [_r(float(x)) for x in p]  # noqa: E731
+
+    def deja(a):
+        """[{type, entity, applies_to}]: entity = línea 3D con la que se une (None en axis: lo da la dirección de la línea)."""
+        un = inf3.uniones(proy, a)
+        d = u if a.inferencia.tipo == "horizontal" else v                # el eje de la tríada que sigue la línea
+        eje = next((k for k, e in b3.EJES.items() if abs(abs(float(d @ np.array(e))) - 1.0) < 1e-9), None)
+        return [{"type": _A_INGLES[t], "entity": e, "applies_to": donde, **({"axis": eje} if t == "eje" else {})}
+                for donde, lista_u in (("point", un["punto"]), ("line", un["curva"])) for t, e in lista_u]
+    candidatas = [{"type": _NOMBRE_AYUDA[a.inferencia.tipo], "point": triple(a.punto), "label": a.etiqueta,
+                   "distance": _r(a.inferencia.distancia), "guides": [[triple(p), triple(q)] for p, q in a.guias],
+                   "constraints": deja(a)} for a in lista]
+    return {"sketch": _paso(op), "plane": plane, "tolerance": tolerance, "count": len(lista),
+            "selected": candidatas[alternative % len(lista)] if lista else None, "candidates": candidatas}

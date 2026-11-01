@@ -215,7 +215,7 @@ def _ancho_x(sesion):
 def test_boc17_con_link_sigue_al_modelo_y_sin_link_queda_congelada(caja):
     r = llamar(caja, "project_to_sketch", bodies=["Cuerpo1"])
     assert r["projection"] == 1 and boceto(caja)["projections"] == [
-        {"id": 1, "mode": "project", "lost": False, "entities": boceto(caja)["projections"][0]["entities"]}]
+        {"id": 1, "mode": "project", "lost": False, "entities": boceto(caja)["projections"][0]["entities"], "automatic": False}]
     llamar(caja, "set_parameter", name="ancho", expression="30 mm")
     assert _ancho_x(caja) == pytest.approx(30)
     s = api.Sesion()

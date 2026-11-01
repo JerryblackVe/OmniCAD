@@ -9,13 +9,14 @@ from .registro import herramienta
 
 _TIPOS = {"midpoint": "medio", "intersection": "interseccion", "tangent": "tangente", "perpendicular": "perpendicular",
           "on_curve": "curva", "alignment": "alineacion", "horizontal": "horizontal", "vertical": "vertical",
-          "parallel": "paralela"}
+          "parallel": "paralela", "equal": "igual"}
 assert set(_TIPOS.values()) == set(TIPOS_INFERENCIA)
 _NOMBRE = {"punto_medio": "midpoint", "interseccion": "intersection", "tangente": "tangent",
            "perpendicular": "perpendicular", "sobre_curva": "on_curve", "alineado_h": "aligned_horizontal",
            "alineado_v": "aligned_vertical", "alineado_hv": "aligned_cross", "horizontal": "horizontal",
            "vertical": "vertical", "paralela": "parallel", "colineal": "collinear",
-           "perpendicular_dir": "perpendicular_direction"}
+           "perpendicular_dir": "perpendicular_direction", "tangente_circulo": "tangent_circle", "igual": "equal",
+           "interseccion_aparente": "apparent_intersection"}
 
 
 def _par(a, b, nombre):
@@ -44,13 +45,17 @@ def _candidata(inf):
 
 @herramienta("infer_sketch_snap", "boceto",
              "Dice qué ayuda de dibujo (inferencia) propone la interfaz con el cursor en (x, y): punto medio, "
-             "intersección, tangente, perpendicular, sobre la curva, paralela/perpendicular/colineal a una línea cercana, alineación con otros puntos (misma X o misma Y, "
-             "solo guía y sin restricción) y horizontal/vertical desde un punto base. Devuelve las candidatas "
+             "intersección (real y aparente, la del cruce de dos prolongaciones, solo guía), tangente, perpendicular, sobre la curva, "
+             "paralela/perpendicular/colineal a una línea cercana, igual (largo de una línea o radio de un círculo), "
+             "alineación con otros puntos (misma X o misma Y, "
+             "solo guía y sin restricción) y horizontal/vertical desde un punto base. Con radius_mode la base es el centro "
+             "de un círculo o arco y el cursor fija su radio (tangente a otro círculo, radio igual). Devuelve las candidatas "
              "ordenadas (la primera es la que se activa; alternative elige otra, como la tecla Espacio) y, para cada "
              "una, el punto ajustado, las guías y la restricción que dejaría al confirmar. No modifica el boceto.")
 def infer_sketch_snap(sesion, x: float, y: float, sketch: str | None = None, base_x: float | None = None,
                       base_y: float | None = None, tolerance: float = 0.5, types: list[str] | None = None,
-                      exclude: list[int] | None = None, shift: bool = False, alternative: int = 0):
+                      exclude: list[int] | None = None, shift: bool = False, alternative: int = 0,
+                      radius_mode: bool = False):
     """
     x: coordenada X del cursor en mm, sobre el plano del boceto.
     y: coordenada Y del cursor en mm, sobre el plano del boceto.
@@ -58,10 +63,11 @@ def infer_sketch_snap(sesion, x: float, y: float, sketch: str | None = None, bas
     base_x: X del punto anterior de la línea en curso (para tangente, perpendicular y horizontal/vertical); va con base_y.
     base_y: Y del punto anterior de la línea en curso.
     tolerance: radio de captura en mm (en pantalla son px / escala: con zoom 10 px/mm, 8 px son 0.8 mm).
-    types: familias a considerar: midpoint, intersection, tangent, perpendicular, on_curve, alignment, horizontal, vertical, parallel; vacío = todas.
+    types: familias a considerar: midpoint, intersection, tangent, perpendicular, on_curve, alignment, horizontal, vertical, parallel, equal; vacío = todas.
     exclude: ids de puntos o curvas que no cuentan (la geometría que se está dibujando).
     shift: true imita Mayús: el punto medio queda como coincidente en vez de punto medio.
     alternative: 0 = la mejor; 1, 2… recorren las otras en vueltas.
+    radius_mode: true si la base (base_x, base_y) es el centro de un círculo o arco y el cursor fija el radio: propone el radio tangente a otra circunferencia o igual al de otra; exige la base.
     """
     for nombre, valor in (("x", x), ("y", y), ("tolerance", tolerance)):
         if not math.isfinite(valor):
@@ -73,6 +79,8 @@ def infer_sketch_snap(sesion, x: float, y: float, sketch: str | None = None, bas
     base = _par(base_x, base_y, "base")
     if base is not None and not all(math.isfinite(v) for v in base):
         raise error("INVALID_ARGUMENTS", "La base tiene que ser finita.")
+    if radius_mode and base is None:
+        raise error("INVALID_ARGUMENTS", "radius_mode necesita la base (base_x y base_y): es el centro del círculo.")
     elegidas = TIPOS_INFERENCIA
     if types:
         malos = [t for t in types if t not in _TIPOS]
@@ -82,7 +90,8 @@ def infer_sketch_snap(sesion, x: float, y: float, sketch: str | None = None, bas
     op, _ = boceto_activo(sesion, sketch, derivados=False)
     b: Boceto = op.boceto.copia()
     _sincronizar_con_solver(sesion, op, b)
-    lista = inferencias(b, (x, y), tolerance, base=base, excluir=exclude or (), coincidente=shift, tipos=elegidas)
+    lista = inferencias(b, (x, y), tolerance, base=base, excluir=exclude or (), coincidente=shift, tipos=elegidas,
+                       centro=radius_mode)
     return {"sketch": _paso(op), "tolerance": tolerance, "count": len(lista),
             "selected": _candidata(lista[alternative % len(lista)]) if lista else None,
             "candidates": [_candidata(i) for i in lista]}

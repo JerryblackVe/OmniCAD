@@ -81,12 +81,12 @@ def test_boc14_soltar_desfase_desde_la_seleccion(lienzo):
     assert not lz.soltar_desfase()                         # ya no es parte de un desfase
 
 
-def test_boc14_paleta_ofrece_la_direccion_del_desfase(app):
-    paleta = modo_boceto.PaletaBoceto()
+def test_boc14_tarjeta_ofrece_la_direccion_del_desfase(app):
+    tarjeta = modo_boceto.TarjetaHerramienta()
     recibido = []
-    paleta.ajuste.connect(lambda k, v: recibido.append((k, v)))
-    paleta.set_herramienta("desfase", opciones={"direccion_desfase": "un"})
-    combo = paleta.contexto.findChild(QComboBox)
+    tarjeta.ajuste.connect(lambda k, v: recibido.append((k, v)))
+    tarjeta.set_herramienta("desfase", opciones={"direccion_desfase": "un"})
+    combo = tarjeta.contexto.findChild(QComboBox)
     assert [combo.itemData(i) for i in range(combo.count())] == ["un", "dos", "simetrico"]
     combo.setCurrentIndex(2)
     assert recibido == [("direccion_desfase", "simetrico")]
@@ -183,12 +183,12 @@ def test_boc17_interruptor_de_vinculo(lienzo_xy):
     assert len(lz.b.proyecciones) == 1
 
 
-def test_boc17_paleta_tiene_el_interruptor_de_vinculo(app):
-    paleta = modo_boceto.PaletaBoceto()
+def test_boc17_tarjeta_tiene_el_interruptor_de_vinculo(app):
+    tarjeta = modo_boceto.TarjetaHerramienta()
     recibido = []
-    paleta.ajuste.connect(lambda k, v: recibido.append((k, v)))
-    paleta.set_herramienta("proyectar", opciones={"vinculo_proyeccion": True, "filtro_proyectar": "entidades"})
-    casilla = paleta.contexto.findChild(QCheckBox)
+    tarjeta.ajuste.connect(lambda k, v: recibido.append((k, v)))
+    tarjeta.set_herramienta("proyectar", opciones={"vinculo_proyeccion": True, "filtro_proyectar": "entidades"})
+    casilla = tarjeta.contexto.findChild(QCheckBox)
     assert casilla.isChecked()
     casilla.setChecked(False)
     assert recibido == [("vinculo_proyeccion", False)]
@@ -293,12 +293,12 @@ def test_boc18_eje_por_arista_y_sin_vinculo(lienzo_xz):
     assert lz.b.proyecciones[0]["eje"] == {"tipo": "eje", "id": "Z"}
 
 
-def test_boc18_paleta_y_cinta_del_perfil_giratorio(app):
-    paleta = modo_boceto.PaletaBoceto()
-    paleta.set_herramienta("perfil_giratorio", opciones={"eje_giro": "Z", "tolerancia_giro": 0.1,
+def test_boc18_tarjeta_y_cinta_del_perfil_giratorio(app):
+    tarjeta = modo_boceto.TarjetaHerramienta()
+    tarjeta.set_herramienta("perfil_giratorio", opciones={"eje_giro": "Z", "tolerancia_giro": 0.1,
                                                          "invertir_giro": False, "vinculo_proyeccion": True})
-    assert paleta.contexto.findChild(QDoubleSpinBox).value() == pytest.approx(0.1)
-    form = paleta.form_contexto
+    assert tarjeta.contexto.findChild(QDoubleSpinBox).value() == pytest.approx(0.1)
+    form = tarjeta.form_contexto
     etiquetas = {form.itemAt(f, QFormLayout.ItemRole.LabelRole).widget().text()
                  for f in range(form.rowCount()) if form.itemAt(f, QFormLayout.ItemRole.LabelRole)}
     assert {"Invertir", "Vínculo de proyección", "Solo contorno exterior", "Proyectar eje"} <= etiquetas

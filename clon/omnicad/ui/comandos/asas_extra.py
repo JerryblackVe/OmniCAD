@@ -62,7 +62,7 @@ def _asas_escala(self, ctx, v):
     if base is None:
         return []
     radios = []
-    for c in _cuerpos_ids(v):
+    for c in _cuerpos_ids(v, "entidades"):
         try:
             caja = geo.caja_envolvente(ctx.estado.cuerpos[c].forma)
         except Exception:  # noqa: BLE001 — cuerpos de malla o ya borrados: sin caja exacta
@@ -93,7 +93,8 @@ def _asas_barrido(self, ctx, v):
             salida.append(mp.AsaRuta("distancia", ts, muestras_ruta(formas, ts)))
         except Exception:  # noqa: BLE001 — una ruta partida o que no se puede muestrear no rompe el diálogo
             pass
-    if v.get("tipo") != "cuerpo":
+    torsion = next(c for c in self.campos(ctx) if c.clave == "torsion")      # barrido sólido y de superficie: difieren
+    if torsion.visible_si is None or torsion.visible_si(v):
         salida.append(mp.Angulo("torsion", pt[0], pt[1], mp.perpendiculares(pt[1])[0]))
     return salida
 
@@ -140,6 +141,8 @@ def _asas_extruir_superficie(self, ctx, v):
     """Flecha de distancia y asa de conicidad; la dirección es la que usa la operación: la elegida, la normal
     del boceto o, con aristas de un cuerpo (sin plano), el eje Z."""
     mp = _mp()
+    if v.get("extension", "distancia") != "distancia":
+        return []
     ents = [e for e in (mp.entidad(h, ctx.estado) for h in v.get("curvas") or []) if e is not None and e.forma is not None]
     if not ents:
         return []
@@ -151,7 +154,18 @@ def _asas_extruir_superficie(self, ctx, v):
         n = mp.unitario(plano.normal) if plano is not None else np.array([0.0, 0.0, 1.0])
     if n is None:
         return []
-    salida = [mp.Flecha("distancia", centro, n, factor=0.5 if v.get("simetrica") else 1.0)]
+    if v.get("invertir"):
+        n = -n
+    if v.get("inicio") == "desfase":
+        centro = centro + n * evaluar_o_cero(ctx, v.get("desfase_inicio"))
+    lados = "simetrica" if v.get("simetrica") else v.get("lados", "un_lado")
+    if lados == "simetrica":
+        total = v.get("simetrica") or v.get("medida", "total") == "total"
+        salida = [mp.Flecha("distancia", centro, n, factor=0.5 if total else 1.0, minimo=0.0)]
+    else:
+        salida = [mp.Flecha("distancia", centro, n)]
+    if lados == "dos_lados":
+        salida.append(mp.Flecha("distancia2", centro, -n, minimo=0.0))
     lateral = mp.perpendiculares(n)[0]
     borde = mp.punto_borde([e.forma for e in ents], centro, lateral)
     t = n * (-1.0 if evaluar_o_cero(ctx, v.get("distancia")) < 0 else 1.0)
@@ -313,7 +327,7 @@ def _asas_extender(self, ctx, v):
     if not v.get("aristas"):
         return []
     s = _saliente_de_arista(ctx, v["aristas"][0])
-    return [_mp().Flecha("distancia", s[0], s[1])] if s is not None else []
+    return [_mp().Flecha("distancia", s[0], s[1], minimo=0.0)] if s is not None else []
 
 
 def _asas_reglada(self, ctx, v):
@@ -346,7 +360,7 @@ def _asas_reglada(self, ctx, v):
 def _asas_sup_revolucion(self, ctx, v):
     """Arco de ángulo alrededor del eje, a la distancia del primer punto del perfil."""
     mp = _mp()
-    if not v.get("curvas") or not v.get("eje"):
+    if not v.get("curvas") or not v.get("eje") or v.get("extension", "angulo") != "angulo":
         return []
     forma = _forma_de(ctx, v["curvas"][0])
     pt = _punto_y_tangente(forma) if forma is not None else None
@@ -359,7 +373,12 @@ def _asas_sup_revolucion(self, ctx, v):
     d, punto = mp.unitario(d), np.asarray(punto, float)
     pie = punto + d * float((pt[0] - punto) @ d)
     radio = float(np.linalg.norm(pt[0] - pie))
-    return [mp.Angulo("angulo", pie, d, pt[0] - pie, radio)] if radio > 1e-6 else []
+    if radio <= 1e-6:
+        return []
+    salida = [mp.Angulo("angulo", pie, d, pt[0] - pie, radio)]
+    if v.get("lados") == "dos_lados":
+        salida.append(mp.Angulo("angulo2", pie, -d, pt[0] - pie, radio * 0.8))
+    return salida
 
 
 def _asas_empalme_superficie(self, ctx, v):

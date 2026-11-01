@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFrame, QG
                                QPushButton, QScrollArea, QToolButton, QVBoxLayout, QWidget)
 
 from .comando import _FilaSeleccion
+from .formulario import ANCHOS, armar_cabecera, armar_estado, poner_estado
 from .iconos import icono
 
 TITULOS = {"rectangular": "PATRÓN RECTANGULAR", "circular": "PATRÓN CIRCULAR"}
@@ -38,6 +39,8 @@ class _Campo(QLineEdit):
 
 
 class PanelPatron(QFrame):
+    TIPO_INICIAL = "rectangular"     # `PanelTransformar` (Escala y Mover/copiar) hereda de acá con sus propias filas
+    ANCHO = ANCHOS["normal"]
     campo = Signal(str)          # lo que va a elegir el próximo clic: seleccion, centro, dir1 o dir2
     limpiar = Signal(str)
     cambio = Signal(object)      # {clave: texto} de todos los campos, a cada tecla
@@ -50,24 +53,14 @@ class PanelPatron(QFrame):
         super().__init__(parent)
         self.setObjectName("panel_comando")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.tipo = "rectangular"
+        self.tipo = self.TIPO_INICIAL
         self.filas, self.campos, self.combos, self.casillas = {}, {}, {}, {}
         self._rectangular, self._circular = [], []
         self._quieto = False
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        cab = QFrame(objectName="cabecera_comando")
-        hc = QHBoxLayout(cab)
-        hc.setContentsMargins(8, 4, 4, 4)
-        self.icono = QLabel()
-        self.titulo = QLabel(objectName="titulo_comando")
-        hc.addWidget(self.icono)
-        hc.addWidget(self.titulo, 1)
-        cerrar = QToolButton(text="✕")
-        cerrar.setToolTip("Cancelar (Esc)")
-        cerrar.clicked.connect(self.cancelado)
-        hc.addWidget(cerrar)
+        cab, self.icono, self.titulo = armar_cabecera(self, self.cancelado)
         v.addWidget(cab)
         self.cuerpo = QWidget()
         self.g = QGridLayout(self.cuerpo)
@@ -82,13 +75,7 @@ class PanelPatron(QFrame):
         self.scroll.setWidget(self.cuerpo)
         v.addWidget(self.scroll)
         self._armar()
-        self.guia = QLabel(objectName="pie_comando", wordWrap=True)
-        self.guia.setMaximumWidth(330)
-        v.addWidget(self.guia)
-        self.mensaje = QLabel(objectName="mensaje_comando", wordWrap=True)
-        self.mensaje.setContentsMargins(10, 0, 10, 4)
-        self.mensaje.setMaximumWidth(330)
-        v.addWidget(self.mensaje)
+        armar_estado(self, v, self.ANCHO)
         pie = QHBoxLayout()
         pie.setContentsMargins(10, 4, 10, 8)
         pie.addStretch(1)
@@ -101,7 +88,7 @@ class PanelPatron(QFrame):
         v.addLayout(pie)
         for w in self.findChildren(QAbstractButton):
             w.setFocusPolicy(Qt.NoFocus)
-        self.configurar("rectangular")
+        self.configurar(self.TIPO_INICIAL)
 
     # ------------------------------------------------------------ armado
     def _fila(self, clave, texto, widget, ayuda, grupo):
@@ -188,7 +175,7 @@ class PanelPatron(QFrame):
         self._valor("angulo1", "Ángulo 1", "Dirección de la fila 1, en grados desde el eje X del boceto.", "rectangular", "°")
         self._combo("modo", "Distribución", MODOS, "rectangular")
         self._valor("cantidad1", "Cantidad 1", "Ejemplares en la dirección 1, contando el original.", "rectangular")
-        self._valor("distancia1", "Distancia 1", "Total (extensión) o por paso (espaciado). Negativa: sentido contrario.",
+        self._valor("distancia1", "Extensión total 1", "Total (extensión) o por paso (espaciado). Negativa: sentido contrario.",
                     "rectangular", "mm", invertir="distancia1")
         self._casilla("simetrico1", "Simétrico", "Reparte las copias a los dos lados del original.", "rectangular")
         self._casilla("dos", "Dirección 2", "Agrega una segunda dirección (filas y columnas).", "rectangular")
@@ -197,7 +184,7 @@ class PanelPatron(QFrame):
                                            "línea se usa el ángulo de abajo (no tiene que ser perpendicular).", "rectangular")
         self._valor("angulo2", "Ángulo 2", "Dirección 2, en grados desde el eje X del boceto.", "rectangular", "°")
         self._valor("cantidad2", "Cantidad 2", "Ejemplares en la dirección 2, contando el original.", "rectangular")
-        self._valor("distancia2", "Distancia 2", "Total (extensión) o por paso (espaciado). Negativa: sentido contrario.",
+        self._valor("distancia2", "Extensión total 2", "Total (extensión) o por paso (espaciado). Negativa: sentido contrario.",
                     "rectangular", "mm", invertir="distancia2")
         self._casilla("simetrico2", "Simétrico", "Reparte las copias de la dirección 2 a los dos lados del original.",
                       "rectangular")
@@ -213,7 +200,7 @@ class PanelPatron(QFrame):
     def lista_campos(self):
         """Los `QLineEdit` en el orden que usan las asas (`asas_patron`)."""
         return [self.campos[k] for k in ("cantidad1", "distancia1", "cantidad2", "distancia2", "cantidad",
-                                         "angulo_total")]
+                                         "angulo_total", "angulo1", "angulo2")]
 
     def textos(self):
         d = {k: c.text() for k, c in self.campos.items()}
@@ -259,6 +246,9 @@ class PanelPatron(QFrame):
             if e["etiquetas"].get(clave):
                 fila.boton.setText(e["etiquetas"][clave])
         self.poner(e["campos"])
+        paso = e["campos"].get("modo") == "espaciado"          # la etiqueta dice qué mide el valor (como en los paneles de comando)
+        for n in ("1", "2"):
+            self.filas["distancia" + n][0].setText(("Separación " if paso else "Extensión total ") + n)
         dos = bool(e["campos"].get("dos")) or e["tipo"] == "circular"
         for clave in ("dir2", "angulo2", "cantidad2", "distancia2", "simetrico2"):
             visible = e["tipo"] == "rectangular" and dos
@@ -272,10 +262,7 @@ class PanelPatron(QFrame):
         antes = self.size()
         self.boton_ok.setEnabled(e["valido"])
         self.boton_ok.setText("Aceptar")
-        self.guia.setText(e["guia"])
-        self.guia.setVisible(bool(e["guia"]))
-        self.mensaje.setText(e["error"])
-        self.mensaje.setVisible(bool(e["error"]))
+        poner_estado(self, e["guia"], e["error"])
         self.casilla_previa.blockSignals(True)
         self.casilla_previa.setChecked(e["previa"])
         self.casilla_previa.blockSignals(False)
@@ -286,7 +273,7 @@ class PanelPatron(QFrame):
     def ajustar(self):
         """Tamaño del panel: lo que piden sus filas, y si no entra en la vista el cuerpo se desplaza (ventanas chicas)."""
         self.cuerpo.adjustSize()
-        self.setFixedWidth(340)
+        self.setFixedWidth(self.ANCHO)
         self.scroll.setFixedHeight(self.cuerpo.sizeHint().height() + 2)
         self.layout().activate()
         self.adjustSize()

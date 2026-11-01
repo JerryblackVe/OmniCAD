@@ -31,7 +31,7 @@ DEFECTO = {"rectangular": {"cantidad1": "3", "distancia1": "30", "angulo1": "0",
                            "simetrico2": False},
            "circular": {"cantidad": "6", "angulo_total": "360", "distribucion": "completo", "centro_x": "", "centro_y": ""}}
 ORDEN_CAMPOS = ("seleccion", "dir1", "dir2", "centro")
-TIPOS_ASA = ["int", "long", "int", "long", "int", "ang"]       # el orden de `PanelPatron.lista_campos`
+TIPOS_ASA = ["int", "long", "int", "long", "int", "ang", "ang", "ang"]       # el orden de `PanelPatron.lista_campos`
 
 
 class _Mal(Exception):
@@ -98,6 +98,7 @@ class ControlPatron:
             self.l._asas.cerrar()
             self.l._asas = None
         self.tipo = self.editando = self.centro = self._cache = self._firma = self._estado = None
+        self.l.copias_en_edicion = frozenset()
         self.lineas = {"dir1": None, "dir2": None}
         self.suprimidos, self.error_clic, self.previa = set(), "", True
 
@@ -107,6 +108,9 @@ class ControlPatron:
         self.tipo, self.editando = registro["tipo"], registro["id"]
         l.seleccion = [i for i in registro["ids"] if i in l.b.curvas or i in l.b.puntos]
         self.suprimidos, self.previa, self.error_clic = set(registro["suprimidos"]), True, ""
+        # Las copias que ya existen se ocultan mientras dura el panel: la vista previa trae las nuevas y, debajo, las
+        # viejas hacían difícil ver qué cambió.
+        l.copias_en_edicion = frozenset(i for ids in registro["copias"].values() for i in ids)
         self.lineas = {"dir1": p.get("linea1"), "dir2": p.get("linea2")}
         if self.tipo == "rectangular":
             self.textos = {"cantidad1": str(p["cantidad1"]), "distancia1": formato.numero(p["distancia1"]),
@@ -483,7 +487,9 @@ class ControlPatron:
         if l._asas is not None and not getattr(l._asas, "_de_patron", False):
             return                                        # otra herramienta con sus propias asas
         p = r["params"]
-        direcciones = tuple(round(x, 9) for k in ("dir1", "dir2") for x in p.get(k, ()))
+        # La dirección de una fila sin línea la mueve su asa de ángulo: no entra en la clave, o soltar el asa a la mitad
+        # de un arrastre rearmaría todas. Con una línea de dirección, sí (es fija).
+        direcciones = tuple(round(x, 9) for k in (1, 2) if self.lineas[f"dir{k}"] is not None for x in p.get(f"dir{k}", ()))
         clave = (self.tipo, tuple(l._seleccion_util()), self.centro, direcciones, p.get("modo"), p["cantidad2"] > 1
                  if self.tipo == "rectangular" else p["angulo_total"] > 0)
         if l._asas is not None and getattr(l._asas, "_clave", None) == clave:
@@ -500,32 +506,53 @@ class ControlPatron:
         c = centro_de(l, l._seleccion_util())
         extension = p["modo"] == "extension"
 
-        def eje(u, i_n, i_d, lado):
+        def eje(dirk, i_n, i_d, i_a, lado):
+            linea = self.lineas[f"dir{dirk}"] is not None
+            fija = p[f"dir{dirk}"]
+
+            def u(v):                       # la fila sigue el ángulo escrito; con una línea de dirección, la de la línea
+                return fija if linea else (math.cos(math.radians(v[i_a])), math.sin(math.radians(v[i_a])))
+
             def largo(v):
                 n = max(int(v[i_n]), 1)
                 return v[i_d] if extension else v[i_d] * (n - 1 if n > 1 else 1)
 
             def donde(v, lateral=0.0):
-                e = largo(v)
-                return (c[0] + u[0] * e - u[1] * lateral * lado, c[1] + u[1] * e + u[0] * lateral * lado)
+                e, d = largo(v), u(v)
+                return (c[0] + d[0] * e - d[1] * lateral * lado, c[1] + d[1] * e + d[0] * lateral * lado)
 
             def dist(xy, v, v0=None, xy0=None):
-                t = (xy[0] - c[0]) * u[0] + (xy[1] - c[1]) * u[1]
+                d = u(v)
+                t = (xy[0] - c[0]) * d[0] + (xy[1] - c[1]) * d[1]
                 n = int(v[i_n])
                 return t if extension or n <= 1 else t / (n - 1)
 
             def cantidad(xy, v, v0=None, xy0=None):
-                n0 = int(v0[i_n])
+                n0, d = int(v0[i_n]), u(v0)
                 paso = (v0[i_d] / (n0 - 1) if extension and n0 > 1 else v0[i_d]) or 10.0
-                t = (xy[0] - xy0[0]) * u[0] + (xy[1] - xy0[1]) * u[1]
+                t = (xy[0] - xy0[0]) * d[0] + (xy[1] - xy0[1]) * d[1]
                 return n0 + round(t / paso)
-            return [Asa2D(i_d, donde, dist, ancla=lambda v: c, ayuda="Distancia"),
+
+            def angulo(xy, v, v0=None, xy0=None):
+                giro = _angulo((xy[0] - c[0], xy[1] - c[1]))
+                return giro + 360.0 * round((v[i_a] - giro) / 360.0)          # sin saltos de vuelta al cruzar ±180°
+            asas = [Asa2D(i_d, donde, dist, ancla=lambda v: c, ayuda="Distancia"),
                     Asa2D(i_n, lambda v: donde(v, _desfase_px(l)), cantidad, tipo="int", minimo=1, maximo=200,
                           ayuda="Cantidad")]
-        asas = eje(p["dir1"], 0, 1, 1.0)
-        if p["cantidad2"] > 1 or self.textos.get("dos"):
-            asas += eje(p["dir2"], 2, 3, -1.0)
-        return asas
+            giro = None
+            if not linea:                   # BOC-62: un asa a 56 px del centro que gira la dirección
+                radio = 56.0 / max(l.px_por_mm(), 1e-9)
+                giro = Asa2D(i_a, lambda v: (c[0] + radio * u(v)[0], c[1] + radio * u(v)[1]), angulo, ancla=lambda v: c,
+                             tipo="ang", ayuda="Ángulo")
+            return asas, giro
+        asas, giros = [], []
+        for dirk, i_n, i_d, i_a, lado in ((1, 0, 1, 6, 1.0), (2, 2, 3, 7, -1.0)):
+            if dirk == 2 and not (p["cantidad2"] > 1 or self.textos.get("dos")):
+                continue
+            nuevas, giro = eje(dirk, i_n, i_d, i_a, lado)
+            asas += nuevas
+            giros += [giro] if giro is not None else []
+        return asas + giros                  # los giros al final: los índices de las asas de distancia y cantidad no cambian
 
     def _asas_circular(self, p):
         l = self.l

@@ -3,8 +3,10 @@
 Modo boceto dentro de la vista 3D (como el entorno de boceto de Fusion 360):
   - la capa de dibujo (Lienzo) sobre el visor, proyectada con su cámara;
   - la PALETA DE BOCETO a la derecha (Opciones: tipo de línea —construcción / línea central—, Mirar a,
-    rejilla, forzar, corte, perfil, puntos, cotas, restricciones, geometrías proyectadas, construcción;
-    opciones de cada herramienta como las "Feature Options" de Fusion; y Terminar boceto);
+    rejilla, forzar, corte, perfil, puntos, cotas, restricciones, geometrías proyectadas, construcción, Boceto 3D;
+    estado del boceto y Terminar boceto);
+  - la TARJETA de la herramienta activa al lado de la paleta: sus opciones propias y, en Proyectar e Intersecar, la
+    selección, el resultado provisional, Aceptar y Cancelar;
   - la pestaña contextual BOCETO de la cinta (la arma la ventana con las acciones de acá);
   - el sombreado azul de los perfiles cerrados, recalculado al cambiar el boceto.
 Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del timeline.
@@ -12,19 +14,22 @@ Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del ti
 import numpy as np
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QCompleter, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
-                               QHBoxLayout, QLabel, QLayout, QLineEdit, QMessageBox, QPushButton, QSpinBox, QToolButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter, QDoubleSpinBox, QFormLayout, QFrame,
+                               QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit, QMessageBox, QPushButton,
+                               QScrollArea, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from ..nucleo.perfiles import detectar
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
-from .editor_boceto import (AYUDA_RESTRICCION, HERRAMIENTAS, NOMBRES_RESTRICCION, RESTRICCIONES_HERRAMIENTA, Lienzo,
-                            ajustes_inferencia)
+from .editor_boceto import (AYUDA_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
+                            RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia)
+from .formulario import armar_cabecera
 from .iconos import icono
 from .panel_patron import PanelPatron
+from .panel_transformar import PanelTransformar
 from .panel_simetria import PanelSimetria
+from .superposiciones import CabeceraMovible
 
 # acción → (texto del menú, herramienta, atajo, ícono). Atajos de Fusion: L, R, C, D, T, O, P, M, Mayús+V.
 ACCIONES_BOCETO = [
@@ -64,6 +69,7 @@ ACCIONES_BOCETO = [
     ("sk_intersecar", "Intersecar", "intersecar", None, "proyectar"),
     ("sk_incluir_3d", "Incluir geometría 3D", "incluir_3d", None, "proyectar"),
     ("sk_perfil_giratorio", "Perfil giratorio", "perfil_giratorio", None, "proyectar"),
+    ("sk_isoparametrica", "Curva isoparamétrica", "isoparametrica", None, "proyectar"),
     ("sk_proyectar_eje", "Proyectar eje", "proyectar_eje", None, "proyectar"),
     ("sk_cota", "Cota de boceto", "cota", "D", "cota"),
     ("sk_empalme", "Empalme", "empalme", None, "empalme"),
@@ -78,6 +84,7 @@ ACCIONES_BOCETO = [
     ("sk_escala", "Escala del boceto", "escala", None, "escala_boceto"),
     ("sk_mover", "Mover/copiar", "mover", "M", "mover"),
 ] + [(f"sk_{h}", NOMBRES_RESTRICCION[h], h, None, h) for h in RESTRICCIONES_HERRAMIENTA]
+TARJETAS = {h: (texto, ico) for _clave, texto, h, _atajo, ico in ACCIONES_BOCETO}       # título e ícono de cada tarjeta
 TIPOS_POR_FAMILIA = {
     "rectangulo": [("rectangulo", "2 puntos"), ("rectangulo_3p", "3 puntos"), ("rectangulo_centro", "Central")],
     "circulo": [("circulo", "Centro y diámetro"), ("circulo_2p", "2 puntos"), ("circulo_3p", "3 puntos"),
@@ -91,7 +98,7 @@ TIPOS_POR_FAMILIA = {
     "chaflan": [("chaflan", "Distancias iguales"), ("chaflan_dist_angulo", "Distancia y ángulo"),
                 ("chaflan_dos_dist", "Dos distancias")],
     "proyectar": [("proyectar", "Proyectar"), ("intersecar", "Intersecar"), ("incluir_3d", "Incluir geometría 3D"),
-                  ("perfil_giratorio", "Perfil giratorio")],
+                  ("perfil_giratorio", "Perfil giratorio"), ("isoparametrica", "Curva isoparamétrica")],
 }
 # Opciones de función (Feature Options de Fusion): herramienta → [(clave, etiqueta, [(valor, texto), ...])]
 OPCIONES_HERRAMIENTA = {
@@ -102,16 +109,23 @@ OPCIONES_HERRAMIENTA = {
     "desfase": [("direccion_desfase", "Dirección", [("un", "Un lado"), ("dos", "Dos lados"), ("simetrico", "Simétrico")])],
     "perfil_giratorio": [("eje_giro", "Eje", [("X", "Eje X"), ("Y", "Eje Y"), ("Z", "Eje Z"),
                                               ("arista", "Arista recta (primer clic)")])],
+    "isoparametrica": [("iso_direccion", "Dirección", [("u", "U"), ("v", "V"), ("both", "Ambas")]),
+                       ("iso_tipo", "Distribución", [("unica", "Una (por el punto)"), ("distancia", "Distribuidas por distancia"),
+                                             ("cantidad", "Distribuidas por cantidad")])],
 }
 # Opciones numéricas: herramienta → [(clave, etiqueta, mínimo, máximo, paso, sufijo)]
-NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.001, 10.0, 0.05, " mm")]}
+NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.001, 10.0, 0.05, " mm")],
+                       "isoparametrica": [("iso_distancia", "Distancia", 0.001, 100000.0, 1.0, " mm")]}
+# Opciones enteras: herramienta → [(clave, etiqueta, mínimo, máximo)]
+ENTEROS_HERRAMIENTA = {"isoparametrica": [("iso_cantidad", "Cantidad", 1, 200)]}
 # Casillas: herramienta → [(clave, etiqueta)]
 _VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
-CASILLAS_HERRAMIENTA = {"mover": [("copiar", "Copiar")], "proyectar": [_VINCULO], "intersecar": [_VINCULO],
+CASILLAS_HERRAMIENTA = {"proyectar": [_VINCULO], "intersecar": [_VINCULO],
                         "desfase": [("seleccion_cadena", "Selección de cadena"), ("match_topology", "Match Topology")],
                         "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO,
                                               ("contorno_exterior", "Solo contorno exterior"),
-                                              ("proyectar_eje", "Proyectar eje")]}
+                                              ("proyectar_eje", "Proyectar eje")],
+                        "isoparametrica": [_VINCULO]}
 # Opciones del texto: viven en el panel «Carácter» (PanelCaracter), no en la paleta de boceto
 ALINEACIONES_TEXTO = [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]
 ANCLAJES_TEXTO = [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"), ("abajo", "Abajo")]
@@ -147,12 +161,8 @@ class PaletaBoceto(QFrame):
     terminar = Signal()
     mirar_a = Signal()
     opcion = Signal(str, bool)
-    herramienta = Signal(str)
-    lados = Signal(int)
-    opcion_cota = Signal(str)
     construccion = Signal()
     eje = Signal()
-    ajuste = Signal(str, object)       # opción de la herramienta activa (clave, valor)
     dibujar3d = Signal(str, str, str, str)     # Boceto 3D: herramienta, bloqueo de la tríada, puntos, largo
 
     OPCIONES = [("rejilla", "Rejilla del boceto", True, True), ("forzar", "Forzar", False, True),
@@ -183,14 +193,17 @@ class PaletaBoceto(QFrame):
         v.addLayout(cab)
         self.cuerpo = QWidget()
         self.cuerpo.setFixedWidth(234)
-        c = QVBoxLayout(self.cuerpo)
+        externo = QVBoxLayout(self.cuerpo)
+        externo.setContentsMargins(0, 0, 0, 0)
+        self.opciones = QScrollArea(frameShape=QFrame.NoFrame, widgetResizable=True)   # en una ventana baja se desplaza
+        self.opciones.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lista = QWidget()
+        self.opciones.setWidget(lista)
+        externo.addWidget(self.opciones)
+        c = QVBoxLayout(lista)
         c.setContentsMargins(0, 0, 0, 0)
         seccion = QLabel("▾ <b>Opciones</b>")
         c.addWidget(seccion)
-        self.contexto = QWidget()
-        self.form_contexto = QFormLayout(self.contexto)
-        self.form_contexto.setContentsMargins(0, 2, 0, 2)
-        c.addWidget(self.contexto)
         grilla = QGridLayout()
         grilla.setColumnStretch(0, 1)
         grilla.addWidget(QLabel("Tipo de línea"), 0, 0)
@@ -267,72 +280,43 @@ class PaletaBoceto(QFrame):
         f3.addRow(self.b_triada)
         self.panel3d.setVisible(False)
         c.addWidget(self.panel3d)
+        c.addStretch(1)
         self.estado = QLabel()
         self.estado.setWordWrap(True)
-        c.addWidget(self.estado)
+        externo.addWidget(self.estado)
         fila = QHBoxLayout()
         fila.addStretch(1)
         self.b_terminar = QPushButton("Terminar boceto")
         self.b_terminar.clicked.connect(self.terminar)
         fila.addWidget(self.b_terminar)
-        c.addLayout(fila)
+        externo.addLayout(fila)
         v.addWidget(self.cuerpo)
+        self._alto_maximo = 100000
         self.ajustar()
 
-    def ajustar(self):
-        """Tamaño justo para el contenido (las opciones contextuales cambian con la herramienta)."""
-        self.layout().activate()
+    def ajustar(self, alto_maximo=None):
+        """Tamaño justo para el contenido (Boceto 3D y el estado del boceto cambian su alto). Con `alto_maximo` (lo que da
+        la vista) las opciones se desplazan: el estado y Terminar boceto siempre se ven."""
+        if alto_maximo is not None:
+            self._alto_maximo = alto_maximo
+        alto = self.opciones.widget().sizeHint().height()
+        self.opciones.setFixedHeight(alto)
+        sobra = self._alto_medido() - self._alto_maximo
+        if sobra > 0:
+            self.opciones.setFixedHeight(max(60, alto - sobra))
+            self._alto_medido()
         self.adjustSize()
+
+    def _alto_medido(self):
+        """Alto con lo que hay ahora (sin esperar al bucle de eventos: la paleta se ubica enseguida)."""
+        for layout in (self.cuerpo.layout(), self.layout()):
+            layout.invalidate()
+            layout.activate()
+        return self.sizeHint().height()
 
     def _plegar(self):
         self.cuerpo.setVisible(not self.cuerpo.isVisible())
         self.b_plegar.setText("–" if self.cuerpo.isVisible() else "+")
-        self.ajustar()
-
-    def set_herramienta(self, h, lados=6, opcion_cota="auto", opciones=None):
-        """Opciones contextuales según la herramienta activa (como las de Fusion)."""
-        opciones = opciones or {}
-        while self.form_contexto.rowCount():
-            self.form_contexto.removeRow(0)
-        fam = _familia(h)
-        if fam:
-            combo = QComboBox()
-            for clave, texto in TIPOS_POR_FAMILIA[fam]:
-                combo.addItem(texto, clave)
-            combo.setCurrentIndex(combo.findData(h))
-            combo.currentIndexChanged.connect(lambda _i, cb=combo: self.herramienta.emit(cb.currentData()))
-            self.form_contexto.addRow("Tipo", combo)
-        if fam == "poligono":
-            sp = QSpinBox()
-            sp.setRange(3, 64)
-            sp.setValue(lados)
-            sp.valueChanged.connect(self.lados)
-            self.form_contexto.addRow("Lados", sp)
-        if h == "cota":
-            combo = QComboBox()
-            combo.addItem("Automática (horizontal / vertical)", "auto")
-            combo.addItem("Alineada", "alineada")
-            combo.setCurrentIndex(combo.findData(opcion_cota))
-            combo.currentIndexChanged.connect(lambda _i, cb=combo: self.opcion_cota.emit(cb.currentData()))
-            self.form_contexto.addRow("Cota", combo)
-        for clave, etiqueta, valores in OPCIONES_HERRAMIENTA.get(h, []):
-            combo = QComboBox()
-            for valor, texto in valores:
-                combo.addItem(texto, valor)
-            combo.setCurrentIndex(max(0, combo.findData(opciones.get(clave))))
-            combo.currentIndexChanged.connect(lambda _i, cb=combo, k=clave: self.ajuste.emit(k, cb.currentData()))
-            self.form_contexto.addRow(etiqueta, combo)
-        for clave, etiqueta, minimo, maximo, paso, sufijo in NUMEROS_HERRAMIENTA.get(h, []):
-            sp = QDoubleSpinBox(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
-            sp.setValue(float(opciones.get(clave, minimo)))
-            sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, float(x)))
-            self.form_contexto.addRow(etiqueta, sp)
-        for clave, etiqueta in CASILLAS_HERRAMIENTA.get(h, []):
-            ch = QCheckBox()
-            ch.setChecked(bool(opciones.get(clave, clave == "contorno_exterior")))
-            ch.toggled.connect(lambda valor, k=clave: self.ajuste.emit(k, valor))
-            self.form_contexto.addRow(etiqueta, ch)
-        self.contexto.setVisible(self.form_contexto.rowCount() > 0)
         self.ajustar()
 
     def set_estado(self, resultado, conflictos=""):
@@ -351,7 +335,217 @@ class PaletaBoceto(QFrame):
         self.ajustar()
 
 
-FILTROS_FUENTE = [("todo", "Todo"), ("variables", "Variables"), ("negrita", "Con negrita"),
+class _Referencia(QFrame):
+    """Una referencia elegida en la tarjeta: su nombre y una ✕, del ancho justo (sin campo alrededor)."""
+    quitar = Signal()
+    ANCHO_MAXIMO = 170
+
+    def __init__(self, texto, parent=None):
+        super().__init__(parent, objectName="referencia_cmd")
+        h = QHBoxLayout(self)
+        h.setContentsMargins(6, 1, 2, 1)
+        h.setSpacing(2)
+        nombre = QLabel()
+        nombre.setText(nombre.fontMetrics().elidedText(texto, Qt.ElideMiddle, self.ANCHO_MAXIMO - 34))
+        nombre.setToolTip(texto)
+        h.addWidget(nombre)
+        b = QToolButton(text="✕", autoRaise=True)
+        b.setToolTip("Sacar de la selección")
+        b.setFocusPolicy(Qt.NoFocus)
+        b.clicked.connect(self.quitar)
+        h.addWidget(b)
+
+
+class TarjetaHerramienta(QFrame):
+    """Tarjeta de la herramienta activa, al lado de la Paleta de boceto: sus opciones propias (las «Feature Options» de
+    Fusion). En Proyectar e Intersecar suma la selección, el resultado provisional, Aceptar y Cancelar; las herramientas de
+    dibujo continuo se siguen terminando como siempre. No guarda estado: los valores salen por señales y `mostrar` pinta lo
+    que manda el Lienzo. Lo que no se escribe no toma el foco: Enter y Esc siguen siendo del Lienzo."""
+    herramienta = Signal(str)
+    lados = Signal(int)
+    opcion_cota = Signal(str)
+    ajuste = Signal(str, object)       # opción de la herramienta activa (clave, valor)
+    quitar = Signal(int)               # posición de la referencia que se saca
+    aceptado = Signal()
+    cancelado = Signal()
+    REFERENCIAS_A_LA_VISTA = 4         # con más, la lista se desplaza: la tarjeta no crece hasta salirse de la vista
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("panel_comando")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.posicion_usuario = None   # dónde la dejó la persona (None: al lado de la paleta)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.setSizeConstraint(QLayout.SetFixedSize)
+        cab = CabeceraMovible(self)
+        hc = QHBoxLayout(cab)
+        hc.setContentsMargins(8, 4, 8, 4)
+        self.icono = QLabel()
+        hc.addWidget(self.icono)
+        self.titulo = QLabel(objectName="titulo_comando")
+        hc.addWidget(self.titulo, 1)
+        self.b_cerrar = QToolButton(text="✕")
+        self.b_cerrar.setToolTip("Cancelar (Esc)")
+        self.b_cerrar.setFocusPolicy(Qt.NoFocus)
+        self.b_cerrar.clicked.connect(self.cancelado)
+        hc.addWidget(self.b_cerrar)
+        v.addWidget(cab)
+        self.contexto = QWidget()
+        self.form_contexto = QFormLayout(self.contexto)
+        self.form_contexto.setContentsMargins(10, 8, 10, 6)
+        v.addWidget(self.contexto)
+        self.resultado = QLabel(objectName="pie_comando", wordWrap=True)
+        self.resultado.setMaximumWidth(300)
+        v.addWidget(self.resultado)
+        self.mensaje = QLabel(objectName="mensaje_comando", wordWrap=True)
+        self.mensaje.setContentsMargins(10, 0, 10, 4)
+        self.mensaje.setMaximumWidth(300)
+        v.addWidget(self.mensaje)
+        self.pie = QWidget()
+        h = QHBoxLayout(self.pie)
+        h.setContentsMargins(10, 4, 10, 8)
+        h.addStretch(1)
+        self.boton_ok = QPushButton("Aceptar", objectName="boton_primario")
+        self.boton_ok.clicked.connect(self.aceptado)
+        h.addWidget(self.boton_ok)
+        self.boton_cancelar = QPushButton("Cancelar")
+        self.boton_cancelar.clicked.connect(self.cancelado)
+        h.addWidget(self.boton_cancelar)
+        v.addWidget(self.pie)
+        for b in self.findChildren(QAbstractButton):
+            b.setFocusPolicy(Qt.NoFocus)
+        self.referencias = None        # lista de referencias: solo existe en Proyectar e Intersecar
+        self._nombres = None
+        self._comando(False)
+
+    def _comando(self, activo):
+        """Muestra (o no) lo propio de un comando con selección: resultado, Aceptar, Cancelar y su ✕."""
+        for w in (self.resultado, self.pie, self.b_cerrar):
+            w.setVisible(activo)
+        self.mensaje.setVisible(False)
+
+    def _sin_foco(self, w):
+        """Combos y casillas no le sacan el teclado al Lienzo (Enter acepta y Esc cancela también después de usarlos)."""
+        w.setFocusPolicy(Qt.NoFocus)
+        return w
+
+    def _armar_referencias(self):
+        self.referencias = QScrollArea(frameShape=QFrame.NoFrame, widgetResizable=True)
+        self.referencias.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.referencias.setFocusPolicy(Qt.NoFocus)
+        self._lista = QWidget()
+        self._filas = QVBoxLayout(self._lista)
+        self._filas.setContentsMargins(0, 0, 0, 0)
+        self._filas.setSpacing(2)
+        self.referencias.setWidget(self._lista)
+        self._nombres = None
+        return self.referencias
+
+    def set_herramienta(self, h, lados=6, opcion_cota="auto", opciones=None):
+        """Título y opciones de la herramienta `h`. Las claves son las del Lienzo; ninguna opción se guarda acá."""
+        opciones = opciones or {}
+        while self.form_contexto.rowCount():
+            self.form_contexto.removeRow(0)
+        self.referencias = None
+        texto, ico = TARJETAS.get(h, (HERRAMIENTAS.get(h, (h,))[0], "seleccionar"))
+        self.titulo.setText(texto.upper())
+        self.icono.setPixmap(icono(ico).pixmap(18, 18))
+        fam = _familia(h)
+        if fam:
+            combo = self._sin_foco(QComboBox())
+            for clave, texto in TIPOS_POR_FAMILIA[fam]:
+                combo.addItem(texto, clave)
+            combo.setCurrentIndex(combo.findData(h))
+            # diferido: cambiar de herramienta rearma este formulario, y el combo no se puede borrar en su propia señal
+            combo.currentIndexChanged.connect(lambda _i, cb=combo: QTimer.singleShot(
+                0, self, lambda clave=cb.currentData(): self.herramienta.emit(clave)))
+            self.form_contexto.addRow("Tipo", combo)
+        if h in COMANDO_PROYECCION:
+            self.form_contexto.addRow("Geometría", self._armar_referencias())
+        if fam == "poligono":
+            sp = QSpinBox()
+            sp.setRange(3, 64)
+            sp.setValue(lados)
+            sp.valueChanged.connect(self.lados)
+            self.form_contexto.addRow("Lados", sp)
+        if h == "cota":
+            combo = self._sin_foco(QComboBox())
+            combo.addItem("Automática (horizontal / vertical)", "auto")
+            combo.addItem("Alineada", "alineada")
+            combo.setCurrentIndex(combo.findData(opcion_cota))
+            combo.currentIndexChanged.connect(lambda _i, cb=combo: self.opcion_cota.emit(cb.currentData()))
+            self.form_contexto.addRow("Cota", combo)
+        for clave, etiqueta, valores in OPCIONES_HERRAMIENTA.get(h, []):
+            combo = self._sin_foco(QComboBox())
+            for valor, texto in valores:
+                combo.addItem(texto, valor)
+            combo.setCurrentIndex(max(0, combo.findData(opciones.get(clave))))
+            combo.currentIndexChanged.connect(lambda _i, cb=combo, k=clave: self.ajuste.emit(k, cb.currentData()))
+            self.form_contexto.addRow(etiqueta, combo)
+        for clave, etiqueta, minimo, maximo, paso, sufijo in NUMEROS_HERRAMIENTA.get(h, []):
+            sp = QDoubleSpinBox(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
+            sp.setValue(float(opciones.get(clave, minimo)))
+            sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, float(x)))
+            self.form_contexto.addRow(etiqueta, sp)
+        for clave, etiqueta, minimo, maximo in ENTEROS_HERRAMIENTA.get(h, []):
+            sp = QSpinBox(minimum=minimo, maximum=maximo)
+            sp.setValue(int(opciones.get(clave, minimo)))
+            sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, int(x)))
+            self.form_contexto.addRow(etiqueta, sp)
+        for clave, etiqueta in CASILLAS_HERRAMIENTA.get(h, []):
+            ch = self._sin_foco(QCheckBox())
+            ch.setChecked(bool(opciones.get(clave, clave == "contorno_exterior")))
+            ch.toggled.connect(lambda valor, k=clave: self.ajuste.emit(k, valor))
+            self.form_contexto.addRow(etiqueta, ch)
+        self._comando(h in COMANDO_PROYECCION)
+        self.ajustar()
+
+    def mostrar(self, e):
+        """Pinta lo que manda el Lienzo (`estado_proyeccion`): referencias, resultado provisional y si se puede aceptar."""
+        if self.referencias is None:
+            return
+        if e["elegidos"] != self._nombres:
+            self._nombres = list(e["elegidos"])
+            while self._filas.count():
+                w = self._filas.takeAt(0).widget()
+                w.hide()
+                w.deleteLater()
+            filas = []
+            for i, texto in enumerate(e["elegidos"]):
+                r = _Referencia(texto, self._lista)
+                r.quitar.connect(lambda i=i: self.quitar.emit(i))
+                filas.append(r)
+            filas = filas or [QLabel("Sin elegir", self._lista)]
+            for w in filas:
+                self._filas.addWidget(w, 0, Qt.AlignLeft)
+            altos = [w.sizeHint().height() + self._filas.spacing() for w in filas]   # el layout aún no las ve: se miden acá
+            self.referencias.setFixedHeight(sum(altos[:self.REFERENCIAS_A_LA_VISTA]))
+            self.referencias.setFixedWidth(_Referencia.ANCHO_MAXIMO + 14)
+        texto = " ".join(x for x in (e["resultado"], e["nota"]) if x)
+        self.resultado.setText(texto)
+        self.resultado.setVisible(bool(texto))
+        self.mensaje.setText(e["error"])
+        self.mensaje.setVisible(bool(e["error"]))
+        self.boton_ok.setEnabled(e["valido"])
+        self.ajustar()
+
+    def ajustar(self):
+        for layout in (self.form_contexto, self.layout()):       # la lista de referencias acaba de cambiar de alto
+            layout.invalidate()
+            layout.activate()
+        self.adjustSize()
+
+    def resizeEvent(self, e):
+        """Cambió de ancho o de alto: se vuelve a ubicar para no meterse debajo de la paleta."""
+        super().resizeEvent(e)
+        area = self.parentWidget()
+        if self.isVisible() and hasattr(area, "reubicar"):
+            area.reubicar()
+
+
+FILTROS_FUENTE =[("todo", "Todo"), ("variables", "Variables"), ("negrita", "Con negrita"),
                   ("cursiva", "Con cursiva")]
 ESTILOS_TEXTO = [("regular", "Regular"), ("negrita", "Negrita"), ("cursiva", "Cursiva"),
                  ("negrita_cursiva", "Negrita cursiva")]
@@ -424,21 +618,19 @@ class PanelCaracter(QFrame):
         self.setObjectName("paleta_boceto")
         self._tam_usuario = [0, 0]
         v = QVBoxLayout(self)
-        v.setContentsMargins(8, 4, 8, 8)
-        v.setSpacing(4)
-        cab = QHBoxLayout()
-        self.b_plegar = QToolButton(text="–")
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        self.b_plegar = QToolButton(text="–", toolTip="Plegar o desplegar el panel")
+        self.b_plegar.setFocusPolicy(Qt.NoFocus)
         self.b_plegar.clicked.connect(self._plegar)
-        cab.addWidget(self.b_plegar)
-        titulo = QLabel("CARÁCTER")
-        titulo.setStyleSheet("font-size: 8pt; letter-spacing: 0.3px;")
-        cab.addWidget(titulo)
-        cab.addStretch(1)
-        v.addLayout(cab)
+        cab, ico, titulo = armar_cabecera(self, None, [self.b_plegar])      # la misma cabecera movible que los demás paneles
+        ico.setPixmap(icono("texto").pixmap(18, 18))
+        titulo.setText("CARÁCTER")
+        v.addWidget(cab)
         self.cuerpo = QWidget()
-        self.cuerpo.setMinimumWidth(self.ANCHO)
+        self.cuerpo.setMinimumWidth(self.ANCHO + 16)
         c = QVBoxLayout(self.cuerpo)
-        c.setContentsMargins(0, 0, 0, 0)
+        c.setContentsMargins(8, 6, 8, 8)
         c.setSpacing(6)
         self.parametro_texto = QLabel()
         self.valor_parametro_texto = QLineEdit()
@@ -592,6 +784,10 @@ class PanelCaracter(QFrame):
         self._agarre = _AgarreTamano(self)
         self._agarre.raise_()
         self.ajustar()
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        QTimer.singleShot(0, self, self._reubicar)   # (con `self`: no corre si el panel ya no existe) los combos miden su texto en la primera vez que se ven: el panel se reajusta
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -771,6 +967,8 @@ class ModoBoceto(QObject):
         self.caracter = None
         self.simetria = None
         self.patron = None
+        self.transformar = None
+        self.tarjeta = None
         self.datos = None
         self.plano = None
         self.boceto = None
@@ -844,10 +1042,11 @@ class ModoBoceto(QObject):
         # evaluar se busca en el documento en cada uso: "Cambiar parámetros" puede reemplazar la tabla
         self.lienzo = Lienzo(self.boceto, lambda *a: v.doc.parametros.evaluar(*a), area, visor=visor, plano=plano)
         self.lienzo.ajustes_inf = ajustes_inferencia(v.prefs)
-        self.lienzo.estado_referencias = lambda: v.doc.estado_final
+        self.lienzo.estado_referencias = v._estado_visible      # al reeditar un boceto, lo que se ve y se elige es su paso
         self.lienzo.valores_parametros = lambda: v.doc.parametros.valores()
         self.lienzo.editar_parametro_texto = self._editar_parametro_texto
         self.lienzo.perdidas = list(getattr((datos or {}).get("op"), "perdidas", []))
+        self.lienzo.op_boceto = getattr((datos or {}).get("op"), "id", None)
         self.lienzo.mensaje.connect(lambda t: v.mensaje(t, 7000))
         self.lienzo.cambio.connect(self._cambio)
         self.lienzo.herramienta_cambiada.connect(self._sincronizar_herramienta)
@@ -858,13 +1057,19 @@ class ModoBoceto(QObject):
         self.paleta.terminar.connect(self.terminar)
         self.paleta.mirar_a.connect(lambda: visor.animar_vista(lambda: visor.mirar_a_plano(self.plano)))
         self.paleta.opcion.connect(self._opcion)
-        self.paleta.herramienta.connect(self.herramienta)
-        self.paleta.lados.connect(lambda n: setattr(self.lienzo, "lados", n))
-        self.paleta.opcion_cota.connect(lambda o: setattr(self.lienzo, "opcion_cota", o))
         self.paleta.construccion.connect(self._construccion)
         self.paleta.eje.connect(self._eje)
-        self.paleta.ajuste.connect(self._ajuste)
         self.paleta.dibujar3d.connect(self._dibujar3d)
+        self.tarjeta = TarjetaHerramienta(area)     # opciones de la herramienta activa; en Proyectar, también su selección
+        self.tarjeta.herramienta.connect(self.herramienta)
+        self.tarjeta.lados.connect(lambda n: setattr(self.lienzo, "lados", n))
+        self.tarjeta.opcion_cota.connect(lambda o: setattr(self.lienzo, "opcion_cota", o))
+        self.tarjeta.ajuste.connect(self._ajuste)
+        self.tarjeta.quitar.connect(self.lienzo.quitar_proyeccion)
+        self.tarjeta.aceptado.connect(self.lienzo.aceptar_proyeccion)
+        self.tarjeta.cancelado.connect(self.lienzo.cancelar_proyeccion)
+        self.lienzo.proyeccion_estado.connect(self.tarjeta.mostrar)
+        self.tarjeta.hide()
         from .triada3d import Interaccion3D
         self.interaccion3d = Interaccion3D(self)        # tríada y ratón del Boceto 3D (filtra eventos del lienzo)
         self.lienzo.installEventFilter(self.interaccion3d)
@@ -894,7 +1099,18 @@ class ModoBoceto(QObject):
         self.patron.aceptado.connect(control.aceptar)
         self.patron.cancelado.connect(control.cancelar)
         self.patron.hide()
-        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria, self.patron)
+        self.transformar = PanelTransformar(area)   # Escala y Mover/copiar: Objetos, Punto base, valores, Vista previa
+        control = lz.transformar
+        control.panel = self.transformar
+        self.transformar.campo.connect(control.elegir_campo)
+        self.transformar.limpiar.connect(control.limpiar_campo)
+        self.transformar.cambio.connect(control.recibir)
+        self.transformar.previa.connect(control.set_previa)
+        self.transformar.aceptado.connect(control.aceptar)
+        self.transformar.cancelado.connect(control.cancelar)
+        self.transformar.hide()
+        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar,
+                             self.tarjeta)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -925,9 +1141,12 @@ class ModoBoceto(QObject):
                                         "¿Terminar igual?")
             if resp != QMessageBox.Yes:
                 return False
+        nota = self.lienzo.descartar_proyeccion()    # Terminar boceto no es Aceptar Proyectar
         boceto, datos = self.boceto, self.datos
         self._limpiar()
         self.terminado.emit(boceto, datos)
+        if nota:
+            self.v.mensaje(nota, 7000)
         return True
 
     def terminar_con_autorestringir(self):
@@ -977,12 +1196,14 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
-        for w in (self.lienzo, self.paleta, self.caracter, self.simetria, self.patron):
+        for w in (self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar, self.tarjeta):
             w.hide()
             w.deleteLater()
-        self.lienzo = self.paleta = self.caracter = self.simetria = self.patron = None
+        self.lienzo = self.paleta = self.caracter = self.simetria = self.patron = self.transformar = self.tarjeta = None
         self.v.visor.set_capa("boceto3d", None)
         self.v.visor.set_capa("triada3d", None)
+        self.v.visor.set_capa("iso_previa", None)
+        self.v.visor.set_capa(CAPA_PROYECCION, None)
         self.interaccion3d = None
         self.v.visor.set_plano_boceto(None)
         self.v.cinta.ocultar_contextual("BOCETO")
@@ -1011,13 +1232,20 @@ class ModoBoceto(QObject):
             if a.isCheckable():
                 a.setChecked(k == clave)
         if self.paleta is not None:
-            self.paleta.set_herramienta(h, self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
+            self._mostrar_tarjeta(h)
             self._mostrar_caracter(h == "texto")
             if self.simetria is not None:
                 self.simetria.setVisible(h == "simetria")
             if self.patron is not None:
                 self.patron.setVisible(h in ("patron_rectangular", "patron_circular"))
+            if self.transformar is not None:
+                self.transformar.setVisible(h in ("escala", "mover"))
             self.v.area.reubicar()
+
+    def _mostrar_tarjeta(self, h):
+        """La tarjeta se ve solo si la herramienta tiene opciones propias."""
+        self.tarjeta.set_herramienta(h, self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
+        self.tarjeta.setVisible(self.tarjeta.form_contexto.rowCount() > 0)
 
     def _mostrar_caracter(self, visible):
         """El panel «Carácter» se ve con la herramienta Texto (o al editar un texto) y arranca con sus opciones."""
@@ -1035,7 +1263,7 @@ class ModoBoceto(QObject):
             lz.opciones["valor_parametro_texto"] = valor
             lz.entrada.campos[0].setText(valor.replace("\n", "\\n"))
         if self.paleta is not None:
-            self.paleta.set_herramienta("texto", self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
+            self._mostrar_tarjeta("texto")
             self._mostrar_caracter(True)
             self.v.area.reubicar()
 
@@ -1103,6 +1331,10 @@ class ModoBoceto(QObject):
                 return
             else:
                 self.lienzo.opciones[clave] = valor
+                if clave.startswith("iso_"):
+                    self.lienzo.programar_previa_iso()       # la isoparamétrica se ve con el valor nuevo
+                elif clave in ("filtro_proyectar", "vinculo_proyeccion"):
+                    self.lienzo.cambiar_opcion_proyeccion()  # la tarjeta revisa la selección y el resultado
             self.lienzo.refrescar_previa_texto()          # fuente, estilo y alineación se ven en vivo
 
     def _opciones_visor(self):

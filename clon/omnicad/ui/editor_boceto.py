@@ -44,9 +44,11 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInpu
 
 from ..restricciones import (Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, grados_de_libertad,
                              resolver)
-from ..restricciones.solver import restricciones_en_conflicto, restricciones_redundantes
-from ..restricciones.inferencia import Indice, Inferencia, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
+from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
+                                     restriccion_quita_grados)
+from ..restricciones.inferencia import Indice, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
+                                    aviso_tangencias_fuera,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, mas_cercano, paradas_cursor,
@@ -57,6 +59,7 @@ from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, no
 from . import formato, temas
 from .iconos import icono
 from .patron_boceto import ControlPatron, dibujar_casilla
+from .transformar_boceto import ControlTransformar
 
 HERRAMIENTAS = {
     "seleccionar": ("Seleccionar", "Clic: seleccionar (Ctrl o Mayús suman); doble clic: toda la cadena unida. "
@@ -106,16 +109,18 @@ HERRAMIENTAS = {
                            "en cada dirección (X e Y del boceto)."),
     "patron_circular": ("Patrón circular", "Seleccioná la geometría, Enter y clic en el centro; escribí la "
                         "cantidad y el ángulo total."),
-    "proyectar": ("Proyectar", "Clic en aristas, caras, vértices o cuerpos del modelo: se proyectan sobre el "
-                  "plano del boceto (violeta, fijos). Esc termina."),
-    "intersecar": ("Intersecar", "Clic en caras, aristas o cuerpos: se agregan las curvas donde cortan el plano "
-                   "del boceto."),
+    "proyectar": ("Proyectar", "Elegí aristas, caras, vértices o cuerpos del modelo y revisá la vista previa. Aceptar o "
+                  "Enter los proyecta sobre el plano del boceto (violeta, fijos); Esc cancela."),
+    "intersecar": ("Intersecar", "Elegí caras, aristas o cuerpos y revisá la vista previa. Aceptar o Enter agrega las "
+                   "curvas donde cortan el plano del boceto; Esc cancela."),
     "incluir_3d": ("Incluir geometría 3D", "Clic en aristas o vértices del modelo para incluirlos en el boceto "
                    "(el boceto es plano: se llevan al plano)."),
-    "proyectar_eje": ("Proyectar eje", "Proyecta el eje del perfil giratorio elegido en la paleta sobre el plano "
+    "proyectar_eje": ("Proyectar eje", "Proyecta el eje del perfil giratorio elegido en la tarjeta sobre el plano "
                       "del boceto, con el vínculo de proyección elegido."),
+    "isoparametrica": ("Curva isoparamétrica", "Clic en un punto de una cara del modelo: saca sus curvas U, V o ambas "
+                       "(una sola o distribuidas) como curvas 3D del boceto. Opciones en la tarjeta."),
     "perfil_giratorio": ("Perfil giratorio", "Clic en aristas, caras o cuerpos del modelo: se giran alrededor del "
-                         "eje de la paleta y su perfil queda en el boceto. Con eje «Arista», el primer clic elige "
+                         "eje de la tarjeta y su perfil queda en el boceto. Con eje «Arista», el primer clic elige "
                          "una arista recta como eje."),
     "cota": ("Cota de boceto", "Clic en una línea, círculo o arco (o en dos entidades) y clic para ubicar; "
              "escribí el valor o una expresión y Enter. Mayús + doble clic en una cota: de referencia ↔ driving."),
@@ -124,15 +129,15 @@ HERRAMIENTAS = {
     "chaflan_dist_angulo": ("Chaflán de distancia y ángulo", "Clic en dos líneas; escribí la distancia y el ángulo."),
     "chaflan_dos_dist": ("Chaflán de dos distancias", "Clic en dos líneas; escribí las dos distancias."),
     "curva_fusion": ("Curva de fusión", "Clic cerca del extremo de una curva y cerca del extremo de otra "
-                     "(G1 o G2 en la paleta)."),
+                     "(G1 o G2 en la tarjeta)."),
     "desfase": ("Desfase", "Clic en una curva (se toma la cadena conectada), arrastrá el asa o escribí la distancia "
                 "(negativa = al otro lado) y Enter."),
     "recortar": ("Recortar", "Clic en el tramo a quitar (hasta las intersecciones más cercanas)."),
     "alargar": ("Alargar", "Clic cerca del extremo de una línea o un arco para llevarlo a la próxima intersección."),
     "partir": ("Partir", "Clic en una curva para partirla en las intersecciones más cercanas."),
-    "escala": ("Escala del boceto", "Seleccioná la geometría, Enter y clic en el punto base; escribí el factor y Enter."),
-    "mover": ("Mover/copiar", "Seleccioná la geometría, Enter, clic en el punto base y clic en el destino "
-              "(o escribí ΔX, ΔY y el ángulo). «Copiar» en la paleta."),
+    "escala": ("Escala del boceto", "Elegí la geometría y el punto base; escribí el factor (o tirá del asa) y Aceptar."),
+    "mover": ("Mover/copiar", "Elegí la geometría y el punto base; clic en el destino o escribí ΔX, ΔY y el ángulo, y "
+              "Aceptar. «Crear copia» deja el original."),
     "desglosar_texto": ("Desglosar texto", "Clic en un texto para convertirlo en curvas fijas."),
 }
 # herramienta de restricción → (tipo, cantidad de entidades que pide)
@@ -182,8 +187,11 @@ PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme"
          "partir": (1, None), "desglosar_texto": (1, ("texto",))}
 SELECCION = ("simetria", "patron_rectangular", "patron_circular", "escala", "mover")
 PATRON = ("patron_rectangular", "patron_circular")     # los maneja `ControlPatron` (ui/patron_boceto.py)
+TRANSFORMAR = ("escala", "mover")                      # los maneja `ControlTransformar` (ui/transformar_boceto.py)
 SPLINES = ("spline_ajuste", "spline_control")
-PROYECCION = ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio")
+PROYECCION = ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio", "isoparametrica")
+COMANDO_PROYECCION = ("proyectar", "intersecar")        # con tarjeta: se elige, se revisa la vista previa y se acepta
+CAPA_PROYECCION = "proyeccion_elegida"                  # capa del visor con lo elegido en la tarjeta
 CURVA_TEXTO = ("camino_lado", "camino_desfase", "camino_ajustar")      # opciones del texto sobre una curva
 MODIFICAN = tuple(PICKS) + SELECCION + PROYECCION       # no aplican el tipo de línea a lo que crean
 PORTAPAPELES = {}         # Ctrl+C / Ctrl+V entre bocetos: {"boceto": copia del origen, "ids": [...]}
@@ -193,6 +201,7 @@ TOL_PUNTO = 11.0          # radio (px) para agarrar un punto: más grande que lo
 TOL_MANIJA = 12.0         # radio (px) de las manijas del marco de control
 RADIO_INTERIOR_PX = 80.0  # círculos de hasta este radio en pantalla se agarran también desde adentro
 TOL_INFERENCIA = math.radians(3.0)
+EJES_ORIGEN = {Boceto.EJE_X: ((0.0, 0.0), (1.0, 0.0)), Boceto.EJE_Y: ((0.0, 0.0), (0.0, 1.0))}   # extremos de los ejes del origen
 # Ayudas de dibujo (Preferencias › Boceto): `inferencias` y `restricciones_auto` apagan las ayudas y las restricciones
 # que dejan al confirmar; `tipos` elige las familias de TIPOS_INFERENCIA; `sensibilidad_px` es el radio de captura.
 AJUSTES_INFERENCIA = {"inferencias": True, "restricciones_auto": True, "tipos": TIPOS_INFERENCIA,
@@ -201,7 +210,7 @@ AJUSTES_INFERENCIA = {"inferencias": True, "restricciones_auto": True, "tipos": 
 
 def ajustes_inferencia(prefs):
     """Los ajustes de ayudas de dibujo a partir de las preferencias de la aplicación (claves «boceto/…»)."""
-    familias = ("medio", "interseccion", "tangente", "perpendicular", "curva", "alineacion", "paralela")
+    familias = ("medio", "interseccion", "tangente", "perpendicular", "curva", "alineacion", "paralela", "igual")
     tipos = [t for t in familias if prefs[f"boceto/inf_{t}"]]
     if prefs["boceto/inf_horizontal_vertical"]:
         tipos += ["horizontal", "vertical"]
@@ -220,12 +229,33 @@ COTA_OSCURO, COTA_CLARO = QColor(0xa9, 0xc4, 0x6c), QColor(70, 72, 78)
 REFERENCIA = QColor(140, 140, 146)        # cota de referencia (driven): gris medio, legible en los dos temas
 AZUL_CAJA = QColor(0, 120, 215)
 FONDO_LIENZO = QColor(250, 250, 252)      # lienzo 2D (sin visor)
+CAPA_PREVIA_ISO = "iso_previa"              # capa del visor con las curvas isoparamétricas que saldrían con un clic
+COLOR_PREVIA_ISO = (1.0, 0.55, 0.1)
 TOPE_DIAGNOSTICO_S = 3.0                 # B-111: el diagnóstico de qué choca (un resolver por vínculo) se abandona a los 3 s
 CONFLICTO = QColor(225, 45, 45)           # BOC-7: restricciones, cotas y geometría en choque, en rojo como Fusion
 # Ventana de selección: de izquierda a derecha (adentro) y de derecha a izquierda (lo que toca).
 VENTANA_RELLENO, VENTANA_BORDE = QColor(237, 120, 0, 70), QColor(140, 150, 180)
 VENTANA_CRUCE = QColor(193, 191, 0, 70)
 AVISO_BORRADAS = "Las restricciones o las cotas se han eliminado durante la operación."
+YA_PROYECTADA = "Ya estaba proyectada: no cambia nada."
+
+
+def _cantidad(n, singular, plural):
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def texto_proyeccion(r):
+    """Qué hace una proyección, según lo que da `Boceto.simular_proyecciones` (lo dicen la tarjeta y la barra de estado)."""
+    partes = []
+    if r["curvas"] or r["puntos"]:
+        nuevas = [_cantidad(len(r["curvas"]), "curva", "curvas")] if r["curvas"] else []
+        nuevas += [_cantidad(len(r["puntos"]), "punto", "puntos")] if r["puntos"] else []
+        partes.append("Agrega " + " y ".join(nuevas))
+    if r["visibles"]:
+        partes.append(f"Muestra {_cantidad(len(r['visibles']), 'curva oculta', 'curvas ocultas')} del contorno, sin duplicar")
+    if r["vinculadas"]:
+        partes.append(f"Vincula {_cantidad(len(r['vinculadas']), 'curva existente', 'curvas existentes')}")
+    return ". ".join(partes) + "." if partes else "Actualiza lo que ya estaba proyectado."
 
 
 def _tipo_valor(tipo_cota):
@@ -533,6 +563,7 @@ class Lienzo(QWidget):
     info = Signal(str)          # medidas de lo elegido, como Fusion ("1 línea de boceto | Longitud: …")
     aviso = Signal(str)         # aviso flotante (p. ej. una operación borró restricciones o cotas)
     simetria_estado = Signal(object)    # lo que muestra el panel SIMETRÍA (ver `estado_simetria`)
+    proyeccion_estado = Signal(object)  # lo que muestra la tarjeta de Proyectar (ver `estado_proyeccion`)
 
     def __init__(self, boceto, evaluar, parent=None, visor=None, plano=None):
         super().__init__(parent)
@@ -555,6 +586,7 @@ class Lienzo(QWidget):
                          "direccion_desfase": "un", "match_topology": False, "seleccion_cadena": True,
                          "vinculo_proyeccion": True, "eje_giro": "Z", "contorno_exterior": True, "proyectar_eje": False,
                          "tolerancia_giro": 0.1, "invertir_giro": False,
+                         "iso_direccion": "u", "iso_tipo": "unica", "iso_distancia": 10.0, "iso_cantidad": 5,
                          "pivote_texto": None, "marco_texto": False, "parametro_texto": None,
                          "valor_parametro_texto": "",
                          "negrita": False, "cursiva": False,
@@ -567,6 +599,10 @@ class Lienzo(QWidget):
         self._revincular = None                    # proyección perdida que se re-vincula con el próximo clic
         self._brillantes = None                    # ids que se ven normales con «Atenuar el resto» (None: todo normal)
         self._eje_giro = None                      # (eje, referencia) de la arista elegida para el perfil giratorio
+        self._elegidos_proy = []                   # lo elegido en la tarjeta de Proyectar / Intersecar (sin aceptar)
+        self._nota_proy = ""                       # aviso de la tarjeta (p. ej. lo que sacó un cambio de filtro)
+        self._previa_proy = {"prims": [], "puntos": []}      # lo que se dibuja como resultado provisional
+        self.op_boceto = None                      # paso del timeline de este boceto (None: todavía no tiene)
         self.estado_referencias = lambda: None     # el modo consulta el estado actual del documento
         self._sel_texto = []                       # cuadriláteros de lo seleccionado en el texto que se escribe
         self._arrastre_texto = False               # se está seleccionando texto arrastrando el ratón
@@ -599,6 +635,7 @@ class Lienzo(QWidget):
         self.inferencia = None
         self.inf_actual = None
         self.inf_lista = []              # todas las ayudas bajo el cursor, la activa primero (Espacio alterna)
+        self.ayuda_3d = None             # (posición en px, tipo, etiqueta) de la ayuda del Boceto 3D (`ui/triada3d.py`)
         self.ajustes_inf = dict(AJUSTES_INFERENCIA)
         self._indice_inf = None          # geometría derivada para consultar rápido; se descarta al cambiar el boceto
         self._indice_clave = None
@@ -609,7 +646,8 @@ class Lienzo(QWidget):
         self._inf_bloqueo_clics = 0      # pulsaciones que había al bloquear: otra pulsación la suelta
         self._inf_inicio = None
         self._inf_lado = None
-        self._inf_clics = []             # BOC-9: (xy, tipo, objetivo) de cada clic, para las herramientas que no son Línea
+        self._inf_radio = None           # BOC-33: la ayuda del clic de radio del arco con centro, hasta el clic final
+        self._inf_clics = []          # BOC-9: (xy, tipo, objetivo) de cada clic, para las herramientas que no son Línea
         self._eligiendo_punto = None     # BOC-5: {"lazo", "pid"} mientras se elige el datum en el lienzo
         self.perfiles_sel = []           # BOC-23: índices de los perfiles elegidos con un clic (orden de `detectar`)
         self._modificadores_raton = Qt.NoModifier
@@ -628,9 +666,13 @@ class Lienzo(QWidget):
         self.entrada = None
         self._asas = None                          # asas de arrastre de la herramienta (ui/asas_boceto.py)
         self.patron = ControlPatron(self)          # Patrón rectangular y circular: estado, vista previa y panel
+        self.transformar = ControlTransformar(self)    # Escala y Mover/copiar: estado, vista previa y panel
         self._desfase_invertido = False            # botón «Invertir» de la barra del Desfase
         self._desfase_modo = "un"                   # dirección con la que se abrió esa barra
         self._desfase_conservar = None              # (textos, invertido) que pasan a la curva elegida en su lugar
+        self.copias_en_edicion = frozenset()        # BOC-60: copias del patrón que se edita: no se dibujan ni se agarran
+        self._desfase_perfil = None                 # BOC-70: ids del borde del perfil elegido con un clic adentro, o None
+        self._desfase_elipse = False                # BOC-71: la elipse se eligió cerca de un eje: da otra elipse, no un óvalo
         self._previa_desfase_cache = None           # (clave, resultado) de la última vista previa del Desfase
         self._mvp = None
         self._sobre = None               # entidad bajo el ratón en Seleccionar (se resalta y cambia el cursor)
@@ -653,7 +695,6 @@ class Lienzo(QWidget):
         self._presion_inf_actual = None
         self._cache_cortes = {}
         self._previa_recorte = None
-        self._base = (0.0, 0.0)          # punto base de Mover/copiar
         # Cotas en vivo: lo escrito queda bloqueado (clave → (texto, valor)) hasta crear la geometría.
         self._bloqueos = {}
         self._activo = 0                 # caja activa (Tab pasa a la siguiente)
@@ -674,6 +715,11 @@ class Lienzo(QWidget):
         self._t_derecho = QTimer(self)   # clic derecho mantenido con una cota a medias: menú de opciones (BOC-34)
         self._t_derecho.setSingleShot(True)
         self._t_derecho.timeout.connect(self._opciones_cota_mantenido)
+        self._iso_pos = self._iso_texto = None   # isoparamétrica: cursor y último aviso de la vista previa (BOC-75)
+        self._iso_dibujada = False
+        self._t_iso = QTimer(self)              # la vista previa se arma con el cursor quieto, no en cada movimiento
+        self._t_iso.setSingleShot(True)
+        self._t_iso.timeout.connect(self._previa_iso)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         if visor is None:
@@ -772,6 +818,7 @@ class Lienzo(QWidget):
         self.inf_actual = self.inferencia = self._inf_inicio = None
         self._reiniciar_vivo()
         self.resolver()
+        self._emitir_proyeccion()
 
     # ------------------------------------------------------------ resolver
     def evaluar(self, expr, tipo=LONGITUD):
@@ -1023,16 +1070,18 @@ class Lienzo(QWidget):
 
     def _visible(self, c):
         return not ((c.construccion and not self.mostrar["construccion"])
-                    or (c.proyectada and not self.mostrar["proyectadas"]))
+                    or (c.proyectada and not self.mostrar["proyectadas"]) or c.id in self.copias_en_edicion)
 
     def _ocultos(self):
-        """(curvas, puntos) que no se ven —construcción o proyectadas apagadas—: tampoco se pueden capturar."""
-        if self.mostrar["construccion"] and self.mostrar["proyectadas"]:
+        """(curvas, puntos) que no se ven —construcción o proyectadas apagadas, o las copias de un patrón que se
+        edita (BOC-60)—: tampoco se pueden capturar."""
+        if self.mostrar["construccion"] and self.mostrar["proyectadas"] and not self.copias_en_edicion:
             return frozenset(), frozenset()
         curvas = {c.id: c for c in self.b.curvas.values() if not self._visible(c)}
         vistos = {p for c in self.b.curvas.values() if c.id not in curvas for p in c.puntos()}
         ocultos = {p for c in curvas.values() for p in c.puntos()}
         ocultos |= {p.id for p in self.b.puntos.values() if p.proyectado and not self.mostrar["proyectadas"]}
+        ocultos |= {i for i in self.copias_en_edicion if i in self.b.puntos}
         return frozenset(curvas), frozenset(ocultos - vistos)
 
     def _clave_geometria(self):
@@ -1155,13 +1204,23 @@ class Lienzo(QWidget):
             return self.inf_lista[0]
         if self._indice_inf is None or self._indice_inf.b is not self.b or self._indice_clave != self._clave_geometria():
             self._indice_inf, self._indice_clave = Indice(self.b), self._clave_geometria()
-        # Paralela/perpendicular/colineal mueven el punto sobre un rayo: solo tienen sentido para el segmento de una Línea.
-        tipos = a["tipos"] if self.herramienta == "linea" else tuple(t for t in a["tipos"] if t != "paralela")
+        # Paralela/perpendicular/colineal e igual mueven el punto sobre un rayo desde la base: valen para el segmento de
+        # una Línea (BOC-48: también el de la línea de punto medio y el primer lado del rectángulo 3p, donde no
+        # deforman nada). Igual compara el largo con otras líneas, o el radio de un círculo o arco con centro.
+        # (BOC-33) Con la base en el centro de un círculo o arco, el cursor fija el radio.
+        h, n = self.herramienta, len(self.clics)
+        centro = h in ("circulo", "arco_centro") and n == 1
+        quitar = []
+        if not (h == "linea" or (h in ("linea_medio", "rectangulo_3p") and n == 1)):
+            quitar.append("paralela")
+        if not (h == "linea" or centro):
+            quitar.append("igual")
+        tipos = tuple(t for t in a["tipos"] if t not in quitar)
         # Alternar con Espacio elige una de las ambiguas: sin histéresis, o la activa volvería siempre al primer lugar.
         lista = inferencias(self.b, xy, a["sensibilidad_px"] / self.px_por_mm(), base=base, excluir=excluidos,
                             coincidente=bool(self._modificadores_raton & Qt.ShiftModifier),
                             angulo_tol=TOL_INFERENCIA, previa=None if self._inf_alt else previa, tipos=tipos,
-                            indice=self._indice_inf, extra=[c[1] for c in self.clics[:-1]])
+                            indice=self._indice_inf, extra=[c[1] for c in self.clics[:-1]], centro=centro)
         claves = [i.clave() for i in lista]
         if claves != self._inf_claves:
             self._inf_alt, self._inf_claves = 0, claves
@@ -1205,7 +1264,11 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ herramientas
     def set_herramienta(self, h):
         self.confirmar_texto_pendiente()          # cambiar de herramienta no pierde el texto escrito
+        nota = self.descartar_proyeccion()        # lo no aceptado no se confirma solo: se descarta y se avisa
         self.patron.cerrar()
+        self.transformar.cerrar()
+        self._iso_pos = self._iso_texto = None
+        self._borrar_previa_iso()
         if h == "texto":
             self.opciones.update(pivote_texto=None, marco_texto=False, parametro_texto=None, valor_parametro_texto="")
         self.herramienta = h
@@ -1227,18 +1290,24 @@ class Lienzo(QWidget):
         if h in RESTRICCIONES_HERRAMIENTA:
             ayuda = AYUDA_RESTRICCION[h]
             if self._restriccion_con_seleccion():
+                if nota:
+                    self.mensaje.emit(nota)
                 return
         if h in PATRON:
             self.patron.iniciar(h)
+        elif h in TRANSFORMAR:
+            self.transformar.iniciar(h)
         elif h in SELECCION:
             self.fase = "seleccion"
             if self._seleccion_util():
                 self._avanzar_seleccion(avisar=False)
         elif h == "desfase":
             self._desfase_con_seleccion()
-        self.mensaje.emit(f"{nombre}: {ayuda}" if ayuda else nombre)
+        texto = f"{nombre}: {ayuda}" if ayuda else nombre
+        self.mensaje.emit(f"{nota} {texto}" if nota else texto)
         self._emitir_simetria()
         self.herramienta_cambiada.emit(h)
+        self._emitir_proyeccion()
         self.update()
 
     def _hay_operacion(self):
@@ -1263,8 +1332,14 @@ class Lienzo(QWidget):
         if self.herramienta == "simetria":         # el panel SIMETRÍA se cierra entero, sin tocar el boceto
             self.cancelar_simetria()
             return
+        if self.herramienta in COMANDO_PROYECCION and self._revincular is None:     # y la tarjeta de Proyectar
+            self.cancelar_proyeccion()
+            return
         if self.herramienta in PATRON:             # lo mismo con el panel del patrón
             self.patron.cancelar()
+            return
+        if self.herramienta in TRANSFORMAR:        # y con el de Escala y Mover/copiar
+            self.transformar.cancelar()
             return
         self.inf_actual = self.inferencia = self._inf_inicio = self._inf_bloqueo = None
         self.inf_lista, self._inf_alt = [], 0
@@ -1694,9 +1769,6 @@ class Lienzo(QWidget):
                 return ok
             self._abrir_entrada(["Vueltas", "Paso"], ["3", formato.numero(max(math.dist(ce, ini), 1.0) / 2)],
                                 self._pos_cursor, aceptar)
-        elif h in SELECCION and c:
-            self._clic_fase(c[-1])
-            self.clics = []
 
     def _terminar_spline(self, cerrar=False):
         """Enter, doble clic o clic en el primer punto: crea la spline con los puntos marcados."""
@@ -1731,41 +1803,7 @@ class Lienzo(QWidget):
         if h == "simetria":
             self.elegir_campo_simetria("eje")
             self.mensaje.emit("Simetría: elegí la línea de simetría.")
-        elif h in ("escala", "mover"):
-            self.fase = "base"
-            self.mensaje.emit("Clic en el punto base.")
         self.update()
-
-    def _clic_fase(self, clic):
-        """Clics de posición en las herramientas de selección (punto base, destino, centro)."""
-        h, (_pid, xy) = self.herramienta, clic
-        ids = self._seleccion_util()
-        if self.fase == "base" and h == "escala":
-            def aceptar(v):
-                f = self.evaluar(v[0] or "1", ESCALAR)
-                ok = self.aplicar_cambio(lambda: self.b.escalar(ids, xy, f))
-                if ok:
-                    self.seleccion, self.fase = [], "seleccion"
-                return ok
-            from .asas_boceto import asas_escala
-            self._abrir_entrada(["Factor"], ["2"], self._pos_cursor, aceptar, asas_escala(self, ids, xy))
-        elif self.fase == "base" and h == "mover":
-            self._base = xy
-            self.fase = "destino"
-            self.mensaje.emit("Clic en el destino (o escribí ΔX, Tab, ΔY, Tab, ángulo y Enter).")
-
-            def aceptar(v):
-                return self._mover(ids, self.evaluar(v[0] or "0"), self.evaluar(v[1] or "0"),
-                                   self.evaluar(v[2] or "0", ANGULO))
-            self._abrir_entrada(["ΔX", "ΔY", "∠"], ["0", "0", "0"], self._pos_cursor, aceptar)
-        elif self.fase == "destino" and h == "mover":
-            self._mover(ids, xy[0] - self._base[0], xy[1] - self._base[1], 0.0)
-
-    def _mover(self, ids, dx, dy, ang):
-        ok = self.aplicar_cambio(lambda: self.b.transformar(ids, dx, dy, ang, self._base, self.opciones["copiar"]))
-        if ok:
-            self.seleccion, self.fase = [], "seleccion"
-        return ok
 
     # ------------------------------------------------------------ Simetría: el panel SIMETRÍA
     def _calcular_simetria(self):
@@ -1792,13 +1830,13 @@ class Lienzo(QWidget):
         """Lo que muestra el panel SIMETRÍA: cuántos objetos hay, si hay línea de simetría, el campo activo, si se puede
         aceptar y qué decirle a la persona (una guía o un reparo)."""
         objetos = self._seleccion_util()
-        eje = self._eje_simetria if self._eje_simetria in self.b.curvas else None
+        eje = self._eje_simetria if self._eje_simetria in self.b.curvas or self._eje_simetria in EJES_ORIGEN else None
         e = {"objetos": len(objetos), "eje": eje is not None, "campo": self.fase, "valido": False,
              "previa": self.previa_simetria, "guia": "", "error": self._error_simetria}
         if not objetos:
             e["guia"] = "Elegí la geometría a reflejar: clic en cada curva o arrastrá una ventana."
         elif eje is None:
-            e["guia"] = ("Elegí la línea de simetría (puede ser de construcción)." if self.fase == "eje" else
+            e["guia"] = ("Elegí la línea de simetría (puede ser de construcción o un eje del origen)." if self.fase == "eje" else
                          "Con la geometría lista, Enter pasa a elegir la línea de simetría.")
         else:
             error = self._calcular_simetria()[1]
@@ -1874,9 +1912,13 @@ class Lienzo(QWidget):
     def _dibujar_previa_simetria(self, p, acento):
         """La recta de simetría entera (trazo y raya, hasta el borde de la vista) y, con la casilla activa, la copia."""
         eje = self._eje_simetria
-        if eje not in self.b.curvas:
+        if eje in EJES_ORIGEN:
+            extremos = EJES_ORIGEN[eje]
+        elif eje in self.b.curvas:
+            extremos = self.b._extremos_linea(eje)
+        else:
             return
-        a, b = (self.a_px(*q) for q in self.b._extremos_linea(eje))
+        a, b = (self.a_px(*q) for q in extremos)
         n = math.hypot(b.x() - a.x(), b.y() - a.y())
         if n > 1e-6:
             k = (self.width() + self.height()) / n
@@ -1892,6 +1934,12 @@ class Lienzo(QWidget):
     def _clic_pick(self, pos):
         tipos = ("linea",) if self.fase == "eje" else PICKS[self.herramienta][1]
         cid = self._curva_cercana(pos, tipos=tipos)
+        if cid is None and self.fase == "eje" and (eje := self._eje_origen_cerca(pos)) is not None:
+            self.agregar_pick(eje, self.a_mm(pos), pos)       # BOC-40: el eje X o Y del origen sirve de línea de simetría
+            return True
+        if cid is None and self.herramienta == "desfase" and (de_perfil := self._pick_de_perfil(pos)) is not None:
+            self.agregar_pick(de_perfil[0], self.a_mm(pos), pos, perfil=de_perfil[1])
+            return True
         if cid is None:
             if self.herramienta == "circulo_2t" and len(self.picks) == 2:
                 return False          # el clic ubica el círculo (lo procesa la herramienta de puntos)
@@ -1908,9 +1956,45 @@ class Lienzo(QWidget):
         self.agregar_pick(cid, self.a_mm(pos), pos)
         return True
 
-    def agregar_pick(self, cid, xy, pos=None):
-        """Suma una curva elegida (con el lugar del clic, en mm) a la herramienta actual."""
+    def _cerca_de_eje(self, cid, xy, tol_px=12.0):
+        """BOC-71: ¿el clic `xy` (mm) sobre una elipse cae a menos de `tol_px` de su eje mayor o menor? (Fusion: cerca
+        de un eje el desfase es otra elipse; lejos, un óvalo a distancia constante.)"""
+        c = self.b.curvas.get(cid)
+        if c is None or c.tipo != "elipse":
+            return False
+        (cx, cy), (mx, my) = self.b.coords(c.centro), self.b.coords(c.mayor)
+        a = math.hypot(mx - cx, my - cy)
+        if a < 1e-9:
+            return False
+        ux, uy, dx, dy = (mx - cx) / a, (my - cy) / a, xy[0] - cx, xy[1] - cy
+        return min(abs(-dx * uy + dy * ux), abs(dx * ux + dy * uy)) * self.px_por_mm() <= tol_px
+
+    def _eje_origen_cerca(self, pos):
+        """Id del eje del origen (X o Y) a menos de `TOL_PX` píxeles de `pos`, o None."""
+        o = self.a_px(0.0, 0.0)
+        for eje, distancia in ((Boceto.EJE_X, abs(pos.y() - o.y())), (Boceto.EJE_Y, abs(pos.x() - o.x()))):
+            if distancia <= TOL_PX:
+                return eje
+        return None
+
+    def _pick_de_perfil(self, pos):
+        """BOC-70: (curva del borde más cercana al clic, ids del borde) del perfil (región cerrada) bajo `pos`, o None.
+        Fusion acepta en Desfase una curva, una cadena o un perfil."""
+        i = self.perfil_en(pos)
+        if i is None:
+            return None
+        firma = self._perfiles()[i].firma
+        xy = self.a_mm(pos)
+        cercana = min((k for k in firma if k in self.b.curvas),
+                      key=lambda k: min(mas_cercano(p, xy)[1] for p in self.b.primitivas(k)), default=None)
+        return None if cercana is None else (cercana, frozenset(firma))
+
+    def agregar_pick(self, cid, xy, pos=None, perfil=None):
+        """Suma una curva elegida (con el lugar del clic, en mm) a la herramienta actual. `perfil`: en Desfase, el
+        borde del perfil del que sale (se desfasan todos sus contornos)."""
         h = self.herramienta
+        self._desfase_perfil = perfil if h == "desfase" else None
+        self._desfase_elipse = h == "desfase" and perfil is None and self._cerca_de_eje(cid, xy)
         pos = pos if pos is not None else self._pos_cursor
         if h == "simetria" and self.fase == "eje":
             self._eje_simetria = cid                # no crea nada: lo hace Aceptar, después de la vista previa
@@ -1984,7 +2068,9 @@ class Lienzo(QWidget):
         modo = self._desfase_modo = modo or self.opciones["direccion_desfase"]     # un lado, dos lados o simétrico
         self._desfase_invertido = invertido
         self._previa_desfase_cache = None
-        if self.opciones["seleccion_cadena"]:
+        if self._desfase_perfil:
+            self.seleccion = sorted(self._desfase_perfil)
+        elif self.opciones["seleccion_cadena"]:
             self.seleccion = [k for k, _ in self.b.cadena(cid)[0]]
         else:
             self.seleccion = [cid]
@@ -2001,7 +2087,7 @@ class Lienzo(QWidget):
                 self.mensaje.emit(nota)
                 return False
             avisos = []
-            ok = self._aplicar_y_limpiar(lambda: avisos.extend(self.b.desfasar(cid, **self._args_desfase(v))[1]))
+            ok = self._aplicar_y_limpiar(lambda: avisos.extend(self._desfasar_en(self.b, cid, **self._args_desfase(v))[1]))
             if ok:
                 self.seleccion = []
                 if avisos:
@@ -2014,6 +2100,11 @@ class Lienzo(QWidget):
         self.seleccion = elegidas                 # cerrar la barra anterior soltó lo resaltado: vuelve a quedar elegido
         self._armar_barra_desfase()
 
+    def _desfasar_en(self, b, cid, **args):
+        """`desfasar` de la curva elegida (con su cadena) o, si se eligió un perfil, `desfasar_perfil`: lo mismo en la
+        vista previa y en Aceptar."""
+        return b.desfasar_perfil(self._desfase_perfil, **args) if self._desfase_perfil else b.desfasar(cid, **args)
+
     def _base_desfase(self):
         """(P, n) del asa del Desfase: P = punto de lo elegido más cercano al clic y n = hacia dónde va una distancia
         positiva (sin Invertir). La normal sale de probar el mismo `desfasar` de Aceptar con una distancia chica."""
@@ -2024,7 +2115,8 @@ class Lienzo(QWidget):
         for k in (1.0, 0.1, 0.01):
             copia = self.b.copia()
             try:
-                nuevos, _ = copia.desfasar(cid, d0 * k, cadena=self.opciones["seleccion_cadena"])
+                nuevos, _ = self._desfasar_en(copia, cid, distancia=d0 * k, cadena=self.opciones["seleccion_cadena"],
+                                              elipse=self._desfase_elipse)
             except (ErrorBoceto, ErrorExpresion, ValueError, ZeroDivisionError):
                 continue
             hacia, _t = punto_mas_cercano([puntos_primitiva(prim) for n in nuevos for prim in copia.primitivas(n)],
@@ -2063,11 +2155,16 @@ class Lienzo(QWidget):
         if self._citar_cota(pos):
             return
         cid = self._curva_cercana(pos, tipos=PICKS["desfase"][1])
-        if cid is not None and cid not in self.seleccion:
+        de_perfil = self._pick_de_perfil(pos) if cid is None else None
+        if de_perfil is not None and de_perfil[1] != self._desfase_perfil:       # otro perfil, con los mismos valores
+            self._desfase_conservar = ([c.text() for c in self.entrada.campos], self._desfase_invertido)
+            self.picks, self.picks_xy = [], []
+            self.agregar_pick(de_perfil[0], self.a_mm(pos), self.entrada.pos() - QPoint(14, 10), perfil=de_perfil[1])
+        elif cid is not None and cid not in self.seleccion:
             self._desfase_conservar = ([c.text() for c in self.entrada.campos], self._desfase_invertido)
             self.picks, self.picks_xy = [], []
             self.agregar_pick(cid, self.a_mm(pos), self.entrada.pos() - QPoint(14, 10))
-        elif cid is None:
+        elif cid is None and de_perfil is None:
             self.mensaje.emit("Desfase abierto: Enter lo acepta, Esc lo cancela (el boceto sigue abierto).")
         self.entrada.campos[0].setFocus()
 
@@ -2168,7 +2265,7 @@ class Lienzo(QWidget):
                 "direccion": self._desfase_modo, "distancia2": d[1] if dos else None,
                 "expresion2": expresion_sin_signo(textos[1], d[1], self.evaluar) if dos else None,
                 "invertir": self._desfase_invertido, "topologia": self.opciones["match_topology"],
-                "cadena": self.opciones["seleccion_cadena"]}
+                "cadena": self.opciones["seleccion_cadena"], "elipse": self._desfase_elipse}
 
     def _previa_desfase(self):
         """(curvas de la vista previa, nota, error) de lo escrito ahora en la barra del Desfase. `error` es False o
@@ -2177,7 +2274,7 @@ class Lienzo(QWidget):
         Se recuerda el último resultado: repintar sin cambiar nada no vuelve a calcular."""
         textos = [c.text().strip() for c in self.entrada.campos]
         clave = (tuple(textos), self._desfase_invertido, self._desfase_modo, self.opciones["match_topology"],
-                 self.opciones["seleccion_cadena"], tuple(self.picks),
+                 self.opciones["seleccion_cadena"], tuple(self.picks), self._desfase_perfil, self._desfase_elipse,
                  (len(self.b.curvas), len(self.b.puntos), len(self.b.cotas)))     # el boceto cambió: se recalcula
         if self._previa_desfase_cache is not None and self._previa_desfase_cache[0] == clave:
             return self._previa_desfase_cache[1]
@@ -2197,11 +2294,13 @@ class Lienzo(QWidget):
         try:
             args = self._args_desfase(textos)
             copia = self.b.copia()
-            nuevos, avisos = copia.desfasar(self.picks[0], **args)
+            nuevos, avisos = self._desfasar_en(copia, self.picks[0], **args)
         except (ErrorBoceto, ErrorExpresion, ValueError, ZeroDivisionError) as e:
             return [], str(e), self._campos_que_fallan(textos) or tuple(range(len(textos)))
         polis = [puntos_primitiva(prim) for k in nuevos for prim in copia.primitivas(k)]
         nota = {"dos": "Dos lados", "simetrico": "Simétrico"}.get(self._desfase_modo) or self._lado_desfase(polis)
+        if self.b.curvas[self.picks[0]].tipo == "elipse" and not self._desfase_perfil:
+            nota += " · " + ("Elipse (cerca de un eje)" if self._desfase_elipse else "Óvalo (lejos de los ejes)")
         return polis, " · ".join([nota, *avisos]), False
 
     def _campos_que_fallan(self, textos):
@@ -2213,8 +2312,9 @@ class Lienzo(QWidget):
             if valor == 0:
                 continue
             try:
-                self.b.copia().desfasar(self.picks[0], valor, direccion="un", invertir=args["invertir"],
-                                        topologia=args["topologia"], cadena=args["cadena"])
+                self._desfasar_en(self.b.copia(), self.picks[0], distancia=valor, direccion="un",
+                                  invertir=args["invertir"], topologia=args["topologia"], cadena=args["cadena"],
+                                  elipse=args["elipse"])
             except ErrorBoceto:
                 malos.append(i)
         return tuple(malos)
@@ -2222,8 +2322,8 @@ class Lienzo(QWidget):
     def _lado_desfase(self, polis):
         """«Hacia afuera» o «Hacia adentro» si la cadena es cerrada (el resultado crece o se achica); si no, «Hacia un
         lado» (la distancia negativa o «Invertir» pasan al otro)."""
-        cadena, cerrada = self.b.cadena(self.picks[0])
-        if not cerrada or not self.opciones["seleccion_cadena"]:
+        cadena, cerrada = ([(k, False) for k in sorted(self._desfase_perfil)], True) if self._desfase_perfil             else self.b.cadena(self.picks[0])
+        if not cerrada or not (self.opciones["seleccion_cadena"] or self._desfase_perfil):
             return "Hacia un lado"
 
         def caja(lista):
@@ -2288,20 +2388,177 @@ class Lienzo(QWidget):
         return max(round(v / e) * e, 1e-3)
 
     # ------------------------------------------------------------ Proyectar / Intersecar / Incluir
-    def proyectar_forma(self, forma, modo="proyectar", ref=None):
-        """Agrega al boceto la proyección (o la intersección) de una forma OCC sobre su plano. Con `ref` (la
-        referencia persistente de lo elegido) la proyección sigue al modelo cuando este cambia (B-09)."""
+    def _tanda_proyeccion(self, forma, modo, ref):
+        """Argumentos de `Boceto.agregar_proyeccion` para una forma OCC, con el tipo de línea y el vínculo actuales."""
         from ..nucleo.perfiles import intersecar_forma, proyectar_forma
         if self.plano is None:
             raise ErrorBoceto("El boceto no tiene plano.")
         prims, puntos = (intersecar_forma if modo == "intersecar" else proyectar_forma)(forma, self.plano)
-        if not prims and not puntos:
-            self.mensaje.emit("Eso no deja nada sobre el plano del boceto.")
-            return False
         origen = {"modo": "intersect" if modo == "intersecar" else "project", "refs": [ref]} if ref else None
         if not self.opciones["vinculo_proyeccion"]:          # Projection Link apagado: queda congelada
             origen = None
-        return self.aplicar_cambio(lambda: self.b.agregar_proyeccion(prims, puntos, self.construccion, origen))
+        return prims, puntos, self.construccion, origen
+
+    def _aplicar_proyecciones(self, tandas):
+        """Agrega `tandas` en un solo paso de deshacer y dice qué pasó de verdad. Si no cambiaría nada, no deja paso."""
+        resumen = self.b.simular_proyecciones(tandas)
+        if not resumen["cambia"]:
+            self.mensaje.emit(YA_PROYECTADA)
+            return False
+        if not self.aplicar_cambio(lambda: [self.b.agregar_proyeccion(*t) for t in tandas], anclar=False):
+            return False
+        nombre = HERRAMIENTAS[self.herramienta][0] if self.herramienta in PROYECCION else "Proyectar"
+        self.mensaje.emit(f"{nombre}: {texto_proyeccion(resumen)}")
+        return True
+
+    def proyectar_forma(self, forma, modo="proyectar", ref=None):
+        """Agrega al boceto la proyección (o la intersección) de una forma OCC sobre su plano, sin pasar por la tarjeta.
+        Con `ref` (la referencia persistente de lo elegido) la proyección sigue al modelo cuando este cambia (B-09)."""
+        tanda = self._tanda_proyeccion(forma, modo, ref)
+        if not tanda[0] and not tanda[1]:
+            self.mensaje.emit("Eso no deja nada sobre el plano del boceto.")
+            return False
+        return self._aplicar_proyecciones([tanda])
+
+    # ------------------------------------------------------------ Proyectar / Intersecar: la tarjeta
+    def _hay_tarjeta_proyeccion(self):
+        return self.herramienta in COMANDO_PROYECCION and self._revincular is None
+
+    def _elegir_proyeccion(self, info):
+        """Clic en el modelo: suma lo elegido a la selección de la tarjeta; otro clic en lo mismo lo saca. El boceto no
+        cambia: eso lo hace Aceptar."""
+        ref, forma = info.get("ref"), info["forma"]
+        repetido = next((e for e in self._elegidos_proy
+                         if (e["ref"] == ref if ref else e["forma"].IsSame(forma))), None)
+        if repetido is not None:
+            self._elegidos_proy.remove(repetido)
+        else:
+            self._elegidos_proy.append(info)
+        self._nota_proy = ""
+        self._emitir_proyeccion()
+
+    def quitar_proyeccion(self, indice):
+        """Tarjeta: la ✕ de una referencia la saca de la selección."""
+        del self._elegidos_proy[indice]
+        self._nota_proy = ""
+        self._emitir_proyeccion()
+
+    def cambiar_opcion_proyeccion(self):
+        """Cambió el filtro o el vínculo. Lo que el filtro nuevo no admite sale de la selección y se dice cuánto: nunca se
+        proyecta algo que la tarjeta no muestra."""
+        admitidos = self._filtros_proyeccion()
+        quedan = [e for e in self._elegidos_proy if e.get("tipo") in admitidos]
+        sacados = len(self._elegidos_proy) - len(quedan)
+        self._elegidos_proy = quedan
+        self._nota_proy = (f"El filtro sacó {sacados} {'referencia' if sacados == 1 else 'referencias'} de la selección."
+                           if sacados else "")
+        self._emitir_proyeccion()
+
+    def _calcular_proyeccion(self):
+        """(tandas, resumen, error) de lo elegido. Cada referencia se comprueba y se calcula acá: un fallo se dice en la
+        tarjeta, no aparece recién al aceptar."""
+        from ..nucleo import geometria as geo
+        from ..timeline import entidades as ent
+        tandas, sin_nada = [], 0
+        estado = self.estado_referencias()
+        for e in self._elegidos_proy:
+            try:
+                if estado is not None and e.get("ref"):
+                    ent.resolver(e["ref"], estado)
+                tanda = self._tanda_proyeccion(e["forma"], self.herramienta, e.get("ref"))
+            except (ent.ErrorReferencia, ent.ReferenciaMalFormada):
+                return [], None, f"La referencia de «{self._nombre_elegido(e)}» ya no es válida: sacala y elegila de nuevo."
+            except (geo.ErrorGeometria, ErrorBoceto) as error:
+                return [], None, f"No se pudo calcular «{self._nombre_elegido(e)}»: {error}"
+            sin_nada += not tanda[0] and not tanda[1]
+            tandas.append(tanda)
+        if sin_nada == len(tandas):
+            return [], None, "Eso no deja nada sobre el plano del boceto."
+        return tandas, self.b.simular_proyecciones(tandas), ""
+
+    def _nombre_elegido(self, e):
+        """Cómo se lee una referencia en la tarjeta: qué es y de qué cuerpo («Arista circular · Cuerpo1»)."""
+        ref = e.get("ref") or {}
+        estado = self.estado_referencias()
+        cuerpo = getattr(getattr(estado, "cuerpos", {}).get(ref.get("cuerpo")), "nombre", ref.get("cuerpo") or "")
+        geom = (ref.get("firma") or {}).get("geom")
+        tipo = {"cuerpo": "Cuerpo", "vertice": "Vértice", "cara": "Cara plana" if geom == "plano" else "Cara",
+                "curva_boceto": "Curva de boceto",
+                "arista": {"linea": "Arista recta", "circulo": "Arista circular"}.get(geom, "Arista")}.get(e.get("tipo"), "Geometría")
+        return cuerpo if tipo == "Cuerpo" and cuerpo else f"{tipo} · {cuerpo}" if cuerpo else tipo
+
+    def estado_proyeccion(self):
+        """Lo que muestra la tarjeta: las referencias elegidas, el resultado provisional y si se puede aceptar."""
+        vacio = "Elegí cuerpos en el modelo." if self.opciones["filtro_proyectar"] == "cuerpos" else (
+            "Elegí caras, aristas o vértices en el modelo.")
+        e = {"elegidos": [self._nombre_elegido(x) for x in self._elegidos_proy], "valido": False, "nota": self._nota_proy,
+             "resultado": vacio, "error": "", "prims": [], "puntos": []}
+        if not self._elegidos_proy:
+            return e
+        tandas, resumen, error = self._calcular_proyeccion()
+        e["tandas"] = tandas
+        if error:
+            e.update(resultado="", error=error)
+        elif not resumen["cambia"]:
+            e["resultado"] = YA_PROYECTADA
+        else:
+            e.update(resultado=texto_proyeccion(resumen), valido=True)
+        e["prims"] = [p for t in tandas for p in t[0]]
+        e["puntos"] = [q for t in tandas for q in t[1]]
+        return e
+
+    def _emitir_proyeccion(self):
+        """Le manda el estado a la tarjeta, marca lo elegido en el modelo y repinta la vista previa."""
+        self._previa_proy = {"prims": [], "puntos": []}
+        if self._hay_tarjeta_proyeccion():
+            estado = self.estado_proyeccion()
+            self._previa_proy = estado
+            self.proyeccion_estado.emit(estado)
+        if self.visor is not None and hasattr(self.visor, "set_capa"):
+            capas = [capa for e in self._elegidos_proy for capa in e.get("dibujo") or []]
+            self.visor.set_capa(CAPA_PROYECCION, capas or None)
+        self.update()
+
+    def aceptar_proyeccion(self):
+        """Aceptar (botón o Enter): todo lo elegido entra en una sola transacción y la herramienta termina; el boceto
+        sigue abierto."""
+        e = self.estado_proyeccion()
+        if not e["valido"]:
+            self.mensaje.emit(e["error"] or e["resultado"])
+            return False
+        if not self._aplicar_proyecciones(e["tandas"]):
+            return False
+        self._elegidos_proy = []
+        nombre, texto = HERRAMIENTAS[self.herramienta][0], e["resultado"]
+        self.set_herramienta("seleccionar")
+        self.mensaje.emit(f"{nombre}: {texto}")
+        return True
+
+    def cancelar_proyeccion(self):
+        """Cancelar (botón, ✕ o Esc): descarta lo provisional, sin tocar el boceto, y sale de la herramienta."""
+        self._elegidos_proy = []
+        self.set_herramienta("seleccionar")
+
+    def descartar_proyeccion(self):
+        """Cambiar de herramienta o terminar el boceto con una selección sin aceptar: se descarta. Devuelve lo que hay que
+        decirle a la persona ("" si no había nada), para que quien llama lo muestre en la barra de estado."""
+        if not self._elegidos_proy:
+            return ""
+        nota = f"{HERRAMIENTAS[self.herramienta][0]}: la selección sin aceptar se descartó."
+        self._elegidos_proy = []
+        self._emitir_proyeccion()
+        return nota
+
+    def _dibujar_previa_proyeccion(self, p, acento):
+        """Lo que quedaría al aceptar, en el plano del boceto y en azul: todavía no es geometría."""
+        p.setPen(QPen(acento, 2.0))
+        for prim in self._previa_proy["prims"]:
+            self._dibujar_polilinea(p, puntos_primitiva(prim))
+        p.setBrush(acento)
+        for xy in self._previa_proy["puntos"]:
+            q = self.a_px(*xy)
+            p.drawEllipse(q, 3.5, 3.5)
+        p.setBrush(Qt.NoBrush)
 
     def _eje_perfil_giratorio(self):
         from ..timeline import entidades as ent
@@ -2312,13 +2569,13 @@ class Lienzo(QWidget):
         ref = {"tipo": "eje", "id": self.opciones["eje_giro"]}
         return ent.como_eje(ent.resolver(ref, self.estado_referencias())), ref
 
-    def _agregar_eje_proyectado(self, eje, ref):
+    def _tanda_eje(self, eje, ref):
         from ..timeline import entidades as ent
         prims, puntos = ent.proyectar_entidad(ent.Entidad("eje", eje=eje), self.plano)
         datos = {"modo": "project", "refs": [ref], "infinitas": {str(k): 0.0 for k in range(len(prims))}}
         if not self.opciones["vinculo_proyeccion"] or ref is None:
             prims, datos = self.b.derivar_proyeccion(datos, prims), None
-        return self.b.agregar_proyeccion(prims, puntos, self.construccion, datos)
+        return prims, puntos, self.construccion, datos
 
     def proyectar_eje(self):
         """Fusion: Project Axis; proyecta el eje elegido en la paleta, como línea o punto si es perpendicular."""
@@ -2330,7 +2587,7 @@ class Lienzo(QWidget):
         except (ErrorBoceto, ent.ErrorReferencia) as e:
             self.mensaje.emit(str(e))
             return False
-        return self.aplicar_cambio(lambda: self._agregar_eje_proyectado(eje, ref), anclar=False)
+        return self._aplicar_proyecciones([self._tanda_eje(eje, ref)])
 
     def perfil_giratorio_forma(self, forma, ref=None):
         """Perfil giratorio (Fusion: Proyectar › Spun Profile) de una forma OCC alrededor del eje de la paleta
@@ -2354,39 +2611,138 @@ class Lienzo(QWidget):
             from ..api.herramientas_boceto import _eje_en_plano
             origen["contorno"] = _eje_en_plano(self.plano, eje)
 
+        datos = origen if ref and o["vinculo_proyeccion"] else None
+        curvas = prims if datos is not None else self.b.derivar_proyeccion(origen, prims)
+        tandas = [(curvas, puntos, self.construccion, datos)]
+        if o["proyectar_eje"]:
+            tandas.append(self._tanda_eje(eje, ref_eje))
+        return self._aplicar_proyecciones(tandas)
+
+    def isoparametrica_forma(self, forma, ref, punto):
+        """Curva isoparamétrica (Fusion: Proyectar/Incluir › Isoparametric Curve) de la cara `forma` por `punto`, con la
+        dirección, el tipo y el vínculo de la paleta. Quedan como curvas 3D del boceto; con vínculo siguen a la cara."""
+        from ..nucleo import geometria as geo
+        from ..restricciones import boceto3d as b3
+        o = self.opciones
+        if punto is None:
+            self.mensaje.emit("Hacé clic sobre la cara: el punto del clic da dónde va la curva.")
+            return False
+        p = [float(x) for x in punto]
+        self._borrar_previa_iso()
+        try:
+            curvas, tipo, distancia, cantidad = self._curvas_iso(forma, p)
+        except geo.ErrorGeometria as e:
+            self.mensaje.emit(str(e))
+            return False
+        origen = {"tool": "isoparametric_curve", "refs": [ref], "point": p, "direction": o["iso_direccion"],
+                  "type": tipo, "distance": distancia, "quantity": cantidad}
+        vinculo = bool(ref) and bool(o["vinculo_proyeccion"])
+
         def agregar():
-            datos = origen if ref and o["vinculo_proyeccion"] else None
-            curvas = prims if datos is not None else self.b.derivar_proyeccion(origen, prims)
-            self.b.agregar_proyeccion(curvas, puntos, self.construccion, datos)
-            if o["proyectar_eje"]:
-                self._agregar_eje_proyectado(eje, ref_eje)
+            for i, d in enumerate(curvas):
+                b3.agregar_desde_mundo(self.b, d, self.plano, self.construccion, {**origen, "index": i} if vinculo else None)
         return self.aplicar_cambio(agregar, anclar=False)
+
+    def _curvas_iso(self, forma, punto):
+        """(curvas, tipo, distancia, cantidad) de la isoparamétrica de `forma` por `punto` con las opciones de la paleta;
+        `ErrorGeometria` si no sale ninguna."""
+        from ..nucleo import curvas3d
+        o = self.opciones
+        tipo = "single" if o["iso_tipo"] == "unica" else "distributed"
+        distancia = float(o["iso_distancia"]) if o["iso_tipo"] == "distancia" else None
+        cantidad = int(o["iso_cantidad"]) if o["iso_tipo"] == "cantidad" else None
+        return curvas3d.isoparametricas(forma, punto, o["iso_direccion"], tipo, distancia, cantidad), tipo, distancia, cantidad
+
+    def programar_previa_iso(self, pos=None):
+        """Isoparamétrica: pide la vista previa en `pos` (o donde estaba el cursor, p. ej. al cambiar una opción de la
+        paleta). Se arma con el cursor quieto (80 ms): las distribuidas cuestan y no se recalculan en cada movimiento."""
+        if pos is not None:
+            self._iso_pos = pos
+        self._t_iso.start(80)
+
+    def _previa_iso(self):
+        """Dibuja en la vista 3D las curvas que saldrían con un clic donde está el cursor (Fusion muestra la curva antes
+        de aceptar). Sin cara bajo el cursor, o con un valor que no sirve, no dibuja nada; el motivo va al mensaje."""
+        from ..nucleo import geometria as geo
+        from ..restricciones import boceto3d as b3
+        elegir = getattr(self.visor, "elegir_entidad", None) if self.visor is not None else None
+        if self.herramienta != "isoparametrica" or self._iso_pos is None or elegir is None:
+            return self._borrar_previa_iso()
+        pos = self._iso_pos
+        info = elegir(QPointF(self.visor.mapFromGlobal(self.mapToGlobal(QPoint(int(pos.x()), int(pos.y()))))), {"cara"})
+        if not info or info.get("forma") is None or info.get("punto") is None:
+            return self._borrar_previa_iso()
+        try:
+            curvas = self._curvas_iso(info["forma"], [float(x) for x in info["punto"]])[0]
+        except geo.ErrorGeometria as e:
+            self._borrar_previa_iso()
+            if str(e) != self._iso_texto:                  # el motivo se dice una vez, no en cada pausa del cursor
+                self._iso_texto = str(e)
+                self.mensaje.emit(self._iso_texto)
+            return
+        previa = Boceto()
+        try:
+            for d in curvas:
+                b3.agregar_desde_mundo(previa, d, self.plano)
+        except ErrorBoceto:                                # un arco casi recto del recorte: sin vista previa, no una excepción en el timer
+            return self._borrar_previa_iso()
+        from .visor3d import _segmentos
+        self._iso_texto, self._iso_dibujada = None, True
+        self.visor.set_capa(CAPA_PREVIA_ISO, [("lineas", _segmentos(b3.polilineas(previa, self.plano)), COLOR_PREVIA_ISO, 2.5)])
+
+    def _borrar_previa_iso(self):
+        self._t_iso.stop()
+        if self.visor is not None and self._iso_dibujada:
+            self.visor.set_capa(CAPA_PREVIA_ISO, None)
+        self._iso_dibujada = False
+
+    def leaveEvent(self, e):
+        if self.herramienta == "isoparametrica":
+            self._iso_pos = None
+            self._borrar_previa_iso()
+        super().leaveEvent(e)
+
+    def _filtros_proyeccion(self):
+        """Tipos de entidad que elige el próximo clic con la herramienta y el filtro actuales."""
+        h = self.herramienta
+        if self._revincular is not None:
+            return {"cuerpo", "cara", "arista", "vertice"}
+        if h == "incluir_3d" or (h == "perfil_giratorio" and self.opciones["eje_giro"] == "arista"
+                                 and self._eje_giro is None):
+            return {"arista", "vertice"} if h == "incluir_3d" else {"arista"}
+        if h == "isoparametrica":
+            return {"cara"}
+        if self.opciones["filtro_proyectar"] == "cuerpos" and h != "perfil_giratorio":
+            return {"cuerpo"}
+        comunes = {"cara", "arista", "vertice"}
+        if h in COMANDO_PROYECCION:
+            comunes.add("curva_boceto")
+        return comunes | ({"cuerpo"} if h in ("intersecar", "perfil_giratorio") else set())
 
     def _clic_proyectar(self, pos):
         elegir = getattr(self.visor, "elegir_entidad", None) if self.visor is not None else None
         if elegir is None:
             self.mensaje.emit("La vista 3D todavía no permite elegir aristas, caras o cuerpos.")
             return
-        h = self.herramienta
-        if self._revincular is not None:
-            filtros = {"cuerpo", "cara", "arista", "vertice"}
-        elif h == "incluir_3d" or (h == "perfil_giratorio" and self.opciones["eje_giro"] == "arista"
-                                 and self._eje_giro is None):
-            filtros = {"arista", "vertice"} if h == "incluir_3d" else {"arista"}
-        elif self.opciones["filtro_proyectar"] == "cuerpos" and h != "perfil_giratorio":
-            filtros = {"cuerpo"}
-        else:
-            filtros = {"cara", "arista", "vertice"} | ({"cuerpo"} if h in ("intersecar", "perfil_giratorio") else set())
         q = self.visor.mapFromGlobal(self.mapToGlobal(QPoint(int(pos.x()), int(pos.y()))))
+        filtros = self._filtros_proyeccion()
         info = elegir(QPointF(q), filtros)
+        if info and info.get("tipo") == "curva_boceto" and info["ref"]["boceto"] == self.op_boceto:
+            info = elegir(QPointF(q), filtros - {"curva_boceto"})        # este boceto no se proyecta sobre sí mismo
+        if info and info.get("tipo") == "curva_boceto":                  # el visor da la referencia; la forma la da el documento
+            from ..timeline import entidades as ent
+            info["forma"] = ent.resolver(info["ref"], self.estado_referencias()).forma
         if not info or info.get("forma") is None:
             self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
             return
-        self._usar_entidad(info)
+        if self._hay_tarjeta_proyeccion():
+            self._elegir_proyeccion(info)
+        else:
+            self._usar_entidad(info)
 
     def _usar_entidad(self, info):
         """Lo elegido en el modelo (dict de `elegir_entidad`) según la herramienta: re-vincular una proyección
-        perdida, el eje o el perfil giratorio, o proyectar / intersecar."""
+        perdida, el eje o el perfil giratorio, o proyectar / intersecar sin pasar por la tarjeta."""
         h, forma, ref = self.herramienta, info["forma"], info.get("ref")
         if self._revincular is not None:
             return self._revincular_con(forma, ref)
@@ -2400,19 +2756,21 @@ class Lienzo(QWidget):
             self._eje_giro = ((a, (b - a) / np.linalg.norm(b - a)), ref)
             self.mensaje.emit("Perfil giratorio: eje elegido. Ahora clic en lo que se gira.")
             return True
+        if h == "isoparametrica":
+            ok = self.isoparametrica_forma(forma, ref, info.get("punto"))
+            if ok:
+                self.mensaje.emit(f"{HERRAMIENTAS[h][0]}: listo ({info.get('tipo', 'geometría')}). Seguí eligiendo o Esc.")
+            return ok
         if h == "perfil_giratorio":
-            ok = self.perfil_giratorio_forma(forma, ref)
-        else:
-            ok = self.proyectar_forma(forma, "intersecar" if h == "intersecar" else "proyectar", ref)
-        if ok:
-            self.mensaje.emit(f"{HERRAMIENTAS[h][0]}: listo ({info.get('tipo', 'geometría')}). Seguí eligiendo o Esc.")
-        return ok
+            return self.perfil_giratorio_forma(forma, ref)
+        return self.proyectar_forma(forma, "intersecar" if h == "intersecar" else "proyectar", ref)
 
     # ------------------------------------------------------------ vínculo de proyección (BOC-17)
     def _proyecciones_de(self, ids):
-        """Ids de las proyecciones asociativas que tienen alguna de las entidades `ids`."""
-        ids = set(ids)
-        return [r["id"] for r in self.b.proyecciones if ids & set(r["ids"])]
+        """Ids de las proyecciones asociativas que tienen alguna de las entidades `ids`. Lo que tiene una proyección
+        explícita no arrastra al contorno automático con el que comparte la curva."""
+        ids, explicitas = set(ids), self.b._explicitas()
+        return [r["id"] for r in self.b.proyecciones if (ids - explicitas if r.get("auto") else ids) & set(r["ids"])]
 
     def romper_vinculo(self):
         """Romper vínculo (Fusion: Break Link) de las proyecciones de lo seleccionado."""
@@ -2595,6 +2953,7 @@ class Lienzo(QWidget):
                 self.construccion = False
             self.mensaje.emit("Las curvas nuevas son líneas centrales (eje)." if self.eje
                               else "Las curvas nuevas son normales.")
+            self._emitir_proyeccion()
             return
 
         def cambiar():
@@ -3128,11 +3487,6 @@ class Lienzo(QWidget):
                 return self._aplicar_y_limpiar(lambda: self.b.agregar_circulo_tangente(lineas, self.cursor, r, None,
                                                                                        self.construccion))
             self._abrir_entrada(["R"], [primera], pos, aceptar)
-        elif h == "mover" and self.fase == "destino":
-            ids = self._seleccion_util()
-            self._abrir_entrada(["ΔX", "ΔY", "∠"], [primera, "0", "0"], pos,
-                                lambda v: self._mover(ids, self.evaluar(v[0] or "0"), self.evaluar(v[1] or "0"),
-                                                      self.evaluar(v[2] or "0", ANGULO)))
 
     # ------------------------------------------------------------ cotas en vivo (cajas de valor de Fusion)
     # Mientras se dibuja, junto a la vista previa se muestran cajas con lo que mide la geometría (con su
@@ -3534,14 +3888,19 @@ class Lienzo(QWidget):
             self._inf_lado = self.inf_actual
             if self._inf_lado is not None and self._inf_lado.tipo in ("horizontal", "vertical") and not self.inferencia:
                 self._inf_lado = None
-        if (h in ("linea_medio", "circulo") and n == 1) or (h == "rectangulo_3p" and n == 2):
-            inf = self._inf_lado if h == "rectangulo_3p" else self.inf_actual
-            if h == "circulo":
-                inf = (Inferencia("tangente", inf.xy, inf.objetivo, ("tangente", inf.objetivo))
-                       if inf is not None and inf.tipo == "perpendicular" else None)
+        if h == "arco_centro" and n == 1:
+            self._inf_radio = self.inf_actual          # el arco se crea en el tercer clic: se guarda la ayuda del radio
+        if (h in ("linea_medio", "circulo") and n == 1) or (h in ("rectangulo_3p", "arco_centro") and n == 2):
+            inf = self._inf_lado if h == "rectangulo_3p" else self._inf_radio if h == "arco_centro" else self.inf_actual
+            if h in ("circulo", "arco_centro"):       # el radio perpendicular a una línea o tangente a otra circunferencia
+                if inf is not None and inf.tipo == "perpendicular" and inf.restriccion:
+                    inf = replace(inf, tipo="tangente", restriccion=("tangente", inf.objetivo))
+                elif inf is None or inf.tipo not in ("tangente_circulo", "igual") or not inf.restriccion:
+                    inf = None
             elif h == "linea_medio" and inf is not None and inf.tipo in ("horizontal", "vertical") and not self.inferencia:
                 inf = None
-            if inf is not None and inf.tipo in ("horizontal", "vertical", "tangente", "perpendicular"):
+            if inf is not None and inf.tipo in ("horizontal", "vertical", "tangente", "perpendicular", "paralela",
+                                                "perpendicular_dir", "colineal", "tangente_circulo", "igual"):
                 post_crear = self._post_crear
 
                 def restringir(nuevas):
@@ -4000,7 +4359,23 @@ class Lienzo(QWidget):
         if r is None:
             return False
         antes = TIPOS_RESTRICCION[r.tipo].lower()
-        if not self.aplicar_cambio(lambda: self.b.reemplazar_restriccion(rid, tipo)):
+        if self.resultado is None or self.resultado.ok:       # BOC-53: una restricción que sobra se rechaza, como en Agregar
+            copia = self.b.copia()
+            try:
+                copia.reemplazar_restriccion(rid, tipo)
+                valores = self.valores_cotas()
+                sobra = resolver(copia, valores).ok and not restriccion_quita_grados(copia, rid, valores)
+            except ErrorBoceto:
+                sobra = False                                # no aplica: lo dice `aplicar_cambio`
+            if sobra:
+                self.mensaje.emit(f"«{TIPOS_RESTRICCION[tipo]}» no quita ningún grado de libertad: el boceto ya la cumple "
+                                  "por otras restricciones o cotas. No se cambió.")
+                return False
+        def cambiar():
+            self.b.reemplazar_restriccion(rid, tipo)
+            if tipo == "tangente":
+                acomodar_tangente(self.b, r.entidades, self._valores_para_diagnostico())
+        if not self.aplicar_cambio(cambiar):
             return False
         self.mensaje.emit(f"Restricción cambiada: {antes} → {TIPOS_RESTRICCION[tipo].lower()}.")
         return True
@@ -4186,7 +4561,11 @@ class Lienzo(QWidget):
 
         def agregar():
             for t, e in pedidos:
+                if t == "tangente":
+                    self.b.deslizar_a_tangente(*e)
                 self.b.agregar_restriccion(t, e)
+                if t == "tangente":
+                    acomodar_tangente(self.b, e, self._valores_para_diagnostico())
         ok = self.aplicar_cambio(agregar)
         if ok and tipo != "fijo" and gdl is not None and self.resultado.gdl >= gdl:    # no quitó ningún GDL: sobra
             self._restaurar(self.historial.pop())
@@ -4195,7 +4574,8 @@ class Lienzo(QWidget):
                               "restricciones o cotas (sobre-definiría).")
             return False
         if ok:
-            self.mensaje.emit(f"Restricción agregada: {TIPOS_RESTRICCION.get(tipo, tipo)}.")
+            fuera = self.b.tangencias_fuera_del_arco() if tipo == "tangente" else []
+            self.mensaje.emit(aviso_tangencias_fuera() if fuera else f"Restricción agregada: {TIPOS_RESTRICCION.get(tipo, tipo)}.")
         return ok
 
     def _restriccion_con_seleccion(self):
@@ -4267,6 +4647,7 @@ class Lienzo(QWidget):
                 self.eje = False
             self.mensaje.emit("Las curvas nuevas son de construcción." if self.construccion
                               else "Las curvas nuevas son normales.")
+            self._emitir_proyeccion()
             return
 
         def cambiar():
@@ -4382,6 +4763,8 @@ class Lienzo(QWidget):
         elif h in PROYECCION:
             self._clic_proyectar(pos)
         elif h in PATRON and self.fase in ("centro", "dir1", "dir2") and self.patron.clic(pos):
+            pass
+        elif h in TRANSFORMAR and self.fase in ("base", "destino") and self.transformar.clic(pos):
             pass
         elif h in SELECCION and self.fase == "seleccion":
             self._presionar_seleccion(pos, Qt.ControlModifier, arrastrar=False)
@@ -4808,6 +5191,8 @@ class Lienzo(QWidget):
             self._movio = True
         if self.herramienta == "recortar":
             self._previa_recorte = self._tramo_a_recortar(pos)
+        elif self.herramienta == "isoparametrica":
+            self.programar_previa_iso(pos)
         self.update()
 
     def mouseReleaseEvent(self, e):
@@ -4997,6 +5382,7 @@ class Lienzo(QWidget):
             self.info.emit(texto)
         self._emitir_simetria()
         self.patron.notificar()
+        self.transformar.notificar()
 
     def mouseDoubleClickEvent(self, e):
         if self.visor is not None and e.button() == Qt.MiddleButton:
@@ -5052,8 +5438,6 @@ class Lienzo(QWidget):
         h = self.herramienta
         if h == "circulo_2t":
             return len(self.picks) == 2
-        if h == "mover":
-            return self.fase == "destino"
         return bool(self._claves_vivas())
 
     def event(self, e):
@@ -5114,8 +5498,12 @@ class Lienzo(QWidget):
             self._terminar_spline()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h == "simetria":
             self._enter_simetria()
+        elif k in (Qt.Key_Return, Qt.Key_Enter) and self._hay_tarjeta_proyeccion():
+            self.aceptar_proyeccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in PATRON:
             self.patron.enter()
+        elif k in (Qt.Key_Return, Qt.Key_Enter) and h in TRANSFORMAR:
+            self.transformar.enter()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and h in SELECCION and self.fase == "seleccion":
             self._avanzar_seleccion()
         elif k in (Qt.Key_Return, Qt.Key_Enter) and any(c in self._bloqueos for c in self._claves_vivas()):
@@ -5609,12 +5997,27 @@ class Lienzo(QWidget):
                 d = q - self.a_px(*o)
                 afuera = d / (math.hypot(d.x(), d.y()) or 1.0)
             else:
-                anclas = [self._ancla(e) for e in c.entidades]
-                q = sum(anclas[1:], anclas[0]) / len(anclas) + QPointF(0, 12)
-                afuera = QPointF(0, 1)
+                seg = self.b.segmento_cota(c)
+                if seg is not None:                     # BOC-37: la línea de cota con sus flechas, entre lo que mide
+                    qa, qb = self.a_px(*seg[0]), self.a_px(*seg[1])
+                    raya(qa, qb)
+                    self._flecha(p, qa, qb)
+                    self._flecha(p, qb, qa)
+                    q, afuera, d = (qa + qb) / 2, QPointF(0, -1), qb - qa
+                    largo = math.hypot(d.x(), d.y())
+                    if largo > 1e-6:
+                        afuera = QPointF(d.y() / largo, -d.x() / largo)       # la normal que mira hacia arriba
+                        if afuera.y() > 1e-9 or (abs(afuera.y()) <= 1e-9 and afuera.x() < 0):
+                            afuera = -afuera
+                    girar = math.degrees(math.atan2(d.y(), d.x()))
+                    girar = girar - 180 if girar > 90 else girar + 180 if girar <= -90 else girar
+                else:
+                    anclas = [self._ancla(e) for e in c.entidades]
+                    q = sum(anclas[1:], anclas[0]) / len(anclas) + QPointF(0, 12)
+                    afuera = QPointF(0, 1)
                 if "ubic" in c.datos:                   # arrastrada: el texto va donde se la dejó, con una guía fina
                     p.drawLine(q, self.a_px(*c.datos["ubic"]))
-                    q, afuera = self.a_px(*c.datos["ubic"]), QPointF(0, 0)
+                    q, afuera, girar = self.a_px(*c.datos["ubic"]), QPointF(0, 0), None
             w, h = fm.horizontalAdvance(texto) + 4, fm.height()
             if girar is not None:                    # texto a lo largo de la línea: se aleja medio alto
                 centro = q + afuera * (h / 2 + 1)
@@ -5716,8 +6119,12 @@ class Lienzo(QWidget):
         acento = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
         if h == "simetria":
             self._dibujar_previa_simetria(p, acento)
+        elif h in COMANDO_PROYECCION:
+            self._dibujar_previa_proyeccion(p, acento)
         elif h in PATRON and self.patron.activo:
             self.patron.dibujar(p, acento)
+        elif h in TRANSFORMAR and self.transformar.activo:
+            self.transformar.dibujar(p, acento)
         if self._previa_polis or self._caret is not None or (self._previa_texto and self._previa_texto.get("caja")):
             if self._sel_texto:                    # lo seleccionado del texto que se escribe
                 p.setPen(Qt.NoPen)
@@ -5745,6 +6152,8 @@ class Lienzo(QWidget):
             self._dibujar_polilinea(p, self._previa_recorte)
         if self._asas is not None:
             self._asas.dibujar(p)
+        if self.ayuda_3d is not None:
+            self._dibujar_ayuda_3d(p, acento)
         if h == "desfase" and self.picks and self.entrada is not None:
             polis, nota, error = self._previa_desfase()
             p.setPen(QPen(acento, 2.0))
@@ -5850,13 +6259,6 @@ class Lienzo(QWidget):
                 self._dibujar_polilinea(p, pts + [cur])
             for poli in polis:
                 self._dibujar_polilinea(p, poli)
-        if h == "mover" and self.fase == "destino" and cur is not None:
-            base = self._base
-            p.setPen(QPen(acento, 1.5, Qt.DashLine))
-            for i in self._seleccion_util():
-                if i in self.b.curvas:
-                    for poli in self._polilineas(self.b.curvas[i], 32):
-                        self._dibujar_polilinea(p, [(q[0] + cur[0] - base[0], q[1] + cur[1] - base[1]) for q in poli])
         if cur is not None and self.herramienta not in ("seleccionar",) and self.visor is not None \
                 and self.entrada is None:
             q = self.a_px(*cur)
@@ -5891,7 +6293,7 @@ class Lienzo(QWidget):
             x, y = q.x(), q.y()
             if inf.tipo == "punto_medio":
                 p.drawPolygon(QPolygonF([QPointF(x, y - 6), QPointF(x - 6, y + 5), QPointF(x + 6, y + 5)]))
-            elif inf.tipo == "interseccion":
+            elif inf.tipo.startswith("interseccion"):
                 p.drawLine(QPointF(x - 5, y - 5), QPointF(x + 5, y + 5))
                 p.drawLine(QPointF(x - 5, y + 5), QPointF(x + 5, y - 5))
             elif inf.tipo.startswith("alineado"):
@@ -5905,19 +6307,41 @@ class Lienzo(QWidget):
             texto = inf.etiqueta + (" · bloqueada" if self._inf_bloqueo is not None else "")
             if len(self.inf_lista) > 1 and self._inf_bloqueo is None:
                 texto += f" · Espacio: otra ({self._inf_alt % len(self.inf_lista) + 1}/{len(self.inf_lista)})"
-            fm = QFontMetricsF(p.font())
-            caja = QRectF(q.x() + 12, q.y() + 24, fm.horizontalAdvance(texto) + 10, fm.height() + 4)
-            if caja.right() > self.width():
-                caja.moveRight(q.x() - 8)
-            if caja.bottom() > self.height():
-                caja.moveBottom(q.y() - 10)
-            fondo = QColor(30, 30, 36, 215) if self._oscuro() else QColor(255, 255, 255, 225)
-            p.setPen(QPen(guia, 1))
-            p.setBrush(fondo)
-            p.drawRoundedRect(caja, 3, 3)
-            p.setBrush(Qt.NoBrush)
-            p.setPen(QColor(235, 235, 240) if self._oscuro() else QColor(30, 30, 40))
-            p.drawText(caja.adjusted(5, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, texto)
+            self._rotulo(p, q, texto, guia)
+
+    def _rotulo(self, p, q, texto, color):
+        """El cartelito de una ayuda de dibujo junto al cursor `q` (px): fondo, borde del color de la guía y texto."""
+        fm = QFontMetricsF(p.font())
+        caja = QRectF(q.x() + 12, q.y() + 24, fm.horizontalAdvance(texto) + 10, fm.height() + 4)
+        if caja.right() > self.width():
+            caja.moveRight(q.x() - 8)
+        if caja.bottom() > self.height():
+            caja.moveBottom(q.y() - 10)
+        p.setPen(QPen(color, 1))
+        p.setBrush(QColor(30, 30, 36, 215) if self._oscuro() else QColor(255, 255, 255, 225))
+        p.drawRoundedRect(caja, 3, 3)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QColor(235, 235, 240) if self._oscuro() else QColor(30, 30, 40))
+        p.drawText(caja.adjusted(5, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, texto)
+
+    def _dibujar_ayuda_3d(self, p, acento):
+        """Marcador y etiqueta de la ayuda de dibujo del Boceto 3D (`ui/triada3d.py`; las guías van en la vista 3D)."""
+        q, tipo, texto = self.ayuda_3d
+        guia = QColor(acento)
+        guia.setAlpha(210)
+        p.setPen(QPen(guia, 1.8))
+        p.setBrush(Qt.NoBrush)
+        x, y = q.x(), q.y()
+        if tipo == "punto_medio":
+            p.drawPolygon(QPolygonF([QPointF(x, y - 6), QPointF(x - 6, y + 5), QPointF(x + 6, y + 5)]))
+        elif tipo.startswith("interseccion"):
+            p.drawLine(QPointF(x - 5, y - 5), QPointF(x + 5, y + 5))
+            p.drawLine(QPointF(x - 5, y + 5), QPointF(x + 5, y - 5))
+        elif tipo.startswith("alineado"):
+            p.drawPolygon(QPolygonF([QPointF(x, y - 6), QPointF(x + 6, y), QPointF(x, y + 6), QPointF(x - 6, y)]))
+        else:
+            p.drawEllipse(q, 5, 5)
+        self._rotulo(p, q, texto, guia)
 
     def describir(self, ids):
         return ", ".join(f"{NOMBRES_ENTIDAD[self.b.tipo_de(i)]} {i}" for i in ids if i in self.b.puntos or i in self.b.curvas)

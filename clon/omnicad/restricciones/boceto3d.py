@@ -18,9 +18,11 @@ Las herramientas de Fusion en 3D son Línea, Arco, Spline, Rectángulo, Círculo
 restricciones, Horizontal/Vertical (acá «eje»), Coincidente, Tangente, Igual, Paralela, Perpendicular, Fijo, Punto medio,
 Concéntrica y Colineal. Cotas: distancia 3D entre dos puntos, largo de una línea y ángulo entre dos líneas. El solver es
 propio (mínimos cuadrados de scipy), aparte del solver 2D: mueve PUNTOS; radios, normales y ejes de círculos, elipses y
-textos son datos (los cambian mover/rotar/escalar).
+textos son datos (los cambian mover/rotar/escalar). Un punto sobre una curva y dos curvas tangentes sin extremo común
+suman parámetros auxiliares de contacto, que se estiman en cada resolución (`Curva`, `_contacto`), como en el solver 2D.
 """
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -32,7 +34,9 @@ EJES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 TIPOS_RESTRICCION = ("coincidente", "eje", "paralela", "perpendicular", "tangente", "igual", "punto_medio", "fijo",
                      "concentrica", "colineal")
 CON_CENTRO = ("arco", "circulo", "elipse")
+_CON_EXTREMOS = ("linea", "arco", "conica", "spline")
 _TOL = 1e-6
+_ESCALA_TANGENTE = 10.0     # mm: convierte el seno del ángulo en un residuo comparable a una distancia
 
 
 def datos(b):
@@ -204,10 +208,13 @@ def agregar_texto(b, origen, texto, altura, u=(1, 0, 0), v=(0, 1, 0), fuente="Ar
                   u=_lista(u), v=_lista(v))
 
 
-_FIRMAS = {"coincidente": ({"punto", "punto"}, {"punto", "linea"}), "eje": ({"linea"},),
+_CURVAS = ("linea", "arco", "circulo", "elipse", "conica", "spline")
+_FIRMAS = {"coincidente": ({"punto", "punto"}, *({"punto", c} for c in _CURVAS)), "eje": ({"linea"},),
            "paralela": ({"linea"},), "perpendicular": ({"linea"},), "igual": ({"linea"},), "colineal": ({"linea"},),
-           "tangente": ({"linea", "spline"}, {"spline"}), "punto_medio": ({"punto", "linea"},)}
+           "tangente": tuple({a, c} for a in _CURVAS for c in _CURVAS if {a, c} != {"linea"}),
+           "punto_medio": ({"punto", "linea"},)}
 _CANTIDAD = {"eje": 1}
+_TEXTO_FIRMA = {"coincidente": "dos puntos o un punto y una curva", "tangente": "dos curvas (no dos líneas)"}
 
 
 def agregar_restriccion(b, tipo, entidades, eje=None):
@@ -223,18 +230,57 @@ def agregar_restriccion(b, tipo, entidades, eje=None):
         if len(entidades) != 2 or not distintas or not set(tipos) <= set(CON_CENTRO):
             raise ErrorBoceto(f"La restricción concéntrica une dos arcos, círculos o elipses (llegó {'+'.join(tipos)}).")
     elif len(entidades) != _CANTIDAD.get(tipo, 2) or set(tipos) not in _FIRMAS[tipo] or not distintas:
-        esperado = " o ".join("+".join(sorted(f)) for f in _FIRMAS[tipo])
+        esperado = _TEXTO_FIRMA.get(tipo) or " o ".join("+".join(sorted(f)) for f in _FIRMAS[tipo])
         raise ErrorBoceto(f"La restricción {tipo} se aplica a {esperado} (llegó {'+'.join(tipos)}).")
     datos_r = {"tipo": tipo, "entidades": entidades}
     if tipo == "eje":
         if eje not in EJES:
             raise ErrorBoceto(f"La restricción de eje necesita el eje: x, y o z (llegó {eje!r}).")
         datos_r["eje"] = eje
-    if tipo == "tangente":
-        _tangente(b, entidades)
+    if tipo == "tangente" and set(tipos) <= {"linea", "spline"} and _comun(datos(b), *entidades) is None:
+        raise ErrorBoceto("Para la tangencia, la spline tiene que empezar o terminar en un extremo de la otra curva "
+                          "(dibujala desde ese extremo: se encadenan solas).")
     rid = b._nuevo_id()
     datos(b)["restricciones"][rid] = datos_r
     return rid
+
+
+def agregar_si_cumple(b, tipo, entidades, valores, eje=None):
+    """Agrega la restricción solo si la geometría YA la cumple (el solver no mueve ningún punto), para que una ayuda de
+    dibujo deje su restricción sin arrastrar lo que ya está bien puesto. Devuelve su id, o None si no hace falta
+    (ya estaba), no se puede (la restricción no admite esas entidades) o la geometría no la cumple."""
+    g = datos(b)
+    if any(r["tipo"] == tipo and set(r["entidades"]) == set(entidades) for r in g["restricciones"].values()):
+        return None
+    antes = {k: list(v) for k, v in g["puntos"].items()}
+    try:
+        rid = agregar_restriccion(b, tipo, entidades, eje)
+    except ErrorBoceto:
+        return None
+    if resolver(b, valores).ok and all(math.dist(g["puntos"][k], v) < 1e-7 for k, v in antes.items()):
+        return rid
+    del g["restricciones"][rid]
+    g["puntos"].update(antes)
+    return None
+
+
+def aplicar_uniones(b, uniones, punto, linea, valores):
+    """Deja en `b` las restricciones de `inferencia3d.uniones`: las de `uniones["punto"]` con el punto `punto` y las de
+    `uniones["curva"]` con la línea `linea` (None si no hay). Cada una se agrega solo si ya se cumple (`agregar_si_cumple`).
+    Devuelve cuántas quedaron."""
+    g, n = datos(b), 0
+    for tipo, destino in uniones.get("punto", ()):
+        if punto in g["puntos"] and destino in g["curvas"]:
+            n += agregar_si_cumple(b, tipo, [punto, destino], valores) is not None
+    for tipo, destino in uniones.get("curva", ()) if linea in g["curvas"] else ():
+        if tipo == "eje":
+            a, c = (np.array(g["puntos"][i], float) for i in g["curvas"][linea]["puntos"])
+            d = (c - a) / max(float(np.linalg.norm(c - a)), 1e-12)
+            eje = next((k for k, e in EJES.items() if abs(abs(float(d @ np.array(e))) - 1.0) < 1e-9), None)
+            n += eje is not None and agregar_si_cumple(b, "eje", [linea], valores, eje) is not None
+        elif destino in g["curvas"]:
+            n += agregar_si_cumple(b, tipo, [linea, destino], valores) is not None
+    return n
 
 
 def agregar_cota(b, entidades, expresion, tipo="distancia"):
@@ -339,6 +385,12 @@ def _centro(g, P, cid):
     return _circuncentro(*(P[p] for p in pts)) if g["curvas"][cid]["tipo"] == "arco" else P[pts[0]]
 
 
+def _medida(g, P, cid):
+    """Radio de un arco o largo de una línea."""
+    pts = g["curvas"][cid]["puntos"]
+    return float(np.linalg.norm(P[pts[0]] - (_centro(g, P, cid) if g["curvas"][cid]["tipo"] == "arco" else P[pts[-1]])))
+
+
 def _P(b):
     return {p: np.array(v, float) for p, v in datos(b)["puntos"].items()}
 
@@ -348,8 +400,132 @@ def centro(b, cid):
     return _centro(datos(b), _P(b), cid)
 
 
-def _ecuaciones(b, valores):
-    """Lista de funciones P → residuos (P: {id: array xyz})."""
+@dataclass
+class Curva:
+    """Una curva 3D como C(t): `f(t)` da (punto, derivada) y [t0, t1] es su tramo dibujado (fuera de él sigue la recta
+    o el círculo entero). `marco` = (centro, e1, e2, a, b) en arcos, círculos y elipses: C(t) = centro + a·cos t·e1 +
+    b·sin t·e2, y en un arco e1 apunta al inicio."""
+    f: object
+    t0: float
+    t1: float
+    marco: tuple | None = None
+
+    def en_tramo(self, t):
+        """Si el parámetro `t` cae en lo dibujado; en arcos y círculos da igual la vuelta, y el inicio vale también por debajo."""
+        if self.marco is None:
+            return self.t0 - 1e-6 <= t <= self.t1 + 1e-6
+        s = t % math.tau
+        return s <= self.t1 + 1e-6 or s >= math.tau - 1e-6
+
+
+def _sobre_marco(centro, e1, e2, a, b, barrido):
+    def f(t):
+        c, s = math.cos(t), math.sin(t)
+        return centro + a * c * e1 + b * s * e2, -a * s * e1 + b * c * e2
+    return Curva(f, 0.0, barrido, (centro, e1, e2, a, b))
+
+
+def _spline_parametrica(b, cid, c, P):
+    try:
+        return Curva(*curvas3d.parametrica(curvas3d.arista_spline([P[p] for p in c["puntos"]], _tangentes(b, cid, P),
+                                                                  c.get("cerrada", False))))
+    except geo.ErrorGeometria as e:
+        raise ErrorBoceto(f"No se pudo construir la curva 3D {cid}: {e}") from e
+
+
+def curva_parametrica(b, cid, P=None):
+    """La `Curva` de `cid` con los puntos `P` ({id: array xyz}; sin `P`, los del boceto). El texto no tiene."""
+    P = _P(b) if P is None else P
+    c = datos(b)["curvas"][cid]
+    t, q = c["tipo"], [P[p] for p in c["puntos"]]
+    if t == "linea":
+        d = q[1] - q[0]
+        return Curva(lambda s: (q[0] + s * d, d), 0.0, 1.0)
+    if t == "arco":
+        centro = _circuncentro(*q)
+        r = float(np.linalg.norm(q[0] - centro))
+        n = np.cross(q[1] - q[0], q[2] - q[0])
+        n = n / max(float(np.linalg.norm(n)), 1e-12)
+        e1 = (q[0] - centro) / max(r, 1e-12)
+        e2 = np.cross(n, e1)
+        fin = q[2] - centro
+        return _sobre_marco(centro, e1, e2, r, r, math.atan2(float(fin @ e2), float(fin @ e1)) % math.tau)
+    if t == "circulo":
+        n = np.array(c["normal"], float)
+        e = np.zeros(3)
+        e[int(np.argmin(np.abs(n)))] = 1.0
+        e1 = np.cross(n, e)
+        e1 = e1 / np.linalg.norm(e1)
+        return _sobre_marco(q[0], e1, np.cross(n, e1), c["radio"], c["radio"], math.tau)
+    if t == "elipse":
+        e = np.array(c["eje_mayor"], float)
+        a = float(np.linalg.norm(e))
+        return _sobre_marco(q[0], e / a, np.cross(np.array(c["normal"], float), e / a), a, c["radio_menor"], math.tau)
+    if t == "conica":
+        w = c["rho"] / (1 - c["rho"])                  # Bézier racional de `curvas3d.arista_conica`
+
+        def f(s):
+            u = 1 - s
+            pesos = np.array([u * u, 2 * u * s * w, s * s])
+            dpesos = np.array([-2 * u, 2 * (1 - 2 * s) * w, 2 * s])
+            n, dn = sum(p * v for p, v in zip(pesos, q, strict=True)), sum(p * v for p, v in zip(dpesos, q, strict=True))
+            m, dm = float(pesos.sum()), float(dpesos.sum())
+            return n / m, (dn * m - n * dm) / (m * m)
+        return Curva(f, 0.0, 1.0)
+    if t == "spline":
+        return _spline_parametrica(b, cid, c, P)
+    raise ErrorBoceto(f"Un {t} no es una curva con la que se pueda restringir.")
+
+
+def _muestras(c, recta=False):
+    """(parámetros, puntos) a lo largo de la curva; una recta se mira también más allá de sus extremos."""
+    ts = np.linspace(-2.0, 3.0, 96) if recta else np.linspace(c.t0, c.t1, 96)
+    return ts, np.array([c.f(t)[0] for t in ts])
+
+
+def _parametro_cercano(c, q):
+    """Parámetro de la `Curva` c más cercano al punto q."""
+    from scipy.optimize import least_squares
+    ts, pts = _muestras(c)
+    t0 = ts[int(np.argmin(np.linalg.norm(pts - q, axis=1)))]
+    return float(least_squares(lambda x: c.f(x[0])[0] - q, [t0], xtol=1e-14, ftol=1e-14, gtol=1e-14).x[0])
+
+
+def _residuo_tangencia(ca, cc, s, t):
+    (pa, da), (pc, dc) = ca.f(s), cc.f(t)
+    u = lambda v: v / max(np.linalg.norm(v), 1e-12)  # noqa: E731
+    return np.concatenate([pa - pc, np.cross(u(da), u(dc)) * _ESCALA_TANGENTE])
+
+
+def _contacto(b, a, c):
+    """Parámetros (s, t) del contacto de dos curvas: el par de muestras más cercano y, sin mover ningún punto, lo más
+    tangente que se pueda desde ahí (así, si ya son tangentes, los residuos arrancan en 0 y nada se mueve)."""
+    from scipy.optimize import least_squares
+    tipos = datos(b)["curvas"]
+    ca, cc = curva_parametrica(b, a), curva_parametrica(b, c)
+    (ts, pa), (us, pc) = _muestras(ca, tipos[a]["tipo"] == "linea"), _muestras(cc, tipos[c]["tipo"] == "linea")
+    i, j = np.unravel_index(int(np.argmin(np.linalg.norm(pa[:, None] - pc[None, :], axis=2))), (len(ts), len(us)))
+    x = least_squares(lambda x: _residuo_tangencia(ca, cc, x[0], x[1]), [ts[i], us[j]], xtol=1e-14, ftol=1e-14, gtol=1e-14).x
+    return float(x[0]), float(x[1])
+
+
+def tangencias_fuera_del_arco(b):
+    """[[a, b]] de las tangentes 3D cuyo contacto cae fuera del tramo dibujado de un arco: se resuelven contra el círculo
+    entero, como en el boceto 2D (ver `Boceto.tangencias_fuera_del_arco`)."""
+    g, salida = datos(b), []
+    for r in g["restricciones"].values():
+        tipos = [g["curvas"][e]["tipo"] for e in r["entidades"]] if r["tipo"] == "tangente" else ()
+        if "arco" in tipos and _comun(g, *r["entidades"]) is None:
+            for cid, t in zip(r["entidades"], _contacto(b, *r["entidades"]), strict=True):
+                if g["curvas"][cid]["tipo"] == "arco" and not curva_parametrica(b, cid).en_tramo(t):
+                    salida.append(list(r["entidades"]))
+                    break
+    return salida
+
+
+def _ecuaciones(b, valores, aux):
+    """Lista de funciones P → residuos (P: {id: array xyz} y "aux", los parámetros de contacto, que arrancan en los
+    valores que se agregan a `aux`)."""
     g = datos(b)
     ext = lambda c: g["curvas"][c]["puntos"]  # noqa: E731
     d = lambda P, c: P[ext(c)[-1]] - P[ext(c)[0]]  # noqa: E731
@@ -361,8 +537,11 @@ def _ecuaciones(b, valores):
             p, o = sorted(e, key=lambda i: i not in g["puntos"])
             if o in g["puntos"]:
                 fs.append(lambda P, p=p, o=o: P[p] - P[o])
-            else:
+            elif g["curvas"][o]["tipo"] == "linea":
                 fs.append(lambda P, p=p, o=o: np.cross(P[p] - P[ext(o)[0]], u(d(P, o))))
+            else:
+                aux.append(_parametro_cercano(curva_parametrica(b, o), np.array(g["puntos"][p], float)))
+                fs.append(lambda P, p=p, o=o, j=len(aux) - 1: P[p] - curva_parametrica(b, o, P).f(P["aux"][j])[0])
         elif t == "eje":
             otros = [i for i, n in enumerate("xyz") if n != r["eje"]]
             fs.append(lambda P, c=e[0], k=otros: d(P, c)[k])
@@ -380,6 +559,15 @@ def _ecuaciones(b, valores):
             fs.append(lambda P, p=p, c=c: P[p] - (P[ext(c)[0]] + P[ext(c)[1]]) / 2)
         elif t == "concentrica":
             fs.append(lambda P, a=e[0], c=e[1]: _centro(g, P, a) - _centro(g, P, c))
+        elif t == "tangente":
+            comun = _comun(g, *e)
+            if comun is None:
+                aux.extend(_contacto(b, *e))
+                fs.append(lambda P, a=e[0], c=e[1], j=len(aux) - 2: _residuo_tangencia(
+                    curva_parametrica(b, a, P), curva_parametrica(b, c, P), P["aux"][j], P["aux"][j + 1]))
+            elif "spline" not in (g["curvas"][e[0]]["tipo"], g["curvas"][e[1]]["tipo"]):
+                fs.append(lambda P, a=e[0], c=e[1], k=comun: np.cross(u(_llegada(b, a, k, P)), u(_llegada(b, c, k, P)))
+                          * _ESCALA_TANGENTE)                       # la spline la cumple al construirse (`_tangentes`)
     for k, cota in g["cotas"].items():
         e, v = cota["entidades"], float(valores[k])
         if cota.get("tipo") == "angulo":
@@ -391,9 +579,10 @@ def _ecuaciones(b, valores):
     return fs
 
 
-def resolver(b, valores):
+def resolver(b, valores, quietas=(), medidas=None):
     """Resuelve la geometría 3D de `b` EN EL LUGAR con las cotas `valores` ({id: mm o grados}). Si queda en conflicto
-    no mueve nada y devuelve ok=False. Grados de libertad: coordenadas libres − rango del jacobiano."""
+    no mueve nada y devuelve ok=False. Grados de libertad: coordenadas libres − rango del jacobiano. `quietas` (curvas que
+    no se mueven) y `medidas` ({curva: radio o largo que se conserva}) son solo de `acomodar_tangente`."""
     g = datos(b)
     if not g["puntos"]:
         return Resultado3D(True, 0)
@@ -402,27 +591,36 @@ def resolver(b, valores):
             return Resultado3D(False, None, f"La cota 3D {k} tiene que medir más que 0.")
         if cota.get("tipo") == "angulo" and not valores[k] < 180:
             return Resultado3D(False, None, f"La cota angular 3D {k} tiene que medir menos de 180°.")
-    fijos = puntos_fijos(b)
+    fijos = puntos_fijos(b).union(*(g["curvas"][k]["puntos"] for k in quietas))
     libres = [p for p in g["puntos"] if p not in fijos]
-    fs = _ecuaciones(b, valores)
-    x0 = np.array([c for p in libres for c in g["puntos"][p]], float)
+    aux = []
+    try:
+        fs = _ecuaciones(b, valores, aux)
+    except ErrorBoceto as e:
+        return Resultado3D(False, None, str(e))
+    fs += [lambda P, k=k, v=v: [_medida(g, P, k) - v] for k, v in (medidas or {}).items()]
+    x0 = np.array([c for p in libres for c in g["puntos"][p]] + aux, float)
 
     def puntos(x):
         P = _P(b)
         for i, p in enumerate(libres):
             P[p] = x[3 * i:3 * i + 3]
+        P["aux"] = x[3 * len(libres):]
         return P
 
     def residuos(x):
         P = puntos(x)
         return np.concatenate([np.ravel(f(P)) for f in fs]) if fs else np.zeros(0)
 
-    if not fs or not libres:
+    if not fs or not len(x0):
         r = residuos(x0)
         ok = not len(r) or float(np.max(np.abs(r))) < _TOL
         return Resultado3D(ok, len(x0), "" if ok else "Restricciones 3D en conflicto (sobre geometría fija).")
     from scipy.optimize import least_squares
-    sol = least_squares(residuos, x0, method="trf", xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=2000)
+    try:
+        sol = least_squares(residuos, x0, method="trf", xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=2000)
+    except ErrorBoceto as e:
+        return Resultado3D(False, None, str(e))
     if float(np.max(np.abs(residuos(sol.x)))) > _TOL:
         return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto: quitá alguna.")
     for p, v in puntos(sol.x).items():
@@ -432,31 +630,52 @@ def resolver(b, valores):
     return Resultado3D(True, gdl)
 
 
-def _tangente(b, entidades):
-    """(curva a, spline s, punto común): a es una línea o una spline y s una spline que empieza o termina en un
-    extremo de a. ErrorBoceto si no comparten extremo."""
-    g = datos(b)
-    a, s = sorted(entidades, key=lambda i: g["curvas"][i]["tipo"] != "linea")
-    pa, ps = g["curvas"][a]["puntos"], g["curvas"][s]["puntos"]
-    for extremo in (0, -1):
-        if ps[extremo] in (pa[0], pa[-1]):
-            return a, s, ps[extremo]
-    raise ErrorBoceto("Para la tangencia, la spline tiene que empezar o terminar en un extremo de la otra curva "
-                      "(dibujala desde ese extremo: se encadenan solas).")
+def acomodar_tangente(b, entidades, valores):
+    """Antes de resolver una tangente recién agregada con el comando: la cumple sin mover el primer arco o círculo y sin
+    cambiar ningún radio de arco ni el largo de la línea (`solver.acomodar_tangente` en 2D; en la figura de la ayuda de
+    Fusion el círculo no cambia). Si no, el solver reparte el salto entre los tres puntos sueltos del arco y su radio
+    cambia (BOC-81). Si la otra curva no puede moverse, se mueve el arco entero; si tampoco, queda el reparto del solver.
+    Las recetas guardadas no pasan por acá: resuelven igual que siempre."""
+    g, P = datos(b), _P(b)
+    redondas = [e for e in entidades if g["curvas"][e]["tipo"] in ("arco", "circulo")]
+    medidas = {k: _medida(g, P, k) for k, c in g["curvas"].items()
+               if c["tipo"] == "arco" or (c["tipo"] == "linea" and k in entidades)}
+    if redondas:
+        for quietas in (redondas[:1], ()):
+            if resolver(b, valores, quietas, medidas).ok:
+                return
+
+
+def _comun(g, a, c):
+    """El punto en que terminan las dos curvas, o None si no comparten extremo (un círculo o una elipse no tienen)."""
+    ca, cc = g["curvas"][a], g["curvas"][c]
+    if ca["tipo"] not in _CON_EXTREMOS or cc["tipo"] not in _CON_EXTREMOS:
+        return None
+    pa, pc = ca["puntos"], cc["puntos"]
+    return next((pc[e] for e in (0, -1) if pc[e] in (pa[0], pa[-1])), None)
+
+
+def _llegada(b, cid, pid, P):
+    """Dirección de la curva `cid` al llegar a su extremo `pid`."""
+    c, ultimo = curva_parametrica(b, cid, P), datos(b)["curvas"][cid]["puntos"][-1] == pid
+    return c.f(c.t1)[1] if ultimo else -c.f(c.t0)[1]
 
 
 def _tangentes(b, cid, P):
-    """{índice: vector} de la spline `cid` por sus tangencias. Con una línea, la dirección de la línea; entre dos
-    splines, la cuerda entre los puntos vecinos al común (la misma para las dos: continuidad G1)."""
+    """{índice: vector} de la spline `cid` por sus tangencias con un extremo común. Con otra curva, su dirección al
+    llegar ahí; entre dos splines, la cuerda entre los puntos vecinos al común (la misma para las dos: continuidad G1)."""
     g = datos(b)
     pts, salida = g["curvas"][cid]["puntos"], {}
     vecino = lambda c, p: g["curvas"][c]["puntos"][1 if g["curvas"][c]["puntos"][0] == p else -2]  # noqa: E731
     for r in g["restricciones"].values():
         if r["tipo"] != "tangente" or cid not in r["entidades"]:
             continue
-        a, s, comun = _tangente(b, r["entidades"])
-        if g["curvas"][a]["tipo"] == "linea":
-            t = P[comun] - P[next(p for p in g["curvas"][a]["puntos"] if p != comun)]
+        comun = _comun(g, *r["entidades"])
+        if comun is None:
+            continue
+        a, s = sorted(r["entidades"], key=lambda i: g["curvas"][i]["tipo"] == "spline")
+        if g["curvas"][a]["tipo"] != "spline":
+            t = _llegada(b, a, comun, P)
         else:
             t = P[vecino(s, comun)] - P[vecino(a, comun)]          # del lado de a hacia el de s
         al_inicio = pts[0] == comun

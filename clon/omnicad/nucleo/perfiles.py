@@ -586,8 +586,9 @@ def _spline_de_arista(arista, a_uv):
     polos = tuple(a_uv(q) for q in polos)
     if max(math.dist(polos[0], q) for q in polos[1:]) < 1e-9:
         return None
-    if all(abs((q[0] - polos[0][0]) * (polos[-1][1] - polos[0][1]) - (q[1] - polos[0][1]) * (polos[-1][0] - polos[0][0]))
-           < 1e-9 * max(1.0, math.dist(polos[0], polos[-1]) ** 2) for q in polos):
+    lejano = max(polos, key=lambda q: math.dist(polos[0], q))      # en una curva cerrada el último polo es el primero
+    if all(abs((q[0] - polos[0][0]) * (lejano[1] - polos[0][1]) - (q[1] - polos[0][1]) * (lejano[0] - polos[0][0]))
+           < 1e-9 * max(1.0, math.dist(polos[0], lejano) ** 2) for q in polos):
         # curva vista de canto (p. ej. un círculo perpendicular al plano): queda el segmento que recorre
         # (los polos de una curva racional pueden caer fuera de ella: se usan puntos de la curva)
         pts = puntos_primitiva(("spline", None, polos, tuple(nudos), p, tuple(pesos) if pesos else None), 128)

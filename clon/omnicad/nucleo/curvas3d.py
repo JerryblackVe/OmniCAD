@@ -108,6 +108,19 @@ def muestrear(arista, n=48):
                     np.float32)
 
 
+def parametrica(arista):
+    """La arista como C(t): (f, t0, t1), con `f(t)` = (punto, derivada) en arrays xyz y [t0, t1] su tramo."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.gp import gp_Pnt, gp_Vec
+    ad = BRepAdaptor_Curve(arista)
+
+    def f(t):
+        p, d = gp_Pnt(), gp_Vec()
+        ad.D1(float(t), p, d)
+        return np.array([p.X(), p.Y(), p.Z()]), np.array([d.X(), d.Y(), d.Z()])
+    return f, ad.FirstParameter(), ad.LastParameter()
+
+
 def longitud(forma):
     """Largo exacto (a 1e-9 mm) de una arista o de las aristas de un compuesto. `geo.longitud` (GProp) se queda corto
     en las elipses: 36,49 en vez de 36,37 mm para semiejes 8 y 3."""
@@ -215,3 +228,104 @@ def describir(arista, muestras=32):
     pts = muestrear(arista, muestras).astype(float)
     cerrada = math.dist(pts[0], pts[-1]) < 1e-7      # cerrada: spline periódica, sin repetir el primer punto
     return {"tipo": "spline", "puntos": [list(p) for p in (pts[:-1] if cerrada else pts)], "cerrada": cerrada}
+
+
+# ---------------------------------------------------------------- Curva isoparamétrica (Project/Include › Isoparametric Curve)
+TOPE_ISO = 200                 # curvas por pedido: más es un error de unidad (distancia en mm contra una cara enorme)
+_MUESTRAS_ISO = 120            # shortcut: se busca dónde la curva está dentro de la cara con 120 muestras; un recorte
+#                                más fino que 1/120 del largo de la cara (un agujero diminuto) no se ve
+
+
+def _dentro(clasificador, cara, uv, tol):
+    """¿Cae (u, v) dentro de la cara o sobre su borde? Un solo `BRepClass_FaceClassifier` sirve para todas las consultas."""
+    from OCP.gp import gp_Pnt2d
+    from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+    clasificador.Perform(cara, gp_Pnt2d(*uv), tol)
+    return clasificador.State() in (TopAbs_IN, TopAbs_ON)
+
+
+def _tramos_dentro(clasificador, cara, t0, t1, fijo, par, tol):
+    """Intervalos [a, b] del parámetro de `curva` (entre t0 y t1) cuya posición cae dentro de la cara. `par(t)` arma el
+    (u, v) con el parámetro libre t y el fijo; los bordes se afinan por bisección."""
+    ts = [t0 + (t1 - t0) * i / _MUESTRAS_ISO for i in range(_MUESTRAS_ISO + 1)]
+    estado = [_dentro(clasificador, cara, par(t, fijo), tol) for t in ts]
+
+    def borde(fuera, dentro):
+        for _ in range(45):
+            m = (fuera + dentro) / 2
+            fuera, dentro = (fuera, m) if _dentro(clasificador, cara, par(m, fijo), tol) else (m, dentro)
+        return dentro
+    tramos, inicio = [], (ts[0] if estado[0] else None)
+    for i in range(1, len(ts)):
+        if estado[i] and not estado[i - 1]:
+            inicio = borde(ts[i - 1], ts[i])
+        elif estado[i - 1] and not estado[i]:
+            tramos.append((inicio, borde(ts[i], ts[i - 1])))
+            inicio = None
+    if inicio is not None:
+        tramos.append((inicio, ts[-1]))
+    return [(a, b) for a, b in tramos if b - a > 1e-7 * (t1 - t0)]
+
+
+def isoparametricas(cara, punto, direccion="u", tipo="single", distancia=None, cantidad=None):
+    """Curvas isoparamétricas de `cara` (Fusion: Isoparametric Curve), cada una como `describir` (coordenadas del
+    mundo), recortadas al contorno de la cara. La curva de dirección «u» sigue el parámetro U (V constante) y la «v»
+    el parámetro V; «both» da las dos. «single» es la que pasa por `punto` (se proyecta a la cara). «distributed»:
+    las de toda la cara, a lo ancho de cada dirección, en una de dos formas (se mide a lo largo de la curva
+    perpendicular que pasa por `punto`): con `distancia`, una curva cada tantos mm, una pasando por el punto; con
+    `cantidad`, ese número de curvas parejas de borde a borde (en el centro de cada franja)."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.BRepTools import BRepTools
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.GeomAdaptor import GeomAdaptor_Curve
+    from OCP.ShapeAnalysis import ShapeAnalysis_Surface
+    from OCP.TopoDS import TopoDS
+    if direccion not in ("u", "v", "both") or tipo not in ("single", "distributed"):
+        raise geo.ErrorGeometria("Dirección: u, v o both. Tipo: single o distributed.")
+    if tipo == "distributed":
+        if (distancia is None) == (cantidad is None):
+            raise geo.ErrorGeometria("Distribuidas: dá la distancia entre curvas o la cantidad, una de las dos.")
+        if distancia is not None and not distancia > 0 or cantidad is not None and not cantidad >= 1:
+            raise geo.ErrorGeometria("La distancia tiene que ser mayor que 0 y la cantidad, de 1 o más.")
+    try:
+        cara = TopoDS.Face(cara)
+    except Exception as e:  # noqa: BLE001 — OCP lanza TypeError o Standard_Failure según la forma
+        raise geo.ErrorGeometria("La curva isoparamétrica se saca de una cara.") from e
+    sup = BRep_Tool.Surface_s(cara)
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    uv = ShapeAnalysis_Surface(sup).ValueOfUV(_pnt(punto), 1e-6)
+    tol = 1e-6
+    clasificador = BRepClass_FaceClassifier()
+    if not _dentro(clasificador, cara, (uv.X(), uv.Y()), tol):
+        raise geo.ErrorGeometria("El punto no cae sobre la cara: elegí un punto de la cara.")
+    p_u, p_v = uv.X(), uv.Y()
+    salida = []
+    for sentido in (("u", "v") if direccion == "both" else (direccion,)):
+        libre, fijo0 = ((u0, u1), p_v) if sentido == "u" else ((v0, v1), p_u)          # recorre `libre`, queda `fijo`
+        ancho = (v0, v1) if sentido == "u" else (u0, u1)                               # a lo ancho se reparte
+        iso = (lambda t: sup.VIso(t)) if sentido == "u" else (lambda t: sup.UIso(t))
+        par = (lambda t, f: (t, f)) if sentido == "u" else (lambda t, f: (f, t))
+        if tipo == "single":
+            fijos = [fijo0]
+        else:
+            ref = GeomAdaptor_Curve(sup.UIso(p_u) if sentido == "u" else sup.VIso(p_v), *ancho)
+            largo = GCPnts_AbscissaPoint.Length_s(ref)
+            if cantidad is not None:
+                pasos = [(i + 0.5) * largo / int(cantidad) for i in range(int(cantidad))]
+            else:
+                s0 = GCPnts_AbscissaPoint.Length_s(ref, ancho[0], p_v if sentido == "u" else p_u)
+                k0 = math.ceil(-s0 / distancia - 1e-9)
+                pasos = [s0 + k * distancia for k in range(k0, int((largo - s0) / distancia + 1e-9) + 1)]
+                pasos = [s for s in pasos if 1e-9 < s < largo - 1e-9]
+            if len(pasos) > TOPE_ISO:
+                raise geo.ErrorGeometria(f"Salen {len(pasos)} curvas: el tope es {TOPE_ISO}. Subí la distancia o bajá la cantidad.")
+            fijos = [GCPnts_AbscissaPoint(ref, s, ancho[0]).Parameter() for s in pasos]
+        for f in fijos:
+            curva = iso(f)
+            for a, b in _tramos_dentro(clasificador, cara, *libre, f, par, tol):
+                salida.append(describir(BRepBuilderAPI_MakeEdge(curva, a, b).Edge()))
+    if not salida:
+        raise geo.ErrorGeometria("La cara no deja ninguna curva con esos valores.")
+    return salida

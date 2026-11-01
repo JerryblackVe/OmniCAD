@@ -3,10 +3,10 @@
 Vista previa, Aceptar y Cancelar. No guarda estado: `mostrar` lo llena con lo que manda el Lienzo (`estado_simetria`)
 y cada botón sale como una señal. Los botones no toman el foco: Enter y Esc siguen siendo del Lienzo."""
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QPushButton,
-                               QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import QAbstractButton, QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from .comando import _FilaSeleccion
+from .formulario import ANCHOS, armar_cabecera, armar_estado, poner_estado
 from .iconos import icono
 
 CAMPOS = (("seleccion", "Objetos", "La geometría a reflejar: clic en cada curva o una ventana de selección."),
@@ -19,6 +19,7 @@ class PanelSimetria(QFrame):
     previa = Signal(bool)
     aceptado = Signal()
     cancelado = Signal()
+    ANCHO = ANCHOS["simple"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,18 +28,9 @@ class PanelSimetria(QFrame):
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        v.setSizeConstraint(QLayout.SetFixedSize)
-        cab = QFrame(objectName="cabecera_comando")
-        hc = QHBoxLayout(cab)
-        hc.setContentsMargins(8, 4, 4, 4)
-        ico = QLabel()
+        cab, ico, titulo = armar_cabecera(self, self.cancelado)
         ico.setPixmap(icono("simetria_boceto").pixmap(18, 18))
-        hc.addWidget(ico)
-        hc.addWidget(QLabel("SIMETRÍA", objectName="titulo_comando"), 1)
-        cerrar = QToolButton(text="✕")
-        cerrar.setToolTip("Cancelar (Esc)")
-        cerrar.clicked.connect(self.cancelado)
-        hc.addWidget(cerrar)
+        titulo.setText("SIMETRÍA")
         v.addWidget(cab)
         cuerpo = QWidget()
         g = QGridLayout(cuerpo)
@@ -63,13 +55,7 @@ class PanelSimetria(QFrame):
         g.addWidget(QLabel("Vista previa", objectName="etiqueta_cmd"), len(CAMPOS), 0)
         g.addWidget(self.casilla, len(CAMPOS), 1)
         v.addWidget(cuerpo)
-        self.guia = QLabel(objectName="pie_comando", wordWrap=True)
-        self.guia.setMaximumWidth(300)
-        v.addWidget(self.guia)
-        self.mensaje = QLabel(objectName="mensaje_comando", wordWrap=True)
-        self.mensaje.setContentsMargins(10, 0, 10, 4)
-        self.mensaje.setMaximumWidth(300)
-        v.addWidget(self.mensaje)
+        armar_estado(self, v, self.ANCHO)
         pie = QHBoxLayout()
         pie.setContentsMargins(10, 4, 10, 8)
         pie.addStretch(1)
@@ -90,15 +76,13 @@ class PanelSimetria(QFrame):
         self.filas["seleccion"].set_estado(e["objetos"], e["campo"] == "seleccion")
         self.filas["eje"].set_estado(1 if e["eje"] else 0, e["campo"] == "eje")
         self.boton_ok.setEnabled(e["valido"])
-        self.guia.setText(e["guia"])
-        self.guia.setVisible(bool(e["guia"]))
-        self.mensaje.setText(e["error"])
-        self.mensaje.setVisible(bool(e["error"]))
+        poner_estado(self, e["guia"], e["error"])
         self.casilla.blockSignals(True)
         self.casilla.setChecked(e["previa"])
         self.casilla.blockSignals(False)
         self.ajustar()
 
     def ajustar(self):
+        self.setFixedWidth(self.ANCHO)
         self.layout().activate()
         self.adjustSize()

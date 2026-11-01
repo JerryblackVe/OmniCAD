@@ -825,6 +825,17 @@ def puntos_primitiva(prim, pasos=64):
     return [evaluar_primitiva(prim, t0 + (t1 - t0) * i / n)[0] for i in range(n + 1)]
 
 
+def firma_primitiva(prim):
+    """Tipo y siete puntos (redondeados a 1e-5 mm, sin importar el sentido) de una primitiva: dos curvas iguales dan la
+    misma firma aunque vengan de aristas distintas. Una polilínea de sección (spline sin nudos) se identifica por sus polos."""
+    if prim[0] == "spline" and prim[3] is None:
+        puntos = prim[2]
+    else:
+        t0, t1, _ = dominio(prim)
+        puntos = [evaluar_primitiva(prim, t0 + (t1 - t0) * k / 6)[0] for k in range(7)]
+    return prim[0], frozenset((round(x, 5) + 0.0, round(y, 5) + 0.0) for x, y in puntos)
+
+
 def _muestras(prim, pasos=96):
     t0, t1, _ = dominio(prim)
     n = _cantidad_muestras(prim, pasos)
@@ -1635,41 +1646,63 @@ class Boceto:
             self.agregar_restriccion("tangente", [k, cid])
         return cid
 
-    def agregar_proyeccion(self, primitivas, puntos=(), construccion=False, origen=None):
+    def _firma_proyectada(self, c):
+        """Lo que identifica a una curva proyectada al compararla con otra (ver `agregar_proyeccion`)."""
+        return frozenset(c.puntos()) if isinstance(c, Linea) else firma_primitiva(self.primitivas(c.id)[0])
+
+    def agregar_proyeccion(self, primitivas, puntos=(), construccion=False, origen=None, unir=True):
         """Agrega geometría proyectada (Proyectar / Intersecar de Fusion): curvas violetas, fijas.
         Los extremos que coinciden se comparten para que cierren perfiles. Con `construccion` las curvas quedan
         como líneas de construcción (no forman perfiles). Con `origen` recuerda las referencias para reproyectar (y
-        aplica `derivar_proyeccion`)."""
+        aplica `derivar_proyeccion`).
+        Lo que coincide con geometría ya proyectada no se duplica: esa curva entra en los ids, en el lugar de su
+        primitiva (`reproyectar` depende de ese orden), y toma el tipo de línea pedido. Si con eso alguna deja de ser solo
+        del contorno automático o gana vínculo, nace un registro propio (se ve y guarda sus referencias); si todas ya
+        eran explícitas, no cambia nada. Sin `origen` (vínculo apagado), lo que era solo del contorno automático se
+        suelta de él. Con `unir=False` solo se unen líneas y círculos: lo usan los registros anteriores a unir también
+        arcos, elipses y splines. Devuelve los ids, los reutilizados incluidos."""
         if origen is not None:
             primitivas = self.derivar_proyeccion(origen, primitivas)
         existentes = [p for p in self.puntos.values() if p.proyectado]
+        previas = self.ocultos_por_proyeccion_auto()[0]
+        vinculados = self._puntos_vinculados() if origen is None else ()
+        propios = {}
 
-        def punto(xy):
+        def buscar(xy):
             for p in existentes:
                 if math.hypot(p.x - xy[0], p.y - xy[1]) < 1e-6:
                     return p.id
             pid = self.agregar_punto(xy[0], xy[1], proyectado=True)
             existentes.append(self.puntos[pid])
             return pid
-        ids = []
-        lineas = {frozenset(c.puntos()) for c in self.curvas.values() if c.proyectada and isinstance(c, Linea)}
-        circulos = [(c.centro, c.radio) for c in self.curvas.values() if c.proyectada and isinstance(c, Circulo)]
+
+        def punto(xy):
+            """El punto de la curva nueva. Sin vínculo no comparte uno que sigue al modelo: si no, se movería con él."""
+            pid = buscar(xy)
+            if pid not in vinculados:
+                return pid
+            if pid not in propios:
+                propios[pid] = self.agregar_punto(xy[0], xy[1], proyectado=True)
+            return propios[pid]
+        ids, reusadas = [], []
+        vistas = {self._firma_proyectada(c): c.id for c in self.curvas.values() if c.proyectada and c.id > 0}
         for prim in primitivas:
             t = prim[0]
+            if t == "linea" and math.dist(prim[2], prim[3]) < 1e-9:
+                continue
             if t == "linea":
-                if math.dist(prim[2], prim[3]) < 1e-9:
-                    continue
-                extremos = frozenset((punto(prim[2]), punto(prim[3])))
-                if extremos in lineas:        # dos aristas que se proyectan sobre la misma línea: una sola
-                    continue
-                lineas.add(extremos)
+                firma = frozenset((buscar(prim[2]), buscar(prim[3])))
+            else:
+                firma = firma_primitiva(prim) if unir or t == "circulo" else None
+            if firma in vistas:               # dos aristas que se proyectan sobre lo mismo: una sola curva
+                if vistas[firma] not in ids:
+                    ids.append(vistas[firma])
+                    reusadas.append(vistas[firma])
+                continue
+            if t == "linea":
                 c = Linea(self._nuevo_id(), punto(prim[2]), punto(prim[3]), construccion, proyectada=True)
             elif t == "circulo":
-                centro, radio = punto(prim[2]), prim[3]
-                if any(centro == pc and abs(radio - r) < 1e-6 for pc, r in circulos):
-                    continue
-                circulos.append((centro, radio))
-                c = Circulo(self._nuevo_id(), centro, radio, construccion, proyectada=True)
+                c = Circulo(self._nuevo_id(), punto(prim[2]), prim[3], construccion, proyectada=True)
             elif t == "arco":
                 (cx, cy), r = prim[2], prim[3]
                 c = Arco(self._nuevo_id(), punto((cx, cy)), punto((cx + r * math.cos(prim[4]), cy + r * math.sin(prim[4]))),
@@ -1688,24 +1721,74 @@ class Boceto:
             else:
                 continue
             ids.append(self._agregar_curva(c))
-        for xy in puntos:
-            ids.append(punto(xy))
-        if origen is not None and ids:
+            if firma is not None:
+                vistas[firma] = c.id
+        ids += [punto(xy) for xy in puntos]
+        for i in reusadas:
+            self.curvas[i].construccion = bool(construccion)
+        if origen is None:
+            for i in previas.intersection(reusadas):
+                self._soltar_de_auto(i)
+        elif ids and (origen.get("auto") or not set(ids) <= self._explicitas()):
             self.proyecciones.append({"id": max((r["id"] for r in self.proyecciones), default=0) + 1,
                                       "construccion": construccion, "ids": list(ids),
                                       **copy.deepcopy(origen)})
         return ids
 
+    def simular_proyecciones(self, tandas):
+        """Qué harían `tandas` (argumentos de `agregar_proyeccion`), sin tocar el boceto: "curvas" y "puntos" creados,
+        "visibles" (curvas que dejan de estar ocultas), "vinculadas" (las que ya se veían y ganan vínculo), "reusadas"
+        (lo existente que entra) y si "cambia" algo. La vista previa y el resultado del comando salen de acá."""
+        copia = self.copia()
+        antes = copia.a_dict()
+        ids = []
+        for tanda in tandas:
+            ids += [i for i in copia.agregar_proyeccion(*tanda) if i not in ids]
+        ocultas, explicitas = self.ocultos_por_proyeccion_auto()[0], self._explicitas()
+        reusadas = [i for i in ids if i in self.curvas or i in self.puntos]
+        return {"curvas": [i for i in ids if i in copia.curvas and i not in self.curvas],
+                "puntos": [i for i in ids if i in copia.puntos and i not in self.puntos],
+                "visibles": sorted(ocultas - copia.ocultos_por_proyeccion_auto()[0]),
+                "vinculadas": [i for i in reusadas if i not in ocultas and i not in explicitas and i in copia._explicitas()],
+                "reusadas": reusadas, "cambia": copia.a_dict() != antes}
+
+    def _explicitas(self):
+        """Ids de las proyecciones con vínculo que no son el contorno automático."""
+        return {i for r in self.proyecciones if not r.get("auto") for i in r["ids"]}
+
     def ocultos_por_proyeccion_auto(self):
         """(curvas, puntos) que solo vienen de la proyección automática de la cara elegida al crear el boceto
         (`auto`): Fusion no las dibuja (se ve solo el celeste del perfil), pero siguen siendo geometría real."""
-        auto = {i for r in self.proyecciones if r.get("auto") for i in r["ids"]}
-        auto -= {i for r in self.proyecciones if not r.get("auto") for i in r["ids"]}
+        explicitas = self._explicitas()
+        auto = {i for r in self.proyecciones if r.get("auto") for i in r["ids"]} - explicitas
         if not auto:
             return frozenset(), frozenset()
         puntos = {q for c in self.curvas.values() if c.id in auto for q in c.puntos()} | auto
-        puntos -= {q for c in self.curvas.values() if c.id not in auto for q in c.puntos()}
+        puntos -= {q for c in self.curvas.values() if c.id not in auto for q in c.puntos()} | explicitas
         return frozenset(auto), frozenset(puntos)
+
+    def _puntos_vinculados(self):
+        """Puntos que mueve alguna proyección con vínculo al reproyectar."""
+        return {q for r in self.proyecciones for i in r["ids"] for q in (self.curvas[i].puntos() if i in self.curvas else [i])}
+
+    def _soltar_de_auto(self, cid):
+        """Saca la curva del contorno automático (vínculo apagado o roto): queda donde está, sin seguir a la cara y con
+        puntos propios si los compartía con otra proyección. Su lugar queda en `huecos`, para que `reproyectar` no
+        corra a las demás. Un registro que se queda sin ids desaparece."""
+        autos = [r for r in self.proyecciones if r.get("auto") and cid in r["ids"]]
+        if not autos:
+            return
+        for r in autos:
+            huecos = r.setdefault("huecos", [])
+            libres = [k for k in range(len(r["ids"]) + len(huecos)) if k not in huecos]
+            huecos.append(libres[r["ids"].index(cid)])
+            r["ids"].remove(cid)
+            if not r["ids"]:
+                self.proyecciones.remove(r)
+        c = self.curvas[cid]
+        nuevos = {q: self.agregar_punto(*self.coords(q), proyectado=True) for q in set(c.puntos()) & self._puntos_vinculados()}
+        if nuevos:
+            self.curvas[cid] = c.remapear(nuevos)
 
     def derivar_proyeccion(self, datos, primitivas):
         """Ajustes de una proyección según sus `datos` (los del registro de proyección):
@@ -1740,23 +1823,30 @@ class Boceto:
 
     def romper_vinculo(self, pid):
         """Romper vínculo (Fusion: Break Link): la geometría proyectada queda donde está, como geometría normal
-        (editable, ya no fija) que no sigue más al modelo."""
+        (editable, ya no fija) que no sigue más al modelo. Lo que sigue en otra proyección explícita no se toca."""
         r = self.proyecciones.pop(self.proyecciones.index(self._proyeccion(pid)))
+        for i in r["ids"]:
+            if i in self.curvas and i not in self._explicitas():
+                self._soltar_de_auto(i)
         siguen = {i for otra in self.proyecciones for i in otra["ids"]}
         for i in r["ids"]:
+            if i in siguen:
+                continue
             if i in self.curvas:
                 self.curvas[i].proyectada = False
                 for q in self.curvas[i].puntos():
                     if not any(q in self.curvas[k].puntos() for k in siguen if k in self.curvas):
                         self.puntos[q].proyectado = False
-            elif i in self.puntos and i not in siguen:
+            elif i in self.puntos:
                 self.puntos[i].proyectado = False
 
     def eliminar_proyeccion(self, pid):
-        """Borrar geometría (Manage Lost Projections › Delete Geometry): quita la proyección y sus curvas y puntos."""
+        """Borrar geometría (Manage Lost Projections › Delete Geometry): quita la proyección y sus curvas y puntos. Lo
+        que comparte con otra proyección queda (con el contorno automático vuelve a ocultarse)."""
         r = self.proyecciones.pop(self.proyecciones.index(self._proyeccion(pid)))
+        siguen = {i for otra in self.proyecciones for i in otra["ids"]}
         for i in r["ids"]:
-            if i in self.curvas or i in self.puntos:
+            if i not in siguen and (i in self.curvas or i in self.puntos):
                 self.eliminar(i)
 
     def revincular(self, pid, refs, primitivas, puntos, infinitas=None):
@@ -1773,9 +1863,15 @@ class Boceto:
 
     def reproyectar(self, registro, primitivas, puntos) -> bool:
         """Actualiza Proyectar / Intersecar de Fusion conservando ids; si cambia la topología, no toca nada."""
-        nuevo = Boceto()
-        ids = nuevo.agregar_proyeccion(self.derivar_proyeccion(registro, primitivas), puntos, registro["construccion"])
-        if len(ids) != len(registro["ids"]):
+        derivadas = self.derivar_proyeccion(registro, primitivas)
+        huecos = set(registro.get("huecos", ()))
+        for unir in (True, False):         # False: el registro es anterior a unir arcos, elipses y splines
+            nuevo = Boceto()
+            ids = nuevo.agregar_proyeccion(derivadas, puntos, registro["construccion"], unir=unir)
+            ids = [i for k, i in enumerate(ids) if k not in huecos]
+            if len(ids) == len(registro["ids"]):
+                break
+        else:
             return False
         coordenadas, curvas = {}, []
         for anterior_id, nuevo_id in zip(registro["ids"], ids, strict=True):
@@ -2072,6 +2168,85 @@ class Boceto:
             n = (-u[1], u[0])
         return a, b, u, n, max(a[0] * n[0] + a[1] * n[1], b[0] * n[0] + b[1] * n[1])
 
+    def segmento_cota(self, c):
+        """BOC-37: el segmento ((x, y), (x, y)) que mide una cota de distancia o de desfase que no es la lineal de una
+        línea o dos puntos (esas tienen su `ejes_cota`): punto–línea, línea–línea paralelas, con círculo o arco (hasta el
+        centro o de borde a borde, según su `modo`), punto–spline y el desfase de una curva. La interfaz dibuja ahí la
+        línea de cota con sus flechas. None si no hay nada que dibujar (cota de otro tipo, medida cero o geometría
+        a medio borrar: dibujar nunca debe fallar)."""
+        try:
+            return self._segmento_cota(c)
+        except (KeyError, IndexError, ValueError, ZeroDivisionError, ErrorBoceto):
+            return None
+
+    def _segmento_cota(self, c):
+        P, t = self.coords, [self.tipo_de(e) for e in c.entidades]
+
+        def pie(q, linea):
+            a, b = self._extremos_linea(linea)
+            d = distancia_punto_recta(q, a, b)
+            largo = math.dist(a, b) or 1.0
+            n = (-(b[1] - a[1]) / largo, (b[0] - a[0]) / largo)
+            return q[0] - d * n[0], q[1] - d * n[1]
+
+        def hacia(centro, radio, q):
+            """Punto del borde del círculo en la dirección de `q`."""
+            d = math.dist(centro, q) or 1.0
+            return centro[0] + radio * (q[0] - centro[0]) / d, centro[1] + radio * (q[1] - centro[1]) / d
+        seg = None
+        if c.tipo == "desfase":
+            madre, copia = (self.curvas[e] for e in c.entidades)
+            if isinstance(madre, Linea):
+                seg = pie(P(copia.p1), madre.id), P(copia.p1)
+            elif isinstance(madre, Elipse) and isinstance(copia, Elipse):
+                seg = P(madre.mayor), P(copia.mayor)
+            elif isinstance(madre, (Circulo, Arco)):
+                centro, prim = P(madre.centro), self.primitivas(madre.id)[0]
+                un = (math.cos(math.pi / 4), math.sin(math.pi / 4)) if isinstance(madre, Circulo) else None
+                if un is None:                       # el arco: en la dirección de su punto medio
+                    medio = evaluar_primitiva(prim, dominio(prim)[1] / 2)[0]
+                    d = math.dist(centro, medio) or 1.0
+                    un = ((medio[0] - centro[0]) / d, (medio[1] - centro[1]) / d)
+                r1, r2 = self.radio(madre.id), self.radio(copia.id)
+                seg = (centro[0] + r1 * un[0], centro[1] + r1 * un[1]), (centro[0] + r2 * un[0], centro[1] + r2 * un[1])
+            elif isinstance(copia, Spline):
+                q = P(copia.pts[0])
+                seg = mas_cercano(self.primitivas(madre.id)[0], q)[2], q
+        elif c.tipo == "distancia":
+            tangente = c.datos.get("modo", "centro") == "tangente"
+            circ = [e for e, x in zip(c.entidades, t, strict=True) if x in CIRCULARES]
+            if circ:
+                otro = next((e for e in c.entidades if e != circ[0]), circ[0])
+                centro, radio = P(self.curvas[circ[0]].centro), self.radio(circ[0])
+                if t[c.entidades.index(otro)] in CIRCULARES and otro != circ[0]:
+                    c2, r2 = P(self.curvas[otro].centro), self.radio(otro)
+                    d = math.dist(centro, c2)
+                    if tangente and d > 1e-12:
+                        grande = radio >= r2
+                        u = ((c2[0] - centro[0]) / d, (c2[1] - centro[1]) / d)
+                        if d < abs(radio - r2):          # uno adentro del otro: el borde más cercano de cada uno
+                            s = 1.0 if grande else -1.0
+                            seg = ((centro[0] + s * radio * u[0], centro[1] + s * radio * u[1]),
+                                   (c2[0] + s * r2 * u[0], c2[1] + s * r2 * u[1]))
+                        else:
+                            seg = ((centro[0] + radio * u[0], centro[1] + radio * u[1]),
+                                   (c2[0] - r2 * u[0], c2[1] - r2 * u[1]))
+                    else:
+                        seg = centro, c2
+                else:
+                    q = P(otro) if t[c.entidades.index(otro)] == "punto" else pie(centro, otro)
+                    seg = (hacia(centro, radio, q) if tangente else centro), q
+            elif sorted(t) == ["punto", "spline"]:
+                punto = c.entidades[t.index("punto")]
+                seg = mas_cercano(self.primitivas(c.entidades[t.index("spline")])[0], P(punto))[2], P(punto)
+            elif sorted(t) == ["linea", "punto"]:
+                punto = c.entidades[t.index("punto")]
+                seg = pie(P(punto), c.entidades[t.index("linea")]), P(punto)
+            elif t == ["linea", "linea"]:
+                a = P(self.curvas[c.entidades[1]].p1)
+                seg = pie(a, c.entidades[0]), a
+        return seg if seg is not None and math.dist(*seg) > 1e-9 else None
+
     def ubicar_cota(self, c, punto, con_texto=True):
         """Guarda dónde van la línea de cota y su texto (datos «desfase» y «texto», en mm): la línea pasa por
         `punto` (x, y) y el texto queda a su altura (con `con_texto` falso, el texto no se corre). No cambia el
@@ -2119,6 +2294,9 @@ class Boceto:
         o, d = self.curvas[original], self.curvas[desfasada]
         if isinstance(o, Linea):
             return abs(distancia_punto_recta(self.coords(d.p1), *self._extremos_linea(o.id)))
+        if isinstance(o, Elipse) and isinstance(d, Elipse):         # la elipse del desfase con eje: difieren los semiejes
+            semieje = lambda e: math.dist(self.coords(e.centro), self.coords(e.mayor))  # noqa: E731
+            return abs(semieje(d) - semieje(o))
         if isinstance(o, (Spline, Elipse, ArcoElipse)):
             return mas_cercano(self.primitivas(original)[0], self.coords(d.pts[0]))[1]
         return abs(self.radio(d.id) - self.radio(o.id))
@@ -2205,6 +2383,56 @@ class Boceto:
                     return q, p
         return None
 
+    def _contacto_tangente(self, a, b):
+        """Punto donde se tocan, tangentes, una línea y una circunferencia o dos circunferencias; None con otras curvas."""
+        pa, pb = self.primitivas(a)[0], self.primitivas(b)[0]
+        tipos = {pa[0], pb[0]}
+        if tipos == {"linea"} or not tipos <= {"linea", *CIRCULARES}:
+            return None
+        if "linea" in tipos:
+            recta, circ = (pa, pb) if pa[0] == "linea" else (pb, pa)
+            (x1, y1), (x2, y2), (cx, cy) = recta[2], recta[3], circ[2]
+            dx, dy = x2 - x1, y2 - y1
+            t = ((cx - x1) * dx + (cy - y1) * dy) / (dx * dx + dy * dy or 1e-18)
+            return x1 + t * dx, y1 + t * dy
+        (cg, rg), (cc, _r) = sorted((pa[2:4], pb[2:4]), key=lambda p: -p[1])
+        d = math.dist(cg, cc)
+        return None if d < 1e-12 else (cg[0] + rg * (cc[0] - cg[0]) / d, cg[1] + rg * (cc[1] - cg[1]) / d)
+
+    def deslizar_a_tangente(self, a, b):
+        """Antes de agregar una tangente línea-circunferencia con el comando: desliza la línea, sin girarla, hasta tocarla.
+        Si no, el solver reparte el salto entre las dos y cambia el radio; en la figura de la ayuda de Fusion el círculo
+        no cambia y se mueven las líneas (BOC-52). No toca una línea con un punto fijo ni dos curvas ya encadenadas."""
+        l, c = (a, b) if self.tipo_de(a) == "linea" else (b, a)
+        if self.tipo_de(l) != "linea" or self.tipo_de(c) not in CIRCULARES or self.extremo_comun(a, b) is not None:
+            return
+        extremos = self.curvas[l].puntos()
+        if self.puntos_fijos().intersection(extremos):
+            return
+        (x1, y1), (x2, y2) = (self.coords(p) for p in extremos)
+        largo = math.hypot(x2 - x1, y2 - y1) or 1e-12
+        nx, ny = -(y2 - y1) / largo, (x2 - x1) / largo
+        centro = self.primitivas(c)[0][2]
+        d = (centro[0] - x1) * nx + (centro[1] - y1) * ny
+        paso = d - math.copysign(self.radio(c), d)
+        for p in extremos:
+            self.puntos[p].x += paso * nx
+            self.puntos[p].y += paso * ny
+
+    def tangencias_fuera_del_arco(self):
+        """[[a, b]] de las tangentes cuyo contacto cae fuera del tramo dibujado de un arco. El solver las resuelve contra
+        el círculo entero: acotar el contacto al barrido movería arcos de bocetos que hoy resuelven bien (BOC-52), así
+        que se avisa. Fusion pide que se toquen."""
+        salida = []
+        for r in self.restricciones.values():
+            if r.tipo != "tangente" or self.extremo_comun(*r.entidades) is not None:
+                continue
+            arcos = [k for k in r.entidades if self.curvas[k].tipo == "arco"]
+            contacto = self._contacto_tangente(*r.entidades) if arcos else None
+            if contacto is not None and any(mas_cercano(self.primitivas(k)[0], contacto)[1] > 1e-6 for k in arcos):
+                salida.append(list(r.entidades))
+        return salida
+
     def vertices_cadena(self, lineas):
         """Vértices en orden de una cadena CERRADA de líneas (para la restricción de polígono)."""
         lados = [tuple(self.curvas[k].puntos()) for k in lineas]
@@ -2251,7 +2479,9 @@ class Boceto:
                                   and (t[0] in LIBRES or t[1] in LIBRES)),
             "poligono": lambda: len(t) >= 3 and all(x == "linea" for x in t),
             "desfase": lambda: ((len(t) == 4 and all(x in GEOMETRICAS for x in t))
-                                or (len(t) == 3 and t[0] in GEOMETRICAS and t[1:] == ["punto", "punto"])),
+                                or (len(t) == 3 and t[0] in GEOMETRICAS and t[1:] == ["punto", "punto"])
+                                or (len(t) == 2 and ((t[0] in ("spline", "elipse", "arco_elipse") and t[1] == "spline")
+                                                     or t == ["elipse", "elipse"]))),            # BOC-72: curvas libres
             "patron": lambda: t in (["punto", "punto"], ["punto", "punto", "punto"]),
         }
         if not validas[tipo]():
@@ -2277,7 +2507,8 @@ class Boceto:
             "angulo": lambda: t == ["linea", "linea"],
             "desfase": lambda: (t == ["linea", "linea"] or
                                 (len(t) == 2 and t[0] in CIRCULARES and t[1] in CIRCULARES) or
-                                (len(t) == 2 and t[0] in ("spline", *ELIPTICAS) and t[1] == "spline")),
+                                (len(t) == 2 and t[0] in ("spline", *ELIPTICAS) and t[1] == "spline") or
+                                t == ["elipse", "elipse"]),
         }
         if not validas[tipo]():
             raise ErrorBoceto(f"La cota '{TIPOS_COTA[tipo]}' no aplica a: {', '.join(t) or 'nada'}.")
@@ -2310,15 +2541,16 @@ class Boceto:
         return salida
 
     # ------------------------------------------------------------ cadenas y cortes
-    def cadena(self, cid):
+    def cadena(self, cid, entre=None):
         """Curvas (líneas y arcos) conectadas por sus extremos a `cid`, en orden de recorrido, como la
-        selección de cadena de Fusion: ([(id, invertida), ...], cerrada)."""
+        selección de cadena de Fusion: ([(id, invertida), ...], cerrada). Con `entre` (ids), solo cuentan esas curvas:
+        el contorno de un perfil que toca otras figuras no se corta en cada unión."""
         c = self.curvas[cid]
         if not isinstance(c, (Linea, Arco)):
             return [(cid, False)], isinstance(c, (Circulo, Elipse))
         por_punto = {}
         for k in self.curvas.values():
-            if isinstance(k, (Linea, Arco)) and k.construccion == c.construccion:
+            if isinstance(k, (Linea, Arco)) and k.construccion == c.construccion and (entre is None or k.id in entre):
                 for p in k.extremos():
                     por_punto.setdefault(p, []).append(k.id)
 
@@ -2879,7 +3111,7 @@ class Boceto:
 
     # ------------------------------------------------------------ MODIFICAR: desfase
     def desfasar(self, cid, distancia, punto_lado=None, expresion=None, direccion="un", distancia2=None,
-                 expresion2=None, invertir=False, topologia=False, cadena=True):
+                 expresion2=None, invertir=False, topologia=False, cadena=True, elipse=False, entre=None):
         """Comando Desfase de Fusion entero (Direction + Chain Selection + Match Topology): lo llaman igual la ventana
         (y su vista previa) y la API, así lo que se ve es lo que se crea. `distancia` lleva signo: negativa = al lado
         contrario del que da la positiva (el de `punto_lado`; sin él, afuera en una cadena cerrada y a la izquierda
@@ -2889,7 +3121,9 @@ class Boceto:
         Distancia 2 = -20,556 adentro): 20 y -10 dan una copia a 20 afuera y otra a 10 adentro; una de las dos
         puede ser 0 (no crea esa copia). `expresion`/`expresion2`: texto de cada distancia SIN signo, para la cota.
         `cadena`=False desfasa solo la curva `cid` (Fusion: sin Chain Selection). `topologia` limita la distancia
-        a la mayor que conserva la curva madre. Devuelve (ids nuevos, avisos)."""
+        a la mayor que conserva la curva madre. `elipse`: una elipse da otra elipse con los semiejes a ± d y b ± d
+        (Fusion, al elegirla cerca de un eje; la distancia varía alrededor) en vez del óvalo a distancia constante.
+        Devuelve (ids nuevos, avisos)."""
         if direccion == "dos" and distancia2 is None:
             raise ErrorBoceto("Falta la segunda distancia del desfase.")
         contrario = (distancia < 0) != bool(invertir)
@@ -2905,18 +3139,46 @@ class Boceto:
             if not math.isfinite(valor):
                 raise ErrorBoceto("La distancia de desfase no es un número válido.")
             if topologia:
-                tope = self.desfase_con_topologia(cid, valor, punto_lado, inv, cadena)
+                tope = self.desfase_con_topologia(cid, valor, punto_lado, inv, cadena, elipse, entre)
                 if tope < valor:
                     avisos.append(f"Match Topology: la distancia se limitó de {valor:g} a {tope:.4g} mm para "
                                   "conservar todos los segmentos.")
                     valor, texto = round(tope, 6), None
             ligada = primera if direccion == "simetrico" and texto is not None and not avisos else None   # Match Topology
-            nuevos += self.desfase(cid, valor, punto_lado, texto, invertir=inv, cadena=cadena, igual_a=ligada)   # la limitó: no
+            nuevos += self.desfase(cid, valor, punto_lado, texto, invertir=inv, cadena=cadena, igual_a=ligada,   # la limitó: no
+                                   elipse=elipse, entre=entre)
             if primera is None:
                 primera = max(self.cotas)               # la cota que acaba de crear el primer lado
         return nuevos, avisos
 
-    def desfase(self, cid, distancia, punto_lado=None, expresion=None, invertir=False, cadena=True, igual_a=None):
+    def desfasar_perfil(self, firma, distancia, **opciones):
+        """Desfase de un perfil (región cerrada; `firma` = ids de las curvas de su borde, `Perfil.firma`): Fusion
+        acepta "una curva, una cadena o un perfil". Se desfasan todos sus contornos, el exterior y los de sus
+        huecos, de modo que la región crezca con una distancia positiva (el hueco se achica). `opciones` son las de
+        `desfasar` (menos `cadena`, que aquí siempre es verdadera). Devuelve (ids nuevos, avisos)."""
+        opciones["cadena"], opciones["entre"] = True, set(firma)       # el contorno no se corta donde otra figura lo toca
+        contornos, vistas = [], set()
+        for cid in sorted(firma):
+            if cid in vistas or cid not in self.curvas:
+                continue
+            ids = [k for k, _ in self.cadena(cid, opciones["entre"])[0]]
+            vistas.update(ids)
+            cajas = [caja_primitiva(p) for k in ids for p in self.primitivas(k)]
+            area = ((max(c[2] for c in cajas) - min(c[0] for c in cajas))
+                    * (max(c[3] for c in cajas) - min(c[1] for c in cajas)))
+            contornos.append((area, cid))
+        if not contornos:
+            raise ErrorBoceto("El perfil no tiene contornos que desfasar.")
+        exterior = max(contornos)[1]
+        invertir, nuevos, avisos = bool(opciones.pop("invertir", False)), [], []
+        for _area, cid in sorted(contornos, key=lambda c: c[1] != exterior):
+            n, a = self.desfasar(cid, distancia, invertir=invertir != (cid != exterior), **opciones)
+            nuevos += n
+            avisos += a
+        return nuevos, avisos
+
+    def desfase(self, cid, distancia, punto_lado=None, expresion=None, invertir=False, cadena=True, igual_a=None,
+                elipse=False, entre=None):
         """Desfase (SKT-OFFSET) de la cadena conectada a `cid` (o solo de `cid` con `cadena`=False): curvas
         paralelas a `distancia`, con las esquinas resueltas por intersección, la restricción de desfase y su cota.
         Por defecto, una cadena cerrada se desfasa hacia afuera (y una abierta, a la izquierda de su recorrido);
@@ -2932,9 +3194,11 @@ class Boceto:
             distancia, invertir = -distancia, not invertir
         c0 = self.curvas[cid]
         datos = {} if igual_a is None else {"igual_a": igual_a}
+        if isinstance(c0, Elipse) and elipse:
+            return [self._desfase_elipse(cid, distancia, punto_lado, invertir, expresion, datos)]
         if isinstance(c0, (Spline, Elipse, ArcoElipse)):
             return [self._desfase_libre(cid, distancia, punto_lado, invertir, expresion=expresion, datos=datos)]
-        cadena, cerrada = self.cadena(cid) if cadena else ([(cid, False)], False)
+        cadena, cerrada = self.cadena(cid, entre) if cadena else ([(cid, False)], False)
         if len(cadena) == 1 and isinstance(c0, Circulo):
             r = c0.radio
             fuera = (punto_lado is None or math.dist(punto_lado, self.coords(c0.centro)) > r) != bool(invertir)
@@ -3044,14 +3308,15 @@ class Boceto:
         self.agregar_cota("desfase", [k0, n0], expresion or _numero(distancia), datos)
         return nuevos
 
-    def desfase_con_topologia(self, cid, distancia, punto_lado=None, invertir=False, cadena=True):
+    def desfase_con_topologia(self, cid, distancia, punto_lado=None, invertir=False, cadena=True, elipse=False,
+                              entre=None):
         """Match Topology de Fusion: la mayor distancia ≤ `distancia` con la que el desfase conserva la topología de la
         curva madre (ningún segmento se anula o se invierte, ningún arco ni círculo llega a radio cero, la spline no
         se pliega). Busca el tope por bisección sobre copias y se queda un 0,1 % antes para no dejar un segmento
         de largo cero. Devuelve la distancia que hay que usar."""
         def sirve(d):
             try:
-                self.copia().desfase(cid, d, punto_lado, invertir=invertir, cadena=cadena)
+                self.copia().desfase(cid, d, punto_lado, invertir=invertir, cadena=cadena, elipse=elipse, entre=entre)
             except ErrorBoceto:
                 return False
             return True
@@ -3096,7 +3361,34 @@ class Boceto:
         if any(min(math.dist(q, C) for C in densos) < 0.9 * d for q in nuevos):
             raise ErrorBoceto("El desfase es mayor que el radio de curvatura de la curva: se pliega sobre sí mismo.")
         nuevo = self.agregar_spline(nuevos, "ajuste", 3, cerrada, construccion=c.construccion)
-        self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(d), {"lado": s, **(datos or {})})
+        self._atar_desfase_libre(cid, nuevo, s, expresion or _numero(d), datos)
+        return nuevo
+
+    def _atar_desfase_libre(self, madre, copia, lado, expresion, datos):
+        """BOC-72: la copia de una curva libre queda atada por una restricción de desfase (distancia común y libre) y
+        además por su cota; borrar la cota (Fusion) conserva la relación y libera la distancia."""
+        self.agregar_restriccion("desfase", [madre, copia], {"grupo": self._siguiente, "lado": lado})
+        self.agregar_cota("desfase", [madre, copia], expresion, {"lado": lado, **(datos or {})})
+
+    def _desfase_elipse(self, cid, d, punto_lado, invertir, expresion, datos):
+        """Desfase de una elipse que da otra elipse concéntrica de semiejes a ± d y b ± d (Fusion, elegida cerca de
+        un eje). `lado` +1 = la mayor (afuera); `punto_lado` lo elige con un punto; `invertir` lo da vuelta."""
+        c = self.curvas[cid]
+        (cx, cy), (mx, my) = self.coords(c.centro), self.coords(c.mayor)
+        a, b = math.hypot(mx - cx, my - cy), c.radio_menor
+        if punto_lado is None:
+            s = 1.0
+        else:
+            ca, sa = (mx - cx) / a, (my - cy) / a
+            dx, dy = punto_lado[0] - cx, punto_lado[1] - cy
+            s = 1.0 if (((dx * ca + dy * sa) / a) ** 2 + ((-dx * sa + dy * ca) / b) ** 2) > 1 else -1.0
+        s = -s if invertir else s
+        if min(a, b) + s * d <= MEDIDA_MINIMA:
+            _exigir_radio_positivo(min(a, b), d, "menor de la elipse")
+        u = ((mx - cx) / a, (my - cy) / a)
+        mayor = self.agregar_punto(cx + u[0] * (a + s * d), cy + u[1] * (a + s * d))
+        nuevo = self._agregar_curva(Elipse(self._nuevo_id(), c.centro, mayor, b + s * d, c.construccion))
+        self._atar_desfase_libre(cid, nuevo, s, expresion or _numero(d), datos)
         return nuevo
 
     def soltar_desfase(self, cid, conservar_cota=False):
@@ -3185,6 +3477,13 @@ class Boceto:
                     self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, k.datos, k.referencia)
         return mapa, mapa_c
 
+    def comprobar_mover(self, ids):
+        """ErrorBoceto si `transformar` (sin copiar) no puede mover lo elegido: lo de adentro es fijo o proyectado.
+        Es la misma comprobación de `transformar`; el panel la usa para avisar antes de aceptar sin copiar el boceto."""
+        fijos = self.puntos_fijos()
+        if any(p in fijos for p in self.puntos_de(ids)):
+            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede mover.")
+
     def transformar(self, ids, dx=0.0, dy=0.0, angulo=0.0, centro=(0.0, 0.0), copiar=False):
         """Mover/copiar (M): traslada (dx, dy) y gira `angulo` grados alrededor de `centro`. Con `copiar`
         duplica la geometría con sus restricciones internas. Devuelve los ids resultantes."""
@@ -3196,10 +3495,8 @@ class Boceto:
         if copiar:
             mapa, mapa_c = self._copiar(ids, f, True, angulo)
             return list(mapa_c.values()) + [mapa[i] for i in ids if i in mapa]
-        fijos = self.puntos_fijos()
+        self.comprobar_mover(ids)
         pts = self.puntos_de(ids)
-        if any(p in fijos for p in pts):
-            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede mover.")
         self._transformar_puntos(pts, f)
         for i in ids:
             if isinstance(self.curvas.get(i), Texto):
@@ -3350,15 +3647,19 @@ class Boceto:
                 c.camino_pos = 1.0 - c.camino_pos
         return list(ids), textos
 
+    def comprobar_escalar(self, ids, base):
+        """ErrorBoceto si `escalar` no puede mover lo elegido desde `base`: un punto fijo solo vale como base."""
+        fijos = self.puntos_fijos()
+        if any(p in fijos and math.dist(self.coords(p), base) > 1e-9 for p in self.puntos_de(ids)):
+            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección que no está en la base: no se puede escalar.")
+
     def escalar(self, ids, base, factor):
         """Escala del boceto (SKT-SCALE): agranda o achica la geometría desde el punto base; las cotas
         de longitud de esa geometría se multiplican por el factor. Un punto fijo puede ser la base."""
         if factor <= 0:
             raise ErrorBoceto("El factor de escala debe ser positivo.")
+        self.comprobar_escalar(ids, base)
         pts = self.puntos_de(ids)
-        fijos = self.puntos_fijos()          # un punto fijo puede ser la base: escalar desde él no lo mueve
-        if any(p in fijos and math.dist(self.coords(p), base) > 1e-9 for p in pts):
-            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección que no está en la base: no se puede escalar.")
         self._transformar_puntos(pts, lambda q: (base[0] + factor * (q[0] - base[0]), base[1] + factor * (q[1] - base[1])))
         afectados = set(pts) | set(ids)
         for i in ids:
@@ -3393,7 +3694,9 @@ class Boceto:
         """Simetría (SKT-CREATE-MIRROR): copia espejada respecto de la línea `eje`, con restricciones
         de simetría entre los puntos (los que están sobre el eje se comparten). Devuelve las curvas nuevas.
         Lo que ya es su propio reflejo (una línea sobre el eje, un círculo centrado en él) no se copia: la copia
-        quedaría encimada. El eje puede estar entre los `ids`: se ignora."""
+        quedaría encimada. El eje puede estar entre los `ids`: se ignora. BOC-40: como en Fusion («line or axis»), el
+        eje puede ser uno del origen (`EJE_X` o `EJE_Y`): se materializa como línea de construcción fija."""
+        self.asegurar_referencias([eje])
         if self.tipo_de(eje) != "linea":
             raise ErrorBoceto("La línea de simetría tiene que ser una línea.")
         ids = [i for i in ids if i != eje and not isinstance(self.curvas.get(i), Texto)]
@@ -4026,6 +4329,14 @@ def circunferencia_3_puntos(a, b, c):
     ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
     uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
     return ux, uy, math.hypot(ax - ux, ay - uy)
+
+
+def aviso_tangencias_fuera(pares=()):
+    """Texto del aviso de `tangencias_fuera_del_arco` (en 2D y en 3D). `pares`, los [[a, b]] de ids para un agente; en la
+    ventana no van: la persona ve la curva, no su número."""
+    quien = "Tangente entre " + ", ".join(f"{a} y {b}" for a, b in pares) if pares else "La tangente"
+    return (f"{quien}: el contacto cae fuera del tramo dibujado del arco (vale para su círculo entero). "
+            "Mové la línea o alargá el arco para que se toquen.")
 
 
 def distancia_con_circulo(tipos, entidades, modo, P, C, R, L, anidados=None):

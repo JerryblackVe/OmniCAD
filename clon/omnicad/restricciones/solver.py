@@ -130,6 +130,7 @@ class _Sistema:
         self.n_base = len(x0)
         self.x0 = np.array(x0, dtype=float)
         self._extra = []
+        self._dvar = {}              # (madre, copia) de un desfase de curva libre → índice de su distancia (incógnita)
         self.terminos = []
         self._armar()
         if self._extra:
@@ -380,7 +381,9 @@ class _Sistema:
             elif t == "poligono":
                 self._poligono(b.vertices_cadena(e))
             elif t == "desfase":
-                if len(e) == 4:
+                if len(e) == 2:
+                    self._desfase_libre(e[0], e[1], r.datos.get("lado"))
+                elif len(e) == 4:
                     T.append(lambda x, e=tuple(e): [self.separacion(x, e[2], e[3]) - self.separacion(x, e[0], e[1])])
                 else:
                     def f(x, k=e[0], p=e[1], q=e[2]):
@@ -423,7 +426,9 @@ class _Sistema:
                 k = 1.0 if t == "radio" else 2.0
                 T.append(lambda x, cid=e[0], v=v, k=k: [k * self.R(x, cid) - v])
             elif t == "desfase":
-                if tipos[0] in ("spline", *ELIPTICAS):
+                if (e[0], e[1]) in self._dvar:             # BOC-72: la restricción trae la distancia, la cota la fija
+                    T.append(lambda x, j=self._dvar[e[0], e[1]], v=v: [x[j] - v])
+                elif tipos[0] in ("spline", *ELIPTICAS):
                     self._desfase_normal(e[0], e[1], v, c.datos.get("lado"))
                 else:
                     T.append(lambda x, o=e[0], d=e[1], v=v: [self.separacion(x, o, d) - v])
@@ -490,8 +495,32 @@ class _Sistema:
             return [math.hypot(*w) - v, (w[0] * d[0] + w[1] * d[1]) / (math.hypot(*d) or 1e-12)]
         self.terminos.append(f)
 
-    def _desfase_normal(self, madre, copia, distancia, lado):
-        """Offset de Fusion: cada punto de ajuste queda a distancia firmada sobre la normal de la madre."""
+    def _desfase_libre(self, madre, copia, lado):
+        """Restricción de desfase de una curva libre (BOC-72): lo mismo que `_desfase_normal` pero con la distancia como
+        incógnita común a todos los puntos, así que sobrevive a la cota y, sin ella, la distancia queda libre. Si la
+        copia es una elipse (Fusion: elegida cerca de un eje) tiene los mismos centro y giro que la madre y sus
+        semiejes difieren en esa distancia (`lado` +1 = más grande)."""
+        if self.b.curvas[copia].tipo == "elipse":
+            j = self._dvar[madre, copia] = self._parametro(abs(self.elipse(self.x0, copia)[1] - self.elipse(self.x0, madre)[1]))
+
+            def f(x, m=madre, c=copia, j=j, s=lado or 1.0):
+                # El extremo del eje mayor de la copia queda sobre el de la madre, alargado en la distancia: sin
+                # trigonometría, así una madre girada de golpe converge igual.
+                (cx, cy), a1, b1, _g = self.elipse(x, m)
+                (c2x, c2y), _a2, b2, _g2 = self.elipse(x, c)
+                (m1x, m1y), (m2x, m2y) = self.P(x, self.b.curvas[m].mayor), self.P(x, self.b.curvas[c].mayor)
+                k = 1 + s * x[j] / (a1 or 1e-12)
+                return [(m2x - c2x) - k * (m1x - cx), (m2y - c2y) - k * (m1y - cy), b2 - b1 - s * x[j]]
+            self.terminos.append(f)
+            return
+        prim0 = self.prim(self.x0, madre)
+        p0 = self.P(self.x0, self.b.curvas[copia].pts[0])
+        j = self._dvar[madre, copia] = self._parametro(mas_cercano(prim0, p0)[1])
+        self._desfase_normal(madre, copia, None, lado, j)
+
+    def _desfase_normal(self, madre, copia, distancia, lado, jd=None):
+        """Offset de Fusion: cada punto de ajuste queda a distancia firmada sobre la normal de la madre. Con `jd`, la
+        distancia es la incógnita de ese índice en vez de un número."""
         prim0 = self.prim(self.x0, madre)
         for pid in self.b.curvas[copia].pts:
             t, _, q = mas_cercano(prim0, self.P(self.x0, pid))
@@ -507,7 +536,8 @@ class _Sistema:
                 q, d = evaluar_primitiva(prim, t, 1)
                 ux, uy = _unitario(d)
                 p = self.P(x, pid)
-                return [p[0] - q[0] + lado * distancia * uy, p[1] - q[1] - lado * distancia * ux]
+                dist = distancia if jd is None else x[jd]
+                return [p[0] - q[0] + lado * dist * uy, p[1] - q[1] - lado * dist * ux]
             self.terminos.append(f)
 
     def _contacto_punto(self, pid, cid):
@@ -875,6 +905,25 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     return ResultadoSolver("ok", gdl, err_max, determinadas=determinadas)
 
 
+def acomodar_tangente(boceto, entidades, valores_cotas=None):
+    """Después de agregar una tangente con el comando: la cumple sin mover el primer arco o círculo y sin cambiar ningún
+    radio de arco, ni el radio o el largo de las curvas de la tangente (`boceto3d.acomodar_tangente` en 3D, BOC-83). Si
+    no, el solver reparte el salto entre los puntos sueltos del arco y su radio cambia. Si la otra curva no puede moverse,
+    se mueve el arco entero; si tampoco, queda el reparto del solver. Las recetas guardadas no pasan por acá."""
+    redondas = [e for e in entidades if boceto.tipo_de(e) in CIRCULARES]
+    conservar = [(cid, "distancia" if c.tipo == "linea" else "radio") for cid, c in boceto.curvas.items()
+                 if not c.proyectada and (c.tipo == "arco" or (cid in entidades and c.tipo in ("linea", "circulo")))]
+    for quietas in (redondas[:1], ()) if redondas else ():
+        prueba, valores = boceto.copia(), dict(valores_cotas or {})
+        for k in quietas:
+            prueba.agregar_restriccion("fijo", [k])
+        for cid, tipo in conservar:
+            valores[prueba.agregar_cota(tipo, [cid], "0")] = boceto.medir_cota(tipo, [cid])
+        if resolver(prueba, valores).ok:
+            boceto.puntos, boceto.curvas = prueba.puntos, prueba.curvas
+            return
+
+
 def restricciones_en_conflicto(boceto, valores_cotas=None, cancelar=None):
     """Ids de restricciones/cotas cuya retirada individual deja el boceto consistente.
 
@@ -930,6 +979,14 @@ def restricciones_redundantes(boceto, valores_cotas=None, cancelar=None):
         else:
             gdl = nuevo
     return salida
+
+
+def restriccion_quita_grados(boceto, rid, valores_cotas=None):
+    """True si la restricción `rid` baja los grados de libertad del boceto respecto de no tenerla (BOC-53: «Cambiar
+    por» lo usa para rechazar una restricción nueva que sobra, igual que Agregar). No mueve el boceto."""
+    sin = boceto.copia()
+    sin.restricciones.pop(rid)
+    return grados_de_libertad(boceto, valores_cotas) < grados_de_libertad(sin, valores_cotas)
 
 
 def _ventana(boceto, g, arrastrado, radio):

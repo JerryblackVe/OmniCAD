@@ -328,7 +328,10 @@ def proyeccion():
     q = lz.visor.proyectar(np.array([220.0, 0.0, 20.0]), lz._mvp)          # arista frontal de la tapa de la caja
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, q.toPoint())
     A.esperar(300)
-    A.reg(AR + " · Proyección", "clic en una arista del modelo la proyecta", len(lz.b.proyecciones) == n0 + 1,
+    A.reg(AR + " · Proyección", "el clic no confirma: espera Aceptar", len(lz.b.proyecciones) == n0, f"{len(lz.b.proyecciones)}")
+    tecla(Qt.Key_Return)
+    A.esperar(300)
+    A.reg(AR + " · Proyección", "Enter proyecta la arista elegida", len(lz.b.proyecciones) == n0 + 1,
           f"{n0}->{len(lz.b.proyecciones)} msg={MENSAJES[-1:]}")
     if len(lz.b.proyecciones) == n0 + 1:
         r = lz.b.proyecciones[-1]
@@ -341,10 +344,13 @@ def proyeccion():
         A.reg(AR + " · Proyección", "Ctrl+Y la vuelve", len(lz.b.proyecciones) == n0 + 1, f"{len(lz.b.proyecciones)}")
     # filtro «Cuerpos»: el clic en una cara toma el cuerpo entero
     lz.opciones["filtro_proyectar"] = "cuerpos"
+    lz.set_herramienta("proyectar")
     q = lz.visor.proyectar(np.array([220.0, 15.0, 20.0]), lz._mvp)
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, q.toPoint())
     A.esperar(300)
-    A.reg(AR + " · Proyección", "filtro «Cuerpos»: un clic proyecta el contorno del cuerpo", len(lz.b.proyecciones) >= n0 + 2,
+    tecla(Qt.Key_Return)
+    A.esperar(300)
+    A.reg(AR + " · Proyección", "filtro «Cuerpos»: clic y Enter proyectan el contorno del cuerpo", len(lz.b.proyecciones) >= n0 + 2,
           f"proyecciones={len(lz.b.proyecciones)} msg={MENSAJES[-1:]}")
     lz.opciones["filtro_proyectar"] = "entidades"
     A.foto(v, "proyeccion_cuerpo")

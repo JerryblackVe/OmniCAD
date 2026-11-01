@@ -57,14 +57,14 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "delete_sketch_entities_3d",
                 # Fase 9: boceto 3D completo (tests/test_boceto_fase9_3d.py)
                 "draw_arc_3d", "draw_circle_3d", "draw_ellipse_3d", "draw_rectangle_3d", "draw_conic_3d",
-                "draw_text_3d", "transform_sketch_3d", "intersect_curves", "project_to_surface",
+                "draw_text_3d", "transform_sketch_3d", "intersect_curves", "project_to_surface", "isoparametric_curve", "infer_sketch_snap_3d",
                 "infer_sketch_snap"]
 
 
 def test_herramientas_del_grupo_boceto():
     assert sorted(h["nombre"] for h in api.catalogo("boceto")) == sorted(HERRAMIENTAS)     # el orden depende de qué módulo se importó antes
     lecturas = {h["nombre"] for h in api.catalogo("boceto") if not h["modifica"]}
-    assert lecturas == {"get_sketch", "suggest_auto_constraints", "get_spline_curvature", "infer_sketch_snap",
+    assert lecturas == {"get_sketch", "suggest_auto_constraints", "get_spline_curvature", "infer_sketch_snap", "infer_sketch_snap_3d",
                        "find_redundant_constraints"}
 
 
