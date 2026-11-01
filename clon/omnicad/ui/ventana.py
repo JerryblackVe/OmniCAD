@@ -35,6 +35,7 @@ from .mas_comando import FiltroMas, _normal, leer_barra, leer_teclas
 from .sugerencias import TiraSugerencias, comandos_sugeridos, tipos_de_seleccion
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
+from ..nucleo import aislado
 from ..nucleo import geometria as geo
 from ..restricciones import Boceto
 from ..timeline import entidades as ent
@@ -994,6 +995,8 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.cancelar()
         self._cancelar_eleccion()
         self.doc = doc
+        if not doc._prevuelo_corresponde():          # un documento chico no usa el trabajador: su memoria se libera
+            aislado.cerrar_trabajador()
         doc.al_calcular = self._calculando
         doc.al_esperar = self._esperando_calculo
         self._avisos_vistos = None

@@ -152,6 +152,7 @@ class Documento:
         self.al_esperar = None    # función(segundos) que la ventana pone para avisar y repintar mientras trabaja el hijo (B-48)
         self._cache = {}          # solo mientras `desde_dict` abre un proyecto: índice → (datos, formas) guardados
         self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
+        self._calcular_todo = False    # «Calcular todo» pedido: también el trabajador tiene que olvidar su memoria
         self._sin_partir = set()  # pasos de recetas viejas: su corte no divide el cuerpo (ver `_pasos_sin_partir`)
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
         self.posicion_pendiente = None    # componentes arrastrados sin capturar (`timeline/posicion.py`); no se guarda
@@ -807,7 +808,8 @@ class Documento:
         self._contador_cotas = receta.get("contador_cotas", 0)
         self._contador = receta["contador"]
         self.marcador = receta["marcador"]
-        self._conservar_formas(self._estados, calculo["estados"])
+        if not calculo["parcial"]:      # en un envío parcial, lo que no cambió ya llega como el mismo objeto
+            self._conservar_formas(self._estados, calculo["estados"])
         self._estados = calculo["estados"]
         self.resultados = [ResultadoPaso(estado, mensaje) for estado, mensaje in calculo["resultados"]]
         self._usados, self._valores, self._duraciones = calculo["usados"], calculo["valores"], calculo["duraciones"]
@@ -885,7 +887,8 @@ class Documento:
             # cotejar todo el contenido, nunca por caja/volumen ni por el id del cuerpo.
             for cid, c in previa["estado"].cuerpos.items():
                 original = entrada.cuerpos.get(cid)
-                if (original is not None and consultas.es_forma(c.forma) and consultas.es_forma(original.forma)
+                if (original is not None and c.forma is not original.forma
+                        and consultas.es_forma(c.forma) and consultas.es_forma(original.forma)
                         and intercambio.huella_visual(c.forma) == intercambio.huella_visual(original.forma)):
                     c.forma = original.forma
             op._usados = set(previa["usados"])
@@ -935,8 +938,11 @@ class Documento:
     @registrar_calculo
     def recalcular(self, desde=0):
         if self._prevuelo_corresponde():
-            self._aplicar_calculo(self._solicitar_calculo("recalcular_documento", {"receta": self.a_dict()}))
+            self._aplicar_calculo(self._solicitar_calculo("recalcular_documento", {
+                "receta": self.a_dict(), "sin_memoria": self._calcular_todo}))
+            self._calcular_todo = False
             return
+        self._calcular_todo = False
         registro = registro_uso.activo
         if registro is not None:
             inicio_registro, tiempos_registro = time.perf_counter(), []
@@ -1039,14 +1045,16 @@ class Documento:
     def olvidar_memoria(self):
         """El próximo `recalcular` ejecuta todos los pasos («Calcular todo» de Fusion: Compute All)."""
         self._memo.clear()
+        self._calcular_todo = True
 
     def _de_memo(self, op, estado, valores):
         """El último resultado del paso, si con `estado` y `valores` daría lo mismo: misma operación (mismo objeto y
         receta), mismo motor, mismos parámetros leídos y lo que leyó del estado sin cambios. Así, editar un paso no
         recalcula los posteriores que no dependen de él. (estado, resultado, parámetros leídos, duración) o None."""
         m = self._memo.get(op.id)
+        nombres = self._nombres_cuerpos()
         if (m is None or m["op"] is not op or m["motor"] != self.motor or not op.MEMORIZABLE
-                or m.get("nombres") != self._nombres_cuerpos()):     # los renombres viven en los estados guardados
+                or self._renombre_le_importa(m, nombres)):
             return None
         if any(valores.get(n, _FALTA) != v for n, v in m["valores"].items()) or _receta(op) != m["receta"]:
             return None
@@ -1069,8 +1077,21 @@ class Documento:
         nuevo = self._aplicar_memo(m, estado)
         # La entrada y la salida de ahora valen igual (mismas lecturas, mismo cambio) y así la memoria no retiene los
         # estados viejos (con sus formas) de cálculos anteriores.
-        m["entrada"], m["salida"] = estado, (nuevo if m["salida"] is not None else None)
+        m["entrada"], m["salida"], m["nombres"] = estado, (nuevo if m["salida"] is not None else None), nombres
         return nuevo, m["resultado"], m["usados"], m["duracion"]
+
+    @staticmethod
+    def _renombre_le_importa(m, nombres):
+        """¿Cambió el nombre de un cuerpo que el paso leyó o cambió? Los renombres viven en los estados guardados; el de
+        un cuerpo ajeno no invalida su memoria (con un solo renombre, si no, se recalculaba todo el historial)."""
+        cambiados = {c for c in m["nombres"].keys() | nombres.keys() if m["nombres"].get(c) != nombres.get(c)}
+        if not cambiados:
+            return False
+        leidas, entrada, salida = m["lecturas"].get("cuerpos"), m["entrada"], m["salida"]
+        if leidas is TODAS or cambiados & leidas:
+            return True
+        return salida is not None and any(c in salida.cuerpos and not (c in entrada.cuerpos and _mismo_valor(
+            salida.cuerpos[c], entrada.cuerpos[c])) for c in cambiados)
 
     @staticmethod
     def _aplicar_memo(m, estado):

@@ -10,7 +10,12 @@ como BREP a un hijo que hace la cuenta; si pasa el tope se lo mata y la app sigu
 `correr(tarea, forma, tope, **args)` y `correr_json(tarea, datos, tope)` devuelven JSON o lanzan `TareaAislada`
 (`TiempoAgotado` si pasó el tope). Sin Qt; solo el hijo de prevuelo importa timeline para reconstruir la receta.
 En la app instalada el hijo es la misma `OmniCAD.exe --tarea-aislada`.
+
+RS-X1: `correr_json` no arranca un hijo por cálculo. Un solo trabajador sigue vivo entre cálculos con el documento al
+día y su memoria por paso (`_Trabajador`, `_trabajar`). No guarda nada que no se pueda rehacer: cada pedido trae la
+receta completa, y si el hijo cae o se lo mata por tiempo, el siguiente pedido arranca otro desde esa receta.
 """
+import atexit
 import json
 import os
 import subprocess
@@ -18,6 +23,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from pathlib import Path
 
 from . import intercambio
@@ -28,7 +34,21 @@ _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
+TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
 EN_HIJO = False
+# En el trabajador: el documento al día y lo que el padre ya tiene (id(objeto) → (número, huella, objeto); huella → número),
+# que no se vuelve a mandar. `formas_enviadas` es None en un hijo de una sola tarea. Las mantiene `_codificar`.
+documento_vivo = None
+formas_enviadas = None
+huellas_enviadas = {}
+estados_enviados = []
+marca_enviada = None
+proxima_forma = 0
+# En el padre: lo del último cálculo recibido (número → objeto) y su marca, que mantiene `_decodificar`. Si la marca no
+# es la del trabajador (es otro, o nadie leyó su última respuesta), él vuelve a mandar todo.
+formas_recibidas = {}
+estados_recibidos = []
+marca_recibida = None
 
 
 class TareaAislada(Exception):
@@ -53,13 +73,30 @@ def _proyeccion_exacta(forma, e, x, deflexion):
 _TAREAS = {"autointersecciones": _autointersecciones, "proyeccion_exacta": _proyeccion_exacta}
 
 
+def _documento(receta):
+    """`receta` calculada. En el trabajador sale del documento vivo: se recalcula solo lo que cambió, y la memoria por
+    paso reusa el resto. Lo que un paso no memorizable lee de afuera se vuelve a leer, como en un documento recién hecho."""
+    global documento_vivo
+    from ..timeline.documento import Documento
+
+    if formas_enviadas is None:
+        return Documento.desde_dict(receta)
+    if documento_vivo is None:
+        documento_vivo = Documento.desde_dict(receta)
+        return documento_vivo
+    if documento_vivo.a_dict() != receta:
+        documento_vivo._cargar(receta)
+    if not all(op.MEMORIZABLE for op in documento_vivo.operaciones):
+        documento_vivo.recalcular(0)
+    return documento_vivo
+
+
 def _prevuelo_parametros(receta, parametros):
     from ..timeline.calculo_aislado import _empaquetar
-    from ..timeline.documento import Documento
     from ..timeline.parametros import TablaParametros
 
     with _motor.fijar_motor("opencascade"):
-        doc = Documento.desde_dict(receta)
+        doc = _documento(receta)
         doc.aplicar_parametros(TablaParametros.desde_lista(parametros))
         return _empaquetar(doc)
 
@@ -68,11 +105,10 @@ def _prevuelo_cambio(receta, cambio, previa=False):
     """Ensaya editar, suprimir o eliminar un paso (B-48): un cambio del historial también recalcula y podía
     tumbar el proceso con una caída nativa del kernel."""
     from ..timeline.calculo_aislado import _empaquetar
-    from ..timeline.documento import Documento
     from ..timeline.operaciones import operacion_desde_dict
 
     with _motor.fijar_motor("opencascade"):
-        doc = Documento.desde_dict(receta)
+        doc = _documento(receta)
         i = int(cambio["indice"])
         estado_previo = None
         if cambio["tipo"] in ("reemplazar", "agregar"):
@@ -96,20 +132,27 @@ def _prevuelo_cambio(receta, cambio, previa=False):
 
 def _prevuelo_abrir(ruta):
     """Ensaya abrir un proyecto grande (B-48): si el kernel cae al reconstruirlo, la app no lo abre y sigue viva."""
+    global documento_vivo
     from ..io_archivos import proyecto
     from ..timeline.calculo_aislado import _empaquetar
 
     with _motor.fijar_motor("opencascade"):
         doc = proyecto.abrir(ruta)
+        if formas_enviadas is not None:
+            documento_vivo = doc
         return _empaquetar(doc)
 
 
-def _recalcular_documento(receta):
+def _recalcular_documento(receta, sin_memoria=False):
+    """`sin_memoria`: «Calcular todo» ejecuta de verdad cada paso, también los que el trabajador tiene en memoria."""
     from ..timeline.calculo_aislado import _empaquetar
-    from ..timeline.documento import Documento
 
     with _motor.fijar_motor("opencascade"):
-        return _empaquetar(Documento.desde_dict(receta))
+        doc = _documento(receta)
+        if sin_memoria and formas_enviadas is not None:
+            doc.olvidar_memoria()
+            doc.recalcular(0)
+        return _empaquetar(doc)
 
 
 def _previa_visual(receta, operacion, indice, deflexion, angular):
@@ -133,12 +176,75 @@ def _a_json(o):
     raise TypeError(f"{type(o).__name__} no se guarda como JSON")
 
 
+def _memoria_mb():
+    """Memoria residente de este proceso en MB (`/proc` en Linux; la API de Windows, sin dependencias). 0 sin `/proc`."""
+    if sys.platform != "win32":
+        try:
+            with open("/proc/self/statm", encoding="ascii") as f:
+                return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2 ** 20
+        except OSError:        # macOS: sin tope, antes que tumbar al trabajador en cada pedido
+            return 0
+    import ctypes
+    from ctypes import wintypes
+
+    class _Contadores(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD), ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t)] + [(f"_{i}", ctypes.c_size_t) for i in range(6)]
+
+    k32 = ctypes.WinDLL("kernel32")
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+    k32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Contadores), wintypes.DWORD]
+    c = _Contadores()
+    c.cb = ctypes.sizeof(c)
+    k32.K32GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(c), c.cb)
+    return c.WorkingSetSize / 2 ** 20
+
+
+def _atender(tarea, args):
+    """Un pedido del trabajador. Un error (una previa con un valor imposible) no lo mata: vuelve como texto, y solo si
+    el documento quedó a medias se descarta (el próximo pedido lo arma de la receta)."""
+    global documento_vivo, formas_enviadas, huellas_enviadas
+    if args.pop("_marca") != marca_enviada:
+        formas_enviadas, huellas_enviadas = {}, {}
+    os.chdir(args.pop("_cwd"))     # las rutas relativas del documento (derivaciones) valen desde el padre
+    try:
+        return _TAREAS_JSON[tarea](**args)
+    except Exception as e:      # noqa: BLE001 — lo que falle en un pedido se informa y el trabajador sigue
+        doc = documento_vivo
+        if doc is not None and (doc.a_dict() != args.get("receta") or len(doc._estados) != len(doc.operaciones)):
+            documento_vivo = None
+        return {"_fallo": traceback.format_exception_only(e)[-1].strip()}
+    finally:
+        os.chdir(_RAIZ)         # una carpeta tomada de directorio actual no se puede mover ni borrar en Windows
+        if documento_vivo is not None:
+            documento_vivo._deshacer.clear()
+            documento_vivo._rehacer.clear()
+
+
+def _trabajar(carpeta):
+    """El bucle del trabajador: un pedido por línea de la entrada, hasta que el padre la cierra (también si muere).
+    `args.json` trae el pedido; `listo` avisa que `salida.json` ya está completa."""
+    global formas_enviadas
+    formas_enviadas = {}
+    for linea in os.fdopen(0, "rb"):
+        args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
+        tope = args.pop("_tope_mb")
+        salida = _atender(linea.decode("ascii").strip(), args)
+        if _memoria_mb() > tope:
+            salida["_cerrar"] = True     # lo cierra el padre: si se fuera solo, el próximo pedido lo encontraría saliendo
+        (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
+        (carpeta / "listo").touch()
+    return 0
+
+
 def principal(argv):
     """Punto de entrada del hijo: `tarea carpeta`. Lee args.json y, si corresponde, forma.brep; escribe salida.json."""
     # Con «-m» este módulo es __main__; timeline importa la instancia con su nombre de paquete.
     from . import aislado
     aislado.EN_HIJO = True
     tarea, carpeta = argv[0], Path(argv[1])
+    if tarea == "trabajador":
+        return aislado._trabajar(carpeta)
     args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
     if tarea in _TAREAS_JSON:
         os.chdir(args.pop("_cwd"))     # las rutas relativas del documento (derivaciones) valen desde el padre
@@ -167,11 +273,116 @@ def correr(tarea, forma, tope, **args):
 
 
 def correr_json(tarea, datos, tope, esperar=None):
-    """Hace `tarea` en un hijo con argumentos JSON (`datos`), sin BREP. `tope`: segundos como máximo.
+    """Hace `tarea` en el trabajador con argumentos JSON (`datos`), sin BREP. `tope`: segundos como máximo.
     `esperar(segundos)`: la ventana la usa para avisar y repintar mientras el hijo trabaja (B-48)."""
     if tarea not in _TAREAS_JSON:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
-    return _correr(tarea, tope, dict(datos, _cwd=os.getcwd()), esperar=esperar)
+    datos = dict(datos, _cwd=os.getcwd())
+    if not _ocupado.acquire(blocking=False):       # otro hilo u otro documento lo está usando: un hijo de una sola tarea
+        return _correr(tarea, tope, datos, esperar=esperar)
+    try:
+        return _pedir(tarea, dict(datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR), tope, esperar)
+    finally:
+        _ocupado.release()
+
+
+class _Trabajador:
+    """El hijo que queda vivo entre cálculos (RS-X1). Si cae, se cuelga o pasa el tope, se lo cierra y se informa como
+    en una tarea de una sola vez: el documento del padre no se toca y el pedido siguiente arranca otro."""
+
+    def __init__(self):
+        self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_trabajador_", ignore_cleanup_errors=True)
+        self.carpeta = Path(self.temporal.name)
+        self.proceso = None
+        try:
+            self.errores = (self.carpeta / "errores.txt").open("wb")
+            self.proceso = subprocess.Popen(_comando("trabajador", self.carpeta), bufsize=0, cwd=_RAIZ,
+                                            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.errores,
+                                            creationflags=_SIN_VENTANA)
+        except (OSError, ValueError) as e:
+            self.cerrar()
+            raise TareaAislada(f"no pudo arrancar el proceso aparte ({e})") from e
+
+    def _avisar(self, tarea):
+        try:
+            self.proceso.stdin.write(tarea.encode("ascii") + b"\n")
+        except OSError:                  # ya cayó: lo informa la espera
+            pass
+
+    def pedir(self, tarea, datos, tope, esperar):
+        listo, salida = self.carpeta / "listo", self.carpeta / "salida.json"
+        (self.carpeta / "args.json").write_text(json.dumps(datos, default=_a_json), encoding="utf-8", newline="\n")
+        self._avisar(tarea)
+        inicio = aviso = time.monotonic()
+        while not listo.is_file() and self.proceso.poll() is None:
+            ahora = time.monotonic()
+            if ahora - inicio > tope:
+                self.cerrar()
+                raise TiempoAgotado(f"pasó de {tope:.3g} s y se cortó".replace(".", ","))
+            if esperar is not None and ahora - aviso >= 0.05:
+                aviso = ahora
+                esperar(ahora - inicio)
+            time.sleep(0.001)
+        if esperar is not None:
+            esperar(time.monotonic() - inicio)
+        if not listo.is_file() and (self.proceso.returncode != 0 or not salida.is_file()):
+            codigo = self.proceso.returncode
+            self.errores.close()
+            ultima = (self.carpeta / "errores.txt").read_bytes()
+            self.cerrar()
+            raise _caida(codigo, ultima)
+        try:
+            resultado = json.loads(salida.read_text(encoding="utf-8"))
+            salida.unlink()
+            listo.unlink(missing_ok=True)
+        except (OSError, ValueError) as e:
+            self.cerrar()
+            raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
+        if resultado.get("_cerrar"):
+            self.cerrar()
+        if "_fallo" in resultado:
+            raise TareaAislada(f"el proceso aparte falló ({resultado['_fallo'][:200]})")
+        return resultado
+
+    def cerrar(self):
+        if self.proceso is not None and self.proceso.poll() is None:
+            self.proceso.kill()
+            self.proceso.wait()
+        if self.proceso is not None:
+            self.proceso.stdin.close()
+        if hasattr(self, "errores"):
+            self.errores.close()
+        self.temporal.cleanup()
+
+
+_trabajador = None
+_ocupado = threading.Lock()
+
+
+def cerrar_trabajador():
+    """Cierra el trabajador y suelta lo que este proceso guardaba de sus respuestas."""
+    global _trabajador, formas_recibidas, estados_recibidos, marca_recibida
+    if _trabajador is not None:
+        _trabajador.cerrar()
+        _trabajador = None
+    formas_recibidas, estados_recibidos, marca_recibida = {}, [], None
+
+
+atexit.register(cerrar_trabajador)
+
+
+def _pedir(tarea, datos, tope, esperar):
+    global _trabajador
+    if _trabajador is None or _trabajador.proceso.poll() is not None:
+        cerrar_trabajador()
+        _trabajador = _Trabajador()
+    try:
+        return _trabajador.pedir(tarea, datos, tope, esperar)
+    except TareaAislada:
+        raise
+    except BaseException:            # quedó con un pedido a medias: no sirve para el próximo
+        cerrar_trabajador()
+        raise
 
 
 class CalculoPendiente:
@@ -247,6 +458,17 @@ def _ejecutar(comando, tope, esperar):
     return salida[0]
 
 
+def _caida(codigo, errores):
+    """La excepción de un hijo que terminó sin resultado. `errores`: lo que dejó en stderr."""
+    if codigo < 0 or codigo >= 0x80000000:
+        # B-48: caída nativa del kernel (p. ej. 0xC0000005 en TKernel). Acá llega como error en español
+        # y la app sigue viva; sin el proceso aparte mataba a todo el programa.
+        return TareaAislada(f"el kernel cayó por un error nativo (código {codigo:#x}) dentro "
+                            "del proceso aparte; OmniCAD sigue andando")
+    ultima = (errores or b"").decode("utf-8", "replace").strip().splitlines()[-1:] or ["sin detalle"]
+    return TareaAislada(f"el proceso aparte falló ({ultima[0][:200]})")
+
+
 def _correr(tarea, tope, args, forma=None, esperar=None):
     if tope <= 0:
         raise TiempoAgotado("no quedó tiempo para correrla")
@@ -268,13 +490,7 @@ def _correr(tarea, tope, args, forma=None, esperar=None):
             raise TareaAislada(f"no pudo arrancar el proceso aparte ({e})") from e
         salida = carpeta / "salida.json"
         if hijo.returncode != 0 or not salida.is_file():
-            if hijo.returncode < 0 or hijo.returncode >= 0x80000000:
-                # B-48: caída nativa del kernel (p. ej. 0xC0000005 en TKernel). Acá llega como error en español
-                # y la app sigue viva; sin el proceso aparte mataba a todo el programa.
-                raise TareaAislada(f"el kernel cayó por un error nativo (código {hijo.returncode:#x}) dentro "
-                                   "del proceso aparte; OmniCAD sigue andando")
-            ultima = (hijo.stderr or b"").decode("utf-8", "replace").strip().splitlines()[-1:] or ["sin detalle"]
-            raise TareaAislada(f"el proceso aparte falló ({ultima[0][:200]})")
+            raise _caida(hijo.returncode, hijo.stderr)
         try:
             return json.loads(salida.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:

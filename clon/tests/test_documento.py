@@ -136,7 +136,7 @@ def test_combinar_avisa_si_la_union_no_fusiona_lo_que_se_toca(monkeypatch):
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8"))
     # el kernel "no fusiona": devuelve las dos piezas sin unirlas (la fusión degenerada de la espiral)
     real_booleano = g.booleano
-    monkeypatch.setattr(g, "booleano", lambda a, b, op: g.compuesto([a, b]) if op == "unir"
+    monkeypatch.setattr(g, "booleano", lambda a, b, op, avisos=None: g.compuesto([a, b]) if op == "unir"
                         else real_booleano(a, b, op))
     r = doc.agregar(OpCombinar(doc.nuevo_id(), objetivo="op1.c1", herramientas=["op2.c1"], operacion="unir"))
     assert r.estado == "aviso" and "partido" in r.mensaje
@@ -156,7 +156,7 @@ def _kernel_que_pierde_material(monkeypatch):
     del cilindro del gimbal que se comía el sólido de la espiral dentro del cuerpo compuesto)."""
     real = g.booleano
 
-    def perder(objetivo, herramienta, operacion):
+    def perder(objetivo, herramienta, operacion, avisos=None):
         if operacion == "unir":
             return real(objetivo, herramienta, "cortar")     # devuelve MENOS material del que había
         return real(objetivo, herramienta, operacion)
