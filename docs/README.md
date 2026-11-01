@@ -70,7 +70,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | Documento | IDs |
 |---|---|
 | [brechas_fusion.md](brechas_fusion.md) | Fusion 360 |
-| [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-12: herramientas de SÓLIDO contra capturas de Fusion |
+| [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-14: herramientas de SÓLIDO contra capturas de Fusion |
 | [brechas_freecad.md](brechas_freecad.md) | F1–F23 |
 | [brechas_plasticity.md](brechas_plasticity.md) | PL1–PL13 |
 | [brechas_blender.md](brechas_blender.md) | B1–B19 (no confundir con los bugs B-n) |

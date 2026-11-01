@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-375 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+376 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -19,7 +19,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [solido](#grupo-solido) | 83 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 17 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
-| [ensamble](#grupo-ensamble) | 17 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
+| [ensamble](#grupo-ensamble) | 18 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 25 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
@@ -2099,7 +2099,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`split_body`](#split_body) | sí | Parte un cuerpo en varios con un plano, una cara u otro cuerpo. |
 | [`silhouette_split`](#silhouette_split) | sí | Divide un cuerpo por su silueta vista desde una dirección. operation: faces_only (solo parte las caras; el cuerpo sigue siendo uno), shelled_body (parte en dos un cuerpo vaciado) o solid_body (parte en dos un sólido). |
 | [`replace_face`](#replace_face) | sí | Lleva caras de un cuerpo hasta otra cara o un plano. |
-| [`edit_face`](#edit_face) | sí | Deforma una cara con una grilla de control (Editar cara): mueve puntos de la grilla; el contorno de la cara queda fijo y sigue cosida a sus vecinas. get_face_grid muestra la grilla. |
+| [`edit_face`](#edit_face) | sí | Deforma una cara con una grilla de control (Editar cara): mueve puntos de la grilla. |
 | [`remove_bodies`](#remove_bodies) | sí | Quita cuerpos del diseño conservando la operación en el timeline. |
 | [`delete_faces`](#delete_faces) | sí | Borra caras y cierra el hueco extendiendo sus vecinas. |
 | [`gear_info`](#gear_info) | no | Calcula las medidas de un engranaje cilíndrico de evolvente sin modelarlo (ISO 21771, perfil de referencia ISO 53): diámetros primitivo, base, exterior y de fondo, paso, espesor del diente, dientes mínimos sin socavado (criterio estricto: 18 con 20°; el límite teórico, 17,1, va en min_teeth_theoretical) y desplazamiento mínimo. |
@@ -2129,7 +2129,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_surface_extrude`](#create_surface_extrude) | sí | Extruye curvas abiertas o cerradas (o un texto de una línea) en una superficie. |
 | [`create_surface_revolve`](#create_surface_revolve) | sí | Gira curvas alrededor de un eje para crear una superficie. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil. |
 | [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta. |
-| [`create_surface_loft`](#create_surface_loft) | sí | Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier cantidad, tocan cada sección) y center_line guían la forma, sin combinarse con las condiciones. |
+| [`create_surface_loft`](#create_surface_loft) | sí | Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier cantidad, tocan cada sección; con closed, lazos cerrados) y center_line guían la forma y se combinan con las condiciones: entre rieles manda la condición y sobre cada riel, el riel. |
 | [`offset_surface`](#offset_surface) | sí | Crea una superficie paralela a caras o cuerpos. |
 | [`fillet_surface`](#fillet_surface) | sí | Redondea o bisela aristas entre superficies. |
 | [`create_patch`](#create_patch) | sí | Tapa un contorno cerrado con continuidad G0, G1 o G2. group_edges=false permite una continuidad por arista (edge_continuity); interior guía el parche con curvas, aristas o puntos y flip da vuelta la normal. |
@@ -2814,7 +2814,7 @@ Lleva caras de un cuerpo hasta otra cara o un plano.
 
 ### `edit_face`
 
-Deforma una cara con una grilla de control (Editar cara): mueve puntos de la grilla; el contorno de la cara queda fijo y sigue cosida a sus vecinas. get_face_grid muestra la grilla.
+Deforma una cara con una grilla de control (Editar cara): mueve puntos de la grilla. Si un punto toca el contorno, las caras vecinas siguen al borde nuevo, cada una sobre su superficie. extrude hace lo de Alt en Fusion: suma líneas alrededor de los puntos antes de moverlos. get_face_grid muestra la grilla.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2823,6 +2823,10 @@ Deforma una cara con una grilla de control (Editar cara): mueve puntos de la gri
   - `length_factor` (entero; opcional, por defecto `1`): Factor de longitud, desde 1 (Dividir caras).
   - `width_factor` (entero; opcional, por defecto `1`): Factor de anchura, desde 1 (Dividir caras).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector; vacío = el único cuerpo.
+  - `length_cuts` (lista de número o null; opcional, por defecto `null`): líneas de más a lo largo, como fracciones de 0 a 1.
+  - `width_cuts` (lista de número o null; opcional, por defecto `null`): líneas de más a lo ancho, como fracciones de 0 a 1.
+  - `contour_spacing` (número o expresión; opcional, por defecto `0`): Espaciado de contorno en mm o expresión: suma una fila de cuadros a esa distancia del contorno; 0 = ninguna.
+  - `extrude` (true/false; opcional, por defecto `false`): true suma una línea de cada lado de los puntos de moves (Alt en Fusion); u y v son los de la grilla de antes.
 - CLI: `omnicad call edit_face --doc pieza.omnicad face=… moves=…`
 
 ### `remove_bodies`
@@ -3354,7 +3358,7 @@ Barre curvas por una ruta. Tipos de Sweep de Fusion: ruta sola (orientation, twi
 
 ### `create_surface_loft`
 
-Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier cantidad, tocan cada sección) y center_line guían la forma, sin combinarse con las condiciones.
+Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier cantidad, tocan cada sección; con closed, lazos cerrados) y center_line guían la forma y se combinan con las condiciones: entre rieles manda la condición y sobre cada riel, el riel.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4147,7 +4151,7 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`get_assembly`](#get_assembly) | no | Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz. |
+| [`get_assembly`](#get_assembly) | no | Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar (uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz. |
 | [`create_component`](#create_component) | sí | Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). |
 | [`ground_component`](#ground_component) | sí | Fija o libera un componente (ENSAMBLAR › Fijar). |
 | [`create_joint`](#create_joint) | sí | Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. |
@@ -4163,11 +4167,12 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | [`set_component_initial_position`](#set_component_initial_position) | sí | Posición inicial de un componente (ENSAMBLAR › Editar posición inicial): lo gira alrededor del centro de su caja envolvente (X, luego Y, luego Z) y lo desplaza. |
 | [`capture_position`](#capture_position) | sí | Captura la posición actual de los componentes (ENSAMBLAR › Posición › Capturar posición): queda como la de referencia a la que vuelve revert_position. |
 | [`revert_position`](#revert_position) | sí | Revierte los componentes a su última posición capturada con capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron. |
+| [`drag_component`](#drag_component) | no | Arrastra un componente como con el mouse en el visor (ENSAMBLAR › Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. |
 | [`motion_study_pose`](#motion_study_pose) | no | Estudio de movimiento con varias uniones a la vez (ENSAMBLAR › Estudio de movimiento): dónde quedan los componentes si cada unión de values tiene ese valor. |
 
 ### `get_assembly`
 
-Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz.
+Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar (uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz.
 
 - Modifica el documento: no.
 - Parámetros: ninguno.
@@ -4395,7 +4400,7 @@ Posición inicial de un componente (ENSAMBLAR › Editar posición inicial): lo 
 
 ### `capture_position`
 
-Captura la posición actual de los componentes (ENSAMBLAR › Posición › Capturar posición): queda como la de referencia a la que vuelve revert_position. No mueve nada.
+Captura la posición actual de los componentes (ENSAMBLAR › Posición › Capturar posición): queda como la de referencia a la que vuelve revert_position. Lo arrastrado con drag_component pasa al timeline: el valor de cada unión y un paso de posición por componente libre.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4405,13 +4410,24 @@ Captura la posición actual de los componentes (ENSAMBLAR › Posición › Capt
 
 ### `revert_position`
 
-Revierte los componentes a su última posición capturada con capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron.
+Revierte los componentes a su última posición capturada con capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron. Si hay algo arrastrado sin capturar, solo descarta eso: no agrega ningún paso.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `components` (lista de texto o null; opcional, por defecto `null`): componentes a revertir (id, nombre o un cuerpo); vacío = todos.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Revertir posición<n>».
 - CLI: `omnicad call revert_position --doc pieza.omnicad`
+
+### `drag_component`
+
+Arrastra un componente como con el mouse en el visor (ENSAMBLAR › Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. NO cambia el documento: la posición queda sin capturar hasta capture_position o revert_position, y cualquier otro cambio del documento la descarta. Devuelve dónde quedó cada componente.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `component` (texto; obligatorio): id, nombre o un cuerpo del componente.
+  - `offset` (lista de número; obligatorio): hacia dónde se lleva el punto agarrado [x, y, z] en mm.
+  - `point` (lista de número o null; opcional, por defecto `null`): punto agarrado [x, y, z] en mm; vacío = el centro de la caja de un cuerpo del componente.
+- CLI: `omnicad call drag_component --doc pieza.omnicad component=… offset=…`
 
 ### `motion_study_pose`
 
@@ -4620,7 +4636,7 @@ Ver y medir el resultado.
 | [`measure_angle`](#measure_angle) | no | Ángulo (grados) entre dos caras planas, dos aristas rectas, o una cara y una arista. |
 | [`get_entity_origin`](#get_entity_origin) | no | De dónde viene una cara o arista: qué paso del timeline la creó (created_by) y cuáles la modificaron (modified_by, en orden). |
 | [`design_advice`](#design_advice) | no | Consejos de diseño para moldeo por inyección (Plástico › Inspeccionar › Design Advice): revisa un cuerpo contra una regla de plástico y la dirección de extracción del molde. |
-| [`get_face_grid`](#get_face_grid) | no | Grilla de control de una cara para edit_face (no cambia el documento): sus puntos sobre la cara y cuáles quedan fijos porque tocan el contorno. |
+| [`get_face_grid`](#get_face_grid) | no | Grilla de control de una cara para edit_face (no cambia el documento): sus puntos sobre la cara, cuáles mueven el contorno (contour: las caras vecinas lo siguen) y cuáles quedan fijos (fixed: en una costura o afuera de la cara). |
 | [`find_features`](#find_features) | no | Reconoce las funciones que forman un cuerpo sin historial, por ejemplo uno importado (SÓLIDO › CREAR › Reconocer funciones): agujeros (diámetro, profundidad, pasante, avellanado, punto de entrada), empalmes (radio, convexo o cóncavo), chaflanes (ancho, ángulo y distancia), extrusión (el cuerpo entero es un prisma: dirección, distancia y área del perfil), revolución (todas las caras giran alrededor de un eje: eje y ángulo) y grupos de agujeros, empalmes o chaflanes iguales: patrón rectangular (direcciones, cantidad y paso), circular (eje, cantidad y paso angular) o simetría (plano X, Y o Z por el centro de la caja del cuerpo). |
 | [`check_geometry`](#check_geometry) | no | Revisa la geometría de un cuerpo (o de todos), como Check Geometry de FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes abiertos, no manifold, normales invertidas y triángulos degenerados. |
 | [`check_printability`](#check_printability) | no | Revisión de impresión 3D de un cuerpo (o de todos), como la caja de herramientas de impresión 3D de Blender: si es estanco, espesor mínimo de pared (rayos hacia adentro desde la superficie; zonas más finas que min_thickness), zonas en voladizo que necesitan soportes (más de overhang_angle desde la vertical, sin contar la cara apoyada en la cama: el plano Z más bajo del cuerpo) y aristas filosas (ángulo interior menor que sharp_angle). printable = estanco y sin paredes finas. |
@@ -4852,7 +4868,7 @@ Consejos de diseño para moldeo por inyección (Plástico › Inspeccionar › D
 
 ### `get_face_grid`
 
-Grilla de control de una cara para edit_face (no cambia el documento): sus puntos sobre la cara y cuáles quedan fijos porque tocan el contorno.
+Grilla de control de una cara para edit_face (no cambia el documento): sus puntos sobre la cara, cuáles mueven el contorno (contour: las caras vecinas lo siguen) y cuáles quedan fijos (fixed: en una costura o afuera de la cara).
 
 - Modifica el documento: no.
 - Parámetros:
@@ -4860,6 +4876,9 @@ Grilla de control de una cara para edit_face (no cambia el documento): sus punto
   - `length_factor` (entero; opcional, por defecto `1`): Factor de longitud, desde 1: la grilla tiene length_factor + 3 puntos a lo largo.
   - `width_factor` (entero; opcional, por defecto `1`): Factor de anchura, desde 1: la grilla tiene width_factor + 3 puntos a lo ancho.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector; vacío = el único cuerpo.
+  - `length_cuts` (lista de número o null; opcional, por defecto `null`): líneas de más a lo largo, como fracciones de 0 a 1 (las que dejó extrude en edit_face).
+  - `width_cuts` (lista de número o null; opcional, por defecto `null`): líneas de más a lo ancho, como fracciones de 0 a 1.
+  - `contour_spacing` (número o expresión; opcional, por defecto `0`): Espaciado de contorno en mm: suma una fila de cuadros a esa distancia del contorno; 0 = ninguna.
 - CLI: `omnicad call get_face_grid --doc pieza.omnicad face=…`
 
 ### `find_features`

@@ -22,9 +22,9 @@ Lanzada por Gerardo el 2026-10-31 a las 21:30. Extruir y Proyectar ya terminaron
 | 4a | Media: timeline e Insertar (**terminado**; H-4 queda Parcial, falta el catálogo; Sonnet alto alcanzó) | A | H-6, H-4 | Sonnet alto |
 | 4b | Media: ventana (**terminado**; UI-1 queda Parcial; UI-8 nueva; Sonnet alto alcanzó) | B | UI-5, UI-1, `test_temas`, foco del botón ⋯, mensaje viejo | Sonnet alto |
 | 5 | **Control** (**terminado**: 7473 tests, humo OK, rojos corregidos, commits hechos) | coordinador | Cierre completo, rojos, commits separados | — |
-| 6 | Alta: sólido y superficie | A | CAP-13, SUP-13 | Opus alto |
-| 7 | Alta: ensamble | B | ASM-15, B-108 | Opus alto |
-| 8 | Muy alta | B | ASM-9 | Fable alto |
+| 6 | Alta: sólido y superficie (**terminado**; SUP-13 queda Parcial; Opus alto alcanzó) | A | CAP-13, SUP-13, B-124 | Opus alto |
+| 7 | Alta: ensamble (**terminado**; ASM-16 y B-123 nuevos; Opus alto alcanzó) | B | ASM-15, B-108 | Opus alto |
+| 8 | Muy alta (en curso) | B | ASM-9 | Fable alto |
 | 9 | **Final** | coordinador | Cierre completo, rojos, tortura, commits | — |
 
 Reglas de la noche:
@@ -196,6 +196,19 @@ El orden que manda desde ahora es la sección 0; las tandas 3 y 4 quedaron dentr
   - La vista previa de la isoparamétrica con «Distribuidas» sobre una cara grande: las 80 ms de espera evitan recalcular en cada movimiento, pero no se midió el costo de una pasada (hasta 200 curvas) en la ventana.
 
 Cada sesión anota acá lo que deja sin probar.
+
+- **Bloque 6, CAP-13 y SUP-13: lo que queda sin probar.** Corrió verde: ruff de lo tocado, `test_herramientas_solido`, `test_superficie_guias`, `test_sol09_solevacion`, `test_sol15_bocetos`, los tests de API, comandos y documentación, y las piezas `herramientas_solido` y `superficie_guias` en ventana transparente. Recetas viejas: comparadas contra `git HEAD`, 10 casos con diferencia 0. Falta de noche:
+  - La suite completa y la prueba de humo: se tocó `nucleo/superficies.py` (`solevar_superficie`, `_solevar_con_rieles`), `nucleo/editar_cara.py`, `nucleo/solidos_modificar.py` (`desfasar_caras`) y `ui/comandos/editar_cara.py`.
+  - `herramientas_solido` con `--ventana visible` una vez, y mirar `capturas/editar_cara_contorno.png`, `editar_cara_alt.png` y `panel_editar_cara_espaciado.png`. En la pieza Alt se simula solo la lectura de `keyboardModifiers` (el `sendEvent` no la actualiza): falta un Alt de teclado real al arrastrar la tríada, y ver que Windows no abra el menú de la ventana.
+  - Sin verificar en Fusion real (el MCP no conecta): qué hace Espaciado de contorno (Contour Spacing: la ayuda solo lo nombra y las capturas no lo muestran; acá suma una fila de cuadros a esa distancia del borde), qué hace Fusion con una vecina tangente (acá la cara sube a plomo), qué peso de Fusion equivale a cada peso de la solevación.
+  - No cubierto en la ventana: solevación cerrada con rieles y rieles hasta un punto (solo núcleo y API); Editar cara sobre una superficie cosida, sobre una cara ya editada y con la cara curva con vecinas tangentes (error claro) solo en el núcleo. Un Alt sobre un punto del contorno suma líneas adentro de la cara: la grilla sigue siendo un rectángulo, no agrega caras hacia afuera como T-Spline.
+  - El desfase de caras con agujero ciego ahora devuelve un sólido: mirar `offset_faces` y Mover cara sobre piezas reales con agujeros.
+
+- **ASM-15 y B-108: lo que queda sin probar.** Corrió verde: ruff, `test_posicion_asm`, `test_posicion_ventana` y los vecinos, y las piezas `posicion_asm` (nueva), `ensamblar` y `ensamblar_asm`, todas en ventana transparente. Falta de noche:
+  - La prueba de humo y la suite completa: se tocaron `visor3d.py`, `ventana.py` y `superposiciones.py`.
+  - `posicion_asm` con `--ventana visible` una vez, y mirar `capturas/posicion_asm_sin_capturar.png`, `posicion_asm_giro.png` y `posicion_asm_800x520.png`: la pregunta «Algunos componentes se movieron» solo se vio en ventana transparente.
+  - Sin verificar en Fusion real (el MCP no conecta): qué hace al soltar con el botón fuera de la ventana y si elegir sigue andando con algo sin capturar (acá queda en pausa, ver ASM-16).
+  - El archivo real `evidencias/grove_2026-10-28/interferencia_giro_10.omnicad` sigue dando lo mismo que antes (receta vieja, interferencia 10,3536 mm³): no se migra solo.
 
 - **BOC-52, BOC-77 y BOC-78: lo que queda sin probar.** Corrió verde: ruff, los tests de solver, boceto y boceto 3D, y las piezas `boceto_herramientas` (100, 0 ✗) y `restricciones_boceto`, las dos solo en ventana transparente. Falta para el cierre: (1) suite completa y prueba de humo; tocan `restricciones/boceto3d.py`, `inferencia3d.py`, `ui/triada3d.py` y `aplicar_restriccion` de `ui/editor_boceto.py`; (2) `boceto_herramientas` y `restricciones_boceto` con `--ventana visible`, y mirar `capturas/herr_boceto3d_medio_en_el_espacio.png`, `herr_boceto3d_tangente.png` y `herr_tangente_fuera_del_arco.png`; (3) `inferencias`, `auditoria_boceto`, `patrones_boceto` y `desfase_boceto`, que comparten `editor_boceto.py`; (4) una pieza real con ruta 3D de línea + arco tangente + spline, barrida con `sweep` y cambiando una cota: la spline toma la dirección del arco, pero nadie barrió por esa ruta; (5) la vista en perspectiva: la tolerancia del enganche en el espacio es la del objetivo de la vista, así que varía con la profundidad (la pieza prueba una vista inclinada a distancia normal); (6) con muchas curvas: 120 curvas dan 10 ms por movimiento y 95 ms al rearmar, medido solo en el núcleo; el solver 3D con tangentes o splines largas se siente lento al arrastrar (BOC-82). ⚠ Fusion real no conectó: BOC-79 y BOC-80. ⚠ BOC-81: tangente 3D con un arco libre todavía puede cambiarle el radio.
 
