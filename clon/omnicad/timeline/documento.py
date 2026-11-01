@@ -154,6 +154,7 @@ class Documento:
         self._memo = {}           # id de paso → su último cálculo (ver `_de_memo`)
         self._sin_partir = set()  # pasos de recetas viejas: su corte no divide el cuerpo (ver `_pasos_sin_partir`)
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
+        self.posicion_pendiente = None    # componentes arrastrados sin capturar (`timeline/posicion.py`); no se guarda
         self._ultimo_prevuelo = None    # (huella, cálculo) de la última previa; se comparte con Aceptar
         self.motor = motor.motor_activo()
         self._contador = 0

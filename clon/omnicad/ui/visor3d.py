@@ -471,6 +471,8 @@ class Visor3D(QOpenGLWidget):
         self._cache_dinamico = {}
         self.cortes = []                   # [(normal, punto)]: planos de recorte del análisis de sección
         self.transformaciones = {}         # id_cuerpo → matriz 4x4 solo de dibujo (animar uniones)
+        self.arrastre = None               # lo pone la ventana: arrastrar componentes (ui/arrastre_componente.py)
+        self._arrastrando = False
         self._texturas = {}                # clave de imagen → id de textura OpenGL (lienzos)
         self._presion = None               # posición del botón izquierdo al presionar (para detectar clic)
         self._lazo = None                  # puntos de la selección de forma libre mientras se arrastra
@@ -1138,6 +1140,33 @@ class Visor3D(QOpenGLWidget):
         if not self._entra_en_caja(cid, o, d, limite):
             return None
         return primer_rayo_triangulos(o, d, self._datos_pick(cid)[1], self._pick, ("bvh", id(self._formas[cid])))
+
+    @property
+    def _sin_capturar(self):
+        """Hay componentes dibujados fuera de su lugar: elegir y resaltar, que miran el modelo, quedan en pausa."""
+        return self.arrastre is not None and self.arrastre.mostrado
+
+    def cancelar_arrastre(self):
+        self._arrastrando = False
+        self.arrastre.cancelar()
+
+    def _soltar_arrastre(self):
+        self._arrastrando = False
+        self.arrastre.soltar()
+        self._presion, self._boton, self._accion = None, None, None
+
+    def cuerpo_bajo_cursor(self, pos):
+        """(id de cuerpo, punto 3D) del primero bajo el cursor tal como se dibuja, con `transformaciones`; o None."""
+        o, d = self.rayo(pos)
+        mejor_t, mejor = math.inf, None
+        for cid in self._formas:
+            m = self.transformaciones.get(cid)
+            inv = None if m is None else np.linalg.inv(m)
+            choque = self._primer_rayo_cuerpo(cid, *((o, d) if inv is None else (inv[:3, :3] @ o + inv[:3, 3], inv[:3, :3] @ d)),
+                                              mejor_t)
+            if choque is not None and choque[0] < mejor_t:
+                mejor_t, mejor = choque[0], cid
+        return None if mejor is None else (mejor, o + d * mejor_t)
 
     def elegir(self, pos, planos=True, caras=True):
         """Lo que hay bajo el cursor: {"ref", "plano", "marco", "tris"} (plano None = cara no plana); en una cara
@@ -2207,6 +2236,9 @@ class Visor3D(QOpenGLWidget):
 
     def mousePressEvent(self, e):
         self._cancelar_animacion()
+        if self._arrastrando:              # otro botón durante el arrastre de un componente: lo cancela
+            self.cancelar_arrastre()
+            return
         pos = e.position()
         self._presion = (pos, e.button())
         if e.button() == Qt.LeftButton and self.modo in ("elegir_plano", "mirar"):
@@ -2254,6 +2286,9 @@ class Visor3D(QOpenGLWidget):
         self._banda.raise_()
 
     def mouseReleaseEvent(self, e):
+        if self._arrastrando:
+            self._soltar_arrastre()
+            return
         if self._banda_inicio is not None:
             inicio, fin = self._banda_inicio, e.position().toPoint()
             rect = QRect(inicio, fin).normalized()
@@ -2261,7 +2296,7 @@ class Visor3D(QOpenGLWidget):
             self._banda_inicio = None
             libre, self._banda_libre = self._banda_libre, False
             self._presion = None
-            if self.modo == "sel_ventana" or libre:
+            if (self.modo == "sel_ventana" or libre) and not self._sin_capturar:
                 # De izquierda a derecha: lo que queda adentro; de derecha a izquierda: lo que toca (como Fusion).
                 poli = [(rect.left(), rect.top()), (rect.right(), rect.top()), (rect.right(), rect.bottom()),
                         (rect.left(), rect.bottom())]
@@ -2303,7 +2338,7 @@ class Visor3D(QOpenGLWidget):
         if e.button() == Qt.LeftButton and self.filtro:
             from .. import registro_uso
             inicio_pick = time.perf_counter() if registro_uso.activo is not None else None
-            hit = self.elegir_entidad(e.position())
+            hit = None if self._sin_capturar else self.elegir_entidad(e.position())
             if inicio_pick is not None:
                 registro_uso.activo.emitir("seleccion", {"categoria": hit["tipo"] if hit else "vacia",
                     "cantidad": int(hit is not None), "duracion_ms": (time.perf_counter() - inicio_pick) * 1000})
@@ -2313,12 +2348,13 @@ class Visor3D(QOpenGLWidget):
                 self.entidad_elegida.emit(hit)
         elif e.button() == Qt.RightButton:
             filtros = self.filtro or {"cara", "arista", "cuerpo", "perfil", "boceto"}
-            self.menu_contextual.emit(self.elegir_entidad(e.position(), filtros), e.globalPosition().toPoint())
+            hit = None if self._sin_capturar else self.elegir_entidad(e.position(), filtros)
+            self.menu_contextual.emit(hit, e.globalPosition().toPoint())
 
     def _pulsacion_larga(self):
         """Mantener apretado el botón izquierdo sin moverlo: lista de lo que hay bajo el cursor (incluido lo
         tapado), como el "Seleccionar otro" de Fusion."""
-        if self._presion is None or self._presion[1] != Qt.LeftButton:
+        if self._presion is None or self._presion[1] != Qt.LeftButton or self._sin_capturar:
             return
         pos = self._presion[0]
         entidades = self.entidades_bajo_cursor(pos)
@@ -2385,8 +2421,19 @@ class Visor3D(QOpenGLWidget):
         if self._t_largo.isActive() and self._presion is not None and \
                 (pos - self._presion[0]).manhattanLength() > 6:
             self._t_largo.stop()
+        if self._arrastrando:
+            if e.buttons() & Qt.LeftButton:
+                self.arrastre.mover(pos)
+            else:                          # el botón se soltó fuera de la ventana (Alt+Tab): el evento nunca llegó
+                self._soltar_arrastre()
+            return
         if self._banda_pendiente is not None and e.buttons() & Qt.LeftButton:
             if (pos.toPoint() - self._banda_pendiente).manhattanLength() > 6:
+                if self.arrastre is not None and self.arrastre.empezar(QPointF(self._banda_pendiente)):
+                    self._banda_pendiente, self._arrastrando, self._hover_ent = None, True, None
+                    self.entidad_sobre.emit(None)
+                    self.arrastre.mover(pos)
+                    return
                 self._empezar_banda(self._banda_pendiente)
                 self._banda_pendiente, self._banda_libre = None, True
             else:
@@ -2416,7 +2463,7 @@ class Visor3D(QOpenGLWidget):
                 self.update()
             return
         if self.filtro and not e.buttons() and self.modo is None:
-            hit = self.elegir_entidad(pos)
+            hit = None if self._sin_capturar else self.elegir_entidad(pos)
             anterior = self._hover_ent
             if (hit is None) != (anterior is None) or (hit and anterior and hit["ref"] != anterior["ref"]):
                 grupo = self.hits_texto(hit) if self.texto_entero else None
@@ -2463,7 +2510,9 @@ class Visor3D(QOpenGLWidget):
         super().leaveEvent(e)
 
     def keyPressEvent(self, e):
-        if e.key() == Qt.Key_Escape and self.modo:
+        if e.key() == Qt.Key_Escape and self._arrastrando:
+            self.cancelar_arrastre()
+        elif e.key() == Qt.Key_Escape and self.modo:
             if self.modo == "elegir_plano":
                 self.eleccion_cancelada.emit()
             self.set_modo(None)

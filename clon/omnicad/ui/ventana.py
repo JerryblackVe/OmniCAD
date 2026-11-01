@@ -44,6 +44,7 @@ from ..timeline.ops_chapa import es_patron_plano
 from ..timeline.ops_insertar import calcomanias_vigentes
 from . import formato, temas
 from .medidas import NOMBRES as _NOMBRES_ENTIDAD
+from .arrastre_componente import ArrastreComponente
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
@@ -170,6 +171,7 @@ class VentanaPrincipal(QMainWindow):
 
         self.visor = Visor3D()
         self.area = AreaVisor(self.visor)
+        self.visor.arrastre = self.arrastre = ArrastreComponente(self)
         try:                                        # dónde dejó la persona los paneles de comando (vacío: el de siempre)
             derecha, arriba = self.prefs["vista/posicion_panel_comando"].split(",")
             self.area.posicion_panel = (int(derecha), int(arriba))
@@ -1011,12 +1013,13 @@ class VentanaPrincipal(QMainWindow):
         """Dentro del boceto valen el Deshacer y el Rehacer del editor (historial propio): quedan activos siempre, no
         según el documento (que en un boceto nuevo todavía no tiene nada que deshacer ni rehacer)."""
         en_boceto = getattr(self, "modo_boceto", None) is not None and self.modo_boceto.activo
-        self.acciones["deshacer"].setEnabled(en_boceto or self.doc.puede_deshacer())
+        self.acciones["deshacer"].setEnabled(en_boceto or self.doc.puede_deshacer() or self.arrastre.mostrado)
         self.acciones["rehacer"].setEnabled(en_boceto or self.doc.puede_rehacer())
 
     def _actualizar(self):
         self._actualizar_unidades()
         estado = self.doc.estado_final
+        self.arrastre.sincronizar()
         self._refrescar_visibilidad()
         self.timeline.actualizar(self.doc)
         modificado = " *" if self.doc.modificado else ""
@@ -1034,6 +1037,8 @@ class VentanaPrincipal(QMainWindow):
         if hasattr(self, "comentarios") and self.comentarios.doc is self.doc:
             self.comentarios.actualizar()
             self.area.reubicar()
+        if self.timeline.estado.toolTip().startswith("Calculando"):
+            self._t_mensaje.stop()              # terminó: el aviso de `_calculando` no espera sus 30 s
         if not self._t_mensaje.isActive():
             self._mostrar_estado(self._info_sel or texto)
         self._anunciar_avisos()
@@ -1218,6 +1223,8 @@ class VentanaPrincipal(QMainWindow):
         """Anima una unión sin recalcular el modelo (como «Animar unión» del navegador de Fusion): mueve el
         dibujo de los cuerpos de sus componentes alrededor (o a lo largo) del eje de la unión."""
         from ..timeline.ops_ensamblar import MOVIMIENTOS, movimiento
+        if not self.arrastre.decidir():
+            return
         estado = self.doc.estado_final
         u = estado.uniones.get(op_id)
         if u is None:
@@ -1263,6 +1270,8 @@ class VentanaPrincipal(QMainWindow):
         """ENSAMBLAR › Estudio de movimiento: el panel con todas las uniones (ASM-14, `ui/estudio_movimiento.py`)."""
         from ..timeline.ops_ensamblar import MOVIMIENTOS
         from .estudio_movimiento import PanelEstudioMovimiento
+        if not self.arrastre.decidir():
+            return
         if not any(any(MOVIMIENTOS[u["tipo"]]) for u in self.doc.estado_final.uniones.values()):
             QMessageBox.information(self, NOMBRE_APP, "Todavía no hay uniones con movimiento para animar.")
             return
@@ -2378,7 +2387,7 @@ class VentanaPrincipal(QMainWindow):
     def _deshacer(self):
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.deshacer()
-        else:
+        elif not self.arrastre.deshacer():
             self._intentar(self.doc.deshacer)
             self.releer_espacios()      # deshacer también revierte doc.espacios (guiones de animación)
 
@@ -2400,6 +2409,8 @@ class VentanaPrincipal(QMainWindow):
     # ------------------------------------------------------------ diálogos de comando (estilo Fusion)
     def ejecutar_comando(self, comando, op=None, valores=None):
         """Abre el diálogo del comando sobre el lienzo. Con `op` edita ese paso del timeline."""
+        if not self.arrastre.decidir(comando if op is None else None):
+            return None
         if op is None and self.modo_boceto.activo:
             from .comandos.insertar_en_boceto import InsertarEnBoceto, admite
             if admite(comando):                # Insertar SVG / DXF / imagen: al boceto abierto, sin cambiar de plano
@@ -2548,6 +2559,8 @@ class VentanaPrincipal(QMainWindow):
 
     # ------------------------------------------------------------ crear / editar operaciones
     def _elegir_plano(self, proposito, aviso):
+        if not self.arrastre.decidir():
+            return
         if not self._salir_de_boceto():
             return
         self._eleccion = proposito

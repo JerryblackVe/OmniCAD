@@ -385,15 +385,19 @@ def _componente_de(estado, e):
     return estado.cuerpo(e.cuerpo).componente or ""
 
 
+def _mover_cuerpo(c, m):
+    if getattr(c, "tipo", "solido") == "malla":
+        nueva = c.forma.copia()
+        nueva.vertices = (np.c_[nueva.vertices, np.ones(len(nueva.vertices))] @ m.T)[:, :3]
+        c.forma = nueva
+    else:
+        c.forma = geo.transformar(c.forma, m)
+
+
 def _mover_componentes(estado, comps, m):
     for c in estado.cuerpos.values():
         if (c.componente or "") in comps:
-            if getattr(c, "tipo", "solido") == "malla":
-                nueva = c.forma.copia()
-                nueva.vertices = (np.c_[nueva.vertices, np.ones(len(nueva.vertices))] @ m.T)[:, :3]
-                c.forma = nueva
-            else:
-                c.forma = geo.transformar(c.forma, m)
+            _mover_cuerpo(c, m)
     for k in comps:
         if k in estado.componentes:
             actual = np.asarray(estado.componentes[k].get("matriz", np.identity(4).tolist()), float)
@@ -412,28 +416,6 @@ def grupo_rigido(estado, comp):
                 salida |= set(g)
                 creció = True
     return salida
-
-
-class OpComponente(Operacion):
-    """ENSAMBLAR › Nuevo componente [GUID-5966BF6B]: crea un componente y le pasa los cuerpos elegidos
-    («Desde cuerpos»). `fijo` es «Fijar» (Ground): una unión no puede moverlo."""
-    TIPO, ETIQUETA, ICONO = "componente", "Componente", "▣"
-    PARAMS = {"cuerpos": [], "fijo": False}
-
-    def dependencias(self):
-        return _deps_objetivo(self.p["cuerpos"]) - {self.id}
-
-    def ejecutar(self, estado, ctx):
-        estado.componentes[self.id] = {"nombre": self.nombre, "padre": "", "fijo": bool(self.p["fijo"]),
-                                       "matriz": np.identity(4).tolist()}
-        viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
-        for cid in self.p["cuerpos"]:
-            estado.cuerpo(cid).componente = self.id
-        for k in sorted(viejos):       # ASM-7: el componente de donde salió su único cuerpo queda vacío
-            if k in estado.componentes and not any(c.componente == k for c in estado.cuerpos.values()):
-                nombre = estado.componentes[k].get("nombre") or k
-                ctx.aviso(f"El componente «{nombre}» quedó sin cuerpos{' (estaba fijo)' if es_fijo(estado, k) else ''}: "
-                          "sus uniones ya no mueven ni sujetan nada. Borralo o pasale otro cuerpo.")
 
 
 def _migrador(clave):
@@ -460,6 +442,51 @@ def _version_de(p, clave):
 
 def _matriz_de(estado, comp):
     return np.asarray(estado.componentes.get(comp, {}).get("matriz", np.identity(4).tolist()), float)
+
+
+def _matriz_de_cuerpos(estado, cuerpos, nombre, ctx):
+    """La matriz con la que arranca un componente que recibe `cuerpos`. Cada cuerpo llega con el movimiento de su
+    componente anterior ya aplicado a la forma: si todos traen el mismo, el nuevo lo hereda y nadie se mueve. Si traen
+    distintos, ninguna matriz los representa juntos y cada uno vuelve a donde se modeló: su posición relativa deja de
+    depender de las uniones de los componentes de donde salieron (B-108)."""
+    elegidos = list({c.id: c for c in map(estado.cuerpo, cuerpos)}.values())
+    matrices = [_matriz_de(estado, c.componente) for c in elegidos]
+    comun = matrices[0] if matrices else np.identity(4)
+    if all(np.allclose(m, comun, atol=1e-9) for m in matrices):
+        return comun
+    for c, m in zip(elegidos, matrices, strict=True):
+        _mover_cuerpo(c, np.linalg.inv(m))
+    ctx.aviso(f"Los cuerpos de «{nombre}» venían movidos por uniones distintas: vuelven a donde se modelaron para "
+              "conservar su posición relativa.")
+    return np.identity(4)
+
+
+class OpComponente(Operacion):
+    """ENSAMBLAR › Nuevo componente [GUID-5966BF6B]: crea un componente y le pasa los cuerpos elegidos
+    («Desde cuerpos»). `fijo` es «Fijar» (Ground): una unión no puede moverlo. `version_pose` (2 en los nuevos; 1 en
+    las recetas viejas, ver `_migrador`): con 2 el componente tiene en cuenta el movimiento que traen sus cuerpos
+    (`_matriz_de_cuerpos`); con 1 arranca siempre en la identidad."""
+    TIPO, ETIQUETA, ICONO = "componente", "Componente", "▣"
+    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2}
+    migrar_receta = _migrador("version_pose")
+
+    def dependencias(self):
+        return _deps_objetivo(self.p["cuerpos"]) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        matriz = np.identity(4)
+        if _version_de(self.p, "version_pose") >= 2:
+            matriz = _matriz_de_cuerpos(estado, self.p["cuerpos"], self.nombre, ctx)
+        estado.componentes[self.id] = {"nombre": self.nombre, "padre": "", "fijo": bool(self.p["fijo"]),
+                                       "matriz": matriz.tolist(), "base": matriz.tolist()}
+        viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
+        for cid in self.p["cuerpos"]:
+            estado.cuerpo(cid).componente = self.id
+        for k in sorted(viejos):       # ASM-7: el componente de donde salió su único cuerpo queda vacío
+            if k in estado.componentes and not any(c.componente == k for c in estado.cuerpos.values()):
+                nombre = estado.componentes[k].get("nombre") or k
+                ctx.aviso(f"El componente «{nombre}» quedó sin cuerpos{' (estaba fijo)' if es_fijo(estado, k) else ''}: "
+                          "sus uniones ya no mueven ni sujetan nada. Borralo o pasale otro cuerpo.")
 
 
 def _camino_lazo(estado, comp1, comp2):
@@ -733,7 +760,8 @@ class OpUnion(Operacion):
                 if comp2 == comp1:
                     raise ErrorOperacion("Los dos orígenes están en el mismo componente.")
             camino = _camino_lazo(estado, comp1, comp2)
-            ya_movida = not np.allclose(_matriz_de(estado, comp1), np.identity(4), atol=1e-9)
+            base = estado.componentes[comp1].get("base", np.identity(4).tolist())       # la heredada no es movimiento
+            ya_movida = not np.allclose(_matriz_de(estado, comp1), base, atol=1e-9)
             if comp2 and ya_movida and not camino:
                 # Otra unión anterior ya movió el componente 1: se queda donde está (no se pisa ese movimiento).
                 ctx.aviso("Otra unión ya mueve el componente 1: la unión como está lo deja donde está. Para que "
@@ -1090,11 +1118,13 @@ def valores_de_estudio(estado, valores):
     return efectivos
 
 
-def poses_de_estudio(estado, valores):
+def poses_de_estudio(estado, valores, libres=None):
     """Estudio de movimiento: {id de cuerpo: matriz 4x4} para ver las uniones con otros valores SIN recalcular.
     `valores` = {id de unión: {movimiento: valor}} (grados o mm; lo que falte se queda como está). Una unión que
     sigue a un vínculo toma su valor de la otra. Cada unión mueve los cuerpos de sus componentes y también los de las
-    uniones que cuelgan de ellos (su componente 2 es uno de los que mueve)."""
+    uniones que cuelgan de ellos (su componente 2 es uno de los que mueve). `libres` = {componente: [x, y, z]}: lo que
+    se desplazan los componentes que ninguna unión mueve, y con ellos lo que cuelga."""
+    libres = libres or {}
     uniones = estado.uniones
     efectivos = valores_de_estudio(estado, valores)
     delta = {}
@@ -1111,10 +1141,13 @@ def poses_de_estudio(estado, valores):
     def total(k, vistos=()):
         padre = quien_mueve.get(uniones[k]["comp2"])
         if padre is None or padre == k or padre in vistos:
-            return delta[k]
+            return _tras(libres.get(uniones[k]["comp2"], (0.0, 0.0, 0.0))) @ delta[k]
         return total(padre, (*vistos, k)) @ delta[k]
 
-    return {cid: total(quien_mueve[c.componente]) for cid, c in estado.cuerpos.items() if c.componente in quien_mueve}
+    poses = {cid: _tras(libres[c.componente]) for cid, c in estado.cuerpos.items() if c.componente in libres}
+    poses.update({cid: total(quien_mueve[c.componente]) for cid, c in estado.cuerpos.items()
+                  if c.componente in quien_mueve})
+    return poses
 
 
 class OpInsertarDiseno(Operacion):

@@ -39,6 +39,7 @@ from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion,
                                       OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
                                       limites_expr, poses_de_estudio, principal_de, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
+from ..timeline.posicion import Arrastre, pendiente_de
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_boceto import nombre_nuevo, texto_expr
@@ -338,7 +339,8 @@ def _matrices(sesion):
 
 # ---------------------------------------------------------------- consulta
 @herramienta("get_assembly", "ensamble", "Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: "
-             "traslación y rotación respecto de donde se modelaron, caja envolvente), uniones (tipo, componentes, "
+             "traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar "
+             "(uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, "
              "valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, "
              "grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz.")
 def get_assembly(sesion):
@@ -359,6 +361,7 @@ def get_assembly(sesion):
                              "z_axis": None if plano is None else [_r(v) for v in plano.normal]})
     raiz = [c for c in cuerpos_del_modelo(estado) if not c.componente]
     return {"components": [info_componente(sesion, k) for k in estado.componentes],
+            "uncaptured_position": pendiente_de(doc) is not None,
             "joints": [info_union(sesion, o) for o in ops if isinstance(o, OpUnion)],
             "joint_origins": origenes, "rigid_groups": grupos,
             "motion_links": [_info_vinculo(o) for o in ops if isinstance(o, OpVinculoMovimiento)],
@@ -1184,26 +1187,100 @@ def set_component_initial_position(sesion, component: str, offset: list[Expr] | 
     return resultado
 
 
+def _capturar_arrastres(sesion):
+    """Pasa lo arrastrado sin capturar al timeline: el valor de cada unión y un paso de posición por componente libre,
+    antes de la primera unión que cuelga de él para que esa unión y su marco lo sigan."""
+    doc = sesion.doc
+    p = pendiente_de(doc)
+    if p is None:
+        return
+    for uid, valores in p.valores.items():
+        op = doc.operacion(uid)
+        nuevos = {c: f"{v:.9g} deg" if c.startswith("giro") else f"{v:.9g} mm" for c, v in valores.items()}
+        doc.reemplazar(uid, OpUnion(op.id, op.nombre, op.suprimida, **dict(
+            op.p, **nuevos, accionada=siguiente_accion(doc.operaciones))))
+    for comp, d in p.libres.items():
+        op = OpPosicionInicial(doc.nuevo_id(), nombre_paso(sesion, None, "Posición inicial", OpPosicionInicial), componente=comp,
+                               **{c: f"{v:.9g} mm" for c, v in zip("xyz", d, strict=True)})
+        doc.agregar(op)
+        cuelga = (i for i, o in enumerate(doc.operaciones) if p.estado.uniones.get(o.id, {}).get("comp2") == comp)
+        primera = next(cuelga, None)
+        if primera is not None:
+            doc.mover(op.id, primera)
+
+
 @herramienta("capture_position", "ensamble", "Captura la posición actual de los componentes (ENSAMBLAR › Posición › "
-             "Capturar posición): queda como la de referencia a la que vuelve revert_position. No mueve nada.",
+             "Capturar posición): queda como la de referencia a la que vuelve revert_position. Lo arrastrado con "
+             "drag_component pasa al timeline: el valor de cada unión y un paso de posición por componente libre.",
              modifica=True)
 def capture_position(sesion, components: list[str] | None = None, name: str | None = None):
     """
     components: componentes a capturar (id, nombre o un cuerpo); vacío = todos.
     name: nombre del paso; vacío = «Capturar posición<n>».
     """
+    _capturar_arrastres(sesion)
     return _paso_componentes(sesion, OpCapturarPosicion, "Capturar posición", components, name)
 
 
 @herramienta("revert_position", "ensamble", "Revierte los componentes a su última posición capturada con "
-             "capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron.",
-             modifica=True)
+             "capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron. Si hay "
+             "algo arrastrado sin capturar, solo descarta eso: no agrega ningún paso.", modifica=True)
 def revert_position(sesion, components: list[str] | None = None, name: str | None = None):
     """
     components: componentes a revertir (id, nombre o un cuerpo); vacío = todos.
     name: nombre del paso; vacío = «Revertir posición<n>».
     """
+    if pendiente_de(sesion.doc) is not None:
+        sesion.doc.posicion_pendiente = None
+        return {"reverted_uncaptured": True,
+                "components": [info_componente(sesion, k) for k in sesion.doc.estado_final.componentes]}
     return _paso_componentes(sesion, OpRevertirPosicion, "Revertir posición", components, name)
+
+
+def _componentes_en_poses(sesion, estado, poses):
+    """Información de cada componente como si sus cuerpos estuvieran en `poses`, con la traslación que tiene hoy."""
+    movido = estado.copia()
+    for k in estado.componentes:
+        m = next((poses[c.id] for c in estado.cuerpos.values() if c.componente == k and c.id in poses), None)
+        if m is not None:
+            _mover_componentes(movido, {k}, m)
+    return [dict(info_componente(sesion, k, movido), previous_translation=info_componente(sesion, k)["translation"])
+            for k in estado.componentes]
+
+
+@herramienta("drag_component", "ensamble", "Arrastra un componente como con el mouse en el visor (ENSAMBLAR › "
+             "Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. NO cambia "
+             "el documento: la posición queda sin capturar hasta capture_position o revert_position, y cualquier otro "
+             "cambio del documento la descarta. Devuelve dónde quedó cada componente.")
+def drag_component(sesion, component: str, offset: list[float], point: list[float] | None = None):
+    """
+    component: id, nombre o un cuerpo del componente.
+    offset: hacia dónde se lleva el punto agarrado [x, y, z] en mm.
+    point: punto agarrado [x, y, z] en mm; vacío = el centro de la caja de un cuerpo del componente.
+    """
+    k = componente(sesion, component)
+    estado = sesion.doc.estado_final
+    if len(offset) != 3 or (point is not None and len(point) != 3):
+        raise error("INVALID_ARGUMENTS", "offset y point van como [x, y, z].")
+    if not np.isfinite([*offset, *(point or ())]).all():
+        raise error("INVALID_ARGUMENTS", "offset y point tienen que ser números finitos.")
+    cuerpo = next((c for c in estado.cuerpos.values() if c.componente == k), None)
+    if cuerpo is None:
+        raise error("INVALID_ARGUMENTS", f"El componente «{component}» no tiene cuerpos que arrastrar.")
+    if point is None:
+        p = pendiente_de(sesion.doc)
+        centro = np.mean(geo.caja_envolvente(cuerpo.forma) if cuerpo.tipo != "malla" else cuerpo.forma.caja(), axis=0)
+        pose = p.poses().get(cuerpo.id, np.identity(4)) if p is not None else np.identity(4)
+        point = (pose @ np.r_[centro, 1.0])[:3]
+    try:
+        arrastre = Arrastre(sesion.doc, cuerpo.id, point)
+    except ErrorOperacion as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from None
+    arrastre.mover(np.add(point, offset))
+    arrastre.soltar()
+    p = pendiente_de(sesion.doc)
+    return {"components": _componentes_en_poses(sesion, estado, p.poses() if p is not None else {}),
+            "uncaptured": p is not None, "document_changed": False}
 
 
 @herramienta("motion_study_pose", "ensamble", "Estudio de movimiento con varias uniones a la vez (ENSAMBLAR › Estudio de "
@@ -1235,12 +1312,5 @@ def motion_study_pose(sesion, values: dict):
         if not np.isfinite(valor):
             raise error("INVALID_ARGUMENTS", f"El valor de «{ref}» tiene que ser finito.")
         pedidos.setdefault(op.id, {})[clave] = valor
-    poses = poses_de_estudio(estado, pedidos)
-    movido = estado.copia()
-    for k in estado.componentes:
-        m = next((poses[c.id] for c in estado.cuerpos.values() if c.componente == k and c.id in poses), None)
-        if m is not None:
-            _mover_componentes(movido, {k}, m)
-    return {"components": [dict(info_componente(sesion, k, movido),
-                                previous_translation=info_componente(sesion, k)["translation"])
-                           for k in estado.componentes], "document_changed": False}
+    return {"components": _componentes_en_poses(sesion, estado, poses_de_estudio(estado, pedidos)),
+            "document_changed": False}

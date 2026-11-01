@@ -244,6 +244,16 @@ def test_execute_code_en_vivo_solo_con_su_preferencia(puente, ventana):
         c.cerrar()
 
 
+def test_drag_component_en_vivo_se_ve_en_la_ventana(puente, ventana):
+    c = _cliente(puente)
+    cuerpo = c.pedir("create_box", {"length": 10, "width": 10, "height": 10, "x": 700})["result"]["bodies_created"][0]["id"]
+    assert c.pedir("create_component", {"bodies": [cuerpo], "name": "EnVivo"})["ok"]
+    assert c.pedir("drag_component", {"component": "EnVivo", "offset": [0, 30, 0]})["ok"]
+    assert (ventana.visor.transformaciones[cuerpo][:3, 3] == [0, 30, 0]).all() and not ventana.arrastre.barra.isHidden()
+    assert c.pedir("revert_position", {})["result"]["reverted_uncaptured"] is True
+    assert not ventana.visor.transformaciones and ventana.arrastre.barra.isHidden()
+
+
 def test_execute_code_en_vivo_con_plazo(puente, ventana):
     from omnicad.api.herramientas_avanzado import PLAZO_CODIGO
     from omnicad.servidor_mcp.puente_cliente import TIEMPO_RESPUESTA

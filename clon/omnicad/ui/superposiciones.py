@@ -473,6 +473,7 @@ class AreaVisor(QWidget):
         self.paleta = None
         self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
+        self.barra_posicion = None        # panel «Posición»: componentes movidos sin capturar (arriba al centro)
         self.posicion_panel = None        # dónde lo dejó la persona: (distancia al borde derecho, distancia al borde de arriba)
         self.al_mover_panel = None        # función(posicion_panel o None): la ventana la guarda en las preferencias
         self.extras = []                  # visores de las vistas múltiples
@@ -589,6 +590,11 @@ class AreaVisor(QWidget):
             wid.raise_()
         self.viewcube.move(g.right() - self.viewcube.width() - 14, g.top() + 12)
         self.viewcube.raise_()
+        if self.barra_posicion is not None and self.barra_posicion.isVisible():
+            self.barra_posicion.adjustSize()
+            libre = max((wid.geometry().right() for wid in self.arriba_izq if wid.isVisible()), default=g.left()) + 8
+            self.barra_posicion.move(max(libre, g.left() + (g.width() - self.barra_posicion.width()) // 2), g.top() + 8)
+            self.barra_posicion.raise_()
         y = self.viewcube.y() + self.viewcube.height() + 10
         abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8
         fija = self._posicion_fija_panel(g)

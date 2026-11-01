@@ -326,6 +326,7 @@ class PuenteAgentes(QObject):
             if v.seleccion:
                 v._seleccionar([])                           # lo elegido puede ya no existir
             v._actualizar()                                  # título, deshacer, «modificado» tras un rollback
+        v.arrastre.sincronizar()                             # drag_component no cambia el documento: se dibuja igual
         if modifica and respuesta["ok"]:
             nuevo = f" → {self.sesion.doc.operaciones[-1].nombre}" if len(self.sesion.doc.operaciones) > pasos else ""
             v.mensaje(f"Agente IA: {herramienta}{nuevo}", 5000)

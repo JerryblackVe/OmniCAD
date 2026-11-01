@@ -151,7 +151,7 @@ class NuevoComponente(Comando):
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos del componente.")
         return self.crear_op(OpComponente, v, ctx, cuerpos=[h["ref"]["cuerpo"] for h in v["cuerpos"]],
-                             fijo=v["fijo"])
+                             fijo=v["fijo"], version_pose=_version(ctx, OpComponente, "version_pose"))
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
