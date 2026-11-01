@@ -115,6 +115,11 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **El chat coordinador ya corre en `bypassPermissions`**: sus comandos no piden permiso. Lo que SÍ pide
   aprobación y corta el loop es **borrar sesiones** (tarjeta en todos los modos) y **abrir sesiones nuevas desde un
   aviso automático** (solo se puede proponer una tarjeta). Por eso **no se borran ni se abren sesiones entre fases**.
+- **OBLIGATORIO (Gerardo, 2026-10-31): no pedirle permiso para abrir sesiones.** Prohibido preguntarle si se abre una
+  sesión y hacerle aprobar una tarjeta que se puede evitar. El coordinador reusa las sesiones que ya existen
+  (`clear_session` + `SendMessage`, sin tarjeta) y llama a `start_session` solo si no queda ninguna para reusar, con
+  `mcp__ccd_session__start_session` permitido en `.claude/settings.local.json`. Si aun así la app muestra su tarjeta,
+  no hay ajuste que la apague desde acá: se le avisa en una línea.
 - **Reusar UNA sesión de ejecución**: al cerrar una fase y commitearla, vaciarla con `clear_session` (en bypass no
   pide aprobación) y mandarle el brief de la fase siguiente con `SendMessage` (anda desde un aviso automático). El
   brief tiene que ser autocontenido (el clear borra el contexto). Se borra la sesión solo al terminar el plan o si
@@ -142,5 +147,41 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   la tarea completa, sin sobre-ingeniería.
 - Usar SIEMPRE la skill `/ponytail-review` antes de dar por terminado un cambio de código:
   revisión de lógica, seguridad, carga real, tests y que cada línea sea necesaria.
+- **OBLIGATORIO para TODAS las sesiones de código** («todo prompt a un agente lleva `/fable-method` y `/ponytail`
+  al inicio y `/ponytail-review` al final, con la herramienta Skill»; también está en el CLAUDE.md global).
+  Cada tarea nueva que Gerardo manda abre una sesión (`start_session`), y su brief lleva ARRIBA DE TODO, en el
+  `prompt` (nunca solo en `background`), el bloque: «invocá con la herramienta Skill `fable-method` y `ponytail`
+  al empezar, `plan-then-do`, `tool-calling-guard`, `verify-before-commit` (y `omnicad-test` si prueba la ventana),
+  y `ponytail-review` antes de cerrar». El coordinador comprueba en el informe que la sesión pegó la salida real
+  de `ponytail-review`; si no, se la pide antes de integrar.
+
+## Regla: pruebas pesadas de noche y lista viva
+- Mientras haya sesiones o pedidos abiertos **no se lanza el cierre completo** (suite, piezas de ventana, humo):
+  queda vieja con el próximo cambio. Solo se integra y se verifica lo mínimo (git, `merge-tree`, tests de lo tocado).
+- Todo lo que falta probar vive en **`docs/auditorias/prueba_nocturna_2026-10-31.md`** (la fecha del nombre es la
+  del documento vivo; si se renombra, actualizar `docs/README.md`). **Cada vez que Gerardo pasa una tarea nueva,
+  el coordinador actualiza esa lista en el mismo turno**: qué piezas y tests nuevos trae, qué quedó sin verificar.
+- El cierre completo corre con `scripts/cierre_completo.sh` solo cuando Gerardo diga «corré todo» o lance la
+  sesión nocturna. Lo verde se borra de la lista; lo rojo va a `docs/seguimiento/`.
+
+## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
+- **Cada tarea lleva su modelo y su esfuerzo elegidos a conciencia**, y se dicen en una línea ANTES de abrir la
+  sesión (`start_session`, `model` y `effort`) o de mandar el trabajo. Nunca el valor por defecto ni «alto» por
+  reflejo. El coordinador administra el gasto de tokens de Gerardo: es su responsabilidad.
+- Tabla de decisión:
+
+  | Tarea | Modelo | Esfuerzo |
+  |---|---|---|
+  | Mecánica, formato fijo, mucho volumen, leer/buscar | Haiku 4.5 (o OpenCode con Sol) | sin esfuerzo |
+  | Arreglo chico, UI, validaciones, tests, docs | Sonnet 5 | bajo o medio |
+  | Feature normal, refactor, revisar un diff | Sonnet 5 | medio |
+  | Solver, geometría difícil, arquitectura, auditoría a fondo | Opus 5 | alto |
+  | Lo más difícil o agéntico largo, última instancia | Fable 5 | alto |
+
+- **La calidad del código manda**: si la tarea toca solver, geometría, núcleo o es delicada, no se baja el
+  esfuerzo para ahorrar. Se ahorra en lo mecánico, no en lo que decide si el código anda.
+- No se cambia el modelo de una sesión en marcha (corta y pierde contexto) salvo que se quede corta.
+- Al integrar una sesión, anotar si el modelo elegido alcanzó; si falló por quedarse corto, subir un escalón la
+  próxima vez, y si sobró, bajarlo.
 
 @AGENTS.md

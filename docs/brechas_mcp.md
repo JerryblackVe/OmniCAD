@@ -141,7 +141,7 @@ La operación existe y funciona por `run_operation`. Falta la herramienta con no
 | MCP-55 | Ampliar `sketch_view` | Paleta del boceto: rejilla, forzar, corte, puntos, restricciones | `ui/modo_boceto.py:135-139` | baja |
 | MCP-93 | Ampliar `select_bodies` | Opciones `invert`, `by_name` y `by_size` (claves de cinta `invertir_seleccion`, `seleccion_nombre`, `seleccion_tamano`). No es MCP-50 | `ui/ventana.py:420-421` | baja |
 
-Se descartan porque no le sirven a un agente: tema, paneles, pantalla completa, atajos, caja de herramientas, menú
+Se descartan porque no le sirven a un agente: tema, paneles (también dónde se arrastró el panel de comando: `vista/posicion_panel_comando`, un gesto de la persona sobre la ventana, fuera de la lista blanca de `set_preference`), pantalla completa, atajos, caja de herramientas, menú
 radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y del ViewCube, ayuda.
 
 Íconos (plan_iconos.md, 2026-10-26): los íconos del timeline, las insignias de operación y de estado, la gramática visual y el tema de los
@@ -255,6 +255,13 @@ Se descartan, porque no le sirven a un agente:
   `spacing`, `angle/angle2` o `direction1_line/direction2_line`, `symmetric/symmetric2`, `count`, `total_angle` con signo,
   `center_x/center_y/center_point`, `suppress`). Las reglas (`Boceto.validar_patron`, `comprobar_patron`, `previa_patron`) son las
   mismas de la ventana y de la API; `get_sketch › patterns › parameters` devuelve los valores con esos nombres.
+
+## Lo que la ventana hace y a un agente no le sirve (decidido a propósito)
+
+| Qué | Por qué no tiene herramienta |
+|---|---|
+| Estudio de movimiento: reproducir hacia atrás y adelante, paso a paso, modo (en un sentido, ida y vuelta, bucle) y velocidad (ASM-14) | Es tiempo real de la vista: un agente pide un valor y lee el resultado. Lo que sí le sirve (todas las uniones con su valor a la vez, y dónde queda cada componente) es `motion_study_pose`; recorrer una unión con choques es `motion_study`. |
+| «Animar» del diálogo Vínculo de movimiento (ASM-13) | Mueve solo el dibujo mientras el diálogo está abierto. Para ver el vínculo, `create_motion_link` y `motion_study_pose`. |
 
 ## Hallazgos de la auditoría
 

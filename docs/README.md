@@ -70,6 +70,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | Documento | IDs |
 |---|---|
 | [brechas_fusion.md](brechas_fusion.md) | Fusion 360 |
+| [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-12: herramientas de SÓLIDO contra capturas de Fusion |
 | [brechas_freecad.md](brechas_freecad.md) | F1–F23 |
 | [brechas_plasticity.md](brechas_plasticity.md) | PL1–PL13 |
 | [brechas_blender.md](brechas_blender.md) | B1–B19 (no confundir con los bugs B-n) |
@@ -90,7 +91,10 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [auditorias/previa-asincrona-2026-10-29.md](auditorias/previa-asincrona-2026-10-29.md) | Previa en proceso aparte para Empalme, Chaflán, booleanas, patrones y Vaciado: cuadros, asas y latencia hasta el sólido exacto por comando, y la causa del «piso» del Vaciado (P-55). |
 | [auditorias/patrones-solidos-2026-10-31.md](auditorias/patrones-solidos-2026-10-31.md) | Patrón rectangular, circular, en trayectoria, en puntos y Multitransformación: qué dice la ayuda de Fusion, matriz por herramienta (problema, evidencia, causa, corrección, prueba, pendiente) y las filas PAT-1 a PAT-6 del seguimiento |
 | [auditorias/desfase_boceto_2026-10-31.md](auditorias/desfase_boceto_2026-10-31.md) | Matriz de equivalencia del Desfase del boceto contra Fusion (31 filas, con su evidencia: video, ayuda, código, pruebas) y lo que no se pudo verificar |
-| [informe_tortura_2026-10-17.md](informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |
+| [auditorias/ui_paneles_2026-10-31.md](auditorias/ui_paneles_2026-10-31.md) | Paneles de herramienta: sistema común (cabecera por modo, jerarquía «Más opciones», selección legible, ancho fijo, mensajes tipados), matriz de los 148 comandos y 16 diálogos (antes/después, verificación) y límites; filas `UI-1` a `UI-7` del seguimiento |
+| [auditorias/rust-pipeline-2026-10-31.md](auditorias/rust-pipeline-2026-10-31.md) | Pipeline de rendimiento: qué pasa a Rust y qué no, estado de los planes anteriores, mediciones de hoy (proyectos de 292 pasos, `.f3d`, mallas, rayos, boceto), fases, permisos y pruebas de aceptación (filas `RS-X*`) |
+| [auditorias/informe_tortura_2026-10-17.md](auditorias/informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |
+| [auditorias/prueba_nocturna_2026-10-31.md](auditorias/prueba_nocturna_2026-10-31.md) | Todo lo que falta probar sobre el código final y en qué orden correrlo de noche (se borra a medida que queda verde). Script: `scripts/cierre_completo.sh` |
 | [comparacion_motores.md](comparacion_motores.md) | OpenCascade contra OmniKernel. **Generado**: `scripts/comparar_motores.py` |
 | [inventario_motor.md](inventario_motor.md) | Funciones del núcleo por motor. **Generado**: `scripts/estado_motor.py` |
 | [novedades/](novedades/) | Novedades mensuales de Fusion, Blender y Rhino. **Generado**: `scripts/novedades.py` |

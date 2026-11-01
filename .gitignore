@@ -9,9 +9,6 @@ __pycache__/
 analisis/
 evidencias/
 
-# Ajeno al proyecto
-/skills/
-
 # Autoguardados
 *.autoguardado.*
 *.egg-info/
