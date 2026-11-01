@@ -21,13 +21,17 @@ print((ctypes.windll.kernel32.GetTickCount() - l.dwTime)//1000)")
 }
 $PY -m ruff check . > "$S/ruff.txt" 2>&1
 echo "ruff exit=$? | $(tail -n 1 "$S/ruff.txt")" >> "$R"
+MOTOR=tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado
 ls tests/test_*.py | sort > "$S/lista.txt"
 split -n l/6 -d "$S/lista.txt" "$S/parte_"
 for p in "$S"/parte_0*; do
   n=$(basename "$p")
-  $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest $(tr '\n' ' ' < "$p") -q -W error -p no:cacheprovider > "$S/$n.txt" 2>&1
+  $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest $(tr '\n' ' ' < "$p") -q -W error -p no:cacheprovider --deselect "$MOTOR" > "$S/$n.txt" 2>&1
   echo "$n exit=$? | $(tail -n 1 "$S/$n.txt")" >> "$R"
 done
+# Abre otra app entera dentro de pytest: junto a una tanda pasa el tope de memoria de turno.py (MemoryError, 2026-11-01).
+$PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "$MOTOR" -q -W error -p no:cacheprovider > "$S/motor.txt" 2>&1
+echo "motor exit=$? | $(tail -n 1 "$S/motor.txt")" >> "$R"
 $PY ../scripts/prueba_ui/todo.py > "$S/ui.txt" 2>&1
 echo "ui exit=$? | $(grep -cE '[1-9][0-9]* con ✗' "$S/ui.txt") piezas con ✗" >> "$R"
 if espera_ocio 120 10800; then
