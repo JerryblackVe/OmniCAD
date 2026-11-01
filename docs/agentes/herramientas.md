@@ -4180,13 +4180,14 @@ Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: trasl
 
 ### `create_component`
 
-Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al nuevo.
+Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `bodies` (lista de texto; obligatorio): ids o nombres de los cuerpos del componente (al menos uno).
   - `name` (texto; opcional, por defecto `null`): nombre del componente; vacío = «Componente<n>».
   - `grounded` (true/false; opcional, por defecto `false`): true para fijarlo (Ground): ninguna unión lo mueve.
+  - `parent` (texto; opcional, por defecto `null`): componente padre (id, nombre o uno de sus cuerpos); vacío = la raíz (Parent de Fusion).
 - CLI: `omnicad call create_component --doc pieza.omnicad bodies=…`
 
 ### `ground_component`
@@ -4342,6 +4343,7 @@ Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven juntos; u
 - Parámetros:
   - `components` (lista de texto; obligatorio): componentes del grupo (id, nombre o uno de sus cuerpos); al menos dos distintos.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Grupo rígido<n>».
+  - `include_children` (true/false; opcional, por defecto `false`): true suma al grupo los subcomponentes de cada uno («Incluir componentes secundarios»); false los deja libres dentro de su padre.
 - CLI: `omnicad call create_rigid_group --doc pieza.omnicad components=…`
 
 ### `create_motion_link`

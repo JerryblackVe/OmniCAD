@@ -178,14 +178,12 @@ la ayuda de Fusion y el video de uso. Sin verificar 1. Informe y matriz por herr
 
 Salió de los dos videos de uso comparados con SolidCraft y de abrir los 148 comandos y 16 diálogos en la ventana real.
 Sistema común, matriz por herramienta y capturas antes/después: [ui_paneles_2026-10-31.md](../auditorias/ui_paneles_2026-10-31.md).
-Abierto 1 · Parcial 1 · Sin verificar 2.
+Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| UI-1 | Los diálogos de render no usan el sistema común hasta el final | Parcial | Media | Ya están medidos (`dialogos_inventario.py`), con ancho de `ANCHOS`, secciones, avisos tipados y la cabecera movible. Falta: los paneles flotantes Escena y Aspecto (≈ 560 px) no tienen barra de desplazamiento ni `ajustar_alto` como `PanelComando`: en una ventana de render de menos de ≈ 600 px de lienzo se cortan por abajo; `DialogoLienzo` y `VisorImagen` no llevan mensajes tipados (no tienen nada que avisar hoy) | omnicad/ui/render.py · tests/test_render_dialogos_comunes.py | 2026-10-31 |
 | UI-2 | El escalado real de Windows (125 % y 150 %) y los monitores nuevos no se probaron | Sin verificar | Baja | Se simuló con letra al 125/150 % y ventanas de 1024×640 y 800×520. Falta correr `paneles_inventario.py` y `paneles_temas.py` con la pantalla en 125 % y 150 % y moviendo la ventana de un monitor a otro | scripts/prueba_ui/paneles_temas.py | 2026-10-31 |
 | UI-6 | Las agrupaciones de opciones de cada comando no se compararon una por una con la ayuda de Fusion | Sin verificar | Media | Los agentes miraron la ayuda de Fusion cuando dudaron (p. ej. Bobina); no hay una matriz comando por comando de qué opciones agrupa Fusion y cuáles son «avanzadas» allá | docs/auditorias/ui_paneles_2026-10-31.md | 2026-10-31 |
-| UI-8 | El panel Carácter (texto del boceto) mide ≈ 540 px y en una ventana baja se corta por abajo | Abierto | Baja | Es más alto que la vista a 1280×720 (y más aún a 1024×640 y 800×520): solo su cabecera queda a la vista; no tiene barra como los paneles de comando. Falta un `QScrollArea` en el cuerpo y un `ajustar_alto` que `AreaVisor.reubicar` ya sabe llamar | scripts/prueba_ui/paneles_boceto.py (`cabecera_entra`) | 2026-10-31 |
 
 ## Menú del boceto (decisión del usuario)
 
