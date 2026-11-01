@@ -242,7 +242,7 @@ class SupSolevacion(Solevacion):
     def crear_op(self, clase, v, ctx, **params):
         for k in ("operacion", "objetivos"):
             params.pop(k, None)
-        return super().crear_op(OpSupSolevacion, v, ctx, **params)
+        return super().crear_op(OpSupSolevacion, v, ctx, condicion_exacta=True, **params)
 
     def desde_op(self, op, ctx):
         v = dict(super().desde_op(op, ctx), operacion="nuevo")

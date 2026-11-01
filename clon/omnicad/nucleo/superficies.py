@@ -913,9 +913,10 @@ def _domo(punto, w, peso):
     return salida
 
 
-def _auxiliares(sec, otra, cond, signo):
+def _auxiliares(sec, otra, cond, signo, exacta=False):
     """Secciones auxiliares de la condición `cond` del perfil `sec` hacia su vecino `otra`, de la más cercana a la más
-    lejana. La solevación pasa por ellas: así sale con la dirección pedida (aproximación, como en la solevación sólida)."""
+    lejana. La solevación pasa por ellas: así sale con la dirección pedida (aproximación, como en la solevación sólida).
+    Con `exacta` un perfil cerrado también se corre punto por punto, y el ángulo vale en todo el contorno."""
     from . import solidos_crear as sc
     tipo, peso = cond["tipo"], float(cond.get("peso", 1.0))
     if peso <= 0:
@@ -938,9 +939,12 @@ def _auxiliares(sec, otra, cond, signo):
         if not 0 < angulo < 180:
             raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados.")
         n = _normal_seccion(w, hacia)
-        if BRep_Tool.IsClosed_s(w):
+        if BRep_Tool.IsClosed_s(w) and not exacta:
             return [sc._auxiliar_direccion(w, n, delta, angulo, signo)]
         inclinacion = 1.0 / math.tan(math.radians(angulo))
+        if BRep_Tool.IsClosed_s(w):                # hacia afuera del contorno, recorra para donde recorra
+            q, t = sc._punto_en(w, 0.25)
+            signo = signo * (1.0 if float(np.cross(t, n) @ (q - c)) > 0 else -1.0)
         return [_auxiliar_puntos(w, lambda _s, _q, t: _unitario(n + np.cross(t, n) * inclinacion * signo), delta)]
     if tipo not in ("tangente", "suave"):
         raise geo.ErrorGeometria(f"Condición de borde desconocida: {tipo}")
@@ -993,38 +997,82 @@ def _esquinas(alambre, n):
 
 _MUESTRAS_PERFIL = 721    # puntos por perfil para ubicar los rieles y repartir el contorno
 _SECCIONES_TRAMO = 6      # secciones por las que pasa la superficie entre dos perfiles
+_BANDA_RIEL = 0.1         # fracción del contorno, a cada lado de un riel, donde la superficie vuelve a él
 
 
-def _solevar_con_rieles(perfiles, rieles):
+def _derivadas(q, auxiliares, sentido, peso):
+    """(primera, segunda) derivada de la superficie en los puntos `q` de un perfil, a partir de sus secciones auxiliares: una da la
+    dirección; dos (Suave) además la curvatura de la cara, que se lee de la parábola por los tres. `sentido` -1 en el último perfil,
+    que se recorre llegando. El peso es la velocidad con que sale: 1 es la de avanzar a lo largo de la solevación."""
+    v1 = auxiliares[0] - q
+    t1 = np.maximum(np.linalg.norm(v1, axis=-1, keepdims=True), 1e-12)
+    if len(auxiliares) == 1:
+        return sentido * peso * v1 / t1, None
+    v2 = auxiliares[1] - q
+    t2 = np.maximum(np.linalg.norm(v2, axis=-1, keepdims=True), 1e-12)
+    curva = 2.0 * (v2 / t2 - v1 / t1) / np.maximum(t2 - t1, 1e-12)
+    d = v1 / t1 - curva * t1 / 2.0
+    return sentido * peso * d / np.maximum(np.linalg.norm(d, axis=-1, keepdims=True), 1e-12), peso * peso * curva
+
+
+def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrada=False, exacta=False):
     """Rails de la solevación [SFC-REF-LOFT-DLG]: cualquier cantidad de rieles, que tocan cada perfil y terminan en el
     primero y el último (o más allá). OCC admite uno solo y con perfiles lisos, así que se arman secciones intermedias:
     cada una es la interpolación de los perfiles más un corrimiento que la lleva hasta los rieles, repartido entre ellos
     a lo largo del contorno, y se soleva entre todas. Las esquinas se conservan si en todos los perfiles caen entre los
-    mismos rieles; si no, el contorno queda liso entre riel y riel."""
-    from scipy.interpolate import CubicSpline
+    mismos rieles; si no, el contorno queda liso entre riel y riel. `secs` son los perfiles como ("alambre" o "vertice",
+    forma): un punto en un extremo vale si los rieles llegan a él. Con `cerrada` los rieles son lazos que pasan por todos.
+
+    Las condiciones de borde mandan en el contorno y los rieles en sus puntos: entre un riel y otro la salida es la de la
+    condición (la interpolación pasa por las secciones auxiliares y ahí el corrimiento no cuenta), y en la franja `_BANDA_RIEL`
+    que rodea a cada riel la superficie vuelve a él, que la superficie tiene que seguir.
+
+    Con `exacta` Dirección, Tangente y Suave no pasan por las auxiliares: de ellas sale la derivada con que la interpolación deja
+    el perfil (la segunda en Suave), y así se cumplen en el perfil, con el peso como velocidad de salida. También sirve sin rieles,
+    si los perfiles son compatibles (`_exacta_posible`)."""
+    from scipy.interpolate import CubicSpline, make_interp_spline
 
     from . import solidos_crear as sc
-    cerrada = BRep_Tool.IsClosed_s(perfiles[0])
-    if any(BRep_Tool.IsClosed_s(w) != cerrada for w in perfiles):
+    if all(t == "vertice" for t, _f in secs):
+        raise geo.ErrorGeometria("Con rieles hace falta al menos un perfil que sea una curva, no solo puntos.")
+    anillo = BRep_Tool.IsClosed_s(next(f for t, f in secs if t == "alambre"))
+    if any(t == "alambre" and BRep_Tool.IsClosed_s(f) != anillo for t, f in secs):
         raise geo.ErrorGeometria("Con rieles, los perfiles tienen que ser todos abiertos o todos cerrados.")
-    contornos = [_muestras(w, _MUESTRAS_PERFIL)[:-1 if cerrada else None] for w in perfiles]
-    m = len(contornos[0])
-    toques, en_riel = np.empty((len(rieles), len(perfiles)), int), np.empty((len(rieles), len(perfiles)))
+    if cerrada and not all(BRep_Tool.IsClosed_s(r) for r in rieles):
+        raise geo.ErrorGeometria("En una solevación cerrada los rieles tienen que ser lazos cerrados que pasen por todos los perfiles.")
+    fin_muestras = -1 if anillo else None
+    m = _MUESTRAS_PERFIL - (1 if anillo else 0)
+    contornos = [_muestras(f, _MUESTRAS_PERFIL)[:fin_muestras] if t == "alambre" else np.tile(_np(BRep_Tool.Pnt_s(f)), (m, 1))
+                 for t, f in secs]
+    originales = list(contornos)
+    n = len(secs)
+    toques, en_riel = np.empty((len(rieles), n), int), np.empty((len(rieles), n))
     for j, riel in enumerate(rieles):
         denso = _muestras(riel, 1441)
-        for i, w in enumerate(perfiles):
-            d = BRepExtrema_DistShapeShape(w, riel)
+        for i, (_t, f) in enumerate(secs):
+            d = BRepExtrema_DistShapeShape(f, riel)
             if not d.IsDone() or d.Value() > 0.01:
                 raise geo.ErrorGeometria(f"El riel {j + 1} no toca el perfil {i + 1}: un riel tiene que cruzar todos los "
                                          "perfiles.")
             q = _np(d.PointOnShape1(1))
             toques[j, i] = np.argmin(np.linalg.norm(contornos[i] - q, axis=1))
             en_riel[j, i] = np.argmin(np.linalg.norm(denso - q, axis=1)) / (len(denso) - 1)
+    if cerrada:                                    # cada riel da una vuelta entera: la fracción sigue creciendo (o bajando)
+        en_riel = np.unwrap(np.column_stack([en_riel, en_riel[:, 0]]) * 2 * math.pi, axis=1) / (2 * math.pi)
+        if np.any(np.abs(np.abs(en_riel[:, -1] - en_riel[:, 0]) - 1.0) > 1e-3):
+            raise geo.ErrorGeometria("En una solevación cerrada cada riel tiene que dar la vuelta pasando por todos los perfiles.")
     # Cada perfil se recorre desde el primer riel y en el sentido en que más se parece al anterior.
-    esquinas = []
-    for i, w in enumerate(perfiles):
-        candidatos = [np.roll(o, -int(np.nonzero(o == toques[0, i])[0][0])) if cerrada else o
-                      for o in (np.arange(m), np.arange(m)[::-1])]
+    esquinas, ordenes = [], []
+    for i, (t, f) in enumerate(secs):
+        if t == "vertice":
+            esquinas.append(set())
+            ordenes.append(None)
+            continue
+        arranque = toques[0, i] if rieles else 0
+        if i and not rieles:                       # empieza en la esquina más cercana al arranque del perfil anterior: así se emparejan
+            lugares = sorted({q % m for q in _esquinas(f, _MUESTRAS_PERFIL)}) or list(range(m))
+            arranque = lugares[int(np.argmin(np.linalg.norm(contornos[i][lugares] - contornos[i - 1][0], axis=1)))]
+        candidatos = [np.roll(o, -int(np.nonzero(o == arranque)[0][0])) if anillo else o for o in (np.arange(m), np.arange(m)[::-1])]
 
         def parecido(o, i=i):
             a, b = contornos[i][o], contornos[i - 1]
@@ -1035,14 +1083,19 @@ def _solevar_con_rieles(perfiles, rieles):
         lugar[orden] = np.arange(m)
         contornos[i] = contornos[i][orden]
         toques[:, i] = lugar[toques[:, i]]
-        esquinas.append({int(lugar[q % m]) for q in _esquinas(w, _MUESTRAS_PERFIL)})
+        ordenes.append(orden)
+        esquinas.append({int(lugar[q % m]) for q in _esquinas(f, _MUESTRAS_PERFIL)})
+    for i, (t, _f) in enumerate(secs):
+        if t == "vertice":                         # un punto se reparte igual que el perfil de al lado
+            vecino = 1 if i == 0 else i - 1
+            toques[:, i], esquinas[i] = toques[:, vecino], esquinas[vecino]
 
     def marcas(con_esquinas):
         """Índices que parten cada contorno en tramos, o None si los perfiles no se pueden emparejar así."""
         salida = []
-        for i in range(len(perfiles)):
+        for i in range(n):
             cortes = {int(x) for x in toques[:, i]} | (esquinas[i] if con_esquinas else set())
-            salida.append(sorted(cortes | ({0, m} if cerrada else {0, m - 1})))
+            salida.append(sorted(cortes | ({0, m} if anillo else {0, m - 1})))
         lugares = {tuple(c.index(int(x)) for x in toques[:, i]) for i, c in enumerate(salida)}
         return salida if len(lugares) == 1 and len({len(c) for c in salida}) == 1 else None
 
@@ -1052,36 +1105,115 @@ def _solevar_con_rieles(perfiles, rieles):
     k = len(tramos[0]) - 1
     fr = np.linspace(0.0, 1.0, max(9, math.ceil(49 / k)))
 
-    def tramo(i, j):
-        a, b = tramos[i][j], tramos[i][j + 1]
-        base = np.vstack([contornos[i], contornos[i][:1]]) if cerrada else contornos[i]
+    def tramo(contorno, marcas_perfil, j):
+        a, b = marcas_perfil[j], marcas_perfil[j + 1]
+        base = np.vstack([contorno, contorno[:1]]) if anillo else contorno
         return np.column_stack([np.interp(a + (b - a) * fr, np.arange(len(base)), base[:, c]) for c in range(3)])
 
-    grilla = np.array([[tramo(i, j) for j in range(k)] for i in range(len(perfiles))])     # perfil, tramo, punto, xyz
-    centros = np.array([sc._centro_alambre(w) for w in perfiles])
+    def centro(sec):
+        return _np(BRep_Tool.Pnt_s(sec[1])) if sec[0] == "vertice" else sc._centro_alambre(sec[1])
+
+    def de_auxiliar(sec):
+        """(contorno de una sección auxiliar, en el orden del perfil más cercano; ese perfil)."""
+        p = min((i for i, (t, _f) in enumerate(secs) if t == "alambre"), key=lambda i: np.linalg.norm(centro(secs[i]) - centro(sec)))
+        a = _muestras(sec[1], _MUESTRAS_PERFIL)[:fin_muestras]
+        if anillo:
+            a0, b0 = a - a.mean(axis=0), originales[p] - originales[p].mean(axis=0)
+            a0 = a0 * np.linalg.norm(b0[0]) / max(float(np.linalg.norm(a0, axis=1).mean()), 1e-9)
+            a = np.roll(a, -int(np.argmin(np.linalg.norm(a0 - b0[0], axis=1))), axis=0)
+        return a[ordenes[p]], p
+
+    completo = _con_condiciones(secs, inicio, fin, medias) if (inicio or fin or medias) and not exacta else list(secs)
+    reales = [i for i, sec in enumerate(completo) if any(sec is r for r in secs)]
+    centros = np.array([centro(sec) for sec in completo])
     x = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(centros, axis=0), axis=1))])
-    if np.any(np.diff(x) < 1e-9):
+    x_reales = x[reales]
+    if cerrada:
+        x_reales = np.r_[x_reales, x_reales[-1] + np.linalg.norm(centros[reales[-1]] - centros[reales[0]])]
+    if np.any(np.diff(x_reales) < 1e-9):
         raise geo.ErrorGeometria("Hay dos perfiles en el mismo lugar.")
-    interpolada = CubicSpline(x, grilla, axis=0)
+    grilla = np.array([[tramo(contornos[i], tramos[i], j) for j in range(k)] for i in range(n)])     # perfil, tramo, punto, xyz
+    sin_condicion = CubicSpline(x_reales, np.concatenate([grilla, grilla[:1]]) if cerrada else grilla, axis=0,
+                                bc_type="periodic" if cerrada else "not-a-knot")
+    con_condicion = None
+
+    def contorno_aux(sec):
+        contorno, p = de_auxiliar(sec)
+        return np.array([tramo(contorno, tramos[p], j) for j in range(k)])
+
+    if exacta:
+        lados = [(0, 1, 1.0, inicio), (n - 1, n - 2, -1.0, fin)]
+        bordes = [None if not c or c.get("tipo", "libre") == "libre" else _derivadas(
+            grilla[i], [contorno_aux(a) for a in _auxiliares(secs[i], secs[v], c, 1.0, True)], sentido, float(c.get("peso", 1.0)))
+            for i, v, sentido, c in lados]
+        if any(b is not None and b[1] is not None for b in bordes):
+            cero = np.zeros_like(grilla[0])
+            bc = [[(1, b[0]), (2, b[1] if b[1] is not None else cero)] if b is not None else [(2, cero), (3, cero)] for b in bordes]
+            con_condicion = make_interp_spline(x_reales, grilla, k=5, bc_type=(bc[0], bc[1]), axis=0)
+        else:
+            con_condicion = CubicSpline(x_reales, grilla, axis=0, bc_type=tuple("not-a-knot" if b is None else (1, b[0]) for b in bordes))
+    elif len(completo) > n:
+        filas = []
+        for sec in completo:
+            if any(sec is r for r in secs):
+                filas.append(grilla[next(i for i, r in enumerate(secs) if r is sec)])
+            else:
+                filas.append(contorno_aux(sec))
+        con_condicion = CubicSpline(x, np.array(filas), axis=0)
     # A lo largo del contorno cada punto tiene una coordenada 0..1; cada riel, la del tramo donde empieza.
     coordenada = (np.arange(k)[:, None] + fr) / k
     donde = [tramos[0].index(int(a)) for a in toques[:, 0]]
+    orden = np.argsort(donde)
+    gs = np.array(donde, float)[orden] / k
+    lejos = np.abs(coordenada[..., None] - gs)
+    lejos = np.minimum(lejos, 1.0 - lejos) if anillo else lejos
+    libre = np.clip(lejos.min(axis=-1, initial=1.0) / _BANDA_RIEL, 0.0, 1.0)
+    libre = libre * libre * (3.0 - 2.0 * libre)                 # 0 sobre el riel, 1 lejos: ahí manda la condición
+
+    def en_condicion(s):
+        """1 en un perfil con condición, 0 desde el perfil vecino: el corrimiento de los rieles no le cambia la salida."""
+        salida = 0.0
+        for i, cond in [(0, inicio), (n - 1, fin), *sorted((int(a), b) for a, b in (medias or {}).items())]:
+            if cond and cond.get("tipo", "libre") != "libre":
+                vecino = i + (1 if s >= x_reales[i] else -1)
+                if 0 <= vecino < n:
+                    t = min(abs(s - x_reales[i]) / abs(x_reales[vecino] - x_reales[i]), 1.0)
+                    salida = max(salida, (1.0 - t) ** 2 * (1.0 + 2.0 * t))
+        return salida
+
+    pasos = _SECCIONES_TRAMO * (3 if con_condicion else 1)
     ts = BRepOffsetAPI_ThruSections(False, False)
-    for i in range(len(perfiles) - 1):
-        for paso in range(_SECCIONES_TRAMO + (i == len(perfiles) - 2)):
-            f = paso / _SECCIONES_TRAMO
-            puntos = interpolada(x[i] + (x[i + 1] - x[i]) * f)
-            corrimiento = np.array([sc._punto_en(riel, en_riel[j, i] + (en_riel[j, i + 1] - en_riel[j, i]) * f)[0]
-                                    - (puntos[donde[j], 0] if donde[j] < k else puntos[k - 1, -1])
-                                    for j, riel in enumerate(rieles)])
-            orden = np.argsort(donde)
-            gs = np.array(donde, float)[orden] / k
-            for c in range(3):
-                puntos[..., c] += np.interp(coordenada, gs, corrimiento[orden, c], period=1.0 if cerrada else None)
-            if k == 1 and cerrada:
-                ts.AddWire(sc._alambre([_interpolar(puntos[0, :-1], True)]))
+    primera = None
+    tramos_x = n if cerrada else n - 1
+    for i in range(tramos_x):
+        for paso in range(pasos + (i == tramos_x - 1 and not cerrada)):
+            f = paso / pasos
+            indice = i + 1 if paso == pasos else i
+            if paso in (0, pasos) and secs[indice][0] == "vertice":
+                ts.AddVertex(secs[indice][1])
+                continue
+            s = x_reales[i] + (x_reales[i + 1] - x_reales[i]) * f
+            base = sin_condicion(s)
+            reparto = 0.0
+            if rieles:
+                corrimiento = np.array([sc._punto_en(riel, (en_riel[j, i] + (en_riel[j, i + 1] - en_riel[j, i]) * f) % 1.0 if cerrada
+                                                     else en_riel[j, i] + (en_riel[j, i + 1] - en_riel[j, i]) * f)[0]
+                                        - (base[donde[j], 0] if donde[j] < k else base[k - 1, -1])
+                                        for j, riel in enumerate(rieles)])
+                reparto = np.stack([np.interp(coordenada, gs, corrimiento[orden, c], period=1.0 if anillo else None) for c in range(3)], axis=-1)
+            if con_condicion is None:
+                puntos = base + reparto
             else:
-                ts.AddWire(sc._alambre([_interpolar(t) for t in puntos]))
+                peso = libre[..., None]
+                puntos = base + peso * (con_condicion(s) - base) + reparto * (1.0 - peso * en_condicion(s))
+            if k == 1 and anillo:
+                w = sc._alambre([_interpolar(puntos[0, :-1], True)])
+            else:
+                w = sc._alambre([_interpolar(t) for t in puntos])
+            ts.AddWire(w)
+            primera = primera or w
+    if cerrada:
+        ts.AddWire(primera)
     ts.CheckCompatibility(False)              # todas tienen las mismas aristas, en el mismo orden
     ts.Build()
     if not ts.IsDone():
@@ -1090,8 +1222,16 @@ def _solevar_con_rieles(perfiles, rieles):
     return ts.Shape()
 
 
+def _exacta_posible(secs, condiciones):
+    """¿Las condiciones se pueden cumplir con derivadas? Hace falta que sean de los extremos, que no haya perfiles punto y que los
+    perfiles se puedan emparejar: todos abiertos o todos cerrados y con las mismas esquinas. Si no, quedan las secciones auxiliares."""
+    if any(t == "vertice" for t, _f in secs) or any(c and c.get("tipo") == "punto_tangente" for c in condiciones):
+        return False
+    return len({(BRep_Tool.IsClosed_s(f), len(_esquinas(f, _MUESTRAS_PERFIL))) for _t, f in secs}) == 1
+
+
 def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), linea_central=None, condicion_inicio=None,
-                       condicion_fin=None, condiciones_medias=None, fusionar_tangentes=False):
+                       condicion_fin=None, condiciones_medias=None, fusionar_tangentes=False, condicion_exacta=False):
     """Solevado (loft) de superficie entre secciones [SFC-LOFT, SFC-REF-LOFT-DLG].
 
     Cada sección es una curva/alambre o un punto (numpy (3,), gp_Pnt o vértice) — los puntos solo
@@ -1104,9 +1244,10 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     G1 o Smooth G2, Tangency Weight y Free Edges, Align Edges o Align to Surface, que son de los perfiles abiertos);
     {"tipo": "punto_tangente", "peso": 1} en un perfil que es un punto (Point Tangent: cúpula; sin condición es Sharp).
     `condiciones_medias`: {posición: condición Dirección} en los perfiles de en medio.
-    Las condiciones se aproximan con secciones auxiliares por las que pasa la superficie.
+    Las condiciones se aproximan con secciones auxiliares por las que pasa la superficie; con `condicion_exacta` Dirección, Tangente
+    y Suave de los extremos fijan la derivada con que sale (ver `_exacta_posible`), sin línea central y sin perfiles de en medio.
     `rieles` (Rail): cualquier cantidad, ver `_solevar_con_rieles`. `linea_central` (Centerline): las secciones se
-    mantienen normales a ella. No se combinan con las condiciones. `fusionar_tangentes` (Tangent Edges › Merge)."""
+    mantienen normales a ella. Las dos guías se combinan con las condiciones. `fusionar_tangentes` (Tangent Edges › Merge)."""
     secciones = list(secciones)
     if len(secciones) < 2:
         raise geo.ErrorGeometria("El solevado necesita al menos dos secciones.")
@@ -1135,18 +1276,19 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     guiada = bool(rieles) or linea_central is not None
     condiciones = any(c and c.get("tipo", "libre") != "libre"
                       for c in (condicion_inicio, condicion_fin, *(condiciones_medias or {}).values()))
-    if (guiada or condiciones) and (cerrada or reglada):
-        raise geo.ErrorGeometria("Las condiciones de borde, los rieles y la línea central no se combinan con una "
-                                 "solevación cerrada ni con tramos rectos.")
-    if guiada and condiciones:
-        raise geo.ErrorGeometria("Las condiciones de borde no se combinan con rieles ni con línea central: el kernel "
-                                 "no tiene las dos cosas juntas.")
-    if rieles:
-        if any(t == "vertice" for t, _ in secs):
-            raise geo.ErrorGeometria("Con rieles, todos los perfiles tienen que ser curvas (no puntos).")
-        forma = _solevar_con_rieles([w for _, w in secs], [_alambre_unico(r, "El riel") for r in rieles])
+    if (guiada or condiciones) and reglada:
+        raise geo.ErrorGeometria("Las condiciones de borde, los rieles y la línea central no se combinan con tramos rectos.")
+    if cerrada and (condiciones or linea_central is not None):
+        raise geo.ErrorGeometria("Una solevación cerrada no tiene perfiles extremos: no admite condiciones de borde, y OpenCascade "
+                                 "no la arma con línea central. Con rieles sí se puede.")
+    exacta = (condicion_exacta and condiciones and not condiciones_medias and linea_central is None
+              and _exacta_posible(secs, (condicion_inicio, condicion_fin)))
+    if rieles or exacta:
+        forma = _solevar_con_rieles(secs, [_alambre_unico(r, "El riel") for r in rieles], condicion_inicio, condicion_fin,
+                                    condiciones_medias, cerrada, exacta)
     elif linea_central is not None:
         from . import solidos_crear as sc
+        secs = _con_condiciones(secs, condicion_inicio, condicion_fin, condiciones_medias) if condiciones else secs
         forma = sc.solevar([x[1] for x in secs], linea_central=_alambre_unico(linea_central, "La línea central"), solido=False)
     else:
         if condiciones:

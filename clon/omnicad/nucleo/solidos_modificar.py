@@ -1366,6 +1366,8 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         mo.MakeOffsetShape()
         if mo.IsDone() and not mo.Shape().IsNull() and geo.es_valida(mo.Shape()) and not geo.esta_vacia(mo.Shape()):
             resultado = mo.Shape()
+            if resultado.ShapeType() == TopAbs_SHELL:       # con un agujero ciego el kernel devuelve la cáscara sola
+                resultado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(resultado)).Solid()
             dada_vuelta = _cara_dada_vuelta(mo, forma, todas, resultado, dist)
     except Exception:  # noqa: BLE001 — se intenta la alternativa por extrusión
         resultado = None

@@ -2,13 +2,15 @@
 from typing import Literal
 
 from ..timeline import entidades as ent
+from ..timeline.operaciones import Contexto
 from ..timeline.ops_modificar import (OpBorrarCaras, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpEditarCara,
                                       OpQuitar, OpReemplazarCara)
+from .herramientas_boceto import texto_expr
 from .herramientas_construccion import Referencia, _crear, _referencia
 from .herramientas_modificar import Elementos, _refs
 from .herramientas_solido import Cuerpos, _agregar, _ids_cuerpos
 from .errores import error
-from .registro import herramienta
+from .registro import Expr, herramienta
 
 
 @herramienta("split_face", "solido", "Divide caras con un plano, cara, arista o curva de boceto. split_type: surface "
@@ -86,33 +88,50 @@ def replace_face(sesion, faces: Elementos, target: Referencia, body: str | None 
     return _agregar(sesion, _crear(sesion, OpReemplazarCara, caras=refs, destino=destino, cadena_tangente=bool(tangent_chain)))
 
 
+def _milimetros(sesion, valor):
+    return Contexto(sesion.doc.parametros.valores()).evaluar(texto_expr(valor))
+
+
 @herramienta("get_face_grid", "inspeccion", "Grilla de control de una cara para edit_face (no cambia el documento): sus puntos sobre "
-             "la cara y cuáles quedan fijos porque tocan el contorno.")
-def get_face_grid(sesion, face: Elementos, length_factor: int = 1, width_factor: int = 1, body: str | None = None):
+             "la cara, cuáles mueven el contorno (contour: las caras vecinas lo siguen) y cuáles quedan fijos (fixed: en una costura o "
+             "afuera de la cara).")
+def get_face_grid(sesion, face: Elementos, length_factor: int = 1, width_factor: int = 1, body: str | None = None,
+                  length_cuts: list[float] | None = None, width_cuts: list[float] | None = None, contour_spacing: Expr = 0):
     """
     face: una cara: selector o id de find_faces.
     length_factor: Factor de longitud, desde 1: la grilla tiene length_factor + 3 puntos a lo largo.
     width_factor: Factor de anchura, desde 1: la grilla tiene width_factor + 3 puntos a lo ancho.
     body: cuerpo donde se evalúa el selector; vacío = el único cuerpo.
+    length_cuts: líneas de más a lo largo, como fracciones de 0 a 1 (las que dejó extrude en edit_face).
+    width_cuts: líneas de más a lo ancho, como fracciones de 0 a 1.
+    contour_spacing: Espaciado de contorno en mm: suma una fila de cuadros a esa distancia del contorno; 0 = ninguna.
     """
     from ..nucleo import editar_cara
     refs, _ = _refs(sesion, face, "cara", body)
     if len(refs) != 1:
         raise error("INVALID_ARGUMENTS", "Elegí una sola cara.")
-    g = editar_cara.grilla_cara(ent.resolver(refs[0], sesion.doc.estado_final).forma, length_factor, width_factor)
+    g = editar_cara.grilla_cara(ent.resolver(refs[0], sesion.doc.estado_final).forma, length_factor, width_factor, length_cuts or (),
+                                width_cuts or (), _milimetros(sesion, contour_spacing))
     return {"size": list(g["fijos"].shape), "points": [[[round(float(x), 6) for x in p] for p in fila] for fila in g["puntos"]],
-            "fixed": [[bool(x) for x in fila] for fila in g["fijos"]]}
+            "fixed": [[bool(x) for x in fila] for fila in g["fijos"]], "contour": [[bool(x) for x in fila] for fila in g["contorno"]]}
 
 
-@herramienta("edit_face", "solido", "Deforma una cara con una grilla de control (Editar cara): mueve puntos de la grilla; el contorno "
-             "de la cara queda fijo y sigue cosida a sus vecinas. get_face_grid muestra la grilla.", modifica=True)
-def edit_face(sesion, face: Elementos, moves: list[dict], length_factor: int = 1, width_factor: int = 1, body: str | None = None):
+@herramienta("edit_face", "solido", "Deforma una cara con una grilla de control (Editar cara): mueve puntos de la grilla. Si un punto "
+             "toca el contorno, las caras vecinas siguen al borde nuevo, cada una sobre su superficie. extrude hace lo de Alt en Fusion: "
+             "suma líneas alrededor de los puntos antes de moverlos. get_face_grid muestra la grilla.", modifica=True)
+def edit_face(sesion, face: Elementos, moves: list[dict], length_factor: int = 1, width_factor: int = 1, body: str | None = None,
+              length_cuts: list[float] | None = None, width_cuts: list[float] | None = None, contour_spacing: Expr = 0,
+              extrude: bool = False):
     """
     face: una cara: selector o id de find_faces.
     moves: puntos a mover: [{"u": i, "v": j, "offset": [dx, dy, dz]}], con i y j desde 0 y el desplazamiento en mm.
     length_factor: Factor de longitud, desde 1 (Dividir caras).
     width_factor: Factor de anchura, desde 1 (Dividir caras).
     body: cuerpo donde se evalúa el selector; vacío = el único cuerpo.
+    length_cuts: líneas de más a lo largo, como fracciones de 0 a 1.
+    width_cuts: líneas de más a lo ancho, como fracciones de 0 a 1.
+    contour_spacing: Espaciado de contorno en mm o expresión: suma una fila de cuadros a esa distancia del contorno; 0 = ninguna.
+    extrude: true suma una línea de cada lado de los puntos de moves (Alt en Fusion); u y v son los de la grilla de antes.
     """
     refs, _ = _refs(sesion, face, "cara", body)
     if len(refs) != 1:
@@ -123,7 +142,19 @@ def edit_face(sesion, face: Elementos, moves: list[dict], length_factor: int = 1
         raise error("INVALID_ARGUMENTS", 'Cada movimiento es {"u": i, "v": j, "offset": [dx, dy, dz]}.') from e
     if any(len(d) != 3 for d in despl.values()):
         raise error("INVALID_ARGUMENTS", "offset lleva tres números: dx, dy y dz.")
-    return _agregar(sesion, _crear(sesion, OpEditarCara, cara=refs[0], n_u=length_factor, n_v=width_factor, desplazamientos=despl))
+    cortes_u, cortes_v = list(length_cuts or ()), list(width_cuts or ())
+    if extrude:
+        if not despl:
+            raise error("INVALID_ARGUMENTS", "extrude necesita los puntos a mover en moves.")
+        from ..nucleo import editar_cara
+        cara = ent.resolver(refs[0], sesion.doc.estado_final).forma
+        puntos = {tuple(map(int, k.split(","))) for k in despl}
+        r = editar_cara.extruir_grilla(editar_cara.divisiones(cara, length_factor, width_factor, cortes_u, cortes_v,
+                                                              _milimetros(sesion, contour_spacing)), {}, puntos)
+        despl = {"{},{}".format(*r["puntos"][tuple(map(int, k.split(",")))]): d for k, d in despl.items()}
+        cortes_u, cortes_v = cortes_u + r["cortes_u"], cortes_v + r["cortes_v"]
+    return _agregar(sesion, _crear(sesion, OpEditarCara, cara=refs[0], n_u=length_factor, n_v=width_factor, desplazamientos=despl,
+                                   cortes_u=cortes_u, cortes_v=cortes_v, espaciado=texto_expr(contour_spacing)))
 
 
 @herramienta("remove_bodies", "solido", "Quita cuerpos del diseño conservando la operación en el timeline.", modifica=True)

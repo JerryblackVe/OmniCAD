@@ -806,11 +806,9 @@ def test_nucleo_editar_cara_da_el_volumen_de_la_cuenta():
     from omnicad.nucleo import editar_cara as ec
     _cid, forma, tapa = _tapa(_caja_edicion())
     g = ec.grilla_cara(tapa, 1, 1)
-    assert g["fijos"].shape == (4, 4) and int((~g["fijos"]).sum()) == 4           # bicúbica: los 4 de adentro
+    assert g["fijos"].shape == (4, 4) and not g["fijos"].any() and int((~g["contorno"]).sum()) == 4   # bicúbica: los 4 de adentro
     r = ec.editar_cara(forma, tapa, 1, 1, {(i, j): (0, 0, 5) for i in (1, 2) for j in (1, 2)})
     assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(16000 + 1600 * 4 / 16 * 5, rel=1e-6)   # ∫ Bernstein = 1/4
-    with pytest.raises(geo.ErrorGeometria, match="fijo"):
-        ec.editar_cara(forma, tapa, 1, 1, {(0, 0): (0, 0, 5)})
 
 
 def test_nucleo_editar_cara_lateral_de_cilindro_y_disco():
@@ -831,7 +829,7 @@ def test_nucleo_editar_cara_lateral_de_cilindro_y_disco():
 def test_api_edit_face_guarda_y_reabre_la_forma(tmp_path):
     s = _caja_edicion()
     g = _llamar(s, "get_face_grid", face=">Z")
-    assert g["size"] == [4, 4] and g["fixed"][0][0] and not g["fixed"][1][1]
+    assert g["size"] == [4, 4] and g["contour"][0][0] and not g["contour"][1][1] and not g["fixed"][0][0]
     r = _llamar(s, "edit_face", face=">Z", moves=[{"u": 1, "v": 1, "offset": [0, 0, 8]}])
     assert r
     vol = _volumen(s)
@@ -842,7 +840,6 @@ def test_api_edit_face_guarda_y_reabre_la_forma(tmp_path):
     otra = Sesion()
     _llamar(otra, "open_document", path=ruta)
     assert _volumen(otra) == pytest.approx(vol, rel=1e-9)
-    assert not api.llamar(s, "edit_face", {"face": ">X", "moves": [{"u": 0, "v": 0, "offset": [1, 0, 0]}]})["ok"]
     assert not api.llamar(s, "edit_face", {"face": ">Z", "moves": [{"u": 1, "offset": [1, 0, 0]}]})["ok"]
 
 
@@ -965,6 +962,255 @@ def test_peines_y_atajos_de_editar_cara(app_qt):
     claves = {a.key().toString() for a in p.findChildren(QShortcut)}
     assert {"Alt+W", "Alt+E", "Alt+R", "Alt+Z", "Alt+X", "Alt+C", "Alt+V", "Alt+A", "Alt+S", "Alt+D", "Alt+F", "Alt+P", "Alt+O", "Alt+I",
             "Alt+L", "Alt+K", "Alt+J", "Alt+N", "Alt+M", "Shift+Up", "Shift+Down"} <= claves
+    p.cancelar()
+
+
+# ---------------------------------------------------------------- CAP-13: el contorno y Alt
+@pytest.mark.parametrize("dz, volumen", [(5, 18000), (-5, 14000)])
+def test_cap13_mover_una_fila_del_contorno_da_el_volumen_de_la_cuenta(dz, volumen):
+    from omnicad.nucleo import editar_cara as ec
+    _cid, forma, tapa = _tapa(_caja_edicion())
+    r = ec.editar_cara(forma, tapa, 1, 1, {(i, 3): (0, 0, dz) for i in range(4)})           # ∫ v³ = 1/4
+    assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(volumen, rel=1e-5)
+    assert len(geo.caras(r)) == 6 and geo.caja_envolvente(r)[1][2] == pytest.approx(15 if dz > 0 else 10, abs=1e-2)
+
+
+def test_cap13_toda_la_grilla_lleva_las_vecinas_y_una_esquina_tambien():
+    from omnicad.nucleo import editar_cara as ec
+    _cid, forma, tapa = _tapa(_caja_edicion())
+    r = ec.editar_cara(forma, tapa, 1, 1, {(i, j): (0, 0, 5) for i in range(4) for j in range(4)})
+    assert geo.volumen_exacto(r) == pytest.approx(24000, rel=1e-9) and geo.es_valida(r)
+    r = ec.editar_cara(forma, tapa, 1, 1, {(0, 0): (0, 0, 8)})
+    assert geo.volumen_exacto(r) == pytest.approx(16000 + 1600 / 16 * 8, rel=1e-5) and geo.es_valida(r)
+    assert geo.caja_envolvente(r)[1][2] == pytest.approx(18, abs=1e-2)
+
+
+def test_cap13_las_vecinas_inclinadas_siguen_en_su_plano():
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeWedge
+
+    from omnicad.nucleo import editar_cara as ec
+    cuna = BRepPrimAPI_MakeWedge(40.0, 40.0, 20.0, 10.0).Shape()
+    tope = max(geo.caras(cuna), key=lambda c: (geo.caja_envolvente(c)[0][1], geo.area(c)))
+    r = ec.editar_cara(cuna, tope, 1, 1, {(i, j): (0, 5, 0) for i in range(4) for j in range(4)})
+    assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(20000 + (10 + 6.25) / 2 * 5 * 20, rel=1e-6)
+
+
+def test_cap13_en_curvas_y_lo_que_queda_fijo():
+    from omnicad.nucleo import editar_cara as ec
+    forma = geo.cilindro(10, 30)
+    lateral, disco = max(geo.caras(forma), key=geo.area), max(geo.caras(forma), key=lambda c: geo.caja_envolvente(c)[0][2])
+    g = ec.grilla_cara(lateral, 4, 2)
+    assert g["fijos"][0].all() and g["fijos"][-1].all() and g["contorno"][3, 0] and g["contorno"][3, 4]
+    p = g["puntos"][3, 4]
+    r = ec.editar_cara(forma, lateral, 4, 2, {(3, 4): (p[0] * 0.3, p[1] * 0.3, 0)})
+    assert geo.es_valida(r) and geo.volumen_exacto(r) > geo.volumen_exacto(forma) * 1.002
+    assert geo.caja_envolvente(r)[1][2] == pytest.approx(30, abs=1e-3)                       # la tapa sigue en su plano
+    with pytest.raises(geo.ErrorGeometria, match="queda fijo"):
+        ec.editar_cara(forma, lateral, 4, 2, {(0, 2): (1, 0, 0)})
+    g = ec.grilla_cara(disco, 6, 6)
+    i, j = np.argwhere(g["contorno"])[0]
+    r = ec.editar_cara(forma, disco, 6, 6, {(int(i), int(j)): (0, 0, 4)})
+    assert geo.es_valida(r) and geo.caja_envolvente(r)[1][2] > 31 and geo.area(r) > geo.area(forma)
+
+
+def test_cap13_cara_con_un_agujero_ciego_y_cara_ya_editada():
+    from omnicad.nucleo import editar_cara as ec
+    s = Sesion()
+    _llamar(s, "create_box", length=40, width=40, height=10)
+    _llamar(s, "create_hole", face=">Z", depth=5, diameter=10)
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    tapa = max(geo.caras(forma), key=lambda c: (round(geo.caja_envolvente(c)[0][2], 3), geo.area(c)))
+    r = ec.editar_cara(forma, tapa, 1, 1, {(i, 3): (0, 0, 5) for i in range(4)})
+    assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(17555.9, abs=0.5)     # lo de la caja, menos lo que sube el agujero
+    assert len(geo.solidos(r)) == 1
+    s = _caja_edicion()
+    _llamar(s, "edit_face", face=">Z", moves=[{"u": i, "v": 3, "offset": [0, 0, 5]} for i in range(4)])
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    cara = max(geo.caras(forma), key=lambda c: geo.caja_envolvente(c)[1][2] + geo.area(c) * 1e-3)
+    r = ec.editar_cara(forma, cara, 1, 1, {(0, 0): (0, 0, 3)})
+    assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(18000 + 1600 / 16 * 3, rel=1e-4)
+
+
+def test_cap13_no_pierde_material_de_otro_solido_ni_la_pieza_que_queda_abajo():
+    from omnicad.nucleo import editar_cara as ec
+    a, b = geo.caja(40, 40, 10), geo.trasladar(geo.caja(10, 10, 10), (100, 0, 0))
+    dos = geo.compuesto([a, b])
+    tapa = max(geo.caras(a), key=lambda c: geo.caja_envolvente(c)[0][2])
+    tapa = next(c for c in geo.caras(dos) if c.IsSame(tapa))
+    r = ec.editar_cara(dos, tapa, 1, 1, {(i, 3): (0, 0, 5) for i in range(4)})
+    assert len(geo.solidos(r)) == 2 and geo.volumen_exacto(r) == pytest.approx(18000 + 1000, rel=1e-5)
+    # una grilla que baja en el medio hasta el piso parte la tapa en dos: quedan las dos
+    _cid, forma, tapa = _tapa(_caja_edicion())
+    r = ec.editar_cara(forma, tapa, 2, 1, {(2, j): (0, 0, -25) for j in range(4)})
+    assert len(geo.solidos(r)) == 2 and geo.es_valida(r)
+
+
+def test_cap13_superficie_con_la_cara_dada_vuelta():
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.gp import gp_Pnt
+
+    from omnicad.nucleo import editar_cara as ec
+    from omnicad.nucleo import superficies as sf
+    lamina = sf.extruir_superficie(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(20, 0, 0)).Edge(), (0, 1, 0), 20)
+    cara = geo.caras(lamina)[0].Reversed()
+    r = ec.editar_cara(cara, geo.caras(cara)[0], 1, 1, {(0, 0): (0, 0, 5)})
+    assert geo.es_valida(r) and geo.area(r) > 400 and geo.area(r) < 1000                     # una cara con el contorno al revés daría el plano entero
+    assert geo.caras(r)[0].Orientation() == geo.caras(cara)[0].Orientation()
+
+
+def test_cap13_cortes_de_un_archivo_ajeno_y_punto_afuera():
+    from omnicad.nucleo import editar_cara as ec
+    _cid, _forma, tapa = _tapa(_caja_edicion())
+    for malo in ("abc", 5, [None], [0.0], [float("nan")]):
+        with pytest.raises(geo.ErrorGeometria, match="cortes"):
+            ec.grilla_cara(tapa, 1, 1, malo)
+    s = _caja_edicion()
+    r = api.llamar(s, "edit_face", {"face": ">Z", "extrude": True, "moves": [{"u": 99, "v": 1, "offset": [0, 0, 1]}]})
+    assert not r["ok"] and "afuera" in r["mensaje"]
+
+
+def test_cap13_vecinas_tangentes_suben_a_plomo():
+    from omnicad.nucleo import editar_cara as ec
+    s = _caja_edicion()
+    _llamar(s, "fillet", edges="|Y", radius=2)
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    tapa = max(geo.caras(forma), key=lambda c: (round(geo.caja_envolvente(c)[0][2], 3), geo.area(c)))
+    r = ec.editar_cara(forma, tapa, 1, 1, {(i, 3): (0, 0, 3) for i in range(4)})
+    assert geo.es_valida(r) and len(geo.solidos(r)) == 1
+    assert geo.volumen_exacto(r) == pytest.approx(geo.volumen_exacto(forma) + 36 * 40 * 3 / 4, rel=1e-4)
+
+
+def test_desfase_de_caras_con_un_agujero_ciego_sigue_siendo_solido():
+    s = _caja_edicion()
+    _llamar(s, "create_hole", face=">Z", depth=5, diameter=10)
+    _llamar(s, "offset_faces", faces=">Z", distance=3)
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    assert len(geo.solidos(forma)) == 1 and geo.es_valida(forma)
+    assert geo.volumen_exacto(forma) == pytest.approx(16000 - 78.54 * 5 + (1600 - 78.54) * 3 + 78.54 * 0, rel=1e-2)
+
+
+def test_cap13_movimiento_que_no_cambia_nada_y_superficies():
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.gp import gp_Pnt
+
+    from omnicad.nucleo import editar_cara as ec
+    from omnicad.nucleo import superficies as sf
+    _cid, forma, tapa = _tapa(_caja_edicion())
+    with pytest.raises(geo.ErrorGeometria, match="misma superficie"):
+        ec.editar_cara(forma, tapa, 1, 1, {(0, 0): (5, 0, 0)})
+    lamina = sf.extruir_superficie(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(20, 0, 0)).Edge(), (0, 1, 0), 20)
+    cara = geo.caras(lamina)[0]
+    r = ec.editar_cara(lamina, cara, 1, 1, {(0, 0): (0, 0, 5)})
+    assert geo.es_valida(r) and geo.area(r) > 400 and geo.caja_envolvente(r)[1][2] == pytest.approx(5, abs=1e-3)
+    dos = sf.coser([sf.extruir_superficie(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(20, 0, 0)).Edge(), (0, 1, 0), 20),
+                    sf.extruir_superficie(BRepBuilderAPI_MakeEdge(gp_Pnt(20, 0, 0), gp_Pnt(40, 0, 0)).Edge(), (0, 1, 0), 20)], 1e-3)["forma"]
+    cara = min(geo.caras(dos), key=lambda c: geo.caja_envolvente(c)[0][0])                   # x de 0 a 20: su borde x = 20 es el cosido
+    g = ec.grilla_cara(cara, 1, 1)
+    libre = next((int(i), int(j)) for i, j in np.argwhere(g["contorno"]) if g["puntos"][i, j][0] == pytest.approx(0))
+    cosido = next((int(i), int(j)) for i, j in np.argwhere(g["contorno"]) if g["puntos"][i, j][0] == pytest.approx(20))
+    r = ec.editar_cara(dos, cara, 1, 1, {libre: (0, 0, 5)})
+    assert geo.es_valida(r) and len(geo.caras(r)) == 2 and geo.caja_envolvente(r)[1][2] == pytest.approx(5, abs=1e-2)
+    assert sf.bordes_de_costura(geo.caras(r), 1e-3)["aristas_cosidas"] == 1
+    with pytest.raises(geo.ErrorGeometria, match="borde libre"):
+        ec.editar_cara(dos, cara, 1, 1, {cosido: (0, 0, 5)})
+
+
+def test_cap13_extruir_suma_lineas_sin_cambiar_la_forma():
+    from omnicad.nucleo import editar_cara as ec
+    _cid, forma, tapa = _tapa(_caja_edicion())
+    viejos = {(2, 2): (0.0, 0.0, 6.0)}
+    r = ec.extruir_grilla(ec.divisiones(tapa, 2, 2), viejos, {(2, 2)})
+    assert len(r["cortes_u"]) == 2 and len(r["cortes_v"]) == 2
+    assert ec.grilla_cara(tapa, 2, 2, r["cortes_u"], r["cortes_v"])["puntos"].shape[:2] == (7, 7)
+    a = ec.editar_cara(forma, tapa, 2, 2, viejos)
+    b = ec.editar_cara(forma, tapa, 2, 2, r["desplazamientos"], r["cortes_u"], r["cortes_v"])
+    assert geo.volumen_exacto(b) == pytest.approx(geo.volumen_exacto(a), rel=1e-6)
+    i, j = r["puntos"][(2, 2)]
+    alto = ec.editar_cara(forma, tapa, 2, 2, {(i, j): (0, 0, 8)}, r["cortes_u"], r["cortes_v"])
+    ancho = ec.editar_cara(forma, tapa, 2, 2, {(2, 2): (0, 0, 8)})
+    assert geo.es_valida(alto) and geo.volumen_exacto(alto) < geo.volumen_exacto(ancho)      # más cuadros: el bulto es más angosto
+    final = (2, 2, [float(c) for c in np.linspace(0.01, 0.31, 32)], [])
+    with pytest.raises(geo.ErrorGeometria, match="cortes"):
+        ec.extruir_grilla(final, {}, {(5, 2)})
+    with pytest.raises(geo.ErrorGeometria, match="cortes"):
+        ec.grilla_cara(tapa, 1, 1, [1.5])
+
+
+def test_cap13_espaciado_de_contorno_suma_una_fila_junto_al_borde():
+    from omnicad.nucleo import editar_cara as ec
+    _cid, forma, tapa = _tapa(_caja_edicion())
+    assert ec.grilla_cara(tapa, 1, 1, espaciado=4)["puntos"].shape[:2] == (6, 6)
+    assert ec.divisiones(tapa, 1, 1, espaciado=4)[2] == pytest.approx([0.1, 0.9])
+    assert ec.grilla_cara(tapa, 1, 1, espaciado=0)["puntos"].shape[:2] == (4, 4)
+    with pytest.raises(geo.ErrorGeometria, match="espaciado"):
+        ec.grilla_cara(tapa, 1, 1, espaciado=20)
+    with pytest.raises(geo.ErrorGeometria, match="espaciado"):
+        ec.grilla_cara(tapa, 1, 1, espaciado=float("inf"))
+
+
+def test_cap13_api_contorno_extruir_espaciado_y_receta_vieja(tmp_path):
+    s = _caja_edicion()
+    assert _llamar(s, "get_face_grid", face=">Z", contour_spacing=4)["size"] == [6, 6]
+    _llamar(s, "edit_face", face=">Z", moves=[{"u": i, "v": 3, "offset": [0, 0, 5]} for i in range(4)])
+    assert _volumen(s) == pytest.approx(18000, rel=1e-5)
+    s = _caja_edicion()
+    _llamar(s, "edit_face", face=">Z", length_factor=2, width_factor=2, moves=[{"u": 2, "v": 2, "offset": [0, 0, 8]}], extrude=True)
+    op = s.doc.operaciones[-1]
+    assert len(op.p["cortes_u"]) == 2 and len(op.p["desplazamientos"]) == 1 and _volumen(s) > 16000
+    ruta = str(tmp_path / "alt.omnicad")
+    _llamar(s, "save_document", path=ruta)
+    otra = Sesion()
+    _llamar(otra, "open_document", path=ruta)
+    assert _volumen(otra) == pytest.approx(_volumen(s), rel=1e-9)
+    s = _caja_edicion()
+    _llamar(s, "edit_face", face=">Z", contour_spacing="4 mm", moves=[{"u": 2, "v": 2, "offset": [0, 0, 8]}])
+    assert s.doc.operaciones[-1].p["espaciado"] == "4 mm" and _volumen(s) > 16000
+    assert not api.llamar(s, "edit_face", {"face": ">Z", "moves": [], "extrude": True})["ok"]
+    from omnicad.timeline.ops_modificar import OpEditarCara
+    s = _caja_edicion()
+    cid, forma, tapa = _tapa(s)
+    vieja = OpEditarCara(s.doc.nuevo_id(), cara=refs.referencia(cid, tapa, forma), n_u=1, n_v=1, desplazamientos={"1,1": [0, 0, 8]})   # sin claves nuevas
+    assert s.doc.agregar(vieja).estado == "ok" and _volumen(s) == pytest.approx(16000 + 1600 / 16 * 8, rel=1e-9)
+
+
+def test_cap13_panel_contorno_alt_y_reabrir(app_qt):
+    from omnicad.ui.comando import ContextoComando as C
+    s, comando, p, _v = _panel_cara(2)
+    comando.elegir(p, {(0, 0)})
+    assert comando.sel == {(0, 0)}                                                           # el contorno ya se elige
+    comando.elegir(p, {(2, 2)})
+    comando.extruir(p)
+    assert len(p.valores["cortes_u"]) == 2 and len(comando.sel) == 1 and p.manipuladores.manips[0].puntos.shape[:2] == (7, 7)
+    p.set_valor("dz", "6 mm")
+    assert len(p.valores["despl"]) == 1 and next(iter(p.valores["despl"].values())) == pytest.approx([0, 0, 6])
+    uno = dict(p.valores["despl"])
+    p.set_valor("n_u", 5)
+    assert p.manipuladores.manips[0].puntos.shape[0] == 10 and p.valores["despl"] != uno
+    p.set_valor("espaciado", "2 mm")
+    assert p.manipuladores.manips[0].puntos.shape[0] == 12 and p.valores["despl"]
+    p.set_valor("espaciado", "500 mm")                                                       # no entra: rojo, sin romper la grilla
+    p.set_valor("espaciado", "2 mm")
+    op = comando.construir(p.valores, p.ctx)
+    p.cancelar()
+    s.doc.agregar(op)
+    assert s.doc.resultados[-1].estado in ("ok", "aviso") and _volumen(s) > 16000
+    v = comando.desde_op(op, C(s.doc, None, op))
+    assert v["cortes_u"] == op.p["cortes_u"] and v["espaciado"] == "2 mm"
+
+
+def test_cap13_alt_al_arrastrar_la_triada_extruye(app_qt, monkeypatch):
+    from omnicad.ui.comandos import editar_cara as modulo
+    _s, comando, p, _v = _panel_cara(2)
+    comando.elegir(p, {(2, 2)})
+    triada = p.manipuladores.manips[1]
+    assert isinstance(triada, modulo.TriadaCara)
+    llamadas = []
+    monkeypatch.setattr(modulo.mp.Triada, "empezar", lambda *a: llamadas.append(a) or {})
+    triada.empezar(p.manipuladores, (0, 0), ("eje", 2))
+    assert llamadas and not p.valores.get("cortes_u")                                        # sin Alt: la grilla no cambia
+    monkeypatch.setattr(modulo.QApplication, "keyboardModifiers", staticmethod(lambda: modulo.mp.Qt.AltModifier))
+    triada.empezar(p.manipuladores, (0, 0), ("eje", 2))
+    assert len(p.valores["cortes_u"]) == 2
     p.cancelar()
 
 

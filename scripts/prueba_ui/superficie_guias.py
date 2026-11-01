@@ -279,10 +279,32 @@ def solevacion():
     p = A.abrir(v, "sup_solevacion")
     A.elegir(p, "secciones", *dos())
     A.elegir(p, "carriles", *rieles())
-    p.set_valor("condicion_inicio", "direccion")
+    combo = next(c for c in p.findChildren(QComboBox) if c.findData("direccion") >= 0)        # la fila del primer perfil, como una persona
+    combo.setCurrentIndex(combo.findData("direccion"))
+    A.esperar(120)
+    angulo = p.widgets["angulo_inicio"]
+    angulo.setFocus()
+    angulo.selectAll()
+    QTest.keyClicks(angulo, "45 deg")
+    QTest.keyClick(angulo, Qt.Key_Tab)
+    A.esperar(120)
     st = calcular(p)
-    A.reg(AR, "condición y raíles juntos: el aviso dice que no se combinan", not st["previa_ok"] and "no se combinan" in st["mensaje"], f"«{st['mensaje']}»")
-    p.cancelar()
+    A.reg(AR, "condición y raíles juntos: vista previa", st["previa_ok"] and p.valores.get("condicion_inicio") == "direccion", f"«{st['mensaje']}»")
+    A.esperar(300)
+    A.foto(v, "guias_solevacion_condicion_rieles")
+    n0 = A.n_ops(v)
+    p.aceptar()
+    A.esperar(450)
+    cuerpo = list(v.doc.estado_final.cuerpos.values())[-1]
+    A.reg(AR, "la condición con raíles abre la superficie entre ellos", A.n_ops(v) == n0 + 1 and geo.area(cuerpo.forma) > 200.5, f"{geo.area(cuerpo.forma):.1f} > 200")
+    op = v.doc.operaciones[-1]
+    v.editar_operacion(op.id)
+    A.esperar(400)
+    r = v.panel
+    A.reg(AR, "reabrir conserva la condición y los raíles", r.valores.get("condicion_inicio") == "direccion" and len(r.valores.get("carriles") or []) == 2, "")
+    QTest.keyClick(r, Qt.Key_Escape)
+    A.esperar(200)
+    A.deshacer(v)
     A.esperar(100)
 
 

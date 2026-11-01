@@ -573,10 +573,12 @@ class OpReemplazarCara(Operacion):
 
 class OpEditarCara(Operacion):
     """Editar cara de Fusion (Edit Face), con grilla B-spline en lugar de T-Spline (`nucleo/editar_cara.py`): `n_u` y `n_v` son
-    los factores de Dividir caras y `desplazamientos` {"i,j": [dx, dy, dz]}, los puntos movidos de la grilla."""
+    los factores de Dividir caras, `espaciado` su Espaciado de contorno, `cortes_u` y `cortes_v` las líneas que sumó la extrusión
+    con Alt (fracciones de 0 a 1) y `desplazamientos` {"i,j": [dx, dy, dz]}, los puntos movidos de la grilla."""
     TIPO, ETIQUETA, ICONO = "editar_cara", "Editar cara", "✥"
-    PARAMS = {"cara": None, "n_u": 1, "n_v": 1, "desplazamientos": {}}
+    PARAMS = {"cara": None, "n_u": 1, "n_v": 1, "desplazamientos": {}, "cortes_u": [], "cortes_v": [], "espaciado": "0 mm"}
     REFS = ("cara",)
+    EXPRESIONES = ("espaciado",)
 
     def dependencias(self):
         return _deps_refs([self.p["cara"]]) - {self.id}
@@ -591,7 +593,8 @@ class OpEditarCara(Operacion):
             raise ErrorOperacion("Los puntos de la grilla se escriben «i,j».") from e
         for cid, caras in _por_cuerpo([self.p["cara"]], estado, "caras").items():
             c = estado.cuerpo(cid)
-            c.forma = editar_cara.editar_cara(c.forma, caras[0], int(self.p["n_u"]), int(self.p["n_v"]), despl)
+            c.forma = editar_cara.editar_cara(c.forma, caras[0], int(self.p["n_u"]), int(self.p["n_v"]), despl, self.p["cortes_u"],
+                                              self.p["cortes_v"], ctx.evaluar(self.p["espaciado"]))
 
 
 def _herramienta(ref, estado):

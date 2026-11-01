@@ -3,6 +3,7 @@ import pytest
 
 from omnicad import api
 from omnicad.nucleo import geometria as geo
+from omnicad.timeline import entidades as ent
 
 
 def llamar(sesion, nombre, **args):
@@ -92,8 +93,12 @@ def test_dialogos_de_mover_y_escalar_aceptan_bocetos():
         mover.construir(v, ctx)
     op = mover.construir(dict(v, bocetos=[hit]), ctx)
     assert op.p["bocetos"] == [] and op.p["cuerpos"] == [] and len(op.p["curvas_boceto"]) == 1
+    antes = geo.caja_envolvente(ent.resolver(hit["ref"], doc.estado_final).forma)
     doc.agregar(op)
     assert doc.resultados[-1].estado in ("ok", "aviso")
+    despues = geo.caja_envolvente(ent.resolver(hit["ref"], doc.estado_final).forma)
+    assert (despues[0][0] - antes[0][0], despues[1][0] - antes[1][0]) == pytest.approx((30, 30))         # la curva se movió de verdad
+    assert (despues[0][1], despues[0][2]) == pytest.approx((antes[0][1], antes[0][2]))
     assert mover.desde_op(op, ContextoComando(doc, op=op))["objeto"] == "bocetos"
     escala = Escala()
     v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in escala.campos(ctx)}

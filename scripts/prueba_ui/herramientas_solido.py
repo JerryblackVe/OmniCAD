@@ -216,6 +216,108 @@ def editar_cara():
     A.deshacer(v)
 
 
+# ---------------------------------------------------------------- CAP-13: mover el contorno, Alt y Espaciado de contorno
+def _grilla_de_la_tapa(n="2"):
+    p = A.abrir(v, "editar_cara")
+    A.elegir(p, "cara", A.hit_cara(v, caja, normal=(0, 0, 1)))
+    A.esperar(300)
+    teclear(p.widgets["n_u"].lineEdit(), n)
+    teclear(p.widgets["n_v"].lineEdit(), n)
+    A.esperar(300)
+    p.set_valor("filtro", "vertice")
+    return p
+
+
+def _clic_en_grilla(p, punto):
+    pix, _ok = p.manipuladores.pantalla([p.manipuladores.manips[0].puntos[punto]])
+    mover(pix[0])
+    clic(pix[0])
+    A.esperar(200)
+
+
+def editar_cara_contorno():
+    antes = medir(caja)
+    alto = A.geo.caja_envolvente(volumen(caja))[1][2]
+    p = _grilla_de_la_tapa()
+    _clic_en_grilla(p, (0, 0))
+    A.reg(AR, "clic en una esquina del contorno la elige", p.comando.sel == {(0, 0)}, p.comando.sel)
+    p.plegables["Entradas numéricas"].boton.setChecked(True)
+    A.esperar(100)
+    teclear(p.widgets["dx"], "3 mm")
+    A.esperar(500)
+    teclear(p.widgets["dx"], "0 mm")
+    teclear(p.widgets["dz"], "6 mm")
+    A.esperar(700)
+    A.foto(v, "editar_cara_contorno")
+    A.reg(AR, "mover el contorno: la vista previa anda", p._previa_ok, p.mensaje.text())
+    p.aceptar()
+    A.esperar(800)
+    despues = medir(caja)
+    forma = volumen(caja)
+    A.reg(AR, "Aceptar: las vecinas siguen al borde (más volumen, sube la esquina)", despues > antes and A.geo.es_valida(forma)
+          and A.geo.caja_envolvente(forma)[1][2] > alto + 5, (antes, despues, A.geo.caja_envolvente(forma)[1]))
+    op = v.doc.operaciones[-1]
+    v.editar_operacion(op.id)
+    A.esperar(500)
+    r = v.panel
+    A.reg(AR, "reabrir conserva el contorno movido", r.valores["despl"] == op.p["desplazamientos"], r.valores["despl"])
+    QTest.keyClick(r, Qt.Key_Escape)
+    A.esperar(300)
+    A.deshacer(v)
+    A.reg(AR, "deshacer vuelve al volumen", abs(medir(caja) - antes) < 1e-3)
+
+    # Alt: arrastrar la tríada con Alt suma cuadros alrededor de lo elegido
+    from omnicad.ui.comandos import editar_cara as modulo
+    p = _grilla_de_la_tapa()
+    _clic_en_grilla(p, (2, 2))
+    gestor = p.manipuladores
+    triada = gestor.manips[1]
+    eje = next(poli for sub, poli in triada._partes(gestor)[0] if sub == ("eje", 2))
+    pix = gestor.pantalla([(eje[0] + eje[1]) / 2])[0][0]
+    mover(pix)
+    QTest.keyPress(v, Qt.Key_Alt)
+    alt_real = bool(QApplication.keyboardModifiers() & Qt.AltModifier)
+    original = modulo.QApplication.keyboardModifiers
+    if not alt_real:         # `sendEvent` no actualiza los modificadores de Qt: se simula solo esa lectura
+        modulo.QApplication.keyboardModifiers = staticmethod(lambda: Qt.AltModifier)
+    raton(QEvent.MouseButtonPress, pix, Qt.LeftButton, Qt.LeftButton)
+    modulo.QApplication.keyboardModifiers = original
+    for k in (10, 25, 40):
+        raton(QEvent.MouseMove, (pix[0], pix[1] - k), Qt.NoButton, Qt.LeftButton)
+        A.esperar(60)
+    raton(QEvent.MouseButtonRelease, (pix[0], pix[1] - 40), Qt.LeftButton)
+    QTest.keyRelease(v, Qt.Key_Alt)
+    A.esperar(600)
+    A.reg(AR, "Alt al arrastrar suma líneas y mueve lo elegido", len(p.valores.get("cortes_u") or []) == 2 and bool(p.valores.get("despl")),
+          (p.valores.get("cortes_u"), p.valores.get("despl"), f"Alt por teclado {alt_real}"))
+    A.foto(v, "editar_cara_alt")
+    forma_puntos = p.manipuladores.manips[0].puntos.shape[:2]
+    A.reg(AR, "la grilla crece con la extrusión", forma_puntos == (7, 7), forma_puntos)
+    p.aceptar()
+    A.esperar(800)
+    A.reg(AR, "Aceptar con Alt da un bulto", medir(caja) > antes and A.geo.es_valida(volumen(caja)), (antes, medir(caja)))
+    A.deshacer(v)
+
+    # Espaciado de contorno: se teclea como cualquier medida
+    p = _grilla_de_la_tapa("1")
+    campo = p.widgets["espaciado"]
+    assert isinstance(campo, QLineEdit)
+    teclear(campo, "2 mm")
+    A.esperar(300)
+    A.reg(AR, "Espaciado de contorno suma una fila de cada lado", p.manipuladores.manips[0].puntos.shape[:2] == (6, 6), p.manipuladores.manips[0].puntos.shape)
+    foto(p, "editar_cara_espaciado")
+    teclear(campo, "abc")
+    A.esperar(200)
+    A.reg(AR, "un espaciado malo no rompe la grilla", p.manipuladores.manips[0].puntos.shape[:2] == (4, 4), p.mensaje.text())
+    teclear(campo, "5000 mm")
+    A.esperar(400)
+    p._calcular_previa()
+    A.reg(AR, "un espaciado enorme avisa", not p._previa_ok and "espaciado" in p.mensaje.text().lower(), p.mensaje.text())
+    QTest.keyClick(p, Qt.Key_Escape)
+    A.esperar(200)
+    A.reg(AR, "Esc deja el cuerpo como estaba", abs(medir(caja) - antes) < 1e-3)
+
+
 # ---------------------------------------------------------------- ventana chica y capturas
 def ventana_chica():
     for ancho, alto in ((1024, 640), (800, 520)):
@@ -366,6 +468,7 @@ A.correr("caja", lambda: dibujar("caja", "centro", lambda p: p.valores["ancho"] 
 A.correr("bobina", lambda: dibujar("bobina", "plano", lambda p: p.valores["diametro"] != "20 mm"))
 A.correr("solevacion", solevacion)
 A.correr("editar_cara", editar_cara)
+A.correr("editar_cara_contorno", editar_cara_contorno)
 A.correr("ventana_chica", ventana_chica)
 A.correr("capturas", capturas)
 A.correr("extruir_corta", extruir_corta)

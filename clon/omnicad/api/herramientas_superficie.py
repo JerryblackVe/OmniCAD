@@ -224,7 +224,8 @@ def _condicion(cond, sesion, body):
              "Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo "
              "sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con "
              "alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier "
-             "cantidad, tocan cada sección) y center_line guían la forma, sin combinarse con las condiciones.", modifica=True)
+             "cantidad, tocan cada sección; con closed, lazos cerrados) y center_line guían la forma y se combinan con las "
+             "condiciones: entre rieles manda la condición y sobre cada riel, el riel.", modifica=True)
 def create_surface_loft(sesion, profiles: list[str | dict], closed: bool = False, ruled: bool = False,
                         body: str | None = None, rails: list[str | dict] | None = None,
                         center_line: list[str | dict] | None = None, start_condition: dict | None = None,
@@ -249,7 +250,7 @@ def create_surface_loft(sesion, profiles: list[str | dict], closed: bool = False
         raise error("INVALID_ARGUMENTS", "Una solevación necesita al menos dos secciones.")
     if rails and center_line:
         raise error("INVALID_ARGUMENTS", "Pasá rails o center_line, no los dos.")
-    params = {"fusionar_tangentes": merge_tangent_edges, "cadena": chain}
+    params = {"fusionar_tangentes": merge_tangent_edges, "cadena": chain, "condicion_exacta": True}
     if rails:
         params["carriles"] = _seleccion(sesion, clase, "carriles", rails, body, curvas=True)
     if center_line:

@@ -208,11 +208,12 @@ class OpSupSolevacion(_OpSuperficie):
     """SUPERFICIE › Solevación [SFC-LOFT]: cada selección es una sección (curva, arista o punto). `carriles` (Rail) y
     `linea_central` (Centerline) guían la forma. `condicion_inicio`, `condicion_fin` y `condiciones_medias` son como en la
     solevación sólida, más `alineacion` (Edge Alignment) y el tipo `punto_tangente`; sin `cara`, una condición Tangente o
-    Suave usa la cara de la que sale el perfil."""
+    Suave usa la cara de la que sale el perfil. `condicion_exacta`: las condiciones fijan la derivada de salida; los pasos
+    guardados antes de que existiera siguen con las secciones auxiliares, y dan lo mismo que entonces."""
     TIPO, ETIQUETA, ICONO = "sup_solevacion", "Solevación de superficie", "⌓"
     PARAMS = {"secciones": [], "cerrada": False, "reglada": False, "carriles": [], "linea_central": [],
               "condicion_inicio": None, "condicion_fin": None, "condiciones_medias": {}, "fusionar_tangentes": False,
-              "cadena": False}
+              "cadena": False, "condicion_exacta": False}
     REFS = ("secciones", "carriles", "linea_central")
 
     def dependencias(self):
@@ -260,7 +261,7 @@ class OpSupSolevacion(_OpSuperficie):
             condicion_fin=self._condicion(p["condicion_fin"], ents, -1, ctx, estado),
             condiciones_medias={int(k): self._condicion(c, ents, int(k), ctx, estado)
                                 for k, c in p["condiciones_medias"].items()},
-            fusionar_tangentes=p["fusionar_tangentes"]))
+            fusionar_tangentes=p["fusionar_tangentes"], condicion_exacta=p["condicion_exacta"]))
 
 
 class OpParche(_OpSuperficie):

@@ -34,8 +34,7 @@ geometría se saca de `docs/fusion_docs/` con `scripts/fusion_docs.py`.
 | Mover/Copiar, Escala, Alinear, Simetría | Existen | Detalles de selección: CAP-9 |
 | Extruir, Revolución, Nervio, Red, Tubería, Vaciado, Combinar, División de silueta, Cara de desfase, Dividir cuerpo | Completos en función | Solo presentación: CAP-10, CAP-11, CAP-12 |
 
-Estado al 2026-10-31: CAP-1 a CAP-12 resueltos. Lo que quedó afuera es CAP-13, en `seguimiento/faltantes.md` (CAP-14, la clase de tolerancia de los tipos nuevos de rosca, se resolvió el 2026-10-31). Las columnas
-«En OmniCAD» de abajo describen el punto de partida.
+Estado al 2026-11-01: CAP-1 a CAP-14 resueltos. Las columnas «En OmniCAD» de abajo describen el punto de partida.
 
 ## CAP-1 · Editar cara (Edit Face)
 

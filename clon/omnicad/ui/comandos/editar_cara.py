@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """SÓLIDO › MODIFICAR › Editar cara (Fusion: Edit Face). Sin motor T-Spline: una grilla de control sobre la cara (ver
 `nucleo/editar_cara.py`). La grilla se elige en la vista, con el filtro de vértice, arista o cara; la tríada, el manipulador
-de escala o las Entradas numéricas mueven lo elegido. Lo que queda en el paso son los desplazamientos de los puntos."""
+de escala o las Entradas numéricas mueven lo elegido, y Alt al arrastrar la tríada suma cuadros alrededor (extrusión). Lo que
+queda en el paso son los desplazamientos de los puntos y las líneas que se sumaron."""
 import math
 
 import numpy as np
@@ -9,6 +10,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QGridLayout, QToolButton, QWidget
 
+from ...nucleo.geometria import ErrorGeometria
 from ...timeline.ops_modificar import OpEditarCara
 from ...timeline.parametros import ANGULO, ESCALAR
 from .. import manipuladores as mp
@@ -192,17 +194,30 @@ class GrillaCara(mp.Manipulador):
         return {}
 
 
+class TriadaCara(mp.Triada):
+    """La tríada de Editar cara: arrastrarla con Alt extruye lo elegido antes de moverlo."""
+
+    def __init__(self, comando, panel, *a, **k):
+        super().__init__(*a, **k)
+        self.comando, self.panel = comando, panel
+
+    def empezar(self, g, pos, sub):
+        if QApplication.keyboardModifiers() & mp.Qt.AltModifier:
+            self.comando.extruir(self.panel)
+        return super().empezar(g, pos, sub)
+
+
 class EditarCara(Comando):
     CLAVE, TITULO, ICONO = "editar_cara", "Editar cara", "editar_cara"
-    AYUDA = ("Deforma una cara con una grilla de control: elegí puntos, aristas o cuadros de la grilla y movelos. El contorno "
-             "de la cara queda fijo. Dividir caras suma puntos.")
+    AYUDA = ("Deforma una cara con una grilla de control: elegí puntos, aristas o cuadros de la grilla y movelos. Si movés el "
+             "contorno, las caras vecinas lo siguen. Pulsá Alt al arrastrar para extruir: suma cuadros alrededor. Dividir caras suma puntos.")
     CLASE_OP = OpEditarCara
     PLEGADAS = (OPCIONES_SEL, "Entradas numéricas")
     ANCHO_PANEL = "normal"
 
     def __init__(self):
         super().__init__()
-        self.sel, self._base, self._memo, self._panel = set(), {}, (None, None), None
+        self.sel, self._base, self._memo, self._panel, self._div = set(), {}, (None, None), None, None
 
     def campos(self, ctx):
         kw = {"seccion": "Entradas numéricas"}
@@ -214,6 +229,7 @@ class EditarCara(Comando):
                   for i, (titulo, botones) in enumerate(FILAS_SEL)],
                 Entero("n_u", "Factor de longitud", 1, 1, 32, seccion="Dividir caras"),
                 Entero("n_v", "Factor de anchura", 1, 1, 32, seccion="Dividir caras"),
+                Expresion("espaciado", "Espaciado de contorno", "0 mm", seccion="Dividir caras"),
                 Casilla("peine_u", "Longitud", seccion="Curvatura en peines"), Casilla("peine_v", "Anchura", seccion="Curvatura en peines"),
                 Casilla("sim_u", "Longitud", seccion="Simetría"), Casilla("sim_v", "Anchura", seccion="Simetría"),
                 Expresion("dx", "X", "0 mm", **kw), Expresion("dy", "Y", "0 mm", **kw), Expresion("dz", "Z", "0 mm", **kw),
@@ -249,11 +265,23 @@ class EditarCara(Comando):
         cara = (v.get("cara") or [None])[0]
         if cara is None:
             return None
-        clave = repr((cara["ref"], v.get("n_u"), v.get("n_v")))
+        forma = mp.entidad(cara, ctx.estado).forma
+        extra = v.get("cortes_u") or [], v.get("cortes_v") or [], self._espaciado(v, ctx, forma)
+        clave = repr((cara["ref"], v.get("n_u"), v.get("n_v"), *extra))
         if self._memo[0] != clave:
-            e = mp.entidad(cara, ctx.estado)
-            self._memo = clave, _ec().grilla_cara(e.forma, int(v.get("n_u") or 1), int(v.get("n_v") or 1))
+            n = int(v.get("n_u") or 1), int(v.get("n_v") or 1)
+            self._memo = clave, _ec().grilla_cara(forma, *n, *extra)
+            self._div = _ec().divisiones(forma, *n, *extra)
         return self._memo[1]
+
+    @staticmethod
+    def _espaciado(v, ctx, forma):
+        try:
+            e = ctx.evaluar(v.get("espaciado") or "0 mm")
+            _ec().divisiones(forma, 1, 1, (), (), e)
+            return e
+        except Exception:  # noqa: BLE001 — a medio escribir o demasiado grande: la vista previa lo marca en rojo
+            return 0.0
 
     def _posiciones(self, v, grilla, despl=None):
         despl = v.get("despl", {}) if despl is None else despl
@@ -286,6 +314,22 @@ class EditarCara(Comando):
         panel.set_valores(dict(_NUMERICAS_CERO))
         if panel.manipuladores is not None:
             panel.manipuladores.actualizar()
+
+    def extruir(self, panel):
+        """Alt: suma una línea de cada lado de lo elegido. La forma no cambia hasta moverlo."""
+        v = panel.valores
+        if not self.sel:
+            return
+        self.grilla(v, panel.ctx)
+        despl = {tuple(map(int, k.split(","))): d for k, d in v.get("despl", {}).items()}
+        try:
+            r = _ec().extruir_grilla(self._div, despl, self.sel)
+        except ErrorGeometria as e:
+            panel.mensaje.setText(str(e))
+            return
+        v["cortes_u"], v["cortes_v"] = [*(v.get("cortes_u") or []), *r["cortes_u"]], [*(v.get("cortes_v") or []), *r["cortes_v"]]
+        v["despl"] = {_clave(k): d for k, d in r["desplazamientos"].items()}
+        self.elegir(panel, set(r["puntos"].values()))
 
     def accion_sel(self, panel, accion):
         grilla = self.grilla(panel.valores, panel.ctx)
@@ -339,11 +383,11 @@ class EditarCara(Comando):
 
     def al_cambiar(self, panel, clave):
         v = panel.valores
-        if clave in ("cara", "n_u", "n_v"):
+        if clave in ("cara", "n_u", "n_v", "espaciado"):
             if clave == "cara":
-                v["despl"] = {}
+                v["despl"], v["cortes_u"], v["cortes_v"] = {}, [], []
             elif v.get("despl"):
-                v["despl"] = self._remuestrear(v, clave)
+                v["despl"] = self._remuestrear(v)
             self.sel, self._base = set(), dict(v.get("despl") or {})
         elif clave in NUMERICAS:
             try:
@@ -351,22 +395,20 @@ class EditarCara(Comando):
             except Exception:  # noqa: BLE001 — una expresión a medio escribir: el panel la marca en rojo
                 pass
 
-    def _remuestrear(self, v, clave):
-        """Al cambiar los factores la forma casi no cambia: el campo viejo se lee en los puntos nuevos."""
-        nuevo, otro = int(v[clave]), "n_v" if clave == "n_u" else "n_u"
+    def _remuestrear(self, v):
+        """Al cambiar las divisiones la forma casi no cambia: el campo viejo se lee en los puntos nuevos."""
         viejos = {tuple(map(int, k.split(","))): d for k, d in v["despl"].items()}
-        anterior = (int(self._memo[1]["puntos"].shape[0 if clave == "n_u" else 1]) - 3) if self._memo[1] is not None else nuevo
-        n0 = (anterior, int(v[otro])) if clave == "n_u" else (int(v[otro]), anterior)
-        n1 = (nuevo, int(v[otro])) if clave == "n_u" else (int(v[otro]), nuevo)
-        if n0 == n1:                     # `set_valor` avisa dos veces
-            return v["despl"]
+        anterior = self._div
         fijos = self.grilla(v, self._panel.ctx)["fijos"]
-        return {_clave(k): d for k, d in _ec().remuestrear(viejos, n0, n1).items() if not fijos[k]}
+        if anterior is None or anterior == self._div:    # `set_valor` avisa dos veces
+            return v["despl"]
+        return {_clave(k): d for k, d in _ec().remuestrear(viejos, anterior, self._div).items() if not fijos[k]}
 
     # ------------------------------------------------------------ operación
     def construir(self, v, ctx):
         exigir(v, "cara", "Seleccioná la cara.")
-        return self.crear_op(OpEditarCara, v, ctx, cara=ref1(v, "cara"), n_u=int(v["n_u"]), n_v=int(v["n_v"]), desplazamientos=dict(v.get("despl") or {}))
+        return self.crear_op(OpEditarCara, v, ctx, cara=ref1(v, "cara"), n_u=int(v["n_u"]), n_v=int(v["n_v"]), desplazamientos=dict(v.get("despl") or {}),
+                             cortes_u=list(v.get("cortes_u") or []), cortes_v=list(v.get("cortes_v") or []), espaciado=v.get("espaciado") or "0 mm")
 
     def desde_op(self, op, ctx):
         self._base = dict(op.p["desplazamientos"])
@@ -379,7 +421,8 @@ class EditarCara(Comando):
         from ...nucleo import analisis as an
         e = mp.entidad(v["cara"][0], panel.ctx.estado)
         despl = {tuple(map(int, k.split(","))): d for k, d in v.get("despl", {}).items()}
-        curvas = _ec().curvas_grilla(e.forma, int(v["n_u"]), int(v["n_v"]), despl)
+        curvas = _ec().curvas_grilla(e.forma, int(v["n_u"]), int(v["n_v"]), despl, cortes_u=v.get("cortes_u") or (), cortes_v=v.get("cortes_v") or (),
+                                     espaciado=self._espaciado(v, panel.ctx, e.forma))
         lista = (curvas["u"] if v.get("peine_u") else []) + (curvas["v"] if v.get("peine_v") else [])
         return [("lineas", np.asarray(an.peines_isocurva(lista, densidad=40, escala=5.0)["puas"], float).reshape(-1, 3), (0.55, 0.30, 0.85), 1.0)]
 
@@ -396,8 +439,8 @@ class EditarCara(Comando):
             if modo == "escala":
                 manips.append(mp.Flecha("escala", centro, ejes[2], factor=0.02, minimo=0.01))
             else:
-                manips.append(mp.Triada(centro, ejes=ejes, giros=None if modo == "traslacion" else ("rx", "ry", "rz"),
-                                        solo_giros=modo == "giro", esfera=False))
+                manips.append(TriadaCara(self, self._panel, centro, ejes=ejes, giros=None if modo == "traslacion" else ("rx", "ry", "rz"),
+                                         solo_giros=modo == "giro", esfera=False))
         return manips
 
 
