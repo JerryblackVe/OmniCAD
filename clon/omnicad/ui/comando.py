@@ -16,14 +16,18 @@ operación sigue apuntando a "su" cara o arista al recalcular.
 import time
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit,
-                               QPushButton, QScrollArea, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGridLayout,
+                               QHBoxLayout, QHeaderView, QLabel, QLayout, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QScrollArea,
+                               QSizePolicy, QSlider, QSpinBox, QTabBar, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
+                               QWidget)
 
 from ..timeline.documento import ErrorDocumento
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, con_unidad
 from .. import registro_uso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
+from .formulario import (ANCHO_ETIQUETA, ANCHOS, Seccion, armar_cabecera, describir_ref, describir_seleccion, fila_mensaje,
+                         poner_mensaje, texto_filtros)
 from .iconos import icono
 
 
@@ -32,6 +36,8 @@ PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
 # Operaciones cuya previa pasa de ~40 ms sobre un cuerpo de muchas caras (docs/auditorias/previa-comandos-*.md): se
 # calculan en un proceso aparte para que la ventana no se congele. Sobre cuerpos chicos siguen en el proceso (< 33 ms).
 TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar"), 64
+# Comandos cuya sección «Más opciones» quedó abierta (se recuerda mientras dure la sesión: no hace falta reabrirla cada vez).
+_SECCIONES_ABIERTAS = set()
 
 
 def _ids_cuerpo(p):
@@ -58,8 +64,18 @@ class ErrorComando(ValueError):
 
 # ---------------------------------------------------------------- campos
 class Campo:
-    def __init__(self, clave, etiqueta, defecto=None, visible_si=None, ayuda=""):
+    """Un control del panel. Jerarquía (docs/auditorias/ui_paneles_2026-10-31.md): los campos son imprescindibles o
+    frecuentes por defecto y van a la vista; `avanzado=True` los manda a la sección plegable «Más opciones» (solo lo poco
+    frecuente: nunca lo necesario para completar la operación). `seccion` los pone en una sección plegable con ese título
+    (la «Configuración de la forma» del Agujero): abierta por defecto, salvo que el título esté en `Comando.PLEGADAS`.
+    `pestana` los lleva a otra pestaña del panel (la «Análisis» de Barrido). `grupo` los junta bajo un subtítulo;
+    `visible_si` los muestra solo en el modo que corresponde; `etiqueta_si(valores)` cambia la etiqueta según el modo
+    (p. ej. «Extensión total» o «Separación entre instancias»)."""
+
+    def __init__(self, clave, etiqueta, defecto=None, visible_si=None, ayuda="", grupo=None, avanzado=False,
+                 etiqueta_si=None, seccion=None, pestana=None):
         self.clave, self.etiqueta, self.defecto, self.visible_si, self.ayuda = clave, etiqueta, defecto, visible_si, ayuda
+        self.grupo, self.avanzado, self.etiqueta_si, self.seccion, self.pestana = grupo, avanzado, etiqueta_si, seccion, pestana
 
 
 class Seleccion(Campo):
@@ -68,6 +84,16 @@ class Seleccion(Campo):
     def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, **kw):
         super().__init__(clave, etiqueta, [], **kw)
         self.filtros, self.minimo, self.maximo = set(filtros), minimo, maximo
+
+
+class ListaSeleccion(Seleccion):
+    """Selección que se ve como tabla con + y ✕ (Perfiles y Raíles de Solevación). `celda(panel, i, n)`: el widget de la
+    segunda columna de la fila i de n. La fila elegida queda en `valores["fila_<clave>"]`."""
+    ancho_completo = True
+
+    def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=None, celda=None, **kw):
+        super().__init__(clave, etiqueta, filtros, minimo, maximo, **kw)
+        self.celda = celda
 
 
 class Expresion(Campo):
@@ -84,15 +110,46 @@ class Opciones(Campo):
         self.opciones = opciones
 
 
+class OpcionesVivas(Opciones):
+    """Lista desplegable que depende de otros valores: `listar(valores)` da el dict de opciones y se vuelve a pedir con
+    cada cambio (Designación según el Tamaño: un campo por tamaño serían miles)."""
+
+    def __init__(self, clave, etiqueta, listar, defecto="", **kw):
+        super().__init__(clave, etiqueta, {}, defecto, **kw)
+        self.listar = listar
+
+
+class Botones(Opciones):
+    """Fila de íconos excluyentes (Tipo de agujero, Operación de Combinar…): el mismo valor que `Opciones`, un botón por
+    opción y su nombre en el tooltip. `opciones`: dict clave → (texto, ícono)."""
+
+
 class Casilla(Campo):
     def __init__(self, clave, etiqueta, defecto=False, **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
+
+
+class Alternar(Casilla):
+    """Booleano que se ve como un botón con ícono que queda apretado («Cambiar dirección» de Nervio y Red). Con
+    `icono_marcado`, apretado cambia de ícono y de nombre: es un modo que se cierra con Terminado («Definir punto de giro»)."""
+
+    def __init__(self, clave, etiqueta, icono_boton, defecto=False, icono_marcado=None, **kw):
+        super().__init__(clave, etiqueta, defecto, **kw)
+        self.icono_boton, self.icono_marcado = icono_boton, icono_marcado
 
 
 class Entero(Campo):
     def __init__(self, clave, etiqueta, defecto=1, minimo=1, maximo=10000, **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
         self.minimo, self.maximo = minimo, maximo
+
+
+class Deslizador(Entero):
+    """Número y deslizador sincronizados (Repetición, Opacidad, Isocurvas del análisis); con `decimales`, no entero."""
+
+    def __init__(self, clave, etiqueta, defecto=1, minimo=1, maximo=10000, decimales=0, **kw):
+        super().__init__(clave, etiqueta, defecto, minimo, maximo, **kw)
+        self.decimales = decimales
 
 
 class Texto(Campo):
@@ -121,6 +178,7 @@ class Info(Campo):
     def __init__(self, clave, etiqueta, funcion, **kw):
         super().__init__(clave, etiqueta, None, **kw)
         self.funcion = funcion
+        self.ancho_completo = not etiqueta          # sin etiqueta el texto ocupa las dos columnas
 
 
 # ---------------------------------------------------------------- contexto y comando
@@ -154,6 +212,19 @@ class Comando:
     # PL2 (Plasticity: teclas de opción a la vista): lo que hace cada tecla MIENTRAS el comando está
     # abierto, p. ej. {"Mayús": "simétrico", "Ctrl": "copiar"}; el panel lo muestra en el pie.
     MODIFICADORES = {}
+    ANCHO_PANEL = None       # "simple" | "normal" | "ancho" (ui/formulario.ANCHOS); None = según la cantidad de campos
+    PLEGADAS = ()            # títulos de las secciones (`Campo.seccion`) que arrancan cerradas
+    AYUDA = ""               # una o dos frases: se ven con el botón «?» de la cabecera (no ocupan el panel)
+    # (clave del campo de modo, {valor: (título, ícono)}): la cabecera sigue al modo elegido (Patrón rectangular → circular)
+    TITULOS_MODO = None
+
+    def titulo_icono(self, valores):
+        """(título, ícono) de la cabecera para estos valores: el del modo elegido si el comando tiene `TITULOS_MODO`."""
+        if self.TITULOS_MODO:
+            clave, tabla = self.TITULOS_MODO
+            if valores.get(clave) in tabla:
+                return tabla[valores[clave]]
+        return self.TITULO, self.ICONO
 
     def campos(self, ctx):
         return []
@@ -185,6 +256,18 @@ class Comando:
 
     def al_cerrar(self, ctx):
         """Limpieza al cerrar el panel (capas de análisis, colores…)."""
+
+    def al_elegir(self, panel, clave):
+        """Clic en la vista que completó un campo de selección (el centro de un cilindro empieza a dibujar el diámetro)."""
+
+    def analizar_previa(self, v, ctx, estado, visor):
+        """Vista previa lista: la pestaña Análisis la pinta (ver `comunes.con_analisis`)."""
+
+    def previa_lista(self, panel, estado):
+        """Vista previa lista, también en cada cuadro de un arrastre: el comando puede ajustar sus valores."""
+
+    def al_tocar_paso(self, panel, op_id):
+        """Clic en un paso del timeline con el panel abierto (Simetría y Patrón eligen operaciones así)."""
 
     def preparar_panel(self, panel):
         """Conecta controles dependientes después de crear todos los campos."""
@@ -303,7 +386,7 @@ def preseleccion(campos, seleccion):
         if c.maximo is not None:
             compatibles = compatibles[:c.maximo]
         if compatibles:
-            valores[c.clave] = compatibles
+            valores[c.clave] = [dict(h, origen=h.get("origen", "previa")) for h in compatibles]
             restantes = [h for h in restantes if all(h is not x for x in compatibles)]
     return valores
 
@@ -325,35 +408,199 @@ def exigir(v, clave, texto):
 
 
 # ---------------------------------------------------------------- widgets
-class _FilaSeleccion(QWidget):
+class _FilaBotones(QWidget):
+    """La fila de `Botones`. Habla como el QComboBox que reemplaza (`findData`, `setCurrentIndex`, `currentData`,
+    `currentIndexChanged`), así el panel, los preajustes y las pruebas la usan igual que a un desplegable."""
+    currentIndexChanged = Signal(int)
+
+    def __init__(self, opciones, parent=None):
+        super().__init__(parent)
+        self._claves, self._textos = list(opciones), [t[0] if isinstance(t, tuple) else t for t in opciones.values()]
+        fila = QHBoxLayout(self)
+        fila.setContentsMargins(0, 0, 0, 0)
+        fila.setSpacing(2)
+        self.grupo = QButtonGroup(self)
+        for i, t in enumerate(opciones.values()):
+            b = QToolButton(objectName="opcion_cmd", checkable=True, toolTip=self._textos[i], accessibleName=self._textos[i])
+            b.setIcon(icono(t[1] if isinstance(t, tuple) else ""))
+            b.setIconSize(QSize(20, 20))
+            self.grupo.addButton(b, i)
+            fila.addWidget(b)
+        fila.addStretch(1)
+        self.grupo.idToggled.connect(lambda i, marcado: marcado and self.currentIndexChanged.emit(i))
+
+    def count(self):
+        return len(self._claves)
+
+    def findData(self, clave):
+        return self._claves.index(clave) if clave in self._claves else -1
+
+    def findText(self, texto):
+        return self._textos.index(texto) if texto in self._textos else -1
+
+    def itemData(self, i):
+        return self._claves[i]
+
+    def itemText(self, i):
+        return self._textos[i]
+
+    def currentIndex(self):
+        return self.grupo.checkedId()
+
+    def currentData(self):
+        return self._claves[self.grupo.checkedId()] if self.grupo.checkedId() >= 0 else None
+
+    def currentText(self):
+        return self._textos[self.grupo.checkedId()] if self.grupo.checkedId() >= 0 else ""
+
+    def setCurrentIndex(self, i):
+        self.grupo.button(i).setChecked(True)
+
+    def boton(self, clave):
+        return self.grupo.button(self.findData(clave))
+
+
+class _BotonElidido(QPushButton):
+    """Botón cuyo texto se corta con «…» al ancho disponible: un nombre largo nunca ensancha el panel."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self._completo, self._elidir = "", False
+
+    def poner(self, texto, elidir):
+        self._completo, self._elidir = texto, elidir
+        self._pintar()
+
+    def _pintar(self):
+        if self._elidir and self.width() > 60:
+            self.setText(self.fontMetrics().elidedText(self._completo, Qt.ElideMiddle, self.width() - 34))
+        else:
+            self.setText(self._completo)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self._elidir:
+            self._pintar()
+
+
+class _FilaLista(QWidget):
+    """`ListaSeleccion`: etiqueta arriba, una fila por elemento y debajo + (elegir más), ✕ (quitar la fila) y ▲▼ (reordenar)."""
     activar = Signal(object)
     limpiar = Signal(object)
+    quitar = Signal(object, int)
+    mover = Signal(object, int, int)
+
+    def __init__(self, campo, panel):
+        super().__init__()
+        self.campo, self.panel, self._items = campo, panel, None
+        caja = QVBoxLayout(self)
+        caja.setContentsMargins(0, 0, 0, 0)
+        caja.setSpacing(2)
+        caja.addWidget(QLabel(campo.etiqueta))
+        self.tabla = QTableWidget(0, 2 if campo.celda else 1, objectName="lista_seleccion", showGrid=False,
+                                  selectionBehavior=QAbstractItemView.SelectRows, selectionMode=QAbstractItemView.SingleSelection,
+                                  editTriggers=QAbstractItemView.NoEditTriggers)
+        self.tabla.horizontalHeader().hide()
+        self.tabla.verticalHeader().hide()
+        self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.tabla.setMaximumHeight(92)
+        self.tabla.itemSelectionChanged.connect(self._fila_elegida)
+        caja.addWidget(self.tabla)
+        pie = QHBoxLayout()
+        pie.setSpacing(2)
+        self.mas = QToolButton(text="+", checkable=True, toolTip="Agregar")
+        self.mas.clicked.connect(lambda: self.activar.emit(self))
+        self.menos = QToolButton(text="✕", toolTip="Quitar la fila elegida")
+        self.menos.clicked.connect(lambda: self._con_fila(lambda i: self.quitar.emit(self, i)))
+        self.arriba = QToolButton(text="▲", toolTip="Subir la fila elegida")
+        self.arriba.clicked.connect(lambda: self._con_fila(lambda i: self.mover.emit(self, i, i - 1)))
+        self.abajo = QToolButton(text="▼", toolTip="Bajar la fila elegida")
+        self.abajo.clicked.connect(lambda: self._con_fila(lambda i: self.mover.emit(self, i, i + 1)))
+        for b in (self.mas, self.menos, self.arriba, self.abajo):
+            pie.addWidget(b)
+        pie.addStretch(1)
+        caja.addLayout(pie)
+
+    def _con_fila(self, accion):
+        if self.tabla.currentRow() >= 0:
+            accion(self.tabla.currentRow())
+
+    def _fila_elegida(self):
+        self.panel._cambiar(f"fila_{self.campo.clave}", self.tabla.currentRow())
+
+    def set_estado(self, n, activa, _descripcion="", _detalle="", vacio="", items=()):
+        self.mas.setChecked(activa)
+        self.tabla.setToolTip(vacio)
+        items = list(items) or [f"Elemento {i + 1}" for i in range(n)]
+        if items == self._items:
+            return
+        self._items = items
+        self.tabla.blockSignals(True)
+        self.tabla.setRowCount(n)
+        for i, texto in enumerate(items):
+            self.tabla.setItem(i, 0, QTableWidgetItem(texto))
+            if self.campo.celda:
+                self.tabla.setCellWidget(i, 1, self.campo.celda(self.panel, i, n))
+        self.tabla.blockSignals(False)
+
+
+class _FilaSeleccion(QWidget):
+    """Fila «Seleccionar». Sin descripción (paneles de boceto) dice «N seleccionados»; con ella (paneles de comando)
+    muestra qué es lo elegido («Cara plana +Z · Caja1», «3 aristas · Caja1»), con el detalle en el tooltip y, si hay
+    varios, un menú ▾ para revisarlos y quitar uno a uno. ✕ limpia todo."""
+    activar = Signal(object)
+    limpiar = Signal(object)
+    quitar = Signal(object, int)         # (fila, posición del elemento que se quita)
 
     def __init__(self, campo, parent=None):
         super().__init__(parent)
         self.campo = campo
+        self._items = []
         h = QHBoxLayout(self)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(2)
-        self.boton = QPushButton(objectName="seleccion_cmd")
+        self.boton = _BotonElidido(objectName="seleccion_cmd")
         self.boton.setIcon(icono("seleccionar"))
         self.boton.setIconSize(QSize(14, 14))
         self.boton.setCursor(Qt.PointingHandCursor)
+        self.boton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)        # el texto no ensancha el panel
         self.boton.clicked.connect(lambda: self.activar.emit(self))
+        self.revisar = QToolButton(text="▾", popupMode=QToolButton.InstantPopup)
+        self.revisar.setToolTip("Revisar lo elegido y quitar elementos uno a uno")
+        self.menu = QMenu(self.revisar)
+        self.revisar.setMenu(self.menu)
+        self.menu.aboutToShow.connect(self._armar_menu)
         self.borrar = QToolButton(text="✕")
         self.borrar.setToolTip("Borrar la selección")
         self.borrar.clicked.connect(lambda: self.limpiar.emit(self))
         h.addWidget(self.boton, 1)
+        h.addWidget(self.revisar)
         h.addWidget(self.borrar)
         self.set_estado(0, False)
 
-    def set_estado(self, n, activa):
-        self.boton.setText("Seleccionar" if n == 0 else (f"{n} seleccionado" if n == 1 else f"{n} seleccionados"))
+    def _armar_menu(self):
+        self.menu.clear()
+        for i, texto in enumerate(self._items):
+            self.menu.addAction(f"Quitar: {texto}").triggered.connect(lambda _=False, i=i: self.quitar.emit(self, i))
+
+    def set_estado(self, n, activa, descripcion="", detalle="", vacio="", items=()):
+        """`descripcion`/`detalle`/`vacio`/`items` los pasa el panel de comando; sin ellos queda el texto simple."""
+        propio = bool(descripcion) or (n == 0 and bool(vacio))
+        if n == 0 and len(vacio) > 26:                    # una lista larga de tipos no entra en el botón: queda en el tooltip
+            texto_vacio = "Elegir en la vista"
+        else:
+            texto_vacio = vacio
+        texto = descripcion or (texto_vacio if n == 0 and vacio else (
+            "Seleccionar" if n == 0 else (f"{n} seleccionado" if n == 1 else f"{n} seleccionados")))
+        self._items = list(items)
+        self.boton.setToolTip(detalle or vacio)
+        self.boton.poner(texto, propio)
         self.boton.setProperty("activa", activa)
         self.boton.setProperty("lleno", n > 0)
         self.boton.style().unpolish(self.boton)
         self.boton.style().polish(self.boton)
         self.borrar.setVisible(n > 0)
+        self.revisar.setVisible(n > 1 and bool(descripcion))
 
 
 class PanelComando(QFrame):
@@ -400,71 +647,129 @@ class PanelComando(QFrame):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
         v.setSizeConstraint(QLayout.SetFixedSize)
-        cab = QFrame(objectName="cabecera_comando")
-        hc = QHBoxLayout(cab)
-        hc.setContentsMargins(8, 4, 4, 4)
-        ico = QLabel()
-        ico.setPixmap(icono(comando.ICONO).pixmap(18, 18))
-        hc.addWidget(ico)
-        titulo = QLabel(comando.TITULO.upper() if ctx.op is None else f"EDITAR {comando.TITULO.upper()}",
-                        objectName="titulo_comando")
-        hc.addWidget(titulo, 1)
-        cerrar = QToolButton(text="✕")
-        cerrar.clicked.connect(self.cancelar)
-        hc.addWidget(cerrar)
+        self.ancho_panel = ANCHOS[comando.ANCHO_PANEL or ("simple" if len(self.campos) <= 6 else "normal")]
+        self._por_clave = {c.clave: c for c in self.campos}
+        self.boton_preajustes = None
+        if preajustes_ui.tiene_preajustes(self):      # UI-4: los preajustes van en la cabecera, no en una fila aparte
+            self.boton_preajustes = preajustes_ui.BotonPreajustes(self)
+        self.boton_ayuda = QToolButton(text="?", checkable=True, toolTip="Qué hace este comando")
+        self.boton_ayuda.setVisible(bool(comando.AYUDA))
+        self.boton_ayuda.setFocusPolicy(Qt.NoFocus)  # Tab empieza en los campos, no en la cabecera (Esc ya cancela)
+        cab, self.icono_titulo, self.titulo = armar_cabecera(
+            self, self.cancelar, [w for w in (self.boton_preajustes, self.boton_ayuda) if w is not None])
         v.addWidget(cab)
+        self._titulo_actual = None
+        self._actualizar_titulo()
+        self.ayuda = QLabel(comando.AYUDA, objectName="pie_comando", wordWrap=True)
+        self.ayuda.setMaximumWidth(self.ancho_panel)
+        self.ayuda.hide()
+        self.boton_ayuda.toggled.connect(lambda b: (self.ayuda.setVisible(b), self._reubicar()))   # ver la ayuda no recalcula nada
+        v.addWidget(self.ayuda)
 
         cuerpo = QWidget()
-        self.grilla = QGridLayout(cuerpo)
-        self.grilla.setContentsMargins(10, 8, 10, 6)
-        self.grilla.setHorizontalSpacing(10)
-        self.grilla.setVerticalSpacing(5)
-        self.grilla.setColumnMinimumWidth(1, 170)
-        for fila, campo in enumerate(self.campos):
-            et = QLabel(campo.etiqueta, objectName="etiqueta_cmd")
+        marco = QVBoxLayout(cuerpo)
+        marco.setContentsMargins(10, 8, 10, 6)
+        marco.setSpacing(4)
+        self.grilla = self._grilla_nueva()
+        marco.addLayout(self.grilla)
+        avanzados = [c for c in self.campos if c.avanzado and not c.pestana]
+        self.seccion = None
+        if avanzados:
+            self.seccion = Seccion("Más opciones", abierta=comando.CLAVE in _SECCIONES_ABIERTAS or bool(self._resumen_avanzados()))
+            self.seccion.plegada.connect(self._seccion_alternada)
+            marco.addWidget(self.seccion)
+        self.plegables = {}                # título de `Campo.seccion` → Seccion
+        self.paginas = {}                  # título de `Campo.pestana` → su página
+        marcos = {None: marco}             # pestaña → marco donde se apilan sus grillas y secciones
+        libres = {None: self.grilla}       # pestaña → grilla vigente de los campos sueltos
+        en_seccion = {None: False}         # pestaña → ¿el campo anterior estaba en una sección plegable?
+        self.rotulos = []                  # (rótulo del grupo, [claves]) → se ve si algún campo del grupo se ve
+        ultimo = {}                        # por grilla (principal / «Más opciones»): (grupo, claves del rótulo vigente)
+        for campo in self.campos:
+            p = campo.pestana
+            if p is not None and p not in self.paginas:
+                self.paginas[p] = QWidget()
+                marcos[p] = QVBoxLayout(self.paginas[p])
+                marcos[p].setContentsMargins(10, 8, 10, 6)
+                marcos[p].setSpacing(4)
+                libres[p] = self._grilla_nueva()
+                marcos[p].addLayout(libres[p])
+                en_seccion[p] = False
+            if campo.avanzado and p is None:
+                grilla = self.seccion.grilla
+            elif campo.seccion:
+                grilla = self._plegable(campo.seccion, marcos[p]).grilla
+                en_seccion[p] = True
+            else:
+                if en_seccion[p]:              # un campo suelto después de una sección va debajo de ella
+                    libres[p] = self._grilla_nueva()
+                    marcos[p].insertLayout(self._antes_de_mas_opciones(marcos[p]), libres[p])
+                    en_seccion[p] = False
+                grilla = libres[p]
+            fila = grilla.rowCount()
+            if campo.grupo and (ultimo.get(id(grilla)) or (None,))[0] != campo.grupo:
+                rotulo = QLabel(campo.grupo, objectName="grupo_cmd")
+                grilla.addWidget(rotulo, fila, 0, 1, 2)
+                claves = [campo.clave]
+                self.rotulos.append((rotulo, claves))
+                ultimo[id(grilla)] = (campo.grupo, claves)
+                fila += 1
+            elif campo.grupo:
+                ultimo[id(grilla)][1].append(campo.clave)
+            else:
+                ultimo[id(grilla)] = None
+            et = QLabel(campo.etiqueta_si(self.valores) if campo.etiqueta_si else campo.etiqueta,
+                        objectName="etiqueta_cmd", wordWrap=True)
+            et.setFixedWidth(ANCHO_ETIQUETA)
             if campo.ayuda:
                 et.setToolTip(campo.ayuda)
             w = self._widget(campo)
             if getattr(campo, "ancho_completo", False):
                 et.hide()                                       # sin etiqueta: el widget ocupa las dos columnas
-                self.grilla.addWidget(w, fila, 0, 1, 2)
+                grilla.addWidget(w, fila, 0, 1, 2)
             else:
-                self.grilla.addWidget(et, fila, 0)
-                self.grilla.addWidget(w, fila, 1)
+                grilla.addWidget(et, fila, 0, Qt.AlignTop if isinstance(campo, Info) else Qt.AlignVCenter)
+                grilla.addWidget(w, fila, 1)
             self.etiquetas[campo.clave], self.widgets[campo.clave] = et, w
-        if preajustes_ui.tiene_preajustes(self):
-            v.addWidget(preajustes_ui.FilaPreajustes(self))
         # B-105: en una ventana chica el cuerpo se desplaza con una barra y Aceptar/Cancelar quedan siempre visibles.
         self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
-        self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)     # solo si un widget propio no entra: no se recorta en silencio
+        self.desplazador.setFixedWidth(self.ancho_panel)
+        self.barra_pestanas = None
+        if self.paginas:
+            self.pagina_principal = cuerpo
+            cuerpo = self._armar_pestanas(cuerpo, v)
         self.desplazador.setWidget(cuerpo)
         v.addWidget(self.desplazador)
 
-        # PL2 (Plasticity: teclas de opción a la vista): el pie del panel muestra qué hace cada
-        # tecla MIENTRAS el comando está abierto; cada comando puede sumar las suyas en MODIFICADORES.
+        # PL2 (Plasticity: teclas de opción a la vista): el pie muestra las teclas de opción del comando (solo si tiene);
+        # Enter y Esc ya están en los tooltips de Aceptar y Cancelar.
         teclas = [*(f"{k}: {d}" for k, d in getattr(comando, "MODIFICADORES", {}).items()),
                   "Enter: aceptar", "Esc: cancelar"]
         self.pie_teclas = QLabel("  ·  ".join(teclas), objectName="pie_comando", wordWrap=True)
-        self.pie_teclas.setMaximumWidth(330)
+        self.pie_teclas.setMaximumWidth(self.ancho_panel)
+        self.pie_teclas.setVisible(bool(getattr(comando, "MODIFICADORES", {})))
         v.addWidget(self.pie_teclas)
 
-        self.mensaje = QLabel(objectName="mensaje_comando", wordWrap=True)
-        self.mensaje.setContentsMargins(10, 0, 10, 4)
-        self.mensaje.setMaximumWidth(330)
-        self.mensaje.hide()
-        v.addWidget(self.mensaje)
+        # Estado: una línea reservada (no salta el panel al aparecer o desaparecer un mensaje); el símbolo y el color dicen
+        # de qué clase es: instrucción pendiente, valor inválido, advertencia, cálculo en curso o error.
+        zona, self.icono_mensaje, self.mensaje = fila_mensaje(self.ancho_panel, self.fontMetrics().height() + 8)
+        v.addWidget(zona)
         pie = QHBoxLayout()
         pie.setContentsMargins(10, 4, 10, 8)
         pie.addStretch(1)
-        self.boton_ok = QPushButton(comando.TEXTO_ACEPTAR, objectName="boton_primario")
+        self.boton_ok = QPushButton(comando.TEXTO_ACEPTAR, objectName="boton_primario", toolTip="Aceptar (Enter)")
         self.boton_ok.clicked.connect(self.aceptar)
-        cancelar = QPushButton("Cancelar")
-        cancelar.clicked.connect(self.cancelar)
+        self.boton_cancelar = QPushButton("Cancelar", toolTip="Cancelar (Esc)")
+        self.boton_cancelar.clicked.connect(self.cancelar)
         pie.addWidget(self.boton_ok)
-        pie.addWidget(cancelar)
+        pie.addWidget(self.boton_cancelar)
         v.addLayout(pie)
+        if self.boton_preajustes is not None:       # Tab empieza en los campos: «⋯» queda después de Cancelar
+            QWidget.setTabOrder(self.boton_cancelar, self.boton_preajustes)
 
         self._t_previa = QTimer(self, singleShot=True, interval=0)
+        self._t_reubicar = QTimer(self, singleShot=True, interval=0, timeout=self._reubicar_ahora)   # B-113: un mensaje de varias líneas asienta su alto recién al volver al bucle de eventos
         self._t_previa.timeout.connect(self._calcular_previa)
         self.manipuladores = None            # GestorManipuladores si el comando tiene asas en la vista
         if (type(comando).manipuladores is not Comando.manipuladores
@@ -474,7 +779,7 @@ class PanelComando(QFrame):
         self.visor.entidad_elegida.connect(self._elegida)
         self._actualizar_visibles()
         self._refrescar_seleccion()
-        primera = next((c for c in self.campos if isinstance(c, Seleccion) and self._visible(c)
+        primera = next((c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)
                         and not self.valores.get(c.clave)), None)
         self._activar(primera)
         comando.preparar_panel(self)
@@ -500,20 +805,79 @@ class PanelComando(QFrame):
             "duracion_s": ahora - self._uso_inicio if self._uso_inicio is not None else 0,
             "cambios": self._uso_cambios, "editando": self.ctx.op is not None})
 
+    def _antes_de_mas_opciones(self, marco):
+        """Posición de `marco` para agregar algo: «Más opciones» siempre queda al final."""
+        i = marco.indexOf(self.seccion) if self.seccion is not None else -1
+        return i if i >= 0 else marco.count()
+
+    def _plegable(self, titulo, marco):
+        """La sección plegable `titulo`, creada la primera vez que aparece."""
+        s = self.plegables.get(titulo)
+        if s is None:
+            s = self.plegables[titulo] = Seccion(titulo, abierta=titulo not in self.comando.PLEGADAS)
+            s.plegada.connect(lambda _a: self._reubicar())        # plegar no recalcula: solo cambia lo que se ve
+            marco.insertWidget(self._antes_de_mas_opciones(marco), s)
+        return s
+
+    def _armar_pestanas(self, principal, v):
+        """Barra Operación / Análisis arriba del cuerpo. Devuelve el widget con todas las páginas: se ve solo la de la
+        pestaña elegida y el panel se ajusta a ella (un QStackedWidget mediría siempre lo que la más alta)."""
+        self.barra_pestanas = QTabBar(objectName="pestanas_cmd", drawBase=False, expanding=False)
+        self.barra_pestanas.addTab("Operación")
+        for titulo in self.paginas:
+            self.barra_pestanas.addTab(titulo)
+        v.addWidget(self.barra_pestanas)
+        todas = QWidget()
+        lista = QVBoxLayout(todas)
+        lista.setContentsMargins(0, 0, 0, 0)
+        lista.setSpacing(0)
+        for pagina in (principal, *self.paginas.values()):
+            lista.addWidget(pagina)
+            pagina.setVisible(pagina is principal)
+        lista.addStretch(1)
+        self.barra_pestanas.currentChanged.connect(self._cambiar_pestana)
+        return todas
+
+    def _pestana_actual(self):
+        """Título de la pestaña a la vista; None = la principal (Operación)."""
+        i = self.barra_pestanas.currentIndex() if self.barra_pestanas is not None else 0
+        return None if i <= 0 else self.barra_pestanas.tabText(i)
+
+    def _cambiar_pestana(self, _i):
+        actual = self._pestana_actual()
+        self.pagina_principal.setVisible(actual is None)
+        for titulo, pagina in self.paginas.items():
+            pagina.setVisible(titulo == actual)
+        self._activar(next((c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)
+                            and not self.valores.get(c.clave)), None))
+        self._reubicar()                     # cambiar de pestaña no recalcula: solo cambia lo que se ve
+
     def _widget(self, campo):
         val = self.valores.get(campo.clave)
         if isinstance(campo, Seleccion):
-            w = _FilaSeleccion(campo)
+            w = _FilaLista(campo, self) if isinstance(campo, ListaSeleccion) else _FilaSeleccion(campo)
+            if isinstance(campo, ListaSeleccion):
+                w.mover.connect(lambda f, a, b: self._reordenar(f.campo, a, b))
             w.activar.connect(lambda f: self._activar(f.campo))
             w.limpiar.connect(lambda f: self._limpiar(f.campo))
+            w.quitar.connect(lambda f, i: self._quitar(f.campo, i))
             self.filas_sel[campo.clave] = w
             return w
         if isinstance(campo, Expresion):
             w = QLineEdit(str(val))
             w.textChanged.connect(lambda t, c=campo: self._cambiar(c.clave, t.strip()))
             return w
+        if isinstance(campo, Botones):
+            w = _FilaBotones(campo.opciones)
+            w.setCurrentIndex(max(w.findData(val), 0))
+            w.currentIndexChanged.connect(lambda _i, c=campo, w=w: self._cambiar(c.clave, w.currentData()))
+            return w
         if isinstance(campo, Opciones):
             w = QComboBox()
+            w.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)      # una opción larga no ensancha el panel
+            w.setMinimumContentsLength(8)
+            if isinstance(campo, OpcionesVivas):
+                campo.opciones = campo.listar(self.valores)
             for k, texto in campo.opciones.items():
                 if isinstance(texto, tuple):
                     w.addItem(icono(texto[1]), texto[0], k)
@@ -522,6 +886,19 @@ class PanelComando(QFrame):
             i = w.findData(val)
             w.setCurrentIndex(max(i, 0))
             w.currentIndexChanged.connect(lambda _i, c=campo, w=w: self._cambiar(c.clave, w.currentData()))
+            return w
+        if isinstance(campo, Alternar):
+            w = QToolButton(objectName="opcion_cmd", checkable=True, checked=bool(val), toolTip=campo.etiqueta,
+                            accessibleName=campo.etiqueta)
+            w.setIcon(icono(campo.icono_boton))
+            w.setIconSize(QSize(20, 20))
+            w.toggled.connect(lambda b, c=campo: self._cambiar(c.clave, b))
+            if campo.icono_marcado:
+                def modo(b, w=w, c=campo):
+                    w.setIcon(icono(c.icono_marcado if b else c.icono_boton))
+                    w.setToolTip("Terminado" if b else c.etiqueta)
+                w.toggled.connect(modo)
+                modo(bool(val))
             return w
         if isinstance(campo, Casilla):
             w = QCheckBox()
@@ -546,6 +923,23 @@ class PanelComando(QFrame):
                 fila.addWidget(hijo)
             w.numero, w.deslizador, w.casilla = numero, deslizador, casilla
             return w
+        if isinstance(campo, Deslizador):
+            w = QWidget()
+            fila = QHBoxLayout(w)
+            fila.setContentsMargins(0, 0, 0, 0)
+            escala = 10 ** campo.decimales
+            numero = (QDoubleSpinBox(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo) if campo.decimales
+                      else QSpinBox(minimum=campo.minimo, maximum=campo.maximo))
+            deslizador = QSlider(Qt.Horizontal, minimum=int(campo.minimo * escala), maximum=int(campo.maximo * escala))
+            numero.setValue(val)
+            deslizador.setValue(round(val * escala))
+            numero.valueChanged.connect(lambda n, d=deslizador: d.setValue(round(n * escala)))
+            deslizador.valueChanged.connect(lambda x, n=numero: n.setValue(x / escala if campo.decimales else x))
+            numero.valueChanged.connect(lambda n, c=campo: self._cambiar(c.clave, n))
+            fila.addWidget(numero)
+            fila.addWidget(deslizador, 1)
+            w.numero, w.deslizador = numero, deslizador
+            return w
         if isinstance(campo, Entero):
             w = QSpinBox(minimum=campo.minimo, maximum=campo.maximo)
             w.setValue(int(val))
@@ -559,33 +953,146 @@ class PanelComando(QFrame):
             return campo.crear(self)
         if isinstance(campo, Info):
             w = QLabel(wordWrap=True)
-            w.setMaximumWidth(220)
+            w.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             w.setTextInteractionFlags(Qt.TextSelectableByMouse)
             return w
         raise TypeError(campo)
 
+    # ------------------------------------------------------------ cabecera, secciones y estado
+    @staticmethod
+    def _grilla_nueva():
+        g = QGridLayout()
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(5)
+        g.setColumnMinimumWidth(0, ANCHO_ETIQUETA)
+        g.setColumnStretch(1, 1)
+        return g
+
+    def _actualizar_titulo(self):
+        """La cabecera sigue a la operación activa: cambia con el modo (Patrón rectangular → circular) y dice si se edita."""
+        titulo, ico = self.comando.titulo_icono(self.valores)
+        if (titulo, ico) == self._titulo_actual:
+            return
+        self._titulo_actual = (titulo, ico)
+        completo = titulo.upper() if self.ctx.op is None else f"EDITAR {titulo.upper()}"
+        # Un título largo se corta con «…» (con el completo en el tooltip): nunca ensancha el panel.
+        sitio = self.ancho_panel - (122 if self.boton_preajustes is not None else 96)       # lo que dejan el ícono y los botones
+        self.titulo.setText(self.titulo.fontMetrics().elidedText(completo, Qt.ElideRight, sitio)
+                            if self.titulo.fontMetrics().horizontalAdvance(completo) * 1.15 > sitio else completo)
+        self.titulo.setToolTip(completo)
+        self.icono_titulo.setPixmap(icono(ico).pixmap(18, 18))
+
+    def _reubicar(self):
+        """El panel cambió de alto (mensaje, ayuda, sección): que siga entrando en el visor."""
+        self._reubicar_ahora()
+        self._t_reubicar.start()          # y otra vez cuando el layout ya asentó las alturas que dependen del ancho
+
+    def _reubicar_ahora(self):
+        self.adjustSize()
+        if hasattr(self.parent(), "reubicar"):
+            self.parent().reubicar()
+
+    def _seccion_alternada(self, abierta):
+        (_SECCIONES_ABIERTAS.add if abierta else _SECCIONES_ABIERTAS.discard)(self.comando.CLAVE)
+        self._reubicar()                     # plegar no recalcula la vista previa: solo cambia lo que se ve
+
+    def _texto_valor(self, campo, valor):
+        if isinstance(campo, Opciones):
+            t = campo.opciones.get(valor, valor)
+            return t[0] if isinstance(t, tuple) else str(t)
+        return str(valor)
+
+    def _resumen_avanzados(self):
+        """Lo que está activo (distinto de su valor por defecto) dentro de «Más opciones»: «Invertir, Conicidad: 5 deg»."""
+        partes = []
+        for c in self.campos:
+            if not c.avanzado or isinstance(c, (Seleccion, Info, Personalizado)) or not self._visible(c):
+                continue
+            valor = self.valores.get(c.clave)
+            if valor == c.defecto or valor in (None, "", []):
+                continue
+            partes.append(c.etiqueta if isinstance(c, Casilla) else f"{c.etiqueta}: {self._texto_valor(c, valor)}")
+        return ", ".join(partes)
+
     # ------------------------------------------------------------ valores
     def ajustar_alto(self, disponible):
-        """B-105: si el panel no entra en el visor, achica el cuerpo con barra; el pie nunca se tapa."""
-        self.desplazador.setMaximumHeight(2 ** 24)          # el alto natural del cuerpo
-        self.adjustSize()
-        cuerpo = self.desplazador.height()
-        otros = self.height() - cuerpo
-        self.desplazador.setMaximumHeight(max(40, min(cuerpo, disponible - otros)))
+        """B-105: si el panel no entra en el visor, achica el cuerpo con barra; el pie nunca se tapa. B-113: el cuerpo crece
+        o se achica con los campos que un cambio de modo muestra u oculta (el alto natural sale del contenido, no del
+        alto que dejó la vez anterior)."""
+        natural = self.desplazador.widget().sizeHint().height() + 2 * self.desplazador.frameWidth()
+        otros = self.height() - self.desplazador.height()
+        self.desplazador.setFixedHeight(max(40, min(natural, disponible - otros)))
         self.adjustSize()
 
     def _visible(self, campo):
         return campo.visible_si is None or bool(campo.visible_si(self.valores))
 
+    def _a_la_vista(self, campo):
+        """Visible, en la pestaña elegida y no escondido en una sección cerrada: la selección no salta sola a un campo que
+        la persona no ve."""
+        if not self._visible(campo) or campo.pestana != self._pestana_actual():
+            return False
+        if campo.seccion and not self.plegables[campo.seccion].abierta:
+            return False
+        return not campo.avanzado or campo.pestana is not None or self.seccion is None or self.seccion.abierta
+
+    def _refrescar_vivas(self):
+        for c in self.campos:
+            if not isinstance(c, OpcionesVivas):
+                continue
+            w, nuevas = self.widgets[c.clave], c.listar(self.valores)
+            w.blockSignals(True)
+            if nuevas != c.opciones:
+                c.opciones = nuevas
+                w.clear()
+                for k, texto in nuevas.items():
+                    w.addItem(texto, k)
+            w.setCurrentIndex(max(w.findData(self.valores.get(c.clave)), 0))
+            self.valores[c.clave] = w.currentData()
+            w.blockSignals(False)
+
     def _actualizar_visibles(self):
+        self._refrescar_vivas()
         for c in self.campos:
             vis = self._visible(c)
             self.widgets[c.clave].setVisible(vis)
             if not getattr(c, "ancho_completo", False):
                 self.etiquetas[c.clave].setVisible(vis)
-        self._validar_expresiones()
+            if c.etiqueta_si is not None:
+                texto = c.etiqueta_si(self.valores)
+                if texto != self.etiquetas[c.clave].text():
+                    self.etiquetas[c.clave].setText(texto)
+        for rotulo, claves in self.rotulos:
+            rotulo.setVisible(any(self._visible(self._por_clave[k]) for k in claves))
+        if self.seccion is not None:
+            self.seccion.setVisible(any(self._visible(c) for c in self.campos if c.avanzado and not c.pestana))
+            self.seccion.set_resumen(self._resumen_avanzados())
+        for titulo, s in self.plegables.items():
+            s.setVisible(any(self._visible(c) for c in self.campos if c.seccion == titulo))
+        self._actualizar_titulo()
+        invalido = self._validar_expresiones()
+        if invalido is not None and invalido.avanzado and self.seccion is not None and not self.seccion.abierta:
+            self.seccion.boton.setChecked(True)          # un valor inválido no se queda escondido en «Más opciones» cerrada
+        self._revisar_selecciones_visibles()
+        self._reubicar()          # B-113: si el cambio de modo mostró u ocultó campos, el panel crece o se achica
+
+    def _revisar_selecciones_visibles(self):
+        """Al cambiar de modo, las selecciones de campos que dejan de verse dejan de resaltarse en la vista (se conservan
+        por si se vuelve al modo anterior) y, si el campo activo se ocultó, la selección pasa al siguiente que falta."""
+        visibles = tuple(c.clave for c in self.campos if isinstance(c, Seleccion) and self._visible(c))
+        if visibles == getattr(self, "_sel_visibles", visibles):
+            self._sel_visibles = visibles
+            return
+        self._sel_visibles = visibles
+        if self.activa is not None and self.activa.clave not in visibles:
+            self._activar(next((self._por_clave[k] for k in visibles
+                                if not self.valores.get(k) and self._a_la_vista(self._por_clave[k])), None))
+        self._refrescar_seleccion()
 
     def _validar_expresiones(self):
+        """Marca en rojo las expresiones inválidas (con el motivo en su tooltip). Devuelve la primera, para llevar a ella."""
+        primera = None
         for c in self.campos:
             if isinstance(c, Expresion) and self._visible(c):
                 w = self.widgets[c.clave]
@@ -596,6 +1103,15 @@ class PanelComando(QFrame):
                 except ErrorExpresion as e:
                     w.setToolTip(str(e))
                     w.setStyleSheet(f"background: {temas.color('campo_error')};")
+                    primera = primera or c
+        return primera
+
+    def _mostrar_campo_invalido(self):
+        """El mensaje de un valor inválido y su campo quedan juntos: se lleva la vista hasta él."""
+        c = self._validar_expresiones()
+        enfocado = QApplication.focusWidget()
+        if c is not None and not (enfocado is not None and self.desplazador.isAncestorOf(enfocado)):   # tecleando en otro campo, la vista no salta
+            self.desplazador.ensureWidgetVisible(self.widgets[c.clave])
 
     def _cambiar(self, clave, valor):
         if registro_uso.activo is not None:
@@ -616,14 +1132,14 @@ class PanelComando(QFrame):
             self._refrescar_seleccion()
         elif isinstance(w, QLineEdit):
             w.setText(str(valor))
-        elif isinstance(w, QComboBox):
+        elif isinstance(w, (QComboBox, _FilaBotones)):
             w.setCurrentIndex(max(w.findData(valor), 0))
-        elif isinstance(w, QCheckBox):
+        elif isinstance(w, (QCheckBox, QToolButton)):
             w.setChecked(bool(valor))
         elif isinstance(w, QSpinBox):
             w.setValue(int(valor))
-        elif isinstance(campo, Porcentaje):
-            w.numero.setValue(int(valor))
+        elif isinstance(campo, (Porcentaje, Deslizador)):
+            w.numero.setValue(valor)
         self.valores[clave] = valor if not isinstance(campo, Seleccion) else list(valor)
         self._actualizar_visibles()
         self.comando.al_cambiar(self, clave)
@@ -638,13 +1154,16 @@ class PanelComando(QFrame):
             self.valores[clave] = list(valor) if isinstance(campo, Seleccion) else valor
             if w is None or isinstance(campo, (Seleccion, Personalizado, Info)):
                 continue
+            if isinstance(campo, Deslizador):
+                w.numero.setValue(valor)
+                continue
             w.blockSignals(True)
             try:
                 if isinstance(w, QLineEdit):
                     w.setText(str(valor))
-                elif isinstance(w, QComboBox):
+                elif isinstance(w, (QComboBox, _FilaBotones)):
                     w.setCurrentIndex(max(w.findData(valor), 0))
-                elif isinstance(w, QCheckBox):
+                elif isinstance(w, (QCheckBox, QToolButton)):
                     w.setChecked(bool(valor))
                 elif isinstance(w, QSpinBox):
                     w.setValue(int(valor))
@@ -657,11 +1176,45 @@ class PanelComando(QFrame):
     # ------------------------------------------------------------ selección en la vista
     def _activar(self, campo):
         self.activa = campo
-        for clave, fila in self.filas_sel.items():
-            fila.set_estado(len(self.valores.get(clave) or []), campo is not None and clave == campo.clave)
+        self._pintar_filas()
         self.visor.set_filtro(campo.filtros if campo is not None else None)
         # en un campo de varios perfiles, tocar una letra elige el texto entero (como Fusion)
         self.visor.texto_entero = bool(campo is not None and campo.maximo is None and "perfil" in campo.filtros)
+
+    def _pintar_filas(self):
+        """Cada fila de selección dice QUÉ tiene (nombre y rasgo de lo elegido) o qué espera (Elegir cara o arista)."""
+        for clave, fila in self.filas_sel.items():
+            campo, hits = self._por_clave[clave], self.valores.get(clave) or []
+            try:
+                texto, detalle = describir_seleccion(hits, self.ctx)
+                items = [describir_ref(h["ref"], self.ctx) for h in hits]
+            except Exception:  # noqa: BLE001 — una referencia que no se puede nombrar no tumba el panel
+                texto, detalle, items = (f"{len(hits)} seleccionado(s)" if hits else ""), "", []
+            vacio = texto_filtros(campo.filtros, campo.maximo != 1)
+            fila.set_estado(len(hits), self.activa is not None and clave == self.activa.clave, texto, detalle, vacio, items)
+
+    def _quitar(self, campo, i):
+        """Quita una sola referencia de un campo con varias (menú ▾ de la fila)."""
+        lista = list(self.valores.get(campo.clave) or [])
+        if 0 <= i < len(lista):
+            del lista[i]
+            self.valores[campo.clave] = lista
+            self._refrescar_seleccion()
+            self._actualizar_visibles()
+            self.comando.al_cambiar(self, campo.clave)
+            self._programar()
+
+    def _reordenar(self, campo, i, j):
+        """Sube o baja una fila de una `ListaSeleccion`: el orden de los perfiles es el de la solevación."""
+        lista = list(self.valores.get(campo.clave) or [])
+        if 0 <= j < len(lista):
+            lista[i], lista[j] = lista[j], lista[i]
+            self.valores[campo.clave] = lista
+            self._refrescar_seleccion()
+            self.filas_sel[campo.clave].tabla.selectRow(j)
+            self._actualizar_visibles()
+            self.comando.al_cambiar(self, campo.clave)
+            self._programar()
 
     def _limpiar(self, campo):
         self.valores[campo.clave] = []
@@ -710,10 +1263,11 @@ class PanelComando(QFrame):
             self._activar(campo)
         self._actualizar_visibles()
         self.comando.al_cambiar(self, campo.clave)
+        self.comando.al_elegir(self, campo.clave)
         self._programar()
 
     def _siguiente_seleccion(self, campo):
-        sels = [c for c in self.campos if isinstance(c, Seleccion) and self._visible(c)]
+        sels = [c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)]
         if campo not in sels:
             return None
         for c in sels[sels.index(campo) + 1:]:
@@ -725,12 +1279,11 @@ class PanelComando(QFrame):
         self._previa_aislada = False     # otra selección es otra geometría: la próxima previa vuelve a ensayarse aislada
         prims = []
         for c in self.campos:
-            if isinstance(c, Seleccion):
+            if isinstance(c, Seleccion) and self._visible(c):
                 for h in self.valores.get(c.clave) or []:
                     prims.extend(h.get("dibujo") or [])
         self.visor.set_capa("seleccion", prims)
-        for clave, fila in self.filas_sel.items():
-            fila.set_estado(len(self.valores.get(clave) or []), self.activa is not None and clave == self.activa.clave)
+        self._pintar_filas()
         self._informar_medidas()
 
     def _informar_medidas(self):
@@ -748,7 +1301,17 @@ class PanelComando(QFrame):
         info(texto)
 
     # ------------------------------------------------------------ vista previa
+    def _limpiar_mensaje(self):
+        """Cambió un valor o una selección: el aviso de antes ya no vale y se va al instante, sin esperar a la previa
+        (que lo vuelve a mostrar si sigue siendo cierto). El «Calculando…» de la previa aparte se queda."""
+        if self.mensaje.text() and self.mensaje.property("tipo") != "calculando":
+            self.mensaje.setText("")
+            self.mensaje.setVisible(False)
+            self.icono_mensaje.setVisible(False)
+            self._reubicar()
+
     def _programar(self):
+        self._limpiar_mensaje()
         gestor = self.manipuladores
         if gestor is not None and gestor.arrastrando and self._t_previa.isActive():
             pass                             # arrastrando un asa: el cálculo ya pedido toma el último valor
@@ -782,10 +1345,13 @@ class PanelComando(QFrame):
             try:
                 self.comando.mostrar(self.valores, self.ctx)
                 self._mostrar("")
-            except (ErrorComando, ErrorExpresion) as e:
-                self._mostrar(str(e), aviso=True)
+            except ErrorComando as e:
+                self._mostrar(str(e), tipo="instruccion")
+            except ErrorExpresion as e:
+                self._mostrar(str(e), tipo="invalido")
+                self._mostrar_campo_invalido()
             except Exception as e:  # noqa: BLE001 — el análisis que falla se informa, no tumba la app
-                self._mostrar(f"⚠ {e}")
+                self._mostrar(f"⚠ {e}", tipo="error")
             self._previa_ok = True
             return
         try:
@@ -793,7 +1359,9 @@ class PanelComando(QFrame):
         except (ErrorComando, ErrorExpresion) as e:
             self._cancelar_previa_hijo()
             self.ultima_op = None
-            self._mostrar(str(e), aviso=True)
+            self._mostrar(str(e), tipo="instruccion" if isinstance(e, ErrorComando) else "invalido")
+            if isinstance(e, ErrorExpresion):
+                self._mostrar_campo_invalido()
             self._previa_vista(None)
             self.previa.emit(None)
             return
@@ -816,14 +1384,28 @@ class PanelComando(QFrame):
             estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
             self._previa_aislada = True
         except Exception as e:  # noqa: BLE001 — se muestra el error del kernel como en Fusion
-            self._mostrar(f"⚠ {e}")
+            self._mostrar(f"⚠ {e}", tipo="error")
             self._previa_vista(None)
             self.previa.emit(None)
             return
         self._previa_ok = True
-        self._mostrar(" ".join(avisos), aviso=True)
+        self._mostrar(" ".join(avisos), tipo="aviso")
         self._previa_vista(op)
+        self._previa_lista(estado)
+
+    def _previa_lista(self, estado):
         self.previa.emit(estado)
+        try:
+            self.comando.analizar_previa(self.valores, self.ctx, estado, self.visor)
+        except Exception as e:  # noqa: BLE001 — el análisis que falla se informa, no tumba la vista previa
+            self._mostrar(f"⚠ {e}", tipo="aviso")
+        self._avisar_previa(estado)
+
+    def _avisar_previa(self, estado):
+        try:
+            self.comando.previa_lista(self, estado)
+        except Exception as e:  # noqa: BLE001 — si el ajuste falla, la previa sigue sirviendo
+            self._mostrar(f"⚠ {e}", tipo="aviso")
 
     def _previsualizar_prisma(self, op):
         p = op.p
@@ -891,9 +1473,10 @@ class PanelComando(QFrame):
         for cid, (v, _, _) in mallas.items():
             estado.cuerpos[cid].forma.vertices = v
         if self.visor._estado is not estado:
-            self.previa.emit(estado)
+            self._previa_lista(estado)
         else:
             self.visor.actualizar_prismas(estado, mallas)
+            self._avisar_previa(estado)
         self._previa_ok = True
         if self.mensaje.text():
             self._mostrar("")
@@ -914,9 +1497,9 @@ class PanelComando(QFrame):
                 "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular})
             self._op_hijo = op
             self._t_hijo.start()
-            self._mostrar("Calculando vista previa en un proceso aparte…", aviso=True)
+            self._mostrar("Calculando vista previa en un proceso aparte…", tipo="calculando")
         except TareaAislada as e:
-            self._mostrar(str(e), aviso=True)
+            self._mostrar(str(e), tipo="aviso")
 
     def _recibir_previa(self):
         from ..timeline.calculo_aislado import leer_previa_visual
@@ -926,13 +1509,13 @@ class PanelComando(QFrame):
                 return
             estado, avisos = leer_previa_visual(salida, self.ctx.estado)
             self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
-            self._mostrar(" ".join(avisos), aviso=True)
+            self._mostrar(" ".join(avisos), tipo="aviso")
             if self._previa_ok:
                 self._previa_vista(self._op_hijo)
-            self.previa.emit(estado)
+            self._previa_lista(estado)
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
             self._previa_ok = False
-            self._mostrar(f"⚠ {e}", aviso=True)
+            self._mostrar(f"⚠ {e}", tipo="error")
             self.previa.emit(None)
         self._t_hijo.stop()
         self._hijo_previa = None
@@ -959,22 +1542,22 @@ class PanelComando(QFrame):
                 prims = None
         self.manipuladores.mostrar_previa(prims)
 
-    def _mostrar(self, texto, aviso=False):
+    def _mostrar(self, texto, aviso=False, tipo=None):
+        """Estado del panel. `tipo`: instruccion (falta elegir algo), invalido (valor mal escrito), aviso, calculando o error;
+        sin `tipo`, `aviso=True` es un aviso y lo demás un error. El símbolo acompaña al color."""
+        tipo = tipo or ("aviso" if aviso else "error")
         if registro_uso.activo is not None and texto and texto != self._uso_error:
             registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
             registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
         self._uso_error = texto
-        self.mensaje.setObjectName("aviso_comando" if aviso else "mensaje_comando")
-        self.mensaje.setStyleSheet(f"color: {temas.color('aviso' if aviso else 'error')};")
-        self.mensaje.setText(texto)
-        self.mensaje.setVisible(bool(texto))
-        self.adjustSize()
-        if hasattr(self.parent(), "reubicar"):
-            self.parent().reubicar()        # el mensaje agranda el panel: que siga entrando en el visor
+        poner_mensaje(self.icono_mensaje, self.mensaje, texto, tipo)
+        self._reubicar()                       # el mensaje puede agrandar el panel: que siga entrando en el visor
 
     # ------------------------------------------------------------ cierre
     def aceptar(self):
-        if self._t_previa.isActive():
+        for _ in range(3):              # la previa puede ajustar un valor (Extruir pasa a Cortar) y pedir otra
+            if not self._t_previa.isActive():
+                break
             self._t_previa.stop()
             self._calcular_previa()
         if self.comando.SIN_OP:
@@ -1031,9 +1614,21 @@ class PanelComando(QFrame):
         self.previa.emit(None)
         self.hide()
 
+    def _enter_es_del_control(self):
+        """Enter lo atiende el control con foco (lista abierta de un desplegable, tabla, texto de varias líneas, botón)
+        en vez de aceptar el comando por accidente. Devuelve True si ya lo resolvió."""
+        w = QApplication.focusWidget()
+        if isinstance(w, QComboBox) and w.view().isVisible() or isinstance(w, (QAbstractItemView, QPlainTextEdit)):
+            return True
+        if w is not None and w in (self.boton_cancelar, self.boton_preajustes):
+            w.click()                       # Enter sobre «Cancelar» cancela y sobre «⋯» abre el menú (no aceptan); sobre cualquier otro botón sigue aceptando
+            return True
+        return False
+
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Return, Qt.Key_Enter):
-            self.aceptar()
+            if not self._enter_es_del_control():
+                self.aceptar()
         elif e.key() == Qt.Key_Escape:
             self.cancelar()
         else:

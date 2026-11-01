@@ -373,6 +373,7 @@ for clave, a in v.acciones.items():
     antes = estado()
     n_err = len(A.ERRORES)
     A.MODALES.clear()
+    A.activar(v)             # Windows puede dar la activación a la ventana de Dibujo (abierta antes): los atajos son de la principal
     vis.setFocus()
     QTest.keySequence(vis, sc)
     A.esperar(180)

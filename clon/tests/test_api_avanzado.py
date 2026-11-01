@@ -328,6 +328,16 @@ def test_execute_code_sin_result_y_con_valor_no_json(s):
     assert r["result"] == [1, 2] and len(r["stdout"]) == 20000 and r["stdout_truncated"] is True
 
 
+def test_execute_code_devuelve_la_imagen_de_una_llamada_como_imagen(s):
+    """H-53: un get_viewport_image hecho dentro de execute_code no se vuelve texto: el MCP la manda como imagen."""
+    from omnicad.servidor_mcp.conversion import a_resultado_mcp
+    codigo = "result = llamar('get_viewport_image', {'width': 64, 'height': 48})['result']['image']"
+    r = api.llamar(s, "execute_code", {"code": codigo})
+    assert r["ok"] and isinstance(r["result"]["result"], api.Imagen) and not r["avisos"]
+    mcp = a_resultado_mcp(r)
+    assert [c.type for c in mcp.content] == ["text", "image"] and "attached_image" in mcp.content[0].text
+
+
 def test_execute_code_que_lanza_deja_el_documento_igual(s):
     antes = foto(s)
     codigo = ("llamar('run_operation', {'type': 'primitiva', 'params': {}})\n"

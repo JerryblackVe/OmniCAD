@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Hallazgos de la prueba de tortura del 2026-10-17 (docs/informe_tortura_2026-10-17.md), uno por bug (T-01 … T-18):
+"""Hallazgos de la prueba de tortura del 2026-10-17 (docs/auditorias/informe_tortura_2026-10-17.md), uno por bug (T-01 … T-18):
 cuelgues del kernel que ahora se cortan por tiempo, referencias que se perdían, vaciados imposibles, topes de rango,
 avisos que faltaban y mensajes que culpaban a lo que no era."""
 import json

@@ -10,6 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Todas las pruebas corren sin ventanas. Va acá, ANTES de importar cualquier módulo: en Linux `omnicad.ui` elige con
 # esto la API de contexto de PyOpenGL (GLX para offscreen) y algunos archivos de prueba importan la interfaz sin fijarlo.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Sin esto, la primera QApplication que se crea (según el archivo que corra antes) dibuja el texto de los íconos con otra
+# fuente que Segoe UI y cambia sus colores (B-112: test_iconos_gramatica); en Linux Qt ya usa fontconfig.
+if sys.platform == "win32":
+    os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 # Las vistas animadas (P-45) no corren en pruebas: cada prueba espera la cámara al instante.
 os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")
 # El historial del Asistente (asistente/historial.py) nunca se escribe en la carpeta del usuario durante las pruebas.

@@ -170,6 +170,12 @@ class VentanaPrincipal(QMainWindow):
 
         self.visor = Visor3D()
         self.area = AreaVisor(self.visor)
+        try:                                        # dónde dejó la persona los paneles de comando (vacío: el de siempre)
+            derecha, arriba = self.prefs["vista/posicion_panel_comando"].split(",")
+            self.area.posicion_panel = (int(derecha), int(arriba))
+        except ValueError:
+            pass
+        self.area.al_mover_panel = self._guardar_posicion_panel
         self.navegador = Navegador()
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
@@ -208,8 +214,13 @@ class VentanaPrincipal(QMainWindow):
 
         self.timeline = PanelTimeline()
         self.timeline.editar.connect(self.editar_operacion)
+        self.timeline.tocado.connect(lambda i: self.panel is not None and self.panel.comando.al_tocar_paso(self.panel, i))
         self.timeline.renombrar.connect(self._renombrar)
         self.timeline.suprimir.connect(lambda i, v: self._intentar(lambda: self.doc.suprimir(i, v)))
+        self.timeline.suprimir_varios.connect(self._suprimir_varios)
+        self.timeline.configurar.connect(self._configurar_paso)
+        self.timeline.buscar_ventana.connect(self._buscar_pasos_en_ventana)
+        self.timeline.crear_conjunto.connect(self._crear_conjunto_de_pasos)
         self.timeline.eliminar.connect(lambda i: self._intentar(lambda: self.doc.eliminar(i)))
         self.timeline.mover.connect(lambda i, n: self._intentar(lambda: self.doc.mover(i, n)))
         self.timeline.marcador.connect(lambda n: self._intentar(lambda: self.doc.mover_marcador(n)))
@@ -1249,14 +1260,17 @@ class VentanaPrincipal(QMainWindow):
         self._t_anim.start()
 
     def _estudio_movimiento(self):
-        uniones = {k: u["nombre"] for k, u in self.doc.estado_final.uniones.items()}
-        if not uniones:
-            QMessageBox.information(self, NOMBRE_APP, "Todavía no hay uniones para animar.")
+        """ENSAMBLAR › Estudio de movimiento: el panel con todas las uniones (ASM-14, `ui/estudio_movimiento.py`)."""
+        from ..timeline.ops_ensamblar import MOVIMIENTOS
+        from .estudio_movimiento import PanelEstudioMovimiento
+        if not any(any(MOVIMIENTOS[u["tipo"]]) for u in self.doc.estado_final.uniones.values()):
+            QMessageBox.information(self, NOMBRE_APP, "Todavía no hay uniones con movimiento para animar.")
             return
-        nombre, ok = QInputDialog.getItem(self, "Estudio de movimiento", "Unión a animar:", list(uniones.values()), 0,
-                                          False)
-        if ok:
-            self.animar_union(next(k for k, n in uniones.items() if n == nombre))
+        previo = getattr(self, "_panel_estudio", None)
+        if previo is not None and previo.isVisible():
+            previo.close()
+        self._panel_estudio = PanelEstudioMovimiento(self)
+        self._panel_estudio.show()
 
     # ------------------------------------------------------------ otros espacios de trabajo
     @staticmethod
@@ -1304,6 +1318,10 @@ class VentanaPrincipal(QMainWindow):
         v.raise_()
         v.activateWindow()
         return v
+
+    def _guardar_posicion_panel(self, pos):
+        """Dónde dejó la persona los paneles de comando (None: vuelven al lugar de siempre)."""
+        self.prefs["vista/posicion_panel_comando"] = ",".join(map(str, pos)) if pos else ""
 
     def _guardar_espacio(self, clave, ventana):
         self.doc.espacios[clave] = ventana.a_dict()
@@ -2117,6 +2135,18 @@ class VentanaPrincipal(QMainWindow):
             op = self.doc.operacion(clave)
             if isinstance(op, OpComponente):
                 self._reemplazar(OpComponente(op.id, op.nombre, op.suprimida, **dict(op.p, fijo=not op.p.get("fijo"))))
+        elif accion in ("anclar_componente", "posicion_inicial_componente"):       # menú del navegador (ASM-15)
+            from .comando import hits_cuerpos
+            from .comandos.ensamblar import AnclarComponente, PosicionInicial
+            cuerpos = [c for c, cu in estado.cuerpos.items() if cu.componente == clave][:1]
+            if not cuerpos:
+                self.mensaje("Ese componente no tiene cuerpos.")
+            elif accion == "anclar_componente":
+                anclado = bool(estado.componentes.get(clave, {}).get("anclado"))
+                self.ejecutar_comando(AnclarComponente(), valores={"cuerpos": hits_cuerpos(cuerpos, estado),
+                                                                   "anclado": not anclado})
+            else:
+                self.ejecutar_comando(PosicionInicial(), valores={"cuerpos": hits_cuerpos(cuerpos, estado)})
         elif accion == "aislar_componente":
             self.ocultos |= {c for c, cu in estado.cuerpos.items() if cu.componente != clave}
             self.ocultos -= {c for c, cu in estado.cuerpos.items() if cu.componente == clave}
@@ -2299,6 +2329,45 @@ class VentanaPrincipal(QMainWindow):
             self._intentar(lambda: self.doc.set_propiedad([clave], "nombre", nombre))
         else:
             self._intentar(lambda: self.doc.renombrar(clave.split("_")[0], nombre))
+
+    def _suprimir_varios(self, ids, suprimir):
+        """Timeline › «Suprimir N pasos» (varios elegidos con Ctrl): un solo paso de deshacer."""
+        from .acciones_navegador import llamar
+        r = llamar(self, "suppress_feature", feature=list(ids), suppressed=suprimir)
+        if r["ok"] and r["avisos"]:
+            self.mensaje(" ".join(r["avisos"]), 10000)
+
+    def _configurar_paso(self, op_id):
+        """Timeline › «Configurar» (Fusion: Configure › Suppression): suma la columna «Suprimir» del paso a la tabla."""
+        from .acciones_navegador import llamar
+        op = self.doc.operacion(op_id)
+        if any(c.get("op") == op_id for c in self.doc.configuraciones.get("columnas", [])):
+            self.mensaje(f"«{op.nombre}» ya está en la tabla de configuraciones.")
+        elif llamar(self, "manage_configurations", action="add_column",
+                    column={"type": "suppress", "feature": op_id})["ok"]:
+            self.mensaje(f"Se sumó «Suprimir {op.nombre}» a la tabla de configuraciones.")
+
+    def _buscar_pasos_en_ventana(self, ids):
+        """Timeline › «Buscar en la ventana» (Fusion: Find in Window): elige y encuadra los cuerpos que crearon los pasos."""
+        try:
+            cuerpos = self._sesion_api().cuerpos_de_pasos(ids)
+        except Exception as e:  # noqa: BLE001 — el error de la API trae su mensaje claro
+            self.mensaje(str(getattr(e, "mensaje", e)), 8000)
+            return
+        self.buscar_en_ventana(cuerpos)
+
+    def _crear_conjunto_de_pasos(self, ids):
+        """Timeline › «Crear conjunto de selección…»: guarda los cuerpos de los pasos bajo el nombre que se escribe."""
+        from .acciones_navegador import llamar
+        usados = {c["name"] for c in llamar(self, "manage_selection_sets", action="list")["result"]["sets"]}
+        n = len(usados) + 1
+        while f"Conjunto {n}" in usados:
+            n += 1
+        nombre, ok = QInputDialog.getText(self, "Crear conjunto de selección", "Nombre:", text=f"Conjunto {n}")
+        if ok and nombre.strip():
+            r = llamar(self, "manage_selection_sets", action="create", name=nombre.strip(), steps=list(ids))
+            if r["ok"]:
+                self.mensaje(f"Conjunto «{nombre.strip()}» guardado ({r['result']['count']} en total).")
 
     def _renombrar(self, op_id):
         op = self.doc.operacion(op_id)

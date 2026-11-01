@@ -80,31 +80,55 @@ def _panel(comando):
     return PanelComando(comando, ContextoComando(doc), visor)
 
 
+def _accion(boton, texto):
+    """La entrada del menú de preajustes que empieza con `texto` (se arma al abrirlo, como cuando la persona lo despliega)."""
+    boton.menu.aboutToShow.emit()
+    acciones = boton.menu.actions()
+    return next((a for a in acciones if a.text() == texto), None) or next(a for a in acciones if a.text().startswith(texto))
+
+
 def test_panel_guarda_aplica_y_abre_con_el_predeterminado(monkeypatch):
     from omnicad.ui.comandos.crear import Nervio
-    from omnicad.ui.preajustes_ui import FilaPreajustes
+    from omnicad.ui.preajustes_ui import BotonPreajustes
     panel = _panel(Nervio())
-    fila = panel.findChild(FilaPreajustes)
-    assert fila is not None and fila.lista.count() == 1
+    boton = panel.boton_preajustes
+    cabecera = boton.parentWidget()
+    assert isinstance(boton, BotonPreajustes) and cabecera.objectName() == "cabecera_comando"     # UI-4: va en la cabecera
+    assert panel.findChildren(BotonPreajustes) == [boton]
+    assert _accion(boton, "Valores de fábrica").isChecked()
     clave = next(c.clave for c in panel.campos if c.clave == "espesor")
     panel.set_valor(clave, "7 mm")
     monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_k: ("Siete", True))
-    fila.mas.click()                                               # «＋»: guarda los valores actuales
-    assert pre.obtener("nervio", "Siete")[clave] == "7 mm" and fila.lista.currentData() == "Siete"
+    _accion(boton, "Guardar los valores actuales como nuevo").trigger()
+    assert pre.obtener("nervio", "Siete")[clave] == "7 mm" and boton.actual == "Siete" and _accion(boton, "Siete").isChecked()
     panel.set_valor(clave, "3 mm")
-    fila.lista.setCurrentIndex(0)                                  # valores de fábrica
-    fila.lista.activated.emit(0)
-    assert panel.valores[clave] == "2 mm"
-    fila.lista.setCurrentIndex(fila.lista.findData("Siete"))
-    fila.lista.activated.emit(fila.lista.currentIndex())
-    assert panel.valores[clave] == "7 mm"
-    fila._predeterminado("Siete")
+    _accion(boton, "Valores de fábrica").trigger()
+    assert panel.valores[clave] == "2 mm" and boton.actual is None
+    _accion(boton, "Siete").trigger()
+    assert panel.valores[clave] == "7 mm" and boton.actual == "Siete"
+    boton._predeterminado("Siete")
+    assert _accion(boton, "Siete").text() == "Siete (predeterminado)"
     assert _panel(Nervio()).valores[clave] == "7 mm"               # un diálogo nuevo abre con el predeterminado
+    panel.set_valor(clave, "9 mm")
+    _accion(boton, "Guardar").trigger()                            # «Guardar»: pisa el preajuste elegido
+    assert pre.obtener("nervio", "Siete")[clave] == "9 mm"
     monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_k: ("Siete", True))
-    fila.mas.click()                                               # el nombre repetido avisa y no pisa
+    _accion(boton, "Guardar los valores actuales como nuevo").trigger()    # el nombre repetido avisa y no pisa
     assert "Ya existe" in panel.mensaje.text()
-    fila._eliminar()
-    assert pre.listar("nervio") == {"presets": [], "default": "fabrica"}
+    monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_k: ("Nueve", True))
+    _accion(boton, "Renombrar").trigger()
+    assert pre.listar("nervio")["presets"] == ["Nueve"] and boton.actual == "Nueve"
+    _accion(boton, "Eliminar").trigger()
+    assert pre.listar("nervio") == {"presets": [], "default": "fabrica"} and boton.actual is None
+
+
+def test_los_paneles_sin_valores_guardables_no_traen_el_boton(monkeypatch):
+    from omnicad.ui.comandos.crear import Nervio
+    panel = _panel(Nervio())
+    assert panel.boton_preajustes is not None
+    from omnicad.ui import preajustes_ui
+    monkeypatch.setattr(preajustes_ui, "tiene_preajustes", lambda _p: False)
+    assert _panel(Nervio()).boton_preajustes is None
 
 
 def test_ultimo_usado_se_guarda_al_aceptar(monkeypatch):
@@ -122,3 +146,34 @@ def test_manage_command_presets_rechaza_un_comando_que_no_existe():
     s = api.Sesion()
     r = api.llamar(s, "manage_command_presets", {"command": "nervvio", "action": "list"})
     assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS" and any("nervio" in p for p in r["pistas"])
+
+
+def test_el_boton_de_preajustes_se_alcanza_con_tab_y_abre_con_espacio_o_enter():
+    """Con teclado: Tab llega a «⋯» después de Cancelar y Espacio o Enter abren su menú (Enter no acepta el comando)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QAction, QKeySequence
+    from PySide6.QtTest import QTest
+    from omnicad.ui.comandos.crear import Nervio
+    panel = _panel(Nervio())
+    aceptado = []
+    panel.aceptado.connect(aceptado.append)
+    atajo = []
+    accion = QAction(panel)                         # la ventana real tiene Espacio como atajo («Boceto sobre la cara»)
+    accion.setShortcut(QKeySequence(Qt.Key_Space))
+    accion.triggered.connect(lambda *_: atajo.append(1))
+    panel.addAction(accion)
+    panel.show()
+    panel.activateWindow()
+    assert QTest.qWaitForWindowActive(panel)
+    boton = panel.boton_preajustes
+    assert boton.focusPolicy() == Qt.StrongFocus
+    panel.boton_cancelar.setFocus()
+    QTest.keyClick(panel.boton_cancelar, Qt.Key_Tab)
+    assert QApplication.focusWidget() is boton
+    abierto = []
+    boton.menu.aboutToShow.connect(lambda: abierto.append(True))
+    for tecla in (Qt.Key_Space, Qt.Key_Return):
+        QTest.keyClick(boton, tecla)
+        boton.menu.close()
+    assert abierto == [True, True] and aceptado == [] and atajo == [] and panel.isVisible()      # Espacio no disparó el atajo
+    panel.close()

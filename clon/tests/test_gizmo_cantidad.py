@@ -88,7 +88,7 @@ def test_patron_en_trayectoria_el_inicio_se_desliza_por_la_ruta(app_qt):  # noqa
     xy, ok = gm.pantalla([asa.asa(gm), destino])
     assert ok.all()
     _arrastrar(p.visor, *xy)
-    assert gm.valor("inicio") == pytest.approx(0.6, abs=0.03)
+    assert gm.valor("inicio") == pytest.approx(60, abs=3)            # el campo va en porcentaje (PAT-2)
     tramo = next(m for m in gm.manips if isinstance(m, mp.AsaRecorrido))
     assert np.allclose(tramo.recorrido.punto(tramo.s0), asa.asa(gm), atol=0.5)    # el tramo sale de donde empieza el patrón
     p.cancelar()

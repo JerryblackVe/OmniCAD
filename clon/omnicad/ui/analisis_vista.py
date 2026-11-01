@@ -74,7 +74,7 @@ def cota_diametro(centro, radio, eje, texto, tam=3.0, vista=None, color=COLOR_CO
 
 def aplicar(visor, datos):
     visor.mallas_analisis = datos["mallas"]
-    visor.funcion_colores = datos["colores"]
+    visor.funcion_colores, visor.ids_colores = datos["colores"], datos.get("solo")
     visor._cache_dinamico = {}
     visor.cortes = datos["cortes"]
     visor.set_capa("analisis", datos["capas"])

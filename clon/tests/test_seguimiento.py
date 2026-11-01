@@ -12,18 +12,20 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 CARPETA = REPO / "docs" / "seguimiento"
 LISTAS = ("bugs.md", "faltantes.md", "mejoras.md")
+SEPARADOR = re.compile(r"(?<!\\)\|")      # una barra vertical escapada (\|) no separa celdas
 ESTADOS = {"Abierto", "Parcial", "Bloqueado", "Sin verificar"}
 DIFICULTADES = {"Baja", "Media", "Alta", "Muy alta"}
 
 
 def _filas(nombre):
-    """Filas de las tablas de seguimiento: las que tienen 7 celdas y no son encabezado ni separador."""
+    """Filas de las tablas de seguimiento (7 celdas, si no falla), sin encabezado ni separador."""
     filas = []
     for n, linea in enumerate((CARPETA / nombre).read_text(encoding="utf-8").splitlines(), 1):
         if not linea.startswith("| "):
             continue
-        celdas = [c.strip() for c in linea.strip().strip("|").split("|")]
-        if len(celdas) != 7 or celdas[0] == "ID" or set(celdas[0]) <= {"-", ":"}:
+        celdas = [c.strip().replace("\\|", "|") for c in SEPARADOR.split(linea.strip().strip("|"))]   # H-51: \| es texto
+        assert len(celdas) == 7, f"{nombre}:{n}: la fila de la tabla tiene {len(celdas)} celdas, no 7 (¿barra vertical sin escapar?)"
+        if celdas[0] == "ID" or set(celdas[0]) <= {"-", ":"}:
             continue
         filas.append((f"{nombre}:{n}", *celdas))
     return filas
@@ -63,3 +65,9 @@ def test_el_readme_solo_nombra_ids_que_siguen_en_las_listas():
         if linea.startswith("| ") and "·" in linea:
             for ident in linea.strip().strip("|").split("|")[-1].split("·"):
                 assert ident.strip() in vivos, f"README.md nombra {ident.strip()}, que ya no está en las listas"
+
+
+def test_la_barra_vertical_escapada_no_parte_la_celda():
+    r"""H-51: una `\|` dentro de una celda es texto; una barra sin escapar suma una celda y `_filas` falla en voz alta."""
+    assert len(SEPARADOR.split(r"a | b \| c | d")) == 3
+    assert len(SEPARADOR.split("a | b | c | d")) == 4

@@ -369,7 +369,7 @@ def test_agujero_hasta_y_por_referencias(caja):
 def test_agujero_roscado_errores(caja):
     antes = foto(caja)
     for args in ({"face": ">Z", "hole_tap": "modeled", "depth": 5},                              # sin thread
-                 {"face": ">Z", "hole_tap": "modeled", "thread": "M7", "depth": 5},              # rosca desconocida
+                 {"face": ">Z", "hole_tap": "modeled", "thread": "M7.7", "depth": 5},            # rosca desconocida
                  {"face": ">Z", "hole_tap": "modeled", "thread": "M6", "thread_class": "6g", "depth": 5},  # de eje
                  {"face": ">Z", "hole_tap": "taper", "thread": "M6", "depth": 5},               # no es cónica
                  {"face": ">Z", "hole_tap": "clearance", "thread": "1/4-20", "depth": 5},       # ISO 273: solo M
@@ -434,14 +434,18 @@ def test_create_thread_interior_trapezoidal(s):
     llamar(s, "create_box", length=40, width=40, height=12)
     llamar(s, "create_hole", face=">Z", diameter=16, through_all=True)
     v0 = volumen(s)
-    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal")
+    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal", thread_class="")
     assert r["threads"][0]["designation"] == "Tr20x4" and r["threads"][0]["internal"]
     assert v0 - volumen(s) == pytest.approx(0.5 * math.pi * (10 ** 2 - 8 ** 2) * 12, rel=0.03)
+    llamar(s, "undo")
+    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal")       # CAP-14: «auto» = la clase 7H de Fusion
+    assert r["threads"][0]["class"] == "7H" and v0 - volumen(s) > 0.5 * math.pi * (10 ** 2 - 8 ** 2) * 12 * 1.02
 
 
 def test_thread_info_y_fit_tolerance(s):
     familias = {f["family"]: f for f in llamar(s, "thread_info")["families"]}
-    assert set(familias) == {"iso_metric", "unified", "trapezoidal", "acme", "bsp_parallel", "bsp_taper", "npt"}
+    assert len(familias) == 24 and {"iso_metric", "unified", "trapezoidal", "acme", "bsp_parallel", "bsp_taper", "npt", "din_wood",
+                                    "npt_pvc"} <= set(familias) and familias["din_wood"]["external_only"]
     assert familias["trapezoidal"]["profile_angle"] == 30 and familias["bsp_taper"]["taper"]
     tr = llamar(s, "thread_info", family="trapezoidal")["sizes"]
     assert tr[0] == {"size": "Tr8", "designations": ["Tr8x1.5"]}
@@ -466,7 +470,7 @@ def test_thread_info_y_fit_tolerance(s):
     assert llamar(s, "fit_tolerance", nominal=25, hole="H7", shaft="k6")["fit_type"] == "transition"
     for args in ({"nominal": 600, "hole": "H7", "shaft": "g6"}, {"nominal": 25, "hole": "g6", "shaft": "H7"}):
         assert falla(s, "fit_tolerance", **args)["error_kind"] == "INVALID_ARGUMENTS"
-    assert falla(s, "thread_info", thread="M7")["error_kind"] == "INVALID_ARGUMENTS"
+    assert falla(s, "thread_info", thread="M7.7")["error_kind"] == "INVALID_ARGUMENTS"
 
 
 # ---------------------------------------------------------------- desmoldeo

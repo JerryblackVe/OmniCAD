@@ -44,7 +44,7 @@ DEFECTOS = {
     "boceto/guias_inferencia": True, "boceto/indicadores_inferencia": True, "boceto/etiquetas_inferencia": True,
     "boceto/inf_medio": True, "boceto/inf_interseccion": True, "boceto/inf_tangente": True,
     "boceto/inf_perpendicular": True, "boceto/inf_curva": True, "boceto/inf_alineacion": True,
-    "boceto/inf_horizontal_vertical": True, "boceto/inf_paralela": True,
+    "boceto/inf_horizontal_vertical": True, "boceto/inf_paralela": True, "boceto/inf_igual": True,
     "general/raton": "fusion",               # como Fusion: medio desplaza, Mayús+medio orbita
     "general/invertir_zoom": False,
     "general/camara": "perspectiva",
@@ -95,6 +95,7 @@ DEFECTOS = {
     "vista/vis_planos_usuario": True,
     "vista/vis_bocetos": True,
     "vista/panel_datos": False,             # Fusion arranca con el panel de datos cerrado
+    "vista/posicion_panel_comando": "",     # «derecha,arriba» en px: dónde dejó la persona los paneles de comando; vacío = el de siempre
     "timeline/color_componente": False,     # engranaje del timeline › «Muestra de color por componente»
 }
 EFECTOS = ("cupula", "suelo", "sombra_suelo", "reflejo", "aa")
@@ -457,6 +458,7 @@ PAGINAS = [
         ("boceto/inf_alineacion", "Alinear con puntos existentes", "check", None),
         ("boceto/inf_horizontal_vertical", "Horizontal y vertical desde el punto anterior", "check", None),
         ("boceto/inf_paralela", "Paralela, perpendicular y colineal a una línea cercana", "check", None),
+        ("boceto/inf_igual", "Largo o radio igual al de otra línea o círculo cercano", "check", None),
     ]),
     ("material", None, "Material", "Preferencias que controlan el material y el aspecto por defecto", [
         ("material/aspecto", "Aspecto por defecto de los cuerpos", "combo",

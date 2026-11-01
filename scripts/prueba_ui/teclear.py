@@ -40,7 +40,7 @@ COMANDOS = [
     ("empalme_3d", {"aristas": arista(caja)}, ["radio"]),
     ("chaflan_3d", {"aristas": arista(caja)}, ["distancia"]),
     ("vaciado", {"caras": cara(caja, normal=(0, 0, 1))}, ["espesor_interior"]),
-    ("escala_3d", {"cuerpos": cuerpo(caja)}, ["factor"]),
+    ("escala_3d", {"entidades": cuerpo(caja)}, ["factor"]),
     ("sup_desfase", {"caras": cara(tubo)}, ["distancia"]),
     ("mover_copiar", {"cuerpos": cuerpo(caja)}, ["dx", "rx"]),
 ]

@@ -400,10 +400,10 @@ def test_f3d_hostil_miembro_mas_grande_que_el_tope_falla(tmp_path, monkeypatch):
 
 
 def test_f3d_hostil_zstd_que_se_expande_mas_de_lo_declarado_falla_sin_llenar_la_memoria(tmp_path):
-    """Zip bomb por la vía Zstandard: el miembro DECLARA 10 bytes (pasa el tope) y 137 bytes de bloques RLE
-    se expanden a 64 MB. El decodificador corta apenas la salida pasa lo declarado, sin generar los 64 MB."""
-    rle = (((1 << 21) - 1) << 3) | (1 << 1)
-    bomba = (struct.pack("<I", zstd_puro.MAGICO) + bytes([0x20 | 0x80]) + struct.pack("<I", 10)
+    """Zip bomb por la vía Zstandard: el miembro DECLARA 10 bytes (pasa el tope) y 128 bytes de bloques RLE legales
+    (128 KiB cada uno) se expanden a 4 MiB. El decodificador corta apenas la salida pasa lo declarado."""
+    rle = ((1 << 17) << 3) | (1 << 1)
+    bomba = (struct.pack("<I", zstd_puro.MAGICO) + bytes([0x20 | 0x80]) + struct.pack("<I", 32 << 17)
              + (struct.pack("<I", rle)[:3] + b"z") * 31 + struct.pack("<I", rle | 1)[:3] + b"z")
     with pytest.raises(zstd_puro.ErrorZstd, match="tope"):
         zstd_puro.descomprimir(bomba, tope=10)

@@ -5,6 +5,7 @@ import math
 import pytest
 
 from omnicad import api
+from omnicad.nucleo import fuentes
 
 
 @pytest.fixture
@@ -55,11 +56,13 @@ def test_herramientas_del_grupo_solido():
         "create_coil", "create_pipe", "create_rib", "create_web", "create_emboss", "create_boss", "create_lip_groove",
         "create_boundary_fill", "create_bounding_solid", "create_fluid_volume", "thicken", "align_bodies", "scale_body",
         "create_surface_extrude", "create_surface_revolve", "create_surface_sweep", "create_surface_loft",
-        "offset_surface", "fillet_surface", "create_patch", "create_ruled_surface", "extend_surface", "trim_surface",
+        "offset_surface", "fillet_surface", "create_patch", "create_ruled_surface", "edit_face", "extend_surface", "trim_surface",
         "untrim_surface", "stitch_surfaces", "unstitch_surfaces", "reverse_surface_normal",
+        "create_surface_box", "create_surface_cylinder", "create_surface_sphere", "create_surface_torus",
+        "create_surface_coil", "create_surface_pipe", "inspect_stitch",
         "move_faces", "create_geometric_pattern", "assign_plastic_rule", "create_volumetric_lattice",
         "rebuild_features"])                   # SOL-15, SOL-20, SOL-21
-    assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] != "gear_info")    # gear_info solo calcula
+    assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] not in ("gear_info", "inspect_stitch"))    # solo calculan
 
 
 # ---------------------------------------------------------------- el soporte en L, solo con la API
@@ -281,6 +284,50 @@ def test_seleccion_de_perfiles(s):
     assert llamar(s, "extrude", sketch="Boceto1", profile=discos[0], distance=1)["profiles_used"] == [discos[0]]
 
 
+def test_extruir_todo_avisa_de_las_curvas_que_no_cierran_region(s):
+    """H-52: un rectángulo cerrado y una línea suelta; profile="all" extruye el rectángulo y avisa de la línea."""
+    llamar(s, "create_sketch")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=40, y2=20)
+    suelta = llamar(s, "draw_line", start_x=60, start_y=0, end_x=80, end_y=0)
+    r = api.llamar(s, "extrude", {"sketch": "Boceto1", "profile": "all", "distance": 2})
+    assert r["ok"] and r["result"]["bodies_created"][0]["volume"] == pytest.approx(40 * 20 * 2, rel=1e-3)
+    assert any("1 curva(s)" in a and "ignoraron" in a for a in r["avisos"]), (r["avisos"], suelta)
+    llamar(s, "create_sketch")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)
+    assert not any("ignoraron" in a for a in api.llamar(s, "extrude", {"sketch": "Boceto2", "profile": "all", "distance": 1})["avisos"])
+
+
+def _sin_aviso_de_curvas(s):
+    r = api.llamar(s, "extrude", {"sketch": "Boceto1", "profile": "all", "distance": 2})
+    assert r["ok"] and not any("ignoraron" in a for a in r["avisos"]), r
+
+
+@pytest.mark.skipif(fuentes.buscar_fuente("Arial") is None, reason="No hay Arial instalada")
+@pytest.mark.parametrize("opciones, rectangulo", [({}, False), ({}, True), ({"frame": True, "box_width": 30}, False)])
+def test_extruir_todo_no_avisa_en_falso_con_texto(s, opciones, rectangulo):
+    """H-52: el texto entra por sus letras, con rectángulo o sin él, y su marco es de construcción."""
+    llamar(s, "create_sketch")
+    if rectangulo:
+        llamar(s, "draw_rectangle", x1=0, y1=0, x2=40, y2=20)
+    llamar(s, "add_text", text="AB", x=5, y=5, height=8, **opciones)
+    _sin_aviso_de_curvas(s)
+
+
+def test_extruir_todo_no_avisa_en_falso_con_construccion(s):
+    llamar(s, "create_sketch")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=40, y2=20)
+    llamar(s, "draw_circle", radius=5, center_x=60, construction=True)
+    llamar(s, "draw_line", start_x=0, start_y=30, end_x=40, end_y=30, construction=True)
+    _sin_aviso_de_curvas(s)
+
+
+def test_extruir_todo_con_solo_construccion_falla_sin_avisar(s):
+    llamar(s, "create_sketch")
+    llamar(s, "draw_circle", radius=5, construction=True)
+    r = api.llamar(s, "extrude", {"sketch": "Boceto1", "profile": "all", "distance": 2})
+    assert r["error_kind"] == "PROFILE_NOT_FOUND" and not any("ignoraron" in a for a in r.get("avisos", []))
+
+
 def test_operaciones_y_target(s):
     llamar(s, "create_box", length=40, width=40, height=10, x=20, y=20)
     llamar(s, "create_box", length=10, width=10, height=10, x=100, y=20)
@@ -408,8 +455,8 @@ def test_chaflan_demasiado_grande_indica_distancia_maxima(s):
     antes = foto(s)
     r = api.llamar(s, "chamfer", {"edges": "|Z", "distance": 30})
     assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
-    assert "Distancia máxima aproximada: 10 mm" in r["mensaje"]
-    assert any("Distancia máxima aproximada: 10 mm" in p for p in r["pistas"])
+    assert "Probá una distancia menor que 10 mm" in r["mensaje"]
+    assert any("Probá una distancia menor que 10 mm" in p for p in r["pistas"])
     assert foto(s) == antes
 
 

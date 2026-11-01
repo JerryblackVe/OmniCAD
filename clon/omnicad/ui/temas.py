@@ -349,10 +349,21 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #seleccion_cmd { text-align: left; padding: 3px 8px; border: 1px solid $borde; background: $entrada; }
 #seleccion_cmd[activa="true"] { border: 1px solid $acento; background: $activo; color: $enlace; }
 #seleccion_cmd[lleno="true"] { color: $texto; }
+#referencia_cmd { border: 1px solid $acento; background: $activo; }
+#paleta_boceto QScrollArea, #paleta_boceto QScrollArea > QWidget > QWidget { background: transparent; }
 #panel_comando QLineEdit, #panel_comando QComboBox, #panel_comando QSpinBox { padding: 2px 4px; }
 #panel_comando QScrollArea, #panel_comando QScrollArea > QWidget > QWidget { background: transparent; }
 #mensaje_comando { color: $error; }
 #aviso_comando { color: $aviso; }
+#grupo_cmd { color: $texto_tenue; font-weight: 600; border-bottom: 1px solid $borde_suave; padding-top: 4px; }
+#seccion_cmd { border: none; background: transparent; font-weight: 600; text-align: left; padding: 3px 0; }
+#seccion_cmd:hover { color: $enlace; }
+#resumen_seccion { color: $texto_tenue; padding-left: 18px; }
+#opcion_cmd { border: 1px solid transparent; background: transparent; padding: 1px; }
+#opcion_cmd:hover { background: $activo; }
+#opcion_cmd:checked { border: 1px solid $enlace; background: $activo; }
+#pestanas_cmd::tab { padding: 3px 10px; }
+#pestanas_cmd::tab:selected { font-weight: 600; border-bottom: 2px solid $acento; }
 
 #panel_comentarios { background: $flotante; border: 1px solid $borde; }
 #panel_comentarios QLabel { color: $texto_tenue; font-size: $px10; letter-spacing: 0.5px; }

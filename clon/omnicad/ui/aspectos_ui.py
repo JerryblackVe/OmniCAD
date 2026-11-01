@@ -16,7 +16,7 @@ from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import (QColorDialog, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
                                QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget,
-                               QListWidgetItem, QMenu, QPushButton, QRadioButton, QSlider, QSpinBox, QTabBar,
+                               QListWidgetItem, QMenu, QPushButton, QRadioButton, QScrollArea, QSlider, QSpinBox, QTabBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..nucleo import aspectos as asp
@@ -279,7 +279,10 @@ class EditorMateriales(QDialog):
         self.setModal(False)
         self.a = asp.normalizar(aspecto)
         self._base = copy.deepcopy(self.a)
-        v = QVBoxLayout(self)
+        raiz = QVBoxLayout(self)
+        cuerpo = QWidget()                                   # todo menos los botones se desplaza: Aceptar/Cancelar siempre se ven
+        v = QVBoxLayout(cuerpo)
+        v.setContentsMargins(0, 0, 4, 0)
         self.miniatura = QLabel(alignment=Qt.AlignCenter)
         self.miniatura.setFixedHeight(84)
         v.addWidget(self.miniatura)
@@ -360,9 +363,24 @@ class EditorMateriales(QDialog):
         self.b_aplicar = QPushButton("Aplicar")
         for b in (self.b_aceptar, self.b_cancelar, self.b_aplicar):
             pie.addWidget(b)
-        v.addLayout(pie)
+        desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        desplazador.setWidget(cuerpo)
+        raiz.addWidget(desplazador, 1)
+        raiz.addLayout(pie)
+        self._grupos_plegables = [self.g_transl, self.g_emi, *(g for g, _e in self.imagenes.values())]
+        for g in self._grupos_plegables:                     # un grupo apagado se pliega: solo ocupa su título
+            g.toggled.connect(lambda activo, g=g: self._plegar(g, activo))
         self._cargar(self.a)
         self._conectar()
+        pantalla = self.screen().availableGeometry() if self.screen() is not None else None
+        tope = int(pantalla.height() * 0.85) if pantalla is not None else 640
+        self.resize(max(self.sizeHint().width(), 340), min(self.sizeHint().height(), tope))
+
+    @staticmethod
+    def _plegar(grupo, activo):
+        for w in grupo.findChildren(QWidget):
+            w.setVisible(activo)
 
     # ------------------------------------------------------------ carga y cambios
     def _cargar(self, a):
@@ -388,6 +406,8 @@ class EditorMateriales(QDialog):
         self.color_resalte.set_color(r["color"])
         self.forma.setCurrentText(r["forma"])
         self.miniatura.setPixmap(icono_de(a, 72))
+        for g in self._grupos_plegables:
+            self._plegar(g, g.isChecked())
         self._cargando = False
 
     def _mostrar_imagen(self, clave, imagen):

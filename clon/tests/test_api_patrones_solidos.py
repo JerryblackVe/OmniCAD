@@ -83,3 +83,32 @@ def test_multi_transform_acepta_simetria_y_supresion(s):
     assert op.p["transformaciones"][1]["distribucion"] == "parcial" and op.p["transformaciones"][1]["suprimir"] == [1]
     assert len(r["bodies_created"]) == 4                    # 5 instancias (6 − la suprimida) menos el original; el giro suprimido no suma
     falla(s, "multi_transform", bodies=c, transforms=[{"type": "rectangular", "axis": "x", "count": 2, "suppress": [[3, 0]]}])
+
+
+def test_pat5_rectangular_la_direccion_2_derivada_queda_dentro_del_plano_elegido(s):
+    c = cubo(s)
+    # dirección 1 = X; plano XZ (su normal es −Y): la perpendicular a X dentro de ese plano es Z (normal × dirección)
+    r = llamar(s, "rectangular_pattern", bodies=c, x_count=2, x_spacing=30, y_count=2, y_spacing=25, axis1="x", plane2="XZ")
+    assert minimos(s, r) == [(-5.0, -5.0, 25.0), (25.0, -5.0, 0.0), (25.0, -5.0, 25.0)]
+    op = s.doc.operaciones[-1]
+    assert op.p["dir2_derivada"] is True and op.p["plano_dir2"] and not op.p["dir2"]
+    llamar(s, "undo")
+    # el plano XY (normal Z) da la perpendicular de siempre: +Y
+    r = llamar(s, "rectangular_pattern", bodies=c, x_count=2, x_spacing=30, y_count=2, y_spacing=25, axis1="x", plane2="XY")
+    assert minimos(s, r) == [(-5.0, 20.0, 0.0), (25.0, -5.0, 0.0), (25.0, 20.0, 0.0)]
+
+
+def test_pat5_plano_de_referencia_paralelo_a_la_direccion_1_dice_que_no_sirve(s):
+    c = cubo(s)
+    r = falla(s, "rectangular_pattern", bodies=c, x_count=2, x_spacing=30, y_count=2, y_spacing=25, axis1="z", plane2="XY")
+    assert "perpendicular al plano" in r["mensaje"]
+    assert llamar(s, "get_timeline")["steps"].__len__() == 1                                # nada quedó a medias
+    falla(s, "rectangular_pattern", bodies=c, x_count=2, x_spacing=30, y_count=2, axis1="x", plane2="NoExiste")
+
+
+def test_pat5_multi_transform_acepta_plane2_en_la_transformacion_rectangular(s):
+    c = cubo(s)
+    r = llamar(s, "multi_transform", bodies=c, transforms=[
+        {"type": "rectangular", "axis": "x", "count": 2, "spacing": 30, "count2": 2, "spacing2": 25, "plane2": "XZ"}])
+    assert minimos(s, r) == [(-5.0, -5.0, 25.0), (25.0, -5.0, 0.0), (25.0, -5.0, 25.0)]
+    falla(s, "multi_transform", bodies=c, transforms=[{"type": "rectangular", "axis": "x", "count": 2, "count2": 2}])

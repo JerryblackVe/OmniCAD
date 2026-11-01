@@ -6,8 +6,9 @@ activo de lo retrocedido. El estado de cada paso (FeatureHealthStates de Fusion)
 fondo: amarillo = aviso, rojo = error; suprimido o retrocedido = ícono gris.
 Se arrastra el marcador o un paso para moverlos; doble clic edita. El clic derecho abre un menú distinto
 según el tipo de paso, como Fusion: boceto (Editar boceto), operación (Editar operación y «Editar boceto de
-perfil»), unión (Editar unión, Animar unión); todos con Renombrar, Suprimir, Mover, «Rodar marcador aquí»,
-«Retroceder antes de este paso», «Buscar en navegador» y Eliminar.
+perfil»), unión (Editar unión, Animar unión); todos con Renombrar, Suprimir, Configurar, Mover, «Rodar marcador aquí»,
+«Retroceder antes de este paso», «Buscar en navegador», «Buscar en la ventana», «Crear conjunto de selección» y Eliminar.
+Con Ctrl se eligen varios pasos: Suprimir (Fusion: «Suprimir operaciones»), Buscar en la ventana y Crear conjunto actúan sobre todos.
 El engranaje de la derecha («Opciones» de Fusion) tiene «Muestra de color por componente»: pinta el fondo de cada
 paso con el color de su componente. «Ocultar pasos inactivos» y «Cambiar a modelado directo» no están: OmniCAD no
 tiene componente activo ni modo sin historial.
@@ -32,7 +33,7 @@ PALETA_COMPONENTES = [QColor(*c) for c in ((141, 196, 255), (255, 183, 120), (16
 ICONO_TIPO = {"boceto": "boceto", "importar_step": "importar", "importar_iges": "importar_iges",
               "operacion_base": "operacion_base", "insertar_malla": "insertar_malla",
               "insertar_diseno": "insertar_diseno", "grafo": "grafo", "borrar_caras": "borrar_caras",
-              "calibracion_holguras": "calibracion_holguras"}
+              "calibracion_holguras": "calibracion_holguras", "copiar_componente": "duplicar_con_uniones"}
 
 
 def icono_operacion(op):
@@ -119,6 +120,11 @@ class PanelTimeline(QWidget):
     marcador = Signal(int)
     buscar_navegador = Signal(str)      # «Buscar en navegador»: elige el elemento del paso en el navegador
     animar_union = Signal(str)          # «Animar unión» (menú de un paso de unión)
+    suprimir_varios = Signal(list, bool)   # «Suprimir N pasos» con varios elegidos: ids, suprimir (True) o reactivar
+    configurar = Signal(str)            # «Configurar»: suma la supresión del paso a la tabla de configuraciones
+    buscar_ventana = Signal(list)       # «Buscar en la ventana»: ids de los pasos cuyos cuerpos se encuadran
+    crear_conjunto = Signal(list)       # «Crear conjunto de selección»: ids de los pasos cuyos cuerpos se guardan
+    tocado = Signal(str)                # clic en un paso: un comando abierto lo puede tomar (Simetría › Operaciones)
     color_componente_cambiado = Signal(bool)    # casilla «Muestra de color por componente» del engranaje
 
     def __init__(self, parent=None):
@@ -136,11 +142,13 @@ class PanelTimeline(QWidget):
         self.lista.setIconSize(QSize(24, 24))
         self.lista.setSpacing(1)
         self.lista.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.lista.setSelectionMode(QAbstractItemView.ExtendedSelection)      # Ctrl: varios pasos, como en Fusion
         self.lista.setDragDropMode(QAbstractItemView.InternalMove)
         self.lista.setDefaultDropAction(Qt.MoveAction)
         self.lista.setContextMenuPolicy(Qt.CustomContextMenu)
         self.lista.customContextMenuRequested.connect(self._menu)
         self.lista.itemDoubleClicked.connect(self._doble_clic)
+        self.lista.itemClicked.connect(self._clic)
         self.lista.soltado.connect(self._soltado)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 0, 4, 0)
@@ -313,15 +321,27 @@ class PanelTimeline(QWidget):
         elif nuevo != self.doc.indice(clave):
             self.mover.emit(clave, nuevo)
 
+    def _clic(self, item):
+        if item.data(Qt.UserRole) not in (None, MARCADOR):
+            self.tocado.emit(item.data(Qt.UserRole))
+
     def _doble_clic(self, item):
         op_id = item.data(Qt.UserRole)
         if op_id and op_id != MARCADOR:
             self.editar.emit(op_id)
 
-    def entradas_menu(self, op_id):
+    def elegidos(self):
+        """Ids de los pasos elegidos en la lista (sin el marcador)."""
+        return [it.data(Qt.UserRole) for it in self.lista.selectedItems() if it.data(Qt.UserRole) != MARCADOR]
+
+    def entradas_menu(self, op_id, ids=None):
         """Menú contextual del paso, distinto según su tipo como en Fusion (boceto, operación, unión):
-        [Entrada | None (separador)]. Una Entrada con `hijos` es un submenú."""
+        [Entrada | None (separador)]. Una Entrada con `hijos` es un submenú. `ids`: todos los pasos elegidos (con
+        varios, suprimir, buscar en la ventana y crear conjunto los toman a todos)."""
         doc = self.doc
+        ids = ids if ids and op_id in ids else [op_id]
+        crean = {c.op_id for c in doc.estado_final.cuerpos.values()}
+        crea = any(i in crean for i in ids)
         i = doc.indice(op_id)
         op = doc.operaciones[i]
         tipo = tipo_menu(op)
@@ -344,8 +364,13 @@ class PanelTimeline(QWidget):
         sufijo = "boceto" if tipo == "boceto" else ("unión" if tipo == "union" else "operación")
         return arriba + [
             E("Renombrar…", emitir(self.renombrar, op_id)),
-            E(f"Desuprimir {sufijo}" if op.suprimida else f"Suprimir {sufijo}",
-              emitir(self.suprimir, op_id, not op.suprimida)),
+            (E(f"{'Desuprimir' if op.suprimida else 'Suprimir'} {len(ids)} pasos",
+               emitir(self.suprimir_varios, ids, not op.suprimida)) if len(ids) > 1 else
+             E(f"Desuprimir {sufijo}" if op.suprimida else f"Suprimir {sufijo}",
+               emitir(self.suprimir, op_id, not op.suprimida))),
+            E("Configurar", emitir(self.configurar, op_id),
+              ayuda="Suma la supresión de este paso a la tabla de configuraciones (una columna «Suprimir»).",
+              habilitada=len(ids) == 1),
             None,
             E("Mover a la izquierda", emitir(self.mover, op_id, i - 1), i > 0),
             E("Mover a la derecha", emitir(self.mover, op_id, i + 1), i < len(doc.operaciones) - 1),
@@ -357,6 +382,12 @@ class PanelTimeline(QWidget):
             None,
             E("Buscar en navegador", emitir(self.buscar_navegador, op_id),
               ayuda="Elige en el navegador el elemento que crea o modifica este paso."),
+            E("Buscar en la ventana", emitir(self.buscar_ventana, ids), crea,
+              "Elige en la vista los cuerpos que crea el paso y los encuadra." if crea else
+              "Este paso no creó ningún cuerpo que siga vivo."),
+            E("Crear conjunto de selección…", emitir(self.crear_conjunto, ids), crea,
+              "Guarda los cuerpos que crea el paso como un conjunto de selección." if crea else
+              "Este paso no creó ningún cuerpo que siga vivo."),
             None,
             E("Eliminar", emitir(self.eliminar, op_id)),
         ]
@@ -366,7 +397,7 @@ class PanelTimeline(QWidget):
         if item is None or item.data(Qt.UserRole) in (None, MARCADOR) or self.doc is None:
             return
         m = QMenu(self)
-        _llenar_menu(m, self.entradas_menu(item.data(Qt.UserRole)))
+        _llenar_menu(m, self.entradas_menu(item.data(Qt.UserRole), self.elegidos()))
         m.exec(self.lista.mapToGlobal(pos))
 
 

@@ -2,7 +2,9 @@
 """BOCETO › Administrar proyecciones perdidas con «Atenuar el resto» (ayuda de Fusion: Project geometry onto a sketch
 plane, Tips): en un boceto con un rectángulo suelto y una proyección marcada como perdida se abre el diálogo, se elige la
 proyección con un clic en la lista, se tilda la casilla con el mouse y se mira que lo demás del lienzo quede apagado y la
-proyección siga a color; al destildar o cerrar todo vuelve a su color. También en ventana chica (1024x640 y 800x520)."""
+proyección siga a color; al destildar o cerrar todo vuelve a su color. También en ventana chica (1024x640 y 800x520).
+B-110: una cara con arcos que cambia de forma deja UNA proyección perdida y su marca en el navegador; repetir la proyección
+no apila nada, terminar y reabrir el boceto tampoco, y la marca se va al tratarla con clics en el diálogo."""
 import sys
 
 import arnes as A
@@ -29,6 +31,14 @@ L("create_box", length=10, width=8, height=10)
 L("create_sketch", name="S", plane="XY")
 L("draw_rectangle", sketch="S", x1=-10, y1=-6, x2=10, y2=6)          # lo suelto, rodea la proyección: se tiene que apagar
 L("project_to_sketch", sketch="S", bodies=["op1.c1"])
+L("create_sketch", name="Perfil", plane="XY")                         # B-110: otra pieza, con arcos, lejos de la primera
+L("draw_arc", sketch="Perfil", start_x=240, start_y=0, mid_x=200, mid_y=40, end_x=160, end_y=0)
+L("draw_arc", sketch="Perfil", start_x=220, start_y=0, mid_x=200, mid_y=20, end_x=180, end_y=0)
+L("draw_line", sketch="Perfil", start_x=160, start_y=0, end_x=180, end_y=0)
+L("draw_line", sketch="Perfil", start_x=220, start_y=0, end_x=240, end_y=0)
+L("extrude", sketch="Perfil", profile=0, distance=10)
+pieza = L("get_scene_info")["bodies"][-1]["id"]
+L("create_sketch", name="Sobre", plane=">Z", body=pieza, project_edges=True)
 app, v = A.iniciar(s.doc)
 v.editar_operacion(s.paso("S").id)
 A.esperar(500)
@@ -108,6 +118,59 @@ for ancho, alto in ((1024, 640), (800, 520)):
           f"diálogo {d.width()}x{d.height()}")
     d.reject()
     A.esperar(150)
+
+# ---------------------------------------------------------------- B-110: la cara cambia de verdad
+v.modo_boceto.terminar()
+A.esperar(300)
+sobre = s.paso("Sobre")
+
+
+def perdidas_y_registros():
+    return len(L("get_sketch", sketch="Sobre")["projections"]), [p["id"] for p in L("get_sketch", sketch="Sobre")["projections"] if p["lost"]]
+
+
+def marca():
+    v._refrescar_visibilidad()
+    return v.navegador.estados.get(sobre.id)
+
+
+for _ in range(2):
+    L("project_to_sketch", faces=">Z", body=pieza, sketch="Sobre")
+A.reg(AR, "B-110: proyectar otra vez lo mismo no apila nada ni marca el boceto", perdidas_y_registros() == (1, []) and marca() is None,
+      str(perdidas_y_registros()))
+geo_perfil = L("get_sketch", sketch="Perfil")["entities"]
+L("sketch_fillet", sketch="Perfil", radius=2, entity1=next(e["id"] for e in geo_perfil if e["type"] == "line"),
+  entity2=next(e["id"] for e in geo_perfil if e["type"] == "arc"))
+A.esperar(400)
+n, perdidas = perdidas_y_registros()
+A.reg(AR, "B-110: la cara gana una arista: una proyección perdida, marcada en el navegador", n == 1 and len(perdidas) == 1 and marca() == "aviso",
+      f"{n} registros, perdidas {perdidas}, marca {marca()}")
+for _ in range(2):
+    L("project_to_sketch", faces=">Z", body=pieza, sketch="Sobre")
+for _ in range(2):
+    v.editar_operacion(sobre.id)
+    A.esperar(400)
+    v.modo_boceto.terminar()
+    A.esperar(300)
+A.reg(AR, "B-110: reproyectar dos veces, terminar y reabrir dos veces deja 2 registros y la misma perdida",
+      perdidas_y_registros() == (2, perdidas), str(perdidas_y_registros()))
+v.editar_operacion(sobre.id)
+A.esperar(400)
+lz = v.modo_boceto.lienzo
+d = dialogos_boceto.DialogoPerdidas(lz)
+d.show()
+A.esperar(200)
+A.foto(v, "perdidas_b110_dialogo")
+QTest.mouseClick(d.lista.viewport(), Qt.LeftButton, Qt.NoModifier, d.lista.visualItemRect(d.lista.item(0)).center())
+A.esperar(150)
+QTest.mouseClick(d.b_romper, Qt.LeftButton)
+A.esperar(300)
+A.reg(AR, "B-110: «Romper vínculo» con clics vacía la lista del diálogo", d.lista.count() == 0, f"{d.lista.count()} filas")
+d.reject()
+v.modo_boceto.terminar()
+A.esperar(400)
+A.reg(AR, "B-110: tratada la perdida, se va la marca del navegador", perdidas_y_registros()[1] == [] and marca() is None,
+      f"{perdidas_y_registros()}, marca {marca()}")
 
 A.reg(AR, "ninguna excepción escapó de un slot de Qt", not A.ERRORES, str(A.ERRORES[:1]))
 A.guardar_registro("perdidas_atenuar")

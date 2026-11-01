@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Íconos adicionales (171) para los comandos y pasos del timeline que no tenían dibujo propio:
+Íconos adicionales (181) para los comandos y pasos del timeline que no tenían dibujo propio:
 sólido, modificar, construir, inspeccionar, insertar, ensamblar, seleccionar, superficie, malla,
 chapa y espacios de trabajo.
 
@@ -16,8 +16,8 @@ cero, sin copiar nada de Autodesk. Convenciones de color:
 import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import (QBrush, QColor, QLinearGradient, QPainterPath, QPen, QPolygonF, QRadialGradient,
-                           QTransform)
+from PySide6.QtGui import (QBrush, QColor, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF,
+                           QRadialGradient, QTransform)
 
 # ---------------------------------------------------------------- paleta propia
 GRISES, BORDE_GRIS = (QColor("#dfe7ef"), QColor("#a9b6c4"), QColor("#8494a6")), QColor("#4a5563")
@@ -1571,6 +1571,14 @@ def _union_construida(p):
     _glifo_union(p, c.x(), c.y(), 3.8)
 
 
+def _duplicar_con_uniones(p):
+    """Dos piezas iguales unidas a una base: el original y su copia."""
+    _caja(p, 8, 8, 7, 9.5, 11, 1.0, BLANCOS, GRIS_OSCURO)
+    _caja(p, 8, 8, 7, 22.5, 11, 1.0, GRIS_COMP, GRIS_OSCURO)
+    _glifo_union(p, 16, 25, 3.6)
+    _mas(p, 16, 11, 3.5)
+
+
 def _origen_union(p):
     q = _caja_c(p, 16, 16, 7, BLANCOS, GRIS_OSCURO)
     c = q(8, 8, 7)
@@ -1645,6 +1653,40 @@ def _fijar_componente(p):
     p.drawEllipse(QPointF(20.5, 5.5), 1.5, 1.1)
 
 
+def _anclar_componente(p):
+    """Pin: una pieza clavada con una chincheta recta."""
+    _caja(p, 12, 12, 8, 13.5, 19.5, 1.0, BLANCOS, GRIS_OSCURO)
+    p.setPen(QPen(GRIS_OSCURO, 1.6, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(22, 9), QPointF(22, 20))
+    p.setPen(QPen(QColor("#8e1f17"), 0.9))
+    p.setBrush(ROJO)
+    p.drawEllipse(QPointF(22, 6.5), 4, 4)
+
+
+def _posicion_inicial(p):
+    """Edit Initial Position: la pieza donde estaba (fantasma) y una flecha hasta donde queda."""
+    _caja(p, 8, 8, 8, 9.5, 10, 1.0, FANTASMA, BORDE_FANTASMA)
+    _caja(p, 8, 8, 8, 22.5, 22.5, 1.0, BLANCOS, GRIS_OSCURO)
+    _flecha(p, 9, 18, 15.5, 24, GRIS_OSCURO, 1.8, 4.2)
+
+
+def _capturar_posicion(p):
+    """Capture Position: la pieza enmarcada por las cuatro esquinas del visor."""
+    _caja(p, 10, 10, 7, 16, 19, 1.0, BLANCOS, GRIS_OSCURO)
+    p.setPen(QPen(AZUL_LADO, 1.8, Qt.SolidLine, Qt.RoundCap))
+    for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+        x, y = 16 + sx * 12, 16 + sy * 12
+        p.drawLine(QPointF(x, y), QPointF(x - sx * 6, y))
+        p.drawLine(QPointF(x, y), QPointF(x, y - sy * 6))
+
+
+def _revertir_posicion(p):
+    """Revert: la pieza vuelve a su posición capturada (fantasma) por una flecha curva."""
+    _caja(p, 8, 8, 8, 22.5, 11, 1.0, FANTASMA, BORDE_FANTASMA)
+    _caja(p, 8, 8, 8, 9.5, 22, 1.0, BLANCOS, GRIS_OSCURO)
+    _arco_con_punta(p, 16, 16, 9, 200, 80, GRIS_OSCURO, 1.8, 4.2)
+
+
 # ================================================================ SELECCIONAR
 def _seleccion_ventana(p):
     _guiones(p, AZUL_LADO, 1.4)
@@ -1680,6 +1722,22 @@ def _filtro_seleccion(p):
 
 
 # ================================================================ SUPERFICIE
+def _primitiva_sup(nombre):
+    """La forma de la primitiva sólida `nombre` en naranja: cambiar rojo por azul conserva sus luces y sus bordes (un
+    tinte parejo las aplanaba y a 24 px la caja se confundía con la esfera)."""
+    def dibujo(p):
+        imagen = QImage(128, 128, QImage.Format_ARGB32_Premultiplied)
+        imagen.fill(Qt.transparent)
+        q = QPainter(imagen)
+        q.setRenderHint(QPainter.Antialiasing)
+        q.scale(4, 4)
+        DIBUJOS[nombre](q)
+        q.end()
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.drawImage(QRectF(0, 0, 32, 32), imagen.rgbSwapped())
+    return dibujo
+
+
 def _sup_extruir(p):
     base, arriba = QPointF(4, 25), QPointF(23, 20)
     _lamina(p, base + QPointF(0, -13), arriba + QPointF(0, -13), arriba, base, 3)
@@ -2425,9 +2483,12 @@ DIBUJOS_EXTRA = {
     "insertar_malla": _insertar_malla, "insertar_componente": _insertar_componente, "fijacion": _fijacion,
     # ensamblar
     "nuevo_componente": _nuevo_componente, "union": _union, "union_construida": _union_construida,
+    "duplicar_con_uniones": _duplicar_con_uniones,
     "origen_union": _origen_union, "grupo_rigido": _grupo_rigido, "accionar_uniones": _accionar_uniones,
     "vinculo_movimiento": _vinculo_movimiento, "conjunto_contacto": _conjunto_contacto,
     "estudio_movimiento": _estudio_movimiento, "fijar_componente": _fijar_componente,
+    "anclar_componente": _anclar_componente, "posicion_inicial": _posicion_inicial,
+    "capturar_posicion": _capturar_posicion, "revertir_posicion": _revertir_posicion,
     # seleccionar
     "seleccion_ventana": _seleccion_ventana, "seleccion_libre": _seleccion_libre,
     "seleccion_pintura": _seleccion_pintura, "filtro_seleccion": _filtro_seleccion,
@@ -2438,6 +2499,7 @@ DIBUJOS_EXTRA = {
     "descoser": _descoser, "invertir_normal": _invertir_normal,
     # variantes de comandos hermanos (ICO-4)
     "sup_empalme": _sup_empalme,
+    **{f"sup_{n}": _primitiva_sup(n) for n in ("caja", "cilindro", "esfera", "toroide", "bobina", "tuberia")},
     # malla
     "malla_teselar": _malla_teselar, "reparar_malla": _reparar_malla, "limpiar_malla": _limpiar_malla,
     "grupos_caras": _grupos_caras,
@@ -2464,10 +2526,461 @@ DIBUJOS_EXTRA = {
     "borrar_caras": _borrar_caras, "calibracion_holguras": _calibracion_holguras,
 }
 
+
+# ---------------------------------------------------------------- íconos de opciones de los paneles (CAP-10)
+# Van en las filas de `Botones` y en los desplegables de los paneles de comando; no son comandos ni pasos del timeline.
+def _bloque(p):
+    """Corte de una pieza: bloque gris sobre el que se dibuja el agujero."""
+    _poli(p, [QPointF(4, 5), QPointF(28, 5), QPointF(28, 27), QPointF(4, 27)], GRISES[1], BORDE_GRIS)
+
+
+def _hoyo(p, boca="", punta="angulo", rosca="", eje=False):
+    """Agujero en corte. boca: escariado | avellanado; punta: angulo | plana; rosca: roscado | conico | libre."""
+    izq, der = [], []
+    a = 3.5 if rosca == "conico" else 5.0
+    if boca == "escariado":
+        izq, der = [QPointF(7, 5), QPointF(7, 12), QPointF(11, 12)], [QPointF(21, 12), QPointF(25, 12), QPointF(25, 5)]
+    elif boca == "avellanado":
+        izq, der = [QPointF(6, 5), QPointF(11, 11)], [QPointF(21, 11), QPointF(26, 5)]
+    else:
+        izq, der = [QPointF(11, 5)], [QPointF(21, 5)]
+    fondo = [QPointF(16 - a, 22), QPointF(16, 27), QPointF(16 + a, 22)] if punta == "angulo" else [QPointF(16 - a, 25), QPointF(16 + a, 25)]
+    _poli(p, izq + fondo + der, QColor("#ffffff"), BORDE_GRIS, 1.1)
+    if rosca in ("roscado", "conico"):
+        _trazo(p, GRIS_OSCURO, 1.3)
+        for y in (9, 13, 17, 21):
+            ancho = 5 - (y - 5) * 0.08 if rosca == "conico" else 5
+            p.drawLine(QPointF(16 - ancho, y), QPointF(16 + ancho, y + 2))
+    if rosca == "libre":
+        _poli(p, [QPointF(14, 2), QPointF(18, 2), QPointF(18, 19), QPointF(14, 19)], AZUL_FRENTE)
+    if eje:
+        _guion(p, EJE, 1.2)
+        p.drawLine(QPointF(16, 3), QPointF(16, 29))
+
+
+def _colocacion(p, puntos):
+    _poli(p, [QPointF(4, 5), QPointF(28, 5), QPointF(28, 27), QPointF(4, 27)], AZUL_ARRIBA)
+    for x, y in puntos:
+        p.setPen(QPen(AZUL_BORDE, 0.9))
+        p.setBrush(QColor("#ffffff"))
+        p.drawEllipse(QPointF(x, y), 3.4, 3.4)
+
+
+def _referencias(p):
+    _colocacion(p, [(18, 15)])
+    _trazo(p, ROJO, 1.2)
+    p.drawLine(QPointF(4, 15), QPointF(14, 15))
+    p.drawLine(QPointF(18, 27), QPointF(18, 19))
+
+
+def _base(p, x0=5, x1=27, y=16):
+    """Línea gruesa del plano del perfil."""
+    p.setPen(QPen(GRIS_OSCURO, 2.4, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(x0, y), QPointF(x1, y))
+
+
+def _dir(p, arriba, abajo):
+    _base(p)
+    if arriba:
+        _flecha(p, 16, 15, 16, 16 - arriba, AZUL_LADO, 2.0, 4.5)
+    if abajo:
+        _flecha(p, 16, 17, 16, 16 + abajo, NARANJA, 2.0, 4.5)
+
+
+def _ext(p, tipo):
+    """Extensión: |←→|, hasta un objeto, a través de todo o hasta el siguiente."""
+    if tipo == "distancia":
+        p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap))
+        p.drawLine(QPointF(5, 8), QPointF(5, 24))
+        p.drawLine(QPointF(27, 8), QPointF(27, 24))
+        _flecha(p, 16, 16, 7, 16, AZUL_LADO, 1.8, 4.0)
+        _flecha(p, 16, 16, 25, 16, AZUL_LADO, 1.8, 4.0)
+    elif tipo == "objeto":
+        _poli(p, [QPointF(21, 4), QPointF(27, 4), QPointF(27, 28), QPointF(21, 28)], GRISES[1], BORDE_GRIS)
+        _flecha(p, 5, 16, 19, 16, ROJO, 2.0, 4.5)
+    elif tipo == "todo":
+        p.setPen(QPen(GRIS_OSCURO, 2.0, Qt.SolidLine, Qt.RoundCap))
+        for x in (10, 20):
+            p.drawLine(QPointF(x, 6), QPointF(x, 26))
+        _flecha(p, 4, 16, 26, 16, AZUL_LADO, 2.0, 4.5)
+    else:
+        _poli(p, [QPointF(20, 16), QPointF(28, 16), QPointF(28, 28), QPointF(20, 28)], GRISES[1], BORDE_GRIS)
+        _trazo(p, AZUL_BORDE, 1.8)
+        p.drawPolyline(QPolygonF([QPointF(4, 6), QPointF(14, 6), QPointF(14, 14)]))
+        _flecha(p, 14, 12, 14, 24, AZUL_LADO, 2.0, 4.5)
+
+
+def _inicio(p, tipo):
+    p.setPen(QPen(GRIS_OSCURO, 2.2, Qt.SolidLine, Qt.RoundCap))
+    x = {"plano": 8, "desfase": 14, "objeto": 14}[tipo]
+    p.drawLine(QPointF(x, 7), QPointF(x, 25))
+    _flecha(p, x, 16, 27, 16, AZUL_LADO, 2.0, 4.5)
+    if tipo == "desfase":
+        _guion(p, GRIS_OSCURO, 1.2)
+        p.drawLine(QPointF(6, 7), QPointF(6, 25))
+    elif tipo == "objeto":
+        _poli(p, [QPointF(4, 6), QPointF(10, 6), QPointF(10, 26), QPointF(4, 26)], GRISES[1], BORDE_GRIS)
+
+
+def _seccion_op(p, tipo):
+    if tipo == "circular":
+        _esfera_c(p, 16, 16, 11, QColor("#cfe7fb"), AZUL_ARRIBA, AZUL_FRENTE, AZUL_BORDE)
+    elif tipo == "cuadrada":
+        _poli(p, [QPointF(6, 6), QPointF(26, 6), QPointF(26, 26), QPointF(6, 26)], AZUL_FRENTE)
+    elif tipo == "externo":
+        _poli(p, [QPointF(7, 5), QPointF(26, 16), QPointF(7, 27)], AZUL_FRENTE)
+    else:
+        _poli(p, [QPointF(25, 5), QPointF(6, 16), QPointF(25, 27)], AZUL_FRENTE)
+
+
+def _posicion(p, tipo):
+    """Sección respecto de la línea de la trayectoria: adentro, sobre ella o afuera."""
+    _guion(p, GRIS_OSCURO, 1.2)
+    p.drawLine(QPointF(16, 3), QPointF(16, 29))
+    x = {"interior": 10, "centro": 16, "exterior": 22}[tipo]
+    p.setPen(QPen(AZUL_BORDE, 0.9))
+    p.setBrush(AZUL_FRENTE)
+    p.drawEllipse(QPointF(x, 16), 5.5, 5.5)
+
+
+def _op(p, tipo):
+    """Operación booleana de dos bloques."""
+    a, b = (5, 8, 15, 15), (12, 14, 15, 13)
+    if tipo == "nuevo":
+        _cil(p, 14, 9, 22, 9, 3)
+        _mas(p, 23, 23, 4.5)
+        return
+    colores = {"unir": (AZUL_FRENTE, AZUL_FRENTE), "cortar": (AZUL_FRENTE, ROJOS[0]), "intersecar": (GRISES[0], AZUL_FRENTE)}[tipo]
+    _poli(p, [QPointF(a[0], a[1]), QPointF(a[0] + a[2], a[1]), QPointF(a[0] + a[2], a[1] + a[3]), QPointF(a[0], a[1] + a[3])], colores[0])
+    if tipo != "intersecar":
+        _poli(p, [QPointF(b[0], b[1]), QPointF(b[0] + b[2], b[1]), QPointF(b[0] + b[2], b[1] + b[3]), QPointF(b[0], b[1] + b[3])], colores[1])
+    else:
+        _poli(p, [QPointF(b[0], b[1]), QPointF(b[0] + b[2], b[1]), QPointF(b[0] + b[2], b[1] + b[3]), QPointF(b[0], b[1] + b[3])], GRISES[0])
+        _poli(p, [QPointF(12, 14), QPointF(20, 14), QPointF(20, 23), QPointF(12, 23)], colores[1])
+
+
+def _barrido_op(p, tipo):
+    camino = QPainterPath(QPointF(5, 24))
+    camino.cubicTo(QPointF(10, 6), QPointF(22, 6), QPointF(27, 24))
+    if tipo == "solido":
+        _tubo(p, _muestras(camino, 0, 1, 16), 6)
+        return
+    _trazo(p, AZUL_LADO, 2.4)
+    p.drawPath(camino)
+    p.setPen(QPen(AZUL_BORDE, 0.9))
+    p.setBrush(AZUL_FRENTE)
+    p.drawEllipse(QPointF(5, 24), 3.4, 3.4)
+    if tipo == "carril":
+        _guion(p, ROJO, 1.5)
+        guia = QPainterPath(QPointF(9, 27))
+        guia.cubicTo(QPointF(13, 15), QPointF(19, 15), QPointF(23, 27))
+        p.drawPath(guia)
+    elif tipo == "superficie":
+        _poli(p, [QPointF(6, 18), QPointF(26, 18), QPointF(30, 28), QPointF(10, 28)], SUP[0], BORDE_SUP)
+
+
+def _orientacion(p, tipo):
+    camino = QPainterPath(QPointF(4, 24))
+    camino.cubicTo(QPointF(10, 8), QPointF(20, 8), QPointF(28, 14))
+    _trazo(p, GRIS_OSCURO, 1.6)
+    p.drawPath(camino)
+    for t in (0.15, 0.5, 0.85):
+        o = camino.pointAtPercent(t)
+        if tipo == "perpendicular":
+            ang = math.radians(camino.angleAtPercent(t) + 90)
+        elif tipo == "paralela":
+            ang = math.radians(90)
+        else:
+            ang = math.radians(35)
+        _flecha(p, o.x(), o.y(), o.x() + 7 * math.cos(ang), o.y() - 7 * math.sin(ang), AZUL_LADO, 1.6, 3.5)
+
+
+def _tipo_extruir_delgada(p):
+    _poli(p, [QPointF(6, 10), QPointF(20, 10), QPointF(20, 26), QPointF(6, 26)], None, AZUL_BORDE, 2.6)
+    _flecha(p, 25, 26, 25, 6, GRIS_OSCURO, 1.8, 4.0)
+
+
+def _esquina(p, redonda, relleno=None, borde=None):
+    """Canto de un desfase: vivo o redondeado, sobre la pieza gris."""
+    q = QPainterPath(QPointF(5, 27))
+    q.lineTo(5, 16)
+    if redonda:
+        q.quadTo(5, 5, 16, 5)
+    else:
+        q.lineTo(5, 5)
+        q.lineTo(16, 5)
+    q.lineTo(27, 5)
+    q.lineTo(27, 16)
+    q.lineTo(16, 16)
+    q.lineTo(16, 27)
+    q.closeSubpath()
+    p.setPen(QPen(borde or AZUL_BORDE, 1.0))
+    p.setBrush(relleno or AZUL_FRENTE)
+    p.drawPath(q)
+    _poli(p, [QPointF(16, 16), QPointF(27, 16), QPointF(27, 27), QPointF(16, 27)], GRISES[1], BORDE_GRIS)
+
+
+def _desmoldeo_op(p, tipo):
+    _poli(p, [QPointF(10, 6), QPointF(22, 6), QPointF(26, 26), QPointF(6, 26)], AZUL_FRENTE)
+    if tipo == "plano":
+        p.setPen(QPen(NARANJA, 2.0, Qt.SolidLine, Qt.RoundCap))
+        p.drawLine(QPointF(3, 26), QPointF(29, 26))
+    else:
+        _guion(p, ROJO, 1.8)
+        p.drawLine(QPointF(3, 16), QPointF(29, 16))
+
+
+def _lados(p, n):
+    _poli(p, [QPointF(10, 8), QPointF(22, 8), QPointF(22, 24), QPointF(10, 24)], GRISES[1], BORDE_GRIS)
+    _trazo(p, AZUL_LADO, 2.2)
+    p.drawLine(QPointF(10, 8), QPointF(5, 24))
+    if n >= 2:
+        p.drawLine(QPointF(22, 8), QPointF(27, 24) if n == 3 else QPointF(29, 24))
+
+
+def _espesor(p, tipo):
+    """Dirección del espesor de Nervio y Red: a los dos lados de la curva o a uno."""
+    p.setPen(QPen(GRIS_OSCURO, 1.6, Qt.DashLine))
+    p.drawLine(QPointF(5, 27), QPointF(27, 5))
+    a, b = {"simetrico": (-5, 5), "lado1": (0, 6), "lado2": (-6, 0)}[tipo]
+    k = 0.707
+    _poli(p, [QPointF(7 + a * k, 25 + a * k), QPointF(25 + a * k, 7 + a * k),
+              QPointF(25 + b * k, 7 + b * k), QPointF(7 + b * k, 25 + b * k)], QColor(240, 162, 90, 190), BORDE_PLANO)
+
+
+def _cambiar_direccion(p):
+    _arco_con_punta(p, 16, 16, 9, 200, 340, AZUL_LADO, 1.8, 4.0)
+    _arco_con_punta(p, 16, 16, 9, 20, 160, AZUL_LADO, 1.8, 4.0)
+
+
+def _guia(p, tipo):
+    """Solevación: raíles a los costados o línea central."""
+    _poli(p, [QPointF(6, 8), QPointF(26, 8), QPointF(26, 24), QPointF(6, 24)], QColor(190, 220, 245, 170))
+    if tipo == "carriles":
+        _trazo(p, ROJO, 1.8)
+        p.drawLine(QPointF(9, 5), QPointF(9, 27))
+        p.drawLine(QPointF(23, 5), QPointF(23, 27))
+    else:
+        _guion(p, ROJO, 1.8)
+        p.drawLine(QPointF(16, 4), QPointF(16, 28))
+
+
+def _tangentes(p, fusionar):
+    q = QPainterPath(QPointF(5, 26))
+    q.lineTo(5, 14)
+    q.quadTo(5, 6, 13, 6)
+    q.lineTo(27, 6)
+    q.lineTo(27, 26)
+    q.closeSubpath()
+    _trazo(p, AZUL_BORDE, 1.1)
+    p.setBrush(AZUL_ARRIBA)
+    p.drawPath(q)
+    if not fusionar:
+        _trazo(p, GRIS_OSCURO, 1.2)
+        p.drawLine(QPointF(13, 6), QPointF(13, 26))
+        p.drawLine(QPointF(5, 14), QPointF(27, 14))
+
+
+def _rayas(p, vertical):
+    p.setPen(QPen(GRIS_OSCURO, 2.6, Qt.SolidLine, Qt.FlatCap))
+    for t in range(8, 26, 6):
+        if vertical:
+            p.drawLine(QPointF(t, 5), QPointF(t, 27))
+        else:
+            p.drawLine(QPointF(5, t), QPointF(27, t))
+
+
+def _editar_cara(p):
+    """La tapa de una caja con una grilla y un punto levantado."""
+    _caja_en(p, _q(16, 16), 0, 0, 0, 14, 14, 6, (AZUL_SEL, AZUL_FRENTE, AZUL_LADO))
+    q = _q(16, 16)
+    for i in (0, 7, 14):
+        p.setPen(QPen(BLANCOS[0], 1.0))
+        p.drawLine(QPointF(*_xy(q(i, 0, 6))), QPointF(*_xy(q(i, 14, 6))))
+        p.drawLine(QPointF(*_xy(q(0, i, 6))), QPointF(*_xy(q(14, i, 6))))
+    _flecha(p, *_xy(q(7, 7, 6)), *_xy(q(7, 7, 13)), NARANJA, 1.6, 4)
+
+
+def _comprobacion(p):
+    """Una forma suave con su tilde: ver cómo queda."""
+    camino = QPainterPath(QPointF(5, 22))
+    camino.cubicTo(QPointF(10, 4), QPointF(20, 26), QPointF(27, 8))
+    p.setPen(QPen(QColor(AZUL_SEL), 3.0))
+    p.drawPath(camino)
+    p.setPen(QPen(QColor(NARANJA), 2.4))
+    p.drawPolyline([QPointF(14, 22), QPointF(18, 27), QPointF(27, 17)])
+
+
+def _ana_ninguno(p):
+    _caja_c(p, 11, 11, 9)
+
+
+def _ana_isocurva(p, u=True, v=True):
+    _poli(p, [QPointF(5, 6), QPointF(27, 6), QPointF(27, 26), QPointF(5, 26)], AZUL_ARRIBA)
+    _trazo(p, GRIS_OSCURO, 1.1)
+    for t in (10, 16, 22):
+        if u:
+            p.drawLine(QPointF(t, 6), QPointF(t, 26))
+        if v:
+            p.drawLine(QPointF(5, t), QPointF(27, t))
+
+
+def _curvatura_op(p, tipo):
+    q = QPainterPath(QPointF(5, 20))
+    q.quadTo(16, 2, 27, 20)
+    colores = {"gaussiana": ROJO, "media": VERDE, "minima": AZUL_LADO, "gradiente": NARANJA, "bandas": AZUL_LADO}
+    _trazo(p, colores[tipo], 3.0)
+    p.drawPath(q)
+    if tipo == "bandas":
+        p.setPen(QPen(QColor("#ffffff"), 1.0))
+        for t in (0.25, 0.5, 0.75):
+            o = q.pointAtPercent(t)
+            p.drawLine(QPointF(o.x() - 1, o.y() - 3), QPointF(o.x() + 1, o.y() + 3))
+    elif tipo == "media":
+        _trazo(p, GRIS_OSCURO, 1.2)
+        p.drawLine(QPointF(5, 24), QPointF(27, 24))
+
+
+def _modo_tr(p, tipo):
+    """Modo de transformación de Editar cara."""
+    if tipo in ("multi", "traslacion"):
+        _flecha(p, 16, 16, 16, 5, VERDE, 1.8, 4.0)
+        _flecha(p, 16, 16, 27, 22, ROJO, 1.8, 4.0)
+        _flecha(p, 16, 16, 5, 22, AZUL_LADO, 1.8, 4.0)
+        if tipo == "multi":
+            _arco_con_punta(p, 16, 16, 12, 30, 140, VIOLETA, 1.2, 3.0)
+    elif tipo == "giro":
+        _arco_con_punta(p, 16, 16, 10, 40, 320, VIOLETA, 2.2, 4.5)
+    else:
+        _poli(p, [QPointF(6, 13), QPointF(19, 13), QPointF(19, 26), QPointF(6, 26)], AZUL_ARRIBA)
+        _flecha(p, 19, 13, 27, 5, GRIS_OSCURO, 1.8, 4.0)
+
+
+def _espacio(p, tipo):
+    """Espacio de coordenadas del manipulador."""
+    if tipo == "universal":
+        _flecha(p, 7, 25, 7, 6, VERDE, 1.8, 4.0)
+        _flecha(p, 7, 25, 26, 25, ROJO, 1.8, 4.0)
+    elif tipo == "vista":
+        _poli(p, [QPointF(5, 8), QPointF(27, 8), QPointF(27, 24), QPointF(5, 24)], None, GRIS_OSCURO, 1.4)
+        _flecha(p, 16, 16, 16, 10, VERDE, 1.6, 3.5)
+        _flecha(p, 16, 16, 23, 16, ROJO, 1.6, 3.5)
+    elif tipo == "seleccion":
+        _poli(p, [QPointF(6, 18), QPointF(20, 12), QPointF(26, 20), QPointF(12, 26)], AZUL_ARRIBA)
+        _flecha(p, 16, 19, 12, 5, VERDE, 1.6, 3.5)
+    else:
+        _poli(p, [QPointF(4, 22), QPointF(13, 18), QPointF(16, 24), QPointF(7, 28)], AZUL_ARRIBA)
+        _poli(p, [QPointF(17, 12), QPointF(26, 8), QPointF(29, 14), QPointF(20, 18)], AZUL_ARRIBA)
+        _flecha(p, 10, 23, 8, 12, VERDE, 1.4, 3.0)
+        _flecha(p, 22, 13, 20, 3, VERDE, 1.4, 3.0)
+
+
+def _filtro_ec(p, tipo):
+    """Filtro de selección de Editar cara: vértice, arista, cara o todo."""
+    _poli(p, [QPointF(6, 8), QPointF(26, 8), QPointF(26, 26), QPointF(6, 26)], AZUL_ARRIBA if tipo in ("cara", "todo") else None,
+          GRIS_OSCURO, 1.2)
+    if tipo in ("arista", "todo"):
+        _trazo(p, ROJO, 2.4)
+        p.drawLine(QPointF(6, 26), QPointF(26, 26))
+    if tipo in ("vertice", "todo"):
+        p.setPen(Qt.NoPen)
+        p.setBrush(ROJO)
+        p.drawEllipse(QPointF(26, 8), 3.4, 3.4)
+
+
+def _grilla_sel(p, marcadas, contrae=False):
+    """Grilla 4×4 de la malla de control con las celdas `marcadas` ((columna, fila)): opciones de selección."""
+    for i in range(4):
+        for j in range(4):
+            x, y = 5 + i * 5.5, 5 + j * 5.5
+            _poli(p, [QPointF(x, y), QPointF(x + 5.5, y), QPointF(x + 5.5, y + 5.5), QPointF(x, y + 5.5)],
+                  VERDE if (i, j) in marcadas else GRISES[0], GRIS_OSCURO, 0.6)
+    if contrae:
+        p.setPen(QPen(ROJO, 1.8))
+        p.drawLine(QPointF(4, 28), QPointF(28, 4))
+
+
+_CENTRO = {(1, 1), (2, 1), (1, 2), (2, 2)}
+_BORDE = {(i, j) for i in range(4) for j in range(4)} - _CENTRO
+_FILA, _COLUMNA = {(i, 1) for i in range(4)}, {(1, j) for j in range(4)}
+
+
+DIBUJOS_OPCIONES = {
+    # Agujero
+    "ag_punto": lambda p: _colocacion(p, [(16, 16)]), "ag_boceto": lambda p: _colocacion(p, [(10, 11), (22, 11), (10, 21), (22, 21)]),
+    "ag_referencias": _referencias,
+    "ag_simple": lambda p: (_bloque(p), _hoyo(p)), "ag_escariado": lambda p: (_bloque(p), _hoyo(p, "escariado")),
+    "ag_avellanado": lambda p: (_bloque(p), _hoyo(p, "avellanado")),
+    "ag_liso": lambda p: (_bloque(p), _hoyo(p, eje=True)), "ag_libre": lambda p: (_bloque(p), _hoyo(p, rosca="libre")),
+    "ag_roscado": lambda p: (_bloque(p), _hoyo(p, rosca="roscado")), "ag_conico": lambda p: (_bloque(p), _hoyo(p, rosca="conico")),
+    "ag_punta_plana": lambda p: (_bloque(p), _hoyo(p, punta="plana")),
+    "ag_punta_angulo": lambda p: (_bloque(p), _hoyo(p, punta="angulo", eje=True), _flecha(p, 26, 18, 18, 26, ROJO, 1.4, 3.0)),
+    # Dirección, extensión, inicio
+    "dir_un_lado": lambda p: _dir(p, 11, 0), "dir_dos_lados": lambda p: _dir(p, 11, 6), "dir_simetrica": lambda p: _dir(p, 9, 9),
+    "ext_distancia": lambda p: _ext(p, "distancia"), "ext_objeto": lambda p: _ext(p, "objeto"),
+    "ext_todo": lambda p: _ext(p, "todo"), "ext_siguiente": lambda p: _ext(p, "siguiente"),
+    "ini_plano": lambda p: _inicio(p, "plano"), "ini_desfase": lambda p: _inicio(p, "desfase"),
+    "ini_objeto": lambda p: _inicio(p, "objeto"),
+    # Sección y posición
+    "sec_circular": lambda p: _seccion_op(p, "circular"), "sec_cuadrada": lambda p: _seccion_op(p, "cuadrada"),
+    "sec_tri_externa": lambda p: _seccion_op(p, "externo"), "sec_tri_interna": lambda p: _seccion_op(p, "interno"),
+    "pos_interior": lambda p: _posicion(p, "interior"), "pos_centro": lambda p: _posicion(p, "centro"),
+    "pos_exterior": lambda p: _posicion(p, "exterior"),
+    # Operación
+    "op_unir": lambda p: _op(p, "unir"), "op_cortar": lambda p: _op(p, "cortar"), "op_intersecar": lambda p: _op(p, "intersecar"),
+    "op_nuevo": lambda p: _op(p, "nuevo"),
+    # Barrido
+    "bar_ruta": lambda p: _barrido_op(p, "ruta"), "bar_carril": lambda p: _barrido_op(p, "carril"),
+    "bar_superficie": lambda p: _barrido_op(p, "superficie"), "bar_solido": lambda p: _barrido_op(p, "solido"),
+    "ori_perpendicular": lambda p: _orientacion(p, "perpendicular"), "ori_paralela": lambda p: _orientacion(p, "paralela"),
+    "ori_alineada": lambda p: _orientacion(p, "alineada"),
+    # Extruir, Engrosar, Vaciado, Desmoldeo
+    "ext_delgada": _tipo_extruir_delgada,
+    "esq_viva": lambda p: _esquina(p, False), "esq_redonda": lambda p: _esquina(p, True),
+    "eng_agudo": lambda p: _esquina(p, False, SUP[1], BORDE_SUP), "eng_redondo": lambda p: _esquina(p, True, SUP[1], BORDE_SUP),
+    "des_plano": lambda p: _desmoldeo_op(p, "plano"), "des_particion": lambda p: _desmoldeo_op(p, "particion"),
+    "lado_uno": lambda p: _lados(p, 1), "lado_dos": lambda p: _lados(p, 2), "lado_simetrico": lambda p: _lados(p, 3),
+    # Mover/copiar
+    "mov_libre": lambda p: _modo_tr(p, "multi"), "mov_trasladar": lambda p: _modo_tr(p, "traslacion"),
+    "mov_rotar": lambda p: _modo_tr(p, "giro"),
+    "mov_punto_punto": lambda p: (_ptos(p, [(7, 24), (25, 8)], 4.0, VERDE), _flecha(p, 10, 21, 21, 11, GRIS_OSCURO, 1.6, 4.0)),
+    "mov_punto_posicion": lambda p: (_ptos(p, [(7, 24)], 4.0, VERDE), _flecha(p, 10, 21, 21, 11, GRIS_OSCURO, 1.6, 4.0),
+                                     _flecha(p, 24, 12, 24, 4, VERDE, 1.2, 3.0), _flecha(p, 24, 12, 30, 12, ROJO, 1.2, 3.0)),
+    "esc_modo": lambda p: _modo_tr(p, "escala"),
+    "mov_pivote": lambda p: (_flecha(p, 9, 24, 9, 7, VERDE, 1.6, 3.6), _flecha(p, 9, 24, 26, 24, ROJO, 1.6, 3.6),
+                             _ptos(p, [(19, 12)], 4.0, AZUL_LADO)),
+    # Nervio y Red
+    "esp_simetrico": lambda p: _espesor(p, "simetrico"), "esp_lado1": lambda p: _espesor(p, "lado1"),
+    "esp_lado2": lambda p: _espesor(p, "lado2"), "cambiar_direccion": _cambiar_direccion,
+    # Solevación
+    "guia_carriles": lambda p: _guia(p, "carriles"), "guia_central": lambda p: _guia(p, "central"),
+    "tan_fusionar": lambda p: _tangentes(p, True), "tan_mantener": lambda p: _tangentes(p, False),
+    # Análisis
+    "editar_cara": _editar_cara, "comprobacion": _comprobacion, "ana_ninguno": _ana_ninguno, "ana_cebra": lambda p: _rayas(p, True), "ana_mapa": lambda p: _curvatura_op(p, "gaussiana"),
+    "ana_iso": _ana_isocurva, "ana_iso_u": lambda p: _ana_isocurva(p, True, False), "ana_iso_v": lambda p: _ana_isocurva(p, False, True),
+    "rayas_v": lambda p: (_rayas(p, True), _trazo(p, ROJO, 1.0), p.drawRect(QRectF(4, 4, 24, 24))),
+    "rayas_h": lambda p: (_rayas(p, False), _trazo(p, ROJO, 1.0), p.drawRect(QRectF(4, 4, 24, 24))),
+    "cur_maxima": lambda p: _curvatura_op(p, "media"), "cur_minima": lambda p: _curvatura_op(p, "minima"),
+    "cur_gradiente": lambda p: _curvatura_op(p, "gradiente"), "cur_bandas": lambda p: _curvatura_op(p, "bandas"),
+    # Editar cara
+    "ec_universal": lambda p: _espacio(p, "universal"), "ec_vista": lambda p: _espacio(p, "vista"),
+    "ec_seleccion": lambda p: _espacio(p, "seleccion"), "ec_local": lambda p: _espacio(p, "local"),
+    "ec_vertice": lambda p: _filtro_ec(p, "vertice"), "ec_arista": lambda p: _filtro_ec(p, "arista"),
+    "ec_cara": lambda p: _filtro_ec(p, "cara"), "ec_todo": lambda p: _filtro_ec(p, "todo"),
+    "sel_aumentar": lambda p: _grilla_sel(p, _CENTRO | {(0, 1), (3, 1), (1, 0), (1, 3)}),
+    "sel_contraer": lambda p: _grilla_sel(p, {(1, 1)}), "sel_contorno": lambda p: _grilla_sel(p, _FILA),
+    "sel_mas_contorno": lambda p: _grilla_sel(p, _FILA | {(i, 2) for i in range(4)}),
+    "sel_menos_contorno": lambda p: _grilla_sel(p, _FILA, True), "sel_anilla": lambda p: _grilla_sel(p, _COLUMNA),
+    "sel_mas_anilla": lambda p: _grilla_sel(p, _COLUMNA | {(2, j) for j in range(4)}),
+    "sel_menos_anilla": lambda p: _grilla_sel(p, _COLUMNA, True), "sel_invertir": lambda p: _grilla_sel(p, _BORDE),
+    "sel_rango": lambda p: _grilla_sel(p, {(i, j) for i in range(3) for j in range(3)}),
+}
+
+
 # Los ayudantes de iconos.py se importan AL FINAL, a propósito: iconos.py importa este módulo en su última
 # línea (DIBUJOS.update), así que cuando se carga cualquiera de los dos primero, DIBUJOS_EXTRA ya existe y
 # los nombres que iconos.py define antes de esa línea también. Las funciones de arriba solo usan estos
 # nombres al ejecutarse, nunca al cargarse el módulo.
-from .iconos import (AZUL_ARRIBA, AZUL_BORDE, AZUL_FRENTE, AZUL_LADO, GRIS, GRIS_OSCURO, NARANJA, ROJO,  # noqa: E402
+from .iconos import (AZUL_ARRIBA, AZUL_BORDE, AZUL_FRENTE, AZUL_LADO, DIBUJOS, GRIS, GRIS_OSCURO, NARANJA, ROJO,  # noqa: E402
                      VERDE, _arco_con_punta, _caja, _cilindro, _curva_por, _flecha, _guion, _iso, _letras, _mas,
                      _poli, _ptos, _regular, _trazo)

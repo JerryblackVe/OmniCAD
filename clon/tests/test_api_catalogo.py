@@ -123,6 +123,9 @@ def test_pista_lista_argumentos_validos():
     r = api.llamar(api.Sesion(), "create_parameter", {"name": "a", "expresion": "1"})
     assert r["error_kind"] == "INVALID_ARGUMENTS"
     assert any("name, expression, comment" in p for p in r["pistas"])
+    r = api.llamar(api.Sesion(), "get_viewport_image", {"body": "op1.c1"})       # H-49: body frente a bodies
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "«body» → «bodies»" in r["pistas"][0]
+    assert any("Argumentos válidos" in p for p in r["pistas"])
     r = api.llamar(api.Sesion(), "get_sceneinfo", {})
     assert any("get_scene_info" in p for p in r["pistas"])
 

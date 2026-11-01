@@ -759,20 +759,20 @@ def test_editar_un_texto_muestra_sus_opciones_en_la_paleta(app_qt):
     from omnicad.timeline.parametros import TablaParametros
     from omnicad.ui.editor_boceto import Lienzo
     from PySide6.QtWidgets import QFormLayout
-    from omnicad.ui.modo_boceto import PaletaBoceto, PanelCaracter
+    from omnicad.ui.modo_boceto import PanelCaracter, TarjetaHerramienta
     b = Boceto()
     tid = b.agregar_texto((0, 0), "HOLA", 10, 0, "Arial", True, False)
     lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
-    paleta = PaletaBoceto()
+    tarjeta = TarjetaHerramienta()
     lz.texto_en_edicion.connect(
-        lambda: paleta.set_herramienta("texto", lz.lados, lz.opcion_cota, lz.opciones))
+        lambda: tarjeta.set_herramienta("texto", lz.lados, lz.opcion_cota, lz.opciones))
     lz.herramienta_cambiada.connect(
-        lambda h: paleta.set_herramienta(h, lz.lados, lz.opcion_cota, lz.opciones))
+        lambda h: tarjeta.set_herramienta(h, lz.lados, lz.opcion_cota, lz.opciones))
     assert lz.herramienta == "seleccionar"
     lz.editar_texto(tid, lz.rect().center())
-    etiquetas = [paleta.form_contexto.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text()
-                 for i in range(paleta.form_contexto.rowCount())]
-    assert etiquetas == []                                    # la paleta ya no mezcla opciones de texto
+    etiquetas = [tarjeta.form_contexto.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text()
+                 for i in range(tarjeta.form_contexto.rowCount())]
+    assert etiquetas == []                                    # la tarjeta ya no mezcla opciones de texto
     assert lz.opciones["negrita"] is True                     # parte de lo que ya tiene el texto
     # la fuente, el estilo y lo demás están en el panel «Carácter», que arranca con lo que ya tiene el texto
     panel = PanelCaracter()
@@ -780,7 +780,7 @@ def test_editar_un_texto_muestra_sus_opciones_en_la_paleta(app_qt):
     assert panel.fuente.currentText() == "Arial" and panel.estilo.currentData() == "negrita"
     assert panel.alineacion.currentData() == lz.opciones["alineacion"] == "izq"
     lz._cerrar_entrada()
-    assert paleta.form_contexto.rowCount() == 0               # «Seleccionar» no tiene opciones propias
+    assert tarjeta.form_contexto.rowCount() == 0               # «Seleccionar» no tiene opciones propias
 
 
 @hay_arial

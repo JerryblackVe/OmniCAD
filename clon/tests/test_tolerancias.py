@@ -80,7 +80,7 @@ def test_iso_965_clases_g_y_h_y_tamanos_sin_datos():
     with pytest.raises(g.ErrorGeometria):
         tol.limites_rosca("iso_metrica", 10, 1.5, "4H5H")
     with pytest.raises(g.ErrorGeometria):
-        tol.limites_rosca("trapezoidal", 20, 4, "7e")
+        tol.limites_rosca("trapezoidal", 20, 4, "6g")                   # una clase que ese tipo no tiene
 
 
 # ---------------------------------------------------------------- ASME B1.1 (rosca unificada)
@@ -104,7 +104,7 @@ def test_resolver_clase_y_desfases():
     assert tol.resolver_clase("iso_metrica", 10, 1.5, "auto", True) == ("6H", None)
     assert tol.resolver_clase("iso_metrica", 10, 1.5, "auto", False) == ("6g", None)
     assert tol.resolver_clase("unificada", 6.35, 1.27, "auto", False) == ("2A", None)
-    assert tol.resolver_clase("trapezoidal", 20, 4, "auto", True) == ("", None)
+    assert tol.resolver_clase("trapezoidal", 20, 4, "auto", True) == ("7H", None)       # CAP-14: la clase de Fusion
     clase, aviso = tol.resolver_clase("iso_metrica", 2, 0.4, "auto", True)
     assert clase == "" and "perfil básico" in aviso
     with pytest.raises(g.ErrorGeometria):

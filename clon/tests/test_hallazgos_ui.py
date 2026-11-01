@@ -288,7 +288,8 @@ def test_menu_del_timeline_es_distinto_para_boceto_operacion_y_union(app_qt):
                       "Eliminar"):
             assert comun in textos
         assert "Retroceder hasta aquí" not in textos                    # unificado con «Rodar marcador aquí»
-        assert "Desactivar operaciones" not in textos and "Configurar" not in textos   # fuera de alcance
+        for h6 in ("Configurar", "Buscar en la ventana", "Crear conjunto de selección…"):   # H-6
+            assert h6 in textos
 
 
 def test_menu_del_timeline_emite_lo_que_corresponde(app_qt):

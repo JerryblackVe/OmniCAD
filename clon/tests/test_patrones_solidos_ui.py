@@ -303,7 +303,7 @@ def test_ruta_insuficiente_avisa_y_el_inicio_se_ve_en_la_ruta(app_qt):  # noqa: 
     assert panel._previa_ok and "La ruta no alcanza" in panel.mensaje.text()
     asa = _manip(panel, mp.AsaRuta, "inicio")
     assert asa.asa(panel.manipuladores) == pytest.approx([0, 0, 0], abs=1e-6)
-    _teclear(panel.widgets["inicio"], "0.5")
+    _teclear(panel.widgets["inicio"], "50")
     assert _manip(panel, mp.AsaRuta, "inicio").asa(panel.manipuladores) == pytest.approx([10, 0, 0], abs=0.3)
     panel.cancelar()
 
@@ -449,4 +449,129 @@ def test_el_limite_de_instancias_se_explica_y_no_cuelga_el_panel(app_qt):  # noq
     _teclear(panel.widgets["n2"], "2")
     panel._calcular_previa()
     assert panel._previa_ok and not panel.mensaje.text().startswith("⚠")
+    panel.cancelar()
+
+
+# ---------------------------------------------------------------- PAT-2 a PAT-5
+def test_pat2_el_punto_de_inicio_va_en_porcentaje_y_la_receta_sigue_en_fraccion(app_qt):  # noqa: F811
+    from omnicad.ui.comandos.crear import fraccion_a_porcentaje, porcentaje_a_fraccion, valores_patron
+    assert fraccion_a_porcentaje("0.5") == "50" and fraccion_a_porcentaje(0.125) == "12.5" and fraccion_a_porcentaje("") == "0"
+    assert porcentaje_a_fraccion("12,5") == "0.125" and porcentaje_a_fraccion("100") == "1" and porcentaje_a_fraccion("") == "0"
+    assert fraccion_a_porcentaje("k") == "(k)*100" and porcentaje_a_fraccion("k") == "(k)/100"          # una expresión vieja
+    doc, ruta = _doc_ruta([(0, 0), (20, 0)])
+    assert valores_patron({"forma_patron": "ruta", "inicio": "0.4"}, doc.estado_final)["inicio"] == "40"
+    panel, visor, _estados, _d = _abrir("patron_ruta", doc, {"ruta": ruta, "rn": 2, "rd": "5 mm", "distribucion": "espaciado"})
+    _teclear(panel.widgets["inicio"], "25")                              # 25 % de una ruta de 20 mm
+    panel._calcular_previa()
+    assert panel.ultima_op.p["inicio"] == "0.25"
+    gm = panel.manipuladores
+    assert _manip(panel, mp.AsaRuta, "inicio").asa(gm) == pytest.approx([5, 0, 0], abs=1e-6)
+    xy, ok = gm.pantalla([[5, 0, 0], [15, 0, 0]])                         # se arrastra el disco con el ratón hasta el 75 %
+    assert ok.all()
+    _arrastrar(visor, *xy)
+    assert float(panel.valores["inicio"]) == pytest.approx(75, abs=4)
+    panel._calcular_previa()
+    assert float(panel.ultima_op.p["inicio"]) == pytest.approx(0.75, abs=0.04)
+    panel.cancelar()
+
+
+def test_pat3_las_copias_suprimidas_se_ven_como_silueta_roja(app_qt):  # noqa: F811
+    from omnicad.ui.comandos.asas_patron import ROJO_FANTASMA
+    panel, _v, _e, _d = _abrir("patron_rectangular_3d", valores={
+        "dir1": [_hit(_doc_caja(), EJE_X)], "n1": 3, "d1": "30 mm", "distribucion": "espaciado", "suprimir": "1:0"})
+    panel._calcular_previa()
+    prims = panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
+    assert len(prims) == 1 and prims[0][0] == "lineas" and prims[0][2] == ROJO_FANTASMA
+    x = prims[0][1][:, 0]
+    assert x.min() == pytest.approx(30.0, abs=1e-3) and x.max() == pytest.approx(50.0, abs=1e-3)    # la copia del paso 1
+    panel.set_valor("suprimir", "")
+    panel._calcular_previa()
+    assert not panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
+    panel.cancelar()
+
+
+def test_pat3_las_casillas_tambien_sirven_con_caras_y_con_geometria_de_construccion(app_qt):  # noqa: F811
+    from omnicad.nucleo import referencias as refs
+    doc = _doc_caja()
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    cara = next(s for s in refs.subformas(forma, "cara") if refs.firma_cara(s)["geom"] == "plano")
+    for objeto, valores in (("caras", {"caras": [_hit(doc, refs.referencia("op1.c1", cara, forma))]}),
+                            ("construccion", {"construccion": [_hit(doc, {"tipo": "plano", "id": "XY"})]})):
+        panel, visor, _e, _d = _abrir("patron_rectangular_3d", doc, {
+            "objeto": objeto, "dir1": [_hit(doc, EJE_X)], "n1": 3, "d1": "30 mm", "distribucion": "espaciado", **valores})
+        _marcar(panel.widgets["ver_casillas"])
+        casillas = _manip(panel, mp.CasillasCopias)
+        assert len(casillas.items) == 3 and casillas.originales == {(0, 0)}, objeto
+        punto = next(p for ident, p, _x in casillas.items if ident == (1, 0))
+        xy, ok = panel.manipuladores.pantalla([punto])
+        assert ok.all()
+        _clic(visor, xy[0])                                                # clic real sobre la casilla de la copia 1
+        assert panel.valores["suprimir"] == "1:0", objeto
+        panel._calcular_previa()
+        assert panel._previa_ok and panel.ultima_op.p["suprimir"] == [[1, 0]], objeto
+        panel.cancelar()
+
+
+def _panel_multi(doc):
+    from omnicad.ui.comandos.patrones import Multitransformar
+    panel, visor, estados = _panel(Multitransformar(), doc, {"cuerpos": [_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})]})
+    visor.vista("iso")
+    return panel, visor, estados
+
+
+def test_pat4_la_multitransformacion_muestra_las_copias_hasta_la_etapa_y_las_asas_de_la_elegida(app_qt):  # noqa: F811
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from omnicad.ui.comandos.asas_patron import AZUL_DESTINO
+    doc = _doc_caja()
+    panel, _visor, _estados = _panel_multi(doc)
+    lista = panel.widgets["lista"]
+    panel.set_valor("t_dir1", [_hit(doc, EJE_X)])
+    panel.set_valor("t_distribucion", "espaciado")
+    _teclear(panel.widgets["t_n1"], "3")
+    _teclear(panel.widgets["t_d1"], "30 mm")
+    lista.agregar.menu().actions()[4].trigger()                            # 2.ª transformación: una simetría
+    panel.set_valor("t_plano", [_hit(doc, {"tipo": "plano", "id": "YZ"})])
+    panel._calcular_previa()
+    assert panel._previa_ok
+    assert not panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)    # la última etapa es todo el resultado
+    QTest.keyClick(lista.lista, Qt.Key_Up)                                 # se elige la 1.ª: el patrón de 3
+    panel._calcular_previa()
+    assert "Hasta esta etapa quedan 3 instancias" in panel.widgets["etapa"].text()
+    prims = panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
+    assert len(prims) == 2 and all(p[2] == AZUL_DESTINO for p in prims)     # las dos copias del patrón, sin las espejadas
+    assert sorted(round(float(p[1][:, 0].min()), 3) for p in prims) == [30.0, 60.0]
+    # las asas son las de la transformación elegida y escriben en sus campos (t_…)
+    panel.manipuladores.actualizar()
+    _arrastrar_asa_n(panel, "t_n1", 1)                                     # una copia más: la cantidad pasa a 4
+    assert panel.valores["t_n1"] == 4
+    panel._calcular_previa()
+    assert panel.ultima_op.p["transformaciones"][0]["n1"] == 4
+    QTest.keyClick(lista.lista, Qt.Key_Down)                               # la simetría no tiene asas
+    assert not [m for m in panel.manipuladores.manips if getattr(m, "clave", "").startswith("t_")]
+    panel.cancelar()
+
+
+def test_pat5_la_direccion_2_derivada_se_puede_llevar_a_un_plano_de_referencia(app_qt):  # noqa: F811
+    doc = _doc_caja()
+    base = {"dir1": [_hit(doc, EJE_X)], "n1": 2, "d1": "30 mm", "n2": 2, "d2": "25 mm", "distribucion": "espaciado"}
+    panel, _v, estados, _d = _abrir("patron_rectangular_3d", doc, base)
+    assert panel._visible(next(c for c in panel.campos if c.clave == "plano_dir2"))
+    panel._calcular_previa()
+    assert _esquinas(estados[-1], panel.ultima_op.id) == [(x, y, 0.0) for x in (0.0, 30.0) for y in (0.0, 25.0)]
+    panel.set_valor("plano_dir2", [_hit(doc, {"tipo": "plano", "id": "XZ"})])        # la 2 queda dentro del plano XZ
+    panel._calcular_previa()
+    assert panel._previa_ok and "dentro del plano elegido" in panel.widgets["info_dir2"].text()
+    assert _esquinas(estados[-1], panel.ultima_op.id) == [(x, 0.0, z) for x in (0.0, 30.0) for z in (0.0, 25.0)]
+    assert panel.ultima_op.p["plano_dir2"] == {"tipo": "plano", "id": "XZ"}
+    flecha = _manip(panel, mp.Flecha, "d2")
+    assert np.allclose(flecha.direccion, (0, 0, 1))                                  # la flecha verde sigue a la elegida
+    # un plano perpendicular a la dirección 1 no define nada: el panel lo dice y la vista previa no se calcula
+    panel.set_valor("plano_dir2", [_hit(doc, {"tipo": "plano", "id": "YZ"})])
+    panel._calcular_previa()
+    assert "perpendicular al plano" in panel.widgets["info_dir2"].text() and not panel._previa_ok
+    # elegir una dirección 2 explícita oculta el campo del plano
+    panel.set_valor("dir2", [_hit(doc, EJE_Y)])
+    assert not panel._visible(next(c for c in panel.campos if c.clave == "plano_dir2"))
     panel.cancelar()

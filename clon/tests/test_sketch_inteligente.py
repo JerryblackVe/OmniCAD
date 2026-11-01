@@ -91,11 +91,12 @@ def test_interseccion_real_de_dos_lineas_pone_las_dos_coincidencias():
     assert {r.restriccion[1], r.restriccion[2][1]} == {a, c}
 
 
-def test_interseccion_aparente_no_existe_si_los_tramos_no_se_cruzan():
+def test_si_los_tramos_no_se_cruzan_no_hay_interseccion_real_sino_aparente_sin_restriccion():
     b = Boceto()
     b.agregar_linea((0, 0), (10, 10))
     b.agregar_linea((0, 40), (10, 30))              # sus prolongaciones se cruzan en (20, 20), pero no los tramos
-    assert inferir(b, (20, 20), 0.5, tipos={"interseccion"}) is None
+    r = inferir(b, (20, 20), 0.5, tipos={"interseccion"})
+    assert r.tipo == "interseccion_aparente" and r.restriccion is None   # BOC-46: solo guía (tests/test_inferencias_dibujo.py)
 
 
 @pytest.mark.parametrize("escala", [0.01, 1.0, 100.0])

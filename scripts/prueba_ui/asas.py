@@ -46,6 +46,41 @@ def arrastrar(panel, g, desde, hasta, pasos=6):
     return True
 
 
+def fijar_trazo(p, vals, nombre):
+    """Caja, cilindro, esfera y toroide siguen al mouse, sin botón, para dar el tamaño hasta el primer clic (como Fusion). Una
+    persona lo prueba moviendo el mouse, lo fija con un clic y escribe los valores que quiere antes de tomar las asas. True
+    si había un trazo en curso."""
+    g = p.manipuladores
+    if g is None or g.trazo is None:
+        return False
+    m = next((x for x in g.manips if isinstance(x, mp.AsaRadial)), None)
+    if m is None:
+        return False
+    antes = g.valor(m.clave)
+    xy, ok = g.pantalla([m.origen + m.direccion * 8.0])             # 8 mm del centro, hacia el asa
+    if not ok.all():
+        return False
+    vis, q = p.visor, QPointF(*xy[0])
+    mover_sim(vis, q)
+    A.esperar(60)
+    A.reg(nombre, f"mover el mouse sin botón dibuja «{m.clave}»", abs(g.valor(m.clave) - antes) > 1e-6 and g.trazo is not None,
+          f"{antes:g} → {g.valor(m.clave):g}")
+    QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonPress, q, vis.mapToGlobal(q), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+    QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, q, vis.mapToGlobal(q), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+    A.esperar(60)
+    fijado = g.valor(m.clave)
+    mover_sim(vis, QPointF(q.x() + 40, q.y() + 25))
+    A.esperar(60)
+    A.reg(nombre, "un clic fija el trazo: el mouse ya no cambia el tamaño", g.trazo is None and abs(g.valor(m.clave) - fijado) < 1e-9,
+          f"{fijado:g} → {g.valor(m.clave):g}")
+    for k, x in vals.items():                                        # y se vuelven a escribir los valores de la prueba
+        p.set_valor(k, x)
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(150)
+    return True
+
+
 def probar(clave, sel, vals, foto=None):
     nombre = f"{AR} · {clave}"
     A.MODALES.clear()
@@ -68,6 +103,8 @@ def probar(clave, sel, vals, foto=None):
             return
         tipos = [(type(m).__name__, getattr(m, "clave", None)) for m in g.manips]
         A.reg(nombre, "asas en la vista", True, str(tipos))
+        if fijar_trazo(p, vals, nombre):
+            g = p.manipuladores
         if foto:
             A.foto(v, foto)
         for m in list(g.manips):
@@ -127,10 +164,10 @@ def probar(clave, sel, vals, foto=None):
                     i = int(np.searchsorted(m.ts, 0.9))
                     ok = arrastrar(p, g, m.asa(g), m.puntos_ruta[i])
                     despues = g.valor(cl)
-                    A.reg(nombre, f"asa de ruta «{cl}» llevada al 90 % del largo", ok and abs(despues - 0.9) < 0.05,
+                    A.reg(nombre, f"asa de ruta «{cl}» llevada al 90 % del largo", ok and abs(despues / m.factor - 0.9) < 0.05,
                           f"{antes:g} → {despues:g}; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
                     ok = arrastrar(p, g, m.asa(g), m.puntos_ruta[-1])
-                    A.reg(nombre, f"asa de ruta «{cl}» al final de lo que admite", ok and g.valor(cl) > min(1.1, m.ts[-1] - 0.05),
+                    A.reg(nombre, f"asa de ruta «{cl}» al final de lo que admite", ok and g.valor(cl) / m.factor > min(1.1, m.ts[-1] - 0.05),
                           f"{g.valor(cl):g}; previa_ok={p._previa_ok}")
                 elif isinstance(m, mp.AsaLista):
                     m = next(x for x in g.manips if isinstance(x, mp.AsaLista) and x.clave == cl)       # las asas se rehacen en cada cambio
@@ -224,7 +261,7 @@ probar("chaflan_3d", {"aristas": arista(caja)}, {"distancia": "2 mm"})
 probar("pulsar_tirar", {"objetos": top}, {"distancia": "3 mm"})
 probar("vaciado", {"caras": top}, {"espesor_interior": "2 mm"})
 probar("desmoldeo", {"plano": top, "caras": cara(caja, normal=(1, 0, 0))}, {"angulo": "5 deg"})
-probar("escala_3d", {"cuerpos": cuerpo(caja)}, {"factor": "2"})
+probar("escala_3d", {"entidades": cuerpo(caja)}, {"factor": "2"})
 probar("mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "libre", "dx": "10 mm", "dy": "5 mm", "dz": "0 mm"}, "asas_mover")
 probar("patron_rectangular_3d", {"cuerpos": cuerpo(caja), "dir1": eje("X")}, {"n1": 3, "d1": "12 mm", "distribucion": "espaciado"})
 probar("patron_circular_3d", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"n": 4, "angulo_paso": "40 deg", "modo": "espaciado"})
@@ -346,16 +383,16 @@ def asas_del_boceto():
     ids = list(lz.b.curvas)
     # los patrones del boceto (rectangular y circular) tienen su panel y su pieza: scripts/prueba_ui/patrones_boceto.py
     # escala
-    lz.set_herramienta("escala")
     lz.seleccion = ids
-    lz._avanzar_seleccion()
-    lz._clic_fase((None, (0.0, 0.0)))
+    lz.set_herramienta("escala")                      # con la geometría elegida pasa solo al punto base (panel ESCALA)
+    lz.transformar.clic(lz.a_px(0.0, 0.0))
     A.esperar(100)
-    lz.entrada.campos[0].setText("1")
+    factor = v.modo_boceto.transformar.campos["factor"]
+    factor.setText("1")
     q = lz._asas.asas[0].posicion(lz._asas.valores())
     tirar(0, (q[0] * 2, q[1] * 2))
-    A.reg(AB, "escala: asa del factor x2", abs(float(caja(0)) - 2.0) < 0.2, f"factor={caja(0)}")
-    lz._cerrar_entrada()
+    A.reg(AB, "escala: asa del factor x2", abs(float(factor.text()) - 2.0) < 0.2, f"factor={factor.text()}")
+    lz.cancelar()
     # empalme y chaflán en la esquina (20, 0) del rectángulo
     inf = next(c for c in lz.b.curvas.values() if all(abs(lz.b.coords(p)[1]) < 1e-6 for p in (c.p1, c.p2)))
     der = next(c for c in lz.b.curvas.values() if all(abs(lz.b.coords(p)[0] - 20) < 1e-6 for p in (c.p1, c.p2)))

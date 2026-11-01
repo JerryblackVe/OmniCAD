@@ -160,19 +160,18 @@ def test_agujero_con_holgura_iso_273_y_conico():
 
 
 def test_agujero_roscado_con_tipo_tamano_designacion_y_clase():
-    from omnicad.nucleo import solidos_crear as sc
     from omnicad.ui.comando import ContextoComando
     from omnicad.ui.comandos.crear import Agujero
     doc, forma, arriba = _caja_y_cara_de_arriba()
-    i = sc.tamanos_rosca("iso_metrica").index("M8")
     op = _ejecutar(doc, Agujero, colocacion=[_clic(doc, forma, arriba, (20, 20, 10))], profundidad="8 mm",
-                   rosca="modelada", tipo_rosca="iso_metrica", tam_iso_metrica="M8", **{f"des_iso_metrica_{i}": "M8x1"},
+                   rosca="cosmetica", rosca_modelada=True, tipo_rosca="iso_metrica", tam_iso_metrica="M8",
+                   des_tipo_rosca="M8x1",
                    clase_iso_metrica="6H")
     assert (op.p["designacion"], op.p["clase_rosca"]) == ("M8x1", "6H")
     ctx = ContextoComando(doc, op=op)
     cmd = Agujero()
     v = cmd.desde_op(op, ctx)
-    assert (v["tipo_rosca"], v["tam_iso_metrica"], v[f"des_iso_metrica_{i}"], v["clase_iso_metrica"]) == (
+    assert (v["tipo_rosca"], v["tam_iso_metrica"], v["des_tipo_rosca"], v["clase_iso_metrica"]) == (
         "iso_metrica", "M8", "M8x1", "6H")
     texto = cmd._info(v, ctx)
     assert "M8x1" in texto and "6H" in texto and "ISO 965-1" in texto
@@ -248,7 +247,7 @@ def test_rosca_dialogo_tipo_tamano_designacion_clase_y_recordar():
     cara = [_h(doc, refs.referencia("op1.c1", lateral, forma))]
     Rosca._recuerdo = {}
     op = _ejecutar(doc, Rosca, caras=cara, tipo_rosca="trapezoidal", tam_trapezoidal="Tr20", recordar=True,
-                   largo_completo=False, longitud="12 mm")
+                   largo_completo=False, longitud="12 mm", modelada=True, clase_trapezoidal="")
     assert (op.p["designacion"], op.p["familia"], op.p["clase_rosca"]) == ("Tr20x4", "trapezoidal", "")
     d1 = sc.datos_rosca("Tr20x4")["diametro_menor"]
     quitado = math.pi * 100 * 20 - _volumen(doc)
@@ -291,16 +290,18 @@ def test_paneles_de_agujero_y_rosca_cambian_campos_y_calculan_la_vista_previa():
     def visibles():
         return {c.clave for c in panel.campos if panel._visible(c)}
     assert {"colocacion", "diametro"} <= visibles() and "tam_holgura" not in visibles()
-    for rosca, deben, no in (("holgura", {"tam_holgura", "ajuste", "info_rosca"}, {"diametro", "tipo_rosca"}),
-                             ("modelada", {"tipo_rosca", "tam_iso_metrica", "clase_iso_metrica", "holgura_3d"},
-                              {"diametro", "tam_holgura"}),
-                             ("cosmetica", {"tipo_rosca", "diametro"}, {"clase_iso_metrica", "holgura_3d"}),
-                             ("conico", {"tipo_conica", "tam_bsp_conica"}, {"tipo_rosca"})):
+    for rosca, modelada, deben, no in (("holgura", False, {"tam_holgura", "ajuste", "info_rosca"}, {"diametro", "tipo_rosca"}),
+                                       ("cosmetica", True, {"tipo_rosca", "tam_iso_metrica", "clase_iso_metrica", "holgura_3d"},
+                                        {"diametro", "tam_holgura"}),
+                                       ("cosmetica", False, {"tipo_rosca", "diametro"}, {"clase_iso_metrica", "holgura_3d"}),
+                                       ("conico", False, {"tipo_conica", "tam_bsp_conica"}, {"tipo_rosca"})):
         panel.set_valor("rosca", rosca)
+        panel.set_valor("rosca_modelada", modelada)
         panel._calcular_previa()
         assert deben <= visibles() and not (no & visibles()), rosca
         assert panel.ultima_op is not None and panel._previa_ok, (rosca, panel.mensaje.text())
-    panel.set_valor("rosca", "modelada")
+    panel.set_valor("rosca", "cosmetica")
+    panel.set_valor("rosca_modelada", True)
     panel.set_valor("tipo_rosca", "unificada")
     assert {"tam_unificada", "clase_unificada"} <= visibles() and "tam_iso_metrica" not in visibles()
     panel.set_valor("posicion", "referencias")
@@ -318,9 +319,7 @@ def test_paneles_de_agujero_y_rosca_cambian_campos_y_calculan_la_vista_previa():
     panel.set_valor("tam_iso_metrica", "M10")
     panel._calcular_previa()
     assert "M10x1.5" in panel.widgets["info_rosca"].text() and "6g" in panel.widgets["info_rosca"].text()
-    from omnicad.nucleo import solidos_crear as sc
-    i = sc.tamanos_rosca("iso_metrica").index("M10")
-    assert f"des_iso_metrica_{i}" in visibles()                       # M10 tiene tres pasos: hay que elegir
+    assert "des_tipo_rosca" in visibles()                       # M10 tiene tres pasos: hay que elegir
     panel.cancelar()
 
 

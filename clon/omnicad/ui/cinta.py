@@ -56,9 +56,12 @@ INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación", "insertar_derivacion")])
 ENSAMBLAR = ("ENSAMBLAR", ["union"], [
     _i("Nuevo componente", "nuevo_componente"), _i("Unión", "union"), _i("Unión como está", "union_construida"),
+    _i("Duplicar con uniones", "duplicar_con_uniones"),
     _i("Origen de la unión", "origen_union"), _i("Grupo rígido", "grupo_rigido"), SEP,
     _i("Accionar uniones", "accionar_uniones"), _i("Vínculo de movimiento", "vinculo_movimiento"),
-    _i("Fijar / liberar componente", "fijar_componente"), SEP,
+    _i("Fijar / liberar componente", "fijar_componente"),
+    _i("Anclar / desanclar componente", "anclar_componente"), _i("Editar posición inicial", "posicion_inicial"),
+    _i("Capturar posición", "capturar_posicion"), _i("Revertir posición", "revertir_posicion"), SEP,
     _i("Habilitar todos los conjuntos de contacto", ico="conjunto_contacto"), _i("Estudio de movimiento", "estudio_movimiento"), SEP,
     _i("Insertar componente…", "insertar_diseno")])
 SELECCIONAR = ("SELECCIONAR", ["seleccionar"], [
@@ -103,7 +106,7 @@ SOLIDO = [
         _i("Pulsar/Tirar", "pulsar_tirar"), _i("Empalme", "empalme_3d"), _i("Chaflán", "chaflan_3d"),
         _i("Quitar empalmes", "quitar_empalmes"), SEP,
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Escala", "escala_3d"), _i("Combinar", "combinar"),
-        _i("Desfase", "desfase"), _i("Reemplazar cara", "reemplazar_cara"), _i("Dividir cara", "dividir_cara"),
+        _i("Desfase", "desfase"), _i("Reemplazar cara", "reemplazar_cara"), _i("Editar cara", "editar_cara"), _i("Dividir cara", "dividir_cara"),
         _i("Dividir cuerpo", "dividir_cuerpo"), _i("División de silueta", "division_silueta"),
         _i("Retícula volumétrica", "reticula_volumetrica"), SEP,
         _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
@@ -126,12 +129,14 @@ SUPERFICIE = [
         _i("Crear boceto", "boceto"), SEP,
         _i("Extruir", "sup_extruir"), _i("Revolución", "sup_revolucion"), _i("Barrido", "sup_barrido"),
         _i("Solevación", "sup_solevacion"), _i("Parche", "parche"), _i("Reglada", "reglada"),
-        _i("Desfase", "sup_desfase"), SEP, _i("Engrosar", "engrosar")]),
+        _i("Desfase", "sup_desfase"), SEP, _i("Engrosar", "engrosar"), SEP,
+        _i("Caja", "sup_caja"), _i("Cilindro", "sup_cilindro"), _i("Esfera", "sup_esfera"), _i("Toroide", "sup_toroide"),
+        _i("Bobina", "sup_bobina"), _i("Tubería", "sup_tuberia")]),
     ("MODIFICAR", ["recortar_sup", "extender_sup", "coser", "engrosar"], [
         _i("Pulsar/Tirar", "pulsar_tirar"), _i("Empalme", "sup_empalme"), SEP,
         _i("Recortar", "recortar_sup"), _i("Destrimar", "destrimar"), _i("Extender", "extender_sup"),
         _i("Coser", "coser"), _i("Descoser", "descoser"), _i("Invertir normal", "invertir_normal"),
-        _i("Engrosar", "engrosar"), SEP,
+        _i("Escala", "escala_3d"), _i("Engrosar", "engrosar"), SEP,
         _i("Cara de desfase", "desfase_cara"), _i("Reemplazar cara", "reemplazar_cara"),
         _i("Dividir cara", "dividir_cara"), _i("Dividir cuerpo", "dividir_cuerpo"), SEP,
         _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), SEP,

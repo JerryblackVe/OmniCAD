@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""171 íconos extra (omnicad/ui/iconos_extra.py): están todos, cada uno pinta, no se repiten ni se salen
+"""182 íconos extra (omnicad/ui/iconos_extra.py): están todos, cada uno pinta, no se repiten ni se salen
 de la grilla, y no pisan a los de iconos.py.
 
 `python tests/test_iconos_extra.py` regenera la hoja de contacto en evidencias/capturas/iconos_extra.png.
@@ -34,12 +34,14 @@ SECCIONES = {
                      "colores_componente", "revisar_geometria", "reparar_cuerpo", "buscar_similares"],
     "PLÁSTICO": ["regla_plastico", "reglas_plastico", "consejos_diseno", "patron_geometrico"],
     "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "vectorizar_imagen", "insertar_malla", "insertar_componente", "fijacion"],
-    "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "origen_union", "grupo_rigido",
+    "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "duplicar_con_uniones", "origen_union", "grupo_rigido",
                   "accionar_uniones", "vinculo_movimiento", "conjunto_contacto", "estudio_movimiento",
-                  "fijar_componente"],
+                  "fijar_componente", "anclar_componente", "posicion_inicial", "capturar_posicion",
+                  "revertir_posicion"],
     "SELECCIONAR": ["seleccion_ventana", "seleccion_libre", "seleccion_pintura", "filtro_seleccion"],
     "SUPERFICIE": ["sup_extruir", "sup_revolucion", "sup_barrido", "sup_solevacion", "parche", "reglada",
-                   "sup_desfase", "recortar_sup", "destrimar", "extender_sup", "coser", "descoser", "invertir_normal", "sup_empalme"],
+                   "sup_desfase", "recortar_sup", "destrimar", "extender_sup", "coser", "descoser", "invertir_normal", "sup_empalme",
+                   "sup_caja", "sup_cilindro", "sup_esfera", "sup_toroide", "sup_bobina", "sup_tuberia"],
     "MALLA": ["malla_teselar", "reparar_malla", "limpiar_malla", "grupos_caras", "reducir_malla", "remallar", "cortar_plano",
               "vaciado_malla", "combinar_mallas", "suavizar_malla", "separar_malla", "escalar_malla",
               "convertir_malla", "borrar_rellenar", "alinear_malla", "exportar_malla", "seccion_malla", "invertir_normal_malla"],
@@ -91,7 +93,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 171
+    assert len(NOMBRES) == len(set(NOMBRES)) == 182
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

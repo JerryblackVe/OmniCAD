@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Fila de PREAJUSTES de un diálogo de comando [Create and use presets de Fusion]: una lista con los preajustes del
-comando, «＋» para guardar los valores actuales con un nombre y «⋯» con Guardar, Renombrar, Eliminar y Predeterminado
-(Actual, Último usado o Valores de fábrica). La lógica y el archivo están en `nucleo/preajustes.py`.
+PREAJUSTES de un diálogo de comando [Create and use presets de Fusion]: un botón «⋯» en la cabecera con un menú (los
+preajustes del comando, guardar los valores actuales con un nombre, Guardar, Renombrar, Eliminar y Predeterminado: Actual,
+Último usado o Valores de fábrica). La lógica y el archivo están en `nucleo/preajustes.py`.
 """
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QInputDialog, QMenu, QToolButton, QWidget
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QActionGroup
+from PySide6.QtWidgets import QInputDialog, QMenu, QToolButton
 
 from ..nucleo import geometria as geo
 from ..nucleo import preajustes as pre
@@ -72,52 +74,39 @@ def recordar_ultimo(panel):
         pre.guardar_ultimo(panel.comando.CLAVE, valores_guardables(panel))
 
 
-class FilaPreajustes(QWidget):
+class BotonPreajustes(QToolButton):
+    """Botón «⋯» de la cabecera del diálogo (el «Preset» de Fusion va arriba del diálogo): su menú lista Valores de fábrica
+    y los preajustes guardados, y trae Guardar como nuevo, Guardar, Renombrar, Eliminar y Establecer como predeterminado."""
+
     def __init__(self, panel):
-        super().__init__()
+        super().__init__(text="⋯", objectName="preajuste_menu")
         self.panel, self.clave = panel, panel.comando.CLAVE
-        h = QHBoxLayout(self)
-        h.setContentsMargins(10, 6, 10, 0)
-        h.setSpacing(4)
-        self.lista = QComboBox(objectName="preajuste_lista")
-        self.lista.setToolTip("Preajustes: valores guardados de este comando.")
-        h.addWidget(self.lista, 1)
-        self.mas = QToolButton(text="＋", objectName="preajuste_nuevo")
-        self.mas.setToolTip("Guardar los valores actuales como preajuste nuevo")
-        self.mas.clicked.connect(self.nuevo)
-        h.addWidget(self.mas)
-        self.menu_boton = QToolButton(text="⋯", objectName="preajuste_menu")
-        self.menu_boton.setToolTip("Guardar, renombrar, eliminar o elegir el predeterminado")
-        self.menu_boton.setPopupMode(QToolButton.InstantPopup)
-        self.menu = QMenu(self.menu_boton)
-        self.menu_boton.setMenu(self.menu)
+        self.setPopupMode(QToolButton.InstantPopup)
+        self.setFocusPolicy(Qt.StrongFocus)         # alcanzable con Tab (el panel lo deja al final del recorrido) y se abre con Espacio o Enter
+        self.menu = QMenu(self)
+        self.setMenu(self.menu)
         self.menu.aboutToShow.connect(self._armar_menu)
-        h.addWidget(self.menu_boton)
         self.actual = None                          # nombre del preajuste elegido (None = valores de fábrica)
         self.recargar()
-        self.lista.activated.connect(self._elegido)
+
+    def event(self, e):
+        if e.type() == QEvent.ShortcutOverride and e.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
+            e.accept()                              # Espacio es un atajo de la ventana (Boceto sobre la cara): con el foco acá abre el menú
+            return True
+        return super().event(e)
 
     # ------------------------------------------------------------ datos
     def recargar(self, elegir=None):
-        info = pre.listar(self.clave)
-        self.lista.blockSignals(True)
-        self.lista.clear()
-        self.lista.addItem(FABRICA, None)
-        for n in info["presets"]:
-            self.lista.addItem(n + (" (predeterminado)" if info["default"] == n else ""), n)
-        if info["default"] == pre.ULTIMO:
-            self.lista.setItemText(0, FABRICA + " · el predeterminado es el último usado")
-        self.actual = elegir if elegir in info["presets"] else None
-        self.lista.setCurrentIndex(max(self.lista.findData(self.actual), 0))
-        self.lista.blockSignals(False)
+        self.actual = elegir if elegir in pre.listar(self.clave)["presets"] else None
+        self.setToolTip(f"Preajustes: {self.actual or FABRICA}. Aplicar, guardar los valores actuales, renombrar, "
+                        "eliminar o elegir el predeterminado")
 
     def _avisar(self, texto):
         self.panel._mostrar(texto, aviso=True)
 
-    def _elegido(self, _i):
-        nombre = self.lista.currentData()
-        self.actual = nombre
-        if nombre is None:                          # valores de fábrica
+    def _elegir(self, nombre):
+        self.recargar(nombre)
+        if nombre is None:                        # valores de fábrica
             for c in self.panel.campos:
                 if c.clave in valores_guardables(self.panel):
                     self.panel.set_valor(c.clave, list(c.defecto) if isinstance(c.defecto, list) else c.defecto)
@@ -165,7 +154,18 @@ class FilaPreajustes(QWidget):
 
     def _armar_menu(self):
         self.menu.clear()
+        info = pre.listar(self.clave)
+        grupo = QActionGroup(self.menu)
+        fabrica = FABRICA + (" · el predeterminado es el último usado" if info["default"] == pre.ULTIMO else "")
+        opciones = [(fabrica, None)] + [(n + (" (predeterminado)" if info["default"] == n else ""), n)
+                                        for n in info["presets"]]
+        for texto, nombre in opciones:
+            a = grupo.addAction(self.menu.addAction(texto, lambda n=nombre: self._elegir(n)))
+            a.setCheckable(True)
+            a.setChecked(nombre == self.actual)
+        self.menu.addSeparator()
         con = self.actual is not None
+        self.menu.addAction("Guardar los valores actuales como nuevo…", self.nuevo)
         self.menu.addAction("Guardar", lambda: self._guardar(self.actual)).setEnabled(con)
         self.menu.addAction("Renombrar…", self._renombrar).setEnabled(con)
         self.menu.addAction("Eliminar", self._eliminar).setEnabled(con)

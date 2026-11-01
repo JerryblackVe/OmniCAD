@@ -36,6 +36,24 @@ def _linea_inclinada(lz, y=30):
     return lz.b.agregar_linea(a, c)
 
 
+def test_tangente_y_cambiar_por_tangente_en_el_lienzo_no_cambian_el_radio(lz):
+    """BOC-83: el comando deja quieto el primer arco; «Cambiar por» llega al mismo lugar."""
+    arco = lz.b.agregar_arco_centro((0, 0), (10, 0), (0, 10))
+    otro = lz.b.agregar_arco_centro((24, 3), (34, 3), (24, 13))
+    lz.aplicar_cambio(lambda: None)
+    centro = lz.b.coords(lz.b.curvas[arco].centro)
+    assert lz.aplicar_restriccion("tangente", [arco, otro])
+    assert lz.b.coords(lz.b.curvas[arco].centro) == pytest.approx(centro, abs=1e-6)
+    assert (lz.b.radio(arco), lz.b.radio(otro)) == pytest.approx((10, 10), abs=1e-6)
+    rid = next(iter(lz.b.restricciones))
+    lz.b.eliminar(rid)
+    rid = lz.b.agregar_restriccion("concentrica", [arco, otro])
+    lz.resolver()
+    radios = lz.b.radio(arco), lz.b.radio(otro)                             # concéntricos, ya no miden 10
+    assert lz.reemplazar_restriccion(rid, "tangente")
+    assert (lz.b.radio(arco), lz.b.radio(otro)) == pytest.approx(radios, abs=1e-6)
+
+
 def test_repetir_una_restriccion_no_la_agrega_y_lo_dice(lz):
     linea = _linea_inclinada(lz)
     assert lz.aplicar_restriccion("horizontal_vertical", [linea])

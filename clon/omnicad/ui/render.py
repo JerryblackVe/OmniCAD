@@ -39,8 +39,8 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QIcon, QImage, QLinearGradie
 from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
                                QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressDialog,
-                               QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QToolButton, QVBoxLayout,
-                               QWidget)
+                               QPushButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QTabWidget, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, api
 from ..nucleo import aspectos as asp
@@ -52,10 +52,11 @@ from ..timeline.operaciones import propiedades_cuerpo
 from . import temas
 from .aspectos_ui import PanelAspectos, RadiosAplicarA
 from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
+from .formulario import ANCHOS, armar_cabecera, fila_mensaje, poner_mensaje
 from .iconos import icono
 from .superposiciones import AreaVisor
 from ..nucleo.render_cpu import ENTORNOS, cielo_de, color_y_acabado, malla_suave, malla_suave_aparte  # noqa: F401 — se re-exportan (tests, animación)
-from .visor3d import ConfigVista, Visor3D, aristas_cuerpo, rayo_caja, rayo_triangulos
+from .visor3d import ConfigVista, Visor3D, aristas_cuerpo, primer_rayo_triangulos, rayo_caja
 
 log = logging.getLogger(__name__)
 _F = np.float32
@@ -573,10 +574,9 @@ class LienzoRender(Visor3D):
             if (self.opacidad.get(m["id"], 1.0) < 0.05 or not len(m["v"])
                     or rayo_caja(o, d, *m["caja"]) >= mejor[0]):
                 continue
-            ts = rayo_triangulos(o, d, m["v"].reshape(-1, 3, 3).astype(float))
-            i = int(np.argmin(ts))
-            if ts[i] < mejor[0]:
-                mejor = (float(ts[i]), m)
+            t, _i = primer_rayo_triangulos(o, d, m["v"].reshape(-1, 3, 3), m, "bvh")
+            if t < mejor[0]:
+                mejor = (t, m)
         if mejor[1] is None:
             return None
         t, m = mejor
@@ -1286,19 +1286,13 @@ class PanelFlotante(QFrame):
     def __init__(self, titulo, parent=None):
         super().__init__(parent)
         self.setObjectName("panel_flotante")
-        self.setFixedWidth(330)
+        self.setFixedWidth(ANCHOS["normal"])
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 6)
         v.setSpacing(4)
-        barra = QFrame(objectName="titulo_panel")
-        h = QHBoxLayout(barra)
-        h.setContentsMargins(8, 3, 4, 3)
-        h.addWidget(QLabel(titulo.upper()))
-        h.addStretch(1)
-        cerrar = QToolButton(text="✕")
-        cerrar.setToolTip("Cerrar")
-        cerrar.clicked.connect(self.cerrar)
-        h.addWidget(cerrar)
+        barra, icono_titulo, rotulo = armar_cabecera(self, self.cerrar, tooltip_cerrar="Cerrar")     # la cabecera movible común
+        icono_titulo.hide()
+        rotulo.setText(titulo.upper())
         v.addWidget(barra)
         self.cuerpo = QVBoxLayout()
         self.cuerpo.setContentsMargins(8, 2, 8, 2)
@@ -1560,6 +1554,7 @@ PRESETS = [("Web (1024 × 768)", 1024, 768), ("HD (1280 × 720)", 1280, 720), ("
            ("Cuadrado (1080 × 1080)", 1080, 1080), ("Impresión (3000 × 2000)", 3000, 2000),
            ("Tamaño de la ventana", 0, 0), ("Personalizado", -1, -1)]
 CALIDADES = [("Borrador (1×)", 1), ("Estándar (2×)", 2), ("Final (3×)", 3)]
+MPX_LENTO = 16          # megapíxeles desde los que el diálogo avisa que el render tarda
 
 
 class DialogoRenderizar(QDialog):
@@ -1568,8 +1563,10 @@ class DialogoRenderizar(QDialog):
     def __init__(self, parent, tam_ventana, ruta_defecto, captura=False):
         super().__init__(parent)
         self.setWindowTitle("Capturar imagen" if captura else "Configuración de render")
+        self.setFixedWidth(ANCHOS["ancho"])               # los textos de los combos (resolución, renderizador) son largos
         self.tam_ventana = tam_ventana
         f = QFormLayout(self)
+        f.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self.preset = QComboBox()
         for texto, w, h in PRESETS:
             self.preset.addItem(texto, (w, h))
@@ -1583,6 +1580,7 @@ class DialogoRenderizar(QDialog):
         tam.addWidget(self.ancho)
         tam.addWidget(QLabel("×"))
         tam.addWidget(self.alto)
+        f.addRow(_seccion("Tamaño de la imagen"))
         f.addRow("Tamaño", self.preset)
         f.addRow("", tam)
         f.addRow("", self.bloquear)
@@ -1593,7 +1591,12 @@ class DialogoRenderizar(QDialog):
         for texto, ss in CALIDADES:
             self.calidad.addItem(texto, ss)
         self.calidad.setCurrentIndex(1)
+        for c in (self.preset, self.motor, self.calidad):        # el texto más largo no ensancha el diálogo: ocupan lo que sobra
+            c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            c.setMinimumContentsLength(12)
+            c.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.transparente = QCheckBox("Fondo transparente")
+        f.addRow(_seccion("Calidad"))
         f.addRow("Renderizador", self.motor)
         f.addRow("Calidad", self.calidad)
         f.addRow("", self.transparente)
@@ -1603,7 +1606,10 @@ class DialogoRenderizar(QDialog):
         fila = QHBoxLayout()
         fila.addWidget(self.ruta, 1)
         fila.addWidget(examinar)
+        f.addRow(_seccion("Salida"))
         f.addRow("Guardar en", fila)
+        zona, self.icono_mensaje, self.mensaje = fila_mensaje(ANCHOS["ancho"])
+        f.addRow(zona)
         botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         botones.button(QDialogButtonBox.Ok).setText("Capturar" if captura else "Renderizar")
         botones.accepted.connect(self.accept)
@@ -1613,8 +1619,25 @@ class DialogoRenderizar(QDialog):
         self.preset.currentIndexChanged.connect(self._preset)
         self.ancho.valueChanged.connect(lambda v: self._mantener("ancho", v))
         self.alto.valueChanged.connect(lambda v: self._mantener("alto", v))
+        self.ancho.valueChanged.connect(self._revisar)
+        self.alto.valueChanged.connect(self._revisar)
+        self.ruta.textChanged.connect(self._revisar)
         self.preset.setCurrentIndex(5 if captura else 2)
         self._preset()
+        self._revisar()
+
+    def _revisar(self, *_):
+        """Avisos que no impiden renderizar: la carpeta de destino no existe (la imagen se haría y no se podría guardar) o
+        la imagen es tan grande que tarda y gasta memoria."""
+        ruta = self.ruta.text().strip()
+        mpx = self.ancho.value() * self.alto.value() / 1e6
+        if ruta and not Path(ruta).expanduser().parent.is_dir():
+            texto = f"La carpeta «{Path(ruta).expanduser().parent}» no existe: la imagen se renderiza pero no se puede guardar."
+        elif mpx > MPX_LENTO:
+            texto = f"{mpx:.0f} megapíxeles: tarda y usa mucha memoria."
+        else:
+            texto = ""
+        poner_mensaje(self.icono_mensaje, self.mensaje, texto, "aviso")
 
     def _preset(self):
         w, h = self.preset.currentData()
@@ -1661,10 +1684,15 @@ class DialogoLienzo(QDialog):
     def __init__(self, parent, supermuestreo, oclusion):
         super().__init__(parent)
         self.setWindowTitle("Configuración del render en el lienzo")
+        self.setFixedWidth(ANCHOS["normal"] + 40)
         f = QFormLayout(self)
+        f.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self.calidad = QComboBox()
         for texto, ss in CALIDADES:
             self.calidad.addItem(texto, ss)
+        self.calidad.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.calidad.setMinimumContentsLength(12)
+        self.calidad.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.calidad.setCurrentIndex(max(0, self.calidad.findData(supermuestreo)))
         self.oclusion = QCheckBox("Oclusión ambiental")
         self.oclusion.setChecked(oclusion)
@@ -1672,6 +1700,7 @@ class DialogoLienzo(QDialog):
         f.addRow("", self.oclusion)
         nota = QLabel("Más calidad = más lento al orbitar. El render final se configura en RENDERIZAR.")
         nota.setWordWrap(True)
+        temas.poner_rol(nota, "tenue")
         f.addRow(nota)
         b = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         b.accepted.connect(self.accept)

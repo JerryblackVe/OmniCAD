@@ -1204,6 +1204,7 @@ DIBUJOS = {
 
 
 # Íconos de los comandos 3D, superficie, malla, chapa, etc. (dibujados en iconos_extra.py).
-from .iconos_extra import DIBUJOS_EXTRA  # noqa: E402
+from .iconos_extra import DIBUJOS_EXTRA, DIBUJOS_OPCIONES  # noqa: E402
 
 DIBUJOS.update(DIBUJOS_EXTRA)
+DIBUJOS.update(DIBUJOS_OPCIONES)

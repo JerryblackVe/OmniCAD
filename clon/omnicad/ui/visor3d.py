@@ -32,6 +32,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QWidget
 
+from .. import nativo
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, ENTORNOS, es_malla  # noqa: F401 — se re-exportan
@@ -161,6 +162,21 @@ def rayo_triangulos(origen, direccion, tris):
     t = np.einsum("ij,ij->i", e2, q) * inv
     toca = ok & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9) & (t > 1e-9)
     return np.where(toca, t, np.inf)
+
+
+def primer_rayo_triangulos(origen, direccion, tris, cache, clave):
+    """(t, i) del primer triángulo que corta el rayo, o (inf, −1): el mínimo y el argmin de `rayo_triangulos`. Con el
+    módulo Rust usa un BVH que queda en `cache[clave]` (el dueño de `cache` lo tira cuando cambian los triángulos)."""
+    rs = nativo.disponible()
+    if hasattr(rs, "Bvh"):                            # un .pyd viejo no la trae: rige numpy
+        bvh = cache.get(clave)
+        if bvh is None:
+            bvh = cache[clave] = rs.Bvh(np.ascontiguousarray(tris, float))
+        t, i = bvh.primer_choque(np.reshape(origen, (1, 3)), np.reshape(direccion, (1, 3)), 1e-9, 1e-12, 0.0)
+        return float(t[0]), int(i[0])
+    ts = rayo_triangulos(origen, direccion, np.asarray(tris, float))
+    i = int(np.argmin(ts))
+    return (float(ts[i]), i) if np.isfinite(ts[i]) else (math.inf, -1)
 
 
 def rayo_caja(origen, direccion, minimo, maximo):
@@ -451,6 +467,7 @@ class Visor3D(QOpenGLWidget):
         self.opacidad = {}                 # id_cuerpo → opacidad (navegador › Opacidad)
         self.mallas_analisis = {}          # id_cuerpo → (vértices, normales, colores) que reemplazan su sombreado
         self.funcion_colores = None        # (normales, dirección de vista) → colores: cebra / mapa de entorno
+        self.ids_colores = None            # cuerpos que pinta `funcion_colores` (None = todos)
         self._cache_dinamico = {}
         self.cortes = []                   # [(normal, punto)]: planos de recorte del análisis de sección
         self.transformaciones = {}         # id_cuerpo → matriz 4x4 solo de dibujo (animar uniones)
@@ -647,6 +664,7 @@ class Visor3D(QOpenGLWidget):
             c = estado.cuerpos[m["id"]]
             c.forma.vertices = v
             m.update(v=v, n=n, seg=seg)
+            m.pop("bvh", None)                      # el BVH de rayos era de los vértices de antes
             mn, mx = estado._cajas_previa[m["id"]]
             cajas.append((mn, mx))
             self._lod_datos[0][i] = (mn + mx) / 2
@@ -654,6 +672,8 @@ class Visor3D(QOpenGLWidget):
             self._cache[id(c.forma)] = (c.forma, v, n, seg, (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2, 0.05)
             self._pick.pop(id(c.forma), None)
             self._pick.pop(("caja", id(c.forma)), None)
+            self._pick.pop(("caja_tris", id(c.forma)), None)
+            self._pick.pop(("bvh", id(c.forma)), None)
             self._pick_aristas.pop(id(c.forma), None)
             self._pick_paquete.pop(id(c.forma), None)
         self._mallas = list(self._mallas)  # invalida la caja de escena y la rejilla sin volver a teselar
@@ -1093,19 +1113,31 @@ class Visor3D(QOpenGLWidget):
             self._pick[id(forma)] = ([c for c, _ in caras], tris, indice)
         return self._pick[id(forma)]
 
-    def _rayo_cuerpo(self, cid, o, d, limite=math.inf):
-        """Distancias del rayo a cada triángulo del cuerpo, o None si no tiene triángulos o el rayo no entra en su
-        caja antes de `limite` (lo que ya tapa otra cosa no se prueba)."""
+    def _entra_en_caja(self, cid, o, d, limite):
+        """¿El cuerpo tiene triángulos y el rayo entra en su caja antes de `limite`? (lo que ya tapa otra cosa no se
+        prueba)."""
         _lista, tris, _indice = self._datos_pick(cid)
         if not len(tris):
-            return None
+            return False
         clave = ("caja_tris", id(self._formas[cid]))
         if clave not in self._pick:
             v = tris.reshape(-1, 3)
             self._pick[clave] = (v.min(0), v.max(0))
-        if rayo_caja(o, d, *self._pick[clave]) >= limite:
+        return rayo_caja(o, d, *self._pick[clave]) < limite
+
+    def _rayo_cuerpo(self, cid, o, d, limite=math.inf):
+        """Distancias del rayo a cada triángulo del cuerpo, o None si no tiene triángulos o el rayo no entra en su
+        caja antes de `limite`."""
+        if not self._entra_en_caja(cid, o, d, limite):
             return None
-        return rayo_triangulos(o, d, tris)
+        return rayo_triangulos(o, d, self._datos_pick(cid)[1])
+
+    def _primer_rayo_cuerpo(self, cid, o, d, limite=math.inf):
+        """(t, índice del triángulo) del primero que corta el rayo en el cuerpo, o None si no entra en su caja antes
+        de `limite`. Con Rust usa un BVH del cuerpo guardado en `_pick`."""
+        if not self._entra_en_caja(cid, o, d, limite):
+            return None
+        return primer_rayo_triangulos(o, d, self._datos_pick(cid)[1], self._pick, ("bvh", id(self._formas[cid])))
 
     def elegir(self, pos, planos=True, caras=True):
         """Lo que hay bajo el cursor: {"ref", "plano", "marco", "tris"} (plano None = cara no plana); en una cara
@@ -1123,15 +1155,15 @@ class Visor3D(QOpenGLWidget):
                     mejor_t, mejor = t, {"ref": ref, "plano": pl, "marco": None, "tris": None}
         if caras:
             for cid in self._formas:
-                ts = self._rayo_cuerpo(cid, o, d, mejor_t)
-                if ts is None:
+                choque = self._primer_rayo_cuerpo(cid, o, d, mejor_t)
+                if choque is None:
                     continue
+                t, i = choque
                 lista, tris, indice = self._datos_pick(cid)
-                i = int(np.argmin(ts))
-                if ts[i] < mejor_t - 1e-6:
+                if t < mejor_t - 1e-6:
                     cara = lista[indice[i]]
                     pl = geo.plano_de_cara(cara)
-                    mejor_t = ts[i]
+                    mejor_t = t
                     mejor = {"ref": "cara" if pl is not None else None, "plano": pl,
                              "marco": pl.marco() if pl is not None else None,
                              "cara_ref": self._referencia(cid, cara) if pl is not None else None,
@@ -1434,13 +1466,13 @@ class Visor3D(QOpenGLWidget):
         # 1) cara más cercana (oculta lo que esté detrás)
         t_cara, cara_hit = math.inf, None
         for cid in self._formas:
-            ts = self._rayo_cuerpo(cid, o, d, t_cara)
-            if ts is None:
+            choque = self._primer_rayo_cuerpo(cid, o, d, t_cara)
+            if choque is None:
                 continue
+            t, i = choque
             lista, tris, indice = self._datos_pick(cid)
-            i = int(np.argmin(ts))
-            if ts[i] < t_cara:
-                t_cara = float(ts[i])
+            if t < t_cara:
+                t_cara = t
                 cara_hit = (cid, lista[indice[i]] if lista else None, tris[indice == indice[i]].reshape(-1, 3))
         if a_traves:                        # "Seleccionar otro": también lo que está tapado por las caras
             t_cara = math.inf
@@ -1866,9 +1898,11 @@ class Visor3D(QOpenGLWidget):
             if not len(v) or (op < 0.999 and alfa >= 0.999) != transparentes:
                 continue
             colores = self._colores_vertice.get(m["id"])
+            dinamico = self.funcion_colores is not None and (self.ids_colores is None or m["id"] in self.ids_colores)
             if m["id"] in self.mallas_analisis:
                 v, n, colores = self.mallas_analisis[m["id"]]
-            elif self.funcion_colores is not None:
+                dinamico = dinamico and colores is None         # malla fina de «Calidad alta», con colores que siguen a la cámara
+            if dinamico:
                 clave = (m["id"], id(v), self.R.tobytes())
                 if clave not in self._cache_dinamico:
                     if len(self._cache_dinamico) > 64:

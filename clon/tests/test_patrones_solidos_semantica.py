@@ -475,6 +475,216 @@ def test_identico_y_optimizado_dan_lo_mismo_y_ajustar_omite_las_copias_que_no_to
     assert resultados["ajustar"][0] == resultados["identico"][0]                     # y el cuerpo queda igual de agujereado
 
 
+def _placa_con_paso(medidas, extra=None):
+    """Placa de 100 × 100 × 5 y la primitiva `medidas`, que la corta o se le une."""
+    doc = Documento()
+    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="100", alto="5", **(extra or {})))
+    herramienta = OpPrimitiva(doc.nuevo_id(), **medidas)
+    _ok(doc, herramienta)
+    return doc, herramienta
+
+
+def _cuerpo_con_calculo(calculo, paso, extra=None, escalon=None, **patron):
+    doc, herramienta = _placa_con_paso(paso, extra)
+    if escalon:
+        _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", operacion="unir", **escalon))
+    _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[herramienta.id], calculo=calculo, **patron))
+    c = doc.estado_final.cuerpos["op1.c1"].forma
+    assert g.es_valida(c)
+    return c
+
+
+def _medidas(calculo, paso, **patron):
+    c = _cuerpo_con_calculo(calculo, paso, **patron)
+    return round(g.volumen_exacto(c), 4), len(g.caras(c))
+
+
+@pytest.fixture
+def espia_caras(monkeypatch):
+    """Lo que devolvió cada `patronear_caras`: una forma = se patronearon las caras; None = fue por la herramienta."""
+    devueltos, original = [], sc.patronear_caras
+
+    def espia(*args, **kwargs):
+        devueltos.append(original(*args, **kwargs))
+        return devueltos[-1]
+    monkeypatch.setattr(sc, "patronear_caras", espia)
+    return devueltos
+
+
+AGUJERO = {"forma": "cilindro", "radio": "3", "alto": "7", "x": "10", "y": "10", "z": "-1", "operacion": "cortar"}
+BOSS = {"forma": "cilindro", "radio": "3", "alto": "8", "x": "10", "y": "10", "z": "4", "operacion": "unir"}
+CIEGO = {"forma": "cilindro", "radio": "3", "alto": "5", "x": "10", "y": "10", "z": "2", "operacion": "cortar"}
+EN_GRILLA = {"forma_patron": "rectangular", "dir1": EJE_X, "n1": 5, "d1": "20 mm", "dir2": EJE_Y, "n2": 5, "d2": "20 mm",
+             "distribucion": "espaciado"}
+
+
+@pytest.mark.parametrize("paso, caras", [(AGUJERO, 31), (BOSS, 56), (CIEGO, 56)], ids=["pasante", "saliente", "ciego"])
+def test_optimizado_patronea_caras_y_da_lo_mismo_que_identico(espia_caras, paso, caras):
+    """5 × 5 sobre la placa: una booleana sola para la primera copia y el mismo cuerpo que con la herramienta unida."""
+    optimizado = _medidas("optimizado", paso, **EN_GRILLA)
+    assert espia_caras and espia_caras[0] is not None
+    assert optimizado == _medidas("identico", paso, **EN_GRILLA) and optimizado[1] == caras
+
+
+def test_optimizado_quita_lo_que_dice_la_cuenta(espia_caras):
+    c = _cuerpo_con_calculo("optimizado", AGUJERO, **EN_GRILLA)
+    assert espia_caras[0] is not None
+    assert g.volumen_exacto(c) == pytest.approx(100 * 100 * 5 - 25 * math.pi * 3 ** 2 * 5, rel=1e-9)
+
+
+def test_optimizado_con_copias_giradas_gira_el_hueco(espia_caras):
+    """Ranura de 6 × 3 a 30 mm del eje Z, 4 copias alrededor: la copia a 90° tiene el lado largo sobre Y."""
+    placa = {"x": "-50", "y": "-50"}
+    ranura = {"forma": "caja", "ancho": "6", "largo": "3", "alto": "7", "x": "27", "y": "-1.5", "z": "-1", "operacion": "cortar"}
+    giro = {"forma_patron": "circular", "eje": {"tipo": "eje", "id": "Z"}, "n": 4, "angulo": "360 deg", "distribucion": "completo"}
+    c = _cuerpo_con_calculo("optimizado", ranura, extra=placa, **giro)
+    assert espia_caras[0] is not None
+    assert g.volumen_exacto(c) == pytest.approx(100 * 100 * 5 - 4 * 6 * 3 * 5, rel=1e-9)
+    assert not g.punto_toca(c, (0.5, 32, 2.5)) and g.punto_toca(c, (2.5, 30, 2.5))
+    assert (round(g.volumen_exacto(c), 4), len(g.caras(c))) == _medidas("identico", ranura, extra=placa, **giro)
+
+
+@pytest.mark.parametrize("patron", [
+    pytest.param({"forma_patron": "rectangular", "dir1": EJE_X, "n1": 5, "d1": "30 mm", "distribucion": "espaciado"},
+                 id="se_sale_de_la_placa"),
+    pytest.param({"forma_patron": "rectangular", "dir1": EJE_X, "n1": 2, "d1": "88 mm", "distribucion": "espaciado"},
+                 id="cruza_el_borde"),
+    pytest.param({"forma_patron": "rectangular", "dir1": EJE_X, "n1": 3, "d1": "4 mm", "distribucion": "espaciado"},
+                 id="copias_solapadas"),
+])
+def test_optimizado_cae_a_la_herramienta_si_las_copias_no_son_intercambiables(espia_caras, patron):
+    """La «operación dividida» de Fusion: acá no da error, da lo mismo que «Idéntico» sin patronear caras."""
+    optimizado = _medidas("optimizado", AGUJERO, **patron)
+    assert espia_caras == [None]
+    assert optimizado == _medidas("identico", AGUJERO, **patron)
+
+
+def test_optimizado_una_copia_bajo_un_escalon_no_se_patronea(espia_caras):
+    """Una copia del agujero ciego cae bajo un escalón: repetir sus caras dejaría un agujero que el escalón tapa."""
+    escalon = {"ancho": "20", "largo": "20", "alto": "5", "x": "40", "y": "0", "z": "5"}
+    patron = {"forma_patron": "rectangular", "dir1": EJE_X, "n1": 3, "d1": "40 mm", "distribucion": "espaciado"}
+    optimizado = _medidas("optimizado", CIEGO, escalon=escalon, **patron)
+    assert espia_caras == [None]
+    assert optimizado == _medidas("identico", CIEGO, escalon=escalon, **patron)
+
+
+@pytest.mark.parametrize("paso, caras", [
+    ({"forma": "cilindro", "radio": "3", "alto": "5", "x": "10", "y": "10", "z": "0", "operacion": "cortar"}, 31),
+    ({"forma": "cilindro", "radio": "3", "alto": "3", "x": "10", "y": "10", "z": "2", "operacion": "cortar"}, 56),
+    ({"forma": "cilindro", "radio": "3", "alto": "8", "x": "10", "y": "10", "z": "5", "operacion": "unir"}, 56),
+], ids=["pasante", "ciego", "saliente"])
+def test_optimizado_con_la_herramienta_al_ras_de_la_cara(espia_caras, paso, caras):
+    """El caso común: extruir desde la cara, con la tapa de la herramienta sobre el mismo plano que la cara."""
+    optimizado = _medidas("optimizado", paso, **EN_GRILLA)
+    assert espia_caras and espia_caras[0] is not None
+    assert optimizado == _medidas("identico", paso, **EN_GRILLA) and optimizado[1] == caras
+
+
+def test_optimizado_con_un_agujero_abocardado_de_verdad(espia_caras):
+    from omnicad.timeline.ops_solido import OpAgujero
+
+    def con(calculo):
+        doc = Documento()
+        _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="100", alto="10"))
+        b = Boceto()
+        pid = b.agregar_punto(10, 10)
+        sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
+        _ok(doc, sk)
+        agujero = OpAgujero(doc.nuevo_id(), posiciones=[{"tipo": "punto_boceto", "boceto": sk.id, "punto": pid}], tipo="abocardado",
+                            diametro="6 mm", diam_abocardado="10 mm", prof_abocardado="3 mm", profundidad="6 mm", invertir=True)
+        _ok(doc, agujero)
+        _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[agujero.id], calculo=calculo, **EN_GRILLA))
+        c = doc.estado_final.cuerpos["op1.c1"].forma
+        assert g.es_valida(c)
+        return round(g.volumen_exacto(c), 4), len(g.caras(c))
+    optimizado = con("optimizado")
+    assert espia_caras[0] is not None and optimizado == con("identico")
+
+
+def test_optimizado_conserva_el_aviso_de_un_objetivo_que_no_se_toca():
+    """Con dos cuerpos elegidos y uno sin tocar, «Idéntico» avisa: «Optimizado» tiene que decir lo mismo."""
+    mensajes = {}
+    for calculo in ("identico", "optimizado"):
+        doc = Documento()
+        _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="100", largo="100", alto="5"))
+        _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="5", x="200"))
+        corte = OpPrimitiva(doc.nuevo_id(), objetivo=["op1.c1", "op2.c1"], **AGUJERO)
+        _ok(doc, corte)
+        mensajes[calculo] = _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[corte.id], calculo=calculo,
+                                              forma_patron="rectangular", dir1=EJE_X, n1=3, d1="20 mm",
+                                              distribucion="espaciado")).mensaje
+    assert "no le cortó nada" in mensajes["identico"]
+    assert mensajes["optimizado"] == mensajes["identico"]
+
+
+def _trasladadas(*desplazamientos):
+    return [sc._traslacion(np.array([x, 0.0, 0.0])) for x in desplazamientos]
+
+
+def test_patronear_caras_con_ubicacion_y_con_un_vacio_interior():
+    """El cuerpo llega con ubicación (copia ligera) y una segunda cáscara: queda cerrado y da la cuenta."""
+    con_vacio = g.booleano(g.caja(100, 100, 10), g.caja(10, 10, 2, (45, 45, 4)), "cortar")
+    placa = sc.instanciar(con_vacio, sc._traslacion(np.array([5.0, 0, 0])))
+    herramienta = g.cilindro(3, 12, (20, 20, -1))
+    trsfs = _trasladadas(20.0, 40.0)
+    r = sc.patronear_caras(placa, [sc.aplicar(herramienta, t) for t in trsfs], trsfs, "cortar")
+    assert r is not None and g.es_valida(r)
+    assert g.volumen_exacto(r) == pytest.approx(100 * 100 * 10 - 10 * 10 * 2 - 2 * math.pi * 9 * 10, rel=1e-9)
+
+
+def test_patronear_caras_rechaza_una_simetria_y_un_cuerpo_de_dos_solidos():
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf
+    espejo = gp_Trsf()
+    espejo.SetMirror(gp_Ax2(gp_Pnt(40, 0, 0), gp_Dir(1, 0, 0)))
+    placa, herramienta = g.caja(100, 100, 10), g.cilindro(3, 12, (20, 20, -1))
+    assert sc.patronear_caras(placa, [sc.aplicar(herramienta, espejo)], [espejo], "cortar") is None
+    t = _trasladadas(30.0)
+    dos = g.compuesto([placa, g.caja(100, 100, 10, (200, 0, 0))])
+    assert sc.patronear_caras(dos, [sc.aplicar(herramienta, t[0])], t, "cortar") is None
+
+
+def test_patronear_caras_el_cuerpo_se_sigue_editando_y_exportando(tmp_path):
+    """Las caras copiadas pasan por el kernel: chaflán en un agujero copiado, malla y STEP de ida y vuelta."""
+    from omnicad.nucleo import intercambio, solidos_modificar as sm
+    trsfs = _trasladadas(20.0, 40.0, 60.0)
+    herramienta = g.cilindro(3, 7, (20, 20, -1))
+    placa = g.booleano(g.caja(100, 100, 5), herramienta, "cortar")
+    r = sc.patronear_caras(placa, [sc.aplicar(herramienta, t) for t in trsfs], trsfs, "cortar")
+    assert r is not None
+    esperado = 100 * 100 * 5 - 4 * math.pi * 9 * 5
+    assert g.volumen(r) == pytest.approx(esperado, rel=1e-3)                  # pasa por la malla
+    circulo = next(g.TopoDS.Edge(a) for a in g._explorar(r, g.TopAbs_EDGE) if g.punto_toca(a, (83, 20, 5)))
+    biselado = sm.chaflan(r, [{"aristas": [circulo], "tipo": "distancia_igual", "distancia": 0.5}])
+    assert g.es_valida(biselado) and g.volumen_exacto(biselado) < g.volumen_exacto(r)
+    ruta = str(tmp_path / "patron.step")
+    intercambio.escribir_step(r, ruta)
+    assert g.volumen_exacto(intercambio.leer_step(ruta)) == pytest.approx(esperado, rel=1e-6)
+
+
+def test_optimizado_deja_la_herramienta_para_un_patron_del_patron(espia_caras):
+    """El registro de herramientas sigue sirviendo: un patrón que repite el «Optimizado» corre todas sus copias."""
+    doc, herramienta = _placa_con_paso(AGUJERO)
+    fila = OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[herramienta.id], calculo="optimizado",
+                    forma_patron="rectangular", dir1=EJE_X, n1=3, d1="20 mm", distribucion="espaciado")
+    _ok(doc, fila)
+    _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[herramienta.id, fila.id], calculo="optimizado",
+                      forma_patron="rectangular", dir1=EJE_Y, n1=2, d1="30 mm", distribucion="espaciado"))
+    c = doc.estado_final.cuerpos["op1.c1"].forma
+    assert espia_caras[0] is not None and g.es_valida(c)
+    assert g.volumen_exacto(c) == pytest.approx(100 * 100 * 5 - 6 * math.pi * 3 ** 2 * 5, rel=1e-9)
+
+
+def test_optimizado_guarda_reabre_y_deshace_con_el_mismo_cuerpo():
+    doc, herramienta = _placa_con_paso(AGUJERO)
+    antes = g.volumen_exacto(doc.estado_final.cuerpos["op1.c1"].forma)
+    _ok(doc, OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[herramienta.id], calculo="optimizado", **EN_GRILLA))
+    despues = g.volumen_exacto(doc.estado_final.cuerpos["op1.c1"].forma)
+    reabierto = Documento.desde_dict(doc.a_dict())
+    assert g.volumen_exacto(reabierto.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(despues, rel=1e-9)
+    doc.deshacer()
+    assert g.volumen_exacto(doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(antes, rel=1e-9)
+
+
 # ---------------------------------------------------------------- eje circular desde un círculo, deshacer y guardar
 def test_circular_con_el_eje_de_un_circulo_de_boceto():
     doc = _cubo()

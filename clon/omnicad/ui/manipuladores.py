@@ -199,6 +199,23 @@ class Manipulador:
         return []
 
 
+class Trazo:
+    """Segundo punto de un dibujo (diámetro del cilindro, esquina opuesta del prisma): sigue al mouse sobre el plano hasta el
+    próximo clic. `valores(q)` da lo que se escribe en el panel para el punto q del plano."""
+
+    def __init__(self, origen, normal, valores):
+        self.origen, self.normal, self.valores = np.asarray(origen, float), np.asarray(normal, float), valores
+        self.movido = False
+
+    def mover(self, g, pos):
+        o, r = g.rayo(pos)
+        d = float(r @ self.normal)
+        if abs(d) < 1e-9:
+            return {}
+        self.movido = True
+        return self.valores(o + r * float((self.origen - o) @ self.normal) / d)
+
+
 class Flecha(Manipulador):
     """Flecha de distancia: su cola está en `origen + direccion·valor·factor` y apunta hacia afuera
     (si el valor es negativo, hacia el otro lado). Arrastrarla corre el valor lo mismo que el cursor
@@ -741,12 +758,13 @@ class AsaRuta(Manipulador):
     de la ruta; al arrastrar se toma el punto de la muestra más cercano al cursor en pantalla."""
     ayuda = "Deslizar por la ruta"
 
-    def __init__(self, clave, ts, puntos):
+    def __init__(self, clave, ts, puntos, factor=1.0):
         self.clave, self.ts, self.puntos_ruta = clave, np.asarray(ts, float), np.asarray(puntos, float)
+        self.factor = float(factor)                 # el campo guarda fracción × factor (100 = porcentaje)
         self.ident = f"ruta:{clave}"
 
     def asa(self, g):
-        t = min(max(g.valor(self.clave), self.ts[0]), self.ts[-1])
+        t = min(max(g.valor(self.clave) / self.factor, self.ts[0]), self.ts[-1])
         return np.array([np.interp(t, self.ts, self.puntos_ruta[:, i]) for i in range(3)])
 
     def dibujar(self, g, activo):
@@ -774,7 +792,7 @@ class AsaRuta(Manipulador):
             d = float(np.linalg.norm(s[i] + ab * u - q))
             if d < mejor[0]:
                 mejor = (d, self.ts[i] + u * (self.ts[i + 1] - self.ts[i]))
-        return {} if mejor[1] is None else {self.clave: float(mejor[1])}
+        return {} if mejor[1] is None else {self.clave: float(mejor[1]) * self.factor}
 
     def cajas(self, g, arrastre):
         return [(self.clave, self.asa(g))]
@@ -951,13 +969,13 @@ class Triada(Manipulador):
     traslación X/Y/Z; `giros`: campos de giro alrededor de X/Y/Z (None = sin arcos)."""
     ident = "triada"
 
-    def __init__(self, centro, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), planos=True, esfera=True):
+    def __init__(self, centro, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), planos=True, esfera=True, ejes=None, solo_giros=False):
         self.centro, self.claves, self.giros = np.asarray(centro, float), tuple(claves), giros
-        self.planos, self.esfera = planos, esfera
+        self.planos, self.esfera, self.solo_giros = planos and not solo_giros, esfera, solo_giros
+        self.ejes = np.identity(3) if ejes is None else np.asarray(ejes, float)      # filas: X, Y, Z de la tríada
 
-    @staticmethod
-    def _base(i):
-        e = np.identity(3)
+    def _base(self, i):
+        e = self.ejes
         return e[i], e[(i + 1) % 3], e[(i + 2) % 3]
 
     def _partes(self, g):
@@ -965,8 +983,8 @@ class Triada(Manipulador):
         k = g.escala(self.centro)
         L, c = LARGO_TRIADA * k, self.centro
         partes = []
-        for i in range(3):
-            e = np.identity(3)[i]
+        for i in () if self.solo_giros else range(3):
+            e = self.ejes[i]
             partes.append((("eje", i), np.array([c + e * L * 0.2, c + e * L])))
         if self.giros:
             for i in range(3):
@@ -990,7 +1008,7 @@ class Triada(Manipulador):
             if activo == sub:
                 color = _aclarar(color, 0.5)
             if tipo == "eje":
-                e = np.identity(3)[i]
+                e = self.ejes[i]
                 cuello = c + e * (L - LARGO_PUNTA * k)
                 prims.append(("lineas", np.array([poli[0], cuello]), color, 3.0))
                 prims += _cono(cuello, e, LARGO_PUNTA * k, RADIO_PUNTA * k, color)
@@ -1046,17 +1064,17 @@ class Triada(Manipulador):
         c = self.centro.copy()
         tipo, i = sub
         if tipo == "eje":
-            s0 = recta_rayo(o, r, c, np.identity(3)[i])
+            s0 = recta_rayo(o, r, c, self.ejes[i])
             return None if s0 is None else {"sub": sub, "c": c, "s0": s0, "v0": g.valor(self.claves[i])}
         if tipo == "giro":
             _, a, b = self._base(i)
-            p = plano_rayo(o, r, c, np.identity(3)[i])
-            if p is None or abs(float(unitario(r)[i])) < 0.08:
+            p = plano_rayo(o, r, c, self.ejes[i])
+            if p is None or abs(float(unitario(r) @ self.ejes[i])) < 0.08:
                 return None
             w = p - c
             ang = math.atan2(float(w @ b), float(w @ a))
             return {"sub": sub, "c": c, "a0": ang, "ultimo": ang, "v0": g.valor(self.giros[i])}
-        n = np.identity(3)[i] if tipo == "plano" else np.asarray(g.visor.R[2], float)
+        n = self.ejes[i] if tipo == "plano" else np.asarray(g.visor.R[2], float)
         p0 = plano_rayo(o, r, c, n)
         if p0 is None:
             return None
@@ -1067,11 +1085,11 @@ class Triada(Manipulador):
         tipo, i = estado["sub"]
         c = estado["c"]
         if tipo == "eje":
-            s = recta_rayo(o, r, c, np.identity(3)[i])
+            s = recta_rayo(o, r, c, self.ejes[i])
             return {} if s is None else {self.claves[i]: estado["v0"] + s - estado["s0"]}
         if tipo == "giro":
             _, a, b = self._base(i)
-            p = plano_rayo(o, r, c, np.identity(3)[i])
+            p = plano_rayo(o, r, c, self.ejes[i])
             if p is None:
                 return {}
             w = p - c
@@ -1081,7 +1099,7 @@ class Triada(Manipulador):
         p = plano_rayo(o, r, c, estado["n"])
         if p is None:
             return {}
-        delta = p - estado["p0"]
+        delta = self.ejes @ (p - estado["p0"])
         if tipo == "plano":
             delta[i] = 0.0
         nuevos = estado["v0"] + delta
@@ -1093,7 +1111,7 @@ class Triada(Manipulador):
         tipo, i = arrastre
         k = g.escala(self.centro)
         if tipo == "eje":
-            return [(self.claves[i], self.centro + np.identity(3)[i] * LARGO_TRIADA * k)]
+            return [(self.claves[i], self.centro + self.ejes[i] * LARGO_TRIADA * k)]
         if tipo == "giro" and self.giros:
             _, a, b = self._base(i)
             return [(self.giros[i], self.centro + (a + b) * LARGO_TRIADA * k * 0.7 / math.sqrt(2))]
@@ -1156,6 +1174,8 @@ class GestorManipuladores(QObject):
         self._redibujo_pendiente = False
         self._decimales = 2
         self._cursor = None
+        self.trazo = None               # `Trazo` en curso
+        self._tragar_soltar = False
         self.visor.installEventFilter(self)
         self.visor.camara_cambiada.connect(self._camara)
 
@@ -1244,7 +1264,7 @@ class GestorManipuladores(QObject):
         if self._cerrado:
             return
         self._cerrado = True
-        self._arrastre = self._hover = None
+        self._arrastre = self._hover = self.trazo = None
         try:
             self.visor.removeEventFilter(self)
             self.visor.camara_cambiada.disconnect(self._camara)
@@ -1456,10 +1476,28 @@ class GestorManipuladores(QObject):
             self.visor.setCursor(self._cursor)
             self._cursor = None
 
+    def _filtrar_trazo(self, e, t):
+        """Con un `Trazo` en curso el mouse dibuja sin botón apretado y el clic lo fija (sin mover, el clic va al asa)."""
+        if t == QEvent.MouseMove and not e.buttons():
+            self.escribir(self.trazo.mover(self, e.position()))
+            return True
+        if t == QEvent.MouseButtonPress and e.button() == Qt.LeftButton:
+            movido, self.trazo = self.trazo.movido, None
+            self._tragar_soltar = movido
+            return movido
+        return False
+
     def eventFilter(self, obj, e):
-        if obj is not self.visor or self._cerrado or (not self.manips and self._arrastre is None):
+        if obj is not self.visor or self._cerrado:
             return False
         t = e.type()
+        if self._tragar_soltar and t == QEvent.MouseButtonRelease:
+            self._tragar_soltar = False
+            return True
+        if self.trazo is not None:
+            return self._filtrar_trazo(e, t)
+        if not self.manips and self._arrastre is None:
+            return False
         if t == QEvent.ToolTip:
             tocado = self._tocado(e.pos())
             ayuda = getattr(tocado[0], "ayuda", "") if tocado else ""

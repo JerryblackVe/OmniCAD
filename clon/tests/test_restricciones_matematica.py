@@ -9,6 +9,7 @@ import pytest
 from omnicad import api
 from omnicad.restricciones import Boceto, ErrorBoceto, grados_de_libertad, resolver
 from omnicad.restricciones.boceto import dominio, evaluar_primitiva
+from omnicad.restricciones.solver import acomodar_tangente
 
 TOL = 1e-6      # mm: TOLERANCIA del solver; las medidas son residuos en mm
 ANG = 1e-7      # rad: producto vectorial / escalar normalizado
@@ -648,10 +649,10 @@ def test_un_archivo_con_restricciones_rotas_no_tumba_al_solver():
     assert resolver(rota, {}).ok
 
 
-def test_tangente_linea_arco_se_mide_contra_el_circulo_completo():
-    """LIMITACIÓN conocida (docs/seguimiento: BOC-52): la tangencia de una línea con un arco se resuelve contra el
-    círculo entero del arco, así que el contacto puede caer fuera del tramo dibujado. Acá el arco va de 0° a 90° y la
-    línea queda tangente del lado opuesto (contacto cerca de los 194°)."""
+def test_tangente_linea_arco_con_el_contacto_fuera_del_tramo_se_avisa():
+    """BOC-52: la tangencia se resuelve contra el círculo entero del arco (acotar el contacto al barrido movía arcos de
+    bocetos que hoy resuelven bien y dejaba los grados de libertad atados a si el contacto toca el borde) y lo que cae
+    fuera del tramo dibujado se avisa. Acá el arco va de 0° a 90° y la línea queda tangente del lado opuesto."""
     b = Boceto()
     k = b.agregar_arco_centro((60, 40), (72, 40), (60, 52))
     l = b.agregar_linea((40, 20), (50, 12))
@@ -664,7 +665,204 @@ def test_tangente_linea_arco_se_mide_contra_el_circulo_completo():
     t = (centro[0] - _p(b, a)[0]) * u[0] + (centro[1] - _p(b, a)[1]) * u[1]
     pie = (_p(b, a)[0] + t * u[0], _p(b, a)[1] + t * u[1])
     ang = math.degrees(math.atan2(pie[1] - centro[1], pie[0] - centro[0])) % 360
-    assert not (ang <= 90 or ang >= 360), "si esto empieza a fallar, la limitación se resolvió: borrar BOC-52"
+    assert 90 < ang < 360                                                      # el contacto, fuera del tramo…
+    assert b.tangencias_fuera_del_arco() == [[l, k]]                           # …y avisado
+
+
+def test_tangente_linea_arco_con_el_contacto_sobre_el_tramo_no_avisa():
+    b = Boceto()
+    k = b.agregar_arco_centro((60, 40), (72, 40), (60, 52))
+    l = b.agregar_linea((30, 70), (90, 62))
+    b.deslizar_a_tangente(l, k)
+    b.agregar_restriccion("tangente", [l, k])
+    assert resolver(b, {}).ok and b.tangencias_fuera_del_arco() == []
+
+
+@pytest.mark.parametrize("crear", [lambda b: b.agregar_arco_centro((60, 40), (72, 40), (60, 52)),
+                                   lambda b: b.agregar_circulo((60, 40), 12)])
+def test_con_el_comando_el_radio_no_cambia_y_se_desliza_la_linea(crear):
+    """La figura de la ayuda de Fusion: el círculo queda del mismo tamaño y se mueven las líneas."""
+    b = Boceto()
+    k = crear(b)
+    l = b.agregar_linea((30, 70), (90, 62))
+    a, c = b.curvas[l].p1, b.curvas[l].p2
+    u0 = _unit(_p(b, a), _p(b, c))
+    b.deslizar_a_tangente(k, l)                                                # en cualquier orden
+    b.agregar_restriccion("tangente", [l, k])
+    assert resolver(b, {}).ok
+    centro, radio = _centro_radio(b, k)
+    assert radio == pytest.approx(12) and centro == pytest.approx((60, 40))
+    assert abs(_dist_recta(centro, _p(b, a), _p(b, c))) == pytest.approx(12, abs=TOL)
+    assert _unit(_p(b, a), _p(b, c)) == pytest.approx(u0)                      # deslizada, no girada
+
+
+def test_deslizar_a_tangente_respeta_lo_fijo_y_lo_encadenado():
+    b = Boceto()
+    k = b.agregar_circulo((60, 40), 12)
+    l = b.agregar_linea((30, 70), (90, 62))
+    b.agregar_restriccion("fijo", [l])
+    antes = _p(b, b.curvas[l].p1), _p(b, b.curvas[l].p2)
+    b.deslizar_a_tangente(l, k)
+    assert (_p(b, b.curvas[l].p1), _p(b, b.curvas[l].p2)) == antes
+    b, _tipo, ents, _ok, _mover, _quita = _tangente_encadenadas()
+    antes = {p: (q.x, q.y) for p, q in b.puntos.items()}
+    b.deslizar_a_tangente(*ents)
+    assert antes == {p: (q.x, q.y) for p, q in b.puntos.items()}
+    b = Boceto()
+    k, l = b.agregar_circulo((0, 0), 5), b.agregar_circulo((20, 0), 5)         # dos círculos: nada que deslizar
+    antes = {p: (q.x, q.y) for p, q in b.puntos.items()}
+    b.deslizar_a_tangente(k, l)
+    assert antes == {p: (q.x, q.y) for p, q in b.puntos.items()}
+
+
+def _arco_libre(b, x=0, r=10):
+    return b.agregar_arco_centro((x, 0), (x + r, 0), (x, r))
+
+
+def _curva_al_lado(b, tipo):
+    if tipo == "arco":
+        return b.agregar_arco_centro((24, 3), (24, 11), (16, 3))
+    if tipo == "circulo":
+        return b.agregar_circulo((24, 3), 8)
+    return b.agregar_spline([(14, -5), (18, 5), (14, 15)])
+
+
+@pytest.mark.parametrize("otra, r2", [("arco", 8), ("circulo", 8), ("spline", None)])
+def test_tangente_con_el_comando_no_cambia_el_radio_del_arco(otra, r2):
+    """BOC-83: medido antes, arco-arco 10 → 11,2 y 8 → 9,2; arco-círculo 10 → 11,27; arco-spline 10 → 11,11."""
+    b = Boceto()
+    k, o = _arco_libre(b), _curva_al_lado(b, otra)
+    puntos = {p: _p(b, p) for p in b.curvas[k].puntos()}
+    b.agregar_restriccion("tangente", [k, o])
+    acomodar_tangente(b, [k, o])
+    assert b.radio(k) == pytest.approx(10, abs=TOL)
+    assert all(_p(b, p) == pytest.approx(q, abs=TOL) for p, q in puntos.items())     # el primer arco queda quieto
+    assert resolver(b, {}).ok
+    assert b.radio(k) == pytest.approx(10, abs=TOL if r2 else 0.02)                  # con la spline, B-121
+    if r2 is not None:
+        assert b.radio(o) == pytest.approx(r2, abs=TOL)
+
+
+def test_tangente_con_el_comando_y_una_linea_encadenada_conserva_radio_y_largo():
+    b = Boceto()
+    k = _arco_libre(b)
+    l = b.agregar_linea(b.curvas[k].inicio, (14, -20))
+    largo = math.dist(_p(b, b.curvas[l].p1), _p(b, b.curvas[l].p2))
+    b.agregar_restriccion("tangente", [k, l])
+    acomodar_tangente(b, [k, l])
+    assert resolver(b, {}).ok
+    assert b.radio(k) == pytest.approx(10, abs=TOL)
+    assert math.dist(_p(b, b.curvas[l].p1), _p(b, b.curvas[l].p2)) == pytest.approx(largo, abs=TOL)
+
+
+def test_tangente_con_la_otra_curva_fija_mueve_el_arco_entero_sin_cambiar_el_radio():
+    b = Boceto()
+    k, o = _arco_libre(b), _curva_al_lado(b, "circulo")
+    b.agregar_restriccion("fijo", [o])
+    b.agregar_restriccion("tangente", [k, o])
+    acomodar_tangente(b, [k, o])
+    assert resolver(b, {}).ok
+    assert b.radio(k) == pytest.approx(10, abs=TOL) and b.radio(o) == pytest.approx(8)
+
+
+def test_tangente_imposible_sin_cambiar_el_radio_queda_para_el_solver():
+    b = Boceto()
+    k, o = _arco_libre(b), _curva_al_lado(b, "circulo")
+    b.agregar_restriccion("fijo", [o])
+    b.agregar_restriccion("fijo", [b.curvas[k].centro])
+    b.agregar_restriccion("tangente", [k, o])
+    antes = {p: _p(b, p) for p in b.puntos}
+    acomodar_tangente(b, [k, o])
+    assert antes == {p: _p(b, p) for p in b.puntos}
+    assert resolver(b, {}).ok and b.radio(k) != pytest.approx(10, abs=0.01)
+
+
+def test_cambiar_por_tangente_tampoco_cambia_el_radio():
+    s = api.Sesion()
+
+    def L(nombre, **a):
+        r = api.llamar(s, nombre, a)
+        assert r["ok"], (nombre, a, r)
+        return r["result"]
+
+    L("create_sketch", name="B", plane="XY")
+    k = L("draw_arc", sketch="B", start_x=10, start_y=0, mid_x=7.0710678, mid_y=7.0710678, end_x=0, end_y=10)
+    o = L("draw_arc", sketch="B", start_x=34, start_y=3, mid_x=31.0710678, mid_y=10.0710678, end_x=24, end_y=13)
+    ids = [e["id"] for e in L("get_sketch", sketch="B")["entities"]]
+    rid = L("add_constraint", sketch="B", type="equal", entities=ids)["constraint"]["id"]
+    L("replace_constraint", sketch="B", constraint=rid, type="tangent")
+    assert [e["radius"] for e in L("get_sketch", sketch="B")["entities"]] == pytest.approx([10, 10], abs=1e-5), (k, o)
+
+
+def test_la_receta_guardada_no_pasa_por_acomodar_y_da_lo_mismo_que_siempre():
+    b = Boceto()
+    k, o = _arco_libre(b), _curva_al_lado(b, "arco")
+    b.agregar_restriccion("tangente", [k, o])
+    assert resolver(b, {}).ok
+    assert (b.radio(k), b.radio(o)) == pytest.approx((11.82, 10.46), abs=0.01)      # el reparto de siempre del solver
+
+
+def test_una_linea_que_corta_el_circulo_sale_al_lado_mas_cercano():
+    b = Boceto()
+    k = b.agregar_circulo((0, 0), 10)
+    l = b.agregar_linea((-20, 3), (20, 3))
+    b.deslizar_a_tangente(l, k)
+    assert _p(b, b.curvas[l].p1)[1] == pytest.approx(10)
+
+
+def test_tangente_con_un_extremo_compartido_o_con_un_circulo_no_avisa():
+    b, _tipo, ents, _ok, _mover, _quita = _tangente_encadenadas()
+    b.agregar_restriccion("tangente", ents)
+    assert resolver(b, {}).ok and b.tangencias_fuera_del_arco() == []
+    b, _tipo, ents, _ok, _mover, _quita = _tangente_linea_circulo()
+    b.agregar_restriccion("tangente", ents)
+    assert resolver(b, {}).ok and b.tangencias_fuera_del_arco() == []
+
+
+def test_entre_dos_arcos_el_contacto_fuera_del_tramo_tambien_se_avisa():
+    b = Boceto()
+    k1 = b.agregar_arco_centro((0, 0), (10, 0), (0, 10))                       # de 0° a 90°
+    k2 = b.agregar_circulo((-25, 0), 15)                                       # queda a la izquierda: contacto en 180°
+    b.agregar_restriccion("tangente", [k1, k2])
+    assert resolver(b, {}).ok and b.tangencias_fuera_del_arco() == [[k1, k2]]
+
+
+def test_el_contacto_fuera_del_tramo_no_cambia_lo_que_resuelve_una_receta_guardada():
+    """Con el aviso, una receta ya resuelta con el contacto fuera del tramo da lo mismo al reabrirla."""
+    b = Boceto()
+    k = b.agregar_arco_centro((60, 40), (72, 40), (60, 52))
+    l = b.agregar_linea((48, 0), (48, 80))                                     # vertical: tangente en 180°
+    b.agregar_restriccion("tangente", [l, k])
+    b.agregar_restriccion("fijo", [b.curvas[l].p1, b.curvas[l].p2, b.curvas[k].centro])
+    assert resolver(b, {}).ok
+    otra = Boceto.desde_dict(b.a_dict())
+    antes = {p: (q.x, q.y) for p, q in otra.puntos.items()}
+    assert resolver(otra, {}).ok and b.tangencias_fuera_del_arco() == [[l, k]]
+    assert all(math.dist(antes[p], (q.x, q.y)) < TOL for p, q in otra.puntos.items())
+
+
+def test_con_el_arco_fijo_el_radio_no_cambia_y_se_mueve_la_linea():
+    b = Boceto()
+    k = b.agregar_arco_centro((60, 40), (72, 40), (60, 52))
+    l = b.agregar_linea((40, 20), (50, 12))
+    b.agregar_restriccion("fijo", [k])
+    b.agregar_restriccion("tangente", [l, k])
+    assert resolver(b, {}).ok and _centro_radio(b, k)[1] == pytest.approx(12)
+
+
+def test_add_constraint_avisa_y_get_sketch_lista_el_contacto_fuera_del_arco():
+    from omnicad import api
+    s = api.Sesion()
+    api.llamar(s, "create_sketch", {"name": "U"})
+    r = api.llamar(s, "draw_arc", {"center_x": 60, "center_y": 40, "start_x": 72, "start_y": 40, "sweep_angle": 90, "sketch": "U"})
+    k = r["result"]["entities"][0]["id"]
+    l = api.llamar(s, "draw_line", {"start_x": 40, "start_y": 20, "end_x": 50, "end_y": 12, "sketch": "U"})["result"]["entities"][0]["id"]
+    r = api.llamar(s, "add_constraint", {"sketch": "U", "type": "tangent", "entities": [l, k]})
+    assert r["ok"] and any("fuera del tramo" in a for a in r["avisos"])
+    info = api.llamar(s, "get_sketch", {"sketch": "U"})["result"]
+    assert info["tangents_off_arc"] == [[l, k]]
+    radio = next(e for e in info["entities"] if e["id"] == k)
+    assert radio["radius"] == pytest.approx(12)                                # el comando no le cambió el radio
 
 
 

@@ -10,7 +10,7 @@ from omnicad.ui.comandos.modificar import Escala
 @pytest.fixture
 def panel(app_qt):  # noqa: F811
     doc = _doc_caja()
-    p, visor, _ = _panel(Escala(), doc, {"cuerpos": [_hit_cuerpo(doc)]})
+    p, visor, _ = _panel(Escala(), doc, {"entidades": [_hit_cuerpo(doc)]})
     visor.vista("iso")
     p.manipuladores.actualizar()
     yield p, doc

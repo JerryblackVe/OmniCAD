@@ -90,10 +90,21 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #seleccion_cmd { text-align: left; padding: 3px 8px; border: 1px solid #36424f; background: #202934; }
 #seleccion_cmd[activa="true"] { border: 1px solid #ff7d0a; background: #3b2c20; color: #5aa9ff; }
 #seleccion_cmd[lleno="true"] { color: #e8ecf1; }
+#referencia_cmd { border: 1px solid #ff7d0a; background: #3b2c20; }
+#paleta_boceto QScrollArea, #paleta_boceto QScrollArea > QWidget > QWidget { background: transparent; }
 #panel_comando QLineEdit, #panel_comando QComboBox, #panel_comando QSpinBox { padding: 2px 4px; }
 #panel_comando QScrollArea, #panel_comando QScrollArea > QWidget > QWidget { background: transparent; }
 #mensaje_comando { color: #ff8a80; }
 #aviso_comando { color: #ffc857; }
+#grupo_cmd { color: #9aa5b4; font-weight: 600; border-bottom: 1px solid #28323d; padding-top: 4px; }
+#seccion_cmd { border: none; background: transparent; font-weight: 600; text-align: left; padding: 3px 0; }
+#seccion_cmd:hover { color: #5aa9ff; }
+#resumen_seccion { color: #9aa5b4; padding-left: 18px; }
+#opcion_cmd { border: 1px solid transparent; background: transparent; padding: 1px; }
+#opcion_cmd:hover { background: #3b2c20; }
+#opcion_cmd:checked { border: 1px solid #5aa9ff; background: #3b2c20; }
+#pestanas_cmd::tab { padding: 3px 10px; }
+#pestanas_cmd::tab:selected { font-weight: 600; border-bottom: 2px solid #ff7d0a; }
 
 #panel_comentarios { background: #151c24; border: 1px solid #36424f; }
 #panel_comentarios QLabel { color: #9aa5b4; font-size: 10px; letter-spacing: 0.5px; }

@@ -148,7 +148,7 @@ def test_dividir_cuerpo_escala_y_quitar():
                    herramienta=[_hit(doc, {"tipo": "plano", "id": "YZ"})])
     vols = sorted(g.volumen(c.forma) for c in doc.estado_final.cuerpos.values())
     assert vols == pytest.approx([4000, 4000]) and f"{op.id}.c1" in doc.estado_final.cuerpos
-    _ejecutar(doc, Escala, cuerpos=[_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})], factor="2")
+    _ejecutar(doc, Escala, entidades=[_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})], factor="2")
     assert g.volumen(_cuerpo(doc).forma) == pytest.approx(32000)
     _ejecutar(doc, Quitar, cuerpos=[_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})])
     assert list(doc.estado_final.cuerpos) == [f"{op.id}.c1"]

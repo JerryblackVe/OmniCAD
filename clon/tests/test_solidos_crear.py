@@ -464,8 +464,9 @@ def test_tabla_de_roscas():
     unc = sc.datos_rosca("1/4-20")
     assert unc["designacion"] == "1/4-20 UNC" and unc["diametro"] == pytest.approx(6.35)
     assert sc.datos_rosca("#10-32 UNF")["paso"] == pytest.approx(25.4 / 32)
+    assert sc.datos_rosca("M7")["paso"] == 1.0                                       # M7 entró con las tablas de Fusion
     with pytest.raises(g.ErrorGeometria):
-        sc.datos_rosca("M7")
+        sc.datos_rosca("M7.7")
 
 
 @pytest.mark.parametrize("designacion", ["M6", "M10", "M20"])
@@ -543,7 +544,7 @@ def test_corte_helicoidal_que_no_toca_el_cuerpo_avisa():
     placa = g.caja(40, 40, 12, (-20, -20, 0))
     lejos = sc._surco_rosca((500, 500, 500), (0, 0, 1), 3.0, 0.5, 0.0, 10.0, True, "derecha", radio_cara=1.2)
     with pytest.raises(g.ErrorGeometria):
-        sc._cortar_helicoidal(placa, lejos)
+        sc._cortar_helicoidal(placa, lejos, (500, 500, 500), (0, 0, 1))
 
 
 # ---------------------------------------------------------------- 8b. familias, clases y holgura de rosca
@@ -569,8 +570,8 @@ def test_recetas_viejas_de_agujero_roscado_y_rosca_interior_dan_el_mismo_volumen
 
 
 def test_familias_de_rosca_con_datos_de_sus_normas():
-    assert set(sc.FAMILIAS_ROSCA) == {"iso_metrica", "unificada", "trapezoidal", "acme", "bsp_paralela", "bsp_conica",
-                                      "npt"}
+    assert len(sc.FAMILIAS_ROSCA) == 24 and {"iso_metrica", "unificada", "trapezoidal", "acme", "bsp_paralela", "bsp_conica",
+                                             "npt"} < set(sc.FAMILIAS_ROSCA)
     from omnicad.timeline.ops_solido import FAMILIAS_ROSCA
     assert FAMILIAS_ROSCA == tuple(sc.FAMILIAS_ROSCA)
     tr = sc.datos_rosca("Tr20x4")                                            # ISO 2904: d2 = d − P/2, D1 = d − P
@@ -587,8 +588,8 @@ def test_familias_de_rosca_con_datos_de_sus_normas():
     assert npt["conicidad"] == pytest.approx(1 / 16)
     assert sc.datos_rosca("#12-24")["diametro"] == pytest.approx(0.216 * 25.4)
     assert sc.datos_rosca("1-1/2-6 UNC")["paso"] == pytest.approx(25.4 / 6)
-    assert sc.designaciones_rosca("iso_metrica", "M10") == ["M10x1.5", "M10x1.25", "M10x1"]
-    assert sc.tamanos_rosca("trapezoidal")[:3] == ["Tr8", "Tr10", "Tr12"]
+    assert sc.designaciones_rosca("iso_metrica", "M10")[:3] == ["M10x1.5", "M10x1.25", "M10x1"]
+    assert sc.tamanos_rosca("trapezoidal")[:3] == ["Tr8", "Tr9", "Tr10"]
     for clave in sc.TABLA_ROSCAS:                                            # toda la tabla se vuelve a leer
         assert sc.datos_rosca(clave)["designacion"] == clave
     with pytest.raises(g.ErrorGeometria):

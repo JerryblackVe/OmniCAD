@@ -8,7 +8,7 @@ Elementos que flotan sobre el lienzo 3D, como en Fusion 360:
 Todo está dibujado con QPainter; QOpenGLWidget admite widgets hijos transparentes encima.
 """
 import numpy as np
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF,
                            QTransform)
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QWidget
@@ -405,6 +405,53 @@ class BarraNavegacion(QFrame):
             self.estilos[clave].setChecked(True)
 
 
+ALTO_UTIL_PANEL = 330        # alto mínimo que se le quiere dar a un panel de comando debajo del ViewCube
+
+
+class CabeceraMovible(QFrame):
+    """Cabecera de una tarjeta flotante: arrastrarla mueve la tarjeta (queda en `posicion_usuario`, siempre dentro de la
+    vista, y `AreaVisor.reubicar` la respeta); el doble clic la devuelve a su lugar de siempre."""
+
+    def __init__(self, tarjeta):
+        super().__init__(tarjeta, objectName="cabecera_comando")
+        self.tarjeta = tarjeta
+        self._inicio = None
+        self._movida = False
+        self.setCursor(Qt.SizeAllCursor)
+        self.setToolTip("Arrastrá para mover. Doble clic: volver a su lugar")
+
+    def _area(self):
+        return self.tarjeta.parentWidget()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._inicio = e.globalPosition().toPoint() - self.tarjeta.pos()
+            self._movida = False
+
+    def mouseMoveEvent(self, e):
+        if self._inicio is not None:
+            self.tarjeta.posicion_usuario = e.globalPosition().toPoint() - self._inicio
+            self._movida = True
+            area = self._area()
+            if hasattr(area, "reubicar"):
+                area.reubicar()
+
+    def mouseReleaseEvent(self, _e):
+        self._inicio = None
+        area = self._area()
+        if self._movida and hasattr(area, "posicion_cambiada"):
+            area.posicion_cambiada(self.tarjeta)         # solo si se movió: un clic suelto no borra la posición recordada
+
+    def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self.tarjeta.posicion_usuario = None
+            area = self._area()
+            if hasattr(area, "posicion_cambiada"):
+                area.posicion_cambiada(self.tarjeta, restablecida=True)
+            if hasattr(area, "reubicar"):
+                area.reubicar()
+
+
 class AreaVisor(QWidget):
     """
     Lienzo 3D con widgets flotantes encima (posicionados en resizeEvent): navegador arriba a la
@@ -426,6 +473,8 @@ class AreaVisor(QWidget):
         self.paleta = None
         self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
+        self.posicion_panel = None        # dónde lo dejó la persona: (distancia al borde derecho, distancia al borde de arriba)
+        self.al_mover_panel = None        # función(posicion_panel o None): la ventana la guarda en las preferencias
         self.extras = []                  # visores de las vistas múltiples
         self.multiples = False
         self.aviso = QLabel(self)
@@ -492,6 +541,30 @@ class AreaVisor(QWidget):
         super().resizeEvent(e)
         self.reubicar()
 
+    def _posicion_fija_panel(self, g):
+        """Esquina del panel de comando si la persona lo movió (mientras lo arrastra o recordada de antes); si no, None."""
+        if self.panel is None or not self.panel.isVisible() or not hasattr(self.panel, "posicion_usuario"):
+            return None                       # los paneles de render no tienen cabecera movible: no heredan el lugar de los de comando
+        viva = self.panel.posicion_usuario
+        if viva is not None or self.posicion_panel is None:
+            return viva
+        derecha, arriba = self.posicion_panel
+        return QPoint(g.right() - derecha - self.panel.width(), g.top() + arriba)
+
+    def posicion_cambiada(self, tarjeta, restablecida=False):
+        """La persona soltó la cabecera de `tarjeta` o le hizo doble clic: del panel de comando se recuerda dónde quedó
+        (respecto del borde derecho y del de arriba, para que siga bien si cambia el tamaño de la ventana)."""
+        if tarjeta is not self.panel:
+            return
+        g = self.visor.geometry()
+        if restablecida or tarjeta.posicion_usuario is None:
+            self.posicion_panel = None
+        else:
+            self.posicion_panel = (g.right() - (tarjeta.x() + tarjeta.width()), tarjeta.y() - g.top())
+            tarjeta.posicion_usuario = None            # en adelante manda la recordada, anclada al borde derecho
+        if self.al_mover_panel is not None:
+            self.al_mover_panel(self.posicion_panel)
+
     def reubicar(self):
         w, h = self.width(), self.height()
         if self.multiples:
@@ -517,8 +590,18 @@ class AreaVisor(QWidget):
         self.viewcube.move(g.right() - self.viewcube.width() - 14, g.top() + 12)
         self.viewcube.raise_()
         y = self.viewcube.y() + self.viewcube.height() + 10
-        if self.panel is not None and self.panel.isVisible():
+        abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8
+        fija = self._posicion_fija_panel(g)
+        if fija is not None:                  # lo movió la persona: queda ahí, sin salirse de la vista ni bajo la barra (el pie siempre entra)
             if hasattr(self.panel, "ajustar_alto"):
+                self.panel.ajustar_alto(abajo - g.top() - 4)
+            self.panel.move(max(g.left() + 4, min(fija.x(), g.right() - self.panel.width() - 4)),
+                            max(g.top() + 4, min(fija.y(), abajo - self.panel.height())))
+            self.panel.raise_()
+        elif self.panel is not None and self.panel.isVisible():
+            if hasattr(self.panel, "ajustar_alto"):
+                if g.bottom() - y - 8 < ALTO_UTIL_PANEL:         # ventana baja: el panel sube y tapa el ViewCube (si no, queda un cuerpo de pocas filas)
+                    y = g.top() + 8
                 self.panel.ajustar_alto(g.bottom() - y - 8)      # B-105: los paneles de comando tienen barra
             if y + self.panel.height() > g.bottom() - 8:         # F3: en una ventana baja, sube para que el pie se vea
                 y = max(g.top() + 4, g.bottom() - self.panel.height() - 8)
@@ -526,16 +609,21 @@ class AreaVisor(QWidget):
             self.panel.raise_()
             y += self.panel.height() + 8
         if self.paleta is not None:
-            self.paleta.ajustar()
-            self.paleta.move(g.right() - self.paleta.width() - 10, y)
+            self.paleta.ajustar(g.height() - 12)
+            # en una ventana baja sube y tapa el ViewCube: Terminar boceto siempre tiene que verse
+            self.paleta.move(g.right() - self.paleta.width() - 10,
+                             max(g.top() + 4, min(y, g.bottom() - self.paleta.height() - 8)))
             self.paleta.raise_()
-            abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8
             for lateral in self.laterales:
                 if lateral.isVisible():
                     lateral.ajustar()
                     sube = y + lateral.height() > abajo and lateral.height() <= abajo - g.top() - 4
-                    lateral.move(max(g.left() + 4, self.paleta.x() - lateral.width() - 8),
-                                 abajo - lateral.height() if sube else y)     # en una ventana baja sube: la barra de vista no lo tapa
+                    x, ly = max(g.left() + 4, self.paleta.x() - lateral.width() - 8), abajo - lateral.height() if sube else y     # en una ventana baja sube: la barra de vista no lo tapa
+                    fija = getattr(lateral, "posicion_usuario", None)
+                    if fija is not None:                 # la movió la persona: queda ahí, sin salirse de la vista
+                        x = max(g.left() + 4, min(fija.x(), g.right() - lateral.width() - 4))
+                        ly = max(g.top() + 4, min(fija.y(), abajo - lateral.height()))
+                    lateral.move(x, ly)
                     lateral.raise_()
         if self.barra is not None:
             self.barra.adjustSize()
@@ -550,5 +638,7 @@ class AreaVisor(QWidget):
             self.aviso.move((w - self.aviso.width()) // 2, 12)
             self.aviso.raise_()
         if self.toast.isVisible():
-            self.toast.move(g.right() - self.toast.width() - 10, g.bottom() - self.toast.height() - 10)
+            # en el boceto va al lado de la paleta: encima taparía Terminar boceto
+            derecha = g.right() if self.paleta is None else self.paleta.x() - 2
+            self.toast.move(max(g.left() + 4, derecha - self.toast.width() - 8), g.bottom() - self.toast.height() - 10)
             self.toast.raise_()

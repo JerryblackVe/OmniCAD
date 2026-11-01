@@ -76,7 +76,8 @@ def test_la_plantilla_solo_usa_tokens_que_existen():
 
 # ---------------------------------------------------------------- tipografía
 def test_el_qss_por_defecto_es_identico_al_de_antes_de_la_tipografia():
-    """Copia del QSS de fábrica guardada antes de tocar la plantilla (tests/datos/qss_base.qss)."""
+    """Copia del QSS de fábrica (tests/datos/qss_base.qss). Regla nueva de la plantilla (tarjeta de herramienta,
+    paleta del boceto…) = se agrega también ahí; lo que no puede cambiar es el resultado de la tipografía por defecto."""
     base = (Path(__file__).parent / "datos" / "qss_base.qss").read_text(encoding="utf-8")
     colores = temas.INCLUIDOS[temas.DEFECTO]["colores"]
     assert temas.generar_qss(colores) == base
