@@ -20,7 +20,7 @@ from ..timeline import ops_chapa
 from ..timeline.operaciones import propiedades_cuerpo
 from . import selectores as sl
 from .errores import ErrorAPI, error
-from .herramientas_documento import _info_cuerpo, _r
+from .herramientas_documento import _info_cuerpo, _r, _r_chico
 from .registro import Imagen, herramienta
 
 _LADO_MAXIMO = 2048
@@ -337,7 +337,7 @@ def get_physical_properties(sesion, bodies: list[str] | None = None, density: fl
         info.update(material=material, density_g_cm3=rho, mass_g=None,
                     center_of_mass=[_r(x) for x in _centro(c)])
         if info["volume"] is not None and rho is not None:
-            info["mass_g"] = _r(info["volume"] * rho * 1e-3)
+            info["mass_g"] = _r_chico(info["volume"] * rho * 1e-3)
         elif info["volume"] is not None:
             sin_masa.append(info["name"])
         por_cuerpo.append(info)
@@ -357,9 +357,9 @@ def get_physical_properties(sesion, bodies: list[str] | None = None, density: fl
         mn, mx = np.min([b["min"] for b in cajas], axis=0), np.max([b["max"] for b in cajas], axis=0)
         caja = {"min": [_r(x) for x in mn], "max": [_r(x) for x in mx], "size": [_r(x) for x in mx - mn]}
     return {"bodies": por_cuerpo,
-            "total": {"volume": _r(sum(i["volume"] or 0.0 for i in por_cuerpo)),
+            "total": {"volume": _r_chico(sum(i["volume"] or 0.0 for i in por_cuerpo)),
                       "area": _r(sum(i["area"] or 0.0 for i in por_cuerpo)),
-                      "mass_g": _r(sum(i["mass_g"] for i in conmasa)) if todo_con_masa else None,
+                      "mass_g": _r_chico(sum(i["mass_g"] for i in conmasa)) if todo_con_masa else None,
                       "center_of_mass": None if centro is None else [_r(x) for x in centro],
                       "center_of_mass_basis": "mass" if todo_con_masa else "volume", "bounding_box": caja},
             "units": {"volume": "mm3", "area": "mm2", "mass": "g", "density": "g/cm3", "length": "mm"}}
@@ -441,7 +441,7 @@ def check_interference(sesion, bodies: list[str] | None = None, coincident_faces
     for i in an.interferencias({c.id: c.forma for c in solidos}, caras_coincidentes=coincident_faces):
         caja = geo.caja_envolvente(i["forma"])
         pares.append({"a": _nombre_y_id(sesion, por_id[i["a"]]), "b": _nombre_y_id(sesion, por_id[i["b"]]),
-                      "volume": _r(i["volumen"]), "coincident": i["coincidente"],
+                      "volume": _r_chico(i["volumen"]), "coincident": i["coincidente"],
                       **({"area": _r(i["area"])} if i["coincidente"] else {}),
                       "bounding_box": None if not caja else {"min": [_r(x) for x in caja[0]],
                                                               "max": [_r(x) for x in caja[1]]}})

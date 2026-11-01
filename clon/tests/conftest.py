@@ -4,6 +4,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 # Permite `import omnicad` corriendo pytest desde cualquier carpeta.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -24,6 +26,14 @@ os.environ.setdefault("OMNICAD_REGLAS_PLASTICO", os.path.join(tempfile.mkdtemp(p
 if os.environ.get("OMNICAD_BLOQUEAR_OCP") == "1":
     from omnicad.bloqueo_ocp import activar
     activar()
+
+
+@pytest.fixture(autouse=True)
+def _sin_trabajador_entre_pruebas():
+    """El trabajador de `nucleo/aislado.py` vive más que un cálculo: cada prueba arranca el suyo (con su `_comando`)."""
+    yield
+    if "omnicad.nucleo.aislado" in sys.modules:
+        sys.modules["omnicad.nucleo.aislado"].cerrar_trabajador()
 
 
 def pytest_sessionfinish(session, exitstatus):

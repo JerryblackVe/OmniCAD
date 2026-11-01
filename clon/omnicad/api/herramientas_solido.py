@@ -26,6 +26,7 @@ from ..timeline.ops_solido import OpBarrido, OpMultitransformar, OpPatron, OpSim
 from .errores import ErrorAPI, error
 from .herramientas_boceto import (boceto_activo, nombre_nuevo, referencia_plano_o_cara, seleccionar_perfiles,
                                   texto_expr)
+from .herramientas_documento import _r_chico
 from .registro import Expr, herramienta
 
 OPERACIONES = {"new_body": "nuevo", "join": "unir", "cut": "cortar", "intersect": "intersecar"}
@@ -81,7 +82,7 @@ def _foto(sesion):
 
 def _info_cuerpo(sesion, c):
     return {"id": c.id, "name": sesion.nombre_cuerpo(c),
-            "volume": _r(geo.volumen(c.forma)) if getattr(c, "tipo", "solido") == "solido" else None}
+            "volume": _r_chico(geo.volumen(c.forma)) if getattr(c, "tipo", "solido") == "solido" else None}
 
 
 def _informe(sesion, op, antes, combina=False):
@@ -94,7 +95,7 @@ def _informe(sesion, op, antes, combina=False):
         if cid in antes and antes[cid] is not c.forma:
             info = _info_cuerpo(sesion, c)
             previo_solido = info["volume"] is not None and not isinstance(antes[cid], Malla)   # una malla no tiene volumen B-rep
-            info["previous_volume"] = _r(geo.volumen(antes[cid])) if previo_solido else None
+            info["previous_volume"] = _r_chico(geo.volumen(antes[cid])) if previo_solido else None
             modificados.append(info)
     creados = [_info_cuerpo(sesion, c) for cid, c in cuerpos.items() if cid not in antes]
     quitados = [cid for cid in antes if cid not in cuerpos]
@@ -788,7 +789,7 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
     keep_tools: true para conservar los cuerpos herramienta.
     """
     objetivo = sesion.cuerpo(target).id
-    herramientas = _ids_cuerpos(sesion, tools)
+    herramientas = list(dict.fromkeys(_ids_cuerpos(sesion, tools)))       # B-127: una herramienta repetida cuenta una vez
     doc = sesion.doc
     if operation == "join":         # unir lo separado es válido (cuerpo de varios sólidos), pero casi siempre es un descuido
         cuerpos = doc.estado_final.cuerpos

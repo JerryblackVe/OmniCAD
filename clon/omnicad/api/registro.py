@@ -35,6 +35,7 @@ imagen, la CLI en un archivo PNG o base64.
 """
 import difflib
 import inspect
+import math
 import re
 import types
 import typing
@@ -282,6 +283,9 @@ def _argumentos(h, args):
     for k, v in args.items():
         try:
             kwargs[k] = _convertir(v, h.tipos[k])
+            if isinstance(kwargs[k], float) and not math.isfinite(kwargs[k]):      # T-23: nan o inf, antes de que llegue a una expresión
+                raise error("INVALID_ARGUMENTS", f"'{k}' no es un número válido (recibió {kwargs[k]:g}): tiene que ser un "
+                                                 "número finito.", f"Firma: {_firma(h)}")
         except _NoCoincide:
             esperado = h.esquema["properties"][k]
             esperado = esperado.get("enum") or esperado.get("type") or esperado.get("anyOf")

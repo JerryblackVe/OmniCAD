@@ -19,6 +19,7 @@ from . import herramientas_modificar  # noqa: F401  (antes: el grupo «solido» 
 from .errores import error
 from .herramientas_boceto import nombre_nuevo, referencia_plano_o_cara, texto_expr
 from .herramientas_construccion import _PUNTO, _referencia
+from .herramientas_documento import _r_chico
 from .herramientas_solido import OPERACIONES, Cuerpos, Operacion, _agregar, _numero_positivo, _objetivos
 from .registro import Expr, herramienta
 
@@ -376,5 +377,5 @@ def create_shaft(sesion, segments: list[dict], plane: str = "XY", center: list[E
     numeros = op.tramos(_ctx(sesion))
     resultado["shaft"] = {"length": _r(sum(t["largo"] for t in numeros)),
                           "max_diameter": _r(max(t["diametro"] for t in numeros)),
-                          "volume": _r(en.volumen_eje(numeros))}
+                          "volume": _r_chico(en.volumen_eje(numeros))}
     return resultado

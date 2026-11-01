@@ -19,6 +19,7 @@ from ..nucleo import geometria as geo
 from ..nucleo import render_cpu as rc
 from ..timeline.ops_ensamblar import ruta_componente
 from .errores import error
+from .herramientas_documento import _r_chico
 from .registro import herramienta
 
 
@@ -225,7 +226,7 @@ def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool =
         masa = None if densidad is None else g["volume"] * densidad * 1e-3
         filas.append({"item": i, "name": g["name"], "quantity": g["quantity"], "material": g["material"],
                       "default_material": g["default_material"], "mass_g": None if masa is None else _r(masa),
-                      "volume": _r(g["volume"]), "component": g["component"], "bodies": g["bodies"]})
+                      "volume": _r_chico(g["volume"]), "component": g["component"], "bodies": g["bodies"]})
     sin = [f["material"] for f in filas if f["mass_g"] is None]
     if sin:
         sesion.avisar(f"Materiales sin densidad (no están en la tabla): {', '.join(dict.fromkeys(sin))}.")

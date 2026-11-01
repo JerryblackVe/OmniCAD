@@ -21,6 +21,7 @@ from ..timeline.ops_malla import (OpCombinarMallas, OpConvertirMalla, OpCortarPl
                                   OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from .errores import error
 from .herramientas_boceto import referencia_plano_o_cara, texto_expr
+from .herramientas_documento import _r_chico
 from .herramientas_ensamble import nombre_paso
 from .registro import Expr, herramienta
 
@@ -79,7 +80,7 @@ def info_malla(sesion, c):
             "vertices": a["vertices"], "face_groups": a["grupos"], "shells": a["cascaras"], "closed": a["cerrada"],
             "oriented": a["orientada"], "positive_volume": a["volumen_positivo"],
             "boundary_edges": a["aristas_borde"], "non_manifold_edges": a["aristas_no_manifold"],
-            "degenerate_triangles": a["degenerados"], "volume": _r(a["volumen"]), "area": _r(a["area"]),
+            "degenerate_triangles": a["degenerados"], "volume": _r_chico(a["volumen"]), "area": _r(a["area"]),
             "bounding_box": _caja(c.forma.caja())}
 
 
@@ -88,7 +89,7 @@ def _info_cuerpo(sesion, c):
         return info_malla(sesion, c)
     tipo = getattr(c, "tipo", "solido")
     return {"id": c.id, "name": sesion.nombre_cuerpo(c), "type": _TIPOS.get(tipo, tipo),
-            "volume": _r(geo.volumen(c.forma)) if tipo == "solido" else None, "area": _r(geo.area(c.forma)),
+            "volume": _r_chico(geo.volumen(c.forma)) if tipo == "solido" else None, "area": _r(geo.area(c.forma)),
             "valid": geo.es_valida(c.forma), "bounding_box": _caja(geo.caja_envolvente(c.forma))}
 
 
@@ -96,8 +97,8 @@ def _antes(forma):
     """Lo principal de una forma antes del paso (para comparar con lo de después)."""
     if hasattr(forma, "caras") and hasattr(forma, "vertices"):
         return {"triangles": int(len(forma.caras)), "vertices": int(len(forma.vertices)),
-                "closed": forma.es_cerrada(), "volume": _r(forma.volumen()), "area": _r(forma.area())}
-    return {"volume": _r(geo.volumen(forma)) if geo.solidos(forma) else None, "area": _r(geo.area(forma))}
+                "closed": forma.es_cerrada(), "volume": _r_chico(forma.volumen()), "area": _r(forma.area())}
+    return {"volume": _r_chico(geo.volumen(forma)) if geo.solidos(forma) else None, "area": _r(geo.area(forma))}
 
 
 def _agregar(sesion, op):

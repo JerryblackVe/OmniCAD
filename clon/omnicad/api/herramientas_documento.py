@@ -30,6 +30,12 @@ def _r(x):
     return None if x is None else round(float(x), 4)
 
 
+def _r_chico(x):
+    """Como `_r`, pero un valor menor que 0,001 conserva 4 cifras significativas en vez de redondearse a 0 (T-19:
+    el volumen de un cuerpo de 1e-9 mm³ no es «0»)."""
+    return None if x is None else round(float(x), 4) if abs(x) >= 1e-3 else float(f"{x:.4g}")
+
+
 def _info_cuerpo(sesion, c):
     forma, tipo = c.forma, getattr(c, "tipo", "solido")
     if tipo == "malla":
@@ -39,7 +45,7 @@ def _info_cuerpo(sesion, c):
         area, caja = geo.area(forma), geo.caja_envolvente(forma)
     info = {"id": c.id, "name": sesion.nombre_cuerpo(c), "type": {"solido": "solid", "superficie": "surface",
                                                                    "malla": "mesh"}.get(tipo, tipo),
-            "volume": _r(volumen), "area": _r(area), "bounding_box": None}
+            "volume": _r_chico(volumen), "area": _r(area), "bounding_box": None}
     if caja:
         p0, p1 = caja
         info["bounding_box"] = {"min": [_r(v) for v in p0], "max": [_r(v) for v in p1],

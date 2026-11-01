@@ -67,7 +67,7 @@ def test_asm6_nan_e_inf_dicen_que_no_son_un_numero(texto):
 def test_asm6_un_valor_float_nan_y_el_paso_de_una_receta_vieja_tambien():
     s, *_ = _mecanismo()
     r = falla(s, "drive_joint", "INVALID_ARGUMENTS", joint="J1", rotation=float("nan"))
-    assert "No es un número" in r["mensaje"]
+    assert "'rotation' no es un número válido" in r["mensaje"]        # T-23: lo dice el registro, antes de la herramienta
     with pytest.raises(ErrorOperacion, match="No es un número"):
         exigir_numero(" -Inf ")
     exigir_numero("inferior")           # un parámetro que empieza con «inf» sigue siendo un nombre

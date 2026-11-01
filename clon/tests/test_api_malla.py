@@ -209,6 +209,13 @@ def test_cortar_con_plano_desplazado_y_girado(s):
     assert s.doc.estado_final.cuerpos[m].forma is not None
 
 
+def test_b127_combinar_mallas_con_una_herramienta_repetida_cuenta_una_vez(s):
+    a = malla_de_caja(s)
+    b = malla_de_caja(s, x=5)
+    r = llamar(s, "combine_meshes", target=a, tools=[b, b], operation="join")
+    assert r["bodies_removed"] == [b] and r["bodies_modified"][0]["volume"] == pytest.approx(1500, rel=1e-6)
+
+
 def test_combinar_separar_escalar_y_convertir(s):
     a = malla_de_caja(s)
     b = malla_de_caja(s, x=5)                                            # se superpone a la mitad

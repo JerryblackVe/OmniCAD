@@ -262,7 +262,7 @@ class OpCombinarMallas(_OpMalla):
 
     def ejecutar(self, estado, ctx):
         (obj,) = _mallas(estado, [self.p["objetivo"]] if self.p["objetivo"] else [])
-        herramientas = _mallas(estado, self.p["herramientas"])
+        herramientas = list({h.id: h for h in _mallas(estado, self.p["herramientas"])}.values())     # B-127: sin repetidas
         obj.forma = _avisar_si_queda_rota(ctx, _ml().combinar([obj.forma] + [h.forma for h in herramientas],
                                                               operacion=self.p["operacion"]))
         if not self.p["mantener"]:

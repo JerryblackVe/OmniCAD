@@ -43,7 +43,7 @@ from ..timeline.posicion import Arrastre, pendiente_de
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_boceto import nombre_nuevo, texto_expr
-from .herramientas_documento import ESTADOS, TIPOS_UNION, _VALORES_UNION
+from .herramientas_documento import ESTADOS, TIPOS_UNION, _VALORES_UNION, _r_chico
 from .herramientas_solido import _agregar
 from .registro import Expr, herramienta
 
@@ -1129,7 +1129,7 @@ def motion_study(sesion, joint: str, values: list[float] | None = None, start: f
         if check_interference:
             solidos = {c.id: c.forma for c in cuerpos_del_modelo(estado) if getattr(c, "tipo", "solido") == "solido"
                        and (revisar is None or c.id in revisar)}
-            pares = [{"a": i["a"], "b": i["b"], "volume": _r(i["volumen"])} for i in an.interferencias(solidos)]
+            pares = [{"a": i["a"], "b": i["b"], "volume": _r_chico(i["volumen"])} for i in an.interferencias(solidos)]
             paso["interference"] = pares
             if pares:
                 choques.append(_r(v))

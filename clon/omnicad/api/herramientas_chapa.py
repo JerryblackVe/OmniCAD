@@ -31,6 +31,7 @@ from ..timeline.ops_chapa import (OpConvertirChapa, OpDesgarro, OpDesplegar, OpD
 from . import selectores as sl
 from .errores import error
 from .herramientas_boceto import boceto_activo, seleccionar_perfiles, texto_expr
+from .herramientas_documento import _r_chico
 from .herramientas_ensamble import nombre_paso
 from .herramientas_material import nombre_material
 from .herramientas_solido import _agregar, _numero_positivo, _ref_perfil
@@ -252,7 +253,7 @@ def info_chapa(sesion, c):
             "flat_pattern_of": m.get("patron_de"), "rule": regla, "rule_step": m.get("op_regla"),
             "bends": r["pliegues"], "unfolded_bends": r["desplegados"],
             "flat_size": [_r(r["ancho"]), _r(r["alto"])], "flat_area": _r(r["area"]),
-            "volume": _r(geo.volumen(c.forma)),
+            "volume": _r_chico(geo.volumen(c.forma)),
             "material": doc.propiedad(c.id, "material") or getattr(c, "material", None)}
 
 

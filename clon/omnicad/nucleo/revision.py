@@ -69,6 +69,9 @@ LARGO_DIMINUTO = 1e-4         # mm: aristas más cortas (restos de booleanas o d
 _AREA_DEGENERADA = 1e-12      # fracción de diagonal² por debajo de la cual una cara es degenerada (área ~0)
 PLAZO_AUTOINTERSECCION = 10.0  # s por cuerpo para buscar autointersecciones en un proceso aparte (formas libres)
 PRESUPUESTO_AUTOINTERSECCION = 30.0  # s en total para varios cuerpos seguidos (quien itera arma `hasta`)
+_AGOTADAS = {}                # hash(forma) → (forma, tope, instante) de las formas libres que ya pasaron el tope de autointersecciones
+_MAX_AGOTADAS = 16
+VENCE_AGOTADA = 300.0         # s: pasado este tiempo se vuelve a intentar (el tope pudo agotarse por una PC cargada)
 MAX_PROBLEMAS = 200           # problemas que se devuelven con su ubicación (los conteos son siempre completos)
 MUESTRAS_ESPESOR = 2000       # rayos para medir el espesor (triángulos elegidos al azar, pesados por área)
 _COS_ENFRENTADAS = math.cos(math.radians(45))   # caras de una pared: normales a menos de 45° de opuestas
@@ -324,14 +327,27 @@ def _autointersecciones(forma, limite):
 def _autointersecciones_seguras(forma, limite, plazo):
     """Igual que `_autointersecciones`, pero las formas con caras libres (B-spline: roscas modeladas, solevados) van a
     un proceso aparte con tope de `plazo` segundos: ahí el análisis puede no terminar nunca y congelaba la ventana
-    (T-01 de la prueba de tortura). Si pasa el tope no hay conteo (None) y queda un aviso."""
+    (T-01 de la prueba de tortura). Si pasa el tope no hay conteo (None) y queda un aviso. La misma forma que ya pasó
+    un tope igual o mayor no se vuelve a esperar (T-21: una rosca modelada necesita más de 300 s; el tope entero se
+    perdía en cada revisión)."""
     if not geo.es_forma_libre(forma):
         return _autointersecciones(forma, limite)
+    previo = _AGOTADAS.get(hash(forma))
+    if previo is not None and time.monotonic() - previo[2] > VENCE_AGOTADA:
+        previo = None
     try:
+        if previo is not None and previo[0].IsSame(forma) and plazo <= previo[1]:
+            raise aislado.TiempoAgotado(f"ya pasó de {previo[1]:.3g} s en una revisión anterior de este cuerpo"
+                                        .replace(".", ","))
         cantidad, problemas, completo = aislado.correr("autointersecciones", forma, plazo, limite=limite)
     except aislado.TareaAislada as e:
+        if isinstance(e, aislado.TiempoAgotado) and plazo > 0 and (previo is None or plazo > previo[1]):
+            _AGOTADAS[hash(forma)] = (forma, plazo, time.monotonic())       # guarda la forma: su dirección no se reutiliza mientras esté
+            while len(_AGOTADAS) > _MAX_AGOTADAS:
+                del _AGOTADAS[next(iter(_AGOTADAS))]
         aviso = _problema("autointerseccion_omitida", "aviso", f"No se revisaron las autointersecciones: {e}. "
-                          "Pasa con roscas modeladas y superficies B-spline muy densas.")
+                          "Pasa con roscas modeladas y superficies B-spline muy densas; se puede desactivar esta "
+                          "revisión para no esperar.")
         return None, [aviso], False
     return cantidad, [{**p, "punto": None if p["punto"] is None else tuple(p["punto"])} for p in problemas], completo
 

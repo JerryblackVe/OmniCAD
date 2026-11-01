@@ -315,8 +315,8 @@ def partes_de_brep(ruta):
     return partes
 
 
-def brep_a_texto(forma):
-    """Forma OCC → texto BREP comprimido (zlib + base64) para guardarla dentro de la receta."""
+def brep_a_texto(forma, nivel=6):
+    """Forma OCC → texto BREP comprimido (zlib + base64) para guardarla dentro de la receta. `nivel`: el de zlib."""
     import base64
     import zlib
     fd, ruta = tempfile.mkstemp(suffix=".brep")
@@ -324,7 +324,7 @@ def brep_a_texto(forma):
     try:
         escribir_brep(forma, ruta)
         with open(ruta, "rb") as f:
-            return base64.b64encode(zlib.compress(f.read(), 6)).decode("ascii")
+            return base64.b64encode(zlib.compress(f.read(), nivel)).decode("ascii")
     finally:
         os.remove(ruta)
 

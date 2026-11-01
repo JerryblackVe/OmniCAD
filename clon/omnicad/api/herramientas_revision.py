@@ -12,6 +12,7 @@ from ..nucleo import revision as rv
 from ..timeline.ops_revision import OpReparar
 from .errores import error
 from .herramientas_boceto import nombre_nuevo, texto_expr
+from .herramientas_documento import _r_chico
 from .herramientas_inspeccion import _cuerpos
 from .herramientas_solido import _agregar
 from .registro import Expr, herramienta
@@ -78,7 +79,7 @@ def _informe_geometria(sesion, c, informe):
         "high_tolerances": informe["tolerancias_altas"],
         "max_tolerance": None if tol is None else {"vertex": _r(tol["vertice"]), "edge": _r(tol["arista"]),
                                                    "face": _r(tol["cara"])},
-        "volume": _r(informe["volumen"]), "area": _r(informe["area"]), "bounding_box": _caja(informe["caja"]),
+        "volume": _r_chico(informe["volumen"]), "area": _r(informe["area"]), "bounding_box": _caja(informe["caja"]),
         "errors": informe["errores"], "warnings": informe["avisos"], "issues": _problemas(informe),
         "issues_truncated": informe["truncado"], "summary": rv.resumen(informe)})
     if informe["tipo_cuerpo"] == "malla":
@@ -153,7 +154,7 @@ def check_printability(sesion, body: str | None = None, min_thickness: float = 0
             "closed": i["cerrado"], "printable": i["imprimible"], "min_thickness_measured": _r(i["espesor_minimo"]),
             "thin_regions": i["zonas_finas"], "overhang_area": _r(i["area_voladizo"]),
             "overhang_regions": i["zonas_voladizo"], "sharp_edges": i["aristas_filosas"], "samples": i["muestras"],
-            "volume": _r(i["volumen"]), "area": _r(i["area"]), "bounding_box": _caja(i["caja"]),
+            "volume": _r_chico(i["volumen"]), "area": _r(i["area"]), "bounding_box": _caja(i["caja"]),
             "errors": i["errores"], "warnings": i["avisos"], "issues": _problemas(i),
             "issues_truncated": i["truncado"], "summary": rv.resumen(i)})
         informes.append(salida)

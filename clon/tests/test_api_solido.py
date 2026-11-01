@@ -342,7 +342,9 @@ def test_operaciones_y_target(s):
     assert [b["id"] for b in r["bodies_modified"]] == ["op1.c1"]
     assert r["bodies_modified"][0]["volume"] == pytest.approx(16000 - math.pi * 25 * 10, rel=1e-6)
     r = api.llamar(s, "extrude", {"sketch": "Boceto1", "distance": 20, "operation": "intersect", "target": "Cuerpo1"})
-    assert r["ok"] and r["result"]["bodies_removed"] == ["op1.c1"] and any("vacío" in a for a in r["avisos"])
+    # T-22: intersecar sin nada en común falla y no toca el documento (igual que Combinar); no borra el cuerpo
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "vacío" in r["mensaje"]
+    assert "op1.c1" in [b["id"] for b in llamar(s, "get_scene_info")["bodies"]]
     # target con new_body se ignora con aviso
     ok_ = api.llamar(s, "extrude", {"sketch": "Boceto1", "distance": 1, "target": "Cuerpo2"})
     assert ok_["ok"] and any("ignora" in a for a in ok_["avisos"])
