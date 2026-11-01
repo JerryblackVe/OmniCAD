@@ -133,6 +133,8 @@ Python. Dificultad y riesgo en la escala del seguimiento. Todas las pruebas de a
 
 ### RS-X1 · Trabajador persistente con memoria por paso (Python, no Rust)
 
+**Hecho el 2026-11-01:** ver el Registro de `PROJECT_LOG.md`. Lo de abajo queda como el diseño y las mediciones de entonces.
+
 - **Qué y dónde:** `nucleo/aislado.py` (un hijo nuevo por tarea, `CalculoPendiente` 172), `timeline/documento.py:722-790`
   (`_prevuelo_*`, `_solicitar_calculo`, `_aplicar_calculo`), `timeline/calculo_aislado.py`. Generaliza P-56 y fluidez E3.
 - **Medición:** § 3 (24,4 s → 0,16–0,8 s en proceso; el hijo suma 4,4–4,9 s en cada recálculo y 2,7 s al abrir).

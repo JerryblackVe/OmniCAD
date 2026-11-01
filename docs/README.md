@@ -57,6 +57,8 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
+| [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
+| [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |
 | [plan_boceto.md](plan_boceto.md) | Plan por fases para llevar el boceto al nivel de Fusion (auditoría 2026-10-23) |
 | [plan_iconos.md](plan_iconos.md) | Plan de íconos, hecho el 2026-10-26: timeline con ícono propio por paso, insignias, gramática visual medida y tema en vivo; con el resultado de la prueba como usuario |
@@ -70,6 +72,9 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | Documento | IDs |
 |---|---|
 | [brechas_fusion.md](brechas_fusion.md) | Fusion 360 |
+| [brechas_parametros.md](brechas_parametros.md) | PAR-1–PAR-11: Parámetros contra Fusion |
+| [brechas_inspeccionar.md](brechas_inspeccionar.md) | INS-1–INS-8: INSPECCIONAR contra capturas de Fusion |
+| [brechas_construir.md](brechas_construir.md) | CON-1–CON-8: CONSTRUIR contra capturas de Fusion |
 | [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-14: herramientas de SÓLIDO contra capturas de Fusion |
 | [brechas_freecad.md](brechas_freecad.md) | F1–F23 |
 | [brechas_plasticity.md](brechas_plasticity.md) | PL1–PL13 |

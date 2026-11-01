@@ -2,17 +2,27 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 14: Abierto 9 · Parcial 3 · Bloqueado 1 · Sin verificar 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 12: Abierto 7 · Parcial 3 · Bloqueado 1 · Sin verificar 1.
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-129 | El volumen de una lente (esfera ∩ esfera) tiene hasta 0,5 mm³ de error; unir y cortar dan exacto | Abierto | Baja | Dos esferas de radio 20 con los centros a 20,6 mm: la fórmula de la lente da 9897,866 mm³ y `intersect` da 9898,405 (+5,4e-5 relativo); a 10 mm da −0,532; a 30 mm +0,172. `volumen` y `volumen_exacto` coinciden entre sí, y la unión (57122,777) y el corte (23612,455) cierran con la fórmula al milésimo. Falta saber si es la geometría de la lente o la integración sobre sus dos casquetes. Con centros a 7,07 y 39 mm el error es 0. | clon/omnicad/nucleo/geometria.py:890 (`volumen`) | 2026-11-01 |
-| B-128 | Cortar o unir con un cuerpo de ~1 µm deja autointersecciones sin avisar | Abierto | Media | Una caja de 1e-6 mm centrada en una arista o cara de otra de 40 mm: `boolean_operation` cortar o unir da ok, sin avisos y `valid: true`, pero `check_geometry` cuenta 1 a 6 autointersecciones (con 3e-7 y unir, 36). Con 1e-4 y 1e-5 solo salen advertencias de arista diminuta. | clon/omnicad/nucleo/geometria.py:478 (`_problema_booleana` mira aristas libres, no manifold y validez; no las autointersecciones) | 2026-11-01 |
-| B-127 | Una herramienta repetida en `boolean_operation` da «Error inesperado: 'op2.c1'» | Abierto | Baja | `tools=["B","B"]` (o `["B","b"]`) falla con un KeyError sin explicar; el documento queda como estaba. Tiene que decir «la herramienta B está repetida» o ignorar el duplicado. | clon/omnicad/timeline/operaciones.py:1264 | 2026-11-01 |
-| B-126 | Intersecar deja aristas no múltiples sin avisar | Abierto | Media | Una caja vaciada contra otra con 9 agujeros pasantes, con caras coplanares: el resultado trae 3 aristas no manifold, `valid: true` y ningún aviso (unir sí avisa con «dejó el cuerpo partido»). El volumen cierra con el de cortar. | clon/omnicad/nucleo/geometria.py:478 (`_problema_booleana`) | 2026-11-01 |
-| B-125 | Unir dos toros con ≤ 1e-4 mm de solape pierde uno entero sin avisar | Abierto | Media | Dos toros iguales (R 14, r 6) con el borde exterior casi tangente: `unir` devuelve UN toro (9948,56 mm³ en vez de ~19897) sin aviso. Con 1e-3 de solape anda. El rango de volumen que el kernel da por creíble para «unir» empieza en max(VA, VB), así que «B desapareció» pasa. | clon/omnicad/nucleo/geometria.py:478 (`limites` de `_problema_booleana`) | 2026-11-01 |
+| B-144 | Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar | Abierto | Media | Hueca de pared 3 (caja 60×40×20 menos 54×34 desde z = 3) y esfera r 4 en (18,537165, 20,0001, 10,0001): cortar quita 103,79 mm³ de 122,5 (antes de B-125 quitaba 0) y el común da 121,97. Las muestras de `_comun_desmentido` solo ven diferencias de 1/4 de la pieza chica. | clon/tests/test_booleanas_tortura.py::test_b125_esfera_casi_tangente_no_se_queda_sin_cortar | 2026-11-01 |
+| B-138 | `sin(PI/4 rad)` da 0,000239 en lugar de 0,7071, sin ningún aviso | Abierto | Media | La unidad se pega al último número en lugar de a la expresión. Corregirlo con PAR-1. | timeline/parametros.py:46 (`_NUM_CON_UNIDAD`); ejemplo de `Parameters reference`; reproducido por API | 2026-11-01 |
+| B-139 | `round(2.5)` da 2 en lugar de 3 | Abierto | Baja | La ayuda dice que .5 redondea alejándose de cero. | timeline/parametros.py:41 usa `round` de Python; `Parameters reference`; reproducido por API | 2026-11-01 |
+| B-140 | Renombrar un parámetro en uso falla en lugar de actualizar lo que lo usa | Abierto | Media | Actualizar expresiones y pasos. Con otro parámetro, el error dice «Nombre desconocido: 'w'». | api/herramientas_parametros.py:90; ayuda `Parameters in Fusion` § Edit parameters; reproducido por API | 2026-11-01 |
+| B-141 | Una longitud acepta `w * h` y guarda 200 mm | Abierto | Media | Validar la magnitud con PAR-2. Mientras tanto, el valor es incorrecto y no avisa. | timeline/parametros.py:82; `Parameters in Fusion`: la unidad del resultado debe coincidir; reproducido por API | 2026-11-01 |
+| B-142 | El nombre `µm_x` se rechaza con un mensaje equivocado | Abierto | Baja | Habla de letra más marca combinada. Fusion admite `µ`, `$`, `°` y `"`. | timeline/parametros.py:177; `Parameters reference` § Name; reproducido por API | 2026-11-01 |
+| B-143 | La tabla de parámetros muestra el valor con 4 cifras y sin unidad | Abierto | Baja | Mostrar el valor completo con la unidad del parámetro: 12345,678 sale como 1.235e+04. | ui/dialogos.py:331 (`:.4g`) | 2026-11-01 |
+| B-132 | Un texto que toca otra curva se elige mal: toma H, A y el hueco de la O, y deja afuera L y el aro de la O | Abierto | Alta | Una letra elige todo el texto aunque cruce otra curva. Las letras no pueden depender de que el borde sea solo de texto, y Extruir no debe rellenar el hueco. | nucleo/perfiles.py:102 y ui/visor3d.py:1259 (`set(p.firma) <= ids`): sin el aro, el hueco de la O queda como letra; video del 2026-11-01, 1:54 a 2:26; reproducido por API | 2026-11-01 |
+| B-133 | Un texto que cruza una curva deja perfiles basura, y Extruir acepta uno de área 0 con volumen 0 | Abierto | Media | No listar restos sin área y rechazar la extrusión de volumen 0 con un mensaje claro. | HOLA altura 30 sobre círculo R57: 9 perfiles; separado 2 mm: 7. Perfil de área 0,0 responde ok con volumen 0.0; perfil de área 1,29 da 12,9; reproducido por API | 2026-11-01 |
+| B-134 | El disco queda mellado cuando el texto apoya sobre su borde | Abierto | Media | La ayuda no aclara si el texto parte otras curvas: comprobarlo en Fusion real y decidir. Hoy resta material. | Perfil de área 10205,74 contra 10207,03 (π·57²); volumen 102057,4 contra 102070,3; video del 2026-11-01, 1:40 a 1:44 (costuras en el canto); reproducido por API | 2026-11-01 |
+| B-135 | La barra de estado queda en «Calculando Extrusión…» después de la vista previa o de Cancelar | Abierto | Baja | Limpiar el aviso al terminar la previa y al cerrar el comando. | ui/ventana.py:980 lo deja 30 s y solo `_actualizar` lo limpia; ui/comando.py `_cerrar` no lo toca; video del 2026-11-01, 1:54 al final | 2026-11-01 |
+| B-136 | Al abrir Extruir aparece un instante una ventanita suelta de OmniCAD | Abierto | Baja | Buscar qué ventana se muestra sin padre. La causa no está identificada. | video del 2026-11-01, cerca de 1:37: un solo cuadro con el ícono, maximizar y cerrar | 2026-11-01 |
+| B-137 | Al deslizar un texto en curva queda una sombra de las letras y se apaga el relleno del disco | Abierto | Media | Repintar los rellenos durante el arrastre. Revisar también la L oscura que queda suelta en la posición vieja. | ui/editor_boceto.py:5029 (`_deslizar_texto` solo pide `update`; causa probable, sin comprobar); video del 2026-11-01, 0:49 a 0:55 y 1:01 a 1:30 | 2026-11-01 |
+| B-130 | Una construcción que no se puede calcular responde «No existe 'opN'» | Abierto | Baja | El `KeyError` de `estado_final` tapa la causa: dos aristas alabeadas, planos paralelos, tangente sobre cara plana. | api/errores.py:264; api/herramientas_construccion.py (`puntos[op.id]`); reproducido por API | 2026-11-01 |
+| B-131 | Una spline donde va una línea da INTERNAL_ERROR en CONSTRUIR | Abierto | Baja | Filtrar la spline en la ventana y responder un error de argumentos en la API. | docs/brechas_construir.md § B-131; reproducido por API | 2026-11-01 |
 | B-123 | Un cuerpo que pasa a otro componente sigue a la unión del componente anterior | Abierto | Media | Si TODOS los cuerpos de un componente nuevo vienen del mismo componente movido por una unión, el nuevo hereda ese movimiento (`_matriz_de_cuerpos`): no salta de lugar, pero al accionar después esa unión el cuerpo se sigue moviendo, aunque ya no pertenece a ese componente y el aviso de ASM-7 diga que sus uniones ya no mueven nada. En Fusion el cuerpo queda donde estaba al reasignarlo. Hace falta guardar en la receta la pose del momento de reasignar. Ya pasaba antes de B-108. | omnicad/timeline/ops_ensamblar.py (`_matriz_de_cuerpos`); tests/test_posicion_asm.py::test_b108_todos_del_mismo_componente_el_nuevo_hereda_su_movimiento_y_no_gira_dos_veces | 2026-11-01 |
 | B-122 | Las clases de las tablas de Fusion no modelan el Ø mayor del agujero ni el Ø menor del eje | Abierto | Media | `desfases_rosca` solo da flancos y menor del agujero: el Ø mayor sale de `diametro/2 + desfase`. Tr12x3 7H: la tabla dice 12,5 y se modela 12,15; 7e: Ø menor 8,3175 y se modela 8,803. Afecta a todo tipo de `tablas_rosca.CLASES`. Falta confirmar en Fusion real (el MCP no conecta) qué diámetro usa la rosca modelada y pasarlo a `_surco_rosca` | clon/omnicad/nucleo/tolerancias.py:333 | 2026-11-01 |
 | B-121 | Volver a resolver un boceto con una tangente general (spline) corre la geometría un poco cada vez | Abierto | Media | En `_tangencia` el contacto arranca de una muestra de 96 puntos, no del contacto exacto: el solver no parte de la solución y reparte el error entre la curva y el parámetro. Medido 2026-10-31 con arco de radio 10 y spline ya tangentes: 10,0000 → 10,0091 → 10,0175 → 10,0254 → 10,0326 por pasada. Arreglarlo cambia lo que dan las recetas guardadas con esas tangentes: decidir antes de tocar el solver (idea: afinar los dos parámetros con la geometría quieta y usarlos solo si el residuo ya es cero) | `tests/test_restricciones_matematica.py::test_tangente_con_el_comando_no_cambia_el_radio_del_arco`; `omnicad/restricciones/solver.py` (`_tangencia`) | 2026-10-31 |
@@ -55,55 +65,15 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
-### B-129 · El volumen de una lente (esfera ∩ esfera) tiene hasta 0,5 mm³ de error
+### B-144 · Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar
 
-**Gravedad:** baja (5e-5 relativo; el volumen de unir y de cortar cierra). **Entorno:** OmniCAD 2d8212e, Windows, API sin ventana. **Estado:** reproducido (la matriz de booleanas, celda esfera × esfera «cruza», y una cuenta directa con `geo.booleano` en 6 distancias).
+**Gravedad:** media (hace falta un contacto casi tangente; el cuerpo sale válido y estanco). **Entorno:** OmniCAD, Windows, API sin ventana. **Estado:** reproducido; apareció comparando cortar junto y de a una en 300 casos al azar con un árbitro de puntos.
 
-**Qué hice:** `create_sphere radius=20 x=0 z=10 name=A`; `create_sphere radius=20 x=20 z=15 name=B`; `boolean_operation target=A tools=["B"] operation=intersect`; `get_physical_properties`.
+**Qué hice:** `geo.booleano(hueca, geo.esfera(4, (18.537165, 20.0001, 10.0001)), "cortar")`, con `hueca` = caja 60×40×20 en (-30, -20, 0) menos caja 54×34×20 en (-27, -17, 3).
 
-**Esperado:** la lente de dos casquetes con centros a d = 20,6155 mm: π(4r + d)(2r − d)² / 12 = 9897,866 mm³. **Obtenido:** 9898,405 mm³ (+0,539). Unir da 57122,777 y cortar 23612,455: los dos cierran con la fórmula. Distancias de 10, 20, 30 mm: −0,532, +0,094, +0,172; de 7,07 y 39 mm: 0.
+**Esperado:** quitar 122,5 mm³ (media esfera menos el casquete que pasa al hueco). **Obtenido:** quita 103,79 mm³, válido y sin aviso; el común da 121,97.
 
-**Causa:** sin leer. `volumen` y `volumen_exacto` dan lo mismo, así que si el error es de la integración de las dos caras trimadas, está en las dos. **Esquive:** ninguno hace falta; para comprobar, medir con una malla. **Prueba propuesta:** la lente de arriba contra la fórmula, tolerancia 1e-6.
-
-### B-128 · Cortar o unir con un cuerpo de ~1 µm deja autointersecciones sin avisar
-
-**Gravedad:** baja (cuerpos de 1 µm son raros; pasa si una cota paramétrica cae casi a cero). **Entorno:** OmniCAD 2d8212e, Windows, API sin ventana. **Estado:** reproducido 2 veces (`evidencias/tortura_2026-11-01/repro3.py`).
-
-**Qué hice:** `create_box length=40 width=40 height=40 name=A`; `create_box length=1e-6 width=1e-6 height=1e-6 x=20 y=20 z=20 name=B` (en medio de una arista vertical de A); `boolean_operation target=A tools=["B"] operation=cut` (y otra vez con `join`); `check_geometry`.
-
-**Esperado:** un cuerpo limpio, o un aviso. **Obtenido:** ok, `avisos: []`, volumen 64000, `valid: true`, `self_intersections: 1`. Con B en (20, 0, 20) y `join`: 6 autointersecciones; con B en (0, 0, 20) y `join`: sí avisa («dejó el cuerpo partido»). Con 1e-4 y 1e-5: solo advertencias `tiny_edge`.
-
-**Causa probable (leída):** `_problema_booleana` compara volúmenes, aristas libres / no manifold y validez, no autointersecciones. **Esquive:** no usar cuerpos menores de 1e-4 mm; correr `check_geometry` tras la operación. **Prueba propuesta:** el caso de arriba en `tests/`, esperando un aviso o un error.
-
-### B-127 · Una herramienta repetida en `boolean_operation` da «Error inesperado: 'op2.c1'»
-
-**Gravedad:** baja (el documento no se toca). **Entorno:** OmniCAD 2d8212e, Windows, API sin ventana. **Estado:** reproducido 2 veces (`repro4.py`).
-
-**Qué hice:** `create_box length=40 width=40 height=40 name=A`; `create_box length=10 width=10 height=10 x=20 name=B`; `boolean_operation target=A tools=["B","B"] operation=join` (y con `["B","b"]`, `operation=cut`).
-
-**Esperado:** un error claro («la herramienta B está repetida») o que ignore el duplicado. **Obtenido:** `OPERATION_FAILED … Error inesperado: 'op2.c1'` y un `KeyError` en el log.
-
-**Causa probable (leída):** `operaciones.py:1264` hace `del estado.cuerpos[h.id]` por cada herramienta; con la lista repetida borra dos veces la misma. **Esquive:** no repetir. **Prueba propuesta:** el caso de arriba, esperando el mismo resultado que con `["B"]`.
-
-### B-126 · Intersecar deja aristas no múltiples sin avisar
-
-**Gravedad:** media (el sólido sigue las operaciones siguientes con una arista que une más de dos caras). **Entorno:** OmniCAD 2d8212e, Windows, API sin ventana. **Estado:** reproducido 2 veces (`repro6.py`, y la celda hueca × agujeros / coplanar de la matriz en `resultados/bool.json`).
-
-**Qué hice:** `create_box length=40 width=40 height=20 x=0 z=0 name=A`; `shell body=A faces=">Z" thickness=3`; `create_box length=40 width=40 height=20 x=20 z=0 name=B`; `create_hole face=">Z" body=B diameter=6 through_all=True points=[[8,-12],[8,0],[8,12],[20,-12],[20,0],[20,12],[32,-12],[32,0],[32,12]]`; `boolean_operation target=A tools=["B"] operation=intersect`.
-
-**Esperado:** un sólido sin aristas compartidas por más de dos caras, o un aviso. **Obtenido:** ok, `avisos: []`, 1 cuerpo de 5071,301 mm³ (cortar da 7276,699 = 12348 − 5071,301, el volumen cierra), `check_geometry`: `valid: true`, `non_manifold_edges: 3`.
-
-**Causa:** sin leer. **Esquive:** `check_geometry` tras intersecar. **Prueba propuesta:** el caso de arriba, esperando un aviso o 0 aristas no manifold.
-
-### B-125 · Unir dos toros con ≤ 1e-4 mm de solape pierde uno entero sin avisar
-
-**Gravedad:** media (pierde material sin error, pero hace falta un contacto casi tangente; con 1e-3 de solape anda). **Entorno:** OmniCAD 2d8212e, Windows, API sin ventana. **Estado:** reproducido 2 veces y en la matriz de booleanas (`repro6.py`, `resultados/repro6.txt`).
-
-**Qué hice:** `create_torus major_radius=14 minor_radius=6 x=0 z=10 name=A`; `create_torus major_radius=14 minor_radius=6 x=39.9999 z=10 name=B`; `boolean_operation target=A tools=["B"] operation=join`.
-
-**Esperado:** ~19897,12 mm³ (la suma menos una lente casi nula). **Obtenido:** ok, `avisos: []`, 1 cuerpo, 9948,561 mm³ (un toro), `valid: true`. Con solapes de 1e-6, 1e-5 y 1e-4 igual; con 1e-3, 19897,119 correcto. Cilindros y cajas tangentes sí avisan.
-
-**Causa probable (leída):** `_problema_booleana` da por creíble para «unir» todo volumen entre max(VA, VB) y VA + VB: un resultado igual a un solo cuerpo cae justo en el borde de ese rango. **Esquive:** solapar ≥ 0,001 mm o comparar el volumen tras unir. **Prueba propuesta:** el caso de arriba, esperando el volumen de la suma (o error / aviso).
+**Causa probable (leída):** el primer reintento creíble gana. `_comun_desmentido` deja pasar lo que difiere menos de 1/4 de la pieza chica, porque con 16 muestras no se puede afirmar menos. Reordenar `_REINTENTOS_BOOLEANA` podría resolverlo, pero cambia recetas que hoy dan bien. También: en ese mismo banco, 1 caso de 300 (el 60) da mal cortando de a una, y 3 terminan en error claro. **Esquive:** mover la esfera una milésima. **Prueba propuesta:** el caso de arriba, esperando 122,5 mm³ con tolerancia 1 mm³.
 
 ### B-122 · Las clases de las tablas de Fusion no modelan el Ø mayor del agujero ni el Ø menor del eje
 

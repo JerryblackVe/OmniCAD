@@ -44,6 +44,25 @@ Quedan afuera:
 - Baja sin turno esta noche: H-54.
 - Espera decisión: B-121 (cambiaría lo que dan las recetas guardadas).
 
+## 0b. Correcciones pedidas después de la tortura (2026-11-01, 07:20)
+
+Gerardo pidió corregir la lista de la tortura. Corre en paralelo, sin commitear:
+- **A** (Opus alto): B-125, B-126, B-128 y T-20. Suma tests de booleanas; repetir `scripts/bench_booleana.py todo`.
+- **B** (Sonnet alto): B-127, B-129, T-19, T-21, T-22 y T-23.
+- **Tortura** `local_ed211518-d842-489b-947c-66e3c52aabfc` (Opus alto): RS-X1, trabajador persistente. Toca recálculo, caché y cancelar.
+
+Al terminar, en este orden:
+1. **CONSTRUIR** (Opus alto, en cola): CON-1 a CON-8, B-130 y B-131, con las 20 herramientas. Pedido literal en `evidencias/construir_2026-11-01/pedido.md`, especificación en `docs/brechas_construir.md`. Suma la pieza `construir` a `todo.py` y una pieza real. Reusa una sesión libre; toca paneles, `ui/comando.py`, API y operaciones, así que no corre junto a otra sesión en esos archivos. Lo que deja sin probar lo anota en la sección 3d.
+2. **INSPECCIONAR** (Opus alto, en cola): INS-1 a INS-8 y la parte de P-25f de Sustainability Insights y grupos de caras de malla, con las 15 herramientas. Pedido literal en `evidencias/inspeccionar_2026-11-01/pedido.md`, especificación en `docs/brechas_inspeccionar.md`. Va después de CONSTRUIR, porque INS-8 reusa el panel del SCU y las dos tocan `ui/comando.py`. Suma la pieza `inspeccionar` a `todo.py`. Lo que deja sin probar lo anota en la sección 3e.
+3. **Comparación con Fusion real** (en cola): abrir Fusion, pasar de una vez B-134, B-118, B-122, BOC-50, BOC-76, BOC-79, BOC-80, PAT-1, SUP-23 y la sección «Pendiente de comparar» de `docs/brechas_parametros.md`, y cerrarlo al terminar. Regla de Gerardo: Fusion queda cerrado salvo cuando se usa, para ahorrar memoria; `ECONNREFUSED` en `127.0.0.1:27182` quiere decir cerrado. Va sin pruebas pesadas al mismo tiempo y antes del texto en curva, que necesita la respuesta de B-134.
+4. **Texto en curva** (Opus alto, en cola): B-132, B-133, B-135, B-136, B-137, TXT-8 y TXT-9, y B-134 resuelto o documentado. Pedido literal en `evidencias/texto_curva_2026-11-01/pedido.md`, con su video. Va después de INSPECCIONAR porque comparte `ui/comando.py`, `ui/visor3d.py` y `ui/ventana.py`. ⚠ B-134 no cambia el disco sin Fusion real o el OK de Gerardo.
+5. **Parámetros** (Opus alto, en cola): B-138 a B-143 y PAR-1 a PAR-11. Pedido literal en `evidencias/parametros_2026-11-01/pedido.md`, especificación en `docs/brechas_parametros.md`. Va después del texto en curva porque comparte `ui/comando.py` y `ui/editor_boceto.py`. Su paso 2 usa los resultados de la pasada con Fusion, ya anotados en la especificación; solo vuelve a abrir Fusion si falta algún dato. Suma una pieza nueva a `todo.py`.
+6. **Reconstruir sólido, fases 0 a 3** (Fable alto, en cola): RI-1, F10, SC13, F11 y RI-2. Pedido literal en `evidencias/reconstruir_2026-11-01/pedido.md`, plan en `docs/plan_reconstruir_solido.md`, STL de referencia de Gerardo en su carpeta del Escritorio. Suma `compare_to_mesh`, `analyze_mesh_features`, `reconstruct_from_mesh`, el mapa de color y el banco de 30 piezas. Va después de Parámetros porque el mapa de color entra en INSPECCIONAR y es la tarea más larga.
+7. Repetir la tortura con 200 pasos y cadena de 200, más una pasada con la ventana real, que quedaron sin probar.
+8. Cierre completo, commits y push solo con el «sí» de Gerardo.
+
+B-129 espera a que A libere `nucleo/geometria.py`: `Eps=1e-8` en `geo._integral` baja el error de +0,539 a +0,004 mm³.
+
 ## 1. Lo último que estuvo verde (referencia, no vale como cierre)
 
 Pasada sobre `3c7ad28`, 2026-10-31 (anterior a restricciones y patrones del boceto):
@@ -197,6 +216,13 @@ El orden que manda desde ahora es la sección 0; las tandas 3 y 4 quedaron dentr
 
 Cada sesión anota acá lo que deja sin probar.
 
+- **B-125, B-126, B-128 y T-20: lo que queda sin probar.** Corrió verde: ruff, `test_booleanas_tortura`, `test_b39_*`, `test_documento`, `test_api_solido*`, `test_api_documento`, `test_hallazgos_tortura`, `test_revision`, `test_motor`, `test_paridad_motor` y `test_consultas_motor`. Falta:
+  - La suite completa y la prueba de humo: `geo.booleano` y `_problema_booleana` los usa casi todo el núcleo, y ahora un resultado desmentido por los puntos termina en error claro donde antes pasaba callado. Cualquier rojo nuevo con «los puntos dan cerca de» se mira primero como geometría que ya estaba mal.
+  - `scripts/bench_booleana.py todo` con la PC libre, contra 2,50 / 2,48 / 1,95 s de placa3000.
+  - `python scripts/fuzz_b39.py --casos 4000` completo: la comprobación nueva cambia cuáles resultados pasan.
+  - Abrir recetas reales con Combinar › Cortar de varias herramientas y comparar cuerpos y referencias: el camino de una pasada solo se probó con cajas, cilindros, esferas y toros.
+  - Sin verificar en Fusion real: qué hace con una herramienta de 1e-6 mm y con una arista pellizcada (B-126). No se pudo: Fusion no conectó.
+
 - **Bloque 6, CAP-13 y SUP-13: lo que queda sin probar.** Corrió verde: ruff de lo tocado, `test_herramientas_solido`, `test_superficie_guias`, `test_sol09_solevacion`, `test_sol15_bocetos`, los tests de API, comandos y documentación, y las piezas `herramientas_solido` y `superficie_guias` en ventana transparente. Recetas viejas: comparadas contra `git HEAD`, 10 casos con diferencia 0. Falta de noche:
   - La suite completa y la prueba de humo: se tocó `nucleo/superficies.py` (`solevar_superficie`, `_solevar_con_rieles`), `nucleo/editar_cara.py`, `nucleo/solidos_modificar.py` (`desfasar_caras`) y `ui/comandos/editar_cara.py`.
   - `herramientas_solido` con `--ventana visible` una vez, y mirar `capturas/editar_cara_contorno.png`, `editar_cara_alt.png` y `panel_editar_cara_espaciado.png`. En la pieza Alt se simula solo la lectura de `keyboardModifiers` (el `sendEvent` no la actualiza): falta un Alt de teclado real al arrastrar la tríada, y ver que Windows no abra el menú de la ventana.
@@ -240,6 +266,22 @@ Cada sesión anota acá lo que deja sin probar.
   - Sin verificar en Fusion real (el MCP no conecta): si al arrastrar un hijo sin unión dentro de un subensamblaje con unión Fusion lo mueve solo (acá, si el hijo existía cuando se creó la unión del padre, arrastra esa unión; `posicion.py`, shortcut) y si Capturar / Revertir de un padre alcanzan a los hijos.
   - No cubierto: un subensamblaje de tres niveles con uniones en cada nivel y un lazo cerrado; renderizar (`get_viewport_image`) con `component_colors` sigue pintando por componente directo, no por familia; `Insertar diseño` de un `.omnicad` con subensamblajes aplana en un componente (como antes).
 
+- **Seis hallazgos menores de la tortura (B-127, T-19, T-22 y T-23 resueltos; T-21 Parcial; B-129 medido): lo que queda sin probar.** Corrió verde: ruff y 244 tests con `-W error` (`test_tortura_menores` 22, sólido, ensamble, tortura, revisión) más cuatro tandas de archivos vecinos. Falta:
+  - La suite completa y la prueba de humo: se tocaron `api/registro.py` (todo parámetro numérico no finito se rechaza), `timeline/operaciones.py` (`aplicar_resultado`, `OpCombinar`), `nucleo/revision.py`, `api/herramientas_solido.py`, `herramientas_documento.py` y `herramientas_inspeccion.py`. Ninguna pieza de ventana se corrió.
+  - ⚠ T-22 sin comprobar en Fusion real (la ayuda no lo dice y el MCP no conecta): Extruir y Crear caja con Intersecar sin nada en común ahora fallan igual que Combinar. Los paneles Extruir y Crear caja no se probaron con ese caso en la ventana: el error tiene que salir en el panel sin cerrarlo y sin borrar el cuerpo.
+  - T-23: un `nan` escrito como texto en un campo de expresión sigue diciendo «Nombre desconocido: 'nan'»; los `nan` dentro de listas (puntos, desfases) los valida cada herramienta.
+  - T-21: la primera revisión de cada rosca distinta sigue esperando 10 s (con 3 roscas se agota el presupuesto de 30 s); la memoria guarda 16 formas, vence a los 5 minutos y se pierde al cerrar la app. La revisión de la ventana (Inspeccionar › Revisar geometría) con un cuerpo roscado no se probó.
+  - T-19, segunda tanda: `_r_chico` también en el campo `volume` de `check_geometry`, malla, lista de materiales, interferencias (`check_interference` y el paso de ensamble), `create_shaft` y `get_sheet_metal_info`. Tienen test `check_geometry`, la lista de materiales, `check_interference` y `get_mesh_info`; `create_shaft`, `get_sheet_metal_info` y el paso de ensamble no tienen uno propio. Siguen con `_r` los volúmenes de `herramientas_grafo.py:169` y de `herramientas_dev.py`.
+  - B-129 (resuelto, segunda versión): `geo._propiedades` integra el volumen con `Eps` = 1e-8 solo si la forma tiene hasta 300 caras y todas sus caras libres son B-spline de hasta 170 polos (`_apta_para_integral_fina`), y en ese caso no corre la malla de control. La primera versión (hasta 64 caras) erraba en piezas reales: en EXTRUSOR XOX.f3z la adaptativa daba -10 % y -3,7 % en tornillos de 500 a 750 polos y movía una pieza de lugar (65 componentes movidos en vez de 64). Falta: la suite completa y la prueba de humo (corrieron `test_f3d_reales` y 1.394 tests vecinos). los volúmenes de piezas libres con 170 polos o menos cambian hasta 1e-4 respecto de antes (el agujero roscado ciego 2288,6556 → 2288,7455 y la tuerca de `test_b70_pasante` 3234,8859 → 3234,928, ambos igual a la cuenta a mano o a Eps 1e-12).
+
+- **RS-X1, trabajador persistente (sin commitear en `main`): lo que queda sin probar.** Corrió verde: ruff, 377 tests de recálculo y las piezas `pasos_largos`, `auditoria_undo`, `timeline_menu`, `teclear`, `solido_modificar` y `ventana_uso` (1426 comprobaciones, 0 ✗, ventana transparente). Falta:
+  - La suite completa y la prueba de humo: se tocaron `nucleo/aislado.py`, `nucleo/intercambio.py`, `timeline/calculo_aislado.py`, `timeline/documento.py`, `ui/ventana.py` y `tests/conftest.py` (el fixture autouse cierra el trabajador tras cada prueba).
+  - Pieza nueva `pasos_largos` con `--ventana visible` una vez, y mirar `capturas/pasos_largos_caida.png`.
+  - ⚠ La app instalada: el hijo es `OmniCAD.exe --tarea-aislada trabajador <carpeta>`. Se probó el canal por entrada estándar con `pythonw.exe` (ejecutable de ventana, igual que el .exe), no con el instalador.
+  - ⚠ Una caída nativa real dentro del trabajador vivo (0xC0000005): se simuló con `_comando` falso y matando el proceso, que da «sin detalle» en lugar del mensaje de error nativo. Lo de B-48 sigue sin reproducirse a pedido.
+  - ⚠ Linux y macOS: el código de `_memoria_mb` y `os.fdopen(0)` solo corrió en Windows.
+  - Pasos 200 y cadena 200 de la saturación: ahora tienen sentido, antes tardaban demasiado.
+
 ## 3f. Tarea nueva: Proyectar y tarjeta de herramienta
 
 Hecho en `local_8d498caa-1987-4fbf-8d1c-464c5510c2a1` (Opus alto), sin commitear en `main`. Pedido en `evidencias/proyectar_2026-10-31/pedido.md`. Tests nuevos: `tests/test_proyectar_tarjeta.py`; pieza nueva: `proyectar_boceto` (en `PIEZAS`). Falta probar:
@@ -253,6 +295,30 @@ Hecho en `local_8d498caa-1987-4fbf-8d1c-464c5510c2a1` (Opus alto), sin commitear
 ## 3g. Extruir, B-116 y B-117: lo que queda sin probar
 
 Corrió verde: ruff, `tests/test_cuerpos_partidos.py`, 71 archivos de tests vinculados (cortes, recetas, patrones) y las piezas `herramientas_solido` y `solido_crear` en minimizada. Falta: (1) suite completa y prueba de humo, que nadie corrió con estos cambios; `todo.py` entero y los tests de boceto tampoco; (2) `herramientas_solido` en `--ventana visible`; (3) ventana chica 1024×640 y 800×520 del panel Extruir con Operación en Cortar (al pasar solo aparece el campo Objetos); (4) un cuerpo pesado de verdad: el proceso aparte se probó bajando `CARAS_PESADAS` a 1, no con 64 caras reales; (5) un corte que parte un cuerpo de chapa: la parte chica queda como sólido común, sin revisar contra Fusion.
+
+## 3d. Tarea nueva: CONSTRUIR (CON-1 a CON-8, B-130, B-131)
+
+Sin empezar. Cuando se haga, suma una pieza de ventana nueva en `todo.py` y los tests de cada fila. Nunca se probó CONSTRUIR en la ventana.
+
+## 3e. Tarea nueva: INSPECCIONAR (INS-1 a INS-8, P-25f)
+
+Sin empezar. Cuando se haga, suma una pieza de ventana nueva en `todo.py` y los tests de cada fila. Nunca se probó INSPECCIONAR en la ventana.
+
+## 3f. Tarea nueva: texto en curva y extrusión (B-132 a B-137, TXT-8, TXT-9)
+
+Sin empezar. Cuando se haga, suma a la pieza de boceto: texto sobre un círculo, deslizarlo, elegir el texto entero, extruir y cancelar. Falta comprobar en Fusion real si el texto parte otras curvas.
+
+## 3g. Tarea nueva: parámetros (PAR-1 a PAR-11, B-138 a B-143)
+
+Sin empezar. Cuando se haga, suma una pieza de ventana nueva en `todo.py` y corre `test_parametros.py`, `test_api_parametros.py` y los de boceto: el evaluador lo usan todos los pasos. Falta la comparación en Fusion real listada en `docs/brechas_parametros.md`.
+
+## 3h. Tarea nueva: reconstruir sólido (RI-1 a RI-6, F10, F11)
+
+Sin empezar: solo hay plan. Cada fase suma sus tests, y el banco de RI-1 corre de noche.
+
+## 3i. Tarea nueva: escanear con el celular (ESC-1 a ESC-7)
+
+Upgrade a futuro: no entra en las pruebas hasta que Gerardo lo pida.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

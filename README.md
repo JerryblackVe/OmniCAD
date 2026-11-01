@@ -142,6 +142,8 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Idioma:** español e inglés en todo (interfaz, mensajes, herramientas y documentación); primer arranque guiado.
 - **Integración:** Blender en los dos sentidos; conectar más agentes de IA.
 - **Asistente IA dentro de la app:** un chat que explica, muestra y diseña con vos, con clave de API o con tu suscripción de Claude Code o Codex.
+- **Reconstruir sólido:** convertir un STL, OBJ o 3MF en una pieza nueva, limpia y paramétrica, con o sin IA.
+- **Escanear con el celular:** filmar una pieza y recibirla en OmniCAD lista para reconstruir.
 - **Render:** materiales, colores e iluminación; ideas de KeyShot y V-Ray.
 - **Vectores y texto:** curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
 - **Ensamblajes:** activar un componente, conjuntos de contacto, más modos de posición y límites de las uniones, animación, simulaciones y movimiento de piezas.

@@ -108,6 +108,81 @@ Abierto 0 · Parcial 3 · Bloqueado 0.
 | SOL-22 | Retícula volumétrica (giroide o cruz) dentro de un cuerpo | Parcial | Alta | Ya están Cruz, Celda X, X 2.5D y a medida (sólido; solidez hasta donde la geometría de la celda llega: la Celda X llega a 99 %, la Cruz a 90 % y no a 95 %), Gyroid, Schwarz P y Schwarz D (malla, también sobre una malla cerrada), solidez en gradiente por una ruta, zona de desfase con mezcla y mover/girar las celdas. Quedan aproximaciones con su salida: la malla achaflana las aristas vivas un paso de grilla (≈3 % de volumen en un cilindro a 2 mm; se afina con `resolution` a costa de tiempo y memoria); en 2.5D con solidez variable el espesor cambia por capa de celdas, no de forma continua; con solidez variable las barras no se unen punta a punta y se llega antes al tope de 800 barras (subir la celda). | omnicad/nucleo/reticula.py; tests/test_sol22_reticula.py | 2026-10-25 |
 | SOL-24 | Reconocer funciones (Find Features) en cuerpos importados | Parcial | Muy alta | Rehace como pasos del timeline (`rebuild_features`, verificado por volumen y caja) los agujeros, empalmes y chaflanes. La extrusión (un prisma, con sus agujeros pasantes en el perfil) también se rehace como boceto + extrusión (`rebuild_features types=[extrude]`). Revoluciones, simetrías y patrones se reconocen y se informan, pero no se rehacen: la revolución necesita cortar el perfil por el eje (un sólido que contiene al eje da un perfil que lo cruza y `revolve` lo rechaza) y los patrones exigirían quitar copias y rearmarlas con su patrón. Faltan simetría en planos que no sean X, Y o Z por el centro, patrones radiales y extrusiones escalonadas. | omnicad/nucleo/reconocer_funciones.py; tests/test_sol24_reconocer_funciones.py | 2026-10-25 |
 
+## CONSTRUIR contra capturas de Fusion (2026-11-01)
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| CON-1 | Panel único «Geometría de construcción» con Tipo y Método | Abierto | Alta | Un solo panel para planos, ejes y puntos; el menú lo abre con el método puesto. | docs/brechas_construir.md § CON-1; ui/comandos/construir.py (19 paneles) | 2026-11-01 |
+| CON-2 | Plano de desfase: Al objeto, y campo Desfase en los métodos de plano | Abierto | Media | Extensión Al objeto asociada al punto; Desfase en 6 métodos, también en la API. | docs/brechas_construir.md § CON-2 | 2026-11-01 |
+| CON-3 | Redimensionar y Tipo de extensión en planos y ejes | Abierto | Media | Predeterminado / Extendido guardado en el paso, y medidas del plano y largo del eje. | docs/brechas_construir.md § CON-3 | 2026-11-01 |
+| CON-4 | Plano y Eje perpendicular como en Fusion | Abierto | Alta | Dirección U/V, lugar tocado, caras curvas, Objeto de referencia opcional, sin romper pasos viejos. | docs/brechas_construir.md § CON-4; api/herramientas_construccion.py (exige 2 referencias) | 2026-11-01 |
+| CON-5 | Plano y Punto en ruta: tipos de distancia, eje como ruta y cadena | Abierto | Media | Proporcional, Absoluto o Físico, Al objeto, eje de construcción y Cadena tangente. | docs/brechas_construir.md § CON-5 | 2026-11-01 |
+| CON-6 | SCU: Forzar, Alineación de Z y X, asas y panel de información | Abierto | Media | Flujo de Fusion; hoy el panel exige Eje X y la API no. | docs/brechas_construir.md § CON-6; ui/comandos/construir.py (clase SCU) | 2026-11-01 |
+| CON-7 | Puntos de forzado en CONSTRUIR | Abierto | Alta | Centros de cara y de arista y puntos tangenciales, en ventana y API. | docs/brechas_construir.md § CON-7 | 2026-11-01 |
+| CON-8 | Nombres de planos en el lienzo y Visibilidad de objetos | Abierto | Media | Etiquetas y dos casillas, con herramienta en la API. | docs/brechas_construir.md § CON-8; sin etiquetas de plano en ui/ (grep) | 2026-11-01 |
+
+## INSPECCIONAR contra capturas de Fusion (2026-11-01)
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| INS-1 | Análisis de mapas de entorno: el panel no tiene campos | Abierto | Media | Cuerpos, 13 entornos, Rotar, casilla de reflejo y cromo temporal, también en la API. | docs/brechas_inspeccionar.md § INS-1; ui/comandos/inspeccionar.py (`MapaEntorno.campos` vacío) | 2026-11-01 |
+| INS-2 | Medir: filtro, Precisión, Unidades secundarias, Borrar selección y puntos de forzado | Abierto | Media | Panel de Fusion, XYZ Delta, resaltar y copiar valores. | docs/brechas_inspeccionar.md § INS-2; ui/comandos/inspeccionar.py (`Medir`) | 2026-11-01 |
+| INS-3 | Interferencia: Calcular, tabla de resultados y quitar volumen | Abierto | Media | Diálogo ordenable, Mostrar todas, componentes y Quitar volumen. | docs/brechas_inspeccionar.md § INS-3; ui/comandos/inspeccionar.py (`Interferencia`) | 2026-11-01 |
+| INS-4 | Ángulo de desmoldeo: rango de dos topes y Zona de tolerancia | Abierto | Media | Campo de dos valores, Tolerancia, Opacidad y Calidad alta. | docs/brechas_inspeccionar.md § INS-4 | 2026-11-01 |
+| INS-5 | Accesibilidad y Radio mínimo: opciones de Fusion | Abierto | Media | Opacidad y Cambiar dirección; Radio máximo, Radio mínimo y Bordes afilados. | docs/brechas_inspeccionar.md § INS-5 | 2026-11-01 |
+| INS-6 | Ajustes de Curvatura en peine, Isocurva y Sección | Abierto | Baja | Valores por defecto, deslizadores y selección de caras. | docs/brechas_inspeccionar.md § INS-6 | 2026-11-01 |
+| INS-7 | Centro de masa en la carpeta Análisis y color de componente por clic derecho | Abierto | Media | Centro asociativo, medible y borrable; Color del componente de ciclo. | docs/brechas_inspeccionar.md § INS-7; ui/comandos/inspeccionar.py (`CentroMasa` con SIN_OP) | 2026-11-01 |
+| INS-8 | Paneles de información con Consejos y Más información | Abierto | Baja | Un componente compartido con el SCU (CON-6). | docs/brechas_inspeccionar.md § INS-8 | 2026-11-01 |
+
+## Texto en curva (video del 2026-11-01)
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| TXT-8 | Con Extruir abierto, elegir un boceto en el navegador o el timeline toma todos sus perfiles, texto incluido | Abierto | Media | Hoy navegador y timeline no alimentan la selección del comando. | ayuda `Extrude reference` § Profiles; ui/ventana.py:2066 es el único `entidad_elegida.emit` fuera del visor | 2026-11-01 |
+
+## Parámetros contra Fusion (2026-11-01)
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| PAR-1 | Expresiones de Fusion: `%`, `^`, `;`, comparaciones, `if`, `and`, `or`, `not`, 3 constantes y 15 funciones | Abierto | Alta | Lector propio sin `eval`; recetas viejas con `max(a, b)` o un parámetro `E` siguen andando. | docs/brechas_parametros.md § PAR-1; timeline/parametros.py usa `ast`; 76 expresiones probadas por API | 2026-11-01 |
+| PAR-2 | Todas las unidades de Fusion y control de magnitud | Abierto | Alta | Las 35 familias de `Unit types`, con yd, mi, mil, micron, `"` y grad. | docs/brechas_parametros.md § PAR-2; timeline/parametros.py:30 (`UNIDADES`, 7 unidades) | 2026-11-01 |
+| PAR-3 | Tabla de parámetros con grupos y columnas de Fusion | Abierto | Alta | Parámetro, Nombre, Unidad, Expresión, Valor y Comentarios; Favoritos, usuario y modelo plegables. | docs/brechas_parametros.md § PAR-3; ui/dialogos.py:185 | 2026-11-01 |
+| PAR-4 | Parámetros del modelo: cada operación crea el suyo | Abierto | Muy alta | Listar, editar desde la tabla y citar en otra expresión, sin romper recetas viejas. | docs/brechas_parametros.md § PAR-4; `get_parameters` no muestra nada tras extruir 15 mm, por API | 2026-11-01 |
+| PAR-5 | Parámetros favoritos | Abierto | Media | Estrella, grupo arriba, filtro, y agregado solo al nombrar uno. | docs/brechas_parametros.md § PAR-5; sin código de favoritos de parámetros (grep) | 2026-11-01 |
+| PAR-6 | Filtros, búsqueda y orden de la tabla de parámetros | Abierto | Media | Orden temporal, filtro de usuario, filtro de favoritos, búsqueda y orden por columna. | docs/brechas_parametros.md § PAR-6; ui/dialogos.py:183 | 2026-11-01 |
+| PAR-7 | Cálculo automático mientras se editan parámetros | Abierto | Alta | Diálogo no modal con casilla. Comprobar Apply en Fusion: la ayuda y las capturas no coinciden. | docs/brechas_parametros.md § PAR-7; ui/ventana.py:2685 (`dlg.exec()`) | 2026-11-01 |
+| PAR-8 | Diálogo Agregar parámetro de usuario y botones de Fusion | Abierto | Media | Diálogo aparte, íconos, papelera y panel de información. | docs/brechas_parametros.md § PAR-8; ui/dialogos.py:202 | 2026-11-01 |
+| PAR-9 | Crear parámetros en cualquier campo y autocompletar | Abierto | Media | `Ancho=50` en todo campo de expresión, lista de nombres y alternar expresión y valor. | docs/brechas_parametros.md § PAR-9; `separar_nombre` solo en ui/editor_boceto.py; `alto=15 mm` falla en extrude, por API | 2026-11-01 |
+| PAR-10 | Importar con Parámetros seleccionados | Abierto | Baja | Casillas por parámetro y selección por nombres en `import_parameters`. | docs/brechas_parametros.md § PAR-10; ui/dialogos.py:254 | 2026-11-01 |
+| PAR-11 | Parámetros de texto con llaves | Abierto | Media | Resolver `{PartNumber}` y expresiones dentro de otro parámetro. | docs/brechas_parametros.md § PAR-11; `Pieza {PartNumber}` queda literal, por API | 2026-11-01 |
+
+## Reconstruir sólido desde una malla (2026-11-01)
+
+Plan: [plan_reconstruir_solido.md](../plan_reconstruir_solido.md).
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| RI-1 | Banco de piezas para medir la reconstrucción de mallas | Abierto | Media | 30 piezas con respuesta conocida, STL reales y un script con tabla de resultados. | docs/plan_reconstruir_solido.md § Fases | 2026-11-01 |
+| RI-2 | Reconstruir un sólido desde una malla, sin IA | Abierto | Muy alta | `reconstruct_from_mesh`: cortes, extrusión, revolución, agujeros, empalmes y patrones. Depende de F10 y F11. | docs/plan_reconstruir_solido.md § Fases; `convert_mesh` no reconoce cilindros (api/herramientas_malla.py:431) | 2026-11-01 |
+| RI-3 | Comando Reconstruir sólido en MALLA | Abierto | Alta | Los 3 estados aprobados: configurar, calculando y resultado, con Otra vuelta. | docs/plan_reconstruir_solido.md § Interfaz aprobada | 2026-11-01 |
+| RI-4 | Resultado paramétrico en la reconstrucción | Abierto | Alta | Bocetos acotados, parámetros con nombre, patrones y simetrías. | docs/plan_reconstruir_solido.md § Opción del usuario | 2026-11-01 |
+| RI-5 | IA en la reconstrucción | Abierto | Alta | Ficha, vistas y cortes a la IA, vueltas de corrección y tope de gasto. | docs/plan_reconstruir_solido.md § Idea central; omnicad/asistente/ | 2026-11-01 |
+| RI-6 | Superficies libres en la reconstrucción | Abierto | Muy alta | Se decide con datos del banco. | docs/plan_reconstruir_solido.md § Fases | 2026-11-01 |
+
+## Escanear con el celular (2026-11-01)
+
+Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_escaneo_celular.md](../plan_escaneo_celular.md).
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| ESC-1 | Prueba real de escaneo con celular | Bloqueado | Baja | 3 piezas conocidas con una app gratis, medidas contra calibre. Decide si la función sigue. | docs/plan_escaneo_celular.md § Fases | 2026-11-01 |
+| ESC-2 | Importar un escaneo: fondo y escala | Bloqueado | Media | Comando Escanear pieza con archivos del celular, quitar fondo y escalar con una medida. | docs/plan_escaneo_celular.md § Fases; `insert_file` ya abre .stl, .obj, .3mf y .ply (api/herramientas_documento.py:345) | 2026-11-01 |
+| ESC-3 | Hoja de escaneo con marcadores | Bloqueado | Media | PDF desde OmniCAD y detección automática de escala. | docs/plan_escaneo_celular.md § Lo que el celular no resuelve | 2026-11-01 |
+| ESC-4 | Video a cuadros nítidos con aviso de faltantes | Bloqueado | Media | Elegir cuadros, rechazar video movido y juntar dos pasadas. | docs/plan_escaneo_celular.md § Fases | 2026-11-01 |
+| ESC-5 | Motor local de video a malla | Bloqueado | Alta | Descarga opcional, proceso aparte y medición en esta PC. | docs/plan_escaneo_celular.md § Herramientas revisadas | 2026-11-01 |
+| ESC-6 | IA para guiar el escaneo | Bloqueado | Media | Guía de captura, medidas a confirmar con calibre y redondeo. | docs/plan_escaneo_celular.md § Lo que el celular no resuelve; depende de RI-5 | 2026-11-01 |
+| ESC-7 | Pasar el video del celular con QR | Bloqueado | Alta | Exige aprobar un servidor en la red local: los de hoy escuchan solo en 127.0.0.1 (AGENTS.md § Seguridad). | docs/plan_escaneo_celular.md § Decisiones | 2026-11-01 |
+
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 
 Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, vínculos, estudio de movimiento) con los artículos de la ayuda de Fusion (carpeta `fusion-assemble`), de probar unas 60 llamadas por API (`evidencias/ensamble_2026-10-25/a*.py`) y de usar la ventana real como una persona (`scripts/prueba_ui/ensamblar.py`, 224 comprobaciones). Lo que ya estaba cargado (P-25e, P-25e2, SC6, SC7, SC8, SC15, H-4, H-5, H-19, F8, P-6d) no se repite.
@@ -145,8 +220,8 @@ Abierto 5 · Parcial 7 · Bloqueado 4. Especificación: [brechas_freecad.md](../
 |---|---|---|---|---|---|---|
 | F6 | Rebanar: N cortes paralelos como curvas, caras o láminas | Abierto | Media | Operación y comando de serie de cortes paralelos con salida a bocetos o cuerpos finos | sin código (grep rebanar/slice); existen dividir_cuerpo y cortar_plano de malla | 2026-10-20 |
 | F10 | Mapa de desviación entre cuerpos o contra una malla | Abierto | Media | Comando INSPECCIONAR con escala de color, mín/máx y punto bajo el cursor | sin código (grep desviación solo halla parámetros de teselado) | 2026-10-20 |
-| F15 | Parámetros desde hoja CSV/XLSX | Abierto | Media | Importar y exportar parámetros y familias de piezas desde hoja de cálculo | sin código de importación (api/herramientas_parametros.py); ui/administrar.py solo exporta la lista de materiales; timeline/documento.py:168 tabla de configuraciones | 2026-10-20 |
-| F11 | Ajustar primitivas a una malla escaneada | Abierto | Alta | Detectar planos, cilindros y esferas y rearmar un sólido paramétrico | sin código (grep); existen grupos_caras y convertir_malla como base | 2026-10-20 |
+| F15 | Parámetros desde XLSX y familias de piezas desde hoja | Abierto | Media | El CSV ya anda: falta XLSX y las familias de piezas. | api/herramientas_parametros_csv.py y ui/dialogos.py:254 ya importan CSV; timeline/documento.py:168 tabla de configuraciones | 2026-11-01 |
+| F11 | Ajustar primitivas a una malla escaneada | Abierto | Alta | Detectar planos, cilindros y esferas y rearmar un sólido paramétrico. Fase 2 de docs/plan_reconstruir_solido.md. | sin código (grep); existen grupos_caras y convertir_malla como base | 2026-10-20 |
 | F13 | Estructura de perfiles con ingletes y lista de cortes | Abierto | Alta | Perfiles estándar a lo largo de rutas con ingletes automáticos y lista de cortes | sin código (grep); nucleo/superficies.py:525 aclara que no hay esquinas a inglete | 2026-10-20 |
 | F1 | Engranajes, cremallera y rueda de cadena | Parcial | Baja | Polea dentada (correa); valores ISO 606 de la rueda de cadena por verificar | ed0c4dc; nucleo/engranajes.py; timeline/ops_engranaje.py; ui/comandos/engranaje.py; api create_gear, create_gear_pair, create_rack, create_sprocket; tests/test_engranajes.py; tests/test_api_engranajes.py | 2026-10-20 |
 | F3 | Patrón en puntos y en ruta con giro | Parcial | Baja | Vista previa de las copias como fantasmas | c606f26; api point_pattern, path_pattern; ui/comandos/patrones.py; tests/test_patrones_avanzados.py::test_transformaciones_en_puntos; ::test_ruta_con_giro_progresivo; tests/test_patrones_solidos_semantica.py::test_patron_en_puntos_traslacion_igual_a_destino_menos_referencia | 2026-10-31 |
@@ -297,7 +372,7 @@ Abierto 13 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md]
 |---|---|---|---|---|---|---|
 | SC18 | Barrido de parámetros: variar un parámetro en un rango y medir volumen, masa o interferencia en cada valor | Abierto | Media | Todo. En SolidCraft es el comando `inspect.parameter_sweep`: recalcula el diseño con cada valor y devuelve la tabla. Acá sería una herramienta `parameter_sweep` (MCP/CLI) más un diálogo en INSPECCIONAR; reutiliza `set_parameter` sobre una copia y `get_physical_properties`. | grep parameter_sweep y barrido de parámetros sin resultados en clon/omnicad | 2026-10-26 |
 | SC9 | Timeline: carpetas de pasos y copiar/pegar pasos | Abierto | Media | Todo. | grep carpeta/copiar/pegar en ui/panel_timeline.py sin resultados | 2026-10-20 |
-| SC13 | Comparar cuerpos: desviación con mapa de color | Abierto | Media | Todo. | grep comparar/desviación entre cuerpos sin resultados | 2026-10-20 |
+| SC13 | Comparar cuerpos: desviación con mapa de color | Abierto | Media | Es la misma función que F10: se resuelven juntas. | grep comparar/desviación entre cuerpos sin resultados | 2026-10-20 |
 | SC14 | Importar .FCStd de FreeCAD | Abierto | Media | Leer el ZIP y los .brp con BRepTools.Read, con topes de seguridad. | grep FCStd sin resultados | 2026-10-20 |
 | SC15 | Exportar URDF desde un ensamble con uniones | Abierto | Media | Eslabones, masa, inercia y juntas con límites. | grep urdf sin resultados en clon/omnicad | 2026-10-20 |
 | SC2 | Robustez con semilla: generador de diseños y minimizador | Abierto | Alta | Generador aleatorio, chequeo de volumen, CLI omnicad fuzz. | grep fuzz sin resultados; solo tortura manual (tests/test_hallazgos_tortura.py) | 2026-10-20 |
