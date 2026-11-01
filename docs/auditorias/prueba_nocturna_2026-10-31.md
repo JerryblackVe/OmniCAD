@@ -8,7 +8,7 @@ Estado del código: `main` en `40a5fcf` (sin subir a origin) más lo que sigue s
 SUPERFICIE y ENSAMBLAR. Con las tres últimas juntas corrieron ruff (limpio) y seis archivos cruzados (`test_seguimiento`,
 `test_doc_agentes`, `test_claves_comandos`, `test_cobertura_ui_api`, `test_iconos_extra`, `test_iconos_gramatica`,
 `test_formulario_paneles`, `test_b105_panel_chico`): 952 OK. Con la segunda tanda (sección 3d): ruff limpio y `test_sol15_bocetos`
-más esos mismos archivos, 944 OK. Con BOC-52, 77 y 78: ruff limpio y esos mismos archivos, 946 OK. **No correr todavía: siguen Extruir, Proyectar y la programación de la sección 0.**
+más esos mismos archivos, 944 OK. Con BOC-52, 77 y 78: ruff limpio y esos mismos archivos, 946 OK. **La programación de la sección 0 terminó. Falta el push, que espera el «sí» de Gerardo, y refrescar la página de seguimiento después.**
 
 ## 0. Programación de la sesión nocturna (de menor a mayor complejidad)
 
@@ -25,7 +25,7 @@ Lanzada por Gerardo el 2026-10-31 a las 21:30. Extruir y Proyectar ya terminaron
 | 6 | Alta: sólido y superficie (**terminado**; SUP-13 queda Parcial; Opus alto alcanzó) | A | CAP-13, SUP-13, B-124 | Opus alto |
 | 7 | Alta: ensamble (**terminado**; ASM-16 y B-123 nuevos; Opus alto alcanzó) | B | ASM-15, B-108 | Opus alto |
 | 8 | Muy alta (**terminado**; ASM-9 queda Parcial, falta Activar componente; Fable alto alcanzó) | B | ASM-9 | Fable alto |
-| 9 | **Final** (cierre en curso desde las 03:35) | coordinador | Cierre completo, rojos, tortura, commits | — |
+| 9 | **Final** (**terminado** a las 07:10: cierre verde con 7567 tests, `test_motor` aparte OK, 41 piezas 0 ✗, humo y foco OK; tortura con 10 hallazgos, B-125 a B-129 y T-19 a T-23; commits hechos) | coordinador | Cierre completo, rojos, tortura, commits | — |
 
 Reglas de la noche:
 - El bloque 5 existe para proteger el trabajo: hoy hay más de 180 archivos sin commitear, y lo difícil (6 a 8) va encima de eso. Si ASM-9 sale mal, se descarta solo lo suyo.
@@ -262,16 +262,17 @@ Corrió verde: ruff, `tests/test_cuerpos_partidos.py`, 71 archivos de tests vinc
 | 8 | Ventana chica (1024×640 y 800×520) para los paneles NUEVOS (Desfase, patrones de sólidos, multitransformación) | punto 8 de la misma regla; `todo.py` lo cubre solo para las piezas ya escritas |
 | 11 | Relleno azul del perfil al dibujar | FU-5 (Sin verificar) |
 | 12 | Normal de las superficies nuevas (tubo extruido: ¿mira adentro?) | SUP-23 (Parcial: falta comprobarla en Fusion real) |
-| 13 | Cuellos O(n²) en máscara de aristas cóncavas y empalme, con un modelo grande | AUD-6 (medir antes de tocar) |
-| 14 | `scripts/bench_booleana.py todo` (tiempo de Nuevo/Unir/Cortar/Intersecar por etapa) sobre `main` final | pendiente desde la sesión anterior |
 | 15 | Sección del análisis: ¿`seccion()` ya evita recalcular el contorno? | CPP-P21 (Sin verificar) |
 
-## 5. Tortura de operaciones y booleanas (sesión `local_ed211518-d842-489b-947c-66e3c52aabfc`)
+## 5. Tortura de operaciones y booleanas (hecha el 2026-11-01)
 
-- Sesión idle, **sin enviarle el pedido nocturno** (espera el «dale» de Gerardo). Su tema: tiempos y
-  saturación de operaciones y booleanas. Evidencias previas en `evidencias/tortura_2026-10-28/`.
-- Correrla DESPUÉS del cierre (#1), no al mismo tiempo: cada caso pesado va en su proceso con tope de tiempo.
-- Si usa el documento de Gerardo: copia antes, comparar volumen y caja por cuerpo al terminar.
+- Corrió completa por la API sin ventana, sobre `main` en 2d8212e (evidencias en `evidencias/tortura_2026-11-01/`, fuera de git): `bench_booleana.py todo`, AUD-6, valores extremos, matriz de booleanas 8×8×8, historial, saturación, patrones de 10.000 copias en Idéntico, Ajustado y Optimizado, y B-48. Los hallazgos están en `docs/seguimiento/` (B-125 a B-129, T-19 a T-23, AUD-6 y RS-X1 con números).
+- Queda sin probar:
+  - Pasos 200 y cadena 200: con 100 pasos ya tarda 237 s (RS-X1); no tiene sentido medirlos antes de arreglar eso.
+  - Las booleanas con la ventana real (panel Extruir y Combinar tecleando valores extremos): todo se probó por la API.
+  - La matriz de booleanas corrió con una sola vuelta por celda: sus tiempos no son la mediana de 3.
+  - B-48 no se reprodujo (376 cambios a 146 pasos): sigue Parcial.
+- No se usó ningún documento de Gerardo.
 
 ## 6. Necesitan permiso o a una persona (no los puede hacer la sesión sola)
 
