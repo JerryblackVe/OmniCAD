@@ -36,8 +36,8 @@ Antes 300 s; ahora 23 s (mediana de tres corridas en proceso aparte: 22,5 / 22,9
 | Ubicar componentes (escena de 11 MB) | 3,8 |
 | `brep_a_texto` de los 6 cuerpos | 2,2 |
 
-Zstandard y SAB son datos puros: candidatos a Rust (regla de rendimiento de `CLAUDE.md`); el crate `ruzstd` es una
-dependencia nueva y pide permiso (P-11n).
+Zstandard ya se descomprime en Rust (`clon/rust/src/zstd.rs`, crate `ruzstd`, con respaldo en `zstd_puro.py`: BINCHA 6,9 s →
+0,09 s). SAB y la escena son datos puros: candidatos a Rust (regla de rendimiento de `CLAUDE.md`, P-11n).
 
 ## Bocetos
 

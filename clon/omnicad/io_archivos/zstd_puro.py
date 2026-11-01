@@ -11,6 +11,8 @@ Sin Qt.
 """
 import struct
 
+from .. import nativo
+
 try:                                         # Python 3.14+: el módulo de la biblioteca estándar
     from compression import zstd as _zstd_std
 except ImportError:                          # pragma: no cover - depende de la versión de Python
@@ -41,13 +43,20 @@ def descomprimir(datos, tope=None):
     """Descomprime una o varias tramas Zstandard seguidas. Devuelve bytes.
 
     Con `tope` falla apenas la salida pasa esa cantidad de bytes (zip bomb: un miembro que declara poco y se
-    expande a gigas). Con tope va siempre el decodificador propio: `compression.zstd.decompress` no tiene tope."""
+    expande a gigas). `compression.zstd.decompress` no tiene tope: con tope va el módulo Rust (RS-R1, ~60 veces más
+    rápido) y, si no está compilado, el decodificador propio."""
     datos = bytes(datos)
     if _zstd_std is not None and tope is None:
         try:
             return _zstd_std.decompress(datos)
         except Exception as e:  # noqa: BLE001 — el error de la biblioteca se traduce al nuestro
             raise ErrorZstd(f"Zstandard inválido: {e}") from None
+    rs = nativo.disponible()
+    if hasattr(rs, "zstd_descomprimir"):         # un .pyd viejo no la trae: rige Python
+        try:
+            return rs.zstd_descomprimir(datos, tope)
+        except ValueError as e:
+            raise ErrorZstd(str(e)) from None
     return _descomprimir_puro(datos, tope)
 
 
@@ -72,12 +81,18 @@ def _descomprimir_puro(datos, tope=None):
             raise ErrorZstd("Trama Zstandard truncada.")
         magico = struct.unpack_from("<I", datos, p)[0]
         if magico & 0xFFFFFFF0 == 0x184D2A50:            # trama salteable (metadatos): se ignora
-            tam = struct.unpack_from("<I", datos, p + 4)[0]
-            p += 8 + tam
+            if len(datos) - p < 8:
+                raise ErrorZstd("Trama Zstandard truncada.")
+            p += 8 + struct.unpack_from("<I", datos, p + 4)[0]
+            if p > len(datos):
+                raise ErrorZstd("Trama Zstandard truncada.")
             continue
         if magico != MAGICO:
             raise ErrorZstd("No es Zstandard (número mágico incorrecto).")
-        p = _trama(datos, p + 4, salida)
+        try:
+            p = _trama(datos, p + 4, salida)
+        except (IndexError, struct.error):                # datos cortados a mitad de un bloque
+            raise ErrorZstd("Trama Zstandard truncada.") from None
     return bytes(salida)
 
 

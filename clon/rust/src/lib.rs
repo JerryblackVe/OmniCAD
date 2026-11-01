@@ -3,8 +3,10 @@ use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, PyReadwriteArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+mod bvh;
 mod perfiles;
 mod spline;
+mod zstd;
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -199,5 +201,7 @@ fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(oclusion, m)?)?;
     m.add_function(wrap_pyfunction!(perfiles::arreglo_planar, m)?)?;
     m.add_function(wrap_pyfunction!(spline::spline_extremos, m)?)?;
+    m.add_function(wrap_pyfunction!(zstd::zstd_descomprimir, m)?)?;
+    m.add_class::<bvh::Bvh>()?;
     Ok(())
 }

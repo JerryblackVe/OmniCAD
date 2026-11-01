@@ -11,6 +11,12 @@ devuelve arrays. Sin módulo compilado se usa la referencia Python. `OMNICAD_SIN
   superpuestas, autocruces, elipses, un extremo libre a menos de 1e-4 mm de otra curva) devuelve error y rige el
   `Splitter` de siempre. Equivale al `Splitter` salvo en triples puntos casi concurrentes (< 1e-4 mm), donde éste funde
   con su tolerancia y el arreglo no: `tests/test_boc28_rust.py`. Pruebas de Rust: `cargo test`.
+- **Zstandard del `.f3d`** (`src/zstd.rs`, RS-R1): `zstd_descomprimir(datos, tope)` con el crate `ruzstd`; mismos bytes y errores que
+  `io_archivos/zstd_puro.py` (respaldo), con tope de salida contra zip bombs. Lo llama `zstd_puro.descomprimir`.
+- **BVH de triángulos** (`src/bvh.rs`, RS-R3): clase `Bvh(triángulos)` y `primer_choque(orígenes, direcciones, eps, det_abs,
+  det_rel)`: el primer triángulo que corta cada rayo, en lote y sin el GIL. Lo usan `nucleo/revision.py` (`primer_choque`,
+  `espesores`) y `ui/visor3d.py` / `ui/render.py` (picking), que guardan un BVH por cuerpo; respaldo numpy. Banco antes/después:
+  `scripts/bench_nativo.py`. No se agregó `rayon`: con un hilo, 2000 rayos a 251 k triángulos tardan menos de 5 ms.
 
 Con Rust y maturin **ya autorizados e instalados**, desde esta carpeta:
 
@@ -25,4 +31,4 @@ Las pruebas nativas se saltean si el módulo no está instalado. PyInstaller des
 submódulo del paquete y lleva el `.pyd`: la máquina donde se ejecuta la app no necesita Rust ni maturin.
 `Cargo.lock` fija las dependencias de compilación; `target/` y el binario quedan fuera de git.
 
-Base y resultados de T-18: `docs/informe_tortura_2026-10-17.md`.
+Base y resultados de T-18: `docs/auditorias/informe_tortura_2026-10-17.md`.

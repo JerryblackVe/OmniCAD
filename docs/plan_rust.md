@@ -13,8 +13,8 @@ de qué lenguaje va dónde y los arreglos P14–P24 de OpenCascade.
 Estado (2026-10-17): **primer módulo Rust implementado: R11**, rasterizador, sombras y SSAO del render CPU,
 en `clon/rust/` con PyO3/numpy; respaldo Python. Rust 1.99.1 ya estaba instalado; el usuario autorizó instalar
 maturin y descargar los crates. Medición: rasterizador 17×, API caja 2,129 → 1,139 s, reductor 4,928 → 4,313 s,
-PNG byte-idénticos. Detalle en `informe_tortura_2026-10-17.md`; comandos en `clon/rust/README.md`.
-El resto de este documento sigue siendo el plan de las próximas migraciones; R1 no se implementó: hoy el crate es un solo `clon/rust/src/lib.rs` (sin `src/zstd.rs`) y el descompresor sigue en Python puro (`io_archivos/zstd_puro.py`).
+PNG byte-idénticos. Detalle en `auditorias/informe_tortura_2026-10-17.md`; comandos en `clon/rust/README.md`.
+El resto de este documento sigue siendo el plan de las próximas migraciones; R1 (`src/zstd.rs`, crate `ruzstd`) y R3 (`src/bvh.rs`, sin `rayon`) se implementaron el 2026-10-31 con respaldo Python (`io_archivos/zstd_puro.py`, numpy); de R3 quedan los usuarios que se listan en `docs/seguimiento/mejoras.md` (RS-R3).
 
 Estado (2026-10-24): **segundo módulo Rust: R14**, arreglo planar de los perfiles de un boceto (`clon/rust/src/perfiles.rs`, BOC-28),
 con respaldo al `Splitter`. 200 «W» sobre un círculo (14,8 mil perfiles): `_detectar` de 3,9 s a 0,26 s. Detalle: sección 3 (R14) y `clon/rust/README.md`.
@@ -23,6 +23,13 @@ Estado (2026-10-19): **fases 0 y 5 hechas en Python** (sección 4): P1–P5, P10
 P24 quedaron cubiertos. Medido con `scripts/bench_rendimiento.py` (modos nuevos `memoria` e `interfaz`): arrastrar un
 punto del polígono de 24 en el editor 56 → 14 ms, hover de 1000 aristas 62 → 1 ms, editar un paso independiente de 4
 roscas M3 1,3 s → 1 ms. Faltan: P6 en un proceso aparte, P17, P18, P20, P21, P23 (detalle en `PROJECT_LOG.md`).
+
+Estado (2026-10-31): **pipeline de rendimiento nuevo en [auditorias/rust-pipeline-2026-10-31.md](auditorias/rust-pipeline-2026-10-31.md)**
+(mediciones de hoy, estado de cada R y P, fases, permisos y pruebas de aceptación; vale ese orden sobre el de la
+sección 7). Lo que cambió: la mayor ganancia medida no es Rust sino un trabajador persistente con memoria por paso
+(editar en proyectos de 60 pasos o más: 24 s → menos de 1 s en proceso, RS-X1); R3 (BVH) y R1 (Zstandard) subieron de
+prioridad con prototipos (800–3000× y 62×); R4 (solver) bajó (el polígono de 24 lados resuelve en 75 ms). Antes de
+implementar una fila de este plan, leer ese informe.
 
 ## 1. Resumen en una pantalla
 
@@ -89,7 +96,7 @@ por cuadro con datos chicos, la ganancia se la come el cruce y hay que pasarle l
 
 | # | Candidato | Dónde (hoy) | Hoy | Ganancia esperada | Riesgo | Depende de |
 |---|---|---|---|---|---|---|
-| R1 | **Descompresor Zstandard** (abierto: sigue en Python puro) | `io_archivos/zstd_puro.py:40-435`, lo llama `f3d_nativo.py:123-136` | Python puro, 1 MB/s comprimido; un `.f3d` de 20 MB ≈ 20 s. El venv es 3.12: nunca usa `compression.zstd` (3.14+) | 50–100× | Bajo (función `bytes→bytes`, crate `zstd`) | — |
+| R1 | **Descompresor Zstandard** (**HECHO 2026-10-31**, `rust/src/zstd.rs`; `zstd_puro.py` queda de respaldo) | `io_archivos/zstd_puro.py:40-435`, lo llama `f3d_nativo.py:123-136` | Python puro, 1 MB/s comprimido; un `.f3d` de 20 MB ≈ 20 s. El venv es 3.12: nunca usa `compression.zstd` (3.14+) | 50–100× | Bajo (función `bytes→bytes`, crate `zstd`) | — |
 | R2 | **Reducir malla (QEM)** | `malla.py:1363-1420`, `_Editor` 1140-1305, `_optimo_qem` 1308, `_cuadricas` 1331 | `heapq` + sets + numpy sobre arreglos de 3–12 elementos por colapso (~300 µs/colapso) | 20–100× | Medio (replicar penalización de bordes de grupo, condición de enlace, umbral anti-pliegue) | Núcleo half-edge (R7) |
 | R3 | **BVH de triángulos**: primer choque, cualquier choque, punto más cercano | `revision.py:477-588` (`espesores`, `primer_choque`), `analisis.py:705-787`, `malla.py:1472-1495`, `vaciar` 1944; picking en `ui/visor3d.py:151-164` | Möller-Trumbore en numpy, O(rayos × triángulos de la caja) | 20–100× y sin recortar rayos por fidelidad | Bajo (BVH estándar con SAH, una sola pieza para 4 usos) | — |
 | R4 | **Kernel del solver**: residuos + jacobiano analítico + trf/LM | `solver.py:437`, `181-334` (`_armar`), `454` (`_jacobiano`), `591-616`, `619` | scipy `least_squares` con diferencias finitas sobre closures | 10–50× por evento de arrastre | **Medio-alto** (16 tipos de restricción; paridad numérica 1e-6; conteo de GDL por rango) | Primero los arreglos de Python (sección 4) |
@@ -157,9 +164,9 @@ clon/rust/                     # nuevo; el resto del repo no cambia
   Cargo.toml                   # workspace
   omnicad_rs/                  # crate PyO3 + rust-numpy (arreglos sin copia)
     src/lib.rs                 # #[pymodule] omnicad_rs
-    src/zstd.rs                # R1 (previsto; hoy no existe: el crate es un solo src/lib.rs)
+    src/zstd.rs                # R1 (hecho 2026-10-31)
     src/malla/{halfedge,qem,remallado,io,soldado}.rs   # R2, R6, R7, R8, R10
-    src/bvh.rs                 # R3
+    src/bvh.rs                 # R3 (hecho 2026-10-31, parcial: ver RS-R3)
     src/boceto/{solver,spline,cortes,golpe}.rs         # R4, R5, R9
   pyproject.toml               # maturin: módulo `omnicad._rs`
 clon/omnicad/nativo.py         # carga el módulo; si no está, expone None
