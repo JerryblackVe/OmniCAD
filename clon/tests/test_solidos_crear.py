@@ -563,7 +563,9 @@ def test_recetas_viejas_de_agujero_roscado_y_rosca_interior_dan_el_mismo_volumen
     # encajar con la exterior; en el agujero ciego el filete termina distinto contra el fondo (antes 2288,7455586392284)
     caja = g.caja(16, 16, 10, (-8, -8, 0))
     h = sc.herramienta_agujero((0, 0, 10), (0, 0, -1), roscado="M8", profundidad=6)
-    assert g.volumen(g.booleano(caja, h, "cortar")) == pytest.approx(2288.655612840022, rel=1e-5)
+    # B-129: con la integración adaptativa el volumen converge a 2288,74555 (Eps 1e-10 y 1e-12 coinciden); los 2288,6556
+    # de antes eran el error de la integración por defecto (−0,09 mm³, 3,9e-5): la geometría de la receta no cambió
+    assert g.volumen(g.booleano(caja, h, "cortar")) == pytest.approx(2288.7455461688, rel=1e-5)
     dd = sc.datos_rosca("1/4-20 UNC")
     blo = g.booleano(g.caja(14, 14, 8, (-7, -7, 0)), g.cilindro(dd["diametro_menor"] / 2, 8), "cortar")
     assert g.volumen(sc.rosca(blo, designacion="1/4-20 UNC")) == pytest.approx(1370.912302636908, rel=1e-5)

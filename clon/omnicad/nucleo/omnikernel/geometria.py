@@ -125,11 +125,16 @@ def rotar(forma, punto, eje, angulo_grados):
     return transformar(forma, matriz_rotacion(punto, eje, np.radians(angulo_grados)))
 
 
-def booleano(objetivo, herramienta, operacion):
+def booleano(objetivo, herramienta, operacion, avisos=None):
     from ..geometria import ErrorGeometria
     if operacion not in ("unir", "cortar", "intersecar"):
         raise ErrorGeometria(f"Operación booleana desconocida: {operacion}")
     return objetivo.booleano(herramienta, operacion)
+
+
+def cortar_varias(objetivo, formas, avisos=None):
+    from ..geometria import ErrorGeometria
+    raise ErrorGeometria("OmniKernel corta de a una herramienta.")         # OpCombinar sigue por ese camino
 
 
 def unir_todos(formas):

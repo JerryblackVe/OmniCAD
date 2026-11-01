@@ -352,14 +352,16 @@ def _segmentar_tubo_cerrado(forma):
 
 
 def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, invertir=False, nurbs=False, sanar=False,
-              pegar=False, obb=False, con_historial=False):
+              pegar=False, obb=False, con_historial=False, varias=False):
     """Una pasada del kernel (BOP). `invertir` cambia objetivo y herramienta (solo 'unir' e 'intersecar', que son
     simétricas); `fuzzy` es la tolerancia difusa en mm; `paralelo=False` corre en un solo hilo; `nurbs` pasa la
     herramienta a B-spline (misma forma, otro algoritmo de intersección: el de toro contra cilindro falla); `sanar`
     repara el resultado con ShapeFix (sólidos inválidos que el kernel devuelve sin quejarse); `pegar` activa el modo
     pegado (GlueShift: las caras que solo se tocan no se recomputan); `obb` usa la caja envolvente orientada para
     descartar intersecciones.
-    `con_historial`: devuelve también las copias de caras de las entradas que no cambiaron, para su revisión."""
+    `con_historial`: devuelve también las copias de caras de las entradas que no cambiaron, para su revisión.
+    `varias`: cada sólido de `herramienta` entra como herramienta propia (un compuesto de sólidos que se tocan no
+    sirve de argumento)."""
     entradas = (objetivo, herramienta)
     clases = {"unir": BRepAlgoAPI_Fuse, "cortar": BRepAlgoAPI_Cut, "intersecar": BRepAlgoAPI_Common}
     from OCP.collections import List_TopoDS_Shape
@@ -369,7 +371,8 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
         objetivo, herramienta = herramienta, objetivo
     args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
     args.Append(_segmentar_tubo_cerrado(objetivo))
-    herr.Append(_segmentar_tubo_cerrado(herramienta))
+    for h in solidos(herramienta) if varias else [herramienta]:
+        herr.Append(_segmentar_tubo_cerrado(h))
     op = clases[operacion]()
     op.SetArguments(args)
     op.SetTools(herr)
@@ -410,6 +413,9 @@ _REINTENTOS_BOOLEANA = (
     {"pegar": True}, {"obb": True},                  # GlueShift y caja orientada: dos caminos de intersección distintos
 )
 _TOPE_VOLUMEN_BOOLEANA = 1e-3     # parte del volumen de la pieza más chica que se tolera de más o de menos (más 1e-6 del total)
+_RESOLUCION_BOOLEANA = 1e-5       # mm: debajo de esto una herramienta deja autointersecciones o partes sueltas (B-128)
+_MUESTRAS_AFUERA = 16
+_MAX_PIEZAS_REVISADAS = 16
 
 
 def _aristas_defectuosas(forma):
@@ -445,6 +451,83 @@ def _volumenes_entrada(objetivo, herramienta):
 
 _MAX_CONTORNOS_REVISADOS = 200   # BRepCheck clasifica los contornos de una cara de a pares: 3000 agujeros cuestan 11 s
 _MAX_CARAS_REVISADAS = 200       # revisar también cáscaras y sólidos, sin penalizar los cuerpos grandes
+
+
+def _caja_adentro(interior, exterior):
+    """True si la caja `interior` entra en la caja `exterior`."""
+    a0, a1, c0, c1 = exterior.CornerMin(), exterior.CornerMax(), interior.CornerMin(), interior.CornerMax()
+    return (c0.X() >= a0.X() and c0.Y() >= a0.Y() and c0.Z() >= a0.Z()
+            and c1.X() <= a1.X() and c1.Y() <= a1.Y() and c1.Z() <= a1.Z())
+
+
+def _clasificador(solido):
+    """Clasificador de puntos de `solido`. Una booleana puede dejar invertida la orientación de una entrada, y entonces
+    adentro y afuera se cambian: el punto del infinito lo delata."""
+    c = BRepClass3d_SolidClassifier(solido)
+    c.PerformInfinitePoint(1e-7)
+    return BRepClass3d_SolidClassifier(solido.Reversed()) if c.State() == TopAbs_IN else c
+
+
+def _muestras_adentro(forma, cuantas, intentos):
+    """Hasta `cuantas` puntos al azar del interior de `forma`. Semilla fija: el veredicto no cambia de corrida a corrida."""
+    caja = _caja_occ(forma, 1e-5, holgada=True)
+    if caja is None:
+        return
+    c0, c1 = caja.CornerMin(), caja.CornerMax()
+    clasificadores = [_clasificador(s) for s in solidos(forma)]
+    rng = random.Random("b39-enterrada")
+    dados = 0
+    for _ in range(intentos):
+        p = gp_Pnt(rng.uniform(c0.X(), c1.X()), rng.uniform(c0.Y(), c1.Y()), rng.uniform(c0.Z(), c1.Z()))
+        for c in clasificadores:
+            c.Perform(p, 1e-7)
+            if c.State() == TopAbs_IN:
+                yield p
+                dados += 1
+                break
+        if dados == cuantas:
+            return
+
+
+def _parte_afuera(chica, grande):
+    """Qué parte de `chica` queda afuera de `grande` (0 a 1), contando puntos: el kernel no sirve para decidirlo (con un
+    contacto casi tangente el común de dos toros devolvía un toro entero). None si no se puede saber.
+    shortcut: si la caja de `chica` entra en la de un `grande` de más de _MAX_CARAS_REVISADAS caras da None sin muestrear
+    (7 ms por punto en una placa de 3000 agujeros), subir si aparece una pieza perdida en un hueco de un cuerpo grande."""
+    if len(caras(grande)) > _MAX_CARAS_REVISADAS:
+        cg, cc = _caja_occ(grande, 1e-5, holgada=True), _caja_occ(chica, 1e-5, holgada=True)
+        if cg is None or cc is None or _caja_adentro(cc, cg):
+            return None
+    clasificadores = [_clasificador(s) for s in solidos(grande)]
+
+    def adentro(p):
+        for c in clasificadores:
+            c.Perform(p, 1e-7)
+            if c.State() in (TopAbs_IN, TopAbs_ON):
+                return True
+        return False
+    muestras = list(_muestras_adentro(chica, _MUESTRAS_AFUERA, 20 * _MUESTRAS_AFUERA))
+    return sum(not adentro(p) for p in muestras) / len(muestras) if muestras else None
+
+
+def _comun_desmentido(objetivo, herramienta, operacion, vr, volumenes):
+    """Cada booleana afirma cuánto comparten las piezas: unir va + vb − vr, cortar va − vr, intersecar vr. Si afirma un
+    extremo (la chica entera adentro, o nada en común) cae justo en el borde del rango de volumen, donde un resultado
+    malo pasa: dos toros casi tangentes perdían uno al unir y una esfera apoyada en una pared no cortaba nada (B-125).
+    Ahí lo comprueban los puntos. Unir sin nada en común no se mira: es lo normal y no pierde material. Devuelve el
+    problema o None. Un margen de 1/4 de la chica porque un falso positivo rechaza un resultado bueno."""
+    vb, vh = volumenes
+    v = min(vb, vh)
+    tol = 1e-6 * (vb + vh) + _TOPE_VOLUMEN_BOOLEANA * v
+    comun = {"unir": vb + vh - vr, "cortar": vb - vr, "intersecar": vr}[operacion]
+    if comun < v - tol and (comun > tol or operacion == "unir"):
+        return None
+    chica, grande = (objetivo, herramienta) if vb <= vh else (herramienta, objetivo)
+    afuera = _parte_afuera(chica, grande)
+    if afuera is None or abs(comun - (1 - afuera) * v) < v / 4:
+        return None
+    return 2, (f"el resultado dice que las piezas comparten {comun:.6g} mm³ y los puntos dan cerca de "
+               f"{(1 - afuera) * v:.6g} mm³"), abs(comun - (1 - afuera) * v), vb + vh
 
 
 def _es_valida_tras_booleana(resultado, entradas, caras_intactas=()):
@@ -490,11 +573,12 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
             return 2, "el resultado quedó vacío", float("inf"), 0.0
         if operacion == "cortar" and volumenes is not None and volumenes[0] > volumenes[1] * (1 + 1e-6) + 1e-6:
             return 2, "el resultado quedó vacío aunque la herramienta no cubre el objetivo", float("inf"), 0.0
-        return None
+        return None if volumenes is None else _comun_desmentido(objetivo, herramienta, operacion, 0.0, volumenes)
     try:
         if volumenes is not None:
             vb, vh = volumenes
             vr = abs(_integral(resultado, BRepGProp.VolumeProperties_s))
+            chica, grande = (objetivo, herramienta) if vb <= vh else (herramienta, objetivo)
             # Misma tolerancia que el oráculo del fuzz: una integración B-spline que se pasa no es «casi correcta»
             tol = 1e-6 * (vb + vh) + _TOPE_VOLUMEN_BOOLEANA * min(vb, vh)
             limites = {"unir": (max(vb, vh), vb + vh), "cortar": (vb - vh, vb), "intersecar": (0.0, min(vb, vh))}
@@ -502,6 +586,9 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
             if vr < minimo - tol or vr > maximo + tol:
                 exceso = max(minimo - vr, vr - maximo)
                 return 2, f"volumen {vr:.6g} mm³ fuera de lo posible ({minimo:.6g} a {maximo:.6g})", exceso, vb + vh
+            desmentido = _comun_desmentido(objetivo, herramienta, operacion, vr, volumenes)
+            if desmentido:
+                return desmentido
             if operacion == "cortar" and vr > maximo - tol:
                 # B-107: un corte que no quita nada cuando la herramienta sí atraviesa el material (el reintento
                 # GlueShift devolvía el objetivo intacto con una cara tangente). El rango «hasta vb» no lo ve.
@@ -510,7 +597,8 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
                                           BRepGProp.VolumeProperties_s))
                 except Exception:  # noqa: BLE001 — sin medir el común no se puede afirmar nada
                     comun = 0.0
-                if comun > tol:
+                # El común puede devolver la chica entera aunque casi ni se toquen (B-125): las muestras lo desmienten
+                if tol < comun <= (1 - (_parte_afuera(chica, grande) or 0.0) / 2) * min(vb, vh) * (1 + 1e-6):
                     return 2, (f"el corte no quitó material aunque la herramienta lo atraviesa "
                                f"({comun:.6g} mm³)"), comun, vb + vh
     except Exception:  # noqa: BLE001 — una integración que falla no es motivo para rechazar el resultado
@@ -553,24 +641,15 @@ def _queda_enterrada(forma, base):
     # Cajas BARATAS (Add_s) con 1e-5 de margen: la exacta (AddOptimal) sobre una pieza de cientos de caras B-spline
     # cuesta ~0,4 s (BINCHA); la caja solo descarta. Las muestras descartan y la resta exterior confirma.
     ba, bb = _caja_occ(base, 1e-5, holgada=True), _caja_occ(forma, 1e-5, holgada=True)
-    if ba is None or bb is None:
+    if ba is None or bb is None or not _caja_adentro(bb, ba):
         return False
-    a0, a1, c0, c1 = ba.CornerMin(), ba.CornerMax(), bb.CornerMin(), bb.CornerMax()
-    if (c0.X() < a0.X() or c0.Y() < a0.Y() or c0.Z() < a0.Z()
-            or c1.X() > a1.X() or c1.Y() > a1.Y() or c1.Z() > a1.Z()):
-        return False
-    sols_b, sols_f = solidos(base), solidos(forma)
+    sols_b = solidos(base)
     for v in _explorar(forma, TopAbs_VERTEX):
         p = BRep_Tool.Pnt_s(TopoDS.Vertex(v))
         if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() in (TopAbs_IN, TopAbs_ON) for s in sols_b):
             return False
-    rng = random.Random("b39-enterrada")           # semilla fija: el veredicto no cambia de corrida a corrida
-    dentro, intentos = 0, 0
-    while dentro < 200 and intentos < 2000:
-        intentos += 1
-        p = gp_Pnt(rng.uniform(c0.X(), c1.X()), rng.uniform(c0.Y(), c1.Y()), rng.uniform(c0.Z(), c1.Z()))
-        if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() == TopAbs_IN for s in sols_f):
-            continue
+    dentro = 0
+    for p in _muestras_adentro(forma, 200, 2000):
         dentro += 1
         if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() in (TopAbs_IN, TopAbs_ON) for s in sols_b):
             return False                           # una muestra adentro de la forma y afuera del material
@@ -583,8 +662,26 @@ def _queda_enterrada(forma, base):
     return esta_vacia(resto)
 
 
-def booleano(objetivo, herramienta, operacion):
+def _es_diminuta(forma):
+    """True si `forma` es un sólido que entra en un cubo de _RESOLUCION_BOOLEANA de lado."""
+    caja = _caja_occ(forma, 0.0, holgada=True) if solidos(forma) else None    # la exacta: ~0,4 s en cientos de B-spline
+    if caja is None:
+        return False
+    c0, c1 = caja.CornerMin(), caja.CornerMax()
+    return max(c1.X() - c0.X(), c1.Y() - c0.Y(), c1.Z() - c0.Z()) < _RESOLUCION_BOOLEANA
+
+
+def _sin_cambios(forma, avisos):
+    """B-128: una herramienta diminuta no cambia nada; pasarla por el kernel deja autointersecciones o partes sueltas."""
+    if avisos is not None:
+        avisos.append("una pieza mide menos de 0,00001 mm, por debajo de la precisión del modelado: no cambió nada.")
+    return forma
+
+
+def booleano(objetivo, herramienta, operacion, avisos=None):
     """'unir' | 'cortar' | 'intersecar' (FeatureOperations Join/Cut/Intersect de Fusion).
+
+    `avisos` (lista, opcional): recibe el texto de lo que sale igual pero el usuario tiene que saber.
 
     B-39: si una forma queda entera dentro de la otra, unir devuelve la que la contiene sin tocar el kernel (el
     contacto casi tangente de una herramienta enterrada era el que dejaba aristas libres). El kernel a veces devuelve
@@ -595,13 +692,57 @@ def booleano(objetivo, herramienta, operacion):
     lo arregla, NUNCA se devuelve geometría sospechosa: es un error claro."""
     if operacion not in ("unir", "cortar", "intersecar"):
         raise ErrorGeometria(f"Operación booleana desconocida: {operacion}")
+    volumenes = _volumenes_entrada(objetivo, herramienta)
+    if volumenes is None:           # un cuerpo diminuto no llega al mínimo de volumen de `_volumenes_entrada`
+        diminuta_h, diminuta_o = _es_diminuta(herramienta), _es_diminuta(objetivo)
+        if operacion == "intersecar" and (diminuta_h or diminuta_o):
+            return compuesto([])    # lo común tampoco llega a la precisión del modelado
+        if operacion != "intersecar" and diminuta_h:
+            return _sin_cambios(objetivo, avisos)
+        if operacion == "unir" and diminuta_o:
+            return _sin_cambios(herramienta, avisos)
     if operacion == "unir":
         if _queda_enterrada(herramienta, objetivo):
             return objetivo
         if _queda_enterrada(objetivo, herramienta):
             return herramienta
+    return _booleana_verificada(objetivo, herramienta, operacion, volumenes, avisos)
+
+
+def cortar_varias(objetivo, formas, avisos=None):
+    """Combine › Cut de Fusion con varias Tool Bodies, en UNA pasada del kernel: de a una, cada pasada revisa un resultado
+    cada vez más grande y el tiempo crecía con el cuadrado de las herramientas (T-20). Una pasada sola puede saltear
+    una herramienta sin salirse del rango de volumen (1433 mm³ en 300 casos al azar), así que solo vale con herramientas
+    separadas y si quita justo lo que cada una le quita sola al objetivo. Si no, lanza ErrorGeometria y quien llama corta
+    de a una, que es más lento pero verifica cada herramienta."""
+    if not all(solidos(f) for f in formas):
+        raise ErrorGeometria("Cortar con varias herramientas juntas necesita que todas sean sólidos.")
+    pesan = [f for f in formas if not _es_diminuta(f)]
+    if len(pesan) < len(formas):
+        _sin_cambios(objetivo, avisos)
+    if not pesan:
+        return objetivo
+    cajas = [_caja_occ(f, 1e-5, holgada=True) for f in pesan]
+    if not all(a.IsOut(b) for a, b in itertools.combinations(cajas, 2)):
+        raise ErrorGeometria("Las herramientas se superponen: hay que cortar de a una.")
+    herramienta = compuesto(pesan)
     volumenes = _volumenes_entrada(objetivo, herramienta)
-    resultado, intactas = _booleana(objetivo, herramienta, operacion, con_historial=True)
+    if volumenes is None:
+        raise ErrorGeometria("Con superficies libres el volumen no comprueba el corte: hay que cortar de a una.")
+
+    def medir(forma):
+        return 0.0 if esta_vacia(forma) else abs(_integral(forma, BRepGProp.VolumeProperties_s))
+    # El corte verificado de cada una, no el común: en un caso el común daba de menos igual que la pasada conjunta
+    quita = sum(volumenes[0] - medir(booleano(objetivo, f, "cortar")) for f in pesan)
+    resultado = _booleana_verificada(objetivo, herramienta, "cortar", volumenes, avisos, varias=True)
+    if abs(volumenes[0] - quita - medir(resultado)) > 1e-6 * (volumenes[0] + quita):
+        raise ErrorGeometria("El corte conjunto no quitó lo que debía: hay que cortar de a una.")
+    return resultado
+
+
+def _booleana_verificada(objetivo, herramienta, operacion, volumenes, avisos, **modo):
+    """Corre el kernel y verifica el resultado; si no es creíble, reintenta (ver `booleano`). `modo`: va a cada pasada."""
+    resultado, intactas = _booleana(objetivo, herramienta, operacion, con_historial=True, **modo)
     problema = _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, intactas)
     if problema is None:
         return resultado
@@ -612,7 +753,7 @@ def booleano(objetivo, herramienta, operacion):
         if intento.get("nurbs") and (problema[0] < 2 and volumenes is None):
             continue                # sin volúmenes de referencia no hay cómo saber si el B-spline cambió el resultado
         try:
-            candidato, intactas = _booleana(objetivo, herramienta, operacion, con_historial=True, **intento)
+            candidato, intactas = _booleana(objetivo, herramienta, operacion, con_historial=True, **modo, **intento)
         except ErrorGeometria:
             continue
         p = _problema_booleana(objetivo, herramienta, operacion, candidato, volumenes, intactas)
@@ -628,13 +769,16 @@ def booleano(objetivo, herramienta, operacion):
     if peor_problema[0] >= 2:
         raise ErrorGeometria(f"La operación '{operacion}' dio un resultado imposible ({peor_problema[1]}) y el kernel "
                              "no logró corregirlo: probá mover la pieza una milésima de milímetro.")
-    libres = _aristas_defectuosas(mejor)[0]
+    libres, no_manifold = _aristas_defectuosas(mejor)
     (la, _), (lb, _) = _aristas_defectuosas(objetivo), _aristas_defectuosas(herramienta)
     if libres > la + lb or "sólido inválido" in peor_problema[1]:
         # No estanco o inválido: nunca sale en silencio (B-39). Solo-no-manifold SÍ se devuelve: el cuerpo sigue
-        # estanco y el timeline avisa con «aristas compartidas de más» (unión de dos cajas por una arista).
+        # estanco y puede ser la geometría real (un agujero tangente a una pared pellizca el material, B-126).
         raise ErrorGeometria(f"La operación '{operacion}' quedó sin un resultado estanco o válido ({peor_problema[1]}) "
                              "y el kernel no logró corregirlo: probá mover la pieza una milésima de milímetro.")
+    if avisos is not None:
+        avisos.append(f"quedaron {no_manifold} aristas compartidas por más de dos caras (posible contacto tangente "
+                      "o en cuña); revisalo con check_geometry.")
     return mejor
 
 
@@ -787,7 +931,10 @@ def _quitar_cables_colgados(forma):
 
 def _union_general_creible(formas, unida):
     """False si la unión de varias formas no está vacía y su volumen cae fuera de [la mayor, la suma] (B-39: el
-    kernel perdía material sin avisar); entonces `unir_todos` une de a pares, que sí reintenta. Solo entre sólidos."""
+    kernel perdía material sin avisar) o le falta una pieza entera (B-125); entonces `unir_todos` une de a pares, que sí
+    reintenta. Solo entre sólidos.
+    shortcut: con más de _MAX_PIEZAS_REVISADAS piezas que se solapan no se buscan piezas perdidas (retícula: miles de
+    barras), subir si aparece un caso."""
     try:
         if esta_vacia(unida):
             return False
@@ -795,7 +942,11 @@ def _union_general_creible(formas, unida):
             return True
         vols = [abs(_integral(f, BRepGProp.VolumeProperties_s)) for f in formas]
         tol = 1e-6 * sum(vols) + _TOPE_VOLUMEN_BOOLEANA * min(vols)
-        return max(vols) - tol <= abs(_integral(unida, BRepGProp.VolumeProperties_s)) <= sum(vols) + tol
+        v = abs(_integral(unida, BRepGProp.VolumeProperties_s))
+        if not max(vols) - tol <= v <= sum(vols) + tol:
+            return False
+        return (v >= sum(vols) - tol or len(formas) > _MAX_PIEZAS_REVISADAS
+                or not any((_parte_afuera(f, unida) or 0.0) >= 0.25 for f in formas))
     except Exception:  # noqa: BLE001 — una integración que falla no rechaza la unión
         return True
 
@@ -845,11 +996,36 @@ _CONTROL_RELATIVO = 1e-3          # malla de control: desvío relativo al tamañ
 _DEFLEXION_FINA = 3e-5            # malla fina: de la diagonal de la caja (~0,01 mm en una pieza de 300 mm)
 _DEFLEXION_MINIMA = 0.01          # mm: menos hace fallar el mallado de algunas B-spline (queda una cara sin malla)
 _ERROR_GROSERO = 0.05             # diferencia relativa a partir de la cual la integración exacta se descarta
+_EPS_VOLUMEN = 1e-8               # error relativo de la integración adaptativa del volumen de una forma libre (B-129)
+_CARAS_FINAS = 300                # caras de la forma hasta las que se integra fino (cada una cuesta de 0,4 a unos 10 ms)
+# Polos de una cara B-spline hasta los que la integración adaptativa es rápida y confiable. Medido en las piezas de
+# EXTRUSOR XOX.f3z: con ≤ 170 polos coincide con Eps 1e-12; con 244 o más tarda de 0,2 a 2 s y puede errar 1 % a 10 %
+# (más que la de siempre), y el cuerpo de la cartera del .f3d subió 0,4 % y tardó 3 veces más.
+_POLOS_FINOS = 170
 
 
 def es_forma_libre(forma):
     """True si alguna cara es B-spline, Bézier, desfasada u otra superficie libre."""
     return any(BRepAdaptor_Surface(c).GetType() not in _ANALITICAS for c in caras(forma))
+
+
+def _apta_para_integral_fina(forma):
+    """True si la forma tiene hasta `_CARAS_FINAS` caras y sus caras libres son todas B-spline de hasta `_POLOS_FINOS`
+    polos (B-129: lentes de esferas, agujeros roscados chicos). Las libres grandes siguen con la integración de siempre."""
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
+    lista = caras(forma)
+    if len(lista) > _CARAS_FINAS:
+        return False
+    for c in lista:
+        sup = BRepAdaptor_Surface(c)
+        if sup.GetType() in _ANALITICAS:
+            continue
+        if sup.GetType() != GeomAbs_BSplineSurface:
+            return False
+        bs = sup.BSpline()
+        if bs.NbUPoles() * bs.NbVPoles() > _POLOS_FINOS:
+            return False
+    return True
 
 
 def _por_malla(forma, funcion, deflexion, relativa):
@@ -863,8 +1039,17 @@ def _por_malla(forma, funcion, deflexion, relativa):
     return p.Mass()
 
 
-def _integral(forma, funcion):
-    """Volumen o área por la integración exacta de OpenCascade, sin el control por malla de `_propiedades`."""
+def _integral(forma, funcion, eps=None):
+    """Volumen o área por la integración exacta de OpenCascade, sin el control por malla de `_propiedades`. Con `eps`
+    (solo volumen) la integración es adaptativa hasta ese error relativo estimado; si el kernel falla en una forma
+    rota, vale la integración por defecto (sin esa precisión, pero con un número)."""
+    if eps is not None:
+        try:
+            p = GProp_GProps()
+            funcion(forma, p, eps)
+            return p.Mass()
+        except Exception:  # noqa: BLE001 — Standard_Failure de OCP en formas degeneradas
+            pass
     p = GProp_GProps()
     funcion(forma, p)
     return p.Mass()
@@ -876,9 +1061,13 @@ def _propiedades(forma, funcion):
     de un .f3d de Fusion daba 180 791 mm³ contra 124 672 de Fusion (con tolerancia, 125 050 en 27 s). Con caras libres
     se controla contra una malla rápida; si difieren más de 5 % (un error grosero: la malla se equivoca menos de 1,5 %
     incluso en un alambre de 1 mm), vale una malla fina: 124 718 mm³ en ~1 s."""
-    exacto = _integral(forma, funcion)
     if not es_forma_libre(forma):
-        return exacto
+        return _integral(forma, funcion)
+    if funcion is BRepGProp.VolumeProperties_s and _apta_para_integral_fina(forma):
+        # B-129: la lente de dos esferas erraba hasta 0,5 mm³. Sin malla de control: los errores groseros que ella
+        # atrapa son de caras libres grandes, y acá no hay ninguna.
+        return _integral(forma, funcion, _EPS_VOLUMEN)
+    exacto = _integral(forma, funcion)
     control = _por_malla(forma, funcion, _CONTROL_RELATIVO, True)
     if control is None or abs(exacto - control) <= _ERROR_GROSERO * abs(control):
         return exacto

@@ -354,8 +354,9 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if operacion == "unir":
         resultado = herramienta
         v_previa = None                # volumen de lo acumulado hasta acá (se mide una vez)
+        avisos = []
         for c in objetivos:
-            nueva = geo.booleano(resultado, c.forma, "unir")
+            nueva = geo.booleano(resultado, c.forma, "unir", avisos)
             # Integración exacta: barata. `geo.volumen` malla el cuerpo entero si tiene caras libres (20 s en 500 B-spline)
             # y solo se pide para confirmar un aviso de pérdida de material.
             v_nueva, v_c = geo.volumen_exacto(nueva), geo.volumen_exacto(c.forma)
@@ -384,6 +385,9 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         if len(geo.solidos(resultado)) > len(geo.solidos(herramienta)) or not rv.es_estanca(resultado):
             ctx.aviso(f"{principal.nombre}: la unión dejó el cuerpo partido, abierto o con aristas compartidas "
                       "de más (posible contacto tangente o en cuña); revisalo con check_geometry.")
+        else:
+            for texto in avisos:
+                ctx.aviso(f"{principal.nombre}: {texto}")
         return [principal.id]
 
     afectados = []
@@ -392,7 +396,12 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
             continue
         if lista and operacion == "cortar" and not geo.se_tocan(c.forma, herramienta):
             ctx.aviso(f"La herramienta no toca a {c.nombre}: no le cortó nada.")
-        nueva = geo.booleano(c.forma, herramienta, operacion)
+        avisos = []
+        nueva = geo.booleano(c.forma, herramienta, operacion, avisos)
+        for texto in avisos:
+            ctx.aviso(f"{c.nombre}: {texto}")
+        if geo.esta_vacia(nueva) and operacion == "intersecar":      # T-22: igual que Combinar, nada se borra
+            raise ErrorOperacion(f"El resultado quedó vacío: la herramienta no se interseca con {c.nombre}.")
         if geo.esta_vacia(nueva):
             del estado.cuerpos[c.id]
             ctx.aviso(f"{c.nombre} quedó vacío y se eliminó.")
@@ -1216,21 +1225,41 @@ class OpCombinar(Operacion):
     def dependencias(self):
         return _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("herramientas"))
 
+    def _cortar_junto(self, ctx, objetivo, herramientas):
+        """Cortar con varias herramientas en una sola pasada (T-20). None si no corresponde o el kernel no puede: se
+        corta de a una, con sus reintentos y su mensaje por herramienta. Con menos de 5 no conviene: la comprobación
+        ya corta con cada una, y en un cuerpo grande esa pasada de más pesa más que lo que se ahorra."""
+        if self.p["operacion"] != "cortar" or len(herramientas) < 5:
+            return None
+        avisos = []
+        try:
+            resultado = geo.cortar_varias(objetivo.forma, [h.forma for h in herramientas], avisos)
+        except geo.ErrorGeometria:
+            return None
+        for h in herramientas:
+            if not geo.se_tocan(objetivo.forma, h.forma):
+                ctx.aviso(f"{h.nombre} no toca a {objetivo.nombre}: no le cortó nada.")
+        for texto in avisos:
+            ctx.aviso(f"{objetivo.nombre}: {texto}")
+        return resultado
+
     def ejecutar(self, estado, ctx):
         if not self.p["objetivo"] or not self.p["herramientas"]:
             raise ErrorOperacion("Elegí un cuerpo objetivo y al menos una herramienta.")
         objetivo = estado.cuerpo(self.p["objetivo"])
-        herramientas = [estado.cuerpo(h) for h in self.p["herramientas"]]
+        herramientas = list({h.id: h for h in map(estado.cuerpo, self.p["herramientas"])}.values())   # B-127: sin repetidas
         if any(h.id == objetivo.id for h in herramientas):
             raise ErrorOperacion("El objetivo no puede ser también herramienta.")
         forma_objetivo = objetivo.forma
-        resultado = forma_objetivo
+        junto = self._cortar_junto(ctx, objetivo, herramientas)
+        resultado = forma_objetivo if junto is None else junto
         v_previa = None
-        for h in herramientas:
+        for h in herramientas if junto is None else ():
             if self.p["operacion"] == "cortar" and not geo.se_tocan(resultado, h.forma):
                 ctx.aviso(f"{h.nombre} no toca a {objetivo.nombre}: no le cortó nada.")
             parcial = resultado
-            resultado = geo.booleano(resultado, h.forma, self.p["operacion"])
+            avisos = []
+            resultado = geo.booleano(resultado, h.forma, self.p["operacion"], avisos)
             if self.p["operacion"] == "unir":
                 # Una unión no puede pesar menos que lo que ya había (B-52: la unión de la espiral
                 # del motor descartaba un sólido entero del compuesto en silencio).
@@ -1253,6 +1282,9 @@ class OpCombinar(Operacion):
                     ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} dejó el cuerpo partido, sin "
                               "fusionar lo que se toca o abierto (posible contacto tangente o en cuña); "
                               "revisalo con check_geometry.")
+                    avisos = []             # ya lo cubre el aviso de arriba
+            for texto in avisos:
+                ctx.aviso(f"{objetivo.nombre}: {texto}")
         if geo.esta_vacia(resultado):
             raise ErrorOperacion("El resultado quedó vacío (¿los cuerpos no se intersecan?).")
         if self.p["operacion"] == "unir":
