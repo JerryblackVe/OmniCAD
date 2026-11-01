@@ -41,6 +41,7 @@ from ..timeline import entidades as ent
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
+from ..timeline.ops_ensamblar import familia
 from ..timeline.ops_insertar import calcomanias_vigentes
 from . import formato, temas
 from .medidas import NOMBRES as _NOMBRES_ENTIDAD
@@ -1060,7 +1061,8 @@ class VentanaPrincipal(QMainWindow):
             ocultos |= set(estado.cuerpos)
         if not (self.vis["todo"] and self.vis["bocetos"]):
             ocultos |= set(estado.bocetos)
-        ocultos |= {cid for cid, c in estado.cuerpos.items() if c.componente and c.componente in self.ocultos}
+        comps_ocultos = set().union(*(familia(estado, k) for k in self.ocultos if k in estado.componentes))
+        ocultos |= {cid for cid, c in estado.cuerpos.items() if c.componente and c.componente in comps_ocultos}
         patrones = {cid for cid, c in estado.cuerpos.items() if es_patron_plano(c)}
         if self.patron_activo in patrones:  # como Fusion: el patrón plano solo, en su propio modo
             ocultos |= (set(estado.cuerpos) - {self.patron_activo}) | set(estado.bocetos)
@@ -1119,7 +1121,7 @@ class VentanaPrincipal(QMainWindow):
         self.navegador.analisis = [(f"analisis:{n}", n, a.get("visible", True)) for n, a in self.doc.analisis.items()]
         self.navegador.componentes = [
             (k, comp["nombre"], comp.get("fijo", False),
-             [(c.id, self.nombre_cuerpo(c)) for c in estado.cuerpos.values() if c.componente == k])
+             [(c.id, self.nombre_cuerpo(c)) for c in estado.cuerpos.values() if c.componente == k], comp.get("padre") or "")
             for k, comp in estado.componentes.items()]
         self.navegador.uniones = [(k, u["nombre"]) for k, u in estado.uniones.items()]
         nombres = {o.id: o.nombre for o in self.doc.operaciones}     # el nombre vigente: renombrar no recalcula el estado
@@ -2157,8 +2159,9 @@ class VentanaPrincipal(QMainWindow):
             else:
                 self.ejecutar_comando(PosicionInicial(), valores={"cuerpos": hits_cuerpos(cuerpos, estado)})
         elif accion == "aislar_componente":
-            self.ocultos |= {c for c, cu in estado.cuerpos.items() if cu.componente != clave}
-            self.ocultos -= {c for c, cu in estado.cuerpos.items() if cu.componente == clave}
+            comps = familia(estado, clave)       # aislar un padre deja ver su subensamblaje entero
+            self.ocultos |= {c for c, cu in estado.cuerpos.items() if cu.componente not in comps}
+            self.ocultos -= {c for c, cu in estado.cuerpos.items() if cu.componente in comps}
             self._refrescar_visibilidad()
         elif accion == "analisis_borrar":
             self.doc.quitar_analisis(clave.split(":", 1)[1])

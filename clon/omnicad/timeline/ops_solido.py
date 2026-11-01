@@ -788,7 +788,7 @@ def copiar_componentes(op, estado, trsfs):
     """Patrón o simetría de COMPONENTES (Object Type › Components): cada componente de `op.p["componentes"]` (id o
     nombre) se copia con cada gp_Trsf de `trsfs` como un componente nuevo con copias de todos sus cuerpos. Solo
     componentes en su lugar de modelado (si una unión los movió, la copia no sabría dónde ir)."""
-    from .ops_ensamblar import componente_por_ref
+    from .ops_ensamblar import componente_por_ref, copiar_componente, familia
     ids = []
     for ref in op.p.get("componentes") or []:
         k = componente_por_ref(estado, ref)
@@ -799,23 +799,13 @@ def copiar_componentes(op, estado, trsfs):
         raise ErrorOperacion("Elegí los componentes.")
     n = 0
     for k in ids:
-        if not np.allclose(np.asarray(estado.componentes[k].get("matriz", np.identity(4)), float), np.identity(4)):
-            raise ErrorOperacion(f"El componente «{estado.componentes[k].get('nombre') or k}» ya fue movido por una "
-                                 "unión: copiá sus cuerpos o volvé a su posición.")
-        if any(d.get("padre") == k for d in estado.componentes.values()):
-            raise ErrorOperacion(f"El componente «{estado.componentes[k].get('nombre') or k}» tiene subcomponentes: "
-                                 "copiarlos todavía no está. Repetí cada subcomponente por separado.")
-        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == k]
+        for m in sorted(familia(estado, k)):       # el subensamblaje entero tiene que estar donde se modeló
+            if not np.allclose(np.asarray(estado.componentes[m].get("matriz", np.identity(4)), float), np.identity(4)):
+                raise ErrorOperacion(f"El componente «{estado.componentes[m].get('nombre') or m}» ya fue movido por una "
+                                     "unión: copiá sus cuerpos o volvé a su posición.")
         for t in trsfs:
             n += 1
-            nuevo = f"{op.id}.k{n}"
-            estado.componentes[nuevo] = {"nombre": estado.nombre_de_copia(estado.componentes[k].get("nombre") or k),
-                                         "padre": "", "fijo": False, "matriz": np.identity(4).tolist(),
-                                         **({"origen": estado.componentes[k]["origen"]} if "origen" in estado.componentes[k] else {})}
-            for c in cuerpos:
-                cid = estado.nuevo_cuerpo(op.id, _sc().aplicar(c.forma, t), c.tipo,
-                                          nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
-                estado.cuerpo(cid).componente = nuevo
+            copiar_componente(estado, k, f"{op.id}.k{n}", op.id, lambda c, t=t: _sc().aplicar(c.forma, t))
 
 
 def copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos):

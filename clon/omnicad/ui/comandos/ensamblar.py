@@ -6,7 +6,7 @@ from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMI
                                        OpCapturarPosicion, OpComponente, OpGrupoRigido, OpOrigenUnion,
                                        OpPosicionInicial, OpRevertirPosicion, OpUnion, OpVinculoMovimiento,
                                        _clave_movimiento, componente_por_ref, direccion_eje, eje_local, ejes_bola,
-                                       exigir_numero, marco_desde, principal_de, siguiente_accion)
+                                       exigir_numero, marco_desde, principal_de, ruta_componente, siguiente_accion)
 from ...timeline.parametros import ANGULO
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, exigir, hit_desde_ref, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -146,15 +146,24 @@ class NuevoComponente(Comando):
     CLASE_OP = OpComponente
 
     def campos(self, ctx):
-        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None), Casilla("fijo", "Fijo")]
+        # «Parent» de Fusion (ASM-9): la raíz o cualquier componente anterior en el timeline, con su camino en un
+        # subensamblaje (`ctx.estado` es el estado ANTES del paso: ni él ni sus hijos pueden ser su padre).
+        padres = {"": "(raíz)", **{k: ruta_componente(ctx.estado, k) for k in ctx.estado.componentes}}
+        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None), Opciones("padre", "Padre", padres, ""),
+                Casilla("fijo", "Fijo")]
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos del componente.")
         return self.crear_op(OpComponente, v, ctx, cuerpos=[h["ref"]["cuerpo"] for h in v["cuerpos"]],
-                             fijo=v["fijo"], version_pose=_version(ctx, OpComponente, "version_pose"))
+                             fijo=v["fijo"], padre=v.get("padre") or "",
+                             version_pose=_version(ctx, OpComponente, "version_pose"))
 
     def desde_op(self, op, ctx):
-        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
+        try:
+            padre = componente_por_ref(ctx.estado, op.p["padre"]) if op.p.get("padre") else ""
+        except ErrorOperacion:                 # un nombre repetido de una receta a mano: el panel abre igual
+            padre = ""
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), padre=padre or "")
 
 
 class Union(Comando):
@@ -275,13 +284,15 @@ class GrupoRigido(Comando):
 
     def campos(self, ctx):
         return [Seleccion("cuerpos", "Componentes", {"cuerpo"}, maximo=None,
-                          ayuda="Elegí un cuerpo de cada componente.")]
+                          ayuda="Elegí un cuerpo de cada componente."),
+                Casilla("incluir_hijos", "Incluir componentes secundarios",
+                        ayuda="También entran al grupo los subcomponentes de cada componente elegido.")]
 
     def construir(self, v, ctx):
         comps = _componentes_de(v, ctx)
         if len(comps) < 2:
             raise ErrorComando("Elegí cuerpos de al menos dos componentes distintos.")
-        return self.crear_op(OpGrupoRigido, v, ctx, componentes=comps)
+        return self.crear_op(OpGrupoRigido, v, ctx, componentes=comps, incluir_hijos=bool(v.get("incluir_hijos")))
 
     def desde_op(self, op, ctx):
         comps = []

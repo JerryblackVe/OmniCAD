@@ -17,6 +17,7 @@ import difflib
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
 from ..nucleo import render_cpu as rc
+from ..timeline.ops_ensamblar import ruta_componente
 from .errores import error
 from .registro import herramienta
 
@@ -210,7 +211,7 @@ def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool =
         asignado = doc.propiedad(c.id, "material") or getattr(c, "material", None)
         material = asignado or MATERIAL_POR_DEFECTO
         vol = geo.volumen(c.forma)
-        comp = str(estado.componentes.get(c.componente, {}).get("nombre", "")) if c.componente else ""
+        comp = ruta_componente(estado, c.componente) if c.componente else ""      # «Padre › Hijo» en un subensamblaje
         base = sesion.nombre_cuerpo(c).split(" (")[0]
         clave = (comp or base, round(vol, 3), round(geo.area(c.forma), 3), material)
         g = grupos.setdefault(clave, {"name": comp or base, "quantity": 0, "material": material,

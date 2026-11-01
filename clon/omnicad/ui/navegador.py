@@ -139,7 +139,7 @@ class Navegador(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.analisis = []           # [(clave "analisis:Nombre", nombre, visible)] (los pasa la ventana)
-        self.componentes = []        # [(id, nombre, fijo, [(id de cuerpo, nombre)])]
+        self.componentes = []        # [(id, nombre, fijo, [(id de cuerpo, nombre)], id del padre o "")]
         self.uniones = []            # [(id de la operación, nombre)]
         self.lienzos = []            # [(id, nombre, visible)] (Lienzos)
         self.calcomanias = []        # [(id, nombre)] (INSERTAR › Calcomanía), cada una con el cuerpo al que está pegada
@@ -268,8 +268,9 @@ class Navegador(QFrame):
                 it = self._item(carpeta, ident, nombre, ico_e, tipo_e, ident not in ocultos)
                 if len(elemento) > 3:
                     it.setToolTip(0, elemento[3])
-        for ident, nombre, fijo, cuerpos_c in self.componentes:     # componentes con sus cuerpos
-            comp = self._item(raiz, ident, nombre + ("  (fijo)" if fijo else ""), "componente", "componente",
+        for ident, nombre, fijo, cuerpos_c, padre in self.componentes:     # componentes con sus cuerpos, en árbol (ASM-9)
+            arriba = self._items[padre] if padre and padre in self._items else raiz
+            comp = self._item(arriba, ident, nombre + ("  (fijo)" if fijo else ""), "componente", "componente",
                               ident not in ocultos)
             if cuerpos_c:
                 carpeta_c = self._item(comp, f"{ident}:cuerpos", "Cuerpos", "carpeta", "carpeta")

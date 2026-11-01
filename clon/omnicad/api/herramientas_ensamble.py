@@ -34,7 +34,7 @@ from ..timeline import entidades as ent
 from ..timeline.operaciones import Contexto
 from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.operaciones import ErrorOperacion
-from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion, OpComponente, OpCopiarComponente,
+from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion, OpComponente, OpCopiarComponente, ruta_componente,
                                       OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion, OpPosicionInicial, OpRevertirPosicion,
                                       OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
                                       limites_expr, poses_de_estudio, principal_de, siguiente_accion)
@@ -252,6 +252,8 @@ def info_componente(sesion, k, estado=None):
     m = _matriz(estado, k)
     return {"id": k, "name": _nombre_comp(estado, k), "grounded": bool(datos.get("fijo")),
             "pinned": bool(datos.get("anclado")), "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c)} for c in cuerpos],
+            "parent": datos.get("padre") or "", "path": ruta_componente(estado, k),
+            "children": [h for h, d in estado.componentes.items() if d.get("padre") == k],
             "translation": [_r(v) for v in m[:3, 3]], "rotation_matrix": [[_r(v) for v in fila] for fila in m[:3, :3]],
             "bounding_box": _caja(cuerpos),
             **({"origin": [_r(v) for v in (m @ [*datos["origen"], 1.0])[:3]]} if datos.get("origen") else {})}
@@ -373,15 +375,19 @@ def get_assembly(sesion):
 @herramienta("create_component", "ensamble", "Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente "
              "desde cuerpos). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar "
              "(ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al "
-             "nuevo.", modifica=True)
-def create_component(sesion, bodies: list[str], name: str | None = None, grounded: bool = False):
+             "nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.",
+             modifica=True)
+def create_component(sesion, bodies: list[str], name: str | None = None, grounded: bool = False,
+                     parent: str | None = None):
     """
     bodies: ids o nombres de los cuerpos del componente (al menos uno).
     name: nombre del componente; vacío = «Componente<n>».
     grounded: true para fijarlo (Ground): ninguna unión lo mueve.
+    parent: componente padre (id, nombre o uno de sus cuerpos); vacío = la raíz (Parent de Fusion).
     """
     if not bodies:
         raise error("INVALID_ARGUMENTS", "Falta elegir los cuerpos del componente.")
+    padre = componente(sesion, parent) if parent else ""
     cuerpos = []
     for b in bodies:
         c = sesion.cuerpo(b)
@@ -394,7 +400,7 @@ def create_component(sesion, bodies: list[str], name: str | None = None, grounde
                           "al nuevo.")
     doc = sesion.doc
     op = OpComponente(doc.nuevo_id(), nombre_paso(sesion, name, "Componente", OpComponente),
-                      cuerpos=[c.id for c in cuerpos], fijo=grounded)
+                      cuerpos=[c.id for c in cuerpos], fijo=grounded, padre=padre)
     resultado = _agregar(sesion, op)
     resultado["component"] = info_componente(sesion, op.id)
     return resultado
@@ -946,10 +952,12 @@ def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: E
 # ---------------------------------------------------------------- grupos y vínculos
 @herramienta("create_rigid_group", "ensamble", "Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven "
              "juntos; una unión que mueve a uno mueve a todos.", modifica=True)
-def create_rigid_group(sesion, components: list[str], name: str | None = None):
+def create_rigid_group(sesion, components: list[str], name: str | None = None, include_children: bool = False):
     """
     components: componentes del grupo (id, nombre o uno de sus cuerpos); al menos dos distintos.
     name: nombre del paso; vacío = «Grupo rígido<n>».
+    include_children: true suma al grupo los subcomponentes de cada uno («Incluir componentes secundarios»); false los
+        deja libres dentro de su padre.
     """
     ids = []
     for ref in components or []:
@@ -960,10 +968,12 @@ def create_rigid_group(sesion, components: list[str], name: str | None = None):
         raise error("INVALID_ARGUMENTS", "Un grupo rígido necesita al menos dos componentes distintos. Componentes: "
                     f"{_lista_componentes(sesion.doc.estado_final)}.")
     doc = sesion.doc
-    op = OpGrupoRigido(doc.nuevo_id(), nombre_paso(sesion, name, "Grupo rígido", OpGrupoRigido), componentes=ids)
+    op = OpGrupoRigido(doc.nuevo_id(), nombre_paso(sesion, name, "Grupo rígido", OpGrupoRigido), componentes=ids,
+                       incluir_hijos=bool(include_children))
     resultado = _agregar(sesion, op)
     estado = sesion.doc.estado_final
-    resultado["rigid_group"] = {"id": op.id, "name": op.nombre, "components": [_ref_componente(estado, k) for k in ids]}
+    miembros = estado.grupos_rigidos[-1] if estado.grupos_rigidos else ids
+    resultado["rigid_group"] = {"id": op.id, "name": op.nombre, "components": [_ref_componente(estado, k) for k in miembros]}
     return resultado
 
 

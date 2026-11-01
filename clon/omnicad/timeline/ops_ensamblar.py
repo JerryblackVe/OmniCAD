@@ -404,16 +404,38 @@ def _mover_componentes(estado, comps, m):
             estado.componentes[k]["matriz"] = (m @ actual).tolist()
 
 
+def familia(estado, comp):
+    """ASM-9: el componente más todos los que cuelgan de él (su subensamblaje): mover el padre los lleva a todos."""
+    salida, pendientes = set(), [comp]
+    while pendientes:
+        k = pendientes.pop()
+        if k not in salida:
+            salida.add(k)
+            pendientes += [h for h, d in estado.componentes.items() if d.get("padre") == k]
+    return salida
+
+
+def ruta_componente(estado, comp):
+    """«Padre › Hijo»: el nombre del componente precedido por los de sus antecesores."""
+    nombres, vistos = [], set()
+    while comp and comp in estado.componentes and comp not in vistos:
+        vistos.add(comp)
+        nombres.append(str(estado.componentes[comp].get("nombre") or comp))
+        comp = estado.componentes[comp].get("padre") or ""
+    return " › ".join(reversed(nombres))
+
+
 def grupo_rigido(estado, comp):
-    """El componente más todos los que caen en su grupo rígido, encadenando grupos que comparten componentes
-    (A+B y B+C mueven A, B y C juntos)."""
-    salida = {comp}
+    """El componente, sus subcomponentes y todos los que caen en su grupo rígido, encadenando grupos que comparten
+    componentes (A+B y B+C mueven A, B y C juntos) y sumando los subcomponentes de cada uno."""
+    salida = familia(estado, comp)
     creció = True
     while creció:
         creció = False
         for g in estado.grupos_rigidos:
             if salida & set(g) and not set(g) <= salida:
-                salida |= set(g)
+                for k in g:
+                    salida |= familia(estado, k)
                 creció = True
     return salida
 
@@ -463,21 +485,28 @@ def _matriz_de_cuerpos(estado, cuerpos, nombre, ctx):
 
 class OpComponente(Operacion):
     """ENSAMBLAR › Nuevo componente [GUID-5966BF6B]: crea un componente y le pasa los cuerpos elegidos
-    («Desde cuerpos»). `fijo` es «Fijar» (Ground): una unión no puede moverlo. `version_pose` (2 en los nuevos; 1 en
-    las recetas viejas, ver `_migrador`): con 2 el componente tiene en cuenta el movimiento que traen sus cuerpos
-    (`_matriz_de_cuerpos`); con 1 arranca siempre en la identidad."""
+    («Desde cuerpos»). `fijo` es «Fijar» (Ground): una unión no puede moverlo. `padre` («Parent», ASM-9): el componente
+    del que cuelga (id, nombre o uno de sus cuerpos; "" = la raíz); mover el padre lo mueve. `version_pose` (2 en los
+    nuevos; 1 en las recetas viejas, ver `_migrador`): con 2 el componente tiene en cuenta el movimiento que traen sus
+    cuerpos (`_matriz_de_cuerpos`); con 1 arranca siempre en la identidad."""
     TIPO, ETIQUETA, ICONO = "componente", "Componente", "▣"
-    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2}
+    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2, "padre": ""}
     migrar_receta = _migrador("version_pose")
 
     def dependencias(self):
-        return _deps_objetivo(self.p["cuerpos"]) - {self.id}
+        return (_deps_objetivo(self.p["cuerpos"]) | _dep_componente(self.p.get("padre") or "")) - {self.id}
 
     def ejecutar(self, estado, ctx):
+        padre = ""
+        if self.p.get("padre"):
+            padre = componente_por_ref(estado, self.p["padre"])
+            if padre is None:
+                raise ErrorOperacion(f"No encuentro el componente padre «{self.p['padre']}» en este punto del timeline. "
+                                     f"Componentes: {', '.join(c.get('nombre') or k for k, c in estado.componentes.items()) or 'ninguno'}.")
         matriz = np.identity(4)
         if _version_de(self.p, "version_pose") >= 2:
             matriz = _matriz_de_cuerpos(estado, self.p["cuerpos"], self.nombre, ctx)
-        estado.componentes[self.id] = {"nombre": self.nombre, "padre": "", "fijo": bool(self.p["fijo"]),
+        estado.componentes[self.id] = {"nombre": self.nombre, "padre": padre, "fijo": bool(self.p["fijo"]),
                                        "matriz": matriz.tolist(), "base": matriz.tolist()}
         viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
         for cid in self.p["cuerpos"]:
@@ -872,9 +901,11 @@ def componente_por_ref(estado, ref):
 
 class OpGrupoRigido(Operacion):
     """ENSAMBLAR › Grupo rígido [ASM-CREATE-RIGID-GROUP]: los componentes se mueven juntos. Cada componente
-    se nombra por id, por nombre o por el id de uno de sus cuerpos (`componente_por_ref`)."""
+    se nombra por id, por nombre o por el id de uno de sus cuerpos (`componente_por_ref`). `incluir_hijos` es «Incluir
+    componentes secundarios» (ASM-9): también entran al grupo los subcomponentes de cada uno; sin marcar, un
+    subcomponente sigue a su padre pero puede moverse solo."""
     TIPO, ETIQUETA, ICONO = "grupo_rigido", "Grupo rígido", "⛓"
-    PARAMS = {"componentes": []}
+    PARAMS = {"componentes": [], "incluir_hijos": False}
 
     def dependencias(self):
         lista = self.p["componentes"] if isinstance(self.p["componentes"], (list, tuple)) else []
@@ -897,6 +928,8 @@ class OpGrupoRigido(Operacion):
             no_hay = f" No encontré: {', '.join(f'«{r}»' for r in faltan)}." if faltan else ""
             hay = ", ".join(f"{c.get('nombre') or k} ({k})" for k, c in estado.componentes.items())
             raise ErrorOperacion(f"Elegí al menos dos componentes existentes.{no_hay} Componentes disponibles: {hay}.")
+        if self.p.get("incluir_hijos"):
+            ids = _con_subcomponentes(estado, ids)
         estado.grupos_rigidos = estado.grupos_rigidos + [ids]
 
 
@@ -1007,7 +1040,7 @@ class OpCopiarComponente(Operacion):
     """ENSAMBLAR › Duplicar con uniones [Duplicate With Joints] — el paso «Copy Component» que deja cada instancia: un
     componente nuevo con copias de todos los cuerpos de `componente`, en la misma pose y con la misma matriz (una unión
     posterior lo lleva a su destino). Las copias son independientes: OmniCAD no tiene instancias asociativas de
-    componentes. Un componente con subcomponentes no se copia."""
+    componentes. Un subensamblaje se copia entero: sus subcomponentes quedan como `<id>.s1`, `<id>.s2`… (ASM-9)."""
     TIPO, ETIQUETA, ICONO = "copiar_componente", "Copiar componente", "▣"
     PARAMS = {"componente": ""}
 
@@ -1015,24 +1048,28 @@ class OpCopiarComponente(Operacion):
         return (super().dependencias() | _dep_componente(self.p["componente"])) - {self.id}
 
     def ejecutar(self, estado, ctx):
-        from .operaciones import atributos_copia
         origen = _comp_o_error(estado, self.p["componente"])
-        if any(d.get("padre") == origen for d in estado.componentes.values()):
-            raise ErrorOperacion(f"El componente «{estado.componentes[origen].get('nombre') or origen}» tiene "
-                                 "subcomponentes: copiarlos todavía no está. Copiá cada subcomponente por separado.")
-        self._usados = {origen}
-        datos = estado.componentes[origen]
-        estado.componentes[self.id] = {"nombre": estado.nombre_de_copia(datos.get("nombre") or origen), "padre": "",
-                                       "fijo": False, "matriz": list(datos.get("matriz", np.identity(4).tolist())),
-                                       **({"origen": datos["origen"]} if "origen" in datos else {})}
-        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == origen]
-        if not cuerpos:
+        self._usados = familia(estado, origen)
+        if not any((c.componente or "") in self._usados for c in estado.cuerpos.values()):
             raise ErrorOperacion("El componente no tiene cuerpos que copiar.")
-        for c in cuerpos:
-            forma = c.forma.copia() if getattr(c, "tipo", "solido") == "malla" else geo.transformar(c.forma, np.identity(4))
-            cid = estado.nuevo_cuerpo(self.id, forma, c.tipo, nombre=estado.nombre_de_copia(c.nombre),
-                                      **atributos_copia(c))
-            estado.cuerpo(cid).componente = self.id
+        copiar_componente(estado, origen, self.id, self.id, lambda c: c.forma.copia()
+                          if getattr(c, "tipo", "solido") == "malla" else geo.transformar(c.forma, np.identity(4)))
+
+
+def copiar_componente(estado, origen, nuevo, op_id, forma, padre=""):
+    """Copia `origen` como el componente `nuevo` (colgado de `padre`) con copias de sus cuerpos (`forma(c)` da la forma
+    copiada, creadas por el paso `op_id`) y, debajo, sus subcomponentes como `nuevo.s1`, `nuevo.s2`… (ASM-9)."""
+    from .operaciones import atributos_copia
+    datos = estado.componentes[origen]
+    hijos = [h for h, d in estado.componentes.items() if d.get("padre") == origen]
+    estado.componentes[nuevo] = {"nombre": estado.nombre_de_copia(datos.get("nombre") or origen), "padre": padre,
+                                 "fijo": False, "matriz": list(datos.get("matriz", np.identity(4).tolist())),
+                                 **({"origen": datos["origen"]} if "origen" in datos else {})}
+    for c in [c for c in estado.cuerpos.values() if (c.componente or "") == origen]:
+        cid = estado.nuevo_cuerpo(op_id, forma(c), c.tipo, nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
+        estado.cuerpo(cid).componente = nuevo
+    for n, h in enumerate(hijos, 1):
+        copiar_componente(estado, h, f"{nuevo}.s{n}", op_id, forma, nuevo)
 
 
 class OpPosicionInicial(Operacion):
@@ -1049,8 +1086,9 @@ class OpPosicionInicial(Operacion):
         for k in self.EXPRESIONES:
             exigir_numero(self.p[k])
         comp = _comp_o_error(estado, self.p["componente"])
+        comps = familia(estado, comp)
         self._usados = {comp}
-        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") == comp]
+        cuerpos = [c for c in estado.cuerpos.values() if (c.componente or "") in comps]
         if not cuerpos:
             raise ErrorOperacion("El componente no tiene cuerpos que mover.")
         cajas = [geo.caja_envolvente(c.forma) if getattr(c, "tipo", "solido") != "malla" else c.forma.caja()
@@ -1059,7 +1097,7 @@ class OpPosicionInicial(Operacion):
         giro = (_rot(2, ctx.evaluar(self.p["rz"], ANGULO)) @ _rot(1, ctx.evaluar(self.p["ry"], ANGULO))
                 @ _rot(0, ctx.evaluar(self.p["rx"], ANGULO)))
         m = _tras([ctx.evaluar(self.p[k]) for k in ("x", "y", "z")]) @ _tras(centro) @ giro @ _tras(-centro)
-        _mover_componentes(estado, {comp}, m)
+        _mover_componentes(estado, comps, m)
 
 
 class OpCapturarPosicion(Operacion):
@@ -1079,7 +1117,7 @@ class OpCapturarPosicion(Operacion):
             raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
                                  "ENSAMBLAR › Nuevo componente.")
         self._usados = set(comps)
-        for k in comps:
+        for k in _con_subcomponentes(estado, comps):
             estado.componentes[k] = dict(estado.componentes[k], captura=_matriz_de(estado, k).tolist())
 
 
@@ -1100,9 +1138,14 @@ class OpRevertirPosicion(Operacion):
             raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
                                  "ENSAMBLAR › Nuevo componente.")
         self._usados = set(comps)
-        for k in comps:
+        for k in _con_subcomponentes(estado, comps):        # cada uno vuelve a SU captura: el orden no importa
             meta = np.asarray(estado.componentes[k].get("captura", np.identity(4).tolist()), float)
             _mover_componentes(estado, {k}, meta @ np.linalg.inv(_matriz_de(estado, k)))
+
+
+def _con_subcomponentes(estado, comps):
+    """Los componentes elegidos más los que cuelgan de cada uno (capturar o revertir un padre alcanza al subensamblaje)."""
+    return list(dict.fromkeys(h for k in comps for h in [k, *sorted(familia(estado, k) - {k})]))
 
 
 def valores_de_estudio(estado, valores):
@@ -1137,6 +1180,13 @@ def poses_de_estudio(estado, valores, libres=None):
     for k, u in uniones.items():
         for comp in u["componentes"]:
             quien_mueve[comp] = k
+    for comp, d in estado.componentes.items():    # ASM-9: un subcomponente creado después de la unión sigue a su padre
+        padre, vistos = d.get("padre") or "", set()
+        while comp not in quien_mueve and padre and padre not in vistos:
+            vistos.add(padre)
+            if padre in quien_mueve:
+                quien_mueve[comp] = quien_mueve[padre]
+            padre = estado.componentes.get(padre, {}).get("padre") or ""
 
     def total(k, vistos=()):
         padre = quien_mueve.get(uniones[k]["comp2"])

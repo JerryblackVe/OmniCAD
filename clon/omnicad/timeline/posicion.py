@@ -70,6 +70,8 @@ def que_arrastra(estado, comp):
     while comp and comp not in vistos:
         vistos.add(comp)
         nombre = estado.componentes[comp].get("nombre") or comp
+        # shortcut: un subcomponente creado antes de la unión de su padre arrastra esa unión (Fusion lo deja libre dentro
+        # del subensamblaje); se cambia cuando ASM-16 resuelva varios componentes a la vez.
         uid = next((k for k, u in reversed(estado.uniones.items()) if comp in u["componentes"]), None)
         grupo = grupo_rigido(estado, comp) if uid is None else {comp}
         if any(es_fijo(estado, k) for k in grupo):
