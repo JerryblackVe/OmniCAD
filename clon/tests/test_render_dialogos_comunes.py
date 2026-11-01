@@ -32,9 +32,11 @@ def test_renderizar_avisa_de_carpeta_inexistente_y_de_imagen_enorme_sin_impedir_
     d.show()
     assert d.mensaje.text() == "" and d.mensaje.isHidden() and d.icono_mensaje.isHidden()
     d.ruta.setText(str(tmp_path / "no_existe" / "a.png"))
+    d._mirar_carpeta()                                                  # (sin esperar la pausa de 300 ms)
     assert "no existe" in d.mensaje.text() and d.icono_mensaje.text() == "⚠" and d.mensaje.property("tipo") == "aviso"
     assert d.mensaje.isVisible()
     d.ruta.setText(str(tmp_path / "a.png"))
+    d._mirar_carpeta()
     assert d.mensaje.text() == ""
     d.preset.setCurrentIndex(len(ur.PRESETS) - 1)
     d.bloquear.setChecked(False)
@@ -42,6 +44,7 @@ def test_renderizar_avisa_de_carpeta_inexistente_y_de_imagen_enorme_sin_impedir_
     d.alto.setValue(4000)
     assert "24 megapíxeles" in d.mensaje.text() and d.mensaje.isVisible()
     d.ruta.setText("")                                                  # sin ruta no se guarda: nada que avisar de la carpeta
+    d._mirar_carpeta()
     assert "megapíxeles" in d.mensaje.text()
     assert d.valores()["ancho"] == 6000 and d.valores()["ruta"] == ""   # el aviso no cambia lo que se renderiza
     d.close()
@@ -86,7 +89,7 @@ def test_el_panel_de_escena_se_mueve_por_la_cabecera_dentro_de_la_ventana_de_ren
     from omnicad.ui import render as ur
     from omnicad.ui.superposiciones import CabeceraMovible
     v = ur.VentanaRender(crear_documento_ejemplo())
-    v.resize(1100, 900)                                                      # el panel mide ~560 px: en una ventana más baja no entra (UI-1, queda)
+    v.resize(1100, 900)
     v.show()
     v.mostrar_escena()
     qapp.processEvents()
@@ -105,3 +108,94 @@ def test_el_panel_de_escena_se_mueve_por_la_cabecera_dentro_de_la_ventana_de_ren
     evento(QEvent.MouseButtonDblClick, cab.mapToGlobal(QPoint(30, 8)))
     assert p.pos() == base                                                  # el doble clic lo devuelve a su lugar
     v.close()
+
+
+def _ventana_render(qapp, alto):
+    from omnicad.ejemplo import crear_documento_ejemplo
+    from omnicad.ui import render as ur
+    v = ur.VentanaRender(crear_documento_ejemplo())
+    v.resize(1100, alto)
+    v.show()
+    qapp.processEvents()
+    return v
+
+
+def _pie_a_la_vista(widget, desplazador):
+    """El borde de abajo del widget cae dentro de lo visible (un widget más alto que la vista se recorre con la barra)."""
+    from PySide6.QtCore import QPoint
+    vista = desplazador.viewport()
+    return widget.mapTo(vista, QPoint(0, widget.height())).y() <= vista.height()
+
+
+@pytest.mark.parametrize("alto", [900, 500, 400])
+def test_los_paneles_escena_y_aspecto_entran_en_el_lienzo_y_se_desplazan_si_no_caben(qapp, alto):
+    """UI-1: el cuerpo tiene barra; la cabecera (con ✕) y el pie siempre se alcanzan, en cualquier alto de la ventana."""
+    v = _ventana_render(qapp, alto)
+    for mostrar, panel, ultimo in (("mostrar_escena", "panel_escena", "oclusion"), ("mostrar_aspecto", "panel_aspecto", "b_quitar")):
+        getattr(v, mostrar)()
+        qapp.processEvents()
+        p = getattr(v, panel)
+        assert v.area.rect().contains(p.geometry()), (panel, p.geometry(), v.area.rect())
+        barra = p.desplazador.verticalScrollBar()
+        assert (barra.maximum() == 0) == (alto == 900), (panel, barra.maximum())
+        barra.setValue(barra.maximum())
+        assert _pie_a_la_vista(getattr(p, ultimo), p.desplazador), (panel, ultimo)
+    v.close()
+
+
+def test_el_panel_de_escena_conserva_su_alto_al_cambiar_de_pestana_y_la_biblioteca_se_alcanza(qapp):
+    """UI-1: las pestañas Configuración y Biblioteca de entornos no cambian el alto del panel ni dejan nada cortado."""
+    from PySide6.QtWidgets import QTabWidget
+    v = _ventana_render(qapp, 400)
+    v.mostrar_escena()
+    qapp.processEvents()
+    p = v.panel_escena
+    pestanas = p.findChild(QTabWidget)
+    alto = p.height()
+    pestanas.setCurrentIndex(1)
+    qapp.processEvents()
+    assert p.height() == alto and v.area.rect().contains(p.geometry())
+    barra = p.desplazador.verticalScrollBar()
+    barra.setValue(barra.maximum())
+    assert _pie_a_la_vista(p.lista_entornos, p.desplazador)
+    pestanas.setCurrentIndex(0)
+    qapp.processEvents()
+    assert p.height() == alto
+    v.close()
+
+
+def test_la_carpeta_del_render_se_mira_al_dejar_de_teclear_y_no_en_cada_tecla(qapp, tmp_path, monkeypatch):
+    """Cada tecla de la ruta mandaba un `is_dir` al disco: ahora uno por pausa de 300 ms."""
+    from pathlib import Path
+    from PySide6.QtTest import QTest
+    from omnicad.ui import render as ur
+    d = ur.DialogoRenderizar(None, (640, 480), tmp_path / "a.png")
+    d.show()
+    llamadas = []
+    original = Path.is_dir
+    monkeypatch.setattr(Path, "is_dir", lambda self: (llamadas.append(self), original(self))[1])
+    for texto in ("x", "xy", "xyz", str(tmp_path / "no_existe" / "a.png")):
+        d.ruta.setText(texto)
+    assert llamadas == [] and d._t_ruta.isActive() and d.mensaje.text() == ""
+    QTest.qWait(450)
+    assert len(llamadas) == 1 and "no existe" in d.mensaje.text() and d.mensaje.isVisible()
+    d.ruta.setText(str(tmp_path / "a.png"))
+    QTest.qWait(450)
+    assert len(llamadas) == 2 and d.mensaje.text() == ""
+    d.close()
+
+
+def test_una_ruta_larga_no_ensancha_el_dialogo_con_la_letra_grande(qapp, tmp_path):
+    """El aviso de carpeta inexistente acorta la ruta en el medio: sin lugar donde cortar la línea, con letra al 150 % forzaba
+    un ancho mayor que el fijo del diálogo y se cortaba."""
+    from PySide6.QtGui import QFont
+    from omnicad.ui import render as ur
+    d = ur.DialogoRenderizar(None, (640, 480), tmp_path / "a.png")
+    fuente = QFont(d.font())
+    fuente.setPointSizeF(fuente.pointSizeF() * 1.5)
+    d.setFont(fuente)
+    d.ruta.setText("Z:/" + "una_carpeta_con_un_nombre_larguisimo/" * 3 + "render.png")
+    d._mirar_carpeta()
+    d.show()
+    assert "…" in d.mensaje.text() and d.minimumSizeHint().width() <= d.width()
+    d.close()

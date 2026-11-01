@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """Paneles de herramienta en CADA tema disponible (y con el tamaño de letra al 125 y 150 %, que es lo que cambia en la
 interfaz con la escala): abre Extruir (con «Más opciones» abierta y un valor inválido), el Patrón (cambio de modo) y la
-Multitransformación, captura cada uno y comprueba el contraste de los colores de mensaje (instrucción, inválido,
+Multitransformación y el diálogo Renderizar, captura cada uno y comprueba el contraste de los colores de mensaje (instrucción, inválido,
 advertencia) contra el fondo del panel, y que nada se recorte (sin desborde horizontal, entra en el lienzo).
     paneles_temas.py   → `evidencias/ui_paneles_2026-10-31/temas/<tema>_<pct>/*.png`."""
 import arnes as A
 import escena
-from omnicad.ui import temas
+from omnicad.ui import render, temas
 from omnicad.ui.comando import hit_desde_ref
 from omnicad.ui.comandos import CATALOGO
 from omnicad.ui.formulario import TIPOS_MENSAJE
+from PySide6.QtWidgets import QCheckBox, QLabel, QPushButton, QToolButton
 
 AR = "PANELES·temas"
 CARPETA = A.SALIDA.parent / "ui_paneles_2026-10-31" / "temas"
@@ -54,6 +55,27 @@ def revisar(tema, pct):
     A.reg(AR, f"{tema} {pct} % · Multitransformación entra en el lienzo", v.area.rect().contains(p.geometry()),
           f"{p.width()}x{p.height()}")
     p.cancelar()
+    revisar_renderizar(tema, pct, carpeta)
+
+
+def revisar_renderizar(tema, pct, carpeta):
+    """El diálogo Renderizar con la letra grande: el aviso largo de carpeta inexistente, ningún texto cortado y todo en pantalla."""
+    d = render.DialogoRenderizar(v, (1280, 720), carpeta / "render.png")
+    d.ruta.setText("Z:/una_carpeta_que_no_existe_y_tiene_un_nombre_bastante_largo/render.png")
+    d._mirar_carpeta()
+    d.show()
+    A.esperar(150)
+    cortados = [w.text() for clase in (QLabel, QCheckBox, QPushButton, QToolButton) for w in d.findChildren(clase)
+                if w.isVisible() and not (isinstance(w, QLabel) and w.wordWrap()) and w.sizeHint().width() > w.width() + 1]
+    aviso = d.mensaje
+    A.reg(AR, f"{tema} {pct} % · Renderizar: ningún texto cortado ni desborde horizontal",
+          not cortados and d.minimumSizeHint().width() <= d.width(), f"{d.width()}x{d.height()} · cortados: {cortados}")
+    A.reg(AR, f"{tema} {pct} % · Renderizar: el aviso largo se lee entero (con ⚠) y el diálogo entra en la pantalla",
+          aviso.isVisible() and d.icono_mensaje.text() == "⚠" and aviso.heightForWidth(aviso.width()) <= aviso.height()
+          and d.height() <= d.screen().availableGeometry().height(), f"{aviso.width()}x{aviso.height()} de {aviso.heightForWidth(aviso.width())}")
+    d.grab().save(str(carpeta / "renderizar.png"))
+    d.close()
+    d.deleteLater()
 
 
 def todo():

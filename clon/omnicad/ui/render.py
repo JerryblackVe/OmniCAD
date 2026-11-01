@@ -37,7 +37,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QBrush, QColor, QIcon, QImage, QLinearGradient, QPainter, QPen, QPixmap,
                            QRadialGradient)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
-                               QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                               QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressDialog,
                                QPushButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QTabWidget, QToolButton,
                                QVBoxLayout, QWidget)
@@ -1290,14 +1290,29 @@ class PanelFlotante(QFrame):
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 6)
         v.setSpacing(4)
-        barra, icono_titulo, rotulo = armar_cabecera(self, self.cerrar, tooltip_cerrar="Cerrar")     # la cabecera movible común
+        v.setSizeConstraint(QLayout.SetFixedSize)
+        self._cabecera, icono_titulo, rotulo = armar_cabecera(self, self.cerrar, tooltip_cerrar="Cerrar")     # la cabecera movible común
         icono_titulo.hide()
         rotulo.setText(titulo.upper())
-        v.addWidget(barra)
+        v.addWidget(self._cabecera)
         self.cuerpo = QVBoxLayout()
         self.cuerpo.setContentsMargins(8, 2, 8, 2)
         self.cuerpo.setSpacing(6)
-        v.addLayout(self.cuerpo, 1)
+        pagina = QWidget()
+        pagina.setLayout(self.cuerpo)
+        # UI-1: en una ventana de render baja el cuerpo se desplaza con una barra y la cabecera (con su ✕) queda a la vista.
+        self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)      # solo si un widget propio no entra: no se recorta en silencio
+        self.desplazador.setWidget(pagina)
+        self.desplazador.setFixedWidth(ANCHOS["normal"])
+        v.addWidget(self.desplazador)
+
+    def ajustar_alto(self, disponible):
+        """El cuerpo toma su alto natural o, si el panel no entra en `disponible` (el alto del lienzo), el que deja: se desplaza."""
+        natural = self.desplazador.widget().sizeHint().height() + 2 * self.desplazador.frameWidth()
+        otros = self._cabecera.sizeHint().height() + self.layout().spacing() + self.layout().contentsMargins().bottom()
+        self.desplazador.setFixedHeight(max(80, min(natural, disponible - otros)))
+        self.adjustSize()
 
     def cerrar(self):
         self.hide()
@@ -1616,23 +1631,34 @@ class DialogoRenderizar(QDialog):
         botones.rejected.connect(self.reject)
         f.addRow(botones)
         self._relacion = 4 / 3
+        self._carpeta_ausente = None
         self.preset.currentIndexChanged.connect(self._preset)
         self.ancho.valueChanged.connect(lambda v: self._mantener("ancho", v))
         self.alto.valueChanged.connect(lambda v: self._mantener("alto", v))
         self.ancho.valueChanged.connect(self._revisar)
         self.alto.valueChanged.connect(self._revisar)
-        self.ruta.textChanged.connect(self._revisar)
+        self._t_ruta = QTimer(self, singleShot=True, interval=300)       # la carpeta se mira al dejar de teclear, no en cada tecla
+        self._t_ruta.timeout.connect(self._mirar_carpeta)
+        self.ruta.textChanged.connect(lambda _t: self._t_ruta.start())
         self.preset.setCurrentIndex(5 if captura else 2)
         self._preset()
+        self._mirar_carpeta()
+
+    def _mirar_carpeta(self):
+        """Mira el disco (una vez por pausa al teclear): guarda la carpeta de destino si no existe, o None."""
+        carpeta = Path(self.ruta.text().strip()).expanduser().parent if self.ruta.text().strip() else None
+        self._carpeta_ausente = carpeta if carpeta is not None and not carpeta.is_dir() else None
         self._revisar()
 
     def _revisar(self, *_):
         """Avisos que no impiden renderizar: la carpeta de destino no existe (la imagen se haría y no se podría guardar) o
         la imagen es tan grande que tarda y gasta memoria."""
-        ruta = self.ruta.text().strip()
         mpx = self.ancho.value() * self.alto.value() / 1e6
-        if ruta and not Path(ruta).expanduser().parent.is_dir():
-            texto = f"La carpeta «{Path(ruta).expanduser().parent}» no existe: la imagen se renderiza pero no se puede guardar."
+        if self._carpeta_ausente is not None:
+            carpeta = str(self._carpeta_ausente)
+            if len(carpeta) > 40:                  # una ruta larga no tiene dónde cortar la línea: ensancharía el diálogo (letra grande)
+                carpeta = carpeta[:18] + "…" + carpeta[-21:]
+            texto = f"La carpeta «{carpeta}» no existe: la imagen se renderiza pero no se puede guardar."
         elif mpx > MPX_LENTO:
             texto = f"{mpx:.0f} megapíxeles: tarda y usa mucha memoria."
         else:

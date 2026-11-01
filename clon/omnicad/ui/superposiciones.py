@@ -622,7 +622,10 @@ class AreaVisor(QWidget):
             self.paleta.raise_()
             for lateral in self.laterales:
                 if lateral.isVisible():
-                    lateral.ajustar()
+                    if hasattr(lateral, "ajustar_alto"):
+                        lateral.ajustar_alto(abajo - g.top() - 4)       # UI-8: no pasa del alto del lienzo, su cuerpo tiene barra
+                    else:
+                        lateral.ajustar()
                     sube = y + lateral.height() > abajo and lateral.height() <= abajo - g.top() - 4
                     x, ly = max(g.left() + 4, self.paleta.x() - lateral.width() - 8), abajo - lateral.height() if sube else y     # en una ventana baja sube: la barra de vista no lo tapa
                     fija = getattr(lateral, "posicion_usuario", None)

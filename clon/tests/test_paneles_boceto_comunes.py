@@ -119,3 +119,28 @@ def test_patron_y_transformar_usan_las_mismas_lineas_de_estado(app_qt):
         assert p.icono_guia.text() == "➜" and p.icono_mensaje.text() == "✖"
         assert p.guia.text() == "Elegí el centro." and p.mensaje.text() == "La cantidad tiene que ser 2 o más."
         assert p.mensaje.maximumWidth() == p.ANCHO - 44
+
+
+@pytest.mark.parametrize("alto", [720, 520, 420])
+def test_el_panel_caracter_no_pasa_del_alto_del_lienzo_y_su_cuerpo_se_desplaza(app_qt, alto):
+    """UI-8: mide ≈ 540 px; en una ventana baja se achica, la cabecera queda a la vista y lo de abajo se alcanza con la barra,
+    también con todas las secciones abiertas (que lo hacen más alto todavía)."""
+    area = _Area()
+    area.resize(900, alto)
+    p = PanelCaracter(area)
+    area.show()
+    p.show()
+    p.ajustar_alto(alto - 16)
+    app_qt.processEvents()
+    assert p.height() <= alto - 16 and p.findChild(CabeceraMovible).isVisible()
+    barra = p.desplazador.verticalScrollBar()
+    natural = p.findChild(CabeceraMovible).sizeHint().height() + p.cuerpo.sizeHint().height()
+    assert (barra.maximum() > 0) == (natural > alto - 16)
+    for seccion in ("Decoraciones", "Transformaciones", "Avanzado"):
+        next(b for b in p.findChildren(QToolButton) if b.text().endswith(seccion)).click()
+    p.ajustar_alto(alto - 16)
+    app_qt.processEvents()
+    assert p.height() <= alto - 16 and barra.maximum() > 0
+    barra.setValue(barra.maximum())
+    vista = p.desplazador.viewport()
+    assert p.sin_division.mapTo(vista, QPoint(0, p.sin_division.height())).y() <= vista.height()

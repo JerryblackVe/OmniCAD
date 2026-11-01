@@ -94,6 +94,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #paleta_boceto QScrollArea, #paleta_boceto QScrollArea > QWidget > QWidget { background: transparent; }
 #panel_comando QLineEdit, #panel_comando QComboBox, #panel_comando QSpinBox { padding: 2px 4px; }
 #panel_comando QScrollArea, #panel_comando QScrollArea > QWidget > QWidget { background: transparent; }
+#panel_flotante QScrollArea, #panel_flotante QScrollArea > QWidget > QWidget { background: transparent; }
 #mensaje_comando { color: #ff8a80; }
 #aviso_comando { color: #ffc857; }
 #grupo_cmd { color: #9aa5b4; font-weight: 600; border-bottom: 1px solid #28323d; padding-top: 4px; }

@@ -617,6 +617,7 @@ class PanelCaracter(QFrame):
         super().__init__(parent)
         self.setObjectName("paleta_boceto")
         self._tam_usuario = [0, 0]
+        self._disponible = None          # alto que deja el lienzo (lo pasa `ajustar_alto`); sin él, el natural
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
@@ -627,6 +628,7 @@ class PanelCaracter(QFrame):
         ico.setPixmap(icono("texto").pixmap(18, 18))
         titulo.setText("CARÁCTER")
         v.addWidget(cab)
+        self._cabecera = cab
         self.cuerpo = QWidget()
         self.cuerpo.setMinimumWidth(self.ANCHO + 16)
         c = QVBoxLayout(self.cuerpo)
@@ -780,7 +782,11 @@ class PanelCaracter(QFrame):
         f.addWidget(self.sin_division)
         self._cuerpo_de["Avanzado"].setLayout(f)
         c.addStretch(1)
-        v.addWidget(self.cuerpo, 1)
+        # UI-8: en una ventana baja el cuerpo se desplaza con una barra y la cabecera queda a la vista.
+        self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
+        self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.desplazador.setWidget(self.cuerpo)
+        v.addWidget(self.desplazador, 1)
         self._agarre = _AgarreTamano(self)
         self._agarre.raise_()
         self.ajustar()
@@ -850,11 +856,26 @@ class PanelCaracter(QFrame):
             otro.setValue(valor)
 
     # ------------------------------------------------------------ comportamiento
+    def ajustar_alto(self, disponible):
+        """`AreaVisor.reubicar` pasa el alto que deja el lienzo: el panel no lo supera (el cuerpo se desplaza)."""
+        self._disponible = disponible
+        self.ajustar()
+
     def ajustar(self):
-        """Tamaño: el que hace falta para el contenido o el que eligió la persona si es mayor."""
-        self.layout().activate()
-        hint = self.sizeHint()
-        self.resize(max(hint.width(), self._tam_usuario[0]), max(hint.height(), self._tam_usuario[1]))
+        """Tamaño: el que hace falta para el contenido o el que eligió la persona si es mayor, sin pasar del alto
+        disponible (UI-8: lo que sobra se desplaza con la barra del cuerpo)."""
+        natural = self.cuerpo.sizeHint()
+        plegado = not self.desplazador.isVisibleTo(self)
+        cab = self._cabecera.sizeHint()
+        tope = natural.height() if self._disponible is None else max(80, self._disponible - cab.height())
+        alto_cuerpo = 0 if plegado else min(natural.height(), tope)
+        barra = not plegado and alto_cuerpo < natural.height()
+        self.desplazador.setMinimumHeight(alto_cuerpo)
+        ancho = max(cab.width(), natural.width() + (self.desplazador.verticalScrollBar().sizeHint().width() if barra else 0))
+        alto = max(cab.height() + alto_cuerpo, self._tam_usuario[1])
+        if self._disponible is not None:
+            alto = min(alto, self._disponible)
+        self.resize(max(ancho, self._tam_usuario[0]), alto)
 
     def _reubicar(self):
         self.ajustar()
@@ -864,8 +885,8 @@ class PanelCaracter(QFrame):
 
     def _plegar(self):
         self._tam_usuario[1] = 0
-        self.cuerpo.setVisible(not self.cuerpo.isVisible())
-        self.b_plegar.setText("–" if self.cuerpo.isVisible() else "+")
+        self.desplazador.setVisible(not self.desplazador.isVisibleTo(self))
+        self.b_plegar.setText("–" if self.desplazador.isVisibleTo(self) else "+")
         self._reubicar()
 
     def _poblar_fuentes(self, actual):

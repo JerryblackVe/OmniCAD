@@ -12,7 +12,7 @@ import math
 import arnes as A
 from omnicad import api
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QPushButton, QToolButton
 
@@ -69,6 +69,15 @@ def arrastrar(panel, dx, dy, pasos=5):
 
 def entra(p):
     return v.area.rect().adjusted(0, 0, 1, 1).contains(p.geometry())
+
+
+def rueda(w, pasos):
+    """Gira la rueda del ratón sobre `w` (un paso = una muesca; negativo = hacia abajo): evento simulado, sin tocar el cursor real."""
+    centro = QPointF(w.width() / 2, w.height() / 2)
+    for _ in range(abs(pasos)):                  # Qt corta cada evento a una página: se gira muesca por muesca, como la mano
+        QApplication.sendEvent(w, QWheelEvent(centro, QPointF(w.mapToGlobal(centro.toPoint())), QPoint(0, 0),
+                                              QPoint(0, 120 if pasos > 0 else -120), Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+    A.esperar(60)
 
 
 def cabecera_entra(p):
@@ -161,10 +170,30 @@ def caracter(tag):
           p.isVisible() and p.findChild(CabeceraMovible) is not None and not [b for b in p.findChildren(QToolButton) if b.text() == "✕"], "")
     base, alto0, ancho0 = p.pos(), p.height(), p.width()
     p.grab().save(str(CARPETA / f"caracter_{tag}.png"))
+    barra = p.desplazador.verticalScrollBar()
+    natural = p.cuerpo.sizeHint().height() + p._cabecera.sizeHint().height()
+    A.reg(AR, f"{tag} · Carácter: entra en el lienzo ({p.height()} de {v.area.height()} px) y, si no cabe, el cuerpo tiene barra",
+          entra(p) and (barra.maximum() > 0) == (natural > v.area.height() - 16), f"natural {natural} · barra {barra.maximum()}")
+    for seccion in ("Decoraciones", "Transformaciones", "Avanzado"):        # como una persona: abre cada sección y baja con la rueda
+        boton = next(b for b in p.findChildren(QToolButton) if b.text().endswith(seccion))
+        if boton.text().startswith("▸"):
+            QTest.mouseClick(boton, Qt.LeftButton)
+            A.esperar(120)
+    rueda(p.desplazador.viewport(), -40)
+    vista = p.desplazador.viewport()
+    pie = p.sin_division.mapTo(vista, QPoint(0, p.sin_division.height())).y()
+    A.reg(AR, f"{tag} · Carácter: con todas las secciones abiertas, la rueda llega hasta «Sin división»",
+          entra(p) and barra.value() == barra.maximum() and 0 < pie <= vista.height(), f"alto {p.height()} · pie {pie}/{vista.height()}")
+    p.grab().save(str(CARPETA / f"caracter_abierto_{tag}.png"))
+    for boton in [b for b in p.findChildren(QToolButton) if b.text().startswith("▾") and not b.text().endswith("Espaciado")
+                  and not b.text().endswith("Alineación y curva")]:
+        QTest.mouseClick(boton, Qt.LeftButton)                              # vuelve a dejar plegadas las tres que se abrieron
+    A.esperar(120)
+    alto0 = p.height()
     arrastrar(p, -200, 60)
     A.reg(AR, f"{tag} · Carácter: arrastrar la cabecera lo mueve y queda dentro de la vista", p.pos() != base and cabecera_entra(p), f"{base} → {p.pos()}")
     arrastrar(p, -9000, 9000)
-    A.reg(AR, f"{tag} · Carácter: más allá del borde su cabecera queda a la vista", cabecera_entra(p), f"{p.pos()} {p.width()}x{p.height()}")
+    A.reg(AR, f"{tag} · Carácter: más allá del borde su cabecera queda a la vista", cabecera_entra(p) and entra(p), f"{p.pos()} {p.width()}x{p.height()}")
     v.grab().save(str(CARPETA / f"ventana_caracter_movido_{tag}.png"))
     QTest.mouseClick(p.b_plegar, Qt.LeftButton)
     A.esperar(150)
