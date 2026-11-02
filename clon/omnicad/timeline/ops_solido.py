@@ -13,8 +13,9 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _resolver,
-                          _resolver_todas, aplicar_resultado, atributos_copia, poner_resultado, registrar_operacion)
+from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo,
+                          _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, atributos_copia,
+                          poner_resultado, registrar_operacion)
 
 ESPESORES = ("simetrica", "lado1", "lado2")     # dirección del espesor de nervio y red (nucleo.solidos_crear)
 
@@ -338,13 +339,14 @@ class OpAgujero(_OpCrear):
               "rosca": "simple", "designacion": "M6", "invertir": False, "objetivos": [],
               "clase_rosca": "", "holgura_3d": "0 mm", "mano": "derecha", "ajuste": "normal", "hasta": None,
               "desfase_hasta": "0 mm", "ref_cara": None, "ref_aristas": [], "ref_distancia1": "10 mm",
-              "ref_distancia2": "10 mm"}
+              "ref_distancia2": "10 mm", "version_rosca": 2}
     EXPRESIONES = ("diametro", "profundidad", "angulo_punta", "diam_abocardado", "prof_abocardado", "diam_avellanado",
                    "angulo_avellanado", "holgura_3d", "desfase_hasta", "ref_distancia1", "ref_distancia2")
     OPCIONES = {"tipo": ("simple", "abocardado", "avellanado"), "extension": ("distancia", "todo", "hasta"),
                 "punta": ("angulo", "plana"), "rosca": ("simple", "holgura", "cosmetica", "modelada", "conico"),
                 "ajuste": ("fino", "normal", "grueso"), "mano": ("derecha", "izquierda")}
     REFS = ("posiciones", "hasta", "ref_cara", "ref_aristas")
+    migrar_receta = _migrador("version_rosca")     # B-122: las clases de tabla modelan sus Ø; una receta vieja, no
 
     def dependencias(self):
         return super().dependencias() | ent.dependencias_de([d["cara"] for d in self.p.get("puntos_cara") or [] if isinstance(d, dict) and "cara" in d])
@@ -411,7 +413,8 @@ class OpAgujero(_OpCrear):
                 opciones["diametro"] = sc.diametro_taladro_rosca(p["designacion"], clase, L("holgura_3d"))
             else:
                 opciones.update(diametro=L("diametro"), roscado=p["designacion"], clase=clase,
-                                holgura=L("holgura_3d"), mano=p.get("mano") or "derecha")
+                                holgura=L("holgura_3d"), mano=p.get("mano") or "derecha",
+                                tabla=_version_de(p, "version_rosca") == 2)
         elif rosca == "holgura":
             opciones["diametro"] = sc.diametro_paso_libre(p["designacion"], p.get("ajuste") or "normal")
         elif rosca == "conico":
@@ -479,10 +482,12 @@ class OpRosca(_OpCrear):
     TIPO, ETIQUETA, ICONO = "rosca", "Rosca", "⌇"
     PARAMS = {"caras": [], "designacion": "", "largo_completo": True, "longitud": "10 mm", "desfase": "0 mm",
               "modelada": True, "mano": "derecha", "invertir": False,
-              "familia": "iso_metrica", "clase_rosca": "", "holgura_3d": "0 mm"}   # nuevas: «familia» y siguientes
+              "familia": "iso_metrica", "clase_rosca": "", "holgura_3d": "0 mm",   # nuevas: «familia» y siguientes
+              "version_rosca": 2}
     EXPRESIONES = ("longitud", "desfase", "holgura_3d")
     OPCIONES = {"mano": ("derecha", "izquierda"), "familia": FAMILIAS_ROSCA}
     REFS = ("caras",)
+    migrar_receta = _migrador("version_rosca")     # B-122: las clases de tabla modelan sus Ø; una receta vieja, no
 
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["caras"], estado, ("cara",))
@@ -506,7 +511,8 @@ class OpRosca(_OpCrear):
             cuerpo.forma = sc.rosca(cuerpo.forma, e.forma, designacion=datos["designacion"],
                                     longitud=None if p["largo_completo"] else ctx.evaluar(p["longitud"]),
                                     desfase=ctx.evaluar(p["desfase"]), modelada=modelada, mano=p["mano"],
-                                    invertir=p["invertir"], clase=clase, holgura=holgura)
+                                    invertir=p["invertir"], clase=clase, holgura=holgura,
+                                    tabla=_version_de(p, "version_rosca") == 2)
             self.roscas.append({"cuerpo": cuerpo.id, "designacion": datos["designacion"], "clase": clase,
                                 "interna": info["interna"], "modelada": modelada})
             if not modelada:
@@ -864,8 +870,10 @@ class OpPatron(_OpCrear):
     y en ruta (k negativo = el otro lado con simetría) y el n.º de punto (1 = el primero) en puntos. Los que ya no
     caen en el patrón (menos cantidad, sin simetría…) se conservan y se avisa; nunca se reasignan a otra copia.
     En el circular, `distribucion` es "completo" (360° sin repetir el cierre), "parcial" (`angulo` es el total desde el
-    original), "simetrico" (n a cada lado hasta ±`angulo`) o, como en las recetas viejas, "extension" (usa `simetrico`)
+    original), "simetrico" (a los dos lados del original) o, como en las recetas viejas, "extension" (usa `simetrico`)
     y "espaciado" (`angulo` es el ángulo entre copias).
+    `version_simetria`: 2 (PAT-1, lo medido en Fusion real): la cantidad simétrica de los patrones rectangular y circular
+    es el total con el original; 1 (recetas viejas): n a cada lado y ±`angulo`.
     En puntos: `puntos` (puntos de boceto, vértices, puntos de construcción o un boceto entero = sus puntos sueltos)
     y `coordenadas` ([x, y, z], números o expresiones); cada copia lleva el punto de referencia (`referencia`, o
     `referencia_xyz` [x, y, z]; por defecto el origen) a uno de los puntos."""
@@ -876,12 +884,13 @@ class OpPatron(_OpCrear):
               "combinar": False, "giro": "0 deg", "puntos": [], "coordenadas": [], "referencia": None,
               "referencia_xyz": [], "objeto": "cuerpos", "pasos": [], "ligeras": False, "caras": [],
               "componentes": [], "construccion": [], "calculo": "identico", "simetrico2": None, "dir2_derivada": False,
-              "plano_dir2": None}
+              "plano_dir2": None, "version_simetria": 2}
     EXPRESIONES = ("d1", "d2", "angulo", "inicio", "giro")
     OPCIONES = {"forma_patron": ("rectangular", "circular", "ruta", "puntos"),
                 "distribucion": ("extension", "espaciado", "completo", "parcial", "simetrico"),
                 "orientacion": ("identica", "direccion_ruta"), "objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
     REFS = ("dir1", "dir2", "eje", "ruta", "puntos", "referencia", "caras", "construccion", "plano_dir2")
+    migrar_receta = _migrador("version_simetria")
 
     def dependencias(self):
         return (super().dependencias() | _pasos_y_componentes(self.p)) - {self.id}
@@ -962,6 +971,7 @@ class OpPatron(_OpCrear):
         p, sc = self.p, _sc()
         sup = self._suprimidos()
         forma = p["forma_patron"]
+        total = _version_de(p, "version_simetria") == 2
         if forma != "circular" and p["distribucion"] not in ("extension", "espaciado"):
             raise ErrorOperacion(f"La distribución «{p['distribucion']}» solo existe en el patrón circular: usá "
                                  "«extension» o «espaciado».")
@@ -973,7 +983,8 @@ class OpPatron(_OpCrear):
             sim2 = sim1 if p.get("simetrico2") is None else bool(p["simetrico2"])
             return [(i, t, "suprimida" if s_ else "ok") for i, t, s_ in sc.instancias_rectangulares(
                 d1, self.entero("n1"), ctx.evaluar(p["d1"]), d2, self.entero("n2") if d2 is not None else 1,
-                ctx.evaluar(p["d2"]), distribucion=p["distribucion"], simetrico1=sim1, simetrico2=sim2, suprimir=sup)]
+                ctx.evaluar(p["d2"]), distribucion=p["distribucion"], simetrico1=sim1, simetrico2=sim2, suprimir=sup,
+                total=total)]
         if forma == "circular":
             if not p["eje"]:
                 raise ErrorOperacion("Elegí el eje.")
@@ -988,7 +999,8 @@ class OpPatron(_OpCrear):
             if angulo is None:
                 angulo = ctx.evaluar(p["angulo"], ANGULO)
             return [(k, t, "suprimida" if s_ else "ok") for k, t, s_ in sc.instancias_circulares(
-                punto, eje, self.entero("n"), angulo_total=angulo, distribucion=modo, simetrico=simetrico, suprimir=sup)]
+                punto, eje, self.entero("n"), angulo_total=angulo, distribucion=modo, simetrico=simetrico, suprimir=sup,
+                total=total)]
         if forma == "puntos":
             puntos, ref = self.puntos_patron(estado, ctx)
             return sc.instancias_en_puntos(puntos, ref, suprimir=sup)
@@ -1052,9 +1064,11 @@ class OpMultitransformar(_OpCrear):
     en la simetría, "plano". `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
     TIPO, ETIQUETA, ICONO = "multitransformar", "Multitransformación", "✣"
     PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False,
-              "ligeras": False, "caras": [], "componentes": [], "construccion": [], "calculo": "identico"}
+              "ligeras": False, "caras": [], "componentes": [], "construccion": [], "calculo": "identico",
+              "version_simetria": 2}
     OPCIONES = {"objeto": OBJETOS_PATRON, "calculo": CALCULOS_PATRON}
     REFS = ("caras", "construccion")
+    migrar_receta = _migrador("version_simetria")
 
     def _lista(self):
         lista = self.p.get("transformaciones") or []
@@ -1064,7 +1078,8 @@ class OpMultitransformar(_OpCrear):
         return list(lista)
 
     def _patron(self, t, i=0):
-        op = OpPatron(self.id, forma_patron=t.get("tipo"), **{k: v for k, v in t.items() if k != "tipo"})
+        op = OpPatron(self.id, forma_patron=t.get("tipo"), version_simetria=self.p["version_simetria"],
+                      **{k: v for k, v in t.items() if k != "tipo"})
         op._prefijo = f"Transformación {i}: " if i else ""
         return op
 

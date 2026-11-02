@@ -25,17 +25,21 @@
 
 ## Página de seguimiento (Artifact de claude.ai)
 - Gerardo ve los pendientes en una página: <https://claude.ai/artifact/4oDQpqbDYfnnsmBREjDRbp> («Seguimiento
-  OmniCAD», tipo Dashboard, privada hasta que él la comparta). Muestra bugs, faltantes y mejoras con filtros, y
-  lo último resuelto. **No es fuente de verdad**: la fuente sigue siendo `docs/seguimiento/`.
-- **No se actualiza sola.** Quien cierra una tanda (el coordinador, después del push) la refresca:
-  1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json` y `resueltos.json`
-     (pendientes de `docs/seguimiento/` y las últimas 25 entradas del Registro de `PROJECT_LOG.md`).
+  OmniCAD», tipo Dashboard, privada hasta que él la comparta). Muestra bugs, faltantes y mejoras con filtros,
+  lo último resuelto y los prompts para agentes. **No es fuente de verdad**: la fuente sigue siendo
+  `docs/seguimiento/` y los documentos de cada prompt.
+- **Prompt nuevo:** se guarda en su documento (`## Prompt para el agente`) y se suma a la tabla «Prompts guardados»
+  de `docs/seguimiento/README.md`, en el mismo turno. `tests/test_seguimiento.py` falla si queda afuera.
+- **No se actualiza sola.** Quien cierra una tanda (el coordinador) la refresca, sin esperar el push:
+  1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json`, `resueltos.json` y
+     `prompts.json` (pendientes de `docs/seguimiento/`, las últimas 25 entradas del Registro de `PROJECT_LOG.md` y
+     los prompts guardados).
   2. Subir cada archivo con la herramienta `Artifact` (`url` de la página, `asset: true`, `file_path`; uno por llamada).
-  3. Con `ArtifactData` `update`, poner la `url` nueva (`/_blob/...`) y `updated` en `datasets/seguimiento` y
-     `datasets/resueltos`. Los números de las tarjetas, la tabla y el gráfico se recalculan solos.
+  3. Con `ArtifactData` `update`, poner la `url` nueva (`/_blob/...`) y `updated` en `datasets/seguimiento`,
+     `datasets/resueltos` y `datasets/prompts`. Las tarjetas, las tablas y el gráfico se recalculan solos.
 - La página no se vuelve a escribir salvo que Gerardo pida un cambio de diseño (documento `files/index.html`).
 - Si se pierde el acceso al Artifact, se vuelve a crear desde la herramienta `Artifact` con el tipo Dashboard:
-  datasets `seguimiento` y `resueltos` como archivos JSON y las calcs `resumen`, `total` y `por_tema`.
+  datasets `seguimiento`, `resueltos` y `prompts` como archivos JSON y las calcs `resumen`, `total` y `por_tema`.
 
 ## Regla estricta: toda prueba se hace como un usuario humano habitual
 - Al probar la app (a mano, con QTest, MCP en vivo o computer use) se simula a una persona que la usa todos los días:
@@ -176,8 +180,9 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   | Arreglo chico, UI, validaciones, tests, docs | Sonnet 5 | bajo o medio |
   | Feature normal, refactor, revisar un diff | Sonnet 5 | medio |
   | Solver, geometría difícil, arquitectura, auditoría a fondo | Opus 5 | alto |
-  | Lo más difícil o agéntico largo, última instancia | Fable 5 | alto |
+  | Lo más difícil o agéntico largo, última instancia | Opus 5 | alto |
 
+- **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01): consume mucho.** El tope es Opus alto.
 - **La calidad del código manda**: si la tarea toca solver, geometría, núcleo o es delicada, no se baja el
   esfuerzo para ahorrar. Se ahorra en lo mecánico, no en lo que decide si el código anda.
 - No se cambia el modelo de una sesión en marcha (corta y pierde contexto) salvo que se quede corta.

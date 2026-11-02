@@ -37,6 +37,7 @@ TOLERANCIA_ACEPTA_ARRASTRE = 1e-3  # mm: un movimiento del ratón se da por buen
 TOLERANCIA_ARRASTRE = 1e-10  # de Levenberg-Marquardt en un evento de arrastre: soltar vuelve a resolver todo a 1e-14
 _PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas durante el arrastre.
 _PESO_ARRASTRE = 1.0
+_PESO_ORIGINAL = 1e-3  # Una curva desfasada se queda quieta: al cambiar la cota se mueve la copia, como en Fusion.
 _ESCALA_TANGENTE = 10.0      # mm: convierte el seno del ángulo en un residuo comparable a una distancia
 _ESCALA_CURVATURA = 100.0    # mm²
 TOPE_AUTO_RESTRINGIR = 500
@@ -130,6 +131,7 @@ class _Sistema:
         self.n_base = len(x0)
         self.x0 = np.array(x0, dtype=float)
         self._extra = []
+        self.originales = set()      # curvas con una copia desfasada (`_resolver_grupo` no las mueve si puede evitarlo)
         self._dvar = {}              # (madre, copia) de un desfase de curva libre → índice de su distancia (incógnita)
         self.terminos = []
         self._armar()
@@ -252,10 +254,11 @@ class _Sistema:
         return r - a * b / (math.hypot(b * c, a * s) or 1e-12)
 
     def separacion(self, x, o, d):
-        """Distancia entre una curva y su desfase."""
+        """Distancia con signo entre una curva y su desfase: el signo dice de qué lado quedó la copia y es lo que deja
+        pasar por cero una cota editada a negativo (BOC-50)."""
         if isinstance(self.b.curvas[o], Linea):
-            return abs(self.dist_signada(x, self.P(x, self.b.curvas[d].p1), o))
-        return abs(self.R(x, d) - self.R(x, o))
+            return self.dist_signada(x, self.P(x, self.b.curvas[d].p1), o)
+        return abs(self.R(x, d)) - abs(self.R(x, o))    # un radio no pasa por cero: esa cota no tiene solución
 
     def extremo(self, x, cid, pid):
         """(tangente unitaria, curvatura con signo) al recorrer la curva ALEJÁNDOSE de su extremo pid."""
@@ -381,10 +384,12 @@ class _Sistema:
             elif t == "poligono":
                 self._poligono(b.vertices_cadena(e))
             elif t == "desfase":
+                self.originales.update(e[:1] if len(e) < 4 else (e[0], e[2]))
                 if len(e) == 2:
                     self._desfase_libre(e[0], e[1], r.datos.get("lado"))
                 elif len(e) == 4:
-                    T.append(lambda x, e=tuple(e): [self.separacion(x, e[2], e[3]) - self.separacion(x, e[0], e[1])])
+                    s = _signo(self.separacion(self.x0, e[0], e[1]) * self.separacion(self.x0, e[2], e[3]))
+                    T.append(lambda x, e=tuple(e), s=s: [s * self.separacion(x, e[2], e[3]) - self.separacion(x, e[0], e[1])])
                 else:
                     def f(x, k=e[0], p=e[1], q=e[2]):
                         a, c = self.P(x, p), self.P(x, q)
@@ -426,12 +431,17 @@ class _Sistema:
                 k = 1.0 if t == "radio" else 2.0
                 T.append(lambda x, cid=e[0], v=v, k=k: [k * self.R(x, cid) - v])
             elif t == "desfase":
+                self.originales.add(e[0])
                 if (e[0], e[1]) in self._dvar:             # BOC-72: la restricción trae la distancia, la cota la fija
                     T.append(lambda x, j=self._dvar[e[0], e[1]], v=v: [x[j] - v])
                 elif tipos[0] in ("spline", *ELIPTICAS):
                     self._desfase_normal(e[0], e[1], v, c.datos.get("lado"))
                 else:
-                    T.append(lambda x, o=e[0], d=e[1], v=v: [self.separacion(x, o, d) - v])
+                    # BOC-50: el lado de la cota positiva se guarda al pasar a negativo, para poder volver.
+                    lado = c.datos.get("lado") or _signo(self.separacion(self.x0, e[0], e[1]))
+                    if v < 0:
+                        c.datos["lado"] = lado
+                    T.append(lambda x, o=e[0], d=e[1], v=v, s=lado: [s * self.separacion(x, o, d) - v])
             elif t == "angulo":
                 def f(x, l1=e[0], l2=e[1], v=math.radians(v), s=signos_cuadrante(c.datos.get("cuadrante"))):
                     (a, bb), (cc, d) = self.L(x, l1), self.L(x, l2)
@@ -1068,6 +1078,10 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
     # Una incógnita fusionada vale por `cuenta` coordenadas: misma regularización que si estuvieran separadas.
     base = _PESO_REGULARIZACION * np.sqrt(sis.cuenta)
     pesos, ancla = base.copy(), sis.x0.copy()
+    if arrastrado is None:
+        for cid in sis.originales:
+            ij = [j for pid in sis.b.curvas[cid].puntos() for j in sis.idx_p.get(pid, ())]
+            pesos[ij + ([sis.idx_r[cid]] if cid in sis.idx_r else [])] = _PESO_ORIGINAL
     if arrastrado in sis.idx_p:
         ij = list(sis.idx_p[arrastrado])
         pesos[ij] = _PESO_ARRASTRE

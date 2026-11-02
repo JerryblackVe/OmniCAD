@@ -10,7 +10,7 @@ from ...nucleo import geometria as geo
 from ...timeline import entidades as ent
 from ...timeline.parametros import ANGULO
 from . import CATALOGO
-from .comunes import evaluar_o_cero
+from .comunes import evaluar_o_cero, simetria_total
 
 
 def _mp():
@@ -137,6 +137,19 @@ def _asas_engrosar(self, ctx, v):
     return [_mp().Flecha("espesor", base[0], base[1], factor=0.5 if v.get("direccion") == "simetrica" else 1.0)]
 
 
+def _asas_invertir_normal(self, ctx, v):
+    """SUP-23: una flecha sobre cada superficie elegida, del lado que queda positivo después de invertirla."""
+    from ...nucleo import superficies as sf
+    mp = _mp()
+    salida = []
+    for h in v.get("cuerpos") or []:
+        e = mp.entidad(h, ctx.estado)
+        if e is not None and e.forma is not None:
+            punto, normal = sf.normal_muestra(e.forma)
+            salida.append(mp.FlechaNormal(len(salida), punto, -normal))
+    return salida
+
+
 def _asas_extruir_superficie(self, ctx, v):
     """Flecha de distancia y asa de conicidad; la dirección es la que usa la operación: la elegida, la normal
     del boceto o, con aristas de un cuerpo (sin plano), el eje Z."""
@@ -176,25 +189,40 @@ def _asas_extruir_superficie(self, ctx, v):
 # ---------------------------------------------------------------- patrones
 def _paso(v, n_clave, dist_clave, ctx):
     """Distancia (con signo) entre copias vecinas: la distancia dada (Espaciado) o repartida entre las copias (Extensión)."""
+    from ...nucleo import solidos_crear as sc
     d, n = evaluar_o_cero(ctx, v.get(dist_clave)), max(1, int(evaluar_o_cero(ctx, v.get(n_clave)) or 1))
-    return d / (n - 1) if v.get("distribucion") == "extension" and n > 1 else d
+    return sc._paso(n, d, v.get("distribucion") or "espaciado", _a_los_dos_lados(v, n_clave, ctx))
 
 
-def _asa_cantidad(clave, origen, direccion, paso):
-    """Asa de cantidad de las copias alineadas: la última queda en `origen + direccion·paso·(n-1)` (paso con signo)."""
+def _a_los_dos_lados(v, n_clave, ctx):
+    """¿La cantidad `n_clave` se reparte a los dos lados del original, con la última copia en n // 2 pasos (PAT-1)?"""
+    return bool(v.get("simetrico" if n_clave == "n1" else "simetrico2")) and simetria_total(ctx)
+
+
+def _asa_cantidad(clave, origen, direccion, paso, a_los_dos_lados=False):
+    """Asa de cantidad de las copias alineadas: la última queda en `origen + direccion·paso·(n-1)` (paso con signo); a los
+    dos lados, en `origen + direccion·paso·(n//2)`, y cada paso del asa suma dos copias."""
     signo = -1.0 if paso < 0 else 1.0
-    return _mp().AsaCantidad(clave, lambda n: (origen + direccion * paso * (n - 1), direccion * signo), abs(paso) or 10.0)
+    pasos = (lambda n: n // 2) if a_los_dos_lados else (lambda n: n - 1)
+    largo = (abs(paso) or 10.0) / (2 if a_los_dos_lados else 1)
+    return _mp().AsaCantidad(clave, lambda n: (origen + direccion * paso * pasos(n), direccion * signo), largo)
 
 
 # ---------------------------------------------------------------- sistemas de coordenadas y uniones
 def _asas_scu(self, ctx, v):
-    """Tríada en el origen del SCU: flechas = Desfase X/Y/Z, arcos = Ángulo X/Y/Z."""
+    """Tríada en el origen del SCU, con sus ejes alineados: flechas = Desfase X/Y/Z, arcos = Ángulo X/Y/Z."""
+    from ...nucleo import construccion as cs
     mp = _mp()
-    origen = _punto_de(ctx, v["origen"][0]) if v.get("origen") else np.zeros(3)
+    if not v.get("origen"):
+        return []
+    origen = _punto_de(ctx, v["origen"][0])
     if origen is None:
         return []
+    direccion = lambda k: ent.como_eje(mp.entidad(v[k][0], ctx.estado))[1] if v.get(k) else None  # noqa: E731
+    m = cs.scu(origen, direccion("eje_x") if v.get("eje_x") else (1.0, 0.0, 0.0), eje_z=direccion("eje_z"))
+    ejes = np.array([m["x"], m["y"], m["z"]])
     L = lambda k: evaluar_o_cero(ctx, v.get(k))  # noqa: E731
-    return [mp.Triada(origen + [L("dx"), L("dy"), L("dz")], claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"))]
+    return [mp.Triada(origen + np.array([L("dx"), L("dy"), L("dz")]) @ ejes, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), ejes=ejes)]
 
 
 def _asas_union(clave_origen, clave_punto):
@@ -405,25 +433,6 @@ def _asas_plegar(self, ctx, v):
     return [mp.Angulo("angulo", pt[0], pt[1], inicio, 25.0)]
 
 
-def _asas_plano_angulo(self, ctx, v):
-    from ...timeline.ops_construir import _plano_por_eje
-    mp = _mp()
-    e = mp.entidad(v["r0"][0], ctx.estado) if v.get("r0") else None
-    if e is None:
-        return []
-    try:
-        punto, d = ent.como_eje(e)
-        base = _plano_por_eje(e)
-    except Exception:  # noqa: BLE001
-        return []
-    a = mp.unitario(d)
-    n0 = np.asarray(base.normal, float)
-    n0 = n0 - a * float(n0 @ a)
-    if np.linalg.norm(n0) < 1e-9:
-        return []
-    return [mp.Angulo("angulo", np.asarray(punto, float), a, np.cross(a, mp.unitario(n0)), 25.0)]
-
-
 def _asas_desmoldeo(self, ctx, v):
     mp = _mp()
     if not v.get("plano") or not v.get("caras"):
@@ -455,6 +464,7 @@ def _asas_desmoldeo(self, ctx, v):
 def _enganchar():
     tabla = {
         "sup_desfase": _asas_desfase_superficie, "engrosar": _asas_engrosar, "sup_extruir": _asas_extruir_superficie,
+        "invertir_normal": _asas_invertir_normal,
         "barrido": _asas_barrido, "sup_barrido": _asas_barrido, "escala_3d": _asas_escala, "seccion": _asas_corte("desfase"),
         "seccion_malla": _asas_corte("distancia"), "cortar_plano": _asas_corte("desfase"),
         "scu": _asas_scu, "union": _asas_union("origen2", "clave2"), "origen_union": _asas_union("origen", "clave"),
@@ -462,7 +472,7 @@ def _enganchar():
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,
         "tuberia": _asas_tuberia, "dobladillo": _asas_dobladillo, "extender_sup": _asas_extender,
         "reglada": _asas_reglada, "sup_revolucion": _asas_sup_revolucion, "sup_empalme": _asas_empalme_superficie, "plegar": _asas_plegar,
-        "plano_angulo": _asas_plano_angulo, "desmoldeo": _asas_desmoldeo,
+        "desmoldeo": _asas_desmoldeo,
     }
     for clave, funcion in tabla.items():
         cls = CATALOGO.get(clave)

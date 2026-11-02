@@ -503,7 +503,7 @@ def _malla_arrastre(forma, deflexion, angular):
 def _mallas_por_cara(forma, deflexion, angular, rehacer=False):
     """[(cara OCC, vértices, normales)] de un cuerpo B-rep con la normal exacta de la superficie en cada vértice."""
     from OCP.BRep import BRep_Tool
-    from .analisis import _indices, _props_nodos
+    from .analisis import _props_nodos
     salida = []
     for cara, tri, loc in geo._triangulaciones(forma, deflexion, angular, rehacer):
         ubicacion = cara.Location()
@@ -519,7 +519,7 @@ def _mallas_por_cara(forma, deflexion, angular, rehacer=False):
             if BRep_Tool.Surface_s(local) is None:
                 n = normales_suaves(tris, None, 60.0)[1]
             else:
-                idx = _indices(tri, local)
+                idx = geo._indices_cara(local, tri, loc)
                 n = _props_nodos(local, tri, idx, tris, False)[0][idx].reshape(-1, 3)
             datos = tris.reshape(-1, 3), n
             _guardar_malla_cara(clave, *datos)

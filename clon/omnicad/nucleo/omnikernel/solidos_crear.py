@@ -58,7 +58,7 @@ def patronear_caras(cuerpo, copias, trsfs, operacion):
 def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profundidad=10.0, punta="angulo",
                         angulo_punta=118.0, diam_abocardado=None, prof_abocardado=None, diam_avellanado=None,
                         angulo_avellanado=90.0, roscado=None, mano="derecha", clase="", holgura=0.0,
-                        conicidad=0.0):
+                        conicidad=0.0, tabla=True):
     """El medio perfil común, girado por el kernel alrededor del eje del agujero."""
     from .. import motor, perfiles
     from .. import solidos_crear as comun

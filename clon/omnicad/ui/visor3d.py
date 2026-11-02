@@ -30,7 +30,7 @@ from OpenGL import GL
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPointF, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from .. import nativo
 from ..nucleo import geometria as geo
@@ -62,6 +62,32 @@ class BandaSeleccion(QWidget):
             p.fillRect(self.rect(), QColor(237, 120, 0, 70))
             p.setPen(QPen(QColor(140, 150, 180), 1))
         p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+
+
+class EtiquetasPlanos(QWidget):
+    """Nombres de los planos sobre el lienzo (Visibilidad del objeto › Nombres de planos). No toma el mouse."""
+
+    def __init__(self, visor):
+        super().__init__(visor)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.visor, self.etiquetas = visor, []
+        self.hide()
+
+    def actualizar(self):
+        """Lo llama cada cuadro del visor: solo repinta si cambió algo."""
+        etiquetas = [(t, self.visor.proyectar(p)) for t, p in self.visor.etiquetas_planos()]
+        etiquetas = [(t, (round(q.x()), round(q.y()))) for t, q in etiquetas if q is not None]
+        if etiquetas != self.etiquetas:
+            self.etiquetas = etiquetas
+            self.setGeometry(self.visor.rect())
+            self.setVisible(bool(etiquetas))
+            self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setPen(QColor(176, 104, 16))
+        for texto, (x, y) in self.etiquetas:
+            p.drawText(x + 4, y - 4, texto)
 
 
 PALETA = [(0.62, 0.68, 0.76), (0.80, 0.62, 0.45), (0.55, 0.75, 0.58), (0.75, 0.58, 0.78),
@@ -103,9 +129,10 @@ AZUL_SELECCION = (0.15, 0.50, 1.0)
 QSS_ETIQUETA = ("QLabel#etiqueta_cota { background: rgba(40, 40, 44, 225); color: #ffffff; padding: 2px 6px;"
                 " border: 1px solid #f29a1f; border-radius: 3px; }")
 TOL_PX_ARISTA, TOL_PX_VERTICE = 9.0, 11.0     # zonas de agarre generosas (antes 7 y 9)
+ESCALA_EXTENDIDO = 2.5                        # Redimensionar › Extendido: cuánto más grande que el cuadro de la vista
 # Filtros de selección que entiende `elegir_entidad` (los diálogos de comando piden uno o varios).
 FILTROS = ("cara", "cara_plana", "arista", "arista_lineal", "arista_circular", "vertice", "cuerpo", "perfil",
-           "curva_boceto", "punto_boceto", "boceto", "plano", "eje", "punto")
+           "curva_boceto", "punto_boceto", "boceto", "plano", "eje", "punto", "forzado", "centro_masa")
 
 
 def _normalizar(v):
@@ -357,6 +384,16 @@ def polilineas_construccion(boceto_resuelto):
     return salida
 
 
+def perfiles_a_pintar(perfiles, boceto):
+    """Los perfiles sin los huecos de las letras, que pintados oscurecerían lo que tengan debajo. Un motor que no los
+    separa los deja: es solo el relleno."""
+    from ..nucleo.perfiles import sin_huecos
+    try:
+        return sin_huecos(perfiles, boceto)
+    except geo.ErrorGeometria:
+        return perfiles
+
+
 def tris_perfil_terminado(boceto_resuelto, tope=300):
     """Triángulos de los perfiles de un boceto terminado (relleno celeste). Se guardan en cada perfil: la vista previa
     de un comando refresca el modelo en cada cambio. shortcut: más de `tope` perfiles no se rellenan (miles de letras
@@ -366,7 +403,9 @@ def tris_perfil_terminado(boceto_resuelto, tope=300):
     if not propios or len(boceto_resuelto.perfiles) > tope:
         return []                      # solo la proyección de una cara: la pieza no se marca (B-109)
     salida = []
-    for p in boceto_resuelto.perfiles:
+    if getattr(boceto_resuelto, "_a_pintar", None) is None:
+        boceto_resuelto._a_pintar = perfiles_a_pintar(boceto_resuelto.perfiles, b)
+    for p in boceto_resuelto._a_pintar:
         if getattr(p, "_tris_visor", None) is None:
             p._tris_visor = geo.teselar(p.cara)[0]
         salida.append(p._tris_visor)
@@ -387,9 +426,11 @@ class ConfigVista:
         self.paso_bloqueado = None
         self.rejilla_fija = None            # None = adaptativa; (espaciado mayor, subdivisiones)
         self.visibilidad = {"planos_origen": True, "ejes_origen": True, "punto_origen": True,
-                            "planos_usuario": True, "bocetos": True}
+                            "planos_usuario": True, "bocetos": True, "nombres_planos_construccion": True,
+                            "nombres_planos_origen": True}
         self.origen = {}                    # "o", "x", "y", "z", "xy", "xz", "yz" → visible (navegador)
         self.planos_usuario = []            # [(id, nombre, geo.Plano)] visibles
+        self.medidas = {}                   # id de plano o eje → {"redimensionar", "limites"}: `EstadoModelo.medidas`
         self.lienzos = []                   # [(id, datos)] imágenes de INSERTAR › Lienzo / Calcomanía visibles
         self.esquema_raton = "fusion"
         self.invertir_zoom = False
@@ -458,14 +499,18 @@ class Visor3D(QOpenGLWidget):
         self._ocultos = frozenset()
         self._excluir_bocetos = ()
         self.filtro = None                 # conjunto de FILTROS activos o None (sin selección en la vista)
+        self.cuerpos_de_previa = frozenset()  # cuerpos que solo existen en la vista previa del comando abierto
         self.texto_entero = False          # con un campo de perfiles activo: una letra resalta y elige todo su texto
         self._hover_ent = None             # entidad bajo el cursor con el filtro activo
         self._capas = {}                   # nombre → [primitivas a dibujar encima: ("tris"|"lineas"|"puntos", …)]
+        self._nombres_planos = EtiquetasPlanos(self)
+        self._marcas_forzado = None        # puntos de forzado de la cara bajo el cursor
         self.resalte_contorno = False      # lo elegido se resalta solo en el contorno: deja ver el color real (Aspecto)
         self._contornos = {}               # id(triángulos) → (triángulos, contorno): se calcula una vez por selección
         self._colores_vertice = {}         # id_cuerpo → colores por vértice (análisis: cebra, curvatura…)
         self.opacidad = {}                 # id_cuerpo → opacidad (navegador › Opacidad)
         self.mallas_analisis = {}          # id_cuerpo → (vértices, normales, colores) que reemplazan su sombreado
+        self.centros_masa = []             # [(nombre del análisis, punto)]: se eligen con Medir (la ventana los mantiene al día)
         self.funcion_colores = None        # (normales, dirección de vista) → colores: cebra / mapa de entorno
         self.ids_colores = None            # cuerpos que pinta `funcion_colores` (None = todos)
         self._cache_dinamico = {}
@@ -1095,8 +1140,36 @@ class Visor3D(QOpenGLWidget):
         L = self._tam_planos()
         salida = [(n, geo.Plano(n), (0.0, 0.0, L, L)) for n in ("XY", "XZ", "YZ")]
         for ident, _nombre, pl in self.config.planos_usuario:
-            cu, cv = pl.a_uv(self.objetivo)
-            salida.append((ident, pl, (cu - L, cv - L, cu + L, cv + L)))
+            limites, extendido = self._medida(ident)
+            if limites is None:
+                cu, cv = pl.a_uv(self.objetivo)
+                lado = L * (ESCALA_EXTENDIDO if extendido else 1.0)
+                limites = (cu - lado, cv - lado, cu + lado, cv + lado)
+            salida.append((ident, pl, limites))
+        return salida
+
+    def _medida(self, ident):
+        """(límites, extendido) con que se dibuja un plano o eje de construcción: Extendido llena la vista."""
+        m = self.config.medidas.get(ident) or {}
+        extendido = m.get("redimensionar") == "extendido"
+        return (None if extendido else m.get("limites")), extendido
+
+    def segmento_eje(self, ident, p, d):
+        """Extremos con que se dibuja un eje de construcción."""
+        limites, extendido = self._medida(ident)
+        L = self._tam_planos() * 1.4 * (ESCALA_EXTENDIDO if extendido else 1.0)
+        t0, t1 = limites if limites is not None else (-L, L)
+        return p + d * t0, p + d * t1
+
+    def etiquetas_planos(self):
+        """[(nombre, punto 3D)] de los planos visibles cuyo nombre va en el lienzo, en una esquina de su cuadro."""
+        cfg, vis = self.config, self.config.visibilidad
+        nombres = {i: n for i, n, _pl in cfg.planos_usuario}
+        salida = []
+        for ref, pl, (_u0, _v0, u1, v1) in self.planos_elegibles():
+            origen = ref in ("XY", "XZ", "YZ")
+            if self.plano_visible(ref) and vis.get("nombres_planos_origen" if origen else "nombres_planos_construccion"):
+                salida.append((ref if origen else nombres[ref], pl.a_3d(u1, v1)))
         return salida
 
     def _datos_pick(self, cid):
@@ -1206,7 +1279,11 @@ class Visor3D(QOpenGLWidget):
         self.filtro = set(filtros) if filtros else None
         # con perfiles elegibles, una letra resalta (y elige) todo su texto; el panel lo apaga en campos de uno solo
         self.texto_entero = bool(self.filtro and "perfil" in self.filtro)
+        if self.filtro is None:
+            self.cuerpos_de_previa = frozenset()
         self._hover_ent = None
+        self._marcas_forzado = None
+        self._capas.pop("forzado", None)
         self.update()
 
     def _huecos_texto(self, br):
@@ -1216,10 +1293,8 @@ class Visor3D(QOpenGLWidget):
             textos = [c.id for c in br.boceto.curvas.values() if c.tipo == "texto"]
             huecos = set()
             if textos:
-                from ..nucleo.perfiles import letras_de_texto
-                ids = set(textos)
-                letras = {id(p) for p in letras_de_texto(br.perfiles, textos)}
-                huecos = {id(p) for p in br.perfiles if p.firma and set(p.firma) <= ids and id(p) not in letras}
+                from ..nucleo.perfiles import partes_de_texto
+                huecos = {id(p) for p in partes_de_texto(br.perfiles, textos)[1]}
             self._pick[clave] = huecos
         return self._pick[clave]
 
@@ -1246,8 +1321,8 @@ class Visor3D(QOpenGLWidget):
         return id(p) in huecos
 
     def hits_texto(self, hit):
-        """Si `hit` es un perfil hecho solo por textos del boceto, los hits de TODAS las letras de ese texto (sin los
-        huecos de la «o», la «a»…), como al elegir un texto en Fusion. None si no es una letra de un texto."""
+        """Si `hit` es un perfil de una letra, los hits de TODAS las letras de ese texto (sin los huecos de la «o», la
+        «a»…), como al elegir un texto en Fusion. None si no lo es."""
         ref = hit.get("ref") if hit else None
         if not ref or ref.get("tipo") != "perfil":
             return None
@@ -1255,17 +1330,15 @@ class Visor3D(QOpenGLWidget):
         firma = set(ref.get("firma") or [])
         if br is None or not firma:
             return None
-        try:
-            if any(br.boceto.tipo_de(c) != "texto" for c in firma):
-                return None
-        except Exception:  # noqa: BLE001 — una curva que ya no está: no es un texto
+        textos = sorted(c for c in firma if c in br.boceto.curvas and br.boceto.curvas[c].tipo == "texto")
+        if not textos:
             return None
-        clave = ("letras", id(br), tuple(sorted(firma)))
+        clave = ("letras", id(br), tuple(textos))
         if clave not in self._pick:
             from ..nucleo.perfiles import letras_de_texto
             from ..timeline.operaciones import OpExtrusion
             self._pick[clave] = [({"tipo": "perfil", "boceto": br.op_id, **OpExtrusion.referencia_perfil(p)}, p.cara)
-                                 for p in letras_de_texto(br.perfiles, firma)]
+                                 for p in letras_de_texto(br.perfiles, textos)]
         letras = self._pick[clave]
         if all(r != ref for r, _ in letras):
             return None
@@ -1495,6 +1568,8 @@ class Visor3D(QOpenGLWidget):
         # 1) cara más cercana (oculta lo que esté detrás)
         t_cara, cara_hit = math.inf, None
         for cid in self._formas:
+            if cid in self.cuerpos_de_previa:      # la vista previa no se elige: el clic sigue a lo que hay detrás
+                continue
             choque = self._primer_rayo_cuerpo(cid, o, d, t_cara)
             if choque is None:
                 continue
@@ -1534,14 +1609,19 @@ class Visor3D(QOpenGLWidget):
                     for pid, pt in br.boceto.puntos.items():
                         candidatos.append((pid, br.plano.a_3d(pt.x, pt.y),
                                            {"tipo": "punto_boceto", "boceto": br.op_id, "punto": pid}))
+                candidatos += [(n, p, {"tipo": "centro_masa", "analisis": n}) for n, p in self.centros_masa if "centro_masa" in filtros]
                 for _i, p, ref in candidatos:
                     s, ok = self._a_pantalla(p, mvp)
                     dist = float(np.linalg.norm(s[0] - q)) if ok[0] else math.inf
-                    if dist < mejor[0] and visible(p):
+                    if dist < mejor[0] and (ref["tipo"] == "centro_masa" or visible(p)):     # el centro cae adentro del sólido
                         mejor = (dist, _hit(ref["tipo"], ref, [("puntos", np.array([p]), None, 9)],
                                             float((p - o) @ d), p))
             if mejor[1] is not None:
                 return mejor[1]
+        if "forzado" in filtros:
+            h = self._elegir_forzado(pos, q, mvp, cara_hit, visible, a_traves, _hit)
+            if h is not None:
+                return h
 
         # 3) aristas, ejes y curvas de boceto
         filtros_arista = filtros & {"arista", "arista_lineal", "arista_circular", "eje"}
@@ -1572,7 +1652,7 @@ class Visor3D(QOpenGLWidget):
                 ejes += [(i, np.asarray(p, float), np.asarray(dd, float)) for i, _n, (p, dd) in
                          getattr(self.config, "ejes_usuario", [])]
                 for ident, p0, dd in ejes:
-                    poli = np.array([p0 - dd * (L if ident not in "XYZ" else 0), p0 + dd * L])
+                    poli = np.array([p0, p0 + dd * L] if ident in "XYZ" else self.segmento_eje(ident, p0, dd))
                     dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
                     if dist < mejor[0] and p is not None:
                         mejor = (dist, _hit("eje", {"tipo": "eje", "id": ident}, [("lineas", poli, None, 3.5)],
@@ -1588,20 +1668,24 @@ class Visor3D(QOpenGLWidget):
                         if dists[j] >= mejor[0]:
                             break
                         curva_id, poli = curvas[quien[j]]
-                        if "curva_boceto" not in filtros and br.boceto.tipo_de(curva_id) != "linea":
+                        tipo_curva = br.boceto.tipo_de(curva_id)
+                        if "curva_boceto" not in filtros and tipo_curva != "linea":
+                            continue
+                        if tipo_curva == "texto" and "perfil" in filtros:   # con letras finas todo clic cae cerca de un borde
                             continue
                         dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
                         if dist < mejor[0] and p is not None:
                             mejor = (dist, _hit("curva_boceto", {"tipo": "curva_boceto", "boceto": br.op_id,
                                                                  "curva": curva_id},
-                                                [("lineas", _segmentos([poli]), None, 3.5)], float((p - o) @ d), p))
+                                                [("lineas", _segmentos([poli]), None, 3.5)], float((p - o) @ d), p,
+                                                es_linea=br.boceto.tipo_de(curva_id) == "linea"))
                             break
             if mejor[1] is not None:
                 return mejor[1]
 
         # 4) perfiles de boceto (están sobre el plano del boceto; ganan a la cara que tengan detrás)
         if filtros & {"perfil", "boceto"}:
-            mejor_t, mejor, hueco_t = math.inf, None, math.inf
+            mejor_t, mejor, mejor_area, hueco_t = math.inf, None, math.inf, math.inf
             for br in self._bocetos_visibles():
                 huecos = self._huecos_texto(br)
                 for perfil in br.perfiles:
@@ -1614,13 +1698,14 @@ class Visor3D(QOpenGLWidget):
                         if t <= t_cara + tol_t:
                             hueco_t = min(hueco_t, t)
                         continue
-                    if t < mejor_t and t <= t_cara + tol_t:
+                    # sobre un mismo plano gana el más chico: una letra se pisa con el disco que tiene debajo
+                    if t <= t_cara + tol_t and (t < mejor_t - tol_t or (t <= mejor_t + tol_t and perfil.area < mejor_area)):
                         from ..timeline.operaciones import OpExtrusion
                         ref = ({"tipo": "perfil", "boceto": br.op_id, **OpExtrusion.referencia_perfil(perfil)}
                                if "perfil" in filtros else {"tipo": "boceto", "boceto": br.op_id})
-                        mejor_t, mejor = t, _hit(ref["tipo"], ref, [("tris", tris.reshape(-1, 3), None, 0.45)], t,
-                                                 o + d * t)
-            if mejor is not None and mejor_t <= hueco_t:
+                        mejor_t, mejor_area = t, perfil.area
+                        mejor = _hit(ref["tipo"], ref, [("tris", tris.reshape(-1, 3), None, 0.45)], t, o + d * t)
+            if mejor is not None and mejor_t <= hueco_t + tol_t:
                 return mejor
             if hueco_t < math.inf and "perfil" in filtros:
                 return None                        # un clic en el hueco no atraviesa: no elige la cara de atrás
@@ -1663,6 +1748,51 @@ class Visor3D(QOpenGLWidget):
                             [("tris", self.triangulos_cuerpo(cid), None, 0.35)], t_cara, o + d * t_cara, cuerpo=cid,
                             forma=self._formas[cid])
         return None
+
+    def _candidatos_forzado(self, cid, cara):
+        """[(referencia, punto)] de los puntos de forzado de una cara; se calculan una vez por cara."""
+        clave = ("forzado", cid, id(cara))
+        if clave not in self._pick:
+            from ..nucleo import construccion as cs
+            base = self._referencia(cid, cara)
+            try:
+                self._pick[clave] = [({"tipo": "forzado", "modo": m, "base": base, **d}, np.asarray(p, float))
+                                     for m, d, p in cs.puntos_forzado_cara(cara)]
+            except geo.ErrorGeometria:          # una cara que no se puede evaluar no ofrece puntos
+                self._pick[clave] = []
+        return self._pick[clave]
+
+    def _elegir_forzado(self, pos, q, mvp, cara_hit, visible, a_traves, _hit):
+        """Punto de forzado bajo el cursor: el de la cara si está cerca (con Ctrl, el más cercano de la cara, esté donde
+        esté); si no, sobre una arista su centro o el punto que se toca."""
+        from ..nucleo import construccion as cs
+        ctrl = bool(QApplication.keyboardModifiers() & Qt.ControlModifier)
+        mejor, marcas = (math.inf if ctrl else TOL_PX_VERTICE, None), []
+        if cara_hit is not None and cara_hit[1] is not None:
+            for ref, p in self._candidatos_forzado(cara_hit[0], cara_hit[1]):
+                if not visible(p):
+                    continue
+                marcas.append(p)
+                s, ok = self._a_pantalla(p, mvp)
+                dist = float(np.linalg.norm(s[0] - q)) if ok[0] else math.inf
+                if dist < mejor[0]:
+                    mejor = (dist, (ref, p))
+        self._marcas_forzado = np.array(marcas) if marcas else None
+        o, d = self.rayo(pos)
+        if mejor[1] is not None:
+            ref, p = mejor[1]
+            return _hit("forzado", ref, [("puntos", p.reshape(1, 3), None, 9)], float((p - o) @ d), p)
+        a = self.elegir_entidad(pos, {"arista"}, a_traves)
+        if a is None:
+            return None
+        centro = cs.centro_arista(a["forma"])
+        s, ok = self._a_pantalla(centro, mvp)
+        if ok[0] and float(np.linalg.norm(s[0] - q)) < TOL_PX_VERTICE:
+            ref, p = {"tipo": "forzado", "modo": "centro_arista", "base": a["ref"]}, centro
+        else:
+            f = cs.distancia_en_ruta(a["forma"], a["punto"]) / cs.largo_ruta(a["forma"])
+            ref, p = {"tipo": "forzado", "modo": "en_arista", "base": a["ref"], "fraccion": f}, cs.punto_en_ruta(a["forma"], f)
+        return _hit("forzado", ref, [("puntos", np.asarray(p, float).reshape(1, 3), None, 9)], float((p - o) @ d), p)
 
     def _dibujar_primitivas(self, prims, color_defecto, alfa_defecto=None):
         for prim in prims:
@@ -1780,16 +1910,15 @@ class Visor3D(QOpenGLWidget):
         cfg = self.config
         if not cfg.visibilidad.get("planos_usuario", True):
             return
-        L = self._tam_planos() * 1.4
         ejes = getattr(cfg, "ejes_usuario", [])
         if ejes:
             GL.glLineWidth(2.0)
             GL.glColor4f(*NARANJA_PLANO, 0.95)
             GL.glBegin(GL.GL_LINES)
-            for _i, _n, (p, dd) in ejes:
-                p, dd = np.asarray(p, float), np.asarray(dd, float)
-                GL.glVertex3f(*(p - dd * L))
-                GL.glVertex3f(*(p + dd * L))
+            for i, _n, (p, dd) in ejes:
+                a, b = self.segmento_eje(i, np.asarray(p, float), np.asarray(dd, float))
+                GL.glVertex3f(*a)
+                GL.glVertex3f(*b)
             GL.glEnd()
         pts = getattr(cfg, "puntos_usuario", [])
         if pts:
@@ -2107,6 +2236,7 @@ class Visor3D(QOpenGLWidget):
             self._ms_cuadro = (time.perf_counter() - inicio) * 1000
             if self._cuadros_uso is not None:
                 self._cuadros_uso.append(self._ms_cuadro)
+            self._nombres_planos.actualizar()
 
     def _pintar_vista(self, cfg):
         # No se llama `_pintar`: LienzoRender (render.py) tiene su propio `_pintar` con otra firma, y sin GLSL cae acá.
@@ -2464,6 +2594,9 @@ class Visor3D(QOpenGLWidget):
             return
         if self.filtro and not e.buttons() and self.modo is None:
             hit = None if self._sin_capturar else self.elegir_entidad(pos)
+            if "forzado" in self.filtro:
+                m = self._marcas_forzado
+                self.set_capa("forzado", None if m is None else [("puntos", m, NARANJA_PLANO, 6)])
             anterior = self._hover_ent
             if (hit is None) != (anterior is None) or (hit and anterior and hit["ref"] != anterior["ref"]):
                 grupo = self.hits_texto(hit) if self.texto_entero else None

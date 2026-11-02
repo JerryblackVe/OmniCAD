@@ -380,7 +380,7 @@ def draw_text_3d(sesion, text: str, origin: list[float], height: float = 5.0,
     """
     text: el texto.
     origin: inicio de la línea base [x, y, z] en mm.
-    height: altura del texto en mm (mayor que 0).
+    height: alto de la letra A en mm (mayor que 0).
     plane: plano de la tríada donde queda el texto: xy, yz o zx.
     font: fuente instalada (list_fonts la lista).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
@@ -545,7 +545,7 @@ def project_to_surface(sesion, faces: list[str] | str, curves: list[int | dict],
              "parámetro U (V constante), v: las que siguen V, both: las dos. type=single: la que pasa por point (un "
              "punto de la cara, se proyecta a ella); type=distributed: las de toda la cara, a lo ancho, una cada "
              "distance mm (medidos sobre la curva perpendicular por point; una pasa por el punto) o quantity curvas "
-             "parejas de borde a borde. Con link=true (por defecto) las curvas siguen a la cara si el modelo cambia "
+             "parejas sin tocar los bordes. Con link=true (por defecto) las curvas siguen a la cara si el modelo cambia "
              "(source anota de dónde salieron; si la cara se pierde quedan congeladas con aviso, como "
              "intersect_curves y project_to_surface: manage_lost_projections y break_projection_link son de las proyecciones 2D); link=false las deja libres.",
              modifica=True)
@@ -559,7 +559,7 @@ def isoparametric_curve(sesion, face: str, point: list[float], direction: Litera
     direction: u (sigue el parámetro U, V constante), v (sigue V, U constante) o both (las dos).
     type: single (una curva por point) o distributed (varias a lo ancho de la cara).
     distance: con distributed, separación entre curvas en mm (excluye a quantity).
-    quantity: con distributed, cantidad de curvas parejas de borde a borde (excluye a distance); hasta 200.
+    quantity: con distributed, cantidad de curvas parejas sin tocar los bordes: la k-ésima de n cae en k/(n+1) (excluye a distance); hasta 200.
     body: cuerpo donde se evalúa el selector de face; vacío = el único cuerpo.
     sketch: id o nombre del boceto 3D donde quedan las curvas; vacío = el último boceto del timeline.
     construction: true deja las curvas como construcción.

@@ -66,12 +66,12 @@ def test_parametro_sin_unidad_renombrar_y_comentario():
     r = ok(s, "set_parameter", name="largo", new_name="brazo")
     assert r["name"] == "brazo" and r["value"] == 30
     assert [p["name"] for p in ok(s, "get_parameters")["parameters"]] == ["copias", "brazo"]
-    falla(s, "set_parameter", name="brazo", new_name="copias")
+    falla(s, "set_parameter", "PARAMETER_EXISTS", name="brazo", new_name="copias")
     falla(s, "set_parameter", "INVALID_PARAMETER_NAME", name="brazo", new_name="1mal")
     falla(s, "set_parameter", name="brazo")                                                 # sin ningún cambio
     ok(s, "create_parameter", name="doble", expression="brazo * 2")
-    falla(s, "set_parameter", "INVALID_EXPRESSION", name="brazo", new_name="otro")    # lo usa «doble»: quedaría roto
-    assert "brazo" in [p["name"] for p in ok(s, "get_parameters")["parameters"]]
+    ok(s, "set_parameter", name="brazo", new_name="otro")                             # «doble» lo sigue citando
+    assert ok(s, "get_parameters", search="doble")["parameters"][0]["expression"] == "otro * 2"
 
 
 # ---------------------------------------------------------------- MCP-84
@@ -154,7 +154,7 @@ def test_visibilidad_de_objetos_y_de_analisis():
     r = ok(s, "set_object_visibility", types=["planos_origen", "uniones"], visible=False)["visibility"]
     assert r["planos_origen"] is False and r["uniones"] is False and r["bocetos"] is True
     r = ok(s, "set_object_visibility", types=["all"], visible=True)["visibility"]
-    assert all(r.values()) and len(r) == 11
+    assert all(r.values()) and len(r) == 13
     ok(s, "undo")                                                      # vuelve al estado anterior a «all»
     assert ok(s, "set_object_visibility")["visibility"]["uniones"] is False
     falla(s, "set_object_visibility", types=["inventado"])

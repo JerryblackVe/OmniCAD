@@ -330,6 +330,8 @@ class BarraNavegacion(QFrame):
                 ("planos_origen", "Planos de origen", True), ("ejes_origen", "Ejes de origen", True),
                 ("punto_origen", "Puntos de origen", True), ("planos_usuario", "Planos de trabajo de usuario", True),
                 ("ejes_usuario", "Ejes de trabajo de usuario", False), ("puntos_usuario", "Puntos de trabajo de usuario", False),
+                ("nombres_planos_construccion", "Nombres de planos de construcción", True),
+                ("nombres_planos_origen", "Nombres de planos de origen", True),
                 ("bocetos", "Bocetos", True), ("scu", "Sistemas de coordenadas del usuario", False),
                 ("origenes_union", "Orígenes de unión", False), ("ejes_union", "Ejes de origen de unión", False),
                 ("uniones", "Uniones", False)):
@@ -590,6 +592,9 @@ class AreaVisor(QWidget):
             wid.raise_()
         self.viewcube.move(g.right() - self.viewcube.width() - 14, g.top() + 12)
         self.viewcube.raise_()
+        for hijo in self.findChildren(QFrame, options=Qt.FindDirectChildrenOnly):
+            if hasattr(hijo, "ubicar_informacion"):
+                hijo.ubicar_informacion()
         if self.barra_posicion is not None and self.barra_posicion.isVisible():
             self.barra_posicion.adjustSize()
             libre = max((wid.geometry().right() for wid in self.arriba_izq if wid.isVisible()), default=g.left()) + 8

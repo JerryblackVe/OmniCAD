@@ -11,6 +11,7 @@ from PIL import Image
 from omnicad import api
 from omnicad.api import herramientas_inspeccion as hi
 from omnicad.nucleo import geometria as geo
+from omnicad.timeline.aspectos_doc import PALETA_COMPONENTES
 
 
 def llamar(s, nombre, **args):
@@ -134,7 +135,7 @@ def test_colores_componente_cambian_pixeles_y_sueltos_conservan_color(s):
     normal, colores = imagen(s), imagen(s, component_colors=True)
     assert np.count_nonzero(normal != colores) > 100
     objetos = hi._objetos_render(s, [s.cuerpo(cid)], colores_componente=True)
-    assert objetos[0]["color"] == (0.62, 0.68, 0.76)
+    assert objetos[0]["color"] == tuple(x / 255 for x in PALETA_COMPONENTES[0])      # el mismo color que el timeline y el navegador
 
 
 def test_patron_plano_muestra_solo_desarrollo_y_deshace(s):

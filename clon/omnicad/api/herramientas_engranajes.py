@@ -363,7 +363,7 @@ def create_shaft(sesion, segments: list[dict], plane: str = "XY", center: list[E
     center_point: punto asociativo donde va el centro (o el comienzo): vértice (id de find_in_window o selector), punto de construcción (id o nombre) o {sketch, point}; [x, y] de center se suma a partir de él sobre el plano; vacío = el origen del plano.
     body: cuerpo donde se evalúan los selectores de plane y center_point; vacío = el único cuerpo.
     operation: "new_body", "join", "cut" o "intersect".
-    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     """
     if not segments:
         raise error("INVALID_ARGUMENTS", "segments necesita al menos un tramo con diameter y length.")

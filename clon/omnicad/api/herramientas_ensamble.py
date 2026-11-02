@@ -406,6 +406,18 @@ def create_component(sesion, bodies: list[str], name: str | None = None, grounde
     return resultado
 
 
+@herramienta("cycle_component_color", "ensamble", "Color del componente de ciclo: pasa el componente al siguiente color de "
+             "la paleta, el de component_colors de get_viewport_image y de Mostrar colores de componente.", modifica=True)
+def cycle_component_color(sesion, component: str):
+    """
+    component: componente (id o nombre).
+    """
+    from ..timeline.aspectos_doc import colores_componentes
+    doc, c = sesion.doc, componente(sesion, component)
+    doc.set_propiedad([c], "ciclo_color", int(doc.propiedad(c, "ciclo_color", 0)) + 1)
+    return {"component": c, "color": "#%02x%02x%02x" % colores_componentes(doc)[c]}
+
+
 @herramienta("ground_component", "ensamble", "Fija o libera un componente (ENSAMBLAR › Fijar). Un componente fijo no se "
              "mueve con ninguna unión.", modifica=True)
 def ground_component(sesion, component: str, grounded: bool = True):

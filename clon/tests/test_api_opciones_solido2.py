@@ -127,7 +127,7 @@ def test_patron_rectangular_con_arista_como_direccion_extension_simetria_y_supre
     xs = sorted(centro(c, 0) for c in cuerpos(s) if c["name"].startswith("Pieza"))
     assert xs[-1] - xs[0] == pytest.approx(40)                                         # 40 = distancia TOTAL
     s = dos_cajas()
-    ok(s, "rectangular_pattern", bodies="Pieza", x_count=3, x_spacing=10, symmetric=True)
+    ok(s, "rectangular_pattern", bodies="Pieza", x_count=5, x_spacing=10, symmetric=True)
     xs = sorted(centro(c, 0) for c in cuerpos(s) if c["name"].startswith("Pieza"))
     assert len(xs) == 5 and xs[-1] - xs[0] == pytest.approx(40)
     s = dos_cajas()

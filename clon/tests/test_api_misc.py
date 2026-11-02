@@ -153,7 +153,7 @@ def test_redefinir_el_plano_mueve_el_boceto_conservando_la_forma():
 def test_exportar_e_importar_parametros_ida_y_vuelta(s, tmp_path):
     csv_ruta = tmp_path / "carpeta nueva" / "parametros.csv"
     r = ok(s, "export_parameters", path=str(csv_ruta))
-    assert r["count"] == 3 and csv_ruta.read_text(encoding="utf-8").splitlines()[0] == "Name,Unit,Expression,Value,Comments"
+    assert r["count"] == 3 and csv_ruta.read_text(encoding="utf-8").splitlines()[0] == "Name,Unit,Expression,Value,Comments,Favorite"
     falla(s, "export_parameters", path=str(csv_ruta), kind="FILE_EXISTS")
     ajeno = tmp_path / "inicio.bat"
     ajeno.write_text("echo hola")

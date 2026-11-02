@@ -17,6 +17,7 @@ from .iconos import icono
 from .insignias import icono_con_insignia
 
 ROL_ORIGEN = Qt.UserRole + 5          # «creo» | «modifico»: lo resalta en amarillo («De dónde viene esta cara»)
+ROL_MUESTRA = Qt.UserRole + 6         # color del componente (Mostrar colores de componente y Muestra de color por componente)
 ROL_CLAVE, ROL_OJO, ROL_ICONO, ROL_TIPO, ROL_ESTADO = (Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2, Qt.UserRole + 3,
                                                       Qt.UserRole + 4)
 ALTO_FILA = 24
@@ -51,6 +52,8 @@ class _Delegado(QStyledItemDelegate):
         p.setBrush(QColor(temas.ORIGEN[origen]) if origen else
                    QColor(c["seleccion"]) if option.state & QStyle.State_Selected else fila)
         p.drawRect(caja)
+        if index.data(ROL_MUESTRA):
+            p.fillRect(QRectF(caja.left(), caja.top(), 3, caja.height()), QColor(index.data(ROL_MUESTRA)))
         if origen:
             p.setPen(QPen(QColor(temas.ORIGEN["borde"]), 1.5 if origen == "creo" else 1))
             p.drawRect(caja)
@@ -138,7 +141,8 @@ class Navegador(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.analisis = []           # [(clave "analisis:Nombre", nombre, visible)] (los pasa la ventana)
+        self.analisis = []           # [(clave "analisis:Nombre", nombre, visible, ícono)] (los pasa la ventana)
+        self.muestras = {}           # id de componente → color «#rrggbb» de su muestra (vacío: sin muestras)
         self.componentes = []        # [(id, nombre, fijo, [(id de cuerpo, nombre)], id del padre o "")]
         self.uniones = []            # [(id de la operación, nombre)]
         self.lienzos = []            # [(id, nombre, visible)] (Lienzos)
@@ -220,6 +224,7 @@ class Navegador(QFrame):
         it.setData(0, ROL_OJO, ojo)
         it.setData(0, ROL_ESTADO, self.estados.get(clave))
         it.setData(0, ROL_ORIGEN, self._origen.get(clave))
+        it.setData(0, ROL_MUESTRA, self.muestras.get(clave))
         (padre.addChild(it) if padre else self.arbol.addTopLevelItem(it))
         self._items[clave] = it
         return it
@@ -229,7 +234,7 @@ class Navegador(QFrame):
         vis: dict con 'todo', 'origen', 'planos', 'cuerpos', 'bocetos'.
         Si no cambió nada de lo que se muestra, no se reconstruye (la ventana lo llama en cada aviso del documento)."""
         firma = repr((titulo, cuerpos, bocetos, sorted(ocultos), vis, planos, vistas, self.calcomanias,
-                      self.componentes, self.lienzos, self.uniones, self.analisis, self.organizacion, self.estados,
+                      self.componentes, self.lienzos, self.uniones, self.analisis, self.organizacion, self.estados, self.muestras,
                       formato.unidad_longitud(), formato.unidad_masa()))
         if self._items and firma == getattr(self, "_firma", None):
             return
@@ -286,8 +291,8 @@ class Navegador(QFrame):
                 self._item(carpeta, ident, nombre, "union", "union")
         if self.analisis:                   # carpeta «Análisis» (sección, cebra, curvatura…)
             carpeta = self._item(raiz, "__analisis__", "Análisis", "carpeta", "carpeta")
-            for ident, nombre, visible in self.analisis:
-                self._item(carpeta, ident, nombre, "seccion", "analisis", visible)
+            for ident, nombre, visible, ico in self.analisis:
+                self._item(carpeta, ident, nombre, ico, "analisis", visible)
         for gid, fila in self.organizacion["grupos"].items():
             grupo = self._item(raiz, gid, fila["nombre"], "carpeta", "grupo", True)
             for cid in fila["miembros"]:
@@ -480,12 +485,14 @@ class Navegador(QFrame):
             m.addAction("Editar posición inicial…", lambda: self.accion.emit("posicion_inicial_componente", clave))
             m.addAction("Aislar", lambda: self.accion.emit("aislar_componente", clave))
             m.addAction("Desaislar", lambda: self.accion.emit("desaislar", clave))
+            m.addAction("Color del componente de ciclo", lambda: self.accion.emit("ciclar_color", clave))
             m.addAction("Renombrar…", lambda: self.accion.emit("renombrar_paso", clave))
             m.addAction("Buscar en el timeline", lambda: self.accion.emit("buscar_timeline", clave))
         elif tipo == "conjunto" and clave.startswith("sel:"):         # SELECCIONAR › Crear conjunto de selección
             m.addAction("Elegir", lambda: self.accion.emit("elegir_conjunto", clave))
             m.addAction("Actualizar con la selección", lambda: self.accion.emit("actualizar_conjunto", clave))
         elif tipo == "analisis":
+            m.addAction("Editar", lambda: self.accion.emit("analisis_editar", clave))
             m.addAction("Mostrar u ocultar", lambda: self.accion.emit("analisis_ojo", clave))
             m.addAction("Suprimir", lambda: self.accion.emit("analisis_borrar", clave))
         if not m.isEmpty():

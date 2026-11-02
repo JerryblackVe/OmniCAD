@@ -29,8 +29,8 @@ def _etiquetas(textos, centros_x, y_base, z, alto, altura_texto):
     letras = []
     for texto, cx in zip(textos, centros_x, strict=True):
         prims = pf.contornos_texto(texto, "Arial", altura_texto)
-        geometria = [(p[0], k) + tuple(p[2:]) for k, p in enumerate(prims)]
-        caras = pf.letras_de_texto(pf.detectar(geometria, geo.Plano("XY")), {p[1] for p in geometria})
+        geometria = [(p[0], 1) + tuple(p[2:]) for p in prims]
+        caras = pf.letras_de_texto(pf.detectar(geometria, geo.Plano("XY")), {1})
         if not caras:
             raise geo.ErrorGeometria(f"No se pudo dibujar la etiqueta «{texto}».")
         (x0, _, _), (x1, _, _) = geo.caja_envolvente(geo.compuesto([c.cara for c in caras]))

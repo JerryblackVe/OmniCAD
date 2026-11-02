@@ -31,10 +31,12 @@ _GEOM_CARA = {"plano": "plana", "cilindro": "cilíndrica", "cono": "cónica", "e
 _GEOM_ARISTA = {"linea": "recta", "circulo": "circular", "elipse": "elíptica", "otra": "curva"}
 _PLURAL = {"cara": "caras", "arista": "aristas", "vertice": "vértices", "cuerpo": "cuerpos", "perfil": "perfiles",
            "curva_boceto": "curvas de boceto", "punto_boceto": "puntos de boceto", "plano": "planos", "eje": "ejes",
-           "punto": "puntos", "boceto": "bocetos"}
+           "punto": "puntos", "boceto": "bocetos", "forzado": "puntos de forzado"}
 _SINGULAR = {"cara": "cara", "arista": "arista", "vertice": "vértice", "cuerpo": "cuerpo", "perfil": "perfil",
              "curva_boceto": "curva de boceto", "punto_boceto": "punto de boceto", "plano": "plano", "eje": "eje",
-             "punto": "punto", "boceto": "boceto"}
+             "punto": "punto", "boceto": "boceto", "forzado": "punto de forzado"}
+_FORZADOS = {"centro_cara": "Centro", "tangencial": "Punto tangencial", "lugar_cara": "Punto", "centro_arista": "Centro",
+             "en_arista": "Punto", "lugar_plano": "Punto"}
 
 
 def _nombre_op(ctx, op_id):
@@ -91,6 +93,12 @@ def describir_ref(ref, ctx):
         return f"Punto {ref.get('punto')} · {_nombre_op(ctx, ref.get('boceto'))}"
     if t == "boceto":
         return f"Boceto {_nombre_op(ctx, ref.get('boceto'))}"
+    if t == "forzado":
+        return f"{_FORZADOS.get(ref.get('modo'), 'Punto')} de {describir_ref(ref.get('base') or {}, ctx)}"
+    if t == "componente":
+        return str(ctx.estado.componentes.get(ref.get("componente"), {}).get("nombre", ref.get("componente")))
+    if t == "centro_masa":
+        return str(ref.get("analisis"))
     return str(t or "?")
 
 
@@ -166,8 +174,8 @@ class Seccion(QWidget):
         self.grilla.setVerticalSpacing(5)
         self.grilla.setColumnMinimumWidth(0, ANCHO_ETIQUETA)
         self.grilla.setColumnStretch(1, 1)
-        self.cuerpo.setVisible(abierta)
         v.addWidget(self.cuerpo)
+        self.cuerpo.setVisible(abierta)      # con padre: suelto se mostraría como ventana (B-136)
         self._texto_resumen = ""
 
     @property
@@ -223,7 +231,8 @@ def fila_mensaje(ancho, alto_min=0):
     simbolo.setAlignment(Qt.AlignTop)
     texto = QLabel(objectName="mensaje_comando", wordWrap=True)
     texto.setMaximumWidth(ancho - 44)
-    zona.setVisible(bool(alto_min))
+    if not alto_min:        # nunca setVisible(True): sin padre todavía, se mostraría como una ventana suelta (B-136)
+        zona.hide()
     simbolo.hide()
     texto.hide()
     h.addWidget(simbolo)

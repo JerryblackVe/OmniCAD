@@ -325,7 +325,7 @@ def bake_graph(sesion, graph: dict | str, inputs: dict | None = None, outputs: l
         enlazadas: al cambiar el parámetro, el paso se recalcula.
     outputs: nombres de las salidas cuyos cuerpos se hornean; vacío = todas.
     operation: "new_body", "join", "cut" o "intersect" (con fixed=true, solo new_body).
-    target: cuerpo(s) para join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) para join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     name: nombre del paso en el timeline; vacío = el automático.
     fixed: true para hornear cuerpos fijos (operación base) en vez del grafo paramétrico.
     """

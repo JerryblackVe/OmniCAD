@@ -23,11 +23,11 @@ from ..nucleo import intercambio
 from ..nucleo import referencias as refs
 from ..nucleo import revision as rv
 from . import entidades as ent
-from ..nucleo.perfiles import buscar_por_firma_tolerante, detectar
+from ..nucleo.perfiles import buscar_por_firma_tolerante, cara_sin_area, detectar_boceto
 from ..restricciones import Boceto, resolver
-from ..restricciones.boceto import (ErrorBoceto, Texto, distancia_punto_recta, expresiones_de_texto,
-                                    sustituir_expresiones, validar_valor_cota)
-from .parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, acotar, evaluar
+from ..restricciones.boceto import ErrorBoceto, Texto, distancia_punto_recta, expresiones_de_texto, validar_valor_cota
+from .parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, ErrorMagnitud, acotar, evaluar, nombres_usados,
+                         renombrar_en, renombrar_en_texto, texto_con_valores)
 
 OPERACIONES_CUERPO = {"nuevo": "Cuerpo nuevo", "unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
 OPERACIONES_COMBINAR = {"unir": "Unir", "cortar": "Cortar", "intersecar": "Intersecar"}
@@ -182,7 +182,7 @@ class _DictLeido(dict):
     __hash__ = None
 
 
-DICTS_ESTADO = ("cuerpos", "bocetos", "planos", "ejes", "puntos", "componentes", "uniones", "lienzos", "herramientas")
+DICTS_ESTADO = ("cuerpos", "bocetos", "planos", "ejes", "puntos", "medidas", "componentes", "uniones", "lienzos", "herramientas")
 
 
 class EstadoModelo:
@@ -194,6 +194,9 @@ class EstadoModelo:
         self.planos = {}           # planos de construcción: id de la operación → geo.Plano
         self.ejes = {}             # ejes de construcción: id → (punto, dirección unitaria, nombre)
         self.puntos = {}           # puntos de construcción: id → (punto, nombre)
+        # cómo se dibuja un plano o eje de construcción: id → {"redimensionar", "limites"}, en (u0, v0, u1, v1) o (t0, t1);
+        # sin `limites`, el tamaño que da la vista
+        self.medidas = {}
         self.componentes = {}      # id → {"nombre", "padre", "matriz" 4x4, "fijo"} (ENSAMBLAR)
         self.uniones = {}          # id → datos de la unión (ENSAMBLAR › Unión)
         self.grupos_rigidos = []   # [[ids de componentes]] que se mueven juntos (ENSAMBLAR › Grupo rígido)
@@ -214,6 +217,7 @@ class EstadoModelo:
         e.planos = dict(self.planos)
         e.ejes = dict(self.ejes)
         e.puntos = dict(self.puntos)
+        e.medidas = dict(self.medidas)
         e.componentes = {k: dict(v) for k, v in self.componentes.items()}
         e.uniones = dict(self.uniones)
         e.grupos_rigidos = [list(g) for g in self.grupos_rigidos]
@@ -296,9 +300,16 @@ class Contexto:
         self.valores = _Lecturas(valores_parametros, self.usados)
         self.avisos = []
         self.partir = partir      # False en un paso de receta vieja: el corte no divide el cuerpo (`Documento._sin_partir`)
+        self.ocultos = ()         # lo oculto al crear el paso (`Operacion.calcular`): sin objetos elegidos no se toca
 
     def evaluar(self, expr, tipo=LONGITUD):
-        """Valor de `expr` para un paso: una longitud de más de 1 km o un ángulo de más de 1e6° es un error."""
+        """Valor de `expr` para un paso: una longitud de más de 1 km o un ángulo de más de 1e6° es un error. Una
+        magnitud que no es la del campo (`w * h` en una longitud) no falla, porque una receta vieja tiene que dar el
+        mismo modelo, pero se avisa: la interfaz la rechaza al escribirla."""
+        try:
+            return acotar(evaluar(expr, tipo, self.valores, estricto=tipo != ESCALAR), tipo)
+        except ErrorMagnitud as e:
+            self.aviso(f"«{expr}»: {e}")
         return acotar(evaluar(expr, tipo, self.valores), tipo)
 
     def aviso(self, texto):
@@ -342,7 +353,8 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if lista:
         objetivos = [estado.cuerpo(o) for o in lista]
     else:
-        objetivos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
+        objetivos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"
+                     and c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
         if operacion == "unir":
             objetivos = [c for c in objetivos if geo.se_tocan(c.forma, herramienta)]
     if not objetivos:
@@ -428,6 +440,28 @@ def _deps_objetivo(objetivo):
 
 
 # ---------------------------------------------------------------- operaciones
+def _migrador(clave):
+    """`migrar_receta` de una operación cuyo cálculo cambió: las recetas viejas (sin `clave`) reciben
+    `clave` = 1 y conservan el cálculo de antes, así un ensamblaje compensado a mano (ángulo 180°, Voltear,
+    dz) abre igual. Las operaciones nuevas toman el valor de PARAMS (2)."""
+    def migrar(d):
+        params = d.get("params", {})
+        if isinstance(params, dict) and clave not in params:
+            d = dict(d, params=dict(params, **{clave: 1}))
+        return d
+    return staticmethod(migrar)
+
+
+def _version_de(p, clave):
+    """La versión de cálculo guardada en `clave` (1 o 2). Otro valor (texto, lista, None, 3…) es un error que
+    nombra el campo."""
+    v = p.get(clave)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v not in (1, 2):
+        raise ErrorOperacion(f"Parámetro mal formado «{clave}»: llegó {v!r}; tiene que ser 1 (el cálculo de las "
+                             "recetas viejas) o 2 (el actual).")
+    return int(v)
+
+
 class Operacion:
     TIPO = ""
     ETIQUETA = ""
@@ -447,6 +481,7 @@ class Operacion:
         self.suprimida = suprimida
         self.p = copy.deepcopy(self.PARAMS)
         self.p.update(params)
+        self.ocultos = []       # ids ocultos al crear el paso (`Documento._fijar_ocultos`)
         # Pasos cuyos cuerpos modificó la última ejecución con objetivo "Automático": también son
         # dependencias (si no, se podría mover o borrar el cuerpo que esta operación corta o une).
         self._usados = set()
@@ -456,6 +491,19 @@ class Operacion:
 
     def expresiones(self):
         return [self.p[k] for k in self.EXPRESIONES]
+
+    def claves_modelo(self):
+        """Claves de `p` que la tabla de parámetros lista como parámetros del modelo de este paso (PAR-4)."""
+        return [k for k in self.EXPRESIONES if not isinstance(self.p.get(k), bool)
+                and isinstance(self.p.get(k), (str, int, float)) and str(self.p[k]).strip()]
+
+    def renombrar_parametro(self, viejo, nuevo):
+        """Actualiza las expresiones de este paso (de una copia: `Documento.renombrar_parametro`). True si cambió algo."""
+        cambios = {e: renombrar_en(e, viejo, nuevo) for e in self.expresiones()
+                   if isinstance(e, str) and viejo in nombres_usados(e)}
+        if cambios:                 # una opción medida="total" no es el parámetro `total`
+            self.p = {k: v if k in self.OPCIONES else _reemplazar_textos(v, cambios) for k, v in self.p.items()}
+        return bool(cambios)
 
     def _registrar_usados(self, afectados):
         self._usados = {_dependencia_de_cuerpo(c) for c in afectados} - {self.id, None}
@@ -510,6 +558,7 @@ class Operacion:
         del paso. No toca `self.p`."""
         self.revisar_parametros()
         self.validar_opciones()
+        ctx.ocultos = self.ocultos
         try:
             self.ejecutar(estado, ctx)
         except (ParametroMalFormado, ent.ReferenciaMalFormada) as e:
@@ -524,7 +573,7 @@ class Operacion:
 
     def a_dict(self):
         return {"tipo": self.TIPO, "id": self.id, "nombre": self.nombre, "suprimida": self.suprimida,
-                "params": copy.deepcopy(self.p)}
+                "params": copy.deepcopy(self.p), **({"ocultos": list(self.ocultos)} if self.ocultos else {})}
 
 
 def _ubicar(p, valor):
@@ -596,11 +645,13 @@ class OpPlano(Operacion):
     referencias van en `refs`; los proyectos viejos usan `base`/`marco` (plano de desfase)."""
     TIPO, ETIQUETA, ICONO = "plano", "Plano", "▱"
     PARAMS = {"tipo": "desfase", "base": "XY", "marco": None, "distancia": "10 mm", "refs": [], "angulo": "0 deg",
-              "posicion": "0.5", "desfase": "0 mm"}
-    EXPRESIONES = ("distancia", "angulo", "posicion", "desfase")
+              "posicion": "0.5", "desfase": "0 mm", "extension": "distancia", "objeto": None, "direccion": "U",
+              "lugar": None, "tipo_distancia": "proporcional", "cadena_tangente": False, "redimensionar": "predeterminado",
+              "tipo_extension": "distancia", "medida": "0 mm", "objeto_extension": None}
+    EXPRESIONES = ("distancia", "angulo", "posicion", "desfase", "medida")
 
     def dependencias(self):
-        deps = super().dependencias()
+        deps = super().dependencias() | ent.dependencias_de(self.p["objeto"], self.p["lugar"], self.p["objeto_extension"])
         if self.p.get("refs"):
             return deps | ent.dependencias_de(self.p["refs"]) - {self.id}
         if _es_ref_operacion(self.p["base"]):
@@ -609,10 +660,12 @@ class OpPlano(Operacion):
 
     def ejecutar(self, estado, ctx):
         if self.p.get("refs"):
-            from .ops_construir import calcular_plano
-            plano = calcular_plano(self.p, [_resolver(r, estado) for r in self.p["refs"]], ctx)
+            from .ops_construir import calcular_plano, medida_plano
+            entidades = [_resolver(r, estado) for r in self.p["refs"]]
+            plano = calcular_plano(self.p, entidades, ctx, estado)
             plano.nombre = self.nombre
             estado.planos[self.id] = plano
+            estado.medidas[self.id] = medida_plano(self.p, plano, entidades, ctx, estado)
             return
         base = resolver_plano(self.p["base"], self.p["marco"], estado)
         estado.planos[self.id] = base.desplazado(ctx.evaluar(self.p["distancia"]), self.nombre)
@@ -651,6 +704,29 @@ class OpBoceto(Operacion):
         return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
                                        for e in (c.nombre, c.expresion)]
                 + en_textos + [c["expresion"] for c in self.boceto.geo3d.get("cotas", {}).values()])
+
+    def claves_modelo(self):
+        return []                # los parámetros de un boceto son sus cotas
+
+    def renombrar_parametro(self, viejo, nuevo):
+        cambio = super().renombrar_parametro(viejo, nuevo)
+        for c in self.boceto.cotas.values():
+            expresion = renombrar_en(c.expresion, viejo, nuevo)
+            cambio = cambio or c.nombre == viejo or expresion != c.expresion
+            c.nombre, c.expresion = nuevo if c.nombre == viejo else c.nombre, expresion
+        for c in self.boceto.geo3d.get("cotas", {}).values():
+            expresion = renombrar_en(c["expresion"], viejo, nuevo)
+            cambio = cambio or expresion != c["expresion"]
+            c["expresion"] = expresion
+        for c in self.boceto.curvas.values():
+            if isinstance(c, Texto):
+                antes = c.texto, c.parametro_texto, c.parametro_altura, c.altura_expr
+                c.texto = renombrar_en_texto(c.texto, viejo, nuevo)
+                c.parametro_texto = nuevo if c.parametro_texto == viejo else c.parametro_texto
+                c.parametro_altura = nuevo if c.parametro_altura == viejo else c.parametro_altura
+                c.altura_expr = renombrar_en(c.altura_expr, viejo, nuevo) if c.altura_expr else c.altura_expr
+                cambio = cambio or antes != (c.texto, c.parametro_texto, c.parametro_altura, c.altura_expr)
+        return cambio
 
     def dependencias(self):
         deps = super().dependencias()
@@ -773,7 +849,10 @@ class OpBoceto(Operacion):
                     ctx.aviso(f"{self.nombre}: texto «{c.texto}»: {e}")
             if isinstance(c, Texto) and c.altura_expr:  # «Text height» de Fusion: la altura sigue al parámetro
                 try:
-                    c.altura = ctx.evaluar(c.altura_expr)
+                    altura = ctx.evaluar(c.altura_expr)
+                    if c.altura_a and c.altura > 0:           # el % de Fusion no cambia con la altura; los mm, sí
+                        c.espaciado *= altura / c.altura
+                    c.altura = altura
                 except ErrorExpresion as e:
                     ctx.aviso(f"{self.nombre}: altura del texto «{c.altura_expr}»: {e}")
         valores = self.valores_cotas(ctx)
@@ -787,7 +866,7 @@ class OpBoceto(Operacion):
         res = resolver(boceto, valores)
         if not res.ok:
             ctx.aviso(res.descripcion())
-        perfiles = detectar(boceto.geometria(), plano)
+        perfiles = detectar_boceto(boceto, plano)
         br = BocetoResuelto(self.id, self.nombre, boceto, plano, perfiles, res)
         if any(boceto.geo3d.values()):                 # Boceto 3D: su propio solver, sobre la misma copia
             from ..restricciones import boceto3d
@@ -853,27 +932,6 @@ def _contenido_texto(texto, valores):
     if nombre not in valores or not isinstance(valores[nombre], str):
         raise ErrorExpresion(f"El parámetro '{nombre}' del texto no existe o no es de tipo texto.")
     return valores[nombre]
-
-
-def texto_con_valores(texto, valores):
-    """Texto con sus {expresión} reemplazadas por el valor que tienen con los parámetros `valores` (longitudes
-    en mm, ángulos en grados, números sueltos o cadenas literales). Levanta ErrorExpresion si alguna no se puede calcular."""
-    def valor(expr):
-        if expr in valores and isinstance(valores[expr], str):
-            return valores[expr]
-        ultimo = None
-        for tipo in (LONGITUD, ANGULO, ESCALAR):
-            try:
-                return evaluar(expr, tipo, valores)
-            except ErrorExpresion as e:
-                ultimo = ultimo or e
-        raise ultimo
-    try:
-        return sustituir_expresiones(texto, valor)
-    except ValueError as e:                       # formato inválido: «{ancho:xyz}»
-        if isinstance(e, ErrorExpresion):
-            raise
-        raise ErrorExpresion(f"Formato de número inválido en el texto: {e}") from e
 
 
 def _exigir_tipos(ref, tipos):
@@ -977,6 +1035,17 @@ class _OpConPerfiles(Operacion):
 DIRECCIONES = {"un_lado": "Un lado", "dos_lados": "Dos lados", "simetrica": "Simétrica"}
 
 
+def _reemplazar_textos(x, cambios):
+    """`x` con cada cadena que está en `cambios` reemplazada, a cualquier profundidad de listas y diccionarios.
+    shortcut: no se sabe qué cadena es expresión; salvo OPCIONES y «tipo», una opción que se llame igual que el parámetro
+    cambia con él. Si aparece un caso, cada paso tendría que listar sus claves de expresión."""
+    if isinstance(x, dict):
+        return {k: v if k == "tipo" else _reemplazar_textos(v, cambios) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_reemplazar_textos(v, cambios) for v in x]
+    return cambios.get(x, x) if isinstance(x, str) else x
+
+
 class OpExtrusion(_OpConPerfiles):
     """Extruir de Fusion [SLD-EXTRUDE-SOLID]: tipo (normal o delgada), inicio (plano del perfil, desfase u
     objeto), dirección (un lado, dos lados, simétrica con media longitud o longitud total), extensión
@@ -990,6 +1059,16 @@ class OpExtrusion(_OpConPerfiles):
               "hasta_modo": "cara", "desfase_hasta": "0 mm", "curvas": [],
               "simetrica": False, "operacion": "nuevo", "objetivo": "", "objetivos": []}
     EXPRESIONES = ("distancia", "distancia2", "desfase_inicio", "conicidad", "conicidad2", "espesor", "desfase_hasta")
+    # Lo que no se usa con estas opciones no se lista: Fusion crea AlongDistance y TaperAngle, por lado.
+    def claves_modelo(self):
+        p = self.p
+        dos_lados = p.get("direccion") == "dos_lados"
+        activas = {"distancia": p.get("extension") == "distancia", "distancia2": dos_lados and p.get("extension2") == "distancia",
+                   "desfase_inicio": p.get("inicio") == "desfase", "conicidad": True, "conicidad2": dos_lados,
+                   "espesor": p.get("tipo") == "delgada",
+                   "desfase_hasta": "objeto" in (p.get("extension"), p.get("extension2"))}
+        return [k for k in super().claves_modelo() if activas[k]]
+
     OPCIONES = {"tipo": ("solida", "delgada"), "inicio": ("plano", "desfase", "objeto"), "direccion": DIRECCIONES,
                 "medida": ("mitad", "total"), "extension": ("distancia", "objeto", "todo"),
                 "extension2": ("distancia", "objeto", "todo"), "hasta_modo": ("cara", "cuerpo", "a_traves"),
@@ -1051,6 +1130,8 @@ class OpExtrusion(_OpConPerfiles):
             raise ErrorOperacion("Esta opción de extrusión todavía no está disponible.")
         else:
             forma = _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase)
+        if not geo.esta_vacia(forma) and caras and all(cara_sin_area(c) for c in caras):
+            raise ErrorOperacion("La extrusión no tiene volumen: el perfil elegido casi no tiene área.")
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, p["operacion"], self._objetivo()))
 
     @staticmethod
@@ -1189,6 +1270,9 @@ class OpPrimitiva(Operacion):
 
     def expresiones(self):
         return [self.p[k] for k in self.CAMPOS.get(self.p["forma"], []) + ["x", "y", "z"]]
+
+    def claves_modelo(self):
+        return list(self.CAMPOS.get(self.p["forma"], []))
 
     def ejecutar(self, estado, ctx):
         v = {k: ctx.evaluar(self.p[k]) for k in self.CAMPOS[self.p["forma"]] + ["x", "y", "z"]}
@@ -1398,9 +1482,11 @@ def operacion_desde_dict(d):
         raise ErrorOperacion(f"Tipo de operación desconocido: {d['tipo']}")
     params = copy.deepcopy(d.get("params", {}))
     if clase is OpBoceto:
-        return OpBoceto(d["id"], d.get("nombre"), d.get("suprimida", False),
-                        boceto=Boceto.desde_dict(d.get("boceto", {})), **params)
-    return clase(d["id"], d.get("nombre"), d.get("suprimida", False), **params)
+        params["boceto"] = Boceto.desde_dict(d.get("boceto", {}))
+    op = clase(d["id"], d.get("nombre"), d.get("suprimida", False), **params)
+    ocultos = d.get("ocultos")
+    op.ocultos = [i for i in ocultos if isinstance(i, str)] if isinstance(ocultos, list) else []
+    return op
 
 
 # Operaciones de los otros módulos (se registran al importarse; van al final por el import circular).

@@ -547,7 +547,7 @@ class Descoser(Comando):
 
 class InvertirNormal(Comando):
     CLAVE, TITULO, ICONO = "invertir_normal", "Invertir normal", "invertir_normal"
-    AYUDA = "Da vuelta la cara de afuera de una superficie."
+    AYUDA = "Da vuelta la cara de afuera de una superficie. La flecha muestra el lado que queda positivo."
     CLASE_OP = OpInvertirNormal
 
     def campos(self, ctx):

@@ -23,6 +23,7 @@ from typing import Literal
 
 import numpy as np
 
+from ..nucleo import fuentes
 from ..nucleo import geometria as geo
 from ..nucleo import perfiles as perfiles_mod
 from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, resolver,
@@ -35,7 +36,8 @@ from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflict
                                      restriccion_quita_grados)
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
-from ..timeline.parametros import ANGULO, LONGITUD, evaluar, validar_nombre
+from ..timeline.parametros import (ANGULO, LONGITUD, TEXTO, ErrorExpresion, TablaParametros, evaluar,
+                                   validar_nombre)
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .registro import Expr, herramienta
@@ -191,8 +193,9 @@ def _letras(br, op, cual):
 
 
 def seleccionar_perfiles(br, op, profile):
-    """Índice, lista de índices, 'all', 'largest', 'text' (las letras de todos los textos, sin los huecos de la «o»)
-    o 'text:<id>' (las de un texto) → lista de perfiles del boceto. Errores PROFILE_*."""
+    """Índice, lista de índices, 'all', 'largest', 'text' (las letras de todos los textos, sin los huecos de la «o»),
+    'text:<id>' (las de un texto) o 'sketch' (todo el boceto sin esos huecos, como elegirlo en el navegador) → lista de
+    perfiles del boceto. Errores PROFILE_*."""
     perfiles = br.perfiles
     if not perfiles:
         if any(not c.construccion for c in br.boceto.curvas.values()):
@@ -208,11 +211,13 @@ def seleccionar_perfiles(br, op, profile):
             return [max(perfiles, key=lambda p: p.area)]
         if clave == "text" or clave.startswith("text:"):
             return _letras(br, op, clave[5:].strip())
+        if clave == "sketch":
+            return perfiles_mod.perfiles_de_boceto(br)
         if clave.lstrip("-").isdigit():
             profile = int(clave)
         else:
             raise error("PROFILE_NOT_FOUND", f"Selección de perfil desconocida: '{profile}'.",
-                        "Usá un índice, una lista de índices, 'all', 'largest', 'text' o 'text:<id>'.")
+                        "Usá un índice, una lista de índices, 'all', 'largest', 'text', 'text:<id>' o 'sketch'.")
     indices = profile if isinstance(profile, list) else [profile]
     if not indices:
         raise error("PROFILE_NOT_FOUND", "La lista de perfiles está vacía.")
@@ -635,6 +640,79 @@ def _marcar_centrales(b, anteriores):
             c.eje = True
 
 
+def _nombre_libre(tabla, base):
+    nombre, numero = base, 0
+    while nombre in tabla:
+        numero += 1
+        nombre = f"{base}_{numero}"
+    return nombre
+
+
+def ligar_parametro_texto(doc, t, texto):
+    """Crea los parámetros automáticos «Text» y «Text height» del texto `t` y lo liga a ellos (Fusion los crea solos).
+    La altura que ya era una expresión queda como expresión del parámetro."""
+    tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
+    nombre = _nombre_libre(tabla, "Text")
+    tabla.agregar(nombre, texto, tipo=TEXTO)
+    alto = _nombre_libre(tabla, "Text_height")
+    tabla.agregar(alto, t.altura_expr or f"{t.altura:.12g} mm")
+    doc.aplicar_parametros(tabla)
+    t.parametro_texto, t.parametro_altura, t.altura_expr = nombre, alto, alto
+    t.texto = texto if "{" in texto else "{" + nombre + "}"
+
+
+def actualizar_alturas_texto(boceto, resuelto):
+    """`op.boceto` guarda la altura de cuando se escribió: la que vale es la que dio el recálculo (`resuelto`, el
+    BocetoResuelto del paso; None si el paso no se calculó)."""
+    for c in boceto.curvas.values() if resuelto else ():
+        if c.tipo == "texto" and c.altura_expr and c.id in resuelto.boceto.curvas:
+            c.altura, c.espaciado = resuelto.boceto.curvas[c.id].altura, resuelto.boceto.curvas[c.id].espaciado
+
+
+def alturas_sueltas(boceto):
+    """Textos con una altura escrita a mano: su «Text height» todavía no la tiene."""
+    return [t for t in boceto.curvas.values() if t.tipo == "texto" and t.parametro_altura
+            and t.altura_expr != t.parametro_altura]
+
+
+def sincronizar_alturas_texto(doc, boceto):
+    """Una altura escrita sobre un texto ligado (barra del texto, edit_text, escalar) pasa a su «Text height». Una
+    expresión que cita al propio parámetro no puede: queda en el texto, que igual la calcula."""
+    sueltas = alturas_sueltas(boceto)
+    if not sueltas:
+        return
+    tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
+    for t in sueltas:
+        try:
+            tabla.modificar(t.parametro_altura, t.altura_expr)
+        except ErrorExpresion:
+            continue
+        t.altura_expr = t.parametro_altura
+    doc.aplicar_parametros(tabla)
+
+
+def parametros_de_textos(boceto):
+    return {t.id: (t.parametro_altura, t.parametro_texto) for t in boceto.curvas.values() if t.tipo == "texto"}
+
+
+def soltar_parametros_texto(doc, antes, boceto):
+    """Fusion, al desglosar: los parámetros automáticos de un texto que ya no está se borran, salvo los que use otro.
+    `antes`: lo que dio `parametros_de_textos` antes del cambio."""
+    nombres = [n for tid, par in antes.items() if tid not in boceto.curvas for n in par if n]
+    if not nombres:
+        return
+    usados = doc.parametros_usados()
+    tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
+    for n in nombres:
+        if n in tabla and n not in usados:
+            try:
+                tabla.eliminar(n)
+            except ErrorExpresion:
+                continue
+    if len(tabla) != len(doc.parametros):
+        doc.aplicar_parametros(tabla)
+
+
 def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, construccion=False, central=False):
     """Edita el boceto con `constructor(boceto)` sobre una copia y la reemplaza en el timeline (un paso). Con
     `desde_solver`, la copia parte de la geometría resuelta (ver `_sincronizar_con_solver`)."""
@@ -643,9 +721,11 @@ def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, constru
     op = op_boceto(sesion, ref)
     nueva = op.copia()
     b = nueva.boceto
+    actualizar_alturas_texto(b, sesion.doc.estado_final.bocetos.get(op.id))
     if desde_solver:
         _sincronizar_con_solver(sesion, op, b)
     antes = _claves(b)
+    textos = parametros_de_textos(b)
     try:
         constructor(b)
         if central:
@@ -655,7 +735,9 @@ def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, constru
             b.anclar_al_origen(set(b.puntos) - antes["puntos"])
     except ErrorBoceto as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
+    sincronizar_alturas_texto(sesion.doc, b)
     sesion.doc.reemplazar(op.id, nueva)
+    soltar_parametros_texto(sesion.doc, textos, b)
     return _informe_edicion(sesion, nueva, b, antes)
 
 
@@ -730,8 +812,11 @@ def _info_curva(b, c):
     elif c.tipo == "conica":
         d.update(start=xy(c.inicio), vertex=xy(c.vertice), end=xy(c.fin), rho=_r(c.rho))
     elif c.tipo == "texto":
-        d.update(text=c.texto, position=xy(c.punto), font=c.fuente, height=_r(c.altura), angle=_r(c.angulo),
-                 bold=c.negrita, italic=c.cursiva, letter_spacing=_r(c.espaciado), line_spacing=_r(c.interlineado),
+        d.update(text=c.texto, position=xy(c.punto), font=c.fuente, height=_r(c.altura),
+                 height_basis="letter_a" if c.altura_a else "font_size", angle=_r(c.angulo),
+                 bold=c.negrita, italic=c.cursiva, letter_spacing=_r(c.espaciado),
+                 character_spacing=_r(100 * c.espaciado / max(fuentes.espaciado_cien(c.fuente, c.altura, c.negrita, c.cursiva), 1e-9)),
+                 line_spacing=_r(c.interlineado),
                  align={"izq": "left", "centro": "center", "der": "right"}.get(c.alineacion, c.alineacion),
                  anchor={"base": "baseline", "arriba": "top", "medio": "middle", "abajo": "bottom"}.get(
                      c.ancla_v, c.ancla_v), box_width=_r(c.ancho_caja), flip_h=c.voltear_h, flip_v=c.voltear_v,
@@ -745,6 +830,7 @@ def _info_curva(b, c):
                  kerning_pairs=[[i, _r(x)] for i, x in c.ajustes_kerning])
         if c.camino is not None:
             d.update(path_entity=c.camino, path_side="left" if c.camino_lado == "izq" else "right",
+                     path_placement="above" if c.camino_colocacion == "arriba" else "below",
                      path_position=_r(c.camino_pos), path_offset=_r(c.camino_desfase), fit_path=c.camino_ajustar)
         if c.altura_expr:
             d["height_expression"] = c.altura_expr
@@ -900,16 +986,24 @@ _TIPOS_PLANO = {"offset": "desfase", "angle": "angulo", "tangent": "tangente", "
 @herramienta("create_construction_plane", "boceto",
              "Crea un plano de construcción (CONSTRUIR › Plano). type=offset (por defecto): desfasado de un plano de origen "
              "(XY, XZ, YZ), de otro plano de construcción o de una CARA PLANA (selector o id de find_faces), sobre su "
-             "normal. Los demás tipos usan references en orden: angle (un eje o arista + angle), tangent (una cara curva "
-             "+ angle, y opcional un plano de referencia), middle (dos planos o caras), two_edges (dos aristas o ejes), "
-             "three_points (tres puntos o vértices), perpendicular (una arista, curva o plano + un punto) y path (una "
-             "arista o curva + position entre 0 y 1). Sirve para dibujar bocetos fuera del origen: va en el grupo "
-             "«boceto» porque su uso típico es create_sketch(plane=<este plano>).", modifica=True)
+             "normal; extent=to_object lo lleva hasta un punto. Los demás tipos usan references en orden: angle (un eje o "
+             "arista + angle), tangent (una cara curva + angle, y opcional un plano de referencia), middle (dos planos o "
+             "caras), two_edges (dos aristas o ejes), three_points (tres puntos), perpendicular (una cara o plano + location, "
+             "direction y un Objeto de referencia opcional; también una arista + un punto) y path (una arista, curva, cadena "
+             "o eje, con extent proportional, absolute o to_object). extra_offset es el campo Desfase. Sirve para dibujar "
+             "bocetos fuera del origen: va en el grupo «boceto» porque su uso típico es create_sketch(plane=<este plano>).",
+             modifica=True)
 def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm", name: str | None = None,
                               type: Literal["offset", "angle", "tangent", "middle", "two_edges", "three_points",
                                             "perpendicular", "path"] = "offset",
                               references: list[str | dict | list[float]] | None = None, angle: Expr = 0,
-                              position: Expr = 0.5, distance: Expr = 0, body: str | None = None):
+                              position: Expr = 0.5, distance: Expr = 0, body: str | None = None,
+                              extent: Literal["distance", "to_object", "proportional", "absolute"] | None = None,
+                              object: str | dict | list[float] | None = None, extra_offset: Expr = 0,
+                              direction: Literal["U", "V"] = "U", location: list[float] | None = None,
+                              tangent_chain: bool = True, resize: Literal["default", "extended"] = "default",
+                              size_type: Literal["distance", "to_object"] = "distance", size: Expr = 0,
+                              size_object: str | dict | list[float] | None = None):
     """
     plane: type=offset: plano base: "XY", "XZ", "YZ", el id/nombre de otro plano de construcción, o una cara plana (selector ">Z" o id de find_faces).
     offset: type=offset: desfase en mm sobre la normal del plano base (número o expresión con parámetros, p. ej. "alto / 2").
@@ -917,12 +1011,34 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
     type: "offset" (desfase), "angle" (en ángulo), "tangent" (tangente a una cara curva), "middle" (plano medio), "two_edges" (por dos aristas), "three_points" (por tres puntos), "perpendicular" (perpendicular a una curva en un punto) o "path" (en un punto de una ruta).
     references: referencias en orden según type (ver la descripción): planos de origen o de construcción, ejes, caras, aristas, selectores, ids de find_faces / find_edges, puntos de construcción, vértices [x, y, z] o {sketch, point | curve}.
     angle: type=angle o tangent: ángulo en grados (número o expresión).
-    position: type=path: posición sobre la ruta entre 0 (inicio) y 1 (fin).
-    distance: type=perpendicular: corre el plano sobre su normal, en mm (número o expresión).
+    position: type=path con extent=proportional: posición sobre la ruta entre 0 (inicio) y 1 (fin).
+    distance: type=perpendicular: corre el plano sobre su normal; type=path con extent=absolute o sobre un eje: mm a lo largo de la ruta.
     body: cuerpo donde se evalúan los selectores de references y de plane (cara); vacío = el único cuerpo.
+    extent: type=offset: distance o to_object; type=path: proportional (por defecto), absolute o to_object.
+    object: punto para extent=to_object (vértice, punto de boceto o de construcción). En una ruta que es un eje, ancla la distancia.
+    extra_offset: campo Desfase: corre el plano sobre su normal, en mm; no va con middle ni perpendicular.
+    direction: type=perpendicular sobre cara plana o plano: U o V, la dirección de la cara que da la normal del plano.
+    location: type=perpendicular sin punto: [x, y, z] del lugar de la cara o plano; vacío = su centro.
+    tangent_chain: type=path con una sola curva: suma las curvas que siguen por tangencia.
+    resize: Redimensionar: default ajusta el dibujo a lo elegido, extended llena la vista. Solo cambia cómo se ve.
+    size_type: Tipo de extensión: distance fija el lado con size; to_object lo lleva hasta size_object.
+    size: lado del plano en mm; 0 = el que sale de lo elegido.
+    size_object: objeto hasta donde llega el plano, con size_type=to_object.
     """
+    from .herramientas_construccion import (_EJE, _PLANO, _PUNTO, _referencia, _referencias, agregar_construccion,
+                                            parametros_tamano, referencia_lugar, referencias_ruta)
     doc = sesion.doc
     nombre = name.strip() if name and name.strip() else nombre_nuevo(doc, "Plano", OpPlano)
+    validos = {"offset": ("distance", "to_object"), "path": ("proportional", "absolute", "to_object")}.get(type, ())
+    if extent is not None and extent not in validos:
+        raise error("INVALID_ARGUMENTS", f"extent={extent} no va con type={type}.", f"Con este tipo vale: {', '.join(validos) or 'nada'}.")
+    if type in ("middle", "perpendicular") and str(extra_offset) not in ("0", "0.0"):
+        raise error("INVALID_ARGUMENTS", f"extra_offset no va con type={type}.")
+    if extent == "to_object" and object is None:
+        raise error("INVALID_ARGUMENTS", "Con extent=to_object falta object.")
+    comunes = dict(desfase=texto_expr(distance if type == "perpendicular" else extra_offset),
+                   objeto=None if object is None else _referencia(sesion, object, _PUNTO, body),
+                   **parametros_tamano(sesion, resize, size_type, size, size_object, body))
     if type == "offset" and not references:
         try:
             base = referencia_plano(sesion, plane)
@@ -931,26 +1047,39 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
                 raise
             base = None
             ref = referencia_plano_o_cara(sesion, plane, body)
-            op = OpPlano(doc.nuevo_id(), nombre, tipo="desfase", refs=[ref], distancia=texto_expr(offset))
         else:
-            op = OpPlano(doc.nuevo_id(), nombre, tipo="desfase", base=base, distancia=texto_expr(offset))
+            ref = {"tipo": "plano", "id": base}
+        op = OpPlano(doc.nuevo_id(), nombre, tipo="desfase", refs=[ref], distancia=texto_expr(offset),
+                     extension="objeto" if extent == "to_object" else "distancia", **comunes)
     else:
-        from .herramientas_construccion import _EJE, _PLANO, _PUNTO, _referencias
-        todos = _PLANO | _EJE | {"cuerpo"}
-        filtros = {"offset": [(_PLANO, "plano")], "angle": [(_EJE, "eje")], "tangent": [({"cara"}, None)],
-                   "middle": [(_PLANO, "plano")] * 2, "two_edges": [(_EJE, "eje")] * 2,
-                   "three_points": [(_PUNTO, None)] * 3, "perpendicular": [(todos, None), (_PUNTO, None)],
-                   "path": [({"arista", "curva_boceto"}, None)]}[type]
-        refs = list(references or [])
-        if type == "tangent" and len(refs) == 2:
-            filtros = filtros + [(_PLANO, "plano")]
         base = None
-        op = OpPlano(doc.nuevo_id(), nombre, tipo=_TIPOS_PLANO[type], refs=_referencias(sesion, refs, filtros, body),
-                     distancia=texto_expr(offset), angulo=texto_expr(angle), posicion=texto_expr(position),
-                     desfase=texto_expr(distance))
-    doc.agregar(op)
+        refs = list(references or [])
+        lugar = None
+        if type == "path":
+            refs = referencias_ruta(sesion, refs, body, con_eje=True)
+        else:
+            todos = _PLANO | _EJE | {"cuerpo"}
+            filtros = {"offset": [(_PLANO, "plano")], "angle": [(_EJE, "eje")], "tangent": [({"cara"}, None)],
+                       "middle": [(_PLANO, "plano")] * 2, "two_edges": [(_EJE, "eje")] * 2,
+                       "three_points": [(_PUNTO, None)] * 3, "perpendicular": [(todos, None), (_PUNTO | _PLANO, None)]}[type]
+            if type == "tangent" and len(refs) == 2:
+                filtros = filtros + [(_PLANO, "plano")]
+            if type == "perpendicular" and len(refs) == 1:
+                filtros = filtros[:1]
+            refs = _referencias(sesion, refs, filtros, body)
+            if type == "perpendicular" and len(refs) == 1:
+                lugar = referencia_lugar(sesion, refs[0], location)
+        op = OpPlano(doc.nuevo_id(), nombre, tipo=_TIPOS_PLANO[type], refs=refs, distancia=texto_expr(distance if type == "path" else offset),
+                     angulo=texto_expr(angle), posicion=texto_expr(position), direccion=direction, lugar=lugar,
+                     extension="objeto" if extent == "to_object" else "distancia",
+                     tipo_distancia={"absolute": "absoluto", "to_object": "objeto"}.get(extent, "proporcional"),
+                     cadena_tangente=tangent_chain and type == "path", **comunes)
+    if object is not None and extent != "to_object" and not (type == "path" and op.p["refs"][0]["tipo"] == "eje"):
+        raise error("INVALID_ARGUMENTS", "object solo va con extent=to_object o en una ruta que es un eje.")
+    agregar_construccion(sesion, op)
     plano = doc.estado_final.planos[op.id]
-    return {"plane": _paso(op), "base": base, "type": type, "offset": op.p["distancia"], **_info_plano(plano)}
+    return {"plane": _paso(op), "base": base, "type": type, "offset": op.p["distancia"], **_info_plano(plano),
+            "display": doc.estado_final.medidas[op.id]}
 
 
 @herramienta("create_sketch", "boceto",
@@ -1573,12 +1702,12 @@ def _booleano(e, i, clave):
 
 def _texto_spec(b, i, e, alias, sesion):
     """Texto de especificación con las mismas opciones y validaciones que add_text."""
-    from .herramientas_vectores import _opciones_camino, _opciones_texto, _verificar_fuente
+    from .herramientas_vectores import _mm_de_caracter, _opciones_camino, _opciones_texto, _verificar_fuente
 
     for clave in ("bold", "italic", "flip_h", "flip_v", "kerning", "fit_path", "no_wrap"):
         if clave in e:
             _booleano(e, i, clave)
-    for clave in ("x", "y", "height", "angle", "letter_spacing", "line_spacing", "box_width", "skew", "scale_x",
+    for clave in ("x", "y", "height", "angle", "letter_spacing", "character_spacing", "line_spacing", "box_width", "skew", "scale_x",
                   "scale_y", "baseline_shift", "decoration_thickness", "path_position", "path_offset"):
         if clave in e:
             _numero(e[clave], i, "text", clave)
@@ -1589,19 +1718,24 @@ def _texto_spec(b, i, e, alias, sesion):
     alineacion = e.get("align")
     if alineacion is None:
         alineacion = "center" if camino else "left"
-    opciones = _opciones_texto(e.get("letter_spacing", 0.0), e.get("line_spacing", 1.0), alineacion,
+    espaciado = e.get("letter_spacing", 0.0)
+    if "character_spacing" in e:
+        espaciado = _mm_de_caracter(e["character_spacing"], espaciado, fuente, e.get("height", 5.0), negrita, cursiva)
+    opciones = _opciones_texto(espaciado, e.get("line_spacing", 1.0), alineacion,
                               e.get("anchor", "baseline"), e.get("box_width", 0.0), e.get("flip_h", False),
                               e.get("flip_v", False), **{k: e[k] for k in (
                                   "kerning", "skew", "scale_x", "scale_y", "baseline_shift", "case", "underline",
                                   "strikethrough", "decoration_thickness", "no_wrap", "kerning_pairs") if k in e})
     if camino is not None:
         opciones |= _opciones_camino(camino, e.get("path_side", "left"), e.get("path_position", 0.5),
-                                    e.get("path_offset", 0.0), e.get("fit_path", False))
+                                    e.get("path_offset", 0.0), e.get("fit_path", False),
+                                    e.get("path_placement", "above"))
         if e.get("underline", "none") != "none" or e.get("strikethrough", "none") != "none":
             sesion.avisar("El subrayado y el tachado no se dibujan en un texto en curva.")
     tid = b.agregar_texto((e.get("x", 0.0), e.get("y", 0.0)), texto, altura=e.get("height", 5.0),
                           angulo=e.get("angle", 0.0), fuente=fuente, negrita=negrita, cursiva=cursiva, **opciones)
     b.curvas[tid].construccion = _booleano(e, i, "construction")
+    ligar_parametro_texto(sesion.doc, b.curvas[tid], texto)
     return {"": tid, "position": b.curvas[tid].punto}
 
 
@@ -2972,7 +3106,7 @@ def edit_dimension(sesion, dimension: int, value: Expr | None = None, sketch: st
     """
     dimension: id de la cota (get_sketch la lista en dimensions).
     name: renombra el parámetro de la cota (como tipear «ANCHO=20» en su caja de la ventana); tiene que estar libre y las expresiones que citaban el nombre viejo dejan de valer; vacío = no cambia.
-    value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor.
+    value: valor nuevo: número (mm; grados en una cota de ángulo) o expresión con parámetros ("ancho / 2"); vacío = no cambia el valor. En una cota de desfase, un negativo pasa la copia al otro lado, como en Fusion.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     offset: mm que se separa la línea de cota de la medida (con signo); vacío = no cambia.
     text_offset: mm que se corre el texto a lo largo de la línea de cota desde su centro; vacío = no cambia.

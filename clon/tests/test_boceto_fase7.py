@@ -193,7 +193,8 @@ def prim_todas(sesion, eid):
 def test_boc20_altura_del_texto_con_parametro(s):
     llamar(s, "create_parameter", name="h_texto", expression="5 mm")
     tid = llamar(s, "add_text", text="H", height="h_texto")["entities"][0]["id"]
-    assert entidad(s, tid)["height_expression"] == "h_texto"
+    assert entidad(s, tid)["height_expression"] == "Text_height"     # «Text height» de Fusion, con la expresión escrita
+    assert s.doc.parametros.obtener("Text_height").expresion == "h_texto"
     alto = _alto_texto(s, tid)
     llamar(s, "set_parameter", name="h_texto", expression="10 mm")
     assert _alto_texto(s, tid) == pytest.approx(2 * alto, rel=1e-6)
@@ -243,7 +244,7 @@ def test_boc21_fuente_de_un_trazo_en_la_lista_y_dibuja_solo_lineas(s):
     tid = llamar(s, "add_text", text="L1", font=familia, height=10)["entities"][0]["id"]
     prims = prim_todas(s, tid)
     assert prims and all(p[0] == "linea" for p in prims)
-    assert _alto_texto(s, tid) == pytest.approx(10 * 0.7, rel=0.05)   # altura de las mayúsculas
+    assert _alto_texto(s, tid) == pytest.approx(10, rel=0.05)         # altura de las mayúsculas
 
 
 # ---------------------------------------------------------------- BOC-28: glifos faltantes y texto largo
@@ -257,7 +258,7 @@ def test_boc28_texto_largo_en_un_circulo_en_tiempo_razonable(s):
     c = llamar(s, "draw_circle", radius=100)["entities"][0]["id"]
     t = time.perf_counter()
     r = llamar(s, "add_text", text="W" * 200, height=5, path_entity=c, fit_path=True)
-    assert r["profiles"] > 1000
+    assert r["profiles"] > 200                # las W se pisan entre ellas; el círculo no las parte (B-134)
     assert time.perf_counter() - t < 10.0     # ~2-3 s; antes de BOC-28, el doble
 
 

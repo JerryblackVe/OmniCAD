@@ -17,7 +17,8 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QLabel, QListView, QListWidget, QListWidgetItem, QMenu,
                                QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton, QWidget)
-
+
+from ..timeline import aspectos_doc
 from ..timeline.operaciones import OPERACIONES_CUERPO
 from . import temas
 from .iconos import icono
@@ -26,9 +27,7 @@ from .insignias import icono_con_insignia, insignia_de
 COLORES = {"aviso": QColor(255, 214, 102), "error": QColor(255, 140, 140)}
 MARCADOR = "__marcador__"
 ROL_ORIGEN = Qt.UserRole + 1     # «creo» | «modifico»: el paso es de donde viene lo elegido en la vista (amarillo)
-# Colores de la muestra por componente (suaves, para que el ícono se siga viendo); se repiten si hay más componentes.
-PALETA_COMPONENTES = [QColor(*c) for c in ((141, 196, 255), (255, 183, 120), (168, 225, 148), (214, 170, 240),
-                                           (255, 165, 175), (130, 220, 215), (240, 220, 120), (190, 190, 200))]
+PALETA_COMPONENTES = [QColor(*c) for c in aspectos_doc.PALETA_COMPONENTES]
 # Pasos que ningún comando de la cinta crea: su ícono. Todos los demás usan el del comando que los crea (`comando_para`).
 ICONO_TIPO = {"boceto": "boceto", "importar_step": "importar", "importar_iges": "importar_iges",
               "operacion_base": "operacion_base", "insertar_malla": "insertar_malla",
@@ -51,7 +50,7 @@ def colores_por_componente(doc):
     """{id de paso: color} de los pasos que pertenecen a un componente: el propio paso Componente y los que crearon
     cuerpos que hoy están dentro de uno (el color sigue el orden en que se crearon los componentes). Los demás no
     figuran."""
-    ids = [op.id for op in doc.operaciones if op.TIPO == "componente"]
+    ids = aspectos_doc.colores_componentes(doc)
     de_cuerpo = {}
     for c in doc.estado_final.cuerpos.values():
         if c.componente:
@@ -60,7 +59,7 @@ def colores_por_componente(doc):
     for op in doc.operaciones:
         comp = op.id if op.TIPO == "componente" else de_cuerpo.get(op.id)
         if comp in ids:
-            colores[op.id] = PALETA_COMPONENTES[ids.index(comp) % len(PALETA_COMPONENTES)]
+            colores[op.id] = QColor(*ids[comp])
     return colores
 
 
@@ -133,6 +132,8 @@ class PanelTimeline(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.doc = None
         self.color_componente = False
+        self.colores_en_lienzo = False      # Mostrar colores de componente también pinta las muestras
+        self.muestras = {}                  # id de paso → color de lo último que se dibujó
         self._origen = ((), ())            # (pasos que crearon lo elegido, pasos que lo modificaron): `resaltar_origen`
         self.lista = _Lista()
         self.lista.setItemDelegate(_Delegado(self.lista))
@@ -233,7 +234,7 @@ class PanelTimeline(QWidget):
 
     def actualizar(self, doc):
         # Sin cambios en lo que se muestra no se reconstruye (llega en cada aviso del documento).
-        colores = colores_por_componente(doc) if self.color_componente else {}
+        colores = self.muestras = colores_por_componente(doc) if self.color_componente or self.colores_en_lienzo else {}
         nombres = [icono_operacion(op) for op in doc.operaciones]       # una vez por paso: resolver el comando recorre el catálogo
         firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, nombre, insignia_de(op, res.estado),
                                           res.estado, res.mensaje, colores.get(op.id))

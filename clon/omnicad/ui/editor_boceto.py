@@ -42,6 +42,7 @@ from PySide6.QtGui import (QColor, QFontMetricsF, QKeySequence, QMouseEvent, QPa
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
                                QToolButton, QToolTip, QWidget)
 
+from ..nucleo import fuentes
 from ..restricciones import (Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, grados_de_libertad,
                              resolver)
 from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
@@ -51,12 +52,13 @@ from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, 
                                     aviso_tangencias_fuera,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     circunferencia_3_puntos, dominio,
-                                    evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, mas_cercano, paradas_cursor,
+                                    evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, lado_natural, mas_cercano, paradas_cursor,
                                     primitivas_entidad, puntos_espiral, puntos_primitiva, validar_valor_cota,
                                     _validar_opciones_texto)
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados, separar_nombre,
                                    validar_nombre)
 from . import formato, temas
+from .campo_expresion import autocompletar
 from .iconos import icono
 from .patron_boceto import ControlPatron, dibujar_casilla
 from .transformar_boceto import ControlTransformar
@@ -192,7 +194,7 @@ SPLINES = ("spline_ajuste", "spline_control")
 PROYECCION = ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio", "isoparametrica")
 COMANDO_PROYECCION = ("proyectar", "intersecar")        # con tarjeta: se elige, se revisa la vista previa y se acepta
 CAPA_PROYECCION = "proyeccion_elegida"                  # capa del visor con lo elegido en la tarjeta
-CURVA_TEXTO = ("camino_lado", "camino_desfase", "camino_ajustar")      # opciones del texto sobre una curva
+CURVA_TEXTO = ("camino_lado", "camino_colocacion", "camino_desfase", "camino_ajustar")      # opciones del texto sobre una curva
 MODIFICAN = tuple(PICKS) + SELECCION + PROYECCION       # no aplican el tipo de línea a lo que crean
 PORTAPAPELES = {}         # Ctrl+C / Ctrl+V entre bocetos: {"boceto": copia del origen, "ids": [...]}
 VIOLETA = QColor(170, 90, 230)
@@ -372,6 +374,22 @@ def _numero(texto):
     return float(str(texto).replace(",", "."))
 
 
+def _espaciado_cien(altura, o):
+    return fuentes.espaciado_cien(o["fuente"], altura, o["negrita"], o["cursiva"])
+
+
+def _espaciado_mm(porcentaje, altura, o):
+    """Lo escrito en «Espaciado (%)», como Character Spacing de Fusion (`espaciado_cien`). El boceto guarda mm; `o`: las
+    opciones del texto. Un % sin tocar deja los mm como estaban: el campo los redondea."""
+    if str(porcentaje) == _espaciado_porcentaje(o["espaciado"], altura, o):
+        return o["espaciado"]
+    return _numero(str(porcentaje).replace("%", "") or "0") * _espaciado_cien(altura, o) / 100
+
+
+def _espaciado_porcentaje(mm, altura, o):
+    return formato.numero(100 * mm / max(_espaciado_cien(altura, o), 1e-9))
+
+
 _CACHE_MUESTRAS = {}
 
 
@@ -450,6 +468,8 @@ class EntradaValor(QFrame):
             c.installEventFilter(self)
             lay.addWidget(c)
             self.campos.append(c)
+            if getattr(parent, "nombres_parametros", None):
+                autocompletar(c, parent.nombres_parametros)
         self.adjustSize()
 
     def hacer_movible(self):
@@ -590,7 +610,7 @@ class Lienzo(QWidget):
                          "pivote_texto": None, "marco_texto": False, "parametro_texto": None,
                          "valor_parametro_texto": "",
                          "negrita": False, "cursiva": False,
-                         "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq",
+                         "alineacion": "izq", "ancla_v": "base", "camino_lado": "izq", "camino_colocacion": "arriba",
                          "camino_desfase": 0.0, "camino_ajustar": False,
                          "altura_texto": 5.0, "espaciado": 0.0, "interlineado": 1.0,
                          "voltear_h": False, "voltear_v": False,
@@ -821,9 +841,10 @@ class Lienzo(QWidget):
         self._emitir_proyeccion()
 
     # ------------------------------------------------------------ resolver
-    def evaluar(self, expr, tipo=LONGITUD):
+    def evaluar(self, expr, tipo=LONGITUD, estricto=False):
         """Evalúa contra el documento. Una cota nombrada al citarla todavía no está en su tabla (entra al terminar el
-        boceto): se cita por su valor, y una referencia circular entre ellas es un error de expresión."""
+        boceto): se cita por su valor, y una referencia circular entre ellas es un error de expresión. `estricto`: lo
+        que se acaba de teclear; además exige la magnitud del campo."""
         usadas = nombres_usados(expr) & self._nombradas.keys() if isinstance(expr, str) else set()
         for nombre in usadas:
             cota = self.b.cotas.get(self._nombradas[nombre])
@@ -838,7 +859,7 @@ class Lienzo(QWidget):
                 self._evaluando.discard(nombre)
             unidad = "deg" if cota.tipo == "angulo" else "mm"
             expr = re.sub(rf"\b{re.escape(nombre)}\b", f"({valor!r} {unidad})", expr)
-        return self._evaluar_doc(expr, tipo)
+        return self._evaluar_doc(expr, tipo, True) if estricto else self._evaluar_doc(expr, tipo)
 
     def valores_cotas(self):
         return {c.id: self.evaluar(c.expresion, _tipo_valor(c.tipo)) for c in self.b.cotas.values()}
@@ -1036,6 +1057,22 @@ class Lienzo(QWidget):
                 return [_muestras(p, pasos) for p in primitivas_entidad(c, self.b.coords, curvas=self.b.curvas)]
         return [_muestras(p, pasos) for p in self.b.primitivas(c.id)]
 
+    def geometria_real(self):
+        """`Boceto.geometria()` con el contenido de los textos ligados a un parámetro, no el «{Text}» que guardan."""
+        from ..timeline.operaciones import _contenido_texto, texto_con_valores
+        valores = self.valores_parametros()
+        ligados = [(c, c.texto) for c in self.b.curvas.values() if isinstance(c, Texto) and c.parametro_texto in valores]
+        try:
+            for c, _texto in ligados:
+                try:
+                    c.texto = texto_con_valores(_contenido_texto(c, valores), valores)
+                except ErrorExpresion:       # un {nombre} que no existe: el paso lo avisa; los demás perfiles siguen
+                    pass
+            return self.b.geometria()
+        finally:
+            for c, texto in ligados:
+                c.texto = texto
+
     def _poli_px(self, puntos):
         if self.visor is None:               # boceto 2D: la cuenta de a_px en línea (se hace miles de veces)
             s, cx, cy = self.escala, self.centro[0], self.centro[1]
@@ -1157,16 +1194,16 @@ class Lienzo(QWidget):
         return self.plano if self.plano is not None else geo.Plano("XY")
 
     def _perfiles(self):
-        """Perfiles del boceto en el orden de `detectar` (el mismo índice que `profile` en la API). Con caché por
+        """Perfiles del boceto en el orden de `detectar_boceto` (el mismo índice que `profile` en la API). Con caché por
         geometría en el núcleo: repetir la consulta sin cambios no vuelve a partir caras."""
-        from ..nucleo.perfiles import detectar
+        from ..nucleo.perfiles import detectar_boceto
         try:
-            return detectar(self.b.geometria(), self._plano_perfiles())
+            return detectar_boceto(self.b, self._plano_perfiles(), self.geometria_real())
         except Exception:  # noqa: BLE001 — un boceto a medio dibujar no debe romper la selección
             return []
 
     def perfil_en(self, pos):
-        """Índice del perfil (región cerrada) bajo `pos`, o None. Si hay varios (no debería), el más chico."""
+        """Índice del perfil (región cerrada) bajo `pos`, o None. Si hay varios (una letra sobre un disco), el más chico."""
         from .manipuladores import punto_en_cara
         p3 = self._plano_perfiles().a_3d(*self.a_mm(pos))
         dentro = [(p.area, i) for i, p in enumerate(self._perfiles()) if punto_en_cara(p.cara, p3, 1e-7)]
@@ -1721,8 +1758,9 @@ class Lienzo(QWidget):
                     return                              # falta la 2.ª esquina del cuadro
             en_curva, caja, altura_ini, rect = {}, {}, self.opciones["altura_texto"], None
             if camino is not None:
-                pos = fraccion_en_camino(self.b.primitivas(camino)[0], xy)
-                en_curva = {"camino": camino, "camino_pos": pos, "alineacion": "centro"}
+                prim_camino = self.b.primitivas(camino)[0]
+                en_curva = {"camino": camino, "camino_pos": fraccion_en_camino(prim_camino, xy), "alineacion": "centro"}
+                self.opciones["camino_lado"] = lado_natural(prim_camino)
             elif len(c) == 2:
                 fin_xy = c[1][1]
                 x0, x1 = sorted((xy[0], fin_xy[0]))
@@ -1735,7 +1773,7 @@ class Lienzo(QWidget):
             def aceptar(v):
                 v = (list(v) + [""] * 5)[:5]          # los campos de más (espaciado, interlineado) son opcionales
                 altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
-                espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
+                espaciado, interlineado = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
                 o = self.opciones
                 extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"], "voltear_h": o["voltear_h"],
                          "voltear_v": o["voltear_v"]} | en_curva | caja | {k: o[k] for k in Texto.TIPOGRAFIA}
@@ -1752,13 +1790,17 @@ class Lienzo(QWidget):
                                   "Carácter).")
             self.opciones["ajustes_kerning"] = []
             from .asas_boceto import asas_texto
-            self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
-                                ["Texto", formato.numero(altura_ini), "0", formato.numero(self.opciones["espaciado"]),
+            self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado (%)", "Interlineado"],
+                                ["Texto", formato.numero(altura_ini), "0",
+                                 _espaciado_porcentaje(self.opciones["espaciado"], self.opciones["altura_texto"], self.opciones),
                                  formato.numero(self.opciones["interlineado"])], self._pos_cursor, aceptar,
                                 None if camino is not None else asas_texto(self, xy, caja.get("ancho_caja", 0.0)))
             self._previa_texto = {"pos": pid if pid is not None else xy, "existente": None,
                                   "extra": en_curva | caja, "caja": rect, "reemplazar": True}
             self._conectar_previa_texto()
+            if camino is not None:                       # el panel muestra el lado elegido para esta curva
+                self.opciones.update(parametro_texto=None, valor_parametro_texto="")
+                self.texto_en_edicion.emit()
         elif h == "espiral" and len(c) == 2:
             (_, ce), (_, ini) = c
 
@@ -2979,7 +3021,7 @@ class Lienzo(QWidget):
             t = self.b.curvas[tid]
             v = (list(v) + [""] * 5)[:5]
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
-            espaciado, interlineado = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
+            espaciado, interlineado = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
             if not v[0].strip():
                 raise ErrorBoceto("El texto está vacío.")
             if interlineado <= 0:
@@ -2990,6 +3032,8 @@ class Lienzo(QWidget):
 
             def cambiar():
                 texto = v[0].replace("\\n", "\n")
+                if t.altura_expr and abs(altura - t.altura) > 1e-9:      # si no, el recálculo vuelve a la altura de antes
+                    t.altura_expr = v[1] if nombres_usados(v[1]) else f"{altura:.12g} mm"
                 t.texto, t.altura = texto, altura
                 if t.marco:
                     self.b.girar_texto(tid, ang, pivote)
@@ -3019,9 +3063,9 @@ class Lienzo(QWidget):
                     self.mensaje.emit(str(e))
                     return False
             return True
-        self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado", "Interlineado"],
+        self._abrir_entrada(["Texto", "Altura", "∠", "Espaciado (%)", "Interlineado"],
                             [t.texto.replace("\n", "\\n"), formato.numero(t.altura), formato.numero(t.angulo, True),
-                             formato.numero(t.espaciado), formato.numero(t.interlineado)], pos, aceptar)
+                             _espaciado_porcentaje(t.espaciado, t.altura, self.opciones), formato.numero(t.interlineado)], pos, aceptar)
         # como en Fusion, al editar un texto se ven sus opciones (fuente, negrita, alineación…) en la paleta
         self._paleta_texto = True
         self._previa_texto = {"pos": None, "existente": tid, "extra": {}, "caja": None, "reemplazar": False,
@@ -3118,8 +3162,12 @@ class Lienzo(QWidget):
         self.opciones[clave] = float(valor)
         if self._previa_texto is not None and self.entrada is not None:
             campo = {"altura_texto": 1, "espaciado": 3, "interlineado": 4}[clave]
-            if self.entrada.campos[campo].text() != formato.numero(valor):
-                self.entrada.campos[campo].setText(formato.numero(valor))
+            texto = formato.numero(valor)
+            if clave == "espaciado":
+                texto = _espaciado_porcentaje(valor, self._previa_texto.get("valores", (self.opciones["altura_texto"],))[0],
+                                              self.opciones)
+            if self.entrada.campos[campo].text() != texto:
+                self.entrada.campos[campo].setText(texto)
 
     def _insertar_en_texto(self, cadena):
         """Escribe `cadena` en el cursor (si hay selección, la reemplaza)."""
@@ -3349,7 +3397,7 @@ class Lienzo(QWidget):
         if "camino" in d["extra"]:
             extra |= {k: o[k] for k in CURVA_TEXTO}
         return Texto(0, d["pos"], texto, o["fuente"], altura, ang, o["negrita"], o["cursiva"], espaciado=esp,
-                     interlineado=inter, **extra, **tipografia)
+                     interlineado=inter, altura_a=True, **extra, **tipografia)
 
     def _mapa_cursor(self, t, P, ang):
         """Mapa de posiciones del texto `t` para el cursor: ver `paradas_cursor` (más `dir` y `caja`)."""
@@ -3385,7 +3433,7 @@ class Lienzo(QWidget):
         try:
             texto = v[0].replace("\\n", "\n")
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
-            esp, inter = self.evaluar(v[3] or "0"), _numero(v[4] or "1")
+            esp, inter = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
             if altura > 0 and inter > 0:
                 t = self._texto_en_vivo(texto, altura, ang, esp, inter)
 
@@ -3404,7 +3452,8 @@ class Lienzo(QWidget):
         d["mapa"] = info
         self._previa_polis = polis
         try:                                  # lo de la barra pasa a las opciones (y de ahí al panel)
-            alt, esp, inter = self.evaluar(v[1] or "5"), self.evaluar(v[3] or "0"), _numero(v[4] or "1")
+            alt, inter = self.evaluar(v[1] or "5"), _numero(v[4] or "1")
+            esp = _espaciado_mm(v[3], alt, self.opciones)
             if alt > 0 and inter > 0:
                 d["valores"] = (alt, esp, inter)
                 if not d.get("caja"):
@@ -4150,7 +4199,7 @@ class Lienzo(QWidget):
             texto = texto or formato.numero(actual, angular=tipo == "angulo")
             self._comprobar_nombre_cota(nombre)
             if not referencia:
-                validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo)))     # −5 o 0: la caja queda en rojo
+                validar_valor_cota(tipo, self.evaluar(texto, _tipo_valor(tipo), estricto=True))     # −5 o 0: la caja queda en rojo
 
             def crear():
                 cota = self.b.cotas[self.b.agregar_cota(tipo, entidades, texto, previa.datos, referencia=referencia)]
@@ -4401,7 +4450,7 @@ class Lienzo(QWidget):
         def aceptar(v):
             nombre, texto = separar_nombre(v[0])
             self._comprobar_nombre_cota(nombre, cota)
-            validar_valor_cota(cota.tipo, self.evaluar(texto, _tipo_valor(cota.tipo)))
+            validar_valor_cota(cota.tipo, self.evaluar(texto, _tipo_valor(cota.tipo), estricto=True))
 
             def cambiar():
                 cota.expresion = texto
@@ -4795,6 +4844,9 @@ class Lienzo(QWidget):
             if i in self.b.puntos:
                 pts.append(self.b.coords(i))
                 continue
+            if isinstance(self.b.curvas[i], Texto):        # con su contenido, no el «{Text}» que guarda
+                pts += [q for poli in self._polilineas(self.b.curvas[i]) for q in poli]
+                continue
             for prim in self.b.primitivas(i):
                 if prim[0] == "linea":
                     pts += [prim[2], prim[3]]
@@ -5037,6 +5089,7 @@ class Lienzo(QWidget):
             t.camino_pos = (pos0 + delta) % 1.0
         else:
             t.camino_pos = min(max(pos0 + delta, 0.0), 1.0)
+        self.cambio.emit()                            # los rellenos de los perfiles siguen al texto (B-137)
         self.update()
 
     def _mover_curva(self, cid, modo, cur):

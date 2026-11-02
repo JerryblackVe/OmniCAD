@@ -187,10 +187,12 @@ def agregar_rectangulo(b, esquina, opuesta, u=(1, 0, 0), v=(0, 1, 0), construcci
     return lineas
 
 
-def _contornos(texto, altura, fuente):
+def _contornos(texto, altura, fuente, altura_a=True):
+    """`altura_a`: ver `Texto.altura_a` del boceto plano; False en las recetas anteriores."""
     from ..nucleo import fuentes
     try:
-        return [puntos_primitiva(p) for p in fuentes.contornos_texto(texto, fuente, altura)]
+        tamano = fuentes.tamano_fuente(fuente, altura) if altura_a else altura
+        return [puntos_primitiva(p) for p in fuentes.contornos_texto(texto, fuente, tamano)]
     except fuentes.ErrorFuente as e:
         raise ErrorBoceto(str(e)) from e
 
@@ -205,7 +207,7 @@ def agregar_texto(b, origen, texto, altura, u=(1, 0, 0), v=(0, 1, 0), fuente="Ar
     if not _contornos(texto, altura, fuente):
         raise ErrorBoceto(f"La fuente «{fuente}» no tiene contornos para «{texto}».")
     return _curva(b, "texto", [origen], construccion, texto=texto, altura=altura, fuente=str(fuente),
-                  u=_lista(u), v=_lista(v))
+                  u=_lista(u), v=_lista(v), altura_a=True)
 
 
 _CURVAS = ("linea", "arco", "circulo", "elipse", "conica", "spline")
@@ -702,7 +704,8 @@ def _vec(plano, v):
 def _polilineas_texto(c, P, plano):
     o, u, v = P[c["puntos"][0]], np.array(c["u"]), np.array(c["v"])
     return [np.array([a_mundo(plano, o + x * u + y * v) for x, y in uv], np.float32)
-            for uv in _contornos(c["texto"], c["altura"], c.get("fuente", "Arial")) if len(uv) >= 2]
+            for uv in _contornos(c["texto"], c["altura"], c.get("fuente", "Arial"), c.get("altura_a", False))
+            if len(uv) >= 2]
 
 
 def arista(b, cid, plano):

@@ -567,7 +567,8 @@ def test_asas_en_la_vista_de_otros_comandos(app_qt):
     assert "flecha:d1" in idents("patron_rectangular_3d", {"cuerpos": [cuerpo], "dir1": [eje_x]})
     assert "angulo:angulo" in idents("patron_circular_3d", {"cuerpos": [cuerpo], "eje": [eje_z], "modo": "parcial"})
     assert "angulo:angulo" not in idents("patron_circular_3d", {"cuerpos": [cuerpo], "eje": [eje_z]})   # completo: 360°
-    assert "triada" in idents("scu", {})
+    assert idents("scu", {}) == []                 # como en Fusion: primero se elige el punto (Forzar)
+    assert "triada" in idents("scu", {"origen": [hit_desde_ref({"tipo": "punto", "id": "O"}, doc.estado_final)]})
     assert "flecha:diametro" in idents("bobina", {})
     plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
     assert "posicion:calcomania" in idents("lienzo", {"plano": [plano]})

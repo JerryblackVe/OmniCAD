@@ -11,6 +11,8 @@ Modo boceto dentro de la vista 3D (como el entorno de boceto de Fusion 360):
   - el sombreado azul de los perfiles cerrados, recalculado al cambiar el boceto.
 Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del timeline.
 """
+import time
+
 import numpy as np
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
@@ -19,9 +21,11 @@ from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter
                                QScrollArea, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
-from ..nucleo.perfiles import detectar
+from ..nucleo import fuentes
+from ..nucleo.perfiles import detectar_boceto
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
+from .campo_expresion import nombres_sugeridos
 from .editor_boceto import (AYUDA_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
                             RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia)
 from .formulario import armar_cabecera
@@ -30,6 +34,7 @@ from .panel_patron import PanelPatron
 from .panel_transformar import PanelTransformar
 from .panel_simetria import PanelSimetria
 from .superposiciones import CabeceraMovible
+from .visor3d import perfiles_a_pintar
 
 # acción → (texto del menú, herramienta, atajo, ícono). Atajos de Fusion: L, R, C, D, T, O, P, M, Mayús+V.
 ACCIONES_BOCETO = [
@@ -132,7 +137,8 @@ ANCLAJES_TEXTO = [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medi
 PIVOTES_TEXTO = [(None, "Ancla del texto"), ("corner:tl", "Esquina: sup-izq"),
                  ("corner:tr", "Esquina: sup-der"), ("corner:bl", "Esquina: inf-izq"),
                  ("corner:br", "Esquina: inf-der"), ("corner:center", "Centro")]
-LADOS_TEXTO = [("izq", "Izquierda de la curva"), ("der", "Derecha (al revés)")]
+COLOCACIONES_TEXTO = [("arriba", "Arriba"), ("abajo", "Abajo")]
+LADOS_TEXTO = [("izq", "A favor de la curva"), ("der", "Al revés")]
 _FUENTES = []
 
 
@@ -690,8 +696,11 @@ class PanelCaracter(QFrame):
         c.addLayout(fila)
         # ---- Espaciado
         self._seccion(c, "Espaciado", True)
-        self.interletraje = self._spin("espaciado", -1000.0, 1000.0, 0.1, " mm", "<b>Interletraje (tracking)</b><br>"
-                                       "Suma o resta distancia entre TODAS las letras (mm). Negativo las junta.")
+        self.interletraje = self._spin(None, -1000.0, 1000.0, 1.0, " %", "<b>Espaciado de caracteres</b><br>"
+                                       "Suma o resta distancia entre TODAS las letras, en % del ancho medio de la "
+                                       "fuente (0 % = el de la fuente). Negativo las junta.")
+        self.interletraje.valueChanged.connect(self._emitir_espaciado)
+        self.altura.valueChanged.connect(self._emitir_espaciado)
         self.par = self._spin("kerning_par", -1000.0, 1000.0, 0.05, " mm", "<b>Kerning de un par</b><br>Ajusta la "
                               "distancia entre las dos letras que rodean al cursor (mm). Con el texto abierto, "
                               "Alt+← / Alt+→ lo ajustan sin salir del teclado.")
@@ -701,7 +710,7 @@ class PanelCaracter(QFrame):
                                        "(1 = el de la fuente).")
         f = QFormLayout()
         f.setContentsMargins(10, 0, 0, 0)
-        f.addRow("Interletraje", self.interletraje)
+        f.addRow("Espaciado de caracteres", self.interletraje)
         f.addRow("Kerning (par)", self.par)
         f.addRow("Interlineado", self.interlineado)
         self._cuerpo_de["Espaciado"].setLayout(f)
@@ -711,8 +720,12 @@ class PanelCaracter(QFrame):
                                       "de la caja (en curva: qué parte del texto cae en su posición).")
         self.ancla_v = self._combo(ANCLAJES_TEXTO, "ancla_v", "<b>Punto de anclaje</b><br>Qué parte del bloque "
                                    "de texto cae sobre el punto donde se hizo clic.")
-        self.camino_lado = self._combo(LADOS_TEXTO, "camino_lado", "<b>Lado en curva</b><br>De qué lado de la "
-                                       "curva van las letras (solo para texto sobre una curva).")
+        self.camino_colocacion = self._combo(COLOCACIONES_TEXTO, "camino_colocacion", "<b>Colocación</b><br>Las "
+                                             "letras apoyadas sobre la curva o colgando de ella, con la misma lectura "
+                                             "(solo para texto sobre una curva).")
+        self.camino_lado = self._combo(LADOS_TEXTO, "camino_lado", "<b>Lado en curva</b><br>Recorre la curva a favor o "
+                                       "al revés: las letras pasan al otro lado y se siguen leyendo derechas (solo para "
+                                       "texto sobre una curva).")
         self.camino_desfase = self._spin("camino_desfase", -10000.0, 10000.0, 0.5, " mm", "<b>Desfase en curva</b><br>"
                                          "Separa (+) o acerca (−) las letras de la curva (solo texto sobre una curva).")
         self.camino_ajustar = QCheckBox("Ajustar a la curva")
@@ -723,6 +736,7 @@ class PanelCaracter(QFrame):
         f.setContentsMargins(10, 0, 0, 0)
         f.addRow("Alineación", self.alineacion)
         f.addRow("Anclaje", self.ancla_v)
+        f.addRow("Colocación", self.camino_colocacion)
         f.addRow("Lado en curva", self.camino_lado)
         f.addRow("Desfase en curva", self.camino_desfase)
         f.addRow("", self.camino_ajustar)
@@ -847,8 +861,18 @@ class PanelCaracter(QFrame):
         sp.setAlignment(Qt.AlignRight)
         sp.setMinimumHeight(24)
         sp.setToolTip(ayuda)
-        sp.valueChanged.connect(lambda x, k=clave: self.cambio.emit(k, float(x)))
+        if clave:
+            sp.valueChanged.connect(lambda x, k=clave: self.cambio.emit(k, float(x)))
         return sp
+
+    def _espaciado_cien(self, altura):
+        negrita, cursiva = _ESTILO_BC[self.estilo.currentData()]
+        return fuentes.espaciado_cien(self.fuente.currentText(), altura, negrita, cursiva)
+
+    def _emitir_espaciado(self, _valor=None):
+        """El boceto guarda `espaciado` en mm: el panel lo muestra en %, como Character Spacing de Fusion. Otra fuente o
+        altura deja el % y cambia los mm."""
+        self.cambio.emit("espaciado", self.interletraje.value() * self._espaciado_cien(self.altura.value()) / 100)
 
     def _proporcion(self, otro, valor):
         """Con «mantener proporciones», el otro lado de la escala copia el valor."""
@@ -912,6 +936,7 @@ class PanelCaracter(QFrame):
     def _fuente_elegida(self, indice):
         if indice >= 0:
             self.cambio.emit("fuente", self.fuente.itemText(indice))
+            self._emitir_espaciado()
 
     def _boton_voltear(self, texto, clave, ayuda):
         b = QToolButton(text=texto)
@@ -924,10 +949,11 @@ class PanelCaracter(QFrame):
         negrita, cursiva = _ESTILO_BC[self.estilo.currentData()]
         self.cambio.emit("negrita", negrita)
         self.cambio.emit("cursiva", cursiva)
+        self._emitir_espaciado()
 
     def mostrar_valores(self, altura, interletraje, interlineado, par):
         """Con un texto abierto: los valores de su barra y el kerning en el cursor (sin emitir cambios)."""
-        for sp, valor in ((self.altura, altura), (self.interletraje, interletraje),
+        for sp, valor in ((self.altura, altura), (self.interletraje, 100 * float(interletraje) / max(self._espaciado_cien(altura), 1e-9)),
                           (self.interlineado, interlineado), (self.par, par)):
             sp.blockSignals(True)
             sp.setValue(float(valor))
@@ -937,7 +963,7 @@ class PanelCaracter(QFrame):
     def _widgets(self):
         return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.b_voltear_h, self.b_voltear_v, self.subrayado, self.tachado, self.grosor,
                 self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
-                self.alineacion, self.ancla_v, self.camino_lado, self.camino_desfase, self.camino_ajustar, self.altura,
+                self.alineacion, self.ancla_v, self.camino_colocacion, self.camino_lado, self.camino_desfase, self.camino_ajustar, self.altura,
                 self.interletraje, self.interlineado, self.par, self.pivote, self.valor_parametro_texto)
 
     def cargar(self, o):
@@ -960,6 +986,7 @@ class PanelCaracter(QFrame):
             for cb, clave, defecto in ((self.subrayado, "subrayado", "ninguno"), (self.tachado, "tachado", "ninguno"),
                                        (self.capitalizacion, "capitalizacion", "ninguno"),
                                        (self.alineacion, "alineacion", "izq"), (self.ancla_v, "ancla_v", "base"),
+                                       (self.camino_colocacion, "camino_colocacion", "arriba"),
                                        (self.camino_lado, "camino_lado", "izq")):
                 cb.setCurrentIndex(max(0, cb.findData(o.get(clave, defecto))))
             self.camino_ajustar.setChecked(bool(o.get("camino_ajustar")))
@@ -967,8 +994,9 @@ class PanelCaracter(QFrame):
                                        (self.camino_desfase, "camino_desfase", 0.0),
                                        (self.inclinacion, "inclinacion", 0.0), (self.escala_h, "escala_h", 100.0),
                                        (self.escala_v, "escala_v", 100.0), (self.altura, "altura_texto", 5.0),
-                                       (self.interletraje, "espaciado", 0.0), (self.interlineado, "interlineado", 1.0)):
+                                       (self.interlineado, "interlineado", 1.0)):
                 sp.setValue(float(o.get(clave, defecto)))
+            self.interletraje.setValue(100 * float(o.get("espaciado", 0.0)) / max(self._espaciado_cien(self.altura.value()), 1e-9))
             self.par.setValue(0.0)
             self.par.setEnabled(False)               # el kerning de un par se ajusta con un texto abierto
             self.sin_division.setChecked(bool(o.get("sin_division")))
@@ -1065,6 +1093,7 @@ class ModoBoceto(QObject):
         self.lienzo.ajustes_inf = ajustes_inferencia(v.prefs)
         self.lienzo.estado_referencias = v._estado_visible      # al reeditar un boceto, lo que se ve y se elige es su paso
         self.lienzo.valores_parametros = lambda: v.doc.parametros.valores()
+        self.lienzo.nombres_parametros = lambda: nombres_sugeridos(v.doc.parametros)
         self.lienzo.editar_parametro_texto = self._editar_parametro_texto
         self.lienzo.perdidas = list(getattr((datos or {}).get("op"), "perdidas", []))
         self.lienzo.op_boceto = getattr((datos or {}).get("op"), "id", None)
@@ -1437,13 +1466,17 @@ class ModoBoceto(QObject):
         if op is not None:                   # BOC-7: candado o marca roja del boceto en el navegador, en vivo
             self.v.navegador.marcar_boceto(op.id, self.lienzo.resultado if self.boceto.curvas else None)
         self._capa3d()
-        self._t_perfiles.start()
+        if not self._t_perfiles.isActive():  # sin reiniciarlo: con un arrastre seguido nunca llegaría a dispararse
+            self._t_perfiles.start()
 
     def _actualizar_perfiles(self):
         if not self.activo:
             return
+        inicio = time.perf_counter()
         try:
-            perfiles = detectar(self.boceto.geometria(), self.plano)
+            perfiles = detectar_boceto(self.lienzo.b, self.plano, self.lienzo.geometria_real())
         except Exception:  # noqa: BLE001 — un boceto a medio dibujar no debe romper la vista
             perfiles = []
-        self.v.visor.set_perfiles([p.cara for p in perfiles])
+        self.v.visor.set_perfiles([p.cara for p in perfiles_a_pintar(perfiles, self.lienzo.b)])
+        costo = time.perf_counter() - inicio
+        self._t_perfiles.setInterval(0 if costo < 0.1 else int(3000 * costo))    # un boceto pesado no traba el arrastre

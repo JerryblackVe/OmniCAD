@@ -11,7 +11,7 @@ from ..nucleo import geometria as geo
 from . import entidades as ent
 from .parametros import _NUM_CON_UNIDAD, LONGITUD, acotar
 from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorBoceto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
-                          _resolver_todas, atributos_copia, detectar, registrar_operacion, resolver)
+                          _resolver_todas, atributos_copia, detectar_boceto, registrar_operacion, resolver)
 
 
 def _sm():
@@ -103,7 +103,7 @@ def _bocetos_transformados(op, estado, ids, matriz, copiar, factor=None):
                 raise ErrorOperacion(f"«{br.nombre}»: {e}") from e
         nuevo = f"{op.id}.b{n}" if copiar else bid
         estado.bocetos[nuevo] = BocetoResuelto(nuevo, f"{br.nombre} (copia)" if copiar else br.nombre, boceto, plano,
-                                               detectar(boceto.geometria(), plano), br.solver)
+                                               detectar_boceto(boceto, plano), br.solver)
 
 
 class OpMover(Operacion):
@@ -200,7 +200,7 @@ class OpMover(Operacion):
                 boceto.transformar(ids, dx, dy, angulo, (0.0, 0.0), copiar=bool(self.p.get("copiar")))
             except ErrorBoceto as e:
                 raise ErrorOperacion(f"«{br.nombre}»: {e}") from e
-            estado.bocetos[bid] = BocetoResuelto(bid, br.nombre, boceto, pl, detectar(boceto.geometria(), pl), br.solver)
+            estado.bocetos[bid] = BocetoResuelto(bid, br.nombre, boceto, pl, detectar_boceto(boceto, pl), br.solver)
 
     def ejecutar(self, estado, ctx):
         if self.p.get("caras"):
@@ -547,7 +547,7 @@ class OpDesfaseAristas(Operacion):
         prims = [prim for w in alambres for prim in proyectar_forma(w, plano)[0]]
         boceto.agregar_proyeccion(prims, ())
         estado.bocetos[self.id] = BocetoResuelto(self.id, self.nombre, boceto, plano,
-                                                 detectar(boceto.geometria(), plano), resolver(boceto, {}))
+                                                 detectar_boceto(boceto, plano), resolver(boceto, {}))
 
 
 class OpReemplazarCara(Operacion):

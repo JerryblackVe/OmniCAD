@@ -2,32 +2,22 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 12: Abierto 7 · Parcial 3 · Bloqueado 1 · Sin verificar 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 16: Abierto 11 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-155 | La previa de un cuerpo de 64 caras o más oculta el error real y muestra «código 0x1» | Abierto | Baja | El hijo termina con salida 1 y deja el motivo en `errores.txt`, pero `CalculoPendiente.sondear` no lo lee. Especificación y prompt en `docs/brechas_previa_aislada.md`. | nucleo/aislado.py:419 | 2026-11-01 |
+| B-153 | Teselar deja abiertas las caras muy finas que OpenCascade abandona a medio mallar | Abierto | Media | Rugged Box `obj_3`: unas 25 de 1088 caras quedan con menos triángulos que nodos (cara 708: 67 nodos y 2 triángulos). El nodo sin llenar ya no llega a la malla (B-151), pero la malla sale abierta y `compare_to_mesh` da `closed: false`. Falta rellenar esas caras con sus aristas o reintentar con otro parámetro. | nucleo/geometria.py `_nodos_de_la_cara`; tests/test_geometria.py::test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos | 2026-11-01 |
+| B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
+| B-146 | Derivar sigue grisado en SÓLIDO aunque el comando existe | Abierto | Baja | Conectar el botón a `insertar_derivacion`, como en INSERTAR, y actualizar P-25i. | ui/cinta.py:90 frente a ui/cinta.py:56 | 2026-11-01 |
+| B-145 | Publicar a .mp4 responde INTERNAL_ERROR | Abierto | Baja | Responder un error claro mientras sigue pendiente B6. | api/herramientas_animacion.py (`export_animation_video`): ValueError unknown file extension; reproducido por API | 2026-11-01 |
 | B-144 | Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar | Abierto | Media | Hueca de pared 3 (caja 60×40×20 menos 54×34 desde z = 3) y esfera r 4 en (18,537165, 20,0001, 10,0001): cortar quita 103,79 mm³ de 122,5 (antes de B-125 quitaba 0) y el común da 121,97. Las muestras de `_comun_desmentido` solo ven diferencias de 1/4 de la pieza chica. | clon/tests/test_booleanas_tortura.py::test_b125_esfera_casi_tangente_no_se_queda_sin_cortar | 2026-11-01 |
-| B-138 | `sin(PI/4 rad)` da 0,000239 en lugar de 0,7071, sin ningún aviso | Abierto | Media | La unidad se pega al último número en lugar de a la expresión. Corregirlo con PAR-1. | timeline/parametros.py:46 (`_NUM_CON_UNIDAD`); ejemplo de `Parameters reference`; reproducido por API | 2026-11-01 |
-| B-139 | `round(2.5)` da 2 en lugar de 3 | Abierto | Baja | La ayuda dice que .5 redondea alejándose de cero. | timeline/parametros.py:41 usa `round` de Python; `Parameters reference`; reproducido por API | 2026-11-01 |
-| B-140 | Renombrar un parámetro en uso falla en lugar de actualizar lo que lo usa | Abierto | Media | Actualizar expresiones y pasos. Con otro parámetro, el error dice «Nombre desconocido: 'w'». | api/herramientas_parametros.py:90; ayuda `Parameters in Fusion` § Edit parameters; reproducido por API | 2026-11-01 |
-| B-141 | Una longitud acepta `w * h` y guarda 200 mm | Abierto | Media | Validar la magnitud con PAR-2. Mientras tanto, el valor es incorrecto y no avisa. | timeline/parametros.py:82; `Parameters in Fusion`: la unidad del resultado debe coincidir; reproducido por API | 2026-11-01 |
-| B-142 | El nombre `µm_x` se rechaza con un mensaje equivocado | Abierto | Baja | Habla de letra más marca combinada. Fusion admite `µ`, `$`, `°` y `"`. | timeline/parametros.py:177; `Parameters reference` § Name; reproducido por API | 2026-11-01 |
-| B-143 | La tabla de parámetros muestra el valor con 4 cifras y sin unidad | Abierto | Baja | Mostrar el valor completo con la unidad del parámetro: 12345,678 sale como 1.235e+04. | ui/dialogos.py:331 (`:.4g`) | 2026-11-01 |
-| B-132 | Un texto que toca otra curva se elige mal: toma H, A y el hueco de la O, y deja afuera L y el aro de la O | Abierto | Alta | Una letra elige todo el texto aunque cruce otra curva. Las letras no pueden depender de que el borde sea solo de texto, y Extruir no debe rellenar el hueco. | nucleo/perfiles.py:102 y ui/visor3d.py:1259 (`set(p.firma) <= ids`): sin el aro, el hueco de la O queda como letra; video del 2026-11-01, 1:54 a 2:26; reproducido por API | 2026-11-01 |
-| B-133 | Un texto que cruza una curva deja perfiles basura, y Extruir acepta uno de área 0 con volumen 0 | Abierto | Media | No listar restos sin área y rechazar la extrusión de volumen 0 con un mensaje claro. | HOLA altura 30 sobre círculo R57: 9 perfiles; separado 2 mm: 7. Perfil de área 0,0 responde ok con volumen 0.0; perfil de área 1,29 da 12,9; reproducido por API | 2026-11-01 |
-| B-134 | El disco queda mellado cuando el texto apoya sobre su borde | Abierto | Media | La ayuda no aclara si el texto parte otras curvas: comprobarlo en Fusion real y decidir. Hoy resta material. | Perfil de área 10205,74 contra 10207,03 (π·57²); volumen 102057,4 contra 102070,3; video del 2026-11-01, 1:40 a 1:44 (costuras en el canto); reproducido por API | 2026-11-01 |
-| B-135 | La barra de estado queda en «Calculando Extrusión…» después de la vista previa o de Cancelar | Abierto | Baja | Limpiar el aviso al terminar la previa y al cerrar el comando. | ui/ventana.py:980 lo deja 30 s y solo `_actualizar` lo limpia; ui/comando.py `_cerrar` no lo toca; video del 2026-11-01, 1:54 al final | 2026-11-01 |
-| B-136 | Al abrir Extruir aparece un instante una ventanita suelta de OmniCAD | Abierto | Baja | Buscar qué ventana se muestra sin padre. La causa no está identificada. | video del 2026-11-01, cerca de 1:37: un solo cuadro con el ícono, maximizar y cerrar | 2026-11-01 |
-| B-137 | Al deslizar un texto en curva queda una sombra de las letras y se apaga el relleno del disco | Abierto | Media | Repintar los rellenos durante el arrastre. Revisar también la L oscura que queda suelta en la posición vieja. | ui/editor_boceto.py:5029 (`_deslizar_texto` solo pide `update`; causa probable, sin comprobar); video del 2026-11-01, 0:49 a 0:55 y 1:01 a 1:30 | 2026-11-01 |
-| B-130 | Una construcción que no se puede calcular responde «No existe 'opN'» | Abierto | Baja | El `KeyError` de `estado_final` tapa la causa: dos aristas alabeadas, planos paralelos, tangente sobre cara plana. | api/errores.py:264; api/herramientas_construccion.py (`puntos[op.id]`); reproducido por API | 2026-11-01 |
-| B-131 | Una spline donde va una línea da INTERNAL_ERROR en CONSTRUIR | Abierto | Baja | Filtrar la spline en la ventana y responder un error de argumentos en la API. | docs/brechas_construir.md § B-131; reproducido por API | 2026-11-01 |
+| B-154 | Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula | Abierto | Media | Volver a elegir el texto en ese paso. Ese pedazo dejó de existir con B-134 y la referencia no guarda con qué distinguir la letra de su hueco. | clon/omnicad/nucleo/perfiles.py › `buscar_por_firma_tolerante` | 2026-11-01 |
 | B-123 | Un cuerpo que pasa a otro componente sigue a la unión del componente anterior | Abierto | Media | Si TODOS los cuerpos de un componente nuevo vienen del mismo componente movido por una unión, el nuevo hereda ese movimiento (`_matriz_de_cuerpos`): no salta de lugar, pero al accionar después esa unión el cuerpo se sigue moviendo, aunque ya no pertenece a ese componente y el aviso de ASM-7 diga que sus uniones ya no mueven nada. En Fusion el cuerpo queda donde estaba al reasignarlo. Hace falta guardar en la receta la pose del momento de reasignar. Ya pasaba antes de B-108. | omnicad/timeline/ops_ensamblar.py (`_matriz_de_cuerpos`); tests/test_posicion_asm.py::test_b108_todos_del_mismo_componente_el_nuevo_hereda_su_movimiento_y_no_gira_dos_veces | 2026-11-01 |
-| B-122 | Las clases de las tablas de Fusion no modelan el Ø mayor del agujero ni el Ø menor del eje | Abierto | Media | `desfases_rosca` solo da flancos y menor del agujero: el Ø mayor sale de `diametro/2 + desfase`. Tr12x3 7H: la tabla dice 12,5 y se modela 12,15; 7e: Ø menor 8,3175 y se modela 8,803. Afecta a todo tipo de `tablas_rosca.CLASES`. Falta confirmar en Fusion real (el MCP no conecta) qué diámetro usa la rosca modelada y pasarlo a `_surco_rosca` | clon/omnicad/nucleo/tolerancias.py:333 | 2026-11-01 |
 | B-121 | Volver a resolver un boceto con una tangente general (spline) corre la geometría un poco cada vez | Abierto | Media | En `_tangencia` el contacto arranca de una muestra de 96 puntos, no del contacto exacto: el solver no parte de la solución y reparte el error entre la curva y el parámetro. Medido 2026-10-31 con arco de radio 10 y spline ya tangentes: 10,0000 → 10,0091 → 10,0175 → 10,0254 → 10,0326 por pasada. Arreglarlo cambia lo que dan las recetas guardadas con esas tangentes: decidir antes de tocar el solver (idea: afinar los dos parámetros con la geometría quieta y usarlos solo si el residuo ya es cero) | `tests/test_restricciones_matematica.py::test_tangente_con_el_comando_no_cambia_el_radio_del_arco`; `omnicad/restricciones/solver.py` (`_tangencia`) | 2026-10-31 |
 | B-119 | Proyectar un cuerpo curvo visto de costado no da su silueta | Abierto | Alta | Fusion promete perfiles cerrados con el filtro Cuerpos («closed profiles»), pero `proyectar_forma` proyecta solo aristas: un cilindro R14 sobre XZ da 3 líneas abiertas (falta el lado opuesto a la costura) y 0 perfiles; una esfera da una línea o un arco. Hace falta sumar la silueta (HLR de `nucleo/dibujo.py`), con cuidado: un vínculo a un cuerpo la recalcularía en cada paso del timeline, y sobre roscas tarda más de 90 s. Mirado de frente anda bien (cilindro sobre XY: 1 círculo, 1 perfil). | omnicad/nucleo/perfiles.py (`proyectar_forma`); tests/test_proyectar_tarjeta.py::test_cambiar_de_filtro_saca_lo_incompatible_y_lo_dice | 2026-10-31 |
-| B-118 | Un corte sin objetivo elegido también corta los cuerpos ocultos | Abierto | Media | Con Objetos vacío se cortan todos los sólidos que toca, también los ocultos. Extruir (B-117) y `operation="auto"` ya ignoran lo oculto al decidir, pero el paso no: falta decidir si la herramienta se queda con los visibles al crear el paso, como la extensión Todo de Fusion (`Extrude reference`: «all visible bodies»). | timeline/operaciones.py:345 | 2026-10-31 |
 | P-12c | Fuente de novedades de Fusion (la ayuda es un shell JS sin titulares) | Parcial | Baja | Autodesk le responde 403 a los scripts: ahora se lee la última copia de archive.org del blog «What's New» (hoy del 2026-05-16, 5 meses atrás) y el informe lo avisa; falta una fuente al día que no bloquee (feed o API) o seguir revisando a mano. | scripts/novedades.py (`bajar`, `COPIAS`); tests/test_novedades.py::test_fusion_apunta_al_blog_y_cae_a_archive_org_si_autodesk_bloquea | 2026-10-20 |
 | P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Necesita PC con Linux nativo (ver P-1b): el fallo solo aparece con Wayland y esta PC es Windows, así que no se pudo reproducir ni probar un arreglo; hoy se fuerza xcb y no molesta. | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
 | P-11j | Cuerpos «sin ubicar» de XOX (3) que quizá Fusion no tiene | Parcial | Alta | Sherpa resuelto (2026-10-21): comparado con Fusion, no tiene los 2 cuerpos (1593 y 952 mm³) y todos sus componentes con cuerpos están emparejados; ahora se descartan los bloques sin dueño cuando ningún componente de la escena queda sin bloque. Queda XOX: 3 componentes de la escena sin bloque y 3 bloques sin dueño (152,9; 494,8 y 4365,4 mm³): no se pueden descartar sin ver Fusion, y la versión en la nube (v35, 202 componentes) no es la del .f3z local (72 cuerpos): hace falta abrir en Fusion ese mismo archivo. | omnicad/io_archivos/f3d_escena.py (huerfanos); tests/test_p11a_f3d_instancias.py; tests/test_f3d_reales.py | 2026-10-21 |
@@ -65,6 +55,29 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
+### B-155 · La previa pesada oculta el error real
+
+Empalme de 32,329 mm sobre la arista de un agujero en una placa de 10 mm, con 64 caras o más: el panel dice «código 0x1». Esperado: el mensaje de la previa normal, «El empalme falló: el radio es demasiado grande…». Se reproduce con `evidencias/empalme_previa_2026-11-01/repro.py`. La causa está leída en `nucleo/aislado.py:419`.
+
+### B-154 · Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula
+
+- **Qué:** documento guardado antes de B-134, con una curva que cruza una letra y una Extrusión que eligió a mano un pedazo de esa letra. Referencia de firma `{círculo, texto}` y centro (-8,8; 67,3).
+- **Esperado:** que el paso encuentre la letra entera.
+- **Obtenido:** «Un perfil seleccionado ya no existe en el boceto (cambió su contorno)». La referencia al disco cortado sí encuentra el disco, con aviso.
+- **Reproducir:** `pf.detectar(boceto.geometria(), plano)` da los pedazos viejos (158,96 y 1,29 mm²); `pf.buscar_por_firma_tolerante(br.perfiles, firma, centro)` devuelve `(None, None)`.
+- **Causa probable:** la O y su hueco tienen el mismo centro y la misma firma, y la referencia vieja no guarda con qué desempatar.
+- **Esquive:** volver a elegir el texto en ese paso.
+- **Prueba propuesta:** una referencia vieja a un pedazo de letra encuentra la letra entera.
+
+### B-149 · Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado
+
+- **Qué:** `analyze_geometry(type="min_radius", radius=25)` o un análisis guardado antes del 2026-11-01 sobre una caja vaciada.
+- **Esperado:** rojo solo junto a los rincones.
+- **Obtenido:** las paredes y el piso interiores enteros en rojo: una cara plana con sus cuatro esquinas sobre aristas cóncavas queda marcada completa.
+- **Esquive:** dar `min_radius`, o reabrir el análisis desde el panel y aceptar.
+- **Prueba propuesta:** extender `test_radio_minimo_degrade_entre_dos_radios` al modo viejo si se decide cambiarlo.
+- **Evidencia:** `evidencias/inspeccionar_2026-11-01/despues/capturas/inspeccionar_radio_minimo_cerca.png`.
+
 ### B-144 · Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar
 
 **Gravedad:** media (hace falta un contacto casi tangente; el cuerpo sale válido y estanco). **Entorno:** OmniCAD, Windows, API sin ventana. **Estado:** reproducido; apareció comparando cortar junto y de a una en 300 casos al azar con un árbitro de puntos.
@@ -75,16 +88,6 @@ de arriba manda sobre este texto.
 
 **Causa probable (leída):** el primer reintento creíble gana. `_comun_desmentido` deja pasar lo que difiere menos de 1/4 de la pieza chica, porque con 16 muestras no se puede afirmar menos. Reordenar `_REINTENTOS_BOOLEANA` podría resolverlo, pero cambia recetas que hoy dan bien. También: en ese mismo banco, 1 caso de 300 (el 60) da mal cortando de a una, y 3 terminan en error claro. **Esquive:** mover la esfera una milésima. **Prueba propuesta:** el caso de arriba, esperando 122,5 mm³ con tolerancia 1 mm³.
 
-### B-122 · Las clases de las tablas de Fusion no modelan el Ø mayor del agujero ni el Ø menor del eje
-
-**Gravedad:** baja (el tornillo y la tuerca de la misma clase no chocan: el agujero queda con menos fondo que el de la tabla). **Entorno:** OmniCAD, Windows, API sin ventana. **Estado:** reproducido por cuenta y con el kernel.
-
-**Qué hice:** tuerca hexagonal de 22 mm entre caras y 10 mm de alto, `create_hole` con `hole_tap="modeled"`, `thread="Tr12x3"`, `through_all=True`, `print_clearance=0.15` y la clase «auto» (7H).
-
-**Esperado:** la tabla de Fusion para 7H da Ø mayor 12,5, Ø flancos 10,65 y Ø menor 9,1575. Con los tres en su valor, la cuenta da 3210,61 mm³. ⚠ Fusion real no conectó: falta confirmar que la rosca modelada use ese Ø mayor. **Obtenido:** flancos y menor al valor de la tabla, Ø mayor 12,15 + holgura: 3234,93 mm³ (0,75 % más).
-
-**Causa:** `desfases_rosca` devuelve `flancos` y `menor`; `_surco_en_origen` calcula el fondo con `diametro / 2 + desfase`, y `_limites_tabla` ni devuelve el Ø menor del eje. **Esquive:** ninguno hace falta para que encastre. **Prueba propuesta:** el volumen de una losa de 1 mm de esa tuerca contra la cuenta con el Ø mayor de la tabla (`tests/test_b70_pasante.py`, cambiando el área del hueco a 98,0951 mm²).
-
 ### B-119 · Proyectar un cuerpo curvo visto de costado no da su silueta
 
 **Gravedad:** media. **Entorno:** OmniCAD, Windows, núcleo sin ventana. **Estado:** reproducido.
@@ -94,16 +97,6 @@ de arriba manda sobre este texto.
 **Esperado:** Fusion, filtro Bodies: «projects closed profiles that are ready for constraints and downstream features» (`project-geometry-onto-a-sketch-plane`). ⚠ Fusion real no conectó: la silueta exacta no se comparó en la app. **Obtenido:** cilindro: 3 líneas abiertas, 0 perfiles. Esfera: 1 línea (XY) o 1 arco (XZ), 0 perfiles. La caja y el cilindro de frente andan bien.
 
 **Causa:** `proyectar_forma` recorre solo las aristas reales de la forma; la silueta de una cara curva no es una arista. **Esquive:** proyectar sobre un plano donde el cuerpo tenga aristas reales, o dibujar el perfil. **Prueba propuesta:** cilindro sobre XZ da un rectángulo con un perfil de 28 × 47; medir el costo con una rosca modelada antes de vincularlo al timeline.
-
-### B-118 · Un corte sin objetivo elegido también corta los cuerpos ocultos
-
-**Gravedad:** media. **Entorno:** OmniCAD, Windows, API sin ventana. **Estado:** reproducido.
-
-**Qué hice:** caja de 20 × 20 × 10 oculta (`__navegador__`, `ocultos`), y `create_box` de 4 × 4 × 20 con `z=-5` y `operation="cut"`, sin `target`.
-
-**Esperado:** a confirmar en Fusion real: la ayuda solo dice «all visible bodies» para la extensión Todo, y «Objects To Cut» no aclara lo oculto. **Obtenido:** la caja oculta pasa de 4000 a 3840 mm³.
-
-**Causa:** `aplicar_resultado` toma todos los sólidos del estado: el timeline no sabe qué está oculto (timeline/operaciones.py:345). **Esquive:** elegir Objetos a mano. **Prueba propuesta:** la de arriba, comparando el volumen del cuerpo oculto.
 
 ### B-48 · Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos
 

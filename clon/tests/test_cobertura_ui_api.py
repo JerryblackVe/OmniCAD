@@ -96,10 +96,11 @@ HERRAMIENTAS = {
     "Calcomanía": "set_decal",
     "calcular": "recompute_all",
     # --- B-80, olas 4 a 7: análisis, configuraciones, construcción, superficies, división, visor y boceto
-    "accesibilidad": "manage_analysis", "angulo_desmoldeo": "manage_analysis", "cebra": "manage_analysis",
+    "accesibilidad": "manage_analysis", "angulo_desmoldeo": "manage_analysis", "cebra": "manage_analysis", "mapa_desviacion": "show_deviation_map",
     "curvatura_peine": "manage_analysis", "mapa_entorno": "manage_analysis", "mapa_curvatura": "manage_analysis",
     "isocurva": "manage_analysis", "radio_minimo": "manage_analysis", "seccion": "section_view",
-    "colores_componente": "get_viewport_image", "configurar": "manage_configurations",
+    "colores_componente": "get_viewport_image", "ver_grupos_caras": "get_viewport_image", "sustentabilidad": "estimate_carbon_footprint",
+    "configurar": "manage_configurations",
     "mostrar_configuracion": "manage_configurations", "alinear": "align_bodies", "escala_3d": "scale_body",
     "bobina": "create_coil", "tuberia": "create_pipe", "nervio": "create_rib", "red": "create_web",
     "repujado": "create_emboss", "saliente": "create_boss", "labio": "create_lip_groove",

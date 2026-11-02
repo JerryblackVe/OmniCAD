@@ -6,6 +6,7 @@ diálogos de Fusion) y su resolución en cada recálculo.
 Tipos de referencia (dicts serializables):
   - {"tipo": "cara"|"arista"|"vertice", "cuerpo": id, "firma": {...}}   subforma de un cuerpo
   - {"tipo": "cuerpo", "cuerpo": id}
+  - {"tipo": "componente", "componente": id}                            todos los cuerpos del componente y sus hijos
   - {"tipo": "plano", "id": "XY"|"XZ"|"YZ"|id de operación}             plano de origen o de construcción
   - {"tipo": "eje", "id": "X"|"Y"|"Z"|id}                               eje de origen o de construcción
   - {"tipo": "punto", "id": "O"|id}                                     punto de origen o de construcción
@@ -13,6 +14,9 @@ Tipos de referencia (dicts serializables):
   - {"tipo": "curva_boceto", "boceto": id, "curva": n}
   - {"tipo": "punto_boceto", "boceto": id, "punto": n}
   - {"tipo": "boceto", "boceto": id}
+  - {"tipo": "forzado", "modo": ..., "base": referencia, ...}           punto de forzado sobre una cara, arista o plano:
+        centro_cara, tangencial ("indice"), lugar_cara ("uv": fracción del rango de la cara), centro_arista,
+        en_arista ("fraccion" del largo) o lugar_plano ("uv": coordenadas del plano)
 `resolver` devuelve una `Entidad` con lo que cada operación necesita (forma OCC, plano, eje o
 punto) y `dependencias` dice de qué pasos del timeline depende la referencia.
 """
@@ -57,23 +61,45 @@ def describir_valor(valor):
 # Claves obligatorias de cada tipo de referencia (con su tipo) y un ejemplo para los mensajes de error.
 _CLAVES = {
     "cara": (("cuerpo", str), ("firma", dict)), "arista": (("cuerpo", str), ("firma", dict)),
-    "vertice": (("cuerpo", str), ("firma", dict)), "cuerpo": (("cuerpo", str),),
+    "vertice": (("cuerpo", str), ("firma", dict)), "cuerpo": (("cuerpo", str),), "componente": (("componente", str),),
     "plano": (("id", str),), "eje": (("id", str),), "punto": (("id", str),),
     "perfil": (("boceto", str), ("firma", (list, tuple))), "curva_boceto": (("boceto", str), ("curva", int)),
     "punto_boceto": (("boceto", str), ("punto", int)), "boceto": (("boceto", str),),
+    "forzado": (("modo", str), ("base", dict)),
 }
 _EJEMPLOS = {
     "cara": '{"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", …}}',
     "arista": '{"tipo": "arista", "cuerpo": "op1.c1", "firma": {"geom": "linea", …}}',
     "vertice": '{"tipo": "vertice", "cuerpo": "op1.c1", "firma": {"geom": "punto", …}}',
-    "cuerpo": '{"tipo": "cuerpo", "cuerpo": "op1.c1"}', "plano": '{"tipo": "plano", "id": "XY"}',
+    "cuerpo": '{"tipo": "cuerpo", "cuerpo": "op1.c1"}', "componente": '{"tipo": "componente", "componente": "op3"}',
+    "plano": '{"tipo": "plano", "id": "XY"}',
     "eje": '{"tipo": "eje", "id": "Z"}', "punto": '{"tipo": "punto", "id": "O"}',
     "perfil": '{"tipo": "perfil", "boceto": "op1", "firma": […]}',
     "curva_boceto": '{"tipo": "curva_boceto", "boceto": "op1", "curva": 1}',
     "punto_boceto": '{"tipo": "punto_boceto", "boceto": "op1", "punto": 1}',
     "boceto": '{"tipo": "boceto", "boceto": "op1"}',
+    "forzado": '{"tipo": "forzado", "modo": "centro_cara", "base": {"tipo": "cara", …}}',
 }
 _NOMBRE_TIPO = {str: "texto", dict: "un dict", int: "un entero"}
+
+
+def _problema_forzado(ref):
+    """Qué le falta a una referencia «forzado» según su modo; None si está bien."""
+    modo = ref["modo"]
+    es_numero = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)  # noqa: E731
+    if modo in ("lugar_cara", "lugar_plano"):
+        uv = ref.get("uv")
+        if not (isinstance(uv, (list, tuple)) and len(uv) == 2 and all(map(es_numero, uv))):
+            return f"el modo «{modo}» necesita «uv»: dos números"
+    elif modo == "en_arista":
+        if not es_numero(ref.get("fraccion")):
+            return "el modo «en_arista» necesita «fraccion»: un número"
+    elif modo == "tangencial":
+        if not isinstance(ref.get("indice"), int):
+            return "el modo «tangencial» necesita «indice»: un entero"
+    elif modo not in ("centro_cara", "centro_arista"):
+        return f"modo de punto de forzado desconocido: «{modo}»"
+    return None
 
 
 def validar(ref):
@@ -93,6 +119,8 @@ def validar(ref):
         detalle = _problema_firma(t, ref["firma"])
     elif t == "perfil":
         detalle = problema_perfil(ref)
+    elif t == "forzado":
+        detalle = _problema_forzado(ref)
     else:
         detalle = None
     if detalle:
@@ -208,6 +236,15 @@ def resolver(ref, estado):
     if t == "cuerpo":
         c = _cuerpo(estado, ref["cuerpo"])
         return Entidad(t, forma=c.forma, cuerpo=c.id)
+    if t == "componente":
+        from .ops_ensamblar import familia
+        if ref["componente"] not in estado.componentes:
+            raise ErrorReferencia("El componente de referencia no está disponible.")
+        grupo = familia(estado, ref["componente"])
+        formas = [c.forma for c in estado.cuerpos.values() if c.componente in grupo and getattr(c, "tipo", "solido") != "malla"]
+        if not formas:
+            raise ErrorReferencia("El componente no tiene cuerpos.")
+        return Entidad(t, forma=geo.compuesto(formas))
     if t == "plano":
         i = ref["id"]
         if i in geo.Plano.DEFINICIONES:
@@ -266,7 +303,32 @@ def resolver(ref, estado):
     if t == "boceto":
         br = _boceto(estado, ref["boceto"])
         return Entidad(t, plano=br.plano, boceto=br)
+    if t == "forzado":
+        return Entidad(t, punto=np.asarray(_punto_forzado(ref, estado), float))
     raise ErrorReferencia(f"Tipo de referencia desconocido: {t}")
+
+
+def _punto_forzado(ref, estado):
+    from ..nucleo import construccion as cs
+    base, modo = resolver(ref["base"], estado), ref["modo"]
+    if modo == "lugar_plano":
+        if base.plano is None:
+            raise ErrorReferencia("El punto de forzado se perdió: su plano ya no está.")
+        return base.plano.a_3d(*ref["uv"])
+    if base.forma is None:
+        raise ErrorReferencia("El punto de forzado se perdió: su cara o arista ya no está.")
+    if modo == "centro_cara":
+        return cs.centro_cara(base.forma)
+    if modo == "lugar_cara":
+        return cs.punto_lugar(base.forma, ref["uv"])
+    if modo == "tangencial":
+        puntos = cs.puntos_tangenciales(base.forma)
+        if ref.get("indice") not in puntos:
+            raise ErrorReferencia("El punto tangencial ya no cae sobre su cara. Editá la operación y volvé a elegirlo.")
+        return puntos[ref["indice"]]
+    if modo == "centro_arista":
+        return cs.centro_arista(base.forma)
+    return cs.punto_en_ruta(base.forma, ref["fraccion"])
 
 
 def geo_dir(v):
@@ -309,6 +371,8 @@ def dependencias(ref):
     if t in ("perfil", "curva_boceto", "punto_boceto", "boceto"):
         b = ref.get("boceto")
         return {b.split(".", 1)[0]} if b and isinstance(b, str) else set()
+    if t == "forzado":
+        return dependencias(ref.get("base"))
     return set()
 
 
@@ -327,7 +391,7 @@ def dependencias_de(*listas):
 
 # ---------------------------------------------------------------- conversiones útiles para las operaciones
 def como_plano(ent):
-    if ent.plano is not None and ent.tipo in ("plano", "cara", "boceto"):
+    if ent.plano is not None and ent.tipo in ("plano", "cara", "boceto", "perfil"):
         return ent.plano
     raise ErrorReferencia("Se esperaba un plano o una cara plana.")
 

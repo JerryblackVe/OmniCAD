@@ -158,6 +158,11 @@ def objetivos_desde_op(op, estado):
     return hits([{"tipo": "cuerpo", "cuerpo": c} for c in lista], estado)
 
 
+def simetria_total(ctx):
+    """¿La cantidad simétrica del patrón es el total con el original (PAT-1)? Un paso viejo editado conserva su reparto."""
+    return ctx.op is None or ctx.op.p.get("version_simetria", 1) == 2
+
+
 def evaluar_o_cero(ctx, expr, tipo=LONGITUD):
     """Valor de una expresión del panel para ubicar manipuladores (0 si todavía no se puede evaluar)."""
     try:

@@ -54,7 +54,7 @@ def test_configuraciones_aplican_parametros_y_supresion():
 
 def test_script_operacion_base_y_csv(tmp_path):
     from omnicad.ui.administrar import ejecutar_script
-    from omnicad.ui.dialogos import DialogoParametros
+    from omnicad.ui.dialogo_parametros import DialogoParametros
 
     class _App:
         pass
@@ -69,11 +69,15 @@ def test_script_operacion_base_y_csv(tmp_path):
     doc.agregar(op)
     assert doc.resultado(op.id).estado == "ok"
     assert g.volumen(doc.estado_final.cuerpos["op1.c1"].forma) == pytest.approx(1000)
-    dlg = DialogoParametros(doc.parametros)
-    filas = dlg.filas_csv()
-    assert filas[0][:3] == ["lado", "mm", "10 mm"]
+    dlg = DialogoParametros(doc)
+    salida = tmp_path / "s.csv"
+    assert dlg.exportar_csv(str(salida))
+    assert "lado,mm,10 mm" in salida.read_text(encoding="utf-8")
     ruta = tmp_path / "p.csv"
     ruta.write_text("Name,Unit,Expression,Value,Comments\nlado,mm,25 mm,25,\nalto,mm,lado * 2,50,nuevo\n",
                     encoding="utf-8")
-    assert dlg.importar_csv(ruta) == 2
-    assert dlg.resultado.valores()["alto"] == pytest.approx(50)
+    dlg.elegir_importacion(str(ruta))
+    assert dlg.dlg_importar.lista.count() == 2
+    dlg.dlg_importar.accept()
+    assert doc.parametros.valores()["alto"] == pytest.approx(50)
+    dlg.close()

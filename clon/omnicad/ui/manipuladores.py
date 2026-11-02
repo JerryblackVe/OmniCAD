@@ -673,6 +673,19 @@ class Volteo(AsaRadial):
         return {}
 
 
+class FlechaNormal(Manipulador):
+    """Flecha fija sobre una superficie: muestra su lado positivo (hacia donde van Desfase y Engrosar), no se arrastra."""
+
+    def __init__(self, ident, origen, direccion):
+        self.ident, self.origen, self.direccion = f"normal:{ident}", np.asarray(origen, float), unitario(direccion)
+
+    def dibujar(self, g, activo):
+        k = g.escala(self.origen)
+        cuello = self.origen + self.direccion * (LARGO_FLECHA - LARGO_PUNTA) * k
+        return [("lineas", np.array([self.origen, cuello]), AZUL, 3.0)] + _cono(
+            cuello, self.direccion, LARGO_PUNTA * k, RADIO_PUNTA * k, AZUL)
+
+
 class AsaCantidad(Manipulador):
     """Asa de cantidad de copias de un patrón: un disco junto a la última copia que se tira a lo largo del patrón y
     suma o quita copias de a una cada `paso` mm. `posicion(n)` da (punto, tangente) de la última copia si hay `n`."""
@@ -1349,6 +1362,7 @@ class GestorManipuladores(QObject):
         self._ubicar_cajas()
 
     def _ubicar_cajas(self):
+        ocupadas = []
         for caja in self.cajas.values():
             if caja.punto is None:
                 continue
@@ -1360,6 +1374,9 @@ class GestorManipuladores(QObject):
                 continue
             caja.resize(caja.width(), caja.sizeHint().height())
             caja.move(int(max(2, min(w - caja.width() - 2, x))), int(max(2, min(h - caja.height() - 2, y))))
+            while any(caja.geometry().intersects(o) for o in ocupadas):       # dos asas juntas: una caja no tapa a la otra
+                caja.move(caja.x(), caja.y() + caja.height() + 2)
+            ocupadas.append(caja.geometry())
             if not caja.isVisible():
                 caja.show()
             caja.raise_()

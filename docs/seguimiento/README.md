@@ -49,7 +49,7 @@ No se empiezan sin su OK, porque instalan algo, gastan plata o cambian el alcanc
 | Paquete nuevo | `rhino3dm` · `mutmut` · `hidapi` · motor de física · CalculiX + Gmsh · OpenSCAD · cabeceras de OCCT 8.0 + `pybind11` · `ffmpeg` · lector `.exr` | RH3 · SC16 · PL12 · B17 · F19 · F22 · CPP-F2 · B6 · KS2 |
 | Gasto | Cuenta Apple Developer (USD 99 al año) · certificado de firma para el `.exe` | P-26d · AUD-8 |
 | Máquina o hardware | PC con Linux nativo · PC limpia para el instalador · SpaceMouse | P-1b · P-1c · P-8b · PL12 |
-| Alcance | CAM · SubD y espacio FORMA · quad remesh · edición de malla · fragmentos booleanos · piezas de McMaster/TraceParts · «AI Shots» · menú del boceto distinto de Fusion · escanear con el celular (upgrade a futuro) | F20 · RH19 · P-25j · RH20 · B16 · F21 · P-25g2 · KS15 · MCP-HAL3 · ESC-1 · ESC-2 · ESC-3 · ESC-4 · ESC-5 · ESC-6 · ESC-7 |
+| Alcance | CAM · SubD y espacio FORMA · quad remesh · edición de malla · fragmentos booleanos · piezas de McMaster/TraceParts · «AI Shots» · menú del boceto distinto de Fusion · escanear con el celular (upgrade a futuro) · anidación · simulación avanzada · diseño generativo · Fusion Manage | F20 · RH19 · P-25j · RH20 · B16 · F21 · P-25g2 · KS15 · MCP-HAL3 · ESC-1 · ESC-2 · ESC-3 · ESC-4 · ESC-5 · ESC-6 · ESC-7 · EXT-1 · EXT-2 · EXT-3 · EXT-4 |
 
 ## Tareas que aparecen en varias listas
 
@@ -58,7 +58,7 @@ Son UNA sola tarea: al hacerla se borran todas sus filas juntas (y su ID de esta
 | Tarea | IDs |
 |---|---|
 | Informe de geometría e impresión 3D | F2 · B2 · RH13 |
-| Mapa de desviación | F10 · SC13 |
+| Conjuntos de contacto | P-25e2 · SC6 |
 | Imanes y manipulador contextual | RH12 · B7 |
 | Instancias o copias ligeras | RH17 · PL8 |
 | Puntos de control y B-spline | F12 · RH9 |
@@ -72,6 +72,25 @@ Son UNA sola tarea: al hacerla se borran todas sus filas juntas (y su ID de esta
 | Cotas y símbolos de dibujo | F9 · RH14 |
 | Video MP4 y cámara en ruta | B6 · P-27-15 |
 | Puente con Blender | P-3a · PL10 · B1 |
+
+## Prompts guardados
+
+Cada tema tiene su prompt al final del documento, en la sección «Prompt para el agente».
+Al sumar un prompt nuevo, se agrega acá en el mismo turno.
+
+| Tema | Documento |
+|---|---|
+| Asas de la ventana | [brechas_gizmos.md](../brechas_gizmos.md) |
+| Vista previa en proceso aparte | [brechas_previa_aislada.md](../brechas_previa_aislada.md) |
+| Texto en curva | [brechas_texto_curva.md](../brechas_texto_curva.md) |
+| Parámetros | [brechas_parametros.md](../brechas_parametros.md) |
+| INSPECCIONAR | [brechas_inspeccionar.md](../brechas_inspeccionar.md) |
+| SUPERFICIE | [brechas_superficie.md](../brechas_superficie.md) |
+| ENSAMBLAR | [brechas_ensamblar.md](../brechas_ensamblar.md) |
+| ANIMACIÓN | [brechas_animacion.md](../brechas_animacion.md) |
+| Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
+| Reconstruir sólido | [plan_reconstruir_solido.md](../plan_reconstruir_solido.md) |
+| Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
 
 ## Otras listas que se siguen aparte
 

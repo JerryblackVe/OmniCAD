@@ -18,7 +18,8 @@ import numpy as np
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from . import entidades as ent
-from .operaciones import ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _resolver, registrar_operacion
+from .operaciones import (ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _migrador, _resolver, _version_de,
+                          registrar_operacion)
 
 TIPOS_UNION = {"rigida": "Rígida", "revolucion": "Revolución", "deslizante": "Deslizante", "cilindrica": "Cilíndrica",
                "pasador_ranura": "Pasador-ranura", "planar": "Planar", "bola": "Bola"}
@@ -438,28 +439,6 @@ def grupo_rigido(estado, comp):
                     salida |= familia(estado, k)
                 creció = True
     return salida
-
-
-def _migrador(clave):
-    """`migrar_receta` de una operación cuyo cálculo cambió: las recetas viejas (sin `clave`) reciben
-    `clave` = 1 y conservan el cálculo de antes, así un ensamblaje compensado a mano (ángulo 180°, Voltear,
-    dz) abre igual. Las operaciones nuevas toman el valor de PARAMS (2)."""
-    def migrar(d):
-        params = d.get("params", {})
-        if isinstance(params, dict) and clave not in params:
-            d = dict(d, params=dict(params, **{clave: 1}))
-        return d
-    return staticmethod(migrar)
-
-
-def _version_de(p, clave):
-    """La versión de cálculo guardada en `clave` (1 o 2). Otro valor (texto, lista, None, 3…) es un error que
-    nombra el campo."""
-    v = p.get(clave)
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or v not in (1, 2):
-        raise ErrorOperacion(f"Parámetro mal formado «{clave}»: llegó {v!r}; tiene que ser 1 (el cálculo de las "
-                             "recetas viejas) o 2 (el actual).")
-    return int(v)
 
 
 def _matriz_de(estado, comp):

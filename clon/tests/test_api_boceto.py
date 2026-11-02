@@ -35,7 +35,7 @@ def entidades(sesion, sketch=None):
 
 
 HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw_rectangle", "draw_circle", "draw_arc",
-                "create_polygon", "draw_spline", "add_constraint", "add_dimension", "get_sketch", "sketch_from_spec",
+                "create_polygon", "draw_spline", "add_constraint", "add_dimension", "get_sketch", "find_snap_points", "sketch_from_spec",
                 # las del editor de la interfaz que faltaban (tests/test_api_boceto_herramientas.py)
                 "draw_ellipse", "draw_slot", "draw_point", "draw_conic", "draw_tangent_circle", "draw_blend_curve",
                 "sketch_fillet", "sketch_chamfer", "trim_sketch_curve", "offset_sketch_curves", "mirror_sketch",
@@ -64,7 +64,7 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
 def test_herramientas_del_grupo_boceto():
     assert sorted(h["nombre"] for h in api.catalogo("boceto")) == sorted(HERRAMIENTAS)     # el orden depende de qué módulo se importó antes
     lecturas = {h["nombre"] for h in api.catalogo("boceto") if not h["modifica"]}
-    assert lecturas == {"get_sketch", "suggest_auto_constraints", "get_spline_curvature", "infer_sketch_snap", "infer_sketch_snap_3d",
+    assert lecturas == {"get_sketch", "find_snap_points", "suggest_auto_constraints", "get_spline_curvature", "infer_sketch_snap", "infer_sketch_snap_3d",
                        "find_redundant_constraints"}
 
 

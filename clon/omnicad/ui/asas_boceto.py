@@ -412,4 +412,4 @@ def asas_texto(l, ancla, ancho):
         g = math.degrees(math.atan2(xy[1] - ancla[1], xy[0] - ancla[0]))
         return g + 360.0 * round((v[2] - g) / 360.0) if abs(v[2]) > 180.0 else g
     return ([Asa2D(2, posicion, angulo, ancla=lambda v: ancla, tipo="ang", ayuda="Girar el texto")],
-            ["long", "long", "ang", "long", "esc"], None)
+            ["long", "long", "ang", "esc", "esc"], None)

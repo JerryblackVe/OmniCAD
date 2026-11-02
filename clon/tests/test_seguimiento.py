@@ -4,6 +4,7 @@ Reglas en docs/seguimiento/README.md: lo resuelto se borra (no hay estados de ce
 dificultades de la lista cerrada, y si la evidencia nombra un test, el test existe. Las tablas del README solo
 nombran IDs que siguen en las listas.
 """
+import importlib.util
 import re
 from pathlib import Path
 
@@ -71,3 +72,13 @@ def test_la_barra_vertical_escapada_no_parte_la_celda():
     r"""H-51: una `\|` dentro de una celda es texto; una barra sin escapar suma una celda y `_filas` falla en voz alta."""
     assert len(SEPARADOR.split(r"a | b \| c | d")) == 3
     assert len(SEPARADOR.split("a | b | c | d")) == 4
+
+
+def test_cada_prompt_guardado_esta_en_la_tabla_y_se_puede_leer():
+    espec = importlib.util.spec_from_file_location("seguimiento_json", REPO / "scripts" / "seguimiento_json.py")
+    modulo = importlib.util.module_from_spec(espec)
+    espec.loader.exec_module(modulo)
+    guardados = modulo.prompts()
+    con_prompt = {p.name for p in (REPO / "docs").glob("*.md") if "\n## Prompt para el agente" in p.read_text(encoding="utf-8")}
+    assert {p["archivo"] for p in guardados} == con_prompt, "docs/seguimiento/README.md › «Prompts guardados» quedó vieja"
+    assert all("fable-method" in p["texto"] and "esfuerzo" in p["modelo"] for p in guardados)

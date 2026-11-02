@@ -111,7 +111,7 @@ FORMATOS_REFERENCIA = [
     'Construcción y bocetos: id o nombre de un plano, eje o punto de construcción ("op3", "Plano1") o de un boceto '
     '(el boceto entero, como plano).',
     'Boceto: {"sketch": "Boceto1", "point": 3} (punto; get_sketch lista los ids), {"sketch": "Boceto1", "curve": 2} '
-    '(curva) o {"sketch": "Boceto1", "profile": 0} (perfil: índice, lista, "all", "largest", "text" o "text:<id>"). Siguen al boceto si '
+    '(curva) o {"sketch": "Boceto1", "profile": 0} (perfil: índice, lista, "all", "largest", "text", "text:<id>" o "sketch"). Siguen al boceto si '
     'cambia.',
     'Cuerpo: {"body": "Cuerpo1"} (id o nombre). En los campos de ids de cuerpo («cuerpos», «objetivos»…) va el id o '
     'el nombre directo ("op2.c1", "Cuerpo1"; se guarda el id).',
@@ -382,7 +382,7 @@ _UN_PUNTO = ('un punto: "O" (origen), un punto de construcción, un punto de boc
 _UN_EJE = ('un eje o una dirección: "X", "Y", "Z", un eje de construcción, una arista recta ("Cuerpo1/E7"), una línea '
            'de boceto ({"sketch": "Boceto1", "curve": 2}) o una cara plana (su normal)')
 _CURVAS = 'curvas de boceto ({"sketch": "Boceto1", "curve": 2}) o aristas ("Cuerpo1/E7", "edges:>Z")'
-_PERFILES = 'perfiles de boceto: {"sketch": "Boceto1", "profile": 0} (índice, lista, "all", "largest", "text" o "text:<id>")'
+_PERFILES = 'perfiles de boceto: {"sketch": "Boceto1", "profile": 0} (índice, lista, "all", "largest", "text", "text:<id>" o "sketch")'
 _ESPERA = {
     "cara": 'una cara ("Cuerpo1/F6", ">Z")', "caras": 'caras ("Cuerpo1/F6", ">Z", "%CYLINDER"…)',
     "caras_a": "caras", "caras_b": "caras", "aristas": 'aristas ("Cuerpo1/E7", "|Z"…)',
@@ -603,7 +603,7 @@ def _renumerar(doc, ops_nuevas, propiedades):
 def _renombrar_cotas(doc, ops_nuevas, parametros):
     """Las cotas de una receta que se agrega traen su nombre dN (BOC-2): las que chocan con un parámetro del
     documento toman uno libre, también en las expresiones que las citan. Los dN de la receta no entran como
-    parámetros: se regeneran desde sus cotas. Devuelve (ops, parámetros)."""
+    parámetros: se regeneran desde sus cotas y sus pasos. Devuelve (ops, parámetros)."""
     nombres = []
 
     def buscar(x):
@@ -616,7 +616,7 @@ def _renombrar_cotas(doc, ops_nuevas, parametros):
             for v in x:
                 buscar(v)
     buscar(ops_nuevas)
-    parametros = [p for p in parametros if p["nombre"] not in nombres]
+    parametros = [p for p in parametros if p["nombre"] not in nombres and not p.get("op")]
     ocupados = {p.nombre for p in doc.parametros}
     mapa, contador = {}, doc._contador_cotas
     for viejo in (n for n in nombres if n in ocupados):

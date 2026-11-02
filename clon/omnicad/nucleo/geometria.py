@@ -1267,15 +1267,34 @@ def _triangulaciones(forma, deflexion, angular, rehacer=False):
             yield cara, tri, loc
 
 
-def _triangulos_cara(cara, tri, loc):
-    """Triángulos Kx3x3 en coordenadas del mundo, con el mismo orden y precisión de OCC."""
+def _nodos_mundo(tri, loc):
     trsf = loc.Transformation()
-    nodos = np.array([[p.X(), p.Y(), p.Z()] for p in
-                      (tri.Node(i).Transformed(trsf) for i in range(1, tri.NbNodes() + 1))], float)
-    idx = np.array([tri.Triangle(i).Get() for i in range(1, tri.NbTriangles() + 1)], int) - 1
+    return np.array([[p.X(), p.Y(), p.Z()] for p in
+                     (tri.Node(i).Transformed(trsf) for i in range(1, tri.NbNodes() + 1))], float)
+
+
+def _indices_cara(cara, tri, loc):
+    """Índices Kx3 de los triángulos de la cara con su orientación, sin los que apuntan a un nodo sin llenar."""
+    idx = np.array([tri.Triangle(i).Get() for i in range(1, tri.NbTriangles() + 1)], int).reshape(-1, 3) - 1
+    if len(np.unique(idx)) < tri.NbNodes():
+        idx = idx[_nodos_de_la_cara(cara, _nodos_mundo(tri, loc))[idx].all(axis=1)]
     if cara.Orientation() == TopAbs_REVERSED:
         idx = idx[:, [0, 2, 1]]
-    return nodos[idx]
+    return idx
+
+
+def _triangulos_cara(cara, tri, loc):
+    """Triángulos Kx3x3 en coordenadas del mundo, con el mismo orden y precisión de OCC."""
+    return _nodos_mundo(tri, loc)[_indices_cara(cara, tri, loc)]
+
+
+def _nodos_de_la_cara(cara, nodos):
+    """B-151: en una cara muy fina el mallador de OCC abandona la cara a medias (por eso sobran nodos) y un triángulo
+    puede apuntar a un nodo que nunca llenó: memoria basura que cae en cualquier lado. Máscara de los nodos que están
+    en la caja de la cara."""
+    caja = _caja_occ(cara, 1e-3, holgada=True)
+    p0, p1 = caja.CornerMin(), caja.CornerMax()
+    return ((nodos >= (p0.X(), p0.Y(), p0.Z())) & (nodos <= (p1.X(), p1.Y(), p1.Z()))).all(axis=1)
 
 
 def teselar(forma, deflexion=0.05, angular=0.3, rehacer=False):

@@ -42,12 +42,14 @@ def pytest_sessionfinish(session, exitstatus):
     pruebas en verde (Linux; en Windows, segfault al salir)."""
     if "PySide6.QtWidgets" not in sys.modules:
         return
-    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance()
     if app is None:
         return
     for w in app.topLevelWidgets():
+        if w.windowType() == Qt.WindowType.Popup:     # lo borra su QCompleter: borrarlo acá es un borrado doble y Qt aborta
+            continue
         w.close()
         w.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)

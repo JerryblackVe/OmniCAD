@@ -135,8 +135,9 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
 - **Language:** Spanish and English everywhere; guided first launch.
 - **Integration:** two-way Blender integration; connecting more AI agents.
 - **In-app AI assistant:** a chat that explains, inspects and designs with you, using an API key or your Claude Code or Codex subscription.
-- **Rebuild solid:** turn an STL, OBJ or 3MF into a new, clean, parametric part, with or without AI.
+- **Rebuild solid:** an STL, OBJ or 3MF made of extrusions and revolves already becomes a part with history, without AI (`reconstruct_from_mesh`). Still missing: the panel, a parametric result, AI and parts that combine several directions.
 - **Phone scanning:** film a part and bring it into OmniCAD, ready to rebuild.
+- **Plastic design:** snap fits, rests, two-sided bosses, part simplification and a fastener library.
 - **Rendering:** materials, lighting, ideas from KeyShot and V-Ray.
 - **New tools:** Rhino-style surfaces, Grasshopper-style visual node canvas, ideas from FreeCAD, Plasticity,
   SolidCraft and other open-source CAD.

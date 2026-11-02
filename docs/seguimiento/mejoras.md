@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 144: Abierto 76 · Parcial 51 · Bloqueado 4 · Sin verificar 13 (recontado 2026-10-31; +T-19 a T-23 y AUD-6 medida: 2026-11-01; T-19, T-22 y T-23 resueltos y T-21 pasó a Parcial: 2026-11-01; RS-X1 resuelto y RS-X6 nuevo: 2026-11-01).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 148: Abierto 80 · Parcial 51 · Bloqueado 4 · Sin verificar 13 (recontado 2026-10-31; +T-19 a T-23 y AUD-6 medida: 2026-11-01; T-19, T-22 y T-23 resueltos y T-21 pasó a Parcial: 2026-11-01; RS-X1 resuelto y RS-X6 nuevo: 2026-11-01; TXT-9 pasó a Parcial y RS-X8 nuevo: 2026-11-01; TXT-9 resuelto: 2026-11-01).
 
 ## Pendientes generales
 
@@ -10,6 +10,7 @@ Abierto 21 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| PLA-14 | Valores predefinidos: sumar Restablecer y Ordenar por | Abierto | Baja | El resto del menú ya está. | ui/preajustes_ui.py:168 | 2026-11-01 |
 | P-40 | Extruir arranca en 10 mm; Fusion arranca en 0 mm y se arrastra la flecha | Abierto | Baja | Video 2026-10-28 11-28-09: en Fusion la distancia empieza en 0,00 mm y el cuerpo aparece al arrastrar; en OmniCAD entra con 10 mm y ya se ve un cuerpo. Es una decisión de producto de Gerardo: replicar Fusion o dejar el cuerpo de entrada. | omnicad/ui/comandos/solido.py (`Extruir`, valor inicial de la distancia) | 2026-10-28 |
 | P-35 | `volumen_exacto` de un cuerpo con 500 caras B-spline cuesta 0,5 s por llamada | Abierto | Baja | `aplicar_resultado` lo llama tres veces en una unión (resultado, cuerpo y herramienta): 1,4 s de los 3 s de Unir en `bspline500`. Guardar el volumen por forma en el cuerpo (se invalida al cambiar `forma`) o no medirlo cuando no hay aviso posible. | omnicad/timeline/operaciones.py (`aplicar_resultado`), omnicad/nucleo/geometria.py (`_integral`); scripts/bench_booleana.py bspline500 | 2026-10-26 |
 | P-36 | B-39 no revisa con BRepCheck las caras cambiadas con más de 200 contornos | Parcial | Baja | `_es_valida_tras_booleana` las salta porque BRepCheck clasifica los contornos de a pares (3000 agujeros: 11 s); el volumen y las aristas libres siguen vigentes. Revisar solo los contornos nuevos de esa cara (hoy la booleana rearma todos los contornos y no se distinguen por forma). | omnicad/nucleo/geometria.py (`_es_valida_tras_booleana`, `_MAX_CONTORNOS_REVISADOS`) | 2026-10-26 |
@@ -49,12 +50,18 @@ Abierto 21 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 1 · Parcial 1.
+Abierto 7 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| H-60 | Asas poco visibles: en Análisis de sección la flecha es una mancha y las cajas de valor la tapan | Abierto | Media | Se pide que se vean bien definidas, sin nada encima, como la tríada de Mover. Hay que auditar todos los comandos con asas. Especificación y prompt en `docs/brechas_gizmos.md`. | clon/omnicad/ui/manipuladores.py | 2026-11-01 |
+| H-58 | Escalar un texto con la altura en fórmula pierde el vínculo con esa fórmula | Abierto | Baja | La medida queda bien, pero la altura pasa a un número fijo: `ancho / 2` escalado × 2 queda `40 mm` y ya no sigue a `ancho`. Hace falta escribir la expresión vieja por el factor. | clon/omnicad/restricciones/boceto.py (`escalar`) | 2026-11-01 |
+| H-57 | Medir formas tarda en mallas reales con cientos de planos chicos | Abierto | Media | Con 311.000 triángulos de una pieza simple tarda 5 s, pero en 15.000 triángulos con 130 formas tarda 10 s por medición: `_juntar` prueba un toro por cada par de vecinas (7.379 ajustes con derivadas numéricas, 77 s de 245 s). Dar la derivada exacta o filtrar los pares antes; también candidato a Rust. Dos de los 51 STL reales tardan más de 5 minutos: `Vite` 551 s y `Rugged Box` pasa de 600 s, porque un solo intento ya supera el plazo de 180 s que se revisa entre intentos. | nucleo/formas_malla.py:93 `_afinar`; perfil en evidencias/reconstruir_2026-11-01/ | 2026-11-01 |
+| H-56 | Mapa de entorno: una cara plana refleja un solo color | Abierto | Media | El reflejo se calcula con una sola dirección de vista: hace falta una por píxel para que el entorno se vea en una cara plana. | nucleo/analisis.py (`colores_mapa_entorno`) | 2026-11-01 |
+| H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | Falta barrido automático de tipos sin caso válido; solo hay tests sueltos por tipo. | tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py; tests/test_chapa.py (unir plegando); tests/test_fijaciones.py; humo 168 pasos según el log (no corrido acá) | 2026-10-20 |
+| H-59 | Con el diálogo Parámetros abierto, un comando hecho en la ventana cae en el mismo deshacer | Abierto | Media | `agrupar_deshacer` junta todo lo posterior a la marca: un Deshacer revierte el cambio de parámetro y ese comando juntos. No se pierde nada. Separar solo lo que hizo el diálogo. | ui/dialogo_parametros.py › done; timeline/documento.py › agrupar_deshacer | 2026-11-01 |
 
 ## Fusion 360
 
@@ -132,34 +139,31 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 5 · Sin verificar 4. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+Abierto 5 · Parcial 1 · Sin verificar 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | BOC-38 | El arrastre con ventana local cae al grupo entero cuando el punto solo puede deslizar | Abierto | Media | B-111 (2026-10-29): `solver._resolver_arrastre` acepta la ventana (radio 1) solo si cumple y el punto queda donde lo puso el ratón; un punto que solo puede deslizar (cursor fuera de su lugar) o una cadena rígida nunca queda en el cursor, así que cada movimiento resuelve el grupo entero: con 60 splines unos 0,3 s de mediana y 0,6 s de p95 por movimiento (arrastre completo: mediana 298 ms, p95 611 ms, máx 1078 ms), contra 15/25/47 ms de la ventana. Además, un movimiento que pone un punto SOBRE otro (spline degenerada que nadie cumple) tarda 0,785 s una vez (ventana 83 ms + parte entera 0,7 s). Idea (no implementada): ampliar la ventana de a UN paso (radio 1, 2, 3…) mientras la distancia del punto al cursor siga mejorando, y quedarse con la ventana cuando deja de mejorar; así el punto que desliza se queda en una ventana chica y la cadena rígida sigue ampliando hasta la parte entera. Cuidado: `tests/test_boceto_fase2.py::test_b101_arrastre_de_cadena_rigida_converge` y `test_arrastre_mueve_lo_minimo`. | clon/omnicad/restricciones/solver.py (`_resolver_arrastre`, `_ventana`); `scripts/medir_ui_boceto.py`; `scripts/medir_ventana_arrastre.py` | 2026-10-29 |
-| BOC-79 | Tangente con un arco: comparar con Fusion real qué pasa si el contacto cae fuera del tramo y qué curva se mueve | Sin verificar | Media | La ayuda solo dice que las curvas «se tocan en un punto» y su figura muestra el círculo del mismo tamaño y las líneas movidas; no habla de arcos, y el MCP de Fusion no se pudo conectar. OmniCAD resuelve contra el círculo entero, avisa (`tangents_off_arc`, `tangents_off_arc_3d` y el mensaje de la ventana) y el comando desliza la línea antes de resolver. Se probó acotar el contacto al barrido y se descartó: sobre una receta que hoy resuelve bien rotó el arco de 0°–90° a 335°–181°, con sus extremos fijos la dejó en conflicto y bajaba un grado de libertad al llegar al borde. Si Fusion rechaza o acota, cambiar el aviso por eso, sin tocar lo que ya está guardado | `omnicad/restricciones/boceto.py` (`tangencias_fuera_del_arco`, `deslizar_a_tangente`); `tests/test_restricciones_matematica.py::test_tangente_linea_arco_con_el_contacto_fuera_del_tramo_se_avisa` | 2026-10-31 |
-| BOC-80 | Boceto 3D: las ayudas enganchan en el espacio sin comparar con Fusion real | Sin verificar | Media | La ayuda solo dice que la tríada es un plano temporal: no describe a qué engancha el cursor. Se siguió la fila de auditoría («Fusion engancha en el espacio»): medio, cruce real, pie, contacto tangente y sobre la curva son puntos 3D; alineaciones y horizontal/vertical siguen en el plano activo. Falta ver en Fusion real qué hace con dos líneas que solo se cruzan en pantalla y con la tangente desde un punto fuera del plano del círculo (acá no hay tangente real y la ayuda queda solo de posición) | `omnicad/restricciones/inferencia3d.py` (`_en_espacio`); `tests/test_inferencia3d.py::test_desde_fuera_del_plano_del_circulo_no_hay_tangente_real_y_no_queda_restriccion` | 2026-10-31 |
-| BOC-76 | Curva isoparamétrica: la regla de reparto de Single/Distributed y cuál es U o V no están comparadas con Fusion real | Sin verificar | Baja | La ayuda de Fusion (Isoparametric curve) no detalla Single/Distributed: OmniCAD reparte por distancia (una curva pasa por el punto) o por cantidad (parejas de borde a borde, en el centro de cada franja) y toma «U» como la curva que sigue U con V constante; falta probarlo con Fusion real. Las curvas ya creadas tampoco se editan: se borran y se rehacen | `clon/omnicad/nucleo/curvas3d.py` (`isoparametricas`); `tests/test_isoparametrica.py` | 2026-10-31 |
+| BOC-80 | Boceto 3D: las ayudas enganchan en el espacio sin comparar con Fusion real | Sin verificar | Media | La API de Fusion no expone el forzado del cursor: el script no llega y falta mirarlo a mano. La ayuda solo dice que la tríada es un plano temporal. Se siguió la fila de auditoría («Fusion engancha en el espacio»): medio, cruce real, pie, contacto tangente y sobre la curva son puntos 3D; alineaciones y horizontal/vertical siguen en el plano activo. Falta ver qué hace con dos líneas que solo se cruzan en pantalla y con la tangente desde un punto fuera del plano del círculo. | `omnicad/restricciones/inferencia3d.py` (`_en_espacio`); `tests/test_inferencia3d.py::test_desde_fuera_del_plano_del_circulo_no_hay_tangente_real_y_no_queda_restriccion` | 2026-11-01 |
+| BOC-76 | Curva isoparamétrica: las curvas ya creadas no se editan | Parcial | Baja | Hecho: reparto de Fusion real (n curvas en k/(n+1), sin tocar los bordes) y U es la curva que sigue U con V constante. Queda cambiar la cantidad o la distancia de curvas ya creadas. | `clon/omnicad/nucleo/curvas3d.py` (`isoparametricas`); tests/test_isoparametrica.py::test_distribuidas_en_una_cara_de_20_por_30_dan_lo_medido_en_fusion | 2026-11-01 |
 | BOC-82 | Boceto 3D: el solver tarda 15 ms por tangente y sube con splines largas | Abierto | Media | Medido 2026-10-31 con el contacto ya resuelto: 10 tangentes línea-círculo 159 ms por resolución; una spline de 30 puntos con 3 puntos encima 161 ms, de 60 puntos 260 ms. Un arrastre resuelve en cada movimiento, así que con eso se siente. Cada resolución vuelve a estimar los contactos y el jacobiano por diferencias finitas reconstruye la curva en cada evaluación; el solver 3D resuelve todo junto y no por partes independientes como el 2D. Idea: partir por grupos independientes y, para la spline, reusar la curva entre evaluaciones que no mueven sus puntos. Medir antes de pasar algo a Rust | `omnicad/restricciones/boceto3d.py` (`resolver`, `_contacto`, `_spline_parametrica`) | 2026-10-31 |
 | BOC-49 | Con miles de entidades, rearmar el índice de ayudas tras cada cambio cuesta decenas de milisegundos | Abierto | Media | Medido (`bench_inferir_nuevo.py`): armar `Indice` tarda 5,2 ms con 1 000 líneas y 26,6 ms con 3 000; se rearma tras cada operación confirmada y tras cada resolución del solver, o sea en cada paso de un arrastre (el paso entero, medido, cuesta 8,7 ms con 3 000 líneas, casi todo solver). Si pesa en la práctica: actualizar el índice solo con lo que cambió, o pasar el armado a Rust (hace falta el permiso de Gerardo para instalar el toolchain). | `clon/omnicad/restricciones/inferencia.py` (`Indice.__init__`) | 2026-10-30 |
-| BOC-50 | Editar la cota de un desfase a un valor negativo para pasar la copia al otro lado | Sin verificar | Baja | Hoy se rechaza con un mensaje que explica que la cota es una distancia sin signo; el lado se cambia con Desfase en negativo o con «Invertir». La ayuda de Fusion (Offset sketch geometry y Dimension sketch geometry, releídas 2026-10-31) no dice qué hace una cota de desfase negativa, y el MCP de Fusion no se pudo conectar: comprobarlo en Fusion y, si pasa al otro lado, mover la copia al editar la cota (hoy el solver mide la distancia sin signo). | `omnicad/restricciones/boceto.py` › `validar_valor_cota`; `tests/test_desfase_boceto.py::test_cota_de_desfase_editada_a_negativo_explica_por_que` | 2026-10-31 |
 | BOC-61 | El patrón de boceto admite 200 copias porque cada copia entra al solver | Abierto | Media | Medido 2026-10-31 (`evidencias/patrones_boceto_2026-10-31/bench_tabla.md`, mediana de 3): 200 copias de un círculo tardan 0,9–1,1 s en el solver (10: 2–4 ms; 100: 85–100 ms); transformar la vista previa cuesta 2–6 ms con 200 copias y 54–64 ms con 5.000, o sea que 1.000 y 5.000 no los frena la vista previa sino el solver. El solver (`restricciones/solver.py`, scipy) es el candidato a Rust (ver `plan_rust.md`); instalar el toolchain requiere permiso de Gerardo. Alternativa sin Rust: copias del patrón como geometría derivada que no entra al solver. | `restricciones/boceto.py` › `MAX_COPIAS_PATRON`, `MAX_PUNTOS_PATRON`; `bench_patrones.py` | 2026-10-31 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
 Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayuda de Fusion (sección Fusion-Patch de `docs/fusion_docs/`) y de probar las 14 herramientas por MCP/CLI. Los bugs se reprodujeron; los scripts de prueba (`sonda*.py`) están en `evidencias/superficie_2026-10-24/`, fuera de git.
 
-Parcial 1.
+Sin pendientes.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| SUP-23 | Sentido de la normal de las superficies nuevas: comprobar con Fusion y mostrar la flecha | Parcial | Baja | Hecho: `get_scene_info` da la normal de cada superficie (`normal`: un punto y la dirección del lado positivo, el que usan Desfase y Engrosar). Falta comprobar con Fusion qué lado debe ser el positivo (un tubo extruido desde un círculo: el desfase +5 lo achica y +3 sobre una caja abierta lo agranda; el MCP de Fusion no conectó el 2026-10-31) y mostrar la flecha en la ventana. | omnicad/nucleo/superficies.py (`normal_muestra`); tests/test_superficie_fusion.py::test_normal_de_una_superficie_apunta_al_lado_positivo | 2026-10-31 |
 
 ## Sólido (auditoría contra Fusion, 2026-10-24)
 
 Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
 
-Abierto 4.
+Sin pendientes.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -167,12 +171,12 @@ Abierto 4.
 ## Patrones de sólido (auditoría 2026-10-31)
 
 Cada fila salió de la auditoría de Patrón rectangular, circular, en trayectoria, en puntos y Multitransformación contra
-la ayuda de Fusion y el video de uso. Sin verificar 1. Informe y matriz por herramienta:
+la ayuda de Fusion y el video de uso. Parcial 1. Informe y matriz por herramienta:
 [patrones-solidos-2026-10-31.md](../auditorias/patrones-solidos-2026-10-31.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| PAT-1 | La simetría de los patrones no está verificada contra Fusion | Sin verificar | Media | La ayuda local de Fusion no dice si la «Cantidad» simétrica es el total de instancias o las de cada lado, ni si el ángulo simétrico del circular es el total o el de cada lado. OmniCAD usa n copias a cada lado (2n − 1) y, en el circular, hasta ± el ángulo. Comprobarlo en Fusion real; si difiere, agregar una receta nueva (los documentos viejos no cambian) | tests/test_patrones_solidos_semantica.py::test_circular_simetrico_reparte_a_los_dos_lados; ::test_receta_vieja_la_simetria_global_vale_para_las_dos_direcciones | 2026-10-31 |
+| PAT-1 | Extensión simétrica con cantidad par sin medir en Fusion real | Parcial | Baja | Hecho: receta nueva con la tabla medida (`version_simetria`, los documentos viejos abren igual). Queda medir en Fusion n par en Extensión: OmniCAD deja la última copia en +medida, paso = medida / (n // 2); Fusion solo se midió con 3 en 100. El patrón en ruta sigue con n a cada lado: tampoco se midió. | tests/test_patrones_solidos_semantica.py::test_rectangular_simetrico_en_extension_mide_por_lado; ::test_circular_simetrico_el_angulo_es_el_total_y_la_de_mas_va_al_lado_negativo | 2026-11-01 |
 
 ## Paneles de herramienta (auditoría 2026-10-31)
 
@@ -231,11 +235,10 @@ Parcial 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | TXT-7 | Fase 7 velocidad (SVG de 5000 nodos en menos de 1 s) | Parcial | Media | Bajar de 2,5 s a menos de 1 s el SVG de 5000 nodos. | El log midió 2,5 s; la meta < 1 s no se cumple. tests/test_texto_vectores.py | 2026-10-20 |
-| TXT-9 | Panel de texto en curva: nombres y unidades de Fusion | Abierto | Baja | Colocación Arriba y Abajo en lugar de Izquierda y Derecha; separación en porcentaje; comprobar por qué el panel dice «Sin parámetro ligado» si Fusion crea Text y Text height solos; comprobar Voltear y Ajustar a la curva, que el video no prueba. | ayuda `Reference: Text dialog` y `Text in sketches`; video del 2026-11-01, 0:44 | 2026-11-01 |
 
 ## Rust
 
-Abierto 14 · Parcial 4 · Sin verificar 2. Especificación: [plan_rust.md](../plan_rust.md). Orden de ejecución y mediciones: [rust-pipeline-2026-10-31.md](../auditorias/rust-pipeline-2026-10-31.md) (filas RS-X*).
+Abierto 15 · Parcial 4 · Sin verificar 2. Especificación: [plan_rust.md](../plan_rust.md). Orden de ejecución y mediciones: [rust-pipeline-2026-10-31.md](../auditorias/rust-pipeline-2026-10-31.md) (filas RS-X*).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -259,6 +262,7 @@ Abierto 14 · Parcial 4 · Sin verificar 2. Especificación: [plan_rust.md](../p
 | RS-X5 | La caché de mallas por cara (32 MB) puede quedar chica para modelos de más de 230 mil triángulos | Sin verificar | Baja | A 144 B por triángulo (vértices y normales en float64) caben unos 233 mil triángulos; un modelo mayor volvería a extraer todo en cada `set_modelo`. No se midió. Probar float32 y 256 MB; aceptación: `set_modelo` repetido de un modelo de 500 mil triángulos en 50 ms o menos. | omnicad/nucleo/render_cpu.py (`_TOPE_BYTES_CARAS`, `_guardar_malla_cara`) | 2026-10-31 |
 | RS-X7 | Editar `motor_impreso` en el paso 73 y `gatoRL` no llegó a la meta de RS-X1 | Abierto | Alta | Con el trabajador persistente, `motor_impreso` paso 73 da 1,11 s (meta 1 s) y `gatoRL` 3,1 s (meta 3 s). Lo que queda es OpenCascade rehaciendo los pasos siguientes: en `gatoRL`, un corte de 2,8 a 3,2 s (paso 77). Bajarlo pide acelerar ese corte, no el recálculo. | omnicad/nucleo/aislado.py | 2026-11-01 |
 | RS-X6 | Con 60 pasos o más, la previa de un comando pesado sigue arrancando un hijo nuevo, y una previa rechazada hace volver a mallar lo recalculado | Abierto | Media | Lo que dejó RS-X1. (1) `CalculoPendiente` (`previa_visual`, `solape_herramienta`) reconstruye el documento desde cero en cada previa, y en `motor_impreso` son unos 20 s; el trabajador podría servirla, pero hoy cancelar una previa mata al hijo y perdería la memoria: hace falta un segundo proceso o un corte que no lo mate. Es la continuación de P-56. (2) Tras Esc, lo que la previa reemplazó ya salió de las tablas del transporte: la edición siguiente lo vuelve a mandar como BREP y el padre recibe objetos nuevos, así que el visor los malla otra vez. No da mal; cuesta una vez. | omnicad/nucleo/aislado.py (`CalculoPendiente`); omnicad/timeline/calculo_aislado.py (`_codificar`, `retiradas`); tests/test_trabajador_persistente.py::test_previa_rechazada_no_deja_al_trabajador_adelantado | 2026-11-01 |
+| RS-X8 | El arreglo planar en Rust une caras cuando un cruce es casi tangente | Abierto | Media | Lo que dejó B-137. `_arreglo_coherente` lo detecta (regiones contra aristas − vértices + componentes) y rige OpenCascade, así que da bien pero tarda 15 ms contra 3 ms. Falta encontrar qué orden angular sale mal en `rust/src/perfiles.rs` y certificar en Rust. Con la base de una letra apoyada en un círculo pasa en 1 de cada 4 posiciones. | omnicad/nucleo/perfiles.py (`_arreglo_coherente`); tests/test_texto_curva.py::test_el_disco_no_se_pierde_cuando_una_letra_apoya_sobre_el_circulo | 2026-11-01 |
 
 ## C++
 

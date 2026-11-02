@@ -62,7 +62,9 @@ def _codificar(raiz, conservar=()):
     def guardar(v):
         if isinstance(v, np.generic):
             v = v.item()
-        if v is None or type(v) in (bool, int, float, str):
+        if isinstance(v, float):         # también `parametros.Magnitud`: del otro lado alcanza con el número
+            return float(v)
+        if v is None or type(v) in (bool, int, str):
             return v
         if id(v) in indices:
             return {"ref": indices[id(v)]}

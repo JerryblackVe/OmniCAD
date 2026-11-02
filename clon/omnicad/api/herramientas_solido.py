@@ -168,21 +168,16 @@ def _avisar_curvas_sin_perfil(sesion, br, sop):
 
 
 @herramienta("extrude", "solido",
-             "Extruye perfiles de un boceto. profile: índice, lista de índices, 'all', 'largest' (el perfil de mayor "
-             "área, p. ej. la placa con sus agujeros) o 'text' (las letras de los textos, sin los huecos de la «o»; "
-             "'text:<id>' para uno solo). distance acepta un número (mm) o una expresión con parámetros. "
+             "Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text' o 'sketch'; ver abajo). "
+             "distance acepta un número (mm) o una expresión con parámetros. "
              "El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, "
               "un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; "
               "en un boceto flotante va hacia el lado que tiene material). direction: "
              "one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada "
              "lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo "
              "lo estrecha). operation: new_body, join, cut, intersect o auto (cut si la extrusión se mete en un sólido "
-             "visible o en target, si no new_body, como el panel Extruir). Opciones de Extruir de Fusion: faces (caras "
-             "planas como perfil, con o sin sketch), thin (extrusión delgada: wall_thickness, wall_location; con "
-             "open_curves se extruyen curvas abiertas), start (profile_plane, offset u object: el inicio no es el "
-             "plano del perfil), symmetric_measure (media longitud o largo total), extent (distance, to_object: hasta "
-             "una cara, plano o cuerpo con to, to_mode y to_offset, o all: atraviesa todo) y taper_angle2 (conicidad "
-             "propia del lado 2).",
+             "visible o en target, si no new_body, como el panel Extruir). También las opciones de Extruir de Fusion: "
+             "faces, thin, start, symmetric_measure, extent (distance, to_object o all) y taper_angle2.",
              modifica=True)
 def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: Expr = "10 mm",
             operation: Literal["new_body", "join", "cut", "intersect", "auto"] = "new_body",
@@ -197,12 +192,12 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
-    profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos) o "text:<id>". Se ignora con open_curves.
+    profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos), "text:<id>" o "sketch" (todos los perfiles sin esos huecos). Se ignora con open_curves.
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
     operation: "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; si no, "new_body"; apoyarse en una cara no cuenta).
     direction: "one_side", "two_sides" o "symmetric".
     taper_angle: conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
-    target: cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos visibles que toca.
     distance2: distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
     reverse: true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al
         material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante
@@ -345,13 +340,13 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
             project_axis: bool = False):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
-    profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
+    profile: perfil(es): índice, lista de índices, "all", "largest", "text", "text:<id>" o "sketch".
     axis: "sketch_x", "sketch_y", "x", "y", "z", el id de una línea del boceto, un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id) o {"sketch": id, "curve": n} (línea de otro boceto).
     angle: ángulo de giro: número en grados o expresión, p. ej. "270 deg" o "giro".
     operation: "new_body", "join", "cut" o "intersect".
     direction: "one_side", "two_sides" o "symmetric" (el ángulo se reparte a los dos lados).
     angle2: ángulo del segundo lado con direction="two_sides"; vacío = igual a angle.
-    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     reverse: true para girar en el sentido contrario.
     faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch.
     body: cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
@@ -422,7 +417,7 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
           guide_surface: Cuerpos | None = None, sweep_bodies: Cuerpos | None = None, chain: bool = False):
     """
     sketch: id o nombre del boceto con el perfil; vacío si el perfil es una cara (faces).
-    profile: perfil(es): índice, lista de índices, "all", "largest", "text" o "text:<id>".
+    profile: perfil(es): índice, lista de índices, "all", "largest", "text", "text:<id>" o "sketch".
     path_sketch: id o nombre del boceto con la ruta; vacío si la ruta son aristas de un cuerpo (path_edges).
     path_curves: ids de las curvas de la ruta; vacío = todas las curvas no de construcción de path_sketch.
     operation: "new_body", "join", "cut" o "intersect".
@@ -431,7 +426,7 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     guide_surface: caras (selector o ids) sobre las que va la ruta; el perfil sigue su normal; sin carril ni torsión.
     taper_angle: ángulo de conicidad en grados.
     twist_angle: torsión total en grados (máximo ±3600; ±1800 en rutas cerradas; la ruta no puede tener esquinas).
-    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     faces: cara plana (selector o id de find_faces) usada como perfil, sola o junto con los perfiles de sketch.
     path_edges: aristas de un cuerpo (selector "edges:…" o ids de find_edges, o lista) como ruta continua, en lugar de path_sketch.
     rail_sketch: id o nombre del boceto del carril guía (tipo «ruta + carril»); vacío = sin carril.
@@ -562,7 +557,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     operation: "new_body", "join", "cut" o "intersect".
     ruled: true para tramos rectos entre secciones.
     closed: true para cerrar el sólido uniendo la última sección con la primera.
-    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     sections: secciones en orden, en lugar de sketches: {"sketch": id, "profile": índice} (profile 0 por defecto), una cara o arista (selector o id de find_faces / find_edges), un vértice [x, y, z] o un punto de construcción (id o nombre). Mínimo dos.
     rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
@@ -671,7 +666,7 @@ def create_box(sesion, length: Expr, width: Expr, height: Expr, x: Expr = 0, y: 
     y: y del centro de la base o de la esquina mínima, según anchor (mm).
     z: z de la base (mm).
     operation: "new_body", "join", "cut" o "intersect".
-    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     anchor: "center" sitúa (x, y, z) en el centro de la base; "corner", en la esquina mínima (crece hacia +X, +Y, +Z).
     plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y la altura crece por la normal.
@@ -710,7 +705,7 @@ def create_cylinder(sesion, height: Expr, radius: Expr | None = None, x: Expr = 
     y: y del centro de la base (mm).
     z: z de la base (mm).
     operation: "new_body", "join", "cut" o "intersect".
-    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     diameter: diámetro en mm, en vez de radius (como el panel Cilindro de la app); el paso guarda la mitad.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el eje va por la normal.
@@ -733,7 +728,7 @@ def create_sphere(sesion, radius: Expr | None = None, x: Expr = 0, y: Expr = 0, 
     y: y del centro (mm).
     z: z del centro (mm).
     operation: "new_body", "join", "cut" o "intersect".
-    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     diameter: diámetro en mm, en vez de radius (como el panel Esfera de la app); el paso guarda la mitad.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
     plane: plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el centro queda a esa altura.
@@ -760,7 +755,7 @@ def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | 
     y: y del centro (mm).
     z: z del centro (mm).
     operation: "new_body", "join", "cut" o "intersect".
-    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos que toca.
+    target: cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     major_diameter: diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
     minor_diameter: diámetro del tubo, en vez de minor_radius.
     name: nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
@@ -936,18 +931,28 @@ def _dir_patron(sesion, valor, que, body=None):
     return _referencia(sesion, valor, {"eje", "arista", "curva_boceto", "cara", "plano"}, body, "direccion")
 
 
-def _suprimir(suppress, limite, simetrico=False, que="suppress"):
+def _extremos(n, simetrico, de_mas=1):
+    """(primer, último) paso desde el original de un patrón de n instancias, como `solidos_crear._indices`."""
+    if not simetrico:
+        return 0, n - 1
+    menos = (n - 1) // 2
+    return (-menos, n - 1 - menos) if de_mas > 0 else (menos + 1 - n, menos)
+
+
+def _suprimir(suppress, limite, simetrico=False, que="suppress", de_mas=0):
     """Índices de copia a suprimir (0 = el original no se puede suprimir): enteros de 1 a limite − 1; con simetría
-    también sus opuestos (−1 es la primera copia hacia el otro lado)."""
+    también sus opuestos (−1 es la primera copia hacia el otro lado). Con `de_mas` (ver `_extremos`), limite es el total
+    y el índice tiene que caer en el reparto a los dos lados."""
     if not suppress:
         return []
     if limite <= 1:
         raise error("INVALID_ARGUMENTS", f"{que}: no hay copias para suprimir (con una sola instancia solo existe el original).")
+    primero, ultimo = _extremos(limite, simetrico, de_mas) if de_mas else (1 - limite if simetrico else 0, limite - 1)
+    rango = (f"de {primero} a {ultimo}" if simetrico and de_mas else
+             f"de 1 a {limite - 1}{' (o negativo, hacia el otro lado)' if simetrico else ''}")
     for i in suppress:
-        if (isinstance(i, bool) or not isinstance(i, int) or i == 0 or abs(i) >= limite
-                or (i < 0 and not simetrico)):
-            raise error("INVALID_ARGUMENTS", f"{que}: cada índice es un entero de 1 a {limite - 1}"
-                        f"{' (o negativo, hacia el otro lado)' if simetrico else ''}; el original, 0, no se suprime: "
+        if isinstance(i, bool) or not isinstance(i, int) or i == 0 or not primero <= i <= ultimo:
+            raise error("INVALID_ARGUMENTS", f"{que}: cada índice es un entero {rango}; el original, 0, no se suprime: "
                         f"llegó {i!r}.")
     return sorted(set(suppress))
 
@@ -966,10 +971,10 @@ def _suprimir_rect(suppress, n1, n2, sim1, sim2, hay_dir2):
         i, j = par
         if (i, j) == (0, 0):
             raise error("INVALID_ARGUMENTS", "suppress: el original, [0, 0], no se puede suprimir.")
-        if abs(i) >= n1 or (i < 0 and not sim1) or abs(j) >= (n2 if hay_dir2 else 1) or (j < 0 and not sim2):
-            raise error("INVALID_ARGUMENTS", f"suppress: la copia {list(par)} no existe en el patrón (i va de "
-                                             f"{-(n1 - 1) if sim1 else 0} a {n1 - 1}; j, de "
-                                             f"{-(n2 - 1) if sim2 and hay_dir2 else 0} a {(n2 - 1) if hay_dir2 else 0}).")
+        (i0, i1), (j0, j1) = _extremos(n1, sim1), _extremos(n2 if hay_dir2 else 1, sim2)
+        if not (i0 <= i <= i1 and j0 <= j <= j1):
+            raise error("INVALID_ARGUMENTS", f"suppress: la copia {list(par)} no existe en el patrón (i va de {i0} a "
+                                             f"{i1}; j, de {j0} a {j1}).")
         if list(par) not in salida:
             salida.append(list(par))
     return salida
@@ -1025,7 +1030,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     axis1: dirección 1: "x", "y", "z", o un eje de construcción (id o nombre), una arista recta, una cara plana (su normal) o un plano (selector o id).
     axis2: dirección 2 (mismas formas que axis1).
     distribution: "spacing" (x_spacing e y_spacing son la separación entre copias consecutivas) o "extent" (son la distancia TOTAL de la primera a la última).
-    symmetric: true reparte las copias de la dirección 1 a los dos lados del original (2·x_count − 1 instancias); si symmetric2 no se indica, vale también para la dirección 2.
+    symmetric: true reparte las copias de la dirección 1 a los dos lados del original, como Fusion: x_count sigue siendo el total con el original (si es par, la de más va al lado +) y con distribution=extent la medida es por lado (3 en 100: −100, 0, +100); si symmetric2 no se indica, vale también para la dirección 2.
     symmetric2: simetría de la dirección 2 por separado (true o false); None = la misma que symmetric.
     suppress: copias a suprimir: pares [i, j] con los pasos desde el original en la dirección 1 y la 2 (con simetría hay negativos, hacia el otro lado) o un entero i (= [i, 0], la primera fila). Cada identificador sigue a SU copia aunque cambien las cantidades o distancias; el original, [0, 0], no se puede suprimir.
     body: cuerpo donde se evalúan los selectores de axis1 y axis2; vacío = el único cuerpo.
@@ -1045,9 +1050,7 @@ def rectangular_pattern(sesion, bodies: Cuerpos | None = None, x_count: int = 1,
     if y_count > 1 and plane2 is None and str(axis1).strip().lower() == str(axis2).strip().lower():
         raise error("INVALID_ARGUMENTS", "axis1 y axis2 tienen que ser direcciones distintas.")
     sim2 = symmetric if symmetric2 is None else bool(symmetric2)
-    k1, k2 = (2 if symmetric else 1), (2 if sim2 else 1)
-    total = (k1 * x_count - k1 + 1) * ((k2 * y_count - k2 + 1) if y_count > 1 else 1)
-    _exigir_instancias(total, "x_count × y_count")
+    _exigir_instancias(x_count * y_count, "x_count × y_count")
     dir1 = _dir_patron(sesion, axis1, "axis1", body)
     dir2 = _dir_patron(sesion, axis2, "axis2", body) if y_count > 1 and plane2 is None else None
     plano2 = _dir_patron(sesion, plane2, "plane2", body) if plane2 is not None and y_count > 1 else None
@@ -1086,8 +1089,8 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
     construction: planos, ejes o puntos de construcción a repetir (id o nombre): cada copia es una entidad nueva. No se combina con bodies, features, faces ni components.
     compute: cálculo de las copias de features (Compute Type): identical repite la herramienta del paso tal cual; optimized da el mismo resultado patroneando las caras de una copia (más rápido) y, si las copias no son intercambiables, como identical; adjust omite las copias cuya herramienta no toca al cuerpo.
     lightweight: true hace copias ligeras (instancias): comparten la geometría del original, cada una con su propia posición, y editar la original las cambia a todas. Solo con bodies y sin combine; realize_copies las vuelve copias de verdad.
-    distribution: "full" (360° sin repetir el cierre; total_angle no se usa), "partial" (total_angle es el ángulo TOTAL entre el original y la última copia, a un lado), "symmetric" (count copias a cada lado hasta ± total_angle) o, como antes, "extent" (como partial, o symmetric con symmetric=true) y "spacing" (total_angle es el ángulo entre copias consecutivas).
-    symmetric: true reparte las copias a los dos lados del original (con extent o spacing).
+    distribution: "full" (360° sin repetir el cierre; total_angle no se usa), "partial" (total_angle es el ángulo TOTAL entre el original y la última copia, a un lado), "symmetric" (count es el total con el original, repartido a los dos lados dentro de total_angle) o, como antes, "extent" (como partial, o symmetric con symmetric=true) y "spacing" (total_angle es el ángulo entre copias consecutivas).
+    symmetric: true reparte las copias a los dos lados del original (con extent o spacing), como distribution="symmetric": count es el total con el original y total_angle, el ángulo total (3 en 90°: −45, 0, +45; si count es par, la de más va al lado −: 4 en 90°: −60, −30, 0, +30).
     suppress: copias a suprimir por su posición (1 a count−1; 0 es el original; con symmetric también negativos, hacia el otro lado).
     body: cuerpo donde se evalúan los selectores de axis; vacío = el único cuerpo.
     """
@@ -1095,8 +1098,7 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
     if count < 2:
         raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
     simetrico = bool(symmetric) or distribution == "symmetric"
-    total = 2 * count - 1 if simetrico else count
-    _exigir_instancias(total, "count")
+    _exigir_instancias(count, "count")
     eje = _dir_patron(sesion, axis, "axis", body)
     doc = sesion.doc
     op = OpPatron(doc.nuevo_id(), nombre_nuevo(doc, "Patrón circular", OpPatron,
@@ -1105,8 +1107,8 @@ def circular_pattern(sesion, count: int, bodies: Cuerpos | None = None, axis: st
                   distribucion={"extent": "extension", "spacing": "espaciado", "full": "completo", "partial": "parcial",
                                 "symmetric": "simetrico"}[distribution],
                   simetrico=bool(symmetric) and distribution in ("extent", "spacing"),
-                  suprimir=_suprimir(suppress, count, simetrico), combinar=combine, ligeras=lightweight and not combine,
-                  **objeto)
+                  suprimir=_suprimir(suppress, count, simetrico, de_mas=-1), combinar=combine,
+                  ligeras=lightweight and not combine, **objeto)
     return _agregar_patron(sesion, op)
 
 
@@ -1311,8 +1313,7 @@ def _transformacion_api(sesion, t, i):
              "suprimir": _suprimir_rect(t.get("suppress"), n1, n2, sim1, sim2, n2 > 1)}
         if n2 > 1 and "axis2" not in t and plano2 is None:
             raise error("INVALID_ARGUMENTS", f"{que}: con count2 > 1 falta axis2 (o plane2).")
-        k1, k2 = (2 if sim1 else 1), (2 if sim2 else 1)
-        return d, (k1 * n1 - k1 + 1) * ((k2 * n2 - k2 + 1) if n2 > 1 else 1)
+        return d, n1 * n2
     if tipo == "circular":
         n = _entero_api(t.get("count", 2), f"{que}.count", 2)
         modos = {"extent": "extension", "spacing": "espaciado", "full": "completo", "partial": "parcial",
@@ -1324,8 +1325,8 @@ def _transformacion_api(sesion, t, i):
         d = {"tipo": "circular", "eje": _dir_patron(sesion, t.get("axis", "z"), f"{que}.axis", t.get("body")), "n": n,
              "angulo": texto_expr(360 if modo == "full" else t.get("total_angle", 360)), "distribucion": modos[modo],
              "simetrico": bool(t.get("symmetric", False)) and modo in ("extent", "spacing"),
-             "suprimir": _suprimir(t.get("suppress"), n, simetrico, f"{que}.suppress")}
-        return d, 2 * n - 1 if simetrico else n
+             "suprimir": _suprimir(t.get("suppress"), n, simetrico, f"{que}.suppress", de_mas=-1)}
+        return d, n
     if tipo == "mirror":
         return {"tipo": "simetria", "plano": referencia_plano_o_cara(sesion, t.get("plane", "YZ"), t.get("body"))}, 2
     if tipo == "points":

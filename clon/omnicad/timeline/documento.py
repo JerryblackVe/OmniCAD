@@ -36,7 +36,7 @@ from .entidades import ErrorReferencia
 from .operaciones import (HEREDABLES, TIPOS_OPERACION, TODAS, Contexto, Cuerpo, ErrorOperacion, EstadoModelo, OpBoceto,
                           operacion_desde_dict, propiedades_cuerpo)
 from .parametros import (ANGULO, LONGITUD, LONGITUDES, MASAS, ErrorExpresion, TablaParametros, evaluar,
-                         nombres_usados, validar_nombre)
+                         nombres_usados, separar_nombre, tipo_de_clave, validar_nombre)
 
 log = logging.getLogger(__name__)
 
@@ -214,6 +214,9 @@ class Documento:
     def suscribir(self, funcion):
         self._oyentes.append(funcion)
 
+    def desuscribir(self, funcion):
+        self._oyentes.remove(funcion)
+
     def _notificar(self):
         for f in list(self._oyentes):
             f()
@@ -260,6 +263,10 @@ class Documento:
         while len(self._deshacer) > 1 and sum(len(s) for s in self._deshacer) > _LIMITE_BYTES_DESHACER:
             del self._deshacer[0]
         self._rehacer.clear()
+
+    def agrupar_deshacer(self, marca):
+        """Deja como un solo paso de deshacer lo hecho desde que la pila tenía `marca` entradas (diálogo Parámetros)."""
+        del self._deshacer[marca + 1:]
 
     def puede_deshacer(self):
         return bool(self._deshacer)
@@ -346,8 +353,19 @@ class Documento:
             return None
 
     # ------------------------------------------------------------ edición del timeline
+    def _fijar_ocultos(self, op):
+        """B-118: como en Fusion, lo que combina sin objetos elegidos alcanza a lo que se veía al crear el paso. Lo
+        oculto se anota en el paso: mostrar u ocultar después no cambia el resultado, y editarlo lo conserva."""
+        vieja = next((o for o in self.operaciones if o.id == op.id), None)
+        if vieja is not None:
+            op.ocultos = vieja.ocultos
+        elif any(k in op.p for k in ("operacion", "forma_patron", "transformaciones")):
+            ocultos = self.propiedad("__navegador__", "ocultos", [])
+            op.ocultos = sorted(i for i in ocultos if isinstance(i, str)) if isinstance(ocultos, list) else []
+
     def agregar(self, op):
         """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta."""
+        self._fijar_ocultos(op)
         tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
         desde = min(self.marcador, self._primer_afectado(tabla))
         calculo = self._prevuelo_cambio({"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()})
@@ -364,6 +382,7 @@ class Documento:
         """Edita un paso: la nueva versión conserva el id (las referencias siguen valiendo)."""
         i = self.indice(op_id)
         nueva.id = op_id
+        self._fijar_ocultos(nueva)
         tabla, contador = self._tabla_cotas(self.operaciones[:i] + [nueva] + self.operaciones[i + 1:])
         desde = min(i, self._primer_afectado(tabla))
         calculo = self._prevuelo_cambio({"tipo": "reemplazar", "indice": i, "operacion": nueva.a_dict()})
@@ -449,7 +468,7 @@ class Documento:
             base = {"seccion": "Sección", "cebra": "Cebra", "mapa_entorno": "Mapa de entorno",
                     "desmoldeo": "Desmoldeo", "curvatura": "Curvatura", "peine": "Peine de curvatura",
                     "isocurva": "Isocurva", "accesibilidad": "Accesibilidad",
-                    "radio_minimo": "Radio mínimo"}.get(tipo, tipo)
+                    "radio_minimo": "Radio mínimo", "centro_masa": "Centro de masa", "desviacion": "Desviación"}.get(tipo, tipo)
             n = 1
             while f"{base}{n}" in self.analisis:
                 n += 1
@@ -494,6 +513,13 @@ class Documento:
                 desde = min(desde, i)
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
+
+    def editar_analisis(self, nombre, params):
+        """Cambia las opciones de un análisis guardado (clic derecho › Editar): sigue en su lugar y con su nombre."""
+        self._guardar_para_deshacer()
+        self.analisis[nombre]["params"] = params
+        self.modificado = True
+        self._notificar()
 
     def quitar_analisis(self, nombre):
         if nombre in self.analisis:
@@ -584,17 +610,19 @@ class Documento:
     def _tabla_cotas(self, operaciones, conocidos=None, parametros=None):
         """Prepara los parámetros de modelo (Fusion: d1, d2…) antes de editar el historial.
 
-        La expresión vive en la cota; la tabla comparte su evaluador y detección de ciclos con los parámetros
-        de usuario. Solo al validar todo se nombran las cotas nuevas de las operaciones entrantes.
+        La expresión vive en la cota o en el paso; la tabla comparte su evaluador y detección de ciclos con los
+        parámetros de usuario. Solo al validar todo se nombran las cotas nuevas de las operaciones entrantes. Un paso
+        de una receta vieja recibe acá sus nombres, sin cambiar nada más.
         """
         if conocidos is None:
             conocidos = {c.nombre for o in self.operaciones if isinstance(o, OpBoceto)
                          for c in o.boceto.cotas.values() if c.nombre}
         fuente = self.parametros if parametros is None else parametros
-        datos = [p.a_dict() for p in fuente if p.nombre not in conocidos]
+        datos = [p.a_dict() for p in fuente if p.nombre not in conocidos and p.op is None]
+        modelo = {(p.op, p.clave): p for p in fuente if p.op is not None}
         ocupados = {p["nombre"] for p in datos}
         cotas = [(o, c) for o in operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()]
-        reservados = ocupados | conocidos | {c.nombre for _, c in cotas if c.nombre}
+        reservados = ocupados | conocidos | {c.nombre for _, c in cotas if c.nombre} | {p.nombre for p in modelo.values()}
         contador = self._contador_cotas
         asignaciones = []
         nombres = {}                 # (op, id de cota) → nombre, para las cotas ligadas (chaflán de distancias iguales)
@@ -612,14 +640,36 @@ class Documento:
             if nombre in ocupados:
                 raise ErrorExpresion(f"Ya existe el parámetro '{nombre}': dos cotas no pueden compartir nombre.")
             ocupados.add(nombre)
-            comentario = fuente.obtener(nombre).comentario if nombre in fuente else ""
+            previo = fuente.obtener(nombre).a_dict() if nombre in fuente else {}
             nombres[(id(op), cota.id)] = nombre
             ligada = None if cota.referencia else nombres.get((id(op), cota.datos.get("igual_a")))
             expresion = repr(op.boceto.medir(cota)) if cota.referencia else ligada or cota.expresion
             datos.append({"nombre": nombre, "expresion": expresion,
-                          "tipo": ANGULO if cota.tipo == "angulo" else LONGITUD, "comentario": comentario})
+                          "tipo": ANGULO if cota.tipo == "angulo" else LONGITUD, "comentario": previo.get("comentario", ""),
+                          **({"favorito": True} if previo.get("favorito") else {})})
             asignaciones.append((cota, nombre, ligada))
-        quitados = conocidos - {nombre for _, nombre, _l in asignaciones}
+        pedidos = []                 # «alto=15 mm» en un campo: (paso, clave, expresión sin el nombre)
+        for op in operaciones:
+            for clave in op.claves_modelo():
+                previo = modelo.get((op.id, clave))
+                pedido, expresion = separar_nombre(op.p[clave])
+                if pedido:
+                    validar_nombre(pedido)
+                    if pedido in ocupados or (pedido in reservados and (previo is None or previo.nombre != pedido)):
+                        raise ErrorExpresion(f"Ya existe el parámetro '{pedido}'.")
+                    pedidos.append((op, clave, expresion))
+                nombre = pedido or (previo.nombre if previo else None)
+                if nombre is None:
+                    contador += 1
+                    while f"d{contador}" in reservados:
+                        contador += 1
+                    nombre = f"d{contador}"
+                reservados.add(nombre)
+                ocupados.add(nombre)
+                datos.append({"nombre": nombre, "expresion": str(expresion), "tipo": tipo_de_clave(clave, expresion),
+                              "comentario": previo.comentario if previo else "", "op": op.id, "clave": clave,
+                              **({"favorito": True} if pedido or (previo and previo.favorito) else {})})
+        quitados = (conocidos | {p.nombre for p in modelo.values()}) - ocupados
         for nombre in sorted(quitados):
             usuarios = {p["nombre"] for p in datos if nombre in nombres_usados(p["expresion"])}
             usuarios.update(o.nombre for o in operaciones if any(nombre in nombres_usados(e) for e in o.expresiones()))
@@ -632,6 +682,8 @@ class Documento:
                 del cota.datos["igual_a"]
                 if ligada:
                     cota.expresion = ligada
+        for op, clave, expresion in pedidos:
+            op.p[clave] = expresion
         self._medir_referencias(tabla, cotas)
         return tabla, contador
 
@@ -703,6 +755,12 @@ class Documento:
                 for cid, expresion in cambios.items():
                     nueva.boceto.cotas[cid].expresion = expresion
                 operaciones[i] = nueva
+        indice = {o.id: i for i, o in enumerate(operaciones)}
+        for p in tabla:
+            i = indice.get(p.op)
+            if i is not None and str(operaciones[i].p.get(p.clave)) != p.expresion:
+                operaciones[i] = operaciones[i].copia()
+                operaciones[i].p[p.clave] = p.expresion
         return operaciones
 
     def parametros_usados(self):
@@ -714,18 +772,43 @@ class Documento:
                     usos.setdefault(nombre, set()).add(op.nombre)
         return usos
 
+    def renombrar_parametro(self, viejo, nuevo):
+        """Cambia el nombre de un parámetro y lo actualiza donde se lo cita: otros parámetros, pasos, cotas, textos y
+        configuraciones (B-140, `Parameters in Fusion` § Edit parameters). Un solo deshacer; el modelo no cambia."""
+        tabla = TablaParametros.desde_lista(self.parametros.a_lista())
+        tabla.renombrar(viejo, nuevo)
+        operaciones, desde = list(self.operaciones), len(self.operaciones)
+        for i, op in enumerate(operaciones):
+            nueva = op.copia()
+            if nueva.renombrar_parametro(viejo, nuevo):
+                operaciones[i], desde = nueva, min(desde, i)
+        conocidos = {c.nombre for o in (*self.operaciones, *operaciones) if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()}
+        tabla, contador = self._tabla_cotas(operaciones, conocidos, tabla)
+        self._guardar_para_deshacer()
+        for columna in self.configuraciones.get("columnas", []):
+            if columna["tipo"] == "parametro" and columna["nombre"] == viejo:
+                columna["nombre"] = nuevo
+        self.operaciones, self.parametros, self._contador_cotas = operaciones, tabla, contador
+        self.modificado = True
+        self.recalcular(desde)
+
     def aplicar_parametros(self, tabla):
         """Aplica la tabla (UserParameters de Fusion). En documentos grandes con OpenCascade calcula en un hijo
         y recibe su resultado completo: una caída nativa allí no cierra la aplicación ni se repite en el padre.
         """
         tabla.valores()  # valida antes de tocar el documento
+        perdido = next((p for p in self.parametros if p.op is not None and p.nombre not in tabla), None)
         operaciones = self._cotas_desde_parametros(tabla)
         tabla, _ = self._tabla_cotas(operaciones, parametros=tabla)
         faltan = {n: pasos for n, pasos in self.parametros_usados().items() if n in self.parametros and n not in tabla}
         if faltan:
             detalle = "; ".join(f"«{n}» (lo usa {', '.join(sorted(p))})" for n, p in sorted(faltan.items()))
             raise ErrorDocumento(f"No se puede quitar ni renombrar un parámetro en uso: {detalle}.")
+        if perdido:
+            raise ErrorExpresion(f"No se puede borrar '{perdido.nombre}': es un valor del paso «{self.operacion(perdido.op).nombre}». "
+                                 "Para sacarlo, borrá el paso.")
         desde = self._primer_afectado(tabla)
+        desde = min([desde] + [i for i, op in enumerate(operaciones) if op is not self.operaciones[i]])   # editado desde la tabla
         calculo = self._prevuelo_parametros(tabla)
         self._guardar_para_deshacer()
         self.operaciones = operaciones
@@ -866,6 +949,7 @@ class Documento:
         indice = self.marcador if indice is None else indice
         entrada = self.estado_en(indice)
         tabla = self.parametros
+        self._fijar_ocultos(op)
         if isinstance(op, OpBoceto):
             operaciones = [op if o.id == op.id else o for o in self.operaciones]
             if not any(o.id == op.id for o in self.operaciones):

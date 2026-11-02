@@ -15,7 +15,7 @@ from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
-from .comunes import campo_objetivos, campo_operacion, con_analisis, objetivos
+from .comunes import campo_objetivos, campo_operacion, con_analisis, objetivos, simetria_total
 
 PERFIL = {"perfil", "cara_plana"}
 CURVA = {"curva_boceto", "arista"}
@@ -1260,7 +1260,7 @@ def _info_circular(pre):
             paso = sc.paso_angular(n, total, "espaciado" if modo == "espaciado" else "completa", simetrico)
             if modo == "parcial" and abs(abs(total) - 360.0) < 1e-9:
                 extra = " 360° es una vuelta completa: igual que «Completo»."
-            ks = sc._indices(n, simetrico)
+            ks = sc._indices(n, simetrico, -1 if simetria_total(ctx) else 0)
             return f"Copias a {', '.join(f'{k * paso:g}°' for k in ks[:8])}{'…' if len(ks) > 8 else ''}.{extra}"
         except Exception:  # noqa: BLE001 — valores a medio escribir: lo dice la vista previa
             return ""
@@ -1297,7 +1297,8 @@ def campos_patron(pre="", forma=None):
         Expresion(k("d1"), "Extensión total", "30 mm", visible_si=cuando("rectangular", n1_mayor), grupo="Dirección 1",
                   etiqueta_si=total),
         Casilla(k("simetrico"), "Simétrico", visible_si=cuando("rectangular", n1_mayor), grupo="Dirección 1",
-                ayuda="La misma cantidad de copias hacia los dos lados del original (2n − 1 en total)."),
+                ayuda="La cantidad es el total con el original, repartido a los dos lados; si es par, la de más va "
+                      "hacia adelante. En Extensión, la medida es por lado."),
         Seleccion(k("dir2"), "Dirección (opcional)", DIRECCION, minimo=0, visible_si=en("rectangular"), grupo="Dirección 2",
                   ayuda="Vacía = la perpendicular a la dirección 1 (derivada). Elegí un eje o una arista para cambiarla."),
         Entero(k("n2"), "Cantidad", 1, 1, visible_si=en("rectangular"), grupo="Dirección 2",
@@ -1315,8 +1316,9 @@ def campos_patron(pre="", forma=None):
                   ayuda="Una línea, una arista recta o circular, un eje de construcción, una cara cilíndrica o un "
                         "círculo de boceto: gira alrededor de su eje."),
         Opciones(k("modo"), "Distribución", MODOS_CIRCULAR, "completo", visible_si=en("circular"),
-                 ayuda="Completo: 360° sin repetir el cierre. Parcial: hasta el ángulo total, a un lado. Simétrico: n "
-                       "copias a cada lado, hasta ± el ángulo. Espaciado: se da el ángulo entre copias, no el total."),
+                 ayuda="Completo: 360° sin repetir el cierre. Parcial: hasta el ángulo total, a un lado. Simétrico: la "
+                       "cantidad y el ángulo son el total, repartido a los dos lados del original. Espaciado: se da el "
+                       "ángulo entre copias, no el total."),
         Entero(k("n"), "Cantidad", 6, 1, visible_si=en("circular")),
         Expresion(k("angulo"), "Ángulo total", "180 deg", ANGULO, visible_si=cuando("circular", modo("parcial", "simetrico"))),
         Expresion(k("angulo_paso"), "Ángulo entre instancias", "30 deg", ANGULO,

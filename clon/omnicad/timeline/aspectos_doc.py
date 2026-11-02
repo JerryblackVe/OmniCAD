@@ -286,3 +286,16 @@ def caras_con_aspecto(doc, estado):
             if isinstance(c, dict) and c.get("ref") and c.get("apariencia"):
                 salida.append((cid, c["ref"], list(c["apariencia"])))
     return salida
+
+
+# Colores de los componentes, suaves para que el ícono de la muestra se siga viendo; se repiten si hay más componentes.
+PALETA_COMPONENTES = ((141, 196, 255), (255, 183, 120), (168, 225, 148), (214, 170, 240), (255, 165, 175), (130, 220, 215),
+                      (240, 220, 120), (190, 190, 200))
+
+
+def colores_componentes(doc, estado=None):
+    """{id de componente: (r, g, b) 0..255}: el color sigue el orden en que se crearon y `ciclo_color` (Color del componente
+    de ciclo) lo corre en la paleta."""
+    estado = estado or doc.estado_final
+    return {k: PALETA_COMPONENTES[(i + int(doc.propiedades.get(k, {}).get("ciclo_color", 0))) % len(PALETA_COMPONENTES)]
+            for i, k in enumerate(estado.componentes)}

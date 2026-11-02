@@ -210,12 +210,12 @@ def test_medir_muestra_cota_y_valor_al_elegir(app_qt):
     a, b = _cara(doc, "op1.c1", (0, 10, 15)), _cara(doc, "op1.c1", (10, 10, 15))
     panel, visor = _panel_medir(doc, {"a": [a], "b": [b]})
     panel._calcular_previa()
-    assert "Distancia: 10 mm" in panel.widgets["resultado"].text()       # valor en el panel
+    assert any(f.nombre.text() == "Distancia" and f.texto == "10.000 mm" for f in panel.widgets["resultados"].filas)   # valor en el panel
     capa = visor._capas["medida"]
     assert sum(1 for p in capa if p[0] == "tris") == 2                    # dos flechas
     linea = next(p[1] for p in capa if p[0] == "lineas")
     assert math.dist(linea[0], linea[1]) == pytest.approx(10)            # entre los puntos más cercanos
-    assert visor.textos_etiquetas("medida") == ["10 mm"]                 # valor en la vista, sobre la cota
+    assert visor.textos_etiquetas("medida") == ["10.000 mm"]              # valor en la vista, sobre la cota
     panel.cancelar()
     assert "medida" not in visor._capas and visor.textos_etiquetas("medida") == []
 
@@ -229,10 +229,10 @@ def test_medir_una_sola_seleccion_da_diametro_o_area(app_qt):
     hit = hit_desde_ref(refs.referencia("op2.c1", lateral, forma), doc.estado_final)
     panel, visor = _panel_medir(doc, {"a": [hit]})
     panel._calcular_previa()
-    assert visor.textos_etiquetas("medida") == ["Ø 10 mm"]
+    assert visor.textos_etiquetas("medida") == ["Ø 10.000 mm"]
     panel.set_valor("a", [_cara(doc, "op1.c1", (5, 10, 30))])
     panel._calcular_previa()
-    assert visor.textos_etiquetas("medida") == ["200 mm²"]
+    assert visor.textos_etiquetas("medida") == ["200.000 mm²"]
     panel.cancelar()
 
 
@@ -242,7 +242,7 @@ def test_medir_valor_en_vivo_bajo_el_cursor_antes_del_segundo_clic(app_qt):
     panel, visor = _panel_medir(doc, {"a": [a]})
     panel._calcular_previa()
     visor.entidad_sobre.emit(b)                                           # el ratón pasa por la otra cara
-    assert visor.textos_etiquetas("medida_previa") == ["≈ 10 mm"]
+    assert visor.textos_etiquetas("medida_previa") == ["≈ 10.000 mm"]
     assert visor._capas["medida_previa"]
     visor.entidad_sobre.emit(None)                                        # el ratón se va: se borra
     assert "medida_previa" not in visor._capas

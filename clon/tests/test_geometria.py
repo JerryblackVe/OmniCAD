@@ -150,6 +150,32 @@ def test_teselado_y_aristas():
     assert len(g.polilineas_aristas(g.caja(1, 2, 3))) == 12
 
 
+def test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos():
+    from OCP.BRep import BRep_Tool
+    from OCP.gp import gp_Pnt
+    from OCP.Poly import Poly_Triangle, Poly_Triangulation
+    from OCP.TopLoc import TopLoc_Location
+    cara = g.caras(g.caja(10, 10, 10, origen=(100, 100, 100)))[0]
+    g.teselar(cara, deflexion=0.5)
+    loc = TopLoc_Location()
+    buena = BRep_Tool.Triangulation_s(cara, loc)
+    n, t = buena.NbNodes(), buena.NbTriangles()
+    tri = Poly_Triangulation(n + 2, t + 1, False)                   # como la deja OCC: un nodo basura y otro que sobra
+    for i in range(1, n + 1):
+        tri.SetNode(i, buena.Node(i))
+    tri.SetNode(n + 1, gp_Pnt(0.0, -1.13e-309, 6.95e-310))
+    tri.SetNode(n + 2, buena.Node(1))
+    for i in range(1, t + 1):
+        tri.SetTriangle(i, buena.Triangle(i))
+    tri.SetTriangle(t + 1, Poly_Triangle(1, 2, n + 1))
+    triangulos = g._triangulos_cara(cara, tri, loc)
+    assert triangulos.shape == (t, 3, 3) and triangulos.min() >= 100
+    assert g._triangulos_cara(cara, buena, loc).shape == (t, 3, 3)     # una cara sana queda igual
+    from omnicad.nucleo.analisis import _props_nodos
+    idx = g._indices_cara(cara, tri, loc)                              # las normales usan los mismos triángulos
+    assert idx.shape == (t, 3) and len(_props_nodos(cara, tri, idx, triangulos, False)[0]) == n + 2
+
+
 def test_plano_girado_sobre_su_eje_u():
     p = g.Plano("XY", 5).girado(90)                                      # normal +Z → −Y, por el mismo origen
     assert p.normal == pytest.approx([0, -1, 0]) and p.u == pytest.approx([1, 0, 0]) and p.origen == pytest.approx([0, 0, 5])

@@ -15,7 +15,8 @@ operación sigue apuntando a "su" cara o arista al recalcular.
 """
 import time
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLayout, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QScrollArea,
                                QSizePolicy, QSlider, QSpinBox, QTabBar, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
@@ -26,6 +27,7 @@ from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, con
 from .. import registro_uso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
+from .campo_expresion import CampoExpresion
 from .formulario import (ANCHO_ETIQUETA, ANCHOS, Seccion, armar_cabecera, describir_ref, describir_seleccion, fila_mensaje,
                          poner_mensaje, texto_filtros)
 from .iconos import icono
@@ -79,11 +81,14 @@ class Campo:
 
 
 class Seleccion(Campo):
-    """Fila "Seleccionar": `filtros` es un subconjunto de visor3d.FILTROS; maximo=None = sin límite."""
+    """Fila "Seleccionar": `filtros` es un subconjunto de visor3d.FILTROS; maximo=None = sin límite. `texto_boton` fija el
+    texto del botón vacío (sin él, dice qué tipos acepta). `oculta`: se elige en el lienzo sin fila en el panel (Medir).
+    `sin_resalte`: lo elegido no se pinta de azul (los análisis: el resalte taparía lo que pintan)."""
 
-    def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, **kw):
+    def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, texto_boton="", oculta=False, sin_resalte=False, **kw):
         super().__init__(clave, etiqueta, [], **kw)
-        self.filtros, self.minimo, self.maximo = set(filtros), minimo, maximo
+        self.filtros, self.minimo, self.maximo, self.texto_boton = set(filtros), minimo, maximo, texto_boton
+        self.oculta, self.sin_resalte = oculta, sin_resalte
 
 
 class ListaSeleccion(Seleccion):
@@ -145,11 +150,21 @@ class Entero(Campo):
 
 
 class Deslizador(Entero):
-    """Número y deslizador sincronizados (Repetición, Opacidad, Isocurvas del análisis); con `decimales`, no entero."""
+    """Número y deslizador sincronizados (Repetición, Opacidad, Isocurvas del análisis); con `decimales`, no entero.
+    `sufijo`: la unidad detrás del número («deg»)."""
 
-    def __init__(self, clave, etiqueta, defecto=1, minimo=1, maximo=10000, decimales=0, **kw):
+    def __init__(self, clave, etiqueta, defecto=1, minimo=1, maximo=10000, decimales=0, sufijo="", **kw):
         super().__init__(clave, etiqueta, defecto, minimo, maximo, **kw)
-        self.decimales = decimales
+        self.decimales, self.sufijo = decimales, sufijo
+
+
+class DosTopes(Campo):
+    """Dos números y un deslizador con dos topes (Ángulo de desmoldeo y Tolerancia): el valor es [mínimo, máximo] y un
+    tope no cruza al otro."""
+
+    def __init__(self, clave, etiqueta, defecto=(0.0, 1.0), minimo=0.0, maximo=1.0, decimales=1, sufijo="", **kw):
+        super().__init__(clave, etiqueta, list(defecto), **kw)
+        self.minimo, self.maximo, self.decimales, self.sufijo = minimo, maximo, decimales, sufijo
 
 
 class Texto(Campo):
@@ -195,7 +210,7 @@ class ContextoComando:
     def evaluar(self, expr, tipo=LONGITUD):
         if tipo == ESCALAR and con_unidad(expr):         # lo teclea la persona: un factor o una relación no llevan unidad
             raise ErrorExpresion("Este valor no lleva unidad: escribí solo el número.")
-        return self.parametros.evaluar(expr, tipo)
+        return self.parametros.evaluar(expr, tipo, estricto=tipo != ESCALAR)     # lo que se teclea, como en Fusion
 
     def nuevo_id(self):
         return self.op.id if self.op is not None else self.doc.nuevo_id()
@@ -213,6 +228,8 @@ class Comando:
     # abierto, p. ej. {"Mayús": "simétrico", "Ctrl": "copiar"}; el panel lo muestra en el pie.
     MODIFICADORES = {}
     ANCHO_PANEL = None       # "simple" | "normal" | "ancho" (ui/formulario.ANCHOS); None = según la cantidad de campos
+    PESTANA_PRINCIPAL = "Operación"     # título de la primera pestaña si el comando tiene campos con `pestana`
+    INFO = None              # {"titulo", "texto", "consejos", "articulo"}: el botón «i» abre ese `ui/panel_info.PanelInfo`
     PLEGADAS = ()            # títulos de las secciones (`Campo.seccion`) que arrancan cerradas
     AYUDA = ""               # una o dos frases: se ven con el botón «?» de la cabecera (no ocupan el panel)
     # (clave del campo de modo, {valor: (título, ícono)}): la cabecera sigue al modo elegido (Patrón rectangular → circular)
@@ -250,8 +267,9 @@ class Comando:
 
     def crear_op(self, clase, v, ctx, **params):
         """Arma la operación nueva o la versión editada (conserva id, nombre y supresión)."""
-        if ctx.op is not None:
-            return clase(ctx.op.id, ctx.op.nombre, ctx.op.suprimida, **params)
+        if ctx.op is not None:          # una versión de cálculo se conserva: editar no le cambia el cálculo a una receta vieja
+            versiones = {k: v for k, v in ctx.op.p.items() if k.startswith("version_") and k in clase.PARAMS}
+            return clase(ctx.op.id, ctx.op.nombre, ctx.op.suprimida, **{**versiones, **params})
         return clase(ctx.doc.nuevo_id(), self.nombre_nuevo(ctx), **params)
 
     def al_cerrar(self, ctx):
@@ -268,6 +286,7 @@ class Comando:
 
     def al_tocar_paso(self, panel, op_id):
         """Clic en un paso del timeline con el panel abierto (Simetría y Patrón eligen operaciones así)."""
+        panel.elegir_boceto(op_id)
 
     def preparar_panel(self, panel):
         """Conecta controles dependientes después de crear todos los campos."""
@@ -311,7 +330,7 @@ def hit_desde_ref(ref, estado):
         e = ent.resolver(ref, estado)
     except Exception:  # noqa: BLE001 — la referencia perdida se muestra igual (sin resalte)
         return hit
-    hit.update(forma=e.forma, cuerpo=e.cuerpo, plano=e.plano)
+    hit.update(forma=e.forma, cuerpo=e.cuerpo, plano=e.plano, es_linea=e.tipo != "curva_boceto" or e.eje is not None)
     try:
         if e.tipo == "cuerpo":
             hit["dibujo"] = [("tris", teselar_cuerpo(e.forma, 0.1)[0], None, 0.35)]
@@ -370,8 +389,8 @@ def acepta(filtros, hit):
         return bool(filtros & {"vertice", "punto"})
     if t == "punto_boceto":
         return "punto" in filtros or "punto_boceto" in filtros
-    if t == "curva_boceto":
-        return "curva_boceto" in filtros or "eje" in filtros
+    if t == "curva_boceto":        # B-131: donde va una línea no entra otra curva
+        return "curva_boceto" in filtros or ("eje" in filtros and hit.get("es_linea", True))
     return t in filtros
 
 
@@ -458,6 +477,98 @@ class _FilaBotones(QWidget):
 
     def boton(self, clave):
         return self.grupo.button(self.findData(clave))
+
+
+class _DeslizadorDoble(QWidget):
+    """Barra con dos topes arrastrables, en un rango [minimo, maximo]. `movido(i, valor)` al arrastrar el tope i."""
+    movido = Signal(int, float)
+    MARGEN = 6
+
+    def __init__(self, minimo, maximo, parent=None):
+        super().__init__(parent)
+        self.minimo, self.maximo, self.valores, self._activo = float(minimo), float(maximo), [float(minimo), float(maximo)], None
+        self.setFixedHeight(20)
+        self.setMinimumWidth(80)
+
+    def x_de(self, i):
+        util = max(self.width() - 2 * self.MARGEN, 1)
+        return self.MARGEN + util * (self.valores[i] - self.minimo) / (self.maximo - self.minimo)
+
+    def _valor_en(self, x):
+        util = max(self.width() - 2 * self.MARGEN, 1)
+        return self.minimo + min(max((x - self.MARGEN) / util, 0.0), 1.0) * (self.maximo - self.minimo)
+
+    def poner(self, a, b):
+        self.valores = [float(a), float(b)]
+        self.update()
+
+    def mousePressEvent(self, e):
+        x = e.position().x()
+        self._activo = min((0, 1), key=lambda i: abs(self.x_de(i) - x))
+        self.mouseMoveEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if self._activo is None:
+            return
+        i, v = self._activo, self._valor_en(e.position().x())
+        v = min(v, self.valores[1]) if i == 0 else max(v, self.valores[0])
+        self.movido.emit(i, v)
+
+    def mouseReleaseEvent(self, _e):
+        self._activo = None
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        y = self.height() / 2
+        tema = self.palette()
+        p.setPen(tema.mid().color())
+        p.drawLine(QPointF(self.MARGEN, y), QPointF(self.width() - self.MARGEN, y))
+        x0, x1 = self.x_de(0), self.x_de(1)
+        p.setPen(QColor(tema.text().color()))
+        p.drawLine(QPointF(x0, y), QPointF(x1, y))
+        p.setBrush(tema.text())
+        for x in (x0, x1):
+            p.drawRoundedRect(QRectF(x - 2, y - 7, 4, 14), 1, 1)
+
+
+class _FilaDosTopes(QWidget):
+    """Los dos números arriba y el deslizador doble abajo. `cambiado(mínimo, máximo)` con cada cambio."""
+    cambiado = Signal(float, float)
+
+    def __init__(self, campo, valor, parent=None):
+        super().__init__(parent)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(2)
+        fila = QHBoxLayout()
+        fila.setContentsMargins(0, 0, 0, 0)
+        self.numero_a, self.numero_b = (QDoubleSpinBox(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo,
+                                                       suffix=f" {campo.sufijo}" if campo.sufijo else "") for _ in range(2))
+        fila.addWidget(self.numero_a)
+        fila.addStretch(1)
+        fila.addWidget(self.numero_b)
+        v.addLayout(fila)
+        self.doble = _DeslizadorDoble(campo.minimo, campo.maximo)
+        v.addWidget(self.doble)
+        self.poner(valor)
+        self.numero_a.valueChanged.connect(lambda n: self._cambiar(0, n))
+        self.numero_b.valueChanged.connect(lambda n: self._cambiar(1, n))
+        self.doble.movido.connect(self._cambiar)
+
+    def poner(self, valor):
+        """Sin avisar: lo pide `PanelComando.set_valores`."""
+        for w, x in ((self.numero_a, valor[0]), (self.numero_b, valor[1])):
+            w.blockSignals(True)
+            w.setValue(x)
+            w.blockSignals(False)
+        self.doble.poner(*valor)
+
+    def _cambiar(self, i, n):
+        a, b = self.numero_a.value(), self.numero_b.value()
+        a, b = (min(n, b), b) if i == 0 else (a, max(n, a))
+        self.poner((a, b))
+        self.cambiado.emit(a, b)
 
 
 class _BotonElidido(QPushButton):
@@ -586,7 +697,9 @@ class _FilaSeleccion(QWidget):
     def set_estado(self, n, activa, descripcion="", detalle="", vacio="", items=()):
         """`descripcion`/`detalle`/`vacio`/`items` los pasa el panel de comando; sin ellos queda el texto simple."""
         propio = bool(descripcion) or (n == 0 and bool(vacio))
-        if n == 0 and len(vacio) > 26:                    # una lista larga de tipos no entra en el botón: queda en el tooltip
+        if n == 0 and getattr(self.campo, "texto_boton", ""):
+            texto_vacio = self.campo.texto_boton
+        elif n == 0 and len(vacio) > 26:                  # una lista larga de tipos no entra en el botón: queda en el tooltip
             texto_vacio = "Elegir en la vista"
         else:
             texto_vacio = vacio
@@ -653,10 +766,10 @@ class PanelComando(QFrame):
         if preajustes_ui.tiene_preajustes(self):      # UI-4: los preajustes van en la cabecera, no en una fila aparte
             self.boton_preajustes = preajustes_ui.BotonPreajustes(self)
         self.boton_ayuda = QToolButton(text="?", checkable=True, toolTip="Qué hace este comando")
-        self.boton_ayuda.setVisible(bool(comando.AYUDA))
         self.boton_ayuda.setFocusPolicy(Qt.NoFocus)  # Tab empieza en los campos, no en la cabecera (Esc ya cancela)
         cab, self.icono_titulo, self.titulo = armar_cabecera(
             self, self.cancelar, [w for w in (self.boton_preajustes, self.boton_ayuda) if w is not None])
+        self.boton_ayuda.setVisible(bool(comando.AYUDA))      # con padre: suelto se mostraría como ventana (B-136)
         v.addWidget(cab)
         self._titulo_actual = None
         self._actualizar_titulo()
@@ -757,6 +870,13 @@ class PanelComando(QFrame):
         v.addWidget(zona)
         pie = QHBoxLayout()
         pie.setContentsMargins(10, 4, 10, 8)
+        self.boton_info = None
+        if comando.INFO:
+            self.boton_info = QToolButton(text="i", toolTip="Información de este comando")
+            self.boton_info.setFixedSize(16, 16)
+            self.boton_info.setStyleSheet("QToolButton { background: #7d8791; color: white; border-radius: 8px; font-weight: bold; }")
+            self.boton_info.clicked.connect(self._abrir_info)
+            pie.addWidget(self.boton_info)
         pie.addStretch(1)
         self.boton_ok = QPushButton(comando.TEXTO_ACEPTAR, objectName="boton_primario", toolTip="Aceptar (Enter)")
         self.boton_ok.clicked.connect(self.aceptar)
@@ -823,7 +943,7 @@ class PanelComando(QFrame):
         """Barra Operación / Análisis arriba del cuerpo. Devuelve el widget con todas las páginas: se ve solo la de la
         pestaña elegida y el panel se ajusta a ella (un QStackedWidget mediría siempre lo que la más alta)."""
         self.barra_pestanas = QTabBar(objectName="pestanas_cmd", drawBase=False, expanding=False)
-        self.barra_pestanas.addTab("Operación")
+        self.barra_pestanas.addTab(self.comando.PESTANA_PRINCIPAL)
         for titulo in self.paginas:
             self.barra_pestanas.addTab(titulo)
         v.addWidget(self.barra_pestanas)
@@ -864,7 +984,7 @@ class PanelComando(QFrame):
             self.filas_sel[campo.clave] = w
             return w
         if isinstance(campo, Expresion):
-            w = QLineEdit(str(val))
+            w = CampoExpresion(str(val), self.ctx, campo.tipo)
             w.textChanged.connect(lambda t, c=campo: self._cambiar(c.clave, t.strip()))
             return w
         if isinstance(campo, Botones):
@@ -928,7 +1048,8 @@ class PanelComando(QFrame):
             fila = QHBoxLayout(w)
             fila.setContentsMargins(0, 0, 0, 0)
             escala = 10 ** campo.decimales
-            numero = (QDoubleSpinBox(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo) if campo.decimales
+            numero = (QDoubleSpinBox(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo,
+                                     suffix=f" {campo.sufijo}" if campo.sufijo else "") if campo.decimales
                       else QSpinBox(minimum=campo.minimo, maximum=campo.maximo))
             deslizador = QSlider(Qt.Horizontal, minimum=int(campo.minimo * escala), maximum=int(campo.maximo * escala))
             numero.setValue(val)
@@ -936,9 +1057,14 @@ class PanelComando(QFrame):
             numero.valueChanged.connect(lambda n, d=deslizador: d.setValue(round(n * escala)))
             deslizador.valueChanged.connect(lambda x, n=numero: n.setValue(x / escala if campo.decimales else x))
             numero.valueChanged.connect(lambda n, c=campo: self._cambiar(c.clave, n))
+            deslizador.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)   # no ensancha el panel: toma lo que sobra
             fila.addWidget(numero)
             fila.addWidget(deslizador, 1)
             w.numero, w.deslizador = numero, deslizador
+            return w
+        if isinstance(campo, DosTopes):
+            w = _FilaDosTopes(campo, val)
+            w.cambiado.connect(lambda a, b, c=campo: self._cambiar(c.clave, [a, b]))
             return w
         if isinstance(campo, Entero):
             w = QSpinBox(minimum=campo.minimo, maximum=campo.maximo)
@@ -1047,7 +1173,10 @@ class PanelComando(QFrame):
                 c.opciones = nuevas
                 w.clear()
                 for k, texto in nuevas.items():
-                    w.addItem(texto, k)
+                    if isinstance(texto, tuple):
+                        w.addItem(icono(texto[1]), texto[0], k)
+                    else:
+                        w.addItem(texto, k)
             w.setCurrentIndex(max(w.findData(self.valores.get(c.clave)), 0))
             self.valores[c.clave] = w.currentData()
             w.blockSignals(False)
@@ -1055,7 +1184,7 @@ class PanelComando(QFrame):
     def _actualizar_visibles(self):
         self._refrescar_vivas()
         for c in self.campos:
-            vis = self._visible(c)
+            vis = self._visible(c) and not getattr(c, "oculta", False)
             self.widgets[c.clave].setVisible(vis)
             if not getattr(c, "ancho_completo", False):
                 self.etiquetas[c.clave].setVisible(vis)
@@ -1140,6 +1269,8 @@ class PanelComando(QFrame):
             w.setValue(int(valor))
         elif isinstance(campo, (Porcentaje, Deslizador)):
             w.numero.setValue(valor)
+        elif isinstance(campo, DosTopes):
+            w.poner(valor)
         self.valores[clave] = valor if not isinstance(campo, Seleccion) else list(valor)
         self._actualizar_visibles()
         self.comando.al_cambiar(self, clave)
@@ -1156,6 +1287,9 @@ class PanelComando(QFrame):
                 continue
             if isinstance(campo, Deslizador):
                 w.numero.setValue(valor)
+                continue
+            if isinstance(campo, DosTopes):
+                w.poner(valor)
                 continue
             w.blockSignals(True)
             try:
@@ -1223,7 +1357,22 @@ class PanelComando(QFrame):
         self.comando.al_cambiar(self, campo.clave)
         self._programar()
 
-    def _elegida(self, hit):
+    def elegir_boceto(self, op_id):
+        """Un boceto elegido en el navegador o el timeline entra entero a un campo de perfiles, con el texto y sin los
+        huecos de sus letras (Fusion: Extrude reference, Profiles). False si el campo activo no lo toma."""
+        from ..nucleo.perfiles import perfiles_de_boceto
+        from ..timeline.operaciones import OpExtrusion
+        campo, br = self.activa, self.ctx.estado.bocetos.get(op_id)
+        if campo is None or br is None or "perfil" not in campo.filtros or campo.maximo is not None:
+            return False
+        hits = [hit_desde_ref({"tipo": "perfil", "boceto": op_id, **OpExtrusion.referencia_perfil(p)}, self.ctx.estado)
+                for p in perfiles_de_boceto(br)]
+        if hits:                     # si falta alguno entra todo; si ya estaban todos, sale
+            faltante = next((h for h in hits if all(x["ref"] != h["ref"] for x in self.valores.get(campo.clave) or [])), hits[0])
+            self._elegida(faltante, hits)
+        return bool(hits)
+
+    def _elegida(self, hit, grupo=None):
         campo = self.activa
         if campo is None or not self.isVisible():
             return
@@ -1233,8 +1382,7 @@ class PanelComando(QFrame):
             pass
         lista = list(self.valores.get(campo.clave) or [])
         repetida = next((h for h in lista if h["ref"] == hit["ref"]), None)
-        grupo = None
-        if "perfil" in campo.filtros:
+        if grupo is None and "perfil" in campo.filtros:
             try:
                 if self.visor.es_hueco_texto(hit):     # el hueco de la «o» de un texto es aire: no se elige
                     return
@@ -1279,7 +1427,7 @@ class PanelComando(QFrame):
         self._previa_aislada = False     # otra selección es otra geometría: la próxima previa vuelve a ensayarse aislada
         prims = []
         for c in self.campos:
-            if isinstance(c, Seleccion) and self._visible(c):
+            if isinstance(c, Seleccion) and self._visible(c) and not c.sin_resalte:
                 for h in self.valores.get(c.clave) or []:
                     prims.extend(h.get("dibujo") or [])
         self.visor.set_capa("seleccion", prims)
@@ -1394,6 +1542,7 @@ class PanelComando(QFrame):
         self._previa_lista(estado)
 
     def _previa_lista(self, estado):
+        self.visor.cuerpos_de_previa = frozenset(estado.cuerpos) - frozenset(self.ctx.estado.cuerpos)
         self.previa.emit(estado)
         try:
             self.comando.analizar_previa(self.valores, self.ctx, estado, self.visor)
@@ -1595,6 +1744,14 @@ class PanelComando(QFrame):
         self._cerrar()
         self.cancelado.emit()
 
+    def _abrir_info(self):
+        """El panel de información del comando: cerrarlo no cancela el comando; se va con él."""
+        from .panel_info import PanelInfo
+        if getattr(self.comando, "info", None) is None:
+            self.comando.info = PanelInfo(self.parent() or self.visor, **self.comando.INFO)
+        self.comando.info.show()
+        self.comando.info.ubicar_informacion()
+
     def _cerrar(self):
         self._t_previa.stop()
         self._cancelar_previa_hijo()
@@ -1610,6 +1767,9 @@ class PanelComando(QFrame):
         info = getattr(self.ctx.ventana, "info_seleccion", None)
         if info is not None:
             info("")
+        if self.comando.INFO and getattr(self.comando, "info", None) is not None:
+            self.comando.info.deleteLater()
+            self.comando.info = None
         self.comando.al_cerrar(self.ctx)
         self.previa.emit(None)
         self.hide()

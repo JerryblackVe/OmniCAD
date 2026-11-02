@@ -301,7 +301,7 @@ def test_batch_tres_pasos_ok_guarda_una_vez(pieza, tmp_path, capsys):
     pasos = escribir_pasos(tmp_path / "p.jsonl", [
         {"tool": "create_parameter", "args": {"name": "a", "expression": "1 mm"}},
         {"tool": "create_parameter", "args": {"name": "b", "expression": "a + 1 mm"}},
-        {"tool": "get_parameters"},
+        {"tool": "get_parameters", "args": {"user_only": True}},
     ])
     codigo, out, _ = correr(capsys, "batch", pasos, "--doc", pieza, "--json")
     resultados = como_json(out)
@@ -377,10 +377,10 @@ def test_run_script_con_llamar(pieza, tmp_path, capsys):
         "result = {'n': len(doc.parametros)}\n", encoding="utf-8")
     antes = pieza.read_bytes()
     codigo, out, _ = correr(capsys, "run", script, "--doc", pieza)
-    assert codigo == 0 and "hola 2" in out and "result" in out
+    assert codigo == 0 and "hola 5" in out and "result" in out
     assert pieza.read_bytes() == antes                            # sin --save no se toca
     codigo, out, _ = correr(capsys, "run", script, "--doc", pieza, "--save", "--json")
-    assert codigo == 0 and como_json(out)["result"]["result"] == {"n": 2}
+    assert codigo == 0 and como_json(out)["result"]["result"] == {"n": 5}
     _, info, _ = correr(capsys, "info", pieza, "--json")
     params = {p["name"]: p for p in como_json(info)["result"]["parameters"]}
     assert params["grueso"]["comment"] == "ñandú útil"

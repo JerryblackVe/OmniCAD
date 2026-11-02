@@ -16,7 +16,7 @@ caja, tubo = ids["caja"], ids["tubo"]
 
 # (entrada, esperado en mm / grados / factor; None = tiene que rechazarse)
 LONG = [("15", 15), ("15 mm", 15), ("15.5 mm", 15.5), ("15,5 mm", 15.5), ("15,5", 15.5), ("  15 mm  ", 15), ("15mm", 15),
-        ("1e3 mm", 1000), ("2*3 mm", 6), ("0.5 cm", 5), ("10 in", 254), ("1/2 mm", 0.5), ("1 m", 1000), ("-5 mm", -5),
+        ("1e3 mm", 1000), ("2*3 mm", 6), ("0.5 cm", 5), ("10 in", 254), ("1/2 mm", None), ("1/(2 mm)", None), ("1 m", 1000), ("-5 mm", -5),
         ("abc", None), ("", None), ("-", None), ("15 mm mm", None), ("15 xx", None), ("(", None), ("1/0", None), ("15 deg", None)]
 ANG = [("45", 45), ("45 deg", 45), ("45°", 45), ("1,5 deg", 1.5), ("1.5 deg", 1.5), ("-30 deg", -30), ("1e1 deg", 10),
        ("abc", None), ("", None), ("45 mm", None), ("45 deg deg", None)]

@@ -163,7 +163,7 @@ def contexto(sesion, seleccion=None):
         "cuerpos": _recortar([{k: c[k] for k in ("id", "name", "type")} for c in escena.get("bodies", [])]),
         "parametros": _recortar([{k: p[k] for k in ("name", "expression", "value", "unit")}
                                  | ({"comment": p["comment"][:TOPE_TEXTO]} if p["comment"] else {})
-                                 for p in parametros]),
+                                 for p in parametros if p.get("source") != "feature"]),
         "pasos": _recortar([{k: p[k] for k in ("id", "name", "type", "status")}
                             | ({"message": p["message"][:TOPE_TEXTO]} if p["message"] else {}) for p in pasos]),
         "marcador": escena.get("marker"),

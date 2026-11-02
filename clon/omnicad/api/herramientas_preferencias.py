@@ -9,6 +9,7 @@ from .registro import herramienta
 # shortcut: catálogo de la UI replicado porque ui/preferencias importa QtWidgets; extraerlo a un módulo
 # compartido cuando se autorice editar la UI. test_preferencias_coinciden_con_la_ventana detecta desvíos.
 _OPCIONES = {
+    "medir/secundarias": ("ninguno", ["ninguno", "cm", "m", "pulg", "ft"]),
     "general/raton": ("fusion", ["omnicad", "fusion", "tinkercad"]),
     "general/invertir_zoom": (False, [False, True]),
     "general/camara": ("perspectiva", ["perspectiva", "ortografica", "persp_orto_caras"]),

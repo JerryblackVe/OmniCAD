@@ -1317,6 +1317,13 @@ def _accesibilidad(p):
     _flecha(p, 16, 1.5, 16, 9.5, GRIS_OSCURO, 1.8, 4.2)
 
 
+def _mapa_desviacion(p):
+    for x, ancho, color in ((4, 6, "#225ad9"), (10, 12, "#33b859"), (22, 6, "#db2929")):
+        p.fillRect(QRectF(x, 8, ancho, 16), QColor(color))
+    _trazo(p, GRIS_OSCURO, 1.4)
+    p.drawRect(QRectF(4, 8, 24, 16))
+
+
 def _radio_minimo(p):
     c = QPainterPath(QPointF(4, 29))
     c.quadTo(16, -12, 28, 29)
@@ -1359,6 +1366,16 @@ def _centro_masa(p):
     p.setBrush(QColor("#111111"))
     p.drawPie(rect, 0, 90 * 16)
     p.drawPie(rect, 180 * 16, 90 * 16)
+
+
+def _sustentabilidad(p):
+    hoja = QPainterPath(QPointF(6, 26))
+    hoja.cubicTo(4, 13, 13, 5, 27, 5)
+    hoja.cubicTo(28, 19, 19, 27, 6, 26)
+    p.setPen(QPen(QColor("#2f7d3b"), 1.2))
+    p.setBrush(QColor("#7cc47f"))
+    p.drawPath(hoja)
+    p.drawLine(QPointF(6, 26), QPointF(20, 12))
 
 
 def _colores_componente(p):
@@ -2361,6 +2378,48 @@ def _parametros_importar(p):
     _flecha(p, 3, 3, 12, 12, AZUL_LADO, 2.4)
 
 
+def _parametro_usuario(p):
+    _letras(p, QRectF(3, 3, 26, 26), "fx", GRIS_OSCURO, 20)
+
+
+def _estrella(p, llena=True):
+    puntos = [QPointF(16 + (12 if k % 2 == 0 else 5) * math.sin(k * math.pi / 5),
+                      17 - (12 if k % 2 == 0 else 5) * math.cos(k * math.pi / 5)) for k in range(10)]
+    p.setPen(QPen(QColor("#b98900") if llena else GRIS, 1.5))
+    p.setBrush(QColor("#f5c518") if llena else Qt.NoBrush)
+    p.drawPolygon(QPolygonF(puntos))
+
+
+def _mas_grande(p):
+    _mas(p, 16, 16, 11)
+
+
+def _copiar(p):
+    for x, y, relleno in ((6, 5, QColor("#dfe7ef")), (12, 11, QColor("#ffffff"))):
+        p.setPen(QPen(GRIS_OSCURO, 1.6))
+        p.setBrush(relleno)
+        p.drawRect(QRectF(x, y, 14, 16))
+
+
+def _papelera(p):
+    p.setPen(QPen(GRIS_OSCURO, 1.8, Qt.SolidLine, Qt.RoundCap))
+    p.setBrush(Qt.NoBrush)
+    p.drawLine(QPointF(7, 9), QPointF(25, 9))
+    p.drawLine(QPointF(13, 9), QPointF(13, 6))
+    p.drawLine(QPointF(13, 6), QPointF(19, 6))
+    p.drawLine(QPointF(19, 6), QPointF(19, 9))
+    p.drawPolyline(QPolygonF([QPointF(9, 9), QPointF(10.5, 26), QPointF(21.5, 26), QPointF(23, 9)]))
+    for x in (13.5, 16, 18.5):
+        p.drawLine(QPointF(x, 13), QPointF(x, 22))
+
+
+def _info(p):
+    p.setPen(QPen(AZUL_LADO, 2))
+    p.setBrush(Qt.NoBrush)
+    p.drawEllipse(QRectF(5, 5, 22, 22))
+    _letras(p, QRectF(5, 5, 22, 22), "i", AZUL_LADO, 15)
+
+
 def _secuencias(p):
     p.setPen(QPen(GRIS, 1.4))
     p.drawLine(QPointF(8, 7), QPointF(8, 25))
@@ -2472,8 +2531,8 @@ DIBUJOS_EXTRA = {
     # inspeccionar
     "interferencia": _interferencia, "curvatura_peine": _curvatura_peine, "cebra": _cebra,
     "mapa_entorno": _mapa_entorno, "angulo_desmoldeo": _angulo_desmoldeo, "mapa_curvatura": _mapa_curvatura,
-    "isocurva": _isocurva, "accesibilidad": _accesibilidad, "radio_minimo": _radio_minimo, "seccion": _seccion,
-    "centro_masa": _centro_masa, "colores_componente": _colores_componente,
+    "isocurva": _isocurva, "accesibilidad": _accesibilidad, "radio_minimo": _radio_minimo, "mapa_desviacion": _mapa_desviacion, "seccion": _seccion,
+    "centro_masa": _centro_masa, "sustentabilidad": _sustentabilidad, "colores_componente": _colores_componente,
     "revisar_geometria": _revisar_geometria, "reparar_cuerpo": _reparar_cuerpo,
     # insertar
     "calcomania": _calcomania,
@@ -2481,6 +2540,8 @@ DIBUJOS_EXTRA = {
     "insertar_dxf": lambda p: _insertar_archivo(p, "DXF", AZUL_LADO, _glifo_dxf),
     "vectorizar_imagen": lambda p: _insertar_archivo(p, "PNG", AZUL_LADO, _glifo_svg),
     "insertar_malla": _insertar_malla, "insertar_componente": _insertar_componente, "fijacion": _fijacion,
+    "parametro_usuario": _parametro_usuario, "estrella": _estrella, "estrella_vacia": lambda p: _estrella(p, False),
+    "mas": _mas_grande, "copiar": _copiar, "papelera": _papelera, "info": _info,
     # ensamblar
     "nuevo_componente": _nuevo_componente, "union": _union, "union_construida": _union_construida,
     "duplicar_con_uniones": _duplicar_con_uniones,
@@ -2585,6 +2646,14 @@ def _dir(p, arriba, abajo):
         _flecha(p, 16, 15, 16, 16 - arriba, AZUL_LADO, 2.0, 4.5)
     if abajo:
         _flecha(p, 16, 17, 16, 16 + abajo, NARANJA, 2.0, 4.5)
+
+
+def _rayas_cara(p, diagonal):
+    """Dirección del Plano perpendicular: la cara rayada en diagonal (U) o en vertical (V)."""
+    _poli(p, [QPointF(4, 5), QPointF(28, 5), QPointF(28, 27), QPointF(4, 27)], GRISES[1], BORDE_GRIS)
+    p.setPen(QPen(BORDE_GRIS, 2.2))
+    for x in (10, 16, 22):
+        p.drawLine(QPointF(x - 5, 26), QPointF(x + 5, 6)) if diagonal else p.drawLine(QPointF(x, 6), QPointF(x, 26))
 
 
 def _ext(p, tipo):
@@ -2918,6 +2987,7 @@ DIBUJOS_OPCIONES = {
     # Dirección, extensión, inicio
     "dir_un_lado": lambda p: _dir(p, 11, 0), "dir_dos_lados": lambda p: _dir(p, 11, 6), "dir_simetrica": lambda p: _dir(p, 9, 9),
     "ext_distancia": lambda p: _ext(p, "distancia"), "ext_objeto": lambda p: _ext(p, "objeto"),
+    "direccion_u": lambda p: _rayas_cara(p, True), "direccion_v": lambda p: _rayas_cara(p, False),
     "ext_todo": lambda p: _ext(p, "todo"), "ext_siguiente": lambda p: _ext(p, "siguiente"),
     "ini_plano": lambda p: _inicio(p, "plano"), "ini_desfase": lambda p: _inicio(p, "desfase"),
     "ini_objeto": lambda p: _inicio(p, "objeto"),

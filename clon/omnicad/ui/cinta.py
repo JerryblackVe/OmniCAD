@@ -45,9 +45,9 @@ INSPECCIONAR = ("INSPECCIONAR", ["medir", "seccion"], [
     _i("Análisis de mapas de entorno", "mapa_entorno"), _i("Análisis de ángulo de desmoldeo", "angulo_desmoldeo"),
     _i("Análisis del mapa de curvatura", "mapa_curvatura"), _i("Análisis de la isocurva", "isocurva"),
     _i("Análisis de accesibilidad", "accesibilidad"), _i("Análisis de radio mínimo", "radio_minimo"),
-    _i("Análisis de sección", "seccion"), _i("Centro de masa", "centro_masa"), SEP,
+    _i("Análisis de sección", "seccion"), _i("Mapa de desviación", "mapa_desviacion"), _i("Centro de masa", "centro_masa"), _i("Sustainability Insights", "sustentabilidad"), SEP,
     _i("Buscar componentes similares", "buscar_similares"), _i("Mostrar colores de componente", "colores_componente"),
-    _i("Mostrar grupos de caras de malla", atajo="Mayúsculas+F")])
+    _i("Mostrar grupos de caras de malla", "ver_grupos_caras")])
 INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Calcomanía", "calcomania"), _i("Lienzo", "lienzo"), _i("Insertar SVG", "insertar_svg"), _i("Vectorizar imagen", "vectorizar_imagen"),
     _i("Insertar archivos DXF", "insertar_dxf"),

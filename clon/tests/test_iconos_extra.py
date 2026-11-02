@@ -29,8 +29,8 @@ SECCIONES = {
                   "plano_tres_puntos", "plano_ruta", "eje_cilindro", "eje_perpendicular", "eje_dos_planos",
                   "eje_dos_puntos", "eje_arista", "punto_vertice", "punto_dos_aristas", "punto_tres_planos",
                   "punto_centro", "punto_arista_plano", "punto_ruta"],
-    "INSPECCIONAR": ["interferencia", "curvatura_peine", "cebra", "mapa_entorno", "angulo_desmoldeo",
-                     "mapa_curvatura", "isocurva", "accesibilidad", "radio_minimo", "seccion", "centro_masa",
+    "INSPECCIONAR": ["interferencia", "curvatura_peine", "cebra", "mapa_entorno", "mapa_desviacion", "angulo_desmoldeo",
+                     "mapa_curvatura", "isocurva", "accesibilidad", "radio_minimo", "seccion", "centro_masa", "sustentabilidad",
                      "colores_componente", "revisar_geometria", "reparar_cuerpo", "buscar_similares"],
     "PLÁSTICO": ["regla_plastico", "reglas_plastico", "consejos_diseno", "patron_geometrico"],
     "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "vectorizar_imagen", "insertar_malla", "insertar_componente", "fijacion"],
@@ -48,7 +48,8 @@ SECCIONES = {
     "CHAPA": ["reglas_chapa", "pestana", "pestana_contorno", "pestana_solevada", "dobladillo", "cierre_esquina",
               "desgarro", "unir_plegando", "plegar", "desplegar", "patron_plano", "convertir_chapa", "replegar", "exportar_dxf_chapa"],
     "ESPACIOS / VARIOS": ["dibujo", "render", "animacion", "configuracion_tabla", "parametros_exportar",
-                          "parametros_importar", "secuencias", "asistente", "clip"],
+                          "parametros_importar", "parametro_usuario", "estrella", "estrella_vacia", "mas", "copiar",
+                          "papelera", "info", "secuencias", "asistente", "clip"],
     "PASOS SIN COMANDO": ["grafo", "insertar_diseno", "importar_iges", "borrar_caras", "calibracion_holguras"],
 }
 NOMBRES = [n for lista in SECCIONES.values() for n in lista]
@@ -93,7 +94,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 182
+    assert len(NOMBRES) == len(set(NOMBRES)) == 191
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

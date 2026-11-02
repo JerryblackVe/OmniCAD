@@ -2022,15 +2022,16 @@ def punto_por_referencias(cara, aristas, distancias):
 def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profundidad=10.0, punta="angulo",
                         angulo_punta=118.0, diam_abocardado=None, prof_abocardado=None, diam_avellanado=None,
                         angulo_avellanado=90.0, roscado=None, mano="derecha", clase="", holgura=0.0,
-                        conicidad=0.0):
+                        conicidad=0.0, tabla=True):
     """Sólido a restar de un agujero de Fusion (revolución del medio perfil). `direccion` apunta hacia el
     material; `profundidad` llega hasta el hombro (sin la punta, como en Fusion). `roscado` = designación de
     TABLA_ROSCAS: el agujero se hace al diámetro menor y se le suma el surco helicoidal de la rosca; `clase`
     ("6H", "2B", "auto"…: ver `tolerancias`) lleva el diámetro menor y los flancos al centro de su tolerancia y
     `holgura` (mm, radial) agranda todo para imprimir en 3D. `conicidad` (diámetro por mm de profundidad, p. ej.
-    1/16 en las roscas de tubería cónicas) angosta el agujero hacia el fondo (Roscado cónico)."""
+    1/16 en las roscas de tubería cónicas) angosta el agujero hacia el fondo (Roscado cónico). `tabla`: ver
+    `_perfil_clase`."""
     a = _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
-                        prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad)
+                        prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad, tabla)
     p, d = a["punto"], a["direccion"]
     e = _perpendicular(d)
     perfil = _cara(_poligono([p + e * rho + d * zz for rho, zz in a["medio"]]))
@@ -2039,7 +2040,7 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
         datos = a["rosca"]
         surco, torno = _armar_surco(lambda extra: _surco_rosca(
             p, d, datos["diametro"], datos["paso"], 0.0, profundidad, True, mano, radio_cara=a["radio"], partes=True,
-            extra=extra, **_perfil_surco(datos, a["flancos"])))
+            extra=extra, **a["perfil"]))
         if torno is not None:                         # la holgura deja sin espesor la cresta: se agranda el agujero
             herramienta = geo.booleano(herramienta, torno, "unir")
         herramienta = geo.booleano(herramienta, surco, "unir")
@@ -2047,11 +2048,11 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
 
 
 def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
-                    prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad):
+                    prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad, tabla=True):
     """Valida un agujero y da su medio perfil [(radio, profundidad)…] desde el eje (común a los dos motores)."""
     d = _unit(direccion, "dirección del agujero")
     p = np.asarray(punto, float)
-    datos = flancos = None
+    datos = perfil = None
     if roscado:
         datos = datos_rosca(roscado)
         if datos["conica"]:
@@ -2060,7 +2061,7 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
             raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[datos['familia']]['nombre']}» es una rosca solo exterior: no va en un agujero.")
         if conicidad:
             raise geo.ErrorGeometria("Un agujero cónico no lleva rosca modelada paralela.")
-        flancos = _desfases_clase(datos, clase, True)["flancos"] + float(holgura)
+        perfil = _perfil_clase(datos, clase, True, holgura, tabla)
         diametro = diametro_taladro_rosca(roscado, clase, holgura)
     if diametro is None or diametro <= 0:
         raise geo.ErrorGeometria("El diámetro del agujero debe ser positivo.")
@@ -2100,7 +2101,7 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
         medio.append((0.0, profundidad))
     else:
         raise geo.ErrorGeometria(f"Punta de broca desconocida: {punta}")
-    return {"punto": p, "direccion": d, "medio": medio, "radio": r, "rosca": datos, "flancos": flancos}
+    return {"punto": p, "direccion": d, "medio": medio, "radio": r, "rosca": datos, "perfil": perfil}
 
 
 def agujero(cuerpo, punto, direccion, *, profundidad=None, **opciones):
@@ -2346,10 +2347,19 @@ def diametro_taladro_rosca(designacion, clase="", holgura=0.0):
     return datos["diametro_menor"] + 2 * (_desfases_clase(datos, clase, True)["menor"] + float(holgura))
 
 
-def _perfil_surco(datos, desfase=0.0):
+def _perfil_surco(datos, desfase=0.0, fondo=None, cresta=None):
     """Argumentos de perfil de `_surco_rosca` para una fila de datos_rosca."""
     return {"angulo": datos["angulo"], "diametro_flancos": datos["diametro_flancos"],
-            "diametro_menor": datos["diametro_menor"], "desfase": float(desfase)}
+            "diametro_menor": datos["diametro_menor"], "desfase": float(desfase), "fondo": fondo, "cresta": cresta}
+
+
+def _perfil_clase(datos, clase, interna, holgura, tabla):
+    """Perfil de `_surco_rosca` con la clase y la holgura de impresión. `tabla` (B-122, Fusion real): las clases de las
+    tablas de Fusion modelan sus Ø mayor y menor (Tr12×3 7e: 8,3175 y 11,882; 7H: 9,1575 y 12,5); `False` deja esos
+    diámetros como quedaban en las recetas viejas."""
+    a, holgura = _desfases_clase(datos, clase, interna), float(holgura)
+    corrido = lambda d: None if d is None or not tabla else d + 2 * (holgura if interna else -holgura)  # noqa: E731
+    return _perfil_surco(datos, a["flancos"] + holgura, corrido(a["fondo"]), corrido(a["cresta"]))
 
 
 def _helice(origen, eje, x, radio, paso, altura, mano="derecha", angulo=0.0):
@@ -2382,14 +2392,16 @@ def _barrido_helicoidal(perfil, helice):
 
 
 def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_cara=None, *, angulo=60.0,
-                 diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1):
+                 diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1, fondo=None, cresta=None):
     """Sólido helicoidal con la forma del hueco entre filetes recortado al tramo [z0, z0 + largo] del eje. Rosca
     exterior: se le resta al cilindro; interior: al cuerpo agujereado. Perfil por defecto: el básico ISO/UN de
     60°; `angulo` (entre flancos), `diametro_flancos` y `diametro_menor` dan el de otras familias (55°, 30°,
     29°). `desfase` (mm, radial) corre los flancos hacia afuera del material: clase de tolerancia y holgura.
     `partes=True` devuelve (surco, torneado o None) por separado: restar primero el torneado (un cilindro o un
     anillo) y después el surco es más rápido que unirlos (M3 con holgura 0,1: 3,6 s → menos de la mitad).
-    `extra` (en pasos) es cuánto sobresale el surco del material; ver `_cortar_rosca`."""
+    `extra` (en pasos) es cuánto sobresale el surco del material; ver `_cortar_rosca`. `fondo` y `cresta` (Ø, con la
+    holgura incluida) fijan el fondo del surco y la cresta del filete; sin ellos, el fondo sale de `desfase` y la
+    cresta queda en la cara."""
     z = _unit(eje)
     o = np.asarray(origen, float)
     h60 = math.sqrt(3) / 2
@@ -2403,19 +2415,21 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
         raise geo.ErrorGeometria(f"La holgura de la rosca es demasiado grande para su paso: la clase y la holgura "
                                  f"juntas corren los flancos {abs(desfase):.3g} mm y el máximo es "
                                  f"{(diametro - d1) / 4:.3g} mm (la mitad de la altura del filete).")
+    r_fondo = (diametro / 2 + desfase if interna else d1 / 2 - desfase) if fondo is None else float(fondo) / 2
     if interna:
-        if radio_cara is not None and radio_cara >= diametro / 2 + desfase - 1e-6:
+        if radio_cara is not None and radio_cara >= r_fondo - 1e-6:
             raise geo.ErrorGeometria("El agujero es más grande que el diámetro mayor de la rosca.")
     else:
         if radio_cara is not None and radio_cara > diametro / 2 + extra - 0.01 * paso:
             raise geo.ErrorGeometria("El cilindro es más grueso que el diámetro mayor de la rosca.")
-        if radio_cara is not None and radio_cara <= d1 / 2 - desfase:
+        if radio_cara is not None and radio_cara <= r_fondo:
             raise geo.ErrorGeometria("El cilindro es más fino que el núcleo de la rosca.")
     eje_r = tuple(round(float(c), 12) for c in z)
     iso = (angulo == 60 and desfase == 0 and abs(d2 - (diametro - 2 * (3 / 8) * h60 * paso)) < 1e-9
-           and abs(d1 - (diametro - 2 * (5 / 8) * h60 * paso)) < 1e-9)
-    perfil = (60.0, None, None, 0.0) if iso else (round(float(angulo), 9), round(d2, 9), round(d1, 9),
-                                                   round(desfase, 9))
+           and abs(d1 - (diametro - 2 * (5 / 8) * h60 * paso)) < 1e-9 and fondo is None and cresta is None)
+    tabla = tuple(None if v is None else round(float(v), 9) for v in (fondo, cresta))
+    perfil = (60.0, None, None, 0.0, None, None) if iso else (round(float(angulo), 9), round(d2, 9), round(d1, 9),
+                                                              round(desfase, 9), *tabla)
     base = _surco_en_origen(round(float(diametro), 9), round(float(paso), 9), round(float(largo), 9), bool(interna),
                             mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r, *perfil,
                             round(float(rel_extra), 9))
@@ -2448,7 +2462,7 @@ _ANCHO_LIMITE, _ANCHO_TOPE, _ANCHO_TORNO = 0.995, 0.97, 0.93     # anchos del su
 
 @functools.lru_cache(maxsize=16)
 def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angulo=60.0, d2=None, d1=None,
-                     desfase=0.0, rel_extra=0.1):
+                     desfase=0.0, fondo=None, cresta=None, rel_extra=0.1):
     """Surco de `_surco_rosca` con el tramo empezando en el origen. Se guarda por (tamaño, largo, eje, mano,
     perfil): roscar varios agujeros iguales arma el barrido helicoidal UNA vez y lo copia trasladado (hallazgo
     L138: M3 en 4 agujeros tardaba 30 s).
@@ -2456,7 +2470,8 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
     El perfil es un trapecio: a la distancia ρ del eje, el surco exterior mide P/2 + 2·(ρ − d2/2 + desfase)·tan(α/2)
     a lo largo del eje (el interior, lo que ocupa el filete del tornillo, P/2 − 2·(ρ − d2/2 − desfase)·tan(α/2)).
     Si con el desfase el surco llegara a medir un paso (las vueltas se tocarían y el barrido sale inválido), se
-    corta a 0,97·P y la cresta que quedaría más fina se tornea (se quita en todo el tramo).
+    corta a 0,97·P y la cresta que quedaría más fina se tornea (se quita en todo el tramo). `cresta` también tornea:
+    la cara queda en el Ø de la tabla aunque el cilindro o el agujero de partida no lo tengan.
     d2 = d1 = None: perfil básico ISO/UN de 60° sin desfase, con las mismas cuentas que antes de las familias (las
     recetas viejas dan exactamente la misma geometría)."""
     z = np.asarray(eje, float)
@@ -2484,26 +2499,34 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
         return d2 / 2 + desfase - delta if interna else d2 / 2 - desfase + delta
 
     if interna:
-        r_out, r_in = diametro / 2 + desfase, d1 / 2 - extra
+        r_out, r_in = diametro / 2 + desfase if fondo is None else fondo / 2, d1 / 2 - extra
     else:
-        r_in, r_out = d1 / 2 - desfase, diametro / 2 + extra
+        r_in, r_out = d1 / 2 - desfase if fondo is None else fondo / 2, diametro / 2 + extra
     torno = r_torno = None
+    material = radio_cara if radio_cara is not None else d1 / 2 if interna else diametro / 2
     # el torneado pasa de largo un pelo en las puntas: si terminara justo donde termina el surco, sus caras planas
     # coincidirían con las del surco y el corte del surco falla (pasó con M3 y holgura 0,1)
     eps = 0.02 * paso
     base_torno, largo_torno = tuple(z * -eps), largo + 2 * eps
     if interna and ancho(r_in) > _ANCHO_LIMITE * paso:
         r_in = radio_de_ancho(_ANCHO_TOPE)
-        if r_in > (d1 / 2 if radio_cara is None else radio_cara) - 0.01 * paso:
+        if r_in > material - 0.01 * paso:
             r_torno = radio_de_ancho(_ANCHO_TORNO)
-            torno = geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z))
     elif not interna and ancho(r_out) > _ANCHO_LIMITE * paso:
         r_out = radio_de_ancho(_ANCHO_TOPE)
-        afuera = diametro / 2 if radio_cara is None else radio_cara
-        if r_out < afuera + 0.01 * paso:
+        if r_out < material + 0.01 * paso:
             r_torno = radio_de_ancho(_ANCHO_TORNO)
-            grande = geo.cilindro(afuera + extra + 1.0, largo_torno, base=base_torno, eje=tuple(z))
-            torno = geo.booleano(grande, geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z)), "cortar")
+    if cresta is not None:
+        r_cresta = cresta / 2
+        if interna and r_cresta > max(material, r_torno or 0.0) + 1e-6:
+            r_torno = r_cresta
+        elif not interna and r_cresta < min(material, r_torno or math.inf) - 1e-6:
+            r_torno = r_cresta
+    if r_torno is not None and interna:
+        torno = geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z))
+    elif r_torno is not None:
+        grande = geo.cilindro(material + extra + 1.0, largo_torno, base=base_torno, eje=tuple(z))
+        torno = geo.booleano(grande, geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z)), "cortar")
     return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, ancho(r_in), r_out,
                          ancho(r_out), torno, r_torno, verificar=True)
 
@@ -2637,7 +2660,7 @@ def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna
 
 
 def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, modelada=True, mano="derecha",
-          interna=None, invertir=False, familia=None, clase="", holgura=0.0):
+          interna=None, invertir=False, familia=None, clase="", holgura=0.0, tabla=True):
     """Rosca (Thread) de Fusion [GUID-7BD8CD24…, GUID-C37E8172…] sobre una cara cilíndrica del cuerpo.
 
     `cara=None`: la cara cilíndrica que mejor calza con la designación (o la de mayor área).
@@ -2647,7 +2670,7 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     rosca cosmética (la geometría no cambia). `clase` ("6g", "6H", "2A", "auto"…; "" = perfil básico) corre los
     flancos al centro de la tolerancia de la clase (ISO 965-1 / ASME B1.1) y `holgura` (mm, radial) los corre
     más, para imprimir en 3D. El perfil es el de la familia: 60° (M, UN), 55° (G), 30° (Tr) o 29° (ACME); las
-    cónicas (R, NPT) solo van cosméticas. Devuelve el cuerpo roscado."""
+    cónicas (R, NPT) solo van cosméticas. `tabla`: ver `_perfil_clase`. Devuelve el cuerpo roscado."""
     info = analizar_rosca(cuerpo, cara, designacion=designacion, familia=familia, interna=interna)
     datos, o, z, radio = info["datos"], info["origen"], info["eje"], info["radio"]
     zmin, zmax = info["zmin"], info["zmax"]
@@ -2659,7 +2682,7 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     if datos["conica"]:
         raise geo.ErrorGeometria(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica solo va "
                                  "cosmética (o con Agujero › Roscado cónico).")
-    flancos = _desfases_clase(datos, clase, info["interna"])["flancos"] + float(holgura)
+    perfil = _perfil_clase(datos, clase, info["interna"], holgura, tabla)
     z0 = zmax - desfase - largo if invertir else zmin + desfase
 
     def cortar(extra):
@@ -2667,8 +2690,7 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             # a izquierdas en un eje el kernel falla (SOL-1): se barre a derechas y el surco se refleja en un plano del eje
             espejar = mano == "izquierda" and not info["interna"]
             surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"],
-                                        "derecha" if espejar else mano, radio, partes=True, extra=extra,
-                                        **_perfil_surco(datos, flancos))
+                                        "derecha" if espejar else mano, radio, partes=True, extra=extra, **perfil)
             if espejar:
                 t = gp_Trsf()
                 t.SetMirror(gp_Ax2(_pnt(o), _gdir(_perpendicular(z))))
@@ -2876,11 +2898,12 @@ def _miles(n):
     return f"{n:,}".replace(",", ".")
 
 
-def _cantidad(n, simetrico):
-    """Instancias de una dirección del patrón, original incluido: n, o 2n − 1 si es simétrico."""
+def _cantidad(n, simetrico, total=False):
+    """Instancias de una dirección del patrón, original incluido: n, o 2n − 1 si es simétrico y n cuenta un solo lado
+    (receta vieja; `total`: n ya es el total, como en Fusion)."""
     if int(n) < 1:
         raise geo.ErrorGeometria("La cantidad del patrón debe ser al menos 1.")
-    return 2 * int(n) - 1 if simetrico else int(n)
+    return 2 * int(n) - 1 if simetrico and not total else int(n)
 
 
 def _exigir_instancias(total):
@@ -3061,14 +3084,22 @@ def patronear_caras(cuerpo, copias, trsfs, operacion):
     return resultado
 
 
-def _indices(n, simetrico):
+def _indices(n, simetrico, de_mas=0):
+    """Pasos desde el original, el original primero. Simétrico con `de_mas` (+1 o −1, PAT-1): n es el total con el
+    original y la copia que sobra cuando n es par va a ese lado, como en Fusion; sin él, n a cada lado (receta vieja)."""
     if int(n) < 1:
         raise geo.ErrorGeometria("La cantidad del patrón debe ser al menos 1.")
     n = int(n)
+    if simetrico and de_mas:
+        menos = (n - 1) // 2
+        return sorted((de_mas * k for k in range(-menos, n - menos)), key=abs)
     return [0] + [s * i for i in range(1, n) for s in (-1, 1)] if simetrico else list(range(n))
 
 
-def _paso(n, distancia, distribucion):
+def _paso(n, distancia, distribucion, por_lado=False):
+    """Avance entre instancias. `por_lado` (Fusion, simétrico): la Extensión se mide del original a la última."""
+    if distribucion == "extension" and por_lado:
+        return distancia / (n // 2) if n > 1 else 0.0
     if distribucion == "extension":
         return distancia / (n - 1) if n > 1 else 0.0
     if distribucion == "espaciado":
@@ -3118,14 +3149,16 @@ def exigir_no_paralelas(dir1, dir2):
 
 
 def instancias_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribucion="extension",
-                             simetrico1=False, simetrico2=False, suprimir=()):
+                             simetrico1=False, simetrico2=False, suprimir=(), total=False):
     """Todas las instancias del patrón rectangular [SLD-REF-PATTERN] con su identificador estable: lista de
     ((i, j), gp_Trsf, suprimida) en orden i por dir1, j por dir2; (0, 0) es el original y nunca se suprime.
     i y j son los pasos desde el original (con simetría hay negativos: i = −1 es la copia del otro lado). "extension":
     d = largo total por dirección; "espaciado": d = paso. Cada dirección es simétrica o no por su cuenta:
-    simétrica da 2n − 1 instancias (la misma cantidad hacia los dos lados). Con `dir2` vacía la segunda dirección no
-    existe (j = 0). `suprimir`: enteros i (= (i, 0), recetas viejas) o pares [i, j]. Como máximo INSTANCIAS_MAXIMAS."""
-    _exigir_instancias(_cantidad(n1, simetrico1) * (_cantidad(n2, simetrico2) if dir2 is not None else 1))
+    simétrica da 2n − 1 instancias (la misma cantidad hacia los dos lados). `total` (PAT-1, Fusion real): la cantidad
+    simétrica es el total con el original, si es par la de más va al lado +, y en «extension» d se mide por lado (3 en
+    100: −100, 0, +100). Con `dir2` vacía la segunda dirección no existe (j = 0). `suprimir`: enteros i (= (i, 0),
+    recetas viejas) o pares [i, j]. Como máximo INSTANCIAS_MAXIMAS."""
+    _exigir_instancias(_cantidad(n1, simetrico1, total) * (_cantidad(n2, simetrico2, total) if dir2 is not None else 1))
     u1 = _unit(dir1, "dirección 1")
     u2 = _unit(dir2, "dirección 2") if dir2 is not None else np.zeros(3)
     if dir2 is not None and int(n2) > 1:
@@ -3133,21 +3166,22 @@ def instancias_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribuc
     for n, d, que in ((n1, d1, "1"), (n2, d2, "2")):
         if (que == "1" or dir2 is not None) and int(n) > 1 and abs(d) < 1e-9:
             raise geo.ErrorGeometria(f"La distancia {que} del patrón no puede ser cero: las copias quedarían una sobre otra.")
-    s1 = _paso(int(n1), d1, distribucion)
-    s2 = _paso(int(n2), d2, distribucion) if dir2 is not None else 0.0
+    s1 = _paso(int(n1), d1, distribucion, total and simetrico1)
+    s2 = _paso(int(n2), d2, distribucion, total and simetrico2) if dir2 is not None else 0.0
     fuera = {_id_rectangular(s) for s in suprimir} - {(0, 0)}
-    js = _indices(n2, simetrico2) if dir2 is not None else [0]
+    de_mas = 1 if total else 0
+    js = _indices(n2, simetrico2, de_mas) if dir2 is not None else [0]
     return [((i, j), _traslacion(i * s1 * u1 + j * s2 * u2), (i, j) in fuera)
-            for i in _indices(n1, simetrico1) for j in js]
+            for i in _indices(n1, simetrico1, de_mas) for j in js]
 
 
 def transformaciones_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribucion="extension",
-                                   simetrico1=False, simetrico2=False, suprimir=()):
+                                   simetrico1=False, simetrico2=False, suprimir=(), total=False):
     """gp_Trsf del patrón rectangular sin las instancias suprimidas (ver `instancias_rectangulares`); la primera es
     la identidad (el original)."""
     return [t for _, t, sup in instancias_rectangulares(dir1, n1, d1, dir2, n2, d2, distribucion=distribucion,
                                                         simetrico1=simetrico1, simetrico2=simetrico2,
-                                                        suprimir=suprimir) if not sup]
+                                                        suprimir=suprimir, total=total) if not sup]
 
 
 def paso_angular(n, angulo_total, distribucion="completa", simetrico=False):
@@ -3165,29 +3199,31 @@ def paso_angular(n, angulo_total, distribucion="completa", simetrico=False):
     raise geo.ErrorGeometria(f"Distribución desconocida: {distribucion}")
 
 
-def instancias_circulares(punto, eje, n, *, angulo_total=360.0, distribucion="completa", simetrico=False, suprimir=()):
+def instancias_circulares(punto, eje, n, *, angulo_total=360.0, distribucion="completa", simetrico=False, suprimir=(),
+                          total=False):
     """Todas las instancias del patrón circular [SLD-REF-PATTERN] con su identificador: lista de (k, gp_Trsf,
     suprimida); k = 0 es el original (nunca se suprime) y, con simetría, hay k negativos (el otro lado). "completa":
     las instancias reparten `angulo_total` (con 360° la última no se superpone con el original); "espaciado":
-    `angulo_total` es el ángulo entre instancias. Simétrico: n hacia cada lado del original (2n − 1 en total).
-    Como máximo INSTANCIAS_MAXIMAS."""
+    `angulo_total` es el ángulo entre instancias. Simétrico: n hacia cada lado del original (2n − 1 en total); con
+    `total` (PAT-1, Fusion real), n es el total con el original y si es par la de más va al lado − (4 en 90°: −60,
+    −30, 0, +30). Como máximo INSTANCIAS_MAXIMAS."""
     n = int(n)
-    _exigir_instancias(_cantidad(n, simetrico))
+    _exigir_instancias(_cantidad(n, simetrico, total))
     paso = paso_angular(n, angulo_total, distribucion, simetrico)
-    if n > 1 and (abs(paso) < 1e-9 or (n - 1) * abs(paso) * (2 if simetrico else 1) >= 360.0 - 1e-9):
+    if n > 1 and (abs(paso) < 1e-9 or (n - 1) * abs(paso) * (2 if simetrico and not total else 1) >= 360.0 - 1e-9):
         raise geo.ErrorGeometria("El ángulo del patrón circular tiene que ser distinto de cero y no dar más de una vuelta: "
                                  "con ese valor las copias quedarían una sobre otra.")
     u = _unit(eje, "eje del patrón")
     fuera = {int(s) for s in suprimir} - {0}
-    return [(k, _rotacion(punto, u, math.radians(k * paso)), k in fuera) for k in _indices(n, simetrico)]
+    return [(k, _rotacion(punto, u, math.radians(k * paso)), k in fuera) for k in _indices(n, simetrico, -1 if total else 0)]
 
 
 def transformaciones_circulares(punto, eje, n, *, angulo_total=360.0, distribucion="completa", simetrico=False,
-                                suprimir=()):
+                                suprimir=(), total=False):
     """gp_Trsf del patrón circular sin las instancias suprimidas (ver `instancias_circulares`); la primera es la
     identidad."""
     return [t for _, t, sup in instancias_circulares(punto, eje, n, angulo_total=angulo_total, distribucion=distribucion,
-                                                     simetrico=simetrico, suprimir=suprimir) if not sup]
+                                                     simetrico=simetrico, suprimir=suprimir, total=total) if not sup]
 
 
 def _trsf_de_marcos(p0, f0, p1, f1):

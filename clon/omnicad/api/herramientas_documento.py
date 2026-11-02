@@ -111,7 +111,7 @@ def _resumen(sesion, resumido=False):
                 "decals": [{"id": d["id"], "name": d["name"], "body": d["body"]} for d in info_calcomanias(sesion)],
                 "counts": {"bodies": len(estado.cuerpos), "sketches": len(estado.bocetos),
                            "components": len(estado.componentes), "joints": len(estado.uniones),
-                           "parameters": len(doc.parametros)},
+                           "parameters": sum(p.op is None for p in doc.parametros)},
                 "timeline_steps": len(doc.operaciones), "marker": doc.marcador}
     return {"name": doc.nombre, "path": doc.ruta, "modified": doc.modificado,
             "units": {"length": "mm", "angle": "deg"},          # en lo que vienen TODOS los números de la API
@@ -122,7 +122,7 @@ def _resumen(sesion, resumido=False):
             "components": _info_componentes(sesion, estado), "joints": _info_uniones(estado),
             "rigid_groups": [list(g) for g in estado.grupos_rigidos],
             "timeline_steps": len(doc.operaciones), "marker": doc.marcador,
-            "parameters": info_parametros(doc)}
+            "parameters": [p for p in info_parametros(doc) if p.get("source") != "feature"]}   # los de cada paso inflarían esto
 
 
 def _params_json(op):

@@ -52,16 +52,22 @@ Gerardo pidió corregir la lista de la tortura. Corre en paralelo, sin commitear
 - **Tortura** `local_ed211518-d842-489b-947c-66e3c52aabfc` (Opus alto): RS-X1, trabajador persistente. Toca recálculo, caché y cancelar.
 
 Al terminar, en este orden:
-1. **CONSTRUIR** (Opus alto, en cola): CON-1 a CON-8, B-130 y B-131, con las 20 herramientas. Pedido literal en `evidencias/construir_2026-11-01/pedido.md`, especificación en `docs/brechas_construir.md`. Suma la pieza `construir` a `todo.py` y una pieza real. Reusa una sesión libre; toca paneles, `ui/comando.py`, API y operaciones, así que no corre junto a otra sesión en esos archivos. Lo que deja sin probar lo anota en la sección 3d.
-2. **INSPECCIONAR** (Opus alto, en cola): INS-1 a INS-8 y la parte de P-25f de Sustainability Insights y grupos de caras de malla, con las 15 herramientas. Pedido literal en `evidencias/inspeccionar_2026-11-01/pedido.md`, especificación en `docs/brechas_inspeccionar.md`. Va después de CONSTRUIR, porque INS-8 reusa el panel del SCU y las dos tocan `ui/comando.py`. Suma la pieza `inspeccionar` a `todo.py`. Lo que deja sin probar lo anota en la sección 3e.
-3. **Comparación con Fusion real** (en cola): abrir Fusion, pasar de una vez B-134, B-118, B-122, BOC-50, BOC-76, BOC-79, BOC-80, PAT-1, SUP-23 y la sección «Pendiente de comparar» de `docs/brechas_parametros.md`, y cerrarlo al terminar. Regla de Gerardo: Fusion queda cerrado salvo cuando se usa, para ahorrar memoria; `ECONNREFUSED` en `127.0.0.1:27182` quiere decir cerrado. Va sin pruebas pesadas al mismo tiempo y antes del texto en curva, que necesita la respuesta de B-134.
-4. **Texto en curva** (Opus alto, en cola): B-132, B-133, B-135, B-136, B-137, TXT-8 y TXT-9, y B-134 resuelto o documentado. Pedido literal en `evidencias/texto_curva_2026-11-01/pedido.md`, con su video. Va después de INSPECCIONAR porque comparte `ui/comando.py`, `ui/visor3d.py` y `ui/ventana.py`. ⚠ B-134 no cambia el disco sin Fusion real o el OK de Gerardo.
-5. **Parámetros** (Opus alto, en cola): B-138 a B-143 y PAR-1 a PAR-11. Pedido literal en `evidencias/parametros_2026-11-01/pedido.md`, especificación en `docs/brechas_parametros.md`. Va después del texto en curva porque comparte `ui/comando.py` y `ui/editor_boceto.py`. Su paso 2 usa los resultados de la pasada con Fusion, ya anotados en la especificación; solo vuelve a abrir Fusion si falta algún dato. Suma una pieza nueva a `todo.py`.
-6. **Reconstruir sólido, fases 0 a 3** (Fable alto, en cola): RI-1, F10, SC13, F11 y RI-2. Pedido literal en `evidencias/reconstruir_2026-11-01/pedido.md`, plan en `docs/plan_reconstruir_solido.md`, STL de referencia de Gerardo en su carpeta del Escritorio. Suma `compare_to_mesh`, `analyze_mesh_features`, `reconstruct_from_mesh`, el mapa de color y el banco de 30 piezas. Va después de Parámetros porque el mapa de color entra en INSPECCIONAR y es la tarea más larga.
+1. **CONSTRUIR** (hecho, sin commitear): CON-1 a CON-8, B-130 y B-131 resueltos. Lo que deja sin probar está en la sección «3d. Tarea nueva: CONSTRUIR».
+2. **INSPECCIONAR** (hecho, sin commitear): INS-1 a INS-8, B-147, B-148 y B-150 resueltos; las 15 herramientas andan (pieza `inspeccionar`: 256 comprobaciones, 0 ✗). Quedan B-149 Parcial, H-55, H-56 y P-25f solo con la pila de fijadores. Pedido literal en `evidencias/inspeccionar_2026-11-01/pedido.md`, especificación en `docs/brechas_inspeccionar.md`. INS-8 reusa `ui/panel_info.py`, el panel del SCU. Suma la pieza `inspeccionar` a `todo.py`. Lo que deja sin probar lo anota en la sección 3e.
+3. **Comparación con Fusion real** (hecha por script el 2026-11-01): B-134, TXT-9, B-118, B-122, BOC-50, BOC-76, PAT-1, SUP-23 y Parámetros tienen su respuesta en `docs/seguimiento/` y en `docs/brechas_parametros.md`; BOC-79 coincide y se cerró. Scripts y salidas en `evidencias/fusion_2026-11-01/`. La API no llega a lo que necesita cursor: BOC-80, Apply y copiar en Parámetros, lo marcado abajo de INSPECCIONAR y «Decisiones tomadas por inferencia» de `docs/auditorias/construir_2026-11-01.md`. Interferencia entre componentes sí se midió: 2 cm³, igual a la cuenta.
+4. **Texto en curva** (hecho, sin commitear): B-132, B-133, B-135, B-136, B-137 y TXT-8 resueltos; OmniKernel filtra las cintas sin área. B-134 y TXT-9 resueltos con la respuesta de Fusion real (sin commitear). Queda H-58. Después del arreglo de Extruir faltó repetir `paneles_boceto`, `boceto_herramientas` y `ventana_uso`: entran en el cierre completo. Una corrida de `texto_curva` se cayó con `access violation` con Fusion abierto y poca memoria; no se repitió. Pedido literal en `evidencias/texto_curva_2026-11-01/pedido.md`, con su video.
+5. **Parámetros** (Opus alto, hecho, sin commitear): B-138 a B-143 y PAR-1 a PAR-11 cerradas. Falta en el cierre lo de la sección 3g.
+6. **Reconstruir sólido, fases 0 a 3** (hecho, sin commitear): RI-1, F10, SC13 y F11 resueltos; RI-2 Parcial, con 30 de 30 en el banco y 6 de 51 en los STL reales. Pedido literal en `evidencias/reconstruir_2026-11-01/pedido.md`, plan en `docs/plan_reconstruir_solido.md`, STL de referencia de Gerardo en su carpeta del Escritorio. Suma `compare_to_mesh`, `analyze_mesh_features`, `reconstruct_from_mesh`, el mapa de color y el banco de 30 piezas. Va después de Parámetros porque el mapa de color entra en INSPECCIONAR y es la tarea más larga.
 7. Repetir la tortura con 200 pasos y cadena de 200, más una pasada con la ventana real, que quedaron sin probar.
-8. Cierre completo, commits y push solo con el «sí» de Gerardo.
+8. Cierre completo y commits hechos el 2026-11-01 (`evidencias/cierre_2026-11-01/`): 8230 tests en verde, 3 rojos y 3 piezas corregidos y repetidos (1190 tests cruzados con `-W error`), humo OK. Después de esos arreglos no se repitió la suite entera. El push espera el «sí» de Gerardo. La tortura de 200 pasos queda para la próxima tanda.
+
+**Para próximas sesiones (Gerardo, 2026-11-01):** queda sin asignar, para Claude o para OpenCode con DeepSeek 4.1 Flash o OpenAI Sol. Lo mecánico y de un solo archivo sirve para OpenCode: H-55, H-56, H-58 y T-21. Lo que toca geometría o timeline va con Sol o Opus: B-144, B-119, B-123, H-54, ASM-16, ASM-9, H-4, SUP-13, RI-2 y H-57. Después, Rust: RS-X6, RS-X7 y RS-X8. B-149 espera su decisión.
+
+**Para mirar con Fusion real (INSPECCIONAR):** Interferencia con componentes y Quitar volumen en modo directo; si Mostrar puntos de forzado sigue visible con el filtro de cuerpos o componentes; Aceptar gris sin selección en los análisis; Sustainability Insights con un cuerpo elegido.
 
 B-129 espera a que A libere `nucleo/geometria.py`: `Eps=1e-8` en `geo._integral` baja el error de +0,539 a +0,004 mm³.
+
+Cambio de orden (2026-11-01, 12:45): con 5,5 GB libres, Gerardo pidió sumar tareas. Corren en paralelo CONSTRUIR (A, en verificación final), Reconstruir sólido (B, Opus alto) y texto en curva (Tortura, Opus alto); B-134 queda para la pasada con Fusion. Al terminar CONSTRUIR entra INSPECCIONAR en A. Parámetros va después de la pasada con Fusion, que necesita un rato sin pruebas pesadas.
 
 ## 1. Lo último que estuvo verde (referencia, no vale como cierre)
 
@@ -298,27 +304,49 @@ Corrió verde: ruff, `tests/test_cuerpos_partidos.py`, 71 archivos de tests vinc
 
 ## 3d. Tarea nueva: CONSTRUIR (CON-1 a CON-8, B-130, B-131)
 
-Sin empezar. Cuando se haga, suma una pieza de ventana nueva en `todo.py` y los tests de cada fila. Nunca se probó CONSTRUIR en la ventana.
+Hecho el 2026-11-01, sin commitear. Corrió verde: `ruff`, la pieza `construir` en minimizada (635 comprobaciones, 0 ✗) y 88 archivos de tests de construcción, API, comandos, gizmos y ventana. Falta: (1) suite completa y prueba de humo: nadie las corrió con estos cambios, que tocan `ui/comando.py`, `ui/visor3d.py`, `ui/ventana.py`, `ui/superposiciones.py`, `timeline/operaciones.py` y `timeline/entidades.py`; (2) `todo.py` entero, porque `cinta_completa`, `asas` y `solido_crear` pasan por los paneles de construcción nuevos; (3) una pasada con `--ventana visible` de la pieza `construir`, porque Ctrl en el forzado se probó con el modificador simulado; (4) «Decisiones tomadas por inferencia» de `docs/auditorias/construir_2026-11-01.md` contra Fusion real, en la pasada de la sección 0b.
 
 ## 3e. Tarea nueva: INSPECCIONAR (INS-1 a INS-8, P-25f)
 
-Sin empezar. Cuando se haga, suma una pieza de ventana nueva en `todo.py` y los tests de cada fila. Nunca se probó INSPECCIONAR en la ventana.
+Hecho el 2026-11-01, sin commitear. Corrió verde: `ruff`, la pieza `inspeccionar` en minimizada (256 comprobaciones, 0 ✗) y los tests de análisis, API, comandos y manipuladores. Resultado en `docs/auditorias/inspeccionar_2026-11-01.md`. Falta: (1) suite completa y prueba de humo: tocó `ui/comando.py`, `ui/visor3d.py`, `ui/ventana.py`, `ui/navegador.py`, `ui/manipuladores.py` y `ui/panel_timeline.py`. (2) Regenerar `omnicad/api/claves_comandos.py` y `docs/agentes/herramientas.md` después de integrar todo. (3) B-149: decidir si el modo viejo de Radio mínimo también cambia.
 
 ## 3f. Tarea nueva: texto en curva y extrusión (B-132 a B-137, TXT-8, TXT-9)
 
-Sin empezar. Cuando se haga, suma a la pieza de boceto: texto sobre un círculo, deslizarlo, elegir el texto entero, extruir y cancelar. Falta comprobar en Fusion real si el texto parte otras curvas.
+Hecha el 2026-11-01, sin commitear. Pieza nueva `texto_curva` en `todo.py`. Queda sin probar:
+- La suite completa y la prueba de humo: se tocaron `nucleo/perfiles.py`, `nucleo/fuentes.py`, `restricciones/boceto.py`, `timeline/operaciones.py`, `ui/comando.py`, `ui/formulario.py`, `ui/visor3d.py`, `ui/ventana.py`, `ui/editor_boceto.py`, `ui/modo_boceto.py` y `ui/panel_info.py`.
+- Todas las piezas: Extruir rechaza ahora lo que `sin_volumen` da por chato, y un texto nuevo crea sus parámetros «Text» y «Text_height» (también `sketch_from_spec`). Borrar o desglosar un texto borra los suyos, salvo los que use otro.
+- Con OmniKernel: `omnikernel/perfiles.py` filtra las cintas sin área; solo lo cubre `test_omnikernel_tampoco_lista_los_restos_sin_area`.
+- Pieza `texto_curva` con `--ventana visible` una vez, mirando `b137_durante.png` y `letras_extruidas.png`.
+- Todas las piezas que cuentan perfiles: el texto se calcula aparte de las curvas (`perfiles.detectar_boceto`), así que sus perfiles ahora se pisan con los de abajo.
+- B-152: los textos nuevos son más grandes (la altura es el alto de la A). Abrir un documento viejo con texto y mirar que no cambie; todas las piezas que escriben texto.
+- ⚠ Rendimiento de `_arreglo_coherente` con 200 W sobre un círculo: lo mide `tests/test_boc28_rust.py`, sin correr con carga.
 
 ## 3g. Tarea nueva: parámetros (PAR-1 a PAR-11, B-138 a B-143)
 
-Sin empezar. Cuando se haga, suma una pieza de ventana nueva en `todo.py` y corre `test_parametros.py`, `test_api_parametros.py` y los de boceto: el evaluador lo usan todos los pasos. Falta la comparación en Fusion real listada en `docs/brechas_parametros.md`.
+Hecha, sin commitear, sobre `main`. Falta en el cierre:
+- Suite completa: el evaluador lo usan todos los pasos, y cada documento suma filas de pasos a `doc.parametros`. Los tests que se tocaron ya corrieron; el resto no.
+- Pieza de ventana `parametros` (ya en `PIEZAS`).
+- Prueba de humo: `ui/comando.py` usa ahora `CampoExpresion` en todos los campos de expresión.
 
 ## 3h. Tarea nueva: reconstruir sólido (RI-1 a RI-6, F10, F11)
 
-Sin empezar: solo hay plan. Cada fase suma sus tests, y el banco de RI-1 corre de noche.
+Fases 0 a 3 construidas (F10, SC13, F11 y RI-1 cerradas; RI-2 Parcial). Sin commitear, sobre `main`. Falta en el cierre:
+- Tests: `test_comparar_malla.py`, `test_formas_malla.py`, `test_reconstruir_malla.py` y, por lo tocado, `test_cobertura_ui_api.py`, `test_iconos_extra.py`, `test_api_malla.py`, `test_claves_comandos.py`, `test_doc_agentes.py`, `test_patrones_boceto.py`, `test_boceto_fase8_malla.py`.
+- Pieza de ventana `mapa_desviacion` (ya en `PIEZAS`).
+- Banco: desde `clon/`, `.venv/Scripts/python.exe ../scripts/turno.py --plazo 1700 -- .venv/Scripts/python.exe ../scripts/bench_reconstruir.py correr`, y `reales` con `--plazo 3400`. El banco se genera con `generar` en `evidencias/reconstruir_2026-11-01/banco/`.
+- RI-3 a RI-6 y ESC siguen sin empezar.
 
 ## 3i. Tarea nueva: escanear con el celular (ESC-1 a ESC-7)
 
 Upgrade a futuro: no entra en las pruebas hasta que Gerardo lo pida.
+
+## 3j. Tareas nuevas: SUPERFICIE, ENSAMBLAR y ANIMACIÓN
+
+Sin empezar: SUP-27 a SUP-31, ASM-17 a ASM-20, ANI-1 a ANI-5 y B-145. Cada una suma tests y prueba de ventana. ANIMACIÓN no tiene pieza propia en `todo.py`.
+
+## 3k. Tarea nueva: plástico y extensiones (PLA-1 a PLA-14, SOL-22)
+
+Sin empezar. Cada herramienta suma tests y la pieza nueva `plastico` en `todo.py`. PLA-7 y PLA-11 piden comprobar en Fusion real. PLA-12 y EXT-1 a EXT-4 quedan afuera: PLA-12 va aparte y las EXT esperan decisión.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

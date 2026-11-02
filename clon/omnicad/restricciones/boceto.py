@@ -184,15 +184,14 @@ def puntos_espiral(centro, inicio, vueltas, paso):
 
 
 def validar_valor_cota(tipo, valor):
-    """Como Fusion, una cota de largo, radio, diámetro o desfase tiene que ser mayor que cero (el solver
-    toma el valor absoluto del radio: −5 quedaba guardado y dibujaba 5) y de hasta MEDIDA_MAXIMA (1 km; frena
-    valores absurdos como un radio de 1e9 o infinito). Los ángulos no se validan acá."""
+    """Como Fusion, una cota de largo, radio o diámetro tiene que ser mayor que cero (el solver toma el valor absoluto
+    del radio: −5 quedaba guardado y dibujaba 5) y de hasta MEDIDA_MAXIMA (1 km; frena valores absurdos como un radio
+    de 1e9 o infinito). La de desfase admite negativo: la copia pasa al otro lado. Los ángulos no se validan acá."""
     if tipo not in COTAS_POSITIVAS:
         return
     nombre = TIPOS_COTA[tipo].lower()
-    if tipo == "desfase" and valor < 0:                 # el signo lo elige el comando Desfase, no la cota
-        raise ErrorBoceto(f"La cota de desfase es una distancia sin signo (vale {valor:g}): para pasar al otro lado, "
-                          "volvé a usar Desfase con la distancia en negativo o con «Invertir».")
+    if tipo == "desfase":
+        valor = abs(valor)
     if not valor > 0:                                   # también NaN
         raise ErrorBoceto(f"La cota de {nombre} tiene que ser mayor que cero (vale {valor:g}).")
     if not valor <= MEDIDA_MAXIMA:                      # también infinito
@@ -404,7 +403,8 @@ class Texto(_Curva):
     """Texto de boceto: `punto` es la esquina inferior izquierda de la línea base; el ángulo, en grados.
     Sus contornos forman perfiles (se pueden extruir), como en Fusion.
 
-    Además de fuente, altura, negrita y cursiva: `espaciado` (mm entre letras), `interlineado` (factor),
+    Además de fuente, altura, negrita y cursiva: `espaciado` (mm entre letras; la pantalla lo muestra en %, ver
+    `fuentes.espaciado_cien`), `interlineado` (factor),
     `alineacion` ("izq", "centro", "der" dentro de la caja), `ancla_v` ("base", "arriba", "medio", "abajo":
     qué parte del bloque cae sobre `punto`), `ancho_caja` (mm; 0 = sin caja, >0 parte las líneas) y
     `voltear_h` / `voltear_v` (espejo dentro del bloque).
@@ -418,27 +418,33 @@ class Texto(_Curva):
     Texto en curva (Fusion: texto en trayectoria): `camino` es el id de una curva del mismo boceto; entonces
     `punto` y `angulo` no se usan y las letras siguen la curva. `camino_lado` ("izq" / "der": de qué lado del
     sentido de la curva van las letras), `camino_pos` (fracción 0-1 del largo donde cae el ancla, según
-    `alineacion`), `camino_desfase` (mm entre la curva y la línea base) y `camino_ajustar` (repartir en todo el
-    largo). Si la curva se borra, el texto vuelve a ser recto. En curva no se dibujan subrayado ni tachado.
+    `alineacion`), `camino_desfase` (mm entre la curva y la línea base), `camino_ajustar` (repartir en todo el largo)
+    y `camino_colocacion` ("arriba": la línea base apoya en la curva; "abajo": las letras cuelgan de ella con la misma
+    lectura, la Placement de Fusion). Si la curva se borra, el texto vuelve a ser recto. En curva no se dibujan subrayado ni tachado.
 
     Marco (Fusion: el rectángulo del texto, que se acota y restringe): `marco` = [esquina derecha, esquina de
     arriba], ids de puntos; con `punto` (esquina de abajo a la izquierda) definen el giro, el ancho de la caja y el
     alto donde se ubica el texto según `ancla_v`. `altura_expr`: la altura como expresión con parámetros (Fusion
     crea el parámetro «Text height»); el paso del boceto la evalúa y la deja en `altura`. `parametro_texto`
-    liga el contenido al parámetro automático «Text»; sin él se conserva el texto de las recetas anteriores."""
+    liga el contenido al parámetro automático «Text»; sin él se conserva el texto de las recetas anteriores.
+    `parametro_altura`: el parámetro automático «Text height» (lo escrito en `altura_expr` pasa a él al guardar).
+
+    `altura_a`: True si `altura` es el alto de la «A» de la fuente, como en Fusion (los textos nuevos). Sin la marca, una
+    receta anterior: `altura` es el tamaño de la fuente y el texto se sigue viendo igual (B-152)."""
     tipo, PUNTOS = "texto", ("punto",)
     DATOS = ("texto", "fuente", "altura", "angulo", "negrita", "cursiva", "espaciado", "interlineado", "alineacion",
              "ancla_v", "ancho_caja", "voltear_h", "voltear_v", "camino", "camino_lado", "camino_pos",
              "camino_desfase", "camino_ajustar", "kerning", "inclinacion", "escala_h", "escala_v", "desfase_base",
              "capitalizacion", "subrayado", "tachado", "grosor_decoracion", "sin_division", "ajustes_kerning",
-             "marco", "altura_expr", "parametro_texto")
+             "marco", "altura_expr", "parametro_texto", "camino_colocacion", "parametro_altura", "altura_a")
     _PREDETERMINADOS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base",
                         "ancho_caja": 0.0, "voltear_h": False, "voltear_v": False, "camino": None,
                         "camino_lado": "izq", "camino_pos": 0.5, "camino_desfase": 0.0, "camino_ajustar": False,
                         "kerning": True, "inclinacion": 0.0, "escala_h": 100.0, "escala_v": 100.0,
                         "desfase_base": 0.0, "capitalizacion": "ninguno", "subrayado": "ninguno",
                         "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False,
-                        "ajustes_kerning": [], "marco": None, "altura_expr": None, "parametro_texto": None}
+                        "ajustes_kerning": [], "marco": None, "altura_expr": None, "parametro_texto": None,
+                        "camino_colocacion": "arriba", "parametro_altura": None, "altura_a": False}
     # opciones del panel «Carácter» que se guardan tal cual (el tipo de cada una, para convertir lo que llega)
     TIPOGRAFIA = {"kerning": bool, "inclinacion": float, "escala_h": float, "escala_v": float, "desfase_base": float,
                   "capitalizacion": str, "subrayado": str, "tachado": str, "grosor_decoracion": float,
@@ -451,7 +457,8 @@ class Texto(_Curva):
                  camino_lado="izq", camino_pos=0.5, camino_desfase=0.0, camino_ajustar=False, kerning=True,
                  inclinacion=0.0, escala_h=100.0, escala_v=100.0, desfase_base=0.0, capitalizacion="ninguno",
                  subrayado="ninguno", tachado="ninguno", grosor_decoracion=0.0, sin_division=False,
-                 ajustes_kerning=None, marco=None, altura_expr=None, parametro_texto=None):
+                 ajustes_kerning=None, marco=None, altura_expr=None, parametro_texto=None,
+                 camino_colocacion="arriba", parametro_altura=None, altura_a=False):
         self.id, self.punto, self.texto, self.fuente = id, punto, str(texto), str(fuente)
         self.altura, self.angulo = float(altura), float(angulo)
         self.negrita, self.cursiva = bool(negrita), bool(cursiva)
@@ -469,6 +476,9 @@ class Texto(_Curva):
         self.marco = None if marco is None else [int(p) for p in marco]
         self.altura_expr = None if altura_expr is None else str(altura_expr)
         self.parametro_texto = None if parametro_texto is None else str(parametro_texto)
+        self.camino_colocacion = str(camino_colocacion)
+        self.parametro_altura = None if parametro_altura is None else str(parametro_altura)
+        self.altura_a = bool(altura_a)
         self._estilo(construccion, eje, proyectada)
 
     def puntos(self):
@@ -476,6 +486,8 @@ class Texto(_Curva):
 
     def remapear(self, mapa, nuevo_id=None):
         c = super().remapear(mapa, nuevo_id)
+        if nuevo_id is not None:                 # una copia sigue al parámetro, pero lo escrito en ella no lo cambia
+            c.parametro_altura = None
         if self.marco:
             c.marco = [mapa.get(p, p) for p in self.marco]
         return c
@@ -488,6 +500,13 @@ class Texto(_Curva):
             if d.get(k) == v:
                 del d[k]
         return d
+
+    def tamano_fuente(self):
+        """Tamaño de fuente (mm) con el que se dibuja: ver `altura_a`."""
+        if not self.altura_a:
+            return self.altura
+        from ..nucleo import fuentes
+        return fuentes.tamano_fuente(self.fuente, self.altura, self.negrita, self.cursiva)
 
     def opciones_contorno(self):
         """Opciones de `fuentes.contornos_texto` en el orden en que se guardan en el caché."""
@@ -1011,12 +1030,13 @@ def _contornos_texto(texto, fuente, altura, negrita, cursiva, opciones=(0.0, 1.0
 
 @lru_cache(maxsize=128)
 def _contornos_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
-                      camino, tipografia=()):
+                      camino, tipografia=(), colocacion="arriba", voltear=(False, False)):
     from ..nucleo.fuentes import contornos_en_camino
     try:
         return tuple(contornos_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
                                          alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
-                                         ajustar=ajustar, **_tipografia_camino(tipografia)))
+                                         ajustar=ajustar, camino_colocacion=colocacion, voltear_h=voltear[0],
+                                         voltear_v=voltear[1], **_tipografia_camino(tipografia)))
     except Exception:  # noqa: BLE001 — una fuente rota o un camino degenerado no deben romper el boceto
         return ()
 
@@ -1041,12 +1061,13 @@ def _mapa_texto(texto, fuente, altura, negrita, cursiva, opciones):
 
 @lru_cache(maxsize=64)
 def _paradas_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
-                    camino, tipografia=()):
+                    camino, tipografia=(), colocacion="arriba", voltear=(False, False)):
     from ..nucleo.fuentes import paradas_en_camino
     try:
         return tuple(paradas_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
                                        alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
-                                       ajustar=ajustar, **_tipografia_camino(tipografia)))
+                                       ajustar=ajustar, camino_colocacion=colocacion, voltear_h=voltear[0],
+                                       voltear_v=voltear[1], **_tipografia_camino(tipografia)))
     except Exception:  # noqa: BLE001
         return None
 
@@ -1058,14 +1079,15 @@ def paradas_cursor(t, origen, prim_camino=None):
     el punto de anclaje; en un texto en curva, `prim_camino` es la primitiva de la curva que sigue. Es lo que usa el
     editor del lienzo para escribir y mover el cursor dentro del texto."""
     if t.camino is not None and prim_camino is not None:
-        paradas = _paradas_camino(t.texto, t.fuente, t.altura, t.negrita, t.cursiva, t.espaciado, t.alineacion,
+        paradas = _paradas_camino(t.texto, t.fuente, t.tamano_fuente(), t.negrita, t.cursiva, t.espaciado, t.alineacion,
                                   t.camino_pos, t.camino_lado, t.camino_desfase + t.desfase_base, t.camino_ajustar,
-                                  polilinea_camino(prim_camino), t.opciones_tipografia())
+                                  polilinea_camino(prim_camino), t.opciones_tipografia(), t.camino_colocacion,
+                                  (t.voltear_h, t.voltear_v))
         if paradas is None:
             return None
         n = len(paradas) - 1
         return {"paradas": list(paradas), "lineas": [(0, n)], "linea_de": [0] * (n + 1)}
-    m = _mapa_texto(t.texto, t.fuente, t.altura, t.negrita, t.cursiva, t.opciones_contorno())
+    m = _mapa_texto(t.texto, t.fuente, t.tamano_fuente(), t.negrita, t.cursiva, t.opciones_contorno())
     if m is None:
         return None
     ox, oy = origen
@@ -1084,6 +1106,13 @@ def paradas_cursor(t, origen, prim_camino=None):
 def polilinea_camino(prim, pasos=720):
     """Polilínea densa de una curva para apoyar texto (redondeada a 1e-9 para que sirva de clave de caché)."""
     return tuple((round(float(x), 9), round(float(y), 9)) for x, y in puntos_primitiva(prim, pasos))
+
+
+def lado_natural(prim):
+    """`camino_lado` con que un texto sobre `prim` se lee de izquierda a derecha con las letras arriba de la curva: en
+    una curva cerrada, por fuera."""
+    poli = polilinea_camino(prim)
+    return "izq" if poli[-1][0] > poli[0][0] else "der"
 
 
 def fraccion_en_camino(prim, q):
@@ -1163,9 +1192,9 @@ def primitivas_entidad(c, P, R=None, curvas=None):
         base = primitivas_entidad(curvas[c.camino], P)      # radios guardados (el solver no pide textos)
         if base:
             return [(p[0], c.id) + tuple(p[2:]) for p in _contornos_camino(
-                c.texto, c.fuente, c.altura, c.negrita, c.cursiva, c.espaciado, c.alineacion, c.camino_pos,
+                c.texto, c.fuente, c.tamano_fuente(), c.negrita, c.cursiva, c.espaciado, c.alineacion, c.camino_pos,
                 c.camino_lado, c.camino_desfase + c.desfase_base, c.camino_ajustar, polilinea_camino(base[0]),
-                c.opciones_tipografia())]
+                c.opciones_tipografia(), c.camino_colocacion, (c.voltear_h, c.voltear_v))]
     if isinstance(c, Texto):
         ox, oy = P(c.punto)
         ang = math.radians(c.angulo)
@@ -1178,7 +1207,7 @@ def primitivas_entidad(c, P, R=None, curvas=None):
             opciones = opciones[:3] + (ancla, ancho) + opciones[5:]
         T = lambda q: (lambda r: (r[0] + ox, r[1] + oy))(_rot(q[0], q[1], ang))  # noqa: E731
         salida = []
-        for prim in _contornos_texto(c.texto, c.fuente, c.altura, c.negrita, c.cursiva, opciones):
+        for prim in _contornos_texto(c.texto, c.fuente, c.tamano_fuente(), c.negrita, c.cursiva, opciones):
             if prim[0] == "linea":
                 salida.append(("linea", c.id, T(prim[2]), T(prim[3])))
             else:
@@ -1285,6 +1314,8 @@ def _validar_opciones_texto(op):
         raise ErrorBoceto("El anclaje vertical es base, arriba, medio o abajo.")
     if op.get("camino_lado", "izq") not in ("izq", "der"):
         raise ErrorBoceto("El lado del texto en curva es izq o der.")
+    if op.get("camino_colocacion", "arriba") not in ("arriba", "abajo"):
+        raise ErrorBoceto("La colocación del texto en curva es arriba o abajo.")
     for k in ("camino_pos", "camino_desfase", "desfase_base", "inclinacion", "escala_h", "escala_v",
               "grosor_decoracion"):
         if k in op and not math.isfinite(float(op[k])):
@@ -1482,7 +1513,7 @@ class Boceto:
         _validar_opciones_texto(opciones)
         self._validar_camino(opciones.get("camino"))
         return self._agregar_curva(Texto(self._nuevo_id(), self._punto(posicion), texto, fuente, altura, angulo,
-                                         negrita, cursiva, **opciones))
+                                         negrita, cursiva, **{"altura_a": True} | opciones))
 
     def _validar_camino(self, camino):
         """El camino de un texto en curva tiene que ser una curva del boceto que no sea otro texto."""
@@ -2291,18 +2322,28 @@ class Boceto:
 
     def separacion(self, original, desfasada):
         """Distancia entre una curva y su desfase; en curvas libres mide el primer punto de ajuste."""
+        return abs(self.separacion_con_lado(original, desfasada))
+
+    def separacion_con_lado(self, original, desfasada):
+        """`separacion` con el signo de `Sistema.separacion` y del «lado» de las curvas libres."""
         o, d = self.curvas[original], self.curvas[desfasada]
         if isinstance(o, Linea):
-            return abs(distancia_punto_recta(self.coords(d.p1), *self._extremos_linea(o.id)))
+            return distancia_punto_recta(self.coords(d.p1), *self._extremos_linea(o.id))
         if isinstance(o, Elipse) and isinstance(d, Elipse):         # la elipse del desfase con eje: difieren los semiejes
             semieje = lambda e: math.dist(self.coords(e.centro), self.coords(e.mayor))  # noqa: E731
-            return abs(semieje(d) - semieje(o))
+            return semieje(d) - semieje(o)
         if isinstance(o, (Spline, Elipse, ArcoElipse)):
-            return mas_cercano(self.primitivas(original)[0], self.coords(d.pts[0]))[1]
-        return abs(self.radio(d.id) - self.radio(o.id))
+            prim, p = self.primitivas(original)[0], self.coords(d.pts[0])
+            t, distancia, q = mas_cercano(prim, p)
+            tangente = evaluar_primitiva(prim, t, 1)[1]
+            return math.copysign(distancia, tangente[0] * (p[1] - q[1]) - tangente[1] * (p[0] - q[0]))
+        return self.radio(d.id) - self.radio(o.id)
 
     def medir(self, cota):
-        """Valor actual de una cota existente (con su modo)."""
+        """Valor actual de una cota existente (con su modo). Una cota de desfase con «lado» sale negativa si la copia
+        pasó al otro lado (BOC-50)."""
+        if cota.tipo == "desfase" and (lado := cota.datos.get("lado")):
+            return lado * self.separacion_con_lado(*cota.entidades)
         medida = self.medir_cota(cota.tipo, cota.entidades, cota.datos.get("modo", "centro"), cota.datos.get("cuadrante"))
         return medida * 2 if cota.datos.get("diametral") else medida     # cota con la línea central: diámetro
 
@@ -3672,6 +3713,8 @@ class Boceto:
                 c.manijas = [[a, b, None if k is None else k / factor] for a, b, k in c.manijas]
             elif isinstance(c, Texto):
                 c.altura *= factor
+                if c.altura_expr:                # si no, el recálculo vuelve a la altura de antes
+                    c.altura_expr = f"{c.altura:.12g} mm"
                 c.espaciado *= factor
                 c.ancho_caja *= factor
                 c.camino_desfase *= factor

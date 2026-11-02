@@ -13,8 +13,8 @@ from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QTreeWidget, QTr
 
 from omnicad import api  # noqa: E402
 from omnicad.timeline.operaciones import OpPrimitiva  # noqa: E402
-from omnicad.timeline.parametros import TablaParametros  # noqa: E402
-from omnicad.ui import acciones_navegador as navegador, asistente, dialogos, dialogos_boceto, iconos  # noqa: E402
+from omnicad.timeline.documento import Documento  # noqa: E402
+from omnicad.ui import acciones_navegador as navegador, asistente, dialogo_parametros, dialogos, dialogos_boceto, iconos  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -96,7 +96,7 @@ def test_la_linea_del_chat_muestra_icono_y_texto_y_sigue_plegandose(app_qt):
 
 
 def test_los_dialogos_generales_tienen_el_icono_correspondiente(app_qt):
-    casos = [(dialogos.DialogoParametros(TablaParametros()), "parametros"),
+    casos = [(dialogo_parametros.DialogoParametros(Documento()), "parametros"),
              (dialogos.DialogoRejilla(), "rejilla"), (dialogos.DialogoRecuperados([]), "archivo")]
     for forma, titulo in OpPrimitiva.ETIQUETAS.items():
         casos.append((dialogos._DialogoBase(titulo), forma))

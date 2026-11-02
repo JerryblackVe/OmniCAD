@@ -122,22 +122,25 @@ def set_browser_visibility(sesion, items: list[str] | None = None, visible: bool
 
 
 TIPOS_OBJETO = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "ejes_usuario", "puntos_usuario",
-                "bocetos", "scu", "origenes_union", "ejes_union", "uniones")
+                "nombres_planos_construccion", "nombres_planos_origen", "bocetos", "scu", "origenes_union", "ejes_union", "uniones")
 _VISIBLES_DE_ORIGEN = {"planos_origen": True, "ejes_origen": True, "punto_origen": True, "planos_usuario": True,
-                       "ejes_usuario": False, "puntos_usuario": False, "bocetos": True, "scu": False,
+                       "ejes_usuario": False, "puntos_usuario": False, "nombres_planos_construccion": True,
+                       "nombres_planos_origen": True, "bocetos": True, "scu": False,
                        "origenes_union": False, "ejes_union": False, "uniones": False}
 
 
 @herramienta("set_object_visibility", "documento", "Muestra u oculta tipos de objetos de trabajo en la vista, como Visibilidad "
              "del objeto del menú de visualización: planos, ejes y punto de origen, planos, ejes y puntos de usuario, "
-             "bocetos, sistemas de coordenadas, orígenes y ejes de unión y uniones. El estado se guarda con el documento "
+             "nombres de planos en el lienzo (ocultarlos no oculta el plano), bocetos, sistemas de coordenadas, orígenes y "
+             "ejes de unión y uniones. El estado se guarda con el documento "
              "(doc.espacios['visor']) y la ventana en vivo lo aplica. Admite deshacer.", modifica=True)
 def set_object_visibility(sesion, types: list[Literal["planos_origen", "ejes_origen", "punto_origen", "planos_usuario",
-                                                     "ejes_usuario", "puntos_usuario", "bocetos", "scu",
+                                                     "ejes_usuario", "puntos_usuario", "nombres_planos_construccion",
+                                                     "nombres_planos_origen", "bocetos", "scu",
                                                      "origenes_union", "ejes_union", "uniones", "all"]] | None = None,
                           visible: bool = True):
     """
-    types: tipos de objeto: planos_origen, ejes_origen, punto_origen, planos_usuario, ejes_usuario, puntos_usuario, bocetos, scu, origenes_union, ejes_union, uniones, o "all" (todos); vacío = solo consulta el estado.
+    types: tipos de objeto: planos_origen, ejes_origen, punto_origen, planos_usuario, ejes_usuario, puntos_usuario, nombres_planos_construccion, nombres_planos_origen, bocetos, scu, origenes_union, ejes_union, uniones, o "all" (todos); vacío = solo consulta el estado.
     visible: true muestra esos tipos; false los oculta.
     """
     datos = copy.deepcopy(sesion.doc.espacios.get("visor") or {})

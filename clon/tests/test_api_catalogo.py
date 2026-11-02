@@ -29,7 +29,7 @@ ESPERADAS = {"documento": {"get_scene_info", "new_document", "open_document", "s
                             # SOL-23 y SOL-27: conjuntos de selección, por límite, semilla y límite, y preajustes
                             "manage_selection_sets", "select_by_boundary", "select_by_seed_and_boundary",
                             "manage_command_presets"},
-             "parametros": {"get_parameters", "create_parameter", "set_parameter", "delete_parameter", "export_parameters",
+             "parametros": {"get_parameters", "get_parameter_units", "create_parameter", "set_parameter", "delete_parameter", "export_parameters",
                            "import_parameters"}}
 
 
@@ -49,7 +49,7 @@ def temporales():
 def test_herramientas_registradas_por_grupo():
     for grupo, nombres in ESPERADAS.items():
         assert {h["nombre"] for h in api.catalogo(grupo)} == nombres
-    assert len(api.catalogo(["documento", "parametros"])) == 53
+    assert len(api.catalogo(["documento", "parametros"])) == 54
 
 
 def test_esquemas_validos_y_documentados():

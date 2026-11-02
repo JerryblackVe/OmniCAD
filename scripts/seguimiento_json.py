@@ -1,8 +1,9 @@
 """Datos de la página «Seguimiento OmniCAD» (Artifact de claude.ai).
 
 Lee docs/seguimiento/{bugs,faltantes,mejoras}.md y la sección «Registro» de PROJECT_LOG.md y escribe, en la
-carpeta que se pase (por defecto, la actual), `seguimiento.json` (una fila por pendiente) y `resueltos.json` (las
-últimas 25 entradas del Registro). Cómo subirlos a la página: sección «Página de seguimiento» de CLAUDE.md.
+carpeta que se pase (por defecto, la actual), `seguimiento.json` (una fila por pendiente), `resueltos.json` (las
+últimas 25 entradas del Registro) y `prompts.json` (los prompts de la tabla «Prompts guardados» del README de
+seguimiento). Cómo subirlos a la página: sección «Página de seguimiento» de CLAUDE.md.
 
 Uso: python scripts/seguimiento_json.py [carpeta_de_salida]
 """
@@ -58,9 +59,24 @@ def resueltos():
     return salida
 
 
+def prompts():
+    salida = []
+    indice = (RAIZ / "docs" / "seguimiento" / "README.md").read_text(encoding="utf-8")
+    for tema_doc, archivo in re.findall(r"^\| (.+?) \| \[(.+?)\]\(\.\./.+?\) \|$", indice, re.M):
+        cuerpo = (RAIZ / "docs" / archivo).read_text(encoding="utf-8").partition("## Prompt para el agente")[2]
+        texto = re.search(r"^```text\n(.*?)^```$", cuerpo, re.M | re.S)
+        modelo = re.search(r"Modelo sugerido[^:]*: ([^.\n]+)", cuerpo)
+        if not texto or not modelo:
+            raise SystemExit(f"{archivo}: falta el prompt o su modelo sugerido")
+        salida.append({"tema": tema_doc, "archivo": archivo, "modelo": modelo.group(1), "texto": texto.group(1).strip()})
+    return salida
+
+
 if __name__ == "__main__":
     carpeta = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
-    filas, hechos = pendientes(), resueltos()
+    filas, hechos, guardados = pendientes(), resueltos(), prompts()
     (carpeta / "seguimiento.json").write_text(json.dumps(filas, ensure_ascii=False), encoding="utf-8")
     (carpeta / "resueltos.json").write_text(json.dumps(hechos, ensure_ascii=False), encoding="utf-8")
-    print(f"{len(filas)} pendientes ({dict(Counter(f['tipo'] for f in filas))}), {len(hechos)} resueltos")
+    (carpeta / "prompts.json").write_text(json.dumps(guardados, ensure_ascii=False), encoding="utf-8")
+    print(f"{len(filas)} pendientes ({dict(Counter(f['tipo'] for f in filas))}), {len(hechos)} resueltos, "
+          f"{len(guardados)} prompts")

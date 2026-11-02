@@ -19,6 +19,7 @@ import os
 import tempfile
 import time
 from collections import Counter
+from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
@@ -37,8 +38,10 @@ from ..io_archivos import abrir_externo, proyecto, puente_fusion
 from ..io_archivos import exportar as ex
 from ..nucleo import aislado
 from ..nucleo import geometria as geo
+from ..nucleo.analisis import colores_grupos_malla
 from ..restricciones import Boceto
 from ..timeline import entidades as ent
+from ..timeline.aspectos_doc import colores_componentes
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
@@ -50,7 +53,8 @@ from .arrastre_componente import ArrastreComponente
 from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
-from .dialogos import DialogoParametros, DialogoRecuperados, DialogoRejilla
+from .dialogo_parametros import DialogoParametros
+from .dialogos import DialogoRecuperados, DialogoRejilla
 from .iconos import icono
 from .modo_boceto import ModoBoceto
 from .navegador import ORIGEN, Navegador
@@ -70,7 +74,8 @@ FILTRO_ABRIR = ";;".join([
 VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True,
                        "calcomanias": True}
 COLOR_PREVIA_NUEVO = (0.62, 0.80, 1.00)     # azul acerado: así pinta Fusion el cuerpo nuevo de una vista previa
-CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos")
+CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos",
+                      "nombres_planos_construccion", "nombres_planos_origen")
 NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"), ("Space", "Espacio"))
 
 
@@ -99,6 +104,12 @@ def dentro_del_poligono(puntos, poligono):
     with np.errstate(divide="ignore", invalid="ignore"):
         x_corte = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
     return (cruza & (x < x_corte)).sum(axis=1) % 2 == 1
+
+
+ICONOS_ANALISIS = {"seccion": "seccion", "cebra": "cebra", "mapa_entorno": "mapa_entorno", "desmoldeo": "angulo_desmoldeo",
+                   "curvatura": "mapa_curvatura", "peine": "curvatura_peine", "isocurva": "isocurva",
+                   "accesibilidad": "accesibilidad", "radio_minimo": "radio_minimo", "centro_masa": "centro_masa",
+                   "desviacion": "mapa_desviacion"}
 
 
 class _FiltroInfoHerramientas(QObject):
@@ -150,6 +161,7 @@ class VentanaPrincipal(QMainWindow):
         self._tema_aplicado = None          # tokens del tema que ya están en la aplicación
         self._avisos_tema = self.aplicar_tema()     # antes de crear los widgets: nacen con el estilo del tema
         self.doc = None
+        self.dlg_parametros = None
         self.ocultos = set()
         self.patron_activo = None           # id del patrón plano en pantalla (Activar patrón plano), o None
         self.vis = dict(VISIBILIDAD_INICIAL)
@@ -158,6 +170,7 @@ class VentanaPrincipal(QMainWindow):
         self._perfil_aplicado = None        # «interfaz/perfil» que ya está en las preferencias
         self._eleccion = None               # "boceto" | "plano": qué se está eligiendo en la vista
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
+        self.prefs_grupos_caras = False         # INSPECCIONAR › Mostrar grupos de caras de malla (Mayús+F)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
         self._autoguardado_fallo = None     # último error del autoguardado ya avisado en la barra
         self._previa_aspecto = {}           # lo que el panel Aspecto muestra sin haberlo aplicado: {"cuerpos": {id: rgb},
@@ -386,7 +399,11 @@ class VentanaPrincipal(QMainWindow):
           "Muestra solo el patrón plano de la chapa elegida (o del último creado); otra vez vuelve al modelo plegado.",
           "patron_plano", True)
         A("colores_componente", "Mostrar colores de componente", self._colores_componente, "Shift+N",
-          "Pinta cada cuerpo con un color distinto para distinguirlos.", "colores_componente", True)
+          "Pinta cada componente con un color distinto para distinguirlos. Oculta los materiales físicos y los aspectos.",
+          "colores_componente", True)
+        A("ver_grupos_caras", "Mostrar grupos de caras de malla", self._grupos_caras, "Shift+F",
+          "Pinta los grupos de caras de los cuerpos de malla. Oculta los colores de los componentes, los materiales físicos y "
+          "los aspectos.", "grupos_caras", True)
         A("importar_step", "Insertar STEP…", self.importar_step, None, "Inserta un archivo STEP como un paso del timeline.",
           "importar")
         A("lista_materiales", "Lista de materiales", self.lista_materiales, None,
@@ -981,6 +998,15 @@ class VentanaPrincipal(QMainWindow):
         self.mensaje(texto, 30000)
         if not ya_pintado:
             self.timeline.estado.repaint()
+        QTimer.singleShot(0, self, self._fin_calculo)      # corre al volver al bucle de eventos: terminó de calcular
+
+    def _fin_calculo(self):
+        """El aviso de `_calculando` no espera sus 30 s: una vista previa o Cancelar no pasan por `_actualizar` (B-135)."""
+        if self.doc._esperando_hijo:                       # `_esperando_calculo` atiende eventos con el hijo calculando
+            QTimer.singleShot(100, self, self._fin_calculo)
+        elif self.timeline.estado.toolTip().startswith("Calculando"):
+            self._t_mensaje.stop()
+            self._mostrar_estado(self._info_sel or self._texto_estado)
 
     def _esperando_calculo(self, segundos):
         """Un hijo calcula por la ventana (B-48): pasado 1 s lo dice con los segundos y la deja repintar y atender
@@ -990,6 +1016,8 @@ class VentanaPrincipal(QMainWindow):
         QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
 
     def set_documento(self, doc):
+        if self.dlg_parametros is not None:
+            self.dlg_parametros.close()
         if self.modo_boceto.activo:
             self._cerrar_panel_de_boceto()
             self.modo_boceto.cancelar()
@@ -1089,8 +1117,10 @@ class VentanaPrincipal(QMainWindow):
         base = self.vis["todo"] and self.vis["origen"]
         c.origen = {clave.strip("_"): base and clave not in self.ocultos for clave, _, _ in ORIGEN}
         construccion = self.vis["todo"] and self.vis["planos"]
-        c.planos_usuario = [(ident, pl.nombre, pl) for ident, pl in estado.planos.items()
+        nombres = {o.id: o.nombre for o in self.doc.operaciones}      # renombrar no recalcula: el nombre vigente está en el paso
+        c.planos_usuario = [(ident, nombres.get(ident, pl.nombre), pl) for ident, pl in estado.planos.items()
                             if construccion and ident not in self.ocultos]
+        c.medidas = estado.medidas
         c.ejes_usuario = [(ident, nombre, (p, d)) for ident, (p, d, nombre) in estado.ejes.items()
                           if construccion and ident not in self.ocultos]
         c.puntos_usuario = [(ident, nombre, p) for ident, (p, nombre) in estado.puntos.items()
@@ -1103,9 +1133,12 @@ class VentanaPrincipal(QMainWindow):
                      and ident.split("@")[0] not in self.ocultos
                      and (not datos.get("calcomania") or (self.vis["calcomanias"] and datos["cuerpo"] not in ocultos))]
         apariencias = self._apariencias(estado)
-        if self.prefs_colores_componente:
-            from .visor3d import PALETA
-            apariencias = {cid: PALETA[i % len(PALETA)] for i, cid in enumerate(estado.cuerpos)}
+        muestras = colores_componentes(self.doc, estado)
+        if self.prefs_grupos_caras:
+            apariencias = {}
+        elif self.prefs_colores_componente:
+            apariencias = {**apariencias, **{cid: tuple(x / 255 for x in muestras[c.componente])
+                                             for cid, c in estado.cuerpos.items() if c.componente in muestras}}
         if self._estado_previa is not None and self.panel is not None:       # P-39: el cuerpo nuevo de la previa va azul
             apariencias = {**apariencias, **{cid: COLOR_PREVIA_NUEVO for cid in estado.cuerpos
                                              if cid not in self.panel.ctx.estado.cuerpos}}
@@ -1121,7 +1154,10 @@ class VentanaPrincipal(QMainWindow):
         if self.panel is None or not self.panel.comando.SIN_OP:
             self.aplicar_analisis(estado)
         titulo = self.doc.nombre if self.doc.ruta else "(Sin guardar)"
-        self.navegador.analisis = [(f"analisis:{n}", n, a.get("visible", True)) for n, a in self.doc.analisis.items()]
+        self.navegador.analisis = [(f"analisis:{n}", n, a.get("visible", True), ICONOS_ANALISIS.get(a["tipo"], "seccion"))
+                                   for n, a in self.doc.analisis.items()]
+        self.navegador.muestras = ({k: "#%02x%02x%02x" % rgb for k, rgb in muestras.items()}
+                                   if self.prefs_colores_componente or self.timeline.color_componente else {})
         self.navegador.componentes = [
             (k, comp["nombre"], comp.get("fijo", False),
              [(c.id, self.nombre_cuerpo(c)) for c in estado.cuerpos.values() if c.componente == k], comp.get("padre") or "")
@@ -1164,15 +1200,21 @@ class VentanaPrincipal(QMainWindow):
         """Dibuja los análisis visibles del navegador (sección, cebra, curvatura…) sobre el modelo."""
         from . import analisis_vista
         estado = estado or self._estado_visible()
-        resultados = []
+        resultados, centros = [], []
         for nombre, a in self.doc.analisis.items():
             if not a.get("visible", True):
                 continue
             try:
                 resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado, self.doc.propiedades))
+                if a["tipo"] == "centro_masa" and resultados[-1]["capas"]:
+                    centros.append((nombre, np.asarray(resultados[-1]["capas"][0][1][0], float)))
             except Exception as e:  # noqa: BLE001 — un análisis cuya referencia se perdió no rompe la vista
                 log.warning("Análisis %s: %s", nombre, e)
-        analisis_vista.aplicar(self.visor, analisis_vista.combinar(resultados))
+        datos = analisis_vista.combinar(resultados)
+        if self.prefs_grupos_caras:
+            datos["mallas"].update({c.id: colores_grupos_malla(c.forma) for c in estado.cuerpos.values() if c.tipo == "malla"})
+        analisis_vista.aplicar(self.visor, datos)
+        self.visor.centros_masa = centros
 
     def _apariencias(self, estado):
         """Color de cada cuerpo según Aspecto o, si no tiene, según su Material físico (como Fusion)."""
@@ -1371,6 +1413,9 @@ class VentanaPrincipal(QMainWindow):
                 if clave_api in (estilo.get("efectos") or {}):
                     c.efectos[clave] = bool(estilo["efectos"][clave_api])
             self.barra_nav.set_estilo(c.estilo_visual)
+        visibles = datos.get("visibilidad") or {}
+        if visibles != (previo.get("visibilidad") or {}):
+            c.visibilidad = {k: bool(visibles.get(k, p[f"vista/vis_{k}"])) for k in CLAVES_VISIBILIDAD}
         rejilla = datos.get("rejilla") or {}
         if rejilla != (previo.get("rejilla") or {}):
             c.rejilla = bool(rejilla["mostrar"]) if "mostrar" in rejilla else p["vista/rejilla"]
@@ -1493,7 +1538,12 @@ class VentanaPrincipal(QMainWindow):
                                        receta=otro.a_dict()))
 
     def _colores_componente(self, activo):
-        self.prefs_colores_componente = bool(activo)
+        self.prefs_colores_componente = self.timeline.colores_en_lienzo = bool(activo)
+        self.timeline.actualizar(self.doc)
+        self._refrescar_visibilidad()
+
+    def _grupos_caras(self, activo):
+        self.prefs_grupos_caras = bool(activo)
         self._refrescar_visibilidad()
 
     def _ojo(self, clave):
@@ -2166,6 +2216,14 @@ class VentanaPrincipal(QMainWindow):
             self.ocultos |= {c for c, cu in estado.cuerpos.items() if cu.componente not in comps}
             self.ocultos -= {c for c, cu in estado.cuerpos.items() if cu.componente in comps}
             self._refrescar_visibilidad()
+        elif accion == "analisis_editar":
+            from .comandos.inspeccionar import ANALISIS_POR_TIPO
+            nombre = clave.split(":", 1)[1]
+            comando = ANALISIS_POR_TIPO[self.doc.analisis[nombre]["tipo"]]()
+            comando.editando = nombre
+            self.ejecutar_comando(comando, valores=comando.desde_params(self.doc.analisis[nombre]["params"], ContextoComando(self.doc, self)))
+        elif accion == "ciclar_color":
+            self.doc.set_propiedad([clave], "ciclo_color", int(self.doc.propiedades.get(clave, {}).get("ciclo_color", 0)) + 1)
         elif accion == "analisis_borrar":
             self.doc.quitar_analisis(clave.split(":", 1)[1])
         elif accion == "analisis_ojo":
@@ -2280,8 +2338,12 @@ class VentanaPrincipal(QMainWindow):
             return False
         estado = self.panel.ctx.estado
         filtros = self.panel.activa.filtros
+        if "perfil" in filtros and self.panel.elegir_boceto(ident):
+            return True
         if ident in estado.cuerpos and "cuerpo" in filtros:
             ref = {"tipo": "cuerpo", "cuerpo": ident}
+        elif ident in estado.componentes and "componente" in filtros:
+            ref = {"tipo": "componente", "componente": ident}
         elif ident in estado.bocetos and filtros & {"boceto", "plano"}:
             ref = {"tipo": "boceto", "boceto": ident}
         elif (ident in estado.planos or ident.strip("_").upper() in ("XY", "XZ", "YZ")) and "plano" in filtros:
@@ -2644,15 +2706,29 @@ class VentanaPrincipal(QMainWindow):
         self._indice_boceto = None
         self._actualizar_deshacer()
         op = datos.get("op")
-        if op is None:
-            if not boceto.puntos and not any(boceto.geo3d.values()):
-                self.mensaje("El boceto quedó vacío: no se agregó al timeline.")
-                self._refrescar_visibilidad()
-                return
-            self._agregar(OpBoceto(self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
-                                   marco=datos["marco"], cara=datos.get("cara"), boceto=boceto))
-        else:
-            self._reemplazar(OpBoceto(op.id, op.nombre, op.suprimida, boceto=boceto, **op.p))
+        if op is None and not boceto.puntos and not any(boceto.geo3d.values()):
+            self.mensaje("El boceto quedó vacío: no se agregó al timeline.")
+            self._refrescar_visibilidad()
+            return
+        textos = [c for c in boceto.curvas.values() if c.tipo == "texto" and c.parametro_texto is None
+                  and (op is None or c.id not in op.boceto.curvas)]
+        from .. import api
+        from ..api.herramientas_boceto import (alturas_sueltas, ligar_parametro_texto, parametros_de_textos,
+                                               soltar_parametros_texto, sincronizar_alturas_texto)
+        sesion = api.Sesion(self.doc)
+        antes = {} if op is None else parametros_de_textos(op.boceto)
+        sueltos = [t for t in antes if t not in boceto.curvas] or alturas_sueltas(boceto)
+        with sesion.transaccion() if textos or sueltos else nullcontext():    # los parámetros y el boceto: un solo deshacer
+            sesion.tolerar_errores = True
+            for t in textos:
+                ligar_parametro_texto(self.doc, t, t.texto)
+            sincronizar_alturas_texto(self.doc, boceto)
+            if op is None:
+                self._agregar(OpBoceto(self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
+                                       marco=datos["marco"], cara=datos.get("cara"), boceto=boceto))
+            else:
+                self._reemplazar(OpBoceto(op.id, op.nombre, op.suprimida, boceto=boceto, **op.p))
+                soltar_parametros_texto(self.doc, antes, boceto)
         self._refrescar_visibilidad()
 
 
@@ -2680,16 +2756,29 @@ class VentanaPrincipal(QMainWindow):
                 QMessageBox.information(self, NOMBRE_APP, f"«{op.nombre}» está suprimido o tiene un error de plano: "
                                         "activalo o corregí su plano de referencia para editarlo.")
                 return
-            self._iniciar_boceto(op.boceto, br.plano, {"op": op}, self.doc.indice(op.id))
+            from ..api.herramientas_boceto import actualizar_alturas_texto
+            boceto = op.boceto.copia()
+            actualizar_alturas_texto(boceto, br)
+            self._iniciar_boceto(boceto, br.plano, {"op": op}, self.doc.indice(op.id))
         elif isinstance(op, OpImportarSTEP):
             QMessageBox.information(self, NOMBRE_APP, f"Importación de «{op.p['archivo']}»: no tiene parámetros editables.")
 
     def parametros(self):
-        dlg = DialogoParametros(self.doc.parametros, self)
-        if dlg.exec() and dlg.resultado is not None:
-            self._intentar(lambda: self.doc.aplicar_parametros(dlg.resultado))
-            if self.modo_boceto.activo:          # las cotas del boceto activo usan los parámetros nuevos
-                self.modo_boceto.lienzo.resolver()
+        """No modal: el modelo se ve detrás y se actualiza con cada cambio (PAR-7)."""
+        if self.dlg_parametros is None:
+            self.dlg_parametros = DialogoParametros(self.doc, self)
+            self.dlg_parametros.aplicado.connect(self._parametros_aplicados)
+            self.dlg_parametros.finished.connect(self._parametros_cerrados)
+        self.dlg_parametros.show()
+        self.dlg_parametros.raise_()
+
+    def _parametros_aplicados(self):
+        if self.modo_boceto.activo:              # las cotas del boceto activo usan los parámetros nuevos
+            self.modo_boceto.lienzo.resolver()
+
+    def _parametros_cerrados(self):
+        self.dlg_parametros = None
+        self._actualizar_deshacer()
 
     # ------------------------------------------------------------ archivos
     def _preguntar(self, texto, botones, detalle="", titulo=NOMBRE_APP):
