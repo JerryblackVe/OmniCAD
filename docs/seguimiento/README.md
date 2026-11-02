@@ -80,6 +80,7 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 
 | Tema | Documento |
 |---|---|
+| Caza automática de errores | [plan_caza_errores.md](../plan_caza_errores.md) |
 | Asas de la ventana | [brechas_gizmos.md](../brechas_gizmos.md) |
 | Vista previa en proceso aparte | [brechas_previa_aislada.md](../brechas_previa_aislada.md) |
 | Texto en curva | [brechas_texto_curva.md](../brechas_texto_curva.md) |

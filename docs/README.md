@@ -57,6 +57,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
+| [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo: capas, jueces automáticos y comandos |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
 | [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |

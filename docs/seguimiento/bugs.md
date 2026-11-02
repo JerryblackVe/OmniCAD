@@ -2,12 +2,13 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 13: Abierto 8 · Parcial 4 · Bloqueado 1 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 14: Abierto 9 · Parcial 4 · Bloqueado 1 (recontado 2026-11-02).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-157 | Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok | Abierto | Alta | El corte exterior atraviesa la pared y las caras de la cavidad quedan sueltas por fuera. El cuerpo da válido y estanco, pero con 16 autointersecciones: falta detectarlo y decidir qué hace cada caso comparando con Fusion. | omnicad/nucleo/solidos_modificar.py:496 | 2026-11-02 |
 | B-153 | Teselar deja abiertas las caras muy finas que OpenCascade abandona a medio mallar | Abierto | Media | Rugged Box `obj_3`: unas 25 de 1088 caras quedan con menos triángulos que nodos (cara 708: 67 nodos y 2 triángulos). El nodo sin llenar ya no llega a la malla (B-151), pero la malla sale abierta y `compare_to_mesh` da `closed: false`. Falta rellenar esas caras con sus aristas o reintentar con otro parámetro. | nucleo/geometria.py `_nodos_de_la_cara`; tests/test_geometria.py::test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos | 2026-11-01 |
 | B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
 | B-146 | Derivar sigue grisado en SÓLIDO aunque el comando existe | Abierto | Baja | Conectar el botón a `insertar_derivacion`, como en INSERTAR, y actualizar P-25i. | ui/cinta.py:90 frente a ui/cinta.py:56 | 2026-11-01 |
@@ -53,6 +54,17 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
+
+### B-157 · Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok
+
+- **Qué:** versión 0.2.0, en vivo. Boceto en XZ, trapecio de 82,74 × 71,14 mm; Extrusión 43,66 mm con conicidad −31,5°; Vaciado interior 1,91 mm quitando la cara de y = −43,66; Empalme 16,05 mm en la arista de (0, 0) y Chaflán 20,28 mm en la de (−82,74, 0), las dos en la cara de y = 0.
+- **Esperado:** quitar la esquina también abre o corta la cavidad, sin caras sueltas, o un error claro si no se puede. Falta comparar con Fusion.
+- **Obtenido:** los pasos dan `ok`, pero las esquinas interiores de la cavidad quedan afuera como dos aletas. `check_geometry`: válido, estanco y 16 autointersecciones. La caja da 75,92 mm de ancho, y esa medida la marcan las aletas.
+- **Cómo reproducir:** los pasos de arriba en un documento nuevo; mirar la vista superior en alambre o correr `check_geometry`.
+- **Causa probable:** sin leer en detalle. `BRepFilletAPI_MakeFillet` solo mira las caras vecinas de la arista y no ve la cavidad; el paso acepta su salida porque `es_valida` no busca autointersecciones.
+- **Esquive:** empalme y chaflán antes del vaciado, o un tamaño menor que la pared.
+- **Prueba propuesta:** caja vaciada con empalme mayor que la pared: el resultado sin autointersecciones, o un error claro.
+- **Evidencia:** los tres renders y la captura de esta revisión quedaron en la sesión; `check_geometry` del 2026-11-02 sobre `op159.c1`.
 
 ### B-154 · Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula
 
