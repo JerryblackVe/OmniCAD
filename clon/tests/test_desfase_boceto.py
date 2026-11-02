@@ -8,13 +8,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import QPointF, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from omnicad import api  # noqa: E402
 from omnicad.restricciones import Boceto, ErrorBoceto  # noqa: E402
-from omnicad.restricciones.boceto import expresion_sin_signo, validar_valor_cota  # noqa: E402
+from omnicad.restricciones.boceto import expresion_sin_signo, mas_cercano, validar_valor_cota  # noqa: E402
+from omnicad.restricciones.solver import resolver  # noqa: E402
 from omnicad.timeline.parametros import TablaParametros  # noqa: E402
 from omnicad.ui import editor_boceto  # noqa: E402
 
@@ -135,13 +136,86 @@ def test_match_topology_limita_y_avisa():
     assert 0 < b.curvas[nuevos[0]].radio < 1
 
 
-def test_cota_de_desfase_editada_a_negativo_explica_por_que():
-    with pytest.raises(ErrorBoceto, match="distancia sin signo.*Invertir"):
-        validar_valor_cota("desfase", -30)
+def test_la_cota_de_desfase_acepta_negativo_y_rechaza_cero():
     with pytest.raises(ErrorBoceto, match="mayor que cero"):
         validar_valor_cota("desfase", 0)
+    validar_valor_cota("desfase", -30)
     validar_valor_cota("desfase", 12)
     validar_valor_cota("angulo", -30)                    # los ángulos no se validan acá
+
+
+def _cota_desfase(b):
+    return next(c for c in b.cotas.values() if c.tipo == "desfase")
+
+
+def _editar(b, valor):
+    cota = _cota_desfase(b)
+    cota.expresion = str(valor)
+    r = resolver(b, {cota.id: valor})
+    assert r.ok, r.descripcion()
+    return cota
+
+
+def test_cota_de_desfase_a_negativo_lleva_la_linea_del_otro_lado_y_vuelve():
+    # Fusion real: línea en y = 0, copia en y = 10, cota −5: la copia queda en y = −5.
+    b = Boceto()
+    linea = b.agregar_linea(b.agregar_punto(0, 0), b.agregar_punto(30, 0))
+    copia = b.curvas[b.desfase(linea, 10, punto_lado=(5, 5))[0]]
+    assert b.coords(copia.p1)[1] == pytest.approx(10)
+    cota = _editar(b, -5)
+    assert b.coords(copia.p1)[1] == pytest.approx(-5) and b.coords(copia.p2)[1] == pytest.approx(-5)
+    assert b.medir(cota) == pytest.approx(-5)
+    _editar(b, -7)                                       # repetir no lo devuelve: sigue del mismo lado
+    _editar(b, -7)
+    assert b.coords(copia.p1)[1] == pytest.approx(-7)
+    _editar(b, 10)
+    assert b.coords(copia.p1)[1] == pytest.approx(10) and b.medir(cota) == pytest.approx(10)
+
+
+def test_cota_negativa_sobrevive_a_guardar_y_abrir():
+    b = Boceto()
+    linea = b.agregar_linea(b.agregar_punto(0, 0), b.agregar_punto(30, 0))
+    copia = b.desfase(linea, 10, punto_lado=(5, 5))[0]
+    _editar(b, -5)
+    otra = Boceto.desde_dict(json.loads(json.dumps(b.a_dict())))
+    _editar(otra, -5)
+    assert otra.coords(otra.curvas[copia].p1)[1] == pytest.approx(-5)
+    _editar(otra, 4)
+    assert otra.coords(otra.curvas[copia].p1)[1] == pytest.approx(4)
+
+
+def test_cota_negativa_en_circulo_achica_y_si_no_entra_no_resuelve():
+    b = Boceto()
+    circulo = b.agregar_circulo(b.agregar_punto(0, 0), 10)
+    copia = b.desfase(circulo, 5)[0]
+    assert b.radio(copia) == pytest.approx(15)
+    _editar(b, -4)
+    assert b.radio(copia) == pytest.approx(6)
+    assert not resolver(b, {_cota_desfase(b).id: -12}).ok   # quedaría con radio −2: no hay círculo que lo cumpla
+
+
+def test_cota_negativa_pasa_una_cadena_cerrada_entera_al_otro_lado():
+    b = Boceto()
+    a, c, d, e = (b.agregar_punto(*p) for p in ((0, 0), (40, 0), (40, 30), (0, 30)))
+    lados = [b.agregar_linea(p, q) for p, q in ((a, c), (c, d), (d, e), (e, a))]
+    copias = b.desfase(lados[0], 5)                      # una cadena cerrada va hacia afuera
+    assert b.separacion(lados[0], copias[0]) == pytest.approx(5)
+    afuera = [b.coords(p) for k in copias for p in (b.curvas[k].p1, b.curvas[k].p2)]
+    assert min(x for x, _ in afuera) == pytest.approx(-5) and max(y for _, y in afuera) == pytest.approx(35)
+    _editar(b, -3)
+    adentro = [b.coords(p) for k in copias for p in (b.curvas[k].p1, b.curvas[k].p2)]
+    assert min(x for x, _ in adentro) == pytest.approx(3) and max(x for x, _ in adentro) == pytest.approx(37)
+    assert min(y for _, y in adentro) == pytest.approx(3) and max(y for _, y in adentro) == pytest.approx(27)
+
+
+def test_cota_negativa_en_una_spline_la_pasa_del_otro_lado():
+    b = Boceto()
+    madre = b.agregar_spline([b.agregar_punto(*p) for p in ((0, 0), (10, 4), (20, 0), (30, 4))], "ajuste", 3, False)
+    copia = b.desfase(madre, 2, punto_lado=(10, 8))[0]
+    assert b.medir(_cota_desfase(b)) == pytest.approx(2, abs=1e-4)
+    cota = _editar(b, -1.5)
+    assert mas_cercano(b.primitivas(madre)[0], b.coords(b.curvas[copia].pts[0]))[1] == pytest.approx(1.5, abs=1e-4)
+    assert b.medir(cota) == pytest.approx(-1.5, abs=1e-4)
 
 
 def test_expresion_sin_signo():
@@ -150,6 +224,56 @@ def test_expresion_sin_signo():
     assert expresion_sin_signo("-20", -20, ev) == "20"
     assert expresion_sin_signo("-a", -5, ev) == "a"
     assert expresion_sin_signo("-a+b", -3, ev) == "-(-a+b)"      # lstrip("-") la habría vuelto «a+b» = 7
+
+
+# ---------------------------------------------------------------- BOC-50 por la API y la ventana
+def test_api_cota_de_desfase_negativa_y_por_parametro():
+    s = api.Sesion()
+    _llamar(s, "create_sketch", plane="XY", name="B")
+    linea = _llamar(s, "draw_line", start_x=0, start_y=0, end_x=30, end_y=0)["entities"][0]["id"]
+    copia = _llamar(s, "offset_sketch_curves", entity=linea, distance=10, side_x=5, side_y=5)
+    cota = copia["dimensions"][0]["id"]
+    resuelto = lambda: s.doc.estado_final.bocetos["op1"].boceto  # noqa: E731
+    y_copia = lambda: resuelto().coords(resuelto().curvas[copia["entities"][0]["id"]].p1)[1]  # noqa: E731
+    assert y_copia() == pytest.approx(10)
+    _llamar(s, "edit_dimension", dimension=cota, value=-5)
+    assert y_copia() == pytest.approx(-5)
+    assert resuelto().coords(resuelto().curvas[linea].p1)[1] == pytest.approx(0, abs=1e-6)      # la original no se mueve
+    _llamar(s, "edit_dimension", dimension=cota, value=8)
+    assert y_copia() == pytest.approx(8)
+    _llamar(s, "create_parameter", name="d", expression="-3 mm")
+    _llamar(s, "edit_dimension", dimension=cota, value="d")
+    assert y_copia() == pytest.approx(-3)
+    _llamar(s, "set_parameter", name="d", expression="6 mm")
+    assert y_copia() == pytest.approx(6)
+    assert _falla(s, "edit_dimension", dimension=cota, value=0)["error_kind"] == "INVALID_DIMENSION"
+
+
+def test_ventana_teclear_una_cota_negativa_pasa_la_copia_y_muestra_el_signo(lienzo):
+    linea = lienzo.b.agregar_linea((0, 0), (30, 0))
+    copia = lienzo.b.curvas[lienzo.b.desfase(linea, 10, punto_lado=(5, 5))[0]]
+    lienzo.resolver()
+    cota = next(k for k in lienzo.b.cotas.values() if k.tipo == "desfase")
+    lienzo.editar_cota(cota.id, QPointF(100, 100))
+    _teclear(lienzo, "-5 mm")
+    QTest.keyClick(lienzo.entrada.campos[0], Qt.Key_Return)
+    assert lienzo.entrada is None and cota.expresion == "-5 mm"
+    assert lienzo.b.coords(copia.p1)[1] == pytest.approx(-5)
+    assert lienzo.b.coords(lienzo.b.curvas[linea].p1)[1] == pytest.approx(0, abs=1e-6)
+    assert "-5" in lienzo._texto_cota(cota, lienzo.b.medir(cota))
+    lienzo.deshacer()
+    assert lienzo.b.coords(copia.p1)[1] == pytest.approx(10)
+
+
+def test_ventana_una_cota_negativa_sin_solucion_se_deshace_y_avisa(lienzo):
+    circulo = lienzo.b.agregar_circulo((0, 0), 10)
+    copia = lienzo.b.desfase(circulo, 5)[0]
+    lienzo.resolver()
+    cota = next(k for k in lienzo.b.cotas.values() if k.tipo == "desfase")
+    lienzo.editar_cota(cota.id, QPointF(100, 100))
+    _teclear(lienzo, "-12")
+    QTest.keyClick(lienzo.entrada.campos[0], Qt.Key_Return)
+    assert lienzo.b.radio(copia) == pytest.approx(15) and lienzo.b.cotas[cota.id].expresion == "5"
 
 
 # ---------------------------------------------------------------- API (MCP y CLI): el mismo resultado y los mismos rechazos

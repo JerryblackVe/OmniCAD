@@ -282,9 +282,19 @@ def _altos(lados, distancia, distancia2, medida):
     return h, h
 
 
-def _extruir_tramos(ws, n, arriba, abajo, conicidad):
+def _hacia_afuera(pieza, n):
+    """SUP-23 (Fusion real): el tubo de un contorno cerrado tiene la normal hacia afuera. El lateral encierra área:
+    por el teorema de la divergencia, ∑ (p − c)·normal dA medido a lo ancho de `n` es positivo si apunta afuera."""
+    tris = np.concatenate([t for _, t in geo.teselar_por_cara(pieza)])
+    relativos = tris.mean(axis=1) - tris.reshape(-1, 3).mean(axis=0)
+    a_lo_ancho = relativos - np.outer(relativos @ n, n)
+    areas = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    return pieza if float(np.sum(a_lo_ancho * areas)) >= 0 else _tipado(pieza.Reversed())
+
+
+def _extruir_tramos(ws, n, arriba, abajo, conicidad, afuera=False):
     """Extrusión de los alambres `arriba` hacia +n y `abajo` hacia -n (superficies sin coser entre sí si no hay
-    conicidad: un solo prisma que atraviesa la base)."""
+    conicidad: un solo prisma que atraviesa la base). `afuera`: ver `_hacia_afuera`."""
     piezas = []
     for w in ws:
         if abs(conicidad) < 1e-9:
@@ -314,12 +324,14 @@ def _extruir_tramos(ws, n, arriba, abajo, conicidad):
                 raise geo.ErrorGeometria("No se pudo crear la extrusión de superficie con conicidad con estas curvas: "
                                          "probá con conicidad 0.")
         piezas.append(_coser_caras(caras))
+    if afuera:
+        piezas = [_hacia_afuera(p, n) if BRep_Tool.IsClosed_s(w) else p for p, w in zip(piezas, ws, strict=True)]
     return _simplificar(_juntar(piezas))
 
 
 def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=False, conicidad=0.0, lados=None,
                        distancia2=None, medida="total", desfase_inicio=0.0, hasta=None, hasta_desfase=0.0,
-                       caja=None):
+                       caja=None, afuera=False):
     """Extrusión de curvas en superficie [SFC-EXTRUDE]. Distancia negativa = sentido contrario.
 
     `lados`: "un_lado" (por defecto), "dos_lados" (`distancia` hacia +dirección y `distancia2` hacia -dirección) o
@@ -330,7 +342,9 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
     negativo la cierra; en una curva abierta, positivo inclina hacia la derecha del recorrido mirando
     desde `direccion`. La altura medida sobre `direccion` es siempre `distancia`.
     Extensión «A objeto» (Extent = To Object): `hasta` (superficie, `geo.Plano` o cuerpo) corta el lado 1, que va
-    hasta el objeto movido `hasta_desfase`. «Todo» (Extent = All): `caja` = caja envolvente de los cuerpos."""
+    hasta el objeto movido `hasta_desfase`. «Todo» (Extent = All): `caja` = caja envolvente de los cuerpos.
+    `afuera=True`: un contorno cerrado da un tubo con la normal hacia afuera, como Fusion; `False`, el lado que da el
+    sentido del recorrido (las recetas viejas)."""
     if abs(conicidad) > 89.0:
         raise geo.ErrorGeometria("La conicidad tiene que estar entre -89° y 89°.")
     n = _unitario(direccion)
@@ -339,7 +353,7 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
     if desfase_inicio:
         ws = [geo.trasladar(w, n * float(desfase_inicio)) for w in ws]
     if hasta is None and caja is None:
-        return _extruir_tramos(ws, n, *_altos(lados, distancia, distancia2, medida), conicidad)
+        return _extruir_tramos(ws, n, *_altos(lados, distancia, distancia2, medida), conicidad, afuera)
     if lados not in LADOS_EXTRUSION:
         raise geo.ErrorGeometria(f"Dirección de extrusión desconocida: {lados}")
     reunidas = _juntar(ws)
@@ -351,8 +365,8 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
             alto = (hi if distancia >= 0 else -lo) + margen
             if alto <= margen:
                 raise geo.ErrorGeometria("No hay cuerpos en el sentido de la extrusión.")
-            return _extruir_tramos(ws, n, *((alto, 0.0) if distancia >= 0 else (0.0, alto)), conicidad)
-        return _extruir_tramos(ws, n, max(hi, 0.0) + margen, max(-lo, 0.0) + margen, conicidad)
+            return _extruir_tramos(ws, n, *((alto, 0.0) if distancia >= 0 else (0.0, alto)), conicidad, afuera)
+        return _extruir_tramos(ws, n, max(hi, 0.0) + margen, max(-lo, 0.0) + margen, conicidad, afuera)
     if lados == "simetrica":
         raise geo.ErrorGeometria("La extensión «A objeto» no se combina con la dirección simétrica.")
     tool = _herramienta(hasta, reunidas)
@@ -366,7 +380,7 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
     alcance = (hi if signo > 0 else -lo) + 1.0 + 0.05 * (hi - lo)
     if alcance <= 1.0:
         raise geo.ErrorGeometria("El objeto está del otro lado de las curvas: invertí la distancia o elegí otro.")
-    larga = _extruir_tramos(ws, n, *((alcance, 0.0) if signo > 0 else (0.0, alcance)), conicidad)
+    larga = _extruir_tramos(ws, n, *((alcance, 0.0) if signo > 0 else (0.0, alcance)), conicidad, afuera)
     regiones = regiones_recorte(larga, tool)
     toca = [r for r in regiones if BRepExtrema_DistShapeShape(r, reunidas).Value() < 1e-5]
     if len(regiones) < 2 or not toca:

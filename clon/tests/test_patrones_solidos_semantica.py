@@ -52,12 +52,12 @@ def test_rectangular_3x2_extension_20_por_5_son_seis_posiciones_con_pasos_10_y_5
 
 def test_rectangular_dos_direcciones_con_simetria_independiente():
     doc = _cubo()
-    op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=2, d1="20 mm", dir2=EJE_Y, n2=2, d2="30 mm",
+    op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=3, d1="20 mm", dir2=EJE_Y, n2=2, d2="30 mm",
                     distribucion="espaciado", simetrico=True, simetrico2=False)
     # dirección 1 simétrica (−20, 0, 20) y la 2 de un solo lado (0, 30): 3 × 2 = 6, y nada en y < 0
     assert _esquinas(doc, op.id) == [(-20, 0, 0), (-20, 30, 0), (0, 0, 0), (0, 30, 0), (20, 0, 0), (20, 30, 0)]
     doc2 = _cubo()
-    op2, _ = _patron(doc2, forma_patron="rectangular", dir1=EJE_X, n1=2, d1="20 mm", dir2=EJE_Y, n2=2, d2="30 mm",
+    op2, _ = _patron(doc2, forma_patron="rectangular", dir1=EJE_X, n1=2, d1="20 mm", dir2=EJE_Y, n2=3, d2="30 mm",
                      distribucion="espaciado", simetrico=False, simetrico2=True)
     assert _esquinas(doc2, op2.id) == [(0, -30, 0), (0, 0, 0), (0, 30, 0), (20, -30, 0), (20, 0, 0), (20, 30, 0)]
 
@@ -65,7 +65,7 @@ def test_rectangular_dos_direcciones_con_simetria_independiente():
 def test_receta_vieja_la_simetria_global_vale_para_las_dos_direcciones():
     doc = _cubo()
     op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=2, d1="20 mm", dir2=EJE_Y, n2=2, d2="30 mm",
-                    distribucion="espaciado", simetrico=True)          # sin simetrico2: como antes
+                    distribucion="espaciado", simetrico=True, version_simetria=1)      # sin simetrico2: como antes
     assert len(_esquinas(doc, op.id)) == 9
     assert op.p["simetrico2"] is None
 
@@ -229,10 +229,65 @@ def test_circular_parcial_de_tres_sobre_120_grados_es_0_60_y_120():
     assert sc.paso_angular(3, 120.0, "completa", False) == pytest.approx(60.0)     # lo mismo que usa el asa
 
 
-def test_circular_simetrico_reparte_a_los_dos_lados():
+def _x_rectangular(doc, **p):
+    op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, simetrico=True, n2=1, **p)
+    return [x for x, _y, _z in _esquinas(doc, op.id)]
+
+
+# PAT-1: tabla medida en Fusion real (evidencias/fusion_2026-11-01/p5.py y p6.py).
+@pytest.mark.parametrize("n, esperado", [(2, [0, 50]), (3, [-50, 0, 50]), (4, [-50, 0, 50, 100]), (5, [-100, -50, 0, 50, 100])])
+def test_rectangular_simetrico_la_cantidad_es_el_total_y_la_de_mas_va_al_lado_positivo(n, esperado):
+    assert _x_rectangular(_cubo(), n1=n, d1="50 mm", distribucion="espaciado") == pytest.approx(esperado)
+
+
+def test_rectangular_simetrico_en_extension_mide_por_lado():
+    assert _x_rectangular(_cubo(), n1=3, d1="100 mm", distribucion="extension") == pytest.approx([-100, 0, 100])
+    assert _x_rectangular(_cubo(), n1=5, d1="100 mm", distribucion="extension") == pytest.approx([-100, -50, 0, 50, 100])
+
+
+@pytest.mark.parametrize("n, esperado", [(3, [0, 45, 315]), (4, [0, 30, 300, 330]), (2, [0, 270])])
+def test_circular_simetrico_el_angulo_es_el_total_y_la_de_mas_va_al_lado_negativo(n, esperado):
+    doc = _cubo_a_distancia()
+    op, _ = _patron(doc, forma_patron="circular", eje=EJE_Z, n=n, distribucion="simetrico", angulo="90 deg")
+    assert _angulos(doc, op) == pytest.approx(esperado, abs=0.1)
+
+
+def test_receta_vieja_de_circular_simetrico_abre_y_da_lo_mismo():
     doc = _cubo_a_distancia()
     op, _ = _patron(doc, forma_patron="circular", eje=EJE_Z, n=3, distribucion="simetrico", angulo="90 deg")
-    assert _angulos(doc, op) == pytest.approx([0, 45, 90, 270, 315], abs=0.1)      # n = 3 a cada lado: 5 con el original
+    datos = doc.a_dict()
+    del datos["operaciones"][-1]["params"]["version_simetria"]
+    viejo = Documento.desde_dict(datos)
+    assert viejo.operaciones[-1].p["version_simetria"] == 1
+    assert _angulos(viejo, viejo.operaciones[-1]) == pytest.approx([0, 45, 90, 270, 315], abs=0.1)   # n a cada lado
+
+
+def test_receta_vieja_de_rectangular_simetrico_y_de_multitransformacion_dan_lo_mismo():
+    doc = _cubo()
+    _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=2, d1="20 mm", distribucion="espaciado", simetrico=True)
+    multi = OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[
+        {"tipo": "rectangular", "dir1": EJE_Y, "n1": 2, "d1": "30 mm", "distribucion": "espaciado", "simetrico": True}])
+    _ok(doc, multi)
+    nuevos = sorted(round(g.caja_envolvente(c.forma)[0][1], 6) for c in doc.estado_final.cuerpos.values())
+    assert nuevos == [0, 0, 30]                          # total 2: 0 y +30, además del patrón en x
+    datos = doc.a_dict()
+    for o in datos["operaciones"]:
+        o["params"].pop("version_simetria", None)
+    viejo = Documento.desde_dict(datos)
+    assert sorted(round(g.caja_envolvente(c.forma)[0][0], 6) for c in viejo.estado_final.cuerpos.values()) == [-20, 0, 0, 0, 20]
+    assert sorted(round(g.caja_envolvente(c.forma)[0][1], 6) for c in viejo.estado_final.cuerpos.values()) == [-30, 0, 0, 0, 30]
+
+
+def test_editar_en_el_panel_un_patron_viejo_conserva_su_reparto():
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import PatronRectangular
+    doc = _cubo()
+    op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=2, d1="20 mm", distribucion="espaciado", simetrico=True,
+                    version_simetria=1)
+    cmd, ctx = PatronRectangular(), ContextoComando(doc, op=op)
+    nueva = cmd.construir(cmd.desde_op(op, ctx), ctx)
+    assert nueva.p["version_simetria"] == 1
+    assert OpPatron("x").p["version_simetria"] == 2
 
 
 def test_circular_sentido_cantidades_uno_y_dos_y_limites():
@@ -439,7 +494,7 @@ def test_patron_en_puntos_sigue_al_punto_del_boceto_si_se_mueve():
 # ---------------------------------------------------------------- multitransformación (receta)
 def test_multitransformar_conserva_simetria_y_supresion_en_cada_transformacion():
     doc = _cubo()
-    t1 = {"tipo": "rectangular", "dir1": EJE_X, "n1": 3, "d1": "20 mm", "dir2": EJE_Y, "n2": 2, "d2": "30 mm",
+    t1 = {"tipo": "rectangular", "dir1": EJE_X, "n1": 5, "d1": "20 mm", "dir2": EJE_Y, "n2": 2, "d2": "30 mm",
           "distribucion": "espaciado", "simetrico": True, "simetrico2": False, "suprimir": [[1, 1], 2]}
     op = OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[t1])
     _ok(doc, op)
@@ -701,7 +756,7 @@ def test_circular_con_el_eje_de_un_circulo_de_boceto():
 def test_un_patron_se_deshace_y_rehace_de_una_vez_y_sobrevive_a_guardar_y_reabrir(tmp_path):
     from omnicad.io_archivos import proyecto
     doc = _cubo()
-    op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=3, d1="20 mm", dir2=EJE_Y, n2=2, d2="30 mm",
+    op, _ = _patron(doc, forma_patron="rectangular", dir1=EJE_X, n1=5, d1="20 mm", dir2=EJE_Y, n2=2, d2="30 mm",
                     distribucion="espaciado", simetrico=True, simetrico2=False, dir2_derivada=True, suprimir=[[1, 1], -1])
     esquinas = _esquinas(doc, op.id)
     assert len(esquinas) == 10 - 2

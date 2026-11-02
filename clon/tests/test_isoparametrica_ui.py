@@ -136,7 +136,7 @@ def test_la_vista_previa_sigue_a_las_opciones_de_la_paleta(con_visor):
     lz.programar_previa_iso(QPointF(40, 40))
     lz._previa_iso()
     alturas = sorted({round(z, 4) for z in _segmentos_previa(visor).reshape(-1, 3)[:, 2]})
-    assert alturas == pytest.approx([40 / 6, 20, 40 * 5 / 6], abs=1e-3)
+    assert alturas == pytest.approx([10, 20, 30], abs=1e-3)              # 3 curvas en k/4 de la cara de 40
     lz.opciones.update(iso_tipo="unica")
 
 

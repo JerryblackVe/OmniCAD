@@ -10,7 +10,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, OpPrimitiva, _caja_todo, _deps_objetivo,
-                          _resolver, _resolver_todas, aplicar_resultado, registrar_operacion)
+                          _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, registrar_operacion)
 from .ops_solido import OpBobina, OpTuberia, _en_cadena
 
 LADOS = {"un_lado": "Un lado", "dos_lados": "Dos lados", "simetrica": "Simétrica"}
@@ -82,15 +82,18 @@ class OpSupExtruir(_OpSuperficie):
     """SUPERFICIE › Extruir [SFC-EXTRUDE]: curvas abiertas o cerradas (o un texto de una línea) → superficie.
     `inicio` (plano del perfil, desfase u objeto), `lados` (un lado, dos lados con distancias distintas, simétrica
     por longitud total o `medida` mitad) y `extension` (distancia, al objeto o todo). `simetrica` es el campo de las
-    recetas viejas: vale como lados = simétrica."""
+    recetas viejas: vale como lados = simétrica. `version_normal`: 2 (SUP-23): un contorno cerrado da la normal hacia
+    afuera, como Fusion; 1 (recetas viejas): el lado que dio siempre."""
     TIPO, ETIQUETA, ICONO = "sup_extruir", "Extrusión de superficie", "⬆"
     PARAMS = {"curvas": [], "direccion": None, "distancia": "10 mm", "simetrica": False, "conicidad": "0 deg",
               "lados": "un_lado", "medida": "total", "distancia2": "10 mm", "inicio": "plano", "desfase_inicio": "0 mm",
-              "inicio_objeto": None, "extension": "distancia", "hasta": None, "desfase_hasta": "0 mm", "invertir": False}
+              "inicio_objeto": None, "extension": "distancia", "hasta": None, "desfase_hasta": "0 mm", "invertir": False,
+              "version_normal": 2}
     EXPRESIONES = ("distancia", "conicidad", "distancia2", "desfase_inicio", "desfase_hasta")
     OPCIONES = {"lados": LADOS, "medida": ("mitad", "total"), "inicio": ("plano", "desfase", "objeto"),
                 "extension": ("distancia", "objeto", "todo")}
     REFS = ("curvas", "direccion", "inicio_objeto", "hasta")
+    migrar_receta = _migrador("version_normal")
 
     def ejecutar(self, estado, ctx):
         p = self.p
@@ -120,7 +123,7 @@ class OpSupExtruir(_OpSuperficie):
             aristas, d, ctx.evaluar(p["distancia"]), conicidad=ctx.evaluar(p["conicidad"], ANGULO), lados=lados,
             distancia2=ctx.evaluar(p["distancia2"]) if lados == "dos_lados" else None, medida=p["medida"],
             desfase_inicio=desfase, hasta=hasta, hasta_desfase=ctx.evaluar(p["desfase_hasta"]) if hasta is not None else 0.0,
-            caja=caja_todo))
+            caja=caja_todo, afuera=_version_de(p, "version_normal") == 2))
 
 
 class OpSupRevolucion(_OpSuperficie):

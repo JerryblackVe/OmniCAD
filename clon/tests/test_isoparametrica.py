@@ -35,13 +35,23 @@ def test_both_da_las_dos_curvas_por_el_punto():
     assert [d["tipo"] for d in r] == ["circulo", "linea"]
 
 
-def test_distribuidas_por_cantidad_quedan_parejas_en_el_centro_de_cada_franja():
+def test_distribuidas_por_cantidad_caen_en_k_sobre_n_mas_uno_y_no_tocan_el_borde():
     lat = cara_de(geo.cilindro(10, 40), GeomAbs_Cylinder)
     r = c3.isoparametricas(lat, (10, 0, 15), "u", "distributed", cantidad=4)
-    assert sorted(d["centro"][2] for d in r) == pytest.approx([5, 15, 25, 35])
+    assert sorted(d["centro"][2] for d in r) == pytest.approx([8, 16, 24, 32])
     r = c3.isoparametricas(lat, (10, 0, 15), "v", "distributed", cantidad=4)
     angulos = sorted(round(math.degrees(math.atan2(d["puntos"][0][1], d["puntos"][0][0])) % 360, 6) for d in r)
-    assert angulos == pytest.approx([45, 135, 225, 315])
+    assert angulos == pytest.approx([72, 144, 216, 288])
+
+
+@pytest.mark.parametrize("cantidad, fracciones", [(1, [1 / 2]), (2, [1 / 3, 2 / 3]), (3, [1 / 4, 2 / 4, 3 / 4]),
+                                                  (4, [0.2, 0.4, 0.6, 0.8])])
+def test_distribuidas_en_una_cara_de_20_por_30_dan_lo_medido_en_fusion(cantidad, fracciones):
+    tapa = cara_de(geo.caja(20, 30, 10), GeomAbs_Plane, z=10)
+    r = c3.isoparametricas(tapa, (5, 7, 10), "u", "distributed", cantidad=cantidad)
+    assert sorted(d["puntos"][0][1] for d in r) == pytest.approx([30 * f for f in fracciones])
+    r = c3.isoparametricas(tapa, (5, 7, 10), "v", "distributed", cantidad=cantidad)
+    assert sorted(d["puntos"][0][0] for d in r) == pytest.approx([20 * f for f in fracciones])
 
 
 def test_distribuidas_por_distancia_pasan_por_el_punto_y_no_tocan_el_borde():

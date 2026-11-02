@@ -112,13 +112,13 @@ def test_rectangular_la_direccion_2_derivada_se_ve_y_se_aplica(app_qt):  # noqa:
 
 def test_rectangular_simetria_por_direccion_desde_las_casillas(app_qt):  # noqa: F811
     panel, _visor, estados, _doc = _abrir("patron_rectangular_3d", valores={
-        "dir1": [_hit(_doc_caja(), EJE_X)], "n1": 2, "d1": "40 mm", "n2": 2, "d2": "40 mm", "distribucion": "espaciado"})
+        "dir1": [_hit(_doc_caja(), EJE_X)], "n1": 3, "d1": "40 mm", "n2": 2, "d2": "40 mm", "distribucion": "espaciado"})
     _marcar(panel.widgets["simetrico"])
     assert panel.valores["simetrico"] is True and panel.valores["simetrico2"] is False
     panel._calcular_previa()
     op = panel.ultima_op
     assert (op.p["simetrico"], op.p["simetrico2"]) == (True, False)
-    assert len(_esquinas(estados[-1], op.id)) == 6                      # 3 en X (simétrico) × 2 en Y (un lado)
+    assert len(_esquinas(estados[-1], op.id)) == 6                      # 3 en X (el total, simétrico) × 2 en Y (un lado)
     assert min(p[1] for p in _esquinas(estados[-1], op.id)) == pytest.approx(0.0)      # nada del lado −Y
     assert min(p[0] for p in _esquinas(estados[-1], op.id)) == pytest.approx(-40.0)    # y la dirección 1 sí tiene lado −X
     panel.cancelar()
@@ -225,11 +225,11 @@ def test_circular_modos_completo_parcial_simetrico_y_el_asa_coincide_con_la_copi
                for cid, c in estados[-1].cuerpos.items() if cid.startswith(panel.ultima_op.id)]
     ultima = min(centros, key=lambda c: abs(math.degrees(math.atan2(c[1], c[0])) - 120))      # la copia a 120°
     assert asa[:2] == pytest.approx(ultima[:2], abs=1e-6)               # el asa y el resultado usan las mismas posiciones
-    # Simétrico: n a cada lado hasta ± el ángulo
+    # Simétrico: n es el total y el ángulo también: 3 en 90° → −45°, 0° y 45°
     _elegir(panel.widgets["modo"], "simetrico")
     _teclear(panel.widgets["angulo"], "90 deg")
     panel._calcular_previa()
-    assert _angulos(estados[-1], panel.ultima_op.id) == pytest.approx([0, 45, 90, 270, 315], abs=0.1)
+    assert _angulos(estados[-1], panel.ultima_op.id) == pytest.approx([0, 45, 315], abs=0.1)
     # Ángulo entre copias
     _elegir(panel.widgets["modo"], "espaciado")
     _teclear(panel.widgets["angulo_paso"], "30 deg")

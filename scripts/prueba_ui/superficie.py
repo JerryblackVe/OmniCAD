@@ -102,8 +102,20 @@ run("coser", lambda: (
 run("descoser", lambda: (
     C.caso(v, AR, "descoser", {"cuerpos": lambda: [A.hit_cuerpo(v, caja)]}, {}, foto="descoser"),
     C.negativos(v, AR, "descoser")))
+def flecha_normal():
+    p = A.abrir(v, "invertir_normal")
+    A.elegir(p, "cuerpos", A.hit_cuerpo(v, tubo))
+    A.esperar(150)
+    flechas = [m for m in p.manipuladores.manips if type(m).__name__ == "FlechaNormal"]
+    A.reg(AR, "invertir_normal: la flecha muestra el lado positivo", len(flechas) == 1, str(p.manipuladores.manips))
+    A.foto(v, "invertir_normal_flecha")
+    p.cancelar()
+    A.esperar(100)
+
+
 run("invertir_normal", lambda: (
     C.caso(v, AR, "invertir_normal", {"cuerpos": lambda: [A.hit_cuerpo(v, tubo)]}, {}, foto="invertir_normal"),
+    flecha_normal(),
     C.negativos(v, AR, "invertir_normal")))
 
 # 11 Empalme de superficie ------------------------------------------------------------------------------------------------

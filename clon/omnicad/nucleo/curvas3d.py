@@ -273,7 +273,7 @@ def isoparametricas(cara, punto, direccion="u", tipo="single", distancia=None, c
     el parámetro V; «both» da las dos. «single» es la que pasa por `punto` (se proyecta a la cara). «distributed»:
     las de toda la cara, a lo ancho de cada dirección, en una de dos formas (se mide a lo largo de la curva
     perpendicular que pasa por `punto`): con `distancia`, una curva cada tantos mm, una pasando por el punto; con
-    `cantidad`, ese número de curvas parejas de borde a borde (en el centro de cada franja)."""
+    `cantidad`, ese número de curvas parejas, sin tocar los bordes (Fusion real: la k-ésima de n cae en k/(n+1))."""
     from OCP.BRep import BRep_Tool
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
     from OCP.BRepClass import BRepClass_FaceClassifier
@@ -313,7 +313,7 @@ def isoparametricas(cara, punto, direccion="u", tipo="single", distancia=None, c
             ref = GeomAdaptor_Curve(sup.UIso(p_u) if sentido == "u" else sup.VIso(p_v), *ancho)
             largo = GCPnts_AbscissaPoint.Length_s(ref)
             if cantidad is not None:
-                pasos = [(i + 0.5) * largo / int(cantidad) for i in range(int(cantidad))]
+                pasos = [(i + 1) * largo / (int(cantidad) + 1) for i in range(int(cantidad))]
             else:
                 s0 = GCPnts_AbscissaPoint.Length_s(ref, ancho[0], p_v if sentido == "u" else p_u)
                 k0 = math.ceil(-s0 / distancia - 1e-9)

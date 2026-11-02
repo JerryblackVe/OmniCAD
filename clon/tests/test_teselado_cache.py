@@ -51,14 +51,15 @@ def _forma(caso):
 
 def _sin_cache(forma, deflexion=0.05, angular=0.3):
     """Referencia independiente: el recorrido de malla_suave anterior a la caché."""
-    from omnicad.nucleo.analisis import _indices, _props_nodos
+    from omnicad.nucleo.analisis import _props_nodos
     partes = []
     for cara, tris in geo.teselar_por_cara(forma, deflexion, angular):
         if geo.BRep_Tool.Surface_s(cara) is None:
             n = rc.normales_suaves(tris, None, 60.0)[1]
         else:
-            tri = geo.BRep_Tool.Triangulation_s(cara, geo.TopLoc_Location())
-            idx = _indices(tri, cara)
+            loc = geo.TopLoc_Location()
+            tri = geo.BRep_Tool.Triangulation_s(cara, loc)
+            idx = geo._indices_cara(cara, tri, loc)
             n = _props_nodos(cara, tri, idx, tris, False)[0][idx].reshape(-1, 3)
         partes.append((tris.reshape(-1, 3), n))
     return rc._juntar(partes)

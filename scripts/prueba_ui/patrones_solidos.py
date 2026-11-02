@@ -155,7 +155,7 @@ def rectangular():
     p._calcular_previa()
     A.esperar(150)
     op = p.ultima_op
-    A.reg(AR + " · rectangular", "simetría solo en la dirección 1: 5 × 2 instancias menos la suprimida",
+    A.reg(AR + " · rectangular", "simetría solo en la dirección 1: 3 × 2 instancias menos la suprimida",
           p._previa_ok and (op.p["simetrico"], op.p["simetrico2"]) == (True, False), str(op.p["simetrico"]) if op else p.mensaje.text())
     QTest.keyClick(p, Qt.Key_Escape)                                # cancelar no deja nada
     A.esperar(200)
@@ -229,7 +229,7 @@ def circular():
     teclear(p.widgets["angulo"], "90 deg")
     p._t_previa.stop()
     p._calcular_previa()
-    A.reg(AR + " · circular", "Simétrico con 5: copias a ambos lados (9 instancias)",
+    A.reg(AR + " · circular", "Simétrico con 5: 5 instancias a los dos lados del original",
           p._previa_ok and p.ultima_op.p["distribucion"] == "simetrico", p.mensaje.text()[:80])
     p.cancelar()
     A.esperar(150)

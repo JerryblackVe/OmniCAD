@@ -34,7 +34,7 @@ def cubo(s, **kw):
 
 def test_rectangular_simetria_por_direccion_y_supresion_de_cualquier_fila(s):
     c = cubo(s)
-    r = llamar(s, "rectangular_pattern", bodies=c, x_count=2, x_spacing=20, y_count=2, y_spacing=30, axis2="y",
+    r = llamar(s, "rectangular_pattern", bodies=c, x_count=3, x_spacing=20, y_count=2, y_spacing=30, axis2="y",
                symmetric=True, symmetric2=False, suppress=[[1, 1], -1])
     # 3 en X (−20, 0, 20) × 2 en Y (0, 30) = 6 instancias: sin el original y sin las dos suprimidas quedan tres copias
     # (el cubo mide 10 y está centrado: la esquina mínima es el centro − 5)
@@ -56,7 +56,7 @@ def test_circular_completo_parcial_y_simetrico(s):
     assert len(completo["bodies_created"]) == 3 and s.doc.operaciones[-1].p["distribucion"] == "completo"
     parcial = llamar(s, "circular_pattern", bodies=c, count=3, axis="z", total_angle=120, distribution="partial")
     assert len(parcial["bodies_created"]) == 2
-    simetrico = llamar(s, "circular_pattern", bodies=c, count=2, axis="z", total_angle=90, distribution="symmetric")
+    simetrico = llamar(s, "circular_pattern", bodies=c, count=3, axis="z", total_angle=90, distribution="symmetric")
     assert len(simetrico["bodies_created"]) == 2 and s.doc.operaciones[-1].p["distribucion"] == "simetrico"
     viejo = llamar(s, "circular_pattern", bodies=c, count=3, axis="z", total_angle=120)         # «extent»: como antes
     assert s.doc.operaciones[-1].p["distribucion"] == "extension" and len(viejo["bodies_created"]) == 2
@@ -75,7 +75,7 @@ def test_ruta_que_no_alcanza_avisa_en_vez_de_extrapolar(s):
 def test_multi_transform_acepta_simetria_y_supresion(s):
     c = cubo(s)
     r = llamar(s, "multi_transform", bodies=c, transforms=[
-        {"type": "rectangular", "axis": "x", "count": 2, "spacing": 20, "axis2": "y", "count2": 2, "spacing2": 30,
+        {"type": "rectangular", "axis": "x", "count": 3, "spacing": 20, "axis2": "y", "count2": 2, "spacing2": 30,
          "symmetric": True, "symmetric2": False, "suppress": [[1, 1]]},
         {"type": "circular", "axis": "z", "count": 2, "total_angle": 180, "distribution": "partial", "suppress": [1]}])
     op = s.doc.operaciones[-1]

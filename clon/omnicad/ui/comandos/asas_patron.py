@@ -10,8 +10,8 @@ from ...timeline import entidades as ent
 from ...timeline.operaciones import Contexto
 from ...timeline.parametros import ANGULO
 from ..comando import ErrorComando
-from .asas_extra import _asa_cantidad, _centro_cuerpos, _cuerpos_ids, _direccion_de, _paso
-from .comunes import evaluar_o_cero
+from .asas_extra import _a_los_dos_lados, _asa_cantidad, _centro_cuerpos, _cuerpos_ids, _direccion_de, _paso
+from .comunes import evaluar_o_cero, simetria_total
 
 MAX_CASILLAS = 400
 VERDE_REFERENCIA = (0.1, 0.7, 0.3)
@@ -97,14 +97,14 @@ def _rectangular(ctx, v, centro):
     salida = []
     if _n(v, "n1") > 1:
         salida.append(mp.Flecha("d1", centro, d1))
-    salida.append(_asa_cantidad("n1", centro, d1, _paso(v, "n1", "d1", ctx)))
+    salida.append(_asa_cantidad("n1", centro, d1, _paso(v, "n1", "d1", ctx), _a_los_dos_lados(v, "n1", ctx)))
     derivada = not v.get("dir2")
     d2 = mp.unitario(direccion_derivada(ctx, v)) if derivada else _direccion_de(ctx, v["dir2"][0])
     if d2 is None or np.linalg.norm(d2) < 1e-9:
         return salida
     if _n(v, "n2") > 1:
         salida.append(mp.Flecha("d2", centro, d2, color=(0.1, 0.62, 0.55) if derivada else mp.AZUL))
-    salida.append(_asa_cantidad("n2", centro, d2, _paso(v, "n2", "d2", ctx)))
+    salida.append(_asa_cantidad("n2", centro, d2, _paso(v, "n2", "d2", ctx), _a_los_dos_lados(v, "n2", ctx)))
     return salida
 
 
@@ -126,12 +126,13 @@ def _circular(ctx, v, centro):
         simetrico = modo == "simetrico" or (modo == "espaciado" and bool(v.get("simetrico_paso")))
         paso = sc.paso_angular(n0, total, "espaciado" if modo == "espaciado" else "completa", simetrico)
         u, signo = (centro - pie) / radio, (-1.0 if paso < 0 else 1.0)
+        dos_lados = simetrico and simetria_total(ctx)
 
         def posicion(n):
-            a = np.radians(paso * (n - 1))
+            a = np.radians(paso * ((n - 1) // 2 if dos_lados else n - 1))
             p = pie + radio * (u * np.cos(a) + np.cross(d, u) * np.sin(a))
             return p, np.cross(d, (p - pie) / radio) * signo
-        salida.append(mp.AsaCantidad("n", posicion, radio * abs(np.radians(paso)) or 10.0))
+        salida.append(mp.AsaCantidad("n", posicion, (radio * abs(np.radians(paso)) or 10.0) / (2 if dos_lados else 1)))
     return salida
 
 

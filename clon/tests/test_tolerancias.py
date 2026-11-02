@@ -114,4 +114,5 @@ def test_resolver_clase_y_desfases():
     assert ext["flancos"] == pytest.approx((0.032 + 0.132 / 2) / 2, abs=1e-4) and ext["menor"] == 0
     intr = tol.desfases_rosca("iso_metrica", 10, 1.5, "6H", True, d2, d1)
     assert intr["flancos"] == pytest.approx(0.180 / 4, abs=1e-4) and intr["menor"] == pytest.approx(0.300 / 4, abs=1e-4)
-    assert tol.desfases_rosca("iso_metrica", 10, 1.5, "", True, d2, d1) == {"flancos": 0.0, "menor": 0.0, "limites": None}
+    assert tol.desfases_rosca("iso_metrica", 10, 1.5, "", True, d2, d1) == {"flancos": 0.0, "menor": 0.0, "limites": None,
+                                                                            "fondo": None, "cresta": None}

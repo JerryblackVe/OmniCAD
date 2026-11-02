@@ -400,6 +400,94 @@ def test_normal_de_una_superficie_apunta_al_lado_positivo():
     assert not np.allclose(p[:2], (10, 10), atol=2.9)
 
 
+def _tubo(perfil, **extra):
+    doc, b = Documento(), Boceto()
+    perfil(b)
+    op = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
+    doc.agregar(op)
+    sup = OpSupExtruir(doc.nuevo_id(), curvas=[{"tipo": "curva_boceto", "boceto": op.id, "curva": c} for c in op.boceto.curvas],
+                       distancia="30 mm", **extra)
+    assert doc.agregar(sup).estado == "ok"
+    return doc, sup
+
+
+def _circulo_20(b):
+    b.agregar_circulo(b.agregar_punto(0, 0), 20)
+
+
+def _cuadrado_20(b):
+    a, c, d, e = (b.agregar_punto(*p) for p in ((-10, -10), (10, -10), (10, 10), (-10, 10)))
+    for p, q in ((a, c), (c, d), (d, e), (e, a)):
+        b.agregar_linea(p, q)
+
+
+def _radio_x(forma):
+    a, b = caja(forma)
+    return (b[0] - a[0]) / 2
+
+
+@pytest.mark.parametrize("perfil, base", [(_circulo_20, 20), (_cuadrado_20, 10)])
+def test_sup23_el_desfase_positivo_agranda_el_tubo_como_en_fusion(perfil, base):
+    doc, sup = _tubo(perfil)
+    forma = doc.estado_final.cuerpos[f"{sup.id}.c1"].forma
+    assert _radio_x(sf.desfasar_superficie(forma, 5)) == pytest.approx(base + 5, abs=1e-3)
+    assert _radio_x(sf.desfasar_superficie(forma, -5)) == pytest.approx(base - 5, abs=1e-3)
+    for cara in g.caras(forma):                               # las paredes del cuadrado, las 4 hacia afuera
+        p, n = sf.normal_muestra(cara)
+        assert float(p[:2] @ n[:2]) > 0
+
+
+def test_sup23_el_sentido_no_depende_de_como_se_recorre_el_contorno():
+    def al_reves(b):
+        a, c, d, e = (b.agregar_punto(*p) for p in ((-10, -10), (-10, 10), (10, 10), (10, -10)))
+        for p, q in ((a, c), (c, d), (d, e), (e, a)):
+            b.agregar_linea(p, q)
+    doc, sup = _tubo(al_reves)
+    forma = doc.estado_final.cuerpos[f"{sup.id}.c1"].forma
+    assert _radio_x(sf.desfasar_superficie(forma, 5)) == pytest.approx(15, abs=1e-3)
+
+
+def test_sup23_una_receta_vieja_conserva_su_lado_y_editarla_tambien():
+    doc, sup = _tubo(_circulo_20)
+    datos = doc.a_dict()
+    del datos["operaciones"][-1]["params"]["version_normal"]
+    viejo = Documento.desde_dict(datos)
+    op = viejo.operaciones[-1]
+    assert op.p["version_normal"] == 1
+    forma = viejo.estado_final.cuerpos[f"{op.id}.c1"].forma
+    assert _radio_x(sf.desfasar_superficie(forma, 5)) == pytest.approx(15, abs=1e-3)          # como siempre: +5 achica
+
+
+def test_sup23_invertir_normal_muestra_la_flecha_del_lado_que_queda():
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos import CATALOGO
+    doc, sup = _tubo(_circulo_20)
+    cuerpo = f"{sup.id}.c1"
+    v = {"cuerpos": [_hit_cuerpo(doc, cuerpo)]}
+    flechas = CATALOGO["invertir_normal"]().manipuladores(ContextoComando(doc), v)
+    punto, normal = sf.normal_muestra(doc.estado_final.cuerpos[cuerpo].forma)
+    assert len(flechas) == 1 and isinstance(flechas[0], mp.FlechaNormal)
+    assert flechas[0].origen == pytest.approx(punto) and flechas[0].direccion == pytest.approx(-normal)
+    assert CATALOGO["invertir_normal"]().manipuladores(ContextoComando(doc), {"cuerpos": []}) == []
+
+
+@pytest.mark.parametrize("sentido", [1, -1])
+def test_sup23_a_objeto_con_dos_lados_los_dos_tramos_quedan_hacia_afuera(sentido):
+    eje = gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, sentido))
+    alambre = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(gp_Circ(eje, 20.0)).Edge()).Wire()
+    tubo = sf.extruir_superficie(alambre, np.array([0.0, 0.0, 1.0]), 5, hasta=g.Plano("XY", 30.0), lados="dos_lados",
+                                 distancia2=10, afuera=True)
+    for _, tris in g.teselar_por_cara(tubo):
+        areas = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+        assert np.sum(tris.mean(axis=1)[:, :2] * areas[:, :2]) > 0      # ∑ radial·normal: hacia afuera en cada tramo
+
+
+def test_sup23_una_curva_abierta_no_cambia_de_lado():
+    linea = seg((0, 0, 0), (10, 0, 0))
+    assert sf.normal_muestra(sf.extruir_superficie(linea, Z, 5, afuera=True))[1] == pytest.approx((0, 1, 0))
+
+
 # ================================================================ pasos y diálogos
 def _h(doc, ref):
     from omnicad.ui.comando import hit_desde_ref

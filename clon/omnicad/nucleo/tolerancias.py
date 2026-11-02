@@ -269,7 +269,7 @@ def _limites_tabla(familia, diametro, paso, clase, interna):
     if interna:
         return {"diametro_mayor": [mayor, None], "diametro_flancos": par(flancos), "diametro_menor": par(menor),
                 "desviacion_fundamental": 0.0}
-    return {"diametro_mayor": par(mayor), "diametro_flancos": par(flancos), "diametro_menor": [None, None],
+    return {"diametro_mayor": par(mayor), "diametro_flancos": par(flancos), "diametro_menor": par(menor),
             "desviacion_fundamental": 0.0}
 
 
@@ -333,15 +333,21 @@ def resolver_clase(familia, diametro, paso, clase, interna):
 def desfases_rosca(familia, diametro, paso, clase, interna, diametro_flancos_basico, diametro_menor_basico):
     """Corrimientos radiales (mm) para MODELAR la rosca al centro de la zona de tolerancia de su clase:
     {"flancos": cuánto se corren los flancos hacia afuera del material (+ = más juego), "menor": cuánto crece el
-    radio del agujero (solo interior), "limites": limites_rosca o None}. Clase "" → todo 0."""
+    radio del agujero (solo interior), "limites": limites_rosca o None, "fondo" y "cresta": Ø de la tabla de Fusion al
+    que van el fondo del surco y la cresta del filete (B-122; None en las clases ISO y UN)}. Clase "" → todo 0."""
     if not clase:
-        return {"flancos": 0.0, "menor": 0.0, "limites": None}
+        return {"flancos": 0.0, "menor": 0.0, "limites": None, "fondo": None, "cresta": None}
     lim = limites_rosca(familia, diametro, paso, clase, interna)
+    mayor, menor_tabla = lim["diametro_mayor"][0], lim["diametro_menor"][0]
+    if familia not in tablas_rosca.CLASES:
+        mayor = menor_tabla = None
     f0, f1 = lim["diametro_flancos"]
     medio = (f0 + f1) / 2
     if interna:
         m0, m1 = lim["diametro_menor"]
         menor = (0.0 if m0 is None else ((m0 + m1) / 2 - diametro_menor_basico) / 2 if m1 is not None
                  else (m0 - diametro_menor_basico) / 2)
-        return {"flancos": (medio - diametro_flancos_basico) / 2, "menor": menor, "limites": lim}
-    return {"flancos": (diametro_flancos_basico - medio) / 2, "menor": 0.0, "limites": lim}
+        return {"flancos": (medio - diametro_flancos_basico) / 2, "menor": menor, "limites": lim, "fondo": mayor,
+                "cresta": menor_tabla}
+    return {"flancos": (diametro_flancos_basico - medio) / 2, "menor": 0.0, "limites": lim, "fondo": menor_tabla,
+            "cresta": mayor}
