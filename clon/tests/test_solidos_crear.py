@@ -574,6 +574,7 @@ def test_recetas_viejas_de_agujero_roscado_y_rosca_interior_dan_el_mismo_volumen
 def test_familias_de_rosca_con_datos_de_sus_normas():
     assert len(sc.FAMILIAS_ROSCA) == 24 and {"iso_metrica", "unificada", "trapezoidal", "acme", "bsp_paralela", "bsp_conica",
                                              "npt"} < set(sc.FAMILIAS_ROSCA)
+    from omnicad.timeline import operaciones  # noqa: F401  (primero: ops_solido entra por ahí, si no el ciclo de imports falla)
     from omnicad.timeline.ops_solido import FAMILIAS_ROSCA
     assert FAMILIAS_ROSCA == tuple(sc.FAMILIAS_ROSCA)
     tr = sc.datos_rosca("Tr20x4")                                            # ISO 2904: d2 = d − P/2, D1 = d − P
