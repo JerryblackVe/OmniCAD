@@ -8,6 +8,20 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-170 | La vista previa de Solevación cierra la app | Abierto | Alta | Con perfiles elegidos, `BRepOffsetAPI_MakePipeShell` da una violación de acceso dentro de la previa, en `solevar`: se cae la ventana entera. La previa tiene que correr aislada o validar antes. | nucleo/solidos_crear.py:1321 | 2026-11-02 |
+| B-169 | Escalar sin cuerpos da un error interno | Abierto | Baja | `scale_body` sin `bodies` da TypeError. Falta pedir el cuerpo con un error claro. | api/herramientas_solido_extra.py:695 | 2026-11-02 |
+| B-171 | Un desfase grande da autointersecciones y sale ok | Abierto | Media | `offset_edges` de 15 mm y `offset_surface` de 400 mm dejan el cuerpo nuevo con autointersecciones. Falta ver qué hace Fusion y si corresponde un aviso. | api/herramientas_solido.py | 2026-11-02 |
+| B-168 | Un tubo por aristas con esquinas da autointersecciones y sale ok | Abierto | Media | `create_pipe` sobre tres aristas de un cuerpo que forman esquinas: 1 autointersección en el cuerpo nuevo. Falta ver cómo resuelve Fusion las esquinas y si corresponde un aviso. | api/herramientas_solido_extra.py | 2026-11-02 |
+| B-159 | Un empalme chico sobre un vaciado cierra la app | Abierto | Alta | Caja 60 × 50 × 40, vaciado de 1 mm quitando la base y empalme de 1 mm en E10: `BRepFilletAPI_MakeFillet.Build` da una violación de acceso y se cae todo el programa. Hay que ver por qué no lo frena el `try`: un cierre nativo no es una excepción de Python; correrlo aislado o validar antes. | nucleo/solidos_modificar.py:548 | 2026-11-02 |
+| B-158 | Labio sobre una esfera cierra la app | Abierto | Media | `create_lip_groove` sobre la arista de costura de una esfera mide un alambre sin largo y da una violación de acceso. Falta rechazar esa arista con un error claro. | nucleo/solidos_crear.py:236 | 2026-11-02 |
+| B-160 | Un STEP con bytes alterados cierra la app | Abierto | Alta | `STEPCAFControl_Reader.ReadFile` da una violación de acceso con el archivo de `tests/corpus_caza/`. Abrir STEP de otros tiene que correr en el proceso aislado (`nucleo/aislado.py`), o la app cae con un archivo ajeno. | nucleo/intercambio.py:225 | 2026-11-02 |
+| B-161 | Un .omnicad o .f3d con el ZIP dañado sale como error interno | Abierto | Baja | `zlib.error` en `proyecto.py:71`, `NotImplementedError` en `proyecto.py:246` y `BadZipFile` en `f3d_nativo.py:320` no se traducen: el usuario ve INTERNAL_ERROR y un mensaje en inglés. Falta atraparlos y decir que el archivo está dañado. | io_archivos/proyecto.py:71 | 2026-11-02 |
+| B-162 | Un chaflán mayor que el radio deja el sólido abierto y el paso sale ok | Abierto | Media | Cilindro de radio 10 y chaflán de 15 en su arista: cuerpo sólido y no estanco, sin error. Falta rechazarlo o cerrar la forma, comparando con Fusion. | nucleo/solidos_modificar.py | 2026-11-02 |
+| B-163 | Extender superficie sobre un sólido lo deja abierto | Abierto | Media | `extend_surface` en una arista de una caja da ok; el cuerpo sigue como sólido, no estanco, y en cadenas llegó a volumen negativo. `untrim_surface` sobre un sólido hace lo mismo. Falta rechazarlo en sólidos o pasarlo a superficie. | api/herramientas_superficie.py | 2026-11-02 |
+| B-164 | Extruir varias caras a la vez deja un cuerpo roto | Abierto | Media | Con caras de distinta orientación el cuerpo nuevo sale con volumen 0 o con autointersecciones, y el STEP exportado pierde ese cuerpo. Falta rechazarlo o extruir cada cara aparte. | timeline/operaciones.py | 2026-11-02 |
+| B-165 | Un agujero tangente a dos paredes deja aristas no manifold y sale ok | Abierto | Media | Agujero de 60 mm en una cara de 60 mm de ancho: pasa justo por las dos paredes. Falta decidir si da error o aviso, comparando con Fusion. | nucleo/solidos_crear.py | 2026-11-02 |
+| B-166 | Desfasar caras de una superficie la deja inválida y sale ok | Abierto | Media | `offset_surface` y después `offset_faces` de 40 mm sobre la cara nueva: `check_geometry` da inválido. El paso tendría que fallar o avisar. | nucleo/solidos_modificar.py | 2026-11-02 |
+| B-167 | El patrón geométrico sobre chapa da autointersecciones y sale ok | Abierto | Media | Dos caras de una pestaña con los valores por defecto: 2 autointersecciones. Falta ver si las copias se pisan y si tiene que unirlas o avisar. Con una distancia de 2 mm sobre una cara grande tarda más de 40 s y no se puede cortar. | api/herramientas_solido_extra.py | 2026-11-02 |
 | B-157 | Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok | Abierto | Alta | El corte exterior atraviesa la pared y las caras de la cavidad quedan sueltas por fuera. El cuerpo da válido y estanco, pero con 16 autointersecciones: falta detectarlo y decidir qué hace cada caso comparando con Fusion. | omnicad/nucleo/solidos_modificar.py:496 | 2026-11-02 |
 | B-153 | Teselar deja abiertas las caras muy finas que OpenCascade abandona a medio mallar | Abierto | Media | Rugged Box `obj_3`: unas 25 de 1088 caras quedan con menos triángulos que nodos (cara 708: 67 nodos y 2 triángulos). El nodo sin llenar ya no llega a la malla (B-151), pero la malla sale abierta y `compare_to_mesh` da `closed: false`. Falta rellenar esas caras con sus aristas o reintentar con otro parámetro. | nucleo/geometria.py `_nodos_de_la_cara`; tests/test_geometria.py::test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos | 2026-11-01 |
 | B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
@@ -55,6 +69,132 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
+### B-170 · La vista previa de Solevación cierra la app
+
+- **Qué:** ventana real, comando `solevacion`, semilla `69704464-D-6` de la capa D (perfiles elegidos con el visor).
+- **Esperado:** La previa o un error en el panel.
+- **Obtenido:** Violación de acceso en `solevar`, llamada desde `_calcular_previa_ahora`: se cierra la ventana.
+- **Cómo reproducir:** `cazar.py repetir "proceso||cierre_c0000005@solidos_crear.py:1321"`. No está en el corpus: necesita la ventana.
+- **Entorno:** Windows, versión 0.2.0, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-169 · Escalar sin cuerpos da un error interno
+
+- **Qué:** `scale_body()` sin argumentos.
+- **Esperado:** Un error que pida el cuerpo.
+- **Obtenido:** INTERNAL_ERROR: «'NoneType' object is not iterable».
+- **Cómo reproducir:** `clon/tests/corpus_caza/b169_escalar_sin_cuerpos.json`.
+- **Entorno:** Windows, versión 0.2.0, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-171 · Un desfase grande da autointersecciones y sale ok
+
+- **Qué:** Las recetas `b171_desfase_aristas` y `b171_desfase_superficie`.
+- **Esperado:** Un cuerpo sin autointersecciones, o un aviso.
+- **Obtenido:** Paso ok, con 1 y con 6 autointersecciones.
+- **Cómo reproducir:** `clon/tests/corpus_caza/b171_*.json`.
+- **Entorno:** Windows, versión 0.2.0, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-168 · Un tubo por aristas con esquinas da autointersecciones y sale ok
+
+- **Qué:** cuerpo con caras extruidas y `create_pipe(edges=["Cuerpo2/E9", "Cuerpo2/E4", "Cuerpo2/E8"])`.
+- **Esperado:** un tubo sin autointersecciones, o un aviso.
+- **Obtenido:** paso ok, cuerpo nuevo con 1 autointersección.
+- **Cómo reproducir:** `clon/tests/corpus_caza/b168_tubo_esquinas.json`; `cazar.py repetir <firma>`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-159 · Un empalme chico sobre un vaciado cierra la app
+
+- **Qué:** `create_box(60, 50, 40)`, `shell(body="Cuerpo1", thickness=1, faces="<Z")`, `find_edges`, `fillet(body="op1.c1", edges=["Cuerpo1/E10"], radius=1)`.
+- **Esperado:** El empalme, o un error.
+- **Obtenido:** Violación de acceso en `mf.Build()`: se cae el proceso entero, sin error ni autoguardado.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-158 · Labio sobre una esfera cierra la app
+
+- **Qué:** `create_sphere(radius=10)`, `find_edges`, `create_lip_groove(edges=["Cuerpo1/E3"])`.
+- **Esperado:** Un error claro: esa arista no sirve para un labio.
+- **Obtenido:** Violación de acceso en `_punto_en`: se cae el proceso.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-160 · Un STEP con bytes alterados cierra la app
+
+- **Qué:** `open_document` con `tests/corpus_caza/b160_step_roto.step`, un STEP de la app con bytes alterados.
+- **Esperado:** Error «No se pudo leer el archivo STEP».
+- **Obtenido:** Violación de acceso dentro de `ReadFile`: se cae el proceso.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-161 · Un .omnicad o .f3d con el ZIP dañado sale como error interno
+
+- **Qué:** `open_document` con `tests/corpus_caza/b161_omnicad_roto.omnicad` e `inspect_f3d` con `tests/corpus_caza/b161_f3d_roto.f3d`.
+- **Esperado:** Un error que diga que el archivo está dañado.
+- **Obtenido:** INTERNAL_ERROR con «Error -3 while decompressing data» y «Bad magic number for file header».
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-162 · Un chaflán mayor que el radio deja el sólido abierto y el paso sale ok
+
+- **Qué:** `create_cylinder(radius=10, height=30)`, `chamfer(edges=["Cuerpo1/E1"], distance=15)`.
+- **Esperado:** Un error, o una forma cerrada.
+- **Obtenido:** Paso ok y `check_geometry` no estanco.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-163 · Extender superficie sobre un sólido lo deja abierto
+
+- **Qué:** `create_box(80, 60, 40)`, `extend_surface(edges=["Cuerpo1/E4"], extension_type="tangent")`.
+- **Esperado:** Un error: un sólido no se extiende, o el cuerpo pasa a superficie.
+- **Obtenido:** Paso ok, tipo sólido y no estanco.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-164 · Extruir varias caras a la vez deja un cuerpo roto
+
+- **Qué:** Caja hueca, `extrude(faces=["Cuerpo1/F2"])` y `extrude(faces=["Cuerpo1/F2", "Cuerpo1/F3"])`.
+- **Esperado:** Un cuerpo válido por cara, o un error.
+- **Obtenido:** Cuerpo4 con volumen 0; en otra pieza, 4 autointersecciones.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-165 · Un agujero tangente a dos paredes deja aristas no manifold y sale ok
+
+- **Qué:** `create_box(80, 60, 40)`, `create_hole(diameter=60, face="Cuerpo1/F5", depth=60)`.
+- **Esperado:** Sin aristas compartidas por más de dos caras, o un aviso.
+- **Obtenido:** Paso ok y una arista no manifold.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-166 · Desfasar caras de una superficie la deja inválida y sale ok
+
+- **Qué:** Caja, vaciado de 2 mm, `offset_surface(faces=["Cuerpo1/F7"])`, `offset_faces(faces=["Cuerpo2/F1"], distance=40)`.
+- **Esperado:** Una superficie válida o un error.
+- **Obtenido:** Paso ok y `check_geometry` inválido.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
+### B-167 · El patrón geométrico sobre chapa da autointersecciones y sale ok
+
+- **Qué:** Pestaña de chapa de 80 × 50 y `create_geometric_pattern(faces=["Cuerpo1/F5", "Cuerpo1/F6"])`.
+- **Esperado:** Una forma sin autointersecciones.
+- **Obtenido:** Paso ok, válido y estanco, con 2 autointersecciones.
+- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
+- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
+- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
+
 ### B-157 · Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok
 
 - **Qué:** versión 0.2.0, en vivo. Boceto en XZ, trapecio de 82,74 × 71,14 mm; Extrusión 43,66 mm con conicidad −31,5°; Vaciado interior 1,91 mm quitando la cara de y = −43,66; Empalme 16,05 mm en la arista de (0, 0) y Chaflán 20,28 mm en la de (−82,74, 0), las dos en la cara de y = 0.
@@ -62,6 +202,7 @@ de arriba manda sobre este texto.
 - **Obtenido:** los pasos dan `ok`, pero las esquinas interiores de la cavidad quedan afuera como dos aletas. `check_geometry`: válido, estanco y 16 autointersecciones. La caja da 75,92 mm de ancho, y esa medida la marcan las aletas.
 - **Cómo reproducir:** los pasos de arriba en un documento nuevo; mirar la vista superior en alambre o correr `check_geometry`.
 - **Causa probable:** sin leer en detalle. `BRepFilletAPI_MakeFillet` solo mira las caras vecinas de la arista y no ve la cavidad; el paso acepta su salida porque `es_valida` no busca autointersecciones.
+- **También:** el cazador la encontró solo (2026-11-02): desde 5 veces la pared aparecen autointersecciones, y con un chaflán de 48,4 mm sobre una pared de 2 el volumen da negativo (−16 579 mm³). Casos en `clon/tests/corpus_caza/b157_*.json`.
 - **Esquive:** empalme y chaflán antes del vaciado, o un tamaño menor que la pared.
 - **Prueba propuesta:** caja vaciada con empalme mayor que la pared: el resultado sin autointersecciones, o un error claro.
 - **Evidencia:** los tres renders y la captura de esta revisión quedaron en la sesión; `check_geometry` del 2026-11-02 sobre `op159.c1`.

@@ -102,6 +102,16 @@ La ventana corre minimizada, así que la PC se puede seguir usando. De a un proc
 
 Si el cupo semanal se acaba, cada fase queda usable sola.
 
+## Cómo quedó
+
+Fases 1 a 4 hechas el 2026-11-02, en `scripts/caza/`: `cazar.py` coordina, `trabajador.py` corre los casos, `generador.py` arma los argumentos desde el catálogo, `jueces.py` decide y `ventana.py` es la capa D. Decisiones que afinan lo de arriba:
+
+- **Un proceso cada 40 casos, no uno por caso.** Abrir Python y OpenCascade tarda 1,5 s y la `rapida` no entraría. Un cuelgue o un cierre sigue siendo un hallazgo y no corta la corrida, y todo caso se confirma en un proceso nuevo antes de informarse.
+- **En la `rapida`, los jueces que rehacen la pieza corren en uno de cada tres pasos.** Son recalcular, deshacer, guardar, exportar, editar, mover e identidad. En `noche` corren en todos.
+- **La capa A no entra entera en una `rapida`.** Sigue por donde quedó en la corrida siguiente, con el contador en `cobertura.json`.
+- **Sesgo a las operaciones sobre la pieza.** El 60 % de los pasos, y siempre el primero, sale de las herramientas de sólido con caras o aristas y una medida (`es_nucleo`). Sin eso, B-157 no aparecía en 10 minutos.
+- **El corpus no guarda cuelgues:** un caso de 40 s no entra en la suite normal.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-02. Modelo sugerido: Opus 5, esfuerzo alto. Un solo agente, sin OpenCode.

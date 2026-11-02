@@ -1,0 +1,65 @@
+{
+ "id": "B-171",
+ "firma": "geometria|offset_surface|autointersecciones",
+ "pasos": [
+  {
+   "tool": "create_sketch",
+   "args": {}
+  },
+  {
+   "tool": "draw_rectangle",
+   "args": {
+    "x1": 0,
+    "y1": 0,
+    "x2": 60,
+    "y2": 40
+   }
+  },
+  {
+   "tool": "draw_circle",
+   "args": {
+    "center_x": 30,
+    "center_y": 20,
+    "radius": 8
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "sketch": "Boceto1",
+    "profile": "all"
+   }
+  },
+  {
+   "tool": "chamfer",
+   "args": {
+    "edges": [
+     "Cuerpo1/E8"
+    ],
+    "distance": 19.0
+   }
+  },
+  {
+   "tool": "fillet",
+   "args": {
+    "body": "op2.c1",
+    "edges": [
+     "Cuerpo1/E3"
+    ],
+    "radius": 2.0
+   }
+  },
+  {
+   "tool": "offset_surface",
+   "args": {
+    "body": "op2.c1",
+    "faces": [
+     "Cuerpo1/F5",
+     "Cuerpo1/F8",
+     "Cuerpo1/F2"
+    ],
+    "distance": 400.0
+   }
+  }
+ ]
+}

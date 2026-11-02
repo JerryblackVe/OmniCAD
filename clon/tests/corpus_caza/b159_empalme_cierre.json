@@ -1,0 +1,32 @@
+{
+ "id": "B-159",
+ "firma": "proceso|fillet|cierre_c0000005@solidos_modificar.py:548",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 60,
+    "width": 50,
+    "height": 40
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 1,
+    "faces": "<Z"
+   }
+  },
+  {
+   "tool": "fillet",
+   "args": {
+    "body": "op1.c1",
+    "edges": [
+     "Cuerpo1/E10"
+    ],
+    "radius": 1.0
+   }
+  }
+ ]
+}

@@ -168,6 +168,20 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - El cierre completo corre con `scripts/cierre_completo.sh` solo cuando Gerardo diga «corré todo» o lance la
   sesión nocturna. Lo verde se borra de la lista; lo rojo va a `docs/seguimiento/`.
 
+## Caza automática de errores
+- `scripts/caza/` es un programa que busca errores solo, sin modelos ni red: cadenas de operaciones con medidas
+  relativas a la pieza, contratos de cada herramienta, archivos alterados, eventos al azar en la ventana y rendimiento.
+  Doce jueces automáticos deciden si la pieza quedó bien. Especificación: `docs/plan_caza_errores.md`.
+- Comandos, desde `clon/` con el Python del venv:
+  - `../scripts/caza/cazar.py rapida`: antes de cada versión (10 min).
+  - `../scripts/caza/cazar.py noche --horas 7`: cuando Gerardo lo pida o después de una tanda grande.
+  - `../scripts/caza/cazar.py tema empalme`: después de tocar una operación (5 min).
+  - `../scripts/caza/cazar.py repetir <firma>`: comprueba un arreglo.
+- Hace fila con `scripts/turno.py`, usa solo carpetas temporales y sigue donde estaba si se corta.
+- El informe sale en `evidencias/caza_<fecha>/informe.md`. Lo lee quien coordina (Haiku o Sonnet bajo): carga las filas
+  en `docs/seguimiento/`, suma la firma a `scripts/caza/conocidos.json` y el caso mínimo a `clon/tests/corpus_caza/`.
+  Lo que quedó «sin confirmar» se confirma solo en la corrida siguiente.
+
 ## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
 - **Cada tarea lleva su modelo y su esfuerzo elegidos a conciencia**, y se dicen en una línea ANTES de abrir la
   sesión (`start_session`, `model` y `effort`) o de mandar el trabajo. Nunca el valor por defecto ni «alto» por

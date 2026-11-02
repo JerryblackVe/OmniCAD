@@ -184,8 +184,11 @@ Estado de cada punto, verificado contra el código: [docs/seguimiento/](docs/seg
 
 ### Errores conocidos
 
-Hoy hay 13 errores abiertos (lista completa en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md)). Los que pueden afectarte:
+Hoy hay 28 errores abiertos (lista completa en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md)). Los que pueden afectarte:
 
+- **Pueden cerrar la app:** la vista previa de Solevación, un empalme chico sobre un vaciado, el Labio sobre una esfera y abrir un STEP dañado.
+- Un empalme o chaflán más grande que la pared de un vaciado deja aletas sueltas y el paso sale bien: hacelo antes del vaciado.
+- Otras operaciones con medidas al límite pueden dejar un cuerpo roto sin avisar: chaflán mayor que el radio, tubo por aristas con esquinas, desfase grande y agujero tangente a dos paredes.
 - Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar.
 - Teselar o comparar con una malla deja abiertas unas pocas caras muy finas en piezas con más de mil caras.
 - Un cuerpo que pasa a otro componente puede seguir a la unión del componente anterior.

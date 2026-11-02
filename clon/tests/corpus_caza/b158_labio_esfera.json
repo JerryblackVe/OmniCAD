@@ -1,0 +1,20 @@
+{
+ "id": "B-158",
+ "firma": "proceso|create_lip_groove|cierre_c0000005@solidos_crear.py:236",
+ "pasos": [
+  {
+   "tool": "create_sphere",
+   "args": {
+    "radius": 10
+   }
+  },
+  {
+   "tool": "create_lip_groove",
+   "args": {
+    "edges": [
+     "Cuerpo1/E3"
+    ]
+   }
+  }
+ ]
+}

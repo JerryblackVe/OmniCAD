@@ -1,0 +1,39 @@
+{
+ "id": "B-164",
+ "firma": "numeros|extrude|volumen_no_positivo",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 80,
+    "width": 60,
+    "height": 40
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 2,
+    "faces": ">Z"
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "faces": [
+     "Cuerpo1/F2"
+    ]
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "faces": [
+     "Cuerpo1/F2",
+     "Cuerpo1/F3"
+    ]
+   }
+  }
+ ]
+}

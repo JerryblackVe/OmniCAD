@@ -1,0 +1,39 @@
+{
+ "id": "B-166",
+ "firma": "geometria|offset_faces|invalido",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 60,
+    "width": 50,
+    "height": 40
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 2,
+    "faces": ">X"
+   }
+  },
+  {
+   "tool": "offset_surface",
+   "args": {
+    "faces": [
+     "Cuerpo1/F7"
+    ]
+   }
+  },
+  {
+   "tool": "offset_faces",
+   "args": {
+    "faces": [
+     "Cuerpo2/F1"
+    ],
+    "distance": 40.0
+   }
+  }
+ ]
+}

@@ -167,8 +167,11 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
 
 ### Known issues
 
-There are 13 open bugs today (full list in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md), Spanish). Those that may affect you:
+There are 28 open bugs today (full list in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md), Spanish). Those that may affect you:
 
+- **May close the app:** the Loft preview, a small fillet on a shelled part, Lip on a sphere, and opening a damaged STEP file.
+- A fillet or chamfer larger than the wall of a shell leaves loose fins and the step still reports success: apply it before the shell.
+- Other operations at extreme sizes can leave a broken body without warning: chamfer larger than the radius, pipe along cornered edges, large offset, and a hole tangent to two walls.
 - Cutting with a sphere almost tangent to a wall can remove too little without warning.
 - Tessellating or comparing with a mesh leaves a few very thin faces open on parts with over a thousand faces.
 - A body that moves to another component can keep following the joint of its previous component.

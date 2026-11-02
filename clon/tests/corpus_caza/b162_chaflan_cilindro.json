@@ -1,0 +1,22 @@
+{
+ "id": "B-162",
+ "firma": "geometria|chamfer|abierto",
+ "pasos": [
+  {
+   "tool": "create_cylinder",
+   "args": {
+    "radius": 10,
+    "height": 30
+   }
+  },
+  {
+   "tool": "chamfer",
+   "args": {
+    "edges": [
+     "Cuerpo1/E1"
+    ],
+    "distance": 15.0
+   }
+  }
+ ]
+}

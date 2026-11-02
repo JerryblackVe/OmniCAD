@@ -1,0 +1,22 @@
+{
+ "id": "B-165",
+ "firma": "geometria|create_hole|no_manifold",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 80,
+    "width": 60,
+    "height": 40
+   }
+  },
+  {
+   "tool": "create_hole",
+   "args": {
+    "diameter": 60.0,
+    "face": "Cuerpo1/F5",
+    "depth": 60.0
+   }
+  }
+ ]
+}

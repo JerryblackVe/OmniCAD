@@ -1,0 +1,31 @@
+{
+ "id": "B-157",
+ "firma": "numeros|chamfer|volumen_no_positivo",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 80,
+    "width": 60,
+    "height": 40
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 2,
+    "faces": ">Z"
+   }
+  },
+  {
+   "tool": "chamfer",
+   "args": {
+    "edges": [
+     "Cuerpo1/E7"
+    ],
+    "distance": 48.4
+   }
+  }
+ ]
+}

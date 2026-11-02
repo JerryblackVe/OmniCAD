@@ -1,0 +1,23 @@
+{
+ "id": "B-163",
+ "firma": "geometria|extend_surface|abierto",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 80,
+    "width": 60,
+    "height": 40
+   }
+  },
+  {
+   "tool": "extend_surface",
+   "args": {
+    "edges": [
+     "Cuerpo1/E4"
+    ],
+    "extension_type": "tangent"
+   }
+  }
+ ]
+}

@@ -1,0 +1,31 @@
+{
+ "id": "B-157",
+ "firma": "geometria|fillet|autointersecciones",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 80,
+    "width": 60,
+    "height": 40
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 2,
+    "faces": ">Z"
+   }
+  },
+  {
+   "tool": "fillet",
+   "args": {
+    "edges": [
+     "Cuerpo1/E1"
+    ],
+    "radius": 16.0
+   }
+  }
+ ]
+}

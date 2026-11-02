@@ -1,0 +1,12 @@
+{
+ "id": "B-160",
+ "firma": "proceso|open_document|cierre_c0000005@intercambio.py:225",
+ "pasos": [
+  {
+   "tool": "open_document",
+   "args": {
+    "path": "{CORPUS}/b160_step_roto.step"
+   }
+  }
+ ]
+}

@@ -65,7 +65,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `docs/` | Índice de todo en `docs/README.md`. Estado (bugs, faltantes, mejoras) en `docs/seguimiento/`; especificación de faltantes en `brechas_*.md`; planes `plan_*.md`; `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`). Al lado, `omnicad-test/`: probar el programa y anotar los hallazgos (no la instala `setup`) |
-| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno); `fusion_docs.py` (buscar en la ayuda de Fusion); `prueba_ui/` (prueba de la ventana como usuario, ver CLAUDE.md); `bench_booleana.py` (tiempo de Nuevo / Unir / Cortar / Intersecar por etapa); `bench_nativo.py` (Zstandard del `.f3d` y BVH de rayos, con y sin Rust: `OMNICAD_SIN_RUST=1`); `generar_tablas_rosca.py` (rehace `nucleo/tablas_rosca.py` desde los XML de Fusion instalados) |
+| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno); `fusion_docs.py` (buscar en la ayuda de Fusion); `prueba_ui/` (prueba de la ventana como usuario, ver CLAUDE.md); `bench_booleana.py` (tiempo de Nuevo / Unir / Cortar / Intersecar por etapa); `bench_nativo.py` (Zstandard del `.f3d` y BVH de rayos, con y sin Rust: `OMNICAD_SIN_RUST=1`); `generar_tablas_rosca.py` (rehace `nucleo/tablas_rosca.py` desde los XML de Fusion instalados); `caza/` (cazador automático de errores: `cazar.py rapida|noche|tema|repetir`) |
 | `PROJECT_LOG.md` | Bitácora (Registro) y "Lecciones aprendidas" |
 
 **`nucleo/`, `timeline/`, `restricciones/` e `io_archivos/` NO importan Qt** (comprobado: cero

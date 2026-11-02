@@ -1,0 +1,67 @@
+{
+ "id": "B-168",
+ "firma": "geometria|create_pipe|autointersecciones",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 60,
+    "width": 50,
+    "height": 20
+   }
+  },
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 30,
+    "width": 30,
+    "height": 30
+   }
+  },
+  {
+   "tool": "create_component",
+   "args": {
+    "bodies": [
+     "Cuerpo1"
+    ]
+   }
+  },
+  {
+   "tool": "create_component",
+   "args": {
+    "bodies": [
+     "Cuerpo2"
+    ]
+   }
+  },
+  {
+   "tool": "create_joint",
+   "args": {
+    "origin1": ">Z",
+    "body1": "Cuerpo1",
+    "origin2": "<Z",
+    "body2": "Cuerpo2"
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "faces": [
+     "Cuerpo2/F3",
+     "Cuerpo2/F1",
+     "Cuerpo2/F4"
+    ]
+   }
+  },
+  {
+   "tool": "create_pipe",
+   "args": {
+    "edges": [
+     "Cuerpo2/E9",
+     "Cuerpo2/E4",
+     "Cuerpo2/E8"
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "id": "B-161",
+ "firma": "contrato|open_document|INTERNAL_ERROR@proyecto.py:246",
+ "pasos": [
+  {
+   "tool": "open_document",
+   "args": {
+    "path": "{CORPUS}/b161_omnicad_version.omnicad"
+   }
+  }
+ ]
+}
