@@ -137,6 +137,55 @@ def _en_ruta(aristas, distancia, absoluta):
     return _en_curva(curva, largo, float(distancia) if absoluta else float(distancia) * largo)
 
 
+def largo_ruta(aristas):
+    """Largo de la ruta en mm."""
+    return GCPnts_AbscissaPoint.Length_s(BRepAdaptor_CompCurve(_alambre(aristas)))
+
+
+def distancia_en_ruta(aristas, punto):
+    """Distancia (mm, desde el inicio) del lugar de la ruta más cercano a `punto`: el plano normal a la ruta ahí pasa
+    por el punto (Extensión «Al objeto» de Plano en ruta). Busca en una muestra y afina por sección áurea."""
+    curva = BRepAdaptor_CompCurve(_alambre(aristas))
+    largo = GCPnts_AbscissaPoint.Length_s(curva)
+    q = punto_de(punto)
+    dist = lambda s: float(np.linalg.norm(_en_curva(curva, largo, s)[0] - q))  # noqa: E731
+    muestra = np.linspace(0.0, largo, 129)
+    i = int(np.argmin([dist(s) for s in muestra]))
+    a, b = muestra[max(i - 1, 0)], muestra[min(i + 1, 128)]
+    r = (math.sqrt(5) - 1) / 2
+    for _ in range(50):
+        c, d = b - r * (b - a), a + r * (b - a)
+        a, b = (a, d) if dist(c) < dist(d) else (c, b)
+    return (a + b) / 2
+
+
+def cadena_tangente(arista, vecinas):
+    """`arista` más las de `vecinas` conectadas a ella por tangencia, siguiendo desde sus dos extremos (Cadena tangente
+    de Plano en ruta y Punto a lo largo de la ruta)."""
+    def extremos(e):
+        c = BRepAdaptor_Curve(e)
+        salida = []
+        for u, signo in ((c.FirstParameter(), -1.0), (c.LastParameter(), 1.0)):
+            p, v = gp_Pnt(), gp_Vec()
+            c.D1(u, p, v)
+            salida.append((_np(p), _unitario(_np(v), "La tangente de la arista") * signo))      # tangente que sale de la arista
+        return salida
+
+    arista = TopoDS.Edge(arista)
+    libres = [(e, extremos(e)) for e in map(TopoDS.Edge, vecinas) if not e.IsSame(arista) and not BRep_Tool.Degenerated_s(e)]
+    cadena, pendientes = [arista], extremos(arista)
+    while pendientes:
+        p, t = pendientes.pop()
+        for j, (e, ext) in enumerate(libres):
+            i = next((k for k, (q, s) in enumerate(ext) if np.linalg.norm(p - q) < 1e-6 and float(t @ s) < -1 + 1e-6), None)
+            if i is not None:
+                cadena.append(e)
+                pendientes.append(ext[1 - i])
+                del libres[j]
+                break
+    return cadena
+
+
 def muestras_ruta(aristas, fracciones):
     """Puntos (N, 3) de la ruta en cada fracción de su largo (también fuera de 0 a 1: se prolonga recta). Para dibujar
     y tirar del asa de «Plano en ruta» y «Punto a lo largo de la ruta»."""
@@ -338,6 +387,14 @@ def plano_perpendicular(cara_o_arista, punto, *, direccion="U", distancia=0.0):
     return geo.Plano.desde_marco(p, eje, n, "Plano perpendicular").desplazado(distancia)
 
 
+def plano_perpendicular_en_plano(base, referencia, *, distancia=0.0):
+    """Plano perpendicular a `base` (cara plana o plano) que pasa por la recta donde `referencia` corta a `base`: lo que
+    ubica a un Plano perpendicular cuyo Objeto de referencia es una cara plana o un plano."""
+    b = plano_de(base)
+    eje = eje_dos_planos(b, referencia)
+    return geo.Plano.desde_marco(eje.punto, np.cross(b.normal, eje.direccion), b.normal, "Plano perpendicular").desplazado(distancia)
+
+
 def plano_en_ruta(aristas_ruta, distancia_rel, *, absoluta=False):
     """Plano a lo largo de una ruta [SLD-CONSTRUCT-PLANE-ALONG-PATH], normal a la ruta.
     `distancia_rel` es la proporción del largo (Proportional); con `absoluta=True`, milímetros."""
@@ -493,6 +550,74 @@ def punto_en_ruta(aristas, distancia_rel, *, absoluta=False):
     return _en_ruta(aristas, distancia_rel, absoluta)[0]
 
 
+# ---------------------------------------------------------------- puntos de forzado
+def centro_cara(cara):
+    """Centro de una cara: el centroide si es plana; si es curva, el punto del medio de su rango (u, v), que sí está
+    sobre la superficie (el centroide de un cilindro cae en su eje)."""
+    cara = _cara(cara)
+    if geo.plano_de_cara(cara) is not None:
+        return np.array(geo.centro_masa(cara, superficie=True), float)
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    return _evaluar(cara, (u0 + u1) / 2, (v0 + v1) / 2)[0]
+
+
+def centro_arista(arista):
+    """Centro de una arista: el centro si es un círculo o una elipse cerrados; si no, su punto medio."""
+    arista = _arista(arista)
+    c = BRepAdaptor_Curve(arista)
+    if c.GetType() in (GeomAbs_Circle, GeomAbs_Ellipse) and BRep_Tool.IsClosed_s(arista):
+        return punto_centro(arista)
+    return punto_en_ruta(arista, 0.5)
+
+
+def lugar_en_cara(cara, punto):
+    """(s, t) del punto más cercano sobre la cara, como fracción de su rango (u, v): así el lugar tocado sigue a la cara
+    cuando cambia de tamaño (`punto_lugar` lo vuelve a 3D)."""
+    cara = _cara(cara)
+    u, v = _proyectar_en_cara(cara, punto_de(punto))
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    s = BRepAdaptor_Surface(cara)
+    if s.IsUPeriodic():
+        u += s.UPeriod() * math.ceil((u0 - u) / s.UPeriod())
+    if s.IsVPeriodic():
+        v += s.VPeriod() * math.ceil((v0 - v) / s.VPeriod())
+    return [(u - u0) / ((u1 - u0) or 1.0), (v - v0) / ((v1 - v0) or 1.0)]
+
+
+def punto_lugar(cara, st):
+    cara = _cara(cara)
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    return _evaluar(cara, u0 + (u1 - u0) * float(st[0]), v0 + (v1 - v0) * float(st[1]))[0]
+
+
+def puntos_tangenciales(cara):
+    """{índice: punto} de los puntos tangenciales de una cara curva, los que caen sobre ella: los cuatro cuadrantes del
+    ecuador o de media altura de un cilindro, cono o esfera, los polos de la esfera, y los anillos exterior y superior
+    de un toroide. El índice es fijo aunque la cara cambie (no cuenta los que un recorte dejó afuera)."""
+    from .consultas import punto_en_cara
+    cara = _cara(cara)
+    tipo = BRepAdaptor_Surface(cara).GetType()
+    cuartos = [k * math.pi / 2 for k in range(4)]
+    if tipo in (GeomAbs_Cylinder, GeomAbs_Cone):
+        _, _, v0, v1 = BRepTools.UVBounds_s(cara)
+        uv = [(u, (v0 + v1) / 2) for u in cuartos]
+    elif tipo == GeomAbs_Sphere:
+        uv = [(u, 0.0) for u in cuartos] + [(0.0, math.pi / 2), (0.0, -math.pi / 2)]
+    elif tipo == GeomAbs_Torus:
+        uv = [(u, 0.0) for u in cuartos] + [(u, math.pi / 2) for u in cuartos]
+    else:
+        return {}
+    s = BRepAdaptor_Surface(cara)
+    salida = {k: _np(s.Value(u, v)) for k, (u, v) in enumerate(uv)}
+    return {k: p for k, p in salida.items() if punto_en_cara(cara, p, 1e-4)}
+
+
+def puntos_forzado_cara(cara):
+    """[(modo, datos, punto)] de los puntos de forzado de una cara: su centro y sus puntos tangenciales. `modo` y `datos`
+    son los de la referencia «forzado» de `timeline.entidades`."""
+    return [("centro_cara", {}, centro_cara(cara))] + [("tangencial", {"indice": k}, p) for k, p in puntos_tangenciales(cara).items()]
+
+
 # ---------------------------------------------------------------- sistema de coordenadas
 def _direccion_de(entidad):
     if isinstance(entidad, TopoDS_Shape) or isinstance(entidad, Eje) or isinstance(entidad, gp_Ax1):
@@ -500,16 +625,23 @@ def _direccion_de(entidad):
     return _unitario(entidad)
 
 
-def scu(origen, eje_x, eje_y=None, *, angulos=(0.0, 0.0, 0.0), desfase=(0.0, 0.0, 0.0)):
+def scu(origen, eje_x, eje_y=None, *, eje_z=None, angulos=(0.0, 0.0, 0.0), desfase=(0.0, 0.0, 0.0)):
     """Sistema de coordenadas de usuario [SLD-DEFINE-UCS]: marco ortonormal derecho.
 
-    `eje_x` manda; `eje_y` se ortogonaliza contra X (si falta, se elige uno perpendicular). Ejes:
-    vectores, aristas rectas o `Eje`. `desfase` (Offset X/Y/Z) se mide en los ejes del SCU y
-    `angulos` (X/Y/Z Angle, grados) giran el SCU alrededor de sus propios ejes X, luego Y, luego Z.
-    Devuelve {"origen", "x", "y", "z", "matriz" (4×4 local→mundo), "plano" (su plano XY)}."""
+    `eje_x` manda; `eje_y` se ortogonaliza contra X (si falta, se elige uno perpendicular). Con `eje_z` (Z Axis Alignment)
+    manda Z y `eje_x` se ortogonaliza contra él; `eje_y` no cuenta. Ejes: vectores, aristas rectas o `Eje`. `desfase`
+    (Offset X/Y/Z) se mide en los ejes del SCU y `angulos` (X/Y/Z Angle, grados) giran el SCU alrededor de sus propios
+    ejes X, luego Y, luego Z. Devuelve {"origen", "x", "y", "z", "matriz" (4×4 local→mundo), "plano" (su plano XY)}."""
     o = punto_de(origen)
     x = _direccion_de(eje_x)
-    if eje_y is None:
+    if eje_z is not None:
+        z = _direccion_de(eje_z)
+        x = x - z * float(x @ z)
+        if np.linalg.norm(x) < 1e-9:
+            x = np.cross((0.0, 1.0, 0.0) if abs(z[1]) < 0.9 else (1.0, 0.0, 0.0), z)
+        x = x / np.linalg.norm(x)
+        y = np.cross(z, x)
+    elif eje_y is None:
         y = np.cross((0.0, 0.0, 1.0) if abs(x[2]) < 0.9 else (1.0, 0.0, 0.0), x)
     else:
         y = _direccion_de(eje_y)

@@ -1,40 +1,13 @@
 # CONSTRUIR: capturas de Fusion contra OmniCAD
 
-Especificación de las filas CON-n de `docs/seguimiento/`, más B-130 y B-131. El estado vive solo allá.
+Especificación de CON-1 a CON-8, B-130 y B-131, resueltos el 2026-11-01.
 
 **Fuentes:** 20 capturas de Fusion en español en `C:\Users\mosos\Desktop\DISEÑO FUSION 360\plano`, y la sección
 «Construction geometry» de `docs/fusion_docs` (carpeta `fusion-model`; árbol en `docs/fusion_docs/indice/fusion-model.md`).
 Se comparó el 2026-11-01 contra los campos reales de cada comando y con pruebas por API.
 
-**Límite de esta revisión:** ninguna herramienta se probó en la ventana. `scripts/prueba_ui/todo.py` tampoco tiene una
-pieza de CONSTRUIR. La columna «Cálculo» dice lo que dio la API; lo que pasa con el mouse está sin verificar.
-
-## Estado por herramienta
-
-| Herramienta | Cálculo | Qué falta |
-|---|---|---|
-| Plano de desfase | Anda | Extensión Al objeto, Desfase, Tamaño |
-| Plano en el ángulo | Anda | Desfase, Tamaño, asa de ángulo sin comprobar |
-| Plano tangente | Anda | Desfase, Tamaño |
-| Plano medio | Anda, también no paralelos | Tamaño |
-| Plano perpendicular | **A medias** | Otro modelo: ver CON-4 |
-| Plano a través de dos aristas | Anda | Desfase, Tamaño |
-| Plano a través de tres puntos | Anda con vértices | Puntos de forzado, Desfase, Tamaño |
-| Plano en ruta | **A medias** | Ver CON-5 |
-| Eje a través de cilindro/cono/toroide | Anda | Tamaño |
-| Eje perpendicular a la cara | **A medias** | Exige un punto; Fusion deja tocar la cara |
-| Eje a través de dos planos | Anda | Tamaño |
-| Eje a través de dos puntos | Anda con vértices | Puntos de forzado, Tamaño |
-| Eje a través de arista | Anda | Tamaño |
-| Punto en vértice | **A medias** | Solo vértices y puntos; faltan los puntos de forzado |
-| Punto a través de dos aristas | Anda, también extendido | Nada en cálculo |
-| Punto a través de tres planos | Anda | Boceto como entrada, sin comprobar |
-| Punto en el centro de círculo/esfera/toroide | Anda con esfera y toroide | Nada en cálculo |
-| Punto en arista y plano | Anda, también extendido | Nada en cálculo |
-| Punto a lo largo de la ruta | **A medias** | Distancia física y cadena |
-| Sistema de coordenadas de usuario | **A medias** | Ver CON-6 |
-
-Ya están: las 20 entradas del menú CONSTRUIR, en el mismo orden que Fusion; Simetría y Patrón de geometría de construcción.
+**Resultado:** tabla por herramienta, medidas y comparación contra las capturas en
+[auditorias/construir_2026-11-01.md](auditorias/construir_2026-11-01.md).
 
 ## CON-1 · Panel único «Geometría de construcción»
 
