@@ -2,7 +2,7 @@
 
 Especificación de las filas CAP-n de `docs/seguimiento/`. El estado vive solo allá.
 
-**Fuente:** 120 capturas de la interfaz de Fusion en español, en `C:\Users\mosos\Desktop\DISEÑO FUSION 360`.
+**Fuente:** 120 capturas de la interfaz de Fusion en español, en `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)`.
 Se miraron todas el 2026-10-31. La comparación salió de los campos reales de cada comando (`CATALOGO`, `campos()`)
 y de la firma de la API. Las capturas muestran el panel recién abierto: lo que Fusion agrega después de elegir
 geometría se saca de `docs/fusion_docs/` con `scripts/fusion_docs.py`.

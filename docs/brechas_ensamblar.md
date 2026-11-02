@@ -2,7 +2,7 @@
 
 Especificación de ASM-17 a ASM-20, y detalle de SC6 y P-25e2. El estado vive solo en `docs/seguimiento/`.
 
-**Fuentes:** 26 capturas de `C:\Users\mosos\Desktop\DISEÑO FUSION 360\ENSAMBLAR`, los artículos de `fusion-assemble` y una prueba
+**Fuentes:** 26 capturas de `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)`, los artículos de `fusion-assemble` y una prueba
 por API. Se comparó el 2026-11-01.
 
 **Límite:** no se probó en la ventana.
@@ -106,7 +106,7 @@ Cerrar ASM-17 a ASM-20, con su herramienta en la API, sus tests y prueba como us
 
 ENTRADAS
 - Especificación: docs/brechas_ensamblar.md → [PROVIDED]
-- Capturas: C:\Users\mosos\Desktop\DISEÑO FUSION 360\ENSAMBLAR → [PROVIDED]
+- Capturas: analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)→ [PROVIDED]
 - Filas: docs/seguimiento/faltantes.md (ASM-9, ASM-16 a ASM-20, SC6, P-25e2) → [PROVIDED]
 - Ayuda: docs/fusion_docs/contenido/fusion-assemble y scripts/fusion_docs.py → [PROVIDED]
 - Código: ui/comandos/ensamblar.py, ui/cinta.py, api/herramientas_ensamble.py, timeline/ops_*.py → [TO BE DISCOVERED BY AGENT]

@@ -2,7 +2,7 @@
 
 Especificación de PLA-1 a PLA-14 y EXT-1 a EXT-4. El estado vive solo en `docs/seguimiento/`.
 
-**Fuente:** 92 capturas de `C:\Users\mosos\Desktop\DISEÑO FUSION 360\NUEVOS`, la ayuda de `docs/fusion_docs/` y una prueba por API el 2026-11-01.
+**Fuente:** 92 capturas de `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)`, la ayuda de `docs/fusion_docs/` y una prueba por API el 2026-11-01.
 
 **Límite:** Fusion estaba cerrado. Lo que dice «comprobar en Fusion real» no se vio funcionando.
 
@@ -114,7 +114,7 @@ Agregar Grampa de fijación, Apoyo y Simplificar, completar las herramientas que
 ENTRADAS
 - Especificación y valores medidos: docs/brechas_extensiones.md → [PROVIDED]
 - Filas: docs/seguimiento/faltantes.md, sección «Plástico y extensiones contra capturas de Fusion», y SOL-22 → [PROVIDED]
-- Capturas: C:\Users\mosos\Desktop\DISEÑO FUSION 360\NUEVOS → [PROVIDED]
+- Capturas: analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)→ [PROVIDED]
 - Ayuda de Fusion: docs/fusion_docs/, con clon/.venv/Scripts/python.exe scripts/fusion_docs.py buscar y ver. Carpetas fusion-model, fusion-simulate, fusion-designs → [PROVIDED]
 - Código de partida: ui/cinta.py, ui/comandos/plastico.py, ui/comandos/fijacion.py, ui/preajustes_ui.py, ui/panel_timeline.py, nucleo/fijaciones.py, nucleo/reticula.py → [PROVIDED]
 - Qué hace «Convertir en operación de DM» en Fusion → [TO BE DISCOVERED BY AGENT]

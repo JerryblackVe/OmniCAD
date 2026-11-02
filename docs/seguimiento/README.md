@@ -49,7 +49,7 @@ No se empiezan sin su OK, porque instalan algo, gastan plata o cambian el alcanc
 | Paquete nuevo | `rhino3dm` · `mutmut` · `hidapi` · motor de física · CalculiX + Gmsh · OpenSCAD · cabeceras de OCCT 8.0 + `pybind11` · `ffmpeg` · lector `.exr` | RH3 · SC16 · PL12 · B17 · F19 · F22 · CPP-F2 · B6 · KS2 |
 | Gasto | Cuenta Apple Developer (USD 99 al año) · certificado de firma para el `.exe` | P-26d · AUD-8 |
 | Máquina o hardware | PC con Linux nativo · PC limpia para el instalador · SpaceMouse | P-1b · P-1c · P-8b · PL12 |
-| Alcance | CAM · SubD y espacio FORMA · quad remesh · edición de malla · fragmentos booleanos · piezas de McMaster/TraceParts · «AI Shots» · menú del boceto distinto de Fusion · escanear con el celular (upgrade a futuro) · anidación · simulación avanzada · diseño generativo · Fusion Manage | F20 · RH19 · P-25j · RH20 · B16 · F21 · P-25g2 · KS15 · MCP-HAL3 · ESC-1 · ESC-2 · ESC-3 · ESC-4 · ESC-5 · ESC-6 · ESC-7 · EXT-1 · EXT-2 · EXT-3 · EXT-4 |
+| Alcance | CAM · SubD y espacio FORMA · quad remesh · edición de malla · fragmentos booleanos · piezas de McMaster/TraceParts · «AI Shots» · menú del boceto distinto de Fusion · escanear con el celular (upgrade a futuro) · anidación · simulación avanzada · diseño generativo · modelado automatizado · electrónica · Fusion Manage | CF-13 · CF-14 · F20 · RH19 · P-25j · RH20 · B16 · F21 · P-25g2 · KS15 · MCP-HAL3 · ESC-1 · ESC-2 · ESC-3 · ESC-4 · ESC-5 · ESC-6 · ESC-7 · EXT-1 · EXT-2 · EXT-3 · EXT-4 |
 
 ## Tareas que aparecen en varias listas
 

@@ -2,7 +2,7 @@
 
 Especificación de CON-1 a CON-8, B-130 y B-131, resueltos el 2026-11-01.
 
-**Fuentes:** 20 capturas de Fusion en español en `C:\Users\mosos\Desktop\DISEÑO FUSION 360\plano`, y la sección
+**Fuentes:** 20 capturas de Fusion en español en `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)`, y la sección
 «Construction geometry» de `docs/fusion_docs` (carpeta `fusion-model`; árbol en `docs/fusion_docs/indice/fusion-model.md`).
 Se comparó el 2026-11-01 contra los campos reales de cada comando y con pruebas por API.
 

@@ -2,7 +2,7 @@
 
 Las 15 herramientas probadas como persona con `scripts/prueba_ui/inspeccionar.py` (clic en el menú de la cinta, elegir con el
 visor, teclear, vista previa, Enter, medir, reabrir, deshacer, Esc, Tab, ventana chica y una pieza real cambiando una cota).
-Fuente del comportamiento: las 38 capturas de `Desktop\DISEÑO FUSION 360\inspeccionar` y la sección «Analysis tools» de
+Fuente del comportamiento: las 38 capturas de `analisis/capturas_fusion` (solo quedan las pendientes) y la sección «Analysis tools» de
 `docs/fusion_docs`. Especificación: [brechas_inspeccionar.md](../brechas_inspeccionar.md).
 
 ## Antes y después

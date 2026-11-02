@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 226: Abierto 147 · Parcial 48 · Bloqueado 28 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 159 · Parcial 48 · Bloqueado 30 · Sin verificar 4 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -56,7 +56,7 @@ Abierto 54 · Parcial 3 · Bloqueado 2.
 | P-11l | Bocetos de un .f3d con varios componentes | Abierto | Alta | El bloque `.smb` de bocetos no dice de qué componente es y la caja de los cuerpos no alcanza (415 de 418 perfiles de CARTERA GOTICA caen en más de un componente): hoy no se importan y se avisa. Hay que ligar cada `BREP.*.smb` con su componente leyendo los registros del flujo de diseño. | omnicad/io_archivos/f3d_nativo.py (_bocetos_ubicados); tests/test_f3d_bocetos.py::test_con_varios_componentes_los_bocetos_no_se_importan_y_se_avisa | 2026-10-26 |
 | P-11m | Trazos abiertos, construcción, cotas, restricciones y nombres de los bocetos de un .f3d | Abierto | Muy alta | El `.smb` solo guarda las regiones cerradas: los bocetos importados no traen los trazos que no cierran región, la geometría de construcción, las cotas («4 mm», «120 mm»…) ni las restricciones, y se llaman Boceto1… Todo eso está en el flujo de diseño propietario. | omnicad/io_archivos/f3d_bocetos.py | 2026-10-26 |
 | P-11i | Referencias externas de un .f3z (diseños hijos referenciados) | Abierto | Muy alta | Se identifican las ocurrencias externas pero no se decodifica su disposición interna. | PROJECT_LOG.md:32 (upgrades3, SIN RESOLVER) | 2026-10-20 |
-| P-25i | i) SÓLIDO > CREAR: Crear forma, Derivar y placa de circuito impreso (grisados) | Abierto | Muy alta | Siguen grisados; Forma depende de P-25j y la placa pide espacio ELECTRÓNICA. | omnicad/ui/cinta.py:83,96 | 2026-10-20 |
+| P-25i | i) SÓLIDO > CREAR: Crear forma y placa de circuito impreso (grisados) | Abierto | Muy alta | Siguen grisados; Forma depende de P-25j y la placa pide espacio ELECTRÓNICA. | omnicad/ui/cinta.py:90,103 | 2026-11-02 |
 | P-25j | j) Espacio FORMA completo (T-splines): crear, modificar, simetría, utilidades | Abierto | Muy alta | No existe nada; necesita núcleo de subdivisión propio y decidir el motor. | Sin módulo de subdivisión en omnicad/nucleo/ | 2026-10-20 |
 | P-27-12 | Soportes fáciles de sacar (cintas curvas, jaula) | Abierto | Muy alta | Sin programar. | omnicad/nucleo/revision.py:725-791 solo detecta voladizos, no genera soportes | 2026-10-20 |
 | P-28d | Cónicos (recto, espiral, Zerol, hipoide, inglete, espirocónico) | Abierto | Muy alta | Sin programar. | omnicad/nucleo/engranajes.py | 2026-10-20 |
@@ -72,13 +72,14 @@ Abierto 54 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 2 · Parcial 1.
+Abierto 2 · Parcial 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-54 | La tarjeta de Proyectar no elige planos, ejes ni puntos de trabajo | Abierto | Baja | Fusion también proyecta geometría de trabajo y puntos de boceto; la tarjeta elige caras, aristas, vértices, cuerpos y curvas de otro boceto. `project_to_sketch` ya los acepta por `references`: falta sumarlos a `_filtros_proyeccion` y darles forma en la selección. | ui/editor_boceto.py (`_filtros_proyeccion`); api/herramientas_boceto.py (`_proyectar_seleccion`) | 2026-10-31 |
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
+| H-63 | create_pipe no toma curvas de un boceto 3D | Sin verificar | Media | Reportado al armar cables y mangueras, sin volver a probar: hoy solo tomaría curvas 2D. Falta tubo por `draw_spline_3d`. | omnicad/api/herramientas_solido_extra.py:181 | 2026-11-02 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
@@ -141,8 +142,8 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 | SUP-27 | Cinta de SUPERFICIE como Fusion: ítems y nombres | Abierto | Media | Faltan Derivar, Patrón, Simetría, Llenado, Origen de la unión, Chaflán, Quitar, Material físico, Administrar y Lista de materiales. | docs/brechas_superficie.md § SUP-27; ui/cinta.py:128 | 2026-11-01 |
 | SUP-28 | Empalme y Chaflán de superficie completos | Abierto | Alta | Tipos, tipo de radio, cadena tangente y esquina; hoy son 3 campos. | docs/brechas_superficie.md § SUP-28; `fillet_surface` rechaza radius_type y tangent_chain, por API | 2026-11-01 |
 | SUP-29 | Encadenado en los comandos de superficie | Abierto | Media | Extruir, Revolución, Contorno, Reglada, Desfase, Alargar y Descoser. | docs/brechas_superficie.md § SUP-29 | 2026-11-01 |
-| SUP-30 | Valores por defecto de superficie y paneles de material | Abierto | Media | Agrupar, Eje de proyecto, Anular recorte, Alargar y biblioteca de Material y Aspecto. | docs/brechas_superficie.md § SUP-30 | 2026-11-01 |
-| SUP-31 | Coser: tolerancia, resultado y tabla de aristas | Abierto | Media | 0,10 mm con deslizador, Resultado del cosido y Aristas no cosidas. | docs/brechas_superficie.md § SUP-31; con 0,05 mm de separación responde ok y 0 aristas cosidas, por API | 2026-11-01 |
+| SUP-30 | Valores por defecto de superficie y paneles de material | Abierto | Media | Agrupar, Eje de proyecto, Anular recorte, Alargar y biblioteca de Material físico (el panel Aspecto ya está completo: `tests/test_aspecto_panel.py`). | docs/brechas_superficie.md § SUP-30 | 2026-11-01 |
+| SUP-31 | Coser: tolerancia y resultado | Abierto | Media | Tolerancia por defecto 0,10 mm con deslizador (hoy 0,01 mm) y mensaje cuando no se cose nada. La tabla «Aristas sin coser» ya existe (`ui/comandos/superficie.py:437`). | docs/brechas_superficie.md § SUP-31; con 0,05 mm de separación responde ok y 0 aristas cosidas, por API | 2026-11-01 |
 
 ## ENSAMBLAR contra capturas de Fusion (2026-11-01)
 
@@ -172,6 +173,27 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 | MAL-3 | MALLA: Borrar y rellenar | Abierto | Media | Botón grisado; comprobar en la ayuda si aplica a malla o solo a T-Spline. | ui/cinta.py:177; ayuda `Erase and fill an area of a T-Spline body` | 2026-11-01 |
 | CHA-1 | CHAPA: Pestaña solevada y Cierre de esquina | Abierto | Alta | Dos botones grisados y sin comando. | ui/cinta.py:148 y 151; ayuda `Create lofted flange` | 2026-11-01 |
 | CFG-1 | Reglas de configuración | Abierto | Media | Botón grisado en CONFIGURAR. | ui/cinta.py:27; ayuda `Configuration Rules` | 2026-11-01 |
+
+## Capturas de Fusion sin clasificar (2026-11-02)
+
+Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fusion/` (índice: `INDICE.md`; las ya hechas se borraron, ver `borradas.tsv`). Abierto 12 · Bloqueado 2. Especificación: mirar las capturas de su sección y `scripts/fusion_docs.py buscar`.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| CF-1 | DIBUJO: diálogo Crear dibujo completo | Abierto | Media | Modo Automático, contenido (todo, visible, selección), creación de planos por nivel, documento base, unidades, recuento de planos y tamaño personalizado. | ui/dibujo.py (solo `DialogoHoja`); capturas `DIBUJO/Crear_dibujo` | 2026-11-02 |
+| CF-2 | DIBUJO: panel Vista de dibujo | Abierto | Alta | Estilos sombreados, mejorar calidad, aristas de interferencia y de rosca, aristas tangentes (longitud completa, acortado), marcas y líneas de centro por tipo (agujero, cortes redondos, extrusiones redondas, patrón, empalme), orientación con vistas guardadas y referencia/instancia/representación. RH14 solo cubre estilos importables. | ui/dibujo.py; capturas `DIBUJO/Vista_de_dibujo` y `DIBUJO/Vista_base` | 2026-11-02 |
+| CF-3 | DIBUJO: menú COTAS completo | Abierto | Media | Cota automática, ordenar, organizar, igualar, voltear flechas, recodo, longitud de arco, línea base y máx/mín. F9 cubre solo cadena y RH14 solo curva. | nucleo/dibujo.py; capturas `DIBUJO/Menu_de_cotas` y `DIBUJO/Ordenar` | 2026-11-02 |
+| CF-4 | DIBUJO: notas, tablas y símbolos | Abierto | Media | Nota de agujero y rosca, de pliegue, panel de Texto con formato; tablas de plegado, agujeros, personalizada, revisiones y nube; símbolos de rectángulo de tolerancia, identificador de referencia, ángulo, inclinación, arista y boceto; extensión de arista. F9 cubre solo soldadura y acabado. | ui/dibujo.py; capturas `DIBUJO/Tablas`, `Simbolos_de_dibujo`, `Texto_y_notas` | 2026-11-02 |
+| CF-5 | DIBUJO: navegador, hojas, cinta y exportar | Abierto | Media | Navegador de dibujo con hojas múltiples, pestañas ADMINISTRAR y UTILIDADES, grupos SÍMBOLOS, INSERTAR e INSPECCIONAR, Exportar DWG y CSV, vista de sección parcial y recortada, boceto de dibujo, patrón de marcas de centro. | ui/dibujo.py; capturas `DIBUJO/Navegador_de_dibujo`, `Exportar_dibujo` | 2026-11-02 |
+| CF-6 | Diálogo «¿Qué desea diseñar?» al crear un diseño | Abierto | Media | Tipo (piezas, ensamblaje, híbrido, dibujo), sistema de unidades y plantilla. Hoy `nuevo()` crea siempre un diseño vacío. Relacionada con H-5. | grep «Qué desea» en omnicad/: sin resultados; capturas `INTERFAZ/Nuevo_diseno*` | 2026-11-02 |
+| CF-7 | Preferencias: páginas que no existen | Abierto | Media | Páginas Dibujo, Configuraciones, Renderizar (valores por defecto), Material, Diseños híbridos y de ensamblaje, Unidades por defecto (Diseño) y Visualización de unidad y valor (faltan 10 de 13 ajustes). | omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_*` | 2026-11-02 |
+| CF-8 | Preferencias: opciones sueltas de General y Gráficos | Abierto | Baja | Finalidad de uso, tipo de diseño por defecto, experiencia de puesta en marcha, orientación Y o Z hacia arriba, tamaño del ViewCube, ratón estilo Alias/Inventor/PowerMill/SOLIDWORKS, controlador de gráficos, tema del sistema, barra espaciadora que repite el último comando. P-2d cubre el idioma. | omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_General` | 2026-11-02 |
+| CF-9 | MALLA: Suavizar contorno, Puente e Insertar malla completo | Abierto | Media | Suavizar contorno (suavidad, iteraciones, anillos) y Puente no existen; Insertar malla solo pregunta la unidad: faltan Voltear dirección, Centro, Mover a suelo, entradas numéricas y Restablecer. MAL-2 y MAL-3 no nombran la paleta de pincel. | grep sin resultados en api/ y ui/comandos/; capturas `MALLA/` e `INSERTAR/Insertar_malla` | 2026-11-02 |
+| CF-10 | MATERIALES: Explorador de materiales y propiedades | Abierto | Media | Propiedades térmicas y mecánicas, favoritos, materiales nuevos y bibliotecas personales. P-25d cubre solo Administrar. | capturas `MATERIALES/` | 2026-11-02 |
+| CF-11 | BOCETO: Buscar subrestringidos y Calcular boceto | Abierto | Baja | Nuevos de octubre de Fusion. El diálogo de restricciones automáticas existe pero no está en la paleta. | grep «subrestring» en omnicad/: sin resultados; capturas `BOCETO/` | 2026-11-02 |
+| CF-12 | BOCETO: unidades en el texto con parámetros | Abierto | Baja | `{largo}` da «150» sin unidad: tiene que dar «150 mm»; `{largo / mm}` y `{angulo / deg}` fallan hoy. | prueba por API del 2026-11-02; capturas `BOCETO/` | 2026-11-02 |
+| CF-13 | SÓLIDO: Modelado automatizado | Bloqueado | Muy alta | Genera alternativas entre geometrías a conectar y a evitar; emparentado con EXT-3 (diseño generativo). Espera el alcance. | sin herramienta; capturas `SOLIDO/Modelado_automatizado` | 2026-11-02 |
+| CF-14 | ELECTRÓNICA: esquemas, placas y biblioteca de componentes | Bloqueado | Muy alta | Diseño de electrónica 2D y 3D, biblioteca de componentes y leyenda de taladro. P-25i solo nombra la placa. Espera el alcance. | sin código; capturas `ELECTRONICA/` | 2026-11-02 |
 
 ## Plástico y extensiones contra capturas de Fusion (2026-11-01)
 

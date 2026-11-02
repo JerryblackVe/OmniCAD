@@ -4,7 +4,7 @@ Especificación de lo que se resolvió el 2026-11-01 (INS-1 a INS-8 y la parte d
 «hoy» describe el punto de partida. Resultado, mediciones y comparación por panel:
 [auditorias/inspeccionar_2026-11-01.md](auditorias/inspeccionar_2026-11-01.md). Lo pendiente vive solo en `docs/seguimiento/`.
 
-**Fuentes:** 38 capturas de Fusion en español en `C:\Users\mosos\Desktop\DISEÑO FUSION 360\inspeccionar` y la sección
+**Fuentes:** 38 capturas de Fusion en español en `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)` y la sección
 «Analysis tools» de `docs/fusion_docs` (`fusion-model`; árbol en `docs/fusion_docs/indice/fusion-model.md`, líneas 116 a 139).
 Se comparó el 2026-11-01 contra los campos reales de cada comando y con pruebas por API.
 
@@ -152,7 +152,7 @@ Probar las 15 herramientas de INSPECCIONAR como persona, clasificarlas en anda, 
 ENTRADAS
 - Especificación: docs/brechas_inspeccionar.md → [PROVIDED]
 - Filas pendientes: docs/seguimiento/faltantes.md (INS-1 a INS-8, P-25f) → [PROVIDED]
-- Capturas: C:\Users\mosos\Desktop\DISEÑO FUSION 360\inspeccionar → [PROVIDED]
+- Capturas: analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)→ [PROVIDED]
 - Ayuda de Fusion: sección «Analysis tools» en docs/fusion_docs/indice/fusion-model.md; buscar con clon/.venv/Scripts/python.exe scripts/fusion_docs.py buscar <palabras> -s fusion-model y ver "<título>" -s fusion-model → [PROVIDED]
 - Código: clon/omnicad/ui/comandos/inspeccionar.py, ui/comando.py, ui/cinta.py, ui/navegador.py, ui/ventana.py, nucleo/analisis.py, api/herramientas_analisis.py, api/herramientas_inspeccion.py → [PROVIDED]
 - Comportamiento en la ventana de cada herramienta → [TO BE DISCOVERED BY AGENT]

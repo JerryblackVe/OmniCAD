@@ -2,7 +2,7 @@
 
 Las 20 herramientas probadas como persona con `scripts/prueba_ui/construir.py` (clic en el menú de la cinta, elegir con el
 visor, teclear, vista previa, Enter, medir, reabrir, deshacer, Esc, Tab, asas y ventana chica). Fuente del comportamiento:
-las 20 capturas de `Desktop\DISEÑO FUSION 360\plano` y la sección «Construction geometry» de `docs/fusion_docs`.
+las 20 capturas de `analisis/capturas_fusion` (solo quedan las pendientes) y la sección «Construction geometry» de `docs/fusion_docs`.
 Especificación: [brechas_construir.md](../brechas_construir.md).
 
 ## Punto de partida (antes de cambiar nada)

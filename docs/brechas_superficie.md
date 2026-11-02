@@ -2,7 +2,7 @@
 
 Especificación de SUP-27 a SUP-31. El estado vive solo en `docs/seguimiento/`.
 
-**Fuentes:** 88 capturas de `C:\Users\mosos\Desktop\DISEÑO FUSION 360\SUPERFICIE`, los artículos de `fusion-patch` y una
+**Fuentes:** 88 capturas de `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)`, los artículos de `fusion-patch` y una
 prueba por API. Se comparó el 2026-11-01 contra los campos reales de cada comando.
 
 **Límites:** no se probó en la ventana. La ayuda de Empalme y Chaflán de superficie no trae opciones: salen de las capturas.
@@ -113,7 +113,7 @@ Cerrar SUP-27 a SUP-31, con su herramienta en la API, sus tests y prueba como us
 
 ENTRADAS
 - Especificación: docs/brechas_superficie.md → [PROVIDED]
-- Capturas: C:\Users\mosos\Desktop\DISEÑO FUSION 360\SUPERFICIE → [PROVIDED]
+- Capturas: analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)→ [PROVIDED]
 - Filas: docs/seguimiento/faltantes.md y mejoras.md (SUP-13, SUP-14, SUP-17, SUP-27 a SUP-31, P-25d) → [PROVIDED]
 - Ayuda: docs/fusion_docs/contenido/fusion-patch y scripts/fusion_docs.py → [PROVIDED]
 - Código: ui/cinta.py, ui/comandos/superficie*.py, ui/comandos/solido.py, api/herramientas_superficie*.py → [TO BE DISCOVERED BY AGENT]

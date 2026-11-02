@@ -2,7 +2,7 @@
 
 Especificación de ANI-1 a ANI-5. El estado vive solo en `docs/seguimiento/`.
 
-**Fuentes:** 15 capturas de `C:\Users\mosos\Desktop\DISEÑO FUSION 360\ANIMACION`, los artículos de `fusion-animate` y una prueba por API.
+**Fuentes:** 15 capturas de `analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)`, los artículos de `fusion-animate` y una prueba por API.
 Se comparó el 2026-11-01.
 
 **Límite:** no se probó en la ventana.
@@ -87,7 +87,7 @@ Cerrar ANI-1 a ANI-5 y B-145, con su herramienta en la API, sus tests y prueba c
 
 ENTRADAS
 - Especificación: docs/brechas_animacion.md → [PROVIDED]
-- Capturas: C:\Users\mosos\Desktop\DISEÑO FUSION 360\ANIMACION → [PROVIDED]
+- Capturas: analisis/capturas_fusion (solo quedan las pendientes; ver su INDICE.md)→ [PROVIDED]
 - Filas: docs/seguimiento/faltantes.md y bugs.md (ANI-1 a ANI-5, B6, B-145) → [PROVIDED]
 - Ayuda: docs/fusion_docs/contenido/fusion-animate y scripts/fusion_docs.py → [PROVIDED]
 - Código: ui/animacion.py, nucleo/animacion.py, api/herramientas_animacion.py → [TO BE DISCOVERED BY AGENT]
