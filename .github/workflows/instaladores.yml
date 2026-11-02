@@ -17,7 +17,7 @@ jobs:
   test:
     # Corre ruff y pytest (AGENTS.md › Cómo verificar) antes de armar o publicar nada.
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 180    # la suite corre en un solo proceso: a 60 min se corto la v0.2.0 sin fallas
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
