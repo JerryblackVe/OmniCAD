@@ -441,10 +441,9 @@ def test_el_proceso_aparte_se_cancela_al_cerrar_el_panel(ventana, monkeypatch):
     monkeypatch.setattr(solido, "CARAS_PESADAS", 1)
     p.set_valor("distancia", "5")
     previa(p)
-    hijo = c._hijo
-    assert hijo is not None
+    assert c._hijo is not None
     p.cancelar()
-    assert c._hijo is None and hijo.proceso.poll() is not None
+    assert c._hijo is None             # el trabajador sigue vivo: test_previa_trabajador.py
 
 
 def test_auto_en_la_api_corta_si_se_mete_y_si_no_crea_un_cuerpo(placa):

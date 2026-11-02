@@ -348,10 +348,6 @@ Sin empezar: SUP-27 a SUP-31, ASM-17 a ASM-20, ANI-1 a ANI-5 y B-145. Cada una s
 
 Sin empezar. Cada herramienta suma tests y la pieza nueva `plastico` en `todo.py`. PLA-7 y PLA-11 piden comprobar en Fusion real. PLA-12 y EXT-1 a EXT-4 quedan afuera: PLA-12 va aparte y las EXT esperan decisión.
 
-## 3l. Previa pesada en el trabajador (B-155, P-56, RS-X6 punto 1)
-
-Hecho el 2026-11-02, sin commitear. Corrió: ruff, `test_previa_trabajador`, `test_trabajador_persistente`, `test_b48_*`, `test_previa_aislada_comandos`, `test_previa_vaciado_aislada`, `test_seguimiento`, `test_doc_agentes` y la pieza `previa_aparte` (34, 0 ✗). Falta en el cierre: suite completa, humo, `solido_modificar`, `teclear`, `asas` y `herramientas_solido`, porque la previa pesada de todos los comandos pasa ahora por el trabajador. Sin probar en la ventana: un cálculo real que pase los 10 s y se corte con un valor nuevo (lo cubre un test con un hijo simulado) y la previa pesada de Extruir (`solape_herramienta`), que no tiene test propio.
-
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
@@ -384,7 +380,6 @@ Hecho el 2026-11-02, sin commitear. Corrió: ruff, `test_previa_trabajador`, `te
 
 ## 7. Orden de la noche
 
-- **H-60 (asas bien definidas, 2026-11-02).** Verificado: ruff, `test_manipuladores`, `test_gizmo_construir`, `test_seguimiento` y las piezas `asas` (293/293) e `inspeccionar` (256, 0 ✗). **Sin verificar de noche:** el resto de las piezas de ventana con el contorno nuevo de las asas; suite completa y humo con todo integrado.
 
 1. Verificar con `git status` y la lista de sesiones que no quede ninguna sesión de código trabajando; si no, esperar.
 2. RAM libre ≥ 5 GB; cerrar todo lo demás.

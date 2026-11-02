@@ -25,41 +25,53 @@ def _abrir(clave, ventana, **valores):
     return p
 
 
+def _triada(gm):
+    return next(m for m in gm.manips if isinstance(m, mp.Triada))
+
+
+def _medio_del_eje(gm):
+    """Medio del eje de la normal, donde se toma para arrastrar."""
+    return dict(_triada(gm)._partes(gm)[0])[("eje", 2)].mean(axis=0)
+
+
 @pytest.mark.parametrize("clave,campo", [("seccion", "desfase"), ("seccion_malla", "distancia")])
-def test_flecha_de_distancia_en_los_dos_comandos(app_qt, ventana, clave, campo):  # noqa: F811
+def test_eje_de_la_triada_da_la_distancia_en_los_dos_comandos(app_qt, ventana, clave, campo):  # noqa: F811
     p = _abrir(clave, ventana)
     gm = p.manipuladores
-    f = next(m for m in gm.manips if isinstance(m, mp.Flecha))
-    assert f.clave == campo and np.allclose(f.direccion, (0, 0, 1))
-    a, b = f.puntos(gm)
-    xy, ok = gm.pantalla([(a + b) / 2, (a + b) / 2 + f.direccion * 8])
+    t = _triada(gm)
+    assert t.claves == (None, None, campo) and np.allclose(t.ejes[2], (0, 0, 1))
+    medio = _medio_del_eje(gm)
+    xy, ok = gm.pantalla([medio, medio + t.ejes[2] * 8])
     assert ok.all()
     _arrastrar(p.visor, *xy)
     assert gm.valor(campo) == pytest.approx(8, abs=0.5)
-    xy, ok = gm.pantalla([f.puntos(gm)[0], f.puntos(gm)[0] - f.direccion * 30])           # pasa por cero: negativos valen
+    medio = _medio_del_eje(gm)
+    xy, ok = gm.pantalla([medio, medio - t.ejes[2] * 30])                                  # pasa por cero: negativos valen
     _arrastrar(p.visor, *xy)
     assert gm.valor(campo) < 0
     p.cancelar()
 
 
 @pytest.mark.parametrize("clave", ["seccion", "seccion_malla"])
-def test_arco_del_angulo_gira_el_plano(app_qt, ventana, clave):  # noqa: F811
+def test_arco_de_la_triada_gira_el_plano(app_qt, ventana, clave):  # noqa: F811
     p = _abrir(clave, ventana)
     gm = p.manipuladores
-    arco = next(m for m in gm.manips if isinstance(m, mp.Angulo))
-    assert arco.clave == "angulo" and np.allclose(arco.eje, (1, 0, 0))                # gira sobre el eje u del plano XY
-    objetivo = arco.centro + (arco.u * np.cos(np.radians(40)) + arco.v * np.sin(np.radians(40))) * arco._r(gm)
-    xy, ok = gm.pantalla([arco.asa(gm), objetivo])
+    t = _triada(gm)
+    assert t.giros == ("angulo", None, None) and np.allclose(t.ejes[0], (1, 0, 0))        # gira sobre el eje u del plano XY
+    arco = dict(t._partes(gm)[0])[("giro", 0)]
+    asa = arco[len(arco) // 2]
+    r = np.linalg.norm(asa - t.centro)
+    objetivo = t.centro + (t.ejes[1] * np.cos(np.radians(85)) + t.ejes[2] * np.sin(np.radians(85))) * r
+    xy, ok = gm.pantalla([asa, objetivo])
     assert ok.all()
     _arrastrar(p.visor, *xy)
     assert gm.valor("angulo") == pytest.approx(40, abs=2)
-    p.set_valor("desfase" if clave == "seccion" else "distancia", "10 mm")             # el arco sigue al plano desplazado
-    nuevo = next(m for m in gm.manips if isinstance(m, mp.Angulo))
-    assert nuevo.centro == pytest.approx([0, 0, 10])
+    p.set_valor("desfase" if clave == "seccion" else "distancia", "10 mm")             # la tríada sigue al plano desplazado
+    assert _triada(gm).centro == pytest.approx([0, 0, 10])
     p.cancelar()
 
 
-def test_corte_de_plano_de_malla_tiene_flecha_y_arco(app_qt):  # noqa: F811
+def test_corte_de_plano_de_malla_tiene_triada(app_qt):  # noqa: F811
     from test_api_malla import malla_de_caja
     from omnicad import api
     s = api.Sesion()
@@ -69,10 +81,10 @@ def test_corte_de_plano_de_malla_tiene_flecha_y_arco(app_qt):  # noqa: F811
     visor.vista("iso")
     p.manipuladores.actualizar()
     gm = p.manipuladores
-    assert sorted(type(m).__name__ for m in gm.manips) == ["Angulo", "Flecha"]
-    f = next(m for m in gm.manips if isinstance(m, mp.Flecha))
-    a, b = f.puntos(gm)
-    xy, ok = gm.pantalla([(a + b) / 2, (a + b) / 2 + f.direccion * 3])
+    assert [type(m).__name__ for m in gm.manips] == ["Triada"]
+    t = _triada(gm)
+    medio = _medio_del_eje(gm)
+    xy, ok = gm.pantalla([medio, medio + t.ejes[2] * 3])
     _arrastrar(p.visor, *xy)
     assert gm.valor("desfase") == pytest.approx(3, abs=0.5)
     p.cancelar()
