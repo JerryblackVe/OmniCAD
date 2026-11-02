@@ -65,10 +65,7 @@ def _objetos_render(sesion, cuerpos, cam=None, alto=600, cajas=None, colores_com
     """Los mismos objetos que arma el render de la app (`render_cpu.malla_suave` y `color_y_acabado`,
     con deflexión automática por pieza y, si hay cámara, por tamaño en píxeles)."""
     objetos = []
-    # Misma paleta que ui.visor3d, sin importar Qt en la API.
-    paleta = [(0.62, 0.68, 0.76), (0.80, 0.62, 0.45), (0.55, 0.75, 0.58),
-              (0.75, 0.58, 0.78), (0.85, 0.80, 0.50), (0.55, 0.72, 0.82)]
-    colores = {cid: paleta[i % len(paleta)] for i, cid in enumerate(sesion.doc.estado_final.componentes)}
+    colores = {k: tuple(x / 255 for x in rgb) for k, rgb in ad.colores_componentes(sesion.doc).items()}
     for c in cuerpos:
         inicio = len(objetos)
         props = propiedades_cuerpo(sesion.doc.propiedades, c)
@@ -140,6 +137,17 @@ def _con_analisis(sesion, objetos, cam, alto, analisis):
     return salida + rs.capas_a_objetos(datos["capas"], cam, alto), cortes, aplicados
 
 
+def _con_grupos_malla(objetos, cuerpos):
+    """Los objetos con cada malla pintada por sus grupos de caras (Mostrar grupos de caras de malla)."""
+    mallas = {c.id: an.colores_grupos_malla(c.forma) for c in cuerpos if _es_malla(c)}
+    salida = [o for o in objetos if o.get("cuerpo") not in mallas]
+    for cid, (v, n, colores) in mallas.items():
+        base = next((o for o in objetos if o.get("cuerpo") == cid), None)
+        if base is not None:
+            salida.append(dict(base, v=v, n=n, colores=colores, acabado={}))
+    return salida
+
+
 def _esquinas(cajas):
     """Las 8 esquinas de cada caja ((mín), (máx)): con solo dos esquinas opuestas la proyección no acota la caja
     y la imagen sale recortada."""
@@ -176,7 +184,7 @@ def get_viewport_image(sesion, view: str | None = None,
                        camera: Literal["perspective", "orthographic"] | None = None, component_colors: bool = False,
                        style: Literal["shaded", "shaded_hidden_edges", "shaded_visible_edges", "wireframe",
                                       "wireframe_hidden_edges", "wireframe_visible_edges"] | None = None,
-                       analysis: list[str] | None = None):
+                       analysis: list[str] | None = None, mesh_face_groups: bool = False):
     """
     view: vista estándar: las caras del ViewCube de Fusion con Z arriba, nombradas por los ejes del MUNDO (no por
         el frente de la pieza). "front": cámara en -Y, se ve la cara -Y con +X a la derecha; "back": cámara en +Y;
@@ -193,9 +201,10 @@ def get_viewport_image(sesion, view: str | None = None,
         "key_only" = solo la luz principal. No depende de Preferencias › Gráficos › «Iluminación de la vista»
         (esa opción es la del visor de la ventana).
     camera: perspective u orthographic; omitida conserva la cámara guardada o usa perspectiva.
-    component_colors: pinta cada componente con un color de la paleta del visor; las piezas sueltas conservan su aspecto.
+    component_colors: pinta cada componente con su color (el de cycle_component_color); las piezas sueltas conservan su aspecto.
     style: estilo visual (los seis de Fusion: shaded, shaded_hidden_edges, shaded_visible_edges, wireframe, wireframe_hidden_edges, wireframe_visible_edges); omitido usa el de set_visual_style (shaded de fábrica). Las aristas son las exactas de los cuerpos: una malla no las tiene.
     analysis: nombres de los análisis a dibujar (manage_analysis los lista); [] ninguno; omitido dibuja los visibles del documento, como la ventana.
+    mesh_face_groups: pinta los cuerpos de malla por sus grupos de caras (generate_face_groups los crea), como Mostrar grupos de caras de malla.
     """
     for nombre, valor in (("width", width), ("height", height)):
         if not _LADO_MINIMO <= valor <= _LADO_MAXIMO:
@@ -236,6 +245,8 @@ def get_viewport_image(sesion, view: str | None = None,
     objetos = _objetos_render(sesion, cuerpos, cam, height, cajas, component_colors)
     if not objetos:
         raise error("NOTHING_TO_RENDER", "Los cuerpos elegidos no tienen caras para dibujar.")
+    if mesh_face_groups:
+        objetos = _con_grupos_malla(objetos, cuerpos)
     objetos, cortes, aplicados = _con_analisis(sesion, objetos, cam, height, analysis)
     if not objetos:
         raise error("NOTHING_TO_RENDER", "Los cortes de los análisis dejaron la escena vacía.")
@@ -366,16 +377,36 @@ def get_physical_properties(sesion, bodies: list[str] | None = None, density: fl
 
 
 # ---------------------------------------------------------------- medir
+def _componente_o_centro(sesion, nombre):
+    """(entidad, descripción) de un componente o de un análisis de Centro de masa, por id o nombre; None si no es ninguno."""
+    from ..timeline import analisis_vista as av
+    from ..timeline import entidades as ent
+    doc, estado = sesion.doc, sesion.doc.estado_final
+    guardado = doc.analisis.get(nombre)
+    if guardado is not None and guardado["tipo"] == "centro_masa":
+        punto, _masa = av.centro_de_masa(guardado["params"], estado, doc.propiedades)
+        if punto is None:
+            raise error("NOTHING_TO_MEASURE", f"El análisis «{nombre}» no tiene cuerpos sólidos.")
+        return punto, {"kind": "center_of_mass", "name": nombre}
+    comp = next((k for k, d in estado.componentes.items() if nombre in (k, d.get("nombre"))), None)
+    if comp is None:
+        return None
+    return ent.resolver({"tipo": "componente", "componente": comp}, estado).forma, {"kind": "component", "id": comp, "component": comp}
+
+
 def _resolver_ref(sesion, ref, body=None):
     """(entidad para `analisis.medir`, descripción) de una referencia: cara o arista (id de find_faces / find_edges
-    o selector, que se evalúa sobre `body` o el único cuerpo), cuerpo (id o nombre) o punto [x, y, z]. Un selector
-    suelto se evalúa sobre las caras; para aristas, `edges:<selector>` o un id."""
+    o selector, que se evalúa sobre `body` o el único cuerpo), cuerpo o componente (id o nombre), análisis de Centro de
+    masa (nombre) o punto [x, y, z]. Un selector suelto se evalúa sobre las caras; para aristas, `edges:<selector>` o un id."""
     if isinstance(ref, str):
         if sl.es_id(ref) or sl._PREFIJO.match(ref):
             return _elemento(sesion, ref, body)
         try:
             c = sesion.cuerpo(ref)
         except ErrorAPI as e:
+            propio = _componente_o_centro(sesion, ref) if e.error_kind == "BODY_NOT_FOUND" else None
+            if propio is not None:
+                return propio
             if e.error_kind == "BODY_NOT_FOUND" and sl.parece_selector(ref):
                 return _elemento(sesion, ref, body)
             raise
@@ -401,13 +432,19 @@ def _elemento(sesion, ref, body=None):
              "edges:|Z sobre las aristas; con varios cuerpos, body dice en cuál se evalúan los selectores). Devuelve la "
              "distancia (mm), los dos puntos más cercanos y el desfase XYZ de a hacia b; con center_to_center, la de centro a centro.")
 def measure_distance(sesion, a: str | list[float], b: str | list[float], body: str | None = None,
-                     center_to_center: bool = False):
+                     center_to_center: bool = False, delta_system: Literal["world", "component_a", "component_b"] = "world",
+                     precision: int | None = None, secondary_unit: Literal["none", "cm", "m", "in", "ft"] = "none"):
     """
-    a: cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
-    b: cuerpo (id o nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
+    a: cuerpo o componente (id o nombre), análisis de Centro de masa (nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
+    b: cuerpo o componente (id o nombre), análisis de Centro de masa (nombre), cara o arista (id "Cuerpo1/F3" o selector ">Z", "edges:|Z") o punto [x, y, z] en mm.
     body: id o nombre del cuerpo donde se evalúan los selectores de a y b; vacío = el único cuerpo. Los ids y los nombres de cuerpo no lo necesitan.
     center_to_center: true mide de centro a centro (opción «Centro a centro» de Fusion): a y b tienen que ser círculos, arcos o cilindros; distance y los puntos son entonces los de los centros, y se agrega center_to_center con las distancias mínima y máxima según los diámetros.
+    delta_system: sistema de coordenadas de delta (XYZ Delta): world, component_a o component_b (el del componente de a o de b).
+    precision: decimales del campo text (0 a 8), que solo aparece si se pide esto o secondary_unit.
+    secondary_unit: agrega a text la distancia en otra unidad: cm, m, in o ft.
     """
+    if precision is not None and not 0 <= precision <= 8:
+        raise error("INVALID_ARGUMENTS", "precision tiene que estar entre 0 y 8.")
     ea, da = _resolver_ref(sesion, a, body)
     eb, db = _resolver_ref(sesion, b, body)
     try:
@@ -416,19 +453,45 @@ def measure_distance(sesion, a: str | list[float], b: str | list[float], body: s
         raise error("INVALID_ARGUMENTS", str(e)) from None
     centros = {"center_to_center": {k: ([_r(x) for x in v] if isinstance(v, (list, tuple)) else _r(v))
                                     for k, v in m["centro_a_centro"].items()}} if "centro_a_centro" in m else {}
+    delta = np.asarray(m["delta"], float)
+    if delta_system != "world":
+        delta = _giro(sesion, da if delta_system == "component_a" else db).T @ delta
+    if precision is not None or secondary_unit != "none":
+        d = 3 if precision is None else precision
+        unidad = "pulg" if secondary_unit == "in" else secondary_unit
+        centros["text"] = f"{m['distancia']:.{d}f} mm{an.texto_secundario(m['distancia'], 1, d, unidad)}"
     return {**centros, "distance": _r(m["distancia"]), "point_a": [_r(x) for x in m["punto_a"]],
-            "point_b": [_r(x) for x in m["punto_b"]], "delta": [_r(x) for x in m["delta"]],
+            "point_b": [_r(x) for x in m["punto_b"]], "delta": [_r(x) for x in delta],
             "intersecting": m["distancia"] < 1e-6, "a": da, "b": db}
+
+
+def _giro(sesion, desc):
+    """Rotación del componente de lo medido (identidad si no está en uno)."""
+    estado = sesion.doc.estado_final
+    cuerpo = estado.cuerpos.get(desc.get("body", desc).get("id"))
+    comp = desc.get("component") or (cuerpo.componente if cuerpo is not None else None)
+    m = estado.componentes.get(comp, {}).get("matriz")
+    return np.identity(3) if m is None else np.asarray(m, float)[:3, :3]
 
 
 # ---------------------------------------------------------------- interferencias
 @herramienta("check_interference", "inspeccion", "Busca pares de cuerpos sólidos que se superponen y devuelve cada par "
              "con el volumen común (mm³) y su caja envolvente. Los que solo se tocan por una cara no cuentan, salvo con coincident_faces.")
-def check_interference(sesion, bodies: list[str] | None = None, coincident_faces: bool = False):
+def check_interference(sesion, bodies: list[str] | None = None, coincident_faces: bool = False,
+                       components: list[str] | None = None):
     """
     bodies: ids o nombres de los cuerpos a comparar entre sí; vacío = todos los sólidos.
+    components: componentes (id o nombre) que entran con todos sus cuerpos; se suman a bodies.
     coincident_faces: true también informa los pares que solo se tocan por caras coincidentes (opción «Incluir caras coincidentes»): volume 0, area de contacto y coincident=true.
     """
+    if components:
+        from ..timeline.ops_ensamblar import familia
+        from .herramientas_ensamble import componente
+        estado = sesion.doc.estado_final
+        grupos = [familia(estado, componente(sesion, c)) for c in components]
+        bodies = list(bodies or []) + [c.id for c in estado.cuerpos.values() if any(c.componente in g for g in grupos)]
+        if not bodies:
+            raise error("NOTHING_TO_MEASURE", "Los componentes elegidos no tienen cuerpos.")
     cuerpos = _cuerpos(sesion, bodies)
     solidos = [c for c in cuerpos if _es_solido(c)]
     omitidos = [sesion.nombre_cuerpo(c) for c in cuerpos if not _es_solido(c)]
@@ -446,6 +509,19 @@ def check_interference(sesion, bodies: list[str] | None = None, coincident_faces
                       "bounding_box": None if not caja else {"min": [_r(x) for x in caja[0]],
                                                               "max": [_r(x) for x in caja[1]]}})
     return {"checked": len(solidos), "count": len(pares), "pairs": pares, "interference": bool(pares)}
+
+
+@herramienta("remove_interference", "inspeccion", "Quita el volumen de una interferencia (columna Quitar volumen del "
+             "resultado de Interferencia): por cada par, resta tool de target y conserva tool. OmniCAD no tiene modo directo: "
+             "queda un paso Combinar por par en el timeline.", modifica=True)
+def remove_interference(sesion, pairs: list[dict]):
+    """
+    pairs: lista de {"target": cuerpo al que se le quita el volumen, "tool": cuerpo que se conserva} (id o nombre).
+    """
+    from .herramientas_solido import boolean_operation
+    if not pairs or not all(isinstance(p, dict) and p.get("target") and p.get("tool") for p in pairs):
+        raise error("INVALID_ARGUMENTS", "pairs es una lista de {\"target\": ..., \"tool\": ...}.")
+    return {"removed": [boolean_operation(sesion, p["target"], [p["tool"]], "cut", True) for p in pairs]}
 
 
 # ---------------------------------------------------------------- caras y aristas (selectores)

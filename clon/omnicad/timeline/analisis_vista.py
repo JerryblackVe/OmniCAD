@@ -5,7 +5,8 @@ isocurvas, accesibilidad y radio mínimo), sin Qt: lo usan la vista 3D de la ven
 render de la API (`get_viewport_image`).
 
 Un análisis es {"tipo", "params"} (los guarda el documento, como la carpeta «Análisis» del navegador
-de Fusion). `calcular` lo convierte en lo que el visor sabe dibujar:
+de Fusion). Las opciones del panel de Fusion se guardan solo si se usan: un análisis viejo, sin ellas, se ve igual.
+`calcular` lo convierte en lo que el visor sabe dibujar:
   - "mallas": id de cuerpo → (vértices, normales, colores) que reemplazan su sombreado;
   - "colores": función (normales, dirección de vista) → colores, para los que dependen de la cámara;
   - "capas": primitivas extra (líneas, triángulos, puntos);
@@ -15,6 +16,7 @@ Los resultados se guardan en caché por forma: recalcular un mapa de colores tar
 import numpy as np
 
 from ..nucleo import analisis as an
+from ..nucleo import comparar_malla as cm
 from ..nucleo import geometria as geo
 from ..nucleo.render_estilos import segmentos_de_polilineas as _segmentos
 from . import entidades as ent
@@ -90,13 +92,76 @@ def _color_seccion(params, cuerpo, propiedades):
     return tuple(params.get("color") or COLOR_SECCION)
 
 
+def centro_de_masa(params, estado, propiedades=None):
+    """(punto, masa en g) de los cuerpos de `params` («cuerpos» y «componentes»; sin ninguno, todos los sólidos), con la
+    densidad de su Material físico o, sin él, la del cuerpo o la del acero. (None, 0.0) si no queda ningún sólido."""
+    from .ops_chapa import es_patron_plano
+    from .ops_ensamblar import familia
+    from .operaciones import propiedades_cuerpo
+    ids = list(params.get("cuerpos") or [])
+    for comp in params.get("componentes") or []:
+        if comp in estado.componentes:
+            grupo = familia(estado, comp)
+            ids += [c for c, cu in estado.cuerpos.items() if cu.componente in grupo]
+    if not params.get("cuerpos") and not params.get("componentes"):
+        ids = [c for c, cu in estado.cuerpos.items() if not es_patron_plano(cu)]
+    ids = [c for c in dict.fromkeys(ids) if c in estado.cuerpos and getattr(estado.cuerpos[c], "tipo", "solido") == "solido"]
+    if not ids:
+        return None, 0.0
+
+    def densidad(c):
+        material = propiedades_cuerpo(propiedades or {}, estado.cuerpos[c]).get("material")
+        material = material or getattr(estado.cuerpos[c], "material", None) or "Acero"
+        return an.TABLA_MATERIALES.get(material, {"densidad": 7.85})["densidad"]
+    dens = [densidad(c) for c in ids]
+    formas = [estado.cuerpos[c].forma for c in ids]
+    masa = sum(an.propiedades_fisicas(f, d)["masa"] for f, d in zip(formas, dens, strict=True))
+    return np.asarray(an.centro_de_masa(formas, dens), float), masa
+
+
+def glifo_centro(punto):
+    """El punto del centro de masa, negro con centro amarillo."""
+    p = np.asarray([punto], float)
+    return [("puntos", p, (0.1, 0.1, 0.1), 12), ("puntos", p, (1.0, 0.85, 0.1), 8)]
+
+
+def _desviacion(params, cuerpos, estado, salida):
+    """Mapa de desviación (F10): los valores quedan en `salida["valores"]` para mostrar mínimo, máximo y cursor."""
+    referencia = estado.cuerpos.get(params.get("referencia"))
+    tol = float(params.get("tolerancia", 0.1))
+    salida["valores"] = {}
+    for cid, forma in cuerpos.items():
+        if referencia is None or referencia.forma is forma:
+            continue
+        v, n, valores = _con_cache(("desviacion", id(forma), id(referencia.forma), tol),
+                                   lambda f=forma, r=referencia.forma: cm.mapa(f, r, tolerancia=tol), (forma, referencia.forma))
+        salida["mallas"][cid] = (np.asarray(v, np.float32), np.asarray(n, np.float32),
+                                 np.asarray(cm.colores(valores, tol), np.float32))
+        salida["valores"][cid] = (v, valores)
+        vacio = np.zeros((0, 3), np.float32)
+        salida["mallas"][params["referencia"]] = (vacio, vacio, vacio)   # coincide con el cuerpo y taparía los colores
+    return salida
+
+
 def calcular(tipo, params, estado, propiedades=None):
-    """`propiedades`: `Documento.propiedades`, para el color por componente de la sección."""
+    """`propiedades`: `Documento.propiedades`, para el color por componente de la sección y la densidad del centro de masa."""
     salida = {"mallas": {}, "colores": None, "capas": [], "cortes": [], "solo": None}
+    if tipo == "centro_masa":
+        punto, _masa = centro_de_masa(params, estado, propiedades)
+        salida["capas"] = glifo_centro(punto) if punto is not None else []
+        return salida
     if tipo == "mapa_entorno":
-        salida["colores"] = lambda n, d: an.colores_mapa_entorno(n, d)
+        entorno, rotacion, reflejo = params.get("entorno"), float(params.get("rotacion", 0.0)), params.get("reflejo", True)
+        salida["colores"] = lambda n, d: an.colores_mapa_entorno(n, d, entorno=entorno, rotacion=rotacion, reflejo=reflejo)
+        if params.get("cuerpos"):
+            salida["solo"] = [c for c in params["cuerpos"] if c in estado.cuerpos]
         return salida
     cuerpos = _cuerpos(params, estado)
+    if tipo == "desviacion":
+        return _desviacion(params, cuerpos, estado, salida)
+    if tipo == "isocurva" and params.get("caras"):       # Cuerpos/Caras: las caras elegidas se suman a los cuerpos elegidos
+        cuerpos = {c: f for c, f in cuerpos.items() if c in (params.get("cuerpos") or [])}
+        cuerpos.update({i: ent.resolver(r, estado).forma for i, r in enumerate(params["caras"])})
     if tipo == "cebra":
         frecuencia, vertical = int(params.get("frecuencia", 8)), params.get("orientacion") == "vertical"
         opacidad, fija = int(params.get("opacidad", 100)), params.get("vista_fija")      # «Bloquear rayas»: no sigue a la cámara
@@ -131,8 +196,10 @@ def calcular(tipo, params, estado, propiedades=None):
         if tipo == "desmoldeo":
             d = _direccion(params, estado)
             a0, a1 = float(params.get("angulo_min", 0.0)), float(params.get("angulo_max", 3.0))
-            v, n, c = _con_cache(("desmoldeo", id(forma), tuple(d), a0, a1),
-                                 lambda f=forma, d=d, a0=a0, a1=a1: an.colores_desmoldeo(f, d, a0, a1), forma)
+            op = {k: (tuple(params[k]) if k == "tolerancia" else params[k])
+                  for k in ("degradado", "tolerancia", "opacidad", "alta_calidad") if k in params}
+            v, n, c = _con_cache(("desmoldeo", id(forma), tuple(d), a0, a1, tuple(sorted(op.items()))),
+                                 lambda f=forma, d=d, a0=a0, a1=a1, op=op: an.colores_desmoldeo(f, d, a0, a1, **op), forma)
         elif tipo == "curvatura":
             t = params.get("tipo_curvatura", "gaussiana")
             op = {k: params[k] for k in ("bandas", "alta_calidad", "escala", "opacidad") if k in params}
@@ -141,11 +208,16 @@ def calcular(tipo, params, estado, propiedades=None):
                                  lambda f=forma, t=t, op=op, r=limite: an.colores_curvatura(f, tipo=t, rango=r, **op), forma)
         elif tipo == "accesibilidad":
             d = _direccion(params, estado)
-            v, n, c = _con_cache(("accesibilidad", id(forma), tuple(d)),
-                                 lambda f=forma, d=d: an.colores_accesibilidad(f, d), forma)
+            sentido, op = params.get("sentido", "dir1"), {k: params[k] for k in ("opacidad",) if k in params}
+            d = -d if sentido == "dir2" else d
+            v, n, c = _con_cache(("accesibilidad", id(forma), tuple(d), sentido, tuple(op.items())),
+                                 lambda f=forma, d=d, a=sentido == "ambas", op=op: an.colores_accesibilidad(f, d, ambos_sentidos=a, **op),
+                                 forma)
         elif tipo == "radio_minimo":
             r = float(params.get("radio", 3.0))
-            v, n, c = _con_cache(("radio_minimo", id(forma), r), lambda f=forma, r=r: an.colores_radio_minimo(f, r), forma)
+            op = {k: params[k] for k in ("radio_minimo", "aristas_vivas", "opacidad") if k in params}
+            v, n, c = _con_cache(("radio_minimo", id(forma), r, tuple(sorted(op.items()))),
+                                 lambda f=forma, r=r, op=op: an.colores_radio_minimo(f, r, **op), forma)
         elif tipo == "isocurva":
             cuantas, sentidos = int(params.get("densidad", 10)), params.get("tipo_iso", "uv")
             n_u, n_v = cuantas if "u" in sentidos else 0, cuantas if "v" in sentidos else 0

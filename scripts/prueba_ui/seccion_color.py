@@ -44,17 +44,18 @@ A.reg(AR, "el comando trae «Color de la sección», «Color» y «Mostrar rayad
 A.elegir(p, "plano", A.hit_plano(v, "XY"))
 p.set_valor("desfase", "15 mm")
 A.esperar(400)
-roja = contar(v.grab(), (217, 77, 64))
+azul_rayado, rojo = contar(v.grab(), (32, 96, 208)), contar(v.grab(), (217, 77, 64))
 A.foto(v, "seccion_color_defecto")
-A.reg(AR, "por defecto la tapa sale del rojo de siempre y sin rayado", roja > 300 and not p.valores["rayado"], f"{roja} px rojos")
+A.reg(AR, "por defecto (como Fusion) la tapa toma el color del componente, con rayado, y el botón de color se esconde",
+      p.valores["color_modo"] == "componente" and p.valores["rayado"] is True and azul_rayado > 100 and rojo < 2000
+      and not p._visible(next(c for c in p.campos if c.clave == "color")), f"{azul_rayado} px azules, {rojo} rojos")
 
-p.set_valor("color_modo", "componente")
+p.set_valor("rayado", False)
 A.esperar(500)
 A.foto(v, "seccion_color_componente")
-azul, rojo = contar(v.grab(), (32, 96, 208)), contar(v.grab(), (217, 77, 64))
-A.reg(AR, "«Del componente»: el cilindro corta en azul y el botón de color se esconde",
-      azul > 100 and rojo < roja * 0.3 and not p._visible(next(c for c in p.campos if c.clave == "color")),
-      f"{azul} px azules, {rojo} rojos")
+azul_liso = contar(v.grab(), (32, 96, 208))
+A.reg(AR, "sin rayado el cilindro corta en azul liso (más azul a la vista que con rayas)", azul_liso > azul_rayado * 1.1,
+      f"{azul_rayado} → {azul_liso} px azules")
 
 p.set_valor("color_modo", "personalizado")
 p._cambiar("color", [0.0, 0.7, 0.2])                                # lo que deja el selector de colores al elegir un verde

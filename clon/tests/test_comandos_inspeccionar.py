@@ -49,10 +49,11 @@ def test_medir_distancia_y_angulo_entre_caras():
     doc = _doc()
     cmd, ctx = Medir(), ContextoComando(doc)
     v = _valores(cmd, ctx, a=[_cara(doc, "op1.c1", (0, 10, 15))], b=[_cara(doc, "op1.c1", (10, 10, 15))])
-    texto = cmd._resultado(v, ctx)
-    assert "Distancia: 10" in texto and "Ángulo: 0" in texto
+    filas = {f[0]: f[1] for _titulo, lista in cmd._secciones(v, ctx) for f in lista}
+    assert filas["Distancia"].startswith("10.000") and filas["Ángulo"].startswith("0.000")
     v = _valores(cmd, ctx, a=[_cara(doc, "op1.c1", (5, 10, 30))])
-    assert "Área: 200" in cmd._resultado(v, ctx)
+    filas = {f[0]: f[1] for _titulo, lista in cmd._secciones(v, ctx) for f in lista}
+    assert filas["Área"].startswith("200.000")
 
 
 def test_interferencia_y_centro_de_masa():
@@ -60,8 +61,8 @@ def test_interferencia_y_centro_de_masa():
     from omnicad.ui.comandos.inspeccionar import CentroMasa, Interferencia
     doc = _doc()
     cmd, ctx = Interferencia(), ContextoComando(doc)
-    texto = cmd._resultado(_valores(cmd, ctx), ctx)
-    assert "500" in texto and texto.count("↔") == 1          # caja 10×20×30 y caja 10³ corrida 5 en X
+    grupos = cmd._grupos(_valores(cmd, ctx), ctx)
+    assert len(grupos) == 1 and grupos[0]["volumen"] == pytest.approx(500)          # caja 10×20×30 y caja 10³ corrida 5 en X
     cm, ctx = CentroMasa(), ContextoComando(doc)
     centro, masa = cm._calcular(_valores(cm, ctx, cuerpos=[_cuerpo(doc, "op1.c1")]), ctx)
     assert np.allclose(centro, (5, 10, 15)) and masa == pytest.approx(6000 * 7.85e-3)

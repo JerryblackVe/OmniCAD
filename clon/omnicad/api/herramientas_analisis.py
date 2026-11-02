@@ -2,7 +2,8 @@
 """Análisis de INSPECCIONAR y estilo visual del visor, para agentes y sin ventana (B-80, MCP-26, MCP-44 y MCP-45).
 
   - `manage_analysis`: la carpeta «Análisis» del navegador (sección, cebra, mapa de entorno, desmoldeo, curvatura,
-    peine, isocurvas, accesibilidad y radio mínimo): lista, agrega, muestra, oculta y quita. `get_viewport_image` dibuja
+    peine, isocurvas, accesibilidad, radio mínimo y centro de masa): lista, agrega, edita, muestra, oculta y quita.
+    `get_viewport_image` dibuja
     los visibles, igual que la ventana (`timeline/analisis_vista.py` los calcula en los dos lados).
   - `analyze_geometry`: lo MEDIDO de cada análisis (áreas, curvaturas, ángulos, porcentajes), sin guardar nada.
   - `section_view`: atajo de la sección: crea el análisis y devuelve su área y su contorno.
@@ -24,17 +25,21 @@ from .registro import herramienta
 
 TIPOS = {"section": "seccion", "zebra": "cebra", "environment_map": "mapa_entorno", "draft": "desmoldeo",
          "curvature": "curvatura", "comb": "peine", "isocurve": "isocurva", "accessibility": "accesibilidad",
-         "min_radius": "radio_minimo"}
+         "min_radius": "radio_minimo", "center_of_mass": "centro_masa"}
+SENTIDOS = {"direction_1": "dir1", "direction_2": "dir2", "both": "ambas"}
 CURVATURAS = {"gaussian": "gaussiana", "mean": "media", "max": "maxima", "min": "minima"}
 # Opciones que acepta cada tipo (el resto es un error: no se ignora en silencio).
 OPCIONES = {"section": {"plane", "offset", "angle", "flip", "bodies", "body", "section_color", "custom_color", "hatch"},
             "zebra": {"frequency", "orientation", "bodies", "opacity", "lock_stripes", "high_quality"},
-            "environment_map": set(), "draft": {"direction", "min_angle", "max_angle", "flip", "bodies", "body"},
+            "environment_map": {"bodies", "environment", "rotation", "mirror_finish"},
+            "draft": {"direction", "min_angle", "max_angle", "flip", "bodies", "body", "gradient", "tolerance_min",
+                      "tolerance_max", "opacity", "high_quality"},
             "curvature": {"curvature_type", "bodies", "display", "scale", "limit", "opacity", "high_quality"},
             "comb": {"edges", "density", "scale", "body"},
-            "isocurve": {"density", "bodies", "isocurve_type", "combs", "comb_density", "comb_scale"},
-            "accessibility": {"direction", "flip", "bodies", "body"},
-            "min_radius": {"radius", "bodies"}}
+            "isocurve": {"density", "bodies", "isocurve_type", "combs", "comb_density", "comb_scale", "faces", "body"},
+            "accessibility": {"direction", "flip", "bodies", "body", "change_direction", "opacity"},
+            "min_radius": {"radius", "bodies", "min_radius", "sharp_edges", "opacity"},
+            "center_of_mass": {"bodies", "components"}}
 
 
 def _numero(valor, que, minimo=None, maximo=None):
@@ -63,7 +68,7 @@ def _rgb_hex(valor):
 
 
 def _comunes_vista(p, dado):
-    """Opacidad y Calidad alta de cebra y mapa: solo si se piden (un análisis sin ellas guarda lo mismo que antes)."""
+    """Opacidad y Calidad alta: solo si se piden (un análisis sin ellas guarda lo mismo que antes)."""
     if dado.get("opacity") is not None:
         p["opacidad"] = int(_numero(dado["opacity"], "opacity", 0, 100))
     if dado.get("high_quality"):
@@ -115,6 +120,34 @@ def _parametros(sesion, tipo, dado):
             if hi < lo:
                 raise error("INVALID_ARGUMENTS", "max_angle tiene que ser mayor o igual que min_angle.")
             p.update(angulo_min=lo, angulo_max=hi)
+            _comunes_vista(p, dado)
+            if dado.get("gradient"):
+                p["degradado"] = True
+            if dado.get("tolerance_min") is not None or dado.get("tolerance_max") is not None:
+                t0, t1 = (float(_numero(dado.get(k), k)) for k in ("tolerance_min", "tolerance_max"))
+                if t1 < t0:
+                    raise error("INVALID_ARGUMENTS", "tolerance_max tiene que ser mayor o igual que tolerance_min.")
+                p.update(degradado=True, tolerancia=[t0, t1])
+        else:
+            _comunes_vista(p, dado)
+            if dado.get("change_direction") is not None:
+                if dado["change_direction"] not in SENTIDOS:
+                    raise error("INVALID_ARGUMENTS", f"change_direction: {', '.join(SENTIDOS)}.")
+                p["sentido"] = SENTIDOS[dado["change_direction"]]
+    elif tipo == "environment_map":
+        entorno = dado.get("environment")
+        if entorno is not None and entorno not in an.ENTORNOS_ANALISIS:
+            raise error("INVALID_ARGUMENTS", f"Entorno desconocido «{entorno}».", f"Entornos: {', '.join(an.ENTORNOS_ANALISIS)}.")
+        if entorno is not None:
+            p["entorno"] = entorno
+        if dado.get("rotation") is not None:
+            p["rotacion"] = float(_numero(dado["rotation"], "rotation", -360, 360))
+        if dado.get("mirror_finish") is not None:
+            p["reflejo"] = bool(dado["mirror_finish"])
+    elif tipo == "center_of_mass":
+        from .herramientas_ensamble import componente
+        if dado.get("components"):
+            p["componentes"] = [componente(sesion, c) for c in dado["components"]]
     elif tipo == "curvature":
         t = dado.get("curvature_type", "gaussian")
         if t not in CURVATURAS:
@@ -145,8 +178,15 @@ def _parametros(sesion, tipo, dado):
         if dado.get("combs"):
             p.update(peines=True, densidad_peine=int(_numero(dado.get("comb_density", 50), "comb_density", 3, 500)),
                      escala_peine=float(_numero(dado.get("comb_scale", 10.0), "comb_scale", 1e-6, 1e6)))
+        if dado.get("faces"):
+            p["caras"] = _refs(sesion, dado["faces"], "cara", body)[0]
     elif tipo == "min_radius":
         p["radio"] = float(_numero(dado.get("radius", 3.0), "radius", 1e-9))
+        _comunes_vista(p, dado)
+        if dado.get("min_radius") is not None:
+            p["radio_minimo"] = float(_numero(dado["min_radius"], "min_radius", 0, p["radio"]))
+        if dado.get("sharp_edges") is not None:
+            p["aristas_vivas"] = bool(dado["sharp_edges"])
     return p
 
 
@@ -163,11 +203,11 @@ def _nombre_existente(sesion, name):
 
 @herramienta("manage_analysis", "inspeccion", "Carpeta «Análisis» del documento: agrega, lista, muestra, oculta y quita "
              "análisis de INSPECCIONAR: sección, cebra, mapa de entorno, desmoldeo, curvatura, peine de curvatura, "
-             "isocurvas, accesibilidad y radio mínimo. Los visibles se dibujan en get_viewport_image. Para los números "
+             "isocurvas, accesibilidad, radio mínimo y centro de masa. Los visibles se dibujan en get_viewport_image. Para los números "
              "(áreas, ángulos, curvaturas) usá analyze_geometry. Admite deshacer.", modifica=True)
-def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hide"] = "list",
+def manage_analysis(sesion, action: Literal["list", "add", "edit", "remove", "show", "hide"] = "list",
                     type: Literal["section", "zebra", "environment_map", "draft", "curvature", "comb", "isocurve",
-                                  "accessibility", "min_radius"] | None = None,
+                                  "accessibility", "min_radius", "center_of_mass"] | None = None,
                     name: str | None = None, bodies: list[str] | None = None, plane: str | dict | None = None,
                     offset: float | None = None, flip: bool | None = None, frequency: int | None = None,
                     orientation: Literal["horizontal", "vertical"] | None = None,
@@ -179,12 +219,17 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
                     hatch: bool | None = None, opacity: int | None = None, lock_stripes: bool | None = None,
                     high_quality: bool | None = None, display: Literal["smooth", "bands"] | None = None,
                     limit: float | None = None, isocurve_type: Literal["both", "u", "v"] | None = None,
-                    combs: bool | None = None, comb_density: int | None = None, comb_scale: float | None = None):
+                    combs: bool | None = None, comb_density: int | None = None, comb_scale: float | None = None,
+                    environment: str | None = None, rotation: float | None = None, mirror_finish: bool | None = None,
+                    gradient: bool | None = None, tolerance_min: float | None = None, tolerance_max: float | None = None,
+                    change_direction: Literal["direction_1", "direction_2", "both"] | None = None,
+                    min_radius: float | None = None, sharp_edges: bool | None = None, faces: str | list[str] | None = None,
+                    components: list[str] | None = None):
     """
-    action: list (los del documento), add (crea uno), remove, show o hide (por name).
-    type: con add: section (corte con plano), zebra, environment_map, draft (desmoldeo), curvature, comb (peine de curvatura de aristas), isocurve, accessibility o min_radius (fresa).
+    action: list (los del documento), add (crea uno), edit (reemplaza las opciones de name: lo que no se pase vuelve a su valor por defecto), remove, show o hide (por name).
+    type: con add: section (corte con plano), zebra, environment_map, draft (desmoldeo), curvature, comb (peine de curvatura de aristas), isocurve, accessibility, min_radius (fresa) o center_of_mass.
     name: nombre del análisis (con add, vacío = automático, p. ej. «Sección1»).
-    bodies: cuerpos que se analizan (id o nombre); vacío = todos los sólidos. Para section, zebra, draft, curvature, isocurve, accessibility y min_radius.
+    bodies: cuerpos que se analizan (id o nombre); vacío = todos los sólidos. Para todos menos comb.
     plane: section: XY, XZ, YZ, un plano de construcción (id o nombre) o una cara plana (selector).
     offset: section: desfase del plano en mm sobre su normal; 0 por defecto.
     flip: section: conserva el otro lado; draft y accessibility: invierte la dirección.
@@ -202,15 +247,26 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
     section_color: section: component (la tapa toma el color de cada cuerpo) o custom (un solo color para todo el corte); custom por defecto.
     custom_color: section con section_color=custom: color de la tapa como «#RRGGBB»; vacío = el rojo de siempre.
     hatch: section: true dibuja el rayado diagonal sobre las caras del corte; false por defecto.
-    opacity: zebra y curvature: opacidad del análisis sobre el cuerpo, 0 a 100 (100 por defecto).
+    opacity: zebra, curvature, draft, accessibility y min_radius: opacidad del análisis sobre el cuerpo, 0 a 100 (100 por defecto).
     lock_stripes: zebra: true deja las rayas fijas al cuerpo; false (por defecto) siguen a la cámara.
-    high_quality: zebra y curvature: true calcula sobre una malla más fina.
+    high_quality: zebra, curvature y draft: true calcula sobre una malla más fina.
     display: curvature: smooth (por defecto) o bands.
     limit: curvature: curvatura en 1/mm que llega al rojo (Límite de Principal mínima y máxima); vacío = automático.
     isocurve_type: isocurve: both (por defecto), u o v.
     combs: isocurve: true dibuja la curvatura en peines sobre cada isocurva.
     comb_density: isocurve: púas por isocurva (50 por defecto).
     comb_scale: isocurve: largo relativo de las púas (10 por defecto).
+    environment: environment_map: entorno (campo, campo_nieve, claraboya, cruce, fotomaton, lecho_lago, luz_calida, luz_rejilla, luz_fria, luz_suave, plaza, resaltado_cerco o resaltado_nitido); vacío = el reflejo de siempre.
+    rotation: environment_map: giro del entorno en grados, de -360 a 360.
+    mirror_finish: environment_map: true (por defecto) acabado de espejo; false, sombreado.
+    gradient: draft: true pinta un degradé continuo entre min_angle y max_angle en lugar de tres zonas.
+    tolerance_min: draft: inicio de la Zona de tolerancia (amarilla), en grados; necesita tolerance_max.
+    tolerance_max: draft: fin de la Zona de tolerancia, en grados; necesita tolerance_min.
+    change_direction: accessibility: direction_1 (por defecto), direction_2 (al revés) o both.
+    min_radius: min_radius: radio mínimo en mm: da el degradé de rojo a verde hasta radius, que pasa a ser el máximo.
+    sharp_edges: min_radius: true (por defecto) marca los rincones sin empalme.
+    faces: isocurve: caras (selector o ids de find_faces); se suman a bodies.
+    components: center_of_mass: componentes (id o nombre) que entran con todos sus cuerpos.
     """
     doc = sesion.doc
     if action == "list":
@@ -225,6 +281,11 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
             doc._guardar_para_deshacer()
             doc.alternar_analisis(name)
         return {"analyses": [_info(n, a) for n, a in doc.analisis.items()], "count": len(doc.analisis)}
+    if action == "edit":
+        if name is None:
+            raise error("INVALID_ARGUMENTS", "edit necesita name.")
+        _nombre_existente(sesion, name)
+        type = _info(name, doc.analisis[name])["type"]
     if type is None:
         raise error("INVALID_ARGUMENTS", "add necesita type.", f"Tipos: {', '.join(TIPOS)}.")
     dado = {k: v for k, v in dict(bodies=bodies, plane=plane, offset=offset, flip=flip, frequency=frequency,
@@ -233,7 +294,14 @@ def manage_analysis(sesion, action: Literal["list", "add", "remove", "show", "hi
                                   scale=scale, radius=radius, body=body, section_color=section_color,
                                   custom_color=custom_color, hatch=hatch, opacity=opacity, lock_stripes=lock_stripes,
                                   high_quality=high_quality, display=display, limit=limit, isocurve_type=isocurve_type,
-                                  combs=combs, comb_density=comb_density, comb_scale=comb_scale).items() if v is not None}
+                                  combs=combs, comb_density=comb_density, comb_scale=comb_scale, environment=environment,
+                                  rotation=rotation, mirror_finish=mirror_finish, gradient=gradient,
+                                  tolerance_min=tolerance_min, tolerance_max=tolerance_max,
+                                  change_direction=change_direction, min_radius=min_radius, sharp_edges=sharp_edges,
+                                  faces=faces, components=components).items() if v is not None}
+    if action == "edit":
+        doc.editar_analisis(name, _parametros(sesion, type, dado))
+        return {"analysis": _info(name, doc.analisis[name]), "count": len(doc.analisis)}
     if name and name.strip() in doc.analisis:
         raise error("INVALID_ARGUMENTS", f"Ya existe un análisis llamado «{name.strip()}».")
     creado = doc.agregar_analisis(TIPOS[type], _parametros(sesion, type, dado), name.strip() if name else None)
@@ -284,17 +352,19 @@ def _medida(sesion, tipo, p, cuerpo):
         d = direccion_de(p, estado)
         lo, hi = p["angulo_min"], p["angulo_max"]
         _v, _n, a = an.angulos_desmoldeo(forma, d)
+        zona = {"tolerance_percent": _porcentaje((a >= p["tolerancia"][0]) & (a <= p["tolerancia"][1]))} if "tolerancia" in p else {}
         return {"angle_deg": _estadisticas(a, 3), "sufficient_percent": _porcentaje(a >= hi - 1e-6),
-                "neutral_percent": _porcentaje((a > lo + 1e-6) & (a < hi - 1e-6)),
+                "neutral_percent": _porcentaje((a > lo + 1e-6) & (a < hi - 1e-6)), **zona,
                 "insufficient_percent": _porcentaje(a <= lo + 1e-6), "direction": [round(float(x), 6) for x in d]}
     if tipo == "accessibility":
         from ..timeline.analisis_vista import _direccion as direccion_de
         d = direccion_de(p, estado)
-        _v, _n, c = an.colores_accesibilidad(forma, d)
+        d = -d if p.get("sentido") == "dir2" else d
+        _v, _n, c = an.colores_accesibilidad(forma, d, ambos_sentidos=p.get("sentido") == "ambas")
         return {"accessible_percent": _porcentaje((np.asarray(c) == np.asarray(an.VERDE, np.float32)).all(1)),
                 "direction": [round(float(x), 6) for x in d]}
     if tipo == "min_radius":
-        _v, _n, c = an.colores_radio_minimo(forma, p["radio"])
+        _v, _n, c = an.colores_radio_minimo(forma, p["radio"], **{k: p[k] for k in ("radio_minimo", "aristas_vivas") if k in p})
         return {"tool_radius_mm": p["radio"],
                 "blocked_percent": _porcentaje((np.asarray(c) == np.asarray(an.ROJO, np.float32)).all(1))}
     if tipo == "isocurve":
@@ -307,15 +377,19 @@ def _medida(sesion, tipo, p, cuerpo):
 @herramienta("analyze_geometry", "inspeccion", "Mide con un análisis de INSPECCIONAR sin guardarlo: section (área y "
              "contorno), curvature (mínimo, máximo, media y percentiles), draft (ángulos y porcentaje de caras con "
              "desmoldeo suficiente), accessibility (porcentaje accesible), min_radius (porcentaje que la fresa no "
-             "alcanza) e isocurve. Por cuerpo. Los análisis puramente visuales (zebra, environment_map, comb) se ven "
-             "con manage_analysis y get_viewport_image.")
-def analyze_geometry(sesion, type: Literal["section", "curvature", "draft", "accessibility", "min_radius", "isocurve"],
+             "alcanza) e isocurve, por cuerpo; y center_of_mass, el punto y la masa de todo lo elegido. Los análisis "
+             "puramente visuales (zebra, environment_map, comb) se ven con manage_analysis y get_viewport_image.")
+def analyze_geometry(sesion, type: Literal["section", "curvature", "draft", "accessibility", "min_radius", "isocurve",
+                                           "center_of_mass"],
                      bodies: list[str] | None = None, plane: str | dict | None = None, offset: float | None = None,
                      flip: bool | None = None, direction: str | dict | None = None, min_angle: float | None = None,
                      max_angle: float | None = None, curvature_type: Literal["gaussian", "mean", "max", "min"] | None = None,
-                     density: int | None = None, radius: float | None = None, body: str | None = None):
+                     density: int | None = None, radius: float | None = None, body: str | None = None,
+                     tolerance_min: float | None = None, tolerance_max: float | None = None,
+                     change_direction: Literal["direction_1", "direction_2", "both"] | None = None,
+                     min_radius: float | None = None, sharp_edges: bool | None = None, components: list[str] | None = None):
     """
-    type: section, curvature, draft, accessibility, min_radius o isocurve.
+    type: section, curvature, draft, accessibility, min_radius, isocurve o center_of_mass.
     bodies: cuerpos a medir (id o nombre); vacío = todos los sólidos.
     plane: section: XY, XZ, YZ, un plano de construcción o una cara plana.
     offset: section: desfase del plano en mm; 0 por defecto.
@@ -327,11 +401,26 @@ def analyze_geometry(sesion, type: Literal["section", "curvature", "draft", "acc
     density: isocurve: curvas por dirección; 10 por defecto.
     radius: min_radius: radio de la fresa en mm; 3 por defecto.
     body: cuerpo donde se evalúan los selectores de plane y direction; vacío = el único cuerpo.
+    tolerance_min: draft: inicio de la Zona de tolerancia en grados: agrega tolerance_percent.
+    tolerance_max: draft: fin de la Zona de tolerancia en grados.
+    change_direction: accessibility: direction_1 (por defecto), direction_2 (al revés) o both.
+    min_radius: min_radius: radio mínimo en mm; radius pasa a ser el máximo.
+    sharp_edges: min_radius: true (por defecto) cuenta los rincones sin empalme.
+    components: center_of_mass: componentes (id o nombre) que entran con todos sus cuerpos.
     """
     dado = {k: v for k, v in dict(plane=plane, offset=offset, flip=flip, direction=direction, min_angle=min_angle,
                                   max_angle=max_angle, curvature_type=curvature_type, density=density,
-                                  radius=radius, body=body).items() if v is not None}
+                                  radius=radius, body=body, tolerance_min=tolerance_min, tolerance_max=tolerance_max,
+                                  change_direction=change_direction, min_radius=min_radius, sharp_edges=sharp_edges,
+                                  components=components, bodies=bodies if type == "center_of_mass" else None).items()
+            if v is not None}
     p = _parametros(sesion, type, dado)
+    if type == "center_of_mass":
+        from ..timeline.analisis_vista import centro_de_masa
+        punto, masa = centro_de_masa(p, sesion.doc.estado_final, sesion.doc.propiedades)
+        if punto is None:
+            raise error("NOTHING_TO_MEASURE", "No hay cuerpos sólidos para calcular el centro de masa.")
+        return {"type": type, "center_of_mass": [round(float(x), 6) for x in punto], "mass_g": round(float(masa), 6)}
     por_cuerpo = []
     for c in _cuerpos_de(sesion, bodies):
         try:

@@ -354,6 +354,17 @@ def _centro_a_centro(ia, ib):
             "minima": dc - suma, "maxima": dc + suma}
 
 
+UNIDADES_SECUNDARIAS = {"cm": ("cm", 10.0), "m": ("m", 1000.0), "pulg": ("pulg.", 25.4), "ft": ("ft", 304.8)}
+
+
+def texto_secundario(valor_mm, potencia=1, decimales=3, unidad="ninguno"):
+    """« (3.000 cm)»: Unidades secundarias de Medir. `valor_mm` en mm, mm² o mm³ según `potencia`; "" sin unidad."""
+    if unidad not in UNIDADES_SECUNDARIAS:
+        return ""
+    texto, factor = UNIDADES_SECUNDARIAS[unidad]
+    return f" ({float(valor_mm) / factor ** potencia:.{decimales}f} {texto}{ {1: '', 2: '²', 3: '³'}[potencia] })"
+
+
 def medir(a, b=None, *, centro_a_centro=False):
     """Inspeccionar > Medir. `a` y `b`: cara, arista, vértice, cuerpo (formas OCC) o punto (array de 3).
 
@@ -523,13 +534,6 @@ def centro_de_masa(formas, densidades=None):
 
 
 # ---------------------------------------------------------------- muestreo del teselado
-def _indices(tri, cara):
-    idx = np.array([tri.Triangle(i).Get() for i in range(1, tri.NbTriangles() + 1)], int).reshape(-1, 3) - 1
-    if cara.Orientation() == TopAbs_REVERSED:
-        idx = idx[:, [0, 2, 1]]
-    return idx
-
-
 def _props_nodos(cara, tri, idx, tris, curvatura):
     """Normal exacta (hacia afuera del material) y curvaturas en cada nodo de la triangulación."""
     m = tri.NbNodes()
@@ -605,14 +609,25 @@ class _Bloque:
                   for sel, n in self.grupos]
         return np.concatenate(partes)
 
-    def expandir_borde(self, marcados):
+    def expandir_borde(self, marcados, lados=None):
         """Máscara por nodo → vértices: un vértice nuevo queda marcado solo si todos los nodos que lo
-        generan (peso > 0) están marcados, así una marca de arista no se derrama hacia el interior."""
+        generan (peso > 0) están marcados, así una marca de arista no se derrama hacia el interior.
+        `lados`, {(nodo menor, nodo mayor)} de la arista: además, solo cuentan los vértices sobre uno de esos lados; una
+        cara plana con todas sus esquinas sobre aristas marcadas no se marca entera."""
         partes = []
         for sel, n in self.grupos:
-            usa = (_patron(n) > 1e-12).astype(float)                       # (P, 3)
+            usa = _patron(n) > 1e-12                                       # (P, 3)
             libres = (~marcados[self.idx[sel]]).astype(float)              # (T, 3)
-            partes.append((libres @ usa.T == 0).reshape(-1))
+            salida = libres @ usa.astype(float).T == 0                     # (T, P)
+            if lados is not None:
+                tri = self.idx[sel]
+                salida[:, usa.sum(1) == 3] = False
+                for a, b in ((0, 1), (1, 2), (2, 0)):
+                    en_lado = usa[:, a] & usa[:, b] & (usa.sum(1) == 2)
+                    if en_lado.any():
+                        es_arista = np.array([(min(p, q), max(p, q)) in lados for p, q in zip(tri[:, a], tri[:, b], strict=True)])
+                        salida[:, en_lado] &= es_arista[:, None]
+            partes.append(salida.reshape(-1))
         return np.concatenate(partes)
 
 
@@ -635,7 +650,7 @@ def _malla(forma, deflexion, angular, curvatura, alta_calidad=False):
     for cara, tris in caras_tris:
         loc = TopLoc_Location()
         tri = BRep_Tool.Triangulation_s(cara, loc)
-        idx = _indices(tri, cara)
+        idx = geo._indices_cara(cara, tri, loc)
         n_nodo, k_nodo = _props_nodos(cara, tri, idx, tris, curvatura)
         lados = np.linalg.norm(tris - np.roll(tris, 1, axis=1), axis=2).max(axis=1)
         nsub = np.clip(np.ceil(lados / largo_max), 1, 16).astype(int)
@@ -692,6 +707,20 @@ def _con_opacidad(colores, opacidad):
     return np.asarray(colores, np.float32) * o + _GRIS_CUERPO * (1 - o)
 
 
+_COLORES_GRUPO = ((0.93, 0.76, 0.42), (0.67, 0.86, 0.93), (0.90, 0.56, 0.48), (0.86, 0.84, 0.56), (0.62, 0.80, 0.62),
+                  (0.76, 0.66, 0.88), (0.95, 0.70, 0.76), (0.56, 0.72, 0.86))
+
+
+def colores_grupos_malla(malla):
+    """INSPECCIONAR › Mostrar grupos de caras de malla → (vertices, normales, colores) como triángulos sueltos: cada grupo de
+    caras de la `Malla` con su color."""
+    t = malla.vertices[malla.caras]
+    n = _normalizar_filas(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]))
+    _unicos, indice = np.unique(malla.grupos, return_inverse=True)
+    col = np.asarray(_COLORES_GRUPO, np.float32)[indice % len(_COLORES_GRUPO)]
+    return t.reshape(-1, 3).astype(np.float32), np.repeat(n, 3, axis=0).astype(np.float32), np.repeat(col, 3, axis=0)
+
+
 def malla_fina(forma, deflexion=0.05, angular=0.3):
     """(vertices, normales) con la malla de «Calidad alta»."""
     v, n, _k, _ = _malla(forma, deflexion, angular, False, True)
@@ -740,17 +769,30 @@ def angulos_desmoldeo(forma, direccion, *, alta_calidad=False, deflexion=0.05, a
     return v, n, ang.astype(np.float32)
 
 
-def colores_desmoldeo(forma, direccion, angulo_min=0.0, angulo_max=3.0, *, alta_calidad=False, deflexion=0.05,
-                      angular=0.3):
+def _degrade(valores, paradas):
+    """Colores Nx3 interpolando (valor, color) en orden creciente; fuera de los extremos, el color del extremo."""
+    x = [p[0] for p in paradas]
+    return np.stack([np.interp(valores, x, [p[1][k] for p in paradas]) for k in range(3)], axis=1).astype(np.float32)
+
+
+def colores_desmoldeo(forma, direccion, angulo_min=0.0, angulo_max=3.0, *, degradado=False, tolerancia=None, opacidad=100,
+                      alta_calidad=False, deflexion=0.05, angular=0.3):
     """Inspeccionar > Análisis de desmoldeo (Draft Analysis) → (vertices, normales, colores).
 
     Verde: ángulo ≥ angulo_max (desmoldeo positivo suficiente). Amarillo: entre ambos (neutro, zona de
     línea de partición). Rojo: ≤ angulo_min (insuficiente o contrasalida). Ángulos en grados.
+    `degradado=True` es el del panel de Fusion: degradé continuo de rojo a verde entre los dos ángulos, y `tolerancia`
+    (mín, máx) deja esa banda en amarillo (Zona de tolerancia). `opacidad`: ver `_con_opacidad`.
     """
     if angulo_max < angulo_min:
         raise geo.ErrorGeometria("El ángulo máximo de desmoldeo debe ser ≥ al mínimo.")
     v, n, ang = angulos_desmoldeo(forma, direccion, alta_calidad=alta_calidad, deflexion=deflexion,
                                   angular=angular)
+    if degradado:
+        t0, t1 = (0.5 * (angulo_min + angulo_max),) * 2 if tolerancia is None else tolerancia
+        t0, t1 = (float(np.clip(t, angulo_min, angulo_max)) for t in (min(t0, t1), max(t0, t1)))
+        col = _degrade(ang, [(angulo_min, ROJO), (t0, AMARILLO), (t1, AMARILLO), (angulo_max, VERDE)])
+        return v, n, _con_opacidad(col, opacidad)
     tol = 1e-6
     return v, n, _pintar([(np.ones(len(ang), bool), AMARILLO), (ang >= angulo_max - tol, VERDE),
                           (ang <= angulo_min + tol, ROJO)], len(ang))
@@ -842,14 +884,14 @@ def _accesible(v, n, d, oclusion, tris):
     return acc
 
 
-def colores_accesibilidad(forma, direccion, *, ambos_sentidos=False, oclusion=True, alta_calidad=False,
+def colores_accesibilidad(forma, direccion, *, ambos_sentidos=False, oclusion=True, opacidad=100, alta_calidad=False,
                           deflexion=0.05, angular=0.3):
     """Inspeccionar > Análisis de accesibilidad → (vertices, normales, colores).
 
     `direccion`: hacia donde está la herramienta (p. ej. +Z = desde arriba). Verde = accesible (la cara
     no le da la espalda y un rayo hacia la herramienta no choca con el propio cuerpo); rojo = no
     accesible (contrasalida o tapado). `ambos_sentidos=True` = "Ambas direcciones" (d o −d).
-    `oclusion=False` usa solo normal·dirección (más rápido).
+    `oclusion=False` usa solo normal·dirección (más rápido). `opacidad`: ver `_con_opacidad`.
     """
     d = _unitario(direccion, "dirección de acceso")
     v, n, _, bloques = _malla(forma, deflexion, angular, False, alta_calidad)
@@ -857,7 +899,7 @@ def colores_accesibilidad(forma, direccion, *, ambos_sentidos=False, oclusion=Tr
     acc = _accesible(v, n, d, oclusion, tris)
     if ambos_sentidos:
         acc |= _accesible(v, n, -d, oclusion, tris)
-    return v, n, _pintar([(np.ones(len(acc), bool), ROJO), (acc, VERDE)], len(acc))
+    return v, n, _con_opacidad(_pintar([(np.ones(len(acc), bool), ROJO), (acc, VERDE)], len(acc)), opacidad)
 
 
 # ---------------------------------------------------------------- radio mínimo
@@ -900,13 +942,15 @@ def _es_concava(arista, vecinas):
     return float(np.cross(n1, tg) @ n2) > 0.05
 
 
-def _mascara_aristas_concavas(forma, bloques, n_total):
+def _mascara_aristas_concavas(forma, bloques, n_total, solo_lados=False):
+    """Vértices sobre aristas cóncavas. `solo_lados`: una banda junto a la arista (`_Bloque.expandir_borde`)."""
     vecinas = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
     TopExp.MapShapesAndAncestors_s(forma, TopAbs_EDGE, TopAbs_FACE, vecinas)
     cache = {}
     mascara = np.zeros(n_total, bool)
     for bloque in bloques:
         nodos = np.zeros(bloque.tri.NbNodes(), bool)
+        lados = set() if solo_lados else None
         for arista in _aristas_unicas(bloque.cara):
             if BRep_Tool.Degenerated_s(arista) or BRep_Tool.IsClosed_s(arista, bloque.cara):
                 continue
@@ -921,26 +965,41 @@ def _mascara_aristas_concavas(forma, bloques, n_total):
                     lista = pol.Nodes()
                     for j in range(1, pol.NbNodes() + 1):
                         nodos[lista.Value(j) - 1] = True
+                        if solo_lados and j > 1:
+                            p, q = lista.Value(j - 1) - 1, lista.Value(j) - 1
+                            lados.add((min(p, q), max(p, q)))
         if nodos.any():
-            mascara[bloque.inicio:bloque.inicio + bloque.tamano] = bloque.expandir_borde(nodos)
+            mascara[bloque.inicio:bloque.inicio + bloque.tamano] = bloque.expandir_borde(nodos, lados)
     return mascara
 
 
-def colores_radio_minimo(forma, radio_herramienta, *, aristas_vivas=True, alta_calidad=False, deflexion=0.05,
-                         angular=0.3):
+def colores_radio_minimo(forma, radio_herramienta, *, aristas_vivas=True, radio_minimo=None, opacidad=100,
+                         alta_calidad=False, deflexion=0.05, angular=0.3):
     """Inspeccionar > Análisis de radio mínimo → (vertices, normales, colores).
 
     Rojo donde una fresa de `radio_herramienta` (mm) no entra: zonas cóncavas con radio de curvatura
     menor que el de la herramienta y, con `aristas_vivas=True` ("Curvas vivas"), los rincones interiores
     sin empalme (radio 0). Verde en el resto (zonas planas, convexas o cóncavas con radio suficiente).
+    Con `radio_minimo` es el panel de Fusion: `radio_herramienta` es el Radio máximo y las zonas cóncavas van en degradé,
+    rojo hasta `radio_minimo` y verde desde el máximo. `opacidad`: ver `_con_opacidad`.
     """
     if radio_herramienta <= 0:
         raise geo.ErrorGeometria("El radio de la herramienta debe ser positivo.")
+    if radio_minimo is not None and not 0 <= radio_minimo <= radio_herramienta:
+        raise geo.ErrorGeometria("El radio mínimo va de 0 al radio máximo de la herramienta.")
     v, n, k, bloques = _malla(forma, deflexion, angular, True, alta_calidad)
-    malo = k[:, 0] * float(radio_herramienta) < -(1.0 + 1e-6)
-    if aristas_vivas:
-        malo |= _mascara_aristas_concavas(forma, bloques, len(v))
-    return v, n, _pintar([(np.ones(len(v), bool), VERDE), (malo, ROJO)], len(v))
+    # El modo viejo (sin radio_minimo) conserva lo que pintaba: un análisis guardado se ve igual.
+    vivas = (_mascara_aristas_concavas(forma, bloques, len(v), radio_minimo is not None) if aristas_vivas
+             else np.zeros(len(v), bool))
+    if radio_minimo is None:
+        malo = (k[:, 0] * float(radio_herramienta) < -(1.0 + 1e-6)) | vivas
+        return v, n, _con_opacidad(_pintar([(np.ones(len(v), bool), VERDE), (malo, ROJO)], len(v)), opacidad)
+    with np.errstate(divide="ignore"):
+        radio = np.where(k[:, 0] < -1e-9, -1.0 / k[:, 0], np.inf)         # lo plano y lo convexo no frenan a la fresa
+    lo, hi = float(radio_minimo), float(radio_herramienta)
+    col = _degrade(np.minimum(radio, hi), [(lo, ROJO), (0.5 * (lo + hi), AMARILLO), (max(hi, lo + 1e-9), VERDE)])
+    col[vivas] = ROJO
+    return v, n, _con_opacidad(col, opacidad)
 
 
 # ---------------------------------------------------------------- cebra y mapa de entorno
@@ -978,17 +1037,60 @@ def _suave(x0, x1, x):
     return t * t * (3 - 2 * t)
 
 
-def colores_mapa_entorno(normales, direccion_vista, *, arriba=(0.0, 0.0, 1.0), rotacion=0.0):
+# Los 13 entornos del panel. Fusion usa imágenes HDR; acá cada uno es un cielo y un suelo en degradé y sus luces: clave →
+# (nombre, (cenit, horizonte), (horizonte del suelo, nadir), [(azimut°, ancho°, elevación mínima, máxima, intensidad)]).
+_BLANCO, _GRIS = (0.96, 0.96, 0.97), (0.62, 0.63, 0.65)
+ENTORNOS_ANALISIS = {
+    "campo": ("Campo", (0.34, 0.54, 0.82), (0.82, 0.88, 0.94), (0.42, 0.52, 0.24), (0.20, 0.26, 0.12), [(40, 60, 0.45, 0.8, 0.8)]),
+    "campo_nieve": ("Campo de nieve", (0.56, 0.68, 0.84), (0.90, 0.93, 0.97), (0.93, 0.94, 0.97), (0.66, 0.70, 0.78), [(120, 50, 0.3, 0.7, 0.9)]),
+    "claraboya": ("Claraboya", (0.92, 0.94, 0.97), (0.42, 0.42, 0.44), (0.30, 0.30, 0.31), (0.12, 0.12, 0.13), [(0, 180, 0.72, 1.0, 1.0)]),
+    "cruce": ("Cruce", (0.50, 0.60, 0.74), (0.74, 0.72, 0.68), (0.34, 0.33, 0.33), (0.18, 0.18, 0.19), [(90, 16, 0.0, 0.5, 0.7), (270, 16, 0.0, 0.5, 0.7)]),
+    "fotomaton": ("Fotomatón", _BLANCO, (0.74, 0.75, 0.77), (0.70, 0.71, 0.73), (0.40, 0.41, 0.43), [(45, 26, 0.25, 0.75, 1.0), (225, 26, 0.25, 0.75, 1.0)]),
+    "lecho_lago": ("Lecho de lago seco", (0.44, 0.60, 0.80), (0.92, 0.84, 0.72), (0.76, 0.66, 0.52), (0.44, 0.36, 0.26), [(200, 40, 0.5, 0.85, 0.9)]),
+    "luz_calida": ("Luz cálida", (0.98, 0.86, 0.68), (0.80, 0.56, 0.34), (0.46, 0.30, 0.20), (0.18, 0.12, 0.08), [(60, 34, 0.2, 0.7, 0.9)]),
+    "luz_rejilla": ("Luz de rejilla", (0.20, 0.21, 0.23), _GRIS, (0.14, 0.14, 0.15), (0.05, 0.05, 0.06),
+                    [(a, 12, e, e + 0.14, 1.0) for a in (0, 60, 120, 180, 240, 300) for e in (0.2, 0.5)]),
+    "luz_fria": ("Luz fría", (0.72, 0.84, 0.98), (0.40, 0.54, 0.72), (0.20, 0.28, 0.40), (0.08, 0.12, 0.18), [(300, 34, 0.2, 0.7, 0.9)]),
+    "luz_suave": ("Luz suave", _BLANCO, (0.84, 0.85, 0.87), (0.74, 0.75, 0.77), (0.52, 0.53, 0.55), [(45, 60, 0.3, 0.85, 0.5)]),
+    "plaza": ("Plaza", (0.46, 0.62, 0.84), (0.82, 0.80, 0.76), (0.54, 0.50, 0.46), (0.30, 0.28, 0.26), [(a, 20, 0.0, 0.42, 0.45) for a in (30, 150, 270)]),
+    "resaltado_cerco": ("Resaltado de cerco", (0.10, 0.10, 0.12), (0.96, 0.96, 0.98), (0.96, 0.96, 0.98), (0.10, 0.10, 0.12), []),
+    "resaltado_nitido": ("Resaltado nítido", (0.08, 0.08, 0.09), (0.16, 0.16, 0.18), (0.10, 0.10, 0.11), (0.03, 0.03, 0.04), [(30, 10, 0.05, 0.95, 1.0), (210, 10, 0.05, 0.95, 1.0)]),
+}
+
+
+def _color_entorno(elev, azim, datos):
+    """Color reflejado del entorno `datos` de ENTORNOS_ANALISIS para cada dirección (elevación en seno, azimut en radianes)."""
+    _nombre, cenit, cielo, suelo, nadir, luces = datos
+    alto = np.abs(elev)[:, None] ** 0.6
+    col = np.where(elev[:, None] >= 0, (1 - alto) * np.array(cielo) + alto * np.array(cenit),
+                   (1 - alto) * np.array(suelo) + alto * np.array(nadir))
+    for az, ancho, e0, e1, intensidad in luces:
+        dif = np.abs((azim - math.radians(az) + math.pi) % (2 * math.pi) - math.pi)
+        caja = intensidad * (1 - _suave(math.radians(ancho) * 0.85, math.radians(ancho), dif)) \
+            * _suave(e0 - 0.03, e0, elev) * (1 - _suave(e1, e1 + 0.03, elev))
+        col = col * (1 - caja[:, None]) + caja[:, None]
+    return col
+
+
+def colores_mapa_entorno(normales, direccion_vista, *, arriba=(0.0, 0.0, 1.0), rotacion=0.0, entorno=None, reflejo=True):
     """Inspeccionar > Mapa de entorno: cromo espejado que refleja un estudio procedural (cielo con
     degradé, horizonte marcado, piso oscuro y dos softboxes). `rotacion` (grados) gira el entorno
-    alrededor de `arriba`, como el control "Girar". Vectorizado: se recalcula con cada cámara."""
-    _n, _v, r = _reflejo(normales, direccion_vista)
+    alrededor de `arriba`, como el control "Girar". Vectorizado: se recalcula con cada cámara.
+    `entorno`: clave de ENTORNOS_ANALISIS (None = el estudio de los análisis guardados sin opciones). `reflejo=False` es
+    «Aplicar simetría» apagada: el cromo sin el entorno, sombreado solo por el ángulo con la vista."""
+    n, _v, r = _reflejo(normales, direccion_vista)
+    if not reflejo:
+        return np.repeat((0.32 + 0.5 * np.abs(n @ _v))[:, None], 3, axis=1).astype(np.float32)
     up = _unitario(arriba, "dirección arriba")
     e1 = np.cross(up, (1.0, 0.0, 0.0) if abs(up[0]) < 0.9 else (0.0, 1.0, 0.0))
     e1 /= np.linalg.norm(e1)
     e2 = np.cross(up, e1)
     elev = np.clip(r @ up, -1.0, 1.0)
     azim = np.arctan2(r @ e2, r @ e1) + math.radians(rotacion)
+    if entorno is not None:
+        if entorno not in ENTORNOS_ANALISIS:
+            raise geo.ErrorGeometria(f"Entorno desconocido: {entorno}.")
+        return np.clip(_color_entorno(elev, azim, ENTORNOS_ANALISIS[entorno]), 0.0, 1.0).astype(np.float32)
     alto = np.abs(elev)[:, None]
     cielo = (1 - alto ** 0.6) * np.array([0.93, 0.94, 0.96]) + alto ** 0.6 * np.array([0.30, 0.50, 0.80])
     piso = (1 - alto ** 0.5) * np.array([0.42, 0.40, 0.37]) + alto ** 0.5 * np.array([0.10, 0.09, 0.09])
