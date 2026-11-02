@@ -99,3 +99,8 @@ def test_la_union_que_sigue_a_un_vinculo_se_rechaza_en_el_panel_y_no_tiene_asas(
     p.aceptar()
     assert "Vínculo1" in p.mensaje.text()
     p.cancelar()
+
+
+def test_un_angulo_enorme_no_arma_un_arco_de_millones_de_puntos():
+    arco = mp._arco(np.zeros(3), np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), 10.0, 0.0, np.radians(1e9))
+    assert len(arco) < 100 and np.allclose(np.linalg.norm(arco, axis=1), 10.0)

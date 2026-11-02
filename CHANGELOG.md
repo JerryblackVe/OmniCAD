@@ -56,6 +56,7 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
   turno.
 
 ### Corregido
+- Escribir un ángulo enorme en un comando con asa de giro ya no traba la ventana.
 - Cortes, roscas, patrones, normales y curvas medidos contra Fusion real (B-118, B-122, B-151, BOC-50, BOC-76, PAT-1 y
   SUP-23, entre otros); un cuerpo que pasa a otro componente ya no se mueve dos veces con la unión (B-108).
 - Texto en curva: una letra tocada por otra curva sigue siendo letra y las cintas diminutas que sobran ya no se

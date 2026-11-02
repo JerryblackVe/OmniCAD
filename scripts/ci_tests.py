@@ -23,7 +23,7 @@ def main():
     for archivo in sorted(Path("tests").glob("test_*.py"))[int(sys.argv[1])::TANDAS]:
         print(f"=== {archivo.name}", flush=True)
         salida = correr(archivo)
-        if salida != 0:
+        if salida not in (0, 5):        # 5: todo el archivo se saltea (falta un módulo opcional)
             print(f"=== FALLA {archivo.name}: {salida}", flush=True)
             fallos.append(f"{archivo.name}: {salida}")
     print(f"=== Fallas: {fallos or 'ninguna'}", flush=True)

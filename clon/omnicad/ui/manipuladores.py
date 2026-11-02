@@ -219,6 +219,8 @@ def _disco(visor, centro, radio, color, borde=None):
 
 
 def _arco(centro, u, v, radio, a0, a1, n=None):
+    if abs(a1 - a0) > 2 * math.pi:                  # más de una vuelta se ve igual: con 1e9 deg eran millones de puntos
+        a0 = a1 - math.copysign(2 * math.pi, a1 - a0)
     n = n or max(6, int(abs(a1 - a0) / math.radians(4)) + 1)
     return np.array([centro + (u * math.cos(a) + v * math.sin(a)) * radio for a in np.linspace(a0, a1, n + 1)])
 
