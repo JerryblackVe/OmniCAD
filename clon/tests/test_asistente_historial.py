@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Historial de chats del Asistente (asistente/historial.py): sin Qt, sin red."""
 import json
+import os
+import time
 
 import pytest
 
@@ -28,6 +30,9 @@ def chat(texto="hace una caja de cuarenta milimetros con empalme de tres y aguje
 def test_guardar_listar_cargar_y_borrar(carpeta):
     id_a = historial.guardar(chat(), "hacer", "anthropic", "claude-opus-5-5")
     id_b = historial.guardar(chat("otra cosa"), "explicar", "local", "qwen3", sesiones_cli={"opencode": "s1"})
+    ahora = time.time()
+    os.utime(carpeta / f"{id_a}.json", (ahora - 2, ahora - 2))      # el reloj de archivos de Windows puede empatar los dos
+    os.utime(carpeta / f"{id_b}.json", (ahora - 1, ahora - 1))
     assert sorted(p.name for p in carpeta.iterdir()) == sorted([f"{id_a}.json", f"{id_b}.json"])
     lista = historial.listar()
     assert [c["id"] for c in lista] == [id_b, id_a]            # el más nuevo primero

@@ -6,6 +6,7 @@ import os
 import pytest
 
 from omnicad import api, nativo
+from omnicad.api.herramientas_boceto import info_perfiles
 from omnicad.nucleo import fuentes
 from omnicad.nucleo import perfiles as pf
 
@@ -68,13 +69,19 @@ def test_el_disco_mide_lo_mismo_que_en_fusion(colocacion):
     assert disco.area == pytest.approx(DISCO, abs=0.01) and disco.firma == {c}
 
 
+def _caja(br):
+    """Caja del primer perfil. `caja_uv` solo viene armada con el módulo de Rust."""
+    caja = info_perfiles(br)[0]["bounding_box"]
+    return (*caja["min"], *caja["max"])
+
+
 @hay_arial
 def test_un_texto_adentro_de_la_o_de_otro_no_es_su_hueco():
     s = api.Sesion()
     ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "b"}))
     a = ok(api.llamar(s, "add_text", {"sketch": "b", "text": "O", "font": "Arial", "height": 60}))["entities"][0]["id"]
     br = s.doc.estado_final.bocetos[s.paso("b").id]
-    x0, y0, x1, y1 = br.perfiles[0].caja_uv
+    x0, y0, x1, y1 = _caja(br)
     b = ok(api.llamar(s, "add_text", {"sketch": "b", "text": "I", "font": "Arial", "height": 5, "x": (x0 + x1) / 2,
                                       "y": (y0 + y1) / 2}))["entities"][0]["id"]
     br = s.doc.estado_final.bocetos[s.paso("b").id]
@@ -104,7 +111,7 @@ def test_una_recta_que_cruza_la_o_no_la_parte():
     ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "b"}))
     t = ok(api.llamar(s, "add_text", {"sketch": "b", "text": "O", "font": "Arial", "height": 30}))["entities"][0]["id"]
     br = s.doc.estado_final.bocetos[s.paso("b").id]
-    (x0, y0, x1, y1) = br.perfiles[0].caja_uv
+    x0, y0, x1, y1 = _caja(br)
     area_total = sum(p.area for p in pf.letras_de_texto(br.perfiles, [t]))
     area_hueco = sum(p.area for p in br.perfiles) - area_total
     ok(api.llamar(s, "draw_line", {"sketch": "b", "start_x": x0 - 5, "start_y": (y0 + y1) / 2, "end_x": x1 + 5,
