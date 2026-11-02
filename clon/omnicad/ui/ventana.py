@@ -1023,7 +1023,7 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.cancelar()
         self._cancelar_eleccion()
         self.doc = doc
-        if not doc._prevuelo_corresponde():          # un documento chico no usa el trabajador: su memoria se libera
+        if not doc._prevuelo_corresponde():          # un documento chico no necesita el trabajador: su memoria se libera
             aislado.cerrar_trabajador()
         doc.al_calcular = self._calculando
         doc.al_esperar = self._esperando_calculo

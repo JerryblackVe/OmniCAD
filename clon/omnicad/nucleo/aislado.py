@@ -14,6 +14,9 @@ En la app instalada el hijo es la misma `OmniCAD.exe --tarea-aislada`.
 RS-X1: `correr_json` no arranca un hijo por cálculo. Un solo trabajador sigue vivo entre cálculos con el documento al
 día y su memoria por paso (`_Trabajador`, `_trabajar`). No guarda nada que no se pueda rehacer: cada pedido trae la
 receta completa, y si el hijo cae o se lo mata por tiempo, el siguiente pedido arranca otro desde esa receta.
+
+RS-X6: las previas de `CalculoPendiente` también van a ese trabajador. Cancelar no lo mata (perdería el documento vivo):
+se deja de esperar su respuesta y solo se lo cierra si no termina en `PACIENCIA_PREVIA`.
 """
 import atexit
 import json
@@ -35,6 +38,7 @@ UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcad
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
 TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
+PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
 # En el trabajador: el documento al día y lo que el padre ya tiene (id(objeto) → (número, huella, objeto); huella → número),
 # que no se vuelve a mandar. `formas_enviadas` es None en un hijo de una sola tarea. Las mantiene `_codificar`.
@@ -157,12 +161,16 @@ def _recalcular_documento(receta, sin_memoria=False):
 
 def _previa_visual(receta, operacion, indice, deflexion, angular):
     from ..timeline.calculo_aislado import previa_visual
-    return previa_visual(receta, operacion, indice, deflexion, angular)
+
+    with _motor.fijar_motor("opencascade"):
+        return previa_visual(receta, operacion, indice, deflexion, angular)
 
 
 def _solape_herramienta(receta, operacion, indice, cuerpos):
     from ..timeline.calculo_aislado import solape_herramienta
-    return solape_herramienta(receta, operacion, indice, cuerpos)
+
+    with _motor.fijar_motor("opencascade"):
+        return solape_herramienta(receta, operacion, indice, cuerpos)
 
 
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
@@ -200,6 +208,11 @@ def _memoria_mb():
     return c.WorkingSetSize / 2 ** 20
 
 
+def _motivo(e):
+    """El texto que la persona ve de un error: el mismo de una previa en el proceso principal."""
+    return str(e) or traceback.format_exception_only(e)[-1].strip()
+
+
 def _atender(tarea, args):
     """Un pedido del trabajador. Un error (una previa con un valor imposible) no lo mata: vuelve como texto, y solo si
     el documento quedó a medias se descarta (el próximo pedido lo arma de la receta)."""
@@ -213,7 +226,7 @@ def _atender(tarea, args):
         doc = documento_vivo
         if doc is not None and (doc.a_dict() != args.get("receta") or len(doc._estados) != len(doc.operaciones)):
             documento_vivo = None
-        return {"_fallo": traceback.format_exception_only(e)[-1].strip()}
+        return {"_fallo": _motivo(e)}
     finally:
         os.chdir(_RAIZ)         # una carpeta tomada de directorio actual no se puede mover ni borrar en Windows
         if documento_vivo is not None:
@@ -248,7 +261,10 @@ def principal(argv):
     args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
     if tarea in _TAREAS_JSON:
         os.chdir(args.pop("_cwd"))     # las rutas relativas del documento (derivaciones) valen desde el padre
-        salida = _TAREAS_JSON[tarea](**args)
+        try:
+            salida = _TAREAS_JSON[tarea](**args)
+        except Exception as e:  # noqa: BLE001 — como en el trabajador: el motivo vuelve como texto
+            salida = {"_fallo": _motivo(e)}
     else:
         forma = intercambio.leer_brep(carpeta / "forma.brep")
         salida = _TAREAS[tarea](forma, **args)
@@ -278,12 +294,14 @@ def correr_json(tarea, datos, tope, esperar=None):
     if tarea not in _TAREAS_JSON:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
     datos = dict(datos, _cwd=os.getcwd())
-    if not _ocupado.acquire(blocking=False):       # otro hilo u otro documento lo está usando: un hijo de una sola tarea
-        return _correr(tarea, tope, datos, esperar=esperar)
-    try:
-        return _pedir(tarea, dict(datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR), tope, esperar)
-    finally:
-        _ocupado.release()
+    if _ocupado.acquire(blocking=False):
+        try:
+            _esperar_previa_cancelada(esperar)
+            if _previa_en_curso is None:
+                return _pedir(tarea, dict(datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR), tope, esperar)
+        finally:
+            _ocupado.release()
+    return _correr(tarea, tope, datos, esperar=esperar)     # otro hilo, documento o previa lo usa: un hijo de una sola tarea
 
 
 class _Trabajador:
@@ -309,12 +327,17 @@ class _Trabajador:
         except OSError:                  # ya cayó: lo informa la espera
             pass
 
-    def pedir(self, tarea, datos, tope, esperar):
-        listo, salida = self.carpeta / "listo", self.carpeta / "salida.json"
+    def enviar(self, tarea, datos):
         (self.carpeta / "args.json").write_text(json.dumps(datos, default=_a_json), encoding="utf-8", newline="\n")
         self._avisar(tarea)
+
+    def termino(self):
+        return (self.carpeta / "listo").is_file() or self.proceso.poll() is not None
+
+    def pedir(self, tarea, datos, tope, esperar):
+        self.enviar(tarea, datos)
         inicio = aviso = time.monotonic()
-        while not listo.is_file() and self.proceso.poll() is None:
+        while not self.termino():
             ahora = time.monotonic()
             if ahora - inicio > tope:
                 self.cerrar()
@@ -325,6 +348,14 @@ class _Trabajador:
             time.sleep(0.001)
         if esperar is not None:
             esperar(time.monotonic() - inicio)
+        resultado = self.recoger()
+        if "_fallo" in resultado:
+            raise TareaAislada(f"el proceso aparte falló ({resultado['_fallo']})")
+        return resultado
+
+    def recoger(self):
+        """La respuesta del pedido que ya terminó."""
+        listo, salida = self.carpeta / "listo", self.carpeta / "salida.json"
         if not listo.is_file() and (self.proceso.returncode != 0 or not salida.is_file()):
             codigo = self.proceso.returncode
             self.errores.close()
@@ -340,8 +371,6 @@ class _Trabajador:
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
         if resultado.get("_cerrar"):
             self.cerrar()
-        if "_fallo" in resultado:
-            raise TareaAislada(f"el proceso aparte falló ({resultado['_fallo'][:200]})")
         return resultado
 
     def cerrar(self):
@@ -357,11 +386,13 @@ class _Trabajador:
 
 _trabajador = None
 _ocupado = threading.Lock()
+_previa_en_curso = None             # la CalculoPendiente que el trabajador está atendiendo
 
 
 def cerrar_trabajador():
     """Cierra el trabajador y suelta lo que este proceso guardaba de sus respuestas."""
-    global _trabajador, formas_recibidas, estados_recibidos, marca_recibida
+    global _trabajador, formas_recibidas, estados_recibidos, marca_recibida, _previa_en_curso
+    _previa_en_curso = None
     if _trabajador is not None:
         _trabajador.cerrar()
         _trabajador = None
@@ -371,13 +402,17 @@ def cerrar_trabajador():
 atexit.register(cerrar_trabajador)
 
 
-def _pedir(tarea, datos, tope, esperar):
+def _trabajador_vivo():
     global _trabajador
     if _trabajador is None or _trabajador.proceso.poll() is not None:
         cerrar_trabajador()
         _trabajador = _Trabajador()
+    return _trabajador
+
+
+def _pedir(tarea, datos, tope, esperar):
     try:
-        return _trabajador.pedir(tarea, datos, tope, esperar)
+        return _trabajador_vivo().pedir(tarea, datos, tope, esperar)
     except TareaAislada:
         raise
     except BaseException:            # quedó con un pedido a medias: no sirve para el próximo
@@ -385,51 +420,132 @@ def _pedir(tarea, datos, tope, esperar):
         raise
 
 
+def _soltar_previa(matar=False):
+    """Con `_ocupado` tomado: si la previa en curso se canceló y terminó, tira su respuesta. Con `matar`, si no terminó,
+    cierra al trabajador."""
+    global _previa_en_curso
+    previa = _previa_en_curso
+    if previa is None or previa.limite is None:
+        return
+    if previa.trabajador.termino():
+        _previa_en_curso = None
+        try:
+            previa.trabajador.recoger()
+        except (TareaAislada, OSError):        # el error de una previa cancelada no le importa a nadie
+            pass
+    elif matar:
+        cerrar_trabajador()
+
+
+def _vencio_previa(previa):
+    with _ocupado:
+        if _previa_en_curso is previa:
+            _soltar_previa(matar=True)
+
+
+def _esperar_previa_cancelada(esperar):
+    """Con `_ocupado` tomado: aceptar en plena previa no pierde el documento vivo, le da tiempo a terminar."""
+    inicio = time.monotonic()
+    while _previa_en_curso is not None and _previa_en_curso.limite is not None:
+        _soltar_previa(matar=time.monotonic() > _previa_en_curso.limite)
+        if esperar is not None:
+            esperar(time.monotonic() - inicio)
+        time.sleep(0.02)
+
+
 class CalculoPendiente:
-    """Una previa en proceso aparte: sondear no espera al kernel y cancelar mata solo a su hijo."""
+    """Una previa en proceso aparte: sondear no espera al kernel. La atiende el trabajador con su documento vivo; si otra
+    previa lo ocupa, un hijo de una sola tarea, que cancelar mata. Detrás de una previa cancelada, espera su turno."""
 
     def __init__(self, tarea, datos, tope=TOPE_PREVUELO_PARAMETROS):
         if tarea not in _TAREAS_JSON:
             raise ValueError(f"Tarea aislada desconocida: {tarea}")
-        self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_previa_", ignore_cleanup_errors=True)
-        self.carpeta = Path(self.temporal.name)
+        self.tarea, self.datos = tarea, dict(datos, _cwd=os.getcwd())
         self.inicio, self.tope = time.monotonic(), tope
-        self.proceso = None
+        self.proceso = self.trabajador = self.temporal = self.limite = None
         try:
-            (self.carpeta / "args.json").write_text(json.dumps(dict(datos, _cwd=os.getcwd()), default=_a_json),
-                                                    encoding="utf-8", newline="\n")
-            self.errores = (self.carpeta / "errores.txt").open("wb")
-            self.proceso = subprocess.Popen(_comando(tarea, self.carpeta), cwd=_RAIZ, stdout=subprocess.DEVNULL,
-                                            stderr=self.errores, creationflags=_SIN_VENTANA |
-                                            getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+            previa = _previa_en_curso
+            if not self._al_trabajador() and (previa is None or previa.limite is None):
+                self._arrancar_hijo()
         except (OSError, TypeError, ValueError) as e:
             self.cancelar()
             raise TareaAislada(f"No pude iniciar la vista previa aparte ({e}).") from e
 
+    def _al_trabajador(self):
+        global _previa_en_curso
+        if not _ocupado.acquire(blocking=False):
+            return False
+        try:
+            _soltar_previa()
+            if _previa_en_curso is not None:
+                return False
+            t = _trabajador_vivo()
+            t.enviar(self.tarea, dict(self.datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR))
+            self.trabajador, self.proceso, _previa_en_curso = t, t.proceso, self
+            return True
+        finally:
+            _ocupado.release()
+
+    def _arrancar_hijo(self):
+        self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_previa_", ignore_cleanup_errors=True)
+        self.carpeta = Path(self.temporal.name)
+        (self.carpeta / "args.json").write_text(json.dumps(self.datos, default=_a_json), encoding="utf-8", newline="\n")
+        self.errores = (self.carpeta / "errores.txt").open("wb")
+        self.proceso = subprocess.Popen(_comando(self.tarea, self.carpeta), cwd=_RAIZ, stdout=subprocess.DEVNULL,
+                                        stderr=self.errores, creationflags=_SIN_VENTANA |
+                                        getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+
+    def _termino(self):
+        if self.proceso is None and not self._al_trabajador():
+            return False
+        return self.proceso.poll() is not None if self.trabajador is None else self.trabajador.termino()
+
     def sondear(self):
         """None mientras calcula; devuelve el JSON terminado o informa el fallo sin tocar el documento."""
-        if self.proceso.poll() is None:
+        global _previa_en_curso
+        if not self._termino():
             if time.monotonic() - self.inicio > self.tope:
-                self.cancelar()
+                self.cancelar(ya=True)
                 raise TiempoAgotado("La vista previa pasó su plazo y se cortó.")
             return None
         try:
-            self.errores.close()
-            if self.proceso.returncode:
-                raise TareaAislada(f"El proceso de la vista previa falló (código {self.proceso.returncode:#x}).")
-            return json.loads((self.carpeta / "salida.json").read_text(encoding="utf-8"))
+            if self.trabajador is not None:
+                if _previa_en_curso is self:
+                    _previa_en_curso = None
+                resultado = self.trabajador.recoger()
+            else:
+                self.errores.close()
+                if self.proceso.returncode:
+                    raise _caida(self.proceso.returncode, (self.carpeta / "errores.txt").read_bytes())
+                resultado = json.loads((self.carpeta / "salida.json").read_text(encoding="utf-8"))
+        except TareaAislada as e:
+            raise TareaAislada(f"No se pudo calcular la vista previa: {e}.") from e
         except (OSError, ValueError) as e:
             raise TareaAislada(f"La vista previa dejó un resultado ilegible ({e}).") from e
         finally:
             self.cancelar()
+        if "_fallo" in resultado:
+            raise TareaAislada(resultado["_fallo"])
+        return resultado
 
-    def cancelar(self):
+    def cancelar(self, ya=False):
+        """Deja de esperarla. En el trabajador sigue corriendo y se le da tiempo a terminar; con `ya`, se lo cierra."""
+        if self.trabajador is not None:
+            if _previa_en_curso is self and ya:
+                cerrar_trabajador()
+            elif _previa_en_curso is self and self.limite is None:
+                self.limite = time.monotonic() + PACIENCIA_PREVIA
+                reloj = threading.Timer(PACIENCIA_PREVIA, _vencio_previa, (self,))
+                reloj.daemon = True
+                reloj.start()
+            return
         if self.proceso is not None and self.proceso.poll() is None:
             self.proceso.kill()
             self.proceso.wait()
         if hasattr(self, "errores"):
             self.errores.close()
-        self.temporal.cleanup()
+        if self.temporal is not None:
+            self.temporal.cleanup()
 
 
 def _ejecutar(comando, tope, esperar):
@@ -492,9 +608,12 @@ def _correr(tarea, tope, args, forma=None, esperar=None):
         if hijo.returncode != 0 or not salida.is_file():
             raise _caida(hijo.returncode, hijo.stderr)
         try:
-            return json.loads(salida.read_text(encoding="utf-8"))
+            resultado = json.loads(salida.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
+        if "_fallo" in resultado:
+            raise TareaAislada(f"el proceso aparte falló ({resultado['_fallo']})")
+        return resultado
 
 
 if __name__ == "__main__":

@@ -28,16 +28,17 @@ def _clases():
                                    geo.Plano, Perfil, ResultadoSolver, Resultado3D)}
 
 
-def _codificar(raiz, conservar=()):
+def _codificar(raiz, conservar=(), transporte=True):
     """Grafo JSON de `raiz`. En el trabajador (RS-X1), lo que el padre ya tiene viaja por su número: una forma con el
     mismo contenido no se vuelve a escribir y en el padre sigue siendo el mismo objeto (el visor no la vuelve a mallar);
     lo mismo las mallas, los bocetos resueltos y los planos, que los pasos comparten. Las dos puntas se quedan con lo de
-    este envío y lo de los estados `conservar` (los que no viajaron porque no cambiaron): las tablas no crecen."""
+    este envío y lo de los estados `conservar` (los que no viajaron porque no cambiaron): las tablas no crecen.
+    Sin `transporte` (una previa, que no le deja nada al padre) esas tablas no se tocan."""
     from .documento import _igual
 
     clases = _clases()
     nodos, indices, retenidos, formas = [], {}, [], []
-    enviadas, huellas = aislado.formas_enviadas, aislado.huellas_enviadas
+    enviadas, huellas = aislado.formas_enviadas if transporte else None, aislado.huellas_enviadas
     vigentes, cuerpos = {}, {}
 
     def compartir(v, nodo_nuevo):
@@ -219,10 +220,9 @@ def _empaquetar(doc, previa=None):
 def previa_visual(receta, operacion, indice, deflexion, angular):
     """Previa exacta y su malla dentro del hijo; al padre viajan solo arrays de los cuerpos cambiados."""
     from ..nucleo import render_cpu
-    from .documento import Documento
     from .operaciones import operacion_desde_dict
 
-    doc = Documento.desde_dict(receta)
+    doc = aislado._documento(receta)
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     op = operacion_desde_dict(operacion)
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
@@ -237,16 +237,16 @@ def previa_visual(receta, operacion, indice, deflexion, angular):
         pares = [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(c.forma) if len(p) >= 2]
         seg = np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
         mallas[cid] = v, n, seg
-    return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)})
+    return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)},
+                      transporte=False)
 
 
 def solape_herramienta(receta, operacion, indice, cuerpos):
     """¿El cuerpo nuevo de `operacion` comparte volumen con alguno de `cuerpos`? Para cuerpos pesados (B-117)."""
     from ..nucleo import geometria as geo
-    from .documento import Documento
     from .operaciones import operacion_desde_dict
 
-    doc = Documento.desde_dict(receta)
+    doc = aislado._documento(receta)
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     estado, _ = doc.previsualizar(operacion_desde_dict(operacion), indice, en_vivo=True)
     formas = [c.forma for k, c in estado.cuerpos.items() if k not in entrada.cuerpos]

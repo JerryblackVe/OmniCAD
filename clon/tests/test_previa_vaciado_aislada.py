@@ -137,12 +137,55 @@ def test_mover_muchas_veces_lanza_solo_el_ultimo_pendiente(ventana, monkeypatch)
     assert p._previa_ok and p._hijo_previa is None
 
 
-def test_cancelar_mata_solo_el_hijo_de_esa_previa(ventana, monkeypatch):
+def test_cancelar_deja_de_esperar_y_no_mata_al_trabajador(ventana, monkeypatch):
     p = panel(ventana, monkeypatch)
     p._calcular_previa()
+    trabajador = p._hijo_previa.proceso
+    p.cancelar()
+    assert trabajador.poll() is None and not p._t_hijo.isActive()
+
+
+def test_cancelar_mata_solo_el_hijo_propio_de_esa_previa(ventana, monkeypatch):
+    p = panel(ventana, monkeypatch)
+    with aislado._ocupado:                  # trabajador ocupado: la previa va a un hijo propio
+        p._calcular_previa()
     hijo = p._hijo_previa.proceso
+    assert p._hijo_previa.trabajador is None
     p.cancelar()
     assert hijo.poll() is not None and not p._t_hijo.isActive()
+
+
+def test_un_valor_nuevo_corta_una_vez_el_calculo_que_se_alarga(ventana, monkeypatch):
+    p = panel(ventana, monkeypatch)
+    pedidos, cortes = [], []
+
+    class Hijo:
+        inicio = -1e9               # ya pasó la paciencia
+
+        def __init__(self, tarea, datos):
+            pedidos.append(datos["operacion"]["params"]["espesor_interior"])
+
+        def sondear(self):
+            return None
+
+        def cancelar(self, ya=False):
+            cortes.append(ya)
+
+    monkeypatch.setattr(aislado, "CalculoPendiente", Hijo)
+    p._calcular_previa()
+    p._recibir_previa()                         # sin valor nuevo no se corta nada
+    assert not cortes
+    p.set_valor("espesor_interior", "0.4")
+    p._t_previa.stop()
+    p._calcular_previa()
+    p._recibir_previa()
+    assert cortes == [True] and pedidos == ["1 mm", "0.4"] and p._t_hijo.isActive()
+    p.set_valor("espesor_interior", "0.6")
+    p._t_previa.stop()
+    p._calcular_previa()
+    p._recibir_previa()                         # el segundo no se corta: tiene que rehacer el documento
+    assert cortes == [True] and pedidos == ["1 mm", "0.4"] and p._pendiente_hijo is not None
+    p._cancelar_previa_hijo()
 
 
 def test_el_visor_reusa_los_arrays_que_volvieron_del_hijo(ventana, monkeypatch):

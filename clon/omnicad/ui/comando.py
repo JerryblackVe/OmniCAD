@@ -750,6 +750,7 @@ class PanelComando(QFrame):
         self._previa_ok = False
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
+        self._previa_cortada = False
         self._previa_aparte = False     # la última previa pedida se calcula en el hijo: aceptar no espera su malla
         self._t_hijo = QTimer(self, interval=16)
         self._t_hijo.timeout.connect(self._recibir_previa)
@@ -1655,6 +1656,7 @@ class PanelComando(QFrame):
         try:
             salida = self._hijo_previa.sondear()
             if salida is None:
+                self._cortar_previa_vieja()
                 return
             estado, avisos = leer_previa_visual(salida, self.ctx.estado)
             self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
@@ -1668,9 +1670,23 @@ class PanelComando(QFrame):
             self.previa.emit(None)
         self._t_hijo.stop()
         self._hijo_previa = None
+        self._previa_cortada = False
         pendiente, self._pendiente_hijo = self._pendiente_hijo, None
         if pendiente is not None and pendiente.a_dict() != self._op_hijo.a_dict():
             self._iniciar_previa(pendiente)
+
+    def _cortar_previa_vieja(self):
+        """Un valor nuevo no espera a un cálculo que se alarga. Un corte por respuesta: rehacer el documento también tarda."""
+        from ..nucleo import aislado
+        pendiente = self._pendiente_hijo
+        if (pendiente is None or self._previa_cortada
+                or time.monotonic() - self._hijo_previa.inicio < aislado.PACIENCIA_PREVIA):
+            return
+        self._hijo_previa.cancelar(ya=True)
+        self._hijo_previa = None
+        self._previa_cortada = True
+        self._cancelar_previa_hijo()
+        self._iniciar_previa(pendiente)
 
     def _cancelar_previa_hijo(self):
         self._t_hijo.stop()
