@@ -213,6 +213,13 @@ def _desvio_recta(Q):
     return float(np.abs((Q[:, 0] - a[0]) * d[1] - (Q[:, 1] - a[1]) * d[0]).max() / L) if L > _EPS else math.inf
 
 
+def _desvio_circulo(Q, c, r):
+    """Desvío radial de la polilínea Q: también en el medio de cada tramo, porque tres o cuatro puntos sueltos siempre
+    caben en un círculo (el corte de una caja son sus cuatro esquinas)."""
+    medios = (Q[1:] + Q[:-1]) / 2
+    return float(np.abs(np.linalg.norm(np.vstack([Q, medios]) - c, axis=1) - r).max())
+
+
 def _arco3(Q):
     """Arco por el primer, el del medio y el último punto de Q; (centro, radio, desvío radial máximo) o None si
     los puntos no recorren el arco en un solo sentido (o están alineados)."""
@@ -228,7 +235,7 @@ def _arco3(Q):
     giro = np.diff(np.unwrap(np.arctan2(Q[:, 1] - cy, Q[:, 0] - cx)))
     if not ((giro > -1e-12).all() or (giro < 1e-12).all()) or abs(giro.sum()) > 2 * math.pi - 1e-3:
         return None
-    return c, r, float(np.abs(np.linalg.norm(Q - c, axis=1) - r).max())
+    return c, r, _desvio_circulo(Q, c, r)
 
 
 def _lineas_arcos(P, cerrada, tol):
@@ -238,7 +245,7 @@ def _lineas_arcos(P, cerrada, tol):
     # o pasar a búsqueda por duplicación.
     if cerrada:
         circ = _circulo(P)
-        if circ is not None and np.abs(np.linalg.norm(P - circ[0], axis=1) - circ[1]).max() <= tol:
+        if circ is not None and _desvio_circulo(cerrar(P), *circ) <= tol:
             return [{"tipo": "circulo", "centro": circ[0], "radio": circ[1], "datos": P, "cerrada": True}]
         e1, e2 = P - np.roll(P, 1, 0), np.roll(P, -1, 0) - P
         giro = np.abs(np.arctan2(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0], (e1 * e2).sum(1)))

@@ -35,7 +35,7 @@ Cada ítem lleva su herramienta MCP/CLI (receta C de `AGENTS.md`), test y doc re
 | SC10 | **Vistas guardadas** (Named Views): guardar, renombrar, restaurar y borrar. | **Hecho (SC10):** hay Vistas guardadas en el navegador (`ui/ventana.py`; se guardan con el documento); sin herramienta MCP (MCP-43). |
 | SC11 | **Ratón 3D** (3Dconnexion SpaceMouse): desplazar, zoom y giro; en boceto, solo desplazar y zoom. Preferencias por eje (invertir, velocidad). | No existe. Hace falta leer HID: `hidapi` es un paquete nuevo (pedir permiso) o se lee con `ctypes`. |
 | SC12 | **Plástico:** Ajuste a presión (Snap Fit) y Reposo (Rest). **Chapa:** Perforar. | No están entre las 96 operaciones (`list_operation_types`). Ya están Labio, Saliente, Nervio y Red. |
-| SC13 | **Comparar cuerpos:** desviación entre dos cuerpos con mapa de color. Sirve para malla contra sólido, o versión vieja contra nueva. | No existe. |
+| SC13 | **Comparar cuerpos:** desviación entre dos cuerpos con mapa de color. Sirve para malla contra sólido, o versión vieja contra nueva. | **Hecho (SC13):** INSPECCIONAR › Mapa de desviación (`ui/comandos/desviacion.py`), con `compare_to_mesh` y `show_deviation_map`. |
 | SC14 | **Importar `.FCStd` de FreeCAD:** es un ZIP con archivos `.brp` de OpenCascade, que se leen con `BRepTools.Read`. Rhino `.3dm` ya está como RH3. | No existe. Barato: sin dependencias nuevas. Validar como dice `AGENTS.md › Seguridad` (tope por miembro del ZIP, sin `extractall`). |
 
 ## Prioridad 3

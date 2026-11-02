@@ -15,7 +15,8 @@ F_CUBO = np.array([[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5,
 HERRAMIENTAS = {"get_mesh_info", "tessellate", "repair_mesh", "clean_mesh", "generate_face_groups", "reduce_mesh",
                 "remesh", "smooth_mesh", "shell_mesh", "plane_cut_mesh", "combine_meshes", "separate_mesh",
                 "reverse_mesh_normals", "scale_mesh", "convert_mesh",
-                "create_mesh_section_sketch", "fit_curves_to_mesh_section"}
+                "create_mesh_section_sketch", "fit_curves_to_mesh_section", "analyze_mesh_features",
+                "reconstruct_from_mesh"}
 
 
 def ok(r):
@@ -55,7 +56,7 @@ def s():
 def test_el_grupo_tiene_una_herramienta_por_operacion():
     assert {h["nombre"] for h in api.catalogo("malla")} == HERRAMIENTAS
     modifican = {h["nombre"] for h in api.catalogo("malla") if h["modifica"]}
-    assert modifican == HERRAMIENTAS - {"get_mesh_info"}
+    assert modifican == HERRAMIENTAS - {"get_mesh_info", "analyze_mesh_features"}
 
 
 def test_teselar_e_info(s):

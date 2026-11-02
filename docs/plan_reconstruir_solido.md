@@ -3,8 +3,8 @@
 Convierte un STL, OBJ o 3MF en una pieza nueva, hecha con pasos normales del timeline: bocetos, extrusiones, revoluciones,
 agujeros, empalmes y patrones. No convierte triángulos en caras: mide la pieza y la vuelve a modelar.
 
-Estado por fila en `docs/seguimiento/faltantes.md` (RI-1 a RI-6, F10 y F11). Revisado el 2026-11-01. No hay prototipo: las
-metas de abajo son propuestas, no mediciones.
+Estado por fila en `docs/seguimiento/faltantes.md` (RI-2 a RI-6). Revisado el 2026-11-01. Las fases 0 a 3 están construidas
+(`scripts/bench_reconstruir.py`, `compare_to_mesh`, `analyze_mesh_features`, `reconstruct_from_mesh`); las metas de abajo ya llevan lo medido.
 
 ## Por qué
 
@@ -122,18 +122,22 @@ la vista 3D, y los números de abajo son de ejemplo.
 
 La fase 3 ya es un primer producto: se puede usar por MCP y por ventana cuando esté la fase 4.
 
-## Metas propuestas
+## Metas
 
-Para mallas de origen CAD del banco. Se ajustan después de la fase 0.
+Para mallas de origen CAD del banco. La tercera columna es lo medido el 2026-11-01 con `scripts/bench_reconstruir.py`, en 30 piezas.
 
-| Medida | Meta |
-|---|---|
-| Desviación máxima | 0,1 mm o la tolerancia elegida |
-| Volumen | Diferencia menor a 0,5 % |
-| Caras | Hasta 1,5 veces las del original |
-| Timeline | Sin pasos en error; cuerpo válido |
-| Tiempo | Menos de 2 minutos para 200.000 triángulos, sin congelar la ventana |
-| Memoria | Dentro del tope de 3 GB por tarea de `scripts/turno.py` |
+| Medida | Meta | Medido |
+|---|---|---|
+| Desviación máxima | 0,1 mm o la tolerancia elegida | 30 de 30; la peor, 0,055 mm |
+| Volumen | Diferencia menor a 0,5 % | 30 de 30; la peor, 0,25 % |
+| Caras | Hasta 1,5 veces las del original | 30 de 30, y las 30 con la misma cantidad que el original |
+| Timeline | Sin pasos en error; cuerpo válido | 30 de 30, también al guardar, reabrir, recalcular y editar una cota |
+| Tiempo | Menos de 2 minutos para 200.000 triángulos, sin congelar la ventana | 311.296 triángulos: formas 4,4 s, reconstrucción 19,5 s; la ventana queda para RI-3 |
+| Memoria | Dentro del tope de 3 GB por tarea de `scripts/turno.py` | Pico de 0,62 GB |
+
+**STL reales de Gerardo (51 archivos):** 6 cumplen todo, 11 cumplen el volumen y 50 no dejan pasos en error. La mediana de la desviación es 4,2 mm. No alcanzan porque
+combinan direcciones: vasos inclinados de pared fina, revolución con una caja oblicua, esquinas con esferas y moleteados. Lo que falta está en RI-2. Dos piezas tardan más de 5 minutos
+(H-57) y una de ellas pasa los 10.
 
 ## Riesgos
 
@@ -146,3 +150,107 @@ Para mallas de origen CAD del banco. Se ajustan después de la fase 0.
 | Lentitud en Python | Proceso aparte; medir, y pasar a Rust lo que el perfil señale |
 | Costo de IA | Tope por corrida y modo sin IA |
 | Patentes o licencias | Se escribe desde cero y se revisa antes de copiar una idea concreta de un paper |
+
+## Prompt para el agente
+
+Entregado el 2026-11-01. Modelo sugerido: Opus 5, esfuerzo alto. Antes de usarlo, revisar que los IDs y las rutas sigan vigentes.
+
+```text
+ARRIBA DE TODO, ANTES DE TOCAR NADA
+Invocá con la herramienta Skill: fable-method, ponytail, plan-then-do, tool-calling-guard, verify-before-commit y omnicad-test.
+Antes de cerrar, invocá ponytail-review con la herramienta Skill y pegá su salida real en el informe.
+
+OBJETIVO
+Construir las fases 0 a 3 de Reconstruir sólido: banco, juez, medición de formas y reconstrucción sin IA de una malla a una pieza con timeline.
+
+CONTEXTO DEL AGENTE
+- Plataforma: Claude Code en D:\PROGRAMA, sobre main.
+- Herramientas: archivos, Bash, Python del venv en clon/.venv, numpy, scipy, OpenCascade por OCP, pytest, ruff, MCP de OmniCAD, scripts/fusion_docs.py, scripts/turno.py y scripts/prueba_ui/.
+- Reglas del proyecto: CLAUDE.md y AGENTS.md. Otros agentes pueden estar trabajando en la misma carpeta.
+
+TAREA PRINCIPAL
+Cerrar RI-1, F10, SC13, F11 y RI-2 con herramientas nuevas en la API, medidas sobre un banco de piezas con respuesta conocida.
+
+ENTRADAS
+- Plan: docs/plan_reconstruir_solido.md → [PROVIDED]
+- Filas: docs/seguimiento/faltantes.md (RI-1, RI-2, F10, F11, SC13) → [PROVIDED]
+- Especificación de comparar cuerpos: docs/brechas_solidcraft.md (SC13) → [PROVIDED]
+- Ayuda de Fusion: docs/fusion_docs/contenido/fusion-mesh: convert-a-mesh-body-to-a-solid-body, create-a-mesh-section-sketch → [PROVIDED]
+- Referencia de método: https://arxiv.org/html/2605.01171v3 → [PROVIDED]
+- Código de partida: nucleo/malla.py, nucleo/malla_seccion.py, nucleo/reconocer_funciones.py, api/herramientas_malla.py, api/herramientas_malla_seccion.py, api/herramientas_reconocer.py, nucleo/analisis.py, nucleo/aislado.py → [PROVIDED]
+- STL reales de Gerardo → [REQUIRED FROM USER]
+
+PROCESO
+1. Leer el plan, las filas, la ayuda, el paper y el código de ENTRADAS hasta poder citar qué existe y qué falta.
+2. Fase 0, RI-1: crear scripts/bench_reconstruir.py y 30 piezas generadas con la API de OmniCAD: 12 prismáticas, 8 torneadas, 6 con empalmes y chaflanes, 4 con patrones. Exportarlas a STL, OBJ y 3MF. Guardar volumen, área, caja, cantidad de caras y pasos esperados como respuesta conocida. Terminar cuando el script imprima una tabla por pieza. Dejar los archivos generados fuera de git. [REQUIERE: paso 1]
+3. Fase 1, F10 y SC13: crear en nucleo/ la comparación entre sólido y malla, y entre dos cuerpos: desviación en los dos sentidos, máximo, media, porcentaje dentro de tolerancia, volumen y solapamiento. Terminar cuando una pieza igual dé casi 0 y otra con un agujero corrido 1 mm marque esa zona. [REQUIERE: paso 2]
+4. Agregar la herramienta `compare_to_mesh` y el análisis con mapa de color en INSPECCIONAR, con escala, mínimo, máximo y valor bajo el cursor. Seguir la Receta B y la Receta C de AGENTS.md. [REQUIERE: paso 3]
+5. Fase 2, F11: crear en nucleo/ la medición de formas sobre la malla: planos, cilindros, conos, esferas y toros, más el resto sin clasificar. Usar semilla fija para que dos corridas den lo mismo. Detectar vecindad, simetrías, agujeros y patrones. [REQUIERE: paso 2]
+6. Agregar la herramienta `analyze_mesh_features`, que devuelve una ficha JSON estable con cada forma, sus medidas, su área, su error de ajuste, sus vecinas y el porcentaje sin clasificar. Terminar cuando encuentre radios y ejes del banco dentro de la tolerancia. [REQUIERE: paso 5]
+7. Medir tiempo y memoria de la fase 2 con 200.000 triángulos. Correr lo pesado en proceso aparte. Si el perfil señala un cuello de botella, anotarlo en docs/seguimiento/mejoras.md; no instalar Rust sin permiso. [REQUIERE: paso 6]
+8. Fase 3, RI-2: crear la reconstrucción sin IA: orientar, elegir cortes, sacar perfiles, ajustar extrusiones, revoluciones, agujeros, empalmes, chaflanes y patrones, y crear pasos normales del timeline. [REQUIERE: pasos 4 y 6]
+9. Agregar la vuelta de corrección: comparar, sumar lo que falta, cortar lo que sobra, con tope de vueltas. Terminar cuando la vuelta se detenga sola si no mejora. [REQUIERE: paso 8]
+10. Agregar la herramienta `reconstruct_from_mesh`, atómica y con un solo deshacer. Tiene que dejar la malla oculta y devolver desviación, cantidad de caras, pasos creados, zonas fuera de tolerancia y lo que no pudo recuperar. Si no alcanza la tolerancia, igual lo informa con claridad. [REQUIERE: paso 9]
+11. Correr el banco completo con scripts/turno.py y pegar la tabla contra las metas del plan. Si hay STL reales de Gerardo, sumarlos. [REQUIERE: paso 10]
+12. Agregar tests con resultado numérico y `geo.es_valida`, y una pieza de ventana para el mapa de color. Probar con mallas vacías, abiertas, sucias, con unidades raras y con archivos enormes.
+13. Regenerar docs/agentes/herramientas.md y actualizar con valores medidos las metas del plan.
+14. Correr ruff, los tests tocados con scripts/turno.py y la pieza con la ventana minimizada. Mirar las capturas.
+15. Borrar de docs/seguimiento/ las filas cerradas, anotar en PROJECT_LOG.md cada ID con su prueba, actualizar docs/auditorias/prueba_nocturna_2026-10-31.md y la hoja de ruta de los dos README.
+16. Invocar ponytail-review con la herramienta Skill y corregir lo que encuentre.
+
+DEPENDENCIAS
+- 2 va antes de todo el código nuevo.
+- 3 y 4 van antes de 8: sin juez no se reconstruye.
+- 5 y 6 van antes de 8.
+- 12 a 16 van después de la reconstrucción.
+
+REGLAS
+- SÍ crear pasos normales del timeline, que se puedan editar como cualquier otro.
+- SÍ reutilizar nucleo/reconocer_funciones.py, las secciones de malla y las herramientas de la API.
+- SÍ mantener funciones puras en nucleo/, sin Qt y con docstring.
+- SÍ validar toda malla como archivo ajeno: tope de tamaño y mensaje claro.
+- SÍ fijar la semilla de todo lo aleatorio.
+- SÍ mostrar lo que no se pudo recuperar.
+- NO usar IA ni llamar APIs pagas en estas fases.
+- NO copiar código de CADFit: su licencia no está confirmada. Se usa el paper como idea y se escribe desde cero.
+- NO cambiar convert_mesh ni su comportamiento.
+- NO bajar una meta para que el banco pase.
+- NO hacer el panel Reconstruir sólido, el resultado paramétrico ni las superficies libres: son RI-3 a RI-6.
+- NO instalar paquetes ni toolchains sin permiso.
+- NO correr el cierre completo ni la suite entera: va de noche, cuando Gerardo lo diga.
+- NO hacer commit ni push sin que Gerardo lo pida.
+- NO tocar archivos ajenos a estas filas. Si hace falta, anotarlo en el informe.
+
+MANEJO DE ERRORES
+- Paso 2: SALTAR Y CONTINUAR con los STL reales si Gerardo no los pasó, avisándolo con ⚠.
+- Paso 3: PARAR Y REPORTAR si la comparación no detecta el agujero corrido.
+- Paso 7: PARAR Y REPORTAR si la fase 2 pasa de 3 GB con 200.000 triángulos.
+- Paso 11: si una pieza no llega a la meta, SALTAR Y CONTINUAR con la siguiente y dejarla marcada en la tabla.
+- Paso 14: PARAR Y REPORTAR con la salida real si algo sigue rojo después de 2 intentos.
+- Default: PARAR Y REPORTAR.
+
+CRITERIO DE ÉXITO
+- `compare_to_mesh`, `analyze_mesh_features` y `reconstruct_from_mesh` existen en la API, MCP y CLI.
+- El mapa de color anda en la ventana.
+- El banco da una tabla real por pieza contra las metas del plan.
+- Las piezas reconstruidas se abren, se editan y recalculan sin pasos en error.
+- ruff, tests tocados y pieza de ventana están en verde, con capturas revisadas.
+- La salida real de ponytail-review está pegada en el informe.
+
+SALIDA ESPERADA
+Informe en español, corto:
+- Tabla por tipo de pieza: cuántas alcanzan cada meta y cuántas no.
+- Lista de piezas que fallaron y por qué.
+- Firma de cada función pública nueva y qué hace.
+- Tiempo y memoria medidos.
+- Salida real de ruff, pytest, la pieza de ventana y ponytail-review.
+- Una línea con ⚠ por cada cosa no verificada.
+- Una línea sobre si el modelo alcanzó.
+
+COMPORTAMIENTO DEL AGENTE
+- Ejecutá las instrucciones literalmente. No parafrasees ni reinterpretes.
+- No agregues contenido que no sea derivable de las entradas.
+- No asumas intención más allá de lo explícitamente declarado.
+- Priorizá precisión sobre velocidad.
+- Si un paso falla, seguí la regla de MANEJO DE ERRORES correspondiente.
+```
