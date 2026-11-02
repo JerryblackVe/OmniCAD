@@ -75,7 +75,7 @@ jobs:
         working-directory: clon    # el criterio vive en clon/pyproject.toml › [tool.ruff.lint]
       - name: Tests
         shell: bash
-        run: .venv/Scripts/python.exe -m pytest $(ls tests/test_*.py | sort | awk 'NR % 6 == ${{ matrix.parte }}') -v -o faulthandler_timeout=300
+        run: timeout 1500 .venv/Scripts/python.exe -m pytest $(ls tests/test_*.py | sort | awk 'NR % 6 == ${{ matrix.parte }}') -v -o faulthandler_timeout=300
         working-directory: clon    # AGENTS.md › Cómo verificar: todo se corre desde clon/
 
   windows:
