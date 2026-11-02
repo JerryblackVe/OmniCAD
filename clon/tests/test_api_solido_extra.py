@@ -214,6 +214,13 @@ def test_align_bodies(copiar):
         assert geo.caja_envolvente(s.cuerpo(cid).forma)[0][0] == pytest.approx(0)
 
 
+def test_scale_body_sin_cuerpos_pide_el_cuerpo():
+    s = api.Sesion()
+    r = api.llamar(s, "scale_body", {})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
+    assert "cuerpo" in r["mensaje"].lower()
+
+
 @pytest.mark.parametrize("opciones,factores", [({"factor": 2}, [2, 2, 2]),
     ({"scale_type": "non_uniform", "factor_x": 2, "factor_y": 3, "factor_z": 4}, [2, 3, 4])])
 def test_scale_body_y_undo(opciones, factores):

@@ -2,20 +2,27 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 14: Abierto 9 · Parcial 4 · Bloqueado 1 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 33: Abierto 25 · Parcial 4 · Bloqueado 1 · Sin verificar 3 (recontado 2026-11-02).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-177 | El sentido de una unión con origen en arista circular se invierte si el padre gira | Abierto | Alta | Con el padre a más de unos 45° el mismo valor mueve al revés: −207,9 mm en vez de −56,9. Con origen en cara plana no pasa. | omnicad/api/herramientas_ensamble.py:725 | 2026-11-02 |
+| B-178 | Lo creado después de una unión no la sigue al accionarla | Abierto | Alta | Agujeros y fijaciones con puntos absolutos salen corridos y el recálculo da REFERENCE_LOST. Esquive: uniones al final del timeline. | omnicad/api/herramientas_ensamble.py:650 | 2026-11-02 |
+| B-179 | La suma de filas de la lista de materiales no da la masa total | Abierto | Media | Filas 77,41 kg contra total 79,54 kg, con todos los cuerpos en alguna fila. | omnicad/api/herramientas_material.py:200 | 2026-11-02 |
+| B-180 | Suprimir un tubo dentro de un componente da BODY_NOT_FOUND | Abierto | Media | Hay que suprimir antes el paso del componente. Falta que funcione o que el error lo diga. | omnicad/api/herramientas_documento.py:750 | 2026-11-02 |
+| B-181 | Un spline cerrado con control_points da PROFILE_NOT_CLOSED | Sin verificar | Media | Reportado al armar el brazo, sin volver a probar. | omnicad/api/herramientas_boceto.py:1950 | 2026-11-02 |
+| B-183 | section_view no aparece en render_image | Sin verificar | Media | Reportado al armar el brazo, sin volver a probar. | omnicad/api/herramientas_analisis.py:439 | 2026-11-02 |
+| B-172 | Pedir propiedades de un cuerpo recién solevado cerró la app | Abierto | Alta | Violación de acceso en TKernel dentro de `_por_malla`, una vez en vivo; no se repite abriendo el autoguardado. Falta aislar esa medición o validar el sólido antes. | omnicad/nucleo/geometria.py:1034 | 2026-11-02 |
+| B-173 | Solevación de 3 splines cerrados sale ok con el sólido plegado, y check_geometry da válido | Abierto | Alta | Da 40 % del volumen esperado y el orden de las secciones cambia el resultado sin avisar. `valid` y `all_valid` siguen en true con un problema de severidad error. | omnicad/api/herramientas_revision.py:74 | 2026-11-02 |
+| B-176 | export_sketch a SVG invertiría el sentido de los arcos | Sin verificar | Baja | No se reproduce con arcos simples: el flag del SVG es correcto por cuenta y por ida y vuelta. Falta probar el boceto original de la cartera, donde salieron cóncavos. | omnicad/io_archivos/svg.py:410 | 2026-11-02 |
 | B-170 | La vista previa de Solevación cierra la app | Abierto | Alta | Con perfiles elegidos, `BRepOffsetAPI_MakePipeShell` da una violación de acceso dentro de la previa, en `solevar`: se cae la ventana entera. La previa tiene que correr aislada o validar antes. | nucleo/solidos_crear.py:1321 | 2026-11-02 |
-| B-169 | Escalar sin cuerpos da un error interno | Abierto | Baja | `scale_body` sin `bodies` da TypeError. Falta pedir el cuerpo con un error claro. | api/herramientas_solido_extra.py:695 | 2026-11-02 |
 | B-171 | Un desfase grande da autointersecciones y sale ok | Abierto | Media | `offset_edges` de 15 mm y `offset_surface` de 400 mm dejan el cuerpo nuevo con autointersecciones. Falta ver qué hace Fusion y si corresponde un aviso. | api/herramientas_solido.py | 2026-11-02 |
 | B-168 | Un tubo por aristas con esquinas da autointersecciones y sale ok | Abierto | Media | `create_pipe` sobre tres aristas de un cuerpo que forman esquinas: 1 autointersección en el cuerpo nuevo. Falta ver cómo resuelve Fusion las esquinas y si corresponde un aviso. | api/herramientas_solido_extra.py | 2026-11-02 |
 | B-159 | Un empalme chico sobre un vaciado cierra la app | Abierto | Alta | Caja 60 × 50 × 40, vaciado de 1 mm quitando la base y empalme de 1 mm en E10: `BRepFilletAPI_MakeFillet.Build` da una violación de acceso y se cae todo el programa. Hay que ver por qué no lo frena el `try`: un cierre nativo no es una excepción de Python; correrlo aislado o validar antes. | nucleo/solidos_modificar.py:548 | 2026-11-02 |
 | B-158 | Labio sobre una esfera cierra la app | Abierto | Media | `create_lip_groove` sobre la arista de costura de una esfera mide un alambre sin largo y da una violación de acceso. Falta rechazar esa arista con un error claro. | nucleo/solidos_crear.py:236 | 2026-11-02 |
 | B-160 | Un STEP con bytes alterados cierra la app | Abierto | Alta | `STEPCAFControl_Reader.ReadFile` da una violación de acceso con el archivo de `tests/corpus_caza/`. Abrir STEP de otros tiene que correr en el proceso aislado (`nucleo/aislado.py`), o la app cae con un archivo ajeno. | nucleo/intercambio.py:225 | 2026-11-02 |
-| B-161 | Un .omnicad o .f3d con el ZIP dañado sale como error interno | Abierto | Baja | `zlib.error` en `proyecto.py:71`, `NotImplementedError` en `proyecto.py:246` y `BadZipFile` en `f3d_nativo.py:320` no se traducen: el usuario ve INTERNAL_ERROR y un mensaje en inglés. Falta atraparlos y decir que el archivo está dañado. | io_archivos/proyecto.py:71 | 2026-11-02 |
 | B-162 | Un chaflán mayor que el radio deja el sólido abierto y el paso sale ok | Abierto | Media | Cilindro de radio 10 y chaflán de 15 en su arista: cuerpo sólido y no estanco, sin error. Falta rechazarlo o cerrar la forma, comparando con Fusion. | nucleo/solidos_modificar.py | 2026-11-02 |
 | B-163 | Extender superficie sobre un sólido lo deja abierto | Abierto | Media | `extend_surface` en una arista de una caja da ok; el cuerpo sigue como sólido, no estanco, y en cadenas llegó a volumen negativo. `untrim_surface` sobre un sólido hace lo mismo. Falta rechazarlo en sólidos o pasarlo a superficie. | api/herramientas_superficie.py | 2026-11-02 |
 | B-164 | Extruir varias caras a la vez deja un cuerpo roto | Abierto | Media | Con caras de distinta orientación el cuerpo nuevo sale con volumen 0 o con autointersecciones, y el STEP exportado pierde ese cuerpo. Falta rechazarlo o extruir cada cara aparte. | timeline/operaciones.py | 2026-11-02 |
@@ -25,8 +32,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-157 | Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok | Abierto | Alta | El corte exterior atraviesa la pared y las caras de la cavidad quedan sueltas por fuera. El cuerpo da válido y estanco, pero con 16 autointersecciones: falta detectarlo y decidir qué hace cada caso comparando con Fusion. | omnicad/nucleo/solidos_modificar.py:496 | 2026-11-02 |
 | B-153 | Teselar deja abiertas las caras muy finas que OpenCascade abandona a medio mallar | Abierto | Media | Rugged Box `obj_3`: unas 25 de 1088 caras quedan con menos triángulos que nodos (cara 708: 67 nodos y 2 triángulos). El nodo sin llenar ya no llega a la malla (B-151), pero la malla sale abierta y `compare_to_mesh` da `closed: false`. Falta rellenar esas caras con sus aristas o reintentar con otro parámetro. | nucleo/geometria.py `_nodos_de_la_cara`; tests/test_geometria.py::test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos | 2026-11-01 |
 | B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
-| B-146 | Derivar sigue grisado en SÓLIDO aunque el comando existe | Abierto | Baja | Conectar el botón a `insertar_derivacion`, como en INSERTAR, y actualizar P-25i. | ui/cinta.py:90 frente a ui/cinta.py:56 | 2026-11-01 |
-| B-145 | Publicar a .mp4 responde INTERNAL_ERROR | Abierto | Baja | Responder un error claro mientras sigue pendiente B6. | api/herramientas_animacion.py (`export_animation_video`): ValueError unknown file extension; reproducido por API | 2026-11-01 |
 | B-144 | Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar | Abierto | Media | Hueca de pared 3 (caja 60×40×20 menos 54×34 desde z = 3) y esfera r 4 en (18,537165, 20,0001, 10,0001): cortar quita 103,79 mm³ de 122,5 (antes de B-125 quitaba 0) y el común da 121,97. Las muestras de `_comun_desmentido` solo ven diferencias de 1/4 de la pieza chica. | clon/tests/test_booleanas_tortura.py::test_b125_esfera_casi_tangente_no_se_queda_sin_cortar | 2026-11-01 |
 | B-154 | Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula | Abierto | Media | Volver a elegir el texto en ese paso. Ese pedazo dejó de existir con B-134 y la referencia no guarda con qué distinguir la letra de su hueco. | clon/omnicad/nucleo/perfiles.py › `buscar_por_firma_tolerante` | 2026-11-01 |
 | B-123 | Un cuerpo que pasa a otro componente sigue a la unión del componente anterior | Abierto | Media | Si TODOS los cuerpos de un componente nuevo vienen del mismo componente movido por una unión, el nuevo hereda ese movimiento (`_matriz_de_cuerpos`): no salta de lugar, pero al accionar después esa unión el cuerpo se sigue moviendo, aunque ya no pertenece a ese componente y el aviso de ASM-7 diga que sus uniones ya no mueven nada. En Fusion el cuerpo queda donde estaba al reasignarlo. Hace falta guardar en la receta la pose del momento de reasignar. Ya pasaba antes de B-108. | omnicad/timeline/ops_ensamblar.py (`_matriz_de_cuerpos`); tests/test_posicion_asm.py::test_b108_todos_del_mismo_componente_el_nuevo_hereda_su_movimiento_y_no_gira_dos_veces | 2026-11-01 |
@@ -69,21 +74,67 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
+### B-177 · El sentido de una unión con origen en arista circular se invierte si el padre gira
+
+- **Qué:** `create_as_built_joint` con `origin` en una arista circular de `A2_eje_principal`, `joint_type="revolute"`, `rotation_axis="Z"`, y `drive_joint` con `J_A1` a 50°.
+- **Esperado:** el giro relativo no depende de la rotación del padre.
+- **Obtenido:** avance de −207,9 mm en vez de −56,9. Con origen en cara plana da −56,9 a 60°.
+- **Esquive:** origen en una cara plana centrada en el eje.
+- **Prueba propuesta:** mismo avance con el padre a 0°, 50° y 90°.
+- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`, sección de uniones, y `herramientas\paso_06b_juntas.py`.
+
+### B-178 · Lo creado después de una unión no la sigue al accionarla
+
+- **Qué:** unión, componente hijo nuevo y `drive_joint`; también `create_hole` e `insert_fastener` con puntos absolutos sobre cuerpos anteriores a la unión.
+- **Esperado:** el hijo acompaña y el recálculo anda.
+- **Obtenido:** el hijo no sigue la unión, los agujeros salen corridos y el recálculo da REFERENCE_LOST (Fijación2 y 3 de `06_TORNILLERIA_A5`).
+- **Esquive:** las uniones al final del timeline con `move_feature`.
+- **Prueba propuesta:** unión, hijo nuevo y `drive_joint`: el hijo acompaña.
+- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`.
+
+### B-179 · La suma de filas de la lista de materiales no da la masa total
+
+- **Qué:** `get_bill_of_materials` sobre `brazo_robotico.omnicad` (426 pasos, 257 cuerpos).
+- **Esperado:** la suma de `rows[].mass_g` da `total_mass_g`, salvo redondeo.
+- **Obtenido:** cerca de 77,41 kg contra 79,54 kg.
+- **Prueba propuesta:** suma de filas igual al total.
+- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`.
+
+### B-180 · Suprimir un tubo dentro de un componente da BODY_NOT_FOUND
+
+- **Qué:** `suppress_feature` con `feature=["op251"]` y `suppressed=true` sobre el tubo de un `create_pipe` dentro de `11_CABLES_ANTEBRAZO` (op391).
+- **Esperado:** se suprime, o el error dice que hay que suprimir antes el componente.
+- **Obtenido:** BODY_NOT_FOUND y se deshace.
+- **Esquive:** `["op391", "op251"]` y reactivar al revés.
+- **Prueba propuesta:** suprimir el tubo funciona o da ese error.
+- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md` y `herramientas\paso_12_correccion_cables.py`.
+
+### B-172 · Pedir propiedades de un cuerpo recién solevado cerró la app
+
+- **Qué:** 0.2.0 en vivo, `execute_code`: 3 × `sketch_from_spec` (spline cerrado con `fit_points`, planos Y = 41, XZ e Y = −41), `loft` de los tres con `operation="new_body"` y `get_physical_properties` de ese cuerpo.
+- **Esperado:** el volumen, o un error claro.
+- **Obtenido:** la app se cerró el 2026-11-02 a las 16:10:37: `pythonw.exe`, TKernel 8.0.1.0, 0xc0000005. Pila: `geometria.py:1034 _por_malla`, `_propiedades`, `volumen`, `_info_cuerpo`, `get_physical_properties`.
+- **Cómo reproducir:** pasó una vez. Abrir el autoguardado de un minuto antes en otro proceso da 1.873.616 mm³ sin caerse: no es determinista desde ese estado.
+- **Causa probable:** sin confirmar. `_por_malla` llama a OpenCascade sobre el sólido plegado de B-173 sin validarlo ni aislarlo; puede compartir causa con B-170.
+- **Esquive:** guardar antes de cada paso.
+- **Prueba propuesta:** propiedades de un sólido autointersectado dan resultado o error, y una violación de acceso ahí no cierra la app (`nucleo/aislado.py`).
+- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\bugs_omnicad\` (autoguardado, traza y script). Reportado por la sesión del brazo robótico. Reporte completo: `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`. El `shell` del script nunca corrió. `siluetas_mm.json` se regeneró después: el actual puede dar otra forma.
+
+### B-173 · Solevación de 3 splines cerrados sale ok con el sólido plegado, y check_geometry da válido
+
+- **Qué:** la misma solevación de B-172; después `check_geometry(body="A3_brazo_superior_fundicion")`.
+- **Esperado:** cerca de 4 L, sin depender del orden de las secciones, o un aviso. `valid` en false si hay un problema de severidad error.
+- **Obtenido:** 1.873.616 mm³, cerca del 40 %, con una cara plegada y paso `ok`. Con el orden p, m, n el volumen da negativo. `self_intersections: 1` con severidad error en [12,26; −23,33; 754,77], pero `valid`, `closed` y `all_valid` en true.
+- **Causa probable:** hipótesis sin analizar: `fit_points` normaliza la cuerda y los puntos enfrentados se corren hasta 50 mm.
+- **Prueba propuesta:** solevación con secciones del mismo número de puntos conserva el área o avisa; `check_geometry` da inválido si hay un error.
+- **Evidencia:** la misma carpeta de B-172. Sin volver a probar acá: spline cerrado con `control_points` daría `PROFILE_NOT_CLOSED`.
+
 ### B-170 · La vista previa de Solevación cierra la app
 
 - **Qué:** ventana real, comando `solevacion`, semilla `69704464-D-6` de la capa D (perfiles elegidos con el visor).
 - **Esperado:** La previa o un error en el panel.
 - **Obtenido:** Violación de acceso en `solevar`, llamada desde `_calcular_previa_ahora`: se cierra la ventana.
 - **Cómo reproducir:** `cazar.py repetir "proceso||cierre_c0000005@solidos_crear.py:1321"`. No está en el corpus: necesita la ventana.
-- **Entorno:** Windows, versión 0.2.0, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-169 · Escalar sin cuerpos da un error interno
-
-- **Qué:** `scale_body()` sin argumentos.
-- **Esperado:** Un error que pida el cuerpo.
-- **Obtenido:** INTERNAL_ERROR: «'NoneType' object is not iterable».
-- **Cómo reproducir:** `clon/tests/corpus_caza/b169_escalar_sin_cuerpos.json`.
 - **Entorno:** Windows, versión 0.2.0, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
 
@@ -128,15 +179,6 @@ de arriba manda sobre este texto.
 - **Qué:** `open_document` con `tests/corpus_caza/b160_step_roto.step`, un STEP de la app con bytes alterados.
 - **Esperado:** Error «No se pudo leer el archivo STEP».
 - **Obtenido:** Violación de acceso dentro de `ReadFile`: se cae el proceso.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-161 · Un .omnicad o .f3d con el ZIP dañado sale como error interno
-
-- **Qué:** `open_document` con `tests/corpus_caza/b161_omnicad_roto.omnicad` e `inspect_f3d` con `tests/corpus_caza/b161_f3d_roto.f3d`.
-- **Esperado:** Un error que diga que el archivo está dañado.
-- **Obtenido:** INTERNAL_ERROR con «Error -3 while decompressing data» y «Bad magic number for file header».
 - **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.

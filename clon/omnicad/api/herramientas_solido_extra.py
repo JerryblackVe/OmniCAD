@@ -690,6 +690,8 @@ def move_faces(sesion, faces: Elementos, type: Literal["translate", "rotate"] = 
 
 def _con_componentes(sesion, bodies):
     """`bodies` con cada nombre o id de un COMPONENTE cambiado por los ids de sus cuerpos (Scale › Components)."""
+    if bodies is None:
+        return None
     estado = sesion.doc.estado_final
     salida = []
     for b in ([bodies] if isinstance(bodies, str) else list(bodies)):

@@ -28,6 +28,7 @@ import os
 import re
 import tempfile
 import zipfile
+import zlib
 from pathlib import Path
 
 from .. import NOMBRE_APP, VERSION, carpeta_datos
@@ -137,8 +138,8 @@ def _leer_cache(z, receta):
                 raise ValueError(f"forma fuera del BREP en el paso {datos.get('op')}")
             cache[int(datos["indice"])] = (datos, [partes[k] for k in ks])
         return cache
-    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zipfile.BadZipFile,
-            geo.ErrorGeometria, RecursionError) as e:
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zipfile.BadZipFile, zlib.error,
+            NotImplementedError, geo.ErrorGeometria, RecursionError) as e:
         log.warning("La caché del proyecto está dañada (%s): se recalcula todo.", e)
         return None
 
@@ -181,7 +182,7 @@ def _leer_cache_omnikernel(z, receta):
             cache[int(datos["indice"])] = (datos, propias)
         return cache
     except (KeyError, IndexError, AttributeError, TypeError, ValueError, OSError, RecursionError,
-            zipfile.BadZipFile, omnikernel.ErrorOmniKernel) as e:
+            zipfile.BadZipFile, zlib.error, NotImplementedError, omnikernel.ErrorOmniKernel) as e:
         log.warning("La caché OmniKernel está dañada (%s): se recalcula todo.", e)
         return None
 
@@ -271,6 +272,8 @@ def abrir(ruta, esperar=None):
                 cache = _leer_cache(z, texto_receta)
     except zipfile.BadZipFile:
         raise ErrorProyecto("El archivo está dañado o no es un ZIP.") from None
+    except (zlib.error, NotImplementedError):
+        raise ErrorProyecto("El archivo está dañado: su ZIP usa una compresión o una versión que no se puede leer.") from None
     try:
         doc = Documento.desde_dict(receta, cache, _calculo=calculo)
     except ErrorOperacion as e:
@@ -287,8 +290,11 @@ def abrir(ruta, esperar=None):
 
 
 def leer_miniatura(ruta):
-    with zipfile.ZipFile(ruta) as z:
-        return _leer_miembro(z, "miniatura.png", TOPE_MINIATURA) if "miniatura.png" in z.namelist() else None
+    try:
+        with zipfile.ZipFile(ruta) as z:
+            return _leer_miembro(z, "miniatura.png", TOPE_MINIATURA) if "miniatura.png" in z.namelist() else None
+    except (zlib.error, NotImplementedError):
+        raise ErrorProyecto("El archivo está dañado: no se pudo leer su miniatura.") from None
 
 
 # ---------------------------------------------------------------- autoguardado

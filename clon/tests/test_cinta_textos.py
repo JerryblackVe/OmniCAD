@@ -69,3 +69,18 @@ def test_cambiar_de_pestana_ajusta_la_nueva(cinta):
 def test_los_menus_siguen_con_el_nombre_completo(cinta):
     a = cinta.acciones["extruir"]
     assert a.text() == "Extruir" and a.iconText() == "Extruir\n "
+
+
+def test_derivar_del_solido_es_la_accion_real(cinta):
+    a = cinta.acciones["insertar_derivacion"]
+    assert a.isEnabled()
+    grupo = next(b for b in cinta.pila.currentWidget().findChildren(QToolButton, "titulo_grupo")
+                 if b.text().startswith("CREAR"))
+    menu = grupo.menu()
+    assert a in menu.actions(), "Derivar de SÓLIDO no está conectado a insertar_derivacion"
+    abiertos = []
+    a.triggered.connect(lambda _=False: abiertos.append(True))
+    QTest.mouseClick(grupo, Qt.LeftButton)
+    assert menu.isVisible()
+    QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, menu.actionGeometry(a).center())
+    assert abiertos == [True]

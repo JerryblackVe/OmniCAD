@@ -57,6 +57,17 @@ def test_edit_feature_acepta_los_nombres_de_create_box(s):
     assert not mal["ok"] and "length (= ancho)" in " ".join(mal["pistas"])
 
 
+def test_edit_feature_de_extrusion_acepta_profile(s):
+    boceto = llamar(s, "create_sketch", plane="XY")["sketch"]["id"]
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)
+    llamar(s, "draw_rectangle", x1=20, y1=0, x2=40, y2=10)
+    r = llamar(s, "extrude", sketch=boceto, profile=0, distance=10)
+    paso, cid = r["feature"]["id"], r["bodies_created"][0]["id"]
+    assert caja(s, cid) == [0, 0, 0, 10, 10, 10]
+    llamar(s, "edit_feature", feature=paso, params={"profile": 1, "distancia": "10 mm"})
+    assert caja(s, cid) == [20, 0, 0, 40, 10, 10]
+
+
 def test_move_body_informa_el_centro_antes_y_despues(s):
     r = llamar(s, "create_box", length=10, width=10, height=10, z=10)
     cid = r["bodies_created"][0]["id"]

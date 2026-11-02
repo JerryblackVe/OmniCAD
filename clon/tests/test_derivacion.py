@@ -251,6 +251,51 @@ def test_seleccion_desaparecida_avisa(origen):
     assert not doc.estado_final.cuerpos and not doc.estado_final.bocetos
 
 
+@pytest.fixture(scope="module")
+def ventana_b146(tmp_path_factory):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    QApplication.instance() or QApplication([])
+    ruta = tmp_path_factory.mktemp("prefs_b146") / "preferencias.ini"
+    v = VentanaPrincipal(prefs=Preferencias(QSettings(str(ruta), QSettings.IniFormat)))
+    v.resize(1280, 800)
+    v.show()
+    QTest.qWait(1)
+    yield v
+    if v.panel is not None:
+        v.panel.cancelar()
+    v.doc.modificado = False
+    v.close()
+    v.deleteLater()
+    QTest.qWait(1)
+
+
+def test_b146_derivar_del_solido_abre_el_comando_en_la_ventana(ventana_b146):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QToolButton
+
+    from omnicad.ui.comandos.derivacion import InsertarDerivacion
+
+    ventana_b146.set_documento(Documento())
+    grupo = next(b for b in ventana_b146.cinta.pila.currentWidget().findChildren(QToolButton, "titulo_grupo")
+                 if b.text().startswith("CREAR"))
+    a = ventana_b146.acciones["insertar_derivacion"]
+    assert a.isEnabled() and a in grupo.menu().actions()
+    QTest.mouseClick(grupo, Qt.LeftButton)
+    menu = grupo.menu()
+    assert menu.isVisible()
+    QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, menu.actionGeometry(a).center())
+    QTest.qWait(20)
+    assert ventana_b146.panel is not None
+    assert isinstance(ventana_b146.panel.comando, InsertarDerivacion)
+
+
 def test_dialogo_seleccion_edicion_previa_y_cinta(origen, monkeypatch):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QFileDialog

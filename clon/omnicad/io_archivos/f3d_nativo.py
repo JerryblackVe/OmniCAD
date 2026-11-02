@@ -30,6 +30,7 @@ import json
 import re
 import struct
 import zipfile
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -316,8 +317,11 @@ def miembro(datos, info):
         raise ErrorF3D(f"El miembro «{info.filename}» del archivo pesa {info.file_size} bytes descomprimidos, "
                        f"más que el tope de {TOPE_MIEMBRO_F3D}: parece dañado o hostil (zip bomb).")
     if info.compress_type != zstd_puro.METODO_ZIP_ZSTD:
-        with zipfile.ZipFile(io.BytesIO(datos)) as z:
-            return z.read(info)
+        try:
+            with zipfile.ZipFile(io.BytesIO(datos)) as z:
+                return z.read(info)
+        except (zipfile.BadZipFile, zlib.error, NotImplementedError):
+            raise ErrorF3D(f"El archivo está dañado: no se pudo leer «{info.filename}».") from None
     h = info.header_offset
     if datos[h:h + 4] != b"PK\x03\x04":
         raise ErrorF3D("ZIP dañado (cabecera local inválida).")

@@ -133,6 +133,20 @@ def test_publicar_gif_y_secuencia_png(sesion, tmp_path):
         assert png.size == (32, 24)
 
 
+def test_publicar_mp4_pide_gif_o_png(sesion, tmp_path):
+    s = sesion
+    api.llamar(s, "create_storyboard", {"name": "Video"})
+    cid = next(iter(s.doc.estado_final.cuerpos))
+    api.llamar(s, "add_animation_action", {"storyboard": "Video", "bodies": [cid], "translation": [20, 0, 0],
+                                           "start": 0, "duration": 2})
+    destino = tmp_path / "anim.mp4"
+    r = api.llamar(s, "export_animation_video", {"path": str(destino), "storyboard": "Video", "format": "gif",
+                                                 "width": 64, "height": 48, "fps": 1})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
+    assert "GIF" in r["mensaje"] and "PNG" in r["mensaje"]
+    assert not destino.exists()
+
+
 def test_editar_y_borrar_acciones(sesion):
     s = sesion
     api.llamar(s, "create_storyboard", {"name": "Edición"})

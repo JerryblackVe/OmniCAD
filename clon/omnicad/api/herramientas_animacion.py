@@ -513,6 +513,10 @@ def export_animation_video(sesion, path: str, storyboard: str | int | None = Non
         raise error("NOTHING_TO_RENDER", "Los guiones elegidos no tienen acciones: agregá alguna antes de publicar.")
     centros = anim.centros_de(doc.estado_final)
     ruta = Path(path)
+    if format == "gif" and ruta.suffix.lower() != ".gif":
+        raise error("INVALID_ARGUMENTS", f"export_animation_video publica un GIF (.gif) o una secuencia PNG; "
+                    f"«{ruta.suffix or 'sin extensión'}» no es una salida válida.",
+                    'Con format="gif", path termina en .gif; con format="png", path es una carpeta.')
     if format == "png":
         os.makedirs(ruta, exist_ok=True)
     elif ruta.parent and not ruta.parent.is_dir():

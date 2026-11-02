@@ -641,6 +641,7 @@ _ALIAS = {
     "primitiva": {"length": "ancho", "width": "largo", "height": "alto", "radius": "radio",
                   "major_radius": "radio_mayor", "minor_radius": "radio_menor"},
     "mover": {"pivot": "pivote"},
+    "extrusion": {"profile": "perfiles"},
 }
 _ALIAS["sup_primitiva"] = _ALIAS["primitiva"]
 _PIVOTE_ORIGEN = {"tipo": "punto", "id": "O"}

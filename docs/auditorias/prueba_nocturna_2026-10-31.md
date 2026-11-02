@@ -348,6 +348,10 @@ Sin empezar: SUP-27 a SUP-31, ASM-17 a ASM-20, ANI-1 a ANI-5 y B-145. Cada una s
 
 Sin empezar. Cada herramienta suma tests y la pieza nueva `plastico` en `todo.py`. PLA-7 y PLA-11 piden comprobar en Fusion real. PLA-12 y EXT-1 a EXT-4 quedan afuera: PLA-12 va aparte y las EXT esperan decisión.
 
+## 3l. Errores que cierran la app y B-157 (B-157, B-158, B-159, B-160, B-170)
+
+Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modificar`, `superficie` y `asas`, porque tocan empalme, chaflán, solevación y abrir archivos. Después, `scripts/caza/cazar.py rapida` y `noche`, que nunca corrió.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |

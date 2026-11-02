@@ -87,7 +87,7 @@ COMPARTIDOS = [CONFIGURAR, CONSTRUIR, INSPECCIONAR, INSERTAR, ENSAMBLAR, SELECCI
 # ------------------------------------------------------------------ pestañas
 SOLIDO = [
     ("CREAR", ["extruir", "revolucion", "agujero", "patron_rectangular_3d", "boceto"], [
-        _i("Crear boceto", "boceto"), _i("Crear forma", ico="crear_forma"), _i("Derivar"), _i("Reconocer funciones", "reconocer_funciones"), SEP,
+        _i("Crear boceto", "boceto"), _i("Crear forma", ico="crear_forma"), _i("Derivar", "insertar_derivacion"), _i("Reconocer funciones", "reconocer_funciones"), SEP,
         _i("Extruir", "extruir"), _i("Revolución", "revolucion"), _i("Barrido", "barrido"),
         _i("Solevación", "solevacion"), _i("Nervio", "nervio"), _i("Red", "red"), _i("Repujado", "repujado"), SEP,
         _i("Agujero", "agujero"), _i("Rosca", "rosca"), SEP,

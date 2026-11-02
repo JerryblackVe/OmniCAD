@@ -853,7 +853,7 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     if timeout is not None and not (math.isfinite(timeout) and timeout > 0):
         raise error("INVALID_ARGUMENTS", f"timeout tiene que ser un número de segundos mayor que 0 (o null); vino {timeout!r}.")
     api = importlib.import_module(__package__)
-    fallidas, total = [], 0        # B-36: llamar nunca lanza; sin esto, un código que ignora los dict da ok global
+    fallidas, respuestas, total = [], [], 0        # B-36: llamar nunca lanza; sin esto, un código que ignora los dict da ok global
 
     def _llamar(nombre, args=None):
         nonlocal total
@@ -861,6 +861,8 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
         r = llamar(sesion, nombre, args)
         if not r.get("ok"):
             fallidas.append(f"{nombre}: {r.get('mensaje', '')}")
+            if len(respuestas) < 3:
+                respuestas.append(r)
         return r
 
     espacio = {"__name__": "__codigo__", "api": api, "sesion": sesion, "doc": sesion.doc, "llamar": _llamar}
@@ -894,8 +896,12 @@ def execute_code(sesion, code: str, timeout: float | None = PLAZO_CODIGO):
     if fallidas:
         detalle = "; ".join(fallidas[:3]) + ("…" if len(fallidas) > 3 else "")
         if total == len(fallidas):      # no hubo NI UNA llamada con éxito: el lote no sirve (B-36)
-            raise error("CODE_ERROR", f"Las {total} llamadas a llamar fallaron y el documento quedó como estaba: "
-                                      f"{detalle}. Revisá el dict que devuelve cada llamada (trae ok y error_kind).")
+            texto = (f"Las {total} llamadas a llamar fallaron y el documento quedó como estaba: "
+                     f"{detalle.rstrip('.')}. Revisá el dict que devuelve cada llamada (trae ok y error_kind).")
+            if stdout:
+                texto += "\nSalida:\n" + stdout[-500:]
+            texto += "\nLlamadas:\n" + json.dumps(respuestas[:3], ensure_ascii=False, default=str)
+            raise error("CODE_ERROR", texto[:_TRAZA_MAXIMA])
         sesion.avisar(f"{len(fallidas)} de {total} llamadas a llamar fallaron: {detalle}.")
         resultado["failed_calls"] = fallidas
     if "result" in espacio:

@@ -483,6 +483,15 @@ def test_execute_code_con_todas_las_llamadas_fallidas(s):
     assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
 
 
+def test_execute_code_informa_stdout_y_dicts_cuando_fallan_todas(s):
+    r = api.llamar(s, "execute_code", {"code": 'print("ANTES_DEL_ERROR")\n'
+                                              'llamar("get_physical_properties", {"bodies": ["NO_EXISTE_XYZ"]})'})
+    assert not r["ok"] and r["error_kind"] == "CODE_ERROR", r
+    assert "ANTES_DEL_ERROR" in r["mensaje"]
+    assert '"ok": false' in r["mensaje"] and "NO_EXISTE_XYZ" in r["mensaje"]
+    assert ".." not in r["mensaje"]
+
+
 def test_execute_code_con_algunas_llamadas_fallidas_avisa(s):
     """B-36: si solo algunas fallan, ok con failed_calls y aviso (el trabajo bueno no se pierde)."""
     r = api.llamar(s, "execute_code", {"code": 'a = llamar("create_sphere", {"radius": 3})\n'

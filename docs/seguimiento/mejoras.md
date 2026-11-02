@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 140: Abierto 75 · Parcial 50 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 143: Abierto 76 · Parcial 50 · Bloqueado 4 · Sin verificar 13 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -49,7 +49,7 @@ Abierto 19 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 8 · Parcial 1.
+Abierto 9 · Parcial 1 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -61,6 +61,9 @@ Abierto 8 · Parcial 1.
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | Falta barrido automático de tipos sin caso válido; solo hay tests sueltos por tipo. | tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py; tests/test_chapa.py (unir plegando); tests/test_fijaciones.py; humo 168 pasos según el log (no corrido acá) | 2026-10-20 |
 | H-59 | Con el diálogo Parámetros abierto, un comando hecho en la ventana cae en el mismo deshacer | Abierto | Media | `agrupar_deshacer` junta todo lo posterior a la marca: un Deshacer revierte el cambio de parámetro y ese comando juntos. No se pierde nada. Separar solo lo que hizo el diálogo. | ui/dialogo_parametros.py › done; timeline/documento.py › agrupar_deshacer | 2026-11-01 |
 | H-61 | Un arco de asa visto de canto no se deja arrastrar | Abierto | Baja | Se ve como una línea con su asa, pero hay que girar la vista para tomarlo. Falta arrastrar en pantalla a lo largo de la tangente del arco, como ya hace la flecha de frente. Sale de la revisión de H-60. | omnicad/ui/manipuladores.py:498 | 2026-11-02 |
+| H-62 | get_assembly no tiene modo resumen | Abierto | Baja | Con 35 componentes y 255 cuerpos devuelve unos 50 KB. Falta `summary=true` como en `get_scene_info`, o `bodies=false`. | omnicad/api/herramientas_ensamble.py:348 | 2026-11-02 |
+| H-64 | render_image rechaza 3840 × 2160 en standard y final | Sin verificar | Baja | Reportado al armar el brazo, sin volver a probar: tope de 25 Mpx. | omnicad/api/herramientas_render.py:179 | 2026-11-02 |
+| H-65 | insert_fastener no perfora el cuerpo de abajo | Sin verificar | Media | Reportado al armar el brazo, sin volver a probar. | omnicad/api/herramientas_construccion.py:244 | 2026-11-02 |
 
 ## Fusion 360
 

@@ -3,6 +3,7 @@ import json
 import math
 import struct
 import zipfile
+from pathlib import Path
 
 import pytest
 from OCP.BRep import BRep_Tool
@@ -111,6 +112,39 @@ def test_proyecto_invalido(tmp_path):
     malo.write_bytes(b"no soy un zip")
     with pytest.raises(proyecto.ErrorProyecto):
         proyecto.abrir(malo)
+
+
+CORPUS = Path(__file__).parent / "corpus_caza"
+
+
+def test_b161_zip_con_zlib_danado_da_error_de_proyecto():
+    with pytest.raises(proyecto.ErrorProyecto, match="dañado"):
+        proyecto.abrir(CORPUS / "b161_omnicad_roto.omnicad")
+
+
+def test_b161_miniatura_con_zip_danado_da_error_de_proyecto(tmp_path):
+    import zipfile
+    ruta = tmp_path / "miniatura_rota.omnicad"
+    with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("miniatura.png", b"abc" * 5000)
+    datos = bytearray(ruta.read_bytes())
+    inicio = 30 + len("miniatura.png")                        # tras la cabecera local del único miembro
+    datos[inicio:inicio + 8] = bytes([255]) * 8
+    ruta.write_bytes(datos)
+    with pytest.raises(proyecto.ErrorProyecto, match="dañado"):
+        proyecto.leer_miniatura(ruta)
+
+
+def test_b161_zip_con_compresion_no_soportada_da_error_de_proyecto():
+    with pytest.raises(proyecto.ErrorProyecto, match="dañado"):
+        proyecto.abrir(CORPUS / "b161_omnicad_version.omnicad")
+
+
+def test_b161_f3d_con_zip_danado_da_error_de_f3d():
+    from omnicad.io_archivos import f3d_nativo
+
+    with pytest.raises(f3d_nativo.ErrorF3D, match="dañado"):
+        f3d_nativo.leer_componentes(CORPUS / "b161_f3d_roto.f3d")
 
 
 def test_miembro_del_zip_mas_grande_que_el_tope_no_se_abre(doc, tmp_path, monkeypatch):
