@@ -7,11 +7,11 @@ permissions:
 jobs:
   archivo:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 9
     strategy:
       fail-fast: false
       matrix:
-        f: [test_administrar.py, test_api_avanzado.py, test_api_chapa.py, test_api_dividir.py, test_api_insertar.py, test_api_navegador.py, test_api_parametros.py, test_api_solido_extra.py, test_arrastre_ventana.py, test_asistente_modelos.py, test_aspecto_panel.py, test_b20_raster.py, test_b48_prevuelo.py, test_bobina_espiral.py, test_boceto_fase2.py, test_boceto_fase6.py, test_boceto_fase9_3d.py, test_boceto_fase9_nucleo.py, test_boceto_fase9_ui.py, test_booleana_rendimiento.py, test_calcomania_cilindro.py, test_cinta_textos.py, test_comandos_crear.py, test_conflictos_boceto.py, test_cuerpos_partidos.py, test_dialogo_parametros.py, test_ejemplos_agentes.py, test_extruir_cara.py, test_f3d_reales.py, test_gizmo_accionar.py, test_gizmo_construir.py, test_gizmo_pestana.py, test_guardar_malla.py, test_iconos_gramatica.py, test_informes_error.py, test_io.py, test_medir_previa_comandos.py, test_p11a_f3d_instancias.py, test_p9b_mas.py, test_paridad_motor.py, test_patrones_solidos_ui.py, test_posicion_asm.py, test_proyectar_tarjeta.py, test_recursos.py, test_registro_uso_ganchos.py, test_render_motor.py, test_restricciones_matematica.py, test_rosca_diametros_tabla.py, test_simetria_patrones.py, test_sol10_nervio_red.py, test_sol14_ui.py, test_sol19_fluido.py, test_sol24_reconocer_funciones.py, test_solidos_modificar.py, test_svg_salida.py, test_timeline_opciones.py, test_transformar_boceto.py, test_zstd_rust.py]
+        f: [test_la_vista_previa_muestra_el_mecanismo_movido_y_no_toca_el_documento, test_un_valor_enorme_se_rechaza_sin_cerrar_el_panel_ni_romper_la_union, test_aceptar_aplica_el_valor_con_ctx_sin_ventana, test_asa_de_giro_gira_y_la_de_distancia_desliza, test_una_union_rigida_no_tiene_asas, test_la_union_que_sigue_a_un_vinculo_se_rechaza_en_el_panel_y_no_tiene_asas]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,5 +20,5 @@ jobs:
       - run: |
           python -m venv clon/.venv
           clon/.venv/Scripts/python.exe -m pip install -q -r clon/requirements.txt -r clon/requirements-dev.txt
-      - run: .venv/Scripts/python.exe -m pytest tests/${{ matrix.f }} -q -o faulthandler_timeout=300
+      - run: .venv/Scripts/python.exe -m pytest tests/test_gizmo_accionar.py::${{ matrix.f }} -q -o faulthandler_timeout=120
         working-directory: clon
